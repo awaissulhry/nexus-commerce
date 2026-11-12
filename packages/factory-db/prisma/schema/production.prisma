@@ -252,6 +252,8 @@ model WorkOrder {
   subcontractOrders SubcontractOrder[]
   // W2b kits.prisma (B-W2b-01): its material kit (staging place, marked complete).
   kits              WorkOrderKit[]
+  // W2b-5 warehouse-depth.prisma (wave 36/44): the substitutes used on it.
+  materialSubstitutions MaterialSubstitution[]
   // W2a rework.prisma, schedule.prisma: its rework, the replacements of its scrap, its slots on the planning board.
   reworkOrders        ReworkOrder[]
   replacementRequests ReplacementRequest[]

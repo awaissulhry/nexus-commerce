@@ -1,20 +1,22 @@
 {
-  "$comment": "Who may read and write each model of prisma/schema/stockcount.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office writes stock counts and their lines through apps/factory-api's modules/inventory/counts (B-W2a-15), always through command(): it creates a count, freezes the expected quantities, types what was counted, asks for recounts, submits, approves or sends back, applies the differences as COUNT moves through the ledger, and signs off the year-end inventory. The floor reads and writes nothing here in W2a: counting by scan on the floor (floor.count, SCM-228) is W2b, which will add the floor's select and the lines' insert and update scoped by site (the lines carry no cost column for that reason). The count's value of its differences is a cost (`@grain cost`): office only. Portal and link sessions read nothing. From SUBMITTED on the lines are history (the …_stock_plan_w2a_guards triggers refuse every change but the move each line posts, for every login); nobody deletes a count (it is cancelled), and the office deletes a line only while its count is DRAFT or COUNTING. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "$comment": "Who may read and write each model of prisma/schema/stockcount.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office writes stock counts and their lines through apps/factory-api's modules/inventory/counts (B-W2a-15), always through command(): it creates a count, freezes the expected quantities, types what was counted, asks for recounts, submits, approves or sends back, applies the differences as COUNT moves through the ledger, and signs off the year-end inventory. W2b-5 (schema wave 36/44, B-W2b-277): the floor counts by scan (floor.count, SCM-228) on its OWN site: it reads the site's counts and their lines, adds the extra units it finds while a count is COUNTING (ADDED lines, expected 0) and writes what it counted and recounted (the lines carry no cost column for that reason; the …_warehouse_depth_w2b_guards redefinition of the line trigger keeps a floor session to those columns, and takes a lock instead of the count row FOR SHARE, which the floor's grant does not allow). The count's value of its differences is a cost (`@grain cost`): office only. Portal and link sessions read nothing. From SUBMITTED on the lines are history (the …_stock_plan_w2a_guards triggers refuse every change but the move each line posts, for every login); nobody deletes a count (it is cancelled), and the office deletes a line only while its count is DRAFT or COUNTING. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
   "models": {
     "StockCount": {
-      "about": "The office opens a cycle count or the year-end inventory of a site, starts it (the snapshot), submits, approves or sends it back, applies its differences, signs off a year-end count and cancels one before it is applied. Office only.",
+      "about": "The office opens a cycle count or the year-end inventory of a site, starts it (the snapshot), submits, approves or sends it back, applies its differences, signs off a year-end count and cancels one before it is applied. W2b-5: the floor reads its own site's counts (what to count; the value of the differences, a cost, hidden).",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId", "site": "siteId" },
       "access": {
-        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"], "hiddenColumns": ["differenceAmount"] }
       }
     },
     "StockCountLine": {
-      "about": "The office writes a count's lines (the snapshot, the counts, recounts and reasons) while the count is DRAFT or COUNTING, deletes an added line then, and names the COUNT move a line posted while the count is APPROVED. Office only in W2a.",
+      "about": "The office writes a count's lines (the snapshot, the counts, recounts and reasons) while the count is DRAFT or COUNTING, deletes an added line then, and names the COUNT move a line posted while the count is APPROVED. W2b-5: the site's floor reads the lines, adds an extra unit it found (an ADDED line) and writes what it counted and recounted, while the count is COUNTING.",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId", "site": "siteId" },
       "access": {
-        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert", "update"], "scopedBy": ["site"] }
       }
     }
   }

@@ -1,0 +1,552 @@
+// The warehouse in depth (W2b-5, schema wave 36/44, B-W2b-277; plan W2B §5 Round 51; features SCM-122, SCM-177, SCM-178,
+// SCM-179, SCM-181, SCM-185, SCM-196, SCM-219, SCM-220, SCM-226, SCM-227, SCM-228, SCM-229, SCM-236, SCM-237, SCM-274,
+// SCM-281, SCM-293, MES-139): the stock work of every shift and the office depth around it. apps/factory-api's
+// modules/inventory writes these tables (B-W2b-289 locations, B-W2b-292 moves on the floor and the task inbox, B-W2b-298
+// pick lists and substitutes, B-W2b-299 counts, B-W2b-300 goods without a PO, B-W2b-313 lots, B-W2b-314 posting dates and
+// low stock, B-W2b-326 transfers), always through command().
+//
+// What this file holds:
+//   DefaultLocation       where goods go by default per site, kind of material and purpose (receiving, quality, issue,
+//                         return, put-away; SCM-179): what every command that needs a place reads first.
+//   TransferOrder, -Line  goods between two sites (of one company, or of two companies of the tenant; SCM-219, SCM-220): the
+//                         ship moves them onto the from-site's TRANSIT location with their DDT, the receipt at the other site
+//                         takes them off it (StockMove TRANSFER_OUT there, TRANSFER_IN at the other site, in one command): so
+//                         stock in transit is never lost nor counted twice. A difference stays in transit until it is settled.
+//   CountSchedule         how often a location, a class or a kind of material is counted (SCM-227).
+//   StockCountScan        every unit scanned in a count (SCM-228), with its own area or length: append-only.
+//   InventorySettings     the warehouse rules of a company (or the tenant): the back-dating limit of a posting date
+//                         (SCM-196), the adjustment that waits for a yes, the separation of duties (SCM-293), low-stock
+//                         alerts (SCM-281).
+//   WarehouseTask         the tablet's task inbox (SCM-274): receive, put away, pick, move, count, quarantine.
+//   MaterialSubstitution  another lot or an approved alternate used on a work order (MES-139), with its yes.
+// And on W1 / W2a tables (inventory.prisma, stockcount.prisma): location kinds, blocks and bin labels; goods without a PO;
+// the lot's lifecycle, parent lot and attributes; a move's posting date and transfer line; frozen count lines.
+//
+// The rules (…_warehouse_depth_w2b_guards, every login, owner included): a blocked location and a frozen count line refuse
+// moves (but a count's own); a TRANSIT location moves only with a transfer; the counter never approves their own variance
+// and a recount is another person's (while the company's switch is on); nobody approves their own substitution; a scan is
+// never changed or removed.
+//
+// Who sees what (ownership/warehouse-depth.json): the office reads and writes; the floor reads its own site's defaults,
+// reads, adds and works its site's tasks, scans units into its site's counts, asks for a substitute and issues an approved
+// one, and reads the warehouse rules but the money threshold. Transfers and schedules are the office's. Portal and link
+// sessions read nothing. No money column but the adjustment threshold (@grain cost, office only). Who took, did, scanned or
+// asked is a person inside the one record (Owner answer W1: never a per-person figure, filter, group or total).
+
+/// Where goods go by default at a site, for a kind of material and a purpose (SCM-179): the goods-in dock for receiving,
+/// the quality shelf, the place issues are taken from, where returns come back, where put-away goes. One active row per
+/// site, kind and purpose (a partial unique index); a row with no kind is the site's fallback for every kind without one.
+/// An old default is kept inactive, never deleted.
+model DefaultLocation {
+  id          String                 @id @db.Uuid
+  tenantId    String                 @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The site's company and the site.
+  companyId   String                 @db.Uuid
+  siteId      String                 @db.Uuid
+  /// The kind of material it is the default for; null: every kind the site names no row of its own for.
+  itemKind    ItemKind?
+  purpose     DefaultLocationPurpose
+  /// A location of the site: not archived when named, never a SUBCONTRACTOR, CUSTOMER or TRANSIT place.
+  locationId  String                 @db.Uuid
+  /// One active row per site, kind and purpose; false: an earlier default, kept.
+  active      Boolean                @default(true)
+  version     Int                    @default(1)
+  createdAt   DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime               @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?                @db.Uuid
+  /// Who changed it last ("Changed by" on Warehouse rules).
+  updatedById String?                @db.Uuid
+
+  site     Site     @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  location Location @relation(fields: [tenantId, siteId, locationId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, siteId, purpose])
+}
+
+/// What a default location is for (SCM-179).
+enum DefaultLocationPurpose {
+  /// Where goods are received (the goods-in dock).
+  RECEIVING
+  /// Where goods that wait for an inspection or a hold are put (the quality shelf).
+  QUALITY
+  /// Where issues to work orders are taken from (the line-side rack).
+  ISSUE
+  /// Where material back from a work order is put.
+  RETURN
+  /// Where received goods are put away when no other place is suggested.
+  PUT_AWAY
+}
+
+/// Goods sent from one site to another (SCM-219, SCM-220): of the same company, or of another company of the tenant. DRAFT
+/// while its lines are written; SHIPPED once its goods left (TRANSFER moves onto the from-site's TRANSIT location, the DDT
+/// issued); PARTLY_RECEIVED while some arrived; RECEIVED once every line arrived or its difference has its reason. Its goods
+/// stay the from-site's stock, on the transit location, until they are received (TRANSFER_OUT there and TRANSFER_IN at the
+/// other site, in one command). Cancelled only while DRAFT. Never deleted.
+model TransferOrder {
+  id                String         @id @db.Uuid
+  tenantId          String         @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The sending company (the from-site's): its TRANSFER series numbers the transfer, its DDT series the DDT.
+  companyId         String         @db.Uuid
+  /// The number from the company's TRANSFER series, unique in the company.
+  number            String
+  fromSiteId        String         @db.Uuid
+  /// Where its lines are picked from when a line names none.
+  fromLocationId    String?        @db.Uuid
+  /// The receiving company and site: another site of the company, or a site of another company of the tenant; never the
+  /// from-site.
+  toCompanyId       String         @db.Uuid
+  toSiteId          String         @db.Uuid
+  /// Where its lines are put at the other site when a line names none.
+  toLocationId      String?        @db.Uuid
+  /// The from-site's TRANSIT location its goods lie on between the ship and the receipt (the design's "in-transit location
+  /// per route"); fixed once SHIPPED.
+  transitLocationId String         @db.Uuid
+  status            TransferStatus @default(DRAFT)
+  /// The day it is planned to leave and the day it is expected at the other site (Europe/Rome days).
+  shipOn            DateTime?      @db.Date
+  expectedOn        DateTime?      @db.Date
+  /// The DDT the goods travel with (DPR 472/1996), issued with the ship from the company's DDT series: the series, the number
+  /// it gave (never reused), its date, the reason for the transport (TRANSFER between sites; another reason, e.g. SALE between
+  /// two companies, as the accountant says; OTHER in words), who carries the goods (SENDER: our own van; CARRIER: named in
+  /// `carrier` { "name", "address"?, "vatNumber"? }), the packages, the gross weight and the goods' appearance. Set exactly
+  /// from SHIPPED on and never changed (a fiscal document). Its PDF is a file of the transfer (ddtFileId, named once).
+  ddtNumberSeriesId String?        @db.Uuid
+  ddtNumber         String?
+  ddtDate           DateTime?      @db.Date
+  ddtReason         DdtReason      @default(TRANSFER)
+  ddtReasonText     String?
+  transportBy       TransportBy?
+  carrier           Json?
+  packages          Int?
+  grossWeightKg     Decimal?       @db.Decimal(18, 4)
+  appearance        String?
+  ddtFileId         String?        @db.Uuid
+  /// The carrier's tracking number and page (an https address), while it travels.
+  trackingRef       String?
+  trackingUrl       String?
+  /// From SHIPPED on: when it left and who shipped it.
+  shippedAt         DateTime?      @db.Timestamptz(3)
+  shippedById       String?        @db.Uuid
+  /// RECEIVED exactly: when the last of it was received, and by whom.
+  receivedAt        DateTime?      @db.Timestamptz(3)
+  receivedById      String?        @db.Uuid
+  /// CANCELLED exactly: when and why.
+  cancelledAt       DateTime?      @db.Timestamptz(3)
+  cancelReason      String?
+  note              String?
+  version           Int            @default(1)
+  createdAt         DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById       String?        @db.Uuid
+
+  fromSite        Site          @relation("TransferOrderFromSite", fields: [tenantId, companyId, fromSiteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  toSite          Site          @relation("TransferOrderToSite", fields: [tenantId, toCompanyId, toSiteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and the site.
+  fromLocation    Location?     @relation("TransferOrderFrom", fields: [tenantId, fromSiteId, fromLocationId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  toLocation      Location?     @relation("TransferOrderTo", fields: [tenantId, toSiteId, toLocationId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  transitLocation Location      @relation("TransferOrderTransit", fields: [tenantId, fromSiteId, transitLocationId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  ddtNumberSeries NumberSeries? @relation(fields: [tenantId, companyId, ddtNumberSeriesId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  ddtFile         StoredFile?   @relation("TransferOrderDdtFile", fields: [tenantId, ddtFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  lines           TransferLine[]
+
+  @@unique([tenantId, companyId, number])
+  // A DDT number is given once in its series.
+  @@unique([tenantId, ddtNumberSeriesId, ddtNumber])
+  // The target of the lines' reference: the transfer's two sites.
+  @@unique([tenantId, fromSiteId, toSiteId, id])
+  // The tiles: in transit, arriving today, with differences.
+  @@index([tenantId, status, expectedOn])
+  @@index([tenantId, toSiteId, status])
+}
+
+/// DRAFT → SHIPPED | CANCELLED; SHIPPED → PARTLY_RECEIVED | RECEIVED; PARTLY_RECEIVED → RECEIVED. RECEIVED and CANCELLED are
+/// final.
+enum TransferStatus {
+  DRAFT
+  SHIPPED
+  PARTLY_RECEIVED
+  RECEIVED
+  CANCELLED
+}
+
+/// One material of a transfer (SCM-219, SCM-220): what is sent (an item in a colour; a lot, a hide or a roll of the
+/// from-site), how much, what left with the ship, what arrived so far and where it was put, the lot, hide and roll the
+/// receipt made at the other site, and a difference with its reason and how it was settled. Written while the transfer is
+/// DRAFT (removed then too); from SHIPPED on only what arrives and the difference change.
+model TransferLine {
+  id                   String                        @id @db.Uuid
+  tenantId             String                        @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  transferId           String                        @db.Uuid
+  /// The transfer's two sites: the keys of what the line names at each end.
+  fromSiteId           String                        @db.Uuid
+  toSiteId             String                        @db.Uuid
+  /// Its place on the transfer: 10, 20, 30 …
+  seq                  Int
+  itemId               String                        @db.Uuid
+  /// The colour sent (a lot's own colour when a lot is named).
+  itemColourId         String?                       @db.Uuid
+  /// What is sent, of the from-site: a lot (required for an item tracked by LOT or HIDE), a hide of it (HIDE: one line per
+  /// hide), a fabric roll of it.
+  lotId                String?                       @db.Uuid
+  hideId               String?                       @db.Uuid
+  rollId               String?                       @db.Uuid
+  /// Where it is picked from (else the transfer's).
+  fromLocationId       String?                       @db.Uuid
+  /// How much is sent, above 0, in `uom`, and the same in the item's base unit.
+  quantity             Decimal                       @db.Decimal(18, 4)
+  uom                  Uom
+  baseQuantity         Decimal                       @db.Decimal(18, 4)
+  /// Base units that left with the ship (onto the transit location), 0 or more; set while the transfer is DRAFT, fixed once
+  /// it is SHIPPED.
+  shippedQuantity      Decimal?                      @db.Decimal(18, 4)
+  /// Base units received at the other site so far, 0 to what left; never goes back.
+  receivedQuantity     Decimal                       @default(0) @db.Decimal(18, 4)
+  /// Where it was put at the other site (else the transfer's), and what the receipt made there: the lot (of the item, in
+  /// its colour), the hide and the roll at the other site; each named once.
+  toLocationId         String?                       @db.Uuid
+  toLotId              String?                       @db.Uuid
+  toHideId             String?                       @db.Uuid
+  toRollId             String?                       @db.Uuid
+  /// A difference between what left and what arrived (SCM-220): why (a reason code, without spaces) and words; how it was
+  /// settled (an adjustment, a claim to the carrier, sent back), when and by whom. A line that arrived short has its reason
+  /// before the transfer is RECEIVED.
+  differenceReasonCode String?
+  differenceNote       String?
+  differenceResolution TransferDifferenceResolution?
+  resolvedAt           DateTime?                     @db.Timestamptz(3)
+  resolvedById         String?                       @db.Uuid
+  note                 String?
+  version              Int                           @default(1)
+  createdAt            DateTime                      @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime                      @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById          String?                       @db.Uuid
+
+  transfer     TransferOrder @relation(fields: [tenantId, fromSiteId, toSiteId, transferId], references: [tenantId, fromSiteId, toSiteId, id], onDelete: Restrict, onUpdate: Restrict)
+  item         Item          @relation(fields: [tenantId, itemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and the other keys.
+  itemColour   ItemColour?   @relation(fields: [tenantId, itemId, itemColourId], references: [tenantId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
+  lot          Lot?          @relation("TransferLineLot", fields: [tenantId, fromSiteId, itemId, lotId], references: [tenantId, siteId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
+  hide         Hide?         @relation("TransferLineHide", fields: [tenantId, fromSiteId, lotId, hideId], references: [tenantId, siteId, lotId, id], onDelete: Restrict, onUpdate: Restrict)
+  roll         FabricRoll?   @relation("TransferLineRoll", fields: [tenantId, fromSiteId, rollId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  fromLocation Location?     @relation("TransferLineFrom", fields: [tenantId, fromSiteId, fromLocationId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  toLocation   Location?     @relation("TransferLineTo", fields: [tenantId, toSiteId, toLocationId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  toLot        Lot?          @relation("TransferLineToLot", fields: [tenantId, toSiteId, itemId, toLotId], references: [tenantId, siteId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
+  toHide       Hide?         @relation("TransferLineToHide", fields: [tenantId, toSiteId, toLotId, toHideId], references: [tenantId, siteId, lotId, id], onDelete: Restrict, onUpdate: Restrict)
+  toRoll       FabricRoll?   @relation("TransferLineToRoll", fields: [tenantId, toSiteId, toRollId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // inventory.prisma: the moves that carry it (the ship's TRANSFER, the receipt's TRANSFER_OUT and TRANSFER_IN, a difference
+  // written off).
+  moves        StockMove[]
+
+  @@unique([tenantId, transferId, seq])
+  // The target of the moves' reference.
+  @@unique([tenantId, id])
+}
+
+/// How a transfer line's difference was settled (SCM-220; the design's "resolved by").
+enum TransferDifferenceResolution {
+  /// Written off the transit location by an adjustment (lost, damaged).
+  ADJUSTMENT
+  /// Claimed from the carrier.
+  CARRIER_CLAIM
+  /// Sent back to the from-site.
+  SENT_BACK
+}
+
+/// How often stock is counted (SCM-227): what (the stock under a location, a zone or a bin; a class of materials; a kind
+/// of material; together, at least one), every how many days, when the next count is due and when the last one was taken.
+/// Its due counts make COUNT tasks; the next date is set again when a count of it closes. Retired (inactive), never
+/// deleted.
+model CountSchedule {
+  id            String         @id @db.Uuid
+  tenantId      String         @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId     String         @db.Uuid
+  siteId        String         @db.Uuid
+  /// A short name ("Leather racks, monthly"), 1 to 200 characters.
+  name          String
+  /// What it counts, together, at least one: the stock under a location of the site (a warehouse, a zone or a bin and
+  /// everything inside it); a class of materials (A, B, C: the counts module ranks the materials by the value they use,
+  /// B-W2b-299); a kind of material.
+  locationId    String?        @db.Uuid
+  abcClass      CountAbcClass?
+  itemKind      ItemKind?
+  /// Every how many days, 1 to 366.
+  everyDays     Int
+  /// The day the next count is due, and the day of the last one with the count it was (Europe/Rome days).
+  nextDueOn     DateTime       @db.Date
+  lastCountedOn DateTime?      @db.Date
+  lastCountId   String?        @db.Uuid
+  /// false: retired (makes no more counts).
+  active        Boolean        @default(true)
+  note          String?
+  version       Int            @default(1)
+  createdAt     DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById   String?        @db.Uuid
+
+  site      Site        @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  location  Location?   @relation(fields: [tenantId, siteId, locationId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  lastCount StockCount? @relation(fields: [tenantId, siteId, lastCountId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // Due counts: the active schedules of a site by their next day.
+  @@index([tenantId, siteId, active, nextDueOn])
+}
+
+/// The class of a material by the value it uses (ABC analysis): A the few that use most, C the many that use least.
+enum CountAbcClass {
+  A
+  B
+  C
+}
+
+/// One unit scanned in a count (SCM-228): a hide, a roll, a box of a lot, or a number typed for an item without a label,
+/// with what it adds to its line (its own area or length) — the count's evidence. The line's count (or recount) is the sum
+/// of its scans of that pass. Never changed or removed (the …_warehouse_depth_w2b_guards triggers, for every login); a wrong
+/// count is recounted.
+/// @append-only
+model StockCountScan {
+  id                String         @id @db.Uuid
+  tenantId          String         @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId            String         @db.Uuid
+  countId           String         @db.Uuid
+  /// The count line it counts (a hide is a line of its own; an extra one is an ADDED line).
+  lineId            String         @db.Uuid
+  /// COUNT, or RECOUNT once a recount of the line was asked (another person's, while the company's switch is on).
+  pass              StockCountPass @default(COUNT)
+  /// What was scanned (a hide's tag, a roll's tag, a lot's label), up to 120 characters without spaces; null: typed on the
+  /// number pad (an item without a label).
+  code              String?
+  /// What this unit adds to the line, above 0, in the item's base unit: a hide's own area, a roll's length, a box's pieces.
+  quantity          Decimal        @db.Decimal(18, 4)
+  /// When it was scanned (the device's time; not in the future).
+  scannedAt         DateTime       @db.Timestamptz(3)
+  /// Who scanned it: an office user or a floor worker of the site, exactly one; shown only inside the count.
+  scannedById       String?        @db.Uuid
+  scannedByWorkerId String?        @db.Uuid
+  /// The floor device it was scanned on.
+  deviceId          String?        @db.Uuid
+  createdAt         DateTime       @default(now()) @db.Timestamptz(3)
+  createdById       String?        @db.Uuid
+
+  count  StockCount     @relation(fields: [tenantId, siteId, countId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  line   StockCountLine @relation(fields: [tenantId, siteId, countId, lineId], references: [tenantId, siteId, countId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  worker Worker?        @relation(fields: [tenantId, siteId, scannedByWorkerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  device Device?        @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, lineId, pass])
+  @@index([tenantId, countId])
+}
+
+/// Which pass of a count line a scan belongs to.
+enum StockCountPass {
+  COUNT
+  RECOUNT
+}
+
+/// The warehouse rules of a company, or of the whole tenant (companyId null) (design warehouse.settings, SCR-258): the
+/// back-dating limit of a posting date (SCM-196), the adjustment that waits for a yes, the separation of duties (SCM-293),
+/// low-stock alerts (SCM-281). The row's id is the company's id, or the tenant's own id for the tenant-wide row (as
+/// PayablesSettings); a value set on the company's row wins, a null follows the tenant-wide row; no value anywhere: no
+/// back-dating limit beyond the closed periods, no adjustment waits, both separation rules on, low-stock alerts on. Never
+/// deleted.
+model InventorySettings {
+  /// The company's id; the tenant's id for the tenant-wide row (companyId null).
+  id                       String   @id @db.Uuid
+  tenantId                 String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// null: the tenant-wide settings. Never changes.
+  companyId                String?  @db.Uuid
+  /// How many days before the day a move is entered its posting date may be (0 to 366; 0: the same day). Closed periods are
+  /// Finance's (PeriodLock), whatever this says.
+  backDatingDays           Int?
+  /// An adjustment worth more than this (minor units of the company's currency, 0 or more) waits for a yes (an approval of
+  /// kind STOCK_ADJUSTMENT; who approves is the approval rule's, Admin › Automation).
+  /// @grain cost
+  adjustmentApprovalAmount Int?
+  /// The separation of duties: true: the person who received goods never approves their invoice's match
+  /// (receiverNotMatcher; payables matching reads it); the person who counted or recounted a line that differs never
+  /// approves the count, and a recount is another person's (counterNotApprover; the database holds it). false only with
+  /// the reason a rule was switched off (separationOffReason, 1 to 500 characters): it widens what one person can do.
+  receiverNotMatcher       Boolean?
+  counterNotApprover       Boolean?
+  separationOffReason      String?
+  /// Alerts when a material's stock falls below its planning minimum (ItemPlanning MIN_MAX; the alert rule is the alerts
+  /// module's).
+  lowStockAlerts           Boolean?
+  version                  Int      @default(1)
+  createdAt                DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt                DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById              String?  @db.Uuid
+  /// Who changed it last ("Changed by" on Warehouse rules).
+  updatedById              String?  @db.Uuid
+
+  company Company? @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, companyId])
+}
+
+/// One task of the warehouse's inbox (SCM-274; floor.mywork's warehouse variant): receive, put away, pick, move, count or
+/// quarantine, made by its source (a posted receipt, a released pick list, a due count, a hold that asks a quarantine move,
+/// a transfer) or asked by hand, for a role or a worker of the site (or anyone there), taken and done on the tablet (queued
+/// offline), or cancelled by the office. OPEN → TAKEN → DONE; TAKEN → OPEN (given back); OPEN → DONE; OPEN or TAKEN →
+/// CANCELLED. Never deleted.
+model WarehouseTask {
+  id               String              @id @db.Uuid
+  tenantId         String              @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId        String              @db.Uuid
+  siteId           String              @db.Uuid
+  kind             WarehouseTaskKind
+  /// The record that made it (GoodsReceipt, Reservation, WorkOrderKit, StockCount, CountSchedule, QualityHold, TransferOrder
+  /// …): its model name and id, both or neither (a task asked by hand). Never changes.
+  sourceType       String?
+  sourceId         String?             @db.Uuid
+  /// What to handle: the item (in a colour), the lot and the hide (of the site).
+  itemId           String?             @db.Uuid
+  itemColourId     String?             @db.Uuid
+  lotId            String?             @db.Uuid
+  hideId           String?             @db.Uuid
+  /// From where and to where (locations of the site; a put-away's "to" is the suggestion, the bin scanned confirms it).
+  fromLocationId   String?             @db.Uuid
+  toLocationId     String?             @db.Uuid
+  /// How much, above 0, in `uom`; both or neither.
+  quantity         Decimal?            @db.Decimal(18, 4)
+  uom              Uom?
+  /// For whom: a role of the site's workers, or one worker of the site; at most one; neither: anyone at the site.
+  assignedRoleId   String?             @db.Uuid
+  assignedWorkerId String?             @db.Uuid
+  /// When it is due (the inbox puts the next due first).
+  dueAt            DateTime?           @db.Timestamptz(3)
+  status           WarehouseTaskStatus @default(OPEN)
+  /// TAKEN exactly: when and by whom (a worker of the site or an office user, exactly one); kept when it is DONE, cleared
+  /// when it is given back.
+  takenAt          DateTime?           @db.Timestamptz(3)
+  takenById        String?             @db.Uuid
+  takenByWorkerId  String?             @db.Uuid
+  /// DONE exactly: when and by whom (a worker of the site or an office user, exactly one).
+  doneAt           DateTime?           @db.Timestamptz(3)
+  doneById         String?             @db.Uuid
+  doneByWorkerId   String?             @db.Uuid
+  /// CANCELLED exactly: when, by whom (the office) and why.
+  cancelledAt      DateTime?           @db.Timestamptz(3)
+  cancelledById    String?             @db.Uuid
+  cancelReason     String?
+  note             String?
+  version          Int                 @default(1)
+  createdAt        DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime            @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById      String?             @db.Uuid
+
+  site           Site        @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and the other keys.
+  item           Item?       @relation(fields: [tenantId, itemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  itemColour     ItemColour? @relation(fields: [tenantId, itemId, itemColourId], references: [tenantId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
+  lot            Lot?        @relation(fields: [tenantId, siteId, itemId, lotId], references: [tenantId, siteId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
+  hide           Hide?       @relation(fields: [tenantId, siteId, lotId, hideId], references: [tenantId, siteId, lotId, id], onDelete: Restrict, onUpdate: Restrict)
+  fromLocation   Location?   @relation("WarehouseTaskFrom", fields: [tenantId, siteId, fromLocationId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  toLocation     Location?   @relation("WarehouseTaskTo", fields: [tenantId, siteId, toLocationId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  assignedRole   Role?       @relation(fields: [tenantId, assignedRoleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  assignedWorker Worker?     @relation("WarehouseTaskAssigned", fields: [tenantId, siteId, assignedWorkerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  takenByWorker  Worker?     @relation("WarehouseTaskTaken", fields: [tenantId, siteId, takenByWorkerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  doneByWorker   Worker?     @relation("WarehouseTaskDone", fields: [tenantId, siteId, doneByWorkerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // The inbox: a site's open and taken tasks by due time.
+  @@index([tenantId, siteId, status, dueAt])
+  // A record's tasks.
+  @@index([tenantId, sourceType, sourceId])
+}
+
+/// What a warehouse task asks (SCM-274).
+enum WarehouseTaskKind {
+  RECEIVE
+  PUT_AWAY
+  PICK
+  MOVE
+  COUNT
+  /// Move goods a hold asks into quarantine (the place scan confirms it).
+  QUARANTINE
+}
+
+/// OPEN → TAKEN → DONE; TAKEN → OPEN (given back); OPEN → DONE; OPEN, TAKEN → CANCELLED. DONE and CANCELLED are final.
+enum WarehouseTaskStatus {
+  OPEN
+  TAKEN
+  DONE
+  CANCELLED
+}
+
+/// A substitute used on a work order (MES-139; B-W2b-228's "a work-order substitution record if an audit row is not
+/// enough"): another lot of a BOM line's own material, or an approved alternate of the line (BomLineAlternate), with how much,
+/// why, the alternate rule's answer as it was given (factory-domain alternateUse), its yes (an approval task) and the issue
+/// moves that used it. WAITING → APPROVED → ISSUED; WAITING → REFUSED; WAITING or APPROVED → WITHDRAWN. Nobody decides their
+/// own request. Never deleted.
+model MaterialSubstitution {
+  id                  String                     @id @db.Uuid
+  tenantId            String                     @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId              String                     @db.Uuid
+  /// The work order and its revision (the key of its BOM line).
+  workOrderId         String                     @db.Uuid
+  styleRevisionId     String                     @db.Uuid
+  /// The BOM line of the work order's revision, and its own material, which the substitute replaces.
+  bomLineId           String                     @db.Uuid
+  fromItemId          String                     @db.Uuid
+  /// What is used instead: the same material (another lot: toLotId required) or an alternate of the line (alternateId, a
+  /// BomLineAlternate of the line, of this material); its colour; the lot, which may be named until it is issued.
+  toItemId            String                     @db.Uuid
+  toItemColourId      String?                    @db.Uuid
+  toLotId             String?                    @db.Uuid
+  alternateId         String?                    @db.Uuid
+  /// How much, above 0, in `uom`, and the same in the substitute's base unit.
+  quantity            Decimal                    @db.Decimal(18, 4)
+  uom                 Uom
+  baseQuantity        Decimal                    @db.Decimal(18, 4)
+  /// Why: a reason code (without spaces) and words (1 to 1000 characters).
+  reasonCode          String?
+  reason              String
+  /// The alternate rule's answer when it was asked, as it was: { "may": true | false, "held": [ "ONLY_WHEN_SHORT" |
+  /// "NEEDS_APPROVAL" | "NEEDS_CERTIFICATE_CHECK" … ], "message": "…" }. Never changes.
+  ruleAnswer          Json
+  /// The approval task that asks for the yes (an ApprovalTask of kind MATERIAL_SUBSTITUTION, B-W2b-276 / -282: its id,
+  /// named once; no reference: that wave builds beside this one). null: no yes was asked.
+  approvalTaskId      String?                    @db.Uuid
+  status              MaterialSubstitutionStatus @default(WAITING)
+  /// Who asked: an office user or a floor worker of the site, exactly one. Never changes.
+  requestedById       String?                    @db.Uuid
+  requestedByWorkerId String?                    @db.Uuid
+  /// APPROVED or REFUSED: when, and by whom (never the person who asked; a REFUSED one with the reason). An APPROVED one with
+  /// no approver: no yes was needed (no approval task).
+  decidedAt           DateTime?                  @db.Timestamptz(3)
+  decidedById         String?                    @db.Uuid
+  refuseReason        String?
+  /// ISSUED exactly: when, and the ISSUE moves of the substitute to the work order (at least one, each once).
+  issuedAt            DateTime?                  @db.Timestamptz(3)
+  moveIds             String[]                   @default([]) @db.Uuid
+  /// WITHDRAWN exactly: when and why.
+  withdrawnAt         DateTime?                  @db.Timestamptz(3)
+  withdrawReason      String?
+  note                String?
+  version             Int                        @default(1)
+  createdAt           DateTime                   @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime                   @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById         String?                    @db.Uuid
+
+  workOrder    WorkOrder   @relation(fields: [tenantId, siteId, styleRevisionId, workOrderId], references: [tenantId, siteId, styleRevisionId, id], onDelete: Restrict, onUpdate: Restrict)
+  bomLine      BomLine     @relation(fields: [tenantId, styleRevisionId, bomLineId, fromItemId], references: [tenantId, revisionId, id, itemId], onDelete: Restrict, onUpdate: Restrict)
+  toItem       Item        @relation("MaterialSubstitutionTo", fields: [tenantId, toItemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and the other keys.
+  toItemColour ItemColour? @relation("MaterialSubstitutionTo", fields: [tenantId, toItemId, toItemColourId], references: [tenantId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
+  toLot        Lot?        @relation(fields: [tenantId, siteId, toItemId, toLotId], references: [tenantId, siteId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
+  requestedBy  Worker?     @relation("MaterialSubstitutionRequested", fields: [tenantId, siteId, requestedByWorkerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, workOrderId])
+  // "Substitutes waiting for approval".
+  @@index([tenantId, siteId, status])
+}
+
+/// WAITING → APPROVED | REFUSED | WITHDRAWN; APPROVED → ISSUED | WITHDRAWN. ISSUED, REFUSED and WITHDRAWN are final.
+enum MaterialSubstitutionStatus {
+  WAITING
+  APPROVED
+  ISSUED
+  REFUSED
+  WITHDRAWN
+}

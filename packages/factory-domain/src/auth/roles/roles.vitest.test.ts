@@ -44,7 +44,9 @@ describe('the permission registry', () => {
     expect([...FACTORY_PERMISSIONS.byArea().keys()]).toEqual(['users', 'roles', 'audit', 'numbering', 'files', 'links', 'devices', 'workers', 'floor', 'threads', 'imports', 'documents', 'print', 'email', 'integrations', 'compliance', 'product', 'inventory', 'shipping', 'parties', 'planning', 'purchasing', 'invoices', 'payments', 'costing', 'production', 'workorders', 'quotes', 'sales', 'companies', 'sites', 'orders', 'privacy', 'quality', 'home', 'floorsync', 'calendars', 'reasons', 'paymentterms', 'pricelists', 'tasks', 'views', 'search', 'plant', 'alerts', 'accounting', 'security', 'receivables', 'payables', 'people', 'safety',
       // B-W2b-162: partner organisations (office) and the portal's own (partner roles only).
       'partners', 'portal',
-      'money'])
+      'money',
+      // B-W2b-282: one approval engine (declared after the grains).
+      'approvals'])
   })
 
   it('refuses a name declared twice, a bad area, a bad risk, an empty description', () => {

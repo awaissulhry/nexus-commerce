@@ -180,6 +180,18 @@ export async function readVersion(db: Db, instruction: Pick<InstructionRow, 'id'
 export const versionsOf = (db: Db, instructionIds: readonly string[]): Promise<VersionRow[]> =>
   instructionIds.length === 0 ? Promise.resolve([]) : db.workInstructionVersion.findMany({ where: { instructionId: { in: [...new Set(instructionIds)] } }, select: VERSION, orderBy: [{ number: 'desc' }] })
 
+/** The commands that write a version's content: who ran one on a draft never approves it (factory-domain publishRefusal). */
+export const SAVE_ACTIONS = ['production.createInstruction', 'production.draftInstructionVersion', 'production.saveInstructionVersion', 'production.bringTypedSteps'] as const
+
+/** Who saved a change to each version (its author included), from the version's audit rows. */
+export async function editorsOf(db: Db, versionIds: readonly string[]): Promise<Map<string, string[]>> {
+  const editors = new Map<string, string[]>()
+  if (versionIds.length === 0) return editors
+  const rows = await db.auditLog.findMany({ where: { recordType: VERSION_RECORD, recordId: { in: [...new Set(versionIds)] }, action: { in: [...SAVE_ACTIONS] } }, select: { recordId: true, actorId: true }, distinct: ['recordId', 'actorId'] })
+  for (const row of rows) editors.set(row.recordId, [...(editors.get(row.recordId) ?? []), row.actorId])
+  return editors
+}
+
 export const stepsOf = (db: Db, versionIds: readonly string[]): Promise<StepRow[]> =>
   versionIds.length === 0 ? Promise.resolve([]) : db.workInstructionStep.findMany({ where: { versionId: { in: [...new Set(versionIds)] } }, select: STEP, orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }] })
 

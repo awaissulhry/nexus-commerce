@@ -464,6 +464,7 @@
     "DRAFT_EXISTS": "Una versione è già in scrittura: modificala, o prima scartala.",
     "NOT_DRAFT": "Questa versione non è più una bozza: non cambia mai. Inizia una nuova versione.",
     "OWN_DRAFT": "Questa è una tua bozza: la approva un’altra persona (quattro occhi).",
+    "EDITED_DRAFT": "Hai modificato questa bozza: la approva una persona che non l’ha scritta né modificata (quattro occhi).",
     "NO_STEPS": "La bozza non ha passi: scrivine almeno uno prima.",
     "CHANGE_NOTE_MISSING": "La bozza richiede una nota di modifica: di’ cosa è cambiato rispetto alla versione precedente.",
     "MEDIA_NOT_READY": "Una foto o un video non è ancora caricato: aspetta o toglilo.",

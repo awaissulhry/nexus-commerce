@@ -19,6 +19,7 @@ import { allocateNumber } from '../../../platform/numbering/allocate'
 import { recordIn, versionRecord } from './office'
 import {
   assertMay,
+  editorsOf,
   FILE_RECORD,
   INSTRUCTION,
   INSTRUCTION_RECORD,
@@ -55,9 +56,10 @@ import {
  *                                                                named) with its steps and media; one draft at a time
  *   PUT   …/:id/versions/:versionId                              the editor's save of a DRAFT: change note, whether Seen is
  *                                                                asked, the whole list of steps in order with their media
- *   POST  …/versions/:versionId/publish                          a second person approves (never the author): the published
- *                                                                one is superseded, then this one published, in one
- *                                                                transaction; the floor shows it from now on
+ *   POST  …/versions/:versionId/publish                          a second person approves (never the author, nor anyone who
+ *                                                                saved a change to the draft): the published one is
+ *                                                                superseded, then this one published, in one transaction;
+ *                                                                the floor shows it from now on
  *   POST  …/versions/:versionId/discard                          a draft nobody wants, with why
  *
  * A version row is locked FOR UPDATE and its version compared inside the command, so a refusal is in words; the instruction
@@ -381,6 +383,7 @@ export async function publishVersion(caller: CommandCaller, instructionId: strin
         number: current.number,
         status: statusOf(current),
         authorId: current.authorId,
+        editorIds: (await editorsOf(tx, [current.id])).get(current.id) ?? [],
         approverId: context.actorId,
         instructionNumber: fresh.number,
         instructionActive: fresh.status === 'ACTIVE',
