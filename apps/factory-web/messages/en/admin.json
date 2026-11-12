@@ -1737,6 +1737,8 @@
     "inventory_reserve": "Reserve stock and release it",
     "inventory_hides_manage": "Correct a hide's grade and shade, re-measure it",
     "inventory_shade_override": "Let a hide of another shade lot into an order, with the reason",
+    "inventory_lots_manage": "Split a lot of hides into shade groups and regroup them, record a lot's attributes, check its lifecycle",
+    "inventory_trace_report": "Make the dated trace report for a customer, a notified body or an authority (PDF or CSV)",
     "shipping_view": "See the shipments",
     "shipping_manage": "Plan and change shipments",
     "shipping_pack": "Pack a shipment",

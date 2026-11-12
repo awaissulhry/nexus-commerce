@@ -189,6 +189,8 @@ import { PO_DEPTH_DEFINITIONS, PO_DEPTH_PERMISSIONS } from '../../purchasing/po-
 import { ASK_TO_BUY_DEFINITIONS, ASK_TO_BUY_PERMISSIONS } from '../../purchasing/ask-to-buy/permissions'
 // B-W2b-288: the PPE text approvals (compliance.ppeTexts.manage, the owner's); reading is compliance.certificates.view.
 import { PPE_TEXTS_DEFINITIONS, PPE_TEXTS_PERMISSIONS } from '../../compliance/ppe-texts/permissions'
+// B-W2b-313: lots in depth (inventory.lots.manage: split into shade groups, regroup, attributes; inventory.trace.report).
+import { INVENTORY_LOTS_DEPTH_DEFINITIONS, INVENTORY_LOTS_DEPTH_PERMISSIONS } from '../../inventory/lots-depth/permissions'
 // B-W2a-35: the plant (machines, machine requests, maintenance jobs).
 import { PLANT_DEFINITIONS, PLANT_FLOOR_PERMISSIONS, PLANT_PERMISSIONS } from '../../plant/permissions'
 // B-W2a-39: the accounting exports and the period locks (accounting.view | export | lock | unlock).
@@ -890,6 +892,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   ASK_TO_BUY_DEFINITIONS,
   // B-W2b-288: the PPE text approvals (area `compliance`, declared above).
   PPE_TEXTS_DEFINITIONS,
+  // B-W2b-313: lots in depth (area `inventory`, declared above).
+  INVENTORY_LOTS_DEPTH_DEFINITIONS,
 ])
 
 /** The area of the permissions only floor roles hold (and floor roles hold no other, but FLOOR_SHARED_PERMISSIONS). */
@@ -1194,6 +1198,8 @@ for (const name of PO_DEPTH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(nam
 for (const name of ASK_TO_BUY_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-288: the PPE text approvals.
 for (const name of PPE_TEXTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-313: lots in depth.
+for (const name of INVENTORY_LOTS_DEPTH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

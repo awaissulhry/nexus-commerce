@@ -1737,6 +1737,8 @@
     "inventory_reserve": "Riservare e liberare merce",
     "inventory_hides_manage": "Correggere scelta e tonalità di una pelle, rimisurarla",
     "inventory_shade_override": "Ammettere in un ordine una pelle di un altro lotto di tonalità, con il motivo",
+    "inventory_lots_manage": "Dividere un lotto di pelli in gruppi di tonalità e riunirli, registrare gli attributi di un lotto, verificarne il ciclo di vita",
+    "inventory_trace_report": "Fare il rapporto di tracciabilità datato per un cliente, un organismo notificato o un'autorità (PDF o CSV)",
     "shipping_view": "Vedere le spedizioni",
     "shipping_manage": "Pianificare e cambiare spedizioni",
     "shipping_pack": "Imballare una spedizione",
