@@ -1,0 +1,21 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/mtm-office.prisma (rules: src/ownership.ts; roles: src/roles.ts). W2b-5 schema wave 44/44 (B-W2b-297): the made-to-measure office's appointments (fittings, showroom visits, measuring sessions) and fitting results, built switched OFF (GATE-MTM: no style is made to measure until a person flags it). The office writes them through apps/factory-api's modules/sales/mtm (B-W2b-358) and modules/sales/fittings (B-W2b-360), always through command(); the API keeps staff to the companies and parties their grants reach. A rider gets the invite and the reminder by e-mail (FAKE until the Owner's switch): no portal or link session (factory_partner_runtime) reads an appointment or a fitting result, and the floor reads neither (body measures and their changes are the rider's personal data, office only). Nothing is deleted: an appointment is cancelled, a fitting result stays (the …_mtm_office_w2b_guards triggers refuse DELETE and TRUNCATE for every login). After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "Appointment": {
+      "about": "The office books a fitting, a showroom visit or a measuring session with a customer and its rider (when, until when, where, with whom), moves it while booked, sends the rider the invite and the reminder, and marks it done, missed or cancelled.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "FittingResult": {
+      "about": "The office records what a fitting found for a made-to-measure unit (per point the change asked, OK, ALTER or REMAKE, the words) and names, once each, the alteration it opened and the new profile revision it led to.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    }
+  }
+}

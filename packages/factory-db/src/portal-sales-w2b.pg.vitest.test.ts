@@ -48,7 +48,8 @@ const admin = async (text: string, values: unknown[] = []) => (await db.admin.qu
 const PARTNER_HIDDEN: Readonly<Record<string, readonly string[]>> = {
   PortalOrderRequest: ['decidedById'],
   OrderChangeRequest: ['answeredById'],
-  MeasurementProfile: ['internalNote', 'createdById'],
+  // W2b-5 (wave 44/44, B-W2b-297): nor who reviewed it or which office person measured it.
+  MeasurementProfile: ['internalNote', 'createdById', 'measuredByUserId', 'reviewedById'],
 }
 /**
  * INSERT a copy of row `id` of `table` with `changes`, in `scope`: the row is read as the owner, and a partner writes only
@@ -140,7 +141,7 @@ describe('grants and the seed', () => {
     expect(byName('PortalOrderRequest').factory_runtime!.privileges).toEqual(['select', 'update'])
     const profile = classifiedModels(loadSchema(), ownership).find(({ model }) => model.name === 'MeasurementProfile')!.ownership.access
     expect(profile.factory_runtime!.privileges).toEqual(['select', 'insert', 'update'])
-    expect(profile.factory_partner_runtime).toMatchObject({ privileges: ['select', 'insert'], hiddenColumns: ['internalNote', 'createdById'] })
+    expect(profile.factory_partner_runtime).toMatchObject({ privileges: ['select', 'insert'], hiddenColumns: ['internalNote', 'createdById', 'measuredByUserId', 'reviewedById'] })
   })
 
   it('the seed: a draft, three sent requests decided or waiting, three change requests, two payment intents, a profile sent by link', async () => {
