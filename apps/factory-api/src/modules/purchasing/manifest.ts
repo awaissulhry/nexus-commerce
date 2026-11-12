@@ -240,4 +240,10 @@ export const manifest = defineManifest({
   'POST /purchasing/suppliers/:partyId/status': { audiences: ['office'], permission: 'purchasing.suppliers.status', scope: 'record' },
   'GET /purchasing/suppliers/:partyId/status-reach': { audiences: ['office'], permission: 'parties.view', scope: 'record' },
   'PUT /purchasing/suppliers/:partyId/contacts/:contactId/receives': { audiences: ['office'], permission: 'parties.manage', scope: 'record' },
+  // B-W2b-347 (SCM-043): sample and development orders (./sample-orders): purchase orders of kind SAMPLE, can() over the
+  // order's (or the body's) company, site and supplier in the handler, as every order route; the PDF also asks the cost grain.
+  'GET /purchasing/sample-orders': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
+  'GET /purchasing/sample-orders/choices': { audiences: ['office'], permission: 'purchasing.manage', scope: 'record' },
+  'POST /purchasing/sample-orders': { audiences: ['office'], permission: 'purchasing.manage', scope: 'record' },
+  'GET /purchasing/sample-orders/:purchaseOrderId/pdf': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
 })

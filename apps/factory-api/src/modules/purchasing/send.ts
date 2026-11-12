@@ -34,6 +34,9 @@ import { copiesOf } from '@nexus/factory-domain/purchasing/suppliers-depth/routi
 import { checksOf, isCancelledLine, letterheadProblems, readFacts, siteAddressOf, type OrderFacts } from './views'
 // B-W2b-296: a third party's delivery address and the lines' delivery schedules on the PDF.
 import { shipToPrintOf } from './po-depth/store'
+// B-W2b-347: a sample order's PDF is the sample order (titled so, what it is for, not a production order).
+import { sampleOrderDocument } from '@nexus/factory-domain/purchasing/sample-orders/document'
+import { developmentOf } from './sample-orders/store'
 
 /**
  * Sending a purchase order (B-W1-30; SCM-054, SCM-055; A1 §2.5; PLAN §4.7 stage 08-buy; the design's Send dialog, SCR-037):
@@ -216,7 +219,7 @@ export async function previewOrderPdf(caller: CommandCaller, orderId: string, la
     return { facts: read, supplier: await supplierParty(client, read, today) }
   })
   const frozen = supplierOrderOf(facts, supplier, today)
-  const composed = composeDocument({ ...purchaseOrderDocument({ ...frozen, language: language ?? frozen.language }), company, sample: true })
+  const composed = sampleOrderDocument(composeDocument({ ...purchaseOrderDocument({ ...frozen, language: language ?? frozen.language }), company, sample: true }), developmentOf(facts.sample))
   return { pdf: await renderDocumentPdf(composed), fileName: documentFileName(composed) }
 }
 
@@ -286,7 +289,7 @@ export async function sendOrder(request: FastifyRequest, orderId: string, body: 
     if (!checks.ready || !facts.contact?.email) refused = refusal(checks.checks)
     else {
       const frozen = supplierOrderOf(facts, supplier, today)
-      const composed = composeDocument({ ...purchaseOrderDocument(frozen), company: await companyLegalOf(caller, order.companyId), sample: false })
+      const composed = sampleOrderDocument(composeDocument({ ...purchaseOrderDocument(frozen), company: await companyLegalOf(caller, order.companyId), sample: false }), developmentOf(facts.sample))
       const pdf = await renderDocumentPdf(composed)
       const fileName = documentFileName(composed)
       const file = await putGeneratedFile(processFiles(), caller, {

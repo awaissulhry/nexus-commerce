@@ -223,6 +223,9 @@ function ReadyOrder({ order, model, actions, panels, invoices }: { order: Purcha
           <span className="fw-by-meta">
             <Pill tone={STATUS_TONE[order.status]}>{t(`poStatus.${order.status}`)}</Pill>
             {order.revision > 1 && <Tag tone="neutral">{t('po.record.revision', { revision: order.revision })}</Tag>}
+            {/* B-W2b-347: a PO of type Sample says so and what it buys for (not counted in production spend). */}
+            {order.sample && <Tag tone="info">{t('po.record.sampleOrder')}</Tag>}
+            {order.sample?.style && <span className="fw-by-hint">{t(order.sample.round ? 'po.record.sampleForRound' : 'po.record.sampleFor', { style: `${order.sample.style.code} ${order.sample.style.name}`, round: order.sample.round?.number ?? '' })}</span>}
             <span className="fw-by-hint">{[`${order.site.code} · ${order.site.name}`, order.currency, order.contact ? order.contact.name : null].filter(Boolean).join(' · ')}</span>
           </span>
           <span className="fw-by-status" role="status">

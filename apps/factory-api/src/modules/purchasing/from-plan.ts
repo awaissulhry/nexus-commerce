@@ -13,6 +13,8 @@ import { assertBuyable, insertDraft } from './orders'
 import { requestIdOf, type RequestHoldCode } from '@nexus/factory-domain/purchasing/requests/requests'
 import { buildRequests, planRaws, type Built } from './requests/build'
 import { assertMay, officeContextOf, ORDER_COLUMNS, PARTY_COLUMNS, readOrder, type OrderRow, type Reader } from './store'
+// B-W2b-347: plan and request lines go on production orders only.
+import { assertTakesPlanLines, productionOrderWhere } from './sample-orders/store'
 
 /**
  * "Draft PO" from What to buy & make (B-W1-30; design 02: the Requirements grid's one-click Draft PO, the band's "Draft POs
@@ -93,7 +95,8 @@ async function lockDraft(tools: CommandTools, order: OrderRow): Promise<void> {
 
 /** The supplier's open draft at the site the caller would add to (its newest, in the supplier's currency), or null. */
 export const openDraftOf = (db: Reader, scope: { readonly companyId: string; readonly siteId: string; readonly partyId: string; readonly currency: string }) =>
-  db.purchaseOrder.findFirst({ where: { ...scope, status: 'DRAFT' }, orderBy: { id: 'desc' }, select: ORDER_COLUMNS })
+  // B-W2b-347: a production draft only (a sample order takes no plan or request lines).
+  db.purchaseOrder.findFirst({ where: { ...scope, status: 'DRAFT', ...productionOrderWhere }, orderBy: { id: 'desc' }, select: ORDER_COLUMNS })
 
 /**
  * Inside a command (the caller checked purchasing.manage over each line's company, site and supplier): the lines into
@@ -125,6 +128,8 @@ export async function draftLines(tools: CommandTools, context: OfficeContext, li
       if (!order || order.companyId !== companyId || order.siteId !== siteId || order.partyId !== supplierId) {
         throw new ValidationError(`The draft named for ${party.legalName} is not one of its orders for this site.`, [{ path: 'body/into', message: 'Name a draft of this supplier for the site.' }])
       }
+      // B-W2b-347: never into a sample order (409 SAMPLE_ORDER_TAKES_NO_PLAN_LINES).
+      await assertTakesPlanLines(tx, order)
     } else if (named === undefined) {
       order = await openDraftOf(tx, { companyId, siteId, partyId: supplierId, currency: party.currency })
     }
