@@ -45,6 +45,29 @@ model Party {
   /// As a supplier, its usual lead time: calendar days from the order to the goods at our site, 0 or more (PLN-066).
   /// Planning uses it when the item names none, or the item is bought from it instead of the item's default supplier.
   leadTimeDays Int?
+  /// W2b-5 (schema wave 42/44, SCM-002; suppliers-depth.prisma): as a supplier, what kind it is, one or more, each once;
+  /// empty: not said. Only on a party with the SUPPLIER, SUBCONTRACTOR or CARRIER role (checked when the kinds change).
+  supplierKinds             SupplierKind[]   @default([])
+  /// W2b-5 (SCM-008): as a supplier, where it stands with us; null: not set (W1's party status alone). A blocked or on-hold
+  /// supplier gets no new purchase order (B-W2b-311). Set only on a party with the SUPPLIER, SUBCONTRACTOR or CARRIER role,
+  /// never cleared once set; each change records when (not in the future, later than the last) and by whom (an active
+  /// office user; null: the system).
+  supplierStatus            SupplierStatus?
+  /// Why it has that status (1 to 500 characters, one line): required for CONDITIONAL, ON_HOLD and BLOCKED. For the office
+  /// only: the partner role can neither read nor write it.
+  /// @internal
+  supplierStatusReason      String?
+  supplierStatusChangedAt   DateTime?        @db.Timestamptz(3)
+  supplierStatusChangedById String?          @db.Uuid
+  /// W2b-5 (SCM-016; Reg. (EU) 2024/3015 on forced labour, due diligence from 14 December 2027): where it makes what it sells
+  /// us: the country (ISO 3166-1 alpha-2), the region (1 to 120 characters, one line), words (1 to 2000). As a tannery
+  /// (supplierKinds has TANNERY, required for these two): the countries its raw hides come from (alpha-2, each once, at most
+  /// 50) and its tannages (each once).
+  originCountry             String?
+  originRegion              String?
+  originNote                String?
+  hideOriginCountries       String[]         @default([])
+  tannages                  Tannage[]        @default([])
   /// The commercial terms its new quotes and orders start with (SAL-012; design customer.tax.terms): its payment terms
   /// from the library (FIN-075) and its price list (SAL-165; a discount group is a GROUP list), null: none of its own.
   paymentTermsId       String?            @db.Uuid
@@ -228,6 +251,10 @@ model Party {
   // W2b portal-followups.prisma (schema wave 23): the documents it uploaded and the profile changes it asked for.
   supplierDocumentUploads SupplierDocumentUpload[]
   changeRequests          PartyChangeRequest[]
+  // W2b-5 suppliers-depth.prisma (wave 42/44): its bank accounts, its qualifications and, as a workshop, its written terms.
+  bankAccounts            SupplierBankAccount[]
+  supplierQualifications  SupplierQualification[]
+  subcontractAgreements   SubcontractAgreement[]
   // W2a schedule.prisma: as a workshop, its slots on the planning board.
   scheduleSlots           ScheduleSlot[]
 
@@ -340,6 +367,8 @@ model PartyAddress {
   // W2b portal-sales.prisma (wave 21/22): the portal order requests and the change requests that ask to deliver there.
   portalOrderRequestsShipTo PortalOrderRequest[] @relation("PortalOrderRequestShipTo")
   orderChangeRequestsShipTo OrderChangeRequest[] @relation("OrderChangeRequestShipTo")
+  // W2b-5 suppliers-depth.prisma (wave 42/44): the bank account changes checked by calling its phone.
+  bankAccountCallBacks SupplierBankAccount[] @relation("SupplierBankAccountCallBackAddress")
 
   @@unique([tenantId, partyId, id])
 }
@@ -376,6 +405,9 @@ model PartyContact {
   phone       String?
   /// What they deal with; none is a plain contact.
   roles       PartyContactRole[] @default([])
+  /// W2b-5 (schema wave 42/44, SCM-004): what they receive from us, each once; empty: none by this routing (the purchase
+  /// order e-mail then goes to the ORDERS contacts, as in W1).
+  receives    PartyContactReceives[] @default([])
   /// The language they read, ISO 639-1; null: the party's language.
   language    String?
   status      MasterStatus       @default(ACTIVE)
@@ -409,6 +441,8 @@ model PartyContact {
   purchaseOrders      PurchaseOrder[]
   // W2b safety.prisma (wave 15/16): the safety roles they hold as an outside contact (a consultant RSPP, the doctor).
   safetyAppointments  SafetyAppointment[]
+  // W2b-5 suppliers-depth.prisma (wave 42/44): the bank account changes checked by calling them.
+  bankAccountCallBacks SupplierBankAccount[] @relation("SupplierBankAccountCallBackContact")
   // returns.prisma, complaints.prisma: the returns they asked for and the complaints they made.
   returnAuthorisations ReturnAuthorisation[]
   complaints          Complaint[]

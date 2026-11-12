@@ -82,6 +82,7 @@ import { seed as seedStylesDepth } from '../seed/styles-depth'
 import { seed as seedSubcontract } from '../seed/subcontract'
 import { seed as seedSubcontractReceipts } from '../seed/subcontract-receipts'
 import { seed as seedSubstances } from '../seed/substances'
+import { seed as seedSuppliersDepth } from '../seed/suppliers-depth'
 import { seed as seedSupply } from '../seed/supply'
 import { seed as seedTechfiles } from '../seed/techfiles'
 import { seed as seedThreads } from '../seed/threads'
@@ -419,6 +420,11 @@ beforeAll(async () => {
   // OPEN message, a re-promise, a move, a DRAFT what-if, an open capacity) are the plain ones a copy may repeat.
   await seedPlanningDepth({ db: factory, namespace: 'iso-a' })
   await seedPlanningDepth({ db: factory, namespace: 'iso-b' })
+  // The suppliers schema of W2b-5 (wave 42/44): P2's kinds, status and origin, its bank accounts (never changed in place), its
+  // qualifications and written terms; the first account (PROPOSED in the portal), qualification (PENDING) and agreement (DRAFT)
+  // are the plain ones a copy may repeat; with partnerScope, P1's PROPOSED account (the row a partner session inserts).
+  await seedSuppliersDepth({ db: factory, namespace: 'iso-a' }, { partnerScope: true })
+  await seedSuppliersDepth({ db: factory, namespace: 'iso-b' }, { partnerScope: true })
   // Every seed of both tenants: under a full parallel run this takes more than a minute.
 }, 120_000)
 
@@ -872,6 +878,7 @@ it('covers every classified table and every runtime role', () => {
     'StyleRevision',
     'StyleRevisionFile',
     'StyleText',
+    'SubcontractAgreement',
     'SubcontractBundle',
     'SubcontractConsumption',
     'SubcontractCostEntry',
@@ -884,6 +891,7 @@ it('covers every classified table and every runtime role', () => {
     'SubcontractReturnNotice',
     'SubcontractorCapacity',
     'SubstanceRule',
+    'SupplierBankAccount',
     'SupplierClaim',
     'SupplierClaimLine',
     'SupplierDeclarationLine',
@@ -894,6 +902,7 @@ it('covers every classified table and every runtime role', () => {
     'SupplierInvoiceLine',
     'SupplierInvoiceMatch',
     'SupplierItem',
+    'SupplierQualification',
     'SupplierQuestionnaire',
     'SupplierQuestionnaireResponse',
     'Suppression',

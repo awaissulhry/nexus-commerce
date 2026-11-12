@@ -244,6 +244,9 @@ model Company {
   privacyNotices       PrivacyNotice[]
   privacyDpias         PrivacyDpia[]
   processingActivities ProcessingActivity[]
+  // W2b-5 suppliers-depth.prisma (wave 42/44): the qualifications of its suppliers and workshops, its written terms with them.
+  supplierQualifications SupplierQualification[]
+  subcontractAgreements  SubcontractAgreement[]
   // W2b pay.prisma (schema wave 6/7): its incentive schemes, pay periods, payroll export layouts, exports and code mapping.
   incentiveSchemes     IncentiveScheme[]
   payPeriods           PayPeriod[]
