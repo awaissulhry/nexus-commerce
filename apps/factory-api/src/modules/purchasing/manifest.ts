@@ -267,4 +267,15 @@ export const manifest = defineManifest({
   'GET /purchasing/sample-orders/choices': { audiences: ['office'], permission: 'purchasing.manage', scope: 'record' },
   'POST /purchasing/sample-orders': { audiences: ['office'], permission: 'purchasing.manage', scope: 'record' },
   'GET /purchasing/sample-orders/:purchaseOrderId/pdf': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
+  // B-W2b-305 (po-approvals/, expediting/): an order's approval (read; take a waiting request back: whoever may send it),
+  // duplicate or reorder (a new draft: purchasing.manage over the order's company, site and supplier), the demand of each
+  // line and the expediting worklist (read), the chase (a mail to the supplier: purchasing.send). Each checked with can()
+  // over the order's company, site and supplier in the handler; the list filtered with scopeWhere().
+  'GET /purchasing/orders/:purchaseOrderId/approval': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
+  'POST /purchasing/orders/:purchaseOrderId/approval/withdraw': { audiences: ['office'], permission: 'purchasing.send', scope: 'record' },
+  'POST /purchasing/orders/:purchaseOrderId/duplicate': { audiences: ['office'], permission: 'purchasing.manage', scope: 'record' },
+  'GET /purchasing/orders/:purchaseOrderId/demand': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
+  'GET /purchasing/expediting': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
+  'GET /purchasing/orders/:purchaseOrderId/chase': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
+  'POST /purchasing/orders/:purchaseOrderId/chase': { audiences: ['office'], permission: 'purchasing.send', scope: 'record' },
 })
