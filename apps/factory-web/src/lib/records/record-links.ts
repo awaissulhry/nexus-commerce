@@ -333,6 +333,12 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/planning/demand': '/planning/demand',
   '/planning/demand/rows': '/planning/demand',
   '/planning/strategy': '/planning/mps',
+  // B-W2b-336: the promise list and its re-promises (SCR-109, `?site=` `?tile=` `?risk=` `?q=`), available to promise (`?style=`)
+  // and the supply-too-late tile of the exceptions (SCR-125).
+  '/planning/promises': '/planning/promise',
+  '/planning/promises/re-promises': '/planning/promise',
+  '/planning/promise/atp': '/planning/promise',
+  '/planning/exceptions/supply-late': '/planning/exceptions',
   // B-W2a-53: the plant's lists (the requests queue reads `?tile=`, the jobs `?view=`, the machines `?view=` and `?q=`).
   '/plant/requests': '/plant/requests',
   '/plant/jobs': '/plant/jobs',

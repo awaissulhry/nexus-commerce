@@ -9,6 +9,8 @@ import type { ExceptionList, PlanningException } from './api'
 import { exceptionsCan } from './model'
 import type { ExceptionsModel } from './view-model'
 import { ExceptionsView } from './view/ExceptionsView'
+// B-W2b-336: supply too late (the tile and the detail's fixes), made-up data.
+import { openSlot, SUPPLY_LATE_BARE, SUPPLY_LATE_FOUND_BY_DATE, SUPPLY_LATE_ROW_ID, supplyLateSlot } from './supply-late/demo'
 
 /**
  * SCR-125 Exceptions with made-up data: an invented site, materials ("DEMO-LEA-01 Nappa"), orders ("SO-DEMO-1043"),
@@ -202,6 +204,7 @@ function make(over: Partial<ExceptionsModel> = {}, permissions: readonly string[
       dialog: null,
       now: NOW,
       timeZone: 'Europe/Rome',
+      supplyLate: supplyLateSlot(permissions),
       ...over,
       controls,
     },
@@ -245,5 +248,30 @@ export const designScreen = defineDesignScreen<ExceptionsCase>({
     { id: 'read-only', label: 'Read-only: sees the queue; Acknowledge, Snooze, Resolve and Run held with the reason', model: make({ selected: [uid('8801', 1)] }, rolePermissions('read_only')) },
     { id: 'read-only-detail', label: 'Read-only: the detail, actions held', model: make({ detail: open(1), controls: { site: SITE.id, view: 'queue', kind: null, q: '', open: uid('8801', 1) } }, rolePermissions('read_only')) },
     { id: 'no-permission', label: 'Sales: no planning.view — the page says so (the row is hidden in the navigation)', model: make({}, rolePermissions('sales')) },
+    // B-W2b-336: Supplier dates later than needed (the tile), the supply too late's fixes, Check now.
+    ...supplyLateCases(),
   ],
 })
+
+/** B-W2b-336: the supply-too-late cases (`w2b-336-*`): the tile, its saved filter, the detail's four fixes, Check now, the roles. */
+function supplyLateCases() {
+  const supply = () => ({ detail: open(2), controls: { site: SITE.id, view: 'queue' as const, kind: null, q: '', open: SUPPLY_LATE_ROW_ID } })
+  const BUYER = rolePermissions('buyer')
+  const READER = rolePermissions('read_only')
+  return [
+    { id: 'w2b-336-tile', label: 'Tile Supplier dates later than needed (2)', model: make(), note: 'Counted by the supply-late read: open ones from the run or a supplier’s new date, snoozed ones counted.' },
+    { id: 'w2b-336-tile-pressed', label: 'Tile pressed: the queue’s supply too late', model: make({ controls: { site: SITE.id, view: 'queue', kind: 'SUPPLY_LATE', q: '', open: null }, rows: ROWS.filter((entry) => entry.kind === 'SUPPLY_LATE') }) },
+    { id: 'w2b-336-tile-loading', label: 'Tile: counting', model: make({ supplyLate: supplyLateSlot(PLANNER, { list: { status: 'loading' } }) }) },
+    { id: 'w2b-336-tile-error', label: 'Tile: the read failed — “—”, never 0', model: make({ supplyLate: supplyLateSlot(PLANNER, { list: { status: 'error', problem: 'supplyLate.error.offline' } }) }) },
+    { id: 'w2b-336-detail', label: 'Detail: chase PO-DEMO-0091 · move WO-DEMO-0221 on the board · buy elsewhere · re-promise', model: make({ ...supply(), supplyLate: openSlot(PLANNER) }), note: 'Each fix is a real link: the PO record with its chase dialog, the board at the work order, the material’s line in What to buy & make, Promise dates with the Re-promise.' },
+    { id: 'w2b-336-detail-supplier-date', label: 'Detail: found by the supplier’s new date; Check now done', model: make({ ...supply(), supplyLate: openSlot(PLANNER, SUPPLY_LATE_FOUND_BY_DATE, { checked: { raised: 0, stillOpen: 1, cleared: 0 } }) }) },
+    { id: 'w2b-336-detail-bare', label: 'Detail: no work order, no other source, no order at risk', model: make({ ...supply(), supplyLate: openSlot(PLANNER, SUPPLY_LATE_BARE) }) },
+    { id: 'w2b-336-detail-loading', label: 'Detail: reading the fixes', model: make({ ...supply(), supplyLate: supplyLateSlot(PLANNER, { detail: { id: SUPPLY_LATE_ROW_ID, loaded: { status: 'loading' } } }) }) },
+    { id: 'w2b-336-detail-error', label: 'Detail: the fixes could not be read, Try again', model: make({ ...supply(), supplyLate: supplyLateSlot(PLANNER, { detail: { id: SUPPLY_LATE_ROW_ID, loaded: { status: 'error', problem: 'supplyLate.error.offline' } } }) }) },
+    { id: 'w2b-336-checking', label: 'Check now: checking', model: make({ ...supply(), supplyLate: openSlot(PLANNER, undefined, { checking: true }) }) },
+    { id: 'w2b-336-check-offline', label: 'Check now: no connection, nothing checked', model: make({ ...supply(), live: 'offline', supplyLate: openSlot(PLANNER, undefined, { problem: 'supplyLate.refusal.offline' }) }) },
+    { id: 'w2b-336-new-item', label: 'Live: a supplier’s new date raised one — 1 update · Show', model: make({ updates: 1 }) },
+    { id: 'w2b-336-buyer', label: 'Buyer: checks and chases; Re-promise held (no promise dates)', model: make({ ...supply(), supplyLate: openSlot(BUYER) }, BUYER) },
+    { id: 'w2b-336-read-only', label: 'Read-only: Check now and Re-promise held with the reason', model: make({ ...supply(), supplyLate: openSlot(READER) }, READER) },
+  ]
+}

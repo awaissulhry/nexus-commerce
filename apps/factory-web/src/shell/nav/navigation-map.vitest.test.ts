@@ -134,6 +134,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/planning/milestones': 'planning.view', // GET /planning/milestones (B-W2b-263)
       '/planning/demand': 'planning.view', // GET /planning/demand (B-W2b-339)
       '/planning/mps': 'planning.view', // GET /planning/strategy (B-W2b-339)
+      '/planning/promise': 'planning.promise.view', // GET /planning/promises (B-W2b-336)
       '/purchasing/suppliers': 'parties.view', // GET /parties
       '/purchasing/orders': 'purchasing.view', // GET /purchasing/orders
       '/purchasing/requests': 'purchasing.view', // GET /purchasing/requests (B-W2a-69)
@@ -270,9 +271,11 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
     ])
     // The sales role: all of Sales, Home's approvals and mail; of Quality only Nonconformances (B-W2a-68: sales raise NCRs
     // from what a customer reports), Corrective actions (B-W2b-119: sales read the 8Ds of their customers) and Complaints
-    // (B-W2a-65: sales logs them); no Compliance or Planning.
+    // (B-W2a-65: sales logs them); no Compliance. Of Planning only Promise dates (B-W2b-336: planning.promise.view, sales asks
+    // "when?" on every quote).
     const sales = officeNavFor(permissionCheck(templateOf('sales')!.permissions))
-    expect(sales.areas.map((area) => area.id)).toEqual(['home', 'sales', 'products', 'purchasing', 'warehouse', 'production', 'quality', 'finance', 'admin'])
+    expect(sales.areas.map((area) => area.id)).toEqual(['home', 'sales', 'products', 'planning', 'purchasing', 'warehouse', 'production', 'quality', 'finance', 'admin'])
+    expect(rows(sales).filter((row) => row.href.startsWith('/planning/')).map((row) => row.href)).toEqual(['/planning/promise'])
     expect(rows(sales).filter((row) => row.href.startsWith('/quality/')).map((row) => row.href)).toEqual(['/quality/ncr', '/quality/capa', '/quality/complaints'])
     expect(rows(sales).filter((row) => row.href.startsWith('/sales/') || row.href.startsWith('/home/')).map((row) => row.href)).toEqual([
       '/home/today',

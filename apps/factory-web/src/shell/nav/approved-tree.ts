@@ -198,7 +198,11 @@ export const OFFICE: readonly TreeArea[] = [
         label: 'Dates',
         labelIt: 'Date',
         hideLabel: false,
-        pages: [{ id: 'planning.milestones', title: 'Time & action', titleIt: 'Calendario T&A', wave: 'W2b', href: '/planning/milestones' }],
+        pages: [
+          // W2b: B-W2b-336 Promise dates (SCR-109), first in the group (the design's order).
+          { id: 'planning.promise', title: 'Promise dates', titleIt: 'Date promesse', wave: 'W2b', href: '/planning/promise' },
+          { id: 'planning.milestones', title: 'Time & action', titleIt: 'Calendario T&A', wave: 'W2b', href: '/planning/milestones' },
+        ],
       },
       // W2b: B-W2b-339 Demand & forecast (SCR-374) and Master schedule & S&OP (SCR-202), the design's group "Long range".
       {

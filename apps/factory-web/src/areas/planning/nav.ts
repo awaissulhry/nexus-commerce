@@ -1,4 +1,4 @@
-import { CalendarClock, CalendarRange, ChartGantt, Gauge, Layers, ListChecks, Network, Scissors, Siren, SlidersHorizontal, TrendingUp } from 'lucide-react'
+import { CalendarCheck, CalendarClock, CalendarRange, ChartGantt, Gauge, Layers, ListChecks, Network, Scissors, Siren, SlidersHorizontal, TrendingUp } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -38,7 +38,11 @@ export const officeArea: OfficeAreaNav = {
       {
         id: 'planning-dates',
         label: 'shell:nav.planning.dates',
-        items: [{ id: 'planning-milestones', label: 'shell:nav.planning.milestones', href: '/planning/milestones', icon: CalendarClock, permission: 'planning.view' }],
+        items: [
+          // B-W2b-336: Promise dates (SCR-109), before Time & action (the design's order); planning.promise.view (sales asks "when?" too).
+          { id: 'planning-promise', label: 'shell:nav.planning.promise', href: '/planning/promise', icon: CalendarCheck, permission: 'planning.promise.view' },
+          { id: 'planning-milestones', label: 'shell:nav.planning.milestones', href: '/planning/milestones', icon: CalendarClock, permission: 'planning.view' },
+        ],
       },
       // B-W2b-339: Long range › Demand & forecast (SCR-374) and Master schedule & S&OP (SCR-202; its W2b part, the production
       // strategy per item), the design's group "Planning › Long range" (Scenarios is W3).
