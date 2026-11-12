@@ -1,9 +1,13 @@
 import { createElement } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
-import { at, canOf, inShell, PREFIX, SITE, SITE_SOUTH, SUPPLIER_LIST, SUPPLIERS, TIME_ZONE, type Role } from '../../../_shared/buying/fixtures'
-import { ORDER_ROWS, ORDER_SUMMARY } from '../demo/fixtures'
+import { at, canOf, inShell, PREFIX, ROLES, SITE, SITE_SOUTH, SUPPLIER_LIST, SUPPLIERS, TIME_ZONE, type Role } from '../../../_shared/buying/fixtures'
+import { order, ORDER_ROWS, ORDER_SUMMARY } from '../demo/fixtures'
 import { SEND_CARDS, SEND_OUTCOMES } from '../demo/daily/fixtures'
 import { NO_NEW_ORDER, type OrdersListModel, type SendManyModel } from '../model'
+// B-W2b-333: What it blocks, Confirmed later than needed, the row verbs Resend link · Chase · Duplicate (made-up worklist).
+import { chaseModel, CONFIRMED_LATE_ROWS, WORKLIST_ROWS } from '../depth/demo/fixtures'
+import { lateRowId } from '../depth/view/ListDepth'
+import { depthCanOf } from '../depth/model'
 import { OrdersListView } from './view/OrdersListView'
 
 /** B-W2b-24: a made-up next purchase order number (the series' next, not reserved). */
@@ -41,6 +45,29 @@ const sendMany = (over: Partial<SendManyModel> = {}): SendManyModel => ({ orderI
 function OrdersDesign({ model }: { model: OrdersCase }) {
   return inShell('/purchasing/orders', createElement(OrdersListView, { model: model.model }), model.role)
 }
+
+const WORKLIST = { status: 'ready' as const, rows: WORKLIST_ROWS, complete: true, confirmedLate: 2 }
+function depthListCase(role: Role, over: Partial<OrdersListModel> = {}): OrdersCase {
+  return listCase(role, { worklist: WORKLIST, depthCan: depthCanOf(ROLES[role]), ...over })
+}
+const lateView = (over: Partial<NonNullable<OrdersListModel['confirmedLate']>> = {}) => ({ view: 'confirmedLate' as const, confirmedLate: { rows: CONFIRMED_LATE_ROWS, more: false, problem: null, ...over } })
+const CHASED = order('CONFIRMED', { id: ORDER_ROWS.find((row) => row.number === 'PO-2026-0005')!.id, number: 'PO-2026-0005', status: 'CHANGES_PROPOSED' })
+
+const DEPTH_CASES = [
+  { id: 'w2b-333-list', label: 'What it blocks: the customer and work orders the late or unconfirmed lines put at risk; the Confirmed later than needed tile', model: depthListCase('buyer') },
+  { id: 'w2b-333-tile', label: 'Tile Confirmed later than needed → its saved view: each line, asked → the supplier’s day, days later, what it blocks', model: depthListCase('buyer', lateView()) },
+  { id: 'w2b-333-tile-selection', label: 'Confirmed later than needed: rows selected, Export N', model: depthListCase('buyer', { ...lateView(), selected: CONFIRMED_LATE_ROWS.map(lateRowId) }) },
+  { id: 'w2b-333-tile-empty', label: 'Confirmed later than needed: none', model: depthListCase('buyer', { ...lateView({ rows: [] }), worklist: { ...WORKLIST, confirmedLate: 0 } }) },
+  { id: 'w2b-333-tile-loading', label: 'Confirmed later than needed: loading', model: depthListCase('buyer', lateView({ rows: null })) },
+  { id: 'w2b-333-tile-error', label: 'Confirmed later than needed: couldn’t load (Try again)', model: depthListCase('buyer', lateView({ rows: null, problem: 'problem.offline' })) },
+  { id: 'w2b-333-tile-at-least', label: 'The worklist read stopped at 5000 open lines: the tile says “at least”', model: depthListCase('buyer', { worklist: { ...WORKLIST, complete: false } }) },
+  { id: 'w2b-333-worklist-failed', label: 'The worklist could not be read: the tile and What it blocks say “—”, never “nothing”', model: depthListCase('buyer', { worklist: { status: 'error', problem: 'problem.offline' } }) },
+  { id: 'w2b-333-row-verbs', label: 'Row verbs: Open · Send (drafts) · Resend link · Chase · Duplicate · Cancel (⋯ of a sent order)', model: depthListCase('buyer'), note: 'Open ⋯ on PO-2026-0007 (sent): Resend link, Chase, Duplicate, Cancel; a draft offers Send and Duplicate.' },
+  { id: 'w2b-333-chase', label: 'Chase from the list: the lines late or unconfirmed, the mail in the supplier’s language', model: depthListCase('buyer', { chase: chaseModel(CHASED) }) },
+  { id: 'w2b-333-chase-done', label: 'Chase from the list: sent', model: depthListCase('buyer', { chase: chaseModel(CHASED, { done: { to: 'ordini@conceria-demo.example.com', at: at(29, 11, 40) } }) }) },
+  { id: 'w2b-333-planner', label: 'Planner: What it blocks read only, no money, Chase and Duplicate absent', model: depthListCase('planner') },
+  { id: 'w2b-333-offline', label: 'Offline: Chase held “Offline”', model: depthListCase('buyer', { live: 'offline', chase: chaseModel(CHASED) }) },
+]
 
 export const designScreen = defineDesignScreen<OrdersCase>({
   screen: 'SCR-058',
@@ -103,5 +130,6 @@ export const designScreen = defineDesignScreen<OrdersCase>({
     { id: 'w2a-send-many-done', label: 'Send n: done — sent to whom, the confirm-by, one refused (changed meanwhile)', model: listCase('buyer', { sendMany: sendMany({ outcomes: SEND_OUTCOMES }) }) },
     { id: 'w2a-send-many-offline', label: 'Send n held: offline', model: listCase('buyer', { live: 'offline', sendMany: sendMany() }) },
     { id: 'w2a-send-many-no-right', label: 'Send n held: no purchasing.send (planner)', model: listCase('planner', { sendMany: sendMany() }) },
+    ...DEPTH_CASES,
   ],
 })

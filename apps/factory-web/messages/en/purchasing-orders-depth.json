@@ -1,0 +1,577 @@
+{
+  "tab": {
+    "schedule": "Delivery schedule",
+    "later": "A delivery is confirmed later than needed"
+  },
+  "held": {
+    "waitingForYes": "It waits for a yes: take the request back to change it."
+  },
+  "refused": {
+    "changed": "Someone changed the order meanwhile: it was read again. Check and try again."
+  },
+  "tile": {
+    "confirmedLate": "Confirmed later than needed",
+    "atLeast": "at least {count}"
+  },
+  "view": {
+    "confirmedLate": "Confirmed later than needed"
+  },
+  "list": {
+    "resendLink": "Resend link",
+    "worklistFailed": "What the orders block could not be read ({problem}): that column says “—”."
+  },
+  "later": {
+    "days_one": "{count} day later than needed",
+    "days_other": "{count} days later than needed"
+  },
+  "lines": {
+    "deliveries_one": "{count} delivery",
+    "deliveries_other": "{count} deliveries"
+  },
+  "blocks": {
+    "col": "For orders",
+    "colList": "What it blocks",
+    "failed": "Could not be read",
+    "none": "No order waits for it",
+    "stock": "For stock",
+    "more": "+{count}",
+    "late_one": "{count} order late by {days} days if it comes as confirmed",
+    "late_other": "{count} orders late, up to {days} days, if it comes as confirmed",
+    "inTime_one": "{count} order, in time",
+    "inTime_other": "{count} orders, in time",
+    "nothingAtRisk": "Nothing at risk",
+    "atRisk": "At risk: {what}, up to {days} days late",
+    "sales_one": "{count} customer order",
+    "sales_other": "{count} customer orders",
+    "work_one": "{count} work order",
+    "work_other": "{count} work orders"
+  },
+  "schedule": {
+    "hintDraft": "Split a line into deliveries, each with its day and quantity (⋯ on its row). The supplier sees them on the order.",
+    "hintSent": "The days asked stay as they were sent; the supplier’s days are kept apart. Record the supplier’s day with ⋯.",
+    "tableLabel": "Deliveries",
+    "count_one": "{count} delivery",
+    "count_other": "{count} deliveries",
+    "noLines": "No lines yet — add a material on Lines.",
+    "empty": "One delivery per line.",
+    "loading": "Reading the deliveries…",
+    "failed": "Couldn’t load deliveries",
+    "line": "Line {seq} · {item}",
+    "ended": "Cancelled or closed short",
+    "one": "One delivery",
+    "nOfM": "{n} of {m}",
+    "closedDay": "The supplier is closed that day",
+    "menu": "Line {seq}, delivery {n}: actions",
+    "split": "Split into deliveries…",
+    "change": "Change the deliveries…",
+    "clear": "Back to one delivery…",
+    "laterBanner_one": "{count} delivery is confirmed later than needed by {supplier}",
+    "laterBanner_other": "{count} deliveries are confirmed later than needed by {supplier}",
+    "laterHint": "Planning counts the supplier’s day. Chase the supplier (⋯ in the band) or see what it blocks on Lines.",
+    "col": {
+      "line": "Line",
+      "delivery": "Delivery",
+      "asked": "Day asked",
+      "theirs": "Supplier’s day",
+      "quantity": "Quantity",
+      "note": "Note"
+    },
+    "state": {
+      "DRAFT": "Not sent yet",
+      "ASKED": "Not confirmed yet",
+      "CONFIRMED": "As asked",
+      "LATER": "Later than needed"
+    },
+    "held": {
+      "two": "A schedule has two deliveries or more (one delivery is the line itself).",
+      "many": "At most {count} deliveries a line.",
+      "quantity": "Delivery {n}: a quantity above 0, at most four decimals.",
+      "day": "Delivery {n}: choose a day.",
+      "past": "Delivery {n}: the day is past; ask for today or later.",
+      "sameDay": "Delivery {n}: two deliveries on one day — make them one.",
+      "note": "Delivery {n}: the note is too long.",
+      "sum": "The deliveries add up to {total}; the line is {quantity}.",
+      "ended": "The line is cancelled or closed short: its deliveries change no more.",
+      "sent": "The order was sent: the days asked change only with a new revision (Change)."
+    },
+    "refused": {
+      "day": "A delivery’s day was refused: it is past or on the same day as another.",
+      "sum": "The deliveries were refused: together they must be the line’s quantity."
+    }
+  },
+  "scheduleDialog": {
+    "title": "Deliveries of line {seq} · {item}",
+    "subtitle": "The line is {quantity} {unit}",
+    "firstIsNeed": "The first delivery’s day becomes the line’s need date.",
+    "supplierSees": "The supplier sees each delivery on the order and confirms its day.",
+    "rowsLabel": "Deliveries",
+    "quantity": "Quantity {n}",
+    "day": "Day {n}",
+    "note": "Note {n}",
+    "remove": "Remove delivery {n}",
+    "add": "Add a delivery",
+    "even": "Split evenly in {count}, a week apart",
+    "sum": "Together {total} of {quantity} {unit}",
+    "sumUnknown": "A quantity is not a number yet.",
+    "save_one": "Save {count} delivery",
+    "save_other": "Save {count} deliveries"
+  },
+  "clear": {
+    "title": "Back to one delivery for line {seq}?",
+    "body_one": "The {count} delivery is removed; the line is one delivery on {date}.",
+    "body_other": "The {count} deliveries are removed; the line is one delivery on {date}.",
+    "confirm": "Back to one delivery"
+  },
+  "date": {
+    "first": "Record the supplier’s day…",
+    "move": "The supplier moves the day…",
+    "titleFirst": "The supplier’s day for line {seq}, delivery {n}",
+    "titleMove": "Move the supplier’s day of line {seq}, delivery {n}",
+    "asked": "Asked for {date} from {supplier}",
+    "firstHint": "The day the supplier gives for it. The day asked ({date}) stays as it was sent.",
+    "moveHint": "The supplier’s day is {date}. A move keeps who said it, when and why.",
+    "day": "The supplier’s day",
+    "later_one": "{count} day later than asked",
+    "later_other": "{count} days later than asked",
+    "source": "Who moves it",
+    "sourceOf": {
+      "SUPPLIER": "The supplier said so",
+      "BUYER": "We agreed it with the supplier"
+    },
+    "contact": "Who at the supplier",
+    "contactHint": "A name, as they gave it (optional).",
+    "reason": "Why",
+    "reasonHint": "Kept with the move; planning and the buyer read it.",
+    "saveFirst": "Record the day",
+    "saveMove": "Move the day",
+    "held": {
+      "day": "Choose a day.",
+      "same": "That is the day it is now.",
+      "reason": "Say why the day moves.",
+      "reasonLong": "The reason is too long (2000 characters at most).",
+      "contactLong": "The name is too long (200 characters at most).",
+      "notSent": "The order is not sent yet: the supplier has no day to give.",
+      "closed": "The order no longer takes a new day (received, closed or cancelled)."
+    }
+  },
+  "calendar": {
+    "title": "Deliveries by day",
+    "label": "Deliveries of {number}",
+    "open": "Supplier open",
+    "closed": "Supplier closed",
+    "asked": "A delivery asked",
+    "confirmed": "A delivery confirmed",
+    "later": "Confirmed later than needed",
+    "clash": "A delivery on a closed day",
+    "deliveries_one": "{count} delivery",
+    "deliveries_other": "{count} deliveries",
+    "closedFor": "the supplier is closed ({name})",
+    "nothing": "no delivery that day",
+    "noClosures": "{supplier} has no closure on file: every day is shown open.",
+    "noClosuresRight": "The supplier’s closures need parties.view: the calendar shows the deliveries only.",
+    "closuresFailed": "The supplier’s closures could not be read ({problem}): the calendar shows the deliveries only."
+  },
+  "history": {
+    "title": "Days moved",
+    "empty": "No day has moved.",
+    "line": "Line {seq}",
+    "delivery": "Line {seq}, delivery {n}",
+    "fromTo": "{from} → {to}",
+    "supplier": "The supplier",
+    "supplierName": "The supplier ({name})",
+    "agreed": "Agreed with the supplier",
+    "follows": "The line follows its earliest delivery: {reason}",
+    "col": {
+      "what": "What",
+      "move": "Day",
+      "who": "Who",
+      "why": "Why"
+    }
+  },
+  "rate": {
+    "title": "Rate at order of {number}",
+    "label": "1 {company} = how many {order}",
+    "hint": "A plain number, at most eight decimals (1.085).",
+    "frozen": "The order’s value in the company’s currency is worked out at this rate and frozen with the send.",
+    "accountant": "Your accountant confirms whether the euro value is the rate at order or at invoice: the rate at order is the default.",
+    "save": "Save the rate",
+    "held": {
+      "empty": "Type the rate.",
+      "bad": "A rate is a plain number above 0 with at most eight decimals.",
+      "sameCurrency": "The order is in the company’s currency: it takes no rate.",
+      "sent": "The order was sent: its rate is frozen."
+    }
+  },
+  "totals": {
+    "netIn": "Net total ({currency})",
+    "noLines": "No lines yet.",
+    "rateLabel": "Rate at order",
+    "rate": "1 {company} = {rate} {order}",
+    "rateHint": "Typed on the order; frozen with the send.",
+    "noRate": "No rate at order",
+    "noRateDraft": "No rate yet: the send asks for it",
+    "companyHint": "At the rate at order, as sent.",
+    "companyHintDraft": "At the rate at order; frozen with the send.",
+    "setRate": "Set the rate",
+    "changeRate": "Change the rate",
+    "depthFailed": "The rate could not be read: the totals show the order’s currency only."
+  },
+  "kind": {
+    "rolls": {
+      "full_one": "{count} roll × {length} m × {width} cm",
+      "full_other": "{count} rolls × {length} m × {width} cm",
+      "length_one": "{count} roll × {length} m",
+      "length_other": "{count} rolls × {length} m",
+      "count_one": "{count} roll",
+      "count_other": "{count} rolls",
+      "notQuantity": "the rolls no longer make the quantity",
+      "otherWidth": "another width than the material’s {width} cm"
+    },
+    "certificate": "Certificate {number} ({standard})",
+    "certificateState": {
+      "HOLDS": "holds",
+      "NOT_VALID": "no longer valid",
+      "OTHER_SUPPLIER": "covers it from another supplier",
+      "NOT_COVERING": "does not cover this material"
+    },
+    "certificateEndsEarly": "ends {date}, before it is needed",
+    "noCertificate": "No certificate named",
+    "noCertificateKnown": "No certificate in the register covers it",
+    "variant": "Variant {code}",
+    "variantNotUsable": "Variant {code} can no longer be used",
+    "held": {
+      "count": "Rolls: a whole number from 1 to 9999.",
+      "length": "Length: a number of metres above 0 (two decimals).",
+      "width": "Width: a number of centimetres above 0 (two decimals).",
+      "sent": "The order was sent: its lines change only with a new revision."
+    },
+    "refused": {
+      "rolls": "The rolls were refused: check the count, length and width.",
+      "certificate": "That certificate does not hold for this supplier and material today.",
+      "variant": "That variant cannot be used on this line (archived, or of another colour)."
+    }
+  },
+  "kindDialog": {
+    "open": "Rolls, certificate and variant…",
+    "title": "Line {seq} · {item}",
+    "rolls": "Rolls",
+    "byRolls": "Bought by rolls",
+    "count": "Rolls",
+    "length": "Length of a roll (m)",
+    "width": "Width (cm)",
+    "widthHint": "The material is {width} cm wide.",
+    "rollsHint": "The quantity follows the rolls when its unit can say it (rolls, metres, square metres).",
+    "certificate": "Certificate (EN 1621) the supplier delivers against",
+    "certificateHint": "Certificates of the register in force today; it is checked again at receipt.",
+    "noChoices": "No certificate of the register covers this protector from this supplier today.",
+    "noCertificate": "None named",
+    "certificateNow": "{number} ({standard}) — named now",
+    "choiceThis": "{number} ({standard}) · this supplier · until {date}",
+    "choiceAny": "{number} ({standard}) · any supplier · until {date}",
+    "variant": "Variant",
+    "variantApart": "Each lot keeps its variant apart in stock.",
+    "variantOneBalance": "The material is not tracked by lot: its variants share one stock balance.",
+    "noVariant": "No variant",
+    "size": "size {size}",
+    "save": "Save"
+  },
+  "mark": {
+    "lineHeld": "Held",
+    "many": "{count} documents hold this order at Send",
+    "failed": "The documents check could not be read ({problem}): Send checks it again.",
+    "notChecked_one": "{count} line was not checked for documents: the supplier’s kinds are not set (Suppliers › the supplier).",
+    "notChecked_other": "{count} lines were not checked for documents: the supplier’s kinds are not set (Suppliers › the supplier).",
+    "CR_VI_TEST_REPORT": {
+      "MET": "The chromium VI test report for {items} is in force.",
+      "EXPIRING": "The chromium VI test report for {items} expires on {date}.",
+      "EXPIRES_BEFORE_NEED": "The chromium VI test report for {items} expires on {date}, before line {lines} is needed.",
+      "EXPIRED": "The chromium VI test report for {items} expired on {date} — this PO can’t be sent.",
+      "MISSING": "There is no chromium VI test report for {items} — this PO can’t be sent."
+    },
+    "PPE_CERTIFICATE": {
+      "MET": "A valid certificate covers {items}.",
+      "EXPIRING": "The certificate for {items} ends on {date}.",
+      "EXPIRES_BEFORE_NEED": "The certificate for {items} ends on {date}, before line {lines} is needed.",
+      "EXPIRED": "The certificate for {items} ended on {date} — this PO can’t be sent.",
+      "MISSING": "No valid certificate of the register covers {items} — this PO can’t be sent."
+    },
+    "RULE": {
+      "MET": "The documents the company asks for are there.",
+      "EXPIRING": "A document the company asks for expires on {date}.",
+      "EXPIRES_BEFORE_NEED": "A document the company asks for expires on {date}, before line {lines} is needed.",
+      "EXPIRED": "A document the company asks before a PO is sent expired on {date} — this PO can’t be sent.",
+      "MISSING": "A document the company asks before a PO is sent is missing — this PO can’t be sent."
+    }
+  },
+  "law": {
+    "CR_VI_TEST_REPORT": "Leather with chromium VI at or above 3 mg/kg may not be placed on the EU market.",
+    "PPE_CERTIFICATE": "A protector is placed on the market only with a valid EU type-examination certificate."
+  },
+  "request": {
+    "waiting": "You asked to send it without the document: it waits for a second person’s yes.",
+    "waitingBy": "{name} asked to send it without the document: it waits for a second person’s yes.",
+    "waitingStale": "A request to send it without the document waits, but what holds the order changed: ask again.",
+    "approved": "{name} said yes: it may be sent without the document.",
+    "approvedStale": "{name} said yes, but what holds the order changed since: ask again.",
+    "rejected": "{name} said no: it is not sent without the document.",
+    "withdrawn": "The request to send it without the document was taken back.",
+    "reason": "Why: {reason}",
+    "words": "Their words: {words}"
+  },
+  "override": {
+    "open": "Send without a valid document…",
+    "withdraw": "Take the request back",
+    "title": "Send without a valid document?",
+    "subtitle": "{number} to {supplier}",
+    "whatHolds": "What holds the order",
+    "col": {
+      "document": "Document",
+      "lines": "Lines",
+      "why": "Why it matters"
+    },
+    "lines": "Line {lines}: {items}",
+    "why": {
+      "CR_VI_TEST_REPORT": "Without a valid test the leather may carry chromium VI: garments made of it may not be sold.",
+      "PPE_CERTIFICATE": "Without a valid certificate the protector may not go into a certified garment.",
+      "RULE": "The company asks for this document before a PO is sent."
+    },
+    "reason": "Why it goes without the document",
+    "reasonHint": "At least {min} characters; the second person reads it.",
+    "second": "A second person must say yes (a quality inspector, with an authenticator code) before it can be sent.",
+    "never": "Nobody says yes to their own request — the Owner included.",
+    "covers": "The yes covers exactly what holds the order now: if that changes, ask again.",
+    "ask": "Ask for approval",
+    "held": {
+      "notDraft": "Only a draft is held at Send.",
+      "nothing": "No document holds this order.",
+      "waiting": "A request waits for its yes already.",
+      "approved": "The yes is there: send the order.",
+      "other": "The request cannot be asked now.",
+      "reason": "Say why, in {count} characters or more.",
+      "reasonLong": "At most {count} characters."
+    }
+  },
+  "decide": {
+    "open": "Decide…",
+    "title": "Send {number} without the document?",
+    "asked": "{name} asks: {reason}",
+    "choice": "Your decision",
+    "yes": "Yes, it may go without the document",
+    "no": "No",
+    "wordsYes": "Your words (optional)",
+    "wordsNo": "Why not (the person who asked reads it)",
+    "yesHint": "A yes asks your authenticator code and covers exactly what holds the order now.",
+    "noHint": "The order stays held until the document is in force.",
+    "approve": "Say yes",
+    "reject": "Say no",
+    "held": {
+      "none": "No request waits for a decision.",
+      "own": "You asked: a second person decides (the Owner included).",
+      "noRight": "Deciding needs purchasing.compliance.override.",
+      "stale": "What holds the order changed since it was asked: the person must ask again.",
+      "other": "It cannot be decided now.",
+      "words": "Say why not."
+    }
+  },
+  "stepUp": {
+    "title": "Your authenticator code",
+    "decide": "Your code says yes: this order may be sent without the document.",
+    "confirm": "Confirm",
+    "problem": {
+      "failed": "The code could not be checked. Try again.",
+      "wrong": "That code is not right. Try the next one.",
+      "locked": "Too many wrong codes: wait a few minutes.",
+      "noAuthenticator": "Set up an authenticator first (My profile).",
+      "tooMany": "Too many tries: wait a minute."
+    }
+  },
+  "withdraw": {
+    "overrideTitle": "Take the request back?",
+    "overrideBody": "The order stays held at Send until the document is in force or you ask again.",
+    "approvalTitle": "Take the request for a yes back?",
+    "approvalBody": "The order becomes a draft again: change it, then send it (the rule asks again).",
+    "note": "A note (optional)",
+    "confirm": "Take it back"
+  },
+  "approval": {
+    "waiting": "Waiting for a yes from {approver}: nothing was sent.",
+    "waitingDue": "Waiting for a yes from {approver} by {due}: nothing was sent.",
+    "waitingHint": "Everything on the order is held while it waits; take the request back to change it.",
+    "approvedSending": "{name} said yes: it is being sent.",
+    "approvedDraft": "{name} said yes to it as it is: Send sends it without asking again.",
+    "sentWithYes": "Sent with its yes from {name}.",
+    "rejected": "{name} said no: the order is a draft again.",
+    "rejectReason": "Why: {reason}",
+    "comment": "Their words: {comment}",
+    "withdrawn": "The request for a yes was taken back.",
+    "stale": "The request for a yes is out of date: the order changed after it was asked.",
+    "open": "Open in Approvals",
+    "withdraw": "Take the request back",
+    "asked": "Asked {approver} for a yes: nothing was sent until it comes.",
+    "waitingFor": "waits for a yes from {approver} (nothing sent)",
+    "waitingAsked": "waits for a yes (nothing sent)",
+    "wouldAsk": "Send asks {approver} for a yes first; it goes when they say yes.",
+    "wouldAskYou": "Send asks a yes first; the rule names you, so a second person decides.",
+    "rule": "Rule: {rule}",
+    "held": {
+      "notWaiting": "No request waits for a yes."
+    }
+  },
+  "chase": {
+    "open": "Chase the supplier…",
+    "title": "Chase {supplier}",
+    "subtitle": "{number}: the lines late or not confirmed",
+    "reading": "Reading what is late…",
+    "failed": "Couldn’t read what to chase",
+    "nothing": "Nothing is late or waiting for a confirmation",
+    "nothingHint": "Every open line is confirmed and in time.",
+    "linesLabel": "Lines to chase",
+    "col": {
+      "take": "Chase",
+      "line": "Line",
+      "asked": "Asked",
+      "theirs": "Supplier’s day",
+      "why": "Why"
+    },
+    "take": "Chase line {seq}",
+    "lineSeq": "Line {seq}",
+    "notConfirmed": "Not confirmed",
+    "daysLate_one": "{count} day late",
+    "daysLate_other": "{count} days late",
+    "to": "To {name} ({email}), in {language}.",
+    "noEmail": "no e-mail",
+    "noContact": "No contact who receives orders: add one on the supplier.",
+    "mailLabel": "The mail as the supplier reads it",
+    "message": "Your message (optional)",
+    "messageHint": "It goes with the mail; no price and no link are sent.",
+    "send": "Send chase",
+    "done": "Chase sent to {to} at {time}",
+    "doneHint": "It is on the order’s thread; the supplier answers there or on its link.",
+    "refused": {
+      "changed": "The order changed meanwhile: what to chase was read again."
+    },
+    "held": {
+      "done": "Sent.",
+      "offline": "Offline: the chase waits for the network.",
+      "notSent": "The order is not sent yet: there is nothing to chase.",
+      "closed": "The order is received, closed or cancelled.",
+      "reading": "Reading what is late…",
+      "nothing": "Nothing to chase.",
+      "noContact": "No contact with an e-mail receives orders.",
+      "other": "It cannot be chased now.",
+      "noLine": "Tick a line to chase.",
+      "long": "At most {count} characters."
+    }
+  },
+  "reason": {
+    "LATE": "Late",
+    "NOT_CONFIRMED": "Not confirmed",
+    "CONFIRMED_LATE": "Confirmed later than needed"
+  },
+  "language": {
+    "it": "Italian",
+    "en": "English"
+  },
+  "duplicate": {
+    "open": "Duplicate…",
+    "reorderLine": "Reorder this line…",
+    "reorderN_one": "Reorder {count} line",
+    "reorderN_other": "Reorder {count} lines",
+    "title": "Duplicate {number}",
+    "titleReorder": "Reorder from {number}",
+    "subtitle": "A new draft to {supplier}",
+    "lines": "Lines to copy",
+    "needDate": "Need date for every line",
+    "needDateHint": "Empty: each line its old day if still ahead of the supplier’s lead time, else the earliest arrival.",
+    "copies": "The same supplier, site, contact, currency, Incoterms, payment terms and note for the supplier.",
+    "prices": "Prices from the supplier’s approved source today when there is one, else the old line’s.",
+    "notCopied": "Not copied: the internal note, delivery schedules, rolls, certificates and variants, a sample order’s style.",
+    "confirm_one": "Create the draft with {count} line",
+    "confirm_other": "Create the draft with {count} lines",
+    "held": {
+      "noLine": "Choose a line to copy.",
+      "past": "The need date is past: choose today or later."
+    },
+    "refused": {
+      "lines": "A line can’t be copied (cancelled, or its material or colour is archived)."
+    }
+  },
+  "late": {
+    "tableLabel": "Lines confirmed later than needed",
+    "count_one": "{count} line",
+    "count_other": "{count} lines",
+    "failed": "Couldn’t load the lines confirmed later than needed",
+    "empty": "No line is confirmed later than needed",
+    "emptyBody": "Every confirmed day is the day asked or earlier.",
+    "openSchedule": "Open the delivery schedule",
+    "rowMenu": "{number} line {seq}: actions",
+    "col": {
+      "order": "PO · supplier",
+      "line": "Line",
+      "asked": "Asked",
+      "theirs": "Supplier’s day",
+      "open": "Still to come"
+    },
+    "csv": {
+      "order": "PO",
+      "supplier": "Supplier",
+      "line": "Line",
+      "material": "Material",
+      "asked": "Asked",
+      "theirs": "Supplier's day",
+      "later": "Days later",
+      "atRisk": "At risk"
+    },
+    "next": "next: delivery {n}",
+    "onSchedule": "See its delivery schedule"
+  },
+  "tolerance": {
+    "title": "Received against the order",
+    "of": "{received} of {expected} {unit}",
+    "none": "Exactly as ordered",
+    "both": "± {pct} %",
+    "overUnder": "+{over} % / −{under} %",
+    "nothing": "Nothing yet",
+    "ended": "Cancelled or closed short",
+    "depthFailed": "The tolerances could not be read: the line’s own tolerance is shown.",
+    "col": {
+      "received": "Received",
+      "difference": "Difference",
+      "tolerance": "Tolerance",
+      "state": "State"
+    },
+    "source": {
+      "LINE": "The line’s own",
+      "RULE": "A delivery tolerance",
+      "NONE": "No tolerance"
+    },
+    "kind": {
+      "EXACT": "As expected",
+      "WITHIN_TOLERANCE": "Within the tolerance",
+      "OVER": "Over the tolerance",
+      "SHORT": "Short"
+    }
+  },
+  "send": {
+    "passDocuments": "The documents are valid",
+    "fixSchedule": "Fix on Delivery schedule",
+    "fixRate": "Set the rate",
+    "fixLines": "Fix on Lines"
+  },
+  "notice": {
+    "scheduled_one": "Saved: {count} delivery.",
+    "scheduled_other": "Saved: {count} deliveries.",
+    "cleared": "The line is one delivery again.",
+    "dateFirst": "The supplier’s day is recorded.",
+    "dateMoved": "The day moved; who, when and why are kept.",
+    "rate": "The rate at order is saved.",
+    "kind": "Line {seq} saved.",
+    "overrideAsked": "Asked: a second person decides whether it goes without the document.",
+    "overrideApproved": "You said yes: it may be sent without the document.",
+    "overrideRejected": "You said no: it stays held.",
+    "overrideWithdrawn": "The request was taken back.",
+    "approvalWithdrawn": "The request was taken back: the order is a draft again.",
+    "chased": "Chase sent to {to}.",
+    "copied": "A copy of {number}: check its lines, then send it."
+  }
+}

@@ -133,6 +133,10 @@ export const lineView = output({
   decidedAt: instant().nullable(),
   /** B-W2a-22: the firm planned order; null: the line is planned (the run may change it). */
   firm: firmView.nullable(),
+  /** B-W2b-306 (PLN-072): the order line this line's supply is for alone (hard-pegged); null: for every order. */
+  orderSpecific: output({ orderLineId: id(), orderId: z.string(), orderNumber: z.string(), lineSeq: z.number().int() }).nullable(),
+  /** B-W2b-306 (PLN-083): the planned order's date (its need, never before today) and how many days late its need is. */
+  planned: output({ date: businessDate(), daysLate: z.number().int().nullable() }),
   /** The item's standard cost per suggested unit, and the suggestion's expected value in minor units (cost grain). */
   unitCost: money.cost(unitPrice().nullable()),
   expectedAmount: money.cost(amountMinor().nullable()),

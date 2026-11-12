@@ -82,8 +82,8 @@ export function codeOfTask(task: Pick<WarehouseTask, 'hide' | 'lot'>): string | 
   return task.hide?.code ?? task.lot?.code ?? null
 }
 
-/** The screen that does a kind (a floor task route key), or null: none on the floor yet (a count: B-W2b-310's screen). */
-export type TaskScreen = 'move' | 'receive' | 'pick' | null
+/** The screen that does a kind (a floor task route key), or null: none on the floor. B-W2b-310: a count opens Count. */
+export type TaskScreen = 'move' | 'receive' | 'pick' | /* B-W2b-310 */ 'count' | null
 
 export function screenOf(kind: TaskKind): TaskScreen {
   switch (kind) {
@@ -95,8 +95,9 @@ export function screenOf(kind: TaskKind): TaskScreen {
       return 'receive'
     case 'PICK':
       return 'pick'
+    // B-W2b-310: Count on the task's place.
     case 'COUNT':
-      return null
+      return 'count'
   }
 }
 
