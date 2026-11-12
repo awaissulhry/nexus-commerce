@@ -108,6 +108,13 @@ import * as jobContracts from './portal-jobs/contract'
 import * as jobLink from './portal-jobs/link'
 import * as jobOffice from './portal-jobs/office'
 import * as jobPortal from './portal-jobs/portal'
+// B-W2b-331: subcontracting in depth (./subcontract-depth): written terms, the material balance, bundles, cost, days out.
+import * as depthContracts from './subcontract-depth/contract'
+import * as depthTerms from './subcontract-depth/terms'
+import * as depthBalance from './subcontract-depth/balance'
+import * as depthBundles from './subcontract-depth/bundles'
+import * as depthCost from './subcontract-depth/cost'
+import * as depthAgeing from './subcontract-depth/ageing'
 import { appClock as jobClock } from '../../platform/portal/tasks/clock'
 // B-W2a-44: supplier claims and returns to the supplier (./claims).
 import * as claims from './claims/claims'
@@ -183,6 +190,12 @@ import * as questionnaireLink from './questionnaire/link'
 import { reviewAnswer, supplierQuestionnaire } from './questionnaire/review'
 import { sendQuestionnaireLink } from './questionnaire/send'
 import { createVersion, listVersions, publishVersion, updateVersion } from './questionnaire/versions'
+// B-W2b-311: suppliers in depth (./suppliers-depth): kinds, status, origin, closures, what each contact receives.
+import * as suppliersDepthContracts from './suppliers-depth/contract'
+import { listSuppliers, supplierCounts } from './suppliers-depth/list'
+import { getProfile, updateProfile } from './suppliers-depth/profile'
+import { setReceives } from './suppliers-depth/receives'
+import { setStatus, statusReach } from './suppliers-depth/status'
 import { registerLinkRenewer } from '../../platform/links/renew'
 // B-W2b-219: the leather area tolerance where a PO line names none (PurchasingSettings.leatherAreaTolerancePct).
 import { getLeatherTolerance, getLeatherToleranceContract, putLeatherTolerance, putLeatherToleranceContract } from '../inventory/hides/tolerance'
@@ -198,6 +211,12 @@ import { createTolerance, listTolerances, moveTolerance, updateTolerance } from 
 // B-W2b-332: ask to buy (./ask-to-buy).
 import { askFromShortage, askOptions, askToBuy, cancelRequests as cancelAsked, getAsked, listAsked, rejectRequests as rejectAsked } from './ask-to-buy/ask'
 import * as askContracts from './ask-to-buy/contract'
+// B-W2b-347: sample and development orders (./sample-orders).
+import { sampleChoices } from './sample-orders/choices'
+import * as sampleContracts from './sample-orders/contract'
+import { createSampleOrder } from './sample-orders/create'
+import { listSampleOrders } from './sample-orders/list'
+import { sampleOrderPdf } from './sample-orders/pdf'
 // B-W2b-172: "Ask for a new link" on a dead questionnaire link.
 registerLinkRenewer('SUPPLIER_ONBOARD', 'Party', questionnaireLink.renewQuestionnaireLink)
 
@@ -396,6 +415,33 @@ export default defineRoutes('purchasing', manifest, async (app) => {
   app.post('/link/job/move-date', { schema: jobContracts.linkMoveDateContract, config: jobLimited }, async (request) => jobLink.moveDateByLink(request, request.body, request.query.language))
   app.post('/link/job/decline', { schema: jobContracts.linkDeclineContract, config: jobLimited }, async (request) => jobLink.declineByLink(request, request.body, request.query.language))
 
+  // B-W2b-331 (SCM-049, SCM-143, SCM-144, SCM-145, SCM-146, SCM-150): subcontracting in depth.
+  app.get('/purchasing/subcontracting/agreements', { schema: depthContracts.listAgreementsContract }, async (request) => depthTerms.listAgreements(request, request.query))
+  app.get('/purchasing/subcontracting/agreements/:agreementId', { schema: depthContracts.getAgreementContract }, async (request) => depthTerms.getAgreement(request, request.params.agreementId))
+  app.post('/purchasing/subcontracting/agreements', { schema: depthContracts.createAgreementContract }, async (request, reply) => reply.code(201).send(await depthTerms.createAgreement(request, request.body, idempotencyKeyFrom(request))))
+  app.patch('/purchasing/subcontracting/agreements/:agreementId', { schema: depthContracts.updateAgreementContract }, async (request) => depthTerms.updateAgreement(request, request.params.agreementId, request.body, idempotencyKeyFrom(request)))
+  app.delete('/purchasing/subcontracting/agreements/:agreementId', { schema: depthContracts.deleteAgreementContract }, async (request) => depthTerms.deleteAgreement(request, request.params.agreementId, request.query, idempotencyKeyFrom(request)))
+  app.post('/purchasing/subcontracting/agreements/:agreementId/sign', { schema: depthContracts.signAgreementContract }, async (request) => depthTerms.signAgreement(request, request.params.agreementId, request.body, idempotencyKeyFrom(request)))
+  app.post('/purchasing/subcontracting/agreements/:agreementId/terminate', { schema: depthContracts.terminateAgreementContract }, async (request) => depthTerms.terminateAgreement(request, request.params.agreementId, request.body, idempotencyKeyFrom(request)))
+  app.get('/purchasing/subcontracting/orders/:subcontractOrderId/terms', { schema: depthContracts.orderTermsContract }, async (request) => depthTerms.orderTerms(request, request.params.subcontractOrderId))
+  app.get('/purchasing/subcontracting/orders/:subcontractOrderId/balance', { schema: depthContracts.orderBalanceContract }, async (request) => depthBalance.orderBalance(request, request.params.subcontractOrderId))
+  app.post('/purchasing/subcontracting/orders/:subcontractOrderId/balance/declare', { schema: depthContracts.declareBalanceContract }, async (request, reply) =>
+    reply.code(201).send(await depthBalance.declareBalance(request, request.params.subcontractOrderId, request.body, idempotencyKeyFrom(request))),
+  )
+  app.post('/purchasing/subcontracting/orders/:subcontractOrderId/balance/adjust', { schema: depthContracts.adjustBalanceContract }, async (request, reply) =>
+    reply.code(201).send(await depthBalance.adjustBalance(request, request.params.subcontractOrderId, request.body, idempotencyKeyFrom(request))),
+  )
+  app.get('/purchasing/subcontracting/orders/:subcontractOrderId/bundles', { schema: depthContracts.orderBundlesContract }, async (request) => depthBundles.orderBundles(request, request.params.subcontractOrderId))
+  app.get('/purchasing/subcontracting/orders/:subcontractOrderId/cost', { schema: depthContracts.orderCostContract }, async (request) => depthCost.orderCost(request, request.params.subcontractOrderId))
+  app.post('/purchasing/subcontracting/orders/:subcontractOrderId/costs', { schema: depthContracts.bookCostContract }, async (request, reply) =>
+    reply.code(201).send(await depthCost.bookCost(request, request.params.subcontractOrderId, request.body, idempotencyKeyFrom(request))),
+  )
+  app.post('/purchasing/subcontracting/orders/:subcontractOrderId/costs/:entryId/reverse', { schema: depthContracts.reverseCostContract }, async (request, reply) =>
+    reply.code(201).send(await depthCost.reverseCost(request, request.params.subcontractOrderId, request.params.entryId, request.body, idempotencyKeyFrom(request))),
+  )
+  app.get('/purchasing/subcontracting/ageing', { schema: depthContracts.ageingContract }, async (request) => depthAgeing.subcontractorAgeing(request, request.query))
+  app.get('/purchasing/subcontracting/balances', { schema: depthContracts.balancesContract }, async (request) => depthAgeing.openBalances(request, request.query))
+
   // B-W2a-44 (SCM-134): supplier claims and returns to the supplier.
   app.get('/purchasing/claims', { schema: listClaimsContract }, async (request) => claims.listClaims(request, request.query))
   app.get('/purchasing/claims/counts', { schema: claimCountsContract }, async (request) => claims.claimCounts(request, request.query))
@@ -591,4 +637,29 @@ export default defineRoutes('purchasing', manifest, async (app) => {
   app.post('/purchasing/ask-to-buy/cancel', { schema: askContracts.cancelContract }, async (request) => cancelAsked(request, request.body, idempotencyKeyFrom(request)))
 
   app.post('/purchasing/ask-to-buy/reject', { schema: askContracts.rejectContract }, async (request) => rejectAsked(request, request.body, idempotencyKeyFrom(request)))
+  // B-W2b-311 (SCM-002, SCM-004, SCM-008, SCM-012, SCM-016): suppliers in depth (./suppliers-depth).
+  app.get('/purchasing/suppliers', { schema: suppliersDepthContracts.listSuppliersContract }, async (request) => listSuppliers(request, request.query))
+
+  app.get('/purchasing/suppliers/counts', { schema: suppliersDepthContracts.supplierCountsContract }, async (request) => supplierCounts(request, request.query))
+
+  app.get('/purchasing/suppliers/:partyId/profile', { schema: suppliersDepthContracts.getProfileContract }, async (request) => getProfile(request, request.params.partyId))
+
+  app.patch('/purchasing/suppliers/:partyId/profile', { schema: suppliersDepthContracts.updateProfileContract }, async (request) => updateProfile(request, request.params.partyId, request.body, idempotencyKeyFrom(request)))
+
+  app.post('/purchasing/suppliers/:partyId/status', { schema: suppliersDepthContracts.setStatusContract }, async (request) => setStatus(request, request.params.partyId, request.body, idempotencyKeyFrom(request)))
+
+  app.get('/purchasing/suppliers/:partyId/status-reach', { schema: suppliersDepthContracts.statusReachContract }, async (request) => statusReach(request, request.params.partyId, request.query.status))
+
+  app.put('/purchasing/suppliers/:partyId/contacts/:contactId/receives', { schema: suppliersDepthContracts.setReceivesContract }, async (request) => setReceives(request, request.params.partyId, request.params.contactId, request.body, idempotencyKeyFrom(request)))
+
+  // B-W2b-347 (SCM-043): sample and development orders (./sample-orders) — the list (RFQs & sourcing, SCR-222), what New sample
+  // order offers, the draft it makes (kind SAMPLE, for a style or a sample round) and the sample order PDF (a new tab). The rest
+  // of a sample order is W1's on its record; the send prints it as the sample order (send.ts); planning never nets it.
+  app.get('/purchasing/sample-orders', { schema: sampleContracts.listSampleOrdersContract }, async (request) => listSampleOrders(request, request.query))
+  app.get('/purchasing/sample-orders/choices', { schema: sampleContracts.sampleChoicesContract }, async (request) => sampleChoices(request, request.query))
+  app.post('/purchasing/sample-orders', { schema: sampleContracts.createSampleOrderContract }, async (request, reply) => reply.code(201).send(await createSampleOrder(request, request.body, idempotencyKeyFrom(request))))
+  app.get('/purchasing/sample-orders/:purchaseOrderId/pdf', { schema: sampleContracts.sampleOrderPdfContract }, async (request, reply) => {
+    const { pdf, fileName } = await sampleOrderPdf(request, request.params.purchaseOrderId, request.query.language)
+    return reply.type('application/pdf').header('content-disposition', inlineDisposition(fileName)).header('cache-control', 'no-store').send(pdf)
+  })
 })

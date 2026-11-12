@@ -13,7 +13,11 @@ import { announcePhoto, completePhoto, writeOff, writeOffRecord } from './write-
 export default defineRoutes('inventory.ledger', manifest, async (app) => {
   app.get('/inventory/moves', { schema: listMovesContract }, async (request) => listMoves(request, request.query))
 
-  app.post('/inventory/adjustments', { schema: adjustContract }, async (request, reply) => reply.code(201).send(await adjust(request, request.body, idempotencyKeyFrom(request))))
+  // B-W2b-314: 202 when it waits for a yes (worth more than the warehouse rules' value): nothing posted yet.
+  app.post('/inventory/adjustments', { schema: adjustContract }, async (request, reply) => {
+    const answer = await adjust(request, request.body, idempotencyKeyFrom(request))
+    return reply.code('waiting' in answer ? 202 : 201).send(answer)
+  })
 
   app.post('/inventory/counts', { schema: countContract }, async (request, reply) => reply.code(201).send(await postCount(request, request.body, idempotencyKeyFrom(request))))
 

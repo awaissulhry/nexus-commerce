@@ -5,6 +5,8 @@ import { earnedAmount } from '@nexus/factory-domain/purchasing/subcontracting/ru
 import type { CommandTx } from '../../../core/command'
 // B-W2b-111: good pieces of a receipt waiting for its incoming inspection earn nothing yet.
 import { heldGoodByOperation } from './held'
+// B-W2b-331 (SCM-146): the workshop's own cost entries of the orders, and the pieces their FEE entries book.
+import { bookedFeePieces, workshopEntryPlan } from '../subcontract-depth/cost-source'
 
 /**
  * The subcontract source of the work order's cost ledger (B-W2a-25; FIN-026; cost-ledger.prisma WorkOrderCostEntry kind
@@ -57,6 +59,8 @@ export async function subcontractCostPlan(
   })
   const orderOf = new Map(orders.map((order) => [order.id, order]))
   const held = await heldGoodByOperation(db, orders.map((order) => order.id))
+  // B-W2b-331: pieces a FEE entry of the order's own cost ledger books (at the workshop's price) earn nothing here.
+  const booked = await bookedFeePieces(db, orders.map((order) => order.id))
   const drafts: EntryDraft[] = []
   const waiting: WaitingView[] = []
   for (const operation of operations) {
@@ -64,7 +68,7 @@ export async function subcontractCostPlan(
     const posted = existing.filter((entry) => entry.kind === 'SUBCONTRACT' && entry.sourceType === 'SubcontractOperation' && entry.sourceId === operation.id)
     const sum = posted.reduce((total, entry) => total + entry.amount, 0)
     const fee = operation.pricePerPiece.toFixed(6)
-    const good = Math.max(0, operation.piecesBackGood - (held.get(operation.id) ?? 0))
+    const good = Math.max(0, operation.piecesBackGood - (held.get(operation.id) ?? 0) - (booked.get(operation.id) ?? 0))
     if (order.currency !== workOrder.currency) {
       if (good > 0 && sum === 0) {
         waiting.push({ code: 'CURRENCY', sourceType: 'SubcontractOrder', sourceId: order.id, words: `Subcontract order ${order.number} is in ${order.currency}; the work order's cost is kept in ${workOrder.currency} (no exchange rates).` })
@@ -93,9 +97,11 @@ export async function subcontractCostPlan(
       sourceType: 'SubcontractOperation',
       sourceId: operation.id,
       reversalOfId: null,
-      reason: `Workshop fee of ${order.number}, operation ${operation.seq}: ${good} piece(s) back good in all${good < operation.piecesBackGood ? ` (${operation.piecesBackGood - good} waiting for incoming inspection)` : ''}`,
+      reason: `Workshop fee of ${order.number}, operation ${operation.seq}: ${good} piece(s) back good in all${(held.get(operation.id) ?? 0) > 0 ? ` (${held.get(operation.id)} waiting for incoming inspection)` : ''}${(booked.get(operation.id) ?? 0) > 0 ? ` (${booked.get(operation.id)} booked at the workshop's price)` : ''}`,
       idempotencyKey: key,
     })
   }
-  return { drafts, waiting }
+  // B-W2b-331: each of the orders' own cost entries, once, onto the work order.
+  const workshop = await workshopEntryPlan(db, workOrder, orders, existing, ids)
+  return { drafts: [...drafts, ...workshop.drafts], waiting: [...waiting, ...workshop.waiting] }
 }

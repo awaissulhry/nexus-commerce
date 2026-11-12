@@ -32,7 +32,8 @@ model GeneratedDocument {
   /// SubcontractOrder or MaintenanceJob (JOB_SHEET), ReturnAuthorisation (RMA_SHEET), Inspection or IncomingInspection
   /// (INSPECTION_REPORT), Nonconformance (NCR_REPORT), Capa (EIGHT_D), Complaint (COMPLAINT_ANSWER), and, once their
   /// tables exist, MachineCheckResult (CHECK_REPORT), RiskAssessmentVersion (DVR_FROZEN), PpeIssue (PPE_RECEIPT).
-  /// W2b-5 (wave 39/44): SalesOrder (ORDER_CONFIRMATION).
+  /// W2b-5 (wave 39/44): SalesOrder (ORDER_CONFIRMATION). W2b-5 (wave 44/44): MeasurementProfile (MTM_WORKSHEET; a profile
+  /// has no company: the document names the company whose papers it is, and no site).
   recordType  String
   recordId    String                @db.Uuid
   kind        GeneratedDocumentKind
@@ -107,4 +108,8 @@ enum GeneratedDocumentKind {
   /// W2b-5 (schema wave 39/44, B-W2b-281; SAL-208): the confirmation of a SalesOrder (no site): its lines, sizes, prices,
   /// dates, terms and the certificate class per style, sent on the order's thread (SalesOrder.confirmationSentAt).
   ORDER_CONFIRMATION
+  /// W2b-5 (schema wave 44/44, B-W2b-297; SAL-303): the made-to-measure worksheet and order form of a MeasurementProfile
+  /// revision (no site): its measurements, colours, padding and options, and an order form to sign at the fitting. Body
+  /// measures: office only.
+  MTM_WORKSHEET
 }

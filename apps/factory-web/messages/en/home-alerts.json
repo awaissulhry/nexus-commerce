@@ -15,6 +15,7 @@
     "alerts.WORKING_TIME_LIMIT.OVERTIME_YEARLY_CAP": "Site {label}: someone is close to or over the yearly overtime cap.",
     "alerts.WORKING_TIME_LIMIT.DAILY_REST": "Site {label}: someone is under the minimum rest, or would be before their next shift.",
     "alerts.WORKING_TIME_LIMIT.WEEKLY_AVERAGE": "Site {label}: someone is close to or over the weekly average of working hours.",
+    "alerts.LOW_STOCK": "{label} is below its minimum: {position} {unit} against {minimum} {unit}.",
     "alerts.UNKNOWN": "Alert on {label}."
   },
   "refused": {
@@ -161,7 +162,8 @@
       "CERTIFICATE_EXPIRING": "{record} expiring",
       "INVOICE_DEADLINE": "{record}: invoice deadline near",
       "INTEGRATION_FAILING": "{record} is failing",
-      "WORKING_TIME_LIMIT": "{record}: working-time limit close"
+      "WORKING_TIME_LIMIT": "{record}: working-time limit close",
+      "LOW_STOCK": "{record} below its minimum"
     },
     "snooze": "Snooze",
     "assign": "Assign",

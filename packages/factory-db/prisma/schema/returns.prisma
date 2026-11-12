@@ -450,10 +450,14 @@ model RepairOrder {
   serialOfOurs GarmentSerial?   @relation("RepairOrderGarmentSerial", fields: [tenantId, garmentSerial], references: [tenantId, serial], onDelete: Restrict, onUpdate: Restrict)
   estimates  RepairEstimate[]
   stages     RepairStageEvent[]
+  // W2b-5 mtm-office.prisma (wave 44/44): the fitting that opened this alteration.
+  fittingResults FittingResult[] @relation("FittingResultAlteration")
 
   @@unique([tenantId, companyId, number])
   // The target of the stage events' reference: an event of the same site.
   @@unique([tenantId, siteId, id])
+  // W2b-5 (wave 44/44): the target of the fitting results' reference: an alteration of the result's own customer.
+  @@unique([tenantId, partyId, id])
   // The returns and repairs list (repairs in progress).
   @@index([tenantId, stage])
   @@index([tenantId, returnLineId])

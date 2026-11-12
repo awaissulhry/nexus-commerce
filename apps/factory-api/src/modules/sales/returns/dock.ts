@@ -24,6 +24,7 @@ import { reasonWords } from '../../../platform/reasons/service'
 import { asTenantSystem } from '../../production/bundles/codes'
 import { defaultPlaceOf, finishedPlaces } from '../../inventory/finished/post'
 import { actorIdOf, dockReturn } from './access'
+import { scanCodeWhere } from '../returns-depth/scan'
 import { lockReturn, touchReturn } from './rma'
 import { asDay, FLOOR_LINE_COLUMNS, FLOOR_RMA_COLUMNS, lineKeyOf, lineMoves, LINE_RECORD, photoCounts, RECEIPT_COLUMNS, RECEIPT_RECORD, soldFactsOf, w2aDispositionOf, type FloorRmaRow, type Reader } from './store'
 
@@ -140,7 +141,8 @@ async function dockView(db: Reader, rma: FloorRmaRow, garments: Garments) {
         reasonNote: line.reasonNote,
         quantity: line.quantity,
         receivedQuantity: line.receivedQuantity,
-        expected: line.quantity - line.receivedQuantity,
+        // B-W2b-341 (SAL-342): a line credited without the goods expects nothing.
+        expected: line.creditWithoutReturn ? 0 : line.quantity - line.receivedQuantity,
         grade: line.grade,
         cause: line.cause,
         conditionNote: line.conditionNote,
@@ -170,7 +172,8 @@ export async function findAtDock(caller: CommandCaller, code: string): Promise<{
   return caller.withClient(async (client) => {
     const scope = scopeWhere(actorOf(context), SALES_RETURNS_RECEIVE, { company: 'companyId', site: 'siteId', party: 'partyId' })
     const rows = await client.returnAuthorisation.findMany({
-      where: { AND: [scope, { number: { equals: number, mode: 'insensitive' } }, { status: { in: [...RECEIVING_STATUSES] } }, context.audience === 'floor' ? { siteId: context.siteId } : {}] },
+      // B-W2b-341 (SAL-346): the number typed, or the scan code the RMA sheet and box label print.
+      where: { AND: [scope, { OR: [{ number: { equals: number, mode: 'insensitive' } }, ...scanCodeWhere(number)] }, { status: { in: [...RECEIVING_STATUSES] } }, context.audience === 'floor' ? { siteId: context.siteId } : {}] },
       select: FLOOR_RMA_COLUMNS,
       take: 2,
     })
@@ -233,6 +236,8 @@ export async function receiveReturn(caller: CommandCaller, returnId: string, bod
       if (!line) lineProblems.push({ path: `${at}/lineId`, message: 'Not a line of this return.' })
       else if (seenLines.has(line.id)) lineProblems.push({ path: `${at}/lineId`, message: `Line ${line.seq} is named twice.` })
       else if (line.grade !== null) lineProblems.push({ path: `${at}/lineId`, message: `Line ${line.seq} is graded already: what else comes of it goes on a new return.` })
+      // B-W2b-341 (SAL-342): the …_service_safety_w2b_guards trigger refuses the same.
+      else if (line.creditWithoutReturn) lineProblems.push({ path: `${at}/lineId`, message: `Line ${line.seq} was credited without the goods coming back: put the parcel aside and tell customer service.` })
       else if (!Number.isInteger(entry.quantity) || entry.quantity < 1) lineProblems.push({ path: `${at}/quantity`, message: 'One piece or more.' })
       else if (entry.quantity > line.quantity - line.receivedQuantity) lineProblems.push({ path: `${at}/quantity`, message: line.quantity === line.receivedQuantity ? `Every piece of line ${line.seq} arrived already.` : `Line ${line.seq} still expects ${line.quantity - line.receivedQuantity} of ${line.quantity}.` })
       if (line) seenLines.add(line.id)

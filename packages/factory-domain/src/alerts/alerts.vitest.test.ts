@@ -47,8 +47,8 @@ const state = (n: number, extra: Partial<KeyState> = {}): KeyState => ({ alertId
 
 describe('the kinds of rule', () => {
   it('ship a built-in rule each, whose numbers their own schema reads, and refuse numbers out of range', () => {
-    // B-W2b-24: + INTEGRATION_FAILING (the design's last built-in). B-W2b-42: + WORKING_TIME_LIMIT.
-    expect(RULE_KINDS).toHaveLength(9)
+    // B-W2b-24: + INTEGRATION_FAILING (the design's last built-in). B-W2b-42: + WORKING_TIME_LIMIT. B-W2b-314: + LOW_STOCK.
+    expect(RULE_KINDS).toHaveLength(10)
     expect(kindsOf('DATE')).toEqual(['CERTIFICATE_EXPIRING', 'INVOICE_DEADLINE'])
     for (const kind of RULE_KINDS) {
       const read = readThreshold(kind, KINDS[kind].builtIn.threshold)
