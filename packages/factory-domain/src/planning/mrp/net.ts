@@ -3,6 +3,8 @@ import type { BusinessDate } from '../../core/time'
 import { decimalOf, QUANTITY_SCALE, type DecimalInput } from '../../product/units/units'
 import type { LotFacts, OpenPurchase, PurchaseLine, StockEntry, StockLine } from '../netting'
 import { usabilityOf } from '../usable'
+// B-W2b-318 (PLN-088): scarce material by the backlog's priority.
+import { byPriority, isRanked, type Allocation } from '../allocation-priority/rank'
 
 /**
  * MRP every day (B-W2a-22; PLN-071 pegging, PLN-075 firm planned orders, PLN-086 material readiness), pure: one material
@@ -58,6 +60,8 @@ export interface DemandPart {
   readonly quantity: string
   /** Of it, already issued to the work order. */
   readonly issued: string
+  /** B-W2b-318 (PLN-088): the order's backlog rank (SalesOrder.backlogRank, 1 first); left out or null: not ranked. */
+  readonly rank?: number | null
 }
 
 /** An ACTIVE reservation of the material (B-W2a-11), as netting reads it. */
@@ -163,12 +167,19 @@ export interface MaterialPegging {
   readonly firm: FirmUse | null
   /** By day, as walked. */
   readonly coverage: readonly PartCoverage[]
+  /** B-W2b-318 (PLN-088): PRIORITY when free supply was shared out by the backlog's rank (scarce, ranked orders); left out: by date (W1). */
+  readonly allocation?: Allocation
 }
 
 const dayOf = (part: DemandPart, runDate: BusinessDate): BusinessDate => part.dueDate ?? runDate
 
 /** Nets one material in one colour (`itemColourId`; null: a material without colours), part by part. */
 export function pegMaterial(input: {
+  /**
+   * B-W2b-318 (PLN-088): DATE walks the parts by day (W1); PRIORITY by the backlog's rank (../allocation-priority/rank).
+   * Left out: by day, and again by priority when that leaves the material short and a part's order is ranked.
+   */
+  readonly walk?: Allocation
   readonly itemColourId: string | null
   readonly parts: readonly DemandPart[]
   readonly stock: readonly StockEntry[]
@@ -179,6 +190,11 @@ export function pegMaterial(input: {
   readonly runDate: BusinessDate
 }): MaterialPegging {
   const { runDate } = input
+  // B-W2b-318 (PLN-088): a scarce material goes to the first-ranked orders first.
+  if (input.walk === undefined && input.parts.some(isRanked)) {
+    const byDate = pegMaterial({ ...input, walk: 'DATE' })
+    return decimalOf(byDate.net).gt(0) ? pegMaterial({ ...input, walk: 'PRIORITY' }) : byDate
+  }
   // ---- stock: usable, held, not counted (W1's rules) ------------------------------------------------------------------
   const stock: StockLine[] = input.stock
     .filter((entry) => decimalOf(entry.quantity).gt(0))
@@ -246,7 +262,19 @@ export function pegMaterial(input: {
   let short = ZERO
   let firstShort: BusinessDate | null = null
   const shortOf = new Map<(typeof parts)[number], Decimal>()
-  for (const entry of parts) {
+  // B-W2b-318 (PLN-088): by priority, each part takes the purchase lines in time first (the latest first), then stock.
+  const byRank = input.walk === 'PRIORITY'
+  for (const entry of byRank ? [...parts].sort(byPriority) : parts) {
+    if (byRank) {
+      for (const line of [...lines].reverse()) {
+        if (entry.need.isZero()) break
+        if (line.line.dueDate > entry.day || line.left.isZero()) continue
+        const take = min(line.left, entry.need)
+        line.left = line.left.minus(take)
+        entry.need = entry.need.minus(take)
+        entry.supplies.push({ kind: 'PURCHASE_ORDER', quantity: q(take), purchaseOrderLineId: line.line.purchaseOrderLineId, date: line.line.dueDate })
+      }
+    }
     const fromStock = min(stockLeft, entry.need)
     if (fromStock.gt(0)) {
       stockLeft = stockLeft.minus(fromStock)
@@ -264,7 +292,8 @@ export function pegMaterial(input: {
     shortOf.set(entry, entry.need)
     if (entry.need.gt(0)) {
       short = short.plus(entry.need)
-      firstShort ??= entry.day
+      // B-W2b-318: the earliest day short, whatever the walk's order.
+      if (firstShort === null || entry.day < firstShort) firstShort = entry.day
     }
   }
   const onOrder = lines.reduce((sum, entry) => sum.plus(opened.get(entry)!.minus(entry.left)), ZERO)
@@ -327,6 +356,8 @@ export function pegMaterial(input: {
     reservedForOthers: q(reservedForOthers),
     firm,
     coverage: all.map((entry) => ({ part: entry.part, day: entry.day, supplies: entry.supplies, short: q(shortOf.get(entry) ?? ZERO), uncovered: q(entry.need.gt(0) ? entry.need : ZERO) })),
+    // B-W2b-318 (PLN-088): said when the walk was by priority (left out: by date).
+    ...(input.walk === 'PRIORITY' ? { allocation: 'PRIORITY' as const } : {}),
   }
 }
 

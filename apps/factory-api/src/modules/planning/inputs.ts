@@ -15,6 +15,8 @@ import { scheduledStartsOf } from './pegging/starts'
 // B-W2b-293 (MR1:01, MR1:02): every garment through its multi-level explosion, with the order line's options.
 import type { Garments } from '@nexus/factory-domain/planning/planned-orders/multilevel'
 import { readGarments } from './planned-orders/store'
+// B-W2b-318 (PLN-006, PLN-008, PLN-081, PLN-088): the planning rules per item and the backlog's ranks.
+import { readItemRules } from './lot-sizing/inputs'
 import { dayOf, ITEM_COLUMNS, lotFactsOf, planItemOf, readDemand, readLots, readPurchases, readStock, readSupplyRules, readWorkOrders, unitsOf, type DemandRead, type ItemRow, type PlanStockRow as PlanStockOf, type PurchaseRead, type Reader, type SiteRow } from './store'
 
 /**
@@ -42,6 +44,17 @@ export const ITEM_PLANNING_COLUMNS = {
   makeLeadTimeDays: true,
   safetyLeadTimeDays: true,
   safetyStock: true,
+  // B-W2b-318: the planning rules per item (./lot-sizing/inputs) and the order limits MIN_MAX lot sizing reads.
+  minOrderQty: true,
+  orderMultiple: true,
+  maxOrderQty: true,
+  lotSizing: true,
+  fixedLotQty: true,
+  lotPeriodDays: true,
+  planLevel: true,
+  scrapPct: true,
+  yieldPct: true,
+  delayDays: true,
 } as const satisfies Prisma.ItemPlanningSelect
 export type ItemPlanningRow = Prisma.ItemPlanningGetPayload<{ select: typeof ITEM_PLANNING_COLUMNS }>
 
@@ -148,9 +161,11 @@ export async function readPlanInputs(db: Reader, site: SiteRow, runDate: Busines
   const partyIds = [...new Set(candidateIds.filter((value): value is string => value !== null))]
   const parties = partyIds.length === 0 ? [] : await db.party.findMany({ where: { id: { in: partyIds } }, select: { id: true, leadTimeDays: true } })
   const supplierLeadTimes = new Map(parties.map((party) => [party.id, party.leadTimeDays]))
+  // B-W2b-318: lot sizing, scrap and yield, the plan level and the backlog's ranks (./lot-sizing/inputs).
+  const rules = await readItemRules(db, demand.orderLines, itemPlanning)
   const input: PlanInput = {
     runDate,
-    orderLines: demand.orderLines,
+    orderLines: rules.orderLines,
     revisions: demand.revisions,
     items: items.map(planItemOf),
     workOrderCells: workOrders.cells,
@@ -162,6 +177,8 @@ export async function readPlanInputs(db: Reader, site: SiteRow, runDate: Busines
     reservations,
     firmSupply,
     buying: buyingOf({ companyId: site.companyId, items, itemPlanning, sources, supplierLeadTimes }),
+    // B-W2b-318 (PLN-006, PLN-081).
+    ...rules.hooks,
     workOrderStarts: await scheduledStartsOf(db, site),
     ...(explosion ? { lineSuppliers: explosion.lineSuppliers } : {}),
   }

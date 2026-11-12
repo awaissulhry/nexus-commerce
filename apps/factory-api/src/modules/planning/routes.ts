@@ -24,6 +24,11 @@ import {
 import { createItemParameters, deleteItemParameters, editItemParameters, getItemParameters, listItemParameters, reorderRules } from './settings/items'
 import { editLineCapacity, editWorkCentreCapacity, listLanes } from './settings/lanes'
 import { editSettings, getSettings, listSettings } from './settings/settings'
+// B-W2b-318: the planning rules per item: the item's requirement profile, the calculated delays, scarce material by priority.
+import { readAllocationPriority } from './allocation-priority/allocation'
+import { allocationPriorityContract } from './allocation-priority/contract'
+import { delaysContract, itemProfileContract } from './item-profile/contract'
+import { readDelays, readItemProfile } from './item-profile/read'
 // B-W2a-22: MRP every day (firm planned orders, pegging, readiness, the shortage list, the exception list).
 import { firmContract, unfirmContract } from './contract'
 import { firmLine, unfirmLine } from './firm'
@@ -130,6 +135,10 @@ export default defineRoutes('planning', manifest, async (app) => {
   app.patch('/planning/work-centres/:workCentreId/capacity', { schema: editWorkCentreCapacityContract }, async (request) => editWorkCentreCapacity(request, request.params.workCentreId, request.body, idempotencyKeyFrom(request)))
   app.get('/planning/capacity', { schema: capacityContract }, async (request) => capacity(request, request.query))
   app.get('/planning/capacity/cell', { schema: capacityCellContract }, async (request) => capacityCell(request, request.query))
+  // B-W2b-318 (PLN-084, PLN-082, PLN-088): the item's requirement profile, the calculated delays, scarce material by priority.
+  app.get('/planning/item-profile', { schema: itemProfileContract }, async (request) => readItemProfile(request, request.query))
+  app.get('/planning/delays', { schema: delaysContract }, async (request) => readDelays(request, request.query))
+  app.get('/planning/allocation-priority', { schema: allocationPriorityContract }, async (request) => readAllocationPriority(request, request.query))
 
   // ---- B-W2a-22: MRP every day -------------------------------------------------------------------------------------
   app.post('/planning/requirements/:requirementId/firm', { schema: firmContract }, async (request) => firmLine(request, request.params.requirementId, request.body, idempotencyKeyFrom(request)))

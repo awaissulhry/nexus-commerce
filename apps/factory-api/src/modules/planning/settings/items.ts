@@ -9,6 +9,10 @@ import { assertMayAt, officeContextOf, siteFor } from '../access'
 import { SITE_COLUMNS, type Reader, type SiteRow } from '../store'
 import type { CreateItemParametersBody, EditItemParametersBody } from './contract'
 import { auditValuesOf, ITEM_PLANNING_SELECT, ITEM_SELECT, itemDefaultsOf, itemParametersViewOf, itemPlanningValuesOf, readItemPlanning, siteViewOf, storedAnswer, type ItemPlanningRow, type ItemRow } from './store'
+// B-W2b-318 (PLN-006, PLN-008, PLN-081, PLN-082): the planning rules per item, in the same writes.
+import { changedRules, mergeItemRules } from '@nexus/factory-domain/planning/lot-sizing/parameters'
+import { assertMayPlanLevel, refuseRules, rulePatchOf } from '../lot-sizing/parameters'
+import { itemRulesOf } from './store'
 
 /**
  * Item planning parameters (B-W2a-16; PLN-005) and reorder rules (PLN-099; design planning.settings "Item parameters",
@@ -198,9 +202,13 @@ export async function createItemParameters(caller: CommandCaller, body: CreateIt
   const itemColourId = body.itemColourId ?? null
   const { values, cleared } = mergeItemPlanning(null, patchOf(body))
   refuse(itemPlanningProblems(values), 'The item parameters cannot be saved this way.')
+  // B-W2b-318: the rules named with it (a plan level also asks planning.strategy.manage).
+  const ruled = mergeItemRules(null, rulePatchOf(body))
+  assertMayPlanLevel(context, site, null, ruled.values)
   const { result } = await command(caller, { name: 'planning.createItemParameters', idempotencyKey, input: body }, async (tools) => {
     const item = await readItem(tools.tx, body.itemId)
     assertItemAt(item, site)
+    refuseRules(ruled.values, item.kind)
     if (itemColourId !== null && !item.colours.some((colour) => colour.id === itemColourId)) {
       throw new ValidationError('No such colour of this item.', [{ path: 'body/itemColourId', message: 'Choose one of the item’s active colours, or none for every colour.' }])
     }
@@ -209,11 +217,11 @@ export async function createItemParameters(caller: CommandCaller, body: CreateIt
     if (taken) throw new ConflictError(`This site already plans ${item.code}${itemColourId ? ' in this colour' : ' (every colour)'} with item parameters ${taken.id}; change those instead.`)
     refuse(await factProblems(tools.tx, site, item, itemColourId, values, null), 'The item parameters name what cannot be used.')
     const id = newId()
-    await tools.tx.itemPlanning.create({ data: { id, companyId: site.companyId, siteId: site.id, itemId: item.id, itemColourId, ...values, createdById: context.actorId }, select: { id: true } })
+    await tools.tx.itemPlanning.create({ data: { id, companyId: site.companyId, siteId: site.id, itemId: item.id, itemColourId, ...values, ...ruled.values, createdById: context.actorId }, select: { id: true } })
     const row = (await readItemPlanning(tools.tx, id))!
-    tools.audit({ recordType: 'ItemPlanning', recordId: id, companyId: site.companyId, siteId: site.id, before: null, after: { itemId: item.id, itemColourId, ...auditValuesOf(itemPlanningValuesOf(row)) } })
+    tools.audit({ recordType: 'ItemPlanning', recordId: id, companyId: site.companyId, siteId: site.id, before: null, after: { itemId: item.id, itemColourId, ...auditValuesOf(itemPlanningValuesOf(row)), ...itemRulesOf(row) } })
     emitChange(tools, row, site, row.method, 'CREATED')
-    return { parameters: itemParametersViewOf(row), cleared: cleared as string[] }
+    return { parameters: itemParametersViewOf(row), cleared: [...cleared, ...ruled.cleared] as string[] }
   })
   return result
 }
@@ -228,7 +236,12 @@ export async function editItemParameters(caller: CommandCaller, itemPlanningId: 
   const current = itemPlanningValuesOf(row)
   const { values } = mergeItemPlanning(current, patchOf(body))
   refuse(itemPlanningProblems(values), 'The item parameters cannot be saved this way.')
-  const changed = ITEM_FIELDS.filter((key) => values[key] !== current[key])
+  // B-W2b-318: the rules named with it (a plan level also asks planning.strategy.manage).
+  const currentRules = itemRulesOf(row)
+  const nextRules = mergeItemRules(currentRules, rulePatchOf(body))
+  refuseRules(nextRules.values, row.item.kind)
+  assertMayPlanLevel(officeContextOf(caller), site, currentRules, nextRules.values)
+  const changed = [...ITEM_FIELDS.filter((key) => values[key] !== current[key]), ...changedRules(currentRules, nextRules.values)]
   if (changed.length === 0 && body.version === row.version) {
     const replay = await storedAnswer<{ parameters: ReturnType<typeof itemParametersViewOf>; cleared: string[] }>(caller, { name: 'planning.editItemParameters', idempotencyKey, input: { itemPlanningId, ...body } }, [{ type: 'ItemPlanning', id: row.id, expectedVersion: body.version }])
     return replay ?? { parameters: itemParametersViewOf(row), cleared: [] as string[] }
@@ -243,11 +256,15 @@ export async function editItemParameters(caller: CommandCaller, itemPlanningId: 
       refuse(itemPlanningProblems(next.values), 'The item parameters cannot be saved this way.')
       const item = await readItem(tools.tx, before.itemId)
       refuse(await factProblems(tools.tx, site, item!, before.itemColourId, next.values, from), 'The item parameters name what cannot be used.')
-      await tools.tx.itemPlanning.update({ where: { id: row.id }, data: next.values, select: { id: true } })
+      // B-W2b-318: the rules at the version locked.
+      const fromRules = itemRulesOf(before)
+      const rules = mergeItemRules(fromRules, rulePatchOf(body))
+      refuseRules(rules.values, before.item.kind)
+      await tools.tx.itemPlanning.update({ where: { id: row.id }, data: { ...next.values, ...rules.values }, select: { id: true } })
       const after = (await readItemPlanning(tools.tx, row.id))!
-      tools.audit({ recordType: 'ItemPlanning', recordId: row.id, companyId: site.companyId, siteId: site.id, before: auditValuesOf(from), after: auditValuesOf(itemPlanningValuesOf(after)) })
+      tools.audit({ recordType: 'ItemPlanning', recordId: row.id, companyId: site.companyId, siteId: site.id, before: { ...auditValuesOf(from), ...fromRules }, after: { ...auditValuesOf(itemPlanningValuesOf(after)), ...itemRulesOf(after) } })
       emitChange(tools, after, site, after.method, 'EDITED')
-      return { parameters: itemParametersViewOf(after), cleared: next.cleared as string[] }
+      return { parameters: itemParametersViewOf(after), cleared: [...next.cleared, ...rules.cleared] as string[] }
     },
   )
   return result
@@ -262,7 +279,7 @@ export async function deleteItemParameters(caller: CommandCaller, itemPlanningId
     async (tools) => {
       const before = (await readItemPlanning(tools.tx, row.id))!
       await tools.tx.itemPlanning.delete({ where: { id: row.id }, select: { id: true } })
-      tools.audit({ recordType: 'ItemPlanning', recordId: row.id, companyId: site.companyId, siteId: site.id, before: { itemId: before.itemId, itemColourId: before.itemColourId, ...auditValuesOf(itemPlanningValuesOf(before)) }, after: null })
+      tools.audit({ recordType: 'ItemPlanning', recordId: row.id, companyId: site.companyId, siteId: site.id, before: { itemId: before.itemId, itemColourId: before.itemColourId, ...auditValuesOf(itemPlanningValuesOf(before)), ...itemRulesOf(before) }, after: null })
       emitChange(tools, before, site, before.method, 'DELETED')
       return { deleted: row.id, siteId: site.id, itemId: before.itemId }
     },
