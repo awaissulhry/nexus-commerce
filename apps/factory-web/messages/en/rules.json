@@ -9,7 +9,9 @@
     "INVOICE_DEADLINE": "Shipped goods near their invoice deadline",
     "INTEGRATION_FAILING": "Connections failing",
     "WORKING_TIME_LIMIT": "Working-time limits close or passed",
-    "LOW_STOCK": "Materials below their minimum"
+    "LOW_STOCK": "Materials below their minimum",
+    "PO_CONFIRMED_LATE": "Purchase orders confirmed later than needed",
+    "SUPPLIER_STATUS_CHANGED": "Supplier status changes"
   },
   "when": {
     "ORDER_LATE_RISK": "When an order is promised within {daysBeforePromise} and is not ready, or is late",
@@ -21,7 +23,9 @@
     "INVOICE_DEADLINE": "{daysBefore} before the deadline to invoice a DDT's goods",
     "INTEGRATION_FAILING": "When a connection has not worked for more than {hours}",
     "WORKING_TIME_LIMIT": "When someone comes close to a working-time limit, or passes it",
-    "LOW_STOCK": "When a material falls below the minimum of its planning parameters"
+    "LOW_STOCK": "When a material falls below the minimum of its planning parameters",
+    "PO_CONFIRMED_LATE": "When a supplier confirms a purchase order line at least {days} later than the day it is needed",
+    "SUPPLIER_STATUS_CHANGED": "When a supplier is approved with conditions, put on hold, blocked or made inactive (an alert for {days})"
   },
   "sentence": {
     "full": "{when} {place}, tell {recipient} by {channels} {cooldown}.",

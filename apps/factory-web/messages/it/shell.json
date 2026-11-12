@@ -55,7 +55,9 @@
       "subcontracting": "Ordini ai terzisti",
       "sourcingClaims": "Offerte e reclami",
       "sourcing": "Richieste di offerta",
-      "claims": "Resi e reclami ai fornitori"
+      "claims": "Resi e reclami ai fornitori",
+      "reportsGroup": "Report",
+      "reports": "Report acquisti"
     },
     "people": {
       "area": "Persone",
@@ -214,7 +216,8 @@
       "picking": "Prelievi e kit",
       "counts": "Inventari",
       "reportsGroup": "Report",
-      "reports": "Report magazzino"
+      "reports": "Report magazzino",
+      "transfers": "Trasferimenti"
     },
     "frame": {
       "topBar": "Barra superiore"
