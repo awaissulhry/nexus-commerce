@@ -201,6 +201,27 @@ describe('the pick list by bin (SCM-212)', () => {
     await no('viewer', 'GET', `/inventory/pick-lists/work-orders/${W.wo1}`, undefined, 403)
     expect(paths(await no('picker', 'GET', '/inventory/pick-lists/walk?workOrderIds=nope', undefined, 400))).toEqual(['querystring/workOrderIds'])
   })
+
+  // B-W2b-310 (follow-up FT2:01; design floor.pick sec:kit): the tablet stages the kit and checks it complete at its own site.
+  it('the tablet stages the kit by the walk\'s version and is held checking it while a line is short; another site\'s tablet finds nothing', async () => {
+    const before = (await ok('tablet', 'GET', `/inventory/pick-lists/work-orders/${W.wo3}`)).workOrders[0]
+    expect(before.kit).toMatchObject({ version: expect.any(Number) })
+    const staged = (await ok('tablet', 'POST', `/inventory/kits/${W.wo3}/stage`, { version: before.kit.version, locationId: P.store01 })).kit
+    expect(staged).toMatchObject({ location: { code: 'A1-STORE-01' }, version: before.kit.version + 1 })
+    const after = (await ok('tablet', 'GET', `/inventory/pick-lists/work-orders/${W.wo3}`)).workOrders[0]
+    expect(after.kit).toMatchObject({ location: { code: 'A1-STORE-01' }, version: before.kit.version + 1 })
+    // Kept on the work order's history; the record names the worker (no answer does).
+    expect((await one<{ n: number }>(`SELECT count(*)::int AS n FROM "AuditLog" WHERE "recordType" = 'WorkOrder' AND "recordId" = $1 AND action = 'inventory.kitStaged'`, [W.wo3])).n).toBeGreaterThanOrEqual(1)
+    const short = after.lines.filter((line: Json) => !line.covered).length
+    if (short > 0) expect(paths(await no('tablet', 'POST', `/inventory/kits/${W.wo3}/complete`, { version: after.kit.version }, 409))).toEqual(['kit/LINES_SHORT'])
+    else {
+      await ok('tablet', 'POST', `/inventory/kits/${W.wo3}/complete`, { version: after.kit.version })
+      expect(await one<Json>(`SELECT "completedById" FROM "WorkOrderKit" WHERE id = $1`, [W.wo3])).toEqual({ completedById: A.worker })
+    }
+    await no('b1tablet', 'POST', `/inventory/kits/${W.wo3}/stage`, { version: after.kit.version, locationId: P.store01 }, 404)
+    // Reading the kit record and opening it again stay the office's.
+    expect((await call('tablet', 'GET', `/inventory/kits/${W.wo3}`)).statusCode).toBeGreaterThanOrEqual(403)
+  })
 })
 
 describe('use a substitute (MES-139; PK1:01)', () => {

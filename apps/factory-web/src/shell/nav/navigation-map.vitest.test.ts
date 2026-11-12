@@ -455,6 +455,7 @@ describe('the floor tiles and the scan router (floor/model.ts, floor/tasks/route
       receive: 'inventory.receive',
       move: 'inventory.transfer', // GET /inventory/putaway/scan, POST /inventory/putaway | /inventory/bin-moves (B-W2b-308 on B-W2b-292)
       pick: 'inventory.issue',
+      count: 'inventory.counts.scan', // GET /inventory/stock-counts/to-count, POST …/:countId/scans (B-W2b-310 on B-W2b-299)
       returnsin: 'sales.returns.receive', // GET /sales/returns/dock (B-W2a-76)
       kits: 'purchasing.subcontract.kit', // GET /purchasing/subcontracting/kits (B-W2a-76)
       labels: 'production.serials',
@@ -490,8 +491,8 @@ describe('the floor tiles and the scan router (floor/model.ts, floor/tasks/route
       // B-W2b-115: Incoming inspection at the inspection bench (tile family Quality, before Final inspection).
       // B-W2b-203: at the bench Operation after the inspection tiles (Owner answer 2026-11-09 to B-W2b-151's question 1).
       inspection: ['mywork', 'incoming', 'final', 'inline', 'operation', 'machine', 'clock', 'training', 'instructions', 'help', 'incident', 'lineview', 'scan'],
-      // B-W2b-308: My work (the task inbox) at the warehouse, Move & put away after Receive.
-      warehouse: ['mywork', 'receive', 'move', 'pick', 'returnsin', 'kits', 'machine', 'clock', 'training', 'help', 'incident', 'lineview', 'scan'],
+      // B-W2b-308: My work (the task inbox) at the warehouse, Move & put away after Receive. B-W2b-310: Count after Pick & issue.
+      warehouse: ['mywork', 'receive', 'move', 'pick', 'count', 'returnsin', 'kits', 'machine', 'clock', 'training', 'help', 'incident', 'lineview', 'scan'],
     })
     for (const mode of FLOOR_MODES) {
       const first = tilePage(homeTiles(mode, everything, false), 0)

@@ -73,7 +73,7 @@ const inbox = (extra: Partial<InboxViewModel> = {}): InboxViewModel => ({
   online: true,
   step: { kind: 'list' },
   inbox: inboxOf(TASKS),
-  screens: { move: true, receive: true, pick: true },
+  screens: { move: true, receive: true, pick: true, /* B-W2b-310 */ count: true },
   now: NOW,
   ...extra,
 })
@@ -104,6 +104,6 @@ export function warehouseCases(model: (extra?: Partial<MyWorkViewModel>) => MyWo
     at('empty', 'nothing waits', inbox({ inbox: inboxOf([]) })),
     at('notice-held', 'scans held by the worker notice', inbox({ held: true })),
     at('no-permission', 'no permission', inbox({ step: { kind: 'noPermission' } }), 'A person without floor.work: fail closed.'),
-    at('no-screen', 'a task whose screen is not open to the person', inbox({ screens: { move: false, receive: true, pick: true }, step: { kind: 'task', taskId: 't-move' } }), 'The main action waits and says why (a held button says why).'),
+    at('no-screen', 'a task whose screen is not open to the person', inbox({ screens: { move: false, receive: true, pick: true, /* B-W2b-310 */ count: true }, step: { kind: 'task', taskId: 't-move' } }), 'The main action waits and says why (a held button says why).'),
   ]
 }

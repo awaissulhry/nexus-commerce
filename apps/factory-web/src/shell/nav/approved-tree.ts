@@ -677,6 +677,8 @@ export const FLOOR: ReadonlyArray<{
   // B-W2b-308: Move & put away (SCR-177), after Receive.
   { id: 'floor.move', title: 'Move & put away', titleIt: 'Sposta e ubica', tile: 'move', modes: ['warehouse'] },
   { id: 'floor.pick', title: 'Pick & issue', titleIt: 'Preleva e consegna', tile: 'pick', modes: ['warehouse'] },
+  // B-W2b-310: Count (SCR-178), after Pick & issue (tile family Warehouse).
+  { id: 'floor.count', title: 'Count', titleIt: 'Conta', tile: 'count', modes: ['warehouse'] },
   // W2a: B-W2a-76 Receive a return (SCR-180) and Subcontract kits (SCR-181).
   { id: 'floor.returnsin', title: 'Receive a return', titleIt: 'Ricevi un reso', tile: 'returnsin', modes: ['warehouse'] },
   { id: 'floor.kits', title: 'Subcontract kits', titleIt: 'Kit per terzisti', tile: 'kits', modes: ['warehouse'] },

@@ -219,6 +219,42 @@
     "REMNANT_GONE_ON": {
       "message": "Il ritaglio è andato avanti (consegnato, tagliato o scartato): non si riprende.",
       "fix": "Chiedi all'ufficio."
+    },
+    "STOP_BLOCKED": {
+      "message": "Questa ubicazione è bloccata: non si preleva niente",
+      "fix": "Preleva da un'altra tappa, o chiedi all'ufficio di sbloccarla."
+    },
+    "STOP_ON_HOLD": {
+      "message": "Questo lotto è in blocco qualità: non si consegna",
+      "fix": "Prima lo rilascia la qualità. Passa alla tappa seguente."
+    },
+    "STOP_NOT_RELEASED": {
+      "message": "Non rilasciato per l'uso: si consegna solo merce rilasciata",
+      "fix": "Passa alla tappa seguente, o chiedi alla qualità."
+    },
+    "LINES_SHORT": {
+      "message": "Ci sono righe ancora scoperte: il kit non è completo",
+      "fix": "Preleva ogni riga per intero, poi Kit completo."
+    },
+    "NOTHING_PLANNED": {
+      "message": "L'ordine non prevede materiale",
+      "fix": "Non c'è un kit da controllare."
+    },
+    "ALREADY_CHECKED": {
+      "message": "Il kit è già controllato completo",
+      "fix": "Se manca qualcosa lo riapre l'ufficio."
+    },
+    "NOT_CHECKED": {
+      "message": "Il kit non è controllato completo",
+      "fix": "Non c'è niente da riaprire."
+    },
+    "NOT_A_PLACE": {
+      "message": "Nessuna ubicazione ha questa etichetta",
+      "fix": "Scansiona l'etichetta di un'ubicazione di questo stabilimento."
+    },
+    "NOT_A_KIT_PLACE": {
+      "message": "Un kit non può aspettare in questa ubicazione",
+      "fix": "Scansiona un'ubicazione in uso di questo stabilimento (non di un terzista)."
     }
   },
   "unit": {
@@ -335,6 +371,93 @@
       "lot": "Lotto",
       "code": "Codice {code}",
       "invalid": "Il codice {code} non si può disegnare"
+    }
+  },
+  "walk": {
+    "title": "Prelievo per ubicazione",
+    "empty": "Niente da prelevare per ubicazione: nessuna giacenza dello stabilimento è riservata o proposta per quanto manca.",
+    "allTaken": "Tutte le tappe sono prelevate",
+    "summary_one": "{count} ubicazione in ordine di percorso, prima {first}",
+    "summary_other": "{count} ubicazioni in ordine di percorso, prima {first}",
+    "kitAt": "il kit aspetta in {place}",
+    "count_one": "{count} tappa",
+    "count_other": "{count} tappe",
+    "source": {
+      "RESERVED": "Riservato",
+      "PROPOSED": "Suggerito",
+      "SUBSTITUTE": "Sostituto approvato"
+    },
+    "held": {
+      "blocked": "l'ubicazione è bloccata",
+      "onHold": "in blocco qualità",
+      "notReleased": "non rilasciato per l'uso"
+    },
+    "stopTitle": "{turn}. {place}",
+    "taken": "Prelevato",
+    "notNow": "Non prelevabile ora",
+    "next": "Prossima: vai qui",
+    "scanIt": "Scansiona {code}",
+    "toTake": "da prelevare",
+    "padHere": "In questa tappa: {quantity}",
+    "offline": "Nessuna rete: un prelievo dalla lista per ubicazione resta su questo tablet e parte quando torna la rete. Il resto aspetta la rete.",
+    "offlineScan": "Nessuna rete: scansiona quello che prelevi a una tappa della lista per ubicazione",
+    "last": {
+      "taken": "Prelevato da {place}: {code}, {quantity}",
+      "takenWhole": "Prelevato da {place}: {code}",
+      "substitute": "Sostituto prelevato da {place}: {code}, {quantity}",
+      "substituteWhole": "Sostituto prelevato da {place}: {code}",
+      "refused": "{code} da {place} è stato rifiutato: vedi In attesa di invio"
+    }
+  },
+  "kit": {
+    "open": "Kit",
+    "noWalk": "La preparazione del kit richiede la lista per ubicazione dell'ordine: aprila una volta con la rete.",
+    "back": "Torna alla lista",
+    "complete": "Kit completo",
+    "kind": "Kit",
+    "state": {
+      "checked": "Controllato completo",
+      "complete": "Tutto prelevato",
+      "partly": "Prelevato in parte",
+      "open": "Non ancora prelevato"
+    },
+    "fact": {
+      "place": "Aspetta in",
+      "lines": "Righe",
+      "checked": "Controllato alle"
+    },
+    "noPlace": "Nessuna ubicazione ancora",
+    "picked": "{picked} di {total} prelevate",
+    "readPlace": "Aspetta in {place}",
+    "offline": "Nessuna rete: l'ubicazione del kit e il suo controllo aspettano la rete.",
+    "last": {
+      "staged": "Il kit aspetta in {place}",
+      "checked": "Kit di {number} controllato completo"
+    },
+    "scan": {
+      "label": "Scansiona l'ubicazione del kit",
+      "hint": "L'etichetta dell'ubicazione dove aspetta il kit",
+      "move": "Scansiona l'etichetta di un'altra ubicazione per spostare il kit da {place}"
+    },
+    "lines": "Nel kit",
+    "noLines": "L'ordine non prevede materiale: non c'è un kit da controllare.",
+    "line": {
+      "picked": "Prelevata",
+      "short": "Da prelevare"
+    },
+    "held": {
+      "offline": "Serve la rete.",
+      "busy": "Invio in corso…",
+      "WORK_ORDER_NOT_OPEN": "L'ordine di lavoro {number} ora non si preleva.",
+      "LINES_SHORT_one": "{count} riga è ancora scoperta: il kit è completo quando ogni riga è prelevata.",
+      "LINES_SHORT_other": "{count} righe sono ancora scoperte: il kit è completo quando ogni riga è prelevata.",
+      "NOTHING_PLANNED": "L'ordine non prevede materiale.",
+      "ALREADY_CHECKED": "Già controllato completo. Se manca qualcosa lo riapre l'ufficio.",
+      "NOT_CHECKED": "Non controllato completo."
+    },
+    "keys": {
+      "complete": "Kit completo",
+      "back": "Torna alla lista"
     }
   }
 }
