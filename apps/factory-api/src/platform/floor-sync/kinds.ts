@@ -77,6 +77,12 @@ import { seenBody } from '../../modules/production/instructions/contract'
 // B-W2b-226: a spec problem reported from the floor's queue.
 import { floorRequestBody } from '@nexus/factory-domain/product/changes/contracts'
 import { reportFromFloor as reportChangeFromFloor } from '../../modules/product/changes/floor'
+// B-W2b-292: moves on the floor and the warehouse task inbox from the floor's queue.
+import { moveBody } from '../../modules/inventory/bin-moves/contract'
+import { moveBodyProblems, moveByScan } from '../../modules/inventory/bin-moves/move'
+import { doneBody, stepBody } from '../../modules/inventory/tasks/contract'
+import { doneTask, giveBackTask, takeTask } from '../../modules/inventory/tasks/floor'
+import { TaskRefusedError } from '../../modules/inventory/tasks/lifecycle'
 
 /**
  * How each queued kind is applied (B-W0-30): through its own module command, in-process, as the tablet's request (the
@@ -136,6 +142,12 @@ import { reportFromFloor as reportChangeFromFloor } from '../../modules/product/
  *   product.change.report                 modules/product/changes reportFromFloor (B-W2b-226: a spec problem as a change request
  *                                         of the site, the tablet's time of the tap kept; the queue answers the request's id,
  *                                         then the tablet sends its photo online)
+ *   inventory.putAway / binMove           modules/inventory/bin-moves moveByScan (B-W2b-292: a put-away or a move between bins by
+ *                                         its two scans, the tablet's time kept; applied as the stock and the place stand when
+ *                                         it arrives: a place blocked since, or stock gone, is refused in words)
+ *   inventory.task.take / giveBack / done modules/inventory/tasks takeTask, giveBackTask, doneTask (B-W2b-292: a warehouse task's
+ *                                         step, at the version sent or as the task stands; a quarantine move by the scan of the
+ *                                         quarantine place, the same act as the office's confirm)
  *
  * The event's payload is the module's body without the envelope's fields (client event id, device time, taker).
  */
@@ -181,6 +193,8 @@ export function refusalOfError(error: unknown): SyncRefusal | null {
   if (error instanceof LayRefusedError) return moduleRefusal({ code: error.refusal.code, message: error.refusal.message })
   // B-W2b-117
   if (error instanceof CutIssueRefusedError) return moduleRefusal({ code: error.refusal.code, message: error.refusal.message })
+  // B-W2b-292
+  if (error instanceof TaskRefusedError) return moduleRefusal({ code: error.refusal.code, message: error.refusal.message })
   if (error instanceof ScanIdsRefusedError) {
     const first = error.refusals[0]
     return first ? moduleRefusal({ code: first.code, message: first.message, fix: first.fix }) : moduleRefusal({ code: 'NUMBER_REFUSED', message: error.message })
@@ -433,6 +447,32 @@ async function applyChangeReport(caller: CommandCaller, event: QueuedEvent): Pro
   return { status: result.replayed ? 'duplicate' : 'accepted', result: { type: 'ChangeRequest', id: result.changeRequest.id } }
 }
 
+/** B-W2b-292: a queued put-away or bin move, through the moves' own command (its key: `<device>.<client event id>`). */
+async function applyMoveByScan(caller: CommandCaller, event: QueuedEvent, key: string): Promise<Applied> {
+  const body = parsed(moveBody, { ...event.payload, ...(event.occurredAt ? { occurredAt: event.occurredAt } : {}) })
+  if (!body.ok) return refusedBy(body.refusal)
+  moveBodyProblems(body.value)
+  const result = await moveByScan(caller, body.value, event.kind === 'inventory.putAway' ? 'PUT_AWAY' : 'MOVE', key)
+  return { status: 'accepted', result: { type: 'StockMove', id: result.moveIds[0]! } }
+}
+
+/** B-W2b-292: a queued step of a warehouse task, through the tasks' own commands (the key: `<device>.<client event id>`). */
+async function applyTaskStep(caller: CommandCaller, event: QueuedEvent, key: string): Promise<Applied> {
+  const withTask = <Shape extends z.ZodRawShape>(body: z.ZodObject<Shape>) => body.extend({ taskId: id() })
+  if (event.kind === 'inventory.task.done') {
+    const body = parsed(withTask(doneBody), { ...event.payload, ...(event.occurredAt ? { occurredAt: event.occurredAt } : {}) })
+    if (!body.ok) return refusedBy(body.refusal)
+    const { taskId, ...rest } = body.value
+    const result = await doneTask(caller, taskId, rest, key)
+    return { status: 'accepted', result: { type: 'WarehouseTask', id: result.task.id } }
+  }
+  const body = parsed(withTask(stepBody), event.payload)
+  if (!body.ok) return refusedBy(body.refusal)
+  const { taskId, ...rest } = body.value
+  const result = event.kind === 'inventory.task.take' ? await takeTask(caller, taskId, rest, key) : await giveBackTask(caller, taskId, rest, key)
+  return { status: 'accepted', result: { type: 'WarehouseTask', id: result.task.id } }
+}
+
 /**
  * Applies one event through its module. `key`: the module command's Idempotency-Key (`<device>.<client event id>`); a
  * module refusal or a domain error is a refusal, anything else is thrown (the send fails; resending it is safe).
@@ -502,6 +542,14 @@ export async function applyQueued(caller: CommandCaller, event: QueuedEvent, con
       // B-W2b-226
       case 'product.change.report':
         return await applyChangeReport(caller, event)
+      // B-W2b-292
+      case 'inventory.putAway':
+      case 'inventory.binMove':
+        return await applyMoveByScan(caller, event, context.key)
+      case 'inventory.task.take':
+      case 'inventory.task.giveBack':
+      case 'inventory.task.done':
+        return await applyTaskStep(caller, event, context.key)
     }
   } catch (error) {
     const refusal = refusalOfError(error)

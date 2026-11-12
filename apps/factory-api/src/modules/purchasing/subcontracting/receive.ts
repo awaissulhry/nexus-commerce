@@ -18,6 +18,9 @@ import { heldReports, openForReceiptInCommand, type OpenedForReceipt } from './i
 // B-W2b-176: the workshop's send-back named by the receipt, and its requests (../portal-jobs).
 import { receiveNoticeInCommand } from '../portal-jobs/acts'
 import { settleJobInCommand } from '../portal-jobs/tasks'
+// B-W2b-331 (SCM-145): partial returns by bundle — only the bundles the order sent, never more than each carried out.
+import { bundleBackProblems } from '@nexus/factory-domain/purchasing/subcontract-depth/bundles'
+import { bundlesOutOf } from '../subcontract-depth/bundles'
 
 /**
  * Receive back (B-W2a-25; SCM-142; design purchasing.subcontracting "Received back", floor.kits "Receive back"): what
@@ -100,6 +103,8 @@ export async function receiveBackAs(caller: CommandCaller, orderId: string, inpu
         for (const line of receipt.lines) if (line.bundleId) earlier.set(`${line.bundleId}|${line.operationId}`, (earlier.get(`${line.bundleId}|${line.operationId}`) ?? 0) + line.good + line.defective + line.scrapped)
       }
 
+      // B-W2b-331 hook (../subcontract-depth/bundles.ts): the bundles that went out with the order, as garments carried out.
+      const bundlesOut = input.lines.some((line) => line.bundleId !== undefined) ? await bundlesOutOf(tools.tx, orderId) : { onRecord: false, out: new Map<string, { garments: number }>() }
       const perOperation = new Map<string, { good: number; defective: number; scrapped: number }>()
       const recorded = []
       for (const [index, line] of input.lines.entries()) {
@@ -115,7 +120,10 @@ export async function receiveBackAs(caller: CommandCaller, orderId: string, inpu
           if (cells.length > 0 && !cells.some((size) => size.workOrderSizeId === row.workOrderSizeId)) throw refuse([{ path: `${at}/bundleId`, message: `Bundle ${row.code} is of a size line ${operation.seq} does not send out.` }])
           const key = `${row.id}|${operation.id}`
           const total = (earlier.get(key) ?? 0) + line.good + line.defective + line.scrapped
-          if (total > row.quantity) throw refuse([{ path: `${at}/good`, message: `Bundle ${row.code} holds ${row.quantity} garment(s); ${earlier.get(key) ?? 0} came back already on line ${operation.seq}.` }])
+          // B-W2b-331 (SCM-145): once the order's bundles are on record, one it sent; at most the garments it carried out.
+          const out = bundlesOut.out.get(row.id)
+          const bundleProblems = bundleBackProblems(at, { code: row.code, garments: out?.garments || row.quantity }, { onRecord: bundlesOut.onRecord, sent: out !== undefined, earlier: earlier.get(key) ?? 0, now: line.good + line.defective + line.scrapped, operationSeq: operation.seq })
+          if (bundleProblems.length > 0) throw refuse(bundleProblems)
           earlier.set(key, total)
           bundle = { id: row.id, code: row.code, quantity: row.quantity }
         }
