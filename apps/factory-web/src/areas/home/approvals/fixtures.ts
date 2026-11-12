@@ -1,8 +1,12 @@
+import { createElement } from 'react'
 import { defineDesignScreen } from '../../../lib/design/design-screen'
 import { approvalRow, CAN, GRAINS, PEOPLE, PREFIX, pending, withoutCost } from '../../sales/quotes/record/fixtures'
 import type { ApprovalRow } from '../../sales/quotes/api'
-import type { ApprovalsViewModel } from './model'
+import type { ApprovalsViewModel, InboxViewModel } from './model'
 import { ApprovalsView } from './view/ApprovalsView'
+// B-W2b-307: the inbox in depth (every request in one inbox).
+import { DEPTH_CASES } from './depth/fixtures'
+import { InboxView } from './view/InboxView'
 
 /**
  * SCR-030 Approvals — made-up data only (PLAN §3.1). Each case is one state the Owner reviews, per role: Finance
@@ -16,6 +20,13 @@ const second = approvalRow({ id: '0190f0e2-9999-7000-8000-200000000002', quoteId
 const WAITING: ApprovalRow[] = [approvalRow(), second]
 /** Finance's own request in the queue (four eyes): its box is disabled and says why. */
 const own = approvalRow({ id: '0190f0e2-9999-7000-8000-200000000004', quoteId: '0190f0e2-9999-7000-8000-000000000139', number: 'Q-2026-0139', partyName: 'Concessionaria Fittizia Tre S.p.A.', reasons: ['DISCOUNT_LIMIT'], requestNote: null, marginPct: '24.0000', askedBy: { id: PEOPLE.finance, name: 'Fiona Conti', you: true }, askedAt: at(29, 9, 15), mayDecide: false, held: 'OWN_REQUEST' })
+
+/** W1's quote cases draw the W1 view; B-W2b-307's cases the inbox in depth (the page itself since B-W2b-307). */
+type DesignModel = ApprovalsViewModel | { readonly depth: InboxViewModel }
+const isDepth = (value: DesignModel): value is { readonly depth: InboxViewModel } => 'depth' in value
+function DesignView({ model }: { model: DesignModel }) {
+  return isDepth(model) ? createElement(InboxView, { model: model.depth }) : createElement(ApprovalsView, { model })
+}
 
 function model(overrides: Partial<ApprovalsViewModel> = {}): ApprovalsViewModel {
   return {
@@ -37,11 +48,12 @@ function model(overrides: Partial<ApprovalsViewModel> = {}): ApprovalsViewModel 
 
 const review = { id: WAITING[0]!.id, quote: { status: 'ready' as const, value: pending() } }
 
-export const designScreen = defineDesignScreen<ApprovalsViewModel>({
+export const designScreen = defineDesignScreen<DesignModel>({
   screen: 'SCR-030',
-  title: 'Approvals: the queue, my requests, the review',
-  view: ApprovalsView,
+  title: 'Approvals: every request in one inbox (B-W2b-307), the queue, my requests, the review',
+  view: DesignView,
   cases: [
+    ...DEPTH_CASES.map((entry) => ({ ...entry, model: { depth: entry.model } })),
     { id: 'finance-queue', label: 'Finance · waiting for me', model: model(), note: 'Each row says what is asked and why ("margin 18.9 % under the 20 % floor"), who asked, the net and since when.' },
     { id: 'selected', label: 'Finance · two requests selected', model: model({ rows: { items: [...WAITING, own], problem: null }, counts: { waiting: 3, mine: 1, decided: 3, capped: false }, selected: WAITING.map((row) => row.id), focusRow: 0 }), note: 'Approve 2 in the toolbar. Finance\'s own request cannot be ticked: its box is disabled and says why (four eyes); the header box and x skip it.' },
     { id: 'finance-review', label: 'Finance · the review (A approve, R reject, J / K)', model: model({ open: review }), note: 'Still current · checked 10:42; the numbers behind the rule; the lines under the floor; the note; Open full quote.' },

@@ -1,0 +1,23 @@
+/*
+ * The approval history on a record (B-W2b-307, SCR-352) LAYOUT: the heading, the timeline, Show more. Semantic tokens
+ * only; the record panels' Approvals tab and the inbox review's History tab draw it.
+ */
+.fw-apd-history {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+.fw-apd-history > div[aria-busy='true'] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-apd-h {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
