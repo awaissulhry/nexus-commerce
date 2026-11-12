@@ -116,6 +116,10 @@ beforeAll(async () => {
     })
     await client.portalSettings.create({ data: { id: P1, partyId: P1, portalOn: true }, select: { id: true } })
   })
+  // The tenant's FAKE file store (the photos), with room for this file's calls.
+  if ((await admin(`SELECT 1 FROM "IntegrationAccount" WHERE "tenantId" = $1 AND provider = 'R2'`, [T])).length === 0) {
+    await admin(`INSERT INTO "IntegrationAccount" (id, "tenantId", provider, code, label, mode, "rateLimitPerMinute", "rateLimitBurst") VALUES ($1, $2, 'R2', 'files', 'Files', 'FAKE', 6000, 1000)`, [newId(), T])
+  }
   await admin(`UPDATE "IntegrationAccount" SET "rateLimitPerMinute" = 6000, "rateLimitBurst" = 1000 WHERE "tenantId" = $1 AND provider = 'R2'`, [T])
   await portalWorld(h, tenant)
   freshGuard(h)

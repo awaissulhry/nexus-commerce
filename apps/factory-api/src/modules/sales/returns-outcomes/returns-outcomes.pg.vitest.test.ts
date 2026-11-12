@@ -105,7 +105,7 @@ const grade = async (returnId: string, lineId: string, gradeCode = 'GOOD', cause
 const TYPED_DDT = { transportBy: 'SENDER', packages: 1, grossWeightKg: '1.8', appearance: 'Scatola di cartone' } as const
 
 beforeAll(async () => {
-  h = await startHarness('returns_outcomes_w2b346')
+  h = await startHarness('returns_out_w2b346')
   h.clock.set(new Date())
   await seedCore({ db: h.database, namespace: NS })
   await seedService({ db: h.database, namespace: NS })
