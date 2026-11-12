@@ -114,6 +114,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/sales/orders': 'orders.view', // GET /sales/orders
       '/sales/price-lists': 'pricelists.view', // GET /sales/price-lists (B-W2a-49)
       '/sales/returns': 'sales.returns.view', // GET /sales/returns (+ GET /sales/repairs with sales.repairs.view) (B-W2a-77)
+      '/sales/service': 'sales.service.view', // GET /sales/service/cases (B-W2b-353)
       '/sales/settings': 'quotes.view', // GET /sales/settings (B-W2a-77)
       '/products/styles': 'product.styles.view', // GET /product/styles
       '/products/materials': 'product.materials.view', // GET /product/materials
@@ -286,6 +287,8 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/sales/quotes',
       '/sales/orders',
       '/sales/returns',
+      // B-W2b-353: Sales › After-sales › Warranty & service.
+      '/sales/service',
       '/sales/price-lists',
       '/sales/settings',
     ])

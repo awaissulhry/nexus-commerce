@@ -28,7 +28,9 @@ export const SEARCH_TYPES = ['SalesOrder', 'Quote', 'Party', 'Style', 'Item', 'P
   // B-W2b-274: a point of measure and a grade rule (B-W2b-224's indexers; they open on Sizes & measurements, B-W2b-240).
   'PointOfMeasure', 'GradeRule',
   // B-W2b-322: an inquiry (B-W2b-295's indexer; it opens its full page, Sales › Inquiries).
-  'Inquiry'] as const
+  'Inquiry',
+  // B-W2b-353: a service case (B-W2b-345's indexer; it opens its page, Sales › Warranty & service).
+  'ServiceCase'] as const
 
 /** The status codes the search catalogue says in words (`search:status.<code>`); another code is not shown. */
 export const STATUS_CODES: ReadonlySet<string> = new Set([
@@ -54,6 +56,8 @@ export const STATUS_CODES: ReadonlySet<string> = new Set([
   'IN_REVIEW', 'DONE',
   // B-W2b-322: an inquiry's (NEW and DECLINED are above).
   'ASSIGNED', 'NEED_INFO', 'QUOTED', 'LOST',
+  // B-W2b-353: a service case's (NEW, OPEN and CLOSED are above).
+  'WAITING_CUSTOMER', 'WAITING_PART', 'RESOLVED',
 ])
 
 /** The areas whose name the shell's navigation says (`shell:nav.<area>.area`). */
@@ -156,6 +160,7 @@ export const SEARCH_VIEW_PERMISSIONS: readonly string[] = Object.freeze(['partie
   /* B-W2b-129 */ 'production.cutting.view',
   /* B-W2b-261 */ 'sales.samples.view',
   /* B-W2b-244 */ 'product.changes.view',
-  /* B-W2b-322 */ 'sales.inquiries.view'])
+  /* B-W2b-322 */ 'sales.inquiries.view',
+  /* B-W2b-353 */ 'sales.service.view'])
 
 export const canSearchSomething = (permissions: readonly string[]): boolean => permissions.some((permission) => SEARCH_VIEW_PERMISSIONS.includes(permission))

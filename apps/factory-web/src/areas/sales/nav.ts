@@ -1,4 +1,4 @@
-import { ClipboardList, Contact, FileText, Handshake, Inbox, Settings, Tags, Undo2 } from 'lucide-react'
+import { ClipboardList, Contact, FileText, Handshake, Inbox, LifeBuoy, Settings, Tags, Undo2 } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -35,7 +35,11 @@ export const officeArea: OfficeAreaNav = {
       {
         id: 'sales-aftersales',
         label: 'shell:nav.sales.aftersales',
-        items: [{ id: 'sales-returns', label: 'shell:nav.sales.returns', href: '/sales/returns', icon: Undo2, permission: 'sales.returns.view' }],
+        items: [
+          { id: 'sales-returns', label: 'shell:nav.sales.returns', href: '/sales/returns', icon: Undo2, permission: 'sales.returns.view' },
+          // SCR-217 / SCR-413 (B-W2b-353): After-sales › Warranty & service — service cases with the warranty check (B-W2b-345).
+          { id: 'sales-service', label: 'shell:nav.sales.service', href: '/sales/service', icon: LifeBuoy, permission: 'sales.service.view' },
+        ],
       },
       // SCR-106 (B-W2a-49): Pricing › Price lists & contracts — customer price lists by dated version, their customers.
       {
