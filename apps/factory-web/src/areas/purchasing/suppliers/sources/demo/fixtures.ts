@@ -1,4 +1,4 @@
-import { createElement, useEffect, useState } from 'react'
+import { createElement, useEffect, useState, type ReactNode } from 'react'
 import { DEMO_COMPANIES } from '../../../../../shell/design-data'
 import type { MaterialDetail, MaterialOption } from '../../../../_shared/buying/api'
 import type { Source } from '../api'
@@ -186,7 +186,8 @@ export function pricesModel(itemId: string, over: Partial<SupplierPricesModel> =
  * The tab in the design index: the picked rows, the view, the dialogs and the search keep their own state, so ticking rows,
  * the header box, shift-click and x show the bulk actions as on the page; everything else stays as the case's model says.
  */
-export function DesignSources({ model }: { model: ApprovedSourcesModel }) {
+/** B-W2b-334: `importAction` = Import price list at the head. */
+export function DesignSources({ model, importAction }: { model: ApprovedSourcesModel; importAction?: ReactNode }) {
   const [selected, setSelected] = useState<readonly string[]>(model.selected)
   const [dialog, setDialog] = useState<SourcesDialog | null>(model.dialog)
   const [q, setQ] = useState(model.q)
@@ -198,5 +199,5 @@ export function DesignSources({ model }: { model: ApprovedSourcesModel }) {
     onSearch: setQ,
     add: { onChange: (draft) => setDialog({ kind: 'add', draft }) },
   }
-  return createElement(ApprovedSourcesView, { model: { ...model, selected, dialog, q }, actions })
+  return createElement(ApprovedSourcesView, { model: { ...model, selected, dialog, q }, actions, importAction })
 }

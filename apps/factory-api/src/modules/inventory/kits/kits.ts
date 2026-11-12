@@ -3,8 +3,8 @@ import { isUuid } from '@nexus/factory-domain/core/ids'
 import { INVENTORY_ISSUE, INVENTORY_STOCK_VIEW } from '@nexus/factory-domain/inventory/permissions'
 import { kitActions, kitHeldWords, stagingProblem, type KitAction, type KitChange } from '@nexus/factory-domain/inventory/kits/rules'
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
-import { mayAt, officeContextOf } from '../ledger/access'
-import type { Reader } from '../issue/store'
+import { mayAt, officeContextOf, stockContextOf } from '../ledger/access'
+import { lockWorkOrderIssues, type Reader } from '../issue/store'
 import { picksOf, readKits } from './store'
 
 /**
@@ -12,6 +12,9 @@ import { picksOf, readKits } from './store'
  * "Kit complete check" and "Mark kit complete (held while lines are short)"). ONE kit record per work order (WorkOrderKit,
  * its id the work order's, made by its first write): where the picked material waits, and whether a person checked it
  * complete. Office routes; a floor screen comes with the floor's kit section (W2b-5: the grants are there already).
+ * B-W2b-310: stage and complete also from a floor device at the work order's site (inventory.issue; the floor holds no
+ * inventory.stock.view): the work order is held by its issue lock there (the floor runtime may not lock its row), so a check
+ * never races an issue; the database's WorkOrderKit_guard keeps the last word on the work order's state.
  *
  *   GET  /inventory/kits/:workOrderId            inventory.stock.view  the kit: the picks' state, place, check, actions
  *   POST /inventory/kits/:workOrderId/stage      inventory.issue       put it at a place of the site, or take it off
@@ -87,14 +90,19 @@ interface KitWrite {
 }
 
 async function writeKit(caller: CommandCaller, workOrderId: string, name: `inventory.${string}`, input: unknown, spec: KitWrite, idempotencyKey?: string) {
-  const context = officeContextOf(caller)
+  // B-W2b-310: the office, or a floor device for stage and complete (the routes' audiences say which).
+  const context = spec.action === 'reopen' ? officeContextOf(caller) : stockContextOf(caller)
+  if (context.audience === 'system') throw new NotFoundError('Work order not found.')
+  const floor = context.audience === 'floor'
   const seen = await caller.withClient((db) => headerOf(db, workOrderId))
-  if (!seen || !mayAt(context, INVENTORY_STOCK_VIEW, seen)) throw new NotFoundError('Work order not found.')
+  if (!seen || !mayAt(context, floor ? INVENTORY_ISSUE : INVENTORY_STOCK_VIEW, seen)) throw new NotFoundError('Work order not found.')
   if (!mayAt(context, INVENTORY_ISSUE, seen)) throw new NotFoundError('Work order not found.')
   const { result } = await command(caller, { name, idempotencyKey, input }, async (tools) => {
     const { tx } = tools
-    // The work order's row, locked: its state cannot move under the kit's check.
-    await tx.$queryRaw`SELECT 1 FROM "WorkOrder" WHERE id = ${seen.id}::uuid FOR UPDATE`
+    // The work order's row, locked: its state cannot move under the kit's check. B-W2b-310: a floor session may not lock the
+    // row (SELECT only); it takes the work order's issue lock, so the picks it reads cannot move under the check.
+    if (floor) await lockWorkOrderIssues(tx, context.tenantId, seen.id)
+    else await tx.$queryRaw`SELECT 1 FROM "WorkOrder" WHERE id = ${seen.id}::uuid FOR UPDATE`
     const header = (await headerOf(tx, seen.id))!
     const picks = await picksOf(tx, header.id)
     const current = await tx.workOrderKit.findUnique({ where: { id: header.id }, select: { id: true, version: true, completedAt: true, stagingLocationId: true } })
@@ -151,7 +159,9 @@ export async function stageKit(caller: CommandCaller, workOrderId: string, body:
 
 /** POST /inventory/kits/:workOrderId/complete: a person checked the kit complete (every line picked in full). */
 export async function completeKit(caller: CommandCaller, workOrderId: string, body: { readonly version: number; readonly note?: string | undefined }, idempotencyKey?: string) {
-  const context = officeContextOf(caller)
+  // B-W2b-310: by an office user or a floor worker (the record keeps who; no answer names them).
+  const context = stockContextOf(caller)
+  if (context.audience === 'system') throw new NotFoundError('Work order not found.')
   return writeKit(caller, workOrderId, 'inventory.completeKit', { workOrderId, ...body }, {
     action: 'complete',
     version: body.version,

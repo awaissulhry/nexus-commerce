@@ -97,6 +97,9 @@ async function onReceipt(caller: CommandCaller, event: EventEnvelope): Promise<v
     if (!receipt || receipt.status !== 'POSTED') return null
     const moves = await db.stockMove.findMany({ where: { id: { in: payload.moveIds } }, select: { lotId: true, toLocationId: true, createdById: true, deviceId: true }, orderBy: { id: 'asc' } })
     const docks = new Set((await db.location.findMany({ where: { id: { in: moves.flatMap((move) => (move.toLocationId ? [move.toLocationId] : [])) }, kind: 'RECEIVING' }, select: { id: true } })).map((row) => row.id))
+    // B-W2b-300 (SCM-122): goods without a PO post into the holding place they waited in: they wait for a put-away there too.
+    const holding = (await db.goodsReceipt.findUnique({ where: { id: receipt.id }, select: { holdingLocationId: true } }))?.holdingLocationId
+    if (holding) docks.add(holding)
     const pairs = new Map<string, { lotId: string; fromId: string }>()
     for (const move of moves) if (move.lotId && move.toLocationId && docks.has(move.toLocationId)) pairs.set(`${move.lotId}|${move.toLocationId}`, { lotId: move.lotId, fromId: move.toLocationId })
     const wanted: Wanted[] = []

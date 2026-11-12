@@ -56,7 +56,7 @@ export interface InboxViewModel {
   /** Rows of a fresher list waiting behind "Show" (0: none). */
   changed?: number
   /** Which of the screens a task opens this person may open here. */
-  screens: { readonly move: boolean; readonly receive: boolean; readonly pick: boolean }
+  screens: { readonly move: boolean; readonly receive: boolean; readonly pick: boolean; /* B-W2b-310 */ readonly count: boolean }
   /** The task whose step is on its way. */
   busy?: string | null
   line?: InboxLine | null
@@ -109,7 +109,7 @@ export function InboxView({ model, onAction, onFrame, camera }: InboxViewProps) 
     const screen = screenOf(task.kind)
     if (screen === null) return { label: t('inbox.act.done'), icon: <Check />, heldReason: model.busy === task.id ? t('inbox.held.busy') : null, onPress: () => send({ type: 'done', taskId: task.id }) }
     const label = task.kind === 'QUARANTINE' ? t('inbox.act.quarantine') : t(`inbox.act.${screen}`)
-    const icon = screen === 'move' ? task.kind === 'QUARANTINE' ? <ShieldAlert /> : <ArrowRightLeft /> : screen === 'receive' ? <PackageOpen /> : <ClipboardList />
+    const icon = screen === 'move' ? task.kind === 'QUARANTINE' ? <ShieldAlert /> : <ArrowRightLeft /> : screen === 'receive' ? <PackageOpen /> : /* B-W2b-310 */ screen === 'count' ? <Layers /> : <ClipboardList />
     return { label, icon, heldReason: model.screens[screen] ? null : t('inbox.held.noScreen'), onPress: () => send({ type: 'go', taskId: task.id }) }
   }
 

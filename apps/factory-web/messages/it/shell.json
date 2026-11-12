@@ -57,7 +57,9 @@
       "sourcing": "Richieste di offerta",
       "claims": "Resi e reclami ai fornitori",
       "reportsGroup": "Report",
-      "reports": "Report acquisti"
+      "reports": "Report acquisti",
+      "settingsGroup": "Impostazioni",
+      "settings": "Impostazioni acquisti"
     },
     "people": {
       "area": "Persone",
@@ -195,6 +197,9 @@
       "exceptions": "Eccezioni",
       "dates": "Date",
       "milestones": "Calendario T&A",
+      "longRange": "Lungo periodo",
+      "demand": "Domanda e previsioni",
+      "mps": "Piano principale e S&OP",
       "settingsGroup": "Impostazioni",
       "settings": "Impostazioni pianificazione"
     },

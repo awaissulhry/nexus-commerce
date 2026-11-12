@@ -78,6 +78,8 @@ describe('one party record, two sides (SCR-032, SCR-056)', () => {
     expect(viewQuery(SIDES.customers, 'all')).toMatchObject({ statuses: ['ALL'] })
     expect(viewQuery(SIDES.suppliers, 'subcontractors')).toMatchObject({ roles: ['SUBCONTRACTOR'] })
     expect(viewQuery(SIDES.customers, 'brands', { kind: 'PERSON', taxMode: 'IT_B2C' }, ' rossi ')).toMatchObject({ roles: ['BRAND'], kind: 'PERSON', taxMode: 'IT_B2C', q: ' rossi ' })
+    // B-W2b-324: Riders (people) = the customers that are people.
+    expect(viewQuery(SIDES.customers, 'riders', { kind: 'ORGANISATION' })).toMatchObject({ roles: ['CUSTOMER', 'BRAND'], kind: 'PERSON' })
     for (const side of Object.values(SIDES)) for (const tile of side.tiles) expect(side.views).toContain(TILE_VIEW[tile])
   })
 
@@ -116,6 +118,8 @@ describe('one party record, two sides (SCR-032, SCR-056)', () => {
     const can = { view: true, manage: true, block: true, vies: true, quotes: true, orders: true, purchaseOrders: true, price: true, cost: true, threads: true }
     expect(recordTabs(SIDES.customers, can)).toEqual(['overview', 'addresses', 'tax', 'orders', 'documents', 'activity'])
     expect(recordTabs(SIDES.customers, { ...can, quotes: false, orders: false, threads: false })).toEqual(['overview', 'addresses', 'tax'])
+    // B-W2b-324: Requirements after Tax & terms, with Sales' depth slot.
+    expect(recordTabs(SIDES.customers, { ...can, depth: true })).toEqual(['overview', 'addresses', 'tax', 'requirements', 'orders', 'documents', 'activity'])
     // B-W2a-69: Items & prices stays in view without purchasing.view: the tab says what is missing.
     expect(recordTabs(SIDES.suppliers, { ...can, purchaseOrders: false })).toEqual(['overview', 'contacts', 'items', 'activity'])
   })
@@ -308,7 +312,9 @@ function literalKeys(): string[] {
     // B-W2a-69: purchasing/suppliers/sources speaks its own catalogue (purchasing-sources), checked by its own test.
     // B-W2b-180: the Portal access tab (sales/customers/portal, purchasing/suppliers/portal) speaks `portal-access` (its own test).
     // B-W2b-172: the Questionnaire tab (purchasing/suppliers/questionnaire) speaks `purchasing-questionnaire` (its own test).
-    for (const file of sources(join(SRC, dir)).filter((path) => !path.includes(`${join('suppliers', 'sources')}`) && !path.includes(`${join('customers', 'portal')}`) && !path.includes(`${join('suppliers', 'portal')}`) && !path.includes(`${join('suppliers', 'questionnaire')}`)))
+    // B-W2b-334: the supplier in depth (purchasing/suppliers/depth, /list) speaks `purchasing-suppliers-depth` (its own test).
+    // B-W2b-324: the customer in depth (sales/customers/depth) speaks `sales-customers-depth` (its own test).
+    for (const file of sources(join(SRC, dir)).filter((path) => !path.includes(`${join('suppliers', 'sources')}`) && !path.includes(`${join('customers', 'portal')}`) && !path.includes(`${join('suppliers', 'portal')}`) && !path.includes(`${join('suppliers', 'questionnaire')}`) && !path.includes(`${join('suppliers', 'depth')}`) && !path.includes(`${join('suppliers', 'list')}`) && !path.includes(`${join('customers', 'depth')}`)))
       for (const match of readFileSync(file, 'utf8').matchAll(pattern)) if (!NOT_KEYS.has(match[1]!)) keys.add(match[1]!)
   return [...keys].sort()
 }

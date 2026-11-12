@@ -120,7 +120,7 @@ export function FloorHome() {
         // One person's open work never reaches the next person on the tablet. B-W2b-F6: unread, what they left on Operation counts too.
         resume: scans && person ? { items: fresh ? kept : withLeft(person, kept), asOf: online ? null : asOf } : null,
         mydayAnswers: answers,
-        tileCounts: warehouse ? { move: moveCount(waiting) ?? 0, mywork: totalCount(waiting) ?? 0 } : undefined,
+        tileCounts: warehouse ? { move: moveCount(waiting) ?? 0, mywork: totalCount(waiting) ?? 0, /* B-W2b-310 */ count: waiting?.COUNT ?? 0 } : undefined,
       }}
       onFrame={onFrame}
       onAction={(action) => void onAction(action)}

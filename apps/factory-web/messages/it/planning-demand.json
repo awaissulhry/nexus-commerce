@@ -1,0 +1,401 @@
+{
+  "noAccess": {
+    "title": "Domanda e previsioni non è aperta per te",
+    "body": "Serve il permesso di vedere la pianificazione. Chiedi a un amministratore se ti serve per il lavoro."
+  },
+  "page": {
+    "asOf": "Aggiornato al {time}",
+    "horizon": "Dal {from} al {to}",
+    "site": "Sede",
+    "siteOne": "Sede {site}",
+    "bucket": "Colonne per",
+    "weeks": "Orizzonte",
+    "weeksSite": "Orizzonte della sede",
+    "weeksCount_one": "{count} settimana",
+    "weeksCount_other": "{count} settimane",
+    "more": "Altre azioni",
+    "exportGrid": "Esporta la griglia (CSV)",
+    "strategy": "Strategia di produzione per articolo",
+    "keys": "Scorciatoie da tastiera",
+    "noSites": "Nessuna sede pianifica ancora: imposta uno stabilimento in Impostazioni pianificazione.",
+    "sitesFailed": "Impossibile caricare le sedi",
+    "truncated": "Sono mostrati i primi {count} modelli-colore per codice: cerca un modello per vedere gli altri.",
+    "unplacedTitle": "Parte della domanda non ha una sede di produzione",
+    "unplaced": "{orders} righe d’ordine, {quotes} righe d’offerta e {rounds} giri campioni di questa azienda non indicano una sede mentre ha più stabilimenti: qui non sono contati."
+  },
+  "bucket": {
+    "WEEK": "Settimana",
+    "MONTH": "Mese"
+  },
+  "live": {
+    "connecting": "Connessione…",
+    "live": "In tempo reale",
+    "offline": "Non in linea: aggiornamenti in pausa"
+  },
+  "common": {
+    "pieces_one": "{n} pezzo",
+    "pieces_other": "{n} pezzi",
+    "sources_one": "{n} origine",
+    "sources_other": "{n} origini",
+    "retry": "Riprova",
+    "clearSearch": "Cancella la ricerca",
+    "clearFilters": "Togli i filtri",
+    "dismiss": "Chiudi"
+  },
+  "tiles": {
+    "title": "Domanda in sintesi",
+    "purpose": "Pezzi per livello nell’orizzonte: in ritardo, nell’orizzonte e senza data.",
+    "error": "Impossibile caricare la domanda in sintesi",
+    "loading": "Caricamento…",
+    "hint": "{sources} · {late} in ritardo · {after} oltre l’orizzonte",
+    "later": {
+      "BRANDS": "Non ancora nota: la domanda dei marchi arriva con i marchi di Nexus Commerce",
+      "FORECAST": "Non ancora nota: la previsione arriva più avanti"
+    }
+  },
+  "tile": {
+    "ORDERS": "Ordini confermati",
+    "QUOTES": "Offerte probabili",
+    "MTM": "Capi su misura",
+    "SAMPLES": "Campioni e prototipi",
+    "REMAKES": "Rifacimenti",
+    "BRANDS": "Domanda dei marchi",
+    "FORECAST": "Previsione"
+  },
+  "layer": {
+    "ORDERS": "Ordini confermati",
+    "QUOTES": "Offerte probabili",
+    "MTM": "Su misura",
+    "SAMPLES": "Campioni e prototipi",
+    "REMAKES": "Rifacimenti",
+    "BRANDS": "Domanda dei marchi",
+    "FORECAST": "Previsione"
+  },
+  "layers": {
+    "label": "Livelli nella griglia",
+    "lastHeld": "Un livello resta acceso: accendine prima un altro.",
+    "quotesNote": "Le offerte non sono ancora vinte: mai acquistate e mai nel totale fermo.",
+    "held": {
+      "BRANDS": "La domanda dei marchi non è ancora nota: arriva con i marchi di Nexus Commerce.",
+      "FORECAST": "La previsione non è ancora nota: arriva più avanti."
+    }
+  },
+  "layerCount": {
+    "ORDERS_one": "{count} da ordini",
+    "ORDERS_other": "{count} da ordini",
+    "QUOTES_one": "{count} da offerte",
+    "QUOTES_other": "{count} da offerte",
+    "MTM_one": "{count} su misura",
+    "MTM_other": "{count} su misura",
+    "SAMPLES_one": "{count} campione",
+    "SAMPLES_other": "{count} campioni",
+    "REMAKES_one": "{count} rifacimento",
+    "REMAKES_other": "{count} rifacimenti"
+  },
+  "strategy": {
+    "MAKE_TO_ORDER": "Su ordine",
+    "MAKE_TO_STOCK": "Per magazzino",
+    "ASSEMBLE_TO_ORDER": "Assemblaggio su ordine",
+    "MIXED": "Misto",
+    "hint": {
+      "MAKE_TO_ORDER": "Aspetta l’ordine del cliente.",
+      "MAKE_TO_STOCK": "Prodotto in anticipo da una previsione, a magazzino.",
+      "ASSEMBLE_TO_ORDER": "Componenti pronti; assemblato all’arrivo dell’ordine.",
+      "MIXED": "Le sue taglie non hanno una sola strategia: vedi Piano principale e S&OP."
+    }
+  },
+  "grid": {
+    "title": "Domanda nel tempo",
+    "purpose": "Righe modello-colore (aprile per taglia) × settimane, livello per livello.",
+    "note": "Una cella sono i pezzi dei livelli accesi; la sua barra mostra i livelli. Premi un numero per vedere da cosa nasce.",
+    "col": {
+      "line": "Modello e colore",
+      "strategy": "Strategia",
+      "total": "Totale",
+      "totalTip": "Ogni periodo dell’orizzonte, i pezzi in ritardo e quelli senza data"
+    },
+    "count_one": "{count} modello-colore · {pieces}",
+    "count_other": "{count} modelli-colore · {pieces}",
+    "search": "Cerca un modello",
+    "error": "Impossibile caricare la domanda nel tempo",
+    "noMatch": "Nessun modello corrisponde",
+    "noMatchBody": "Niente in questo orizzonte per “{q}”.",
+    "empty": "Nessuna domanda in questo orizzonte",
+    "emptyBody": "Nessun ordine, offerta, giro campioni o rifacimento aperto aspetta in questa sede.",
+    "past": "In ritardo",
+    "none": "Senza data",
+    "later": "Più avanti",
+    "week": "Sett. {week}",
+    "pastSpan": "Da consegnare prima del {day}",
+    "noneSpan": "Nessuna data ancora",
+    "laterSpan": "Dopo il {day}",
+    "span": "Dal {from} al {to}",
+    "mtm": "Su misura",
+    "size": "Taglia {size}",
+    "anyColour": "Qualsiasi colore",
+    "cellLabel": "{line}, {bucket}: {pieces} — {layers}. Da cosa nasce questo numero",
+    "wholeHorizon": "tutto l’orizzonte",
+    "openSizes": "Apri le taglie di {line}",
+    "closeSizes": "Chiudi le taglie di {line}",
+    "sizeNotSelectable": "Una taglia va con il suo modello e colore: spunta quella riga."
+  },
+  "bulk": {
+    "open_one": "Apri le taglie di {count}",
+    "open_other": "Apri le taglie di {count}",
+    "close_one": "Chiudi le taglie di {count}",
+    "close_other": "Chiudi le taglie di {count}",
+    "export_one": "Esporta {count}",
+    "export_other": "Esporta {count}",
+    "noSizes": "Queste righe non hanno taglie da aprire.",
+    "noneOpen": "Nessuna di queste righe è aperta."
+  },
+  "keys": {
+    "search": "Cerca un modello",
+    "what": "Da cosa nasce questo numero",
+    "sizes": "Apri o chiudi le taglie",
+    "openSource": "Apri il documento d’origine",
+    "close": "Chiudi il riquadro"
+  },
+  "popover": {
+    "title": "Da cosa nasce questo numero: {what}",
+    "loading": "Lettura delle origini…",
+    "error": "Impossibile leggere da cosa nasce questo numero.",
+    "sum": "{kinds} · {pieces}",
+    "none": "Niente nei livelli accesi.",
+    "more_one": "e altri {count}",
+    "more_other": "e altri {count}",
+    "showAll": "Mostra tutte in Righe di domanda",
+    "newTab": "⌘-clic su un documento per aprirlo in una nuova scheda.",
+    "openNewTab": "Apri {doc} in una nuova scheda",
+    "line": "{pieces} pz · {size} · {day}"
+  },
+  "kindCount": {
+    "ORDER_LINE_one": "{count} ordine",
+    "ORDER_LINE_other": "{count} ordini",
+    "QUOTE_LINE_one": "{count} offerta",
+    "QUOTE_LINE_other": "{count} offerte",
+    "MTM_UNIT_one": "{count} capo su misura",
+    "MTM_UNIT_other": "{count} capi su misura",
+    "SAMPLE_ROUND_one": "{count} giro campioni",
+    "SAMPLE_ROUND_other": "{count} giri campioni",
+    "REWORK_one": "{count} rilavorazione",
+    "REWORK_other": "{count} rilavorazioni",
+    "RECUT_one": "{count} ritaglio",
+    "RECUT_other": "{count} ritagli",
+    "RETURN_REPLACEMENT_one": "{count} sostituzione di un reso",
+    "RETURN_REPLACEMENT_other": "{count} sostituzioni di resi",
+    "RETURN_REMAKE_one": "{count} rifacimento di un reso",
+    "RETURN_REMAKE_other": "{count} rifacimenti di resi"
+  },
+  "kind": {
+    "ORDER_LINE": "Riga d’ordine",
+    "QUOTE_LINE": "Riga d’offerta",
+    "MTM_UNIT": "Capo su misura",
+    "SAMPLE_ROUND": "Giro campioni",
+    "REWORK": "Rilavorazione",
+    "RECUT": "Ritaglio",
+    "RETURN_REPLACEMENT": "Sostituzione di un reso",
+    "RETURN_REMAKE": "Rifacimento di un reso"
+  },
+  "sampleKind": {
+    "PROTO": "Prototipo",
+    "FIT": "Fit",
+    "SALESMAN": "Campionario vendita",
+    "PRE_PRODUCTION": "Pre-produzione",
+    "CERTIFICATION": "Campione per prova CE",
+    "BRAND": "Campione del brand"
+  },
+  "status": {
+    "CONFIRMED": "Confermato",
+    "IN_PRODUCTION": "In produzione",
+    "READY": "Pronto per la spedizione",
+    "PARTLY_SHIPPED": "Spedito in parte",
+    "SENT": "Inviata al cliente",
+    "REQUESTED": "Richiesto",
+    "IN_MAKING": "In lavorazione",
+    "OPEN": "Aperto",
+    "IN_PROGRESS": "In corso",
+    "AUTHORISED": "Reso autorizzato",
+    "RECEIVED": "Reso ricevuto",
+    "INSPECTED": "Reso controllato",
+    "other": "Aperto"
+  },
+  "rows": {
+    "title": "Righe di domanda",
+    "purpose": "La stessa domanda come elenco, ogni riga con il suo documento d’origine.",
+    "col": {
+      "source": "Origine",
+      "document": "Documento",
+      "style": "Modello",
+      "size": "Taglia",
+      "pieces": "Pezzi",
+      "date": "Data",
+      "status": "Stato"
+    },
+    "docLine": "{number} · riga {line}",
+    "noDate": "Senza data",
+    "late_one": "{count} giorno di ritardo",
+    "late_other": "{count} giorni di ritardo",
+    "from": "da {origin}",
+    "mayNotOpen": "Non puoi aprire questo documento",
+    "validUntil": "Valida fino al {day}",
+    "planned": "Coperta dal piano materiali",
+    "notPlanned": "Non nel piano materiali",
+    "error": "Impossibile caricare le righe di domanda",
+    "noMatch": "Nessuna domanda corrisponde",
+    "noMatchBody": "Niente aspetta con questi filtri in questo orizzonte.",
+    "empty": "Nessuna domanda",
+    "emptyBody": "Niente aspetta in questa sede in questo orizzonte.",
+    "onCell": "Una cella: {cell}",
+    "clearCell": "Mostra di nuovo tutte le righe",
+    "count_one": "{count} riga mostrata · {sources} · {pieces}",
+    "count_other": "{count} righe mostrate · {sources} · {pieces}",
+    "search": "Cerca un modello o un documento",
+    "layer": "Livello",
+    "allLayers": "Tutti i livelli",
+    "more": "Mostra altre",
+    "moreFailed": "Impossibile caricarne altre: riprova",
+    "moreLoading": "Caricamento…"
+  },
+  "csv": {
+    "style": "Modello",
+    "colourway": "Colore",
+    "size": "Taglia",
+    "strategy": "Strategia",
+    "total": "Totale"
+  },
+  "error": {
+    "failed": "Qualcosa non ha funzionato da parte nostra. Riprova tra poco.",
+    "forbidden": "Non puoi vedere la pianificazione di questa sede.",
+    "offline": "Nessuna connessione al server. Controlla la rete e riprova.",
+    "gone": "Questa sede non c’è più.",
+    "moved": "La domanda è cambiata mentre la leggevi: l’elenco riparte.",
+    "noSite": "Nessuna sede da pianificare: imposta uno stabilimento in Impostazioni pianificazione."
+  },
+  "mps": {
+    "noAccess": {
+      "title": "Piano principale e S&OP non è aperto per te",
+      "body": "Serve il permesso di vedere la pianificazione. Chiedi a un amministratore se ti serve per il lavoro."
+    },
+    "page": {
+      "asOf": "Aggiornato al {time}",
+      "site": "Sede",
+      "siteOne": "Sede {site}",
+      "more": "Altre azioni",
+      "demand": "Domanda e previsioni",
+      "keys": "Scorciatoie da tastiera",
+      "noSites": "Nessuna sede pianifica ancora: imposta uno stabilimento in Impostazioni pianificazione.",
+      "readOnly": "Puoi leggere le strategie; per cambiarle serve il permesso di gestire le strategie di produzione (lo hanno pianificatori e responsabili di produzione)."
+    },
+    "list": {
+      "title": "Strategia di produzione per articolo",
+      "purpose": "Su ordine, per magazzino o assemblaggio su ordine, per ogni capo finito e componente di questa sede.",
+      "hint": "Su ordine aspetta l’ordine del cliente; per magazzino produce in anticipo da una previsione.",
+      "error": "Impossibile caricare la strategia di produzione per articolo",
+      "noMatch": "Nessun articolo corrisponde",
+      "noMatchBody": "Nessun capo finito o componente di questa sede corrisponde a questi filtri.",
+      "empty": "Ancora nessun articolo",
+      "emptyBody": "Capi finiti e componenti compaiono qui quando Prodotti li ha.",
+      "count_one": "{count} articolo",
+      "count_other": "{count} articoli",
+      "search": "Cerca un articolo o uno SKU",
+      "more": "Mostra altri",
+      "moreFailed": "Impossibile caricarne altri: riprova",
+      "moreLoading": "Caricamento…"
+    },
+    "col": {
+      "item": "Articolo",
+      "strategy": "Strategia",
+      "colours": "Colori",
+      "reason": "Motivo",
+      "changed": "Ultima modifica"
+    },
+    "filter": {
+      "kind": "Tipo",
+      "strategy": "Strategia",
+      "setLabel": "Impostata o predefinita",
+      "all": {
+        "kind": "Tutti i tipi",
+        "strategy": "Tutte le strategie",
+        "set": "Impostate e predefinite"
+      },
+      "set": {
+        "set": "Impostata da una persona",
+        "default": "Predefinita (su ordine)"
+      }
+    },
+    "kind": {
+      "FINISHED": "Capo finito",
+      "COMPONENT": "Componente"
+    },
+    "bulk": {
+      "open_one": "Cambia strategia per {count}",
+      "open_other": "Cambia strategia per {count}",
+      "tooMany": "Al massimo {max} articoli in una modifica.",
+      "to": "Nuova strategia",
+      "reason": "Motivo (facoltativo)",
+      "reasonHint": "Resta con la modifica, al massimo {max} caratteri.",
+      "reasonLong": "Tieni il motivo entro 500 caratteri.",
+      "already_one": "{count} articolo ha già questa strategia: resta com’è.",
+      "already_other": "{count} articoli hanno già questa strategia: restano come sono.",
+      "hint": "Tutto o niente: un articolo cambiato dopo la lettura ferma il salvataggio e lo dice.",
+      "undoneLine": "Annullato: tornato com’era",
+      "undoneVerb": "annullati",
+      "unchangedLine": "Già così",
+      "savedLine": "Ora {strategy}",
+      "title_one": "Cambia la strategia di {count} articolo",
+      "title_other": "Cambia la strategia di {count} articoli",
+      "summary": "Solo in Nexus: come questa sede pianifica gli articoli. Niente viene inviato a clienti o fornitori.",
+      "metric": {
+        "changing": "Cambiano",
+        "already": "Già così"
+      },
+      "save_one": "Salva {count} modifica",
+      "save_other": "Salva {count} modifiche"
+    },
+    "held": {
+      "noManage": "Per cambiare una strategia serve il permesso di gestire le strategie di produzione."
+    },
+    "cell": {
+      "strategy": "Strategia di {item}",
+      "default": "predefinita",
+      "saved": "Salvato",
+      "allColours": "Tutti i colori uguali",
+      "coloursApart_one": "{count} colore a parte",
+      "coloursApart_other": "{count} colori a parte",
+      "noReason": "Nessun motivo indicato",
+      "changedUnknown": "Impostata prima che le modifiche fossero registrate",
+      "neverSet": "Mai impostata: su ordine per impostazione predefinita",
+      "changedFrom": "{from} → {to} · {by}",
+      "someone": "il sistema"
+    },
+    "keys": {
+      "edit": "Cambia la strategia"
+    },
+    "refusal": {
+      "changed": "Cambiata da qualcun altro dopo la lettura: rileggi e scegli.",
+      "colour": "Quel colore non è tra i colori attivi dell’articolo.",
+      "item": "Solo capi finiti e componenti che produciamo, ancora attivi, hanno una strategia.",
+      "reason": "Lascia vuoto il motivo, o spiega il perché in al massimo 500 caratteri.",
+      "twice": "Un articolo è indicato due volte: indicalo una volta sola.",
+      "invalid": "Questa modifica non si può salvare così com’è.",
+      "forbidden": "Non puoi cambiare la strategia in questa sede.",
+      "gone": "Questo articolo non c’è più.",
+      "offline": "Nessuna connessione: non è stato salvato niente. Riprova.",
+      "failed": "Non salvato: qualcosa non ha funzionato da parte nostra. Riprova."
+    },
+    "error": {
+      "failed": "Qualcosa non ha funzionato da parte nostra. Riprova tra poco.",
+      "forbidden": "Non puoi vedere la pianificazione di questa sede.",
+      "offline": "Nessuna connessione al server. Controlla la rete e riprova.",
+      "gone": "Questa sede non c’è più.",
+      "noSite": "Nessuna sede da pianificare: imposta uno stabilimento in Impostazioni pianificazione."
+    },
+    "notice": {
+      "bulkDone_one": "{count} articolo ha una nuova strategia.",
+      "bulkDone_other": "{count} articoli hanno una nuova strategia.",
+      "bulkUndone_one": "La modifica di {count} articolo è stata annullata.",
+      "bulkUndone_other": "La modifica di {count} articoli è stata annullata."
+    }
+  }
+}

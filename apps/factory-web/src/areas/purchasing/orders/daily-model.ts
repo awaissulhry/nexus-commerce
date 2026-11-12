@@ -225,6 +225,8 @@ export function sendManyBody(cards: readonly SendCard[], confirmBy: Readonly<Rec
 /** A refused send of Send n in words, from its code (never the API's message). */
 export function outcomeWords(outcome: SendOutcome): Phrase {
   if (outcome.outcome === 'SENT') return phrase('sendMany.sent', { to: outcome.sent?.to ?? '' })
+  // B-W2b-333: a switched-on approval rule held it (B-W2b-305): it waits for a yes, nothing was sent.
+  if (outcome.outcome === 'WAITING') return phrase(outcome.approval?.approver ? 'purchasing-orders-depth:approval.waitingFor' : 'purchasing-orders-depth:approval.waitingAsked', { approver: outcome.approval?.approver?.name ?? '' })
   switch (outcome.refused?.code) {
     case 'conflict':
       return phrase('sendMany.refused.conflict')

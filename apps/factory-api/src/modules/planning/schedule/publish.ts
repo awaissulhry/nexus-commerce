@@ -286,6 +286,10 @@ export async function publish(caller: CommandCaller, body: PublishBody, idempote
           minutes: slot.minutes,
           overloadReason: slot.overloadReason,
           note: slot.note,
+          // B-W2b-312 (PLN-139): the floor's version keeps the pins.
+          pinned: slot.pinned,
+          pinnedAt: slot.pinnedAt,
+          pinnedById: slot.pinnedById,
           createdAt: now,
           updatedAt: slot.updatedAt,
           createdById: context.actorId,
@@ -343,7 +347,7 @@ export async function getVersion(caller: CommandCaller, versionId: string) {
       select: { ...SLOT_COLUMNS, workOrder: { select: { id: true, number: true } }, operation: { select: { id: true, seq: true, code: true, name: true } } },
       orderBy: [{ startAt: 'asc' }, { id: 'asc' }],
     })
-    const names = await userNamesOf(db, slots.map((slot) => slot.updatedById))
+    const names = await userNamesOf(db, slots.flatMap((slot) => [slot.updatedById, slot.pinnedById])) // B-W2b-312: who pinned it too
     return {
       site: siteViewOf(version.site),
       version: await versionHeaderOf(db, version),
@@ -375,6 +379,10 @@ export function storedSlotView(slot: SlotRow, names: ReadonlyMap<string, string>
     note: slot.note,
     updatedAt: toUtcIso(slot.updatedAt),
     updatedBy: slot.updatedById ? { id: slot.updatedById, name: names.get(slot.updatedById) ?? '' } : null,
+    // B-W2b-312 (PLN-139): pinned where it is, since when and by whom (an office user, inside the record).
+    pinned: slot.pinned,
+    pinnedAt: slot.pinnedAt ? toUtcIso(slot.pinnedAt) : null,
+    pinnedBy: slot.pinnedById ? { id: slot.pinnedById, name: names.get(slot.pinnedById) ?? '' } : null,
   }
 }
 

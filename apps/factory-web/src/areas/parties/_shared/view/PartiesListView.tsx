@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, type ReactNode } from 'react'
 import Link from 'next/link'
 import { Archive, Ban, Building2, Download, MoreHorizontal, Search, ShieldCheck, X } from 'lucide-react'
-import { EmptyState, Menu, MetricStrip, type MenuItemDef } from '@nexus/ui/components'
+import { EmptyState, Menu, MetricStrip, type MenuItemDef, type Metric } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, FilterChip, Input, Skeleton } from '@nexus/ui/primitives'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
@@ -67,15 +67,25 @@ export interface PartiesListActions {
  * with the header select-all box and shift-click ranges, and the footer with Show more and the keys icon. Fetches
  * nothing: the container (PartiesList.tsx) reads and writes.
  */
-export function PartiesListView({ model, actions, headActions, columns: sideColumns }: { model: PartiesListModel; actions?: PartiesListActions; headActions?: ReactNode; columns?: readonly ColDef<PartyRow>[] }) {
+/**
+ * B-W2b-334: a side's own list parts (Suppliers, areas/purchasing/suppliers/list): tiles after the side's own, a view of
+ * its own drawn in place of the grid while it is on (its own list frame), bulk actions after Export N.
+ */
+export interface ListDepth {
+  readonly tiles?: readonly Metric[]
+  readonly body?: ReactNode
+  readonly bulk?: ReactNode
+}
+
+export function PartiesListView({ model, actions, headActions, columns: sideColumns, depth }: { model: PartiesListModel; actions?: PartiesListActions; headActions?: ReactNode; columns?: readonly ColDef<PartyRow>[]; depth?: ListDepth | undefined }) {
   return (
     <PartiesMessages>
-      <PartiesList model={model} actions={actions} headActions={headActions} sideColumns={sideColumns} />
+      <PartiesList model={model} actions={actions} headActions={headActions} sideColumns={sideColumns} depth={depth} />
     </PartiesMessages>
   )
 }
 
-function PartiesList({ model, actions, headActions, sideColumns }: { model: PartiesListModel; actions?: PartiesListActions; headActions?: ReactNode; sideColumns?: readonly ColDef<PartyRow>[] }) {
+function PartiesList({ model, actions, headActions, sideColumns, depth }: { model: PartiesListModel; actions?: PartiesListActions; headActions?: ReactNode; sideColumns?: readonly ColDef<PartyRow>[]; depth?: ListDepth | undefined }) {
   const t = useT('parties')
   const locale = useLocale()
   const config = SIDES[model.side]
@@ -209,6 +219,8 @@ function PartiesList({ model, actions, headActions, sideColumns }: { model: Part
       column('status', t('list.col.status'), StatusCell, { flex: 1, minWidth: 130 }),
       column('vat', t('list.col.vat'), VatCell, { flex: 1.6, minWidth: 210 }),
       column('country', t('list.col.country'), CountryCell, { flex: 1, minWidth: 130 }),
+      // B-W2b-334: the side's own columns (Suppliers: Documents), before Language.
+      ...(sideColumns ?? []),
       { colId: 'language', headerName: t('list.col.language'), sortable: false, flex: 0.8, minWidth: 110, valueGetter: (params) => (params.data ? languageName(params.data.language, locale) : '') },
       actionsColumn,
     ]
@@ -316,6 +328,8 @@ function PartiesList({ model, actions, headActions, sideColumns }: { model: Part
     <>
       {bulk(t('list.bulkVies', { count: viesReach.reach.length }), <ShieldCheck size={13} aria-hidden />, () => actions?.onCheckVies?.(viesReach.reach.map((row) => row.id)), viesHeld)}
       {bulk(t('list.bulkExport', { count: selectedRows.length }), <Download size={13} aria-hidden />, () => actions?.onExport?.(selectedRows), null)}
+      {/* B-W2b-334: the side's own bulk actions (Suppliers: Request documents N). */}
+      {depth?.bulk}
       {bulk(t('list.bulkBlock', { count: blockReach.reach.length }), <Ban size={13} aria-hidden />, () => open({ kind: 'block', partyIds: blockReach.reach.map((row) => row.id) }), blockHeld)}
       {bulk(
         t('list.bulkArchive', { count: archiveReach.reach.length }),
@@ -382,8 +396,10 @@ function PartiesList({ model, actions, headActions, sideColumns }: { model: Part
         }
       />
       <NoticeBanner notice={model.notice} onDismiss={actions?.onDismissNotice} />
-      <MetricStrip metrics={config.tiles.map(tile)} />
+      <MetricStrip metrics={[...config.tiles.map(tile), ...(depth?.tiles ?? [])]} />
 
+      {/* B-W2b-334: a side's own view in place of the grid (Suppliers: Documents expiring in 30 days). */}
+      {depth?.body ?? (
       <ListFrame<PartyRow>
         label={t(`${side}.table`)}
         rows={model.rows.problem ? [] : model.rows.items}
@@ -420,6 +436,7 @@ function PartiesList({ model, actions, headActions, sideColumns }: { model: Part
         state={state}
         focusRow={model.focusRow}
       />
+      )}
 
       <NewPartyModal
         side={side}

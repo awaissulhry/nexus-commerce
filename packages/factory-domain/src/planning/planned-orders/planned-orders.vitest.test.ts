@@ -212,12 +212,14 @@ describe('planned work orders from the demand (PLN-067, PLN-069, PLN-089)', () =
       ['MAKE', null, '48x2 50x5 52x2', 9, null, ''],
       ['SUBCONTRACT', 'rev-2', '48x2 50x4 52x2', 8, 'ws-1', '20,30'],
     ])
-    expect(grid[0]!.demand).toEqual([
+    // B-W2b-306 (PLN-083): each demand says the day it is needed (the row's key day).
+    expect(grid[0]!.demand.map(({ needDate: _needDate, ...entry }) => entry)).toEqual([
       { orderId: 'so-1', orderLineId: 'ol-1', size: '48', pieces: 2 },
       { orderId: 'so-1', orderLineId: 'ol-1', size: '50', pieces: 4 },
       { orderId: 'so-1', orderLineId: 'ol-1', size: '52', pieces: 2 },
       { orderId: 'so-2', orderLineId: 'ol-2', size: '50', pieces: 1 },
     ])
+    expect(grid[0]!.demand.every((entry) => entry.needDate === grid[0]!.dueDate)).toBe(true)
     expect(grid[1]!.transitDays).toBe(4)
     const split = proposeWork({ cells, runDate: '2026-11-12', rule: 'SIZE_GROUPS', groups: [['48', '50'], ['52', '54']], sizesOf: () => ['48', '50', '52'], outsideOf: () => null })
     expect(split.map((row) => `${row.sizeGroup}:${row.quantity}`)).toEqual(['48-50:7', '52-54:2', '48-50:6', '52-54:2'])
@@ -237,7 +239,9 @@ describe('planned work orders from the demand (PLN-067, PLN-069, PLN-089)', () =
     expect(convertProblem({ status: 'PLANNED', demand: [] })).toContain('stock')
     expect(convertProblem({ status: 'PLANNED', demand: [{ orderId: 'a', orderLineId: 'b', size: '50', pieces: 1 }] })).toBeNull()
     expect(firmProblem({ status: 'PLANNED', firm: true }, true)).toContain('firm already')
-    expect(keptByRun({ status: 'PLANNED', firm: false, protectedFields: ['dueDate'] })).toBe(true)
+    // B-W2b-306 (PLN-076): a protected row is no longer kept whole (the run rewrites its other fields); a firm one is.
+    expect(keptByRun({ status: 'PLANNED', firm: false, protectedFields: ['dueDate'] })).toBe(false)
+    expect(keptByRun({ status: 'PLANNED', firm: true, protectedFields: [] })).toBe(true)
     expect(keptByRun({ status: 'CONVERTED', firm: true, protectedFields: [] })).toBe(false)
   })
 })

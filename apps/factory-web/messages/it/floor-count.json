@@ -1,0 +1,248 @@
+{
+  "title": "Conta",
+  "noPermission": {
+    "title": "La conta non è aperta per te qui",
+    "body": "La conta con la scansione richiede il permesso di contare la merce. Chiedi al tuo capoturno."
+  },
+  "asOf": "Da questo tablet, alle {time}",
+  "offline": {
+    "line": "Nessuna rete: ogni unità che scansioni resta su questo tablet e parte quando torna la rete.",
+    "bin": "Nessuna rete: ogni unità resta su questo tablet e parte quando torna la rete. Ubicazione finita aspetta la rete."
+  },
+  "what": {
+    "title": "Cosa contare",
+    "scan": {
+      "label": "Scansiona un'ubicazione per contarla",
+      "hint": "L'etichetta sullo scaffale o sul contenitore"
+    },
+    "reading": "Lettura di {code}…",
+    "loading": "Lettura di cosa contare…",
+    "empty": {
+      "title": "Nessuna conta in programma",
+      "body": "Nessuna conta in programma. Scansiona un'ubicazione per contarla."
+    },
+    "error": "Non è stato possibile leggere cosa contare. Scansiona comunque un'ubicazione per contarla.",
+    "notOnTablet": "Cosa contare non è su questo tablet. Scansiona un'ubicazione contata qui per continuare.",
+    "row": {
+      "count": "Conta {number}",
+      "since": "dalle {time}",
+      "frozen": "movimenti in attesa",
+      "yours": "La riconta un'altra persona",
+      "yoursWhy": "Hai contato tu questa ubicazione: la riconta la fa un'altra persona."
+    },
+    "count_one": "{count} ubicazione da contare",
+    "count_other": "{count} ubicazioni da contare"
+  },
+  "choose": {
+    "title": "Per quale conta conti {place}?",
+    "hint_one": "{count} conta comprende questa ubicazione: tocca quella per cui conti.",
+    "hint_other": "{count} conte comprendono questa ubicazione: tocca quella per cui conti."
+  },
+  "countKind": {
+    "CYCLE": "Conta ciclica",
+    "YEAR_END": "Inventario di fine anno"
+  },
+  "pass": {
+    "COUNT": "Conta",
+    "RECOUNT": "Riconta"
+  },
+  "bin": {
+    "kind": "Ubicazione",
+    "fact": {
+      "count": "Conta",
+      "lines": "Righe",
+      "moves": "Movimenti"
+    },
+    "frozen": "Attendono che ogni riga sia contata",
+    "blind": "Conta alla cieca: quanto dovrebbe esserci si vede dopo Ubicazione finita",
+    "units_one": "unità scansionata",
+    "units_other": "unità scansionate",
+    "readCount": "Conta {number}",
+    "readUnits_one": "{count} unità scansionata",
+    "readUnits_other": "{count} unità scansionate",
+    "counted": "Ogni riga di questa ubicazione è contata: per contarla di nuovo l'ufficio chiede una riconta."
+  },
+  "scan": {
+    "label": "Scansiona ogni unità",
+    "hint": "L'etichetta di una pelle, di un rotolo o di un ritaglio conta da sola; l'etichetta di un lotto chiede quanto"
+  },
+  "pad": {
+    "titleCode": "Quanto contiene {code}?",
+    "titleLine": "Quanto {item} c'è qui?",
+    "label": "Quanto",
+    "blind": "Conta quello che vedi: il numero atteso si vede dopo Ubicazione finita.",
+    "separator": "Virgola",
+    "minus": "Meno",
+    "plus": "Più",
+    "clear": "Azzera",
+    "back": "Elimina",
+    "empty": "Scrivi quanto",
+    "range": "Più di {min}"
+  },
+  "lines": {
+    "title": "In questa ubicazione",
+    "empty": "All'inizio della conta qui non c'era niente: scansiona quello che trovi.",
+    "keptOnly": "Questo tablet non ha letto le righe di questa ubicazione: ogni unità scansionata la abbina l'ufficio.",
+    "keptUnknown_one": "{count} unità tenuta su questo tablet la abbina l'ufficio quando parte.",
+    "keptUnknown_other": "{count} unità tenute su questo tablet le abbina l'ufficio quando partono.",
+    "added": "trovata qui, non attesa",
+    "kept_one": "{count} su questo tablet",
+    "kept_other": "{count} su questo tablet",
+    "tapToType": "tocca per scrivere quanto",
+    "counted": "Contata",
+    "notYet": "Non ancora scansionata",
+    "scans_one": "{count} scansionata",
+    "scans_other": "{count} scansionate",
+    "scanned": "scansionato",
+    "count_one": "{count} riga",
+    "count_other": "{count} righe"
+  },
+  "last": {
+    "counted": "{code}: {quantity} contati",
+    "added": "{code}: {quantity} contati, trovati qui e non attesi",
+    "kept": "{code} tenuto su questo tablet",
+    "keptQuantity": "{code}: {quantity} tenuti su questo tablet",
+    "already": "Già contato: {code} è in questa conta una volta. Scansiona l'unità seguente."
+  },
+  "done": {
+    "reading": "Lettura delle differenze…",
+    "kind": "Differenze",
+    "title": "Differenze",
+    "none": "Nessuna differenza.",
+    "noneShort": "Nessuna differenza",
+    "noneBody": "Tutto quello che doveva esserci è stato scansionato, e niente di più.",
+    "differShort_one": "{count} differenza",
+    "differShort_other": "{count} differenze",
+    "summary": "Mancanti {missing}, in più {extra}, altre differenze {other}",
+    "moved_one": "{count} movimento in entrata o in uscita da questa ubicazione da quando è iniziata la conta: controllalo prima di finire.",
+    "moved_other": "{count} movimenti in entrata o in uscita da questa ubicazione da quando è iniziata la conta: controllali prima di finire.",
+    "lookAgainHint": "Guarda di nuovo: scansiona quello che trovi, poi di nuovo Ubicazione finita. Chiudi ubicazione la manda così com'è all'approvazione.",
+    "matchLine_one": "{count} riga corrisponde.",
+    "matchLine_other": "{count} righe corrispondono.",
+    "fact": {
+      "missing": "Mancanti",
+      "extra": "In più",
+      "match": "Corrispondono"
+    }
+  },
+  "difference": {
+    "MISSING": "Mancante: atteso, non scansionato",
+    "EXTRA": "In più: scansionato, non atteso",
+    "SHORT": "Meno del previsto",
+    "OVER": "Più del previsto",
+    "MATCH": "Corrisponde",
+    "expectedScanned": "Atteso {expected} · scansionato {scanned}"
+  },
+  "finished": {
+    "title": "Ubicazione {place} chiusa",
+    "body": "{counted} di {lines} righe della conta {number} sono contate.",
+    "keptBody": "Tenuta su questo tablet: la conta {number} la riceve quando torna la rete.",
+    "recounts_one": "Un'altra persona riconta la riga {lines}: la differenza supera la regola di riconta.",
+    "recounts_other": "Un'altra persona riconta le righe {lines}: le differenze superano la regola di riconta.",
+    "approval": "L'ufficio controlla le differenze della conta e le approva prima che la giacenza cambi."
+  },
+  "action": {
+    "scanAgain": "Scansiona di nuovo",
+    "back": "Indietro",
+    "cancel": "Annulla",
+    "countPad": "Conta {quantity}",
+    "countNothing": "Conta",
+    "binDone": "Ubicazione finita",
+    "lookAgain": "Guarda di nuovo",
+    "finish": "Chiudi ubicazione",
+    "another": "Conta un'altra ubicazione"
+  },
+  "held": {
+    "busy": "Invio in corso…",
+    "binDoneOffline": "Ubicazione finita richiede la rete: quanto dovrebbe esserci lo sa l'ufficio.",
+    "noCount": "Nessuna conta comprende questa ubicazione.",
+    "keptWaiting_one": "{count} unità aspetta ancora su questo tablet: Ubicazione finita quando è partita.",
+    "keptWaiting_other": "{count} unità aspettano ancora su questo tablet: Ubicazione finita quando sono partite."
+  },
+  "keys": {
+    "open": "Conta questa ubicazione",
+    "home": "Torna alla Home",
+    "countPad": "Conta il numero scritto",
+    "binDone": "Ubicazione finita",
+    "digits": "Scrivi quanto",
+    "cancelPad": "Chiudi il tastierino",
+    "back": "Indietro"
+  },
+  "refusal": {
+    "NOT_COUNTING": {
+      "message": "Questa conta non è in corso ora",
+      "fix": "Le sue ubicazioni si contano mentre la conta è in corso. Chiedi all'ufficio."
+    },
+    "OUTSIDE_COUNT": {
+      "message": "{code} non fa parte di questa conta",
+      "fix": "Conta solo quello che questa conta comprende. Mettilo da parte e avvisa l'ufficio."
+    },
+    "UNKNOWN_LABEL": {
+      "message": "Nessuna merce di questo stabilimento ha l'etichetta {code}",
+      "fix": "Scansiona l'etichetta di una pelle, di un rotolo, di un ritaglio o di un lotto. Un materiale senza etichetta: tocca la sua riga e scrivi quanto."
+    },
+    "NAME_THE_HIDE": {
+      "message": "Questo materiale si conta pelle per pelle",
+      "fix": "Scansiona l'etichetta di ogni pelle."
+    },
+    "NOT_IN_BIN": {
+      "message": "Quella riga non è di questa ubicazione",
+      "fix": "Scansiona l'ubicazione della riga."
+    },
+    "SCAN_THE_HIDE": {
+      "message": "Una pelle si conta con la sua etichetta",
+      "fix": "Scansiona l'etichetta della pelle."
+    },
+    "LINE_COUNTED": {
+      "message": "Questa riga è già contata",
+      "fix": "Per contarla di nuovo l'ufficio chiede una riconta."
+    },
+    "ALREADY_COUNTED": {
+      "message": "Già contato: {code}",
+      "fix": "Ogni etichetta conta una volta. Scansiona l'unità seguente."
+    },
+    "OWN_RECOUNT": {
+      "message": "Hai contato tu questa riga: la riconta un'altra persona",
+      "fix": "Chiedi a un collega di ricontare questa ubicazione."
+    },
+    "QUANTITY": {
+      "message": "Quanto contiene {code}?",
+      "fix": "Scrivi quanto sul tastierino."
+    },
+    "NOTHING_TO_FINISH": {
+      "message": "Ogni riga di questa ubicazione è già contata",
+      "fix": "Conta un'altra ubicazione."
+    },
+    "NOT_A_PLACE": {
+      "message": "Nessuna ubicazione di questo stabilimento ha l'etichetta {code}",
+      "fix": "Scansiona l'etichetta di un'ubicazione di qui."
+    },
+    "NO_COUNT_HERE": {
+      "message": "Nessuna conta comprende {code} ora",
+      "fix": "Scansiona un'ubicazione da Cosa contare, o chiedi all'ufficio di avviare una conta."
+    },
+    "BADGE": {
+      "message": "Quel badge qui non apre niente",
+      "fix": "Scansiona il tuo badge, o chiedi al tuo capoturno."
+    }
+  },
+  "unit": {
+    "PCS": "pz",
+    "PAIR": "paia",
+    "SET": "set",
+    "M": "m",
+    "CM": "cm",
+    "MM": "mm",
+    "M2": "m²",
+    "DM2": "dm²",
+    "FT2": "ft²",
+    "KG": "kg",
+    "G": "g",
+    "L": "l",
+    "HIDE": "pelli",
+    "SIDE": "fianchi",
+    "ROLL": "rotoli",
+    "CONE": "coni",
+    "BOX": "scatole"
+  }
+}

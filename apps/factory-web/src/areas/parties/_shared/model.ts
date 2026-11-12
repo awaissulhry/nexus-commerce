@@ -44,15 +44,18 @@ import type {
 
 export type Side = 'customers' | 'suppliers'
 
-export type ListView = 'open' | 'active' | 'prospects' | 'brands' | 'invoice' | 'vies' | 'blocked' | 'archived' | 'all' | 'suppliers' | 'subcontractors' | 'carriers'
+// B-W2b-324: 'riders' = Riders (people): the customers that are people (a team's riders and private riders).
+export type ListView = 'open' | 'active' | 'prospects' | 'brands' | 'riders' | 'invoice' | 'vies' | 'blocked' | 'archived' | 'all' | 'suppliers' | 'subcontractors' | 'carriers'
 
 export type TileId = 'active' | 'prospects' | 'vies' | 'invoice' | 'blocked'
 
 // B-W2b-180: 'portal' = Portal access (the slot is areas/sales/customers/portal's, on both sides).
-export type CustomerTab = 'overview' | 'addresses' | 'tax' | 'orders' | 'documents' | 'portal' | 'activity'
+// B-W2b-324: 'requirements' = the customer's Requirements (the slot is Sales', areas/sales/customers/depth).
+export type CustomerTab = 'overview' | 'addresses' | 'tax' | 'requirements' | 'orders' | 'documents' | 'portal' | 'activity'
 // B-W2a-69: 'items' = Items & prices (Approved sources; the slot is Purchasing's, areas/purchasing/suppliers).
 // B-W2b-172: 'questionnaire' = the supplier questionnaire (the slot is Purchasing's, areas/purchasing/suppliers/questionnaire).
-export type SupplierTab = 'overview' | 'contacts' | 'items' | 'orders' | 'questionnaire' | 'portal' | 'activity'
+// B-W2b-334: 'documents' (Documents & qualification), 'quality' (Quality & rating), 'bank' (Bank details): Purchasing's depth slot.
+export type SupplierTab = 'overview' | 'contacts' | 'items' | 'documents' | 'orders' | 'quality' | 'bank' | 'questionnaire' | 'portal' | 'activity'
 export type RecordTab = CustomerTab | SupplierTab
 
 export interface SideConfig {
@@ -79,9 +82,9 @@ export const SIDES: Readonly<Record<Side, SideConfig>> = {
     newRoles: ['CUSTOMER', 'BRAND'],
     base: '/sales/customers',
     newStatus: 'ACTIVE',
-    views: ['open', 'active', 'prospects', 'brands', 'invoice', 'vies', 'blocked', 'archived', 'all'],
+    views: ['open', 'active', 'prospects', 'brands', 'riders', 'invoice', 'vies', 'blocked', 'archived', 'all'], // B-W2b-324: riders
     tiles: ['active', 'prospects', 'vies', 'invoice', 'blocked'],
-    tabs: ['overview', 'addresses', 'tax', 'orders', 'documents', 'portal', 'activity'], // B-W2b-180: portal
+    tabs: ['overview', 'addresses', 'tax', 'requirements', 'orders', 'documents', 'portal', 'activity'], // B-W2b-180: portal; B-W2b-324: requirements
     recordType: 'Party',
   },
   suppliers: {
@@ -92,7 +95,7 @@ export const SIDES: Readonly<Record<Side, SideConfig>> = {
     newStatus: 'PROSPECT',
     views: ['open', 'active', 'prospects', 'suppliers', 'subcontractors', 'carriers', 'blocked', 'archived', 'all'],
     tiles: ['active', 'prospects', 'blocked'],
-    tabs: ['overview', 'contacts', 'items', 'orders', 'questionnaire', 'portal', 'activity'], // B-W2a-69: items; B-W2b-180: portal; B-W2b-172: questionnaire
+    tabs: ['overview', 'contacts', 'items', 'documents', 'orders', 'quality', 'bank', 'questionnaire', 'portal', 'activity'], // B-W2a-69: items; B-W2b-180: portal; B-W2b-172: questionnaire; B-W2b-334: documents, quality, bank
     recordType: 'Party',
   },
 }
@@ -112,8 +115,10 @@ export function viewQuery(config: SideConfig, view: ListView, filters: ListFilte
   const statuses: Partial<Record<ListView, PartyQuery['statuses']>> = { active: ['ACTIVE'], prospects: ['PROSPECT'], blocked: ['BLOCKED'], archived: ['ARCHIVED'], all: ['ALL'] }
   const roles: Partial<Record<ListView, PartyRole[]>> = { brands: ['BRAND'], suppliers: ['SUPPLIER'], subcontractors: ['SUBCONTRACTOR'], carriers: ['CARRIER'] }
   const attention: Partial<Record<ListView, Attention>> = { invoice: 'INVOICE', vies: 'VIES' }
+  const kinds: Partial<Record<ListView, PartyKind>> = { riders: 'PERSON' } // B-W2b-324
   return {
     ...base,
+    ...(kinds[view] ? { kind: kinds[view] } : {}),
     ...(statuses[view] ? { statuses: statuses[view] } : {}),
     ...(roles[view] ? { roles: roles[view] } : {}),
     ...(attention[view] ? { attention: attention[view] } : {}),
@@ -844,6 +849,10 @@ export interface RecordCan {
   partners?: boolean
   /** B-W2b-172: purchasing.questionnaire.view — the Questionnaire tab. */
   questionnaire?: boolean
+  /** B-W2b-334: Purchasing draws a supplier's W2b parts (Documents & qualification, Quality & rating). */
+  depth?: boolean
+  /** B-W2b-334: purchasing.bank.view — the Bank details tab (hidden without it, as the design says). */
+  bank?: boolean
 }
 
 export type RecordDialog =
@@ -896,6 +905,10 @@ export interface PartyRecordModel {
 export function recordTabs(config: SideConfig, can: RecordCan): RecordTab[] {
   return config.tabs.filter((tab) => {
     if (tab === 'orders') return config.side === 'customers' ? can.quotes || can.orders : can.purchaseOrders
+    // B-W2b-334: a supplier's Documents & qualification and Quality & rating (Purchasing's depth slot), Bank details.
+    if (config.side === 'suppliers' && (tab === 'documents' || tab === 'quality')) return can.depth === true
+    if (tab === 'bank') return can.bank === true
+    if (tab === 'requirements') return can.depth === true // B-W2b-324: Sales' depth slot
     if (tab === 'activity' || tab === 'documents') return can.threads
     if (tab === 'portal') return can.partners === true // B-W2b-180
     if (tab === 'questionnaire') return can.questionnaire === true // B-W2b-172

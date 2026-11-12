@@ -1,0 +1,248 @@
+{
+  "title": "Count",
+  "noPermission": {
+    "title": "Counting is not open to you here",
+    "body": "Counting by scan needs the permission to count stock. Ask your team leader."
+  },
+  "asOf": "From this tablet, as of {time}",
+  "offline": {
+    "line": "No network: a unit you scan is kept on this tablet and sent when the network is back.",
+    "bin": "No network: every unit is kept on this tablet and sent when the network is back. Bin done waits for the network."
+  },
+  "what": {
+    "title": "What to count",
+    "scan": {
+      "label": "Scan a bin to count it",
+      "hint": "The label on the shelf or the bin"
+    },
+    "reading": "Reading {code}…",
+    "loading": "Reading what to count…",
+    "empty": {
+      "title": "No count planned",
+      "body": "No count planned. Scan a bin to count it."
+    },
+    "error": "What to count could not be read. Scan a bin to count it anyway.",
+    "notOnTablet": "What to count is not on this tablet. Scan a bin you counted here to go on.",
+    "row": {
+      "count": "Count {number}",
+      "since": "since {time}",
+      "frozen": "moves wait",
+      "yours": "Another person recounts it",
+      "yoursWhy": "You counted this bin: a recount is done by another person."
+    },
+    "count_one": "{count} bin to count",
+    "count_other": "{count} bins to count"
+  },
+  "choose": {
+    "title": "Which count is {place} counted for?",
+    "hint_one": "{count} count counts this bin: tap the one you count for.",
+    "hint_other": "{count} counts count this bin: tap the one you count for."
+  },
+  "countKind": {
+    "CYCLE": "Cycle count",
+    "YEAR_END": "Year-end count"
+  },
+  "pass": {
+    "COUNT": "Count",
+    "RECOUNT": "Recount"
+  },
+  "bin": {
+    "kind": "Bin",
+    "fact": {
+      "count": "Count",
+      "lines": "Lines",
+      "moves": "Moves"
+    },
+    "frozen": "Wait until each line is counted",
+    "blind": "Blind count: what it should hold shows after Bin done",
+    "units_one": "unit scanned",
+    "units_other": "units scanned",
+    "readCount": "Count {number}",
+    "readUnits_one": "{count} unit scanned",
+    "readUnits_other": "{count} units scanned",
+    "counted": "Every line of this bin is counted: the office asks a recount to count it again."
+  },
+  "scan": {
+    "label": "Scan every unit",
+    "hint": "A hide's, roll's or remnant's tag counts by itself; a lot's label asks how much"
+  },
+  "pad": {
+    "titleCode": "How much does {code} hold?",
+    "titleLine": "How much {item} is here?",
+    "label": "How much",
+    "blind": "Count what you see: the number it should be shows after Bin done.",
+    "separator": "Decimal point",
+    "minus": "Less",
+    "plus": "More",
+    "clear": "Clear",
+    "back": "Delete",
+    "empty": "Type how much",
+    "range": "More than {min}"
+  },
+  "lines": {
+    "title": "In this bin",
+    "empty": "Nothing was here at the start of the count: scan what you find.",
+    "keptOnly": "This tablet has not read this bin's lines: every unit you scan is matched by the office.",
+    "keptUnknown_one": "{count} unit kept on this tablet is matched by the office when it is sent.",
+    "keptUnknown_other": "{count} units kept on this tablet are matched by the office when they are sent.",
+    "added": "found here, not expected",
+    "kept_one": "{count} on this tablet",
+    "kept_other": "{count} on this tablet",
+    "tapToType": "tap to type how much",
+    "counted": "Counted",
+    "notYet": "Not scanned yet",
+    "scans_one": "{count} scanned",
+    "scans_other": "{count} scanned",
+    "scanned": "scanned",
+    "count_one": "{count} line",
+    "count_other": "{count} lines"
+  },
+  "last": {
+    "counted": "{code}: {quantity} counted",
+    "added": "{code}: {quantity} counted, found here and not expected",
+    "kept": "{code} kept on this tablet",
+    "keptQuantity": "{code}: {quantity} kept on this tablet",
+    "already": "Already counted: {code} is in this count once. Scan the next unit."
+  },
+  "done": {
+    "reading": "Reading the differences…",
+    "kind": "Differences",
+    "title": "Differences",
+    "none": "No difference.",
+    "noneShort": "No difference",
+    "noneBody": "Everything that should be here was scanned, and nothing more.",
+    "differShort_one": "{count} difference",
+    "differShort_other": "{count} differences",
+    "summary": "Missing {missing}, extra {extra}, other differences {other}",
+    "moved_one": "{count} move into or out of this bin since the count started: check it before you finish.",
+    "moved_other": "{count} moves into or out of this bin since the count started: check them before you finish.",
+    "lookAgainHint": "Look again: scan what you find, then Bin done again. Finish bin sends the bin as it is for approval.",
+    "matchLine_one": "{count} line matches.",
+    "matchLine_other": "{count} lines match.",
+    "fact": {
+      "missing": "Missing",
+      "extra": "Extra",
+      "match": "Match"
+    }
+  },
+  "difference": {
+    "MISSING": "Missing: expected, not scanned",
+    "EXTRA": "Extra: scanned, not expected",
+    "SHORT": "Less than expected",
+    "OVER": "More than expected",
+    "MATCH": "Matches",
+    "expectedScanned": "Expected {expected} · scanned {scanned}"
+  },
+  "finished": {
+    "title": "Bin {place} finished",
+    "body": "{counted} of {lines} lines of count {number} are counted.",
+    "keptBody": "Kept on this tablet: count {number} gets it when the network is back.",
+    "recounts_one": "Another person recounts line {lines}: the difference is over the recount rule.",
+    "recounts_other": "Another person recounts lines {lines}: the differences are over the recount rule.",
+    "approval": "The office checks the count's differences and approves them before any stock changes."
+  },
+  "action": {
+    "scanAgain": "Scan again",
+    "back": "Back",
+    "cancel": "Cancel",
+    "countPad": "Count {quantity}",
+    "countNothing": "Count",
+    "binDone": "Bin done",
+    "lookAgain": "Look again",
+    "finish": "Finish bin",
+    "another": "Count another bin"
+  },
+  "held": {
+    "busy": "Sending…",
+    "binDoneOffline": "Bin done needs the network: what the bin should hold is with the office.",
+    "noCount": "No count counts this bin.",
+    "keptWaiting_one": "{count} unit still waits on this tablet: Bin done once it is sent.",
+    "keptWaiting_other": "{count} units still wait on this tablet: Bin done once they are sent."
+  },
+  "keys": {
+    "open": "Count this bin",
+    "home": "Back to Home",
+    "countPad": "Count the number typed",
+    "binDone": "Bin done",
+    "digits": "Type how much",
+    "cancelPad": "Close the pad",
+    "back": "Back"
+  },
+  "refusal": {
+    "NOT_COUNTING": {
+      "message": "This count is not being counted now",
+      "fix": "Its bins are counted while the count runs. Ask the office."
+    },
+    "OUTSIDE_COUNT": {
+      "message": "{code} is not part of this count",
+      "fix": "Count only what this count counts. Put it aside and tell the office."
+    },
+    "UNKNOWN_LABEL": {
+      "message": "Nothing at this site carries the label {code}",
+      "fix": "Scan a hide's, roll's or remnant's tag or a lot's label. A material without a label: tap its line and type how much."
+    },
+    "NAME_THE_HIDE": {
+      "message": "This material is counted hide by hide",
+      "fix": "Scan each hide's tag."
+    },
+    "NOT_IN_BIN": {
+      "message": "That line is not one of this bin",
+      "fix": "Scan the bin the line belongs to."
+    },
+    "SCAN_THE_HIDE": {
+      "message": "A hide is counted by its tag",
+      "fix": "Scan the hide's tag."
+    },
+    "LINE_COUNTED": {
+      "message": "This line is counted already",
+      "fix": "The office asks a recount to count it again."
+    },
+    "ALREADY_COUNTED": {
+      "message": "Already counted: {code}",
+      "fix": "Each tag counts once. Scan the next unit."
+    },
+    "OWN_RECOUNT": {
+      "message": "You counted this line: another person recounts it",
+      "fix": "Ask a colleague to recount this bin."
+    },
+    "QUANTITY": {
+      "message": "How much does {code} hold?",
+      "fix": "Type how much on the pad."
+    },
+    "NOTHING_TO_FINISH": {
+      "message": "Every line of this bin is counted already",
+      "fix": "Count another bin."
+    },
+    "NOT_A_PLACE": {
+      "message": "No place of this site carries the label {code}",
+      "fix": "Scan the label of a bin here."
+    },
+    "NO_COUNT_HERE": {
+      "message": "No count counts {code} now",
+      "fix": "Scan a bin from What to count, or ask the office to start a count."
+    },
+    "BADGE": {
+      "message": "That badge opens nothing here",
+      "fix": "Scan your own badge, or ask your team leader."
+    }
+  },
+  "unit": {
+    "PCS": "pcs",
+    "PAIR": "pairs",
+    "SET": "sets",
+    "M": "m",
+    "CM": "cm",
+    "MM": "mm",
+    "M2": "m²",
+    "DM2": "dm²",
+    "FT2": "ft²",
+    "KG": "kg",
+    "G": "g",
+    "L": "l",
+    "HIDE": "hides",
+    "SIDE": "sides",
+    "ROLL": "rolls",
+    "CONE": "cones",
+    "BOX": "boxes"
+  }
+}
