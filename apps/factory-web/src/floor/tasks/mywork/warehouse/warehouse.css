@@ -1,0 +1,39 @@
+/*
+ * SCR-089's warehouse variant, My work at the warehouse (B-W2b-308): layout only, inside the DS FloorFrame and the floor tasks'
+ * shared parts (../../shared/view/tasks.css). Sizes read the floor tier's `--nds-density-*` tokens; colours are semantic `--nds-*`
+ * roles; no raw colour. The one-job screen stays centred in the frame (the Owner's width rule allows it for the floor).
+ */
+
+.fw-inbox {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-density-gap);
+  min-width: 0;
+}
+
+/* The kinds that wait, one quiet line under the status ("Put away 3 · Pick 1"). */
+.fw-inbox-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6) var(--nds-space-16);
+  margin: 0;
+}
+
+/* The last step's line and its two ticks side by side; the ticks drop under it on a narrow frame. */
+.fw-inbox-step {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-density-gap);
+}
+.fw-inbox-step > .fw-floor-notice {
+  flex: 1 1 22em;
+  min-width: 0;
+}
+
+/* Take / Give back, Done and Read aloud inside the card: one row, wrapping on a phone. */
+.fw-inbox-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-density-gap);
+}

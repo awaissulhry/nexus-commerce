@@ -232,6 +232,8 @@ import { events as inventoryTransfers } from '../inventory-transfers/events'
 import { events as inventoryCounts } from '../inventory-counts/events'
 // B-W2b-304: credit checks and limits.
 import { events as salesCredit } from '../sales-credit/events'
+// B-W2b-298: substitutes with a yes (inventory.substitution_changed).
+import { events as inventorySubstitutions } from '../inventory-substitutions/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -529,7 +531,9 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-299
   ...inventoryCounts,
   // B-W2b-304
-  ...salesCredit] as const satisfies readonly EventDefinition[]
+  ...salesCredit,
+  // B-W2b-298
+  ...inventorySubstitutions] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']
