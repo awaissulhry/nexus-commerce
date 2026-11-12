@@ -9,6 +9,8 @@ import { allocateNumber } from '../../../platform/numbering/allocate'
 import { orderWaitFor, type OrderWait as PartyOrderWait } from '../../parties/holds/stops'
 import { makeScheduleInCommand } from './schedule'
 import { asDay, dayOrNull, hasOrderSeries } from './store'
+// B-W2b-304 (SAL-237): the credit check of the order made from an accepted quote.
+import { planOrderCredit, recordOrderCredit } from '../credit/check'
 
 /**
  * The order of an accepted quote version (B-W1-25; SAL-200 "quote to order in one step", SAL-203; Owner answer S1: made
@@ -173,6 +175,9 @@ export async function makeOrderInCommand(tools: CommandTools, versionId: string,
   const number = await allocateNumber(tools, { companyId: quote.companyId, kind: 'SALES_ORDER' }, { type: 'SalesOrder', id, date: acceptedOn })
   const stamp = { createdAt: now, updatedAt: now, createdById: actorIdOf(tools) }
   const { header } = draft
+  // B-W2b-304: over the customer's credit limit where the company holds, the order waits as PENDING_APPROVAL for a yes.
+  const credit = await planOrderCredit(tools, { step: 'ORDER', partyId: version.partyId, companyId: quote.companyId, grossAmount: header.grossAmount, currency: header.currency })
+  const status = credit.status === 'PENDING_APPROVAL' ? credit.status : header.status
   await tx.salesOrder.create({
     data: {
       id,
@@ -181,7 +186,7 @@ export async function makeOrderInCommand(tools: CommandTools, versionId: string,
       number: number.formatted,
       quoteVersionId: version.id,
       customerRef: header.customerRef,
-      status: header.status,
+      status,
       orderDate: asDay(header.orderDate),
       currency: header.currency,
       language: header.language,
@@ -248,6 +253,8 @@ export async function makeOrderInCommand(tools: CommandTools, versionId: string,
     { id, number: number.formatted, companyId: quote.companyId, partyId: version.partyId, currency: header.currency, grossAmount: header.grossAmount, promiseDate: header.promiseDate === null ? null : asDay(header.promiseDate), paymentTermsId: version.paymentTermsId },
     deposit,
   )
+  // B-W2b-304: the order's credit check (on a hold, the request for a yes by the office person who made it).
+  await recordOrderCredit(tools, credit.plan, id)
   tools.audit({
     action: 'orders.make',
     recordType: 'SalesOrder',
@@ -257,7 +264,7 @@ export async function makeOrderInCommand(tools: CommandTools, versionId: string,
       number: number.formatted,
       quoteId: quote.id,
       quoteVersionId: version.id,
-      status: header.status,
+      status,
       orderDate: header.orderDate,
       taxMode: header.taxMode,
       currency: header.currency,

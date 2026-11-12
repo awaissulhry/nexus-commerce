@@ -218,7 +218,8 @@ export async function acceptRequest(caller: CommandCaller, requestId: string, bo
         internalNote: current.note ? `Order request ${current.number}: ${current.note}`.slice(0, 4000) : `Order request ${current.number}.`,
         lines: linesFor(fresh, body.lines),
       }
-      const outcome = await makeManualOrderInCommand(tools, order, null)
+      // B-W2b-304 (SAL-244): an order from the portal is checked as such (PORTAL).
+      const outcome = await makeManualOrderInCommand(tools, order, null, 'PORTAL')
       salesOrderId = outcome.orderId
       made = { number: outcome.number, dropped: [], warnings: [] }
     } else {

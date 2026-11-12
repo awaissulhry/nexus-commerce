@@ -10,7 +10,7 @@ import {
   INVENTORY_COUNTS_VIEW,
 } from '@nexus/factory-domain/inventory/counts/permissions'
 import {
-  approveProblems,
+  // B-W2b-299: approveProblems now reads the warehouse rules' switch (counts-depth/variance.ts ownVarianceInCommand).
   COUNT_LIMITS,
   countMoveNote,
   createProblems,
@@ -60,6 +60,12 @@ import {
 import { factsOf, lineViews, peopleNames, recordView, scopeOf } from './views'
 // B-W2b-289 (SCM-181): a count of a place blocks it (and the places inside) while it counts.
 import { blockForCount, releaseForCount } from '../locations-depth/blocks'
+// B-W2b-299 (SCM-226, SCM-227, SCM-229, SCM-293): an ABC class's materials, the yes of kind COUNT_VARIANCE, the counter rule as
+// the warehouse rules hold it, and the schedules a closed count moves on.
+import { itemsOfClass } from '@nexus/factory-domain/inventory/counts-depth/abc'
+import { classesOfSite } from '../counts-depth/abc'
+import { closeSchedulesInCommand } from '../counts-depth/close'
+import { askVarianceInCommand, ownVarianceInCommand, refuseWhileInApprovals, withdrawVarianceInCommand } from '../counts-depth/variance'
 
 /**
  * Stock counts and the year-end physical inventory, office side (B-W2a-15; SCM-224, SCM-230; SCM-229, SCM-293). Every
@@ -189,6 +195,10 @@ export async function createCount(caller: CommandCaller, body: CreateCountBody, 
     }
     return { itemId, issues }
   })
+  // B-W2b-299 (SCM-227): a class count is the class's materials when it starts (no column keeps the class), so it starts at once.
+  if (body.abcClass && !body.start) scope.issues.push({ path: 'body/abcClass', message: 'A count of an ABC class starts at once (send start: true): its materials are taken when it starts.' })
+  if (body.abcClass && (body.itemId || body.lotId)) scope.issues.push({ path: 'body/abcClass', message: 'A class count names no single material or lot.' })
+  if (body.abcClass && body.kind !== 'CYCLE') scope.issues.push({ path: 'body/abcClass', message: 'A class is counted by a cycle count; the year-end inventory counts everything.' })
   const all = [...problems, ...scope.issues]
   if (all.length > 0) throw new ValidationError(all.length === 1 ? all[0]!.message : 'The count is not valid.', all)
   const { result } = await countsCommand(
@@ -209,11 +219,16 @@ export async function createCount(caller: CommandCaller, body: CreateCountBody, 
         itemKind: body.itemKind ?? null,
         inventoryDate: body.inventoryDate ? toDay(body.inventoryDate) : null,
         countTeam: body.countTeam ?? null,
-        note: body.note ?? null,
+        // B-W2b-299: a class count says its class in the note (the record's scope says the place or kind).
+        note: body.abcClass ? [`Class ${body.abcClass} materials.`, body.note ?? ''].join(' ').trim().slice(0, 1000) : (body.note ?? null),
         createdById: context.actorId,
+        // B-W2b-299 (SCM-226)
+        freezeMoves: body.freeze === true,
       })
       changed(tools, row, 'CREATED', null, 0)
-      if (body.start) row = await startInCommand(tools, row)
+      // B-W2b-299 (SCM-227): a class count counts only the class's materials.
+      const onlyItems = body.abcClass ? itemsOfClass(await classesOfSite(tools.tx, site.id, tools.now), body.abcClass) : null
+      if (body.start) row = await startInCommand(tools, row, onlyItems)
       return { countId: row.id }
     },
     body.start === true,
@@ -278,7 +293,7 @@ export async function startCount(caller: CommandCaller, countId: string, body: {
  * then the count COUNTING with its start and snapshot (one UPDATE), then its lines (the trigger lets them in while it is
  * COUNTING).
  */
-async function startInCommand(tools: CommandTools, row: CountRow): Promise<CountRow> {
+async function startInCommand(tools: CommandTools, row: CountRow, onlyItems: ReadonlySet<string> | null = null): Promise<CountRow> {
   const { tx, now, context } = tools
   if (context.audience !== 'office') throw new ForbiddenError()
   const snapshot = snapshotFor(row.kind, dayOf(row.inventoryDate), now)
@@ -287,7 +302,8 @@ async function startInCommand(tools: CommandTools, row: CountRow): Promise<Count
   const locations = await siteLocations(tx, row.siteId)
   const scoped = row.locationId ? subtreeOf(locations, row.locationId) : null
   const balances = await balancesAt(tx, { siteId: row.siteId, locationIds: scoped, itemId: row.itemId, lotId: row.lotId, itemKind: row.itemKind }, snapshot.at)
-  const held = balances.filter((balance) => balance.onHand.greaterThan(0))
+  // B-W2b-299: a class count holds only the class's materials.
+  const held = balances.filter((balance) => balance.onHand.greaterThan(0) && (onlyItems === null || onlyItems.has(balance.itemId)))
   if (held.length > COUNT_LIMITS.maxLines) {
     throw refuse(`Count ${row.number} cannot start.`, 'TOO_MANY_LINES', `Its scope holds ${held.length} stock keys; a count holds at most ${COUNT_LIMITS.maxLines}. Count a location, an item or a kind of material at a time.`)
   }
@@ -326,6 +342,8 @@ async function startInCommand(tools: CommandTools, row: CountRow): Promise<Count
       origin: 'SNAPSHOT' as const,
       expectedQuantity: line.expected,
       createdById: context.actorId,
+      // B-W2b-299 (SCM-226): a count that freezes moves writes its lines frozen.
+      frozenAt: row.freezeMoves ? now : null,
     })),
   )
   tools.audit({ action: 'inventory.counts.snapshot', recordType: 'StockCount', recordId: row.id, companyId: row.companyId, siteId: row.siteId, after: { snapshotAt: toUtcIso(snapshot.at), lines: lines.length } })
@@ -606,6 +624,8 @@ export async function submitCount(caller: CommandCaller, countId: string, body: 
       const written = await updateCount(tools, row, { status: 'SUBMITTED', submittedAt: tools.now, submittedById: context.actorId, differenceAmount: value.amount, approvalRequired: required })
       await releaseForCount(tools, written)
       changed(tools, written, 'SUBMITTED', row.status, lines.length)
+      // B-W2b-299 (SCM-229): an approval rule the Owner switched on asks its yes (kind COUNT_VARIANCE); none on: as before.
+      await askVarianceInCommand(tools, written, context.actorId)
       return { countId }
     },
     true,
@@ -621,7 +641,9 @@ export async function approveCount(caller: CommandCaller, countId: string, body:
     const row = await lockCount(tools.tx, countId, body.version)
     if (row.status !== 'SUBMITTED') throw refuse(`Count ${row.number} is ${row.status}.`, 'NOT_SUBMITTED', 'Only a SUBMITTED count is approved.')
     const lines = await readLines(tools.tx, countId)
-    const own = approveProblems(row.approvalRequired, context.actorId, lines.map((line) => ({ ...factsOf(line), seq: line.seq, countedById: line.countedById, recountedById: line.recountedById })))
+    // B-W2b-299 (SCM-229, SCM-293): a yes asked in Approvals is given there; the counter rule follows the warehouse rules' switch.
+    await refuseWhileInApprovals(tools, row)
+    const own = await ownVarianceInCommand(tools, row, lines, context.actorId)
     if (own.length > 0) throw new CountRefusedError(`You cannot approve count ${row.number}.`, own)
     const written = await updateCount(tools, row, { status: 'APPROVED', approvedAt: tools.now, approvedById: context.actorId, approvalNote: body.note ?? null })
     changed(tools, written, 'APPROVED', row.status, lines.length)
@@ -644,6 +666,8 @@ export async function sendBack(caller: CommandCaller, countId: string, body: { r
       { status: 'COUNTING', submittedAt: null, submittedById: null, differenceAmount: null, approvalRequired: true, rejectedAt: tools.now, rejectedById: context.actorId, rejectReason: body.reason },
       { reason: body.reason },
     )
+    // B-W2b-299: a yes still asked in Approvals is taken back (the count counts again).
+    await withdrawVarianceInCommand(tools, row, context.actorId, body.reason)
     await blockForCount(tools, written)
     const asked = recount.length > 0 ? await recountInCommand(tools, written, recount, context.actorId, 'body/recountLineIds') : []
     const totals = await lineTotals(tools.tx, countId)
@@ -665,6 +689,8 @@ export async function cancelCount(caller: CommandCaller, countId: string, body: 
     }
     const written = await updateCount(tools, row, { status: 'CANCELLED', cancelledAt: tools.now, cancelReason: body.reason }, { reason: body.reason })
     if (row.status === 'COUNTING') await releaseForCount(tools, written)
+    // B-W2b-299: a yes still asked in Approvals is taken back.
+    if (row.status === 'SUBMITTED') await withdrawVarianceInCommand(tools, row, context.actorId, body.reason)
     changed(tools, written, 'CANCELLED', row.status, (await lineTotals(tools.tx, countId)).lines)
     return { countId }
   })
@@ -695,6 +721,8 @@ export async function applyCount(caller: CommandCaller, countId: string, body: {
     { name: 'inventory.counts.apply', idempotencyKey, input: { countId, ...body } },
     async (tools) => {
       let row = await lockCount(tools.tx, countId, body.version)
+      // B-W2b-299 (SCM-229): while a yes is asked in Approvals, the differences wait for it.
+      await refuseWhileInApprovals(tools, row)
       let approvedWithApply = false
       if (row.status === 'SUBMITTED' && !row.approvalRequired) {
         row = await updateCount(tools, row, { status: 'APPROVED', approvedAt: tools.now, approvedById: context.actorId }, { action: 'inventory.counts.approve', reason: 'Under the approval limit: approved with the apply.' })
@@ -743,6 +771,8 @@ export async function applyCount(caller: CommandCaller, countId: string, body: {
         moves.push({ id: move.id, lineId: line.id, seq: line.seq, direction: move.fromLocationId ? 'OUT' : 'IN', baseQuantity: move.baseQuantity })
       }
       const written = await updateCount(tools, row, { status: 'APPLIED', appliedAt: tools.now, appliedById: context.actorId })
+      // B-W2b-299 (SCM-227): the schedules this count covered move on (their next date, their open COUNT task done).
+      await closeSchedulesInCommand(tools, written)
       tools.emit({
         type: 'inventory.count_applied',
         subject: written.id,

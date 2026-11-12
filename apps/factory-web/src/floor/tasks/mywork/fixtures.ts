@@ -1,6 +1,7 @@
 import { defineDesignScreen } from '../../../lib/design/design-screen'
 // B-W2b-109: the inspector queue.
 import { inspectionCases } from './inspections/fixtures'
+import { warehouseCases } from './warehouse/fixtures'
 import { onFloor, signedInFrame } from '../../frame/fixtures'
 import type { PickerReason } from '../reasons/model'
 import type { DispatchEntry, DispatchList, MyMessages, PutLast, WorkMessage } from './model'
@@ -14,7 +15,7 @@ import type { RepairQueue, RepairRow } from './repair/model'
  * "Can't find it?" and Put it last with its reason tile, and every state (loading, failed, offline from this tablet,
  * offline with nothing kept, no station, nothing published, the first plan later, nothing queued, all done, the notice
  * holding scans, no permission). B-W2b-71: the material flag, my list across stations, "For your work" and the messages,
- * Call for help: Material with each reason it is held, and the warehouse tablet. B-W2b-126: the repair queue (MES-132) — the
+ * Call for help: Material with each reason it is held. B-W2b-308: the warehouse task inbox (`w2b-308-*`). B-W2b-126: the repair queue (MES-132) — the
  * Repair tile, the list (this station's first), a repair's card waiting or in repair, a bundle with no ticket, the scan out
  * (all good in one tap, or the good ones typed), each line with its ticks and the refusals in words, a held work order, offline
  * from this tablet and never read. Made-up data only: a "Demo" plant, made-up orders and styles; no person, no money.
@@ -258,12 +259,6 @@ export const designScreen = defineDesignScreen<MyWorkViewModel>({
       model: model({ mode: null, list: list({ target: null, next: null, entries: [] }) }),
       note: 'Who fixes it, in words: the office places the tablet at a station (Admin › Devices & printers).',
     },
-    {
-      id: 'warehouse',
-      label: 'Warehouse tablet: the task list held',
-      model: model({ mode: 'warehouse', list: list({ target: null, next: null, entries: [] }) }),
-      note: 'The warehouse variant is held: its task inbox (SCM-274) comes with picking and put-away (W2b-5). Home has no My work tile at the warehouse (six tiles at most, Scan always among them); the page says it in words if it is opened. No station is how the app tells a warehouse tablet, so the words also say who places a tablet that belongs to a station.',
-    },
     { id: 'nothing-published', label: 'No plan published yet', model: model({ list: list({ version: null, next: null, entries: [] }) }) },
     {
       id: 'first-upcoming',
@@ -309,5 +304,7 @@ export const designScreen = defineDesignScreen<MyWorkViewModel>({
     { id: 'repair-error', label: 'W2b: the repair list could not be read', model: model({ step: { kind: 'repair' }, repair: null, repairProblem: 'error' }) },
     { id: 'repair-loading', label: 'W2b: reading the repair list', model: model({ step: { kind: 'repair' }, repair: null }) },
     ...inspectionCases(model, frame),
+    // B-W2b-308: at the warehouse My work is the task inbox (SCM-274), instead of the held list.
+    ...warehouseCases(model),
   ],
 })
