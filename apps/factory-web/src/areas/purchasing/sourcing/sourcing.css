@@ -1,0 +1,167 @@
+/*
+ * Purchasing › Sourcing & claims › RFQs & sourcing (SCR-222, B-W2b-347) LAYOUT: the band, the sample orders, New sample order
+ * and its lines. The page fills the shell's main area (no max-width: Owner rule 2026-10-29); the controls are the design system's;
+ * semantic tokens only.
+ */
+.fw-src,
+.fw-src-section,
+.fw-src-form,
+.fw-src-loading,
+.fw-src-fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-src {
+  gap: var(--nds-space-20);
+}
+
+.fw-src-section,
+.fw-src-loading {
+  gap: var(--nds-space-8);
+}
+
+.fw-src-anchor {
+  scroll-margin-top: var(--nds-space-16);
+}
+
+.fw-src-band,
+.fw-src-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+}
+
+.fw-src-status,
+.fw-src-actions,
+.fw-src-tools,
+.fw-src-row,
+.fw-src-head-title,
+.fw-src-line-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-src-line-head {
+  justify-content: space-between;
+}
+
+.fw-src-grow {
+  flex: 1 1 auto;
+}
+
+.fw-src-h {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: 600;
+}
+
+.fw-src-h:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: 2px;
+}
+
+.fw-src-h3 {
+  margin: 0;
+  padding: 0;
+  font-size: var(--nds-font-size-sm);
+  font-weight: 600;
+}
+
+.fw-src-muted {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+p.fw-src-muted[role='status'] {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-src-list {
+  margin: 0;
+  padding-left: var(--nds-space-20);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+.fw-src-cell {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.fw-src-cell > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-src-link {
+  color: var(--nds-primary);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.fw-src-link:hover,
+.fw-src-link:focus-visible {
+  text-decoration: underline;
+}
+
+/* Two fields side by side on a wide dialog, one column on a phone. */
+.fw-src-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-src-fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  gap: var(--nds-space-8);
+}
+
+.fw-src-line {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+  min-width: 0;
+}
+
+.fw-src-line-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
+  gap: var(--nds-space-8) var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-src-slow {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+  opacity: 0;
+  animation: fw-src-slow 0s linear 1s forwards;
+}
+
+@keyframes fw-src-slow {
+  to {
+    opacity: 1;
+  }
+}

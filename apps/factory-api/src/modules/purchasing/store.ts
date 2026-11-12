@@ -80,6 +80,8 @@ export const ORDER_COLUMNS = {
   createdAt: true,
   updatedAt: true,
   createdById: true,
+  // B-W2b-311 (SCM-008): a sample order may go to a supplier that is still a prospect.
+  kind: true,
 } as const satisfies Prisma.PurchaseOrderSelect
 export type OrderRow = Prisma.PurchaseOrderGetPayload<{ select: typeof ORDER_COLUMNS }>
 
@@ -145,10 +147,26 @@ export const ITEM_COLUMNS = {
 } as const satisfies Prisma.ItemSelect
 export type ItemRow = Prisma.ItemGetPayload<{ select: typeof ITEM_COLUMNS }>
 
-export const PARTY_COLUMNS = { id: true, companyId: true, code: true, legalName: true, roles: true, status: true, currency: true, language: true, paymentTerms: true, leadTimeDays: true } as const satisfies Prisma.PartySelect
+export const PARTY_COLUMNS = {
+  id: true,
+  companyId: true,
+  code: true,
+  legalName: true,
+  roles: true,
+  status: true,
+  currency: true,
+  language: true,
+  paymentTerms: true,
+  leadTimeDays: true,
+  // B-W2b-311 (SCM-008): where the supplier stands with us (no new order on hold, blocked or inactive).
+  supplierStatus: true,
+  supplierStatusReason: true,
+  supplierStatusChangedAt: true,
+} as const satisfies Prisma.PartySelect
 export type PartyRow = Prisma.PartyGetPayload<{ select: typeof PARTY_COLUMNS }>
 
-export const CONTACT_COLUMNS = { id: true, partyId: true, name: true, email: true, roles: true, language: true, status: true } as const satisfies Prisma.PartyContactSelect
+// B-W2b-311 (SCM-004): what each contact receives (the PO goes to the contacts that receive POs).
+export const CONTACT_COLUMNS = { id: true, partyId: true, name: true, email: true, roles: true, receives: true, language: true, status: true } as const satisfies Prisma.PartyContactSelect
 export type ContactRow = Prisma.PartyContactGetPayload<{ select: typeof CONTACT_COLUMNS }>
 
 export const SITE_COLUMNS = { id: true, companyId: true, code: true, name: true, address: true, status: true } as const satisfies Prisma.SiteSelect

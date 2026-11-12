@@ -116,6 +116,8 @@ export const orderSchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
   lines: z.array(poLineSchema),
+  /** B-W2b-347: a PO of type Sample names the style and sample round it buys for (null or absent: a production order). */
+  sample: z.object({ style: z.object({ id: z.string(), code: z.string(), name: z.string() }).nullable(), round: z.object({ id: z.string(), number: z.string(), kind: z.string(), roundNo: z.number(), stage: z.string() }).nullable() }).nullable().optional(),
   send: z.object({ ready: z.boolean(), checks: z.array(checkSchema) }).nullable(),
   confirmLinks: z.array(linkState),
 })

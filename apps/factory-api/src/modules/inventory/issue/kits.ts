@@ -41,7 +41,8 @@ import { readPickHeader, type PickHeader, type Reader } from './store'
 
 const LISTED = ['RELEASED', 'IN_PROGRESS', 'ON_HOLD'] as const
 const PICKABLE = ['RELEASED', 'IN_PROGRESS'] as const
-const PICK_LIST_NOTE = 'Pick list (Warehouse › Picking & kits)'
+// B-W2b-292: exported for the PICK task's source (modules/inventory/tasks/sources/pick-lists.ts), which knows a pick list by it.
+export const PICK_LIST_NOTE = 'Pick list (Warehouse › Picking & kits)'
 
 const dec = (value: { toString(): string } | null | undefined): Decimal => (value === null || value === undefined ? ZERO : new Dec(value.toString()))
 const keyOf = (workOrderId: string, itemId: string, itemColourId: string | null) => `${workOrderId}|${itemId}|${itemColourId ?? '-'}`

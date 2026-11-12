@@ -19,6 +19,7 @@ import { renderDiscrepancyReport } from '../../inventory/receipts/report'
 import { TAX_COLUMNS, taxFieldsOf } from '../../parties/store'
 import type { Reader } from '../store'
 import { CLAIM_RECORD, claimInCommand, officeClaim, readLines, type ClaimRow } from './store'
+import { recipientRank } from '@nexus/factory-domain/purchasing/suppliers-depth/routing'
 
 /**
  * The claim letter to the supplier (B-W2b-14; SCM-135; Z1:08; design purchasing.claims rec "Supplier claim › Claim":
@@ -114,9 +115,9 @@ async function letterInputOf(db: Reader, claim: ClaimRow, company: CompanyLegal,
 /** The supplier's language for the letter: its first contact's (QUALITY, then ORDERS), else the party's. */
 async function supplierLanguage(db: Reader, partyId: string): Promise<DocumentLanguage> {
   const party = await db.party.findUniqueOrThrow({ where: { id: partyId }, select: { language: true } })
-  const contacts = await db.partyContact.findMany({ where: { partyId, status: 'ACTIVE', email: { not: null } }, select: { roles: true, language: true }, orderBy: [{ name: 'asc' }, { id: 'asc' }] })
-  const rank = (roles: readonly string[]) => (roles.includes('QUALITY') ? 0 : roles.includes('ORDERS') ? 1 : 2)
-  const first = [...contacts].sort((a, b) => rank(a.roles) - rank(b.roles))[0]
+  const contacts = await db.partyContact.findMany({ where: { partyId, status: 'ACTIVE', email: { not: null } }, select: { roles: true, receives: true, language: true }, orderBy: [{ name: 'asc' }, { id: 'asc' }] })
+  // B-W2b-311 (SCM-004): those who receive claims first, then QUALITY, then ORDERS.
+  const first = [...contacts].sort((a, b) => recipientRank('CLAIM', a) - recipientRank('CLAIM', b))[0]
   return supplierLanguageOf(first?.language ?? null, party.language)
 }
 

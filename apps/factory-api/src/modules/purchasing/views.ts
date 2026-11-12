@@ -16,6 +16,8 @@ import { confirmLinksOf } from './confirm-links'
 import { depthChecks, readDepthFacts, type DepthFacts } from './po-depth/store'
 // B-W2b-328: the lines by kind: rolls, a protector's certificate, a variant (line-kinds/store.ts).
 import { kindChecks, readKindFacts, type LineKindFacts } from './line-kinds/store'
+// B-W2b-347: a sample order's development project (sample-orders/store.ts): its PDF and the record say it.
+import { readSampleFacts, sampleViewOf, type SampleFacts } from './sample-orders/store'
 import {
   CONTACT_COLUMNS,
   dayOf,
@@ -62,6 +64,8 @@ export interface OrderFacts {
   readonly depth?: DepthFacts | undefined
   /** B-W2b-328: each line's rolls, certificate and variant, with the register's coverages and the materials' variants. */
   readonly kinds?: LineKindFacts | undefined
+  /** B-W2b-347: a sample order's style and sample round (null for a production order). */
+  readonly sample?: SampleFacts | null | undefined
 }
 
 /** B-W2a-52: a line cancelled or closed short takes no goods and is no part of what is sent. */
@@ -113,7 +117,8 @@ export async function readFacts(db: Reader, order: OrderRow, today?: string): Pr
   }
   const depth = await readDepthFacts(db, order, lines)
   const kinds = await readKindFacts(db, order, lines)
-  return { order, lines, items: new Map(items.map((item) => [item.id, item])), colours: new Map(colours.map((colour) => [colour.id, colour])), party, contact, site, plan, supplierCalendar, today, depth, kinds }
+  const sample = await readSampleFacts(db, order.id)
+  return { order, lines, items: new Map(items.map((item) => [item.id, item])), colours: new Map(colours.map((colour) => [colour.id, colour])), party, contact, site, plan, supplierCalendar, today, depth, kinds, sample }
 }
 
 /** The company's letterhead problems, read in this scope (a command's transaction or a client). */
@@ -128,8 +133,10 @@ export function checksOf(facts: OrderFacts, today: string, companyLegal: readonl
   const w1 = sendChecks({
     status: order.status as PurchaseOrderStatus,
     today,
-    supplier: { name: party.legalName, status: party.status, roles: party.roles },
-    contact: contact && contact.partyId === order.partyId ? { name: contact.name, email: contact.email, roles: contact.roles, active: contact.status === 'ACTIVE' } : null,
+    // B-W2b-311 (SCM-008, SCM-004): where the supplier stands, the order's kind, and whether the contact receives POs.
+    supplier: { name: party.legalName, status: party.status, roles: party.roles, supplierStatus: party.supplierStatus, supplierStatusReason: party.supplierStatusReason, supplierStatusSince: party.supplierStatusChangedAt ? businessDate(party.supplierStatusChangedAt) : null },
+    orderKind: order.kind,
+    contact: contact && contact.partyId === order.partyId ? { name: contact.name, email: contact.email, roles: contact.roles, receives: contact.receives, active: contact.status === 'ACTIVE' } : null,
     companyLegal,
     deliveryAddress: siteAddressOf(facts.site) !== null,
     requestedDate: dayOf(order.requestedDate),
@@ -266,6 +273,8 @@ export async function orderDetail(db: Reader, context: RequestContext, order: Or
     updatedAt: toUtcIso(order.updatedAt),
     createdById: order.createdById,
     lines: facts.lines.map((line) => lineView(facts, line, received)),
+    // B-W2b-347: a PO of type Sample names the style and sample round it buys for (null: a production order).
+    sample: sampleViewOf(facts.sample),
     send,
     confirmLinks: await confirmLinksOf(db, order.id, now),
   }
