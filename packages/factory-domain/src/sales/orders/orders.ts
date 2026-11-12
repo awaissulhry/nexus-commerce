@@ -14,6 +14,10 @@ import { priceBasisOf, type SalesFeeKind, type SalesLineKind } from '../quotes/q
  *
  *   CONFIRMED → IN_PRODUCTION → READY → PARTLY_SHIPPED → SHIPPED → CLOSED; CANCELLED (with a reason) before anything shipped.
  *
+ * W2b-5 (schema wave 39/44, B-W2b-281; SAL-205): an order may be made PENDING_APPROVAL, waiting for a yes before it goes on
+ * (PENDING_APPROVAL → CONFIRMED with the yes, CANCELLED with a no: the …_sales_orders_depth_w2b_guards trigger); B-W2b-303
+ * writes those moves through the approval engine.
+ *
  * One writer per move (SAL-204; the design's board: cards never drag, each state changes only through its own action):
  *
  *   IN_PRODUCTION    the system, when the first work order of its lines is released (workorder.released)
@@ -34,7 +38,7 @@ import { priceBasisOf, type SalesFeeKind, type SalesLineKind } from '../quotes/q
  * shipped are `closedShort`, never "to ship".
  */
 
-export const SALES_ORDER_STATUSES = ['CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED', 'SHIPPED', 'CLOSED', 'CANCELLED'] as const
+export const SALES_ORDER_STATUSES = ['CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED', 'SHIPPED', 'CLOSED', 'CANCELLED', 'PENDING_APPROVAL'] as const
 export type SalesOrderStatus = (typeof SALES_ORDER_STATUSES)[number]
 
 export const STATUS_WORDS: Readonly<Record<SalesOrderStatus, string>> = Object.freeze({
@@ -45,6 +49,7 @@ export const STATUS_WORDS: Readonly<Record<SalesOrderStatus, string>> = Object.f
   SHIPPED: 'Shipped',
   CLOSED: 'Closed',
   CANCELLED: 'Cancelled',
+  PENDING_APPROVAL: 'Waiting for a yes',
 })
 
 /** The board's lanes (SAL-214): the open states, then shipped; closed and cancelled are counted beside them. */
@@ -111,6 +116,7 @@ export const salesOrderMachine = defineMachine<SalesOrderStatus, SalesOrderFacts
     READY: ['PARTLY_SHIPPED', 'SHIPPED', 'CANCELLED'],
     PARTLY_SHIPPED: ['SHIPPED'],
     SHIPPED: ['PARTLY_SHIPPED', 'CLOSED'],
+    PENDING_APPROVAL: ['CONFIRMED', 'CANCELLED'],
   },
   guards: {
     IN_PRODUCTION: (facts) => ((facts.releasedWorkOrders ?? 0) > 0 ? [] : ['a released work order of its lines']),

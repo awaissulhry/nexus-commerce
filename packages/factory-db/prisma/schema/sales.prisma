@@ -51,6 +51,11 @@
 // W2b (schema wave 21/22, B-W2b-157): a customer's order request from the portal and its change and cancel requests are
 // portal-sales.prisma's; an order or a quote names nothing of them (the request names what it became), and the sales
 // settings hold the cut-off rules those requests are checked against.
+//
+// W2b-5 (schema wave 39/44, B-W2b-281; sales-orders-depth.prisma): an order may wait for a yes (PENDING_APPROVAL) before it
+// goes on; it carries the office's priority and the confirmation sent; a change after production started is priced and may
+// ask an extra deposit and a new yes (SalesOrderAmendment); a deposit may be a caparra penitenziale, switched off until the
+// accountant's word (SalesSettings.caparraPenitenzialeEnabled).
 
 /// A quote of a company to a party (SAL-143): its number, its party and contact, and the status of its current version.
 /// Its documents are its versions.
@@ -279,6 +284,11 @@ enum DepositKind {
   ACCONTO
   /// A caparra confirmatoria (c.c. art. 1385).
   CAPARRA
+  /// W2b-5 (schema wave 39/44, B-W2b-281; SAL-248): a caparra penitenziale (c.c. art. 1386): the price of the buyer's right
+  /// to withdraw, kept when the buyer withdraws. Built switched OFF (GATE-ACCOUNTANT): a quote version or a deposit request
+  /// takes it only while its company's sales settings switch it on (SalesSettings.caparraPenitenzialeEnabled, the
+  /// …_sales_orders_depth_w2b_guards triggers); the acconto stays the default (Owner answer Q12).
+  CAPARRA_PENITENZIALE
 }
 
 /// One line of a quote version: a style in one colourway, as a size grid or one made-to-measure unit, with its price,
@@ -539,6 +549,8 @@ model DepositRequest {
   allocations  PaymentAllocation[]
   // The step of its order's payment schedule it is asked for: the deposit, or a balance before shipping (B-W2a-F2).
   milestones   SalesOrderMilestone[]
+  // W2b-5 (wave 39/44): the amendment that asked it, an extra deposit when the order grew (SAL-221).
+  amendments   SalesOrderAmendment[] @relation("SalesOrderAmendmentDeposit")
   // W2b portal-sales.prisma (wave 21/22): its card and SEPA payments at the provider.
   paymentIntents PaymentIntent[]
 
@@ -605,11 +617,23 @@ model SalesOrder {
   originalPromiseDate DateTime?        @db.Date
   /// Higher first; 0 is normal.
   priority            Int              @default(0)
+  /// W2b-5 (schema wave 39/44, B-W2b-281; SAL-207): how urgent the order is in the office's daily priorities, LOW, NORMAL,
+  /// HIGH or URGENT, read by the board and the backlog; URGENT exactly with its reason in words (one line, at most 500).
+  /// W1's `priority` number stays the order within a level. The office's own reading: the partner role sees neither.
+  /// @internal
+  priorityLevel       SalesOrderPriority @default(NORMAL)
+  /// @internal
+  urgentReason        String?
   /// The order states that a made-to-measure unit for a consumer has no right of withdrawal; the acceptance of its
   /// version holds the consumer's acceptance of it (SAL-304).
   noWithdrawal        Boolean          @default(false)
   /// Production waits for a PAID or WAIVED deposit request of the order (the deposit gate).
   depositRequired     Boolean          @default(false)
+  /// W2b-5 (schema wave 39/44, B-W2b-281; SAL-208): the order confirmation last sent to the customer: when, and the version
+  /// of its ORDER_CONFIRMATION document (gendocs.prisma GeneratedDocument of this order) it was; both or neither, never
+  /// while the order waits for a yes (PENDING_APPROVAL), the version never going back.
+  confirmationSentAt  DateTime?        @db.Timestamptz(3)
+  confirmationVersion Int?
   /// The sums of the lines.
   /// @grain price
   netAmount           Int              @default(0)
@@ -657,6 +681,8 @@ model SalesOrder {
   complaints      Complaint[]
   // W2b-4 samples.prisma (wave 29/33): the pre-production gates it waits on.
   gates           OrderGate[]
+  // W2b-5 sales-orders-depth.prisma (wave 39/44): the materials its customer sends for it (SAL-306).
+  customerMaterials CustomerMaterial[]
   // W2b portal-sales.prisma (wave 21/22): the portal order requests it was made from, its change and cancel requests.
   portalOrderRequests PortalOrderRequest[] @relation("PortalOrderRequestOrder")
   changeRequests      OrderChangeRequest[] @relation("OrderChangeRequestOrder")
@@ -681,6 +707,19 @@ enum SalesOrderStatus {
   SHIPPED
   CLOSED
   CANCELLED
+  /// W2b-5 (schema wave 39/44, B-W2b-281; SAL-205): made but waiting for a yes before it goes on (a SALES_ORDER rule, a
+  /// credit hold): only at its making, then CONFIRMED with the yes or CANCELLED with a no; its lines change meanwhile, nothing
+  /// is made or shipped for it, no confirmation is sent.
+  PENDING_APPROVAL
+}
+
+/// W2b-5 (schema wave 39/44, B-W2b-281; SAL-207): how urgent an order is in the office's daily priorities.
+enum SalesOrderPriority {
+  LOW
+  NORMAL
+  HIGH
+  /// With its reason (SalesOrder.urgentReason).
+  URGENT
 }
 
 /// One line of a sales order (SAL-203, SAL-206): a style in one colourway as a size grid, or one made-to-measure unit
@@ -770,6 +809,8 @@ model SalesOrderLine {
   peggings           RequirementPegging[]
   // shipping.prisma: the shipment lines that ship it.
   shipmentLines      ShipmentLine[]
+  // W2b-5 sales-orders-depth.prisma (wave 39/44): the materials its customer sends for it (SAL-306).
+  customerMaterials  CustomerMaterial[]
   // money.prisma: the invoice lines that bill it.
   invoiceLines       InvoiceLine[]
   // returns.prisma: the return lines of its goods, and those it replaces (a replacement order's line).
@@ -858,6 +899,10 @@ model SalesSettings {
   /// W2b (schema wave 23, B-W2b-157/-183's option; design portal.customer.orders "Ask to cancel" "Fee 15%"): the fee a
   /// customer's cancel request is charged, in percent of the cancelled lines' net value (0 to 100); null: free.
   cancelFeePct           Decimal?            @db.Decimal(7, 4)
+  /// W2b-5 (schema wave 39/44, B-W2b-281; SAL-248): the caparra penitenziale (DepositKind CAPARRA_PENITENZIALE, c.c. art.
+  /// 1386) may be asked: OFF by default and until the accountant's word on its wording (GATE-ACCOUNTANT). Read for a
+  /// company from its own row, else from the tenant-wide row, else off.
+  caparraPenitenzialeEnabled Boolean       @default(false)
   version             Int      @default(1)
   createdAt           DateTime @default(now()) @db.Timestamptz(3)
   updatedAt           DateTime @default(now()) @updatedAt @db.Timestamptz(3)
@@ -904,6 +949,20 @@ model SalesOrderAmendment {
   grossAmountAfter   Int
   /// The customer must accept the order again (the net total changed).
   reacceptanceNeeded Boolean  @default(false)
+  /// W2b-5 (schema wave 39/44, B-W2b-281; SAL-219; design order.changes.priced): a change made after production started is
+  /// priced: what each part of it costs the customer, [{ "label": "Recut 2 jackets in RED", "orderLineId"?: <a line of the
+  /// order before or after>, "amount": <minor units, signed, never 0> }] (1 to 100 parts), and a fee for the change (minor
+  /// units, above 0); null: not priced. The customer accepted the price before it applied (B-W2b-309).
+  /// @grain price
+  priceDeltaLines    Json?
+  /// @grain price
+  feeAmount          Int?
+  /// SAL-221: the extra deposit the change asked because the order grew: a deposit request of the same order, of at most
+  /// what the gross total grew by.
+  depositRequestId   String?  @db.Uuid
+  /// SAL-190: the new yes the edit of an approved order asked (approvals.prisma ApprovalTask of kind SALES_ORDER_CHANGE, of
+  /// this order, of its company).
+  reapprovalTaskId   String?  @db.Uuid
   /// The request whose command applied it; its audit rows share it.
   requestId          String
   createdAt          DateTime @default(now()) @db.Timestamptz(3)
@@ -911,12 +970,18 @@ model SalesOrderAmendment {
   createdById        String?  @db.Uuid
 
   order SalesOrder @relation(fields: [tenantId, companyId, partyId, orderId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b-5 (wave 39/44): the extra deposit and the new yes it asked. Restrict, not Prisma's SetNull default for an optional
+  // relation: that would also clear tenantId, companyId and partyId.
+  depositRequest DepositRequest? @relation("SalesOrderAmendmentDeposit", fields: [tenantId, companyId, partyId, depositRequestId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  reapprovalTask ApprovalTask?   @relation("SalesOrderAmendmentReapproval", fields: [tenantId, companyId, reapprovalTaskId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
   // W2b portal-sales.prisma (wave 21/22): the customer's change request it answers.
   changeRequests OrderChangeRequest[] @relation("OrderChangeRequestAmendment")
 
   @@unique([tenantId, orderId, revision])
   // W2b (wave 21/22): the target of a change request's reference: an amendment of the request's own order.
   @@unique([tenantId, orderId, id])
+  // W2b-5 (wave 39/44): an extra deposit is asked by one amendment.
+  @@unique([tenantId, depositRequestId])
 }
 
 /// One step of an order's payment schedule (SAL-216; design order.money.schedule): what is due when (the deposit on the

@@ -49,8 +49,15 @@ export type SalesFeeKind = (typeof SALES_FEE_KINDS)[number]
 /** A line of goods (a size grid or a made-to-measure unit), not a fee: what work orders, reorders and W1's copies handle. */
 export const isGoodsLine = <Line extends { readonly kind: string }>(line: Line): line is Line & { readonly kind: GoodsLineKind } =>
   (GOODS_LINE_KINDS as readonly string[]).includes(line.kind)
+/** The kinds a deposit is asked as through the quote and order routes. */
 export const DEPOSIT_KINDS = ['ACCONTO', 'CAPARRA'] as const
-export type DepositKind = (typeof DEPOSIT_KINDS)[number]
+/**
+ * W2b-5 (schema wave 39/44, B-W2b-281; SAL-248): every kind the database keeps. CAPARRA_PENITENZIALE (c.c. art. 1386) is
+ * built switched off until the accountant's word (GATE-ACCOUNTANT; SalesSettings.caparraPenitenzialeEnabled): no route asks
+ * it yet (B-W2b-309 adds it behind the switch), but a stored one is read and shown.
+ */
+export const STORED_DEPOSIT_KINDS = ['ACCONTO', 'CAPARRA', 'CAPARRA_PENITENZIALE'] as const
+export type DepositKind = (typeof STORED_DEPOSIT_KINDS)[number]
 export const APPROVAL_REASONS = ['MARGIN_FLOOR', 'DISCOUNT_LIMIT', 'AMOUNT_LIMIT', 'SPECIAL_ITEM'] as const
 export type ApprovalReason = (typeof APPROVAL_REASONS)[number]
 export const APPROVAL_STATUSES = ['PENDING', 'APPROVED', 'REJECTED', 'WITHDRAWN'] as const
