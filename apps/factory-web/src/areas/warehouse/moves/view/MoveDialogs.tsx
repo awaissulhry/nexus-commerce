@@ -6,7 +6,7 @@ import { ChevronDown, ChevronUp, Undo2 } from 'lucide-react'
 import { Banner, Card, Field, KeyValue } from '@nexus/ui/components'
 import { Button, Spinner } from '@nexus/ui/primitives'
 import { Modal, Textarea } from '../../../../lib/i18n/ds-parts'
-import { formatDateTime } from '../../../../lib/i18n/format'
+import { formatDate, formatDateTime } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { recordAddress } from '../../../../lib/records/record-links'
 import { OFFICE_PAGES } from '../../../../shell/nav/office-nav'
@@ -15,6 +15,8 @@ import { money, quantity, reverseHeldKey, unitCost } from '../../../_shared/stoc
 import { ReasonTag } from '../../../_shared/stock/parts'
 import { reasonLabel } from '../../stock/daily/model'
 import { mirrorOf, sideKey, type MovesPageActions, type MovesPageModel } from '../model'
+// B-W2b-327 (SCM-196): the day a move counts on in the books, when it was dated apart.
+import { DEPTH_NAMESPACE } from '../../stock/depth/model'
 
 /**
  * A move's detail (design mv-detail: a DetailModal reviewed in sequence; a move has no page of its own) and the reversal
@@ -34,6 +36,7 @@ function useSide() {
 export function MoveDetailModal({ model, actions }: { model: MovesPageModel; actions?: MovesPageActions }) {
   const t = useT('warehouse-stock')
   const s = useT('stock')
+  const w = useT(DEPTH_NAMESPACE)
   const locale = useLocale()
   const place = { locale, timeZone: model.timeZone }
   const sideWords = useSide()
@@ -47,6 +50,7 @@ export function MoveDetailModal({ model, actions }: { model: MovesPageModel; act
   const value = detail.status === 'ready' ? detail.value : null
   const move = value?.move ?? null
   const held = move ? reverseHeldKey(move, model.can) : 'held.noReverse'
+  const postingDate = move ? ((model.rows ?? []).find((row) => row.id === move.id)?.postingDate ?? null) : null
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -151,6 +155,7 @@ export function MoveDetailModal({ model, actions }: { model: MovesPageModel; act
                   { label: t('mv.col.posted'), value: postedBy(move), hint: move.worker ? t('mv.detail.worker', { name: move.worker }) : move.workerHidden ? t('mv.detail.workerHidden') : move.postedBy.audience === 'FLOOR' && move.stationOnly ? t('mv.detail.stationOnly') : undefined },
                   { label: t('mv.detail.happened'), value: formatDateTime(move.occurredAt, place), hint: move.postedBy.audience === 'FLOOR' ? t('mv.detail.deviceClock') : undefined },
                   { label: t('mv.detail.recorded'), value: formatDateTime(move.createdAt, place) },
+                  ...(postingDate ? [{ label: w('wd.posting.countsOn'), value: formatDate(`${postingDate}T12:00:00Z`, { locale, timeZone: 'UTC' }), hint: w('wd.posting.countsOnHint') }] : []),
                   { label: t('mv.detail.key'), value: <code className="fw-st-sub">{move.idempotencyKey}</code> },
                 ]}
               />

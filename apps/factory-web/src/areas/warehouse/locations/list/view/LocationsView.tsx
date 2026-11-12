@@ -2,14 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { Download, FolderInput, MapPin, MoreHorizontal, Plus, Search } from 'lucide-react'
+import { Download, FolderInput, Lock, MapPin, MoreHorizontal, Plus, Printer, Search, Unlock } from 'lucide-react'
 import { Banner, EmptyState, EntityPath, Menu } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, Input, Pill, Select, Toggle } from '@nexus/ui/primitives'
 import { Modal } from '../../../../../lib/i18n/ds-parts'
 import { ListFrame } from '../../../../../list-frame/ListFrame'
 import { listKeys, type ListKey } from '../../../../../list-frame/model'
-import { formatTime } from '../../../../../lib/i18n/format'
+import { formatDate, formatTime } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import type { LiveState } from '../../../../_shared/buying/hooks'
 import type { LocationView, SiteLocations, StockOverview, Uom } from '../../../../_shared/stock/api'
@@ -18,13 +18,18 @@ import { NoAccess, ReadFailed, StockMessages } from '../../../../_shared/stock/p
 import { LOCATIONS_NAMESPACES, placeRows, searchRows, type ListAddress, type LocationsCan, type PlaceRow } from '../../model'
 import { LocationDialogs, type DialogActions, type LocationDialog } from '../../view/LocationDialogs'
 import '../../locations.css'
+// B-W2b-327: Status (blocked), Default for, the label code, Block / Unblock, Print labels and the bin labels PDF.
+import type { DefaultView, PartyChoice, PlaceSite, PlaceView } from '../../depth/api'
+import { blockHeldOf, countHref, defaultsOf, depthCan, labelRefusalOf, placeStatus, printStartHeldKey, STATUS_TONE, type Loaded, type PrintActions, type PrintDialogModel } from '../../depth/model'
+import { DEPTH_WORDS, DepthDialogs, PrintDialog, type DepthDialog, type DepthDialogActions } from '../../depth/view/DepthDialogs'
+import '../../../stock/depth/depth.css'
 
 export interface LocationsListModel {
   prefix: string
   can: LocationsCan
-  sites: { status: 'loading' } | { status: 'ready'; items: SiteLocations[] } | { status: 'error'; problem: string }
-  /** The site shown (the address's, else the first). */
-  site: SiteLocations | null
+  sites: { status: 'loading' } | { status: 'ready'; items: (SiteLocations | PlaceSite)[] } | { status: 'error'; problem: string }
+  /** The site shown (the address's, else the first); its places carry their label code and block (B-W2b-327). */
+  site: SiteLocations | PlaceSite | null
   address: ListAddress
   /** The site's stock (inventory.stock.view): what each place holds. */
   stock: { value: StockOverview | null; problem: string | null }
@@ -38,9 +43,21 @@ export interface LocationsListModel {
   dialog?: LocationDialog | null
   selected?: readonly string[]
   helpOpen?: boolean
+  /** B-W2b-327: the site's default locations (what each place is the default for). */
+  defaults?: readonly DefaultView[] | null
+  /** B-W2b-327: Print labels (the dialog's model), Block / Unblock open (design cases), today at the site, a new place's parties. */
+  print?: PrintDialogModel | null
+  depthDialog?: DepthDialog | null
+  today?: string
+  parties?: Loaded<PartyChoice[]> | null
+  /** The permissions (print, parties) the W2b parts read. */
+  permissions?: readonly string[]
 }
 
-export interface LocationsListActions extends DialogActions {
+export interface LocationsListActions extends DialogActions, DepthDialogActions {
+  /** B-W2b-327: Print labels of the places picked; the parties a new workshop's or customer's place may name. */
+  onPrint?: (places: PlaceView[]) => void
+  onParties?: (roles: readonly string[]) => void
   onSite?: (siteId: string) => void
   onArchived?: (show: boolean) => void
   onSearch?: (q: string) => void
@@ -59,16 +76,20 @@ export interface LocationsListActions extends DialogActions {
  * stock or active places), Open. New location (primary, `c`), ⋯ Import locations (the inventory.locations importer)
  * and Export. Blocks and bin labels are W2b: not drawn. Fetches nothing.
  */
-export function LocationsView({ model, actions }: { model: LocationsListModel; actions?: LocationsListActions }) {
+export function LocationsView({ model, actions, printActions }: { model: LocationsListModel; actions?: LocationsListActions; printActions?: PrintActions }) {
   return (
-    <StockMessages extra={LOCATIONS_NAMESPACES}>
-      <LocationsList model={model} actions={actions} />
+    <StockMessages extra={[...LOCATIONS_NAMESPACES, DEPTH_WORDS]}>
+      <LocationsList model={model} actions={actions} printActions={printActions} />
     </StockMessages>
   )
 }
 
-function LocationsList({ model, actions }: { model: LocationsListModel; actions?: LocationsListActions }) {
+function LocationsList({ model, actions, printActions }: { model: LocationsListModel; actions?: LocationsListActions; printActions?: PrintActions }) {
   const t = useT('warehouse-locations')
+  const w = useT(DEPTH_WORDS)
+  const deep = useMemo(() => depthCan(model.permissions ?? []), [model.permissions])
+  const [depthDialog, setDepthDialog] = useState<DepthDialog | null>(model.depthDialog ?? null)
+  useEffect(() => setDepthDialog(model.depthDialog ?? null), [model.depthDialog])
   const stock = useT('stock')
   const lists = useT('lists')
   const locale = useLocale()
@@ -95,7 +116,7 @@ function LocationsList({ model, actions }: { model: LocationsListModel; actions?
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null
-      if (event.metaKey || event.ctrlKey || event.altKey || dialog || help) return
+      if (event.metaKey || event.ctrlKey || event.altKey || dialog || depthDialog || model.print || help) return
       if (target && (target.closest('input, textarea, select, [contenteditable="true"], [role="dialog"], [role="menu"]') || target.isContentEditable)) return
       if (event.key === 'c' && model.can.manage && model.site) {
         event.preventDefault()
@@ -125,7 +146,53 @@ function LocationsList({ model, actions }: { model: LocationsListModel; actions?
         </span>
       ) : null
     const CodeCell = ({ data }: ICellRendererParams<PlaceRow>) => (data ? <span className={data.location.status === 'ARCHIVED' ? 'fw-lc-code fw-st-struck' : 'fw-lc-code'}>{data.location.code}</span> : null)
-    const StatusCell = ({ data }: ICellRendererParams<PlaceRow>) => (data ? <Pill tone={data.location.status === 'ACTIVE' ? 'success' : 'neutral'}>{stock(`locationStatus.${data.location.status}`)}</Pill> : null)
+    // B-W2b-327 (design lc-tree "Status (Active / Blocked W2b / Archived)"): a block that holds says its reason, its day or its count.
+    const StatusCell = ({ data }: ICellRendererParams<PlaceRow>) => {
+      if (!data) return null
+      const place = data.location as PlaceView
+      const status = placeStatus(place)
+      const block = status === 'BLOCKED' ? place.block! : null
+      return (
+        <span className="fw-st-cell">
+          <span>
+            <Pill tone={STATUS_TONE[status]}>{w(`wd.loc.status.${status}`)}</Pill>
+          </span>
+          {block && (
+            <span className="fw-st-sub" title={block.note ?? undefined}>
+              {block.countNumber ? (
+                <Link className="fw-st-link" href={countHref(model.prefix, block.countNumber)}>
+                  {w('wd.loc.status.byCount', { number: block.countNumber })}
+                </Link>
+              ) : block.until ? (
+                w('wd.loc.status.until', { reason: w(`wd.loc.reason.${block.reason}`), day: formatDate(`${block.until}T12:00:00Z`, { locale, timeZone: 'UTC' }) })
+              ) : (
+                w(`wd.loc.reason.${block.reason}`)
+              )}
+            </span>
+          )}
+        </span>
+      )
+    }
+    // B-W2b-327 (design lc-tree "Default for (W2b)", SCM-179): the purposes the site's default locations name this place for.
+    const DefaultCell = ({ data }: ICellRendererParams<PlaceRow>) => {
+      if (!data) return null
+      const own = defaultsOf(data.location.id, model.defaults)
+      if (own.length === 0) return <span className="fw-st-sub">—</span>
+      const words = own.map((entry) => (entry.itemKind ? w('wd.loc.purposeFor', { purpose: w(`wd.loc.purpose.${entry.purpose}`), kind: w(`wd.loc.itemKind.${entry.itemKind}`) }) : w(`wd.loc.purpose.${entry.purpose}`))).join(' · ')
+      return (
+        <span className="fw-st-ellipsis" title={words}>
+          {words}
+        </span>
+      )
+    }
+    // B-W2b-327 (design lc-tree "Label printed", SCM-178): the code its bin label carries, or why it has none.
+    const LabelCell = ({ data }: ICellRendererParams<PlaceRow>) => {
+      if (!data) return null
+      const place = data.location as PlaceView
+      const refusal = labelRefusalOf(place)
+      if (place.labelCode) return <span className="fw-lc-code">{place.labelCode}</span>
+      return <span className="fw-st-sub">{refusal && place.status === 'ACTIVE' ? w('wd.loc.label.noneKind') : w('wd.loc.label.none')}</span>
+    }
     const StockCell = ({ data }: ICellRendererParams<PlaceRow>) => {
       if (!data?.stock) return null
       if (data.stock.lines === 0) return <span className="fw-st-sub">{t('lc.stock.empty')}</span>
@@ -144,6 +211,10 @@ function LocationsList({ model, actions }: { model: LocationsListModel; actions?
       if (!data) return null
       const active = data.location.status === 'ACTIVE'
       const held = (key: string | null) => (key ? t(key, data.archiveParams) : undefined)
+      const place = data.location as PlaceView
+      const blocked = placeStatus(place) === 'BLOCKED'
+      const blockHeld = blockHeldOf(place, model.can)
+      const labelHeld = labelRefusalOf(place)
       return (
         <Menu
           label={<MoreHorizontal size={16} aria-hidden />}
@@ -156,8 +227,12 @@ function LocationsList({ model, actions }: { model: LocationsListModel; actions?
                   { id: 'inside', label: t('lc.menu.newInside'), disabled: !active, description: active ? undefined : t('lc.held.archived'), onSelect: () => setDialog({ kind: 'new', parentId: data.location.id }) },
                   { id: 'move', label: t('lc.menu.move'), disabled: !active, description: active ? undefined : t('lc.held.archived'), onSelect: () => setDialog({ kind: 'move', locationId: data.location.id }) },
                   { id: 'archive', label: t('lc.menu.archive'), tone: 'danger' as const, disabled: !!data.archiveHeld, description: held(data.archiveHeld), onSelect: () => setDialog({ kind: 'archive', locationId: data.location.id }) },
+                  // B-W2b-327 (design lc-tree row ⋯ "Block (W2b)"): block, change the block, or unblock.
+                  { id: 'block', label: w(blocked ? 'wd.loc.menu.changeBlock' : 'wd.loc.menu.block'), icon: <Lock size={14} aria-hidden />, disabled: !!blockHeld, description: blockHeld ? w(blockHeld.key, blockHeld.params) : undefined, onSelect: () => setDepthDialog({ kind: 'block', locationId: place.id }) },
+                  ...(blocked ? [{ id: 'unblock', label: w('wd.loc.menu.unblock'), icon: <Unlock size={14} aria-hidden />, disabled: !!blockHeld, description: blockHeld ? w(blockHeld.key, blockHeld.params) : undefined, onSelect: () => setDepthDialog({ kind: 'unblock', locationId: place.id }) }] : []),
                 ]
               : []),
+            { id: 'label', label: w('wd.loc.menu.printLabel'), icon: <Printer size={14} aria-hidden />, disabled: !!labelHeld, description: labelHeld ? w(labelHeld) : undefined, onSelect: () => actions?.onPrint?.([place]) },
             ...(data.stock && data.stock.lines > 0 ? [{ id: 'moves', label: t('lc.menu.moves'), href: movesHref(model.prefix, { siteId: data.location.siteId, locationId: data.location.id }) }] : []),
           ]}
         />
@@ -167,12 +242,14 @@ function LocationsList({ model, actions }: { model: LocationsListModel; actions?
       { colId: 'place', headerName: t('lc.col.place'), minWidth: 240, flex: 2, cellRenderer: NameCell },
       { colId: 'code', headerName: t('lc.col.code'), minWidth: 140, flex: 1, cellRenderer: CodeCell },
       { colId: 'kind', headerName: t('lc.col.kind'), minWidth: 130, flex: 0.9, valueGetter: (params) => (params.data ? stock(`locationKind.${params.data.location.kind}`) : '') },
-      { colId: 'status', headerName: t('lc.col.status'), minWidth: 110, flex: 0.6, cellRenderer: StatusCell },
+      { colId: 'status', headerName: t('lc.col.status'), minWidth: 150, flex: 0.8, cellRenderer: StatusCell },
+      { colId: 'defaults', headerName: w('wd.loc.col.defaults'), minWidth: 140, flex: 0.9, cellRenderer: DefaultCell },
+      { colId: 'label', headerName: w('wd.loc.col.label'), minWidth: 130, flex: 0.8, cellRenderer: LabelCell },
       ...(model.can.stock ? [{ colId: 'stock', headerName: t('lc.col.stock'), minWidth: 180, flex: 1.3, cellRenderer: StockCell } satisfies ColDef<PlaceRow>] : []),
       { colId: 'inside', headerName: t('lc.col.inside'), minWidth: 120, flex: 0.6, cellRenderer: InsideCell },
       { colId: 'more', headerName: '', headerTooltip: stock('common.more'), minWidth: 64, maxWidth: 64, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
     ]
-  }, [t, stock, locale, model.prefix, model.can])
+  }, [t, w, stock, locale, model.prefix, model.can, model.defaults])
 
   if (!model.can.view) return <NoAccess permission="inventory.locations.view" />
 
@@ -269,6 +346,10 @@ function LocationsList({ model, actions }: { model: LocationsListModel; actions?
               ))}
             </Select>
           )}
+          {/* B-W2b-327 (design page.h "Print labels (W2b)"): selection-aware — the selected places print. */}
+          <Button size="sm" heldReason={printStartHeldKey(picked.length) ? w(printStartHeldKey(picked.length)!) : null} onClick={() => actions?.onPrint?.(picked.map((row) => row.location as PlaceView))}>
+            <Printer size={14} aria-hidden /> {w('wd.loc.print.band')}
+          </Button>
           {model.can.manage && (
             <Button size="sm" variant="primary" heldReason={model.site ? null : t('lc.held.noSite')} onClick={() => setDialog({ kind: 'new', parentId: null })} aria-keyshortcuts="c">
               <Plus size={14} aria-hidden /> {t('lc.new.button')}
@@ -280,7 +361,7 @@ function LocationsList({ model, actions }: { model: LocationsListModel; actions?
       {model.notice && (
         <Banner
           tone={model.notice.tone}
-          title={t(model.notice.key, model.notice.params)}
+          title={model.notice.key.startsWith('wd.') ? w(model.notice.key, model.notice.params) : t(model.notice.key, model.notice.params)}
           action={
             actions?.onDismissNotice ? (
               <Button size="sm" variant="quiet" onClick={actions.onDismissNotice}>
@@ -305,9 +386,14 @@ function LocationsList({ model, actions }: { model: LocationsListModel; actions?
           selected,
           onChange: setSelected,
           actions: (
-            <Button size="sm" aria-label={t('lc.export', { count: picked.length })} onClick={() => actions?.onExport?.(picked)}>
-              <Download size={13} aria-hidden /> <SelectionLabel>{t('lc.export', { count: picked.length })}</SelectionLabel>
-            </Button>
+            <>
+              <Button size="sm" aria-label={t('lc.export', { count: picked.length })} onClick={() => actions?.onExport?.(picked)}>
+                <Download size={13} aria-hidden /> <SelectionLabel>{t('lc.export', { count: picked.length })}</SelectionLabel>
+              </Button>
+              <Button size="sm" aria-label={w('wd.loc.print.bulk', { count: picked.length })} onClick={() => actions?.onPrint?.(picked.map((row) => row.location as PlaceView))}>
+                <Printer size={13} aria-hidden /> <SelectionLabel>{w('wd.loc.print.bulk', { count: picked.length })}</SelectionLabel>
+              </Button>
+            </>
           ),
         }}
         updates={model.updates > 0 ? { count: model.updates, onShow: () => actions?.onShowUpdates?.() } : null}
@@ -319,11 +405,36 @@ function LocationsList({ model, actions }: { model: LocationsListModel; actions?
       />
 
       {model.site && (
+        <DepthDialogs
+          dialog={depthDialog}
+          places={model.site.locations as PlaceView[]}
+          today={model.today ?? new Date().toISOString().slice(0, 10)}
+          onClose={() => setDepthDialog(null)}
+          actions={{
+            onBlock: async (place, draft) => {
+              const answer = (await actions?.onBlock?.(place, draft)) ?? null
+              if (!answer) setDepthDialog(null)
+              return answer
+            },
+            onUnblock: async (place) => {
+              const answer = (await actions?.onUnblock?.(place)) ?? null
+              if (!answer) setDepthDialog(null)
+              return answer
+            },
+          }}
+        />
+      )}
+      {model.print && <PrintDialog model={model.print} can={{ printLabels: deep.printLabels, manage: model.can.manage }} actions={printActions} />}
+
+      {model.site && (
         <LocationDialogs
           dialog={dialog}
           locations={model.site.locations}
           siteName={siteName}
           onClose={() => setDialog(null)}
+          parties={model.parties ?? null}
+          partiesAllowed={deep.parties}
+          onParties={actions?.onParties}
           actions={{
             onCreate: async (form) => {
               const answer = (await actions?.onCreate?.(form)) ?? null
