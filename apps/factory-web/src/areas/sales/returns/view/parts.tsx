@@ -22,14 +22,18 @@ import '../returns.css'
  */
 
 export function ReturnsMessages({ children }: { children?: ReactNode }) {
-  return <QualityMessages namespaces={['sales-returns']}>{children}</QualityMessages>
+  return <QualityMessages namespaces={['sales-returns', 'sales-returns-depth']}>{children}</QualityMessages>
 }
 
-/** The screen's words (`sales-returns`); a `quality:` key reads the shared quality catalogue (the kinds of a failed call). */
+/**
+ * The screen's words (`sales-returns`); a `quality:` key reads the shared quality catalogue (the kinds of a failed call), a
+ * `depth:` key the W2b parts' catalogue (`sales-returns-depth`, B-W2b-352).
+ */
 export function useWords(): Translate {
   const t = useT('sales-returns')
   const q = useT('quality')
-  return useMemo<Translate>(() => (key, params) => (key.startsWith('quality:') ? q(key.slice(8), params) : t(key, params)), [t, q])
+  const d = useT('sales-returns-depth')
+  return useMemo<Translate>(() => (key, params) => (key.startsWith('quality:') ? q(key.slice(8), params) : key.startsWith('depth:') ? d(key.slice(6), params) : t(key, params)), [t, q, d])
 }
 
 /**

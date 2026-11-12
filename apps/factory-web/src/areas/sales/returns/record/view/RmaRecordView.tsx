@@ -33,6 +33,10 @@ import type { RmaActions, RmaModel, RmaTab } from '../../view-model'
 import { CloseReturnModal } from '../../view/CloseReturnModal'
 import { NewRepairModal } from '../../view/NewRepairModal'
 import { InstantText, isPageKey, MilestoneTracker, Money, RepairStagePill, ReturnsMessages, ReturnStatusPill, say, useDayWords, useWords } from '../../view/parts'
+import { EMPTY_DEPTH } from '../../depth/view-model'
+import { DepthDialogs } from '../../depth/view/DepthDialogs'
+import { policyHeld, printHeld } from '../../depth/model'
+import { CreditWithoutReturnSection, DepthNotices, depthFacts, FeeSection, LineDepth } from '../../depth/view/DepthParts'
 import { AddLinesModal } from './AddLinesModal'
 import { RmaDialogs } from './RmaDialogs'
 
@@ -45,6 +49,9 @@ import { RmaDialogs } from './RmaDialogs'
  * sets money, stock and work in one step — per line, or several at once), Replacement & credit (the replacement order,
  * the credit notes Finance drafts and their SDI state, the repairs of the lines), Shipments (goods in with the customer's
  * DDT, goods going back) and Activity (the record's thread and history). Money only with the price grain. Fetches nothing.
+ * B-W2b-352 (the W2b parts, `model.depth`): the policy, the deadline and the arrival, the withdrawal and the scan code among
+ * the facts; Print the return papers and Bind the return policy in ⋯; the remake asked; a line's split, size exchange and
+ * fee on Inspection & decision; Credit without return and the restocking or handling fee on Replacement & credit.
  */
 export function RmaRecordView({ model, actions, panels }: { model: RmaModel; actions?: RmaActions; panels?: ReactNode }) {
   return (
@@ -65,6 +72,9 @@ function RmaRecord({ model, actions, panels }: { model: RmaModel; actions?: RmaA
     return words ? say(t, words) : null
   }
   const counts = rmaCounts(rma)
+  const depth = model.depth ?? EMPTY_DEPTH
+  const papersHeld = printHeld(depth, can, model.offline)
+  const bindHeld = policyHeld(depth, can, model.offline)
 
   // r: Receive goods (the record's key, design kb).
   const keys = useRef({ actions, held: held('receive'), dialog: model.dialog, rma })
@@ -84,6 +94,9 @@ function RmaRecord({ model, actions, panels }: { model: RmaModel; actions?: RmaA
   const moreItems: MenuItemDef[] = [
     menuItem('close', t('action.close'), held('close'), () => actions?.onCloseOpen?.()),
     menuItem('cancel', t('action.cancel'), held('cancel'), () => actions?.onDialog?.({ kind: 'cancel', reason: '' })),
+    { id: 'sep-depth', separator: true } as MenuItemDef,
+    menuItem('papers', t('depth:papers.print'), papersHeld ? say(t, papersHeld) : null, () => actions?.onPrintPapers?.()),
+    menuItem('policy', t('depth:policy.bind'), bindHeld ? say(t, bindHeld) : null, () => actions?.onDepthDialog?.({ kind: 'policy', draft: { withdrawal: false, reason: '' }, check: null })),
     { id: 'sep', separator: true } as MenuItemDef,
     { id: 'number', label: t('row.copy'), onSelect: () => actions?.onCopy?.(rma.number) },
     { id: 'link', label: t('record.copyLink'), onSelect: () => actions?.onCopy?.(typeof window === 'undefined' ? base : `${window.location.origin}${base}`) },
@@ -163,6 +176,7 @@ function RmaRecord({ model, actions, panels }: { model: RmaModel; actions?: RmaA
               }
             />
           )}
+          {model.depth && <DepthNotices model={model} depthModel={model.depth} />}
           {(rma.status === 'CANCELLED' || rma.status === 'REJECTED' || rma.status === 'CLOSED') && (
             <Banner tone="info" title={t(`record.final.${rma.status}`)}>
               {rma.statusReason ?? null}
@@ -179,6 +193,7 @@ function RmaRecord({ model, actions, panels }: { model: RmaModel; actions?: RmaA
               { label: t('fact.freight'), value: rma.policy.freightPaidByNow ? t(`freight.now.${rma.policy.freightPaidByNow}`) : rma.policy.freightPaidBy === 'BY_CAUSE' ? t('freight.byCauseOpen') : '—' },
               { label: t('fact.owner'), value: owner ? ('key' in owner ? t(owner.key) : owner.name) : '—' },
               ...(can.price ? [{ label: t('fact.credit'), value: <Money minor={rma.creditTotal} currency={rma.currency} /> }] : []),
+              ...(model.depth ? depthFacts(t, dayWords, model.depth) : []),
             ]}
           />
           {tab === 'lines' && <LinesTab model={model} actions={actions} />}
@@ -189,6 +204,7 @@ function RmaRecord({ model, actions, panels }: { model: RmaModel; actions?: RmaA
         </div>
       </RecordFrame>
       <RmaDialogs model={model} actions={actions} />
+      {model.depth && <DepthDialogs model={model} depthModel={model.depth} actions={actions} />}
       {model.close && <CloseReturnModal model={model.close} actions={actions} />}
       {model.newRepair && <NewRepairModal model={model.newRepair} prefix={prefix} actions={actions} />}
       {model.addLines && <AddLinesModal model={model} add={model.addLines} actions={actions} />}
@@ -381,6 +397,7 @@ function InspectionLine({ line, model, actions, decideHeld }: { line: ReturnLine
       ? effectOf({ disposition: draft.disposition, goodsOutcome: preview?.goodsOutcome ?? outcome, creditAmount: preview?.creditAmount ?? null, place: preview?.place?.code ?? null })
       : []
   const repairNeeded = decided && line.followUp === 'REPAIR_ORDER'
+  const sizes = model.depth?.outcomes.value?.lines.find((entry) => entry.id === line.id)?.exchange.sizes ?? []
   const repairHeld = !can.repairsManage ? t('held.right.repairsManage') : model.offline ? t('held.offline') : null
   return (
     <Section
@@ -457,6 +474,19 @@ function InspectionLine({ line, model, actions, decideHeld }: { line: ReturnLine
                 })}
               </Select>
             </label>
+            {draft.disposition === 'SIZE_EXCHANGE' && (
+              <label className="fw-q-cell">
+                <span className="fw-q-hint">{t('depth:exchange.size')}</span>
+                <Select value={draft.exchangeSize ?? ''} disabled={!!decideHeld || sizes.length === 0} onChange={(event) => actions?.onDecision?.(line.id, { exchangeSize: event.target.value })} aria-label={t('depth:exchange.sizeOf', { seq: line.seq })}>
+                  <option value="">{sizes.length === 0 ? t('depth:exchange.noSizes') : t('depth:exchange.pick')}</option>
+                  {sizes.map((size) => (
+                    <option key={size} value={size}>
+                      {size}
+                    </option>
+                  ))}
+                </Select>
+              </label>
+            )}
             {can.price ? (
               <label className="fw-q-cell">
                 <span className="fw-q-hint">{t('decide.credit')}</span>
@@ -473,6 +503,7 @@ function InspectionLine({ line, model, actions, decideHeld }: { line: ReturnLine
           </p>
         )}
         {!decided && draft.disposition === 'REPAIR' && <p className="fw-q-hint">{t('decide.repairNext')}</p>}
+        {model.depth && <LineDepth lineId={line.id} model={model} depthModel={model.depth} actions={actions} />}
       </div>
     </Section>
   )
@@ -599,12 +630,8 @@ function CreditTab({ model, actions }: { model: RmaModel; actions?: RmaActions }
         )}
       </Section>
 
-      <Section title={t('credit.later')}>
-        <ul className="fw-q-lines">
-          <li className="fw-q-hint">{t('credit.laterWithout')}</li>
-          <li className="fw-q-hint">{t('credit.laterFee')}</li>
-        </ul>
-      </Section>
+      {model.depth && <CreditWithoutReturnSection model={model} depthModel={model.depth} actions={actions} />}
+      {model.depth && <FeeSection model={model} depthModel={model.depth} actions={actions} />}
     </div>
   )
 }
