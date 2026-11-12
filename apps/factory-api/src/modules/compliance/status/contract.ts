@@ -3,6 +3,8 @@ import { COMPLIANCE_GATES, FIX_PLACES, WHO } from '@nexus/factory-domain/complia
 import { LINE_STATES } from '@nexus/factory-domain/compliance/gates/gate'
 import { CELL_STATES } from '@nexus/factory-domain/compliance/status/board'
 import { GAP_TYPES } from '@nexus/factory-domain/compliance/reports/rules'
+// B-W2b-288 (FU2:02): where a style stands in a market (Style.marketCodes).
+import { MARKET_STANDINGS } from '@nexus/factory-domain/product/markets/rules'
 import { businessDate, defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
 
 /**
@@ -54,7 +56,8 @@ export const boardContract = defineContract({
       }),
       rows: z.array(
         output({
-          style: output({ id: id(), code: z.string(), name: z.string(), companyId: id().nullable(), ppeCategory: z.string(), productType: z.string(), brand: output({ id: id(), code: z.string(), name: z.string() }).nullable(), soldUnderOurName: z.boolean() }),
+          // B-W2b-288 (FU2:02): marketCodes — the markets it is sold in ([]: every market); a market left out is NOT_SOLD.
+          style: output({ id: id(), code: z.string(), name: z.string(), companyId: id().nullable(), ppeCategory: z.string(), productType: z.string(), brand: output({ id: id(), code: z.string(), name: z.string() }).nullable(), soldUnderOurName: z.boolean(), marketCodes: z.array(z.string()) }),
           cells: z.array(cell),
           ready: z.boolean(),
           blocked: z.boolean(),
@@ -77,8 +80,10 @@ export const cellContract = defineContract({
   querystring: input({ styleId: id(), market: z.string().trim().min(2).max(40) }),
   response: {
     200: output({
-      style: output({ id: id(), code: z.string(), name: z.string(), ppeCategory: z.string(), productType: z.string() }),
+      // B-W2b-288 (FU2:02): the markets it is sold in and where it stands in this one (NOT_SOLD_THERE: no item is asked).
+      style: output({ id: id(), code: z.string(), name: z.string(), ppeCategory: z.string(), productType: z.string(), marketCodes: z.array(z.string()) }),
       market: output({ code: z.string(), name: z.string(), switchedOn: z.boolean() }),
+      standing: z.enum(MARKET_STANDINGS),
       cell,
       items: z.array(
         output({

@@ -160,6 +160,7 @@
     "MISSING": "Missing",
     "BLOCKED": "Blocked",
     "EXPIRING": "Expiring",
+    "NOT_SOLD": "Not sold there",
     "missingCount_one": "Missing 1",
     "missingCount_other": "Missing {count}",
     "title": "{style} × {market}",
@@ -178,8 +179,7 @@
     "fixFirst": "Fix the first missing item",
     "nothingMissing": "Nothing is missing here.",
     "keys": "J / K next market · ⇧J / ⇧K next style · Esc closes",
-    "marketOff": "This market is switched off: its own rules wait.",
-    "notSold": "Every market is checked as if the style sold there: the markets a style sells in are not recorded yet."
+    "marketOff": "This market is switched off: its own rules wait."
   },
   "line": {
     "OK": "Present",
@@ -191,7 +191,6 @@
   "matrix": {
     "hint": "Each style against each market shown: ready, missing or blocked. A cell opens its checklist; Enter opens a row's worst cell.",
     "legend": "What the cells say",
-    "notSold": "— not sold there (not recorded yet)",
     "col": {
       "style": "Style"
     },
