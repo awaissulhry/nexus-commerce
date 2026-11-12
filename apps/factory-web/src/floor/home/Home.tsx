@@ -10,6 +10,9 @@ import { readScan } from '../scan/scan-model'
 import { TASK_ROUTES, taskForScan, taskOfTile } from '../tasks/routes'
 import { cabinetOfScan, CABINET_PATH } from '../tasks/sds/model'
 import { useMyDayBadge } from '../tasks/myday/badge'
+// B-W2b-308: the warehouse tiles' counts (the Move tile, My work).
+import { moveCount, totalCount } from '../tasks/mywork/warehouse/model'
+import { useWarehouseCounts } from '../tasks/mywork/warehouse/use-inbox'
 import { fetchOpenWork } from '../tasks/scans/api'
 import { withLeft } from '../tasks/scans/left'
 import { resumeRows, type OpenItem } from '../tasks/scans/timing'
@@ -40,6 +43,9 @@ export function FloorHome() {
   const person = me?.worker.id ?? null
   // B-W2b-68: a dispute answered shows on the My day tile; read per person, nothing held for the next one.
   const answers = useMyDayBadge(api, Boolean(online && me?.permissions.includes('floor.work')), person)
+  // B-W2b-308: what waits at the warehouse for the person (the Move tile counts put-aways, moves and quarantine moves).
+  const warehouse = me ? modeOf(me.device.station, me.device.mode) === 'warehouse' : false
+  const waiting = useWarehouseCounts(api, Boolean(online && warehouse && me?.permissions.includes('floor.work')), warehouse ? person : null)
   // B-W2b-73: the next person starts on the first page of tiles.
   useEffect(() => setPage(0), [person])
   useEffect(() => {
@@ -114,6 +120,7 @@ export function FloorHome() {
         // One person's open work never reaches the next person on the tablet. B-W2b-F6: unread, what they left on Operation counts too.
         resume: scans && person ? { items: fresh ? kept : withLeft(person, kept), asOf: online ? null : asOf } : null,
         mydayAnswers: answers,
+        tileCounts: warehouse ? { move: moveCount(waiting) ?? 0, mywork: totalCount(waiting) ?? 0 } : undefined,
       }}
       onFrame={onFrame}
       onAction={(action) => void onAction(action)}

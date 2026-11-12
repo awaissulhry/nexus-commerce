@@ -12,6 +12,8 @@ import { CREDIT_WITHOUT_RETURN_KIND } from './credit-without-return'
 import { SUPPLIER_BANK_CHANGE_KIND } from './supplier-bank-change'
 // B-W2b-299: a stock count's differences, before they are approved.
 import { COUNT_VARIANCE_KIND } from './count-variance'
+// B-W2b-304: a step held for credit let through with a yes.
+import { CREDIT_OVERRIDE_KIND } from './credit-override'
 // B-W2b-298: a substitute material on a work order's BOM line, before it is used.
 import { MATERIAL_SUBSTITUTION_KIND } from './material-substitution'
 
@@ -27,6 +29,7 @@ import { MATERIAL_SUBSTITUTION_KIND } from './material-substitution'
  *   CREDIT_WITHOUT_RETURN  a return line credited without the goods coming back (B-W2b-341; the credit written on the yes)
  *   SUPPLIER_BANK_CHANGE   a supplier's new bank account after its call-back, before payments use it (B-W2b-315; ACTIVE on the yes)
  *   COUNT_VARIANCE   a submitted stock count's differences (B-W2b-299; approved on the yes, sent back for a recount on the no)
+ *   CREDIT_OVERRIDE  an order, a release or a shipment held for credit, let through on the yes (B-W2b-304)
  *   MATERIAL_SUBSTITUTION  a substitute on a work order's BOM line before it is used (B-W2b-298; approved, refused or withdrawn)
  */
 const KINDS: readonly ApprovalKindDefinition[] = Object.freeze([
@@ -41,6 +44,8 @@ const KINDS: readonly ApprovalKindDefinition[] = Object.freeze([
   SUPPLIER_BANK_CHANGE_KIND,
   // B-W2b-299
   COUNT_VARIANCE_KIND,
+  // B-W2b-304
+  CREDIT_OVERRIDE_KIND,
   // B-W2b-298
   MATERIAL_SUBSTITUTION_KIND,
 ])

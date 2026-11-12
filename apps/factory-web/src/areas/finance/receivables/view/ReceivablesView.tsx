@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { BellRing, CheckCheck, Download, MoreHorizontal, Printer, Search, X } from 'lucide-react'
 import { Banner, EmptyState, Menu, MetricStrip, type Metric } from '@nexus/ui/components'
@@ -33,6 +33,8 @@ import {
   type StatementRef,
 } from '../model'
 import { AgeBar, dayText } from './parts'
+// B-W2b-304: the credit limit used, the same meter as Credit limits.
+import { UsedMeter } from '../credit/view/UsedMeter'
 import { ReminderDialog, type ReminderDialogState } from './ReminderDialog'
 import { StatementDialog, type StatementState } from './StatementDialog'
 import '../receivables.css'
@@ -117,19 +119,20 @@ export interface ReceivablesActions {
  * sent; a row opens the statement DetailModal with J / K; selected rows: Print N statements, Export N), and Reminders to
  * approve (what the ladder prepared, the level, the action, the warnings; Approve and send n while the Owner's switch
  * is on, else Approve n and they wait; A approves the focused one; a row opens the reminder). Amounts and the
- * reminders' text only with the price grain. Credit limits are W2b and not drawn.
+ * reminders' text only with the price grain. B-W2b-304: By customer's "credit limit used" and the Credit limits section
+ * (`credit`, its own container: areas/finance/receivables/credit).
  */
-export function ReceivablesView({ model, actions }: { model: ReceivablesModel; actions?: ReceivablesActions }) {
+export function ReceivablesView({ model, actions, credit }: { model: ReceivablesModel; actions?: ReceivablesActions; credit?: ReactNode }) {
   return (
     <WithMessages namespaces={[RECEIVABLES_NAMESPACE, 'lists']}>
-      <ReceivablesPageView model={model} actions={actions} />
+      <ReceivablesPageView model={model} actions={actions} credit={credit} />
     </WithMessages>
   )
 }
 
 const REMINDER_VIEW_ORDER: readonly ReminderView[] = ['toApprove', 'waiting', 'sent', 'closed', 'all']
 
-function ReceivablesPageView({ model, actions }: { model: ReceivablesModel; actions?: ReceivablesActions }) {
+function ReceivablesPageView({ model, actions, credit }: { model: ReceivablesModel; actions?: ReceivablesActions; credit?: ReactNode }) {
   const t = useT(RECEIVABLES_NAMESPACE)
   const lists = useT('lists')
   const locale = useLocale()
@@ -203,6 +206,15 @@ function ReceivablesPageView({ model, actions }: { model: ReceivablesModel; acti
           <span>{dayText(data.oldestDueDate, locale)}</span>
           <span className={`fw-frv-cell-sub${data.daysLate && data.daysLate > 0 ? ' fw-frv-tone is-danger' : ''}`}>{say(latePhrase(data.daysLate, data.oldestDueDate))}</span>
         </span>
+      ) : null
+    // B-W2b-304: the credit limit used, a meter (over 100: over the limit).
+    const CreditUsedCell = ({ data }: ICellRendererParams<AgeingRow>) =>
+      data ? (
+        data.creditLimitUsed === null ? (
+          <span className="fw-frv-muted">{t('row.noCreditLimit')}</span>
+        ) : (
+          <UsedMeter pct={data.creditLimitUsed} label={t('col.creditUsed')} />
+        )
       ) : null
     const PaymentCell = ({ data }: ICellRendererParams<AgeingRow>) => (data ? <span>{data.lastPaymentOn ? dayText(data.lastPaymentOn, locale) : t('row.noPayment')}</span> : null)
     const RemindersCell = ({ data }: ICellRendererParams<AgeingRow>) =>
@@ -279,6 +291,18 @@ function ReceivablesPageView({ model, actions }: { model: ReceivablesModel; acti
         flex: 0.9,
         cellRenderer: RemindersCell,
       },
+      // B-W2b-304: the share of the customer's credit limit with the company used (price grain; '—' without a limit).
+      ...(can.price
+        ? [
+            {
+              colId: 'creditUsed',
+              headerName: t('col.creditUsed'),
+              minWidth: 140,
+              flex: 0.8,
+              cellRenderer: CreditUsedCell,
+            } satisfies ColDef<AgeingRow>,
+          ]
+        : []),
     ]
   }, [t, locale, model.prefix, can.price, actions])
 
@@ -769,6 +793,9 @@ function ReceivablesPageView({ model, actions }: { model: ReceivablesModel; acti
           state={reminderState}
         />
       </section>
+
+      {/* B-W2b-304: Credit limits (sec:credit), its own container (areas/finance/receivables/credit). */}
+      {credit}
 
       {model.statement && (
         <StatementDialog

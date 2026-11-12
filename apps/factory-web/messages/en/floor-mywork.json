@@ -107,10 +107,6 @@
     "allDone": {
       "title": "Everything planned here is done",
       "body": "Scan a bundle to work on it."
-    },
-    "warehouse": {
-      "title": "The warehouse task list is not here yet",
-      "body": "It comes with picking and put-away. Work from the tiles on Home. If this tablet belongs to a station, the office places it (Admin › Devices & printers)."
     }
   },
   "noPermission": {
