@@ -55,6 +55,11 @@ import { convertPlannedOrdersContract, firmPlannedOrderContract, getPlannedOrder
 import { convertPlannedOrders } from './planned-orders/convert'
 import { firmPlannedOrder, unfirmPlannedOrder } from './planned-orders/firm'
 import { getPlannedOrder, listPlannedOrders } from './planned-orders/read'
+// B-W2b-319: one demand view and the production strategy per item.
+import { demandContract, demandRowsContract } from './demand/contract'
+import { readDemand, readDemandRows } from './demand/demand'
+import { bulkStrategyContract, listStrategyContract, setStrategyContract } from './strategy/contract'
+import { bulkStrategy, listStrategy, setStrategy } from './strategy/strategy'
 
 /**
  * What to buy and make (B-W1-29; PLN-062 to PLN-066; A2 SCR-055, design 02): run the plan for a site, read the latest
@@ -82,6 +87,10 @@ import { getPlannedOrder, listPlannedOrders } from './planned-orders/read'
  * B-W2b-20 (W2a follow-ups): bulk writes of a site's item parameters (POST /planning/item-parameters/bulk) and lanes
  * (PATCH /planning/lanes), each ONE command; the other follow-ups are fields of the routes above (stable refusal codes,
  * per-component readiness, customer and family, lanes without a calendar, exceptions' age in working days).
+ *
+ * B-W2b-319 (PLN-017, PLN-040, PLN-041, PLN-042, PLN-061; design planning.demand, planning.mps sec:strategy): one demand view
+ * (./demand: the tiles and the time-phased rows, and the same demand as a list with its source) and the production strategy per
+ * item (./strategy: the list, one item's autosave, a bulk change in one command).
  */
 export default defineRoutes('planning', manifest, async (app) => {
   app.post('/planning/runs', { schema: runPlanContract }, async (request, reply) => reply.code(201).send(await runPlan(request, request.body, idempotencyKeyFrom(request))))
@@ -160,4 +169,11 @@ export default defineRoutes('planning', manifest, async (app) => {
   app.get('/planning/planned-orders/:plannedOrderId', { schema: getPlannedOrderContract }, async (request) => getPlannedOrder(request, request.params.plannedOrderId))
   app.post('/planning/planned-orders/:plannedOrderId/firm', { schema: firmPlannedOrderContract }, async (request) => firmPlannedOrder(request, request.params.plannedOrderId, request.body, idempotencyKeyFrom(request)))
   app.post('/planning/planned-orders/:plannedOrderId/unfirm', { schema: firmPlannedOrderContract }, async (request) => unfirmPlannedOrder(request, request.params.plannedOrderId, request.body, idempotencyKeyFrom(request)))
+  // B-W2b-319: one demand view (orders, quotes likely to win, made-to-measure units, samples, remakes by week) and the
+  // production strategy per item.
+  app.get('/planning/demand', { schema: demandContract }, async (request) => readDemand(request, request.query))
+  app.get('/planning/demand/rows', { schema: demandRowsContract }, async (request) => readDemandRows(request, request.query))
+  app.get('/planning/strategy', { schema: listStrategyContract }, async (request) => listStrategy(request, request.query))
+  app.put('/planning/strategy/items/:itemId', { schema: setStrategyContract }, async (request) => setStrategy(request, request.params.itemId, request.body, idempotencyKeyFrom(request)))
+  app.post('/planning/strategy/bulk', { schema: bulkStrategyContract }, async (request) => bulkStrategy(request, request.body, idempotencyKeyFrom(request)))
 })
