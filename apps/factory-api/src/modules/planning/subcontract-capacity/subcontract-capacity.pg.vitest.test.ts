@@ -181,9 +181,12 @@ describe('only approved workshops (PLN-162), kit timing (PLN-164), in-house or o
   })
 
   it('times the kit: two transport days before the start on our working days, the goods back after the work, the kit list', async () => {
+    // The workshop's own delivery time is its transport days (none: 2).
+    await admin(`UPDATE "Party" SET "leadTimeDays" = 2 WHERE id = $1`, [A.P2])
     const timing = await ok('viewer', 'GET', `/planning/work-orders/${production.workOrderId}/kit-timing?partyId=${A.P2}&operationIds=${production.operationIds.qc}&start=2026-12-02`)
-    expect(timing).toMatchObject({ start: '2026-12-02', startSource: 'GIVEN', workshop: { id: A.P2 }, operations: [{ id: production.operationIds.qc }] })
-    expect(timing.kitShipOn < timing.start).toBe(true)
+    expect(timing).toMatchObject({ start: '2026-12-02', startSource: 'GIVEN', workshop: { id: A.P2 }, operations: [{ id: production.operationIds.qc }], transportDays: 2, transportSource: 'WORKSHOP', late: false })
+    // Two of the site's working days before Wednesday 2 December (no calendar: Monday to Friday).
+    expect(timing.kitShipOn).toBe('2026-11-30')
     expect(timing.backOn >= timing.start).toBe(true)
     expect(timing.words).toMatch(/^Send the kit on \d{4}-\d{2}-\d{2}: \d+ transport days? before the work starts at .+ on 2026-12-02\.$/)
     expect(Array.isArray(timing.kit.lines)).toBe(true)

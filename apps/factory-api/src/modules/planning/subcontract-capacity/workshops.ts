@@ -100,7 +100,9 @@ function capacityWith(world: WorkshopWorld, partyId: string, extra: Job | null) 
 }
 
 /** Each workshop's answer for each operation (qualification by kind of work and by the library operation). */
-async function needsOf(db: Reader, companyId: string, partyIds: readonly string[], operations: readonly Operation[], today: BusinessDate): Promise<Map<string, Map<string, NeedAnswer>>> {
+type Answers = Map<string, Awaited<ReturnType<typeof qualificationsFor>>>
+
+async function needsOf(db: Reader, companyId: string, partyIds: readonly string[], operations: readonly Operation[], today: BusinessDate, cache: Answers = new Map()): Promise<Map<string, Map<string, NeedAnswer>>> {
   const out = new Map<string, Map<string, NeedAnswer>>(partyIds.map((id) => [id, new Map()]))
   const asked = new Map<string, Operation[]>()
   for (const operation of operations) {
@@ -109,7 +111,10 @@ async function needsOf(db: Reader, companyId: string, partyIds: readonly string[
   }
   for (const group of asked.values()) {
     const first = group[0]!
-    const answers = await qualificationsFor(db, { companyId, partyIds, need: { workCentreKind: first.workCentreKind as never, operationId: first.operationId }, today })
+    // One question per kind of work and library operation (the allocation board asks it for every card).
+    const asking = `${first.workCentreKind}|${first.operationId ?? ''}`
+    const answers = cache.get(asking) ?? (await qualificationsFor(db, { companyId, partyIds, need: { workCentreKind: first.workCentreKind as never, operationId: first.operationId }, today }))
+    cache.set(asking, answers)
     for (const partyId of partyIds) {
       const answer = answers.get(partyId)!
       for (const operation of group) out.get(partyId)!.set(operation.id, { label: needLabel(operation), qualified: answer.qualified, standing: answer.standing, words: answer.words })
@@ -119,8 +124,8 @@ async function needsOf(db: Reader, companyId: string, partyIds: readonly string[
 }
 
 /** The verdict of each workshop for some operations of a work order. */
-export async function verdictsFor(db: Reader, world: WorkshopWorld, workOrder: Pick<WorkOrderOperations, 'id' | 'companyId'>, operations: readonly Operation[], extra: (partyId: string) => Job | null, needs?: Map<string, Map<string, NeedAnswer>>) {
-  const answers = needs ?? (await needsOf(db, workOrder.companyId, world.workshops.map((workshop) => workshop.id), operations, world.today))
+export async function verdictsFor(db: Reader, world: WorkshopWorld, workOrder: Pick<WorkOrderOperations, 'id' | 'companyId'>, operations: readonly Operation[], extra: (partyId: string) => Job | null, cache?: Answers) {
+  const answers = await needsOf(db, workOrder.companyId, world.workshops.map((workshop) => workshop.id), operations, world.today, cache)
   return world.workshops.map((workshop) => {
     const perOperation = operations.map((operation) => ({ operation, answer: answers.get(workshop.id)!.get(operation.id)! }))
     const verdict: Verdict = verdictOf({
@@ -185,9 +190,10 @@ export async function allocationWorkshops(caller: CommandCaller, query: { readon
     const kinds = new Map<string, Map<string, { qualified: boolean; standing: string; words: string }>>()
     for (const kind of KINDS) kinds.set(kind, await qualificationsFor(db, { companyId: site.companyId, partyIds: ids, need: { workCentreKind: kind }, today }))
     const cards = []
+    const cache: Answers = new Map()
     for (const workOrder of workOrders.values()) {
       const sent = outsideWorkOf(workOrder.operations)
-      const verdicts = await verdictsFor(db, world, workOrder, sent, () => null)
+      const verdicts = await verdictsFor(db, world, workOrder, sent, () => null, workOrder.companyId === site.companyId ? cache : undefined)
       cards.push({
         workOrder: { id: workOrder.id, number: workOrder.number, status: workOrder.status, version: workOrder.version },
         operations: sent.map(operationView),
