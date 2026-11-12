@@ -14,7 +14,8 @@ import {
 import type { CommandCaller } from '../../../core/command'
 import { serverClock } from '../../../core/time'
 import { processLotDocuments, type LotDocumentRow } from './documents-store'
-import { processLabResults, type LabResultRow } from './results-store'
+import { processLabResults, type LabCost, type LabResultRow } from './results-store'
+import { asMoney, type Money } from '@nexus/factory-domain/money/marked'
 import { processQualitySettings } from './settings-store'
 import { certificateCovering, factsOf, holdNoteOf, lotFor, officeOf, receiptOf, type LotRow, type Reader } from './store'
 
@@ -50,7 +51,9 @@ export async function documentsOf(client: Reader, lotId: string, day: BusinessDa
   })
 }
 
-export interface ResultView extends LabResultRow {
+export interface ResultView extends Omit<LabResultRow, 'cost'> {
+  /** B-W2b-288 (FU2:03): the lab's price (the cost grain). */
+  readonly cost: Money<'cost', LabCost | null>
   readonly words: string
   readonly file: { readonly id: string; readonly originalName: string; readonly status: string } | null
   /** A later result superseded it. */
@@ -59,10 +62,12 @@ export interface ResultView extends LabResultRow {
 
 export async function resultsOf(client: Reader, lotId: string): Promise<ResultView[]> {
   const rows = await processLabResults().list(client, lotId)
+  // B-W2b-288 (FU2:03): the lab's price of each result (office reads; the grain filter keeps it for the cost grain only).
+  const costs = new Map((await processLabResults().costs(client, [lotId])).map((cost) => [cost.resultId, { cents: cost.cents, currency: cost.currency }]))
   const files = rows.length === 0 ? [] : await client.storedFile.findMany({ where: { id: { in: [...new Set(rows.map((row) => row.fileId))] } }, select: { id: true, originalName: true, status: true } })
   const byId = new Map(files.map((file) => [file.id, file]))
   const superseded = new Set(rows.map((row) => row.supersedesId).filter((id): id is string => id !== null))
-  return rows.map((row) => ({ ...row, words: resultWords(row), file: byId.get(row.fileId) ?? null, superseded: superseded.has(row.id) }))
+  return rows.map((row) => ({ ...row, cost: asMoney('cost', costs.get(row.id) ?? null), words: resultWords(row), file: byId.get(row.fileId) ?? null, superseded: superseded.has(row.id) }))
 }
 
 const resultWords = (row: LabResultRow): string =>

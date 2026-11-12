@@ -11,12 +11,14 @@ import {
   LOT_DOCUMENT_KINDS,
   SETTING_SOURCES,
 } from '@nexus/factory-domain/quality/lab/rules'
+import { money } from '@nexus/factory-domain/money/marked'
 import { fileView, presignedView } from '../../../platform/files/contract'
 
 /**
  * The lab step (B-W1-34; QHS-029, QHS-030, SCM-117, QHS-073; A2 SCR-054, SCR-075): a lot's chromium VI results with their
  * reports, its supplier documents, the release checklist, the decisions, and the Cr VI evidence rule (Q14). mg/kg values
- * are decimal strings with three decimals. No money here.
+ * are decimal strings with three decimals. B-W2b-288 (FU2:03): the lab's price of a result (money.cost: typed with the result,
+ * read back, summed per lot in the list) — the only money here, dropped for every caller without the cost grain.
  */
 
 const version = z.number().int().min(1)
@@ -98,6 +100,8 @@ const resultView = output({
   note: z.string().nullable(),
   createdAt: instant(),
   createdById: id().nullable(),
+  /** B-W2b-288 (FU2:03): the lab's price of this result (minor units, ISO 4217), or none; the cost grain only. */
+  cost: money.cost(output({ cents: z.number().int(), currency: z.string() }).nullable()),
   /** The verdict in words: "PASS: 1.2 mg/kg is below the limit of 3 mg/kg." */
   words: z.string(),
 })
@@ -147,7 +151,9 @@ export const listLotsContract = defineContract({
     q: z.string().trim().max(60).optional(),
     limit: z.coerce.number().int().min(1).max(200).default(50),
   }),
-  response: { 200: output({ lots: z.array(lotView) }) },
+  // B-W2b-288 (FU2:03): the Lab cost column of Material tests — the lab prices of the lot's results per currency (none: []); the
+  // cost grain only.
+  response: { 200: output({ lots: z.array(lotView.extend({ labCost: money.cost(z.array(output({ currency: z.string(), cents: z.number().int(), results: z.number().int() }))) })) }) },
 })
 
 export const releaseCheckContract = defineContract({
@@ -179,6 +185,8 @@ export const recordResultContract = defineContract({
     note: text(LAB_LIMITS.note).nullish(),
     /** The report: announced with …/results/report and sent; or a supplier report already recorded for a lot of the same article. */
     fileId: id(),
+    /** B-W2b-288 (FU2:03): the lab's price of this result (minor units from 0, ISO 4217); refused without the cost grain. */
+    cost: money.cost(input({ cents: z.number().int(), currency: z.string().trim().max(3) }).nullable()),
   }),
   response: {
     201: output({

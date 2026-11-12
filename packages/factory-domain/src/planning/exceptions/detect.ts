@@ -89,6 +89,11 @@ export interface DetectMaterial {
   readonly pegging: MaterialPegging
   /** The lead time a buy or make takes from today (days); null: none on record. */
   readonly leadTimeDays: number | null
+  /**
+   * W2b (B-W2b-311, SCM-012): a buy's earliest arrival if ordered on the run date, the supplier's closed days not counted
+   * (calendars/suppliers arrivalDate); left out: the run date plus the lead time in calendar days.
+   */
+  readonly earliestArrival?: BusinessDate | null | undefined
   /** The site keeps the material in stock: a reorder point, min/max or a safety stock above 0. */
   readonly keptInStock: boolean
   /** The site's safety stock for it (base unit); null: none. */
@@ -150,7 +155,7 @@ export function detectExceptions(input: DetectInput): ExceptionCondition[] {
       const first = uncovered[0]!
       const quantity = uncovered.reduce((sum, coverage) => sum.plus(decimalOf(coverage.uncovered)), ZERO)
       const orders = new Set(uncovered.map((coverage) => coverage.part.orderId))
-      const arrival = material.leadTimeDays === null ? null : addDays(runDate, material.leadTimeDays)
+      const arrival = material.earliestArrival !== undefined ? material.earliestArrival : material.leadTimeDays === null ? null : addDays(runDate, material.leadTimeDays)
       const daysLate = arrival !== null && arrival > first.day ? daysFrom(first.day, arrival) : arrival === null ? null : 0
       found.push({
         ...base,

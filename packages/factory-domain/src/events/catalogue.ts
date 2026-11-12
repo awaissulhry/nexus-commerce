@@ -133,6 +133,18 @@ import { events as stylesDepth } from '../styles-depth/events'
 import { events as productChanges } from '../product-changes/events'
 // B-W2b-282: one approval engine.
 import { events as approvals } from '../approvals/events'
+// B-W2b-332: ask to buy (a request asked, a request moved).
+import { events as purchaseRequests } from '../purchase-requests/events'
+// B-W2b-295: inquiries and requests for quotation.
+import { events as salesInquiries } from '../sales-inquiries/events'
+// B-W2b-314: the warehouse rules and the adjustments they hold back.
+import { events as inventoryRules } from '../inventory-rules/events'
+// B-W2b-341: returns in depth (the policy check, fee rules, garments named, credit without a return, the scan code).
+import { events as returnsDepth } from '../returns-depth/events'
+// B-W2b-293: planned work and subcontract orders (planned by a run, made real, made firm).
+import { events as planningPlannedOrders } from '../planning-planned-orders/events'
+// B-W2b-331: subcontracting in depth (the written terms, the material balance booked, a workshop charge booked).
+import { events as subcontractDepth } from '../subcontract-depth/events'
 // B-W2b-342: repairs and alterations in depth (a request from outside, an estimate sent, answered or withdrawn).
 import { events as repairsDepth } from '../repairs-depth/events'
 // B-W2b-238: materials in depth (a material's approval decided).
@@ -198,6 +210,16 @@ import { events as productMtm } from '../product-mtm/events'
 import { events as complianceClaims } from '../compliance-claims/events'
 // B-W2b-247: the colour library and the brands' branding sets (colour.changed, branding_set.changed).
 import { events as productColours } from '../product-colours/events'
+// B-W2b-289: locations in depth (blocks, bin label codes, default locations).
+import { events as inventoryLocationsDepth } from '../inventory-locations/events'
+// B-W2b-288: the PPE text approvals (a consultant's yes per template recorded or withdrawn; GATE-PPE-TEXTS).
+import { events as compliancePpeTexts } from '../compliance-ppe-texts/events'
+// B-W2b-313: lots in depth (the lifecycle, shade lots, attributes, the dated trace report).
+import { events as lotsDepth } from '../lots-depth/events'
+// B-W2b-311: suppliers in depth (supplier.status_changed).
+import { events as suppliersDepth } from '../suppliers-depth/events'
+// B-W2b-292: the warehouse task inbox.
+import { events as inventoryTasks } from '../inventory-tasks/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -461,6 +483,28 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...productColours,
   // B-W2b-282
   ...approvals,
+  // B-W2b-332
+  ...purchaseRequests,
+  // B-W2b-289
+  ...inventoryLocationsDepth,
+  // B-W2b-288
+  ...compliancePpeTexts,
+  // B-W2b-313
+  ...lotsDepth,
+  // B-W2b-295
+  ...salesInquiries,
+  // B-W2b-314
+  ...inventoryRules,
+  // B-W2b-341
+  ...returnsDepth,
+  // B-W2b-293
+  ...planningPlannedOrders,
+  // B-W2b-311
+  ...suppliersDepth,
+  // B-W2b-292
+  ...inventoryTasks,
+  // B-W2b-331
+  ...subcontractDepth,
   // B-W2b-342
   ...repairsDepth] as const satisfies readonly EventDefinition[]
 

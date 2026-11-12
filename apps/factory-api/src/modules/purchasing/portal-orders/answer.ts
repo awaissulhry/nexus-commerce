@@ -20,6 +20,7 @@ import { commandOn } from '../../../platform/portal/tasks/clock'
 import { dayOf, dayValue, quantityText } from '../store'
 import { choiceIdsOf, heldLines, heldOrder, mayAnswer, portalOrder } from './read'
 import { closeConfirmTasks } from './tasks'
+import { confirmScheduleAsAsked } from '../po-depth/hooks'
 
 /**
  * The supplier answers a purchase order in the portal (B-W2b-174; SCM-085, SCM-086; design portal.supplier.orders ›
@@ -99,6 +100,8 @@ async function confirmLines(tools: CommandTools, orderId: string, plan: PortalAn
       data: { confirmedQuantity: line.quantity, confirmedDate: line.date === null ? null : dayValue(line.date), version: { increment: 1 } },
     })
   }
+  // B-W2b-296: a line confirmed as asked confirms its deliveries, each on its own day.
+  await confirmScheduleAsAsked(tools, orderId, ids)
 }
 
 async function writeConfirmation(tools: CommandTools, order: Held, plan: PortalAnswerPlan, person: { id: string; name: string }) {

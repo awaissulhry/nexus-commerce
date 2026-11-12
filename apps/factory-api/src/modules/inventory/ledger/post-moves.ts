@@ -1,4 +1,4 @@
-import type { Prisma, StockMoveReason, StockValuationMethod, Uom } from '@nexus/factory-db'
+import type { ItemKind, Prisma, StockMoveReason, StockValuationMethod, Uom } from '@nexus/factory-db'
 import { dayWords } from '@nexus/factory-domain/accounting/periods'
 import { ConflictError, ForbiddenError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
@@ -26,6 +26,10 @@ import type { PeriodLockOverride } from '@nexus/factory-domain/accounting/contra
 import { standardCostFor } from '../finished/post'
 import { postedBy, stockContextOf, type StockContext } from './access'
 import { remnantsFollowTransfers } from '../remnants/lifecycle'
+// B-W2b-289 (SCM-177, SCM-181): what each kind of place holds, and a blocked place, said before the database's guard.
+import { placeRefusals } from '../locations-depth/moves'
+// B-W2b-314 (SCM-196): a posting date apart from the time it happened.
+import { honourPostingDate, postingDateColumn } from '../posting/store'
 
 /**
  * postMoves(): the ONE writer of the stock ledger (plan A1 §2.1, §2.6; SCM-189, SCM-192, SCM-194), called INSIDE the
@@ -107,6 +111,13 @@ export interface PostOptions {
   readonly issuePath?: (index: number) => string
   /** B-W2a-F8: the body's reason a move dated inside a SOFT-locked month is posted anyway (`periodLockOverride`). */
   readonly periodLockOverride?: PeriodLockOverride | null | undefined
+  /**
+   * B-W2b-314 (SCM-196): the day every move of this post counts on in the books (YYYY-MM-DD, office and system), apart
+   * from when it happened: not after the day it is entered, not further back than the company's back-dating limit (in
+   * words, at `postingDatePath`, default `body/postingDate`), never in a closed month (the period lock reads this day).
+   */
+  readonly postingDate?: string | null | undefined
+  readonly postingDatePath?: string
 }
 
 /** A posted move as postMoves answers it (plain JSON, never a cost). */
@@ -135,6 +146,8 @@ export interface PostedMove {
   readonly occurredAt: string
   /** Its value was written in this command (false: a transfer, an item without a cost, or a floor move). */
   readonly valued: boolean
+  /** B-W2b-314: the day it counts on in the books when it is not the day it happened, else null. */
+  readonly postingDate: string | null
 }
 
 /** A move would take a location below zero (SCM-194). A 409, before the insert. */
@@ -149,10 +162,12 @@ export class InsufficientStockError extends ConflictError {
 
 // ---- the rows a batch names --------------------------------------------------------------------------------------------
 
-const ITEM_SELECT = { id: true, code: true, tracking: true, baseUom: true, purchaseUom: true, purchaseFactor: true, consumptionUom: true, consumptionFactor: true, currency: true } as const
+const ITEM_SELECT = { id: true, code: true, tracking: true, baseUom: true, purchaseUom: true, purchaseFactor: true, consumptionUom: true, consumptionFactor: true, currency: true, kind: true } as const
 type ItemRow = {
   id: string
   code: string
+  /** B-W2b-289: what a place may hold is read by the item's kind. */
+  kind: ItemKind
   tracking: ItemTracking
   baseUom: Uom
   purchaseUom: Uom
@@ -164,7 +179,8 @@ type ItemRow = {
 }
 const LOT_SELECT = { id: true, siteId: true, itemId: true, itemColourId: true, code: true, qualityStatus: true, receiptLineId: true } as const
 const HIDE_SELECT = { id: true, siteId: true, lotId: true, itemId: true, code: true, state: true } as const
-const LOCATION_SELECT = { id: true, siteId: true, code: true, status: true } as const
+// B-W2b-289: its kind and block too.
+const LOCATION_SELECT = { id: true, siteId: true, code: true, status: true, kind: true, blockedAt: true, blockReason: true, blockedUntil: true } as const
 export const LEDGER_SELECT = {
   id: true,
   companyId: true,
@@ -288,19 +304,31 @@ export async function postMoves(tools: CommandTools, drafts: readonly MoveDraft[
     (entry.problem ? [entry.problem] : checkDraft(entry.move, index, facts, moves)).map((issue) => ({ path: `${at(index)}/${issue.path}`, message: issue.message })),
   )
   if (problems.length > 0) throw new ValidationError(problems.length === 1 ? problems[0]!.message : 'These moves break the stock rules.', problems)
+  // B-W2b-289: a place of a kind that does not hold the item (400), a blocked place (409), in words.
+  placeRefusals(moves, facts, at)
 
   const rows = moves.map((move, index) => rowOf(move, index, facts, context, tools.now, options.key ?? null))
   const keys = rows.map((row) => row.idempotencyKey)
   if (new Set(keys).size !== keys.length) throw new ConflictError('Two moves of this batch have the same idempotency key.')
   const used = await tx.stockMove.findMany({ where: { idempotencyKey: { in: keys } }, select: { idempotencyKey: true } })
   if (used.length > 0) throw new ConflictError(`This move was posted already (idempotency key ${used[0]!.idempotencyKey}).`)
+  // B-W2b-314 (SCM-196): the posting date within the company's back-dating limit, in words before the database's trigger.
+  const postingDay = options.postingDate ?? null
+  if (postingDay !== null) {
+    await honourPostingDate(tools, rows, postingDay, options.postingDatePath ?? 'body/postingDate')
+    for (const row of rows) row.postingDate = postingDateColumn(postingDay)
+  }
   // B-W2a-F1: an office or system move dated inside a HARD period lock of its company is refused in words (409) before
   // the database's StockMove_period_lock; B-W2a-F8: inside a SOFT one it needs the caller's override reason. The floor's
   // moves are dated now and the floor reads no lock (the trigger skips them).
   if (context.audience !== 'floor') {
     await honourPeriodLocks(
       tools,
-      rows.map((row, index) => ({ companyId: row.companyId, day: lockDayOf(row.occurredAt), refused: `the stock move (${row.reason.toLowerCase().replace(/_/g, ' ')}) dated ${dayWords(lockDayOf(row.occurredAt))} is not posted`, path: `${at(index)}/occurredAt`, record: { type: 'StockMove', id: row.id } })),
+      // B-W2b-314: the day it counts on (its posting date, else the day it happened), as the database's period lock reads it.
+      rows.map((row, index) => {
+        const day = postingDay ?? lockDayOf(row.occurredAt)
+        return { companyId: row.companyId, day, refused: `the stock move (${row.reason.toLowerCase().replace(/_/g, ' ')}) dated ${dayWords(day)} is not posted`, path: postingDay ? (options.postingDatePath ?? 'body/postingDate') : `${at(index)}/occurredAt`, record: { type: 'StockMove', id: row.id } }
+      }),
       options.periodLockOverride,
     )
   }
@@ -340,6 +368,7 @@ export async function postMoves(tools: CommandTools, drafts: readonly MoveDraft[
       reversalOfId: row.reversalOfId,
       idempotencyKey: row.idempotencyKey,
       occurredAt: toUtcIso(row.occurredAt),
+      ...(postingDay ? { postingDate: postingDay } : {}),
     }
     tools.audit({ action: 'inventory.move', recordType: 'StockMove', recordId: row.id, companyId: row.companyId, siteId: row.siteId, after, ...(row.note ? { reason: row.note } : {}) })
     tools.emit({
@@ -387,6 +416,7 @@ export async function postMoves(tools: CommandTools, drafts: readonly MoveDraft[
     idempotencyKey: row.idempotencyKey,
     occurredAt: toUtcIso(row.occurredAt),
     valued: valued.has(row.id),
+    postingDate: postingDay,
   }))
 }
 

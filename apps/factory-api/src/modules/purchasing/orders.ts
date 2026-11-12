@@ -41,6 +41,8 @@ import {
 } from './store'
 import { orderDetail, type OrderDetail } from './views'
 import { closeConfirmTasks } from './portal-orders/tasks'
+import { refreshCompanyValue } from './po-depth/value'
+import { assertNoNewOrder } from './suppliers-depth/store'
 
 /**
  * Purchase orders (B-W1-30; SCM-050, SCM-053; A2 SCR-058 "Purchase orders", SCR-059 the record): the list, the record, a
@@ -87,6 +89,8 @@ export function assertBuyable(party: PartyRow, path = 'body/partyId'): void {
   if (party.status === 'BLOCKED' || party.status === 'ARCHIVED') {
     throw new DomainError('conflict', `${party.legalName} is ${party.status.toLowerCase()}: no purchase order goes to it; pick another approved source.`, [{ path, message: `The supplier is ${party.status}.` }])
   }
+  // B-W2b-311 (SCM-008): on hold, blocked or inactive as a supplier, in words.
+  assertNoNewOrder(party, path)
 }
 
 /**
@@ -97,6 +101,8 @@ export async function refreshTotal(tools: CommandTools, orderId: string): Promis
   const sum = await tools.tx.purchaseOrderLine.aggregate({ where: { purchaseOrderId: orderId, cancelledAt: null }, _sum: { netAmount: true } })
   const netAmount = sum._sum.netAmount ?? 0
   await tools.tx.purchaseOrder.update({ where: { id: orderId }, data: { netAmount }, select: { id: true } })
+  // B-W2b-296 (SCM-065): a draft in another currency keeps its value in the company's currency at its rate current.
+  await refreshCompanyValue(tools, orderId, netAmount)
   return netAmount
 }
 
@@ -222,7 +228,9 @@ export async function updateOrder(caller: CommandCaller, orderId: string, body: 
     if (issues.length > 0) throw new ValidationError(issues[0]!.message, issues)
     const data: Prisma.PurchaseOrderUncheckedUpdateInput = {}
     if (fields.contactId !== undefined) data.contactId = fields.contactId
-    if (fields.currency !== undefined) data.currency = fields.currency
+    // B-W2b-296: another currency drops the rate at order typed for the one before (the buyer types the new one).
+    if (fields.currency !== undefined && fields.currency !== current.currency) Object.assign(data, { currency: fields.currency, rateAtOrder: null, companyNetAmount: null })
+    else if (fields.currency !== undefined) data.currency = fields.currency
     if (fields.requestedDate !== undefined) data.requestedDate = fields.requestedDate ? dayValue(fields.requestedDate) : null
     if (fields.incoterms !== undefined) data.incoterms = blankToNull(fields.incoterms)
     if (fields.paymentTerms !== undefined) data.paymentTerms = blankToNull(fields.paymentTerms)

@@ -134,8 +134,12 @@ import { declarationHandlers, declarationsCron } from './modules/compliance/decl
 import { profilesNightlyCron, reevaluateHandlers } from './modules/compliance/material-profiles/reevaluate'
 // B-W2b-263: pre-production gates passed by their events (a sample round approved, the order's leather released).
 import { gateHandlers } from './modules/planning/milestones/follow'
+// B-W2b-313: the lot lifecycle moved by its stock moves and quality decisions.
+import { lotLifecycleHandler } from './modules/inventory/lots-depth/lifecycle'
 // B-W2b-264: the claims' evidence check (daily 00:25 Europe/Rome; claim.evidence_expired once per claim and cause).
 import { claimEvidenceExpiryCron } from './modules/compliance/claims/expiry'
+// B-W2b-292: the warehouse task sources (a receipt, a released lot or hold, a hold that asks quarantine, a pick list; due counts).
+import { warehouseTaskCron, warehouseTaskHandlers } from './modules/inventory/tasks/handlers'
 
 /**
  * The factory's background processes (plan A1 §3.1), one codebase with the API, two Railway services:
@@ -212,6 +216,10 @@ const W2B_260_HANDLERS: readonly EventHandler[] = distributorHandlers()
 const W2B_256_HANDLERS: readonly EventHandler[] = [...declarationHandlers(), ...reevaluateHandlers()]
 // B-W2b-263: sample_round.decided (approved) → the sample gates naming the round pass; lot.released (leather) → the order's leather gate when all its leather is released.
 const W2B_263_HANDLERS: readonly EventHandler[] = gateHandlers()
+// B-W2b-313: a lot's lifecycle follows its ledger (IN_USE at the first issue, DEPLETED when the last unit leaves, RETURNED).
+const W2B_313_HANDLERS: readonly EventHandler[] = [lotLifecycleHandler()]
+// B-W2b-292: a receipt posted or reversed, a lot or hold released, a hold asking quarantine, a pick list made or picked → the warehouse tasks they ask.
+const W2B_292_HANDLERS: readonly EventHandler[] = warehouseTaskHandlers()
 // B-W2b-11: the reports (one file each in modules/insights/reports/defs/), read by an export of a report.
 await loadReports(fileURLToPath(new URL('.', import.meta.url)))
 // B-W2b-120: the safety calendar's sources (one file each in modules/safety/calendar/sources/), read by an export of the calendar.
@@ -280,7 +288,7 @@ if (mode === 'worker') {
   await moveLiftsAll({ database, log }).catch((error) => log.error({ err: error }, 'the unblocked addresses could not be moved at start'))
   await writeStepsAll({ database, log }).catch((error) => log.error({ err: error }, 'the first-load steps could not be written at start'))
   const relay = startRelay({ database, publish: queuePublisher(kit), log })
-  const workers = startEventWorkers({ kit, handlers: [...HANDLERS, ...W2A_20_HANDLERS, ...W2A_32_HANDLERS, ...W2A_33_HANDLERS, ...W2A_55_HANDLERS, ...W2A_61_HANDLERS, ...W2A_62_HANDLERS, ...W2B_15_HANDLERS, ...W2B_40_HANDLERS, ...W2B_37_HANDLERS, ...W2B_42_HANDLERS, ...W2B_43_HANDLERS, ...W2B_101_HANDLERS, ...W2B_118_HANDLERS, ...W2B_125_HANDLERS, ...W2B_135_HANDLERS, ...W2B_160_HANDLERS, ...W2B_167_HANDLERS, ...W2B_185_HANDLERS, ...W2B_170_HANDLERS, ...W2B_200_HANDLERS, ...W2B_225_HANDLERS, ...W2B_251_HANDLERS, ...W2B_260_HANDLERS, ...W2B_256_HANDLERS, ...W2B_263_HANDLERS], database, live: redis, log })
+  const workers = startEventWorkers({ kit, handlers: [...HANDLERS, ...W2A_20_HANDLERS, ...W2A_32_HANDLERS, ...W2A_33_HANDLERS, ...W2A_55_HANDLERS, ...W2A_61_HANDLERS, ...W2A_62_HANDLERS, ...W2B_15_HANDLERS, ...W2B_40_HANDLERS, ...W2B_37_HANDLERS, ...W2B_42_HANDLERS, ...W2B_43_HANDLERS, ...W2B_101_HANDLERS, ...W2B_118_HANDLERS, ...W2B_125_HANDLERS, ...W2B_135_HANDLERS, ...W2B_160_HANDLERS, ...W2B_167_HANDLERS, ...W2B_185_HANDLERS, ...W2B_170_HANDLERS, ...W2B_200_HANDLERS, ...W2B_225_HANDLERS, ...W2B_251_HANDLERS, ...W2B_260_HANDLERS, ...W2B_256_HANDLERS, ...W2B_263_HANDLERS, ...W2B_313_HANDLERS, ...W2B_292_HANDLERS], database, live: redis, log })
   stops.push(() => relay.stop(), () => workers.close())
 } else {
   const crons: CronJob[] = [outboxLagCron({ database, kit, log }), rolesSyncCron({ database, log }), certificateExpiryCron({ database, log }), sdiPollCron({ database, log }), trackingPollCron({ database, log }), nightlyPlanCron({ database, log }), exportExpiryCron({ database, log })]
@@ -347,6 +355,8 @@ if (mode === 'worker') {
   crons.push(declarationsCron({ database, log }), profilesNightlyCron({ database, log }))
   // B-W2b-264: daily at 00:25, every approved claim whose evidence stopped holding is flagged once (claim.evidence_expired).
   crons.push(claimEvidenceExpiryCron({ database, log }))
+  // B-W2b-292: hourly at minute 17, the count schedules that fell due get their COUNT task (and stale ones are cancelled).
+  crons.push(warehouseTaskCron({ database, log }))
   const scheduler = startCrons(crons, { redis, prefix, log })
   stops.push(() => scheduler.stop())
 }

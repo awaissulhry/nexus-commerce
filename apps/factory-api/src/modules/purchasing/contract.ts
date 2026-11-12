@@ -9,6 +9,8 @@ import { REACH_ACTIONS } from '@nexus/factory-domain/purchasing/orders/changes'
 import { DELIVERY_STATES } from '@nexus/factory-domain/purchasing/orders/delivery'
 import { LINE_DIFF_KINDS, MAX_CHANGE_NOTE, REVISION_ANSWERS } from '@nexus/factory-domain/purchasing/revisions/revisions'
 import { ERROR_CODES } from '@nexus/factory-domain/core/errors'
+// B-W2b-347: the record of a sample order says what it buys for.
+import { sampleOfOrderView } from './sample-orders/contract'
 
 /**
  * The purchasing routes' contracts (B-W1-30; A2 SCR-058 "Purchase orders", SCR-059 the record, SCR-037 the send dialog,
@@ -123,6 +125,8 @@ const orderView = output({
   updatedAt: instant(),
   createdById: id().nullable(),
   lines: z.array(lineView),
+  /** B-W2b-347: a sample order (kind SAMPLE): the style and sample round it buys for; null for a production order. */
+  sample: sampleOfOrderView.nullable(),
   /** A draft: what a send would check now (null once sent). */
   send: output({ ready: z.boolean(), checks: z.array(checkView) }).nullable(),
   confirmLinks: z.array(linkStateView),

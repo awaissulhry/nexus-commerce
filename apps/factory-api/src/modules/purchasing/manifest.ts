@@ -126,6 +126,27 @@ export const manifest = defineManifest({
   'POST /link/job/accept': { audiences: ['link'], permission: 'links.accept', scope: 'record' },
   'POST /link/job/move-date': { audiences: ['link'], permission: 'links.moveDate', scope: 'record' },
   'POST /link/job/decline': { audiences: ['link'], permission: 'links.decline', scope: 'record' },
+  // B-W2b-331 (SCM-049, SCM-143 to SCM-146, SCM-150): subcontracting in depth, office only (./subcontract-depth). Read with
+  // purchasing.view (prices and amounts with the cost grain); the written terms kept with purchasing.subcontract.terms, the
+  // material balance booked with .balance, the workshop's charges with .cost (can() over the order's or the agreement's
+  // company, site and workshop in the handler).
+  'GET /purchasing/subcontracting/agreements': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
+  'GET /purchasing/subcontracting/agreements/:agreementId': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
+  'POST /purchasing/subcontracting/agreements': { audiences: ['office'], permission: 'purchasing.subcontract.terms', scope: 'record' },
+  'PATCH /purchasing/subcontracting/agreements/:agreementId': { audiences: ['office'], permission: 'purchasing.subcontract.terms', scope: 'record' },
+  'DELETE /purchasing/subcontracting/agreements/:agreementId': { audiences: ['office'], permission: 'purchasing.subcontract.terms', scope: 'record' },
+  'POST /purchasing/subcontracting/agreements/:agreementId/sign': { audiences: ['office'], permission: 'purchasing.subcontract.terms', scope: 'record' },
+  'POST /purchasing/subcontracting/agreements/:agreementId/terminate': { audiences: ['office'], permission: 'purchasing.subcontract.terms', scope: 'record' },
+  'GET /purchasing/subcontracting/orders/:subcontractOrderId/terms': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
+  'GET /purchasing/subcontracting/orders/:subcontractOrderId/balance': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
+  'POST /purchasing/subcontracting/orders/:subcontractOrderId/balance/declare': { audiences: ['office'], permission: 'purchasing.subcontract.balance', scope: 'record' },
+  'POST /purchasing/subcontracting/orders/:subcontractOrderId/balance/adjust': { audiences: ['office'], permission: 'purchasing.subcontract.balance', scope: 'record' },
+  'GET /purchasing/subcontracting/orders/:subcontractOrderId/bundles': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
+  'GET /purchasing/subcontracting/orders/:subcontractOrderId/cost': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
+  'POST /purchasing/subcontracting/orders/:subcontractOrderId/costs': { audiences: ['office'], permission: 'purchasing.subcontract.cost', scope: 'record' },
+  'POST /purchasing/subcontracting/orders/:subcontractOrderId/costs/:entryId/reverse': { audiences: ['office'], permission: 'purchasing.subcontract.cost', scope: 'record' },
+  'GET /purchasing/subcontracting/ageing': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
+  'GET /purchasing/subcontracting/balances': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
   // B-W2a-44 (SCM-134): supplier claims and returns to the supplier; read with purchasing.view, kept with
   // purchasing.claims.manage, the goods back with purchasing.claims.return (the return DDT also needs shipping.ddt.issue,
   // and "Return to supplier" in one go claims.manage too: both checked in the handler) (./claims).
@@ -207,4 +228,43 @@ export const manifest = defineManifest({
   'POST /link/supplier-questionnaire/documents': { audiences: ['link'], permission: 'links.submit', scope: 'record' },
   'POST /link/supplier-questionnaire/documents/:fileId/complete': { audiences: ['link'], permission: 'links.submit', scope: 'record' },
   'GET /link/supplier-questionnaire/code-of-conduct': { audiences: ['link'], permission: 'links.open', scope: 'record' },
+  // B-W2b-296 (po-depth/): purchase orders in depth, office only (a receipt reads the tolerances inside its own command). An
+  // order's depth is checked with can() over the order's company, site and supplier, as every order route; a delivery
+  // tolerance over its company (every company's: a role over every company).
+  'GET /purchasing/orders/:purchaseOrderId/depth': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
+  'PUT /purchasing/orders/:purchaseOrderId/lines/:lineId/deliveries': { audiences: ['office'], permission: 'purchasing.manage', scope: 'record' },
+  'DELETE /purchasing/orders/:purchaseOrderId/lines/:lineId/deliveries': { audiences: ['office'], permission: 'purchasing.manage', scope: 'record' },
+  'POST /purchasing/orders/:purchaseOrderId/lines/:lineId/supplier-date': { audiences: ['office'], permission: 'purchasing.manage', scope: 'record' },
+  'PUT /purchasing/orders/:purchaseOrderId/rate': { audiences: ['office'], permission: 'purchasing.manage', scope: 'record' },
+  'PUT /purchasing/orders/:purchaseOrderId/ship-to': { audiences: ['office'], permission: 'purchasing.manage', scope: 'record' },
+  'GET /purchasing/tolerances': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
+  'POST /purchasing/tolerances': { audiences: ['office'], permission: 'purchasing.tolerances.manage', scope: 'record' },
+  'PATCH /purchasing/tolerances/:toleranceId': { audiences: ['office'], permission: 'purchasing.tolerances.manage', scope: 'record' },
+  'POST /purchasing/tolerances/:toleranceId/archive': { audiences: ['office'], permission: 'purchasing.tolerances.manage', scope: 'record' },
+  'POST /purchasing/tolerances/:toleranceId/reactivate': { audiences: ['office'], permission: 'purchasing.tolerances.manage', scope: 'record' },
+  // B-W2b-332 (SCM-035, SCM-037): ask to buy (./ask-to-buy): anyone in the office asks; from a shortage also needs
+  // planning.view (and "Draft a purchase order now" purchasing.manage), refusing purchasing.manage, checked in the handler.
+  'GET /purchasing/ask-to-buy/options': { audiences: ['office'], permission: 'purchasing.requests.ask', scope: 'record' },
+  'GET /purchasing/ask-to-buy': { audiences: ['office'], permission: 'purchasing.requests.ask', scope: 'record' },
+  'GET /purchasing/ask-to-buy/:requestId': { audiences: ['office'], permission: 'purchasing.requests.ask', scope: 'record' },
+  'POST /purchasing/ask-to-buy': { audiences: ['office'], permission: 'purchasing.requests.ask', scope: 'record' },
+  'POST /purchasing/ask-to-buy/from-shortage': { audiences: ['office'], permission: 'purchasing.requests.ask', scope: 'record' },
+  'POST /purchasing/ask-to-buy/cancel': { audiences: ['office'], permission: 'purchasing.requests.ask', scope: 'record' },
+  'POST /purchasing/ask-to-buy/reject': { audiences: ['office'], permission: 'purchasing.manage', scope: 'record' },
+  // B-W2b-311: suppliers in depth. Office only, can() over the supplier's company AND the supplier in the handler: reads
+  // parties.view (the supplier record is the party record); kinds, lead time, origin and what each contact receives
+  // parties.manage; where it stands with us purchasing.suppliers.status.
+  'GET /purchasing/suppliers': { audiences: ['office'], permission: 'parties.view', scope: 'record' },
+  'GET /purchasing/suppliers/counts': { audiences: ['office'], permission: 'parties.view', scope: 'record' },
+  'GET /purchasing/suppliers/:partyId/profile': { audiences: ['office'], permission: 'parties.view', scope: 'record' },
+  'PATCH /purchasing/suppliers/:partyId/profile': { audiences: ['office'], permission: 'parties.manage', scope: 'record' },
+  'POST /purchasing/suppliers/:partyId/status': { audiences: ['office'], permission: 'purchasing.suppliers.status', scope: 'record' },
+  'GET /purchasing/suppliers/:partyId/status-reach': { audiences: ['office'], permission: 'parties.view', scope: 'record' },
+  'PUT /purchasing/suppliers/:partyId/contacts/:contactId/receives': { audiences: ['office'], permission: 'parties.manage', scope: 'record' },
+  // B-W2b-347 (SCM-043): sample and development orders (./sample-orders): purchase orders of kind SAMPLE, can() over the
+  // order's (or the body's) company, site and supplier in the handler, as every order route; the PDF also asks the cost grain.
+  'GET /purchasing/sample-orders': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
+  'GET /purchasing/sample-orders/choices': { audiences: ['office'], permission: 'purchasing.manage', scope: 'record' },
+  'POST /purchasing/sample-orders': { audiences: ['office'], permission: 'purchasing.manage', scope: 'record' },
+  'GET /purchasing/sample-orders/:purchaseOrderId/pdf': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
 })

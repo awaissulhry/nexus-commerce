@@ -254,7 +254,9 @@
       "UNCONVERTIBLE_UNIT_one": "{count} material is used in a unit that does not turn into its base unit.",
       "UNCONVERTIBLE_UNIT_other": "{count} materials are used in units that do not turn into their base units.",
       "SEVERAL_SUPPLIERS_one": "{count} material is bought from several suppliers in the bills: its default supplier is proposed.",
-      "SEVERAL_SUPPLIERS_other": "{count} materials are bought from several suppliers in the bills: their default suppliers are proposed."
+      "SEVERAL_SUPPLIERS_other": "{count} materials are bought from several suppliers in the bills: their default suppliers are proposed.",
+      "SUB_ASSEMBLY_one": "{count} sub-assembly below an order line cannot be walked (its size, colourway or unit): what is below it is not planned.",
+      "SUB_ASSEMBLY_other": "{count} sub-assemblies below order lines cannot be walked (their size, colourway or unit): what is below them is not planned."
     },
     "heldNotice_one": "{count} line is short although stock exists that the plan may not use",
     "heldNotice_other": "{count} lines are short although stock exists that the plan may not use",
@@ -692,6 +694,9 @@
       "backToList": "Back to the list",
       "tabsLabel": "Parts of the order",
       "revision": "revision {revision}",
+      "sampleOrder": "Sample order",
+      "sampleFor": "For the development of {style}: not counted in production spend",
+      "sampleForRound": "For {style}, sample round {round}: not counted in production spend",
       "supplierView": "What the supplier sees",
       "editDetails": "Edit details",
       "copyNumber": "Copy the number",
@@ -762,6 +767,11 @@
       "BELOW_MINIMUM": "A line is below the supplier’s minimum (a warning: it still sends).",
       "NOT_A_MULTIPLE": "A line is not a multiple of what the supplier sells (a warning).",
       "LATE_FOR_LEAD_TIME": "With the supplier’s lead time a line arrives after it is needed (a warning).",
+      "SCHEDULE_NOT_THE_LINE": "A line’s deliveries no longer add up to the line: write its delivery schedule again.",
+      "DELIVERY_DATE_PAST": "A delivery of a line is asked for a day in the past.",
+      "NO_RATE_AT_ORDER": "The order is in another currency than the company’s: type the rate at order.",
+      "SHIP_TO_NOT_USABLE": "The party the order ships to, or its address, cannot take the goods any more.",
+      "SHIP_TO_NO_WORKSHOP_PLACE": "The workshop it ships to has no place of ours on the site: the receipt will not land on its stock (a warning).",
       "pass": {
         "supplierActive": "The supplier is active",
         "linesPriced": "Every line has a price",

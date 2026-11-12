@@ -15,6 +15,7 @@
     "alerts.WORKING_TIME_LIMIT.OVERTIME_YEARLY_CAP": "Sede {label}: qualcuno è vicino al limite annuo di straordinario o lo ha superato.",
     "alerts.WORKING_TIME_LIMIT.DAILY_REST": "Sede {label}: qualcuno è sotto il riposo minimo, o lo sarebbe prima del prossimo turno.",
     "alerts.WORKING_TIME_LIMIT.WEEKLY_AVERAGE": "Sede {label}: qualcuno è vicino alla media settimanale di ore di lavoro o la ha superata.",
+    "alerts.LOW_STOCK": "{label} è sotto il minimo: {position} {unit} su {minimum} {unit}.",
     "alerts.UNKNOWN": "Avviso su {label}."
   },
   "refused": {
@@ -161,7 +162,8 @@
       "CERTIFICATE_EXPIRING": "{record} in scadenza",
       "INVOICE_DEADLINE": "{record}: scadenza di fatturazione vicina",
       "INTEGRATION_FAILING": "{record} è in errore",
-      "WORKING_TIME_LIMIT": "{record}: limite di orario vicino"
+      "WORKING_TIME_LIMIT": "{record}: limite di orario vicino",
+      "LOW_STOCK": "{record} sotto il minimo"
     },
     "snooze": "Rimanda",
     "assign": "Assegna",

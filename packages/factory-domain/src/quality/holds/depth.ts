@@ -385,8 +385,12 @@ export function placeOfCode<P extends { readonly code: string }>(typed: string, 
   return places.find((place) => placeCodeKey(place.code) === key) ?? null
 }
 
-/** The kinds of places held stock leaves for quarantine (never our stock at an outside workshop: it is not here). */
-export const QUARANTINE_FROM_KINDS: readonly string[] = Object.freeze(['WAREHOUSE', 'ZONE', 'BIN', 'RECEIVING', 'QUARANTINE', 'PRODUCTION', 'SHIPPING', 'FINISHED_GOODS'])
+/**
+ * The kinds of places held stock leaves for quarantine (never our stock at an outside workshop, a customer's or in transit: it
+ * is not here). B-W2b-292: the pick faces and bulk racks of B-W2b-277 are store places too (the tablet's quarantine scan moves
+ * what lies there).
+ */
+export const QUARANTINE_FROM_KINDS: readonly string[] = Object.freeze(['WAREHOUSE', 'ZONE', 'BIN', 'RECEIVING', 'QUARANTINE', 'PRODUCTION', 'SHIPPING', 'FINISHED_GOODS', 'PICK_FACE', 'BULK'])
 
 export interface HeldBalance {
   readonly locationId: string

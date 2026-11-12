@@ -755,7 +755,12 @@
       "inlineResults": "Controllo in linea: i controlli del piano",
       "finalRecord": "Collaudo finale: risultati e misure",
       "instructionSeen": "Istruzione di lavoro vista",
-      "specProblem": "Problema della scheda segnalato"
+      "specProblem": "Problema della scheda segnalato",
+      "putAway": "Ubicato in un posto",
+      "binMove": "Spostato tra due posti",
+      "taskTake": "Compito di magazzino preso",
+      "taskGiveBack": "Compito di magazzino restituito",
+      "taskDone": "Compito di magazzino fatto"
     },
     "refusal": {
       "UNKNOWN_BUNDLE": {

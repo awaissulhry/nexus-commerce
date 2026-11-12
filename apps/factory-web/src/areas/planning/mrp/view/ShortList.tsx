@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { CalendarClock, FilePlus2, Megaphone } from 'lucide-react'
+import { CalendarClock, FilePlus2, Megaphone, Send } from 'lucide-react'
 import { EmptyState } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, Pill, Spinner } from '@nexus/ui/primitives'
@@ -11,14 +11,16 @@ import { formatDate } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { dayAt, quantity } from '../../../_shared/buying/model'
 import type { Shortage } from '../api'
-import { buyLinesOf, fixHeld, MRP_NAMESPACE, shortageId, type PlanActions, type PlanModel } from '../model'
+import { buyLinesOf, fixHeld, MRP_NAMESPACE, shortageAskKey, shortageId, type PlanActions, type PlanModel } from '../model'
 
 /**
  * Short on open work orders (design planning.mrp sec:short-wo; B-W2a-70 on GET /planning/shortages of B-W2a-22): open
  * and planned work orders missing material now, one row per work order and material — the work order and its style,
  * its dates, the material and its readiness word, what is short and by when, the purchase line it waits for — with the
  * fix beside each: Buy (the plan's same one-click Draft PO), Expedite PO-… (the order's page, where Remind chases the
- * supplier), Move the firm order earlier. Swap to another lot or an approved alternate is a later wave. No money.
+ * supplier), Move the firm order earlier, and Ask to buy (B-W2b-332: the line becomes a request to the buyers, or a buyer
+ * drafts its purchase order line in one step; held once asked). Swap to another lot or an approved alternate is a later
+ * wave. No money.
  */
 export function ShortList({ model, actions, tools, search }: { model: PlanModel; actions?: PlanActions; tools: ReactNode; search?: ReactNode }) {
   const t = useT('buying')
@@ -88,11 +90,21 @@ export function ShortList({ model, actions, tools, search }: { model: PlanModel;
         )}
       </span>
     ) : null
+  const AskFix = ({ data }: { data: Shortage }) => {
+    if (!model.canAsk) return null
+    const asked = (model.asked ?? []).includes(shortageAskKey({ workOrderId: data.workOrder.id, itemId: data.material.itemId, itemColourId: data.material.itemColourId }))
+    return (
+      <Button size="sm" variant="quiet" heldReason={asked ? w('short.fix.asked') : null} onClick={() => actions?.onAskToBuy?.(data)} aria-label={w('short.fix.askLabel', { material: data.material.label, workOrder: data.workOrder.number })}>
+        <Send size={13} aria-hidden /> {w('short.fix.ASK')}
+      </Button>
+    )
+  }
   const FixCell = ({ data }: ICellRendererParams<Shortage>) => {
     if (!data) return null
-    if (data.fixes.length === 0) return <span className="fw-by-cell-sub">{w('short.noFix')}</span>
+    if (data.fixes.length === 0 && !model.canAsk) return <span className="fw-by-cell-sub">{w('short.noFix')}</span>
     return (
       <span className="fw-by-inline">
+        <AskFix data={data} />
         {data.fixes.map((fix) => {
           const held = fixHeld(fix, lines, can)
           if (fix.kind === 'EXPEDITE' && fix.purchaseOrder) {

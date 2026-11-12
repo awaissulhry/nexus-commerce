@@ -1,4 +1,4 @@
-import { Factory, FileText, Inbox, ShoppingCart, Truck, Undo2 } from 'lucide-react'
+import { Factory, FileText, FlaskConical, Inbox, ShoppingCart, Truck, Undo2 } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -8,6 +8,8 @@ import type { OfficeAreaNav } from '../../shell/nav/office-nav'
  */
 export const officeArea: OfficeAreaNav = {
   order: 5,
+  // B-W2b-332: a person who asks to buy (purchasing.requests.ask) opens Requests to buy too, and sees their own requests there.
+  alsoOpens: { 'purchasing-requests': ['purchasing.requests.ask'] },
   area: {
     id: 'purchasing',
     label: 'shell:nav.purchasing.area',
@@ -33,11 +35,14 @@ export const officeArea: OfficeAreaNav = {
         label: 'shell:nav.purchasing.outside',
         items: [{ id: 'purchasing-subcontracting', label: 'shell:nav.purchasing.subcontracting', href: '/purchasing/subcontracting', icon: Factory, permission: 'purchasing.view' }],
       },
-      // B-W2a-63: Sourcing & claims › Returns & claims (SCR-131). RFQs & sourcing (W2b) joins before it with its step.
+      // B-W2a-63: Sourcing & claims › Returns & claims (SCR-131). B-W2b-347: RFQs & sourcing (SCR-222) before it.
       {
         id: 'purchasing-claims',
         label: 'shell:nav.purchasing.sourcingClaims',
-        items: [{ id: 'purchasing-claims', label: 'shell:nav.purchasing.claims', href: '/purchasing/claims', icon: Undo2, permission: 'purchasing.view' }],
+        items: [
+          { id: 'purchasing-sourcing', label: 'shell:nav.purchasing.sourcing', href: '/purchasing/sourcing', icon: FlaskConical, permission: 'purchasing.view' },
+          { id: 'purchasing-claims', label: 'shell:nav.purchasing.claims', href: '/purchasing/claims', icon: Undo2, permission: 'purchasing.view' },
+        ],
       },
     ],
   },

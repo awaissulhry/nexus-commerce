@@ -22,19 +22,25 @@ import { isPurchaseParty, MAX_LINES } from '../orders'
  *             the base unit). Always OPEN while it holds: once a draft order covers it the position rises and it leaves the
  *             queue by itself.
  *
- * Staff requests ("Ask to buy", SCM-035, with who asked and an approval) are W2b, and a shortage on an open work order is
- * in its plan line (the W1 run counts the open work orders' material, less what was issued); the shortage list with its
- * fixes is B-W2a-22's (PLN-085).
+ *   ASKED     a request to buy from someone in the office (B-W2b-332; SCM-035, SCM-037; factory-db PurchaseRequest,
+ *             purchasing/ask-to-buy): asked by hand or from a work order's shortage, with who asked, why and by when. OPEN
+ *             while it waits for the buyer, WAITING_APPROVAL while a rule's yes is awaited (held: it cannot be drafted
+ *             yet), CONVERTED with its purchase order line, SET_ASIDE when refused with the reason; taken back, it leaves
+ *             the queue. What it buys is what was asked, in the chosen supplier's unit after its minimum and steps.
+ *
+ * A shortage on an open work order is also in its plan line (the W1 run counts the open work orders' material, less what
+ * was issued); the shortage list with its fixes is B-W2a-22's (PLN-085), its "Ask to buy" B-W2b-332's.
  *
  * Converting: one draft purchase order per supplier and delivery site (its open draft, or a new one), one line per
  * request, in ONE command (apps/factory-api modules/purchasing/requests). A request that cannot be drafted now says why
  * (`holdOf`): the command refuses the whole batch rather than drafting a part of it.
  */
 
-export const REQUEST_KINDS = ['PLAN', 'REORDER'] as const
+export const REQUEST_KINDS = ['PLAN', 'REORDER', 'ASKED'] as const
 export type RequestKind = (typeof REQUEST_KINDS)[number]
 
-export const REQUEST_STATUSES = ['OPEN', 'CONVERTED', 'SET_ASIDE'] as const
+// B-W2b-332: WAITING_APPROVAL (an ASKED request whose yes is awaited).
+export const REQUEST_STATUSES = ['OPEN', 'CONVERTED', 'SET_ASIDE', 'WAITING_APPROVAL'] as const
 export type RequestStatus = (typeof REQUEST_STATUSES)[number]
 
 /** At most this many requests in one conversion (one order holds at most as many lines). */
@@ -42,20 +48,23 @@ export const MAX_CONVERT = MAX_LINES
 /** The tile "Need date within 14 days". */
 export const DUE_SOON_DAYS = 14
 
-const PREFIX: Readonly<Record<RequestKind, string>> = Object.freeze({ PLAN: 'plan', REORDER: 'reorder' })
+const PREFIX: Readonly<Record<RequestKind, string>> = Object.freeze({ PLAN: 'plan', REORDER: 'reorder', ASKED: 'asked' })
 
-/** A request's id in the queue: `plan:<requirement id>` or `reorder:<item planning id>`. */
+/** A request's id in the queue: `plan:<requirement id>`, `reorder:<item planning id>` or `asked:<purchase request id>`. */
 export const requestIdOf = (kind: RequestKind, refId: string): string => `${PREFIX[kind]}:${refId}`
 
 /** A queue id read back; null when it is not one. */
 export function parseRequestId(value: string): { readonly kind: RequestKind; readonly refId: string } | null {
-  const match = /^(plan|reorder):(.+)$/.exec(value)
+  const match = /^(plan|reorder|asked):(.+)$/.exec(value)
   if (!match || !isUuid(match[2])) return null
-  return { kind: match[1] === 'plan' ? 'PLAN' : 'REORDER', refId: match[2]! }
+  return { kind: kindOfPath(match[1]!)!, refId: match[2]! }
 }
 
-/** The kind a path segment names (`plan`, `reorder`). */
-export const kindOfPath = (segment: string): RequestKind | null => (segment === 'plan' ? 'PLAN' : segment === 'reorder' ? 'REORDER' : null)
+/** The kind a path segment names (`plan`, `reorder`, `asked`). */
+export const kindOfPath = (segment: string): RequestKind | null => (segment === 'plan' ? 'PLAN' : segment === 'reorder' ? 'REORDER' : segment === 'asked' ? 'ASKED' : null)
+
+/** The path segment of a kind (GET /purchasing/requests/:kind/:refId). */
+export const pathOfKind = (kind: RequestKind): string => PREFIX[kind]
 
 // ---- reorder points ---------------------------------------------------------------------------------------------------
 
@@ -184,7 +193,7 @@ export function reorderWhy(need: ReorderNeed, stock: StockPosition, uom: Uom): s
 
 // ---- what stops a request ---------------------------------------------------------------------------------------------
 
-export const REQUEST_HOLDS = ['NO_SUPPLIER', 'NOT_A_SUPPLIER', 'SUPPLIER_BLOCKED', 'SUPPLIER_ARCHIVED', 'NOT_APPROVED', 'MATERIAL_ARCHIVED', 'NOT_OPEN', 'PLAN_REPLACED', 'NOT_NEEDED'] as const
+export const REQUEST_HOLDS = ['NO_SUPPLIER', 'NOT_A_SUPPLIER', 'SUPPLIER_BLOCKED', 'SUPPLIER_ARCHIVED', 'NOT_APPROVED', 'MATERIAL_ARCHIVED', 'NOT_OPEN', 'PLAN_REPLACED', 'NOT_NEEDED', 'WAITING_APPROVAL'] as const
 export type RequestHoldCode = (typeof REQUEST_HOLDS)[number]
 
 export interface RequestHold {
@@ -199,7 +208,13 @@ export interface HoldFacts {
   /** REORDER: the stock is still at or below the reorder point (below the minimum). */
   readonly needed: boolean
   readonly material: { readonly code: string; readonly active: boolean }
-  readonly supplier: { readonly name: string; readonly roles: readonly PartyRole[]; readonly status: PartyStatus } | null
+  readonly supplier: {
+    readonly name: string
+    readonly roles: readonly PartyRole[]
+    readonly status: PartyStatus
+    /** W2b (B-W2b-311, SCM-008): why no new order goes to it as its supplier status stands (on hold, blocked, inactive). */
+    readonly newOrderProblem?: string | null | undefined
+  } | null
   /** The supplier is one of the material's approved sources for the need (or the material has none). */
   readonly approved: boolean
 }
@@ -208,6 +223,8 @@ export interface HoldFacts {
 export function holdOf(facts: HoldFacts): RequestHold | null {
   if (!facts.latest) return { code: 'PLAN_REPLACED', message: 'A newer plan replaced this one: draft the lines of the latest plan.' }
   if (!facts.needed) return { code: 'NOT_NEEDED', message: 'The stock is above its reorder level now (the reorder point, or the minimum): nothing to buy.' }
+  // B-W2b-332: an ASKED request whose yes is awaited.
+  if (facts.status === 'WAITING_APPROVAL') return { code: 'WAITING_APPROVAL', message: 'It waits for a yes first: it can be drafted once it is approved.' }
   if (facts.status !== 'OPEN') return { code: 'NOT_OPEN', message: facts.status === 'CONVERTED' ? 'It is on a purchase order already.' : 'It was set aside: open it again first.' }
   if (!facts.material.active) return { code: 'MATERIAL_ARCHIVED', message: `${facts.material.code} is archived: it is not bought any more.` }
   const supplier = facts.supplier
@@ -215,6 +232,7 @@ export function holdOf(facts: HoldFacts): RequestHold | null {
   if (!isPurchaseParty(supplier.roles)) return { code: 'NOT_A_SUPPLIER', message: `${supplier.name} is not a supplier: pick an approved source.` }
   if (supplier.status === 'BLOCKED') return { code: 'SUPPLIER_BLOCKED', message: `${supplier.name} is blocked: pick another approved source.` }
   if (supplier.status === 'ARCHIVED') return { code: 'SUPPLIER_ARCHIVED', message: `${supplier.name} is archived: pick another approved source.` }
+  if (supplier.newOrderProblem) return { code: 'SUPPLIER_BLOCKED', message: supplier.newOrderProblem }
   if (!facts.approved) return { code: 'NOT_APPROVED', message: `${supplier.name} is not an approved source of ${facts.material.code}: pick one of its sources, or add this supplier to them first.` }
   return null
 }
@@ -257,9 +275,9 @@ export interface RequestTiles {
   readonly open: number
   /** Open requests needed within DUE_SOON_DAYS days (or late already). */
   readonly needWithin14Days: number
-  /** Staff requests waiting for an approval: W2b, unknown until then (null, drawn as '—'). */
-  readonly waitingApproval: null
-  /** Requests drafted into a purchase order today (plan lines: a reorder row leaves no trace of its own). */
+  /** Requests asked by someone in the office that wait for a yes (B-W2b-332). */
+  readonly waitingApproval: number
+  /** Requests drafted into a purchase order today (plan lines and asked requests: a reorder row leaves no trace of its own). */
   readonly convertedToday: number
 }
 
@@ -268,7 +286,7 @@ export function requestTiles(rows: readonly TileRow[], today: BusinessDate): Req
   return {
     open: rows.filter((row) => row.status === 'OPEN').length,
     needWithin14Days: rows.filter((row) => row.status === 'OPEN' && row.needDate <= soon).length,
-    waitingApproval: null,
+    waitingApproval: rows.filter((row) => row.status === 'WAITING_APPROVAL').length,
     convertedToday: rows.filter((row) => row.status === 'CONVERTED' && row.convertedOn === today).length,
   }
 }

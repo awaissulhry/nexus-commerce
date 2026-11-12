@@ -18,6 +18,7 @@ import { systemCallerOf } from '../../../platform/files/files'
 import { deliverLinkMail } from '../../../platform/links/mail'
 import { assertNoPayByLink, LinkRefusedError } from '../../../platform/links/pay'
 import { currentVersion } from './store'
+import { routeMail } from '@nexus/factory-domain/purchasing/suppliers-depth/routing'
 
 /**
  * The questionnaire by link (B-W2b-172; SCM-023; design purchasing.suppliers "Links › Supplier questionnaire —
@@ -72,7 +73,13 @@ export async function sendQuestionnaireLink(request: FastifyRequest, partyId: st
     ? await request.withClient(async (client) => {
         const party = await client.party.findUnique({ where: { id: partyId }, select: { id: true, code: true, companyId: true, language: true, roles: true, status: true } })
         if (!party) return null
-        const contact = body.contactId && isUuid(body.contactId) ? await client.partyContact.findFirst({ where: { id: body.contactId, partyId, status: 'ACTIVE' }, select: { email: true, language: true } }) : null
+        const contact = body.contactId && isUuid(body.contactId)
+          ? await client.partyContact.findFirst({ where: { id: body.contactId, partyId, status: 'ACTIVE' }, select: { id: true, email: true, language: true } })
+          : // B-W2b-311 (SCM-004): sent with no contact and no address named: the first who receives document requests
+            // (else QUALITY, then ORDERS).
+            body.send && !body.contactId && !body.email
+            ? (routeMail('DOCUMENT', await client.partyContact.findMany({ where: { partyId }, select: { id: true, status: true, email: true, roles: true, receives: true, language: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })).contacts[0] ?? null)
+            : null
         return { party, contact }
       })
     : null
@@ -128,7 +135,7 @@ export async function sendQuestionnaireLink(request: FastifyRequest, partyId: st
             note,
             expiresAt: terms.expiresAt,
             maxUses: terms.maxUses,
-            contactId: facts.contact ? body.contactId! : null,
+            contactId: facts.contact ? facts.contact.id : null,
             createdAt: now,
             updatedAt: now,
             createdById: context.actorId,

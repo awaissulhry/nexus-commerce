@@ -5,6 +5,7 @@ import { ageDays, claimActions, CLAIM_REASON_LIST, claimReasonOf, linesValue } f
 import { dayOf, quantityText, type Reader } from '../store'
 import { nameOf } from '../subcontracting/store'
 import { factsOf, readLines, type ClaimRow, type LineRow } from './store'
+import { recipientRank } from '@nexus/factory-domain/purchasing/suppliers-depth/routing'
 
 /**
  * The claims as the office reads them (B-W2a-44; design purchasing.claims: the "Returns and claims" grid, the record's
@@ -202,9 +203,9 @@ async function evidenceOf(db: Reader, claim: ClaimRow, lines: readonly LineRow[]
     select: { id: true, version: true, language: true, number: true, fileId: true, createdAt: true, createdById: true },
     orderBy: { version: 'desc' },
   })
-  const contacts = await db.partyContact.findMany({ where: { partyId: claim.partyId, status: 'ACTIVE', email: { not: null } }, select: { id: true, name: true, email: true, roles: true }, orderBy: [{ name: 'asc' }, { id: 'asc' }] })
-  const rank = (roles: readonly string[]) => (roles.includes('QUALITY') ? 0 : roles.includes('ORDERS') ? 1 : 2)
-  const contact = [...contacts].sort((a, b) => rank(a.roles) - rank(b.roles))[0] ?? null
+  const contacts = await db.partyContact.findMany({ where: { partyId: claim.partyId, status: 'ACTIVE', email: { not: null } }, select: { id: true, name: true, email: true, roles: true, receives: true }, orderBy: [{ name: 'asc' }, { id: 'asc' }] })
+  // B-W2b-311 (SCM-004): those who receive claims first, then QUALITY, then ORDERS.
+  const contact = [...contacts].sort((a, b) => recipientRank('CLAIM', a) - recipientRank('CLAIM', b)).map(({ receives: _receives, ...rest }) => rest)[0] ?? null
   const ncr = claim.ncrId ? await db.nonconformance.findUnique({ where: { id: claim.ncrId }, select: { id: true, number: true } }) : null
   const peopleIds = unique([...photos.map((file) => file.createdById), ...letters.map((letter) => letter.createdById)])
   const people = peopleIds.length === 0 ? [] : await db.user.findMany({ where: { id: { in: peopleIds } }, select: { id: true, displayName: true } })

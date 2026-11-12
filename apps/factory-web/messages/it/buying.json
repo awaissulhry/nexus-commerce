@@ -254,7 +254,9 @@
       "UNCONVERTIBLE_UNIT_one": "{count} materiale è usato in un’unità che non si converte nella sua unità base.",
       "UNCONVERTIBLE_UNIT_other": "{count} materiali sono usati in unità che non si convertono nelle loro unità base.",
       "SEVERAL_SUPPLIERS_one": "{count} materiale ha più fornitori nelle distinte: si propone il fornitore abituale.",
-      "SEVERAL_SUPPLIERS_other": "{count} materiali hanno più fornitori nelle distinte: si propongono i fornitori abituali."
+      "SEVERAL_SUPPLIERS_other": "{count} materiali hanno più fornitori nelle distinte: si propongono i fornitori abituali.",
+      "SUB_ASSEMBLY_one": "{count} sottoassieme sotto una riga d’ordine non si può esplodere (taglia, variante colore o unità): quello che c’è sotto non è pianificato.",
+      "SUB_ASSEMBLY_other": "{count} sottoassiemi sotto righe d’ordine non si possono esplodere (taglia, variante colore o unità): quello che c’è sotto non è pianificato."
     },
     "heldNotice_one": "{count} riga è in mancanza anche se esiste scorta che il piano non può usare",
     "heldNotice_other": "{count} righe sono in mancanza anche se esiste scorta che il piano non può usare",
@@ -692,6 +694,9 @@
       "backToList": "Torna all’elenco",
       "tabsLabel": "Parti dell’ordine",
       "revision": "revisione {revision}",
+      "sampleOrder": "Ordine di campionatura",
+      "sampleFor": "Per lo sviluppo di {style}: non conta nella spesa di produzione",
+      "sampleForRound": "Per {style}, giro di campionatura {round}: non conta nella spesa di produzione",
       "supplierView": "Cosa vede il fornitore",
       "editDetails": "Modifica i dettagli",
       "copyNumber": "Copia il numero",
@@ -762,6 +767,11 @@
       "BELOW_MINIMUM": "Una riga è sotto il minimo del fornitore (un avviso: si invia lo stesso).",
       "NOT_A_MULTIPLE": "Una riga non è un multiplo di ciò che vende il fornitore (un avviso).",
       "LATE_FOR_LEAD_TIME": "Con i tempi di consegna del fornitore una riga arriva dopo il fabbisogno (un avviso).",
+      "SCHEDULE_NOT_THE_LINE": "Le consegne di una riga non corrispondono più alla riga: riscrivi il suo piano di consegna.",
+      "DELIVERY_DATE_PAST": "Una consegna di una riga è chiesta per un giorno passato.",
+      "NO_RATE_AT_ORDER": "L’ordine è in una valuta diversa da quella della società: inserisci il cambio all’ordine.",
+      "SHIP_TO_NOT_USABLE": "Il destinatario della consegna, o il suo indirizzo, non può più ricevere la merce.",
+      "SHIP_TO_NO_WORKSHOP_PLACE": "Il laboratorio di destinazione non ha un nostro luogo nello stabilimento: il ricevimento non entrerà nel suo stock (un avviso).",
       "pass": {
         "supplierActive": "Il fornitore è attivo",
         "linesPriced": "Ogni riga ha un prezzo",

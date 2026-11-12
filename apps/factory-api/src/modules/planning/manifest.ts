@@ -86,4 +86,11 @@ export const manifest = defineManifest({
   'PATCH /planning/milestones/gates/:gateId': { audiences: ['office'], permission: 'planning.milestones.manage', scope: 'record' },
   'POST /planning/milestones/gates/:gateId/remove': { audiences: ['office'], permission: 'planning.milestones.manage', scope: 'record' },
   'POST /planning/milestones/gates/:gateId/start-before': { audiences: ['office'], permission: 'planning.milestones.override', scope: 'record' },
+  // B-W2b-293: planned work and subcontract orders (./planned-orders): read with planning.view; made firm with planning.firm;
+  // made real with planning.planned.convert (and what the work order and subcontract order ask themselves).
+  'GET /planning/planned-orders': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'POST /planning/planned-orders/convert': { audiences: ['office'], permission: 'planning.planned.convert', scope: 'record' },
+  'GET /planning/planned-orders/:plannedOrderId': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'POST /planning/planned-orders/:plannedOrderId/firm': { audiences: ['office'], permission: 'planning.firm', scope: 'record' },
+  'POST /planning/planned-orders/:plannedOrderId/unfirm': { audiences: ['office'], permission: 'planning.firm', scope: 'record' },
 })

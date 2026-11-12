@@ -254,6 +254,12 @@ export const THREAD_RECORDS: Readonly<Record<string, RecordResolver>> = Object.f
     const task = await client.approvalTask.findUnique({ where: { id }, select: { companyId: true, siteId: true } })
     return task ? { companyId: task.companyId, siteId: task.siteId, partyId: null } : null
   },
+  // B-W2b-295 (modules/sales/inquiries; design sales.inquiries Activity): an inquiry's company, no site, and the customer it is
+  // from (its mail and the replies reach that customer only); a prospect's inquiry takes internal notes until it is matched.
+  Inquiry: async (client, id) => {
+    const inquiry = await client.inquiry.findUnique({ where: { id }, select: { companyId: true, partyId: true } })
+    return inquiry ? { companyId: inquiry.companyId, siteId: null, partyId: inquiry.partyId } : null
+  },
 })
 
 let extra: Readonly<Record<string, RecordResolver>> = {}

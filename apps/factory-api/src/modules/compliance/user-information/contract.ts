@@ -5,6 +5,7 @@ import { WORDS_MAX } from '@nexus/factory-domain/compliance/user-information/rul
 import { SECTION_KEYS } from '@nexus/factory-domain/compliance/user-information/template'
 import { defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
 import { declarationRow } from '../declarations/contract'
+import { ppeGateView } from '../ppe-texts/contract'
 
 /**
  * The user information builder's routes (B-W2b-258; PRD-350 to PRD-354; design compliance.declarations, the user-information
@@ -95,7 +96,8 @@ export const leafletDetail = declarationRow.extend({
   /** A translation's sections still holding the original's words. */
   sectionsToType: z.array(z.string()),
   template: z.string().nullable(),
-  gate: gate.extend({ open: z.boolean() }).nullable(),
+  // B-W2b-288 (FU2:01): the gate as the PPE consultant's yes per template says it (modules/compliance/ppe-texts).
+  gate: ppeGateView.nullable(),
   createdBy: person.nullable(),
   original: output({ id: id(), language: z.string(), status }).nullable(),
   languages: z.array(
