@@ -336,11 +336,19 @@ export async function liveRepairsByLine(db: Reader, lineIds: readonly string[]):
 /** B-W2b-16: what a close would leave behind (factory-domain closeWarningsOf), for the record and for the close itself. */
 export const closeWarningsFor = (lines: readonly Pick<LineRow, 'id' | 'seq' | 'receivedQuantity' | 'disposition' | 'goodsOutcome' | 'replacementLineId'>[], repairs: ReadonlyMap<string, number>, liveReturnDdt: boolean) =>
   closeWarningsOf(
-    lines.map((line) => ({ id: line.id, seq: line.seq, received: line.receivedQuantity, disposition: line.disposition as ReturnDisposition | null, goodsOutcome: line.goodsOutcome as GoodsOutcome | null, replaced: line.replacementLineId !== null, repairs: repairs.get(line.id) ?? 0 })),
+    lines.map((line) => ({ id: line.id, seq: line.seq, received: line.receivedQuantity, disposition: w2aDispositionOf(line.disposition), goodsOutcome: line.goodsOutcome as GoodsOutcome | null, replaced: line.replacementLineId !== null, repairs: repairs.get(line.id) ?? 0 })),
     liveReturnDdt,
   )
 
 const price = <T>(value: T) => asMoney('price', value)
+
+/**
+ * W2b-5 (B-W2b-291): the database's ReturnDisposition grew SIZE_EXCHANGE (SAL-351: the same garment in another size, on the
+ * replacement order's line). The W2a returns routes and screens know six dispositions; until B-W2b-346 adds the exchange to
+ * them, a SIZE_EXCHANGE line reads as REPLACE (the closest of the six: another garment on the replacement order).
+ */
+export const w2aDispositionOf = (disposition: string | null): ReturnDisposition | null =>
+  disposition === null ? null : disposition === 'SIZE_EXCHANGE' ? 'REPLACE' : (disposition as ReturnDisposition)
 
 /** One line of the record (prices and credit values marked with the price grain). */
 export function lineView(line: LineRow, facts: Pick<RecordFacts, 'sold' | 'reasons' | 'linePhotos' | 'moves'>) {
@@ -352,7 +360,7 @@ export function lineView(line: LineRow, facts: Pick<RecordFacts, 'sold' | 'reaso
   const moves = facts.moves.get(line.id) ?? []
   const place = moves[0]?.locationCode ?? null
   const decided = line.disposition !== null
-  const decision = decided ? { disposition: line.disposition as ReturnDisposition, goodsOutcome: line.goodsOutcome as GoodsOutcome | null, creditAmount: line.creditAmount } : null
+  const decision = decided ? { disposition: w2aDispositionOf(line.disposition)!, goodsOutcome: line.goodsOutcome as GoodsOutcome | null, creditAmount: line.creditAmount } : null
   const graded = line.grade ? { grade: line.grade as ReturnGrade, cause: line.cause as ReturnCause | null, ppe, reasonCode: line.reasonCode } : null
   const amountText = decision && decision.creditAmount !== null && currency ? `${fromMinorUnits(decision.creditAmount, currency).toFixed(2)} ${currency}` : null
   return {
@@ -389,7 +397,7 @@ export function lineView(line: LineRow, facts: Pick<RecordFacts, 'sold' | 'reaso
     photos: facts.linePhotos.get(line.id) ?? 0,
     suggestedOutcome: graded ? suggestedOutcome(graded) : null,
     restockHeld: graded ? restockHeldWords(graded) : null,
-    disposition: line.disposition,
+    disposition: w2aDispositionOf(line.disposition),
     goodsOutcome: line.goodsOutcome,
     decidedAt: iso(line.decidedAt),
     decidedById: line.decidedById,
@@ -473,7 +481,7 @@ export function returnView(facts: RecordFacts, now: Date) {
     }),
     actions: returnActions({
       status: rma.status as ReturnStatus,
-      lines: facts.lines.map((line) => ({ quantity: line.quantity, received: line.receivedQuantity, graded: line.grade !== null, disposition: line.disposition as ReturnDisposition | null, goodsOutcome: line.goodsOutcome as GoodsOutcome | null, replaced: line.replacementLineId !== null })),
+      lines: facts.lines.map((line) => ({ quantity: line.quantity, received: line.receivedQuantity, graded: line.grade !== null, disposition: w2aDispositionOf(line.disposition), goodsOutcome: line.goodsOutcome as GoodsOutcome | null, replaced: line.replacementLineId !== null })),
       replacementOrder: rma.replacementOrderId !== null,
     }),
     // B-W2b-16: said in the close dialog before the click (the close answers the same warnings).

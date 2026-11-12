@@ -1,0 +1,253 @@
+// Orders after the quote, in depth (W2b-5, schema wave 39/44, B-W2b-281; features SAL-148, SAL-190, SAL-201, SAL-205,
+// SAL-207, SAL-208, SAL-218, SAL-219, SAL-221, SAL-237, SAL-241, SAL-244, SAL-248, SAL-306): what may still change on an
+// order at each production stage, the customer's credit checked at every step with what each check saw, and the materials
+// a customer sends for its orders.
+//
+//   OrderFreezeRule   per company, field and stage (SAL-218; design order.changes.freeze): from which production stage on a
+//                     field of an order (its sizes and quantities, colourway, options, delivery date, ship-to, prices) is
+//                     frozen, and what a change then needs: a priced change request the customer accepts (CHANGE_REQUEST,
+//                     SAL-219) or nothing at all (BLOCKED). Switched off, never deleted; one active rule per company, field
+//                     and stage, and a later stage never loosens an earlier BLOCKED. The orders module applies them
+//                     (B-W2b-309): the stages are the production data's (released, cut, sewn, finished, shipped), so the
+//                     database holds the rules, not their reading.
+//   CreditCheck       one check of a customer's credit with a company (SAL-148, SAL-237, SAL-241, SAL-244), append-only: the
+//                     step (the quote, the order, a work order's release, a shipment, an order from the portal or the API),
+//                     what was checked (record type + id), what it saw (open orders, open invoices, the overdue part of
+//                     them, the amount of what was checked, the exposure they add up to, the limit, a credit hold in force)
+//                     and its result: PASS, WARN or HOLD. An override never changes a check: it is a new check that names the
+//                     HOLD it overrides and the approved CREDIT_OVERRIDE request for a yes (approvals.prisma ApprovalTask,
+//                     whose subject is that check), with what it saw then. No limit, no check: B-W2b-279's PartyCompanyTerms
+//                     holds the limit, and a check names party and company, never a key into those rows.
+//   CustomerMaterial  per order line and customer-supplied BOM line (SAL-306; design order.lines.owned; B-W2b-228's
+//                     customer-supplied lines): the material, its colour, what is expected per size from the explosion and in
+//                     all, and what was received from the customer, used and returned (in the item's base unit); "Left" is
+//                     received − used − returned. The stock itself is customer-owned lots (inventory.prisma Lot.ownerPartyId),
+//                     received with a CUSTOMER_SUPPLIED goods receipt of the customer.
+//
+// Beside them, on the tables of earlier waves (their files say so): SalesOrderStatus PENDING_APPROVAL, SalesOrderPriority and
+// SalesOrder.priorityLevel + urgentReason, SalesOrder.confirmationSentAt + confirmationVersion, SalesOrderAmendment's
+// priceDeltaLines, feeAmount, depositRequestId and reapprovalTaskId, DepositKind CAPARRA_PENITENZIALE and
+// SalesSettings.caparraPenitenzialeEnabled (sales.prisma); GeneratedDocumentKind ORDER_CONFIRMATION (gendocs.prisma);
+// Lot.ownerPartyId and GoodsReceiptKind CUSTOMER_SUPPLIED (inventory.prisma). Several orders from one quote version (SAL-201)
+// need no column: SalesOrder.quoteVersionId already names the version each order was made from, and no rule of the database
+// keeps it to one order.
+//
+// apps/factory-api's modules/sales (B-W2b-303 orders in depth, B-W2b-304 credit limits, B-W2b-309 order changes) writes these
+// tables through command(); the hand-written …_sales_orders_depth_w2b_guards migration holds their rules for every login, the
+// owner included. Records of parallel waves are named by record type + id.
+//
+// Who sees what (ownership/sales-orders-depth.json): the office reads and writes; the floor, the portal and links read nothing
+// here (a credit check is the office's: exposure, limit and overdue are price-grain figures; the portal shows a customer its
+// own orders, never its credit reading). Money: CreditCheck's amounts (@grain price).
+
+/// What freezes on an order at one production stage (SAL-218): a field of a company's orders, the stage from which it is
+/// frozen, and what a change needs from then on. Several rules per field, one per stage (a CHANGE_REQUEST from cutting, a
+/// BLOCKED from finishing); a later stage never loosens an earlier BLOCKED. Switched off (active false), never deleted.
+model OrderFreezeRule {
+  id          String            @id @db.Uuid
+  tenantId    String            @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company whose orders it holds. A company with no rule leaves every field open (the orders module's defaults).
+  companyId   String            @db.Uuid
+  field       OrderFreezeField
+  /// The production stage of the order line's cells from which the field is frozen (RELEASED < CUT < SEWING < FINISHED <
+  /// SHIPPED, in this order).
+  frozenFrom  OrderFreezeStage
+  /// What a change of the field needs from that stage on.
+  action      OrderFreezeAction
+  /// Off: the rule holds nothing (kept for the history). One active rule per company, field and stage.
+  active      Boolean           @default(true)
+  /// The words the order shows beside a frozen field ("Cutting started — size frozen"), when the default ones do not fit;
+  /// one line, at most 200.
+  note        String?
+  /// Who changed it last ("Changed by").
+  updatedById String?           @db.Uuid
+  version     Int               @default(1)
+  createdAt   DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime          @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?           @db.Uuid
+
+  company Company @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // A company's rules of a field (the order's "What is frozen" panel, the amend command).
+  @@index([tenantId, companyId, field])
+}
+
+/// What a freeze rule holds on an order (SAL-218).
+enum OrderFreezeField {
+  /// The sizes and their quantities of a line.
+  SIZE_QUANTITY
+  /// The colourway of a line.
+  COLOURWAY
+  /// The options chosen on a line (the configurator's values).
+  OPTION
+  /// The requested and promised dates.
+  DELIVERY_DATE
+  /// The delivery address.
+  SHIP_TO
+  /// The prices.
+  PRICE
+}
+
+/// The production stages a freeze rule starts from, in order (the database compares them by this order).
+enum OrderFreezeStage {
+  /// A work order of the line is released.
+  RELEASED
+  /// Cutting started.
+  CUT
+  /// Sewing started.
+  SEWING
+  /// Pieces are finished.
+  FINISHED
+  /// Something shipped.
+  SHIPPED
+}
+
+/// What a change of a frozen field needs.
+enum OrderFreezeAction {
+  /// A priced change request the customer accepts before it applies (SAL-219).
+  CHANGE_REQUEST
+  /// No change at all.
+  BLOCKED
+}
+
+/// One credit check of a customer with a company (SAL-148, SAL-237, SAL-241, SAL-244): what it saw and its result. Written
+/// by the credit check of the step (B-W2b-304) in the command of the step; never changed or removed. An override is a new
+/// check naming the HOLD it overrides and the approved request for a yes that allowed it.
+/// @append-only
+model CreditCheck {
+  id                 String            @id @db.Uuid
+  tenantId           String            @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The selling company whose limit was checked, and the customer.
+  companyId          String            @db.Uuid
+  partyId            String            @db.Uuid
+  step               CreditCheckStep
+  /// What was checked, of this customer and company: a QuoteVersion (QUOTE), a SalesOrder (ORDER, API), a WorkOrder making
+  /// its orders (RELEASE), a Shipment (SHIPMENT), a PortalOrderRequest or the SalesOrder made from it (PORTAL).
+  recordType         String
+  recordId           String            @db.Uuid
+  /// ISO 4217: the currency of every amount of the check (the limit's).
+  currency           String            @default("EUR")
+  /// What the customer owes or will owe: the open orders not yet invoiced, the invoices not yet paid (the overdue part of
+  /// them apart), the amount of what was checked when it is not one of those yet (a quote, a new order; 0 otherwise), and
+  /// the exposure they add up to (open orders + open invoices + this one). Minor units, 0 or more.
+  /// @grain price
+  openOrdersAmount   Int
+  /// @grain price
+  openInvoicesAmount Int
+  /// @grain price
+  overdueAmount      Int
+  /// @grain price
+  subjectAmount      Int               @default(0)
+  /// @grain price
+  exposureAmount     Int
+  /// The credit limit in force (minor units, 0 or more); null: none set, so nothing is held for it.
+  /// @grain price
+  limitAmount        Int?
+  /// A credit hold of the customer was in force (B-W2b-279's PartyHold, reason CREDIT).
+  onHold             Boolean           @default(false)
+  /// PASS: within the limit and no hold; WARN: over the limit, overdue or on hold, shown and let through (the company's
+  /// setting); HOLD: the same, held until a yes. A WARN or a HOLD has something to say (over the limit, overdue or on hold).
+  result             CreditCheckResult
+  /// What the check said, in words (one line, at most 500): "Over the limit by 1,800.00 EUR"; null: the result's words.
+  words              String?
+  /// An override: the HOLD check it overrides (of the same company, customer, step and record; at most one override per
+  /// check) and the request for a yes that allowed it: an APPROVED ApprovalTask of kind CREDIT_OVERRIDE whose subject is
+  /// that check. Both or neither.
+  overridesCheckId   String?           @db.Uuid
+  overrideTaskId     String?           @db.Uuid
+  /// When it was checked (not in the future; an override not before its yes).
+  checkedAt          DateTime          @db.Timestamptz(3)
+  /// The request whose command checked it; its audit rows share it.
+  requestId          String?
+  createdAt          DateTime          @default(now()) @db.Timestamptz(3)
+  /// The office user whose step checked it; null: the system (an order from the portal or the API, a handler).
+  createdById        String?           @db.Uuid
+
+  company      Company       @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  party        Party         @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, companyId and partyId.
+  overrides    CreditCheck?  @relation("CreditCheckOverride", fields: [tenantId, companyId, partyId, overridesCheckId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  overriddenBy CreditCheck[] @relation("CreditCheckOverride")
+  overrideTask ApprovalTask? @relation("CreditCheckOverrideTask", fields: [tenantId, companyId, overrideTaskId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // The target of an override's reference: a check of the same company and customer.
+  @@unique([tenantId, companyId, partyId, id])
+  // A check is overridden once.
+  @@unique([tenantId, overridesCheckId])
+  // A record's checks, newest last (the quote's warnings, the order's gate, the release and the shipment).
+  @@index([tenantId, recordType, recordId, checkedAt])
+  // A customer's checks with a company (Finance › Receivables › Credit limits: orders on hold).
+  @@index([tenantId, partyId, companyId, checkedAt])
+}
+
+/// Where a customer's credit is checked (SAL-237, SAL-241, SAL-244).
+enum CreditCheckStep {
+  QUOTE
+  ORDER
+  /// A work order's release.
+  RELEASE
+  SHIPMENT
+  /// An order from the customer portal.
+  PORTAL
+  /// An order through the API.
+  API
+}
+
+/// The result of a credit check.
+enum CreditCheckResult {
+  PASS
+  WARN
+  HOLD
+}
+
+/// One material a customer sends for one of its order lines (SAL-306; design order.lines.owned "Customer-supplied
+/// materials"): a customer-supplied line of the BOM (B-W2b-228), the material and its colour, what is expected per size from
+/// the explosion and in all, and what was received from the customer, used on the work orders and returned to the customer,
+/// in the item's base unit; left = received − used − returned. The orders module keeps the figures from the customer-owned
+/// lots' moves (B-W2b-309). Removed only while nothing was received, used or returned (an amendment removed its line).
+model CustomerMaterial {
+  id               String   @id @db.Uuid
+  tenantId         String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The order's company and customer (the references' keys): the customer sends the material and owns it.
+  companyId        String   @db.Uuid
+  partyId          String   @db.Uuid
+  orderId          String   @db.Uuid
+  /// A line of the order.
+  orderLineId      String   @db.Uuid
+  /// The BOM line it is for: a line the customer supplies (BomLine.customerSuppliedByPartyId = the customer), of the
+  /// revision it belongs to (the explosion's, a sub-assembly's too).
+  bomRevisionId    String   @db.Uuid
+  bomLineId        String   @db.Uuid
+  /// The BOM line's material, and the colour expected (one of the item's).
+  itemId           String   @db.Uuid
+  itemColourId     String?  @db.Uuid
+  /// The item's base unit: every quantity below is in it.
+  uom              Uom
+  /// What the order line needs of it in all (0 or more, 4 decimals), and per size from the explosion: { "<size>": "<decimal
+  /// above 0>" }, adding up to the whole when given; {} for a made-to-measure unit.
+  expectedQuantity Decimal  @db.Decimal(18, 4)
+  expectedBySize   Json     @default("{}")
+  /// Received from the customer, used on the work orders, returned to the customer: 0 or more, used + returned at most what
+  /// was received.
+  receivedQuantity Decimal  @default(0) @db.Decimal(18, 4)
+  usedQuantity     Decimal  @default(0) @db.Decimal(18, 4)
+  returnedQuantity Decimal  @default(0) @db.Decimal(18, 4)
+  note             String?
+  /// Who changed it last.
+  updatedById      String?  @db.Uuid
+  version          Int      @default(1)
+  createdAt        DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById      String?  @db.Uuid
+
+  order      SalesOrder     @relation(fields: [tenantId, companyId, partyId, orderId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  orderLine  SalesOrderLine @relation(fields: [tenantId, partyId, orderLineId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  bomLine    BomLine        @relation(fields: [tenantId, bomRevisionId, bomLineId, itemId], references: [tenantId, revisionId, id, itemId], onDelete: Restrict, onUpdate: Restrict)
+  item       Item           @relation(fields: [tenantId, itemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and itemId.
+  itemColour ItemColour?    @relation(fields: [tenantId, itemId, itemColourId], references: [tenantId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // An order's materials (the order's Lines tab), a customer's materials of an item (the receipt from the customer).
+  @@index([tenantId, orderId])
+  @@index([tenantId, partyId, itemId])
+}

@@ -168,6 +168,7 @@
         },
         "PURCHASE_ORDERS": {
           "DRAFT": "Draft",
+          "PENDING_APPROVAL": "Waiting for a yes",
           "SENT": "Sent",
           "CHANGES_PROPOSED": "Changes proposed",
           "CONFIRMED": "Confirmed",

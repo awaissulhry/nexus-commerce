@@ -1,0 +1,449 @@
+// Quotes, pricing and configuration in depth (W2b-5, schema wave 38/44, B-W2b-280; features SAL-133, SAL-136, SAL-139,
+// SAL-140, SAL-144, SAL-145, SAL-151, SAL-162, SAL-166, SAL-167, SAL-170, SAL-174, SAL-175, SAL-178, SAL-180, SAL-181,
+// SAL-189, SAL-252, SAL-269): how a quote or order line is priced and configured.
+//
+//   QuoteTemplate, QuoteTemplateLine   a saved start of a quote (SAL-144): its lines with styles and sizes under their
+//                                      sections, validity, terms, acceptance mode, deposit and delivery terms; one
+//                                      company's or every company's of the tenant (SAL-252). A quote names the template it
+//                                      was started from (Quote.templateId).
+//   QuoteLineDelivery,                 a line's delivery schedule (SAL-151): dates with the sizes and pieces each brings;
+//   SalesOrderLineDelivery             copied to the order when the order is made. What a schedule leaves out goes at the
+//                                      line's (or the document's) promise date.
+//   QuoteLineOption,                   the options chosen on a line (SAL-133, SAL-136, SAL-139): the option group and value
+//   SalesOrderLineOption               of the library (options.prisma), the customer's free text, a library colour or a
+//                                      material and its colour picked with it, and the surcharge frozen as it was priced
+//                                      (@grain price). Copied to the order when the order is made and from there to the
+//                                      work order's cells (production.prisma WorkOrderSize.optionValueIds), so that
+//                                      option-only routing steps apply (B-W2b-225).
+//   PriceBreak                         a quantity break of a price list version (SAL-166): from a number of pieces of a
+//                                      line, a unit price of one entry, or a discount on every entry of the version.
+//   SizeSurcharge                      an extra per piece for a size (SAL-180): an amount or a percent, in a price list
+//                                      version (for every style or one) or on a style (whatever the list).
+//   MoqRule                            a minimum order quantity (SAL-178) of a style, a kind of garment or a material,
+//                                      per document, colourway or line, that blocks, warns or adds a small-run surcharge.
+//   SizeCurve                          a saved percent curve over a size scale (SAL-269): "Fill by curve".
+//
+// The columns this wave adds to earlier tables are in their files: Quote.templateId; QuoteVersion's reminder, Incoterm and
+// place, ship complete and acceptance mode; QuoteLine's section, fee kind and price waterfall; SalesOrder's Incoterm and
+// place and ship complete; SalesOrderLine's fee kind and price waterfall; SalesLineKind FEE (sales.prisma); SalesSettings'
+// margin floors by role (sales.prisma); PriceList.showDiscount and PriceListEntry's validity (pricing.prisma);
+// WorkOrderSize.optionValueIds (production.prisma); ReasonList PRICE_ADJUSTMENT (reasons.prisma); FileCategory ARTWORK
+// (files.prisma: the customer's artwork on a line, SAL-140).
+//
+// The price waterfall (SAL-174, SAL-175): QuoteLine.priceSteps and SalesOrderLine.priceSteps keep every step of a line's
+// unit price with its source (the price list entry, the break, the size surcharge, the chosen option, the discount, a
+// manual change with its reason code), so the waterfall is a reading, never a recalculation; the database keeps the steps
+// adding up to the line's unit price, and drops them when a writer changes the price without them (the
+// …_sales_pricing_w2b_guards triggers).
+//
+// apps/factory-api's modules/sales writes all of it through command() (B-W2b-294 templates, validity and delivery terms,
+// B-W2b-302 size curves, B-W2b-325 price lists in depth, B-W2b-330 the price of a line, B-W2b-340 the configurator); the
+// hand-written …_sales_pricing_w2b_guards migration holds the rules for every login.
+//
+// Who sees what (ownership/sales-pricing.json): the office reads and writes; a portal or link session reads its OWN party's
+// delivery schedules and chosen options (its own documents, with their prices); the floor reads none of it (a work order's
+// cell carries the chosen option values). Templates, breaks, surcharges, minimums and curves are the office's alone.
+//
+// Money (A1 §2.1, §2.6): unit prices, amounts and surcharges Decimal(18,6) with the price grain, percents Decimal(7,4).
+
+/// How a quote is accepted (SAL-144; design quote.terms.validity "Acceptance mode: sign · sign and pay deposit").
+enum QuoteAcceptanceMode {
+  /// The customer signs (the accept link's typed name, or a signed copy): W1's way.
+  SIGN
+  /// The customer pays the deposit: the payment is the acceptance.
+  PAY
+  /// The customer signs and pays the deposit.
+  SIGN_AND_PAY
+}
+
+/// What a FEE line charges for (SAL-181): development, sample and tooling fees, invoiced once.
+enum SalesFeeKind {
+  DEVELOPMENT
+  SAMPLE
+  TOOLING
+}
+
+/// What a minimum order quantity counts (SAL-178).
+enum MoqPer {
+  /// The pieces of the subject on the whole document.
+  ORDER
+  /// The pieces of the subject per colourway on the document.
+  COLOURWAY
+  /// The pieces of each line of the subject.
+  LINE
+}
+
+/// What a minimum order quantity does when it is not reached (SAL-178; design pricelist.breaks "MOQ action").
+enum MoqAction {
+  /// The quote or order is refused, with the minimum in words.
+  BLOCK
+  /// The person reads the minimum and goes on.
+  WARN
+  /// A small-run surcharge per piece is added (an amount or a percent).
+  SURCHARGE
+}
+
+/// A saved start of a quote (SAL-144; design Sales settings › Quote templates): its lines with styles and sizes under their
+/// sections, how long it stands, its terms, how it is accepted, the deposit and the delivery terms. One company's, or every
+/// company's of the tenant (SAL-252). Archived (status ARCHIVED), never deleted: quotes name it (Quote.templateId).
+model QuoteTemplate {
+  id             String              @id @db.Uuid
+  tenantId       String              @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The selling company whose template it is; null: every company of the tenant. Never changes.
+  companyId      String?             @db.Uuid
+  /// One line, 1 to 120 characters ("Season order", "Sample request").
+  name           String
+  /// What it is for, for the office (up to 2000 characters).
+  description    String?
+  /// The document's language (ISO 639-1) and currency (ISO 4217) of a quote started from it.
+  language       String              @default("it")
+  currency       String              @default("EUR")
+  /// How many days a quote started from it stands (its validUntil): 1 to 365; null: the sales settings' default.
+  validityDays   Int?
+  /// A firm offer (c.c. art. 1329) by default.
+  firmOffer      Boolean             @default(false)
+  /// How the customer accepts; PAY and SIGN_AND_PAY need the deposit below.
+  acceptanceMode QuoteAcceptanceMode @default(SIGN)
+  /// The deposit asked at acceptance: percent of the gross total (above 0, at most 100) and its legal kind, both or neither;
+  /// null: the sales settings' default.
+  depositPct     Decimal?            @db.Decimal(7, 4)
+  depositKind    DepositKind?
+  /// The library's payment terms (of the template's company or tenant-wide); null: the customer's.
+  paymentTermsId String?             @db.Uuid
+  /// The terms and conditions as printed, and the reference of their version (SAL-194).
+  termsText      String?
+  termsVersion   String?
+  /// The Incoterms 2020 rule (three capitals: EXW, FCA, DAP …) and its named place, both or neither; null: the customer's.
+  incoterm       String?
+  incotermPlace  String?
+  /// Ship complete (true) or ship as ready (false).
+  shipComplete   Boolean             @default(false)
+  status         MasterStatus        @default(ACTIVE)
+  version        Int                 @default(1)
+  createdAt      DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime            @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById    String?             @db.Uuid
+
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  company        Company?            @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  termsOfPayment PaymentTerms?       @relation(fields: [tenantId, paymentTermsId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  lines          QuoteTemplateLine[]
+  // sales.prisma: the quotes started from it.
+  quotes         Quote[]
+
+  // The target of the tenant-safe references from its lines and the quotes started from it.
+  @@unique([tenantId, id])
+  @@index([tenantId, companyId])
+}
+
+/// One line of a quote template: a style (and a colourway, or the one chosen at use) as a size grid with its pieces per size
+/// (or the sizes typed at use), or a FEE line with its kind; under a section heading; with the text printed for it. A
+/// template has no made-to-measure line (it has no rider). The office adds, changes and removes them.
+model QuoteTemplateLine {
+  id             String        @id @db.Uuid
+  tenantId       String        @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// Its template; never changes.
+  templateId     String        @db.Uuid
+  /// Its place: 1, 2, 3 … (10, 20, 30 …), unique in the template.
+  seq            Int
+  /// The heading it is printed under ("Jackets", "Fees"; one line, up to 120 characters); null: none.
+  section        String?
+  /// SIZE_GRID or FEE.
+  kind           SalesLineKind
+  /// FEE: what it charges for; exactly on a FEE line.
+  feeKind        SalesFeeKind?
+  /// A style of the template's company or tenant-wide (a template of every company: a tenant-wide style).
+  styleId        String        @db.Uuid
+  /// A colourway of the style; null: chosen when the quote is made.
+  colourwayId    String?       @db.Uuid
+  /// SIZE_GRID: pieces per size ({ "50": 2, "52": 4 }: 1 to 100 size codes, whole pieces from 1); null: typed at use. FEE:
+  /// none.
+  sizeQuantities Json?
+  /// A unit price it starts with (a fee's price), in the template's currency, above 0; null: the price list's at use.
+  /// @grain price
+  unitPrice      Decimal?      @db.Decimal(18, 6)
+  /// The text printed for the line (up to 500 characters) and a note for the customer (up to 1000).
+  description    String?
+  note           String?
+  version        Int           @default(1)
+  createdAt      DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime      @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById    String?       @db.Uuid
+
+  template  QuoteTemplate @relation(fields: [tenantId, templateId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  style     Style         @relation("QuoteTemplateLineStyle", fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and styleId.
+  colourway Colourway?    @relation("QuoteTemplateLineColourway", fields: [tenantId, styleId, colourwayId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, templateId, seq])
+  @@index([tenantId, styleId])
+}
+
+/// One delivery of a quote line's schedule (SAL-151; design quote line drawer "Delivery schedule"): a date and the pieces it
+/// brings, per size for a size grid ({ "50": 1, "52": 2 }), or the one made-to-measure unit. A part of its line: written
+/// only while the version is DRAFT, removed with the line. The deliveries of a size never bring more than the line has of it;
+/// what the schedule leaves out goes at the promise date. A FEE line has no schedule.
+model QuoteLineDelivery {
+  id             String    @id @db.Uuid
+  tenantId       String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  lineId         String    @db.Uuid
+  /// The line's party (the partner role's policy key).
+  partyId        String    @db.Uuid
+  /// The day it is to leave (or arrive, by the document's Incoterm); one delivery per line and day.
+  deliveryDate   DateTime  @db.Date
+  /// SIZE_GRID: the pieces per size, sizes of the line's size rows; MADE_TO_MEASURE: null.
+  sizeQuantities Json?
+  /// The pieces it brings: the sum of its sizes, or 1 (a made-to-measure unit).
+  quantity       Int
+  /// A word for the office and the customer (up to 500 characters).
+  note           String?
+  version        Int       @default(1)
+  createdAt      DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById    String?   @db.Uuid
+
+  // Removed with its line (a draft's line is deleted with its parts).
+  line QuoteLine @relation(fields: [tenantId, partyId, lineId], references: [tenantId, partyId, id], onDelete: Cascade, onUpdate: Restrict)
+
+  @@unique([tenantId, lineId, deliveryDate])
+}
+
+/// One delivery of an order line's schedule (SAL-151): copied from its quote line's when the order is made, or typed. The
+/// shape and rules of QuoteLineDelivery; written while the order is CONFIRMED, IN_PRODUCTION or READY (as the line's
+/// sizes), removed with its line.
+model SalesOrderLineDelivery {
+  id             String         @id @db.Uuid
+  tenantId       String         @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  lineId         String         @db.Uuid
+  /// The line's party (the partner role's policy key).
+  partyId        String         @db.Uuid
+  deliveryDate   DateTime       @db.Date
+  sizeQuantities Json?
+  quantity       Int
+  note           String?
+  version        Int            @default(1)
+  createdAt      DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById    String?        @db.Uuid
+
+  line SalesOrderLine @relation(fields: [tenantId, partyId, lineId], references: [tenantId, partyId, id], onDelete: Cascade, onUpdate: Restrict)
+
+  @@unique([tenantId, lineId, deliveryDate])
+}
+
+/// One option chosen on a quote line (SAL-133, SAL-136, SAL-139; B-W2b-229's check gives them: the value, its group, the
+/// typed text, taken by default): a value of an option group the line's style offers (or offered), the customer's free text
+/// when the value takes one, the library colour or the material and its colour picked with it (a panel's colour, leather by
+/// article and colour), and the surcharge per piece frozen as it was priced (an amount in the document's currency; with the
+/// percent it came from, when the value's price effect was a percent). A part of its line: written only while the version
+/// is DRAFT, removed with the line. A FEE line takes none.
+model QuoteLineOption {
+  id              String      @id @db.Uuid
+  tenantId        String      @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  lineId          String      @db.Uuid
+  /// The line's party (the partner role's policy key).
+  partyId         String      @db.Uuid
+  groupId         String      @db.Uuid
+  /// A value of the group.
+  valueId         String      @db.Uuid
+  /// The customer's text, exactly when the value takes one (OptionValue.freeText: its length and pattern).
+  freeText        String?
+  /// Taken because the style's offer gives it when nothing is chosen.
+  byDefault       Boolean     @default(false)
+  /// A colour of the library picked with the value (a panel's colour); null: none.
+  colourId        String?     @db.Uuid
+  /// A material picked with the value (leather by article), and its colour; the colour only with the material.
+  itemId          String?     @db.Uuid
+  itemColourId    String?     @db.Uuid
+  /// The surcharge per piece as priced, in the document's currency (positive or negative, never 0); null: none. With
+  /// surchargePct, the percent of the base price it came from (-100 to 1000, never 0; percents never compound).
+  /// @grain price
+  surchargeAmount Decimal?    @db.Decimal(18, 6)
+  /// @grain price
+  surchargePct    Decimal?    @db.Decimal(7, 4)
+  version         Int         @default(1)
+  createdAt       DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime    @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById     String?     @db.Uuid
+
+  line       QuoteLine    @relation(fields: [tenantId, partyId, lineId], references: [tenantId, partyId, id], onDelete: Cascade, onUpdate: Restrict)
+  group      OptionGroup  @relation("QuoteLineOptionGroup", fields: [tenantId, groupId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  value      OptionValue  @relation("QuoteLineOptionValue", fields: [tenantId, groupId, valueId], references: [tenantId, groupId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId (and itemId).
+  colour     Colour?      @relation("QuoteLineOptionColour", fields: [tenantId, colourId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  item       Item?        @relation("QuoteLineOptionItem", fields: [tenantId, itemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  itemColour ItemColour?  @relation("QuoteLineOptionItemColour", fields: [tenantId, itemId, itemColourId], references: [tenantId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, lineId])
+  @@index([tenantId, valueId])
+}
+
+/// One option chosen on an order line: copied from its quote line's when the order is made (the surcharge as accepted), or
+/// chosen on the order (B-W2b-340). The shape and rules of QuoteLineOption; written while the order is CONFIRMED,
+/// IN_PRODUCTION or READY, removed with its line. Its value travels to the work order's cells (WorkOrderSize.optionValueIds).
+model SalesOrderLineOption {
+  id              String         @id @db.Uuid
+  tenantId        String         @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  lineId          String         @db.Uuid
+  /// The line's party (the partner role's policy key).
+  partyId         String         @db.Uuid
+  groupId         String         @db.Uuid
+  valueId         String         @db.Uuid
+  freeText        String?
+  byDefault       Boolean        @default(false)
+  colourId        String?        @db.Uuid
+  itemId          String?        @db.Uuid
+  itemColourId    String?        @db.Uuid
+  /// @grain price
+  surchargeAmount Decimal?       @db.Decimal(18, 6)
+  /// @grain price
+  surchargePct    Decimal?       @db.Decimal(7, 4)
+  version         Int            @default(1)
+  createdAt       DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById     String?        @db.Uuid
+
+  line       SalesOrderLine @relation(fields: [tenantId, partyId, lineId], references: [tenantId, partyId, id], onDelete: Cascade, onUpdate: Restrict)
+  group      OptionGroup    @relation("SalesOrderLineOptionGroup", fields: [tenantId, groupId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  value      OptionValue    @relation("SalesOrderLineOptionValue", fields: [tenantId, groupId, valueId], references: [tenantId, groupId, id], onDelete: Restrict, onUpdate: Restrict)
+  colour     Colour?        @relation("SalesOrderLineOptionColour", fields: [tenantId, colourId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  item       Item?          @relation("SalesOrderLineOptionItem", fields: [tenantId, itemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  itemColour ItemColour?    @relation("SalesOrderLineOptionItemColour", fields: [tenantId, itemId, itemColourId], references: [tenantId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, lineId])
+  @@index([tenantId, valueId])
+}
+
+/// A quantity break of a price list version (SAL-166; design pricelist.breaks): from minQuantity pieces of a line, one entry's
+/// style (and colourway) costs unitPrice, or every entry of the version (entryId null) takes discountPct off. Exactly one of
+/// the two; a version-wide break gives a discount only. One break per entry (or the version) and quantity. Written only while
+/// its version is a DRAFT (activating it fixes the breaks with the prices), removed with its entry or version.
+model PriceBreak {
+  id          String           @id @db.Uuid
+  tenantId    String           @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  versionId   String           @db.Uuid
+  /// An entry of the version; null: every entry of it. Never changes, nor the version.
+  entryId     String?          @db.Uuid
+  /// The pieces from which it applies: 2 or more.
+  minQuantity Int
+  /// The unit price from there, in the list's currency, above 0.
+  /// @grain price
+  unitPrice   Decimal?         @db.Decimal(18, 6)
+  /// The discount from there, percent of the entry's price: above 0, below 100.
+  /// @grain price
+  discountPct Decimal?         @db.Decimal(7, 4)
+  version     Int              @default(1)
+  createdAt   DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime         @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?          @db.Uuid
+
+  // pricing.prisma: removed with its version or entry (a DRAFT's prices are deleted with their parts).
+  listVersion PriceListVersion @relation("PriceBreakVersion", fields: [tenantId, versionId], references: [tenantId, id], onDelete: Cascade, onUpdate: Restrict)
+  entry       PriceListEntry?  @relation(fields: [tenantId, versionId, entryId], references: [tenantId, versionId, id], onDelete: Cascade, onUpdate: Restrict)
+
+  @@unique([tenantId, versionId, entryId, minQuantity])
+}
+
+/// An extra per piece for one size (SAL-180; design pricelist.breaks "Size surcharge", the style's "Suggested size surcharge
+/// for big sizes"): an amount (in a currency) or a percent of the unit price, exactly one. In a price list version (for every
+/// style of it, or one style: then written only while the version is a DRAFT, removed with it), or on a style (whatever list
+/// prices it: the office keeps it at any time). One per version (and style) or style, and size.
+model SizeSurcharge {
+  id              String            @id @db.Uuid
+  tenantId        String            @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The price list version; null: the style's own. Never changes.
+  versionId       String?           @db.Uuid
+  /// The style; null: every style of the version. At least one of the two. Never changes.
+  styleId         String?           @db.Uuid
+  /// A size code (1 to 40 characters without spaces).
+  size            String
+  /// The amount per piece (above 0) in currency (ISO 4217; a version's: its list's currency).
+  /// @grain price
+  surchargeAmount Decimal?          @db.Decimal(18, 6)
+  currency        String?
+  /// The percent of the unit price (above 0, at most 100).
+  /// @grain price
+  surchargePct    Decimal?          @db.Decimal(7, 4)
+  version         Int               @default(1)
+  createdAt       DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime          @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById     String?           @db.Uuid
+
+  listVersion PriceListVersion? @relation("SizeSurchargeVersion", fields: [tenantId, versionId], references: [tenantId, id], onDelete: Cascade, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  style       Style?            @relation("SizeSurchargeStyle", fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, versionId, styleId, size])
+  @@index([tenantId, styleId])
+}
+
+/// A minimum order quantity (SAL-178; design pricelist.breaks "MOQ action"): of one style, one kind of garment or one
+/// material (exactly one), counted per document, colourway or line; below it the quote or order is refused (BLOCK), warned
+/// (WARN) or charged a small-run surcharge per piece (SURCHARGE: an amount in a currency, or a percent; exactly then). One
+/// company's or every company's, for every price list or one. Switched off by archiving it; removed by the office.
+model MoqRule {
+  id              String       @id @db.Uuid
+  tenantId        String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The selling company; null: every company of the tenant. Never changes.
+  companyId       String?      @db.Uuid
+  /// @not-money a reference: the price list whose customers it binds (of the company or tenant-wide); null: every list
+  priceListId     String?      @db.Uuid
+  /// What it is about: one style, one kind of garment or one material (of the company or tenant-wide), exactly one.
+  styleId         String?      @db.Uuid
+  productType     ProductType?
+  itemId          String?      @db.Uuid
+  /// The minimum pieces: 2 or more.
+  minQuantity     Int
+  per             MoqPer
+  action          MoqAction
+  /// SURCHARGE: the amount per piece (above 0) in currency (ISO 4217), or the percent of the unit price (above 0, at most
+  /// 100); exactly one, and only then.
+  /// @grain price
+  surchargeAmount Decimal?     @db.Decimal(18, 6)
+  currency        String?
+  /// @grain price
+  surchargePct    Decimal?     @db.Decimal(7, 4)
+  /// What the person reads (up to 500 characters); null: the API's words.
+  note            String?
+  status          MasterStatus @default(ACTIVE)
+  version         Int          @default(1)
+  createdAt       DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById     String?      @db.Uuid
+
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  company   Company?   @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  /// @not-money the relation to the price list it binds
+  priceList PriceList? @relation("MoqRulePriceList", fields: [tenantId, priceListId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  style     Style?     @relation("MoqRuleStyle", fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  item      Item?      @relation("MoqRuleItem", fields: [tenantId, itemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, styleId])
+  @@index([tenantId, companyId])
+}
+
+/// A saved percent curve over a size scale (SAL-269; design Sales settings › Size curves): the share of every size, which
+/// "Fill by curve" spreads a total by (whole pieces; the remainder on the base size: the API's). Per size of the scale a
+/// percent above 0 with up to 4 decimals, the shares totalling exactly 100 ({ "50": "25.0000", "52": "50.0000", "54":
+/// "25.0000" }). One company's or every company's; unique by name in its scale. Archived or removed by the office.
+model SizeCurve {
+  id          String       @id @db.Uuid
+  tenantId    String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company whose curve it is; null: every company. Never changes, nor the scale.
+  companyId   String?      @db.Uuid
+  sizeScaleId String       @db.Uuid
+  /// One line, 1 to 120 characters.
+  name        String
+  shares      Json
+  status      MasterStatus @default(ACTIVE)
+  version     Int          @default(1)
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?      @db.Uuid
+
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  company   Company?  @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  sizeScale SizeScale @relation("SizeCurveScale", fields: [tenantId, sizeScaleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, sizeScaleId, name])
+}

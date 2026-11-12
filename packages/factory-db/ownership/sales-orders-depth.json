@@ -1,0 +1,29 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/sales-orders-depth.prisma (rules: src/ownership.ts; roles: src/roles.ts). W2b-5, schema wave 39/44 (B-W2b-281): what freezes on an order at each production stage, the credit checks of a customer and the materials a customer sends for its orders. The office (factory_runtime, and the worker and scheduler in the tenant's system context: a check of an order from the portal or the API) writes them through apps/factory-api's modules/sales (B-W2b-303, -304, -309), always with command(); the API keeps staff to the companies and parties their grants reach (a company is a column, not a policy key; the row wall is the tenant). The floor, portal and link sessions read and write nothing here: a credit check holds price-grain figures of the customer's account (exposure, limit, overdue), and a customer sees its own orders and their materials through the API, never these rows. A freeze rule is switched off, never deleted; CreditCheck is append-only (`@append-only`; the triggers refuse UPDATE, DELETE and TRUNCATE); a customer's material row is removed only while nothing of it was received, used or returned: the …_sales_orders_depth_w2b_guards triggers, for every login. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "OrderFreezeRule": {
+      "about": "The office keeps a company's freeze rules in the sales settings (which field freezes from which production stage, and whether a change then needs a priced change request or is blocked), switches them on and off; the orders module reads the active ones when an order is amended or shown. Never deleted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "CreditCheck": {
+      "about": "The credit check of a step (the quote, the order, a work order's release, a shipment, an order from the portal or the API) adds one row with what it saw and its result; an approved override adds one more naming the check it overrides. The office reads a record's and a customer's checks. Never changed or removed.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] }
+      }
+    },
+    "CustomerMaterial": {
+      "about": "The orders module writes what a customer's order line needs of each material the customer sends (from the explosion, per size), and what was received from the customer, used and returned; the office reads them on the order. Removed only while nothing of it moved (an amendment removed the line).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    }
+  }
+}
