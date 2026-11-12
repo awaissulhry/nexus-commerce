@@ -228,12 +228,12 @@ const W2B_263_HANDLERS: readonly EventHandler[] = gateHandlers()
 const W2B_313_HANDLERS: readonly EventHandler[] = [lotLifecycleHandler()]
 // B-W2b-292: a receipt posted or reversed, a lot or hold released, a hold asking quarantine, a pick list made or picked → the warehouse tasks they ask.
 const W2B_292_HANDLERS: readonly EventHandler[] = warehouseTaskHandlers()
-// B-W2b-294: an order that waited for a yes takes its quote's delivery schedule once it is CONFIRMED.
-const W2B_294_HANDLERS: readonly EventHandler[] = [orderScheduleHandler()]
 // B-W2b-305: purchase_order.approved → the purchase order sent with its yes (held in words when it cannot go).
 const W2B_305_HANDLERS: readonly EventHandler[] = [approvedSendHandler()]
 // B-W2b-304
 const W2B_304_HANDLERS: readonly EventHandler[] = creditHandlers()
+// B-W2b-294: an order that waited for a yes takes its quote's delivery schedule once it is CONFIRMED.
+const W2B_294_HANDLERS: readonly EventHandler[] = [orderScheduleHandler()]
 // B-W2b-11: the reports (one file each in modules/insights/reports/defs/), read by an export of a report.
 await loadReports(fileURLToPath(new URL('.', import.meta.url)))
 // B-W2b-120: the safety calendar's sources (one file each in modules/safety/calendar/sources/), read by an export of the calendar.
