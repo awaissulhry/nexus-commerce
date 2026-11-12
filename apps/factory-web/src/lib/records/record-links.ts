@@ -74,6 +74,8 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   StockCount: '/warehouse/counts/[id]',
   // B-W2b-326: a transfer between sites (SCR-361: lines, in transit with its DDT, received).
   TransferOrder: '/warehouse/transfers/[id]',
+  // B-W2b-320: a substitute asked for a work order's line (Home › Approvals' subject): Picking's substitutes, that one first.
+  MaterialSubstitution: '/warehouse/picking?substitution=[id]',
   // Compliance › PPE register & recalls (SCR-113).
   PpeRegisterEntry: '/compliance/register/[id]',
   // B-W2b-271: a recall or withdrawal of a register entry (SCR-328).

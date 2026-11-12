@@ -8,6 +8,8 @@ import type { SplitActions, SplitModel } from '../every-shift/use-split'
 import type { ExtraActions, ExtraModel } from '../extra/use-extra'
 // B-W2b-130: the Leather panel (one shade lot rule) and the cut entry's hide photo.
 import type { WorkOrderLeather } from './leather/api'
+// B-W2b-320: Materials › Substitute….
+import type { WorkOrderSubstituteActions, WorkOrderSubstituteModel } from '../materials/substitute/WorkOrderSubstitute'
 // B-W2b-245: the frozen spec against the master (Spec differences) and Change request.
 import type { SpecActions, SpecModel } from '../spec/model'
 
@@ -84,6 +86,8 @@ export interface WorkOrderRecordModel {
   cutPhoto?: { entryId: string; url: string | null; problem: string | null } | null
   /** B-W2b-245: the spec against the master and the work order's change requests (absent: not drawn). */
   spec?: SpecModel
+  /** B-W2b-320: Materials › Substitute… (absent: not drawn). */
+  substitute?: WorkOrderSubstituteModel
   /** Design cases: what the panels show (the page mounts the live panels instead). */
   panelsPreview?: RecordPanelsViewModel
   /** Design cases: a dialog's typed reason, the overview's fields in edit, a draft's grid being edited. */
@@ -121,4 +125,6 @@ export interface WorkOrderRecordActions {
   extra?: ExtraActions
   /** B-W2b-245: Spec differences and Change request. */
   spec?: SpecActions
+  /** B-W2b-320: Materials › Substitute…. */
+  substitute?: WorkOrderSubstituteActions
 }

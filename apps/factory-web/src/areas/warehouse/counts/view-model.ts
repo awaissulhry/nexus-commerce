@@ -1,6 +1,9 @@
 import type { RecordPanelsViewModel } from '../../../record-panels/model'
 import type { CountItemKind, CountKind, CountLine, CountPlace, CountReason, CountRecord, CountRow, CountTiles, LineFilter, MaterialChoice } from './api'
 import type { CountsCan, ListView, Phrase, RecordTab } from './model'
+// B-W2b-320: the count schedules (Due counts, Due this week, Count schedule), the freeze and class of New count, the blocked places.
+import type { AbcClass, BlockedPlace } from './depth/api'
+import type { CountSchedulesActions, CountSchedulesModel } from './depth/use-count-schedules'
 
 /**
  * The view models of Warehouse › Counts (SCR-132): what the list, the count record and their dialogs draw. The views take
@@ -41,6 +44,9 @@ export interface NewCountDraft {
   note: string
   /** Start counting at once (the expected quantities frozen in the same step). */
   start: boolean
+  /** B-W2b-320: freeze the counted lines' moves until each is counted; one ABC class of materials (starts at once). */
+  freeze?: boolean
+  abcClass?: AbcClass | null
 }
 
 export interface NewCountModel {
@@ -85,6 +91,9 @@ export interface CountsListModel {
   /** Design cases: rows ticked, the keys list open. */
   selected?: string[]
   helpOpen?: boolean
+  /** B-W2b-320: the schedules' parts (null: not drawn) and the places of the schedule form's site. */
+  schedules?: CountSchedulesModel | null
+  schedulePlaces?: PlaceChoice[] | null
 }
 
 export interface CountsListActions extends NewCountActions {
@@ -99,6 +108,7 @@ export interface CountsListActions extends NewCountActions {
   onExport?: (ids: readonly string[]) => void
   onSheets?: (id: string, expected: boolean) => void
   onDismissNotice?: () => void
+  schedules?: CountSchedulesActions
 }
 
 // ---- the count record ------------------------------------------------------------------------------------------------------------
@@ -172,6 +182,8 @@ export interface CountRecordModel {
   now: string
   /** B-W2b-15: every place of the count with its lines, counted and differing (the place filter); null while read. */
   places?: CountPlace[] | null
+  /** B-W2b-320: the places this count blocks now (conn "Locations (blocked during a count)"); null: not read. */
+  blocked?: BlockedPlace[] | null
   /** Design cases: the Activity tab's record panels (the page mounts the real ones). */
   panelsPreview?: RecordPanelsViewModel | null
   /** Design cases: Differences rows ticked, the keys list open. */

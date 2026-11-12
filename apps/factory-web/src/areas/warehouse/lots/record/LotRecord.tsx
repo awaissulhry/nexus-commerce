@@ -20,6 +20,9 @@ import { useTraceFind } from '../trace/useTraceFind'
 import { LOADING, part, PART_LOADING, ready, type Loaded, type Part } from '../shared/model'
 import { LotsMessages, type MovesPart } from '../shared/parts'
 import { LotRecordView } from './view/LotRecordView'
+// B-W2b-320: the lot's W2b parts (lifecycle, attributes, incoming inspection, separation, split, trace report).
+import { useLotDepth } from '../depth/use-lot-depth'
+import { useLocale } from '../../../../lib/i18n/provider'
 
 /**
  * The lot record container (`/w/<company>/warehouse/lots/<lotId>?tab=overview|trace|moves|activity`, SCR-201-record):
@@ -62,6 +65,8 @@ function LotRecordContainer({ lotId }: { lotId: string }) {
   const [holds, setHolds] = useState<Part<LotHolds> | null>(daily.holdsView ? PART_LOADING : null)
   const [holdReasons, setHoldReasons] = useState<PickerReason[]>([])
   const asked = useRef({ figures: false, trace: false, holds: false })
+  const locale = useLocale()
+  const depth = useLotDepth(api, lotId, session.permissions, { timeZone: TIME_ZONE, language: locale === 'en' ? 'en' : 'it', traceOpen: tab === 'trace', onChanged: () => reread() })
 
   const load = useCallback(async () => {
     if (!can.stockView) {
@@ -184,8 +189,13 @@ function LotRecordContainer({ lotId }: { lotId: string }) {
     (change) => {
       const named = change.fields.lotId
       if ((change.type.startsWith('inventory.') || change.type.startsWith('lot.') || change.type.startsWith('quality.hold')) && (named === undefined || named === lotId)) reread()
+      // B-W2b-320: lot.lifecycle_changed / lot.split / lot.attributes_changed / lot.trace_report_made name the lot (or its family).
+      if (change.type.startsWith('lot.') && (named === undefined || named === lotId || change.fields.parentLotId === lotId)) depth.reread()
     },
-    () => reread(),
+    () => {
+      reread()
+      depth.reread()
+    },
     can.stockView,
   )
 
@@ -230,7 +240,7 @@ function LotRecordContainer({ lotId }: { lotId: string }) {
 
   return (
     <LotRecordView
-      model={{ prefix, can, tab, record, checklist, moves, live, asOf, changed: null, dockOpen, timeZone: TIME_ZONE, daily, figures, trace, holds, holdReasons, writeOff: writeOff.model, find: find.model }}
+      model={{ prefix, can, tab, record, checklist, moves, live, asOf, changed: null, dockOpen, timeZone: TIME_ZONE, daily, figures, trace, holds, holdReasons, writeOff: writeOff.model, find: find.model, depth: depth.model }}
       panels={panels}
       actions={{
         onRetry: () => void load(),
@@ -246,6 +256,7 @@ function LotRecordContainer({ lotId }: { lotId: string }) {
         writeOff: writeOff.actions,
         onTrace: find.open,
         find: find.actions,
+        depth: depth.actions,
       }}
     />
   )

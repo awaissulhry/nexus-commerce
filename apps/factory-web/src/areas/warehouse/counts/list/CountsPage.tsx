@@ -14,6 +14,9 @@ import { CountsMessages, scopeText, useWords } from '../parts'
 import type { CountsListModel, NewCountDraft, NewCountModel, Notice, PlaceChoice, SiteChoice } from '../view-model'
 import { openPdf } from '../papers'
 import { CountsListView } from './view/CountsListView'
+// B-W2b-320: the count schedules (Due counts, the tile, Count schedule, Start count), the freeze and class of New count.
+import { useCountSchedules } from '../depth/use-count-schedules'
+import { todayIn } from '../../lots/depth/model'
 
 /**
  * `/w/<company>/warehouse/counts` (SCR-132): the saved row (`?view=`), the search (`?q=`) and the site (`?site=`) in the
@@ -108,14 +111,28 @@ function CountsContainer() {
       .then(setTiles)
       .catch(() => undefined)
   }, 1000)
+  const schedules = useCountSchedules(api, {
+    siteId,
+    can,
+    locations: can.locations,
+    today: todayIn(TIME_ZONE),
+    onStarted: (countId) => router.push(`${prefix}/warehouse/counts/${encodeURIComponent(countId)}`),
+    onChanged: () => void load(),
+  })
+  const rereadDue = useCoalesced(() => void schedules.reread(), 1500)
   const live = useLive(
     (change) => {
       if (isCountEvent(change.type)) {
         setUpdates((count) => count + 1)
         refreshTiles()
       }
+      // B-W2b-320: a schedule changed, counted or started → the Due counts and the tile.
+      if (change.type === 'inventory.count_schedule_changed' || change.type === 'inventory.count_changed') rereadDue()
     },
-    () => void load(),
+    () => {
+      void load()
+      void schedules.reread()
+    },
     can.view,
   )
 
@@ -123,7 +140,7 @@ function CountsContainer() {
 
   const years = useMemo(() => yearEndChoices(new Date()), [])
   const blank = useCallback(
-    (): NewCountDraft => ({ siteId: siteId ?? (sites.length === 1 ? sites[0]!.id : null), kind: 'CYCLE', year: years.preset, locationId: null, item: null, lotId: null, itemKind: null, team: '', note: '', start: true }),
+    (): NewCountDraft => ({ siteId: siteId ?? (sites.length === 1 ? sites[0]!.id : null), kind: 'CYCLE', year: years.preset, locationId: null, item: null, lotId: null, itemKind: null, team: '', note: '', start: true, freeze: true, abcClass: null }),
     [siteId, sites, years.preset],
   )
   const [draft, setDraft] = useState<NewCountDraft | null>(null)
@@ -182,13 +199,16 @@ function CountsContainer() {
       siteId: draft.siteId,
       kind: draft.kind,
       ...(draft.locationId ? { locationId: draft.locationId } : {}),
-      ...(draft.item ? { itemId: draft.item.id } : {}),
-      ...(draft.item && draft.lotId ? { lotId: draft.lotId } : {}),
+      ...(draft.item && !draft.abcClass ? { itemId: draft.item.id } : {}),
+      ...(draft.item && draft.lotId && !draft.abcClass ? { lotId: draft.lotId } : {}),
       ...(draft.itemKind ? { itemKind: draft.itemKind } : {}),
       ...(draft.kind === 'YEAR_END' ? { inventoryDate: `${draft.year}-12-31` } : {}),
       ...(draft.team.trim() ? { countTeam: draft.team.trim() } : {}),
       ...(draft.note.trim() ? { note: draft.note.trim() } : {}),
-      ...(draft.start ? { start: true } : {}),
+      ...(draft.start || draft.abcClass ? { start: true } : {}),
+      // B-W2b-320 (cn-new W2b): freeze the counted lines' moves; one ABC class (it starts at once, names no item or lot).
+      ...(draft.freeze ? { freeze: true } : {}),
+      ...(draft.abcClass && draft.kind === 'CYCLE' ? { abcClass: draft.abcClass } : {}),
     }
     setBusy(true)
     setProblem(null)
@@ -240,7 +260,8 @@ function CountsContainer() {
     [api, locale],
   )
 
-  const model: CountsListModel = { prefix, can, view, q, sites, siteId, rows, tiles, asOf, live, updates, timeZone: TIME_ZONE, newCount, notice }
+  const formSite = schedules.model.dialog?.form?.siteId ?? null
+  const model: CountsListModel = { prefix, can, view, q, sites, siteId, rows, tiles, asOf, live, updates, timeZone: TIME_ZONE, newCount, notice, schedules: schedules.model, schedulePlaces: formSite ? placesOf(trees.find((site) => site.id === formSite)) : null }
 
   return (
     <CountsListView
@@ -261,6 +282,7 @@ function CountsContainer() {
         onExport: exportRows,
         onSheets: sheets,
         onDismissNotice: () => setNotice(null),
+        schedules: schedules.actions,
       }}
     />
   )

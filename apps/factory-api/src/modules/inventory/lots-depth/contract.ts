@@ -62,6 +62,15 @@ export const listContract = defineContract({
     finish: z.string().trim().min(1).max(100).optional(),
     origin: z.string().trim().min(1).max(100).optional(),
     q: z.string().trim().min(1).max(80).optional(),
+    // B-W2b-320: the W2b columns of the lots a W1 view of Lots & traceability shows (its page's ids, comma-separated).
+    ids: z
+      .string()
+      .trim()
+      .min(1)
+      .max(200 * 37)
+      .transform((value) => value.split(',').map((part) => part.trim()))
+      .pipe(z.array(id()).min(1).max(200))
+      .optional(),
     cursor: id().optional(),
     limit: limit(200, 50),
   }),

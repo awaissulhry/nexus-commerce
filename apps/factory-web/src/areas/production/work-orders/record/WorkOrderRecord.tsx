@@ -49,6 +49,8 @@ import { WorkOrderRecordView } from './view/WorkOrderRecordView'
 // B-W2b-130: the cut log with its W2b facts (the hide photo), and Materials › Leather (the one shade lot rule).
 import { getCutLogW2b, hidePhotoAddress } from '../cutting/api'
 import { getWorkOrderLeather, type WorkOrderLeather } from './leather/api'
+// B-W2b-320: Materials › Substitute… opens Warehouse › Picking's "Use a substitute" (B-W2b-298's API).
+import { useSubstitute } from '../../../warehouse/picking/substitute/use-substitute'
 
 /**
  * `/w/<company>/production/work-orders/<id>` (SCR-070 … SCR-072): loads the work order (workorders.view; the API checks
@@ -289,6 +291,8 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
 
   // Live: this work order's events read it again (one read for a burst of scans); unsaved work → "changed · Reload".
   const reread = useCoalesced(() => void load(), 700)
+  // B-W2b-320: a substitute asked or withdrawn re-reads the work order (its pick list, readiness).
+  const substitute = useSubstitute(api, session.permissions, () => reread())
   const live = useLive(
     (change) => {
       if (!liveTouches(change, workOrderId)) return
@@ -372,6 +376,8 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
     split: split.model,
     // B-W2b-245
     spec: spec.model,
+    // B-W2b-320
+    substitute: workOrder.status === 'ready' ? { can: substitute.can, status: workOrder.value.status, dialog: substitute.model } : undefined,
   }
 
   const value = workOrder.status === 'ready' ? workOrder.value : null
@@ -388,6 +394,8 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
         extra: extra.actions,
         // B-W2b-245
         spec: spec.actions,
+        // B-W2b-320
+        substitute: { onOpen: () => value && substitute.open({ workOrderId: value.id, number: value.number }), dialog: substitute.actions },
         onRetryPart: () => value && void loadParts(value),
         onReload: () => void load(),
         onDock: toggleDock,
