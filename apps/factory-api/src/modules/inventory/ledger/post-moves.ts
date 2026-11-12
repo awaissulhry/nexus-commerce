@@ -89,6 +89,8 @@ export interface MoveDraft {
   /** W2b (B-W2b-16): a CUSTOMER_RETURN move names the return line its goods came back on, and that line's customer. */
   readonly returnLineId?: string | null
   readonly returnPartyId?: string | null
+  /** W2b (B-W2b-326): a move of a transfer between sites names its line (the ship's TRANSFER, the receipt's TRANSFER_OUT and TRANSFER_IN, a difference written off). */
+  readonly transferLineId?: string | null
   readonly workOrderId?: string | null
   readonly reference?: string | null
   /** Why: required for ADJUSTMENT, COUNT, SCRAP and a reversal. */
@@ -361,6 +363,8 @@ export async function postMoves(tools: CommandTools, drafts: readonly MoveDraft[
       receiptLineId: row.receiptLineId,
       ...(row.shipmentLineId ? { shipmentLineId: row.shipmentLineId } : {}),
       ...(row.returnLineId ? { returnLineId: row.returnLineId, returnPartyId: row.returnPartyId } : {}),
+      // B-W2b-326
+      ...(row.transferLineId ? { transferLineId: row.transferLineId } : {}),
       workOrderId: row.workOrderId,
       reference: row.reference,
       note: row.note,
@@ -577,6 +581,8 @@ function rowOf(move: KeyedDraft, index: number, facts: Facts, context: StockCont
     receiptLineId: move.receiptLineId ?? null,
     ...(move.shipmentLineId ? { shipmentLineId: move.shipmentLineId } : {}),
     ...(move.returnLineId ? { returnLineId: move.returnLineId, returnPartyId: move.returnPartyId ?? null } : {}),
+    // B-W2b-326
+    ...(move.transferLineId ? { transferLineId: move.transferLineId } : {}),
     workOrderId: move.workOrderId ?? null,
     reference: move.reference?.trim() || null,
     note: move.note?.trim() || null,

@@ -51,6 +51,8 @@ import { SALES_INQUIRIES_ADDS } from '../../sales/inquiries/permissions'
 import { INVENTORY_RULES_ADDS } from '../../inventory/posting/permissions'
 // B-W2b-293: planned work and subcontract orders made real (the planner and the production manager).
 import { PLANNING_PLANNED_ADDS } from '../../planning/planned-orders/permissions'
+// B-W2b-301
+import { PLANNING_PROMISE_ADDS } from '../../planning/promise/permissions'
 // B-W2b-311: suppliers in depth (the buyer and quality set a supplier's status).
 import { SUPPLIERS_DEPTH_ADDS } from '../../purchasing/suppliers-depth/permissions'
 // B-W2b-292: the warehouse task inbox (the warehouse hands out the floor's tasks).
@@ -60,6 +62,10 @@ import { SUBCONTRACT_DEPTH_ADDS } from '../../purchasing/subcontract-depth/permi
 // B-W2b-315: bank details (finance), qualification (the buyer and quality) and the compliance override (quality); the portal's bank details.
 import { BANK_ADDS, PORTAL_BANK_ADDS } from '../../purchasing/bank/permissions'
 import { QUALIFICATION_ADDS } from '../../purchasing/qualification/permissions'
+// B-W2b-326: transfers between sites (the warehouse).
+import { TRANSFERS_ADDS } from '../../inventory/transfers/permissions'
+// B-W2b-299: counts by scanning every unit (the warehouse's phone; the floor's operator and team leader).
+import { INVENTORY_COUNTS_DEPTH_ADDS, INVENTORY_COUNTS_DEPTH_FLOOR_ADDS } from '../../inventory/counts-depth/permissions'
 // B-W2b-229: the option library (production manager) and option prices (sales).
 import { PRODUCT_OPTIONS_ADDS } from '../../product/options/permissions'
 // B-W2b-238: materials in depth (the production manager and quality decide a material's approval).
@@ -94,6 +100,8 @@ import { PRODUCT_BRANDING_ADDS } from '../../product/branding-sets/permissions'
 import { INVENTORY_LOTS_DEPTH_ADDS } from '../../inventory/lots-depth/permissions'
 // B-W2b-356: warehouse reports (the warehouse, buyer, planner, production manager and finance read them).
 import { INVENTORY_REPORTS_ADDS } from '../../inventory/reports/permissions'
+// B-W2b-350: purchasing reports (the buyer, planner, production manager, finance and the warehouse read them).
+import { PURCHASING_REPORTS_ADDS } from '../../purchasing/reports/permissions'
 // B-W2b-260: recall, withdrawal and authority (the quality inspector drafts them and speaks for the company outward).
 import { RECALL_ADDS } from '../../compliance/recall/permissions'
 // B-W2b-258: the user information builder (quality generates the leaflet drafts and checks a translation).
@@ -108,6 +116,8 @@ import { COMPLIANCE_REPORTS_ADDS } from '../../compliance/reports/permissions'
 import { CLAIMS_ADDS } from '../../compliance/claims/permissions'
 // B-W2b-262: the brand's samples and tech packs (the customer Buyer, Quality, Designer and Viewer; the Admin follows).
 import { PORTAL_SAMPLES_READERS } from '../../sales/portal-samples/permissions'
+// B-W2b-304: credit limits.
+import { SALES_CREDIT_ADDS } from '../../sales/credit/permissions'
 
 /**
  * The system role templates (plan A1 §3.11 "Role"; feature PLT-030): ready roles every tenant gets as system roles
@@ -951,6 +961,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (INVENTORY_RULES_ADDS[key] ?? []) : []),
   // B-W2b-293
   ...(audience === 'office' ? (PLANNING_PLANNED_ADDS[key] ?? []) : []),
+  // B-W2b-301
+  ...(audience === 'office' ? (PLANNING_PROMISE_ADDS[key] ?? []) : []),
   // B-W2b-311
   ...(audience === 'office' ? (SUPPLIERS_DEPTH_ADDS[key] ?? []) : []),
   // B-W2b-292
@@ -963,7 +975,15 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (BANK_ADDS[key] ?? []) : []),
   ...(audience === 'office' ? (QUALIFICATION_ADDS[key] ?? []) : []),
   // B-W2b-319
-  ...(audience === 'office' ? (PLANNING_STRATEGY_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (PLANNING_STRATEGY_ADDS[key] ?? []) : []),
+  // B-W2b-350
+  ...(audience === 'office' ? (PURCHASING_REPORTS_ADDS[key] ?? []) : []),
+  // B-W2b-326
+  ...(audience === 'office' ? (TRANSFERS_ADDS[key] ?? []) : []),
+  // B-W2b-299
+  ...((audience === 'office' ? INVENTORY_COUNTS_DEPTH_ADDS : INVENTORY_COUNTS_DEPTH_FLOOR_ADDS)[key] ?? []),
+  // B-W2b-304
+  ...(audience === 'office' ? (SALES_CREDIT_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the

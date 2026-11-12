@@ -180,10 +180,8 @@ describe('my list across stations (MES-022)', () => {
   })
 })
 
-describe('the warehouse variant (SCM-274 comes with W2b-5)', () => {
-  it('a warehouse tablet is told so; a tablet with no mode keeps "not at a station"', () => {
-    expect(emptyOf({ ...LIST, target: null, entries: [] }, 'warehouse')).toBe('warehouse')
-    expect(emptyOf({ ...LIST, target: null, entries: [] }, null)).toBe('noStation')
+describe('the warehouse variant (B-W2b-308: the task inbox is My work at the warehouse)', () => {
+  it('a tablet with no station here is a misplaced one: "not at a station" (a warehouse tablet opens the inbox: warehouse/entry.tsx)', () => {
     expect(emptyOf({ ...LIST, target: null, entries: [] })).toBe('noStation')
   })
 })

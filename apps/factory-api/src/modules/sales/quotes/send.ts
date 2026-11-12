@@ -36,6 +36,8 @@ import { freezeProofsInCommand, proofSendChecks } from '../quote-proofs/freeze'
 // B-W2b-325: the line rules (minimums) and the discount shown on the document.
 import { quoteLineChecks, withLineChecks } from '../line-checks/documents'
 import { discountShownFor } from '../pricing-depth/store'
+// B-W2b-304 (SAL-148): the customer's credit checked when the quote goes out (shown, never held).
+import { quoteCreditInCommand } from '../credit/check'
 
 /**
  * Sending a quote (B-W1-24; A1 §2.5 "Sending freezes a version"; SAL-157, SAL-192, SAL-194, SAL-093; GAP-005, GAP-008;
@@ -318,6 +320,8 @@ export async function sendQuote(request: FastifyRequest, quoteId: string, body: 
         select: { id: true },
       })
       await tx.quote.update({ where: { id: current.id }, data: { status: 'SENT' }, select: { id: true } })
+      // B-W2b-304: one credit check of the version sent (PASS or WARN; none without a limit).
+      await quoteCreditInCommand(tools, version.id)
       await freezeProofsInCommand(tools, { companyId: current.companyId, partyId: current.partyId, number: current.number, versionId: version.id, revision: version.revision })
       const link = await insertAcceptLink(tools, plan.link, current, { email: plan.to, terms: plan.terms, actorId: context.actorId })
       const mail = await queueLinkMail(tools, {
