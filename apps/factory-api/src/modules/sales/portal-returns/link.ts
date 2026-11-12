@@ -51,9 +51,10 @@ import { complaintRecord, listCases, returnReasons, returnRecord } from './views
  */
 
 const RECORD_TYPES: readonly ClaimRecordType[] = ['Shipment', 'SalesOrder']
-const LINK_CASE_ACTION = 'portalReturns.linkCase'
+// B-W2b-346: exported for the remake by link (returns-outcomes/remake.ts), which opens a case of this link the same way.
+export const LINK_CASE_ACTION = 'portalReturns.linkCase'
 
-function claimLinkOf(request: FastifyRequest): LinkSession {
+export function claimLinkOf(request: FastifyRequest): LinkSession {
   const link = linkSessionOf(request)
   if (link.purpose !== 'CLAIM' || !RECORD_TYPES.includes(link.record.type as ClaimRecordType)) throw linkUnavailable()
   return link
@@ -63,7 +64,7 @@ const placeOf = (link: LinkSession): Place => ({ companyId: link.companyId, part
 const systemOf = (request: FastifyRequest, link: { readonly tenantId: string }): CommandCaller => systemCallerOf(request)(link.tenantId)
 
 /** What the link keeps to: its shipment (and that shipment's order) or its order. */
-async function scopeOf(db: Reader, link: LinkSession): Promise<ClaimScope> {
+export async function scopeOf(db: Reader, link: LinkSession): Promise<ClaimScope> {
   if (link.record.type === 'SalesOrder') return { salesOrderId: link.record.id, shipmentId: null }
   const shipment = await db.shipment.findUnique({ where: { id: link.record.id }, select: { salesOrderId: true } })
   return { salesOrderId: shipment?.salesOrderId ?? null, shipmentId: link.record.id }

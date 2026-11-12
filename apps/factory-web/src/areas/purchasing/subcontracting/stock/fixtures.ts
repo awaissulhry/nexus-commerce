@@ -2,6 +2,8 @@ import { createElement } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import { inShell, STOCK, stockWithoutValues, WORKSHOPS, type RoleCase } from '../demo/fixtures'
 import { listCase } from '../list/fixtures'
+// B-W2b-344: days out beside the stock.
+import { AGEING } from '../depth/fixtures'
 import type { SubcontractingModel } from '../list/list-model'
 import { stockKey } from '../list/view/StockSection'
 import { SubcontractingView } from '../list/view/SubcontractingView'
@@ -10,7 +12,8 @@ import { SubcontractingView } from '../list/view/SubcontractingView'
  * SCR-129 — Stock at subcontractors (design purchasing.subcontracting sec:stock; the page's ⋯ / switch "Stock at
  * subcontractors", `?show=stock`) with made-up stock only: each workshop a stock location with our material by lot, still
  * in our books, its lines and value per workshop (cost grain only), a workshop filter and a search, the selection with
- * Export, and the states (loading, error, none at any workshop, nothing matching). Roles: Owner and Buyer (values),
+ * Export, days out per line and workshop (B-W2b-344), and the states (loading, error, none at any workshop, nothing
+ * matching). Roles: Owner and Buyer (values),
  * Warehouse and Planner (no money: no value column), Read-only, Sales (no purchasing.view).
  */
 
@@ -48,5 +51,11 @@ export const designScreen = defineDesignScreen<StockCase>({
     { id: 'planner', label: 'Planner: no money (no value column)', model: stockCase('planner') },
     { id: 'read-only', label: 'Read-only', model: stockCase('readOnly') },
     { id: 'sales', label: 'Sales: no purchasing.view — the page says so', model: stockCase('sales') },
+    // B-W2b-344: days out (W2b ageing), first in first out per stock line.
+    { id: 'w2b-344-days-out', label: 'B-W2b-344 · Days out per line and per workshop; the embroidery thread out 76 days (long out)', model: stockCase('buyer'), note: 'The long-out mark comes after 60 days.' },
+    { id: 'w2b-344-days-out-warehouse', label: 'B-W2b-344 · Days out for the warehouse (no value column)', model: stockCase('warehouse') },
+    { id: 'w2b-344-days-loading', label: 'B-W2b-344 · Days out not read yet: “—” beside each line', model: stockCase('buyer', { ageing: { value: null, problem: null } }) },
+    { id: 'w2b-344-days-failed', label: 'B-W2b-344 · Days out couldn’t be read: the stock stays, a warning with Try again', model: stockCase('buyer', { ageing: { value: null, problem: 'problem.offline' } }) },
+    { id: 'w2b-344-days-truncated', label: 'B-W2b-344 · Days out read from the newest moves only (cut short)', model: stockCase('buyer', { ageing: { value: { ...AGEING, truncated: true }, problem: null } }) },
   ],
 })

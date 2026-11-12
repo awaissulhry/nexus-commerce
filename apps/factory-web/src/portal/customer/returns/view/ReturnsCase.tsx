@@ -37,7 +37,7 @@ export function ReturnsCase({ model: build }: { model: ReturnsCaseBuilder }) {
   const model = narrow && built.shell.band?.refs ? { ...built, shell: { ...built.shell, band: { ...built.shell.band, refs: null } } } : built
   const body = model.body
   return (
-    <WithMessages namespaces={[NS, 'ds-words', 'portal', 'shell', 'lists']}>
+    <WithMessages namespaces={[NS, 'ds-words', 'portal', 'shell', 'lists', 'returns-remake']}>
       <PortalShellView model={model.shell}>
         {body.kind === 'list' ? (
           <ReturnsListView model={body.model} />

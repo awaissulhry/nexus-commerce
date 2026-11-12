@@ -8,6 +8,8 @@ import { STOCK_ADJUSTMENT_KIND } from './stock-adjustment'
 import { PURCHASE_REQUEST_KIND } from './purchase-request'
 // B-W2b-341: a return line credited without the goods coming back.
 import { CREDIT_WITHOUT_RETURN_KIND } from './credit-without-return'
+// B-W2b-315: a supplier's new bank account, after its call-back (SCM-007).
+import { SUPPLIER_BANK_CHANGE_KIND } from './supplier-bank-change'
 // B-W2b-304: a step held for credit let through with a yes.
 import { CREDIT_OVERRIDE_KIND } from './credit-override'
 
@@ -21,6 +23,7 @@ import { CREDIT_OVERRIDE_KIND } from './credit-override'
  *   STOCK_ADJUSTMENT an adjustment worth more than the warehouse rules' value, posted on the yes (B-W2b-314)
  *   PURCHASE_REQUEST a request to buy from someone in the office, before the buyer sees it (B-W2b-332)
  *   CREDIT_WITHOUT_RETURN  a return line credited without the goods coming back (B-W2b-341; the credit written on the yes)
+ *   SUPPLIER_BANK_CHANGE   a supplier's new bank account after its call-back, before payments use it (B-W2b-315; ACTIVE on the yes)
  *   CREDIT_OVERRIDE  an order, a release or a shipment held for credit, let through on the yes (B-W2b-304)
  */
 const KINDS: readonly ApprovalKindDefinition[] = Object.freeze([
@@ -31,6 +34,8 @@ const KINDS: readonly ApprovalKindDefinition[] = Object.freeze([
   PURCHASE_REQUEST_KIND,
   // B-W2b-341
   CREDIT_WITHOUT_RETURN_KIND,
+  // B-W2b-315
+  SUPPLIER_BANK_CHANGE_KIND,
   // B-W2b-304
   CREDIT_OVERRIDE_KIND,
 ])

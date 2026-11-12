@@ -31,6 +31,8 @@ import { gradeRulesImportAdapter } from '../../modules/product/grading/importer'
 import { substanceRulesImportAdapter, substancesImportAdapter } from '../../modules/compliance/substances/importer'
 // W2b (B-W2b-311): a supplier's price list (Purchasing › Supplier › Items & prices › Import price list).
 import { supplierPricesImportAdapter } from '../../modules/purchasing/suppliers-depth/import-prices'
+// W2b (B-W2b-325): the prices of price lists (Sales › Price lists › Import prices), into each list's draft version.
+import { priceListImportAdapter } from '../../modules/sales/pricing-depth/importer'
 
 /**
  * The importers this process runs (plan A1 W0-22; feature PLT-176): each is an importer of factory-domain (its columns,
@@ -139,6 +141,8 @@ export const IMPORTERS: readonly ImportAdapter[] = Object.freeze([
   substanceRulesImportAdapter,
   // B-W2b-311
   supplierPricesImportAdapter,
+  // B-W2b-325
+  priceListImportAdapter,
 ])
 
 let configured: ImporterRegistry<ImportAdapter> | undefined

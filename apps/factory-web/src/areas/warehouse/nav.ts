@@ -1,5 +1,7 @@
-import { ArrowLeftRight, Boxes, ClipboardCheck, ClipboardList, Layers, MapPin, PackageCheck, Settings, Squircle, Truck, Warehouse } from 'lucide-react'
+import { ArrowLeftRight, Boxes, ClipboardCheck, ClipboardList, Layers, MapPin, PackageCheck, Route, Settings, Squircle, Truck, Warehouse } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
+// B-W2b-356: the Reports section's icon (its own line: a merge point).
+import { BarChart3 } from 'lucide-react'
 
 /**
  * Warehouse (design 01 area 6 "Warehouse / Magazzino": Main (Stock, Hides, Lots & traceability, Movements), Inbound (Receipts),
@@ -47,6 +49,8 @@ export const officeArea: OfficeAreaNav = {
           // B-W2a-58: SCR-237 Picking & kits, what the floor must pick and whether it is there (inventory.stock.view).
           { id: 'warehouse-picking', label: 'shell:nav.warehouse.picking', href: '/warehouse/picking', icon: ClipboardList, permission: 'inventory.stock.view' },
           { id: 'warehouse-counts', label: 'shell:nav.warehouse.counts', href: '/warehouse/counts', icon: ClipboardCheck, permission: 'inventory.counts.view' },
+          // B-W2b-326: SCR-360 transfers between sites and the goods in transit (inventory.stock.view: who sees the stock).
+          { id: 'warehouse-transfers', label: 'shell:nav.warehouse.transfers', href: '/warehouse/transfers', icon: Route, permission: 'inventory.stock.view' },
         ],
       },
       {
@@ -54,6 +58,12 @@ export const officeArea: OfficeAreaNav = {
         label: 'shell:nav.warehouse.outbound',
         // SCR-066 / SCR-067: the ship-today queue with the carrier cut-off, then every shipment and its record.
         items: [{ id: 'warehouse-shipments', label: 'shell:nav.warehouse.shipments', href: '/warehouse/shipments', icon: Truck, permission: 'shipping.view' }],
+      },
+      {
+        id: 'warehouse-reports',
+        label: 'shell:nav.warehouse.reportsGroup',
+        // B-W2b-356: SCR-257 stock ageing by material type and leather use by article and supplier lot (inventory.reports.view).
+        items: [{ id: 'warehouse-reports', label: 'shell:nav.warehouse.reports', href: '/warehouse/reports', icon: BarChart3, permission: 'inventory.reports.view' }],
       },
       {
         id: 'warehouse-settings',

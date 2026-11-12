@@ -12,12 +12,15 @@ import { listKeys, type ListKey } from '../../../../../list-frame/model'
 import { formatDate, formatTime } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
-import { dayAt, money } from '../../../../_shared/buying/model'
+import { dayAt, money, quantity } from '../../../../_shared/buying/model'
 import type { OrderRow } from '../../api'
 import { KIT_TONE, ORDER_VIEWS, piecesLine, say, STATUS_TONE, TILES, type OrderView } from '../../model'
 import type { SubcontractingActions, SubcontractingModel } from '../list-model'
 import { NewOrderDialog } from './NewOrderDialog'
 import { StockSection } from './StockSection'
+// B-W2b-344: the Balance open view and the grid's Balance open (../../depth).
+import { BalanceOpenSection } from './BalanceOpenSection'
+import { DEPTH, openByOrder, openText } from '../../depth/model'
 import '../../../../_shared/buying/buying.css'
 import '../../subcontracting.css'
 
@@ -34,7 +37,7 @@ export type { SubcontractingActions, SubcontractingModel } from '../list-model'
  */
 export function SubcontractingView({ model, actions }: { model: SubcontractingModel; actions?: SubcontractingActions }) {
   return (
-    <WithMessages namespaces={['subcontracting', 'lists']}>
+    <WithMessages namespaces={['subcontracting', 'lists', DEPTH]}>
       <Page model={model} actions={actions} />
     </WithMessages>
   )
@@ -42,6 +45,7 @@ export function SubcontractingView({ model, actions }: { model: SubcontractingMo
 
 function Page({ model, actions }: { model: SubcontractingModel; actions?: SubcontractingActions }) {
   const t = useT('subcontracting')
+  const depth = useT(DEPTH)
   const lists = useT('lists')
   const locale = useLocale()
   const place = { locale, timeZone: model.timeZone }
@@ -130,9 +134,9 @@ function Page({ model, actions }: { model: SubcontractingModel; actions?: Subcon
         ) : (
           <MetricStrip
             metrics={TILES.map((tile) => {
-              const value = model.counts ? tile.count(model.counts) : null
+              // B-W2b-344: the Balance open count is the open balances' read ('—' while it is not known, or failed).
+              const value = model.counts ? tile.count({ ...model.counts, balanceOpen: model.balances.value?.counts.balanceOpen ?? null }) : null
               const shown = value === null ? '—' : String(value)
-              if (tile.view === null) return { label: t(`tile.${tile.id}`), value: shown, hint: t('tile.balanceLater') }
               const view = tile.view
               return {
                 label: t(`tile.${tile.id}`),
@@ -142,14 +146,21 @@ function Page({ model, actions }: { model: SubcontractingModel; actions?: Subcon
                   actions?.onView?.(model.view === view && model.show === 'orders' ? 'open' : view)
                 },
                 active: model.show === 'orders' && tileView === view,
-                ...(tile.id === 'late' && value ? { accent: 'var(--nds-danger)' } : {}),
+                ...((tile.id === 'late' || tile.id === 'balance') && value ? { accent: 'var(--nds-danger)' } : {}),
+                ...(tile.id === 'balance' && model.balances.problem ? { hint: depth('tile.balanceFailed') } : {}),
               }
             })}
           />
         )}
       </section>
 
-      {model.show === 'orders' ? <OrdersSection model={model} actions={actions} ownKeys={ownKeys} onHelp={() => setHelp(true)} /> : <StockSection model={model} actions={actions} onHelp={() => setHelp(true)} />}
+      {model.show === 'stock' ? (
+        <StockSection model={model} actions={actions} onHelp={() => setHelp(true)} />
+      ) : model.view === 'balance' ? (
+        <BalanceOpenSection model={model} actions={actions} ownKeys={ownKeys} onHelp={() => setHelp(true)} />
+      ) : (
+        <OrdersSection model={model} actions={actions} ownKeys={ownKeys} onHelp={() => setHelp(true)} />
+      )}
 
       {model.newOrder && <NewOrderDialog model={model} actions={actions} />}
       {help && (
@@ -169,6 +180,8 @@ function Page({ model, actions }: { model: SubcontractingModel; actions?: Subcon
 
 function OrdersSection({ model, actions, ownKeys, onHelp }: { model: SubcontractingModel; actions?: SubcontractingActions; ownKeys: ListKey[]; onHelp: () => void }) {
   const t = useT('subcontracting')
+  const depth = useT(DEPTH)
+  const open = useMemo(() => openByOrder(model.balances.value), [model.balances.value])
   const locale = useLocale()
   const place = { locale, timeZone: model.timeZone }
   const [query, setQuery] = useState(model.q)
@@ -258,6 +271,21 @@ function OrdersSection({ model, actions, ownKeys, onHelp }: { model: Subcontract
           <span className="fw-by-hint">{t('list.noDate')}</span>
         )
       ) : null
+    // B-W2b-344: what of the kit is still out (per unit), red once every piece is back; '—' while the balances are not known.
+    const BalanceCell = ({ data }: ICellRendererParams<OrderRow>) => {
+      if (!data) return null
+      if (!model.balances.value) return <span className="fw-by-hint">—</span>
+      const entry = open.get(data.id)
+      if (!entry) return null
+      return (
+        <span className={entry.balanceOpen ? 'fw-by-cell fw-sc-late' : 'fw-by-cell'}>
+          <Link className="fw-by-link fw-by-num" href={`${href(data)}?tab=balance`}>
+            {openText(entry.open, (uom) => depth(`uom.${uom}`), (text) => quantity(text, locale, 4))}
+          </Link>
+          {entry.balanceOpen && <span className="fw-by-cell-sub">{depth('grid.allBack')}</span>}
+        </span>
+      )
+    }
     const FeeCell = ({ data }: ICellRendererParams<OrderRow>) => (data ? <span className="fw-by-num">{money(data.netAmount ?? null, data.currency, locale)}</span> : null)
     const StatusCell = ({ data }: ICellRendererParams<OrderRow>) =>
       data ? (
@@ -274,6 +302,7 @@ function OrdersSection({ model, actions, ownKeys, onHelp }: { model: Subcontract
             { id: 'tab', label: t('common.openNewTab'), href: href(data), target: '_blank' },
             { id: 'kit', label: t('list.tab.kit'), href: `${href(data)}?tab=kit` },
             { id: 'back', label: t('list.tab.back'), href: `${href(data)}?tab=back` },
+            { id: 'balance', label: depth('tab.balance'), href: `${href(data)}?tab=balance` },
             { id: 'sheet', label: t('list.jobSheet'), href: `${href(data)}/job-sheet`, target: '_blank' },
           ]}
         />
@@ -286,11 +315,12 @@ function OrdersSection({ model, actions, ownKeys, onHelp }: { model: Subcontract
       { colId: 'pieces', headerName: t('col.pieces'), minWidth: 140, flex: 1.1, cellRenderer: PiecesCell },
       { colId: 'kit', headerName: t('col.kit'), minWidth: 130, flex: 1, cellRenderer: KitCell },
       { colId: 'back', headerName: t('col.back'), minWidth: 120, flex: 0.9, cellRenderer: BackCell },
+      { colId: 'balance', headerName: depth('grid.balance'), minWidth: 120, flex: 0.9, cellRenderer: BalanceCell },
       ...(model.can.cost ? [{ colId: 'fee', headerName: t('col.fee'), minWidth: 100, flex: 0.7, type: 'rightAligned', cellRenderer: FeeCell } satisfies ColDef<OrderRow>] : []),
       { colId: 'status', headerName: t('col.status'), minWidth: 130, flex: 0.9, cellRenderer: StatusCell },
       { colId: 'more', headerName: t('col.more'), minWidth: 64, maxWidth: 64, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
     ]
-  }, [t, locale, model.prefix, model.can.cost, model.can.workOrders, model.timeZone])
+  }, [t, depth, locale, model.prefix, model.can.cost, model.can.workOrders, model.timeZone, model.balances.value, open])
 
   const filtered = model.q.trim() !== '' || model.view !== 'open'
   const state = model.rows.problem ? (

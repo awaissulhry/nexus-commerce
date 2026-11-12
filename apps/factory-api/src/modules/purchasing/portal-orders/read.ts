@@ -64,7 +64,9 @@ function searchOf(q: string | undefined): Prisma.PurchaseOrderWhereInput {
 }
 
 /** The revision as the supplier holds it: the order's own for a sent order, the one before for a draft being changed. */
-const heldRevisionOf = (order: { readonly status: string; readonly revision: number }): number => (order.status === 'DRAFT' ? order.revision - 1 : order.revision)
+// B-W2b-305: an order waiting for its yes is not sent yet either.
+const unsent = (status: string): boolean => status === 'DRAFT' || status === 'PENDING_APPROVAL'
+const heldRevisionOf = (order: { readonly status: string; readonly revision: number }): number => (unsent(order.status) ? order.revision - 1 : order.revision)
 
 /** May this person answer (the capability portal.approve over the order's company and party; never an office preview)? */
 export function mayAnswer(request: FastifyRequest, session: PortalSession, order: { readonly companyId: string; readonly partyId: string }): boolean {
@@ -106,7 +108,7 @@ export async function listPortalOrders(request: FastifyRequest, query: PortalLis
   )
   const page = rows.slice(0, LIST_MAX)
   // Drafts being changed: what the supplier holds is the revision before (its row), never the draft's edits.
-  const drafts = page.filter((row) => row.status === 'DRAFT').map((row) => row.id)
+  const drafts = page.filter((row) => unsent(row.status)).map((row) => row.id)
   const held = new Map<string, RevisionState>()
   if (drafts.length > 0) {
     const revisions = await request.withClient((client) => client.purchaseOrderRevision.findMany({ where: { purchaseOrderId: { in: drafts } }, orderBy: { revision: 'desc' }, select: { purchaseOrderId: true, revision: true, after: true } }))
@@ -371,7 +373,7 @@ export async function portalOrder(request: FastifyRequest, orderId: string) {
   const { order, lines, revisions } = own
   const heldRevision = heldRevisionOf(order)
   const heldRow = revisions.find((row) => row.revision === heldRevision) ?? null
-  const draft = order.status === 'DRAFT'
+  const draft = unsent(order.status)
   const heldState = draft && heldRow ? (heldRow.after as unknown as RevisionState) : null
   const tenant = await system(request, session).withClient(async (client) => {
     const stateLines = heldState?.lines ?? []

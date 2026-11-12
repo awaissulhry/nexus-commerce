@@ -96,6 +96,7 @@
     "ChangeOrder": "Change order",
     "PointOfMeasure": "Point of measure",
     "GradeRule": "Grade rule",
+    "Inquiry": "Inquiry",
     "other": "Record"
   },
   "chip": {
@@ -142,6 +143,7 @@
     "ChangeOrder": "Change orders",
     "PointOfMeasure": "Points of measure",
     "GradeRule": "Grade rules",
+    "Inquiry": "Inquiries",
     "other": "Other records"
   },
   "status": {
@@ -232,6 +234,10 @@
     "IN_MAKING": "In making",
     "UNDER_REVIEW": "Under review",
     "IN_REVIEW": "In review",
-    "DONE": "Done"
+    "DONE": "Done",
+    "ASSIGNED": "In progress",
+    "NEED_INFO": "Need info",
+    "QUOTED": "Quoted",
+    "LOST": "Lost"
   }
 }

@@ -11,6 +11,8 @@ import { LINE_DIFF_KINDS, MAX_CHANGE_NOTE, REVISION_ANSWERS } from '@nexus/facto
 import { ERROR_CODES } from '@nexus/factory-domain/core/errors'
 // B-W2b-347: the record of a sample order says what it buys for.
 import { sampleOfOrderView } from './sample-orders/contract'
+// B-W2b-305: the request a send waits for (the 202 answer, Send n's WAITING outcome).
+import { waitingView } from './po-approvals/waiting'
 
 /**
  * The purchasing routes' contracts (B-W1-30; A2 SCR-058 "Purchase orders", SCR-059 the record, SCR-037 the send dialog,
@@ -80,7 +82,8 @@ const lineView = output({
   version: z.number().int(),
 })
 
-const orderView = output({
+// B-W2b-305: exported for po-approvals/ and expediting/ (their answers carry the order).
+export const orderView = output({
   id: id(),
   number: z.string(),
   /** The number the PDF prints (with its revision from the second one). */
@@ -355,6 +358,8 @@ export const sendContract = defineContract({
       }),
       delivery,
     }),
+    // B-W2b-305 (SCM-078): a switched-on approval rule holds for the order: it waits for a yes (PENDING_APPROVAL), nothing was sent.
+    202: output({ order: orderView, approval: waitingView }),
   },
 })
 
@@ -573,12 +578,15 @@ export const sendManyContract = defineContract({
         output({
           id: id(),
           number: z.string().nullable(),
-          outcome: z.enum(['SENT', 'REFUSED']),
+          // B-W2b-305: WAITING — a rule asked a yes first (approval names the request).
+          outcome: z.enum(['SENT', 'REFUSED', 'WAITING']),
           sent: sendContract.response[200].shape.sent.nullable(),
           delivery,
+          approval: waitingView.nullable(),
           refused: refusedView.nullable(),
         }),
       ),
+      waiting: z.number().int(),
     }),
   },
 })

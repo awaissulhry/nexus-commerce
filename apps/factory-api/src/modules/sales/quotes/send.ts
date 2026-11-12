@@ -33,6 +33,9 @@ import { grainsOf, officeContextOf, officeQuote, readCurrentVersion, readQuote, 
 import { forCaller, readFacts, type QuoteDetail } from './views'
 // B-W2b-165 (SAL-199): the proofs go with the version: a proof not ready blocks the send, the send freezes them.
 import { freezeProofsInCommand, proofSendChecks } from '../quote-proofs/freeze'
+// B-W2b-325: the line rules (minimums) and the discount shown on the document.
+import { quoteLineChecks, withLineChecks } from '../line-checks/documents'
+import { discountShownFor } from '../pricing-depth/store'
 // B-W2b-304 (SAL-148): the customer's credit checked when the quote goes out (shown, never held).
 import { quoteCreditInCommand } from '../credit/check'
 
@@ -154,6 +157,8 @@ export async function readSendFacts(db: Reader, quote: QuoteRow, now: Date, comp
   })
   const proofChecks = await proofSendChecks(db, version.id)
   if (proofChecks.length > 0) checks = { ready: false, checks: [...checks.checks, ...proofChecks] }
+  // B-W2b-325 (SAL-178): the line rules of sales/line-checks (minimum order quantities): a BLOCKS finding stops the send.
+  checks = withLineChecks(checks, await quoteLineChecks(db, quote, version, facts.lines, party, now))
 
   let billTo: BillToSnapshot | null = null
   if (billRow && party?.identity) {
@@ -173,7 +178,8 @@ export async function readSendFacts(db: Reader, quote: QuoteRow, now: Date, comp
   if (preview ? billTo && shipTo && row.validUntil !== null : checks.ready && billTo && shipTo) {
     const lines = await readCustomerLines(db, version.id)
     const shown = preview ? { ...row, language: preview.language } : row
-    customer = customerQuoteOf({ quote, version: shown, lines, labels: await lineLabels(db, lines), billTo: billTo!, shipTo: shipTo!, contact, date: today, depositDueDays: await depositDueDaysFor(db, version.paymentTermsId) })
+    // B-W2b-325 (SAL-170): showDiscount, the version's price list's choice.
+    customer = customerQuoteOf({ quote, version: shown, lines, labels: await lineLabels(db, lines), billTo: billTo!, shipTo: shipTo!, contact, date: today, depositDueDays: await depositDueDaysFor(db, version.paymentTermsId), showDiscount: await discountShownFor(db, version.priceListVersionId) })
   }
   return { checks, versionId: version.id, versionStatus: version.status, billTo, shipTo, contact, customer, today }
 }

@@ -20,7 +20,8 @@ import { addDays, sendBlockers, STATUS_WORDS, type QuoteIssue, type QuoteVersion
  */
 
 // B-W2b-165 (SAL-199): PROOF_NOT_READY, a proof of the version still uploading, being checked or refused (sales/quote-proofs).
-export const SEND_CHECK_CODES = ['COMPANY_LEGAL', 'BILL_TO_INCOMPLETE', 'SHIP_TO_INCOMPLETE', 'SDI_IDENTITY', 'VAT_CHANGED', 'FIRM_OFFER_STANDS', 'TERMS_VERSION', 'NO_BANK_DETAILS', 'PROOF_NOT_READY'] as const
+// B-W2b-325 (SAL-178): BELOW_MINIMUM, a minimum order quantity the version does not reach (api sales/line-checks).
+export const SEND_CHECK_CODES = ['COMPANY_LEGAL', 'BILL_TO_INCOMPLETE', 'SHIP_TO_INCOMPLETE', 'SDI_IDENTITY', 'VAT_CHANGED', 'FIRM_OFFER_STANDS', 'TERMS_VERSION', 'NO_BANK_DETAILS', 'PROOF_NOT_READY', 'BELOW_MINIMUM'] as const
 export type SendCheckCode = (typeof SEND_CHECK_CODES)[number]
 
 export interface SendCheck {

@@ -5,13 +5,16 @@ import Link from 'next/link'
 import { Download, Search } from 'lucide-react'
 import { Banner, EmptyState } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
-import { Button, Input, Pill, Select } from '@nexus/ui/primitives'
+import { Button, Input, Pill, Select, Tag } from '@nexus/ui/primitives'
 import { ListFrame } from '../../../../../list-frame/ListFrame'
 import { formatDate } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { money, quantity } from '../../../../_shared/buying/model'
 import type { WorkshopStockRow } from '../../api'
 import type { SubcontractingActions, SubcontractingModel } from '../list-model'
+// B-W2b-344: days out (W2b ageing) beside each stock line, first in first out at the workshop's place.
+import { daysOutBy, DEPTH, workshopAgeing } from '../../depth/model'
+import { LONG_OUT_DAYS } from '@nexus/factory-domain/purchasing/subcontract-depth/ageing'
 
 const QUALITY_TONE: Readonly<Record<string, 'neutral' | 'success' | 'warning' | 'danger'>> = { RELEASED: 'success', QUARANTINE: 'warning', BLOCKED: 'danger', REJECTED: 'danger' }
 
@@ -32,14 +35,17 @@ export function stockRowsOf(rows: readonly WorkshopStockRow[], workshop: string 
  * SCR-129 — Stock at subcontractors (design purchasing.subcontracting sec:stock): each workshop is a stock location, our
  * material there by lot (and hide), still in our books while the workshop holds it. Per workshop its lines and value (the
  * cost grain only), then the list frame: workshop, material, lot (a link to the lot), quantity in the material's unit,
- * value (cost grain only: not drawn without it), last sent. Days out are W2b's ageing (said, not drawn). A workshop
- * filter and a search over what was read; Export N (CSV) while lines are selected.
+ * value (cost grain only: not drawn without it), last sent, days out (B-W2b-344: GET …/ageing joined by place, material,
+ * colour, lot and hide; long out past the long-out days; '—' while unknown). A workshop filter and a search over what was
+ * read; Export N (CSV) while lines are selected.
  */
 export function StockSection({ model, actions, onHelp }: { model: SubcontractingModel; actions?: SubcontractingActions; onHelp: () => void }) {
   const t = useT('subcontracting')
+  const depth = useT(DEPTH)
   const locale = useLocale()
   const place = { locale, timeZone: model.timeZone }
   const stock = model.stock.value
+  const days = useMemo(() => daysOutBy(model.ageing.value), [model.ageing.value])
   const [query, setQuery] = useState(model.stockQ)
   useEffect(() => setQuery(model.stockQ), [model.stockQ])
   const typed = useRef(false)
@@ -112,6 +118,20 @@ export function StockSection({ model, actions, onHelp }: { model: Subcontracting
       ) : null
     const ValueCell = ({ data }: ICellRendererParams<WorkshopStockRow>) => (data ? <span className="fw-by-num">{data.value === null || data.value === undefined ? t('stock.noValue') : money(data.value, data.currency, locale)}</span> : null)
     const SentCell = ({ data }: ICellRendererParams<WorkshopStockRow>) => (data ? <span>{data.lastSentAt ? formatDate(data.lastSentAt, place) : '—'}</span> : null)
+    const DaysCell = ({ data }: ICellRendererParams<WorkshopStockRow>) => {
+      if (!data) return null
+      const age = days.get(stockKey(data))
+      if (!age || age.daysOut === null) return <span className="fw-by-hint">—</span>
+      return (
+        <span className="fw-by-cell">
+          <span className="fw-by-inline">
+            <span className="fw-by-num">{depth('balance.days', { count: age.daysOut })}</span>
+            {age.longOut && <Tag tone="danger">{depth('ageing.longOut')}</Tag>}
+          </span>
+          {age.since && <span className="fw-by-cell-sub">{depth('ageing.since', { date: formatDate(`${age.since}T12:00:00Z`, place) })}</span>}
+        </span>
+      )
+    }
     return [
       { colId: 'workshop', headerName: t('stock.col.workshop'), minWidth: 190, flex: 1.4, valueGetter: (params) => params.data?.workshop.name ?? '', cellRenderer: WorkshopCell },
       { colId: 'material', headerName: t('stock.col.material'), minWidth: 220, flex: 1.8, valueGetter: (params) => params.data?.item.code ?? '', cellRenderer: MaterialCell },
@@ -119,8 +139,9 @@ export function StockSection({ model, actions, onHelp }: { model: Subcontracting
       { colId: 'quantity', headerName: t('stock.col.quantity'), minWidth: 120, flex: 0.8, type: 'rightAligned', cellRenderer: QuantityCell },
       ...(model.can.cost ? [{ colId: 'value', headerName: t('stock.col.value'), minWidth: 120, flex: 0.8, type: 'rightAligned', cellRenderer: ValueCell } satisfies ColDef<WorkshopStockRow>] : []),
       { colId: 'lastSent', headerName: t('stock.col.lastSent'), minWidth: 120, flex: 0.8, cellRenderer: SentCell },
+      { colId: 'daysOut', headerName: t('stock.col.daysOut'), minWidth: 130, flex: 0.9, valueGetter: (params) => (params.data ? (days.get(stockKey(params.data))?.daysOut ?? -1) : -1), cellRenderer: DaysCell },
     ]
-  }, [t, locale, model.prefix, model.can.cost, model.can.stock, model.timeZone])
+  }, [t, depth, locale, model.prefix, model.can.cost, model.can.stock, model.timeZone, days])
 
   const workshops = stock?.workshops ?? []
   const state = model.stock.problem ? (
@@ -152,17 +173,27 @@ export function StockSection({ model, actions, onHelp }: { model: Subcontracting
         <p className="fw-by-hint">{t('stock.intro')}</p>
         {workshops.length > 0 && (
           <ul className="fw-sc-workshops">
-            {workshops.map((entry) => (
-              <li key={entry.location.id}>
-                {model.can.cost
-                  ? t('stock.workshopValue', { workshop: entry.workshop.name, lines: t('stock.lines', { count: entry.lines }), value: entry.value === null || entry.value === undefined ? t('stock.noValue') : money(entry.value, stock?.rows.find((row) => row.location.id === entry.location.id)?.currency ?? 'EUR', locale) })
-                  : t('stock.workshopLines', { workshop: entry.workshop.name, lines: t('stock.lines', { count: entry.lines }) })}
-              </li>
-            ))}
+            {workshops.map((entry) => {
+              const age = workshopAgeing(model.ageing.value, entry.location.id)
+              return (
+                <li key={entry.location.id}>
+                  {model.can.cost
+                    ? t('stock.workshopValue', { workshop: entry.workshop.name, lines: t('stock.lines', { count: entry.lines }), value: entry.value === null || entry.value === undefined ? t('stock.noValue') : money(entry.value, stock?.rows.find((row) => row.location.id === entry.location.id)?.currency ?? 'EUR', locale) })
+                    : t('stock.workshopLines', { workshop: entry.workshop.name, lines: t('stock.lines', { count: entry.lines }) })}
+                  {age && age.oldest !== null && <> · {depth(age.longOut > 0 ? 'ageing.workshopLong' : 'ageing.workshop', { days: depth('balance.days', { count: age.oldest }), count: age.longOut })}</>}
+                </li>
+              )
+            })}
           </ul>
         )}
       </div>
       {stock?.truncated && <Banner tone="warning" title={t('stock.truncated')} />}
+      {model.ageing.problem && (
+        <Banner tone="warning" title={depth('ageing.failed')} action={<Button size="sm" onClick={() => actions?.onRetryAgeing?.()}>{t('common.retry')}</Button>}>
+          {depth(model.ageing.problem)}
+        </Banner>
+      )}
+      {model.ageing.value?.truncated && <Banner tone="warning" title={depth('ageing.truncated')} />}
       <ListFrame<WorkshopStockRow>
         label={t('stock.tableLabel')}
         rows={state ? [] : rows}
@@ -215,7 +246,7 @@ export function StockSection({ model, actions, onHelp }: { model: Subcontracting
         </p>
       )}
       <p className="fw-by-hint">
-        {t('stock.ours')} {t('stock.daysOutLater')}
+        {t('stock.ours')} {depth('ageing.how', { days: model.ageing.value?.longOutDays ?? LONG_OUT_DAYS })}
       </p>
     </section>
   )

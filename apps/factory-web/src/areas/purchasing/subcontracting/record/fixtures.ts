@@ -6,6 +6,13 @@ import { BUNDLES, canFor, CELLS, DDT_LIVE, inShell, kitLine, LOCATIONS, MATERIAL
 import { words, type SubcontractCan } from '../model'
 import { LOADING, NO_DDT, NO_KIT_LINE, ready, receiveDraftOf, sendDraftOf, sourcesFor, type RecordDialog, type SubcontractRecordModel } from './record-model'
 import { SubcontractRecordView } from './view/SubcontractRecordView'
+// B-W2b-344: the written terms link, the Material balance and Cost tabs (../depth), with made-up data.
+import type { OrderBalance, OrderCost, OrderTerms } from '../depth/api'
+import { BALANCE_BACK, BALANCE_NOTHING_SENT, BALANCE_PARTLY, COST, COST_DRAFT, COST_NONE, COST_OTHER_CURRENCY, COST_WITH_INVOICES, costWithoutMoney, depthFor, termsOf } from '../depth/fixtures'
+import { adjustDraftOf, bookDraftOf, declareDraftOf, type BalanceModel, type CostModel, type DepthCan, type TermsModel } from '../depth/model'
+import { BalanceTabView } from '../depth/view/BalanceTabView'
+import { CostTabView } from '../depth/view/CostTabView'
+import { TermsLinkView } from '../depth/view/TermsLinkView'
 
 /**
  * SCR-128 record — a subcontract order (design purchasing.subcontracting "Record: Subcontract order") with made-up data
@@ -13,7 +20,8 @@ import { SubcontractRecordView } from './view/SubcontractRecordView'
  * partly back and late, back, closed, cancelled), each tab with its content and its empty, loading and failed parts, each
  * dialog (send kit, its DDT held without shipping.ddt.issue, receive back, cancel, close, add operation, pieces per size,
  * add kit line, remove kit lines, take back a line, annul a DDT), the changed banner and the roles: Owner, Buyer,
- * Warehouse and Planner (no money: no fee anywhere), Read-only, Sales (no purchasing.view: the page says so).
+ * Warehouse and Planner (no money: no fee anywhere), Read-only, Sales (no purchasing.view: the page says so). B-W2b-344's
+ * cases (`w2b-344-*`): the written terms link on Operations & quantities, the Material balance and the Cost tabs.
  */
 
 export interface RecordCase {
@@ -118,6 +126,34 @@ const grid = (sizes: SubcontractOrder['operations'][number]['sizes']) => {
 const warehouse = canFor('warehouse')
 const noDdtRight: SubcontractCan = { ...warehouse, ddtIssue: false, ddtCancel: false }
 
+// ---- B-W2b-344: the written terms link, the Material balance and Cost tabs ----------------------------------------------------
+
+type Read<T> = { status: 'loading' } | { status: 'ready'; value: T } | { status: 'error'; problem: string }
+const readyOf = <T,>(value: T): Read<T> => ({ status: 'ready', value })
+
+function termsCase(role: RoleCase, value: SubcontractOrder, terms: Read<OrderTerms>, over: Partial<TermsModel> = {}): RecordCase {
+  const model: TermsModel = { terms, can: depthFor(role), problem: null, timeZone: TIME_ZONE, ...over }
+  return recordCase(role, value, { tab: 'ops', depth: { terms: createElement(TermsLinkView, { model }) } })
+}
+
+function balanceCase(role: RoleCase, value: SubcontractOrder, balance: Read<OrderBalance>, over: Partial<BalanceModel> = {}): RecordCase {
+  const model: BalanceModel = { balance, can: depthFor(role), workOrder: value.workOrder.number, busy: false, dialog: null, problem: null, notice: null, timeZone: TIME_ZONE, ...over }
+  return recordCase(role, value, { tab: 'balance', depth: { balance: createElement(BalanceTabView, { model }) } })
+}
+
+function costCase(role: RoleCase, value: SubcontractOrder, cost: Read<OrderCost>, over: Partial<CostModel> = {}): RecordCase {
+  const can = over.can ?? depthFor(role)
+  const shown: Read<OrderCost> = cost.status === 'ready' && !can.cost ? { status: 'ready', value: costWithoutMoney(cost.value) } : cost
+  const model: CostModel = { cost: shown, can, receipts: value.receipts.map((receipt, index) => ({ id: receipt.id, seq: index + 1, receivedAt: receipt.receivedAt })), busy: false, dialog: null, problem: null, notice: null, timeZone: TIME_ZONE, ...over }
+  return recordCase(role, value, { tab: 'cost', depth: { cost: createElement(CostTabView, { model }) } })
+}
+
+const noFiles = (role: RoleCase): DepthCan => ({ ...depthFor(role), files: false })
+const lining = BALANCE_BACK.lines[0]!
+const declareFilled = declareDraftOf(BALANCE_PARTLY)
+const transport = { ...bookDraftOf(COST), unitPrice: '35', reason: 'Ritiro dei capi con il corriere del terzista.' }
+const fee = { ...bookDraftOf(COST, 'FEE'), quantity: '3', unitPrice: '6.50', receiptId: COST.entries[0]!.receipt!.id, reason: 'Fattura del terzista: prezzo concordato.' }
+
 function RecordDesign({ model }: { model: RecordCase }) {
   const value = model.record.order.status === 'ready' ? model.record.order.value : null
   const path = `/purchasing/subcontracting/${value?.id ?? 'demo'}`
@@ -178,5 +214,45 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'forbidden', label: 'Not this role’s workshop or site', model: recordCase('buyer', issued, { order: { status: 'forbidden' } }) },
     { id: 'loading', label: 'Loading', model: recordCase('buyer', issued, { order: { status: 'loading' }, live: 'connecting' }) },
     { id: 'error', label: "The order couldn't be read", model: recordCase('buyer', issued, { order: { status: 'error', problem: 'problem.offline' }, live: 'offline' }) },
+    // B-W2b-344: the written terms link (Operations & quantities).
+    { id: 'w2b-344-terms', label: 'B-W2b-344 · Written terms: revision 2 signed, covers the order’s date, Download (buyer)', model: termsCase('buyer', atWorkshop, readyOf(termsOf('covered'))) },
+    { id: 'w2b-344-terms-ending', label: 'B-W2b-344 · Written terms in force end in 22 days', model: termsCase('buyer', atWorkshop, readyOf(termsOf('ending'))) },
+    { id: 'w2b-344-terms-superseded', label: 'B-W2b-344 · An older order: covered by revision 1, replaced since', model: termsCase('buyer', closed, readyOf(termsOf('superseded'))) },
+    { id: 'w2b-344-terms-draft', label: 'B-W2b-344 · No signed terms cover the order: revision 1 waits for its signature (the law beside it)', model: termsCase('buyer', issued, readyOf(termsOf('draft'))) },
+    { id: 'w2b-344-terms-none', label: 'B-W2b-344 · No terms written with this workshop yet', model: termsCase('buyer', draft, readyOf(termsOf('none'))) },
+    { id: 'w2b-344-terms-other-days', label: 'B-W2b-344 · The signed terms cover other days', model: termsCase('buyer', issued, readyOf(termsOf('otherDays'))) },
+    { id: 'w2b-344-terms-no-file', label: 'B-W2b-344 · Covered, but no signed file kept: Download held with why', model: termsCase('buyer', atWorkshop, readyOf(termsOf('noFile'))) },
+    { id: 'w2b-344-terms-no-right', label: 'B-W2b-344 · A role without files.read: Download held with the permission', model: termsCase('planner', atWorkshop, readyOf(termsOf('covered')), { can: noFiles('planner') }) },
+    { id: 'w2b-344-terms-refused', label: 'B-W2b-344 · Download refused: the file is no longer there', model: termsCase('buyer', atWorkshop, readyOf(termsOf('covered')), { problem: words('terms.fileGone') }) },
+    { id: 'w2b-344-terms-loading', label: 'B-W2b-344 · Written terms loading (the slow note after a second)', model: termsCase('buyer', atWorkshop, { status: 'loading' }, { slow: true }) },
+    { id: 'w2b-344-terms-error', label: 'B-W2b-344 · Written terms couldn’t be read (never drawn as “no terms”)', model: termsCase('buyer', atWorkshop, { status: 'error', problem: 'problem.offline' }) },
+    // B-W2b-344: the Material balance tab.
+    { id: 'w2b-344-balance', label: 'B-W2b-344 · Material balance, partly back: the lining counted short, not declared, 3.4 m back; protectors declared (warehouse)', model: balanceCase('warehouse', partly, readyOf(BALANCE_PARTLY)) },
+    { id: 'w2b-344-balance-back', label: 'B-W2b-344 · Every piece back: 2.7 m of lining still out (flagged), the declaration and an adjustment with who and why (buyer)', model: balanceCase('buyer', received, readyOf(BALANCE_BACK)) },
+    { id: 'w2b-344-balance-declare', label: 'B-W2b-344 · Book the workshop’s declaration: prefilled from the goods back, naming receipt 1, what moves', model: balanceCase('warehouse', partly, readyOf(BALANCE_PARTLY), { dialog: { kind: 'declare', draft: declareFilled } }) },
+    { id: 'w2b-344-balance-declare-held', label: 'B-W2b-344 · The declaration held: more than is still open on line 10', model: balanceCase('warehouse', partly, readyOf(BALANCE_PARTLY), { dialog: { kind: 'declare', draft: { ...declareFilled, lines: declareFilled.lines.map((entry, index) => (index === 0 ? { ...entry, used: '45' } : entry)) } } }) },
+    { id: 'w2b-344-balance-declare-refused', label: 'B-W2b-344 · The declaration refused: a closed accounting period (in words)', model: balanceCase('warehouse', partly, readyOf(BALANCE_PARTLY), { dialog: { kind: 'declare', draft: declareFilled }, problem: words('balance.refused.period') }) },
+    { id: 'w2b-344-balance-adjust', label: 'B-W2b-344 · Book over- or under-consumption: +2.2 m used, +0.5 m scrapped, the line before and after, what moves', model: balanceCase('buyer', received, readyOf(BALANCE_BACK), { dialog: { kind: 'adjust', draft: { ...adjustDraftOf(lining.kitLineId), used: '2.2', scrapped: '0.5', reason: 'Il terzista ha usato 2,2 m in più per due giacche rifatte; 0,5 m di ritagli scartati.' } } }) },
+    { id: 'w2b-344-balance-adjust-held', label: 'B-W2b-344 · The adjustment held: no reason yet', model: balanceCase('buyer', received, readyOf(BALANCE_BACK), { dialog: { kind: 'adjust', draft: { ...adjustDraftOf(lining.kitLineId), used: '-0.5' } } }) },
+    { id: 'w2b-344-balance-booked', label: 'B-W2b-344 · Booked: the notice says how many stock moves followed', model: balanceCase('buyer', received, readyOf(BALANCE_BACK), { notice: { tone: 'success', words: words('balance.booked', { count: 2 }) } }) },
+    { id: 'w2b-344-balance-empty', label: 'B-W2b-344 · Nothing sent yet: the balance starts with the kit (declaration held)', model: balanceCase('buyer', issued, readyOf(BALANCE_NOTHING_SENT)) },
+    { id: 'w2b-344-balance-planner', label: 'B-W2b-344 · Planner: reads the balance, every booking held with the permission', model: balanceCase('planner', received, readyOf(BALANCE_BACK)) },
+    { id: 'w2b-344-balance-loading', label: 'B-W2b-344 · Material balance loading (the slow note)', model: balanceCase('buyer', partly, { status: 'loading' }, { slow: true }) },
+    { id: 'w2b-344-balance-error', label: 'B-W2b-344 · Material balance couldn’t be read, Try again', model: balanceCase('buyer', partly, { status: 'error', problem: 'problem.offline' }) },
+    // B-W2b-344: the Cost tab.
+    { id: 'w2b-344-cost', label: 'B-W2b-344 · Cost to the work order: the bridge, per operation, charges (one taken back), the workshop’s invoice (owner)', model: costCase('owner', received, readyOf(COST_WITH_INVOICES)) },
+    { id: 'w2b-344-cost-buyer', label: 'B-W2b-344 · Cost for the buyer: books and takes back charges; the workshop’s invoice (payables.view)', model: costCase('buyer', received, readyOf(COST_WITH_INVOICES)) },
+    { id: 'w2b-344-cost-warehouse', label: 'B-W2b-344 · Cost for the warehouse: pieces only, no price or amount drawn, booking held, no invoice section (no payables.view)', model: costCase('warehouse', received, readyOf(COST)) },
+    { id: 'w2b-344-cost-empty', label: 'B-W2b-344 · No cost yet — booked when goods come back', model: costCase('buyer', atWorkshop, readyOf(COST_NONE)) },
+    { id: 'w2b-344-cost-currency', label: 'B-W2b-344 · An order in another currency: nothing posts on the work order yet (in words)', model: costCase('buyer', received, readyOf(COST_OTHER_CURRENCY)) },
+    { id: 'w2b-344-cost-book', label: 'B-W2b-344 · Book a charge: transport 1 × 35.00 onto WO-DEMO-0101', model: costCase('buyer', received, readyOf(COST), { dialog: { kind: 'book', draft: transport } }) },
+    { id: 'w2b-344-cost-book-fee', label: 'B-W2b-344 · Book a fee at the workshop’s price: 3 pieces of line 10 at 6.50, paid once', model: costCase('buyer', received, readyOf(COST), { dialog: { kind: 'book', draft: fee } }) },
+    { id: 'w2b-344-cost-book-held', label: 'B-W2b-344 · Book a charge held: another charge says what it is for', model: costCase('buyer', received, readyOf(COST), { dialog: { kind: 'book', draft: { ...bookDraftOf(COST, 'OTHER'), unitPrice: '12' } } }) },
+    { id: 'w2b-344-cost-book-refused', label: 'B-W2b-344 · Book a fee refused: more pieces than are back good (in words)', model: costCase('buyer', received, readyOf(COST), { dialog: { kind: 'book', draft: fee }, problem: words('cost.refused.bookable') }) },
+    { id: 'w2b-344-cost-reverse', label: 'B-W2b-344 · Take a charge back: its reason, −35.00 on the work order', model: costCase('buyer', received, readyOf(COST), { dialog: { kind: 'reverse', entryId: COST.entries[1]!.id, reason: 'Il trasporto era a carico del terzista.' } }) },
+    { id: 'w2b-344-cost-booked', label: 'B-W2b-344 · Booked: the notice', model: costCase('buyer', received, readyOf(COST), { notice: { tone: 'success', words: words('cost.done.booked', { kind: '@cost.kind.TRANSPORT' }) } }) },
+    { id: 'w2b-344-cost-draft', label: 'B-W2b-344 · A draft: its work costs nothing, Book a charge held', model: costCase('buyer', draft, readyOf(COST_DRAFT)) },
+    { id: 'w2b-344-cost-loading', label: 'B-W2b-344 · Cost loading (the slow note)', model: costCase('buyer', received, { status: 'loading' }, { slow: true }) },
+    { id: 'w2b-344-cost-error', label: 'B-W2b-344 · Cost couldn’t be read, Try again', model: costCase('buyer', received, { status: 'error', problem: 'problem.offline' }) },
   ],
 })

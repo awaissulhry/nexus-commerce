@@ -1,0 +1,201 @@
+/*
+ * Purchasing › Reports (SCR-255) and its print view (SCR-372) LAYOUT: the band, the scope row, the panels' heads, the skeletons,
+ * the late line's chain, the drill and the chase, the keys and the print notes. The controls are the design system's; this file
+ * only places them, with semantic tokens (no colours of its own). No page max-width (Owner rule 2026-10-29): the page fills the
+ * shell's main area and every panel starts full width.
+ */
+.fw-pr {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-pr-band,
+.fw-pr-scope,
+.fw-pr-head,
+.fw-pr-chain-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-pr-scope {
+  justify-content: flex-start;
+}
+
+.fw-pr-company {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.fw-pr-head {
+  align-items: flex-start;
+  margin-bottom: var(--nds-space-10);
+}
+
+.fw-pr-head-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  flex: 1 1 18rem;
+}
+
+.fw-pr-head-controls,
+.fw-pr-status,
+.fw-pr-actions,
+.fw-pr-tags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-pr-tags {
+  gap: var(--nds-space-4);
+}
+
+.fw-pr-h2 {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: 600;
+}
+
+.fw-pr-h3 {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.fw-pr-hint,
+.fw-pr-muted {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.fw-pr-danger {
+  color: var(--nds-danger-text);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pr-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+  scroll-margin-top: var(--nds-space-16);
+}
+
+.fw-pr-sections {
+  min-width: 0;
+}
+
+.fw-pr-shape {
+  display: grid;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+.fw-pr-cell {
+  display: inline-flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.fw-pr-link {
+  color: var(--nds-primary);
+  text-decoration: underline;
+  overflow-wrap: anywhere;
+}
+
+/* A group's name in the pivot opens its drill: a text button that reads as a link. */
+.fw-pr-cell-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--nds-primary);
+  text-align: left;
+  text-decoration: underline;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.fw-pr-cell-link:focus-visible {
+  outline: 2px solid var(--nds-focus-ring);
+  outline-offset: 2px;
+}
+
+.fw-pr-chain {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  padding-top: var(--nds-space-10);
+  border-top: 1px solid var(--nds-border);
+}
+
+.fw-pr-drill,
+.fw-pr-chase {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-pr-mail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+  padding: var(--nds-space-10) var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+}
+
+.fw-pr-mail-subject {
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.fw-pr-mail-body {
+  margin: 0;
+  font: inherit;
+  font-size: var(--nds-font-size-sm);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.fw-pr-keymap {
+  display: grid;
+  gap: var(--nds-space-6);
+  margin: 0;
+}
+
+.fw-pr-keymap > div {
+  display: flex;
+  gap: var(--nds-space-10);
+  align-items: baseline;
+}
+
+.fw-pr-keymap dd {
+  margin: 0;
+}
+
+.fw-pr-print-note {
+  margin: var(--nds-space-6) 0 0;
+  font-size: var(--nds-font-size-sm);
+}

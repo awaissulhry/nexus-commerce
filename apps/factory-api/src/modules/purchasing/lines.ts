@@ -12,6 +12,10 @@ import { actorIdOf, dayOf, dayValue, decimal, ITEM_COLUMNS, LINE_COLUMNS, office
 import { activeSourcesOf } from './supplier-items/store'
 // B-W2b-296 (SCM-052): a scheduled line's deliveries go with it; its quantity, unit and need date are its deliveries'.
 import { assertScheduledEdit, removeDeliveriesOf, sameQuantity } from './po-depth/hooks'
+// B-W2b-328 (SCM-076, SCM-077, SCM-186): a protector's line names its certificate by default; a line's rolls and variant hold
+// its quantity, unit and colour.
+import { assertKindEdit, certificateDefaultFor } from './line-kinds/hooks'
+import { businessDate } from '@nexus/factory-domain/core/time'
 import type { OrderDetail } from './views'
 
 /**
@@ -65,7 +69,8 @@ const leatherDefaults = (item: ItemRow) =>
     : { grade: null, thicknessMinMm: null, thicknessMaxMm: null, oneDyeBatch: false, areaTolerancePct: null }
 
 /** The stored numbers of a line from its fields: base quantity, amount, hides; a ValidationError when a field is wrong. */
-function computed(order: Pick<OrderRow, 'currency'>, item: ItemRow, line: Required<Pick<LineFields, 'quantity' | 'uom' | 'needDate'>> & LineFields & { readonly unitPrice: string }) {
+// B-W2b-328: exported for line-kinds/kind.ts (a quantity the rolls make).
+export function computed(order: Pick<OrderRow, 'currency'>, item: ItemRow, line: Required<Pick<LineFields, 'quantity' | 'uom' | 'needDate'>> & LineFields & { readonly unitPrice: string }) {
   const problems = lineProblems(line, { kind: item.kind, status: item.status, units: unitsOf(item) })
   if (problems.length > 0) throw new ValidationError(problems[0]!.message, problems)
   const baseQuantity = baseQuantityOf(line.quantity, line.uom, unitsOf(item))!
@@ -109,6 +114,8 @@ export async function insertLine(tools: CommandTools, order: OrderRow, item: Ite
   const numbers = computed(order, item, fields)
   const last = await tx.purchaseOrderLine.findFirst({ where: { purchaseOrderId: order.id }, orderBy: { seq: 'desc' }, select: { seq: true } })
   const id = newId()
+  // B-W2b-328 (SCM-077): a PPE component's line names the certificate the incoming check would pick today.
+  const certificate = await certificateDefaultFor(tx, order, item.id, businessDate(tools.now))
   await tx.purchaseOrderLine.create({
     data: {
       id,
@@ -135,6 +142,7 @@ export async function insertLine(tools: CommandTools, order: OrderRow, item: Ite
       estimatedHides: numbers.estimatedHides,
       requiresCrViTest: item.requiresCrViTest,
       note: blankToNull(input.note),
+      ...certificate,
       createdById: actorIdOf(tools),
     },
     select: { id: true },
@@ -201,6 +209,12 @@ export async function editLine(caller: CommandCaller, orderId: string, lineId: s
       quantity: input.quantity !== undefined && !sameQuantity(line.quantity, input.quantity),
       uom: input.uom !== undefined && input.uom !== line.uom,
       needDate: input.needDate !== undefined && input.needDate !== dayOf(line.needDate),
+    })
+    // B-W2b-328: the rolls make its quantity in its unit; its variant is of one colour.
+    await assertKindEdit(tx, line, {
+      quantity: input.quantity !== undefined && !sameQuantity(line.quantity, input.quantity),
+      uom: input.uom !== undefined && input.uom !== line.uom ? (input.uom as Uom) : null,
+      itemColourId: input.itemColourId !== undefined && input.itemColourId !== line.itemColourId ? input.itemColourId : undefined,
     })
     if (input.itemColourId !== undefined && input.itemColourId !== line.itemColourId && (await tx.materialRequirement.count({ where: { purchaseOrderLineId: line.id } })) > 0) {
       throw new ConflictError('The line buys a line of the plan in its colour: remove it and add the other colour instead.')

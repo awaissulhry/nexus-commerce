@@ -294,7 +294,8 @@
     "REPLACE": "A replacement",
     "CREDIT_ONLY": "A credit note",
     "RETURN_UNCHANGED": "Sent back to you as it came",
-    "SCRAP": "Not sent back"
+    "SCRAP": "Not sent back",
+    "SIZE_EXCHANGE": "The same garment in another size"
   },
   "outcome": {
     "REPLACE": "A replacement",

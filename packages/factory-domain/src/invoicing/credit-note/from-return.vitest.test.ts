@@ -102,3 +102,16 @@ describe('the checks at issue of a credit note that credits return lines', () =>
     expect(codes[3]!.message).toBe('Return RMA-2026-0001 line 10 was decided a credit of 500.00 EUR; this credit note credits 500.01 EUR of it.')
   })
 })
+
+describe('B-W2b-346 (lead fix F28): a line credited without the goods coming back (SAL-342)', () => {
+  it('credits its authorised pieces, none of them received; a received line still credits what arrived only', () => {
+    const plan = planReturnCredit(rma, [line('cwr', 10, { quantity: 2, receivedQuantity: 0, creditWithoutReturn: true, creditAmount: 40_000 }), line('rcv', 20, { quantity: 3, receivedQuantity: 1, creditAmount: 25_000 })], invoices)
+    expect(plan.skipped).toEqual([])
+    expect(plan.notes[0]!.lines.map((entry) => [entry.returnLineId, entry.pieces, entry.core.quantity, entry.core.unitPrice, entry.netAmount])).toEqual([
+      ['cwr', 2, '2.0000', '200.000000', 40_000],
+      ['rcv', 1, '1.0000', '250.000000', 25_000],
+    ])
+    // Without the flag nothing arrived is still nothing to credit (W2a's words).
+    expect(planReturnCredit(rma, [line('none', 30, { receivedQuantity: 0 })], invoices).skipped.map((entry) => entry.code)).toEqual(['NOT_RECEIVED'])
+  })
+})
