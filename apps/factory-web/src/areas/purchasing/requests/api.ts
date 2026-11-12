@@ -2,7 +2,8 @@ import { z } from 'zod'
 import { SET_ASIDE_REASONS } from '@nexus/factory-domain/planning/decisions'
 import { UOMS } from '@nexus/factory-domain/product/units/units'
 import { PURCHASE_ORDER_STATUSES } from '@nexus/factory-domain/purchasing/orders'
-import { REORDER_METHODS, REQUEST_HOLDS, REQUEST_KINDS, REQUEST_STATUSES, REQUEST_WARNINGS } from '@nexus/factory-domain/purchasing/requests/requests'
+import { pathOfKind, REORDER_METHODS, REQUEST_HOLDS, REQUEST_KINDS, REQUEST_STATUSES, REQUEST_WARNINGS } from '@nexus/factory-domain/purchasing/requests/requests'
+import { PURCHASE_REQUEST_SOURCES, PURCHASE_REQUEST_STATUSES } from '@nexus/factory-domain/purchasing/ask-to-buy/ask-to-buy'
 import { SOURCE_PREFERENCES } from '@nexus/factory-domain/purchasing/sources/sources'
 import type { ApiClient } from '../../../lib/api/client'
 import { newIdempotencyKey } from '../../../lib/api/client'
@@ -101,6 +102,27 @@ export const requestSchema = z.object({
       note: z.string().nullable(),
     })
     .nullable(),
+  // B-W2b-332: a request asked in the office (kind ASKED).
+  asked: z
+    .object({
+      purchaseRequestId: z.string(),
+      source: z.enum(PURCHASE_REQUEST_SOURCES),
+      status: z.enum(PURCHASE_REQUEST_STATUSES),
+      requestedBy: z.object({ id: z.string(), name: z.string() }),
+      requestedAt: z.string(),
+      reason: z.string(),
+      description: z.string().nullable(),
+      quantity: z.string(),
+      uom,
+      workOrder: z.object({ id: z.string(), number: z.string() }).nullable(),
+      shortage: z.object({ word: z.enum(['NOT_ENOUGH', 'DELAYED']), short: z.string(), uom: z.string(), needDate: z.string(), runId: z.string().nullable(), workOrderNumber: z.string() }).nullable(),
+      approvalTaskId: z.string().nullable(),
+      rejected: z.object({ at: z.string(), reason: z.string() }).nullable(),
+      convertedAt: z.string().nullable(),
+      purchaseOrder: z.object({ id: z.string(), number: z.string(), status: z.enum(PURCHASE_ORDER_STATUSES) }).nullable(),
+    })
+    .nullable()
+    .optional(),
 })
 export type BuyRequest = z.infer<typeof requestSchema>
 
@@ -136,7 +158,7 @@ export function listRequests(api: ApiClient, query: RequestQuery, signal?: Abort
   return api.get('/purchasing/requests', { query: requestParams(query), schema: listSchema, signal })
 }
 
-const countsSchema = z.object({ asOf: z.string(), open: z.number(), needWithin14Days: z.number(), waitingApproval: z.null(), convertedToday: z.number() })
+const countsSchema = z.object({ asOf: z.string(), open: z.number(), needWithin14Days: z.number(), waitingApproval: z.number().nullable(), convertedToday: z.number() })
 export type RequestCounts = z.infer<typeof countsSchema>
 
 export function requestCounts(api: ApiClient, query: { siteId?: string | null; kind?: RequestKind | null }, signal?: AbortSignal): Promise<RequestCounts> {
@@ -162,9 +184,9 @@ export type OnOrderLine = z.infer<typeof onOrderSchema>
 const detailSchema = z.object({ request: requestSchema, sources: z.array(sourceSchema), onOrder: z.array(onOrderSchema) })
 export type RequestDetail = z.infer<typeof detailSchema>
 
-/** One request (`plan:<id>` → GET …/plan/<id>), with the approved sources that reach it and a reorder row's open PO lines. */
+/** One request (`plan:<id>` → GET …/plan/<id>; `asked:<id>` → …/asked/<id>), with the approved sources that reach it and a reorder row's open PO lines. */
 export function getRequest(api: ApiClient, kind: RequestKind, refId: string, signal?: AbortSignal): Promise<RequestDetail> {
-  return api.get(`/purchasing/requests/${kind === 'PLAN' ? 'plan' : 'reorder'}/${encodeURIComponent(refId)}`, { schema: detailSchema, signal })
+  return api.get(`/purchasing/requests/${pathOfKind(kind)}/${encodeURIComponent(refId)}`, { schema: detailSchema, signal })
 }
 
 export interface ConvertBody {

@@ -8,21 +8,24 @@ import { lineAmount } from '@nexus/factory-domain/purchasing/orders'
 import { PURCHASING_VIEW } from '@nexus/factory-domain/purchasing/permissions'
 import { compareRequests, kindOfPath, needWeekOf, requestTiles, type RequestKind, type RequestStatus } from '@nexus/factory-domain/purchasing/requests/requests'
 import { rankedSources } from '@nexus/factory-domain/purchasing/sources/sources'
+import { requestStatusesOf } from '@nexus/factory-domain/purchasing/ask-to-buy/ask-to-buy'
 import type { CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { serverClock } from '../../../core/time'
 import { officeContextOf, quantityText, seesCost, type Reader } from '../store'
 import { activeSourcesOf } from '../supplier-items/store'
-import { buildRequests, latestRuns, planRaws, planWhy, reorderRaws, type Built } from './build'
+import { askedRaws, buildRequests, latestRuns, planRaws, planWhy, reorderRaws, type Built } from './build'
 
 /**
  * The buyer's queue (B-W2a-10; SCM-034; design purchasing.requests "To handle" tiles, "Requests", the Request detail):
  * every open need of the sites the caller reaches, from the sites' latest plans and their reorder rules, built by ./build
  * (one rule for the queue, the pop-up and the conversion). purchasing.view; a request with a supplier is seen when the
- * caller reaches that supplier too (as its purchase orders). Prices and values only with the cost grain.
+ * caller reaches that supplier too (as its purchase orders). Prices and values only with the cost grain. B-W2b-332: the
+ * requests asked in the office are the kind ASKED (who asked, why, the work order, the shortage as seen); "Waiting
+ * approval" counts those that wait for a yes.
  */
 
-const DECISION_OF: Readonly<Record<RequestStatus, 'OPEN' | 'ORDERED' | 'IGNORED'>> = { OPEN: 'OPEN', CONVERTED: 'ORDERED', SET_ASIDE: 'IGNORED' }
+const DECISION_OF: Readonly<Record<Exclude<RequestStatus, 'WAITING_APPROVAL'>, 'OPEN' | 'ORDERED' | 'IGNORED'>> = { OPEN: 'OPEN', CONVERTED: 'ORDERED', SET_ASIDE: 'IGNORED' }
 
 /** Something to buy: a suggestion above 0, or a firm planned order. */
 const TO_BUY: Prisma.MaterialRequirementWhereInput = { action: 'BUY', OR: [{ suggestedQuantity: { gt: 0 } }, { firmQuantity: { not: null } }] }
@@ -36,6 +39,7 @@ export function requestView(built: Built, withCost: boolean) {
   const amount = withCost && built.unitPrice !== null && built.currency !== null ? safeAmount(built.quantity, built.unitPrice, built.currency) : null
   const plan = built.plan
   const reorder = built.reorder
+  const asked = built.asked
   return {
     id: built.id,
     kind: built.kind,
@@ -103,6 +107,26 @@ export function requestView(built: Built, withCost: boolean) {
           note: reorder.rule.note,
         }
       : null,
+    // B-W2b-332: a request asked in the office.
+    asked: asked
+      ? {
+          purchaseRequestId: asked.request.id,
+          source: asked.request.source,
+          status: asked.status,
+          requestedBy: asked.requestedBy,
+          requestedAt: toUtcIso(asked.request.requestedAt),
+          reason: asked.request.reason,
+          description: asked.request.description,
+          quantity: quantityText(asked.request.quantity),
+          uom: asked.request.uom,
+          workOrder: asked.request.workOrder ? { id: asked.request.workOrder.id, number: asked.request.workOrder.number } : null,
+          shortage: asked.shortage,
+          approvalTaskId: asked.request.approvalTaskId,
+          rejected: asked.request.rejectedAt ? { at: toUtcIso(asked.request.rejectedAt), reason: asked.request.rejectReason ?? '' } : null,
+          convertedAt: asked.request.convertedAt ? toUtcIso(asked.request.convertedAt) : null,
+          purchaseOrder: asked.purchaseOrder,
+        }
+      : null,
   }
 }
 
@@ -119,17 +143,22 @@ interface QueueScope {
   readonly siteId?: string | undefined
   readonly kind?: RequestKind | undefined
   /** Which plan lines (their decision, the tiles' "drafted today"); always only lines with something to buy. */
-  readonly plan: Prisma.MaterialRequirementWhereInput
+  readonly plan: Prisma.MaterialRequirementWhereInput | null
   readonly withReorder: boolean
+  /** B-W2b-332: which requests asked in the office (null: none). */
+  readonly asked: Prisma.PurchaseRequestWhereInput | null
 }
 
 /** Every request of the scope the caller reaches, built and in the queue's order. */
 async function queueOf(db: Reader, actor: Actor, scope: QueueScope, today: BusinessDate): Promise<Built[]> {
   const runs = (await latestRuns(db, scope.siteId)).filter((run) => can(actor, PURCHASING_VIEW, { companyId: run.companyId, siteId: run.siteId }))
-  const plans = scope.kind === 'REORDER' ? [] : await planRaws(db, runs, { AND: [TO_BUY, scope.plan] })
+  const only = (kind: RequestKind) => scope.kind === undefined || scope.kind === kind
+  const plans = only('PLAN') && scope.plan !== null ? await planRaws(db, runs, { AND: [TO_BUY, scope.plan] }) : []
   const ruleScope = scopeWhere(actor, PURCHASING_VIEW, { company: 'companyId', site: 'siteId' }) as Prisma.ItemPlanningWhereInput
-  const reorders = scope.kind === 'PLAN' || !scope.withReorder ? [] : await reorderRaws(db, { AND: [ruleScope, scope.siteId ? { siteId: scope.siteId } : {}] })
-  const built = await buildRequests(db, [...plans, ...reorders], { today, triggeredOnly: true })
+  const reorders = !only('REORDER') || !scope.withReorder ? [] : await reorderRaws(db, { AND: [ruleScope, scope.siteId ? { siteId: scope.siteId } : {}] })
+  const askedScope = scopeWhere(actor, PURCHASING_VIEW, { company: 'companyId', site: 'siteId' }) as Prisma.PurchaseRequestWhereInput
+  const asked = !only('ASKED') || scope.asked === null ? [] : await askedRaws(db, { AND: [askedScope, scope.asked, scope.siteId ? { siteId: scope.siteId } : {}] })
+  const built = await buildRequests(db, [...plans, ...reorders, ...asked], { today, triggeredOnly: true })
   return built.filter((entry) => reaches(actor, entry)).sort((a, b) => compareRequests({ ...a, orderBy: a.orderBy.date, code: a.item.code }, { ...b, orderBy: b.orderBy.date, code: b.item.code }))
 }
 
@@ -155,8 +184,11 @@ export async function listRequests(caller: CommandCaller, query: ListRequestsQue
   const now = serverClock.now()
   const today = businessDate(now)
   return caller.withClient(async (client) => {
-    const plan: Prisma.MaterialRequirementWhereInput = { ...(query.status === 'ALL' ? {} : { decision: DECISION_OF[query.status] }), ...(query.itemId ? { itemId: query.itemId } : {}) }
-    const built = await queueOf(client, actor, { siteId: query.siteId, kind: query.kind, plan, withReorder: query.status === 'OPEN' || query.status === 'ALL' }, today)
+    // WAITING_APPROVAL is a state of the requests asked in the office only (B-W2b-332).
+    const plan: Prisma.MaterialRequirementWhereInput | null =
+      query.status === 'WAITING_APPROVAL' ? null : { ...(query.status === 'ALL' ? {} : { decision: DECISION_OF[query.status] }), ...(query.itemId ? { itemId: query.itemId } : {}) }
+    const asked: Prisma.PurchaseRequestWhereInput = { status: { in: requestStatusesOf(query.status) }, ...(query.itemId ? { itemId: query.itemId } : {}) }
+    const built = await queueOf(client, actor, { siteId: query.siteId, kind: query.kind, plan, withReorder: query.status === 'OPEN' || query.status === 'ALL', asked }, today)
     const q = query.q?.toLowerCase()
     const matching = built.filter(
       (entry) =>
@@ -168,7 +200,8 @@ export async function listRequests(caller: CommandCaller, query: ListRequestsQue
           contains(entry.item.code, q) ||
           contains(entry.item.name, q) ||
           contains(entry.supplier?.tradeName ?? entry.supplier?.legalName, q) ||
-          (entry.plan ? entry.plan.orders.some((order) => contains(order.number, q)) || entry.plan.workOrders.some((number) => contains(number, q)) : false)),
+          (entry.plan ? entry.plan.orders.some((order) => contains(order.number, q)) || entry.plan.workOrders.some((number) => contains(number, q)) : false) ||
+          (entry.asked ? contains(entry.asked.request.workOrder?.number, q) || contains(entry.asked.requestedBy.name, q) || contains(entry.asked.request.reason, q) : false)),
     )
     const start = query.cursor ? matching.findIndex((entry) => entry.id === query.cursor) + 1 : 0
     const page = matching.slice(start, start + query.limit)
@@ -188,8 +221,10 @@ export async function requestCounts(caller: CommandCaller, query: { readonly sit
   const now = serverClock.now()
   const today = businessDate(now)
   return caller.withClient(async (client) => {
-    const plan: Prisma.MaterialRequirementWhereInput = { OR: [{ decision: 'OPEN' }, { decision: 'ORDERED', decidedAt: { gte: businessDayStart(today), lt: businessDayStart(addDays(today, 1)) } }] }
-    const built = await queueOf(client, actorOf(context), { siteId: query.siteId, kind: query.kind, plan, withReorder: true }, today)
+    const todayRange = { gte: businessDayStart(today), lt: businessDayStart(addDays(today, 1)) }
+    const plan: Prisma.MaterialRequirementWhereInput = { OR: [{ decision: 'OPEN' }, { decision: 'ORDERED', decidedAt: todayRange }] }
+    const asked: Prisma.PurchaseRequestWhereInput = { OR: [{ status: { in: ['OPEN', 'PENDING_APPROVAL'] } }, { status: 'CONVERTED', convertedAt: todayRange }] }
+    const built = await queueOf(client, actorOf(context), { siteId: query.siteId, kind: query.kind, plan, withReorder: true, asked }, today)
     return { asOf: toUtcIso(now), ...requestTiles(built, today) }
   })
 }
@@ -201,7 +236,7 @@ export async function getRequest(caller: CommandCaller, kindSegment: string, ref
   const kind = kindOfPath(kindSegment)
   const now = serverClock.now()
   return caller.withClient(async (client) => {
-    const raws = kind === 'PLAN' ? await planRaws(client, null, { id: refId, action: 'BUY' }) : kind === 'REORDER' ? await reorderRaws(client, { id: refId }) : []
+    const raws = kind === 'PLAN' ? await planRaws(client, null, { id: refId, action: 'BUY' }) : kind === 'REORDER' ? await reorderRaws(client, { id: refId }) : kind === 'ASKED' ? await askedRaws(client, { id: refId }) : []
     const [built] = await buildRequests(client, raws, { today: businessDate(now), triggeredOnly: false })
     if (!built || !reaches(actor, built)) throw new NotFoundError('Request not found.')
     const withCost = seesCost(context)

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { Ban, Download, FilePlus2, MoreHorizontal, Search, ShieldOff } from 'lucide-react'
+import { Ban, Download, FilePlus2, MoreHorizontal, Search, Send, ShieldOff } from 'lucide-react'
 import { Banner, Card, EmptyState, Menu, MetricStrip } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, Input, Pill, Select } from '@nexus/ui/primitives'
@@ -48,9 +48,9 @@ const NS = ['purchasing-requests', 'lists'] as const
 
 /**
  * SCR-236 — Requests to buy (Purchasing; design purchasing.requests, 00 §2.1 inbox): what the plan and the sites' reorder
- * rules ask to buy, in ONE queue. The band (as of, live; "Draft POs for n" held until requests are picked; "Ask to buy" is
- * W2b and not drawn), the tiles "To handle" (open, need date within 14 days, waiting approval — staff requests are W2b:
- * '—' —, converted today; each a saved view), the shared list frame (search; Rows ▾, Kind ▾, Group ▾ by supplier or need
+ * rules ask to buy, and what people in the office asked (B-W2b-332), in ONE queue. The band (as of, live; "Ask to buy"
+ * opens the pop-up of requests/ask; "Draft POs for n" held until requests are picked), the tiles "To handle" (open, need
+ * date within 14 days, waiting approval — asked in the office, waiting for a yes —, converted today; each a saved view), the shared list frame (search; Rows ▾, Kind ▾, Group ▾ by supplier or need
  * week, the site; select-all, shift range, x; bulk Draft POs · Reject with reason · Export; a row that may not be picked
  * says why), the source, the netting and the rounding in our words, the value with the cost grain only (the column is not
  * drawn without it). Enter opens the request (`?open=`); its source record opens in a new tab.
@@ -131,7 +131,7 @@ function Requests({ model, actions }: { model: RequestsModel; actions?: Requests
       data ? (
         <span className="fw-by-cell">
           <span className="fw-by-ellipsis">{say(t, sourcePhrase(data))}</span>
-          <span className="fw-by-cell-sub">{data.kind === 'PLAN' ? t('kind.PLAN') : t('kind.REORDER')} · {data.site.code}</span>
+          <span className="fw-by-cell-sub">{t(`kind.${data.kind}`)} · {data.site.code}</span>
         </span>
       ) : null
     const MaterialCell = ({ data }: ICellRendererParams<BuyRequest>) =>
@@ -184,7 +184,7 @@ function Requests({ model, actions }: { model: RequestsModel; actions?: Requests
       data ? (
         <span className="fw-by-cell">
           <span className="fw-by-ellipsis">{say(t, requestedByPhrase(data))}</span>
-          <span className="fw-by-cell-sub">{data.plan ? formatDate(data.plan.runStartedAt, place) : t('by.live')}</span>
+          <span className="fw-by-cell-sub">{data.plan ? formatDate(data.plan.runStartedAt, place) : data.asked ? formatDate(data.asked.requestedAt, place) : t('by.live')}</span>
         </span>
       ) : null
     const StatusCell = ({ data }: ICellRendererParams<BuyRequest>) => {
@@ -211,7 +211,7 @@ function Requests({ model, actions }: { model: RequestsModel; actions?: Requests
             { id: 'open', label: t('row.open'), href: openHref(data) },
             { id: 'source', label: t('row.source'), href: sourceHref(model.prefix, data), target: '_blank' },
             ...(data.status === 'OPEN' && !data.hold && model.can.manage ? [{ id: 'draft', label: t('row.draft'), onSelect: () => actions?.onDraft?.([data.id]) }] : []),
-            ...(data.kind === 'PLAN' && data.status === 'OPEN' && model.can.decide ? [{ id: 'reject', label: t('row.reject'), onSelect: () => actions?.onReject?.([data.id]) }] : []),
+            ...((data.kind === 'PLAN' && data.status === 'OPEN' && model.can.decide) || (data.kind === 'ASKED' && data.status === 'OPEN' && model.can.manage) ? [{ id: 'reject', label: t('row.reject'), onSelect: () => actions?.onReject?.([data.id]) }] : []),
           ]}
         />
       ) : null
@@ -292,6 +292,11 @@ function Requests({ model, actions }: { model: RequestsModel; actions?: Requests
           {model.can.planView && (
             <Button size="sm" asChild>
               <Link href={`${model.prefix}/planning/mrp`}>{t('band.plan')}</Link>
+            </Button>
+          )}
+          {model.can.ask && (
+            <Button size="sm" heldReason={model.offline ? t('held.offline') : null} onClick={() => actions?.onAsk?.()}>
+              <Send size={14} aria-hidden /> {t('band.ask')}
             </Button>
           )}
           <Button size="sm" variant="primary" heldReason={draftWhy ? say(t, draftWhy) : null} onClick={() => actions?.onDraft?.(pickedOpen.map((row) => row.id))} aria-keyshortcuts="b">

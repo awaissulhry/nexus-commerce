@@ -275,6 +275,9 @@ export interface PlanModel {
   today?: string
   /** planning.firm (B-W2a-22): may move a firm planned order. */
   canFirm?: boolean
+  /** B-W2b-332: purchasing.requests.ask — "Ask to buy" on a shortage; the shortages asked already (shortageAskKey). */
+  canAsk?: boolean
+  asked?: readonly string[]
   /** Design cases: preset selection, focused row, keys panel. */
   selected?: readonly string[]
   focusRow?: number
@@ -311,8 +314,13 @@ export interface PlanActions {
   /** B-W2a-70: Short on open work orders. */
   onRetryShortages?: () => void
   onMoveFirm?: (requirementId: string) => void
+  /** B-W2b-332: a shortage asked to buy (or drafted at once by a buyer): requests/ask's dialog. */
+  onAskToBuy?: (row: Shortage) => void
   moveFirm?: { onDate?: (date: string) => void; onConfirm?: () => void }
   /** B-W2a-70: the drafts made, reviewed and sent (Send n). */
   onSendDrafts?: () => void
   onSendConfirm?: () => void
 }
+
+/** B-W2b-332: a shortage's key for "asked already" (its work order, material and colour). */
+export const shortageAskKey = (row: { workOrderId: string; itemId: string; itemColourId: string | null }): string => `${row.workOrderId}|${row.itemId}|${row.itemColourId ?? '-'}`

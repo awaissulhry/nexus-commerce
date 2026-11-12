@@ -24,6 +24,8 @@ export interface RequestsCan {
   cost: boolean
   planView: boolean
   sites: boolean
+  /** B-W2b-332: purchasing.requests.ask — "Ask to buy" (the band), one's own requests. */
+  ask: boolean
 }
 
 export function requestsCan(permissions: readonly string[]): RequestsCan {
@@ -35,12 +37,14 @@ export function requestsCan(permissions: readonly string[]): RequestsCan {
     cost: held.has('money.cost'),
     planView: held.has('planning.view'),
     sites: held.has('inventory.locations.view'),
+    ask: held.has('purchasing.requests.ask'),
   }
 }
 
 // ---- views, filters, address -------------------------------------------------------------------------------------------
 
-export const VIEWS = ['open', 'need14', 'held', 'converted', 'setAside', 'all'] as const
+// B-W2b-332: `waiting` — asked in the office, waiting for a yes (the tile "Waiting approval").
+export const VIEWS = ['open', 'need14', 'held', 'waiting', 'converted', 'setAside', 'all'] as const
 export type RequestsView = (typeof VIEWS)[number]
 export const GROUPS = ['none', 'supplier', 'week'] as const
 export type Group = (typeof GROUPS)[number]
@@ -105,6 +109,8 @@ export function requestQuery(view: RequestsView, filters: Filters, today: string
       return { ...base, status: 'OPEN', needBy: plusDays(today, SOON_DAYS) }
     case 'held':
       return { ...base, status: 'OPEN', held: true }
+    case 'waiting':
+      return { ...base, status: 'WAITING_APPROVAL' }
     case 'converted':
       return { ...base, status: 'CONVERTED' }
     case 'setAside':
@@ -116,7 +122,7 @@ export function requestQuery(view: RequestsView, filters: Filters, today: string
 
 export interface Tile {
   id: 'open' | 'need14' | 'waiting' | 'converted'
-  /** The view it is (null: no view yet — staff requests are W2b). */
+  /** The view it is. */
   view: RequestsView | null
   count: (counts: RequestCounts) => number | null
 }
@@ -125,7 +131,7 @@ export interface Tile {
 export const TILES: readonly Tile[] = Object.freeze([
   { id: 'open', view: 'open', count: (counts: RequestCounts) => counts.open },
   { id: 'need14', view: 'need14', count: (counts: RequestCounts) => counts.needWithin14Days },
-  { id: 'waiting', view: null, count: (counts: RequestCounts) => counts.waitingApproval },
+  { id: 'waiting', view: 'waiting', count: (counts: RequestCounts) => counts.waitingApproval },
   { id: 'converted', view: 'converted', count: (counts: RequestCounts) => counts.convertedToday },
 ] satisfies Tile[])
 
@@ -139,7 +145,9 @@ export const tileValue = (tile: Tile, counts: RequestCounts | null): string => {
 
 /** Why a row may not be picked (its box disabled with these words), or null. */
 export function selectableWhy(row: BuyRequest): Phrase | null {
-  if (row.status !== 'OPEN') return phrase(`notOpen.${row.status}`, row.plan?.purchaseOrder ? { number: row.plan.purchaseOrder.number } : undefined)
+  // B-W2b-332: a refused request asked in the office is asked again, never put back on the plan.
+  if (row.kind === 'ASKED' && row.status === 'SET_ASIDE') return phrase('notOpen.refused')
+  if (row.status !== 'OPEN') return phrase(`notOpen.${row.status}`, row.plan?.purchaseOrder ? { number: row.plan.purchaseOrder.number } : row.asked?.purchaseOrder ? { number: row.asked.purchaseOrder.number } : undefined)
   if (row.hold) return holdPhrase(row)
   return null
 }
@@ -152,6 +160,8 @@ export function holdPhrase(row: Pick<BuyRequest, 'hold' | 'supplier' | 'item'>):
 
 /** Where the need comes from: a firm planned order, work-order shortages, the plan run, a reorder point or a minimum. */
 export function sourcePhrase(row: BuyRequest): Phrase {
+  // B-W2b-332: "Anna asked", or "WO-0221 shortage · Anna asked".
+  if (row.kind === 'ASKED') return row.asked?.source === 'SHORTAGE' && row.asked.workOrder ? phrase('source.askedShortage', { number: row.asked.workOrder.number, name: row.asked.requestedBy.name }) : phrase('source.asked', { name: row.asked?.requestedBy.name ?? '' })
   if (row.kind === 'REORDER') return phrase(row.reorder?.method === 'MIN_MAX' ? 'source.minMax' : 'source.reorderPoint')
   const plan = row.plan
   if (plan?.firm) return phrase('source.firm')
@@ -161,6 +171,8 @@ export function sourcePhrase(row: BuyRequest): Phrase {
 
 /** Who asked: the plan run (with its day, never a person) or the site's reorder rule. */
 export function requestedByPhrase(row: BuyRequest): Phrase {
+  // B-W2b-332: the office person who asked (inside one request; never a figure per person).
+  if (row.kind === 'ASKED') return phrase('by.person', { name: row.asked?.requestedBy.name ?? '' })
   return row.kind === 'PLAN' ? phrase('by.planRun') : phrase(row.reorder?.method === 'MIN_MAX' ? 'by.minMax' : 'by.reorderPoint', { site: row.site.code })
 }
 
@@ -170,12 +182,14 @@ export const supplierFromPhrase = (row: Pick<BuyRequest, 'supplierFrom' | 'appro
 
 /** The status in words: open (held with its reason), in a PO, set aside. */
 export function statusPhrase(row: BuyRequest): Phrase {
-  if (row.status === 'CONVERTED') return row.plan?.purchaseOrder ? phrase('status.inOrder', { number: row.plan.purchaseOrder.number }) : phrase('status.CONVERTED')
-  if (row.status === 'SET_ASIDE') return row.plan?.setAside ? phrase('status.setAsideWhy', { reason: `reason.${row.plan.setAside.reason}` }) : phrase('status.SET_ASIDE')
+  const order = row.plan?.purchaseOrder ?? row.asked?.purchaseOrder ?? null
+  if (row.status === 'CONVERTED') return order ? phrase('status.inOrder', { number: order.number }) : phrase('status.CONVERTED')
+  if (row.status === 'SET_ASIDE') return row.plan?.setAside ? phrase('status.setAsideWhy', { reason: `reason.${row.plan.setAside.reason}` }) : row.asked ? phrase('status.refused') : phrase('status.SET_ASIDE')
+  if (row.status === 'WAITING_APPROVAL') return phrase('status.WAITING_APPROVAL')
   return row.hold ? phrase('status.held') : phrase('status.OPEN')
 }
 
-export const STATUS_TONE = { OPEN: 'info', CONVERTED: 'success', SET_ASIDE: 'neutral', HELD: 'warning' } as const
+export const STATUS_TONE = { OPEN: 'info', CONVERTED: 'success', SET_ASIDE: 'neutral', HELD: 'warning', WAITING_APPROVAL: 'warning' } as const
 export const toneOf = (row: BuyRequest): (typeof STATUS_TONE)[keyof typeof STATUS_TONE] => (row.status === 'OPEN' && row.hold ? STATUS_TONE.HELD : STATUS_TONE[row.status])
 
 /** The ISO week "2026-W46" as its number and year. */
@@ -258,6 +272,10 @@ export function nettingPhrases(row: BuyRequest, locale: Locale): Phrase[] {
     out.push(phrase('net.position', { position: q(rule.position), usable: q(rule.usable), onOrder: q(rule.onOrder), reserved: q(rule.reserved), uom: base }))
     out.push(phrase(rule.method === 'MIN_MAX' ? 'net.belowMinimum' : 'net.atPoint', { level: q(rule.level), uom: base }))
     out.push(phrase('net.ruleOrders', { quantity: q(rule.quantity), uom: base }))
+  } else if (row.asked) {
+    // B-W2b-332: what was asked, then what it buys (the supplier's unit, minimum and steps).
+    out.push(phrase('net.asked', { quantity: q(row.asked.quantity), uom: `uom.${row.asked.uom}` }))
+    if (row.asked.shortage) out.push(phrase('net.shortage', { quantity: q(row.asked.shortage.short), uom: `uom.${row.asked.shortage.uom}`, number: row.asked.shortage.workOrderNumber }))
   }
   out.push(phrase(`net.buy.${row.quantityFrom}`, { quantity: q(row.quantity), uom: `uom.${row.uom}` }))
   return out
@@ -270,6 +288,13 @@ export function historyPhrases(row: BuyRequest): { at: string | null; words: Phr
     out.push({ at: row.plan.runStartedAt, words: phrase('history.run') })
     if (row.plan.setAside) out.push({ at: row.plan.decidedAt, words: phrase('history.setAside', { reason: `reason.${row.plan.setAside.reason}` }) })
     else if (row.plan.purchaseOrder) out.push({ at: row.plan.decidedAt, words: phrase('history.ordered', { number: row.plan.purchaseOrder.number }) })
+  } else if (row.asked) {
+    // B-W2b-332: asked, the yes (when a rule asked one), then refused or drafted.
+    const asked = row.asked
+    out.push({ at: asked.requestedAt, words: phrase(asked.source === 'SHORTAGE' ? 'history.askedShortage' : 'history.asked', { name: asked.requestedBy.name }) })
+    if (asked.approvalTaskId) out.push({ at: null, words: phrase(asked.status === 'PENDING_APPROVAL' ? 'history.waitingYes' : 'history.yesAsked') })
+    if (asked.rejected) out.push({ at: asked.rejected.at, words: phrase('history.refused', { reason: asked.rejected.reason }) })
+    if (asked.convertedAt && asked.purchaseOrder) out.push({ at: asked.convertedAt, words: phrase('history.ordered', { number: asked.purchaseOrder.number }) })
   } else {
     out.push({ at: null, words: phrase('history.reorderLive') })
   }
@@ -288,9 +313,14 @@ export function draftHeld(rows: readonly BuyRequest[], can: Pick<RequestsCan, 'm
   return null
 }
 
-/** Why "Reject with reason" is held: no planning.decide, a reorder row in the pick (no table: change the rule), nothing open. */
-export function rejectHeld(rows: readonly BuyRequest[], can: Pick<RequestsCan, 'decide'>, offline: boolean): Phrase | null {
-  if (!can.decide) return phrase('held.noDecide')
+/**
+ * Why "Reject with reason" is held: a plan row needs planning.decide (planning's set-aside), an asked one purchasing.manage
+ * (B-W2b-332), a reorder row in the pick (no table: change the rule), nothing open.
+ */
+export function rejectHeld(rows: readonly BuyRequest[], can: Pick<RequestsCan, 'decide'> & Partial<Pick<RequestsCan, 'manage'>>, offline: boolean): Phrase | null {
+  const asked = rows.some((row) => row.kind === 'ASKED')
+  if ((!asked || rows.some((row) => row.kind === 'PLAN')) && !can.decide) return phrase('held.noDecide')
+  if (asked && !can.manage) return phrase('held.noManageReject')
   if (offline) return phrase('held.offline')
   if (rows.length === 0) return phrase('held.selectFirst')
   if (rows.some((row) => row.kind === 'REORDER')) return phrase('held.reorderNoReject')
@@ -352,6 +382,9 @@ export function rejectConfirmHeld(reject: Pick<RejectModel, 'reason' | 'note' | 
 /** The set-aside's lines: the plan lines behind the open plan rows. */
 export const rejectLinesOf = (rows: readonly BuyRequest[]) => rows.filter((row) => row.kind === 'PLAN' && row.status === 'OPEN').map((row) => ({ id: row.refId, version: row.version }))
 
+/** B-W2b-332: the requests asked in the office that a "Reject with reason" refuses (POST /purchasing/ask-to-buy/reject). */
+export const rejectAskedOf = (rows: readonly BuyRequest[]) => rows.filter((row) => row.kind === 'ASKED' && row.status === 'OPEN').map((row) => ({ id: row.refId, version: row.version }))
+
 /** A refused conversion in our words: a supplier not approved, a held request, changed meanwhile, else by kind. */
 export function convertRefusal(error: unknown): Phrase {
   if (!isApiError(error)) return phrase('problem.write')
@@ -377,8 +410,10 @@ export function convertRefusal(error: unknown): Phrase {
 // ---- where things open -----------------------------------------------------------------------------------------------------
 
 /** The source record of a request, for a new tab: the plan line's Why on What to buy & make, else the material. */
-export function sourceHref(prefix: string, row: Pick<BuyRequest, 'kind' | 'siteId' | 'refId' | 'item'>): string {
+export function sourceHref(prefix: string, row: Pick<BuyRequest, 'kind' | 'siteId' | 'refId' | 'item' | 'asked'>): string {
   if (row.kind === 'PLAN') return `${prefix}/planning/mrp?site=${encodeURIComponent(row.siteId)}&line=${encodeURIComponent(row.refId)}`
+  // B-W2b-332: an asked request opens its work order when it has one.
+  if (row.kind === 'ASKED' && row.asked?.workOrder) return `${prefix}/production/work-orders/${encodeURIComponent(row.asked.workOrder.id)}`
   return `${prefix}/products/materials/${encodeURIComponent(row.item.id)}`
 }
 export const workOrderHref = (prefix: string, number: string) => `${prefix}/production/work-orders?q=${encodeURIComponent(number)}`
@@ -462,6 +497,8 @@ export interface RequestsActions {
     onClose?: () => void
   }
   onReject?: (requestIds: string[]) => void
+  /** B-W2b-332: the band's "Ask to buy". */
+  onAsk?: () => void
   reject?: {
     onReason?: (reason: SetAsideReason | '') => void
     onNote?: (note: string) => void

@@ -203,6 +203,33 @@ const BLOCKED = reorder({
   rounding: [{ rule: 'UP_TO_MAXIMUM', quantity: '70' }],
 })
 
+// B-W2b-332: requests asked in the office (kind ASKED): open, from a shortage, waiting for a yes, refused, in a PO.
+const askedPart = (over: Partial<NonNullable<BuyRequest['asked']>> = {}): NonNullable<BuyRequest['asked']> => ({
+  purchaseRequestId: uid('8585', 1),
+  source: 'OFFICE',
+  status: 'OPEN',
+  requestedBy: { id: uid('9191', 9), name: 'Anna Esempio' },
+  requestedAt: at(30, 7, 40),
+  reason: 'Campionatura della nuova giacca: serve prima del fitting.',
+  description: null,
+  quantity: '40.0000',
+  uom: 'FT2',
+  workOrder: null,
+  shortage: null,
+  approvalTaskId: null,
+  rejected: null,
+  convertedAt: null,
+  purchaseOrder: null,
+  ...over,
+})
+const asked = (n: number, over: Partial<BuyRequest>, part: Partial<NonNullable<BuyRequest['asked']>> = {}): BuyRequest =>
+  plan({ n: 40 + n, id: `asked:${uid('8585', n)}`, kind: 'ASKED', refId: uid('8585', n), version: 1, quantityFrom: 'SOURCE', plan: null, asked: askedPart({ purchaseRequestId: uid('8585', n), ...part }), ...over })
+const ASKED_OPEN = asked(1, { quantity: '400', rounding: [{ rule: 'MINIMUM', quantity: '400' }], needDate: '2026-11-20', needWeek: '2026-W47' })
+const ASKED_SHORTAGE = asked(2, { item: item('lining'), colour: COLOURS.grey, quantity: '20', uom: 'M', baseQuantity: '20', baseUom: 'M', estimatedHides: null, rounding: [], supplier: sup('fabric'), needDate: '2026-11-16', needWeek: '2026-W47' }, { source: 'SHORTAGE', quantity: '18.0000', uom: 'M', reason: 'Mancanza per WO-DEMO-0042.', workOrder: { id: uid('5151', 1), number: 'WO-DEMO-0042' }, shortage: { word: 'NOT_ENOUGH', short: '18.0000', uom: 'M', needDate: '2026-11-16', runId: null, workOrderNumber: 'WO-DEMO-0042' }, requestedBy: { id: uid('9191', 8), name: 'Paolo Pianificatore' } })
+const ASKED_WAITING = asked(3, { status: 'WAITING_APPROVAL', item: item('protector'), colour: null, quantity: '48', uom: 'PCS', baseQuantity: '48', baseUom: 'PCS', estimatedHides: null, rounding: [], supplier: sup('protector'), hold: { code: 'WAITING_APPROVAL', message: 'x' } }, { status: 'PENDING_APPROVAL', quantity: '24.0000', uom: 'PCS', approvalTaskId: uid('8686', 1), reason: 'Scorta per le riparazioni in garanzia.' })
+const ASKED_REFUSED = asked(4, { status: 'SET_ASIDE', item: item('zip'), colour: COLOURS.black, quantity: '50', uom: 'PCS', baseQuantity: '50', baseUom: 'PCS', estimatedHides: null, rounding: [] }, { status: 'REJECTED', quantity: '50.0000', uom: 'PCS', rejected: { at: at(30, 9, 0), reason: 'Già in magazzino: 3 scatole al taglio.' } })
+const ASKED_ROWS: BuyRequest[] = [ASKED_OPEN, ASKED_SHORTAGE, ASKED_WAITING]
+
 export const OPEN_ROWS: BuyRequest[] = [ZIP, LINING, LEATHER, RED, PROTECTOR, PROSPECT, BLOCKED]
 export const ALL_ROWS: BuyRequest[] = [...OPEN_ROWS, CONVERTED, SET_ASIDE]
 export const COUNTS: RequestCounts = { asOf: at(30, 8, 15), open: 7, needWithin14Days: 5, waitingApproval: null, convertedToday: 1 }
@@ -223,6 +250,8 @@ export const DETAIL_LEATHER: RequestDetail = {
 const DETAIL_ZIP: RequestDetail = { request: ZIP, sources: [{ ...DETAIL_LEATHER.sources[0]!, id: uid('8484', 3), partyId: SUPPLIERS.protector.id, supplier: { code: SUPPLIERS.protector.code, name: SUPPLIERS.protector.legalName, status: 'ACTIVE' }, purchaseUom: 'PCS', unitPrice: '1.850000', minOrderQty: '50', orderMultiple: '50', leadTimeDays: 7, supplierArticleCode: 'ZP-60' }], onOrder: [{ purchaseOrderId: uid('9292', 3), number: 'PO-DEMO-0003', status: 'SENT', openQuantity: '0' }] }
 const DETAIL_RED: RequestDetail = { request: RED, sources: DETAIL_LEATHER.sources, onOrder: [] }
 const DETAIL_CONVERTED: RequestDetail = { request: CONVERTED, sources: [], onOrder: [] }
+const DETAIL_ASKED: RequestDetail = { request: ASKED_SHORTAGE, sources: [{ ...DETAIL_LEATHER.sources[0]!, id: uid('8484', 4), partyId: SUPPLIERS.fabric.id, supplier: { code: SUPPLIERS.fabric.code, name: SUPPLIERS.fabric.legalName, status: 'ACTIVE' }, purchaseUom: 'M', unitPrice: '6.500000', minOrderQty: null, orderMultiple: null, leadTimeDays: 8, supplierArticleCode: null }], onOrder: [] }
+const DETAIL_WAITING: RequestDetail = { request: ASKED_WAITING, sources: [], onOrder: [] }
 
 const draftRef = (n: number, lines: number) => ({ id: uid('9292', n), number: `PO-DEMO-000${n}`, lineCount: lines })
 export const PREVIEW: ConvertPreview = {
@@ -317,6 +346,8 @@ const detail = (requestId: string, value: RequestDetail | null, status: 'ready' 
   supplierId,
 })
 const SELECTED = [ZIP.id, LINING.id, LEATHER.id]
+/** B-W2b-332: the role with purchasing.requests.ask (every office template has it; the shared buying roles predate it). */
+const asker = (role: Role) => requestsCan([...ROLES[role], 'purchasing.requests.ask'])
 
 function RequestsDesign({ model }: { model: Case }) {
   return inShell('/purchasing/requests', createElement(RequestsView, { model: model.model }), model.role)
@@ -388,6 +419,16 @@ export const designScreen = defineDesignScreen<Case>({
     { id: 'reject', label: 'Reject 2 with reason: pick a reason', model: make('buyer', { selected: [LEATHER.id, LINING.id], reject: rejectOf() }) },
     { id: 'reject-other', label: 'Reject: another reason needs a note', model: make('buyer', { reject: rejectOf({ reason: 'OTHER' }) }) },
     { id: 'reject-ready', label: 'Reject: ready', model: make('buyer', { reject: rejectOf({ reason: 'STOCK_NOT_IN_SYSTEM', note: 'Contate ieri in magazzino.' }) }) },
+    // ---- B-W2b-332: Ask to buy, requests asked in the office ----
+    { id: 'w2b-332-queue', label: 'With requests asked in the office (Ask to buy in the band)', model: make('buyer', { can: asker('buyer'), rows: rowsOf([...ASKED_ROWS, ...OPEN_ROWS.slice(0, 3)]), counts: { value: { ...COUNTS, open: 9, waitingApproval: 1 }, problem: null } }), note: 'Source “Anna asked” / “WO-DEMO-0042 shortage · Paolo asked”; the asker’s name inside the row, never a figure per person.' },
+    { id: 'w2b-332-waiting', label: 'Tile: waiting for a yes', model: make('buyer', { can: asker('buyer'), view: 'waiting', rows: rowsOf([ASKED_WAITING]), counts: { value: { ...COUNTS, waitingApproval: 1 }, problem: null } }), note: 'Held: it cannot be drafted until the approver says yes (nobody approves their own request).' },
+    { id: 'w2b-332-refused', label: 'Rows ▾ rejected: a refused request with its reason', model: make('buyer', { can: asker('buyer'), view: 'setAside', rows: rowsOf([ASKED_REFUSED, SET_ASIDE]) }) },
+    { id: 'w2b-332-detail', label: 'Request asked from a shortage (who asked, why, the work order)', model: make('buyer', { can: asker('buyer'), rows: rowsOf(ASKED_ROWS), detail: detail(ASKED_SHORTAGE.id, DETAIL_ASKED) }) },
+    { id: 'w2b-332-detail-waiting', label: 'Request waiting for a yes', model: make('buyer', { can: asker('buyer'), rows: rowsOf(ASKED_ROWS), detail: detail(ASKED_WAITING.id, DETAIL_WAITING) }) },
+    { id: 'w2b-332-selected', label: 'Asked requests selected: Draft POs · Reject', model: make('buyer', { can: asker('buyer'), rows: rowsOf(ASKED_ROWS), selected: [ASKED_OPEN.id, ASKED_SHORTAGE.id] }) },
+    { id: 'w2b-332-reject', label: 'Reject an asked request with the reason', model: make('buyer', { can: asker('buyer'), rows: rowsOf(ASKED_ROWS), reject: rejectOf({ requestIds: [ASKED_OPEN.id], reason: 'STOCK_NOT_IN_SYSTEM', note: 'Già al taglio.' }) }) },
+    { id: 'w2b-332-planner', label: 'Planner: asks, rejects plan lines, cannot refuse an asked one', model: make('planner', { can: asker('planner'), rows: rowsOf(ASKED_ROWS), selected: [ASKED_OPEN.id] }) },
+    { id: 'w2b-332-offline', label: 'Offline: Ask to buy held', model: make('buyer', { can: asker('buyer'), offline: true, live: 'offline', rows: rowsOf(ASKED_ROWS) }) },
     // ---- roles ----
     { id: 'owner', label: 'Owner: everything, with costs', model: make('owner') },
     { id: 'planner', label: 'Planner: no costs; rejects, does not draft', model: make('planner', { selected: [LEATHER.id, LINING.id] }), note: 'No value or price column (not even —). Draft POs held: purchasing.manage.' },

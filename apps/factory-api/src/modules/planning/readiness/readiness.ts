@@ -70,7 +70,8 @@ export async function workOrderReadiness(caller: CommandCaller, workOrderId: str
 
 const q = (value: { toFixed(scale: number): string }): string => value.toFixed(QUANTITY_SCALE)
 
-async function shortageRows(db: Reader, live: LivePlan) {
+// B-W2b-332: also read by Ask to buy's "from a shortage" (modules/purchasing/ask-to-buy), so both see the same list.
+export async function shortageRows(db: Reader, live: LivePlan) {
   const workOrderIds = [...new Set(live.plan.netting.flatMap((entry) => entry.pegging.coverage.flatMap((coverage) => (coverage.part.workOrderId ? [coverage.part.workOrderId] : []))))]
   if (workOrderIds.length === 0) return []
   const workOrders = new Map((await openWorkOrdersOf(db, live.site.id, workOrderIds)).map((row) => [row.id, row]))

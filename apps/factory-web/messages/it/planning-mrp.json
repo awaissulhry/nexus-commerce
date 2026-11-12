@@ -59,7 +59,10 @@
       "buyLabel": "Compra {material} per {workOrder}: un ordine in bozza dalla pianificazione",
       "EXPEDITE": "Sollecita {number}",
       "expediteLabel": "Sollecita {number} per {workOrder}: apri l’ordine e manda un promemoria al fornitore",
-      "MOVE_FIRM": "Sposta l’ordine fisso"
+      "MOVE_FIRM": "Sposta l’ordine fisso",
+      "ASK": "Chiedi di acquistare",
+      "askLabel": "Chiedi di acquistare {material} per {workOrder}",
+      "asked": "Già chiesta: attende i buyer"
     },
     "col": {
       "workOrder": "Ordine di produzione",
