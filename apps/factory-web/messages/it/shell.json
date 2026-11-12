@@ -216,7 +216,8 @@
       "picking": "Prelievi e kit",
       "counts": "Inventari",
       "reportsGroup": "Report",
-      "reports": "Report magazzino"
+      "reports": "Report magazzino",
+      "transfers": "Trasferimenti"
     },
     "frame": {
       "topBar": "Barra superiore"

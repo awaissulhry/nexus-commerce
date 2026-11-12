@@ -21,6 +21,8 @@ import { INVENTORY_RESERVATION_PERMISSIONS } from '../../inventory/reservations/
 import { INVENTORY_HIDES_DEFINITIONS, INVENTORY_HIDES_PERMISSIONS } from '../../inventory/hides/permissions'
 // B-W2b-100: one shade lot per order (inventory.shade.override: a hide of another shade lot let through with the reason).
 import { INVENTORY_SHADE_DEFINITIONS, INVENTORY_SHADE_PERMISSIONS } from '../../inventory/reservations/permissions'
+// B-W2b-326: transfers between sites (inventory.transfers.manage).
+import { INVENTORY_TRANSFERS_DEFINITIONS, INVENTORY_TRANSFERS_PERMISSIONS } from '../../inventory/transfers/permissions'
 import { INVOICES_DEFINITIONS, INVOICES_PERMISSIONS } from '../../invoicing/permissions'
 import { LINK_SESSION_PERMISSIONS as LINK_SESSION_NAMES, LINKS_OFFICE_PERMISSIONS } from '../../links/permissions'
 import { NUMBERING_MANAGE, NUMBERING_VIEW } from '../../numbering/permissions'
@@ -630,6 +632,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   INVENTORY_HIDES_DEFINITIONS,
   // B-W2b-100: one shade lot per order.
   INVENTORY_SHADE_DEFINITIONS,
+  // B-W2b-326: transfers between sites.
+  INVENTORY_TRANSFERS_DEFINITIONS,
   SHIPPING_DEFINITIONS,
   SHIPPING_LABELS_DEFINITIONS,
   PARTIES_DEFINITIONS,
@@ -1026,6 +1030,8 @@ for (const name of INVENTORY_DISCREPANCIES_PERMISSIONS) if (!FACTORY_PERMISSIONS
 for (const name of INVENTORY_HIDES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-100: one shade lot per order.
 for (const name of INVENTORY_SHADE_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-326: transfers between sites.
+for (const name of INVENTORY_TRANSFERS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-32: global search.
 for (const name of SEARCH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-168: portal search, flagged partner (never in an office or floor role).
