@@ -210,7 +210,8 @@
       "what": "You accept the estimate of repair {number}.",
       "work": "We start the work and tell you when it goes back.",
       "confirm": "Accept the estimate",
-      "busy": "Sending…"
+      "busy": "Sending…",
+      "undo": "Write to us before the work starts"
     },
     "decline": {
       "title": "Decline estimate {revision}?",

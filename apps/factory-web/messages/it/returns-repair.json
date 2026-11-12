@@ -210,7 +210,8 @@
       "what": "Accetti il preventivo della riparazione {number}.",
       "work": "Iniziamo il lavoro e ti diciamo quando il capo torna da te.",
       "confirm": "Accetta il preventivo",
-      "busy": "Invio…"
+      "busy": "Invio…",
+      "undo": "Scrivici prima che il lavoro inizi"
     },
     "decline": {
       "title": "Rifiuti il preventivo {revision}?",

@@ -12,6 +12,7 @@ import { useReturnWords } from '../words'
 import type { Repair } from './api'
 import { garmentLine, LIMITS, moneyText, NS, repairSteps, unitPriceText, type RepairTab } from './model'
 import '../returns.css'
+import './repair.css'
 
 /**
  * SCR-358 — a customer's repair in the portal (B-W2b-342; SAL-384, SAL-385, SAL-387; RR1:02; design portal.customer.returns
@@ -185,7 +186,7 @@ function Estimate({ model, repair, actions }: { model: RepairRecordViewModel; re
           {estimate.status === 'SENT' ? (
             <div className="fw-pret-block">
               <p className="fw-pret-hint">{r('portal.estimate.ask')}</p>
-              <div className="fw-pret-actions">
+              <div className="fw-prep-actions">
                 <Button onClick={() => actions?.onDecline?.()} heldReason={model.answerHeld ? r(model.answerHeld) : null}>
                   {r('portal.estimate.decline')}
                 </Button>
@@ -289,6 +290,7 @@ function AcceptDialog({ repair, model, busy, problem, onConfirm, onClose }: { re
         title: r('portal.accept.title', { revision: estimate?.revision ?? 1 }),
         confirmLabel: busy ? r('portal.accept.busy') : r('portal.accept.confirm'),
         consequences: [model.seesPrices && amount ? r('portal.accept.amount', { amount }) : r('portal.accept.what', { number: repair.number }), r('portal.accept.work')],
+        reversal: { verb: r('portal.accept.undo'), fidelity: 'lossy' },
         ...(problem ? { refusal: { reason: r(problem) } } : {}),
       }}
       onConfirm={() => onConfirm?.()}
