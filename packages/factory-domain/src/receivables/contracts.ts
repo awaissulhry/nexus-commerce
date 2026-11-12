@@ -62,8 +62,10 @@ export const ageingRow = output({
   lastReminderAt: instant().nullable(),
   /** Prepared or approved, waiting. */
   remindersWaiting: z.number().int(),
-  /** W2b (credit limits): always null in W2a. */
-  creditLimitUsed: z.null(),
+  /** B-W2b-304: the share of the customer's credit limit with the company used, in whole percent (open orders not yet
+   *  invoiced + invoices not yet paid, over the limit); null without a limit in the row's currency or without the price
+   *  grain. */
+  creditLimitUsed: z.number().int().nullable(),
 })
 
 export const ageingAnswer = output({
