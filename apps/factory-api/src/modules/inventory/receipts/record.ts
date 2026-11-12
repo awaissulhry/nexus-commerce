@@ -33,7 +33,11 @@ import { Dec, parseDecimal, ZERO, type Decimal } from '@nexus/factory-domain/tax
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { allocateScanIds } from '../../../platform/numbering/scan-ids'
-import { lockOrderForReceipt, readOrderForFloorReceipt, setOrderReceiptProgress, type OrderForReceipt } from '../../purchasing/receiving'
+import { differenceTolerance, lockOrderForReceipt, readOrderForFloorReceipt, receiptTolerancesOf, setOrderReceiptProgress, type OrderForReceipt } from '../../purchasing/receiving'
+// B-W2b-296 (SCM-061, SCM-066, SCM-147): the delivery tolerance beyond which a receipt is refused, and where an order
+// shipped to a third party lands.
+import { beyondToleranceRefusal, upToWords } from '@nexus/factory-domain/purchasing/po-depth/tolerances'
+import { receiptPlaceOf } from '../../purchasing/po-depth/hooks'
 import { activeSourcesOf } from '../../purchasing/supplier-items/store'
 import { officeContextOf, postedBy, stockContextOf } from '../ledger/access'
 import { postMoves, type MoveDraft, type PostedMove } from '../ledger/post-moves'
@@ -224,7 +228,10 @@ export async function recordReceiptInCommand(tools: CommandTools, body: ReceiptB
   // 2. When, and where the goods go.
   const receivedAt = body.receivedAt ? parseInstant(body.receivedAt)! : now
   if (receivedAt.getTime() > now.getTime() + CLOCK_SLACK_MS) throw new ValidationError('The goods cannot arrive in the future.', [{ path: 'body/receivedAt', message: 'Now or earlier.' }])
-  const location = await locationFor(tools, order.siteId, body.locationId, body.lines.map((line) => line.purchaseOrderLineId))
+  // B-W2b-296: an order shipped straight to a workshop lands on its place (the floor never receives it).
+  const shipTo = await receiptPlaceOf(tools, order, floor)
+  // B-W2b-289: no place named and no ship-to place: the site's default receiving place for these items, else its one dock.
+  const location = await locationFor(tools, order.siteId, body.locationId ?? shipTo.locationId ?? undefined, body.lines.map((line) => line.purchaseOrderLineId))
 
   // 3. The lines against the order's lines, with each material's rules.
   const { lines: orderLines, received } = await readOrderLines(tx, order.id)
@@ -245,11 +252,16 @@ export async function recordReceiptInCommand(tools: CommandTools, body: ReceiptB
   const notes: ReceiptNote[] = []
   const refusals: Issue[] = []
   const earlier = await readEarlierLots(tx, planned.map((line) => line.orderLine.id))
+  // B-W2b-296 (SCM-061): each line's tolerance over and under (its own, else the delivery tolerance, else none).
+  const tolerances = await receiptTolerancesOf(tx, order, orderLines)
   for (const line of planned) {
     const expected = expectedBaseOf({ quantity: line.orderLine.quantity.toString(), baseQuantity: line.orderLine.baseQuantity.toString(), confirmedQuantity: line.orderLine.confirmedQuantity?.toString() ?? null })
-    const difference = lineDifference({ expected, receivedBefore: received.get(line.orderLine.id) ?? ZERO, receiving: line.baseQuantity, tolerancePct: line.orderLine.areaTolerancePct?.toString() ?? null })
+    const tolerance = tolerances.get(line.orderLine.id)
+    const difference = lineDifference({ expected, receivedBefore: received.get(line.orderLine.id) ?? ZERO, receiving: line.baseQuantity, ...differenceTolerance(tolerance, line.orderLine.areaTolerancePct) })
     const words = differenceWords(line.label, difference, line.item.baseUom)
-    if (difference.kind === 'OVER' && !blank(line.body.differenceReason)) {
+    const beyond = difference.kind === 'OVER' && tolerance ? beyondToleranceRefusal(words, tolerance, upToWords(difference.upTo, line.item.baseUom)) : null
+    if (beyond) refusals.push({ path: `body/lines/${line.index}/quantity`, message: beyond })
+    else if (difference.kind === 'OVER' && !blank(line.body.differenceReason)) {
       refusals.push({ path: `body/lines/${line.index}/differenceReason`, message: `${words} Give the reason the extra is taken, or receive only what was ordered.` })
     }
     if (difference.kind !== 'EXACT') notes.push({ code: difference.kind, seq: line.seq, message: words })
@@ -273,7 +285,9 @@ export async function recordReceiptInCommand(tools: CommandTools, body: ReceiptB
     }
   }
   if (refusals.length > 0) {
-    throw new DomainError('conflict', refusals.length === 1 ? refusals[0]!.message : `${refusals.length} lines bring more than their order line's tolerance: give each the reason.`, refusals)
+    // B-W2b-296: a line beyond its delivery tolerance is refused whatever the reason: the words say each one.
+    const blocked = refusals.filter((refusal) => refusal.path.endsWith('/quantity'))
+    throw new DomainError('conflict', refusals.length === 1 ? refusals[0]!.message : blocked.length === 0 ? `${refusals.length} lines bring more than their order line's tolerance: give each the reason.` : `${refusals.length} lines bring more than their order line's tolerance: ${refusals.map((refusal) => refusal.message).join(' ')}`, refusals)
   }
   if (!blank(body.supplierDdtNumber)) notes.unshift({ code: 'NO_SUPPLIER_DDT', seq: null, message: 'No supplier DDT number: add the transport document\'s number and date to the receipt (DPR 472/1996).' })
 
@@ -468,7 +482,7 @@ export async function recordReceiptInCommand(tools: CommandTools, body: ReceiptB
     after.lines.map((line) => ({
       expected: expectedBaseOf({ quantity: line.quantity.toString(), baseQuantity: line.baseQuantity.toString(), confirmedQuantity: line.confirmedQuantity?.toString() ?? null }),
       received: after.received.get(line.id) ?? ZERO,
-      tolerancePct: line.areaTolerancePct?.toString() ?? null,
+      ...differenceTolerance(tolerances.get(line.id), line.areaTolerancePct),
       // B-W2a-52: a cancelled or closed-short line takes no more goods: it counts as complete.
       ended: line.cancelledAt !== null || line.closedShortAt !== null,
     })),

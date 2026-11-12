@@ -24,11 +24,13 @@ import {
   type StockPosition,
 } from '@nexus/factory-domain/purchasing/requests/requests'
 import { approvedSupplierIds, buyFromSource, isApproved, priceIn, sourceFor, sourceRules, unitsBoughtIn, type Need, type SourceFacts } from '@nexus/factory-domain/purchasing/sources/sources'
+import { QUEUE_STATUS_OF, readShortage, type PurchaseRequestStatus, type ShortageSeen } from '@nexus/factory-domain/purchasing/ask-to-buy/ask-to-buy'
 import { supplierCalendarsFor, type LoadedSupplierCalendar } from '../../../platform/calendars/service'
 import { lotFactsOf, readLots, readPurchases, readStock, type PurchaseRead } from '../../planning/store'
 import { sourcesOf } from '../../planning/views'
 import { dayOf, decimal, ITEM_COLUMNS, quantityText, unitsOf, type Reader } from '../store'
 import { activeSourcesOf } from '../supplier-items/store'
+import { ASKED_COLUMNS, namesOf, type AskedRow } from '../ask-to-buy/store'
 
 /**
  * What each request to buy proposes (B-W2a-10; SCM-034, SCM-036; factory-domain purchasing/requests): one function for
@@ -46,6 +48,10 @@ import { activeSourcesOf } from '../supplier-items/store'
  *              site's safety days and the lead time (the site's, else the source's, else the supplier's), counted back
  *              around the supplier's closed days (platform/calendars). A reorder row is ordered today and needed when the
  *              goods can come: today plus the lead time, the closed days not counted.
+ *   asked      B-W2b-332: a request asked in the office (PurchaseRequest, kind ASKED) is bought as asked: its quantity in the
+ *              chosen supplier's source unit after its minimum and steps (else the material's terms), needed by the day
+ *              asked (its day to order by as a plan row's), from the site's preferred supplier, the best approved source or
+ *              the material's default; its status is the request's (QUEUE_STATUS_OF: waiting for a yes is held).
  *
  * Reads only (a scoped client or a command's tx); no money leaves here without the cost grain (the view's marked fields).
  */
@@ -143,6 +149,16 @@ export interface ReorderPart {
   readonly onOrderLines: readonly { readonly purchaseOrderId: string; readonly number: string; readonly status: string; readonly openQuantity: string }[]
 }
 
+/** B-W2b-332: a request asked in the office, as the queue shows it. */
+export interface AskedPart {
+  readonly request: AskedRow
+  readonly status: PurchaseRequestStatus
+  readonly requestedBy: { readonly id: string; readonly name: string }
+  readonly shortage: ShortageSeen | null
+  /** CONVERTED: the purchase order its line is on. */
+  readonly purchaseOrder: { readonly id: string; readonly number: string; readonly status: PurchaseOrderStatus } | null
+}
+
 /** One request, decided: what it proposes and why it may or may not be drafted now. */
 export interface Built {
   readonly id: string
@@ -178,6 +194,7 @@ export interface Built {
   readonly warnings: readonly { readonly code: RequestWarningCode; readonly message: string }[]
   readonly plan: PlanPart | null
   readonly reorder: ReorderPart | null
+  readonly asked: AskedPart | null
 }
 
 // ---- reading the raw rows ---------------------------------------------------------------------------------------------
@@ -191,7 +208,16 @@ interface RawReorder {
   readonly kind: 'REORDER'
   readonly rule: RuleRow
 }
-type Raw = RawPlan | RawReorder
+interface RawAsked {
+  readonly kind: 'ASKED'
+  readonly request: AskedRow & { readonly itemId: string }
+}
+type Raw = RawPlan | RawReorder | RawAsked
+
+/** B-W2b-332: the row's material, colour and site, whatever its kind. */
+const itemOf = (raw: Raw): string => (raw.kind === 'PLAN' ? raw.row.itemId : raw.kind === 'REORDER' ? raw.rule.itemId : raw.request.itemId)
+const colourOf = (raw: Raw): string | null => (raw.kind === 'PLAN' ? raw.row.itemColourId : raw.kind === 'REORDER' ? raw.rule.itemColourId : raw.request.itemColourId)
+const siteOf = (raw: Raw): string => (raw.kind === 'PLAN' ? raw.row.siteId : raw.kind === 'REORDER' ? raw.rule.siteId : raw.request.siteId)
 
 /** Plan lines: of these runs (the queue: the sites' latest DONE runs), or whatever their run (a conversion, a Draft PO). */
 export async function planRaws(db: Reader, runs: readonly RunRow[] | null, where: Prisma.MaterialRequirementWhereInput): Promise<RawPlan[]> {
@@ -214,6 +240,12 @@ export const latestRuns = (db: Reader, siteId?: string): Promise<RunRow[]> =>
 export async function reorderRaws(db: Reader, where: Prisma.ItemPlanningWhereInput): Promise<RawReorder[]> {
   const rules = await db.itemPlanning.findMany({ where: { AND: [where, { method: { in: ['REORDER_POINT', 'MIN_MAX'] } }, { OR: [{ source: 'BUY' }, { source: null }] }] }, select: RULE_COLUMNS, orderBy: { id: 'asc' } })
   return rules.map((rule) => ({ kind: 'REORDER', rule }))
+}
+
+/** B-W2b-332: requests asked in the office (a material named; a cancelled one is never in the queue). */
+export async function askedRaws(db: Reader, where: Prisma.PurchaseRequestWhereInput): Promise<RawAsked[]> {
+  const rows = await db.purchaseRequest.findMany({ where: { AND: [where, { itemId: { not: null } }, { status: { not: 'CANCELLED' } }] }, select: ASKED_COLUMNS, orderBy: [{ requestedAt: 'asc' }, { id: 'asc' }] })
+  return rows.map((request) => ({ kind: 'ASKED', request: request as AskedRow & { itemId: string } }))
 }
 
 // ---- stock positions ----------------------------------------------------------------------------------------------------
@@ -277,9 +309,9 @@ interface Facts {
 }
 
 async function factsFor(db: Reader, raws: readonly Raw[], extraRules: readonly RuleRow[]): Promise<Facts> {
-  const itemIds = [...new Set(raws.map((raw) => (raw.kind === 'PLAN' ? raw.row.itemId : raw.rule.itemId)))]
-  const siteIds = [...new Set(raws.map((raw) => (raw.kind === 'PLAN' ? raw.row.siteId : raw.rule.siteId)))]
-  const colourIds = [...new Set(raws.flatMap((raw) => { const id = raw.kind === 'PLAN' ? raw.row.itemColourId : raw.rule.itemColourId; return id ? [id] : [] }))]
+  const itemIds = [...new Set(raws.map(itemOf))]
+  const siteIds = [...new Set(raws.map(siteOf))]
+  const colourIds = [...new Set(raws.flatMap((raw) => { const id = colourOf(raw); return id ? [id] : [] }))]
   const items = itemIds.length === 0 ? [] : await db.item.findMany({ where: { id: { in: itemIds } }, select: MATERIAL_COLUMNS })
   const colours = colourIds.length === 0 ? [] : await db.itemColour.findMany({ where: { id: { in: colourIds } }, select: { id: true, code: true, name: true, supplierColourCode: true } })
   const sites = siteIds.length === 0 ? [] : await db.site.findMany({ where: { id: { in: siteIds } }, select: { id: true, companyId: true, code: true, name: true } })
@@ -338,26 +370,27 @@ export async function buildRequests(db: Reader, raws: readonly Raw[], options: B
       if (need) reorderParts.set(rule.id, { need, position, lines })
     }
   }
-  const kept = raws.filter((raw) => raw.kind === 'PLAN' || (reorderParts.has(raw.rule.id) && (!options.triggeredOnly || reorderParts.get(raw.rule.id)!.need.triggered)))
+  const kept = raws.filter((raw) => raw.kind !== 'REORDER' || (reorderParts.has(raw.rule.id) && (!options.triggeredOnly || reorderParts.get(raw.rule.id)!.need.triggered)))
   const facts = await factsFor(db, kept, kept.flatMap((raw) => (raw.kind === 'REORDER' ? [raw.rule] : [])))
   // A made part is never bought: a rule with no source of its own follows the item's sourcing.
-  const live = kept.filter((raw) => raw.kind === 'PLAN' || raw.rule.source === 'BUY' || facts.items.get(raw.rule.itemId)?.sourcing !== 'MAKE')
+  const live = kept.filter((raw) => raw.kind !== 'REORDER' || raw.rule.source === 'BUY' || facts.items.get(raw.rule.itemId)?.sourcing !== 'MAKE')
 
   const drafts = live.map((raw) => {
-    const id = raw.kind === 'PLAN' ? requestIdOf('PLAN', raw.row.id) : requestIdOf('REORDER', raw.rule.id)
-    const siteId = raw.kind === 'PLAN' ? raw.row.siteId : raw.rule.siteId
+    const id = raw.kind === 'PLAN' ? requestIdOf('PLAN', raw.row.id) : raw.kind === 'REORDER' ? requestIdOf('REORDER', raw.rule.id) : requestIdOf('ASKED', raw.request.id)
+    const siteId = siteOf(raw)
     const site = facts.sites.get(siteId)!
-    const need: Need = { companyId: site.companyId, itemId: raw.kind === 'PLAN' ? raw.row.itemId : raw.rule.itemId, itemColourId: raw.kind === 'PLAN' ? raw.row.itemColourId : raw.rule.itemColourId }
+    const need: Need = { companyId: site.companyId, itemId: itemOf(raw), itemColourId: colourOf(raw) }
     return { raw, id, site, need, supplier: supplierChoice(raw, facts, need, siteId, options.choices?.get(id) ?? {}) }
   })
   const partyIds = [...new Set(drafts.flatMap((draft) => (draft.supplier.id ? [draft.supplier.id] : [])))]
   const parties = new Map((partyIds.length === 0 ? [] : await db.party.findMany({ where: { id: { in: partyIds } }, select: SUPPLIER_COLUMNS })).map((party) => [party.id, party]))
-  const orderLineIds = drafts.flatMap((draft) => (draft.raw.kind === 'PLAN' && draft.raw.row.purchaseOrderLineId ? [draft.raw.row.purchaseOrderLineId] : []))
+  const orderLineIds = drafts.flatMap((draft) => (draft.raw.kind === 'PLAN' && draft.raw.row.purchaseOrderLineId ? [draft.raw.row.purchaseOrderLineId] : draft.raw.kind === 'ASKED' && draft.raw.request.purchaseOrderLineId ? [draft.raw.request.purchaseOrderLineId] : []))
   const ordered = new Map(
     (orderLineIds.length === 0 ? [] : await db.purchaseOrderLine.findMany({ where: { id: { in: orderLineIds } }, select: { id: true, purchaseOrder: { select: { id: true, number: true, status: true } } } })).map((line) => [line.id, line.purchaseOrder]),
   )
   const salesOrderIds = [...new Set(drafts.flatMap((draft) => (draft.raw.kind === 'PLAN' ? sourcesOf(draft.raw.row.sources).map((source) => source.orderId) : [])))].filter((id) => id !== '')
   const salesOrders = new Map((salesOrderIds.length === 0 ? [] : await db.salesOrder.findMany({ where: { id: { in: salesOrderIds } }, select: { id: true, number: true } })).map((order) => [order.id, order.number]))
+  const askers = await namesOf(db, drafts.flatMap((draft) => (draft.raw.kind === 'ASKED' ? [draft.raw.request.requestedById] : [])))
 
   // What each buys, its lead time and the day it is needed (or ordered by), before the calendars are read.
   const sized = drafts.map((draft) => {
@@ -375,7 +408,12 @@ export async function buildRequests(db: Reader, raws: readonly Raw[], options: B
     if (raw.kind === 'PLAN' && raw.row.firmQuantity !== null) {
       buy = { quantity: quantityText(raw.row.firmQuantity), uom: raw.row.suggestedUom as Uom, baseQuantity: quantityText(raw.row.firmBaseQuantity ?? raw.row.firmQuantity), from: 'FIRM', steps: [] }
     } else {
-      const net = raw.kind === 'PLAN' ? raw.row.netQuantity.toString() : reorderParts.get(raw.rule.id)!.need.quantity
+      const net =
+        raw.kind === 'PLAN'
+          ? raw.row.netQuantity.toString()
+          : raw.kind === 'REORDER'
+            ? reorderParts.get(raw.rule.id)!.need.quantity
+            : toBase(raw.request.quantity.toString(), raw.request.uom as Uom, units, { scale: QUANTITY_SCALE, rounding: 'UP' }).toFixed(QUANTITY_SCALE)
       const fromSource = usableSource ? buyFromSource(net, units, usableSource, party?.leadTimeDays ?? null) : null
       if (fromSource) buy = { quantity: fromSource.quantity, uom: fromSource.uom, baseQuantity: fromSource.baseQuantity, from: 'SOURCE', steps: stepsOf(fromSource.steps) }
       else if (raw.kind === 'PLAN') {
@@ -387,11 +425,16 @@ export async function buildRequests(db: Reader, raws: readonly Raw[], options: B
       }
       if (raw.kind === 'REORDER') buy = { ...buy, steps: [...stepsOf(reorderParts.get(raw.rule.id)!.need.steps), ...buy.steps] }
     }
-    const target = raw.kind === 'PLAN' ? addDays(dayOf(raw.row.firmDate ?? raw.row.needDate)!, -(siteRule?.safetyLeadTimeDays ?? 0)) : today
+    const target =
+      raw.kind === 'PLAN'
+        ? addDays(dayOf(raw.row.firmDate ?? raw.row.needDate)!, -(siteRule?.safetyLeadTimeDays ?? 0))
+        : raw.kind === 'ASKED'
+          ? addDays(dayOf(raw.request.needDate)!, -(siteRule?.safetyLeadTimeDays ?? 0))
+          : today
     return { ...draft, item, units, party, source, usableSource, lead, buy, target }
   })
 
-  const windows = sized.flatMap((entry) => (entry.party && entry.lead !== null ? [leadTimeWindow(entry.target, entry.lead, entry.raw.kind === 'PLAN' ? 'back' : 'forward')] : []))
+  const windows = sized.flatMap((entry) => (entry.party && entry.lead !== null ? [leadTimeWindow(entry.target, entry.lead, entry.raw.kind === 'REORDER' ? 'forward' : 'back')] : []))
   const calendars: Map<string, LoadedSupplierCalendar> =
     windows.length === 0
       ? new Map()
@@ -405,8 +448,8 @@ export async function buildRequests(db: Reader, raws: readonly Raw[], options: B
     const calendar = party ? (calendars.get(party.id)?.calendar ?? null) : null
     let needDate: BusinessDate
     let orderBy: Built['orderBy']
-    if (raw.kind === 'PLAN') {
-      needDate = dayOf(raw.row.firmDate ?? raw.row.needDate)!
+    if (raw.kind !== 'REORDER') {
+      needDate = raw.kind === 'PLAN' ? dayOf(raw.row.firmDate ?? raw.row.needDate)! : dayOf(raw.request.needDate)!
       const walk = lead === null ? null : orderByDate(calendar, target, lead)
       const date = walk?.date ?? target
       orderBy = { date, leadTimeDays: lead, passed: date < today, closedDaysSkipped: walk?.skipped.length ?? 0 }
@@ -421,12 +464,13 @@ export async function buildRequests(db: Reader, raws: readonly Raw[], options: B
         ? null
         : ((usableSource ? priceIn(usableSource, buy.uom, units, currency) : null) ?? defaultUnitPrice({ standardCost: decimal(item.standardCost), currency: item.currency, units }, buy.uom, currency))
     const colour = need.itemColourId ? (facts.colours.get(need.itemColourId) ?? null) : null
-    const status: RequestStatus = raw.kind === 'REORDER' ? 'OPEN' : raw.row.decision === 'ORDERED' ? 'CONVERTED' : raw.row.decision === 'IGNORED' ? 'SET_ASIDE' : 'OPEN'
+    const status: RequestStatus =
+      raw.kind === 'REORDER' ? 'OPEN' : raw.kind === 'ASKED' ? (QUEUE_STATUS_OF[raw.request.status as PurchaseRequestStatus] ?? 'SET_ASIDE') : raw.row.decision === 'ORDERED' ? 'CONVERTED' : raw.row.decision === 'IGNORED' ? 'SET_ASIDE' : 'OPEN'
     const reorder = raw.kind === 'REORDER' ? reorderParts.get(raw.rule.id)! : null
     const approved = party ? isApproved(facts.sources, need, party.id) : true
     const hold = holdOf({
       status,
-      latest: raw.kind === 'REORDER' || raw.run.status === 'DONE',
+      latest: raw.kind !== 'PLAN' || raw.run.status === 'DONE',
       needed: reorder === null || reorder.need.triggered,
       material: { code: item.code, active: item.status === 'ACTIVE' },
       supplier: party ? { name: party.tradeName ?? party.legalName, roles: party.roles as PartyRole[], status: party.status as PartyStatus } : null,
@@ -455,16 +499,26 @@ export async function buildRequests(db: Reader, raws: readonly Raw[], options: B
             ...planOrdersOf(raw.row, salesOrders),
           }
         : null
+    const asked: AskedPart | null =
+      raw.kind === 'ASKED'
+        ? {
+            request: raw.request,
+            status: raw.request.status as PurchaseRequestStatus,
+            requestedBy: { id: raw.request.requestedById, name: askers.get(raw.request.requestedById) ?? '' },
+            shortage: readShortage(raw.request.shortage),
+            purchaseOrder: raw.request.purchaseOrderLineId ? ((ordered.get(raw.request.purchaseOrderLineId) as AskedPart['purchaseOrder']) ?? null) : null,
+          }
+        : null
     return {
       id: entry.id,
       kind: raw.kind,
-      refId: raw.kind === 'PLAN' ? raw.row.id : raw.rule.id,
-      version: raw.kind === 'PLAN' ? raw.row.version : raw.rule.version,
+      refId: raw.kind === 'PLAN' ? raw.row.id : raw.kind === 'REORDER' ? raw.rule.id : raw.request.id,
+      version: raw.kind === 'PLAN' ? raw.row.version : raw.kind === 'REORDER' ? raw.rule.version : raw.request.version,
       companyId: site.companyId,
       siteId: site.id,
       site: { code: site.code, name: site.name },
       status,
-      convertedOn: raw.kind === 'PLAN' && raw.row.decision === 'ORDERED' && raw.row.decidedAt ? businessDate(raw.row.decidedAt) : null,
+      convertedOn: raw.kind === 'PLAN' && raw.row.decision === 'ORDERED' && raw.row.decidedAt ? businessDate(raw.row.decidedAt) : raw.kind === 'ASKED' && raw.request.convertedAt ? businessDate(raw.request.convertedAt) : null,
       item,
       colour,
       needDate,
@@ -489,6 +543,7 @@ export async function buildRequests(db: Reader, raws: readonly Raw[], options: B
       reorder: reorder
         ? { rule: (raw as RawReorder).rule, method: reorder.need.method, stock: reorder.position as ReorderPart['stock'], need: reorder.need, why: reorderWhy(reorder.need, reorder.position, item.baseUom as Uom), onOrderLines: reorder.lines }
         : null,
+      asked,
     } satisfies Built
   })
 }
@@ -505,4 +560,4 @@ function planOrdersOf(row: RequirementRow, numbers: ReadonlyMap<string, string>)
   return { orders: [...orders.entries()].map(([id, number]) => ({ id, number })), workOrders: [...new Set(sources.flatMap((source) => source.workOrders))] }
 }
 
-export type { MaterialRow, RequirementRow, RuleRow, RunRow, SupplierRow }
+export type { MaterialRow, RawAsked, RequirementRow, RuleRow, RunRow, SupplierRow }

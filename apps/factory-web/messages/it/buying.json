@@ -762,6 +762,11 @@
       "BELOW_MINIMUM": "Una riga è sotto il minimo del fornitore (un avviso: si invia lo stesso).",
       "NOT_A_MULTIPLE": "Una riga non è un multiplo di ciò che vende il fornitore (un avviso).",
       "LATE_FOR_LEAD_TIME": "Con i tempi di consegna del fornitore una riga arriva dopo il fabbisogno (un avviso).",
+      "SCHEDULE_NOT_THE_LINE": "Le consegne di una riga non corrispondono più alla riga: riscrivi il suo piano di consegna.",
+      "DELIVERY_DATE_PAST": "Una consegna di una riga è chiesta per un giorno passato.",
+      "NO_RATE_AT_ORDER": "L’ordine è in una valuta diversa da quella della società: inserisci il cambio all’ordine.",
+      "SHIP_TO_NOT_USABLE": "Il destinatario della consegna, o il suo indirizzo, non può più ricevere la merce.",
+      "SHIP_TO_NO_WORKSHOP_PLACE": "Il laboratorio di destinazione non ha un nostro luogo nello stabilimento: il ricevimento non entrerà nel suo stock (un avviso).",
       "pass": {
         "supplierActive": "Il fornitore è attivo",
         "linesPriced": "Ogni riga ha un prezzo",
