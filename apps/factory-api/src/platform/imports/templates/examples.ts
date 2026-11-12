@@ -74,6 +74,13 @@ export const TEMPLATE_EXAMPLES: Readonly<Record<string, readonly TemplateExample
     { key: 'BRAND-RSL-EX-01', code: 'OTHER', name: 'DMF in coated materials, the brand\'s limit', substance: '68-12-2', limit: '10', unit: 'MG_KG', bound: 'AT_MOST', evidence: 'EITHER', source: 'CUSTOMER', customer: 'CLI-001', legalReference: 'Example brand RSL 2026, line 14' },
     { key: 'AFIRM-EX-PFAS', code: 'PFAS', name: 'PFAS in water-repellent finishes', group: 'PFAS_AFIRM', materialKinds: 'TEXTILE, MEMBRANE', markets: 'FR', evidence: 'DECLARATION', source: 'INDUSTRY', legalReference: 'Example industry RSL' },
   ],
+  // B-W2b-325: a price list's prices (made-up list and style codes): every colourway with its breaks, a colourway's own
+  // price, and an announced increase from a day.
+  'sales.priceLists': [
+    { list: 'PL-CLIENTE', style: 'JK-210', colourway: '*', validFrom: '-', validTo: '2027-01-31', unitPrice: '435', breaks: '10=425; 50=415' },
+    { list: 'PL-CLIENTE', style: 'JK-210', colourway: '*', validFrom: '2027-02-01', validTo: '-', unitPrice: '449.50', breaks: '100=3%' },
+    { list: 'PL-CLIENTE', style: 'JK-210', colourway: 'RED', validFrom: '-', unitPrice: '455' },
+  ],
 })
 
 /** The examples of one importer for one number format: `formatted` when they are written for it already. */

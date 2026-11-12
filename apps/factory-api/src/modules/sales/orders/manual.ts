@@ -158,8 +158,9 @@ async function planManualOrder(db: Reader, body: ManualOrderBody, now: Date, pic
     if (isIssueList(draft)) issues.push(...draft)
     else drafts.push(draft)
   }
-  // B-W2b-325 (SAL-178): an office order below a BLOCK minimum order quantity (sales/line-checks) is refused in words.
-  if (issues.length === 0) issues.push(...(await orderLineProblems(db, { companyId: company.id, priceListId: chain.lists[0]?.id ?? null, currency: company.currency, lines: drafts.map((line) => ({ id: null, seq: line.seq, styleId: line.styleId, colourwayId: line.colourwayId, styleRevisionId: line.styleRevisionId, quantity: line.kind === 'MADE_TO_MEASURE' ? 1 : line.sizes.reduce((sum, size) => sum + size.quantity, 0), optionItemIds: [] })) })))
+  // B-W2b-325 (SAL-178): an office order below a BLOCK minimum order quantity (sales/line-checks) is refused in words (said
+  // beside the other problems once every line reads).
+  if (drafts.length > 0 && drafts.length === body.lines.length) issues.push(...(await orderLineProblems(db, { companyId: company.id, priceListId: chain.lists[0]?.id ?? null, currency: company.currency, lines: drafts.map((line) => ({ id: null, seq: line.seq, styleId: line.styleId, colourwayId: line.colourwayId, styleRevisionId: line.styleRevisionId, quantity: line.kind === 'MADE_TO_MEASURE' ? 1 : line.sizes.reduce((sum, size) => sum + size.quantity, 0), optionItemIds: [] })) })))
   if (issues.length > 0) return issues
   const priced = priceLines(priceBasisOf(taxMode), company.currency, treatment, drafts)
   // The deposit as a quote asks it (sales/quotes priceVersion): gross × % ÷ 100, rounded once.
