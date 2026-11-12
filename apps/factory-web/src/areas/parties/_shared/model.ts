@@ -52,7 +52,8 @@ export type TileId = 'active' | 'prospects' | 'vies' | 'invoice' | 'blocked'
 export type CustomerTab = 'overview' | 'addresses' | 'tax' | 'orders' | 'documents' | 'portal' | 'activity'
 // B-W2a-69: 'items' = Items & prices (Approved sources; the slot is Purchasing's, areas/purchasing/suppliers).
 // B-W2b-172: 'questionnaire' = the supplier questionnaire (the slot is Purchasing's, areas/purchasing/suppliers/questionnaire).
-export type SupplierTab = 'overview' | 'contacts' | 'items' | 'orders' | 'questionnaire' | 'portal' | 'activity'
+// B-W2b-334: 'documents' (Documents & qualification), 'quality' (Quality & rating), 'bank' (Bank details): Purchasing's depth slot.
+export type SupplierTab = 'overview' | 'contacts' | 'items' | 'documents' | 'orders' | 'quality' | 'bank' | 'questionnaire' | 'portal' | 'activity'
 export type RecordTab = CustomerTab | SupplierTab
 
 export interface SideConfig {
@@ -92,7 +93,7 @@ export const SIDES: Readonly<Record<Side, SideConfig>> = {
     newStatus: 'PROSPECT',
     views: ['open', 'active', 'prospects', 'suppliers', 'subcontractors', 'carriers', 'blocked', 'archived', 'all'],
     tiles: ['active', 'prospects', 'blocked'],
-    tabs: ['overview', 'contacts', 'items', 'orders', 'questionnaire', 'portal', 'activity'], // B-W2a-69: items; B-W2b-180: portal; B-W2b-172: questionnaire
+    tabs: ['overview', 'contacts', 'items', 'documents', 'orders', 'quality', 'bank', 'questionnaire', 'portal', 'activity'], // B-W2a-69: items; B-W2b-180: portal; B-W2b-172: questionnaire; B-W2b-334: documents, quality, bank
     recordType: 'Party',
   },
 }
@@ -844,6 +845,10 @@ export interface RecordCan {
   partners?: boolean
   /** B-W2b-172: purchasing.questionnaire.view — the Questionnaire tab. */
   questionnaire?: boolean
+  /** B-W2b-334: Purchasing draws a supplier's W2b parts (Documents & qualification, Quality & rating). */
+  depth?: boolean
+  /** B-W2b-334: purchasing.bank.view — the Bank details tab (hidden without it, as the design says). */
+  bank?: boolean
 }
 
 export type RecordDialog =
@@ -896,6 +901,9 @@ export interface PartyRecordModel {
 export function recordTabs(config: SideConfig, can: RecordCan): RecordTab[] {
   return config.tabs.filter((tab) => {
     if (tab === 'orders') return config.side === 'customers' ? can.quotes || can.orders : can.purchaseOrders
+    // B-W2b-334: a supplier's Documents & qualification and Quality & rating (Purchasing's depth slot), Bank details.
+    if (config.side === 'suppliers' && (tab === 'documents' || tab === 'quality')) return can.depth === true
+    if (tab === 'bank') return can.bank === true
     if (tab === 'activity' || tab === 'documents') return can.threads
     if (tab === 'portal') return can.partners === true // B-W2b-180
     if (tab === 'questionnaire') return can.questionnaire === true // B-W2b-172

@@ -39,7 +39,13 @@ import {
   type Side,
   type TileId,
 } from './model'
-import { PartiesListView } from './view/PartiesListView'
+import { PartiesListView, type ListDepth } from './view/PartiesListView'
+
+/**
+ * B-W2b-334: a side's own list parts (Suppliers: the "Documents expiring in 30 days" tile and its view, Request documents
+ * N), given the list's view, a way to change it, the selected rows and how to read the list again.
+ */
+export type ListDepthSlot = (list: { view: ListView; onView: (view: ListView) => void; selectedRows: readonly PartyRow[]; reload: () => void }) => ListDepth
 
 /**
  * The list container of both sides (`/w/<company>/sales/customers` SCR-032, `/w/<company>/purchasing/suppliers`
@@ -49,17 +55,17 @@ import { PartiesListView } from './view/PartiesListView'
  * selection at a time, exports the view as CSV, and listens to the live stream: changes wait behind "N updates · Show"
  * (rows never move under the cursor). `?view=` keeps the view in the address; `?new=1` opens New.
  */
-export function PartiesList({ side, headActions, columns }: { side: Side; headActions?: (reload: () => void) => ReactNode; columns?: readonly ColDef<PartyRow>[] }) {
+export function PartiesList({ side, headActions, columns, depth }: { side: Side; headActions?: (reload: () => void) => ReactNode; columns?: readonly ColDef<PartyRow>[]; depth?: ListDepthSlot }) {
   return (
     <WithMessages namespaces={['parties']}>
-      <PartiesListContainer side={side} headActions={headActions} columns={columns} />
+      <PartiesListContainer side={side} headActions={headActions} columns={columns} depth={depth} />
     </WithMessages>
   )
 }
 
 const VIEWS = new Set<string>(['open', 'active', 'prospects', 'brands', 'invoice', 'vies', 'blocked', 'archived', 'all', 'suppliers', 'subcontractors', 'carriers'])
 
-function PartiesListContainer({ side, headActions, columns }: { side: Side; headActions?: (reload: () => void) => ReactNode; columns?: readonly ColDef<PartyRow>[] }) {
+function PartiesListContainer({ side, headActions, columns, depth }: { side: Side; headActions?: (reload: () => void) => ReactNode; columns?: readonly ColDef<PartyRow>[]; depth?: ListDepthSlot }) {
   const config = SIDES[side]
   const api = useOfficeApi()
   const session = useOfficeSession()
@@ -353,6 +359,16 @@ function PartiesListContainer({ side, headActions, columns }: { side: Side; head
   return (
     <PartiesListView
       columns={columns}
+      // B-W2b-334: the side's own tiles, view and bulk actions.
+      depth={depth?.({
+        view,
+        onView: changeView,
+        selectedRows: (rows.items ?? []).filter((row) => selected.includes(row.id)),
+        reload: () => {
+          void load()
+          void loadTiles()
+        },
+      })}
       headActions={
         headActions?.(() => {
           void load()

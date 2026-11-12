@@ -7,6 +7,7 @@ import { EMPTY_START, startProblems, type StartDraft } from './model'
 import type { ReturnsListViewModel } from './view/ReturnsListView'
 import { ReturnsCase, type ReturnsCaseBuilder } from './view/ReturnsCase'
 import type { StartDialogModel } from './view/StartDialog'
+import { repairListCases } from './repair/cases'
 
 /**
  * SCR-187 › Returns & claims (design portal.customer.returns: sec:cases, sec:complaints, h.act "Start a return or claim";
@@ -121,5 +122,7 @@ export const designScreen = defineDesignScreen<ReturnsCaseBuilder>({
     { id: 'start-empty', label: 'Start › nothing can come back', model: startCase({ step: 'details', type: 'RETURN' }, { read: returnableRead({ items: [] }) }), note: 'Nothing delivered may come back now: a quality problem is reported instead.' },
     { id: 'start-sent', label: 'Start › sent (EndState)', model: startCase({ ...returnDraft, step: 'review' }, { sent: { type: 'RETURN', number: 'R-2026-0037', answerBy: '2026-11-11', href: `${PREFIX}/returns/x?tab=request` } }), note: 'The case number (copy), when we answer, what comes next, Open the request.' },
     { id: 'start-sent-complaint', label: 'Start › sent (a complaint)', model: startCase({ ...complaintDraft, step: 'review' }, { sent: { type: 'COMPLAINT', number: 'C-2026-0025', answerBy: null, href: `${PREFIX}/returns/complaints/x?tab=request` } }) },
+    // B-W2b-342: Repair or alteration in the start, and the page's "Your repairs".
+    ...repairListCases({ listCase, startCase, prefix: PREFIX }),
   ],
 })
