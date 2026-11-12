@@ -153,6 +153,9 @@ beforeAll(async () => {
   // DDT 144/2026 (143 was cancelled): its goods not invoiced yet (the seed's invoice of them taken out, test data only).
   ids.ddt = (await one<{ id: string }>(`SELECT id FROM "Ddt" WHERE "tenantId" = $1 AND number = '144/2026'`, [T])).id
   await force(`DELETE FROM "InvoiceLine" WHERE "ddtId" = $1`, [ids.ddt])
+  // B-W2b-F26: dated today, like the hold and the certificate above. The seed's fixed date (30 Oct 2026, due 15 Nov) put its
+  // timer in the past from 12 Nov on, so an earlier pass fired it before this suite's own test of it.
+  await force(`UPDATE "Ddt" SET "documentDate" = $2::date WHERE id = $1`, [ids.ddt, today])
   ids.seededHoldAlert = (await one<{ id: string }>(`SELECT id FROM "Alert" WHERE "tenantId" = $1 AND "ruleKind" = 'HOLD_TOO_LONG'`, [T])).id
   app = await buildApp(
     { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },

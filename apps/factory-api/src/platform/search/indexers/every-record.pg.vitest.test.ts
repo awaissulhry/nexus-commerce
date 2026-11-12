@@ -128,8 +128,10 @@ beforeAll(async () => {
   await admin('DELETE FROM "SearchEntry"')
   indexers = await loadIndexers(SRC)
   system = callerFor(database, systemContext(tenantId, 'search-every-record-test'))
+  // B-W2b-F26: the walk over every record type makes more than the default 300 requests a minute (429 rate_limited);
+  // a high limit like the links, leather and images suites.
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET, rateLimit: { max: 10_000, timeWindowMs: 60_000 } },
     { database, routesRoot: SRC, authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
   )
   await rebuildIndex(system, indexers, { recordTypes: null, key: `search-rebuild-${newId()}` })

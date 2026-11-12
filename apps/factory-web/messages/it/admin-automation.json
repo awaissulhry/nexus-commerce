@@ -1,7 +1,7 @@
 {
   "refused": {
     "title": "Non è tua da aprire",
-    "body": "Questa pagina richiede il permesso di vedere le regole degli avvisi. Chiedi a un amministratore se ti serve per il tuo lavoro."
+    "body": "Questa pagina richiede il permesso di vedere le regole degli avvisi o di approvazione. Chiedi a un amministratore se ti serve per il tuo lavoro."
   },
   "band": {
     "label": "Approvazioni, automazioni e IA",
@@ -28,7 +28,7 @@
     "automation": "Automazioni",
     "runs": "Registro esecuzioni",
     "ai": "IA",
-    "later": "Le regole di approvazione arrivano nella prossima ondata: fino ad allora i preventivi usano il margine minimo delle impostazioni di vendita. Le automazioni, il loro registro e gli agenti IA arrivano più avanti (W3)."
+    "later": "Le automazioni, il loro registro e gli agenti IA arrivano più avanti (W3)."
   },
   "timers": {
     "title": "Promemoria e timer",
