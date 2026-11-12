@@ -17,6 +17,8 @@ import { rowViews } from '../declarations/read'
 import { KIND, LEAFLET_SELECT, readVisibleLeaflet, type LeafletRow } from './common'
 import { packMarkets, recompose } from './generate'
 import { renderLeaflet } from './pdf'
+// B-W2b-288 (FU2:01): a generated leaflet reads GATE-PPE-TEXTS from the PPE consultant's yes per template.
+import { ppeGateFor } from '../ppe-texts/store'
 
 /**
  * The user information, read side (B-W2b-258; design compliance.declarations, the user-information kind): one leaflet with
@@ -136,7 +138,8 @@ export async function detailOf(db: Reader, context: OfficeContext, row: LeafletR
     spareProtectors: stored.spareProtectors.map((entry) => ({ ...entry, zones: [...entry.zones], certificate: { ...entry.certificate } })),
     sectionsToType: sectionsToType(stored.sections),
     template: generated ? stored.template : null,
-    gate: generated ? { ...GATE, open: true } : null,
+    // B-W2b-288 (FU2:01): the gate reads the PPE consultant's yes to its template (its language, its company).
+    gate: generated ? await ppeGateFor(db, { kind: 'USER_INFORMATION', templateId: stored.template ?? null, language: row.language, companyId: row.companyId }) : null,
     createdBy: authors(row.createdById),
     original: original ? { id: original.id, language: original.language, status: original.status } : null,
     languages: familyViews.map((entry, index) => ({
