@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { businessDate, id, input, instant, output } from '../../core/contracts'
+import { notMoney } from '../../money/marked'
 import { UOMS } from '../../product/units/units'
 import {
   LINE_STATES,
@@ -157,7 +158,8 @@ export const transferView = output({
   version: z.number().int(),
   createdAt: instant(),
   lines: z.array(lineView),
-  totals: output({ lines: z.number().int(), inTransitLines: z.number().int(), openDifferences: z.number().int(), settled: z.number().int() }),
+  /** Counts of lines (no money). */
+  totals: notMoney(output({ lines: z.number().int(), inTransitLines: z.number().int(), openDifferences: z.number().int(), settled: z.number().int() })),
   actions: output({
     edit: transferAction,
     lines: transferAction,
