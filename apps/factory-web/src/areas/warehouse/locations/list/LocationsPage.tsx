@@ -2,14 +2,21 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { newIdempotencyKey } from '../../../../lib/api/client'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { downloadText, useCoalesced, useLive } from '../../../_shared/buying/hooks'
-import { archiveLocation, createLocation, listLocations, moveLocation, stockOverview, type SiteLocations, type Uom } from '../../../_shared/stock/api'
+import { archiveLocation, moveLocation, stockOverview, type Uom } from '../../../_shared/stock/api'
 import { csvOf, readProblem, TIME_ZONE, unitTotals } from '../../../_shared/stock/model'
 import { StockMessages } from '../../../_shared/stock/parts'
 import { chosenSite, CSV_COLUMNS, listAddressOf, listQuery, LOCATIONS_NAMESPACES, locationsCan, locationWriteProblem, type ListAddress, type PlaceRow } from '../model'
 import { LocationsView, type LocationsListModel } from './view/LocationsView'
+// B-W2b-327: places with their label code and block, the default locations, Block / Unblock, Print labels, parties.
+import { blockPlace, createPlace, listPlaces, placeDefaults, placeParties, unblockPlace, type DefaultView, type PlaceSite } from '../depth/api'
+import { blockProblemOf } from '../depth/model'
+import { DEPTH_WORDS } from '../depth/view/DepthDialogs'
+import { usePrint } from '../depth/usePrint'
+import { wallOf } from '../../stock/daily/model'
 
 /**
  * `/w/<company>/warehouse/locations` (SCR-065): reads this company's sites with their places (`GET /inventory/locations`,
@@ -19,7 +26,7 @@ import { LocationsView, type LocationsListModel } from './view/LocationsView'
  */
 export function LocationsPage() {
   return (
-    <StockMessages extra={LOCATIONS_NAMESPACES}>
+    <StockMessages extra={[...LOCATIONS_NAMESPACES, DEPTH_WORDS]}>
       <Container />
     </StockMessages>
   )
@@ -44,12 +51,19 @@ function Container() {
   const [asOf, setAsOf] = useState<string | null>(null)
   const [updates, setUpdates] = useState(0)
   const [notice, setNotice] = useState<LocationsListModel['notice']>(null)
+  const [defaults, setDefaults] = useState<DefaultView[] | null>(null)
+  const [parties, setParties] = useState<LocationsListModel['parties']>(null)
   const readId = useRef(0)
 
   const go = useCallback((next: Partial<ListAddress>) => router.replace(`${pathname}${listQuery({ ...address, ...next })}`), [router, pathname, address])
 
   const loadStock = useCallback(
     async (siteId: string | null) => {
+      // B-W2b-327: what each place is the default for (SCM-179; a failed read leaves the column "—").
+      if (siteId)
+        placeDefaults(api, siteId)
+          .then((answer) => setDefaults(answer.defaults))
+          .catch(() => setDefaults(null))
       if (!can.stock || !siteId) return
       try {
         const value = await stockOverview(api, { siteId })
@@ -65,7 +79,7 @@ function Container() {
     if (!can.view) return
     const id = ++readId.current
     try {
-      const answer = await listLocations(api, { includeArchived: address.archived })
+      const answer = await listPlaces(api, { includeArchived: address.archived })
       if (id !== readId.current) return
       const items = answer.sites.filter((site) => !companyId || site.companyId === companyId)
       setSites({ status: 'ready', items })
@@ -82,12 +96,14 @@ function Container() {
     void load()
   }, [load])
 
-  const site: SiteLocations | null = sites.status === 'ready' ? chosenSite(sites.items, address.siteId) : null
+  const site = (sites.status === 'ready' ? chosenSite(sites.items, address.siteId) : null) as PlaceSite | null
 
   const refresh = useCoalesced(() => setUpdates((count) => count + 1), 800)
   const live = useLive(
     (change) => {
       if (change.type === 'inventory.moved') refresh()
+      // B-W2b-327: a block, a label code or a default changed: the tree reads again behind "N updates · Show".
+      if (change.type === 'inventory.location_blocked' || change.type === 'inventory.location_label_changed' || change.type === 'inventory.default_location_changed') refresh()
     },
     () => void load(),
     can.view,
@@ -122,6 +138,8 @@ function Container() {
     [load],
   )
 
+  const print = usePrint(api, { printLabels: session.permissions.includes('print.labels') && session.permissions.includes('print.view'), printView: session.permissions.includes('print.view'), manage: can.manage }, () => void load())
+
   const model: LocationsListModel = {
     prefix,
     can,
@@ -134,11 +152,17 @@ function Container() {
     updates,
     timeZone: TIME_ZONE,
     notice,
+    defaults,
+    print: print.model,
+    today: wallOf(Date.now(), TIME_ZONE).day,
+    parties,
+    permissions: session.permissions,
   }
 
   return (
     <LocationsView
       model={model}
+      printActions={print.actions}
       actions={{
         onSite: (siteId) => go({ siteId }),
         onArchived: (show) => go({ archived: show }),
@@ -154,7 +178,7 @@ function Container() {
         onCreate: async (form) => {
           if (!site) return { key: 'lc.problem.write' }
           try {
-            const { location } = await createLocation(api, { siteId: site.id, parentId: form.parentId, code: form.code, name: form.name, kind: form.kind })
+            const { location } = await createPlace(api, { siteId: site.id, parentId: form.parentId, code: form.code, name: form.name, kind: form.kind, ...(form.partyId ? { partyId: form.partyId } : {}) })
             await afterWrite('lc.done.created', { code: location.code })
             return null
           } catch (error) {
@@ -178,6 +202,37 @@ function Container() {
           } catch (error) {
             return locationWriteProblem(error)
           }
+        },
+        // B-W2b-327: Block / Unblock (one command each, the version read), Print labels, the parties of a new place.
+        onBlock: async (place, draft) => {
+          try {
+            await blockPlace(api, place.id, { version: place.version, reason: draft.reason as Exclude<typeof draft.reason, ''>, note: draft.note.trim() || null, until: draft.until || null }, newIdempotencyKey())
+            setNotice({ tone: 'success', key: 'wd.loc.done.blocked', params: { code: place.code } })
+            await load()
+            return null
+          } catch (error) {
+            return blockProblemOf(error)
+          }
+        },
+        onUnblock: async (place) => {
+          try {
+            await unblockPlace(api, place.id, place.version, newIdempotencyKey())
+            setNotice({ tone: 'success', key: 'wd.loc.done.unblocked', params: { code: place.code } })
+            await load()
+            return null
+          } catch (error) {
+            return blockProblemOf(error)
+          }
+        },
+        onPrint: (places) => {
+          if (!site || places.length === 0) return
+          print.open(places, site.id, site.code, locale === 'en' ? 'en' : 'it')
+        },
+        onParties: (roles) => {
+          setParties({ status: 'loading' })
+          placeParties(api, roles)
+            .then((value) => setParties({ status: 'ready', value }))
+            .catch((error: unknown) => setParties({ status: 'error', problem: readProblem(error) }))
         },
       }}
     />

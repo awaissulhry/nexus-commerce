@@ -1,15 +1,19 @@
 import { createElement } from 'react'
 import type { CapturedPhoto } from '@nexus/ui/components/PhotoCapture/index'
 import { defineDesignScreen } from '../../../lib/design/design-screen'
-import type { Explain, LedgerCounts, LedgerRow, MoveDetail } from '../../_shared/stock/api'
+import type { LedgerCounts, LedgerRow, MoveDetail } from '../../_shared/stock/api'
 import { at, canFor, COLOURS, DEVICES, inShell, ITEMS, ledgerRow, LOCATIONS, LOTS, named, NOW, PEOPLE, PREFIX, RECEIPTS, ROLE_PERMISSIONS, SITE, SITE_SOUTH, TIME_ZONE, uid, WORK_ORDERS, type RoleCase } from '../../_shared/stock/fixtures'
 import { blankDraft, type AdjustDialogModel } from '../stock/adjust/model'
 import type { WriteOffDialogModel } from '../stock/daily/dialog-model'
 import { blankWriteOff, type WriteOffTarget } from '../stock/daily/model'
 import { holdOf, WRITE_OFF_REASONS } from '../stock/demo/fixtures'
 import { dailyCan } from '../stock/model'
-import { movesAddressOf, type MovesAddress, type MovesPageModel } from './model'
+import { movesAddressOf, type MoveRow, type MovesAddress, type MovesPageModel } from './model'
 import { MovesView } from './view/MovesView'
+// B-W2b-327: the balance bridge (GET /inventory/why), posting days, adjustments waiting for a yes.
+import type { Why } from '../stock/depth/api'
+import { POSTING_OK, RULES, WAITING, WAITING_DOWN } from '../stock/depth/demo/fixtures'
+import { approvalNoticeOf } from '../stock/depth/model'
 
 /**
  * SCR-064 — Movements (design warehouse.moves; Owner answer W2 B) with made-up data only: the ledger of one nappa hide
@@ -47,27 +51,41 @@ export const MOVES: LedgerRow[] = [
 ]
 
 const KEY_MOVES = MOVES.filter((move) => move.item.id === ITEMS.leather.id && move.lot?.id === LOTS.nappa.id)
-const EXPLAIN: Explain = {
-  siteId: SITE.id,
+/** B-W2b-327: "why is it this number" as GET /inventory/why answers it (the whole ledger of the key: no start balance). */
+const link = (reason?: string) => ({ path: '/inventory/ledger', query: { siteId: SITE.id, itemId: ITEMS.leather.id, lotId: LOTS.nappa.id, ...(reason ? { reasons: reason } : {}) } })
+const step = (reason: Why['steps'][number]['reason'], sign: string, into: string, out: string, net: string, moves: number, before: string, after: string): Why['steps'][number] => ({ reason, sign, in: into, out, net, moves, before, after, moveId: null, link: link(reason) })
+const EXPLAIN: Why = {
+  site: { id: SITE.id, code: SITE.code, name: SITE.name },
   item: ITEMS.leather,
   colour: COLOURS.black,
   lot: LOTS.nappa,
   hide: null,
   location: null,
-  onHand: '252.0000',
-  byReason: [
-    { reason: 'RECEIPT', in: '268.8000', out: '0.0000', net: '268.8000', moves: 2 },
-    { reason: 'ISSUE', in: '0.0000', out: '49.6000', net: '-49.6000', moves: 1 },
-    { reason: 'RETURN', in: '12.5000', out: '0.0000', net: '12.5000', moves: 1 },
-    { reason: 'TRANSFER', in: '80.8000', out: '80.8000', net: '0.0000', moves: 2 },
-    { reason: 'ADJUSTMENT', in: '1.5000', out: '1.5000', net: '0.0000', moves: 2 },
+  uom: 'FT2',
+  basis: 'ENTRY',
+  period: { from: null, to: '2026-10-30' },
+  start: '0.0000',
+  steps: [
+    step('RECEIPT', '+', '268.8000', '0.0000', '268.8000', 2, '0.0000', '268.8000'),
+    step('RETURN', '+', '12.5000', '0.0000', '12.5000', 1, '268.8000', '281.3000'),
+    step('ISSUE', '−', '0.0000', '49.6000', '-49.6000', 1, '281.3000', '231.7000'),
+    step('ADJUSTMENT', '±', '1.5000', '1.5000', '0.0000', 2, '231.7000', '231.7000'),
+    step('TRANSFER', '±', '80.8000', '80.8000', '0.0000', 2, '231.7000', '231.7000'),
   ],
   sum: '231.7000',
+  end: '252.0000',
   addsUp: false,
   gap: '20.3000',
+  onHandNow: '252.0000',
   moves: 8,
+  last: [],
+  allMoves: link(),
 }
-const EXPLAIN_OK: Explain = { ...EXPLAIN, onHand: '231.7000', addsUp: true, gap: '0.0000' }
+const EXPLAIN_OK: Why = { ...EXPLAIN, end: '231.7000', onHandNow: '231.7000', addsUp: true, gap: '0.0000' }
+/** October by posting day: the balance before 1 Oct, then the month's steps. */
+const EXPLAIN_OCTOBER: Why = { ...EXPLAIN_OK, basis: 'POSTING', period: { from: '2026-10-01', to: '2026-10-30' }, start: '40.0000', steps: EXPLAIN_OK.steps.map((entry) => (entry.reason === 'RECEIPT' ? { ...entry, in: '228.8000', net: '228.8000', before: '40.0000' } : entry)) }
+/** Two moves of the key dated apart (SCM-196): the adjustment counts on 28 Oct, the return on 27 Oct. */
+const POSTED_MOVES: MoveRow[] = MOVES.map((move, index) => (index === 1 ? { ...move, postingDate: '2026-10-28', postingDay: '2026-10-28' } : index === 2 ? { ...move, postingDate: '2026-10-27', postingDay: '2026-10-27' } : { ...move, postingDate: null, postingDay: move.occurredAt.slice(0, 10) }))
 const COUNTS: LedgerCounts = { adjustments7d: 2, scraps30d: 1, counts30d: 1, reversals30d: 1, writeOffs30d: 1, unvalued: 3 }
 
 const withoutCost = (rows: LedgerRow[]) => rows.map(({ valuation: _value, ...row }) => row)
@@ -158,6 +176,22 @@ function MovesDesign({ model }: { model: Case }) {
 
 const [adjustmentReversal, adjustment, returned, issued, , transfer] = MOVES
 
+// ---- B-W2b-327 ------------------------------------------------------------------------------------------------------------
+const ready = <T,>(value: T) => ({ status: 'ready' as const, value })
+const W2B_CASES: { id: string; label: string; model: Case; note?: string }[] = [
+  { id: 'w2b-bridge', label: 'W2b · Why is it 231,7 ft² — the table by reason and the balance bridge (start → each reason → on hand), adds up ✓', model: keyed('warehouse'), note: 'Each bar’s name filters the ledger to that reason.' },
+  { id: 'w2b-bridge-gap', label: 'W2b · The bridge of a figure that does not add up: the gap said under the end bar and in the banner', model: keyed('owner', { explain: ready(EXPLAIN) }) },
+  { id: 'w2b-bridge-october', label: 'W2b · October by posting day: the balance before 1 Oct, the month’s steps, the end on 30 Oct', model: keyed('warehouse', { explain: ready(EXPLAIN_OCTOBER) }, { period: '30d', by: 'posting' }) },
+  { id: 'w2b-posting-days', label: 'W2b · Posting dates against entry dates: two moves dated apart say “Counts on …” under the day they happened', model: page('warehouse', { rows: withoutCost(POSTED_MOVES) as MoveRow[] }) },
+  { id: 'w2b-dated-back', label: 'W2b · Filter: only moves dated apart, the period by posting day (no running balance then)', model: page('warehouse', { rows: withoutCost(POSTED_MOVES.filter((move) => move.postingDate)) as MoveRow[] }, { dated: 'back', by: 'posting' }) },
+  { id: 'w2b-detail-posted', label: 'W2b · A move dated apart in its detail: Counts on 28 Oct (dated apart from the day it happened)', model: page('warehouse', { rows: withoutCost(POSTED_MOVES) as MoveRow[], detail: detailOf(withoutCost([adjustment!])[0]!) }, { open: adjustment!.id }) },
+  { id: 'w2b-waiting', label: 'W2b · Waiting for approval (2) in the band: open — what waits, from → to, by whom since when, Open request', model: page('warehouse', { waiting: ready({ rows: [WAITING, WAITING_DOWN], count: 2 }) }, { waiting: 'all' }) },
+  { id: 'w2b-waiting-closed', label: 'W2b · The band’s Waiting for approval (2), closed', model: page('warehouse', { waiting: ready({ rows: [WAITING, WAITING_DOWN], count: 2 }) }) },
+  { id: 'w2b-waiting-failed', label: 'W2b · The waiting adjustments could not be read (the band says so; Try again inside)', model: page('warehouse', { waiting: { status: 'error', problem: 'problem.offline' } }, { waiting: 'all' }) },
+  { id: 'w2b-waiting-asked', label: 'W2b · An adjustment just asked above the value: “Waiting for approval by Amministrazione since …” + Open request', model: page('warehouse', { waitingNotice: WAITING, waiting: ready({ rows: [WAITING], count: 1 }) }) },
+  { id: 'w2b-adjust-approval', label: 'W2b · Adjust from a stock key: the approval banner (owner) and a posting date checked', model: keyed('owner', { adjust: { ...ADJUST, approval: approvalNoticeOf(RULES, [{ name: 'Amministrazione' }]), today: '2026-10-30', draft: { ...ADJUST.draft, postingDay: '2026-10-28' }, postingCheck: ready(POSTING_OK) } }) },
+]
+
 export const designScreen = defineDesignScreen<Case>({
   screen: 'SCR-064',
   title: 'Movements (the stock ledger as one long grid; why is it this number; reverse; adjust)',
@@ -210,6 +244,7 @@ export const designScreen = defineDesignScreen<Case>({
     { id: 'write-off-no-photo-right', label: 'A role without files.upload or quality.ncr.raise: the photo held, no NCR offered', model: page('warehouse', { rows: withoutCost(LINING_MOVES), writeOff: writeOff({ canPhoto: false, canNcr: false, draft: { ...READY, photo: null, openNcr: false } }) }, liningKey) },
     { id: 'write-off-sending', label: 'Written off: the photo and the NCR being sent', model: page('warehouse', { rows: withoutCost(LINING_MOVES), writeOff: writeOff({ draft: READY, done: { writeOffId: uid('8383', 30), moves: 1, value: null, photo: 'sending', ncr: { state: 'sending', id: null, number: null }, overReserved: 0 } }) }, liningKey) },
     { id: 'write-off-done', label: 'Written off (owner): the value that left, the photo kept, the NCR opened with its link', model: page('owner', { rows: LINING_MOVES, writeOff: writeOff({ draft: READY, done: { writeOffId: uid('8383', 30), moves: 1, value: { amount: 775, currency: 'EUR' }, photo: 'sent', ncr: { state: 'sent', id: uid('7676', 7), number: 'NC-D-0007' }, overReserved: 0 } }, true) }, liningKey) },
+    ...W2B_CASES,
     { id: 'write-off-failed', label: 'Written off, but the photo and the NCR failed: each with Try again; a key left over-reserved', model: page('warehouse', { rows: withoutCost(LINING_MOVES), writeOff: writeOff({ draft: READY, done: { writeOffId: uid('8383', 30), moves: 1, value: null, photo: 'failed', ncr: { state: 'failed', id: null, number: null }, overReserved: 1 } }) }, liningKey) },
   ],
 })

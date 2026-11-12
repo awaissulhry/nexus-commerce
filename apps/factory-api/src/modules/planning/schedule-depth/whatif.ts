@@ -467,7 +467,8 @@ export async function applyWhatIf(caller: CommandCaller, scenarioId: string, bod
       before: audited(row, moves.length),
       after: { status: 'APPLIED', planVersion: plan.version, applied, skipped: clashes.map((clash) => ({ index: clash.index, code: clash.code })), changes: changes.map((change) => ({ kind: change.kind, slotId: change.slotId })), overloadReason: overs.length > 0 ? reason : null },
     })
-    emitDepthChange(tools, row.site, plan, 'WHAT_IF_APPLIED', changes.map((change) => change.slotId), (changes.length > 0 ? changes : moves).map((entry) => entry.workOrderId))
+    // B-W2b-329: a logged change's slot and work order may be null (a publish's); a what-if's never are.
+    emitDepthChange(tools, row.site, plan, 'WHAT_IF_APPLIED', changes.flatMap((change) => (change.slotId ? [change.slotId] : [])), (changes.length > 0 ? changes : moves).flatMap((entry) => (entry.workOrderId ? [entry.workOrderId] : [])))
     return { scenario: { id: row.id, status: 'APPLIED' as const, version: row.version + 1, appliedAt: toUtcIso(now) }, applied, skipped: clashes, planVersion: plan.version }
   })
   return { site: siteViewOf(target.site), ...result, replayed }
