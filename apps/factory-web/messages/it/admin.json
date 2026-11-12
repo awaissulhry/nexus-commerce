@@ -2093,6 +2093,7 @@
     "production_instructions_manage": "Scrivere istruzioni di lavoro: una bozza con passi per lingua, punti critici, note di sicurezza, icone, le spunte chieste dal tablet, foto e video; scartare una bozza, archiviare o ripristinare; riportare le righe di passi scritte nei cicli",
     "production_instructions_approve": "Approvare la bozza di un'altra persona di un'istruzione di lavoro: il reparto la vede da quel momento (mai la propria bozza)",
     "production_instructions_people": "Un registro della formazione: vedere per nome chi ha visto quale versione di un'istruzione di lavoro (dove il sito consente un nome) e registrare una presa visione firmata su carta",
-    "purchasing_requests_ask": "Chiedere ai buyer di acquistare un materiale (anche da una mancanza di un ordine di produzione); vedere e ritirare le proprie richieste"
+    "purchasing_requests_ask": "Chiedere ai buyer di acquistare un materiale (anche da una mancanza di un ordine di produzione); vedere e ritirare le proprie richieste",
+    "inventory_tasks_manage": "Creare a mano i compiti di magazzino del reparto (ricevere, ubicare, prelevare, spostare, contare), assegnarli a un ruolo o a un addetto, cambiarli e annullarli"
   }
 }

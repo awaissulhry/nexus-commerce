@@ -214,6 +214,8 @@ import { events as compliancePpeTexts } from '../compliance-ppe-texts/events'
 import { events as lotsDepth } from '../lots-depth/events'
 // B-W2b-311: suppliers in depth (supplier.status_changed).
 import { events as suppliersDepth } from '../suppliers-depth/events'
+// B-W2b-292: the warehouse task inbox.
+import { events as inventoryTasks } from '../inventory-tasks/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -494,7 +496,9 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-293
   ...planningPlannedOrders,
   // B-W2b-311
-  ...suppliersDepth] as const satisfies readonly EventDefinition[]
+  ...suppliersDepth,
+  // B-W2b-292
+  ...inventoryTasks] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']
