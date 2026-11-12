@@ -49,7 +49,7 @@ const admin = async <T = Json>(sql: string, values: unknown[] = []): Promise<T[]
 const one = async <T = Json>(sql: string, values: unknown[] = []): Promise<T> => (await admin<T>(sql, values))[0]!
 const grant = (permissions: readonly Permission[], scope: Partial<Grant> = {}): Grant => ({ permissions, companies: 'all', sites: 'all', parties: 'all', ...scope })
 
-const A = { tenant: '', companyA: '', siteA1: '', worker: '', colleague: '', device: '', lining: '', colour: null as string | null, reason: '', owner: '', member: '' }
+const A = { tenant: '', companyA: '', siteA1: '', worker: '', colleague: '', device: '', lining: '', colour: null as string | null, reason: '' }
 const PEOPLE = { clerk: newId(), approver: newId(), keeper: newId() }
 let SESSIONS: Record<string, SessionContext> = {}
 const today = businessDate(new Date())
@@ -131,8 +131,6 @@ beforeAll(async () => {
   A.lining = lot.itemId
   A.colour = lot.itemColourId
   A.reason = (await one<Json>(`SELECT code FROM "ReasonCode" WHERE "tenantId" = $1 AND list = 'ADJUSTMENT' AND active ORDER BY code LIMIT 1`, [A.tenant])).code
-  A.owner = (await one<Json>(`SELECT id FROM "User" WHERE "tenantId" = $1 AND email LIKE 'owner.seed%'`, [A.tenant])).id
-  A.member = (await one<Json>(`SELECT id FROM "User" WHERE "tenantId" = $1 AND email LIKE 'member.seed%'`, [A.tenant])).id
   for (const [person, userId] of Object.entries(PEOPLE)) {
     await admin(`INSERT INTO "User" (id, "tenantId", email, "displayName", status) VALUES ($1, $2, $3, $4, 'ACTIVE')`, [userId, A.tenant, `w2b299-${person}-${run}@example.com`, `Made-up ${person}`])
   }
@@ -332,7 +330,7 @@ describe('the receiver never approves their invoice (SCM-293)', () => {
   it('refuses who posted the receipt an invoice matches, while the switch is on', async () => {
     const invoice = await one<Json>(`SELECT id, "companyId", number FROM "SupplierInvoice" WHERE "tenantId" = $1 AND number = '2026/0412'`, [A.tenant])
     const poster = (await one<Json>(`SELECT gr."postedById" FROM "SupplierInvoiceMatch" m JOIN "GoodsReceiptLine" l ON l.id = m."goodsReceiptLineId" JOIN "GoodsReceipt" gr ON gr.id = l."receiptId" WHERE m."invoiceId" = $1 LIMIT 1`, [invoice.id])).postedById
-    const other = poster === A.owner ? A.member : A.owner
+    const other = PEOPLE.clerk
     const read = (personId: string) => caller('clerk').withClient((client) => receiverRefusals(client, invoice as never, personId, 'APPROVE'))
     expect(await read(poster)).toEqual([expect.objectContaining({ code: 'RECEIVED_THE_GOODS', message: expect.stringContaining(invoice.number) })])
     expect(await read(other)).toEqual([])
