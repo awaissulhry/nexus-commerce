@@ -215,7 +215,9 @@ describe('a draft routing in depth (PRD-118, PRD-119, PRD-128)', () => {
     const own = stepOf((await ok('developer', 'PUT', stepUrl(jacket, draft1, step1('SEED-SEW-ASM'), 'settings'), { version, settings: [{ machineClassId: postBed, stitchesPerCm: '3' }] })).routing, 'SEED-SEW-ASM')
     expect(own.settings).toEqual([expect.objectContaining({ seq: 1, stitchesPerCm: '3', machineClass: expect.objectContaining({ code: 'POST_BED' }) })])
     await no('developer', 'PUT', stepUrl(jacket, draft1, step1('SEED-SEW-ASM'), 'settings'), { version: await revisionVersion(draft1), settings: [], fromLibrary: true }, 400)
-    const history = await admin<{ after: Json }>('SELECT "after" FROM "AuditLog" WHERE "recordType" = $1 AND "recordId" = $2 ORDER BY at DESC LIMIT 1', ['RoutingOperation', step1('SEED-SEW-ASM')])
+    // B-W2b-278 (FU4:03): the newest row by its time, then its id (UUIDv7, in the order written): the test clock gives two
+    // commands of one instant the same `at`, and `at` alone let either row come first (as B-W2b-F20 for renewals).
+    const history = await admin<{ after: Json }>('SELECT "after" FROM "AuditLog" WHERE "recordType" = $1 AND "recordId" = $2 ORDER BY at DESC, id DESC LIMIT 1', ['RoutingOperation', step1('SEED-SEW-ASM')])
     expect(history[0]!.after.machineSettings.settings).toHaveLength(1)
   })
 
@@ -252,7 +254,9 @@ describe('the copies carry the depth, the release closes the days (PRD-124)', ()
     )
     expect(rows.find((row) => row.code === 'SEED-CUT-LEA')).toMatchObject({ tv: null, basic: '12.500', setup: '20.000' })
     expect(rows.find((row) => row.code === 'SEED-SEW-ASM')).toMatchObject({ wait: '15.000', extras: ['50:-1.500', '54:4.000'] })
-    const audit = await admin<{ after: Json }>('SELECT "after" FROM "AuditLog" WHERE "recordType" = $1 AND "recordId" = $2 ORDER BY at LIMIT 1', ['StyleRevision', draft2])
+    // B-W2b-278 (FU4:03): the copy's own row (the copy also writes one for the measures it carried, in the same command, at the
+    // same instant): the row that names the copy, first by time, then id.
+    const audit = await admin<{ after: Json }>(`SELECT "after" FROM "AuditLog" WHERE "recordType" = $1 AND "recordId" = $2 AND "after" ? 'copiedFrom' ORDER BY at, id LIMIT 1`, ['StyleRevision', draft2])
     expect(audit[0]!.after.routingDepth).toMatchObject({ versionsDropped: 1, sizeTimes: 2, settings: 1, checkpoints: 1 })
     version = await revisionVersion(draft2)
     expect(version).toBeGreaterThan(0)
@@ -318,7 +322,7 @@ describe('the copies carry the depth, the release closes the days (PRD-124)', ()
 describe('the checkpoint opens its check at a bundle\'s first report, and the tablet shows the settings (PRD-119, PRD-118)', () => {
   const sewOperation = async () => (await admin<{ id: string }>('SELECT id FROM "WorkOrderOperation" WHERE "workOrderId" = $1 AND code = $2', [WO1, 'SEED-SEW-ASM']))[0]!.id
   const reportOfBundle2 = async () =>
-    (await admin<{ id: string; bundleId: string }>(`SELECT s.id, s."bundleId" FROM "OperationScan" s WHERE s."workOrderId" = $1 AND s.kind = 'REPORT' AND s."workOrderOperationId" = $2 AND s."bundleId" = $3 ORDER BY s."serverTime" LIMIT 1`, [WO1, await sewOperation(), idOf('production:bundle:WO-0001:2')]))[0]!
+    (await admin<{ id: string; bundleId: string }>(`SELECT s.id, s."bundleId" FROM "OperationScan" s WHERE s."workOrderId" = $1 AND s.kind = 'REPORT' AND s."workOrderOperationId" = $2 AND s."bundleId" = $3 ORDER BY s."serverTime", s.id LIMIT 1`, [WO1, await sewOperation(), idOf('production:bundle:WO-0001:2')]))[0]!
   const envelope = (scanId: string): EventEnvelope => ({
     eventId: newId(),
     type: 'production.scan_recorded',
@@ -354,7 +358,7 @@ describe('the checkpoint opens its check at a bundle\'s first report, and the ta
     expect((await outbox('routing_checkpoint.check_opened')).at(-1)!.payload).toMatchObject({ routingStepId: releasedStep2('SEED-SEW-ASM'), recordId, kind: 'ROVING', planId: INL_FIRST, workOrderId: WO1, bundleId: scan.bundleId })
     // A second event for the same bundle: one is open already (said on the step's trail).
     expect(await applyCheckpoint(caller(), envelope(scan.id))).toEqual({ skipped: 'ALREADY_OPEN' })
-    const [trail] = await admin<{ action: string; after: Json }>('SELECT action, "after" FROM "AuditLog" WHERE "recordType" = $1 AND "recordId" = $2 ORDER BY at DESC LIMIT 1', ['RoutingOperation', releasedStep2('SEED-SEW-ASM')])
+    const [trail] = await admin<{ action: string; after: Json }>('SELECT action, "after" FROM "AuditLog" WHERE "recordType" = $1 AND "recordId" = $2 ORDER BY at DESC, id DESC LIMIT 1', ['RoutingOperation', releasedStep2('SEED-SEW-ASM')])
     expect(trail).toMatchObject({ action: 'product.checkpointSkipped', after: { reason: 'ALREADY_OPEN' } })
     // The step only for size 54: bundle 2 (a sleeve set of BLK 50 or 52) is not its cell.
     await fixture(`UPDATE "RoutingOperation" SET "appliesToSizes" = ARRAY['54'] WHERE id = '${releasedStep2('SEED-SEW-ASM')}'`)

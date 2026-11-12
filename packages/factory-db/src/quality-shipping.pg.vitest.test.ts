@@ -343,8 +343,9 @@ describe('the walls', () => {
     const prices: Record<string, string[]> = { Shipment: ['freightCharge'], ShippingSettings: ['freightAmount', 'freightFreeFrom'] }
     // W2b schema wave 1/7 (B-W2b-01): the shipment's freight cost (the carrier's invoice) is a cost, office only; its
     // currency goes with it (hidden from the floor and the partner too).
-    const costs: Record<string, string[]> = { Shipment: ['freightCost'] }
-    const withCosts: Record<string, string[]> = { Shipment: ['freightCost', 'freightCostCurrency'] }
+    // W2b schema wave 34/44 (B-W2b-275): the lab's price of a lab result is a cost, office only; its currency goes with it.
+    const costs: Record<string, string[]> = { Shipment: ['freightCost'], LabResult: ['costAmount'] }
+    const withCosts: Record<string, string[]> = { Shipment: ['freightCost', 'freightCostCurrency'], LabResult: ['costAmount', 'costCurrency'] }
     for (const { model, ownership } of models) {
       const grained = model.fields.filter((field) => field.tags.some((entry) => entry.startsWith('@grain')))
       expect(grained.map((field) => field.column), model.name).toEqual([...(prices[model.name] ?? []), ...(costs[model.name] ?? [])])

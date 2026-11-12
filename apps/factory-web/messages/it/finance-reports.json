@@ -195,7 +195,9 @@
     "CUSTOMER_RETURN": "Reso da cliente",
     "SUPPLIER_RETURN": "Reso a fornitore",
     "SHIPMENT": "Spedizione",
-    "REMNANT": "Ritaglio da ordine"
+    "REMNANT": "Ritaglio da ordine",
+    "TRANSFER_OUT": "Inviato ad altro stabilimento",
+    "TRANSFER_IN": "Ricevuto da altro stabilimento"
   },
   "print": {
     "title": "Valorizzazione del magazzino · {company} · al {day}",

@@ -12,6 +12,8 @@ import { actorOf } from '../../../core/context'
 import { assertMayWrite, contextOf, isUniqueViolation } from '../styles/store'
 // B-W2b-239: whether the caller may change the row (the Product settings screen draws the fields as text otherwise).
 import { mayWrite } from '../materials/store'
+// B-W2b-283 (FU1:04): who changed the row last ("Changed by" without audit.read).
+import { changedByOf, updatedByOf, type ChangedByView } from './changed-by'
 
 /**
  * The product settings (B-W2b-221; PRD-105, PRD-182; design products.settings psettings.lifecycle, psettings.tolerance;
@@ -46,6 +48,8 @@ const SETTINGS_SELECT = {
   consumptionToleranceByKind: true,
   version: true,
   updatedAt: true,
+  // B-W2b-283 (FU1:04).
+  updatedById: true,
 } as const satisfies Prisma.ProductSettingsSelect
 type SettingsRow = Prisma.ProductSettingsGetPayload<{ select: typeof SETTINGS_SELECT }>
 
@@ -61,7 +65,7 @@ export async function settingsRows(db: Reader, tenantId: string, companyId: stri
   return { own, tenant }
 }
 
-function settingsViewOf(companyId: string | null, own: SettingsRow | null, tenant: SettingsRow | null, mayChange: boolean): SettingsView {
+function settingsViewOf(companyId: string | null, own: SettingsRow | null, tenant: SettingsRow | null, mayChange: boolean, changedBy: ChangedByView | null = null): SettingsView {
   // For the tenant-wide row, "company" is the row itself and nothing sits above it but the defaults.
   const company = companyId === null ? null : own
   const ruleRow = (row: SettingsRow | null): EditRuleRow | null => row
@@ -77,6 +81,8 @@ function settingsViewOf(companyId: string | null, own: SettingsRow | null, tenan
     exists: own !== null,
     version: own?.version ?? null,
     updatedAt: own ? toUtcIso(own.updatedAt) : null,
+    // B-W2b-283 (FU1:04): the person who saved the row last (null: nobody recorded since the column came).
+    changedBy,
     mayChange,
     editRules,
     tolerance: {
@@ -111,8 +117,11 @@ export async function readSettings(caller: CommandCaller, query: SettingsQuery):
   const companyId = query.companyId ?? null
   await companyFor(caller, companyId)
   const tenantId = tenantOf(caller)
-  const { own, tenant } = await caller.withClient((client) => settingsRows(client, tenantId, companyId))
-  return settingsViewOf(companyId, own, tenant, mayWrite(actorOf(contextOf(caller)), PRODUCT_SETTINGS_MANAGE, companyId))
+  const { own, tenant, changedBy } = await caller.withClient(async (client) => {
+    const rows = await settingsRows(client, tenantId, companyId)
+    return { ...rows, changedBy: await changedByOf(client, rows.own?.updatedById ?? null) }
+  })
+  return settingsViewOf(companyId, own, tenant, mayWrite(actorOf(contextOf(caller)), PRODUCT_SETTINGS_MANAGE, companyId), changedBy)
 }
 
 /** The fields a change names, as the row's columns (only what was sent). */
@@ -158,11 +167,11 @@ export async function updateSettings(caller: CommandCaller, body: UpdateSettings
       const { consumptionToleranceByKind: byKind, ...columns } = data
       const written = { ...columns, ...(byKind === null || byKind === undefined ? {} : { consumptionToleranceByKind: byKind }) }
       if (before) {
-        await tx.productSettings.update({ where: { id: rowId }, data: { ...(written as Prisma.ProductSettingsUncheckedUpdateInput), updatedAt: now }, select: { id: true } })
+        await tx.productSettings.update({ where: { id: rowId }, data: { ...(written as Prisma.ProductSettingsUncheckedUpdateInput), updatedAt: now, updatedById: updatedByOf(tools) /* B-W2b-283 */ }, select: { id: true } })
         if (byKind === null) await tx.$executeRaw`UPDATE "ProductSettings" SET "consumptionToleranceByKind" = NULL WHERE "id" = ${rowId}::uuid`
       } else {
         const createdById = tools.context.audience === 'office' ? tools.context.actorId : null
-        await tx.productSettings.create({ data: { id: rowId, companyId, ...(written as object), createdAt: now, updatedAt: now, createdById } as Prisma.ProductSettingsUncheckedCreateInput, select: { id: true } })
+        await tx.productSettings.create({ data: { id: rowId, companyId, ...(written as object), createdAt: now, updatedAt: now, createdById, updatedById: updatedByOf(tools) /* B-W2b-283 */ } as Prisma.ProductSettingsUncheckedCreateInput, select: { id: true } })
       }
       tools.audit({
         action: 'product.settings.update',
@@ -175,7 +184,7 @@ export async function updateSettings(caller: CommandCaller, body: UpdateSettings
       })
       tools.emit({ type: 'product_settings.changed', subject: rowId, companyId, payload: { companyId, fields } })
       const rows = await settingsRows(tx, tenantId, companyId)
-      return settingsViewOf(companyId, rows.own, rows.tenant, true)
+      return settingsViewOf(companyId, rows.own, rows.tenant, true, await changedByOf(tx, rows.own?.updatedById ?? null) /* B-W2b-283 */)
     },
   ).catch((error: unknown) => {
     if (isUniqueViolation(error)) throw new ConflictError('These settings were made at the same time by someone else: load them again.')

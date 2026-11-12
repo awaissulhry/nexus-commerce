@@ -114,6 +114,10 @@ describe('the seeds and the walls', () => {
     for (const { model, ownership } of models) {
       expect(ownership.access[PARTNER_ROLE], model.name).toBeUndefined()
       if (model.name === 'Reservation') expect(ownership.access[FLOOR_ROLE]?.privileges).toEqual(['select', 'update'])
+      // W2b-5 (B-W2b-277, wave 36/44): the floor counts by scan: it reads its site's counts (not their value) and lines, adds
+      // the extra units it finds and writes what it counted.
+      else if (model.name === 'StockCount') expect(ownership.access[FLOOR_ROLE]).toMatchObject({ privileges: ['select'], hiddenColumns: ['differenceAmount'] })
+      else if (model.name === 'StockCountLine') expect(ownership.access[FLOOR_ROLE]?.privileges).toEqual(['select', 'insert', 'update'])
       else {
         expect(ownership.access[FLOOR_ROLE], model.name).toBeUndefined()
         await expect(sql(floor(), `SELECT id FROM "${model.table}" LIMIT 1`), model.name).rejects.toThrow(DENIED)

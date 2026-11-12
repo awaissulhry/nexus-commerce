@@ -108,6 +108,11 @@ model User {
   reportSubscriptions ReportSubscription[]
   // alerts.prisma: the alerts assigned to them.
   assignedAlerts      Alert[]
+  // W2b-5 approvals.prisma (wave 35/44): the approval rules and the requests that name them as the approver.
+  approvalRules       ApprovalRule[] @relation("ApprovalRuleApproverUser")
+  approvalTasks       ApprovalTask[] @relation("ApprovalTaskApproverUser")
+  // W2b-5 sales-intake.prisma (wave 37/44): the inquiries they answer.
+  assignedInquiries   Inquiry[]         @relation("InquiryAssignee")
   // W2b links-depth.prisma (wave 19/22): as a partner user, the approval requests they answered in the portal.
   approvalAnswers     ApprovalRequest[] @relation("ApprovalRequestAnsweredBy")
   // W2b portal-frame.prisma (wave 20/22): as a partner user, the tasks they did in the portal and their e-mail settings.

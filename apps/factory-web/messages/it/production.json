@@ -107,6 +107,7 @@
   },
   "held": {
     "noManage": "Puoi vedere gli ordini, non modificarli (workorders.manage)",
+    "sampleSizes": "Un ordine di lavoro campione senza riga d'ordine fa le taglie del suo giro: cambiale sul giro",
     "noRelease": "Per rilasciare serve il permesso di rilascio (workorders.release)",
     "checking": "Controllo in corso…",
     "checksOpen_one": "{count} controllo blocca il rilascio: vedi Riepilogo",

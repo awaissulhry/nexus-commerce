@@ -184,6 +184,39 @@ export function planCases(base: Base, order: OrderModel, frame: FrameOf) {
       note: 'Target ± tolerance, the pad with decimals, DS LimitMeter: in or out in words and tone. Save goes on to the next garment.',
     },
     { id: 'w2b-measure-out', label: 'W2b — Out of tolerance', model: onBench(bench({ section: 'measure', measure: { pointCode: 'CHEST', unit: 3, size: '52', value: 59.8, nominal: null, tolerance: null, field: 'value' } })) },
+    // B-W2b-283 (FU1:05): a point of the approved measurement spec whose band is 64 −0.5/+1.5 cm: nothing typed but the value.
+    {
+      id: 'w2b-283-measure-spec',
+      label: 'W2b-283 — A spec point with a band: 63.4 is out (made up)',
+      model: onBench(
+        bench({
+          section: 'measure',
+          sheet: sheet({
+            chart: {
+              ...sheet().chart,
+              points: [
+                {
+                  pointCode: 'SLEEVE_LEN',
+                  checkCode: null,
+                  label: 'Manica',
+                  size: null,
+                  source: 'SPEC',
+                  nominal: null,
+                  tolerance: null,
+                  uom: 'CM',
+                  spec: 'Dalla specifica di misura approvata, revisione 2: 52 64 −0,5/+1,5 cm',
+                  bySize: [{ size: '52', nominal: '64.000', tolerance: '1.500', toleranceMinus: '0.500', tolerancePlus: '1.500', words: '64 −0.5/+1.5 cm' }],
+                  values: [{ id: 'v283', size: '52', sampleIndex: 1, measured: '65.4', nominal: '64.000', tolerance: '1.500', toleranceMinus: '0.500', tolerancePlus: '1.500', pass: true, words: '' }],
+                },
+              ],
+              values: 1,
+            },
+          }),
+          measure: { pointCode: 'SLEEVE_LEN', unit: 2, size: '52', value: 63.4, nominal: null, tolerance: null, field: 'value' },
+        }),
+      ),
+      note: 'The spec gives nominal and band per size; the meter shows the same band (63.5 … 65.5), so 63.4 is out though within 64 ± 1.5.',
+    },
     {
       id: 'w2b-measure-mtm',
       label: 'W2b — Made to measure: against the rider\'s profile',

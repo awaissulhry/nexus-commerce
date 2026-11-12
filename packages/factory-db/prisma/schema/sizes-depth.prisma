@@ -65,7 +65,8 @@ model PointOfMeasure {
   tenantId         String             @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
   /// The company it belongs to; null: tenant-wide master data (A1 §2.1). Fixed.
   companyId        String?            @db.Uuid
-  /// Unique in the tenant, no spaces ("CHEST_W").
+  /// Unique in the tenant, no spaces ("CHEST_W"). W2b-5 (schema wave 34/44, B-W2b-275): unique whatever the letter case too
+  /// (the index "PointOfMeasure_tenantId_lower_code_key" on (tenantId, lower(code)) of …_followups_product_w2b4_guards).
   code             String
   name             String
   /// The name per language: {"it": "…", "en": "…"}.
@@ -97,6 +98,9 @@ model PointOfMeasure {
   // product.prisma: the made-to-measure template points that take it.
   templatePoints MeasurementPoint[]
   specValues     MeasurementSpecValue[]
+  // W2b-5 samples.prisma (wave 34/44): the fit measurements and comments that name it.
+  sampleMeasurements SampleMeasurement[] @relation("SampleMeasurementPoint")
+  sampleComments     SampleComment[]     @relation("SampleCommentPoint")
   gradeRuleSteps GradeRuleStep[]
 
   @@unique([tenantId, code])

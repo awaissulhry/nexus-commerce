@@ -109,10 +109,11 @@ export interface CellRow {
   readonly colourwayName: string
   readonly size: string
   readonly quantity: number
-  readonly salesOrderLineId: string
-  readonly partyId: string
-  readonly lineSeq: number
-  readonly salesOrderId: string
+  /** B-W2b-284: null (all four) for a SAMPLE cell of an internal or uncharged round: it makes no order line. */
+  readonly salesOrderLineId: string | null
+  readonly partyId: string | null
+  readonly lineSeq: number | null
+  readonly salesOrderId: string | null
 }
 
 /** The work order's cells: colourways in code order, sizes in the style's range order (then by code). */
@@ -123,7 +124,7 @@ export async function readCells(db: Reader, workOrderId: string, styleSizes: rea
   })
   if (rows.length === 0) return []
   const colourways = await db.colourway.findMany({ where: { id: { in: [...new Set(rows.map((row) => row.colourwayId))] } }, select: { id: true, code: true, name: true } })
-  const lines = await db.salesOrderLine.findMany({ where: { id: { in: [...new Set(rows.map((row) => row.salesOrderLineId))] } }, select: { id: true, seq: true, orderId: true } })
+  const lines = await db.salesOrderLine.findMany({ where: { id: { in: [...new Set(rows.flatMap((row) => (row.salesOrderLineId === null ? [] : [row.salesOrderLineId])))] } }, select: { id: true, seq: true, orderId: true } })
   const colourwayOf = new Map(colourways.map((row) => [row.id, row]))
   const lineOf = new Map(lines.map((row) => [row.id, row]))
   const place = (size: string) => {
@@ -133,10 +134,11 @@ export async function readCells(db: Reader, workOrderId: string, styleSizes: rea
   return rows
     .map((row) => ({
       ...row,
+      // B-W2b-284: a SAMPLE cell of an internal or uncharged round names no order line (B-W2b-275's nullable cell).
       colourwayCode: colourwayOf.get(row.colourwayId)?.code ?? '',
       colourwayName: colourwayOf.get(row.colourwayId)?.name ?? '',
-      lineSeq: lineOf.get(row.salesOrderLineId)?.seq ?? 0,
-      salesOrderId: lineOf.get(row.salesOrderLineId)?.orderId ?? '',
+      lineSeq: row.salesOrderLineId === null ? null : (lineOf.get(row.salesOrderLineId)?.seq ?? 0),
+      salesOrderId: row.salesOrderLineId === null ? null : (lineOf.get(row.salesOrderLineId)?.orderId ?? ''),
     }))
     .sort((a, b) => a.colourwayCode.localeCompare(b.colourwayCode) || place(a.size) - place(b.size) || a.size.localeCompare(b.size, undefined, { numeric: true }))
 }

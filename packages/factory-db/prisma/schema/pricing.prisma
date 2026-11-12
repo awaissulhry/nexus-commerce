@@ -64,6 +64,8 @@ model PaymentTerms {
   // sales.prisma: the quote versions and sales orders made with them.
   quoteVersions QuoteVersion[]
   salesOrders   SalesOrder[]
+  // W2b-5 sales-intake.prisma (wave 37/44): the customers' terms per company that use them.
+  partyCompanyTerms PartyCompanyTerms[] @relation("PartyCompanyTermsPayment")
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from parties, quote versions and orders.
@@ -110,6 +112,8 @@ model PriceList {
   parties      Party[]
   // W2b: the customers it was given to, each from a day (the Customers tab).
   assignments  PartyPriceListAssignment[]
+  // W2b-5 sales-intake.prisma (wave 37/44): the customers' terms per company that price from it.
+  partyCompanyTerms PartyCompanyTerms[] @relation("PartyCompanyTermsPriceList")
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from its versions, the lists that fall back to it and the parties.

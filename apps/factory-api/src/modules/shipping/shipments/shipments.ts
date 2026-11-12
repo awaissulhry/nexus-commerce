@@ -201,6 +201,8 @@ const CELL_SELECT = {
 } as const satisfies Prisma.WorkOrderSizeSelect
 
 type CellRow = Prisma.WorkOrderSizeGetPayload<{ select: typeof CELL_SELECT }>
+/** B-W2b-275: a cell that ships names its order line (a SAMPLE cell of an internal or uncharged round names none). */
+type ShippableCell = CellRow & { readonly salesOrderLineId: string; readonly partyId: string; readonly salesOrderLine: { readonly orderId: string } }
 
 const cellLabel = (cell: CellRow): string => `${cell.workOrder.number} ${cell.colourway.code} ${cell.size}`
 
@@ -220,9 +222,10 @@ async function cellsFor(
   shipment: { siteId: string; partyId: string; salesOrderId: string; status: ShipmentStatus },
   byCell: ReadonlyMap<string, { quantity: number; index: number }>,
   path: string,
-): Promise<Map<string, CellRow>> {
+): Promise<Map<string, ShippableCell>> {
   const rows = await db.workOrderSize.findMany({ where: { id: { in: [...byCell.keys()] } }, select: CELL_SELECT })
   const cells = new Map(rows.map((row) => [row.id, row]))
+  const shippable = new Map<string, ShippableCell>()
   const problems: Issue[] = []
   for (const [cellId, { quantity, index }] of byCell) {
     const cell = cells.get(cellId)
@@ -236,17 +239,24 @@ async function cellsFor(
       problems.push({ path: `${at}/workOrderSizeId`, message: repairCellWords(cell.workOrder.number) })
       continue
     }
-    problems.push(...lineProblems(shipment, { siteId: cell.siteId, partyId: cell.partyId, salesOrderId: cell.salesOrderLine.orderId }, quantity, at))
+    // B-W2b-275: a SAMPLE cell of an internal or uncharged round names no order line: it never ships on an order's shipment.
+    if (cell.salesOrderLineId === null || cell.partyId === null || cell.salesOrderLine === null) {
+      problems.push({ path: `${at}/workOrderSizeId`, message: `Work order ${cell.workOrder.number} makes samples for no order line: they do not ship on an order's shipment.` })
+      continue
+    }
+    const ofLine: ShippableCell = { ...cell, salesOrderLineId: cell.salesOrderLineId, partyId: cell.partyId, salesOrderLine: cell.salesOrderLine }
+    problems.push(...lineProblems(shipment, { siteId: ofLine.siteId, partyId: ofLine.partyId, salesOrderId: ofLine.salesOrderLine.orderId }, quantity, at))
+    shippable.set(cellId, ofLine)
   }
   if (problems.length > 0) throw new ValidationError(problems.length === 1 ? problems[0]!.message : 'These lines cannot ship on this shipment.', problems)
-  return cells
+  return shippable
 }
 
 /**
  * Adds garments to the shipment's lines: each cell's unpacked line grows, or a new line is made. Under the cells'
  * shipping locks, with a 409 before any write when a cell has not that many released garments left.
  */
-async function addGarments(tools: CommandTools, shipment: { id: string; siteId: string; partyId: string; companyId: string }, byCell: ReadonlyMap<string, { quantity: number }>, cells: ReadonlyMap<string, CellRow>) {
+async function addGarments(tools: CommandTools, shipment: { id: string; siteId: string; partyId: string; companyId: string }, byCell: ReadonlyMap<string, { quantity: number }>, cells: ReadonlyMap<string, ShippableCell>) {
   const { tx, context } = tools
   const more = new Map([...byCell].map(([cellId, entry]) => [cellId, entry.quantity]))
   await reserveReleased(tx, tenantOf(context), more, new Map([...cells].map(([cellId, cell]) => [cellId, cellLabel(cell)])))
@@ -342,7 +352,7 @@ export async function createShipment(caller: CommandCaller, body: CreateShipment
     assertMay(context, SHIPPING_VIEW, SHIPPING_MANAGE, { companyId: order.companyId, siteId, partyId: order.partyId }, 'Sales order')
     if (order.status === 'CANCELLED' || order.status === 'CLOSED') throw new InvalidStateError(`The sales order is ${order.status}; nothing more ships for it.`)
     const shipment = { siteId, partyId: order.partyId, salesOrderId: order.id, status: 'DRAFT' as const }
-    const cells = byCell.size > 0 ? await cellsFor(client, shipment, byCell, 'body/lines') : new Map<string, CellRow>()
+    const cells = byCell.size > 0 ? await cellsFor(client, shipment, byCell, 'body/lines') : new Map<string, ShippableCell>()
     const shipTo = body.shipToAddressId ? await shipToOf(client, order.partyId, body.shipToAddressId, 'body/shipToAddressId') : (order.shipTo as Prisma.InputJsonValue)
     const settings = await client.shippingSettings.findUnique({ where: { id: siteId }, select: { defaultTransportBy: true, defaultCarrierCode: true, defaultServiceCode: true, integrationAccountId: true } })
     return { order, siteId, cells, shipTo, settings }

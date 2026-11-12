@@ -46,6 +46,12 @@ export interface SplitInput {
 
 const splitCellOf = (cell: CellRow): SplitCell => ({ id: cell.id, label: cellLabel(cell), quantity: cell.quantity })
 
+/** B-W2b-284: a split work order is never a SAMPLE one (splitRefusal), so each of its cells names its order line. */
+function lineOfCell(cell: CellRow): string {
+  if (cell.salesOrderLineId === null) throw new InvalidStateError(`Cell ${cellLabel(cell)} makes samples for no order line: a sample work order is not split.`)
+  return cell.salesOrderLineId
+}
+
 /** Each side's cells after the plan: the parent's kept ones (lowered or whole), and the new one's from the parent's. */
 function sidesOf(cells: readonly CellRow[], plan: SplitPlan) {
   const byId = new Map(cells.map((cell) => [cell.id, cell]))
@@ -88,7 +94,7 @@ function sideView(parts: SpecParts, cells: readonly CellRow[], own: boolean) {
       colourwayCode: cell.colourwayCode,
       colourwayName: cell.colourwayName,
       size: cell.size,
-      salesOrderLineId: cell.salesOrderLineId,
+      salesOrderLineId: lineOfCell(cell),
       quantity: cell.quantity,
     })),
     materials: materialsOf(parts, cells),
@@ -140,7 +146,7 @@ export async function splitWorkOrder(caller: CommandCaller, workOrderId: string,
       const plan = splitPlan(cells.map(splitCellOf), body.cells)
       const byId = new Map(cells.map((cell) => [cell.id, cell]))
       // The order lines' locks, as every draft of these lines takes them (their pieces only move between two work orders).
-      await lockOrderLines(tx, context.tenantId, plan.move.map((entry) => byId.get(entry.fromCellId)!.salesOrderLineId))
+      await lockOrderLines(tx, context.tenantId, plan.move.map((entry) => lineOfCell(byId.get(entry.fromCellId)!)))
       if (!(await hasSeries(tx, parent.companyId, 'WORK_ORDER'))) {
         throw new InvalidStateError('The company has no active work order number series: an admin sets one up under Numbering (kind WORK_ORDER).')
       }
@@ -211,7 +217,7 @@ export async function splitWorkOrder(caller: CommandCaller, workOrderId: string,
           cells: childCells.map((cell) => ({ id: cell.id, salesOrderLineId: cell.salesOrderLineId, colourwayId: cell.colourwayId, size: cell.size, quantity: cell.quantity })),
         },
       })
-      const salesOrderIds = [...new Set(moved.map((entry) => byId.get(entry.fromCellId)!.salesOrderId))]
+      const salesOrderIds = [...new Set(moved.flatMap((entry) => byId.get(entry.fromCellId)!.salesOrderId ?? []))]
       tools.emit({
         type: 'workorder.created',
         subject: id,

@@ -1,0 +1,13 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/ppe-texts.prisma (rules: src/ownership.ts; roles: src/roles.ts). W2b-5, schema wave 34/44 (B-W2b-275): the PPE consultant's yes per template of generated PPE texts (GATE-PPE-TEXTS). The office (factory_runtime) records and withdraws approvals through apps/factory-api's modules/compliance (B-W2b-288), always with command(); the API keeps staff to the companies their grants reach (a company is a column, not a policy key). The generators read them in the office scope. The floor, portal and link sessions read nothing here: no screen of theirs shows an approval. No money column; the consultant is named as typed, nobody else. Nothing is deleted: an approval is withdrawn (the …_followups_product_w2b4_guards triggers). After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "PpeTextApproval": {
+      "about": "The office records a PPE consultant's yes to one template of generated PPE texts (the DoC, the user information, a label template's class warnings) in the languages checked, with the consultant's file, and withdraws it once with a reason; never changed otherwise, never deleted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    }
+  }
+}

@@ -327,7 +327,8 @@ export async function workOrderSpec(caller: CommandCaller, workOrderId: string):
     const decision = await decisionFor(client, workOrder.id)
     const differs = pinned && released && pinned.id !== released.id ? await differ.of(pinned, released) : []
     // The drift at release (PRD-194): its order lines quoted or ordered on another revision than the work order's.
-    const lineIds = [...new Set((await client.workOrderSize.findMany({ where: { workOrderId: workOrder.id }, select: { salesOrderLineId: true } })).map((cell) => cell.salesOrderLineId))]
+    // B-W2b-275: a SAMPLE cell may name no order line.
+    const lineIds = [...new Set((await client.workOrderSize.findMany({ where: { workOrderId: workOrder.id }, select: { salesOrderLineId: true } })).flatMap((cell) => (cell.salesOrderLineId === null ? [] : [cell.salesOrderLineId])))]
     const orders = pinned && lineIds.length > 0 ? await rowsOf(client, await orderLines(client, context, { ids: lineIds }, false), pinned, "this work order's spec", differ, withCost) : []
     return {
       workOrder: { id: workOrder.id, number: workOrder.number, status: workOrder.status, styleId: style.id, styleCode: style.code },

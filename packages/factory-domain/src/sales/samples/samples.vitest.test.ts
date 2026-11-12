@@ -7,6 +7,7 @@ import { SALES_SAMPLES_PERMISSIONS } from './permissions'
 import {
   cellsForLines,
   cellsProblems,
+  cellsWithoutLine,
   daysLate,
   lineRefusal,
   nextRoundNo,
@@ -17,6 +18,7 @@ import {
   stageAfterShipment,
   stageMoveRefusal,
   storedCells,
+  withoutLineRefusal,
 } from './rules'
 
 const BLK = '00000000-0000-4000-8000-000000000001'
@@ -104,5 +106,23 @@ describe('sample rounds (B-W2b-246)', () => {
     expect(template('planner')).not.toContain('sales.samples.manage')
     for (const type of ['sample_round.requested', 'sample_round.changed', 'sample_shipment.changed']) expect(EVENT_CATALOGUE.find(type, 1)).toBeDefined()
     expect(splitRefusal({ number: 'WO-1', status: 'DRAFT', kind: 'SAMPLE' })).toContain('sample round')
+  })
+
+  it('B-W2b-284: makes an internal or uncharged proto, fit or salesman round without an order line, from its own cells', () => {
+    expect(withoutLineRefusal({ number: 'SR-1', stage: 'REQUESTED', kind: 'PROTO', charged: false })).toBeNull()
+    expect(withoutLineRefusal({ number: 'SR-1', stage: 'REQUESTED', kind: 'SALESMAN', charged: false })).toBeNull()
+    expect(withoutLineRefusal({ number: 'SR-1', stage: 'REQUESTED', kind: 'FIT', charged: true })).toMatchObject({ code: 'ORDER_LINE_NEEDED', message: expect.stringContaining('charged to its customer') })
+    for (const kind of ['PRE_PRODUCTION', 'CERTIFICATION', 'BRAND'] as const) expect(withoutLineRefusal({ number: 'SR-1', stage: 'REQUESTED', kind, charged: false })?.code).toBe('ORDER_LINE_NEEDED')
+    const cells = [
+      { colourwayId: BLK, size: '52', quantity: 2 },
+      { colourwayId: null, size: '52', quantity: 1 },
+      { colourwayId: RED, size: '50', quantity: 1 },
+    ]
+    // "Any colourway" takes the colourway asked; the same colourway and size add up (one cell per colourway and size).
+    expect(cellsWithoutLine(cells, style, BLK, 'body')).toEqual({ cells: [{ colourwayId: BLK, size: '52', quantity: 3 }, { colourwayId: RED, size: '50', quantity: 1 }], problems: [] })
+    expect(cellsWithoutLine(cells, style, null, 'body').problems).toEqual([{ path: 'body/colourwayId', message: "The round names sizes without a colourway: pick the colourway of style JK-1 they are made in." }])
+    expect(cellsWithoutLine(cells, { ...style, colourwayIds: [BLK] }, null, 'body').cells[0]).toEqual({ colourwayId: BLK, size: '52', quantity: 3 })
+    expect(cellsWithoutLine(cells, style, 'x', 'body').problems[0]?.path).toBe('body/colourwayId')
+    expect(cellsWithoutLine([], style, null, 'body').problems).toHaveLength(1)
   })
 })

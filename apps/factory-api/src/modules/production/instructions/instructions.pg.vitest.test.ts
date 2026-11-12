@@ -62,12 +62,15 @@ const SEED = { sewing: idOf('instructions:wi:2'), revision: idOf('instructions:w
 const writer = newId()
 const approver = newId()
 const hr = newId()
+const editor = newId()
 
 const grant = (permissions: Permission[], companies: Grant['companies'] = 'all'): Grant => ({ permissions, companies, sites: 'all', parties: 'all' })
 const WRITE: Permission[] = ['production.instructions.view', 'production.instructions.manage']
 const SESSIONS: Record<string, SessionContext> = {
   writer: { audience: 'office', tenantId: T, actorId: writer, grants: [grant([...WRITE, 'production.instructions.approve'])] },
   approver: { audience: 'office', tenantId: T, actorId: approver, grants: [grant(['production.instructions.view', 'production.instructions.approve'])] },
+  // A second manager who holds every right of the area (B-W2b-F24).
+  editor: { audience: 'office', tenantId: T, actorId: editor, grants: [grant([...WRITE, 'production.instructions.approve', 'production.instructions.people'])] },
   viewer: { audience: 'office', tenantId: T, actorId: newId(), grants: [grant(['production.instructions.view'])] },
   hr: { audience: 'office', tenantId: T, actorId: hr, grants: [grant(['production.instructions.view', 'production.instructions.people'])] },
   otherCompany: { audience: 'office', tenantId: T, actorId: newId(), grants: [grant(WRITE, [idOf('company:B')])] },
@@ -127,7 +130,7 @@ beforeAll(async () => {
   h = await startHarness('instructions')
   h.clock.set(new Date())
   for (const seed of [seedCore, seedPrivacy, seedTime, seedLabour, seedReasons, seedSkills, seedInstructions]) await seed({ db: h.database, namespace: NS })
-  for (const [userId, name] of [[writer, 'Made-up Writer'], [approver, 'Made-up Approver'], [hr, 'Made-up HR']] as const) {
+  for (const [userId, name] of [[writer, 'Made-up Writer'], [approver, 'Made-up Approver'], [hr, 'Made-up HR'], [editor, 'Made-up Editor']] as const) {
     await admin(`INSERT INTO "User" (id, "tenantId", email, "displayName", status, "updatedAt") VALUES ($1, $2, $3, $4, 'ACTIVE', now())`, [userId, T, `${userId}@example.com`, name])
   }
   wo = (await admin<{ id: string }>('SELECT id FROM "WorkOrder" WHERE "tenantId" = $1 AND number = $2', [T, 'SEED-WO-0001']))[0]!.id
@@ -398,5 +401,22 @@ describe('acknowledgements: a training record, by name only to HR and where the 
     expect(refusalOf(await no('hr', 'POST', url, { workerId: lead, locale: 'it' }, 409))).toBe('refusal/SEEN_ALREADY')
     expect((await call('viewer', 'POST', url, { workerId: lead, locale: 'it' })).statusCode).toBe(403)
     expect((await outbox('production.instruction_acknowledged')).some((payload) => payload.way === 'PAPER' && payload.versionId === pack.current.versionId)).toBe(true)
+  })
+})
+
+// B-W2b-F24 (Owner W2b-5 Q3: nobody approves their own work, the Owner included): the four eyes cover who changed the draft too.
+describe('nobody publishes a draft they changed (B-W2b-F24)', () => {
+  it('a second manager with every right who saved the draft is refused EDITED_DRAFT; a third person publishes it', async () => {
+    const made = await ok('writer', 'POST', '/production/instructions', { companyId: companyA, operationId: ops.cut }, 201)
+    const instructionId = made.instruction.id
+    const draft = made.versions[0]
+    const saved = await ok('editor', 'PUT', `/production/instructions/${instructionId}/versions/${draft.id}`, { version: draft.version, steps: [step('SPREAD')] })
+    expect((await ok('editor', 'GET', `/production/instructions/${instructionId}`)).rights.approveHeld).toBe(`You changed version 1 of ${made.instruction.number}: a person who neither wrote nor changed it approves it (four eyes).`)
+    const refused = await no('editor', 'POST', `/production/instructions/${instructionId}/versions/${draft.id}/publish`, { version: saved.version.version }, 409)
+    expect(refusalOf(refused)).toBe('refusal/EDITED_DRAFT')
+    expect(refusalOf(await no('writer', 'POST', `/production/instructions/${instructionId}/versions/${draft.id}/publish`, { version: saved.version.version }, 409))).toBe('refusal/OWN_DRAFT')
+    expect((await ok('approver', 'GET', `/production/instructions/${instructionId}`)).rights.approveHeld).toBeNull()
+    const published = await ok('approver', 'POST', `/production/instructions/${instructionId}/versions/${draft.id}/publish`, { version: saved.version.version })
+    expect(published.version).toMatchObject({ number: 1, status: 'PUBLISHED', approvedBy: { id: approver, name: 'Made-up Approver' } })
   })
 })

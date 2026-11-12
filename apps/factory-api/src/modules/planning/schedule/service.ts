@@ -139,7 +139,8 @@ async function readBoardWorkOrders(db: Reader, site: SiteRow, capacity: Capacity
   const wips = await wipForMany(db, rows.filter((row) => row.status === 'ON_HOLD' && row.heldFromStatus === 'IN_PROGRESS').map((row) => row.id))
   for (const wip of wips.values()) for (const operation of wip.operations) done.set(operation.operationId, operation.good + operation.scrap)
   // B-W2b-20: the customers of the work orders' cells, by code.
-  const partyIds = [...new Set(rows.flatMap((row) => row.sizes.map((size) => size.partyId)))]
+  // B-W2b-275: a SAMPLE cell may name no order line, so no customer.
+  const partyIds = [...new Set(rows.flatMap((row) => row.sizes.flatMap((size) => (size.partyId === null ? [] : [size.partyId]))))]
   const parties = new Map((partyIds.length === 0 ? [] : await db.party.findMany({ where: { id: { in: partyIds } }, select: { id: true, code: true, legalName: true, tradeName: true } })).map((party) => [party.id, { id: party.id, code: party.code, name: party.tradeName ?? party.legalName }]))
   const out: BoardWorkOrder[] = []
   for (const row of rows) {
@@ -158,7 +159,7 @@ async function readBoardWorkOrders(db: Reader, site: SiteRow, capacity: Capacity
       holdReason: row.holdReason,
       style: { id: row.style.id, code: row.style.code, name: row.style.name },
       family: row.style.productType,
-      customers: [...new Set(row.sizes.map((size) => size.partyId))]
+      customers: [...new Set(row.sizes.flatMap((size) => (size.partyId === null ? [] : [size.partyId])))]
         .map((id) => parties.get(id))
         .filter((party): party is { id: string; code: string; name: string } => party !== undefined)
         .sort((a, b) => (a.code < b.code ? -1 : a.code > b.code ? 1 : 0)),

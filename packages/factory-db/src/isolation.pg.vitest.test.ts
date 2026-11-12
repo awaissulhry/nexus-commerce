@@ -4,6 +4,7 @@ import { seed, type CoreSeed } from '../seed/_core'
 import { seed as seedAccounting } from '../seed/accounting'
 import { seed as seedAlerts } from '../seed/alerts'
 import { seed as seedAndon } from '../seed/andon'
+import { seed as seedApprovals } from '../seed/approvals'
 import { seed as seedAudit } from '../seed/audit'
 import { seed as seedAuth } from '../seed/auth'
 import { seed as seedCalendar } from '../seed/calendar'
@@ -49,6 +50,7 @@ import { seed as seedPortalFollowups } from '../seed/portal-followups'
 import { seed as seedPortalFrame } from '../seed/portal-frame'
 import { seed as seedPortalSales } from '../seed/portal-sales'
 import { seed as seedPortalSupply } from '../seed/portal-supply'
+import { seed as seedPpeTexts } from '../seed/ppe-texts'
 import { seed as seedSafety } from '../seed/safety'
 import { seed as seedPeople } from '../seed/people'
 import { seed as seedPricing } from '../seed/pricing'
@@ -64,6 +66,7 @@ import { seed as seedRecall } from '../seed/recall'
 import { seed as seedReceivables } from '../seed/receivables'
 import { seed as seedRoles } from '../seed/roles'
 import { seed as seedSales } from '../seed/sales'
+import { seed as seedSalesIntake } from '../seed/sales-intake'
 import { seed as seedSalesPricing } from '../seed/sales-pricing'
 import { seed as seedSamples } from '../seed/samples'
 import { seed as seedSchedule } from '../seed/schedule'
@@ -81,6 +84,7 @@ import { seed as seedTechfiles } from '../seed/techfiles'
 import { seed as seedThreads } from '../seed/threads'
 import { seed as seedTime } from '../seed/time'
 import { seed as seedViews } from '../seed/views'
+import { seed as seedWarehouseDepth } from '../seed/warehouse-depth'
 import { seed as seedFollowupsPlatformW2b } from '../seed/w2b-followups-platform'
 import { openFactoryDatabase, type FactoryClient, type FactoryDatabase, type FactoryScope } from './client'
 import { classifiedModels } from './ownership'
@@ -370,6 +374,26 @@ beforeAll(async () => {
   // claim that never expires) are the plain ones a copy may repeat.
   await seedRecall({ db: factory, namespace: 'iso-a' })
   await seedRecall({ db: factory, namespace: 'iso-b' })
+  // The W2b-4 follow-ups of W2b-5 (schema wave 34/44): the PPE text approvals; company B's approval in force is the first row
+  // (the one a copy may repeat), company A's two are withdrawn.
+  await seedPpeTexts({ db: factory, namespace: 'iso-a' })
+  await seedPpeTexts({ db: factory, namespace: 'iso-b' })
+  // The approvals schema of W2b-5 (wave 35/44): approval rules (all switched off: Owner answer Q3), requests for a yes in each
+  // state and their history; the first rule (off), request (PENDING) and line (its REQUESTED) are the plain ones a copy may repeat.
+  await seedApprovals({ db: factory, namespace: 'iso-a' })
+  await seedApprovals({ db: factory, namespace: 'iso-b' })
+  // The warehouse in depth schema of W2b-5 (wave 36/44): places, defaults, transfers, schedules, a count that freezes moves with
+  // its scans, the warehouse rules, the task inbox, substitutes and goods without a PO at A1 (and B1's default); their first
+  // rows (an inactive default, a DRAFT transfer and its line, an OPEN task, a WAITING substitute, an ADDED line of a COUNTING
+  // count and its COUNT scan) are the plain ones a copy may repeat.
+  await seedWarehouseDepth({ db: factory, namespace: 'iso-a' })
+  await seedWarehouseDepth({ db: factory, namespace: 'iso-b' })
+  // The sales intake and customers schema of W2b-5 (wave 37/44): seasons, inquiries and their lines, customer requirements,
+  // holds and terms per company, a rider under a team, the contacts' lawful basis and an erased contact; their first rows (an
+  // OPEN season, a NEW office inquiry and its line, a requirement in force, a RELEASED hold, ENDED terms) are the plain ones a
+  // copy may repeat.
+  await seedSalesIntake({ db: factory, namespace: 'iso-a' })
+  await seedSalesIntake({ db: factory, namespace: 'iso-b' })
   // The quotes, pricing and configuration schema of W2b-5 (wave 38/44): templates, delivery schedules and chosen options of a
   // DRAFT quote and a CONFIRMED order for P1 (the partner reads them), breaks and surcharges of a DRAFT price list version,
   // minimums, size curves; their first rows (a delivery bringing at most half of each size, a default option) are the plain
@@ -393,7 +417,10 @@ it('covers every classified table and every runtime role', () => {
     'Alert',
     'AlertEvent',
     'AlertRule',
+    'ApprovalEvent',
     'ApprovalRequest',
+    'ApprovalRule',
+    'ApprovalTask',
     'AqlProfile',
     'AqlProfileAssignment',
     'AttendanceAnomaly',
@@ -439,8 +466,10 @@ it('covers every classified table and every runtime role', () => {
     'ComplianceDocumentBatch',
     'ComplianceRequirement',
     'CostingSettings',
+    'CountSchedule',
     'CrewMember',
     'CrewSession',
+    'CustomerRequirement',
     'CutConsumption',
     'CutIssue',
     'CutIssueLine',
@@ -452,6 +481,7 @@ it('covers every classified table and every runtime role', () => {
     'CutTicket',
     'Ddt',
     'DdtCancellation',
+    'DefaultLocation',
     'DefectCode',
     'DepositRequest',
     'Device',
@@ -514,6 +544,8 @@ it('covers every classified table and every runtime role', () => {
     'IncomingHideResult',
     'IncomingInspection',
     'IncomingRollResult',
+    'Inquiry',
+    'InquiryLine',
     'Inspection',
     'InspectionAmendment',
     'InspectionCheckResult',
@@ -528,6 +560,7 @@ it('covers every classified table and every runtime role', () => {
     'IntegrationAccount',
     'IntegrationCall',
     'InterestReferenceRate',
+    'InventorySettings',
     'Invitation',
     'Invoice',
     'InvoiceLine',
@@ -570,6 +603,7 @@ it('covers every classified table and every runtime role', () => {
     'MarketProfile',
     'MaterialComplianceProfile',
     'MaterialRequirement',
+    'MaterialSubstitution',
     'MeasurementPoint',
     'MeasurementProfile',
     'MeasurementRule',
@@ -621,7 +655,9 @@ it('covers every classified table and every runtime role', () => {
     'Party',
     'PartyAddress',
     'PartyChangeRequest',
+    'PartyCompanyTerms',
     'PartyContact',
+    'PartyHold',
     'PartyPriceListAssignment',
     'PartyTaxIdentity',
     'PasswordReset',
@@ -662,6 +698,7 @@ it('covers every classified table and every runtime role', () => {
     'PpeItem',
     'PpeKitLine',
     'PpeRegisterEntry',
+    'PpeTextApproval',
     'Prepack',
     'PrepackLine',
     'PriceBreak',
@@ -769,6 +806,7 @@ it('covers every classified table and every runtime role', () => {
     'SdiNotification',
     'SdiSubmission',
     'SearchEntry',
+    'Season',
     'SecondaryProcess',
     'SecretValue',
     'Session',
@@ -793,6 +831,7 @@ it('covers every classified table and every runtime role', () => {
     'Station',
     'StockCount',
     'StockCountLine',
+    'StockCountScan',
     'StockMove',
     'StockValuation',
     'StoredFile',
@@ -841,10 +880,13 @@ it('covers every classified table and every runtime role', () => {
     'TrainingRecord',
     'TrainingRequirement',
     'TrainingSession',
+    'TransferLine',
+    'TransferOrder',
     'TypeChangeReview',
     'User',
     'Variant',
     'ViesCheck',
+    'WarehouseTask',
     'WorkCalendar',
     'WorkCentre',
     'WorkCentreCapacity',

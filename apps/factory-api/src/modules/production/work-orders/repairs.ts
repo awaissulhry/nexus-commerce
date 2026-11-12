@@ -93,7 +93,8 @@ async function knownGarment(db: Reader, repair: RepairRow): Promise<{ returnLine
   if (returnLine || !repair.serial) return { returnLine, serialCell: null }
   const serial = await db.garmentSerial.findFirst({ where: { serial: repair.serial.trim() }, select: { workOrderSizeId: true } })
   const cell = serial ? await db.workOrderSize.findUnique({ where: { id: serial.workOrderSizeId }, select: { salesOrderLineId: true, size: true } }) : null
-  return { returnLine: null, serialCell: cell ? { salesOrderLineId: cell.salesOrderLineId, size: cell.size } : null }
+  // B-W2b-275: a SAMPLE cell may name no order line (no line sold the garment).
+  return { returnLine: null, serialCell: cell?.salesOrderLineId ? { salesOrderLineId: cell.salesOrderLineId, size: cell.size } : null }
 }
 
 /** The revision a repair is made to: asked, else the one the line fixes, else the style's released one. */

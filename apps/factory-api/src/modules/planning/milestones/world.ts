@@ -16,9 +16,11 @@ import {
   OPEN_ORDER_STATUSES,
   orderClosedRefusal,
   passRefusal,
+  productionStartOf,
   removeRefusal,
   startBeforeRefusal,
   tileCounts,
+  workOrdersByKind,
   type GateFacts,
   type GateKind,
   type LeatherState,
@@ -33,8 +35,10 @@ import { action, GATE_COLUMNS, lacking, namesOf, ORDER_COLUMNS, SYSTEM_PASSER, t
  * "Waiting on a gate". What the factory already records makes the milestones (templates stay Later):
  *
  *   gate    target = the gate's date; actual = the day it passed (the site's day); started before = the override
- *   start   target = the earliest bar of the order's work orders on the site's WORKING plan; actual = the first work order
- *           that started (WorkOrder.startedAt)
+ *   start   target = the earliest bar of the order's production work orders (SIZE_GRID, MADE_TO_MEASURE) on the site's
+ *           WORKING plan; actual = the first of them that started (WorkOrder.startedAt). B-W2b-284 (F22's follow-up): each work
+ *           order's facts carry its kind and its own earliest bar, so a sample or a repair work order never moves the start
+ *           (productionStartOf); the order view counts its work orders per kind
  *   ship    target = the promise date; actual = the first shipment that left (Shipment.shippedAt)
  *
  * A LEATHER_APPROVED gate says where the order's leather stands: the lots reserved (ACTIVE or ISSUED) for its work orders or
@@ -53,17 +57,17 @@ export interface WorldFilter {
 }
 
 interface OrderFacts {
-  readonly workOrders: { id: string; kind: string; status: string; startedAt: Date | null }[]
-  readonly firstBar: Date | null
+  /** B-W2b-284: each with its kind and its own earliest bar on the working plan (the START milestone reads production ones only). */
+  readonly workOrders: { id: string; kind: string; status: string; startedAt: Date | null; firstBar: Date | null }[]
   readonly shippedAt: Date | null
   readonly leather: LeatherState
 }
 
 /** Per order: its work orders, the earliest bar on the working plan, the first shipment, the leather reserved for it. */
 async function orderFactsOf(db: Reader, orderIds: readonly string[]): Promise<Map<string, OrderFacts>> {
-  const empty = (): OrderFacts => ({ workOrders: [], firstBar: null, shippedAt: null, leather: 'NOT_RECEIVED' })
-  const facts = new Map<string, { workOrders: OrderFacts['workOrders']; firstBar: Date | null; shippedAt: Date | null; lots: Map<string, string> }>(
-    orderIds.map((id) => [id, { workOrders: [], firstBar: null, shippedAt: null, lots: new Map() }]),
+  const empty = (): OrderFacts => ({ workOrders: [], shippedAt: null, leather: 'NOT_RECEIVED' })
+  const facts = new Map<string, { workOrders: OrderFacts['workOrders']; shippedAt: Date | null; lots: Map<string, string> }>(
+    orderIds.map((id) => [id, { workOrders: [], shippedAt: null, lots: new Map() }]),
   )
   if (orderIds.length === 0) return new Map()
   const ids = [...orderIds]
@@ -73,9 +77,9 @@ async function orderFactsOf(db: Reader, orderIds: readonly string[]): Promise<Ma
   })
   const ordersOfWorkOrder = new Map<string, Set<string>>()
   for (const workOrder of workOrders) {
-    const of = new Set(workOrder.sizes.map((size) => size.salesOrderLine.orderId).filter((id) => facts.has(id)))
+    // B-W2b-275: a SAMPLE cell may name no order line.
+    const of = new Set(workOrder.sizes.flatMap((size) => (size.salesOrderLine ? [size.salesOrderLine.orderId] : [])).filter((id) => facts.has(id)))
     ordersOfWorkOrder.set(workOrder.id, of)
-    for (const orderId of of) facts.get(orderId)!.workOrders.push({ id: workOrder.id, kind: workOrder.kind, status: workOrder.status, startedAt: workOrder.startedAt })
   }
   const workOrderIds = workOrders.map((row) => row.id)
   const [slots, shipments, reservations] = await Promise.all([
@@ -91,10 +95,15 @@ async function orderFactsOf(db: Reader, orderIds: readonly string[]): Promise<Ma
       select: { workOrderId: true, salesOrderLine: { select: { orderId: true } }, lot: { select: { id: true, qualityStatus: true } } },
     }),
   ])
+  // B-W2b-284: each work order's own earliest bar, kept with its kind.
+  const firstBarOf = new Map<string, Date>()
   for (const slot of slots) {
-    for (const orderId of ordersOfWorkOrder.get(slot.workOrderId) ?? []) {
-      const entry = facts.get(orderId)!
-      if (entry.firstBar === null || slot.startAt < entry.firstBar) entry.firstBar = slot.startAt
+    const first = firstBarOf.get(slot.workOrderId)
+    if (first === undefined || slot.startAt < first) firstBarOf.set(slot.workOrderId, slot.startAt)
+  }
+  for (const workOrder of workOrders) {
+    for (const orderId of ordersOfWorkOrder.get(workOrder.id) ?? []) {
+      facts.get(orderId)!.workOrders.push({ id: workOrder.id, kind: workOrder.kind, status: workOrder.status, startedAt: workOrder.startedAt, firstBar: firstBarOf.get(workOrder.id) ?? null })
     }
   }
   for (const shipment of shipments) {
@@ -109,7 +118,7 @@ async function orderFactsOf(db: Reader, orderIds: readonly string[]): Promise<Ma
   return new Map(
     [...facts].map(([id, entry]) => [
       id,
-      { ...empty(), workOrders: entry.workOrders, firstBar: entry.firstBar, shippedAt: entry.shippedAt, leather: leatherStateOf([...entry.lots.values()].map((qualityStatus) => ({ qualityStatus }))) },
+      { ...empty(), workOrders: entry.workOrders, shippedAt: entry.shippedAt, leather: leatherStateOf([...entry.lots.values()].map((qualityStatus) => ({ qualityStatus }))) },
     ]),
   )
 }
@@ -182,11 +191,11 @@ function milestonesOf(order: OrderRow, gates: readonly GateView[], facts: OrderF
     late: kind === 'GATE' && gate?.state === 'STARTED_BEFORE' ? null : lateDays(target, actual, today),
     owner: gate?.owner ?? null,
   })
-  const started = facts.workOrders.map((workOrder) => workOrder.startedAt).filter((value): value is Date => value !== null)
-  const firstStart = started.length ? new Date(Math.min(...started.map((value) => value.getTime()))) : null
+  // B-W2b-284: production start follows the order's production work orders only (a sample or a repair never moves it).
+  const start = productionStartOf(facts.workOrders)
   const rows = [
     ...gates.map((gate) => row(`gate:${gate.id}`, 'GATE', gate, gate.targetDate, gate.passedOn)),
-    ...(facts.workOrders.length > 0 ? [row(`start:${order.id}`, 'START', null, facts.firstBar ? businessDate(facts.firstBar) : null, firstStart ? businessDate(firstStart) : null)] : []),
+    ...(start ? [row(`start:${order.id}`, 'START', null, start.firstBar ? businessDate(start.firstBar) : null, start.firstStart ? businessDate(start.firstStart) : null)] : []),
     row(`ship:${order.id}`, 'SHIP', null, day(order.promiseDate), facts.shippedAt ? businessDate(facts.shippedAt) : null),
   ]
   return rows.sort(milestoneOrder)
@@ -220,7 +229,7 @@ export async function readWorld(db: Reader, world: WorldContext, filter: WorldFi
   const roundOf = new Map(rounds.map((row) => [row.id, row]))
   const partyOf = new Map(parties.map((row) => [row.id, row]))
   const views: OrderView[] = orders.map((order) => {
-    const own = facts.get(order.id) ?? { workOrders: [], firstBar: null, shippedAt: null, leather: 'NOT_RECEIVED' as const }
+    const own = facts.get(order.id) ?? { workOrders: [], shippedAt: null, leather: 'NOT_RECEIVED' as const }
     const gateViews = gates.filter((gate) => gate.salesOrderId === order.id).map((gate) => gateViewOf(gate, order, gate.sampleRoundId ? (roundOf.get(gate.sampleRoundId) ?? null) : null, names, own, world, today))
     const milestones = milestonesOf(order, gateViews, own, today)
     const party = partyOf.get(order.partyId)
@@ -233,7 +242,7 @@ export async function readWorld(db: Reader, world: WorldContext, filter: WorldFi
       status: order.status,
       promiseDate: day(order.promiseDate),
       customerRef: order.customerRef,
-      workOrders: { count: own.workOrders.length, notStarted: notStarted(own.workOrders) },
+      workOrders: { count: own.workOrders.length, notStarted: notStarted(own.workOrders), byKind: workOrdersByKind(own.workOrders) },
       gates: gateViews,
       milestones,
       waiting: gateViews.filter((gate) => gate.state === 'WAITING').map((gate) => gate.kind),
@@ -259,7 +268,7 @@ export async function readGateView(db: Reader, world: WorldContext, gateId: stri
     gate.sampleRoundId ? db.sampleRound.findUnique({ where: { id: gate.sampleRoundId }, select: { id: true, number: true, kind: true, decision: true } }) : Promise.resolve(null),
     namesOf(db, [gate.ownerId, gate.createdById, gate.passedById, gate.overriddenById]),
   ])
-  return gateViewOf(gate, order, round, names, facts.get(order.id) ?? { workOrders: [], firstBar: null, shippedAt: null, leather: 'NOT_RECEIVED' }, world, businessDate(world.now))
+  return gateViewOf(gate, order, round, names, facts.get(order.id) ?? { workOrders: [], shippedAt: null, leather: 'NOT_RECEIVED' }, world, businessDate(world.now))
 }
 
 export { orderFactsOf }

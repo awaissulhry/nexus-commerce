@@ -1,0 +1,76 @@
+{
+  "markets": {
+    "title": "Mercati",
+    "intro": "Dove si vende questo modello. Per la merce diretta a un mercato in cui è venduto, i blocchi controllano le lingue di quel mercato.",
+    "change": "Modifica…",
+    "dismiss": "Chiudi",
+    "retry": "Riprova",
+    "loading": "Lettura dei mercati…",
+    "every": "Tutti i mercati",
+    "everyMeans": "Nessuno scelto: si vende ovunque, come prima. Le regole di lingua di ogni mercato aspettano ai blocchi finché qui non si sceglie un mercato.",
+    "named": "{name} ({code})",
+    "pickedLabel_one": "Venduto in {count} mercato",
+    "pickedLabel_other": "Venduto in {count} mercati",
+    "listMeans": "Per la merce diretta a questi mercati, i blocchi chiedono la DoC, le informazioni per l'utilizzatore e l'etichetta nelle lingue di ogni mercato. La merce diretta altrove non viene fermata per questo.",
+    "readOnly": "Puoi vedere, non modificare.",
+    "languages": "DoC: {doc} · Informazioni per l'utilizzatore: {info} · Etichetta: {label}",
+    "none": "nessuna",
+    "notOffered": "non più proposto: si può solo togliere",
+    "pickTitle": "Mercati di {code}",
+    "pickEvery": "Nessuna spunta: venduto in tutti i mercati.",
+    "pickCount_one": "{count} mercato spuntato.",
+    "pickCount_other": "{count} mercati spuntati.",
+    "pickLegend": "I mercati in cui vende l'azienda di questo modello",
+    "pickMeans": "I mercati e le loro lingue si tengono in Conformità › Norme e mercati. Le regole di un mercato spento aspettano finché non è acceso.",
+    "clear": "Tutti i mercati",
+    "cancel": "Annulla",
+    "save": "Salva i mercati",
+    "mark": {
+      "off": "Spento",
+      "archived": "Archiviato",
+      "otherCompany": "Di un'altra azienda"
+    },
+    "held": {
+      "reading": "Lettura dei mercati…",
+      "failed": "Non è stato possibile leggere i mercati: riprova prima.",
+      "noRight": "Il tuo ruolo non può cambiare dove si vende un modello.",
+      "offline": "Offline: i mercati cambiano quando torna la connessione.",
+      "busy": "Salvataggio…",
+      "same": "Ancora nessuna modifica.",
+      "everyAlready": "Nessuna spunta: è già tutti i mercati."
+    },
+    "refusal": {
+      "EDIT_BLOCKED": "Nel suo stato del ciclo di vita nulla di questo modello cambia (la sua regola di modifica nelle Impostazioni prodotto è \"bloccato\"): spostalo prima in un altro stato.",
+      "STYLE_ARCHIVED": "Il modello è archiviato: riattivalo prima di cambiare dove si vende.",
+      "other": "Dove si vende questo modello ora non cambia."
+    },
+    "problem": {
+      "moved": "Qualcuno ha cambiato il modello nel frattempo: i mercati sono stati riletti. Scegli di nuovo.",
+      "changed": "Un mercato è cambiato nel frattempo: i mercati sono stati riletti. Scegli di nuovo.",
+      "market": "Un mercato non si può più aggiungere (archiviato, rimosso o di un'altra azienda): i mercati sono stati riletti.",
+      "invalid": "L'elenco non è stato accettato: i mercati sono stati riletti. Scegli di nuovo.",
+      "forbidden": "Il tuo ruolo non può cambiare dove si vende questo modello.",
+      "offline": "Nessuna connessione: nulla è stato salvato.",
+      "gone": "Questo modello non c'è più.",
+      "failed": "I mercati non sono stati salvati: riprova.",
+      "readForbidden": "Il tuo ruolo non legge dove si vende questo modello.",
+      "readFailed": "Non è stato possibile leggere i mercati."
+    },
+    "notice": {
+      "saved_one": "Ora venduto in {count} mercato.",
+      "saved_other": "Ora venduto in {count} mercati.",
+      "every": "Ora venduto in tutti i mercati."
+    }
+  },
+  "templates": {
+    "hint": "Le misure che prende un modello su misura di questo tipo. Le sue regole su misura restano spente finché non si avviano per modello di misure.",
+    "reading": "Lettura dei modelli di misure…",
+    "failed": "Non è stato possibile leggere i modelli di misure: il tipo tiene quello che indica.",
+    "none": "Ancora nessun modello di misure attivo per questo tipo di capo e questa azienda.",
+    "option_one": "{code} · {name} ({count} punto)",
+    "option_other": "{code} · {name} ({count} punti)",
+    "optionRulesOn": "{template} · regole su misura accese",
+    "notOffered": "{template} · non più proposto",
+    "unknown": "Un modello che non puoi vedere"
+  }
+}
