@@ -194,7 +194,12 @@ export async function readOrderFacts(db: Reader, order: Pick<OrderRow, 'id'>): P
   const leftIds = shipments.filter((row) => (LEFT as readonly string[]).includes(row.status)).map((row) => row.id)
   const shipped = leftIds.length > 0 ? await db.shipmentLine.groupBy({ by: ['salesOrderLineId', 'size'], where: { shipmentId: { in: leftIds } }, _sum: { quantity: true } }) : []
 
-  const invoiceLines = lineIds.length > 0 ? await db.invoiceLine.findMany({ where: { salesOrderLineId: { in: lineIds }, kind: 'GOODS' }, select: { invoiceId: true, salesOrderLineId: true, size: true, quantity: true } }) : []
+  // B-W2b-330 (SAL-181): a fee line is billed by the SERVICE line that names it (modules/sales/price-waterfall/fee-invoicing).
+  const feeIds = lines.filter((line) => line.kind === 'FEE').map((line) => line.id)
+  const invoiceLines =
+    lineIds.length > 0
+      ? await db.invoiceLine.findMany({ where: { salesOrderLineId: { in: lineIds }, OR: [{ kind: 'GOODS' }, ...(feeIds.length > 0 ? [{ kind: 'SERVICE' as const, salesOrderLineId: { in: feeIds } }] : [])] }, select: { invoiceId: true, salesOrderLineId: true, size: true, quantity: true } })
+      : []
   const invoices = await db.invoice.findMany({
     where: { OR: [{ salesOrderId: order.id }, ...(invoiceLines.length > 0 ? [{ id: { in: unique(invoiceLines.map((line) => line.invoiceId)) } }] : [])] },
     select: { id: true, number: true, docType: true, status: true, issueDate: true, depositRequestId: true },
@@ -221,6 +226,8 @@ export async function readOrderFacts(db: Reader, order: Pick<OrderRow, 'id'>): P
     invoiced,
     // B-W2a-30: a line closed short is done (its left pieces will not be made or shipped).
     closedShort: new Set(lines.filter((line) => line.closedShortQuantity !== null).map((line) => line.id)),
+    // B-W2b-330 (SAL-181): a fee is never made or shipped: it never holds the order back.
+    fees: new Set(feeIds),
   })
   return { lines, progress, workOrders, shipments, invoices }
 }

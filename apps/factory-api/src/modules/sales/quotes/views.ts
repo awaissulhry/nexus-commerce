@@ -18,6 +18,8 @@ import { taxable, type VatTreatment } from '@nexus/factory-domain/tax/vat-treatm
 import { gateRequestFor } from '../../compliance/certificates/gate'
 import { snapshotMissing } from './pricing'
 import { quoteRulesFor } from './rules'
+// B-W2b-330 (SAL-189): the floor of the version's maker.
+import { withPersonFloor } from '../price-waterfall/floors'
 import { holdQuoteIssues } from '../../parties/holds/stops'
 import {
   APPROVAL_COLUMNS,
@@ -96,7 +98,8 @@ export async function readFacts(db: Reader, quote: QuoteRow, now: Date, options:
   const version = await readCurrentVersion(db, quote)
   const lines = await readLineRecords(db, version.id)
   const party = await quotePartyOf(db, quote.partyId, today, now)
-  const rules = await quoteRulesFor(db, quote.companyId)
+  // B-W2b-330 (SAL-189): held to the floor of the version's maker (their roles' lowest listed floor, else the company's).
+  const rules = await withPersonFloor(db, quote, version, await quoteRulesFor(db, quote.companyId), now)
   const styles = new Map((await db.style.findMany({ where: { id: { in: [...new Set(lines.map((line) => line.styleId))] } }, select: { id: true, code: true, name: true, status: true, sizes: true } })).map((row) => [row.id, row]))
   const colourways = new Map((await db.colourway.findMany({ where: { id: { in: [...new Set(lines.map((line) => line.colourwayId))] } }, select: { id: true, code: true, name: true } })).map((row) => [row.id, row]))
   const revisionIds = [...new Set(lines.flatMap((line) => (line.styleRevisionId ? [line.styleRevisionId] : [])))]
@@ -141,6 +144,8 @@ export async function readFacts(db: Reader, quote: QuoteRow, now: Date, options:
       costMissing: snapshotMissing(line.costSnapshot).map((entry) => entry.message),
       costRevision: line.styleRevisionId ? ((revisions.get(line.styleRevisionId)?.status ?? null) as 'RELEASED' | 'DRAFT' | 'OBSOLETE' | null) : null,
       certificates: [...(certificates.get(line.id)?.entries() ?? [])].map(([size, answer]) => ({ size, reasons: answer.reasons })),
+      // B-W2b-330 (SAL-181): a fee has no cost sheet.
+      fee: line.kind === 'FEE',
     })),
     rules: priced.rules,
   })
@@ -250,7 +255,8 @@ export async function quoteDetail(db: Reader, quote: QuoteRow, now: Date) {
         unitCost: asMoney('cost', decimal(line.unitCost)),
         costAmount: asMoney('cost', line.costAmount),
         costComplete: line.costAmount !== null,
-        costMissing: line.styleRevisionId === null ? [{ code: 'NO_REVISION', message: 'The style has no revision to cost it from.' }] : snapshotMissing(line.costSnapshot),
+        // B-W2b-330: a fee has no cost sheet, so nothing is missing.
+        costMissing: line.kind === 'FEE' ? [] : line.styleRevisionId === null ? [{ code: 'NO_REVISION', message: 'The style has no revision to cost it from.' }] : snapshotMissing(line.costSnapshot),
         costSnapshot: asMoney('cost', (line.costSnapshot ?? null) as Record<string, unknown> | null),
         marginAmount: marginAmount(line.marginAmount),
         marginPct: asMoney('margin', decimal(line.marginPct)),

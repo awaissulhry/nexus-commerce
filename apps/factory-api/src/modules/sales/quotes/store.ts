@@ -181,7 +181,15 @@ export async function readLineRecords(db: Reader, versionId: string): Promise<Li
 }
 
 /** A line as the version's money is computed from it. */
-export const moneyLineOf = (line: LineRecord): MoneyLine => ({ seq: line.seq, unitPrice: decimal(line.unitPrice)!, listUnitPrice: decimal(line.listUnitPrice), sizes: line.sizes, costAmount: line.costAmount })
+export const moneyLineOf = (line: LineRecord): MoneyLine => ({
+  seq: line.seq,
+  unitPrice: decimal(line.unitPrice)!,
+  listUnitPrice: decimal(line.listUnitPrice),
+  sizes: line.sizes,
+  costAmount: line.costAmount,
+  // B-W2b-330 (SAL-181): a fee line has no size rows: its own pieces.
+  ...(line.kind === 'FEE' ? { quantity: line.quantity } : {}),
+})
 
 /** The quote the office may see (else 404) and act on with `permission` (else 403). */
 export async function officeQuote(caller: CommandCaller, quoteId: string, permission: Permission = QUOTES_VIEW): Promise<QuoteRow> {

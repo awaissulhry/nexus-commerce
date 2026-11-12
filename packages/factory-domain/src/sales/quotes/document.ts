@@ -96,7 +96,8 @@ export function quoteDocument(quote: CustomerQuote): Omit<DocumentInput, 'compan
   const words = SIZE_WORDS[quote.language]
   const lines: DocumentLine[] = quote.lines.map((line) => ({
     code: line.code,
-    description: [line.description, `${words.sizes}: ${sizesText(line.sizes, quote.currency, quote.language)}`, ...(line.note ? [line.note] : [])].join(' — '),
+    // B-W2b-330 (SAL-181): a fee line has no sizes to print.
+    description: [line.description, ...(line.sizes.length > 0 ? [`${words.sizes}: ${sizesText(line.sizes, quote.currency, quote.language)}`] : []), ...(line.note ? [line.note] : [])].join(' — '),
     quantity: String(line.quantity),
     uom: words.pieces,
     unitPrice: line.unitPrice,
