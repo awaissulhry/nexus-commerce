@@ -49,6 +49,8 @@ import { lotNumber, receiptNumber } from './numbers'
 import { markNoticeReceived, noticeForReceipt } from '../receiving/from-ship-notice'
 import { receiptDetail } from './read'
 import { readColours, readEarlierLots, readItems, readOrderLines, RECEIPT_COLUMNS, type ItemRow, type OrderLineRow } from './store'
+// B-W2b-289 (SCM-179): the site's default receiving place when none is named.
+import { defaultPlaceFor } from '../locations-depth/defaults'
 
 /**
  * Record a goods receipt against a purchase order (B-W1-32; SCM-113, SCM-116, SCM-117, SCM-187, SCM-232, SCM-233,
@@ -228,7 +230,8 @@ export async function recordReceiptInCommand(tools: CommandTools, body: ReceiptB
   if (receivedAt.getTime() > now.getTime() + CLOCK_SLACK_MS) throw new ValidationError('The goods cannot arrive in the future.', [{ path: 'body/receivedAt', message: 'Now or earlier.' }])
   // B-W2b-296: an order shipped straight to a workshop lands on its place (the floor never receives it).
   const shipTo = await receiptPlaceOf(tools, order, floor)
-  const location = await locationFor(tools, order.siteId, body.locationId ?? shipTo.locationId ?? undefined)
+  // B-W2b-289: no place named and no ship-to place: the site's default receiving place for these items, else its one dock.
+  const location = await locationFor(tools, order.siteId, body.locationId ?? shipTo.locationId ?? undefined, body.lines.map((line) => line.purchaseOrderLineId))
 
   // 3. The lines against the order's lines, with each material's rules.
   const { lines: orderLines, received } = await readOrderLines(tx, order.id)
@@ -528,14 +531,20 @@ export async function recordReceiptInCommand(tools: CommandTools, body: ReceiptB
   return { receiptId, number, order, orderStatus: to, notes, moves }
 }
 
-/** The location the goods go to: the one named (of the order's site, active), else the site's one goods-in dock. */
-async function locationFor(tools: CommandTools, siteId: string, locationId: string | undefined): Promise<{ id: string; code: string }> {
+/**
+ * The location the goods go to: the one named (of the order's site, active), else (B-W2b-289, SCM-179) the site's default
+ * receiving place for the kinds of material received, else the site's one goods-in dock.
+ */
+async function locationFor(tools: CommandTools, siteId: string, locationId: string | undefined, orderLineIds: readonly string[]): Promise<{ id: string; code: string }> {
   if (locationId) {
     const location = isUuid(locationId) ? await tools.tx.location.findUnique({ where: { id: locationId }, select: { id: true, siteId: true, code: true, status: true } }) : null
     if (!location || location.siteId !== siteId) throw new ValidationError('That is not a location of the order\'s delivery site.', [{ path: 'body/locationId', message: 'A location of the delivery site.' }])
     if (location.status !== 'ACTIVE') throw new ValidationError(`Location ${location.code} is ${location.status.toLowerCase()}: it takes no stock.`, [{ path: 'body/locationId', message: 'An active location.' }])
     return location
   }
+  const lines = await tools.tx.purchaseOrderLine.findMany({ where: { id: { in: orderLineIds.filter(isUuid) } }, select: { item: { select: { kind: true } } } })
+  const preset = await defaultPlaceFor(tools.tx, { siteId, purpose: 'RECEIVING', itemKinds: lines.map((line) => line.item.kind) })
+  if (preset) return preset
   const docks = await tools.tx.location.findMany({ where: { siteId, kind: 'RECEIVING', status: 'ACTIVE' }, select: { id: true, code: true }, orderBy: { code: 'asc' }, take: 2 })
   if (docks.length !== 1) {
     throw new ValidationError(docks.length === 0 ? 'The delivery site has no goods-in dock: name the location the goods go to.' : 'The delivery site has several goods-in docks: name the one the goods go to.', [{ path: 'body/locationId', message: 'Name the location.' }])

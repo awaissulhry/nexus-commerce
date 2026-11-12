@@ -1,5 +1,4 @@
 import type { Issue } from '../core/errors'
-import type { ComposedLabel } from './model'
 
 /**
  * ZPL II for label printers (plan A1 §3.9: pure builders in factory-domain/labels, after Commerce's
@@ -88,10 +87,23 @@ export function fitText(value: string, widthDots: number, heightDots: number): s
 const text = (x: number, y: number, height: number, value: string): string => `^FO${x},${y}^A0N,${height},${height}^FH^FD${zplText(value)}^FS`
 
 /**
+ * What the layout reads of a label: a composed scan label (./model composeLabel), or a module's own label in the same
+ * layout (B-W2b-289: a bin label, factory-domain inventory/locations-depth/labels, whose code is a location's label code).
+ */
+export interface LaidOutLabel {
+  readonly language: string
+  readonly heading: string
+  readonly title: string
+  /** The code the bars carry and the text under them. */
+  readonly scanId: string
+  readonly fields: readonly { readonly label: string; readonly value: string }[]
+}
+
+/**
  * The ZPL of one composed label on the stock, `copies` times. Throws a RangeError for a stock the layout does not fit
  * or a copy count out of range (the print module checks both first, so a request never gets here with them).
  */
-export function labelZpl(label: ComposedLabel, stock: LabelStock, copies = 1): string {
+export function labelZpl(label: LaidOutLabel, stock: LabelStock, copies = 1): string {
   const problems = stockProblems(stock)
   if (problems.length > 0) throw new RangeError(problems.map((problem) => problem.message).join(' '))
   if (!Number.isSafeInteger(copies) || copies < 1 || copies > MAX_LABEL_COPIES) throw new RangeError(`A label is printed 1 to ${MAX_LABEL_COPIES} times.`)

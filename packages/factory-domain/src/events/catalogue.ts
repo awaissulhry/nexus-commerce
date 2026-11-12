@@ -198,6 +198,8 @@ import { events as productMtm } from '../product-mtm/events'
 import { events as complianceClaims } from '../compliance-claims/events'
 // B-W2b-247: the colour library and the brands' branding sets (colour.changed, branding_set.changed).
 import { events as productColours } from '../product-colours/events'
+// B-W2b-289: locations in depth (blocks, bin label codes, default locations).
+import { events as inventoryLocationsDepth } from '../inventory-locations/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -462,7 +464,9 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-282
   ...approvals,
   // B-W2b-332
-  ...purchaseRequests] as const satisfies readonly EventDefinition[]
+  ...purchaseRequests,
+  // B-W2b-289
+  ...inventoryLocationsDepth] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']
