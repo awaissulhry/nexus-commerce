@@ -28,7 +28,9 @@ import { detailInCommand, refreshTotal } from './orders'
 import { draftChangesOf } from './revisions/read'
 import { writeRevisionInCommand } from './revisions/state'
 import { openConfirmTask } from './portal-orders/tasks'
-import { dayOf, decimal, officeContextOf, officeOrder, quantityText, readOrder, seesCost, senderOf, type OrderRow, type Reader } from './store'
+import { CONTACT_COLUMNS, dayOf, decimal, officeContextOf, officeOrder, quantityText, readOrder, seesCost, senderOf, type OrderRow, type Reader } from './store'
+// B-W2b-311 (SCM-004): the other contacts who receive POs get a copy when the office names none.
+import { copiesOf } from '@nexus/factory-domain/purchasing/suppliers-depth/routing'
 import { checksOf, isCancelledLine, letterheadProblems, readFacts, siteAddressOf, type OrderFacts } from './views'
 // B-W2b-296: a third party's delivery address and the lines' delivery schedules on the PDF.
 import { shipToPrintOf } from './po-depth/store'
@@ -339,7 +341,7 @@ export async function sendOrder(request: FastifyRequest, orderId: string, body: 
         orderId: current.id,
         sender,
         to: plan.to,
-        cc: body.cc ?? [],
+        cc: body.cc ?? copiesOf('PO', await tx.partyContact.findMany({ where: { partyId: current.partyId }, select: CONTACT_COLUMNS, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] }), plan.to),
         subject: body.subject?.trim() ? body.subject.trim() : plan.mail.subject,
         storedText: plan.mail.stored,
         attachments: [file.id],
@@ -455,7 +457,7 @@ export async function sendNewLink(request: FastifyRequest, orderId: string, body
       if (problem) throw new InvalidStateError(problem)
       const revoked = await revokeConfirmLinks(tools, current, context.actorId)
       const link = await insertConfirmLink(tools, plan.link, current, { email: plan.to, terms: plan.terms, actorId: context.actorId })
-      const mail = await queueLinkMail(tools, { orderId: current.id, sender: await senderOf(tools.tx, context), to: plan.to, cc: body.cc ?? [], subject: plan.mail.subject, storedText: plan.mail.stored, attachments: [plan.fileId], locale: plan.language })
+      const mail = await queueLinkMail(tools, { orderId: current.id, sender: await senderOf(tools.tx, context), to: plan.to, cc: body.cc ?? copiesOf('PO', await tools.tx.partyContact.findMany({ where: { partyId: current.partyId }, select: CONTACT_COLUMNS, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] }), plan.to), subject: plan.mail.subject, storedText: plan.mail.stored, attachments: [plan.fileId], locale: plan.language })
       tools.audit({ action: 'purchasing.sendLink', recordType: 'PurchaseOrder', recordId: current.id, companyId: current.companyId, siteId: current.siteId, after: { linkId: link.linkId, linkExpiresAt: toUtcIso(link.expiresAt), revokedLinkIds: revoked, outboundId: mail.outbound.id, to: plan.to } })
       tools.emit({ type: 'purchase_order.link_sent', subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { purchaseOrderId: current.id, number: current.number, linkId: link.linkId, revokedLinkIds: revoked, outboundId: mail.outbound.id } })
       return { ...(await detailInCommand(tools, current.id)), link: { id: link.linkId, expiresAt: toUtcIso(link.expiresAt), to: plan.to, revokedLinkIds: revoked, emailId: mail.outbound.id } }

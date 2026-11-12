@@ -230,4 +230,14 @@ export const manifest = defineManifest({
   'POST /purchasing/ask-to-buy/from-shortage': { audiences: ['office'], permission: 'purchasing.requests.ask', scope: 'record' },
   'POST /purchasing/ask-to-buy/cancel': { audiences: ['office'], permission: 'purchasing.requests.ask', scope: 'record' },
   'POST /purchasing/ask-to-buy/reject': { audiences: ['office'], permission: 'purchasing.manage', scope: 'record' },
+  // B-W2b-311: suppliers in depth. Office only, can() over the supplier's company AND the supplier in the handler: reads
+  // parties.view (the supplier record is the party record); kinds, lead time, origin and what each contact receives
+  // parties.manage; where it stands with us purchasing.suppliers.status.
+  'GET /purchasing/suppliers': { audiences: ['office'], permission: 'parties.view', scope: 'record' },
+  'GET /purchasing/suppliers/counts': { audiences: ['office'], permission: 'parties.view', scope: 'record' },
+  'GET /purchasing/suppliers/:partyId/profile': { audiences: ['office'], permission: 'parties.view', scope: 'record' },
+  'PATCH /purchasing/suppliers/:partyId/profile': { audiences: ['office'], permission: 'parties.manage', scope: 'record' },
+  'POST /purchasing/suppliers/:partyId/status': { audiences: ['office'], permission: 'purchasing.suppliers.status', scope: 'record' },
+  'GET /purchasing/suppliers/:partyId/status-reach': { audiences: ['office'], permission: 'parties.view', scope: 'record' },
+  'PUT /purchasing/suppliers/:partyId/contacts/:contactId/receives': { audiences: ['office'], permission: 'parties.manage', scope: 'record' },
 })
