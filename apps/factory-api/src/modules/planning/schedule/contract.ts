@@ -10,6 +10,8 @@ import { CALENDAR_STATES } from '../capacity/contract'
 import { materialArrival } from '../readiness/contract'
 // B-W2b-312: the earliest start with material (PLN-134) and the problems list's new kinds.
 import { materialCheckView, materialStartView } from '../schedule-depth/material-contract'
+// B-W2b-329 (PLN-133): a bar's state on the floor.
+import { floorStatusView } from '../schedule-log/floor-contract'
 
 /**
  * The planning board (B-W2a-34; PLN-129 backward scheduling and latest safe start, PLN-131 the board, PLN-132 order and
@@ -83,6 +85,8 @@ export const slotView = storedSlot.extend({
   latestFinish: instant().nullable(),
   /** It starts after its latest start: the operations after it have no time to spare. */
   startsLate: z.boolean(),
+  /** B-W2b-329 (PLN-133): its state on the floor now and its progress; null when its work order is not open. */
+  floor: floorStatusView.nullable().optional(),
 })
 
 const operationView = output({

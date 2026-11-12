@@ -206,6 +206,8 @@ import { PLANNING_PLANNED_DEFINITIONS, PLANNING_PLANNED_PERMISSIONS } from '../.
 import { PLANNING_PROMISE_DEFINITIONS, PLANNING_PROMISE_PERMISSIONS } from '../../planning/promise/permissions'
 // B-W2b-312: scheduling in depth (planning.schedule.pin).
 import { PLANNING_SCHEDULE_DEPTH_DEFINITIONS, PLANNING_SCHEDULE_DEPTH_PERMISSIONS } from '../../planning/schedule-depth/permissions'
+// B-W2b-317: the backlog ranked (planning.backlog.manage).
+import { PLANNING_BACKLOG_DEFINITIONS, PLANNING_BACKLOG_PERMISSIONS } from '../../planning/backlog/permissions'
 // B-W2b-321: work to subcontractors.
 import { PLANNING_SUBCONTRACT_DEFINITIONS, PLANNING_SUBCONTRACT_PERMISSIONS } from '../../planning/subcontract-capacity/permissions'
 // B-W2b-311: suppliers in depth (purchasing.suppliers.status).
@@ -342,6 +344,8 @@ import { GRAIN_DESCRIPTIONS, GRAINS, grainPermission } from '../grains/grains'
 import { definePermissions, permissionRegistry, type PermissionDefinition } from './registry'
 // B-W2b-304: credit limits (sales.credit.view, .limits, .checks).
 import { SALES_CREDIT_DEFINITIONS, SALES_CREDIT_PERMISSIONS } from '../../sales/credit/permissions'
+// B-W2b-345: warranty and service cases (sales.service.view, .manage, .decide).
+import { SALES_SERVICE_DEFINITIONS, SALES_SERVICE_PERMISSIONS } from '../../sales/service/permissions'
 
 /**
  * Every permission of the factory, assembled (feature PLT-029). A module that adds routes declares its permissions
@@ -948,6 +952,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PLANNING_PROMISE_DEFINITIONS,
   // B-W2b-312: scheduling in depth (area `planning`, declared above).
   PLANNING_SCHEDULE_DEPTH_DEFINITIONS,
+  // B-W2b-317: the backlog ranked (area `planning`, declared above).
+  PLANNING_BACKLOG_DEFINITIONS,
   // B-W2b-321
   PLANNING_SUBCONTRACT_DEFINITIONS,
   // B-W2b-311: suppliers in depth (area `purchasing`, declared above).
@@ -974,6 +980,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PLANNING_ACTIONS_DEFINITIONS,
   // B-W2b-300: goods without a PO (area `inventory`).
   INVENTORY_UNPLANNED_DEFINITIONS,
+  // B-W2b-345: warranty and service cases (area `sales`).
+  SALES_SERVICE_DEFINITIONS,
 ])
 
 /** The area of the permissions only floor roles hold (and floor roles hold no other, but FLOOR_SHARED_PERMISSIONS). */
@@ -1297,6 +1305,8 @@ for (const name of PLANNING_PLANNED_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDecl
 for (const name of PLANNING_PROMISE_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-312: scheduling in depth.
 for (const name of PLANNING_SCHEDULE_DEPTH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-317: the backlog ranked.
+for (const name of PLANNING_BACKLOG_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-306
 for (const name of PLANNING_ACTIONS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-321: work to subcontractors.
@@ -1320,6 +1330,8 @@ for (const name of PURCHASING_REPORTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDe
 for (const name of INVENTORY_COUNTS_DEPTH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-304: credit limits.
 for (const name of SALES_CREDIT_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-345: warranty and service cases.
+for (const name of SALES_SERVICE_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

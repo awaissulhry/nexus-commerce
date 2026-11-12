@@ -5,6 +5,10 @@ import { ITEM_PLANNING_LIMITS, ITEM_PLANNING_METHODS, ITEM_PLANNING_SOURCES } fr
 import { SETTINGS_LIMITS } from '@nexus/factory-domain/planning/settings/settings'
 import { ITEM_KINDS } from '@nexus/factory-domain/product/materials/rules'
 import { UOMS } from '@nexus/factory-domain/product/units/units'
+// B-W2b-318: the planning rules per item and the size-run setting.
+import { ITEM_RULE_LIMITS, LOT_SIZINGS, PLAN_LEVELS } from '@nexus/factory-domain/planning/lot-sizing/parameters'
+import { SIZE_RUN_LIMITS } from '@nexus/factory-domain/planning/lot-sizing/size-run'
+import { SIZE_RUN_RULES } from '@nexus/factory-domain/planning/planned-orders/rules'
 
 /**
  * Planning settings (B-W2a-16; PLN-003, PLN-005, PLN-014, PLN-099; design planning.settings, SCR-124, SCR-127): a site's
@@ -32,6 +36,9 @@ export const settingsView = output({
   weekBucketWeeks: z.number().int(),
   defaultEfficiencyPct: z.string(),
   scheduledRunTime: z.string().nullable(),
+  /** B-W2b-318 (PLN-068): how a run splits a size run into planned work orders, and the site's size groups. */
+  sizeRunRule: z.enum(SIZE_RUN_RULES),
+  sizeGroups: z.array(z.array(z.string())),
   /** No row yet: the defaults (26 / 2 / 13 weeks, 100 %, runs on demand). */
   isDefault: z.boolean(),
   version: z.number().int().nullable(),
@@ -69,6 +76,9 @@ export const editSettingsContract = defineContract({
     defaultEfficiencyPct: percent().optional(),
     /** HH:MM; null: runs on demand only. */
     scheduledRunTime: z.string().trim().nullable().optional(),
+    /** B-W2b-318 (PLN-068): ONE_GRID (no groups) or SIZE_GROUPS (2-20 groups of size codes, a code in one group). */
+    sizeRunRule: z.enum(SIZE_RUN_RULES).optional(),
+    sizeGroups: z.array(z.array(z.string().trim().max(SIZE_RUN_LIMITS.code * 2)).max(SIZE_RUN_LIMITS.codes.max * 2)).max(SIZE_RUN_LIMITS.groups.max * 2).optional(),
   }),
   response: { 200: output({ ...siteSettings.shape, changed: z.array(z.string()) }) },
 })
@@ -103,6 +113,15 @@ export const itemParametersView = output({
   safetyLeadTimeDays: z.number().int().nullable(),
   ...Object.fromEntries(Object.keys(quantities).map((key) => [key, z.string().nullable()])) as { [Key in keyof typeof quantities]: z.ZodNullable<z.ZodString> },
   note: z.string().nullable(),
+  // B-W2b-318 (PLN-006, PLN-008, PLN-081, PLN-082): the planning rules per item, and what each does in words.
+  lotSizing: z.enum(LOT_SIZINGS),
+  fixedLotQty: z.string().nullable(),
+  lotPeriodDays: z.number().int().nullable(),
+  planLevel: z.enum(PLAN_LEVELS).nullable(),
+  scrapPct: z.string().nullable(),
+  yieldPct: z.string().nullable(),
+  delayDays: z.number().int().nullable(),
+  rules: output({ lotSizing: z.string().nullable(), planLevel: z.string().nullable(), scrapYield: z.string().nullable(), delay: z.string().nullable() }),
   version: z.number().int(),
   updatedAt: instant(),
 })
@@ -165,6 +184,18 @@ const writable = {
   note: note().nullable(),
 }
 
+/** B-W2b-318: the planning rules per item a create or a change may name (not the bulk write: its rows stay W2a's). */
+const rules = {
+  lotSizing: z.enum(LOT_SIZINGS),
+  fixedLotQty: decimalText().nullable(),
+  lotPeriodDays: z.number().int().min(ITEM_RULE_LIMITS.periodDays.min).max(ITEM_RULE_LIMITS.periodDays.max).nullable(),
+  /** planning.strategy.manage too (how a garment is planned, as its production strategy). */
+  planLevel: z.enum(PLAN_LEVELS).nullable(),
+  scrapPct: percent().nullable(),
+  yieldPct: percent().nullable(),
+  delayDays: z.number().int().min(ITEM_RULE_LIMITS.delayDays.min).max(ITEM_RULE_LIMITS.delayDays.max).nullable(),
+}
+
 const partial = <Shape extends Record<string, z.ZodType>>(shape: Shape) =>
   Object.fromEntries(Object.entries(shape).map(([key, schema]) => [key, schema.optional()])) as { [Key in keyof Shape]: z.ZodOptional<Shape[Key]> }
 
@@ -175,14 +206,14 @@ const writeAnswer = output({
 })
 
 export const createItemParametersContract = defineContract({
-  body: input({ siteId: id(), itemId: id(), itemColourId: id().nullable().optional(), ...partial(writable) }),
+  body: input({ siteId: id(), itemId: id(), itemColourId: id().nullable().optional(), ...partial(writable), ...partial(rules) }),
   response: { 201: writeAnswer },
 })
 export type CreateItemParametersBody = z.infer<typeof createItemParametersContract.body>
 
 export const editItemParametersContract = defineContract({
   params: input({ itemPlanningId: id() }),
-  body: input({ version, ...partial(writable) }),
+  body: input({ version, ...partial(writable), ...partial(rules) }),
   response: { 200: writeAnswer },
 })
 export type EditItemParametersBody = z.infer<typeof editItemParametersContract.body>

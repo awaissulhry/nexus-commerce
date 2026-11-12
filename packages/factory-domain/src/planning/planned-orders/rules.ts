@@ -1,5 +1,7 @@
 import type { BusinessDate } from '../../core/time'
 import type { PlanOrderLine, PlanWorkOrderCell } from '../explode'
+// B-W2b-318 (PLN-008): plan by style, colour or size.
+import { sizeSplitByLevel } from '../lot-sizing/plan-level'
 
 /**
  * Planned work orders and planned subcontract orders (B-W2b-293; PLN-067, PLN-068, PLN-069, PLN-089; design planning.mrp
@@ -197,7 +199,8 @@ export function proposeWork(input: {
     const sizes = [...new Set(cells.map((cell) => cell.size))].sort((a, b) => order(a) - order(b) || (a < b ? -1 : a > b ? 1 : 0))
     const outside = input.outsideOf(first.line.revisionId!)
     const subcontract = outside !== null && outside.usable
-    for (const { codes, words } of sizeGroupsOf(sizes, input.rule, input.groups)) {
+    // B-W2b-318 (PLN-008): the finished garments' plan level splits the sizes (../lot-sizing/plan-level); none: the site's rule.
+    for (const { codes, words } of sizeSplitByLevel(first.line.planLevel, sizes) ?? sizeGroupsOf(sizes, input.rule, input.groups)) {
       const mine = cells.filter((cell) => codes.includes(cell.size))
       const sizeRun = codes.map((size) => ({ size, quantity: mine.filter((cell) => cell.size === size).reduce((sum, cell) => sum + cell.pieces, 0) })).filter((row) => row.quantity > 0)
       if (sizeRun.length === 0) continue

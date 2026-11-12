@@ -55,6 +55,8 @@ import { PLANNING_PLANNED_ADDS } from '../../planning/planned-orders/permissions
 import { PLANNING_PROMISE_ADDS } from '../../planning/promise/permissions'
 // B-W2b-312: scheduling in depth (the planner and the production manager pin the board).
 import { PLANNING_SCHEDULE_DEPTH_ADDS } from '../../planning/schedule-depth/permissions'
+// B-W2b-317: the backlog ranked (the planner and the production manager rank it).
+import { PLANNING_BACKLOG_ADDS } from '../../planning/backlog/permissions'
 // B-W2b-321: work to subcontractors.
 import { PLANNING_SUBCONTRACT_ADDS } from '../../planning/subcontract-capacity/permissions'
 // B-W2b-311: suppliers in depth (the buyer and quality set a supplier's status).
@@ -126,6 +128,8 @@ import { CLAIMS_ADDS } from '../../compliance/claims/permissions'
 import { PORTAL_SAMPLES_READERS } from '../../sales/portal-samples/permissions'
 // B-W2b-304: credit limits.
 import { SALES_CREDIT_ADDS } from '../../sales/credit/permissions'
+// B-W2b-345: warranty and service cases.
+import { SALES_SERVICE_ADDS } from '../../sales/service/permissions'
 
 /**
  * The system role templates (plan A1 §3.11 "Role"; feature PLT-030): ready roles every tenant gets as system roles
@@ -975,6 +979,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (PLANNING_SUBCONTRACT_ADDS[key] ?? []) : []),
   // B-W2b-312
   ...(audience === 'office' ? (PLANNING_SCHEDULE_DEPTH_ADDS[key] ?? []) : []),
+  // B-W2b-317
+  ...(audience === 'office' ? (PLANNING_BACKLOG_ADDS[key] ?? []) : []),
   // B-W2b-311
   ...(audience === 'office' ? (SUPPLIERS_DEPTH_ADDS[key] ?? []) : []),
   // B-W2b-292
@@ -999,7 +1005,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-306
   ...(audience === 'office' ? (PLANNING_ACTIONS_ADDS[key] ?? []) : []),
   // B-W2b-300
-  ...(audience === 'office' ? (INVENTORY_UNPLANNED_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (INVENTORY_UNPLANNED_ADDS[key] ?? []) : []),
+  // B-W2b-345
+  ...(audience === 'office' ? (SALES_SERVICE_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the

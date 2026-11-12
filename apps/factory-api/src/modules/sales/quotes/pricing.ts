@@ -10,6 +10,8 @@ import type { CommandTools, CommandTx } from '../../../core/command'
 import { loadCostFacts, STYLE_COLUMNS as COSTING_STYLE_COLUMNS, type CostingCompany } from '../../costing/store'
 import { findRevision, type RevisionRow } from '../../product/bom/store'
 import { quoteRulesFor } from './rules'
+// B-W2b-330 (SAL-189): the floor of the version's maker.
+import { withPersonFloor } from '../price-waterfall/floors'
 import { decimal, moneyLineOf, quotePartyOf, readLineRecords, storedVat, treatmentFor, VERSION_COLUMNS, type LineRecord, type QuoteParty, type QuoteRow, type Reader, type VersionRow } from './store'
 
 /**
@@ -125,7 +127,8 @@ export async function refreshVersion(tools: CommandTools, quote: QuoteRow, versi
   const costed = new Map<string, CostedLine>()
   for (const line of lines) {
     if (recost !== 'all' && !recost.has(line.id)) continue
-    const result = await costLine(tx, cache, line, company, now)
+    // B-W2b-330 (SAL-181): a fee has no cost sheet: its cost is 0, its margin all of its net.
+    const result: CostedLine = line.kind === 'FEE' ? { cost: { complete: true, unitCost: '0', amount: 0 }, snapshot: null } : await costLine(tx, cache, line, company, now)
     costed.set(line.id, result)
     await tx.quoteLine.update({
       where: { id: line.id },
@@ -137,7 +140,8 @@ export async function refreshVersion(tools: CommandTools, quote: QuoteRow, versi
   }
   if (costed.size > 0) lines = lines.map((line) => (costed.has(line.id) ? { ...line, costAmount: costed.get(line.id)!.cost.amount } : line))
 
-  const rules = await quoteRulesFor(tx, quote.companyId)
+  // B-W2b-330 (SAL-189): held to the floor of the version's maker (their roles' lowest listed floor, else the company's).
+  const rules = await withPersonFloor(tx, quote, version, await quoteRulesFor(tx, quote.companyId), now)
   const priced = priceVersion({
     basis: priceBasisOf(taxMode),
     currency: version.currency,

@@ -10,7 +10,7 @@ import { officeOrder } from '../orders/moves'
 import { readLines as readOrderLines } from '../orders/store'
 import { dayText, entryHoldsOn } from '../pricelists/store'
 import { chainForQuote, listPriceOf } from '../quotes/list-price'
-import { officeQuote, quotePartyOf, readCurrentVersion, readLineRecords, treatmentFor, type QuoteParty } from '../quotes/store'
+import { officeQuote, quotePartyOf, readCurrentVersion, readLineRecords, treatmentFor, type QuoteParty, type QuoteRow, type Reader, type VersionRow } from '../quotes/store'
 import { serverClock } from '../../../core/time'
 import { breakRowOf, breaksOf, discountShownFor, surchargeRowOf, surchargesOf } from './store'
 
@@ -35,30 +35,60 @@ function rateOf(party: QuoteParty | null): string | null {
   return 'kind' in treatment && treatment.kind === 'TAXABLE' ? treatment.rate.toFixed(2) : null
 }
 
+/**
+ * B-W2b-330: what each goods line of a version takes from its list (the entry, the break, the size surcharges, the
+ * waterfall's first steps), read with any client (a command's transaction too): the list-prices read below and the
+ * price waterfall's writes (modules/sales/price-waterfall) share it.
+ */
+export async function linePricesOf(client: Reader, quote: QuoteRow, version: VersionRow, now: Date) {
+  const day = businessDate(version.createdAt)
+  const lines = (await readLineRecords(client, version.id)).filter((line) => isGoodsLine(line))
+  const party = await quotePartyOf(client, quote.partyId, businessDate(now), now)
+  const basis = priceBasisOf(version.taxMode)
+  const rate = rateOf(party)
+  const onBasis = (net: string) => listPriceOnBasis(net, basis, rate)
+  const chain = party ? await chainForQuote(client, quote, version, party, now, [...new Set(lines.map((line) => line.styleId))]) : null
+  const found = lines.map((line) => ({ line, listed: chain && party ? listPriceOf(chain, version.taxMode, party, line.styleId, line.colourwayId) : null }))
+  // The entry each line is priced from: its version, style and colourway (or every colourway), holding on the day.
+  const versionIds = [...new Set(found.flatMap((row) => (row.listed ? [row.listed.versionId] : [])))]
+  const entries = versionIds.length === 0 ? [] : await client.priceListEntry.findMany({ where: { versionId: { in: versionIds }, styleId: { in: [...new Set(lines.map((line) => line.styleId))] } }, select: { id: true, versionId: true, styleId: true, colourwayId: true, unitPrice: true, validFrom: true, validTo: true } })
+  const entryOf = (row: (typeof found)[number]) =>
+    row.listed ? (entries.find((entry) => entry.versionId === row.listed!.versionId && entry.styleId === row.line.styleId && entry.colourwayId === (row.listed!.colourwayPrice ? row.line.colourwayId : null) && entryHoldsOn(entry, day)) ?? null) : null
+  const withEntries = found.map((row) => ({ ...row, entry: entryOf(row) }))
+  const breaks = await breaksOf(client, versionIds)
+  const surcharges = (await surchargesOf(client, versionIds, [...new Set(lines.map((line) => line.styleId))])).map(surchargeRowOf)
+  const lists = new Map((chain?.lists ?? []).map((list) => [list.id, list]))
+  const counted = withEntries.map((row) => ({ entryId: row.entry?.id ?? null, quantity: row.line.quantity }))
+  const priced = withEntries.map(({ line, listed, entry }) => {
+    const label = listed ? (lists.get(listed.listId)?.code ?? '') : ''
+    return {
+      line,
+      listed,
+      entry,
+      list: listed ? lists.get(listed.listId) : undefined,
+      pieces: entry ? breakQuantityOf(counted, entry.id) : line.quantity,
+      priced: linePriceOf({
+        entry: entry && listed ? { id: entry.id, versionId: entry.versionId, unitPrice: listPriceText(entry.unitPrice.toString()), label: `${label} version ${lists.get(listed.listId)?.revision ?? ''}`.trim() } : null,
+        breaks: entry ? breaks.filter((row) => row.versionId === entry.versionId).map(breakRowOf) : [],
+        surcharges,
+        styleId: line.styleId,
+        quantity: entry ? breakQuantityOf(counted, entry.id) : line.quantity,
+        sizes: line.sizes.map((size) => size.size),
+        currency: version.currency,
+        onBasis,
+      }),
+    }
+  })
+  return { day, basis, rate, onBasis, chain, lines: priced }
+}
+
 /** GET /sales/quotes/:quoteId/list-prices: the current version's lines priced from their list. */
 export async function quoteListPrices(caller: CommandCaller, quoteId: string) {
   const quote = await officeQuote(caller, quoteId)
   const now = serverClock.now()
   return caller.withClient(async (client) => {
     const version = await readCurrentVersion(client, quote)
-    const day = businessDate(version.createdAt)
-    const lines = (await readLineRecords(client, version.id)).filter((line) => isGoodsLine(line))
-    const party = await quotePartyOf(client, quote.partyId, businessDate(now), now)
-    const basis = priceBasisOf(version.taxMode)
-    const rate = rateOf(party)
-    const onBasis = (net: string) => listPriceOnBasis(net, basis, rate)
-    const chain = party ? await chainForQuote(client, quote, version, party, now, [...new Set(lines.map((line) => line.styleId))]) : null
-    const found = lines.map((line) => ({ line, listed: chain && party ? listPriceOf(chain, version.taxMode, party, line.styleId, line.colourwayId) : null }))
-    // The entry each line is priced from: its version, style and colourway (or every colourway), holding on the day.
-    const versionIds = [...new Set(found.flatMap((row) => (row.listed ? [row.listed.versionId] : [])))]
-    const entries = versionIds.length === 0 ? [] : await client.priceListEntry.findMany({ where: { versionId: { in: versionIds }, styleId: { in: [...new Set(lines.map((line) => line.styleId))] } }, select: { id: true, versionId: true, styleId: true, colourwayId: true, unitPrice: true, validFrom: true, validTo: true } })
-    const entryOf = (row: (typeof found)[number]) =>
-      row.listed ? (entries.find((entry) => entry.versionId === row.listed!.versionId && entry.styleId === row.line.styleId && entry.colourwayId === (row.listed!.colourwayPrice ? row.line.colourwayId : null) && entryHoldsOn(entry, day)) ?? null) : null
-    const withEntries = found.map((row) => ({ ...row, entry: entryOf(row) }))
-    const breaks = await breaksOf(client, versionIds)
-    const surcharges = (await surchargesOf(client, versionIds, [...new Set(lines.map((line) => line.styleId))])).map(surchargeRowOf)
-    const lists = new Map((chain?.lists ?? []).map((list) => [list.id, list]))
-    const counted = withEntries.map((row) => ({ entryId: row.entry?.id ?? null, quantity: row.line.quantity }))
+    const { day, basis, onBasis, chain, lines } = await linePricesOf(client, quote, version, now)
     return {
       quoteId: quote.id,
       versionId: version.id,
@@ -67,19 +97,7 @@ export async function quoteListPrices(caller: CommandCaller, quoteId: string) {
       currency: version.currency,
       priceBasis: basis,
       showDiscount: await discountShownFor(client, version.priceListVersionId ?? chain?.keptVersionId ?? null),
-      lines: withEntries.map(({ line, listed, entry }) => {
-        const label = listed ? (lists.get(listed.listId)?.code ?? '') : ''
-        const priced = linePriceOf({
-          entry: entry && listed ? { id: entry.id, versionId: entry.versionId, unitPrice: listPriceText(entry.unitPrice.toString()), label: `${label} version ${lists.get(listed.listId)?.revision ?? ''}`.trim() } : null,
-          breaks: entry ? breaks.filter((row) => row.versionId === entry.versionId).map(breakRowOf) : [],
-          surcharges,
-          styleId: line.styleId,
-          quantity: entry ? breakQuantityOf(counted, entry.id) : line.quantity,
-          sizes: line.sizes.map((size) => size.size),
-          currency: version.currency,
-          onBasis,
-        })
-        const list = listed ? lists.get(listed.listId) : undefined
+      lines: lines.map(({ line, listed, entry, list, pieces, priced }) => {
         return {
           lineId: line.id,
           seq: line.seq,
@@ -94,7 +112,7 @@ export async function quoteListPrices(caller: CommandCaller, quoteId: string) {
               : null,
           listPrice: asMoney('price', priced.listPrice),
           break: priced.break
-            ? { breakId: priced.break.breakId, ownBreak: priced.break.ownBreak, minQuantity: priced.break.minQuantity, pieces: entry ? breakQuantityOf(counted, entry.id) : line.quantity, unitPrice: asMoney('price', onBasis(priced.break.unitPrice)), discountPct: asMoney('price', priced.break.discountPct), delta: asMoney('price', priced.break.delta) }
+            ? { breakId: priced.break.breakId, ownBreak: priced.break.ownBreak, minQuantity: priced.break.minQuantity, pieces, unitPrice: asMoney('price', onBasis(priced.break.unitPrice)), discountPct: asMoney('price', priced.break.discountPct), delta: asMoney('price', priced.break.delta) }
             : null,
           unitPrice: asMoney('price', priced.unitPrice),
           sizeSurcharges: priced.sizeSurcharges.map((row) => ({ size: row.size, surchargeId: row.surchargeId, scope: row.scope, amount: asMoney('price', row.onBasis), pct: asMoney('price', row.pct) })),
