@@ -14,8 +14,9 @@ import { DISPOSITIONS, type Disposition } from '../versions/drift'
  * A change order carries accepted requests from the style's RELEASED revision to the DRAFT revision holding the redlines,
  * names what each change touches (CHANGE lines: a record before → after) and what happens to each open work order's work
  * in progress (WORK_IN_PROGRESS lines: finish on the old spec, rework, scrap or hold), and is approved by someone who is not
- * its author (one stage in V1, PRD-170: every required approver approves, none rejects). Released, it releases its revision
- * (the old one becomes OBSOLETE) and its requests become DONE, in one command:
+ * its author, did not name themselves its approver and raised none of its requests (one stage in V1, PRD-170: every required
+ * approver approves, none rejects). Released, it releases its revision (the old one becomes OBSOLETE) and its requests become
+ * DONE, in one command:
  *
  *   DRAFT ──submit──▶ SUBMITTED ──every required approval──▶ APPROVED ──release──▶ RELEASED
  *     │                   │──one rejection──▶ REJECTED            │
@@ -127,6 +128,8 @@ export const CHANGE_REFUSALS = [
   'NO_DRAFT_REVISION',
   'NO_APPROVER',
   'OWN_APPROVAL',
+  'SELF_NAMED',
+  'OWN_REQUEST',
   'APPROVER_CANNOT',
   'NOT_APPROVER',
   'ALREADY_DECIDED',
@@ -273,6 +276,34 @@ export function approverRefusal(order: OrderFacts & { readonly authorId: string 
   return null
 }
 
+/**
+ * Nobody approves their own work, the Owner included (Owner W2b-5 Q3): nobody names themselves an approver (a co-manager who
+ * is not the author included), and an approval someone named themselves to is never theirs to decide.
+ */
+export function selfNamedRefusal(order: OrderFacts, namedById: string | null, approverId: string): ChangeRefusal | null {
+  if (namedById === null || namedById !== approverId) return null
+  return refusal('SELF_NAMED', `Nobody names themselves an approver of change order ${order.number}: someone else names who decides it (four eyes).`)
+}
+
+/** What makes a decision on a change order the decider's own work besides being its author. */
+export interface OwnWorkFacts {
+  /** Who named the person an approver (ChangeApproval.createdById); null when not recorded. */
+  readonly namedById: string | null
+  /** The requests it carries, with who raised each (ChangeRequest.createdById; null for a floor request). */
+  readonly carried: readonly { readonly number: string | null; readonly raisedById: string | null }[]
+}
+
+/** The decider named themselves (SELF_NAMED), or raised a request the change order carries (OWN_REQUEST): another person decides. */
+export function ownWorkRefusal(order: OrderFacts, personId: string, facts: OwnWorkFacts): ChangeRefusal | null {
+  const named = selfNamedRefusal(order, facts.namedById, personId)
+  if (named) return named
+  const raised = facts.carried.find((request) => request.raisedById !== null && request.raisedById === personId)
+  if (raised) {
+    return refusal('OWN_REQUEST', `You raised ${raised.number ? `change request ${raised.number}` : 'a change request'}, which change order ${order.number} carries: a person who did not ask for the change decides it (four eyes).`)
+  }
+  return null
+}
+
 /** Approvers are named while DRAFT, or SUBMITTED before they decide. */
 export function approversRefusal(order: OrderFacts): ChangeRefusal | null {
   if (order.status === 'DRAFT' || order.status === 'SUBMITTED') return null
@@ -314,13 +345,14 @@ export function approvalCount(approvals: readonly ApprovalFacts[]): { approved: 
   return { approved: required.filter((approval) => approval.decision === 'APPROVED').length, required: required.length }
 }
 
-/** One person's decision on a submitted change order: theirs to give (named), once, with why for a rejection. */
+/** One person's decision on a submitted change order: theirs to give (named by someone else), once, never on their own work, with why for a rejection. */
 export function decideRefusal(
   order: OrderFacts & { readonly authorId: string },
   approval: ApprovalFacts | null,
   personId: string,
   decision: ChangeDecision,
   reason: string | null,
+  own: OwnWorkFacts,
 ): ChangeRefusal | null {
   if (personId === order.authorId) return approverRefusal(order, personId)
   if (order.status !== 'SUBMITTED') {
@@ -328,6 +360,8 @@ export function decideRefusal(
   }
   if (approval === null) return refusal('NOT_APPROVER', `You are not an approver of change order ${order.number}: its author names who decides it.`)
   if (approval.decision !== null) return refusal('ALREADY_DECIDED', `You already ${approval.decision === 'APPROVED' ? 'approved' : 'rejected'} change order ${order.number}: a decision is given once.`)
+  const ownWork = ownWorkRefusal(order, personId, own)
+  if (ownWork) return ownWork
   if (decision === 'REJECTED' && (reason === null || reason.trim() === '')) {
     return refusal('REASON_NEEDED', `Say why you reject change order ${order.number}: its author reads the reason.`)
   }

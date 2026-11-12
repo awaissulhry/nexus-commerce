@@ -125,6 +125,13 @@ model Company {
   // parties.prisma: the parties of this company only (tenant-wide ones have none), and the VIES checks it requested.
   parties             Party[]
   viesChecks          ViesCheck[]
+  // W2b-5 sales-intake.prisma (wave 37/44): the inquiries it was asked, its seasons, and the customer requirements, holds
+  // and terms set for it.
+  inquiries            Inquiry[]
+  seasons              Season[]
+  customerRequirements CustomerRequirement[]
+  partyHolds           PartyHold[]
+  partyCompanyTerms    PartyCompanyTerms[]
   // email.prisma: the company's sending identities (its mail goes out through them).
   emailIdentities     EmailIdentity[]
   // product.prisma: the company's own master data (tenant-wide rows have none).

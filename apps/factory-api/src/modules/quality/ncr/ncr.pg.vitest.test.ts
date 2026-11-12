@@ -360,3 +360,20 @@ describe('a supplier claim from the decision, links, change and cancel', () => {
     expect(record.ncr).toMatchObject({ stage: 'CANCELLED', cancelReason: 'Raised twice by mistake' })
   })
 })
+
+// B-W2b-F24 (Owner W2b-5 Q3: nobody approves their own work, the Owner included): the four eyes cover who changed a decision.
+describe('nobody approves a decision they changed (B-W2b-F24)', () => {
+  it('a second manager with every right who changed the decision is refused EDITED_DECISION; a third person approves it', async () => {
+    let { record } = await ok('qa', 'POST', '/quality/ncr', { siteId: A.siteA1, title: 'Seam opens under load (made-up)', quantityAffected: '4', severity: 'CRITICAL' }, 201)
+    ;({ record } = await ok('qa', 'POST', `/quality/ncr/${record.ncr.id}/decisions`, { version: record.ncr.version, dispositionCodeId: codes.SCRAP, quantity: '4' }, 201))
+    const url = `/quality/ncr/${record.ncr.id}/decisions/${record.decisions[0].id}`
+    expect(record.decisions[0]).toMatchObject({ approvalRequired: true, state: 'WAITING_APPROVAL' })
+    ;({ record } = await ok('qa2', 'PATCH', url, { version: record.decisions[0].version, note: 'All four open at the same seam (made-up).' }))
+    const edited = await refused('qa2', 'POST', `${url}/approve`, { version: record.decisions[0].version }, 409)
+    expect(paths(edited)).toEqual(['refusal/EDITED_DECISION'])
+    expect(edited.message).toBe(`You changed decision ${record.decisions[0].seq}: a person who neither decided nor changed it approves it (four eyes).`)
+    expect((await refused('qa', 'POST', `${url}/approve`, { version: record.decisions[0].version }, 409)).message).toBe('You decided this: another person approves it (four eyes).')
+    ;({ record } = await ok('buyer', 'POST', `${url}/approve`, { version: record.decisions[0].version }))
+    expect(record.decisions[0]).toMatchObject({ state: 'TO_CARRY_OUT', approvedById: (SESSIONS.buyer as { actorId: string }).actorId })
+  })
+})

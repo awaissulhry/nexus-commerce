@@ -1,12 +1,12 @@
 import type { Uom } from '@nexus/factory-db'
-import { ConflictError, ForbiddenError, InvalidStateError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
+import { ConflictError, ForbiddenError, InvalidStateError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { PRODUCTION_REWORK } from '@nexus/factory-domain/production/rework/permissions'
 import { PURCHASING_CLAIMS_MANAGE } from '@nexus/factory-domain/purchasing/claims/permissions'
 import { approvalNeeded, outcomeWords, type DefectClass, type DispositionFollowUp, type DispositionMove, type DispositionOutcome } from '@nexus/factory-domain/quality/defects/rules'
 import type { DecisionChange } from '@nexus/factory-domain/quality/ncr/changes'
 import { QUALITY_NCR_APPROVE, QUALITY_NCR_MANAGE } from '@nexus/factory-domain/quality/ncr/permissions'
-import { approveProblem, carryOutProblem, decisionProblems, FOLLOW_UP_TYPES, MOVE_PERMISSIONS, NCR_LIMITS, problemEditable, stageWords, valueOf, type NcrStage } from '@nexus/factory-domain/quality/ncr/rules'
+import { approveProblem, carryOutProblem, decisionEditorRefusal, decisionProblems, FOLLOW_UP_TYPES, MOVE_PERMISSIONS, NCR_LIMITS, problemEditable, stageWords, valueOf, type NcrStage } from '@nexus/factory-domain/quality/ncr/rules'
 import { Dec, ZERO } from '@nexus/factory-domain/tax/decimal'
 import { command, StaleVersionError, type CommandCaller, type CommandTools } from '../../../core/command'
 import { moveRework, openRework } from '../../production/rework/rework'
@@ -29,7 +29,8 @@ import { CODE_COLUMNS, DECISION_COLUMNS, readDecisions, type CodeRow, type Decis
  *            nor carried out: never more than is left to decide; "use as is" only on a MINOR NCR; whether it needs
  *            another person's approval by the code's rule (factory-domain approvalNeeded: the NCR's class, or the value
  *            of the goods = the lot's cost × the quantity when the NCR is in the material's base unit; unknown asks).
- *   approve  (quality.ncr.approve) once, while OPEN or CONTAINED, never by who decided it (four eyes).
+ *   approve  (quality.ncr.approve) once, while OPEN or CONTAINED, never by who decided it nor by who changed it since
+ *            (four eyes; 409 refusal/EDITED_DECISION).
  *   carry out (quality.ncr.manage, and the right of what it makes) once approved when it must be, until the NCR is
  *            closed: the code's stock move through defects/stock.ts postDispositionInCommand (inventory.scrap |
  *            transfer | adjust | issue; the moves in the NCR's unit add up to the decision), and its follow-up record —
@@ -87,6 +88,22 @@ async function decisionAt(tools: CommandTools, ncrId: string, decisionId: string
   if (!decision || decision.ncrId !== ncrId) throw new NotFoundError('Decision not found.')
   if (decision.version !== expectedVersion) throw new StaleVersionError('NcrDispositionLine', decisionId, decision.version, expectedVersion)
   return decision
+}
+
+/** A refusal in words with its code (`refusal/<CODE>`), answered 409. */
+class DecisionRefusedError extends ConflictError {
+  override name = 'DecisionRefusedError'
+  override readonly issues: readonly Issue[]
+  constructor(refusal: { readonly code: string; readonly message: string }) {
+    super(refusal.message)
+    this.issues = [{ path: `refusal/${refusal.code}`, message: refusal.message }]
+  }
+}
+
+/** Who changed the decision since it was made (its quality.editNcrDecision audit rows): the people who may not approve it. */
+async function editorsOf(tools: Pick<CommandTools, 'tx'>, decisionId: string): Promise<string[]> {
+  const rows = await tools.tx.auditLog.findMany({ where: { recordType: 'NcrDispositionLine', recordId: decisionId, action: 'quality.editNcrDecision' }, select: { actorId: true }, distinct: ['actorId'] })
+  return rows.map((row) => row.actorId)
 }
 
 // ---- add, change, remove -------------------------------------------------------------------------------------------------
@@ -177,6 +194,8 @@ export async function approveDecision(caller: CommandCaller, ncrId: string, deci
     const decision = await decisionAt(tools, ncrId, decisionId, body.version)
     const problem = approveProblem({ stage: ncr.stage as NcrStage, approvalRequired: decision.approvalRequired, approved: decision.approvedAt !== null, done: decision.doneAt !== null, decidedById: decision.decidedById, approverId: context.actorId })
     if (problem) throw new ConflictError(problem)
+    const edited = decisionEditorRefusal({ seq: decision.seq, editorIds: await editorsOf(tools, decisionId), approverId: context.actorId })
+    if (edited) throw new DecisionRefusedError(edited)
     const code = await codeOf(tools, decision.dispositionCodeId)
     const after = await tx.ncrDispositionLine.update({ where: { id: decisionId }, data: { approvedAt: now, approvedById: context.actorId, version: { increment: 1 }, updatedAt: now }, select: DECISION_COLUMNS })
     tools.audit({ action: 'quality.approveNcrDecision', recordType: 'NcrDispositionLine', recordId: decisionId, ...scopeOf(ncr), before: { approvedAt: null }, after: { approvedAt: now, approvedById: context.actorId }, ...(body.note?.trim() ? { reason: body.note.trim() } : {}) })
