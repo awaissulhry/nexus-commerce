@@ -2121,6 +2121,7 @@
     "production_instructions_people": "A training record: see by name who saw which version of a work instruction (where the site allows a name) and record a paper acknowledgement",
     "purchasing_requests_ask": "Ask the buyers to buy a material (also from a work order’s shortage); see and take back your own requests",
     "inventory_tasks_manage": "Make the warehouse's floor tasks by hand (receive, put away, pick, move, count), hand them to a floor role or one worker, change and cancel them",
-    "inventory_counts_scan": "Count a running stock count by scanning every unit (a hide's area, a roll's length, pieces typed), see a bin's differences after Bin done, finish the bin and recount a line someone else counted"
+    "inventory_counts_scan": "Count a running stock count by scanning every unit (a hide's area, a roll's length, pieces typed), see a bin's differences after Bin done, finish the bin and recount a line someone else counted",
+    "inventory_unplanned_decide": "Name the purchase order of goods that came without one (they then post into the holding place), or send them back to the supplier with the reason"
   }
 }

@@ -97,6 +97,18 @@ export interface SupplierDepth {
   readonly documents?: ReactNode
   readonly quality?: ReactNode
   readonly bank?: ReactNode
+  // B-W2b-324: a customer's W2b parts (areas/sales/customers/depth) in the same slot: `now` under the Overview's Now,
+  // `contacts` under the contacts of Addresses & contacts (consent, lawful basis, personal-data actions), and these.
+  /** Key numbers after the side's own (free credit, promises). */
+  readonly numbers?: readonly Metric[]
+  /** The side panel's status card, under the status pill (the hold and its reason). */
+  readonly status?: ReactNode
+  /** The side panel, after the status card (a rider's team, the requirements in force). */
+  readonly aside?: ReactNode
+  /** The Requirements tab. */
+  readonly requirements?: ReactNode
+  /** Tax & terms, after the side's own card (Hold, Customer PO number required). */
+  readonly tax?: ReactNode
 }
 
 /**
@@ -257,12 +269,14 @@ function PartyRecord({ model, actions, panels, documents, terms, items, overview
         {party.status === 'ARCHIVED' && <Banner tone="info" title={t('record.archivedBanner')} />}
         {!can.manage && party.status !== 'ARCHIVED' && <Banner tone="info" title={t('record.readOnly')} />}
 
-        {tab === 'overview' && side === 'customers' && <CustomerOverview model={model} party={party} actions={actions} editable={editable} viesHeld={viesHeld} overview={overview} />}
+        {tab === 'overview' && side === 'customers' && <CustomerOverview model={model} party={party} actions={actions} editable={editable} viesHeld={viesHeld} overview={overview} depth={depth} />}
         {tab === 'overview' && side === 'suppliers' && <SupplierOverview model={model} party={party} actions={actions} editable={editable} viesHeld={viesHeld} depth={depth} />}
         {tab === 'addresses' && (
           <div className="fw-pty-stack">
             <AddressesCard model={model} party={party} actions={actions} editable={editable} />
             <ContactsCard model={model} party={party} actions={actions} editable={editable} />
+            {/* B-W2b-324: consent, lawful basis and the personal-data actions (Sales' depth slot). */}
+            {side === 'customers' && depth?.contacts}
           </div>
         )}
         {tab === 'contacts' && <ContactsCard model={model} party={party} actions={actions} editable={editable} />}
@@ -276,6 +290,9 @@ function PartyRecord({ model, actions, panels, documents, terms, items, overview
         )}
         {/* A side's own Tax & terms card (Customers: Commercial terms, B-W2a-49), below identity and VIES. */}
         {tab === 'tax' && terms}
+        {/* B-W2b-324: Hold and Customer PO number required (Sales' depth slot), then the Requirements tab. */}
+        {tab === 'tax' && side === 'customers' && depth?.tax}
+        {tab === 'requirements' && side === 'customers' && depth?.requirements}
         {tab === 'orders' && side === 'customers' && <DealsTab model={model} actions={actions} />}
         {tab === 'orders' && side === 'suppliers' && <PurchaseOrdersTab model={model} />}
         {/* B-W2a-69: a supplier's Items & prices (Purchasing's Approved sources). */}
@@ -440,7 +457,7 @@ function NextSteps({ model, party, actions, editable, viesHeld }: TabProps & { v
   )
 }
 
-function SidePanel({ model, party, actions, editable, viesHeld, children }: TabProps & { viesHeld: string | null; children?: ReactNode }) {
+function SidePanel({ model, party, actions, editable, viesHeld, children, status }: TabProps & { viesHeld: string | null; children?: ReactNode; status?: ReactNode }) {
   const t = useT('parties')
   const locale = useLocale()
   const lastCheck = party.viesChecks[0] ?? null
@@ -461,6 +478,8 @@ function SidePanel({ model, party, actions, editable, viesHeld, children }: TabP
               ? t('side.blockedSince', { date: formatDate(party.blocked.at, { locale }) })
               : t('side.createdOn', { date: formatDate(party.createdAt, { locale }) })}
           </p>
+          {/* B-W2b-324: the hold and its reason (a customer's depth slot). */}
+          {status}
         </div>
       </Card>
       <Card padded>
@@ -505,7 +524,7 @@ function SidePanel({ model, party, actions, editable, viesHeld, children }: TabP
   )
 }
 
-function CustomerOverview({ model, party, actions, editable, viesHeld, overview }: TabProps & { viesHeld: string | null; overview?: OverviewSlot }) {
+function CustomerOverview({ model, party, actions, editable, viesHeld, overview, depth }: TabProps & { viesHeld: string | null; overview?: OverviewSlot; depth?: SupplierDepth | undefined }) {
   const t = useT('parties')
   const locale = useLocale()
   const can = model.can
@@ -542,6 +561,8 @@ function CustomerOverview({ model, party, actions, editable, viesHeld, overview 
       : []),
     // B-W2a-81: the side's own key numbers (Customers: Overdue, Returns this year), after the design's first three.
     ...(overview?.numbers ?? []),
+    // B-W2b-324: free credit and the promises (Sales' depth slot).
+    ...(depth?.numbers ?? []),
   ]
   const openQuotes = (model.quotes.items ?? []).filter((quote) => ['DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'SENT'].includes(quote.status))
   const openOrders = (model.orders.items ?? []).filter((order) => ['CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED'].includes(order.status))
@@ -625,9 +646,21 @@ function CustomerOverview({ model, party, actions, editable, viesHeld, overview 
       )}
       {/* B-W2a-81: the side's own part of Now (Customers: open returns and claims, Finance › Receivables). */}
       {overview?.now}
+      {/* B-W2b-324: samples in progress, measurement profiles, riders, repairs (Sales' depth slot). */}
+      {depth?.now}
     </div>
   )
-  return <RecordLayout main={main} aside={<SidePanel model={model} party={party} actions={actions} editable={editable} viesHeld={viesHeld} />} asideLabel={t('side.label')} />
+  return (
+    <RecordLayout
+      main={main}
+      aside={
+        <SidePanel model={model} party={party} actions={actions} editable={editable} viesHeld={viesHeld} status={depth?.status}>
+          {depth?.aside}
+        </SidePanel>
+      }
+      asideLabel={t('side.label')}
+    />
+  )
 }
 
 /** The supplier's form (design suppliers.record.overview.main: EditModeBar ⌘S, leaving with changes asks). */
