@@ -198,6 +198,16 @@ export const OFFICE: readonly TreeArea[] = [
         hideLabel: false,
         pages: [{ id: 'planning.milestones', title: 'Time & action', titleIt: 'Calendario T&A', wave: 'W2b', href: '/planning/milestones' }],
       },
+      // W2b: B-W2b-339 Demand & forecast (SCR-374) and Master schedule & S&OP (SCR-202), the design's group "Long range".
+      {
+        label: 'Long range',
+        labelIt: 'Lungo periodo',
+        hideLabel: false,
+        pages: [
+          { id: 'planning.demand', title: 'Demand & forecast', titleIt: 'Domanda e previsioni', wave: 'W2b', href: '/planning/demand' },
+          { id: 'planning.mps', title: 'Master schedule & S&OP', titleIt: 'Piano principale e S&OP', wave: 'W2b', href: '/planning/mps' },
+        ],
+      },
       // W2a: B-W2a-59 Planning settings (SCR-124, SCR-127).
       {
         label: 'Settings',
