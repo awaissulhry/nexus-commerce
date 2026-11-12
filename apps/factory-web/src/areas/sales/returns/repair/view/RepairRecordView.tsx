@@ -11,6 +11,8 @@ import { POINT_RESULTS, REPAIR_KINDS, type PointResult, type Repair, type Repair
 import { CHECK_POINTS, checklistProblems, checklistResult, ownerName, repairHref, repairStep, returnHref, type CheckPoint, type Words } from '../../model'
 import type { IntakeDraft, RepairActions, RepairModel, RepairTab } from '../../view-model'
 import { DayText, GateChecklist, InstantText, RepairStagePill, ReturnsMessages, SafetyTag, say, useDayWords, useWords } from '../../view/parts'
+import { workHeldWords } from '../../estimate/model'
+import { EstimateTab } from '../../estimate/view/EstimateTab'
 import { RepairDialogs } from './RepairDialogs'
 
 /**
@@ -20,7 +22,9 @@ import { RepairDialogs } from './RepairDialogs'
  * customer's DDT, the customer's words, photos, the serial's other repairs; edited with the EditModeBar), Work (the stages
  * as a stepper and their history, the repair work order, the moves held with their reason), Safety check (a protective
  * garment goes back only after a check that it still protects: the GateChecklist, signed with a fresh code), Return (the
- * way back on its own DDT, reason repair) and Activity. No money (the estimate with prices is W2b). Fetches nothing.
+ * way back on its own DDT, reason repair) and Activity. B-W2b-352: the Estimate tab (parts and labour approved by the
+ * customer before the work starts; `model.estimate`), and the approval and the repair held while a sent estimate waits for
+ * the customer's answer or after a declined one. Prices only on the Estimate tab, with the price grain. Fetches nothing.
  */
 export function RepairRecordView({ model, actions, panels }: { model: RepairModel; actions?: RepairActions; panels?: ReactNode }) {
   return (
@@ -46,7 +50,10 @@ function RepairRecord({ model, actions, panels }: { model: RepairModel; actions?
   const base = repairHref(prefix, repair.id)
   const held = (action: RepairAction): string | null => {
     const words = repairStep(action, repair, can, model.offline)
-    return words ? say(t, words) : null
+    if (words) return say(t, words)
+    // B-W2b-352: W2a's steps do not know the estimate; its hold is the estimates' answer, said in our words.
+    const estimateHold = action === 'approve' || action === 'startRepair' ? workHeldWords(model.estimate?.value ?? null, action) : null
+    return estimateHold ? say(t, estimateHold) : null
   }
   const run = (action: RepairAction) => {
     if (action === 'receive') actions?.onDialog?.({ kind: 'receive', ddtNumber: repair.inboundDdt?.number ?? '', ddtDate: repair.inboundDdt?.date ?? '', note: '' })
@@ -69,6 +76,7 @@ function RepairRecord({ model, actions, panels }: { model: RepairModel; actions?
   ]
   const tabs = [
     { id: 'intake', label: t('tab.intake') },
+    { id: 'estimate', label: t('depth:estimate.tab') },
     { id: 'work', label: t('tab.work') },
     { id: 'safety', label: t('tab.safety') },
     { id: 'return', label: t('tab.return') },
@@ -147,6 +155,7 @@ function RepairRecord({ model, actions, panels }: { model: RepairModel; actions?
           )}
           {repair.stage === 'CANCELLED' && <Banner tone="info" title={t('repair.cancelled')}>{repair.cancelReason ?? null}</Banner>}
           {tab === 'intake' && <IntakeTab model={model} actions={actions} held={held} run={run} />}
+          {tab === 'estimate' && <EstimateTab model={model} actions={actions} />}
           {tab === 'work' && <WorkTab model={model} held={held} run={run} />}
           {tab === 'safety' && <SafetyTab model={model} actions={actions} />}
           {tab === 'return' && <ReturnTab model={model} held={held} run={run} />}

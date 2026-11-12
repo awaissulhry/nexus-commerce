@@ -68,9 +68,6 @@
       "state": "SDI state"
     },
     "draft": "Draft",
-    "later": "Later",
-    "laterFee": "The restocking or handling fee (dropped when the cause is ours) is recorded in the policy but not taken yet.",
-    "laterWithout": "Credit without a return, within the approval limit, comes later.",
     "makeInFinance": "Make it in Finance",
     "makeReplacement": "Make replacement order",
     "noRepairs": "No repair order from this return.",
@@ -265,14 +262,6 @@
     "freight": "Freight paid by",
     "owner": "Owner",
     "site": "Goods to"
-  },
-  "finish": {
-    "CREDITED": "Credited",
-    "OTHER": "Other (say why)",
-    "REPAIRED": "Repaired",
-    "REPLACED": "Replaced",
-    "RETURNED": "Returned to the customer",
-    "SCRAPPED": "Scrapped"
   },
   "freight": {
     "byCauseOpen": "By cause: known after the inspection",

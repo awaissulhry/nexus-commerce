@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { newIdempotencyKey } from '../../../../lib/api/client'
 import { companyPrefix } from '../../../../lib/session/session'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
+import { useLocale } from '../../../../lib/i18n/provider'
 import { RecordPanels } from '../../../../record-panels/RecordPanels'
 import { liveMatches, useLive, useRecordTab } from '../../../quality/_shared/hooks'
 import { problemKey } from '../../../quality/_shared/model'
@@ -13,7 +14,6 @@ import {
   addReturnLines,
   cancelReturn,
   changeReturnLine,
-  closeReturn,
   createRepair,
   decideReturn,
   getReturn,
@@ -40,7 +40,6 @@ import {
   addLinesBody,
   addLinesProblems,
   BLANK_REPAIR,
-  closeReasonText,
   ddtBody,
   decisionLinesOf,
   garmentOf,
@@ -57,6 +56,9 @@ import {
 } from '../model'
 import { RMA_TABS, type AddLinesModel, type CloseModel, type NewRepairModel, type RmaDialog, type RmaModel } from '../view-model'
 import { ReturnsMessages, useWords } from '../view/parts'
+import { finishReturn } from '../depth/api'
+import { finishOptionsOf } from '../depth/model'
+import { useRmaDepth } from '../depth/use-rma-depth'
 import { RmaRecordView } from './view/RmaRecordView'
 
 /**
@@ -65,7 +67,9 @@ import { RmaRecordView } from './view/RmaRecordView'
  * lines (sales.repairs.view); runs ONE write at a time with the version read (a stale one reads the RMA again and says
  * so); a line's cell edits queue so each carries the previous answer's version. Live return events of this RMA read it
  * again, or, while a dialog is open, say it changed with Reload. `?do=receive` opens Receive goods; `?created=1` says the
- * RMA was made. The thread dock (O1) and Activity mount the record panels.
+ * RMA was made. The thread dock (O1) and Activity mount the record panels. B-W2b-352: the W2b parts (`useRmaDepth`: the
+ * return in depth and its outcomes, the fees of the drafted decisions, a credit without the goods, the policy, split, the
+ * papers) and the close through `POST …/finish` with the outcomes' reasons.
  */
 export function RmaRecord({ returnId }: { returnId: string }) {
   return (
@@ -85,6 +89,7 @@ function Container({ returnId }: { returnId: string }) {
   const pathname = usePathname()
   const params = useSearchParams()
   const t = useWords()
+  const locale = useLocale()
   const can = useMemo(() => returnsCan(session.permissions), [session.permissions])
   const prefix = companyPrefix(session.company?.code ?? '')
   const tab = useRecordTab(RMA_TABS)
@@ -123,6 +128,7 @@ function Container({ returnId }: { returnId: string }) {
   const [dockOpen, setDockOpen] = useState(false)
   const latest = useRef<Rma | null>(null)
   latest.current = rma
+  const depthReload = useRef<() => void>(() => undefined)
   const quiet = useRef(false)
   quiet.current = dialog !== null || close !== null || newRepair !== null || addLines !== null
   const dialogKey = useRef<string>(newIdempotencyKey())
@@ -193,6 +199,8 @@ function Container({ returnId }: { returnId: string }) {
       if (change.type.startsWith('repair.')) return void loadRepairs()
       if (quiet.current) setChangedAt(new Date().toISOString())
       else void load()
+      // A credit without the goods said yes to elsewhere may leave the RMA's version as it was.
+      depthReload.current()
     },
     () => void load(),
   )
@@ -239,6 +247,21 @@ function Container({ returnId }: { returnId: string }) {
       controller.abort()
     }
   }, [api, can.decide, can.price, decisionsKey, rma?.version])
+
+  // B-W2b-352: the W2b parts, read again whenever the RMA's version moves; the drafted decisions' fees.
+  const decisionLines = useMemo(() => (rma ? decisionLinesOf(decisions, rma.lines.filter((line) => line.disposition === null), can.price) : []), [decisionsKey, rma?.version, can.price])
+  const depth = useRmaDepth({
+    api,
+    returnId,
+    version: rma?.version ?? null,
+    can,
+    latest: () => latest.current,
+    reload: load,
+    decisionLines,
+    language: locale,
+    onDone: (words, tone = 'success') => setReceipt({ tone, words }),
+  })
+  depthReload.current = depth.reload
 
   // The DDT preview of unchanged goods going back (debounced).
   const ddtKey = dialog?.kind === 'ddt' ? JSON.stringify(dialog.draft) : ''
@@ -448,9 +471,9 @@ function Container({ returnId }: { returnId: string }) {
     if (!current || !close || close.busy || !close.reason) return
     setClose({ ...close, busy: true, problem: null })
     try {
-      const answer = await closeReturn(api, current, closeReasonText(t(`finish.${close.reason}`), close.note), closeKey.current)
-      setRma(answer.return)
+      const answer = await finishReturn(api, current, { finishReason: close.reason, reason: close.note.trim() || null }, closeKey.current)
       setClose({ ...close, busy: false, warnings: answer.warnings.length })
+      await load()
     } catch (error) {
       setClose((open) => (open ? { ...open, busy: false, problem: refusalOf(error) } : open))
     }
@@ -488,6 +511,7 @@ function Container({ returnId }: { returnId: string }) {
     newRepair,
     addLines,
     dockOpen,
+    depth: depth.model,
   }
 
   return (
@@ -496,6 +520,7 @@ function Container({ returnId }: { returnId: string }) {
       panels={panels}
       actions={{
         onReload: () => void load(),
+        ...depth.actions,
         onDismissReceipt: () => setReceipt(null),
         onDock: () =>
           setDockOpen((open) => {
@@ -547,7 +572,10 @@ function Container({ returnId }: { returnId: string }) {
         onNewRepairClose: () => setNewRepair(null),
         onCloseOpen: () => {
           closeKey.current = newIdempotencyKey()
-          setClose({ number: rma.number, reason: '', note: '', busy: false, problem: null, warnings: null, pending: rma.closeWarnings })
+          const outcomes = depth.model.outcomes.value
+          const options = outcomes ? finishOptionsOf(outcomes, rma) : null
+          const suggested = options?.find((option) => option.reason === outcomes?.finish.suggested && option.held === null)?.reason ?? ''
+          setClose({ number: rma.number, reason: suggested, note: '', busy: false, problem: null, warnings: null, pending: rma.closeWarnings, options })
         },
         onCloseDraft: (patch) => setClose((current) => (current ? { ...current, ...patch } : current)),
         onCloseSubmit: () => void submitClose(),
