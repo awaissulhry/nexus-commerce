@@ -46,7 +46,7 @@ export const designScreen = defineDesignScreen<HomeViewModel>({
       id: 'warehouse',
       label: 'Warehouse device (no station)',
       model: home('warehouse', { frame: signedInFrame('home.title', { showHome: false, station: { name: null, site: 'Stabilimento Demo Nord' } }) }),
-      note: 'A device with no station is a warehouse device: Receive (inventory.receive, the operator\'s since B-W1-33) and Pick & issue open.',
+      note: 'A device with no station is a warehouse device: Receive (inventory.receive, the operator\'s since B-W1-33) and Pick & issue open. B-W2b-308: My work (the task inbox) first, Move & put away after Receive; a lot, hide, roll or remnant label scanned here opens Move & put away, a traveller Pick & issue.',
     },
     {
       id: 'notice-blocks',
@@ -129,6 +129,8 @@ export const designScreen = defineDesignScreen<HomeViewModel>({
     { id: 'resume-running', label: 'Unfinished: running and paused', model: home('sewing', { resume: { items: [open('RUNNING', { bundleId: 'b-124', bundleCode: 'B-000124' }), open('PAUSED')], asOf: null } }) },
     { id: 'resume-offline', label: 'Unfinished offline, from this tablet', model: home('sewing', { frame: signedInFrame('home.title', { showHome: false, online: false }), offline: { held: null }, resume: { items: [open('PAUSED')], asOf: '2026-10-29T10:59:00.000Z' } }), note: 'The last answer of this visit, with its as-of time.' },
     { id: 'myday-answer', label: 'A dispute answered: the badge on the My day tile', model: home('sewing', { mydayAnswers: 1 }), note: 'B-W2b-68: the number only, for the person signed in.' },
+    // B-W2b-308: what waits at the warehouse, on the My work and Move & put away tiles.
+    { id: 'w2b-308-warehouse-counts', label: 'W2b: the warehouse tiles count what waits', model: home('warehouse', { frame: signedInFrame('home.title', { showHome: false, station: { name: null, site: 'Stabilimento Demo Nord' } }), tileCounts: { mywork: 6, move: 3 } }, LEAD), note: 'My work counts the person\'s tasks, Move & put away its put-aways, moves and quarantine moves (a new quarantine move task adds one). Not read yet: no number, never 0.' },
     { id: 'switched', label: 'Person switched by a badge', model: home('cutting', { switched: { from: 'Bea Esempio', to: 'Ada Demo' } }), note: 'The next person scanned their badge on Home (badge-only site): one line says who left and who is on.' },
     { id: 'badge-refused', label: 'A badge that does not open this tablet', model: home('cutting', { badgeRefused: true }), note: 'The person signed in stays.' },
   ],

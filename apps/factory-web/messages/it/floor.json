@@ -373,6 +373,7 @@
     "fabriccut": "Taglio tessuto",
     "bundles": "Fasci",
     "receive": "Ricevi",
+    "move": "Sposta e ubica",
     "pick": "Preleva e consegna",
     "returnsin": "Ricevi un reso",
     "kits": "Kit per terzisti",
@@ -385,12 +386,14 @@
     "sds": "Schede di sicurezza",
     "hint": {
       "mywork": "La coda della postazione: cosa viene dopo",
+      "myworkWarehouse": "I tuoi compiti di magazzino: prima il prossimo",
       "scan": "Qualsiasi etichetta della fabbrica",
       "operation": "Segnala un fascio alla tua operazione",
       "cut": "Controlla una pelle e registra il taglio",
       "fabriccut": "Buono, materasso, conteggio, taglio, etichette, ritagli, al cucito",
       "bundles": "Crea i fasci e stampa i cartellini",
       "receive": "Ricevi la merce e stampa i cartellini delle pelli",
+      "move": "Scansiona cosa sposti, poi l’etichetta dell’ubicazione",
       "pick": "Consegna i materiali a un ordine di lavoro",
       "returnsin": "Scansiona l'RMA, ricevi e valuta i capi",
       "kits": "Invia un kit con il DDT, ricevi il rientro",
@@ -426,7 +429,13 @@
     "incident": "Segnala un incidente",
     "lineview": "Vista linea",
     "more": "Altro",
-    "back": "Indietro"
+    "back": "Indietro",
+    "count": {
+      "move_one": "{count} da ubicare o spostare",
+      "move_other": "{count} da ubicare o spostare",
+      "mywork_one": "{count} compito ti aspetta",
+      "mywork_other": "{count} compiti ti aspettano"
+    }
   },
   "scan": {
     "title": "Scansiona",
