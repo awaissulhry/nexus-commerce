@@ -11,8 +11,12 @@ import { downloadText, useCoalesced, useLive } from '../../_shared/buying/hooks'
 import { DEFAULT_TIME_ZONE } from '../../../lib/i18n/format'
 import { buyingCan, csvOf, phrase, readProblem, todayIn, writeProblem, type Loaded } from '../../_shared/buying/model'
 import { draftFromPlan, explainLine, firmLine, getLatestPlan, getShortages, listRuns, openDrafts, reopen, runPlan, sendChecks, sendMany, setAside, undoDraft, unusableStock, type Explain, type Plan, type PlanLine, type Shortages, type StockLine } from './api'
-import { draftable, moveFirmProblem, MRP_NAMESPACE, sendable, viewOf, type DraftDialog, type PlanDialog, type PlanModel, type PlanNotice, type PlanView as PlanViewName } from './model'
+import { draftable, moveFirmProblem, MRP_NAMESPACE, sendable, shortageAskKey, viewOf, type DraftDialog, type PlanDialog, type PlanModel, type PlanNotice, type PlanView as PlanViewName } from './model'
 import { PlanView } from './view/PlanView'
+// B-W2b-332: "Ask to buy" on a shortage (requests/ask's dialog in its shortage mode).
+import { listAsked } from '../../purchasing/requests/ask/api'
+import { useAskToBuy } from '../../purchasing/requests/ask/AskToBuy'
+import { ASK_NAMESPACE, type ShortageLine } from '../../purchasing/requests/ask/model'
 
 /**
  * `/w/<company>/planning/mrp` (SCR-055): the company's sites (`?site=`, else the first), the site's latest plan with its
@@ -23,7 +27,7 @@ import { PlanView } from './view/PlanView'
  */
 export function PlanPage() {
   return (
-    <WithMessages namespaces={['buying', MRP_NAMESPACE, 'lists']}>
+    <WithMessages namespaces={['buying', MRP_NAMESPACE, 'lists', ASK_NAMESPACE]}>
       <PlanContainer />
     </WithMessages>
   )
@@ -55,10 +59,37 @@ function PlanContainer() {
   const [shortages, setShortages] = useState<Loaded<Shortages> | null>(null)
   const today = useMemo(() => todayIn(DEFAULT_TIME_ZONE), [])
   const canFirm = session.permissions.includes('planning.firm')
+  // B-W2b-332: Ask to buy on a shortage; the shortages asked already (their request waits for the buyers or for a yes).
+  const tAsk = useT(ASK_NAMESPACE)
+  const canAsk = session.permissions.includes('purchasing.requests.ask')
+  const [asked, setAsked] = useState<string[]>([])
   const readId = useRef(0)
   const planRef = useRef<Plan | null>(null)
 
   const siteId = sites.status === 'ready' ? (sites.value.find((site) => site.id === siteParam)?.id ?? sites.value[0]?.id ?? null) : null
+
+  const loadAsked = useCallback(async () => {
+    if (!canAsk || !siteId) return
+    try {
+      const page = await listAsked(api, { siteId, source: 'SHORTAGE', status: 'LIVE', limit: 200 })
+      setAsked(page.requests.flatMap((row) => (row.workOrder && row.item ? [shortageAskKey({ workOrderId: row.workOrder.id, itemId: row.item.id, itemColourId: row.colour?.id ?? null })] : [])))
+    } catch {
+      setAsked([])
+    }
+  }, [api, canAsk, siteId])
+  useEffect(() => {
+    void loadAsked()
+  }, [loadAsked])
+  const ask = useAskToBuy({
+    api,
+    prefix,
+    permissions: session.permissions,
+    onAsked: () => {
+      void loadAsked()
+      if (siteId) getShortages(api, siteId).then((answer) => setShortages({ status: 'ready', value: answer })).catch(() => undefined)
+    },
+    reasonFor: (line: ShortageLine) => tAsk('shortage.reason', { number: line.workOrder.number, material: line.material.label }),
+  })
 
   const address = useCallback(
     (next: { view?: PlanViewName; q?: string; site?: string | null; line?: string | null }) => {
@@ -408,12 +439,18 @@ function PlanContainer() {
     shortages,
     today,
     canFirm,
+    canAsk,
+    asked,
   }
 
   return (
+    <>
     <PlanView
       model={model}
       actions={{
+        onAskToBuy: (row) =>
+          siteId &&
+          ask.open({ siteId, workOrder: { id: row.workOrder.id, number: row.workOrder.number }, material: { itemId: row.material.itemId, itemColourId: row.material.itemColourId, label: row.material.label, uom: row.material.uom }, word: row.word, short: row.short, neededBy: row.neededBy }),
         onSite: (next) => router.replace(address({ site: next, line: null })),
         onView: (next) => router.replace(address({ view: next })),
         onSearch: (next) => router.replace(address({ q: next })),
@@ -480,6 +517,8 @@ function PlanContainer() {
         },
       }}
     />
+    {ask.element}
+    </>
   )
 }
 

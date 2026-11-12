@@ -36,14 +36,15 @@
     "draft_one": "Crea ordine per {count}",
     "draft_other": "Crea ordini per {count}",
     "draftNone": "Crea ordini",
-    "plan": "Cosa comprare e produrre"
+    "plan": "Cosa comprare e produrre",
+    "ask": "Chiedi di acquistare"
   },
   "tile": {
     "open": "Aperte",
     "need14": "Servono entro 14 giorni",
     "waiting": "In attesa di approvazione",
     "converted": "Convertite oggi",
-    "waitingHint": "Le richieste del personale arrivano più avanti"
+    "waitingHint": "Chieste dall'ufficio, in attesa di un sì"
   },
   "tiles": {
     "failed": "Impossibile caricare cosa c’è da gestire"
@@ -77,12 +78,14 @@
     "held": "Aperte, non ordinabili ora",
     "converted": "In un ordine d’acquisto",
     "setAside": "Rifiutate",
-    "all": "Tutte"
+    "all": "Tutte",
+    "waiting": "In attesa di un sì"
   },
   "kind": {
     "all": "Ogni tipo",
     "PLAN": "Piano",
-    "REORDER": "Punto di riordino"
+    "REORDER": "Punto di riordino",
+    "ASKED": "Chiesta dall'ufficio"
   },
   "groupBy": {
     "none": "Nessun gruppo",
@@ -121,13 +124,16 @@
     "shortage_one": "Mancanza per {numbers}",
     "shortage_other": "Mancanza per {count} ordini di lavoro ({numbers}…)",
     "reorderPoint": "Punto di riordino raggiunto",
-    "minMax": "Sotto la scorta minima"
+    "minMax": "Sotto la scorta minima",
+    "asked": "Chiesta da {name}",
+    "askedShortage": "Mancanza {number} · chiesta da {name}"
   },
   "by": {
     "planRun": "Esecuzione del piano",
     "reorderPoint": "Regola di riordino a {site}",
     "minMax": "Regola min–max a {site}",
-    "live": "Controllata al momento, non salvata"
+    "live": "Controllata al momento, non salvata",
+    "person": "{name}"
   },
   "crVi": "test cromo VI",
   "hides_one": "≈ {count} pelle",
@@ -163,12 +169,16 @@
     "SET_ASIDE": "Rifiutata",
     "held": "Aperta · bloccata",
     "inOrder": "In {number}",
-    "setAsideWhy": "Rifiutata: {reason}"
+    "setAsideWhy": "Rifiutata: {reason}",
+    "WAITING_APPROVAL": "Attende un sì",
+    "refused": "Rifiutata"
   },
   "notOpen": {
     "CONVERTED": "Già nell’ordine d’acquisto {number}",
     "SET_ASIDE": "Rifiutata: rimettila prima in Cosa comprare e produrre",
-    "OPEN": "Aperta"
+    "OPEN": "Aperta",
+    "WAITING_APPROVAL": "Attende prima un sì: si potrà ordinare dopo l’approvazione",
+    "refused": "Rifiutata: chi l’ha chiesta può chiederla di nuovo"
   },
   "hold": {
     "NO_SUPPLIER": "Nessun fornitore: aprila e scegline uno approvato",
@@ -179,7 +189,8 @@
     "MATERIAL_ARCHIVED": "{material} è archiviato: non si può comprare",
     "NOT_OPEN": "Non più aperta: qualcuno l’ha decisa nel frattempo",
     "PLAN_REPLACED": "Un piano più recente ha sostituito questa riga: rileggi l’elenco",
-    "NOT_NEEDED": "La scorta non è più al punto di riordino: nulla da comprare"
+    "NOT_NEEDED": "La scorta non è più al punto di riordino: nulla da comprare",
+    "WAITING_APPROVAL": "Attende prima un sì"
   },
   "warning": {
     "SUPPLIER_PROSPECT": "Il fornitore è un potenziale: l’ordine si può creare, non inviare, finché non è approvato.",
@@ -211,7 +222,8 @@
     "offline": "Offline: attendi la connessione",
     "selectFirst": "Seleziona prima delle richieste",
     "noneOpen": "Nessuna di queste è aperta e pronta",
-    "reorderNoReject": "Un punto di riordino non si rifiuta: cambia la regola di riordino"
+    "reorderNoReject": "Un punto di riordino non si rifiuta: cambia la regola di riordino",
+    "noManageReject": "Per rifiutare una richiesta dell'ufficio serve purchasing.manage"
   },
   "keys": {
     "draft": "Crea ordini per le richieste selezionate (nella richiesta: questa)",
@@ -278,7 +290,9 @@
       "SOURCE": "Compra {quantity} {uom}, nell’unità e nei multipli del fornitore",
       "PLAN": "Compra {quantity} {uom}, come suggerisce il piano",
       "ITEM": "Compra {quantity} {uom}, secondo le condizioni del materiale"
-    }
+    },
+    "asked": "Chiesto: {quantity} {uom}",
+    "shortage": "Mancavano per {number} alla richiesta: {quantity} {uom}"
   },
   "rounding": {
     "WHOLE_UNITS": "Unità intere: {quantity} {uom}",
@@ -293,7 +307,12 @@
     "run": "L’esecuzione del piano l’ha trovata",
     "setAside": "Rifiutata: {reason}",
     "ordered": "Inserita in {number}",
-    "reorderLive": "La regola di riordino della sede la chiede ora (controllata a ogni lettura dell’elenco)."
+    "reorderLive": "La regola di riordino della sede la chiede ora (controllata a ogni lettura dell’elenco).",
+    "asked": "{name} l'ha chiesta",
+    "askedShortage": "{name} l'ha chiesta da una mancanza",
+    "waitingYes": "Attende un sì (una regola di approvazione lo chiede)",
+    "yesAsked": "Una regola di approvazione ha chiesto prima un sì",
+    "refused": "Rifiutata: {reason}"
   },
   "reason": {
     "CUSTOMER_SUPPLIES": "la fornisce il cliente",
@@ -413,5 +432,20 @@
     "RECEIVED": "Ricevuto",
     "CLOSED": "Chiuso",
     "CANCELLED": "Annullato"
+  },
+  "asked": {
+    "title": "Chiesta dall'ufficio",
+    "waiting": "Attende prima un sì: i buyer potranno ordinarla dopo l'approvazione.",
+    "by": "Chiesta da",
+    "quantity": "Quantità chiesta",
+    "reason": "Perché",
+    "description": "Che cosa esattamente",
+    "workOrder": "Per l’ordine di produzione",
+    "shortage": "Mancanza alla richiesta",
+    "word": {
+      "NOT_ENOUGH": "Non basta, serve entro il {date}",
+      "DELAYED": "Ordinato troppo tardi, serve entro il {date}"
+    },
+    "refused": "Rifiutata"
   }
 }

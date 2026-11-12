@@ -9,7 +9,8 @@ import { actorOf } from '../../../core/context'
 import { serverClock } from '../../../core/time'
 import { draftLineOf, draftLines, openDraftOf, type DraftInto } from '../from-plan'
 import { assertMay, officeContextOf, seesCost, type Reader } from '../store'
-import { buildRequests, planRaws, reorderRaws, type Built } from './build'
+import { markConverted } from '../ask-to-buy/convert'
+import { askedRaws, buildRequests, planRaws, reorderRaws, type Built } from './build'
 import { safeAmount } from './queue'
 
 /**
@@ -27,6 +28,10 @@ import { safeAmount } from './queue'
  *             version read; a held request refuses the whole batch in words (its path names it). Two buyers converting
  *             the same reorder row wait for each other (an advisory lock per site, item and colour): the second finds the
  *             first one's draft in the position and is refused ("nothing to buy").
+ *
+ * B-W2b-332: a request asked in the office (kind ASKED) is drafted as any other and marked CONVERTED with its new line in
+ * the same command (../ask-to-buy/convert `markConverted`: its row locked first, its version compared, the person who
+ * asked told by purchase_requests.status_changed); one that waits for a yes is held.
  */
 
 export interface ConvertInput {
@@ -46,8 +51,10 @@ async function resolve(db: Reader, actor: Actor, body: ConvertInput, today: Busi
     if (!raw.row.suggestedQuantity.gt(0) && raw.row.firmQuantity === null) throw new ConflictError('Nothing is short on this line: there is nothing to buy.')
   }
   const reorders = ruleIds.length === 0 ? [] : await reorderRaws(db, { id: { in: ruleIds } })
+  const askedIds = body.requests.filter((request) => request.kind === 'ASKED').map((request) => request.id)
+  const asked = askedIds.length === 0 ? [] : await askedRaws(db, { id: { in: askedIds } })
   const choices = new Map(body.requests.flatMap((request) => (request.supplierId ? [[requestIdOf(request.kind, request.id), { supplierId: request.supplierId }] as const] : [])))
-  const built = new Map((await buildRequests(db, [...plans, ...reorders], { today, choices, triggeredOnly: false })).map((entry) => [entry.id, entry]))
+  const built = new Map((await buildRequests(db, [...plans, ...reorders, ...asked], { today, choices, triggeredOnly: false })).map((entry) => [entry.id, entry]))
   return ids.map((id) => {
     const entry = built.get(id)
     if (!entry || !can(actor, PURCHASING_VIEW, { companyId: entry.companyId, siteId: entry.siteId })) throw new NotFoundError('Request not found.')
@@ -120,14 +127,19 @@ export async function convertRequests(caller: CommandCaller, body: ConvertInput,
     for (const lock of [...new Set(rules.map((rule) => `${rule.siteId}|${rule.itemId}|${rule.itemColourId ?? '-'}`))].sort()) {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(concat_ws('|', 'factory.reorder-buy', ${context.tenantId}::uuid, ${lock}::text), 0))`
     }
+    // B-W2b-332: a request asked in the office is a row: held for this command before it is read (in a fixed order).
+    for (const id of body.requests.filter((request) => request.kind === 'ASKED').map((request) => request.id).sort()) {
+      await tx.$queryRaw`SELECT 1 FROM "PurchaseRequest" WHERE id = ${id}::uuid FOR UPDATE`
+    }
     const built = await resolve(tx, actor, body, businessDate(tools.now))
     const lines = built.map((entry, index) => {
       const asked = body.requests[index]!
-      if (entry.version !== asked.version) throw new StaleVersionError(entry.kind === 'PLAN' ? 'MaterialRequirement' : 'ItemPlanning', entry.refId, entry.version, asked.version)
+      if (entry.version !== asked.version) throw new StaleVersionError(entry.kind === 'PLAN' ? 'MaterialRequirement' : entry.kind === 'REORDER' ? 'ItemPlanning' : 'PurchaseRequest', entry.refId, entry.version, asked.version)
       if (entry.supplier) assertMay(context, PURCHASING_MANAGE, { companyId: entry.companyId, siteId: entry.siteId, partyId: entry.supplier.id }, 'Request')
       return draftLineOf(entry, `body/requests/${index}`, { requestId: entry.id, kind: entry.kind, refId: entry.refId, quantityFrom: entry.quantityFrom, sourceId: entry.source?.id ?? null })
     })
     const { orders, made } = await draftLines(tools, context, lines, body.into ?? [], 'purchasing.convertRequests')
+    await markConverted(tools, context, built.filter((entry) => entry.kind === 'ASKED'), made)
     for (const order of orders) {
       const kinds = order.keys.map((key) => built.find((entry) => entry.id === key)!.kind)
       tools.emit({

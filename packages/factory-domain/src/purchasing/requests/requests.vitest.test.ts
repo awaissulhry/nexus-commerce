@@ -26,6 +26,9 @@ describe('a request’s id', () => {
     expect(parseRequestId(`staff:${ID}`)).toBeNull()
     expect(parseRequestId('plan:not-an-id')).toBeNull()
     expect([kindOfPath('plan'), kindOfPath('reorder'), kindOfPath('PLAN')]).toEqual(['PLAN', 'REORDER', null])
+    // B-W2b-332: a request asked in the office.
+    expect(parseRequestId(`asked:${ID}`)).toEqual({ kind: 'ASKED', refId: ID })
+    expect(kindOfPath('asked')).toBe('ASKED')
   })
 })
 
@@ -97,6 +100,7 @@ describe('what stops a request', () => {
     expect(holdOf(facts({ supplier: { name: 'Conceria Uno', roles: ['SUPPLIER'], status: 'PROSPECT' } }))).toBeNull() // drafted, not sent
     expect(holdOf(facts({ status: 'CONVERTED' }))?.code).toBe('NOT_OPEN')
     expect(holdOf(facts({ status: 'SET_ASIDE' }))?.message).toBe('It was set aside: open it again first.')
+    expect(holdOf(facts({ status: 'WAITING_APPROVAL' }))?.code).toBe('WAITING_APPROVAL')
     expect(holdOf(facts({ material: { code: 'LEA-01', active: false } }))?.code).toBe('MATERIAL_ARCHIVED')
     expect(holdOf(facts({ supplier: null }))?.message).toBe('Pick a supplier first: LEA-01 has no approved source or default supplier.')
     expect(holdOf(facts({ supplier: { name: 'Brand X', roles: ['CUSTOMER'], status: 'ACTIVE' } }))?.code).toBe('NOT_A_SUPPLIER')
@@ -117,7 +121,7 @@ describe('the queue', () => {
     expect(() => needWeekOf('30/10/2026')).toThrow(RangeError)
   })
 
-  it('counts the tiles: open, needed within 14 days (late included), drafted today; staff requests are not known yet', () => {
+  it('counts the tiles: open, needed within 14 days (late included), waiting for a yes (B-W2b-332), drafted today', () => {
     const rows = [
       { status: 'OPEN', needDate: '2026-10-20', convertedOn: null },
       { status: 'OPEN', needDate: '2026-11-13', convertedOn: null },
@@ -125,8 +129,9 @@ describe('the queue', () => {
       { status: 'CONVERTED', needDate: '2026-11-01', convertedOn: '2026-10-30' },
       { status: 'CONVERTED', needDate: '2026-11-01', convertedOn: '2026-10-29' },
       { status: 'SET_ASIDE', needDate: '2026-11-01', convertedOn: null },
+      { status: 'WAITING_APPROVAL', needDate: '2026-11-02', convertedOn: null },
     ] as const
-    expect(requestTiles(rows, '2026-10-30')).toEqual({ open: 3, needWithin14Days: 2, waitingApproval: null, convertedToday: 1 })
+    expect(requestTiles(rows, '2026-10-30')).toEqual({ open: 3, needWithin14Days: 2, waitingApproval: 1, convertedToday: 1 })
   })
 
   it('orders by need date, then order-by day, material and id', () => {

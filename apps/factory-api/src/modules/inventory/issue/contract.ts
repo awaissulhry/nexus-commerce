@@ -231,7 +231,8 @@ export const returnContract = defineContract({
     quantity: quantity(),
     uom: uom.optional(),
     baseQuantity: quantity().optional(),
-    toLocationId: id(),
+    /** B-W2b-289 (SCM-179): left out, the site's default return place for the material's kind. */
+    toLocationId: id().optional(),
     note: z.string().trim().max(500).nullish(),
     occurredAt: instant().optional(),
     periodLockOverride: periodLockOverride.optional(),
