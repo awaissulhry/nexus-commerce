@@ -172,60 +172,71 @@ export async function createSource(caller: CommandCaller, body: CreateSourceInpu
   if (!can(actor, PURCHASING_VIEW, scope)) throw new NotFoundError('Supplier not found.')
   if (!mayKeep(actor, scope)) throw new ForbiddenError(body.companyId === null ? 'A source for every company is kept only by a role over every company.' : undefined)
   const { result } = await command(caller, { name: 'purchasing.sources.create', idempotencyKey, input: body }, async (tools) => {
-    const { tx } = tools
-    const party = isUuid(body.partyId) ? await tx.party.findUnique({ where: { id: body.partyId }, select: { id: true, companyId: true, legalName: true, tradeName: true, roles: true, status: true, currency: true } }) : null
-    if (!party || (party.companyId !== null && body.companyId !== null && party.companyId !== body.companyId)) throw new NotFoundError('Supplier not found.')
-    const name = party.tradeName ?? party.legalName
-    if (party.companyId !== null && body.companyId === null) {
-      throw new ValidationError(`${name} supplies one company only: its source holds for that company.`, [{ path: 'body/companyId', message: "Give the supplier's company." }])
-    }
-    if (!isPurchaseParty(party.roles)) throw new ValidationError(`${name} is not a supplier.`, [{ path: 'body/partyId', message: 'Give the party the supplier role first.' }])
-    if (party.status === 'ARCHIVED') throw new InvalidStateError(`${name} is archived: it is no approved source any more.`)
-    const item = isUuid(body.itemId) ? await tx.item.findUnique({ where: { id: body.itemId }, select: ITEM_COLUMNS }) : null
-    if (!item || (item.companyId !== null && body.companyId !== null && item.companyId !== body.companyId)) throw new NotFoundError('Material not found.')
-    if (item.companyId !== null && body.companyId === null) {
-      throw new ValidationError(`${item.code} is one company's material: its source holds for that company.`, [{ path: 'body/companyId', message: "Give the material's company." }])
-    }
-    if (item.status !== 'ACTIVE') throw new InvalidStateError(`${item.code} is archived: it is not bought any more.`)
-    const colour = body.itemColourId
-      ? isUuid(body.itemColourId)
-        ? await tx.itemColour.findUnique({ where: { id: body.itemColourId }, select: { id: true, itemId: true, status: true, supplierColourCode: true } })
-        : null
-      : null
-    if (body.itemColourId && (!colour || colour.itemId !== item.id)) throw new ValidationError('Not a colour of this material.', [{ path: 'body/itemColourId', message: 'Choose one of the material’s colours.' }])
-    if (colour && colour.status !== 'ACTIVE') throw new ValidationError('The colour is archived.', [{ path: 'body/itemColourId', message: 'Choose an active colour.' }])
-
-    await lockSourcesOf(tx, context.tenantId, item.id)
-    const others = (await sourcesOfItem(tx, item.id)).map(factsOf)
-    const candidate = { companyId: body.companyId, partyId: party.id, itemId: item.id, itemColourId: colour?.id ?? null }
-    if (duplicateOf(candidate, others)) throw new ConflictError(`${name} already has an approved source of ${item.code} for this company and colour: change that one.`)
-    const primary = primaryOf(candidate, others)
-    const preference: SourcePreference = body.preference ?? (primary ? 'BACKUP' : 'PRIMARY')
-    const fields: SourceFields = {
-      purchaseUom: body.purchaseUom ?? (item.purchaseUom as Uom),
-      unitPrice: body.unitPrice ?? null,
-      currency: body.currency ?? party.currency,
-      minOrderQty: body.minOrderQty ?? null,
-      orderMultiple: body.orderMultiple ?? null,
-      leadTimeDays: body.leadTimeDays ?? null,
-      supplierArticleCode: body.supplierArticleCode === undefined ? (item.defaultSupplierId === party.id ? item.supplierArticleCode : null) : blankToNull(body.supplierArticleCode),
-      supplierColourCode: body.supplierColourCode === undefined ? (colour?.supplierColourCode ?? null) : blankToNull(body.supplierColourCode),
-      description: blankToNull(body.description),
-      note: blankToNull(body.note),
-    }
-    fieldsProblem(fields, item)
-    const id = newId()
-    const demoted = preference === 'PRIMARY' && primary ? await demote(tools, (await readRow(tx, primary.id))!, id) : null
-    await tx.supplierItem.create({
-      data: { id, ...candidate, ...fields, purchaseFactor: factorOf(fields.purchaseUom, unitsOf(item))!, preference, createdById: context.actorId },
-      select: { id: true },
-    })
-    const created = (await readRow(tx, id))!
-    tools.audit({ action: 'purchasing.sources.create', recordType: 'SupplierItem', recordId: id, companyId: body.companyId, after: { partyId: party.id, itemId: item.id, itemColourId: candidate.itemColourId, ...auditOf(created), demotedId: demoted?.id ?? null } })
-    tools.emit({ type: 'supplier_item.created', subject: id, companyId: body.companyId, payload: { supplierItemId: id, partyId: party.id, itemId: item.id, preference, demotedId: demoted?.id ?? null } })
+    const { id, demoted } = await insertSourceInCommand(tools, { tenantId: context.tenantId, createdById: context.actorId, action: 'purchasing.sources.create' }, body)
     return answer(tools, id, demoted)
   })
   return result
+}
+
+/**
+ * Inside a command: a new approved source, under the material's lock, with its audit row and event (the routes' create and
+ * B-W2b-311's price list import, modules/purchasing/suppliers-depth/import-prices.ts). Who may keep it is the caller's
+ * check; this checks the supplier, the material and colour, the one-each rules and the fields. Answers its id and the
+ * scope's other PRIMARY it made a BACKUP.
+ */
+export async function insertSourceInCommand(tools: CommandTools, by: { readonly tenantId: string; readonly createdById: string | null; readonly action: string }, body: CreateSourceInput): Promise<{ id: string; demoted: SourceRow | null }> {
+  const { tx } = tools
+  const party = isUuid(body.partyId) ? await tx.party.findUnique({ where: { id: body.partyId }, select: { id: true, companyId: true, legalName: true, tradeName: true, roles: true, status: true, currency: true } }) : null
+  if (!party || (party.companyId !== null && body.companyId !== null && party.companyId !== body.companyId)) throw new NotFoundError('Supplier not found.')
+  const name = party.tradeName ?? party.legalName
+  if (party.companyId !== null && body.companyId === null) {
+    throw new ValidationError(`${name} supplies one company only: its source holds for that company.`, [{ path: 'body/companyId', message: "Give the supplier's company." }])
+  }
+  if (!isPurchaseParty(party.roles)) throw new ValidationError(`${name} is not a supplier.`, [{ path: 'body/partyId', message: 'Give the party the supplier role first.' }])
+  if (party.status === 'ARCHIVED') throw new InvalidStateError(`${name} is archived: it is no approved source any more.`)
+  const item = isUuid(body.itemId) ? await tx.item.findUnique({ where: { id: body.itemId }, select: ITEM_COLUMNS }) : null
+  if (!item || (item.companyId !== null && body.companyId !== null && item.companyId !== body.companyId)) throw new NotFoundError('Material not found.')
+  if (item.companyId !== null && body.companyId === null) {
+    throw new ValidationError(`${item.code} is one company's material: its source holds for that company.`, [{ path: 'body/companyId', message: "Give the material's company." }])
+  }
+  if (item.status !== 'ACTIVE') throw new InvalidStateError(`${item.code} is archived: it is not bought any more.`)
+  const colour = body.itemColourId
+    ? isUuid(body.itemColourId)
+      ? await tx.itemColour.findUnique({ where: { id: body.itemColourId }, select: { id: true, itemId: true, status: true, supplierColourCode: true } })
+      : null
+    : null
+  if (body.itemColourId && (!colour || colour.itemId !== item.id)) throw new ValidationError('Not a colour of this material.', [{ path: 'body/itemColourId', message: 'Choose one of the material’s colours.' }])
+  if (colour && colour.status !== 'ACTIVE') throw new ValidationError('The colour is archived.', [{ path: 'body/itemColourId', message: 'Choose an active colour.' }])
+
+  await lockSourcesOf(tx, by.tenantId, item.id)
+  const others = (await sourcesOfItem(tx, item.id)).map(factsOf)
+  const candidate = { companyId: body.companyId, partyId: party.id, itemId: item.id, itemColourId: colour?.id ?? null }
+  if (duplicateOf(candidate, others)) throw new ConflictError(`${name} already has an approved source of ${item.code} for this company and colour: change that one.`)
+  const primary = primaryOf(candidate, others)
+  const preference: SourcePreference = body.preference ?? (primary ? 'BACKUP' : 'PRIMARY')
+  const fields: SourceFields = {
+    purchaseUom: body.purchaseUom ?? (item.purchaseUom as Uom),
+    unitPrice: body.unitPrice ?? null,
+    currency: body.currency ?? party.currency,
+    minOrderQty: body.minOrderQty ?? null,
+    orderMultiple: body.orderMultiple ?? null,
+    leadTimeDays: body.leadTimeDays ?? null,
+    supplierArticleCode: body.supplierArticleCode === undefined ? (item.defaultSupplierId === party.id ? item.supplierArticleCode : null) : blankToNull(body.supplierArticleCode),
+    supplierColourCode: body.supplierColourCode === undefined ? (colour?.supplierColourCode ?? null) : blankToNull(body.supplierColourCode),
+    description: blankToNull(body.description),
+    note: blankToNull(body.note),
+  }
+  fieldsProblem(fields, item)
+  const id = newId()
+  const demoted = preference === 'PRIMARY' && primary ? await demote(tools, (await readRow(tx, primary.id))!, id) : null
+  await tx.supplierItem.create({
+    data: { id, ...candidate, ...fields, purchaseFactor: factorOf(fields.purchaseUom, unitsOf(item))!, preference, createdById: by.createdById },
+    select: { id: true },
+  })
+  const created = (await readRow(tx, id))!
+  tools.audit({ action: by.action, recordType: 'SupplierItem', recordId: id, companyId: body.companyId, after: { partyId: party.id, itemId: item.id, itemColourId: candidate.itemColourId, ...auditOf(created), demotedId: demoted?.id ?? null } })
+  tools.emit({ type: 'supplier_item.created', subject: id, companyId: body.companyId, payload: { supplierItemId: id, partyId: party.id, itemId: item.id, preference, demotedId: demoted?.id ?? null } })
+  return { id, demoted }
 }
 
 // ---- change -------------------------------------------------------------------------------------------------------------
@@ -234,12 +245,18 @@ export async function createSource(caller: CommandCaller, body: CreateSourceInpu
  * Inside the command, under the material's lock: the row as it is now, at the version the caller read (409 otherwise).
  */
 async function lockedRow(tools: CommandTools, context: OfficeContext, id: string, version: number): Promise<{ row: SourceRow; item: ItemRow; others: SourceRow[] }> {
+  assertReach(context, await readRow(tools.tx, id), true)
+  return lockRowInCommand(tools, context.tenantId, id, version)
+}
+
+/** The same without the caller's reach (the price list import checks it per row with the person who applies). */
+async function lockRowInCommand(tools: CommandTools, tenantId: string, id: string, version: number | null): Promise<{ row: SourceRow; item: ItemRow; others: SourceRow[] }> {
   const first = await readRow(tools.tx, id)
-  assertReach(context, first, true)
-  await lockSourcesOf(tools.tx, context.tenantId, first.itemId)
+  if (!first) throw new NotFoundError('Approved source not found.')
+  await lockSourcesOf(tools.tx, tenantId, first.itemId)
   const all = await sourcesOfItem(tools.tx, first.itemId)
   const row = all.find((entry) => entry.id === id)!
-  if (row.version !== version) throw new StaleVersionError('SupplierItem', id, row.version, version)
+  if (version !== null && row.version !== version) throw new StaleVersionError('SupplierItem', id, row.version, version)
   const item = (await tools.tx.item.findUnique({ where: { id: row.itemId }, select: ITEM_COLUMNS }))!
   return { row, item, others: all.filter((entry) => entry.id !== id) }
 }
@@ -258,32 +275,44 @@ export async function updateSource(caller: CommandCaller, id: string, body: Sour
   const names = FIELD_NAMES.filter((name) => input[name] !== undefined)
   if (names.length === 0) throw new ValidationError('Nothing to change.', [{ path: 'body', message: 'Send at least one field.' }])
   const { result } = await command(caller, { name: 'purchasing.sources.update', idempotencyKey, input: { id, ...body } }, async (tools) => {
-    const { row, item, others } = await lockedRow(tools, context, id, version)
-    if (row.status !== 'ACTIVE') throw new InvalidStateError('The source is archived: approve it again first.')
-    const current = factsOf(row)
-    const fields: SourceFields = {
-      purchaseUom: input.purchaseUom ?? current.purchaseUom,
-      unitPrice: input.unitPrice === undefined ? current.unitPrice : input.unitPrice,
-      currency: input.currency ?? current.currency,
-      minOrderQty: input.minOrderQty === undefined ? current.minOrderQty : input.minOrderQty,
-      orderMultiple: input.orderMultiple === undefined ? current.orderMultiple : input.orderMultiple,
-      leadTimeDays: input.leadTimeDays === undefined ? current.leadTimeDays : input.leadTimeDays,
-      supplierArticleCode: input.supplierArticleCode === undefined ? current.supplierArticleCode : blankToNull(input.supplierArticleCode),
-      supplierColourCode: input.supplierColourCode === undefined ? current.supplierColourCode : blankToNull(input.supplierColourCode),
-      description: input.description === undefined ? row.description : blankToNull(input.description),
-      note: input.note === undefined ? row.note : blankToNull(input.note),
-    }
-    fieldsProblem(fields, item)
-    const preference = input.preference ?? current.preference
-    const primary = preference === 'PRIMARY' && current.preference !== 'PRIMARY' ? primaryOf(row, others.map(factsOf)) : null
-    const demoted = primary ? await demote(tools, others.find((other) => other.id === primary.id)!, row.id) : null
-    await write(tools, row, { ...fields, purchaseFactor: factorOf(fields.purchaseUom, unitsOf(item))!, preference })
-    const after = (await readRow(tools.tx, id))!
-    tools.audit({ action: 'purchasing.sources.update', recordType: 'SupplierItem', recordId: id, companyId: row.companyId, before: auditOf(row), after: { ...auditOf(after), fields: names, demotedId: demoted?.id ?? null } })
-    tools.emit({ type: 'supplier_item.updated', subject: id, companyId: row.companyId, payload: { supplierItemId: id, partyId: row.partyId, itemId: row.itemId, fields: [...names], demotedId: demoted?.id ?? null } })
+    assertReach(context, await readRow(tools.tx, id), true)
+    const { demoted } = await changeSourceInCommand(tools, { tenantId: context.tenantId, action: 'purchasing.sources.update' }, id, version, input)
     return answer(tools, id, demoted)
   })
   return result
+}
+
+/**
+ * Inside a command: the fields `input` gives on an ACTIVE source, under the material's lock, at `version` (null: as it is
+ * now, the price list import's apply, which re-checked the row against the dry run), with its audit row and event (the
+ * route's update and B-W2b-311's price list import). Answers the scope's other PRIMARY it made a BACKUP.
+ */
+export async function changeSourceInCommand(tools: CommandTools, by: { readonly tenantId: string; readonly action: string }, id: string, version: number | null, input: SourceInput): Promise<{ demoted: SourceRow | null }> {
+  const names = FIELD_NAMES.filter((name) => input[name] !== undefined)
+  const { row, item, others } = await lockRowInCommand(tools, by.tenantId, id, version)
+  if (row.status !== 'ACTIVE') throw new InvalidStateError('The source is archived: approve it again first.')
+  const current = factsOf(row)
+  const fields: SourceFields = {
+    purchaseUom: input.purchaseUom ?? current.purchaseUom,
+    unitPrice: input.unitPrice === undefined ? current.unitPrice : input.unitPrice,
+    currency: input.currency ?? current.currency,
+    minOrderQty: input.minOrderQty === undefined ? current.minOrderQty : input.minOrderQty,
+    orderMultiple: input.orderMultiple === undefined ? current.orderMultiple : input.orderMultiple,
+    leadTimeDays: input.leadTimeDays === undefined ? current.leadTimeDays : input.leadTimeDays,
+    supplierArticleCode: input.supplierArticleCode === undefined ? current.supplierArticleCode : blankToNull(input.supplierArticleCode),
+    supplierColourCode: input.supplierColourCode === undefined ? current.supplierColourCode : blankToNull(input.supplierColourCode),
+    description: input.description === undefined ? row.description : blankToNull(input.description),
+    note: input.note === undefined ? row.note : blankToNull(input.note),
+  }
+  fieldsProblem(fields, item)
+  const preference = input.preference ?? current.preference
+  const primary = preference === 'PRIMARY' && current.preference !== 'PRIMARY' ? primaryOf(row, others.map(factsOf)) : null
+  const demoted = primary ? await demote(tools, others.find((other) => other.id === primary.id)!, row.id) : null
+  await write(tools, row, { ...fields, purchaseFactor: factorOf(fields.purchaseUom, unitsOf(item))!, preference })
+  const after = (await readRow(tools.tx, id))!
+  tools.audit({ action: by.action, recordType: 'SupplierItem', recordId: id, companyId: row.companyId, before: auditOf(row), after: { ...auditOf(after), fields: names, demotedId: demoted?.id ?? null } })
+  tools.emit({ type: 'supplier_item.updated', subject: id, companyId: row.companyId, payload: { supplierItemId: id, partyId: row.partyId, itemId: row.itemId, fields: [...names], demotedId: demoted?.id ?? null } })
+  return { demoted }
 }
 
 /** purchasing.sources.manage: no buy takes the source any more; it is kept. */

@@ -50,6 +50,11 @@ import { leatherYield } from './leather/yield'
 import { addGateContract, choicesContract, editGateContract, milestonesContract, passGatesContract, removeGateContract, startBeforeContract } from './milestones/contract'
 import { addGate, editGate, gateChoices, passGates, removeGate, startBefore } from './milestones/gates'
 import { readMilestones } from './milestones/milestones'
+// B-W2b-293: planned work and subcontract orders (the run proposes them; firm; made real in bulk with a preview).
+import { convertPlannedOrdersContract, firmPlannedOrderContract, getPlannedOrderContract, listPlannedOrdersContract } from './planned-orders/contract'
+import { convertPlannedOrders } from './planned-orders/convert'
+import { firmPlannedOrder, unfirmPlannedOrder } from './planned-orders/firm'
+import { getPlannedOrder, listPlannedOrders } from './planned-orders/read'
 
 /**
  * What to buy and make (B-W1-29; PLN-062 to PLN-066; A2 SCR-055, design 02): run the plan for a site, read the latest
@@ -148,4 +153,11 @@ export default defineRoutes('planning', manifest, async (app) => {
   app.patch('/planning/milestones/gates/:gateId', { schema: editGateContract }, async (request) => editGate(request, request.params.gateId, request.body, idempotencyKeyFrom(request)))
   app.post('/planning/milestones/gates/:gateId/remove', { schema: removeGateContract }, async (request) => removeGate(request, request.params.gateId, request.body, idempotencyKeyFrom(request)))
   app.post('/planning/milestones/gates/:gateId/start-before', { schema: startBeforeContract }, async (request) => startBefore(request, request.params.gateId, request.body, idempotencyKeyFrom(request)))
+  // B-W2b-293: planned work and subcontract orders.
+  app.get('/planning/planned-orders', { schema: listPlannedOrdersContract }, async (request) => listPlannedOrders(request, request.query))
+  // Before /:plannedOrderId (a static path).
+  app.post('/planning/planned-orders/convert', { schema: convertPlannedOrdersContract }, async (request) => convertPlannedOrders(request, request.body, idempotencyKeyFrom(request)))
+  app.get('/planning/planned-orders/:plannedOrderId', { schema: getPlannedOrderContract }, async (request) => getPlannedOrder(request, request.params.plannedOrderId))
+  app.post('/planning/planned-orders/:plannedOrderId/firm', { schema: firmPlannedOrderContract }, async (request) => firmPlannedOrder(request, request.params.plannedOrderId, request.body, idempotencyKeyFrom(request)))
+  app.post('/planning/planned-orders/:plannedOrderId/unfirm', { schema: firmPlannedOrderContract }, async (request) => unfirmPlannedOrder(request, request.params.plannedOrderId, request.body, idempotencyKeyFrom(request)))
 })

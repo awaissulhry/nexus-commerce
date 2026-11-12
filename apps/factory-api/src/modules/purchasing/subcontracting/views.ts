@@ -17,6 +17,7 @@ import {
 import { dayOf, quantityText, type Reader } from '../store'
 import { receiptsOfOrder } from './receive-back'
 import { KIT_COLUMNS, nameOf, OPERATION_COLUMNS, sizesOf, type KitRow, type OperationRow, type OrderRow } from './store'
+import { NO_NEW_ORDER, type SupplierStatus } from '@nexus/factory-domain/purchasing/suppliers-depth/rules'
 
 /**
  * The subcontract orders as the screens read them (design purchasing.subcontracting: the grid, the record's tabs
@@ -288,7 +289,8 @@ export async function orderDetailOf(db: Reader, order: OrderRow, today: Business
   const ddts = await ddtsOf(db, order.id)
   const ddtOf = named(ddts)
   const receipts = await receiptViews(db, await storedReceipts(db, order.id))
-  const party = await db.party.findUnique({ where: { id: order.partyId }, select: { status: true } })
+  // B-W2b-311 (SCM-008): a workshop on hold, blocked or inactive as a supplier gets no work either.
+  const party = await db.party.findUnique({ where: { id: order.partyId }, select: { status: true, supplierStatus: true } })
   const location = await db.location.findUnique({ where: { id: order.locationId }, select: { status: true } })
   const workOrderStatus = found.workOrders.get(order.workOrderId)?.status ?? ''
   const facts = {
@@ -296,7 +298,7 @@ export async function orderDetailOf(db: Reader, order: OrderRow, today: Business
     expectedBackDate: dayOf(order.expectedBackDate),
     orderDate: dayOf(order.orderDate)!,
     currency: order.currency,
-    workshopActive: party?.status === 'ACTIVE',
+    workshopActive: party?.status === 'ACTIVE' && !NO_NEW_ORDER.includes(party.supplierStatus as SupplierStatus),
     locationActive: location?.status === 'ACTIVE',
     workOrderStatus,
     operations: operations.map((row) => ({ seq: row.seq, code: found.woOperations.get(row.workOrderOperationId)?.code, pieces: row.pieces, pricePerPiece: row.pricePerPiece.toString(), piecesSent: row.piecesSent })),

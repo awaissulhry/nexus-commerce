@@ -37,6 +37,8 @@ export const THRESHOLD_FIELDS: Readonly<Record<RuleKind, { readonly numbers: rea
   INTEGRATION_FAILING: { numbers: [{ key: 'hours', min: 1, max: 168, unit: 'hours' }], workingDays: false },
   // B-W2b-42: no number here (the limits themselves are People settings').
   WORKING_TIME_LIMIT: { numbers: [], workingDays: false },
+  // B-W2b-314: no number here (the minimum is the material's planning parameters').
+  LOW_STOCK: { numbers: [], workingDays: false },
 })
 
 /** The kind's one number edited in the rules list itself (inline), or null (none, as "Material short"). */

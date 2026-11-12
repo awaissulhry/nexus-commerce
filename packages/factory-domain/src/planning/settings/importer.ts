@@ -52,7 +52,8 @@ export const IMPORT_SOURCES = ['BUY', 'MAKE', ITEM_SOURCE] as const
 const EVERY_COLOUR_WORDS = new Set(['*', '-', 'tutti', 'tutti i colori', 'ogni colore', 'qualsiasi', 'all', 'any', 'every colour', 'every color', 'all colours', 'all colors'].map(foldWord))
 
 /** The colour's code, or `*` (also written "tutti", "all", "every colour") for every colour. */
-const colourCell = (() => {
+/** B-W2b-311: the supplier price list import reads the same colour key (exported). */
+export const colourCell = (() => {
   const schema = z
     .custom<CellInput>((value) => value !== null && typeof value === 'object' && 'context' in (value as object))
     .transform((input, ctx) => {

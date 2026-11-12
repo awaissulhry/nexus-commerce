@@ -194,6 +194,16 @@ import { INVENTORY_LOTS_DEPTH_DEFINITIONS, INVENTORY_LOTS_DEPTH_PERMISSIONS } fr
 // B-W2b-290: customers in depth (parties.hold; parties.privacy, parties.erase; area `parties`).
 import { PARTIES_HOLD_DEFINITIONS, PARTIES_HOLD_PERMISSIONS } from '../../parties/holds/permissions'
 import { PARTIES_PRIVACY_DEFINITIONS, PARTIES_PRIVACY_PERMISSIONS } from '../../parties/contact-privacy/permissions'
+// B-W2b-295: inquiries and requests for quotation (sales.inquiries.view | manage).
+import { SALES_INQUIRIES_DEFINITIONS, SALES_INQUIRIES_PERMISSIONS } from '../../sales/inquiries/permissions'
+// B-W2b-314: the warehouse rules (inventory.rules.manage).
+import { INVENTORY_RULES_DEFINITIONS, INVENTORY_RULES_PERMISSIONS } from '../../inventory/posting/permissions'
+// B-W2b-293: planned work and subcontract orders made real (planning.planned.convert).
+import { PLANNING_PLANNED_DEFINITIONS, PLANNING_PLANNED_PERMISSIONS } from '../../planning/planned-orders/permissions'
+// B-W2b-311: suppliers in depth (purchasing.suppliers.status).
+import { SUPPLIERS_DEPTH_DEFINITIONS, SUPPLIERS_DEPTH_PERMISSIONS } from '../../purchasing/suppliers-depth/permissions'
+// B-W2b-292: the warehouse task inbox (inventory.tasks.manage: tasks by hand, handed out, changed, cancelled).
+import { INVENTORY_TASKS_DEFINITIONS, INVENTORY_TASKS_PERMISSIONS } from '../../inventory/tasks/permissions'
 // B-W2a-35: the plant (machines, machine requests, maintenance jobs).
 import { PLANT_DEFINITIONS, PLANT_FLOOR_PERMISSIONS, PLANT_PERMISSIONS } from '../../plant/permissions'
 // B-W2a-39: the accounting exports and the period locks (accounting.view | export | lock | unlock).
@@ -900,6 +910,16 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   // B-W2b-290: customers in depth (area `parties`, declared above).
   PARTIES_HOLD_DEFINITIONS,
   PARTIES_PRIVACY_DEFINITIONS,
+  // B-W2b-295: inquiries (area `sales`).
+  SALES_INQUIRIES_DEFINITIONS,
+  // B-W2b-314: the warehouse rules (area `inventory`, declared above).
+  INVENTORY_RULES_DEFINITIONS,
+  // B-W2b-293: planned work and subcontract orders (area `planning`, declared above).
+  PLANNING_PLANNED_DEFINITIONS,
+  // B-W2b-311: suppliers in depth (area `purchasing`, declared above).
+  SUPPLIERS_DEPTH_DEFINITIONS,
+  // B-W2b-292: the warehouse task inbox (area `inventory`).
+  INVENTORY_TASKS_DEFINITIONS,
 ])
 
 /** The area of the permissions only floor roles hold (and floor roles hold no other, but FLOOR_SHARED_PERMISSIONS). */
@@ -1208,6 +1228,16 @@ for (const name of PPE_TEXTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(na
 for (const name of INVENTORY_LOTS_DEPTH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-290: customers in depth.
 for (const name of [...PARTIES_HOLD_PERMISSIONS, ...PARTIES_PRIVACY_PERMISSIONS]) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-295: inquiries.
+for (const name of SALES_INQUIRIES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-314: the warehouse rules.
+for (const name of INVENTORY_RULES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-293: planned work and subcontract orders.
+for (const name of PLANNING_PLANNED_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-311: suppliers in depth.
+for (const name of SUPPLIERS_DEPTH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-292: the warehouse task inbox.
+for (const name of INVENTORY_TASKS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }
