@@ -211,7 +211,9 @@
       "locations": "Ubicazioni",
       "inTheWarehouse": "In magazzino",
       "picking": "Prelievi e kit",
-      "counts": "Inventari"
+      "counts": "Inventari",
+      "reportsGroup": "Report",
+      "reports": "Report magazzino"
     },
     "frame": {
       "topBar": "Barra superiore"

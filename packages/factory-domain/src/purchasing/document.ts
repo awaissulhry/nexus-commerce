@@ -46,6 +46,9 @@ export interface SupplierLine {
   readonly note: string | null
   /** B-W2b-296 (SCM-052): the line's delivery schedule, by day (none: one delivery on its need date). */
   readonly deliveries?: readonly { readonly quantity: DecimalString; readonly needDate: BusinessDate; readonly note: string | null }[] | undefined
+
+  /** B-W2b-328 (SCM-076, SCM-077, SCM-186): the line's variant, rolls and certificate in words (line-kinds/checks lineKindWords). */
+  readonly kind?: readonly string[] | undefined
 }
 
 export interface SupplierOrder {
@@ -112,6 +115,8 @@ export function lineText(line: SupplierLine, language: DocumentLanguage): string
     if (leather.estimatedHides !== null) parts.push(words.hides(leather.estimatedHides, formatQuantity(leather.baseQuantity, language), uomText(leather.baseUom)))
   }
   if (line.requiresCrViTest) parts.push(words.crVi)
+  // B-W2b-328: a fabric or trim line by rolls, a protector's certificate, a material variant.
+  if (line.kind) parts.push(...line.kind)
   // B-W2b-296: a line split into deliveries says each one (quantity in the line's unit, the day asked, its note).
   if (line.deliveries && line.deliveries.length > 0) {
     parts.push(words.deliveries(line.deliveries.map((delivery) => `${words.delivery(formatQuantity(delivery.quantity, language), uomText(line.uom), formatDate(delivery.needDate, language))}${delivery.note ? ` (${delivery.note})` : ''}`).join('; ')))

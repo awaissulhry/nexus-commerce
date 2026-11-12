@@ -56,6 +56,8 @@ async function waitingOnOf(db: Reader, order: Pick<OrderRow, 'id' | 'partyId'>, 
 function answerStateOf(order: Pick<OrderRow, 'status' | 'confirmedAt'>): AnswerState {
   switch (order.status) {
     case 'DRAFT':
+    // B-W2b-305: waiting for its yes, it is not sent yet.
+    case 'PENDING_APPROVAL':
       return 'NOT_SENT'
     case 'SENT':
       return 'WAITING'

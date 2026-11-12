@@ -251,6 +251,10 @@ export const manifest = defineManifest({
   'POST /purchasing/ask-to-buy/from-shortage': { audiences: ['office'], permission: 'purchasing.requests.ask', scope: 'record' },
   'POST /purchasing/ask-to-buy/cancel': { audiences: ['office'], permission: 'purchasing.requests.ask', scope: 'record' },
   'POST /purchasing/ask-to-buy/reject': { audiences: ['office'], permission: 'purchasing.manage', scope: 'record' },
+  // B-W2b-328 (SCM-076, SCM-077, SCM-186): purchase lines by kind (./line-kinds), office only; the order checked with can() over
+  // its company, site and supplier, as every order route.
+  'GET /purchasing/orders/:purchaseOrderId/line-kinds': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
+  'PUT /purchasing/orders/:purchaseOrderId/lines/:lineId/kind': { audiences: ['office'], permission: 'purchasing.manage', scope: 'record' },
   // B-W2b-311: suppliers in depth. Office only, can() over the supplier's company AND the supplier in the handler: reads
   // parties.view (the supplier record is the party record); kinds, lead time, origin and what each contact receives
   // parties.manage; where it stands with us purchasing.suppliers.status.
@@ -267,4 +271,15 @@ export const manifest = defineManifest({
   'GET /purchasing/sample-orders/choices': { audiences: ['office'], permission: 'purchasing.manage', scope: 'record' },
   'POST /purchasing/sample-orders': { audiences: ['office'], permission: 'purchasing.manage', scope: 'record' },
   'GET /purchasing/sample-orders/:purchaseOrderId/pdf': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
+  // B-W2b-305 (po-approvals/, expediting/): an order's approval (read; take a waiting request back: whoever may send it),
+  // duplicate or reorder (a new draft: purchasing.manage over the order's company, site and supplier), the demand of each
+  // line and the expediting worklist (read), the chase (a mail to the supplier: purchasing.send). Each checked with can()
+  // over the order's company, site and supplier in the handler; the list filtered with scopeWhere().
+  'GET /purchasing/orders/:purchaseOrderId/approval': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
+  'POST /purchasing/orders/:purchaseOrderId/approval/withdraw': { audiences: ['office'], permission: 'purchasing.send', scope: 'record' },
+  'POST /purchasing/orders/:purchaseOrderId/duplicate': { audiences: ['office'], permission: 'purchasing.manage', scope: 'record' },
+  'GET /purchasing/orders/:purchaseOrderId/demand': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
+  'GET /purchasing/expediting': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
+  'GET /purchasing/orders/:purchaseOrderId/chase': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
+  'POST /purchasing/orders/:purchaseOrderId/chase': { audiences: ['office'], permission: 'purchasing.send', scope: 'record' },
 })

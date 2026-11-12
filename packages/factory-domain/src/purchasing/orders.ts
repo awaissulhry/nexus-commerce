@@ -5,6 +5,8 @@ import { isBusinessDate, type BusinessDate } from '../core/time'
 import { addDays, hidesFor } from '../planning/buy'
 import type { PartyRole, PartyStatus } from '../parties/rules'
 import { DEPTH_SEND_CHECK_CODES } from './po-depth/codes'
+// B-W2b-328: the send checks of purchase lines by kind (line-kinds/codes.ts).
+import { LINE_KIND_SEND_CHECK_CODES } from './line-kinds/codes'
 import { baseFactor, convertibleUnits, COST_SCALE, decimalOf, QUANTITY_SCALE, roundTo, type ItemUnits, type Uom } from '../product/units/units'
 // W2b (B-W2b-311): where the supplier stands (SCM-008) and who receives purchase orders (SCM-004).
 import { sendProblem, type SupplierStatus } from './suppliers-depth/rules'
@@ -199,6 +201,8 @@ export const SEND_CHECK_CODES = [
   'LATE_FOR_LEAD_TIME',
   // B-W2b-296: the delivery schedule, the rate at order and the ship-to (po-depth/codes.ts).
   ...DEPTH_SEND_CHECK_CODES,
+  // B-W2b-328: rolls, a protector's certificate, a material variant (line-kinds/codes.ts).
+  ...LINE_KIND_SEND_CHECK_CODES,
 ] as const
 export type SendCheckCode = (typeof SEND_CHECK_CODES)[number]
 export type CheckSeverity = 'BLOCKS' | 'WARNING'
@@ -311,6 +315,8 @@ export function sendChecks(facts: SendFacts): { readonly ready: boolean; readonl
 /** Lines and header change only while the order is a draft (the …_supply_guards triggers say so too). */
 export function draftProblem(status: PurchaseOrderStatus): string | null {
   if (status === 'DRAFT') return null
+  // B-W2b-305: nothing in an order changes while it waits for its yes.
+  if (status === 'PENDING_APPROVAL') return 'The order waits for a yes before it is sent: take the request back to change it.'
   return `The order is ${STATUS_WORDS[status]}: its lines and terms change only while it is a draft.`
 }
 
