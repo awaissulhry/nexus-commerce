@@ -33,7 +33,11 @@ import { Dec, parseDecimal, ZERO, type Decimal } from '@nexus/factory-domain/tax
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { allocateScanIds } from '../../../platform/numbering/scan-ids'
-import { lockOrderForReceipt, readOrderForFloorReceipt, setOrderReceiptProgress, type OrderForReceipt } from '../../purchasing/receiving'
+import { differenceTolerance, lockOrderForReceipt, readOrderForFloorReceipt, receiptTolerancesOf, setOrderReceiptProgress, type OrderForReceipt } from '../../purchasing/receiving'
+// B-W2b-296 (SCM-061, SCM-066, SCM-147): the delivery tolerance beyond which a receipt is refused, and where an order
+// shipped to a third party lands.
+import { beyondToleranceRefusal, upToWords } from '@nexus/factory-domain/purchasing/po-depth/tolerances'
+import { receiptPlaceOf } from '../../purchasing/po-depth/hooks'
 import { activeSourcesOf } from '../../purchasing/supplier-items/store'
 import { officeContextOf, postedBy, stockContextOf } from '../ledger/access'
 import { postMoves, type MoveDraft, type PostedMove } from '../ledger/post-moves'
@@ -45,6 +49,8 @@ import { lotNumber, receiptNumber } from './numbers'
 import { markNoticeReceived, noticeForReceipt } from '../receiving/from-ship-notice'
 import { receiptDetail } from './read'
 import { readColours, readEarlierLots, readItems, readOrderLines, RECEIPT_COLUMNS, type ItemRow, type OrderLineRow } from './store'
+// B-W2b-289 (SCM-179): the site's default receiving place when none is named.
+import { defaultPlaceFor } from '../locations-depth/defaults'
 
 /**
  * Record a goods receipt against a purchase order (B-W1-32; SCM-113, SCM-116, SCM-117, SCM-187, SCM-232, SCM-233,
@@ -222,7 +228,10 @@ export async function recordReceiptInCommand(tools: CommandTools, body: ReceiptB
   // 2. When, and where the goods go.
   const receivedAt = body.receivedAt ? parseInstant(body.receivedAt)! : now
   if (receivedAt.getTime() > now.getTime() + CLOCK_SLACK_MS) throw new ValidationError('The goods cannot arrive in the future.', [{ path: 'body/receivedAt', message: 'Now or earlier.' }])
-  const location = await locationFor(tools, order.siteId, body.locationId)
+  // B-W2b-296: an order shipped straight to a workshop lands on its place (the floor never receives it).
+  const shipTo = await receiptPlaceOf(tools, order, floor)
+  // B-W2b-289: no place named and no ship-to place: the site's default receiving place for these items, else its one dock.
+  const location = await locationFor(tools, order.siteId, body.locationId ?? shipTo.locationId ?? undefined, body.lines.map((line) => line.purchaseOrderLineId))
 
   // 3. The lines against the order's lines, with each material's rules.
   const { lines: orderLines, received } = await readOrderLines(tx, order.id)
@@ -243,11 +252,16 @@ export async function recordReceiptInCommand(tools: CommandTools, body: ReceiptB
   const notes: ReceiptNote[] = []
   const refusals: Issue[] = []
   const earlier = await readEarlierLots(tx, planned.map((line) => line.orderLine.id))
+  // B-W2b-296 (SCM-061): each line's tolerance over and under (its own, else the delivery tolerance, else none).
+  const tolerances = await receiptTolerancesOf(tx, order, orderLines)
   for (const line of planned) {
     const expected = expectedBaseOf({ quantity: line.orderLine.quantity.toString(), baseQuantity: line.orderLine.baseQuantity.toString(), confirmedQuantity: line.orderLine.confirmedQuantity?.toString() ?? null })
-    const difference = lineDifference({ expected, receivedBefore: received.get(line.orderLine.id) ?? ZERO, receiving: line.baseQuantity, tolerancePct: line.orderLine.areaTolerancePct?.toString() ?? null })
+    const tolerance = tolerances.get(line.orderLine.id)
+    const difference = lineDifference({ expected, receivedBefore: received.get(line.orderLine.id) ?? ZERO, receiving: line.baseQuantity, ...differenceTolerance(tolerance, line.orderLine.areaTolerancePct) })
     const words = differenceWords(line.label, difference, line.item.baseUom)
-    if (difference.kind === 'OVER' && !blank(line.body.differenceReason)) {
+    const beyond = difference.kind === 'OVER' && tolerance ? beyondToleranceRefusal(words, tolerance, upToWords(difference.upTo, line.item.baseUom)) : null
+    if (beyond) refusals.push({ path: `body/lines/${line.index}/quantity`, message: beyond })
+    else if (difference.kind === 'OVER' && !blank(line.body.differenceReason)) {
       refusals.push({ path: `body/lines/${line.index}/differenceReason`, message: `${words} Give the reason the extra is taken, or receive only what was ordered.` })
     }
     if (difference.kind !== 'EXACT') notes.push({ code: difference.kind, seq: line.seq, message: words })
@@ -271,7 +285,9 @@ export async function recordReceiptInCommand(tools: CommandTools, body: ReceiptB
     }
   }
   if (refusals.length > 0) {
-    throw new DomainError('conflict', refusals.length === 1 ? refusals[0]!.message : `${refusals.length} lines bring more than their order line's tolerance: give each the reason.`, refusals)
+    // B-W2b-296: a line beyond its delivery tolerance is refused whatever the reason: the words say each one.
+    const blocked = refusals.filter((refusal) => refusal.path.endsWith('/quantity'))
+    throw new DomainError('conflict', refusals.length === 1 ? refusals[0]!.message : blocked.length === 0 ? `${refusals.length} lines bring more than their order line's tolerance: give each the reason.` : `${refusals.length} lines bring more than their order line's tolerance: ${refusals.map((refusal) => refusal.message).join(' ')}`, refusals)
   }
   if (!blank(body.supplierDdtNumber)) notes.unshift({ code: 'NO_SUPPLIER_DDT', seq: null, message: 'No supplier DDT number: add the transport document\'s number and date to the receipt (DPR 472/1996).' })
 
@@ -466,7 +482,7 @@ export async function recordReceiptInCommand(tools: CommandTools, body: ReceiptB
     after.lines.map((line) => ({
       expected: expectedBaseOf({ quantity: line.quantity.toString(), baseQuantity: line.baseQuantity.toString(), confirmedQuantity: line.confirmedQuantity?.toString() ?? null }),
       received: after.received.get(line.id) ?? ZERO,
-      tolerancePct: line.areaTolerancePct?.toString() ?? null,
+      ...differenceTolerance(tolerances.get(line.id), line.areaTolerancePct),
       // B-W2a-52: a cancelled or closed-short line takes no more goods: it counts as complete.
       ended: line.cancelledAt !== null || line.closedShortAt !== null,
     })),
@@ -515,14 +531,20 @@ export async function recordReceiptInCommand(tools: CommandTools, body: ReceiptB
   return { receiptId, number, order, orderStatus: to, notes, moves }
 }
 
-/** The location the goods go to: the one named (of the order's site, active), else the site's one goods-in dock. */
-async function locationFor(tools: CommandTools, siteId: string, locationId: string | undefined): Promise<{ id: string; code: string }> {
+/**
+ * The location the goods go to: the one named (of the order's site, active), else (B-W2b-289, SCM-179) the site's default
+ * receiving place for the kinds of material received, else the site's one goods-in dock.
+ */
+async function locationFor(tools: CommandTools, siteId: string, locationId: string | undefined, orderLineIds: readonly string[]): Promise<{ id: string; code: string }> {
   if (locationId) {
     const location = isUuid(locationId) ? await tools.tx.location.findUnique({ where: { id: locationId }, select: { id: true, siteId: true, code: true, status: true } }) : null
     if (!location || location.siteId !== siteId) throw new ValidationError('That is not a location of the order\'s delivery site.', [{ path: 'body/locationId', message: 'A location of the delivery site.' }])
     if (location.status !== 'ACTIVE') throw new ValidationError(`Location ${location.code} is ${location.status.toLowerCase()}: it takes no stock.`, [{ path: 'body/locationId', message: 'An active location.' }])
     return location
   }
+  const lines = await tools.tx.purchaseOrderLine.findMany({ where: { id: { in: orderLineIds.filter(isUuid) } }, select: { item: { select: { kind: true } } } })
+  const preset = await defaultPlaceFor(tools.tx, { siteId, purpose: 'RECEIVING', itemKinds: lines.map((line) => line.item.kind) })
+  if (preset) return preset
   const docks = await tools.tx.location.findMany({ where: { siteId, kind: 'RECEIVING', status: 'ACTIVE' }, select: { id: true, code: true }, orderBy: { code: 'asc' }, take: 2 })
   if (docks.length !== 1) {
     throw new ValidationError(docks.length === 0 ? 'The delivery site has no goods-in dock: name the location the goods go to.' : 'The delivery site has several goods-in docks: name the one the goods go to.', [{ path: 'body/locationId', message: 'Name the location.' }])

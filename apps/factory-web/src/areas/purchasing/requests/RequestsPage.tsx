@@ -19,6 +19,7 @@ import {
   filtersOf,
   intoBody,
   openOf,
+  rejectAskedOf,
   rejectLinesOf,
   requestQuery,
   requestsAddress,
@@ -32,6 +33,10 @@ import {
   type RequestsView,
 } from './model'
 import { RequestsView as RequestsScreen } from './view/RequestsView'
+// B-W2b-332: Ask to buy (the band's pop-up) and, for a person who asks but does not buy, their own requests.
+import { rejectAsked } from './ask/api'
+import { useAskToBuy } from './ask/AskToBuy'
+import { MineContainer } from './ask/MineContainer'
 
 /** The live events that may change the queue: a conversion, a plan run or decision, a PO, an approved source. */
 const LIVE_PREFIXES = ['purchase_requests.', 'planning.', 'purchase_order.', 'supplier_item.'] as const
@@ -40,7 +45,9 @@ const LIVE_PREFIXES = ['purchase_requests.', 'planning.', 'purchase_order.', 'su
  * `/w/<company>/purchasing/requests` (SCR-236): the queue of the saved view (`?view=`) with the site (`?site=`), the
  * kind (`?kind=`), the search (`?q=`) and the group (`?group=`, drawn on the client); the tiles (GET …/counts); the open
  * request (`?open=<request id>` → GET …/:kind/:refId); "Draft POs for n" (preview, then ONE convert with the dialog's own
- * Idempotency-Key); "Reject with reason" (planning's set-aside of the plan lines); live events behind "N updates · Show".
+ * Idempotency-Key); "Reject with reason" (planning's set-aside of the plan lines; an asked request refused with the
+ * reason, B-W2b-332); "Ask to buy" (requests/ask); live events behind "N updates · Show". A person who may ask but not see
+ * the queue (no purchasing.view) gets their own requests instead (requests/ask MineContainer).
  */
 export function RequestsPage() {
   return (
@@ -51,6 +58,15 @@ export function RequestsPage() {
 }
 
 function RequestsContainer() {
+  const session = useOfficeSession()
+  const pathname = usePathname()
+  const prefix = pathname.replace(/\/$/, '').replace(/\/purchasing\/requests$/, '')
+  const can = useMemo(() => requestsCan(session.permissions), [session.permissions])
+  if (!can.view && can.ask) return <MineContainer prefix={prefix} />
+  return <QueueContainer />
+}
+
+function QueueContainer() {
   const t = useT('purchasing-requests')
   const api = useOfficeApi()
   const session = useOfficeSession()
@@ -241,22 +257,26 @@ function RequestsContainer() {
     }
   }, [api, draft, load, loadCounts, preview, rowsOf])
 
-  // "Reject with reason": the plan lines set aside in planning (a reorder row has no row to reject).
+  // "Reject with reason": the plan lines set aside in planning (a reorder row has no row to reject); B-W2b-332: an asked
+  // request refused with the reason's words (and the note), POST /purchasing/ask-to-buy/reject.
   const confirmReject = useCallback(async () => {
     const current = reject
     if (!current || current.busy || !current.reason) return
     setReject({ ...current, busy: true, problem: null })
     try {
-      const lines = rejectLinesOf(rowsOf(current.requestIds))
-      await rejectPlanLines(api, lines, current.reason, current.note || null)
+      const picked = rowsOf(current.requestIds)
+      const lines = rejectLinesOf(picked)
+      const asked = rejectAskedOf(picked)
+      if (lines.length > 0) await rejectPlanLines(api, lines, current.reason, current.note || null)
+      if (asked.length > 0) await rejectAsked(api, { requests: asked, reason: `${t(`reason.${current.reason}`)}${current.note.trim() ? `: ${current.note.trim()}` : ''}` }, newIdempotencyKey())
       setReject(null)
-      setNotice({ tone: 'success', words: phrase('notice.rejected', { count: lines.length }) })
+      setNotice({ tone: 'success', words: phrase('notice.rejected', { count: lines.length + asked.length }) })
       void load()
       void loadCounts()
     } catch (error) {
       setReject((state) => (state ? { ...state, busy: false, problem: writeProblem(error, (paths) => (paths.some((path) => path.replace(/\./g, '/') === 'body/note') ? phrase('reject.noteNeeded') : null)) } : state))
     }
-  }, [api, reject, rowsOf, load, loadCounts])
+  }, [api, reject, rowsOf, load, loadCounts, t])
 
   const exportRows = useCallback(
     (ids: string[]) => {
@@ -280,6 +300,16 @@ function RequestsContainer() {
     [rows.items, can.cost, t, today],
   )
 
+  const ask = useAskToBuy({
+    api,
+    prefix,
+    permissions: session.permissions,
+    onAsked: () => {
+      void load()
+      void loadCounts()
+    },
+  })
+
   const model: RequestsModel = {
     prefix,
     can,
@@ -300,9 +330,11 @@ function RequestsContainer() {
   }
 
   return (
+    <>
     <RequestsScreen
       model={model}
       actions={{
+        onAsk: () => ask.open(null),
         onView: (next) => go(next, filters, null),
         onFilters: (next) => go(view, next, open),
         onMore: () => void more(),
@@ -349,7 +381,7 @@ function RequestsContainer() {
         },
         onReject: (requestIds) => {
           const ids = rowsOf(requestIds)
-            .filter((row) => row.kind === 'PLAN' && row.status === 'OPEN')
+            .filter((row) => (row.kind === 'PLAN' || row.kind === 'ASKED') && row.status === 'OPEN')
             .map((row) => row.id)
           if (ids.length > 0) setReject({ requestIds: ids, reason: '', note: '', busy: false, problem: null })
         },
@@ -364,5 +396,7 @@ function RequestsContainer() {
         },
       }}
     />
+    {ask.element}
+    </>
   )
 }
