@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { ExternalLink, MoreHorizontal, Network } from 'lucide-react'
+import { ExternalLink, MoreHorizontal, Network, Truck } from 'lucide-react'
 import { Banner, Card, EmptyState, Field, KeyValue, Menu } from '@nexus/ui/components'
 import { Button, Kbd, NumberStepper, Select, Skeleton, Spinner, Tag } from '@nexus/ui/primitives'
 import { LoadBar, PlanningBoard, type PlanningMove, type PlanningPlace } from '@nexus/ui/patterns/planning-board/index'
@@ -11,9 +11,12 @@ import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { BOARD_KIT_NAMESPACE, useBoardWords } from '../../../_shared/planning-board/words'
 import type { Allocation } from '../api'
+import { createOrdersHeld, decorateCards, decorateLanes, DEPTH_NAMESPACE, dropHeldFor, fullestLine, orderableParts, pieceLoadWords, workshopCapacityWords, workshopOf } from '../depth/model'
+import { CreateOrdersDialog, KitTimingDialog, OperationsSection, SwitchOperationDialog } from '../depth/view/DepthDialogs'
 import { dayWords, drawAllocation, laneDetail, laneKeyOf, minutesText, NAMESPACE, type Words } from '../model'
 import type { AllocationActions, AllocationDialog, AllocationViewModel } from '../view-model'
 import '../allocation.css'
+import '../depth/depth.css'
 
 /**
  * SCR-126 — Lines & subcontractors (design planning.allocation: Lanes, Allocation board): one small load summary per line
@@ -25,7 +28,7 @@ import '../allocation.css'
  */
 export function AllocationView({ model, actions }: { model: AllocationViewModel; actions?: AllocationActions }) {
   return (
-    <WithMessages namespaces={[NAMESPACE, BOARD_KIT_NAMESPACE]}>
+    <WithMessages namespaces={[NAMESPACE, BOARD_KIT_NAMESPACE, DEPTH_NAMESPACE, 'buying']}>
       <AllocationBody model={model} actions={actions} />
     </WithMessages>
   )
@@ -33,14 +36,25 @@ export function AllocationView({ model, actions }: { model: AllocationViewModel;
 
 function AllocationBody({ model, actions }: { model: AllocationViewModel; actions?: AllocationActions }) {
   const t = useT(NAMESPACE)
+  const td = useT(DEPTH_NAMESPACE)
   const locale = useLocale()
   const kit = useBoardWords()
   const words = useMemo<Words>(() => ({ t, locale }), [t, locale])
+  const depth = useMemo(() => ({ t: td, locale }), [td, locale])
+  const pieceWords = useMemo(() => ({ ...kit.load, ...pieceLoadWords(td) }), [kit.load, td])
   const data = model.read.status === 'ready' ? model.read.value : null
-  const drawn = useMemo(() => (data ? drawAllocation(data, words) : null), [data, words])
+  const workshops = model.workshops ?? ({ status: 'loading' } as const)
+  const checked = workshops.status === 'ready' ? workshops.value : null
+  const drawn = useMemo(() => {
+    if (!data) return null
+    const plain = drawAllocation(data, words)
+    return { ...plain, lanes: decorateLanes(plain.lanes, workshops, data.site.name, depth), cards: decorateCards(plain.cards, data, workshops, depth) }
+  }, [data, words, workshops, depth])
   const [local, setLocal] = useState<Record<string, PlanningPlace>>({})
   const cards = useMemo(() => (drawn ? (actions?.onMove ? drawn.cards : drawn.cards.map((card) => (local[card.id] ? { ...card, ...local[card.id] } : card))) : []), [drawn, actions?.onMove, local])
   const mayChange = data?.mayChange ?? false
+  const ordersHeld = createOrdersHeld({ data, workshops, mayOutsource: model.may?.outsource ?? false, mayOrder: model.may?.order ?? false, offline: model.offline }, depth)
+  const orderable = data && checked ? orderableParts(data, checked).length : 0
   const held = !data ? null : !mayChange ? t('held.readOnly') : model.offline ? t('held.offline') : null
   const onMove = useMemo(() => {
     if (!data || !mayChange) return undefined
@@ -74,6 +88,9 @@ function AllocationBody({ model, actions }: { model: AllocationViewModel; action
           </span>
         </div>
         <div className="fw-al-actions">
+          <Button size="sm" variant="primary" heldReason={ordersHeld} onClick={() => !ordersHeld && actions?.onCreateOrders?.()}>
+            <Truck size={14} aria-hidden /> {td('al.orders.button', { count: orderable })}
+          </Button>
           <Button size="sm" variant="secondary" asChild>
             <a href={`${model.prefix}/planning/board${data ? `?site=${encodeURIComponent(data.site.id)}` : ''}`} target="_blank" rel="noopener">
               <ExternalLink size={14} aria-hidden /> {t('band.board')}
@@ -98,23 +115,28 @@ function AllocationBody({ model, actions }: { model: AllocationViewModel; action
           </div>
         ) : data ? (
           <div className="fw-al-tiles">
-            {data.lanes.map((lane) => (
-              <Card key={laneKeyOf(lane)} padded className="fw-al-tile">
-                <span className="fw-al-tile-name">
-                  {lane.name} <Tag tone="neutral">{t(`kind.${lane.kind}`)}</Tag>
-                </span>
-                <LoadBar
-                  size="md"
-                  label={lane.name}
-                  labelVisible={false}
-                  booked={lane.load ? Number(lane.load.bookedMinutes) : 0}
-                  available={lane.load ? Number(lane.load.availableMinutes) : undefined}
-                  words={kit.load}
-                  locale={INTL_LOCALE[locale]}
-                />
-                <span className="fw-al-hint">{laneDetail(lane, words)}</span>
-              </Card>
-            ))}
+            {data.lanes.map((lane) => {
+              const workshop = lane.kind === 'WORKSHOP' ? workshopOf(checked, lane.id) : null
+              const line = workshop ? fullestLine(workshop) : null
+              return (
+                <Card key={laneKeyOf(lane)} padded className="fw-al-tile">
+                  <span className="fw-al-tile-name">
+                    {lane.name} <Tag tone="neutral">{t(`kind.${lane.kind}`)}</Tag>
+                  </span>
+                  <LoadBar
+                    size="md"
+                    label={lane.name}
+                    labelVisible={false}
+                    booked={lane.load ? Number(lane.load.bookedMinutes) : line ? Number(line.booked) : 0}
+                    available={lane.load ? Number(lane.load.availableMinutes) : line?.available ? Number(line.available) : undefined}
+                    words={line?.unit === 'PIECES' ? pieceWords : kit.load}
+                    locale={INTL_LOCALE[locale]}
+                  />
+                  <span className="fw-al-hint">{laneDetail(lane, words)}</span>
+                  {lane.kind === 'WORKSHOP' ? <span className="fw-al-hint fw-ald-block">{workshop ? workshopCapacityWords(workshop, depth) : td(workshops.status === 'error' ? 'al.held.notChecked' : 'al.held.checking')}</span> : null}
+                </Card>
+              )
+            })}
             {data.lanes.length === 0 ? <p className="fw-al-hint">{t('lanes.none')}</p> : null}
           </div>
         ) : null}
@@ -159,6 +181,7 @@ function AllocationBody({ model, actions }: { model: AllocationViewModel; action
             cards={cards}
             onMove={onMove}
             onOpen={(card) => actions?.onOpen?.(card)}
+            dropHeld={(card, to) => dropHeldFor(data!, workshops, card.id, to.laneId, depth)}
             heldReason={held}
             words={{ ...kit.board, tray: t('board.tray'), trayEmpty: t('board.trayEmpty'), empty: t('board.empty'), moveBucket: t('board.moveBucket') }}
             loadWords={kit.load}
@@ -167,22 +190,25 @@ function AllocationBody({ model, actions }: { model: AllocationViewModel; action
         ) : null}
       </section>
 
-      <AllocationDialogs model={model} actions={actions} words={words} data={data} />
+      <AllocationDialogs model={model} actions={actions} words={words} depth={depth} data={data} />
     </div>
   )
 }
 
-function AllocationDialogs({ model, actions, words, data }: { model: AllocationViewModel; actions?: AllocationActions; words: Words; data: Allocation | null }) {
+function AllocationDialogs({ model, actions, words, depth, data }: { model: AllocationViewModel; actions?: AllocationActions; words: Words; depth: Words; data: Allocation | null }) {
   const dialog = model.dialog
   if (!dialog) return null
   const close = () => actions?.onCloseDialog?.()
   if (dialog.kind === 'keys') return <KeysDialog words={words} onClose={close} />
-  return <CardDialog dialog={dialog} model={model} actions={actions} words={words} data={data} onClose={close} />
+  if (dialog.kind === 'kit') return data ? <KitTimingDialog dialog={dialog} model={model} actions={actions} data={data} words={depth} /> : null
+  if (dialog.kind === 'switch') return data ? <SwitchOperationDialog dialog={dialog} model={model} actions={actions} data={data} words={depth} /> : null
+  if (dialog.kind === 'orders') return data ? <CreateOrdersDialog dialog={dialog} model={model} actions={actions} data={data} words={depth} /> : null
+  return <CardDialog dialog={dialog} model={model} actions={actions} words={words} depth={depth} data={data} onClose={close} />
 }
 
 const NOT_ALLOCATED = ''
 
-function CardDialog({ dialog, model, actions, words, data, onClose }: { dialog: Extract<AllocationDialog, { kind: 'card' }>; model: AllocationViewModel; actions?: AllocationActions; words: Words; data: Allocation | null; onClose: () => void }) {
+function CardDialog({ dialog, model, actions, words, depth, data, onClose }: { dialog: Extract<AllocationDialog, { kind: 'card' }>; model: AllocationViewModel; actions?: AllocationActions; words: Words; depth: Words; data: Allocation | null; onClose: () => void }) {
   const { t, locale } = words
   const card = data?.cards.find((entry) => entry.id === dialog.cardId) ?? null
   const here = card?.lane ? laneKeyOf(card.lane) : NOT_ALLOCATED
@@ -266,6 +292,8 @@ function CardDialog({ dialog, model, actions, words, data, onClose }: { dialog: 
           </Field>
         </div>
         <p className="fw-al-hint">{t('card.rule')}</p>
+        {lane.startsWith('WORKSHOP:') ? <p className="fw-al-hint">{depth.t('al.card.toWorkshop')}</p> : null}
+        <OperationsSection cardId={card.id} operations={dialog.operations} model={model} actions={actions} words={depth} />
       </div>
     </Modal>
   )

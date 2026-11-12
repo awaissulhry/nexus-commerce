@@ -12,7 +12,8 @@ import type { DefaultView } from './contract'
 /**
  * Default locations (B-W2b-289; SCM-179; design warehouse.settings › Default locations: material type × purpose →
  * location). Per site, per kind of material (null: the site's fallback) and purpose (RECEIVING, QUALITY, ISSUE, RETURN,
- * PUT_AWAY), one active row; a change keeps the earlier row inactive (history, "Changed by").
+ * PUT_AWAY), one active row; a change keeps the earlier row inactive (history, "Changed by"). The cell's versions only go
+ * up across its rows (a new row takes the next one, B-W2b-F33): a save sent with the version of an earlier read is a 409.
  *
  *   GET /inventory/locations/defaults?siteId=          the site's active defaults (inventory.locations.view; a floor device
  *                                                       its own site's: the put-away suggestion)
@@ -91,13 +92,18 @@ export async function setDefault(caller: CommandCaller, body: SetDefaultBody, id
     const problems = defaultProblems(body.purpose, body.itemKind, place, site.id)
     if (problems.length > 0) throw new ValidationError(problems[0]!.message, problems.map((issue) => ({ path: `body/${issue.path}`, message: issue.message })))
     if (current?.locationId === body.locationId) return { default: viewOf(current) }
+    // B-W2b-F33: the new row continues the cell's versions (above every version a row of this site, kind and purpose ever
+    // had), so a page that read an earlier row of the cell never matches it. A new row at version 1 matched a read of the
+    // earlier row at version 1, and that stale save overwrote the change made since.
+    const latest = await tx.defaultLocation.aggregate({ where: { siteId: site.id, purpose: body.purpose, itemKind: body.itemKind }, _max: { version: true } })
+    const version = (latest._max.version ?? 0) + 1
     // The earlier row stays, inactive; the new one is the active default.
     if (current) {
       await tx.defaultLocation.update({ where: { id: current.id }, data: { active: false, updatedById: context.actorId, version: { increment: 1 } }, select: { id: true } })
     }
     const id = newId()
     const row = await tx.defaultLocation.create({
-      data: { id, companyId: site.companyId, siteId: site.id, itemKind: body.itemKind, purpose: body.purpose, locationId: body.locationId, createdAt: now, updatedAt: now, createdById: context.actorId, updatedById: context.actorId },
+      data: { id, companyId: site.companyId, siteId: site.id, itemKind: body.itemKind, purpose: body.purpose, locationId: body.locationId, version, createdAt: now, updatedAt: now, createdById: context.actorId, updatedById: context.actorId },
       select: DEFAULT_SELECT,
     })
     audit({ recordType: 'DefaultLocation', recordId: id, companyId: site.companyId, siteId: site.id, before: current ? { id: current.id, locationId: current.locationId } : null, after: { itemKind: body.itemKind, purpose: body.purpose, locationId: body.locationId } })

@@ -23,7 +23,8 @@ import { locationsImportAdapter } from '../locations/importer'
  *     without a code given its suggested one, an outside place refused), the bin labels PDF, a changed code's old labels;
  *   - blocks: block, change, unblock in words; a move in or out refused while it holds; a count of a place blocks it and
  *     the places inside it while it counts, and only its own block is lifted when the counting ends;
- *   - default locations: set, change (the earlier one kept), clear; what a place may be the default for; the resolver.
+ *   - default locations: set, change (the earlier one kept), clear; what a place may be the default for; the resolver; a
+ *     save made on an old read refused, changing nothing (B-W2b-F33).
  * Run with `node scripts/factory/run-pg-tests.mjs modules/inventory/locations-depth`.
  */
 
@@ -337,5 +338,45 @@ describe('default locations (SCM-179)', () => {
     expect((await ok(put({ siteId: ids.siteA1, itemKind: null, purpose: 'RECEIVING', locationId: null, version: second.version }))).default).toBeNull()
     expect((await ok(call('manager', 'GET', `/inventory/locations/defaults?siteId=${ids.siteA1}`))).defaults).toHaveLength(1)
     expect((await events('inventory.default_location_changed', first.id)).map((event) => event.change)).toEqual(['SET'])
+  })
+
+  it('refuses a save made on an old read (409 in words), changing nothing; a fresh read saves (B-W2b-F33)', async () => {
+    const put = (body: Json) => call('manager', 'PUT', '/inventory/locations/defaults', body)
+    const cell = { siteId: ids.siteA1, itemKind: null, purpose: 'ISSUE' }
+    const read = async (session: string): Promise<Json | undefined> => ((await ok(call(session, 'GET', `/inventory/locations/defaults?siteId=${ids.siteA1}`))).defaults as Json[]).find((row) => row.purpose === 'ISSUE' && row.itemKind === null)
+    const written = async () => ({
+      rows: await f.admin(`SELECT id::text, "locationId"::text AS "locationId", active, version FROM "DefaultLocation" WHERE "siteId" = $1 AND purpose = 'ISSUE' AND "itemKind" IS NULL ORDER BY "createdAt", id`, [ids.siteA1]),
+      audit: (await f.admin<{ n: number }>(`SELECT count(*)::int AS n FROM "AuditLog" WHERE "recordType" = 'DefaultLocation' AND "siteId" = $1`, [ids.siteA1]))[0]!.n,
+      events: (await f.admin<{ n: number }>(`SELECT count(*)::int AS n FROM "OutboxEvent" WHERE type = 'inventory.default_location_changed' AND "siteId" = $1`, [ids.siteA1]))[0]!.n,
+    })
+    await ok(put({ ...cell, locationId: ids.cut }))
+
+    // Two people read the same cell; the first saves; the second saves on the version they read.
+    const one = (await read('manager'))!
+    const two = (await read('viewer'))!
+    expect([one.version, two.version, two.location.code]).toEqual([one.version, one.version, 'A1-CUT'])
+    const saved = (await ok(put({ ...cell, locationId: ids.store, version: one.version }))).default
+    expect(saved.version).toBeGreaterThan(one.version)
+    const before = await written()
+    const stale = await refused(put({ ...cell, locationId: ids.bin1, version: two.version }), 409)
+    expect(stale).toMatchObject({ code: 'conflict', message: `The default changed since you read it (version ${saved.version}): read it again.` })
+    expect(await written()).toEqual(before)
+    expect(await read('manager')).toMatchObject({ id: saved.id, version: saved.version, location: { code: 'A1-STORE' } })
+
+    // A fresh read saves.
+    const fresh = (await read('manager'))!
+    const after = (await ok(put({ ...cell, locationId: ids.bin1, version: fresh.version }))).default
+    expect(after).toMatchObject({ location: { code: 'A1-BIN-01' } })
+    expect(after.version).toBeGreaterThan(fresh.version)
+
+    // Across a clear and a new default too: the new row never takes a version an earlier read of the cell saw.
+    const old = (await read('viewer'))!
+    expect((await ok(put({ ...cell, locationId: null, version: old.version }))).default).toBeNull()
+    const again = (await ok(put({ ...cell, locationId: ids.cut }))).default
+    expect(again.version).toBeGreaterThan(old.version)
+    const beforeClear = await written()
+    expect((await refused(put({ ...cell, locationId: ids.store, version: old.version }), 409)).message).toContain('read it again')
+    expect(await written()).toEqual(beforeClear)
+    expect(beforeClear.rows.filter((row) => row.active)).toEqual([{ id: again.id, locationId: ids.cut, active: true, version: again.version }])
   })
 })

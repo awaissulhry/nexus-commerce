@@ -14,7 +14,8 @@ import { CAPACITY_BUCKETS, LANE_KINDS, type Capacity, type CapacityBucket, type 
  */
 
 export const NAMESPACE = 'planning-capacity'
-export const TILE_IDS = ['over', 'free', 'most'] as const
+/** B-W2b-338: 'subs' = Subcontractors over their capacity (design tiles#1), the workshop rows it filters to. */
+export const TILE_IDS = ['over', 'free', 'most', 'subs'] as const
 export type CapacityTile = (typeof TILE_IDS)[number]
 
 export interface CapacityControls {
@@ -25,8 +26,10 @@ export interface CapacityControls {
   bucket: CapacityBucket
   /** The tile pressed: it filters the lanes. */
   tile: CapacityTile | null
-  /** The open cell (`<LINE|WORK_CENTRE>:<lane id>:<bucket key>`). */
+  /** The open cell (`<LINE|WORK_CENTRE>:<lane id>:<bucket key>`; a workshop's `WORKSHOP:<party>:<kind|all|none>:<bucket key>`). */
   cell: string | null
+  /** B-W2b-338: the open heatmap cell (the same keys, a week of the heatmap). */
+  heat: string | null
 }
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/
@@ -45,6 +48,7 @@ export function controlsOf(params: { get(name: string): string | null } | null |
     bucket: (CAPACITY_BUCKETS as readonly string[]).includes(bucket) ? (bucket as CapacityBucket) : 'WEEK',
     tile: (TILE_IDS as readonly string[]).includes(tile) ? (tile as CapacityTile) : null,
     cell: params?.get('cell') ?? null,
+    heat: params?.get('heat') ?? null,
   }
 }
 
@@ -56,6 +60,7 @@ export function queryOf(controls: CapacityControls): string {
   if (controls.bucket !== 'WEEK') query.set('bucket', controls.bucket)
   if (controls.tile) query.set('tile', controls.tile)
   if (controls.cell) query.set('cell', controls.cell)
+  if (controls.heat) query.set('heat', controls.heat)
   return query.toString()
 }
 
@@ -126,6 +131,8 @@ export function lanesOf(capacity: Capacity, tile: CapacityTile | null): Capacity
       const most = capacity.tiles.mostLoadedThisWeek
       return most ? capacity.lanes.filter((lane) => lane.kind === most.kind && lane.id === most.id) : []
     }
+    case 'subs':
+      return []
     default:
       return [...capacity.lanes]
   }
@@ -233,7 +240,7 @@ export function laneNotes(lane: CapacityLane, words: Words): string[] {
 // ---- links -------------------------------------------------------------------------------------------------------------
 
 /** The planning board filtered to lanes (design tab:board: a window of its own), from a day. */
-export function boardHref(prefix: string, siteId: string | null, lanes: readonly { kind: LaneKind; id: string }[], from?: string | null): string {
+export function boardHref(prefix: string, siteId: string | null, lanes: readonly { kind: LaneKind | 'WORKSHOP'; id: string }[], from?: string | null): string {
   const query = new URLSearchParams()
   if (siteId) query.set('site', siteId)
   if (lanes.length > 0) query.set('lane', lanes.map((lane) => `${lane.kind}:${lane.id}`).join(','))
@@ -256,7 +263,7 @@ export function readProblemOf(error: unknown): string {
 }
 
 /** The lanes shown as a CSV: one row per lane and bucket (available, booked, load), then the row end. */
-export function csvOfLanes(capacity: Capacity, lanes: readonly CapacityLane[], words: Words): string {
+export function csvOfLanes(capacity: Capacity, lanes: readonly CapacityLane[], words: Words, more: ReadonlyArray<ReadonlyArray<string | number>> = []): string {
   const { t } = words
   const header = ['lane', 'kind', 'bucket', 'from', 'to', 'available', 'booked', 'load', 'efficiency', 'people'].map((column) => t(`csv.${column}`))
   const rows = lanes.flatMap((lane) =>
@@ -265,5 +272,6 @@ export function csvOfLanes(capacity: Capacity, lanes: readonly CapacityLane[], w
       return [lane.code, t(`kind.${lane.kind}`), bucketLabel(bucket, words), cell.from, cell.to, cell.availableMinutes, cell.bookedMinutes, cell.loadPct ?? '', lane.efficiencyPct, lane.people]
     }),
   )
-  return csvOf(header, rows)
+  // B-W2b-338: the workshop rows after the lanes (minutes or garments, as each line says; no efficiency or people).
+  return csvOf(header, [...rows, ...more.map((row) => [...row])])
 }
