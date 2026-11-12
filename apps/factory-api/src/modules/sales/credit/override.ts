@@ -182,7 +182,7 @@ export async function askAgain(caller: CommandCaller, checkId: string, body: { r
     const requester = hold.createdById ?? context.actorId
     const askers = [...new Set([requester, context.actorId])]
     const plan = await planNow(tools.tx, hold, tools.now, askers)
-    if (plan.approver === null) throw new DomainError('conflict', 'No credit rule names someone else who may say yes: an administrator names an approver in Admin › Automation › Approval rules, or the customer pays, or the limit is raised.', [{ path: 'credit', message: 'Nobody to ask.' }])
+    if (plan.approver === null) throw new DomainError('conflict', 'No credit rule names someone else who may say yes: an administrator names an approver in the approval rules (Admin › Approvals, automation & AI), or the customer pays, or the limit is raised.', [{ path: 'credit', message: 'Nobody to ask.' }])
     const asked = await askOverride(tools, hold.id, requester, plan, note)
     if (!asked.asked) throw new DomainError('conflict', 'No credit rule is switched on any more: check it again instead.', [{ path: 'credit', message: 'No rule.' }])
     tools.audit({ action: 'credit.askOverride', recordType: hold.recordType, recordId: hold.recordId, companyId: hold.companyId, after: { creditCheckId: hold.id, taskId: asked.taskId, requestedById: requester } })

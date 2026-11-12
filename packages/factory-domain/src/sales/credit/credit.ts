@@ -15,7 +15,7 @@ import { fromMinorUnits, isCurrencyCode, type MinorUnits } from '../../core/mone
  *   findings   OVER_LIMIT (exposure above the limit), OVERDUE (an invoice past its due date), ON_HOLD (a CREDIT account
  *              hold in force, B-W2b-290's PartyHold). None: PASS.
  *   result     PASS, or with a finding WARN (shown, let through) or HOLD (the step waits for a yes). HOLD only where the
- *              company says so: its CREDIT_OVERRIDE approval rules (Admin › Automation › Approval rules) switched on, in
+ *              company says so: its CREDIT_OVERRIDE approval rules (Admin › Approvals, automation & AI) switched on, in
  *              force, whose condition holds on the check's facts; none, as on every tenant until the Owner sets one: WARN.
  *              The quote never holds (it shows the reading; the order holds).
  *   override   a CREDIT_OVERRIDE request for a yes about the HOLD check (platform/approvals); its yes adds a new check that

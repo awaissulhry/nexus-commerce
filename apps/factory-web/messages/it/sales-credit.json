@@ -1,7 +1,7 @@
 {
   "title": "Fidi",
   "hint": "Fido, utilizzato (fatture aperte + ordini non ancora fatturati), disponibile, e cosa attende per il fido.",
-  "rules": "Oltre il fido, un ordine, un rilascio o una spedizione viene segnalato e prosegue, a meno che una regola sul fido in Amministrazione › Automazione › Regole di approvazione lo faccia attendere il sì di qualcuno. Nessuno approva la propria richiesta.",
+  "rules": "Oltre il fido, un ordine, un rilascio o una spedizione viene segnalato e prosegue, a meno che una regola sul fido (Sistema › Approvazioni, automazioni e IA, le regole di approvazione) lo faccia attendere il sì di qualcuno. Nessuno approva la propria richiesta.",
   "wording": "La formulazione della regola sul fido nei documenti attende il parere del commercialista; questi sono i testi predefiniti.",
   "noAccess": {
     "title": "Fidi",

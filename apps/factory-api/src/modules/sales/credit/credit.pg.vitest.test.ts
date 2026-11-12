@@ -163,7 +163,7 @@ describe('Finance › Receivables › Credit limits (SAL-237)', () => {
     const changed = await setLimit(100, 'Down to 1.00 for the test (made-up).')
     expect(changed.row).toMatchObject({ limit: 100, findings: expect.arrayContaining(['OVER_LIMIT']) })
     await no('finance', 'PUT', `/sales/credit/limits/${p1}/${A.companyA}`, { version: termsA.version, amount: 200, currency: 'EUR', reason: 'Stale' }, 409)
-    const audit = await one<Json>(`SELECT reason, after FROM "AuditLog" WHERE "tenantId" = $1 AND action = 'credit.setLimit' ORDER BY "createdAt" DESC, id DESC LIMIT 1`, [A.tenant])
+    const audit = await one<Json>(`SELECT reason, after FROM "AuditLog" WHERE "tenantId" = $1 AND action = 'credit.setLimit' ORDER BY at DESC, id DESC LIMIT 1`, [A.tenant])
     expect(audit.reason).toBe('Down to 1.00 for the test (made-up).')
     expect(await outbox('credit_limit.changed')).toContainEqual(expect.objectContaining({ partyId: p1, termsId: termsA.id, change: 'SET' }))
   })

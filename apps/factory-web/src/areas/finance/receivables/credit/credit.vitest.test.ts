@@ -117,8 +117,12 @@ describe('every design case draws in both languages with no key or placeholder l
   it('read-only: no amount in the section; finance sees them', () => {
     const bare = render(screen, screen.cases.find((entry) => entry.id === 'read-only')!.model, 'en')
     expect(bare.slice(bare.indexOf('fw-frc-title'))).not.toMatch(EURO)
-    const full = render(screen, screen.cases.find((entry) => entry.id === 'finance')!.model, 'en')
-    expect(full).toContain('€15,000.00')
+    // The grid draws its cells in the browser (not in a server render): the rows the read-only case hands it carry no
+    // amount and no share of the limit; Finance's carry both.
+    type Page = { page: { rows: { limit?: number | null; used?: number | null; usedPct: number | null }[] } }
+    const rowsOf = (id: string) => (screen.cases.find((entry) => entry.id === id)!.model as Page).page.rows
+    for (const row of rowsOf('read-only')) expect([row.limit, row.used, row.usedPct]).toEqual([undefined, undefined, null])
+    expect(rowsOf('finance').every((row) => typeof row.limit === 'number' && typeof row.usedPct === 'number')).toBe(true)
   })
 
   it('the dynamic words exist in both languages', () => {

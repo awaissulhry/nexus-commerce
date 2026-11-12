@@ -1,7 +1,7 @@
 {
   "title": "Credit limits",
   "hint": "Limit, used (open invoices + orders not yet invoiced), available, and what waits for credit.",
-  "rules": "Over the limit, an order, a release or a shipment is shown and goes on, unless a credit rule in Admin › Automation › Approval rules makes it wait for someone's yes. Nobody approves their own request.",
+  "rules": "Over the limit, an order, a release or a shipment is shown and goes on, unless a credit rule (Admin › Approvals, automation & AI, its approval rules) makes it wait for someone's yes. Nobody approves their own request.",
   "wording": "The wording of the credit rule on documents waits for the accountant's word; these are the defaults.",
   "noAccess": {
     "title": "Credit limits",
