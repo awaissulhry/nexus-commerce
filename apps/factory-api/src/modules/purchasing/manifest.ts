@@ -230,4 +230,8 @@ export const manifest = defineManifest({
   'POST /purchasing/ask-to-buy/from-shortage': { audiences: ['office'], permission: 'purchasing.requests.ask', scope: 'record' },
   'POST /purchasing/ask-to-buy/cancel': { audiences: ['office'], permission: 'purchasing.requests.ask', scope: 'record' },
   'POST /purchasing/ask-to-buy/reject': { audiences: ['office'], permission: 'purchasing.manage', scope: 'record' },
+  // B-W2b-328 (SCM-076, SCM-077, SCM-186): purchase lines by kind (./line-kinds), office only; the order checked with can() over
+  // its company, site and supplier, as every order route.
+  'GET /purchasing/orders/:purchaseOrderId/line-kinds': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
+  'PUT /purchasing/orders/:purchaseOrderId/lines/:lineId/kind': { audiences: ['office'], permission: 'purchasing.manage', scope: 'record' },
 })

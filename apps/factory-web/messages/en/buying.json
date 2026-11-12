@@ -767,6 +767,11 @@
       "NO_RATE_AT_ORDER": "The order is in another currency than the company’s: type the rate at order.",
       "SHIP_TO_NOT_USABLE": "The party the order ships to, or its address, cannot take the goods any more.",
       "SHIP_TO_NO_WORKSHOP_PLACE": "The workshop it ships to has no place of ours on the site: the receipt will not land on its stock (a warning).",
+      "ROLLS_NOT_THE_QUANTITY": "A line bought by rolls no longer asks for what its rolls make: change its rolls, or clear them.",
+      "PPE_NO_CERTIFICATE": "A protector line names no certificate: name the one the supplier delivers it against.",
+      "PPE_CERTIFICATE_NOT_VALID": "A protector line’s certificate no longer holds for this supplier: name one that holds.",
+      "PPE_CERTIFICATE_ENDS_EARLY": "A protector line’s certificate ends before the line is needed (a warning).",
+      "VARIANT_NOT_USABLE": "A line buys a variant that is archived or of another colour: choose an active one.",
       "pass": {
         "supplierActive": "The supplier is active",
         "linesPriced": "Every line has a price",

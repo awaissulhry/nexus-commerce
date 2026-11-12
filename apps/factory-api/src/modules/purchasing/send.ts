@@ -32,6 +32,8 @@ import { dayOf, decimal, officeContextOf, officeOrder, quantityText, readOrder, 
 import { checksOf, isCancelledLine, letterheadProblems, readFacts, siteAddressOf, type OrderFacts } from './views'
 // B-W2b-296: a third party's delivery address and the lines' delivery schedules on the PDF.
 import { shipToPrintOf } from './po-depth/store'
+// B-W2b-328: each line's variant, rolls and certificate on the PDF.
+import { kindWordsOf } from './line-kinds/store'
 
 /**
  * Sending a purchase order (B-W1-30; SCM-054, SCM-055; A1 §2.5; PLAN §4.7 stage 08-buy; the design's Send dialog, SCR-037):
@@ -125,6 +127,7 @@ function supplierOrderOf(facts: OrderFacts, supplier: DocumentParty, today: stri
         requiresCrViTest: line.requiresCrViTest,
         note: line.note,
         deliveries: (facts.depth?.deliveries.get(line.id) ?? []).map((delivery) => ({ quantity: quantityText(delivery.quantity), needDate: dayOf(delivery.needDate)!, note: delivery.note })),
+        kind: kindWordsOf(facts.kinds, line, supplierLanguageOf(facts.contact?.language, facts.party.language)),
       }
     }),
   }

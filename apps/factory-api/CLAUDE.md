@@ -502,6 +502,22 @@ B-W2b-124 `modules/plant/statutory` (QHS-205; D.Lgs. 81/2008 art. 71: results ke
   tolerance, else the most specific ACTIVE rule; beyond it BLOCK refuses and APPROVAL refuses too (no receipt approval kind).
   Events purchase_order.dates_confirmed | date_changed, delivery_tolerance.changed. PG: `po-depth/po-depth.pg.vitest.test.ts`.
 
+## Purchase lines by kind (`src/modules/purchasing/line-kinds/`, `src/modules/product/materials/variants.ts`, B-W2b-328; SCM-076, SCM-077, SCM-186)
+- Rules in factory-domain `purchasing/line-kinds/` (rolls, certificates on B-W2b-255's bought-in rule, variants, the send checks
+  in `codes.ts`/`checks.ts`, listed by `purchasing/orders` SEND_CHECK_CODES). Routes in purchasing's and materials' routes.ts /
+  manifest.ts (one block each). `GET /purchasing/orders/:id/line-kinds` (purchasing.view: rolls with what they make, a protector's
+  certificate with its check today and the register's choices, the variant with the material's choices, the kind checks) and
+  `PUT …/lines/:lineId/kind {version, rolls?, certificateId?, variantCode?}` (purchasing.manage, DRAFT; rolls set the quantity
+  when the unit can say it; a line without a colour takes its variant's).
+- Variants: `GET|POST /product/materials/:id/variants`, `PATCH …/variants/:variantId` (supplier code, archive/restore; never
+  archived while an open PO line buys it), `GET …/variants/bom-sizes` (also product.styles.view: the variant each BOM size uses,
+  by size and colour — no BOM column names one). Event material.updated (fields ["variants"]).
+- Hooks (`line-kinds/hooks.ts`, no command imports): lines.ts insertLine names a PPE line's certificate by default, editLine refuses
+  a quantity/unit its rolls make or a colour its variant is not of; inventory/receipts/record.ts gives a variant line's lots their
+  variant (the database requires it) and checks a named certificate again on the receipt's day (no longer holding: the lots start
+  in quarantine with the reason). views.ts readFacts/checksOf add the kind facts and checks; send.ts prints them on the PDF.
+  PG: `line-kinds/line-kinds.pg.vitest.test.ts`.
+
 ## Integrations (`src/platform/{gateway,secrets,inbound}/`, plan A1 §4, §5.4)
 - `gateway/`: EVERY call to an outside service is `processGateway().call(gatewayAccount(caller, accountId),
   { name, idempotent, idempotencyKey?, request? }, async (call) => …)`. It re-reads the IntegrationAccount (office or

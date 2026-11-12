@@ -198,6 +198,10 @@ import { createTolerance, listTolerances, moveTolerance, updateTolerance } from 
 // B-W2b-332: ask to buy (./ask-to-buy).
 import { askFromShortage, askOptions, askToBuy, cancelRequests as cancelAsked, getAsked, listAsked, rejectRequests as rejectAsked } from './ask-to-buy/ask'
 import * as askContracts from './ask-to-buy/contract'
+// B-W2b-328: purchase lines by kind (./line-kinds).
+import { getLineKindsContract, putLineKindContract } from './line-kinds/contract'
+import { putLineKind } from './line-kinds/kind'
+import { getLineKinds } from './line-kinds/read'
 // B-W2b-172: "Ask for a new link" on a dead questionnaire link.
 registerLinkRenewer('SUPPLIER_ONBOARD', 'Party', questionnaireLink.renewQuestionnaireLink)
 
@@ -591,4 +595,11 @@ export default defineRoutes('purchasing', manifest, async (app) => {
   app.post('/purchasing/ask-to-buy/cancel', { schema: askContracts.cancelContract }, async (request) => cancelAsked(request, request.body, idempotencyKeyFrom(request)))
 
   app.post('/purchasing/ask-to-buy/reject', { schema: askContracts.rejectContract }, async (request) => rejectAsked(request, request.body, idempotencyKeyFrom(request)))
+
+  // B-W2b-328 (SCM-076, SCM-077, SCM-186): purchase lines by kind (./line-kinds) — a fabric or trim line by rolls, a
+  // protector line's certificate, a material variant. The send checks and prints them (views.ts, send.ts); a receipt checks
+  // the certificate again and gives the lots their variant (inventory/receipts/record.ts).
+  app.get('/purchasing/orders/:purchaseOrderId/line-kinds', { schema: getLineKindsContract }, async (request) => getLineKinds(request, request.params.purchaseOrderId))
+
+  app.put('/purchasing/orders/:purchaseOrderId/lines/:lineId/kind', { schema: putLineKindContract }, async (request) => putLineKind(request, request.params.purchaseOrderId, request.params.lineId, request.body, idempotencyKeyFrom(request)))
 })

@@ -767,6 +767,11 @@
       "NO_RATE_AT_ORDER": "L’ordine è in una valuta diversa da quella della società: inserisci il cambio all’ordine.",
       "SHIP_TO_NOT_USABLE": "Il destinatario della consegna, o il suo indirizzo, non può più ricevere la merce.",
       "SHIP_TO_NO_WORKSHOP_PLACE": "Il laboratorio di destinazione non ha un nostro luogo nello stabilimento: il ricevimento non entrerà nel suo stock (un avviso).",
+      "ROLLS_NOT_THE_QUANTITY": "Una riga a rotoli non chiede più quanto fanno i suoi rotoli: cambia i rotoli o toglili.",
+      "PPE_NO_CERTIFICATE": "Una riga di protettori non indica il certificato: indica quello con cui il fornitore la consegna.",
+      "PPE_CERTIFICATE_NOT_VALID": "Il certificato di una riga di protettori non vale più per questo fornitore: indicane uno valido.",
+      "PPE_CERTIFICATE_ENDS_EARLY": "Il certificato di una riga di protettori scade prima che la riga serva (un avviso).",
+      "VARIANT_NOT_USABLE": "Una riga compra una variante archiviata o di un altro colore: scegline una attiva.",
       "pass": {
         "supplierActive": "Il fornitore è attivo",
         "linesPriced": "Ogni riga ha un prezzo",
