@@ -1911,6 +1911,7 @@
     "planning_promise_view": "Vedere il disponibile a promettere e chiedere quando un ordine può essere pronto (il calcolatore delle promesse, le date proposte di un preventivo, le date per taglia di una riga d'ordine)",
     "planning_promise_manage": "Registrare la promessa per taglia di una riga d'ordine (solo le taglie coperte da un certificato valido fino alla data)",
     "planning_schedule_pin": "Fissare barre e ordini di lavoro sul tabellone di pianificazione dove sono, o sbloccarli",
+    "planning_backlog_manage": "Ordinare a mano gli ordini di vendita aperti, riportarli alla regola o ordinarli secondo la regola",
     "planning_strategy_manage": "Impostare come un sito risponde alla domanda di un capo o di un componente: su ordine, per magazzino o assemblaggio su ordine",
     "alerts_view": "Vedere gli avvisi dei record che vedi e le regole di eccezione",
     "alerts_handle": "Prendere in carico, assegnare, posticipare e risolvere gli avvisi",

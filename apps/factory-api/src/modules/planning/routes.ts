@@ -70,6 +70,15 @@ import { demandContract, demandRowsContract } from './demand/contract'
 import { readDemand, readDemandRows } from './demand/demand'
 import { bulkStrategyContract, listStrategyContract, setStrategyContract } from './strategy/contract'
 import { bulkStrategy, listStrategy, setStrategy } from './strategy/strategy'
+// B-W2b-317: keeping promises (the promise list with orders at risk, one promise history per line, the re-promise workflow),
+// the backlog ranked, supply too late.
+import { acceptContract, declineContract, draftContract, getRepromiseContract, historyContract, listPromisesContract, listRepromisesContract, proposeContract, withdrawContract } from './promise-keep/contract'
+import { promiseHistory } from './promise-keep/history'
+import { listPromises } from './promise-keep/lines'
+import { acceptRepromise, declineRepromise, getRepromise, listRepromises, proposeRepromise, repromiseDraft, withdrawRepromise } from './promise-keep/repromise'
+import { backlogContract as readBacklogContract, rankByRuleContract, ranksContract } from './backlog/contract'
+import { rankByRule, readBacklog, setRanks } from './backlog/backlog'
+import { checkSupplyLateNow, supplyLateCheckContract, supplyLateFixes, supplyLateFixesContract, supplyLateList, supplyLateListContract } from './exceptions/supply-late'
 
 /**
  * What to buy and make (B-W1-29; PLN-062 to PLN-066; A2 SCR-055, design 02): run the plan for a site, read the latest
@@ -205,4 +214,21 @@ export default defineRoutes('planning', manifest, async (app) => {
   app.get('/planning/strategy', { schema: listStrategyContract }, async (request) => listStrategy(request, request.query))
   app.put('/planning/strategy/items/:itemId', { schema: setStrategyContract }, async (request) => setStrategy(request, request.params.itemId, request.body, idempotencyKeyFrom(request)))
   app.post('/planning/strategy/bulk', { schema: bulkStrategyContract }, async (request) => bulkStrategy(request, request.body, idempotencyKeyFrom(request)))
+  // B-W2b-317: keeping promises (orders at risk, the promise history, re-promise), the backlog ranked, supply too late.
+  app.get('/planning/promises', { schema: listPromisesContract }, async (request) => listPromises(request, request.query))
+  app.get('/planning/promises/order-lines/:orderLineId/history', { schema: historyContract }, async (request) => promiseHistory(request, request.params.orderLineId))
+  app.get('/planning/promises/order-lines/:orderLineId/re-promise', { schema: draftContract }, async (request) => repromiseDraft(request, request.params.orderLineId))
+  app.post('/planning/promises/order-lines/:orderLineId/re-promise', { schema: proposeContract }, async (request) => proposeRepromise(request, request.params.orderLineId, request.body, idempotencyKeyFrom(request)))
+  app.get('/planning/promises/re-promises', { schema: listRepromisesContract }, async (request) => listRepromises(request, request.query))
+  app.get('/planning/promises/re-promises/:proposalId', { schema: getRepromiseContract }, async (request) => getRepromise(request, request.params.proposalId))
+  app.post('/planning/promises/re-promises/:proposalId/accept', { schema: acceptContract }, async (request) => acceptRepromise(request, request.params.proposalId, request.body, idempotencyKeyFrom(request)))
+  app.post('/planning/promises/re-promises/:proposalId/decline', { schema: declineContract }, async (request) => declineRepromise(request, request.params.proposalId, request.body, idempotencyKeyFrom(request)))
+  app.post('/planning/promises/re-promises/:proposalId/withdraw', { schema: withdrawContract }, async (request) => withdrawRepromise(request, request.params.proposalId, idempotencyKeyFrom(request)))
+  app.get('/planning/backlog', { schema: readBacklogContract }, async (request) => readBacklog(request, request.query))
+  app.put('/planning/backlog/ranks', { schema: ranksContract }, async (request) => setRanks(request, request.body, idempotencyKeyFrom(request)))
+  app.post('/planning/backlog/rank-by-rule', { schema: rankByRuleContract }, async (request) => rankByRule(request, request.body, idempotencyKeyFrom(request)))
+  // Before /planning/exceptions/:exceptionId (static paths).
+  app.get('/planning/exceptions/supply-late', { schema: supplyLateListContract }, async (request) => supplyLateList(request, request.query))
+  app.post('/planning/exceptions/supply-late/check', { schema: supplyLateCheckContract }, async (request) => checkSupplyLateNow(request, request.body, idempotencyKeyFrom(request)))
+  app.get('/planning/exceptions/:exceptionId/fixes', { schema: supplyLateFixesContract }, async (request) => supplyLateFixes(request, request.params.exceptionId))
 })
