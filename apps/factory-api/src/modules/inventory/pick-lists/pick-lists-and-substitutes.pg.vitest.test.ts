@@ -88,7 +88,7 @@ async function addLot(itemId: string, colourId: string | null, code: string, qua
   const lotId = newId()
   await admin(
     `INSERT INTO "Lot" (id, "tenantId", "companyId", "siteId", "itemId", "itemColourId", code, "qualityStatus", "qualityDecidedAt", "requiresCrViTest", "crViStatus", "receivedAt")
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8::"LotQualityStatus", now(), false, 'NOT_REQUIRED', now() - interval '20 days')`,
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8::text::"LotQualityStatus", CASE WHEN $8::text = 'QUARANTINE' THEN NULL ELSE now() END, false, 'NOT_REQUIRED', now() - interval '20 days')`,
     [lotId, A.tenant, A.companyA, A.siteA1, itemId, colourId, code, quality],
   )
   await admin(
@@ -102,7 +102,7 @@ async function addLot(itemId: string, colourId: string | null, code: string, qua
 const ask = (extra: Json) => ({ workOrderId: W.wo1, reason: 'Made-up: the own material is late', ...extra })
 
 beforeAll(async () => {
-  db = await migratedDatabase('pick_lists_and_substitutes')
+  db = await migratedDatabase('pick_bin_substitute')
   database = await openFactoryDatabase({ connectionString: db.url(RUNTIME_LOGIN), pool: { max: 6 } })
   for (const file of readdirSync(SEED_DIR).filter((name) => name.endsWith('.ts')).sort()) {
     const module = (await import(pathToFileURL(join(SEED_DIR, file)).href)) as { seed: (context: { db: FactoryDatabase; namespace: string }) => Promise<unknown> }
@@ -178,7 +178,7 @@ describe('the pick list by bin (SCM-212)', () => {
   })
 
   it('reserved stock comes first and the PICK task names where the walk starts', async () => {
-    const created = await ok('picker', 'POST', '/inventory/picking/pick-lists', { siteId: A.siteA1, workOrderIds: [W.wo1] })
+    const created = await ok('picker', 'POST', '/inventory/picking/pick-lists', { siteId: A.siteA1, workOrderIds: [W.wo1] }, 201)
     expect(created.results[0].outcome).toBe('CREATED')
     const walk = await ok('picker', 'GET', `/inventory/pick-lists/work-orders/${W.wo1}`)
     const lining = walk.stops.filter((stop: Json) => stop.itemCode === 'SEED-LIN-200')
@@ -227,7 +227,10 @@ describe('use a substitute (MES-139; PK1:01)', () => {
     expect(paths(await no('picker', 'POST', '/inventory/substitutions', protector, 409))).toEqual(['refusal/OUTSIDE_CERTIFICATE'])
     expect(paths(await no('picker', 'POST', '/inventory/substitutions', ask({ bomLineId: W.line20, toItemId: I.liningAlt, quantity: '2' }), 409))).toEqual(['refusal/ONLY_WHEN_SHORT'])
     expect(paths(await no('picker', 'POST', '/inventory/substitutions', ask({ bomLineId: W.line20, toItemId: I.protectorAlt, quantity: '2' }), 409))).toEqual(['refusal/NOT_ON_THE_LINE'])
+    // Made-up: the lining's alternate becomes "always" (the released BOM's guard off for this one update).
+    await admin(`SET session_replication_role = replica`)
     await admin(`UPDATE "BomLineAlternate" SET "allowedWhen" = 'ALWAYS' WHERE "bomLineId" = $1`, [W.line20])
+    await admin(`SET session_replication_role = DEFAULT`)
     expect(paths(await no('picker', 'POST', '/inventory/substitutions', ask({ bomLineId: W.line20, toItemId: I.liningAlt, toLotId: L.altLiningQuarantine, quantity: '2' }), 409))).toEqual(['refusal/LOT_NOT_USABLE'])
     // 13.23 m still to issue, 8 m standing (the seed's waiting and approved substitutes): at most 5.23 m.
     const tooMuch = await no('picker', 'POST', '/inventory/substitutions', ask({ bomLineId: W.line20, toItemId: I.liningAlt, quantity: '6' }), 409)
@@ -270,7 +273,7 @@ describe('use a substitute (MES-139; PK1:01)', () => {
     expect(protectorSub).toMatchObject({ status: 'WAITING', approval: { status: 'PENDING' }, ruleAnswer: { may: false, held: ['NEEDS_APPROVAL'] } })
     const taskId = protectorSub.approval.taskId
     const task = (await ok('picker', 'GET', `/approvals/tasks/${taskId}`)).task
-    expect(task).toMatchObject({ kind: 'MATERIAL_SUBSTITUTION', recordType: 'MaterialSubstitution', recordId: protectorSub.id })
+    expect(task).toMatchObject({ kind: 'MATERIAL_SUBSTITUTION', record: { type: 'MaterialSubstitution', id: protectorSub.id }, requester: { kind: 'PERSON', id: PEOPLE.picker } })
     expect(paths(await no('picker', 'POST', `/approvals/tasks/${taskId}/approve`, { version: task.version }, 403))).toContain('refusal/OWN_REQUEST')
     // Not issued while it waits.
     expect(paths(await no('picker', 'POST', `/inventory/substitutions/${protectorSub.id}/issue`, {}, 409))).toEqual(['refusal/NOT_APPROVED'])
