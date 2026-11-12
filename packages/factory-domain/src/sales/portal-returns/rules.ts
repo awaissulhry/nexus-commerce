@@ -159,6 +159,8 @@ export const DISPOSITION_WORDS: Readonly<Record<ReturnDisposition, Words>> = Obj
   CREDIT_ONLY: { en: 'A credit note', it: 'Una nota di credito' },
   RETURN_UNCHANGED: { en: 'Sent back to you as it came', it: 'Ti viene rispedito com’è arrivato' },
   SCRAP: { en: 'Not sent back', it: 'Non viene rispedito' },
+  // B-W2b-346 (SAL-351).
+  SIZE_EXCHANGE: { en: 'The same garment in another size', it: 'Lo stesso capo in un’altra taglia' },
 })
 
 /** The inspection's grade in customer words (the cause found is the office's). */

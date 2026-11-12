@@ -14,6 +14,9 @@ import { NotInAccess } from './view/parts'
 import { ReturnsListView, type ReturnsListViewModel } from './view/ReturnsListView'
 import type { StartDialogModel } from './view/StartDialog'
 import { useReturnWords } from './words'
+// B-W2b-346 (SAL-298, RX2:02): the remake's body and route.
+import { requestRemake } from './remake/api'
+import { remakeBodyOf } from './remake/model'
 
 /**
  * `/p/<party>/returns` for a customer (B-W2b-197; design portal.customer.returns, SCR-187): reads the cases (GET
@@ -25,7 +28,7 @@ import { useReturnWords } from './words'
  */
 export function CustomerReturnsPage() {
   return (
-    <WithMessages namespaces={[NS, 'ds-words', 'lists']}>
+    <WithMessages namespaces={[NS, 'ds-words', 'lists', 'returns-remake']}>
       <Suspense fallback={null}>
         <ReturnsRoute />
       </Suspense>
@@ -175,7 +178,13 @@ function ListContainer() {
     const returnable = start.read.read
     setStart({ ...start, busy: true, problem: null })
     const call =
-      draft.type === 'RETURN'
+      // B-W2b-346 (SAL-298, RX2:02): a remake goes to its own route.
+      draft.type === 'REMAKE'
+        ? (() => {
+            const body = remakeBodyOf(draft, returnable)
+            return requestRemake(api, body, keyFor(body))
+          })()
+        : draft.type === 'RETURN'
         ? (() => {
             const body = returnBodyOf(draft, returnable)
             return requestReturn(api, body, keyFor(body))
@@ -187,7 +196,7 @@ function ListContainer() {
     call
       .then((answer) => {
         writeKey.current = null
-        setStart((current) => (current ? { ...current, busy: false, sent: { type: draft.type ?? 'RETURN', number: answer.sent.number, answerBy: answer.sent.answerBy, href: caseHref(frame.prefix, draft.type ?? 'RETURN', answer.id, 'request') } } : current))
+        setStart((current) => (current ? { ...current, busy: false, sent: { type: draft.type ?? 'RETURN', number: answer.sent.number, answerBy: answer.sent.answerBy, href: caseHref(frame.prefix, draft.type === 'COMPLAINT' ? 'COMPLAINT' : 'RETURN', answer.id, 'request') } } : current))
         void load()
         void loadComplaints()
         frame.refreshTasks()

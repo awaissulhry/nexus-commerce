@@ -7,7 +7,7 @@ import { SaveStatus } from '@nexus/ui/components/SaveStatus/index'
 import { Button, Skeleton, Spinner } from '@nexus/ui/primitives'
 import { useDsWords } from '../../../lib/i18n/ds-parts'
 import { formatDate, formatTime } from '../../../lib/i18n/format'
-import { useLocale, useT } from '../../../lib/i18n/provider'
+import { useLocale, useScopedT, useT } from '../../../lib/i18n/provider'
 import { WithMessages } from '../../../record-panels/i18n'
 import { LinkFrameView } from '../../../shell/links/view/LinkFrameView'
 import type { ClaimPage } from '../api'
@@ -30,6 +30,8 @@ import { itemTitle } from './items'
 import { PhotoDialog } from './PhotoDialog'
 import { ScanDialog } from './ScanDialog'
 import { DetailsStep, ItemStep, PhotosStep, ReviewStep, TypeStep } from './Steps'
+// B-W2b-346 (SAL-298, RX2:01): a remake's words on the band and the end.
+import { typeKey } from '../types/remake/model'
 import '../claim.css'
 
 export type { ClaimViewModel, ClaimActions } from '../model'
@@ -46,7 +48,7 @@ export type { ClaimViewModel, ClaimActions } from '../model'
  */
 export function ReportProblemView({ model, actions }: { model: ClaimViewModel; actions?: ClaimActions }) {
   return (
-    <WithMessages namespaces={['link-claim', 'photo-kit']}>
+    <WithMessages namespaces={['link-claim', 'photo-kit', 'returns-remake']}>
       <ReportProblem model={model} actions={actions} />
     </WithMessages>
   )
@@ -115,7 +117,7 @@ function ReadProblem({ model, actions }: { model: ClaimViewModel; actions?: Clai
 }
 
 function Wizard({ page, model, actions }: { page: ClaimPage; model: ClaimViewModel; actions?: ClaimActions }) {
-  const t = useT('link-claim')
+  const t = useScopedT('link-claim')
   const locale = useLocale()
   const ds = useDsWords()
   const step = model.step
@@ -218,7 +220,7 @@ function Wizard({ page, model, actions }: { page: ClaimPage; model: ClaimViewMod
                   <Spinner size={14} /> {t('send.busy')}
                 </>
               ) : (
-                t(`send.button.${model.form.type ?? 'RETURN'}`)
+                t(typeKey(model.form.type, 'send'))
               )}
             </Button>
           )}
@@ -248,10 +250,12 @@ function StepBody({ step, page, model, actions }: { step: Step; page: ClaimPage;
 
 /** Design sec:done — the case number and the next step, how the photos went, and this link's reports. */
 function Done({ page, done, model, actions }: { page: ClaimPage; done: DoneModel; model: ClaimViewModel; actions?: ClaimActions }) {
-  const t = useT('link-claim')
+  const t = useScopedT('link-claim')
   const locale = useLocale()
   const ds = useDsWords()
   const sent = done.sent
+  // B-W2b-346: a remake is a return case (`sent.type`) asked as a remake (the form's type).
+  const asked = done.form.type === 'REMAKE' ? 'REMAKE' : sent.type
   const uploads = uploadSummary(done.uploads)
   const held = sendHeldKey(page)
   const items =
@@ -266,11 +270,11 @@ function Done({ page, done, model, actions }: { page: ClaimPage; done: DoneModel
     <div className="fw-cl-stack">
       <EndState
         tone="success"
-        title={t(`done.title.${sent.type}`, { number: sent.number })}
+        title={t(typeKey(asked, 'doneTitle'), { number: sent.number })}
         body={sent.answerBy ? t('done.answerBy', { day: formatDate(sent.answerBy, { locale, timeZone: model.timeZone }) }) : t('done.answerWithin', { days: ANSWER_DAYS })}
-        next={[t(`done.next.${sent.type}`), ...(photosLine ? [photosLine] : []), page.link.usesLeft > 0 && page.link.live ? t('done.again', { day: formatDate(page.link.expiresAt, { locale, timeZone: model.timeZone }) }) : t('done.noMore', { sender: page.sender.companyName })]}
+        next={[t(typeKey(asked, 'doneNext')), ...(photosLine ? [photosLine] : []), page.link.usesLeft > 0 && page.link.live ? t('done.again', { day: formatDate(page.link.expiresAt, { locale, timeZone: model.timeZone }) }) : t('done.noMore', { sender: page.sender.companyName })]}
         facts={[
-          { label: t('done.fact.type'), value: t(`type.${sent.type}.title`) },
+          { label: t('done.fact.type'), value: t(typeKey(asked, 'typeTitle')) },
           { label: t(sent.type === 'RETURN' ? 'done.fact.items' : 'done.fact.item'), value: items.join(' · ') },
           ...(done.form.customerRef.trim() ? [{ label: t('done.fact.yourRef'), value: done.form.customerRef.trim() }] : []),
           ...(done.form.typedName.trim() ? [{ label: t('done.fact.by'), value: done.form.typedName.trim() }] : []),
