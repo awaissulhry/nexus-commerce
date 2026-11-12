@@ -19,6 +19,7 @@ import { followDiscrepancies } from './follow'
 import { keepLetterInCommand, prepareLetter, type PreparedLetter } from './letter'
 import { CLAIM_RECORD, claimInCommand, factsOf, officeClaim, readLines, type ClaimRow } from './store'
 import type { ClaimDetailView } from './views'
+import { recipientRank } from '@nexus/factory-domain/purchasing/suppliers-depth/routing'
 
 /**
  * Sending a claim to the supplier (B-W2a-44; SCM-134; design purchasing.claims "Send to supplier"): a DRAFT, or a claim
@@ -52,13 +53,14 @@ export interface SendInput {
   readonly mail: MailInput | null
 }
 
-const QUALITY_FIRST = (roles: readonly string[]) => (roles.includes('QUALITY') ? 0 : roles.includes('ORDERS') ? 1 : 2)
+// B-W2b-311 (SCM-004): those who receive claims first, then QUALITY, then ORDERS (W1's order).
+const CLAIM_FIRST = (contact: { readonly roles: readonly string[]; readonly receives: readonly string[] }) => recipientRank('CLAIM', contact)
 
-/** The supplier's active contacts with an e-mail, QUALITY then ORDERS first. */
+/** The supplier's active contacts with an e-mail: those who receive claims, then QUALITY, then ORDERS first. */
 async function contactsOf(db: Reader, partyId: string) {
   const party = await db.party.findUniqueOrThrow({ where: { id: partyId }, select: { id: true, legalName: true, language: true } })
-  const contacts = await db.partyContact.findMany({ where: { partyId, status: 'ACTIVE', email: { not: null } }, select: { id: true, name: true, email: true, roles: true, language: true }, orderBy: [{ name: 'asc' }, { id: 'asc' }] })
-  return { party, contacts: [...contacts].sort((a, b) => QUALITY_FIRST(a.roles) - QUALITY_FIRST(b.roles)) }
+  const contacts = await db.partyContact.findMany({ where: { partyId, status: 'ACTIVE', email: { not: null } }, select: { id: true, name: true, email: true, roles: true, receives: true, language: true }, orderBy: [{ name: 'asc' }, { id: 'asc' }] })
+  return { party, contacts: [...contacts].sort((a, b) => CLAIM_FIRST(a) - CLAIM_FIRST(b)) }
 }
 
 /** The mail's language when none is asked: the first chosen contact's, else the party's (unknown contact: the party's). */

@@ -12,6 +12,7 @@ import { identityAt, taxKeysOf, type TaxIdentityFields } from '@nexus/factory-do
 import { viesStanding, type ViesCheckFacts, type ViesStanding } from '@nexus/factory-domain/parties/vies'
 import { partyWarnings, type PartyWarning } from '@nexus/factory-domain/parties/warnings'
 import { viesErrorMeaning } from '@nexus/factory-domain/ports/vies'
+import { hasSupplierRole, initialSupplierStatus, type SupplierStatus } from '@nexus/factory-domain/purchasing/suppliers-depth/rules'
 import type { CommandCaller, CommandTools, CommandTx } from '../../core/command'
 import { actorOf, type RequestContext } from '../../core/context'
 import { ApiError } from '../../core/errors'
@@ -535,6 +536,11 @@ export interface NewPartyRecord {
   readonly identity: TaxIdentityFields | null
   readonly addresses: readonly (AddressFields & { readonly isDefaultBillTo: boolean; readonly isDefaultShipTo: boolean })[]
   readonly contacts: readonly ContactFields[]
+  /**
+   * W2b (B-W2b-311; SCM-008): the supplier status a new supplier starts with. Left out: its W1 status read as one (PROSPECT
+   * a prospect, ACTIVE approved), set by the system (no person: the party's own audit row names who made it); null: none.
+   */
+  readonly supplierStatus?: { readonly status: SupplierStatus; readonly reason: string | null } | null | undefined
 }
 
 /**
@@ -544,11 +550,23 @@ export interface NewPartyRecord {
 export async function insertParty(tools: CommandTools, record: NewPartyRecord, action?: Permission): Promise<string> {
   const { tx, now, context } = tools
   const id = record.id ?? newId()
+  // W2b (B-W2b-311): a new supplier's first supplier status (B-W2b-287: "set it in the supplier create command from now on").
+  const supplier = record.supplierStatus !== undefined ? record.supplierStatus : hasSupplierRole(record.fields.roles) ? { status: initialSupplierStatus(record.status), reason: null } : null
   await tx.party.create({
-    data: { id, companyId: record.companyId, ...record.fields, roles: [...record.fields.roles], status: record.status, createdAt: now, updatedAt: now, createdById: createdBy(context) },
+    data: {
+      id,
+      companyId: record.companyId,
+      ...record.fields,
+      roles: [...record.fields.roles],
+      status: record.status,
+      ...(supplier ? { supplierStatus: supplier.status, supplierStatusReason: supplier.reason, supplierStatusChangedAt: now, supplierStatusChangedById: record.supplierStatus ? createdBy(context) : null } : {}),
+      createdAt: now,
+      updatedAt: now,
+      createdById: createdBy(context),
+    },
     select: { id: true },
   })
-  tools.audit({ ...(action ? { action } : {}), recordType: 'Party', recordId: id, companyId: record.companyId, after: { ...record.fields, status: record.status } })
+  tools.audit({ ...(action ? { action } : {}), recordType: 'Party', recordId: id, companyId: record.companyId, after: { ...record.fields, status: record.status, ...(supplier ? { supplierStatus: supplier.status, supplierStatusReason: supplier.reason } : {}) } })
   const party = { id, companyId: record.companyId }
   if (record.identity) {
     await assertNoTaxDuplicate(tx, context, id, record.identity)

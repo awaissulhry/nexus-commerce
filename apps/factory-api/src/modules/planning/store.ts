@@ -16,6 +16,7 @@ import {
   type WorkOrderIssue,
 } from '@nexus/factory-domain/planning/explode'
 import { OPEN_PURCHASE_STATUSES, openQuantityOf, type LotFacts } from '@nexus/factory-domain/planning/netting'
+import { PRODUCTION_ORDER_KINDS } from '@nexus/factory-domain/purchasing/sample-orders/rules'
 import { Dec, ZERO, type Decimal } from '@nexus/factory-domain/tax/decimal'
 import type { CommandTx } from '../../core/command'
 import { readLines } from '../product/bom/store'
@@ -255,7 +256,8 @@ export async function readPurchases(db: Reader, siteId: string, itemIds: readonl
   if (itemIds.length === 0) return []
   const lines = await db.purchaseOrderLine.findMany({
     // B-W2a-22: a cancelled or closed-short line (W2a wave 3, SCM-059/060) brings nothing more.
-    where: { siteId, itemId: { in: [...itemIds] }, cancelledAt: null, closedShortAt: null, purchaseOrder: { status: { in: [...OPEN_PURCHASE_STATUSES] } } },
+    // B-W2b-347 (SCM-043): production orders only; a sample order (kind SAMPLE) is development buying, never netted.
+    where: { siteId, itemId: { in: [...itemIds] }, cancelledAt: null, closedShortAt: null, purchaseOrder: { status: { in: [...OPEN_PURCHASE_STATUSES] }, kind: { in: [...PRODUCTION_ORDER_KINDS] } } },
     select: {
       id: true,
       seq: true,

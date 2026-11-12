@@ -8,6 +8,9 @@ import { changeParty, isCustomer, newParty, PARTY_KINDS, PARTY_ROLES, type Party
 import { checkTaxIdentity, PARTY_TAX_MODES, suggestTaxMode, type PartyTaxMode, type TaxIdentityFields } from './tax'
 import { decimalText } from '../product/units/units'
 import { CARRIER_CODE_MAX, commercialTermsProblems, INVOICE_TIMINGS, type InvoiceTiming } from '../sales/terms/terms'
+// W2b (B-W2b-311): a supplier's kinds, status, lead time and origin.
+import { SUPPLIER_IMPORT_COLUMNS, supplierColumnsOf, supplierOfRow, type ImportedSupplier } from '../purchasing/suppliers-depth/importer'
+import { supplierRoleProblem } from '../purchasing/suppliers-depth/rules'
 
 /**
  * The customers and suppliers import (features SAL-001, SCM-001, SCM-289 → PLT-176): a sheet of parties, one per row,
@@ -31,6 +34,10 @@ import { CARRIER_CODE_MAX, commercialTermsProblems, INVOICE_TIMINGS, type Invoic
  *                                                   the list in the party's currency, given only by a person who may keep
  *                                                   price lists), the minimum order in the party's currency (the price
  *                                                   grain). Only for a customer (the customer or brand role).
+ *   supplier kinds, supplier status, status         W2b (B-W2b-311; SCM-289): a supplier's kinds, where it stands with us,
+ *   reason, lead time, country and region of        its default lead time and origin, as its supplier record sets them
+ *   manufacture, origin note, raw hides from,       (factory-domain purchasing/suppliers-depth `supplierOfRow`). Only for a
+ *   tannages                                        supplier (the supplier, subcontractor or carrier role).
  *
  * Not by import: the company (the job's company is the parties' company: a code of another company's party is an
  * error), the status (a new party is ACTIVE; blocked and archived parties change on their page), several addresses or
@@ -114,6 +121,8 @@ export const partiesImporter = defineImporter({
     incoterm: { label: 'Incoterm', aliases: ['incoterms', 'resa', 'termini di resa'], type: cell.code({ upper: true, max: 3 }), description: 'An Incoterms 2020 rule: EXW, FCA, DAP … (a customer only).' },
     preferredCarrier: { label: 'Preferred carrier', aliases: ['corriere preferito', 'vettore preferito', 'carrier code', 'codice corriere'], type: cell.text({ max: CARRIER_CODE_MAX }), description: "The carrier's code as on a shipment (a customer only)." },
     minimumOrder: { label: 'Minimum order', aliases: ['ordine minimo', 'minimo ordine', "minimo d'ordine", 'minimum order amount'], type: cell.decimal({ precision: 14, scale: 3, min: '0' }), grain: 'price', description: "In the customer's currency (a customer only)." },
+    // W2b (B-W2b-311; SCM-289): a supplier's kinds, status and reason, default lead time and origin (after the terms columns).
+    ...SUPPLIER_IMPORT_COLUMNS,
   },
   keyColumns: ['code'],
   batchSize: 100,
@@ -151,6 +160,8 @@ export interface ImportedParty {
   readonly contacts: readonly ContactFields[]
   /** W2b (B-W2b-25): its commercial terms (left out: none set). */
   readonly terms?: ImportedTerms | null | undefined
+  /** W2b (B-W2b-311): its supplier kinds, status, lead time and origin (left out: none set). */
+  readonly supplier?: ImportedSupplier | null | undefined
 }
 
 /** A party's commercial terms as the import sees them: the library terms and the price list by their codes. */
@@ -177,6 +188,8 @@ export function importRecordValues(party: ImportedParty): RecordValues {
   for (const column of Object.keys(CONTACT_COLUMNS)) columns[column] = null
   // Commercial terms are a customer's: a supplier's row leaves them blank (its file for re-import comes back UNCHANGED).
   Object.assign(columns, isCustomer(party.fields.roles) ? termsColumnsOf(party.terms ?? null, party.fields.currency) : NO_TERMS)
+  // W2b (B-W2b-311): a customer's row leaves the supplier columns blank, as a supplier's leaves the terms.
+  Object.assign(columns, supplierColumnsOf(party.supplier, party.fields.roles))
   return { ...columns, [RECORD]: JSON.stringify(party) }
 }
 
@@ -357,11 +370,13 @@ export function planPartyRow(values: RowValues, existing: ExistingRecord | null)
     const address = addressOfRow(values, outcome.party, null)
     const contact = contactOfRow(values, null)
     const terms = termsOfRow(values, outcome.party)
+    const supplier = supplierOfRow(values, outcome.party.roles, null)
     const issues = [
       ...(identity && !identity.ok ? rowIssues(identity.issues) : []),
       ...(address && !address.ok ? rowIssues(address.issues, ADDRESS_COLUMNS) : []),
       ...(contact && !contact.ok ? rowIssues(contact.issues, CONTACT_COLUMNS) : []),
       ...(terms && !terms.ok ? terms.issues : []),
+      ...(supplier && !supplier.ok ? supplier.issues : []),
     ]
     return issues.length > 0 ? refused(issues) : { action: 'CREATE', after: values }
   }
@@ -377,11 +392,16 @@ export function planPartyRow(values: RowValues, existing: ExistingRecord | null)
   const match = matchContact(values, record.contacts)
   const contact = contactOfRow(values, match)
   const terms = termsOfRow(values, party)
+  const supplier = supplierOfRow(values, party.roles, record.supplier ?? null)
+  // W2b (B-W2b-311): a party with supplier kinds or a supplier status keeps a supplier role.
+  const roleKept = change.changed.includes('roles') && record.supplier ? supplierRoleProblem(party.tradeName ?? party.legalName, record.fields.roles, party.roles, record.supplier) : null
   const issues = [
+    ...(roleKept ? [{ column: 'roles', message: roleKept }] : []),
     ...(identity && !identity.ok ? rowIssues(identity.issues) : []),
     ...(address && !address.ok ? rowIssues(address.issues, ADDRESS_COLUMNS) : []),
     ...(contact && !contact.ok ? rowIssues(contact.issues, CONTACT_COLUMNS) : []),
     ...(terms && !terms.ok ? terms.issues : []),
+    ...(supplier && !supplier.ok ? supplier.issues : []),
   ]
   if (issues.length > 0) return refused(issues)
 
@@ -407,6 +427,7 @@ export function planPartyRow(values: RowValues, existing: ExistingRecord | null)
     const current = termsColumnsOf(record.terms ?? null, party.currency)
     for (const [column, value] of Object.entries(termsColumnsOfPatch(terms.patch, party.currency))) note(column, current[column as TermsColumn], value)
   }
+  if (supplier?.ok) for (const [column, change] of Object.entries(supplier.plan.changes)) note(column, change.before, change.after)
   return Object.keys(after).length === 0 ? { action: 'UNCHANGED' } : { action: 'UPDATE', before, after }
 }
 

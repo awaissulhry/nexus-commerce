@@ -30,6 +30,8 @@ import { genealogyStart, groupViewOf, impactOf } from './impact'
 import { HOLD_COLUMNS, readHold, type HoldRow, type Reader } from './store'
 // B-W2b-289 (SCM-179): the site's default quality place when none is named.
 import { defaultPlaceFor } from '../../inventory/locations-depth/defaults'
+// B-W2b-292 (WT1:01): the confirmed move closes the hold's QUARANTINE task in the same command.
+import { doneQuarantineTasksInCommand } from '../../inventory/tasks/lifecycle'
 
 /**
  * Holds in depth, the writes (B-W2b-114; QHS-075, QHS-077, QHS-078). Each is ONE command(); the refusals come first in
@@ -173,14 +175,81 @@ export async function askQuarantine(caller: CommandCaller, holdId: string, body:
   return result
 }
 
+/** The columns of a hold the quarantine move reads: none the floor may not see (B-W2b-292: the tablet confirms it too). */
+const QUARANTINE_HOLD_COLUMNS = { id: true, number: true, companyId: true, siteId: true, subjectType: true, subjectIds: true, status: true, quarantine: true, quarantineLocationId: true } as const satisfies Prisma.QualityHoldSelect
+export type QuarantineHold = Prisma.QualityHoldGetPayload<{ select: typeof QUARANTINE_HOLD_COLUMNS }>
+
+/** The asked move's words when it is not asked (any more): the office's and the tablet's. */
+function askedOrRefused(row: Pick<QuarantineHold, 'quarantine'>): void {
+  if (row.quarantine === 'NOT_NEEDED') throw conflict('No move to quarantine was asked for this hold: ask it first.', [{ path: 'body/placeCode', message: 'No move was asked.' }])
+  if (row.quarantine === 'MOVED') throw new InvalidStateError('The move to quarantine is confirmed already.')
+}
+
+/**
+ * B-W2b-292 (WT1:01): the hold under its row lock in a floor session (or any): its quarantine columns only (the floor may not
+ * read the board's lane), ACTIVE, a stock hold, the move asked. The tablet's QUARANTINE task takes it before the move.
+ */
+export async function lockHoldForQuarantine(tools: CommandTools, holdId: string): Promise<QuarantineHold> {
+  const [locked] = await tools.tx.$queryRaw<{ id: string }[]>`SELECT "id" FROM "QualityHold" WHERE "id" = ${holdId}::uuid FOR UPDATE`
+  if (!locked) throw new NotFoundError('Hold not found.')
+  const current = await tools.tx.qualityHold.findUniqueOrThrow({ where: { id: holdId }, select: QUARANTINE_HOLD_COLUMNS })
+  stockOnly(current)
+  askedOrRefused(current)
+  return current
+}
+
+/**
+ * The quarantine move itself (QHS-078), inside the caller's command, on the hold it locked: every balance of the held lots and
+ * hides at the site, outside the place and not at an outside workshop, is TRANSFERred into it (postMoves), the hold is MOVED
+ * with the time and the place, one audit row, quality.hold_changed. B-W2b-292 (WT1:01): THE act of the office's confirm and of
+ * the tablet's scan of the quarantine place (modules/inventory/tasks floor.ts): the hold's QUARANTINE task is done by who
+ * confirmed it, in the same command.
+ */
+export async function moveIntoQuarantineInCommand(tools: CommandTools, current: QuarantineHold, place: { readonly id: string; readonly code: string }, key: string | null) {
+  const { tx, now } = tools
+  const balances = await heldBalancesOf(tx, current)
+  const { moves, stays } = quarantineTransfers(balances, place.id)
+  const lying = new Map(balances.map((balance) => [`${balance.locationId}|${balance.lotId}|${balance.hideId}`, balance]))
+  const drafts: MoveDraft[] = moves.map((balance) => ({
+    siteId: current.siteId,
+    reason: 'TRANSFER',
+    itemId: balance.itemId,
+    itemColourId: balance.itemColourId,
+    lotId: balance.lotId,
+    hideId: balance.hideId,
+    fromLocationId: balance.locationId,
+    toLocationId: place.id,
+    quantity: balance.onHand,
+    note: `Quarantine move of hold ${current.number ?? current.id}`,
+  }))
+  if (drafts.length > 0) await postMoves(tools, drafts, { key, issuePath: () => 'body/placeCode' })
+  await tx.qualityHold.update({ where: { id: current.id }, data: { quarantine: 'MOVED', quarantineMovedAt: now, quarantineLocationId: place.id, version: { increment: 1 }, updatedAt: now }, select: { id: true } })
+  tools.audit({
+    action: 'quality.confirmHoldQuarantine',
+    recordType: 'QualityHold',
+    recordId: current.id,
+    companyId: current.companyId,
+    siteId: current.siteId,
+    before: { quarantine: current.quarantine, quarantineLocationId: current.quarantineLocationId },
+    after: { quarantine: 'MOVED', quarantineLocationId: place.id, transfers: drafts.length, staysAt: stays.map((entry) => entry.locationId) },
+  })
+  emitHoldChanged(tools, current, current.quarantineLocationId === place.id ? ['quarantine'] : ['quarantine', 'quarantineLocationId'])
+  const tasks = await doneQuarantineTasksInCommand(tools, current.id)
+  const at = (entry: HeldBalance) => lying.get(`${entry.locationId}|${entry.lotId}|${entry.hideId}`)
+  return {
+    moved: moves.map((entry) => ({ fromCode: at(entry)?.code ?? '', onHand: entry.onHand, uom: at(entry)?.uom ?? '' })),
+    stays: stays.map((entry) => ({ atCode: at(entry)?.code ?? '', onHand: entry.onHand, uom: at(entry)?.uom ?? '' })),
+    tasks,
+  }
+}
+
 /** POST /quality/holds/:holdId/quarantine/confirm */
 export async function confirmQuarantine(caller: CommandCaller, holdId: string, body: { readonly version: number; readonly placeCode: string }, idempotencyKey?: string) {
   const context = officeOf(caller)
   const row = await visibleHold(caller, holdId, QUALITY_HOLDS_VIEW)
   if (!can(actorOf(context), INVENTORY_TRANSFER, { companyId: row.companyId, siteId: row.siteId })) throw new ForbiddenError("Confirming a quarantine move moves the stock: it needs inventory.transfer at the hold's site.")
   stockOnly(row)
-  if (row.quarantine === 'NOT_NEEDED') throw conflict('No move to quarantine was asked for this hold: ask it first.', [{ path: 'body/placeCode', message: 'No move was asked.' }])
-  if (row.quarantine === 'MOVED') throw new InvalidStateError('The move to quarantine is confirmed already.')
+  askedOrRefused(row)
   const { result } = await command(caller, { name: 'quality.confirmHoldQuarantine', idempotencyKey, input: { holdId, ...body } }, async (tools) => {
     const { tx, now } = tools
     const current = await lockActiveHold(tools, row.id, body.version)
@@ -191,37 +260,12 @@ export async function confirmQuarantine(caller: CommandCaller, holdId: string, b
       const asked = places.find((entry) => entry.id === current.quarantineLocationId)
       refuse([{ path: 'body/placeCode', message: `${body.placeCode.trim()} is not a quarantine place of this site: scan or type the code on the quarantine place's label${asked ? ` (${asked.code})` : ''}.` }], 'The code is not a quarantine place of the site.')
     }
-    const balances = await heldBalancesOf(tx, current)
-    const { moves, stays } = quarantineTransfers(balances, place!.id)
-    const lying = new Map(balances.map((balance) => [`${balance.locationId}|${balance.lotId}|${balance.hideId}`, balance]))
-    const drafts: MoveDraft[] = moves.map((balance) => ({
-      siteId: current.siteId,
-      reason: 'TRANSFER',
-      itemId: balance.itemId,
-      itemColourId: balance.itemColourId,
-      lotId: balance.lotId,
-      hideId: balance.hideId,
-      fromLocationId: balance.locationId,
-      toLocationId: place!.id,
-      quantity: balance.onHand,
-      note: `Quarantine move of hold ${current.number ?? current.id}`,
-    }))
-    if (drafts.length > 0) await postMoves(tools, drafts, { key: idempotencyKey ? `quality.confirmHoldQuarantine:${idempotencyKey}` : null, issuePath: () => 'body/placeCode' })
-    const after = await tx.qualityHold.update({ where: { id: current.id }, data: { quarantine: 'MOVED', quarantineMovedAt: now, quarantineLocationId: place!.id, version: { increment: 1 }, updatedAt: now }, select: HOLD_COLUMNS })
-    tools.audit({
-      action: 'quality.confirmHoldQuarantine',
-      recordType: 'QualityHold',
-      recordId: current.id,
-      companyId: current.companyId,
-      siteId: current.siteId,
-      before: { quarantine: current.quarantine, quarantineLocationId: current.quarantineLocationId },
-      after: { quarantine: 'MOVED', quarantineLocationId: place!.id, transfers: drafts.length, staysAt: stays.map((entry) => entry.locationId) },
-    })
-    emitHoldChanged(tools, current, current.quarantineLocationId === place!.id ? ['quarantine'] : ['quarantine', 'quarantineLocationId'])
+    const done = await moveIntoQuarantineInCommand(tools, current, place!, idempotencyKey ? `quality.confirmHoldQuarantine:${idempotencyKey}` : null)
+    const after = (await readHold(tx, current.id))!
     return {
       hold: await detailOf(tx, after, now),
-      moved: moves.map((entry) => ({ fromCode: lying.get(`${entry.locationId}|${entry.lotId}|${entry.hideId}`)?.code ?? '', onHand: entry.onHand, uom: lying.get(`${entry.locationId}|${entry.lotId}|${entry.hideId}`)?.uom ?? '' })),
-      stays: stays.map((entry) => ({ atCode: lying.get(`${entry.locationId}|${entry.lotId}|${entry.hideId}`)?.code ?? '', onHand: entry.onHand, uom: lying.get(`${entry.locationId}|${entry.lotId}|${entry.hideId}`)?.uom ?? '' })),
+      moved: done.moved,
+      stays: done.stays,
       stock: await heldStockOf(tx, after),
     }
   })
