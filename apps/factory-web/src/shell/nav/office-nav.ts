@@ -155,6 +155,8 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/purchasing/subcontracting/[id]/job-sheet',
   // B-W2a-69: Requests to buy (SCR-236).
   '/purchasing/requests',
+  // B-W2b-347: RFQs & sourcing (SCR-222): the sample and development orders.
+  '/purchasing/sourcing',
   // B-W2a-63: Returns & claims (SCR-131) and a supplier claim.
   '/purchasing/claims',
   '/purchasing/claims/[id]',

@@ -12,6 +12,8 @@
 // photos are deleted, and a MEASUREMENTS link session inserts the revision the rider sent; the …_portal_sales_w2b_guards
 // triggers hold both). W2b schema wave 23: a portal session also inserts a delivery address of its own party that waits for
 // the office's check (PartyAddress.approvalStatus WAITING; the …_portal_followups_w2b_guards triggers).
+// W2b-5 schema wave 44/44 (B-W2b-297): the factory reviews a revision (MeasurementProfile.reviewStatus, the office's update
+// grant moves its review columns too) and a revision says who of ours measured and where (the …_mtm_office_w2b_guards).
 //
 // The partyId columns of the W0 modules (OneOffLink, LinkEvidence, Thread, Message, StoredFile, OutboxEvent,
 // AuditLog, IdempotencyReceipt) stay plain ids: the ledgers keep the scope a row was written in, and the others' seeds
@@ -259,6 +261,9 @@ model Party {
   bankAccounts            SupplierBankAccount[]
   supplierQualifications  SupplierQualification[]
   subcontractAgreements   SubcontractAgreement[]
+  // W2b-5 mtm-office.prisma (wave 44/44): its fittings, showroom visits and measuring sessions, and the fittings' results.
+  appointments            Appointment[]
+  fittingResults          FittingResult[]
   // W2a schedule.prisma: as a workshop, its slots on the planning board.
   scheduleSlots           ScheduleSlot[]
 
@@ -453,6 +458,8 @@ model PartyContact {
   // W2b-5 service.prisma (wave 43/44): the service cases and product-safety reports they raised.
   serviceCases         ServiceCase[]         @relation("ServiceCaseContact")
   productSafetyReports ProductSafetyReport[] @relation("ProductSafetyReportContact")
+  // W2b-5 mtm-office.prisma (wave 44/44): the appointments of this rider.
+  appointments         Appointment[]
   // W2b ncr.prisma (wave 11/16): the concessions they were asked.
   ncrConcessions      NcrConcession[]
   // W2b links.prisma, links-depth.prisma (wave 19/22): the links sent to them, the records shared with them, the
@@ -639,6 +646,22 @@ model MeasurementProfile {
   /// shipped, the rider asked), moved, never cleared; only on a revision with a photo. The one column of a profile that
   /// changes after it is written.
   photosDeleteAfter  DateTime? @db.Timestamptz(3)
+  /// W2b-5 (schema wave 44/44, B-W2b-297; SAL-291): who of ours measured (an office person: the fitter in the showroom,
+  /// at a track, at a dealer) and where, in words (1 to 200, one line: "Showroom", "Mugello paddock"); W1's takenBy stays
+  /// the name as written (a dealer's fitter, the rider). Given when the revision is written, never changed; a revision
+  /// sent by link has neither.
+  measuredByUserId   String?   @db.Uuid
+  measuredPlace      String?
+  /// W2b-5 (SAL-292): the factory review of the revision before a made-to-measure order is confirmed. Every revision
+  /// starts WAITING (also one a rider sent by link); WAITING → CONFIRMED | NEED_MORE, NEED_MORE → NEED_MORE (asked again)
+  /// | CONFIRMED; CONFIRMED is final (a change is a new revision). Who and when exactly once reviewed; nobody confirms
+  /// measures they took themselves (Owner answer Q3).
+  reviewStatus       MeasurementReviewStatus @default(WAITING)
+  reviewedById       String?   @db.Uuid
+  reviewedAt         DateTime? @db.Timestamptz(3)
+  /// The review's words (1 to 2000, line breaks allowed): what more is needed (NEED_MORE, required; the rider or dealer
+  /// reads them), or the design notes of a confirmation. Only once reviewed.
+  reviewNote         String?
   createdAt        DateTime @default(now()) @db.Timestamptz(3)
   /// The office user who recorded it.
   createdById      String?  @db.Uuid
@@ -651,6 +674,8 @@ model MeasurementProfile {
   photoFront   StoredFile?          @relation("MeasurementProfilePhotoFront", fields: [tenantId, photoFrontFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   photoSide    StoredFile?          @relation("MeasurementProfilePhotoSide", fields: [tenantId, photoSideFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   photoBack    StoredFile?          @relation("MeasurementProfilePhotoBack", fields: [tenantId, photoBackFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b-5 (wave 44/44): the office person who measured.
+  measuredBy   User?                @relation("MeasurementProfileMeasuredBy", fields: [tenantId, measuredByUserId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   contact      PartyContact?        @relation(fields: [tenantId, partyId, contactId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   supersedes   MeasurementProfile?  @relation("MeasurementProfileRevisions", fields: [tenantId, partyId, supersedesId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   supersededBy MeasurementProfile[] @relation("MeasurementProfileRevisions")
@@ -659,10 +684,27 @@ model MeasurementProfile {
   salesOrderLines SalesOrderLine[]
   // production.prisma: the made-to-measure work order cells made to this revision.
   workOrderSizes  WorkOrderSize[]
+  // W2b-5 mtm-office.prisma (wave 44/44): the appointments about it, the fittings of units made to it, the fittings that
+  // led to it.
+  appointments        Appointment[]
+  fittingResults      FittingResult[] @relation("FittingResultProfile")
+  fittingNewProfiles  FittingResult[] @relation("FittingResultNewProfile")
 
   @@unique([tenantId, partyId, riderName, garmentType, revision])
   // The target of the revisions' reference: a revision supersedes one of its own party.
   @@unique([tenantId, partyId, id])
   // W2b (wave 21/22): the photo purge job.
   @@index([tenantId, photosDeleteAfter])
+  // W2b-5 (wave 44/44): "Waiting for factory review", "Need more from the rider".
+  @@index([tenantId, reviewStatus])
+}
+
+/// The factory review of a measurement profile revision (SAL-292).
+enum MeasurementReviewStatus {
+  /// Not reviewed yet: every new revision.
+  WAITING
+  /// The measures and the design checked: a made-to-measure order may use it.
+  CONFIRMED
+  /// More is asked of the rider or dealer (the review's words).
+  NEED_MORE
 }

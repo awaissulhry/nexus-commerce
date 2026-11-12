@@ -36,6 +36,7 @@ import { seed as seedLeather } from '../seed/leather'
 import { seed as seedLinks } from '../seed/links'
 import { seed as seedLinksDepth } from '../seed/links-depth'
 import { seed as seedMoney } from '../seed/money'
+import { seed as seedMtmOffice } from '../seed/mtm-office'
 import { seed as seedNumbering } from '../seed/numbering'
 import { seed as seedNumberingBlocks } from '../seed/numbering-blocks'
 import { seed as seedOps } from '../seed/ops'
@@ -432,6 +433,11 @@ beforeAll(async () => {
   // row a second revision with its reason): the plain ones a copy may repeat. P1's repairs and estimates for the partner scope.
   await seedService({ db: factory, namespace: 'iso-a' })
   await seedService({ db: factory, namespace: 'iso-b' })
+  // The made-to-measure office schema of W2b-5 (wave 44/44): the factory review of P1's and P4's rider profiles, a new TROUSERS
+  // revision, appointments (the first a BOOKED fitting) and fitting results (the first an OK result that opened nothing), the
+  // alteration one opened and a worksheet: the plain ones a copy may repeat.
+  await seedMtmOffice({ db: factory, namespace: 'iso-a' })
+  await seedMtmOffice({ db: factory, namespace: 'iso-b' })
   // Every seed of both tenants: under a full parallel run this takes more than a minute.
 }, 120_000)
 
@@ -450,6 +456,7 @@ it('covers every classified table and every runtime role', () => {
     'Alert',
     'AlertEvent',
     'AlertRule',
+    'Appointment',
     'ApprovalEvent',
     'ApprovalRequest',
     'ApprovalRule',
@@ -539,6 +546,7 @@ it('covers every classified table and every runtime role', () => {
     'FileUploadSession',
     'FirstLoadStep',
     'FitnessJudgement',
+    'FittingResult',
     'FloorRefusedAction',
     'FloorScanRefusal',
     'FloorSession',
