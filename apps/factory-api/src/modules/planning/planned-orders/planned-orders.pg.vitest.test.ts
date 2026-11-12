@@ -117,6 +117,11 @@ beforeAll(async () => {
     [newId(), A.tenant, A.jkt01, A.jkt01Rev, options.itemIds.linerComponent, options.linerStyleId, options.linerRevisionId],
   )
   await admin(`UPDATE "RoutingOperation" SET "supplierId" = $2, "transitDays" = 5, "pricePerPiece" = 4.5 WHERE id = $1`, [A.sewing, A.workshop])
+  // B-W2b-321 (PLN-162): only a workshop qualified for the step gets planned work: P2 approved for sewing in company A (written as
+  // the owner with the guards off; a decided qualification needs evidence files this test does not upload).
+  await db.admin.query(
+    `SET session_replication_role = replica; INSERT INTO "SupplierQualification" (id, "tenantId", "companyId", "partyId", "workCentreKinds", status, "validFrom", evidence, "decidedAt", "createdAt", "updatedAt") VALUES ('${newId()}', '${A.tenant}', '${A.companyA}', '${A.workshop}', '{SEWING}'::"WorkCentreKind"[], 'APPROVED', DATE '2026-01-01', '[{"recordType": "StoredFile", "recordId": "${newId()}"}]'::jsonb, now() - interval '1 hour', now(), now()); SET session_replication_role = origin;`,
+  )
   await admin(`UPDATE "Style" SET status = 'ACTIVE' WHERE id = $1`, [A.jkt01])
   await admin(`UPDATE "StyleRevision" SET status = 'RELEASED', "releasedAt" = now(), "releasedById" = $2 WHERE id = $1`, [A.jkt01Rev, A.actor])
   // SEED-SO-0001's black line: the name on the chest (the style offered the group; the offer is archived since).

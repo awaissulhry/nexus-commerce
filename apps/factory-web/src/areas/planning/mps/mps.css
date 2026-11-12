@@ -1,0 +1,141 @@
+/*
+ * Planning › Long range › Master schedule & S&OP (SCR-202) LAYOUT: the band, the production strategy section, its cells and save
+ * marks, the bulk change's form. The controls are the design system's; semantic tokens only. No page max-width (Owner rule
+ * 2026-10-29): the page fills the shell's main area.
+ */
+.fw-mps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-mps-head,
+.fw-mps-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-mps-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-mps-inline {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-mps-status {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-10);
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-mps-h2 {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-mps-hint {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-mps-list {
+  margin: 0;
+  padding-left: var(--nds-space-16);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+.fw-mps-cell {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  height: 100%;
+  line-height: 1.3;
+}
+
+.fw-mps-sub {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
+}
+
+.fw-mps-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.fw-mps-nowrap {
+  white-space: nowrap;
+}
+
+/* The strategy cell: the Listbox, "by default", the save mark. */
+.fw-mps-strategy {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  height: 100%;
+  min-width: 0;
+}
+
+.fw-mps-strategy > :first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.fw-mps-saved {
+  display: inline-flex;
+  color: var(--nds-success-text);
+}
+
+.fw-mps-refused {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex: none;
+  border-radius: var(--nds-radius-full);
+  background: var(--nds-danger-soft);
+  color: var(--nds-danger-text);
+  font-weight: var(--nds-font-weight-bold);
+  font-size: var(--nds-font-size-xs);
+}
+
+/* The bulk change's form above the review's table. */
+.fw-mps-bulk {
+  display: grid;
+  grid-template-columns: minmax(200px, 1fr) minmax(240px, 2fr);
+  gap: var(--nds-space-10) var(--nds-space-16);
+  align-items: start;
+}
+
+.fw-mps-bulk > .fw-mps-hint {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 640px) {
+  .fw-mps-bulk {
+    grid-template-columns: 1fr;
+  }
+}

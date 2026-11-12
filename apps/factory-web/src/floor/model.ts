@@ -39,7 +39,7 @@ export function modeOf(station: { workCentreKind: WorkCentreKind } | null, devic
 
 // ---- the home tiles (design floor.home "tiles": the station's mode AND the person's permissions, fail closed) ----
 
-export const TILE_KEYS = ['mywork', 'operation', 'cut', /* B-W2b-121 */ 'fabriccut', 'bundles', 'receive', 'pick', /* B-W2a-76 */ 'returnsin', 'kits', 'labels', 'pack', /* B-W2b-115 */ 'incoming', 'final', /* B-W2b-105 */ 'inline', 'machine', /* B-W2b-67 */ 'clock', /* B-W2b-68 */ 'myday', /* B-W2b-145 */ 'training', /* B-W2b-232 */ 'instructions', /* B-W2b-70 */ 'help', /* B-W2b-137 */ 'incident', 'lineview', 'scan'] as const
+export const TILE_KEYS = ['mywork', 'operation', 'cut', /* B-W2b-121 */ 'fabriccut', 'bundles', 'receive', /* B-W2b-308 */ 'move', 'pick', /* B-W2b-310 */ 'count', /* B-W2a-76 */ 'returnsin', 'kits', 'labels', 'pack', /* B-W2b-115 */ 'incoming', 'final', /* B-W2b-105 */ 'inline', 'machine', /* B-W2b-67 */ 'clock', /* B-W2b-68 */ 'myday', /* B-W2b-145 */ 'training', /* B-W2b-232 */ 'instructions', /* B-W2b-70 */ 'help', /* B-W2b-137 */ 'incident', 'lineview', 'scan'] as const
 export type TileKey = (typeof TILE_KEYS)[number]
 
 export interface TileRule {
@@ -63,8 +63,8 @@ export interface TileRule {
  */
 export const TILE_RULES: readonly TileRule[] = [
   // SCR-089 (B-W2a-74): My work, the station's queue from the published plan (GET /production/dispatch/station asks
-  // floor.work). At every station mode; not at the warehouse (a device with no station has no queue: its task inbox is W2b).
-  { key: 'mywork', permission: 'floor.work', modes: ['sewing', 'cutting', 'packing', 'inspection'], built: true, takesScans: false },
+  // floor.work). At every station mode. B-W2b-308: at the warehouse too, as the task inbox (GET /inventory/tasks/inbox, floor.work).
+  { key: 'mywork', permission: 'floor.work', modes: ['sewing', 'cutting', 'packing', 'inspection', /* B-W2b-308 */ 'warehouse'], built: true, takesScans: false },
   // design floor.operation: sewing, cutting, packing; and the inspection bench, where a routing's scanned INSPECTION
   // operation is reported (the scans module wants a station of the operation's kind, else a reason).
   { key: 'operation', permission: 'production.scan', modes: ['sewing', 'cutting', 'packing', 'inspection'], built: true, takesScans: true },
@@ -74,7 +74,13 @@ export const TILE_RULES: readonly TileRule[] = [
   { key: 'fabriccut', permission: 'production.cut', modes: ['cutting'], built: true, takesScans: true },
   { key: 'bundles', permission: 'production.bundles', modes: ['cutting'], built: true, takesScans: true },
   { key: 'receive', permission: 'inventory.receive', modes: ['warehouse'], built: true, takesScans: true },
+  // SCR-177 (B-W2b-308): Move & put away at the warehouse (design floor.move Modes: warehouse; tile family Warehouse), after Receive:
+  // a delivery's put-away is the next job. Its API asks inventory.transfer (every floor template but the technician's holds it).
+  { key: 'move', permission: 'inventory.transfer', modes: ['warehouse'], built: true, takesScans: true },
   { key: 'pick', permission: 'inventory.issue', modes: ['warehouse'], built: true, takesScans: true },
+  // SCR-178 (B-W2b-310): Count at the warehouse (design floor.count Modes: warehouse; tile family Warehouse), after Pick & issue: the
+  // site's running counts' bins, or a bin scanned, every unit scanned. Its API asks inventory.counts.scan (operator, team leader).
+  { key: 'count', permission: 'inventory.counts.scan', modes: ['warehouse'], built: true, takesScans: true },
   // SCR-180 / SCR-181 (B-W2a-76): a customer return at the dock (its API asks sales.returns.receive) and subcontract kits
   // out and back (purchasing.subcontract.kit opens the task; Receive back asks .receive inside it). Warehouse tablets only.
   { key: 'returnsin', permission: 'sales.returns.receive', modes: ['warehouse'], built: true, takesScans: true },

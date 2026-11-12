@@ -132,6 +132,8 @@ export const ROWS: AgeingRow[] = [
     remindersSent: 2,
     lastReminderAt: '2026-10-07T07:00:00.000Z',
     remindersWaiting: 1,
+    // B-W2b-304: over its made-up limit of 15,000.00 with the orders not yet invoiced.
+    creditLimitUsed: 106,
   }),
   row(MOTO, {
     open: 854000,
@@ -150,6 +152,7 @@ export const ROWS: AgeingRow[] = [
     remindersSent: 1,
     lastReminderAt: '2026-10-07T07:00:00.000Z',
     remindersWaiting: 1,
+    creditLimitUsed: 62,
   }),
   row(PISTA, {
     open: 183000,

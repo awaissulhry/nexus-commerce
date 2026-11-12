@@ -1,0 +1,395 @@
+{
+  "title": "Move & put away",
+  "noPermission": {
+    "title": "Moving goods is not open to you here",
+    "body": "Moves need the permission to move stock. Ask your team leader."
+  },
+  "offline": {
+    "line": "No network: a move is kept on this tablet and sent when the network is back. Undo waits for the network."
+  },
+  "asOf": "From this tablet, as of {time}",
+  "what": {
+    "scan": {
+      "label": "Scan what you move",
+      "hint": "A lot, a hide, a roll or a remnant label"
+    },
+    "reading": "Reading {code}…"
+  },
+  "waiting": {
+    "title": "Waiting to be moved",
+    "loading": "Reading your tasks…",
+    "empty": {
+      "title": "Nothing waits to be moved",
+      "body": "Scan any lot, hide or roll to move it."
+    },
+    "error": "Your tasks could not be read. Scan to move anyway.",
+    "notOnTablet": "Your tasks are not on this tablet. Scan to move anyway.",
+    "more": "More wait: the first {count} are shown, the next first.",
+    "count_one": "{count} task",
+    "count_other": "{count} tasks"
+  },
+  "kind": {
+    "RECEIVE": "Receive",
+    "PUT_AWAY": "Put away",
+    "PICK": "Pick",
+    "MOVE": "Move",
+    "COUNT": "Count",
+    "QUARANTINE": "Move to quarantine"
+  },
+  "purpose": {
+    "PUT_AWAY": "Put away",
+    "MOVE": "Move between places"
+  },
+  "scanned": {
+    "LOT": "Lot",
+    "HIDE": "Hide",
+    "ROLL": "Roll",
+    "REMNANT": "Remnant",
+    "LABEL": "Label"
+  },
+  "quality": {
+    "RELEASED": "Released",
+    "QUARANTINE": "In quarantine",
+    "ON_HOLD": "On quality hold",
+    "BLOCKED": "Blocked by quality",
+    "REJECTED": "Rejected by quality"
+  },
+  "for": {
+    "MINE": "For you",
+    "ROLE": "For your role",
+    "ANYONE": "For anyone here",
+    "OTHER": "For someone else",
+    "inHand": "In your hands"
+  },
+  "row": {
+    "title": "{kind} {code}",
+    "item": "{code} {name}",
+    "fromTo": "{from} → {to}",
+    "from": "In {from}",
+    "to": "To {to}",
+    "due": "Due {time}",
+    "late": "Late",
+    "quantity": "How much"
+  },
+  "task": {
+    "scanGoods": "Scan {code} to start: its label confirms what you move.",
+    "scanItem": "Scan the label of {item} at {from} to start.",
+    "scanQuarantine": "Scan the quarantine place {place}: the scan confirms the move.",
+    "scanQuarantineAny": "Scan the label of the quarantine place: the scan confirms the move.",
+    "fact": {
+      "from": "Where it is",
+      "to": "Where it goes",
+      "quantity": "How much",
+      "due": "Due"
+    },
+    "note": "Note: {note}"
+  },
+  "hand": {
+    "title": "In your hands · {kind}",
+    "fact": {
+      "onHand": "On hand",
+      "where": "Where it is now",
+      "lot": "Lot",
+      "move": "Kind of move"
+    },
+    "nowhere": "Nowhere at this site",
+    "places_one": "{count} place",
+    "places_other": "{count} places",
+    "readWhere": "In {where}",
+    "flag": {
+      "hold": "On a quality hold: it goes only into a quarantine place",
+      "notReleased": "Not released by quality: it goes only into a quarantine place",
+      "quarantine": "Quality asks: move it to quarantine {place}",
+      "quarantineAny": "Quality asks: move it to quarantine",
+      "wholeLot": "Hide by hide: every hide of it there moves",
+      "suggestion": {
+        "DEFAULT": "Put it in {place}: the default place for this kind",
+        "SAME_LOT": "Put it in {place}: where the same lot lies",
+        "QUALITY": "Put it in {place}: the quality place",
+        "TASK": "Asked: put it in {place}"
+      }
+    },
+    "blind": {
+      "status": "Not on this tablet",
+      "body": "Scan the place: the move waits on this tablet and the office checks it when the network is back."
+    }
+  },
+  "from": {
+    "title": "Where do you take it from?",
+    "hint": "It lies in {count} places: tap the one you take it from.",
+    "picked": "Taken from here",
+    "count_one": "{count} place",
+    "count_other": "{count} places"
+  },
+  "pad": {
+    "title": "How much do you move?",
+    "label": "How much",
+    "expected": "All of it: {quantity}",
+    "all": "All",
+    "separator": "Decimal point",
+    "minus": "Less",
+    "plus": "More",
+    "clear": "Clear",
+    "back": "Delete",
+    "empty": "Type how much",
+    "range": "From {min} to {max}"
+  },
+  "where": {
+    "scan": {
+      "label": "Scan the place",
+      "hint": "The bin label is the confirmation",
+      "to": "Put it in {place}: scan its label",
+      "quarantine": "Scan the quarantine place {place}",
+      "quarantineAny": "Scan the label of the quarantine place"
+    },
+    "held": {
+      "busy": "Moving…",
+      "from": "Tap first where you take it from",
+      "nothing": "Nothing of it lies at this site",
+      "empty": "Type how much first",
+      "tooMuch": "Not more than lies there"
+    }
+  },
+  "last": {
+    "moved": "{code} · {quantity} → {to}",
+    "movedWhole": "{code} → {to}",
+    "movedFrom": "{quantity} from {from}",
+    "quarantined": "{code}: moved to quarantine {to}",
+    "quarantinedHold": "Quality's hold: moved to quarantine {to}",
+    "stays": "Stays at {at}: {quantity}",
+    "undone": "Undone: {code} is back in {from}",
+    "refused": "The office refused the move of {code} to {to}: open Waiting to send to see why."
+  },
+  "undo": {
+    "label": "Undo",
+    "held": {
+      "offline": "Undo needs the network",
+      "busy": "Undoing…"
+    }
+  },
+  "action": {
+    "back": "Back",
+    "startAgain": "Scan something else",
+    "anotherPlace": "Scan another place",
+    "scanAgain": "Scan again"
+  },
+  "keys": {
+    "home": "Back to Home",
+    "tab": "Next row",
+    "pick": "Take it from this place",
+    "back": "Back"
+  },
+  "refusal": {
+    "NOTHING_HERE": {
+      "message": "{code} lies nowhere at this site",
+      "fix": "There is nothing to move: scan another label."
+    },
+    "NAME_THE_PLACE": {
+      "message": "{code} lies in several places",
+      "fix": "Tap where you take it from, then scan the place again."
+    },
+    "SAME_PLACE": {
+      "message": "{code} is in {place} already",
+      "fix": "Scan the label of the place you put it in."
+    },
+    "ARCHIVED": {
+      "message": "{place} is no longer used",
+      "fix": "Nothing goes into it: scan another place."
+    },
+    "QUARANTINE_ONLY": {
+      "message": "Not released by quality: it goes only into a quarantine place",
+      "fix": "Scan the label of a quarantine place. Quality releases it first for an open shelf."
+    },
+    "WHOLE_ONLY": {
+      "message": "{code} moves whole",
+      "fix": "Move all of it: a hide or a roll is never split by a move."
+    },
+    "TOO_MUCH": {
+      "message": "Less lies there than you typed",
+      "fix": "Type at most what lies there."
+    },
+    "NOT_A_QUARANTINE_PLACE": {
+      "message": "{place} is not a quarantine place",
+      "fix": "Scan the label of the quarantine place.",
+      "fixAsked": "Scan the label of the quarantine place {asked}."
+    },
+    "LOCATION_BLOCKED": {
+      "message": "This place is blocked",
+      "fix": "Nothing moves in or out until the office unblocks it. Scan another place."
+    },
+    "COUNT_FROZEN": {
+      "message": "A count is counting this material there",
+      "fix": "Its moves wait until the count line is counted. Ask your team leader."
+    },
+    "TRANSIT_ONLY_TRANSFER": {
+      "message": "Goods in transit move only with their transfer",
+      "fix": "The office ships or receives the transfer."
+    },
+    "NOT_A_PLACE": {
+      "message": "No place of this site carries the label {place}",
+      "fix": "Scan the label of a place here: a place of another site is refused."
+    },
+    "DOES_NOT_HOLD": {
+      "message": "{place} does not take these goods",
+      "fix": "Materials go to material places, finished garments to finished goods: scan another place."
+    },
+    "NOT_STOCK": {
+      "message": "Nothing at this site carries the label {code}",
+      "fix": "Scan a lot, a hide, a roll or a remnant's tag first, then the place."
+    },
+    "NOT_YOURS": {
+      "message": "Only who made a move undoes it",
+      "fix": "Ask the office to reverse it."
+    },
+    "TOO_LATE": {
+      "message": "A move is undone within 2 minutes",
+      "fix": "Move it back with two scans, or ask the office to reverse it."
+    },
+    "UNDONE": {
+      "message": "This move was undone already",
+      "fix": "Nothing more to do."
+    },
+    "NOT_A_MOVE": {
+      "message": "Only a move made by scan is undone here",
+      "fix": "A roll moves back with a scan of it and of its place; the office reverses other moves."
+    },
+    "DONE": {
+      "message": "This task is done already",
+      "fix": "Scan what you move next."
+    },
+    "CANCELLED": {
+      "message": "The office cancelled this task",
+      "fix": "Scan what you move next."
+    },
+    "TAKEN_BY_OTHER": {
+      "message": "Someone else took this task",
+      "fix": "It is in their hands: pick another one."
+    },
+    "NOT_FOR_YOU": {
+      "message": "This task is for someone else",
+      "fix": "It is not in your list: pick another one."
+    },
+    "SCAN_THE_PLACE": {
+      "message": "Scan the label of the quarantine place",
+      "fix": "The scan confirms the move."
+    },
+    "STILL_THERE": {
+      "message": "It still lies where it was",
+      "fix": "Scan it, then scan the place you put it in."
+    },
+    "NOT_ALLOWED": {
+      "message": "This needs a permission you do not have here",
+      "fix": "Ask your team leader."
+    },
+    "CONFLICT": {
+      "message": "The office could not take the move as it is",
+      "fix": "Open Waiting to send to see why."
+    },
+    "BADGE": {
+      "message": "This badge did not open the tablet",
+      "fix": "The person on the tablet stays signed in."
+    }
+  },
+  "unit": {
+    "PCS": "pcs",
+    "PAIR": "pairs",
+    "SET": "sets",
+    "M": "m",
+    "CM": "cm",
+    "MM": "mm",
+    "M2": "m²",
+    "DM2": "dm²",
+    "FT2": "ft²",
+    "KG": "kg",
+    "G": "g",
+    "L": "l",
+    "HIDE": "hides",
+    "SIDE": "sides",
+    "ROLL": "rolls",
+    "CONE": "cones",
+    "BOX": "boxes"
+  },
+  "inbox": {
+    "title": "My work",
+    "status": "Your warehouse tasks, the next first",
+    "statusAsOf": "Your warehouse tasks, from this tablet as of {time}",
+    "countsLabel": "What waits, by kind",
+    "countOf": "{kind} {count}",
+    "next": "Next",
+    "then": "Then",
+    "task": "The task",
+    "loading": "Reading your tasks…",
+    "empty": {
+      "title": "Nothing waits for you",
+      "body": "Scan a lot, a hide or a roll to move it, or a work order's traveller to pick for it."
+    },
+    "error": {
+      "title": "Your tasks could not be read",
+      "body": "Scan to work anyway."
+    },
+    "offline": {
+      "line": "No network: Take, Give back and Done are kept on this tablet and sent when the network is back.",
+      "title": "Your tasks are not on this tablet",
+      "body": "No network, and this tablet has not read them in this visit. Scan to work anyway."
+    },
+    "noPermission": {
+      "title": "Your tasks are not open to you here",
+      "body": "The warehouse inbox needs floor work at this site. Ask your team leader."
+    },
+    "gone": {
+      "title": "This task is no longer in your list",
+      "body": "Done, given to someone else or cancelled in the office. Go back to your list."
+    },
+    "more": "More wait: the first {count} are shown, the next first.",
+    "count_one": "{count} task",
+    "count_other": "{count} tasks",
+    "scan": {
+      "label": "Scan a label",
+      "hint": "A lot or a hide opens Move & put away; a traveller opens Pick & issue"
+    },
+    "how": {
+      "moveTo": "Scan {code}, then the label of {place}.",
+      "move": "Scan {code}, then the label of the place you put it in.",
+      "moveItem": "Scan the goods' label, then the place's.",
+      "quarantine": "Quality's hold: move the goods to {place} and scan its label.",
+      "quarantineAny": "Quality's hold: move the goods to quarantine and scan the place's label.",
+      "receive": "Take the delivery in on Receive; the receipt closes this task.",
+      "pick": "Pick on Pick & issue: scan the work order's traveller there.",
+      "countAt": "Count what lies at {place}, then tap Done.",
+      "count": "Count it, then tap Done."
+    },
+    "act": {
+      "move": "Move it",
+      "quarantine": "Move to quarantine",
+      "receive": "Open Receive",
+      "pick": "Open Pick & issue",
+      "count": "Open Count",
+      "take": "Take it",
+      "giveBack": "Give it back",
+      "done": "Done"
+    },
+    "held": {
+      "busy": "Sending…",
+      "noScreen": "That screen is not open to you here",
+      "scanPlace": "Scan the quarantine place: the scan confirms the move"
+    },
+    "step": {
+      "take": "Taken: {task} is in your hands",
+      "giveBack": "Given back: {task} is open for others",
+      "done": "Done: {task}",
+      "refused": "Refused: {task}."
+    },
+    "refusal": {
+      "DONE": "It is done already.",
+      "CANCELLED": "The office cancelled it.",
+      "TAKEN_BY_OTHER": "Someone else took it.",
+      "NOT_TAKEN": "Nobody has it: there is nothing to give back.",
+      "NOT_YOURS": "Only who took it gives it back.",
+      "NOT_FOR_YOU": "It is for someone else.",
+      "SCAN_THE_PLACE": "Scan the quarantine place: the scan confirms the move.",
+      "STILL_THERE": "The goods still lie where they were: scan them, then the place you put them in.",
+      "NOT_ALLOWED": "This needs a permission you do not have here.",
+      "CONFLICT": "The office could not take it: open Waiting to send to see why."
+    }
+  }
+}

@@ -204,6 +204,10 @@ import { INVENTORY_RULES_DEFINITIONS, INVENTORY_RULES_PERMISSIONS } from '../../
 import { PLANNING_PLANNED_DEFINITIONS, PLANNING_PLANNED_PERMISSIONS } from '../../planning/planned-orders/permissions'
 // B-W2b-301: promise dates (planning.promise.view, planning.promise.manage).
 import { PLANNING_PROMISE_DEFINITIONS, PLANNING_PROMISE_PERMISSIONS } from '../../planning/promise/permissions'
+// B-W2b-312: scheduling in depth (planning.schedule.pin).
+import { PLANNING_SCHEDULE_DEPTH_DEFINITIONS, PLANNING_SCHEDULE_DEPTH_PERMISSIONS } from '../../planning/schedule-depth/permissions'
+// B-W2b-321: work to subcontractors.
+import { PLANNING_SUBCONTRACT_DEFINITIONS, PLANNING_SUBCONTRACT_PERMISSIONS } from '../../planning/subcontract-capacity/permissions'
 // B-W2b-311: suppliers in depth (purchasing.suppliers.status).
 import { SUPPLIERS_DEPTH_DEFINITIONS, SUPPLIERS_DEPTH_PERMISSIONS } from '../../purchasing/suppliers-depth/permissions'
 // B-W2b-292: the warehouse task inbox (inventory.tasks.manage: tasks by hand, handed out, changed, cancelled).
@@ -223,6 +227,8 @@ import { PLANNING_STRATEGY_DEFINITIONS, PLANNING_STRATEGY_PERMISSIONS } from '..
 import { PURCHASING_REPORTS_DEFINITIONS, PURCHASING_REPORTS_PERMISSIONS } from '../../purchasing/reports/permissions'
 // B-W2b-299: counts in depth (inventory.counts.scan: count by scanning every unit, shared with the floor).
 import { INVENTORY_COUNTS_DEPTH_DEFINITIONS, INVENTORY_COUNTS_DEPTH_FLOOR_PERMISSIONS, INVENTORY_COUNTS_DEPTH_PERMISSIONS } from '../../inventory/counts-depth/permissions'
+// B-W2b-306: MRP you can trust (planning.actions.manage: action messages; planning.planned.edit: protected edits, bulk edit).
+import { PLANNING_ACTIONS_DEFINITIONS, PLANNING_ACTIONS_PERMISSIONS } from '../../planning/actions/permissions'
 // B-W2a-35: the plant (machines, machine requests, maintenance jobs).
 import { PLANT_DEFINITIONS, PLANT_FLOOR_PERMISSIONS, PLANT_PERMISSIONS } from '../../plant/permissions'
 // B-W2a-39: the accounting exports and the period locks (accounting.view | export | lock | unlock).
@@ -334,6 +340,8 @@ import { BRANDING_DEFINITIONS, BRANDING_PERMISSIONS } from '../../branding/permi
 import { REQUIRED_DOCUMENTS_DEFINITIONS, REQUIRED_DOCUMENTS_PERMISSIONS } from '../../files/required/permissions'
 import { GRAIN_DESCRIPTIONS, GRAINS, grainPermission } from '../grains/grains'
 import { definePermissions, permissionRegistry, type PermissionDefinition } from './registry'
+// B-W2b-304: credit limits (sales.credit.view, .limits, .checks).
+import { SALES_CREDIT_DEFINITIONS, SALES_CREDIT_PERMISSIONS } from '../../sales/credit/permissions'
 
 /**
  * Every permission of the factory, assembled (feature PLT-029). A module that adds routes declares its permissions
@@ -938,6 +946,10 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   // B-W2b-293: planned work and subcontract orders (area `planning`, declared above).
   PLANNING_PLANNED_DEFINITIONS,
   PLANNING_PROMISE_DEFINITIONS,
+  // B-W2b-312: scheduling in depth (area `planning`, declared above).
+  PLANNING_SCHEDULE_DEPTH_DEFINITIONS,
+  // B-W2b-321
+  PLANNING_SUBCONTRACT_DEFINITIONS,
   // B-W2b-311: suppliers in depth (area `purchasing`, declared above).
   SUPPLIERS_DEPTH_DEFINITIONS,
   // B-W2b-292: the warehouse task inbox (area `inventory`).
@@ -956,6 +968,10 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PURCHASING_REPORTS_DEFINITIONS,
   // B-W2b-299: counts in depth (area `inventory`).
   INVENTORY_COUNTS_DEPTH_DEFINITIONS,
+  // B-W2b-304: credit limits (area `sales`).
+  SALES_CREDIT_DEFINITIONS,
+  // B-W2b-306: MRP you can trust (area `planning`, declared above).
+  PLANNING_ACTIONS_DEFINITIONS,
   // B-W2b-300: goods without a PO (area `inventory`).
   INVENTORY_UNPLANNED_DEFINITIONS,
 ])
@@ -1279,6 +1295,12 @@ for (const name of INVENTORY_RULES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDecla
 // B-W2b-293: planned work and subcontract orders.
 for (const name of PLANNING_PLANNED_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of PLANNING_PROMISE_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-312: scheduling in depth.
+for (const name of PLANNING_SCHEDULE_DEPTH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-306
+for (const name of PLANNING_ACTIONS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-321: work to subcontractors.
+for (const name of PLANNING_SUBCONTRACT_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-311: suppliers in depth.
 for (const name of SUPPLIERS_DEPTH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-292: the warehouse task inbox.
@@ -1296,6 +1318,8 @@ for (const name of PORTAL_BANK_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.p
 for (const name of PURCHASING_REPORTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-299: counts in depth.
 for (const name of INVENTORY_COUNTS_DEPTH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-304: credit limits.
+for (const name of SALES_CREDIT_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

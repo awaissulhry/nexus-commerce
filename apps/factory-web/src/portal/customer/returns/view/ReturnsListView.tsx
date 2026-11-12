@@ -13,6 +13,7 @@ import { answerCell, caseHref, complaintStateOfStatus, eightDProgress, itemLine,
 import { useReturnWords } from '../words'
 import { Loading, OfflineBanner, ReadFailed } from './parts'
 import { StartDialog, type StartDialogActions, type StartDialogModel } from './StartDialog'
+import { RepairsSection, type RepairsSectionModel } from '../repair/RepairsSection'
 import '../returns.css'
 
 /**
@@ -40,6 +41,8 @@ export interface ReturnsListViewModel {
   /** "Start a return or claim" in the empty list waits: why (words), or null. */
   startHeld: string | null
   start: StartDialogModel | null
+  /** B-W2b-342: the customer's repairs (hidden when there are none). */
+  repairs?: RepairsSectionModel
   /** Design cases: the keys panel open. */
   keysOpen?: boolean
 }
@@ -53,6 +56,8 @@ export interface ReturnsListActions {
   onOpenComplaint?: (id: string) => void
   onRetry?: () => void
   onRetryComplaints?: () => void
+  onOpenRepair?: (id: string) => void
+  onRetryRepairs?: () => void
   onShowUpdates?: () => void
   onExport?: (ids: readonly string[]) => void
   onStart?: () => void
@@ -227,6 +232,7 @@ export function ReturnsListView({ model, actions }: { model: ReturnsListViewMode
           keysOpen={model.keysOpen}
         />
       </section>
+      {model.repairs ? <RepairsSection model={model.repairs} onOpen={actions?.onOpenRepair} onRetry={actions?.onRetryRepairs} /> : null}
       <Complaints model={model} actions={actions} />
       {model.start ? <StartDialog model={model.start} actions={actions?.start} /> : null}
     </div>

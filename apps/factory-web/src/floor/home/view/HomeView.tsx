@@ -1,7 +1,7 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { ArrowLeft, BookOpenCheck, CircleAlert, ClipboardList, Clock, CloudOff, Factory, GraduationCap, Hash, Layers, LayoutGrid, LifeBuoy, ListTodo, Package, PackageOpen, PackageSearch, Pause, Play, Ruler, ScanLine, Scissors, ScrollText, ShieldCheck, Shirt, Siren, Tag, TrafficCone, Undo2, UserRound, UserRoundCheck, Users, Wrench } from 'lucide-react'
+import { ArrowLeft, ArrowRightLeft, BookOpenCheck, /* B-W2b-310 */ ClipboardCheck, CircleAlert, ClipboardList, Clock, CloudOff, Factory, GraduationCap, Hash, Layers, LayoutGrid, LifeBuoy, ListTodo, Package, PackageOpen, PackageSearch, Pause, Play, Ruler, ScanLine, Scissors, ScrollText, ShieldCheck, Shirt, Siren, Tag, TrafficCone, Undo2, UserRound, UserRoundCheck, Users, Wrench } from 'lucide-react'
 import type { ScanIdKind } from '@nexus/factory-domain/numbering/kinds'
 import { FloorButton, FloorTile, FloorTileGrid, ScanInput, type CameraScanner } from '@nexus/ui/floor'
 import { FloorCard } from '@nexus/ui/floor/FloorCard/index'
@@ -42,6 +42,8 @@ export interface HomeViewModel {
   resume?: { items: readonly OpenItem[]; asOf: string | null } | null
   /** B-W2b-68: answers to the person's disputes not opened yet (the My day tile's badge). */
   mydayAnswers?: number
+  /** B-W2b-308: what waits per tile at the warehouse (the Move tile's put-aways, moves and quarantine moves; My work's tasks). */
+  tileCounts?: Partial<Record<TileKey, number>>
   timeZone?: string
 }
 
@@ -62,7 +64,11 @@ export const TILE_ICON: Readonly<Record<TileKey, ReactNode>> = {
   fabriccut: <Ruler />,
   bundles: <Layers />,
   receive: <PackageOpen />,
+  // B-W2b-308
+  move: <ArrowRightLeft />,
   pick: <ClipboardList />,
+  // B-W2b-310
+  count: <ClipboardCheck />,
   // B-W2a-76
   returnsin: <Undo2 />,
   kits: <Factory />,
@@ -196,11 +202,12 @@ export function HomeView({ model, onAction, onFrame, camera }: HomeViewProps) {
                 key={tile.key}
                 icon={TILE_ICON[tile.key]}
                 label={t(`tile.${tile.key}`)}
-                hint={tile.held ? t(`tile.held.${tile.held}`) : t(`tile.hint.${tile.key}`)}
+                hint={tile.held ? t(`tile.held.${tile.held}`) : t(/* B-W2b-308 */ tile.key === 'mywork' && model.mode === 'warehouse' ? 'tile.hint.myworkWarehouse' : `tile.hint.${tile.key}`)}
                 tone={tile.held ? 'neutral' : 'primary'}
                 heldReason={tile.held ? t(`tile.held.${tile.held}`) : null}
                 onPress={() => send({ type: 'tile', key: tile.key })}
                 {...(tile.key === 'myday' && model.mydayAnswers ? { count: model.mydayAnswers, countLabel: t('tile.mydayAnswers', { count: model.mydayAnswers }) } : {})}
+                {...(!tile.held && model.tileCounts?.[tile.key] ? { count: model.tileCounts[tile.key], countLabel: t(/* B-W2b-310: tile.count is the Count tile's word */ `tile.waits.${tile.key}`, { count: model.tileCounts[tile.key]! }) } : {})}
               />
             ))}
             {model.more === undefined || model.more === null ? null : <FloorTile key="more" icon={model.more > 0 ? <LayoutGrid /> : <ArrowLeft />} label={t(model.more > 0 ? 'tile.more' : 'tile.back')} hint={model.more > 0 ? t('tile.hint.more', { count: model.more }) : t('tile.hint.back')} tone="neutral" onPress={() => send({ type: 'more' })} />}

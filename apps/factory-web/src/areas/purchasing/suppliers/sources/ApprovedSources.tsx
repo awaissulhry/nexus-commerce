@@ -33,6 +33,7 @@ import {
   type SourcesRead,
   type SourceView,
 } from './model'
+import { SupplierImport } from '../list/SupplierImport'
 import { ApprovedSourcesView } from './view/ApprovedSourcesView'
 
 const SAVED_SHOWN_MS = 2500
@@ -258,6 +259,8 @@ function Container({ party }: { party: Party }) {
   return (
     <ApprovedSourcesView
       model={model}
+      // B-W2b-334: Import price list (the purchasing.supplierPrices importer, in the page's company).
+      importAction={<SupplierImport importer="purchasing.supplierPrices" onApplied={() => void load()} />}
       actions={{
         onView: setView,
         onSearch: setQ,

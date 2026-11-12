@@ -133,6 +133,8 @@ export const WARNING_CODES = [
   'SEVERAL_SUPPLIERS',
   /** B-W2b-293: a sub-assembly below the order line's revision cannot be walked (its size, colourway, unit, a circle). */
   'SUB_ASSEMBLY',
+  /** B-W2b-306 (PLN-083): an order line due before the run's day, or one its planned work cannot be ready for: planned from today. */
+  'LATE',
 ] as const
 export type WarningCode = (typeof WARNING_CODES)[number]
 
@@ -182,6 +184,24 @@ export interface PlannedRequirement {
   readonly needDate: BusinessDate
   readonly supplierId: string | null
   readonly sources: readonly RequirementSource[]
+  /** B-W2b-306 (PLN-072): the order line this line's supply is for alone (hard-pegged); null or left out: for every order. */
+  readonly reservedFor?: OrderSpecificLine | null
+}
+
+/** B-W2b-306 (PLN-072): the order line (and its party) an order-specific requirement is for. */
+export interface OrderSpecificLine {
+  readonly orderLineId: string
+  readonly partyId: string | null
+}
+
+/**
+ * B-W2b-306 (PLN-072, order-specific supply): the order lines whose need of a material is planned on a line of its own
+ * (the planner's hard pegs, carried run to run), and the open purchase lines bought for one order line alone.
+ */
+export interface OrderSpecificInput {
+  readonly pegs: readonly { readonly itemId: string; readonly itemColourId: string | null; readonly orderLineId: string }[]
+  /** purchaseOrderLineId → the order line it was bought for. */
+  readonly purchaseFor: ReadonlyMap<string, string>
 }
 
 export interface PlanResult {
@@ -252,6 +272,13 @@ export interface PlanInput {
   readonly perGarment?: (line: PlanOrderLine, size: string) => readonly GarmentNeed[] | null
   /** B-W2b-293: the supplier of the BOM lines below the revision's own (its sub-assemblies' lines), by line id. */
   readonly lineSuppliers?: ReadonlyMap<string, string | null>
+  /**
+   * B-W2b-306 (PLN-072): hard-pegged supply. A pegged order line's need of the material is a line of its own, netted only
+   * against what is its own (its reservations, the purchase lines bought for it, its firm planned order), never free stock
+   * or another order's purchase lines; the other orders' line never counts what is bought for it. A pegged purchase line
+   * whose order line no longer needs the material is free supply again. Left out: W2a's netting exactly.
+   */
+  readonly orderSpecific?: OrderSpecificInput
 }
 
 const UP = { scale: QUANTITY_SCALE, rounding: 'UP' } as const
@@ -452,7 +479,11 @@ export function planRequirements(input: PlanInput): PlanResult {
     readonly sources: RequirementSource[]
     readonly parts: DemandPart[]
     readonly suppliers: Set<string | null>
+    /** B-W2b-306 (PLN-072): the order line it is planned for alone; null: every order's. */
+    readonly reservedFor: OrderSpecificLine | null
   }
+  // B-W2b-306 (PLN-072): the hard pegs (material|order line).
+  const pegged = new Set((input.orderSpecific?.pegs ?? []).map((peg) => `${materialKey(peg.itemId, peg.itemColourId)}|${peg.orderLineId}`))
   const materials = new Map<string, Material>()
   for (const draft of [...drafts].sort(compareSources)) {
     const pieces = piecesOf(draft)
@@ -462,7 +493,10 @@ export function planRequirements(input: PlanInput): PlanResult {
       const quantity = needOf(draft, key, pieces)
       if (quantity.isZero()) continue
       const issued = issuedTo.get(`${cellKey(draft.line.orderLineId, draft.size)}|${key}`) ?? ZERO
-      const material = materials.get(key) ?? { itemId: per.itemId, itemColourId: per.itemColourId, sources: [], parts: [], suppliers: new Set<string | null>() }
+      // B-W2b-306 (PLN-072): a hard-pegged order line's need is a material line of its own.
+      const reservedFor = pegged.has(`${key}|${draft.line.orderLineId}`) ? { orderLineId: draft.line.orderLineId, partyId: draft.line.partyId ?? null } : null
+      const mapKey = reservedFor ? `${key}|OL:${reservedFor.orderLineId}` : key
+      const material = materials.get(mapKey) ?? { itemId: per.itemId, itemColourId: per.itemColourId, sources: [], parts: [], suppliers: new Set<string | null>(), reservedFor }
       const source: RequirementSource = {
         orderId: draft.line.orderId,
         orderNumber: draft.line.orderNumber,
@@ -480,26 +514,37 @@ export function planRequirements(input: PlanInput): PlanResult {
       material.parts.push(...partsOf(draft, key, source))
       const item = items.get(per.itemId)
       for (const lineId of per.lineIds) material.suppliers.add(bomLineSupplier.get(lineId) ?? item?.defaultSupplierId ?? null)
-      materials.set(key, material)
+      materials.set(mapKey, material)
     }
+  }
+  // B-W2b-306 (PLN-072): the purchase lines bought for one order line serve its own line only while it needs the material.
+  const ownLines = new Set([...materials.values()].flatMap((material) => (material.reservedFor ? [`${materialKey(material.itemId, material.itemColourId)}|${material.reservedFor.orderLineId}`] : [])))
+  const purchaseFor = input.orderSpecific?.purchaseFor ?? new Map<string, string>()
+  const boughtFor = (line: PlanPurchase): string | null => {
+    const orderLineId = purchaseFor.get(line.purchaseOrderLineId)
+    return orderLineId && ownLines.has(`${materialKey(line.itemId, line.itemColourId)}|${orderLineId}`) ? orderLineId : null
   }
 
   // ---- netting and suggestion -----------------------------------------------------------------------------------------
   const lots = new Map(input.lots.map((lot) => [lot.id, lot]))
+  // B-W2b-306 (PLN-072): a firm line pegged to an order line is carried into that order line's own line.
+  const firmKey = (itemId: string, itemColourId: string | null, action: RequirementAction, orderLineId: string | null | undefined) => `${materialKey(itemId, itemColourId)}|${action}${orderLineId ? `|OL:${orderLineId}` : ''}`
   const firmOf = new Map<string, FirmSupply>()
-  for (const firm of input.firmSupply ?? []) firmOf.set(`${materialKey(firm.itemId, firm.itemColourId)}|${firm.action}`, firm)
+  for (const firm of input.firmSupply ?? []) firmOf.set(firmKey(firm.itemId, firm.itemColourId, firm.action, firm.orderLineId), firm)
   const carriedFirms = new Set<FirmSupply>()
   const rows: (Omit<PlannedRequirement, 'seq'> & { readonly netting: Omit<RequirementNetting, 'seq' | 'itemId' | 'itemColourId'> })[] = []
-  const pegOf = (itemId: string, itemColourId: string | null, parts: readonly DemandPart[], firm: FirmSupply | null) =>
+  const pegOf = (itemId: string, itemColourId: string | null, parts: readonly DemandPart[], firm: FirmSupply | null, reservedFor: OrderSpecificLine | null = null) =>
     pegMaterial({
       itemColourId,
       parts,
       stock: input.stock.filter((entry) => entry.itemId === itemId),
       lotOf: (lotId) => lots.get(lotId),
       reservations: (input.reservations ?? []).filter((reservation) => reservation.itemId === itemId),
-      purchases: input.purchases.filter((line) => line.itemId === itemId && line.itemColourId === itemColourId),
+      // B-W2b-306 (PLN-072): an order-specific line counts the purchase lines bought for its order line; the others never do.
+      purchases: input.purchases.filter((line) => line.itemId === itemId && line.itemColourId === itemColourId && boughtFor(line) === (reservedFor?.orderLineId ?? null)),
       firm,
       runDate: input.runDate,
+      ...(reservedFor ? { ownOnly: true } : {}),
     })
   for (const material of materials.values()) {
     const item = items.get(material.itemId)
@@ -514,9 +559,15 @@ export function planRequirements(input: PlanInput): PlanResult {
     let action: RequirementAction = item.sourcing === 'MAKE' || (item.sourcing === 'MAKE_OR_BUY' && supplierId === null) ? 'MAKE' : 'BUY'
     if (action === 'MAKE') supplierId = null
     // The firm planned order the earlier run fixed for this material and action (B-W2a-22, PLN-075).
-    const firm = firmOf.get(`${materialKey(material.itemId, material.itemColourId)}|${action}`) ?? null
+    // B-W2b-306 (PLN-072): a firm line kept for an order line that has no line of its own this run (its need ended, or its
+    // order is not planned) is carried by every order's line, as before the peg.
+    const firm =
+      firmOf.get(firmKey(material.itemId, material.itemColourId, action, material.reservedFor?.orderLineId)) ??
+      (material.reservedFor
+        ? null
+        : ((input.firmSupply ?? []).find((entry) => entry.orderLineId && !carriedFirms.has(entry) && entry.itemId === material.itemId && entry.itemColourId === material.itemColourId && entry.action === action && !ownLines.has(`${materialKey(entry.itemId, entry.itemColourId)}|${entry.orderLineId}`)) ?? null))
     if (firm) carriedFirms.add(firm)
-    const netting = pegOf(material.itemId, material.itemColourId, material.parts, firm)
+    const netting = pegOf(material.itemId, material.itemColourId, material.parts, firm, material.reservedFor)
     const chosen = input.buying?.({ item, itemColourId: material.itemColourId, action, supplierId, quantity: netting.net }) ?? null
     if (chosen) {
       action = chosen.action
@@ -544,6 +595,8 @@ export function planRequirements(input: PlanInput): PlanResult {
       needDate: netting.needDate,
       supplierId,
       sources: material.sources,
+      // B-W2b-306 (PLN-072).
+      ...(material.reservedFor ? { reservedFor: material.reservedFor } : {}),
       netting: { pegging: netting, carried: firm },
     })
   }
@@ -585,7 +638,8 @@ export function planRequirements(input: PlanInput): PlanResult {
           ? -1
           : (a.itemColourId ?? '') > (b.itemColourId ?? '')
             ? 1
-            : 0,
+            : // B-W2b-306 (PLN-072): every order's line first, then the order-specific ones by order line.
+              (a.reservedFor ? 1 : 0) - (b.reservedFor ? 1 : 0) || ((a.reservedFor?.orderLineId ?? '') < (b.reservedFor?.orderLineId ?? '') ? -1 : (a.reservedFor?.orderLineId ?? '') > (b.reservedFor?.orderLineId ?? '') ? 1 : 0),
   )
   const requirements = rows.map(({ netting: _netting, ...row }, index) => ({ seq: index + 1, ...row }))
   const netting = rows.map((row, index) => ({ seq: index + 1, itemId: row.itemId, itemColourId: row.itemColourId, ...row.netting }))

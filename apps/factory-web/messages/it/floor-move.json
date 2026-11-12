@@ -1,0 +1,395 @@
+{
+  "title": "Sposta e ubica",
+  "noPermission": {
+    "title": "Spostare merce non ti è aperto qui",
+    "body": "Gli spostamenti chiedono il permesso di spostare la merce. Chiedi al tuo capo squadra."
+  },
+  "offline": {
+    "line": "Niente rete: lo spostamento resta su questo tablet e parte quando torna la rete. Annulla aspetta la rete."
+  },
+  "asOf": "Da questo tablet, alle {time}",
+  "what": {
+    "scan": {
+      "label": "Scansiona cosa sposti",
+      "hint": "L’etichetta di un lotto, di una pelle, di un rotolo o di un ritaglio"
+    },
+    "reading": "Leggo {code}…"
+  },
+  "waiting": {
+    "title": "Da spostare",
+    "loading": "Leggo i tuoi compiti…",
+    "empty": {
+      "title": "Niente aspetta di essere spostato",
+      "body": "Scansiona un lotto, una pelle o un rotolo per spostarlo."
+    },
+    "error": "Non riesco a leggere i tuoi compiti. Scansiona e sposta lo stesso.",
+    "notOnTablet": "I tuoi compiti non sono su questo tablet. Scansiona e sposta lo stesso.",
+    "more": "Ne aspettano altri: vedi i primi {count}, prima il prossimo.",
+    "count_one": "{count} compito",
+    "count_other": "{count} compiti"
+  },
+  "kind": {
+    "RECEIVE": "Ricevi",
+    "PUT_AWAY": "Ubica",
+    "PICK": "Preleva",
+    "MOVE": "Sposta",
+    "COUNT": "Conta",
+    "QUARANTINE": "Porta in quarantena"
+  },
+  "purpose": {
+    "PUT_AWAY": "Ubicazione",
+    "MOVE": "Spostamento tra ubicazioni"
+  },
+  "scanned": {
+    "LOT": "Lotto",
+    "HIDE": "Pelle",
+    "ROLL": "Rotolo",
+    "REMNANT": "Ritaglio",
+    "LABEL": "Etichetta"
+  },
+  "quality": {
+    "RELEASED": "Rilasciato",
+    "QUARANTINE": "In quarantena",
+    "ON_HOLD": "Bloccato dalla qualità",
+    "BLOCKED": "Bloccato dalla qualità",
+    "REJECTED": "Scartato dalla qualità"
+  },
+  "for": {
+    "MINE": "Per te",
+    "ROLE": "Per il tuo ruolo",
+    "ANYONE": "Per chiunque qui",
+    "OTHER": "Per un’altra persona",
+    "inHand": "In mano a te"
+  },
+  "row": {
+    "title": "{kind} {code}",
+    "item": "{code} {name}",
+    "fromTo": "{from} → {to}",
+    "from": "In {from}",
+    "to": "Verso {to}",
+    "due": "Entro le {time}",
+    "late": "In ritardo",
+    "quantity": "Quanto"
+  },
+  "task": {
+    "scanGoods": "Scansiona {code} per iniziare: l’etichetta conferma cosa sposti.",
+    "scanItem": "Scansiona l’etichetta di {item} in {from} per iniziare.",
+    "scanQuarantine": "Scansiona l’ubicazione di quarantena {place}: la scansione conferma lo spostamento.",
+    "scanQuarantineAny": "Scansiona l’etichetta dell’ubicazione di quarantena: la scansione conferma lo spostamento.",
+    "fact": {
+      "from": "Dove si trova",
+      "to": "Dove va",
+      "quantity": "Quanto",
+      "due": "Entro"
+    },
+    "note": "Nota: {note}"
+  },
+  "hand": {
+    "title": "In mano · {kind}",
+    "fact": {
+      "onHand": "Giacenza",
+      "where": "Dove si trova ora",
+      "lot": "Lotto",
+      "move": "Tipo di spostamento"
+    },
+    "nowhere": "Da nessuna parte in questo stabilimento",
+    "places_one": "{count} ubicazione",
+    "places_other": "{count} ubicazioni",
+    "readWhere": "In {where}",
+    "flag": {
+      "hold": "Bloccato dalla qualità: va solo in un’ubicazione di quarantena",
+      "notReleased": "Non rilasciato dalla qualità: va solo in un’ubicazione di quarantena",
+      "quarantine": "La qualità chiede: portalo in quarantena {place}",
+      "quarantineAny": "La qualità chiede: portalo in quarantena",
+      "wholeLot": "Pelle per pelle: si spostano tutte le sue pelli che sono lì",
+      "suggestion": {
+        "DEFAULT": "Mettilo in {place}: l’ubicazione predefinita per questo tipo",
+        "SAME_LOT": "Mettilo in {place}: dove c’è lo stesso lotto",
+        "QUALITY": "Mettilo in {place}: l’ubicazione della qualità",
+        "TASK": "Richiesto: mettilo in {place}"
+      }
+    },
+    "blind": {
+      "status": "Non su questo tablet",
+      "body": "Scansiona l’ubicazione: lo spostamento resta su questo tablet e l’ufficio lo controlla quando torna la rete."
+    }
+  },
+  "from": {
+    "title": "Da dove lo prendi?",
+    "hint": "Si trova in {count} ubicazioni: tocca quella da cui lo prendi.",
+    "picked": "Preso da qui",
+    "count_one": "{count} ubicazione",
+    "count_other": "{count} ubicazioni"
+  },
+  "pad": {
+    "title": "Quanto sposti?",
+    "label": "Quanto",
+    "expected": "Tutto: {quantity}",
+    "all": "Tutto",
+    "separator": "Virgola",
+    "minus": "Meno",
+    "plus": "Più",
+    "clear": "Azzera",
+    "back": "Elimina",
+    "empty": "Scrivi quanto",
+    "range": "Da {min} a {max}"
+  },
+  "where": {
+    "scan": {
+      "label": "Scansiona l’ubicazione",
+      "hint": "L’etichetta dell’ubicazione è la conferma",
+      "to": "Mettilo in {place}: scansiona la sua etichetta",
+      "quarantine": "Scansiona l’ubicazione di quarantena {place}",
+      "quarantineAny": "Scansiona l’etichetta dell’ubicazione di quarantena"
+    },
+    "held": {
+      "busy": "Sposto…",
+      "from": "Tocca prima da dove lo prendi",
+      "nothing": "Non ce n’è nulla in questo stabilimento",
+      "empty": "Scrivi prima quanto",
+      "tooMuch": "Non più di quanto c’è lì"
+    }
+  },
+  "last": {
+    "moved": "{code} · {quantity} → {to}",
+    "movedWhole": "{code} → {to}",
+    "movedFrom": "{quantity} da {from}",
+    "quarantined": "{code}: portato in quarantena {to}",
+    "quarantinedHold": "Blocco della qualità: portato in quarantena {to}",
+    "stays": "Resta presso {at}: {quantity}",
+    "undone": "Annullato: {code} è di nuovo in {from}",
+    "refused": "L’ufficio ha rifiutato lo spostamento di {code} in {to}: apri In attesa di invio per vedere perché."
+  },
+  "undo": {
+    "label": "Annulla",
+    "held": {
+      "offline": "Annulla chiede la rete",
+      "busy": "Annullo…"
+    }
+  },
+  "action": {
+    "back": "Indietro",
+    "startAgain": "Scansiona altro",
+    "anotherPlace": "Scansiona un’altra ubicazione",
+    "scanAgain": "Scansiona di nuovo"
+  },
+  "keys": {
+    "home": "Torna alla Home",
+    "tab": "Riga seguente",
+    "pick": "Prendilo da questa ubicazione",
+    "back": "Indietro"
+  },
+  "refusal": {
+    "NOTHING_HERE": {
+      "message": "{code} non si trova in questo stabilimento",
+      "fix": "Non c’è nulla da spostare: scansiona un’altra etichetta."
+    },
+    "NAME_THE_PLACE": {
+      "message": "{code} si trova in più ubicazioni",
+      "fix": "Tocca da dove lo prendi, poi scansiona di nuovo l’ubicazione."
+    },
+    "SAME_PLACE": {
+      "message": "{code} è già in {place}",
+      "fix": "Scansiona l’etichetta dell’ubicazione in cui lo metti."
+    },
+    "ARCHIVED": {
+      "message": "{place} non è più in uso",
+      "fix": "Lì non va nulla: scansiona un’altra ubicazione."
+    },
+    "QUARANTINE_ONLY": {
+      "message": "Non rilasciato dalla qualità: va solo in un’ubicazione di quarantena",
+      "fix": "Scansiona l’etichetta di un’ubicazione di quarantena. Per uno scaffale aperto la qualità deve prima rilasciarlo."
+    },
+    "WHOLE_ONLY": {
+      "message": "{code} si sposta intero",
+      "fix": "Spostalo tutto: una pelle o un rotolo non si dividono con uno spostamento."
+    },
+    "TOO_MUCH": {
+      "message": "Lì ce n’è meno di quanto hai scritto",
+      "fix": "Scrivi al massimo quanto c’è lì."
+    },
+    "NOT_A_QUARANTINE_PLACE": {
+      "message": "{place} non è un’ubicazione di quarantena",
+      "fix": "Scansiona l’etichetta dell’ubicazione di quarantena.",
+      "fixAsked": "Scansiona l’etichetta dell’ubicazione di quarantena {asked}."
+    },
+    "LOCATION_BLOCKED": {
+      "message": "Questa ubicazione è bloccata",
+      "fix": "Non entra né esce nulla finché l’ufficio non la sblocca. Scansiona un’altra ubicazione."
+    },
+    "COUNT_FROZEN": {
+      "message": "Un inventario sta contando questo materiale lì",
+      "fix": "I suoi spostamenti aspettano che la riga sia contata. Chiedi al tuo capo squadra."
+    },
+    "TRANSIT_ONLY_TRANSFER": {
+      "message": "La merce in transito si sposta solo con il suo trasferimento",
+      "fix": "L’ufficio spedisce o riceve il trasferimento."
+    },
+    "NOT_A_PLACE": {
+      "message": "Nessuna ubicazione di questo stabilimento ha l’etichetta {place}",
+      "fix": "Scansiona l’etichetta di un’ubicazione di qui: un’ubicazione di un altro stabilimento è rifiutata."
+    },
+    "DOES_NOT_HOLD": {
+      "message": "{place} non accetta questa merce",
+      "fix": "I materiali vanno nelle ubicazioni dei materiali, i capi finiti nei prodotti finiti: scansiona un’altra ubicazione."
+    },
+    "NOT_STOCK": {
+      "message": "Niente in questo stabilimento ha l’etichetta {code}",
+      "fix": "Scansiona prima il cartellino di un lotto, di una pelle, di un rotolo o di un ritaglio, poi l’ubicazione."
+    },
+    "NOT_YOURS": {
+      "message": "Solo chi ha fatto lo spostamento lo annulla",
+      "fix": "Chiedi all’ufficio di stornarlo."
+    },
+    "TOO_LATE": {
+      "message": "Uno spostamento si annulla entro 2 minuti",
+      "fix": "Riportalo indietro con due scansioni, o chiedi all’ufficio di stornarlo."
+    },
+    "UNDONE": {
+      "message": "Questo spostamento è già stato annullato",
+      "fix": "Non c’è altro da fare."
+    },
+    "NOT_A_MOVE": {
+      "message": "Qui si annulla solo uno spostamento fatto con la scansione",
+      "fix": "Un rotolo torna indietro scansionando lui e la sua ubicazione; gli altri spostamenti li storna l’ufficio."
+    },
+    "DONE": {
+      "message": "Questo compito è già fatto",
+      "fix": "Scansiona cosa sposti dopo."
+    },
+    "CANCELLED": {
+      "message": "L’ufficio ha annullato questo compito",
+      "fix": "Scansiona cosa sposti dopo."
+    },
+    "TAKEN_BY_OTHER": {
+      "message": "Un’altra persona ha preso questo compito",
+      "fix": "È nelle sue mani: scegline un altro."
+    },
+    "NOT_FOR_YOU": {
+      "message": "Questo compito è per un’altra persona",
+      "fix": "Non è nel tuo elenco: scegline un altro."
+    },
+    "SCAN_THE_PLACE": {
+      "message": "Scansiona l’etichetta dell’ubicazione di quarantena",
+      "fix": "La scansione conferma lo spostamento."
+    },
+    "STILL_THERE": {
+      "message": "Si trova ancora dov’era",
+      "fix": "Scansionalo, poi scansiona l’ubicazione in cui lo metti."
+    },
+    "NOT_ALLOWED": {
+      "message": "Serve un permesso che qui non hai",
+      "fix": "Chiedi al tuo capo squadra."
+    },
+    "CONFLICT": {
+      "message": "L’ufficio non ha potuto accettare lo spostamento così",
+      "fix": "Apri In attesa di invio per vedere perché."
+    },
+    "BADGE": {
+      "message": "Questo badge non ha aperto il tablet",
+      "fix": "La persona sul tablet resta collegata."
+    }
+  },
+  "unit": {
+    "PCS": "pz",
+    "PAIR": "paia",
+    "SET": "set",
+    "M": "m",
+    "CM": "cm",
+    "MM": "mm",
+    "M2": "m²",
+    "DM2": "dm²",
+    "FT2": "ft²",
+    "KG": "kg",
+    "G": "g",
+    "L": "l",
+    "HIDE": "pelli",
+    "SIDE": "fianchi",
+    "ROLL": "rotoli",
+    "CONE": "coni",
+    "BOX": "scatole"
+  },
+  "inbox": {
+    "title": "Il mio lavoro",
+    "status": "I tuoi compiti di magazzino, prima il prossimo",
+    "statusAsOf": "I tuoi compiti di magazzino, da questo tablet alle {time}",
+    "countsLabel": "Cosa aspetta, per tipo",
+    "countOf": "{kind} {count}",
+    "next": "Prossimo",
+    "then": "Poi",
+    "task": "Il compito",
+    "loading": "Leggo i tuoi compiti…",
+    "empty": {
+      "title": "Niente ti aspetta",
+      "body": "Scansiona un lotto, una pelle o un rotolo per spostarlo, o il foglio di lavoro di un ordine per prelevare."
+    },
+    "error": {
+      "title": "Non riesco a leggere i tuoi compiti",
+      "body": "Scansiona e lavora lo stesso."
+    },
+    "offline": {
+      "line": "Niente rete: Prendi, Restituisci e Fatto restano su questo tablet e partono quando torna la rete.",
+      "title": "I tuoi compiti non sono su questo tablet",
+      "body": "Niente rete, e questo tablet non li ha letti in questa visita. Scansiona e lavora lo stesso."
+    },
+    "noPermission": {
+      "title": "I tuoi compiti non ti sono aperti qui",
+      "body": "I compiti di magazzino chiedono il lavoro in reparto in questo stabilimento. Chiedi al tuo capo squadra."
+    },
+    "gone": {
+      "title": "Questo compito non è più nel tuo elenco",
+      "body": "Fatto, preso da un’altra persona o annullato dall’ufficio. Torna al tuo elenco."
+    },
+    "more": "Ne aspettano altri: vedi i primi {count}, prima il prossimo.",
+    "count_one": "{count} compito",
+    "count_other": "{count} compiti",
+    "scan": {
+      "label": "Scansiona un’etichetta",
+      "hint": "Un lotto o una pelle apre Sposta e ubica; un foglio di lavoro apre Preleva e consegna"
+    },
+    "how": {
+      "moveTo": "Scansiona {code}, poi l’etichetta di {place}.",
+      "move": "Scansiona {code}, poi l’etichetta dell’ubicazione in cui lo metti.",
+      "moveItem": "Scansiona l’etichetta della merce, poi quella dell’ubicazione.",
+      "quarantine": "Blocco della qualità: porta la merce in {place} e scansiona la sua etichetta.",
+      "quarantineAny": "Blocco della qualità: porta la merce in quarantena e scansiona l’etichetta dell’ubicazione.",
+      "receive": "Ricevi la consegna in Ricevi: il ricevimento chiude questo compito.",
+      "pick": "Preleva in Preleva e consegna: lì scansiona il foglio di lavoro dell’ordine.",
+      "countAt": "Conta cosa c’è in {place}, poi tocca Fatto.",
+      "count": "Contalo, poi tocca Fatto."
+    },
+    "act": {
+      "move": "Spostalo",
+      "quarantine": "Porta in quarantena",
+      "receive": "Apri Ricevi",
+      "pick": "Apri Preleva e consegna",
+      "count": "Apri Conta",
+      "take": "Prendilo",
+      "giveBack": "Restituiscilo",
+      "done": "Fatto"
+    },
+    "held": {
+      "busy": "Invio…",
+      "noScreen": "Quella schermata qui non ti è aperta",
+      "scanPlace": "Scansiona l’ubicazione di quarantena: la scansione conferma lo spostamento"
+    },
+    "step": {
+      "take": "Preso: {task} è nelle tue mani",
+      "giveBack": "Restituito: {task} è di nuovo aperto agli altri",
+      "done": "Fatto: {task}",
+      "refused": "Rifiutato: {task}."
+    },
+    "refusal": {
+      "DONE": "È già fatto.",
+      "CANCELLED": "L’ufficio l’ha annullato.",
+      "TAKEN_BY_OTHER": "Un’altra persona l’ha preso.",
+      "NOT_TAKEN": "Nessuno ce l’ha: non c’è nulla da restituire.",
+      "NOT_YOURS": "Solo chi l’ha preso lo restituisce.",
+      "NOT_FOR_YOU": "È per un’altra persona.",
+      "SCAN_THE_PLACE": "Scansiona l’ubicazione di quarantena: la scansione conferma lo spostamento.",
+      "STILL_THERE": "La merce è ancora dov’era: scansionala, poi l’ubicazione in cui la metti.",
+      "NOT_ALLOWED": "Serve un permesso che qui non hai.",
+      "CONFLICT": "L’ufficio non l’ha potuto accettare: apri In attesa di invio per vedere perché."
+    }
+  }
+}

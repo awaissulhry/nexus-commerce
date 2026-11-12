@@ -200,6 +200,16 @@ export const OFFICE: readonly TreeArea[] = [
         hideLabel: false,
         pages: [{ id: 'planning.milestones', title: 'Time & action', titleIt: 'Calendario T&A', wave: 'W2b', href: '/planning/milestones' }],
       },
+      // W2b: B-W2b-339 Demand & forecast (SCR-374) and Master schedule & S&OP (SCR-202), the design's group "Long range".
+      {
+        label: 'Long range',
+        labelIt: 'Lungo periodo',
+        hideLabel: false,
+        pages: [
+          { id: 'planning.demand', title: 'Demand & forecast', titleIt: 'Domanda e previsioni', wave: 'W2b', href: '/planning/demand' },
+          { id: 'planning.mps', title: 'Master schedule & S&OP', titleIt: 'Piano principale e S&OP', wave: 'W2b', href: '/planning/mps' },
+        ],
+      },
       // W2a: B-W2a-59 Planning settings (SCR-124, SCR-127).
       {
         label: 'Settings',
@@ -245,6 +255,8 @@ export const OFFICE: readonly TreeArea[] = [
       },
       // W2b: B-W2b-350 Purchasing reports (SCR-255).
       { label: 'Reports', labelIt: 'Report', hideLabel: false, pages: [{ id: 'purchasing.reports', title: 'Purchasing reports', titleIt: 'Report acquisti', wave: 'W2b', href: '/purchasing/reports' }] },
+      // W2b: B-W2b-354 Purchasing settings (SCR-256), the tree's Settings group (last).
+      { label: 'Settings', labelIt: 'Impostazioni', hideLabel: false, pages: [{ id: 'purchasing.settings', title: 'Purchasing settings', titleIt: 'Impostazioni acquisti', wave: 'W2b', href: '/purchasing/settings' }] },
     ],
   },
   {
@@ -666,6 +678,7 @@ export const FLOOR: ReadonlyArray<{
   // W2a: B-W2a-74 My work (SCR-089), the station's queue, in the tree's modes. The build differs, named in the navigation
   // test: the warehouse's task inbox (SCM-274) and the phone's personal list are W2b, so W2a gives it every station with
   // a queue — the packing bench too (the dispatch list is per station, whatever its work centre), not the warehouse.
+  // B-W2b-308: the warehouse too, where My work is the task inbox (SCM-274).
   { id: 'floor.mywork', title: 'My work', titleIt: 'Il mio lavoro', tile: 'mywork', modes: ['sewing', 'cutting', 'warehouse', 'inspection', 'phone'] },
   { id: 'floor.operation', title: 'Operation', titleIt: 'Operazione', tile: 'operation', modes: ['sewing', 'cutting', 'packing'] },
   { id: 'floor.hidecut', title: 'Hide check & cut log', titleIt: 'Controllo pelle e taglio', tile: 'cut', modes: ['cutting'] },
@@ -673,7 +686,11 @@ export const FLOOR: ReadonlyArray<{
   { id: 'floor.fabriccut', title: 'Fabric cutting', titleIt: 'Taglio tessuto', tile: 'fabriccut', modes: ['cutting'] },
   { id: 'floor.bundles', title: 'Bundles & tickets', titleIt: 'Fasci e cartellini', tile: 'bundles', modes: ['cutting'] },
   { id: 'floor.receive', title: 'Receive goods', titleIt: 'Ricevi merce', tile: 'receive', modes: ['warehouse'] },
+  // B-W2b-308: Move & put away (SCR-177), after Receive.
+  { id: 'floor.move', title: 'Move & put away', titleIt: 'Sposta e ubica', tile: 'move', modes: ['warehouse'] },
   { id: 'floor.pick', title: 'Pick & issue', titleIt: 'Preleva e consegna', tile: 'pick', modes: ['warehouse'] },
+  // B-W2b-310: Count (SCR-178), after Pick & issue (tile family Warehouse).
+  { id: 'floor.count', title: 'Count', titleIt: 'Conta', tile: 'count', modes: ['warehouse'] },
   // W2a: B-W2a-76 Receive a return (SCR-180) and Subcontract kits (SCR-181).
   { id: 'floor.returnsin', title: 'Receive a return', titleIt: 'Ricevi un reso', tile: 'returnsin', modes: ['warehouse'] },
   { id: 'floor.kits', title: 'Subcontract kits', titleIt: 'Kit per terzisti', tile: 'kits', modes: ['warehouse'] },

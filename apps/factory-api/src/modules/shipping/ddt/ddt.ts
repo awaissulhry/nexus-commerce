@@ -33,6 +33,8 @@ import { ddtView, expectedDdtNumber, isShipmentDdt, issuedOf, languageOf, liveDd
 // B-W2b-254 (PRD-272): the one compliance gate at the shipment (certificate coverage locked by the law, the operator, every requirement that blocks it).
 import { shipmentGate } from '../../compliance/gates/at-steps'
 import { withGateRecords } from '../../compliance/gates/gate'
+// B-W2b-304 (SAL-241): a shipment held for credit is written with its request after the rollback.
+import { withCreditHolds } from '../../sales/credit/check'
 
 /**
  * The DDT of a shipment (B-W1-47; LOG-054; DPR 472/1996; A2 SCR-067 Documents tab). Office only.
@@ -173,7 +175,7 @@ export async function issueDdt(files: FilesRuntime, caller: CommandCaller, shipm
   const shipment = await officeShipment(caller, shipmentId, SHIPPING_DDT_ISSUE)
   if (body.ship === true && !mayOn(context, SHIPPING_MANAGE, shipment)) throw new ForbiddenError('Shipping the goods with the DDT needs shipping.manage too.')
   const company = await companyLegalOf(caller, shipment.companyId)
-  const { result } = await withGateRecords(caller, idempotencyKey, () => command(
+  const { result } = await withCreditHolds(caller, idempotencyKey, () => withGateRecords(caller, idempotencyKey, () => command(
     caller,
     { name: 'shipping.issueDdt', idempotencyKey, input: { shipmentId, ...body }, record: { type: 'Shipment', id: shipment.id, expectedVersion: body.version } },
     async (tools) => {
@@ -242,7 +244,7 @@ export async function issueDdt(files: FilesRuntime, caller: CommandCaller, shipm
       tools.emit({ type: 'ddt.issued', subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { ddtId: id, shipmentId: current.id, number: number.formatted, documentDate: number.documentDate, replacement, shipped: shipped !== null } })
       return { ddt: ddtView((await readDdt(tools.tx, id))!, null), shipment: await shipmentState(tools, current.id) }
     },
-  ))
+  )))
   const printed = await printSafely(files, caller, result.ddt.id, onPdfError)
   return { ...result, ddt: { ...result.ddt, fileId: printed.file?.id ?? null }, ...printed }
 }
@@ -433,7 +435,7 @@ export async function listDdts(caller: CommandCaller, query: ListDdtsQuery) {
  */
 export async function shipShipment(caller: CommandCaller, shipmentId: string, body: { version?: number | undefined; periodLockOverride?: PeriodLockOverride | undefined }, idempotencyKey?: string) {
   const shipment = await officeShipment(caller, shipmentId, SHIPPING_MANAGE)
-  const { result } = await withGateRecords(caller, idempotencyKey, () => command(caller, { name: 'shipping.ship', idempotencyKey, input: { shipmentId, ...body }, record: { type: 'Shipment', id: shipment.id, expectedVersion: body.version } }, async (tools) => {
+  const { result } = await withCreditHolds(caller, idempotencyKey, () => withGateRecords(caller, idempotencyKey, () => command(caller, { name: 'shipping.ship', idempotencyKey, input: { shipmentId, ...body }, record: { type: 'Shipment', id: shipment.id, expectedVersion: body.version } }, async (tools) => {
     const current = await lockedStatus(tools, shipment.id, ['PACKED'], 'it leaves')
     const facts = { ...(await shipmentFacts(tools.tx, current.id)), ddtRequired: current.ddtRequired }
     assertTransition(shipmentMachine, current.status, 'SHIPPED', facts)
@@ -442,7 +444,7 @@ export async function shipShipment(caller: CommandCaller, shipmentId: string, bo
     const serials = await shipGoods(tools, current, body.periodLockOverride)
     tools.audit({ recordType: 'Shipment', recordId: current.id, companyId: current.companyId, siteId: current.siteId, before: { status: 'PACKED' }, after: { status: 'SHIPPED', ddt: live?.number ?? null, serials } })
     return { shipment: await shipmentDetail(tools.tx, (await readShipment(tools.tx, current.id))!) }
-  }))
+  })))
   return result
 }
 

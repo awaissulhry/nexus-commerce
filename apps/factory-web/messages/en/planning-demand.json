@@ -1,0 +1,401 @@
+{
+  "noAccess": {
+    "title": "Demand & forecast is not open to you",
+    "body": "It needs the right to see planning. Ask an administrator if your work needs it."
+  },
+  "page": {
+    "asOf": "As of {time}",
+    "horizon": "From {from} to {to}",
+    "site": "Site",
+    "siteOne": "Site {site}",
+    "bucket": "Columns by",
+    "weeks": "Horizon",
+    "weeksSite": "The site’s horizon",
+    "weeksCount_one": "{count} week",
+    "weeksCount_other": "{count} weeks",
+    "more": "More actions",
+    "exportGrid": "Export the grid (CSV)",
+    "strategy": "Production strategy per item",
+    "keys": "Keyboard shortcuts",
+    "noSites": "No site plans yet: set up a plant in Planning settings.",
+    "sitesFailed": "Couldn’t load the sites",
+    "truncated": "Showing the first {count} style-colours by code: search a style to see the others.",
+    "unplacedTitle": "Some demand has no making site",
+    "unplaced": "{orders} order lines, {quotes} quote lines and {rounds} sample rounds of this company name no site while it has several plants: they are not counted here."
+  },
+  "bucket": {
+    "WEEK": "Week",
+    "MONTH": "Month"
+  },
+  "live": {
+    "connecting": "Connecting…",
+    "live": "Live",
+    "offline": "Offline: updates paused"
+  },
+  "common": {
+    "pieces_one": "{n} piece",
+    "pieces_other": "{n} pieces",
+    "sources_one": "{n} source",
+    "sources_other": "{n} sources",
+    "retry": "Try again",
+    "clearSearch": "Clear the search",
+    "clearFilters": "Clear filters",
+    "dismiss": "Dismiss"
+  },
+  "tiles": {
+    "title": "Demand at a glance",
+    "purpose": "Pieces by layer in the horizon: late, in the horizon and without a day.",
+    "error": "Couldn’t load demand at a glance",
+    "loading": "Loading…",
+    "hint": "{sources} · {late} late · {after} after the horizon",
+    "later": {
+      "BRANDS": "Not known yet: brand demand arrives with the Nexus Commerce brands",
+      "FORECAST": "Not known yet: the forecast comes later"
+    }
+  },
+  "tile": {
+    "ORDERS": "Confirmed orders",
+    "QUOTES": "Quotes likely to win",
+    "MTM": "Made-to-measure units",
+    "SAMPLES": "Samples and protos",
+    "REMAKES": "Remakes",
+    "BRANDS": "Brand demand",
+    "FORECAST": "Forecast"
+  },
+  "layer": {
+    "ORDERS": "Confirmed orders",
+    "QUOTES": "Quotes likely to win",
+    "MTM": "Made to measure",
+    "SAMPLES": "Samples and protos",
+    "REMAKES": "Remakes",
+    "BRANDS": "Brand demand",
+    "FORECAST": "Forecast"
+  },
+  "layers": {
+    "label": "Layers in the grid",
+    "lastHeld": "One layer stays on: switch another on first.",
+    "quotesNote": "Quotes are not won yet: never bought for and never in the firm total.",
+    "held": {
+      "BRANDS": "Brand demand is not known yet: it arrives with the Nexus Commerce brands.",
+      "FORECAST": "The forecast is not known yet: it comes later."
+    }
+  },
+  "layerCount": {
+    "ORDERS_one": "{count} on orders",
+    "ORDERS_other": "{count} on orders",
+    "QUOTES_one": "{count} on quotes",
+    "QUOTES_other": "{count} on quotes",
+    "MTM_one": "{count} made to measure",
+    "MTM_other": "{count} made to measure",
+    "SAMPLES_one": "{count} sample",
+    "SAMPLES_other": "{count} samples",
+    "REMAKES_one": "{count} remake",
+    "REMAKES_other": "{count} remakes"
+  },
+  "strategy": {
+    "MAKE_TO_ORDER": "Make to order",
+    "MAKE_TO_STOCK": "Make to stock",
+    "ASSEMBLE_TO_ORDER": "Assemble to order",
+    "MIXED": "Mixed",
+    "hint": {
+      "MAKE_TO_ORDER": "Waits for a customer order.",
+      "MAKE_TO_STOCK": "Built ahead from a forecast, into finished stock.",
+      "ASSEMBLE_TO_ORDER": "Parts kept ready; assembled when the order comes.",
+      "MIXED": "Its sizes do not share one strategy: see Master schedule & S&OP."
+    }
+  },
+  "grid": {
+    "title": "Demand over time",
+    "purpose": "Style-colour rows (open them to sizes) × weeks, layer by layer.",
+    "note": "A cell is the pieces of the layers switched on; its bar shows the layers. Press a number to see what makes it.",
+    "col": {
+      "line": "Style and colour",
+      "strategy": "Strategy",
+      "total": "Total",
+      "totalTip": "Every bucket of the horizon, the late pieces and those without a day"
+    },
+    "count_one": "{count} style-colour · {pieces}",
+    "count_other": "{count} style-colours · {pieces}",
+    "search": "Search a style",
+    "error": "Couldn’t load demand over time",
+    "noMatch": "No style matches",
+    "noMatchBody": "Nothing in this horizon for “{q}”.",
+    "empty": "No demand in this horizon",
+    "emptyBody": "No open order, quote, sample round or remake waits at this site.",
+    "past": "Late",
+    "none": "No date",
+    "later": "Later",
+    "week": "Wk {week}",
+    "pastSpan": "Due before {day}",
+    "noneSpan": "No day named yet",
+    "laterSpan": "After {day}",
+    "span": "{from} to {to}",
+    "mtm": "Made to measure",
+    "size": "Size {size}",
+    "anyColour": "Any colour",
+    "cellLabel": "{line}, {bucket}: {pieces} — {layers}. What makes this number",
+    "wholeHorizon": "the whole horizon",
+    "openSizes": "Open the sizes of {line}",
+    "closeSizes": "Close the sizes of {line}",
+    "sizeNotSelectable": "A size goes with its style and colour: tick that line."
+  },
+  "bulk": {
+    "open_one": "Open sizes of {count}",
+    "open_other": "Open sizes of {count}",
+    "close_one": "Close sizes of {count}",
+    "close_other": "Close sizes of {count}",
+    "export_one": "Export {count}",
+    "export_other": "Export {count}",
+    "noSizes": "These lines have no sizes to open.",
+    "noneOpen": "None of these lines is open."
+  },
+  "keys": {
+    "search": "Search a style",
+    "what": "What makes this number",
+    "sizes": "Open or close the sizes",
+    "openSource": "Open the source document",
+    "close": "Close the popover"
+  },
+  "popover": {
+    "title": "What makes this number: {what}",
+    "loading": "Reading its sources…",
+    "error": "Couldn’t read what makes this number.",
+    "sum": "{kinds} · {pieces}",
+    "none": "Nothing in the layers switched on.",
+    "more_one": "and {count} more",
+    "more_other": "and {count} more",
+    "showAll": "Show all in Demand rows",
+    "newTab": "⌘-click a document to open it in a new tab.",
+    "openNewTab": "Open {doc} in a new tab",
+    "line": "{pieces} pcs · {size} · {day}"
+  },
+  "kindCount": {
+    "ORDER_LINE_one": "{count} order",
+    "ORDER_LINE_other": "{count} orders",
+    "QUOTE_LINE_one": "{count} quote",
+    "QUOTE_LINE_other": "{count} quotes",
+    "MTM_UNIT_one": "{count} made-to-measure unit",
+    "MTM_UNIT_other": "{count} made-to-measure units",
+    "SAMPLE_ROUND_one": "{count} sample round",
+    "SAMPLE_ROUND_other": "{count} sample rounds",
+    "REWORK_one": "{count} rework",
+    "REWORK_other": "{count} reworks",
+    "RECUT_one": "{count} recut",
+    "RECUT_other": "{count} recuts",
+    "RETURN_REPLACEMENT_one": "{count} replacement for a return",
+    "RETURN_REPLACEMENT_other": "{count} replacements for returns",
+    "RETURN_REMAKE_one": "{count} remake for a return",
+    "RETURN_REMAKE_other": "{count} remakes for returns"
+  },
+  "kind": {
+    "ORDER_LINE": "Order line",
+    "QUOTE_LINE": "Quote line",
+    "MTM_UNIT": "Made-to-measure unit",
+    "SAMPLE_ROUND": "Sample round",
+    "REWORK": "Rework",
+    "RECUT": "Recut",
+    "RETURN_REPLACEMENT": "Replacement for a return",
+    "RETURN_REMAKE": "Remake for a return"
+  },
+  "sampleKind": {
+    "PROTO": "Proto",
+    "FIT": "Fit",
+    "SALESMAN": "Salesman",
+    "PRE_PRODUCTION": "Pre-production",
+    "CERTIFICATION": "CE test sample",
+    "BRAND": "Brand sample"
+  },
+  "status": {
+    "CONFIRMED": "Confirmed",
+    "IN_PRODUCTION": "In production",
+    "READY": "Ready to ship",
+    "PARTLY_SHIPPED": "Partly shipped",
+    "SENT": "Sent to the customer",
+    "REQUESTED": "Requested",
+    "IN_MAKING": "In making",
+    "OPEN": "Open",
+    "IN_PROGRESS": "In progress",
+    "AUTHORISED": "Return authorised",
+    "RECEIVED": "Return received",
+    "INSPECTED": "Return inspected",
+    "other": "Open"
+  },
+  "rows": {
+    "title": "Demand rows",
+    "purpose": "The same demand as a list, each row with its source document.",
+    "col": {
+      "source": "Source",
+      "document": "Document",
+      "style": "Style",
+      "size": "Size",
+      "pieces": "Pieces",
+      "date": "Date",
+      "status": "Status"
+    },
+    "docLine": "{number} · line {line}",
+    "noDate": "No date",
+    "late_one": "{count} day late",
+    "late_other": "{count} days late",
+    "from": "from {origin}",
+    "mayNotOpen": "You may not open this document",
+    "validUntil": "Valid until {day}",
+    "planned": "Bought for by the material plan",
+    "notPlanned": "Not in the material plan",
+    "error": "Couldn’t load demand rows",
+    "noMatch": "No demand matches",
+    "noMatchBody": "Nothing waits for these filters in this horizon.",
+    "empty": "No demand",
+    "emptyBody": "Nothing waits at this site in this horizon.",
+    "onCell": "One cell: {cell}",
+    "clearCell": "Show every row again",
+    "count_one": "{count} row shown · {sources} · {pieces}",
+    "count_other": "{count} rows shown · {sources} · {pieces}",
+    "search": "Search a style or a document",
+    "layer": "Layer",
+    "allLayers": "Every layer",
+    "more": "Show more",
+    "moreFailed": "Couldn’t load more: try again",
+    "moreLoading": "Loading…"
+  },
+  "csv": {
+    "style": "Style",
+    "colourway": "Colourway",
+    "size": "Size",
+    "strategy": "Strategy",
+    "total": "Total"
+  },
+  "error": {
+    "failed": "Something went wrong on our side. Try again in a moment.",
+    "forbidden": "You may not see the planning of this site.",
+    "offline": "No connection to the server. Check the network and try again.",
+    "gone": "This site is not there any more.",
+    "moved": "The demand moved while you read it: the list starts again.",
+    "noSite": "No site to plan: set up a plant in Planning settings."
+  },
+  "mps": {
+    "noAccess": {
+      "title": "Master schedule & S&OP is not open to you",
+      "body": "It needs the right to see planning. Ask an administrator if your work needs it."
+    },
+    "page": {
+      "asOf": "As of {time}",
+      "site": "Site",
+      "siteOne": "Site {site}",
+      "more": "More actions",
+      "demand": "Demand & forecast",
+      "keys": "Keyboard shortcuts",
+      "noSites": "No site plans yet: set up a plant in Planning settings.",
+      "readOnly": "You can read the strategies; changing them needs the right to manage production strategies (planners and production managers have it)."
+    },
+    "list": {
+      "title": "Production strategy per item",
+      "purpose": "Make to order, make to stock or assemble to order, per finished garment and component of this site.",
+      "hint": "Make to order waits for a customer order; make to stock builds ahead from a forecast.",
+      "error": "Couldn’t load production strategy per item",
+      "noMatch": "No item matches",
+      "noMatchBody": "No finished garment or component of this site fits these filters.",
+      "empty": "No items yet",
+      "emptyBody": "Finished garments and components appear here once Products has them.",
+      "count_one": "{count} item",
+      "count_other": "{count} items",
+      "search": "Search an item or a SKU",
+      "more": "Show more",
+      "moreFailed": "Couldn’t load more: try again",
+      "moreLoading": "Loading…"
+    },
+    "col": {
+      "item": "Item",
+      "strategy": "Strategy",
+      "colours": "Colours",
+      "reason": "Reason",
+      "changed": "Last changed"
+    },
+    "filter": {
+      "kind": "Kind",
+      "strategy": "Strategy",
+      "setLabel": "Set or default",
+      "all": {
+        "kind": "Every kind",
+        "strategy": "Every strategy",
+        "set": "Set and default"
+      },
+      "set": {
+        "set": "Set by a person",
+        "default": "On the default (make to order)"
+      }
+    },
+    "kind": {
+      "FINISHED": "Finished garment",
+      "COMPONENT": "Component"
+    },
+    "bulk": {
+      "open_one": "Change strategy for {count}",
+      "open_other": "Change strategy for {count}",
+      "tooMany": "At most {max} items in one change.",
+      "to": "New strategy",
+      "reason": "Reason (optional)",
+      "reasonHint": "Kept with the change, at most {max} characters.",
+      "reasonLong": "Keep the reason within 500 characters.",
+      "already_one": "{count} item has this strategy already: it is left as it is.",
+      "already_other": "{count} items have this strategy already: they are left as they are.",
+      "hint": "All or nothing: an item changed since you read it stops the save and says so.",
+      "undoneLine": "Undone: back as it was",
+      "undoneVerb": "undone",
+      "unchangedLine": "Already so",
+      "savedLine": "Now {strategy}",
+      "title_one": "Change the strategy of {count} item",
+      "title_other": "Change the strategy of {count} items",
+      "summary": "Nexus only: how this site plans the items. Nothing is sent to a customer or a supplier.",
+      "metric": {
+        "changing": "Change",
+        "already": "Already so"
+      },
+      "save_one": "Save {count} change",
+      "save_other": "Save {count} changes"
+    },
+    "held": {
+      "noManage": "Changing a strategy needs the right to manage production strategies."
+    },
+    "cell": {
+      "strategy": "Strategy of {item}",
+      "default": "by default",
+      "saved": "Saved",
+      "allColours": "Every colour alike",
+      "coloursApart_one": "{count} colour set apart",
+      "coloursApart_other": "{count} colours set apart",
+      "noReason": "No reason given",
+      "changedUnknown": "Set before changes were recorded",
+      "neverSet": "Never set: make to order by default",
+      "changedFrom": "{from} → {to} · {by}",
+      "someone": "the system"
+    },
+    "keys": {
+      "edit": "Change the strategy"
+    },
+    "refusal": {
+      "changed": "Changed by someone else since you read it: read again and choose.",
+      "colour": "That colour is not one of the item’s active colours.",
+      "item": "Only finished garments and components we make, still active, have a strategy.",
+      "reason": "Leave the reason out, or say why in at most 500 characters.",
+      "twice": "An item is named twice: name each once.",
+      "invalid": "This change could not be saved as it is.",
+      "forbidden": "You may not change the strategy at this site.",
+      "gone": "This item is not there any more.",
+      "offline": "No connection: nothing was saved. Try again.",
+      "failed": "Not saved: something went wrong on our side. Try again."
+    },
+    "error": {
+      "failed": "Something went wrong on our side. Try again in a moment.",
+      "forbidden": "You may not see the planning of this site.",
+      "offline": "No connection to the server. Check the network and try again.",
+      "gone": "This site is not there any more.",
+      "noSite": "No site to plan: set up a plant in Planning settings."
+    },
+    "notice": {
+      "bulkDone_one": "{count} item has a new strategy.",
+      "bulkDone_other": "{count} items have a new strategy.",
+      "bulkUndone_one": "The change of {count} item was undone.",
+      "bulkUndone_other": "The change of {count} items was undone."
+    }
+  }
+}

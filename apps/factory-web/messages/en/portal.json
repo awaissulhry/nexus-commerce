@@ -184,6 +184,7 @@
       "Party": "Account",
       "ReturnAuthorisation": "Return",
       "Complaint": "Complaint",
+      "RepairOrder": "Repair",
       "other": "Record"
     }
   },

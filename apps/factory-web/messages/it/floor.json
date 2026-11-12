@@ -373,7 +373,9 @@
     "fabriccut": "Taglio tessuto",
     "bundles": "Fasci",
     "receive": "Ricevi",
+    "move": "Sposta e ubica",
     "pick": "Preleva e consegna",
+    "count": "Conta",
     "returnsin": "Ricevi un reso",
     "kits": "Kit per terzisti",
     "labels": "Etichette capo",
@@ -385,13 +387,16 @@
     "sds": "Schede di sicurezza",
     "hint": {
       "mywork": "La coda della postazione: cosa viene dopo",
+      "myworkWarehouse": "I tuoi compiti di magazzino: prima il prossimo",
       "scan": "Qualsiasi etichetta della fabbrica",
       "operation": "Segnala un fascio alla tua operazione",
       "cut": "Controlla una pelle e registra il taglio",
       "fabriccut": "Buono, materasso, conteggio, taglio, etichette, ritagli, al cucito",
       "bundles": "Crea i fasci e stampa i cartellini",
       "receive": "Ricevi la merce e stampa i cartellini delle pelli",
+      "move": "Scansiona cosa sposti, poi l’etichetta dell’ubicazione",
       "pick": "Consegna i materiali a un ordine di lavoro",
+      "count": "Scansiona un'ubicazione, poi ogni unità",
       "returnsin": "Scansiona l'RMA, ricevi e valuta i capi",
       "kits": "Invia un kit con il DDT, ricevi il rientro",
       "final": "Controlla, firma e rilascia i capi",
@@ -426,7 +431,15 @@
     "incident": "Segnala un incidente",
     "lineview": "Vista linea",
     "more": "Altro",
-    "back": "Indietro"
+    "back": "Indietro",
+    "waits": {
+      "move_one": "{count} da ubicare o spostare",
+      "move_other": "{count} da ubicare o spostare",
+      "mywork_one": "{count} compito ti aspetta",
+      "mywork_other": "{count} compiti ti aspettano",
+      "count_one": "{count} conta ti aspetta",
+      "count_other": "{count} conte ti aspettano"
+    }
   },
   "scan": {
     "title": "Scansiona",
@@ -762,7 +775,9 @@
       "taskGiveBack": "Compito di magazzino restituito",
       "taskDone": "Compito di magazzino fatto",
       "countScan": "Unità scansionata in un inventario",
-      "countFinishBin": "Contenitore di un inventario chiuso"
+      "countFinishBin": "Contenitore di un inventario chiuso",
+      "pickIssue": "Prelevato dalla lista di prelievo",
+      "substituteIssue": "Sostituto approvato prelevato"
     },
     "refusal": {
       "UNKNOWN_BUNDLE": {
