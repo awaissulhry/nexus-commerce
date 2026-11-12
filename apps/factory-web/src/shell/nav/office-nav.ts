@@ -130,6 +130,9 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/records/[type]/[id]',
   '/sales/customers',
   '/sales/customers/[partyId]',
+  // B-W2b-322: Sales › Inquiries (SCR-105) and an inquiry's full page.
+  '/sales/inquiries',
+  '/sales/inquiries/[id]',
   '/sales/quotes',
   '/sales/quotes/[id]',
   '/sales/orders',
@@ -337,6 +340,9 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   // B-W2a-58: Warehouse › Picking & kits (SCR-237) and its paper (a new tab, no navigation row).
   '/warehouse/picking',
   '/warehouse/picking/print',
+  // B-W2b-356: Warehouse › Reports › Warehouse reports (SCR-257) and its print view (SCR-353, a new tab, no navigation row).
+  '/warehouse/reports',
+  '/warehouse/reports/print',
   // B-W2a-32: All results of the global search (SCR-248), a frame page opened from the palette (no navigation row).
   '/search',
   // B-W2a-38: Production › Reports › Production reports (SCR-240) and its print page (a new tab, no navigation row).

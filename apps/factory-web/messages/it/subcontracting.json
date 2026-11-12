@@ -129,8 +129,7 @@
     "workshop": "Presso i terzisti",
     "due": "Rientro questa settimana",
     "late": "In ritardo",
-    "balance": "Saldo materiale aperto",
-    "balanceLater": "Il saldo materiale per ordine arriva con un passo successivo: il conteggio non è ancora noto."
+    "balance": "Saldo materiale aperto"
   },
   "view": {
     "open": "Ordini aperti",
@@ -138,6 +137,7 @@
     "workshop": "Presso i terzisti",
     "due": "Rientro questa settimana",
     "late": "In ritardo",
+    "balance": "Saldo materiale aperto",
     "drafts": "Bozze",
     "back": "Rientrati, da chiudere",
     "closed": "Chiusi",
@@ -233,7 +233,6 @@
     "workshopValue": "{workshop}: {lines} · {value}",
     "workshopLines": "{workshop}: {lines}",
     "noValue": "non valorizzato",
-    "daysOutLater": "I giorni fuori (anzianità) arrivano con un passo successivo.",
     "empty": "Nessun nostro materiale è presso un terzista",
     "emptyBody": "Il materiale va al terzista con il kit di un ordine, sul DDT di conto lavorazione.",
     "noMatch": "Nessuna riga di giacenza corrisponde alla ricerca.",

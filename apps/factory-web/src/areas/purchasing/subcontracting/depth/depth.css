@@ -1,0 +1,50 @@
+/*
+ * Subcontracting in depth (B-W2b-344) LAYOUT, on top of the buying office's (fw-by-*) and the record's (fw-sco-*): the
+ * material balance's line cards side by side when there is room, the open rest flagged once every piece is back (the
+ * bridge is the buying office's ladder, fw-by-ladder), the declaration's line groups, the terms link's row. The controls
+ * are the design system's; semantic tokens only, no page max-width.
+ */
+.fw-scd-lines {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 620px), 1fr));
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-by-rung.fw-scd-alarm {
+  border-color: var(--nds-danger);
+}
+
+.fw-by-rung.fw-scd-alarm .fw-by-rung-value {
+  color: var(--nds-danger);
+}
+
+.fw-scd-declare {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  margin: 0;
+  padding: var(--nds-space-10, var(--nds-space-8)) var(--nds-space-12, var(--nds-space-10));
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md, 8px);
+}
+
+.fw-scd-declare > legend {
+  padding: 0 var(--nds-space-4);
+}
+
+.fw-scd-terms {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-scd-terms > .fw-by-cell {
+  flex: 1 1 280px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

@@ -35,6 +35,7 @@
       "area": "Vendite",
       "main": "Principali",
       "customers": "Clienti",
+      "inquiries": "Richieste",
       "quotes": "Preventivi",
       "orders": "Ordini",
       "pricing": "Prezzi",
@@ -212,6 +213,8 @@
       "inTheWarehouse": "In magazzino",
       "picking": "Prelievi e kit",
       "counts": "Inventari",
+      "reportsGroup": "Report",
+      "reports": "Report magazzino",
       "transfers": "Trasferimenti"
     },
     "frame": {

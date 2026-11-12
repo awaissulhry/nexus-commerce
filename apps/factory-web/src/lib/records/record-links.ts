@@ -213,6 +213,8 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   EvidencePack: '/compliance/techfiles/pack?pack=[id]',
   // B-W2b-307 Home › Approvals (SCR-030): a request of the approval engine opens its review in the inbox (Today, the bell).
   ApprovalTask: '/home/approvals?open=[id]',
+  // B-W2b-322 Sales › Inquiries (SCR-105): an inquiry opens its full page (the list opens it in its DetailModal, `?open=`).
+  Inquiry: '/sales/inquiries/[id]',
 })
 
 /**
@@ -368,6 +370,8 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/safety/rolesheets': '/plant/risk',
   // B-W2b-234: the work instructions (SCR-141).
   '/production/instructions': '/production/instructions',
+  // B-W2b-322: the inquiries (SCR-105) read `?tile=`, `?source=`, `?party=`, `?prospect=1`, `?q=`.
+  '/sales/inquiries': '/sales/inquiries',
   // B-W2b-261: the sample rounds (SCR-110) read `?tile=`, `?kind=`, `?party=`, `?internal=1`, `?style=`, `?q=`.
   '/sales/samples/rounds': '/products/samples',
   // B-W2b-244: the changes (SCR-117) read `?tile=` (B-W2b-226's request and order tiles are its saved rows), `?style=` or

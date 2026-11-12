@@ -1,5 +1,7 @@
 import { ArrowLeftRight, Boxes, ClipboardCheck, ClipboardList, Layers, MapPin, PackageCheck, Route, Settings, Squircle, Truck, Warehouse } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
+// B-W2b-356: the Reports section's icon (its own line: a merge point).
+import { BarChart3 } from 'lucide-react'
 
 /**
  * Warehouse (design 01 area 6 "Warehouse / Magazzino": Main (Stock, Hides, Lots & traceability, Movements), Inbound (Receipts),
@@ -56,6 +58,12 @@ export const officeArea: OfficeAreaNav = {
         label: 'shell:nav.warehouse.outbound',
         // SCR-066 / SCR-067: the ship-today queue with the carrier cut-off, then every shipment and its record.
         items: [{ id: 'warehouse-shipments', label: 'shell:nav.warehouse.shipments', href: '/warehouse/shipments', icon: Truck, permission: 'shipping.view' }],
+      },
+      {
+        id: 'warehouse-reports',
+        label: 'shell:nav.warehouse.reportsGroup',
+        // B-W2b-356: SCR-257 stock ageing by material type and leather use by article and supplier lot (inventory.reports.view).
+        items: [{ id: 'warehouse-reports', label: 'shell:nav.warehouse.reports', href: '/warehouse/reports', icon: BarChart3, permission: 'inventory.reports.view' }],
       },
       {
         id: 'warehouse-settings',

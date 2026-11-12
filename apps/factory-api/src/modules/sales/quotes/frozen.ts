@@ -130,6 +130,8 @@ export interface CustomerQuoteInput {
   readonly date: string
   /** B-W2a-19: the days the deposit is due after acceptance (its payment terms' order instalment); default 7. */
   readonly depositDueDays?: number | undefined
+  /** B-W2b-325 (SAL-170): false when the version's price list shows only net prices (no list price, no discount); default true. */
+  readonly showDiscount?: boolean | undefined
 }
 
 /**
@@ -142,7 +144,8 @@ export function customerQuoteOf(input: CustomerQuoteInput): CustomerQuote {
   const lines: CustomerLine[] = input.lines.map((line) => {
     const range = input.labels.range(line.styleId)
     const unitPrice = text(line.unitPrice)!
-    const listUnitPrice = text(line.listUnitPrice)
+    // B-W2b-325 (SAL-170): a list that hides the discount prints the net price only.
+    const listUnitPrice = input.showDiscount === false ? null : text(line.listUnitPrice)
     const sizes = [...line.sizes].sort((a, b) => range.indexOf(a.size) - range.indexOf(b.size))
     return {
       seq: line.seq,

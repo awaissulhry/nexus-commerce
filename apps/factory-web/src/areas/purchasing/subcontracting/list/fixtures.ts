@@ -2,12 +2,14 @@ import { createElement } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import { canFor, inShell, NOW, OPEN_ROWS, ORDER_ROWS, OTHER_WORKSHOPS, OUTSIDE, PREFIX, STOCK, TILE_COUNTS, TIME_ZONE, WORK_ORDER_CHOICES, WORKSHOPS, ZERO_COUNTS, withoutFee, type RoleCase } from '../demo/fixtures'
 import { words } from '../model'
+// B-W2b-344: the open balances (the Balance open tile, its saved view, the grid's Balance open) and days out.
+import { AGEING, BALANCES, BALANCES_BACK } from '../depth/fixtures'
 import { defaultPicks, NO_NEW_ORDER, type NewOrderDraft, type SubcontractingModel } from './list-model'
 import { SubcontractingView } from './view/SubcontractingView'
 
 /**
  * SCR-128 — Subcontract orders (design purchasing.subcontracting) with made-up orders only: the tiles "Outside work" (kit
- * to send, at workshops, due back this week, late; balance open '—' until W2b), the list frame of every job at a terzista
+ * to send, at workshops, due back this week, late, balance open — B-W2b-344), the list frame of every job at a terzista
  * (draft, sent with the kit to send, in work, partly back and late, back, closed, cancelled), each tile and Rows ▾ view,
  * a search, the selection with Export, Show more, live updates, the keyboard, New subcontract order (the work order
  * picker, the routing's outside operations with the pieces still free, the routing's workshop or another one, held with
@@ -34,6 +36,9 @@ export function listCase(role: RoleCase, over: Partial<SubcontractingModel> = {}
       q: '',
       counts: TILE_COUNTS,
       stock: { value: STOCK, problem: null },
+      balances: { value: BALANCES, problem: null },
+      balanceRows: { items: null, more: false, problem: null },
+      ageing: { value: AGEING, problem: null },
       stockWorkshop: null,
       stockQ: '',
       asOf: NOW,
@@ -93,5 +98,15 @@ export const designScreen = defineDesignScreen<ListCase>({
     { id: 'planner', label: 'Planner: reads, no money (no fee column), New held', model: listCase('planner') },
     { id: 'read-only', label: 'Read-only: reads, nothing written', model: listCase('readOnly') },
     { id: 'sales', label: 'Sales: no purchasing.view — the page says so', model: listCase('sales') },
+    // B-W2b-344: the Balance open tile, its saved view, the grid's Balance open.
+    { id: 'w2b-344-tile', label: 'B-W2b-344 · Balance open tile: 2 jobs back with material still out; the grid’s Balance open per unit (red once every piece is back)', model: listCase('buyer', { rows: { items: ORDER_ROWS.filter((row) => row.status !== 'CANCELLED'), more: false, problem: null }, view: 'all' }) },
+    { id: 'w2b-344-view', label: 'B-W2b-344 · Balance open (the tile pressed): the jobs back with material open, days out, long out', model: listCase('buyer', { view: 'balance', balanceRows: { items: BALANCES_BACK.items, more: false, problem: null } }) },
+    { id: 'w2b-344-view-selection', label: 'B-W2b-344 · Balance open: two selected, Export 2 (CSV)', model: listCase('buyer', { view: 'balance', balanceRows: { items: BALANCES_BACK.items, more: false, problem: null }, selected: BALANCES_BACK.items.map((item) => item.order.id) }) },
+    { id: 'w2b-344-view-empty', label: 'B-W2b-344 · Balance open: none — every job back has its material declared (tile 0)', model: listCase('buyer', { view: 'balance', balanceRows: { items: [], more: false, problem: null }, balances: { value: { ...BALANCES, items: [], counts: { balanceOpen: 0, open: 0, longOut: 0 } }, problem: null } }) },
+    { id: 'w2b-344-view-loading', label: 'B-W2b-344 · Balance open: loading, the slow note after a second', model: listCase('buyer', { view: 'balance', balanceRows: { items: null, more: false, problem: null }, slow: true }) },
+    { id: 'w2b-344-view-error', label: 'B-W2b-344 · Balance open couldn’t be read (never drawn as empty), Try again', model: listCase('buyer', { view: 'balance', balanceRows: { items: null, more: false, problem: 'problem.offline' } }) },
+    { id: 'w2b-344-view-warehouse', label: 'B-W2b-344 · Balance open for the warehouse (the work order linked; no money anywhere)', model: listCase('warehouse', { view: 'balance', balanceRows: { items: BALANCES_BACK.items, more: false, problem: null } }) },
+    { id: 'w2b-344-tile-unknown', label: 'B-W2b-344 · The open balances couldn’t be read: the tile says “—” with why, the column “—”', model: listCase('buyer', { balances: { value: null, problem: 'problem.offline' } }) },
+    { id: 'w2b-344-tile-zero', label: 'B-W2b-344 · No balance open: the tile says 0', model: listCase('buyer', { balances: { value: { ...BALANCES, items: BALANCES.items.filter((item) => !item.balanceOpen), counts: { balanceOpen: 0, open: 2, longOut: 1 } }, problem: null } }) },
   ],
 })

@@ -79,6 +79,7 @@
     "TERMS_VERSION": "Dai una versione alle condizioni, così l'accettazione registra quali sono state accettate.",
     "NO_BANK_DETAILS": "La società non ha ancora coordinate bancarie: le istruzioni per l'acconto seguiranno a parte.",
     "PROOF_NOT_READY": "Una prova è ancora in caricamento, in verifica o è stata rifiutata (Documenti › Prove): completala o toglila.",
+    "BELOW_MINIMUM": "Una riga è sotto la quantità minima d'ordine del suo modello, tipo di capo o materiale (Righe): aggiungi pezzi o chiedi al cliente.",
     "pass": {
       "approval": "Approvazione fatta o non necessaria",
       "validity": "Validità impostata",

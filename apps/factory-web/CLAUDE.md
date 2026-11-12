@@ -288,6 +288,15 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
 - `src/lib/records/record-links.ts` — where a record opens: its own page once built (`RECORD_PAGES`, one line per record
   page; list pages in `LIST_PAGES`), else the record panel route `/w/<company>/records/<type>/<id>` (SCR-006 panels).
   Home › Today (`src/areas/home/today/`, SCR-029) and its lists open records through it.
+- `src/areas/sales/inquiries/` — Sales › Inquiries (B-W2b-322 on B-W2b-295's API; SCR-105 `/sales/inquiries?tile=&source=&party=|prospect=1&q=&open=<id>&tab=request|files|quote|activity&new=1&mail=<inbound mail id>`,
+  SCR-105-full `/sales/inquiries/<id>?tab=` the full page in a new tab; catalogue `sales-inquiries`, CSS prefix `fw-inq-`): the tiles = the API's
+  saved filters (a tile's chip in the filter row; "—" when not counted), the notices (one at a time, dismissed by value), the list frame
+  (Assign to… / Decline N over the open rows of a selection: the API's all-or-none bulk routes), the inquiry in a DetailModal (`?open=`, J / K,
+  after a decision the next one opens) and its full page on ONE container (`use-inquiry.tsx`: Request with the EditModeBar — the lines on the DS
+  SizeGridEditor, a prospect matched once —, Files & specs with the brand's tech pack in force and the record panels' files, Quote, Activity =
+  the record panels; Make quote, Assign, Ask for more information, Decline with an optional message through the thread, Mark as lost), New
+  inquiry (`c`) and "Make an inquiry" from a mail (`?mail=`: Mail to sort can link there). Row verbs are held before the click with
+  factory-domain's own refusals (model.ts). `RECORD_PAGES.Inquiry` opens the full page; search type `Inquiry`.
 - `src/areas/sales/orders/` — Sales › Orders (SCR-038 list + board by state, SCR-039 the order studio): `api.ts` (every
   call: orders, the deposit's page and payment, an invoice's SDI state and send, the settlement, the order's work
   orders), `model.ts` (saved rows ⇄ address = the API's own filters `?late=true` `?deposit=OPEN` `?status=` `?rows=all`,

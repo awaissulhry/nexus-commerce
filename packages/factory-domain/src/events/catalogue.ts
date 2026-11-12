@@ -141,10 +141,14 @@ import { events as salesInquiries } from '../sales-inquiries/events'
 import { events as inventoryRules } from '../inventory-rules/events'
 // B-W2b-341: returns in depth (the policy check, fee rules, garments named, credit without a return, the scan code).
 import { events as returnsDepth } from '../returns-depth/events'
+// B-W2b-346: remakes, exchanges and closing a return (a remake asked, a line split, goods sent back, closed with a reason).
+import { events as returnsOutcomes } from '../returns-outcomes/events'
 // B-W2b-293: planned work and subcontract orders (planned by a run, made real, made firm).
 import { events as planningPlannedOrders } from '../planning-planned-orders/events'
 // B-W2b-331: subcontracting in depth (the written terms, the material balance booked, a workshop charge booked).
 import { events as subcontractDepth } from '../subcontract-depth/events'
+// B-W2b-325: price lists in depth (breaks and surcharges, a style's own surcharges, minimum order quantities).
+import { events as salesPricing } from '../sales-pricing/events'
 // B-W2b-238: materials in depth (a material's approval decided).
 import { events as materialsDepth } from '../materials-depth/events'
 // B-W2b-230: the tech pack (a new PDF version of a revision's tech pack kept).
@@ -218,6 +222,8 @@ import { events as lotsDepth } from '../lots-depth/events'
 import { events as suppliersDepth } from '../suppliers-depth/events'
 // B-W2b-292: the warehouse task inbox.
 import { events as inventoryTasks } from '../inventory-tasks/events'
+// B-W2b-315: supplier qualification and bank details (supplier_bank_account.*, supplier_qualification.changed, purchase_order.compliance_override_*).
+import { events as supplierQualification } from '../supplier-qualification/events'
 // B-W2b-326: transfers between sites (inventory.transfer_changed).
 import { events as inventoryTransfers } from '../inventory-transfers/events'
 import type { EventDefinition } from './define'
@@ -497,6 +503,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...inventoryRules,
   // B-W2b-341
   ...returnsDepth,
+  // B-W2b-346
+  ...returnsOutcomes,
   // B-W2b-293
   ...planningPlannedOrders,
   // B-W2b-311
@@ -505,6 +513,10 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...inventoryTasks,
   // B-W2b-331
   ...subcontractDepth,
+  // B-W2b-315
+  ...supplierQualification,
+  // B-W2b-325
+  ...salesPricing,
   // B-W2b-326
   ...inventoryTransfers] as const satisfies readonly EventDefinition[]
 

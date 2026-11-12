@@ -120,6 +120,8 @@ const ZERO = decimalOf('0')
 const q = (value: Decimal): string => value.toFixed(QUANTITY_SCALE)
 const later = (a: BusinessDate | null, b: BusinessDate | null): BusinessDate | null => (a === null ? b : b === null ? a : a > b ? a : b)
 const DRAFT = 'DRAFT'
+// B-W2b-305: an order waiting for its yes (PENDING_APPROVAL) is not sent yet either: REQUESTED, never overdue.
+const unsent = (status: string | null | undefined): boolean => status === DRAFT || status === 'PENDING_APPROVAL'
 
 /** The readiness of each work order asked for (an id the plan has no part of: NOT_PLANNED). */
 export function readinessOf(workOrderIds: readonly string[], materials: readonly ReadinessMaterial[], purchaseOf: (purchaseOrderLineId: string) => PurchaseFacts | undefined, today: BusinessDate): WorkOrderReadiness[] {
@@ -188,13 +190,13 @@ function materialReadiness(material: ReadinessMaterial, coverages: MaterialPeggi
             kind: 'PURCHASE_ORDER',
             purchaseOrderLineId: supply.purchaseOrderLineId,
             purchaseOrderNumber: facts?.purchaseOrderNumber ?? null,
-            draft: facts?.purchaseOrderStatus === DRAFT,
+            draft: unsent(facts?.purchaseOrderStatus),
             date: arrivesOn,
-            state: facts?.purchaseOrderStatus !== DRAFT && arrivesOn !== null && arrivesOn < today ? 'OVERDUE' : 'IN_TIME',
+            state: !unsent(facts?.purchaseOrderStatus) && arrivesOn !== null && arrivesOn < today ? 'OVERDUE' : 'IN_TIME',
           },
           quantity,
         )
-        if (facts?.purchaseOrderStatus === DRAFT) {
+        if (facts && unsent(facts.purchaseOrderStatus)) {
           sum.draft = sum.draft.plus(quantity)
           draftLine ??= facts.purchaseOrderNumber
         } else {
@@ -218,7 +220,7 @@ function materialReadiness(material: ReadinessMaterial, coverages: MaterialPeggi
       const facts = purchaseOf(purchase.line.purchaseOrderLineId)
       arrive(
         `late|${purchase.line.purchaseOrderLineId}`,
-        { kind: 'PURCHASE_ORDER', purchaseOrderLineId: purchase.line.purchaseOrderLineId, purchaseOrderNumber: purchase.line.purchaseOrderNumber, draft: facts?.purchaseOrderStatus === DRAFT, date: purchase.line.dueDate, state: 'LATE' },
+        { kind: 'PURCHASE_ORDER', purchaseOrderLineId: purchase.line.purchaseOrderLineId, purchaseOrderNumber: purchase.line.purchaseOrderNumber, draft: unsent(facts?.purchaseOrderStatus), date: purchase.line.dueDate, state: 'LATE' },
         decimalOf(purchase.notCounted),
       )
     }

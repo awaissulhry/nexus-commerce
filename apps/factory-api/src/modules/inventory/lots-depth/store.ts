@@ -26,6 +26,8 @@ export const LOT_SELECT = {
   dyeBatch: true,
   shade: true,
   receiptLineId: true,
+  // B-W2b-328 (SCM-186): the material variant the lot is of (a lot of a variant's PO line carries it; its split children too).
+  variantCode: true,
   receivedAt: true,
   qualityStatus: true,
   qualityNote: true,
