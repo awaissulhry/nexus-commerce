@@ -95,6 +95,8 @@ export interface FirmSupply {
   readonly supplierId: string | null
   readonly firmedAt: Date
   readonly firmedById: string | null
+  /** B-W2b-306 (PLN-072): the order line the firm line is hard-pegged to (it is carried into that line's own line); null: none. */
+  readonly orderLineId?: string | null
 }
 
 export const SUPPLY_KINDS = ['ISSUED', 'RESERVATION', 'STOCK', 'PURCHASE_ORDER', 'FIRM', 'PLANNED'] as const
@@ -188,6 +190,12 @@ export function pegMaterial(input: {
   readonly purchases: readonly OpenPurchase[]
   readonly firm?: Pick<FirmSupply, 'requirementId' | 'baseQuantity' | 'date'> | null
   readonly runDate: BusinessDate
+  /**
+   * B-W2b-306 (PLN-072, order-specific supply): the parts take only what is theirs: the stock their own reservations hold
+   * and the purchase lines given (those bought for their order line), never free stock. usable = what the reservations
+   * covered; the identity holds as before.
+   */
+  readonly ownOnly?: boolean
 }): MaterialPegging {
   const { runDate } = input
   // B-W2b-318 (PLN-088): a scarce material goes to the first-ranked orders first.
@@ -258,7 +266,9 @@ export function pegMaterial(input: {
     .filter((entry) => entry.left.gt(0))
     .sort((a, b) => compare(a.line.dueDate, b.line.dueDate) || compare(a.line.purchaseOrderNumber, b.line.purchaseOrderNumber) || a.index - b.index)
   const opened = new Map(lines.map((entry) => [entry, entry.left]))
-  let stockLeft = freeLeft
+  // B-W2b-306 (PLN-072): order-specific parts never take free stock.
+  const freeForParts = input.ownOnly === true ? ZERO : freeLeft
+  let stockLeft = freeForParts
   let short = ZERO
   let firstShort: BusinessDate | null = null
   const shortOf = new Map<(typeof parts)[number], Decimal>()
@@ -298,7 +308,7 @@ export function pegMaterial(input: {
   }
   const onOrder = lines.reduce((sum, entry) => sum.plus(opened.get(entry)!.minus(entry.left)), ZERO)
   // usable = all free stock + what reservations covered (free stock left over means nothing is short).
-  const usableCounted = freeLeft.plus(reservedUsed)
+  const usableCounted = freeForParts.plus(reservedUsed)
   const formula = gross.minus(usableCounted).minus(onOrder)
   const net = formula.isNegative() ? ZERO : formula
   // The walk and the trigger's identity agree by construction; a difference is a bug, never a plan.

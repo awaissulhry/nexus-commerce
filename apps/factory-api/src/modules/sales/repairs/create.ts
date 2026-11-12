@@ -52,6 +52,8 @@ export interface CreateBody {
   readonly problem?: string | undefined
   readonly ownerId?: string | null | undefined
   readonly internalNote?: string | null | undefined
+  /** B-W2b-342 (SAL-384): the work the customer asks for. */
+  readonly workWanted?: string | null | undefined
   readonly received?: { readonly at?: string | undefined; readonly inboundDdtNumber?: string | null | undefined; readonly inboundDdtDate?: BusinessDate | null | undefined } | null | undefined
 }
 
@@ -249,6 +251,7 @@ async function planRepair(db: Reader, context: OfficeContext, body: CreateBody, 
   if (!problem) problems.push({ path: 'body/problem', message: "Say what is wrong, in the customer's words." })
   else if (problem.length > REPAIR_LIMITS.problem) problems.push({ path: 'body/problem', message: `At most ${REPAIR_LIMITS.problem} characters.` })
   if (tooLong(body.internalNote, REPAIR_LIMITS.internalNote)) problems.push({ path: 'body/internalNote', message: `At most ${REPAIR_LIMITS.internalNote} characters.` })
+  if (tooLong(body.workWanted, REPAIR_LIMITS.problem)) problems.push({ path: 'body/workWanted', message: `At most ${REPAIR_LIMITS.problem} characters.` })
   const ownerId = body.ownerId ?? context.actorId
   if (body.ownerId) {
     const owner = isUuid(body.ownerId) ? await db.user.findUnique({ where: { id: body.ownerId }, select: { status: true } }) : null
@@ -409,6 +412,9 @@ export async function createRepair(caller: CommandCaller, body: CreateBody, idem
         safetyCheckRequired: p.safetyCheckRequired,
         ownerId: p.ownerId,
         internalNote: p.internalNote,
+        // B-W2b-342 (SAL-384, SAL-391): the work wanted, and the garment of ours its serial names (the garment's history).
+        workWanted: blank(body.workWanted),
+        garmentSerial: p.garment?.serial ?? null,
         createdAt: now,
         updatedAt: now,
         createdById: context.actorId,

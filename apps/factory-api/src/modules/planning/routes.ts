@@ -75,6 +75,13 @@ import { demandContract, demandRowsContract } from './demand/contract'
 import { readDemand, readDemandRows } from './demand/demand'
 import { bulkStrategyContract, listStrategyContract, setStrategyContract } from './strategy/contract'
 import { bulkStrategy, listStrategy, setStrategy } from './strategy/strategy'
+// B-W2b-306: MRP you can trust (action messages, protected edits and bulk edit of planned orders, order-specific supply, the run log).
+import { bulkEditPlannedOrdersContract, decideActionMessagesContract, editPlannedOrderContract, listActionMessagesContract, pegRequirementContract, resetPlannedOrderContract } from './actions/contract'
+import { bulkEditPlannedOrders, editPlannedOrder, resetPlannedOrder } from './actions/edit'
+import { decideActionMessages, listActionMessages } from './actions/messages'
+import { pegRequirement } from './actions/peg'
+import { runLogContract } from './run-log/contract'
+import { runLog } from './run-log/log'
 
 /**
  * What to buy and make (B-W1-29; PLN-062 to PLN-066; A2 SCR-055, design 02): run the plan for a site, read the latest
@@ -102,6 +109,11 @@ import { bulkStrategy, listStrategy, setStrategy } from './strategy/strategy'
  * B-W2b-20 (W2a follow-ups): bulk writes of a site's item parameters (POST /planning/item-parameters/bulk) and lanes
  * (PATCH /planning/lanes), each ONE command; the other follow-ups are fields of the routes above (stable refusal codes,
  * per-component readiness, customer and family, lanes without a calendar, exceptions' age in working days).
+ *
+ * B-W2b-306 (PLN-072, PLN-073, PLN-076, PLN-078, PLN-083, PLN-095; design planning.mrp "To make", the protected cell, the
+ * run log): a run's log (./run-log), its action messages on existing orders and their decisions, a planned order's edit
+ * protected from the next run, Reset to plan and the bulk edit with one review, and a requirement kept for one order line
+ * (./actions).
  *
  * B-W2b-319 (PLN-017, PLN-040, PLN-041, PLN-042, PLN-061; design planning.demand, planning.mps sec:strategy): one demand view
  * (./demand: the tiles and the time-phased rows, and the same demand as a list with its source) and the production strategy per
@@ -214,4 +226,14 @@ export default defineRoutes('planning', manifest, async (app) => {
   app.get('/planning/strategy', { schema: listStrategyContract }, async (request) => listStrategy(request, request.query))
   app.put('/planning/strategy/items/:itemId', { schema: setStrategyContract }, async (request) => setStrategy(request, request.params.itemId, request.body, idempotencyKeyFrom(request)))
   app.post('/planning/strategy/bulk', { schema: bulkStrategyContract }, async (request) => bulkStrategy(request, request.body, idempotencyKeyFrom(request)))
+  // B-W2b-306: MRP you can trust. The run log of a run; the run's action messages (decided several at once); a planned order's
+  // edit (its fields protected from the next run), Reset to plan and the bulk edit; a requirement kept for one order line.
+  app.get('/planning/runs/:runId/log', { schema: runLogContract }, async (request) => runLog(request, request.params.runId))
+  app.get('/planning/action-messages', { schema: listActionMessagesContract }, async (request) => listActionMessages(request, request.query))
+  app.post('/planning/action-messages/decide', { schema: decideActionMessagesContract }, async (request) => decideActionMessages(request, request.body, idempotencyKeyFrom(request)))
+  // Before /:plannedOrderId (a static path).
+  app.post('/planning/planned-orders/bulk', { schema: bulkEditPlannedOrdersContract }, async (request) => bulkEditPlannedOrders(request, request.body, idempotencyKeyFrom(request)))
+  app.patch('/planning/planned-orders/:plannedOrderId', { schema: editPlannedOrderContract }, async (request) => editPlannedOrder(request, request.params.plannedOrderId, request.body, idempotencyKeyFrom(request)))
+  app.post('/planning/planned-orders/:plannedOrderId/reset', { schema: resetPlannedOrderContract }, async (request) => resetPlannedOrder(request, request.params.plannedOrderId, request.body, idempotencyKeyFrom(request)))
+  app.post('/planning/requirements/:requirementId/order-specific', { schema: pegRequirementContract }, async (request) => pegRequirement(request, request.params.requirementId, request.body, idempotencyKeyFrom(request)))
 })

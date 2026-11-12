@@ -1,0 +1,351 @@
+{
+  "head": {
+    "intro": "Who approves purchase orders before they are sent, how far a delivery may differ from the order, and how suppliers are asked to confirm.",
+    "reload": "Read again",
+    "history": "History (audit log)",
+    "more": "More"
+  },
+  "live": {
+    "updated": "Updated {time}",
+    "notYet": "Not read yet",
+    "connecting": "Connecting…",
+    "live": "Live",
+    "offline": "Offline",
+    "changedTitle": "Someone else changed these settings",
+    "changedBody": "Your changes on this page are kept until you read again; saving now may be refused because the settings moved on.",
+    "reload": "Read again"
+  },
+  "scope": {
+    "label": "Whose settings",
+    "company": "{company}",
+    "all": "Every company",
+    "companyHint": "The settings of {company}. Where it keeps none of its own, it follows every company’s.",
+    "allHint": "The settings every company follows where it keeps none of its own."
+  },
+  "noAccess": {
+    "title": "Purchasing settings are not in your role",
+    "body": "Reading them needs the right to see purchasing (purchasing.view). An administrator gives it in Admin › Roles & permissions."
+  },
+  "card": {
+    "neverChanged": "Never changed here.",
+    "changedBy": "Changed by {name} · {time}",
+    "changedAt": "Changed {time}",
+    "history": "History",
+    "viewOnly": "View only"
+  },
+  "common": {
+    "retry": "Try again",
+    "dismiss": "Dismiss",
+    "cancel": "Cancel",
+    "close": "Close",
+    "everyCompany": "Every company",
+    "less": "Less",
+    "more": "More"
+  },
+  "approval": {
+    "title": "PO approval",
+    "description": "Who approves which purchase orders before they are sent. The rules are written and switched in Admin › Approvals, automation & AI › Approval rules.",
+    "add": "New PO rule",
+    "locked": "Nobody approves their own request, the Owner included.",
+    "state": {
+      "NONE": "No approval rule for purchase orders: every order is sent without anyone’s yes.",
+      "OFF_one": "{count} rule written, switched off: every order is sent without anyone’s yes until a rule is switched on.",
+      "OFF_other": "{count} rules written, none switched on: every order is sent without anyone’s yes until a rule is switched on.",
+      "ON_one": "{count} rule of {total} switched on: an order it holds waits for a yes before it is sent.",
+      "ON_other": "{count} rules of {total} switched on: an order they hold waits for a yes before it is sent."
+    },
+    "notYetInForce_one": "{count} more is switched on from a later date.",
+    "notYetInForce_other": "{count} more are switched on from a later date.",
+    "table": "Purchase order approval rules",
+    "count_one": "{count} rule",
+    "count_other": "{count} rules",
+    "col": {
+      "rule": "Rule",
+      "company": "Company",
+      "approver": "Approver",
+      "signature": "Signature",
+      "due": "Time to decide",
+      "fired": "Asked in 30 days",
+      "state": "State",
+      "changed": "Changed"
+    },
+    "byRole": "Anyone with this role",
+    "byPerson": "This person",
+    "noSignature": "No signature",
+    "withCode": "with a fresh code",
+    "hours_one": "{count} hour",
+    "hours_other": "{count} hours",
+    "on": "On",
+    "off": "Off",
+    "byYou": "by you",
+    "empty": {
+      "title": "No purchase order rule yet",
+      "body": "Without a rule every purchase order is sent without a yes. A new rule is written switched off; it asks only once you switch it on."
+    },
+    "facts": "A rule may check: {facts}.",
+    "firstDecides": "Several rules may hold for one order: the first one whose approver is not the person asking decides.",
+    "comesLater": "Comes later: approving from a link in the e-mail, and two approvers one after the other.",
+    "inbox": "The orders waiting for a yes are in",
+    "inboxLink": "Home › Approvals",
+    "failed": "Couldn’t load PO approval"
+  },
+  "meaning": {
+    "REVIEWED": "Reviewed",
+    "APPROVED": "Approved",
+    "RELEASED": "Released",
+    "VERIFIED": "Verified"
+  },
+  "tolerance": {
+    "title": "Delivery tolerances",
+    "description": "How far a delivery may be over or under the ordered quantity, per supplier or material (for example ±5 % on leather footage).",
+    "add": "New tolerance",
+    "defaultFor": "Default for {company}",
+    "defaultAll": "Default for every company",
+    "defaultHint": "Every supplier and every material. A rule per supplier or material below wins over it.",
+    "over": "Over",
+    "overHint": "How much more than ordered is taken, in percent. For example 5.",
+    "overPlaceholder": "e.g. 5",
+    "under": "Under",
+    "underHint": "How much less still counts as delivered in full, in percent. For example 5.",
+    "underPlaceholder": "e.g. 5",
+    "beyond": "Beyond the tolerance",
+    "beyondTitle": {
+      "BLOCK": "Refuse the extra",
+      "APPROVAL": "Needs a yes"
+    },
+    "beyondHint": {
+      "BLOCK": "The receipt takes at most the limit; the rest goes back to the supplier.",
+      "APPROVAL": "A yes for a receipt is not built yet: until it is, the extra is refused the same way."
+    },
+    "beyondShort": {
+      "BLOCK": "the extra refused",
+      "APPROVAL": "the extra needs a yes (refused until built)"
+    },
+    "figures": "+{over} / −{under}",
+    "applies": "What applies:",
+    "appliesNow": "What applies now:",
+    "followsAll": "follows every company",
+    "none": "No tolerance: a delivery is taken exactly as ordered; more only with the receiver’s reason.",
+    "removeDefault": "Remove the default",
+    "applyDefault": "Save the default",
+    "exceptions": "Per supplier or material",
+    "table": "Delivery tolerances per supplier or material",
+    "count_one": "{count} rule",
+    "count_other": "{count} rules",
+    "col": {
+      "supplier": "Supplier",
+      "material": "Material",
+      "rule": "Tolerance",
+      "whose": "Whose",
+      "note": "Note",
+      "state": "State",
+      "changed": "Changed",
+      "actions": "Actions"
+    },
+    "status": {
+      "label": "Which rules",
+      "ACTIVE": "Active",
+      "ARCHIVED": "Archived",
+      "ALL": "All"
+    },
+    "everySupplier": "Every supplier",
+    "everyMaterial": "Every material",
+    "kindOf": "Any {kind}",
+    "thisCompany": "This company",
+    "empty": {
+      "title": "No rule per supplier or material",
+      "body": "Every delivery follows the default above. Add a rule where one supplier or one material needs its own."
+    },
+    "emptyArchived": {
+      "title": "No archived rule",
+      "body": "An archived rule no longer applies; it can be reactivated here."
+    },
+    "precedence": "The most specific rule wins: a material over its kind over every material, then a supplier over every supplier, then the company over every company.",
+    "leatherLine": "A leather line that carries its own area tolerance, agreed on its order, keeps it: over it the receiver says why the extra is taken.",
+    "short": "A short delivery is never refused: within the tolerance under, the line counts as received in full.",
+    "failed": "Couldn’t load delivery tolerances"
+  },
+  "itemKind": {
+    "LEATHER": "leather",
+    "TEXTILE": "textile",
+    "LINING": "lining",
+    "MEMBRANE": "membrane",
+    "PADDING": "padding",
+    "THREAD": "thread",
+    "TRIM": "trim",
+    "HARDWARE": "hardware",
+    "PROTECTOR": "protector",
+    "LABEL": "label",
+    "PACKAGING": "packaging",
+    "COMPONENT": "component"
+  },
+  "row": {
+    "menu": "Actions for {rule}",
+    "edit": "Edit",
+    "view": "View",
+    "archive": "Archive",
+    "archiveHint": "It stops applying; it can be reactivated.",
+    "reactivate": "Reactivate"
+  },
+  "bulk": {
+    "archive_one": "Archive {count}",
+    "archive_other": "Archive {count}",
+    "reactivate_one": "Reactivate {count}",
+    "reactivate_other": "Reactivate {count}"
+  },
+  "dialog": {
+    "newTitle": "New delivery tolerance",
+    "editTitle": "Delivery tolerance: {rule}",
+    "viewTitle": "Delivery tolerance: {rule}",
+    "whose": "For",
+    "whoseHint": "Every company’s rule is kept only by a role over every company.",
+    "forEveryCompany": "For every company.",
+    "supplierHint": "One supplier or workshop, or every supplier.",
+    "supplierPlaceholder": "Every supplier",
+    "materialHint": "One material, one kind of material, or every material. A rule names a supplier, a material or both.",
+    "mode": {
+      "ALL": "Every material",
+      "KIND": "A kind",
+      "ITEM": "One material"
+    },
+    "kind": "Kind of material",
+    "kindPlaceholder": "Choose a kind",
+    "materialPlaceholder": "Choose a material",
+    "note": "Note",
+    "noteHint": "Optional: what was agreed and with whom.",
+    "scopeFixed": "Whose, supplier and material never change: archive this rule and add another.",
+    "archived": "Archived: it no longer applies. Reactivate it to use it again.",
+    "create": "Add the rule",
+    "save": "Save"
+  },
+  "confirm": {
+    "title": "Confirmation",
+    "description": "When suppliers are asked to confirm an order, and how they are reminded.",
+    "by": "Confirm by",
+    "byValue": "{hours} hours after the send: {days} of the supplier’s open days, longer over its closed days.",
+    "byHint": "The buyer may ask for another time when sending, and move it while the order waits. A setting of its own for this default comes later.",
+    "reminders": "Automatic reminders to suppliers",
+    "on": "On",
+    "off": "Off",
+    "how": "When on, the daily run mails a supplier who has not confirmed by the deadline, then once a day, at most {most} times per revision.",
+    "byHand": "A reminder sent by hand from the order counts too. When off, the buyer reminds by hand.",
+    "mails": "The reminder repeats the order’s number and its confirm-by time and attaches the order again; it carries no link (a reply from the supplier gets a new one).",
+    "turningOn": "Switching on mails real suppliers every day an order waits past its confirm-by time. Saving asks you to confirm it’s you.",
+    "applyOn": "Switch on",
+    "applyOff": "Switch off",
+    "failed": "Couldn’t load confirmation"
+  },
+  "switch": {
+    "on": {
+      "COMPANY": "On for this company.",
+      "TENANT": "On: it follows every company’s setting.",
+      "DEFAULT": "On."
+    },
+    "off": {
+      "COMPANY": "Off for this company: the daily run sends no reminder.",
+      "TENANT": "Off: it follows every company’s setting; the daily run sends no reminder.",
+      "DEFAULT": "Off (never switched on): the daily run sends no reminder."
+    }
+  },
+  "alert": {
+    "title": "Buyer alert",
+    "hint": "The buyer is told when an order is still not confirmed after its confirm-by time (Home › Alerts).",
+    "none": "No alert rule for orders not confirmed: the buyer is not told.",
+    "add": "New alert rule",
+    "tells": "Tells: {role}",
+    "tellsNobody": "Tells nobody yet",
+    "everywhere": "Every company and site",
+    "open": "Open in Home › Alerts",
+    "on": "On",
+    "off": "Off"
+  },
+  "held": {
+    "reading": "Still reading the settings.",
+    "busy": "Saving: wait a moment.",
+    "offline": "Offline: changes are kept on this page until the connection is back.",
+    "offlineTitle": "Offline",
+    "offlineBody": "This is the last copy read. Nothing can be saved until the connection is back.",
+    "noApprovalsView": "Reading the approval rules needs the right to see approvals (approvals.view).",
+    "noRulesManage": "Writing approval rules needs the right to keep them (approvals.rules.manage): the Owner or an administrator.",
+    "noToleranceRight": "Keeping delivery tolerances needs purchasing.tolerances.manage over this company.",
+    "noToleranceRightAll": "Every company’s tolerances are kept only by a role over every company.",
+    "noSwitch": "Only the Owner switches automatic reminders to suppliers on or off.",
+    "noSwitchAll": "The reminders of every company are switched only by a role over every company.",
+    "noAlertsView": "Reading alert rules needs the right to see alerts (alerts.view).",
+    "noAlertsManage": "Writing alert rules needs alerts.rules.manage.",
+    "noPartiesView": "Choosing a supplier needs the right to see suppliers (parties.view): the rule is for every supplier.",
+    "noMaterialsView": "Choosing one material needs the right to see materials (product.materials.view): choose a kind instead.",
+    "noneActive": "None of the ticked rules is active, or you may not change them.",
+    "noneArchived": "None of the ticked rules is archived, or you may not change them.",
+    "nothingChanged": "Nothing changed yet."
+  },
+  "problem": {
+    "percentNeeded": "Type a percentage.",
+    "percentRange": "A percentage from 0 to 100.",
+    "percentPlaces": "At most four decimals.",
+    "kindNeeded": "Choose the kind of material.",
+    "materialNeeded": "Choose the material.",
+    "supplierRefused": "This supplier cannot take a tolerance: choose another, or every supplier.",
+    "noteLong": "The note is too long.",
+    "exceptionNeedsScope": "Name a supplier, a material or both: the default above is for every supplier and every material.",
+    "sameScope": "An active rule for the same supplier and material exists already: change that one, or archive it first.",
+    "toleranceGone": "That tolerance is not there any more.",
+    "read": {
+      "signed_out": "Your session ended: sign in again.",
+      "forbidden": "Your role does not read this.",
+      "not_found": "Not found: it may have been removed.",
+      "unavailable": "The factory server did not answer. Try again in a moment.",
+      "rate_limited": "Too many tries at once. Wait a moment and try again.",
+      "contract": "This screen and the server do not agree on the answer. Reload the page.",
+      "internal": "Something went wrong reading this. Try again."
+    },
+    "write": {
+      "moved": "Someone changed it meanwhile: it is read again and nothing was overwritten. Make your change again.",
+      "sameScope": "An active rule for the same supplier and material exists already: change that one, or archive it first.",
+      "state": "It changed state meanwhile: it is read again.",
+      "invalid": "The server refused what was typed: see the fields.",
+      "forbidden": "Your role may not change this for this company.",
+      "forbiddenAll": "Every company’s settings are changed only by a role over every company.",
+      "not_found": "Not found: it may have been removed. It is read again.",
+      "signed_out": "Your session ended: sign in again, then save.",
+      "rate_limited": "Too many tries at once. Wait a moment and save again.",
+      "unavailable": "The factory server did not answer: nothing was saved. Try again.",
+      "internal": "Something went wrong: nothing was saved. Try again."
+    }
+  },
+  "done": {
+    "default": "The default is saved.",
+    "defaultRemoved": "The default is archived: deliveries follow what is in force above it. It can be reactivated from the archived rules.",
+    "added": "The rule is added.",
+    "saved": "The rule is saved.",
+    "archived_one": "{count} rule archived.",
+    "archived_other": "{count} rules archived.",
+    "archivedSome_one": "{count} of {total} rules archived; the others were refused (read again).",
+    "archivedSome_other": "{count} of {total} rules archived; the others were refused (read again).",
+    "reactivated_one": "{count} rule reactivated.",
+    "reactivated_other": "{count} rules reactivated.",
+    "reactivatedSome_one": "{count} of {total} rules reactivated; the others were refused (read again).",
+    "reactivatedSome_other": "{count} of {total} rules reactivated; the others were refused (read again).",
+    "remindersOn": "Automatic reminders are on: the daily run reminds suppliers that have not confirmed.",
+    "remindersOff": "Automatic reminders are off: the buyer reminds by hand."
+  },
+  "stepUp": {
+    "title": "Confirm it’s you",
+    "sentence": "Switching automatic reminders on mails your suppliers. Type a fresh 6-digit code from your authenticator app.",
+    "confirm": "Confirm",
+    "cancelled": "Not switched: the code was not given. The reminders stay as they were.",
+    "problem": {
+      "wrong": "That code is wrong or already used. Type the code your app shows now.",
+      "locked": "Too many wrong codes. Wait a few minutes and try again.",
+      "unavailable": "The code could not be checked now. Try again."
+    }
+  },
+  "keys": {
+    "title": "Keyboard shortcuts",
+    "newException": "New delivery tolerance",
+    "openRule": "Open the rule in Admin › Approvals, automation & AI",
+    "save": "Save the card you changed",
+    "saveDialog": "Save the tolerance in its dialog",
+    "close": "Close the dialog"
+  }
+}

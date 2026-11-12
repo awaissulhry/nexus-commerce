@@ -1,0 +1,7 @@
+/* SCR-358 — the customer's repair page (B-W2b-342): the estimate's answer row. Semantic tokens only. */
+.fw-prep-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+  margin-top: var(--nds-space-4);
+}

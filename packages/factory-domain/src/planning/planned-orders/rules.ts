@@ -20,8 +20,9 @@ import { sizeSplitByLevel } from '../lot-sizing/plan-level'
  *                subcontractor is not proposed: the order is MAKE and says why.
  *   life         one row lives across runs (B-W2b-286): a run moves a row of the same key on (the new run, its sizes,
  *                demand and dates), adds the new ones and removes a plain PLANNED one nothing needs any more. A firm
- *                row, or one a planner protected, is never changed by a run (it only moves on to the new run) and its
- *                demand counts as covered; a CONVERTED one is history.
+ *                row is never changed by a run (it only moves on to the new run) and its demand counts as covered;
+ *                B-W2b-306 (PLN-076): a row a planner protected fields of follows its demand, the run rewriting only the
+ *                fields not protected (planning/actions/protect); a CONVERTED one is history.
  */
 
 export const SIZE_RUN_RULES = ['ONE_GRID', 'SIZE_GROUPS'] as const
@@ -53,6 +54,11 @@ export interface PeggedDemand {
   readonly orderLineId: string
   readonly size: string
   readonly pieces: number
+  /**
+   * B-W2b-306 (PLN-083): the day the order line needs it (its date; none: the run's day). The planned order's own due date
+   * may be later when it cannot be ready in time (late demand starts today); the row keeps its key by this day.
+   */
+  readonly needDate?: BusinessDate
 }
 
 /**
@@ -201,7 +207,8 @@ export function proposeWork(input: {
       const sizeGroup = words
       const demand = [...mine]
         .sort((a, b) => (a.line.orderNumber < b.line.orderNumber ? -1 : a.line.orderNumber > b.line.orderNumber ? 1 : a.line.lineSeq - b.line.lineSeq || a.sizeIndex - b.sizeIndex))
-        .map((cell) => ({ orderId: cell.line.orderId, orderLineId: cell.line.orderLineId, size: cell.size, pieces: cell.pieces }))
+        // B-W2b-306 (PLN-083): each demand says the day it is needed (the row's key day, whatever its due date becomes).
+        .map((cell) => ({ orderId: cell.line.orderId, orderLineId: cell.line.orderLineId, size: cell.size, pieces: cell.pieces, needDate: dueDate }))
       const kind: PlannedOrderKind = subcontract ? 'SUBCONTRACT' : 'MAKE'
       const row = { kind, styleId: first.line.styleId, colourwayId: first.line.colourwayId, styleRevisionId: first.ownRevisionId, sizeGroup, dueDate }
       out.push({
@@ -226,16 +233,28 @@ export function inHouseDays(steps: readonly { readonly standardMinutes: string; 
   return Math.max(1, Math.ceil(minutes / DAY_MINUTES))
 }
 
-/** A kept row (firm, or a planner protected a field): the run never changes it. */
-export const keptByRun = (row: { readonly status: PlannedOrderStatus; readonly firm: boolean; readonly protectedFields: readonly string[] }): boolean => row.status === 'PLANNED' && (row.firm || row.protectedFields.length > 0)
+/**
+ * A row the run keeps whole: a firm one (it only moves on to the new run; its demand counts as covered). B-W2b-306
+ * (PLN-076): a row a planner protected fields of is no longer kept whole: the run rewrites the fields NOT protected
+ * (planning/actions/protect), so `protectedFields` does not make it kept.
+ */
+export const keptByRun = (row: { readonly status: PlannedOrderStatus; readonly firm: boolean; readonly protectedFields: readonly string[] }): boolean => row.status === 'PLANNED' && row.firm
 
 /** The demand of a stored row, as written (anything else in the list is skipped). */
 export function demandOf(value: unknown): PeggedDemand[] {
   if (!Array.isArray(value)) return []
   return value.flatMap((entry) => {
     const row = entry as Partial<PeggedDemand> | null
-    return row && typeof row.orderId === 'string' && typeof row.orderLineId === 'string' && typeof row.size === 'string' && typeof row.pieces === 'number' ? [{ orderId: row.orderId, orderLineId: row.orderLineId, size: row.size, pieces: row.pieces }] : []
+    if (!(row && typeof row.orderId === 'string' && typeof row.orderLineId === 'string' && typeof row.size === 'string' && typeof row.pieces === 'number')) return []
+    // B-W2b-306 (PLN-083): the day it is needed, when the run wrote it.
+    return [{ orderId: row.orderId, orderLineId: row.orderLineId, size: row.size, pieces: row.pieces, ...(typeof row.needDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(row.needDate) ? { needDate: row.needDate } : {}) }]
   })
+}
+
+/** B-W2b-306 (PLN-083): the day a stored row's demand is needed (its earliest), else its due date: the day of its key. */
+export function needDateOf(demand: readonly PeggedDemand[], dueDate: BusinessDate): BusinessDate {
+  const days = demand.flatMap((entry) => (entry.needDate ? [entry.needDate] : [])).sort()
+  return days[0] ?? dueDate
 }
 
 /** The size run of a stored row. */

@@ -1,5 +1,6 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import { Banner } from '@nexus/ui/components'
 import { Button } from '@nexus/ui/primitives'
 import { EditModeBar } from '../../../../lib/i18n/ds-parts'
@@ -56,15 +57,16 @@ export interface ProfileActions {
   dialogs?: ProfileDialogActions
 }
 
-export function ProfileView({ model, actions }: { model: ProfileViewModel; actions?: ProfileActions }) {
+export function ProfileView({ model, actions, bank }: { model: ProfileViewModel; actions?: ProfileActions; bank?: ReactNode }) {
   return (
-    <WithMessages namespaces={[NS, 'portal', 'portal-account', 'lists', 'ds-words']}>
-      <ProfileBody model={model} actions={actions} />
+    // B-W2b-334: `purchasing-suppliers-depth` holds the Bank details' words (portalBank.*).
+    <WithMessages namespaces={[NS, 'portal', 'portal-account', 'lists', 'ds-words', 'purchasing-suppliers-depth']}>
+      <ProfileBody model={model} actions={actions} bank={bank} />
     </WithMessages>
   )
 }
 
-function ProfileBody({ model, actions }: { model: ProfileViewModel; actions?: ProfileActions | undefined }) {
+function ProfileBody({ model, actions, bank }: { model: ProfileViewModel; actions?: ProfileActions | undefined; bank?: ReactNode }) {
   const t = useT(NS)
   const edit = model.edit.held
   const held = !edit ? null : edit.key === 'held.adminChanges' ? heldWords(t, edit.key, model.company.admins) : t(edit.key, edit.params)
@@ -102,6 +104,8 @@ function ProfileBody({ model, actions }: { model: ProfileViewModel; actions?: Pr
             <EditModeBar count={model.edit.count} busy={model.edit.sending} message={t('profile.changesTyped', { count: model.edit.count })} applyLabel={t('profile.send')} applyHeldReason={held} saveShortcut onApply={() => actions?.onSend?.()} onDiscard={() => actions?.onDiscard?.()} />
           </div>
         ) : null}
+        {/* B-W2b-334: Bank details (SCM-007). */}
+        {bank ? <div className="fw-pacc-wide">{bank}</div> : null}
         <div className="fw-pacc-wide">
           <ColleaguesSection model={model.colleagues} slow={model.slow} actions={actions?.colleagues} inviteHeld={model.inviteHeld} prices={false} title={t('profile.users.title')} hint={t('profile.users.onlyYouHint')} />
         </div>
