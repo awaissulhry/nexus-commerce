@@ -89,6 +89,8 @@ model SampleRound {
   // production.prisma: the sample work orders that make it; changes.prisma: the change requests it raised.
   workOrders      WorkOrder[]
   changeRequests  ChangeRequest[]
+  // W2b-5 supply.prisma (wave 40/44): the sample purchase orders bought for it.
+  purchaseOrders  PurchaseOrder[]  @relation("PurchaseOrderSampleRound")
 
   @@unique([tenantId, companyId, number])
   // The target of its parts' and the gates' references.

@@ -68,6 +68,9 @@ model Colour {
   company     Company?     @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   itemColours ItemColour[]
   colourways  Colourway[]
+  // W2b-5 sales-pricing.prisma (wave 38/44): the options chosen with this colour on quote and order lines.
+  quoteLineOptions      QuoteLineOption[]      @relation("QuoteLineOptionColour")
+  salesOrderLineOptions SalesOrderLineOption[] @relation("SalesOrderLineOptionColour")
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from material colours and colourways.
@@ -195,6 +198,10 @@ model Item {
   bomLineAlternates   BomLineAlternate[] @relation("BomLineAlternateItem")
   optionEffects       OptionEffect[]     @relation("OptionEffectItem")
   optionEffectTargets OptionEffect[]     @relation("OptionEffectTargetItem")
+  // W2b-5 sales-pricing.prisma (wave 38/44): the options chosen with it on quote and order lines, its minimum order rules.
+  quoteLineOptions      QuoteLineOption[]      @relation("QuoteLineOptionItem")
+  salesOrderLineOptions SalesOrderLineOption[] @relation("SalesOrderLineOptionItem")
+  moqRules              MoqRule[]              @relation("MoqRuleItem")
   // W2b-4 samples.prisma (wave 29/33): the swatches of it sent to brands.
   sampleSwatches  SampleSwatch[]
   // W2b-4 substances.prisma (wave 31/33): its compliance profile, what suppliers declared of it, its own test plan rules.
@@ -208,6 +215,11 @@ model Item {
   purchaseOrderLines   PurchaseOrderLine[]
   // W2b (wave 22/22): the purchase order lines whose supplier proposes it as a substitute.
   substituteProposals  PurchaseOrderLine[] @relation("PurchaseOrderLineSubstitute")
+  // W2b-5 buying-depth.prisma (wave 40/44): its variants (colours and sizes), its delivery tolerances and the requests to
+  // buy it.
+  variants             ItemVariant[]
+  deliveryTolerances   DeliveryTolerance[] @relation("DeliveryToleranceItem")
+  purchaseRequests     PurchaseRequest[]   @relation("PurchaseRequestItem")
   materialRequirements MaterialRequirement[]
   // W2a cost-ledger.prisma (wave 7/7): its frozen standard costs, and the work-order cost entries that name it.
   /// @not-money the relation to its standard costs (the rows carry the grain)
@@ -232,10 +244,14 @@ model Item {
   lots                 Lot[]
   stockMoves           StockMove[]
   stockValuations      StockValuation[]
+  // W2b-5 sales-orders-depth.prisma (wave 39/44): the customers' materials of it expected for their orders.
+  customerMaterials    CustomerMaterial[]
   // W2a sourcing.prisma, claims.prisma, subcontract.prisma: its approved sources, claim lines and kit lines.
   supplierItems        SupplierItem[]
   supplierClaimLines   SupplierClaimLine[]
   subcontractKitLines  SubcontractKitLine[]
+  // W2b-5 service.prisma (wave 43/44): the repair estimate lines that use it as a part.
+  repairEstimateLines  RepairEstimateLine[]
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from BOM lines and the item's colours.
@@ -339,6 +355,9 @@ model ItemColour {
   // supply.prisma: the purchase order lines and requirements in this colour.
   purchaseOrderLines   PurchaseOrderLine[]
   materialRequirements MaterialRequirement[]
+  // W2b-5 buying-depth.prisma (wave 40/44): the variants and the requests to buy in this colour.
+  variants             ItemVariant[]
+  purchaseRequests     PurchaseRequest[]   @relation("PurchaseRequestItemColour")
   // W2a reservations.prisma, stockcount.prisma, planning.prisma: the same, of this colour.
   reservations         Reservation[]
   stockCountLines      StockCountLine[]
@@ -352,6 +371,8 @@ model ItemColour {
   goodsReceiptLines    GoodsReceiptLine[]
   lots                 Lot[]
   stockMoves           StockMove[]
+  // W2b-5 sales-orders-depth.prisma (wave 39/44): the customers' materials expected in this colour.
+  customerMaterials    CustomerMaterial[]
   // production.prisma: the work orders' planned materials in this colour.
   workOrderMaterials   WorkOrderMaterial[]
   // W2a sourcing.prisma, claims.prisma, subcontract.prisma: its approved sources, claim lines and kit lines.
@@ -365,6 +386,9 @@ model ItemColour {
   // W2b-4 options.prisma (wave 28/33): the alternates and option effects in this colour.
   bomLineAlternates    BomLineAlternate[] @relation("BomLineAlternateItemColour")
   optionEffects        OptionEffect[]     @relation("OptionEffectItemColour")
+  // W2b-5 sales-pricing.prisma (wave 38/44): the options chosen with this colour on quote and order lines.
+  quoteLineOptions      QuoteLineOption[]      @relation("QuoteLineOptionItemColour")
+  salesOrderLineOptions SalesOrderLineOption[] @relation("SalesOrderLineOptionItemColour")
   supplierClaimLines   SupplierClaimLine[]
   subcontractKitLines  SubcontractKitLine[]
 
@@ -395,6 +419,8 @@ model SizeScale {
   // W2b-4 sizes-depth.prisma (wave 27/33): its grade rules and prepacks.
   gradeRules GradeRule[]
   prepacks   Prepack[]
+  // W2b-5 sales-pricing.prisma (wave 38/44): its size curves.
+  sizeCurves SizeCurve[] @relation("SizeCurveScale")
   styles  Style[]
   // W2b-4 styles-depth.prisma (wave 26/33): the product types whose default scale it is.
   productTypeProfiles ProductTypeProfile[]
@@ -528,6 +554,10 @@ model Style {
   copies              Style[]               @relation("StyleCopiedFrom")
   // W2b-4 options.prisma (wave 28/33): the option groups it offers.
   optionGroups        StyleOptionGroup[]
+  // W2b-5 sales-pricing.prisma (wave 38/44): the quote template lines, size surcharges and minimum order rules of it.
+  quoteTemplateLines  QuoteTemplateLine[]   @relation("QuoteTemplateLineStyle")
+  sizeSurcharges      SizeSurcharge[]       @relation("SizeSurchargeStyle")
+  moqRules            MoqRule[]             @relation("MoqRuleStyle")
   // W2b-4 styles-depth.prisma (wave 26/33): the style that replaces it and those it replaces, its product type, its names
   // per language and its pictures (Restrict, not Prisma's SetNull default: that would also clear tenantId).
   replacedBy          Style?                @relation("StyleReplacedBy", fields: [tenantId, replacedById], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
@@ -552,6 +582,8 @@ model Style {
   inquiryLines        InquiryLine[]            @relation("InquiryLineStyle")
   // production.prisma: the work orders that make it.
   workOrders          WorkOrder[]
+  // W2b-5 planning-depth.prisma (wave 41/44): the planned work orders that would make it.
+  plannedWorkOrders   PlannedWorkOrder[]
   // W2b pay.prisma (schema wave 6/7): the piece-rate tables of its own.
   pieceRateTables     PieceRateTable[]
   // quality.prisma: the PPE register's entries about it.
@@ -570,6 +602,10 @@ model Style {
   priceListEntries    PriceListEntry[]
   repairOrders        RepairOrder[]
   complaints          Complaint[]
+  // W2b-5 service.prisma (wave 43/44): the service cases, product-safety reports and accident log entries about it.
+  serviceCases        ServiceCase[]         @relation("ServiceCaseStyle")
+  productSafetyReports ProductSafetyReport[] @relation("ProductSafetyReportStyle")
+  accidentLogEntries  AccidentLogEntry[]    @relation("AccidentLogEntryStyle")
   // W2a compliance.prisma: the changes to its approved type under review.
   typeChangeReviews   TypeChangeReview[]
   // W2b-4 changes.prisma and samples.prisma (wave 29/33): its change requests and orders, sample rounds and swatches.
@@ -577,6 +613,8 @@ model Style {
   changeOrders        ChangeOrder[]
   sampleRounds        SampleRound[]
   sampleSwatches      SampleSwatch[]
+  // W2b-5 supply.prisma (wave 40/44): the sample and development purchase orders for it.
+  samplePurchaseOrders PurchaseOrder[]     @relation("PurchaseOrderDevelopmentStyle")
   // W2b-4 compliance-rules.prisma (wave 30/33): its own economic operators and the gate events about it.
   economicOperatorRoles EconomicOperatorRole[]
   gateEvents          GateEvent[]
@@ -657,6 +695,8 @@ model Colourway {
   images         StyleImage[]
   // W2b-4 sizes-depth.prisma (wave 27/33): the prepack lines of this colourway.
   prepackLines   PrepackLine[]
+  // W2b-5 sales-pricing.prisma (wave 38/44): the quote template lines in it.
+  quoteTemplateLines QuoteTemplateLine[] @relation("QuoteTemplateLineColourway")
   // sales.prisma: its quote and sales order lines.
   quoteLines      QuoteLine[]
   salesOrderLines SalesOrderLine[]
@@ -666,12 +706,17 @@ model Colourway {
   inquiryLines       InquiryLine[]            @relation("InquiryLineColourway")
   // production.prisma: the work order cells made in it.
   workOrderSizes  WorkOrderSize[]
+  // W2b-5 planning-depth.prisma (wave 41/44): the planned work orders in it.
+  plannedWorkOrders PlannedWorkOrder[]
   // W2a ncr.prisma: the nonconformances about it.
   nonconformances Nonconformance[]
   // pricing.prisma, returns.prisma: its own prices in price lists, its repairs.
   /// @not-money the relation to its price list entries
   priceListEntries PriceListEntry[]
   repairOrders     RepairOrder[]
+  // W2b-5 service.prisma (wave 43/44): the service cases and product-safety reports about it.
+  serviceCases         ServiceCase[]         @relation("ServiceCaseColourway")
+  productSafetyReports ProductSafetyReport[] @relation("ProductSafetyReportColourway")
 
   @@unique([tenantId, styleId, code])
   // The target of the references from the style's SKUs, BOM lines and grid cells: a colourway of the same style.
@@ -773,6 +818,8 @@ model StyleRevision {
   salesOrderLines SalesOrderLine[]
   // production.prisma: the work orders released with it as their frozen specification.
   workOrders      WorkOrder[]
+  // W2b-5 planning-depth.prisma (wave 41/44): the planned work orders whose demand names it.
+  plannedWorkOrders PlannedWorkOrder[]
   // W2b-2 cutting.prisma (wave 13/16): its pattern pieces (frozen with it).
   patternPieces   PatternPiece[]
   // quality.prisma: the PPE register entries about garments made to it.
@@ -894,6 +941,8 @@ model BomLine {
   workOrderMaterials WorkOrderMaterial[]
   // W2b-5 warehouse-depth.prisma (wave 36/44): the substitutes used for its material on work orders.
   materialSubstitutions MaterialSubstitution[]
+  // W2b-5 sales-orders-depth.prisma (wave 39/44): the customers' materials expected for orders of the line (customer-supplied).
+  customerMaterials  CustomerMaterial[]
   // W2b-2 cutting.prisma (wave 13/16): the pattern pieces cut from the line.
   patternPieces      PatternPiece[]
 

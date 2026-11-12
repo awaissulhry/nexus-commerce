@@ -6,6 +6,7 @@ import { asMoney, markMoney } from '@nexus/factory-domain/money/marked'
 import { approvalView } from '@nexus/factory-domain/parties/address-approval'
 import { withdrawProblem } from '@nexus/factory-domain/sales/portal-ordering/office'
 import { reorderPlan, type PastLine } from '@nexus/factory-domain/sales/portal-ordering/reorder'
+import { isGoodsLine } from '@nexus/factory-domain/sales/quotes/quotes'
 import {
   draftTotals,
   headerProblems,
@@ -97,8 +98,9 @@ async function sourcesOf(request: FastifyRequest, reader: PortalReader, lines: r
   )
   const revisionIds = [...new Set(rows.flatMap((row) => (row.styleRevisionId ? [row.styleRevisionId] : [])))]
   const revisions = revisionIds.length === 0 ? new Map<string, number>() : await reader.inTenant(async (db) => new Map((await db.styleRevision.findMany({ where: { id: { in: revisionIds } }, select: { id: true, revision: true } })).map((row) => [row.id, row.revision])))
+  // W2b-5 (B-W2b-280): a fee line is never a reorder's source.
   return new Map(
-    rows.map((row) => [
+    rows.filter(isGoodsLine).map((row) => [
       row.id,
       {
         orderLineId: row.id,

@@ -1,0 +1,79 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/service.prisma (rules: src/ownership.ts; roles: src/roles.ts). W2b-5 schema wave 43/44 (B-W2b-291): return policies and fee rules, repair estimates, service cases and their links, product-safety reports, the injury kept apart, the accident log. The office writes them through apps/factory-api's modules/sales/returns-depth (B-W2b-341), returns-outcomes (B-W2b-346), repairs-depth (B-W2b-342), service (B-W2b-345) and safety-reports (B-W2b-351), always through command(); the API keeps staff to the companies their grants reach, and only the product-safety role reads an injury (the database has one office role). A portal or link session (factory_partner_runtime) reads its own party's repair estimates and their lines (the customer accepts an estimate by link or in the portal), never a cost, an internal note or who wrote them; it writes nothing here (the API writes the customer's answer and a report from the portal or the public page as the person or the tenant's system). Nothing here on the floor. ProductSafetyInjury is special-category data (GDPR art. 9): office only, no export source, report or search indexer reads it (apps/factory-api platform/exports/protected-tables.vitest.test.ts) and the …_service_safety_w2b_guards trigger refuses a search entry of it. AccidentLogEntry is append-only (`@append-only`; the triggers refuse UPDATE, DELETE and TRUNCATE for every login). Nothing is deleted but an estimate line while its estimate is a DRAFT and a service case's link while the case is open. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "ReturnPolicy": {
+      "about": "The office keeps a company's return policy per channel (business customers, consumers at a distance): the days to ask and for the goods to arrive, who pays the freight, the conditions and the withdrawal words; a newer policy retires the older, and one an RMA names keeps its terms.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "ReturnFeeRule": {
+      "about": "The office keeps a company's restocking and handling fee rules per reason group and channel, a percent or an amount; switched off, never deleted, and one a return line names keeps its terms.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "RepairEstimate": {
+      "about": "The office writes a repair's estimate, sends it, records the customer's answer or withdraws it. A portal or link session reads its own party's estimates (what it was sent and its answer), never the internal note or who sent, recorded, withdrew or wrote one.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["internalNote", "sentById", "recordedById", "withdrawnById", "createdById"] }
+      }
+    },
+    "RepairEstimateLine": {
+      "about": "The office writes the parts and labour of a draft estimate (and removes a line while it is a draft). A portal or link session reads its own party's lines with their prices, never our cost or who wrote a line.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["unitCost", "costAmount", "createdById"] }
+      }
+    },
+    "ServiceCase": {
+      "about": "The office opens a warranty or service case (numbered), checks the guarantee, decides the cover, moves it through its states, tells the customer when the case says so, resolves and closes it.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "ServiceCaseLink": {
+      "about": "The office links a case to the records it led to or is about (an RMA, a repair, a remake, a credit note …) and removes a link while the case is open.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "delete"] }
+      }
+    },
+    "ProductSafetyReport": {
+      "about": "The office types a product-safety report (from a call or a mail) and the API writes one from the public page or the portal as the tenant's system or the person; quality sees it, opens its service case, files it in the PPE register and closes it.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "ProductSafetyInjury": {
+      "about": "Whether someone was hurt and in what words (special-category data): written with the report, read in the office by the product-safety role only (the API), the words erased on request. Never in a list, an export, a search entry, a portal, a link or on the floor.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "AccidentLogEntry": {
+      "about": "The office records an accident from a safety report in the accident log and adds a later revision to correct or complete it (the authority told). Nobody changes or removes one.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] }
+      }
+    }
+  }
+}

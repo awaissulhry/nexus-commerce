@@ -1,0 +1,679 @@
+// Returns, repairs, service and product safety in depth (W2b-5, schema wave 43/44, B-W2b-291; features SAL-298,
+// SAL-336, SAL-337, SAL-338, SAL-342, SAL-343, SAL-346, SAL-350, SAL-351, SAL-355, SAL-360, SAL-368, SAL-384, SAL-385,
+// SAL-387, SAL-391, SAL-393, SAL-414, SAL-415, SAL-423; design sales.returns, sales.service, sales.settings
+// "Return policy and reasons", compliance.register "Accident log", links.claim, portal.customer.returns): what comes back
+// after a sale, and what a customer or a rider tells us about a garment.
+//
+//   ReturnPolicy        the return policy of a company per channel (SAL-338): business customers (B2B) or consumers who
+//                       bought at a distance (CONSUMER_DISTANCE: the right of withdrawal of the Codice del Consumo art. 52,
+//                       at least 14 days), the days to ask and for the goods to arrive (the RMA's deadline, SAL-337), who
+//                       pays the freight, the conditions printed on the RMA and the withdrawal words; an RMA names the
+//                       policy it was checked against, so a policy in use never changes (a new one replaces it). The W2a
+//                       sales settings' return columns (sales.prisma SalesSettings) stay the default where no policy is set.
+//   ReturnFeeRule       a restocking or handling fee (SAL-343) for a group of return reasons (the RETURN reason codes it
+//                       lists), a percent of the credited value or a fixed amount, per company and channel; a return line
+//                       names the rule its fee came from, and the fee is dropped when the cause is ours (the line's guard).
+//   RepairEstimate      a repair quote from parts and labour (SAL-387), sent to the customer and accepted or declined by
+//   (+ Line)            them (by link, in the portal, or by their word to the office) before the work starts; a new
+//                       revision when it changes. Lines: a part (an item of ours, or words) or labour (minutes), each with
+//                       its price to the customer and our cost.
+//   ServiceCase         a warranty, complaint, repair, question or safety case about one garment or a batch (SAL-368,
+//   (+ Link)            SAL-436): numbered SVC-…, the legal guarantee (Directive (EU) 2019/771) against the factory's own,
+//                       said and decided in words, what the customer wants, NEW → OPEN → WAITING_CUSTOMER | WAITING_PART →
+//                       RESOLVED → CLOSED, the customer told at each status change when the case says so (OFF by default:
+//                       the mail goes through the FAKE provider until the Owner's switch), and the records it led to (an
+//                       RMA, a repair, a remake, a credit note …) by record type + id.
+//   ProductSafetyReport a product-safety report (SAL-414): from the public DoC page (a link with no sign-in), the portal,
+//                       the office or a mail; numbered PSR-…; who reported (personal data), the garment (style, serial or
+//                       batch), what happened, whether it was worn as intended, photos (StoredFile rows of the report);
+//                       quality sees it at once; it opens a SAFETY service case and names its PPE register entry.
+//   ProductSafetyInjury whether someone was hurt and in what words (SAL-415): special-category data (GDPR art. 9) in a table
+//                       of its own, one per report, words only after an explicit consent; erased on request. No list, no
+//                       export, no search entry, no partner and no floor ever read it; in the office only the product-safety
+//                       role (the API's permission). The report itself never holds an injury.
+//   AccidentLogEntry    the accident log (SAL-423; GPSR, Reg. (EU) 2023/988 art. 20; kept whether or not GPSR reaches PPE,
+//                       the Owner's Q37): one entry per report, append-only: a later revision corrects or completes the
+//                       earlier one (the newest is the entry): the date and place, the product, what came of it (coarse,
+//                       never the injury words), when the authority was told and by whom.
+//
+// The return line's serial and lot (SAL-336), its split on a partial receipt (SAL-350), credit without the goods coming back
+// (SAL-342), the size exchange (SAL-351), its fee; the RMA's policy, finish reason (SAL-360) and the scan code printed on
+// its papers (SAL-346); the repair's garment serial, the work wanted and how the request reached us (SAL-384, SAL-385,
+// SAL-391, SAL-393): columns of returns.prisma. A garment's serial is GarmentSerial.serial (quality.prisma), its lot the
+// batch number of the work order that made it (production.prisma WorkOrder.batchNumber; "batch traceability exists through
+// the work order"), so a recall's scope and a trace find a return line, a repair, a case and a report by them.
+//
+// apps/factory-api's modules/sales/returns-depth (B-W2b-341), returns-outcomes (B-W2b-346), repairs-depth (B-W2b-342),
+// service (B-W2b-345) and safety-reports (B-W2b-351) write these tables, always through command(); the hand-written
+// …_service_safety_w2b_guards migration holds their rules for every login, the owner included.
+//
+// Who sees what (ownership/service.json): the office. A portal or link session (factory_partner_runtime) reads its own
+// party's repair estimates and their lines, never a cost, an internal note or who wrote them (the customer accepts an
+// estimate by link or in the portal: the API writes the answer as the person or the tenant's system). Nothing here on the
+// floor. No money on the floor; costs never reach a partner.
+
+/// Which customers a return policy is for.
+enum ReturnPolicyChannel {
+  /// Business customers: brands, dealers, teams (the contract's terms).
+  B2B
+  /// Consumers who bought at a distance (the web shop, a phone order): the right of withdrawal, Codice del Consumo
+  /// art. 52 (14 days from delivery at least).
+  CONSUMER_DISTANCE
+}
+
+/// The return policy of a company for one channel (SAL-338; design sales.settings "Return policy and reasons"): the days
+/// from delivery a customer may ask, the days from the authorisation the goods must arrive in (the RMA's goodsDueBy,
+/// SAL-337), who pays the freight back, the conditions printed on the RMA and, for consumers at a distance, the words of
+/// the right of withdrawal. One live policy per company and channel; a newer one retires the older (retiredAt). An RMA
+/// names the policy it was checked against (ReturnAuthorisation.policyId), so a policy an RMA names never changes its
+/// terms. Never deleted.
+model ReturnPolicy {
+  id              String              @id @db.Uuid
+  tenantId        String              @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// Never changes.
+  companyId       String              @db.Uuid
+  /// Never changes.
+  channel         ReturnPolicyChannel
+  /// Its title in the settings (1 to 120 characters, one line): "Brands and dealers", "Web shop".
+  name            String
+  /// Days from delivery a customer may ask for a return: 1 to 365; for CONSUMER_DISTANCE at least 14 (art. 52).
+  windowDays      Int
+  /// Days from the authorisation the goods must arrive in (1 to 365): the RMA's deadline; null: no deadline.
+  goodsDueDays    Int?
+  freightPaidBy   ReturnFreightPayer
+  /// The conditions printed on the RMA (1 to 4000 characters, line breaks allowed).
+  conditions      String?
+  /// CONSUMER_DISTANCE only: the words of the right of withdrawal given to the consumer (1 to 8000 characters). Its
+  /// wording is the lawyer's to confirm; the database keeps what is typed.
+  withdrawalWords String?
+  /// From which day it applies (Europe/Rome).
+  effectiveFrom   DateTime            @db.Date
+  /// When a newer policy replaced it (set once, never cleared), and by whom.
+  retiredAt       DateTime?           @db.Timestamptz(3)
+  retiredById     String?             @db.Uuid
+  version         Int                 @default(1)
+  createdAt       DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime            @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById     String?             @db.Uuid
+  /// Who changed it last ("Changed by").
+  updatedById     String?             @db.Uuid
+
+  company Company               @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // returns.prisma: the RMAs checked against it.
+  returns ReturnAuthorisation[]
+
+  // The target of the RMAs' reference: a policy of the RMA's own company.
+  @@unique([tenantId, companyId, id])
+  @@index([tenantId, companyId, channel])
+}
+
+/// How a fee is counted.
+enum ReturnFeeKind {
+  /// A percent of the line's credited value.
+  PERCENT
+  /// A fixed amount per return line.
+  AMOUNT
+}
+
+/// A restocking or handling fee rule (SAL-343; design sales.settings "Handling fee rules (dropped when the cause is
+/// ours)", rma.credit "Restocking or handling fee"): for a group of return reasons (the RETURN reason codes it lists; none:
+/// every reason) of one company, on one channel or both, a percent of the credited value or a fixed amount. The first
+/// active rule that matches a line (lowest sequence) gives its fee; the line keeps the rule and the fee it gave. A fee is
+/// never charged when the inspection found the cause ours (the return line's guard). Switched off, never deleted; a rule a
+/// return line names keeps its terms (a change is a new rule).
+model ReturnFeeRule {
+  id          String               @id @db.Uuid
+  tenantId    String               @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// Never changes.
+  companyId   String               @db.Uuid
+  /// The channel it applies to; null: both.
+  channel     ReturnPolicyChannel?
+  /// The reason group's name (1 to 120 characters, one line): "Change of mind", "Wrong size ordered".
+  name        String
+  /// The RETURN reason codes of the group (each once, at most 50; the code's shape `^[A-Z][A-Z0-9_]{1,39}$`); empty:
+  /// every reason.
+  reasonCodes String[]             @default([])
+  kind        ReturnFeeKind
+  /// PERCENT: of the credited value, above 0 and at most 100; AMOUNT: none.
+  percent     Decimal?             @db.Decimal(7, 4)
+  /// AMOUNT: the fee per return line in minor units of `currency`, above 0; PERCENT: none.
+  /// @grain price
+  amount      Int?
+  /// AMOUNT: ISO 4217 (EUR); PERCENT: none.
+  currency    String?
+  /// The order among the company's rules (1 to 9999, lower first).
+  sequence    Int                  @default(100)
+  active      Boolean              @default(true)
+  version     Int                  @default(1)
+  createdAt   DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime             @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?              @db.Uuid
+  /// Who changed it last ("Changed by").
+  updatedById String?              @db.Uuid
+
+  company Company      @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // returns.prisma: the return lines whose fee it gave.
+  lines   ReturnLine[]
+
+  // The target of the return lines' reference (the guard checks the rule is of the RMA's company).
+  @@unique([tenantId, id])
+  @@index([tenantId, companyId, active])
+}
+
+/// Why an RMA was closed (SAL-360; design returns.close "Finish reason (required)"): set with CLOSED, never on another
+/// status. RMAs closed before W2b-5 have none.
+enum ReturnFinishReason {
+  /// Every line was decided and done (credit, replacement, repair, remake, exchange).
+  COMPLETED
+  /// Credited without the goods coming back (SAL-342).
+  CREDITED_WITHOUT_RETURN
+  /// The goods went back to the customer as they came (SAL-355).
+  RETURNED_UNCHANGED
+  /// The goods never arrived by the deadline.
+  GOODS_NOT_RECEIVED
+  /// The customer no longer wants the return.
+  CUSTOMER_WITHDREW
+  /// Said in the RMA's reason words.
+  OTHER
+}
+
+/// The states of a repair estimate: DRAFT → SENT | WITHDRAWN; SENT → ACCEPTED | DECLINED | WITHDRAWN. The last three are
+/// final; a changed estimate is a new revision.
+enum RepairEstimateStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  DECLINED
+  /// Taken back before an answer (replaced by a new revision, or the repair was cancelled).
+  WITHDRAWN
+}
+
+/// How the customer's answer to an estimate reached us.
+enum RepairEstimateAnswerVia {
+  /// The approval link sent with the estimate.
+  LINK
+  /// A person of the customer in the portal.
+  PORTAL
+  /// The customer's word by phone, mail or in person, recorded by the office.
+  OFFICE
+}
+
+/// A repair quote (SAL-387; design repair.estimate "Parts and labour, approved by the customer before work starts"): one
+/// revision of the estimate of a repair order, its lines of parts and labour, sent to the customer and accepted or
+/// declined by them, with the time and how the answer came ("Customer decision shown with time"). Inserted DRAFT; its
+/// lines change only while DRAFT; SENT with when and by whom (then its terms and lines are frozen: what the customer saw);
+/// the answer once. The repair's stage (ESTIMATED, APPROVED) is the repair order's own. Never deleted.
+model RepairEstimate {
+  id             String                   @id @db.Uuid
+  tenantId       String                   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The repair's company, site and customer (the references' and the partner wall's keys). Never change.
+  companyId      String                   @db.Uuid
+  siteId         String                   @db.Uuid
+  partyId        String                   @db.Uuid
+  /// Never changes.
+  repairId       String                   @db.Uuid
+  /// 1, 2, 3 … per repair (a changed estimate is a new revision; the old one WITHDRAWN or DECLINED).
+  revision       Int
+  status         RepairEstimateStatus     @default(DRAFT)
+  /// ISO 4217 (EUR) of every amount of its lines.
+  currency       String                   @default("EUR")
+  /// The last day the customer may accept it (Europe/Rome); null: no end.
+  validUntil     DateTime?                @db.Date
+  /// Words to the customer, on the estimate (1 to 2000 characters).
+  customerNote   String?
+  /// For the office only.
+  /// @internal
+  internalNote   String?
+  /// Set exactly from SENT on (sent by a person of the office).
+  sentAt         DateTime?                @db.Timestamptz(3)
+  sentById       String?                  @db.Uuid
+  /// The customer's answer: set exactly when ACCEPTED or DECLINED. answeredByName: the customer's person as they gave
+  /// it (a link or the portal); recordedById: the office person who recorded an OFFICE answer (exactly then).
+  answeredAt     DateTime?                @db.Timestamptz(3)
+  answeredVia    RepairEstimateAnswerVia?
+  answeredByName String?
+  recordedById   String?                  @db.Uuid
+  /// Why the customer declined, in their words (DECLINED only).
+  declineReason  String?
+  /// Set exactly when WITHDRAWN.
+  withdrawnAt    DateTime?                @db.Timestamptz(3)
+  withdrawnById  String?                  @db.Uuid
+  version        Int                      @default(1)
+  createdAt      DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime                 @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById    String?                  @db.Uuid
+
+  site   Site                 @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  party  Party                @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  repair RepairOrder          @relation(fields: [tenantId, siteId, repairId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  lines  RepairEstimateLine[]
+
+  @@unique([tenantId, repairId, revision])
+  // The target of the lines' reference: a line of the same customer (the partner wall).
+  @@unique([tenantId, partyId, id])
+  @@index([tenantId, status])
+}
+
+/// What an estimate line is.
+enum RepairEstimateLineKind {
+  /// A part: a zip, a protector, a leather panel (an item of ours, or words).
+  PART
+  /// Work: minutes of a person's time.
+  LABOUR
+}
+
+/// One line of a repair estimate (design repair.est.grid "Part or job · Qty · Price · Labour minutes · Total"): a part or
+/// labour, the quantity, the labour minutes, the price to the customer per unit and the line's total, and our cost (the
+/// part's standard cost or the labour's rate: office only, never shown to the customer). Written only while its estimate
+/// is DRAFT.
+model RepairEstimateLine {
+  id          String                 @id @db.Uuid
+  tenantId    String                 @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The estimate's customer (the partner wall's key). Never changes.
+  partyId     String                 @db.Uuid
+  /// Never changes.
+  estimateId  String                 @db.Uuid
+  /// Its place on the estimate: 10, 20, 30 …
+  seq         Int
+  kind        RepairEstimateLineKind
+  /// PART: the item used, when it is one of ours; LABOUR: none.
+  itemId      String?                @db.Uuid
+  /// What it is, as the customer reads it (1 to 500 characters, one line): "YKK zip 60 cm", "Replace the left sleeve".
+  description String
+  /// Pieces (or the item's unit) of a part; 1 or more jobs of labour. Above 0.
+  quantity    Decimal                @db.Decimal(18, 4)
+  /// LABOUR: the minutes of work, 1 to 100000; PART: none.
+  minutes     Int?
+  /// The price to the customer per unit (0 or more).
+  /// @grain price
+  unitPrice   Decimal                @db.Decimal(18, 6)
+  /// The line's total to the customer, minor units of the estimate's currency (0 or more).
+  /// @grain price
+  amount      Int
+  /// Our cost per unit, and the line's cost in minor units (0 or more; both or neither).
+  /// @grain cost
+  unitCost    Decimal?               @db.Decimal(18, 6)
+  /// @grain cost
+  costAmount  Int?
+  version     Int                    @default(1)
+  createdAt   DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime               @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?                @db.Uuid
+
+  estimate RepairEstimate @relation(fields: [tenantId, partyId, estimateId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  item     Item?          @relation(fields: [tenantId, itemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, estimateId, seq])
+}
+
+/// What a service case is about (SAL-368, SAL-436).
+enum ServiceCaseKind {
+  /// A claim under the legal guarantee or the factory's own.
+  WARRANTY
+  /// A complaint about a garment (W2a's Complaint, if one is opened, is a linked record).
+  COMPLAINT
+  /// A repair or an alteration asked for.
+  REPAIR
+  /// A question (care, fit, sizes, a certificate).
+  QUESTION
+  /// A product-safety report (ProductSafetyReport.serviceCaseId names its case).
+  SAFETY
+}
+
+/// How a case reached us (design service.new "Channel").
+enum ServiceCaseChannel {
+  OFFICE
+  MAIL
+  PHONE
+  PORTAL
+  LINK
+}
+
+/// What the customer wants from the case (null: not said).
+enum ServiceCaseWish {
+  REPAIR
+  /// Another garment (a replacement, an exchange, a remake).
+  REPLACE
+  /// The money back (a credit note).
+  CREDIT
+  /// An answer.
+  ANSWER
+}
+
+enum ServiceCasePriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+/// The states of a case: NEW → OPEN | CLOSED; OPEN → WAITING_CUSTOMER | WAITING_PART | RESOLVED | CLOSED; a waiting case
+/// → OPEN | the other waiting state | RESOLVED | CLOSED; RESOLVED → OPEN (it came back) | CLOSED. CLOSED is final.
+enum ServiceCaseStatus {
+  NEW
+  OPEN
+  WAITING_CUSTOMER
+  /// Waiting for a part (design service.tiles "Waiting for a part").
+  WAITING_PART
+  RESOLVED
+  CLOSED
+}
+
+/// Which guarantee a case's claim falls under (SAL-368; design case.warranty "Legal 2-year guarantee or factory warranty,
+/// with why (remedies and who is liable differ)").
+enum ServiceCover {
+  /// The seller's legal guarantee of conformity to a consumer (Directive (EU) 2019/771; Codice del Consumo arts. 128-135).
+  LEGAL_GUARANTEE
+  /// The factory's own guarantee (its terms).
+  FACTORY_GUARANTEE
+  /// Out of cover.
+  NONE
+}
+
+/// The decision on a claim's cover (design case.warranty "Decide: covered / partly / not covered").
+enum ServiceCoverDecision {
+  COVERED
+  PARTLY
+  NOT_COVERED
+}
+
+/// A warranty or service case (SAL-368, SAL-436; design sales.service and its record "Service case"): numbered from its
+/// company's SERVICE_CASE series (SVC-…), about one garment (its serial as typed, and the serial of ours it is) or a batch
+/// (as typed, and the work order's batch it is), or a style; who (a customer or dealer, and the person), what is wrong,
+/// what the customer wants; the warranty check: the delivery day, when the legal guarantee and the factory's own end, the
+/// cover decided and why in words; the status, the customer told at each status change when `notifyCustomer` is on (OFF by
+/// default); resolved and closed with words. The records it led to are ServiceCaseLink rows. Never deleted.
+model ServiceCase {
+  id                     String                @id @db.Uuid
+  tenantId               String                @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// Never changes.
+  companyId              String                @db.Uuid
+  /// The number from the company's SERVICE_CASE series, unique in the company. Never changes.
+  number                 String
+  kind                   ServiceCaseKind
+  /// How it reached us. Never changes.
+  channel                ServiceCaseChannel    @default(OFFICE)
+  /// The customer or dealer, and the person who wrote (when known); a rider or a private person without an account is
+  /// named in the problem's words or the safety report.
+  partyId                String?               @db.Uuid
+  contactId              String?               @db.Uuid
+  /// The garment: its serial and batch as typed or read from the label (1 to 100 characters, one line), and, when they
+  /// are ours, the serial (GarmentSerial.serial) and the batch (WorkOrder.batchNumber) they match; its style, colourway
+  /// and size.
+  serial                 String?
+  garmentSerial          String?
+  batchNumber            String?
+  garmentBatch           String?
+  styleId                String?               @db.Uuid
+  colourwayId            String?               @db.Uuid
+  size                   String?
+  /// What the customer reports (1 to 4000 characters, line breaks allowed).
+  problem                String
+  customerWants          ServiceCaseWish?
+  priority               ServiceCasePriority   @default(NORMAL)
+  status                 ServiceCaseStatus     @default(NEW)
+  /// The warranty check (SAL-368): the day the garment was delivered (the guarantees run from it), the last day of the
+  /// legal guarantee (null: none, a business customer, or not known) and of the factory's own (null: none).
+  deliveredOn            DateTime?             @db.Date
+  legalGuaranteeEndsOn   DateTime?             @db.Date
+  factoryGuaranteeEndsOn DateTime?             @db.Date
+  /// The decision: which cover, covered or not, why in words (1 to 2000), when and by whom; all set or none.
+  cover                  ServiceCover?
+  coverDecision          ServiceCoverDecision?
+  coverNote              String?
+  coverDecidedAt         DateTime?             @db.Timestamptz(3)
+  coverDecidedById       String?               @db.Uuid
+  /// SAL-436: the customer gets a mail at each status change (through the FAKE provider until the Owner switches mail on).
+  notifyCustomer         Boolean               @default(false)
+  /// The office user who follows it up.
+  ownerId                String?               @db.Uuid
+  /// Set while RESOLVED and kept when CLOSED from there: when, and what was done (1 to 4000).
+  resolvedAt             DateTime?             @db.Timestamptz(3)
+  resolution             String?
+  /// Set exactly when CLOSED; closed without a resolution, the reason in words (1 to 2000).
+  closedAt               DateTime?             @db.Timestamptz(3)
+  closedById             String?               @db.Uuid
+  closeReason            String?
+  /// For the office only.
+  /// @internal
+  internalNote           String?
+  version                Int                   @default(1)
+  createdAt              DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime              @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById            String?               @db.Uuid
+
+  company        Company               @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId (and partyId,
+  // styleId).
+  party          Party?                @relation("ServiceCaseParty", fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  contact        PartyContact?         @relation("ServiceCaseContact", fields: [tenantId, partyId, contactId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  style          Style?                @relation("ServiceCaseStyle", fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  colourway      Colourway?            @relation("ServiceCaseColourway", fields: [tenantId, styleId, colourwayId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
+  serialOfOurs   GarmentSerial?        @relation("ServiceCaseGarmentSerial", fields: [tenantId, garmentSerial], references: [tenantId, serial], onDelete: Restrict, onUpdate: Restrict)
+  batchOfOurs    WorkOrder?            @relation("ServiceCaseGarmentBatch", fields: [tenantId, garmentBatch], references: [tenantId, batchNumber], onDelete: Restrict, onUpdate: Restrict)
+  links          ServiceCaseLink[]
+  safetyReports  ProductSafetyReport[]
+
+  @@unique([tenantId, companyId, number])
+  // The targets of the references from its links and from the safety reports (a case of the report's company).
+  @@unique([tenantId, id])
+  @@unique([tenantId, companyId, id])
+  // The case list and its tiles; a garment's history by serial.
+  @@index([tenantId, status])
+  @@index([tenantId, partyId])
+  @@index([tenantId, garmentSerial])
+  @@index([tenantId, garmentBatch])
+}
+
+/// A record a service case led to or is about (design case.linked "RecordChain of every linked record": order, garment
+/// serial, RMA, repair, remake, credit note, complaint …), by record type (a model name) + id. Added and removed while the
+/// case is not CLOSED; never changed.
+model ServiceCaseLink {
+  id          String   @id @db.Uuid
+  tenantId    String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  caseId      String   @db.Uuid
+  /// The record: its model name ("ReturnAuthorisation", "RepairOrder", "WorkOrder", "Invoice") and id.
+  recordType  String
+  recordId    String   @db.Uuid
+  /// Why it is linked (1 to 500 characters, one line).
+  note        String?
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  createdById String?  @db.Uuid
+
+  serviceCase ServiceCase @relation(fields: [tenantId, caseId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, caseId])
+  // The cases a record is linked to (the record's own "Service cases").
+  @@index([tenantId, recordType, recordId])
+}
+
+/// Where a product-safety report came from (SAL-414).
+enum ProductSafetySource {
+  /// The public DoC page's "Report a problem" (no sign-in; OFF until the privacy notice is published, GATE-PRIVACY).
+  PUBLIC_LINK
+  /// A person of the customer in the portal ("Report a safety incident"; OFF until the notice too).
+  PORTAL
+  /// Typed by the office (a call, a visit).
+  OFFICE
+  /// Typed by the office from a mail.
+  MAIL
+}
+
+/// NEW → ASSESSING | CLOSED; ASSESSING → CLOSED. CLOSED is final.
+enum ProductSafetyReportStatus {
+  NEW
+  /// Quality looks at it.
+  ASSESSING
+  CLOSED
+}
+
+/// A product-safety report (SAL-414; design links.claim "Safety", portal.customer.returns "Report a safety incident",
+/// links.doc "Report a problem"): numbered from its company's SAFETY_REPORT series (PSR-…) when it is made; where it came
+/// from and when; who reported it (a customer and its person, or a name, an e-mail and a phone as given: personal data,
+/// erased on request); the garment (style, colourway, size; the serial and batch as given, and the serial and batch of
+/// ours they match); what happened and when, whether it was worn as intended; quality saw it (once); the SAFETY service case
+/// it opened and the PPE register entry it is in; closed with words. Its photos are StoredFile rows of the report. Whether
+/// someone was hurt is NOT here: ProductSafetyInjury, the narrowest table. Never deleted.
+model ProductSafetyReport {
+  id             String                    @id @db.Uuid
+  tenantId       String                    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company whose product it is (the maker, or the factory for a brand). Never changes.
+  companyId      String                    @db.Uuid
+  /// The number from the company's SAFETY_REPORT series, unique in the company. Never changes.
+  number         String
+  /// Never changes.
+  source         ProductSafetySource
+  /// When it reached us. Never changes.
+  receivedAt     DateTime                  @db.Timestamptz(3)
+  /// The customer or dealer who reported it, and their person (PORTAL: the person's party, required).
+  partyId        String?                   @db.Uuid
+  contactId      String?                   @db.Uuid
+  /// The reporter as they gave themselves (a rider, a wearer): name (1 to 200), e-mail, phone; personal data.
+  reporterName   String?
+  reporterEmail  String?
+  reporterPhone  String?
+  /// The garment: style, colourway and size; the serial and batch as given or read from the label or the QR (1 to 100
+  /// characters, one line), and the serial (GarmentSerial.serial) and batch (WorkOrder.batchNumber) of ours they match.
+  styleId        String?                   @db.Uuid
+  colourwayId    String?                   @db.Uuid
+  size           String?
+  serial         String?
+  garmentSerial  String?
+  batchNumber    String?
+  garmentBatch   String?
+  /// The day it happened (not after the report).
+  occurredOn     DateTime?                 @db.Date
+  /// What happened, in the reporter's words (1 to 4000 characters, line breaks allowed): the event and the product, never
+  /// an injury (ProductSafetyInjury).
+  whatHappened   String
+  /// Was it worn as intended (null: not said).
+  wornAsIntended Boolean?
+  status         ProductSafetyReportStatus @default(NEW)
+  /// Quality saw it: when and by whom, set once.
+  seenAt         DateTime?                 @db.Timestamptz(3)
+  seenById       String?                   @db.Uuid
+  /// The quality person who follows it up.
+  ownerId        String?                   @db.Uuid
+  /// The SAFETY service case it opened, and its PPE register entry: each set once.
+  serviceCaseId  String?                   @db.Uuid
+  registerEntryId String?                   @db.Uuid
+  /// Set exactly when CLOSED: when, by whom, the words (1 to 2000).
+  closedAt       DateTime?                 @db.Timestamptz(3)
+  closedById     String?                   @db.Uuid
+  closeNote      String?
+  version        Int                       @default(1)
+  createdAt      DateTime                  @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime                  @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById    String?                   @db.Uuid
+
+  company       Company               @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId (and companyId,
+  // partyId, styleId).
+  party         Party?                @relation("ProductSafetyReportParty", fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  contact       PartyContact?         @relation("ProductSafetyReportContact", fields: [tenantId, partyId, contactId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  style         Style?                @relation("ProductSafetyReportStyle", fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  colourway     Colourway?            @relation("ProductSafetyReportColourway", fields: [tenantId, styleId, colourwayId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
+  serialOfOurs  GarmentSerial?        @relation("ProductSafetyReportGarmentSerial", fields: [tenantId, garmentSerial], references: [tenantId, serial], onDelete: Restrict, onUpdate: Restrict)
+  batchOfOurs   WorkOrder?            @relation("ProductSafetyReportGarmentBatch", fields: [tenantId, garmentBatch], references: [tenantId, batchNumber], onDelete: Restrict, onUpdate: Restrict)
+  serviceCase   ServiceCase?          @relation(fields: [tenantId, companyId, serviceCaseId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  registerEntry PpeRegisterEntry?     @relation("ProductSafetyReportRegisterEntry", fields: [tenantId, companyId, registerEntryId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  injuries      ProductSafetyInjury[]
+  accidentLog   AccidentLogEntry[]
+
+  @@unique([tenantId, companyId, number])
+  // The target of the injury's and the accident log's references: of the report's own company.
+  @@unique([tenantId, companyId, id])
+  @@index([tenantId, status])
+  @@index([tenantId, garmentSerial])
+  @@index([tenantId, garmentBatch])
+  @@index([tenantId, styleId])
+}
+
+/// Whether someone was hurt, and in what words (SAL-415; design links.claim "injury yes/no — the injury field appears only
+/// after an explicit consent tick (health data, GDPR art. 9)"): special-category data in a table of its own, one per report
+/// (its key). The words only with an explicit consent (when it was given), at most 2000 characters; erased on request
+/// (the words blanked, when and by whom; never back). No list, export, search entry, partner or floor reads it; in the
+/// office only the product-safety role (the API's permission). Never deleted.
+model ProductSafetyInjury {
+  id          String    @id @db.Uuid
+  tenantId    String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The report's company. Never changes.
+  companyId   String    @db.Uuid
+  /// Never changes.
+  reportId    String    @db.Uuid
+  /// `injury:<reportId>`: one row per report. Never changes.
+  key         String
+  /// Someone was hurt. Never changes.
+  injured     Boolean
+  /// The explicit consent to keep the injury words (GDPR art. 9(2)(a)): when it was given. Never changes.
+  consentAt   DateTime? @db.Timestamptz(3)
+  /// The injury in the reporter's words (1 to 2000 characters): only when someone was hurt and with the consent.
+  injuryWords String?
+  /// The words erased on request (GDPR art. 17): when, and by whom; set once, the words stay blank.
+  erasedAt    DateTime? @db.Timestamptz(3)
+  erasedById  String?   @db.Uuid
+  version     Int       @default(1)
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?   @db.Uuid
+
+  report ProductSafetyReport @relation(fields: [tenantId, companyId, reportId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, key])
+}
+
+/// What came of an accident, coarsely (the accident log; never the injury's words, which stay in ProductSafetyInjury).
+enum AccidentOutcome {
+  /// Nobody was hurt.
+  NO_HARM
+  MINOR_HARM
+  /// Serious harm to health (GPSR art. 20: an accident that caused death or serious adverse effects is notified).
+  SERIOUS_HARM
+  DEATH
+  NOT_KNOWN
+}
+
+/// One entry of the accident log (SAL-423; design compliance.register "Accident log (W2b)"; GPSR art. 20): the accident a
+/// safety report tells of, append-only: revision 1 records it; a later revision (higher) corrects or completes it with
+/// the reason (the newest is the entry). The date and place, the product (style, serial and batch as known), what came of
+/// it, when the market surveillance authority was told and by whom (with its reference and the authority notice sent, when
+/// one was). Never changed, never removed.
+/// @append-only
+model AccidentLogEntry {
+  id                 String          @id @db.Uuid
+  tenantId           String          @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The report's company.
+  companyId          String          @db.Uuid
+  reportId           String          @db.Uuid
+  /// 1 for the first entry of a report; a later one higher than every earlier one of the report.
+  revision           Int
+  /// The day of the accident (not in the future).
+  occurredOn         DateTime        @db.Date
+  /// Where it happened (1 to 300 characters, one line): "track day, Mugello", "road, SS 65".
+  place              String
+  /// The product: its style, and its serial and batch as known (1 to 100 characters, one line).
+  styleId            String?         @db.Uuid
+  serial             String?
+  batchNumber        String?
+  outcome            AccidentOutcome
+  /// When the market surveillance authority was told (the Safety Business Gateway), by whom, its reference (1 to 200),
+  /// and the authority notice sent (recall.prisma AuthorityNotice, of the company, SENT); none: not told (yet).
+  authorityToldAt    DateTime?       @db.Timestamptz(3)
+  authorityToldById  String?         @db.Uuid
+  authorityReference String?
+  authorityNoticeId  String?         @db.Uuid
+  /// Why this revision (1 to 2000 characters): required from revision 2.
+  note               String?
+  createdAt          DateTime        @default(now()) @db.Timestamptz(3)
+  /// Who recorded it.
+  createdById        String?         @db.Uuid
+
+  report ProductSafetyReport @relation(fields: [tenantId, companyId, reportId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  style  Style?              @relation("AccidentLogEntryStyle", fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, reportId, revision])
+  // The log, newest first.
+  @@index([tenantId, occurredOn])
+}

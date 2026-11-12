@@ -43,6 +43,7 @@
   },
   "status": {
     "DRAFT": "Bozza",
+    "PENDING_APPROVAL": "In attesa di approvazione",
     "SENT": "Inviato",
     "CONFIRMED": "Confermato",
     "CHANGES_PROPOSED": "Modifiche proposte",
