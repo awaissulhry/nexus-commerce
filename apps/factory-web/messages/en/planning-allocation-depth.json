@@ -1,0 +1,462 @@
+{
+  "al": {
+    "workshop": "The workshop",
+    "kind": {
+      "ALL": "all work",
+      "CUTTING": "cutting",
+      "SEWING": "sewing",
+      "ASSEMBLY": "assembly",
+      "FINISHING": "finishing",
+      "INSPECTION": "inspection",
+      "PACKING": "packing",
+      "SUBCONTRACT": "outside work"
+    },
+    "standing": {
+      "PENDING": "being reviewed, not approved yet",
+      "SUSPENDED": "suspended",
+      "SUSPENDED_WHY": "suspended: {reason}",
+      "REFUSED": "refused",
+      "REFUSED_WHY": "refused: {reason}",
+      "NONE": "withdrawn",
+      "NO_COVER": "no qualification covers this work",
+      "NOT_YET": "approved only from a later day",
+      "EXPIRED": "its approval has ended",
+      "EVIDENCE_EXPIRED": "a document the approval rests on has expired",
+      "OTHER": "not approved"
+    },
+    "hold": {
+      "NOT_A_WORKSHOP": "{workshop} has no subcontractor role.",
+      "NOT_ACTIVE": "{workshop} is not active.",
+      "SUPPLIER_STATUS": {
+        "ON_HOLD": "{workshop} is on hold as a supplier: no new order goes to it.",
+        "BLOCKED": "{workshop} is blocked as a supplier: no new order goes to it.",
+        "INACTIVE": "{workshop} is inactive as a supplier: set it approved again to send it work.",
+        "OTHER": "{workshop}'s supplier status stops new orders."
+      },
+      "NO_LOCATION": "{workshop} has no stock location at {site}: the kit has nowhere to go.",
+      "DURC_MISSING": "No valid DURC on file (D.Lgs. 276/2003 art. 29): ask the workshop for it.",
+      "DURC_EXPIRED": "No valid DURC: it expired on {date}.",
+      "NOT_QUALIFIED": "Not approved for {kind} (Op {seq} {operation}): {standing}.",
+      "NOT_QUALIFIED_ANY": "{workshop} is not approved for this work."
+    },
+    "warn": {
+      "CONDITIONAL": "Approved with conditions for {kind} (Op {seq} {operation}): {conditions}.",
+      "CONDITIONAL_ANY": "Approved with conditions for this work.",
+      "DURC_EXPIRING": "Its DURC expires on {date}.",
+      "DURC_EXPIRING_ANY": "Its DURC expires soon.",
+      "DURC_NOT_CHECKED": "{workshop}'s supplier kinds are not set: its DURC is not checked.",
+      "OVER_CAPACITY": "{workshop} would be at {pct}% of its capacity while the work is there.",
+      "OVER_CAPACITY_ANY": "{workshop} would go over its capacity while the work is there.",
+      "NO_CAPACITY_SET": "{workshop} has no weekly capacity set: its load is not known."
+    },
+    "held": {
+      "checking": "Checking which workshops are approved for this work…",
+      "notChecked": "Whether the workshops are approved could not be read: no work goes to a workshop until it is checked.",
+      "notListed": "Whether {workshop} is approved for {order} is not known yet: the board reads it again.",
+      "notOffered": "{workshop} is not offered for this work.",
+      "noWork": "{order} has no work left to send out: nothing it makes is left, so it stays on our lines."
+    },
+    "capacity": {
+      "head": "Next 4 weeks:",
+      "MINUTES": "{kind}: {booked} of {available} min booked ({pct}%).",
+      "PIECES": "{kind}: {booked} of {available} garments booked ({pct}%).",
+      "proposed": {
+        "MINUTES": "{proposed} min more proposed by the plan.",
+        "PIECES": "{proposed} garments more proposed by the plan."
+      },
+      "none": "{kind}: no weekly capacity set.",
+      "unknown": "{workshop} has no weekly capacity set: its load is not known (—)."
+    },
+    "lane": {
+      "approved": "Approved for {kinds}",
+      "approvedNone": "Not approved for any work yet",
+      "durcNotChecked": "DURC not checked",
+      "durcUntil": "DURC until {date}",
+      "durcValid": "DURC valid"
+    },
+    "mark": {
+      "oneOutside": "Op {seq} {kind} outside",
+      "manyOutside_one": "{count} operation outside",
+      "manyOutside_other": "{count} operations outside"
+    },
+    "card": {
+      "toWorkshop": "To a workshop: the kit timing opens first, then Allocate."
+    },
+    "dialog": {
+      "cancel": "Cancel",
+      "back": "Back to the card",
+      "retry": "Try again"
+    },
+    "error": {
+      "forbidden": "You may not see this at this site.",
+      "offline": "The server did not answer: nothing is shown so that nothing is shown wrong.",
+      "failed": "It could not be read. Try again.",
+      "noSite": "This company has no site to plan yet."
+    },
+    "kit": {
+      "title": "Send to {workshop}",
+      "subtitle_one": "{order} · {style} · {pieces} garment",
+      "subtitle_other": "{order} · {style} · {pieces} garments",
+      "allocate_one": "Allocate {pieces} garment",
+      "allocate_other": "Allocate {pieces} garments",
+      "done_one": "{pieces} garment allocated to {workshop}.",
+      "done_other": "{pieces} garments allocated to {workshop}.",
+      "reading": "Reading the kit timing…",
+      "errorTitle": "Couldn't load the kit timing",
+      "heldTitle": "{workshop} does not take this work",
+      "warnTitle": "Said before you allocate (it does not stop the drop)",
+      "held": {
+        "readOnly": "Read-only: only planners allocate work orders.",
+        "offline": "Offline: nothing can be allocated until the connection is back.",
+        "busy": "Saving: wait for the answer.",
+        "reading": "Wait for the kit timing.",
+        "noWork": "{order} has no work left to send out."
+      },
+      "start": "Work starts",
+      "startFrom": {
+        "GIVEN": "{date}",
+        "SCHEDULE": "{date} (the board's latest safe start)",
+        "TODAY": "{date} (today: the board has no start for it yet)"
+      },
+      "transport": "Transport",
+      "transportFrom": {
+        "WORKSHOP_one": "{days} day (the workshop's delivery time)",
+        "WORKSHOP_other": "{days} days (the workshop's delivery time)",
+        "DEFAULT_one": "{days} day (the default: the workshop has no delivery time)",
+        "DEFAULT_other": "{days} days (the default: the workshop has no delivery time)"
+      },
+      "ship": "Kit ships out",
+      "shipValue": "{date} at {time}",
+      "work": "Work at the workshop",
+      "workFrom": {
+        "CAPACITY_one": "{days} working day (from its weekly capacity)",
+        "CAPACITY_other": "{days} working days (from its weekly capacity)",
+        "ROUTING_one": "{days} working day (from the routing step)",
+        "ROUTING_other": "{days} working days (from the routing step)",
+        "DEFAULT_one": "{days} working day (nothing tells more)",
+        "DEFAULT_other": "{days} working days (nothing tells more)"
+      },
+      "back": "Back at the factory",
+      "backSkipped_one": "{date} ({days} closed day of the workshop skipped)",
+      "backSkipped_other": "{date} ({days} closed days of the workshop skipped)",
+      "onTime_one": "Send the kit on {date}: {days} transport day before the work starts at {workshop} on {start}.",
+      "onTime_other": "Send the kit on {date}: {days} transport days before the work starts at {workshop} on {start}.",
+      "late_one": "The kit should have left on {date} to reach {workshop} {days} transport day before the work starts on {start}: send it today, or start later.",
+      "late_other": "The kit should have left on {date} to reach {workshop} {days} transport days before the work starts on {start}: send it today, or start later.",
+      "listTitle": "The kit (from the bill of materials)",
+      "listNone": "Nothing to send with this work: its bill of materials has no line for it.",
+      "col": {
+        "item": "Material",
+        "colour": "Colour",
+        "quantity": "Quantity"
+      },
+      "note": "Note: {note}",
+      "laterTitle": "What the return date drives",
+      "laterNone": "No later operation waits for these garments.",
+      "laterOp": "Op {seq} {operation} · can start {date}",
+      "laterOk": "latest {date}",
+      "laterLate": "latest {date}: too late",
+      "finishesLate": "Finishes late",
+      "lateOrder": "With this return date the work order would finish after its due date.",
+      "howOrdered": "Allocate books the workshop on the board. The subcontract order is drafted with Create subcontract orders (or by the buyer); nothing reaches the floor until the plan is published.",
+      "noWorkTitle": "No work to send out",
+      "noWork": "Nothing {order} makes (sewing, assembly or finishing) is left to do outside: it stays on our lines."
+    },
+    "op": {
+      "title": "Operations: in-house or outside",
+      "reading": "Reading the operations…",
+      "errorTitle": "Couldn't load the operations",
+      "none": "This work order has no operation.",
+      "col": {
+        "operation": "Operation",
+        "where": "Where",
+        "switch": "Switch"
+      },
+      "name": "Op {seq} {operation}",
+      "inHouse": "In-house",
+      "outside": "Outside",
+      "atOrdered": "at {workshop} · on a subcontract order",
+      "atNoOrder": "at {workshop} · no subcontract order yet",
+      "ordered": "on a subcontract order",
+      "noOrderYet": "no subcontract order yet",
+      "toOutside": "Send outside…",
+      "toInHouse": "Bring in-house…",
+      "rule": "One operation at a time: an operation sent outside books its workshop, not our lines; bringing it back cancels or trims its draft order, never once the kit or pieces went out.",
+      "switchTitle": "In-house or outside",
+      "outsideTitle": "Send Op {seq} {operation} outside",
+      "inHouseTitle": "Bring Op {seq} {operation} back in-house",
+      "outsideLead": "Pick an approved workshop for {kind}. A workshop that is not approved shows why and cannot be picked.",
+      "pick": "Workshop",
+      "noWorkshops": "This site has no workshop yet.",
+      "offered": "Approved",
+      "notOffered": "Not offered",
+      "routing": "In the routing",
+      "noRemark": "Approved for this operation; nothing to say.",
+      "pieces": "Garments",
+      "piecesHint_one": "From 1 to {pieces}.",
+      "piecesHint_other": "From 1 to {pieces}.",
+      "less": "One less",
+      "more": "One more",
+      "orderWill": "A draft subcontract order is made for it when the work order is released.",
+      "orderBuyer": "No subcontract order is made by you: the buyer drafts it from Purchasing › Subcontracting.",
+      "inHouseLead": "The operation comes back to our lines; it is not on any subcontract order.",
+      "inHouseLeadOrder": "Its draft subcontract order is cancelled (or the operation taken off it), never once the kit or pieces went out.",
+      "reason": "Why it comes back in-house",
+      "reasonHint": "At least 3 characters; kept with the change.",
+      "when": "As read on {date}.",
+      "send": "Send outside",
+      "bringBack": "Bring in-house",
+      "held": {
+        "permission": "Switching an operation needs the permission to send work outside (planners, production managers, buyers).",
+        "offline": "Offline: nothing can be switched until the connection is back.",
+        "busy": "Saving: wait for the answer.",
+        "reading": "Wait for the workshops.",
+        "pick": "Pick an approved workshop.",
+        "notOffered": "That workshop is not offered for this operation.",
+        "reason": "Say why it comes back in-house (at least 3 characters).",
+        "noWork": "No work left on this operation.",
+        "pieces_one": "Give whole garments, from 1 to {pieces}.",
+        "pieces_other": "Give whole garments, from 1 to {pieces}."
+      },
+      "sentOutside": "Op {seq} {operation} sent outside to {workshop}.",
+      "orderMade": "Draft subcontract order {order}: the kit leaves {date}, back {back}.",
+      "noOrder": {
+        "PERMISSION": "No subcontract order yet: the buyer drafts it from Purchasing › Subcontracting.",
+        "NOT_RELEASED": "No subcontract order yet: it is made once the work order is released.",
+        "OTHER": "No subcontract order yet."
+      },
+      "backInHouse": "Op {seq} {operation} is done in-house again.",
+      "orderChange": {
+        "CANCELLED": "{order} was cancelled.",
+        "OPERATION_REMOVED": "The operation was taken off {order}."
+      },
+      "refusal": {
+        "CHANGED": "The operation changed since it was read: it was read again.",
+        "HELD": "That workshop is not offered for this operation.",
+        "ALREADY_OUTSIDE": "It is outside already: bring it back in first to send it elsewhere.",
+        "ALREADY_IN_HOUSE": "It is done in-house already.",
+        "NO_WORK_LEFT": "This operation has no work left.",
+        "NOT_SWITCHABLE": "The work order is not open for changes: its operations stay where they are.",
+        "KIT_OUT": "The kit or pieces are at the workshop: take them back on the subcontract order first.",
+        "ISSUED_WITH_OTHERS": "Its subcontract order is issued with other operations too: reopen it to take this one off.",
+        "NEEDS_SUBCONTRACT": "This changes its subcontract order: that needs the subcontracting permission (the buyer's).",
+        "FORBIDDEN": "You may not send work outside at this site.",
+        "PIECES": "Give whole garments, at most the work order's.",
+        "ON_ORDERS_one": "Only {more} more garment of this operation can go out: the rest are on other subcontract orders already.",
+        "ON_ORDERS_other": "Only {more} more garments of this operation can go out: the rest are on other subcontract orders already.",
+        "ON_ORDERS_NONE": "Every garment of this operation is on another subcontract order already: cancel or trim that order in Purchasing first.",
+        "LOCATION": "The workshop needs one active stock location on this site for the order: archived, missing or more than one.",
+        "REASON": "Say why it comes back in-house (at least 3 characters).",
+        "NOT_FOUND": "The operation is no longer on this work order: it was read again.",
+        "OFFLINE": "No connection to the server: nothing was changed.",
+        "FAILED": "The server did not change it. Try again."
+      }
+    },
+    "orders": {
+      "button_one": "Create subcontract orders ({count})",
+      "button_other": "Create subcontract orders ({count})",
+      "held": {
+        "reading": "Wait for the board.",
+        "offline": "Offline: no order can be made until the connection is back.",
+        "permission": "Making subcontract orders here needs the permission to send work outside.",
+        "subcontract": "Drafting subcontract orders needs the subcontracting permission: the buyer makes them.",
+        "none": "No order allocated to a subcontractor yet.",
+        "allOrdered": "Every part at a workshop is on its subcontract order already."
+      },
+      "title_one": "Create subcontract orders: {count} part at a workshop",
+      "title_other": "Create subcontract orders: {count} parts at workshops",
+      "summary": "Each part becomes a draft subcontract order with its kit planned; nothing is sent to the workshop until the order is issued.",
+      "save_one": "Create {count} draft order",
+      "save_other": "Create {count} draft orders",
+      "verb": "drafted",
+      "where": "{order} · {workshop}",
+      "op": "Op {seq} {operation}",
+      "what_one": "{operations} · {pieces} garment",
+      "what_other": "{operations} · {pieces} garments",
+      "whatNone": "No operation named",
+      "now": "No subcontract order",
+      "next": "Draft order · the kit leaves {date} · back {back}",
+      "nextLate": "Draft order · the kit is late (due {date}): it leaves today · back {back}",
+      "nextPlain": "Draft order",
+      "leftOut_one": "{count} part is left out",
+      "leftOut_other": "{count} parts are left out",
+      "nonePass": "No part can become an order now: see why below.",
+      "made": "{order} drafted · the kit leaves {date}",
+      "notice_one": "{count} draft subcontract order made.",
+      "notice_other": "{count} draft subcontract orders made.",
+      "problem": {
+        "NOT_A_PART": "It is no longer a part of {order} at a workshop on this board.",
+        "ORDERED": "{order}'s garments at this workshop are on a subcontract order already.",
+        "NO_WORK": "{order} has no work left to send out.",
+        "PERMISSION": "Drafting it needs the subcontracting permission: the buyer makes it from Purchasing › Subcontracting.",
+        "NOT_RELEASED": "{order} is not released yet: its order is made once it is.",
+        "OTHER": "The server did not make this order."
+      },
+      "failed": {
+        "FAILED": "The orders could not be made. Try again.",
+        "FORBIDDEN": "You may not make subcontract orders at this site.",
+        "OFFLINE": "No connection to the server: nothing was made.",
+        "NOT_FOUND": "The site is no longer there: the board was read again."
+      }
+    },
+    "load": {
+      "minutes": "{booked} / {available} garments",
+      "over": "+{over} garments over",
+      "booked": "{booked} garments booked",
+      "sentence": "{label}: {booked} of {available} garments booked, {pct}%.",
+      "sentenceOver": "{label}: {booked} of {available} garments booked, {pct}%, {over} garments over capacity.",
+      "sentenceNone": "{label}: no capacity set, {booked} garments booked.",
+      "sentenceClosed": "{label}: closed, {booked} garments booked."
+    }
+  },
+  "cp": {
+    "kind": {
+      "LINE": "Line",
+      "WORK_CENTRE": "Work centre",
+      "WORKSHOP": "Workshop"
+    },
+    "unit": {
+      "MINUTES": "min",
+      "PIECES": "garments"
+    },
+    "count_one": "{lanes} lanes · {workshops} workshop lines",
+    "count_other": "{lanes} lanes · {workshops} workshop lines",
+    "note": "Workshop rows count their own weekly capacity (minutes of one kind of work, or garments); what the plan proposes there is said apart and is never in the %.",
+    "row": {
+      "MINUTES": "{code} · Workshop · {kind}, minutes a week",
+      "PIECES": "{code} · Workshop · {kind}, garments a week",
+      "none": "{code} · Workshop · no weekly capacity set"
+    },
+    "end": {
+      "MINUTES": "{perWeek} min a week",
+      "PIECES": "{perWeek} garments a week",
+      "none": "No weekly capacity",
+      "noneFull": "No weekly capacity set: its load is not known (—).",
+      "open": "open-ended",
+      "row": {
+        "MINUTES": "{perWeek} min a week for {kind}, {from} – {to}",
+        "PIECES": "{perWeek} garments a week for {kind}, {from} – {to}"
+      }
+    },
+    "proposed": {
+      "MINUTES": "+{proposed} min proposed by the plan",
+      "PIECES": "+{proposed} garments proposed by the plan"
+    },
+    "how": {
+      "trigger": "How the capacity of {what} is made: {how}",
+      "title": "How this capacity is made · {what}",
+      "titleShort": "How this capacity is made",
+      "noCapacity": "{workshop} has no weekly capacity set for this work: its load is not known.",
+      "row": {
+        "MINUTES": "{perWeek} min a week for {kind}, {from} – {to}.",
+        "PIECES": "{perWeek} garments a week for {kind}, {from} – {to}."
+      },
+      "spread": "A week's capacity is shared over the weekdays (Monday–Friday) the workshop is open.",
+      "days_one": "{open} open weekday, {closed} closed in these days.",
+      "days_other": "{open} open weekdays, {closed} closed in these days.",
+      "available": {
+        "MINUTES": "{available} min available.",
+        "PIECES": "{available} garments available."
+      },
+      "booked": {
+        "MINUTES": "{booked} min booked: subcontract orders and the parts on Lines & subcontractors.",
+        "PIECES": "{booked} garments booked: subcontract orders and the parts on Lines & subcontractors."
+      },
+      "proposed": {
+        "MINUTES": "{proposed} min more proposed by the plan (planned subcontract orders: not in the %).",
+        "PIECES": "{proposed} garments more proposed by the plan (planned subcontract orders: not in the %)."
+      }
+    },
+    "tile": {
+      "label": "Subcontractors over their capacity",
+      "hint_one": "This week · {count} workshop line has no capacity set",
+      "hint_other": "This week · {count} workshop lines have no capacity set",
+      "error": "Not known: the workshops could not be read"
+    },
+    "empty": {
+      "subs": "No workshop is over its capacity this week."
+    },
+    "subs": {
+      "errorTitle": "Couldn't load the workshops' capacity",
+      "errorBody": "Our lines and work centres are shown; the workshop rows and their tile are not drawn, never drawn as empty."
+    },
+    "detail": {
+      "subtitle": "{kind} · {from} – {to}",
+      "days": "{from} – {to}",
+      "band": "Load: {pct} — {band}.",
+      "kindOnly": "This row counts {kind} only.",
+      "noPerson": "Per work order and workshop only: no person, no money."
+    },
+    "jobs": {
+      "label": "The work booked here",
+      "none": "No work booked or proposed in these days.",
+      "col": {
+        "what": "What",
+        "workOrder": "Work order",
+        "days": "Days",
+        "garments": "Garments",
+        "share": {
+          "MINUTES": "Min here",
+          "PIECES": "Garments here"
+        },
+        "pct": "Share"
+      },
+      "kind": {
+        "ORDER": "Subcontract order",
+        "ALLOCATION": "Part on Lines & subcontractors",
+        "PLANNED": "Planned subcontract order"
+      },
+      "proposed": "proposed by the plan, not in the %",
+      "status": {
+        "DRAFT": "Draft",
+        "ISSUED": "Issued",
+        "AT_WORKSHOP": "At the workshop",
+        "PARTLY_RECEIVED": "Partly back",
+        "RECEIVED": "Back",
+        "RELEASED": "Work order released",
+        "IN_PROGRESS": "Work order in progress",
+        "ON_HOLD": "Work order on hold",
+        "PLANNED": "Planned",
+        "OTHER": "Open"
+      }
+    },
+    "heat": {
+      "title": "Load heatmap",
+      "hint_one": "Lanes down, {weeks} week across ({from} – {to}): the % is written in every cell; colour is never the only signal.",
+      "hint_other": "Lanes down, {weeks} weeks across ({from} – {to}): the % is written in every cell; colour is never the only signal.",
+      "hintPlain": "Lanes down, weeks across: the % is written in every cell.",
+      "legend": "What the colours mean",
+      "reading": "Reading the heatmap…",
+      "axisLanes": "Lanes",
+      "axisWeeks": "Weeks",
+      "errorTitle": "Couldn't load load heatmap",
+      "emptyTitle": "No lanes on this site yet",
+      "emptyBody": "Lines, work centres and workshops with a capacity appear here, week by week.",
+      "label": "Load heatmap · {site}",
+      "subNone": "Workshop · no capacity set",
+      "sub": {
+        "MINUTES": "Workshop · {kind}, minutes",
+        "PIECES": "Workshop · {kind}, garments"
+      },
+      "week": "week of {range}",
+      "cell": "{lane}, {week}: {pct} — {booked} of {available} {unit} booked ({band}). Opens the orders.",
+      "cellUnknown": "{lane}, {week}: — nothing available (closed, or no capacity set); {booked} {unit} booked. Opens the orders.",
+      "counts_one": "{cells} cell over 100% in {lanes} lanes.",
+      "counts_other": "{cells} cells over 100% in {lanes} lanes."
+    },
+    "band": {
+      "LOW": "below 70%",
+      "MEDIUM": "70% to 89%",
+      "HIGH": "90% to 100%",
+      "OVER": "over capacity",
+      "UNKNOWN": "not known"
+    },
+    "legend": {
+      "LOW": "Below 70%",
+      "MEDIUM": "70% to 89%",
+      "HIGH": "90% to 100%",
+      "OVER": "Over 100% (bold, hatched)",
+      "UNKNOWN": "Nothing available: closed, or no capacity set"
+    }
+  }
+}
