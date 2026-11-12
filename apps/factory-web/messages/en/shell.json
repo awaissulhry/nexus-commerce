@@ -223,7 +223,8 @@
       "counts": "Counts",
       "reportsGroup": "Reports",
       "reports": "Warehouse reports",
-      "transfers": "Transfers"
+      "transfers": "Transfers",
+      "rules": "Warehouse rules"
     },
     "frame": {
       "topBar": "Top bar"

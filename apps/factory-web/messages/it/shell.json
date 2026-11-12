@@ -223,7 +223,8 @@
       "counts": "Inventari",
       "reportsGroup": "Report",
       "reports": "Report magazzino",
-      "transfers": "Trasferimenti"
+      "transfers": "Trasferimenti",
+      "rules": "Regole di magazzino"
     },
     "frame": {
       "topBar": "Barra superiore"

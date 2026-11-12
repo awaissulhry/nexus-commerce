@@ -147,3 +147,182 @@
     display: block;
   }
 }
+
+/*
+ * B-W2b-338 — the Load heatmap (design sec:heatmap): lanes down, weeks across, every cell its band's colour AND the
+ * whole percent written in it (colour is never the only signal: OVER is also bold with a hatch, UNKNOWN writes "—" on a
+ * dashed cell). Semantic tokens only. The table fills the section; many weeks scroll inside it (the lane column stays),
+ * never the page.
+ */
+.fw-pch {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-pch-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--nds-space-4) var(--nds-space-12);
+}
+
+.fw-pch-title {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: 600;
+}
+
+.fw-pch-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6) var(--nds-space-14);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
+}
+
+.fw-pch-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-pch-swatch {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 14px;
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-sm);
+  font-size: var(--nds-font-size-xs);
+  line-height: 1;
+}
+
+.fw-pch-frame {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+
+.fw-pch-axes {
+  display: flex;
+  justify-content: space-between;
+}
+
+.fw-pch-scroll {
+  overflow-x: auto;
+  min-width: 0;
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
+}
+
+.fw-pch-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 3px;
+  table-layout: fixed;
+  min-width: max-content;
+}
+
+.fw-pch-lanehead,
+.fw-pch-lane {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  width: 200px;
+  min-width: 160px;
+  padding: var(--nds-space-4) var(--nds-space-8);
+  background: var(--nds-surface);
+  text-align: left;
+  font-weight: 400;
+}
+
+.fw-pch-lane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  max-width: 220px;
+  line-height: 1.3;
+}
+
+.fw-pch-lanehead,
+.fw-pch-weekhead {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.fw-pch-weekhead {
+  min-width: 96px;
+  padding: var(--nds-space-4);
+  text-align: center;
+}
+
+.fw-pch-td {
+  padding: 0;
+}
+
+.fw-pch-cell {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-width: 72px;
+  min-height: 34px;
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-sm);
+  color: var(--nds-text);
+  font: inherit;
+  font-size: var(--nds-font-size-sm);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.fw-pch-cell:focus-visible {
+  outline: 2px solid var(--nds-info-strong);
+  outline-offset: 1px;
+}
+
+.fw-pch-cell:hover {
+  border-color: var(--nds-border-strong);
+}
+
+.fw-pch-cell.is-low,
+.fw-pch-swatch.is-low {
+  background: var(--nds-success-soft);
+  color: var(--nds-success-text);
+}
+
+.fw-pch-cell.is-medium,
+.fw-pch-swatch.is-medium {
+  background: var(--nds-info-soft);
+  color: var(--nds-info-text);
+}
+
+.fw-pch-cell.is-high,
+.fw-pch-swatch.is-high {
+  background: var(--nds-warning-soft);
+  color: var(--nds-warning-text);
+  border-color: var(--nds-warning-border);
+}
+
+.fw-pch-cell.is-over,
+.fw-pch-swatch.is-over {
+  background: repeating-linear-gradient(135deg, var(--nds-danger-soft) 0 6px, var(--nds-surface) 6px 9px);
+  color: var(--nds-danger-text);
+  border-color: var(--nds-danger-strong);
+  font-weight: 700;
+}
+
+.fw-pch-cell.is-unknown,
+.fw-pch-swatch.is-unknown {
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text-muted);
+  border-style: dashed;
+}
