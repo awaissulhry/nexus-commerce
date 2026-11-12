@@ -37,7 +37,8 @@ import { scopeFilterOf, viewerOf } from './viewer'
 /** The most rows one lens reads (an answer says when it was reached). */
 const FLOW_LIMIT = 5000
 
-const OPEN_PO = ['DRAFT', 'SENT', 'CHANGES_PROPOSED', 'CONFIRMED', 'PARTLY_RECEIVED'] as const
+// B-W2b-305: PENDING_APPROVAL is a draft waiting for its yes (its stage is the draft's).
+const OPEN_PO = ['DRAFT', 'PENDING_APPROVAL', 'SENT', 'CHANGES_PROPOSED', 'CONFIRMED', 'PARTLY_RECEIVED'] as const
 
 /** The company (and site, where the record has one) filter of a lens's query. */
 function filterWhere(filter: ScopeFilter, hasSite: boolean): Record<string, unknown> {
@@ -97,7 +98,7 @@ const purchaseOrders: Reader = async (db, viewer, filter) => {
   })
   const rows = found.slice(0, FLOW_LIMIT).map((row) => {
     const requested = dayOrNull(row.requestedDate)
-    return { stage: purchaseOrderStageOf(row.status), late: requested !== null && requested < viewer.today && (OPEN_PO as readonly string[]).includes(row.status), since: row.createdAt }
+    return { stage: purchaseOrderStageOf(row.status === 'PENDING_APPROVAL' ? 'DRAFT' : row.status), late: requested !== null && requested < viewer.today && (OPEN_PO as readonly string[]).includes(row.status), since: row.createdAt }
   })
   return { rows, complete: found.length <= FLOW_LIMIT }
 }

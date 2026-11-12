@@ -207,6 +207,13 @@ import { getDepth } from './po-depth/read'
 import { clearSchedule, putSchedule } from './po-depth/schedule'
 import { putShipTo } from './po-depth/ship-to'
 import { createTolerance, listTolerances, moveTolerance, updateTolerance } from './po-depth/tolerances'
+// B-W2b-305: PO approvals and duplicate (po-approvals/), the expediting worklist, the demand of each line, the chase (expediting/).
+import * as poApprovalContracts from './po-approvals/contract'
+import { getApproval, withdrawApproval } from './po-approvals/approval'
+import { duplicateOrder } from './po-approvals/duplicate'
+import * as expeditingContracts from './expediting/contract'
+import { chasePreview, chaseSupplier } from './expediting/chase'
+import { expeditingWorklist, orderDemand } from './expediting/worklist'
 
 // B-W2b-332: ask to buy (./ask-to-buy).
 import { askFromShortage, askOptions, askToBuy, cancelRequests as cancelAsked, getAsked, listAsked, rejectRequests as rejectAsked } from './ask-to-buy/ask'
@@ -279,7 +286,11 @@ export default defineRoutes('purchasing', manifest, async (app) => {
 
   app.get('/purchasing/orders/:purchaseOrderId/send-check', { schema: sendCheckContract }, async (request) => sendCheck(request, request.params.purchaseOrderId))
 
-  app.post('/purchasing/orders/:purchaseOrderId/send', { schema: sendContract }, async (request) => sendOrder(request, request.params.purchaseOrderId, request.body, idempotencyKeyFrom(request)))
+  app.post('/purchasing/orders/:purchaseOrderId/send', { schema: sendContract }, async (request, reply) => {
+    const answer = await sendOrder(request, request.params.purchaseOrderId, request.body, idempotencyKeyFrom(request))
+    // B-W2b-305 (SCM-078): a rule asked a yes first — 202, nothing was sent.
+    return 'approval' in answer ? reply.code(202).send(answer) : answer
+  })
 
   app.post('/purchasing/orders/:purchaseOrderId/send-link', { schema: sendLinkContract }, async (request) => sendNewLink(request, request.params.purchaseOrderId, request.body, idempotencyKeyFrom(request)))
 
@@ -499,6 +510,15 @@ export default defineRoutes('purchasing', manifest, async (app) => {
   app.patch('/purchasing/tolerances/:toleranceId', { schema: poDepthContracts.updateToleranceContract }, async (request) => updateTolerance(request, request.params.toleranceId, request.body, idempotencyKeyFrom(request)))
   app.post('/purchasing/tolerances/:toleranceId/archive', { schema: poDepthContracts.moveToleranceContract }, async (request) => moveTolerance(request, request.params.toleranceId, 'archive', request.body, idempotencyKeyFrom(request)))
   app.post('/purchasing/tolerances/:toleranceId/reactivate', { schema: poDepthContracts.moveToleranceContract }, async (request) => moveTolerance(request, request.params.toleranceId, 'reactivate', request.body, idempotencyKeyFrom(request)))
+  // B-W2b-305 (SCM-078, SCM-080, SCM-057, SCM-064, SCM-068): an order's approval and taking its request back, duplicate or
+  // reorder, the demand each line serves, the expediting worklist, the chase.
+  app.get('/purchasing/orders/:purchaseOrderId/approval', { schema: poApprovalContracts.getApprovalContract }, async (request) => getApproval(request, request.params.purchaseOrderId))
+  app.post('/purchasing/orders/:purchaseOrderId/approval/withdraw', { schema: poApprovalContracts.withdrawApprovalContract }, async (request) => withdrawApproval(request, request.params.purchaseOrderId, request.body, idempotencyKeyFrom(request)))
+  app.post('/purchasing/orders/:purchaseOrderId/duplicate', { schema: poApprovalContracts.duplicateContract }, async (request, reply) => reply.code(201).send(await duplicateOrder(request, request.params.purchaseOrderId, request.body, idempotencyKeyFrom(request))))
+  app.get('/purchasing/orders/:purchaseOrderId/demand', { schema: expeditingContracts.demandContract }, async (request) => orderDemand(request, request.params.purchaseOrderId))
+  app.get('/purchasing/expediting', { schema: expeditingContracts.worklistContract }, async (request) => expeditingWorklist(request, request.query))
+  app.get('/purchasing/orders/:purchaseOrderId/chase', { schema: expeditingContracts.chasePreviewContract }, async (request) => chasePreview(request, request.params.purchaseOrderId, request.query.language))
+  app.post('/purchasing/orders/:purchaseOrderId/chase', { schema: expeditingContracts.chaseContract }, async (request) => chaseSupplier(request, request.params.purchaseOrderId, request.body, idempotencyKeyFrom(request)))
 
   const linkUse = app.officeAuth?.rateLimits.linkUse ?? AUTH_RATE_LIMITS.linkUse
   const limited = { rateLimit: { max: linkUse.max, timeWindow: linkUse.timeWindowMs } }

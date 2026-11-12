@@ -519,6 +519,23 @@ B-W2b-124 `modules/plant/statutory` (QHS-205; D.Lgs. 81/2008 art. 71: results ke
   variant (the database requires it) and checks a named certificate again on the receipt's day (no longer holding: the lots start
   in quarantine with the reason). views.ts readFacts/checksOf add the kind facts and checks; send.ts prints them on the PDF.
   PG: `line-kinds/line-kinds.pg.vitest.test.ts`.
+## PO approvals and worklists (`src/modules/purchasing/{po-approvals,expediting}/`, B-W2b-305; SCM-057, SCM-064, SCM-068, SCM-078, SCM-080)
+- Every send passes the approval gate (`po-approvals/gate.ts`, called by send.ts sendAs, also Send n): a DRAFT a switched-on
+  PURCHASE_ORDER rule holds for is checked (W1's send checks), then asked IN the send's command (engine askApproval; the order
+  DRAFT → PENDING_APPROVAL naming the task; the request keeps the send's words as its changes) → 202 `{order, approval}`; nothing
+  is made or mailed. A revision 2+ shows the revision and the value since the revision sent before (`orderValue` cost); the kind's
+  facts add `revision` and `valueIncrease`. The kind (`platform/approvals/kinds/purchase-order.ts`) fingerprints the order without
+  its status (DRAFT = PENDING_APPROVAL), with its depth (schedule, rate, ship-to) and its new line columns; its hooks are
+  `po-approvals/hooks.ts`: the yes emits purchase_order.approved (the order stays frozen), a no / withdrawal / STALE → DRAFT.
+- The yes sends it: worker handler `purchasing.sendApproved` (`po-approvals/approved-send.ts`) runs send.ts `sendAs` as the person
+  who asked (their live grants over the system client; `SendHost` gives the link address and the system caller), key
+  `po-approved-send-<taskId>`; a refusal in words is held (thread note mentioning them, purchase_order.send_held), and the
+  buyer's Send sends an approved waiting order (or a draft a generic request approved as it is) without asking again.
+- `GET /purchasing/orders/:id/approval`, `POST …/approval/withdraw` (purchasing.send), `POST …/duplicate` (purchasing.manage; a new
+  draft from some or all lines; `purchase_order.copied`), `GET …/demand` (the latest DONE plan's pegging on each line),
+  `GET /purchasing/expediting` (late · not confirmed after confirm-by · confirmed later than needed, ranked by customer orders at
+  risk; what each line blocks), `GET|POST …/chase` (purchasing.send; a mail without link or price; `purchase_order.chased`).
+  Cancel of a waiting order withdraws its request (orders.ts). PG: `po-approvals/*.pg`, `expediting/*.pg`.
 
 ## Integrations (`src/platform/{gateway,secrets,inbound}/`, plan A1 §4, §5.4)
 - `gateway/`: EVERY call to an outside service is `processGateway().call(gatewayAccount(caller, accountId),

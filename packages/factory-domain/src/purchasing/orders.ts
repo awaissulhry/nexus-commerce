@@ -315,6 +315,8 @@ export function sendChecks(facts: SendFacts): { readonly ready: boolean; readonl
 /** Lines and header change only while the order is a draft (the …_supply_guards triggers say so too). */
 export function draftProblem(status: PurchaseOrderStatus): string | null {
   if (status === 'DRAFT') return null
+  // B-W2b-305: nothing in an order changes while it waits for its yes.
+  if (status === 'PENDING_APPROVAL') return 'The order waits for a yes before it is sent: take the request back to change it.'
   return `The order is ${STATUS_WORDS[status]}: its lines and terms change only while it is a draft.`
 }
 
