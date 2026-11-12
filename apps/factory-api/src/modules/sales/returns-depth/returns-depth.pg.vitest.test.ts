@@ -365,7 +365,7 @@ describe('credit without a return, within the approval limit (SAL-342)', () => {
     expect(asked).toMatchObject({ credited: false, waiting: { approverRoleId: financeRoleId }, return: { lines: [{ creditWithoutReturn: { credited: false, waiting: { taskId: asked.waiting.taskId }, allowed: false } }] } })
     expect(await lineRow(line.id)).toMatchObject({ disposition: null, creditWithoutReturn: false })
     const task = (await ok('finance', 'GET', `/approvals/tasks/${asked.waiting.taskId}`)).task
-    expect(task).toMatchObject({ kind: 'CREDIT_WITHOUT_RETURN', recordType: 'ReturnLine', recordId: line.id, recheck: 'CURRENT', approve: { allowed: true } })
+    expect(task).toMatchObject({ kind: 'CREDIT_WITHOUT_RETURN', record: { type: 'ReturnLine', id: line.id }, recheck: 'CURRENT', approve: { allowed: true } })
     expect(task.changes).toEqual(expect.arrayContaining([expect.objectContaining({ field: 'creditAmount', to: 12_000 })]))
     // The person who asked holds approvals.decide too: refused, the Owner's rule.
     expect(paths(await refused('sales', 'POST', `/approvals/tasks/${asked.waiting.taskId}/approve`, { version: task.version }, 403))).toEqual(['refusal/OWN_REQUEST'])
