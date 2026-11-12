@@ -196,7 +196,14 @@ export async function getStyleSurcharges(caller: CommandCaller, styleId: string)
   return caller.withClient((client) => styleSurchargesView(client, style))
 }
 
-/** PUT /sales/styles/:styleId/size-surcharges: a style's own surcharges set or removed (sizes of its range). */
+/** Thrown inside the command when the write changes nothing: rolls back an empty command (as lots-depth/lifecycle.ts). */
+class Unchanged extends Error {}
+
+/**
+ * PUT /sales/styles/:styleId/size-surcharges: a style's own surcharges set or removed (sizes of its range). The surcharges
+ * the style has already (the same values again, a size removed that has none) write nothing, no audit row and no event
+ * (B-W2b-F32): the answer is what the style has.
+ */
 export async function setStyleSurcharges(caller: CommandCaller, styleId: string, sent: { readonly surcharges: readonly Sent<Omit<SurchargeInput, 'styleId'>, 'amount' | 'pct'>[] }, idempotencyKey?: string) {
   const style = await styleFor(caller, styleId)
   const body = { surcharges: allSent(sent.surcharges, ['amount', 'pct'], 'surcharges') }
@@ -207,18 +214,23 @@ export async function setStyleSurcharges(caller: CommandCaller, styleId: string,
     if (style.sizes.length > 0 && !style.sizes.includes(sizeCodeOf(row.size))) problems.push({ path: `surcharges/${index}/size`, message: `${sizeCodeOf(row.size)} is not a size of ${style.code} (${style.sizes.join(', ')}).` })
   }
   if (problems.length > 0) throw invalid(problems, 'The size surcharges are not valid.')
-  const { result } = await command(caller, { name: 'styles.setSizeSurcharges', idempotencyKey, input: { styleId, ...body } }, async (tools) => {
-    const { tx } = tools
-    // One writer of a style's own surcharges at a time (the style row stays the product area's).
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(concat_ws('|', 'factory.style-surcharges', current_setting('factory.tenant_id', true), ${styleId}::text), 0))`
-    const changed = await writeSurcharges(tools, { versionId: null, styleId }, rows)
-    if (changed.after.length > 0) {
+  try {
+    const { result } = await command(caller, { name: 'styles.setSizeSurcharges', idempotencyKey, input: { styleId, ...body } }, async (tools) => {
+      const { tx } = tools
+      // One writer of a style's own surcharges at a time (the style row stays the product area's).
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(concat_ws('|', 'factory.style-surcharges', current_setting('factory.tenant_id', true), ${styleId}::text), 0))`
+      const changed = await writeSurcharges(tools, { versionId: null, styleId }, rows)
+      // Compared under the lock: nothing differs, nothing was written.
+      if (changed.after.length === 0) throw new Unchanged()
       tools.audit({ action: 'styles.setSizeSurcharges', recordType: 'Style', recordId: styleId, companyId: style.companyId, before: { surcharges: markMoney('price', changed.before) }, after: { surcharges: markMoney('price', changed.after) } })
       tools.emit({ type: 'style.size_surcharges_changed', subject: styleId, companyId: style.companyId, payload: { styleId, code: style.code, sizes: [...new Set(rows.map((row) => sizeCodeOf(row.size)))] } })
-    }
-    return styleSurchargesView(tx, style)
-  })
-  return result
+      return styleSurchargesView(tx, style)
+    })
+    return result
+  } catch (error) {
+    if (error instanceof Unchanged) return caller.withClient((client) => styleSurchargesView(client, style))
+    throw error
+  }
 }
 
 // ---- dated prices (SAL-167) ----------------------------------------------------------------------------------------------

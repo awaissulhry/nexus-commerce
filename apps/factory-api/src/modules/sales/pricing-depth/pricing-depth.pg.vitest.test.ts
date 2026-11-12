@@ -214,6 +214,24 @@ describe('quantity breaks and size surcharges of a draft version (SAL-166, SAL-1
     expect((await ok('sales', 'GET', `${v(P1_V2)}/rules`)).styleSurcharges).toMatchObject([{ style: { code: 'SEED-JKT-01' }, size: '54', amount: '15' }])
     expect((await eventsOf(jkt01)).filter((event) => event.type === 'style.size_surcharges_changed').map((event) => event.payload)).toEqual([{ styleId: jkt01, code: 'SEED-JKT-01', sizes: ['54'] }])
   })
+
+  it("a style's own surcharges sent again change nothing: 200 with what the style has, no audit row, no event (B-W2b-F32)", async () => {
+    const audits = async () => (await admin<{ n: number }>(`SELECT count(*)::int AS n FROM "AuditLog" WHERE action = 'styles.setSizeSurcharges' AND "recordId" = $1`, [jkt01]))[0]!.n
+    const events = async () => (await eventsOf(jkt01)).filter((event) => event.type === 'style.size_surcharges_changed').length
+    const [auditsBefore, eventsBefore] = [await audits(), await events()]
+    expect(auditsBefore).toBe(1)
+    const current = await ok('sales', 'GET', `/sales/styles/${jkt01}/size-surcharges`)
+    expect(current.surcharges).toMatchObject([{ size: '54', amount: '15', currency: 'EUR', pct: null }])
+    const same = { surcharges: [{ size: '54', amount: '15', currency: 'EUR', pct: null }] }
+    // The same values twice (the second with a key of its own), and a size removed that has none.
+    expect(await ok('sales', 'PUT', `/sales/styles/${jkt01}/size-surcharges`, same)).toEqual(current)
+    const keyed = await app.inject({ method: 'PUT', url: `/sales/styles/${jkt01}/size-surcharges`, headers: { 'x-test-session': 'sales', 'idempotency-key': `f32-same-${newId()}` }, payload: same })
+    expect(keyed.statusCode, keyed.body).toBe(200)
+    expect(keyed.json()).toEqual(current)
+    expect(await ok('sales', 'PUT', `/sales/styles/${jkt01}/size-surcharges`, { surcharges: [{ size: '50', amount: null, pct: null }] })).toEqual(current)
+    expect(await audits()).toBe(auditsBefore)
+    expect(await events()).toBe(eventsBefore)
+  })
 })
 
 describe('dated prices (SAL-167)', () => {
