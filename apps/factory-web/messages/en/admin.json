@@ -2096,6 +2096,7 @@
     "production_instructions_manage": "Write work instructions: a draft with steps per language, critical points, safety notes, icons, the ticks the tablet asks, photos and videos; discard a draft, archive or restore; bring the typed step lines of the routings in",
     "production_instructions_approve": "Approve another person's draft of a work instruction: the floor shows it from then on (never your own draft)",
     "production_instructions_people": "A training record: see by name who saw which version of a work instruction (where the site allows a name) and record a paper acknowledgement",
-    "purchasing_requests_ask": "Ask the buyers to buy a material (also from a work order’s shortage); see and take back your own requests"
+    "purchasing_requests_ask": "Ask the buyers to buy a material (also from a work order’s shortage); see and take back your own requests",
+    "inventory_tasks_manage": "Make the warehouse's floor tasks by hand (receive, put away, pick, move, count), hand them to a floor role or one worker, change and cancel them"
   }
 }
