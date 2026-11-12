@@ -14,6 +14,9 @@ import { orderQuery, showOf, subcontractCan, viewFromAddress, words, type OrderV
 import { defaultPicks, NO_NEW_ORDER, newOrderBody, newOrderHeld, newOrderRefusal, workshopOf, type NewOrderDraft, type SubcontractingModel } from './list-model'
 import { stockKey, stockRowsOf } from './view/StockSection'
 import { SubcontractingView } from './view/SubcontractingView'
+// B-W2b-344: the Balance open tile and its saved view, days out beside the stock.
+import { openBalances, subcontractorAgeing, type Ageing, type OpenBalances } from '../depth/api'
+import { ageingKey, daysOutBy, DEPTH } from '../depth/model'
 
 const TIME_ZONE = 'Europe/Rome'
 
@@ -25,7 +28,7 @@ const TIME_ZONE = 'Europe/Rome'
  */
 export function SubcontractingPage() {
   return (
-    <WithMessages namespaces={['subcontracting', 'lists']}>
+    <WithMessages namespaces={['subcontracting', 'lists', DEPTH]}>
       <Container />
     </WithMessages>
   )
@@ -33,6 +36,7 @@ export function SubcontractingPage() {
 
 function Container() {
   const t = useT('subcontracting')
+  const depth = useT(DEPTH)
   const api = useOfficeApi()
   const session = useOfficeSession()
   const router = useRouter()
@@ -51,6 +55,9 @@ function Container() {
   const [countsProblem, setCountsProblem] = useState<string | null>(null)
   const [stock, setStock] = useState<{ value: WorkshopStock | null; problem: string | null }>({ value: null, problem: null })
   const [stockWorkshop, setStockWorkshop] = useState<string | null>(null)
+  const [balances, setBalances] = useState<{ value: OpenBalances | null; problem: string | null }>({ value: null, problem: null })
+  const [balanceRows, setBalanceRows] = useState<SubcontractingModel['balanceRows']>({ items: null, more: false, problem: null })
+  const [ageing, setAgeing] = useState<{ value: Ageing | null; problem: string | null }>({ value: null, problem: null })
   const [stockQ, setStockQ] = useState('')
   const [asOf, setAsOf] = useState<string | null>(null)
   const [updates, setUpdates] = useState(0)
@@ -85,12 +92,30 @@ function Container() {
         setCountsProblem(null)
       })
       .catch((error: unknown) => setCountsProblem(readProblem(error)))
+    // B-W2b-344: every job with material open (the Balance open tile's count, the grid's Balance open).
+    openBalances(api)
+      .then((value) => setBalances({ value, problem: null }))
+      .catch((error: unknown) => setBalances({ value: null, problem: readProblem(error) }))
   }, [api, can.view])
 
   const load = useCallback(async () => {
     if (!can.view) return
     const id = ++readId.current
     loadCounts()
+    if (view === 'balance') {
+      // B-W2b-344: the tile's saved view is the API's own filter (every piece back, material still open).
+      try {
+        const value = await openBalances(api, { open: true })
+        if (id !== readId.current) return
+        setBalanceRows({ items: value.items, more: false, problem: null })
+        setAsOf(new Date().toISOString())
+        setUpdates(0)
+      } catch (error) {
+        if (id !== readId.current) return
+        setBalanceRows({ items: null, more: false, problem: readProblem(error) })
+      }
+      return
+    }
     try {
       const page = await listOrders(api, orderQuery(view, q))
       if (id !== readId.current) return
@@ -106,6 +131,10 @@ function Container() {
 
   const loadStock = useCallback(async () => {
     if (!can.view) return
+    // B-W2b-344: the days out of the same stock lines, read beside it (a failed read leaves the stock drawn).
+    subcontractorAgeing(api)
+      .then((value) => setAgeing({ value, problem: null }))
+      .catch((error: unknown) => setAgeing({ value: null, problem: readProblem(error) }))
     try {
       setStock({ value: await workshopStock(api), problem: null })
     } catch (error) {
@@ -115,6 +144,7 @@ function Container() {
 
   useEffect(() => {
     setRows({ items: null, more: false, problem: null })
+    setBalanceRows({ items: null, more: false, problem: null })
     void load()
   }, [load])
 
@@ -148,7 +178,7 @@ function Container() {
       if (!change.type.startsWith('subcontract_order.')) return
       setUpdates((count) => count + 1)
       recount()
-      if (show === 'stock' && (change.type === 'subcontract_order.kit_sent' || change.type === 'subcontract_order.received' || change.type === 'subcontract_order.kit_returned')) restock()
+      if (show === 'stock' && (change.type === 'subcontract_order.kit_sent' || change.type === 'subcontract_order.received' || change.type === 'subcontract_order.kit_returned' || change.type === 'subcontract_order.balance_booked')) restock()
     },
     () => {
       void load()
@@ -260,7 +290,8 @@ function Container() {
     (keys: string[]) => {
       const all = stock.value ? stockRowsOf(stock.value.rows, stockWorkshop, stockQ) : []
       const picked = all.filter((row) => keys.includes(stockKey(row)))
-      const header = [t('stock.col.workshop'), t('csv.site'), t('stock.col.material'), t('stock.col.lot'), t('stock.col.quantity'), 'UoM', ...(can.cost ? [t('stock.col.value'), t('csv.currency')] : []), t('stock.col.lastSent')]
+      const days = daysOutBy(ageing.value)
+      const header = [t('stock.col.workshop'), t('csv.site'), t('stock.col.material'), t('stock.col.lot'), t('stock.col.quantity'), 'UoM', ...(can.cost ? [t('stock.col.value'), t('csv.currency')] : []), t('stock.col.lastSent'), t('stock.col.daysOut')]
       const csvRows = picked.map((row) => [
         row.workshop.name,
         row.site.code,
@@ -270,10 +301,30 @@ function Container() {
         row.item.baseUom,
         ...(can.cost ? [row.value === null || row.value === undefined ? '' : (row.value / 100).toFixed(2), row.currency] : []),
         row.lastSentAt?.slice(0, 10) ?? '',
+        days.get(ageingKey(row))?.daysOut ?? '',
       ])
       downloadText(`stock-at-subcontractors-${new Date().toISOString().slice(0, 10)}.csv`, csvOf(header, csvRows))
     },
-    [stock.value, stockWorkshop, stockQ, can.cost, t],
+    [stock.value, stockWorkshop, stockQ, can.cost, t, ageing.value],
+  )
+
+  const exportBalances = useCallback(
+    (orderIds: string[]) => {
+      const picked = (balanceRows.items ?? []).filter((row) => orderIds.includes(row.order.id))
+      const header = [t('csv.number'), t('csv.status'), t('csv.workshop'), t('csv.workOrder'), depth('balanceView.col.open'), depth('balanceView.col.lines'), depth('balanceView.col.oldest'), depth('balanceView.col.daysOut')]
+      const csvRows = picked.map((row) => [
+        row.order.number,
+        t(`status.${row.order.status}`),
+        row.order.workshop.name,
+        row.order.workOrder.number,
+        row.open.map((entry) => `${entry.quantity} ${entry.uom}`).join(' + '),
+        `${row.openLines}/${row.kitLines}`,
+        row.oldestSentAt?.slice(0, 10) ?? '',
+        row.daysOut ?? '',
+      ])
+      downloadText(`balance-open-${new Date().toISOString().slice(0, 10)}.csv`, csvOf(header, csvRows))
+    },
+    [balanceRows.items, depth, t],
   )
 
   const model: SubcontractingModel = {
@@ -286,6 +337,9 @@ function Container() {
     counts,
     countsProblem,
     stock,
+    balances,
+    balanceRows,
+    ageing,
     stockWorkshop,
     stockQ,
     asOf,
@@ -307,12 +361,16 @@ function Container() {
         onMore: () => void more(),
         onRetry: () => void load(),
         onRetryStock: () => void loadStock(),
+        onRetryBalances: () => loadCounts(),
+        onRetryAgeing: () => void loadStock(),
+        onExportBalances: exportBalances,
         onShowUpdates: () => void load(),
         onExport: exportRows,
         onExportStock: exportStock,
         onStockWorkshop: setStockWorkshop,
         onStockSearch: setStockQ,
-        onOpen: (id) => router.push(`${prefix}/purchasing/subcontracting/${id}`),
+        // B-W2b-344: a row of the Balance open view opens on the order's Material balance.
+        onOpen: (id) => router.push(`${prefix}/purchasing/subcontracting/${id}${view === 'balance' ? '?tab=balance' : ''}`),
         onDismissNotice: () => setNotice(null),
         onNew: (open) => (open ? (can.manage ? openNew() : undefined) : closeNew()),
         newOrder: {
