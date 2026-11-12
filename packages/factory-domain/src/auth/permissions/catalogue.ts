@@ -191,6 +191,15 @@ import { ASK_TO_BUY_DEFINITIONS, ASK_TO_BUY_PERMISSIONS } from '../../purchasing
 import { PPE_TEXTS_DEFINITIONS, PPE_TEXTS_PERMISSIONS } from '../../compliance/ppe-texts/permissions'
 // B-W2b-313: lots in depth (inventory.lots.manage: split into shade groups, regroup, attributes; inventory.trace.report).
 import { INVENTORY_LOTS_DEPTH_DEFINITIONS, INVENTORY_LOTS_DEPTH_PERMISSIONS } from '../../inventory/lots-depth/permissions'
+// B-W2b-290: customers in depth (parties.hold; parties.privacy, parties.erase; area `parties`).
+import { PARTIES_HOLD_DEFINITIONS, PARTIES_HOLD_PERMISSIONS } from '../../parties/holds/permissions'
+import { PARTIES_PRIVACY_DEFINITIONS, PARTIES_PRIVACY_PERMISSIONS } from '../../parties/contact-privacy/permissions'
+// B-W2b-295: inquiries and requests for quotation (sales.inquiries.view | manage).
+import { SALES_INQUIRIES_DEFINITIONS, SALES_INQUIRIES_PERMISSIONS } from '../../sales/inquiries/permissions'
+// B-W2b-314: the warehouse rules (inventory.rules.manage).
+import { INVENTORY_RULES_DEFINITIONS, INVENTORY_RULES_PERMISSIONS } from '../../inventory/posting/permissions'
+// B-W2b-293: planned work and subcontract orders made real (planning.planned.convert).
+import { PLANNING_PLANNED_DEFINITIONS, PLANNING_PLANNED_PERMISSIONS } from '../../planning/planned-orders/permissions'
 // B-W2b-356: warehouse reports (inventory.reports.view: stock ageing and leather use; each figure also inventory.stock.view).
 import { INVENTORY_REPORTS_DEFINITIONS, INVENTORY_REPORTS_PERMISSIONS } from '../../inventory/reports/permissions'
 // B-W2a-35: the plant (machines, machine requests, maintenance jobs).
@@ -896,6 +905,15 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PPE_TEXTS_DEFINITIONS,
   // B-W2b-313: lots in depth (area `inventory`, declared above).
   INVENTORY_LOTS_DEPTH_DEFINITIONS,
+  // B-W2b-290: customers in depth (area `parties`, declared above).
+  PARTIES_HOLD_DEFINITIONS,
+  PARTIES_PRIVACY_DEFINITIONS,
+  // B-W2b-295: inquiries (area `sales`).
+  SALES_INQUIRIES_DEFINITIONS,
+  // B-W2b-314: the warehouse rules (area `inventory`, declared above).
+  INVENTORY_RULES_DEFINITIONS,
+  // B-W2b-293: planned work and subcontract orders (area `planning`, declared above).
+  PLANNING_PLANNED_DEFINITIONS,
   // B-W2b-356: warehouse reports (area `inventory`, declared above).
   INVENTORY_REPORTS_DEFINITIONS,
 ])
@@ -1204,6 +1222,14 @@ for (const name of ASK_TO_BUY_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(n
 for (const name of PPE_TEXTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-313: lots in depth.
 for (const name of INVENTORY_LOTS_DEPTH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-290: customers in depth.
+for (const name of [...PARTIES_HOLD_PERMISSIONS, ...PARTIES_PRIVACY_PERMISSIONS]) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-295: inquiries.
+for (const name of SALES_INQUIRIES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-314: the warehouse rules.
+for (const name of INVENTORY_RULES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-293: planned work and subcontract orders.
+for (const name of PLANNING_PLANNED_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-356: warehouse reports.
 for (const name of INVENTORY_REPORTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {

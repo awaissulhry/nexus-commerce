@@ -254,7 +254,9 @@
       "UNCONVERTIBLE_UNIT_one": "{count} material is used in a unit that does not turn into its base unit.",
       "UNCONVERTIBLE_UNIT_other": "{count} materials are used in units that do not turn into their base units.",
       "SEVERAL_SUPPLIERS_one": "{count} material is bought from several suppliers in the bills: its default supplier is proposed.",
-      "SEVERAL_SUPPLIERS_other": "{count} materials are bought from several suppliers in the bills: their default suppliers are proposed."
+      "SEVERAL_SUPPLIERS_other": "{count} materials are bought from several suppliers in the bills: their default suppliers are proposed.",
+      "SUB_ASSEMBLY_one": "{count} sub-assembly below an order line cannot be walked (its size, colourway or unit): what is below it is not planned.",
+      "SUB_ASSEMBLY_other": "{count} sub-assemblies below order lines cannot be walked (their size, colourway or unit): what is below them is not planned."
     },
     "heldNotice_one": "{count} line is short although stock exists that the plan may not use",
     "heldNotice_other": "{count} lines are short although stock exists that the plan may not use",

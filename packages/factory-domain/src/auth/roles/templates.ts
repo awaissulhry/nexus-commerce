@@ -42,6 +42,15 @@ import { APPROVALS_ADDS } from '../../approvals/permissions'
 import { PO_DEPTH_ADDS } from '../../purchasing/po-depth/permissions'
 // B-W2b-332: ask to buy (every office template that works in the office).
 import { ASK_TO_BUY_ADDS } from '../../purchasing/ask-to-buy/permissions'
+// B-W2b-290: customers in depth (holds; contacts' personal data).
+import { PARTIES_HOLD_ADDS } from '../../parties/holds/permissions'
+import { PARTIES_PRIVACY_ADDS } from '../../parties/contact-privacy/permissions'
+// B-W2b-295: inquiries (sales).
+import { SALES_INQUIRIES_ADDS } from '../../sales/inquiries/permissions'
+// B-W2b-314: the warehouse rules (warehouse, finance).
+import { INVENTORY_RULES_ADDS } from '../../inventory/posting/permissions'
+// B-W2b-293: planned work and subcontract orders made real (the planner and the production manager).
+import { PLANNING_PLANNED_ADDS } from '../../planning/planned-orders/permissions'
 // B-W2b-229: the option library (production manager) and option prices (sales).
 import { PRODUCT_OPTIONS_ADDS } from '../../product/options/permissions'
 // B-W2b-238: materials in depth (the production manager and quality decide a material's approval).
@@ -922,6 +931,15 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (ASK_TO_BUY_ADDS[key] ?? []) : []),
   // B-W2b-313
   ...(audience === 'office' ? (INVENTORY_LOTS_DEPTH_ADDS[key] ?? []) : []),
+  // B-W2b-290
+  ...(audience === 'office' ? (PARTIES_HOLD_ADDS[key] ?? []) : []),
+  ...(audience === 'office' ? (PARTIES_PRIVACY_ADDS[key] ?? []) : []),
+  // B-W2b-295
+  ...(audience === 'office' ? (SALES_INQUIRIES_ADDS[key] ?? []) : []),
+  // B-W2b-314
+  ...(audience === 'office' ? (INVENTORY_RULES_ADDS[key] ?? []) : []),
+  // B-W2b-293
+  ...(audience === 'office' ? (PLANNING_PLANNED_ADDS[key] ?? []) : []),
   // B-W2b-356
   ...(audience === 'office' ? (INVENTORY_REPORTS_ADDS[key] ?? []) : [])]
 /**
