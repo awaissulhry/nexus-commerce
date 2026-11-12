@@ -2084,6 +2084,8 @@
     "sales_samples_manage": "Ask for sample rounds, move and cancel them, keep their shipments and make their sample work orders",
     "sales_samples_decide": "Record a sample round's or a leather or colour swatch's decision, and ask the brand to decide by link or portal",
     "sales_samples_measure": "Measure a sample round's fit against the measurement spec and keep its fit comments",
+    "sales_inquiries_view": "See inquiries and requests for quotation: who asks, what is asked by size, the mail they came from, their files and the brand tech pack in force, and the quote each became (the target price only with prices)",
+    "sales_inquiries_manage": "Type inquiries and make them from received mail, change what is asked, match a prospect to a customer, assign them, ask the customer for more information, decline them with the reason or mark them lost, and make their quote",
     "production_instructions_view": "See the work instructions of the operations: steps, photos and videos, versions, the printed sheet, and how many saw a version (counts, never a name)",
     "production_instructions_manage": "Write work instructions: a draft with steps per language, critical points, safety notes, icons, the ticks the tablet asks, photos and videos; discard a draft, archive or restore; bring the typed step lines of the routings in",
     "production_instructions_approve": "Approve another person's draft of a work instruction: the floor shows it from then on (never your own draft)",
