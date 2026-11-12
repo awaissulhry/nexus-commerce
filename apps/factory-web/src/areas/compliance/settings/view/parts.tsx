@@ -20,7 +20,8 @@ import type { Writing } from '../view-model'
  * step-up dialog and the keys behind `?`.
  */
 
-export const SETTINGS_NAMESPACES = ['compliance-settings', 'lists', 'quality'] as const
+// B-W2b-288: + the Templates tab's catalogue.
+export const SETTINGS_NAMESPACES = ['compliance-settings', 'lists', 'quality', 'compliance-followups-w2b4'] as const
 export const NAMESPACE = 'compliance-settings'
 
 /** The page's words. */

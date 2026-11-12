@@ -1,0 +1,202 @@
+{
+  "ppe": {
+    "title": "Templates of generated PPE texts",
+    "note": "A PPE consultant checks each template once: record the yes here with the consultant's file.",
+    "failed": "The templates could not be read.",
+    "count_one": "{count} template",
+    "count_other": "{count} templates",
+    "search": "Search template or label",
+    "filter": {
+      "kind": "Kind of text",
+      "allKinds": "Every kind of text"
+    },
+    "kind": {
+      "DOC": "Declaration of conformity",
+      "USER_INFORMATION": "User information",
+      "LABEL_WARNING": "Label class warnings"
+    },
+    "template": {
+      "DOC": "Declaration of conformity (generated)",
+      "USER_INFORMATION": "User information (generated)",
+      "generatorDetail": "template {key} · version {version}",
+      "labelTitle": "Class warnings of label {code}",
+      "labelDetail": "revision {revision} · {name}"
+    },
+    "col": {
+      "template": "Template",
+      "kind": "Kind of text",
+      "whose": "Whose",
+      "languages": "Checked in",
+      "state": "Consultant's yes",
+      "approvals": "Records"
+    },
+    "whose": {
+      "generator": "Every style",
+      "company": "One company's label",
+      "every": "Every company",
+      "thisCompany": "This company ({company})",
+      "thisCompanyWhat": "The yes covers this company's generated texts only.",
+      "everyWhat": "The yes covers the generated texts of every company, including texts of every company.",
+      "otherCompany": "Another company"
+    },
+    "state": {
+      "APPROVED": "Yes in force",
+      "WITHDRAWN": "Withdrawn",
+      "NONE": "Not checked yet"
+    },
+    "approvals": {
+      "count_one": "{count} record",
+      "count_other": "{count} records"
+    },
+    "emptyTitle": "No template of generated PPE texts",
+    "empty": "The declaration and the user information are always here; a PPE garment label shows once it exists.",
+    "noneFiltered": "No template matches these filters.",
+    "keys": {
+      "record": "Record a consultant's yes"
+    },
+    "gate": {
+      "title": "Generated texts stay drafts until a PPE consultant says yes (GATE-PPE-TEXTS)",
+      "body": "A generated declaration, user information or label warning may leave draft only in the languages and for the companies a yes in force covers. The yes is your decision: record it only when the consultant has checked the template. Withdrawing it stops new texts at once; texts issued before stay issued."
+    },
+    "record": {
+      "open": "Record a consultant's yes",
+      "title": "Record a PPE consultant's yes",
+      "gateTitle": "This opens the issue of generated texts",
+      "gateBody": "From now on, generated texts of this template in these languages may leave draft for the companies you choose. It asks a fresh code from your authenticator app.",
+      "save": "Record the yes",
+      "saving": "Recording…"
+    },
+    "field": {
+      "template": "Template",
+      "whose": "Whose generated texts",
+      "languages": "Languages the consultant checked",
+      "languagesHint": "Language codes, for example it, en, de.",
+      "languagesLabel": "The label prints {languages}.",
+      "checkedBy": "Who checked the texts",
+      "checkedByHint": "The consultant's name and firm, as on their file.",
+      "file": "The consultant's file"
+    },
+    "file": {
+      "choose": "Choose the file",
+      "change": "Choose another file",
+      "none": "No file chosen",
+      "hint": "The consultant's signed check: a PDF or a scan (JPEG, PNG)."
+    },
+    "window": {
+      "title": "Template",
+      "notFound": "This template is not here any more.",
+      "approved": "A yes is in force: {languages}",
+      "waiting": "No yes in force: generated texts stay drafts",
+      "what": {
+        "DOC": "Generated declarations of conformity name this template. A draft in a covered language may leave draft; any other stays a draft and the signed PDF stays the live declaration.",
+        "USER_INFORMATION": "Generated user information names this template. A leaflet in a covered language may leave draft; any other stays a draft and the signed PDF stays the live leaflet.",
+        "LABEL_WARNING": "The label's class warnings (EN 17092) print only in the languages a yes covers; the label checks wait for the others."
+      },
+      "approvals_one": "{count} record of a consultant's yes",
+      "approvals_other": "{count} records of a consultant's yes",
+      "none": "No consultant's yes is recorded for this template yet."
+    },
+    "label": {
+      "code": "Label",
+      "revision": "revision {revision}",
+      "name": "Name",
+      "languages": "Prints",
+      "whose": "Whose label"
+    },
+    "approval": {
+      "live": "In force",
+      "withdrawn": "Withdrawn",
+      "languages": "Checked in",
+      "checkedBy": "Checked by",
+      "recorded": "Recorded",
+      "withdrawnAt": "Withdrawn",
+      "reason": "Why",
+      "file": "Open {name}"
+    },
+    "withdraw": {
+      "open": "Withdraw…",
+      "reason": "Why it is withdrawn",
+      "hint": "Generated texts of this template stop leaving draft at once; texts issued before stay issued.",
+      "save": "Withdraw the yes"
+    },
+    "stepUp": {
+      "record": "Recording a PPE consultant's yes opens the issue of generated texts: confirm it with a fresh code.",
+      "confirm": "Confirm"
+    },
+    "notice": {
+      "recorded": "The consultant's yes is recorded for {languages}.",
+      "withdrawn": "The consultant's yes is withdrawn: new texts of this template stay drafts.",
+      "fileFailed": "The consultant's file could not be opened. Try again."
+    },
+    "held": {
+      "manage": "Only the owner records or withdraws a PPE consultant's yes (compliance.ppeTexts.manage).",
+      "offline": "Offline: changes wait to be sent.",
+      "busy": "Working…",
+      "template": "Choose the template.",
+      "company": "Your role may not record a yes for this company.",
+      "everyCompany": "Only a role over every company records a yes for every company.",
+      "languages": "Type the languages the consultant checked.",
+      "languageCodes": "Type language codes (it, en, de), at most 20.",
+      "checkedBy": "Type who checked the texts (one line, at most 300 characters).",
+      "file": "Choose the consultant's file.",
+      "reason": "Say why it is withdrawn (at least 3 characters).",
+      "withdrawn": "This yes is withdrawn already.",
+      "filesRead": "Opening files needs files.read.",
+      "fileState": "The file is not available."
+    },
+    "problem": {
+      "cancelled": "Nothing was recorded: the code was not given.",
+      "conflict": "This clashes with what is recorded now. Read the page again.",
+      "stale": "Someone changed this meanwhile. Read the page again.",
+      "failed": "This did not work. Try again.",
+      "forbidden": "Your role may not do this.",
+      "signedOut": "You were signed out. Sign in again.",
+      "notFound": "This is not here any more.",
+      "invalid": "Check what you typed.",
+      "unavailable": "Nexus could not be reached. Try again.",
+      "field": {
+        "templateKey": "This template cannot be approved: choose one from the list.",
+        "templateVersion": "This template's version cannot be approved.",
+        "templateKind": "Choose the kind of text.",
+        "languages": "Check the languages: ISO codes, each once.",
+        "checkedBy": "Check who checked the texts.",
+        "fileId": "The consultant's file did not arrive: choose it again.",
+        "reason": "Say why it is withdrawn.",
+        "companyId": "Choose whose texts the yes covers."
+      }
+    },
+    "refusal": {
+      "RECORDED": "This yes is recorded already.",
+      "WITHDRAWN": "This yes was withdrawn already.",
+      "DATABASE": "The records refused this: read the page again."
+    },
+    "common": {
+      "close": "Close",
+      "cancel": "Cancel",
+      "choose": "Choose…",
+      "clearFilters": "Clear filters"
+    }
+  },
+  "notSold": {
+    "cell": {
+      "title": "Not sold in {market}",
+      "notSold": "This style is sold in {markets}: {market} asks nothing, and it is never counted as a gap.",
+      "everyMarket": "This style names no market, so every market is checked.",
+      "change": "Change where it is sold (the style's Overview)",
+      "changeHeld": "Where it is sold is changed on the style's Overview (Products › Styles)."
+    }
+  },
+  "labCost": {
+    "field": "Lab's price (optional)",
+    "fieldHint": "What the lab charged for this result. Only roles with the cost grain see it; it never reaches the floor or a portal.",
+    "amount": "Amount",
+    "currency": "Currency",
+    "result": "Lab's price",
+    "column": "Lab cost",
+    "problem": {
+      "amount": "Type the price as an amount, for example 85,50.",
+      "tooLarge": "At most 1,000,000 for one result.",
+      "currency": "Choose the currency."
+    }
+  }
+}
