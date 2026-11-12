@@ -219,6 +219,8 @@ import { QUALIFICATION_DEFINITIONS, QUALIFICATION_PERMISSIONS } from '../../purc
 import { PLANNING_STRATEGY_DEFINITIONS, PLANNING_STRATEGY_PERMISSIONS } from '../../planning/strategy/permissions'
 // B-W2b-350: purchasing reports (purchasing.reports.view: spend and late lines; each figure also purchasing.view).
 import { PURCHASING_REPORTS_DEFINITIONS, PURCHASING_REPORTS_PERMISSIONS } from '../../purchasing/reports/permissions'
+// B-W2b-306: MRP you can trust (planning.actions.manage: action messages; planning.planned.edit: protected edits, bulk edit).
+import { PLANNING_ACTIONS_DEFINITIONS, PLANNING_ACTIONS_PERMISSIONS } from '../../planning/actions/permissions'
 // B-W2a-35: the plant (machines, machine requests, maintenance jobs).
 import { PLANT_DEFINITIONS, PLANT_FLOOR_PERMISSIONS, PLANT_PERMISSIONS } from '../../plant/permissions'
 // B-W2a-39: the accounting exports and the period locks (accounting.view | export | lock | unlock).
@@ -950,6 +952,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PLANNING_STRATEGY_DEFINITIONS,
   // B-W2b-350: purchasing reports (area `purchasing`, declared above).
   PURCHASING_REPORTS_DEFINITIONS,
+  // B-W2b-306: MRP you can trust (area `planning`, declared above).
+  PLANNING_ACTIONS_DEFINITIONS,
 ])
 
 /** The area of the permissions only floor roles hold (and floor roles hold no other, but FLOOR_SHARED_PERMISSIONS). */
@@ -1269,6 +1273,8 @@ for (const name of INVENTORY_RULES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDecla
 // B-W2b-293: planned work and subcontract orders.
 for (const name of PLANNING_PLANNED_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of PLANNING_PROMISE_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-306
+for (const name of PLANNING_ACTIONS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-311: suppliers in depth.
 for (const name of SUPPLIERS_DEPTH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-292: the warehouse task inbox.

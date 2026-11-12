@@ -17,6 +17,10 @@ import { fromBase, QUANTITY_SCALE, type Uom } from '@nexus/factory-domain/produc
 import { Dec } from '@nexus/factory-domain/tax/decimal'
 import { RUN_COLUMNS, runViewOf } from './views'
 import { planWork } from './planned-orders/pass'
+// B-W2b-306 (PLN-073, PLN-083, PLN-095): action messages, nothing planned in the past, the run log.
+import { lateWarnings } from '@nexus/factory-domain/planning/actions/late'
+import { raiseActionMessages } from './actions/messages'
+import { runInputsOf } from './run-log/snapshot'
 
 /**
  * Run the plan for a site (PLN-062; A2 SCR-055 "Run plan now"): ONE command reads the site's open orders, BOMs, work
@@ -39,6 +43,12 @@ import { planWork } from './planned-orders/pass'
  * (PLN-071: RequirementPegging, append-only, createMany in this transaction) and refreshes the site's exception list
  * (PLN-193: ./exceptions/refresh). The scheduler runs it every night at the site's PlanningSettings.scheduledRunTime
  * (./nightly, trigger SCHEDULED, as the tenant's system).
+ *
+ * B-W2b-306 (MRP you can trust): a line planned for one order line alone carries its hard peg (PLN-072); the planned work
+ * pass runs before the run is DONE and keeps a planner's protected fields, rewriting the rest (PLN-076), never dating
+ * anything before today (PLN-083: late demand starts today, with a LATE warning per order line); the run raises its action
+ * messages on existing orders (PLN-073: ./actions/messages) and writes its log with it (PLN-095: PlanningRun.inputs, what
+ * it read and the plan's value of every protected field; ./run-log).
  */
 
 /** A run may take longer than an everyday command (it reads the whole site); still bounded. */
@@ -89,7 +99,6 @@ async function work(tools: CommandTools, site: SiteRow, note: string | null, tri
   const runDate = businessDate(now, site.timezone)
   const inputs = await readPlanInputs(tx, site, runDate, previous?.id ?? null)
   const plan = planLevelled(inputs.input, inputs.garments)
-  const warnings = [...inputs.demand.unplaced, ...plan.warnings]
 
   // ---- the run's lines (a carried firm planned order with its firm columns), their pegging ----------------------------
   const idOf = new Map(plan.requirements.map((line) => [line.seq, newId()]))
@@ -116,6 +125,8 @@ async function work(tools: CommandTools, site: SiteRow, note: string | null, tri
           needDate: dateOf(line.needDate),
           supplierId: line.supplierId,
           sources: line.sources as unknown as Prisma.InputJsonValue,
+          // B-W2b-306 (PLN-072): a line planned for one order line alone (its hard peg, carried).
+          ...(line.reservedFor?.partyId ? { orderSpecific: true, reservedForLineId: line.reservedFor.orderLineId, reservedForPartyId: line.reservedFor.partyId } : {}),
           ...(carried
             ? {
                 // In the line's unit (the firm order's own, unless the material no longer converts it).
@@ -166,25 +177,36 @@ async function work(tools: CommandTools, site: SiteRow, note: string | null, tri
     await tx.planningRun.update({ where: { id: run.id }, data: { status: 'SUPERSEDED', version: { increment: 1 } }, select: { id: true } })
     tools.audit({ action: 'planning.run', recordType: 'PlanningRun', recordId: run.id, companyId: run.companyId, siteId: site.id, before: { status: 'DONE' }, after: { status: 'SUPERSEDED', supersededBy: runId } })
   }
+  // ---- B-W2b-293: the make and subcontract pass (planned work orders and planned subcontract orders) ----------------------
+  // B-W2b-306: before the run is DONE, so its log (PlanningRun.inputs, frozen with the run) keeps the plan's values of the
+  // protected fields, and the action messages read the pass.
+  const planned = await planWork(tools, site, runId, inputs, runDate)
+  const detected = await detectInputs(tools, site, inputs, plan, runDate)
+  // ---- B-W2b-306 (PLN-073): the action messages on existing orders ---------------------------------------------------------
+  const actions = await raiseActionMessages(tools, site, runId, runDate, { inputs, materials: detected.materials, requirementIdOf: (seq) => idOf.get(seq)!, protectedRows: planned.protectedRows })
+  // ---- B-W2b-306 (PLN-083): late demand starts today; one LATE warning per order line ----------------------------------------
+  const readyOf = new Map<string, string>()
+  for (const entry of planned.late) if (!readyOf.has(entry.orderLineId) || readyOf.get(entry.orderLineId)! < entry.readyDate) readyOf.set(entry.orderLineId, entry.readyDate)
+  const late = lateWarnings(inputs.input.orderLines.map((line) => ({ line, readyDate: readyOf.get(line.orderLineId) ?? null })), runDate)
+  const warnings = [...inputs.demand.unplaced, ...plan.warnings, ...late]
+  // ---- B-W2b-306 (PLN-095): the run log --------------------------------------------------------------------------------------
+  const logged = await runInputsOf(tools, site, { runDate, inputs, orderLinesPlanned: plan.orderLines, passes: plan.passes, lateOrderLines: late.length, pass: planned, protectedPlan: planned.protectedPlan })
   const done = await tx.planningRun.update({
     where: { id: runId },
-    data: { status: 'DONE', finishedAt: now, orderLines: plan.orderLines, warnings: warnings as unknown as Prisma.InputJsonValue },
+    data: { status: 'DONE', finishedAt: now, orderLines: plan.orderLines, warnings: warnings as unknown as Prisma.InputJsonValue, inputs: logged as unknown as Prisma.InputJsonValue },
     select: RUN_COLUMNS,
   })
 
   // ---- the exception list of this run (PLN-193) -----------------------------------------------------------------------
   const conditions = detectExceptions({
     runDate,
-    ...(await detectInputs(tools, site, inputs, plan, runDate)),
+    ...detected,
     purchaseOf: (lineId) => {
       const line = inputs.purchases.find((purchase) => purchase.purchaseOrderLineId === lineId)
       return line ? { purchaseOrderId: line.purchaseOrderId, purchaseOrderNumber: line.purchaseOrderNumber } : undefined
     },
   })
   const exceptions = await refreshExceptions(tools, site, runId, conditions, (seq) => (seq === null ? null : (idOf.get(seq) ?? null)))
-
-  // ---- B-W2b-293: the make and subcontract pass (planned work orders and planned subcontract orders) ----------------------
-  const planned = await planWork(tools, site, runId, inputs, runDate)
 
   const short = plan.requirements.filter((line) => line.netQuantity !== '0.0000').length
   const carried = plan.netting.flatMap((entry) => (entry.carried ? [{ from: entry.carried.requirementId, to: idOf.get(entry.seq)! }] : []))
@@ -204,7 +226,9 @@ async function work(tools: CommandTools, site: SiteRow, note: string | null, tri
       carried,
       exceptions,
       // B-W2b-293: the planned work and subcontract orders the run wrote.
-      plannedWorkOrders: { added: planned.added, moved: planned.moved, removed: planned.removed, kept: planned.kept, sizeRunRule: planned.sizeRunRule },
+      plannedWorkOrders: { added: planned.added, moved: planned.moved, removed: planned.removed, kept: planned.kept, sizeRunRule: planned.sizeRunRule, followed: planned.followed, unclaimed: planned.unclaimed },
+      // B-W2b-306 (PLN-073): the action messages it raised.
+      actionMessages: actions,
     },
   })
   tools.emit({
