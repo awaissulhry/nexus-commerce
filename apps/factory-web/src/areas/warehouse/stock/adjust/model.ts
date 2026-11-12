@@ -1,5 +1,8 @@
-import type { AdjustInput, ItemRef, Named } from '../../../_shared/stock/api'
+import type { ItemRef, Named } from '../../../_shared/stock/api'
 import { decimalValue, type Phrase } from '../../../_shared/stock/model'
+// B-W2b-327: the warehouse rules an adjustment meets (the value above which it waits for a yes) and its posting date.
+import type { DepthAdjustInput, PostingCheck } from '../depth/api'
+import { postingHeldOf, type ApprovalNotice, type Loaded } from '../depth/model'
 
 /**
  * Adjust stock (design st-adjust / mv-adjust: ONE dialog for Stock and Movements), pure: what it adjusts (one stock key
@@ -31,6 +34,10 @@ export interface AdjustDraft {
   reference: string
   /** Per base unit, as typed; cost grain only. */
   unitCost: string
+  /** B-W2b-327 (SCM-196): the day it counts on in the books (YYYY-MM-DD); '' or absent = the day it happens. */
+  postingDay?: string
+  /** B-W2b-327: why it goes into a soft-locked month (asked only then). */
+  lockReason?: string
 }
 
 export interface AdjustDialogModel {
@@ -43,6 +50,12 @@ export interface AdjustDialogModel {
   problem: Phrase | null
   /** Offline: the post waits with the reason. */
   offline?: boolean
+  /** B-W2b-327 (design st-adjust "W2b: 'Needs approval above € 500' Banner and the approver role"): null = posts at once. */
+  approval?: ApprovalNotice | null
+  /** B-W2b-327: the posting day checked as the post will (the back-dating limit, a closed month). */
+  postingCheck?: Loaded<PostingCheck> | null
+  /** Today at the site (YYYY-MM-DD): the latest posting day. */
+  today?: string
 }
 
 export interface AdjustActions {
@@ -62,10 +75,10 @@ export function typedDecimal(text: string, scale = 4): string | null {
   return normal
 }
 
-export type AdjustCheck = 'quantity' | 'tooMuch' | 'note' | 'unitCost' | 'location'
+export type AdjustCheck = 'quantity' | 'tooMuch' | 'note' | 'unitCost' | 'location' | 'posting'
 
 /** What still holds the post, in order (the first one names the held button's reason). */
-export function adjustChecks(model: Pick<AdjustDialogModel, 'target' | 'draft' | 'withCost'>): AdjustCheck[] {
+export function adjustChecks(model: Pick<AdjustDialogModel, 'target' | 'draft' | 'withCost'> & Partial<Pick<AdjustDialogModel, 'postingCheck'>>): AdjustCheck[] {
   const { draft, target } = model
   const checks: AdjustCheck[] = []
   const quantity = typedDecimal(draft.quantity)
@@ -75,6 +88,7 @@ export function adjustChecks(model: Pick<AdjustDialogModel, 'target' | 'draft' |
   const note = draft.note.trim()
   if (note.length === 0 || note.length > 500) checks.push('note')
   if (model.withCost && draft.unitCost.trim() && typedDecimal(draft.unitCost, 6) === null) checks.push('unitCost')
+  if (postingHeldOf({ day: draft.postingDay ?? '', check: model.postingCheck ?? null, lockReason: draft.lockReason ?? '' })) checks.push('posting')
   return checks
 }
 
@@ -88,7 +102,7 @@ export function adjustPreview(model: Pick<AdjustDialogModel, 'target' | 'draft'>
 }
 
 /** The request (one Idempotency-Key per dialog, sent by the container). */
-export function adjustBody(model: Pick<AdjustDialogModel, 'target' | 'draft' | 'withCost'>): AdjustInput {
+export function adjustBody(model: Pick<AdjustDialogModel, 'target' | 'draft' | 'withCost'> & Partial<Pick<AdjustDialogModel, 'postingCheck'>>): DepthAdjustInput {
   const { target, draft } = model
   const reference = draft.reference.trim()
   const unitCost = model.withCost && draft.unitCost.trim() ? typedDecimal(draft.unitCost, 6) : null
@@ -104,6 +118,9 @@ export function adjustBody(model: Pick<AdjustDialogModel, 'target' | 'draft' | '
     note: draft.note.trim(),
     ...(reference ? { reference } : {}),
     ...(unitCost ? { unitCost: Number(unitCost).toFixed(6) } : {}),
+    // B-W2b-327: a posting day apart from today, and the reason a soft-locked month asks.
+    ...(draft.postingDay ? { postingDate: draft.postingDay } : {}),
+    ...(draft.postingDay && model.postingCheck?.status === 'ready' && model.postingCheck.value.periodLock?.needsReason && draft.lockReason?.trim() ? { periodLockOverride: { reason: draft.lockReason.trim() } } : {}),
   }
 }
 

@@ -4,6 +4,9 @@ import { at, inShell, LOCATIONS, NOW, PREFIX, ROLE_PERMISSIONS, TIME_ZONE, type 
 import { NORTH_ALL, overviewOf } from '../demo/fixtures'
 import { locationsCan, type RecordTab } from '../model'
 import { LocationRecordView, type LocationRecordModel } from './view/LocationRecordView'
+// B-W2b-327: the block, the kinds' profiles, Default for, the Labels tab, Print labels.
+import { BIN_LABEL, DEFAULTS, PLACES, PRINTERS, RACK_LABEL } from '../../stock/depth/demo/fixtures'
+import type { PlaceSite } from '../depth/api'
 
 /**
  * Design cases of SCR-065's Location record (made-up data: ../demo.ts): bin N-MAG-A-01 with three hides, rack A with its
@@ -30,6 +33,8 @@ function base(role: RoleCase, locationId: string, over: Partial<LocationRecordMo
       conflict: false,
       savedAt: null,
       notice: null,
+      permissions: ROLE_PERMISSIONS[role],
+      today: '2026-10-30',
       ...over,
     },
   }
@@ -41,6 +46,27 @@ function LocationRecordDesign({ model }: { model: { role: RoleCase; model: Locat
 
 const BIN = LOCATIONS.binA1.id
 const RACK = LOCATIONS.rackA.id
+
+// ---- B-W2b-327 ------------------------------------------------------------------------------------------------------------
+const DEPTH: PlaceSite = { ...NORTH_ALL, locations: PLACES }
+const deep = (role: RoleCase, locationId: string, over: Partial<LocationRecordModel> = {}, tab: RecordTab = 'overview') => base(role, locationId, { record: { status: 'ready', site: DEPTH }, defaults: DEFAULTS, ...over }, tab)
+const code = (value: string) => PLACES.find((place) => place.code === value)!.id
+const W2B_CASES: { id: string; label: string; model: { role: RoleCase; model: LocationRecordModel }; note?: string }[] = [
+  { id: 'w2b-count-blocked', label: 'W2b · Bin A1 blocked while count CNT-D-0007 runs: the banner, Open the count; Block held (the count lifts it)', model: deep('warehouse', BIN) },
+  { id: 'w2b-damage-blocked', label: 'W2b · The quarantine shelf blocked for damage until 2 Nov (its note, since when); Default for Quality', model: deep('warehouse', LOCATIONS.quarantine.id) },
+  { id: 'w2b-defaults', label: 'W2b · The goods-in dock: what it holds (any goods, a dock) and Default for Receiving', model: deep('owner', LOCATIONS.receiving.id) },
+  { id: 'w2b-transit', label: 'W2b · A transit place: between two sites, only a transfer moves its goods, no label; its kind stays what it is', model: deep('warehouse', code('N-TRANSIT')) },
+  { id: 'w2b-labels', label: 'W2b · Labels tab of rack A: the bin label to scale, the last job (not printed: Reprint), the code, the history', model: deep('warehouse', RACK, { label: { status: 'ready', value: RACK_LABEL } }, 'labels') },
+  { id: 'w2b-labels-suggested', label: 'W2b · Labels tab of bin A2: no code yet — the label shows the one it gets; Give it STAB-N-N-MAG-A-02', model: deep('warehouse', LOCATIONS.binA2.id, { label: { status: 'ready', value: BIN_LABEL } }, 'labels') },
+  { id: 'w2b-labels-change', label: 'W2b · Labels tab: a new code typed — labels already printed with the old code will no longer scan', model: deep('warehouse', RACK, { label: { status: 'ready', value: RACK_LABEL }, labelCodeDraft: 'MAG-A' }, 'labels') },
+  { id: 'w2b-labels-read-only', label: 'W2b · Labels tab, read-only: the label and its history, no code change; prints as a PDF only', model: deep('readOnly', RACK, { label: { status: 'ready', value: RACK_LABEL } }, 'labels') },
+  { id: 'w2b-labels-transit', label: 'W2b · Labels tab of a transit place: it carries no label (said in words)', model: deep('warehouse', code('N-TRANSIT'), {}, 'labels') },
+  { id: 'w2b-labels-loading', label: 'W2b · Labels tab being read', model: deep('warehouse', RACK, { label: { status: 'loading' } }, 'labels') },
+  { id: 'w2b-labels-error', label: 'W2b · Labels tab: the label could not be read (Try again)', model: deep('warehouse', RACK, { label: { status: 'error', problem: 'problem.offline' } }, 'labels') },
+  { id: 'w2b-print', label: 'W2b · Print label of rack A on the warehouse label printer', model: deep('warehouse', RACK, { label: { status: 'ready', value: RACK_LABEL }, print: { places: [PLACES.find((place) => place.id === RACK)!], siteCode: NORTH_ALL.code, draft: { printerId: PRINTERS[0]!.id, copies: 1, language: 'it' }, printers: { status: 'ready', value: PRINTERS }, posting: false, problem: null, done: null } }, 'labels') },
+  { id: 'w2b-block', label: 'W2b · Block… from the record (rack A)', model: deep('warehouse', RACK, { depthDialog: { kind: 'block', locationId: RACK } }) },
+]
+
 
 export const designScreen = defineDesignScreen<{ role: RoleCase; model: LocationRecordModel }>({
   screen: 'SCR-065-record',
@@ -66,6 +92,7 @@ export const designScreen = defineDesignScreen<{ role: RoleCase; model: Location
     { id: 'not-found', label: 'Not found or another company’s: Back to the list', model: base('warehouse', BIN, { record: { status: 'not_found' } }) },
     { id: 'error', label: 'The read failed: Try again', model: base('warehouse', BIN, { record: { status: 'error', problem: 'problem.offline' } }) },
     { id: 'stock-failed', label: 'The stock could not be read: said with Try again', model: base('warehouse', BIN, { stock: { value: null, problem: 'problem.read' } }, 'stock') },
+    ...W2B_CASES,
   ],
 })
 

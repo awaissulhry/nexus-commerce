@@ -8,8 +8,8 @@ import { decimalValue, stockCan, type StockCan } from '../../_shared/stock/model
  * as list rows with the stock each place holds (from the stock overview, never a stored figure), why a place cannot be
  * archived yet, where a place may move to, the new place's form and its problems, the record's stock with or without
  * the places inside, and the address (`?site=&archived=1&q=`, the record's `?tab=overview|stock`). The words are keys of
- * `warehouse-locations` (prefix `lc.`); the shared stock words are `stock`'s. No blocks and no bin labels: both W2b (no
- * column, no LOCATION label kind).
+ * `warehouse-locations` (prefix `lc.`); the shared stock words are `stock`'s. Blocks, bin labels, default locations and the
+ * W2b kinds' rules are B-W2b-327's (`depth/`, words `warehouse-depth`).
  */
 
 export const LOCATIONS_NAMESPACES = ['warehouse-locations'] as const
@@ -133,6 +133,8 @@ export interface NewPlaceForm {
   code: string
   name: string
   kind: LocationKind
+  /** B-W2b-327: the party a workshop's (SUBCONTRACTOR) or a customer's (CUSTOMER) place names. */
+  partyId?: string | null
 }
 
 /** A sensible kind under a parent: a bin in a zone, a zone in a warehouse, a warehouse at the top. */
@@ -203,7 +205,8 @@ export function listQuery(address: ListAddress): string {
   return text ? `?${text}` : ''
 }
 
-export const RECORD_TABS = ['overview', 'stock'] as const
+// B-W2b-327: Labels (the bin label and its print history; design rec:Location/labels).
+export const RECORD_TABS = ['overview', 'stock', 'labels'] as const
 export type RecordTab = (typeof RECORD_TABS)[number]
 export const recordTabOf = (value: string | null | undefined): RecordTab => (RECORD_TABS.includes(value as RecordTab) ? (value as RecordTab) : 'overview')
 

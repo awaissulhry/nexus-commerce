@@ -1,0 +1,127 @@
+/*
+ * Stock, Movements and Locations in depth (B-W2b-327) — LAYOUT only: the "why is it this number" popover's column, the
+ * balance bridge's room, short lists in dialogs, the label tab's two columns. The controls are the design system's;
+ * semantic tokens only. No page max-width: a popover and a dialog may cap their own width.
+ */
+/* Inside the DS DetailPopover (its panel is at most --nds-popover-max-w wide): the content wraps, and a long one scrolls. */
+.fw-wd-why {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  width: 100%;
+  max-height: min(70vh, 520px);
+  overflow-y: auto;
+  min-width: 0;
+}
+
+.fw-wd-h3 {
+  margin: 0;
+  color: var(--nds-text-strong);
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-wd-h4 {
+  margin: var(--nds-space-4) 0 0;
+  color: var(--nds-text-strong);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-wd-muted {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-wd-moves {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-wd-moves li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4) var(--nds-space-10);
+  align-items: baseline;
+  min-width: 0;
+}
+
+.fw-wd-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  margin: 0;
+  padding-inline-start: var(--nds-space-16);
+  font-size: var(--nds-font-size-sm);
+  min-width: 0;
+}
+
+.fw-wd-bridge {
+  min-width: 0;
+}
+
+.fw-wd-why-button {
+  max-width: 100%;
+}
+
+.fw-wd-why-trigger {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.fw-wd-short {
+  color: var(--nds-danger-text);
+}
+
+.fw-wd-split {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
+  gap: var(--nds-space-14);
+  align-items: start;
+  min-width: 0;
+}
+
+.fw-wd-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+.fw-wd-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--nds-space-8) var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-wd-pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-wd-why-bridge {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: var(--nds-space-14);
+  align-items: start;
+  min-width: 0;
+}
+
+@media (max-width: 900px) {
+  .fw-wd-why-bridge {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

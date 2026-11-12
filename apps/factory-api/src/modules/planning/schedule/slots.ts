@@ -25,6 +25,8 @@ import { assertNoGateHold, gateHoldsOf, type GateHold } from './gates'
 // B-W2b-312: a pinned slot stays where it is (PLN-139); a move's answer knows the material (PLN-134).
 import { pinnedRefusal } from '../schedule-depth/pins'
 import { materialCheckOf, materialStartsOf } from '../schedule-depth/material'
+// B-W2b-329 (PLN-149): every place, move and removal joins the board's change log (B-W2b-312's helper).
+import { logChanges } from '../schedule-depth/log'
 
 /**
  * Moves on the planning board (B-W2a-34; PLN-129, PLN-131, PLN-160; design planning.board "Schedule": "Each move
@@ -237,6 +239,7 @@ export async function placeSlot(caller: CommandCaller, body: PlaceSlotBody, idem
       updatedById: context.actorId,
     }
     await tx.scheduleSlot.create({ data, select: { id: true } })
+    await logChanges(tx, target.site, plan.id, [{ kind: 'PLACE', slotId: id, workOrderId: workOrder.id, operationId: data.workOrderOperationId, to: { lane: lane.ref, startAt: start, endAt: end }, reason: data.overloadReason }], context.actorId, now) // B-W2b-329
     tools.audit({ action: 'planning.schedule.place', recordType: 'ScheduleSlot', recordId: id, companyId: target.companyId, siteId: target.siteId, before: null, after: { workOrderId: workOrder.id, operationId: data.workOrderOperationId, ...slotAudit({ ...data, minutes }) } })
     emitChange(tools, target.site, plan, 'PLACED', [id], [workOrder.id])
     return { slotId: id, planVersion: plan.version, over }
@@ -290,6 +293,10 @@ export async function moveSlot(caller: CommandCaller, slotId: string, body: Move
     }
     const { count } = await tx.scheduleSlot.updateMany({ where: { id: current.id, version: current.version }, data })
     if (count !== 1) throw new ScheduleRefusal('SLOT_MOVED', 'The slot moved meanwhile: reload the board.')
+    // B-W2b-329 (PLN-149): a move of its lane or times is logged from → to (garments, a reason or a note alone are not a move).
+    if (laneKey(lane.ref) !== laneKey(laneOfSlot(current)) || start.getTime() !== current.startAt.getTime() || end.getTime() !== current.endAt.getTime()) {
+      await logChanges(tx, target.site, plan.id, [{ kind: 'MOVE', slotId: current.id, workOrderId: current.workOrderId, operationId: current.workOrderOperationId, from: { lane: laneOfSlot(current), startAt: current.startAt, endAt: current.endAt }, to: { lane: lane.ref, startAt: start, endAt: end }, reason: data.overloadReason }], context.actorId, now)
+    }
     tools.audit({ action: 'planning.schedule.move', recordType: 'ScheduleSlot', recordId: current.id, companyId: target.companyId, siteId: target.siteId, before: slotAudit(current), after: slotAudit({ ...data, minutes }) })
     emitChange(tools, target.site, plan, 'MOVED', [current.id], [current.workOrderId])
     return { planVersion: plan.version, over }
@@ -309,6 +316,7 @@ export async function removeSlot(caller: CommandCaller, slotId: string, body: { 
     if (current.pinned) throw await pinnedRefusal(tx, current, 'remove', target.site.timezone) // B-W2b-312 (PLN-139)
     const { count } = await tx.scheduleSlot.deleteMany({ where: { id: current.id, version: current.version } })
     if (count !== 1) throw new ScheduleRefusal('SLOT_MOVED', 'The slot moved meanwhile: reload the board.')
+    await logChanges(tx, target.site, plan.id, [{ kind: 'REMOVE', slotId: current.id, workOrderId: current.workOrderId, operationId: current.workOrderOperationId, from: { lane: laneOfSlot(current), startAt: current.startAt, endAt: current.endAt } }], context.actorId, now) // B-W2b-329
     tools.audit({ action: 'planning.schedule.remove', recordType: 'ScheduleSlot', recordId: current.id, companyId: target.companyId, siteId: target.siteId, before: { workOrderId: current.workOrderId, operationId: current.workOrderOperationId, ...slotAudit(current) }, after: null })
     emitChange(tools, target.site, plan, 'REMOVED', [current.id], [current.workOrderId])
     return { planVersion: plan.version, workOrderId: current.workOrderId }
@@ -441,6 +449,8 @@ export async function placeByDueDate(caller: CommandCaller, body: PlaceByDueDate
         updatedById: context.actorId,
       })),
     })
+    // B-W2b-329 (PLN-149): each placement logged.
+    await logChanges(tx, site, plan.id, proposals.map((proposal) => ({ kind: 'PLACE' as const, slotId: proposal.row.id, workOrderId: proposal.row.workOrderId, operationId: proposal.row.workOrderOperationId, to: { lane: proposal.lane, startAt: proposal.row.startAt, endAt: proposal.row.endAt }, reason: proposal.over.length > 0 ? reason : null })), context.actorId, now)
     tools.audit({
       action: 'planning.schedule.placeByDueDate',
       recordType: 'PlanVersion',
