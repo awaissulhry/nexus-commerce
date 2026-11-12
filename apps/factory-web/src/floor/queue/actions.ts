@@ -84,6 +84,12 @@ export const WHAT_KEY = {
   'production.instruction.ack': 'instructionSeen',
   // B-W2b-226: a spec problem reported (its screen is B-W2b-232's "Report a spec problem").
   'product.change.report': 'specProblem',
+  // B-W2b-292: a put-away and a move between bins by scan, a warehouse task's steps (the Move & put away screen is B-W2b-308's).
+  'inventory.putAway': 'putAway',
+  'inventory.binMove': 'binMove',
+  'inventory.task.take': 'taskTake',
+  'inventory.task.giveBack': 'taskGiveBack',
+  'inventory.task.done': 'taskDone',
 } as const
 
 export type WhatKey = (typeof WHAT_KEY)[keyof typeof WHAT_KEY]

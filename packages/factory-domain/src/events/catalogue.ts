@@ -200,6 +200,8 @@ import { events as complianceClaims } from '../compliance-claims/events'
 import { events as productColours } from '../product-colours/events'
 // B-W2b-289: locations in depth (blocks, bin label codes, default locations).
 import { events as inventoryLocationsDepth } from '../inventory-locations/events'
+// B-W2b-292: the warehouse task inbox.
+import { events as inventoryTasks } from '../inventory-tasks/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -466,7 +468,9 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-332
   ...purchaseRequests,
   // B-W2b-289
-  ...inventoryLocationsDepth] as const satisfies readonly EventDefinition[]
+  ...inventoryLocationsDepth,
+  // B-W2b-292
+  ...inventoryTasks] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']
