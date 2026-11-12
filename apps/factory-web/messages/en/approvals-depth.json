@@ -1,0 +1,430 @@
+{
+  "you": "You",
+  "aWorker": "A floor worker",
+  "colleague": "A colleague",
+  "or": " or ",
+  "yes": "Yes",
+  "no": "No",
+  "retry": "Try again",
+  "back": "Back",
+  "dismiss": "Dismiss",
+  "approve": "Approve",
+  "approveAs": "Approve as '{meaning}'",
+  "reject": "Reject",
+  "later": {
+    "W3": "Comes later (W3)."
+  },
+  "meaning": {
+    "REVIEWED": "Reviewed",
+    "APPROVED": "Approved",
+    "RELEASED": "Released",
+    "VERIFIED": "Verified"
+  },
+  "status": {
+    "PENDING": "Waiting",
+    "APPROVED": "Approved",
+    "REJECTED": "Rejected",
+    "WITHDRAWN": "Withdrawn",
+    "STALE": "Changed since asked"
+  },
+  "history": {
+    "title": "Approvals",
+    "loading": "Reading the approvals…",
+    "problem": {
+      "forbidden": "This record's approvals are outside your rights.",
+      "unavailable": "Couldn't read the approvals."
+    },
+    "empty": {
+      "title": "No approval yet",
+      "body": "Every request for a yes on this record, and its answer, will be listed here."
+    },
+    "more": "Show more",
+    "loadingMore": "Reading more…",
+    "line": {
+      "REQUESTED": {
+        "other": "{name} asked for a yes",
+        "me": "You asked for a yes",
+        "system": "The system asked for a yes"
+      },
+      "COMMENTED": {
+        "other": "{name} wrote a note",
+        "me": "You wrote a note",
+        "system": "The system wrote a note"
+      },
+      "APPROVED": {
+        "other": "{name} approved",
+        "me": "You approved",
+        "system": "Approved by the system"
+      },
+      "APPROVED_AS": {
+        "other": "{name} approved as '{meaning}'",
+        "me": "You approved as '{meaning}'",
+        "system": "Approved as '{meaning}' by the system"
+      },
+      "REJECTED": {
+        "other": "{name} rejected",
+        "me": "You rejected",
+        "system": "Rejected by the system"
+      },
+      "WITHDRAWN": {
+        "other": "{name} withdrew the request",
+        "me": "You withdrew the request",
+        "system": "The system withdrew it: its record is gone"
+      },
+      "STALE": {
+        "other": "{name}: it changed since it was asked",
+        "me": "You: it changed since it was asked",
+        "system": "The system: it changed since it was asked"
+      },
+      "SIGNED": {
+        "other": "{name} signed it as '{meaning}'",
+        "me": "You signed it as '{meaning}'",
+        "system": "Signed as '{meaning}'"
+      }
+    }
+  },
+  "intro": "Every request that needs your yes, in one place: approve or reject the engine’s requests and quotes here; every other kind opens its own page.",
+  "notYet": "Not read yet",
+  "waitingForYou": "{count} waiting for you",
+  "offline": "Offline",
+  "band": {
+    "outOfOffice": "Out of office…",
+    "more": "More",
+    "rules": "Approval rules",
+    "keys": "Keyboard shortcuts"
+  },
+  "held": {
+    "noRules": "You do not read approval rules."
+  },
+  "tile": {
+    "waiting": "Waiting for me",
+    "overdue": "Overdue",
+    "mine": "Asked by me",
+    "decided": "Decided in the last 7 days"
+  },
+  "tileMore": "{count}+",
+  "notice": {
+    "changed_one": "1 request changed since it was asked — it needs a fresh request.",
+    "changed_other": "{count} requests changed since they were asked — they need a fresh request.",
+    "show": "Show them",
+    "partial": "Some requests could not be read: the list shows the others. Try again in a moment.",
+    "approved": "Approved: {summary}",
+    "signed": "Signed and approved: {summary}",
+    "rejected": "Rejected: {summary}",
+    "quoteApproved": "Quote {number} approved.",
+    "quoteRejected": "Quote {number} rejected."
+  },
+  "table": {
+    "waiting": "Requests waiting for me",
+    "overdue": "Requests past their time",
+    "mine": "My requests",
+    "decided": "Decided in the last 7 days",
+    "title": "Approvals"
+  },
+  "count_one": "1 request",
+  "count_other": "{count} requests",
+  "countAtLeast": "At least {count} requests",
+  "search": "Search requests",
+  "filter": {
+    "kind": "Kind of request",
+    "anyKind": "Every kind",
+    "kindCount": "{kind} ({count})",
+    "changedChip": "Changed since asked",
+    "changedOff": "Show every request again"
+  },
+  "col": {
+    "kind": "Kind",
+    "request": "Request",
+    "record": "Record",
+    "askedBy": "Asked by",
+    "approver": "Approver",
+    "rule": "Rule",
+    "size": "Change size",
+    "amount": "Amount",
+    "waiting": "Waiting / due",
+    "state": "State",
+    "company": "Company"
+  },
+  "kind": {
+    "QUOTE_APPROVAL": "Quote"
+  },
+  "row": {
+    "openRecord": "Open the record",
+    "ownPage": "Decided on its own page"
+  },
+  "recheck": {
+    "changedShort": "Changed since asked",
+    "current": "Still current · checked {time}",
+    "changed": "Changed since asked — ask again",
+    "askAgain": "The record moved after the request: Approve is held until someone asks again.",
+    "gone": "Its record is gone or out of your reach."
+  },
+  "rule": {
+    "quote": "Sales › Settings: margin floor and discount limit"
+  },
+  "since": "Since {when}",
+  "due": "Due {when}",
+  "dueWas": "Was due {when}",
+  "whyMe": {
+    "open": "Why is this mine? ({rule})",
+    "title": "Why is this mine?",
+    "named": "The rule names you.",
+    "role": "The rule asks {role}, and you hold that role here.",
+    "openRule": "Open the rule"
+  },
+  "failed": "Couldn't load approvals.",
+  "empty": {
+    "waiting": {
+      "title": "Nothing waits for your yes.",
+      "body": "New requests appear here as soon as someone asks."
+    },
+    "overdue": {
+      "title": "Nothing is past its time.",
+      "body": "A request past the time its rule gives is listed here."
+    },
+    "mine": {
+      "title": "You have no open requests.",
+      "body": "What you ask for a yes is listed here until someone decides it."
+    },
+    "decided": {
+      "title": "Nothing decided in the last 7 days.",
+      "body": "What you approved or rejected in the last 7 days is listed here."
+    },
+    "filtered": {
+      "title": "No request matches.",
+      "body": "Clear the filters to see every request of this view."
+    },
+    "clear": "Clear filters",
+    "showMine_one": "Asked by me: 1 waiting · Show",
+    "showMine_other": "Asked by me: {count} waiting · Show"
+  },
+  "bulk": {
+    "approve_one": "Approve 1",
+    "approve_other": "Approve {count}",
+    "title_one": "Approve 1 {kind}",
+    "title_other": "Approve {count} · {kind}",
+    "summary": "Each request was read again just now: only the ones still as asked are approved, one by one.",
+    "now": "Waiting",
+    "next": "Approved",
+    "ack": "I checked every request listed.",
+    "leftOut_one": "1 left out:",
+    "leftOut_other": "{count} left out:",
+    "doneVerb": "approved",
+    "approved": "Approved",
+    "failed": "Couldn't read the requests again. Try again."
+  },
+  "keys": {
+    "title": "Keyboard shortcuts",
+    "open": "Open the review",
+    "approve": "Approve the open request",
+    "reject": "Reject the open request",
+    "walk": "Next / previous request",
+    "confirm": "Confirm in a dialog"
+  },
+  "inbox": {
+    "held": {
+      "ownPage": "Decided on its own page: open it from the request.",
+      "notWaiting": "It does not wait for a decision any more.",
+      "own": "You asked for this: nobody approves their own request, the Owner included.",
+      "ownNames": "You asked for this; {names} can approve it.",
+      "notYours": "It waits for another approver.",
+      "changed": "It changed since it was asked: ask again.",
+      "gone": "Its record is gone or out of your reach.",
+      "needsMargin": "A margin request needs the right to see margins.",
+      "offline": "Offline — decide when back online.",
+      "busy": "Working…",
+      "signedOneByOne": "Signed approvals are approved one by one.",
+      "codeOneByOne": "An approval that asks a code is approved one by one.",
+      "pickSome": "Tick the requests to approve first.",
+      "oneKind": "Approve several only for requests of one kind.",
+      "reading": "Reading the request…"
+    }
+  },
+  "refusal": {
+    "STALE": "It changed since you looked: the request was asked about another version of the record. It needs a fresh request.",
+    "SUBJECT_GONE": "The record of this request is gone or out of your reach.",
+    "NOT_PENDING": "This request was decided, withdrawn or found changed already.",
+    "OWN_REQUEST": "You asked for this: another approver decides it.",
+    "NOT_APPROVER": "This request waits for another approver.",
+    "NO_KIND": "This kind of request cannot be re-read yet, so it cannot be approved here.",
+    "NOT_REQUESTER": "Only the person who asked takes it back.",
+    "other": "Refused by a rule of the approval: read it again.",
+    "moved": "Someone changed it meanwhile: it was read again."
+  },
+  "problem": {
+    "forbidden": "You may not do this here.",
+    "invalid": "It was refused as it is: check what you entered.",
+    "unavailable": "The server did not answer. Try again in a moment.",
+    "rate_limited": "Too many tries: wait a moment.",
+    "signed_out": "Your session ended: sign in again.",
+    "step_up": "This needs a fresh code from your authenticator app.",
+    "internal": "Something went wrong. Try again."
+  },
+  "review": {
+    "title": "Approve this {kind}?",
+    "titleDecided": "Request: {kind}",
+    "titleUnknown": "Request",
+    "not_found": "This request is not there any more.",
+    "forbidden": "This request is outside your rights.",
+    "tabs": "The request",
+    "noun": "request",
+    "tab": {
+      "change": "Change",
+      "context": "Context",
+      "conversation": "Conversation",
+      "history": "History"
+    },
+    "asked": "{who} asked on {at}",
+    "decided": "{status} by {who} on {at}",
+    "withdrawn": "Withdrawn on {at}",
+    "changes_one": "1 change",
+    "changes_other": "{count} changes",
+    "noChanges": "The request approves the record as it is now: nothing in it changes field by field.",
+    "rules": "Why it needs a yes",
+    "noRule": "No rule is named on it.",
+    "signs": "Its rule asks a signature: your yes means '{meaning}'.",
+    "signsWithCode": "Its rule asks a signature with a fresh code: your yes means '{meaning}'.",
+    "deciders": "Who can decide it: {names}.",
+    "noDeciders": "Nobody else can decide it yet: an administrator names another approver.",
+    "comment": "Comment with your yes",
+    "commentHint": "Optional: it goes on the record’s history.",
+    "meaningTag": "Signed as '{meaning}'",
+    "overdue": "Past its time"
+  },
+  "context": {
+    "kind": "Kind",
+    "size": "Change size",
+    "due": "To decide by",
+    "noMoney": "Amounts are shown only with the right to see them.",
+    "open": "Open full page"
+  },
+  "conversation": {
+    "title": "No comments yet",
+    "body": "Comments between the approver and who asked stay with the request."
+  },
+  "sign": {
+    "title": "Approve as '{meaning}'",
+    "binds": "Your signature means '{meaning}' and binds to the record as asked (version {version}, fingerprint {print}).",
+    "code": "Enter a fresh code from your authenticator app.",
+    "confirm": "Sign and approve",
+    "codeWrong": "That code did not work: enter the code your app shows now.",
+    "codeAgain": "The signature needs a fresh code: sign again."
+  },
+  "rejectDialog": {
+    "title": "Reject — tell {who} why",
+    "body": "The reason goes on the record’s history and to who asked.",
+    "code": "Reason",
+    "pick": "Pick a reason",
+    "words": "In your words",
+    "wordsHint": "What needs to change before it can be approved.",
+    "held": {
+      "reading": "Reading the reasons…",
+      "code": "Pick a reason first.",
+      "words": "Write why, in a few words.",
+      "long": "At most 500 characters."
+    }
+  },
+  "rules": {
+    "title": "Approval rules",
+    "label": "Approval rules",
+    "body": "When a request needs a yes, and from whom. A new rule is written off: switch it on when it is right.",
+    "new": "New rule",
+    "count_one": "1 rule",
+    "count_other": "{count} rules",
+    "fixedBody": "Fixed by the system: it cannot be switched off or changed.",
+    "locked": "Locked",
+    "allOff": "Every rule is off: no request asks for a yes until someone switches a rule on.",
+    "empty": "No approval rules.",
+    "emptyBody": "Quotes still use the margin floor from Sales › Settings.",
+    "error": "Couldn't read the approval rules.",
+    "kindsError": "Couldn't read what a rule may check.",
+    "everyCompany": "Every company",
+    "notRegistered": "not checked yet: comes with its own step",
+    "thresholdHeld": "a threshold you cannot see",
+    "switch": "Switch the rule {rule} on or off",
+    "on": "On",
+    "off": "Off",
+    "named": "named",
+    "withCode": "with a code",
+    "aRequest": "a request",
+    "col": {
+      "sentence": "Rule",
+      "area": "Area",
+      "approver": "Approver",
+      "delegation": "Delegation",
+      "meaning": "Signature",
+      "fired": "Fired in 30 days",
+      "active": "On / off"
+    },
+    "held": {
+      "noManage": "You may read the rules but not change them.",
+      "offline": "Offline — change it when back online.",
+      "cannotChange": "This rule is outside what you may change (its company, or a threshold you cannot see).",
+      "money": "It checks an amount you may not see: only someone with that right changes its condition.",
+      "kind": "Pick what the rule is for.",
+      "name": "Give the rule a name.",
+      "approver": "Pick who approves.",
+      "condition": "Finish every condition first.",
+      "sequence": "The order is a whole number from 1 to 9999.",
+      "dueHours": "The time to decide is whole hours, from 1 to 2160.",
+      "notRegistered": "This kind of request is not checked yet: its rule cannot be switched on.",
+      "reading": "Reading the rules…",
+      "noKinds": "No kind of request can have a rule yet."
+    },
+    "problem": {
+      "approver": "That approver cannot decide approvals here: pick a role that approves.",
+      "condition": "A condition was refused: check each row.",
+      "moved": "Someone changed this rule meanwhile: it was read again.",
+      "invalid": "The rule was refused as it is: check what you entered."
+    },
+    "notice": {
+      "saved": "Rule {rule} saved.",
+      "created": "Rule {rule} created — it is off until you switch it on.",
+      "on": "Rule {rule} is on.",
+      "off": "Rule {rule} is off."
+    },
+    "dialog": {
+      "title": "Approval rule: {kind}",
+      "new": "New approval rule",
+      "save": "Save rule",
+      "create": "Create rule (off)",
+      "writtenOff": "A new rule is written off: switch it on in the list when it is right.",
+      "kind": "For",
+      "kindFixed": "Fixed once written.",
+      "pickKind": "Pick a kind of request",
+      "company": "Company",
+      "companyHint": "Every company needs a grant over every company.",
+      "name": "Name",
+      "namePlaceholder": "Orders over 5,000",
+      "when": "When {kind} needs a yes",
+      "lead": "A {kind} needs a yes when",
+      "outcome": "→ ask {approver}",
+      "everyRequest": "No condition: every request of this kind asks.",
+      "approver": "Approver",
+      "approverHint": "A role whose people approve requests; never the person who asked.",
+      "personKept": "The rule names this person: it stays as it is.",
+      "reading": "Reading the roles…",
+      "rolesError": "Couldn't read the roles",
+      "pickRole": "Pick a role",
+      "meaning": "Signature meaning",
+      "meaningHint": "What the approver’s yes means, written with it.",
+      "noMeaning": "No signature",
+      "sequence": "Order",
+      "sequenceHint": "Rules of one kind are asked in this order; the first that names someone else decides.",
+      "dueHours": "Time to decide (hours)",
+      "dueHoursHint": "After it the request is overdue.",
+      "noDue": "No time limit",
+      "stepUp": "Ask a fresh authenticator code with the signature",
+      "stepUpHeld": "Pick a signature meaning first.",
+      "delegationLater": "Delegation (out of office) comes later (W3)."
+    },
+    "test": {
+      "title": "Test",
+      "run": "Test against recent records",
+      "body": "Nothing is saved: the rule is checked against the latest records you may see.",
+      "result": "Would have asked for {asked} of the last {tested} ({kind}).",
+      "approvers": "Would approve: {names}.",
+      "noApprovers": "Nobody holds that role there yet: nobody could approve it."
+    }
+  }
+}

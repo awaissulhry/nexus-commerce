@@ -105,7 +105,11 @@
       "ORDER_CHANGE_REQUEST": "Customers' change and cancel requests",
       "SUPPLIER_CHANGE": "Suppliers' profile changes",
       "SUPPLIER_DOCUMENT": "Supplier documents to check",
-      "DELIVERY_ADDRESS": "Delivery addresses customers added, to check"
+      "DELIVERY_ADDRESS": "Delivery addresses customers added, to check",
+      "CHANGE_ORDER": "Change orders to approve",
+      "SMV_CHANGE": "SMV changes to approve",
+      "PLAN_VERSION": "Inspection plan versions to approve",
+      "APPROVAL_TASK": "Requests waiting for your yes"
     },
     "severity": {
       "HIGH": "Urgent",
@@ -436,6 +440,14 @@
       "SUPPLIER_DOCUMENT.blocks": "It is not shared back and does not count for the required documents until someone accepts it.",
       "DELIVERY_ADDRESS.WAITING": "{customer} added a delivery address for our check: {address}.",
       "DELIVERY_ADDRESS.blocks": "No order or shipment goes there until you approve it; accepting a request of the customer that names it approves it too.",
+      "CHANGE_ORDER.SUBMITTED": "Change order {number} for {style} waits for your approval: {title}.",
+      "CHANGE_ORDER.blocks": "Its new revision is not released until every required approver says yes.",
+      "SMV_CHANGE.PROPOSED": "Operation {code}: an SMV change to {minutes} minutes from {effectiveDate} waits for your approval.",
+      "SMV_CHANGE.blocks": "Routings, piece rates and costs keep the current minutes until a second person approves it.",
+      "PLAN_VERSION.SUBMITTED": "Inspection plan {code} version {number} waits for your approval.",
+      "PLAN_VERSION.blocks": "Inspections keep using the approved version until a second person approves this one.",
+      "APPROVAL_TASK.PENDING": "Waiting for your yes ({taskKind}): {summary}.",
+      "APPROVAL_TASK.blocks": "Nothing of it is carried out until someone who did not ask for it approves it.",
       "why.ORDER_PROMISE.orders_manage": "You manage this customer's orders and their promise dates.",
       "why.WORK_ORDER_HELD.workorders_release": "You release work orders at this site.",
       "why.LOT_HOLD.quality_lots_release": "You release lots at this site.",
@@ -461,6 +473,10 @@
       "why.SUPPLIER_CHANGE.purchasing_supplierChanges_decide": "You check suppliers' changes of their addresses and contacts.",
       "why.SUPPLIER_DOCUMENT.purchasing_supplierDocuments_review": "You check the certificates, test reports and declarations suppliers send.",
       "why.DELIVERY_ADDRESS.orders_manage": "You take this customer's orders.",
+      "why.CHANGE_ORDER.product_changes_approve": "You were asked to approve this change order, and someone else wrote it.",
+      "why.SMV_CHANGE.product_smv_approve": "You approve this company's SMV changes, and someone else proposed it.",
+      "why.PLAN_VERSION.quality_plans_approve": "You approve this company's inspection plans, and someone else wrote this version.",
+      "why.APPROVAL_TASK.approvals_decide": "Its approval rule names you or your role here, and someone else asked for it.",
       "code": {
         "checks": {
           "REVISION": "revision",
@@ -514,6 +530,20 @@
           "SPAM": "it looks like spam",
           "UNKNOWN_SENDER": "its sender is not a contact of the record",
           "THREAD_CLOSED": "the thread it answers is closed"
+        },
+        "taskKind": {
+          "PURCHASE_ORDER": "purchase order",
+          "PURCHASE_ORDER_CHANGE": "purchase order change",
+          "SALES_ORDER": "sales order",
+          "SALES_ORDER_CHANGE": "sales order change",
+          "PRICE_CHANGE": "price change",
+          "STOCK_ADJUSTMENT": "stock adjustment",
+          "COUNT_VARIANCE": "count difference",
+          "MATERIAL_SUBSTITUTION": "material substitution",
+          "CREDIT_OVERRIDE": "credit override",
+          "CREDIT_WITHOUT_RETURN": "credit without a return",
+          "SUPPLIER_BANK_CHANGE": "supplier's bank details change",
+          "PURCHASE_REQUEST": "purchase request"
         }
       },
       "TASK_DUE.TODAY": "Your task \"{title}\" is due today.",

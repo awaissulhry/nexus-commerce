@@ -205,6 +205,8 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   // B-W2b-269 Compliance › Technical files (SCR-120): a technical file opens its record page, an evidence pack its PDF window (SCR-326).
   TechnicalFile: '/compliance/techfiles/[id]',
   EvidencePack: '/compliance/techfiles/pack?pack=[id]',
+  // B-W2b-307 Home › Approvals (SCR-030): a request of the approval engine opens its review in the inbox (Today, the bell).
+  ApprovalTask: '/home/approvals?open=[id]',
 })
 
 /**
@@ -214,6 +216,10 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
  */
 export const ATTENTION_PAGES: Readonly<Record<string, string>> = Object.freeze({
   PRIVACY_DUTY: '/admin/privacy?company=[id]',
+  // B-W2b-307 (AW2:01, AW2:02): a change order and an SMV change waiting for my approval open Changes & versions' decide
+  // pop-up (B-W2b-244's `?decide=`); the SMV row's record is the version.
+  CHANGE_ORDER: '/products/changes?tile=MINE_TO_APPROVE&decide=order:[id]',
+  SMV_CHANGE: '/products/changes?decide=smv:[id]',
 })
 
 /** An API list route → the web page that shows it (with the same query). */
