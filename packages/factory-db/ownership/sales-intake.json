@@ -1,0 +1,53 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/sales-intake.prisma (rules: src/ownership.ts; roles: src/roles.ts). W2b-5, schema wave 37/44 (B-W2b-279): sales intake and customers. The office (factory_runtime) reads and writes through apps/factory-api's modules/parties (B-W2b-290: requirements, holds, terms per company) and modules/sales (B-W2b-295 inquiries, B-W2b-303 seasons), always with command(); the API keeps staff to the companies their grants reach (a company is a column, not a policy key). The floor, portal and link sessions read nothing here: no floor screen shows them, the customer portal's inquiries are W3, and a partyId here is the party key with no partner grant. One money column each on Inquiry (targetUnitPrice) and PartyCompanyTerms (creditLimitAmount), both @grain price. Personal data: an inquiry's prospect (name, company, e-mail, phone), office only and blanked by erasure (no `personal` entry: the purposes of src/ownership.ts are the people's; the prospect is named by no id); who placed, released, ended or set a row is a person inside the one record. Nothing is deleted but an open inquiry's lines (the …_sales_intake_w2b_guards triggers): inquiries are closed, requirements ended and superseded, holds released, terms ended, seasons closed. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "Inquiry": {
+      "about": "The office logs an inquiry or RFQ (typed, or made from a mail), matches it to a party, assigns it, asks for more, makes the quote it becomes, declines it with a reason or marks it lost, and erases its prospect's personal data on request; never deleted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "InquiryLine": {
+      "about": "The office writes what an inquiry asks for (a style or a description, a colourway, the pieces by size) while the inquiry is open, and removes a line then.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "CustomerRequirement": {
+      "about": "The office writes a customer's packing, labelling, document, quality, shipping and invoicing rules, ends one, and replaces one by a new row that supersedes it; never deleted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "PartyHold": {
+      "about": "The office (or the system: a credit check, in the tenant's office scope) puts a customer's account on hold with a reason, and the office releases it with words; never edited or deleted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "PartyCompanyTerms": {
+      "about": "The office sets a tenant-wide customer's terms with one of our companies (payment terms, price list, deposit, PO number required, credit limit), changes them, and ends them; never deleted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "Season": {
+      "about": "The office sets up a company's seasons (code, name, dates, order-book close), and closes or reopens one; never deleted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    }
+  }
+}

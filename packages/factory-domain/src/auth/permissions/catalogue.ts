@@ -181,6 +181,8 @@ import { PORTAL_SAMPLES_DEFINITIONS, PORTAL_SAMPLES_PERMISSIONS } from '../../sa
 // B-W2b-247: the colour library (product.colours.manage) and the brands' branding sets (product.branding.manage).
 import { PRODUCT_COLOURS_DEFINITIONS, PRODUCT_COLOURS_PERMISSIONS } from '../../product/colours/permissions'
 import { PRODUCT_BRANDING_DEFINITIONS, PRODUCT_BRANDING_PERMISSIONS } from '../../product/branding-sets/permissions'
+// B-W2b-282: one approval engine (approvals.view | request | decide | rules.manage).
+import { APPROVALS_DEFINITIONS, APPROVALS_PERMISSIONS } from '../../approvals/permissions'
 // B-W2b-313: lots in depth (inventory.lots.manage: split into shade groups, regroup, attributes; inventory.trace.report).
 import { INVENTORY_LOTS_DEPTH_DEFINITIONS, INVENTORY_LOTS_DEPTH_PERMISSIONS } from '../../inventory/lots-depth/permissions'
 // B-W2a-35: the plant (machines, machine requests, maintenance jobs).
@@ -876,6 +878,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   // B-W2b-247: the colour library and the branding sets (area `product`, declared above).
   PRODUCT_COLOURS_DEFINITIONS,
   PRODUCT_BRANDING_DEFINITIONS,
+  // B-W2b-282: one approval engine.
+  APPROVALS_DEFINITIONS,
   // B-W2b-313: lots in depth (area `inventory`, declared above).
   INVENTORY_LOTS_DEPTH_DEFINITIONS,
 ])
@@ -1174,6 +1178,8 @@ for (const name of CLAIMS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)
 for (const name of PORTAL_SAMPLES_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.partner !== true) throw new Error(`${name} is a partner permission but not declared as one`)
 // B-W2b-247: the colour library and the branding sets.
 for (const name of [...PRODUCT_COLOURS_PERMISSIONS, ...PRODUCT_BRANDING_PERMISSIONS]) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-282: one approval engine.
+for (const name of APPROVALS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-313: lots in depth.
 for (const name of INVENTORY_LOTS_DEPTH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {

@@ -49,8 +49,9 @@ const siteA1 = idOf('site:A1')
 const siteB1 = idOf('site:B1')
 const P1 = idOf('party:P1')
 
-const PEOPLE = { manager: newId(), quality: newId(), sales: newId() } as const
-const ROLES = { manager: 'production_manager', quality: 'quality_inspector', sales: 'sales' } as const
+// comanager: a second production manager who holds every right of the area (B-W2b-F24).
+const PEOPLE = { manager: newId(), quality: newId(), sales: newId(), comanager: newId() } as const
+const ROLES = { manager: 'production_manager', quality: 'quality_inspector', sales: 'sales', comanager: 'production_manager' } as const
 const MANAGE: Permission[] = [
   'product.changes.view',
   'product.changes.request',
@@ -74,6 +75,7 @@ const office = (actorId: string, permissions: Permission[]): SessionContext => (
 const floorAt = (siteId: string): SessionContext => ({ audience: 'floor', tenantId: T, actorId: newId(), siteId, deviceId: newId(), grants: [grant(['floor.work', 'production.scan'] as Permission[], [siteId])] })
 const SESSIONS: Record<string, SessionContext> = {
   manager: office(PEOPLE.manager, MANAGE),
+  comanager: office(PEOPLE.comanager, MANAGE),
   quality: office(PEOPLE.quality, ['product.changes.view', 'product.changes.request', 'product.changes.approve', 'workorders.view', 'home.view'] as Permission[]),
   sales: office(PEOPLE.sales, ['product.changes.view', 'product.changes.request', 'home.view'] as Permission[]),
   viewer: office(newId(), ['product.changes.view'] as Permission[]),
@@ -340,5 +342,36 @@ describe('Changes & versions: released versions and the approver picker', () => 
     expect(people.find((person: Json) => person.id === PEOPLE.quality)).toEqual({ id: PEOPLE.quality, name: 'Made-up quality' })
     await no('quality', 'GET', `/product/change-orders/${draft.id}/approver-options`, undefined, 403)
     expect((await ok('viewer', 'GET', '/product/change-orders?status=DRAFT')).rows.find((row: Json) => row.id === draft.id)).toMatchObject({ reason: 'Made-up.' })
+  })
+})
+
+// B-W2b-F24 (Owner W2b-5 Q3: nobody approves their own work, the Owner included): the four eyes cover who named the approver
+// and who raised a request the change order carries.
+describe('nobody decides a change order they named themselves to, or one carrying their own request (B-W2b-F24)', () => {
+  it('a co-manager with every right is refused SELF_NAMED and OWN_REQUEST; named by another person, a third person decides', async () => {
+    const raised = (await ok('comanager', 'POST', '/product/change-requests', { styleId: jacket2, companyId: companyA, source: 'OFFICE', title: 'Wider cuff tab (made-up)', reason: 'Made-up.' }, 201)).changeRequest
+    expect(raised.createdById).toBe(PEOPLE.comanager)
+    let eco = (await ok('manager', 'POST', '/product/change-orders', { styleId: jacket2, companyId: companyA, title: 'Wider cuff tab (made-up)', reason: 'Made-up.', requestIds: [raised.id] }, 201)).changeOrder
+    eco = (await ok('manager', 'POST', `/product/change-orders/${eco.id}/draft-revision`, { version: eco.version })).changeOrder
+    // Naming: the co-manager (not the author) cannot name themselves; the author names the quality inspector.
+    expect(refusal(await no('comanager', 'PUT', `/product/change-orders/${eco.id}/approvers`, { version: eco.version, approvers: [{ userId: PEOPLE.comanager }] }, 409))).toBe('refusal/SELF_NAMED')
+    eco = (await ok('manager', 'PUT', `/product/change-orders/${eco.id}/approvers`, { version: eco.version, approvers: [{ userId: PEOPLE.quality, required: true }] })).changeOrder
+    eco = (await ok('manager', 'POST', `/product/change-orders/${eco.id}/submit`, { version: eco.version })).changeOrder
+    // An approval the co-manager named themselves to before this rule (written past the API) is never theirs to decide.
+    await admin(`INSERT INTO "ChangeApproval" (id, "tenantId", "changeOrderId", "approverId", required, "createdAt", "updatedAt", "createdById") VALUES ($1, $2, $3, $4, false, now(), now(), $4)`, [newId(), T, eco.id, PEOPLE.comanager])
+    eco = await orderOf(eco.id)
+    expect(refusal(await no('comanager', 'POST', `/product/change-orders/${eco.id}/decide`, { version: eco.version, decision: 'APPROVED' }, 409))).toBe('refusal/SELF_NAMED')
+    // Named by the author instead, the co-manager still raised the request the change order carries.
+    eco = (await ok('manager', 'PUT', `/product/change-orders/${eco.id}/approvers`, { version: eco.version, approvers: [{ userId: PEOPLE.quality, required: true }] })).changeOrder
+    eco = (await ok('manager', 'PUT', `/product/change-orders/${eco.id}/approvers`, { version: eco.version, approvers: [{ userId: PEOPLE.quality, required: true }, { userId: PEOPLE.comanager, required: false }] })).changeOrder
+    expect((await ok('comanager', 'GET', `/product/change-orders/${eco.id}`)).changeOrder.actions.decide).toMatchObject({ allowed: false, refusal: { code: 'OWN_REQUEST' } })
+    const own = await no('comanager', 'POST', `/product/change-orders/${eco.id}/decide`, { version: eco.version, decision: 'APPROVED' }, 409)
+    expect(refusal(own)).toBe('refusal/OWN_REQUEST')
+    expect(own.message).toBe(`You raised change request ${raised.number}, which change order ${eco.number} carries: a person who did not ask for the change decides it (four eyes).`)
+    // A third person decides: the order is approved and the request accepted by them.
+    expect((await ok('quality', 'GET', `/product/change-orders/${eco.id}`)).changeOrder.actions.decide).toMatchObject({ allowed: true })
+    eco = (await ok('quality', 'POST', `/product/change-orders/${eco.id}/decide`, { version: eco.version, decision: 'APPROVED' })).changeOrder
+    expect(eco).toMatchObject({ status: 'APPROVED', approvals: { approved: 1, required: 1 } })
+    expect(eco.requestsList).toEqual([expect.objectContaining({ id: raised.id, status: 'ACCEPTED', decidedById: PEOPLE.quality })])
   })
 })

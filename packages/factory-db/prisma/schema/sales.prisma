@@ -89,6 +89,8 @@ model Quote {
   versions QuoteVersion[]
   // W2b portal-sales.prisma (wave 21/22): the portal order requests it was made from.
   portalOrderRequests PortalOrderRequest[] @relation("PortalOrderRequestQuote")
+  // W2b-5 sales-intake.prisma (wave 37/44): the inquiry it answers.
+  inquiries           Inquiry[]
 
   @@unique([tenantId, companyId, number])
   // The target of the versions' reference: a version names its quote's party.
@@ -187,6 +189,9 @@ model QuoteVersion {
   marginFloorBreached Boolean            @default(false)
   /// What changed against the previous version, as the party reads it.
   changeNote          String?
+  /// W2b-5 (schema wave 37/44, SAL-277): the season it is for, an OPEN season of the quote's company when named; fixed with
+  /// the rest of the version once it is sent.
+  seasonId            String?            @db.Uuid
   /// SHA-256 (hex) of the PDF the party received (the version's StoredFile); required from SENT on.
   documentSha256      String?
   sentAt              DateTime?          @db.Timestamptz(3)
@@ -214,6 +219,9 @@ model QuoteVersion {
   acceptances     QuoteAcceptance[]
   depositRequests DepositRequest[]
   salesOrders     SalesOrder[]
+  // W2b-5 sales-intake.prisma (wave 37/44): its season (Restrict, not Prisma's SetNull default: that would also clear
+  // tenantId).
+  season          Season?           @relation(fields: [tenantId, seasonId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([tenantId, quoteId, revision])
   // The target of the references from the version's lines, approvals, acceptances, deposit requests and orders.
@@ -568,6 +576,8 @@ model SalesOrder {
   /// Set when an amendment changed the net total after acceptance (the party must accept it again); cleared when it
   /// does.
   reapprovalNeededAt  DateTime?        @db.Timestamptz(3)
+  /// W2b-5 (schema wave 37/44, SAL-277): the season it is for, an OPEN season of its own company when named.
+  seasonId            String?          @db.Uuid
   /// Why it was cancelled; set exactly when CANCELLED.
   cancelReason        String?
   /// When it was closed or cancelled.
@@ -604,6 +614,9 @@ model SalesOrder {
   // W2b portal-sales.prisma (wave 21/22): the portal order requests it was made from, its change and cancel requests.
   portalOrderRequests PortalOrderRequest[] @relation("PortalOrderRequestOrder")
   changeRequests      OrderChangeRequest[] @relation("OrderChangeRequestOrder")
+  // W2b-5 sales-intake.prisma (wave 37/44): its season, of its own company (Restrict, not Prisma's SetNull default: that
+  // would also clear tenantId and companyId).
+  season              Season?              @relation(fields: [tenantId, companyId, seasonId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([tenantId, companyId, number])
   // The target of the references from the order's lines and deposit requests: the same company and party.

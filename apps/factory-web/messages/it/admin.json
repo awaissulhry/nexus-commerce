@@ -1610,7 +1610,8 @@
     "people": "Persone",
     "safety": "Sicurezza sul lavoro",
     "partners": "Portali dei partner",
-    "portal": "Portale (partner)"
+    "portal": "Portale (partner)",
+    "approvals": "Approvazioni"
   },
   "perm": {
     "companies_view": "Vedere le società e se possono fatturare",
@@ -1887,6 +1888,10 @@
     "alerts_view": "Vedere gli avvisi dei record che vedi e le regole di eccezione",
     "alerts_handle": "Prendere in carico, assegnare, posticipare e risolvere gli avvisi",
     "alerts_rules_manage": "Modificare e aggiungere regole di eccezione",
+    "approvals_view": "Vedere le richieste di approvazione che hai fatto, quelle che aspettano te, lo storico delle approvazioni di un record e le regole di approvazione",
+    "approvals_request": "Chiedere un’approvazione su un record che puoi modificare e ritirare la tua richiesta",
+    "approvals_decide": "Approvare o rifiutare una richiesta rivolta a te o al tuo ruolo (mai la tua)",
+    "approvals_rules_manage": "Scrivere le regole di approvazione e attivarle o disattivarle",
     "accounting_view": "Vedere le esportazioni contabili, i controlli del mese, le righe Intrastat e le chiusure di periodo",
     "accounting_export": "Creare e riesportare il lotto contabile numerato di un mese",
     "accounting_lock": "Chiudere un mese (provvisoria o definitiva) e riaprire una chiusura provvisoria",

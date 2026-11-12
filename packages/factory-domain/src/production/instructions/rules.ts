@@ -241,6 +241,8 @@ export interface PublishFacts {
   readonly number: number
   readonly status: VersionStatus
   readonly authorId: string
+  /** Everyone who saved a change to the draft (its audit rows; the author may be among them). */
+  readonly editorIds: readonly string[]
   readonly approverId: string
   readonly instructionNumber: string
   readonly instructionActive: boolean
@@ -255,6 +257,8 @@ export function publishRefusal(facts: PublishFacts): Refusal | null {
   const v = `Version ${facts.number} of ${facts.instructionNumber}`
   if (facts.status !== 'DRAFT') return { code: 'NOT_DRAFT', message: facts.status === 'DISCARDED' ? `${v} was discarded: a discarded draft is never published.` : `${v} is ${facts.status.toLowerCase()} already: a published version never changes.` }
   if (facts.authorId === facts.approverId) return { code: 'OWN_DRAFT', message: `${v} is your own draft: another person approves it (four eyes).` }
+  // Nobody approves their own work, the Owner included (Owner W2b-5 Q3): a person who changed the draft is never its approver.
+  if (facts.editorIds.includes(facts.approverId)) return { code: 'EDITED_DRAFT', message: `You changed version ${facts.number} of ${facts.instructionNumber}: a person who neither wrote nor changed it approves it (four eyes).` }
   if (!facts.instructionActive) return { code: 'ARCHIVED', message: `${facts.instructionNumber} is archived: restore it before publishing a version.` }
   if (facts.steps === 0) return { code: 'NO_STEPS', message: `${v} has no step: write at least one before it goes to the floor.` }
   if (facts.number > 1 && !(facts.changeNote ?? '').trim()) return { code: 'CHANGE_NOTE_MISSING', message: `${v} needs a change note: say what changed from the version before, for the people who saw it.` }
