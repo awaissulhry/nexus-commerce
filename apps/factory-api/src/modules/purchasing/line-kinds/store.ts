@@ -133,6 +133,7 @@ export function checkLineOf(facts: LineKindFacts, line: KindLine, supplierPartyI
     certificateId: kind?.certificateId ?? null,
     certificate: certificateCheckOf(facts, line, kind?.certificateId ?? null, supplierPartyId, day),
     coverable: defaultCertificateOf(coverages, supplierPartyId, day) !== null,
+    registered: coverages.some((coverage) => coverage.status === 'ACTIVE'),
     variant: variant && kind?.variantCode ? { code: kind.variantCode, problem: variant.problem } : null,
   }
 }

@@ -131,7 +131,7 @@ describe('colour and size variants of one material (SCM-186)', () => {
     expect(changed.variants.find((variant: Json) => variant.code === 'SEED-PRO-300-S')).toMatchObject({ supplierCode: 'ART-300-S', version: G.small.version + 1 })
     G.small = changed.variants.find((variant: Json) => variant.code === 'SEED-PRO-300-S')
     expect(await eventsOf(protector)).toContain('material.updated')
-    const rows = await admin(`SELECT "recordType", action FROM "AuditLog" WHERE "recordId" = $1 ORDER BY "occurredAt", id`, [protector])
+    const rows = await admin(`SELECT "recordType", action FROM "AuditLog" WHERE "recordId" = $1 ORDER BY at, id`, [protector])
     expect(rows.map((row) => row.action)).toEqual(expect.arrayContaining(['product.materials.addVariants', 'product.materials.updateVariant']))
   })
 
@@ -191,7 +191,7 @@ describe('a purchase order by kind (SCM-076, SCM-077, SCM-186)', () => {
     const edit = await as('PATCH', `${orderUrl(orderId)}/lines/${liningLine.id}`, { version: record.version, quantity: '4' }, 409)
     expect(edit.error.message).toMatch(/^Line 10 is bought by rolls \(3 rolls × 50 m × 150 cm\): change its rolls, or clear them first/)
     const notPpe = await as('PUT', `${orderUrl(orderId)}/lines/${liningLine.id}/kind`, { version: view.version, certificateId: protectorCertificate }, 400)
-    expect(notPpe.error.message).toBe('SEED-LIN-200 is no PPE component: only a protector’s line names a certificate.')
+    expect(notPpe.error.message).toBe("SEED-LIN-200 is no PPE component: only a protector's line names a certificate.")
     const other = await as('PUT', `${orderUrl(orderId)}/lines/${protectorLine.id}/kind`, { version: view.version, certificateId: jacketCertificate }, 409)
     expect(other.error.message).toMatch(/^Certificate SEED-CERT-0001 \(EN 17092-3:2020\) does not cover SEED-PRO-300/)
     const badRolls = await as('PUT', `${orderUrl(orderId)}/lines/${protectorLine.id}/kind`, { version: view.version, rolls: { count: 2 } }, 400)

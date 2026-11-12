@@ -25,6 +25,8 @@ export interface KindCheckLine {
   readonly certificate: { readonly check: LineCertificateCheck; readonly facts: NamedCertificate | null } | null
   /** The register has a certificate that covers the material from this supplier today (one could be named). */
   readonly coverable: boolean
+  /** The register has an active coverage of the material at all (from any supplier, valid or not). */
+  readonly registered: boolean
   /** The variant the line buys and why it no longer may (null: it may), or null when it buys none. */
   readonly variant: { readonly code: string; readonly problem: string | null } | null
 }
@@ -45,7 +47,8 @@ export function lineKindChecks(lines: readonly KindCheckLine[], sample: boolean)
         })
       }
     }
-    if (line.ppe && line.certificateId === null) {
+    // A register that knows nothing of the material asks nothing (W1's check at receipt stays the only one).
+    if (line.ppe && line.certificateId === null && (line.coverable || line.registered)) {
       const blocks = line.coverable && !sample
       checks.push({
         code: 'PPE_NO_CERTIFICATE',
@@ -53,9 +56,9 @@ export function lineKindChecks(lines: readonly KindCheckLine[], sample: boolean)
         path: `${at}/certificateId`,
         message: blocks
           ? `Line ${line.seq} (${line.itemCode}) is a PPE component: name the certificate the supplier delivers it against (the register has one that covers it from this supplier).`
-          : sample
+          : line.coverable
             ? `Line ${line.seq} (${line.itemCode}) is a PPE component on a sample order and names no certificate: its lots are checked at receipt.`
-            : `Line ${line.seq} (${line.itemCode}) is a PPE component, and no certificate of the register covers it from this supplier: its lots are checked at receipt only.`,
+            : `Line ${line.seq} (${line.itemCode}) is a PPE component: the register's certificates of it do not cover it from this supplier today (another supplier's, or no longer valid), so its lots are checked at receipt only.`,
       })
     }
     if (line.certificate) {

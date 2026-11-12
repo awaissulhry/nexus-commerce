@@ -4,8 +4,9 @@
  *
  *   ROLLS_NOT_THE_QUANTITY     a line bought by rolls no longer is its rolls × length (× width) in its unit (SCM-076)
  *   PPE_NO_CERTIFICATE         a PPE component's line (a protector) names no certificate while the register has one that
- *                              covers it from this supplier (SCM-077); a warning when the register has none, or on a sample
- *                              order (development parts are often not certified yet)
+ *                              covers it from this supplier (SCM-077); a warning on a sample order (development parts are
+ *                              often not certified yet), or when the register's certificates of it cover it only from another
+ *                              supplier or no longer hold; nothing when the register knows nothing of it (W1's check at receipt)
  *   PPE_CERTIFICATE_NOT_VALID  the certificate a line names no longer holds today (suspended, withdrawn, expired), no longer
  *                              covers the line's material, or covers it only as bought from another supplier
  *   PPE_CERTIFICATE_ENDS_EARLY a warning: the certificate ends before the line's need date (the goods may come after it)

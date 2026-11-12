@@ -112,7 +112,7 @@ describe('variants of one material (SCM-186)', () => {
 })
 
 describe('the send and the PDF', () => {
-  const base: KindCheckLine = { seq: 10, itemCode: 'TX-01', quantity: '100', uom: 'M', needDate: '2026-12-01', rolls: null, ppe: false, certificateId: null, certificate: null, coverable: false, variant: null }
+  const base: KindCheckLine = { seq: 10, itemCode: 'TX-01', quantity: '100', uom: 'M', needDate: '2026-12-01', rolls: null, ppe: false, certificateId: null, certificate: null, coverable: false, registered: false, variant: null }
   it('the codes are the send check codes', () => {
     for (const code of LINE_KIND_SEND_CHECK_CODES) expect(SEND_CHECK_CODES).toContain(code)
   })
@@ -123,8 +123,10 @@ describe('the send and the PDF', () => {
     ])
     const ppe = { ...base, itemCode: 'PRO-1', uom: 'PCS' as const, ppe: true }
     expect(lineKindChecks([{ ...ppe, coverable: true }], false).map((check) => [check.code, check.severity])).toEqual([['PPE_NO_CERTIFICATE', 'BLOCKS']])
-    expect(lineKindChecks([{ ...ppe, coverable: true }], true).map((check) => check.severity)).toEqual(['WARNING'])
-    expect(lineKindChecks([ppe], false).map((check) => check.severity)).toEqual(['WARNING'])
+    expect(lineKindChecks([{ ...ppe, coverable: true, registered: true }], true).map((check) => check.severity)).toEqual(['WARNING'])
+    // The register knows the protector only from another supplier: a warning; it knows nothing of it: no check (W1).
+    expect(lineKindChecks([{ ...ppe, registered: true }], false).map((check) => [check.code, check.severity])).toEqual([['PPE_NO_CERTIFICATE', 'WARNING']])
+    expect(lineKindChecks([ppe], false)).toEqual([])
     const facts = { id: 'c', number: 'N-1', standard: 'EN 1621-1', status: 'VALID' as const, validFrom: '2025-01-01', validTo: '2026-11-30' }
     expect(lineKindChecks([{ ...ppe, certificateId: 'c', certificate: { check: { state: 'HOLDS', why: null, coverageId: 'a' }, facts } }], false).map((check) => [check.code, check.severity])).toEqual([['PPE_CERTIFICATE_ENDS_EARLY', 'WARNING']])
     expect(lineKindChecks([{ ...ppe, certificateId: 'c', certificate: { check: { state: 'OTHER_SUPPLIER', why: null, coverageId: null }, facts } }], false)[0]).toMatchObject({ code: 'PPE_CERTIFICATE_NOT_VALID', severity: 'BLOCKS' })
