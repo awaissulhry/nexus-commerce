@@ -253,6 +253,7 @@ export async function callBack(caller: CommandCaller, partyId: string, accountId
     })
     tools.audit({ action: 'purchasing.bank.callBack', recordType: 'SupplierBankAccount', recordId: account.id, companyId: supplier.companyId, after: { kind: onFile!.kind, onFileId: onFile!.id, phone: body.phone.trim() } })
     tools.emit(eventFor(calledBackEvent, { subject: account.id, companyId: supplier.companyId, payload: { accountId: account.id, partyId: supplier.id, approvalTaskId: null } }))
+    return { accountId: account.id }
   })
   return getBank(caller, partyId)
 }
@@ -300,6 +301,7 @@ export async function refuse(caller: CommandCaller, partyId: string, accountId: 
     if (!isOpen(account.status as BankAccountStatus)) throw new DomainError('conflict', BANK_REFUSALS.notOpen, [{ path: 'accountId', message: BANK_REFUSALS.notOpen }])
     await withdrawPending(tools, { kind: KIND, recordId: account.id, byId: context.actorId })
     await refuseInCommand(tools, account, supplier.companyId, context.actorId, reason.reason, null)
+    return { accountId: account.id }
   })
   return getBank(caller, partyId)
 }
@@ -319,6 +321,7 @@ export async function retire(caller: CommandCaller, partyId: string, accountId: 
     await tools.tx.supplierBankAccount.update({ where: { id: account.id }, data: { status: 'RETIRED', retiredAt: tools.now, retireReason: reason.reason, updatedAt: tools.now }, select: { id: true } })
     tools.audit({ action: 'purchasing.bank.retire', recordType: 'SupplierBankAccount', recordId: account.id, companyId: supplier.companyId, before: { status: 'ACTIVE' }, after: { status: 'RETIRED', reason: reason.reason } })
     tools.emit(eventFor(retiredEvent, { subject: account.id, companyId: supplier.companyId, payload: { accountId: account.id, partyId: supplier.id } }))
+    return { accountId: account.id }
   })
   return getBank(caller, partyId)
 }
@@ -337,6 +340,7 @@ export async function reveal(caller: CommandCaller, partyId: string, accountId: 
     const account = await readAccount(tools.tx, accountId)
     if (!account || account.partyId !== supplier.id) throw new NotFoundError('Bank account not found.')
     tools.audit({ action: 'purchasing.bank.reveal', recordType: 'SupplierBankAccount', recordId: account.id, companyId: supplier.companyId, after: { masked: maskedIban(account.ibanCountry, account.ibanLast4) } })
+    return { accountId: account.id }
   })
   const row = await caller.withClient((client) => client.supplierBankAccount.findUnique({ where: { id: accountId }, select: { id: true, iban: true } }))
   if (!row) throw new NotFoundError('Bank account not found.')

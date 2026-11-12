@@ -148,6 +148,7 @@ export async function askOverride(caller: CommandCaller, orderId: string, body: 
       after: { requestLineId: lineId, fingerprint: answer.fingerprint, reason: reason.reason, held: answer.blocks.map((entry) => ({ kind: entry.kind, seqs: [...entry.seqs], itemCodes: [...entry.itemCodes], ruleId: entry.ruleId, state: entry.state })) },
     })
     tools.emit(eventFor(askedEvent, { subject: order.id, companyId: order.companyId, siteId: order.siteId, payload: { ...party(order), held: answer.blocks.length } }))
+    return { requestLineId: lineId }
   })
   return getCompliance(caller, orderId)
 }
@@ -178,6 +179,7 @@ export async function decideOverride(caller: CommandCaller, orderId: string, bod
     const lineId = await historyLine(tools, { companyId: order.companyId, recordType: 'PurchaseOrder', recordId: order.id, action: body.decision, byId: context.actorId, words: words.words })
     tools.audit({ action: DECIDE_ACTION, recordType: 'PurchaseOrder', recordId: order.id, companyId: order.companyId, siteId: order.siteId, after: { requestLineId: newest.lineId, decisionLineId: lineId, decision: body.decision, fingerprint: newest.fingerprint, words: words.words } })
     tools.emit(eventFor(decidedEvent, { subject: order.id, companyId: order.companyId, siteId: order.siteId, payload: { ...party(order), decision: body.decision } }))
+    return { decisionLineId: lineId }
   })
   return getCompliance(caller, orderId)
 }
@@ -197,6 +199,7 @@ export async function withdrawOverride(caller: CommandCaller, orderId: string, i
     await tools.tx.approvalEvent.create({ data: { id: lineId, companyId: order.companyId, taskId: null, recordType: 'PurchaseOrder', recordId: order.id, action: 'WITHDRAWN', byId: context.actorId, at: tools.now, createdAt: tools.now, createdById: context.actorId }, select: { id: true } })
     tools.audit({ action: WITHDRAW_ACTION, recordType: 'PurchaseOrder', recordId: order.id, companyId: order.companyId, siteId: order.siteId, after: { requestLineId: newest.lineId, withdrawLineId: lineId } })
     tools.emit(eventFor(withdrawnEvent, { subject: order.id, companyId: order.companyId, siteId: order.siteId, payload: party(order) }))
+    return { withdrawLineId: lineId }
   })
   return getCompliance(caller, orderId)
 }

@@ -314,6 +314,7 @@ export async function createQualification(caller: CommandCaller, partyId: string
     })
     tools.audit({ action: 'purchasing.qualification.create', recordType: 'SupplierQualification', recordId: id, companyId: body.companyId, after: { partyId: supplier.id, status: 'PENDING', scope: scope.scope, validFrom: body.validFrom ?? null, validUntil: body.validUntil ?? null, evidence } })
     emitChanged(tools, { id, companyId: body.companyId, partyId: supplier.id }, 'PENDING', 'CREATED')
+    return { done: true }
   })
   return { ...(await listQualifications(caller, partyId)), qualificationId: id }
 }
@@ -362,6 +363,7 @@ export async function updateQualification(caller: CommandCaller, partyId: string
     })
     tools.audit({ action: 'purchasing.qualification.update', recordType: 'SupplierQualification', recordId: row.id, companyId: row.companyId, before: { scope: current, evidence: evidenceOf(row.evidence) }, after: { scope: scope.scope, validFrom, validUntil, evidence: body.evidence ?? evidenceOf(row.evidence) } })
     emitChanged(tools, row, 'PENDING', 'UPDATED')
+    return { done: true }
   })
   return listQualifications(caller, partyId)
 }
@@ -393,6 +395,7 @@ export async function decideQualification(caller: CommandCaller, partyId: string
     await tools.tx.supplierQualification.update({ where: { id: row.id }, data: { status: body.decision, decidedAt: tools.now, decidedById: context.actorId, conditions, refuseReason, updatedAt: tools.now }, select: { id: true } })
     tools.audit({ action: 'purchasing.qualification.decide', recordType: 'SupplierQualification', recordId: row.id, companyId: row.companyId, before: { status: row.status }, after: { status: body.decision, validFrom, validUntil, conditions, refuseReason } })
     emitChanged(tools, row, body.decision, 'DECIDED')
+    return { done: true }
   })
   return listQualifications(caller, partyId)
 }
@@ -407,6 +410,7 @@ export async function suspendQualification(caller: CommandCaller, partyId: strin
     await tools.tx.supplierQualification.update({ where: { id: row.id }, data: { status: 'SUSPENDED', suspendedAt: tools.now, suspendReason: reason.reason, updatedAt: tools.now }, select: { id: true } })
     tools.audit({ action: 'purchasing.qualification.suspend', recordType: 'SupplierQualification', recordId: row.id, companyId: row.companyId, before: { status: row.status }, after: { status: 'SUSPENDED', reason: reason.reason } })
     emitChanged(tools, row, 'SUSPENDED', 'SUSPENDED')
+    return { done: true }
   })
   return listQualifications(caller, partyId)
 }
@@ -420,6 +424,7 @@ export async function liftQualification(caller: CommandCaller, partyId: string, 
     await tools.tx.supplierQualification.update({ where: { id: row.id }, data: { status: back, suspendedAt: null, suspendReason: null, updatedAt: tools.now }, select: { id: true } })
     tools.audit({ action: 'purchasing.qualification.lift', recordType: 'SupplierQualification', recordId: row.id, companyId: row.companyId, before: { status: 'SUSPENDED', reason: row.suspendReason }, after: { status: back } })
     emitChanged(tools, row, back, 'LIFTED')
+    return { done: true }
   })
   return listQualifications(caller, partyId)
 }
@@ -434,6 +439,7 @@ export async function withdrawQualification(caller: CommandCaller, partyId: stri
     await tools.tx.supplierQualification.update({ where: { id: row.id }, data: { status: 'WITHDRAWN', withdrawnAt: tools.now, withdrawReason: reason.reason, suspendedAt: null, suspendReason: null, updatedAt: tools.now }, select: { id: true } })
     tools.audit({ action: 'purchasing.qualification.withdraw', recordType: 'SupplierQualification', recordId: row.id, companyId: row.companyId, before: { status: row.status }, after: { status: 'WITHDRAWN', reason: reason.reason } })
     emitChanged(tools, row, 'WITHDRAWN', 'WITHDRAWN')
+    return { done: true }
   })
   return listQualifications(caller, partyId)
 }
