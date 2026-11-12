@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { CalendarClock, Download, FileText, MoreHorizontal, PackageCheck, PauseCircle, Search, SlidersHorizontal, Upload, X } from 'lucide-react'
-import { Banner, EmptyState, Field, Menu, MetricStrip } from '@nexus/ui/components'
+import { ArrowRightLeft, CalendarClock, Download, FileText, MoreHorizontal, PackageCheck, PauseCircle, Search, SlidersHorizontal, Upload, X } from 'lucide-react'
+import { Banner, DetailPopover, EmptyState, Field, Menu, MetricStrip } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, Input, Pill, Select } from '@nexus/ui/primitives'
 import { DateField, Modal } from '../../../../lib/i18n/ds-parts'
@@ -14,13 +14,21 @@ import { INTL_LOCALE } from '../../../../lib/i18n/locales'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { OFFICE_PAGES } from '../../../../shell/nav/office-nav'
 import { recordAddress } from '../../../../lib/records/record-links'
-import { money, movesHref, unitCost, unitTotals } from '../../../_shared/stock/model'
+import { money, movesHref, quantity, unitCost, unitTotals } from '../../../_shared/stock/model'
 import { Dual, NoAccess, QualityPill, Qty, ReadFailed, StockMessages, useUnitWord } from '../../../_shared/stock/parts'
 import { AdjustDialog } from '../adjust/AdjustDialog'
 import type { AdjustActions } from '../adjust/model'
 import type { HoldActions } from '../daily/dialog-model'
 import { HoldDialog } from '../daily/HoldDialog'
 import { asOfHeldKey, asOfWall, DAILY_NAMESPACE, END_OF_DAY, reasonLabel, wallOf } from '../daily/model'
+// B-W2b-327: why is it this number, In transit, Move…, Below minimum, a waiting adjustment.
+import { DEPTH_NAMESPACE, isInTransit, moveStartHeldKey, placesById, transitHref, type Loaded, type MoveActions } from '../depth/model'
+import type { Why } from '../depth/api'
+import { WaitingBanner } from '../depth/view/AdjustParts'
+import { LowList } from '../depth/view/LowList'
+import { MoveDialog } from '../depth/view/MoveDialog'
+import { WhyNumber } from '../depth/view/WhyNumber'
+import '../depth/depth.css'
 import {
   adjustHeldKey,
   dailyCan,
@@ -63,18 +71,58 @@ export type { StockPageActions, StockPageModel } from '../model'
  * of a past date (the pill, the read-only notice, every change held); the valued stock list as of the day (PDF, cost
  * grain) in a new tab; below 720 px the rows are cards.
  */
-export function StockView({ model, actions, adjustActions, holdActions }: { model: StockPageModel; actions?: StockPageActions; adjustActions?: AdjustActions; holdActions?: HoldActions }) {
+export function StockView({ model, actions, adjustActions, holdActions, moveActions }: { model: StockPageModel; actions?: StockPageActions; adjustActions?: AdjustActions; holdActions?: HoldActions; moveActions?: MoveActions }) {
   return (
-    <StockMessages extra={['warehouse-stock', DAILY_NAMESPACE]}>
-      <Stock model={model} actions={actions} adjustActions={adjustActions} holdActions={holdActions} />
+    <StockMessages extra={['warehouse-stock', DAILY_NAMESPACE, DEPTH_NAMESPACE]}>
+      <Stock model={model} actions={actions} adjustActions={adjustActions} holdActions={holdActions} moveActions={moveActions} />
     </StockMessages>
+  )
+}
+
+/**
+ * B-W2b-327 (design st-grid "every quantity cell is a link: W2b opens the WhyNumber popover first"): what the quantity
+ * cells read beside their row — the open "why is it this number" and its read — kept in a context so the grid's cells
+ * keep their place while it loads.
+ */
+interface WhyCellContext {
+  prefix: string
+  why: { lineId: string; state: Loaded<Why> } | null
+  onWhy?: (line: StockLine | null) => void
+  onRetry?: () => void
+  title: string
+}
+const WhyContext = createContext<WhyCellContext>({ prefix: '', why: null, title: '' })
+
+/** The on-hand figure: a button that opens "Why is it 84,20 m²?" (key w on a focused row). */
+function OnHandCell({ data }: ICellRendererParams<StockLine>) {
+  const context = useContext(WhyContext)
+  const t = useT(DEPTH_NAMESPACE)
+  const s = useT('stock')
+  const locale = useLocale()
+  if (!data) return null
+  const open = context.why?.lineId === data.id
+  const figure = data.item.tracking === 'HIDE' && !data.hide ? <Dual hides={data.hides} area={data.onHand} uom={data.item.baseUom} /> : <Qty value={data.onHand} uom={data.item.baseUom} strong />
+  const words = `${quantity(data.onHand, locale)} ${s(`uom.${data.item.baseUom}`)}`
+  return (
+    <DetailPopover
+      trigger={<span className="fw-wd-why-trigger">{figure}</span>}
+      triggerLabel={t('wd.why.open', { quantity: words })}
+      triggerClassName="fw-wd-why-button"
+      label={context.title}
+      hoverDelay={0}
+      open={open}
+      onOpenChange={(next) => context.onWhy?.(next ? data : null)}
+    >
+      {open ? <WhyNumber state={context.why!.state} prefix={context.prefix} onRetry={context.onRetry} /> : null}
+    </DetailPopover>
   )
 }
 
 const focusedRowId = (): string | null => (typeof document === 'undefined' ? null : ((document.activeElement as HTMLElement | null)?.closest('.ag-row')?.getAttribute('row-id') ?? null))
 
-function Stock({ model, actions, adjustActions, holdActions }: { model: StockPageModel; actions?: StockPageActions; adjustActions?: AdjustActions; holdActions?: HoldActions }) {
+function Stock({ model, actions, adjustActions, holdActions, moveActions }: { model: StockPageModel; actions?: StockPageActions; adjustActions?: AdjustActions; holdActions?: HoldActions; moveActions?: MoveActions }) {
   const t = useT('warehouse-stock')
+  const w = useT(DEPTH_NAMESPACE)
   const s = useT('stock')
   const d = useT(DAILY_NAMESPACE)
   const lists = useT('lists')
@@ -115,8 +163,16 @@ function Stock({ model, actions, adjustActions, holdActions }: { model: StockPag
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null
-      if (event.metaKey || event.ctrlKey || event.altKey || help || model.adjust || model.hold || model.asOfDialog) return
+      if (event.metaKey || event.ctrlKey || event.altKey || help || model.adjust || model.hold || model.asOfDialog || model.move) return
       if (target && (target.closest('input, textarea, select, [contenteditable="true"], [role="dialog"], [role="menu"]') || target.isContentEditable)) return
+      // B-W2b-327: w = why is this number (the focused row's quantity).
+      if (event.key === 'w' && address.tile !== 'low') {
+        const line = lineOf(focusedRowId()) ?? adjustLine
+        if (!line) return
+        event.preventDefault()
+        actions?.onWhy?.(line)
+        return
+      }
       if (event.key !== 'a') return
       const line = lineOf(focusedRowId()) ?? adjustLine
       if (!line || adjustHeldKey(line, can, pastDate)) return
@@ -131,6 +187,9 @@ function Stock({ model, actions, adjustActions, holdActions }: { model: StockPag
   const holdWords = (line: StockLine) => (line.hold ? t('st.heldBy', { reason: reasonLabel(holdReasons, line.hold.reasonCode, locale), day: formatDate(line.hold.placedAt, place) }) : null)
   const reservationsOf = (line: StockLine) =>
     (model.reservations ?? []).filter((entry) => entry.siteId === line.siteId && entry.itemId === line.item.id && entry.itemColourId === (line.colour?.id ?? null) && (entry.lotId === null || entry.lotId === (line.lot?.id ?? null))).reduce((sum, entry) => sum + entry.reservations, 0)
+  const places = useMemo(() => placesById(model.places), [model.places])
+  // B-W2b-327: Below minimum's words are this step's catalogue's.
+  const tileLabel = (tile: StockTile) => (tile === 'low' ? w('wd.low.tile') : t(`st.tile.${tile}`))
   const lotHref = (id: string) => `${model.prefix}${recordAddress({ type: 'Lot', id }, OFFICE_PAGES)}`
   const hideHref = (id: string) => `${model.prefix}${recordAddress({ type: 'Hide', id }, OFFICE_PAGES)}`
 
@@ -192,11 +251,16 @@ function Stock({ model, actions, adjustActions, holdActions }: { model: StockPag
           <span className="fw-st-sub">{several ? `${data.siteCode} · ${data.location.name}` : data.location.name}</span>
         </span>
       ) : null
-    const OnHandCell = ({ data }: ICellRendererParams<StockLine>) =>
+    // B-W2b-327 (design st-grid "In transit (W2b)"): a transfer's goods on the site's transit place, linked to Transfers.
+    const InTransitCell = ({ data }: ICellRendererParams<StockLine>) =>
       data ? (
-        <Link className="fw-st-link" href={movesHref(model.prefix, keyOf(data))} title={t('st.onHandLink')}>
-          {data.item.tracking === 'HIDE' && !data.hide ? <Dual hides={data.hides} area={data.onHand} uom={data.item.baseUom} /> : <Qty value={data.onHand} uom={data.item.baseUom} strong />}
-        </Link>
+        isInTransit(data, places) ? (
+          <Link className="fw-st-link" href={transitHref(model.prefix, data.siteId)} title={w('wd.transit.link')}>
+            <Qty value={data.onHand} uom={data.item.baseUom} />
+          </Link>
+        ) : (
+          <span className="fw-st-sub">—</span>
+        )
       ) : null
     const PastCell = () => (
       <span className="fw-st-sub" title={past}>
@@ -218,6 +282,8 @@ function Stock({ model, actions, adjustActions, holdActions }: { model: StockPag
     const AvailableCell = ({ data }: ICellRendererParams<StockLine>) => {
       if (!data) return null
       if (data.available === null) return <PastCell />
+      // B-W2b-327: goods in transit are not usable at the site until a transfer receives them.
+      if (isInTransit(data, places)) return <span className="fw-st-sub">{w('wd.transit.notHere')}</span>
       const below = Number(data.available) < 0
       return (
         <span className="fw-st-cell">
@@ -232,6 +298,7 @@ function Stock({ model, actions, adjustActions, holdActions }: { model: StockPag
       if (!data) return null
       const held = adjustHeldKey(data, can, pastDate)
       const holdHeld = holdHeldKey([data], daily, pastDate)
+      const moveHeld = moveStartHeldKey([data], can, pastDate)
       return (
         <Menu
           label={<MoreHorizontal size={16} aria-hidden />}
@@ -243,6 +310,8 @@ function Stock({ model, actions, adjustActions, holdActions }: { model: StockPag
             { id: 'moves', label: t('st.showMoves'), href: movesHref(model.prefix, keyOf(data)) },
             { id: 'adjust', label: t('st.adjustRow'), disabled: !!held, ...(held ? { description: t(held) } : {}), onSelect: () => !held && actions?.onAdjust?.(data) },
             { id: 'hold', label: t('st.holdRow'), disabled: !!holdHeld, ...(holdHeld ? { description: d(holdHeld) } : {}), onSelect: () => !holdHeld && actions?.onHold?.([data]) },
+            // B-W2b-327: Move… to another place of the site.
+            { id: 'move', label: w('wd.move.row'), disabled: !!moveHeld, ...(moveHeld ? { description: w(moveHeld) } : {}), onSelect: () => !moveHeld && actions?.onMove?.([data]) },
           ]}
         />
       )
@@ -253,6 +322,7 @@ function Stock({ model, actions, adjustActions, holdActions }: { model: StockPag
       { colId: 'quality', headerName: t('st.col.quality'), minWidth: 160, flex: 0.9, cellRenderer: QualityCell },
       { colId: 'location', headerName: t('st.col.location'), minWidth: 120, flex: 0.9, cellRenderer: LocationCell },
       { colId: 'onHand', headerName: t('st.col.onHand'), minWidth: 155, flex: 0.9, type: 'rightAligned', cellRenderer: OnHandCell },
+      { colId: 'inTransit', headerName: w('wd.transit.col'), minWidth: 110, flex: 0.6, type: 'rightAligned', cellRenderer: InTransitCell },
       { colId: 'reserved', headerName: t('st.col.reserved'), minWidth: 120, flex: 0.7, type: 'rightAligned', cellRenderer: ReservedCell },
       { colId: 'held', headerName: t('st.col.held'), minWidth: 125, flex: 0.7, type: 'rightAligned', cellRenderer: HeldCell },
       { colId: 'available', headerName: t('st.col.available'), minWidth: 125, flex: 0.7, type: 'rightAligned', cellRenderer: AvailableCell },
@@ -265,7 +335,7 @@ function Stock({ model, actions, adjustActions, holdActions }: { model: StockPag
       { colId: 'more', headerName: t('st.col.actions'), minWidth: 80, maxWidth: 80, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
     ]
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [t, s, d, locale, model.prefix, can, crViLots, several, model.currencies, model.reservations, holdReasons, pastDate, daily])
+  }, [t, s, d, w, locale, model.prefix, can, crViLots, several, model.currencies, model.reservations, holdReasons, pastDate, daily, places])
 
   if (!can.stockView) {
     return (
@@ -281,6 +351,7 @@ function Stock({ model, actions, adjustActions, holdActions }: { model: StockPag
   const reservedLinesAll = model.rows ? visibleLines(model.rows, { ...address, view: 'material', q: '', tile: 'reserved' }, false, crViLots, extras) : null
   const tileWords = (tile: StockTile) => {
     if (tile === 'reserved') return reservedLinesAll === null ? '—' : t('st.tileRows', { count: reservedLinesAll.length })
+    if (tile === 'low') return model.low?.status === 'ready' ? w('wd.low.tileCount', { count: model.low.value.count }) : '—'
     const count = tileCount(tile, model.counts)
     return count === null ? '—' : s('lots', { count })
   }
@@ -361,8 +432,8 @@ function Stock({ model, actions, adjustActions, holdActions }: { model: StockPag
         ))}
       </Select>
       {address.tile && (
-        <Button size="sm" variant="tonal" onClick={() => actions?.onAddress?.({ tile: null })} aria-label={t('st.removeChip', { chip: t(`st.tile.${address.tile}`) })}>
-          {t(`st.tile.${address.tile}`)} <X size={12} aria-hidden />
+        <Button size="sm" variant="tonal" onClick={() => actions?.onAddress?.({ tile: null })} aria-label={t('st.removeChip', { chip: tileLabel(address.tile) })}>
+          {tileLabel(address.tile)} <X size={12} aria-hidden />
         </Button>
       )}
     </span>
@@ -370,10 +441,14 @@ function Stock({ model, actions, adjustActions, holdActions }: { model: StockPag
   const filterTotals = lines ? unitTotals(onHandPerUnit(lines), unitWord, locale) : '—'
   const pickedTotals = unitTotals(onHandPerUnit(picked), unitWord, locale)
   const value = can.cost && lines ? valueOf(lines, currency) : null
-  const ownKeys: ListKey[] = [{ keys: ['a'], does: t('st.keyAdjust') }]
+  const ownKeys: ListKey[] = [
+    { keys: ['a'], does: t('st.keyAdjust') },
+    { keys: ['w'], does: w('wd.why.key') },
+  ]
   const adjustHeld = adjustHeldKey(adjustLine, can, pastDate)
   const pickedLots = holdSubjectsOf(picked).subjects.length
   const holdHeld = holdHeldKey(picked, daily, pastDate)
+  const bulkMoveHeld = moveStartHeldKey(picked, can, pastDate)
   const today = wallOf(model.now ? Date.parse(model.now) : Date.now(), model.timeZone).day
   const valuedDay = asOfShown?.day ?? today
   const valuedHref = `${model.prefix}/finance/reports/print?${new URLSearchParams({ asOf: valuedDay, ...(address.site ? { site: address.site } : {}) }).toString()}`
@@ -384,6 +459,9 @@ function Stock({ model, actions, adjustActions, holdActions }: { model: StockPag
       </Button>
       <Button size="sm" variant="warning" aria-label={t('st.holdLots', { count: pickedLots })} heldReason={holdHeld ? d(holdHeld) : null} onClick={() => actions?.onHold?.(picked)}>
         <PauseCircle size={13} aria-hidden /> <SelectionLabel>{t('st.holdLots', { count: pickedLots })}</SelectionLabel>
+      </Button>
+      <Button size="sm" aria-label={w('wd.move.bulk', { count: picked.length })} heldReason={bulkMoveHeld ? w(bulkMoveHeld) : null} onClick={() => actions?.onMove?.(picked)}>
+        <ArrowRightLeft size={13} aria-hidden /> <SelectionLabel>{w('wd.move.bulk', { count: picked.length })}</SelectionLabel>
       </Button>
       <span className="fw-stk-totals">{t('st.selectedTotals', { totals: pickedTotals })}</span>
     </>
@@ -450,6 +528,7 @@ function Stock({ model, actions, adjustActions, holdActions }: { model: StockPag
       )}
 
       {model.notice && <Banner tone={model.notice.tone} title={t(model.notice.key, model.notice.params)} onDismiss={() => actions?.onNotice?.()} />}
+      {model.waiting && <WaitingBanner waiting={model.waiting} prefix={model.prefix} timeZone={model.timeZone} onDismiss={() => actions?.onDismissWaiting?.()} />}
 
       {firstNotice && (
         <div className="fw-stk-notices">
@@ -482,15 +561,19 @@ function Stock({ model, actions, adjustActions, holdActions }: { model: StockPag
       {!pastDate && (
         <MetricStrip
           metrics={STOCK_TILES.map((tile) => ({
-            label: t(`st.tile.${tile}`),
+            label: tileLabel(tile),
             value: tileWords(tile),
-            hint: model.rows ? unitTotals(tile === 'reserved' ? reservedPerUnit(reservedLinesAll ?? []) : tileStock(model.rows, tile, crViLots, extras), unitWord, locale) : '—',
+            hint: tile === 'low' ? w('wd.low.tileHint') : model.rows ? unitTotals(tile === 'reserved' ? reservedPerUnit(reservedLinesAll ?? []) : tileStock(model.rows, tile, crViLots, extras), unitWord, locale) : '—',
             active: address.tile === tile,
             onClick: () => actions?.onAddress?.({ tile: address.tile === tile ? null : tile }),
           }))}
         />
       )}
 
+      {address.tile === 'low' ? (
+        <LowList model={model} actions={actions} search={search} tools={tools} />
+      ) : (
+      <WhyContext.Provider value={{ prefix: model.prefix, why: model.why ?? null, onWhy: actions?.onWhy, onRetry: actions?.onRetryWhy, title: w('wd.why.label') }}>
       <ListFrame<StockLine>
         label={t('st.tableLabel')}
         rows={state ? [] : lines}
@@ -509,7 +592,9 @@ function Stock({ model, actions, adjustActions, holdActions }: { model: StockPag
         // Below 720 px the same rows as cards (B-W2b-18: the list frame's DS GridCardList, replacing the composed StockCards).
         cards={{ hrefOf: (line) => (line.hide ? hideHref(line.hide.id) : line.lot ? lotHref(line.lot.id) : null) }}
       />
-      {lines && lines.length > 0 && (
+      </WhyContext.Provider>
+      )}
+      {address.tile !== 'low' && lines && lines.length > 0 && (
         <p className="fw-stk-totals">
           {t('st.totals', { totals: filterTotals })}
           {hidesOf(lines) > 0 ? ` · ${s('hides', { count: hidesOf(lines) })}` : ''}
@@ -520,6 +605,7 @@ function Stock({ model, actions, adjustActions, holdActions }: { model: StockPag
 
       {model.adjust && <AdjustDialog model={model.adjust} actions={adjustActions} />}
       {model.hold && <HoldDialog model={model.hold} actions={holdActions} />}
+      {model.move && <MoveDialog model={model.move} places={model.places ?? []} actions={moveActions} />}
       {model.asOfDialog && <AsOfDialog model={model} actions={actions} />}
 
       {help && (

@@ -98,12 +98,14 @@ describe('Locations (SCR-065): the tree, what lies where, archive and move', () 
     expect(listQuery({ siteId: 's1', archived: true, q: 'A-0' })).toBe('?site=s1&archived=1&q=A-0')
     expect(listQuery({ siteId: null, archived: false, q: ' ' })).toBe('')
     expect(recordTabOf('stock')).toBe('stock')
-    expect(recordTabOf('labels')).toBe('overview')
+    // B-W2b-327: the Labels tab.
+    expect(recordTabOf('labels')).toBe('labels')
+    expect(recordTabOf('nope')).toBe('overview')
     expect(chosenSite([], null)).toBeNull()
     expect(searchRows(placeRows(NORTH, null, { manage: true, stock: false }), 'a-0').map((row) => row.location.code)).toEqual(['N-MAG-A-01', 'N-MAG-A-02'])
   })
 
-  it('never draws a money figure for a role without the cost grain, and no block or label controls (W2b)', () => {
+  it('never draws a money figure for a role without the cost grain', () => {
     const warehouse = recordScreen.cases.find((item) => item.id === 'stock-inside')!
     const html = draw(LocationRecordView, warehouse.model.model)
     expect(html).not.toMatch(/€|EUR/)
@@ -111,8 +113,7 @@ describe('Locations (SCR-065): the tree, what lies where, archive and move', () 
     expect(locationsCan(ROLE_PERMISSIONS.owner).cost).toBe(true)
     // The grid's cells draw in the browser; the overview a role without the grain receives holds no value at all.
     expect(overviewOf(false).rows.some((row) => 'value' in row || 'unitCost' in row)).toBe(false)
-    for (const item of listScreen.cases) expect(/\bBlock\b|Print label/i.test(draw(LocationsView, item.model.model)), item.id).toBe(false)
-    for (const item of recordScreen.cases) expect(/\bBlock\b|Print label/i.test(draw(LocationRecordView, item.model.model)), item.id).toBe(false)
+    // B-W2b-327 draws Block and Print labels (its own test: depth/depth.vitest.test.ts).
   })
 })
 
