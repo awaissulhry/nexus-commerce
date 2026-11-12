@@ -1,0 +1,354 @@
+{
+  "unplanned": {
+    "entry": "Merce senza ordine",
+    "title": "Merce senza ordine",
+    "intro": "La merce arrivata senza ordine d'acquisto aspetta nell'area di attesa un buyer. Non si usa nulla finché un ordine non la nomina.",
+    "loading": "Lettura dell'area di attesa…",
+    "noPermission": {
+      "title": "Non puoi ricevere merce",
+      "body": "Per ricevere merce serve il ruolo di ricevimento su questo tablet. Chiedi al capoturno."
+    },
+    "supplier": {
+      "title": "Chi l'ha mandata?",
+      "search": "Trova il fornitore",
+      "hint": "Scrivi parte del nome o il codice, poi Invio.",
+      "filtered": "Fornitori con “{text}”",
+      "clear": "Mostra tutti",
+      "none": {
+        "title": "Nessun fornitore trovato",
+        "body": "Scrivi un'altra parte del nome, oppure chiedi all'ufficio di aggiungere il fornitore."
+      },
+      "count_one": "{count} fornitore",
+      "count_other": "{count} fornitori"
+    },
+    "card": {
+      "type": "Merce senza ordine",
+      "supplier": "Fornitore",
+      "noSupplier": "Fornitore da scegliere",
+      "ddt": "DDT",
+      "noDdt": "Senza numero",
+      "place": "Area di attesa",
+      "noPlace": "Scansiona l'etichetta",
+      "lines": "Righe",
+      "linesCount_one": "{count} riga",
+      "linesCount_other": "{count} righe"
+    },
+    "material": {
+      "title": "Materiali trovati",
+      "scan": "Scansiona o scrivi il codice del materiale",
+      "hint": "Il codice sull'etichetta o sul DDT. Va bene anche parte del nome.",
+      "reading": "Ricerca del materiale…",
+      "ask": {
+        "title": "Cosa è arrivato?",
+        "body": "Scansiona o scrivi il codice, poi tocca il materiale."
+      },
+      "none": {
+        "title": "Nessun materiale corrisponde a “{code}”",
+        "body": "Prova un altro codice o parte del nome. Un materiale che non abbiamo ancora lo aggiunge l'ufficio."
+      }
+    },
+    "tracking": {
+      "NONE": "A quantità",
+      "LOT": "A lotto",
+      "HIDE": "Pelle, a pezzo"
+    },
+    "quantity": {
+      "colour": "Che colore è arrivato?",
+      "title": "Quanto è arrivato ({unit})",
+      "pad": "Quantità in {unit}",
+      "empty": "Scrivi la quantità",
+      "hides": "Quante pelli",
+      "hidesEmpty": "Conta le pelli",
+      "held": {
+        "NO_COLOUR": "Scegli il colore arrivato.",
+        "NO_QUANTITY": "Scrivi quanto è arrivato."
+      }
+    },
+    "lines": {
+      "title": "Cosa è arrivato",
+      "goesTo": "Mettila nell'area di attesa {place}: lì aspetta un buyer.",
+      "scanPlace": "Scansiona l'etichetta dell'area di attesa dove la metti.",
+      "empty": {
+        "title": "Ancora niente",
+        "body": "Aggiungi ogni materiale arrivato."
+      },
+      "quantity": "Quantità",
+      "hides_one": "{count} pelle",
+      "hides_other": "{count} pelli",
+      "remove": "Togli {code}",
+      "full": "Una consegna ha al massimo 20 righe."
+    },
+    "keys": {
+      "enter": "Metti nell'area di attesa"
+    },
+    "ddt": {
+      "title": "Documento di trasporto",
+      "number": "Il numero",
+      "scan": "Scansiona il DDT",
+      "hint": "Il codice a barre, oppure scrivi il numero.",
+      "pad": "Il numero del DDT",
+      "empty": "Scrivi il numero",
+      "kept": "Tenuto come scansionato: {number}",
+      "clear": "Cancella il numero",
+      "date": "La data",
+      "today": "Oggi",
+      "yesterday": "Ieri",
+      "another": "Un altro giorno",
+      "photo": "Una foto",
+      "takePhoto": "Scatta una foto",
+      "retake": "Rifai la foto",
+      "removePhoto": "Togli la foto",
+      "photoKept": "foto tenuta",
+      "photoAlt": "DDT {number}",
+      "photoHint": "La foto va con la merce quando è nell'area di attesa. Niente volti nella foto."
+    },
+    "place": {
+      "title": "Area di attesa",
+      "scan": "Scansiona l'etichetta dell'area di attesa",
+      "hint": "Etichetta sul ripiano o scaffale dove aspetta la merce.",
+      "useSuggested": "Usa di nuovo {place}"
+    },
+    "held": {
+      "OFFLINE": "Niente rete: la merce senza ordine la aspetta (il ricevimento prende il numero dall'ufficio). Ciò che hai scritto resta qui.",
+      "NO_SUPPLIER": "Prima scegli chi l’ha mandata.",
+      "NO_LINES": "Prima aggiungi cosa è arrivato.",
+      "NO_PLACE": "Prima scansiona l'etichetta dell'area di attesa.",
+      "BUSY": "Invio…"
+    },
+    "action": {
+      "back": "Torna al ricevimento",
+      "toDraft": "Torna alla merce",
+      "toLines": "Torna a cosa è arrivato",
+      "toSupplier": "Torna al fornitore",
+      "cancelLine": "Lascia la riga",
+      "addLine": "Aggiungi la riga",
+      "addMaterial": "Aggiungi un altro materiale",
+      "ddt": "DDT",
+      "place": "Un'altra area di attesa",
+      "changeSupplier": "Cambia fornitore",
+      "post": "Metti nell'area di attesa",
+      "posting": "Invio…",
+      "next": "Prossima consegna"
+    },
+    "problem": {
+      "PLACE": {
+        "title": "Quella non è un'area di attesa",
+        "body": "Scansiona l'etichetta di un ripiano o scaffale di questo sito che prende merce (non di un laboratorio, di un cliente o di transito)."
+      },
+      "SUPPLIER": {
+        "title": "Quel fornitore non si può scegliere",
+        "body": "Scegli uno dei nostri fornitori attivi, oppure chiedi all'ufficio."
+      },
+      "COLOUR": {
+        "title": "Scegli il colore",
+        "body": "Un materiale a colori vuole il colore arrivato."
+      },
+      "LINE": {
+        "title": "Una riga non si può ricevere",
+        "body": "Controlla ogni materiale e la sua quantità, poi invia di nuovo."
+      }
+    },
+    "done": {
+      "type": "In attesa di un buyer",
+      "waiting": "Ancora non si usa",
+      "lines_one": "{count} riga",
+      "lines_other": "{count} righe",
+      "putIt": "Metti ora la merce in {place}.",
+      "buyerAsked": "Un buyer ha il compito: indica l'ordine d'acquisto o rimanda la merce.",
+      "buyerLater": "L'ufficio chiede a un buyer: intanto la merce aspetta.",
+      "photoSending": "Invio della foto del DDT…",
+      "photoSent": "Foto del DDT inviata.",
+      "photoFailed": "La foto del DDT non è partita."
+    }
+  },
+  "reception": {
+    "menu": "Rapporto di ricevimento…",
+    "title": "Rapporto di ricevimento {number}",
+    "subtitle": "A quali ordini di lavoro e ordini serve questa merce, cosa riservare ora.",
+    "loading": "Lettura del rapporto…",
+    "failed": "Il rapporto non si è potuto leggere",
+    "retry": "Riprova",
+    "close": "Chiudi",
+    "send": "Invia al buyer",
+    "reserve": {
+      "workOrders_one": "Riserva per {count} ordine di lavoro",
+      "workOrders_other": "Riserva per {count} ordini di lavoro",
+      "orders_one": "Riserva per {count} ordine",
+      "orders_other": "Riserva per {count} ordini",
+      "demands_one": "Riserva per {count} ordine",
+      "demands_other": "Riserva per {count} ordini"
+    },
+    "tellBuyer": "Avvisa il buyer, {name}",
+    "noBuyer": "L'ordine non ha un buyer da avvisare.",
+    "noBuyerShort": "Nessuno",
+    "note": "Due parole per il buyer",
+    "noteHint": "Va con il rapporto e sulle riserve.",
+    "fact": {
+      "order": "Ordine d'acquisto",
+      "buyer": "Buyer",
+      "plan": "Piano",
+      "planAt": "Pianificazione del {time}",
+      "noPlan": "Nessuna pianificazione: gli ordini di lavoro aperti che chiedono il materiale"
+    },
+    "linesLabel": "Cosa è arrivato",
+    "line": {
+      "received": "ricevuti {amount}",
+      "lotFree": "Lotto {lot}: {amount} liberi",
+      "lotHeld": "Lotto {lot}: in quarantena, libero quando rilasciato",
+      "free": "{amount} liberi",
+      "left": "A magazzino dopo queste: {amount}"
+    },
+    "tableLabel": "Ordini di lavoro e ordini che questa merce serve",
+    "count_one": "{count} ordine di lavoro o ordine",
+    "count_other": "{count} ordini di lavoro e ordini",
+    "empty": {
+      "title": "Nessuno aspetta questa merce",
+      "body": "Nessun piano ha legato questa riga d'ordine e nessun ordine di lavoro aperto chiede il materiale: la merce va a magazzino."
+    },
+    "col": {
+      "line": "Riga",
+      "for": "Per",
+      "need": "Serve entro",
+      "open": "Manca ancora",
+      "here": "Riservati da questa",
+      "proposed": "Riserva ora",
+      "state": "Stato",
+      "ready": "Pronto da riservare"
+    },
+    "kind": {
+      "WORK_ORDER": "Ordine di lavoro",
+      "ORDER_LINE": "Riga di ordine cliente"
+    },
+    "why": {
+      "PEGGED": "Pianificato per questo",
+      "NEEDS": "Lo chiede"
+    },
+    "held": {
+      "NOT_NEEDED": "Non chiede altro (riservato o prelevato).",
+      "NOTHING_LEFT": "Niente di questa merce è libero per questo.",
+      "IN_QUARANTINE": "I lotti sono in quarantena: riserva dopo il rilascio.",
+      "NOT_OPEN": "Non è più aperto.",
+      "busy": "In corso…",
+      "loading": "Il rapporto è in lettura.",
+      "nothing": "Niente da riservare ora.",
+      "noReserve": "Per riservare serve il permesso di riservare giacenze in questo sito.",
+      "choose": "Prima scegli un ordine di lavoro o un ordine.",
+      "noSend": "Per inviare serve il permesso di scrivere sull'ordine d'acquisto."
+    },
+    "report": {
+      "NOT_POSTED": "Il ricevimento non è registrato: la merce non è ancora a magazzino.",
+      "NO_ORDER": "Il ricevimento non nomina un ordine d'acquisto: non c'è rapporto."
+    },
+    "done_one": "Riservata {count} riga di giacenza.",
+    "done_other": "Riservate {count} righe di giacenza.",
+    "doneSkipped_one": "{count} non aveva più niente di libero.",
+    "doneSkipped_other": "{count} non avevano più niente di libero.",
+    "doneTold": "Il buyer è stato avvisato sull'ordine d'acquisto.",
+    "doneNotTold": "Il rapporto è sull'ordine d'acquisto; il suo buyer non si è potuto nominare.",
+    "problem": {
+      "refused": "Una parte è stata riservata nel frattempo: rileggi il rapporto e scegli di nuovo.",
+      "demand": "Un ordine di lavoro o ordine scelto non prende più questa merce: rileggi il rapporto.",
+      "nothing": "Niente di questa merce è libero ora per quelli scelti: rileggi il rapporto.",
+      "read": "Riprova tra un momento.",
+      "forbidden": "Non puoi vedere il rapporto di questo ricevimento.",
+      "offline": "Nessuna risposta dal server dell'ufficio: riprova.",
+      "gone": "Questo ricevimento non c’è più."
+    }
+  },
+  "waiting": {
+    "title": "Merce senza ordine: in attesa in {place} dal {since}",
+    "body": "Non è a magazzino e non si usa finché un ordine d'acquisto non la nomina.",
+    "buyer": "Il buyer {name} ha il compito, entro il {due}.",
+    "buyerNobody": "Il compito del buyer aspetta qualcuno che lo prenda.",
+    "noTask": "Nessun buyer è stato ancora chiesto.",
+    "noOrderYet": "{supplier} non ha ancora un ordine aperto per questo sito per questa merce: prima crealo e invialo.",
+    "toOrders": "Ordini d'acquisto",
+    "askBuyer": "Chiedi a un buyer",
+    "sendBack": "Rimanda…",
+    "name": "Indica l'ordine d'acquisto…",
+    "named": "Registrata con {order} in {place}: la merce è a magazzino.",
+    "sentBack": "Rimandata al fornitore: questo ricevimento è annullato.",
+    "held": {
+      "busy": "In corso…",
+      "noDecide": "Per decidere sulla merce senza ordine serve il permesso del buyer o del magazzino.",
+      "noOrder": "{supplier} non ha un ordine aperto per questo sito: prima crealo e invialo.",
+      "pickOrder": "Scegli l'ordine d'acquisto.",
+      "pickLine": "Scegli la riga d'ordine per la riga {seq} ({code}).",
+      "hides": "Indica la superficie di ogni pelle per la riga {seq} ({code}): la pelle si registra pelle per pelle.",
+      "reason": "Di’ perché la merce torna indietro."
+    },
+    "back": {
+      "title": "Rimanda {number}",
+      "what_one": "La merce di {supplier} ({count} riga) torna indietro: il ricevimento è annullato.",
+      "what_other": "La merce di {supplier} ({count} righe) torna indietro: il ricevimento è annullato.",
+      "task": "Il compito del buyer è concluso.",
+      "kept": "Non si cancella nulla: il ricevimento tiene il motivo.",
+      "reason": "Perché torna indietro",
+      "reasonHint": "Lo leggono il buyer e il fornitore.",
+      "confirm": "Rimanda"
+    },
+    "nameDialog": {
+      "title": "Indica l'ordine d'acquisto di {number}",
+      "subtitle": "La merce si registra in {place}, dove aspetta.",
+      "order": "Gli ordini aperti del fornitore per questo sito",
+      "notAll": "non tutte le righe corrispondono",
+      "lines": "Ogni riga a una riga dell'ordine",
+      "came": "Arrivato",
+      "hides_one": "{count} pelle",
+      "hides_other": "{count} pelli",
+      "orderLine": "Riga d'ordine",
+      "pick": "Scegli la riga",
+      "noFit": "Nessuna riga di questo ordine è di questo materiale e colore",
+      "lineOption": "Riga {seq} · {code} · {open} ancora da arrivare",
+      "supplierLot": "Lotto del fornitore",
+      "supplierLotHint": "Come stampato sulla merce (facoltativo).",
+      "hideAreas": "Superficie di ogni pelle ({unit})",
+      "hideAreasHint": "Un numero per pelle, separati da spazi o a capo.",
+      "hideTotal_one": "{count} pelle, {total} in tutto",
+      "hideTotal_other": "{count} pelli, {total} in tutto",
+      "reach": "La registrazione mette la merce a magazzino in {place}, numera i lotti, fa avanzare l'ordine e chiude il compito del buyer. Segue un compito di ubicazione.",
+      "confirm": "Indica l'ordine e registra"
+    },
+    "orderStatus": {
+      "SENT": "inviato",
+      "CONFIRMED": "confermato",
+      "PARTLY_RECEIVED": "ricevuto in parte"
+    },
+    "problem": {
+      "tolerance": "Una riga porta più di quanto la riga d'ordine consente: scegli un'altra riga, oppure rimanda la merce.",
+      "hides": "Le superfici delle pelli non si leggono: un numero per pelle.",
+      "line": "Una riga non può andare su quella riga d'ordine: scegline un'altra.",
+      "order": "Quell'ordine non può prendere questa merce (altro fornitore, altro sito, o non inviato).",
+      "period": "Il mese è chiuso per i movimenti di magazzino: chiedi all’amministrazione.",
+      "changed": "La merce è cambiata nel frattempo: qualcun altro l’ha registrata, rimandata o cambiata. Rileggila."
+    }
+  },
+  "problem": {
+    "write": "Non è andato: riprova.",
+    "changed": "Qualcuno l'ha cambiato nel frattempo: rileggi.",
+    "forbidden": "Qui non puoi farlo.",
+    "gone": "Non c’è più.",
+    "invalid": "Qualcosa non va: controlla ciò che hai scritto.",
+    "slowDown": "Troppi tentativi: aspetta un momento.",
+    "offline": "Nessuna risposta dal server dell'ufficio: riprova."
+  },
+  "unit": {
+    "PCS": "pz",
+    "PAIR": "paia",
+    "SET": "set",
+    "M": "m",
+    "CM": "cm",
+    "MM": "mm",
+    "M2": "m²",
+    "DM2": "dm²",
+    "FT2": "ft²",
+    "KG": "kg",
+    "G": "g",
+    "L": "l",
+    "HIDE": "pelli",
+    "SIDE": "mezzine",
+    "ROLL": "rotoli",
+    "CONE": "coni",
+    "BOX": "scatole"
+  }
+}
