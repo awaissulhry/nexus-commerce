@@ -102,7 +102,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
     // href → [the API route, the permission its manifest names] (apps/factory-api … manifest.ts).
     const PAGE_PERMISSION: Record<string, string> = {
       '/home/today': 'home.view', // GET /home/today
-      '/home/approvals': 'quotes.view', // GET /sales/quote-approvals
+      '/home/approvals': 'home.view', // GET /home/today?category=APPROVAL (B-W2b-307: every kind; quotes and the engine's requests read with their own rights)
       '/home/tasks': 'home.view', // GET /tasks (B-W2a-40)
       '/home/notifications': 'home.view', // GET /notifications (B-W2a-40)
       '/home/mail-to-sort': 'email.triage', // GET /email/inbound

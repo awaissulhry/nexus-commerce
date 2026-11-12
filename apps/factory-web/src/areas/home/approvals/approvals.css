@@ -94,3 +94,38 @@ p.fw-apv-hint[role='status'] {
   border-left-color: var(--nds-warning);
 }
 
+
+/* B-W2b-307: the inbox in depth (the band, the filters, the rule's "why is this mine?", the due line). */
+.fw-apv-status,
+.fw-apv-actions,
+.fw-apv-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-apv-head {
+  align-items: center;
+}
+
+.fw-apv-why {
+  color: var(--nds-text-link);
+  text-decoration: underline dotted;
+  cursor: pointer;
+}
+
+.fw-apv-popover {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  max-width: 320px;
+}
+
+.fw-apv-sub.is-warning {
+  color: var(--nds-warning-text, var(--nds-warning));
+}
+
+.fw-apv-sub.is-danger {
+  color: var(--nds-danger-text, var(--nds-danger));
+}

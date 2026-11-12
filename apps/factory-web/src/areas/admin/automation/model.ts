@@ -3,6 +3,8 @@ import { TIMER_KINDS } from '@nexus/factory-domain/timers/rules'
 import type { PanelRead } from '../../../record-panels/model'
 import type { AlertRule, RulesList } from '../../_shared/rules/api'
 import type { RuleDialogState } from '../../_shared/rules/view/RuleDialog'
+// B-W2b-307: Approval rules (the list and its pop-up).
+import type { ApprovalRulesModel } from './approval-rules/model'
 
 /**
  * Admin › Platform › Approvals, automation & AI (SCR-167, the W2a part; design admin.automation, PLT-100): the ONE view
@@ -17,9 +19,9 @@ export const NAMESPACE = 'admin-automation'
 export const VIEWS = ['approvals', 'timers', 'automation', 'runs', 'ai'] as const
 export type AutomationView = (typeof VIEWS)[number]
 
-/** The lists this wave builds; the others are held with the wave that brings them. */
-export const BUILT: ReadonlySet<AutomationView> = new Set(['timers'])
-export const LATER: Readonly<Record<Exclude<AutomationView, 'timers'>, 'W2b' | 'W3'>> = Object.freeze({ approvals: 'W2b', automation: 'W3', runs: 'W3', ai: 'W3' })
+/** The lists built so far (B-W2b-307: + Approval rules); the others are held with the wave that brings them. */
+export const BUILT: ReadonlySet<AutomationView> = new Set(['timers', 'approvals'])
+export const LATER: Readonly<Record<Exclude<AutomationView, 'timers' | 'approvals'>, 'W2b' | 'W3'>> = Object.freeze({ automation: 'W3', runs: 'W3', ai: 'W3' })
 
 export const viewOf = (value: string | null | undefined): AutomationView => (BUILT.has(value as AutomationView) ? (value as AutomationView) : 'timers')
 
@@ -86,6 +88,10 @@ export interface AutomationViewModel {
   readonly moduleTimers: readonly string[]
   /** The keys panel is open. */
   readonly help: boolean
+  /** B-W2b-307: Approval rules (approvals.view); absent: the person does not read them. */
+  readonly approvalRules?: ApprovalRulesModel
+  /** B-W2b-307: alerts.view (Reminders & timers); absent: true (the W2a page). */
+  readonly timersAllowed?: boolean
 }
 
 /** Why New rule is held (a `why.` key of `admin-automation`), or null. */

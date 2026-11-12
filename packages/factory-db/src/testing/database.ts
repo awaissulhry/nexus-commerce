@@ -5,6 +5,7 @@ import { readMigrations } from '../policies'
 import { assertTestDatabaseUrl } from '../test-database'
 import { MIGRATIONS_DIR } from '../tools'
 import { testKitApplicationName, withMigrationLock } from './migration-lock'
+import { createFromTemplate, templateSwitch } from './template'
 
 /**
  * Test support (`@nexus/factory-db/testing`): a throwaway database built from the checked-in migrations, one per test
@@ -13,11 +14,16 @@ import { testKitApplicationName, withMigrationLock } from './migration-lock'
  *   server   FACTORY_PG_TEST_SERVER_URL (shell only), else the local stack at 127.0.0.1:5442; loopback only
  *   name     factory_test_<run>_<label>_<hex>; <run> is FACTORY_PG_TEST_RUN (set by scripts/factory/run-pg-tests.mjs,
  *            which drops whatever a crashed file left behind) or "adhoc"
+ *   made     a copy of factory_tpl_<hash> (./template, B-W2b-F27): the migrations are applied once per migration set,
+ *            <hash> being the sha256 of every migration folder's name and SQL, to a template nobody connects to (its
+ *            catalogs compacted); each test database is `CREATE DATABASE … TEMPLATE` of it, without the lock once it is
+ *            built. A new migration set builds a new template (and drops the templates built over 24 hours ago).
+ *            FACTORY_PG_TEST_TEMPLATE=off (shell only) migrates every test database from zero instead, as before.
  *
  * The migrations create the factory's roles, which are cluster-wide and shared with every worktree on the server.
  * Migrations are applied under MIGRATION_LOCK (an advisory lock in the server's `postgres` database, taken by
  * `withMigrationLock` in ./migration-lock: per transaction, on a connection of its own, freed by the server when its
- * process stops acting), so two test files never race on them. A test never drops or alters those roles. Every
+ * process stops acting), so two builds never race on them. A test never drops or alters those roles. Every
  * connection opened here is named `factory-test <role> <pid> <database>` in pg_stat_activity.
  */
 
@@ -50,7 +56,7 @@ function runId(): string {
   return run
 }
 
-/** Creates `factory_test_<run>_<label>_<hex>` and applies every migration to it, in order. */
+/** Creates `factory_test_<run>_<label>_<hex>`: a copy of the migrated template, or migrated from zero with the switch off. */
 export async function migratedDatabase(label: string): Promise<MigratedDatabase> {
   if (!/^[a-z0-9_]{1,20}$/.test(label)) throw new Error(`Bad test database label: ${JSON.stringify(label)}.`)
   const server = testServerUrl()
@@ -77,18 +83,23 @@ export async function migratedDatabase(label: string): Promise<MigratedDatabase>
   }
   try {
     const migrations = readMigrations(MIGRATIONS_DIR)
-    await root.query(`CREATE DATABASE "${name}"`)
-    await admin.connect()
-    await withMigrationLock({ url: server.href, key: MIGRATION_LOCK, tag }, async (signal) => {
-      for (const migration of migrations) {
-        signal.throwIfAborted()
-        try {
-          await admin.query(migration.sql)
-        } catch (error) {
-          throw new Error(`Migration ${migration.folder} failed on ${name}: ${(error as Error).message}`)
+    if (templateSwitch()) {
+      await createFromTemplate({ root, server, migrations, lockKey: MIGRATION_LOCK, tag }, name)
+      await admin.connect()
+    } else {
+      await root.query(`CREATE DATABASE "${name}"`)
+      await admin.connect()
+      await withMigrationLock({ url: server.href, key: MIGRATION_LOCK, tag }, async (signal) => {
+        for (const migration of migrations) {
+          signal.throwIfAborted()
+          try {
+            await admin.query(migration.sql)
+          } catch (error) {
+            throw new Error(`Migration ${migration.folder} failed on ${name}: ${(error as Error).message}`)
+          }
         }
-      }
-    })
+      })
+    }
   } catch (error) {
     await drop().catch(() => {})
     await root.end().catch(() => {})

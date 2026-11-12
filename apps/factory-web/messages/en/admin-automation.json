@@ -1,7 +1,7 @@
 {
   "refused": {
     "title": "Not yours to open",
-    "body": "This page needs the right to see alert rules. Ask an administrator if your work needs it."
+    "body": "This page needs the right to see alert rules or approval rules. Ask an administrator if your work needs it."
   },
   "band": {
     "label": "Approvals, automation & AI",
@@ -28,7 +28,7 @@
     "automation": "Automation",
     "runs": "Run log",
     "ai": "AI",
-    "later": "Approval rules come in the next wave: until then quotes use the margin floor of the sales settings. Automation rules, their run log and AI agents come later (W3)."
+    "later": "Automation rules, their run log and AI agents come later (W3)."
   },
   "timers": {
     "title": "Reminders & timers",

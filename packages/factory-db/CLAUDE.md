@@ -19,7 +19,7 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
   `client.vitest.test.ts` fails when a migration reads a setting no scope sets (a guard on `factory.actor_id` would
   put the actor back into `SCOPE_DEFINITIONS` and the cache back to one client per person) and when one more client
   costs more than 130 MB of heap.
-- `@nexus/factory-db/testing`: `migratedDatabase(label)`, a throwaway database built from the migrations.
+- `@nexus/factory-db/testing`: `migratedDatabase(label)`, a throwaway database copied from `factory_tpl_<hash of the migrations>` (B-W2b-F27, `src/testing/template.ts`: built once per migration set under the lock, then `CREATE DATABASE … TEMPLATE` without it); `FACTORY_PG_TEST_TEMPLATE=off` migrates each one from zero instead.
 - The test migration lock (B-W2b-F11, `src/testing/migration-lock.ts`): builds of test databases on one server take
   turns under `MIGRATION_LOCK`, now a transaction-level advisory lock on a connection of its own that is closed when the
   build ends. A killed process frees it at once; one that stops acting (frozen, stalled, a lost socket) stops its
