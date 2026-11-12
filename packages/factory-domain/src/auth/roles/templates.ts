@@ -53,6 +53,9 @@ import { INVENTORY_RULES_ADDS } from '../../inventory/posting/permissions'
 import { PLANNING_PLANNED_ADDS } from '../../planning/planned-orders/permissions'
 // B-W2b-311: suppliers in depth (the buyer and quality set a supplier's status).
 import { SUPPLIERS_DEPTH_ADDS } from '../../purchasing/suppliers-depth/permissions'
+// B-W2b-315: bank details (finance), qualification (the buyer and quality) and the compliance override (quality); the portal's bank details.
+import { BANK_ADDS, PORTAL_BANK_ADDS } from '../../purchasing/bank/permissions'
+import { QUALIFICATION_ADDS } from '../../purchasing/qualification/permissions'
 // B-W2b-229: the option library (production manager) and option prices (sales).
 import { PRODUCT_OPTIONS_ADDS } from '../../product/options/permissions'
 // B-W2b-238: materials in depth (the production manager and quality decide a material's approval).
@@ -941,7 +944,10 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-293
   ...(audience === 'office' ? (PLANNING_PLANNED_ADDS[key] ?? []) : []),
   // B-W2b-311
-  ...(audience === 'office' ? (SUPPLIERS_DEPTH_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (SUPPLIERS_DEPTH_ADDS[key] ?? []) : []),
+  // B-W2b-315
+  ...(audience === 'office' ? (BANK_ADDS[key] ?? []) : []),
+  ...(audience === 'office' ? (QUALIFICATION_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the
@@ -1593,6 +1599,8 @@ const PARTNER_ADDS: readonly Readonly<Record<string, readonly Permission[]>>[] =
   { 'guest-accountant': ['portal.accounting.view' as Permission] },
   // B-W2b-262: the brand's samples and tech packs (rounds, its styles in development, the BRAND tech pack PDF); not Finance.
   PORTAL_SAMPLES_READERS,
+  // B-W2b-315: the bank details in the profile (SCM-007): the supplier's Invoices role sees them masked, each Admin proposes a change.
+  PORTAL_BANK_ADDS,
 ]
 export const PARTNER_ROLE_TEMPLATES: readonly PartnerRoleTemplate[] = partnerRoleTemplates(PARTNER_ADDS)
 const partnerProblems = partnerTemplateProblems(PARTNER_ROLE_TEMPLATES)

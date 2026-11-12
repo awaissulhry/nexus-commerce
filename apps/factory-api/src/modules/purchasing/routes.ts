@@ -204,6 +204,16 @@ import { createTolerance, listTolerances, moveTolerance, updateTolerance } from 
 // B-W2b-332: ask to buy (./ask-to-buy).
 import { askFromShortage, askOptions, askToBuy, cancelRequests as cancelAsked, getAsked, listAsked, rejectRequests as rejectAsked } from './ask-to-buy/ask'
 import * as askContracts from './ask-to-buy/contract'
+// B-W2b-315: bank details (./bank, ./portal-profile/bank.ts), the vault and qualifications, the compliance gate (./qualification).
+import type { FastifyRequest } from 'fastify'
+import { StepUpRequiredError } from '../../platform/auth/office/account'
+import * as bank from './bank/bank'
+import * as bankContracts from './bank/contract'
+import { portalBank, portalProposeBank } from './portal-profile/bank'
+import * as qualificationContracts from './qualification/contract'
+import * as complianceGate from './qualification/gate'
+import * as qualifications from './qualification/qualifications'
+import { getVault, vaultSummary as getVaultSummary } from './qualification/vault'
 // B-W2b-172: "Ask for a new link" on a dead questionnaire link.
 registerLinkRenewer('SUPPLIER_ONBOARD', 'Party', questionnaireLink.renewQuestionnaireLink)
 
@@ -611,4 +621,66 @@ export default defineRoutes('purchasing', manifest, async (app) => {
   app.get('/purchasing/suppliers/:partyId/status-reach', { schema: suppliersDepthContracts.statusReachContract }, async (request) => statusReach(request, request.params.partyId, request.query.status))
 
   app.put('/purchasing/suppliers/:partyId/contacts/:contactId/receives', { schema: suppliersDepthContracts.setReceivesContract }, async (request) => setReceives(request, request.params.partyId, request.params.contactId, request.body, idempotencyKeyFrom(request)))
+  // B-W2b-315 (SCM-007): a supplier's bank details (./bank, ./portal-profile/bank.ts): propose, verify and reveal ask a fresh
+  // office step-up; the portal's proposal an e-mail step-up.
+  const freshStepUp = (request: FastifyRequest) => () => {
+    const auth = app.officeAuth
+    if (!auth) throw new StepUpRequiredError()
+    try {
+      requireStepUp(auth, request)
+    } catch (error) {
+      if (error instanceof StepUpRequiredError) throw error
+      throw new StepUpRequiredError()
+    }
+  }
+  app.get('/purchasing/suppliers/:partyId/bank', { schema: bankContracts.getBankContract }, async (request) => bank.getBank(request, request.params.partyId))
+
+  app.post('/purchasing/suppliers/:partyId/bank', { schema: bankContracts.proposeBankContract }, async (request, reply) => reply.code(201).send(await bank.proposeBank(request, request.params.partyId, request.body, freshStepUp(request), idempotencyKeyFrom(request))))
+
+  app.post('/purchasing/suppliers/:partyId/bank/:accountId/call-back', { schema: bankContracts.callBackContract }, async (request) => bank.callBack(request, request.params.partyId, request.params.accountId, request.body, idempotencyKeyFrom(request)))
+
+  app.post('/purchasing/suppliers/:partyId/bank/:accountId/verify', { schema: bankContracts.verifyContract }, async (request, reply) => {
+    const answer = await bank.verify(request, request.params.partyId, request.params.accountId, request.body, freshStepUp(request), idempotencyKeyFrom(request))
+    return reply.code(answer.approval ? 202 : 200).send(answer)
+  })
+
+  app.post('/purchasing/suppliers/:partyId/bank/:accountId/refuse', { schema: bankContracts.refuseContract }, async (request) => bank.refuse(request, request.params.partyId, request.params.accountId, request.body, idempotencyKeyFrom(request)))
+
+  app.post('/purchasing/suppliers/:partyId/bank/:accountId/retire', { schema: bankContracts.retireContract }, async (request) => bank.retire(request, request.params.partyId, request.params.accountId, request.body, idempotencyKeyFrom(request)))
+
+  app.post('/purchasing/suppliers/:partyId/bank/:accountId/reveal', { schema: bankContracts.revealContract }, async (request, reply) => reply.header('cache-control', 'no-store').send(await bank.reveal(request, request.params.partyId, request.params.accountId, freshStepUp(request))))
+
+  app.get('/portal/supplier-bank', { schema: bankContracts.portalBankContract }, async (request) => portalBank(request))
+
+  app.post('/portal/supplier-bank', { schema: bankContracts.portalProposeContract }, async (request, reply) => reply.code(201).send(await portalProposeBank(app, request, request.body, idempotencyKeyFrom(request))))
+  // B-W2b-315 (SCM-020, SCM-027, VN2:01, VN2:02): the document vault and the qualifications (./qualification).
+  app.get('/purchasing/suppliers/documents-summary', { schema: qualificationContracts.vaultSummaryContract }, async (request) => getVaultSummary(request, request.query))
+
+  app.get('/purchasing/suppliers/:partyId/documents', { schema: qualificationContracts.vaultContract }, async (request) => getVault(request, request.params.partyId))
+
+  app.get('/purchasing/suppliers/:partyId/qualifications', { schema: qualificationContracts.listQualificationsContract }, async (request) => qualifications.listQualifications(request, request.params.partyId))
+
+  app.post('/purchasing/suppliers/:partyId/qualifications', { schema: qualificationContracts.createQualificationContract }, async (request, reply) => reply.code(201).send(await qualifications.createQualification(request, request.params.partyId, request.body, idempotencyKeyFrom(request))))
+
+  app.patch('/purchasing/suppliers/:partyId/qualifications/:qualificationId', { schema: qualificationContracts.updateQualificationContract }, async (request) => qualifications.updateQualification(request, request.params.partyId, request.params.qualificationId, request.body, idempotencyKeyFrom(request)))
+
+  app.post('/purchasing/suppliers/:partyId/qualifications/:qualificationId/decide', { schema: qualificationContracts.decideQualificationContract }, async (request) => qualifications.decideQualification(request, request.params.partyId, request.params.qualificationId, request.body, idempotencyKeyFrom(request)))
+
+  app.post('/purchasing/suppliers/:partyId/qualifications/:qualificationId/suspend', { schema: qualificationContracts.suspendQualificationContract }, async (request) => qualifications.suspendQualification(request, request.params.partyId, request.params.qualificationId, request.body, idempotencyKeyFrom(request)))
+
+  app.post('/purchasing/suppliers/:partyId/qualifications/:qualificationId/lift', { schema: qualificationContracts.liftQualificationContract }, async (request) => qualifications.liftQualification(request, request.params.partyId, request.params.qualificationId, request.body, idempotencyKeyFrom(request)))
+
+  app.post('/purchasing/suppliers/:partyId/qualifications/:qualificationId/withdraw', { schema: qualificationContracts.withdrawQualificationContract }, async (request) => qualifications.withdrawQualification(request, request.params.partyId, request.params.qualificationId, request.body, idempotencyKeyFrom(request)))
+  // B-W2b-315 (SCM-022): the compliance gate on a PO (./qualification/gate.ts): what holds it, "Send without a valid document?".
+  app.get('/purchasing/orders/:purchaseOrderId/compliance', { schema: qualificationContracts.complianceContract }, async (request) => complianceGate.getCompliance(request, request.params.purchaseOrderId))
+
+  app.post('/purchasing/orders/:purchaseOrderId/compliance-override', { schema: qualificationContracts.askOverrideContract }, async (request) => complianceGate.askOverride(request, request.params.purchaseOrderId, request.body, idempotencyKeyFrom(request)))
+
+  app.post('/purchasing/orders/:purchaseOrderId/compliance-override/decide', { schema: qualificationContracts.decideOverrideContract }, async (request) => complianceGate.decideOverride(request, request.params.purchaseOrderId, request.body, freshStepUp(request), idempotencyKeyFrom(request)))
+
+  app.post('/purchasing/orders/:purchaseOrderId/compliance-override/withdraw', { schema: qualificationContracts.withdrawOverrideContract }, async (request) => complianceGate.withdrawOverride(request, request.params.purchaseOrderId, idempotencyKeyFrom(request)))
+
+  app.get('/purchasing/compliance-overrides', { schema: qualificationContracts.listOverridesContract }, async (request) => complianceGate.listOverrides(request, request.query))
+
+  app.get('/purchasing/compliance-overrides/:purchaseOrderId', { schema: qualificationContracts.complianceContract }, async (request) => complianceGate.getCompliance(request, request.params.purchaseOrderId))
 })

@@ -5,6 +5,8 @@ import { isBusinessDate, type BusinessDate } from '../core/time'
 import { addDays, hidesFor } from '../planning/buy'
 import type { PartyRole, PartyStatus } from '../parties/rules'
 import { DEPTH_SEND_CHECK_CODES } from './po-depth/codes'
+// B-W2b-315: the compliance gate's send checks (qualification/codes.ts).
+import { COMPLIANCE_SEND_CHECK_CODES } from './qualification/codes'
 import { baseFactor, convertibleUnits, COST_SCALE, decimalOf, QUANTITY_SCALE, roundTo, type ItemUnits, type Uom } from '../product/units/units'
 // W2b (B-W2b-311): where the supplier stands (SCM-008) and who receives purchase orders (SCM-004).
 import { sendProblem, type SupplierStatus } from './suppliers-depth/rules'
@@ -199,6 +201,8 @@ export const SEND_CHECK_CODES = [
   'LATE_FOR_LEAD_TIME',
   // B-W2b-296: the delivery schedule, the rate at order and the ship-to (po-depth/codes.ts).
   ...DEPTH_SEND_CHECK_CODES,
+  // B-W2b-315: the compliance gate on a PO (qualification/codes.ts).
+  ...COMPLIANCE_SEND_CHECK_CODES,
 ] as const
 export type SendCheckCode = (typeof SEND_CHECK_CODES)[number]
 export type CheckSeverity = 'BLOCKS' | 'WARNING'

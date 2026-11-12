@@ -240,4 +240,35 @@ export const manifest = defineManifest({
   'POST /purchasing/suppliers/:partyId/status': { audiences: ['office'], permission: 'purchasing.suppliers.status', scope: 'record' },
   'GET /purchasing/suppliers/:partyId/status-reach': { audiences: ['office'], permission: 'parties.view', scope: 'record' },
   'PUT /purchasing/suppliers/:partyId/contacts/:contactId/receives': { audiences: ['office'], permission: 'parties.manage', scope: 'record' },
+  // B-W2b-315 (SCM-007): a supplier's bank details, changed only with a call-back and a second check (./bank). Office only,
+  // can() over the supplier's company AND the supplier in the handler (parties.view too); propose, verify and reveal ask a
+  // fresh step-up. The supplier's portal proposes only (./portal-profile/bank.ts), with an e-mail step-up.
+  'GET /purchasing/suppliers/:partyId/bank': { audiences: ['office'], permission: 'purchasing.bank.view', scope: 'record' },
+  'POST /purchasing/suppliers/:partyId/bank': { audiences: ['office'], permission: 'purchasing.bank.propose', scope: 'record' },
+  'POST /purchasing/suppliers/:partyId/bank/:accountId/call-back': { audiences: ['office'], permission: 'purchasing.bank.callBack', scope: 'record' },
+  'POST /purchasing/suppliers/:partyId/bank/:accountId/verify': { audiences: ['office'], permission: 'purchasing.bank.verify', scope: 'record' },
+  'POST /purchasing/suppliers/:partyId/bank/:accountId/refuse': { audiences: ['office'], permission: 'purchasing.bank.verify', scope: 'record' },
+  'POST /purchasing/suppliers/:partyId/bank/:accountId/retire': { audiences: ['office'], permission: 'purchasing.bank.verify', scope: 'record' },
+  'POST /purchasing/suppliers/:partyId/bank/:accountId/reveal': { audiences: ['office'], permission: 'purchasing.bank.reveal', scope: 'record' },
+  'GET /portal/supplier-bank': { audiences: ['partner'], permission: 'portal.supplierBank.view', scope: 'party' },
+  'POST /portal/supplier-bank': { audiences: ['partner'], permission: 'portal.supplierBank.propose', scope: 'party' },
+  // B-W2b-315 (SCM-020, SCM-027): the document vault and the qualifications (./qualification); reads parties.view, writes
+  // purchasing.qualification.manage, over the supplier's company AND the supplier.
+  'GET /purchasing/suppliers/documents-summary': { audiences: ['office'], permission: 'parties.view', scope: 'record' },
+  'GET /purchasing/suppliers/:partyId/documents': { audiences: ['office'], permission: 'parties.view', scope: 'record' },
+  'GET /purchasing/suppliers/:partyId/qualifications': { audiences: ['office'], permission: 'parties.view', scope: 'record' },
+  'POST /purchasing/suppliers/:partyId/qualifications': { audiences: ['office'], permission: 'purchasing.qualification.manage', scope: 'record' },
+  'PATCH /purchasing/suppliers/:partyId/qualifications/:qualificationId': { audiences: ['office'], permission: 'purchasing.qualification.manage', scope: 'record' },
+  'POST /purchasing/suppliers/:partyId/qualifications/:qualificationId/decide': { audiences: ['office'], permission: 'purchasing.qualification.manage', scope: 'record' },
+  'POST /purchasing/suppliers/:partyId/qualifications/:qualificationId/suspend': { audiences: ['office'], permission: 'purchasing.qualification.manage', scope: 'record' },
+  'POST /purchasing/suppliers/:partyId/qualifications/:qualificationId/lift': { audiences: ['office'], permission: 'purchasing.qualification.manage', scope: 'record' },
+  'POST /purchasing/suppliers/:partyId/qualifications/:qualificationId/withdraw': { audiences: ['office'], permission: 'purchasing.qualification.manage', scope: 'record' },
+  // B-W2b-315 (SCM-022): the compliance gate on a PO; asking to send without a document is purchasing.send, the yes or no
+  // purchasing.compliance.override (a yes with a fresh step-up; never one's own request).
+  'GET /purchasing/orders/:purchaseOrderId/compliance': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
+  'POST /purchasing/orders/:purchaseOrderId/compliance-override': { audiences: ['office'], permission: 'purchasing.send', scope: 'record' },
+  'POST /purchasing/orders/:purchaseOrderId/compliance-override/decide': { audiences: ['office'], permission: 'purchasing.compliance.override', scope: 'record' },
+  'POST /purchasing/orders/:purchaseOrderId/compliance-override/withdraw': { audiences: ['office'], permission: 'purchasing.send', scope: 'record' },
+  'GET /purchasing/compliance-overrides': { audiences: ['office'], permission: 'purchasing.compliance.override', scope: 'record' },
+  'GET /purchasing/compliance-overrides/:purchaseOrderId': { audiences: ['office'], permission: 'purchasing.compliance.override', scope: 'record' },
 })
