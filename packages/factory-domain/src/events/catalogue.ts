@@ -149,6 +149,8 @@ import { events as planningPlannedOrders } from '../planning-planned-orders/even
 import { events as planningActions } from '../planning-actions/events'
 // B-W2b-301: promise dates (an order line's promise per size).
 import { events as planningPromise } from '../planning-promise/events'
+// B-W2b-321
+import { events as planningSubcontract } from '../planning-subcontract/events'
 // B-W2b-331: subcontracting in depth (the written terms, the material balance booked, a workshop charge booked).
 import { events as subcontractDepth } from '../subcontract-depth/events'
 // B-W2b-325: price lists in depth (breaks and surcharges, a style's own surcharges, minimum order quantities).
@@ -520,6 +522,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-293
   ...planningPlannedOrders,
   ...planningPromise,
+  // B-W2b-321
+  ...planningSubcontract,
   // B-W2b-311
   ...suppliersDepth,
   // B-W2b-292
