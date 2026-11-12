@@ -32,6 +32,12 @@ const FIX_TAB: Readonly<Record<string, QuoteTab>> = {
   PROOF_NOT_READY: 'documents',
   // B-W2b-325: a line under a minimum order quantity (sales/line-checks).
   BELOW_MINIMUM: 'lines',
+  // B-W2b-294: the customer and product rules (sales/line-checks); the customer's account is settled on its record.
+  PRIVATE_LABEL: 'lines',
+  OUTSIDE_RELEASED_SCOPE: 'lines',
+  STYLE_PHASE_OUT: 'lines',
+  NOT_SOLD_IN_MARKET: 'lines',
+  BLOCKED_MATERIAL: 'lines',
 }
 
 /** The checks that pass when none of their codes is in the answer (one line each). */

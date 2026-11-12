@@ -10,6 +10,8 @@ import { refreshVersion } from './pricing'
 import { assertDraft, assertQuotable, detailInCommand, onQuote } from './quotes'
 import { decimal, officeQuote, quotePartyOf, readLineRecords, type LineRecord, type Reader } from './store'
 import type { QuoteDetail } from './views'
+// B-W2b-294 (SAL-151): a size change keeps what the line's delivery schedule brings.
+import { assertScheduleFits } from '../quote-terms/carry'
 
 /**
  * A draft quote's lines (B-W1-21; SAL-203, SAL-268; A2 SCR-034 "Style blocks", SCR-035 "Quote line"): a style in one
@@ -209,6 +211,8 @@ export async function editLine(caller: CommandCaller, quoteId: string, lineId: s
     if (issues.length > 0) throw invalid(issues)
     const grid = sizes as SizeRow[]
     const priced = price as Exclude<typeof price, Issue[]>
+    // B-W2b-294
+    await assertScheduleFits(tx, line, grid)
     const gridKey = (rows: readonly SizeRow[]) => JSON.stringify([...rows].sort((a, b) => (a.size < b.size ? -1 : a.size > b.size ? 1 : 0)))
     const sameGrid = gridKey(grid) === gridKey(line.sizes)
     const recost = target.colourway.id !== line.colourwayId || target.revisionId !== line.styleRevisionId || !sameGrid

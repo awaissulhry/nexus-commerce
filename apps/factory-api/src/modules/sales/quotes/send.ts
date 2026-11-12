@@ -33,6 +33,8 @@ import { grainsOf, officeContextOf, officeQuote, readCurrentVersion, readQuote, 
 import { forCaller, readFacts, type QuoteDetail } from './views'
 // B-W2b-165 (SAL-199): the proofs go with the version: a proof not ready blocks the send, the send freezes them.
 import { freezeProofsInCommand, proofSendChecks } from '../quote-proofs/freeze'
+// B-W2b-294 (SAL-151, SAL-162): a new version takes the delivery terms and the schedule of the one it revises.
+import { carryToRevisionInCommand } from '../quote-terms/carry'
 // B-W2b-325: the line rules (minimums) and the discount shown on the document.
 import { quoteLineChecks, withLineChecks } from '../line-checks/documents'
 import { discountShownFor } from '../pricing-depth/store'
@@ -499,6 +501,8 @@ export async function reviseQuote(caller: CommandCaller, quoteId: string, body: 
       select: { id: true },
     })
     await copyLines(tools, from.id, versionId, current.partyId)
+    // B-W2b-294
+    await carryToRevisionInCommand(tools, from.id, versionId)
     await tx.quote.update({ where: { id: current.id }, data: { status: 'DRAFT', currentRevision: revision }, select: { id: true } })
     const after = (await readQuote(tx, current.id))!
     await refreshVersion(tools, after, await readCurrentVersion(tx, after), new Set())

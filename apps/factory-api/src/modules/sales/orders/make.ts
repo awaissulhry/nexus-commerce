@@ -9,6 +9,8 @@ import { allocateNumber } from '../../../platform/numbering/allocate'
 import { orderWaitFor, type OrderWait as PartyOrderWait } from '../../parties/holds/stops'
 import { makeScheduleInCommand } from './schedule'
 import { asDay, dayOrNull, hasOrderSeries } from './store'
+// B-W2b-294 (SAL-151, SAL-162): the accepted version's Incoterm, ship complete and delivery schedule go to the order.
+import { carryToOrderInCommand } from '../quote-terms/carry'
 
 /**
  * The order of an accepted quote version (B-W1-25; SAL-200 "quote to order in one step", SAL-203; Owner answer S1: made
@@ -240,6 +242,8 @@ export async function makeOrderInCommand(tools: CommandTools, versionId: string,
       await tx.salesOrderLineSize.createMany({ data: line.sizes.map((size) => ({ id: newId(), lineId, partyId: version.partyId, size: size.size, quantity: size.quantity, unitPrice: size.unitPrice, ...stamp })) })
     }
   }
+  // B-W2b-294
+  await carryToOrderInCommand(tools, id)
   const linked = await linkDeposits(tools, { id, companyId: quote.companyId }, version.id)
   // B-W2a-30 (SAL-216): the payment schedule from the terms it was accepted with and its deposit request.
   const deposit = await tx.depositRequest.findFirst({ where: { quoteVersionId: version.id, status: { in: ['OPEN', 'PAID'] } }, select: { id: true, amount: true, dueDate: true, depositPct: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })

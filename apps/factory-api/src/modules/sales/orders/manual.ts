@@ -160,7 +160,9 @@ async function planManualOrder(db: Reader, body: ManualOrderBody, now: Date, pic
   }
   // B-W2b-325 (SAL-178): an office order below a BLOCK minimum order quantity (sales/line-checks) is refused in words (said
   // beside the other problems once every line reads).
-  if (drafts.length > 0 && drafts.length === body.lines.length) issues.push(...(await orderLineProblems(db, { companyId: company.id, priceListId: chain.lists[0]?.id ?? null, currency: company.currency, lines: drafts.map((line) => ({ id: null, seq: line.seq, styleId: line.styleId, colourwayId: line.colourwayId, styleRevisionId: line.styleRevisionId, quantity: line.kind === 'MADE_TO_MEASURE' ? 1 : line.sizes.reduce((sum, size) => sum + size.quantity, 0), optionItemIds: [] })) })))
+  // B-W2b-294 (SAL-147; QT1:01, QT1:02): the customer, the delivery country and each line's sizes for the customer and product
+  // rules (another customer's private-label style or a cell outside the released scope is refused too).
+  if (drafts.length > 0 && drafts.length === body.lines.length) issues.push(...(await orderLineProblems(db, { companyId: company.id, priceListId: chain.lists[0]?.id ?? null, currency: company.currency, partyId: party.row.id, shipToCountry: snapshots.shipTo?.country ?? null, lines: drafts.map((line) => ({ id: null, seq: line.seq, styleId: line.styleId, colourwayId: line.colourwayId, styleRevisionId: line.styleRevisionId, quantity: line.kind === 'MADE_TO_MEASURE' ? 1 : line.sizes.reduce((sum, size) => sum + size.quantity, 0), optionItemIds: [], sizes: line.sizes.filter((size) => size.quantity > 0).map((size) => size.size) })) })))
   if (issues.length > 0) return issues
   const priced = priceLines(priceBasisOf(taxMode), company.currency, treatment, drafts)
   // The deposit as a quote asks it (sales/quotes priceVersion): gross × % ÷ 100, rounded once.

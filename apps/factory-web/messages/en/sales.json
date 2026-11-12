@@ -80,6 +80,11 @@
     "NO_BANK_DETAILS": "The company has no bank details yet: the deposit instructions follow separately.",
     "PROOF_NOT_READY": "A proof is still uploading, being checked or was refused (Documents › Proofs): finish it or remove it.",
     "BELOW_MINIMUM": "A line is under a minimum order quantity of its style, kind of garment or material (Lines): add pieces, or ask the customer.",
+    "PRIVATE_LABEL": "A line is another customer's private-label style: it is made and sold for that brand only (Lines).",
+    "OUTSIDE_RELEASED_SCOPE": "A line names a colourway or size its style is not released for yet: release it first, or quote what is released (Lines).",
+    "STYLE_PHASE_OUT": "A style is being phased out or discontinued: check it can still be made before it is promised.",
+    "NOT_SOLD_IN_MARKET": "A style is not sold in the market the goods go to: its labels, declaration and certificates may not cover it.",
+    "BLOCKED_MATERIAL": "A material of a line is blocked: it may not be used until it is approved again or replaced.",
     "pass": {
       "approval": "Approval done or not needed",
       "validity": "Validity set",

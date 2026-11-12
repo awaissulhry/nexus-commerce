@@ -1811,6 +1811,7 @@
     "quotes_manage": "Make and edit quotes",
     "quotes_approve": "Approve or reject a quote's approval request",
     "quotes_send": "Send a quote to its customer",
+    "quotes_templates_manage": "Keep the quote templates (saved starts of quotes) of a company, or of every company",
     "sales_settings_manage": "Set a company's quote rules",
     "companies_bank_view": "See a company's bank account",
     "companies_bank_manage": "Change a company's bank account",

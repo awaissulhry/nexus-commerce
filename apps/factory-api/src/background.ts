@@ -142,6 +142,10 @@ import { lotLifecycleHandler } from './modules/inventory/lots-depth/lifecycle'
 import { claimEvidenceExpiryCron } from './modules/compliance/claims/expiry'
 // B-W2b-292: the warehouse task sources (a receipt, a released lot or hold, a hold that asks quarantine, a pick list; due counts).
 import { warehouseTaskCron, warehouseTaskHandlers } from './modules/inventory/tasks/handlers'
+// B-W2b-294: a sent quote's validity (EXPIRED after its last day, the customer reminded before it); the schedule of an order
+// confirmed by its yes.
+import { quoteValidityCron } from './modules/sales/quote-terms/validity'
+import { orderScheduleHandler } from './modules/sales/quote-terms/carry'
 
 /**
  * The factory's background processes (plan A1 §3.1), one codebase with the API, two Railway services:
@@ -222,6 +226,8 @@ const W2B_263_HANDLERS: readonly EventHandler[] = gateHandlers()
 const W2B_313_HANDLERS: readonly EventHandler[] = [lotLifecycleHandler()]
 // B-W2b-292: a receipt posted or reversed, a lot or hold released, a hold asking quarantine, a pick list made or picked → the warehouse tasks they ask.
 const W2B_292_HANDLERS: readonly EventHandler[] = warehouseTaskHandlers()
+// B-W2b-294: an order that waited for a yes takes its quote's delivery schedule once it is CONFIRMED.
+const W2B_294_HANDLERS: readonly EventHandler[] = [orderScheduleHandler()]
 // B-W2b-305: purchase_order.approved → the purchase order sent with its yes (held in words when it cannot go).
 const W2B_305_HANDLERS: readonly EventHandler[] = [approvedSendHandler()]
 // B-W2b-11: the reports (one file each in modules/insights/reports/defs/), read by an export of a report.
@@ -292,7 +298,7 @@ if (mode === 'worker') {
   await moveLiftsAll({ database, log }).catch((error) => log.error({ err: error }, 'the unblocked addresses could not be moved at start'))
   await writeStepsAll({ database, log }).catch((error) => log.error({ err: error }, 'the first-load steps could not be written at start'))
   const relay = startRelay({ database, publish: queuePublisher(kit), log })
-  const workers = startEventWorkers({ kit, handlers: [...HANDLERS, ...W2A_20_HANDLERS, ...W2A_32_HANDLERS, ...W2A_33_HANDLERS, ...W2A_55_HANDLERS, ...W2A_61_HANDLERS, ...W2A_62_HANDLERS, ...W2B_15_HANDLERS, ...W2B_40_HANDLERS, ...W2B_37_HANDLERS, ...W2B_42_HANDLERS, ...W2B_43_HANDLERS, ...W2B_101_HANDLERS, ...W2B_118_HANDLERS, ...W2B_125_HANDLERS, ...W2B_135_HANDLERS, ...W2B_160_HANDLERS, ...W2B_167_HANDLERS, ...W2B_185_HANDLERS, ...W2B_170_HANDLERS, ...W2B_200_HANDLERS, ...W2B_225_HANDLERS, ...W2B_251_HANDLERS, ...W2B_260_HANDLERS, ...W2B_256_HANDLERS, ...W2B_263_HANDLERS, ...W2B_313_HANDLERS, ...W2B_292_HANDLERS, ...W2B_305_HANDLERS], database, live: redis, log })
+  const workers = startEventWorkers({ kit, handlers: [...HANDLERS, ...W2A_20_HANDLERS, ...W2A_32_HANDLERS, ...W2A_33_HANDLERS, ...W2A_55_HANDLERS, ...W2A_61_HANDLERS, ...W2A_62_HANDLERS, ...W2B_15_HANDLERS, ...W2B_40_HANDLERS, ...W2B_37_HANDLERS, ...W2B_42_HANDLERS, ...W2B_43_HANDLERS, ...W2B_101_HANDLERS, ...W2B_118_HANDLERS, ...W2B_125_HANDLERS, ...W2B_135_HANDLERS, ...W2B_160_HANDLERS, ...W2B_167_HANDLERS, ...W2B_185_HANDLERS, ...W2B_170_HANDLERS, ...W2B_200_HANDLERS, ...W2B_225_HANDLERS, ...W2B_251_HANDLERS, ...W2B_260_HANDLERS, ...W2B_256_HANDLERS, ...W2B_263_HANDLERS, ...W2B_313_HANDLERS, ...W2B_292_HANDLERS, ...W2B_305_HANDLERS, ...W2B_294_HANDLERS], database, live: redis, log })
   stops.push(() => relay.stop(), () => workers.close())
 } else {
   const crons: CronJob[] = [outboxLagCron({ database, kit, log }), rolesSyncCron({ database, log }), certificateExpiryCron({ database, log }), sdiPollCron({ database, log }), trackingPollCron({ database, log }), nightlyPlanCron({ database, log }), exportExpiryCron({ database, log })]
@@ -361,6 +367,8 @@ if (mode === 'worker') {
   crons.push(claimEvidenceExpiryCron({ database, log }))
   // B-W2b-292: hourly at minute 17, the count schedules that fell due get their COUNT task (and stale ones are cancelled).
   crons.push(warehouseTaskCron({ database, log }))
+  // B-W2b-294: daily at 06:15, sent quotes past their last day become EXPIRED and those ending soon remind their customer once.
+  crons.push(quoteValidityCron({ database, log }))
   const scheduler = startCrons(crons, { redis, prefix, log })
   stops.push(() => scheduler.stop())
 }
