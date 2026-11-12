@@ -483,6 +483,26 @@ B-W2b-124 `modules/plant/statutory` (QHS-205; D.Lgs. 81/2008 art. 71: results ke
   OUTBOUND message on the Party thread; the task done). Events `supplier_questionnaire.*` (factory-domain
   `supplier-questionnaire/events.ts`). PG tests: `questionnaire/questionnaire.pg.vitest.test.ts`.
 
+## Supplier qualification and bank details (`src/modules/purchasing/{bank,qualification}/`, `portal-profile/bank.ts`, B-W2b-315; SCM-007, SCM-020, SCM-022, SCM-027)
+- Bank details (factory-domain `purchasing/bank`; B-W2b-287's SupplierBankAccount, never changed in place): `GET|POST /purchasing/suppliers/:partyId/bank`
+  (masked accounts, pills, the numbers on file a call-back may dial; a proposal asks a fresh step-up), `POST …/bank/:accountId/call-back`
+  (never who proposed or wrote it; a contact or address created and last changed BEFORE the proposal), `…/verify` (step-up; the second
+  person: a switched-on SUPPLIER_BANK_CHANGE rule asks a yes first — 202, the approver's yes activates it in `platform/approvals/kinds/
+  supplier-bank-change.ts` — else ACTIVE now, the old account RETIRED first), `…/refuse`, `…/retire`, `…/reveal` (finance, step-up,
+  audited; the only answer with an IBAN). Portal: `GET|POST /portal/supplier-bank` (masked; the proposal in the PARTNER scope after an
+  e-mail step-up). Payments read `bank/store.ts payableAccountOf` (the ACTIVE account only). No IBAN in any mail, event, audit row or list.
+- The vault and qualification (factory-domain `purchasing/qualification/{vault,rules}`): `GET /purchasing/suppliers/:partyId/documents`
+  (what we ask per supplier kind and per material, what is in force, the office review of uploads and profile changes — decided with
+  B-W2b-189's routes), `GET /purchasing/suppliers/documents-summary`, `GET|POST|PATCH /purchasing/suppliers/:partyId/qualifications[/:id]`
+  + `…/decide|suspend|lift|withdraw`; planning asks `qualification/qualifications.ts qualificationsFor` (qualified now, else why).
+- The compliance gate on a PO (`qualification/gate.ts`, three lines in send.ts): a leather needing a chromium VI test without a test
+  report in force, a PPE component without a VALID register certificate, a company rule before SENT: held at Send (send checks
+  COMPLIANCE_*); `GET /purchasing/orders/:id/compliance`, `POST …/compliance-override` (reason; purchasing.send), `…/decide` (a yes with
+  step-up, purchasing.compliance.override, never the asker — the approvals history guard refuses it too), `…/withdraw`,
+  `GET /purchasing/compliance-overrides[/:purchaseOrderId]`. Requests are the engine's domain lines on the PurchaseOrder (what each
+  covers on its `purchasing.compliance.overrideAsk` audit row); the order's version does not move. PG tests: `bank/bank.pg`,
+  `qualification/qualification.pg`.
+
 ## Purchase orders in depth (`src/modules/purchasing/po-depth/`, B-W2b-296; SCM-052, SCM-061, SCM-065, SCM-066, SCM-088, SCM-147)
 - Its routes and manifest lines are in purchasing's routes.ts / manifest.ts (one block each: a folder with a routes file is not
   looked into by the autoloader).
