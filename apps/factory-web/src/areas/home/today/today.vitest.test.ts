@@ -286,7 +286,8 @@ describe('navigation, pages, words and the design fixtures', () => {
   it('Today is Home’s first page for whoever holds home.view, and its pages are built', () => {
     const home = officeNavFor((permission) => permission === 'home.view' || permission === 'email.triage', OFFICE_NAV).areas.find((area) => area.id === 'home')!
     // W2a (B-W2a-40): My tasks and Notifications join Home in the tree's order.
-    expect(home.sections![0]!.items.map((row) => row.href)).toEqual(['/home/today', '/home/tasks', '/home/notifications', '/home/mail-to-sort'])
+    // B-W2b-307: Approvals is every request's inbox, so whoever reaches Home has it (home.view).
+    expect(home.sections![0]!.items.map((row) => row.href)).toEqual(['/home/today', '/home/approvals', '/home/tasks', '/home/notifications', '/home/mail-to-sort'])
     expect(['/home/today', '/home/today/print'].every((page) => OFFICE_PAGES.has(page))).toBe(true)
   })
 
@@ -300,6 +301,8 @@ describe('navigation, pages, words and the design fixtures', () => {
     for (const kind of KINDS) used.add(`today.kind.${kind}`)
     // B-W2b-F13b: the delivery addresses customers added, to check.
     used.add('today.kind.DELIVERY_ADDRESS')
+    // B-W2b-307: change orders, SMV changes, inspection plan versions and the approval engine's requests waiting for my yes.
+    for (const kind of ['CHANGE_ORDER', 'SMV_CHANGE', 'PLAN_VERSION', 'APPROVAL_TASK']) used.add(`today.kind.${kind}`)
     for (const severity of ['HIGH', 'MEDIUM', 'LOW']) used.add(`today.severity.${severity}`)
     for (const group of ['NOW', 'TODAY', 'THIS_WEEK', 'LATER']) used.add(`today.group.${group}`)
     for (const panel of PANELS) {

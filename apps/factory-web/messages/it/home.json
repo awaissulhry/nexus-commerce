@@ -105,7 +105,11 @@
       "ORDER_CHANGE_REQUEST": "Richieste di modifica e annullamento dei clienti",
       "SUPPLIER_CHANGE": "Modifiche al profilo dei fornitori",
       "SUPPLIER_DOCUMENT": "Documenti dei fornitori da verificare",
-      "DELIVERY_ADDRESS": "Indirizzi di consegna aggiunti dai clienti, da verificare"
+      "DELIVERY_ADDRESS": "Indirizzi di consegna aggiunti dai clienti, da verificare",
+      "CHANGE_ORDER": "Ordini di modifica da approvare",
+      "SMV_CHANGE": "Modifiche dei tempi standard da approvare",
+      "PLAN_VERSION": "Versioni dei piani di ispezione da approvare",
+      "APPROVAL_TASK": "Richieste in attesa del tuo sì"
     },
     "severity": {
       "HIGH": "Urgente",
@@ -437,6 +441,14 @@
       "SUPPLIER_DOCUMENT.blocks": "Non viene condiviso né conta per i documenti richiesti finché qualcuno non lo accetta.",
       "DELIVERY_ADDRESS.WAITING": "{customer} ha aggiunto un indirizzo di consegna da verificare: {address}.",
       "DELIVERY_ADDRESS.blocks": "Nessun ordine né spedizione va lì finché non lo approvi; accettare una richiesta del cliente che lo nomina lo approva anche.",
+      "CHANGE_ORDER.SUBMITTED": "L'ordine di modifica {number} per {style} aspetta la tua approvazione: {title}.",
+      "CHANGE_ORDER.blocks": "La nuova revisione non viene rilasciata finché ogni approvatore richiesto non dice sì.",
+      "SMV_CHANGE.PROPOSED": "Operazione {code}: una modifica del tempo standard a {minutes} minuti dal {effectiveDate} aspetta la tua approvazione.",
+      "SMV_CHANGE.blocks": "Cicli, tariffe a cottimo e costi restano sui minuti attuali finché una seconda persona non la approva.",
+      "PLAN_VERSION.SUBMITTED": "Il piano di ispezione {code} versione {number} aspetta la tua approvazione.",
+      "PLAN_VERSION.blocks": "Le ispezioni usano la versione approvata finché una seconda persona non approva questa.",
+      "APPROVAL_TASK.PENDING": "In attesa del tuo sì ({taskKind}): {summary}.",
+      "APPROVAL_TASK.blocks": "Non viene eseguito nulla finché non lo approva qualcuno che non l'ha chiesto.",
       "why.ORDER_PROMISE.orders_manage": "Gestisci gli ordini di questo cliente e le loro date promesse.",
       "why.WORK_ORDER_HELD.workorders_release": "Rilasci gli ordini di lavoro di questo stabilimento.",
       "why.LOT_HOLD.quality_lots_release": "Rilasci i lotti di questo stabilimento.",
@@ -462,6 +474,10 @@
       "why.SUPPLIER_CHANGE.purchasing_supplierChanges_decide": "Verifichi le modifiche di indirizzi e contatti dei fornitori.",
       "why.SUPPLIER_DOCUMENT.purchasing_supplierDocuments_review": "Verifichi certificati, rapporti di prova e dichiarazioni inviati dai fornitori.",
       "why.DELIVERY_ADDRESS.orders_manage": "Prendi gli ordini di questo cliente.",
+      "why.CHANGE_ORDER.product_changes_approve": "Ti è stato chiesto di approvare questo ordine di modifica, e l'ha scritto qualcun altro.",
+      "why.SMV_CHANGE.product_smv_approve": "Approvi le modifiche dei tempi standard di questa azienda, e l'ha proposta qualcun altro.",
+      "why.PLAN_VERSION.quality_plans_approve": "Approvi i piani di ispezione di questa azienda, e questa versione l'ha scritta qualcun altro.",
+      "why.APPROVAL_TASK.approvals_decide": "La sua regola di approvazione nomina te o il tuo ruolo qui, e l'ha chiesta qualcun altro.",
       "code": {
         "checks": {
           "REVISION": "revisione",
@@ -515,6 +531,20 @@
           "SPAM": "sembra spam",
           "UNKNOWN_SENDER": "il mittente non è un contatto del record",
           "THREAD_CLOSED": "il thread a cui risponde è chiuso"
+        },
+        "taskKind": {
+          "PURCHASE_ORDER": "ordine d'acquisto",
+          "PURCHASE_ORDER_CHANGE": "modifica di un ordine d'acquisto",
+          "SALES_ORDER": "ordine di vendita",
+          "SALES_ORDER_CHANGE": "modifica di un ordine di vendita",
+          "PRICE_CHANGE": "cambio di prezzo",
+          "STOCK_ADJUSTMENT": "rettifica di magazzino",
+          "COUNT_VARIANCE": "differenza di inventario",
+          "MATERIAL_SUBSTITUTION": "sostituzione di materiale",
+          "CREDIT_OVERRIDE": "deroga al fido",
+          "CREDIT_WITHOUT_RETURN": "nota di credito senza reso",
+          "SUPPLIER_BANK_CHANGE": "modifica delle coordinate bancarie di un fornitore",
+          "PURCHASE_REQUEST": "richiesta d'acquisto"
         }
       },
       "TASK_DUE.TODAY": "La tua attività \"{title}\" scade oggi.",

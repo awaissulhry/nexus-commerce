@@ -25,6 +25,9 @@ import { EXPIRY_RULES } from '../../files/expiry/notices'
 import { LINK_RULES } from '../../links/notices'
 // B-W2b-226: change requests and change orders (PRD-175: who triages, the style's owner, approvers, the author, supervisors).
 import { CHANGE_RULES } from '../../../modules/product/changes/notices'
+// B-W2b-307: the approval engine's requests to their deciders and the decision to who asked; an SMV change to its approvers.
+import { APPROVAL_TASK_NOTICES } from '../../../modules/insights/sources/approval-tasks'
+import { SMV_CHANGE_NOTICES } from '../../../modules/insights/sources/smv-changes'
 
 /**
  * The fan-out's rules, one file per source (B-W2a-20: mentions and followed records, assignments, approvals). A step that
@@ -53,4 +56,7 @@ export const FAN_OUT_RULES: readonly FanOutRule[] = Object.freeze([...THREAD_RUL
   // B-W2b-F17: a dead link with no renewer asked for again (SYSTEM to who made the link, with the reader's note).
   ...LINK_RULES,
   // B-W2b-226: a change request raised or decided; a change order's approval asked or decided, its release (SYSTEM / APPROVAL).
-  ...CHANGE_RULES])
+  ...CHANGE_RULES,
+  // B-W2b-307: approval.requested (APPROVAL to its deciders), approval.decided (APPROVAL to who asked), an SMV change proposed (APPROVAL to its approvers).
+  ...APPROVAL_TASK_NOTICES,
+  ...SMV_CHANGE_NOTICES])

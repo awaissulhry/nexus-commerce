@@ -43,6 +43,21 @@ export const CODE_WORDS: Readonly<Record<string, Readonly<Record<string, string>
     UNKNOWN_SENDER: 'its sender is not a contact of the record',
     THREAD_CLOSED: 'the thread it answers is closed',
   },
+  // B-W2b-307: the approval engine's kinds of request (factory-domain approvals/rules APPROVAL_TASK_KINDS).
+  taskKind: {
+    PURCHASE_ORDER: 'purchase order',
+    PURCHASE_ORDER_CHANGE: 'purchase order change',
+    SALES_ORDER: 'sales order',
+    SALES_ORDER_CHANGE: 'sales order change',
+    PRICE_CHANGE: 'price change',
+    STOCK_ADJUSTMENT: 'stock adjustment',
+    COUNT_VARIANCE: 'count difference',
+    MATERIAL_SUBSTITUTION: 'material substitution',
+    CREDIT_OVERRIDE: 'credit override',
+    CREDIT_WITHOUT_RETURN: 'credit without a return',
+    SUPPLIER_BANK_CHANGE: "supplier's bank details change",
+    PURCHASE_REQUEST: 'purchase request',
+  },
 })
 
 /**
@@ -154,6 +169,15 @@ export const EN_TEMPLATES: Readonly<Record<string, string>> = Object.freeze({
   // B-W2b-F13b: a delivery address a customer added in the portal, waiting for our check.
   'DELIVERY_ADDRESS.WAITING': '{customer} added a delivery address for our check: {address}.',
   'DELIVERY_ADDRESS.blocks': 'No order or shipment goes there until you approve it; accepting a request of the customer that names it approves it too.',
+  // B-W2b-307: change orders, SMV changes, inspection plan versions and the approval engine's requests.
+  'CHANGE_ORDER.SUBMITTED': 'Change order {number} for {style} waits for your approval: {title}.',
+  'CHANGE_ORDER.blocks': 'Its new revision is not released until every required approver says yes.',
+  'SMV_CHANGE.PROPOSED': 'Operation {code}: an SMV change to {minutes} minutes from {effectiveDate} waits for your approval.',
+  'SMV_CHANGE.blocks': 'Routings, piece rates and costs keep the current minutes until a second person approves it.',
+  'PLAN_VERSION.SUBMITTED': 'Inspection plan {code} version {number} waits for your approval.',
+  'PLAN_VERSION.blocks': 'Inspections keep using the approved version until a second person approves this one.',
+  'APPROVAL_TASK.PENDING': 'Waiting for your yes ({taskKind}): {summary}.',
+  'APPROVAL_TASK.blocks': 'Nothing of it is carried out until someone who did not ask for it approves it.',
 
   'why.ORDER_PROMISE.orders_manage': "You manage this customer's orders and their promise dates.",
   'why.WORK_ORDER_HELD.workorders_release': 'You release work orders at this site.',
@@ -180,6 +204,10 @@ export const EN_TEMPLATES: Readonly<Record<string, string>> = Object.freeze({
   'why.SUPPLIER_CHANGE.purchasing_supplierChanges_decide': "You check suppliers' changes of their addresses and contacts.",
   'why.SUPPLIER_DOCUMENT.purchasing_supplierDocuments_review': "You check the certificates, test reports and declarations suppliers send.",
   'why.DELIVERY_ADDRESS.orders_manage': "You take this customer's orders.",
+  'why.CHANGE_ORDER.product_changes_approve': 'You were asked to approve this change order, and someone else wrote it.',
+  'why.SMV_CHANGE.product_smv_approve': "You approve this company's SMV changes, and someone else proposed it.",
+  'why.PLAN_VERSION.quality_plans_approve': "You approve this company's inspection plans, and someone else wrote this version.",
+  'why.APPROVAL_TASK.approvals_decide': 'Its approval rule names you or your role here, and someone else asked for it.',
 })
 
 /** At most five values, then "and N more". */
@@ -380,4 +408,24 @@ export function orderChangeRequestWords(facts: { readonly number: string; readon
 /** B-W2b-F13b: a delivery address a customer added in the portal, waiting for our check (`address`: street and city). */
 export function deliveryAddressWords(facts: { readonly customer: string; readonly address: string }): RowWords {
   return { sentence: phrase('DELIVERY_ADDRESS.WAITING', { customer: facts.customer, address: facts.address }), blocks: phrase('DELIVERY_ADDRESS.blocks') }
+}
+
+/** B-W2b-307 (AW2:01): a change order that waits for the viewer's approval. */
+export function changeOrderWords(facts: { readonly number: string; readonly style: string; readonly title: string }): RowWords {
+  return { sentence: phrase('CHANGE_ORDER.SUBMITTED', { number: facts.number, style: facts.style, title: facts.title }), blocks: phrase('CHANGE_ORDER.blocks') }
+}
+
+/** B-W2b-307 (AW2:02): an SMV change waiting for a second person (`minutes`: the proposed SMV as a decimal text). */
+export function smvChangeWords(facts: { readonly code: string; readonly minutes: string; readonly effectiveDate: BusinessDate }): RowWords {
+  return { sentence: phrase('SMV_CHANGE.PROPOSED', { code: facts.code, minutes: facts.minutes, effectiveDate: facts.effectiveDate }), blocks: phrase('SMV_CHANGE.blocks') }
+}
+
+/** B-W2b-307 (AW2:03): an inspection plan version submitted for approval. */
+export function planVersionWords(facts: { readonly code: string; readonly number: number }): RowWords {
+  return { sentence: phrase('PLAN_VERSION.SUBMITTED', { code: facts.code, number: String(facts.number) }), blocks: phrase('PLAN_VERSION.blocks') }
+}
+
+/** B-W2b-307: a request of the approval engine waiting for the viewer's yes (`summary`: the request's line, no money). */
+export function approvalTaskWords(facts: { readonly kind: string; readonly summary: string }): RowWords {
+  return { sentence: phrase('APPROVAL_TASK.PENDING', { taskKind: [facts.kind], summary: facts.summary.replace(/[.\s]+$/, '') }), blocks: phrase('APPROVAL_TASK.blocks') }
 }
