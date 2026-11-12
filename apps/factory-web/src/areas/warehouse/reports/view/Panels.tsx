@@ -415,4 +415,3 @@ export function LeatherPanel({ model, actions }: Props) {
     </section>
   )
 }
-
