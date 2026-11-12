@@ -49,7 +49,7 @@ const bridge = output({
   materialDays: z.number().int(),
   baseDays: z.number().int(),
   queueDays: z.number().int(),
-  totalDays: z.number().int(),
+  spanDays: z.number().int(),
   materialDate: businessDate(),
   finish: businessDate(),
 })

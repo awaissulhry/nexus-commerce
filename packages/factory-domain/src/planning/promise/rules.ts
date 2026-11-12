@@ -161,7 +161,7 @@ export function bridgeWords(bridge: Bridge, setBy: Pick<MaterialArrival, 'label'
           : setBy.source === 'PURCHASE_ORDER'
             ? `${setBy.label} on order ${days(bridge.materialDays)}`
             : `${setBy.label} planned ${days(bridge.materialDays)}`
-  return `base lead time ${days(bridge.baseDays)} + queue at today's load ${days(bridge.queueDays)} + ${material} = ${days(bridge.totalDays)} → ${dayWords(bridge.finish, today)}`
+  return `base lead time ${days(bridge.baseDays)} + queue at today's load ${days(bridge.queueDays)} + ${material} = ${days(bridge.spanDays)} → ${dayWords(bridge.finish, today)}`
 }
 
 export interface SizeDate {

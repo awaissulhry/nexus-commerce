@@ -81,7 +81,7 @@ describe('capable to promise, lite (PLN-169)', () => {
     const base = walkSteps(steps, copyFree(freeWhenEmpty(lanes)), '2026-11-12', names)
     expect(base.finish).toBe('2026-11-15')
     const bridge = bridgeOf('2026-11-12', '2026-11-12', base.finish!, real.finish!)
-    expect(bridge).toMatchObject({ materialDays: 0, baseDays: 3, queueDays: 1, totalDays: 4 })
+    expect(bridge).toMatchObject({ materialDays: 0, baseDays: 3, queueDays: 1, spanDays: 4 })
     // A later group queues behind what the first one booked.
     const again = walkSteps(steps.slice(0, 1), free, '2026-11-12', names)
     expect(again.finish).toBe('2026-11-17')
@@ -100,7 +100,7 @@ describe('capable to promise, lite (PLN-169)', () => {
 
   it('the bridge in words: base + queue + material = total → the date', () => {
     const bridge = bridgeOf('2026-11-01', '2026-11-15', '2026-11-30', '2026-12-04')
-    expect(bridge).toMatchObject({ materialDays: 14, baseDays: 15, queueDays: 4, totalDays: 33 })
+    expect(bridge).toMatchObject({ materialDays: 14, baseDays: 15, queueDays: 4, spanDays: 33 })
     expect(bridgeWords(bridge, { label: 'Leather BLK', source: 'BUY' }, '2026-11-01')).toBe("base lead time 15 days + queue at today's load 4 days + Leather BLK to buy 14 days = 33 days → 4 Dec")
   })
 })

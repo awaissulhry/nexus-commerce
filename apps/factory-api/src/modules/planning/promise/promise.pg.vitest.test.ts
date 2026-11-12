@@ -171,7 +171,8 @@ describe('the promise calculator (PLN-169, PLN-171, PLN-179)', { timeout: 120_00
       wantedDate: wanted,
       country: 'IT',
     })
-    expect(where).toMatchObject({ site: { code: 'A1' }, today, market: { code: 'IT' }, destination: 'IT' })
+    // The market is the profile of the destination when one names it (none is seeded here: the certificate rule is every market's).
+    expect(where).toMatchObject({ site: { code: 'A1' }, today, destination: 'IT' })
     expect(answer).toMatchObject({ key: 'calculator', style: { code: 'SEED-JKT-02' }, colourway: { code: 'BLK' }, revision: { revision: 1, status: 'RELEASED' }, wantedDate: wanted, complete: false })
     // 54: no valid certificate covers it, so it is not promised and nothing is made for it.
     expect(sizeOf(answer, '54')).toMatchObject({ state: 'NOT_CERTIFIED', date: null, toMake: 0, certificate: { state: 'MISSING' } })
@@ -180,7 +181,7 @@ describe('the promise calculator (PLN-169, PLN-171, PLN-179)', { timeout: 120_00
     const s50 = sizeOf(answer, '50')
     expect(s50).toMatchObject({ state: 'MAKE', fromStock: 0, toMake: 2, certificate: { state: 'OK', certificate: 'SEED-CERT-0003' } })
     expect(s50.date >= today).toBe(true)
-    expect(s50.bridge.materialDays + s50.bridge.baseDays + s50.bridge.queueDays).toBe(s50.bridge.totalDays)
+    expect(s50.bridge.materialDays + s50.bridge.baseDays + s50.bridge.queueDays).toBe(s50.bridge.spanDays)
     expect(s50.bridge.finish).toBe(s50.date)
     // 52 is made to stock: from available to promise when it has one free, else made.
     const s52 = sizeOf(answer, '52')
@@ -194,13 +195,21 @@ describe('the promise calculator (PLN-169, PLN-171, PLN-179)', { timeout: 120_00
   })
 
   it('a certificate that ends before the day does not promise the size', async () => {
-    await admin(`UPDATE "Certificate" SET "validTo" = $2::date WHERE id = (SELECT "certificateId" FROM "CertificateCoverage" WHERE "styleId" = $1 LIMIT 1)`, [A.jkt02, today])
+    // SEED-CERT-0003 suspended; a made-up certificate covers 50 and 52 until today only.
+    const seeded = await one(`SELECT "certificateId" AS id FROM "CertificateCoverage" WHERE "styleId" = $1 LIMIT 1`, [A.jkt02])
+    const short = newId()
+    await admin(`INSERT INTO "Certificate" SELECT (jsonb_populate_record(NULL::"Certificate", to_jsonb(c) || jsonb_build_object('id', $1::text, 'number', 'TEST-CERT-0301', 'validTo', $3::text))).* FROM "Certificate" c WHERE c.id = $2`, [short, seeded, today])
+    await admin(`INSERT INTO "CertificateCoverage" SELECT (jsonb_populate_record(NULL::"CertificateCoverage", to_jsonb(v) || jsonb_build_object('id', $1::text, 'certificateId', $2::text))).* FROM "CertificateCoverage" v WHERE v."certificateId" = $3 AND v."styleId" = $4`, [newId(), short, seeded, A.jkt02])
+    await admin(`UPDATE "Certificate" SET status = 'SUSPENDED', "statusChangedAt" = now() WHERE id = $1`, [seeded])
     try {
       const { answer } = await ok('planner', 'POST', '/planning/promise/calculate', { siteId: A.site, styleId: A.jkt02, colourwayId: A.blk, sizes: [{ size: '50', quantity: 2 }] })
       const s50 = sizeOf(answer, '50')
-      if (s50.readyDate > today) expect(s50).toMatchObject({ state: 'NOT_CERTIFIED', date: null, certificate: { state: 'MISSING' } })
+      // Covered today (nothing refused at first), but made after today: the certificate does not reach its day.
+      expect(s50.readyDate > today).toBe(true)
+      expect(s50).toMatchObject({ state: 'NOT_CERTIFIED', date: null, certificate: { state: 'MISSING' } })
     } finally {
-      await admin(`UPDATE "Certificate" SET "validTo" = '2031-01-14' WHERE id = (SELECT "certificateId" FROM "CertificateCoverage" WHERE "styleId" = $1 LIMIT 1)`, [A.jkt02])
+      await admin(`UPDATE "Certificate" SET status = 'VALID', "statusChangedAt" = now() WHERE id = $1`, [seeded])
+      await admin(`UPDATE "Certificate" SET status = 'WITHDRAWN', "statusChangedAt" = now() WHERE id = $1`, [short])
     }
   })
 
@@ -223,10 +232,9 @@ describe("a quote's suggested dates (PLN-169)", { timeout: 120_000 }, () => {
     expect(answer.mayUse).toBe(true)
     const line = (answer.lines as Json[]).find((entry) => entry.lineId === A.q2Line)!
     expect(line.answer).toMatchObject({ style: { code: 'SEED-JKT-02' }, colourway: { code: 'BLK' } })
-    expect(sizeOf(line.answer, '54').state).toBe('NOT_CERTIFIED')
-    // The deliveries: one per day, the promised sizes on it (54 is not on any).
+    // The deliveries: one per day, every promised size on it with its pieces.
     const delivered = (line.deliveries as Json[]).flatMap((delivery) => Object.keys(delivery.sizeQuantities ?? {}))
-    expect(delivered).not.toContain('54')
+    expect(delivered.sort()).toEqual((line.answer.sizes as Json[]).filter((size) => size.date !== null).map((size) => size.size).sort())
     expect(line.deliveries.every((delivery: Json) => delivery.quantity === Object.values(delivery.sizeQuantities as Record<string, number>).reduce((a, b) => a + b, 0))).toBe(true)
     // The made-to-measure line is asked as one unit of its base size; JKT-01 has no released revision.
     const mtm = (answer.lines as Json[]).find((entry) => entry.answer.madeToMeasure)

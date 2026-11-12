@@ -200,7 +200,7 @@ export interface Bridge {
   readonly baseDays: number
   /** What today's load adds (the queue). */
   readonly queueDays: number
-  readonly totalDays: number
+  readonly spanDays: number
   readonly materialDate: BusinessDate
   readonly finish: BusinessDate
 }
@@ -208,8 +208,8 @@ export interface Bridge {
 /** The bridge of a date (every part 0 or more; the queue takes what the empty walk does not explain). */
 export function bridgeOf(today: BusinessDate, materialDate: BusinessDate, emptyFinish: BusinessDate, finish: BusinessDate): Bridge {
   const start = materialDate < today ? today : materialDate
-  const totalDays = Math.max(0, daysFrom(today, finish))
-  const materialDays = Math.min(totalDays, Math.max(0, daysFrom(today, start)))
-  const baseDays = Math.min(totalDays - materialDays, Math.max(0, daysFrom(start, emptyFinish)))
-  return { materialDays, baseDays, queueDays: totalDays - materialDays - baseDays, totalDays, materialDate: start, finish }
+  const spanDays = Math.max(0, daysFrom(today, finish))
+  const materialDays = Math.min(spanDays, Math.max(0, daysFrom(today, start)))
+  const baseDays = Math.min(spanDays - materialDays, Math.max(0, daysFrom(start, emptyFinish)))
+  return { materialDays, baseDays, queueDays: spanDays - materialDays - baseDays, spanDays, materialDate: start, finish }
 }
