@@ -175,7 +175,7 @@ describe('price lists (SAL-165): a base list, a customer list over it, dated ver
     const v1 = lists.BASE.versions[0]
     const priced = await ok('sales', 'PUT', `/sales/price-lists/${lists.BASE.id}/versions/${v1.id}/entries`, { version: v1.version, entries: [{ styleId: jacket, colourwayId: null, unitPrice: '450' }] })
     // Sales sees the margin % at today's standard cost (290.439 at size 52), never the cost (design question S2, answer a).
-    expect(priced.entries).toEqual([{ id: expect.any(String), styleId: jacket, style: { code: 'SEED-JKT-01', name: 'Seed leather jacket', status: expect.any(String) }, colourwayId: null, colourway: null, unitPrice: '450', marginPct: '35.458', belowFloor: false, version: 1 }])
+    expect(priced.entries).toEqual([{ id: expect.any(String), styleId: jacket, style: { code: 'SEED-JKT-01', name: 'Seed leather jacket', status: expect.any(String) }, colourwayId: null, colourway: null, unitPrice: '450', marginPct: '35.458', belowFloor: false, validFrom: null, validTo: null, version: 1 }])
     const read = await ok('finance', 'GET', `/sales/price-lists/${lists.BASE.id}/versions/${v1.id}`)
     expect(read.entries[0]).toMatchObject({ unitPrice: '450', standardCost: '290.439', marginPct: '35.458' })
     // Price lists are not the buyer's; a copy of the sales role without the price grain reads no price.

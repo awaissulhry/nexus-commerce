@@ -22,6 +22,8 @@ export const listRowView = output({
   name: z.string(),
   kind: z.enum(PRICE_LIST_KINDS),
   currency: z.string(),
+  /** B-W2b-325 (SAL-170): the customer's documents show the list price and the discount (true), or only the net price. */
+  showDiscount: z.boolean(),
   baseList: output({ id: id(), code: z.string(), name: z.string() }).nullable(),
   /** Today: DRAFT (never activated), SCHEDULED, IN_FORCE, EXPIRED or ARCHIVED. */
   state: z.enum(PRICE_LIST_STATES),
@@ -76,6 +78,9 @@ const entryView = output({
   marginPct: money.margin(z.string().nullable()),
   /** The margin is under the sales settings' floor. */
   belowFloor: money.margin(z.boolean()),
+  /** B-W2b-325 (SAL-167): the days the price holds inside its version; null and null: the whole version. */
+  validFrom: businessDate().nullable(),
+  validTo: businessDate().nullable(),
   version: z.number().int(),
 })
 

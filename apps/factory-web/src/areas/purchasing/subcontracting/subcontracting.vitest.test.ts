@@ -44,7 +44,12 @@ describe('subcontract orders: the saved views, the address, the tiles', () => {
     expect(viewFromAddress(new URLSearchParams(''))).toBe('open')
     expect(showOf('stock')).toBe('stock')
     expect(showOf(null)).toBe('orders')
-    expect(TILES.map((tile) => tile.count({ kitToSend: 1, atWorkshops: 2, dueBackThisWeek: 3, late: 4 }))).toEqual([1, 2, 3, 4, null])
+    expect(TILES.map((tile) => tile.count({ kitToSend: 1, atWorkshops: 2, dueBackThisWeek: 3, late: 4, balanceOpen: null }))).toEqual([1, 2, 3, 4, null])
+    // B-W2b-344: Balance open is a saved view of its own (the open balances' read), counted by the API.
+    expect(TILES.map((tile) => tile.count({ kitToSend: 1, atWorkshops: 2, dueBackThisWeek: 3, late: 4, balanceOpen: 5 })).at(-1)).toBe(5)
+    expect(TILES.at(-1)?.view).toBe('balance')
+    expect(viewOf('balance')).toBe('balance')
+    expect(viewFromAddress(new URLSearchParams('view=balance'))).toBe('balance')
   })
 
   it('reads the roles: the buyer manages with fees, the warehouse sends and receives without money, sales sees nothing', () => {

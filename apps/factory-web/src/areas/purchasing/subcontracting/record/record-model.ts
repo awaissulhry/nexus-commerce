@@ -16,7 +16,8 @@ import { plannedLines, words, type SubcontractCan, type Words } from '../model'
 
 // ---- tabs ---------------------------------------------------------------------------------------------------------------------
 
-export const RECORD_TABS = ['ops', 'kit', 'back', 'documents', 'activity'] as const
+// B-W2b-344: Material balance and Cost (../depth) between Received back and Documents, as the design orders them.
+export const RECORD_TABS = ['ops', 'kit', 'back', 'balance', 'cost', 'documents', 'activity'] as const
 export type RecordTab = (typeof RECORD_TABS)[number]
 export const tabOf = (value: string | null | undefined): RecordTab => ((RECORD_TABS as readonly string[]).includes(value ?? '') ? (value as RecordTab) : 'ops')
 
@@ -542,6 +543,8 @@ export interface SubcontractRecordModel {
   selected?: readonly string[]
   /** B-W2b-176: what the workshop said, under the Kit tab (./workshop; the container's panel, or a design case's view). */
   workshop?: ReactNode
+  /** B-W2b-344: the written terms link (on Operations & quantities), the Material balance and Cost tabs (../depth). */
+  depth?: { terms?: ReactNode; balance?: ReactNode; cost?: ReactNode }
 }
 
 export interface SubcontractRecordActions {

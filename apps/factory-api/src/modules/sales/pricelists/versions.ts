@@ -7,7 +7,7 @@ import { PRICE_LISTS_MANAGE } from '@nexus/factory-domain/sales/pricelists/permi
 import { command, type CommandCaller, type CommandTools, type CommandTx } from '../../../core/command'
 import { serverClock } from '../../../core/time'
 import { officeContextOf } from '../quotes/store'
-import { assertMayChangeList, claimVersion, dayText, dayValue, ENTRY_COLUMNS, entriesViewOf, lockList, priceOf, readListFor, VERSION_COLUMNS, versionFactsOf, versionsOf, versionViewOf, type ListRow } from './store'
+import { assertMayChangeList, claimVersion, copyVersionParts, dayText, dayValue, ENTRY_COLUMNS, entriesViewOf, lockList, priceOf, readListFor, refuseDatedKeys, VERSION_COLUMNS, versionFactsOf, versionsOf, versionViewOf, type ListRow } from './store'
 
 /**
  * A price list's versions and prices (B-W2a-19; SAL-165; design record "Price list": Prices — autosave per cell, draft
@@ -114,9 +114,9 @@ export async function nextVersion(caller: CommandCaller, listId: string, body: N
     const stamp = { createdAt: now, updatedAt: now, createdById: tools.context.audience === 'office' ? tools.context.actorId : null }
     const note = body.note?.trim() ? body.note.trim().slice(0, PRICE_LIST_LIMITS.note) : null
     await tx.priceListVersion.create({ data: { id, listId, revision, validFrom: body.validFrom ? dayValue(body.validFrom) : null, validTo: body.validTo ? dayValue(body.validTo) : null, note, ...stamp }, select: { id: true } })
-    const copied = from ? await tx.priceListEntry.findMany({ where: { versionId: from.id }, select: ENTRY_COLUMNS }) : []
-    if (copied.length > 0) await tx.priceListEntry.createMany({ data: copied.map((entry) => ({ id: newId(), versionId: id, styleId: entry.styleId, colourwayId: entry.colourwayId, unitPrice: entry.unitPrice, ...stamp })) })
-    tools.audit({ action: 'priceLists.nextVersion', recordType: 'PriceList', recordId: listId, companyId: list.companyId, after: { versionId: id, revision, fromVersionId: from?.id ?? null, rows: copied.length, validFrom: body.validFrom ?? null, validTo: body.validTo ?? null, note } })
+    // B-W2b-325: the prices with their days, their quantity breaks and the version's size surcharges (pricelists/store).
+    const copied = from ? await copyVersionParts(tx, from.id, id, stamp) : { entries: 0, breaks: 0, surcharges: 0 }
+    tools.audit({ action: 'priceLists.nextVersion', recordType: 'PriceList', recordId: listId, companyId: list.companyId, after: { versionId: id, revision, fromVersionId: from?.id ?? null, rows: copied.entries, breaks: copied.breaks, surcharges: copied.surcharges, validFrom: body.validFrom ?? null, validTo: body.validTo ?? null, note } })
     tools.emit({ type: 'price_list.version_changed', subject: listId, companyId: list.companyId, payload: { listId, versionId: id, revision, change: 'CREATED' } })
     return versionAnswer(tools, list, id)
   })
@@ -218,6 +218,8 @@ export async function setPrices(caller: CommandCaller, listId: string, versionId
     if (row.status !== 'DRAFT') throw new InvalidStateError(`Version ${row.revision} is active: its prices are fixed. Make the next version to change them.`)
     await checkTargets(tx, list, entries)
     const existing = await tx.priceListEntry.findMany({ where: { versionId }, select: ENTRY_COLUMNS })
+    // B-W2b-325 (SAL-167): a style with dated prices is changed under …/dated-prices.
+    refuseDatedKeys(existing, entries)
     const byKey = new Map(existing.map((entry) => [entryKey(entry.styleId, entry.colourwayId), entry]))
     const before: { styleId: string; colourwayId: string | null; unitPrice: string | null }[] = []
     const after: { styleId: string; colourwayId: string | null; unitPrice: string | null }[] = []

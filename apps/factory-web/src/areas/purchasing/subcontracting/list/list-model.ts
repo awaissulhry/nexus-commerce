@@ -1,5 +1,6 @@
 import type { LiveState } from '../../../_shared/buying/hooks'
 import type { OrderRow, OutsideOperations, TileCounts, WorkOrderChoice, WorkshopOption, WorkshopStock } from '../api'
+import type { Ageing, OpenBalance, OpenBalances } from '../depth/api'
 import { words, type OrderView, type PageShow, type SubcontractCan, type Words } from '../model'
 
 /**
@@ -27,6 +28,12 @@ export interface SubcontractingModel {
   counts: TileCounts | null
   countsProblem?: string | null
   stock: { value: WorkshopStock | null; problem: string | null }
+  /** B-W2b-344: every job with kit material still open (the Balance open tile, the grid's Balance open); null while read. */
+  balances: { value: OpenBalances | null; problem: string | null }
+  /** B-W2b-344: the saved view "Balance open" — the jobs back with material still open (GET …/balances?open=true). */
+  balanceRows: Rows<OpenBalance>
+  /** B-W2b-344: how long our material has been at each workshop (GET …/ageing), beside the stock. */
+  ageing: { value: Ageing | null; problem: string | null }
   /** The stock view's workshop filter (a party id) and search. */
   stockWorkshop: string | null
   stockQ: string
@@ -51,6 +58,10 @@ export interface SubcontractingActions {
   onMore?: () => void
   onRetry?: () => void
   onRetryStock?: () => void
+  /** B-W2b-344: the open balances again (the tile, the column), the days out again, the saved view's export. */
+  onRetryBalances?: () => void
+  onRetryAgeing?: () => void
+  onExportBalances?: (orderIds: string[]) => void
   onShowUpdates?: () => void
   onExport?: (ids: string[]) => void
   onExportStock?: (keys: string[]) => void

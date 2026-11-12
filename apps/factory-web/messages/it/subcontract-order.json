@@ -334,7 +334,7 @@
     "title": "Chiudi {number}",
     "confirm": "Chiudi l’ordine",
     "back": "Rientrati: {good} buoni, {defective} difettosi, {scrapped} scartati dal terzista.",
-    "balanceLater": "Il saldo materiale (inviato, nei capi, restituito, ancora fuori) arriva con un passo successivo: prima controlla la giacenza presso il terzista.",
+    "balance": "Il materiale del kit ancora fuori resta presso il terzista: controlla la scheda Saldo materiale e registralo come usato, reso o scartato prima di chiudere.",
     "final": "Un ordine chiuso non accetta altro.",
     "note": "Nota",
     "noteHint": "Facoltativa; resta nella cronologia."
