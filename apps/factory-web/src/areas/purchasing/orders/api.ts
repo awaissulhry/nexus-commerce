@@ -8,6 +8,7 @@ import { DELIVERY_STATES } from '@nexus/factory-domain/purchasing/orders/deliver
 import { LINE_DIFF_KINDS, REVISION_ANSWERS } from '@nexus/factory-domain/purchasing/revisions/revisions'
 import type { ApiClient } from '../../../lib/api/client'
 import { newIdempotencyKey } from '../../../lib/api/client'
+import { waitingSchema } from './depth/api'
 
 /**
  * Every call of Purchase orders (SCR-058) and the PO studio (SCR-059), with the answer's shape checked (zod; unknown
@@ -294,7 +295,10 @@ const sentView = z.object({
   changes: z.array(z.string()).nullable().optional(),
 })
 const sentSchema = z.object({ order: orderSchema, sent: sentView, delivery })
-export type SendAnswer = z.infer<typeof sentSchema>
+/** B-W2b-305 (SCM-078): a switched-on approval rule held the send — 202, the order waits for a yes, nothing was sent. */
+const waitingSendSchema = z.object({ order: orderSchema, approval: waitingSchema })
+export type SendAnswer = z.infer<typeof sentSchema> | z.infer<typeof waitingSendSchema>
+export const isWaitingSend = (answer: SendAnswer): answer is z.infer<typeof waitingSendSchema> => 'approval' in answer
 
 export function sendOrder(
   api: ApiClient,
@@ -302,7 +306,7 @@ export function sendOrder(
   body: { version: number; cc?: string[]; subject?: string | null; message?: string | null; confirmBy?: string | null; changeNote?: string | null },
   idempotencyKey: string,
 ): Promise<SendAnswer> {
-  return api.post(`${orderUrl(id)}/send`, { body, schema: sentSchema, idempotencyKey })
+  return api.post(`${orderUrl(id)}/send`, { body, schema: z.union([sentSchema, waitingSendSchema]), idempotencyKey })
 }
 
 const linkSentSchema = z.object({ order: orderSchema, link: z.object({ id: z.string(), expiresAt: z.string(), to: z.string(), revokedLinkIds: z.array(z.string()), emailId: z.string() }), delivery })
@@ -636,7 +640,8 @@ export async function sendChecks(api: ApiClient, orderIds: readonly string[], si
   return (await api.post('/purchasing/orders/send-checks', { body: { orderIds: [...orderIds] }, schema: z.object({ ready: z.number(), cards: z.array(sendCardSchema) }), signal })).cards
 }
 
-const outcomeSchema = z.object({ id: z.string(), number: z.string().nullable(), outcome: z.enum(['SENT', 'REFUSED']), sent: sentView.nullable(), delivery, refused: refusedSchema.nullable() })
+// B-W2b-333: WAITING (B-W2b-305) — a rule asked a yes first; `approval` names the request.
+const outcomeSchema = z.object({ id: z.string(), number: z.string().nullable(), outcome: z.enum(['SENT', 'REFUSED', 'WAITING']), sent: sentView.nullable(), delivery, refused: refusedSchema.nullable(), approval: waitingSchema.nullable().optional() })
 export type SendOutcome = z.infer<typeof outcomeSchema>
 
 /** Send n: each order its own send (and key); a refused one keeps its code. */

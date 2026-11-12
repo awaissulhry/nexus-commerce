@@ -9,7 +9,7 @@ import { defineExportSource, type ExportColumn } from '../source'
 /**
  * Sales › Customers (SCR-032, `/sales/customers`) and Purchasing › Suppliers (SCR-056, `/purchasing/suppliers`): the
  * one parties list seen from each side (apps/factory-web areas/parties/_shared PartiesList + model.ts SIDES and
- * viewQuery). The address keeps the saved filter `?view=` (customers: open|active|prospects|brands|invoice|vies|blocked|
+ * viewQuery). The address keeps the saved filter `?view=` (customers: open|active|prospects|brands|riders|invoice|vies|blocked|
  * archived|all; suppliers: open|active|prospects|suppliers|subcontractors|carriers|blocked|archived|all; nothing: open =
  * every status but archived, the side's roles); the screen keeps its search and kind / tax-mode chips out of the
  * address, so the file reads them only when an address names them (`?q=`, `?kind=`, `?taxMode=`). Read through the
@@ -29,12 +29,14 @@ type TaxMode = (typeof PARTY_TAX_MODES)[number]
 
 const SIDE_ROLES: Readonly<Record<Side, readonly PartyRole[]>> = Object.freeze({ customers: ['CUSTOMER', 'BRAND'], suppliers: ['SUPPLIER', 'SUBCONTRACTOR', 'CARRIER'] })
 const SIDE_VIEWS: Readonly<Record<Side, readonly string[]>> = Object.freeze({
-  customers: ['open', 'active', 'prospects', 'brands', 'invoice', 'vies', 'blocked', 'archived', 'all'],
+  customers: ['open', 'active', 'prospects', 'brands', 'riders', 'invoice', 'vies', 'blocked', 'archived', 'all'], // B-W2b-324: riders
   suppliers: ['open', 'active', 'prospects', 'suppliers', 'subcontractors', 'carriers', 'blocked', 'archived', 'all'],
 })
 const VIEW_STATUSES: Readonly<Record<string, NonNullable<Query['status']>>> = Object.freeze({ active: ['ACTIVE'], prospects: ['PROSPECT'], blocked: ['BLOCKED'], archived: ['ARCHIVED'], all: ['ALL'] })
 const VIEW_ROLES: Readonly<Record<string, PartyRole[]>> = Object.freeze({ brands: ['BRAND'], suppliers: ['SUPPLIER'], subcontractors: ['SUBCONTRACTOR'], carriers: ['CARRIER'] })
 const VIEW_ATTENTION: Readonly<Record<string, NonNullable<Query['attention']>>> = Object.freeze({ invoice: 'INVOICE', vies: 'VIES' })
+// B-W2b-324: Riders (people, design sales.customers savedRows) = the customers that are people (a team's riders and private riders).
+const VIEW_KIND: Readonly<Record<string, Kind>> = Object.freeze({ riders: 'PERSON' })
 
 const isKind = (value: string | null): value is Kind => value !== null && (PARTY_KINDS as readonly string[]).includes(value)
 const isTaxMode = (value: string | null): value is TaxMode => value !== null && (PARTY_TAX_MODES as readonly string[]).includes(value)
@@ -51,6 +53,7 @@ function queryOf(side: Side, address: URLSearchParams): Query {
     status: Object.hasOwn(VIEW_STATUSES, view) ? [...VIEW_STATUSES[view]!] : undefined,
     ...(Object.hasOwn(VIEW_ATTENTION, view) ? { attention: VIEW_ATTENTION[view] } : {}),
     ...(isKind(kind) ? { kind } : {}),
+    ...(Object.hasOwn(VIEW_KIND, view) ? { kind: VIEW_KIND[view]! } : {}),
     ...(isTaxMode(taxMode) ? { taxMode } : {}),
     q,
   }

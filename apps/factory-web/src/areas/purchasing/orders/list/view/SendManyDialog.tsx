@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { CheckCircle2, Mail, XCircle } from 'lucide-react'
+import { CheckCircle2, Clock, Mail, XCircle } from 'lucide-react'
 import { Banner, Card, Field } from '@nexus/ui/components'
 import { Button, Pill, Spinner, Tag } from '@nexus/ui/primitives'
 import { DateTimeField, Modal, Textarea } from '../../../../../lib/i18n/ds-parts'
@@ -43,7 +43,8 @@ export function SendManyDialog({ model, actions }: { model: OrdersListModel; act
           <ul className="fw-po-card-orders">
             {dialog.outcomes.map((outcome) => (
               <li key={outcome.id} className="fw-by-check">
-                {outcome.outcome === 'SENT' ? <CheckCircle2 size={16} className="fw-by-ico is-ok" aria-hidden /> : <XCircle size={16} className="fw-by-ico is-blocked" aria-hidden />}
+                {/* B-W2b-333: WAITING — a rule asked a yes first; nothing was sent. */}
+                {outcome.outcome === 'SENT' ? <CheckCircle2 size={16} className="fw-by-ico is-ok" aria-hidden /> : outcome.outcome === 'WAITING' ? <Clock size={16} className="fw-by-ico is-warning" aria-hidden /> : <XCircle size={16} className="fw-by-ico is-blocked" aria-hidden />}
                 <span className="fw-by-check-body">
                   <Link className="fw-by-link" href={`${model.prefix}/purchasing/orders/${outcome.id}`}>
                     {outcome.number ?? t('sendMany.order')}

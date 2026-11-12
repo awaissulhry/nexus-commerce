@@ -1,0 +1,525 @@
+{
+  "problem": {
+    "forbidden": "You may not do this here.",
+    "notFound": "It is not there any more: read the page again.",
+    "conflict": "Someone else changed it meanwhile: it was read again. Check and try once more.",
+    "invalid": "Something typed is not right: check the fields.",
+    "stepUp": "A fresh code is needed for this.",
+    "rateLimited": "Too many tries: wait a minute and try again.",
+    "signedOut": "You were signed out: sign in again.",
+    "offline": "The factory’s server did not answer: check the connection and try again.",
+    "unavailable": "It did not work this time: try again.",
+    "tooLong": "At most {max} characters."
+  },
+  "read": {
+    "failed": "Couldn’t load {what}",
+    "retry": "Try again",
+    "loading": "Still loading…"
+  },
+  "dialog": {
+    "cancel": "Cancel",
+    "close": "Close",
+    "saving": "Saving…",
+    "fixFirst_one": "Fix {count} field first",
+    "fixFirst_other": "Fix {count} fields first"
+  },
+  "held": {
+    "manage": "Needs the right to change customers (parties.manage).",
+    "hold": "Needs the right to put customers on hold (parties.hold).",
+    "privacy": "Needs the right to manage personal data (parties.privacy).",
+    "erase": "Needs the right to erase personal data (parties.erase).",
+    "archived": "The customer is archived: reactivate it first.",
+    "manageCompany": "You may not change this customer’s terms with this company.",
+    "erased": "This contact was erased: nothing more can be done with it.",
+    "objected": "An objection is already recorded for this person.",
+    "styles": "Picking styles needs the right to see styles (product.styles.view).",
+    "files": "Picking a file needs the right to see the record’s files (files.read)."
+  },
+  "numbers": {
+    "freeCredit": "Free credit",
+    "promises": "Promises",
+    "reading": "Reading…",
+    "failed": "Couldn’t count",
+    "unknown": "—",
+    "creditWithheld": "Your role does not see credit",
+    "promisesWithheld": "Your role does not see orders"
+  },
+  "credit": {
+    "noLimit": "No limit",
+    "noLimitHint": "No credit limit is set with this company",
+    "available": "{amount}",
+    "ofLimit": "of a {limit} limit",
+    "overBy": "Over by {amount}",
+    "over": "Over the credit limit",
+    "within": "Within the limit",
+    "noPrice": "Amounts need selling prices"
+  },
+  "promises": {
+    "none": "No open order",
+    "noneHint": "Nothing promised now",
+    "late_one": "{count} late",
+    "late_other": "{count} late",
+    "onTime_one": "{count} on time",
+    "onTime_other": "All {count} on time",
+    "next": "Next {date}",
+    "without_one": "{count} without a promise date",
+    "without_other": "{count} without a promise date",
+    "noneComing": "No promise date ahead"
+  },
+  "withheld": {
+    "samples": "Not shown: your role does not see sample rounds.",
+    "profiles": "Not shown: your role does not see measurement profiles.",
+    "repairs": "Not shown: your role does not see repairs."
+  },
+  "glance": {
+    "seeAll": "See all {count}",
+    "more_one": "{count} more",
+    "more_other": "{count} more"
+  },
+  "now": {
+    "title": "Now"
+  },
+  "samples": {
+    "title": "Samples in progress",
+    "hint": "Sample rounds for this customer not decided yet, the earliest due first.",
+    "none": "No sample in progress.",
+    "col": {
+      "number": "Round",
+      "style": "Style",
+      "kind": "Kind",
+      "stage": "Stage",
+      "due": "Due"
+    },
+    "kindRound": "{kind} · round {round}",
+    "late_one": "{count} day late",
+    "late_other": "{count} days late",
+    "dueToday": "Due today",
+    "due": "Due {date}",
+    "noDue": "No due date"
+  },
+  "profiles": {
+    "title": "Measurement profiles",
+    "hint": "The newest revision per rider and garment; the measurements stay in the profile.",
+    "none": "No measurement profile kept for this customer.",
+    "noneRider": "No measurement profile for this rider yet.",
+    "col": {
+      "rider": "Rider",
+      "garment": "Garment",
+      "revision": "Revision",
+      "base": "Closest size",
+      "taken": "Measured on"
+    },
+    "rev": "Rev. {revision}"
+  },
+  "riders": {
+    "title": "Riders",
+    "hint": "The people under this team or dealer.",
+    "none": "No rider under this customer.",
+    "col": {
+      "rider": "Rider",
+      "status": "Status",
+      "profiles": "Profiles"
+    }
+  },
+  "repairs": {
+    "title": "Repairs and alterations in progress",
+    "hint": "Garments of this customer being repaired or altered.",
+    "none": "No repair in progress.",
+    "col": {
+      "number": "Repair",
+      "kind": "Kind",
+      "stage": "Stage",
+      "opened": "Opened"
+    }
+  },
+  "status": {
+    "notOnHold": "Not on hold.",
+    "onHold": "On hold",
+    "since": "Since {date}, by {by}",
+    "sinceSystem": "Since {date}, by a credit check",
+    "holdStops": "New orders and shipments wait; new quotes show a warning.",
+    "openHold": "Open the hold"
+  },
+  "team": {
+    "title": "Team",
+    "hint": "This rider is under this team or dealer."
+  },
+  "reqSide": {
+    "title": "Requirements in force",
+    "none": "No special requirements.",
+    "all_one": "See the requirement",
+    "all_other": "See all {count} requirements",
+    "open": "Open Requirements"
+  },
+  "hold": {
+    "title": "Hold",
+    "hint": "Stop new orders and shipments with a reason; new quotes show a warning.",
+    "place": "Put on hold…",
+    "toggle": "On hold",
+    "on": "On hold",
+    "off": "Not on hold",
+    "toggleMany": "Several holds are in force: release each one below.",
+    "inForce": "Holds in force",
+    "none": "No hold in force.",
+    "col": {
+      "reason": "Reason",
+      "company": "Company",
+      "words": "Why",
+      "placed": "Placed"
+    },
+    "everyCompany": "Every company",
+    "placedBy": "{date} by {by}",
+    "placedSystem": "{date} by a credit check",
+    "release": "Release…",
+    "stops": "While a hold is in force, new orders and shipments of this customer wait until it is released.",
+    "waiting_one": "{count} accepted quote waits for its order",
+    "waiting_other": "{count} accepted quotes wait for their order",
+    "quoteRev": "{number} rev. {revision}",
+    "waitingHint": "After the release, make the order from the quote (Sales › Orders).",
+    "history": "Released holds",
+    "noHistory": "No hold was released yet.",
+    "releasedLine": "{reason}: released by {by}",
+    "placedLine": "placed {date}: {words}",
+    "system": "the system",
+    "dialog": {
+      "place": "Put the customer on hold",
+      "release": "Release the hold ({reason})",
+      "company": "For",
+      "companyHint": "One company, or every company of the group.",
+      "reason": "Reason",
+      "pick": "Pick a reason",
+      "words": "Why",
+      "wordsHint": "People see it on the quote, the order and the shipment.",
+      "stops": "New orders and shipments will wait until the hold is released.",
+      "releaseWords": "Why it is lifted",
+      "releaseHint": "Kept with the hold’s history.",
+      "confirmPlace": "Put on hold",
+      "confirmRelease": "Release"
+    },
+    "problem": {
+      "reason": "Pick the reason.",
+      "why": "Say why the account goes on hold.",
+      "whyRelease": "Say why the hold is lifted."
+    },
+    "refused": {
+      "same": "A hold for this reason is already in force there: release it or pick another reason.",
+      "company": "Not a company this customer can be put on hold in."
+    },
+    "placed": "The customer is on hold.",
+    "released": "The hold was released."
+  },
+  "reason": {
+    "CREDIT": "Credit",
+    "LEGAL": "Legal",
+    "QUALITY_DISPUTE": "Quality dispute",
+    "DATA_MISSING": "Data missing",
+    "OTHER": "Other"
+  },
+  "po": {
+    "title": "Customer PO number",
+    "hint": "When it is required, an order with that company is refused when it is made without the customer’s PO number.",
+    "toggle": "Customer PO number required with {company}",
+    "required": "Required with {company}",
+    "notRequired": "Not required with {company}",
+    "setBy": "Set by {by}, {date}",
+    "partyOwn": "No terms of this company yet: nothing is required.",
+    "unsaved_one": "{count} change not saved",
+    "unsaved_other": "{count} changes not saved",
+    "save": "Save",
+    "saved_one": "The PO number rule was saved for {count} company.",
+    "saved_other": "The PO number rule was saved for {count} companies."
+  },
+  "req": {
+    "title": "Customer requirements",
+    "hint": "Packing, labelling, hangtag, document and routing-guide rules; each says where people will see it.",
+    "add": "Add rule",
+    "empty": "No special requirements",
+    "emptyBody": "Add a rule for packing, labels, documents or shipping, and say where people should see it.",
+    "col": {
+      "rule": "Rule",
+      "appliesTo": "Applies to",
+      "shownOn": "Shown on",
+      "attachment": "Attachment",
+      "written": "Written"
+    },
+    "allOrders": "All orders",
+    "someStyles": "Some styles",
+    "writtenBy": "{by}, {date}",
+    "menu": "Actions for the {kind} rule",
+    "replace": "Replace…",
+    "replaceHint": "The old rule ends and the new one starts in one step.",
+    "end": "End…",
+    "history": "Ended rules",
+    "historyHint": "Rules are never edited: a change ends the old one and keeps it here.",
+    "noHistory": "No rule ended yet.",
+    "endedLine": "{kind}: ended by {by}",
+    "addTitle": "Add a requirement",
+    "replaceTitle": "Replace the {kind} rule",
+    "replaceNote": "Saving ends the rule in force and writes this one in its place; the old one stays in the history.",
+    "addConfirm": "Add rule",
+    "replaceConfirm": "Replace rule",
+    "endTitle": "End the {kind} rule",
+    "endReason": "Why it ends",
+    "endReasonHint": "Kept with the rule in the history.",
+    "endConfirm": "End rule",
+    "field": {
+      "company": "For",
+      "companyHint": "One company, or every company of the group.",
+      "kind": "Kind",
+      "rule": "Rule",
+      "ruleHint": "As people should read it: “Two hangtags per jacket, size label inside the collar.”",
+      "shownOn": "Shown on",
+      "shownOnHint": "Where people will see it while they work.",
+      "appliesTo": "Applies to",
+      "styles": "Styles",
+      "stylesPick": "Pick styles",
+      "stylesSearch": "Search a style",
+      "attachment": "Attachment (routing guide)",
+      "attachmentHint": "One of this customer’s files (Documents tab).",
+      "noAttachment": "No attachment",
+      "reason": "Why it changes (optional)",
+      "reasonHint": "Kept with the old rule."
+    },
+    "stylesFailed": "The styles couldn’t be read: this rule can apply to all orders only for now.",
+    "problem": {
+      "words": "Write the rule.",
+      "where": "Pick at least one place where it is shown.",
+      "styles": "Pick the styles, or choose all orders.",
+      "tooManyStyles": "At most {max} styles.",
+      "endReason": "Say why the rule ends."
+    },
+    "refused": {
+      "company": "Not a company this rule can be for.",
+      "styles": "A style picked is not one of this company’s.",
+      "file": "The attachment is not one of this customer’s files."
+    },
+    "done": {
+      "add": "The requirement was added.",
+      "replace": "The requirement was replaced; the old one is in the history.",
+      "end": "The requirement ended."
+    }
+  },
+  "kind": {
+    "PACKING": "Packing",
+    "DOCUMENT": "Documents",
+    "LABEL": "Labels",
+    "QUALITY": "Quality",
+    "SHIPPING": "Shipping",
+    "INVOICING": "Invoicing",
+    "OTHER": "Other"
+  },
+  "stage": {
+    "QUOTE": "the quote",
+    "ORDER": "the order",
+    "PACKING": "the pick & pack screen",
+    "SHIPMENT": "the shipping checklist",
+    "INVOICE": "the invoice"
+  },
+  "privacy": {
+    "title": "Personal data of the contacts",
+    "hint": "Why we may keep each person’s details (GDPR art. 6), their consent, and what they may ask: a copy of what we hold (art. 15) and erasure (art. 17).",
+    "notRecorded_one": "{count} contact has no lawful basis recorded yet.",
+    "notRecorded_other": "{count} contacts have no lawful basis recorded yet.",
+    "none": "No contacts yet.",
+    "col": {
+      "contact": "Contact",
+      "basis": "Lawful basis",
+      "consent": "Consent",
+      "objection": "Objection",
+      "state": "State"
+    },
+    "erasedName": "Erased contact",
+    "basisMissing": "Not recorded",
+    "objectedOn": "Objected {date}",
+    "erased": "Erased",
+    "erasedOn": "{date} by {by}",
+    "menu": "Personal-data actions for {name}",
+    "rule": "Personal data stays inside this record: it is never a filter, a group or a total.",
+    "openPortal": "Open Portal access",
+    "act": {
+      "basis": "Record the lawful basis…",
+      "basisHint": "Why we may keep this person’s details.",
+      "objection": "Record an objection…",
+      "objectionHint": "The person objects to how we use their details (art. 21).",
+      "copy": "Access copy…",
+      "copyHint": "Everything we hold about the person (art. 15).",
+      "erase": "Erase…",
+      "eraseHint": "Blank the person’s details for good; documents the law keeps stay (art. 17)."
+    },
+    "problem": {
+      "basis": "Pick the lawful basis.",
+      "consentDay": "Give the day the person consented.",
+      "consentSource": "Say how the person consented (a form, a mail).",
+      "future": "The consent cannot be in the future.",
+      "words": "Say what the person asked and how (a mail, a letter), without their details."
+    },
+    "refused": {
+      "portalUser": "This person still signs in to the portal with this e-mail: end their portal access first, then erase the contact."
+    },
+    "done": {
+      "basis": "The lawful basis of {name} was recorded.",
+      "objection": "The objection of {name} was recorded."
+    }
+  },
+  "basis": {
+    "CONTRACT": "Contract",
+    "CONSENT": "Consent",
+    "LEGITIMATE_INTEREST": "Legitimate interest",
+    "LEGAL_DUTY": "Legal duty",
+    "title": "Lawful basis of {name}",
+    "field": "Lawful basis",
+    "fieldHint": "Why we may keep this person’s details.",
+    "pick": "Pick a basis",
+    "consentDay": "Consent given on",
+    "consentSource": "How",
+    "consentSourceHint": "The form, the mail or the call it came with.",
+    "confirm": "Save"
+  },
+  "basisArticle": {
+    "CONTRACT": "GDPR art. 6(1)(b)",
+    "CONSENT": "GDPR art. 6(1)(a)",
+    "LEGITIMATE_INTEREST": "GDPR art. 6(1)(f)",
+    "LEGAL_DUTY": "GDPR art. 6(1)(c)"
+  },
+  "basisWhy": {
+    "CONTRACT": "We need the details to quote, deliver and invoice what they order.",
+    "CONSENT": "The person agreed: say when and how.",
+    "LEGITIMATE_INTEREST": "Our interest in keeping in touch, weighed against the person’s rights.",
+    "LEGAL_DUTY": "A law makes us keep it (invoices, tax records)."
+  },
+  "objection": {
+    "title": "Objection of {name}",
+    "body": "Recorded once, with what the person asked and how; it stays on the contact.",
+    "words": "What the person asked and how",
+    "wordsHint": "Without their details: “By mail on 3 Nov, no more newsletters.”",
+    "confirm": "Record objection"
+  },
+  "copy": {
+    "title": "Access copy of {name}",
+    "body": "Everything we hold about the person (GDPR art. 15): their details, why we keep them, their quotes, inquiries, returns, complaints, mails, messages, links, measurement profiles and portal users. Making it is recorded.",
+    "words": "What the person asked and how",
+    "wordsHint": "Without their details: “Request by mail on 3 Nov.”",
+    "confirm": "Make the copy",
+    "making": "Making the copy…",
+    "made": "Copy made {date}.",
+    "person": "Person",
+    "email": "E-mail",
+    "phone": "Phone",
+    "basis": "Lawful basis",
+    "held": "What we hold",
+    "col": {
+      "what": "What",
+      "count": "How many"
+    },
+    "truncated": "Some lists stop at 200 entries: the rest opens from each record.",
+    "passOn": "Download the copy and send it to the person through the channel they asked by.",
+    "download": "Download the copy",
+    "fileName": "access-copy-{date}.json",
+    "quotes": "Quotes",
+    "inquiries": "Inquiries",
+    "returns": "Returns",
+    "complaints": "Complaints",
+    "mailsReceived": "Mails received",
+    "mailsSent": "Mails sent",
+    "messages": "Messages written",
+    "links": "Links sent",
+    "profiles": "Measurement profiles",
+    "portalUsers": "Portal users",
+    "changes": "Changes to the contact"
+  },
+  "erase": {
+    "title": "Erase {name}",
+    "forGood": "This cannot be undone.",
+    "blanks": "The name, e-mail and phone are blanked for good and the contact is archived as “Erased contact”.",
+    "keeps": "What the law requires stays: quotes, orders, DDTs and invoices keep their own copies; the audit trail keeps what each change recorded.",
+    "words": "What the person asked and how",
+    "wordsHint": "Without their details: “Erasure asked by letter on 3 Nov.”",
+    "code": "A fresh code from your authenticator app is asked before the erasure.",
+    "confirm": "Erase for good",
+    "erasing": "Erasing…",
+    "done": "The contact was erased.",
+    "keptNone": "Nothing else named the person.",
+    "notErased": "Not erased: the code was not given.",
+    "stepUp": "Erasing personal data asks a fresh code from your authenticator app.",
+    "stepUpTitle": "Confirm it’s you",
+    "stepUpConfirm": "Confirm and erase",
+    "stepUpFailed": "That code was not right: try the newest one.",
+    "kept": {
+      "documents": {
+        "what_one": "{count} document kept",
+        "what_other": "{count} documents kept",
+        "why": "They keep their own copies of what they printed: the law makes us keep them."
+      },
+      "inboundMails": {
+        "what_one": "{count} mail received kept",
+        "what_other": "{count} mails received kept",
+        "why": "Mails stay as they arrived until the platform lets an erasure blank them."
+      },
+      "messages": {
+        "what_one": "{count} message kept",
+        "what_other": "{count} messages kept",
+        "why": "Messages on record threads stay as they were written for now."
+      },
+      "auditRows": {
+        "what_one": "{count} audit entry kept",
+        "what_other": "{count} audit entries kept",
+        "why": "The audit trail is the proof of who changed what."
+      },
+      "links": {
+        "what_one": "{count} link kept",
+        "what_other": "{count} links kept",
+        "why": "Links keep the address they went to: the proof of what was sent."
+      },
+      "measurementProfiles": {
+        "what_one": "{count} measurement profile kept",
+        "what_other": "{count} measurement profiles kept",
+        "why": "They stay with the made-to-measure orders that used them."
+      },
+      "other": {
+        "what_one": "{count} other record kept",
+        "what_other": "{count} other records kept",
+        "why": "Kept because the law or a document needs it."
+      }
+    }
+  },
+  "sampleKind": {
+    "PROTO": "Proto",
+    "FIT": "Fit",
+    "SALESMAN": "Salesman",
+    "PRE_PRODUCTION": "Pre-production",
+    "CERTIFICATION": "Certification",
+    "BRAND": "Brand"
+  },
+  "sampleStage": {
+    "REQUESTED": "Requested",
+    "IN_MAKING": "Being made",
+    "SENT": "Sent",
+    "UNDER_REVIEW": "Under review",
+    "DECIDED": "Decided",
+    "CANCELLED": "Cancelled"
+  },
+  "repairKind": {
+    "REPAIR": "Repair",
+    "ALTERATION": "Alteration"
+  },
+  "repairStage": {
+    "AWAITING_GOODS": "Waiting for the garment",
+    "RECEIVED": "Received",
+    "ESTIMATED": "Estimated",
+    "APPROVED": "Approved",
+    "IN_REPAIR": "In repair",
+    "REPAIRED": "Repaired",
+    "SHIPPED": "Shipped back",
+    "CANCELLED": "Cancelled"
+  },
+  "partyStatus": {
+    "PROSPECT": "Prospect",
+    "ACTIVE": "Active",
+    "BLOCKED": "Blocked",
+    "ARCHIVED": "Archived"
+  },
+  "contactStatus": {
+    "ACTIVE": "Active",
+    "ARCHIVED": "Archived"
+  }
+}

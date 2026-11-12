@@ -375,6 +375,7 @@
     "receive": "Receive",
     "move": "Move & put away",
     "pick": "Pick & issue",
+    "count": "Count",
     "returnsin": "Receive a return",
     "kits": "Subcontract kits",
     "labels": "Garment labels",
@@ -395,6 +396,7 @@
       "receive": "Receive goods and print the hide tags",
       "move": "Scan what you move, then the bin label",
       "pick": "Issue materials to a work order",
+      "count": "Scan a bin, then every unit in it",
       "returnsin": "Scan the RMA, receive and grade the garments",
       "kits": "Send a kit with its DDT, receive goods back",
       "final": "Check, sign and release garments",
@@ -430,11 +432,13 @@
     "lineview": "Line view",
     "more": "More",
     "back": "Back",
-    "count": {
+    "waits": {
       "move_one": "{count} to put away or move",
       "move_other": "{count} to put away or move",
       "mywork_one": "{count} task waits for you",
-      "mywork_other": "{count} tasks wait for you"
+      "mywork_other": "{count} tasks wait for you",
+      "count_one": "{count} count waits for you",
+      "count_other": "{count} counts wait for you"
     }
   },
   "scan": {

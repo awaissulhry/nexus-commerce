@@ -16,6 +16,13 @@ import { num, padBounds, quantityText, stockOfScan, undoStock, withLine, type Pi
 import { comesBackAs, remnantLabel, returnBody, returnBounds, returnOfScan, returnRows, tagPrinterOf, type ReturnRow } from './returns'
 import { PickView, unitWord, type PickAction, type PickLast, type PickPad } from './view/PickView'
 import type { PickReturnModel, ReturnTag } from './view/ReturnStep'
+// B-W2b-310: the pick list by bin and kit staging.
+import { queuedView } from '../shared/queued'
+import { completeKit, placeOfLabel, stageKit } from './kit/api'
+import { kitOf, type KitLast } from './kit/model'
+import { fetchWalk, keptWalk, pickOrKeep, substituteOrKeep } from './picklist/api'
+import { takeHandedWorkOrder } from './picklist/handoff'
+import { HELD_CODE, stopBody, stopBounds, stopHeld, stopKey, stopOfScan, takesWhole, type Walk, type WalkStop } from './picklist/model'
 
 /**
  * The live SCR-093 (`/floor/pick`): for which work order (its traveller scanned here or on Home, or a row of the site's
@@ -24,6 +31,12 @@ import type { PickReturnModel, ReturnTag } from './view/ReturnStep'
  * retry), recorded by the office at once (two ticks) or refused in words; the pick list is read again after each. Undo
  * the last issue in one tap. A code that is no work order number is handed on to Scan anything. Issuing needs the
  * network: offline the screen keeps the last lists it read (this visit only, with their time) and holds the scan.
+ *
+ * B-W2b-310: the work order's pick list by bin is read beside its pick list (and kept for the visit): a code scanned that is a stop
+ * of the walk is taken from that stop's place (a hide whole, a lot on the pad defaulted to the stop's quantity, an approved
+ * substitute by its own issue), online first, else kept in the tablet's queue (inventory.pick.issue | inventory.substitute.issue)
+ * — so with the walk on this tablet a pick goes on offline. Kit staging (online only): the kit's place by its label's scan, and
+ * "Kit complete". A PICK task handed from My work opens its work order.
  */
 
 // The lists read on this tablet during the visit (offline they stay on screen with their time; nothing is stored).
@@ -34,7 +47,7 @@ const PLACES = new AsOfMemory<ReturnPlace[]>(4)
 const TAG_POLL_MS = 3_000
 const TAG_POLL_TRIES = 40
 
-type Stage = 'choose' | 'list' | 'return'
+type Stage = 'choose' | 'list' | 'return' | /* B-W2b-310 */ 'kit'
 
 /** B-W2a-75: the Return unused step as the container keeps it (the view's model is built from it and the pick list). */
 interface ReturnState {
@@ -54,7 +67,8 @@ export function FloorPick() {
   const feedback = useConfirmFeedback()
   const t = useT('floor-issue')
   const { frame, onFrame } = store.frame('tile.pick', { showHome: true })
-  const { me, api, online, sessionEnded, locale } = store
+  const { me, api, online, sessionEnded, locale, queue, queueSnapshot } = store
+  const deviceId = store.device?.device.id ?? null
   const siteId = me?.site.id ?? ''
   const may = Boolean(me?.permissions.includes('inventory.issue'))
 
@@ -68,6 +82,12 @@ export function FloorPick() {
   const [busy, setBusy] = useState<string | null>(null)
   const [problem, setProblem] = useState<{ problem: TaskProblem; code: string | null } | null>(null)
   const [ret, setRet] = useState<ReturnState | null>(null)
+  // B-W2b-310: the walk of the work order on screen, the stops this tablet took that it has not read back, Kit staging.
+  const [walk, setWalk] = useState<Walk | null>(null)
+  const [walkAsOf, setWalkAsOf] = useState<string | null>(null)
+  const [taken, setTaken] = useState<ReadonlySet<string>>(new Set())
+  const [kitBusy, setKitBusy] = useState(false)
+  const [kitLast, setKitLast] = useState<KitLast | null>(null)
   const started = useRef(false)
 
   const fail = useCallback(
@@ -105,15 +125,40 @@ export function FloorPick() {
     setAsOf(null)
   }, [api, fail, siteId])
 
+  /** B-W2b-310: the work order's walk, read beside its pick list (offline: the one this tablet read, else none). */
+  const loadWalk = useCallback(
+    async (workOrderId: string) => {
+      if (!navigator.onLine) {
+        const kept = keptWalk(workOrderId)
+        setWalk(kept?.value ?? null)
+        setWalkAsOf(kept?.asOf ?? null)
+        return
+      }
+      const answer = await fetchWalk(api, workOrderId)
+      if (answer.ok) {
+        setWalk(answer.value)
+        setWalkAsOf(null)
+        setTaken(new Set())
+        return
+      }
+      const kept = answer.problem.kind === 'offline' ? keptWalk(workOrderId) : null
+      setWalk(kept?.value ?? null)
+      setWalkAsOf(kept?.asOf ?? null)
+    },
+    [api],
+  )
+
   const openList = useCallback(
     async (workOrderId: string, number: string | null = null) => {
       setPad(null)
+      setKitLast(null)
       if (!navigator.onLine) {
         const kept = LISTS.get(workOrderId)
         if (!kept) return fail({ kind: 'offline' }, number)
         setList(kept.value)
         setAsOf(kept.asOf)
         setStage('list')
+        void loadWalk(workOrderId)
         return
       }
       const answer = await fetchPickList(api, workOrderId)
@@ -122,8 +167,10 @@ export function FloorPick() {
       setList(answer.value)
       setAsOf(null)
       setStage('list')
+      setTaken(new Set())
+      void loadWalk(workOrderId)
     },
-    [api, fail],
+    [api, fail, loadWalk],
   )
 
   /** A scanned work order number: its pick list; no work order of this site: Scan anything takes the code. */
@@ -152,8 +199,10 @@ export function FloorPick() {
         setList(answer.value)
         setAsOf(null)
       }
+      // B-W2b-310: and its walk.
+      await loadWalk(workOrderId)
     },
-    [api],
+    [api, loadWalk],
   )
 
   // B-W2a-75: what the work order holds that may come back, and one of them picked for Return unused.
@@ -192,6 +241,79 @@ export function FloorPick() {
     [api, fail, feedback, openList, refresh, t],
   )
 
+  /** B-W2b-310: a stop of the walk taken by its scan: online first, else kept on this tablet (it may queue). */
+  const issueStop = useCallback(
+    async (current: PickList, stop: WalkStop, quantity?: { value: number; decimals: number }) => {
+      const body = stopBody(stop, quantity)
+      setBusy(body.code)
+      const substitute = stop.source === 'SUBSTITUTE' && stop.substitutionId !== null
+      const outcome = substitute ? await substituteOrKeep(api, queue, online, deviceId, stop.substitutionId!, body) : await pickOrKeep(api, queue, online, deviceId, current.workOrder.id, body)
+      setBusy(null)
+      const base = { kind: 'picked' as const, code: body.code, place: stop.location.code, uom: stop.baseUom, substitute }
+      if (outcome.kept) {
+        feedback('success')
+        setPad(null)
+        setTaken((before) => new Set([...before, stopKey(stop)]))
+        return setLast({ ...base, quantity: body.quantity ?? null, ticks: 'saved', clientEventId: outcome.kept.clientEventId })
+      }
+      if (!outcome.answer.ok) return fail(outcome.answer.problem, body.code)
+      feedback('success')
+      setPad(null)
+      setLast({ ...base, quantity: outcome.answer.value.quantity, ticks: 'recorded', clientEventId: null })
+      await refresh(current.workOrder.id)
+    },
+    [api, deviceId, fail, feedback, online, queue, refresh],
+  )
+
+  /** B-W2b-310: what a stop's scan does: refused in words when it may not be taken now, a hide at once, a lot on the pad. */
+  const takeStop = useCallback(
+    (current: PickList, stop: WalkStop) => {
+      const held = stopHeld(stop)
+      if (held) return fail({ kind: 'refused', code: HELD_CODE[held], message: '', fix: null }, stop.lotCode ?? stop.hideCode ?? stop.location.code)
+      if (takesWhole(stop)) return void issueStop(current, stop)
+      const bounds = stopBounds(stop)
+      const colour = walk?.lines.find((entry) => entry.key === stop.lineKey)?.itemColourId ?? null
+      feedback(bounds.covered ? 'warning' : 'success')
+      setLast(null)
+      setPad({ code: stop.lotCode ?? stop.itemCode, lineKey: `${stop.itemId}:${colour ?? '-'}`, value: bounds.covered ? null : bounds.suggested, bounds, uom: stop.baseUom, stop: stopKey(stop) })
+    },
+    [fail, feedback, issueStop, walk],
+  )
+
+  /** B-W2b-310: Kit staging — the kit put at the place whose label was scanned (online only). */
+  const stageAt = useCallback(
+    async (code: string) => {
+      if (!list || !walk || kitBusy || !navigator.onLine) return void feedback('warning')
+      setKitBusy(true)
+      try {
+        const place = await placeOfLabel(api, code)
+        if (!place.ok) return fail(place.problem, code)
+        const answer = await stageKit(api, list.workOrder.id, { version: walk.kit.version, locationId: place.value.id }, newIdempotencyKey())
+        if (!answer.ok) return fail(answer.problem, code)
+        feedback('success')
+        setWalk({ ...walk, kit: answer.value })
+        setKitLast({ kind: 'staged', place: answer.value.location?.code ?? place.value.code })
+      } finally {
+        setKitBusy(false)
+      }
+    },
+    [api, fail, feedback, kitBusy, list, walk],
+  )
+
+  const checkKit = useCallback(async () => {
+    if (!list || !walk || kitBusy || !navigator.onLine) return void feedback('warning')
+    setKitBusy(true)
+    try {
+      const answer = await completeKit(api, list.workOrder.id, { version: walk.kit.version }, newIdempotencyKey())
+      if (!answer.ok) return fail(answer.problem, list.workOrder.number)
+      feedback('success')
+      setWalk({ ...walk, kit: answer.value })
+      setKitLast({ kind: 'checked' })
+    } finally {
+      setKitBusy(false)
+    }
+  }, [api, fail, feedback, kitBusy, list, walk])
+
   const onScan = useCallback(
     async (code: string) => {
       if (!me) return
@@ -210,6 +332,10 @@ export function FloorPick() {
         return setRet({ ...ret, problem: { problem: { kind: 'refused', code: 'NOT_AT_WORK_ORDER', message: t('refusal.NOT_AT_WORK_ORDER.message'), fix: t('refusal.NOT_AT_WORK_ORDER.fix') }, code: read.code } })
       }
       if (stage === 'choose' || !list) return openNumber(read.code)
+      // B-W2b-310: Kit staging takes a place's label; the pick list by bin takes what is taken at a stop (offline too).
+      if (stage === 'kit') return stageAt(read.code)
+      const stop = stopOfScan(walk, taken, read)
+      if (stop) return takeStop(list, stop)
       if (!navigator.onLine) {
         feedback('warning')
         return
@@ -223,7 +349,7 @@ export function FloorPick() {
       }
       return issue(list, stock.code)
     },
-    [fail, feedback, issue, list, me, openNumber, pickReturn, ret, rows, stage, store, t],
+    [fail, feedback, issue, list, me, openNumber, pickReturn, ret, rows, stage, stageAt, store, t, takeStop, taken, walk],
   )
 
   const undo = useCallback(async () => {
@@ -359,8 +485,21 @@ export function FloorPick() {
     setList(null)
     setPad(null)
     setLast(null)
+    // B-W2b-310
+    setWalk(null)
+    setWalkAsOf(null)
+    setTaken(new Set())
+    setKitLast(null)
     void loadWorkOrders()
   }, [loadWorkOrders])
+
+  // B-W2b-310: a stop kept on this tablet — once the office recorded it, the lists are read again; a refusal says so on the strip.
+  const keptId = last?.kind === 'picked' ? last.clientEventId : null
+  const keptTicks = keptId ? (queuedView(queueSnapshot, keptId)?.ticks ?? null) : null
+  useEffect(() => {
+    if (keptTicks === 'recorded' && online && list) void refresh(list.workOrder.id)
+    // Only the queue's word on the kept stop moves it on.
+  }, [keptTicks])
 
   // A code handed from Home opens its work order; else the site's list.
   useEffect(() => {
@@ -368,8 +507,11 @@ export function FloorPick() {
     started.current = true
     const code = store.takeScan()
     void loadWorkOrders()
+    // B-W2b-310: a PICK task handed from My work opens its work order's pick list.
+    const handed = takeHandedWorkOrder()
+    if (handed) return void openList(handed)
     if (code) void openNumber(code)
-  }, [loadWorkOrders, may, me, openNumber, store])
+  }, [loadWorkOrders, may, me, openList, openNumber, store])
 
   // Back online: what is on screen is read again (it was this tablet's copy).
   useEffect(() => {
@@ -395,10 +537,15 @@ export function FloorPick() {
       }
       case 'pad':
         return setPad((current) => (current ? { ...current, value: action.value } : current))
-      case 'issue':
-        if (!list || !pad || pad.value === null || pad.bounds.covered || busy || !navigator.onLine) return
+      case 'issue': {
+        if (!list || !pad || pad.value === null || pad.bounds.covered || busy) return
         if (pad.value < pad.bounds.min || pad.value > pad.bounds.max) return
+        // B-W2b-310: a stop's pad issues from that stop (online first, else kept on this tablet).
+        const stop = pad.stop ? walk?.stops.find((entry) => stopKey(entry) === pad.stop) : undefined
+        if (stop) return void issueStop(list, stop, { value: pad.value, decimals: pad.bounds.decimals })
+        if (!navigator.onLine) return
         return void issue(list, pad.code, { value: pad.value, decimals: pad.bounds.decimals })
+      }
       case 'cancelPad':
         return setPad(null)
       case 'undo':
@@ -438,6 +585,20 @@ export function FloorPick() {
         return void printTag()
       case 'tagRetry':
         return void retryTag()
+      // B-W2b-310: Kit staging.
+      case 'kitOpen':
+        if (!walk) return
+        setPad(null)
+        setProblem(null)
+        setKitLast(null)
+        return setStage('kit')
+      case 'kitScan':
+        return void onScan(action.code)
+      case 'kitComplete':
+        return void checkKit()
+      case 'kitBack':
+        setKitLast(null)
+        return setStage('list')
     }
   }
 
@@ -450,7 +611,9 @@ export function FloorPick() {
   useFloorKeys({
     enter: problem
       ? () => onAction({ type: 'dismiss' })
-      : stage === 'return'
+      : /* B-W2b-310 */ stage === 'kit'
+        ? () => void checkKit()
+        : stage === 'return'
         ? ret?.done
           ? () => onAction({ type: tagReady ? 'tagPrint' : 'returnAnother' })
           : ret?.picked
@@ -463,7 +626,9 @@ export function FloorPick() {
             : null,
     escape: problem
       ? () => onAction({ type: 'dismiss' })
-      : stage === 'return'
+      : /* B-W2b-310 */ stage === 'kit'
+        ? () => onAction({ type: 'kitBack' })
+        : stage === 'return'
         ? ret?.picked && !ret.done
           ? () => onAction({ type: 'returnUnpick' })
           : backFromReturn
@@ -475,6 +640,7 @@ export function FloorPick() {
   })
 
   if (!me) return null
+  const shownLast: PickLast | null = last?.kind === 'picked' && keptTicks && last.ticks !== 'recorded' ? { ...last, ticks: keptTicks } : last
   return (
     <PickView
       model={{
@@ -487,10 +653,13 @@ export function FloorPick() {
         notOnTablet,
         list,
         pad,
-        last,
+        last: shownLast,
         busy,
         problem,
         ret: returnModel,
+        // B-W2b-310
+        walk: walk && list && walk.workOrder.id === list.workOrder.id ? { walk, taken } : null,
+        kit: stage === 'kit' && walk && list ? { kit: kitOf(walk, list), busy: kitBusy, last: kitLast, asOf: walkAsOf } : null,
       }}
       onFrame={onFrame}
       onAction={onAction}

@@ -170,6 +170,8 @@ export type ReceiveAction =
   | { type: 'ddtPhotoRemove' }
   | { type: 'ddtDone' }
   | { type: 'photoRetry' }
+  // B-W2b-300 (SCM-122): goods that came without a purchase order (floor/tasks/receive/unplanned).
+  | { type: 'unplanned' }
 
 export interface ReceiveViewProps {
   model: ReceiveViewModel
@@ -223,6 +225,8 @@ const TAG_TONE: Record<TagState, FloorTone> = {
 
 export function ReceiveView({ model, onAction, onFrame, camera }: ReceiveViewProps) {
   const t = useT('floor-receive')
+  // B-W2b-300: the words of goods without a PO.
+  const depth = useT('warehouse-receiving-depth')
   const shared = useT('floor-tasks')
   const floor = useT('floor')
   const locale = useLocale()
@@ -278,6 +282,8 @@ export function ReceiveView({ model, onAction, onFrame, camera }: ReceiveViewPro
           ]
         : [back]
   } else if (model.stage === 'scan') {
+    // B-W2b-300 (design floor.receive sec:unplanned): goods without a PO start here.
+    actions = [{ label: depth('unplanned.entry'), icon: <PackagePlus />, onPress: () => send({ type: 'unplanned' }) }]
     body = (
       <div className="fw-floor-stack">
         {!model.online ? <HeldLine text={t('offline.held')} /> : null}

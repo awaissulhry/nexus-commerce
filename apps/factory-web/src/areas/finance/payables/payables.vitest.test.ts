@@ -117,7 +117,8 @@ describe('the address and the tiles', () => {
   it('the record’s tabs; the PO studio has Invoices after Receipts (the design’s order)', () => {
     expect(tabOf('match')).toBe('match')
     expect(tabOf('nope')).toBe('lines')
-    expect(PO_TABS).toEqual(['lines', 'answer', 'receipts', 'invoices', 'documents', 'activity'])
+    // B-W2b-333: Delivery schedule after Lines.
+    expect(PO_TABS).toEqual(['lines', 'schedule', 'answer', 'receipts', 'invoices', 'documents', 'activity'])
   })
 })
 

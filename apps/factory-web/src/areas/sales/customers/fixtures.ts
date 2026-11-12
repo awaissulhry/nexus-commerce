@@ -61,6 +61,14 @@ export const designScreen = defineDesignScreen<CustomersCase>({
       label: 'Rows ▾ Brands, with a kind filter',
       model: list({ view: 'brands', filters: { kind: 'ORGANISATION' }, rows: loaded(rows.filter((row) => row.roles.includes('BRAND'))), total: 2 }),
     },
+    // B-W2b-324: Rows ▾ Riders (people): the customers that are people (a team's riders and private riders).
+    {
+      id: 'w2b-324-riders',
+      label: 'W2b Rows ▾ Riders (people): the customers that are people',
+      model: list({ view: 'riders', rows: loaded(rows.filter((row) => row.kind === 'PERSON')), total: rows.filter((row) => row.kind === 'PERSON').length }),
+      note: 'A rider opens on its record: its team, its measurement profiles. Personal data stays inside the record (never a total).',
+    },
+    { id: 'w2b-324-riders-empty', label: 'W2b Rows ▾ Riders: none yet', model: list({ view: 'riders', rows: loaded([]), total: 0 }) },
     { id: 'search', label: 'Search by name or VAT number', model: list({ query: 'demo', rows: loaded(rows.filter((row) => /demo/i.test(`${row.code} ${row.legalName}`))), total: 6 }) },
     { id: 'filtered-empty', label: 'No rows match these filters', model: list({ query: 'zzz', rows: loaded([]), total: 0 }) },
     { id: 'empty', label: 'First day: no customer yet', model: list({ rows: loaded([]), total: 0, tiles: { active: 0, prospects: 0, vies: 0, invoice: 0, blocked: 0 } }) },
