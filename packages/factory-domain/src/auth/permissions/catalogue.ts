@@ -183,6 +183,8 @@ import { PRODUCT_COLOURS_DEFINITIONS, PRODUCT_COLOURS_PERMISSIONS } from '../../
 import { PRODUCT_BRANDING_DEFINITIONS, PRODUCT_BRANDING_PERMISSIONS } from '../../product/branding-sets/permissions'
 // B-W2b-282: one approval engine (approvals.view | request | decide | rules.manage).
 import { APPROVALS_DEFINITIONS, APPROVALS_PERMISSIONS } from '../../approvals/permissions'
+// B-W2b-319: the production strategy per item (planning.strategy.manage); the one demand view reads with planning.view.
+import { PLANNING_STRATEGY_DEFINITIONS, PLANNING_STRATEGY_PERMISSIONS } from '../../planning/strategy/permissions'
 // B-W2a-35: the plant (machines, machine requests, maintenance jobs).
 import { PLANT_DEFINITIONS, PLANT_FLOOR_PERMISSIONS, PLANT_PERMISSIONS } from '../../plant/permissions'
 // B-W2a-39: the accounting exports and the period locks (accounting.view | export | lock | unlock).
@@ -878,6 +880,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PRODUCT_BRANDING_DEFINITIONS,
   // B-W2b-282: one approval engine.
   APPROVALS_DEFINITIONS,
+  // B-W2b-319: the production strategy per item (area `planning`, declared above).
+  PLANNING_STRATEGY_DEFINITIONS,
 ])
 
 /** The area of the permissions only floor roles hold (and floor roles hold no other, but FLOOR_SHARED_PERMISSIONS). */
@@ -1166,6 +1170,8 @@ for (const name of LABEL_ARTWORK_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclare
 for (const name of COMPLIANCE_REPORTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-263: Time & action.
 for (const name of PLANNING_MILESTONES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-319: the production strategy per item.
+for (const name of PLANNING_STRATEGY_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-248: made-to-measure rules.
 for (const name of PRODUCT_MTM_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-264: sourcing & claims.

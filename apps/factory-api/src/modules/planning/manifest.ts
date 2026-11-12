@@ -86,4 +86,11 @@ export const manifest = defineManifest({
   'PATCH /planning/milestones/gates/:gateId': { audiences: ['office'], permission: 'planning.milestones.manage', scope: 'record' },
   'POST /planning/milestones/gates/:gateId/remove': { audiences: ['office'], permission: 'planning.milestones.manage', scope: 'record' },
   'POST /planning/milestones/gates/:gateId/start-before': { audiences: ['office'], permission: 'planning.milestones.override', scope: 'record' },
+  // B-W2b-319: one demand view (./demand), read with planning.view over the site (each source over its customer too); the production
+  // strategy per item (./strategy), read with planning.view, kept with planning.strategy.manage over the site.
+  'GET /planning/demand': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'GET /planning/demand/rows': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'GET /planning/strategy': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'PUT /planning/strategy/items/:itemId': { audiences: ['office'], permission: 'planning.strategy.manage', scope: 'record' },
+  'POST /planning/strategy/bulk': { audiences: ['office'], permission: 'planning.strategy.manage', scope: 'record' },
 })

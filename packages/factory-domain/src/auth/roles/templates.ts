@@ -63,6 +63,8 @@ import { DECLARATIONS_ADDS } from '../../compliance/declarations/permissions'
 import { SALES_SAMPLE_DECISIONS_ADDS } from '../../sales/sample-decisions/permissions'
 // B-W2b-263: Time & action (pre-production gates).
 import { PLANNING_MILESTONES_ADDS } from '../../planning/milestones/permissions'
+// B-W2b-319: the production strategy per item.
+import { PLANNING_STRATEGY_ADDS } from '../../planning/strategy/permissions'
 // B-W2b-247: the colour library and the brands' branding sets.
 import { PRODUCT_COLOURS_ADDS } from '../../product/colours/permissions'
 import { PRODUCT_BRANDING_ADDS } from '../../product/branding-sets/permissions'
@@ -907,7 +909,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (PRODUCT_COLOURS_ADDS[key] ?? []) : []),
   ...(audience === 'office' ? (PRODUCT_BRANDING_ADDS[key] ?? []) : []),
   // B-W2b-282
-  ...(audience === 'office' ? (APPROVALS_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (APPROVALS_ADDS[key] ?? []) : []),
+  // B-W2b-319
+  ...(audience === 'office' ? (PLANNING_STRATEGY_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the
