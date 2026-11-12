@@ -4,6 +4,8 @@ import { actionProblems, approvalProblems, isTyped, type InvoiceKind, type Invoi
 import { asMoney } from '@nexus/factory-domain/money/marked'
 import type { MatchStatus } from '@nexus/factory-domain/payables/match'
 import { freshMatch, matchSettingsFor } from './matching'
+// B-W2b-299 (SCM-293)
+import { receiverRefusals } from './matching'
 import { sdiRuleRefusals } from './settings'
 import { dayOf, peopleNames, preparationOf, readLines, readMatches, type InvoiceRow, type LineRow, type Reader } from './store'
 
@@ -166,7 +168,12 @@ export async function detailOf(db: Reader, invoice: InvoiceRow, viewer: { readon
     lines: lines.length,
   }
   // B-W2b-21: the payables settings' SDI rule (LISTED approvers, not the buyer) after the four eyes.
-  const approval = [...approvalProblems(facts, viewer.userId), ...(invoice.status === 'RECEIVED' ? await sdiRuleRefusals(db, invoice, viewer.userId) : [])]
+  const approval = [
+    ...approvalProblems(facts, viewer.userId),
+    ...(invoice.status === 'RECEIVED' ? await sdiRuleRefusals(db, invoice, viewer.userId) : []),
+    // B-W2b-299 (SCM-293): the receiver of the goods never approves their invoice.
+    ...(invoice.status === 'RECEIVED' ? await receiverRefusals(db, invoice, viewer.userId, 'APPROVE') : []),
+  ]
   const held = actionProblems(facts)
   const settings = await matchSettingsFor(db, invoice.companyId)
 

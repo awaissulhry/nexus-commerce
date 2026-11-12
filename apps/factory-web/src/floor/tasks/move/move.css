@@ -1,0 +1,40 @@
+/*
+ * SCR-177 Move & put away (B-W2b-308): layout only, inside the DS FloorFrame and the floor tasks' shared parts
+ * (../shared/view/tasks.css). Sizes read the floor tier's `--nds-density-*` tokens; colours are semantic `--nds-*` roles; no
+ * raw colour. The one-job screen stays centred in the frame (the Owner's width rule allows it for the floor).
+ */
+
+.fw-move {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-density-gap);
+  min-width: 0;
+}
+
+/* The last move's line and its two ticks side by side; the ticks drop under it on a narrow frame. */
+.fw-move-last {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-density-gap);
+}
+.fw-move-last > .fw-floor-notice {
+  flex: 1 1 22em;
+  min-width: 0;
+}
+
+/* Part of a lot: its heading and the pad, centred under it. */
+.fw-move-pad {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-density-gap);
+  padding: var(--nds-space-16) var(--nds-density-pad-x);
+  border: 1px solid var(--nds-border-strong);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface);
+}
+.fw-move-pad > .nds-floor-qty {
+  align-self: center;
+  width: 100%;
+  max-width: 760px;
+}

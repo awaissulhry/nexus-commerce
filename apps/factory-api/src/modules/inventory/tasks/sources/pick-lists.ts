@@ -4,6 +4,9 @@ import type { CommandCaller } from '../../../../core/command'
 import { PICK_LIST_NOTE } from '../../issue/kits'
 import type { Reader } from '../../issue/store'
 import { cancelInCommand, createTaskInCommand, doneInCommand, openTasksOf } from '../lifecycle'
+// B-W2b-298: the PICK task names its pick list's walk by bin (the first place, how many, the kit's place).
+import { walkStartOf } from '../../pick-lists/walk'
+import type { StockContext } from '../../ledger/access'
 import { defineTaskSource, posterOf, sourceCommand } from '../source-kit'
 
 /**
@@ -14,7 +17,8 @@ import { defineTaskSource, posterOf, sourceCommand } from '../source-kit'
  *   inventory.reserved                 a pick list made for a work order: one open PICK task for it
  *   inventory.issued                   nothing of its pick list is left to pick: the task is done by who issued the last of it
  *   inventory.reservations_released    its pick list was let go: the task is cancelled (done, when some of it was issued)
- * B-W2b-298's pick list by bin will name its task the same way.
+ * B-W2b-298's pick list by bin names its task the same way, and the task says where its walk starts: the first place of the
+ * pick list sorted by bin path (fromLocationId), how many places it passes, and the kit's staging place (toLocationId).
  */
 
 const OPEN = [...OPEN_TASK_STATUSES]
@@ -32,7 +36,10 @@ async function onReserved(caller: CommandCaller, event: EventEnvelope): Promise<
     const list = await pickListOf(db, workOrderId)
     if (list.active === 0) return null
     if ((await openTasksOf(db, { type: 'WorkOrder', id: workOrderId }, 'PICK')).length > 0) return null
-    return db.workOrder.findUnique({ where: { id: workOrderId }, select: { id: true, number: true, companyId: true, siteId: true } })
+    const order = await db.workOrder.findUnique({ where: { id: workOrderId }, select: { id: true, number: true, companyId: true, siteId: true } })
+    // B-W2b-298 (the task is made even when its walk cannot be read: it then names no place).
+    const start = order ? await walkStartOf(db, caller.factoryContext as StockContext, workOrderId).catch(() => null) : null
+    return order ? { ...order, start } : null
   })
   if (!read) return
   await sourceCommand(caller, 'pickLists', event, { workOrderId }, async (tools) => {
@@ -40,7 +47,16 @@ async function onReserved(caller: CommandCaller, event: EventEnvelope): Promise<
       tools.audit({ action: 'inventory.warehouseTaskSource', recordType: 'WorkOrder', recordId: workOrderId, companyId: read.companyId, siteId: read.siteId, after: { pickTask: 'open already' } })
       return
     }
-    await createTaskInCommand(tools, { companyId: read.companyId, siteId: read.siteId, kind: 'PICK', source: { type: 'WorkOrder', id: read.id }, note: `Pick list of ${read.number}` })
+    await createTaskInCommand(tools, {
+      companyId: read.companyId,
+      siteId: read.siteId,
+      kind: 'PICK',
+      source: { type: 'WorkOrder', id: read.id },
+      // B-W2b-298: where the walk by bin starts, and the kit's place.
+      fromLocationId: read.start?.fromLocationId ?? null,
+      toLocationId: read.start?.toLocationId ?? null,
+      note: read.start ? `Pick list of ${read.number}: ${read.start.places} ${read.start.places === 1 ? 'place' : 'places'} by bin path, first ${read.start.fromCode}` : `Pick list of ${read.number}`,
+    })
   })
 }
 

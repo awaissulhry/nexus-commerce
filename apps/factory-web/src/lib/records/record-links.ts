@@ -72,6 +72,8 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   Location: '/warehouse/locations/[id]',
   // Warehouse › Counts (SCR-132): a cycle count or the year-end inventory.
   StockCount: '/warehouse/counts/[id]',
+  // B-W2b-326: a transfer between sites (SCR-361: lines, in transit with its DDT, received).
+  TransferOrder: '/warehouse/transfers/[id]',
   // Compliance › PPE register & recalls (SCR-113).
   PpeRegisterEntry: '/compliance/register/[id]',
   // B-W2b-271: a recall or withdrawal of a register entry (SCR-328).
@@ -211,6 +213,10 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   EvidencePack: '/compliance/techfiles/pack?pack=[id]',
   // B-W2b-307 Home › Approvals (SCR-030): a request of the approval engine opens its review in the inbox (Today, the bell).
   ApprovalTask: '/home/approvals?open=[id]',
+  // B-W2b-322 Sales › Inquiries (SCR-105): an inquiry opens its full page (the list opens it in its DetailModal, `?open=`).
+  Inquiry: '/sales/inquiries/[id]',
+  // B-W2b-354 Purchasing › Settings (SCR-256): a delivery tolerance opens in its dialog.
+  DeliveryTolerance: '/purchasing/settings?tolerance=[id]',
 })
 
 /**
@@ -321,6 +327,10 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/planning/settings': '/planning/settings',
   // B-W2b-263: Time & action (SCR-253, `?view=calendar|list|orders` `?tile=` `?q=` `?open=`).
   '/planning/milestones': '/planning/milestones',
+  // B-W2b-339: the demand view and its rows (SCR-374), the production strategy per item (SCR-202).
+  '/planning/demand': '/planning/demand',
+  '/planning/demand/rows': '/planning/demand',
+  '/planning/strategy': '/planning/mps',
   // B-W2a-53: the plant's lists (the requests queue reads `?tile=`, the jobs `?view=`, the machines `?view=` and `?q=`).
   '/plant/requests': '/plant/requests',
   '/plant/jobs': '/plant/jobs',
@@ -366,6 +376,8 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/safety/rolesheets': '/plant/risk',
   // B-W2b-234: the work instructions (SCR-141).
   '/production/instructions': '/production/instructions',
+  // B-W2b-322: the inquiries (SCR-105) read `?tile=`, `?source=`, `?party=`, `?prospect=1`, `?q=`.
+  '/sales/inquiries': '/sales/inquiries',
   // B-W2b-261: the sample rounds (SCR-110) read `?tile=`, `?kind=`, `?party=`, `?internal=1`, `?style=`, `?q=`.
   '/sales/samples/rounds': '/products/samples',
   // B-W2b-244: the changes (SCR-117) read `?tile=` (B-W2b-226's request and order tiles are its saved rows), `?style=` or

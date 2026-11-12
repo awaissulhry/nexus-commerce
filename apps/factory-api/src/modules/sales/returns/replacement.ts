@@ -68,6 +68,8 @@ export async function makeReplacementOrder(caller: CommandCaller, returnId: stri
         lines: orderLines.map((line) => line.input),
       },
       null,
+      // B-W2b-304: a replacement of returned goods is not new credit: no credit check.
+      null,
     )
     const madeLines = await tx.salesOrderLine.findMany({ where: { orderId: made.orderId }, select: { id: true, seq: true }, orderBy: { seq: 'asc' } })
     for (const [index, line] of orderLines.entries()) {

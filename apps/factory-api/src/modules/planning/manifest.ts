@@ -70,6 +70,21 @@ export const manifest = defineManifest({
   'GET /planning/schedule/versions/:versionId': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
   'GET /planning/allocation': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
   'PUT /planning/allocation/work-orders/:workOrderId': { audiences: ['office'], permission: 'planning.schedule.manage', scope: 'record' },
+  // B-W2b-312: scheduling in depth (./schedule-depth): pins with planning.schedule.pin; the material check read with
+  // planning.view; forward scheduling and the backlog reschedule previewed with planning.view (the handler asks
+  // planning.schedule.manage when it applies); a what-if is its planner's own (read with planning.view, the owner only;
+  // made, tried, applied and discarded with planning.schedule.manage).
+  'POST /planning/schedule/slots/:slotId/pin': { audiences: ['office'], permission: 'planning.schedule.pin', scope: 'record' },
+  'POST /planning/schedule/work-orders/:workOrderId/pin': { audiences: ['office'], permission: 'planning.schedule.pin', scope: 'record' },
+  'GET /planning/schedule/work-orders/:workOrderId/material': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'POST /planning/schedule/forward': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'POST /planning/schedule/reschedule-backlog': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'POST /planning/schedule/what-ifs': { audiences: ['office'], permission: 'planning.schedule.manage', scope: 'record' },
+  'GET /planning/schedule/what-ifs': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'GET /planning/schedule/what-ifs/:scenarioId': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'PUT /planning/schedule/what-ifs/:scenarioId/moves': { audiences: ['office'], permission: 'planning.schedule.manage', scope: 'record' },
+  'POST /planning/schedule/what-ifs/:scenarioId/apply': { audiences: ['office'], permission: 'planning.schedule.manage', scope: 'record' },
+  'POST /planning/schedule/what-ifs/:scenarioId/discard': { audiences: ['office'], permission: 'planning.schedule.manage', scope: 'record' },
   // B-W2b-132: the leather and cut plan (./leather): read with planning.view; a style's cutting loss changed or its proposal
   // dismissed with planning.leather.manage at the site whose cuts it rests on.
   'GET /planning/leather/need': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
@@ -93,6 +108,15 @@ export const manifest = defineManifest({
   'GET /planning/planned-orders/:plannedOrderId': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
   'POST /planning/planned-orders/:plannedOrderId/firm': { audiences: ['office'], permission: 'planning.firm', scope: 'record' },
   'POST /planning/planned-orders/:plannedOrderId/unfirm': { audiences: ['office'], permission: 'planning.firm', scope: 'record' },
+  // B-W2b-301: promise dates (./promise): read with planning.promise.view over the site (a quote also with quotes.view, an
+  // order line with orders.view over its order); an order line's promise per size recorded with planning.promise.manage. The
+  // calculator is a POST that writes nothing.
+  'GET /planning/promise/atp': { audiences: ['office'], permission: 'planning.promise.view', scope: 'record' },
+  'GET /planning/promise/atp/styles': { audiences: ['office'], permission: 'planning.promise.view', scope: 'record' },
+  'POST /planning/promise/calculate': { audiences: ['office'], permission: 'planning.promise.view', scope: 'record' },
+  'GET /planning/promise/quotes/:quoteId': { audiences: ['office'], permission: 'planning.promise.view', scope: 'record' },
+  'GET /planning/promise/order-lines/:orderLineId': { audiences: ['office'], permission: 'planning.promise.view', scope: 'record' },
+  'POST /planning/promise/order-lines/:orderLineId': { audiences: ['office'], permission: 'planning.promise.manage', scope: 'record' },
   // B-W2b-319: one demand view (./demand), read with planning.view over the site (each source over its customer too); the production
   // strategy per item (./strategy), read with planning.view, kept with planning.strategy.manage over the site.
   'GET /planning/demand': { audiences: ['office'], permission: 'planning.view', scope: 'record' },

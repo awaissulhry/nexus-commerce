@@ -72,6 +72,11 @@ describe('refusals in words, one fix, final or not', () => {
     expect(errorRefusal({ code: 'validation_failed', message: 'Bad.', issues: [{ path: 'body/cells', message: 'Send one event per bundle.' }] })).toMatchObject({ code: 'BAD_EVENT', message: expect.stringContaining('Send one event per bundle. (body/cells)'), final: true })
     expect(errorRefusal({ code: 'forbidden', message: 'You may not do this.' })).toMatchObject({ code: 'NOT_ALLOWED', final: true })
     expect(errorRefusal({ code: 'conflict', message: 'The worker has not acknowledged the notice.' })).toMatchObject({ code: 'CONFLICT', final: false })
+    // B-W2b-F31: a 409 naming its refusal in an issue path keeps that code and words, and is final unless it passes later.
+    expect(errorRefusal({ code: 'conflict', message: 'Place A1-02 is blocked.', issues: [{ path: 'warehouse/LOCATION_BLOCKED', message: 'Place A1-02 is blocked: a count is running.' }] })).toMatchObject({ code: 'LOCATION_BLOCKED', message: 'Place A1-02 is blocked: a count is running.', final: true })
+    expect(errorRefusal({ code: 'conflict', message: 'Taken.', issues: [{ path: 'refusal/TAKEN_BY_OTHER', message: 'Another worker took this task.' }] })).toMatchObject({ code: 'TAKEN_BY_OTHER', final: true })
+    expect(errorRefusal({ code: 'conflict', message: 'Not now.', issues: [{ path: 'refusal/CONFLICT', message: 'Try again.' }] })).toMatchObject({ code: 'CONFLICT', final: false })
+    expect(errorRefusal({ code: 'conflict', message: 'Changed.', issues: [{ path: 'body/version', message: 'Read it again.' }] })).toMatchObject({ code: 'CONFLICT', final: false })
     expect(otherWorkerRefusal()).toMatchObject({ code: 'OTHER_WORKER', final: false })
   })
 })

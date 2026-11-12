@@ -16,7 +16,13 @@ import { defineEvent } from '../events/define'
  * person.
  */
 
-export const RULES_CARDS = ['POSTING_DATES', 'ADJUSTMENT_APPROVAL', 'LOW_STOCK_ALERTS'] as const
+export const RULES_CARDS = [
+  'POSTING_DATES',
+  'ADJUSTMENT_APPROVAL',
+  'LOW_STOCK_ALERTS',
+  // B-W2b-299 (SCM-293): the separation of duties card (the receiver and the counter switches).
+  'SEPARATION_OF_DUTIES',
+] as const
 export type RulesCard = (typeof RULES_CARDS)[number]
 
 export const ADJUSTMENT_REQUEST_STATES = ['WAITING', 'POSTED', 'REJECTED', 'WITHDRAWN', 'STALE'] as const

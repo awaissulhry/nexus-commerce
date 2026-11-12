@@ -1,0 +1,50 @@
+/* B-W2b-334 — the supplier's bank details in its portal (fw-pbk-*): DS tokens only; the card fills the profile's width. */
+
+.fw-pbk-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-pbk-hint {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+
+.fw-pbk-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-12);
+}
+
+@media (min-width: 720px) {
+  .fw-pbk-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.fw-pbk-account {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+}
+
+.fw-pbk-account-head,
+.fw-pbk-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-pbk-iban {
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-sm);
+  overflow-wrap: anywhere;
+}

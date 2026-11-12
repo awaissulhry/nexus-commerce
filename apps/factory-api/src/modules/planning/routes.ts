@@ -41,6 +41,12 @@ import { board, workOrderSchedule } from './schedule/board'
 import { allocateContract, allocationContract, boardContract, moveSlotContract, placeByDueDateContract, placeSlotContract, publishContract, publishPreviewContract, removeSlotContract, versionContract, versionsContract, workOrderScheduleContract } from './schedule/contract'
 import { getVersion, listVersions, publish, publishPreview } from './schedule/publish'
 import { moveSlot, placeByDueDate, placeSlot, removeSlot } from './schedule/slots'
+// B-W2b-312: scheduling in depth (pins, material, forward scheduling, the backlog reschedule, what-if).
+import { applyWhatIfContract, backlogContract, createWhatIfContract, discardWhatIfContract, forwardContract, getWhatIfContract, listWhatIfsContract, materialContract, pinSlotContract, pinWorkOrderContract, setWhatIfMovesContract } from './schedule-depth/contract'
+import { workOrderMaterial } from './schedule-depth/material'
+import { pinSlot, pinWorkOrder } from './schedule-depth/pins'
+import { rescheduleBacklog, scheduleForward } from './schedule-depth/reschedule'
+import { applyWhatIf, createWhatIf, discardWhatIf, getWhatIf, listWhatIfs, setWhatIfMoves } from './schedule-depth/whatif'
 // B-W2b-132: the leather and cut plan (need per order with one shade's answer, certified protectors, yield and the cutting loss).
 import { acceptLossContract, dismissLossContract, needContract, protectorsContract, yieldContract } from './leather/contract'
 import { acceptLoss, dismissLoss } from './leather/loss'
@@ -55,6 +61,10 @@ import { convertPlannedOrdersContract, firmPlannedOrderContract, getPlannedOrder
 import { convertPlannedOrders } from './planned-orders/convert'
 import { firmPlannedOrder, unfirmPlannedOrder } from './planned-orders/firm'
 import { getPlannedOrder, listPlannedOrders } from './planned-orders/read'
+// B-W2b-301: promise dates (available to promise, the promise calculator, a quote's suggested dates, an order line's promise per size).
+import { atpContract, atpStylesContract, calculateContract, orderLineContract, quoteContract, recordContract } from './promise/contract'
+import { orderLinePromise, recordPromise } from './promise/order-lines'
+import { availableToPromise, calculatePromise, quoteSuggestion, stockStyles } from './promise/read'
 // B-W2b-319: one demand view and the production strategy per item.
 import { demandContract, demandRowsContract } from './demand/contract'
 import { readDemand, readDemandRows } from './demand/demand'
@@ -147,6 +157,18 @@ export default defineRoutes('planning', manifest, async (app) => {
   app.get('/planning/schedule/versions/:versionId', { schema: versionContract }, async (request) => getVersion(request, request.params.versionId))
   app.get('/planning/allocation', { schema: allocationContract }, async (request) => allocationBoard(request, request.query))
   app.put('/planning/allocation/work-orders/:workOrderId', { schema: allocateContract }, async (request) => allocate(request, request.params.workOrderId, request.body, idempotencyKeyFrom(request)))
+  // B-W2b-312: scheduling in depth.
+  app.post('/planning/schedule/slots/:slotId/pin', { schema: pinSlotContract }, async (request) => pinSlot(request, request.params.slotId, request.body, idempotencyKeyFrom(request)))
+  app.post('/planning/schedule/work-orders/:workOrderId/pin', { schema: pinWorkOrderContract }, async (request) => pinWorkOrder(request, request.params.workOrderId, request.body, idempotencyKeyFrom(request)))
+  app.get('/planning/schedule/work-orders/:workOrderId/material', { schema: materialContract }, async (request) => workOrderMaterial(request, request.params.workOrderId, request.query))
+  app.post('/planning/schedule/forward', { schema: forwardContract }, async (request) => scheduleForward(request, request.body, idempotencyKeyFrom(request)))
+  app.post('/planning/schedule/reschedule-backlog', { schema: backlogContract }, async (request) => rescheduleBacklog(request, request.body, idempotencyKeyFrom(request)))
+  app.post('/planning/schedule/what-ifs', { schema: createWhatIfContract }, async (request, reply) => reply.code(201).send(await createWhatIf(request, request.body, idempotencyKeyFrom(request))))
+  app.get('/planning/schedule/what-ifs', { schema: listWhatIfsContract }, async (request) => listWhatIfs(request, request.query))
+  app.get('/planning/schedule/what-ifs/:scenarioId', { schema: getWhatIfContract }, async (request) => getWhatIf(request, request.params.scenarioId))
+  app.put('/planning/schedule/what-ifs/:scenarioId/moves', { schema: setWhatIfMovesContract }, async (request) => setWhatIfMoves(request, request.params.scenarioId, request.body, idempotencyKeyFrom(request)))
+  app.post('/planning/schedule/what-ifs/:scenarioId/apply', { schema: applyWhatIfContract }, async (request) => applyWhatIf(request, request.params.scenarioId, request.body, idempotencyKeyFrom(request)))
+  app.post('/planning/schedule/what-ifs/:scenarioId/discard', { schema: discardWhatIfContract }, async (request) => discardWhatIf(request, request.params.scenarioId, request.body, idempotencyKeyFrom(request)))
   // B-W2b-132: the leather and cut plan.
   app.get('/planning/leather/need', { schema: needContract }, async (request) => leatherNeed(request, request.query))
   app.get('/planning/leather/protectors', { schema: protectorsContract }, async (request) => certifiedProtectors(request, request.query))
@@ -169,6 +191,13 @@ export default defineRoutes('planning', manifest, async (app) => {
   app.get('/planning/planned-orders/:plannedOrderId', { schema: getPlannedOrderContract }, async (request) => getPlannedOrder(request, request.params.plannedOrderId))
   app.post('/planning/planned-orders/:plannedOrderId/firm', { schema: firmPlannedOrderContract }, async (request) => firmPlannedOrder(request, request.params.plannedOrderId, request.body, idempotencyKeyFrom(request)))
   app.post('/planning/planned-orders/:plannedOrderId/unfirm', { schema: firmPlannedOrderContract }, async (request) => unfirmPlannedOrder(request, request.params.plannedOrderId, request.body, idempotencyKeyFrom(request)))
+  // B-W2b-301: promise dates.
+  app.get('/planning/promise/atp', { schema: atpContract }, async (request) => availableToPromise(request, request.query))
+  app.get('/planning/promise/atp/styles', { schema: atpStylesContract }, async (request) => stockStyles(request, request.query))
+  app.post('/planning/promise/calculate', { schema: calculateContract }, async (request) => calculatePromise(request, request.body))
+  app.get('/planning/promise/quotes/:quoteId', { schema: quoteContract }, async (request) => quoteSuggestion(request, request.params.quoteId, request.query))
+  app.get('/planning/promise/order-lines/:orderLineId', { schema: orderLineContract }, async (request) => orderLinePromise(request, request.params.orderLineId))
+  app.post('/planning/promise/order-lines/:orderLineId', { schema: recordContract }, async (request) => recordPromise(request, request.params.orderLineId, request.body, idempotencyKeyFrom(request)))
   // B-W2b-319: one demand view (orders, quotes likely to win, made-to-measure units, samples, remakes by week) and the
   // production strategy per item.
   app.get('/planning/demand', { schema: demandContract }, async (request) => readDemand(request, request.query))

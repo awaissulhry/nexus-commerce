@@ -1727,6 +1727,7 @@
     "inventory_stock_view": "See the stock and its moves",
     "inventory_adjust": "Correct stock with a reason",
     "inventory_transfer": "Move stock between locations",
+    "inventory_transfers_manage": "Transfers between sites: draft, ship with the DDT, receive at the other site, settle a difference",
     "inventory_scrap": "Scrap stock with a reason",
     "inventory_reverse": "Reverse a wrong stock move",
     "inventory_issue": "Pick and issue stock to a work order",
@@ -1741,6 +1742,7 @@
     "inventory_lots_manage": "Split a lot of hides into shade groups and regroup them, record a lot's attributes, check its lifecycle",
     "inventory_trace_report": "Make the dated trace report for a customer, a notified body or an authority (PDF or CSV)",
     "inventory_reports_view": "See a company's warehouse reports: stock ageing by material type and leather use by article and supplier lot (only from stock you may see; values only with the cost grain)",
+    "purchasing_reports_view": "See a company's purchasing reports: spend by supplier, category, material, company and month with sample orders apart, and the late purchase order lines with what they hold up (only from orders you may see; amounts only with the cost grain)",
     "shipping_view": "See the shipments",
     "shipping_manage": "Plan and change shipments",
     "shipping_pack": "Pack a shipment",
@@ -1906,6 +1908,9 @@
     "planning_milestones_manage": "Keep the pre-production gates of a sales order and mark them done",
     "planning_milestones_override": "Let an order's work start before a gate, with a reason (not the gate's planner)",
     "planning_planned_convert": "Make the plan's planned work orders and planned subcontract orders real (needs the work-order and subcontracting permissions too)",
+    "planning_promise_view": "See available to promise and ask when an order can be ready (the promise calculator, a quote's suggested dates, an order line's dates per size)",
+    "planning_promise_manage": "Record an order line's promise per size (only sizes a valid certificate covers through the date)",
+    "planning_schedule_pin": "Pin bars and work orders on the planning board where they are, or unpin them",
     "planning_strategy_manage": "Set how a site meets the demand for a garment or a component: make to order, make to stock or assemble to order",
     "alerts_view": "See the alerts of the records you see, and the exception rules",
     "alerts_handle": "Acknowledge, assign, snooze and resolve alerts",
@@ -2103,11 +2108,15 @@
     "sales_samples_measure": "Measure a sample round's fit against the measurement spec and keep its fit comments",
     "sales_inquiries_view": "See inquiries and requests for quotation: who asks, what is asked by size, the mail they came from, their files and the brand tech pack in force, and the quote each became (the target price only with prices)",
     "sales_inquiries_manage": "Type inquiries and make them from received mail, change what is asked, match a prospect to a customer, assign them, ask the customer for more information, decline them with the reason or mark them lost, and make their quote",
+    "sales_credit_view": "See a customer's credit with a company: the limit, what is used, what is still available, the overdue part, the orders held for credit, and the credit checks of quotes, orders, work orders and shipments (the amounts only with prices)",
+    "sales_credit_limits": "Set, change or clear a customer's credit limit with a company; the orders held for credit are checked again at once",
+    "sales_credit_checks": "Check a record held for credit again, and ask for a yes to let it through (someone else approves it, never you)",
     "production_instructions_view": "See the work instructions of the operations: steps, photos and videos, versions, the printed sheet, and how many saw a version (counts, never a name)",
     "production_instructions_manage": "Write work instructions: a draft with steps per language, critical points, safety notes, icons, the ticks the tablet asks, photos and videos; discard a draft, archive or restore; bring the typed step lines of the routings in",
     "production_instructions_approve": "Approve another person's draft of a work instruction: the floor shows it from then on (never your own draft)",
     "production_instructions_people": "A training record: see by name who saw which version of a work instruction (where the site allows a name) and record a paper acknowledgement",
     "purchasing_requests_ask": "Ask the buyers to buy a material (also from a work order’s shortage); see and take back your own requests",
-    "inventory_tasks_manage": "Make the warehouse's floor tasks by hand (receive, put away, pick, move, count), hand them to a floor role or one worker, change and cancel them"
+    "inventory_tasks_manage": "Make the warehouse's floor tasks by hand (receive, put away, pick, move, count), hand them to a floor role or one worker, change and cancel them",
+    "inventory_counts_scan": "Count a running stock count by scanning every unit (a hide's area, a roll's length, pieces typed), see a bin's differences after Bin done, finish the bin and recount a line someone else counted"
   }
 }

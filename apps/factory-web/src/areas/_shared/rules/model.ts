@@ -39,6 +39,9 @@ export const THRESHOLD_FIELDS: Readonly<Record<RuleKind, { readonly numbers: rea
   WORKING_TIME_LIMIT: { numbers: [], workingDays: false },
   // B-W2b-314: no number here (the minimum is the material's planning parameters').
   LOW_STOCK: { numbers: [], workingDays: false },
+  // B-W2b-350: a line confirmed at least this many days later than needed; a supplier's status change stays an alert this long.
+  PO_CONFIRMED_LATE: { numbers: [{ key: 'days', min: 1, max: 60, unit: 'days' }], workingDays: false },
+  SUPPLIER_STATUS_CHANGED: { numbers: [{ key: 'days', min: 1, max: 90, unit: 'days' }], workingDays: false },
 })
 
 /** The kind's one number edited in the rules list itself (inline), or null (none, as "Material short"). */

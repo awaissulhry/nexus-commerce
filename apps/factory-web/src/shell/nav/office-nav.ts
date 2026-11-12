@@ -130,6 +130,9 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/records/[type]/[id]',
   '/sales/customers',
   '/sales/customers/[partyId]',
+  // B-W2b-322: Sales › Inquiries (SCR-105) and an inquiry's full page.
+  '/sales/inquiries',
+  '/sales/inquiries/[id]',
   '/sales/quotes',
   '/sales/quotes/[id]',
   '/sales/orders',
@@ -157,6 +160,11 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/purchasing/requests',
   // B-W2b-347: RFQs & sourcing (SCR-222): the sample and development orders.
   '/purchasing/sourcing',
+  // B-W2b-350: Purchasing reports (SCR-255) and their print view (SCR-372, a new tab).
+  '/purchasing/reports',
+  '/purchasing/reports/print',
+  // B-W2b-354: Purchasing settings (SCR-256).
+  '/purchasing/settings',
   // B-W2a-63: Returns & claims (SCR-131) and a supplier claim.
   '/purchasing/claims',
   '/purchasing/claims/[id]',
@@ -176,6 +184,9 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/planning/settings/calendar-print',
   // B-W2b-263: Time & action (SCR-253).
   '/planning/milestones',
+  // B-W2b-339: Planning › Long range › Demand & forecast (SCR-374) and Master schedule & S&OP (SCR-202).
+  '/planning/demand',
+  '/planning/mps',
   // B-W1-32 part 2: Receipts (SCR-063), receiving against a PO with lots and hides one by one (SCR-061/062), a receipt.
   '/warehouse/receipts',
   '/warehouse/receipts/new',
@@ -331,6 +342,9 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   // B-W2a-28: Warehouse › Counts (SCR-132) and a count.
   '/warehouse/counts',
   '/warehouse/counts/[id]',
+  // B-W2b-326: Warehouse › Transfers (SCR-360) and a transfer (SCR-361).
+  '/warehouse/transfers',
+  '/warehouse/transfers/[id]',
   // B-W2a-58: Warehouse › Picking & kits (SCR-237) and its paper (a new tab, no navigation row).
   '/warehouse/picking',
   '/warehouse/picking/print',

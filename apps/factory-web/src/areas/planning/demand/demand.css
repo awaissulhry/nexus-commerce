@@ -1,0 +1,278 @@
+/*
+ * Planning › Demand & forecast (SCR-374) LAYOUT: the band, the three sections, the TimePhasedGrid's lines, cells and stacked mini
+ * bars, the popover, the list's cells. The controls are the design system's; this file only places them, with semantic tokens
+ * (the layers' colours are the DS grid tones). No page max-width (Owner rule 2026-10-29): the page fills the shell's main area.
+ */
+.fw-dm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-dm-head,
+.fw-dm-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-dm-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  scroll-margin-top: var(--nds-space-16);
+}
+
+.fw-dm-inline {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-dm-status {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-10);
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-dm-h2 {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+  scroll-margin-top: var(--nds-space-16);
+}
+
+.fw-dm-hint {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-dm-list {
+  margin: 0;
+  padding-left: var(--nds-space-16);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+/* The layer toggles in the grid's toolbar. */
+.fw-dm-layers {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-dm-swatch {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: var(--nds-space-4);
+  border-radius: var(--nds-radius-full);
+  vertical-align: middle;
+}
+
+/* The layers' colours: one DS grid tone each (the mini bar and its toggle's swatch). */
+.fw-dm-swatch.orders,
+.fw-dm-part.orders {
+  background: var(--nds-grid-tone-blue-rule);
+}
+.fw-dm-swatch.mtm,
+.fw-dm-part.mtm {
+  background: var(--nds-grid-tone-violet-rule);
+}
+.fw-dm-swatch.samples,
+.fw-dm-part.samples {
+  background: var(--nds-grid-tone-cyan-rule);
+}
+.fw-dm-swatch.remakes,
+.fw-dm-part.remakes {
+  background: var(--nds-grid-tone-orange-rule);
+}
+.fw-dm-swatch.quotes,
+.fw-dm-part.quotes {
+  background: var(--nds-grid-tone-slate-rule);
+}
+
+/* A grid line: the open toggle, the style and colour, the style's name. */
+.fw-dm-line {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  height: 100%;
+  min-width: 0;
+}
+
+.fw-dm-line.size {
+  padding-left: calc(var(--nds-space-20) + var(--nds-space-6));
+  color: var(--nds-text-2);
+}
+
+.fw-dm-expand-gap {
+  display: inline-block;
+  flex: none;
+  width: var(--nds-space-20);
+}
+
+.fw-dm-line-text,
+.fw-dm-cell {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  height: 100%;
+  line-height: 1.3;
+}
+
+.fw-dm-sub {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
+}
+
+.fw-dm-sub.late {
+  color: var(--nds-danger-text);
+}
+
+.fw-dm-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+/* A cell: the number with its stacked mini bar, the trigger of "What makes this number". */
+.fw-dm-trigger {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  align-items: center;
+}
+
+.fw-dm-num {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--nds-space-2);
+  width: 100%;
+  min-width: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-dm-num.total .fw-dm-value {
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-dm-num.late .fw-dm-value {
+  color: var(--nds-danger-text);
+}
+
+.fw-dm-bar {
+  display: flex;
+  align-self: flex-end;
+  height: 4px;
+  min-width: 4px;
+  border-radius: var(--nds-radius-full);
+  overflow: hidden;
+  background: var(--nds-surface-sunken);
+}
+
+.fw-dm-part {
+  display: block;
+  height: 100%;
+}
+
+.fw-dm-zero {
+  display: block;
+}
+
+/* The popover. */
+.fw-dm-pop {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 280px;
+  max-width: 440px;
+}
+
+.fw-dm-pop-sum {
+  margin: 0;
+}
+
+.fw-dm-pop-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+
+.fw-dm-pop-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+}
+
+.fw-dm-pop-main {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-dm-pop-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6) var(--nds-space-10);
+  padding-top: var(--nds-space-4);
+  border-top: 1px solid var(--nds-border-subtle);
+}
+
+.fw-dm-link {
+  color: var(--nds-text-link);
+  text-decoration: none;
+}
+
+.fw-dm-link:hover,
+.fw-dm-link:focus-visible {
+  text-decoration: underline;
+}
+
+.fw-dm-newtab {
+  display: inline-flex;
+  align-items: center;
+  color: var(--nds-text-muted);
+}
+
+.fw-dm-newtab:hover,
+.fw-dm-newtab:focus-visible {
+  color: var(--nds-text-link);
+}
+
+.fw-dm-held {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  color: var(--nds-text-muted);
+}
+
+@media print {
+  .fw-dm-head .fw-dm-inline {
+    display: none;
+  }
+}

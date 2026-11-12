@@ -109,6 +109,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/home/reports': 'home.reports.view', // GET /reports (B-W2a-79)
       '/home/alerts': 'alerts.view', // GET /alerts (B-W2a-78)
       '/sales/customers': 'parties.view', // GET /parties
+      '/sales/inquiries': 'sales.inquiries.view', // GET /sales/inquiries (B-W2b-322)
       '/sales/quotes': 'quotes.view', // GET /sales/quotes
       '/sales/orders': 'orders.view', // GET /sales/orders
       '/sales/price-lists': 'pricelists.view', // GET /sales/price-lists (B-W2a-49)
@@ -131,12 +132,16 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/planning/exceptions': 'planning.view', // GET /planning/exceptions (B-W2a-70)
       '/planning/settings': 'planning.view', // GET /planning/settings (B-W2a-59)
       '/planning/milestones': 'planning.view', // GET /planning/milestones (B-W2b-263)
+      '/planning/demand': 'planning.view', // GET /planning/demand (B-W2b-339)
+      '/planning/mps': 'planning.view', // GET /planning/strategy (B-W2b-339)
       '/purchasing/suppliers': 'parties.view', // GET /parties
       '/purchasing/orders': 'purchasing.view', // GET /purchasing/orders
       '/purchasing/requests': 'purchasing.view', // GET /purchasing/requests (B-W2a-69)
       '/purchasing/subcontracting': 'purchasing.view', // GET /purchasing/subcontracting/orders (B-W2a-56)
       '/purchasing/claims': 'purchasing.view', // GET /purchasing/claims (B-W2a-63)
       '/purchasing/sourcing': 'purchasing.view', // GET /purchasing/sample-orders (B-W2b-347)
+      '/purchasing/reports': 'purchasing.reports.view', // GET /purchasing/reports/spend (B-W2b-350)
+      '/purchasing/settings': 'purchasing.view', // GET /purchasing/tolerances (B-W2b-354)
       '/warehouse/stock': 'inventory.stock.view', // GET /inventory/stock
       '/warehouse/hides': 'inventory.stock.view', // GET /inventory/hides
       '/warehouse/lots': 'inventory.stock.view', // GET /inventory/lots
@@ -144,6 +149,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/warehouse/receipts': 'inventory.stock.view', // GET /inventory/receipts
       '/warehouse/picking': 'inventory.stock.view', // GET /inventory/picking/pick-lists (B-W2a-58)
       '/warehouse/counts': 'inventory.counts.view', // GET /inventory/stock-counts
+      '/warehouse/transfers': 'inventory.stock.view', // GET /inventory/transfer-orders (B-W2b-326)
       '/warehouse/shipments': 'shipping.view', // GET /shipping/shipments
       '/warehouse/locations': 'inventory.locations.view', // GET /inventory/locations
       '/warehouse/shipping': 'shipping.settings.view', // GET /shipping/settings
@@ -252,6 +258,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/warehouse/receipts',
       '/warehouse/picking',
       '/warehouse/counts',
+      '/warehouse/transfers',
       '/warehouse/shipments',
       '/warehouse/reports',
       '/warehouse/locations',
@@ -274,6 +281,8 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/home/reports',
       '/home/alerts',
       '/sales/customers',
+      // B-W2b-322: Sales › Inquiries.
+      '/sales/inquiries',
       '/sales/quotes',
       '/sales/orders',
       '/sales/returns',
@@ -428,10 +437,10 @@ describe('the floor tiles and the scan router (floor/model.ts, floor/tasks/route
 
   it('each tile in the station modes the tree gives it, the build\'s two named differences apart', () => {
     // Operation also at the inspection bench (the floor tasks' decision: a routing's scanned INSPECTION operation). My
-    // work (B-W2a-74): at the packing bench too (the dispatch list is per station), not at the warehouse (a device with no
-    // station has no queue: the warehouse's task inbox, SCM-274, is W2b-5).
+    // work (B-W2a-74): at the packing bench too (the dispatch list is per station). B-W2b-308: at the warehouse it is the task
+    // inbox (SCM-274), as the tree gives it.
     const added: Partial<Record<TileKey, readonly FloorMode[]>> = { operation: ['inspection'], mywork: ['packing'] }
-    const removed: Partial<Record<TileKey, readonly FloorMode[]>> = { mywork: ['warehouse'] }
+    const removed: Partial<Record<TileKey, readonly FloorMode[]>> = {}
     for (const page of FLOOR) {
       const rule = TILE_RULES.find((entry) => entry.key === page.tile)!
       const tree = page.modes.filter((mode): mode is FloorMode => (FLOOR_MODES as readonly string[]).includes(mode) && !(removed[rule.key] ?? []).includes(mode as FloorMode))
@@ -447,6 +456,7 @@ describe('the floor tiles and the scan router (floor/model.ts, floor/tasks/route
       fabriccut: 'production.cut', // GET /production/cut-tickets/waiting, /production/lays/:id (B-W2b-121 on B-W2b-112, -116)
       bundles: 'production.bundles',
       receive: 'inventory.receive',
+      move: 'inventory.transfer', // GET /inventory/putaway/scan, POST /inventory/putaway | /inventory/bin-moves (B-W2b-308 on B-W2b-292)
       pick: 'inventory.issue',
       returnsin: 'sales.returns.receive', // GET /sales/returns/dock (B-W2a-76)
       kits: 'purchasing.subcontract.kit', // GET /purchasing/subcontracting/kits (B-W2a-76)
@@ -483,7 +493,8 @@ describe('the floor tiles and the scan router (floor/model.ts, floor/tasks/route
       // B-W2b-115: Incoming inspection at the inspection bench (tile family Quality, before Final inspection).
       // B-W2b-203: at the bench Operation after the inspection tiles (Owner answer 2026-11-09 to B-W2b-151's question 1).
       inspection: ['mywork', 'incoming', 'final', 'inline', 'operation', 'machine', 'clock', 'training', 'instructions', 'help', 'incident', 'lineview', 'scan'],
-      warehouse: ['receive', 'pick', 'returnsin', 'kits', 'machine', 'clock', 'training', 'help', 'incident', 'lineview', 'scan'],
+      // B-W2b-308: My work (the task inbox) at the warehouse, Move & put away after Receive.
+      warehouse: ['mywork', 'receive', 'move', 'pick', 'returnsin', 'kits', 'machine', 'clock', 'training', 'help', 'incident', 'lineview', 'scan'],
     })
     for (const mode of FLOOR_MODES) {
       const first = tilePage(homeTiles(mode, everything, false), 0)
@@ -521,7 +532,7 @@ describe('the floor tiles and the scan router (floor/model.ts, floor/tasks/route
     const expected: Record<FloorMode, Partial<Record<string, TileKey>>> = {
       sewing: { bundle: 'operation' },
       cutting: { hide: 'cut', bundle: 'bundles' },
-      warehouse: { workOrder: 'pick', free: 'pick' },
+      warehouse: { workOrder: 'pick', free: 'pick', /* B-W2b-308 */ lot: 'move', hide: 'move', roll: 'move', remnant: 'move' },
       packing: { bundle: 'operation', serial: 'pack', free: 'pack' },
       inspection: { bundle: 'operation', workOrder: 'final', free: 'final', /* B-W2b-115 */ lot: 'incoming', hide: 'incoming' },
     }

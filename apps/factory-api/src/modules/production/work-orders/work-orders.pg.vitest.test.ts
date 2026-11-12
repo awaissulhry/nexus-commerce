@@ -379,7 +379,11 @@ describe('a work order from order lines (MES-001, MES-002)', () => {
     const otherStyle = await refused('planner', 'POST', '/production/work-orders', { lines: mixed.lineIds.map((salesOrderLineId) => ({ salesOrderLineId })) }, 400)
     expect(otherStyle.issues).toContainEqual({ path: 'body/lines/1', message: `${mixed.number} line 20 is another style: a work order makes one style.` })
 
+    // B-W2b-F30: since B-W2b-297 (schema wave 44) the database refuses a made-to-measure line whose style is not flagged
+    // made to measure (Style.mtmAllowed), so the style is flagged for this order only; the work order must still refuse it.
+    await admin('UPDATE "Style" SET "mtmAllowed" = true WHERE id = $1', [A.style])
     const mtm = await salesOrder({ lines: [{ madeToMeasure: true }] })
+    await admin('UPDATE "Style" SET "mtmAllowed" = false WHERE id = $1', [A.style])
     expect(await refused('planner', 'POST', '/production/work-orders', { lines: [{ salesOrderLineId: mtm.lineIds[0]! }] }, 409)).toMatchObject({ code: 'conflict', message: MADE_TO_MEASURE_LATER })
     expect((await refused('viewer', 'POST', '/production/work-orders', { lines: [{ salesOrderLineId: line }] }, 403)).code).toBe('forbidden')
   })
