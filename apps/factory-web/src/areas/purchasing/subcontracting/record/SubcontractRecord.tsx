@@ -67,6 +67,11 @@ import {
 import { RECORD_NAMESPACES, SubcontractRecordView } from './view/SubcontractRecordView'
 // B-W2b-176: what the workshop said (its answer, the job link, the kit it checked, progress, send-backs).
 import { WorkshopPanel } from './workshop/WorkshopPanel'
+// B-W2b-344: the written terms link, the Material balance and Cost tabs.
+import { BalanceTab } from '../depth/BalanceTab'
+import { CostTab } from '../depth/CostTab'
+import { depthCan } from '../depth/model'
+import { TermsLink } from '../depth/TermsLink'
 
 const TIME_ZONE = 'Europe/Rome'
 
@@ -94,6 +99,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
   const tab = tabOf(params?.get('tab'))
   const prefix = pathname.replace(/\/purchasing\/subcontracting\/[^/]+(\/.*)?$/, '')
   const can = useMemo(() => subcontractCan(session.permissions), [session.permissions])
+  const deep = useMemo(() => depthCan(session.permissions, can), [session.permissions, can])
   const [order, setOrder] = useState<Loaded<SubcontractOrder>>({ status: 'loading' })
   const current = useRef<SubcontractOrder | null>(null)
   const [dialog, setDialogState] = useState<RecordDialog | null>(null)
@@ -513,7 +519,18 @@ function RecordContainer({ orderId }: { orderId: string }) {
   // B-W2b-176: what the workshop said, under the Kit tab (./workshop), with Receive back prefilled from its send-back.
   const workshop =
     order.status === 'ready' && tab === 'kit' ? <WorkshopPanel order={order.value} timeZone={TIME_ZONE} onReceiveWith={(shape) => openReceive(shape)} onChanged={() => void load()} /> : null
-  const model: SubcontractRecordModel = { prefix, can, tab, order, live, dockOpen, changed, notice, busy, dialog, dialogProblem, marks, pdf, timeZone: TIME_ZONE, today, workshop }
+  // B-W2b-344: each part reads when its tab shows; a booking reads the order again.
+  const depth: SubcontractRecordModel['depth'] =
+    order.status !== 'ready'
+      ? undefined
+      : tab === 'ops'
+        ? { terms: <TermsLink order={order.value} can={deep} timeZone={TIME_ZONE} /> }
+        : tab === 'balance'
+          ? { balance: <BalanceTab order={order.value} can={deep} timeZone={TIME_ZONE} onChanged={() => void load()} /> }
+          : tab === 'cost'
+            ? { cost: <CostTab order={order.value} can={deep} timeZone={TIME_ZONE} onChanged={() => void load()} /> }
+            : undefined
+  const model: SubcontractRecordModel = { prefix, can, tab, order, live, dockOpen, changed, notice, busy, dialog, dialogProblem, marks, pdf, timeZone: TIME_ZONE, today, workshop, depth }
 
   const panels =
     order.status === 'ready' && (tab === 'activity' || dockOpen) ? (

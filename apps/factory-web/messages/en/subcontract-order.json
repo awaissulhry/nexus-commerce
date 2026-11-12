@@ -334,7 +334,7 @@
     "title": "Close {number}",
     "confirm": "Close the order",
     "back": "Back: {good} good, {defective} defective, {scrapped} scrapped at the workshop.",
-    "balanceLater": "The material balance (sent, in the garments, returned, still out) comes with a later step: check the stock at the workshop first.",
+    "balance": "Kit material still out stays at the workshop’s place: check the Material balance tab and book it as used, returned or scrapped before you close.",
     "final": "A closed order takes nothing more.",
     "note": "Note",
     "noteHint": "Optional; kept in the order’s history."
