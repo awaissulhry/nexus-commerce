@@ -8,6 +8,8 @@ import { PUBLISH_HOLDS, SKIP_CODES } from '@nexus/factory-domain/planning/schedu
 import { UOMS } from '@nexus/factory-domain/product/units/units'
 import { CALENDAR_STATES } from '../capacity/contract'
 import { materialArrival } from '../readiness/contract'
+// B-W2b-312: the earliest start with material (PLN-134) and the problems list's new kinds.
+import { materialCheckView, materialStartView } from '../schedule-depth/material-contract'
 
 /**
  * The planning board (B-W2a-34; PLN-129 backward scheduling and latest safe start, PLN-131 the board, PLN-132 order and
@@ -21,6 +23,8 @@ import { materialArrival } from '../readiness/contract'
 export const BOARD_BUCKETS = ['DAY', 'WEEK', 'MONTH'] as const
 export const TRAY_CHIPS = ['PAST_LATEST_SAFE_START', 'START_SOON', 'MATERIAL_NOT_READY', 'ON_HOLD', 'DRAFT', 'NO_DUE_DATE'] as const
 export const PROBLEM_KINDS = ['OVERBOOKED', 'FINISHES_LATE'] as const
+/** B-W2b-312: the problems list's W2b kinds, in their own list (`moreProblems`): a screen built on W2a's two kinds still reads the board. */
+export const MORE_PROBLEM_KINDS = ['IN_THE_PAST', 'MATERIAL_NOT_IN_TIME', 'GATE_NOT_PASSED'] as const
 export const CHECK_CODES = ['OVERBOOKED', 'IN_THE_PAST', 'MATERIAL_NOT_READY'] as const
 
 const named = output({ id: id(), code: z.string(), name: z.string() })
@@ -46,7 +50,8 @@ export const scheduleView = output({
   reasons: z.array(output({ code: z.enum(SCHEDULE_REASONS), words: z.string() })),
 })
 
-const storedSlot = output({
+// B-W2b-312: exported for schedule-depth's answers.
+export const storedSlot = output({
   id: id(),
   version: z.number().int(),
   planVersionId: id(),
@@ -65,6 +70,10 @@ const storedSlot = output({
   updatedAt: instant(),
   /** "Moved by … at …": the planner who placed or moved it last. */
   updatedBy: person,
+  /** B-W2b-312 (PLN-139): pinned where it is (moves and reschedules go around it), since when and by whom. */
+  pinned: z.boolean(),
+  pinnedAt: instant().nullable(),
+  pinnedBy: person,
 })
 
 export const slotView = storedSlot.extend({
@@ -151,6 +160,8 @@ export const workOrderView = output({
   schedule: scheduleView,
   /** Material readiness now (planning/readiness); null when not asked. */
   readiness: readinessView,
+  /** B-W2b-312 (PLN-134): the first day (and instant on its first operation's lane) its work may start with every material; null when readiness is not asked. */
+  materialStart: materialStartView.nullable().optional(),
   operations: z.array(operationView),
 })
 export type WorkOrderView = z.infer<typeof workOrderView>
@@ -221,7 +232,23 @@ const problemView = output({
   daysLate: z.number().int().nullable(),
 })
 
-const siteView = output({ id: id(), companyId: id(), code: z.string(), name: z.string(), timeZone: z.string() })
+/**
+ * B-W2b-312 (design planning.board "Problems in this plan": "Operations in the past (W2b)", "Material not in time (W2b)", "Gate not
+ * passed (W2b)"): IN_THE_PAST a bar that should have ended by now with work left (the backlog), MATERIAL_NOT_IN_TIME a work order
+ * on the board starting before its earliest start with material, GATE_NOT_PASSED one whose order waits on a pre-production gate;
+ * `slotId` the bar "Show on board" outlines.
+ */
+const moreProblemView = output({
+  kind: z.enum(MORE_PROBLEM_KINDS),
+  words: z.string(),
+  lane: laneRef.nullable(),
+  date: businessDate().nullable(),
+  workOrderId: id(),
+  slotId: id().nullable(),
+})
+
+// B-W2b-312: exported for schedule-depth's answers.
+export const siteView = output({ id: id(), companyId: id(), code: z.string(), name: z.string(), timeZone: z.string() })
 
 const boardQuery = {
   siteId: id(),
@@ -268,6 +295,8 @@ export const boardContract = defineContract({
       /** Not on the board (wholly or partly), the earliest latest safe start first. */
       tray: z.array(output({ workOrderId: id(), unplacedOperations: z.number().int(), minutes: minutes(), latestSafeStart: instant().nullable(), chips: z.array(z.enum(TRAY_CHIPS)) })),
       problems: z.array(problemView),
+      /** B-W2b-312: the problems list's W2b kinds (see moreProblemView). */
+      moreProblems: z.array(moreProblemView),
     }),
   },
 })
@@ -287,10 +316,19 @@ export const workOrderScheduleContract = defineContract({
   },
 })
 
-const overView = output({ lane: laneRef, date: businessDate(), availableMinutes: minutes(), bookedMinutes: minutes(), overMinutes: minutes(), loadPct: z.string().nullable() })
+// B-W2b-312: exported for schedule-depth's answers.
+export const overView = output({ lane: laneRef, date: businessDate(), availableMinutes: minutes(), bookedMinutes: minutes(), overMinutes: minutes(), loadPct: z.string().nullable() })
 
 const slotAnswer = {
-  201: output({ slot: storedSlot, planVersion: z.number().int(), schedule: scheduleView.nullable(), over: z.array(overView), replayed: z.boolean() }),
+  201: output({
+    slot: storedSlot,
+    planVersion: z.number().int(),
+    schedule: scheduleView.nullable(),
+    over: z.array(overView),
+    /** B-W2b-312 (PLN-134): the bar's start against its work order's material ("Snap to 15 Nov / Keep my date"); null for a part of an order. */
+    material: materialCheckView.nullable().optional(),
+    replayed: z.boolean(),
+  }),
 }
 
 export const placeSlotContract = defineContract({

@@ -145,6 +145,8 @@ import { events as returnsDepth } from '../returns-depth/events'
 import { events as returnsOutcomes } from '../returns-outcomes/events'
 // B-W2b-293: planned work and subcontract orders (planned by a run, made real, made firm).
 import { events as planningPlannedOrders } from '../planning-planned-orders/events'
+// B-W2b-306: MRP you can trust (action messages raised and decided, planned orders edited, order-specific pegs).
+import { events as planningActions } from '../planning-actions/events'
 // B-W2b-301: promise dates (an order line's promise per size).
 import { events as planningPromise } from '../planning-promise/events'
 // B-W2b-321
@@ -153,6 +155,8 @@ import { events as planningSubcontract } from '../planning-subcontract/events'
 import { events as subcontractDepth } from '../subcontract-depth/events'
 // B-W2b-325: price lists in depth (breaks and surcharges, a style's own surcharges, minimum order quantities).
 import { events as salesPricing } from '../sales-pricing/events'
+// B-W2b-342: repairs and alterations in depth (a request from outside, an estimate sent, answered or withdrawn).
+import { events as repairsDepth } from '../repairs-depth/events'
 // B-W2b-238: materials in depth (a material's approval decided).
 import { events as materialsDepth } from '../materials-depth/events'
 // B-W2b-230: the tech pack (a new PDF version of a revision's tech pack kept).
@@ -230,6 +234,12 @@ import { events as inventoryTasks } from '../inventory-tasks/events'
 import { events as supplierQualification } from '../supplier-qualification/events'
 // B-W2b-326: transfers between sites (inventory.transfer_changed).
 import { events as inventoryTransfers } from '../inventory-transfers/events'
+// B-W2b-299: counts in depth (a unit scanned into a count, a count schedule changed or counted).
+import { events as inventoryCounts } from '../inventory-counts/events'
+// B-W2b-304: credit checks and limits.
+import { events as salesCredit } from '../sales-credit/events'
+// B-W2b-298: substitutes with a yes (inventory.substitution_changed).
+import { events as inventorySubstitutions } from '../inventory-substitutions/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -525,7 +535,17 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-325
   ...salesPricing,
   // B-W2b-326
-  ...inventoryTransfers] as const satisfies readonly EventDefinition[]
+  ...inventoryTransfers,
+  // B-W2b-299
+  ...inventoryCounts,
+  // B-W2b-304
+  ...salesCredit,
+  // B-W2b-298
+  ...inventorySubstitutions,
+  // B-W2b-342
+  ...repairsDepth,
+  // B-W2b-306
+  ...planningActions] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']

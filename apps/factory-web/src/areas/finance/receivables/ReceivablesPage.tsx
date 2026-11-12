@@ -44,6 +44,8 @@ import {
 } from './model'
 import type { ReminderDialogState } from './view/ReminderDialog'
 import { ReceivablesView, type Notice, type ReceivablesModel } from './view/ReceivablesView'
+// B-W2b-304: Finance › Receivables › Credit limits (sec:credit).
+import { CreditLimits } from './credit/CreditLimits'
 import type { StatementState } from './view/StatementDialog'
 
 const SLOW_MS = 1000
@@ -307,6 +309,7 @@ export function ReceivablesPage() {
   return (
     <ReceivablesView
       model={model}
+      credit={<CreditLimits prefix={prefix} />}
       actions={{
         onAddress: go,
         onSearch: (text) => {

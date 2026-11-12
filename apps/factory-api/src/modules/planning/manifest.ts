@@ -70,6 +70,21 @@ export const manifest = defineManifest({
   'GET /planning/schedule/versions/:versionId': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
   'GET /planning/allocation': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
   'PUT /planning/allocation/work-orders/:workOrderId': { audiences: ['office'], permission: 'planning.schedule.manage', scope: 'record' },
+  // B-W2b-312: scheduling in depth (./schedule-depth): pins with planning.schedule.pin; the material check read with
+  // planning.view; forward scheduling and the backlog reschedule previewed with planning.view (the handler asks
+  // planning.schedule.manage when it applies); a what-if is its planner's own (read with planning.view, the owner only;
+  // made, tried, applied and discarded with planning.schedule.manage).
+  'POST /planning/schedule/slots/:slotId/pin': { audiences: ['office'], permission: 'planning.schedule.pin', scope: 'record' },
+  'POST /planning/schedule/work-orders/:workOrderId/pin': { audiences: ['office'], permission: 'planning.schedule.pin', scope: 'record' },
+  'GET /planning/schedule/work-orders/:workOrderId/material': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'POST /planning/schedule/forward': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'POST /planning/schedule/reschedule-backlog': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'POST /planning/schedule/what-ifs': { audiences: ['office'], permission: 'planning.schedule.manage', scope: 'record' },
+  'GET /planning/schedule/what-ifs': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'GET /planning/schedule/what-ifs/:scenarioId': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'PUT /planning/schedule/what-ifs/:scenarioId/moves': { audiences: ['office'], permission: 'planning.schedule.manage', scope: 'record' },
+  'POST /planning/schedule/what-ifs/:scenarioId/apply': { audiences: ['office'], permission: 'planning.schedule.manage', scope: 'record' },
+  'POST /planning/schedule/what-ifs/:scenarioId/discard': { audiences: ['office'], permission: 'planning.schedule.manage', scope: 'record' },
   // B-W2b-132: the leather and cut plan (./leather): read with planning.view; a style's cutting loss changed or its proposal
   // dismissed with planning.leather.manage at the site whose cuts it rests on.
   'GET /planning/leather/need': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
@@ -109,6 +124,16 @@ export const manifest = defineManifest({
   'GET /planning/strategy': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
   'PUT /planning/strategy/items/:itemId': { audiences: ['office'], permission: 'planning.strategy.manage', scope: 'record' },
   'POST /planning/strategy/bulk': { audiences: ['office'], permission: 'planning.strategy.manage', scope: 'record' },
+  // B-W2b-306: MRP you can trust (./run-log, ./actions): the run log and the action messages read with planning.view over the
+  // run's site; messages decided with planning.actions.manage; planned orders edited, reset and bulk-edited with
+  // planning.planned.edit; a requirement kept for one order line with planning.firm (the planner's act on the latest plan).
+  'GET /planning/runs/:runId/log': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'GET /planning/action-messages': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'POST /planning/action-messages/decide': { audiences: ['office'], permission: 'planning.actions.manage', scope: 'record' },
+  'POST /planning/planned-orders/bulk': { audiences: ['office'], permission: 'planning.planned.edit', scope: 'record' },
+  'PATCH /planning/planned-orders/:plannedOrderId': { audiences: ['office'], permission: 'planning.planned.edit', scope: 'record' },
+  'POST /planning/planned-orders/:plannedOrderId/reset': { audiences: ['office'], permission: 'planning.planned.edit', scope: 'record' },
+  'POST /planning/requirements/:requirementId/order-specific': { audiences: ['office'], permission: 'planning.firm', scope: 'record' },
   // B-W2b-321: work to subcontractors (./subcontract-capacity, ./capacity/subcontractors.ts, ./heatmap): read with planning.view over
   // the site (a workshop's capacity: over the workshop); a workshop's weekly capacity kept with planning.subcontract.capacity; an
   // operation sent outside or brought back in, the kit's time and "Create subcontract orders" with planning.subcontract.outsource

@@ -53,6 +53,8 @@ import { INVENTORY_RULES_ADDS } from '../../inventory/posting/permissions'
 import { PLANNING_PLANNED_ADDS } from '../../planning/planned-orders/permissions'
 // B-W2b-301
 import { PLANNING_PROMISE_ADDS } from '../../planning/promise/permissions'
+// B-W2b-312: scheduling in depth (the planner and the production manager pin the board).
+import { PLANNING_SCHEDULE_DEPTH_ADDS } from '../../planning/schedule-depth/permissions'
 // B-W2b-321: work to subcontractors.
 import { PLANNING_SUBCONTRACT_ADDS } from '../../planning/subcontract-capacity/permissions'
 // B-W2b-311: suppliers in depth (the buyer and quality set a supplier's status).
@@ -66,6 +68,8 @@ import { BANK_ADDS, PORTAL_BANK_ADDS } from '../../purchasing/bank/permissions'
 import { QUALIFICATION_ADDS } from '../../purchasing/qualification/permissions'
 // B-W2b-326: transfers between sites (the warehouse).
 import { TRANSFERS_ADDS } from '../../inventory/transfers/permissions'
+// B-W2b-299: counts by scanning every unit (the warehouse's phone; the floor's operator and team leader).
+import { INVENTORY_COUNTS_DEPTH_ADDS, INVENTORY_COUNTS_DEPTH_FLOOR_ADDS } from '../../inventory/counts-depth/permissions'
 // B-W2b-229: the option library (production manager) and option prices (sales).
 import { PRODUCT_OPTIONS_ADDS } from '../../product/options/permissions'
 // B-W2b-238: materials in depth (the production manager and quality decide a material's approval).
@@ -93,6 +97,8 @@ import { SALES_SAMPLE_DECISIONS_ADDS } from '../../sales/sample-decisions/permis
 import { PLANNING_MILESTONES_ADDS } from '../../planning/milestones/permissions'
 // B-W2b-319: the production strategy per item.
 import { PLANNING_STRATEGY_ADDS } from '../../planning/strategy/permissions'
+// B-W2b-306: MRP you can trust (action messages; protected edits and bulk edit of planned orders).
+import { PLANNING_ACTIONS_ADDS } from '../../planning/actions/permissions'
 // B-W2b-247: the colour library and the brands' branding sets.
 import { PRODUCT_COLOURS_ADDS } from '../../product/colours/permissions'
 import { PRODUCT_BRANDING_ADDS } from '../../product/branding-sets/permissions'
@@ -116,6 +122,8 @@ import { COMPLIANCE_REPORTS_ADDS } from '../../compliance/reports/permissions'
 import { CLAIMS_ADDS } from '../../compliance/claims/permissions'
 // B-W2b-262: the brand's samples and tech packs (the customer Buyer, Quality, Designer and Viewer; the Admin follows).
 import { PORTAL_SAMPLES_READERS } from '../../sales/portal-samples/permissions'
+// B-W2b-304: credit limits.
+import { SALES_CREDIT_ADDS } from '../../sales/credit/permissions'
 
 /**
  * The system role templates (plan A1 §3.11 "Role"; feature PLT-030): ready roles every tenant gets as system roles
@@ -963,6 +971,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (PLANNING_PROMISE_ADDS[key] ?? []) : []),
   // B-W2b-321
   ...(audience === 'office' ? (PLANNING_SUBCONTRACT_ADDS[key] ?? []) : []),
+  // B-W2b-312
+  ...(audience === 'office' ? (PLANNING_SCHEDULE_DEPTH_ADDS[key] ?? []) : []),
   // B-W2b-311
   ...(audience === 'office' ? (SUPPLIERS_DEPTH_ADDS[key] ?? []) : []),
   // B-W2b-292
@@ -979,7 +989,13 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-350
   ...(audience === 'office' ? (PURCHASING_REPORTS_ADDS[key] ?? []) : []),
   // B-W2b-326
-  ...(audience === 'office' ? (TRANSFERS_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (TRANSFERS_ADDS[key] ?? []) : []),
+  // B-W2b-299
+  ...((audience === 'office' ? INVENTORY_COUNTS_DEPTH_ADDS : INVENTORY_COUNTS_DEPTH_FLOOR_ADDS)[key] ?? []),
+  // B-W2b-304
+  ...(audience === 'office' ? (SALES_CREDIT_ADDS[key] ?? []) : []),
+  // B-W2b-306
+  ...(audience === 'office' ? (PLANNING_ACTIONS_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the

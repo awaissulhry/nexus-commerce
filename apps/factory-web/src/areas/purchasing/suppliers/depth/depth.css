@@ -1,0 +1,272 @@
+/* B-W2b-334 — suppliers in depth (fw-spd-*): the Overview's card, Now, what each contact receives, Documents &
+   qualification, Quality & rating, Bank details, and the list's documents parts. DS tokens only; no page max-width (the
+   record fills the main area), two columns from 900 px, one on a phone. */
+
+.fw-spd-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-spd-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--nds-space-12);
+}
+
+.fw-spd-head-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  flex: 1 1 320px;
+}
+
+.fw-spd-head-actions,
+.fw-spd-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+  align-items: center;
+}
+
+.fw-spd-title {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-spd-subtitle {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-spd-hint {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+
+.fw-spd-warn {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-warning-text);
+}
+
+.fw-spd-error {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-danger-text);
+}
+
+.fw-spd-saved {
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-success-text);
+}
+
+.fw-spd-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-spd-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-16);
+}
+
+@media (min-width: 900px) {
+  .fw-spd-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.fw-spd-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.fw-spd-legend,
+.fw-spd-label {
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+  margin: 0 0 var(--nds-space-4);
+  width: 100%;
+}
+
+.fw-spd-label {
+  width: auto;
+  margin: 0;
+}
+
+.fw-spd-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-12);
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+}
+
+.fw-spd-status-text,
+.fw-spd-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-spd-closures {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-spd-closures-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-16);
+}
+
+@media (min-width: 1100px) {
+  .fw-spd-closures-grid {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  }
+}
+
+.fw-spd-calendar {
+  min-width: 0;
+}
+
+.fw-spd-ordered,
+.fw-spd-next,
+.fw-spd-reach {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-strong);
+}
+
+.fw-spd-list {
+  margin: 0;
+  padding-left: var(--nds-space-16);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-spd-routes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-spd-who {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-spd-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+}
+
+.fw-spd-code,
+.fw-spd-iban {
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-sm);
+  overflow-wrap: anywhere;
+}
+
+.fw-spd-iban-full {
+  font-size: var(--nds-font-size-lg);
+  letter-spacing: 0.04em;
+}
+
+.fw-spd-account {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+}
+
+.fw-spd-account-waiting {
+  border-style: dashed;
+}
+
+.fw-spd-account-head,
+.fw-spd-qual-head,
+.fw-spd-change {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-12);
+}
+
+.fw-spd-change {
+  align-items: flex-start;
+  padding: var(--nds-space-12) 0;
+  border-top: 1px solid var(--nds-border);
+}
+
+.fw-spd-change-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  flex: 1 1 360px;
+}
+
+.fw-spd-qual {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-12) 0;
+  border-top: 1px solid var(--nds-border);
+}
+
+.fw-spd-loading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-spd-bar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-spd-docs-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+}

@@ -17,6 +17,8 @@ import { readinessPart } from './release/blockers'
 // B-W2b-254 (PRD-272): the one compliance gate at the work-order release (MES-004 as a requirement); refusals become GateEvents.
 import { releaseGate } from '../../compliance/gates/at-steps'
 import { withGateRecords } from '../../compliance/gates/gate'
+// B-W2b-304 (SAL-241): the customers' credit checked again at the release (a hold stops it until a yes).
+import { creditGateInCommand, withCreditHolds } from '../../sales/credit/check'
 
 /**
  * B-W2b-51: the release refused by its check (409 invalid_state with every blocker, as before), carrying the codes of the
@@ -96,7 +98,7 @@ export async function releaseWorkOrder(caller: CommandCaller, workOrderId: strin
   const { tenantId } = officeContextOf(caller)
   const workOrder = await officeWorkOrder(caller, workOrderId, WORKORDERS_RELEASE)
   if (!beforeRelease(workOrder)) throw new InvalidStateError(`Work order ${workOrder.number} is ${workOrder.status}; it was released already.`)
-  return withGateRecords(caller, idempotencyKey, () => onWorkOrder(caller, workOrder, { name: 'workorders.release', idempotencyKey, input: { workOrderId, ...body }, version: body.version }, async (tools) => {
+  return withCreditHolds(caller, idempotencyKey, () => withGateRecords(caller, idempotencyKey, () => onWorkOrder(caller, workOrder, { name: 'workorders.release', idempotencyKey, input: { workOrderId, ...body }, version: body.version }, async (tools) => {
     const { tx, now } = tools
     await lockSiteReleases(tx, tenantId, workOrder.siteId)
     await tx.$queryRaw`SELECT 1 FROM "Style" WHERE "id" = ${workOrder.styleId}::uuid FOR SHARE`
@@ -111,6 +113,8 @@ export async function releaseWorkOrder(caller: CommandCaller, workOrderId: strin
     if (current.kind !== 'REPAIR') await releaseGate(tools, { id: current.id, number: current.number, companyId: current.companyId, siteId: current.siteId, styleId: current.styleId, labelTemplateId: facts.label?.id ?? null }, blocked)
     else if (blocked) throw blocked
     assertTransition(workOrderMachine, current.status, 'RELEASED', { releaseBlockers: [] })
+    // B-W2b-304: every customer whose order lines it makes, over its credit limit where the company holds: 409 in words.
+    await creditGateInCommand(tools, { step: 'RELEASE', recordType: 'WorkOrder', recordId: current.id, label: `Work order ${current.number}`, companyId: current.companyId, partyIds: facts.cells.flatMap((cell) => (cell.partyId ? [cell.partyId] : [])) })
     const revision = facts.revision!
     const label = facts.label!
     const overridden = checklist.checks.find((check) => check.code === 'MATERIAL' && check.state === 'OVERRIDDEN') ?? null
@@ -207,5 +211,5 @@ export async function releaseWorkOrder(caller: CommandCaller, workOrderId: strin
     const view = await workOrderView(tx, (await readWorkOrder(tx, current.id))!, todayOfCommand(tools))
     const release = view.release && materialOverride ? { ...view.release, materialOverride: { ...materialOverride, byId: actorId, at: toUtcIso(now) } } : view.release
     return { workOrder: { ...view, release } }
-  }))
+  })))
 }

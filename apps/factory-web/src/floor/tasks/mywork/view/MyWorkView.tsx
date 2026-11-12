@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, type KeyboardEvent, type ReactNode } from 'react'
-import { ArrowLeft, Check, CircleAlert, CircleCheckBig, CircleHelp, ClipboardCheck, CloudOff, Flame, House, ListEnd, ListTodo, MapPinOff, MessageSquare, MessageSquareText, PackageSearch, PauseCircle, RotateCcw, ScanLine, ShieldOff, Siren, Ban, Clock, TriangleAlert, Truck, Warehouse, Wrench, X } from 'lucide-react'
+import { ArrowLeft, Check, CircleAlert, CircleCheckBig, CircleHelp, ClipboardCheck, CloudOff, Flame, House, ListEnd, ListTodo, MapPinOff, MessageSquare, MessageSquareText, PackageSearch, PauseCircle, RotateCcw, ScanLine, ShieldOff, Siren, Ban, Clock, TriangleAlert, Truck, Wrench, X } from 'lucide-react'
 import { FloorActionBar, FloorButton, FloorList, FloorListRow, FloorTile, FloorTileGrid, ScanInput, type CameraScanner, type FloorActions } from '@nexus/ui/floor'
 import { FloorCard } from '@nexus/ui/floor/FloorCard/index'
 import { FloorListUpdates } from '@nexus/ui/floor/FloorListUpdates/index'
@@ -24,6 +24,8 @@ import { RepairCard, RepairLine, RepairList, RepairOut, RepairUnread, type Repai
 // B-W2b-109: the inspector queue (QHS-068).
 import type { InspectorQueue, OpenHeld } from '../inspections/model'
 import { InspectionCard, InspectionList, InspectionsUnread } from '../inspections/view/InspectionViews'
+// B-W2b-308: at the warehouse My work is the task inbox (SCM-274).
+import { InboxView, type InboxViewModel } from '../warehouse/view/InboxView'
 import '../mywork.css'
 
 /**
@@ -106,6 +108,8 @@ export interface MyWorkViewModel {
   repairBusy?: boolean
   /** B-W2b-109: my inspections (null: the person holds no inspection view). */
   inspections?: InspectionsModel | null
+  /** B-W2b-308: the warehouse task inbox, drawn instead of the station's queue (the live screen: warehouse/entry.tsx). */
+  warehouse?: InboxViewModel | null
 }
 
 /** B-W2b-109: the inspector queue as this tablet shows it. */
@@ -212,7 +216,13 @@ function useRowKeys() {
   return { group, onKeyDown }
 }
 
-export function MyWorkView({ model, onAction, onFrame, camera }: MyWorkViewProps) {
+export function MyWorkView(props: MyWorkViewProps) {
+  // B-W2b-308: at the warehouse the inbox (its own actions; the design index shows its cases on this screen).
+  if (props.model.warehouse) return <InboxView model={props.model.warehouse} onFrame={props.onFrame} camera={props.camera} />
+  return <StationWorkView {...props} />
+}
+
+function StationWorkView({ model, onAction, onFrame, camera }: MyWorkViewProps) {
   const t = useT('floor-mywork')
   const ti = useT('floor-myinspections')
   const shared = useT('floor-tasks')
@@ -505,7 +515,7 @@ export function MyWorkView({ model, onAction, onFrame, camera }: MyWorkViewProps
       break
 
     case 'list': {
-      const empty = list ? emptyOf(list, model.mode) : null
+      const empty = list ? emptyOf(list) : null
       actions = view?.next ? [home, { label: t('cantFind.open'), icon: <PackageSearch />, onPress: () => send({ type: 'cantFind', slotId: view.next!.entry.slotId }), variant: 'secondary' }] : [home]
       body = (
         <>
@@ -623,8 +633,6 @@ function EmptyState({ kind, list, t, time }: { kind: NonNullable<ReturnType<type
   switch (kind) {
     case 'noStation':
       return <FloorState tone="warning" icon={<MapPinOff />} title={t('empty.noStation.title')} text={t('empty.noStation.body')} />
-    case 'warehouse':
-      return <FloorState tone="info" icon={<Warehouse />} title={t('empty.warehouse.title')} text={t('empty.warehouse.body')} />
     case 'nothingPublished':
       return <FloorState tone="info" icon={<ListTodo />} title={t('empty.nothingPublished.title')} text={t('empty.nothingPublished.body')} />
     case 'firstUpcoming':

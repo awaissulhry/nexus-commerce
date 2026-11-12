@@ -2,7 +2,6 @@ import type { DispatchState } from '@nexus/factory-domain/planning/schedule/disp
 import type { MaterialScope, MaterialState } from '@nexus/factory-domain/production/dispatch/material'
 import type { FloorRuleMode } from '@nexus/factory-domain/production/settings/floor-rules'
 import { floorListChanges } from '@nexus/ui/floor/FloorListUpdates/floorListUpdatesModel'
-import type { FloorMode } from '../../model'
 
 /**
  * SCR-089 — My work (design floor.mywork; MES-021, MES-022, MES-026, COL-036; Owner answers P3, F2): the rules of the screen without React or the
@@ -30,7 +29,7 @@ import type { FloorMode } from '../../model'
  *             at zero; which ones were opened stays on the tablet, per tablet, never per person (art. 4)
  *   help      Call for help: Material, the site's first active MATERIAL type: one tap through the floor queue, so it works
  *             offline; held with the reason when it cannot go
- *   warehouse a tablet at no station has no queue; the warehouse task inbox (SCM-274) comes with W2b-5, and the screen says so
+ *   warehouse a tablet at no station has no queue: B-W2b-308's task inbox is its My work (./warehouse, chosen by ./warehouse/entry.tsx)
  */
 
 export interface DispatchEntry {
@@ -164,13 +163,11 @@ export type EmptyKind =
   | 'nothingQueued'
   /** Everything the plan put here is done. */
   | 'allDone'
-  /** A warehouse tablet: its task inbox is not built yet (SCM-274, W2b-5); the tiles on Home do the work. */
-  | 'warehouse'
 
-export function emptyOf(list: Pick<DispatchList, 'target' | 'version' | 'upcoming' | 'entries' | 'person'>, mode: FloorMode | null = null): EmptyKind | null {
+export function emptyOf(list: Pick<DispatchList, 'target' | 'version' | 'upcoming' | 'entries' | 'person'>): EmptyKind | null {
   if (list.person) return null
-  // No station is how a warehouse tablet is told apart (floor/model modeOf): one placed nowhere by mistake reads the same.
-  if (list.target === null) return mode === 'warehouse' ? 'warehouse' : 'noStation'
+  // B-W2b-308: a warehouse tablet (no station, floor/model modeOf) opens the task inbox instead; here no station is a misplaced tablet.
+  if (list.target === null) return 'noStation'
   if (list.version === null) return list.upcoming ? 'firstUpcoming' : 'nothingPublished'
   if (list.entries.length === 0) return 'nothingQueued'
   if (list.entries.every((entry) => entry.state === 'DONE')) return 'allDone'
