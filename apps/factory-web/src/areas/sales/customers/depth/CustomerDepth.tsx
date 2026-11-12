@@ -54,9 +54,10 @@ function TileText({ part, field }: { part: 'credit' | 'promises'; field: 'label'
  * connector to the state above. `prefix`: `/w/<company>` (the Promises tile opens the record's Quotes & orders).
  */
 export function customerDepthSlot(party: Party, reload: () => void, prefix: string): SupplierDepth {
-  const tile = (part: 'credit' | 'promises'): Metric => ({ label: <TileText part={part} field="label" />, value: <TileText part={part} field="value" />, hint: <TileText part={part} field="hint" /> })
+  const tile = (part: 'credit' | 'promises') => ({ label: <TileText part={part} field="label" />, value: <TileText part={part} field="value" />, hint: <TileText part={part} field="hint" /> })
+  const numbers: Metric[] = [tile('credit'), { ...tile('promises'), href: `${prefix}/sales/customers/${encodeURIComponent(party.id)}?tab=orders` }]
   return {
-    numbers: [tile('credit'), { ...tile('promises'), href: `${prefix}/sales/customers/${encodeURIComponent(party.id)}?tab=orders` }],
+    numbers,
     now: <NowPart party={party} />,
     status: <StatusPart party={party} />,
     aside: <AsidePart party={party} />,

@@ -16,7 +16,7 @@ import { I18nProvider } from '../../../../lib/i18n/provider'
 import { designScreen as listScreen } from '../fixtures'
 import { designScreen as recordScreen } from '../record/fixtures'
 import { addRequirement, eraseContact, placeHold, readGlance, releaseHold, setLawfulBasis, setPoNumberRequired } from './api'
-import { ALL_CAN, glanceOf, HELD_GLANCE, HOLDS, PRIVACY, READ_CAN, REQUIREMENTS, TERMS, TODAY, withoutPrices } from './demo'
+import { ALL_CAN, glanceOf, HELD_GLANCE, HOLDS, PRIVACY, READ_CAN, REQUIREMENTS, TERMS, TODAY, withoutPrices } from './_demo/fixtures'
 import {
   basisBody,
   basisProblems,

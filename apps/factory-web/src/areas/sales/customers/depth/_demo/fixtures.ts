@@ -1,12 +1,13 @@
-import { CUSTOMERS, at } from '../../../parties/_shared/fixtures'
-import { DEMO_COMPANIES } from '../../../../shell/design-data'
-import type { AccessCopy, CompanyTerms, Erased, Glance, Holds, Privacy, Requirement, Requirements, StyleOption } from './api'
-import { depthCan, type DepthCan } from './model'
+import { CUSTOMERS, at } from '../../../../parties/_shared/fixtures'
+import { DEMO_COMPANIES } from '../../../../../shell/design-data'
+import type { AccessCopy, CompanyTerms, Erased, Glance, Holds, Privacy, Requirement, Requirements, StyleOption } from '../api'
+import { depthCan, type DepthCan } from '../model'
 
 /**
  * Made-up data for the design cases of B-W2b-324 (SCR-032 Riders, SCR-033 the customer in depth): the "Demo" and
  * "Esempio" customers of the shared party fixtures, invented riders, styles, rounds, repairs, holds, rules and contacts.
- * Nothing here is a real company, person or number. Design-only (only fixtures and tests import it).
+ * Nothing here is a real company, person or number. Design-only (a fixtures file: only fixtures and tests import it; it exports
+ * no `designScreen`, so the design index skips it).
  */
 
 const uid = (block: string, n: number) => `0190f0e2-${block}-7000-8000-${String(n).padStart(12, '0')}`

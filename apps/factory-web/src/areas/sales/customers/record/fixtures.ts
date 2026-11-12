@@ -8,13 +8,13 @@ import type { CommercialTermsModel } from '../terms/view/CommercialTermsCard'
 import { MONEY_CAN, MONEY_STATES, moneyModel } from '../money/_demo/fixtures'
 import type { CustomerMoneyModel } from '../money/overview'
 import { CustomerRecordView } from './view/CustomerRecordView'
-// B-W2b-324: the customer in depth (made-up data in ../depth/demo.ts).
+// B-W2b-324: the customer in depth (made-up data in ../depth/_demo/fixtures.ts).
 import type { Metric } from '@nexus/ui/components'
 import { WithMessages } from '../../../../record-panels/i18n'
 import type { SupplierDepth } from '../../../parties/_shared/view/PartyRecordView'
 import type { Glance } from '../depth/api'
 import { DEPTH_NAMESPACES } from '../depth/CustomerDepth'
-import { ALL_CAN, COMPANIES, COPY, FILES, glanceOf, HELD_GLANCE, HOLDS, KEPT, NO_HOLDS, PRIVACY, READ_CAN, REQUIREMENTS, SALES_CAN, STYLES, TERMS as COMPANY_TERMS, TODAY, TWO_HOLDS, WITHHELD, withoutPrices } from '../depth/demo'
+import { ALL_CAN, COMPANIES, COPY, FILES, glanceOf, HELD_GLANCE, HOLDS, KEPT, NO_HOLDS, PRIVACY, READ_CAN, REQUIREMENTS, SALES_CAN, STYLES, TERMS as COMPANY_TERMS, TODAY, TWO_HOLDS, WITHHELD, withoutPrices } from '../depth/_demo/fixtures'
 import { basisDraftOf, blankRequirement, failedRead, LOADING, ready, requirementDraftOf, type DepthCan, type Read } from '../depth/model'
 import { GlanceAside, GlanceNow, GlanceStatus, GlanceTileText } from '../depth/view/GlanceParts'
 import { HoldCard, type HoldCardModel } from '../depth/view/HoldCard'
@@ -49,7 +49,7 @@ function depthNodes(depth: DepthCase | undefined, partyId: string): SupplierDept
   if (!depth) return undefined
   const recordHref = `/w/DEMO/sales/customers/${partyId}`
   const glance = depth.glance ? { read: depth.glance, prefix: '/w/DEMO', recordHref } : null
-  const tile = (part: 'credit' | 'promises'): Metric => ({
+  const tile = (part: 'credit' | 'promises') => ({
     label: createElement(GlanceTileText, { read: depth.glance!, part, field: 'label' }),
     value: createElement(GlanceTileText, { read: depth.glance!, part, field: 'value' }),
     hint: createElement(GlanceTileText, { read: depth.glance!, part, field: 'hint' }),
@@ -57,7 +57,7 @@ function depthNodes(depth: DepthCase | undefined, partyId: string): SupplierDept
   return {
     ...(glance
       ? {
-          numbers: [tile('credit'), { ...tile('promises'), href: `${recordHref}?tab=orders` }],
+          numbers: [tile('credit'), { ...tile('promises'), href: `${recordHref}?tab=orders` }] satisfies Metric[],
           now: createElement(GlanceNow, { model: glance }),
           status: createElement(GlanceStatus, { model: glance }),
           aside: createElement(GlanceAside, { model: glance }),

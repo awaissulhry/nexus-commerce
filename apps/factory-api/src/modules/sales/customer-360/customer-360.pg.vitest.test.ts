@@ -107,7 +107,7 @@ describe('the customer at a glance (SAL-019)', () => {
   it('reads a team for company A: holds, requirements, promises, credit, samples, profiles, riders, repairs', async () => {
     const body = await glance('sales', A.p1)
     expect(body.party).toMatchObject({ id: A.p1, code: 'SEED-C1', kind: 'ORGANISATION' })
-    expect(body.company).toMatchObject({ id: A.companyA, code: 'A' })
+    expect(body.company).toMatchObject({ id: A.companyA, code: 'SCA' })
     expect(body.team).toBeNull()
     expect(body.withheld).toEqual([])
 
