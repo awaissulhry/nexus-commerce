@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { amountMinor, currency, defineContract, id, input, instant, output, unitPrice } from '@nexus/factory-domain/core/contracts'
+import { amountMinor, businessDate, currency, defineContract, id, input, instant, output, unitPrice } from '@nexus/factory-domain/core/contracts'
 import { ITEM_TRACKINGS, STOCK_MOVE_REASONS } from '@nexus/factory-domain/inventory/ledger/moves'
 import { VALUATION_METHODS } from '@nexus/factory-domain/inventory/ledger/valuation'
 import { LOT_QUALITY_STATUSES } from '@nexus/factory-domain/inventory/stock/overview'
@@ -325,6 +325,10 @@ export const ledgerRow = output({
   /** When it happened (the tablet's clock for a floor move); `createdAt` is the server's. */
   occurredAt: instant(),
   createdAt: instant(),
+  /** B-W2b-314 (SCM-196): the day it counts on in the books when it was dated apart (null: the day it happened). */
+  postingDate: businessDate().nullable(),
+  /** The day it counts on: its posting date, else the day it happened (Rome). */
+  postingDay: businessDate(),
   item,
   colour: named.nullable(),
   lot: output({ id: id(), code: z.string() }).nullable(),
@@ -381,6 +385,11 @@ export const ledgerContract = defineContract({
     reversed: flag().optional(),
     from: instant().optional(),
     to: instant().optional(),
+    /** B-W2b-314 (SCM-196): the days the moves count on in the books (their posting date, else the day they happened), from … to included. */
+    postedFrom: businessDate().optional(),
+    postedTo: businessDate().optional(),
+    /** B-W2b-314: only the moves dated apart from the day they happened (true), or none of them (false). */
+    backDated: flag().optional(),
     /** B-W2a-11 (SCM-195): text or a scanned code — material code or name, lot, hide, location, work order or receipt number, reference, note. */
     q: z.string().trim().min(1).max(80).optional(),
     /** Only write-offs (true) or none of them (false). */
