@@ -228,6 +228,9 @@ import * as sampleContracts from './sample-orders/contract'
 import { createSampleOrder } from './sample-orders/create'
 import { listSampleOrders } from './sample-orders/list'
 import { sampleOrderPdf } from './sample-orders/pdf'
+// B-W2b-350: purchasing reports (./reports): the spend and the lines behind one of its bars.
+import { spendContract, spendLinesContract } from './reports/contract'
+import { spendAnswer, spendLinesAnswer } from './reports/reads'
 // B-W2b-172: "Ask for a new link" on a dead questionnaire link.
 registerLinkRenewer('SUPPLIER_ONBOARD', 'Party', questionnaireLink.renewQuestionnaireLink)
 
@@ -694,4 +697,10 @@ export default defineRoutes('purchasing', manifest, async (app) => {
   app.get('/purchasing/orders/:purchaseOrderId/line-kinds', { schema: getLineKindsContract }, async (request) => getLineKinds(request, request.params.purchaseOrderId))
 
   app.put('/purchasing/orders/:purchaseOrderId/lines/:lineId/kind', { schema: putLineKindContract }, async (request) => putLineKind(request, request.params.purchaseOrderId, request.params.lineId, request.body, idempotencyKeyFrom(request)))
+
+  // B-W2b-350 (SCM-165): purchasing reports (./reports) — the spend by supplier, category, material, company or month with sample
+  // orders apart (SCR-255 sec spend), and the purchase order lines behind one bar (pop drill). Read only. The late lines and what
+  // they block are the expediting worklist (GET /purchasing/expediting, B-W2b-305); the supply alerts are exception rules.
+  app.get('/purchasing/reports/spend', { schema: spendContract }, async (request) => spendAnswer(request, request.query))
+  app.get('/purchasing/reports/spend/lines', { schema: spendLinesContract }, async (request) => spendLinesAnswer(request, request.query))
 })

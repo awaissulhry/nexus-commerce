@@ -89,6 +89,8 @@ import { PRODUCT_BRANDING_ADDS } from '../../product/branding-sets/permissions'
 import { INVENTORY_LOTS_DEPTH_ADDS } from '../../inventory/lots-depth/permissions'
 // B-W2b-356: warehouse reports (the warehouse, buyer, planner, production manager and finance read them).
 import { INVENTORY_REPORTS_ADDS } from '../../inventory/reports/permissions'
+// B-W2b-350: purchasing reports (the buyer, planner, production manager, finance and the warehouse read them).
+import { PURCHASING_REPORTS_ADDS } from '../../purchasing/reports/permissions'
 // B-W2b-260: recall, withdrawal and authority (the quality inspector drafts them and speaks for the company outward).
 import { RECALL_ADDS } from '../../compliance/recall/permissions'
 // B-W2b-258: the user information builder (quality generates the leaflet drafts and checks a translation).
@@ -953,7 +955,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-331
   ...(audience === 'office' ? (SUBCONTRACT_DEPTH_ADDS[key] ?? []) : []),
   // B-W2b-356
-  ...(audience === 'office' ? (INVENTORY_REPORTS_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (INVENTORY_REPORTS_ADDS[key] ?? []) : []),
+  // B-W2b-350
+  ...(audience === 'office' ? (PURCHASING_REPORTS_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the

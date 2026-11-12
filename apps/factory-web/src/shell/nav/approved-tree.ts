@@ -241,6 +241,8 @@ export const OFFICE: readonly TreeArea[] = [
           { id: 'purchasing.claims', title: 'Returns & claims', titleIt: 'Resi e reclami ai fornitori', wave: 'W2a', href: '/purchasing/claims' },
         ],
       },
+      // W2b: B-W2b-350 Purchasing reports (SCR-255).
+      { label: 'Reports', labelIt: 'Report', hideLabel: false, pages: [{ id: 'purchasing.reports', title: 'Purchasing reports', titleIt: 'Report acquisti', wave: 'W2b', href: '/purchasing/reports' }] },
     ],
   },
   {

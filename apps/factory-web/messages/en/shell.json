@@ -54,7 +54,9 @@
       "subcontracting": "Subcontract orders",
       "sourcingClaims": "Sourcing & claims",
       "sourcing": "RFQs & sourcing",
-      "claims": "Returns & claims"
+      "claims": "Returns & claims",
+      "reportsGroup": "Reports",
+      "reports": "Purchasing reports"
     },
     "people": {
       "area": "People",
