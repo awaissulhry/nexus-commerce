@@ -42,6 +42,9 @@ import { APPROVALS_ADDS } from '../../approvals/permissions'
 import { PO_DEPTH_ADDS } from '../../purchasing/po-depth/permissions'
 // B-W2b-332: ask to buy (every office template that works in the office).
 import { ASK_TO_BUY_ADDS } from '../../purchasing/ask-to-buy/permissions'
+// B-W2b-290: customers in depth (holds; contacts' personal data).
+import { PARTIES_HOLD_ADDS } from '../../parties/holds/permissions'
+import { PARTIES_PRIVACY_ADDS } from '../../parties/contact-privacy/permissions'
 // B-W2b-229: the option library (production manager) and option prices (sales).
 import { PRODUCT_OPTIONS_ADDS } from '../../product/options/permissions'
 // B-W2b-238: materials in depth (the production manager and quality decide a material's approval).
@@ -919,7 +922,10 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-332
   ...(audience === 'office' ? (ASK_TO_BUY_ADDS[key] ?? []) : []),
   // B-W2b-313
-  ...(audience === 'office' ? (INVENTORY_LOTS_DEPTH_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (INVENTORY_LOTS_DEPTH_ADDS[key] ?? []) : []),
+  // B-W2b-290
+  ...(audience === 'office' ? (PARTIES_HOLD_ADDS[key] ?? []) : []),
+  ...(audience === 'office' ? (PARTIES_PRIVACY_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the

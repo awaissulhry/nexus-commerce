@@ -22,6 +22,7 @@ import { termsForParty } from '../terms/terms'
 import { depositOf, quoteDefaultsOf, termsNameIn } from '@nexus/factory-domain/sales/terms/terms'
 import { assertMay, day, dayValue, decimal, grainsOf, officeContextOf, officeQuote, quotePartyOf, readCurrentVersion, readQuote, type QuoteParty, type QuoteRow, type VersionRow } from './store'
 import { forCaller, quoteDetail, type QuoteDetail } from './views'
+import { withCompanyTerms } from '../../parties/company-terms/in-force'
 
 /**
  * Quotes (B-W1-21; SAL-143, SAL-157; A2 SCR-030, SCR-034): the list, the record, a new quote, its header and its draft
@@ -142,7 +143,8 @@ export async function createQuote(caller: CommandCaller, body: CreateQuoteInput,
     const today = businessDate(now)
     const company = await tx.company.findUnique({ where: { id: body.companyId }, select: { id: true, currency: true } })
     if (!company) throw new NotFoundError('Company not found.')
-    const party = await quotePartyOf(tx, body.partyId, today, now)
+    // B-W2b-290 (SAL-028): the customer's terms with this company over its own (payment terms, price list, deposit).
+    const party = await withCompanyTerms(tx, await quotePartyOf(tx, body.partyId, today, now), company.id)
     if (!party || (party.row.companyId !== null && party.row.companyId !== company.id)) throw new NotFoundError('Customer not found.')
     assertQuotable(party)
     decideTreatment(party)

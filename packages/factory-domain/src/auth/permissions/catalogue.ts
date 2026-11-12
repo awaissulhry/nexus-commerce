@@ -191,6 +191,9 @@ import { ASK_TO_BUY_DEFINITIONS, ASK_TO_BUY_PERMISSIONS } from '../../purchasing
 import { PPE_TEXTS_DEFINITIONS, PPE_TEXTS_PERMISSIONS } from '../../compliance/ppe-texts/permissions'
 // B-W2b-313: lots in depth (inventory.lots.manage: split into shade groups, regroup, attributes; inventory.trace.report).
 import { INVENTORY_LOTS_DEPTH_DEFINITIONS, INVENTORY_LOTS_DEPTH_PERMISSIONS } from '../../inventory/lots-depth/permissions'
+// B-W2b-290: customers in depth (parties.hold; parties.privacy, parties.erase; area `parties`).
+import { PARTIES_HOLD_DEFINITIONS, PARTIES_HOLD_PERMISSIONS } from '../../parties/holds/permissions'
+import { PARTIES_PRIVACY_DEFINITIONS, PARTIES_PRIVACY_PERMISSIONS } from '../../parties/contact-privacy/permissions'
 // B-W2a-35: the plant (machines, machine requests, maintenance jobs).
 import { PLANT_DEFINITIONS, PLANT_FLOOR_PERMISSIONS, PLANT_PERMISSIONS } from '../../plant/permissions'
 // B-W2a-39: the accounting exports and the period locks (accounting.view | export | lock | unlock).
@@ -894,6 +897,9 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PPE_TEXTS_DEFINITIONS,
   // B-W2b-313: lots in depth (area `inventory`, declared above).
   INVENTORY_LOTS_DEPTH_DEFINITIONS,
+  // B-W2b-290: customers in depth (area `parties`, declared above).
+  PARTIES_HOLD_DEFINITIONS,
+  PARTIES_PRIVACY_DEFINITIONS,
 ])
 
 /** The area of the permissions only floor roles hold (and floor roles hold no other, but FLOOR_SHARED_PERMISSIONS). */
@@ -1200,6 +1206,8 @@ for (const name of ASK_TO_BUY_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(n
 for (const name of PPE_TEXTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-313: lots in depth.
 for (const name of INVENTORY_LOTS_DEPTH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-290: customers in depth.
+for (const name of [...PARTIES_HOLD_PERMISSIONS, ...PARTIES_PRIVACY_PERMISSIONS]) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }
