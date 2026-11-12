@@ -4,6 +4,8 @@ import type { FileDepthActions } from '../files/actions'
 import type { ApprovalsPanelActions } from '../approvals/model'
 // B-W2b-200
 import type { SharesPanelActions } from '../share/model'
+// B-W2b-307 (PLT-104): the approval history's actions.
+import type { ApprovalHistoryActions } from '../../shell/panels/approvals/model'
 
 /**
  * What the record panels ask of their page (RecordPanels.tsx does each through the API). In the design index none is
@@ -40,4 +42,6 @@ export interface RecordPanelsActions {
   approvals?: ApprovalsPanelActions
   /** B-W2b-200: the Partners tab (invite a partner to this record, change what they may do, revoke). */
   shares?: SharesPanelActions
+  /** B-W2b-307: the approval history (Try again, Show more). */
+  approvalHistory?: ApprovalHistoryActions
 }

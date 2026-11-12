@@ -1,5 +1,11 @@
 import { createHash } from 'node:crypto'
 import { ALERTS_HANDLE, ALERTS_VIEW } from '../alerts/permissions'
+// B-W2b-307: the approval engine's requests, change orders, SMV changes and inspection plan versions in the inbox.
+import { APPROVALS_DECIDE, APPROVALS_VIEW } from '../approvals/permissions'
+import { PRODUCT_CHANGES_APPROVE, PRODUCT_CHANGES_VIEW } from '../product/changes/permissions'
+import { PRODUCT_SMV_APPROVE } from '../product/minutes/permissions'
+import { PRODUCT_ROUTING_VIEW } from '../product/routing/permissions'
+import { QUALITY_PLANS_APPROVE, QUALITY_PLANS_VIEW } from '../quality/plans/permissions'
 import { heldGrains, type Grain } from '../auth/grains/grains'
 import { EMAIL_TRIAGE } from '../auth/permissions/catalogue'
 import { REGISTER_MANAGE, REGISTER_VIEW } from '../compliance/register/permissions'
@@ -87,6 +93,14 @@ export const ATTENTION_KINDS = [
   // B-W2b-F13b (design portal.customer.neworder "Add a new address (waits for our approval)", home.approvals): a delivery
   // address a customer added in the portal, waiting for the check of whoever takes the customer's orders.
   'DELIVERY_ADDRESS',
+  // B-W2b-307 (PLT-085, design home.approvals "every request that needs my yes"; follow-ups AW2:01-03): a change order that
+  // waits for my approval (decided in Products › Changes & versions, `?decide=order:`), an SMV change proposed by someone
+  // else (`?decide=smv:`), an inspection plan version submitted for approval (decided on the plan), and a request of the
+  // approval engine (B-W2b-282) addressed to me (decided in Home › Approvals' review).
+  'CHANGE_ORDER',
+  'SMV_CHANGE',
+  'PLAN_VERSION',
+  'APPROVAL_TASK',
 ] as const
 export type AttentionKind = (typeof ATTENTION_KINDS)[number]
 
@@ -365,6 +379,47 @@ export const KIND_RULES: Readonly<Record<AttentionKind, KindRule>> = Object.free
     act: [ORDERS_MANAGE],
     decide: 'OPEN',
     live: ['party.addresses_changed'],
+  }),
+  // B-W2b-307: a change order whose approval is asked of me (ChangeApproval undecided, the order SUBMITTED; never its author).
+  CHANGE_ORDER: rule({
+    kind: 'CHANGE_ORDER',
+    category: 'APPROVAL',
+    label: 'Change orders waiting for your approval',
+    view: PRODUCT_CHANGES_VIEW,
+    act: [PRODUCT_CHANGES_APPROVE],
+    decide: 'OPEN',
+    live: ['change_order.changed'],
+  }),
+  // B-W2b-307: an SMV change proposed by someone else, waiting for a second person (never its proposer).
+  SMV_CHANGE: rule({
+    kind: 'SMV_CHANGE',
+    category: 'APPROVAL',
+    label: 'SMV changes waiting for your approval',
+    view: PRODUCT_ROUTING_VIEW,
+    act: [PRODUCT_SMV_APPROVE],
+    decide: 'OPEN',
+    live: ['smv_version.changed'],
+  }),
+  // B-W2b-307: an inspection plan version submitted for approval (never by its author or anyone who saved it).
+  PLAN_VERSION: rule({
+    kind: 'PLAN_VERSION',
+    category: 'APPROVAL',
+    label: 'Inspection plan versions waiting for your approval',
+    view: QUALITY_PLANS_VIEW,
+    act: [QUALITY_PLANS_APPROVE],
+    decide: 'OPEN',
+    live: ['inspection_plan.changed', 'inspection_plan.version_approved'],
+  }),
+  // B-W2b-307: a request of the approval engine addressed to me (by name, or to a role I hold there), never my own; decided
+  // in Home › Approvals' review (the change, the re-check, the signature its rule asks).
+  APPROVAL_TASK: rule({
+    kind: 'APPROVAL_TASK',
+    category: 'APPROVAL',
+    label: 'Requests waiting for your yes',
+    view: APPROVALS_VIEW,
+    act: [APPROVALS_DECIDE],
+    decide: 'REVIEW',
+    live: ['approval.requested', 'approval.decided', 'approval.withdrawn', 'approval.stale'],
   }),
   RULE_ALERT: rule({
     kind: 'RULE_ALERT',
