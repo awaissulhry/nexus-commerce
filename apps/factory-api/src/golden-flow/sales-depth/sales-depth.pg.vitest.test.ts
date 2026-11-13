@@ -400,7 +400,8 @@ describe('the W2b-5 golden flow: an inquiry to a confirmed order with options an
     expect(sizes).toEqual([['50', 10], ['52', 20], ['54', 10]])
   })
 
-  it('Q03 the jacket’s options: full perforation with the liner refused in the rule’s words (nothing written); the liner, front perforation, the name and the standard armour saved, the line priced again', async () => {
+  // B-W2b-F40: no front perforation (the work order's cells skip the option-only step SEED-PERF; P03 releases it without that step).
+  it('Q03 the jacket’s options: full perforation with the liner refused in the rule’s words (nothing written); the liner, the name and the standard armour saved, the line priced again', async () => {
     const base = `/sales/quotes/${G.quote.id}/lines/${G.lines.jkt05}`
     const view = await ok(P.sales, 'GET', `${base}/configurator`)
     expect(view.may.configure).toBe(true)
@@ -411,12 +412,12 @@ describe('the W2b-5 golden flow: an inquiry to a confirmed order with options an
     // REFUSAL: the write checks the rule again, in its words.
     const refused = await ok(P.sales, 'PUT', `${base}/options`, { version: G.quote.version, picks: [{ valueId: V.perfFull }, { valueId: V.linerYes }] }, 409)
     expect(refused.error.message).not.toBe('')
-    // Front perforation too (GAP named in the notes: a work order whose cells choose none of an option-only routing step's values
-    // is refused by the database at its release with a 500; with the step chosen every step applies).
-    const saved = await ok(P.sales, 'PUT', `${base}/options`, { version: G.quote.version, picks: [{ valueId: V.linerYes }, { valueId: V.perfFront }, { valueId: V.name, text: 'ROSSI' }, { valueId: V.armourStd }] })
+    // B-W2b-F40: no perforation chosen, so SEED-JKT-05's step 20 SEED-PERF (front perforation only) is for none of the work
+    // order's cells (it was a 500 at the release; P03 releases it without that step).
+    const saved = await ok(P.sales, 'PUT', `${base}/options`, { version: G.quote.version, picks: [{ valueId: V.linerYes }, { valueId: V.name, text: 'ROSSI' }, { valueId: V.armourStd }] })
     G.quote = saved.quote
     const chosen = (await ok(P.sales, 'GET', `${base}/configurator`)).chosen as Json[]
-    expect(chosen.map((row) => row.valueId).sort()).toEqual([V.linerYes, V.perfFront, V.name, V.armourStd].sort())
+    expect(chosen.map((row) => row.valueId).sort()).toEqual([V.linerYes, V.name, V.armourStd].sort())
     G.optionValues = V
   })
 
@@ -510,7 +511,7 @@ describe('the W2b-5 golden flow: an inquiry to a confirmed order with options an
     const jacket = (G.quote.lines as Json[]).find((line) => line.styleId === G.jkt05.id)!
     G.lines = { jkt05: jacket.id, jkt02: red.id }
     const chosen = (await ok(P.sales, 'GET', `/sales/quotes/${G.quote.id}/lines/${jacket.id}/configurator`)).chosen as Json[]
-    expect(chosen.map((row) => row.valueId).sort()).toEqual([G.optionValues.linerYes, G.optionValues.perfFront, G.optionValues.name, G.optionValues.armourStd].sort())
+    expect(chosen.map((row) => row.valueId).sort()).toEqual([G.optionValues.linerYes, G.optionValues.name, G.optionValues.armourStd].sort()) // B-W2b-F40: no front perforation
     if (G.quote.approval.needed) {
       G.quote = (await ok(P.sales, 'POST', `/sales/quotes/${G.quote.id}/approval`, { version: G.quote.version, note: 'More red jackets (made up).' })).quote
       G.quote = (await ok(P.finance, 'POST', `/sales/quotes/${G.quote.id}/approval/approve`, { version: G.quote.version })).quote
@@ -556,7 +557,7 @@ describe('the W2b-5 golden flow: an inquiry to a confirmed order with options an
     expect(G.order.status).toBe('CONFIRMED')
     const jacket = (G.order.lines as Json[]).find((line) => line.styleId === G.jkt05.id)!
     const chosen = (await ok(P.sales, 'GET', `/sales/orders/${G.order.id}/lines/${jacket.id}/configurator`)).chosen as Json[]
-    expect(chosen.map((row) => row.valueId).sort()).toEqual([G.optionValues.linerYes, G.optionValues.perfFront, G.optionValues.name, G.optionValues.armourStd].sort())
+    expect(chosen.map((row) => row.valueId).sort()).toEqual([G.optionValues.linerYes, G.optionValues.name, G.optionValues.armourStd].sort()) // B-W2b-F40: no front perforation
     G.orderLines = { jkt05: jacket.id, jkt02: (G.order.lines as Json[]).find((line) => line.styleId === G.jkt02.id)!.id }
   })
 
@@ -650,6 +651,12 @@ describe('the W2b-5 golden flow: an inquiry to a confirmed order with options an
     keep(workOrderId)
     G.wo = await release(P.planner, workOrderId)
     expect(G.wo.status).toBe('RELEASED')
+    // B-W2b-F40: its cells chose no perforation: released without step 20 SEED-PERF (front perforation only), every other step kept.
+    const routing = (await ok(P.planner, 'GET', `/production/work-orders/${workOrderId}/routing`)).routing
+    expect(routing.frozen).toBe(true)
+    expect((routing.operations as Json[]).map((op) => op.code)).not.toContain('SEED-PERF')
+    expect((routing.operations as Json[]).map((op) => op.routingSeq)).toEqual([10, 30])
+    expect(routing.leftOut).toEqual([expect.objectContaining({ seq: 20, code: 'SEED-PERF' })])
     expect((await ok(P.planner, 'GET', `/planning/planned-orders?siteId=${siteA1()}&status=CONVERTED`)).plannedOrders.map((row: Json) => row.id)).toContain(G.planned.jkt05.id)
     await settle()
   })
