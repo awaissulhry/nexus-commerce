@@ -48,6 +48,8 @@ const groupSchema = z.object({
   defaultValueId: z.string().nullable(),
   values: z.array(valueSchema),
   rules: z.array(ruleSchema),
+  /** B-W2b-374 (XF3:05): what a chosen value takes: COLOUR (the colour picker), MATERIAL (the material picker), none (both). */
+  takes: z.enum(['COLOUR', 'MATERIAL']).nullable().optional(),
 })
 export type OptionGroupView = z.infer<typeof groupSchema>
 
@@ -93,7 +95,17 @@ const checkPart = {
 
 export const REPRICE_HELD = ['NO_START', 'NOT_SIZE_GRID', 'FEE'] as const
 
-const artworkSchema = z.object({ fileId: z.string(), name: z.string(), contentType: z.string(), sizeBytes: z.number(), status: z.string(), createdAt: z.string(), from: z.enum(['LINE', 'QUOTE_LINE']) })
+const artworkSchema = z.object({
+  fileId: z.string(),
+  name: z.string(),
+  contentType: z.string(),
+  sizeBytes: z.number(),
+  status: z.string(),
+  createdAt: z.string(),
+  from: z.enum(['LINE', 'QUOTE_LINE']),
+  /** B-W2b-374 (XF3:04): shown in the customer's portal. */
+  portal: z.boolean().optional(),
+})
 export type ArtworkFile = z.infer<typeof artworkSchema>
 
 export const lineConfiguratorSchema = styleConfiguratorSchema.extend({
@@ -113,7 +125,8 @@ export const lineConfiguratorSchema = styleConfiguratorSchema.extend({
   check: z.object(checkPart),
   pricing: z.object({ holdsOptions: z.boolean(), held: z.enum(REPRICE_HELD).nullable(), manualKept: z.boolean() }),
   artwork: z.array(artworkSchema),
-  may: z.object({ configure: z.boolean(), held: words.nullable(), artwork: z.boolean() }),
+  /** B-W2b-374: share = may show an order line's artwork in the portal. */
+  may: z.object({ configure: z.boolean(), held: words.nullable(), artwork: z.boolean(), share: z.boolean().optional() }),
 })
 export type LineConfigurator = z.infer<typeof lineConfiguratorSchema>
 
@@ -183,8 +196,8 @@ export function removeArtwork(api: ApiClient, fileId: string): Promise<unknown> 
 
 // ---- the bench (Test a combination, SAL-249) --------------------------------------------------------------------------
 
-export function readStyleConfigurator(api: ApiClient, styleId: string, signal?: AbortSignal): Promise<StyleConfigurator> {
-  return api.get(`/sales/configurator/styles/${enc(styleId)}`, { schema: styleConfiguratorSchema, signal })
+export function readStyleConfigurator(api: ApiClient, styleId: string, signal?: AbortSignal, /** B-W2b-374: the line's colourway (its picture). */ colourwayId?: string): Promise<StyleConfigurator> {
+  return api.get(`/sales/configurator/styles/${enc(styleId)}`, { schema: styleConfiguratorSchema, signal, ...(colourwayId ? { query: { colourwayId } } : {}) })
 }
 
 const effectRef = z.object({ effectId: z.string(), valueId: z.string(), kind: z.string(), words })

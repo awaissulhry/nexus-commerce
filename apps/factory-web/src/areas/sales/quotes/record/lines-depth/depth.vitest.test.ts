@@ -95,7 +95,9 @@ describe('the line drawer\'s delivery schedule', () => {
 describe('Paste lines: the columns before anything is asked, what could not land in words', () => {
   it('reads the first row with factory-domain\'s own parser', () => {
     expect(pasteColumns('')).toBeNull()
-    expect(pasteColumns('Style\tColourway\tPrice\t50\t52\nX\tBLK\t\t1\t2')).toEqual({ sizes: ['50', '52'], price: true, rows: 1, problem: null })
+    expect(pasteColumns('Style\tColourway\tPrice\t50\t52\nX\tBLK\t\t1\t2')).toEqual({ sizes: ['50', '52'], price: true, options: false, rows: 1, problem: null })
+    // B-W2b-374: an Options column is read, never a size.
+    expect(pasteColumns('Style\tColourway\tOpzioni\t50\nX\tBLK\tLINER:YES\t1')).toEqual({ sizes: ['50'], price: false, options: true, rows: 1, problem: null })
     expect(pasteColumns('Codice\t50\nX\t1')?.problem).toEqual({ key: 'paste.problem.colourway' })
     expect(pasteColumns('Style\tColourway\t50')?.problem).toEqual({ key: 'paste.problem.rows' })
   })

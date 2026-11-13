@@ -5,6 +5,8 @@ import { composeDocument } from '@nexus/factory-domain/documents/compose'
 import { formatMoney } from '@nexus/factory-domain/documents/format'
 import { legalProblems } from '@nexus/factory-domain/documents/legal'
 import type { DocumentLanguage, PostalAddress } from '@nexus/factory-domain/documents/model'
+// B-W2b-374: the lines' options on the confirmation.
+import { orderLinesPrinted } from '../configurator/printed'
 import { CONFIRMATION_KIND, confirmationDocument, confirmationFingerprint, confirmationMail, confirmationNumber, ppeWords, type CustomerOrder } from '@nexus/factory-domain/sales/orders-depth/confirmation'
 import { incotermWords } from '@nexus/factory-domain/sales/quote-terms/rules'
 import { quoteDocumentNumber } from '@nexus/factory-domain/sales/quotes/document'
@@ -88,6 +90,8 @@ async function customerOrderOf(db: Reader, order: OrderRow, version: number, dat
   const shipTo = order.shipTo as Snapshot | null
   const shipAddress = postalOf(shipTo)
   const first = lines[0]
+  // B-W2b-374 (XF3:03): the lines' options as printed (a line without any leaves the fingerprint as it was).
+  const options = await orderLinesPrinted(db, lines.map((line) => line.id), language)
   return {
     number: order.number,
     version,
@@ -122,6 +126,7 @@ async function customerOrderOf(db: Reader, order: OrderRow, version: number, dat
         vatAmount: line.vatAmount,
         sizes: [...line.sizes].sort((a, b) => range.indexOf(a.size) - range.indexOf(b.size)).map((size) => ({ size: size.size, quantity: size.quantity, unitPrice: size.unitPrice === null ? null : priceText(size.unitPrice.toString()) })),
         deliveries: deliveries.filter((row) => row.lineId === line.id).map((row) => ({ date: dayOf(row.deliveryDate), quantity: row.quantity })),
+        ...(options.get(line.id)?.length ? { options: options.get(line.id)! } : {}),
       }
     }),
     totals: { net: order.netAmount, vat: first ? [{ rate: first.vatNature ? null : first.vatRatePct.toFixed(2), nature: first.vatNature, taxable: order.netAmount, vat: order.vatAmount }] : [], gross: order.grossAmount },

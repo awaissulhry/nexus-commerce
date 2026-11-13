@@ -30,6 +30,8 @@ export interface PastedRow {
   /** Size code → the cell as typed (trimmed; empty cells left out). */
   readonly cells: Readonly<Record<string, string>>
   readonly unitPrice: string | null
+  /** B-W2b-374 (XF3:01): the "Options" cell ("LINER:YES, NAME:NAME=BIANCHI"), a NEW line's options; null: none. */
+  readonly options?: string | null
 }
 
 export interface PastedSheet {
@@ -41,6 +43,8 @@ export interface PastedSheet {
 const STYLE_HEADS = new Set(['style', 'stile', 'style code', 'codice', 'code'])
 const COLOUR_HEADS = new Set(['colourway', 'colorway', 'colour', 'color', 'colore', 'variante'])
 const PRICE_HEADS = new Set(['price', 'unit price', 'prezzo', 'prezzo unitario'])
+// B-W2b-374: an optional "Options" column (the codes of the values a new line takes).
+export const OPTION_HEADS = new Set(['options', 'opzioni'])
 
 const splitRow = (line: string): string[] => (line.includes('\t') ? line.split('\t') : line.split(';')).map((cell) => cell.trim())
 
@@ -54,12 +58,13 @@ export function parsePastedSheet(text: string, at = 'body/text'): PastedSheet {
   const styleAt = lower.findIndex((cell) => STYLE_HEADS.has(cell))
   const colourAt = lower.findIndex((cell) => COLOUR_HEADS.has(cell))
   const priceAt = lower.findIndex((cell) => PRICE_HEADS.has(cell))
+  const optionsAt = lower.findIndex((cell) => OPTION_HEADS.has(cell))
   const problems: Issue[] = []
   if (styleAt < 0) problems.push({ path: `${at}/1`, message: 'The first row names a "Style" column.' })
   if (colourAt < 0) problems.push({ path: `${at}/1`, message: 'The first row names a "Colourway" column.' })
   if (head.length > PASTE_LIMITS.columns) problems.push({ path: `${at}/1`, message: `At most ${PASTE_LIMITS.columns} columns.` })
   if (lines.length - 1 > PASTE_LIMITS.rows) problems.push({ path: at, message: `At most ${PASTE_LIMITS.rows} rows a paste.` })
-  const sizeAt = head.map((cell, index) => ({ cell, index })).filter(({ cell, index }) => index !== styleAt && index !== colourAt && index !== priceAt && cell.length > 0)
+  const sizeAt = head.map((cell, index) => ({ cell, index })).filter(({ cell, index }) => index !== styleAt && index !== colourAt && index !== priceAt && index !== optionsAt && cell.length > 0)
   if (sizeAt.length === 0) problems.push({ path: `${at}/1`, message: 'The other columns of the first row are the size codes.' })
   const seen = new Set<string>()
   for (const { cell } of sizeAt) {
@@ -75,6 +80,7 @@ export function parsePastedSheet(text: string, at = 'body/text'): PastedSheet {
       colourway: cells[colourAt] ?? '',
       cells: Object.fromEntries(sizeAt.flatMap(({ cell, index: column }) => (cells[column] ? [[cell, cells[column]!]] : []))),
       unitPrice: priceAt >= 0 && cells[priceAt] ? cells[priceAt]!.replace(',', '.') : null,
+      ...(optionsAt >= 0 ? { options: cells[optionsAt] ? cells[optionsAt]! : null } : {}),
     }
   })
   return { sizes: sizeAt.map(({ cell }) => cell), rows, problems: [] }

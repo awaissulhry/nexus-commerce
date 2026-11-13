@@ -123,6 +123,8 @@ export interface OrderRecordModel {
   depth?: OrderDepthModel
   /** B-W2b-340: a colour line's "Options" (the configurator of the order line, its own container); absent: not drawn. */
   lineOptions?: (line: Order['lines'][number]) => ReactNode
+  /** B-W2b-374 (XF3:02): an amendment's new line's Options (OrderRecord mounts NewLineOptions). */
+  newLineOptions?: (line: DraftLine) => ReactNode
   /** B-W2b-368 (XF1:02): "Waits for the factory review" (./review-banner), drawn by the container; absent: nothing to say. */
   reviewBanner?: ReactNode
   /** Design cases: what a dialog holds typed. */

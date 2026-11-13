@@ -25,6 +25,8 @@ import { TAX_COLUMNS, taxFieldsOf, VIES_COLUMNS, viesFactsOf } from '../../parti
 import { depositBankDetailsFor } from '../deposits/deposits'
 import { acceptLinkTerms, insertAcceptLink, mintAcceptLink, revokeAcceptLinks, type AcceptLinkTerms, type MintedLink } from './accept-links'
 import { CUSTOMER_VERSION_COLUMNS, customerQuoteOf, dayOf, lineLabels, readCustomerLines, readCustomerVersions, type Reader } from './frozen'
+// B-W2b-374: the lines' options on the PDF.
+import { quoteLinesPrinted } from '../configurator/printed'
 import { deliverLinkMail, queueLinkMail } from './mail'
 import { refreshVersion } from './pricing'
 import { detailInCommand, onQuote } from './quotes'
@@ -185,7 +187,9 @@ export async function readSendFacts(db: Reader, quote: QuoteRow, now: Date, comp
     const lines = await readCustomerLines(db, version.id)
     const shown = preview ? { ...row, language: preview.language } : row
     // B-W2b-325 (SAL-170): showDiscount, the version's price list's choice.
-    customer = customerQuoteOf({ quote, version: shown, lines, labels: await lineLabels(db, lines), billTo: billTo!, shipTo: shipTo!, contact, date: today, depositDueDays: await depositDueDaysFor(db, version.paymentTermsId), showDiscount: await discountShownFor(db, version.priceListVersionId) })
+    // B-W2b-374 (XF3:03): the lines' options, printed in the document's language.
+    const options = await quoteLinesPrinted(db, lines.map((line) => line.id), shown.language === 'en' ? 'en' : 'it')
+    customer = customerQuoteOf({ quote, version: shown, lines, labels: await lineLabels(db, lines), billTo: billTo!, shipTo: shipTo!, contact, date: today, depositDueDays: await depositDueDaysFor(db, version.paymentTermsId), showDiscount: await discountShownFor(db, version.priceListVersionId), options })
   }
   return { checks, versionId: version.id, versionStatus: version.status, billTo, shipTo, contact, customer, today }
 }

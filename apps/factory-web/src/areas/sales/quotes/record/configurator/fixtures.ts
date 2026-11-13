@@ -188,6 +188,18 @@ export const designScreen = defineDesignScreen<ConfiguratorModel>({
     { id: 'artwork-uploading', label: 'Artwork · a file being sent, one refused', model: model({ artwork: { uploading: ['back-print.png'], problem: { key: 'artwork.problem.type' } } }) },
     { id: 'order-change', label: 'Order line · options that add more than accepted: keep the price or amend', model: model({ mode: 'ORDER', line: orderLine, style: orderLine, draft: draftOf(orderLine.chosen).filter((pick) => pick.valueId !== V.liner), changed: true, saveHeld: { key: 'save.held.keepPrice' }, preview: { status: 'ready', value: preview({}, { repriced: false, change: '-60', unitPrice: '470', before: '470' }) } }) },
     { id: 'order-frozen', label: 'Order line · work orders made: options frozen', model: model({ mode: 'ORDER', line: { ...orderLine, may: { configure: false, artwork: true, held: w("Gli ordini di lavoro di questa riga sono già fatti con le sue opzioni: cambiale con una modifica dell'ordine e rifai gli ordini di lavoro.", 'Work orders already make this line with its options: change them through an order change and make the work orders again.') } }, style: orderLine }) },
+    // B-W2b-374 (XF3:05): a group that takes a colour of the library offers only the colour picker; (XF3:04) an order line's
+    // artwork shown in the customer's portal.
+    {
+      id: 'w2b-374-takes-colour',
+      label: 'The perforation group takes a library colour, the name a material: only that picker each',
+      model: model({ style: { ...DEMO_LINE, groups: DEMO_LINE.groups.map((group) => (group.groupId === G.perf ? { ...group, takes: 'COLOUR' as const } : group.groupId === G.name ? { ...group, takes: 'MATERIAL' as const } : group)) } }),
+    },
+    {
+      id: 'w2b-374-order-portal',
+      label: 'Order line · its artwork shown in the customer\'s portal',
+      model: model({ mode: 'ORDER', line: { ...orderLine, artwork: [{ ...orderLine.artwork[0]!, portal: true }, { ...DEMO_LINE.artwork[0]!, fileId: 'aaaaaaaa-0000-4000-8000-000000000002', name: 'back-print.png', contentType: 'image/png', from: 'LINE', portal: false }], may: { ...orderLine.may, share: true } }, style: orderLine, notice: { tone: 'success', words: { key: 'artwork.portal.shown' } } }),
+    },
     { id: 'loading', label: 'Loading', model: model({ read: { status: 'loading' }, style: null, line: null }) },
     { id: 'error', label: 'The options could not be read', model: model({ read: { status: 'error', problem: { key: 'problem.read' } }, style: null, line: null }) },
     { id: 'no-options', label: 'A style without options', model: model({ style: { ...DEMO_LINE, groups: [] }, line: { ...DEMO_LINE, groups: [], chosen: [] }, draft: [] }) },

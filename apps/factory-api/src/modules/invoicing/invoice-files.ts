@@ -3,6 +3,8 @@ import { fromMinorUnits } from '@nexus/factory-domain/core/money'
 import { composeDocument } from '@nexus/factory-domain/documents/compose'
 import { isDocumentLanguage } from '@nexus/factory-domain/documents/model'
 import { fatturaPaInputOf, invoiceCopyOf, type BillTo, type IssuedInvoice, type StoredLine } from '@nexus/factory-domain/invoicing/document'
+// B-W2b-374: the options of the order lines billed, on the copy.
+import { orderLinesPrinted } from '../sales/configurator/printed'
 import { buildFatturaPa } from '@nexus/factory-domain/invoicing/fatturapa/build'
 import type { FatturaPaSeller } from '@nexus/factory-domain/invoicing/fatturapa/types'
 import { INVOICES_ISSUE } from '@nexus/factory-domain/invoicing/permissions'
@@ -41,6 +43,8 @@ export async function issuedInvoiceOf(db: Reader, invoiceId: string): Promise<{ 
   const credits = invoice.creditOfId ? await db.invoice.findUnique({ where: { id: invoice.creditOfId }, select: { number: true, issueDate: true } }) : null
   const party = await db.party.findUnique({ where: { id: invoice.buyerPartyId }, select: { language: true } })
   const day = (value: Date): string => value.toISOString().slice(0, 10)
+  // B-W2b-374 (XF3:03): the options of the order lines billed, printed on the copy in its language (never in the XML).
+  const options = await orderLinesPrinted(db, lines.flatMap((line) => (line.salesOrderLineId ? [line.salesOrderLineId] : [])), party?.language === 'en' ? 'en' : 'it')
   const storedLines: StoredLine[] = lines.map((line) => {
     const ddt = ddts.find((entry) => entry.id === line.ddtId)
     const deposit = deposits.find((entry) => entry.id === line.depositInvoiceId)
@@ -48,6 +52,7 @@ export async function issuedInvoiceOf(db: Reader, invoiceId: string): Promise<{ 
       ...storedLineOf(line),
       ddtNumber: ddt?.number ?? null,
       deposit: deposit && deposit.number && deposit.issueDate ? { number: deposit.number, issueDate: day(deposit.issueDate) } : null,
+      options: line.salesOrderLineId ? (options.get(line.salesOrderLineId) ?? null) : null,
     }
   })
   const issued: IssuedInvoice = {

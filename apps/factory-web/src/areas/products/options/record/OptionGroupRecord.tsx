@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createElement, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { isApiError } from '../../../../lib/api/errors'
 import { useLocale } from '../../../../lib/i18n/provider'
@@ -33,6 +33,8 @@ import {
 import { useOnline } from '../online'
 import type { CellMarks, GroupLoad, GroupRecordModel, RecordDialog, RulesModel } from '../view-model'
 import { GroupRecordView } from './view/GroupRecordView'
+// B-W2b-374: what a chosen value of the group takes.
+import { GroupTakes } from '../takes/GroupTakes'
 
 /**
  * `/w/<company>/products/options/<id>` (SCR-114-record): reads the option group (product.styles.view) and writes through
@@ -439,7 +441,9 @@ export function OptionGroupRecord({ groupId }: { groupId: string }) {
   }
 
   const companyName = current?.companyId ? (session.companies.find((company) => company.id === current.companyId)?.name ?? null) : null
-  const model: GroupRecordModel = { prefix, can, tab, group, locale: INTL_LOCALE[language], save, cells, busy, notice, refused, changed, offline: !online, rules, scales, dialog, companyName }
+  // B-W2b-374 (XF3:05): what a chosen value takes; a change moves the group's version, so the group is read again.
+  const takes = current ? createElement(GroupTakes, { api, groupId, refreshKey: String(current.version), onChanged: () => void load() }) : undefined
+  const model: GroupRecordModel = { prefix, can, tab, group, locale: INTL_LOCALE[language], save, cells, busy, notice, refused, changed, offline: !online, rules, scales, dialog, companyName, takes }
 
   return (
     <GroupRecordView

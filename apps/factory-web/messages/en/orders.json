@@ -859,7 +859,8 @@
       "catalogue": "{line}: this style or colour cannot be ordered now (archived, or not offered).",
       "moved": "{line}: the order changed meanwhile: read it again.",
       "text": "{line}: a text is too long.",
-      "other": "{line}: check this line."
+      "other": "{line}: check this line.",
+      "options": "Line {line}: its options cannot be taken as chosen: open its Options."
     }
   },
   "closeLines": {

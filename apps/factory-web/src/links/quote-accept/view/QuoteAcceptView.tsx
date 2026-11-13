@@ -114,6 +114,8 @@ function QuoteBody({ quote, model, actions }: { quote: LinkQuote; model: QuoteAc
               <span key="i" className="fw-qa-item">
                 <strong>{line.description}</strong>
                 <span className="fw-qa-sub">{line.sizesText}</span>
+                {/* B-W2b-374: the options as the PDF prints them. */}
+                {line.optionsText && <span className="fw-qa-sub">{line.optionsText}</span>}
                 {line.note && <span className="fw-qa-sub">{line.note}</span>}
               </span>,
               String(line.quantity),

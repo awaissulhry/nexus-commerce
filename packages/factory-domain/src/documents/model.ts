@@ -1,5 +1,7 @@
 import type { BusinessDate } from '../core/time'
 import type { CurrencyCode, DecimalString, MinorUnits } from '../core/money'
+// B-W2b-374: a line's options as printed.
+import type { PrintedOption } from './options-block'
 
 /**
  * The document model (plan A1 §3.9; GAP-008): what a printed company document says, before any layout. A module that
@@ -136,6 +138,8 @@ export interface DocumentLine {
   readonly deliveryDate?: BusinessDate | null
   /** PACKING_LIST: the parcel (collo) the line is packed in, as printed ("1", "2"). */
   readonly parcel?: string | null
+  /** B-W2b-374 (XF3:03): the options the garment is sold with, printed after the description where the layout says so. */
+  readonly options?: readonly PrintedOption[] | null
 }
 
 /** One VAT rate of the totals. */

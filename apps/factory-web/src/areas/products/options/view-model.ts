@@ -154,6 +154,8 @@ export interface GroupRecordModel {
   dialog: RecordDialog | null
   /** Company names for the band ("Every company"). */
   companyName: string | null
+  /** B-W2b-374 (XF3:05): what a chosen value of the group takes (OptionGroupRecord mounts GroupTakes on the Options tab). */
+  takes?: ReactNode
 }
 
 export interface GroupRecordActions {

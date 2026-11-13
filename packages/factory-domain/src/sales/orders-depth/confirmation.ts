@@ -3,6 +3,7 @@ import { canonicalJson } from '../../accounting/manifest'
 import type { CurrencyCode, MinorUnits } from '../../core/money'
 import type { BusinessDate } from '../../core/time'
 import type { DocumentInput, DocumentLanguage, DocumentLine, DocumentReference, PostalAddress } from '../../documents/model'
+import type { PrintedOption } from '../../documents/options-block'
 import { decimalText, roundTo } from '../../product/units/units'
 import { Dec, HUNDRED } from '../../tax/decimal'
 import type { PriceBasis } from '../../tax/vat-summary'
@@ -40,6 +41,8 @@ export interface ConfirmationLine {
   readonly sizes: readonly CustomerSize[]
   /** The line's delivery schedule (B-W2b-294): a day and the pieces then. */
   readonly deliveries: readonly { readonly date: BusinessDate; readonly quantity: number }[]
+  /** B-W2b-374 (XF3:03): the options chosen on the line, as printed; left out when none (the fingerprint stays as it was). */
+  readonly options?: readonly PrintedOption[]
 }
 
 export interface CustomerOrder {
@@ -115,6 +118,8 @@ export function confirmationDocument(order: CustomerOrder, money: (minor: MinorU
     unitPrice: line.unitPrice,
     discountPercent: discountOf(line),
     amountMinor: lineAmountOf(line, order.priceBasis),
+    // B-W2b-374: printed after the description (layout ORDER_CONFIRMATION/2).
+    options: line.options ?? null,
   }))
   const references: DocumentReference[] = [
     ...(order.customerRef ? [{ kind: 'CUSTOMER_ORDER' as const, number: order.customerRef }] : []),

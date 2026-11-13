@@ -3,6 +3,7 @@ import type { MinorUnits } from '../../core/money'
 import type { BusinessDate } from '../../core/time'
 import { LINE_CHANGE_STATUSES, MAX_REASON, type SalesOrderStatus } from '../orders/orders'
 import { MAX_QUOTE_LINES, MAX_SIZE_QUANTITY, type SalesLineKind } from '../quotes/quotes'
+import type { LinePick } from '../configurator/rules'
 
 /**
  * Order amendments (B-W2a-30; SAL-209 "confirmed orders locked", SAL-217 "order amendment with snapshot"; the design's
@@ -193,6 +194,8 @@ export interface AmendLineInput {
   readonly unitPrice?: string | null | undefined
   readonly description?: string | null | undefined
   readonly note?: string | null | undefined
+  /** B-W2b-374 (XF3:02): a NEW line's options (an existing line keeps its own: they change in its Options dialog). */
+  readonly options?: readonly LinePick[] | undefined
 }
 
 /** A line of the order now, with what its work orders already make per size (cells not cancelled). */

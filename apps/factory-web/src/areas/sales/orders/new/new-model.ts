@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import type { PartyDetail, StyleDetail } from '../../quotes/api'
 import type { ManualOrderBody, ManualPreview } from '../api'
 import { badPrice, manualLines, piecesOf, type DraftLine } from '../daily-model'
@@ -63,7 +64,8 @@ export function parseDraft(text: string | null): NewOrderDraft | null {
       (line): line is DraftLine => !!line && typeof line.key === 'string' && typeof line.styleId === 'string' && typeof line.colourwayId === 'string' && typeof line.sizes === 'object' && line.sizes !== null && typeof line.price === 'string',
     )
     return {
-      lines: lines.map((line) => ({ ...line, lineId: null, locked: false, sizes: Object.fromEntries(Object.entries(line.sizes).filter(([, quantity]) => Number.isInteger(quantity) && quantity > 0)) })),
+      // B-W2b-374: a line's options kept with it (anything not a list of picks is none).
+      lines: lines.map((line) => ({ ...line, lineId: null, locked: false, sizes: Object.fromEntries(Object.entries(line.sizes).filter(([, quantity]) => Number.isInteger(quantity) && quantity > 0)), options: Array.isArray(line.options) ? line.options.filter((pick) => !!pick && typeof pick.valueId === 'string') : [] })),
       requestedDate: typeof value.requestedDate === 'string' ? value.requestedDate : '',
       promiseDate: typeof value.promiseDate === 'string' ? value.promiseDate : '',
       internalNote: typeof value.internalNote === 'string' ? value.internalNote : '',
@@ -149,6 +151,8 @@ export interface NewOrderModel {
   busy: boolean
   /** "Confirm order" was refused: said above the lines, what was typed stays. */
   problem: Phrase | null
+  /** B-W2b-374 (XF3:02): a line's Options (the page mounts NewLineOptions). */
+  newLineOptions?: (line: DraftLine) => ReactNode
 }
 
 export interface NewOrderActions {

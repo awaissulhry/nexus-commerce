@@ -26,15 +26,19 @@ export interface DocumentLayout {
   readonly priced: boolean
   /** Signature boxes at the end (the DDT's driver, carrier and recipient). */
   readonly signatures: boolean
+  /** B-W2b-374 (XF3:03): a line's options are printed after its description (documents/options-block.ts). */
+  readonly printsOptions?: boolean
 }
 
 const column = (key: ColumnKey, width: number, align: LayoutColumn['align'] = 'left'): LayoutColumn => Object.freeze({ key, width, align })
 
 export const DOCUMENT_LAYOUTS: Readonly<Record<DocumentType, DocumentLayout>> = Object.freeze({
   QUOTE: {
-    id: 'QUOTE/1',
+    // B-W2b-374: version 2 prints each line's options.
+    id: 'QUOTE/2',
     priced: true,
     signatures: false,
+    printsOptions: true,
     columns: [
       column('code', 110),
       column('description', 400),
@@ -47,9 +51,11 @@ export const DOCUMENT_LAYOUTS: Readonly<Record<DocumentType, DocumentLayout>> = 
   },
   // B-W2b-303 (SAL-208): the order confirmation prints as the quote does (the customer reads the same columns).
   ORDER_CONFIRMATION: {
-    id: 'ORDER_CONFIRMATION/1',
+    // B-W2b-374: version 2 prints each line's options.
+    id: 'ORDER_CONFIRMATION/2',
     priced: true,
     signatures: false,
+    printsOptions: true,
     columns: [
       column('code', 110),
       column('description', 400),
@@ -81,9 +87,11 @@ export const DOCUMENT_LAYOUTS: Readonly<Record<DocumentType, DocumentLayout>> = 
     columns: [column('code', 150), column('goods', 610), column('quantity', 140, 'right'), column('uom', 100)],
   },
   INVOICE_COPY: {
-    id: 'INVOICE_COPY/1',
+    // B-W2b-374: version 2 prints each line's options (the XML's Descrizione stays the line's text).
+    id: 'INVOICE_COPY/2',
     priced: true,
     signatures: false,
+    printsOptions: true,
     columns: [
       column('code', 100),
       column('description', 360),

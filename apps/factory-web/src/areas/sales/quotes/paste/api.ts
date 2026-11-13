@@ -20,6 +20,8 @@ const rowSchema = z.object({
   before: pieces.nullable(),
   after: pieces.nullable(),
   priceFrom: z.enum(['TYPED', 'LIST', 'NONE', 'KEPT']).nullable(),
+  /** B-W2b-374: the options a new line takes from the Options column. */
+  options: z.number().optional(),
   leftOut: z.array(z.object({ size: z.string().nullable(), message: z.string() })),
 })
 export type PastedRow = z.infer<typeof rowSchema>
