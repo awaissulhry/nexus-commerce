@@ -2,6 +2,10 @@ import type { Phrase } from '../../_shared/stock/model'
 import type { LiveState } from '../../_shared/buying/hooks'
 import type { CreateResult, PickRow, PickSheet, PickTiles, PickView } from './api'
 import type { PickingAddress, PickingCan } from './model'
+// B-W2b-320: Use a substitute (pk-sub) and the substitutes waiting for approval (pk-metrics W2b).
+import type { SubCan } from './substitute/model'
+import type { SubstituteActions, SubstituteDialogModel, SubstituteTarget } from './substitute/use-substitute'
+import type { SubstitutesActions, SubstitutesModel } from './substitute/view/SubstitutesSection'
 
 /**
  * The view models of Warehouse › Picking & kits (SCR-237): the page (tiles, the list frame, the band), the pick list dialog
@@ -71,6 +75,10 @@ export interface PickingListModel {
   selected?: readonly string[]
   helpOpen?: boolean
   readinessOpen?: string | null
+  /** B-W2b-320: who may ask for a substitute and see them; the dialog; the tile and the list behind it. */
+  subCan?: SubCan
+  substitute?: SubstituteDialogModel | null
+  subs?: { waiting: number | null; open: boolean; model: SubstitutesModel } | null
 }
 
 export interface PickingListActions {
@@ -97,6 +105,11 @@ export interface PickingListActions {
   onPick?: (ids: string[]) => void
   onConfirmCreate?: () => void
   onDismissNotice?: () => void
+  /** B-W2b-320: Use a substitute for a short line; the substitutes list (the tile opens it). */
+  onSubstitute?: (target: SubstituteTarget) => void
+  substitute?: SubstituteActions
+  onSubs?: (open: boolean) => void
+  subs?: SubstitutesActions
 }
 
 export interface PrintModel {

@@ -12,7 +12,8 @@ import { PICK_VIEWS, type CreateResult, type HeldEntry, type KitStatus, type Kit
  * `messages/<locale>/warehouse-picking.json`. No money is read; no person is named (a pick is said by its team).
  */
 
-export const PICKING_NAMESPACES = ['warehouse-picking', 'stock', 'lists'] as const
+// B-W2b-320: `warehouse-lots-counts` holds the words of Use a substitute and the substitutes list.
+export const PICKING_NAMESPACES = ['warehouse-picking', 'stock', 'lists', 'warehouse-lots-counts'] as const
 export const TIME_ZONE = 'Europe/Rome'
 
 // ---- abilities -------------------------------------------------------------------------------------------------------------

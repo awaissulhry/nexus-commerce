@@ -13,6 +13,8 @@ import { RecordPanelsView } from '../../../../../record-panels/view/RecordPanels
 import { ApprovalTab } from './ApprovalTab'
 import { DifferencesTab } from './DifferencesTab'
 import { LinesTab } from './LinesTab'
+// B-W2b-320: the count freezes its lines' moves (SCM-226).
+import { FreezeTag } from '../../depth/view/CountDepthParts'
 import { RecordDialogs } from './RecordDialogs'
 
 export type { CountRecordActions, CountRecordModel } from '../../view-model'
@@ -161,6 +163,7 @@ function CountRecordBody({ model, actions, panels }: { model: CountRecordModel; 
         <StatusPill status={value.status} />
         <KindTag kind={value.kind} />
         <Tag tone="neutral">{value.site.code}</Tag>
+        {value.freezeMoves && <FreezeTag />}
         {value.inventoryDate && <span className="fw-cn-hint">{t('record.asOf', { date: formatDate(value.inventoryDate, place) })}</span>}
         {value.snapshotAt && <span className="fw-cn-hint">{t('record.snapshot', { time: formatDateTime(value.snapshotAt, place) })}</span>}
         {value.countTeam && <span className="fw-cn-hint">{t('list.team', { team: value.countTeam })}</span>}

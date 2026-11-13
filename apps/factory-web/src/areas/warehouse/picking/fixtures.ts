@@ -3,6 +3,9 @@ import { defineDesignScreen } from '../../../lib/design/design-screen'
 import { CHECKED_SHEET, COMPLETE_SHEET, CREATE_RESULTS, createModel, inShell, listModel, PICK_ROWS, PICK_TILES, sheetModel, type PickRole } from './demo/fixtures'
 import { PickingListView } from './list/view/PickingListView'
 import type { PickingListModel } from './view-model'
+// B-W2b-320: Use a substitute and the substitutes waiting for approval (made-up).
+import { ASKED, BOM_LINES, dialogModel, NAMED_SELF, OPTIONS, SUB_CAN, SUB_CAN_NONE, substitutesModel, SUBSTITUTIONS } from './substitute/demo/fixtures'
+import { blankAsk } from './substitute/model'
 
 /**
  * SCR-237 — Picking & kits (Warehouse › In the warehouse; design warehouse.picking) with made-up data only: six work
@@ -68,5 +71,26 @@ export const designScreen = defineDesignScreen<PickingCase>({
     { id: 'empty', label: 'No pick lists yet (first action: Create pick lists)', model: listCase('warehouse', { rows: { items: [], more: false, total: 0, problem: null }, tiles: { ...PICK_TILES, today: 0, waiting: 0, complete: 0, toCreate: 0, all: 0 } }) },
     { id: 'no-match', label: 'Nothing matches the search', model: listCase('warehouse', { address: { ...view('all'), q: 'ZZZ' }, rows: { items: [], more: false, total: 0, problem: null } }) },
     { id: 'sales', label: 'Sales: no inventory.stock.view (the page says so)', model: listCase('sales') },
+    // ---- B-W2b-320: Use a substitute (pk-sub) and Substitutes waiting for approval (pk-metrics) -------------------------
+    { id: 'w2b-tile', label: 'B-W2b-320 — The tile "Substitutes waiting for approval" (1)', model: listCase('warehouse', { subCan: SUB_CAN, subs: { waiting: 1, open: false, model: substitutesModel() } }) },
+    { id: 'w2b-subs', label: 'B-W2b-320 — Tile pressed: the substitutes waiting and approved, each with its request in Approvals', model: listCase('warehouse', { subCan: SUB_CAN, subs: { waiting: 1, open: true, model: substitutesModel() } }) },
+    { id: 'w2b-subs-all', label: 'B-W2b-320 — Substitutes: all (an issued and a withdrawn one too)', model: listCase('warehouse', { subCan: SUB_CAN, subs: { waiting: 1, open: true, model: substitutesModel({ status: 'ALL', rows: [...SUBSTITUTIONS, { ...SUBSTITUTIONS[0]!, id: 'w-3', status: 'ISSUED', approval: null }, { ...SUBSTITUTIONS[1]!, id: 'w-4', status: 'WITHDRAWN' }] }) } }) },
+    { id: 'w2b-subs-withdraw', label: 'B-W2b-320 — Withdraw 1 substitute: the reason first', model: listCase('warehouse', { subCan: SUB_CAN, subs: { waiting: 1, open: true, model: substitutesModel({ withdraw: { ids: [SUBSTITUTIONS[0]!.id], reason: 'Arrivate le protezioni ordinate', busy: false, problem: null, done: null } }) } }) },
+    { id: 'w2b-subs-empty', label: 'B-W2b-320 — No substitute waits', model: listCase('warehouse', { subCan: SUB_CAN, subs: { waiting: 0, open: true, model: substitutesModel({ rows: [] }) } }) },
+    { id: 'w2b-subs-read-only', label: 'B-W2b-320 — Read-only: sees the substitutes, Withdraw held (inventory.issue)', model: listCase('readOnly', { subCan: SUB_CAN_NONE, subs: { waiting: 1, open: true, model: substitutesModel() } }) },
+    { id: 'w2b-sheet-short', label: 'B-W2b-320 — Pick list: a short line offers "Use a substitute"', model: listCase('warehouse', { subCan: SUB_CAN, sheet: sheetModel() }) },
+    { id: 'w2b-sub', label: 'B-W2b-320 — Use a substitute: the alternate protector (certificate, the production manager’s yes), one outside its certificate, another lot (one in quarantine)', model: listCase('warehouse', { subCan: SUB_CAN, substitute: dialogModel() }) },
+    { id: 'w2b-sub-filled', label: 'B-W2b-320 — Use a substitute: 4 pieces of the alternate, the reason typed: Ask for approval', model: listCase('warehouse', { subCan: SUB_CAN, substitute: dialogModel({ draft: { ...blankAsk(OPTIONS), quantity: '4', reason: 'Protezioni previste in ritardo dal fornitore' } }) }) },
+    { id: 'w2b-sub-own', label: 'B-W2b-320 — Another lot of the own protector: name the lot (the quarantine lot cannot be named)', model: listCase('warehouse', { subCan: SUB_CAN, substitute: dialogModel({ draft: { ...blankAsk(OPTIONS), choice: 2, quantity: '4', reason: 'Stesso materiale, altro lotto' } }) }) },
+    { id: 'w2b-sub-too-much', label: 'B-W2b-320 — Held: more than is still open', model: listCase('warehouse', { subCan: SUB_CAN, substitute: dialogModel({ draft: { ...blankAsk(OPTIONS), quantity: '12', reason: 'Tutta la riga' } }) }) },
+    { id: 'w2b-sub-named-self', label: 'B-W2b-320 — Nobody could decide it: every rule names you (you never approve your own request)', model: listCase('warehouse', { subCan: SUB_CAN, substitute: dialogModel({ options: { value: NAMED_SELF, problem: null }, draft: blankAsk(NAMED_SELF) }) }) },
+    { id: 'w2b-sub-refused', label: 'B-W2b-320 — Refused by the rule (said in words)', model: listCase('warehouse', { subCan: SUB_CAN, substitute: dialogModel({ problem: { key: 'sb.refusal.ONLY_WHEN_SHORT' } }) }) },
+    { id: 'w2b-sub-asked', label: 'B-W2b-320 — Asked: waits for the production manager’s yes (open it in Home › Approvals)', model: listCase('warehouse', { subCan: SUB_CAN, substitute: dialogModel({ done: ASKED }) }) },
+    { id: 'w2b-sub-at-once', label: 'B-W2b-320 — Approved at once: the BOM allows it', model: listCase('warehouse', { subCan: SUB_CAN, substitute: dialogModel({ done: { ...ASKED, approval: { ...ASKED.approval, asked: false, taskId: null }, approvedAtOnce: true } }) }) },
+    { id: 'w2b-sub-withdraw', label: 'B-W2b-320 — Withdraw the waiting substitute of the line (reason)', model: listCase('warehouse', { subCan: SUB_CAN, substitute: dialogModel({ withdraw: { substitution: SUBSTITUTIONS[0]!, reason: '' } }) }) },
+    { id: 'w2b-sub-lines', label: 'B-W2b-320 — The material is on two lines: pick the line first', model: listCase('warehouse', { subCan: SUB_CAN, substitute: dialogModel({ lines: { value: BOM_LINES, problem: null }, bomLineId: null, options: null, draft: null }) }) },
+    { id: 'w2b-sub-loading', label: 'B-W2b-320 — Use a substitute: reading the choices', model: listCase('warehouse', { subCan: SUB_CAN, substitute: dialogModel({ options: { value: null, problem: null }, draft: null }) }) },
+    { id: 'w2b-sub-error', label: "B-W2b-320 — Use a substitute: the choices couldn't be read", model: listCase('warehouse', { subCan: SUB_CAN, substitute: dialogModel({ options: { value: null, problem: 'problem.offline' }, draft: null }) }) },
+    { id: 'w2b-sub-no-right', label: 'B-W2b-320 — Read-only: the dialog read, Ask held (inventory.issue)', model: listCase('readOnly', { subCan: SUB_CAN_NONE, substitute: dialogModel() }) },
   ],
 })

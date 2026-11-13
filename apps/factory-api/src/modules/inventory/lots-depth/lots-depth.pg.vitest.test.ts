@@ -372,6 +372,11 @@ describe('split into shade groups and regroup (SCM-237, LT1:01)', () => {
     expect(family.counts.lifecycle.DEPLETED).toBeGreaterThanOrEqual(1)
     expect(family.counts.lifecycle.RELEASED).toBeGreaterThanOrEqual(3)
     expect((await ok('keeperB', 'GET', '/inventory/lots-depth?view=ALL')).lots).toEqual([])
+    // B-W2b-320: the W2b columns of the rows a W1 view shows, by their ids (another company's lot is never read).
+    const byIds = await ok('viewer', 'GET', `/inventory/lots-depth?view=ALL&ids=${LOT.id},${children.lots[0].id}`)
+    expect(byIds.lots.map((row: Json) => row.id).sort()).toEqual([LOT.id, children.lots[0].id].sort())
+    expect((await ok('keeperB', 'GET', `/inventory/lots-depth?view=ALL&ids=${LOT.id}`)).lots).toEqual([])
+    await refused('viewer', 'GET', '/inventory/lots-depth?ids=not-an-id', undefined, 400)
   })
 })
 
