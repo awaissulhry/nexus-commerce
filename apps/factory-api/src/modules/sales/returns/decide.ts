@@ -34,6 +34,8 @@ import { lockReturn, recordOf, touchReturn } from './rma'
 import { currencyOf, LINE_COLUMNS, lineKeyOf, lineValue, moveKeyPrefix, readLines, soldFactsOf, type LineRow, type Reader, type ReturnView, type RmaRow, type SoldFacts } from './store'
 // B-W2b-289 (SCM-179): the site's default quality place for finished garments when none is named.
 import { defaultPlaceFor } from '../../inventory/locations-depth/defaults'
+// B-W2b-360 (SAL-353): REMAKE of a made-to-measure unit (W2a refused it: "comes later").
+import { REMAKE_DEFAULT_OUTCOME, remakeDecisionFor } from '../fittings/remake'
 
 /**
  * The decision (B-W2a-43; SAL-341 "Disposition decides the outcome"; design rma.inspection "Each line inspected and
@@ -152,11 +154,16 @@ async function planDecisions(db: Reader, rma: Pick<RmaRow, 'id' | 'siteId' | 'co
     seen.add(line.id)
     if (line.disposition !== null) problems.push({ path: `${at}/lineId`, message: `Line ${line.seq} is decided already (${line.disposition}).` })
     const disposition = entry.disposition
-    const goodsOutcome = entry.goodsOutcome ?? outcomeFor(disposition, line, facts)
+    // B-W2b-360 (SAL-353): a remade unit's goods are scrapped unless the decision holds them in quarantine.
+    const goodsOutcome = entry.goodsOutcome ?? (disposition === 'REMAKE' ? REMAKE_DEFAULT_OUTCOME : outcomeFor(disposition, line, facts))
     const value = lineValue(facts, line.receivedQuantity)
     const graded = gradedOf(line, facts)
     const decision = { disposition, goodsOutcome, ...(entry.creditAmount !== undefined && entry.creditAmount !== null ? { creditAmount: entry.creditAmount } : {}) }
-    for (const problem of decisionProblems(decision, { received: line.receivedQuantity, value, ...(graded ?? {}) })) problems.push({ path: `${at}/${problem.path}`, message: problem.message })
+    // B-W2b-360 (SAL-353): REMAKE is taken for a made-to-measure unit whose template's made-to-measure rules are on, its goods
+    // scrapped or held in quarantine (fittings/remake.ts); W2a's other checks run as for a Replace.
+    const remake = disposition === 'REMAKE' && line.receivedQuantity > 0 && line.grade ? await remakeDecisionFor(db, line, goodsOutcome, at) : null
+    if (remake) problems.push(...remake.problems)
+    for (const problem of decisionProblems(remake ? { ...decision, disposition: 'REPLACE' } : decision, { received: line.receivedQuantity, value, ...(graded ?? {}) })) problems.push({ path: `${at}/${problem.path}`, message: problem.message })
     const creditAmount = entry.creditAmount ?? defaultCredit(disposition, value)
     const { place, problems: placeProblems } = await placeFor(db, rma.siteId, goodsOutcome, entry.toLocationId, at)
     problems.push(...placeProblems)

@@ -150,6 +150,8 @@ import { warehouseTaskCron, warehouseTaskHandlers } from './modules/inventory/ta
 // confirmed by its yes.
 import { quoteValidityCron } from './modules/sales/quote-terms/validity'
 import { orderScheduleHandler } from './modules/sales/quote-terms/carry'
+// B-W2b-360: the rider's reminder of a fitting, a showroom visit or a measuring session (hourly, the day before; FAKE mail locally).
+import { fittingRemindersCron } from './modules/sales/fittings/reminders'
 
 /**
  * The factory's background processes (plan A1 §3.1), one codebase with the API, two Railway services:
@@ -377,6 +379,8 @@ if (mode === 'worker') {
   crons.push(warehouseTaskCron({ database, log }))
   // B-W2b-294: daily at 06:15, sent quotes past their last day become EXPIRED and those ending soon remind their customer once.
   crons.push(quoteValidityCron({ database, log }))
+  // B-W2b-360: hourly at minute 23, a booked appointment starting within a day reminds its rider once (made-to-measure on only).
+  crons.push(fittingRemindersCron({ database, log }))
   const scheduler = startCrons(crons, { redis, prefix, log })
   stops.push(() => scheduler.stop())
 }
