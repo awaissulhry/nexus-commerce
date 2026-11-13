@@ -4,6 +4,8 @@ import { money, notMoney } from '../../money/marked'
 import { CHECK_CODES, OPTION_GROUP_KINDS, OPTION_LIMITS, OPTION_RULE_KINDS, OPTION_RULE_SEVERITIES } from '../../product/options/rules'
 import { MASTER_STATUSES } from '../../product/sizes/rules'
 import { CONFIGURATOR_LIMITS, REPRICE_HELD } from './rules'
+// B-W2b-374: what a group's chosen value takes with it.
+import { OPTION_GROUP_TAKES } from '../../product/options/takes'
 
 /**
  * The configurator's shapes (B-W2b-340; SAL-133, SAL-136, SAL-139, SAL-140, SAL-249): what apps/factory-api's
@@ -73,6 +75,8 @@ const groupView = output({
   defaultValueId: id().nullable(),
   values: z.array(valueView),
   rules: z.array(ruleView),
+  /** B-W2b-374 (XF3:05): what a chosen value takes with it: COLOUR (the colour picker), MATERIAL (the material picker), null (both). */
+  takes: z.enum(OPTION_GROUP_TAKES).nullable(),
 })
 
 const colourChoice = output({ id: id(), code: z.string(), name: z.string(), nameI18n: names(), hex: z.string().nullable() })
@@ -122,6 +126,8 @@ const artworkView = output({
   createdAt: instant(),
   /** LINE: this line's; QUOTE_LINE: the quote line the order line was made from. */
   from: z.enum(['LINE', 'QUOTE_LINE']),
+  /** B-W2b-374 (XF3:04): shown in the customer's portal (shared with the document's party). */
+  portal: z.boolean(),
 })
 
 /** A quote or order line's configurator. */
@@ -154,8 +160,8 @@ export const lineConfiguratorView = output({
   /** Whether the line's waterfall holds the options' surcharges; why a quote line is not priced again; a manual change kept. */
   pricing: output({ holdsOptions: z.boolean(), held: z.enum(REPRICE_HELD).nullable(), manualKept: z.boolean() }),
   artwork: z.array(artworkView),
-  /** configure: the person may change the options now (else `held` says why); artwork: may add files. */
-  may: output({ configure: z.boolean(), held: words().nullable(), artwork: z.boolean() }),
+  /** configure: the person may change the options now (else `held` says why); artwork: may add files; share: may show an order line's artwork in the portal (B-W2b-374). */
+  may: output({ configure: z.boolean(), held: words().nullable(), artwork: z.boolean(), share: z.boolean() }),
 })
 export type LineConfiguratorView = z.infer<typeof lineConfiguratorView>
 

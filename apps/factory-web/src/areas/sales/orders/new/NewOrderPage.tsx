@@ -1,13 +1,15 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createElement, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { newIdempotencyKey } from '../../../../lib/api/client'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { findStyles, getParty, getStyle } from '../../quotes/api'
 import { createManualOrder, nextOrderNumber, previewManualOrder } from '../api'
-import { newKey, withCells } from '../daily-model'
+import { namesOf, newKey, withCells, type DraftLine } from '../daily-model'
+// B-W2b-374: a typed line's options.
+import { NewLineOptions } from '../../_shared/options-entry/NewLineOptions'
 import { abilitiesOf, readProblem, romeToday, writeProblem } from '../model'
 import { COMPOSER_EMPTY } from '../record/record-model'
 import { draftKey, EMPTY_DRAFT, headerFromAddress, manualBody, parseDraft, sentLines, type NewOrderDraft, type NewOrderModel } from './new-model'
@@ -143,7 +145,21 @@ function NewOrderContainer() {
     }
   }
 
-  const model: NewOrderModel = { prefix, can, today: romeToday(), header, party, number, draft, styles, composer, preview, busy, problem }
+  // B-W2b-374 (XF3:02): a typed line takes its options when the order is made (the preview prices them).
+  const newLineOptions = (line: DraftLine) =>
+    createElement(NewLineOptions, {
+      key: line.key,
+      api,
+      styleId: line.styleId,
+      colourwayId: line.colourwayId,
+      line: (({ style, colour }) => ({ style, colour }))(namesOf(line, null, styles[line.styleId])),
+      picks: line.options ?? [],
+      onChange: (picks) => {
+        confirmKey.current = null
+        setDraft((current) => ({ ...current, lines: current.lines.map((entry) => (entry.key === line.key ? { ...entry, options: picks } : entry)) }))
+      },
+    })
+  const model: NewOrderModel = { prefix, can, today: romeToday(), header, party, number, draft, styles, composer, preview, busy, problem, newLineOptions }
 
   return (
     <NewOrderView

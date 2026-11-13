@@ -80,9 +80,14 @@
     "problem": {
       "type": "Artwork is a PDF or a picture (JPEG, PNG, WebP).",
       "size": "A file is at most 25 MB.",
-      "failed": "The file could not be sent: try again."
+      "failed": "The file could not be sent: try again.",
+      "share": "The portal sharing did not change: try again."
     },
-    "done": "{name} is on the line."
+    "done": "{name} is on the line.",
+    "portal": {
+      "shown": "The artwork is shown in the customer's portal.",
+      "hidden": "The artwork is no longer shown in the portal."
+    }
   },
   "save": {
     "save": "Save options",

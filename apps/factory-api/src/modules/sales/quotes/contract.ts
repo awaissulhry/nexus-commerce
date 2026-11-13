@@ -603,6 +603,8 @@ const customerLineView = output({
   sizes: z.array(output({ size: z.string(), quantity: z.number().int(), unitPrice: money.price(z.string().nullable()) })),
   /** The size grid as the PDF prints it ("50×2 · 52×4"). */
   sizesText: z.string(),
+  /** B-W2b-374 (XF3:03): the options as the PDF prints them ("Opzioni: …"); null: none. */
+  optionsText: z.string().nullable(),
 })
 
 const postal = output({ line1: z.string(), line2: z.string().optional(), postalCode: z.string(), city: z.string(), province: z.string().optional(), country: z.string() })

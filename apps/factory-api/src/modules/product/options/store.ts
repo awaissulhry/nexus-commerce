@@ -59,6 +59,8 @@ export const GROUP_COLUMNS = {
   kind: true,
   minPicks: true,
   maxPicks: true,
+  // B-W2b-374 (XF3:05): what a chosen value takes with it.
+  takes: true,
   status: true,
   version: true,
   updatedAt: true,

@@ -2,6 +2,8 @@ import type { BusinessDate } from '../../core/time'
 import { formatDate, formatDateTime, formatDecimal } from '../../documents/format'
 import type { DocumentLanguage } from '../../documents/model'
 import type { WorkOrderKind, WorkOrderStatus } from './machine'
+// B-W2b-374: the options table of the traveller.
+import { travellerOptionsTable, type TravellerOptionRow } from '../../documents/options-block'
 
 /**
  * The work order traveller (B-W2b-51; MES-014 "Printable traveller (paper fallback)"; design production.workorders tab
@@ -94,6 +96,8 @@ export interface TravellerFacts {
   /** When it is printed, in the site's time zone. */
   readonly printedAt: Date
   readonly timeZone: string
+  /** B-W2b-374 (XF3:03): the options each colour and size is made with (grouped; documents/options-block.ts); none: no table. */
+  readonly options?: readonly TravellerOptionRow[]
 }
 
 const STATUS_WORDS: Readonly<Record<DocumentLanguage, Readonly<Record<WorkOrderStatus, string>>>> = {
@@ -320,7 +324,8 @@ export function travellerPaper(facts: TravellerFacts, language: DocumentLanguage
     rush: facts.rush ? words.rush : null,
     banner: bannerOf(facts, language),
     facts: list,
-    tables: [sizeTable(facts, language), operationsTable(facts, language), materialsTable(facts, language)],
+    // B-W2b-374: the options to make, after the size run, when a cell has one.
+    tables: [sizeTable(facts, language), ...[travellerOptionsTable(facts.options ?? [], language)].filter((table): table is TravellerTable => table !== null), operationsTable(facts, language), materialsTable(facts, language)],
     notes,
     footer: { printed: words.printed(formatDateTime(facts.printedAt, facts.timeZone, language)), page: words.page, continued: words.continued },
     meta: { title: `${words.title} ${facts.number}`, subject: words.subject(facts.number), createdAt: facts.printedAt.toISOString() },

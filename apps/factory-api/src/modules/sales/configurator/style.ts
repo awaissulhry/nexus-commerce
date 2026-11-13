@@ -137,6 +137,8 @@ export async function styleConfiguratorOf(
                 broken: { ...brokenWords(facts, (id) => names.get(id), groupOf) },
               }
             }),
+          // B-W2b-374 (XF3:05): the picker a chosen value offers.
+          takes: group.takes,
         },
       ]
     }),

@@ -1,0 +1,29 @@
+/*
+ * What a chosen value of an option group takes (SCR-432; B-W2b-374). Layout only, semantic --nds-* tokens; the parts are the
+ * design system's (Card, Field, RadioCard, Banner, Button). No max-width: the card fills the tab's width; the three choices
+ * sit side by side on a wide screen and stack on a phone.
+ */
+.fw-tk {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-tk-choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: var(--nds-space-8);
+}
+
+.fw-tk-hint {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-tk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+}

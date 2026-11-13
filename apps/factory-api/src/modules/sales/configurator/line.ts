@@ -42,6 +42,9 @@ import { lockOrder, type OrderRow } from '../orders/store'
 import { artworkOf } from './artwork'
 import { baseOf, chargesOf, listPriceOf, plannedPrice, restartOf, storedOf, type Restart } from './reprice'
 import { styleConfiguratorOf, valuePrices } from './style'
+// B-W2b-374: what a group takes; who may show an order line's artwork in the portal.
+import { assertPicksTake } from '../../product/options/takes'
+import { mayShareArtwork } from '../portal-ordering/artwork'
 
 /**
  * The configurator on a quote or order line (B-W2b-340; SAL-133, SAL-136, SAL-139, SAL-140; CF1:01-03; design
@@ -121,23 +124,28 @@ async function stepSources(db: Reader, steps: readonly WaterfallStep[] | null): 
   return new Map([...quoteRows, ...orderRows].map((row) => [row.id, { valueId: row.valueId, amount: row.surchargeAmount === null ? null : decimal(row.surchargeAmount) }]))
 }
 
-/** The library colour, material and its colour a choice names: active, of the line's company or every company. */
-async function assertExtras(db: Reader, companyId: string, picks: readonly LinePick[]): Promise<void> {
+/** The library colour, material and its colour a choice names: active, of the line's company or every company (B-W2b-374: also a typed order line's, at `at`). */
+export async function extrasProblems(db: Reader, companyId: string, picks: readonly LinePick[], at = 'body/picks'): Promise<Issue[]> {
   const issues: Issue[] = []
   for (const [index, pick] of picks.entries()) {
     if (pick.colourId) {
       const colour = await db.colour.findUnique({ where: { id: pick.colourId }, select: { status: true, companyId: true } })
-      if (!colour || colour.status !== 'ACTIVE' || (colour.companyId !== null && colour.companyId !== companyId)) issues.push({ path: `body/picks/${index}/colourId`, message: 'Not an active colour of the library for this company.' })
+      if (!colour || colour.status !== 'ACTIVE' || (colour.companyId !== null && colour.companyId !== companyId)) issues.push({ path: `${at}/${index}/colourId`, message: 'Not an active colour of the library for this company.' })
     }
     if (pick.itemId) {
       const item = await db.item.findUnique({ where: { id: pick.itemId }, select: { status: true, companyId: true } })
-      if (!item || item.status !== 'ACTIVE' || (item.companyId !== null && item.companyId !== companyId)) issues.push({ path: `body/picks/${index}/itemId`, message: 'Not an active material for this company.' })
+      if (!item || item.status !== 'ACTIVE' || (item.companyId !== null && item.companyId !== companyId)) issues.push({ path: `${at}/${index}/itemId`, message: 'Not an active material for this company.' })
       else if (pick.itemColourId) {
         const colour = await db.itemColour.findFirst({ where: { id: pick.itemColourId, itemId: pick.itemId }, select: { status: true } })
-        if (!colour || colour.status !== 'ACTIVE') issues.push({ path: `body/picks/${index}/itemColourId`, message: 'Not an active colour of this material.' })
+        if (!colour || colour.status !== 'ACTIVE') issues.push({ path: `${at}/${index}/itemColourId`, message: 'Not an active colour of this material.' })
       }
     }
   }
+  return issues
+}
+
+async function assertExtras(db: Reader, companyId: string, picks: readonly LinePick[]): Promise<void> {
+  const issues = await extrasProblems(db, companyId, picks)
   if (issues.length > 0) throw new ValidationError(issues[0]!.message, issues)
 }
 
@@ -152,8 +160,8 @@ function invalidPicks(picks: readonly LinePick[]): void {
   if (issues.length > 0) throw new ValidationError(issues[0]!.message, issues)
 }
 
-/** What the chosen values would be written as: the check's values, each with its pick's colour or material and its surcharge. */
-function rowsToWrite(chosen: readonly ChosenValue[], picks: readonly LinePick[], surcharges: ReadonlyMap<string, Frozen>) {
+/** What the chosen values would be written as: the check's values, each with its pick's colour or material and its surcharge (B-W2b-374: also a typed order line's). */
+export function rowsToWrite(chosen: readonly ChosenValue[], picks: readonly LinePick[], surcharges: ReadonlyMap<string, Frozen>) {
   return chosen.map((entry) => {
     const pick = picks.find((candidate) => candidate.valueId === entry.valueId)
     const frozen = surcharges.get(entry.valueId) ?? { amount: null, pct: null }
@@ -233,7 +241,8 @@ async function quoteLineView(db: Reader, context: OfficeContext, quote: QuoteRow
       manualKept: manualChangeOf(steps) !== null,
     },
     artwork: await artworkOf(db, { kind: 'QUOTE', quoteId: quote.id, line: { id: line.id, seq: line.seq, styleId: line.styleId } }),
-    may: { configure: held === null, held, artwork: held === null && can(actorOf(context), FILES_UPLOAD, { companyId: quote.companyId }) },
+    // B-W2b-374: a quote line's artwork is shown in the portal from the order line (share: false here).
+    may: { configure: held === null, held, artwork: held === null && can(actorOf(context), FILES_UPLOAD, { companyId: quote.companyId }), share: false },
   }
 }
 
@@ -298,6 +307,55 @@ export async function checkQuoteLine(caller: CommandCaller, quoteId: string, lin
   })
 }
 
+/**
+ * A choice written on a DRAFT quote line inside a command (B-W2b-340's save; B-W2b-374: also the copies of a duplicate and
+ * the options of a pasted line): checked (the rules in their words, the colours and materials active, what each group takes),
+ * each value's surcharge frozen, the rows replaced, the line priced again through B-W2b-330's waterfall. Every refusal is
+ * thrown BEFORE the first write (a caller may leave a line's options out in words and go on in the same transaction). The
+ * caller refreshes the version's money.
+ */
+export async function applyQuoteLinePicks(
+  tools: CommandTools,
+  current: QuoteRow,
+  version: VersionRow,
+  line: LineRecord,
+  picks: readonly LinePick[],
+  at = 'body/picks',
+  /** B-W2b-374: a copy's source surcharges, kept when the line is not priced again (its price kept as sold holds them). */
+  kept?: readonly { readonly valueId: string; readonly amount: string | null; readonly pct: string | null }[],
+) {
+  const { tx, now } = tools
+  invalidPicks(picks)
+  if (line.kind === 'FEE') throw new InvalidStateError('A fee takes no options.')
+  const check = await checkStyleOptions(tx, line.styleId, picks, { useDefaults: true })
+  if (!check.check.ok) throw refusedIn(check)
+  await assertExtras(tx, current.companyId, picks)
+  // B-W2b-374 (XF3:05): a colour or material its group does not take is refused in words (409), before the database would.
+  await assertPicksTake(tx, picks, at)
+  const ctx = await priceContextOf(tx, current, version, [line], now)
+  const { restart, frozen } = await quoteSurcharges(tx, version, line, ctx, check.check.chosen)
+  if (!frozen.ok) throw new DomainError('conflict', frozen.message.en, [{ path: at, message: frozen.message.en }])
+  const before = await quoteOptions(tx, line.id)
+  const surcharges = kept && restart.kind === 'HELD' ? orderSurcharges(kept, frozen.rows) : frozen.rows
+  const rows = rowsToWrite(check.check.chosen, picks, surcharges)
+  const actorId = actorIdOf(tools)
+  await tx.quoteLineOption.deleteMany({ where: { lineId: line.id } })
+  if (rows.length > 0) await tx.quoteLineOption.createMany({ data: rows.map((row) => ({ id: newId(), lineId: line.id, partyId: version.partyId, ...row, createdById: actorId })) })
+  // The price again, through the waterfall (B-W2b-330), with the options as written.
+  let repriced: { held: RepriceHeld | null } = { held: restart.kind === 'HELD' ? restart.held : null }
+  if (restart.kind !== 'HELD') {
+    const fresh = await priceContextOf(tx, current, version, [line], now)
+    const written = await quoteOptions(tx, line.id)
+    const names = await valueNameMap(tx, written.map((row) => row.valueId))
+    const planned = await plannedPrice(tx, fresh, version, line, restart, chargesOf(written.map((row) => ({ id: row.id, name: names.get(row.valueId) ?? 'Option', text: row.freeText, amount: row.surchargeAmount, pct: row.surchargePct }))))
+    if ('plan' in planned) {
+      await writeLinePrice(tools, current, version, fresh, line, planned.plan, planned.start)
+      repriced = { held: null }
+    } else repriced = { held: planned.held }
+  }
+  return { before, rows, check, repriced }
+}
+
 /** PUT /sales/quotes/:quoteId/lines/:lineId/options (quotes.manage): see the file's head. */
 export async function saveQuoteOptions(caller: CommandCaller, quoteId: string, lineId: string, body: SaveQuoteOptionsBody, idempotencyKey?: string) {
   invalidPicks(body.picks)
@@ -307,30 +365,7 @@ export async function saveQuoteOptions(caller: CommandCaller, quoteId: string, l
     const { tx, now } = tools
     assertDraft(version)
     const line = await quoteLineOf(tx, version, lineId)
-    if (line.kind === 'FEE') throw new InvalidStateError('A fee takes no options.')
-    const check = await checkStyleOptions(tx, line.styleId, body.picks, { useDefaults: true })
-    if (!check.check.ok) throw refusedIn(check)
-    await assertExtras(tx, current.companyId, body.picks)
-    const ctx = await priceContextOf(tx, current, version, [line], now)
-    const { restart, frozen } = await quoteSurcharges(tx, version, line, ctx, check.check.chosen)
-    if (!frozen.ok) throw new DomainError('conflict', frozen.message.en, [{ path: 'body/picks', message: frozen.message.en }])
-    const before = await quoteOptions(tx, line.id)
-    const rows = rowsToWrite(check.check.chosen, body.picks, frozen.rows)
-    const actorId = actorIdOf(tools)
-    await tx.quoteLineOption.deleteMany({ where: { lineId: line.id } })
-    if (rows.length > 0) await tx.quoteLineOption.createMany({ data: rows.map((row) => ({ id: newId(), lineId: line.id, partyId: version.partyId, ...row, createdById: actorId })) })
-    // The price again, through the waterfall (B-W2b-330), with the options as written.
-    let repriced: { held: RepriceHeld | null } = { held: restart.kind === 'HELD' ? restart.held : null }
-    if (restart.kind !== 'HELD') {
-      const fresh = await priceContextOf(tx, current, version, [line], now)
-      const written = await quoteOptions(tx, line.id)
-      const names = await valueNameMap(tx, written.map((row) => row.valueId))
-      const planned = await plannedPrice(tx, fresh, version, line, restart, chargesOf(written.map((row) => ({ id: row.id, name: names.get(row.valueId) ?? 'Option', text: row.freeText, amount: row.surchargeAmount, pct: row.surchargePct }))))
-      if ('plan' in planned) {
-        await writeLinePrice(tools, current, version, fresh, line, planned.plan, planned.start)
-        repriced = { held: null }
-      } else repriced = { held: planned.held }
-    }
+    const { before, rows, check, repriced } = await applyQuoteLinePicks(tools, current, version, line, body.picks)
     await refreshVersion(tools, current, version, new Set())
     tools.audit({
       action: 'quotes.configureLine',
@@ -411,7 +446,13 @@ async function orderLineView(db: Reader, context: OfficeContext, order: OrderRow
     // An order keeps the price it was accepted at: never priced again here.
     pricing: { holdsOptions: optionsPriced(steps, await stepSources(db, steps), rows.map((row) => ({ valueId: row.valueId, amount: row.surchargeAmount }))), held: null, manualKept: manualChangeOf(steps) !== null },
     artwork: await artworkOf(db, { kind: 'ORDER', line: { id: line.id, quoteLineId: line.quoteLineId } }),
-    may: { configure: held === null, held, artwork: !ORDER_CLOSED.has(order.status) && can(actorOf(context), ORDERS_MANAGE, { companyId: order.companyId, partyId: order.partyId }) && can(actorOf(context), FILES_UPLOAD, { companyId: order.companyId }) },
+    may: {
+      configure: held === null,
+      held,
+      artwork: !ORDER_CLOSED.has(order.status) && can(actorOf(context), ORDERS_MANAGE, { companyId: order.companyId, partyId: order.partyId }) && can(actorOf(context), FILES_UPLOAD, { companyId: order.companyId }),
+      // B-W2b-374 (XF3:04)
+      share: mayShareArtwork(context, order),
+    },
   }
 }
 
@@ -480,6 +521,8 @@ export async function saveOrderOptions(caller: CommandCaller, orderId: string, l
     const check = await checkStyleOptions(tx, line.styleId, body.picks, { useDefaults: true })
     if (!check.check.ok) throw refusedIn(check)
     await assertExtras(tx, order.companyId, body.picks)
+    // B-W2b-374 (XF3:05)
+    await assertPicksTake(tx, body.picks)
     const current = await orderOptions(tx, line.id)
     const surcharges = await orderSurchargesOf(tx, order, line, current, check.check.chosen)
     if (!surcharges.ok) throw new DomainError('conflict', surcharges.message.en, [{ path: 'body/picks', message: surcharges.message.en }])

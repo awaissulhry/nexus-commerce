@@ -10,6 +10,8 @@ import type { Grains } from '../../model'
 import { checkLine, readLineConfigurator, removeArtwork, saveOrderOptions, saveQuoteOptions, uploadArtwork, type ArtworkFile, type CheckAnswer, type LineConfigurator, type LineTarget } from './api'
 import { artworkRefusal, draftChanged, draftKey, draftOf, picksBody, saveHeld, setPick, togglePick, type DraftPick, type Say, type Tone } from './model'
 import type { ConfiguratorActions, ConfiguratorModel } from './view/ConfiguratorView'
+// B-W2b-374: an order line's artwork in the portal.
+import { shareArtwork } from '../../../_shared/options-entry/api'
 
 const CHECK_DELAY_MS = 400
 
@@ -181,6 +183,21 @@ export function useLineConfigurator(input: LineConfiguratorInput): { model: Conf
     [api],
   )
 
+  // B-W2b-374 (XF3:04): an order line's artwork shown in (or out of) the customer's portal, then the line read again.
+  const shareFile = useCallback(
+    async (file: ArtworkFile, shown: boolean) => {
+      if (target.kind !== 'ORDER') return
+      try {
+        await shareArtwork(api, target.orderId, target.lineId, file.fileId, shown)
+        setNotice({ tone: 'success', words: { key: shown ? 'artwork.portal.shown' : 'artwork.portal.hidden' } })
+      } catch {
+        setArtworkProblem({ key: 'artwork.problem.share' })
+      }
+      setTries((value) => value + 1)
+    },
+    [api, target],
+  )
+
   const previewValue: CheckAnswer | null = preview.status === 'ready' ? preview.value : null
   const held = saveHeld({ held: view && !view.may.configure ? view.may.held : null, changed, checking: preview.status === 'checking', preview: previewValue, saving, offline: !online, keepPrice, kind: target.kind }, draft, groups)
 
@@ -215,6 +232,7 @@ export function useLineConfigurator(input: LineConfiguratorInput): { model: Conf
     onArtwork: (files) => void artwork(files),
     onOpenArtwork: (file) => void openArtwork(file),
     onRemoveArtwork: (file) => void removeFile(file),
+    onShareArtwork: (file, shown) => void shareFile(file, shown),
     onRetry: () => setTries((value) => value + 1),
     onDismissNotice: () => setNotice(null),
   }
