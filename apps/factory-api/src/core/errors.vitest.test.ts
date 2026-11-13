@@ -133,6 +133,20 @@ describe('mapError()', () => {
     expect(mapError(other).status).toBe(500)
   })
 
+  it("B-W2b-373: answers the database's archived-role refusals as a 409 in words, never a 500", () => {
+    const refusal = prismaError('P2010', 'Raw query failed.', {
+      driverAdapterError: { cause: { originalCode: '23514', originalMessage: 'roles: role x is archived: it is given to nobody (assignment y)' } },
+    })
+    const words = 'This role is archived: it is given to nobody. Pick another role, or restore it first.'
+    expect(mapError(refusal)).toEqual({ status: 409, code: 'conflict', message: words, issues: [{ path: 'roles/ROLE_ARCHIVED', message: words }], unexpected: false })
+    const frozen = prismaError('P2010', 'Raw query failed.', {
+      driverAdapterError: { cause: { originalCode: '23514', originalMessage: 'roles: role x is archived: it changes no more (restore it first)' } },
+    })
+    expect(mapError(frozen)).toMatchObject({ status: 409, code: 'conflict', issues: [{ path: 'roles/ROLE_ARCHIVED' }] })
+    const other = prismaError('P2010', 'Raw query failed.', { driverAdapterError: { cause: { originalCode: '23514', originalMessage: 'roles: role x is still held: end its assignments first, then archive it' } } })
+    expect(mapError(other).status).toBe(500)
+  })
+
   it("B-W2b-279: answers the database's refusal of an erased contact's new data as a 409 in words, never a 500", () => {
     const refusal = prismaError('P2010', 'Raw query failed.', {
       driverAdapterError: { cause: { originalCode: '23514', originalMessage: 'parties: contact x was erased; its name, e-mail and phone stay blank and it stays archived (a new contact is made for new data)' } },

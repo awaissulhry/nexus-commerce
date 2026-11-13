@@ -80,6 +80,7 @@ import { seed as seedSalesOrdersDepth } from '../seed/sales-orders-depth'
 import { seed as seedSamples } from '../seed/samples'
 import { seed as seedSchedule } from '../seed/schedule'
 import { seed as seedSearch } from '../seed/search'
+import { seed as seedSecurity } from '../seed/security'
 import { seed as seedService } from '../seed/service'
 import { seed as seedShipping } from '../seed/shipping'
 import { seed as seedSizesDepth } from '../seed/sizes-depth'
@@ -477,6 +478,11 @@ beforeAll(async () => {
   // copy may repeat.
   await seedCustoms({ db: factory, namespace: 'iso-a' })
   await seedCustoms({ db: factory, namespace: 'iso-b' })
+  // The security and audit schema of W2b-6 (wave 52/57): the security settings, an archived custom role, sessions with their
+  // device and place, step-up tries (the first a plain wrong code), security events (the first a failed sign-in of nobody
+  // known; the floor's at A1 and B1, P1's portal) and reads of sensitive records: the plain ones a copy may repeat.
+  await seedSecurity({ db: factory, namespace: 'iso-a' })
+  await seedSecurity({ db: factory, namespace: 'iso-b' })
   // Every seed of both tenants: under a full parallel run this takes more than a minute.
 }, 120_000)
 
@@ -864,6 +870,7 @@ it('covers every classified table and every runtime role', () => {
     'QuoteVersion',
     'RateAcknowledgement',
     'RatePublication',
+    'ReadLog',
     'ReasonCode',
     'RecallAction',
     'RecallProgress',
@@ -943,6 +950,8 @@ it('covers every classified table and every runtime role', () => {
     'Season',
     'SecondaryProcess',
     'SecretValue',
+    'SecurityEvent',
+    'SecuritySettings',
     'SelfInvoice',
     'ServiceCase',
     'ServiceCaseLink',
@@ -969,6 +978,7 @@ it('covers every classified table and every runtime role', () => {
     'StandardChange',
     'StandardCost',
     'Station',
+    'StepUpAttempt',
     'StockCount',
     'StockCountLine',
     'StockCountScan',

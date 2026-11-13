@@ -30,6 +30,11 @@ model Role {
   /// switched on (the time given, else the transaction's), cleared when it is switched off, never moved while it stays
   /// on. Null on a role that asked before W2b (no grace: the audit rows say when).
   requireMfaSince DateTime? @db.Timestamptz(3)
+  /// W2b (B-W2b-373; PLT-031): when a custom role was archived and by whom, both or neither. An archived role is kept for
+  /// the history, given to nobody and changed no more until it is restored (both cleared); it is archived only while
+  /// nobody holds it. A system role is never archived, and a custom role is never deleted (…_security_audit_w2b_guards).
+  archivedAt   DateTime? @db.Timestamptz(3)
+  archivedById String?   @db.Uuid
   /// Declared `<area>.<action>` permissions (factory-domain auth/permissions), sorted; never a `money.*` one.
   permissions String[]     @default([])
   /// The money grains it sees: price, cost, margin, wages (factory-domain auth/grains).
