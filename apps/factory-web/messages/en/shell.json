@@ -38,6 +38,8 @@
       "inquiries": "Inquiries",
       "quotes": "Quotes",
       "orders": "Orders",
+      "specialOrders": "Special orders",
+      "mtm": "Made-to-measure",
       "pricing": "Pricing",
       "pricelists": "Price lists & contracts",
       "aftersales": "After-sales",

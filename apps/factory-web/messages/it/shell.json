@@ -38,6 +38,8 @@
       "inquiries": "Richieste",
       "quotes": "Preventivi",
       "orders": "Ordini",
+      "specialOrders": "Ordini speciali",
+      "mtm": "Su misura",
       "pricing": "Prezzi",
       "pricelists": "Listini e contratti",
       "aftersales": "Post-vendita",

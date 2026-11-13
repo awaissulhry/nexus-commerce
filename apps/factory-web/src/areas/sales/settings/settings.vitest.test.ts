@@ -79,7 +79,8 @@ describe('numbering and the navigation', () => {
   it('Sales sections: Main, After-sales, Pricing, Settings; the settings row needs the quotes right', () => {
     const sales = OFFICE_NAV.areas.find((area) => area.id === 'sales')!
     // B-W2b-348: Reports (Sales reports) before Settings.
-    expect(sales.sections!.map((section) => section.id)).toEqual(['sales-main', 'sales-aftersales', 'sales-pricing', 'sales-reports', 'sales-settings'])
+    // B-W2b-362: Special orders (Made-to-measure) after Main.
+    expect(sales.sections!.map((section) => section.id)).toEqual(['sales-main', /* B-W2b-362 */ 'sales-special', 'sales-aftersales', 'sales-pricing', 'sales-reports', 'sales-settings'])
     const warehouse = officeNavFor((permission) => ['sales.returns.view', 'home.view'].includes(permission)).areas.find((area) => area.id === 'sales')
     expect(warehouse?.sections?.map((section) => section.id)).toEqual(['sales-aftersales'])
     expect(settingsCan(['quotes.view']).quotesView).toBe(true)

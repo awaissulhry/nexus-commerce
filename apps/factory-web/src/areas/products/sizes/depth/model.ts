@@ -19,9 +19,10 @@ export type { PomKind, PomUom, PomZone }
 // ---- the view switch (design sizes.view: "Size scales · Measurement templates · Points of measure · Grade rules") -----
 
 /** The libraries this page shows; `?view=` keeps it (the scales' own `?view=open|archived|all` stays theirs). */
-export const LIBRARIES = ['scales', 'poms', 'rules'] as const
+// B-W2b-362: Measurement templates (B-W1-17) join as the second view, the design's order.
+export const LIBRARIES = ['scales', 'templates', 'poms', 'rules'] as const
 export type Library = (typeof LIBRARIES)[number]
-export const libraryOf = (view: string | null | undefined): Library => (view === 'poms' || view === 'rules' ? view : 'scales')
+export const libraryOf = (view: string | null | undefined): Library => (view === 'poms' || view === 'rules' || /* B-W2b-362 */ view === 'templates' ? view : 'scales')
 
 /** The state a library list shows (`?status=`). */
 export const STATUS_VIEWS = ['open', 'archived', 'all'] as const
@@ -64,8 +65,8 @@ export function depthSearch(library: Library, filters: DepthFilters, extra: { op
   return text ? `?${text}` : ''
 }
 
-/** Keys 1–3 switch the view (design kb "1–4 — switch view"; the templates view is not built). */
-export const libraryOfKey = (key: string): Library | null => (key === '1' ? 'scales' : key === '2' ? 'poms' : key === '3' ? 'rules' : null)
+/** Keys 1–4 switch the view (design kb "1–4 — switch view"). B-W2b-362: the templates view is key 2 (the design's order). */
+export const libraryOfKey = (key: string): Library | null => (key === '1' ? 'scales' : key === '2' ? 'templates' : key === '3' ? 'poms' : key === '4' ? 'rules' : null)
 
 // ---- what a person may do -------------------------------------------------------------------------------------------
 

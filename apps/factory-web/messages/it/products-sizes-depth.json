@@ -2,6 +2,7 @@
   "switch": {
     "label": "Librerie di Taglie e misure",
     "scales": "Scale taglie",
+    "templates": "Modelli di misure",
     "poms": "Punti di misura",
     "rules": "Regole di sviluppo taglie",
     "key": "Tasto {key}"
