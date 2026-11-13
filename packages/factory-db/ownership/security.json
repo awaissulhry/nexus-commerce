@@ -1,0 +1,39 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/security.prisma (rules: src/ownership.ts; roles: src/roles.ts). Office sessions (and the worker and scheduler, in the tenant's system context) keep the tenant's security settings, record each step-up try, write and read the security events and write and read the reads of sensitive records, through apps/factory-api's commands (B-W2b-399, B-W2b-404); who may read the events and the read log is the API's permission (administrators and the Owner: Owner answer W2b-6 question 3 = A). StepUpAttempt, SecurityEvent and ReadLog are append-only ledgers (`@append-only`, scripts/factory/check-append-only.mjs): no role updates or deletes them and the …_security_audit_w2b_guards triggers refuse UPDATE, DELETE and TRUNCATE for every login. As AuditLog, every audience adds its own security events: a floor device the events of its site (a wrong PIN, a refusal), a portal or link session those of its party; neither reads any. Nothing here holds money. No role deletes: the settings are changed, never deleted. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "SecuritySettings": {
+      "about": "The tenant's session lengths per audience and its step-up rules (PLT-063, PLT-068): read by the authenticators and the step-up check, changed by an administrator (Admin › Security). Office only; the floor keeps FloorSettings.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "StepUpAttempt": {
+      "about": "Every step-up try on an office session, with its result and the fingerprint of the code that worked (PLT-063): the step-up check reads a person's recent tries for the lock and a code's reuse. Append-only. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] }
+      }
+    },
+    "SecurityEvent": {
+      "about": "Sign-ins and failed ones, lockouts, two-factor changes, refusals, role changes, API key use, exports and step-up locks (PLT-075): the office writes and reads them (Admin › Security); a floor device adds its site's events, a portal or link session its party's, reading none. Append-only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] },
+        "factory_floor_runtime": { "privileges": ["insert"], "scopedBy": ["site"] },
+        "factory_partner_runtime": { "privileges": ["insert"], "scopedBy": ["party"] }
+      }
+    },
+    "ReadLog": {
+      "about": "Who of the office viewed, downloaded or exported a sensitive record (PLT-074; Owner answer question 3 = A): written by the office as it shows the record, read by administrators and the Owner only (Admin › Audit log › Who looked); never a figure about a person. Append-only. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] }
+      }
+    }
+  }
+}

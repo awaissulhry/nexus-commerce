@@ -349,7 +349,8 @@ describe('platform', () => {
   it("knows the scanner and the error-tracking providers, and a device's network and time in use", async () => {
     const providers = await admin(`SELECT unnest(enum_range(NULL::"IntegrationProvider"))::text AS provider`)
     // W2b wave 21/22 (B-W2b-157) adds the card payment providers after them.
-    expect(providers.map((row) => row.provider)).toEqual(['SES', 'R2', 'SDI', 'SENDCLOUD', 'VIES', 'CLAMAV', 'ERROR_TRACKING', 'PAYMENT_FAKE', 'STRIPE'])
+    // B-W2b-369 (W2b schema wave 49) adds ECB, the exchange-rate source, after them.
+    expect(providers.map((row) => row.provider)).toEqual(['SES', 'R2', 'SDI', 'SENDCLOUD', 'VIES', 'CLAMAV', 'ERROR_TRACKING', 'PAYMENT_FAKE', 'STRIPE', 'ECB'])
     // The floor reports its own state (the device's row, its site).
     expect(await run(floor(), `UPDATE "Device" SET network = 'WIFI', "inUseSince" = now() WHERE id = $1::uuid`, tablet)).toBe(1)
     expect(await sql(office(), `SELECT network::text AS network, "inUseSince" IS NOT NULL AS "inUse" FROM "Device" WHERE id = $1::uuid`, tablet)).toEqual([{ network: 'WIFI', inUse: true }])

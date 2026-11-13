@@ -101,6 +101,10 @@ export const FLOOR_SYNC_KINDS = [
   // own move (MES-139). Applied as the stock, the work order and the substitute stand when they arrive.
   'inventory.pick.issue',
   'inventory.substitute.issue',
+  // B-W2b-384: a garment scanned into a carton at the packing bench (LOG-007; design floor.pack "Works offline"): its serial,
+  // SKU, barcode or batch label, into the carton named or the bench's open one. Applied as the shipment and its cartons stand
+  // when it arrives: a wrong garment, an extra piece or a shipment held since is refused in words.
+  'shipping.carton.scan',
 ] as const
 export type FloorSyncKind = (typeof FLOOR_SYNC_KINDS)[number]
 
@@ -183,6 +187,8 @@ export const QUEUED_ACTIONS: Readonly<Record<FloorSyncKind, QueuedAction>> = Obj
   // B-W2b-298: the issue's right; the module checks again the work order, the stock and the substitute's yes.
   'inventory.pick.issue': { kind: 'inventory.pick.issue', permission: 'inventory.issue', numbers: null, what: 'Issue to a work order from the pick list (a scan)' },
   'inventory.substitute.issue': { kind: 'inventory.substitute.issue', permission: 'inventory.issue', numbers: null, what: 'Issue an approved substitute to a work order' },
+  // B-W2b-384: packing is the packer's (shipping.pack at the tablet's site).
+  'shipping.carton.scan': { kind: 'shipping.carton.scan', permission: 'shipping.pack', numbers: null, what: 'Scan a garment into a carton' },
 } satisfies Record<FloorSyncKind, QueuedAction>)
 
 export const ONLINE_ONLY_ACTIONS = ['inventory.receive', 'quality.inspection', 'quality.release', 'production.serials.labels'] as const

@@ -133,6 +133,35 @@ describe('mapError()', () => {
     expect(mapError(other).status).toBe(500)
   })
 
+  it("B-W2b-373: answers the database's archived-role refusals as a 409 in words, never a 500", () => {
+    const refusal = prismaError('P2010', 'Raw query failed.', {
+      driverAdapterError: { cause: { originalCode: '23514', originalMessage: 'roles: role x is archived: it is given to nobody (assignment y)' } },
+    })
+    const words = 'This role is archived: it is given to nobody. Pick another role, or restore it first.'
+    expect(mapError(refusal)).toEqual({ status: 409, code: 'conflict', message: words, issues: [{ path: 'roles/ROLE_ARCHIVED', message: words }], unexpected: false })
+    const frozen = prismaError('P2010', 'Raw query failed.', {
+      driverAdapterError: { cause: { originalCode: '23514', originalMessage: 'roles: role x is archived: it changes no more (restore it first)' } },
+    })
+    expect(mapError(frozen)).toMatchObject({ status: 409, code: 'conflict', issues: [{ path: 'roles/ROLE_ARCHIVED' }] })
+    const other = prismaError('P2010', 'Raw query failed.', { driverAdapterError: { cause: { originalCode: '23514', originalMessage: 'roles: role x is still held: end its assignments first, then archive it' } } })
+    expect(mapError(other).status).toBe(500)
+  })
+
+  it("B-W2b-384: answers the database's packing refusals as a 409 in words, never a 500 (W1's pack route with a serial in no carton)", () => {
+    const loose = prismaError('P2010', 'Raw query failed.', {
+      driverAdapterError: {
+        cause: { originalCode: '23514', originalMessage: "packing: shipment x is PACKED with each serial in a carton that holds its line (1 serial(s) of a line with carton contents in no carton, 0 carton(s) holding more serials of a line than its contents, 0 serial(s) outside their line's parcel)" },
+      },
+    })
+    const words = "Each serial lies in the carton of its line: 1 serial(s) are in no carton, 0 carton(s) hold more serials of a line than its garments there, 0 serial(s) lie outside their line's parcel. Scan those serials into their carton."
+    expect(mapError(loose)).toEqual({ status: 409, code: 'conflict', message: words, issues: [{ path: 'packing/SERIALS_NOT_IN_CARTONS', message: words }], unexpected: false })
+    const held = prismaError('P2010', 'Raw query failed.', { driverAdapterError: { cause: { originalCode: '23514', originalMessage: 'packing: shipment x is on hold (BALANCE_UNPAID); it is not packed until the hold is released' } } })
+    expect(mapError(held)).toMatchObject({ status: 409, message: 'This shipment is on hold (the balance is not paid): it is not packed until the hold is released.', issues: [{ path: 'packing/ON_HOLD' }] })
+    // Any other packing rule is a 409 in fixed words: the database's own text never reaches the caller.
+    const other = prismaError('P2010', 'Raw query failed.', { driverAdapterError: { cause: { originalCode: '23514', originalMessage: 'packing: cut-off x is a time of day HH:MM (24 hours), not 25:00' } } })
+    expect(mapError(other)).toMatchObject({ status: 409, message: 'The packing rules refuse this change.', issues: [{ path: 'packing/REFUSED' }] })
+  })
+
   it("B-W2b-279: answers the database's refusal of an erased contact's new data as a 409 in words, never a 500", () => {
     const refusal = prismaError('P2010', 'Raw query failed.', {
       driverAdapterError: { cause: { originalCode: '23514', originalMessage: 'parties: contact x was erased; its name, e-mail and phone stay blank and it stays archived (a new contact is made for new data)' } },
