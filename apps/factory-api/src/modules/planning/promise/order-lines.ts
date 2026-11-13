@@ -46,6 +46,9 @@ import { lineOptionsOf } from '../planned-orders/steps'
  * size's FIRST promise, or a RE_PROMISE of a size promised apart from the line with its reason (the date sales typed
  * becomes the line's FIRST row first) — only for sizes a valid certificate covers through their date (PLN-179). The order's
  * own dates (W1's, sales') are not changed here; nobody is told (B-W2b-317 tells the customer).
+ *
+ * B-W2b-F44 (Owner 2026-11-13, option A): a size with garments still to make is proposed for the site's next working day at
+ * the earliest, never for today; only garments already made (ready now) may be proposed for today.
  */
 
 const LINE_SELECT = {
@@ -188,7 +191,11 @@ async function lineView(db: Reader, context: OfficeContext, line: LineRow, site:
     const dates = [entry.readyNow > 0 ? today : null, ...entry.workOrders.map((row) => row.finish ?? today), ...entry.plannedOrders.map((row) => row.dueDate), entry.uncovered > 0 ? (engine?.date ?? null) : null]
     const noDate = entry.uncovered > 0 && (engine?.date ?? null) === null
     const proposed = noDate ? null : latest(dates)
-    return { entry, proposed: proposed !== null && proposed < today ? today : proposed, engine }
+    // B-W2b-F44 (begin): garments still to make (an open work order, a planned order, what nothing makes yet) are promised for
+    // the next working day at the earliest, never for today; only garments already made (ready now) may be promised today.
+    const floor = entry.workOrders.length > 0 || entry.plannedOrders.length > 0 || entry.uncovered > 0 ? where.firstMakeDay : today
+    // B-W2b-F44 (end)
+    return { entry, proposed: proposed !== null && proposed < floor ? floor : proposed /* B-W2b-F44: was today */, engine }
   })
   // The certificate on each proposed day (PLN-179).
   const certificateOf = new Map<string, SizeCertificate>()
