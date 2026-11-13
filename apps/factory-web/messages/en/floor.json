@@ -777,7 +777,8 @@
       "countScan": "Unit scanned into a count",
       "countFinishBin": "Bin of a count finished",
       "pickIssue": "Issued from the pick list",
-      "substituteIssue": "Approved substitute issued"
+      "substituteIssue": "Approved substitute issued",
+      "cartonScan": "Garment scanned into a carton"
     },
     "refusal": {
       "UNKNOWN_BUNDLE": {

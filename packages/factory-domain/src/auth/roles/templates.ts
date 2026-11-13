@@ -142,6 +142,8 @@ import { SALES_SAFETY_ADDS } from '../../sales/safety-reports/permissions'
 import { SALES_MTM_ADDS } from '../../sales/mtm/permissions'
 // B-W2b-360: fittings, alterations and remakes (sales and the production manager record fittings, the administrator too).
 import { SALES_FITTINGS_ADDS } from '../../sales/fittings/permissions'
+// B-W2b-384: packing in depth (the warehouse keeps the packaging types, defaults and carton mark templates).
+import { SHIPPING_PACKAGING_ADDS } from '../../shipping/packaging/permissions'
 
 /**
  * The system role templates (plan A1 §3.11 "Role"; feature PLT-030): ready roles every tenant gets as system roles
@@ -1031,7 +1033,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-358
   ...(audience === 'office' ? (SALES_MTM_ADDS[key] ?? []) : []),
   // B-W2b-360
-  ...(audience === 'office' ? (SALES_FITTINGS_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (SALES_FITTINGS_ADDS[key] ?? []) : []),
+  // B-W2b-384
+  ...(audience === 'office' ? (SHIPPING_PACKAGING_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the

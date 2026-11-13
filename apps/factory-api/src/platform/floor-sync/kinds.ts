@@ -93,6 +93,10 @@ import { PickRefusedError } from '../../modules/inventory/issue/picking'
 import { issueBody as substituteIssueBody } from '../../modules/inventory/substitutions/contract'
 import { issueSubstitute } from '../../modules/inventory/substitutions/issue-substitute'
 import { SubstitutionRefusedError } from '../../modules/inventory/substitutions/store'
+// B-W2b-384: a garment scanned into a carton at the packing bench from the floor's queue.
+import { scanContract } from '../../modules/shipping/cartons/contract'
+import { scanIntoCarton } from '../../modules/shipping/packing/scan'
+import { databasePackingRefusal } from '@nexus/factory-domain/shipping/cartons/refusals'
 
 /**
  * How each queued kind is applied (B-W0-30): through its own module command, in-process, as the tablet's request (the
@@ -165,6 +169,10 @@ import { SubstitutionRefusedError } from '../../modules/inventory/substitutions/
  *                                         the tablet's time kept; a hide another tablet issued first is refused in words)
  *   inventory.substitute.issue            modules/inventory/substitutions issueSubstitute (B-W2b-298: an approved substitute issued
  *                                         with its own move; withdrawn or issued since: refused in words)
+ *   shipping.carton.scan                  modules/shipping/packing/scan scanIntoCarton (B-W2b-384: a garment scanned into the carton
+ *                                         named or the bench's open one, the tablet's time kept for a serial; applied as the shipment
+ *                                         and its cartons stand when it arrives: a wrong garment, an extra piece, a hold placed since
+ *                                         is refused in words by its code)
  *
  * The event's payload is the module's body without the envelope's fields (client event id, device time, taker).
  */
@@ -529,6 +537,26 @@ async function applyPickIssue(caller: CommandCaller, event: QueuedEvent, key: st
 }
 
 /**
+ * B-W2b-384: a queued scan into a carton, through the bench's own command (the key: `<device>.<client event id>`). A
+ * packing rule of the database reached in a race (a hold placed between the check and the write) is refused in its words,
+ * so the tablet does not send it again for ever.
+ */
+async function applyCartonScan(caller: CommandCaller, event: QueuedEvent, key: string): Promise<Applied> {
+  const body = parsed(scanContract.body.extend({ shipmentId: id() }), { ...event.payload, ...(event.occurredAt ? { occurredAt: event.occurredAt } : {}) })
+  if (!body.ok) return refusedBy(body.refusal)
+  const { shipmentId, ...rest } = body.value
+  try {
+    const result = await scanIntoCarton(caller, shipmentId, rest, key)
+    return { status: 'accepted', result: { type: 'Parcel', id: result.scan.parcelId } }
+  } catch (error) {
+    const cause = (error as { meta?: { driverAdapterError?: { cause?: { originalCode?: unknown; originalMessage?: unknown } } } } | null)?.meta?.driverAdapterError?.cause
+    const words = cause?.originalCode === '23514' && typeof cause.originalMessage === 'string' ? databasePackingRefusal(cause.originalMessage) : null
+    if (words) return refusedBy(moduleRefusal({ code: words.path.slice(words.path.indexOf('/') + 1), message: words.message }))
+    throw error
+  }
+}
+
+/**
  * Applies one event through its module. `key`: the module command's Idempotency-Key (`<device>.<client event id>`); a
  * module refusal or a domain error is a refusal, anything else is thrown (the send fails; resending it is safe).
  */
@@ -613,6 +641,9 @@ export async function applyQueued(caller: CommandCaller, event: QueuedEvent, con
       case 'inventory.pick.issue':
       case 'inventory.substitute.issue':
         return await applyPickIssue(caller, event, context.key)
+      // B-W2b-384
+      case 'shipping.carton.scan':
+        return await applyCartonScan(caller, event, context.key)
     }
   } catch (error) {
     const refusal = refusalOfError(error)
