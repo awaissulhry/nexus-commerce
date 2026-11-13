@@ -25,7 +25,8 @@ const actorIdOf = (tools: Pick<CommandTools, 'context'>): string | null => (tool
 const invalid = (issues: { path: string; message: string }[]): ValidationError => new ValidationError(issues.length === 1 ? issues[0]!.message : 'The fee cannot be saved.', issues)
 
 /** The style a fee is for, of the quote's company, not archived; and the colourway its line names. */
-async function feeTarget(tx: CommandTx, companyId: string, versionId: string, styleId: string, colourwayId: string | null | undefined) {
+// B-W2b-302: exported for a quote started from a template (its fee lines, quote-templates/start.ts).
+export async function feeTarget(tx: CommandTx, companyId: string, versionId: string, styleId: string, colourwayId: string | null | undefined) {
   const style = isUuid(styleId) ? await tx.style.findUnique({ where: { id: styleId }, select: { id: true, code: true, name: true, companyId: true, status: true } }) : null
   if (!style || (style.companyId !== null && style.companyId !== companyId)) throw invalid([{ path: 'body/styleId', message: 'Not a style this company sells.' }])
   if (style.status === 'ARCHIVED') throw invalid([{ path: 'body/styleId', message: `${style.code} is archived: no fee is charged for it.` }])

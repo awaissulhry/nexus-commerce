@@ -160,6 +160,11 @@ describe('receipts', () => {
     const { createdAt: _c, sample: _s, ...contents } = input
     expect(receiptFingerprintText(contents)).toBe(receiptFingerprintText({ ...contents }))
     expect(ppeReceipt({ ...input, state: 'VOIDED', sample: false }).sample).toContain('VOID')
+    // B-W2b-F35: handed over at 23:30 UTC on 12 November = 00:30 on 13 November in Rome: the receipt is of the Rome day.
+    const lateNight = ppeReceipt({ ...input, issuedAt: '2026-11-12T23:30:00.000Z' })
+    expect(lateNight.meta.title).toBe('PPE receipt · Made-up Anna · 2026-11-13')
+    expect(lateNight.fileName).toMatch(/-A1-2026-11-13\.pdf$/)
+    expect(ppeReceipt({ ...input, issuedAt: '2026-11-13T11:00:00.000Z' }).meta.title).toBe('PPE receipt · Made-up Anna · 2026-11-13')
   })
 })
 

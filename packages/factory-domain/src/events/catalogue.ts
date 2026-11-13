@@ -165,6 +165,8 @@ import { events as repairsDepth } from '../repairs-depth/events'
 import { events as serviceCases } from '../service-cases/events'
 // B-W2b-351: product-safety reports and the accident log.
 import { events as safetyReports } from '../safety-reports/events'
+// B-W2b-302: quote speed-ups (a size curve changed).
+import { events as quoteSpeedups } from '../quote-speedups/events'
 // B-W2b-238: materials in depth (a material's approval decided).
 import { events as materialsDepth } from '../materials-depth/events'
 // B-W2b-230: the tech pack (a new PDF version of a revision's tech pack kept).
@@ -565,7 +567,10 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-345
   ...serviceCases,
   // B-W2b-351
-  ...safetyReports] as const satisfies readonly EventDefinition[]
+  ...safetyReports,
+  // B-W2b-302
+  ...quoteSpeedups,
+] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']

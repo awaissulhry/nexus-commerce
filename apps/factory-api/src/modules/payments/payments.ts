@@ -209,7 +209,8 @@ export async function checkPayment(caller: CommandCaller, body: Omit<RecordPayme
 async function refuseCountedReference(db: Reader, companyId: string, externalRef: string): Promise<void> {
   const existing = await db.payment.findFirst({ where: { companyId, externalRef }, select: { id: true, receivedOn: true, createdAt: true } })
   if (existing) {
-    const on = existing.createdAt.toISOString().slice(0, 10)
+    // B-W2b-F35: the Rome day it was recorded on (a person reads it), not its UTC day.
+    const on = businessDate(existing.createdAt)
     throw new DomainError('conflict', `This bank reference was recorded on ${on} (payment ${existing.id}, received ${existing.receivedOn.toISOString().slice(0, 10)}): a transfer is counted once.`, [{ path: 'body/externalRef', message: 'Recorded already.' }])
   }
 }

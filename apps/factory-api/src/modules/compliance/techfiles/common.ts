@@ -30,7 +30,10 @@ export const settings = (): CommandSettings => ({ ...COMMAND_SETTINGS, clock })
 /** Today in Rome (the database's factory_techfiles_today). */
 export const todayOf = (now: Date = clock.now()): BusinessDate => businessDate(now)
 
+/** A DATE column's day (Prisma reads it as UTC midnight). */
 export const dayOf = (value: Date | null): BusinessDate | null => (value === null ? null : value.toISOString().slice(0, 10))
+/** An instant's day in Rome (signed, reviewed, decided, made available), not its UTC day (B-W2b-F35). */
+export const instantDayOf = (value: Date | null): BusinessDate | null => (value === null ? null : businessDate(value))
 export const dateOfDay = (day: BusinessDate): Date => new Date(`${day}T00:00:00.000Z`)
 
 /** A database refusal of a technical-file write answered as a 409 in words (never a 500). */

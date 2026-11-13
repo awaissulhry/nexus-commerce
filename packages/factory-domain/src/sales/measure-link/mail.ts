@@ -1,3 +1,5 @@
+import { businessDate } from '../../core/time'
+
 /**
  * The mail that brings a rider the measurement link (B-W2b-171): in the rider's language (Italian or English), naming the
  * sender and the garment, what it takes, until when the link works; never the measurements. The link itself is added
@@ -7,8 +9,9 @@ export type MeasureMailLocale = 'it' | 'en'
 
 export const MEASURE_MAIL_TEMPLATE = 'sales.measure_link'
 
+// B-W2b-F35: the last day the link still works, in Rome (an expiry at Rome midnight ends the day before), not a UTC day.
 const day = (date: Date, locale: MeasureMailLocale): string => {
-  const iso = date.toISOString().slice(0, 10)
+  const iso = businessDate(new Date(date.getTime() - 1))
   return locale === 'it' ? iso.split('-').reverse().join('/') : iso
 }
 

@@ -6,7 +6,7 @@ import { cooldownWords, phraseText, alertPhrase, RULE_REFUSALS, ruleSentence, ki
 import { DomainError, ForbiddenError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { newId } from '@nexus/factory-domain/core/ids'
 import { can, grantsFor, holds, scopeWhere, type Actor } from '@nexus/factory-domain/core/permissions'
-import { toUtcIso } from '@nexus/factory-domain/core/time'
+import { businessDate, toUtcIso } from '@nexus/factory-domain/core/time'
 import { eventFor } from '@nexus/factory-domain/events/define'
 import { command, StaleVersionError, type CommandCaller, type CommandTools, type CommandTx } from '../../core/command'
 import { actorOf } from '../../core/context'
@@ -296,7 +296,8 @@ export async function testRule(caller: CommandCaller, id: string, body: { readon
     else {
       // A DATE rule's window: the records whose lead time has begun (calendar days for the dry run).
       const daysBefore = Number(read.threshold.daysBefore ?? 0)
-      const today = now.toISOString().slice(0, 10)
+      // B-W2b-F35: today is the Rome day (the evaluator's and the timers' day), not the UTC one.
+      const today = businessDate(now)
       const lead = new Date(`${today}T00:00:00.000Z`).getTime() + daysBefore * 86_400_000
       found = (await datedFor(kind, tx, tried, now)).filter((record) => new Date(`${record.date}T00:00:00.000Z`).getTime() <= lead).map((record) => ({ ...record, facts: { dueDate: record.date, daysLeft: Math.round((new Date(`${record.date}T00:00:00.000Z`).getTime() - new Date(`${today}T00:00:00.000Z`).getTime()) / 86_400_000) } }))
     }

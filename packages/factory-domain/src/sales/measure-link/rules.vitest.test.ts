@@ -115,4 +115,16 @@ describe('the mail', () => {
     expect(mail.body).toContain('https://example.test/l#token=x')
     expect(measureMail('en', { companyName: 'Example Ltd', riderName: 'Marco', garment: 'the jacket', expiresAt: new Date('2026-11-30T23:00:00.000Z'), photos: false }, '').body).not.toContain('photos')
   })
+
+  it('names the last day the link works in Rome, not in UTC (B-W2b-F35)', () => {
+    const until = (expiresAt: string, locale: 'it' | 'en' = 'it') => measureMail(locale, { companyName: 'Esempio Srl', riderName: 'Marco', garment: 'la giacca', expiresAt: new Date(expiresAt), photos: false }, '').body
+    // 23:30 UTC on 12 November is 00:30 on 13 November in Rome: the link still works on the 13th.
+    expect(until('2026-11-12T23:30:00.000Z')).toContain('fino al 13/11/2026')
+    expect(until('2026-11-12T23:30:00.000Z', 'en')).toContain('until 2026-11-13')
+    expect(until('2026-11-13T11:00:00.000Z')).toContain('fino al 13/11/2026')
+    // An expiry at Rome midnight (23:00 UTC in winter, 22:00 in summer) ends the day before.
+    expect(until('2026-11-30T23:00:00.000Z')).toContain('fino al 30/11/2026')
+    expect(until('2026-07-31T22:00:00.000Z')).toContain('fino al 31/07/2026')
+    expect(until('2026-07-31T22:30:00.000Z')).toContain('fino al 01/08/2026')
+  })
 })

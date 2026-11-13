@@ -402,3 +402,26 @@ describe('the customer’s DDT is dated on or before the arrival’s day in Rome
     expect(received.repair).toMatchObject({ stage: 'RECEIVED', receivedAt: '2026-11-13T11:00:00.000Z', inboundDdt: { number: 'P1-DDT-F34-3', date: '2026-11-13' } })
   })
 })
+
+describe('the garment found by its serial was made on its Rome day (B-W2b-F35)', () => {
+  it('a serial made at 23:30 UTC on 12 November (00:30 in Rome) was made on 13 November', async () => {
+    // The serial's createdAt as a command at that clock writes it (moved past its guards on the admin's session, then back).
+    const garment = (await admin<{ id: string; serial: string; createdAt: Date }>(`SELECT id, serial, "createdAt" FROM "GarmentSerial" WHERE "tenantId" = $1 ORDER BY serial LIMIT 1`, [T]))[0]!
+    const moveTo = async (at: Date) => {
+      await admin('SET session_replication_role = replica')
+      try {
+        await admin(`UPDATE "GarmentSerial" SET "createdAt" = $2 WHERE id = $1`, [garment.id, at])
+      } finally {
+        await admin('SET session_replication_role = DEFAULT')
+      }
+    }
+    await moveTo(new Date('2026-11-12T23:30:00.000Z'))
+    try {
+      const made = await ok('sales', 'POST', '/sales/repairs', { companyId: companyA, partyId: P1, serial: garment.serial, problem: 'Cuff stitching loose.' }, 201)
+      expect(made.repair.garment).toMatchObject({ serial: garment.serial, found: { madeOn: '2026-11-13' } })
+      await ok('sales', 'POST', `/sales/repairs/${made.repair.id}/cancel`, { version: made.repair.version, reason: 'Made-up: a test of the day only.' })
+    } finally {
+      await moveTo(garment.createdAt)
+    }
+  })
+})
