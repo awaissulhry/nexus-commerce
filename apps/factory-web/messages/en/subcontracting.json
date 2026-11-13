@@ -302,7 +302,9 @@
       "location": "{workshop} has no active stock location on the work order’s site: make one in Warehouse › Locations first.",
       "pieces": "Some pieces are already on another live order: lower the pieces and try again.",
       "workOrder": "The work order is no longer released or running.",
-      "workshop": "The workshop is not an active subcontractor of this company."
+      "workshop": "The workshop is not an active subcontractor of this company.",
+      "notQualified": "{workshop} is not approved for this work: qualify it under the supplier’s Documents & qualification first.",
+      "durc": "{workshop} has no valid DURC on file (D.Lgs. 276/2003 art. 29): ask the workshop for it first."
     },
     "toLocations": "Open Locations",
     "ordersOf": "Already out for this work order: {orders}"

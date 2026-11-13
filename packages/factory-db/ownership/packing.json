@@ -1,0 +1,60 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/packing.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office keeps the packaging types and defaults, the carton mark templates and the cut-offs per carrier, places and releases holds on a shipment, and writes carton contents through apps/factory-api's modules/shipping (B-W2b-384, B-W2b-386), always through command(); the API keeps staff to the companies, sites and parties their grants reach. The floor's packing bench (factory_floor_runtime, B-W2b-387 through floorCommand) reads the packaging types without their cost (a cost is never on the floor), the defaults and the mark templates (no site key: every company of its tenant, as the API's company scope narrows them), its OWN site's cut-offs and the holds on its site's shipments without their words (they may name a customer's credit), and adds, changes and removes the contents of its site's cartons while their shipment is a DRAFT (the …_packing_w2b_guards triggers). A portal or one-off link session (factory_partner_runtime) reads only its OWN party's carton contents (the packing list), never who wrote them; it reads no hold (a hold's partyId is its policy key, with no partner grant). Nobody deletes a packaging type, default, template or hold (switched off, or released); carton contents are removed while their shipment is a DRAFT, cut-offs at any time. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "PackagingType": {
+      "about": "The office keeps a company's cartons, boxes, pallets, polybags and hangers (LOG-008) with what one costs (FIN-011, a cost) and switches them off. The floor reads them without the cost and its currency (the packing bench picks a carton).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"], "hiddenColumns": ["costPerUnit", "costCurrency"] }
+      }
+    },
+    "PackagingDefault": {
+      "about": "The office sets which packaging a style or a size run takes by default (LOG-008) and switches a default off. The floor reads them (the packing bench suggests the carton).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"] }
+      }
+    },
+    "ParcelLine": {
+      "about": "The office and the site's floor (scan into the carton, LOG-007, LOG-010) add, change and remove the contents of a DRAFT shipment's cartons. A portal or link session reads its own party's carton contents (the packing list).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert", "update", "delete"], "scopedBy": ["site"] },
+        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["createdById"] }
+      }
+    },
+    "ShippingMarkTemplate": {
+      "about": "The office keeps what a company's carton marks show per customer or brand, and its default (LOG-013), and switches a template off. The floor reads them (Close carton prints the marks).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"] }
+      }
+    },
+    "ShipmentHold": {
+      "about": "The office (or the system: the balance and credit checks, in the tenant's office scope) puts a shipment on hold with a reason (LOG-017, FIN-079) and releases it once with why; never edited or deleted. The site's floor reads its shipments' holds without the words (the packing bench stops and says the reason).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"], "hiddenColumns": ["words", "releaseWords"] }
+      }
+    },
+    "CarrierCutOff": {
+      "about": "The office keeps each site's cut-off per carrier and weekday (LOG-018, LOG-110), and removes one. The site's floor reads its own (the packing bench shows what must leave by when).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"] }
+      }
+    }
+  }
+}

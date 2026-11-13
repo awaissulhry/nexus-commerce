@@ -131,6 +131,9 @@ describe('New subcontract order', () => {
   it('says a refused create in our words: by path, or by the shape of a 409 sentence', () => {
     expect(newOrderRefusal(['body/operations/0/pieces'], 'invalid', '', 'X')?.key).toBe('new.refused.pieces')
     expect(newOrderRefusal(['body/partyId'], 'invalid', '', 'X')?.key).toBe('new.refused.workshop')
+    // B-W2b-365: the workshop must be approved for the work.
+    expect(newOrderRefusal(['refusal/NOT_QUALIFIED'], 'conflict', 'Lab is not approved for Op 20 Sew: …', 'Lab')).toEqual({ key: 'new.refused.notQualified', params: { workshop: 'Lab' } })
+    expect(newOrderRefusal(['refusal/NO_VALID_DURC'], 'conflict', 'Lab is not approved for Op 20 Sew: …', 'Lab')).toEqual({ key: 'new.refused.durc', params: { workshop: 'Lab' } })
     expect(newOrderRefusal([], 'conflict', "The workshop has no stock location on the work order's site yet: create one first", 'Lab')).toEqual({ key: 'new.refused.location', params: { workshop: 'Lab' } })
     expect(newOrderRefusal([], 'conflict', 'Work order WO-1 is ON_HOLD; work is sent out only for a released or running one.', 'Lab')?.key).toBe('new.refused.workOrder')
     expect(newOrderRefusal([], 'conflict', 'something else', 'Lab')).toBeNull()

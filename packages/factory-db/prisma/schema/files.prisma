@@ -107,6 +107,18 @@ model StoredFile {
   /// shown of a photo. Both set together, once, while the file is AVAILABLE; never changed.
   thumbnailKey     String?
   exifStrippedAt   DateTime?      @db.Timestamptz(3)
+  /// W2b-6 (schema wave 45/57, B-W2b-363; SAL-291, SAL-297; Owner answer 3 of W2b-3): the delete date of a made-to-measure
+  /// photo (category MTM_PHOTO or FITTING_PHOTO, the only files that take one): from then on the purge deletes it (status
+  /// DELETED, its object removed), 90 days after the garment ships by default. Set by the office or the system once known,
+  /// moved earlier or later (the rider asked), never cleared; not before retainUntil; fixed once the file is DELETED (a
+  /// superseded version still takes it). Hidden from the floor and partner roles.
+  deleteAfter      DateTime?      @db.Timestamptz(3)
+  /// W2b-6 (B-W2b-363; SCM-020, B-W2b-315, -334): what a supplier's document is (a DURC, an LWG audit, an ISO 9001
+  /// certificate, a REACH declaration …): a code of the SUPPLIER_DOCUMENT_TYPE reason list (reasons.prisma ReasonCode, kept
+  /// as text), only on a file of a vault category (SUPPLIER_CERTIFICATE, TEST_REPORT, DECLARATION); an ACTIVE code when
+  /// named. A tag like the category: set or corrected while the file is the current version. Null: not said (the category
+  /// only). Hidden from the floor.
+  documentTypeCode String?
   version          Int            @default(1)
   createdAt        DateTime       @default(now()) @db.Timestamptz(3)
   updatedAt        DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
@@ -236,6 +248,8 @@ model StoredFile {
   @@unique([tenantId, thumbnailKey])
   @@index([tenantId, sourceFileId])
   @@index([tenantId, expiresOn])
+  // W2b-6 (wave 45/57): the made-to-measure photo purge (the files whose delete date passed).
+  @@index([tenantId, deleteAfter])
 }
 
 /// What a file is; each kind has its allowed content types and its size limit (platform/files/rules.ts). Additive.
@@ -293,6 +307,12 @@ enum FileCategory {
   /// W2b-5 (schema wave 43/44, B-W2b-291; SAL-385): a photo of a garment's damage at a repair's intake (a repair order's
   /// file; the claim link and the portal ask at least two).
   DAMAGE_PHOTO
+  /// W2b-6 (schema wave 45/57, B-W2b-363; SAL-291, SAL-297): the rider's photos the office takes: a photo of a measurement
+  /// profile revision (MTM_PHOTO, a MeasurementProfile's file) and of a fitting (FITTING_PHOTO, a FittingResult's file).
+  /// PHOTO files, the office's only (never shared with a floor, a portal or a link), each with its delete date
+  /// (deleteAfter). Personal data.
+  MTM_PHOTO
+  FITTING_PHOTO
 }
 
 /// Where a file is: PENDING_UPLOAD (row written, the upload not confirmed) → AVAILABLE (confirmed) or QUARANTINED (it

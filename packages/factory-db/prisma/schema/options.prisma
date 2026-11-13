@@ -92,6 +92,14 @@ enum OptionGroupKind {
   FREE_TEXT
 }
 
+/// W2b-6 (schema wave 45/57, B-W2b-363): what a group's chosen value takes with it.
+enum OptionGroupTakes {
+  /// A colour of the colour library (Colour).
+  COLOUR
+  /// A material (Item) and, when it comes in colours, its colour (ItemColour).
+  MATERIAL
+}
+
 /// A group of choices a style may offer (PRD-206): colour panels, perforation, a hump, logos, name embroidery, a liner.
 /// Master data of the library, tenant-wide or of one company; archived (status ARCHIVED), never deleted, since styles,
 /// quotes and orders name its values.
@@ -115,6 +123,11 @@ model OptionGroup {
   /// (StyleOptionGroup).
   minPicks    Int             @default(0)
   maxPicks    Int?
+  /// W2b-6 (schema wave 45/57, B-W2b-363; B-W2b-340): what a value chosen of it takes with it: COLOUR, a colour of the
+  /// library (a panel's colour); MATERIAL, a material and its colour (leather by article); null: either (B-W2b-340's
+  /// configurator offers both pickers). A COLOUR group's chosen options name no material, a MATERIAL group's no library
+  /// colour (the …_followups_sales_w2b5_guards triggers on QuoteLineOption and SalesOrderLineOption).
+  takes       OptionGroupTakes?
   status      MasterStatus    @default(ACTIVE)
   version     Int             @default(1)
   createdAt   DateTime        @default(now()) @db.Timestamptz(3)

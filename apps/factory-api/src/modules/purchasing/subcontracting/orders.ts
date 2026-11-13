@@ -487,7 +487,17 @@ async function insertKitPlan(tools: CommandTools, order: Pick<OrderRow, 'id' | '
 }
 
 /** purchasing.subcontract.manage: a draft order for outside operations of a work order. */
-export async function createOrder(caller: CommandCaller, input: CreateInput, idempotencyKey?: string): Promise<{ order: OrderDetailView }> {
+/**
+ * B-W2b-365: what a caller adds to the create (../subcontract/create-outsourced: an order made by hand): a check once W2a's
+ * own checks passed (the workshop, its location, the operations), and writes in the create's command once the order and its
+ * operations are in.
+ */
+export interface CreateHook {
+  readonly check: (db: Reader, facts: { readonly workOrder: WorkOrderFacts; readonly partyId: string; readonly operationIds: readonly string[] }) => Promise<void>
+  readonly inCommand: (tools: CommandTools, made: { readonly orderId: string; readonly number: string; readonly workOrder: WorkOrderFacts; readonly partyId: string; readonly operationIds: readonly string[] }) => Promise<void>
+}
+
+export async function createOrder(caller: CommandCaller, input: CreateInput, idempotencyKey?: string, hook?: CreateHook): Promise<{ order: OrderDetailView }> {
   const context = officeContextOf(caller)
   const facts = await caller.withClient(async (client) => {
     const workOrder = await readWorkOrderFacts(client, input.workOrderId)
@@ -511,6 +521,7 @@ export async function createOrder(caller: CommandCaller, input: CreateInput, ide
     const latest = operations.map((operation) => operation.expectedBackDate).filter((date): date is string => date !== null).sort().pop() ?? null
     const expectedBackDate = input.expectedBackDate !== undefined ? input.expectedBackDate : latest
     if (expectedBackDate !== null && expectedBackDate < orderDate) throw refuse([{ path: 'body/expectedBackDate', message: 'Due back on or after the order date.' }])
+    if (hook) await hook.check(client, { workOrder, partyId: party!.id, operationIds: operations.map((operation) => operation.workOrderOperationId) }) // B-W2b-365
     return { workOrder, party: party!, location, currency, orderDate, operations, expectedBackDate }
   })
   const { workOrder, party, location, currency, orderDate, operations, expectedBackDate } = facts
@@ -565,6 +576,7 @@ export async function createOrder(caller: CommandCaller, input: CreateInput, ide
       })
     }
     const kitLines = input.planKit ? await insertKitPlan(tools, { id, siteId: workOrder.siteId, partyId: party.id, workOrderId: workOrder.id }, workOrder, operations) : 0
+    if (hook) await hook.inCommand(tools, { orderId: id, number: number.formatted, workOrder, partyId: party.id, operationIds: operations.map((operation) => operation.workOrderOperationId) }) // B-W2b-365
     tools.audit({
       recordType: 'SubcontractOrder',
       recordId: id,

@@ -2058,6 +2058,12 @@ describe('the W2a golden flow: a factory day through the HTTP routes', { timeout
     const back = addDays(today(), 10)
     // The sewing is an in-house step of the routing: the order names the workshop and its fee (the buyer has the cost grain).
     const body = { workOrderId: s.wo1, partyId: s.p2, expectedBackDate: back, note: 'Sew and assemble the 7 jackets; the lining comes with the kit.', operations: [{ workOrderOperationId: s.sew, pricePerPiece: '4.50', expectedBackDate: back }] }
+    // B-W2b-365: an order made by hand goes to a workshop approved for the work: the buyer approves P2's pending sewing
+    // qualification (seed/suppliers-depth.ts), resting on P2's accepted document (seed/portal-followups.ts).
+    const pending = ((await ok(P.buyer, 'GET', `/purchasing/suppliers/${s.p2}/qualifications`)).qualifications as Json[]).find((row) => row.status === 'PENDING' && row.scope.workCentreKinds.includes('SEWING'))!
+    const evidenced = ((await ok(P.buyer, 'PATCH', `/purchasing/suppliers/${s.p2}/qualifications/${pending.id}`, { version: pending.version, evidence: [{ recordType: 'SupplierDocumentUpload', recordId: id('portal-followups:upload:P2:certificate') }] })).qualifications as Json[]).find((row) => row.id === pending.id)!
+    const approved = ((await ok(P.buyer, 'POST', `/purchasing/suppliers/${s.p2}/qualifications/${pending.id}/decide`, { version: evidenced.version, decision: 'APPROVED' })).qualifications as Json[]).find((row) => row.id === pending.id)!
+    expect(approved).toMatchObject({ status: 'APPROVED', standing: expect.objectContaining({ standing: 'QUALIFIED' }) })
     // REFUSAL: the pieces of an operation are on one live order at a time.
     const held = await ok(P.buyer, 'POST', '/purchasing/subcontracting/orders', body, 400)
     expect(held.error.issues[0]).toMatchObject({ path: 'body/operations/0/pieces', message: expect.stringContaining('7 piece(s) of operation') })
@@ -2283,11 +2289,12 @@ describe('the W2a golden flow: a factory day through the HTTP routes', { timeout
   })
 
   it('H04 capacity per line: the seeded week’s L1 load; a closed day on L1’s calendar takes its minutes away at once, and given back', async () => {
-    // B-W2a-16: L1 on 17 Nov 2026 = 8 people × 930 min × 85 % = 6,324 min, booked 675.5 by SEED-WO-0001's sewing bar
-    // (7 × 96.5 min). Holds while that day is not past (runs until 2026-11-16) and nobody moved the bar or scanned WO-0001.
+    // B-W2a-16: L1 on 17 Nov 2026 = 8 people × 930 min × 85 % = 6,324 min. Holds while that day is not past (runs until
+    // 2026-11-16). B-W2b-365: SEED-WO-0001's sewing (its seeded bar, 7 × 96.5 min) went to P2 by hand in K6, so it is outsourced
+    // and books nothing on L1 any more (B-W2b-321: an outsourced operation books its workshop, not our lanes).
     if (today() <= '2026-11-16') {
       const seeded = await capacityOn('2026-11-16', '2026-11-20')
-      expect(l1Cell(seeded, '2026-11-17')).toMatchObject({ availableMinutes: '6324.0', bookedMinutes: '675.5', loadPct: '10.7', words: '8 people × 930 min × 85% efficiency × 1 day = 6,324 min.' })
+      expect(l1Cell(seeded, '2026-11-17')).toMatchObject({ availableMinutes: '6324.0', bookedMinutes: '0.0', loadPct: '0.0', words: '8 people × 930 min × 85% efficiency × 1 day = 6,324 min.' })
     }
     // A closed day (B-W2a-08): the planner closes L1 on a working day ten working days out; capacity follows on the next read.
     const day = await l1WorkingDay(10)

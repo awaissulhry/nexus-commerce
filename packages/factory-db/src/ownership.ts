@@ -128,7 +128,7 @@ export class OwnershipError extends Error {
 
 const MODEL_KEYS = new Set(['about', 'kind', 'keyColumns', 'access', 'personal'])
 const PERSONAL_KEYS = new Set(['subject', 'via', 'columns'])
-const ACCESS_KEYS = new Set(['privileges', 'scopedBy', 'hiddenColumns', 'onlyValues'])
+const ACCESS_KEYS = new Set(['privileges', 'scopedBy', 'hiddenColumns', 'onlyValues', 'writeOnlyColumns'])
 const PRIVILEGES: readonly Privilege[] = ['select', 'insert', 'update', 'delete']
 
 /** Reads every `ownership/*.json` file. A file that is not valid JSON is an error. */
@@ -297,6 +297,16 @@ function checkModel(at: string, model: SchemaModel, entry: unknown): string[] {
       continue
     }
     for (const column of hidden) if (!columns.has(column)) problems.push(`${where}: hidden column ${String(column)} is not a column of ${model.name}`)
+    // B-W2b-363: a column the role writes but never reads back (db-kit leaves it out of the SELECT grant only).
+    const writeOnly = (grant.writeOnlyColumns ?? []) as unknown
+    if (!Array.isArray(writeOnly)) problems.push(`${where}: writeOnlyColumns must be a list`)
+    else {
+      for (const column of writeOnly) {
+        if (!columns.has(column)) problems.push(`${where}: write-only column ${String(column)} is not a column of ${model.name}`)
+        if (hidden.includes(column)) problems.push(`${where}: ${String(column)} is hidden, so it cannot be write-only`)
+      }
+      if (role === PLATFORM_ROLE && writeOnly.length > 0) problems.push(`${where}: factory_platform takes no writeOnlyColumns`)
+    }
     const only = (grant.onlyValues ?? {}) as unknown
     if (!isObject(only)) problems.push(`${where}: onlyValues must be an object (column → values)`)
     else {

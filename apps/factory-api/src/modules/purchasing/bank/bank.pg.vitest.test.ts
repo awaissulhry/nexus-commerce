@@ -236,6 +236,12 @@ describe('a change in the supplier’s portal, with a second approval the rule a
     // A second open change of the currency waits for the first.
     await portalStepUp(supplierAdmin, SUPPLIER_ADMIN)
     expect((await call(supplierAdmin, 'POST', '/portal/supplier-bank', { iban: IBAN.refused, holder: 'Made-up Tannery S.r.l.' })).status).toBe(409)
+    // B-W2b-363: the partner scope never reads a whole IBAN; the database refuses one that is open already (here the account
+    // in use, in another currency), answered in the same words.
+    await portalStepUp(supplierAdmin, SUPPLIER_ADMIN)
+    const inUse = await call(supplierAdmin, 'POST', '/portal/supplier-bank', { iban: IBAN.first, holder: 'Made-up Tannery S.r.l.', currency: 'USD' })
+    expect(inUse.status).toBe(409)
+    expect(JSON.stringify(inUse.body)).toContain('This is the account payments already use')
     const office = await as(people.fin1!.browser, 'GET', bankUrl)
     expect(account(office, '5003')).toMatchObject({ source: 'PORTAL', pill: 'WAITING_CALL_BACK' })
     expect(office.payable).toEqual([{ currency: 'EUR', accountId: account(office, '5001').id }])

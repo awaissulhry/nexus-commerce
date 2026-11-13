@@ -221,6 +221,10 @@ model Company {
   payablesSettings     PayablesSettings[]
   // W2b-5 warehouse-depth.prisma (wave 36/44): its warehouse rules.
   inventorySettings    InventorySettings[]
+  // W2b-6 packing.prisma (wave 46/57): its packaging types and defaults, and its carton mark templates.
+  packagingTypes        PackagingType[]
+  packagingDefaults     PackagingDefault[]
+  shippingMarkTemplates ShippingMarkTemplate[]
   // W2b-5 buying-depth.prisma (wave 40/44): its delivery tolerances.
   deliveryTolerances   DeliveryTolerance[]
   supplierInvoiceFiles SupplierInvoiceFile[]
@@ -459,6 +463,8 @@ model Site {
   shippingSettings   ShippingSettings[]
   shipments          Shipment[]
   ddts               Ddt[]
+  // W2b-6 packing.prisma (wave 46/57): its cut-offs per carrier and weekday.
+  carrierCutOffs     CarrierCutOff[]
   // W2b gendocs.prisma (B-W2b-01): the documents generated for its records (packing lists, claim letters, job sheets).
   generatedDocuments GeneratedDocument[]
   // returns.prisma: the returns coming back to it and the repairs it makes.

@@ -9,6 +9,8 @@ import { after, MINUTE_MS, spansOf, startFrom, workingMinutesFor, type LaneRate,
 import { Dec, type Decimal } from '@nexus/factory-domain/tax/decimal'
 import { ownerKey, workingCalendarsFor } from '../../../platform/calendars/service'
 import { wipForMany } from '../capacity/wip'
+// B-W2b-365: only the cells a routing step is for.
+import { garmentsOf, STEP_VARIANT_COLUMNS } from '../capacity/steps'
 import { bookedOf, capacityWorld, type CapacityWorld, type LaneState } from '../capacity/service'
 import { dayOf, type Reader, type SiteRow } from '../store'
 import { outsideWorkOf, slotsOf, workingPlanOf, workshopsOf, type PlanRow, type SlotRow, type WorkshopRow } from './store'
@@ -120,12 +122,12 @@ const WORK_ORDER_COLUMNS = {
   holdReason: true,
   heldFromStatus: true,
   style: { select: { id: true, code: true, name: true, productType: true } },
-  sizes: { select: { quantity: true, partyId: true } },
+  sizes: { select: { quantity: true, partyId: true, /* B-W2b-365 */ colourwayId: true, size: true, optionValueIds: true } },
   // B-W2b-82: an unplanned operation has no target quantity, so no bar and no load: the board stays the routing's.
   operations: {
     where: { routingSeq: { not: null } },
     // B-W2b-321 (PLN-165): an operation sent outside, and the workshop of its subcontract order.
-    select: { id: true, seq: true, code: true, name: true, workCentreId: true, standardMinutes: true, styleRevisionId: true, routingSeq: true, outsourced: true, subcontractOrder: { select: { partyId: true } } },
+    select: { id: true, seq: true, code: true, name: true, workCentreId: true, standardMinutes: true, styleRevisionId: true, routingSeq: true, outsourced: true, subcontractOrder: { select: { partyId: true } }, /* B-W2b-365 */ routingOperation: { select: STEP_VARIANT_COLUMNS } },
     orderBy: { seq: 'asc' as const },
   },
 } as const
@@ -177,7 +179,8 @@ async function readBoardWorkOrders(db: Reader, site: SiteRow, capacity: Capacity
         name: operation.name,
         workCentreId: operation.workCentreId,
         standardMinutes: operation.standardMinutes.toString(),
-        remaining: Math.max(0, garments - (done.get(operation.id) ?? 0)),
+        // B-W2b-365: an operation is done on the garments of the cells its routing step is for.
+        remaining: Math.max(0, garmentsOf(operation.routingOperation, row.sizes) - (done.get(operation.id) ?? 0)),
         // B-W2b-321: an operation sent outside is worked at its subcontract order's workshop (the routing's days when it is the same).
         outside: operation.outsourced && operation.subcontractOrder ? { partyId: operation.subcontractOrder.partyId, transitDays: outside.get(operation.id)?.partyId === operation.subcontractOrder.partyId ? outside.get(operation.id)!.transitDays : null } : (outside.get(operation.id) ?? null),
       })),

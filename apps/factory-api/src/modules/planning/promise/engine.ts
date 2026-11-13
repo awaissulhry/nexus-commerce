@@ -32,6 +32,8 @@ import { latestDoneRun, readPlanInputs, type PlanInputs } from '../inputs'
 import type { Reader, SiteRow } from '../store'
 import { certificatesOn, type SizeCertificate } from './certificates'
 import { readRouting, readSkuFlows, readStyleFacts, revisionFor, skuKey, withPromiseLines, type RevisionFacts, type RoutingStepRow, type SkuFlows, type StyleFacts } from './store'
+// B-W2b-365: a step only for some options counts when the garment asked has one of them.
+import { stepsForOptions } from './steps'
 
 /**
  * The promise engine (B-W2b-301; PLN-168, PLN-169, PLN-171, PLN-179): when can these garments be ready, per size. THE
@@ -64,6 +66,11 @@ export interface PromiseAsk {
    * the plan as they are (no line is added, no stock is taken for it).
    */
   readonly orderLineId?: string | null | undefined
+  /**
+   * B-W2b-365: the options chosen for the garment (a quote line's, an order line's, the calculator's): a routing step only for
+   * some options is walked only when one of them is chosen (./steps). Left out: none chosen.
+   */
+  readonly optionValueIds?: readonly string[] | undefined
 }
 
 export interface PromiseWhere {
@@ -160,7 +167,7 @@ export function lanesOf(world: CapacityWorld, today: BusinessDate): Lanes {
   return { lanes, names: new Map(lanes.map((lane) => [lane.key, { code: lane.code, name: lane.name }])), forKind }
 }
 
-/** The routing as walk steps for these garments (a step that applies to some sizes or colourways counts only theirs). */
+/** The routing as walk steps for these garments (a step that applies to some sizes or colourways counts only theirs; B-W2b-365: pass the steps for the ask's options, ./steps). */
 export function stepsFor(routing: readonly RoutingStepRow[], colourwayId: string, garments: readonly { size: string; pieces: number }[], lanes: Pick<Lanes, 'forKind'>): CtpStep[] {
   return routing.map((step) => {
     const colourOk = step.appliesToColourwayIds.length === 0 || step.appliesToColourwayIds.includes(colourwayId)
@@ -385,7 +392,7 @@ export async function answerPromises(db: Reader, where: PromiseWhere, asks: read
         finish = plusDays(date, days)
         emptyFinish = finish
       } else {
-        const walkSpec = stepsFor(entry.routing, entry.colourway.id, garments, lanes)
+        const walkSpec = stepsFor(stepsForOptions(entry.routing, entry.ask.optionValueIds), entry.colourway.id, garments, lanes) // B-W2b-365
         const base = walkSteps(walkSpec, copyFree(empty), date, lanes.names)
         const real = walkSteps(walkSpec, free, date, lanes.names)
         warnings.push(...real.problems)

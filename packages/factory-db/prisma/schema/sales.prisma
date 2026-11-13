@@ -693,6 +693,8 @@ model SalesOrder {
   // W2b-5 sales-intake.prisma (wave 37/44): its season, of its own company (Restrict, not Prisma's SetNull default: that
   // would also clear tenantId and companyId).
   season              Season?              @relation(fields: [tenantId, companyId, seasonId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b-6 (wave 45/57): the FEE lines of the customer's other orders credited against it (the bulk order).
+  feeCreditLines      SalesOrderLine[]     @relation("SalesOrderLineFeeCredit")
 
   @@unique([tenantId, companyId, number])
   // The target of the references from the order's lines and deposit requests: the same company and party.
@@ -790,12 +792,22 @@ model SalesOrderLine {
   /// W2b (B-W2b-03): why it was closed short as a code of the CANCEL reason list (reasons.prisma ReasonCode, kept as
   /// text), beside the words above; only on a line closed short, cleared with it (null on lines closed before W2b).
   closedShortReasonCode String?
+  /// W2b-6 (schema wave 45/57, B-W2b-363; SAL-181, B-W2b-330): a FEE line (a development or sample fee) is invoiced once and
+  /// credited against the customer's bulk order: that order (another order of the same company and customer, with goods
+  /// lines, not CANCELLED when named), and when the credit was given (not in the future, only with the order named). Named,
+  /// changed or cleared until credited, whatever the line's order's state; once credited both are fixed. Order close and
+  /// the backorder never wait for a FEE line (the API's).
+  feeCreditOrderId     String?       @db.Uuid
+  feeCreditedAt        DateTime?     @db.Timestamptz(3)
   version              Int           @default(1)
   createdAt            DateTime      @default(now()) @db.Timestamptz(3)
   updatedAt            DateTime      @default(now()) @updatedAt @db.Timestamptz(3)
   createdById          String?       @db.Uuid
 
   order              SalesOrder           @relation(fields: [tenantId, companyId, partyId, orderId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b-6 (wave 45/57): the bulk order a FEE line is credited against, of the same company and customer. Restrict, not
+  // Prisma's SetNull default for an optional relation: that would also clear tenantId, companyId and partyId.
+  feeCreditOrder     SalesOrder?          @relation("SalesOrderLineFeeCredit", fields: [tenantId, companyId, partyId, feeCreditOrderId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   quoteLine          QuoteLine?           @relation(fields: [tenantId, partyId, quoteLineId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   style              Style                @relation(fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   styleRevision      StyleRevision?       @relation(fields: [tenantId, styleId, styleRevisionId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
@@ -833,6 +845,8 @@ model SalesOrderLine {
   @@unique([tenantId, orderId, seq])
   // The target of the references from the line's size rows (and the work orders of W1-23).
   @@unique([tenantId, partyId, id])
+  // W2b-6 (wave 45/57): the fees credited against a bulk order.
+  @@index([tenantId, feeCreditOrderId])
 }
 
 /// The quantity of one size of a SIZE_GRID order line (the size grid as rows). Changes only while the order is

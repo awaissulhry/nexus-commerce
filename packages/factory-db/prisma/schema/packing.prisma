@@ -1,0 +1,308 @@
+// Packing and the shipment queue (W2b-6, schema wave 46/57, B-W2b-364; features LOG-003, LOG-005, LOG-007, LOG-008,
+// LOG-010, LOG-013, LOG-017, LOG-018, LOG-110, FIN-011, FIN-079; design floor.pack "Scan into the carton", warehouse.shipping
+// "Packaging", warehouse.shipments "Cartons", "Carton 2 of 3", "Carrier cut-offs today"): what the packing bench and the
+// shipment queue keep beyond W1. Rule 1: packers scan every garment every shift; until now a carton was a parcel with a
+// weight and nothing inside it.
+//
+//   PackagingType         a company's carton, box, pallet, polybag or hanger (LOG-008): its inner size, tare, the most it
+//                         may weigh, a pallet's kind, and what one costs us (FIN-011, a cost: office only); switched off,
+//                         never deleted.
+//   PackagingDefault      which packaging a style, or a run of sizes of a size scale, takes by default: one live default
+//                         per kind (a carton, a polybag, a hanger …) and scope.
+//   ParcelLine            a carton's contents (LOG-010): how many garments of which shipment line (and so of which size
+//                         and batch: the line's work order) lie in it. Written while the shipment is a DRAFT; when it
+//                         moves to PACKED the contents of each line add up to the line.
+//   ShippingMarkTemplate  what a carton's shipping marks show and in which language (LOG-013): one live template per
+//                         company and customer, or the company's default.
+//   ShipmentHold          a shipment on hold (LOG-017, FIN-079): credit, deposit, balance unpaid, quality, the customer's
+//                         request or another reason, placed by someone (or by the system) and released once with a
+//                         reason; never edited or removed: the rows are the history. While one is in force the shipment
+//                         is neither packed (nothing goes into its cartons, it does not move to PACKED), labelled (no
+//                         carrier label) nor sent (it does not move to SHIPPED).
+//   CarrierCutOff         a site's cut-off time per carrier and weekday (LOG-018, LOG-110), beside the site's one
+//                         ShippingSettings.cutOffTime (still the default).
+//
+// Beside them: Parcel stays the carton (as W1) and gains its packaging type, its number as printed ("n of N") and when its
+// marks were printed (shipping.prisma); GarmentSerial says which carton a serial went into, when and by whom (LOG-003,
+// LOG-007; quality.prisma); Shipment names the shipment it was split from and why (LOG-005; shipping.prisma).
+//
+// apps/factory-api's modules/shipping writes these tables (B-W2b-384 packing in depth, B-W2b-386 the shipment queue in
+// depth, B-W2b-387 floor Pack), always through command() or floorCommand(); the hand-written …_packing_w2b_guards migration
+// holds their rules for every login, the owner included.
+//
+// Who sees what (ownership/packing.json): the office reads and writes. The floor (the packing bench) reads the packaging
+// types without their cost, the defaults, the mark templates and its site's cut-offs and holds (without the words: they may
+// name a customer's credit), and writes its site's carton contents. A portal or link session reads its own party's carton
+// contents (the packing list), nothing else here.
+
+/// What a packaging type is (LOG-008). A parcel (a carton of a shipment) is a CARTON, a BOX or a PALLET; a POLYBAG and a
+/// HANGER go with each garment.
+enum PackagingKind {
+  CARTON
+  PALLET
+  POLYBAG
+  HANGER
+  BOX
+}
+
+/// A pallet's kind (LOG-008).
+enum PalletKind {
+  /// A EUR (EPAL) pallet, 120 x 80 cm.
+  EUR
+  OTHER
+}
+
+/// A company's packaging type (LOG-008, FIN-011): a carton, box or pallet a parcel is packed in, or a polybag or hanger that
+/// goes with each garment. Named by parcels and defaults; switched off (active false), never deleted.
+model PackagingType {
+  id            String        @id @db.Uuid
+  tenantId      String        @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company whose packaging it is. Never changes.
+  companyId     String        @db.Uuid
+  /// Never changes (its defaults carry it).
+  kind          PackagingKind
+  /// Its name on screen and on the packing list ("Carton 60x40x40"), 1 to 100 characters of one line, unique in the company.
+  name          String
+  /// The inner size in centimetres, each above 0: all three or none.
+  innerLengthCm Decimal?      @db.Decimal(10, 2)
+  innerWidthCm  Decimal?      @db.Decimal(10, 2)
+  innerHeightCm Decimal?      @db.Decimal(10, 2)
+  /// Its own weight in kilograms, 0 or more.
+  tareKg        Decimal?      @db.Decimal(18, 4)
+  /// The most it may weigh full (gross), in kilograms: above 0 and above the tare.
+  maxWeightKg   Decimal?      @db.Decimal(18, 4)
+  /// A pallet's kind: exactly on a PALLET.
+  palletKind    PalletKind?
+  /// What one unit costs us (the packaging cost, FIN-011), in `costCurrency`, 0 or more; both or neither. Office only.
+  /// @grain cost
+  costPerUnit   Decimal?      @db.Decimal(18, 6)
+  /// @not-money the ISO 4217 currency of the cost per unit (hidden with it from the floor)
+  costCurrency  String?
+  /// False: no new parcel or default names it (those that do keep it).
+  active        Boolean       @default(true)
+  version       Int           @default(1)
+  createdAt     DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime      @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById   String?       @db.Uuid
+
+  company  Company            @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  defaults PackagingDefault[]
+  // shipping.prisma: the parcels packed in it.
+  parcels  Parcel[]
+
+  @@unique([tenantId, companyId, name])
+  // The target of the defaults' reference: a type of the default's company and kind.
+  @@unique([tenantId, companyId, kind, id])
+  // The target of the parcels' reference (a parcel has no company: the guard compares the shipment's).
+  @@unique([tenantId, id])
+}
+
+/// Which packaging a style, or a run of sizes of a size scale, takes by default (LOG-008): one live default per company,
+/// kind and scope, so a carton, a polybag and a hanger may each have one. The most precise one wins (the API's): a style's
+/// run, the style, the scale's run. Switched off (active false), never deleted.
+model PackagingDefault {
+  id              String        @id @db.Uuid
+  tenantId        String        @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company whose packing it is. Never changes.
+  companyId       String        @db.Uuid
+  /// The packaging it gives (ACTIVE when named) and that packaging's kind (the reference keeps them equal). The kind never
+  /// changes.
+  packagingTypeId String        @db.Uuid
+  kind            PackagingKind
+  /// The style it is for (of the company or tenant-wide, not archived when named); null: every style of its size run.
+  styleId         String?       @db.Uuid
+  /// The size run: a size scale (with a style, the style's), and the sizes of it from … to (codes of the scale, the first not
+  /// after the last in the scale's order; both or neither, only with the scale; none: every size of it). A style or a scale,
+  /// at least one.
+  sizeScaleId     String?       @db.Uuid
+  fromSize        String?
+  toSize          String?
+  active          Boolean       @default(true)
+  version         Int           @default(1)
+  createdAt       DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime      @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById     String?       @db.Uuid
+
+  company       Company       @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  packagingType PackagingType @relation(fields: [tenantId, companyId, kind, packagingTypeId], references: [tenantId, companyId, kind, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  style         Style?        @relation(fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  sizeScale     SizeScale?    @relation(fields: [tenantId, sizeScaleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // A company's defaults by style (the packing bench, the settings page).
+  @@index([tenantId, companyId, styleId])
+}
+
+/// A carton's contents (LOG-010): how many garments of one shipment line lie in one parcel of the same shipment. The line
+/// gives the cell, so the colourway, the size and the batch (its work order's batch number, PPE Reg. art. 13); the size is
+/// copied and kept equal. Written, changed and removed while the shipment is a DRAFT; when it moves to PACKED, every line
+/// with contents has them adding up to its quantity, and each serial of such a line lies in a carton that holds its line.
+model ParcelLine {
+  id             String   @id @db.Uuid
+  tenantId       String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId         String   @db.Uuid
+  /// The shipment's party (the partner role's policy key).
+  partyId        String   @db.Uuid
+  shipmentId     String   @db.Uuid
+  /// The carton, and the shipment line whose garments lie in it: both of the shipment.
+  parcelId       String   @db.Uuid
+  shipmentLineId String   @db.Uuid
+  /// The line's size (copied; kept equal).
+  size           String
+  /// Garments of the line in this carton, from 1.
+  quantity       Int
+  version        Int      @default(1)
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById    String?  @db.Uuid
+
+  shipment     Shipment     @relation(fields: [tenantId, siteId, partyId, shipmentId], references: [tenantId, siteId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  parcel       Parcel       @relation(fields: [tenantId, siteId, shipmentId, parcelId], references: [tenantId, siteId, shipmentId, id], onDelete: Restrict, onUpdate: Restrict)
+  shipmentLine ShipmentLine @relation(fields: [tenantId, siteId, shipmentId, shipmentLineId], references: [tenantId, siteId, shipmentId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // A carton's contents, a line's cartons.
+  @@index([tenantId, parcelId])
+  @@index([tenantId, shipmentLineId])
+}
+
+/// What a carton's shipping marks can show (LOG-013), each printed in the template's language.
+enum ShippingMarkField {
+  /// The consignee and the address the carton goes to.
+  SHIP_TO
+  /// Our company as the sender.
+  SENDER
+  /// The customer's order number (its PO).
+  CUSTOMER_ORDER
+  /// Our sales order number.
+  ORDER_NUMBER
+  SHIPMENT_NUMBER
+  /// The style's code and name.
+  STYLE
+  /// The customer's own style code.
+  CUSTOMER_STYLE
+  COLOUR
+  /// The contents by size.
+  SIZES
+  /// The pieces in the carton.
+  QUANTITY
+  /// "n of N".
+  CARTON_NUMBER
+  GROSS_WEIGHT
+  NET_WEIGHT
+  DIMENSIONS
+  /// The batch numbers of the garments (PPE Reg. art. 13).
+  BATCH
+  /// The country of origin ("Made in Italy").
+  ORIGIN
+}
+
+/// What a company's carton marks show for one customer or brand, or by default (LOG-013: carton marks per customer for brand
+/// orders): the fields, in order, and the language. One live template per company and customer, and one live default.
+/// Switched off (active false), never deleted.
+model ShippingMarkTemplate {
+  id          String              @id @db.Uuid
+  tenantId    String              @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company whose marks they are. Never changes.
+  companyId   String              @db.Uuid
+  /// The customer or brand it is for (of the company or tenant-wide); null: the company's default. Never changes.
+  partyId     String?             @db.Uuid
+  /// What the marks show, in this order: 1 to 16 fields, each once.
+  fields      ShippingMarkField[]
+  /// The language they are printed in (ISO 639-1, two lower-case letters).
+  language    String
+  active      Boolean             @default(true)
+  version     Int                 @default(1)
+  createdAt   DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime            @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?             @db.Uuid
+
+  company Company @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  party   Party?  @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // The template of a company and customer (the packing bench at Close carton).
+  @@index([tenantId, companyId, partyId])
+}
+
+/// Why a shipment is on hold (LOG-017, FIN-079).
+enum ShipmentHoldReason {
+  /// The customer is over its credit limit or its account is on hold.
+  CREDIT
+  /// The deposit asked before production or shipping is not paid.
+  DEPOSIT
+  /// The balance due before shipping is not paid (FIN-079).
+  BALANCE_UNPAID
+  QUALITY
+  /// The customer asked to wait.
+  CUSTOMER_REQUEST
+  /// Said in words.
+  OTHER
+}
+
+/// A shipment on hold (LOG-017, FIN-079): the reason, the words, when it was placed and by whom (null: the system, e.g. the
+/// balance check), and its release once: when, by whom (null: the system) and why. Placed only while the shipment is a
+/// DRAFT or PACKED; never edited or removed (released, then frozen): the rows are the history. At most one in force per
+/// shipment and reason. While one is in force the shipment is neither packed, labelled nor sent.
+model ShipmentHold {
+  id           String             @id @db.Uuid
+  tenantId     String             @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId       String             @db.Uuid
+  /// The shipment's party (its policy key; no partner grant).
+  partyId      String             @db.Uuid
+  shipmentId   String             @db.Uuid
+  reason       ShipmentHoldReason
+  /// Why, in words (1 to 2000 characters): required for OTHER. Not for the floor.
+  words        String?
+  /// When it was placed (not in the future) and by whom; null: by the system.
+  placedAt     DateTime           @db.Timestamptz(3)
+  placedById   String?            @db.Uuid
+  /// The release: when (not before it was placed, not in the future) and why (1 to 2000 characters), both or neither, set
+  /// once; by whom (null: the system), only with them.
+  releasedAt   DateTime?          @db.Timestamptz(3)
+  releasedById String?            @db.Uuid
+  releaseWords String?
+  version      Int                @default(1)
+  createdAt    DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime           @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById  String?            @db.Uuid
+
+  shipment Shipment @relation(fields: [tenantId, siteId, partyId, shipmentId], references: [tenantId, siteId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // A shipment's holds, those in force first (the queue, the ready check).
+  @@index([tenantId, shipmentId, releasedAt])
+}
+
+/// A day of the week (ISO 8601: Monday first).
+enum IsoWeekday {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
+/// A site's cut-off for one carrier on one weekday (LOG-018, LOG-110): a parcel for that carrier packed after it leaves the
+/// next working day. Without a row, the site's ShippingSettings.cutOffTime holds. One per site, carrier and weekday.
+model CarrierCutOff {
+  id          String     @id @db.Uuid
+  tenantId    String     @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The site's company, and the site. Never change.
+  companyId   String     @db.Uuid
+  siteId      String     @db.Uuid
+  /// The carrier's code, as ShippingSettings.defaultCarrierCode and Shipment.carrierCode name it ("brt"): 1 to 40
+  /// characters, no spaces.
+  carrierCode String
+  weekday     IsoWeekday
+  /// The time of day (HH:MM, 24 hours, the site's zone).
+  cutOffTime  String
+  version     Int        @default(1)
+  createdAt   DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime   @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?    @db.Uuid
+
+  site Site @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, siteId, carrierCode, weekday])
+}

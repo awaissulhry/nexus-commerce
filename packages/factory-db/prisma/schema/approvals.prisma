@@ -61,6 +61,12 @@ enum ApprovalTaskKind {
   SUPPLIER_BANK_CHANGE
   /// Someone's request to buy (ask to buy).
   PURCHASE_REQUEST
+  /// W2b-6 (schema wave 45/57, B-W2b-363; SCM-022, B-W2b-315): a purchase order sent without a valid required document (the
+  /// compliance override), of a PurchaseOrder.
+  PURCHASE_ORDER_COMPLIANCE
+  /// W2b-6 (B-W2b-363; SCM-061, B-W2b-296): a receipt line beyond its delivery tolerance, held until the yes
+  /// (GoodsReceiptLine.heldForApprovalAt), of a GoodsReceiptLine.
+  RECEIPT_OVER_TOLERANCE
 }
 
 /// What a signature means (PLT-105; 21 CFR 11.50 style): the yes is signed with it, and shown with it in the history.

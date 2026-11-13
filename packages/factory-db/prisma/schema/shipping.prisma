@@ -47,6 +47,11 @@
 // mode of transport for Intrastat; a DDT keeps the language it was printed in and its mode of transport. Garments leave
 // finished-goods stock as SHIPMENT moves naming the shipment line (inventory.prisma); a shipment's evidence files carry
 // their category (files.prisma); its packing-list versions are GeneratedDocument rows (gendocs.prisma).
+//
+// W2b-6 (schema wave 46/57, B-W2b-364; LOG-003, LOG-005, LOG-007, LOG-008, LOG-010, LOG-013, LOG-017, LOG-018): a parcel
+// stays the carton and gains its packaging type, its number as printed ("n of N") and when its marks were printed; its
+// contents, the packaging types and defaults, the mark templates, the holds on a shipment and the cut-offs per carrier are
+// packing.prisma's. A shipment names the shipment it was split from and why.
 
 /// Who carries the goods (trasporto a cura del; DPR 472/1996), as factory-domain documents DDT_TRANSPORT_BY.
 enum TransportBy {
@@ -82,7 +87,8 @@ model ShippingSettings {
   /// The packing station's printers (print.prisma, this site's): carrier labels and A4 documents (DDT, DoC).
   labelPrinterId         String?      @db.Uuid
   documentPrinterId      String?      @db.Uuid
-  /// The time of day (HH:MM, the site's zone) after which a parcel leaves the next working day.
+  /// The time of day (HH:MM, the site's zone) after which a parcel leaves the next working day. W2b-6: the default; a
+  /// carrier's own cut-off on a weekday is a CarrierCutOff row (packing.prisma).
   cutOffTime             String?
   /// W2a (LOG-105): the freight a shipment from the site charges its customer by default: NONE, a flat amount PER_SHIPMENT
   /// or PER_PARCEL (in the company's currency, minor units, 0 or more; exactly with a charging rule), free from an order
@@ -234,6 +240,11 @@ model Shipment {
   /// garments: its lines stay (its history) but no longer count against its cells' releases, and its serials may go
   /// back to RELEASED to ship again.
   carrierReturnReceivedAt    DateTime?               @db.Timestamptz(3)
+  /// W2b-6 (schema wave 46/57, B-W2b-364; LOG-005): the shipment it was split from (of the same order, site and party, a
+  /// DRAFT or PACKED one when it was split), and why (a code of the split reasons, as text: not blank, no spaces, up to 40
+  /// characters); both or neither, set when it is made, never changed.
+  splitFromId                String?                 @db.Uuid
+  splitReason                String?
   version              Int            @default(1)
   createdAt            DateTime       @default(now()) @db.Timestamptz(3)
   updatedAt            DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
@@ -248,12 +259,20 @@ model Shipment {
   parcels            Parcel[]
   ddts               Ddt[]
   trackingEvents     TrackingEvent[]
+  // W2b-6 (wave 46/57): the shipment it was split from and those split from it (Restrict, not Prisma's SetNull default:
+  // that would also clear tenantId, siteId and partyId); packing.prisma: its cartons' contents and its holds.
+  splitFrom          Shipment?           @relation("ShipmentSplit", fields: [tenantId, siteId, partyId, splitFromId], references: [tenantId, siteId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  splits             Shipment[]          @relation("ShipmentSplit")
+  parcelLines        ParcelLine[]
+  holds              ShipmentHold[]
 
   @@unique([tenantId, companyId, number])
   // The target of the references from its lines, parcels, DDTs and tracking events: the same site and party.
   @@unique([tenantId, siteId, partyId, id])
   @@index([tenantId, salesOrderId])
   @@index([tenantId, status])
+  // W2b-6: the shipments split from one.
+  @@index([tenantId, splitFromId])
 }
 
 enum ShipmentStatus {
@@ -299,11 +318,15 @@ model ShipmentLine {
   serials        GarmentSerial[]
   // W2b inventory.prisma (B-W2b-01): the SHIPMENT moves that took its garments out of finished goods.
   stockMoves     StockMove[]
+  // W2b-6 packing.prisma (wave 46/57): the cartons its garments lie in.
+  parcelLines    ParcelLine[]
 
   // The target of the serials' reference: a line of the serial's cell.
   @@unique([tenantId, siteId, workOrderSizeId, id])
   // W2b: the target of the SHIPMENT moves' reference: a line of the move's site.
   @@unique([tenantId, siteId, id])
+  // W2b-6: the target of the carton contents' reference: a line of the same shipment.
+  @@unique([tenantId, siteId, shipmentId, id])
   @@index([tenantId, shipmentId])
   // The shipped garments per cell (only released ones ship).
   @@index([tenantId, workOrderSizeId])
@@ -335,6 +358,15 @@ model Parcel {
   /// characters; "Track on the carrier's site"), set with the label; the customer reads it.
   trackingUrl     String?
   labelledAt      DateTime? @db.Timestamptz(3)
+  /// W2b-6 (schema wave 46/57, B-W2b-364; LOG-008): its packaging (packing.prisma PackagingType: a CARTON, BOX or PALLET of
+  /// the shipment's company, ACTIVE when named); null: typed by hand (W1).
+  packagingTypeId String?   @db.Uuid
+  /// W2b-6 (LOG-013): its number as printed on its marks, "n of N": n from 1, at most N, at most 9999; both or neither. When
+  /// the shipment moves to PACKED, its numbered cartons carry distinct numbers, each of N = its cartons.
+  cartonNumber    Int?
+  cartonCount     Int?
+  /// W2b-6 (LOG-013): when its shipping marks were last printed (not in the future); null: never.
+  marksPrintedAt  DateTime? @db.Timestamptz(3)
   version         Int       @default(1)
   createdAt       DateTime  @default(now()) @db.Timestamptz(3)
   updatedAt       DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
@@ -343,10 +375,17 @@ model Parcel {
   shipment       Shipment        @relation(fields: [tenantId, siteId, partyId, shipmentId], references: [tenantId, siteId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   lines          ShipmentLine[]
   trackingEvents TrackingEvent[]
+  // W2b-6 (wave 46/57): its packaging (Restrict, not Prisma's SetNull default: that would also clear tenantId), its
+  // contents (packing.prisma) and the serials packed in it (quality.prisma).
+  packagingType  PackagingType?  @relation(fields: [tenantId, packagingTypeId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  contents       ParcelLine[]
+  serials        GarmentSerial[]
 
   @@unique([tenantId, shipmentId, seq])
   // The target of the lines' and tracking events' references: a parcel of the same site and shipment.
   @@unique([tenantId, siteId, shipmentId, id])
+  // W2b-6: the target of the serials' reference: a parcel of the serial's site.
+  @@unique([tenantId, siteId, id])
   @@index([tenantId, trackingNumber])
 }
 

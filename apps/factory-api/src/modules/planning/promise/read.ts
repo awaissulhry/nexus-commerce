@@ -15,6 +15,8 @@ import type { Reader, SiteRow } from '../store'
 import { marketFor } from './certificates'
 import { answerPromises, type AskAnswer, type PromiseAsk, type PromiseWhere } from './engine'
 import { mayPromiseAt, plantOf, promiseSite, readSkuFlows, readStockStyles, readStyleFacts } from './store'
+// B-W2b-365: the options asked or chosen on the quote line.
+import { askedOptions, quoteLineOptionsOf } from './steps'
 
 /**
  * Reading promise dates (B-W2b-301; design planning.promise › atp, the Promise calculator, Sales › Quote "Suggest date"):
@@ -96,6 +98,8 @@ export interface CalculateBody {
   readonly sizes: readonly { readonly size: string; readonly quantity: number }[]
   readonly wantedDate?: BusinessDate | undefined
   readonly country?: string | undefined
+  /** B-W2b-365: the options of the garment asked (a step only for some options counts when one of them is asked). */
+  readonly optionValueIds?: readonly string[] | undefined
 }
 
 /** POST /planning/promise/calculate — the Promise calculator: nothing is written. */
@@ -110,7 +114,8 @@ export async function calculatePromise(caller: CommandCaller, body: CalculateBod
   return caller.withClient(async (db) => {
     const site = await promiseSite(caller, body.siteId, PLANNING_PROMISE_VIEW, db)
     const { where, view } = await whereOf(db, site, serverClock.now(), body.country ?? null)
-    const [answer] = await answerPromises(db, where, [{ key: 'calculator', styleId: body.styleId, colourwayId: body.colourwayId, revisionId: body.revisionId ?? null, sizes: body.sizes, wantedDate: body.wantedDate ?? null }])
+    const optionValueIds = await askedOptions(db, body.styleId, body.optionValueIds) // B-W2b-365
+    const [answer] = await answerPromises(db, where, [{ key: 'calculator', styleId: body.styleId, colourwayId: body.colourwayId, revisionId: body.revisionId ?? null, sizes: body.sizes, wantedDate: body.wantedDate ?? null, optionValueIds }])
     return { ...view, answer: answer! }
   })
 }
@@ -157,6 +162,7 @@ export async function quoteSuggestion(caller: CommandCaller, quoteId: string, qu
     const wanted = query.wantedDate ?? (version.promiseDate ? version.promiseDate.toISOString().slice(0, 10) : null)
     const asks: PromiseAsk[] = []
     const skipped: { lineId: string; seq: number; why: string }[] = []
+    const options = await quoteLineOptionsOf(db, version.lines.map((line) => line.id)) // B-W2b-365
     for (const line of version.lines) {
       if (line.kind === 'FEE') {
         skipped.push({ lineId: line.id, seq: line.seq, why: 'A fee is not made.' })
@@ -168,7 +174,7 @@ export async function quoteSuggestion(caller: CommandCaller, quoteId: string, qu
           skipped.push({ lineId: line.id, seq: line.seq, why: 'A made-to-measure line without a base size cannot be planned.' })
           continue
         }
-        asks.push({ key: line.id, styleId: line.styleId, colourwayId: line.colourwayId, revisionId: line.styleRevisionId, sizes: [{ size, quantity: 1 }], madeToMeasure: true, wantedDate: wanted })
+        asks.push({ key: line.id, styleId: line.styleId, colourwayId: line.colourwayId, revisionId: line.styleRevisionId, sizes: [{ size, quantity: 1 }], madeToMeasure: true, wantedDate: wanted, optionValueIds: options.get(line.id) ?? [] })
         continue
       }
       // The style's size order (the quote line's sizes are read alphabetically).
@@ -178,7 +184,7 @@ export async function quoteSuggestion(caller: CommandCaller, quoteId: string, qu
         skipped.push({ lineId: line.id, seq: line.seq, why: 'The line has no pieces.' })
         continue
       }
-      asks.push({ key: line.id, styleId: line.styleId, colourwayId: line.colourwayId, revisionId: line.styleRevisionId, sizes, wantedDate: wanted })
+      asks.push({ key: line.id, styleId: line.styleId, colourwayId: line.colourwayId, revisionId: line.styleRevisionId, sizes, wantedDate: wanted, optionValueIds: options.get(line.id) ?? [] })
     }
     const answers = asks.length === 0 ? [] : await answerPromises(db, where, asks)
     const lines = answers.map((answer) => {

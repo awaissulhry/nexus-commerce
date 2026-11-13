@@ -350,6 +350,8 @@ const WITHOUT_LINE: WorkOrderOptions['withoutLine'] = {
     { id: NAVY, code: 'NVY', name: 'Navy' },
     { id: OLIVE, code: 'OLV', name: 'Olive' },
   ],
+  // B-W2b-365: the API lists the style's option groups (none on this demo style).
+  options: [],
 }
 
 export const WO_OPTIONS: WorkOrderOptions = {
