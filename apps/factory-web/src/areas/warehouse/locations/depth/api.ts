@@ -121,9 +121,19 @@ export interface PrintInput {
 /** print.labels: one print job per place on a label printer of their site (a place without a code gets its suggested one). */
 export const printPlaceLabels = (api: ApiClient, body: PrintInput, idempotencyKey: string) => api.post('/inventory/locations/labels/print', { body, schema: printAnswer, idempotencyKey })
 
-/** The bin labels PDF (one page of the stock's size per label and copy), stored nowhere: printed from the browser. */
-export const placeLabelsPdf = (api: ApiClient, body: { locationIds: readonly string[]; copies: number; language: 'it' | 'en'; widthMm?: number; heightMm?: number }) =>
-  api.bytes('/inventory/locations/labels/pdf', { method: 'POST', body })
+/**
+ * The bin labels PDF (one page of the stock's size per label and copy), stored nowhere: printed from the browser. B-W2b-383
+ * (XF8:05): `refused` = how many of the asked places got no label (the API's `x-labels-refused`: a place archived or retyped
+ * since the page read it).
+ */
+export async function placeLabelsPdf(api: ApiClient, body: { locationIds: readonly string[]; copies: number; language: 'it' | 'en'; widthMm?: number; heightMm?: number }): Promise<{ bytes: Uint8Array; refused: number }> {
+  let refused = 0
+  const bytes = await api.bytes('/inventory/locations/labels/pdf', { method: 'POST', body, onHeaders: (headers) => (refused = labelsRefusedOf(headers.get('x-labels-refused'))) })
+  return { bytes, refused }
+}
+
+/** The header's count (a whole number ≥ 0); anything else: 0. */
+export const labelsRefusedOf = (value: string | null): number => (value !== null && /^\d{1,4}$/.test(value.trim()) ? Number(value.trim()) : 0)
 
 // ---- SCM-179 default locations --------------------------------------------------------------------------------------------
 

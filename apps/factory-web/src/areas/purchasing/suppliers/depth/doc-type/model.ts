@@ -19,7 +19,7 @@ export interface DocTypeDialog {
   readonly current: string | null
   /** The code chosen ('' : not said). */
   readonly chosen: string
-  /** The file's version as read when the dialog opened (null: being read). */
+  /** The file's version as the vault answered it (B-W2b-383); null: read again after a refusal (the file moved). */
   readonly version: number | null
   readonly busy: boolean
   readonly problem: string | null

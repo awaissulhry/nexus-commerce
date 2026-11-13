@@ -13,7 +13,7 @@ import type { DocTypeActions, DocTypeModel } from '../use-doc-type'
  * A vault document's type in its row (B-W2b-382; SCR-057 cases `w2b-382-*`): the list's words for its code, or "not said"
  * (it meets any ask of its kind), and "What it is…" (held with why without files.upload or offline).
  */
-export function DocTypeCell({ doc, model, actions }: { doc: Pick<VaultDocument, 'fileId' | 'name' | 'documentTypeCode'>; model: DocTypeModel; actions?: DocTypeActions | undefined }) {
+export function DocTypeCell({ doc, model, actions }: { doc: Pick<VaultDocument, 'fileId' | 'name' | 'documentTypeCode' | 'version'>; model: DocTypeModel; actions?: DocTypeActions | undefined }) {
   return (
     <WithMessages namespaces={[WORDS_NS]}>
       <Cell doc={doc} model={model} actions={actions} />
@@ -21,7 +21,7 @@ export function DocTypeCell({ doc, model, actions }: { doc: Pick<VaultDocument, 
   )
 }
 
-function Cell({ doc, model, actions }: { doc: Pick<VaultDocument, 'fileId' | 'name' | 'documentTypeCode'>; model: DocTypeModel; actions?: DocTypeActions | undefined }) {
+function Cell({ doc, model, actions }: { doc: Pick<VaultDocument, 'fileId' | 'name' | 'documentTypeCode' | 'version'>; model: DocTypeModel; actions?: DocTypeActions | undefined }) {
   const t = useT(WORDS_NS)
   const locale = useLocale()
   const code = doc.documentTypeCode ?? null

@@ -44,6 +44,15 @@ describe('where a result opens (B-W2a-32)', () => {
     expect(statusKey('ASSESSING')).not.toBeNull()
   })
 
+  // B-W2b-383: a transfer between sites (its new indexer) is a search type with its words and statuses, and opens its page.
+  it('opens a transfer on its page under Warehouse › Transfers, said as a transfer, with its statuses in words', () => {
+    expect(resultHref(result({ recordType: 'TransferOrder', area: 'warehouse' }), place)).toBe('/w/DEMO/warehouse/transfers/r1')
+    expect(typeKey('TransferOrder')).toBe('type.TransferOrder')
+    expect(chipKey('TransferOrder')).toBe('chip.TransferOrder')
+    for (const status of ['DRAFT', 'SHIPPED', 'PARTLY_RECEIVED', 'RECEIVED', 'CANCELLED']) expect(statusKey(status), status).not.toBeNull()
+    expect(SEARCH_VIEW_PERMISSIONS).toContain('inventory.stock.view')
+  })
+
   it('opens a record type without a page of its own in its panels', () => {
     expect(resultHref(result({ recordType: 'Gizmo', number: 'GZ-1' }), place)).toBe('/w/DEMO/records/Gizmo/r1?label=GZ-1')
   })

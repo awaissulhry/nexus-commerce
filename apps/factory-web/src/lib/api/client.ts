@@ -63,10 +63,14 @@ export interface ApiClient {
   /**
    * A GET whose answer is a file the API makes (a PDF): its bytes; an error answer is an ApiError as for JSON. A POST
    * with a body (`method`, `body`: a draft rendered from what the person typed, never stored) answers the same way.
+   * B-W2b-383 (XF8:05): `onHeaders` reads the answer's own headers beside the bytes (the bin labels PDF's
+   * `x-labels-refused`), on a good answer only.
    * B-W2b-387: a POST that records something (a floor device's marks PDF) carries its `idempotencyKey`.
    */
-  bytes(path: string, options?: Pick<RequestOptions<unknown>, 'query' | 'signal' | 'body' | 'idempotencyKey'> & { method?: 'GET' | 'POST' }): Promise<Uint8Array>
+  bytes(path: string, options?: BytesOptions): Promise<Uint8Array>
 }
+
+export type BytesOptions = Pick<RequestOptions<unknown>, 'query' | 'signal' | 'body' | 'idempotencyKey'> & { method?: 'GET' | 'POST'; onHeaders?: (headers: Headers) => void }
 
 const UNSAFE: ReadonlySet<HttpMethod> = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 
@@ -148,7 +152,7 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
   function post<T>(path: string, options?: RequestOptions<T>): Promise<T> {
     return request<T>('POST', path, options)
   }
-  async function bytes(path: string, read: Pick<RequestOptions<unknown>, 'query' | 'signal' | 'body' | 'idempotencyKey'> & { method?: 'GET' | 'POST' } = {}): Promise<Uint8Array> {
+  async function bytes(path: string, read: BytesOptions = {}): Promise<Uint8Array> {
     let response: Response
     try {
       const method = read.method ?? 'GET'
@@ -176,6 +180,7 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
       }
       throw apiErrorFrom(response.status, body)
     }
+    read.onHeaders?.(response.headers)
     return new Uint8Array(await response.arrayBuffer())
   }
   return { request, get, post, bytes }

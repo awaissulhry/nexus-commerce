@@ -78,6 +78,10 @@ describe('refusals in words, one fix, final or not', () => {
     expect(errorRefusal({ code: 'conflict', message: 'Not now.', issues: [{ path: 'refusal/CONFLICT', message: 'Try again.' }] })).toMatchObject({ code: 'CONFLICT', final: false })
     expect(errorRefusal({ code: 'conflict', message: 'Changed.', issues: [{ path: 'body/version', message: 'Read it again.' }] })).toMatchObject({ code: 'CONFLICT', final: false })
     expect(otherWorkerRefusal()).toMatchObject({ code: 'OTHER_WORKER', final: false })
+    // B-W2b-383 (XF8:02): a 400 naming its refusal (a bin move of too much) keeps that code and words, final; a 400 naming
+    // a field stays BAD_EVENT.
+    expect(errorRefusal({ code: 'validation_failed', message: 'Only 12 m lie there.', issues: [{ path: 'refusal/TOO_MUCH', message: 'Only 12 m lie there.' }, { path: 'body/quantity', message: 'Only 12 m lie there.' }] })).toEqual({ code: 'TOO_MUCH', message: 'Only 12 m lie there.', fix: 'Discard it, or ask your team leader.', final: true })
+    expect(errorRefusal({ code: 'validation_failed', message: 'Bad.', issues: [{ path: 'body/quantity', message: 'A quantity.' }] })).toMatchObject({ code: 'BAD_EVENT', final: true })
   })
 })
 

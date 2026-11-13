@@ -130,6 +130,8 @@ B-W2b-124 `modules/plant/statutory` (QHS-205; D.Lgs. 81/2008 art. 71: results ke
   amount/total/wages) at any depth; requests are logged by route pattern, never URL, headers or body.
 - `security.ts`: strict headers on every answer, CORS only for `FACTORY_WEB_ORIGIN`, writes with another Origin
   refused, rate limit (Redis when present), 1 MiB body limit.
+- `cors-expose.ts` (B-W2b-383): the answer headers a page may read (`Access-Control-Expose-Headers`): the request id and
+  `x-labels-refused`. A route that answers a header of its own for the web adds it there, by its constant.
 - `ids.ts` (request ids), `time.ts` (the server clock). UUIDv7 `newId()` and Europe/Rome dates live in
   `@nexus/factory-domain/core/{ids,time}`.
 - `queue.ts`: BullMQ queues `events`, `event-handlers`, `dead-letter`, every key under FACTORY_QUEUE_PREFIX
