@@ -148,7 +148,9 @@
     "waitMinutes_one": "Wait {count} minute.",
     "waitMinutes_other": "Wait {count} minutes.",
     "waitSeconds_one": "Wait {count} second.",
-    "waitSeconds_other": "Wait {count} seconds."
+    "waitSeconds_other": "Wait {count} seconds.",
+    "NO_INJURY_ROLE": "Opening, recording or erasing the injury is for the product-safety role.",
+    "NO_MANAGE_ROLE": "Changing a report needs the right to manage product-safety reports: an admin grants it."
   },
   "intake": {
     "accident": "It happened in an accident or a fall",

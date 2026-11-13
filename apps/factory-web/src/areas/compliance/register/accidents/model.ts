@@ -137,12 +137,15 @@ export const RECORD_DOS = ['revise', 'told'] as const
 export type RecordDo = (typeof RECORD_DOS)[number]
 export const isRecordDo = (value: string | null): value is RecordDo => (RECORD_DOS as readonly string[]).includes(value ?? '')
 
-/** Why a verb of the record waits (a key of the catalogue), or null: the API's `actions` for this reader. */
+/** Who may do a verb the person's role does not allow: the product-safety role (the log, the injury), else who manages reports. */
+const WHO_MAY: Readonly<Partial<Record<ReportAction['action'], string>>> = { logAccident: 'held.NO_LOG', openInjury: 'held.NO_INJURY_ROLE', recordInjury: 'held.NO_INJURY_ROLE', eraseInjury: 'held.NO_INJURY_ROLE' }
+
+/** Why a verb of the record waits (a key of the catalogue), or null: the API's `actions` for this reader, saying who may. */
 export function actionHeld(report: Pick<Report, 'actions'> | null, action: ReportAction['action'], offline = false): string | null {
   if (offline) return 'held.offline'
   const found = report?.actions.find((entry) => entry.action === action)
-  if (!found) return 'held.NO_PERMISSION'
-  return found.allowed ? null : `held.${found.held ?? 'NO_PERMISSION'}`
+  if (!found || (!found.allowed && (found.held ?? 'NO_PERMISSION') === 'NO_PERMISSION')) return WHO_MAY[action] ?? 'held.NO_MANAGE_ROLE'
+  return found.allowed ? null : `held.${found.held}`
 }
 
 /** The band's one primary: Mark seen (new, not seen), Start assessing (new), Close (being assessed); none when closed. */

@@ -12,7 +12,7 @@ import { CATALOGUE, messagesFor } from '../../../../lib/i18n/messages'
 import { I18nProvider } from '../../../../lib/i18n/provider'
 import { recordAddress } from '../../../../lib/records/record-links'
 import { OFFICE_PAGES } from '../../../../shell/nav/office-nav'
-import { CLOSED_REPORT, LOG, NEW_REPORT, REPORT, ROWS } from './demo/fixtures'
+import { asReadOnly, CLOSED_REPORT, LOG, NEW_REPORT, REPORT, ROWS } from './demo/fixtures'
 import { designScreen as logScreen } from './log/fixtures'
 import { periodFrom } from './log/view/AccidentLogView'
 import {
@@ -88,6 +88,10 @@ describe('the record', () => {
     expect(actionHeld(REPORT, 'close')).toBeNull()
     expect(actionHeld(REPORT, 'close', true)).toBe('held.offline')
     expect(actionHeld(CLOSED_REPORT, 'edit')).toBe('held.CLOSED')
+    // A role that does not allow it: who may, in words (the product-safety role for the log and the injury).
+    expect(actionHeld(asReadOnly(REPORT), 'logAccident')).toBe('held.NO_LOG')
+    expect(actionHeld(asReadOnly(REPORT), 'openInjury')).toBe('held.NO_INJURY_ROLE')
+    expect(actionHeld(asReadOnly(REPORT), 'close')).toBe('held.NO_MANAGE_ROLE')
   })
 
   it('a refusal in words: a held code, a stale version, the right', () => {
@@ -148,7 +152,7 @@ describe('words', () => {
     for (const status of REPORT_STATUSES) keys.add(`status.${status}`)
     for (const source of SAFETY_SOURCES) keys.add(`source.${source}`)
     for (const outcome of ACCIDENT_OUTCOMES) keys.add(`outcome.${outcome}`)
-    for (const code of [...HELD_CODES, 'NO_PERMISSION', 'OFF']) keys.add(`held.${code}`)
+    for (const code of [...HELD_CODES, 'NO_PERMISSION', 'OFF', 'NO_LOG', 'NO_INJURY_ROLE', 'NO_MANAGE_ROLE']) keys.add(`held.${code}`)
     for (const view of REPORT_VIEWS) keys.add(`viewName.${view}`)
     for (const kind of ['close', 'eraseReporter', 'eraseInjury', 'recordInjury', 'facts', 'file']) for (const part of ['title', 'confirm']) keys.add(`dialog.${kind}.${part}`)
     for (const id of ['notSeen', 'assessing', 'accidentsToTell']) for (const part of ['', 'Hint']) keys.add(`list.tile.${id}${part}`)

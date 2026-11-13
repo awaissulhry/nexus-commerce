@@ -148,7 +148,9 @@
     "waitMinutes_one": "Aspetta {count} minuto.",
     "waitMinutes_other": "Aspetta {count} minuti.",
     "waitSeconds_one": "Aspetta {count} secondo.",
-    "waitSeconds_other": "Aspetta {count} secondi."
+    "waitSeconds_other": "Aspetta {count} secondi.",
+    "NO_INJURY_ROLE": "Aprire, registrare o cancellare la lesione spetta al ruolo sicurezza prodotto.",
+    "NO_MANAGE_ROLE": "Per modificare una segnalazione serve il permesso di gestire le segnalazioni di sicurezza prodotto: lo concede un amministratore."
   },
   "intake": {
     "accident": "È successo in un incidente o in una caduta",
