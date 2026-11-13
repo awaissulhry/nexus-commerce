@@ -10,6 +10,7 @@ import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import type { PartyAddress, QuoteDetail } from '../../api'
 import { addressChoices, isEditable, money, percent, termsDraftOf, termsPatch, termsProblems, type TermsDraft } from '../../model'
 import type { QuoteRecordActions, QuoteRecordViewModel } from '../record-model'
+import type { QuoteDepthSlots } from '../lines-depth/slots'
 
 const addressLine = (address: PartyAddress) => [address.name, address.line1, `${address.postalCode} ${address.city}${address.province ? ` (${address.province})` : ''}`, address.country].filter(Boolean).join(', ')
 
@@ -18,7 +19,7 @@ const addressLine = (address: PartyAddress) => [address.name, address.line1, `${
  * delivery, payment and deposit, the consumer's statements. A form: explicit save with the EditModeBar (⌘S, Discard, a
  * held Save with its reason); Draft only — afterwards the same facts as text with the reason above.
  */
-export function TermsTab({ quote, model, actions }: { quote: QuoteDetail; model: QuoteRecordViewModel; actions?: QuoteRecordActions }) {
+export function TermsTab({ quote, model, actions, depth }: { quote: QuoteDetail; model: QuoteRecordViewModel; actions?: QuoteRecordActions; /** B-W2b-316: validity state, acceptance mode, Incoterm, ship complete, Check capacity, the schedule. */ depth?: Pick<QuoteDepthSlots, 'termsValidity' | 'termsDelivery'> }) {
   const t = useT('sales')
   const locale = useLocale()
   const editable = isEditable(quote, model.can)
@@ -171,6 +172,7 @@ export function TermsTab({ quote, model, actions }: { quote: QuoteDetail; model:
         )}
         <KeyValue dense labelCase="sentence" items={[{ label: t('terms.termsVersion'), value: text(current.termsVersion) ?? '—' }]} />
         <p className="fw-q-hint">{t('terms.termsNote')}</p>
+        {depth?.termsValidity}
       </Card>
 
       <Card padded>
@@ -182,6 +184,7 @@ export function TermsTab({ quote, model, actions }: { quote: QuoteDetail; model:
         ) : (
           <KeyValue dense labelCase="sentence" items={[{ label: t('terms.promiseDate'), value: current.promiseDate ? formatDate(`${current.promiseDate}T12:00:00Z`, { locale }) : '—' }]} />
         )}
+        {depth?.termsDelivery}
       </Card>
 
       <Card padded>

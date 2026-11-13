@@ -1,5 +1,6 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import Link from 'next/link'
 import { Banner, Card, EmptyState, MetricStrip, SummaryTable } from '@nexus/ui/components'
 import { Tag } from '@nexus/ui/primitives'
@@ -14,7 +15,7 @@ import type { QuoteRecordViewModel } from '../record-model'
  * both (net − margin is the cost: the API leaves it out otherwise); a column the person may not see is absent, and the
  * tab says so once. Prices change on the Lines tab only (one edit path).
  */
-export function PriceTab({ quote, model }: { quote: QuoteDetail; model: QuoteRecordViewModel }) {
+export function PriceTab({ quote, model, depth }: { quote: QuoteDetail; model: QuoteRecordViewModel; /** B-W2b-316: Target price. */ depth?: ReactNode }) {
   const t = useT('sales')
   const locale = useLocale()
   const current = quote.current
@@ -117,6 +118,7 @@ export function PriceTab({ quote, model }: { quote: QuoteDetail; model: QuoteRec
         </div>
       </Card>
       <p className="fw-q-hint">{t('price.editOnLines')}</p>
+      {depth}
     </div>
   )
 }

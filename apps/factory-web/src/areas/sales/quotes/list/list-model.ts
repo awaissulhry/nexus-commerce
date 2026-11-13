@@ -2,6 +2,11 @@ import type { CompanyRef } from '../../../../lib/session/session'
 import type { PartyDetail, PartyRow, QuoteListRow } from '../api'
 import type { DuplicateActions, DuplicateDone, DuplicateModel } from '../duplicate/model'
 import type { Grains, ListFilters, QuoteAbilities, QuoteTile, StartFrom, TileCount, Tone } from '../model'
+// B-W2b-316: New quote › Start from Template / Inquiry, and the page's ⋯ links.
+import type { NewFromKind, NewFromModel } from '../new-from/model'
+import type { Words } from '../record/lines-depth/model'
+import type { NewFromActions } from '../new-from/view/NewFrom'
+import type { QuotesPageLinksModel } from '../new-from/view/PageLinks'
 
 /** The quotes list's view model (SCR-034; design sales.quotes): the container (QuotesPage.tsx) fills it. */
 
@@ -24,6 +29,9 @@ export interface NewQuoteModel {
   /** B-W2a-49 "Start from" (design pop:quotes.new): Blank, or a past quote copied for this customer. */
   startFrom?: StartFrom
   past?: PastQuotePick
+  /** B-W2b-316: Start from a template or an inquiry (`active` wins over `startFrom`), and why its Create waits. */
+  newFrom?: NewFromModel
+  newFromHeld?: Words | null
 }
 
 /** Start from a past quote: the chosen customer's quotes first, or any quote found by its number. */
@@ -57,12 +65,16 @@ export interface QuotesListViewModel {
   busy?: boolean
   /** B-W2a-49: Duplicate a quote (row ⋯); null: closed. */
   duplicate?: DuplicateModel | null
+  /** B-W2b-316: the page's ⋯ (Quote templates, Planning › Promise dates). */
+  pageLinks?: QuotesPageLinksModel
   /** Design cases: the rows ticked, the row that has the focus. */
   selected?: readonly string[]
   focusRow?: number
 }
 
-export interface QuotesListActions extends DuplicateActions {
+export interface QuotesListActions extends DuplicateActions, NewFromActions {
+  /** B-W2b-316: New quote › Start from Template / Inquiry. */
+  onNewFrom?: (kind: NewFromKind) => void
   /** Row ⋯ Duplicate: opens the dialog for that quote. */
   onDuplicateStart?: (row: QuoteListRow) => void
   /** New quote › Start from. */

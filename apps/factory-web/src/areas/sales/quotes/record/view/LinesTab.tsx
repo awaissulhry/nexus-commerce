@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Plus, Search, ShieldAlert, Trash2 } from 'lucide-react'
-import { Banner, Card, EmptyState, Field, KeyValue, Menu, RecordLayout, SummaryTable } from '@nexus/ui/components'
+import { Banner, Card, EmptyState, Field, KeyValue, Menu, RecordLayout, SummaryTable, type MenuItemDef } from '@nexus/ui/components'
 import { SizeGridEditor, SizeGridView, type SizeGridIssue } from '@nexus/ui/grid/size-grid/index'
 import { Button, Checkbox, InfoTip, Input, Pill, RadioCard, Spinner, Tag } from '@nexus/ui/primitives'
 import { Modal } from '../../../../../lib/i18n/ds-parts'
@@ -12,6 +12,7 @@ import type { QuoteDetail, QuoteLine, StyleDetail } from '../../api'
 import { certificateIssues, gridShapeOf, gridValueOf, isEditable, listPriceState, marginTone, money, offListPct, percent, styleBlocks, styleTags, unitPrice, unitsOf, type NextStepView, type StyleBlock } from '../../model'
 import type { QuoteRecordActions, QuoteRecordViewModel } from '../record-model'
 import { sizeGridWords } from './grid-copy'
+import type { QuoteDepthSlots } from '../lines-depth/slots'
 
 /**
  * The Lines tab (design `quote.lines.*`): "Add a style" (type a style, pick its colours, Add: its grid opens ready for
@@ -19,7 +20,7 @@ import { sizeGridWords } from './grid-copy'
  * line's price, its net and — with the grains — its cost and margin %), and the summary rail (totals, VAT, deposit,
  * margin against the floor, approval, the next step). Read-only from the moment the version leaves Draft.
  */
-export function LinesTab({ quote, model, actions, step }: { quote: QuoteDetail; model: QuoteRecordViewModel; actions?: QuoteRecordActions; step: NextStepView }) {
+export function LinesTab({ quote, model, actions, step, depth }: { quote: QuoteDetail; model: QuoteRecordViewModel; actions?: QuoteRecordActions; step: NextStepView; /** B-W2b-316: warnings, Blocks | Table, paste, block ⋯ (lines-depth/slots.ts). */ depth?: QuoteDepthSlots }) {
   const t = useT('sales')
   const editable = isEditable(quote, model.can)
   const blocks = useMemo(() => {
@@ -37,13 +38,16 @@ export function LinesTab({ quote, model, actions, step }: { quote: QuoteDetail; 
       asideLabel={t('summary.label')}
       main={
         <div className="fw-q-stack">
-          {editable && <Composer model={model} actions={actions} />}
-          {blocks.length === 0 ? (
+          {depth?.linesTop}
+          {editable && <Composer model={model} actions={actions} extra={depth?.composerExtra} />}
+          {depth?.linesTable ? (
+            depth.linesTable
+          ) : blocks.length === 0 ? (
             <Card padded>
               <EmptyState title={t('lines.empty.title')} description={t(editable ? 'lines.empty.body' : 'lines.empty.bodyReadOnly')} />
             </Card>
           ) : (
-            blocks.map((block) => <StyleBlockCard key={block.styleId} block={block} quote={quote} model={model} actions={actions} editable={editable} />)
+            blocks.map((block) => <StyleBlockCard key={block.styleId} block={block} quote={quote} model={model} actions={actions} editable={editable} depthItems={depth?.blockItems?.(block)} />)
           )}
           {editable && (
             <p className="fw-q-hint fw-q-tablefoot">
@@ -57,7 +61,7 @@ export function LinesTab({ quote, model, actions, step }: { quote: QuoteDetail; 
   )
 }
 
-function Composer({ model, actions }: { model: QuoteRecordViewModel; actions?: QuoteRecordActions }) {
+function Composer({ model, actions, extra }: { model: QuoteRecordViewModel; actions?: QuoteRecordActions; extra?: ReactNode }) {
   const t = useT('sales')
   const { composer } = model
   const input = useRef<HTMLInputElement>(null)
@@ -181,11 +185,12 @@ function Composer({ model, actions }: { model: QuoteRecordViewModel; actions?: Q
           </div>
         </div>
       )}
+      {extra}
     </Card>
   )
 }
 
-function StyleBlockCard({ block, quote, model, actions, editable }: { block: StyleBlock; quote: QuoteDetail; model: QuoteRecordViewModel; actions?: QuoteRecordActions; editable: boolean }) {
+function StyleBlockCard({ block, quote, model, actions, editable, depthItems = [] }: { block: StyleBlock; quote: QuoteDetail; model: QuoteRecordViewModel; actions?: QuoteRecordActions; editable: boolean; depthItems?: MenuItemDef[] }) {
   const t = useT('sales')
   const locale = useLocale()
   const style: StyleDetail | null = model.styles[block.styleId] ?? null
@@ -278,13 +283,15 @@ function StyleBlockCard({ block, quote, model, actions, editable }: { block: Sty
             {style === null && block.lines.length > 0 && <Tag>{t('lines.styleUnread')}</Tag>}
           </span>
         </div>
-        {editable && (
+        {(editable || depthItems.length > 0) && (
           <Menu
             label={t('lines.blockMenu')}
             align="right"
             items={[
-              ...missingColourways.map((colourway) => ({ id: `add-${colourway.id}`, label: t('lines.addColour', { colour: `${colourway.code} · ${colourway.name}` }), icon: <Plus size={14} aria-hidden />, onSelect: () => actions?.onAddColourway?.(block.styleId, colourway.id) })),
-              { id: 'remove', label: t('lines.removeStyle'), tone: 'danger' as const, icon: <Trash2 size={14} aria-hidden />, onSelect: () => setConfirmRemove(true) },
+              ...(editable ? missingColourways.map((colourway) => ({ id: `add-${colourway.id}`, label: t('lines.addColour', { colour: `${colourway.code} · ${colourway.name}` }), icon: <Plus size={14} aria-hidden />, onSelect: () => actions?.onAddColourway?.(block.styleId, colourway.id) })) : []),
+              // B-W2b-316: Open line (the drawer) per colour line, Fill by curve.
+              ...depthItems,
+              ...(editable ? [{ id: 'remove', label: t('lines.removeStyle'), tone: 'danger' as const, icon: <Trash2 size={14} aria-hidden />, onSelect: () => setConfirmRemove(true) }] : []),
             ]}
           />
         )}

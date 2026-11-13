@@ -12,6 +12,8 @@ import { WithMessages } from '../../../../record-panels/i18n'
 import { readProblem, writeProblem } from '../problems'
 import type { NewQuoteModel, QuotesListViewModel } from './list-model'
 import { QuotesListView } from './view/QuotesListView'
+// B-W2b-316: New quote › Start from Template / Inquiry.
+import { useNewFrom } from '../new-from/use-new-from'
 // B-W2b-348: Quote speed under the list (design sales.quotes sec quotes.speed).
 import { QuoteSpeed } from '../speed/QuoteSpeed'
 
@@ -84,6 +86,7 @@ function QuotesContainer() {
   const filtersRef = useRef(filters)
   filtersRef.current = filters
   const duplicate = useDuplicate(api, companyId || null, (id) => router.push(`${prefix}/sales/quotes/${id}?tab=lines`))
+  const newFrom = useNewFrom(api, session.permissions)
 
   const load = useCallback(
     async (more = false, after: string | null = null) => {
@@ -163,6 +166,7 @@ function QuotesContainer() {
     [api],
   )
   const openNew = (open: boolean) => {
+    newFrom.reset()
     if (!open) {
       setNewQuote(null)
       if (params?.get('new')) router.replace(`${pathname}${searchOf(filters)}`)
@@ -181,6 +185,7 @@ function QuotesContainer() {
   }, [])
 
   const pick = (partyId: string | null) => {
+    newFrom.reset()
     if (!partyId) {
       setNewQuote((current) => (current ? { ...current, party: null, partyProblem: null, contactId: '' } : current))
       return
@@ -211,6 +216,11 @@ function QuotesContainer() {
     setNewQuote({ ...draft, busy: true, problem: null })
     const open = (id: string) => router.push(`${prefix}/sales/quotes/${id}?tab=lines`)
     const failed = (error: unknown) => setNewQuote((current) => (current ? { ...current, busy: false, problem: writeProblem(error).key } : current))
+    // B-W2b-316: a template or an inquiry makes the quote in one call (what it left out is said before it opens).
+    if (newFrom.active) {
+      void newFrom.create({ companyId: draft.companyId, partyId: draft.party.id, contactId: draft.contactId, customerRef: draft.customerRef }, open).then((problem) => setNewQuote((current) => (current ? { ...current, busy: false, problem } : current)))
+      return
+    }
     const source = draft.startFrom === 'past' ? (draft.past?.results?.find((row) => row.id === draft.past?.chosenId) ?? null) : null
     if (source) {
       duplicateQuote(api, source.id, { ...(source.partyId !== draft.party.id ? { partyId: draft.party.id } : {}), contactId: draft.contactId || null, customerRef: draft.customerRef.trim() || null })
@@ -237,10 +247,11 @@ function QuotesContainer() {
     asOf,
     today: romeToday(),
     updates,
-    newQuote,
+    newQuote: newQuote ? { ...newQuote, newFrom: newFrom.model, newFromHeld: newFrom.held } : null,
     notice,
     busy,
     duplicate: duplicate.model,
+    pageLinks: { prefix, promiseDates: session.permissions.includes('planning.promise.view') },
   }
 
   const cancelMany = async (ids: readonly string[], reason: string): Promise<boolean> => {
@@ -314,7 +325,10 @@ function QuotesContainer() {
         onCancelMany: cancelMany,
         ...duplicate.actions,
         onDuplicateStart: (row) => duplicate.open({ id: row.id, number: row.number, partyId: row.partyId, partyName: row.partyName, revision: row.revision, versions: [] }),
+        ...newFrom.actions,
+        onNewFrom: (kind) => newFrom.choose(kind, { companyId: newQuote?.companyId ?? companyId, partyId: newQuote?.party?.id ?? null }),
         onStartFrom: (startFrom) => {
+          newFrom.choose(null, { companyId, partyId: null })
           setNewQuote((current) => (current ? { ...current, startFrom, past: startFrom === 'past' ? (current.past ?? { query: '', results: null, problem: null, chosenId: '', done: null }) : current.past } : current))
           if (startFrom === 'past' && !newQuote?.past) setTimeout(() => readPast(''), 0)
         },
