@@ -351,7 +351,7 @@
       "held": {
         "receive": "Nessuna rete: il ricevimento merci aspetta la rete (il ricevimento e i suoi lotti prendono il numero dall'ufficio). Il resto del lavoro resta salvato sul tablet.",
         "inspect": "Nessuna rete: collaudi e rilasci aspettano la rete (prendono il numero dall'ufficio). Le scansioni restano salvate sul tablet.",
-        "serials": "Nessuna rete: i seriali dei capi e le loro etichette aspettano la rete (li dà l'ufficio). Il resto del lavoro resta salvato sul tablet."
+        "pack": "Nessuna rete: i capi scansionati nei cartoni restano salvati sul tablet e partono quando torna la rete. Chiudere un cartone, Imballata, le stampe e i seriali dei capi aspettano la rete."
       }
     },
     "resume": {

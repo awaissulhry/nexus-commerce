@@ -63,8 +63,9 @@ export interface ApiClient {
   /**
    * A GET whose answer is a file the API makes (a PDF): its bytes; an error answer is an ApiError as for JSON. A POST
    * with a body (`method`, `body`: a draft rendered from what the person typed, never stored) answers the same way.
+   * B-W2b-387: a POST that records something (a floor device's marks PDF) carries its `idempotencyKey`.
    */
-  bytes(path: string, options?: Pick<RequestOptions<unknown>, 'query' | 'signal' | 'body'> & { method?: 'GET' | 'POST' }): Promise<Uint8Array>
+  bytes(path: string, options?: Pick<RequestOptions<unknown>, 'query' | 'signal' | 'body' | 'idempotencyKey'> & { method?: 'GET' | 'POST' }): Promise<Uint8Array>
 }
 
 const UNSAFE: ReadonlySet<HttpMethod> = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
@@ -147,11 +148,11 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
   function post<T>(path: string, options?: RequestOptions<T>): Promise<T> {
     return request<T>('POST', path, options)
   }
-  async function bytes(path: string, read: Pick<RequestOptions<unknown>, 'query' | 'signal' | 'body'> & { method?: 'GET' | 'POST' } = {}): Promise<Uint8Array> {
+  async function bytes(path: string, read: Pick<RequestOptions<unknown>, 'query' | 'signal' | 'body' | 'idempotencyKey'> & { method?: 'GET' | 'POST' } = {}): Promise<Uint8Array> {
     let response: Response
     try {
       const method = read.method ?? 'GET'
-      const headers = requestHeaders(options, method, method === 'POST' ? { body: read.body ?? {} } : {})
+      const headers = requestHeaders(options, method, method === 'POST' ? { body: read.body ?? {}, idempotencyKey: read.idempotencyKey } : {})
       headers.set('accept', 'application/pdf, application/json')
       response = await doFetch(apiUrl(options.baseUrl, path, read.query), {
         method,
