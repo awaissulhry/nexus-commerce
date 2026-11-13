@@ -287,6 +287,7 @@
       "TRANSFER": "Trasferimento tra stabilimenti",
       "SERVICE_CASE": "Caso di assistenza",
       "SAFETY_REPORT": "Segnalazione di sicurezza del prodotto",
+      "PROFORMA": "Fattura proforma",
       "PAYROLL_EXPORT": "Esportazione paghe",
       "PORTAL_REQUEST": "Richiesta d'ordine dal portale"
     },

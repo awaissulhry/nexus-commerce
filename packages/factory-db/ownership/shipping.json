@@ -7,7 +7,7 @@
       "keyColumns": { "tenant": "tenantId", "site": "siteId" },
       "access": {
         "factory_runtime": { "privileges": ["select", "insert", "update"] },
-        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"], "hiddenColumns": ["freightAmount", "freightFreeFrom"] }
+        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"], "hiddenColumns": ["freightAmount", "freightFreeFrom", "insureAbove"] }
       }
     },
     "Shipment": {
@@ -36,7 +36,7 @@
       "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
       "access": {
         "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
-        "factory_floor_runtime": { "privileges": ["select", "insert", "update", "delete"], "scopedBy": ["site"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert", "update", "delete"], "scopedBy": ["site"], "hiddenColumns": ["declaredValue", "insuredValue"] },
         "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["createdById"] }
       }
     },

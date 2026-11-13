@@ -102,6 +102,8 @@ model Company {
   sessions     Session[]
   // integration.prisma: the company's accounts with outside services.
   integrationAccounts IntegrationAccount[]
+  // W2b-6 carriers.prisma (wave 48/57): its own carrier contracts.
+  carrierAccounts     CarrierAccount[]
   // files.prisma: the company's files.
   files               StoredFile[]
   // W2b files-depth.prisma (wave 18/22): the documents its record types must have before a status move.
@@ -377,6 +379,10 @@ model Site {
   threads       Thread[]
   // print.prisma: the site's printers.
   printers      Printer[]
+  // W2b-6 carriers.prisma (wave 48/57): the carrier contracts for it alone, its pickups and its day sheets.
+  carrierAccounts   CarrierAccount[]
+  pickupRequests    PickupRequest[]
+  dispatchManifests DispatchManifest[]
   // sales.prisma: the sales order lines it makes.
   salesOrderLines SalesOrderLine[]
   // supply.prisma: the purchase orders delivered to it and its planning runs.
