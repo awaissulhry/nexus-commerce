@@ -829,6 +829,7 @@ export {
   OperationTimeVersionStatus,
   OptionEffectKind,
   OptionGroupKind,
+  OptionGroupTakes,
   OptionRuleKind,
   OptionRuleSeverity,
   OrderChangeRequestKind,

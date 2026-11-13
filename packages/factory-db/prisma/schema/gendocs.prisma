@@ -33,7 +33,8 @@ model GeneratedDocument {
   /// (INSPECTION_REPORT), Nonconformance (NCR_REPORT), Capa (EIGHT_D), Complaint (COMPLAINT_ANSWER), and, once their
   /// tables exist, MachineCheckResult (CHECK_REPORT), RiskAssessmentVersion (DVR_FROZEN), PpeIssue (PPE_RECEIPT).
   /// W2b-5 (wave 39/44): SalesOrder (ORDER_CONFIRMATION). W2b-5 (wave 44/44): MeasurementProfile (MTM_WORKSHEET; a profile
-  /// has no company: the document names the company whose papers it is, and no site).
+  /// has no company: the document names the company whose papers it is, and no site). W2b-6 (wave 45/57): PriceListVersion
+  /// (PRICE_LIST; of its list's company, or of any company of the tenant for a tenant-wide list; no site).
   recordType  String
   recordId    String                @db.Uuid
   kind        GeneratedDocumentKind
@@ -112,4 +113,7 @@ enum GeneratedDocumentKind {
   /// revision (no site): its measurements, colours, padding and options, and an order form to sign at the fitting. Body
   /// measures: office only.
   MTM_WORKSHEET
+  /// W2b-6 (schema wave 45/57, B-W2b-363; SAL-165, B-W2b-325, -343): the price list PDF of a PriceListVersion (no site): its
+  /// prices with their days, breaks and size surcharges, never a cost; stored so a mail attaches the same file.
+  PRICE_LIST
 }

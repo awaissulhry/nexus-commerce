@@ -89,7 +89,7 @@ const USAGE: Partial<Record<ReasonCodeList, (client: Client, used: Map<string, n
 
 export const reasonCodeStore: ReasonStore = {
   source: 'REASON_CODE',
-  lists: ['PAUSE', 'DOWNTIME', 'HELP_CALL', 'ADJUSTMENT', 'HOLD', 'CANCEL', 'WRITE_OFF', 'RETURN', 'DISCREPANCY', 'CLAIM', 'DOWNGRADE', 'APPROVAL_REJECT', 'PRICE_ADJUSTMENT'],
+  lists: ['PAUSE', 'DOWNTIME', 'HELP_CALL', 'ADJUSTMENT', 'HOLD', 'CANCEL', 'WRITE_OFF', 'RETURN', 'DISCREPANCY', 'CLAIM', 'DOWNGRADE', 'APPROVAL_REJECT', 'PRICE_ADJUSTMENT', 'SUPPLIER_DOCUMENT_TYPE'],
 
   async rows(client: Client, lists, filter = {}) {
     const rows = await client.reasonCode.findMany({

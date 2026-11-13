@@ -988,6 +988,9 @@ describe.each(classified)('$model.name', ({ model, ownership }) => {
     const privileges = new Set(access?.privileges ?? [])
     const hidden = new Set(access?.hiddenColumns ?? [])
     const visible = model.columns.filter((column) => !hidden.has(column))
+    // B-W2b-363: a write-only column is written (insert, update) but never read back.
+    const writeOnly = new Set(access?.writeOnlyColumns ?? [])
+    const readable = visible.filter((column) => !writeOnly.has(column))
     // The platform role has no tenant: its policies see every row.
     const keys: PolicyKeyName[] = role === PLATFORM_ROLE ? [] : [...WALL, ...((access?.scopedBy ?? []) as PolicyKeyName[])]
     // The values exist only once the seed ran, so they are read inside the tests.
@@ -1061,14 +1064,14 @@ describe.each(classified)('$model.name', ({ model, ownership }) => {
         if (filter.length === 0 && only.length === 0) expect(new Set(seen.map((row) => row.id)).size).toBe((await admin(`SELECT 1 FROM ${table}`)).length)
       })
 
-      if (hidden.size > 0) {
-        it(`cannot read its hidden columns (${[...hidden].join(', ')})`, async () => {
-          for (const column of hidden) await expect(query(role, `SELECT ${q(column)} FROM ${table} LIMIT 1`)).rejects.toThrow(DENIED)
+      if (hidden.size > 0 || writeOnly.size > 0) {
+        it(`cannot read its hidden or write-only columns (${[...hidden, ...writeOnly].join(', ')})`, async () => {
+          for (const column of [...hidden, ...writeOnly]) await expect(query(role, `SELECT ${q(column)} FROM ${table} LIMIT 1`)).rejects.toThrow(DENIED)
           const delegate = (client: FactoryClient) =>
             (client as unknown as Record<string, { findMany: (args?: unknown) => Promise<unknown[]> }>)[model.name[0]!.toLowerCase() + model.name.slice(1)]!
           // Prisma's default select names every column, so a forgotten `select` fails loudly.
           await expect(as(role, (client) => delegate(client).findMany())).rejects.toThrow(DENIED)
-          const rows = await as(role, (client) => delegate(client).findMany({ select: Object.fromEntries(visible.map((column) => [column, true])) }))
+          const rows = await as(role, (client) => delegate(client).findMany({ select: Object.fromEntries(readable.map((column) => [column, true])) }))
           expect(rows.length).toBeGreaterThan(0)
         })
       }
@@ -1094,7 +1097,7 @@ describe.each(classified)('$model.name', ({ model, ownership }) => {
 
     if (privileges.has('update')) {
       it('updates no row outside its scope and cannot move a row out of it', async () => {
-        const column = q(visible.find((name) => name !== pk && !Object.values(keyColumns).includes(name)) ?? pk)
+        const column = q(readable.find((name) => name !== pk && !Object.values(keyColumns).includes(name)) ?? pk)
         const touch = (id: unknown) => execute(role, `UPDATE ${table} SET ${column} = ${column} WHERE ${q(pk)} = $1::uuid`, id)
         const own = await rowOf(inside)
         expect(await touch(own[pk])).toBe(1)

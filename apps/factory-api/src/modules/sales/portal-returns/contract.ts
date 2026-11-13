@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { businessDate, defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
 import { DOCUMENT_LANGUAGES } from '@nexus/factory-domain/documents/model'
 import { money, notMoney } from '@nexus/factory-domain/money/marked'
-import { CASE_CHIPS, CASE_LIMITS, CASE_TYPES, MILESTONE_STEPS, OUTCOMES_WANTED } from '@nexus/factory-domain/sales/portal-returns/rules'
+import { CASE_CHIPS, CASE_LIMITS, CASE_TYPES, MILESTONE_STEPS, OUTCOMES_WANTED, RECORDED_OUTCOMES_WANTED } from '@nexus/factory-domain/sales/portal-returns/rules'
 import { RETURN_LIMITS } from '@nexus/factory-domain/sales/returns/rules'
 import { complaintView } from '../../quality/complaints/contract'
 import { returnView } from '../returns/contract'
@@ -110,7 +110,8 @@ const returnRecord = output({
   request: output({
     opened: at,
     via: z.enum(['PORTAL', 'LINK', 'OFFICE']),
-    outcomeWanted: output({ code: z.enum(OUTCOMES_WANTED), words }).nullable(),
+    // B-W2b-363: an RMA may record REMAKE (the remake routes), beside the three a request offers.
+    outcomeWanted: output({ code: z.enum(RECORDED_OUTCOMES_WANTED), words }).nullable(),
     note: z.string().nullable(),
     photos: z.array(file),
     lines: z.array(

@@ -7,7 +7,8 @@
  *     matches no row (default deny); a role may also be kept to the rows whose column holds one of a few listed values
  *     (`onlyValues`, e.g. some kinds of a table's rows);
  *   - grants: table-level for a role that sees every column, column-level (`GRANT SELECT (…)`) that leaves out the
- *     hidden columns for the others.
+ *     hidden columns for the others; a write-only column is left out of the SELECT grant only (the role writes it and
+ *     never reads it back).
  *
  * Fail closed, and convergent: applying it twice changes nothing, and applying a newer model removes what the older one
  * granted. It drops EVERY policy on a managed table before creating its own (a stray permissive policy would widen
@@ -33,6 +34,13 @@ export interface RoleAccess {
   readonly scopedBy?: readonly string[]
   /** Columns the role may neither read nor write (cost, margin, price, internal notes …). */
   readonly hiddenColumns?: readonly string[]
+  /**
+   * Columns the role writes (its INSERT and UPDATE grants) but never reads back (left out of its SELECT grant): e.g. a
+   * supplier's portal inserts the IBAN it types and reads only its last four characters. A write-only column is not a
+   * hidden one and not one its policy reads; the role needs SELECT and INSERT or UPDATE. A statement of the role that
+   * names it in a WHERE or RETURNING is refused.
+   */
+  readonly writeOnlyColumns?: readonly string[]
   /**
    * Rows this role may reach only when a column holds one of the listed values (column → values), beside the keys: e.g.
    * `{ kind: ['LOT', 'GOODS_RECEIPT'] }` keeps a role to the rows of those kinds, for reads and writes alike (a row of
@@ -144,6 +152,17 @@ function checkTable(model: PolicyModel, table: TablePolicy, name: string): void 
       if (policyColumns.has(column)) fail(`${name}: role ${roleName} cannot hide ${column}, its own policy reads it.`)
     }
     if (hidden.length > 0 && columns.size - new Set(hidden).size === 0) fail(`${name}: role ${roleName} would see no column.`)
+    const writeOnly = access.writeOnlyColumns ?? []
+    for (const column of writeOnly) {
+      if (!columns.has(column)) fail(`${name}: write-only column ${column} is not one of its columns.`)
+      if (hidden.includes(column)) fail(`${name}: role ${roleName} cannot both hide and write ${column}.`)
+      if (policyColumns.has(column)) fail(`${name}: role ${roleName} cannot make ${column} write-only, its own policy reads it.`)
+      if (Object.hasOwn(access.onlyValues ?? {}, column)) fail(`${name}: role ${roleName} cannot make ${column} write-only, its own policy reads it.`)
+    }
+    if (new Set(writeOnly).size !== writeOnly.length) fail(`${name}: role ${roleName} lists a write-only column twice.`)
+    if (writeOnly.length > 0 && !(privileges.includes('select') && (privileges.includes('insert') || privileges.includes('update')))) {
+      fail(`${name}: role ${roleName} has write-only columns, so it needs select and insert or update.`)
+    }
     for (const [column, values] of Object.entries(access.onlyValues ?? {})) {
       if (!columns.has(column)) fail(`${name}: role ${roleName} filters on ${column}, which is not one of its columns.`)
       if (hidden.includes(column)) fail(`${name}: role ${roleName} cannot hide ${column}, its own policy reads it.`)
@@ -174,16 +193,20 @@ function condition(model: PolicyModel, table: TablePolicy, access: RoleAccess): 
 function grants(table: TablePolicy, name: string, roleName: string, access: RoleAccess): string[] {
   const privileges = PRIVILEGES.filter((privilege) => access.privileges.includes(privilege))
   const hidden = new Set(access.hiddenColumns ?? [])
-  if (hidden.size === 0) {
+  const writeOnly = new Set(access.writeOnlyColumns ?? [])
+  if (hidden.size === 0 && writeOnly.size === 0) {
     return [`GRANT ${privileges.map((p) => p.toUpperCase()).join(', ')} ON TABLE ${name} TO ${role(roleName)};`]
   }
-  const visible = sorted(table.columns.filter((column) => !hidden.has(column)))
-    .map((column) => identifier(column, 'column'))
-    .join(', ')
+  const listed = (keep: (column: string) => boolean): string =>
+    sorted(table.columns.filter(keep))
+      .map((column) => identifier(column, 'column'))
+      .join(', ')
+  const visible = listed((column) => !hidden.has(column))
+  const readable = listed((column) => !hidden.has(column) && !writeOnly.has(column))
   const out: string[] = []
   const columnLevel = privileges.filter((privilege) => privilege !== 'delete')
   if (columnLevel.length > 0) {
-    out.push(`GRANT ${columnLevel.map((p) => `${p.toUpperCase()} (${visible})`).join(', ')} ON TABLE ${name} TO ${role(roleName)};`)
+    out.push(`GRANT ${columnLevel.map((p) => `${p.toUpperCase()} (${p === 'select' ? readable : visible})`).join(', ')} ON TABLE ${name} TO ${role(roleName)};`)
   }
   if (privileges.includes('delete')) out.push(`GRANT DELETE ON TABLE ${name} TO ${role(roleName)};`)
   return out
