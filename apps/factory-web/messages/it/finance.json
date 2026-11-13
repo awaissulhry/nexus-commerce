@@ -215,7 +215,12 @@
     "TD01": "Fattura",
     "TD02": "Fattura di acconto",
     "TD04": "Nota di credito",
-    "TD24": "Fattura differita"
+    "TD24": "Fattura differita",
+    "TD05": "Nota di debito",
+    "TD16": "Integrazione reverse charge interno",
+    "TD17": "Autofattura, servizi dall'estero",
+    "TD18": "Integrazione, beni dall'UE",
+    "TD19": "Autofattura, beni in Italia"
   },
   "docs": {
     "col": {

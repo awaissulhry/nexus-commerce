@@ -288,6 +288,7 @@
       "SERVICE_CASE": "Service case",
       "SAFETY_REPORT": "Product-safety report",
       "PROFORMA": "Proforma invoice",
+      "SELF_INVOICE": "Self-invoice (TD16-TD19)",
       "PAYROLL_EXPORT": "Payroll export",
       "PORTAL_REQUEST": "Portal order request"
     },

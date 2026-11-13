@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { periodLockLineView, periodLockOverride } from '@nexus/factory-domain/accounting/contracts'
 import { businessDate, defineContract, id, input, instant, output, quantity, unitPrice } from '@nexus/factory-domain/core/contracts'
-import { CHARGE_KINDS } from '@nexus/factory-domain/invoicing/charges/charges'
+import { CHARGE_KINDS, TYPED_CHARGE_KINDS } from '@nexus/factory-domain/invoicing/charges/charges'
 import { INVOICE_DOC_TYPES, INVOICE_LINE_KINDS, INVOICE_STATUSES, MAX_CAUSALE, MAX_DESCRIPTION, MAX_INVOICE_LINES, PRICE_BASES } from '@nexus/factory-domain/invoicing/invoices'
 import { money, notMoney } from '@nexus/factory-domain/money/marked'
 
@@ -21,7 +21,8 @@ const paymentMethod = z.string().regex(/^MP(0[1-9]|1[0-9]|2[0-3])$/, { message: 
 export const lineInput = input({
   /** B-W2a-54: CHARGE, an accessory charge (freight, packaging, samples, a fee), with `chargeKind`. */
   kind: z.enum(['GOODS', 'SERVICE', 'CHARGE']).optional(),
-  chargeKind: z.enum(CHARGE_KINDS).nullish(),
+  // B-W2b-369: a person types one of these; STAMP_DUTY is added by the stamp duty rule (B-W2b-392), never typed.
+  chargeKind: z.enum(TYPED_CHARGE_KINDS).nullish(),
   description: z.string().trim().min(1).max(MAX_DESCRIPTION),
   itemCode: z.string().trim().max(35).nullish(),
   quantity: quantity(),

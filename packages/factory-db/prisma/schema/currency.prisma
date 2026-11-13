@@ -1,0 +1,70 @@
+// Currencies and exchange rates (W2b-6, schema wave 49/57, B-W2b-369; features PLT-132, PLT-133; design finance.settings
+// "Currencies & rates": base currency; daily ECB rates; manual override per date). apps/factory-api's currencies module
+// (B-W2b-389) writes them, always through command(); the daily ECB reference rates are read through the gateway
+// (IntegrationProvider ECB, a free public file) by a job in the tenant's system context.
+//
+// Every money value stays minor units plus its currency (as today). A company's base currency is Company.currency; the
+// currencies its documents may be in are its Currency rows that are active (the base one always is). A rate is quoted as
+// the ECB quotes it: how many units of the quote currency one unit of the base buys (1 EUR = 1.0850 USD), one per base,
+// quote, day and source; a MANUAL rate of a day overrides the ECB's for that day. A document keeps the rate and day it
+// used (Invoice.exchangeRate and rateDate, PurchaseOrder.rateAtOrder), so a later rate never changes it; revaluation stays
+// the accountant's.
+//
+// Who sees what (ownership/currency.json): the office only. The …_tax_currency_w2b_guards triggers hold the rules.
+
+/// A currency a company's documents may be in (PLT-132): its ISO 4217 code and minor units, switched on or off. One active
+/// row per company and code; the company's base currency is never switched off. Switched off, never deleted.
+model Currency {
+  id          String   @id @db.Uuid
+  tenantId    String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId   String   @db.Uuid
+  /// ISO 4217, three capitals ("USD"). Fixed.
+  code        String
+  /// The digits after the decimal point of its minor unit (ISO 4217: EUR 2, JPY 0, KWD 3), 0 to 4. Fixed.
+  minorUnits  Int
+  active      Boolean  @default(true)
+  version     Int      @default(1)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?  @db.Uuid
+
+  company Company @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // One active row per company and code: the partial unique Currency_one_active of the guards migration.
+  @@index([tenantId, companyId])
+}
+
+/// One exchange rate of a day (PLT-132, PLT-133): base, quote, the day, the rate (quote units per base unit, above 0), and
+/// where it came from: the ECB's daily reference file (base EUR; never changed) or a person's MANUAL override of that day
+/// (who; its rate may be corrected; removed to fall back to the ECB's). One per base, quote, day and source (`key`).
+model ExchangeRate {
+  id             String             @id @db.Uuid
+  tenantId       String             @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// ISO 4217 codes, different; the ECB's base is EUR.
+  base           String
+  quote          String
+  /// The day it is the rate of (Europe/Rome), not in the future.
+  rateDate       DateTime           @db.Date
+  rate           Decimal            @db.Decimal(18, 8)
+  source         ExchangeRateSource
+  /// MANUAL only, and required there: the person who typed the override (or last corrected it).
+  overriddenById String?            @db.Uuid
+  /// "<base>:<quote>:<YYYY-MM-DD>:<source>" (one rate per base, quote, day and source).
+  key            String
+  version        Int                @default(1)
+  createdAt      DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime           @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById    String?            @db.Uuid
+
+  @@unique([tenantId, key])
+  // The rates of a currency by day.
+  @@index([tenantId, quote, rateDate])
+}
+
+/// Where a rate came from.
+enum ExchangeRateSource {
+  /// The ECB's euro foreign exchange reference rates (the daily public file).
+  ECB
+  /// Typed by a person for that day: it wins over the ECB's.
+  MANUAL
+}

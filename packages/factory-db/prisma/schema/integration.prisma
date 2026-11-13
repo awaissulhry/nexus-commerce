@@ -104,6 +104,9 @@ enum IntegrationProvider {
   /// network: local and test); STRIPE waits for the Owner's yes with its exact cost (GATE-SPEND, W2b-3 question 2).
   PAYMENT_FAKE
   STRIPE
+  /// W2b-6 (schema wave 49/57, B-W2b-369; PLT-132): the ECB's daily euro foreign exchange reference rates (a free public
+  /// file, read through the gateway): currency.prisma ExchangeRate source ECB.
+  ECB
 }
 
 /// Which system an account's calls reach.

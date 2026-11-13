@@ -8,7 +8,7 @@
  */
 
 /** The outside services the factory talks to; the same list as the IntegrationProvider enum of @nexus/factory-db. */
-export const INTEGRATION_PROVIDERS = ['SES', 'R2', 'SDI', 'SENDCLOUD', 'VIES', 'CLAMAV', 'ERROR_TRACKING', 'PAYMENT_FAKE', 'STRIPE'] as const
+export const INTEGRATION_PROVIDERS = ['SES', 'R2', 'SDI', 'SENDCLOUD', 'VIES', 'CLAMAV', 'ERROR_TRACKING', 'PAYMENT_FAKE', 'STRIPE', 'ECB'] as const
 export type IntegrationProviderCode = (typeof INTEGRATION_PROVIDERS)[number]
 
 /**

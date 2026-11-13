@@ -89,6 +89,7 @@ import { seed as seedSubcontractReceipts } from '../seed/subcontract-receipts'
 import { seed as seedSubstances } from '../seed/substances'
 import { seed as seedSuppliersDepth } from '../seed/suppliers-depth'
 import { seed as seedSupply } from '../seed/supply'
+import { seed as seedTax } from '../seed/tax'
 import { seed as seedTechfiles } from '../seed/techfiles'
 import { seed as seedThreads } from '../seed/threads'
 import { seed as seedTime } from '../seed/time'
@@ -456,6 +457,12 @@ beforeAll(async () => {
   // first an open one), a reprint and a printer that prints straight from the station: the plain ones a copy may repeat.
   await seedCarriers({ db: factory, namespace: 'iso-a' })
   await seedCarriers({ db: factory, namespace: 'iso-b' })
+  // The invoicing, tax and currency schema of W2b-6 (wave 49/57): e-invoice settings (one company live), tax codes (the first
+  // archived), declarations of intent (the first revoked), stamp duty quarters (the first not paid), self-invoices (the first
+  // cancelled), our copy of an SDI send, invoice runs (the first a preview), deposit rules (the first archived), currencies (the
+  // first switched off) and exchange rates (the first an ECB rate): the plain ones a copy may repeat.
+  await seedTax({ db: factory, namespace: 'iso-a' })
+  await seedTax({ db: factory, namespace: 'iso-b' })
   // Every seed of both tenants: under a full parallel run this takes more than a minute.
 }, 120_000)
 
@@ -522,6 +529,7 @@ it('covers every classified table and every runtime role', () => {
     'Colourway',
     'Company',
     'CompanyBranding',
+    'CompanyEInvoiceSettings',
     'Complaint',
     'ComplianceDocument',
     'ComplianceDocumentBatch',
@@ -531,6 +539,7 @@ it('covers every classified table and every runtime role', () => {
     'CreditCheck',
     'CrewMember',
     'CrewSession',
+    'Currency',
     'CustomerMaterial',
     'CustomerRequirement',
     'CutConsumption',
@@ -544,9 +553,11 @@ it('covers every classified table and every runtime role', () => {
     'CutTicket',
     'Ddt',
     'DdtCancellation',
+    'DeclarationOfIntent',
     'DefaultLocation',
     'DefectCode',
     'DeliveryTolerance',
+    'DepositCancellationRule',
     'DepositRequest',
     'Device',
     'DeviceEnrolment',
@@ -562,6 +573,7 @@ it('covers every classified table and every runtime role', () => {
     'Employee',
     'EmployeeSkill',
     'EvidencePack',
+    'ExchangeRate',
     'ExportJob',
     'FabricRoll',
     'FileMarkup',
@@ -630,6 +642,7 @@ it('covers every classified table and every runtime role', () => {
     'Invitation',
     'Invoice',
     'InvoiceLine',
+    'InvoiceRun',
     'Item',
     'ItemColour',
     'ItemGradeRule',
@@ -891,6 +904,7 @@ it('covers every classified table and every runtime role', () => {
     'ScheduleSlot',
     'ScrapApproval',
     'ScrapReason',
+    'SdiArchiveCopy',
     'SdiInboxItem',
     'SdiNotification',
     'SdiSubmission',
@@ -898,6 +912,7 @@ it('covers every classified table and every runtime role', () => {
     'Season',
     'SecondaryProcess',
     'SecretValue',
+    'SelfInvoice',
     'ServiceCase',
     'ServiceCaseLink',
     'Session',
@@ -919,6 +934,7 @@ it('covers every classified table and every runtime role', () => {
     'SizeSurcharge',
     'Skill',
     'StaffNoticeAck',
+    'StampDutyQuarter',
     'StandardChange',
     'StandardCost',
     'Station',
@@ -965,6 +981,7 @@ it('covers every classified table and every runtime role', () => {
     'SustainabilityClaim',
     'SvhcListVersion',
     'Task',
+    'TaxCode',
     'Team',
     'TeamInbox',
     'TeamMember',
