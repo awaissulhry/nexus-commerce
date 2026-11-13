@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import type { FastifyInstance } from 'fastify'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { openFactoryDatabase, RUNTIME_LOGIN, type FactoryDatabase, type Prisma } from '@nexus/factory-db'
 import { migratedDatabase, type MigratedDatabase } from '@nexus/factory-db/testing'
 import { newId } from '@nexus/factory-domain/core/ids'
@@ -17,6 +17,13 @@ import { testAuthenticator, type SessionContext } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { systemContext } from '../../../platform/outbox/system'
 import { startOnFirstWork } from './moves'
+
+// ---- B-W2b-F43: the clock is fixed at Friday 13 Nov 2026 09:00 UTC (10:00 at the plant), in the seeds' week, and runs on from
+// there: the expectations read the seeds' fixed days and failed once those days passed (a fake clock on 2026-12-07 or 2027-01-15
+// found it). The routes read the same clock (serverClock); the office sign-in keeps its own movable clock.
+vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-11-13T09:00:00.000Z'), shouldAdvanceTime: true })
+afterAll(() => vi.useRealTimers())
+// ---- end B-W2b-F43
 
 /**
  * Work orders from order lines with a frozen spec (B-W1-38; MES-001, MES-002, MES-005, MES-007, MES-076, MES-305; A1

@@ -242,6 +242,10 @@ describe('repairs and their estimates (SAL-384, SAL-387, SAL-391, SAL-393)', () 
     const empty = randomUUID()
     expect(await newEstimate({ id: empty, revision: 9 })).toBe(1)
     await expect(update(office(), 'RepairEstimate', empty, `status = 'SENT', "sentAt" = now(), "sentById" = $2::uuid`, s.memberId)).rejects.toThrow(/with one line or more/)
+    // ---- B-W2b-F43: the draft stands for a month from today, set while it is a DRAFT (its seeded end day, 5 Dec 2026, passes), so the
+    // acceptance "by the end day" below holds on every day the test runs.
+    expect(await update(office(), 'RepairEstimate', draft, `"validUntil" = $2::date`, day(30))).toBe(1)
+    // ---- end B-W2b-F43
     await expect(update(office(), 'RepairEstimate', draft, `status = 'SENT'`)).rejects.toThrow(/wrong sending/)
     expect(await update(office(), 'RepairEstimate', draft, `status = 'SENT', "sentAt" = now(), "sentById" = $2::uuid, version = version + 1`, s.memberId)).toBe(1)
     await expect(update(office(), 'RepairEstimate', draft, `"customerNote" = 'Changed after sending'`)).rejects.toThrow(/what the customer saw never changes/)

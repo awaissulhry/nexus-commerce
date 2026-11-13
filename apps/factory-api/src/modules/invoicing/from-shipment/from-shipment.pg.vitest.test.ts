@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import type { FastifyInstance } from 'fastify'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { validateXML } from 'xmllint-wasm'
 import { newId } from '@nexus/factory-domain/core/ids'
 import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
@@ -22,6 +22,13 @@ import { systemContext } from '../../../platform/outbox/system'
 import { fileTravelDocuments, TRAVEL_DOCUMENT_PERMISSIONS } from '../../shipping/documents/testing/compliance'
 import { pollSend } from '../sdi/poll'
 import { createSdiRuntime, useSdi, type SdiRuntime } from '../sdi/runtime'
+
+// ---- B-W2b-F43: the clock is fixed at Friday 13 Nov 2026 09:00 UTC (10:00 at the plant), in the seeds' week, and runs on from
+// there: the expectations read the seeds' fixed days and failed once those days passed (a fake clock on 2026-12-07 or 2027-01-15
+// found it). The routes read the same clock (serverClock); the office sign-in keeps its own movable clock.
+vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-11-13T09:00:00.000Z'), shouldAdvanceTime: true })
+afterAll(() => vi.useRealTimers())
+// ---- end B-W2b-F43
 
 /**
  * Invoices from shipped goods (B-W1-51; FIN-054, FIN-055, FIN-069, FIN-078, FIN-090, FIN-098, FIN-121; PLAN §4.7 stage
