@@ -9,6 +9,8 @@ import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import type { Order } from '../../api'
 import type { OrderRecordActions, OrderRecordModel } from '../record-model'
 import { PartState } from './OrderRecordView'
+// ---- B-W2b-323 (orders in depth on screen) ----
+import { ConfirmationCard, TechPackCard } from '../../confirmation/view/ConfirmationCard'
 
 /**
  * Documents (design `order.docs.acceptance` + `order.docs.files`): the accepted quote version and its acceptance
@@ -25,6 +27,12 @@ export function DocumentsTab({ order, model, actions }: { order: Order; model: O
 
   return (
     <div className="fw-so-cards">
+      {/* B-W2b-323: the order confirmation (its PDF, sent to, when; Make, Send…, Open in new tab), full width. */}
+      {model.depth?.confirmation && (
+        <div className="fw-sod-span">
+          <ConfirmationCard order={order} model={model.depth} actions={actions?.depth} prefix={model.prefix} />
+        </div>
+      )}
       <Card padded>
         <div className="fw-so-card-head">
           <h2 className="fw-so-h2">
@@ -68,6 +76,8 @@ export function DocumentsTab({ order, model, actions }: { order: Order; model: O
           </Button>
         </div>
       </Card>
+      {/* B-W2b-323: Brand tech pack in force (order.docs.files). */}
+      <TechPackCard model={model.depth} actions={actions?.depth} />
     </div>
   )
 }

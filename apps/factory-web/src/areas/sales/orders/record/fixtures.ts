@@ -52,6 +52,8 @@ import {
 import { COMPOSER_EMPTY, type AmendState, type OrderRecordModel } from './record-model'
 import { OrderRecordView } from './view/OrderRecordView'
 import { MARGIN, marginAs } from './margin/fixtures'
+// ---- B-W2b-323 (orders in depth on screen) ----
+import { APPROVAL_CREDIT, APPROVAL_NOBODY, APPROVAL_PENDING, CHANGES, CHANGES_NONE, CHANGES_WAITING_YES, CONFIRMATION_NONE, CONFIRMATION_OUTDATED, CONFIRMATION_WAITING, depthModel, FREEZE_FINISHED, FREEZE_NONE, MATERIALS_EMPTY, MATERIALS_NOT_PLANNED, orderDepth, PRICED_BLOCKED, pricedOpen } from '../depth/demo/fixtures'
 
 /**
  * SCR-039 — the order studio (design sales.orders "Record: Sales order") with made-up data only: every tab, the states
@@ -199,6 +201,46 @@ const TYPED: DraftLine[] = [
 ]
 const typedDraft = { lines: TYPED, requestedDate: '2026-12-01', promiseDate: '2026-12-08', internalNote: 'Etichetta del cliente sulle giacche.' }
 
+// ---- B-W2b-323 ----
+const waitingOrder = order('CONFIRMED', { status: 'PENDING_APPROVAL' })
+const d323 = (role: Role, value: Order, over: Partial<OrderRecordModel> = {}, depth: Parameters<typeof depthModel>[1] = {}): RecordCase => base(role, value, { ...over, depth: depthModel(role, depth) })
+const frozenPreview = { ok: false, revision: 4, version: 7, problems: [{ path: 'body/lines/10/SIZE_QUANTITY', message: 'x' }], diff: null }
+const W2B_323 = [
+  { id: 'w2b-323-lines', label: 'W2b · Sales · Lines: urgent with its reason, season FW27, confirmation v2 sent; black 48 · 50 locked “Cutting started — size frozen”; Customer-supplied materials', model: d323('sales', production), note: 'The materials grid links each lot and the receipt that brought it; Plan from the BOM makes the rows.' },
+  { id: 'w2b-323-materials-empty', label: 'W2b · Sales · Customer-supplied materials: the customer supplies nothing', model: d323('sales', production, {}, { materials: { value: MATERIALS_EMPTY, problem: null }, freeze: { value: FREEZE_NONE, problem: null } }) },
+  { id: 'w2b-323-materials-not-planned', label: 'W2b · Sales · Customer-supplied materials: the BOM asks a material the order does not keep yet', model: d323('sales', production, {}, { materials: { value: MATERIALS_NOT_PLANNED, problem: null } }) },
+  { id: 'w2b-323-materials-error', label: "W2b · Sales · Customer materials couldn't load (Try again; the rest stays usable)", model: d323('sales', production, {}, { materials: { value: null, problem: 'problem.read.unavailable' } }) },
+  { id: 'w2b-323-materials-loading', label: 'W2b · Sales · Customer materials reading', model: d323('sales', production, {}, { materials: { value: null, problem: null } }) },
+  { id: 'w2b-323-manager-lines', label: 'W2b · Production manager · Lines: frozen sizes and materials read-only (Plan held)', model: d323('manager', production) },
+  { id: 'w2b-323-amend-frozen', label: 'W2b · Sales · Amend order: the cut sizes marked in the grid with their reason', model: d323('sales', production, { amend: amendOf(production) }) },
+  { id: 'w2b-323-review-frozen', label: 'W2b · Sales · Review amendment: frozen by the stage — Send as a priced change', model: d323('sales', production, { amend: amendOf(production, (lines) => lines.map((line) => (line.lineId === LINE_BLK ? { ...line, sizes: { ...line.sizes, '50': 3 } } : line)), { review: { phase: 'ready', preview: frozenPreview, problem: null } }), dialog: { kind: 'amendReview' } }) },
+  { id: 'w2b-323-review-blocked', label: 'W2b · Sales · Review amendment: frozen for good (finished pieces) — no way', model: d323('sales', production, { amend: amendOf(production, (lines) => lines, { review: { phase: 'ready', preview: frozenPreview, problem: null } }), dialog: { kind: 'amendReview' } }, { freeze: { value: FREEZE_FINISHED, problem: null } }) },
+  { id: 'w2b-323-priced', label: 'W2b · Sales · Priced change: one more in 50 priced, the fee, the extra deposit (30 % of the growth), it waits for a yes', model: d323('sales', production, {}, { dialog: { kind: 'priced' }, priced: pricedOpen() }), note: 'The kind lists the caparra penitenziale held: off until the accountant confirms it.' },
+  { id: 'w2b-323-priced-blocked', label: 'W2b · Sales · Priced change refused: the size cannot change any more', model: d323('sales', production, {}, { dialog: { kind: 'priced' }, priced: pricedOpen(PRICED_BLOCKED) }) },
+  { id: 'w2b-323-priced-reading', label: 'W2b · Sales · Priced change: pricing', model: d323('sales', production, {}, { dialog: { kind: 'priced' }, priced: { ...pricedOpen(), preview: { phase: 'reading', value: null, problem: null } } }) },
+  { id: 'w2b-323-changes', label: 'W2b · Sales · Changes: What is frozen beside Priced change requests (waiting for the customer; turned down: Put back)', model: d323('sales', amended(production), { tab: 'changes' }) },
+  { id: 'w2b-323-changes-yes', label: 'W2b · Sales · Changes: a change waits for a yes (nothing else is taken meanwhile)', model: d323('sales', amended(production), { tab: 'changes' }, { changes: { value: CHANGES_WAITING_YES, problem: null } }) },
+  { id: 'w2b-323-changes-no-rules', label: 'W2b · Sales · Changes: the company keeps no freeze rule; no priced change yet', model: d323('sales', production, { tab: 'changes' }, { freeze: { value: FREEZE_NONE, problem: null }, changes: { value: CHANGES_NONE, problem: null } }) },
+  { id: 'w2b-323-changes-manager', label: 'W2b · Production manager · Changes: no money column; Put back held', model: d323('manager', amended(production), { tab: 'changes' }) },
+  { id: 'w2b-323-put-back', label: 'W2b · Sales · Put back revision 2 (turned down)', model: d323('sales', amended(production), { tab: 'changes' }, { dialog: { kind: 'putBack', changeId: CHANGES.changes[1]!.id, reason: 'Respinta dall’amministrazione.' } }) },
+  { id: 'w2b-323-dates', label: 'W2b · Owner · Dates: Production finish forecast per line (6 days to spare; 7 days short) and the milestones', model: d323('owner', production, { tab: 'dates' }) },
+  { id: 'w2b-323-dates-sales', label: 'W2b · Sales · Dates: the forecast (the milestones are the planner’s)', model: d323('sales', production, { tab: 'dates' }) },
+  { id: 'w2b-323-dates-error', label: "W2b · Sales · Dates: the forecast couldn't be read (said once, Try again)", model: d323('sales', production, { tab: 'dates' }, { forecasts: { value: null, problem: 'problem.read.unavailable' } }) },
+  { id: 'w2b-323-documents', label: 'W2b · Sales · Documents: the confirmation (v2, sent) in the PDF viewer; the brand tech pack in force (a newer version)', model: d323('sales', production, { tab: 'documents' }) },
+  { id: 'w2b-323-documents-none', label: 'W2b · Sales · Documents: no confirmation yet — Make confirmation', model: d323('sales', production, { tab: 'documents' }, { confirmation: { value: CONFIRMATION_NONE, problem: null }, confirmationPdf: null }) },
+  { id: 'w2b-323-documents-outdated', label: 'W2b · Sales · Documents: the order changed since v2 — Make version 3', model: d323('sales', production, { tab: 'documents' }, { confirmation: { value: CONFIRMATION_OUTDATED, problem: null } }) },
+  { id: 'w2b-323-documents-error', label: "W2b · Sales · Documents: the confirmation couldn't be read", model: d323('sales', production, { tab: 'documents' }, { confirmation: { value: null, problem: 'problem.read.unavailable' }, confirmationPdf: null }) },
+  { id: 'w2b-323-send', label: 'W2b · Sales · Send the confirmation (the one send dialog): to the orders contact, the PDF, the checks', model: d323('sales', production, { tab: 'documents' }, { dialog: { kind: 'send', cc: '', subject: '', message: 'Buongiorno, in allegato la conferma d’ordine.' }, send: { recipient: { name: 'Giulia Esempio', email: 'ordini@moto-demo.example.com' }, pdf: null, result: null } }) },
+  { id: 'w2b-323-send-no-recipient', label: 'W2b · Sales · Send held: the customer has no orders contact with an e-mail', model: d323('sales', production, { tab: 'documents' }, { dialog: { kind: 'send', cc: '', subject: '', message: '' }, send: { recipient: null, pdf: null, result: null } }) },
+  { id: 'w2b-323-waiting', label: 'W2b · Sales · Waiting for a yes: asked of Finance, you asked (Take the request back); the confirmation waits', model: d323('sales', waitingOrder, { tab: 'documents' }, { approval: { value: APPROVAL_PENDING, problem: null }, depth: { value: orderDepth({ status: 'PENDING_APPROVAL', priority: { level: 'NORMAL', urgentReason: null, number: 0 }, confirmation: { versions: 0, sentAt: null, sentVersion: null } }), problem: null }, confirmation: { value: CONFIRMATION_WAITING, problem: null }, confirmationPdf: null }) },
+  { id: 'w2b-323-waiting-nobody', label: 'W2b · Sales · Waiting for a yes, nobody asked yet: Ask for a yes', model: d323('sales', waitingOrder, {}, { approval: { value: APPROVAL_NOBODY, problem: null } }) },
+  { id: 'w2b-323-waiting-credit', label: 'W2b · Sales · Waiting: the customer’s credit holds it too (Finance decides; not yours to take back)', model: d323('sales', waitingOrder, {}, { approval: { value: APPROVAL_CREDIT, problem: null } }) },
+  { id: 'w2b-323-ask', label: 'W2b · Sales · Ask for a yes (a note for who decides)', model: d323('sales', waitingOrder, {}, { approval: { value: APPROVAL_NOBODY, problem: null }, dialog: { kind: 'ask', note: 'Cliente storico, prezzo concordato con il titolare.' } }) },
+  { id: 'w2b-323-priority', label: 'W2b · Sales · Set priority (⋯): Urgent with its reason', model: d323('sales', production, {}, { dialog: { kind: 'priority', level: 'URGENT', reason: 'Il cliente apre il negozio il 1° dicembre.' } }) },
+  { id: 'w2b-323-season', label: 'W2b · Sales · Set season (⋯): the open seasons', model: d323('sales', production, {}, { dialog: { kind: 'season', seasonId: '' }, seasons: [{ id: '0190f0e2-5353-7000-8000-000000000001', companyId: COMPANY, code: 'FW27', name: 'Autunno-inverno 2027', startsOn: '2027-07-01', endsOn: '2028-01-31', orderBookClosesOn: '2027-03-31', status: 'OPEN', state: 'OPEN', version: 1 }, { id: '0190f0e2-5353-7000-8000-000000000002', companyId: COMPANY, code: 'SS27', name: 'Primavera-estate 2027', startsOn: '2027-01-15', endsOn: '2027-06-30', orderBookClosesOn: '2026-10-15', status: 'OPEN', state: 'BOOK_CLOSED', version: 2 }] }) },
+  { id: 'w2b-323-notice', label: 'W2b · Sales · After the priced change: recorded, waiting for a yes', model: d323('sales', amended(production), { tab: 'changes' }, { notice: { tone: 'success', words: { key: 'notice.pricedWaiting', params: { revision: 3 } } } }) },
+]
+
 function OrderDesign({ model }: { model: RecordCase }) {
   if (model.draft) return inShell('/sales/orders/new', createElement(NewOrderView, { model: model.draft }), model.role)
   return inShell(`/sales/orders/${model.record.order.status === 'ready' ? model.record.order.value.id : 'x'}`, createElement(OrderRecordView, { model: model.record }), model.role)
@@ -325,5 +367,7 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'w2a-margin-no-grain', label: 'W2a · Production manager · Margin: no margin grain, said in words', model: base('manager', production, { tab: 'margin', margin: marginAs('manager', null) }) },
     { id: 'w2a-margin-loading', label: 'W2a · Margin reading', model: base('finance', production, { tab: 'margin', margin: marginAs('finance', { value: null, problem: null }) }) },
     { id: 'w2a-margin-error', label: "W2a · Margin couldn't load: Try again (the rest of the order stays usable)", model: base('finance', production, { tab: 'margin', margin: marginAs('finance', { value: null, problem: 'problem.unavailable' }) }) },
+    // ---- B-W2b-323: orders in depth (priority, season, the yes, what is frozen, priced changes, materials, confirmation, tech pack, forecast, milestones) ----
+    ...W2B_323,
   ],
 })

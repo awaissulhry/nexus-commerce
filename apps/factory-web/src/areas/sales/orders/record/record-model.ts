@@ -6,6 +6,7 @@ import type { MarginTabModel } from './margin/model'
 import type { LiveState, StepUpState } from '../hooks'
 import type { OrderAbilities, Phrase, RecordTab, SizeLayer } from '../model'
 import type { ScheduleStepsActions, ScheduleStepsModel } from './schedule/view/StepVerbs'
+import type { OrderDepthActions, OrderDepthModel } from '../depth/use-order-depth' // B-W2b-323
 
 /** SCR-039 — the order studio's view model (OrderRecordView draws it and fetches nothing). */
 
@@ -116,6 +117,9 @@ export interface OrderRecordModel {
   panelsPreview?: RecordPanelsViewModel
   /** B-W2b-16: the CANCEL reasons (the code a close of lines names; the words of a closed line's code); null: not read. */
   cancelReasons?: readonly CancelReason[] | null
+  /** B-W2b-323: the orders in depth (priority, season, the yes it waits for, what is frozen, priced changes, the customer's
+   *  materials, the confirmation, the tech pack, the finish forecast, the milestones); absent: not drawn. */
+  depth?: OrderDepthModel
   /** Design cases: what a dialog holds typed. */
   draft?: { date?: string; reason?: string; reasonCode?: string; lineIds?: string[]; scope?: 'order' | 'lines'; amount?: string; reference?: string; receivedOn?: string; issue?: boolean; message?: string; typed?: string }
 }
@@ -166,6 +170,9 @@ export interface OrderRecordActions {
   onCopyAsQuote?: () => void
   /** B-W2a-72: read the Margin tab again. */
   onRetryMargin?: () => void
+  /** B-W2b-323: the depth's actions, and "Send as a priced change" from Review amendment (the draft's lines go with it). */
+  depth?: OrderDepthActions
+  onPricedOffer?: () => void
 }
 
 /** The lines editor's own actions (the amendment and the typed New order share it). */

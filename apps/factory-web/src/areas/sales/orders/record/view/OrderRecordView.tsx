@@ -25,6 +25,10 @@ import { LinesTab } from './LinesTab'
 import { MoneyTab } from './MoneyTab'
 import { ProductionTab } from './ProductionTab'
 import { ShipmentsTab } from './ShipmentsTab'
+// ---- B-W2b-323 (orders in depth on screen) ----
+import { depthMenuItems, DepthNotice, DepthPills, WaitingBanner } from '../../depth/view/DepthBand'
+import { DepthDialogs } from '../../depth/view/DepthDialogs'
+import { NAMESPACE as DEPTH } from '../../depth/model'
 import '../../orders.css'
 
 export type { OrderRecordActions, OrderRecordModel } from '../record-model'
@@ -42,7 +46,7 @@ export type { OrderRecordActions, OrderRecordModel } from '../record-model'
  */
 export function OrderRecordView({ model, actions, panels }: { model: OrderRecordModel; actions?: OrderRecordActions; panels?: ReactNode }) {
   return (
-    <WithMessages namespaces={['orders', 'sales', 'lists', 'records']}>
+    <WithMessages namespaces={['orders', 'sales', 'lists', 'records', DEPTH /* B-W2b-323 */]}>
       <OrderRecord model={model} actions={actions} panels={panels} />
     </WithMessages>
   )
@@ -98,6 +102,7 @@ function OrderRecord({ model, actions, panels }: { model: OrderRecordModel; acti
 
 function ReadyRecord({ order, model, actions, panels }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions; panels?: ReactNode }) {
   const t = useT('orders')
+  const d = useT(DEPTH) // B-W2b-323
   // B-W2b-16: the step-up (now also the owner's waive) in the person's language (B-W2b-04's DS words).
   const dsLabels = useDsLabels()
   const locale = useLocale()
@@ -204,6 +209,8 @@ function ReadyRecord({ order, model, actions, panels }: { order: Order; model: O
       },
     },
     ...daily,
+    // B-W2b-323: Set priority…, Set season…
+    ...depthMenuItems(order, model.depth, actions?.depth, d),
   ]
 
   const activity = panels ?? (model.panelsPreview ? <RecordPanelsView model={model.panelsPreview} /> : null)
@@ -255,6 +262,8 @@ function ReadyRecord({ order, model, actions, panels }: { order: Order; model: O
             )}
             {order.reapprovalNeededAt && !isFinal(order) && <Pill tone="warning">{t('record.reapproval')}</Pill>}
             {!order.chain.quote && <Tag tone="neutral">{t('record.typed')}</Tag>}
+            {/* B-W2b-323: priority (URGENT with its reason), season, the confirmation sent. */}
+            {model.depth && <DepthPills model={model.depth} />}
             {order.chain.quote &&
               (model.can.viewQuotes ? (
                 <Link className="fw-so-link fw-so-hint" href={`${model.prefix}/sales/quotes/${order.chain.quote.id}`}>
@@ -295,6 +304,9 @@ function ReadyRecord({ order, model, actions, panels }: { order: Order; model: O
           }
         />
       )}
+      {/* B-W2b-323: the yes the order waits for, the depth's notice. */}
+      {model.depth && <WaitingBanner model={model.depth} actions={actions?.depth} prefix={model.prefix} />}
+      {model.depth && <DepthNotice model={model.depth} actions={actions?.depth} />}
       {order.status === 'CANCELLED' && <Banner tone="danger" title={t('record.cancelled', { reason: order.cancelReason ?? '—' })} />}
       {order.status === 'CLOSED' && <Banner tone="info" title={order.closedAt ? t('record.closed', { date: formatDate(order.closedAt, { locale }) }) : t('record.closedNoDate')} />}
       {!model.can.manage && !model.can.close && !model.can.recordPayment && !model.can.makeWorkOrders && !isFinal(order) && <Banner tone="info" title={t('record.readOnly')} />}
@@ -319,6 +331,7 @@ function ReadyRecord({ order, model, actions, panels }: { order: Order; model: O
       </div>
 
       <OrderDialogs order={order} model={model} actions={actions} />
+      {model.depth && <DepthDialogs order={order} model={model.depth} actions={actions?.depth} prefix={model.prefix} />}
       <StepUpModal
         open={model.stepUp.open}
         title={t('stepUp.title')}

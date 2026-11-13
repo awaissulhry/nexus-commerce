@@ -251,6 +251,10 @@
       "purchasing_supplierPrices": {
         "name": "Supplier price lists",
         "fills": "A supplier's approved sources: material, colour, purchase unit, price (cost), minimum, lead time and primary or backup, keyed by supplier, material and colour code."
+      },
+      "sales_orders": {
+        "name": "Sales orders",
+        "fills": "Orders taken outside Nexus: one order per order reference, its lines by style, colour and size, with quantity, price, the customer’s PO, dates, season and priority."
       }
     },
     "keys": {
