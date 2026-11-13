@@ -16,6 +16,8 @@ import { asDay, dayOrNull, lockOrder, moveFactsOf, readLines, readOrder, readOrd
 import { orderView, type OrderView } from './views'
 // B-W2b-317 (PLN-173): a typed promise change writes the lines' promise history.
 import { typedPromiseRowsInCommand } from '../../planning/promise-keep/typed'
+// B-W2b-303: a waiting order's request withdrawn when it is cancelled.
+import { withdrawPending } from '../../../platform/approvals/engine'
 
 /**
  * The sales order's moves (B-W1-25; SAL-204: one writer per move; factory-domain sales/orders salesOrderMachine), each
@@ -196,7 +198,10 @@ export async function cancelOrderInCommand(
   const reason = reasonOf(body.reason)
   assertTransition(salesOrderMachine, locked.status, 'CANCELLED', { ...moveFactsOf(facts), reason, cancelBlocks: cancelBlocksOf(impact) })
   await tx.salesOrder.update({ where: { id: order.id }, data: { status: 'CANCELLED', cancelReason: reason!, closedAt: now, updatedAt: now, version: { increment: 1 } }, select: { id: true } })
-  const requests = await tx.depositRequest.findMany({ where: { OR: [{ orderId: order.id }, ...(order.quoteVersionId ? [{ quoteVersionId: order.quoteVersionId }] : [])] }, select: { id: true, status: true }, orderBy: { id: 'asc' } })
+  // B-W2b-303 (SAL-205): a waiting order cancelled: the yes asked on it is taken back (nothing left to approve).
+  if (locked.status === 'PENDING_APPROVAL') await withdrawPending(tools, { kind: 'SALES_ORDER', recordId: order.id, byId: tools.context.audience === 'office' ? tools.context.actorId : null, words: `Order cancelled: ${reason}`.slice(0, 2000) })
+  // B-W2b-303 (SAL-201): the version's requests that name no order yet; one another order of the version (split from it) holds is its own.
+  const requests = await tx.depositRequest.findMany({ where: { OR: [{ orderId: order.id }, ...(order.quoteVersionId ? [{ quoteVersionId: order.quoteVersionId, orderId: null }] : [])] }, select: { id: true, status: true }, orderBy: { id: 'asc' } })
   for (const request of requests.filter((row) => row.status === 'OPEN')) {
     const { count } = await tx.depositRequest.updateMany({ where: { id: request.id, status: 'OPEN' }, data: { status: 'CANCELLED', statusNote: `Order ${order.number} cancelled: ${reason}`, updatedAt: now, version: { increment: 1 } } })
     if (count === 1) tools.audit({ action: 'orders.cancelDeposit', recordType: 'DepositRequest', recordId: request.id, companyId: order.companyId, before: { status: 'OPEN' }, after: { status: 'CANCELLED', orderId: order.id }, reason: reason! })

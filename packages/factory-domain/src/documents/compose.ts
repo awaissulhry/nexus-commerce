@@ -278,6 +278,9 @@ function facts(input: DocumentInput, words: DocumentWords): ComposedFact[] {
   switch (input.type) {
     case 'QUOTE':
       return [...referenceFacts(input, words), ...date(words.facts.validUntil, input.validUntil), ...fact(words.facts.paymentTerms, input.paymentTerms), ...fact(words.facts.deliveryTerms, input.deliveryTerms)]
+    // B-W2b-303: the order, the customer's PO, the quote it came from; the delivery promised, the terms.
+    case 'ORDER_CONFIRMATION':
+      return [...referenceFacts(input, words), ...date(words.facts.promiseDate, input.deliveryDate), ...fact(words.facts.paymentTerms, input.paymentTerms), ...fact(words.facts.deliveryTerms, input.deliveryTerms)]
     case 'PURCHASE_ORDER':
       return [...referenceFacts(input, words), ...date(words.facts.deliveryDate, input.deliveryDate), ...fact(words.facts.deliveryTerms, input.deliveryTerms), ...fact(words.facts.paymentTerms, input.paymentTerms)]
     case 'DDT': {
@@ -320,7 +323,7 @@ function blocks(input: DocumentInput, words: DocumentWords): ComposedBlock[] {
   // W2b (B-W2b-19): a DDT's party is the "cessionario" only when the goods are sold to it (i18n ddtPartyHeading).
   const heading = input.type === 'DDT' ? ddtPartyHeading(words, input.transport!.reason) : words.headings.party[input.type]
   const result: ComposedBlock[] = [{ heading, lines: partyLines(input.party, input.type, words, language) }]
-  if (input.type === 'PURCHASE_ORDER' && input.deliverTo) result.push({ heading: words.headings.deliverTo, lines: namedAddress(input.deliverTo, language) })
+  if ((input.type === 'PURCHASE_ORDER' || input.type === 'ORDER_CONFIRMATION') /* B-W2b-303 */ && input.deliverTo) result.push({ heading: words.headings.deliverTo, lines: namedAddress(input.deliverTo, language) })
   if (input.type === 'DDT') {
     const transport = input.transport!
     if (transport.destination) result.push({ heading: words.headings.destination, lines: namedAddress(transport.destination, language) })

@@ -35,6 +35,8 @@ import { forCaller, readFacts, type QuoteDetail } from './views'
 import { freezeProofsInCommand, proofSendChecks } from '../quote-proofs/freeze'
 // B-W2b-294 (SAL-151, SAL-162): a new version takes the delivery terms and the schedule of the one it revises.
 import { carryToRevisionInCommand } from '../quote-terms/carry'
+// B-W2b-303 (SAL-277): a revision keeps the season.
+import { openSeasonOrNull } from '../seasons/store'
 // B-W2b-325: the line rules (minimums) and the discount shown on the document.
 import { quoteLineChecks, withLineChecks } from '../line-checks/documents'
 import { discountShownFor } from '../pricing-depth/store'
@@ -472,6 +474,8 @@ export async function reviseQuote(caller: CommandCaller, quoteId: string, body: 
     const today = businessDate(now)
     const rules = await quoteRulesFor(tx, current.companyId)
     const source = await tx.quoteVersion.findUniqueOrThrow({ where: { id: from.id }, select: { firmOffer: true, termsText: true, termsVersion: true, paymentTerms: true, promiseDate: true, noWithdrawal: true, taxIdentityId: true } })
+    // B-W2b-303 (SAL-277): the revision keeps the version's season while it is open.
+    const season = await openSeasonOrNull(tx, (await tx.quoteVersion.findUniqueOrThrow({ where: { id: from.id }, select: { seasonId: true } })).seasonId)
     const versionId = newId()
     const revision = from.revision + 1
     await tx.quoteVersion.create({
@@ -501,6 +505,8 @@ export async function reviseQuote(caller: CommandCaller, quoteId: string, body: 
         marginFloorPct: rules.marginFloorPct,
         changeNote: body.changeNote?.trim() ? body.changeNote.trim() : null,
         createdById: actorIdOf(tools),
+        // B-W2b-303
+        seasonId: season,
       },
       select: { id: true },
     })

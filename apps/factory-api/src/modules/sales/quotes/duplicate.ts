@@ -16,6 +16,8 @@ import { assertQuotable, detailInCommand } from './quotes'
 import { quoteRulesFor } from './rules'
 import { assertMay, decimal, dayValue, grainsOf, officeContextOf, officeQuote, quotePartyOf, readCurrentVersion, readQuote, type Reader } from './store'
 import { forCaller, type QuoteDetail } from './views'
+// B-W2b-303 (SAL-277): the season a copy keeps.
+import { seasonOfCopySource } from '../seasons/store'
 
 /**
  * Duplicate a quote (B-W2a-30; SAL-155 "copying quotes speeds daily work"; the design's row verb "Duplicate", the cancel
@@ -160,6 +162,8 @@ export async function duplicateInto(tools: CommandTools, source: Source, body: D
       depositPct,
       depositKind: depositPct === null ? null : (useSource ? source.depositKind : null) ?? 'ACCONTO',
       marginFloorPct: rules.marginFloorPct,
+      // B-W2b-303 (SAL-277): a copy of a quote or an order keeps its season while it is open.
+      seasonId: await seasonOfCopySource(tx, source.from),
       createdById: actorId,
     },
     select: { id: true },

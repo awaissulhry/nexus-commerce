@@ -18,6 +18,8 @@ import { newLineDraft, priceLines, scaledCost, snapshotLine, type LineDraft, typ
 import { lockStepRequests, remakeScheduleInCommand } from './schedule'
 import { asDay, dayOrNull, lockOrder, readOrder, readOrderFacts, type LineRecord, type OrderFacts, type OrderRow, type Reader } from './store'
 import type { OrderView } from './views'
+// B-W2b-303 (SO1:02): the line rules on an amendment's lines.
+import { amendedLineProblems } from '../orders-depth/line-rules'
 
 /**
  * Order amendments (B-W2a-30; SAL-209, SAL-217; the design's "Amend order" → "Review amendment" → Changes tab). A
@@ -217,6 +219,8 @@ export async function planAmendment(db: Reader, order: OrderRow, status: OrderRo
       changed: !sameSizes || priceText(unitPrice) !== priceText(line.unitPrice.toString()) || description !== line.description || note !== line.note,
     })
   }
+  // B-W2b-303 (SO1:02): a new or changed line outside the released scope, or another customer's private-label style, is refused.
+  if (issues.length === 0) issues.push(...(await amendedLineProblems(db, order, drafts.filter((draft) => draft.changed))))
   if (issues.length > 0) return issues
   drafts.sort((a, b) => a.seq - b.seq)
   const priced = priceLines(priceBasisOf(order.taxMode), order.currency, treatmentOfStored(lines[0]!), drafts)
@@ -303,7 +307,7 @@ export async function applyAmendment(caller: CommandCaller, orderId: string, bod
  * own command amends, and B-W2b-183's accepted change request (modules/sales/change-requests) in the same command that
  * answers the request. The caller checked orders.manage over `order`.
  */
-export async function amendInCommand(tools: CommandTools, tenantId: string, order: OrderRow, body: AmendBody): Promise<{ amendmentId: string }> {
+export async function amendInCommand(tools: CommandTools, tenantId: string, order: OrderRow, body: AmendBody, options: { readonly reacceptance?: boolean } = {} /* B-W2b-303: a split asks no re-acceptance */): Promise<{ amendmentId: string }> {
   const { tx, now } = tools
   const lineIds = (await tx.salesOrderLine.findMany({ where: { orderId: order.id }, select: { id: true } })).map((line) => line.id)
   await lockOrderLines(tx, tenantId, lineIds)
@@ -373,7 +377,8 @@ export async function amendInCommand(tools: CommandTools, tenantId: string, orde
   // The snapshot after names the new lines by the ids they got.
   const newIds = new Map(plan.priced.lines.flatMap((line, index) => (line.id === null ? [[placeholderId(index), finalIds[index]!] as const] : [])))
   const after: OrderSnapshot = { header: plan.after.header, lines: plan.after.lines.map((line) => (newIds.has(line.id) ? { ...line, id: newIds.get(line.id)! } : line)) }
-  const reacceptanceNeeded = plan.diff.reacceptanceNeeded
+  // B-W2b-303: a split moves lines to new orders of the same customer and quote: the customer accepts nothing again.
+  const reacceptanceNeeded = options.reacceptance === false ? false : plan.diff.reacceptanceNeeded
   await tx.salesOrder.update({
     where: { id: order.id },
     data: {
