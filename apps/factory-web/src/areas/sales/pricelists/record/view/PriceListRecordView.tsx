@@ -9,7 +9,10 @@ import { formatTime } from '../../../../../lib/i18n/format'
 import { useLocale } from '../../../../../lib/i18n/provider'
 import { RecordPanelsView } from '../../../../../record-panels/view/RecordPanelsView'
 import { archiveHeld, nextVersionHeld, RECORD_TABS } from '../../model'
-import { Freshness, KindTag, PriceListsMessages, RecordFrame, say, StatePill, useValidity, useWords } from '../../parts'
+import { Freshness, KindTag, PriceListsMessages, RecordFrame, say, StatePill, useDepthWords, useSayAny, useValidity, useWords } from '../../parts'
+// B-W2b-343: Breaks & surcharges, the import, the version's export and the price list PDF.
+import { exportHref } from '../../depth/api'
+import { BreaksTab } from './BreaksTab'
 import type { PriceListRecordProps } from '../record-model'
 import { CustomersTab } from './CustomersTab'
 import { RecordDialogs } from './Dialogs'
@@ -37,6 +40,8 @@ export function PriceListRecordView(props: PriceListRecordProps) {
 
 function PriceListRecord({ model, actions, panels }: PriceListRecordProps) {
   const t = useWords()
+  const d = useDepthWords()
+  const sayAny = useSayAny()
   const locale = useLocale()
   const validity = useValidity()
   const listHref = `${model.prefix}/sales/price-lists`
@@ -61,14 +66,16 @@ function PriceListRecord({ model, actions, panels }: PriceListRecordProps) {
   const tabs: TabItem[] = RECORD_TABS.map((tab) => ({
     id: tab,
     href: tab === 'prices' ? base : `${base}?tab=${tab}`,
-    label: t(`tab.${tab}`),
-    count: !list ? null : tab === 'prices' ? (model.prices.answer?.entries.length ?? null) : tab === 'customers' ? list.customers.length : tab === 'versions' ? list.versions.length : null,
+    label: tab === 'breaks' ? d('tab.breaks') : t(`tab.${tab}`),
+    count: !list ? null : tab === 'prices' ? (model.prices.answer?.entries.length ?? null) : tab === 'customers' ? list.customers.length : tab === 'versions' ? list.versions.length : tab === 'breaks' && model.breaks?.rules.status === 'ready' ? model.breaks.rules.value.breaks.length + model.breaks.rules.value.sizeSurcharges.length : null,
   }))
 
   let title: ReactNode = null
   let meta: ReactNode = null
   let bandActions: ReactNode = null
   if (list) {
+    // B-W2b-343: the version the Prices tab shows (its export and PDF).
+    const shownId = model.versionId ?? list.shownVersion?.id ?? null
     const draft = list.versions.find((version) => version.id === list.draftVersionId) ?? null
     const busyHeld = model.busy ? t('held.busy') : null
     const manageHeld = model.can.manage ? null : t('held.noManage')
@@ -97,6 +104,15 @@ function PriceListRecord({ model, actions, panels }: PriceListRecordProps) {
           items={[
             { id: 'copy', label: t('record.copyCode'), onSelect: () => actions?.onCopyCode?.() },
             { id: 'versions', label: t('record.toVersions'), href: `${base}?tab=versions` },
+            // B-W2b-343: the price list PDF (a print view in a new tab), the version's prices as the import's file, Import prices.
+            ...(shownId
+              ? [
+                  { id: 'pdf', label: d('record.pdf'), disabled: !model.can.price, description: model.can.price ? d('record.pdfHint') : d('held.noPrice'), href: model.can.price ? `${base}/print?version=${encodeURIComponent(shownId)}` : undefined, target: '_blank' as const },
+                  { id: 'export-xlsx', label: d('record.exportXlsx'), disabled: !model.can.price, description: model.can.price ? undefined : d('held.noPrice'), href: model.can.price ? exportHref(list.id, shownId, 'xlsx', locale === 'en' ? 'en' : 'it') : undefined },
+                  { id: 'export-csv', label: d('record.exportCsv'), disabled: !model.can.price, description: model.can.price ? undefined : d('held.noPrice'), href: model.can.price ? exportHref(list.id, shownId, 'csv', locale === 'en' ? 'en' : 'it') : undefined },
+                ]
+              : []),
+            ...(actions?.onImport ? [{ id: 'import', label: d('record.import'), onSelect: () => actions.onImport?.() }] : []),
             ...(list.status === 'ARCHIVED'
               ? [{ id: 'reactivate', label: t('record.reactivate'), disabled: !model.can.manage, description: model.can.manage ? undefined : t('held.noManage'), onSelect: () => actions?.onReactivate?.() }]
               : [{ id: 'archive', label: t('record.archive'), tone: 'danger' as const, disabled: archive !== null, description: say(t, archive) ?? undefined, onSelect: () => actions?.onDialog?.({ kind: 'archive' }) }]),
@@ -140,7 +156,7 @@ function PriceListRecord({ model, actions, panels }: PriceListRecordProps) {
       {model.notice && (
         <Banner
           tone={model.notice.tone}
-          title={say(t, model.notice.words) ?? ''}
+          title={sayAny(model.notice.words) ?? ''}
           action={
             actions?.onDismissNotice ? (
               <Button size="sm" variant="quiet" onClick={actions.onDismissNotice}>
@@ -164,10 +180,14 @@ function PriceListRecord({ model, actions, panels }: PriceListRecordProps) {
       {list?.status === 'ARCHIVED' && <Banner tone="info" title={t('record.archivedBanner')} />}
       {list && !model.can.manage && list.status !== 'ARCHIVED' && <Banner tone="info" title={t('record.readOnly')} />}
       {list && model.tab === 'prices' && <PricesTab list={list} model={model} actions={actions} />}
+      {/* B-W2b-343: Breaks & surcharges. */}
+      {list && model.tab === 'breaks' && model.breaks && <BreaksTab list={list} model={model.breaks} actions={{ ...actions?.breaks, onDialog: actions?.onDialog }} />}
       {list && model.tab === 'customers' && <CustomersTab list={list} model={model} actions={actions} />}
       {list && model.tab === 'versions' && <VersionsTab list={list} model={model} actions={actions} />}
       {list && model.tab === 'activity' && (panels ?? (model.panelsPreview ? <RecordPanelsView model={model.panelsPreview} /> : null))}
       {list && model.dialog && <RecordDialogs list={list} model={model} actions={actions} />}
+      {/* B-W2b-343: Import prices (its button lives in the ⋯; the wizard is drawn here). */}
+      {model.importer}
     </RecordFrame>
   )
 }

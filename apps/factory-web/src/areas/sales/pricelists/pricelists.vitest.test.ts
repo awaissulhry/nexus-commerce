@@ -121,7 +121,8 @@ describe('the record: which version, and why its prices are held', () => {
     expect(versionToShow(DETAIL, V1.id)!.id).toBe(V1.id)
     expect(versionToShow(DETAIL_IN_FORCE_ONLY, 'gone')!.id).toBe(V1.id)
     expect(tabOf('versions')).toBe('versions')
-    expect(tabOf('breaks')).toBe('prices')
+    expect(tabOf('breaks')).toBe('breaks') // B-W2b-343: Breaks & surcharges is built
+    expect(tabOf('contracts')).toBe('prices')
   })
   it('prices change on a draft only, with the right and the price grain; each reason in words', () => {
     expect(pricesHeld(DETAIL, V2, can)).toBeNull()

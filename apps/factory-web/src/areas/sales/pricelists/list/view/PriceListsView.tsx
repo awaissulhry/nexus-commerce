@@ -220,9 +220,13 @@ function PriceLists({ model, actions }: { model: PriceListsViewModel; actions?: 
           <p className="fw-pl-hint">{t('list.intro')}</p>
           <Freshness asOf={model.asOf} live={model.live} time={(iso) => formatTime(iso, { locale })} />
         </div>
-        <Button size="sm" variant="primary" heldReason={manageHeld} onClick={() => actions?.onNew?.(true)} aria-keyshortcuts="c">
-          <Plus size={14} aria-hidden /> {t('list.new')}
-        </Button>
+        <span className="fw-pl-actions">
+          {/* B-W2b-343: Import prices (design band "Import (W2b)"). */}
+          {model.importer}
+          <Button size="sm" variant="primary" heldReason={manageHeld} onClick={() => actions?.onNew?.(true)} aria-keyshortcuts="c">
+            <Plus size={14} aria-hidden /> {t('list.new')}
+          </Button>
+        </span>
       </div>
 
       {model.notice && (

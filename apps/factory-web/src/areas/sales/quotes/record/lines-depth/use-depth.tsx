@@ -127,7 +127,7 @@ export function useQuoteDepth(input: DepthInput): QuoteDepthSlots {
   const [warnings, setWarnings] = useState<Read<QuoteWarnings>>({ status: 'loading' })
   const [terms, setTerms] = useState<Read<QuoteTerms>>({ status: 'loading' })
   const [source, setSource] = useState<QuoteSource>(null)
-  const termsWanted = tab === 'terms' || (tab === 'lines' && (view === 'table' || lineId !== null))
+  const termsWanted = tab === 'terms' || (tab === 'lines' && (view === 'table' || lineId !== null)) || (tab === 'price' && lineId !== null) /* B-W2b-343: the drawer docks on Price & margin too */
 
   const loadWarnings = useCallback(() => {
     if (!quoteId) return
@@ -551,7 +551,7 @@ export function useQuoteDepth(input: DepthInput): QuoteDepthSlots {
     versions: tab === 'versions' ? { items: input.versions.items, people: input.versions.people, me: input.me, grains, problem: input.versions.problem, selected: versionPick } : null,
     deposit: tab === 'documents' && deposit ? { deposit: { id: deposit.id, status: deposit.status }, mayRecord: permissions.includes('payments.record'), to: quote.contact?.email ?? null, confirm: pay.confirm, sending: pay.sending, sent: pay.sent ? { to: pay.sent.link.to, expiresAt: pay.sent.link.expiresAt, delivery: pay.sent.delivery } : null, problem: pay.problem } : null,
     drawer:
-      drawerLine && tab === 'lines'
+      drawerLine && (tab === 'lines' || tab === 'price' /* B-W2b-343: a Pricing by line row opens it */)
         ? {
             line: drawerLine,
             style: input.styles[drawerLine.styleId] ?? null,
@@ -565,7 +565,7 @@ export function useQuoteDepth(input: DepthInput): QuoteDepthSlots {
             problem: drawerProblem,
             today,
             position: { index: drawerIndex, count: quote.lines.length },
-            sections: lineDrawerSections({ api, quote, line: drawerLine, grains, editable, onQuote: input.onQuote, t }),
+            sections: lineDrawerSections({ api, quote, line: drawerLine, grains, editable, onQuote: input.onQuote, t, /* B-W2b-343 */ locale }),
           }
         : null,
     bulk: bulk

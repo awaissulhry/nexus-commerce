@@ -64,7 +64,7 @@ export interface SalesSettingsActions {
   onStepUpCancel?: () => void
 }
 
-export function SalesSettingsView({ model, actions, reasons, depth }: { model: SalesSettingsModel; actions?: SalesSettingsActions; reasons?: ReactNode; /** B-W2b-316: Quote templates and Size curves (settings/{templates,curves}). */ depth?: { templates?: ReactNode; curves?: ReactNode } }) {
+export function SalesSettingsView({ model, actions, reasons, depth }: { model: SalesSettingsModel; actions?: SalesSettingsActions; reasons?: ReactNode; /** B-W2b-316: Quote templates and Size curves (settings/{templates,curves}). */ depth?: { templates?: ReactNode; curves?: ReactNode; /** B-W2b-343: Margin floor % per role. */ floors?: ReactNode } }) {
   return (
     <QualityMessages namespaces={['sales-settings']}>
       <Settings model={model} actions={actions} reasons={reasons} depth={depth} />
@@ -80,7 +80,7 @@ function useWords(): Translate {
 
 const say = (t: Translate, words: Words | null | undefined): string => (words ? t(words.key, words.params) : '')
 
-function Settings({ model, actions, reasons, depth }: { model: SalesSettingsModel; actions?: SalesSettingsActions; reasons?: ReactNode; depth?: { templates?: ReactNode; curves?: ReactNode } }) {
+function Settings({ model, actions, reasons, depth }: { model: SalesSettingsModel; actions?: SalesSettingsActions; reasons?: ReactNode; depth?: { templates?: ReactNode; curves?: ReactNode; /** B-W2b-343: Margin floor % per role. */ floors?: ReactNode } }) {
   const t = useWords()
   const { can } = model
 
@@ -153,6 +153,8 @@ function Settings({ model, actions, reasons, depth }: { model: SalesSettingsMode
         <PolicyCard model={model} actions={actions} />
         <NumberingCard model={model} />
       </div>
+      {/* B-W2b-343: Quote approval rules › Margin floor % per role. */}
+      {can.quotesView && depth?.floors}
       {/* B-W2b-316: Quote templates and Size curves. */}
       {can.quotesView && depth?.templates}
       {can.quotesView && depth?.curves}

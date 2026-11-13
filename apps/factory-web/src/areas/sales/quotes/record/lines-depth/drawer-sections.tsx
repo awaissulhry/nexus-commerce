@@ -1,7 +1,12 @@
-import type { ReactNode } from 'react'
+import { createElement, type ReactNode } from 'react'
 import type { ApiClient } from '../../../../../lib/api/client'
+import { createTranslator, messagesFor } from '../../../../../lib/i18n/messages'
+import type { Locale } from '../../../../../lib/i18n/locales'
 import type { QuoteDetail, QuoteLine } from '../../api'
 import type { Grains } from '../../model'
+// B-W2b-343: the cost breakdown and the waterfall (price-depth/LineWaterfall.tsx).
+import { LineWaterfall } from '../price-depth/LineWaterfall'
+import { PRICE_DEPTH_NS } from '../price-depth/model'
 
 /**
  * The line drawer's open slot (design pop:quotes.lineDrawer): the parts later steps add to a quote line, each a section
@@ -35,10 +40,17 @@ export interface LineDrawerContext {
   onQuote: (next: QuoteDetail) => void
   /** The page's words for the section titles (the caller's catalogue). */
   t: (key: string, params?: Record<string, string | number>) => string
+  /** B-W2b-343: the page's language (a section's title from its own catalogue). */
+  locale?: Locale
 }
 
-/** The sections later steps add (none yet). */
-export function lineDrawerSections(_context: LineDrawerContext): LineDrawerSection[] {
+/** The sections later steps add. */
+export function lineDrawerSections(context: LineDrawerContext): LineDrawerSection[] {
   const sections: LineDrawerSection[] = []
+  // B-W2b-343: Cost breakdown and Waterfall (GET …/pricing, PUT …/lines/:lineId/price), with the price grain.
+  if (context.grains.price) {
+    const words = createTranslator(context.locale ?? 'it', messagesFor(context.locale ?? 'it', [PRICE_DEPTH_NS])[PRICE_DEPTH_NS] ?? {})
+    sections.push({ id: 'waterfall', order: 10, title: words('drawer.title'), body: createElement(LineWaterfall, { key: context.line.id, api: context.api, quote: context.quote, line: context.line, grains: context.grains, editable: context.editable, onQuote: context.onQuote }) })
+  }
   return sections.sort((a, b) => a.order - b.order)
 }

@@ -1,6 +1,9 @@
 import { createElement } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import { ARCHIVED_DETAIL, BASE_DETAIL, DETAIL, DETAIL_IN_FORCE_ONLY, GROUP_DETAIL, inShell, recordModel, STYLE_DETAIL, V1, V1_ENTRIES, V2, v1Prices, type PriceListRole } from '../_demo/fixtures'
+// B-W2b-343: Breaks & surcharges, Valid from–to.
+import { breaksModel, MINIMUMS, RULES, RULES_V1, V2_DATED } from '../_demo/fixtures'
+import { emptyBreak, emptyMinimum, emptySurcharge } from '../depth/model'
 import type { PriceListRecordModel } from './record-model'
 import { PriceListRecordView } from './view/PriceListRecordView'
 
@@ -89,5 +92,27 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'not-found', label: 'Not found', model: recordCase('sales', { list: { status: 'not_found' } }) },
     { id: 'error', label: "The list couldn't be read", model: recordCase('sales', { list: { status: 'error', problem: 'problem.read.unavailable' } }) },
     { id: 'no-permission', label: 'Planner: no pricelists.view', model: recordCase('planner', { list: { status: 'forbidden' } }) },
+    // ---- B-W2b-343: Breaks & surcharges, Valid from–to ----------------------------------------------------------------
+    { id: 'breaks', label: 'Breaks & surcharges: the draft version 2 (Owner)', model: recordCase('owner', { tab: 'breaks' }), note: "Quantity breaks (a price's own, or a discount on every price), size surcharges as SizeColumns (every style, one style, a style's own), the minimums, the discount on documents." },
+    { id: 'breaks-sales', label: 'Breaks & surcharges: Sales changes the draft', model: recordCase('sales', { tab: 'breaks', breaks: breaksModel('sales') }) },
+    { id: 'breaks-selected', label: 'Two breaks selected: Remove 2; a minimum selected: Archive 1', model: recordCase('sales', { tab: 'breaks', breaks: breaksModel('sales', { selectedBreaks: RULES.breaks.slice(0, 2).map((row) => row.id), selectedMinimums: [MINIMUMS[0]!.id] }) }) },
+    { id: 'breaks-saving', label: 'A break saving, a surcharge refused (said in words)', model: recordCase('owner', { tab: 'breaks', breaks: breaksModel('owner', { cells: { [`${RULES.breaks[0]!.id}:unitPrice`]: 'saving' }, notice: { tone: 'warning', words: { key: 'breaks.held.lower', params: { price: '436,80 €' } } } }) }) },
+    { id: 'breaks-in-force', label: 'Version 1 in force: its rules read only, said why', model: recordCase('sales', { tab: 'breaks', versionId: V1.id, prices: v1Prices('sales'), breaks: breaksModel('sales', { version: V1, rules: { status: 'ready', value: RULES_V1 }, held: { key: 'held.activeHasDraft', params: { revision: 1 } } }) }) },
+    { id: 'breaks-no-price', label: 'A role without selling prices: the rules held with the reason', model: recordCase('readOnly', { tab: 'breaks', breaks: breaksModel('readOnly') }) },
+    { id: 'breaks-empty', label: 'A new draft without breaks or surcharges', model: recordCase('sales', { tab: 'breaks', breaks: breaksModel('sales', { rules: { status: 'ready', value: { ...RULES, breaks: [], sizeSurcharges: [], styleSurcharges: [] } }, minimums: { status: 'ready', value: [] } }) }) },
+    { id: 'breaks-loading', label: 'Breaks & surcharges while read', model: recordCase('sales', { tab: 'breaks', breaks: breaksModel('sales', { rules: { status: 'loading' }, minimums: { status: 'loading' } }) }) },
+    { id: 'breaks-error', label: "The rules couldn't be read (the record stays usable)", model: recordCase('sales', { tab: 'breaks', breaks: breaksModel('sales', { rules: { status: 'error', problem: 'problem.read.unavailable' } }) }) },
+    { id: 'add-break', label: 'Add a break: JKT-DEMO-01 from 20 pieces at 420', model: recordCase('sales', { tab: 'breaks', dialog: { kind: 'addBreak', draft: { entryId: RULES.breaks[0]!.entryId!, minQuantity: '20', kind: 'PRICE', value: '420' } } }) },
+    { id: 'add-break-held', label: 'Add a break held: a break must lower the price', model: recordCase('sales', { tab: 'breaks', dialog: { kind: 'addBreak', draft: { entryId: RULES.breaks[0]!.entryId!, minQuantity: '30', kind: 'PRICE', value: '440' } } }) },
+    { id: 'add-break-every', label: 'Add a break on every price (a discount)', model: recordCase('sales', { tab: 'breaks', dialog: { kind: 'addBreak', draft: { ...emptyBreak(), minQuantity: '200', value: '5' } } }) },
+    { id: 'remove-breaks', label: 'Remove 2 breaks', model: recordCase('sales', { tab: 'breaks', breaks: breaksModel('sales', { selectedBreaks: RULES.breaks.slice(0, 2).map((row) => row.id) }), dialog: { kind: 'removeBreaks' } }) },
+    { id: 'add-surcharge', label: 'Add a surcharge: sizes 60, 62 + 30 € for every style', model: recordCase('sales', { tab: 'breaks', dialog: { kind: 'addSurcharge', draft: { ...emptySurcharge(), sizes: '60, 62', value: '30' } } }) },
+    { id: 'add-minimum', label: 'New minimum: a material, 30 pcs per colourway, warn', model: recordCase('sales', { tab: 'breaks', dialog: { kind: 'addMinimum', draft: { ...emptyMinimum(), subject: 'MATERIAL', itemId: '', minQuantity: '30', per: 'COLOURWAY' } } }) },
+    { id: 'add-minimum-surcharge', label: 'New minimum: vests per order, small-run surcharge', model: recordCase('sales', { tab: 'breaks', dialog: { kind: 'addMinimum', draft: { ...emptyMinimum(), subject: 'PRODUCT_TYPE', productType: 'VEST', minQuantity: '10', per: 'ORDER', action: 'SURCHARGE', surcharge: '8' } } }) },
+    { id: 'add-minimum-twin', label: 'New minimum held: an active twin exists', model: recordCase('sales', { tab: 'breaks', dialog: { kind: 'addMinimum', draft: { ...emptyMinimum(), styleId: MINIMUMS[0]!.styleId!, minQuantity: '8', per: 'LINE' } } }) },
+    { id: 'prices-dated', label: 'Prices › Valid from–to: GLV-DEMO-01 priced by season', model: recordCase('owner', { prices: { answer: { version: V2, entries: V2_DATED }, problem: null, loading: false } }), note: 'A dated price is written with its days (the dated prices); the others autosave per cell as before.' },
+    { id: 'days', label: "A price's days: a new first day (its own breaks go with the old row)", model: recordCase('owner', { prices: { answer: { version: V2, entries: V2_DATED }, problem: null, loading: false }, dialog: { kind: 'days', entryId: V2_DATED.find((row) => row.validTo === '2027-02-28')!.id, validFrom: '2026-12-01', validTo: '2027-02-28', price: '69,50' } }) },
+    { id: 'days-overlap', label: "A price's days held: they meet the next season's price", model: recordCase('owner', { prices: { answer: { version: V2, entries: V2_DATED }, problem: null, loading: false }, dialog: { kind: 'days', entryId: V2_DATED.find((row) => row.validTo === '2027-02-28')!.id, validFrom: '2026-11-21', validTo: '2027-03-15', price: '69,50' } }) },
+    { id: 'add-dated', label: 'Add a price with days of its own', model: recordCase('sales', { dialog: { kind: 'addPrice' }, stylePick: { query: 'VST', results: [], problem: null, chosen: STYLE_DETAIL, colourwayId: '', price: '189,00', validFrom: '2027-03-01', validTo: '' } }) },
   ],
 })

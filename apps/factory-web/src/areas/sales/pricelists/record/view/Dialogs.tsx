@@ -9,8 +9,11 @@ import { useLocale } from '../../../../../lib/i18n/provider'
 import { percent, unitPrice } from '../../../quotes/model'
 import type { PriceListDetail } from '../../api'
 import { activateCheck, alreadyPriced, dayBefore, defaultActivationDay, parseListPrice, parseRaisePct, raisePlan, sortedEntries, versionToShow } from '../../model'
-import { KeysModal, say, useDay, useWords } from '../../parts'
+import { KeysModal, say, useDay, useDepthWords, useSayAny, useWords } from '../../parts'
 import type { PriceListRecordActions, PriceListRecordModel, RecordDialog } from '../record-model'
+// B-W2b-343: a price's days, breaks, surcharges and minimums.
+import { daysHeld } from '../../depth/model'
+import { DepthDialog } from './DepthDialogs'
 
 /**
  * The price list record's dialogs: Activate version (design pop:pricelists.activate — the days, what it ends, held with
@@ -42,6 +45,13 @@ export function RecordDialogs({ list, model, actions }: { list: PriceListDetail;
       return <ArchiveDialog list={list} model={model} actions={actions} onClose={close} />
     case 'help':
       return <KeysModal own={[]} onClose={close} />
+    // B-W2b-343
+    case 'days':
+    case 'addBreak':
+    case 'removeBreaks':
+    case 'addSurcharge':
+    case 'addMinimum':
+      return <DepthDialog list={list} model={model} actions={actions} dialog={dialog} />
   }
 }
 
@@ -53,8 +63,9 @@ interface DialogProps {
 }
 
 function Problem({ model }: { model: PriceListRecordModel }) {
-  const t = useWords()
-  return model.dialogProblem ? <Banner tone="danger" title={say(t, model.dialogProblem) ?? ''} /> : null
+  // B-W2b-343: a W2b refusal names a key of its own catalogue (`depth.…`).
+  const sayAny = useSayAny()
+  return model.dialogProblem ? <Banner tone="danger" title={sayAny(model.dialogProblem) ?? ''} /> : null
 }
 
 function ActivateDialog({ list, model, dialog, actions, onClose }: DialogProps & { dialog: Extract<RecordDialog, { kind: 'activate' }> }) {
@@ -196,6 +207,7 @@ function RemovePricesDialog({ list, model, actions, onClose }: DialogProps) {
 
 function AddPriceDialog({ list, model, actions, onClose }: DialogProps) {
   const t = useWords()
+  const locale = useLocale()
   const pick = model.stylePick
   const [query, setQuery] = useState(pick.query)
   const typed = useRef(false)
@@ -211,8 +223,14 @@ function AddPriceDialog({ list, model, actions, onClose }: DialogProps) {
   const style = pick.chosen
   const colourways = style ? style.colourways.filter((colourway) => colourway.status === 'ACTIVE') : []
   const price = parseListPrice(pick.price)
-  const taken = style ? alreadyPriced(entries, style.id, pick.colourwayId || null) : false
-  const held = !style ? t('add.held.style') : taken ? t('add.held.taken') : pick.price.trim() === '' ? t('add.held.price') : price === null ? t('add.held.priceInvalid') : model.busy ? t('held.busy') : null
+  // B-W2b-343: a price with days of its own may sit beside another of the same style and colourway when their days do not meet.
+  const d = useDepthWords()
+  const day = useDay()
+  const dated = !!(pick.validFrom || pick.validTo)
+  const daysProblem = style && dated ? daysHeld(entries, { styleId: style.id, colourwayId: pick.colourwayId || null, validFrom: pick.validFrom ?? '', validTo: pick.validTo ?? '' }) : null
+  const taken = style && !dated ? alreadyPriced(entries, style.id, pick.colourwayId || null) : false
+  const daysWords = daysProblem ? d(daysProblem.key, Object.fromEntries(Object.entries(daysProblem.params ?? {}).map(([name, value]) => [name, value === '—' ? '—' : day(String(value))]))) : null
+  const held = !style ? t('add.held.style') : taken ? t('add.held.taken') : daysWords ? daysWords : pick.price.trim() === '' ? t('add.held.price') : price === null ? t('add.held.priceInvalid') : model.busy ? t('held.busy') : null
   return (
     <Modal
       open
@@ -282,8 +300,16 @@ function AddPriceDialog({ list, model, actions, onClose }: DialogProps) {
               <Field label={t('add.price', { currency: list.currency })} hint={t('add.priceHint')} error={pick.price.trim() !== '' && price === null ? t('add.held.priceInvalid') : undefined}>
                 <Input autoFocus inputMode="decimal" value={pick.price} onChange={(event) => actions?.onStyleField?.('price', event.target.value)} />
               </Field>
+              {/* B-W2b-343: Valid from–to (empty: every day of the version). */}
+              <Field label={d('days.from')} hint={d('days.addHint')}>
+                <DateField value={pick.validFrom ?? ''} onChange={(value) => actions?.onStyleField?.('validFrom', value)} locale={INTL_LOCALE[locale]} clearable />
+              </Field>
+              <Field label={d('days.to')}>
+                <DateField value={pick.validTo ?? ''} onChange={(value) => actions?.onStyleField?.('validTo', value)} locale={INTL_LOCALE[locale]} min={pick.validFrom || undefined} clearable />
+              </Field>
             </div>
             {taken && <Banner tone="info" title={t('add.held.taken')} />}
+            {daysWords && <Banner tone="info" title={daysWords} />}
           </>
         )}
         <Problem model={model} />
