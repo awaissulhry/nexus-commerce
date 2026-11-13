@@ -83,6 +83,13 @@
   white-space: nowrap;
 }
 
+/* B-W2b-361: `all: unset` leaves it inline, where the ellipsis never applies: a long name pushed a phone card 69 px wide. */
+.fw-qd-rowlink {
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: bottom;
+}
+
 .fw-qd-rowlink:focus-visible {
   box-shadow: var(--nds-focus-ring);
   outline: 2px solid rgb(var(--nds-focus-rgb));
