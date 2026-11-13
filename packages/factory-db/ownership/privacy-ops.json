@@ -1,0 +1,53 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/privacy-ops.prisma (rules: src/ownership.ts; roles: src/roles.ts). Office only: apps/factory-api's privacy routes (B-W2b-405: data requests, erasure, retention) and its admin routes (B-W2b-415: the error queue, the scheduled jobs) write through command(), and the worker and scheduler in the tenant's system context (office role factory_runtime, RLS forced) write the sweeps, the failed messages and the job runs; who may read them is the API's permission (privacy and admin). The floor and portal/link sessions read and write nothing here. ErasureRecord is append-only (`@append-only`, scripts/factory/check-append-only.mjs): no update or delete grant, and the …_privacy_integration_w2b_guards triggers refuse UPDATE, DELETE and TRUNCATE for every login. Data requests, retention rules and sweeps are kept, never deleted (the triggers). A failed message and a job run are deleted only by the retention sweep, and the triggers allow it only for a closed item 30 days after it closed and for a run 7 days after it finished. GATE-PRIVACY: a retention rule only reports until a person switches it on. Nothing here holds money. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "DataRequest": {
+      "about": "A person's request to see, erase or correct their data with its 30-day clock (PLT-202, PLT-203): the office records it, checks the identity, works on it and closes it (Admin › Privacy & notices › Data requests). Personal data: the request names the person by their record. Never deleted. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "RetentionRule": {
+      "about": "How long each record type is kept and what happens then, with the legal reason (PLT-204): the office keeps the rules (Admin › Privacy & notices › Retention rules; shortening asks the Owner's fresh code), the sweep reads them. Switched off, never deleted. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "RetentionSweep": {
+      "about": "One pass of the retention sweep over one rule (PLT-204): the nightly job or a person's sweep writes it RUNNING and finishes it once with its counts; the rules list shows the last one. Never deleted. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "ErasureRecord": {
+      "about": "What was erased of one record and what stays and why (PLT-203): written by the erasure command of a data request or by an applying sweep, read with the request. Column names and the law only. Append-only. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] }
+      }
+    },
+    "IntegrationErrorItem": {
+      "about": "One failed message in or out (PLT-201): the worker writes it when an outbox event dies, a webhook fails or a call fails, an administrator retries or dismisses it (Admin › Connections & API › Error queue); the retention sweep removes a closed one 30 days after it closed. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "CronRun": {
+      "about": "One run of a scheduled job for the tenant (PLT-221): the scheduler writes it RUNNING and finishes it once; administrators read the runs (Admin › Security & health › Jobs and integrations) and ask for a run now; the retention sweep removes a finished run 7 days after it finished at the earliest. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    }
+  }
+}

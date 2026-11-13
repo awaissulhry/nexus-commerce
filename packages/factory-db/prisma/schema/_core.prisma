@@ -282,6 +282,11 @@ model Company {
   privacyNotices       PrivacyNotice[]
   privacyDpias         PrivacyDpia[]
   processingActivities ProcessingActivity[]
+  // W2b-6 privacy-ops.prisma (schema wave 53/57): its data requests, retention rules, erasure records and failed messages.
+  dataRequests          DataRequest[]
+  retentionRules        RetentionRule[]
+  erasureRecords        ErasureRecord[]
+  integrationErrorItems IntegrationErrorItem[]
   // W2b-5 suppliers-depth.prisma (wave 42/44): the qualifications of its suppliers and workshops, its written terms with them.
   supplierQualifications SupplierQualification[]
   subcontractAgreements  SubcontractAgreement[]
