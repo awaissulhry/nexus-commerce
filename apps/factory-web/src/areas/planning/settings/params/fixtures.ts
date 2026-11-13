@@ -1,4 +1,4 @@
-import { createElement } from 'react'
+import { createElement, Fragment } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import { rolePermissions } from '../../../../shell/design-data'
 import { settingsCan, type SaveStatus } from '../model'
@@ -10,6 +10,9 @@ import { EfficiencyView, type EfficiencyModel } from './view/EfficiencyView'
 import { HorizonView, type HorizonModel } from './view/HorizonView'
 import { ItemsView, type ItemsModel } from './view/ItemsView'
 import { EMPTY_RULE, ReorderView, type ReorderModel } from './view/ReorderView'
+// B-W2b-335: the planning rules per item and the site's size run above Item parameters.
+import { COWHIDE_KEY, JACKET_KEY, MESH_KEY, RULE_ROWS, SIZE_RUN, SLIDER_KEY } from '../items/demo'
+import { SizeRunView, type SizeRunModel } from '../items/view/SizeRunView'
 
 /**
  * SCR-127 — Planning settings › Item planning settings (design planning.settings sec:items, sec:reorder, sec:horizon,
@@ -30,6 +33,8 @@ export interface ParamsCase {
   reorder?: Partial<ReorderModel>
   horizon?: Partial<HorizonModel>
   efficiency?: Partial<EfficiencyModel>
+  /** B-W2b-335: the site's size-run card above Item parameters. */
+  sizeRun?: Partial<SizeRunModel>
 }
 
 const PREFIX = '/w/DEMO'
@@ -41,9 +46,14 @@ function ParamsDesign({ model }: { model: ParamsCase }) {
   const base = { site: SITE, can }
   const body =
     model.tab === 'items'
-      ? createElement(ItemsView, {
-          model: { prefix: PREFIX, sites: SITES, load: ready, rows: ROWS, more: true, loadingMore: false, query: '', method: null, configured: null, marks: {}, notice: null, changedElsewhere: false, busy: false, suppliers: null, ...base, ...model.items },
-        })
+      ? createElement(
+          Fragment,
+          null,
+          createElement(SizeRunView, { model: { ...SIZE_RUN, canManage: can.manageSettings, ...model.sizeRun } }),
+          createElement(ItemsView, {
+            model: { prefix: PREFIX, sites: SITES, load: ready, rows: ROWS, more: true, loadingMore: false, query: '', method: null, configured: null, marks: {}, notice: null, changedElsewhere: false, busy: false, suppliers: null, ...base, ...model.items },
+          }),
+        )
       : model.tab === 'reorder'
         ? createElement(ReorderView, { model: { load: ready, rules: RULES, marks: {}, notice: null, changedElsewhere: false, busy: false, search: { status: 'ready', items: ENTRIES }, ...base, ...model.reorder } })
         : model.tab === 'horizon'
@@ -102,6 +112,18 @@ export const designScreen = defineDesignScreen<ParamsCase>({
     },
     { id: 'items-supplier-dialog', label: 'Where it comes from: bought', model: { role: 'planner', tab: 'items', items: { dialog: { kind: 'source', key: kangaroo, source: 'BUY' }, suppliers: { itemId: ENTRIES[1]!.item.id, status: 'ready', items: SUPPLIER_CHOICES } } }, note: 'The item\'s own supplier and its approved sources; made: the plants of the company.' },
     { id: 'items-buyer', label: 'Buyer', model: { role: 'buyer', tab: 'items' }, note: 'The buyer keeps item parameters and reorder rules (planning.items.manage): the same grid, editable.' },
+    // ---- B-W2b-335 (design sec:items "lot-sizing (W2b), plan by size/colour/style (W2b)") ----
+    { id: 'w2b-335-items-rules', label: 'W2b Item parameters with the planning rules: lot sizing, plan by, scrap, yield, delay days; the site’s size run above', model: { role: 'planner', tab: 'items', items: { rows: RULE_ROWS } }, note: 'Scroll right for the W2b columns. A material is planned per colour (its Plan by cell is held with the reason); the InfoTips say what each rule does.' },
+    { id: 'w2b-335-items-lot', label: 'W2b Lot sizing dialog: a fixed lot (the other method’s number cleared)', model: { role: 'planner', tab: 'items', items: { rows: RULE_ROWS, dialog: { kind: 'lot', key: MESH_KEY, lotSizing: 'FIXED', fixed: '120' } } } },
+    { id: 'w2b-335-items-lot-refused', label: 'W2b Lot sizing dialog: a period with no days is held in words', model: { role: 'planner', tab: 'items', items: { rows: RULE_ROWS, dialog: { kind: 'lot', key: COWHIDE_KEY, lotSizing: 'PERIOD', period: '' } } } },
+    { id: 'w2b-335-items-level', label: 'W2b Plan by dialog for a finished garment: the site’s rule, style, style and colour, each size', model: { role: 'planner', tab: 'items', items: { rows: RULE_ROWS, dialog: { kind: 'level', key: JACKET_KEY, level: 'SKU' } } } },
+    { id: 'w2b-335-items-level-buyer', label: 'W2b Buyer: lot sizing editable, Plan by held (planning.strategy.manage)', model: { role: 'buyer', tab: 'items', items: { rows: RULE_ROWS, dialog: { kind: 'level', key: JACKET_KEY } } } },
+    { id: 'w2b-335-items-marks', label: 'W2b Rule cells saving and refused (scrap of 100 %)', model: { role: 'planner', tab: 'items', items: { rows: RULE_ROWS, marks: { [markKey(SLIDER_KEY, 'scrapPct')]: { state: 'refused', problem: { key: 'items.problem.scrap' } }, [markKey(COWHIDE_KEY, 'delayDays')]: { state: 'saving' } } } } },
+    { id: 'w2b-335-items-read-only', label: 'W2b Production manager: the rule cells read only, the size run held', model: { role: 'production_manager', tab: 'items', items: { rows: RULE_ROWS } } },
+    { id: 'w2b-335-size-run-dialog', label: 'W2b The site’s size run: size groups, one per line', model: { role: 'planner', tab: 'items', items: { rows: RULE_ROWS }, sizeRun: { dialog: { rule: 'SIZE_GROUPS', text: '44, 46, 48\n50, 52, 54, 56', busy: false, problem: null } } } },
+    { id: 'w2b-335-size-run-refused', label: 'W2b The site’s size run: a size in two groups is held in words', model: { role: 'planner', tab: 'items', items: { rows: RULE_ROWS }, sizeRun: { dialog: { rule: 'SIZE_GROUPS', text: '44, 46, 48\n48, 50, 52', busy: false, problem: null } } } },
+    { id: 'w2b-335-size-run-one-grid', label: 'W2b The site’s size run: one grid (no groups) and a saved notice', model: { role: 'planner', tab: 'items', items: { rows: RULE_ROWS }, sizeRun: { values: { sizeRunRule: 'ONE_GRID', sizeGroups: [] }, notice: { key: 'items.sizeRun.savedOne' } } } },
+    { id: 'w2b-335-size-run-error', label: 'W2b The site’s size run could not be read', model: { role: 'planner', tab: 'items', sizeRun: { load: { status: 'error', problem: 'items.sizeRun.failed' } } } },
     { id: 'items-read-only', label: 'Production manager (read-only)', model: { role: 'production_manager', tab: 'items' }, note: 'Shown read-only: the cells do not edit; the choices and the bulk actions stay focusable and say the missing right.' },
     { id: 'items-loading', label: 'Loading', model: { role: 'planner', tab: 'items', items: { load: { status: 'loading' }, rows: null } } },
     { id: 'items-error', label: 'Read failed', model: { role: 'planner', tab: 'items', items: { load: { status: 'error', problem: 'ps.problem.offline' }, rows: null } }, note: 'A failed read is never drawn as empty: the reason in words and Try again.' },
