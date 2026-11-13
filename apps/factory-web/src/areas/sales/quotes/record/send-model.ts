@@ -38,6 +38,11 @@ const FIX_TAB: Readonly<Record<string, QuoteTab>> = {
   STYLE_PHASE_OUT: 'lines',
   NOT_SOLD_IN_MARKET: 'lines',
   BLOCKED_MATERIAL: 'lines',
+  // B-W2b-340: the configurator's rule is fixed in the line (its drawer's Options).
+  OPTIONS_REFUSED: 'lines',
+  OPTIONS_MISSING: 'lines',
+  OPTIONS_OUTSIDE_CERTIFICATE: 'lines',
+  OPTIONS_NOT_PRICED: 'lines',
 }
 
 /** The checks that pass when none of their codes is in the answer (one line each). */

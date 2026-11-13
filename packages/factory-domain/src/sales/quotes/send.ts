@@ -7,6 +7,8 @@ import { addDays, sendBlockers, STATUS_WORDS, type QuoteIssue, type QuoteVersion
 import { LINE_RULE_CODES } from '../quote-warnings/codes'
 // B-W2b-358: the made-to-measure units' rule's codes.
 import { MTM_LINE_CODES } from '../mtm/codes'
+// B-W2b-340 (CF1:01): the configurator's rule of api sales/line-checks.
+import { CONFIGURATOR_LINE_CODES } from '../configurator/rules'
 
 /**
  * Sending a quote (B-W1-24; A1 §2.5 "Sending freezes a version"; SAL-157, SAL-192; the design's Send dialog `quotes.send`),
@@ -27,7 +29,7 @@ import { MTM_LINE_CODES } from '../mtm/codes'
 // B-W2b-325 (SAL-178): BELOW_MINIMUM, a minimum order quantity the version does not reach (api sales/line-checks).
 // B-W2b-294 (SAL-147; QT1:01, QT1:02): the customer and product rules of api sales/line-checks (sales/quote-warnings LINE_RULE_CODES).
 // B-W2b-358 (MM1:01): the made-to-measure units' rule of api sales/line-checks (sales/mtm MTM_LINE_CODES).
-export const SEND_CHECK_CODES = ['COMPANY_LEGAL', 'BILL_TO_INCOMPLETE', 'SHIP_TO_INCOMPLETE', 'SDI_IDENTITY', 'VAT_CHANGED', 'FIRM_OFFER_STANDS', 'TERMS_VERSION', 'NO_BANK_DETAILS', 'PROOF_NOT_READY', 'BELOW_MINIMUM', ...LINE_RULE_CODES, ...MTM_LINE_CODES] as const
+export const SEND_CHECK_CODES = ['COMPANY_LEGAL', 'BILL_TO_INCOMPLETE', 'SHIP_TO_INCOMPLETE', 'SDI_IDENTITY', 'VAT_CHANGED', 'FIRM_OFFER_STANDS', 'TERMS_VERSION', 'NO_BANK_DETAILS', 'PROOF_NOT_READY', 'BELOW_MINIMUM', ...LINE_RULE_CODES, ...MTM_LINE_CODES, /* B-W2b-340 */ ...CONFIGURATOR_LINE_CODES] as const
 export type SendCheckCode = (typeof SEND_CHECK_CODES)[number]
 
 export interface SendCheck {

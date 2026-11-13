@@ -1,0 +1,135 @@
+{
+  "section": {
+    "title": "Opzioni",
+    "line": "Riga {seq} · {style} · {colourway}"
+  },
+  "common": {
+    "loading": "Caricamento delle opzioni…",
+    "retry": "Riprova",
+    "checking": "Controllo della combinazione…",
+    "dismiss": "Chiudi"
+  },
+  "picture": {
+    "label": "Immagine della variante colore scelta",
+    "none": "Ancora nessuna immagine di questa variante o dell'articolo.",
+    "colourway": "Variante {code} · {name}",
+    "fromStyle": "L'immagine principale dell'articolo (nessuna di questa variante)"
+  },
+  "price": {
+    "title": "Prezzo e margine",
+    "now": "Prezzo unitario salvato",
+    "after": "Prezzo unitario con queste opzioni",
+    "optionsAdd": "Le opzioni aggiungono al pezzo",
+    "margin": "Margine salvato",
+    "marginAfter": "Margine con queste opzioni",
+    "noPrice": "Prezzi e margini non sono visibili al tuo ruolo.",
+    "costNote": "Il costo proprio delle opzioni non è ancora contato nel margine.",
+    "manualKept": "La modifica manuale del prezzo resta dello stesso importo.",
+    "notHeld": "Il prezzo salvato non comprende le opzioni salvate: salvale di nuovo per prezzare la riga con loro.",
+    "held": {
+      "NO_START": "La riga è stata prezzata a mano, senza cascata: dalle un punto di partenza (dal listino o dal costo) nella cascata dei prezzi qui sopra, poi le opzioni si aggiungono. Intanto i loro supplementi restano sulla riga.",
+      "NOT_SIZE_GRID": "Un capo su misura ha un prezzo a sé: i supplementi delle opzioni restano sulla riga, il prezzo non si muove da solo.",
+      "FEE": "Una spesa non ha opzioni."
+    },
+    "order": {
+      "accepted": "L'ordine mantiene il prezzo accettato dal cliente.",
+      "more": "Queste opzioni aggiungono {amount} al pezzo in più rispetto all'accettato.",
+      "less": "Queste opzioni aggiungono {amount} al pezzo in meno rispetto all'accettato.",
+      "keep": "Mantieni il prezzo accettato",
+      "amend": "Per far pagare la differenza, modifica invece l'ordine: il cliente accetta il nuovo prezzo."
+    }
+  },
+  "groups": {
+    "empty": "Questo articolo non offre opzioni.",
+    "picks": "Scegli {words}",
+    "default": "Predefinita",
+    "archived": "Archiviata",
+    "outside": "Fuori certificato",
+    "outsideNote": "Fuori certificato: {note}",
+    "text": "Testo per {value}",
+    "textHint": "Fino a {max} caratteri",
+    "textMissing": "Scrivi il testo che questa opzione richiede.",
+    "textTooLong": "Al massimo {max} caratteri.",
+    "colour": "Colore del pannello",
+    "leather": "Articolo pelle",
+    "leatherColour": "Colore della pelle",
+    "none": "Nessuno",
+    "colourOrLeather": "Una scelta prende un colore della libreria o un articolo pelle, non entrambi.",
+    "rules": "Regole",
+    "block": "Non ammesse insieme",
+    "warn": "Avviso",
+    "noHex": "nessun valore di colore"
+  },
+  "check": {
+    "ok": "Questa combinazione è ammessa.",
+    "blocks": "Non ammessa",
+    "warnings": "Da leggere prima di vendere",
+    "outside": "Un'opzione porta il capo fuori dal suo certificato."
+  },
+  "artwork": {
+    "title": "Grafica del cliente",
+    "empty": "Ancora nessuna grafica su questa riga.",
+    "add": "Aggiungi grafica (PDF o immagine)",
+    "fromQuote": "Dal preventivo",
+    "uploading": "Invio di {name}…",
+    "pending": "Non ancora inviato",
+    "quarantined": "Rifiutato dal controllo file",
+    "open": "Apri",
+    "remove": "Rimuovi",
+    "held": "La grafica si aggiunge mentre puoi modificare questa riga.",
+    "problem": {
+      "type": "La grafica è un PDF o un'immagine (JPEG, PNG, WebP).",
+      "size": "Un file è al massimo di 25 MB.",
+      "failed": "Il file non è stato inviato: riprova."
+    },
+    "done": "{name} è sulla riga."
+  },
+  "save": {
+    "save": "Salva le opzioni",
+    "discard": "Annulla",
+    "saving": "Salvataggio…",
+    "done": "Opzioni salvate.",
+    "doneRepriced": "Opzioni salvate; la riga è stata prezzata di nuovo.",
+    "held": {
+      "unchanged": "Ancora nessuna modifica.",
+      "blocked": "Questa combinazione non è ammessa: cambiala prima.",
+      "checking": "Attendi il controllo della combinazione.",
+      "keepPrice": "Scegli prima: mantieni il prezzo accettato, o modifica l'ordine.",
+      "offline": "Offline: le modifiche aspettano che torni la connessione."
+    }
+  },
+  "problem": {
+    "read": "Le opzioni non si sono potute leggere.",
+    "check": "La combinazione non si è potuta controllare: riprova.",
+    "write": "Le opzioni non si sono potute salvare.",
+    "stale": "Qualcuno ha cambiato questa riga nel frattempo: è stata riletta.",
+    "forbidden": "Non puoi cambiare queste opzioni.",
+    "refused": "Rifiutato: {reason}"
+  },
+  "order": {
+    "button": "Opzioni",
+    "buttonCount": "Opzioni · {count}",
+    "dialog": "Opzioni della riga {seq}",
+    "close": "Chiudi"
+  },
+  "bench": {
+    "open": "Prova una combinazione",
+    "title": "Prova una combinazione",
+    "hint": "Solo una prova: scegli un articolo e le sue opzioni per vedere le regole, i supplementi e cosa cambia nella produzione. Niente viene salvato.",
+    "style": "Articolo",
+    "stylePlaceholder": "Cerca un articolo per codice o nome",
+    "pick": "Scegli un articolo per provarne le opzioni.",
+    "noStyles": "Nessun articolo corrisponde.",
+    "surcharges": "Supplementi",
+    "noSurcharge": "Nessun supplemento",
+    "making": "Cosa cambia nella produzione",
+    "bom": "Materiali",
+    "operations": "Operazioni",
+    "minutes": "Minuti aggiunti: {minutes}",
+    "atStandard": "{count} operazione/i ai minuti standard",
+    "nothing": "Niente cambia nella produzione.",
+    "notes": "Note sulla revisione {revision}",
+    "nothingSaved": "Una prova: niente viene salvato.",
+    "close": "Chiudi"
+  }
+}

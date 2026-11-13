@@ -47,6 +47,8 @@ import {
   type RevisionRow,
 } from './store'
 import { progressTotalsOf, workOrderView, type WorkOrderView } from './views'
+// B-W2b-340 (CF1:03): a cell made from an order line names the option values chosen on it.
+import { optionValueIdsOf } from '../../sales/configurator/copy'
 
 /**
  * The office's work orders (B-W1-38; MES-001, MES-002, MES-007, MES-305; A2 SCR-069, SCR-070): the list, the record,
@@ -458,9 +460,10 @@ export async function createWorkOrder(caller: CommandCaller, body: CreateInput, 
       },
       select: { id: true },
     })
+    const optionValues = await optionValueIdsOf(tx, cells.map((cell) => cell.salesOrderLineId)) // B-W2b-340
     const rows = cells.map((cell) => {
       const line = current.get(cell.salesOrderLineId)!
-      return { id: newId(), siteId: site.id, workOrderId: id, styleId: style.id, colourwayId: line.colourwayId, size: cell.size, quantity: cell.quantity, salesOrderLineId: line.id, partyId: line.partyId, createdById: actorIdOf(tools) }
+      return { id: newId(), siteId: site.id, workOrderId: id, styleId: style.id, colourwayId: line.colourwayId, size: cell.size, quantity: cell.quantity, salesOrderLineId: line.id, partyId: line.partyId, /* B-W2b-340 */ optionValueIds: optionValues.get(line.id) ?? [], createdById: actorIdOf(tools) }
     })
     await tx.workOrderSize.createMany({ data: rows })
     const salesOrderIds = [...new Set(cells.map((cell) => current.get(cell.salesOrderLineId)!.orderId))]
@@ -689,7 +692,7 @@ export async function setCells(caller: CommandCaller, workOrderId: string, body:
       } else if (!cell && request.quantity > 0) {
         const cellId = newId()
         await tx.workOrderSize.create({
-          data: { id: cellId, siteId: current.siteId, workOrderId: current.id, styleId: current.styleId, colourwayId: line.colourwayId, size: request.size, quantity: request.quantity, salesOrderLineId: line.id, partyId: line.partyId, createdById: actorIdOf(tools) },
+          data: { id: cellId, siteId: current.siteId, workOrderId: current.id, styleId: current.styleId, colourwayId: line.colourwayId, size: request.size, quantity: request.quantity, salesOrderLineId: line.id, partyId: line.partyId, /* B-W2b-340 */ optionValueIds: (await optionValueIdsOf(tx, [line.id])).get(line.id) ?? [], createdById: actorIdOf(tools) },
           select: { id: true },
         })
         changes.push({ cellId, before: 0, after: request.quantity, size: request.size, salesOrderLineId: line.id })

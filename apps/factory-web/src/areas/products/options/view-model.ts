@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react' // B-W2b-340
 import type { ScaleRow } from '../styles/api'
 import type { Notice, WriteProblem } from '../library/model'
 import type { EffectDraft, GroupDraft, GroupRecord, GroupRow, OptionFilters, OptionsCan, OptionTab, PickedRef, RuleItem, StyleOptions, ValueDraft } from './model'
@@ -35,6 +36,8 @@ export interface OptionsViewModel {
   countsFailed: boolean
   /** The Style studio's link (`?style=`): the style's offers, option lines and steps. */
   style: { id: string; options: StyleOptions | null; problem: string | null } | null
+  /** B-W2b-340 (SAL-249): "Test a combination", its own container; absent: not drawn. */
+  bench?: ReactNode
   asOf: string | null
   updates: number
   dismissed: string[]

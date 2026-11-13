@@ -8,6 +8,8 @@ import { marketsCheck } from './markets'
 import { materialsCheck } from './materials'
 // B-W2b-358 (MM1:01; PRD-017, SAL-292): the made-to-measure units' rule (its own file in modules/sales/mtm).
 import { mtmLineCheck } from '../mtm/line-check'
+// B-W2b-340 (CF1:01; SAL-133, SAL-136): the configurator's rule (its own file in modules/sales/configurator).
+import { configuratorLineCheck } from '../configurator/line-check'
 
 /**
  * The rules a quote's or an order's lines must meet (plan W2b-5: "each line rule is a file in modules/sales/line-checks,
@@ -79,6 +81,9 @@ export const LINE_CHECKS: readonly LineCheck[] = Object.freeze([
   // B-W2b-358 (MM1:01): a made-to-measure unit: not started / outside the certified range (BLOCKS), measures not confirmed, not
   // the newest revision, older than 12 months (WARNING).
   mtmLineCheck,
+  // B-W2b-340: options that no longer pass their rules, a choice the style asks and nobody made (BLOCKS a quote), an option
+  // outside the certificate, options the price does not hold (WARNING); an order only warns.
+  configuratorLineCheck,
 ])
 
 /** Every rule over the document, in LINE_CHECKS order; the BLOCKS first. */

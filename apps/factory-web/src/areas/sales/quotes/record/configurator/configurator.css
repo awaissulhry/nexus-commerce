@@ -1,0 +1,25 @@
+/* B-W2b-340 — the configurator (line drawer section, order line dialog, the bench). Layout only, semantic tokens. */
+.fw-cfg { display: flex; flex-direction: column; gap: var(--nds-space-12); min-width: 0; container-type: inline-size; }
+.fw-cfg-hint { color: var(--nds-text-muted); font-size: var(--nds-font-size-sm); margin: 0; }
+.fw-cfg-note { margin: 0; font-size: var(--nds-font-size-sm); color: var(--nds-text); }
+.fw-cfg-top { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--nds-space-12); }
+@container (min-width: 620px) { .fw-cfg-top { grid-template-columns: minmax(160px, 1fr) minmax(0, 2fr); } }
+.fw-cfg-picture { margin: 0; display: flex; flex-direction: column; gap: var(--nds-space-4); min-width: 0; }
+.fw-cfg-picture img { width: 100%; max-height: 220px; object-fit: contain; border: 1px solid var(--nds-border); border-radius: var(--nds-radius-md); background: var(--nds-surface-sunken); }
+.fw-cfg-picture-none { display: flex; align-items: center; justify-content: center; gap: var(--nds-space-8); min-height: 120px; padding: var(--nds-space-12); text-align: center; border: 1px dashed var(--nds-border); border-radius: var(--nds-radius-md); color: var(--nds-text-muted); font-size: var(--nds-font-size-sm); }
+.fw-cfg-price { min-width: 0; }
+.fw-cfg-order-price { display: flex; flex-direction: column; gap: var(--nds-space-4); margin-top: var(--nds-space-8); }
+.fw-cfg-groups { display: flex; flex-direction: column; gap: var(--nds-space-12); }
+.fw-cfg-group { border: 1px solid var(--nds-border); border-radius: var(--nds-radius-md); padding: var(--nds-space-12); margin: 0; min-width: 0; display: flex; flex-direction: column; gap: var(--nds-space-8); }
+.fw-cfg-group.is-blocked { border-color: var(--nds-danger); }
+.fw-cfg-group legend { padding: 0 var(--nds-space-4); display: flex; flex-wrap: wrap; gap: var(--nds-space-8); align-items: baseline; }
+.fw-cfg-values { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--nds-space-8); }
+.fw-cfg-value-title { display: inline-flex; flex-wrap: wrap; gap: var(--nds-space-4); align-items: center; }
+.fw-cfg-extras { display: flex; flex-direction: column; gap: var(--nds-space-8); padding-left: var(--nds-space-8); border-left: 2px solid var(--nds-border); }
+.fw-cfg-material { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: var(--nds-space-8); }
+.fw-cfg-swatch-field { display: flex; align-items: center; gap: var(--nds-space-8); min-width: 0; }
+.fw-cfg-rules { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--nds-space-4); font-size: var(--nds-font-size-sm); }
+.fw-cfg-check ul, .fw-cfg-making ul { margin: 0; padding-left: var(--nds-space-16); }
+.fw-cfg-files { display: flex; flex-direction: column; gap: var(--nds-space-8); margin-bottom: var(--nds-space-8); }
+.fw-cfg-actions { display: flex; flex-wrap: wrap; gap: var(--nds-space-8); justify-content: flex-end; }
+.fw-cfg-bench-head { display: flex; flex-direction: column; gap: var(--nds-space-8); }

@@ -182,7 +182,7 @@ export async function splitWorkOrder(caller: CommandCaller, workOrderId: string,
       })
       const childCells = plan.move.map((entry) => {
         const from = byId.get(entry.fromCellId)!
-        return { id: newId(), siteId: parent.siteId, workOrderId: id, styleId: parent.styleId, colourwayId: from.colourwayId, size: from.size, quantity: entry.quantity, salesOrderLineId: from.salesOrderLineId, partyId: from.partyId, createdById: actorIdOf(tools) }
+        return { id: newId(), siteId: parent.siteId, workOrderId: id, styleId: parent.styleId, colourwayId: from.colourwayId, size: from.size, quantity: entry.quantity, salesOrderLineId: from.salesOrderLineId, partyId: from.partyId, /* B-W2b-340 */ optionValueIds: [...(from.optionValueIds ?? [])], createdById: actorIdOf(tools) }
       })
       await tx.workOrderSize.createMany({ data: childCells })
 
