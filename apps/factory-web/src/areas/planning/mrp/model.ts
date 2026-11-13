@@ -2,6 +2,8 @@ import { decimalValue, type BuyingCan, type Loaded, type Phrase } from '../../_s
 import type { SiteOption, SupplierOption } from '../../_shared/buying/api'
 import type { LiveState } from '../../_shared/buying/hooks'
 import type { Drafted, Explain, OpenDraft, Plan, PlanLine, PlanRun, SendCard, SendOutcome, SetAsideReason, Shortage, Shortages, StockLine } from './api'
+// B-W2b-335: the W2b parts (To make, action messages, the run log, the projected stock of a material).
+import type { DepthActions, DepthModel } from './depth/model'
 
 /**
  * What to buy & make (SCR-055) — the screen's rules, pure: the saved views (the tiles are some of them), which lines a
@@ -10,7 +12,7 @@ import type { Drafted, Explain, OpenDraft, Plan, PlanLine, PlanRun, SendCard, Se
  * counted by reason, and the CSV of the selected lines.
  */
 
-export const PLAN_VIEWS = ['open', 'toBuy', 'late', 'make', 'held', 'inDraft', 'ordered', 'setAside', 'leather', 'all', 'shortWo'] as const
+export const PLAN_VIEWS = ['open', 'toBuy', 'late', 'make', 'held', 'inDraft', 'ordered', 'setAside', 'leather', 'all', 'shortWo', 'toMake'] as const
 
 /** The MRP every day words (B-W2a-70: Short on open work orders, the pegging tree, Send n): `messages/<locale>/planning-mrp.json`. */
 export const MRP_NAMESPACE = 'planning-mrp'
@@ -48,6 +50,9 @@ export function inView(line: PlanLine, view: PlanView): boolean {
       return true
     case 'shortWo':
       // B-W2a-70: the work orders short of material are a list of their own (GET /planning/shortages).
+      return false
+    case 'toMake':
+      // B-W2b-335: the planned work and subcontract orders are a list of their own (GET /planning/planned-orders).
       return false
   }
 }
@@ -283,6 +288,8 @@ export interface PlanModel {
   focusRow?: number
   keysOpen?: boolean
   timeZone?: string
+  /** B-W2b-335: the W2b parts' model (absent: the W1/W2a page as it was). */
+  depth?: DepthModel
 }
 
 export interface PlanActions {
@@ -320,6 +327,8 @@ export interface PlanActions {
   /** B-W2a-70: the drafts made, reviewed and sent (Send n). */
   onSendDrafts?: () => void
   onSendConfirm?: () => void
+  /** B-W2b-335: the W2b parts. */
+  depth?: DepthActions
 }
 
 /** B-W2b-332: a shortage's key for "asked already" (its work order, material and colour). */

@@ -68,6 +68,8 @@ import { inquiries } from '../../../modules/sales/inquiries/export-source'
 import { demandRows } from './demand'
 // B-W2b-329: Planning › Board as a sheet (the working plan's bars, or a published version's).
 import { scheduleBoard } from './schedule-board'
+// B-W2b-353: Sales › After-sales › Warranty & service (B-W2b-345's source, registered with its page).
+import { serviceCases } from './service-cases'
 
 /**
  * Every list with an export (B-W2a-23; PLT-179), one file per list beside this one. A step that gives its list an export
@@ -148,4 +150,6 @@ export const EXPORT_SOURCES: readonly AnyExportSource[] = Object.freeze([
   demandRows,
   // B-W2b-329: Planning › Board (Export board, XLSX).
   scheduleBoard,
+  // B-W2b-353: Sales › After-sales › Warranty & service.
+  serviceCases,
 ])

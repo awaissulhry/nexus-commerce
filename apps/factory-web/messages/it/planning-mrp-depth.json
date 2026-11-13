@@ -1,0 +1,655 @@
+{
+  "view": {
+    "toMake": "Da produrre (ordini di lavoro e di terzista pianificati)"
+  },
+  "tile": {
+    "toMake": "Da produrre, senza ordine di lavoro",
+    "toMakeHint": "Ordini di lavoro e di terzista pianificati, non ancora creati"
+  },
+  "retry": "Riprova",
+  "cancel": "Annulla",
+  "close": "Chiudi",
+  "clearSearch": "Cancella la ricerca",
+  "kind": {
+    "MAKE": "Interno",
+    "SUBCONTRACT": "Terzista"
+  },
+  "sizeGroup": "taglie {group}",
+  "revision": "revisione {revision}",
+  "pieces_one": "{count} capo",
+  "pieces_other": "{count} capi",
+  "sizes": {
+    "open": "Taglie di {label}: {sizes}. Apri la griglia taglie",
+    "title": "Taglie di {label}",
+    "caption": "Capi per taglia — {label}",
+    "colour": "Variante colore",
+    "total": "Totale",
+    "cell": "{colour}, taglia {size}",
+    "notOffered": "– non prevista",
+    "empty": "Nessuna taglia"
+  },
+  "col": {
+    "style": "Modello e variante",
+    "sizes": "Taglie",
+    "dates": "Inizio → consegna",
+    "where": "Linea o terzista",
+    "orders": "Per gli ordini",
+    "state": "Stato",
+    "more": "Altro"
+  },
+  "protected": {
+    "tip": "Data impostata da te: le prossime pianificazioni la mantengono. Il piano dice {plan}.",
+    "tipNoPlan": "Data impostata da te: le prossime pianificazioni la mantengono.",
+    "hint": "Impostata da te: la prossima pianificazione la mantiene. Il piano dice {plan}.",
+    "hintNoPlan": "Impostata da te: la prossima pianificazione la mantiene.",
+    "reset": "Ripristina dal piano"
+  },
+  "dates": {
+    "change": "Cambia le date di {label}: inizio {start}, consegna {due}",
+    "inTime": "In tempo per i suoi ordini",
+    "title": "Cambia le date",
+    "body": "Una data che cambi viene mantenuta dalle prossime pianificazioni (ha un punto); Ripristina dal piano la restituisce al piano.",
+    "planHint": "Dalla schedulazione all'indietro.",
+    "save": "Salva le date",
+    "same": "Cambia prima una data.",
+    "pick": "Scegli entrambe le date.",
+    "past": "Non si pianifica nulla prima di oggi.",
+    "order": "L'inizio è dopo la consegna."
+  },
+  "late": {
+    "planned_one": "Serve il {need}: {count} giorno di ritardo",
+    "planned_other": "Serve il {need}: {count} giorni di ritardo",
+    "material_one": "Materiale utilizzabile dal {date} al più presto: {count} giorno di ritardo",
+    "material_other": "Materiale utilizzabile dal {date} al più presto: {count} giorni di ritardo",
+    "materialTip": "{material} si può usare dal {date} al più presto; gli ordini ne hanno bisogno il {need}."
+  },
+  "where": {
+    "noWorkshop": "Nessun terzista",
+    "steps": "fasi {steps}",
+    "kit": "il kit parte {date}",
+    "noLine": "Ancora senza linea",
+    "inHouse_one": "{count} fase esterna fatta internamente",
+    "inHouse_other": "{count} fasi esterne fatte internamente",
+    "inHouseTip": "Il terzista di queste fasi ora non può ricevere lavoro, quindi si fanno internamente: {steps}.",
+    "inHouseAll": "Fatto internamente"
+  },
+  "orders": {
+    "more_one": "+{count} altro",
+    "more_other": "+{count} altri",
+    "none": "Nessuna riga d'ordine (magazzino)",
+    "lines_one": "{count} riga d'ordine",
+    "lines_other": "{count} righe d'ordine"
+  },
+  "state": {
+    "firm": "Confermato",
+    "protected_one": "{count} campo mantenuto",
+    "protected_other": "{count} campi mantenuti",
+    "proposed": "Proposto",
+    "ready": "Si può creare"
+  },
+  "row": {
+    "menu": "Altro per {label}",
+    "convertMake": "Crea l'ordine di lavoro",
+    "convertSubcontract": "Crea l'ordine al terzista",
+    "dates": "Cambia le date…",
+    "reset": "Ripristina {field} dal piano",
+    "firm": "Conferma (le pianificazioni lo mantengono)",
+    "unfirm": "Pianifica di nuovo (non confermato)"
+  },
+  "make": {
+    "title": "Da produrre",
+    "hint": "Ordini di lavoro e di terzista che la pianificazione propone.",
+    "counts": "{make} da produrre internamente · {subcontract} dai terzisti · {firm} confermati",
+    "table": "Ordini di lavoro e di terzista pianificati",
+    "count_one": "{count} ordine pianificato",
+    "count_other": "{count} ordini pianificati",
+    "search": "Cerca modello, colore, ordine, linea o terzista",
+    "failed": "Impossibile caricare il da produrre",
+    "noMatch": "Nessun ordine pianificato corrisponde alla ricerca",
+    "empty": {
+      "title": "Nessun ordine di lavoro da proporre",
+      "body": "La pianificazione del {date} ha trovato ogni riga d'ordine coperta da un ordine di lavoro o di terzista.",
+      "noRun": "Per questo stabilimento non è ancora stata fatta una pianificazione."
+    }
+  },
+  "bulk": {
+    "make_one": "Crea {count} ordine di lavoro",
+    "make_other": "Crea {count} ordini di lavoro",
+    "subcontract_one": "Crea {count} ordine al terzista",
+    "subcontract_other": "Crea {count} ordini ai terzisti",
+    "move_one": "Sposta {count} di giorni",
+    "move_other": "Sposta {count} di giorni"
+  },
+  "held": {
+    "converted": "È già stato creato.",
+    "noDemand": "Non produce nessuna riga d'ordine (magazzino): un ordine di lavoro nasce dalle righe d'ordine.",
+    "noRevision": "Il suo modello non ha una revisione rilasciata con cui produrlo.",
+    "other": "Ora non si può creare: apri il modello o l'ordine per vedere perché.",
+    "noRight": "Il tuo ruolo non può creare né cambiare gli ordini pianificati.",
+    "noConvert": "Il tuo ruolo non può creare gli ordini pianificati (planning.planned.convert).",
+    "noWorkOrders": "Crearlo genera un ordine di lavoro: il tuo ruolo non può (workorders.manage).",
+    "noSubcontract": "Crearlo rilascia l'ordine di lavoro e prepara l'ordine al terzista: il tuo ruolo non può (workorders.release, purchasing.subcontract.manage).",
+    "noMake": "Nessuna riga spuntata è un ordine di lavoro pianificato che si può creare.",
+    "noSubcontractRow": "Nessuna riga spuntata è un ordine al terzista pianificato che si può creare.",
+    "noneToMove": "Nessuna riga spuntata si può spostare.",
+    "tooMany": "Sposta al massimo 100 alla volta.",
+    "firm": "È confermato: pianificalo di nuovo prima di cambiarne le date.",
+    "noFirm": "Il tuo ruolo non può confermare gli ordini pianificati (planning.firm).",
+    "noEdit": "Il tuo ruolo non può cambiare gli ordini pianificati (planning.planned.edit).",
+    "noActions": "Il tuo ruolo non può decidere i messaggi di azione (planning.actions.manage).",
+    "noneOpen": "Nessun messaggio spuntato è aperto.",
+    "notLatest": "Una pianificazione più recente ha sostituito questi messaggi: ricarica la pagina.",
+    "decided": "Già deciso.",
+    "busy": "In corso…"
+  },
+  "notice": {
+    "firmed": "{label} è confermato: le prossime pianificazioni lo mantengono così.",
+    "unfirmed": "{label} viene ripianificato dalla prossima pianificazione.",
+    "datesSaved": "Le date di {label} sono salvate e mantenute dalle prossime pianificazioni.",
+    "reset": "{field}: di nuovo come da piano.",
+    "resetNextRun": "{field}: torna al piano alla prossima pianificazione.",
+    "done_one": "{count} messaggio di azione segnato come fatto.",
+    "done_other": "{count} messaggi di azione segnati come fatti.",
+    "ignored_one": "{count} messaggio di azione ignorato.",
+    "ignored_other": "{count} messaggi di azione ignorati."
+  },
+  "problem": {
+    "read": "Impossibile leggerlo. Riprova tra poco.",
+    "noRead": "Il tuo ruolo non può leggerlo.",
+    "offline": "Nessuna risposta dal server: controlla la connessione.",
+    "gone": "Non c'è più: ricarica la pagina.",
+    "signedOut": "Sei uscito: accedi di nuovo.",
+    "write": "Non è stato salvato. Riprova.",
+    "changed": "Qualcuno l'ha cambiato nel frattempo: è stato riletto, controllalo e riprova.",
+    "forbidden": "Il tuo ruolo non può farlo.",
+    "invalid": "La modifica è stata rifiutata: controlla i valori.",
+    "unknown": "Nessuna risposta: potrebbe essere stato salvato oppure no. Ricarica la pagina."
+  },
+  "field": {
+    "sizes": "Taglie",
+    "startDate": "Data di inizio",
+    "dueDate": "Data di consegna",
+    "lineId": "Linea",
+    "partyId": "Terzista",
+    "operationSeqs": "Fasi",
+    "kitDueAt": "Partenza del kit",
+    "styleRevisionId": "Revisione",
+    "other": "Un altro campo"
+  },
+  "convert": {
+    "title": {
+      "MAKE_one": "Crea {count} ordine di lavoro",
+      "MAKE_other": "Crea {count} ordini di lavoro",
+      "SUBCONTRACT_one": "Crea {count} ordine al terzista",
+      "SUBCONTRACT_other": "Crea {count} ordini ai terzisti"
+    },
+    "summary": {
+      "MAKE": "Ognuno diventa un ordine di lavoro in BOZZA con le sue taglie; nulla viene rilasciato o inviato.",
+      "SUBCONTRACT": "Ognuno crea il suo ordine di lavoro, lo rilascia e prepara l'ordine al terzista; nulla viene inviato al terzista."
+    },
+    "save": {
+      "MAKE_one": "Crea {count} ordine di lavoro",
+      "MAKE_other": "Crea {count} ordini di lavoro",
+      "SUBCONTRACT_one": "Crea {count} ordine al terzista",
+      "SUBCONTRACT_other": "Crea {count} ordini ai terzisti"
+    },
+    "what": {
+      "MAKE": "Ordine di lavoro",
+      "SUBCONTRACT": "Ordine al terzista"
+    },
+    "now": "Pianificato: {sizes} · {start} → {due}",
+    "next": {
+      "MAKE": "Ordine di lavoro in bozza · revisione {revision} · {pieces} capi · consegna {due}",
+      "SUBCONTRACT": "Da {workshop} · fasi {steps} · il kit parte {kit}",
+      "unknown": "Creato"
+    },
+    "heldTitle_one": "{count} ora non si può creare",
+    "heldTitle_other": "{count} ora non si possono creare",
+    "heldChecks_one": "{count} controllo lo blocca: apri il modello o l'ordine di lavoro per vederlo.",
+    "heldChecks_other": "{count} controlli lo bloccano: apri il modello o l'ordine di lavoro per vederli.",
+    "noneReady": "Nessuno di questi si può creare ora.",
+    "metric": {
+      "ready": "Si possono creare",
+      "held": "Non ora"
+    },
+    "done": {
+      "MAKE": "Ordine di lavoro {workOrder} creato (bozza)",
+      "SUBCONTRACT": "Ordine di lavoro {workOrder} rilasciato · ordine al terzista {order} in bozza",
+      "notSent": "Non inviato",
+      "verb": "creati"
+    },
+    "error": {
+      "conflict": "Cambiato dopo la lettura: non creato",
+      "invalid_state": "Il suo stato non lo permette più: non creato",
+      "validation_failed": "Un controllo l'ha rifiutato: non creato",
+      "forbidden": "Non permesso al tuo ruolo: non creato",
+      "other": "Non creato"
+    }
+  },
+  "shift": {
+    "title_one": "Sposta {count} ordine pianificato",
+    "title_other": "Sposta {count} ordini pianificati",
+    "summary": "Inizio, consegna e kit si spostano insieme; ogni data spostata viene mantenuta dalle prossime pianificazioni.",
+    "by": "Sposta di (giorni)",
+    "hint": "Un numero negativo li anticipa. Nulla si sposta prima di oggi.",
+    "days": "Scrivi un numero intero di giorni, diverso da 0, al massimo 366.",
+    "refused": "Lo spostamento è stato rifiutato: controlla i giorni.",
+    "save_one": "Sposta {count} di {days} giorni",
+    "save_other": "Sposta {count} di {days} giorni",
+    "problem": "{label}: {fields} non si possono spostare così tanto",
+    "moved": "Spostato",
+    "verb": "spostati",
+    "none": "nessuno"
+  },
+  "decide": {
+    "titleDone_one": "Segna {count} messaggio di azione come fatto",
+    "titleDone_other": "Segna {count} messaggi di azione come fatti",
+    "titleIgnore_one": "Ignora {count} messaggio di azione",
+    "titleIgnore_other": "Ignora {count} messaggi di azione",
+    "saveDone_one": "Segna {count} come fatto",
+    "saveDone_other": "Segna {count} come fatti",
+    "saveIgnore_one": "Ignora {count}",
+    "saveIgnore_other": "Ignora {count}",
+    "bodyDone": "Fatto significa che hai cambiato l'ordine (una data spostata, una nuova quantità, una riga annullata).",
+    "bodyIgnore": "I messaggi ignorati non vengono riproposti dalle prossime pianificazioni per lo stesso ordine e la stessa modifica.",
+    "note": "Nota",
+    "noteHintDone": "Facoltativa: cosa hai fatto.",
+    "noteHintIgnore": "Facoltativa: perché resta così.",
+    "tooLong": "La nota è al massimo di 2000 caratteri."
+  },
+  "action": {
+    "EXPEDITE": "Anticipa",
+    "DEFER": "Posticipa",
+    "CANCEL": "Annulla",
+    "INCREASE": "Aumenta",
+    "DECREASE": "Riduci",
+    "NEW": "Nuovo"
+  },
+  "msg": {
+    "title": "Messaggi di azione sugli ordini esistenti",
+    "hint": "Cosa la pianificazione più recente chiede di cambiare sugli ordini che esistono già.",
+    "table": "Messaggi di azione",
+    "explain": "La pianificazione non cambia mai da sola un ordine esistente: cambia l'ordine, poi segna il messaggio come fatto.",
+    "count": "{open} aperti · {done} fatti · {ignored} ignorati",
+    "noneOpen": "Nessun messaggio aperto.",
+    "show": "Mostra",
+    "showOpen": "Aperti",
+    "showAll": "Tutti",
+    "failed": "Impossibile caricare i messaggi di azione",
+    "empty": {
+      "title": "Nessun messaggio di azione",
+      "body": "Ogni ordine esistente è in linea con la pianificazione più recente.",
+      "noRun": "Per questo stabilimento non è ancora stata fatta una pianificazione."
+    },
+    "col": {
+      "action": "Azione",
+      "record": "Ordine",
+      "what": "Cosa fare",
+      "status": "Decisione"
+    },
+    "rec": {
+      "poLine": "{number}, riga {line}",
+      "po": "{number}",
+      "workOrder": "{number}",
+      "subcontract": "{number}",
+      "planned": "{label}",
+      "firm": "Acquisto pianificato confermato di {material}"
+    },
+    "type": {
+      "PurchaseOrderLine": "Riga d'ordine d'acquisto",
+      "WorkOrder": "Ordine di lavoro",
+      "SubcontractOrder": "Ordine al terzista",
+      "PlannedWorkOrder": "Ordine di lavoro pianificato (protetto)",
+      "MaterialRequirement": "Acquisto pianificato confermato"
+    },
+    "EXPEDITE": "Anticipa dal {from} al {to}",
+    "DEFER": "Posticipa dal {from} al {to}",
+    "INCREASE": "Aumenta da {from} a {to} {unit}",
+    "DECREASE": "Riduci da {from} a {to} {unit}",
+    "CANCEL_qty": "Annulla {quantity} {unit}: non serve",
+    "EXPEDITE_plain": "Anticipalo",
+    "DEFER_plain": "Posticipalo",
+    "CANCEL_plain": "Annullalo: non serve",
+    "INCREASE_plain": "Aumentalo",
+    "DECREASE_plain": "Riducilo",
+    "NEW_plain": "Un nuovo ordine",
+    "material": "Materiale {material}",
+    "openWhy": "{record}: apri perché questo numero",
+    "status": {
+      "OPEN": "Aperto",
+      "DONE": "Fatto",
+      "IGNORED": "Ignorato"
+    },
+    "byAction": {
+      "EXPEDITE_one": "{count} da anticipare",
+      "EXPEDITE_other": "{count} da anticipare",
+      "DEFER_one": "{count} da posticipare",
+      "DEFER_other": "{count} da posticipare",
+      "CANCEL_one": "{count} da annullare",
+      "CANCEL_other": "{count} da annullare",
+      "INCREASE_one": "{count} da aumentare",
+      "INCREASE_other": "{count} da aumentare",
+      "DECREASE_one": "{count} da ridurre",
+      "DECREASE_other": "{count} da ridurre",
+      "NEW_one": "{count} nuovo",
+      "NEW_other": "{count} nuovi"
+    },
+    "bulk": {
+      "done_one": "Segna {count} come fatto",
+      "done_other": "Segna {count} come fatti",
+      "ignore_one": "Ignora {count}",
+      "ignore_other": "Ignora {count}"
+    },
+    "never": "Fatto e Ignora registrano solo la tua decisione: l'ordine si cambia nella sua pagina.",
+    "notice_one": "{count} messaggio di azione su un ordine esistente aspetta una decisione.",
+    "notice_other": "{count} messaggi di azione su ordini esistenti aspettano una decisione.",
+    "noticeShow": "Mostra"
+  },
+  "log": {
+    "column": "Dati e avvisi",
+    "open": "Dati e avvisi della pianificazione del {time}",
+    "openShort": "Apri",
+    "none": "—",
+    "back": "Tutte le pianificazioni",
+    "reading": "Lettura del registro…",
+    "failed": "Impossibile caricare il registro della pianificazione",
+    "title": "La pianificazione del {time} ({trigger})",
+    "runDay": "Giorno",
+    "runDayValue": "{day} ({zone})",
+    "explosionLabel": "Distinte lette",
+    "explosion": {
+      "MULTI_LEVEL_one": "Tutti i livelli, {count} passaggio",
+      "MULTI_LEVEL_other": "Tutti i livelli, {count} passaggi",
+      "ONE_LEVEL_one": "Un livello, {count} passaggio",
+      "ONE_LEVEL_other": "Un livello, {count} passaggi"
+    },
+    "sizeRun": "Serie di taglie",
+    "oneGrid": "Una griglia per variante",
+    "sizeGroups_one": "{count} gruppo di taglie",
+    "sizeGroups_other": "{count} gruppi di taglie",
+    "count": {
+      "orderLines": "Righe d'ordine",
+      "orderLinesPlanned": "Righe d'ordine pianificate",
+      "orders": "Ordini",
+      "lateOrderLines": "Righe d'ordine in ritardo",
+      "undatedOrderLines": "Righe d'ordine senza data",
+      "madeToMeasure": "Capi su misura",
+      "notPlaced": "Senza stabilimento",
+      "revisions": "Revisioni",
+      "materials": "Materiali",
+      "workOrders": "Ordini di lavoro",
+      "workOrderCells": "Celle degli ordini di lavoro",
+      "scheduledWorkOrders": "Ordini di lavoro schedulati",
+      "stockLines": "Righe di giacenza",
+      "lots": "Lotti",
+      "purchaseLines": "Righe d'ordine d'acquisto",
+      "purchaseOrders": "Ordini d'acquisto",
+      "purchaseLinesForOneOrder": "Righe d'acquisto per un solo ordine",
+      "reservations": "Prenotazioni",
+      "firmPlannedOrders": "Acquisti pianificati confermati",
+      "orderSpecificPegs": "Riservati a un solo ordine",
+      "itemParameters": "Parametri articolo",
+      "approvedSources": "Fonti approvate",
+      "plannedWorkOrdersFirm": "Ordini di lavoro pianificati confermati",
+      "plannedWorkOrdersProtected": "Ordini di lavoro pianificati protetti",
+      "plannedWorkOrdersPlain": "Ordini di lavoro pianificati semplici"
+    },
+    "everyCount": "Tutti i conteggi letti",
+    "notRecorded": "Questa pianificazione è precedente al registro: i suoi dati non sono stati registrati.",
+    "warnings_one": "{count} avviso",
+    "warnings_other": "{count} avvisi",
+    "noWarnings": "Nessun avviso.",
+    "proposed": "Cosa ha proposto",
+    "proposedBuy_one": "{count} riga da comprare",
+    "proposedBuy_other": "{count} righe da comprare",
+    "proposedMake_one": "{count} parte da produrre",
+    "proposedMake_other": "{count} parti da produrre",
+    "proposedPlanned_one": "{count} ordine di lavoro pianificato",
+    "proposedPlanned_other": "{count} ordini di lavoro pianificati",
+    "proposedSubcontract_one": "{count} ordine al terzista pianificato",
+    "proposedSubcontract_other": "{count} ordini ai terzisti pianificati",
+    "messages": "Messaggi di azione: {open} aperti · {done} fatti · {ignored} ignorati",
+    "linesTable": "Righe proposte dalla pianificazione",
+    "plannedTable": "Ordini pianificati proposti dalla pianificazione",
+    "col": {
+      "action": "Azione",
+      "material": "Materiale",
+      "short": "Mancante",
+      "need": "Serve il",
+      "decision": "Decisione",
+      "kind": "Tipo",
+      "style": "Modello",
+      "pieces": "Capi",
+      "dates": "Date",
+      "state": "Stato"
+    },
+    "decision": {
+      "OPEN": "Aperta",
+      "ORDERED": "Ordinata",
+      "IGNORED": "Accantonata"
+    },
+    "forOrder": "Solo per {number} riga {line}",
+    "dates": "{start} → {due} (serve il {need})",
+    "status": {
+      "PLANNED": "Pianificato",
+      "CONVERTED": "Creato"
+    }
+  },
+  "lot": {
+    "LOT_FOR_LOT": "Lotto per lotto",
+    "FIXED": "Lotto fisso",
+    "MIN_MAX": "Min / max",
+    "PERIOD": "Periodo"
+  },
+  "profile": {
+    "menu": "Giacenza prevista",
+    "noun": "materiale",
+    "title": "Giacenza prevista — {material}",
+    "reading": "Lettura…",
+    "notFound": "Questo materiale non è più nella pianificazione.",
+    "openMaterial": "Apri il materiale",
+    "asOf": "La pianificazione calcolata ora ({time}) a {site}, {weeks} settimane da questa.",
+    "firstShort": "Manca da {week}: gli ordini chiedono più di quanto portano giacenza e arrivi.",
+    "firstLow": "Sotto la scorta di sicurezza da {week}.",
+    "covered": "Coperto per tutto l'orizzonte.",
+    "onHand": "In giacenza (utilizzabile)",
+    "safety": "Scorta di sicurezza",
+    "noSafety": "Nessuna",
+    "net": "Ancora mancante",
+    "uncovered": "Da ordinare dopo gli ordini confermati",
+    "allocation": "Fornitura scarsa ripartita",
+    "allocationBy": {
+      "DATE": "Per data di fabbisogno",
+      "PRIORITY": "Per priorità del portafoglio"
+    },
+    "lotSizing": "Dimensione dei lotti",
+    "defaults": "Pianificato con i suoi valori predefiniti",
+    "chartLabel": "Saldo previsto di {material} per settimana, con la scorta di sicurezza",
+    "chartProjected": "Saldo previsto",
+    "chartSafety": "Scorta di sicurezza",
+    "chartCaption": "Il saldo previsto (giacenza + arrivi − fabbisogno, settimana per settimana) rispetto alla linea della scorta di sicurezza; sotto 0 manca.",
+    "table": "Giacenza prevista per settimana",
+    "col": {
+      "week": "Settimana",
+      "demand": "Fabbisogno",
+      "receipts": "Arrivi",
+      "planned": "Ordini del piano",
+      "projected": "Previsto",
+      "withPlan": "Con il piano",
+      "atp": "Disponibile da promettere"
+    },
+    "past": "Prima di questa settimana",
+    "later": "Oltre l'orizzonte",
+    "week": "{week} ({from} – {to})",
+    "short": "mancante",
+    "belowSafety": "sotto la scorta",
+    "cellOpen": "{what} in {week}: {quantity}. Apri cosa lo compone",
+    "cellTitle": "{what} — {week}",
+    "ref": {
+      "line": "riga {line}",
+      "size": "taglia {size}",
+      "rank": "priorità {rank}",
+      "firm": "Acquisto pianificato confermato",
+      "planned": "Ordine del piano {seq}"
+    },
+    "lotsTitle": "I prossimi ordini del piano",
+    "noLots": "Il piano non prevede nuovi ordini per questo materiale.",
+    "lot": "{quantity} il {date} (copre {from} – {to})",
+    "moreLots_one": "e {count} altro",
+    "moreLots_other": "e altri {count}",
+    "earliest": "Un nuovo ordine fatto oggi arriva il {arrival} e si può usare dal {usable} ({lead} giorni di consegna, {delay} giorni per l'uso).",
+    "earliestNoLead": "Un nuovo ordine fatto oggi arriva il {arrival} e si può usare dal {usable} (nessun tempo di consegna registrato).",
+    "delaysTitle_one": "{count} fabbisogno in ritardo per questo materiale",
+    "delaysTitle_other": "{count} fabbisogni in ritardo per questo materiale",
+    "noDelays": "Nessun fabbisogno è in ritardo per questo materiale.",
+    "delay_one": "la riga {line} ne ha bisogno il {need}: utilizzabile dal {earliest} al più presto, {count} giorno di ritardo ({source})",
+    "delay_other": "la riga {line} ne ha bisogno il {need}: utilizzabile dal {earliest} al più presto, {count} giorni di ritardo ({source})",
+    "moreDelays_one": "e {count} altro",
+    "moreDelays_other": "e altri {count}",
+    "source": {
+      "PLANNED": "un nuovo ordine",
+      "FIRM": "un acquisto pianificato confermato",
+      "PURCHASE_ORDER": "un ordine d'acquisto scaduto"
+    }
+  },
+  "items": {
+    "col": {
+      "lotSizing": "Dimensione lotti",
+      "planLevel": "Pianifica per",
+      "scrapPct": "Scarto %",
+      "yieldPct": "Resa %",
+      "delayDays": "Giorni di attesa"
+    },
+    "field": {
+      "lotSizing": "Dimensione dei lotti",
+      "fixedLotQty": "Lotto fisso",
+      "lotPeriodDays": "Periodo (giorni)",
+      "planLevel": "Pianifica per",
+      "scrapPct": "Scarto %",
+      "yieldPct": "Resa %",
+      "delayDays": "Giorni tra arrivo e uso"
+    },
+    "cell": {
+      "change": "Cambia {field} di {item}: {value}"
+    },
+    "lot": {
+      "LOT_FOR_LOT": "Lotto per lotto",
+      "FIXED": "Lotto fisso",
+      "MIN_MAX": "Min / max",
+      "PERIOD": "Periodo"
+    },
+    "lotCell": {
+      "FIXED": "Lotti da {quantity} {unit}",
+      "PERIOD_one": "{count} giorno di fabbisogno",
+      "PERIOD_other": "{count} giorni di fabbisogno"
+    },
+    "lotHint": {
+      "LOT_FOR_LOT": "Ogni ordine porta esattamente quanto manca.",
+      "FIXED": "Ogni ordine porta il lotto fisso, tanti lotti quanti ne servono.",
+      "MIN_MAX": "Ogni ordine rispetta i limiti d'ordine della riga: almeno il minimo, a multipli, al massimo il massimo.",
+      "PERIOD": "Un ordine porta il fabbisogno di un numero di giorni; il periodo successivo è l'ordine successivo."
+    },
+    "inUnit": "In {unit}",
+    "periodHint": "Da 1 a 366 giorni.",
+    "minMaxLimits": "I limiti di questa riga: almeno {min}, a multipli di {step}, al massimo {max} {unit}.",
+    "minMaxNone": "Questa riga non ha ancora limiti d'ordine: ogni ordine è esattamente il fabbisogno (come lotto per lotto).",
+    "lotDialog": {
+      "title": "Dimensione dei lotti — {item}",
+      "apply": "Salva la dimensione dei lotti"
+    },
+    "levelDialog": {
+      "title": "Pianifica per — {item}",
+      "apply": "Salva"
+    },
+    "level": {
+      "SITE": "La regola taglie dello stabilimento",
+      "STYLE": "Modello",
+      "STYLE_COLOUR": "Modello e colore",
+      "SKU": "Ogni taglia",
+      "perColour": "Per colore (materiale)"
+    },
+    "levelHint": {
+      "SITE": "Gli ordini di lavoro pianificati seguono la regola taglie dello stabilimento (una griglia o i suoi gruppi di taglie).",
+      "STYLE": "Un ordine di lavoro pianificato per variante con le sue taglie in una griglia (un ordine pianificato produce una sola variante).",
+      "STYLE_COLOUR": "Le taglie della variante in una griglia, qualunque siano i gruppi di taglie dello stabilimento.",
+      "SKU": "Ogni taglia è un ordine di lavoro pianificato a sé."
+    },
+    "days_one": "{count} giorno",
+    "days_other": "{count} giorni",
+    "percent": "{value} %",
+    "held": {
+      "material": "Un materiale si pianifica per colore: solo un capo finito o un componente si pianifica per modello, colore o taglia.",
+      "items": "Il tuo ruolo non può cambiare i parametri articolo (planning.items.manage).",
+      "strategy": "Come si pianifica un capo richiede anche planning.strategy.manage (pianificatore, responsabile di produzione).",
+      "settings": "Il tuo ruolo non può cambiare le impostazioni di pianificazione dello stabilimento (planning.settings.manage).",
+      "same": "Non cambia nulla.",
+      "busy": "Salvataggio…",
+      "loading": "Sto ancora leggendo le impostazioni dello stabilimento."
+    },
+    "problem": {
+      "fixedNeeded": "Un lotto fisso richiede la sua quantità: quanto porta ogni ordine.",
+      "fixedOnly": "Un lotto fisso appartiene alla dimensione a lotto fisso.",
+      "fixedQty": "Il lotto fisso è una quantità maggiore di 0 con al massimo quattro decimali.",
+      "periodNeeded": "Un periodo richiede i suoi giorni: i giorni di fabbisogno che porta un ordine.",
+      "periodOnly": "Un periodo appartiene alla dimensione a periodo.",
+      "periodDays": "Un periodo va da {min} a {max} giorni.",
+      "planLevel": "Scegli modello, modello e colore, ogni taglia o la regola dello stabilimento.",
+      "scrap": "Lo scarto è una percentuale da 0 a meno di 100, al massimo due decimali (5 o 2,5).",
+      "yield": "La resa è una percentuale maggiore di 0 e al massimo 100, al massimo due decimali (92 o 87,5).",
+      "delay": "I giorni tra arrivo e uso vanno da {min} a {max}.",
+      "lotSizing": "Scegli come dimensionare gli ordini.",
+      "write": "Non è stato salvato. Riprova.",
+      "conflict": "Qualcuno l'ha cambiato nel frattempo: è stato riletto, controllalo e riprova.",
+      "unknown": "Nessuna risposta: potrebbe essere stato salvato oppure no. Ricarica la pagina."
+    },
+    "words": {
+      "lotFinished": "Mantenuto per il capo finito: il piano dimensiona solo gli ordini di materiale (un ordine di lavoro pianificato produce i capi ordinati).",
+      "FIXED": "Ogni ordine porta {quantity} {unit}, tanti quanti ne servono.",
+      "PERIOD_one": "Un ordine porta il fabbisogno di {count} giorno.",
+      "PERIOD_other": "Un ordine porta il fabbisogno di {count} giorni.",
+      "MIN_MAX": "Ogni ordine è almeno {min}, a multipli di {step}, al massimo {max} {unit}; oltre il massimo il fabbisogno si divide.",
+      "MIN_MAX_none": "Nessun limite d'ordine su questa riga: ogni ordine è esattamente il fabbisogno.",
+      "onlyOrders": "Letto solo finché l'articolo è pianificato dai suoi ordini.",
+      "level": {
+        "SKU": "Ogni taglia è un ordine di lavoro pianificato a sé.",
+        "STYLE_COLOUR": "Le taglie della variante si pianificano in una griglia, qualunque siano i gruppi di taglie dello stabilimento.",
+        "STYLE": "Pianificato come modello e colore: un ordine di lavoro pianificato produce una sola variante."
+      },
+      "levelComponent": "Mantenuto per il componente: un componente si pianifica per colore come parte da produrre (gli ordini di lavoro pianificati dei componenti non si creano ancora).",
+      "scrapYield": "Il fabbisogno si moltiplica per {factor}, oltre allo sfrido della distinta.",
+      "scrapYieldFinished": "Ogni materiale di questa taglia si moltiplica per {factor}, oltre allo sfrido della distinta.",
+      "delay_one": "{count} giorno tra arrivo e uso: una fornitura si può usare quel numero di giorni dopo l'arrivo.",
+      "delay_other": "{count} giorni tra arrivo e uso: una fornitura si può usare quel numero di giorni dopo l'arrivo."
+    },
+    "clears": "Il cambio cancella: {fields}.",
+    "cleared": "Cancellato perché è cambiata la dimensione dei lotti: {fields}.",
+    "sizeRun": {
+      "title": "Taglie degli ordini di lavoro pianificati",
+      "oneGrid": "Una griglia per variante: tutte le taglie della variante di un ordine in un solo ordine di lavoro pianificato.",
+      "groups_one": "{count} gruppo di taglie:",
+      "groups_other": "{count} gruppi di taglie:",
+      "hint": "Vale per un capo che si pianifica con la regola taglie dello stabilimento.",
+      "change": "Cambia…",
+      "dialogTitle": "Taglie degli ordini di lavoro pianificati",
+      "rule": "Come si divide una serie di taglie",
+      "ONE_GRID": "Una griglia",
+      "SIZE_GROUPS": "Gruppi di taglie",
+      "hintONE_GRID": "Tutte le taglie di una variante in un solo ordine di lavoro pianificato.",
+      "hintSIZE_GROUPS": "Un ordine di lavoro pianificato per gruppo di taglie; una taglia fuori dai gruppi è un gruppo a sé.",
+      "groupsField": "Gruppi (uno per riga)",
+      "groupsHint": "Taglie separate da virgole, ad esempio: 44, 46, 48. Da 2 a 20 gruppi; una taglia in un solo gruppo.",
+      "clears": "Una griglia cancella i gruppi di taglie.",
+      "save": "Salva",
+      "failed": "Impossibile leggere le taglie dello stabilimento.",
+      "savedOne": "Gli ordini di lavoro pianificati si fanno in una griglia per variante.",
+      "savedGroups_one": "Gli ordini di lavoro pianificati si dividono in {count} gruppo di taglie.",
+      "savedGroups_other": "Gli ordini di lavoro pianificati si dividono in {count} gruppi di taglie.",
+      "problem": {
+        "twice": "La taglia {size} è in due gruppi: una taglia sta in un solo gruppo.",
+        "groups": "Crea da {min} a {max} gruppi.",
+        "codes": "Un gruppo elenca da {min} a {max} taglie da 1 a {code} caratteri, senza spazi.",
+        "refused": "I gruppi di taglie sono stati rifiutati: controllali."
+      }
+    }
+  }
+}

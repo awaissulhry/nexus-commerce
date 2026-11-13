@@ -17,6 +17,12 @@ import { decisionPhrase, draftHeld, draftReach, heldByReason, heldReason, MRP_NA
 import { PlanDialogs } from './PlanDialogs'
 import { ShortList } from './ShortList'
 import { WhyModal } from './WhyModal'
+// B-W2b-335: To make, the action messages, their dialogs and the projected stock of a material.
+import { DEPTH_NAMESPACE, openMessageCount, toMakeCount } from '../depth/model'
+import { DepthDialogs } from '../depth/view/DepthDialogs'
+import { MakeSection } from '../depth/view/MakeSection'
+import { ProjectedStock } from '../depth/view/ProjectedStock'
+import { useDepthSay } from '../depth/view/words'
 import '../../../_shared/buying/buying.css'
 
 export type { PlanActions, PlanModel } from '../model'
@@ -33,7 +39,7 @@ export type { PlanActions, PlanModel } from '../model'
  */
 export function PlanView({ model, actions }: { model: PlanModel; actions?: PlanActions }) {
   return (
-    <WithMessages namespaces={['buying', MRP_NAMESPACE, 'lists']}>
+    <WithMessages namespaces={['buying', MRP_NAMESPACE, 'lists', DEPTH_NAMESPACE]}>
       <PlanScreen model={model} actions={actions} />
     </WithMessages>
   )
@@ -42,12 +48,14 @@ export function PlanView({ model, actions }: { model: PlanModel; actions?: PlanA
 function PlanScreen({ model, actions }: { model: PlanModel; actions?: PlanActions }) {
   const t = useT('buying')
   const w = useT(MRP_NAMESPACE)
+  const d = useT(DEPTH_NAMESPACE)
+  const sayDepth = useDepthSay(model.timeZone)
   const locale = useLocale()
   const place = { locale, timeZone: model.timeZone }
   /** B-W2a-70: a planner's Draft PO is held with the buyers' queue named (design: "ask a buyer or use Request to buy"). */
   const heldWords = (key: string) => (key === 'held.noPurchasing' ? w('held.noPurchasingRequests') : t(key))
   /** A view's name: W1's in `buying`, Short on open work orders in `planning-mrp`. */
-  const viewName = (view: PlanViewName) => (view === 'shortWo' ? w('view.shortWo') : t(`plan.view.${view}`))
+  const viewName = (view: PlanViewName) => (view === 'shortWo' ? w('view.shortWo') : view === 'toMake' ? d('view.toMake') : t(`plan.view.${view}`))
   const [query, setQuery] = useState(model.q)
   useEffect(() => setQuery(model.q), [model.q])
   const typed = useRef(false)
@@ -74,7 +82,7 @@ function PlanScreen({ model, actions }: { model: PlanModel; actions?: PlanAction
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null
-      if (event.metaKey || event.ctrlKey || event.altKey || model.dialog || model.why) return
+      if (event.metaKey || event.ctrlKey || event.altKey || model.dialog || model.why || model.depth?.dialog || model.depth?.profile) return
       if (target && (target.closest('input, textarea, select, [contenteditable="true"], [role="dialog"], [role="menu"]') || target.isContentEditable)) return
       if (event.key === 'R' && event.shiftKey && model.can.planRun && !model.running) {
         event.preventDefault()
@@ -214,6 +222,8 @@ function PlanScreen({ model, actions }: { model: PlanModel; actions?: PlanAction
           triggerProps={{ 'aria-label': t('plan.rowMenu', { material: data.item.code }) }}
           items={[
             { id: 'why', label: t('plan.explain'), onSelect: () => actions?.onWhy?.(data.id) },
+            // B-W2b-335 (design pop:item-profile, "Material cell ⋯ › Projected stock").
+            ...(model.depth ? [{ id: 'profile', label: d('profile.menu'), onSelect: () => actions?.depth?.onProfile?.(data.id) }] : []),
             ...(data.decision === 'OPEN' ? [{ id: 'aside', label: t('plan.setAside'), onSelect: () => actions?.onSetAside?.([data.id]), disabled: !model.can.planDecide }] : []),
             ...(data.decision === 'IGNORED' ? [{ id: 'back', label: t('plan.putBack'), onSelect: () => actions?.onReopen?.([data.id]), disabled: !model.can.planDecide }] : []),
             ...(data.purchaseOrder ? [{ id: 'po', label: t('plan.openOrder', { number: data.purchaseOrder.number }), href: `${model.prefix}/purchasing/orders/${data.purchaseOrder.id}` }] : []),
@@ -436,14 +446,39 @@ function PlanScreen({ model, actions }: { model: PlanModel; actions?: PlanAction
         </Banner>
       )}
 
+      {/* B-W2b-335: a W2b write's notice, and the open action messages of the latest plan when the To make view is not shown. */}
+      {model.depth?.notice && <Banner tone={model.depth.notice.tone} title={sayDepth(model.depth.notice.words)} action={<Button size="sm" variant="quiet" onClick={() => actions?.depth?.onDismissNotice?.()}>{t('common.dismiss')}</Button>} />}
+      {model.depth && model.view !== 'toMake' && (openMessageCount(model.depth.messages) ?? 0) > 0 && (
+        <Banner
+          tone="info"
+          title={d('msg.notice', { count: openMessageCount(model.depth.messages) ?? 0 })}
+          action={
+            <Button size="sm" onClick={() => actions?.onView?.('toMake')}>
+              {d('msg.noticeShow')}
+            </Button>
+          }
+        />
+      )}
+
       <MetricStrip
         metrics={[
-          ...TILES.map((tile) => ({
-            label: t(`plan.tile.${tile.id}`),
-            value: plan?.run ? String(tile.count(plan.summary)) : '—',
-            onClick: () => actions?.onView?.(model.view === tile.view ? 'open' : tile.view),
-            active: tileView === tile.view,
-          })),
+          ...TILES.map((tile) =>
+            // B-W2b-335 (design sec:tiles "To make, no work order"): the planned work and subcontract orders not made real yet.
+            tile.id === 'make' && model.depth
+              ? {
+                  label: d('tile.toMake'),
+                  value: toMakeCount(model.depth.planned) === null ? '—' : String(toMakeCount(model.depth.planned)),
+                  hint: d('tile.toMakeHint'),
+                  onClick: () => actions?.onView?.(model.view === 'toMake' ? 'open' : 'toMake'),
+                  active: model.view === 'toMake',
+                }
+              : {
+                  label: t(`plan.tile.${tile.id}`),
+                  value: plan?.run ? String(tile.count(plan.summary)) : '—',
+                  onClick: () => actions?.onView?.(model.view === tile.view ? 'open' : tile.view),
+                  active: tileView === tile.view,
+                },
+          ),
           // B-W2a-70: Short on open work orders, its own view (counted now from the live plan, not the run).
           {
             label: w('tile.shortWo'),
@@ -455,7 +490,9 @@ function PlanScreen({ model, actions }: { model: PlanModel; actions?: PlanAction
         ]}
       />
 
-      {model.view === 'shortWo' ? (
+      {model.view === 'toMake' && model.depth ? (
+        <MakeSection model={model.depth} actions={actions?.depth} prefix={model.prefix} timeZone={model.timeZone} tools={viewSelect} onWhy={(lineId) => actions?.onWhy?.(lineId)} />
+      ) : model.view === 'shortWo' ? (
         <ShortList model={model} actions={actions} search={searchField} tools={viewSelect} />
       ) : (
         <ListFrame<PlanLine>
@@ -521,6 +558,8 @@ function PlanScreen({ model, actions }: { model: PlanModel; actions?: PlanAction
 
       <PlanDialogs model={model} actions={actions} ownKeys={ownKeys} />
       {model.why && <WhyModal model={model} actions={actions} order={(lines ?? []).map((line) => line.id)} />}
+      {model.depth && <DepthDialogs model={model.depth} actions={actions?.depth} today={model.today ?? ''} timeZone={model.timeZone} />}
+      {model.depth?.profile && <ProjectedStock model={model.depth} actions={actions?.depth} prefix={model.prefix} order={(lines ?? []).map((line) => line.id)} timeZone={model.timeZone} />}
     </div>
   )
 }

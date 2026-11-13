@@ -1,0 +1,445 @@
+{
+  "band": {
+    "whatIf": "Simulazione"
+  },
+  "plan": {
+    "openVersion": "Apri la v{version} in sola lettura (nuova scheda)"
+  },
+  "more": {
+    "print": "Stampa i fogli del giorno per linea (PDF)",
+    "export": "Esporta il tabellone (XLSX)",
+    "backlog": "Ripianifica l'arretrato"
+  },
+  "floor": {
+    "NOT_STARTED": "Non iniziato",
+    "RUNNING": "In corso · {done}/{of} ({pct}%)",
+    "UNDER_WAY": "Avviato · {done}/{of} ({pct}%)",
+    "PAUSED": "In pausa · {done}/{of} ({pct}%)",
+    "DONE": "Fatto",
+    "sentence": {
+      "NOT_STARTED": "In reparto: non iniziato, nessuna lettura ancora.",
+      "RUNNING": "In reparto: in corso — {done} di {of} capi fatti, {bundles} mazzetti in lavorazione dalle {since}.",
+      "UNDER_WAY": "In reparto: avviato — {done} di {of} capi fatti; nessun mazzetto in lavorazione in questo momento.",
+      "PAUSED": "In reparto: in pausa dalle {since} — {done} di {of} capi fatti, {paused} mazzetti in pausa.",
+      "DONE": "In reparto: fatto — {done} di {of} capi passati."
+    }
+  },
+  "mark": {
+    "gate": "Gate non superato",
+    "tried": "Simulazione"
+  },
+  "held": {
+    "offline": "Senza connessione: non cambia nulla finché non torna.",
+    "busy": "Salvataggio in corso: attendi la risposta.",
+    "reading": "Attendi la lettura.",
+    "readOnly": "Puoi guardare il tabellone, non cambiarlo: cambiare il piano richiede il permesso di pianificare questo stabilimento.",
+    "inWhatIf": "La simulazione è attiva: applica le tue mosse o esci prima dalla simulazione.",
+    "whatIfReadOnly": "La simulazione richiede il permesso di cambiare il piano di questo stabilimento.",
+    "whatIfEmpty": "Prova prima una mossa sul tabellone: non c'è ancora nulla da applicare.",
+    "pin": "Fissare richiede il permesso di fissare le barre (pianificatori e responsabili di produzione).",
+    "pinInWhatIf": "In simulazione non si fissano barre: esci dalla simulazione per fissare una barra.",
+    "outsource": "Spostare un lavoro a un terzista richiede il permesso di mandare lavoro fuori (pianificatori, responsabili di produzione, buyer).",
+    "partOutside": "Una parte di un ordine va a un terzista da Linee e terzisti, non da una barra.",
+    "alreadyOutside": "Questa operazione è già lavorata da un terzista.",
+    "noWorkLeft": "Nessun lavoro rimasto su questa operazione.",
+    "workshopInWhatIf": "Il lavoro va a un terzista solo con Sposta a un terzista, con il suo kit: in simulazione non si prova.",
+    "workshopChecking": "Verifica delle approvazioni dei terzisti…",
+    "workshopNotChecked": "Non è stato possibile leggere le approvazioni dei terzisti: un terzista non riceve lavoro finché non sono lette.",
+    "workshopNotOffered": "{workshop} non è un terzista a cui questo stabilimento può mandare lavoro."
+  },
+  "whatif": {
+    "title": "Simulazione",
+    "banner": "Simulazione — nulla arriva al reparto o agli altri pianificatori finché non applichi",
+    "bannerBody": "Trascina le barre come vuoi: ogni mossa è provata in privato e il tabellone mostra il piano con le tue mosse.",
+    "discard": "Scarta",
+    "leave": "Esci dalla simulazione",
+    "apply_one": "Applica {moves} mossa al piano",
+    "apply_other": "Applica {moves} mosse al piano",
+    "applyPlain": "Applica al piano",
+    "reading": "Lettura della simulazione…",
+    "errorTitle": "Impossibile caricare la simulazione",
+    "empty": "Nessuna mossa provata. Trascina una barra sul tabellone per vedere cosa cambia.",
+    "deltas": "Cosa cambia rispetto al piano di lavoro",
+    "late": "ordini in ritardo {before} → {after}",
+    "overtime": "straordinari necessari {before} → {after}",
+    "lane": "carico {lane} {before} → {after}",
+    "orders_one": "ordini che si spostano: {orders}",
+    "orders_other": "ordini che si spostano: {orders}",
+    "hours": "{hours} h",
+    "notPlanned": "non pianificato",
+    "orderFinish": "{order} finisce {before} → {after}",
+    "planChanged": "Il piano di lavoro è cambiato da quando hai iniziato",
+    "planChangedBody": "Un altro pianificatore ha spostato qualcosa. Applica ricontrolla ogni mossa ed elenca quelle in conflitto.",
+    "movesSummary_one": "{moves} mossa provata",
+    "movesSummary_other": "{moves} mosse provate",
+    "ordersSummary_one": "{orders} ordine si sposta",
+    "ordersSummary_other": "{orders} ordini si spostano",
+    "materialLate": "Prima del suo materiale",
+    "private": "Solo tu vedi questa simulazione. Resta una bozza finché non la applichi o la scarti.",
+    "conflictsTitle_one": "{moves} mossa è in conflitto con il piano di lavoro",
+    "conflictsTitle_other": "{moves} mosse sono in conflitto con il piano di lavoro",
+    "conflictsSummary": "Il piano di lavoro è cambiato da quando hai provato queste mosse. Applica le altre, oppure chiudi e riprovale sul tabellone.",
+    "nothingElse": "Ogni mossa è in conflitto: non c'è altro da applicare.",
+    "applyRest_one": "Applica l'altra {moves} mossa",
+    "applyRest_other": "Applica le altre {moves} mosse",
+    "conflict": {
+      "SLOT_GONE": "La barra non è più sul tabellone",
+      "SLOT_MOVED": "Spostata da qualcuno dopo la tua prova",
+      "SLOT_PINNED": "Fissata dopo la tua prova",
+      "ALREADY_ON_BOARD": "L'operazione ha avuto una barra nel frattempo",
+      "NOT_OPEN": "L'ordine di lavoro non è più aperto",
+      "OPERATION_DONE": "L'operazione è fatta",
+      "GATE_NOT_PASSED": "Il suo ordine attende un gate non superato"
+    }
+  },
+  "status": {
+    "LATE": "In ritardo",
+    "AT_RISK": "A rischio",
+    "ON_TIME": "In tempo",
+    "NO_DUE_DATE": "Senza consegna",
+    "DONE": "Fatto"
+  },
+  "log": {
+    "title": "Modifiche",
+    "hint": "Ogni mossa con chi, quando e da → a. Annulla torna indietro di una modifica finché la barra è dove quella modifica l'ha lasciata.",
+    "filters": "Filtra le modifiche",
+    "since": "Quali modifiche",
+    "sinceVersion": "Dalla v{version}",
+    "sincePublished": "Dall'ultima versione",
+    "all": "Tutte",
+    "chip": {
+      "MOVE": "Spostamenti",
+      "PLACE": "Collocate",
+      "REMOVE": "Rimesse nel vassoio",
+      "PIN": "Fissaggi",
+      "PUBLISH": "Pubblicazioni",
+      "UNDO": "Annullamenti"
+    },
+    "planner": "Filtra per pianificatore",
+    "everyPlanner": "Tutti i pianificatori",
+    "reading": "Lettura delle modifiche…",
+    "errorTitle": "Impossibile caricare le modifiche",
+    "emptySince": "Nessuna mossa dalla v{version}",
+    "empty": "Ancora nessuna modifica",
+    "more": "Mostra le modifiche precedenti",
+    "undo": "Annulla",
+    "undoOne": "Annulla: {what}",
+    "what": "Op {seq} {operation} di {order}",
+    "whatPart": "parte di {order}",
+    "kind": {
+      "PLACE": "{what} collocata su {lane}",
+      "MOVE": "{what} spostata",
+      "REMOVE": "{what} rimessa nel vassoio",
+      "PIN": "{what} fissata",
+      "UNPIN": "{what} sbloccata",
+      "PUBLISH": "v{version} pubblicata al reparto",
+      "UNDO": "Annullato: {kind} di {what}"
+    },
+    "undid": {
+      "PLACE": "collocazione",
+      "MOVE": "spostamento",
+      "REMOVE": "rimozione",
+      "PIN": "fissaggio",
+      "UNPIN": "sblocco",
+      "PUBLISH": "pubblicazione",
+      "UNDO": "annullamento"
+    },
+    "by": "da {name}, {time}",
+    "byNobody": "{time}",
+    "fromWhatIf": "applicata da una simulazione",
+    "reason": "motivo: {reason}",
+    "undoneBy": "annullata da {name}, {time}",
+    "undone": "annullata {time}",
+    "fromTo": "da {from} a {to}",
+    "toOnly": "a {to}",
+    "fromOnly": "da {from}, fuori dal tabellone",
+    "offBoard": "fuori dal tabellone",
+    "undoHeld": {
+      "NOT_UNDOABLE": "Una pubblicazione o un annullamento non si annullano.",
+      "PART_REMOVED": "Una parte di un ordine tolta si rimette da Linee e terzisti, non si annulla qui.",
+      "ALREADY_UNDONE": "Questa modifica è già annullata.",
+      "ALREADY_UNDONE_BY": "Già annullata da {name}, {time}.",
+      "CHANGED_SINCE": "La barra è cambiata nel frattempo: si annulla solo l'ultima modifica di una barra, finché è dove quella modifica l'ha lasciata.",
+      "NO_PERMISSION": "Annullare questa modifica richiede il permesso con cui è stata fatta (un fissaggio: il permesso di fissare; uno spostamento: di pianificare)."
+    }
+  },
+  "problems": {
+    "more": "Problemi dei tipi W2b",
+    "show": "Mostra sul tabellone",
+    "kind": {
+      "IN_THE_PAST": "Nel passato",
+      "MATERIAL_NOT_IN_TIME": "Materiale non in tempo",
+      "GATE_NOT_PASSED": "Gate non superato"
+    },
+    "fix": {
+      "snap": "Allinea al giorno del materiale",
+      "backlog": "Ripianifica l'arretrato…"
+    }
+  },
+  "problem": {
+    "IN_THE_PAST": "{what} su {lane} doveva finire entro {day} e ha ancora lavoro da fare.",
+    "IN_THE_PAST_PINNED": "{what} su {lane} doveva finire entro {day} e ha ancora lavoro da fare; è fissata (sbloccala per ripianificarla).",
+    "MATERIAL_NOT_IN_TIME": "{order} inizia sul tabellone prima del suo materiale: l'inizio più presto con il materiale è {day}.",
+    "MATERIAL_NOT_COVERED": "{order} inizia sul tabellone mentre manca materiale senza nulla ordinato: {materials}.",
+    "GATE_NOT_PASSED": "{order} attende un gate di pre-produzione non superato: inizia solo quando il gate è superato, o se avviato prima con un motivo."
+  },
+  "material": {
+    "title": "{order} inizierebbe prima del suo materiale",
+    "arrives": "{material} arriva {date}.",
+    "arrivesFirm": "{material} arriva {date} (un ordine pianificato confermato).",
+    "earliest": "Inizio più presto con il materiale: {start}.",
+    "earliestDay": "Inizio più presto con il materiale: {day}.",
+    "notCovered": "{order}: manca materiale senza nulla ordinato ({materials}): non si conosce un giorno di inizio con il materiale.",
+    "body": "La mossa non è rifiutata: allineala all'inizio più presto con il materiale, oppure tieni la tua data (il problema resta nell'elenco).",
+    "snap": "Allinea a {start}",
+    "snapPlain": "Allinea al giorno del materiale",
+    "noDay": "Non si conosce un giorno con il materiale a cui allineare.",
+    "keep": "Tieni la mia data",
+    "cancel": "Annulla"
+  },
+  "subcontract": {
+    "title": "Sposta l'Op {seq} {operation} a un terzista",
+    "titlePlain": "Sposta a un terzista",
+    "reading": "Lettura dei terzisti…",
+    "errorTitle": "Impossibile caricare i terzisti",
+    "lead": "Solo terzisti approvati per {kind}: un terzista non approvato mostra perché e non si può scegliere.",
+    "noWorkshops": "Questo stabilimento non ha ancora terzisti.",
+    "pick": "Terzista",
+    "approved": "Approvato",
+    "held": "Bloccato",
+    "noRemark": "Approvato per questa operazione; nulla da segnalare.",
+    "pieces": "Capi",
+    "piecesHint": "Da 1 a {pieces}.",
+    "piecesHeld": "Indica capi interi, da 1 a {pieces}.",
+    "less": "Uno in meno",
+    "more": "Uno in più",
+    "kitReading": "Lettura dei tempi del kit…",
+    "kitError": "Impossibile leggere quando parte il kit",
+    "kit": "Distinta del kit (dalla distinta base)",
+    "kitNone": "La distinta base non mette nulla in questo kit.",
+    "col": {
+      "item": "Materiale",
+      "colour": "Colore",
+      "quantity": "Quantità"
+    },
+    "later": "Cosa dipende dalla data di rientro",
+    "finishesLate": "Finirebbe in ritardo",
+    "plans": "Pianifica l'ordine al terzista: si crea una bozza d'ordine con il suo kit quando l'ordine di lavoro è rilasciato; la barra passa sulla corsia del terzista.",
+    "plansBuyer": "Pianifica il lavoro fuori e sposta la barra sulla corsia del terzista; il buyer crea l'ordine da Acquisti › Ordini ai terzisti.",
+    "confirm": "Sposta e pianifica il kit",
+    "already": "Questa operazione è già lavorata da un terzista.",
+    "doneHeld": "Spostata: chiudi la finestra.",
+    "barStayed": "La barra resta sulla sua corsia: {reason}"
+  },
+  "print": {
+    "title": "Stampa i fogli del giorno",
+    "lanes": "Linee",
+    "lanesAll": "Nessuna scelta: ogni linea attiva dello stabilimento.",
+    "lanesPlaceholder": "Ogni linea attiva",
+    "lanesPicked_one": "{lanes} scelta",
+    "lanesPicked_other": "{lanes} scelte",
+    "search": "Cerca le linee",
+    "date": "Giorno",
+    "dateHeld": "Scegli il giorno da stampare.",
+    "language": "Lingua dei fogli",
+    "languages": {
+      "it": "Italiano",
+      "en": "Inglese"
+    },
+    "plan": "Quale piano",
+    "plans": {
+      "PUBLISHED": "Quello del reparto",
+      "WORKING": "Piano di lavoro"
+    },
+    "publishedHint": "I fogli stampano la versione pubblicata con cui il reparto lavora quel giorno, così corrispondono ai tablet di spedizione del lavoro.",
+    "workingHint": "I fogli stampano il piano di lavoro, non ancora pubblicato: ogni foglio lo dice in un avviso.",
+    "reading": "Lettura dei fogli…",
+    "noVersion": "Nessuna versione pubblicata copre questo giorno",
+    "noVersionBody": "Pubblica prima il piano per quel giorno, oppure stampa il piano di lavoro.",
+    "errorTitle": "Impossibile leggere i fogli",
+    "noRows": "nulla in programma",
+    "rows_one": "{rows} barra",
+    "rows_other": "{rows} barre",
+    "open": "Apri il PDF (nuova scheda)"
+  },
+  "sheet": {
+    "lead_one": "{sheets} foglio in {language}: cosa dice il PDF.",
+    "lead_other": "{sheets} fogli in {language}: cosa dice il PDF."
+  },
+  "backlog": {
+    "title": "Ripianifica l'arretrato",
+    "summary": "Ogni barra non fissata rimasta nel passato va al primo tempo libero da adesso (e al giorno del suo materiale); quello che segue si sposta solo quanto serve. Solo piano di lavoro: il reparto lo vede quando pubblichi.",
+    "tray": "Non sul tabellone",
+    "why": {
+      "FORWARD": "Da adesso sul tempo libero",
+      "PAST": "Rimasta nel passato",
+      "PUSHED": "Spinta dall'operazione precedente",
+      "PLACED": "Collocata dal vassoio"
+    },
+    "over": "oltre la capacità",
+    "kept": {
+      "PINNED_IN_THE_PAST": "{order}: una barra fissata nel passato resta dov'è.",
+      "PINNED_BEFORE_PREVIOUS": "{order}: una barra fissata inizia prima che finisca l'operazione precedente.",
+      "NO_WORKING_TIME": "{order}: nessun tempo di lavoro dove spostarla."
+    },
+    "skipped": {
+      "NOT_OPEN": "{order} non è più aperto.",
+      "ON_HOLD": "{order} è sospeso.",
+      "NO_DUE_DATE": "{order} non ha una data di consegna.",
+      "LANE_NOT_ACTIVE": "{order}: la sua corsia non è attiva.",
+      "NO_WORKING_TIME": "{order}: nessun tempo di lavoro sulla sua corsia.",
+      "GATE_NOT_PASSED": "{order} attende un gate non superato."
+    },
+    "leftOut_one": "{bars} resta o è esclusa",
+    "leftOut_other": "{bars} restano o sono escluse",
+    "nothing": "Nulla è rimasto nel passato: niente da spostare.",
+    "apply_one": "Sposta {moves} barra",
+    "apply_other": "Sposta {moves} barre",
+    "applyPlain": "Sposta le barre",
+    "reason_one": "Perché {lanes} corsia può andare oltre la capacità",
+    "reason_other": "Perché {lanes} corsie possono andare oltre la capacità",
+    "reasonHint": "Almeno 3 caratteri; resta con ogni barra.",
+    "reasonHeld_one": "Spiega perché {lanes} corsia può andare oltre la capacità (almeno 3 caratteri).",
+    "reasonHeld_other": "Spiega perché {lanes} corsie possono andare oltre la capacità (almeno 3 caratteri).",
+    "planChanged": "Il piano di lavoro è cambiato dopo l'anteprima: rileggi."
+  },
+  "export": {
+    "title": "Esporta il tabellone (XLSX)",
+    "starting": "Richiesta dell'esportazione…",
+    "failed": "Non è stato possibile richiedere l'esportazione.",
+    "fileTitle": "Tabellone di pianificazione",
+    "versionTitle": "Versione pubblicata",
+    "column": {
+      "lane": "Corsia",
+      "start": "Inizio",
+      "end": "Fine",
+      "workOrder": "Ordine di lavoro",
+      "style": "Modello",
+      "operation": "Operazione",
+      "pieces": "Pezzi",
+      "minutes": "Minuti standard",
+      "due": "Consegna",
+      "schedule": "Programma",
+      "floor": "In reparto",
+      "pinned": "Fissata",
+      "note": "Nota"
+    }
+  },
+  "laneKind": {
+    "LINE": "Linea",
+    "WORK_CENTRE": "Centro di lavoro",
+    "WORKSHOP": "Terzista"
+  },
+  "version": {
+    "title": "Versione pubblicata v{version}",
+    "titlePlain": "Versione pubblicata",
+    "readOnly": "Sola lettura",
+    "back": "Piano di lavoro",
+    "export": "Esporta questa versione (XLSX)",
+    "exportHeld": "Esportare richiede gli strumenti degli elenchi dell'Ufficio: apri il tabellone dall'Ufficio.",
+    "reading": "Lettura della versione…",
+    "notFound": "Nessuna versione pubblicata così",
+    "notFoundBody": "Il collegamento indica una versione che questo stabilimento non ha. Apri Versioni pubblicate sul tabellone.",
+    "errorTitle": "Impossibile caricare la versione pubblicata",
+    "note": "Nota: {note}",
+    "board": "Cosa ha ricevuto il reparto",
+    "boardHint": "Ogni barra dice il suo stato in reparto adesso e dove la mette ora il piano di lavoro.",
+    "label": "Versione pubblicata v{version} · {site}",
+    "held": "La versione v{version} è in sola lettura: da qui non si sposta, non si fissa e non si pubblica nulla.",
+    "empty": "Questa versione non ha barre in questi giorni.",
+    "card": "Op {seq} {operation} · {style}",
+    "cardPart": "Parte dell'ordine · {style}",
+    "rush": "Urgente",
+    "moved": "Piano di lavoro: {lane} · {when}",
+    "removed": "Non più nel piano di lavoro",
+    "floor": {
+      "CURRENT": "Il reparto lavora ora con la v{version} (dal {from} al {to}, dalle {start}).",
+      "UPCOMING": "La v{version} attende il suo inizio: il reparto ci lavora da {start} (dal {from} al {to}).",
+      "REPLACED": "La v{version} è stata sostituita da una versione successiva (dal {from} al {to})."
+    },
+    "same": "Il piano di lavoro è uguale alla v{version} nei suoi giorni.",
+    "compare": "Dalla v{version} il piano di lavoro ha {moved} spostate, {added} aggiunte, {removed} tolte nei suoi giorni.",
+    "added_one": "{bars} barra aggiunta dal piano di lavoro",
+    "added_other": "{bars} barre aggiunte dal piano di lavoro",
+    "addedOne": "{lane} · {when}",
+    "legend": "Colori secondo lo stato in reparto: non iniziato, in corso, in pausa, fatto — ognuno detto a parole sulla barra."
+  },
+  "bar": {
+    "title": "Su questa barra",
+    "material": "Materiale",
+    "pinned": "Fissata: tiene la sua corsia e i suoi orari.",
+    "pinnedBy": "Fissata da {name}, {time}: tiene la sua corsia e i suoi orari.",
+    "pin": "Fissa",
+    "unpin": "Sblocca",
+    "pinOrder": "Fissa tutto l'ordine",
+    "unpinOrder": "Sblocca tutto l'ordine",
+    "subcontract": "Sposta a un terzista…",
+    "gates": "Una barra il cui ordine attende un gate di pre-produzione chiede Avviare prima del gate quando la sposti."
+  },
+  "legend": {
+    "notStarted": "Non iniziato",
+    "notStartedWords": "In reparto: nessuna lettura ancora.",
+    "running": "In corso · 2/7",
+    "runningWords": "In reparto: mazzetti in lavorazione o avviati, con i capi fatti su quelli dell'ordine.",
+    "paused": "In pausa · 2/7",
+    "pausedWords": "In reparto: i suoi mazzetti sono in pausa.",
+    "done": "Fatto",
+    "doneWords": "In reparto: nulla rimasto a questa operazione.",
+    "pinned": "Fissata",
+    "pinnedWords": "Tiene la sua corsia e i suoi orari; le ripianificazioni le girano intorno (P fissa e sblocca).",
+    "gateWords": "Il suo ordine attende un gate di pre-produzione non superato.",
+    "triedWords": "Spostata o collocata nella tua simulazione, non nel piano di lavoro."
+  },
+  "keys": {
+    "pin": "Fissa o sblocca la barra selezionata",
+    "whatIf": "Simulazione sì o no",
+    "undoLog": "Fuori dal tabellone ⌘Z annulla la tua modifica più recente dell'elenco Modifiche, ⌘⇧Z la rifà come nuova mossa."
+  },
+  "versions": {
+    "open": "Sola lettura",
+    "openOne": "Apri la v{version}"
+  },
+  "notice": {
+    "pinned": "Barra fissata.",
+    "unpinned": "Barra sbloccata.",
+    "pinnedOrder_one": "{bars} barra dell'ordine fissata.",
+    "pinnedOrder_other": "{bars} barre dell'ordine fissate.",
+    "unpinnedOrder_one": "{bars} barra dell'ordine sbloccata.",
+    "unpinnedOrder_other": "{bars} barre dell'ordine sbloccate.",
+    "undone": "Modifica annullata.",
+    "redone": "Rifatta come nuova mossa.",
+    "nothingToUndo": "Nulla di tuo da annullare nelle modifiche lette.",
+    "nothingToRedo": "Nulla da rifare.",
+    "outside": "Mandata fuori: la barra è dal terzista.",
+    "backlog_one": "{bars} barra dell'arretrato ripianificata.",
+    "backlog_other": "{bars} barre dell'arretrato ripianificate.",
+    "whatIfApplied_one": "{moves} mossa della simulazione applicata al piano.",
+    "whatIfApplied_other": "{moves} mosse della simulazione applicate al piano.",
+    "whatIfDiscarded": "Simulazione scartata: il piano di lavoro è com'era.",
+    "snapped": "{order} allineato all'inizio più presto con il materiale.",
+    "noSnap": "{order}: non si conosce un giorno con il materiale a cui allineare."
+  },
+  "refusal": {
+    "PINNED": "Non salvato: la barra è fissata. Sbloccala per spostarla.",
+    "ALREADY_PINNED": "Già fissata.",
+    "NOT_PINNED": "Non è fissata.",
+    "NOTHING_TO_PIN": "Niente da fissare: ogni barra dell'ordine è già così.",
+    "NOTHING_TO_RESCHEDULE": "Niente da spostare: nulla è rimasto nel passato.",
+    "WHAT_IF_CONFLICTS": "Alcune mosse sono in conflitto con il piano di lavoro attuale.",
+    "WHAT_IF_CLOSED": "Questa simulazione è già applicata o scartata.",
+    "NOT_UNDOABLE": "Questa modifica non si annulla (una pubblicazione, un annullamento o una parte tolta).",
+    "ALREADY_UNDONE": "Questa modifica è già annullata.",
+    "CHANGED_SINCE": "La barra è cambiata nel frattempo: si annulla solo la sua ultima modifica."
+  },
+  "error": {
+    "forbidden": "Non hai il permesso di vederlo.",
+    "offline": "Nessuna connessione: riprova quando torna.",
+    "failed": "Qualcosa è andato storto nella lettura.",
+    "noSite": "Ancora nessuno stabilimento di pianificazione."
+  },
+  "dialog": {
+    "retry": "Riprova",
+    "close": "Chiudi",
+    "cancel": "Annulla"
+  }
+}

@@ -10,6 +10,9 @@ import { readProblem, type TabHost } from '../model'
 import { useEchoes, useMarks, useRowQueue } from './hooks'
 import { bulkResult, clearedWords, itemRowsOf, parseCell, planPatch, refusalWords, rowKeyOf, rowName, valuesOf, withoutRow, withRow, type CellField, type ItemRow, type Notice, type Words } from './model'
 import { ItemsView, type ItemsModel, type SupplierChoices } from './view/ItemsView'
+// B-W2b-335: the planning rules per item (lot sizing, plan by, scrap, yield, delay days) and the site's size-run rule.
+import { SizeRunSection } from '../items/SizeRunSection'
+import { useRuleSave } from '../items/use-item-rules'
 
 const PAGE = 50
 const SEARCH_MS = 300
@@ -198,6 +201,7 @@ export function ItemsTab({ host }: { host: TabHost }) {
   }
 
   const rows = useMemo(() => (entries ? itemRowsOf(entries) : null), [entries])
+  const saveRule = useRuleSave({ api, site, rowNow, queue, expectEcho: echoes.expect, setEntries, setMark, fade, onStatus, failedCount, setNotice, setChangedElsewhere })
 
   const model: ItemsModel = {
     prefix: host.prefix,
@@ -219,9 +223,12 @@ export function ItemsTab({ host }: { host: TabHost }) {
   }
 
   return (
+    <>
+    <SizeRunSection host={host} />
     <ItemsView
       model={model}
       actions={{
+        onRule: saveRule,
         onQuery: setTyped,
         onMethod: (next) => host.setParams({ method: next }),
         onConfigured: (next) => host.setParams({ configured: next === null ? null : String(next) }),
@@ -291,5 +298,6 @@ export function ItemsTab({ host }: { host: TabHost }) {
         onDismissNotice: () => setNotice(null),
       }}
     />
+    </>
   )
 }

@@ -2,6 +2,8 @@ import { z } from 'zod'
 import { SCHEDULE_REASONS, SCHEDULE_STATUSES } from '@nexus/factory-domain/planning/schedule/backward'
 import { SCHEDULE_LANE_KINDS } from '@nexus/factory-domain/planning/schedule/slots'
 import { READINESS_WORDS } from '@nexus/factory-domain/planning/readiness/readiness'
+import { MATERIAL_START_STATES } from '@nexus/factory-domain/planning/schedule-depth/material'
+import { FLOOR_STATES } from '@nexus/factory-domain/planning/schedule-log/floor-status'
 import type { ApiClient } from '../../../lib/api/client'
 import { newIdempotencyKey } from '../../../lib/api/client'
 
@@ -56,11 +58,29 @@ const storedSlot = z.object({
   updatedBy: person,
 })
 
+// B-W2b-337: what B-W2b-312 (pins) and B-W2b-329 (the floor's state) added to every bar; optional, so an older answer still reads.
+export const floorView = z.object({
+  state: z.enum(FLOOR_STATES),
+  done: z.number(),
+  of: z.number(),
+  pct: z.number(),
+  runningBundles: z.number(),
+  pausedBundles: z.number(),
+  since: z.string().nullable(),
+  pauseReasonCode: z.string().nullable(),
+  lastScanAt: z.string().nullable(),
+})
+export type FloorView = z.infer<typeof floorView>
+
 const slotView = storedSlot.extend({
   booksCapacity: z.boolean(),
   latestStart: z.string().nullable(),
   latestFinish: z.string().nullable(),
   startsLate: z.boolean(),
+  pinned: z.boolean().optional(),
+  pinnedAt: z.string().nullable().optional(),
+  pinnedBy: person.optional(),
+  floor: floorView.nullable().optional(),
 })
 export type BoardSlot = z.infer<typeof slotView>
 
@@ -88,6 +108,17 @@ export type BoardOperation = z.infer<typeof operationView>
 const readinessView = z.object({ word: z.enum(READINESS_WORDS), date: z.string().nullable() }).nullable()
 export type Readiness = z.infer<typeof readinessView>
 
+// B-W2b-337 (B-W2b-312, PLN-134): the first day a work order may start with every material.
+export const materialStartView = z.object({
+  state: z.enum(MATERIAL_START_STATES),
+  arrives: z.string().nullable(),
+  startDay: z.string().nullable(),
+  earliestStart: z.string().nullable(),
+  setBy: z.object({ label: z.string(), arrives: z.string().nullable(), purchaseOrderNumber: z.string().nullable(), source: z.enum(['PURCHASE_ORDER', 'FIRM']).nullable() }).nullable(),
+  notCovered: z.array(z.object({ label: z.string() })),
+})
+export type MaterialStart = z.infer<typeof materialStartView>
+
 const workOrderView = z.object({
   id: z.string(),
   number: z.string(),
@@ -105,6 +136,7 @@ const workOrderView = z.object({
   minutes: z.string(),
   schedule: scheduleView,
   readiness: readinessView,
+  materialStart: materialStartView.nullable().optional(),
   operations: z.array(operationView),
 })
 export type BoardWorkOrder = z.infer<typeof workOrderView>
@@ -161,6 +193,12 @@ const problemView = z.object({
 })
 export type BoardProblem = z.infer<typeof problemView>
 
+// B-W2b-337 (B-W2b-312): the problems list's W2b kinds, in their own list.
+export const MORE_PROBLEM_KINDS = ['IN_THE_PAST', 'MATERIAL_NOT_IN_TIME', 'GATE_NOT_PASSED'] as const
+export type MoreProblemKind = (typeof MORE_PROBLEM_KINDS)[number]
+const moreProblemView = z.object({ kind: z.enum(MORE_PROBLEM_KINDS), lane: laneRef.nullable(), date: z.string().nullable(), workOrderId: z.string(), slotId: z.string().nullable() })
+export type MoreProblem = z.infer<typeof moreProblemView>
+
 const siteView = z.object({ id: z.string(), companyId: z.string(), code: z.string(), name: z.string(), timeZone: z.string() })
 export type BoardSite = z.infer<typeof siteView>
 
@@ -188,6 +226,7 @@ export const boardSchema = z.object({
   workOrders: z.array(workOrderView),
   tray: z.array(z.object({ workOrderId: z.string(), unplacedOperations: z.number(), minutes: z.string(), latestSafeStart: z.string().nullable(), chips: z.array(z.enum(TRAY_CHIPS)) })),
   problems: z.array(problemView),
+  moreProblems: z.array(moreProblemView).optional(),
 })
 export type Board = z.infer<typeof boardSchema>
 

@@ -3,6 +3,8 @@ import { SEGMENT_KINDS } from '@nexus/factory-domain/calendars/patterns'
 import { CALENDAR_SCOPES, DAY_KINDS } from '@nexus/factory-domain/calendars/working-time'
 import { BUCKET_KINDS } from '@nexus/factory-domain/planning/settings/buckets'
 import { ITEM_PLANNING_METHODS, ITEM_PLANNING_SOURCES } from '@nexus/factory-domain/planning/settings/items'
+// B-W2b-335: the planning rules per item (B-W2b-318).
+import { LOT_SIZINGS, PLAN_LEVELS } from '@nexus/factory-domain/planning/lot-sizing/parameters'
 import type { ApiClient } from '../../../lib/api/client'
 
 /**
@@ -225,6 +227,9 @@ const settingsSchema = z.object({
   weekBucketWeeks: z.number(),
   defaultEfficiencyPct: z.string(),
   scheduledRunTime: z.string().nullable(),
+  // B-W2b-335 (B-W2b-318's PLN-068 setting): how a run splits a size run when an item has no plan level of its own.
+  sizeRunRule: z.enum(['ONE_GRID', 'SIZE_GROUPS']).optional(),
+  sizeGroups: z.array(z.array(z.string())).optional(),
   isDefault: z.boolean(),
   version: z.number().nullable(),
   updatedAt: z.string().nullable(),
@@ -248,6 +253,9 @@ export interface EditSettingsBody {
   weekBucketWeeks?: number
   defaultEfficiencyPct?: string
   scheduledRunTime?: string | null
+  // B-W2b-335: the size-run rule and its groups (ONE_GRID clears the groups).
+  sizeRunRule?: 'ONE_GRID' | 'SIZE_GROUPS'
+  sizeGroups?: string[][]
 }
 /** planning.settings.manage: the first save makes the row; 400 issues `body/<field>`; 409 stale version. */
 export const editSiteSettings = (api: ApiClient, siteId: string, body: EditSettingsBody, idempotencyKey: string) =>
@@ -281,6 +289,14 @@ const itemParametersSchema = z.object({
   orderMultiple: z.string().nullable(),
   maxOrderQty: z.string().nullable(),
   note: z.string().nullable(),
+  // B-W2b-335 (B-W2b-318's planning rules per item; the API's English `rules` is dropped): absent in an older answer.
+  lotSizing: z.enum(LOT_SIZINGS).optional(),
+  fixedLotQty: z.string().nullable().optional(),
+  lotPeriodDays: z.number().nullable().optional(),
+  planLevel: z.enum(PLAN_LEVELS).nullable().optional(),
+  scrapPct: z.string().nullable().optional(),
+  yieldPct: z.string().nullable().optional(),
+  delayDays: z.number().nullable().optional(),
   version: z.number(),
   updatedAt: z.string(),
 })
@@ -334,6 +350,14 @@ export interface ItemParametersFields {
   orderMultiple?: string | null
   maxOrderQty?: string | null
   note?: string | null
+  // B-W2b-335: the planning rules per item (a plan level also needs planning.strategy.manage).
+  lotSizing?: (typeof LOT_SIZINGS)[number]
+  fixedLotQty?: string | null
+  lotPeriodDays?: number | null
+  planLevel?: (typeof PLAN_LEVELS)[number] | null
+  scrapPct?: string | null
+  yieldPct?: string | null
+  delayDays?: number | null
 }
 const writeAnswer = z.object({ parameters: itemParametersSchema, cleared: z.array(z.string()) })
 export type ItemWriteAnswer = z.infer<typeof writeAnswer>

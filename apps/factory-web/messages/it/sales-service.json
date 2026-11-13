@@ -1,0 +1,715 @@
+{
+  "common": {
+    "dismiss": "Chiudi",
+    "cancel": "Annulla",
+    "retry": "Riprova",
+    "clearFilters": "Togli i filtri",
+    "working": "In corso…",
+    "reading": "Lettura…",
+    "you": "Tu",
+    "nobody": "Nessuno",
+    "colleague": "Un collega",
+    "name": "{name}",
+    "atMost": "Al massimo {count} caratteri.",
+    "copied": "{number} copiato",
+    "copyNumber": "Copia il numero"
+  },
+  "problem": {
+    "signedOut": "Sei uscito. Accedi di nuovo.",
+    "forbidden": "Il tuo ruolo non può farlo.",
+    "stepUp": "Prima conferma che sei tu.",
+    "notFound": "Non trovato: forse è stato tolto.",
+    "refused": "La fabbrica l'ha rifiutato così com'è ora.",
+    "invalid": "Qualcosa non si legge: controlla i campi.",
+    "rateLimited": "Troppi tentativi: aspetta un minuto e riprova.",
+    "contract": "La risposta non si legge come atteso. Riprova.",
+    "unavailable": "La fabbrica non ha risposto. Controlla la connessione e riprova.",
+    "internal": "Qualcosa è andato storto da noi. Riprova.",
+    "stale": "Qualcuno ha cambiato il caso nel frattempo: è stato riletto. Controllalo e riprova.",
+    "held": "Ora non si può:",
+    "fields": "Controlla questi campi:",
+    "duplicate": "Quel documento è già collegato a questo caso."
+  },
+  "held": {
+    "right": "Il tuo ruolo non può farlo ({right}).",
+    "offline": "Offline: aspetta che torni la connessione.",
+    "NO_PERMISSION": "Il tuo ruolo non può farlo.",
+    "CLOSED": "Il caso è chiuso: non cambia più (apri un nuovo caso).",
+    "ALREADY_CLOSED": "Il caso è già chiuso.",
+    "NOT_NEW": "Il caso è nuovo: prima aprilo.",
+    "ALREADY": "Il caso è già lì.",
+    "NOT_FROM_HERE": "Il caso non può andare lì da dove si trova.",
+    "NOT_RESOLVED": "Il caso non è risolto.",
+    "COVER_UNDECIDED": "Una richiesta in garanzia si risolve solo dopo aver deciso la copertura (il rimedio dipende da lei).",
+    "NO_CUSTOMER": "Il caso non indica un nostro cliente: prima indica il cliente.",
+    "NO_CONTACT_EMAIL": "Il caso non ha un referente con e-mail: le e-mail di stato vanno al referente del cliente."
+  },
+  "right": {
+    "sales": {
+      "service": {
+        "manage": "cambiare i casi di assistenza",
+        "decide": "decidere la copertura di una richiesta"
+      },
+      "repairs": {
+        "manage": "creare riparazioni"
+      },
+      "returns": {
+        "manage": "creare resi"
+      }
+    },
+    "parties": {
+      "view": "vedere i clienti"
+    },
+    "threads": {
+      "read": "leggere la conversazione di un documento"
+    }
+  },
+  "status": {
+    "NEW": "Nuovo",
+    "OPEN": "Aperto",
+    "WAITING_CUSTOMER": "In attesa del cliente",
+    "WAITING_PART": "In attesa di un ricambio",
+    "RESOLVED": "Risolto",
+    "CLOSED": "Chiuso"
+  },
+  "kind": {
+    "WARRANTY": "Richiesta in garanzia",
+    "COMPLAINT": "Reclamo",
+    "REPAIR": "Richiesta di riparazione",
+    "QUESTION": "Domanda",
+    "SAFETY": "Sicurezza"
+  },
+  "channel": {
+    "OFFICE": "In ufficio",
+    "MAIL": "Per e-mail",
+    "PHONE": "Per telefono",
+    "PORTAL": "Dal portale",
+    "LINK": "Da un link"
+  },
+  "wish": {
+    "none": "Non detto",
+    "REPAIR": "Una riparazione",
+    "REPLACE": "Una sostituzione",
+    "CREDIT": "Un accredito",
+    "ANSWER": "Una risposta"
+  },
+  "priority": {
+    "LOW": "Bassa",
+    "NORMAL": "Normale",
+    "HIGH": "Alta",
+    "URGENT": "Urgente"
+  },
+  "cover": {
+    "LEGAL_GUARANTEE": "Garanzia legale",
+    "FACTORY_GUARANTEE": "Garanzia del produttore",
+    "OUT_OF_COVER": "Fuori garanzia",
+    "UNKNOWN": "Da verificare",
+    "suggested": "Indicata dalla verifica",
+    "noDelivery": "Manca il giorno di consegna"
+  },
+  "coverName": {
+    "LEGAL_GUARANTEE": "In garanzia legale",
+    "FACTORY_GUARANTEE": "In garanzia del produttore",
+    "NONE": "Fuori garanzia"
+  },
+  "decision": {
+    "COVERED": "Coperto",
+    "PARTLY": "Coperto in parte",
+    "NOT_COVERED": "Non coperto"
+  },
+  "view": {
+    "open": "Aperti",
+    "new": "Nuovi",
+    "waitingCustomer": "In attesa del cliente",
+    "waitingPart": "In attesa di un ricambio",
+    "waiting": "In attesa",
+    "mine": "Miei",
+    "closed": "Chiusi",
+    "all": "Tutti"
+  },
+  "tile": {
+    "new": "Nuovi",
+    "waitingCustomer": "In attesa del cliente",
+    "waitingPart": "In attesa di un ricambio",
+    "failed": "Conteggio non riuscito",
+    "hint": {
+      "new": "Casi che nessuno ha ancora aperto",
+      "waitingCustomer": "Aspettiamo la risposta o la merce del cliente",
+      "waitingPart": "Aspettiamo un ricambio per riparare"
+    }
+  },
+  "chip": {
+    "label": "Filtri",
+    "view": "Righe: {view}",
+    "kind": "Tipo: {kind}",
+    "cover": "Copertura: {cover}",
+    "serial": "Capo: {serial}",
+    "q": "Ricerca: {q}",
+    "clear": "Togli il filtro {what}",
+    "clearAll": "Togli tutto"
+  },
+  "notice": {
+    "label": "Avvisi",
+    "more_one": "Ancora {count} avviso",
+    "more_other": "Ancora {count} avvisi",
+    "fewer": "Mostra un solo avviso",
+    "unknownCover_one": "{count} caso aperto non ha il giorno di consegna: la copertura non si può dire finché non lo si scrive.",
+    "unknownCover_other": "{count} casi aperti non hanno il giorno di consegna: la copertura non si può dire finché non lo si scrive.",
+    "unknownCoverLink": "Mostrali",
+    "undecided_one": "{count} richiesta in garanzia aspetta la decisione sulla copertura: si risolve solo dopo averla decisa.",
+    "undecided_other": "{count} richieste in garanzia aspettano la decisione sulla copertura: si risolvono solo dopo averla decisa.",
+    "undecidedLink": "Mostra le richieste in garanzia",
+    "noCustomer_one": "{count} caso aperto non indica un nostro cliente: una riparazione o un reso ne richiede uno.",
+    "noCustomer_other": "{count} casi aperti non indicano un nostro cliente: una riparazione o un reso ne richiede uno.",
+    "partial": "Questi avvisi contano i primi {count} casi letti: Mostra altri legge il resto."
+  },
+  "list": {
+    "intro": "Richieste in garanzia e casi di assistenza per capo o lotto: quale garanzia vale, detto a parole, e cosa ha aperto il caso.",
+    "new": "Nuovo caso",
+    "more": "Altro",
+    "termsLater": "Condizioni di garanzia",
+    "termsLaterHint": "Arriva più avanti: le condizioni di garanzia per famiglia di prodotto.",
+    "failed": "Non riesco a caricare i casi di assistenza",
+    "noMatch": "Nessuna riga con questi filtri",
+    "noMatchBody": "Togli un filtro, o tutti.",
+    "empty": "Ancora nessun caso di assistenza",
+    "emptyBody": "Nessun caso: una telefonata, un'e-mail o una visita su un capo diventa un caso con Nuovo caso.",
+    "rows": "Righe",
+    "kindLabel": "Tipo",
+    "allKinds": "Ogni tipo",
+    "coverLabel": "Copertura",
+    "allCovers": "Ogni copertura",
+    "tableLabel": "Casi di assistenza",
+    "count_one": "{count} caso",
+    "count_other": "{count} casi",
+    "countMore": "I primi {count} casi",
+    "countReading": "Lettura…",
+    "search": "Numero, matricola, lotto o cliente",
+    "copyMany_one": "Copia {count} numero",
+    "copyMany_other": "Copia {count} numeri",
+    "copied_one": "{count} numero copiato",
+    "copied_other": "{count} numeri copiati",
+    "showMore": "Mostra altri",
+    "foot": "Nessun importo sul caso: il costo di una riparazione e il valore di un accredito stanno nei loro documenti. Codici causa e SLA arrivano più avanti."
+  },
+  "noAccess": {
+    "title": "Non hai accesso ai casi di assistenza",
+    "body": "Per vedere i casi di assistenza serve il permesso “Vedere le pratiche di garanzia e assistenza”: lo hanno i ruoli vendite, qualità, produzione e amministrazione; un amministratore può darlo in Sistema › Ruoli e permessi."
+  },
+  "col": {
+    "case": "Caso",
+    "customer": "Cliente o motociclista",
+    "serial": "Matricola del capo",
+    "style": "Modello",
+    "cover": "Copertura",
+    "status": "Stato",
+    "opened": "Aperto il",
+    "owner": "Responsabile",
+    "kind": "Tipo",
+    "more": "Azioni"
+  },
+  "row": {
+    "rider": "Un motociclista (non nostro cliente)",
+    "riderHint": "Indicato nelle parole del caso",
+    "batch": "Lotto {batch}",
+    "ours": "Nostro",
+    "notOurs": "Non nostro (come scritto)",
+    "noGarment": "Nessun capo indicato",
+    "size": "taglia {size}",
+    "menu": "Azioni per {number}",
+    "open": "Apri",
+    "openNewTab": "Apri in una nuova scheda",
+    "makeReturn": "Crea RMA…",
+    "makeRepair": "Crea riparazione…",
+    "close": "Chiudi…",
+    "copy": "Copia il numero"
+  },
+  "keys": {
+    "new": "Nuovo caso"
+  },
+  "new": {
+    "title": "Nuovo caso",
+    "subtitle": "Una telefonata, un'e-mail o una visita su un capo o un lotto.",
+    "go": "Crea il caso",
+    "party": "Cliente o motociclista",
+    "partyHint": "Un motociclista che non è nostro cliente: lascia vuoto e indicalo nelle parole.",
+    "rider": "Un motociclista (non nostro cliente)",
+    "customersFailed": "Non riesco a leggere i clienti: il caso si può creare per un motociclista.",
+    "contact": "Referente",
+    "contactHint": "Chi ha scritto o chiamato: le e-mail di stato vanno a lui.",
+    "noContact": "Nessun referente",
+    "channel": "Come è arrivato",
+    "serial": "Matricola (scansiona o scrivi)",
+    "serialHint": "Una nostra matricola riempie modello, taglia e giorno di consegna.",
+    "scan": "Scansiona",
+    "batch": "Lotto",
+    "batchHint": "Quando la matricola non è nota: il lotto dell'ordine di lavoro.",
+    "problem": "Problema",
+    "problemHint": "Con le parole del cliente.",
+    "kind": "Tipo",
+    "wish": "Cosa vuole il cliente",
+    "priority": "Priorità",
+    "owner": "Responsabile",
+    "ownersFailed": "Non riesco a leggere chi può seguirlo: lo segui tu.",
+    "size": "Taglia",
+    "previewTitle": "Cosa sappiamo",
+    "previewReading": "Leggo cosa dà la matricola…",
+    "previewFailed": "Non riesco a leggere cosa dà la matricola: il caso si può comunque creare.",
+    "previewEmpty": "Scrivi o scansiona una matricola, un lotto o scegli il cliente: qui compare cosa sappiamo del capo e della sua garanzia.",
+    "notOurs": "{serial} non è una nostra matricola: resta come scritta.",
+    "batchFound_one": "Lotto {batch}: prodotto in {workOrder}, {count} consegna al cliente.",
+    "batchFound_other": "Lotto {batch}: prodotto in {workOrder}, {count} consegne al cliente.",
+    "leftFor": "Questo capo è partito per {customer}.",
+    "useCustomer": "Indicalo come cliente",
+    "others_one": "C'è già {count} altro caso aperto per questo capo: un doppione?",
+    "others_other": "Ci sono già {count} altri casi aperti per questo capo: un doppione?"
+  },
+  "suggested": {
+    "LEGAL_GUARANTEE": "La verifica indica la garanzia legale.",
+    "FACTORY_GUARANTEE": "La verifica indica la garanzia del produttore.",
+    "NONE": "La verifica indica fuori garanzia.",
+    "unknown": "La verifica non può ancora dirlo: il giorno di consegna non è noto."
+  },
+  "scan": {
+    "title": "Scansiona l'etichetta",
+    "intro": "Tieni l'etichetta del capo davanti alla fotocamera: la matricola riempie il campo.",
+    "video": "La fotocamera",
+    "starting": "Avvio la fotocamera…",
+    "noCamera": "Qui non c'è una fotocamera, o non è permessa: scrivi la matricola."
+  },
+  "garment": {
+    "title": "Il capo",
+    "serial": "Matricola",
+    "style": "Modello",
+    "colourway": "Variante colore",
+    "madeOn": "Prodotto il",
+    "workOrder": "Ordine di lavoro",
+    "batch": "Lotto",
+    "shipment": "Spedito",
+    "shippedOn": "{number} il {date}",
+    "notShipped": "Non ancora spedito",
+    "deliveries": "Consegne",
+    "noDeliveries": "Nessuna a questo cliente",
+    "notOurs": "{label} non è un nostro capo o lotto.",
+    "none": "Nessun capo indicato: scrivi matricola o lotto nel modulo.",
+    "photos": "Foto: pubblicale nella conversazione del caso (Attività)."
+  },
+  "form": {
+    "title": "Caso",
+    "readOnly": "Sola lettura: {why}",
+    "viewOnly": "Puoi vedere, non cambiare.",
+    "closedNoteOnly": "Il caso è chiuso: può cambiare solo la nota interna.",
+    "partyLinked": "Ci sono documenti collegati di questo cliente: scollegali per cambiare il cliente.",
+    "contactNeedsParty": "Prima indica il cliente.",
+    "serialHint": "Una nuova matricola nostra riempie di nuovo modello, taglia e giorno di consegna.",
+    "deliveredOn": "Consegnato il",
+    "deliveredOnHint": "Vuoto: dai nostri dati (la spedizione).",
+    "deliveredSuggested": "I nostri dati dicono {date}.",
+    "legalEnds": "Fine garanzia legale",
+    "legalEndsHint": "Vuoto per un consumatore: 2 anni dalla consegna.",
+    "factoryEnds": "Fine garanzia del produttore",
+    "factoryEndsHint": "Dalle condizioni date al cliente.",
+    "notify": "Avvisa il cliente",
+    "notifyLabel": "Invia un'e-mail a ogni cambio di stato",
+    "notifyHint": "A {to}, nella sua lingua (un fornitore di prova finché il servizio e-mail non è collegato).",
+    "notifyNeedsEmail": "Serve un referente con e-mail.",
+    "notifyOn": "Sì, per e-mail",
+    "notifyOff": "No",
+    "internalNote": "Nota interna",
+    "internalNoteHint": "Solo per il personale: mai in un'e-mail al cliente.",
+    "resolution": "Soluzione",
+    "resolvedOn": "Risolto il {date}",
+    "offlineKept": "Offline: le tue modifiche restano su questa pagina.",
+    "saved": "Caso salvato.",
+    "problem": {
+      "problemNeeded": "Di' cosa non va, con le parole del cliente.",
+      "oneLine": "Una riga di al massimo {count} caratteri.",
+      "deliveredFuture": "Il capo è stato consegnato oggi o prima.",
+      "endBeforeDelivery": "Una garanzia finisce il giorno della consegna o dopo.",
+      "notifyNeedsEmail": "Le e-mail di stato richiedono un referente con e-mail."
+    }
+  },
+  "check": {
+    "delivery": "Consegna",
+    "deliveredOn": "Consegnato il {date}: le garanzie decorrono da quel giorno.",
+    "noDelivery": "Il giorno di consegna non è noto.",
+    "noDeliveryFix": "Scrivi il giorno di consegna nella scheda Caso: le garanzie decorrono da lì.",
+    "buyer": "Il cliente",
+    "legal": "Garanzia legale",
+    "presumption": "Primo anno",
+    "factory": "Garanzia del produttore",
+    "daysLeft_one": "manca {count} giorno",
+    "daysLeft_other": "mancano {count} giorni",
+    "lastDay": "oggi è l'ultimo giorno"
+  },
+  "checkState": {
+    "pass": "Vale",
+    "fail": "Non più",
+    "skipped": "Non si applica",
+    "unknown": "Non noto",
+    "warning": "Da verificare"
+  },
+  "buyer": {
+    "CONSUMER": "Un consumatore a cui abbiamo venduto: la garanzia legale di conformità la diamo noi.",
+    "BUSINESS": "Un cliente professionale: la garanzia legale del consumatore non è nostra verso di lui; valgono il contratto e la garanzia per vizi del Codice civile.",
+    "NOT_NAMED": "Nessun nostro cliente è indicato: la garanzia legale del motociclista la deve il venditore che gli ha venduto il capo."
+  },
+  "legal": {
+    "RUNS": "Vale fino al {date}, 2 anni dalla consegna (Direttiva (UE) 2019/771 art. 10; Codice del Consumo art. 133).",
+    "ENDED": "Finita il {date}.",
+    "UNKNOWN": "Un consumatore: vale 2 anni dalla consegna; il giorno di consegna non è ancora noto.",
+    "NONE_BUSINESS": "Non nostra verso un'impresa: il contratto e gli artt. 1490-1495 c.c.; un rivenditore che ha venduto a un consumatore può rivalersi su di noi (diritto di regresso, art. 18).",
+    "NONE_NOT_NAMED": "La deve il venditore che ha venduto il capo, non noi."
+  },
+  "presumption": {
+    "applies": "Entro 1 anno dalla consegna (fino al {date}): il difetto si presume esistente alla consegna; il cliente non deve provarlo (art. 11; Codice del Consumo art. 135).",
+    "past": "Oltre 1 anno dalla consegna (dal {date}): il cliente dimostra che il difetto c'era alla consegna.",
+    "unknown": "Nel primo anno dalla consegna il difetto si presume esistente alla consegna: il giorno di consegna non è ancora noto."
+  },
+  "factory": {
+    "RUNS": "Vale fino al {date}, alle condizioni del produttore, in aggiunta a qualsiasi garanzia legale (art. 17).",
+    "ENDED": "Finita il {date}.",
+    "NONE": "Per questo capo non risulta una garanzia del produttore.",
+    "NONE_FIX": "Scrivi il suo ultimo giorno nella scheda Caso, dalle condizioni date al cliente."
+  },
+  "remedies": {
+    "LEGAL_GUARANTEE": "In garanzia legale: riparazione o sostituzione gratuite, in un tempo ragionevole; se nessuna delle due è possibile o non riesce, una riduzione del prezzo o la risoluzione del contratto (art. 13).",
+    "FACTORY_GUARANTEE": "In garanzia del produttore: quello che le sue condizioni danno (riparazione, sostituzione o accredito), in aggiunta alla garanzia legale e mai al suo posto.",
+    "NONE": "Fuori garanzia: riparazione o sostituzione sono un servizio a pagamento o una cortesia; di' perché nella decisione.",
+    "unknown": "I rimedi seguono la copertura: non noti finché non è noto il giorno di consegna."
+  },
+  "liable": {
+    "CONSUMER": "Abbiamo venduto a questo consumatore: rispondiamo a lui come venditore, per la garanzia legale e per la nostra.",
+    "BUSINESS": "Il venditore risponde al consumatore; il nostro obbligo verso questa impresa è quello del contratto (e della nostra garanzia, quando vale).",
+    "NOT_NAMED": "Il venditore che ha venduto il capo risponde al motociclista; noi rispondiamo della nostra garanzia."
+  },
+  "warranty": {
+    "title": "Verifica della garanzia",
+    "intro": "Quale garanzia vale, e perché: rimedi e chi risponde cambiano.",
+    "facts": "Date e conseguenze",
+    "shipDate": "Data di spedizione",
+    "suggested": "La verifica indica",
+    "cannotTell": "Non si può ancora dire (manca il giorno di consegna)",
+    "remedies": "Rimedi",
+    "liable": "Chi risponde",
+    "lawyer": "Il testo legale va confermato dal legale.",
+    "decision": "Decisione",
+    "notDecided": "Non decisa.",
+    "notDecidedClaim": "Non ancora decisa: decidi la copertura prima di risolvere la richiesta.",
+    "resolveNeedsCover": "Una richiesta in garanzia si risolve solo dopo aver deciso la copertura.",
+    "decidedBy": "Decisa da {name}, {when}",
+    "decide": "Decidi…",
+    "decideAgain": "Decidi di nuovo…"
+  },
+  "decide": {
+    "title": "Decidi la copertura di {number}",
+    "subtitle": "Coperto, in parte o non coperto, con quale garanzia, e perché: una sola decisione; decidere di nuovo la sostituisce.",
+    "go": "Decidi",
+    "cover": "Copertura",
+    "coverHint": {
+      "LEGAL_GUARANTEE": "Serve l'ultimo giorno della garanzia legale (un consumatore a cui abbiamo venduto).",
+      "FACTORY_GUARANTEE": "Serve l'ultimo giorno della garanzia del produttore.",
+      "NONE": "Non coperto: un servizio a pagamento o una cortesia."
+    },
+    "decision": "Decisione",
+    "note": "Perché",
+    "noteHint": "Con parole che il cliente può verificare (uso improprio, usura, una causa dopo la consegna…).",
+    "warnings": "Prima di decidere",
+    "done": "Copertura decisa: {decision}.",
+    "problem": {
+      "coveredNeedsGuarantee": "Coperto o coperto in parte: con la garanzia legale o del produttore.",
+      "notCoveredIsNone": "Non coperto: la copertura è fuori garanzia.",
+      "noLegalEnd": "L'ultimo giorno della garanzia legale non è noto: prima scrivi il giorno di consegna (o l'ultimo giorno) nella scheda Caso.",
+      "noFactoryEnd": "L'ultimo giorno della garanzia del produttore non è noto: prima scrivilo nella scheda Caso.",
+      "noteNeeded": "Di' perché, a parole."
+    },
+    "warn": {
+      "legalEnded": "La garanzia legale è finita il {date}.",
+      "notConsumer": "Il cliente del caso non è un consumatore a cui abbiamo venduto: la garanzia legale è del venditore verso il consumatore (il regresso di un rivenditore).",
+      "factoryEnded": "La garanzia del produttore è finita il {date}.",
+      "refuseWhileLegal": "La garanzia legale vale fino al {date}: un rifiuto richiede un motivo che il cliente può verificare."
+    }
+  },
+  "linked": {
+    "chain": "La catena del capo",
+    "garment": "Capo",
+    "madeIn": "prodotto in",
+    "batch": "lotto {batch}",
+    "order": "L'ordine",
+    "batchOnly": "Lotto {batch}, prodotto in {workOrder}.",
+    "noGarment": "Nessun nostro capo indicato.",
+    "title_one": "{count} documento collegato",
+    "title_other": "{count} documenti collegati",
+    "link": "Collega un documento…",
+    "empty": "Ancora nulla di collegato",
+    "emptyBody": "Collega un ordine, una spedizione, un reso, una riparazione, una fattura, un reclamo o un ordine di lavoro, o aprine uno da Azioni.",
+    "hidden": "Un documento ({type}) che non puoi aprire",
+    "when": "Collegato {when}",
+    "noteWhen": "{note} · {when}",
+    "unlink": "Scollega",
+    "unlinkOne": "Scollega {what}",
+    "via": {
+      "REPAIR": "Riparazione aperta dal caso",
+      "RETURN": "Reso aperto dal caso: la merce torna",
+      "REMAKE": "Reso aperto dal caso per un rifacimento",
+      "CREDIT": "Reso aperto dal caso per un accredito"
+    }
+  },
+  "linkType": {
+    "SalesOrder": "Ordine",
+    "Shipment": "Spedizione",
+    "ReturnAuthorisation": "Reso",
+    "RepairOrder": "Riparazione",
+    "Invoice": "Fattura o nota di credito",
+    "Complaint": "Reclamo",
+    "WorkOrder": "Ordine di lavoro",
+    "other": "Documento"
+  },
+  "link": {
+    "title": "Collega un documento a {number}",
+    "subtitle": "Un documento della società e del cliente del caso che puoi vedere.",
+    "go": "Collega",
+    "type": "Documento",
+    "number": "Numero",
+    "numberHint": "Scrivi parte del numero e premi Invio.",
+    "find": "Cerca",
+    "none": "Nessun documento con quel numero.",
+    "found_one": "{count} trovato",
+    "found_other": "{count} trovati",
+    "note": "Nota (facoltativa)",
+    "noteHint": "Una riga: perché riguarda il caso.",
+    "done": "{number} collegato.",
+    "held": {
+      "pick": "Prima scegli il documento.",
+      "already": "Già collegato a questo caso."
+    }
+  },
+  "unlink": {
+    "title": "Scollegare {what}?",
+    "body": "{what} resta com'è; va via solo il collegamento a {number}.",
+    "go": "Scollega",
+    "done": "Scollegato."
+  },
+  "actions": {
+    "intro": "Cosa apre il caso per {customer} e il capo {garment}: ogni documento rimanda qui.",
+    "introNoCustomer": "Una riparazione o un reso richiede un nostro cliente: prima indicalo nella scheda Caso.",
+    "noGarment": "(nessuno indicato)",
+    "later": "Una sostituzione con cambio e una visita arrivano più avanti.",
+    "repair": {
+      "title": "Riparazione",
+      "creates": "Apre una riparazione del capo, con il problema del caso: aspetta la merce, o parte ora se il cliente l'ha portata.",
+      "button": "Crea riparazione…"
+    },
+    "RETURN": {
+      "title": "Reso della merce",
+      "creates": "Apre un reso autorizzato (RMA) del capo: il magazzino lo riceve, poi si decide ogni riga.",
+      "button": "Crea RMA…"
+    },
+    "REMAKE": {
+      "title": "Rifacimento",
+      "creates": "Apre un reso con il rifacimento richiesto: il capo si rifà quando la riga è decisa Rifacimento.",
+      "button": "Chiedi il rifacimento…"
+    },
+    "CREDIT": {
+      "title": "Accredito",
+      "creates": "Apre un reso per un accredito: accreditato senza la merce (può servire un sì) o quando arriva.",
+      "button": "Apri per un accredito…"
+    }
+  },
+  "repair": {
+    "title": "Crea una riparazione da {number}",
+    "go": "Crea riparazione",
+    "kind": "Tipo",
+    "kindREPAIR": "Riparazione",
+    "kindALTERATION": "Modifica",
+    "problem": "Problema",
+    "problemHint": "Le parole del caso; una riparazione tiene 2000 caratteri.",
+    "work": "Lavoro richiesto",
+    "received": "Il cliente ha portato il capo ora",
+    "done": "Riparazione {number} aperta e collegata.",
+    "open": "Apri {number}",
+    "held": {
+      "problem": "Di' cosa non va."
+    }
+  },
+  "return": {
+    "purpose": "Per cosa",
+    "title": {
+      "RETURN": "Crea un RMA da {number}",
+      "REMAKE": "Chiedi un rifacimento da {number}",
+      "CREDIT": "Apri un reso per un accredito da {number}"
+    },
+    "go": {
+      "RETURN": "Crea RMA",
+      "REMAKE": "Chiedi il rifacimento",
+      "CREDIT": "Apri per un accredito"
+    },
+    "done": {
+      "RETURN": "Reso {number} aperto e collegato.",
+      "REMAKE": "Reso {number} aperto con il rifacimento richiesto, e collegato.",
+      "CREDIT": "Reso {number} aperto per un accredito, e collegato."
+    },
+    "next": {
+      "RETURN": "Poi: il magazzino riceve la merce, l'ufficio decide ogni riga.",
+      "REMAKE": "Poi: il capo si rifà quando la riga è decisa Rifacimento.",
+      "CREDIT": "Poi: accreditalo dal reso, senza la merce o quando arriva."
+    },
+    "line": "Un pezzo: il capo {serial}, come è partito con {number}.",
+    "reason": "Motivo del reso",
+    "pickReason": "Scegli un motivo",
+    "reasonsFailed": "Non riesco a leggere i motivi di reso.",
+    "fit": "Cosa non va nella vestibilità",
+    "fitHint": "Il rifacimento segue queste parole.",
+    "customerRef": "Riferimento del cliente",
+    "goodsDueBy": "Merce attesa entro",
+    "open": "Apri {number}",
+    "held": {
+      "noShipment": "Il capo non è partito con una spedizione che conosciamo: apri il reso da Resi e riparazioni con le sue righe.",
+      "reason": "Scegli il motivo del reso.",
+      "fit": "Di' cosa non va nella vestibilità."
+    }
+  },
+  "move": {
+    "subtitle": "{from} → {to}",
+    "title": {
+      "open": "Apri {number}",
+      "waitCustomer": "{number}: in attesa del cliente",
+      "waitPart": "{number}: in attesa di un ricambio",
+      "resume": "Riprendi {number}",
+      "resolve": "Risolvi {number}",
+      "reopen": "Riapri {number}",
+      "close": "Chiudi {number}"
+    },
+    "go": {
+      "open": "Apri il caso",
+      "waitCustomer": "In attesa del cliente",
+      "waitPart": "In attesa di un ricambio",
+      "resume": "Riprendi",
+      "resolve": "Risolvi",
+      "reopen": "Riapri",
+      "close": "Chiudi il caso"
+    },
+    "resolution": "Cosa è stato fatto",
+    "resolutionHint": "A parole: il rimedio dato.",
+    "reason": "Perché si chiude",
+    "reasonHint": "Chiuso senza soluzione: di' perché.",
+    "reasonOptional": "Facoltativo: un caso risolto si chiude senza motivo.",
+    "mailGoes": "Un'e-mail di stato va a {to}, nella sua lingua.",
+    "mailNoContact": "Questo caso avvisa il cliente, ma il referente non ha un'e-mail: non parte nulla.",
+    "mailWhat": "Dice il numero del caso e dove si trova ora; mai il problema, la soluzione, i motivi o un importo.",
+    "message": "Parole per il cliente (facoltative)",
+    "messageHint": "Aggiunte a questa e-mail di stato.",
+    "notTold": "Il cliente non viene avvisato: le e-mail di stato sono spente per questo caso (scheda Caso).",
+    "closeLinks_one": "{count} documento è collegato: resta com'è.",
+    "closeLinks_other": "{count} documenti sono collegati: restano come sono.",
+    "done": "{number} ora è: {status}.",
+    "mailSent": "Il cliente è stato avvisato: un'e-mail a {to}.",
+    "mailNotSent": {
+      "NO_CONTACT_EMAIL": "Nessuna e-mail partita: il referente del caso non ha un'e-mail.",
+      "NOT_SENT": "Nessuna e-mail partita: l'indirizzo è bloccato o manca un indirizzo di invio."
+    },
+    "held": {
+      "resolution": "Di' cosa è stato fatto.",
+      "reason": "Di' perché si chiude il caso."
+    }
+  },
+  "band": {
+    "back": "Garanzia e assistenza",
+    "more": "Altre azioni",
+    "owner": "Responsabile: {name}",
+    "opened": "Aperto il {date}",
+    "tellsCustomer": "Avvisa il cliente",
+    "decide": "Decidi la copertura…",
+    "move": {
+      "open": "Apri il caso",
+      "waitCustomer": "In attesa del cliente",
+      "waitPart": "In attesa di un ricambio",
+      "resume": "Riprendi",
+      "resolve": "Risolvi…",
+      "reopen": "Riapri…",
+      "close": "Chiudi…"
+    }
+  },
+  "tab": {
+    "case": "Caso",
+    "warranty": "Verifica garanzia",
+    "linked": "Documenti collegati",
+    "actions": "Azioni",
+    "activity": "Attività"
+  },
+  "record": {
+    "offline": "Offline: l'ultima copia, con la sua ora. Le modifiche aspettano.",
+    "stale": "Il caso è cambiato alle {time} mentre ci lavoravi.",
+    "reload": "Rileggilo",
+    "closedBanner": "Chiuso il {date} da {name}."
+  },
+  "mails": {
+    "title": "E-mail di cambio stato inviate al cliente",
+    "on": "Questo caso avvisa il cliente a ogni cambio di stato: e-mail a {to}.",
+    "onNoContact": "Questo caso avvisa il cliente, ma il referente non ha un'e-mail.",
+    "off": "Questo caso non avvisa il cliente (scheda Caso › Avvisa il cliente).",
+    "none": "Ancora nessuna e-mail inviata",
+    "to": "A {to} · {when}"
+  },
+  "mailStatus": {
+    "QUEUED": "In attesa di partire",
+    "SENDING": "In invio",
+    "SENT": "Inviata",
+    "DELIVERED": "Consegnata",
+    "BOUNCED": "Respinta",
+    "COMPLAINED": "Segnalata come spam",
+    "FAILED": "Non riuscita",
+    "other": "Sconosciuto"
+  },
+  "activity": {
+    "noThread": "La conversazione non è mostrata"
+  },
+  "field": {
+    "companyId": "La società",
+    "kind": "Il tipo",
+    "channel": "Come è arrivato",
+    "partyId": "Il cliente",
+    "contactId": "Il referente (un referente attivo di questo cliente)",
+    "serial": "La matricola",
+    "batchNumber": "Il lotto",
+    "size": "La taglia",
+    "problem": "Il problema",
+    "customerWants": "Cosa vuole il cliente",
+    "priority": "La priorità",
+    "ownerId": "Il responsabile (qualcuno il cui ruolo segue questi casi)",
+    "deliveredOn": "Il giorno di consegna",
+    "legalGuaranteeEndsOn": "L'ultimo giorno della garanzia legale",
+    "factoryGuaranteeEndsOn": "L'ultimo giorno della garanzia del produttore",
+    "notifyCustomer": "Avvisa il cliente (serve un referente con e-mail)",
+    "internalNote": "La nota interna",
+    "cover": "La copertura",
+    "decision": "La decisione",
+    "note": "Il perché",
+    "to": "Lo stato",
+    "resolution": "Cosa è stato fatto",
+    "reason": "Perché si chiude",
+    "message": "Le parole per il cliente",
+    "recordType": "Il documento",
+    "recordId": "Il documento (di questa società e cliente)",
+    "lines": "Le righe che tornano (il capo non è partito con una spedizione che conosciamo)",
+    "reasonCode": "Il motivo del reso",
+    "fit": "Cosa non va nella vestibilità",
+    "siteId": "Lo stabilimento",
+    "workWanted": "Il lavoro richiesto",
+    "goodsDueBy": "Il giorno atteso della merce",
+    "customerRef": "Il riferimento del cliente"
+  },
+  "warning": {
+    "cover": "Controlla la copertura: una garanzia è finita, o il cliente non è un consumatore a cui abbiamo venduto.",
+    "decision": "Un rifiuto mentre vale la garanzia legale richiede un motivo che il cliente può verificare.",
+    "deliveredOn": "Controlla il giorno di consegna: i nostri dati non ne danno, o il lotto è partito in più giorni.",
+    "serial": "Controlla la matricola: è stata prodotta per un altro cliente, o c'è già un altro caso aperto.",
+    "batchNumber": "Controlla il lotto.",
+    "to": "Ci sono ancora riparazioni o resi collegati aperti.",
+    "notifyCustomer": "L'e-mail di stato non è partita.",
+    "lines": "Controlla le righe che tornano.",
+    "contactId": "Controlla il referente.",
+    "partyId": "Controlla il cliente.",
+    "other": "La fabbrica ha aggiunto una nota: controlla il caso."
+  }
+}

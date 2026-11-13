@@ -33,6 +33,12 @@ import {
 import type { BoardActions, BoardViewModel } from '../view-model'
 import { BoardDialogs } from './BoardDialogs'
 import '../board.css'
+// B-W2b-337: the board in depth.
+import { DEPTH_NAMESPACE as ALLOCATION_DEPTH_NAMESPACE, type Words as AllocationWords } from '../../allocation/depth/model'
+import { decorateCards, decorateWorkshopLanes, depthProblemRows, DEPTH_NAMESPACE, gatedOrders, triedCards, whatIfCardParts, workshopDropHeld, type DepthWords } from '../depth/model'
+import { ChangesSection, DepthProblems, WhatIfSection } from '../depth/view/DepthSections'
+import { DepthDialogs } from '../depth/view/DepthDialogs'
+import '../depth/depth.css'
 
 /**
  * SCR-122 — the planning board (design planning.board: Board controls, Load per lane, Schedule, Not on the board,
@@ -45,7 +51,7 @@ import '../board.css'
  */
 export function BoardView({ model, actions }: { model: BoardViewModel; actions?: BoardActions }) {
   return (
-    <WithMessages namespaces={[NAMESPACE, BOARD_KIT_NAMESPACE]}>
+    <WithMessages namespaces={[NAMESPACE, BOARD_KIT_NAMESPACE, DEPTH_NAMESPACE, ALLOCATION_DEPTH_NAMESPACE, 'lists', 'buying']}>
       <BoardBody model={model} actions={actions} />
     </WithMessages>
   )
@@ -61,11 +67,17 @@ const isTyping = (target: EventTarget | null): boolean => {
 
 function BoardBody({ model, actions }: { model: BoardViewModel; actions?: BoardActions }) {
   const t = useT(NAMESPACE)
+  const td = useT(DEPTH_NAMESPACE)
+  const ta = useT(ALLOCATION_DEPTH_NAMESPACE)
   const locale = useLocale()
   const kit = useBoardWords()
   const board = model.read.status === 'ready' ? model.read.value : null
   const timeZone = board?.site.timeZone ?? 'Europe/Rome'
-  const words = useMemo<Words>(() => ({ t, locale, timeZone }), [t, locale, timeZone])
+  const words = useMemo<Words>(() => ({ t, locale, timeZone, td }), [t, locale, timeZone, td])
+  const dwords = useMemo<DepthWords>(() => ({ t: td, locale, timeZone }), [td, locale, timeZone])
+  const aw = useMemo<AllocationWords>(() => ({ t: ta, locale }), [ta, locale])
+  const depth = model.depth ?? null
+  const whatIfOn = Boolean(depth?.whatIf)
   const rootRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
 
@@ -76,7 +88,18 @@ function BoardBody({ model, actions }: { model: BoardViewModel; actions?: BoardA
   const setControls = useCallback((next: Partial<BoardControls>) => (actions?.onControls ? actions.onControls(next) : setLocalControls((current) => ({ ...current, ...next }))), [actions])
   const [localPlaces, setLocalPlaces] = useState<Record<string, PlanningPlace>>({})
 
-  const drawn = useMemo(() => (board ? drawBoard(board, controls, words, model.me) : null), [board, controls, words, model.me])
+  const drawn = useMemo(() => {
+    if (!board) return null
+    const plain = drawBoard(board, controls, words, model.me)
+    if (!depth) return plain
+    // B-W2b-337: the floor's state, pins, a gate not passed and what a what-if tried on the cards; the workshops' facts on their lanes.
+    const scenario = depth.whatIf?.read.status === 'ready' ? depth.whatIf.read.value : null
+    return {
+      ...plain,
+      lanes: controls.view === 'resources' ? decorateWorkshopLanes(plain.lanes, depth.workshops, depth.subcontractors, aw) : plain.lanes,
+      cards: decorateCards(plain.cards, board, { gates: gatedOrders(board), tried: triedCards(scenario) }, dwords),
+    }
+  }, [board, controls, words, model.me, depth, aw, dwords])
   const cards = useMemo(() => (drawn ? (actions?.onMove ? drawn.cards : drawn.cards.map((card) => (localPlaces[card.id] ? { ...card, ...localPlaces[card.id] } : card))) : []), [drawn, actions?.onMove, localPlaces])
   const mayChange = board?.plan.mayChange ?? false
   const held = !board ? null : !mayChange ? t('held.readOnly') : model.offline ? t('held.offline') : null
@@ -88,8 +111,28 @@ function BoardBody({ model, actions }: { model: BoardViewModel; actions?: BoardA
       return true
     }
   }, [board, mayChange, actions?.onMove])
-  const dropHeld = useCallback((card: { id: string; laneId: string | null }, to: PlanningPlace) => (board ? dropHeldOf(board, controls, card, to, t) : null), [board, controls, t])
+  const dropHeld = useCallback(
+    (card: { id: string; laneId: string | null }, to: PlanningPlace) => {
+      if (!board) return null
+      const own = dropHeldOf(board, controls, card, to, t)
+      if (own || !depth || controls.view !== 'resources') return own
+      // B-W2b-337: a workshop that takes no work, or a drop on a workshop in what-if (work goes outside with its kit, not tried).
+      return workshopDropHeld(board, card, to, depth.workshops, whatIfOn, board.site.name, dwords, aw)
+    },
+    [board, controls, t, depth, whatIfOn, dwords, aw],
+  )
   const problems = useMemo(() => (board ? problemRows(board, words) : []), [board, words])
+  const moreProblems = useMemo(() => (board && depth ? depthProblemRows(board, dwords) : []), [board, depth, dwords])
+  // B-W2b-337: P on a bar pins it (or unpins it); said in words when this person may not or what-if is on.
+  const onPin = useMemo(() => {
+    if (!board || !depth || !actions?.onPin) return undefined
+    return (card: { id: string; pinned?: boolean }, pinned: boolean) => {
+      if (card.id.startsWith('tray:') || whatIfCardParts(card.id)) return
+      if (whatIfOn) return actions.onNotice?.(td('held.pinInWhatIf'))
+      if (!depth.may.pin) return actions.onNotice?.(td('held.pin'))
+      actions.onPin?.(card.id, pinned)
+    }
+  }, [board, depth, actions, whatIfOn, td])
 
   // The page's keys: / search, t today, 1 / 2 / 3 zoom, o / r view (never while typing or on a card: the board's keys).
   useEffect(() => {
@@ -99,14 +142,15 @@ function BoardBody({ model, actions }: { model: BoardViewModel; actions?: BoardA
       if (key === '/') {
         event.preventDefault()
         searchRef.current?.focus()
-      } else if (key === 't') setControls({ from: null })
+      } else if (key === 'w' && depth && actions?.onWhatIf && (board?.plan.mayChange ?? false)) actions.onWhatIf(!whatIfOn)
+      else if (key === 't') setControls({ from: null })
       else if (key === '1' || key === '2' || key === '3') setControls({ zoom: ZOOMS[Number(key) - 1]!, from: null })
       else if (key === 'o') setControls({ view: 'orders' })
       else if (key === 'r') setControls({ view: 'resources' })
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [setControls, model.dialog])
+  }, [setControls, model.dialog, depth, actions, board, whatIfOn])
 
   // "Show on board": the bar (or the first bar of the lane) is scrolled to and takes the focus.
   useEffect(() => {
@@ -123,10 +167,20 @@ function BoardBody({ model, actions }: { model: BoardViewModel; actions?: BoardA
 
   const today = board?.today ?? null
   const from = today ? windowFrom(controls, today) : (controls.from ?? '')
-  const publishHeld = board ? publishHeldWords(bandPublishHeld(board.plan), words) : t('held.loading')
-  const placeHeld = !board ? t('held.loading') : !mayChange ? t('held.readOnly') : model.offline ? t('held.offline') : board.tray.length === 0 ? t('held.trayEmpty') : null
+  const publishHeld = whatIfOn ? td('held.inWhatIf') : board ? publishHeldWords(bandPublishHeld(board.plan), words) : t('held.loading')
+  const placeHeld = !board ? t('held.loading') : !mayChange ? t('held.readOnly') : model.offline ? t('held.offline') : whatIfOn ? td('held.inWhatIf') : board.tray.length === 0 ? t('held.trayEmpty') : null
+  const whatIfHeld = !board ? t('held.loading') : !mayChange ? td('held.whatIfReadOnly') : model.offline ? t('held.offline') : null
 
   const more: MenuItemDef[] = [
+    // B-W2b-337 (design page.h more): Print day sheets per line (PDF) · Export board (XLSX) · Reschedule backlog.
+    ...(depth
+      ? [
+          { id: 'print', label: td('more.print'), onSelect: () => actions?.onDepthDialog?.('print') },
+          { id: 'export', label: td('more.export'), onSelect: () => actions?.onDepthDialog?.('export') },
+          { id: 'backlog', label: td('more.backlog'), onSelect: () => actions?.onDepthDialog?.('backlog') },
+          { id: 'sep-depth', separator: true },
+        ]
+      : []),
     { id: 'legend', label: t('more.legend'), onSelect: () => actions?.onOpenDialog?.('legend') },
     { id: 'versions', label: t('more.versions'), onSelect: () => actions?.onOpenDialog?.('versions') },
     { id: 'keys', label: t('more.keys'), onSelect: () => actions?.onOpenDialog?.('keys') },
@@ -158,6 +212,11 @@ function BoardBody({ model, actions }: { model: BoardViewModel; actions?: BoardA
           </span>
         </div>
         <div className="fw-pb-actions">
+          {depth ? (
+            <Button size="sm" variant="secondary" active={whatIfOn} aria-pressed={whatIfOn} aria-keyshortcuts="w" heldReason={whatIfHeld} onClick={() => actions?.onWhatIf?.(!whatIfOn)}>
+              {td('band.whatIf')}
+            </Button>
+          ) : null}
           <Button size="sm" variant="secondary" heldReason={placeHeld} onClick={() => actions?.onOpenDialog?.('place')}>
             {t('band.place')}
           </Button>
@@ -168,7 +227,21 @@ function BoardBody({ model, actions }: { model: BoardViewModel; actions?: BoardA
         </div>
       </div>
 
-      {board ? <p className="fw-pb-plan">{planWords(board, words)}</p> : null}
+      {board ? (
+        <p className="fw-pb-plan">
+          {planWords(board, words)}
+          {depth && board.plan.published ? (
+            <>
+              {' '}
+              <Button size="sm" variant="quiet" asChild>
+                <a href={`${model.prefix}/planning/board?version=${encodeURIComponent(board.plan.published.id)}`} target="_blank" rel="noopener noreferrer">
+                  {td('plan.openVersion', { version: board.plan.published.number })}
+                </a>
+              </Button>
+            </>
+          ) : null}
+        </p>
+      ) : null}
 
       <div className="fw-pb-toolbar" role="group" aria-label={t('toolbar.label')}>
         <SegmentedControl size="sm" ariaLabel={t('toolbar.view')} options={BOARD_VIEWS.map((view) => ({ value: view, label: t(`toolbar.views.${view}`) }))} value={controls.view} onChange={(value) => setControls({ view: value === 'orders' ? 'orders' : 'resources' })} />
@@ -247,7 +320,21 @@ function BoardBody({ model, actions }: { model: BoardViewModel; actions?: BoardA
         </Banner>
       ) : null}
 
-      <section className="fw-pb-board" aria-labelledby="fw-pb-schedule" tabIndex={-1}>
+      {board && depth ? <WhatIfSection model={model} depth={depth} board={board} actions={actions} words={dwords} /> : null}
+
+      <section
+        className="fw-pb-board"
+        aria-labelledby="fw-pb-schedule"
+        tabIndex={-1}
+        onContextMenu={(event) => {
+          // B-W2b-337 (design "Right-click / ⋯ on a bar"): the bar's detail, with Pin, Move to a subcontractor, Send back to the tray.
+          const element = (event.target as HTMLElement | null)?.closest?.('[data-pb-card]') as HTMLElement | null
+          const card = element ? cards.find((entry) => entry.id === element.dataset.pbCard) : undefined
+          if (!card || !actions?.onOpen) return
+          event.preventDefault()
+          actions.onOpen(card)
+        }}
+      >
         <div className="fw-pb-section-head">
           <h2 className="fw-pb-h2" id="fw-pb-schedule">
             {t(controls.view === 'orders' ? 'board.titleOrders' : 'board.title')}
@@ -282,6 +369,7 @@ function BoardBody({ model, actions }: { model: BoardViewModel; actions?: BoardA
             cards={cards}
             onMove={onMove}
             onOpen={(card) => actions?.onOpen?.(card)}
+            onPin={onPin}
             dropHeld={dropHeld}
             heldReason={held}
             cellDetails={controls.view === 'resources'}
@@ -297,10 +385,10 @@ function BoardBody({ model, actions }: { model: BoardViewModel; actions?: BoardA
           <h2 className="fw-pb-h2" id="fw-pb-problems">
             {t('problems.title')}
           </h2>
-          {problems.length === 0 ? (
+          {problems.length + moreProblems.length === 0 ? (
             <p className="fw-pb-hint">{t('problems.none')}</p>
           ) : (
-            <Disclosure summary={t('problems.summary', { count: problems.length })} open>
+            <Disclosure summary={t('problems.summary', { count: problems.length + moreProblems.length })} open>
               <ul className="fw-pb-problem-list">
                 {problems.map((row) => (
                   <li key={row.id} className="fw-pb-problem">
@@ -312,12 +400,16 @@ function BoardBody({ model, actions }: { model: BoardViewModel; actions?: BoardA
                   </li>
                 ))}
               </ul>
+              {depth ? <DepthProblems model={model} board={board} actions={actions} words={dwords} /> : null}
             </Disclosure>
           )}
         </section>
       ) : null}
 
+      {board && depth ? <ChangesSection model={model} depth={depth} board={board} actions={actions} words={dwords} say={(refusal) => refusalWords(refusal, words)} /> : null}
+
       <BoardDialogs model={model} actions={actions} words={words} />
+      {depth ? <DepthDialogs model={model} actions={actions} words={dwords} aw={aw} say={(refusal) => refusalWords(refusal, words)} /> : null}
     </div>
   )
 }
