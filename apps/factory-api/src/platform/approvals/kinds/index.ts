@@ -18,6 +18,8 @@ import { CREDIT_OVERRIDE_KIND } from './credit-override'
 import { MATERIAL_SUBSTITUTION_KIND } from './material-substitution'
 // B-W2b-303: a sales order made but waiting for a yes before it goes on.
 import { SALES_ORDER_KIND } from './sales-order'
+// B-W2b-309: a confirmed order changed, asking its yes again.
+import { SALES_ORDER_CHANGE_KIND } from './sales-order-change'
 
 /**
  * The approval kinds the engine knows (B-W2b-282): one file per kind (./kind.ts says what it gives). A later step adds its
@@ -34,6 +36,7 @@ import { SALES_ORDER_KIND } from './sales-order'
  *   CREDIT_OVERRIDE  an order, a release or a shipment held for credit, let through on the yes (B-W2b-304)
  *   MATERIAL_SUBSTITUTION  a substitute on a work order's BOM line before it is used (B-W2b-298; approved, refused or withdrawn)
  *   SALES_ORDER      a sales order made waiting for a yes, CONFIRMED on the yes, CANCELLED on the no (B-W2b-303)
+ *   SALES_ORDER_CHANGE  a confirmed order changed, asking its yes again; the change stays written, a no is put back by a person (B-W2b-309)
  */
 const KINDS: readonly ApprovalKindDefinition[] = Object.freeze([
   PURCHASE_ORDER_KIND,
@@ -53,6 +56,8 @@ const KINDS: readonly ApprovalKindDefinition[] = Object.freeze([
   MATERIAL_SUBSTITUTION_KIND,
   // B-W2b-303
   SALES_ORDER_KIND,
+  // B-W2b-309
+  SALES_ORDER_CHANGE_KIND,
 ])
 
 function registry(kinds: readonly ApprovalKindDefinition[]): Map<ApprovalTaskKind, ApprovalKindDefinition> {

@@ -187,8 +187,9 @@ describe('approval rules by condition (PLT-086)', () => {
     // B-W2b-305 (SCM-080): + the revision and the value added since the last send.
     expect(po.fields.map((field: Json) => field.id)).toEqual(['orderValue', 'currency', 'lineCount', 'supplierStatus', 'supplierCode', 'siteCode', 'revision', 'valueIncrease'])
     expect(po.fields[0]).toMatchObject({ grain: 'cost', heldReason: null })
-    // B-W2b-303: SALES_ORDER is registered now; a change of an approved order is not yet.
-    expect(kinds.notRegistered).toContain('SALES_ORDER_CHANGE')
+    // B-W2b-303: SALES_ORDER is registered now. B-W2b-309: a change of an approved order too (SALES_ORDER_CHANGE); a price change not yet.
+    expect(kinds.notRegistered).not.toContain('SALES_ORDER_CHANGE')
+    expect(kinds.notRegistered).toContain('PRICE_CHANGE')
     const blind = await ok('buyerNoCost', 'GET', '/approvals/kinds')
     expect(blind.kinds[0].fields[0].heldReason).toBe('A money figure your roles do not show.')
   })

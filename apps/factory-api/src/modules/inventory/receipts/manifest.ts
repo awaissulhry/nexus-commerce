@@ -38,4 +38,7 @@ export const manifest = defineManifest({
   'GET /inventory/receipts/hide-lists/:importId': { audiences: ['office'], permission: 'inventory.stock.view', scope: 'record' },
   // B-W2b-14 (Z1:02): the supplier DDT number/date of a posted receipt corrected, with why (who records receipts types it).
   'POST /inventory/receipts/:receiptId/supplier-ddt': { audiences: ['office'], permission: 'inventory.receive', scope: 'record' },
+  // B-W2b-309 (SAL-306): goods a customer sends for its own orders (CUSTOMER_SUPPLIED, owned lots), and its lots sent back.
+  'POST /inventory/receipts/customer': { audiences: ['office'], permission: 'inventory.receive', scope: 'record' },
+  'POST /inventory/receipts/customer/returns': { audiences: ['office'], permission: 'inventory.receive', scope: 'record' },
 })
