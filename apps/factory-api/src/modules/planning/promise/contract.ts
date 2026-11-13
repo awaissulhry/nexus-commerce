@@ -163,6 +163,8 @@ export const calculateContract = defineContract({
     wantedDate: businessDate().optional(),
     /** Where the goods go (ISO country code): the certificate and shipment rules of that market. */
     country: z.string().trim().min(2).max(3).optional(),
+    /** B-W2b-365: the options of the garment asked (active values of groups the style offers); a routing step only for some options counts when one of them is asked. */
+    optionValueIds: z.array(id()).max(100).optional(),
   }),
   response: { 200: output({ ...where, answer: askAnswer }) },
 })

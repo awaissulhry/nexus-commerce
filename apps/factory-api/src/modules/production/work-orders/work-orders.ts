@@ -508,6 +508,8 @@ export interface SampleCellInput {
   readonly colourwayId: string
   readonly size: string
   readonly quantity: number
+  /** B-W2b-365: the options of the configuration sampled (checked by modules/sales/samples); left out: none. */
+  readonly optionValueIds?: readonly string[] | undefined
 }
 
 export interface SampleWithoutLineInput {
@@ -592,7 +594,7 @@ export async function createSampleWorkOrder(
       select: { id: true },
     })
     // Neither an order line nor a party: the round's samples belong to no order (the database allows it on a SAMPLE work order only).
-    const rows = body.cells.map((cell) => ({ id: newId(), siteId: site.id, workOrderId: id, styleId: style.id, colourwayId: cell.colourwayId, size: cell.size, quantity: cell.quantity, salesOrderLineId: null, partyId: null, createdById: actorIdOf(tools) }))
+    const rows = body.cells.map((cell) => ({ id: newId(), siteId: site.id, workOrderId: id, styleId: style.id, colourwayId: cell.colourwayId, size: cell.size, quantity: cell.quantity, salesOrderLineId: null, partyId: null, /* B-W2b-365 */ optionValueIds: [...(cell.optionValueIds ?? [])], createdById: actorIdOf(tools) }))
     await tx.workOrderSize.createMany({ data: rows })
     const pieces = rows.reduce((sum, row) => sum + row.quantity, 0)
     tools.audit({
@@ -610,7 +612,7 @@ export async function createSampleWorkOrder(
         styleRevisionId: revisionId,
         dueDate: body.dueDate ?? null,
         priority,
-        cells: rows.map((row) => ({ id: row.id, salesOrderLineId: null, colourwayId: row.colourwayId, size: row.size, quantity: row.quantity })),
+        cells: rows.map((row) => ({ id: row.id, salesOrderLineId: null, colourwayId: row.colourwayId, size: row.size, quantity: row.quantity, /* B-W2b-365 */ optionValueIds: row.optionValueIds })),
       },
     })
     createdEvent(tools, { workOrderId: id, number: number.formatted, companyId: site.companyId, siteId: site.id, styleId: style.id, salesOrderIds: [], cells: rows.length, pieces })

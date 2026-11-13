@@ -302,7 +302,9 @@
       "location": "{workshop} non ha un’ubicazione attiva nello stabilimento dell’ordine: creane una in Magazzino › Ubicazioni.",
       "pieces": "Alcuni capi sono già su un altro ordine aperto: riduci i capi e riprova.",
       "workOrder": "L’ordine di produzione non è più rilasciato né in corso.",
-      "workshop": "Il terzista non è un subfornitore attivo di questa società."
+      "workshop": "Il terzista non è un subfornitore attivo di questa società.",
+      "notQualified": "{workshop} non è qualificato per questa lavorazione: qualificalo prima in Documenti e qualifica del fornitore.",
+      "durc": "{workshop} non ha un DURC valido in archivio (D.Lgs. 276/2003 art. 29): chiedilo prima al laboratorio."
     },
     "toLocations": "Apri Ubicazioni",
     "ordersOf": "Già fuori per questo ordine di produzione: {orders}"

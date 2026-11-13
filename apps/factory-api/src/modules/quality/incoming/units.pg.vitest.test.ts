@@ -152,6 +152,11 @@ beforeAll(async () => {
   await admin(`ALTER TABLE "RoutingOperation" DISABLE TRIGGER "RoutingOperation_revision_guard"`)
   await admin(`UPDATE "RoutingOperation" r SET "supplierId" = $1, "pricePerPiece" = 5.25, "transitDays" = 7 FROM "WorkOrderOperation" o WHERE o.id = $2 AND r."revisionId" = o."styleRevisionId" AND r.seq = o."routingSeq"`, [A.P2, wo.sew])
   await admin(`ALTER TABLE "RoutingOperation" ENABLE TRIGGER "RoutingOperation_revision_guard"`)
+  // B-W2b-365: an order made by hand goes to a workshop approved for the work: P2 approved for sewing in company A (written as
+  // the owner with the guards off: a decided qualification needs evidence files this test does not upload).
+  await h.db.admin.query(
+    `SET session_replication_role = replica; INSERT INTO "SupplierQualification" (id, "tenantId", "companyId", "partyId", "workCentreKinds", status, "validFrom", evidence, "decidedAt", "createdAt", "updatedAt") VALUES ('${newId()}', '${A.tenant}', '${A.company}', '${A.P2}', '{SEWING}'::"WorkCentreKind"[], 'APPROVED', DATE '2026-01-01', '[{"recordType": "StoredFile", "recordId": "${newId()}"}]'::jsonb, now() - interval '1 hour', now(), now()); SET session_replication_role = origin;`,
+  )
   const cells = await admin<{ id: string }>(`SELECT id FROM "WorkOrderSize" WHERE "workOrderId" = $1 ORDER BY id LIMIT 3`, [wo.id])
   for (const [index, quantity] of [3, 2, 2].entries()) {
     await admin(`INSERT INTO "Bundle" (id, "tenantId", "siteId", "workOrderId", "workOrderSizeId", code, quantity) VALUES ($1, $2, $3, $4, $5, $6, $7)`, [newId(), A.tenant, A.site, wo.id, cells[index % cells.length]!.id, `T-UN-${run}-${index + 1}`, quantity])

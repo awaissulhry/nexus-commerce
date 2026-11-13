@@ -106,13 +106,15 @@ export interface RoutingStepRow {
   readonly transitDays: number | null
   readonly appliesToSizes: readonly string[]
   readonly appliesToColourwayIds: readonly string[]
+  /** B-W2b-365: a step only for some options (./steps `stepsForOptions`). */
+  readonly appliesToOptionValueIds: readonly string[]
 }
 
 export async function readRouting(db: Reader, revisionId: string | null): Promise<RoutingStepRow[]> {
   if (!revisionId) return []
   const rows = await db.routingOperation.findMany({
     where: { revisionId },
-    select: { seq: true, name: true, workCentreKind: true, standardMinutes: true, supplierId: true, transitDays: true, appliesToSizes: true, appliesToColourwayIds: true },
+    select: { seq: true, name: true, workCentreKind: true, standardMinutes: true, supplierId: true, transitDays: true, appliesToSizes: true, appliesToColourwayIds: true, /* B-W2b-365 */ appliesToOptionValueIds: true },
     orderBy: { seq: 'asc' },
   })
   return rows.map((row) => ({ ...row, standardMinutes: row.standardMinutes.toString() }))

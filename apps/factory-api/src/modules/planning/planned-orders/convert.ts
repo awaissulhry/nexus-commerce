@@ -18,6 +18,9 @@ import { dayOf, type Reader } from '../store'
 import type { ConvertResult } from './contract'
 import { plannedFor } from './read'
 import { readPlanned, type PlannedRow } from './store'
+// B-W2b-365: the steps a planned subcontract order sends are those its cells are for.
+import { STEP_VARIANT_COLUMNS } from '../capacity/steps'
+import { cellsOfDemand, lineOptionsOf, stepsForCells } from './steps'
 
 /**
  * Making planned orders real (B-W2b-293; PLN-067, PLN-069, PLN-089; design planning.mrp "To make": "Create 4 work orders" /
@@ -67,8 +70,11 @@ async function factsOf(db: Reader, row: PlannedRow) {
   const named = row.styleRevisionId ? await db.styleRevision.findUnique({ where: { id: row.styleRevisionId }, select: { id: true, revision: true, status: true } }) : null
   const released = named ? null : await db.styleRevision.findFirst({ where: { styleId: row.styleId, status: 'RELEASED' }, select: { id: true, revision: true, status: true }, orderBy: { revision: 'desc' } })
   const revision = named ?? released
-  const steps = revision ? await db.routingOperation.findMany({ where: { revisionId: revision.id }, select: { seq: true, code: true, name: true }, orderBy: { seq: 'asc' } }) : []
+  const routing = revision ? await db.routingOperation.findMany({ where: { revisionId: revision.id }, select: { seq: true, code: true, name: true, /* B-W2b-365 */ ...STEP_VARIANT_COLUMNS }, orderBy: { seq: 'asc' } }) : []
   const party = row.partyId ? await db.party.findUnique({ where: { id: row.partyId }, select: { id: true, code: true, legalName: true, tradeName: true, roles: true, status: true } }) : null
+  // B-W2b-365: of the steps it sends, those one of its cells is for (its order lines' sizes and chosen options).
+  const demand = demandOf(row.demand)
+  const steps = stepsForCells(routing, cellsOfDemand(row.colourwayId, demand, await lineOptionsOf(db, demand.map((entry) => entry.orderLineId)))).map(({ seq, code, name }) => ({ seq, code, name }))
   return { revision, steps: steps.filter((step) => row.operationSeqs.length === 0 || row.operationSeqs.includes(step.seq)), party }
 }
 

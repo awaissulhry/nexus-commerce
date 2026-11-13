@@ -247,6 +247,12 @@ export const workOrderBody = input({
     .optional(),
   /** B-W2b-284, without an order line only: the colourway of the round's cells of "any colourway" (default: the style's only one). */
   colourwayId: id().optional(),
+  /**
+   * B-W2b-365, without an order line only: the configuration sampled (active values of groups the style offers, each once);
+   * every cell carries them, so a routing step only for some options is made when the sample has one. On order lines each
+   * cell takes its line's chosen options.
+   */
+  optionValueIds: z.array(id()).max(100).optional(),
 })
 export type WorkOrderBody = z.output<typeof workOrderBody>
 
@@ -280,6 +286,18 @@ export const workOrderOptionsView = output({
     refusal: sampleRefusal.nullable(),
     cells: z.array(output({ colourwayId: id().nullable(), colourwayCode: z.string().nullable(), size: z.string(), quantity: z.number().int() })),
     colourways: z.array(output({ id: id(), code: z.string(), name: z.string() })),
+    /** B-W2b-365: the option groups the style offers, to name the configuration sampled (`optionValueIds`); empty: no option. */
+    options: z.array(
+      output({
+        id: id(),
+        code: z.string(),
+        name: z.string(),
+        minPicks: z.number().int(),
+        maxPicks: z.number().int().nullable(),
+        defaultValueId: id().nullable(),
+        values: z.array(output({ id: id(), code: z.string(), name: z.string() })),
+      }),
+    ),
   }),
   /** What stops the work order now, in words (empty: it can be made; the order lines' own absence is said only when it cannot be made without one). */
   blockers: z.array(z.string()),
