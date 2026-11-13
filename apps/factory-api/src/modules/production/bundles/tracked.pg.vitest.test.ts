@@ -421,6 +421,15 @@ describe('where every bundle is, and the stuck ones (MES-074, MES-168)', () => {
   it('is stuck after the limit in working hours; the scheduler tells it once per wait', async () => {
     const bundle = BUNDLES.track[0]!
     const cutting = (await ok('floor', 'GET', `/production/bundles/work-orders/${WO.track.id}`)).operations.find((operation: Json) => operation.seq === 10)
+    // B-W2b-F45: the seed's bundles keep their fixed scan days: once those are more than the limit in working hours ago they
+    // are stuck too (at A1 and elsewhere in the seed). Read them first — none of this test's — and let the
+    // scheduler tell those once now; then this bundle is the one more, told once.
+    const seeded = ((await ok('manager', 'GET', `/production/bundles/stuck?siteId=${A.siteA1}`)).bundles as Json[]).map((row) => row.id as string)
+    const ours = new Set(Object.values(BUNDLES).flat().map((made) => made.id as string))
+    expect(seeded.filter((stuckId) => ours.has(stuckId))).toEqual([])
+    const seededTold = (await runStuckBundles({ database, log: silent })).told
+    expect(seededTold).toBeGreaterThanOrEqual(seeded.length)
+    // B-W2b-F45 end
     // A report ten days ago (an offline queue's late send): the wait counts working hours on A1's calendar since then.
     await admin(
       `INSERT INTO "OperationScan" (id, "tenantId", "siteId", "workOrderId", "workOrderOperationId", "bundleId", kind, "goodQuantity", "workerId", "stationId", "deviceId", "clientScanId", "deviceTime", "serverTime", "createdById")
@@ -428,26 +437,33 @@ describe('where every bundle is, and the stuck ones (MES-074, MES-168)', () => {
       [newId(), A.tenant, A.siteA1, WO.track.id, cutting.id, bundle.id, A.operatorA1, A.station, A.deviceA1, `late-${run}`],
     )
     const stuck = await ok('manager', 'GET', `/production/bundles/stuck?siteId=${A.siteA1}`)
-    expect(stuck.bundles.map((row: Json) => row.id)).toEqual([bundle.id])
-    expect(stuck.bundles[0]).toMatchObject({ place: 'LINE', operation: { seq: 10 }, stuck: { stuck: true, limitHours: 4 } })
-    expect(stuck.bundles[0].stuck.workingHours).toBeGreaterThanOrEqual(4)
+    // B-W2b-F45: the seed's stuck bundles read above, and this one.
+    expect(stuck.bundles.map((row: Json) => row.id).sort()).toEqual([...seeded, bundle.id].sort())
+    const late = stuck.bundles.find((row: Json) => row.id === bundle.id)
+    expect(late).toMatchObject({ place: 'LINE', operation: { seq: 10 }, stuck: { stuck: true, limitHours: 4 } })
+    expect(late.stuck.workingHours).toBeGreaterThanOrEqual(4)
     const tiles = await ok('manager', 'GET', `/production/bundles/tiles?siteId=${A.siteA1}`)
-    expect(tiles).toMatchObject({ stuck: 1, stuckLimitHours: 4, onHold: 0, atSubcontractor: 0, capped: false })
-    // Today's replaced tickets: the coupon reprinted above, and any ticket reprint of the day (the seed's are dated later).
+    expect(tiles).toMatchObject({ stuck: seeded.length + 1, stuckLimitHours: 4, onHold: 0, atSubcontractor: 0, capped: false })
+    // Today's replaced tickets: the coupon reprinted above, and any ticket reprint of the day (B-W2b-F45: the seed's ticket
+    // reprint keeps its fixed day, 2026-11-16: it is today's on that day only; this test reprints no ticket).
     const today = businessDate(new Date())
-    const [replaced] = await admin<{ n: number }>(
-      `SELECT ((SELECT count(*) FROM "BundleReprint" WHERE "tenantId" = $1 AND "siteId" = $2 AND "createdAt" >= $3 AND "createdAt" < $4) + (SELECT count(*) FROM "BundleCoupon" WHERE "tenantId" = $1 AND "siteId" = $2 AND "replacesId" IS NOT NULL AND "createdAt" >= $3 AND "createdAt" < $4))::int AS n`,
+    const [replaced] = await admin<{ tickets: number; coupons: number }>(
+      `SELECT (SELECT count(*) FROM "BundleReprint" WHERE "tenantId" = $1 AND "siteId" = $2 AND "createdAt" >= $3 AND "createdAt" < $4)::int AS tickets, (SELECT count(*) FROM "BundleCoupon" WHERE "tenantId" = $1 AND "siteId" = $2 AND "replacesId" IS NOT NULL AND "createdAt" >= $3 AND "createdAt" < $4)::int AS coupons`,
       [A.tenant, A.siteA1, businessDayStart(today), businessDayStart(plusDays(today, 1))],
     )
-    // The seed's reprints are dated later (a made-up November day): never today's.
-    expect(replaced!.n).toBe(1)
-    expect(tiles.ticketsReplacedToday).toBe(replaced!.n)
+    expect(replaced!.coupons).toBe(1)
+    expect(tiles.ticketsReplacedToday).toBe(replaced!.tickets + replaced!.coupons)
+    // B-W2b-F45 end
     const [active] = await admin<{ n: number }>(`SELECT count(*)::int AS n FROM "Bundle" b JOIN "WorkOrder" w ON w.id = b."workOrderId" WHERE b."tenantId" = $1 AND b."siteId" = $2 AND b.status = 'ACTIVE' AND w.status IN ('RELEASED', 'IN_PROGRESS', 'ON_HOLD')`, [A.tenant, A.siteA1])
     expect(tiles.active).toBe(active!.n)
+    // B-W2b-F45: the seed's stuck bundles were told above; this one is told once, then not again.
     const first = await runStuckBundles({ database, log: silent })
     expect(first.told).toBe(1)
     expect((await runStuckBundles({ database, log: silent })).told).toBe(0)
-    expect((await outbox('production.bundle_stuck')).map((row) => row.payload)).toEqual([expect.objectContaining({ bundleId: bundle.id, place: 'LINE', limitHours: 4 })])
+    const told = (await outbox('production.bundle_stuck')).map((row) => row.payload)
+    expect(told).toHaveLength(seededTold + 1)
+    expect(told.filter((payload) => payload.bundleId === bundle.id)).toEqual([expect.objectContaining({ bundleId: bundle.id, place: 'LINE', limitHours: 4 })])
+    // B-W2b-F45 end
   })
 
   it('keeps every company and tenant apart; the floor reads no office list', async () => {

@@ -4,6 +4,8 @@ import type { FastifyInstance } from 'fastify'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { newId } from '@nexus/factory-domain/core/ids'
 import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
+// B-W2b-F45: on a first visit, what arrived in the last 30 days is new.
+import { FIRST_VISIT_NEW_DAYS } from '@nexus/factory-domain/sales/portal-documents/library'
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedCore } from '../../../../../../packages/factory-db/seed/_core'
 import { seed as seedEmail } from '../../../../../../packages/factory-db/seed/email'
@@ -267,7 +269,16 @@ describe('the library per account by role (SAL-086)', { timeout: SLOW_TEST_TIMEO
     expect(kinds(ofOrder)).toEqual(['CERTIFICATE_OF_CONFORMITY', 'DECLARATION_OF_CONFORMITY', 'INSPECTION_REPORT', 'OTHER', 'USER_INFORMATION'])
     expect((await ok(browsers.buyer, `/portal/customer-documents?q=${encodeURIComponent('leaflet nothing')}`)).count).toBe(0)
     expect(kinds(await ok(browsers.buyer, `/portal/customer-documents?q=${encodeURIComponent('conformita JKT-02')}`))).toEqual(['DECLARATION_OF_CONFORMITY'])
-    expect((await ok(browsers.buyer, '/portal/customer-documents?new=true')).count).toBe(7)
+    // B-W2b-F45: new = arrived after the previous visit (on the first one: the last 30 days) and not opened yet. The made-up
+    // documents arrive as the test runs; one keeps a fixed day of the seed and leaves "new" 30 days after it: the documents
+    // that arrived since then, read from the library's own answer (its dates and the last visit).
+    const library = await ok(browsers.buyer, '/portal/customer-documents')
+    const since = library.lastVisitAt ? Date.parse(library.lastVisitAt) : Date.now() - FIRST_VISIT_NEW_DAYS * 86_400_000
+    const arrived = (library.items as Json[]).filter((item) => Date.parse(item.date) > since).map((item) => item.id).sort()
+    const fresh = await ok(browsers.buyer, '/portal/customer-documents?new=true')
+    expect(fresh.count).toBe(arrived.length)
+    expect((fresh.items as Json[]).map((item) => item.id).sort()).toEqual(arrived)
+    // B-W2b-F45 end
   })
 })
 
