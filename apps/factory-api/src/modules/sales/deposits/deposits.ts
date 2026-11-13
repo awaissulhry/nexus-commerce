@@ -187,3 +187,26 @@ export async function instructionsFor(client: FactoryClient | CommandTx, request
   const bank = await depositBankDetailsFor(client, request.companyId)
   return paymentInstructions({ amount: request.amount, currency: request.currency, dueDate: day(request.dueDate), kind: request.kind as DepositKind, documentNumber, bank, language })
 }
+
+// B-W2b-309 (SAL-248): the non-refundable deposit (caparra penitenziale, c.c. art. 1386), the new kind only ---------------
+
+/**
+ * Whether a company asks the caparra penitenziale now: its own sales settings row, else the tenant's row, else off (the
+ * database's `factory_caparra_penitenziale_on`; GATE-ACCOUNTANT: shipped OFF, switched on only on the Owner's word once the
+ * accountant gave its wording). Read in the office or system scope.
+ */
+export async function caparraPenitenzialeOn(db: FactoryClient | CommandTx, tenantId: string, companyId: string): Promise<{ on: boolean; source: 'COMPANY' | 'TENANT' | 'NONE' }> {
+  const rows = await db.salesSettings.findMany({ where: { id: { in: [companyId, tenantId] } }, select: { id: true, companyId: true, caparraPenitenzialeEnabled: true } })
+  const company = rows.find((row) => row.id === companyId && row.companyId === companyId)
+  if (company) return { on: company.caparraPenitenzialeEnabled, source: 'COMPANY' }
+  const tenant = rows.find((row) => row.id === tenantId && row.companyId === null)
+  if (tenant) return { on: tenant.caparraPenitenzialeEnabled, source: 'TENANT' }
+  return { on: false, source: 'NONE' }
+}
+
+/**
+ * The fiscal decision of a caparra penitenziale while the accountant's wording is missing: no deposit invoice when it is paid
+ * (it is the price of the right to withdraw, not a payment on the price), under a rule named UNCONFIRMED so that it is found
+ * and replaced when the wording arrives. Only reached while the switch is on.
+ */
+export const penitentialFiscal = (reason: string): { fiscalDocument: 'NONE'; fiscalRule: string; reason: string } => ({ fiscalDocument: 'NONE', fiscalRule: 'CAPARRA_PENITENZIALE_UNCONFIRMED', reason })

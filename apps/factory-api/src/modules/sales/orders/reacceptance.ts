@@ -4,6 +4,9 @@ import { ORDERS_MANAGE, ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/p
 import type { FactoryClient } from '@nexus/factory-db'
 import type { CommandTx } from '../../../core/command'
 import { words, type RecordAdapter } from '../../../platform/approvals-out/adapter'
+// B-W2b-309
+import { businessDate } from '@nexus/factory-domain/core/time'
+import { formatDate, formatMoney } from '@nexus/factory-domain/documents/format'
 import { diffView } from './amend'
 
 /**
@@ -30,11 +33,30 @@ const AMENDMENT = {
   before: true,
   after: true,
   order: { select: { id: true, number: true, companyId: true, partyId: true, status: true, currency: true, reapprovalNeededAt: true } },
+  // B-W2b-309 (SAL-219, SAL-221): a priced change's parts, its fee and its extra deposit, shown to the customer.
+  priceDeltaLines: true,
+  feeAmount: true,
+  depositRequestId: true,
 } as const
 
 async function latestRevision(client: Client, orderId: string): Promise<number> {
   const latest = await client.salesOrderAmendment.findFirst({ where: { orderId }, orderBy: { revision: 'desc' }, select: { revision: true } })
   return latest?.revision ?? 0
+}
+
+// B-W2b-309 (SAL-219, SAL-221) --------------------------------------------------------------------------------------------
+/** The priced parts, the fee and the extra deposit of a priced change, as facts the customer reads (its own prices). */
+async function pricedFacts(client: Client, row: { readonly priceDeltaLines: unknown; readonly feeAmount: number | null; readonly depositRequestId: string | null; readonly order: { readonly currency: string } }, locale: ApprovalLocale) {
+  const language = locale === 'it' ? 'it' : 'en'
+  const money = (amount: number) => formatMoney(amount, row.order.currency, language)
+  const parts = Array.isArray(row.priceDeltaLines) ? (row.priceDeltaLines as { label: string; amount: number }[]) : []
+  const facts = parts.map((part) => ({ label: words(locale, 'Prezzo della modifica', 'Price of the change'), value: `${part.label}: ${part.amount > 0 ? '+' : ''}${money(part.amount)}` }))
+  if (row.feeAmount !== null) facts.push({ label: words(locale, 'Costo della modifica', 'Change fee'), value: money(row.feeAmount) })
+  if (row.depositRequestId) {
+    const deposit = await client.depositRequest.findUnique({ where: { id: row.depositRequestId }, select: { amount: true, dueDate: true } })
+    if (deposit) facts.push({ label: words(locale, 'Acconto aggiuntivo', 'Extra deposit'), value: `${money(deposit.amount)} · ${words(locale, 'entro il', 'by')} ${formatDate(businessDate(deposit.dueDate), language)}` })
+  }
+  return facts
 }
 
 export const REACCEPTANCE_ADAPTER: RecordAdapter = Object.freeze<RecordAdapter>({
@@ -76,6 +98,8 @@ export const REACCEPTANCE_ADAPTER: RecordAdapter = Object.freeze<RecordAdapter>(
         { label: words(locale, 'Revisione', 'Revision'), value: String(row.revision) },
         { label: words(locale, 'Perché è cambiato', 'Why it changed'), value: row.reason },
         { label: words(locale, 'Attenzione', 'Please note'), value: words(locale, "La vostra accettazione precedente decade se cambia il valore netto dell'ordine.", 'Your earlier acceptance ends if the net value changes.') },
+        // B-W2b-309 (SAL-219, SAL-221): the price of a change after production started, and the extra deposit it asks.
+        ...(await pricedFacts(client, row, locale)),
       ],
       revisedOrder: {
         orderNumber: row.order.number,

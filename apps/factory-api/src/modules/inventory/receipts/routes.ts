@@ -28,6 +28,8 @@ import {
 import { changeDiscrepancy, listDiscrepancies, recordDiscrepancy, removeDiscrepancy, settleDiscrepancy } from './discrepancies'
 import { documentRequestCheck, requestDocuments } from './document-request'
 import { hideListSummary } from './hide-list-summary'
+// B-W2b-309 (SAL-306): goods a customer sends for its own orders, and what goes back to it.
+import { recordCustomerReceipt, recordCustomerReceiptContract, returnToCustomer, returnToCustomerContract } from './customer'
 import { manifest } from './manifest'
 import { announceDdtPhoto, announceDiscrepancyPhoto, completeDdtPhoto, completeDiscrepancyPhoto } from './photos'
 import { countReceipts, expectedLines, getReceipt, listReceipts, receiptLots } from './read'
@@ -106,4 +108,7 @@ export default defineRoutes('inventory.receipts', manifest, async (app) => {
   app.get('/inventory/receipts/hide-lists/:importId', { schema: hideListSummaryContract }, async (request) => hideListSummary(request, request.params.importId))
   // B-W2b-14 (Z1:02): the supplier's DDT number and date corrected on a posted receipt, with why.
   app.post('/inventory/receipts/:receiptId/supplier-ddt', { schema: correctSupplierDdtContract }, async (request) => correctSupplierDdt(request, request.params.receiptId, request.body, idempotencyKeyFrom(request)))
+  // B-W2b-309 (SAL-306): a CUSTOMER_SUPPLIED receipt (lots the customer owns, never valued) and a return of its own lots.
+  app.post('/inventory/receipts/customer', { schema: recordCustomerReceiptContract }, async (request, reply) => reply.code(201).send(await recordCustomerReceipt(request, request.body, idempotencyKeyFrom(request))))
+  app.post('/inventory/receipts/customer/returns', { schema: returnToCustomerContract }, async (request, reply) => reply.code(201).send(await returnToCustomer(request, request.body, idempotencyKeyFrom(request))))
 })

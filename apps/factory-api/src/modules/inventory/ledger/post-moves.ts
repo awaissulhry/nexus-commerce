@@ -653,6 +653,8 @@ export async function valueMovesInCommand(
     existing.map((row) => [row.moveId, { method: row.method, unitCost: row.unitCost.toString() }]),
   )
   const lotIds = ids([...changing.map(({ move }) => move.lotId), ...[...originals.values()].map((row) => row.lotId)])
+  // B-W2b-309 (SAL-306): a customer's own lot (Lot.ownerPartyId) is never valued (the database refuses it too).
+  const ownedLots = new Set((lotIds.length === 0 ? [] : await tx.lot.findMany({ where: { id: { in: lotIds }, ownerPartyId: { not: null } }, select: { id: true } })).map((row) => row.id))
   const lotValuations = new Map<string, { quantity: string; unitCost: string }[]>()
   for (const row of await tx.stockValuation.findMany({ where: { lotId: { in: lotIds } }, select: { siteId: true, lotId: true, quantity: true, unitCost: true } })) {
     const list = lotValuations.get(`${row.siteId}|${row.lotId}`) ?? []
@@ -717,6 +719,8 @@ export async function valueMovesInCommand(
   const rows: ReturnType<typeof value>[] = []
   for (const { move, cost } of changing) {
     if (valuationOf.has(move.id)) continue
+    // B-W2b-309 (SAL-306): the customer's own stock, never valued.
+    if (move.lotId && ownedLots.has(move.lotId)) continue
     const original = move.reversalOfId ? originals.get(move.reversalOfId) : undefined
     if (original && changesSiteStock(original) && !valuationOf.has(original.id)) {
       const basis = basisOf({ ...original, baseQuantity: original.baseQuantity.toString() }, null, undefined)

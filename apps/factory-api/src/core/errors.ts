@@ -178,6 +178,24 @@ function partyRefusal(error: unknown): MappedError | null {
   return words ? { status: STATUS_OF.conflict, code: 'conflict', message: words.message, issues: [{ path: words.path, message: words.message }], unexpected: false } : null
 }
 
+// B-W2b-309 (SAL-306) ----------------------------------------------------------------------------------------------------
+/**
+ * The database's own refusal to issue or hold a customer's own lot for another customer's work (…_sales_orders_depth_w2b_guards
+ * StockMove_customer_owned, Reservation_customer_owned: check_violation 'inventory: lot … is a customer's own material; it is
+ * issued only … / held only …'), when an issue or a reservation reached it (W1's routes, the floor): a 409 in words, never a 500.
+ */
+function customerOwnedRefusal(error: unknown): MappedError | null {
+  const cause = (error as { meta?: { driverAdapterError?: { cause?: { originalCode?: unknown; originalMessage?: unknown } } } } | null)?.meta?.driverAdapterError?.cause
+  if (cause?.originalCode !== '23514' || typeof cause.originalMessage !== 'string') return null
+  const issued = /customer's own material; it is issued only/.test(cause.originalMessage)
+  const held = /customer's own material; it is held only/.test(cause.originalMessage)
+  if (!issued && !held) return null
+  const message = issued
+    ? "This lot is a customer's own material: it is issued only to a work order whose every cell makes that customer's orders."
+    : "This lot is a customer's own material: it is held only for that customer's order lines, or for a work order made only for them."
+  return { status: STATUS_OF.conflict, code: 'conflict', message, issues: [{ path: 'body/lotId', message }], unexpected: false }
+}
+
 /** What an error becomes on the wire. Pure, so the mapping is tested without a server. */
 export function mapError(error: unknown): MappedError {
   if (error instanceof DomainError) {
@@ -195,6 +213,9 @@ export function mapError(error: unknown): MappedError {
   if (lockedRevision) return lockedRevision
   const warehouse = warehouseRefusal(error)
   if (warehouse) return warehouse
+  // B-W2b-309
+  const owned = customerOwnedRefusal(error)
+  if (owned) return owned
   // B-W2b-332
   const askedLine = askedLineRefusal(error)
   if (askedLine) return { status: STATUS_OF.conflict, code: 'conflict', message: askedLine.message, issues: [askedLine], unexpected: false }
