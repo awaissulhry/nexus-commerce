@@ -52,6 +52,15 @@
 // stays the carton and gains its packaging type, its number as printed ("n of N") and when its marks were printed; its
 // contents, the packaging types and defaults, the mark templates, the holds on a shipment and the cut-offs per carrier are
 // packing.prisma's. A shipment names the shipment it was split from and why.
+//
+// W2b-6 (schema wave 48/57, B-W2b-367; LOG-035, LOG-041, LOG-042, LOG-049, LOG-053, LOG-122): a site's settings say
+// whether its labels are TEST labels (on by default: a test carrier makes labels marked TEST and sends nothing), when it
+// went live and who said so, and the declared value above which a parcel is insured. A shipment says whether it goes
+// express, who pays the duties of an export and whether its papers travel paperless; a carrier booked by hand (outside
+// Sendcloud) carries the tracking number typed for it; the customer's own collection records who collected, the plate
+// and the signature; the day's sheet of its carrier names it once it is handed over (carriers.prisma DispatchManifest).
+// A parcel carries its declared and insured values (prices: never on the floor). Carrier contracts and pickups are
+// carriers.prisma's.
 
 /// Who carries the goods (trasporto a cura del; DPR 472/1996), as factory-domain documents DDT_TRANSPORT_BY.
 enum TransportBy {
@@ -98,6 +107,16 @@ model ShippingSettings {
   freightAmount          Int?
   /// @grain price
   freightFreeFrom        Int?
+  /// W2b-6 (schema wave 48/57, B-W2b-367; LOG-035): test mode: a test carrier makes labels marked TEST and sends nothing to
+  /// a carrier (on by default; the shell shows TEST MODE). Live (false) exactly with when it went live (not in the future)
+  /// and the person who switched it (after a step-up); both fixed while live, cleared when it goes back to test mode.
+  testMode               Boolean      @default(true)
+  liveSince              DateTime?    @db.Timestamptz(3)
+  liveSetById            String?      @db.Uuid
+  /// W2b-6 (LOG-042): a parcel whose declared value is above this is insured by rule (in the company's currency, minor
+  /// units, 0 or more); null: never by rule.
+  /// @grain price
+  insureAbove            Int?
   version                Int          @default(1)
   createdAt              DateTime     @default(now()) @db.Timestamptz(3)
   updatedAt              DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
@@ -245,6 +264,24 @@ model Shipment {
   /// characters); both or neither, set when it is made, never changed.
   splitFromId                String?                 @db.Uuid
   splitReason                String?
+  /// W2b-6 (schema wave 48/57, B-W2b-367; LOG-041): an express service (the service itself is serviceCode), who pays the
+  /// duties and taxes of an export (null: not an export, or not said) and whether its papers travel paperless (the
+  /// commercial invoice sent to the carrier electronically, where the carrier takes it).
+  express                    Boolean                 @default(false)
+  dutyPayer                  DutyPayer?
+  paperless                  Boolean                 @default(false)
+  /// W2b-6 (LOG-122): a carrier booked by hand, outside Sendcloud (transportBy CARRIER, no Sendcloud shipment): the
+  /// tracking number typed for it (1 to 100 characters on one line); it may still be typed after the goods left.
+  manualTrackingNumber       String?
+  /// W2b-6 (LOG-053; Incoterms EXW, FCA): the customer's own carrier collected it (transportBy RECIPIENT): who collected
+  /// (1 to 200 characters on one line), the vehicle's plate (1 to 20 capitals, digits, spaces or hyphens) and the
+  /// signature on the DDT (a file of the shipment); fixed once it left.
+  collectedByName            String?
+  vehiclePlate               String?
+  collectionSignatureFileId  String?                 @db.Uuid
+  /// W2b-6 (LOG-049): the day's sheet of its carrier and site it was handed over on (carriers.prisma DispatchManifest);
+  /// put on and taken off while the sheet is open, then fixed with it; a carrier shipment that is PACKED or left.
+  manifestId                 String?                 @db.Uuid
   version              Int            @default(1)
   createdAt            DateTime       @default(now()) @db.Timestamptz(3)
   updatedAt            DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
@@ -265,6 +302,10 @@ model Shipment {
   splits             Shipment[]          @relation("ShipmentSplit")
   parcelLines        ParcelLine[]
   holds              ShipmentHold[]
+  // W2b-6 (wave 48/57): the customer's signature at collection and the day's sheet it is on (Restrict, not Prisma's
+  // SetNull default: that would also clear tenantId and siteId).
+  collectionSignature StoredFile?      @relation("ShipmentCollectionSignature", fields: [tenantId, collectionSignatureFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  manifest            DispatchManifest? @relation(fields: [tenantId, siteId, manifestId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([tenantId, companyId, number])
   // The target of the references from its lines, parcels, DDTs and tracking events: the same site and party.
@@ -273,6 +314,8 @@ model Shipment {
   @@index([tenantId, status])
   // W2b-6: the shipments split from one.
   @@index([tenantId, splitFromId])
+  // W2b-6 (wave 48/57): the shipments on a day's sheet.
+  @@index([tenantId, manifestId])
 }
 
 enum ShipmentStatus {
@@ -367,6 +410,13 @@ model Parcel {
   cartonCount     Int?
   /// W2b-6 (LOG-013): when its shipping marks were last printed (not in the future); null: never.
   marksPrintedAt  DateTime? @db.Timestamptz(3)
+  /// W2b-6 (schema wave 48/57, B-W2b-367; LOG-042): the value of its goods declared to the carrier (0 or more) and the value
+  /// it is insured for (above 0, at most the declared value when that is given; null: not insured), in the shipment's
+  /// order's currency, minor units; they change until it leaves. Prices: never on the floor.
+  /// @grain price
+  declaredValue   Int?
+  /// @grain price
+  insuredValue    Int?
   version         Int       @default(1)
   createdAt       DateTime  @default(now()) @db.Timestamptz(3)
   updatedAt       DateTime  @default(now()) @updatedAt @db.Timestamptz(3)

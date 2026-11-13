@@ -148,6 +148,10 @@ model SecretValue {
   createdById String?   @db.Uuid
 
   credentialsOf   IntegrationAccount[] @relation("IntegrationAccountCredentials")
+  // W2b-6 carriers.prisma, parties.prisma (wave 48/57): the carrier contract whose account number it seals (purpose
+  // `shipping.carrier_account`), the party whose carrier account it seals (purpose `parties.carrier_account`).
+  carrierAccount      CarrierAccount? @relation("CarrierAccountNumber")
+  partyCarrierAccount Party?          @relation("PartyCarrierAccount")
   webhookSecretOf IntegrationAccount[] @relation("IntegrationAccountWebhookSecret")
 
   // The target of the accounts' tenant-safe references.

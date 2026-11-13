@@ -267,6 +267,23 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    and GarmentSerial (the carton of its line's shipment, set while RELEASED and DRAFT; `GarmentSerial_unpack_carton`, a
    BEFORE trigger that fires after the guard, clears the carton when the line is cleared); no earlier function redefined;
    it calls recall's `factory_recall_words_ok` and `factory_recall_not_future`):
+   `…_carriers_w2b_guards` (W2b-6 schema wave 48/57, B-W2b-367, carriers, labels and dispatch: our own carrier contracts (the
+   number a SecretValue of purpose `shipping.carrier_account`, required while live; company, site, carrier fixed; one live per
+   company, site or every site, and carrier: a partial unique; never deleted), pickups (what was asked fixed; REQUESTED →
+   CONFIRMED | FAILED | CANCELLED, CONFIRMED → FAILED | CANCELLED, the last two final; the provider's reference set once; why it
+   failed exactly when FAILED; an address with a two-capital country; never deleted) and day sheets (company, site, carrier and
+   day fixed; closed once with when and its own file, then frozen; one per site, carrier and day; never deleted); its own
+   triggers on Shipment (a hand-typed tracking number only for a CARRIER shipment with no Sendcloud shipment; who collected, the
+   plate and a signature of the shipment only when the customer collects; a day sheet only for a CARRIER shipment of its
+   carrier, PACKED or gone, on and off only while the sheets are open (FOR SHARE), never back to DRAFT or CANCELLED on one),
+   Parcel (declared value 0 or more, insured above 0 and at most declared), ShippingSettings (live exactly with when and who,
+   fixed while live, cleared in test mode), Party (the customer's carrier account a SecretValue of purpose
+   `parties.carrier_account` with its preferred carrier; COLLECT and THIRD_PARTY only with it), Printer (DIRECT only on a label
+   printer) and PrintJob (a reprint of the same record with 3-200 characters of why, fixed once queued); it redefines the
+   portal follow-ups' `factory_shipment_guard` (the hand-typed tracking number and the day sheet still change once the goods
+   left) and wave 45's `factory_generated_document_check` (PROFORMA of a Shipment, SampleShipment or DepositRequest with its
+   record's PROFORMA NumberAllocation; MANIFEST of a DispatchManifest; SHIPPING_MARKS and SHIPMENT_PACK of a Shipment); it calls
+   recall's `factory_recall_words_ok` and `factory_recall_not_future`):
    triggers, partial unique indexes and deferred
    constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new

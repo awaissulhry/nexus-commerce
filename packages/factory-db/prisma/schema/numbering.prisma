@@ -173,6 +173,10 @@ enum NumberKind {
   /// public page or the portal in the tenant's system context).
   SERVICE_CASE
   SAFETY_REPORT
+  /// W2b-6 wave 48/57: a proforma invoice's number (PF-…; gendocs.prisma GeneratedDocument PROFORMA, non-fiscal), one per
+  /// record (a Shipment, SampleShipment or DepositRequest). An office document kind: the API numbers it when the first
+  /// proforma of the record is made; its later versions keep it.
+  PROFORMA
 }
 
 enum NumberReset {
