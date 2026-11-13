@@ -10,6 +10,9 @@ import { getTemplate, moveTemplate, readRules, renameTemplate, savePoints, switc
 import { draftsOf, pointsBody, readProblem, refusedPoints, saveHeld, switchedNotice, tabOf, templateCan, writeProblem, type Notice, type WriteProblem } from '../model'
 import { TemplatesMessages } from '../parts'
 import { TemplateRecordView, type RecordDialog, type TemplateLoad, type TemplateRecordModel } from './view/TemplateRecordView'
+// B-W2b-371: the rule editor (XF2:05) and where the template is used (XF2:04).
+import { useRulesEditor } from '../rules/use-rules'
+import { readWhereUsed } from '../where-used/api'
 
 /**
  * `/w/<company>/products/sizes/templates/<id>` (SCR-049-template; `?tab=points|mtm|whereused`): reads the template page (B-W2b-358)
@@ -69,6 +72,32 @@ function Container({ templateId }: { templateId: string }) {
   useEffect(() => {
     if (tab === 'mtm' && can.view) loadRules()
   }, [tab, loadRules, can.view])
+
+  // B-W2b-371 (XF2:05): the rule editor saves the whole list once; the answer is the rules as kept.
+  const rulesEdit = useRulesEditor({
+    api,
+    templateId,
+    rules: rules.value,
+    onSaved: (value) => {
+      setRules({ value, problem: null })
+      void load()
+    },
+    onStale: () => {
+      loadRules()
+      void load()
+    },
+  })
+  // B-W2b-371 (XF2:04): the styles and open orders the template serves, while Where used is open.
+  const [whereUsed, setWhereUsed] = useState<TemplateRecordModel['whereUsed']>(null)
+  const loadWhereUsed = useCallback(() => {
+    setWhereUsed({ value: null, problem: null })
+    readWhereUsed(api, templateId)
+      .then((value) => setWhereUsed({ value, problem: null }))
+      .catch((error: unknown) => setWhereUsed({ value: null, problem: readProblem(error) }))
+  }, [api, templateId])
+  useEffect(() => {
+    if (tab === 'whereused' && can.view) loadWhereUsed()
+  }, [tab, loadWhereUsed, can.view])
 
   useLiveChanges({
     onChange: (change) => {
@@ -162,7 +191,7 @@ function Container({ templateId }: { templateId: string }) {
     } else setDialog((now) => (now && now.kind === 'rename' ? { ...now, problem: failed.key } : now))
   }
 
-  const model: TemplateRecordModel = { prefix, can, tab, template, rules, edit, dialog, notice, changed, busy }
+  const model: TemplateRecordModel = { prefix, can, tab, template, rules, edit, dialog, notice, changed, busy, rulesEdit: rulesEdit.model, whereUsed }
   return (
     <TemplateRecordView
       model={model}
@@ -181,6 +210,8 @@ function Container({ templateId }: { templateId: string }) {
         onMove: (to) => void doMove(to),
         onRename: () => void doRename(),
         onDismissNotice: () => setNotice(null),
+        rulesEdit: rulesEdit.actions,
+        onRetryWhereUsed: loadWhereUsed,
       }}
     />
   )

@@ -74,7 +74,6 @@
     "rulesCount_other": "{count} rules in force ({blocking} blocking)",
     "archivedRule": "Not checked",
     "twoPoints": "{point} and {other}",
-    "editLater": "The rules are shown here as they stand; changing them on this page is not available yet.",
     "factsTitle": "Base size and limits",
     "baseSize": "Base size suggested from",
     "baseSizeFrom": "{points} (a tie takes the larger size)",

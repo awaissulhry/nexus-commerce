@@ -120,6 +120,8 @@ const row = (n: number, over: Partial<ProfileRow>): ProfileRow => ({
   old: false,
   openUnits: 0,
   nextFittingAt: null,
+  // B-W2b-371: the certified range is not known without an open unit.
+  range: { inside: null, points: [] },
   ...over,
 })
 

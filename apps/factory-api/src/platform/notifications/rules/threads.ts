@@ -1,9 +1,10 @@
 import { THREADS_READ } from '@nexus/factory-domain/auth/permissions/catalogue'
-import { can } from '@nexus/factory-domain/core/permissions'
 import type { MessageKey } from '@nexus/factory-domain/notifications/rules'
 import { events as threadEvents } from '@nexus/factory-domain/threads/events'
 import { followersOf } from '../../threads/followers'
 import { recordLabelOf } from '../../threads/labels'
+// B-W2b-371: a record type's thread gate (a rider's profile: sales.measurements.view).
+import { mayOnThread } from '../../threads/records'
 import { scopeOfThread } from '../../threads/threads'
 import type { Draft, FanOutRule, RuleContext } from '../fan-out'
 
@@ -30,7 +31,7 @@ export const THREAD_RULES: readonly FanOutRule[] = Object.freeze([
       const payload = payloadOf('thread.user_mentioned').parse(raw) as unknown as { threadId: string; messageId: string; userId: string; authorId: string | null }
       const thread = await threadOf(context, payload.threadId)
       const reader = thread ? await context.reader(payload.userId) : null
-      if (!thread || !reader || !can(reader.actor, THREADS_READ, scopeOfThread(thread))) return []
+      if (!thread || !reader || !mayOnThread(reader.actor, THREADS_READ, thread.recordType, scopeOfThread(thread))) return []
       const label = await recordLabelOf(context.tx, thread.recordType, thread.recordId)
       if (label === null) return []
       return [
@@ -65,7 +66,7 @@ export const THREAD_RULES: readonly FanOutRule[] = Object.freeze([
       for (const userId of followers) {
         if (userId === authorId || message.mentionedUserIds.includes(userId)) continue
         const reader = await context.reader(userId)
-        if (!reader || !can(reader.actor, THREADS_READ, scopeOfThread(thread))) continue
+        if (!reader || !mayOnThread(reader.actor, THREADS_READ, thread.recordType, scopeOfThread(thread))) continue
         drafts.push({
           userId,
           category: 'FOLLOWING',

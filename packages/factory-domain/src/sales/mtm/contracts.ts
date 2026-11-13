@@ -69,6 +69,10 @@ export const profilesQuery = input({
   review: z.enum(REVIEW_STATUSES).optional(),
   /** Only the riders measured more than 12 months ago. */
   old: z.enum(['true', 'false']).optional(),
+  // B-W2b-371 (XF2:03): only the riders whose newest revision makes a unit outside the certified range of its style
+  // (`outside`), or inside every one (`inside`); only the riders with a fitting this business week.
+  range: z.enum(['outside', 'inside']).optional(),
+  fittings: z.enum(['week']).optional(),
   limit: z.coerce.number().int().min(1).max(200).default(50),
   offset: z.coerce.number().int().min(0).max(100_000).default(0),
 })
@@ -103,13 +107,18 @@ export const profileRowView = output({
   openUnits: z.number().int(),
   /** The earliest BOOKED fitting of any revision (B-W2b-360's appointments); null: none. */
   nextFittingAt: z.string().nullable(),
+  // B-W2b-371 (XF2:03): the certified range of the newest revision's units (each unit's style and base size, B-W2b-248's check):
+  // inside every one, outside one (the points that fall out), or null when not known (no unit, or made-to-measure off).
+  range: output({ inside: z.boolean().nullable(), points: z.array(z.string()) }),
 })
 
 export const profilesView = output({
   rows: z.array(profileRowView),
   /** The riders matching the filters (the rows are a page of them). */
   matching: z.number().int(),
-  tiles: output({ waitingReview: z.number().int(), needMore: z.number().int(), older: z.number().int(), fittingsThisWeek: z.number().int(), outsideRange: z.null() }),
+  // B-W2b-371: each tile the riders its filter shows (fittings this week: riders, no longer appointments); outsideRange null while
+  // no rider's range is known (no unit checked: made-to-measure off), never 0 for "not known".
+  tiles: output({ waitingReview: z.number().int(), needMore: z.number().int(), older: z.number().int(), fittingsThisWeek: z.number().int(), outsideRange: z.number().int().nullable() }),
   asOf: z.string(),
 })
 

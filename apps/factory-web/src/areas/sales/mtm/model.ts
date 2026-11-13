@@ -103,8 +103,8 @@ export const customerHref = (prefix: string, partyId: string): string => `${pref
 
 // ---- the list -----------------------------------------------------------------------------------------------------------
 
-/** Rows ▾ (design savedRows; "Outside range" is per style: the record's check says it, the list cannot filter it). */
-export const ROW_VIEWS = ['all', 'waiting', 'needMore', 'confirmed', 'old'] as const
+/** Rows ▾ (design savedRows; B-W2b-371: "Outside range" and "Fittings this week" filter the list too, "By customer" is its own chip). */
+export const ROW_VIEWS = ['all', 'waiting', 'needMore', 'confirmed', 'old', /* B-W2b-371 */ 'outside', 'fittings'] as const
 export type RowView = (typeof ROW_VIEWS)[number]
 
 export interface ListAddress {
@@ -116,9 +116,12 @@ export interface ListAddress {
   readonly isNew: boolean
   /** Send a measurement link from the band (`?link=1`). */
   readonly link: boolean
+  /** B-W2b-371 (XF2:03): one customer's riders (`?customer=<party id>`, design Rows ▾ "By customer"). */
+  readonly customer: string | null
 }
 
-export const HOME_ADDRESS: ListAddress = Object.freeze({ view: 'all', garment: null, q: '', isNew: false, link: false })
+export const HOME_ADDRESS: ListAddress = Object.freeze({ view: 'all', garment: null, q: '', isNew: false, link: false, customer: null })
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export function addressOf(params: Pick<URLSearchParams, 'get'> | null | undefined): ListAddress {
   const view = params?.get('view') ?? ''
@@ -129,6 +132,7 @@ export function addressOf(params: Pick<URLSearchParams, 'get'> | null | undefine
     q: (params?.get('q') ?? '').slice(0, 100),
     isNew: params?.get('new') === '1',
     link: params?.get('link') === '1',
+    customer: UUID.test(params?.get('customer') ?? '') ? params!.get('customer') : null,
   }
 }
 
@@ -137,18 +141,19 @@ export function addressText(address: ListAddress): string {
   if (address.view !== 'all') search.set('view', address.view)
   if (address.garment) search.set('garment', address.garment)
   if (address.q.trim()) search.set('q', address.q.trim())
+  if (address.customer) search.set('customer', address.customer)
   if (address.isNew) search.set('new', '1')
   if (address.link) search.set('link', '1')
   const text = search.toString()
   return text ? `?${text}` : ''
 }
 
-export const isFiltered = (address: ListAddress): boolean => address.view !== 'all' || address.garment !== null || address.q.trim() !== ''
+export const isFiltered = (address: ListAddress): boolean => address.view !== 'all' || address.garment !== null || address.q.trim() !== '' || address.customer !== null
 
 const REVIEW_OF: Readonly<Partial<Record<RowView, ReviewStatus>>> = { waiting: 'WAITING', needMore: 'NEED_MORE', confirmed: 'CONFIRMED' }
 
 export function queryOf(address: ListAddress, offset = 0): ProfilesQuery {
-  return { q: address.q, garmentType: address.garment, review: REVIEW_OF[address.view] ?? null, old: address.view === 'old' ? true : null, offset }
+  return { q: address.q, garmentType: address.garment, review: REVIEW_OF[address.view] ?? null, old: address.view === 'old' ? true : null, partyId: address.customer, range: address.view === 'outside' ? 'outside' : null, fittings: address.view === 'fittings' ? 'week' : null, offset }
 }
 
 export interface Chip {
@@ -157,29 +162,31 @@ export interface Chip {
   readonly clear: Partial<ListAddress>
 }
 
-export function chipsOf(address: ListAddress): Chip[] {
+export function chipsOf(address: ListAddress, customerName?: string | null): Chip[] {
   const chips: Chip[] = []
+  // B-W2b-371: the customer chosen (its name once the picker knows it).
+  if (address.customer) chips.push({ id: 'customer', label: customerName ? phrase('chip.customer', { customer: customerName }) : phrase('chip.customerUnnamed'), clear: { customer: null } })
   if (address.view !== 'all') chips.push({ id: 'view', label: phrase(`view.${address.view}`), clear: { view: 'all' } })
   if (address.garment) chips.push({ id: 'garment', label: phrase('chip.garment', { garment: address.garment }), clear: { garment: null } })
   if (address.q.trim()) chips.push({ id: 'q', label: phrase('chip.search', { q: address.q.trim() }), clear: { q: '' } })
   return chips
 }
 
-/** The tiles (design mtm.tiles): each a saved row of the list, but the two the list cannot filter. */
+/** The tiles (design mtm.tiles): each a saved row of the list (B-W2b-371: "Outside" and "Fittings" press theirs too). */
 export const TILES = ['waiting', 'needMore', 'outside', 'fittings', 'old'] as const
 export type Tile = (typeof TILES)[number]
 
-/** The row view a tile presses (null: the tile names a count the list cannot filter, said in its hint). */
-export const TILE_VIEW: Readonly<Record<Tile, RowView | null>> = Object.freeze({ waiting: 'waiting', needMore: 'needMore', outside: null, fittings: null, old: 'old' })
+/** The row view a tile presses. */
+export const TILE_VIEW: Readonly<Record<Tile, RowView | null>> = Object.freeze({ waiting: 'waiting', needMore: 'needMore', outside: 'outside', fittings: 'fittings', old: 'old' })
 
-/** A tile's number; null: unknown ("—", never 0). "Outside the certified range" is per style: always "—" here. */
+/** A tile's number (the riders its filter shows); null: unknown ("—", never 0) — "outside" while no unit's range is known. */
 export function tileValue(tiles: Tiles | null, tile: Tile): number | null {
   if (!tiles) return null
   if (tile === 'waiting') return tiles.waitingReview
   if (tile === 'needMore') return tiles.needMore
   if (tile === 'fittings') return tiles.fittingsThisWeek
   if (tile === 'old') return tiles.older
-  return null
+  return tiles.outsideRange
 }
 
 /** The row verbs (design mtm.grid#2): Open, Open in new tab, New revision, Use in a new quote, Print worksheet. */

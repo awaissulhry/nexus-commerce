@@ -262,6 +262,8 @@ import { events as salesCredit } from '../sales-credit/events'
 import { events as inventorySubstitutions } from '../inventory-substitutions/events'
 // B-W2b-300: goods without a PO and the reception report (inventory.unplanned_changed, inventory.reception_reported).
 import { events as inventoryReceiving } from '../inventory-receiving/events'
+// B-W2b-371: made-to-measure office photos (measurement_photo.added, .dated, .deleted).
+import { events as mtmPhotos } from '../mtm-photos/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -590,6 +592,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...fittings,
   // B-W2b-340
   ...configurator,
+  // B-W2b-371
+  ...mtmPhotos,
 ] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */

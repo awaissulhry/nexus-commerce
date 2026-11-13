@@ -140,6 +140,8 @@ export interface MtmListModel {
   readonly measurements: MeasurementsDialogModel | null
   readonly link: LinkDialogModel | null
   readonly quote: QuoteDialogModel | null
+  /** B-W2b-371 (XF2:03): the customers for the "By customer" filter (null: not read, or no right to read customers). */
+  readonly customers?: readonly PartyOption[] | null
   /** Design only: the rows picked, the focused row, the keys panel open. */
   readonly selected?: readonly string[]
   readonly focusRow?: number
