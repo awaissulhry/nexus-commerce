@@ -98,6 +98,7 @@
     "GradeRule": "Regola di sviluppo taglie",
     "Inquiry": "Richiesta",
     "ServiceCase": "Caso di assistenza",
+    "ProductSafetyReport": "Segnalazione di sicurezza prodotto",
     "other": "Record"
   },
   "chip": {
@@ -146,6 +147,7 @@
     "GradeRule": "Regole di sviluppo taglie",
     "Inquiry": "Richieste",
     "ServiceCase": "Casi di assistenza",
+    "ProductSafetyReport": "Segnalazioni di sicurezza prodotto",
     "other": "Altri record"
   },
   "status": {
@@ -243,6 +245,7 @@
     "LOST": "Persa",
     "WAITING_CUSTOMER": "In attesa del cliente",
     "WAITING_PART": "In attesa di un ricambio",
-    "RESOLVED": "Risolto"
+    "RESOLVED": "Risolto",
+    "ASSESSING": "In valutazione"
   }
 }

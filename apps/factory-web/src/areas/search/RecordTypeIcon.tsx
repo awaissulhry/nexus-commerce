@@ -107,6 +107,8 @@ const ICONS: Readonly<Record<string, LucideIcon>> = Object.freeze({
   Inquiry: Inbox,
   // B-W2b-353
   ServiceCase: LifeBuoy,
+  // B-W2b-361: as the product-safety reports list.
+  ProductSafetyReport: ShieldAlert,
 })
 
 export function RecordTypeIcon({ type, size = 16 }: { type: string; size?: number }) {
