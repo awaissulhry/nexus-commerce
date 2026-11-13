@@ -43,7 +43,7 @@ export default defineRoutes('sales.fittings', manifest, async (app) => {
   app.get('/sales/fittings/results/:resultId', { schema: getResultContract }, async (request) => getResult(request, request.params.resultId))
   app.post('/sales/fittings/results/:resultId/alteration', { schema: alterationContract }, async (request, reply) => reply.code(201).send(await openAlteration(request, request.params.resultId, request.body, idempotencyKeyFrom(request))))
   app.post('/sales/fittings/results/:resultId/revision', { schema: revisionContract }, async (request) => nameRevision(request, request.params.resultId, request.body, idempotencyKeyFrom(request)))
-  app.get('/sales/mtm/profiles/:profileId/fittings', { schema: profileFittingsContract }, async (request) => ({ fittings: await profileFittings(request, request.params.profileId) }))
+  app.get('/sales/mtm/profiles/:profileId/fittings', { schema: profileFittingsContract }, async (request) => ({ fittings: await profileFittings(request, request.params.profileId, /* B-W2b-F38 */ request.query) }))
   app.get('/sales/returns/:returnId/remake-order', { schema: getRemakeContract }, async (request) => getRemake(request, request.params.returnId))
   app.post('/sales/returns/:returnId/remake-order', { schema: remakeOrderContract }, async (request, reply) => reply.code(201).send(await makeRemakeOrder(request, request.params.returnId, request.body, idempotencyKeyFrom(request))))
 })

@@ -36,3 +36,10 @@
   align-items: center;
   gap: var(--nds-space-4);
 }
+
+/* B-W2b-F38: a reminder switch and its state in words, side by side. */
+.fw-ss-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+}

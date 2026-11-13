@@ -5,6 +5,9 @@ import Link from 'next/link'
 import { ExternalLink, Pencil } from 'lucide-react'
 import { Banner, Card, EmptyState, Field, KeyValue } from '@nexus/ui/components'
 import { Button, Input, SegmentedControl, Select, Skeleton, Spinner } from '@nexus/ui/primitives'
+// B-W2b-F38: the reminder switches.
+import { Toggle } from '@nexus/ui/primitives'
+import { reminderWords, remindersFollow, type RemindersDraft } from '../model'
 import type { Translate } from '../../../../lib/i18n/messages'
 import { useT } from '../../../../lib/i18n/provider'
 import type { LiveState, Tone } from '../../../quality/_shared/model'
@@ -25,7 +28,7 @@ import '../settings.css'
  * read-only, kept in Admin › Documents & numbering). Read-only roles see the values as text with why. Fetches nothing.
  */
 
-export type SettingsCard = 'approval' | 'quote' | 'policy'
+export type SettingsCard = 'approval' | 'quote' | 'policy' | /* B-W2b-F38 */ 'reminders'
 
 export interface Read<T> {
   readonly value: T | null
@@ -40,7 +43,7 @@ export interface SalesSettingsModel {
   readonly settings: Read<SalesSettings>
   readonly policy: Read<PolicyAnswer>
   readonly series: Read<readonly Series[]> | null
-  readonly edit: { readonly card: SettingsCard; readonly quote: QuoteDraft; readonly policy: PolicyDraft; readonly busy: boolean; readonly problem: Words | null; readonly showProblems: boolean } | null
+  readonly edit: { readonly card: SettingsCard; readonly quote: QuoteDraft; readonly policy: PolicyDraft; /** B-W2b-F38 */ readonly reminders: RemindersDraft; readonly busy: boolean; readonly problem: Words | null; readonly showProblems: boolean } | null
   readonly asOf: string | null
   readonly live: LiveState
   readonly offline: boolean
@@ -55,6 +58,8 @@ export interface SalesSettingsActions {
   onEdit?: (card: SettingsCard | null) => void
   onQuoteDraft?: (patch: Partial<QuoteDraft>) => void
   onPolicyDraft?: (patch: Partial<PolicyDraft>) => void
+  /** B-W2b-F38: a reminder switch toggled in the card being edited. */
+  onRemindersDraft?: (patch: Partial<RemindersDraft>) => void
   onSave?: () => void
   onOwnSettings?: () => void
   onReload?: () => void
@@ -151,6 +156,8 @@ function Settings({ model, actions, reasons, depth }: { model: SalesSettingsMode
         <ApprovalCard model={model} actions={actions} />
         <QuoteCard model={model} actions={actions} />
         <PolicyCard model={model} actions={actions} />
+        {/* B-W2b-F38: the automatic reminder mails, a switch each (off by default). */}
+        <RemindersCard model={model} actions={actions} />
         <NumberingCard model={model} />
       </div>
       {/* B-W2b-343: Quote approval rules › Margin floor % per role. */}
@@ -199,6 +206,12 @@ function ReadFirst({ read, failedKey, onRetry, children }: { read: Read<unknown>
 function heldOf(model: SalesSettingsModel, card: SettingsCard): Words | null {
   if (!model.can.manage) return { key: 'held.manage' }
   if (model.offline) return { key: 'held.offline' }
+  // B-W2b-F38: the reminder switches need no margin grain; the API says whether they may change in this scope.
+  if (card === 'reminders') {
+    if (model.settings.value && !model.settings.value.reminders.canManage) return { key: model.scope === 'group' ? 'held.group' : 'held.manage' }
+    if (model.edit && model.edit.card !== card) return { key: 'held.otherCard' }
+    return null
+  }
   if (card !== 'policy' && !model.can.margin) return { key: 'held.margin' }
   if (card === 'policy' && model.policy.value && !model.policy.value.canManage) return { key: model.scope === 'group' ? 'held.group' : 'held.manage' }
   if (model.edit && model.edit.card !== card) return { key: 'held.otherCard' }
@@ -447,6 +460,86 @@ function PolicyCard({ model, actions }: { model: SalesSettingsModel; actions?: S
                 <a className="fw-q-link" href="#fw-ss-reasons">
                   {t('policy.toReasons')}
                 </a>
+              </div>
+            )}
+          </ReadFirst>
+        )}
+      </section>
+    </Card>
+  )
+}
+
+/**
+ * B-W2b-F38 (Owner 2026-11-13, option A): the automatic reminder mails to customers, a switch per company each, off by default
+ * — the quote reminder (3 days before a sent quote's last day) and the fitting reminder (24 hours before a booked appointment).
+ * Each says what it sends, to whom and when, and what off means. A company without settings of its own follows the group's.
+ */
+function RemindersCard({ model, actions }: { model: SalesSettingsModel; actions?: SalesSettingsActions }) {
+  const t = useWords()
+  const ids = { quote: useId(), fitting: useId() }
+  const settings = model.settings.value
+  const editing = model.edit?.card === 'reminders' ? model.edit : null
+  const held = heldOf(model, 'reminders')
+  const follows = settings ? remindersFollow(settings, model.scope) : false
+  const shown = settings ? { quote: settings.reminders.quoteRemindersEnabled, fitting: settings.reminders.fittingRemindersEnabled } : null
+  const ownHeld = !model.can.manage ? t('held.manage') : !model.can.margin ? t('held.margin') : model.offline ? t('held.offline') : null
+  return (
+    <Card padded>
+      <section className="fw-q-section" aria-labelledby="fw-ss-reminders" id="reminders">
+        <div className="fw-q-section-head">
+          <div className="fw-q-section-title">
+            <h2 id="fw-ss-reminders">{t('reminders.title')}</h2>
+            <p className="fw-q-hint">{t('reminders.sub')}</p>
+          </div>
+          {!follows && <CardHead model={model} card="reminders" actions={actions} />}
+        </div>
+        {!model.can.quotesView ? (
+          <p className="fw-q-hint">{t('held.quotesView')}</p>
+        ) : (
+          <ReadFirst read={model.settings} failedKey="reminders.failed" onRetry={actions?.onRetry}>
+            {shown && (
+              <div className="fw-q-stack">
+                {follows && (
+                  <Banner
+                    tone="info"
+                    title={t('reminders.follows')}
+                    action={
+                      <Button size="sm" heldReason={ownHeld} onClick={() => actions?.onOwnSettings?.()}>
+                        {t('policy.own')}
+                      </Button>
+                    }
+                  >
+                    {t('reminders.followsBody')}
+                  </Banner>
+                )}
+                {held && !editing && !follows && held.key !== 'held.otherCard' && <p className="fw-q-hint">{t('card.readOnly', { why: say(t, held) })}</p>}
+                {editing ? (
+                  <div className="fw-q-stack">
+                    {editing.problem && <Banner tone="danger" title={say(t, editing.problem)} />}
+                    <Field label={t('reminders.quote')} hint={t('reminders.quoteWhat')} htmlFor={ids.quote}>
+                      <span className="fw-ss-switch">
+                        <Toggle id={ids.quote} checked={editing.reminders.quote} disabled={editing.busy} onChange={(quote) => actions?.onRemindersDraft?.({ quote })} />
+                        <span>{say(t, reminderWords(editing.reminders.quote))}</span>
+                      </span>
+                    </Field>
+                    <Field label={t('reminders.fitting')} hint={t('reminders.fittingWhat')} htmlFor={ids.fitting}>
+                      <span className="fw-ss-switch">
+                        <Toggle id={ids.fitting} checked={editing.reminders.fitting} disabled={editing.busy} onChange={(fitting) => actions?.onRemindersDraft?.({ fitting })} />
+                        <span>{say(t, reminderWords(editing.reminders.fitting))}</span>
+                      </span>
+                    </Field>
+                    <EditBar model={model} actions={actions} problems={0} />
+                  </div>
+                ) : (
+                  <KeyValue
+                    columns={1}
+                    items={[
+                      { label: t('reminders.quote'), value: say(t, reminderWords(shown.quote)), hint: t('reminders.quoteWhat') },
+                      { label: t('reminders.fitting'), value: say(t, reminderWords(shown.fitting)), hint: t('reminders.fittingWhat') },
+                    ]}
+                  />
+                )}
+                <p className="fw-q-hint">{t('reminders.later')}</p>
               </div>
             )}
           </ReadFirst>

@@ -132,11 +132,11 @@ function Container({ profileId }: { profileId: string }) {
 
   const loadFittings = useCallback(async () => {
     try {
-      setFittings({ items: await readFittings(api, profileId), problem: null })
+      setFittings({ items: await readFittings(api, profileId, undefined, /* B-W2b-F38 */ companyId), problem: null })
     } catch (error) {
       setFittings({ items: null, problem: readProblem(error) })
     }
-  }, [api, profileId])
+  }, [api, profileId, /* B-W2b-F38 */ companyId])
 
   useEffect(() => {
     if (!can.view) return

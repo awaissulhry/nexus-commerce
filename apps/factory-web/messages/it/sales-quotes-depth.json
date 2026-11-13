@@ -652,6 +652,7 @@
       "noReminder": "Nessuno (inviata troppo vicino alla scadenza, o senza scadenza)",
       "reminder": "Promemoria al cliente",
       "reminderOn": "Il {date}, 3 giorni prima dell’ultimo giorno",
+      "reminderOff": "Nessun promemoria automatico: spento in Impostazioni vendite",
       "reminderSent": "Inviato {at}"
     }
   },

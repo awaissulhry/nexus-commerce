@@ -361,8 +361,22 @@ const settingsView = output({
   discountLimitPct: z.string(),
   defaultValidityDays: z.number().int(),
   defaultDepositPct: z.string().nullable(),
+  // B-W2b-F38: the row's reminder switches (off by default).
+  quoteRemindersEnabled: z.boolean(),
+  fittingRemindersEnabled: z.boolean(),
   version: z.number().int(),
   updatedAt: instant(),
+})
+
+// B-W2b-F38: the reminder switches in force for the scope: the company's own row, else the tenant's (TENANT), else off (DEFAULT).
+const remindersView = output({
+  /** The quote reminder: one mail 3 days before a sent quote's last day. */
+  quoteRemindersEnabled: z.boolean(),
+  /** The fitting reminder: one mail 24 hours before a BOOKED appointment. */
+  fittingRemindersEnabled: z.boolean(),
+  source: z.enum(['DEFAULT', 'TENANT', 'COMPANY']),
+  /** The caller may change them here (sales.settings.manage over the scope). */
+  canManage: z.boolean(),
 })
 
 const rulesView = output({
@@ -376,7 +390,20 @@ const rulesView = output({
 
 export const getSettingsContract = defineContract({
   querystring: input({ companyId: id().optional() }),
-  response: { 200: output({ settings: output({ tenant: settingsView.nullable(), company: settingsView.nullable(), inForce: rulesView, defaults: rulesView }) }) },
+  response: { 200: output({ settings: output({ tenant: settingsView.nullable(), company: settingsView.nullable(), inForce: rulesView, defaults: rulesView, /* B-W2b-F38 */ reminders: remindersView }) }) },
+})
+
+// B-W2b-F38: PUT /sales/settings/reminders — the two reminder switches of a company or the tenant, at the row's version.
+export const saveReminderSwitchesContract = defineContract({
+  body: input({
+    /** A company's own switches (it needs a row of its own); none: the tenant-wide ones (a role over every company). */
+    companyId: id().optional(),
+    quoteRemindersEnabled: z.boolean(),
+    fittingRemindersEnabled: z.boolean(),
+    /** Required once the row exists; absent only when the tenant's row does not exist yet. */
+    version: version.optional(),
+  }),
+  response: { 200: output({ settings: output({ tenant: settingsView.nullable(), company: settingsView.nullable(), inForce: rulesView, defaults: rulesView, reminders: remindersView }) }) },
 })
 
 export const saveSettingsContract = defineContract({

@@ -298,4 +298,6 @@ const RECORD_APPOINTMENT = {
   createdBy: null,
   may: { move: true, close: false, cancel: true, invite: true, ledTo: false, result: false, notes: true },
   why: null,
+  // B-W2b-F38: the company's fitting reminder switch.
+  reminderEnabled: true,
 }

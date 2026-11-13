@@ -12,6 +12,8 @@ import { APPOINTMENT_MAILS } from '@nexus/factory-domain/fittings/events'
 import { actorOf, type OfficeContext } from '../../../core/context'
 import { namesOf, type Reader } from '../mtm/store'
 import { dayOrNull } from '../orders/store'
+// B-W2b-F38: the fitting reminder switch of an appointment's company.
+import { reminderOnFor } from '../quotes/reminder-switches'
 
 /**
  * Fittings, alterations and remakes: the reads (B-W2b-360). An appointment and a fitting result each have a company and a
@@ -201,6 +203,8 @@ export async function appointmentRecord(db: Reader, context: OfficeContext, row:
       notes: manage,
     },
     why,
+    // B-W2b-F38: the company's fitting reminder switch (off: the hourly job sends no reminder for it).
+    reminderEnabled: await reminderOnFor(db, row.companyId, 'FITTING'),
   }
 }
 

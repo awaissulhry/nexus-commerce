@@ -281,8 +281,8 @@ export function setPhotosDeleteAfter(api: ApiClient, profileId: string, body: { 
 
 // ---- fittings (B-W2b-360) ---------------------------------------------------------------------------------------------------
 
-export async function readFittings(api: ApiClient, profileId: string, signal?: AbortSignal): Promise<FittingsTab> {
-  return (await api.get(`${profilePath(profileId)}/fittings`, { schema: z.object({ fittings: fittingsTabView }), signal })).fittings
+export async function readFittings(api: ApiClient, profileId: string, signal?: AbortSignal, /* B-W2b-F38: the screen's company, for its reminder switch */ companyId?: string | null): Promise<FittingsTab> {
+  return (await api.get(`${profilePath(profileId)}/fittings`, { query: companyId ? { companyId } : {}, schema: z.object({ fittings: fittingsTabView }), signal })).fittings
 }
 
 const APPOINTMENTS = '/sales/fittings/appointments'

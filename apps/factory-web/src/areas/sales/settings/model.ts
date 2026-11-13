@@ -1,6 +1,8 @@
 import { isApiError, issuePath } from '../../../lib/api/errors'
 import { problemKey } from '../../quality/_shared/model'
 import type { FreightPayer, PolicyAnswer, PolicyBody, QuoteRulesBody, SalesSettings, Series } from './api'
+// B-W2b-F38: the reminder switches.
+import type { RemindersBody } from './api'
 
 /**
  * The rules of Sales › Settings (SCR-235) without a screen: who may read and change what, the scope (this company or the
@@ -139,6 +141,31 @@ export function policyBody(draft: PolicyDraft, policy: PolicyAnswer, scope: Scop
     ...(row ? { version: row.version } : {}),
   }
 }
+
+// ---- B-W2b-F38: the automatic reminders (Owner 2026-11-13: a switch per company each, off by default) -------------------------
+
+export interface RemindersDraft {
+  readonly quote: boolean
+  readonly fitting: boolean
+}
+
+/** The switches of the scope: its own row's, else the ones it follows (the group's, else off). */
+export function remindersDraftOf(settings: SalesSettings, scope: Scope): RemindersDraft {
+  const row = scope === 'company' ? settings.company : settings.tenant
+  return row ? { quote: row.quoteRemindersEnabled, fitting: row.fittingRemindersEnabled } : { quote: settings.reminders.quoteRemindersEnabled, fitting: settings.reminders.fittingRemindersEnabled }
+}
+
+/** A company without a sales settings row of its own follows the group's reminders (changed there, or after "own settings"). */
+export const remindersFollow = (settings: SalesSettings, scope: Scope): boolean => scope === 'company' && settings.company === null
+
+/** The body of a save: both switches at the row's version (none: the group's row does not exist yet). */
+export function remindersBody(draft: RemindersDraft, settings: SalesSettings, scope: Scope, companyId: string): RemindersBody {
+  const row = scope === 'company' ? settings.company : settings.tenant
+  return { ...(scope === 'company' ? { companyId } : {}), quoteRemindersEnabled: draft.quote, fittingRemindersEnabled: draft.fitting, ...(row ? { version: row.version } : {}) }
+}
+
+/** One reminder's state in words: on, or off with what that means. */
+export const reminderWords = (on: boolean): Words => ({ key: on ? 'reminders.on' : 'reminders.off' })
 
 // ---- numbering --------------------------------------------------------------------------------------------------------------------
 

@@ -10,6 +10,8 @@ import { serverClock, type Clock } from '../../../core/time'
 import { sendEmail } from '../../../platform/email-out/outbound'
 import { activeTenants, asSystem, systemContext } from '../../../platform/outbox/system'
 import { day } from '../quotes/store'
+// B-W2b-F38: the quote reminder goes only for a company whose switch is on (off by default).
+import { reminderOnFor, reminderSwitchBook, ReminderSwitchedOff } from '../quotes/reminder-switches'
 
 /**
  * A sent quote's validity, run daily (B-W2b-294; SAL-145 "Quote validity and expiry: reminders and auto-expiry"): the
@@ -25,6 +27,10 @@ import { day } from '../quotes/store'
  *              number, its last day, where its link is; no link (a link is never stored) and no amount. reminderSentAt is set
  *              in the same command; quote.reminder_sent. The mail goes on the company's mail account (FAKE locally and in
  *              tests)
+ *   B-W2b-F38  the reminder goes only for a company whose quote reminder switch is on (Sales settings; off by default): a
+ *              company with it off is skipped before any command (counted in `switchedOff`), and a switch turned off while
+ *              the run goes rolls the command back. Nothing is written for it — no mail, no reminderSentAt, no receipt — so
+ *              switching it on later still reminds a quote whose reminder is due then. Expiry does not depend on the switch
  *
  * Each version in its own command with a fixed Idempotency-Key (`quote-expire-<id>`, `quote-reminder-<id>`), so a race or a
  * rerun acts once; a version or a tenant that fails is logged and the others go on. Idle runs write nothing.
@@ -45,6 +51,8 @@ export interface ValidityRun {
   readonly expired: number
   readonly reminded: number
   readonly skipped: number
+  /** B-W2b-F38: reminders due but not sent because the company's switch is off. */
+  readonly switchedOff: number
   readonly failed: number
 }
 
@@ -73,9 +81,10 @@ async function expireVersion(caller: CommandCaller, settings: CommandSettings, v
   return result.expired
 }
 
-/** One version's reminder, in its own command: 'sent', or why not ('not due', 'no address', 'no sender'). */
-async function remindVersion(caller: CommandCaller, settings: CommandSettings, versionId: string, today: BusinessDate): Promise<'sent' | 'not due' | 'no address' | 'no sender'> {
-  const { result } = await runCommand(
+/** One version's reminder, in its own command: 'sent', or why not ('not due', 'no address', 'no sender'; B-W2b-F38: 'switched off'). */
+async function remindVersion(caller: CommandCaller, settings: CommandSettings, versionId: string, today: BusinessDate): Promise<'sent' | 'not due' | 'no address' | 'no sender' | 'switched off'> {
+  // B-W2b-F38: a switch turned off after the listing rolls the command back (ReminderSwitchedOff): nothing written.
+  const remind = () => runCommand(
     caller,
     { name: REMIND_COMMAND, idempotencyKey: `quote-reminder-${versionId}`, input: { versionId } },
     async (tools) => {
@@ -86,6 +95,8 @@ async function remindVersion(caller: CommandCaller, settings: CommandSettings, v
       const validUntil = day(version.validUntil)
       const state = validityOf({ status: version.status, validUntil, sentOn: version.sentAt ? businessDate(version.sentAt) : null, reminderSentAt: version.reminderSentAt, current: version.revision === quote.currentRevision }, today)
       if (!state.reminderDue || validUntil === null || version.sentAt === null) return { outcome: 'not due' as const }
+      // B-W2b-F38: the company's switch, read again in the command (the job listed it a moment before).
+      if (!(await reminderOnFor(tx, quote.companyId, 'QUOTE'))) throw new ReminderSwitchedOff('QUOTE')
       // The address its accept link went to (the newest link of the version's quote), else its contact's.
       const link = await tx.oneOffLink.findFirst({ where: { recordType: 'Quote', recordId: quote.id, purpose: 'QUOTE_ACCEPT', createdAt: { gte: version.sentAt } }, select: { email: true }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] })
       const contact = quote.contactId ? await tx.partyContact.findUnique({ where: { id: quote.contactId }, select: { email: true, status: true } }) : null
@@ -105,7 +116,12 @@ async function remindVersion(caller: CommandCaller, settings: CommandSettings, v
     },
     settings,
   )
-  return result.outcome
+  try {
+    return (await remind()).result.outcome
+  } catch (error) {
+    if (error instanceof ReminderSwitchedOff) return 'switched off'
+    throw error
+  }
 }
 
 /** One run over every active tenant (the cron's tick; tests call it directly). */
@@ -117,6 +133,7 @@ export async function runQuoteValidity(options: ValidityOptions): Promise<Validi
   let expired = 0
   let reminded = 0
   let skipped = 0
+  let switchedOff = 0
   let failed = 0
   const tenants = await activeTenants(options.database)
   for (const tenantId of tenants) {
@@ -126,9 +143,12 @@ export async function runQuoteValidity(options: ValidityOptions): Promise<Validi
         ended: await client.quoteVersion.findMany({ where: { status: 'SENT', validUntil: { lt: new Date(`${today}T00:00:00.000Z`) } }, select: { id: true, quoteId: true }, orderBy: [{ validUntil: 'asc' }, { id: 'asc' }] }),
         ending: await client.quoteVersion.findMany({
           where: { status: 'SENT', reminderSentAt: null, validUntil: { gte: new Date(`${today}T00:00:00.000Z`), lte: new Date(`${addDays(today, REMINDER_DAYS_BEFORE)}T00:00:00.000Z`) } },
-          select: { id: true },
+          // B-W2b-F38: the quote's company, for its reminder switch.
+          select: { id: true, quote: { select: { companyId: true } } },
           orderBy: [{ validUntil: 'asc' }, { id: 'asc' }],
         }),
+        // B-W2b-F38: every company's quote reminder switch, read once for the tenant.
+        quoteReminderOn: await reminderSwitchBook(client, 'QUOTE'),
       }))
       for (const version of due.ended) {
         try {
@@ -139,9 +159,15 @@ export async function runQuoteValidity(options: ValidityOptions): Promise<Validi
         }
       }
       for (const version of due.ending) {
+        // B-W2b-F38: switched off for its company: no command, nothing written.
+        if (!due.quoteReminderOn(version.quote.companyId)) {
+          switchedOff++
+          continue
+        }
         try {
           const outcome = await remindVersion(caller, settings, version.id, today)
           if (outcome === 'sent') reminded++
+          else if (outcome === 'switched off') switchedOff++
           else if (outcome !== 'not due') skipped++
         } catch (error) {
           failed++
@@ -153,7 +179,7 @@ export async function runQuoteValidity(options: ValidityOptions): Promise<Validi
       options.log.error({ err: error, tenantId }, 'the quotes of a tenant could not be checked for their validity')
     }
   }
-  const result = { tenants: tenants.length, today, expired, reminded, skipped, failed }
+  const result = { tenants: tenants.length, today, expired, reminded, skipped, switchedOff, failed }
   options.log.info({ ...result }, 'quote validity checked')
   return result
 }

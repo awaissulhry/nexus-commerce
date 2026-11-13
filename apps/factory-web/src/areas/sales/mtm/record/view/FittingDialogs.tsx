@@ -113,7 +113,8 @@ function BookDialog({ model, record, dialog, actions }: { model: ProfileRecordMo
           <Textarea id={ids.notes} rows={2} value={dialog.draft.notes} onChange={(event) => actions?.onBookDraft?.({ notes: event.target.value })} />
         </Field>
         <Checkbox checked={dialog.draft.invite} onChange={(event) => actions?.onBookDraft?.({ invite: event.target.checked })} label={t('book.invite')} />
-        <p className="fw-mtm-hint">{dialog.draft.invite ? t('book.inviteHint') : t('book.noInviteHint')}</p>
+        {/* B-W2b-F38: the reminder the day before only when the company's switch is on (Sales settings). */}
+        <p className="fw-mtm-hint">{dialog.draft.invite ? t(model.fittings.items?.remindersEnabled === false ? 'book.inviteHintNoReminder' : 'book.inviteHint') : t('book.noInviteHint')}</p>
       </div>
     </Modal>
   )
@@ -181,6 +182,8 @@ function AppointmentDialog({ model, dialog, actions }: { model: ProfileRecordMod
             <p className="fw-mtm-row">
               <Pill tone={appointmentTone(appointment.status)}>{t(`apptStatus.${appointment.status}`)}</Pill>
               {appointment.inviteSentAt ? <span className="fw-mtm-hint">{t('appt.invitedAt', { when: when(appointment.inviteSentAt) })}</span> : <span className="fw-mtm-hint">{appointment.mailTo ? t('fit.notInvited') : t('appt.held.noAddress')}</span>}
+              {/* B-W2b-F38: a booked appointment whose company has the fitting reminder off gets none. */}
+              {appointment.status === 'BOOKED' && !appointment.reminderEnabled && <span className="fw-mtm-hint">{t('appt.reminderOff')}</span>}
             </p>
             <KeyValue
               columns={2}

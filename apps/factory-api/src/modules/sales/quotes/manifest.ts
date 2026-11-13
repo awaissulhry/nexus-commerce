@@ -48,4 +48,6 @@ export const manifest = defineManifest({
   // The sales settings: the quote rules of a company or of the tenant.
   'GET /sales/settings': { audiences: ['office'], permission: 'quotes.view', scope: 'record' },
   'PUT /sales/settings': { audiences: ['office'], permission: 'sales.settings.manage', scope: 'record' },
+  // B-W2b-F38: the reminder switches (quote reminder, fitting reminder) of a company or of the tenant.
+  'PUT /sales/settings/reminders': { audiences: ['office'], permission: 'sales.settings.manage', scope: 'record' },
 })

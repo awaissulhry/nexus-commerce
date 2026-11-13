@@ -51,7 +51,7 @@ const roleOf = (key: string): Permission[] => {
 }
 const grant = (permissions: Permission[]): Grant => ({ permissions, companies: 'all', sites: 'all', parties: 'all' })
 const office = (permissions: Permission[]): SessionContext => ({ audience: 'office', tenantId: T, actorId: newId(), grants: [grant(permissions)] })
-const SESSIONS: Record<string, SessionContext> = { sales: office(roleOf('sales')), viewer: office(['quotes.view'] as Permission[]) }
+const SESSIONS: Record<string, SessionContext> = { sales: office(roleOf('sales')), viewer: office(['quotes.view'] as Permission[]), /* B-W2b-F38: Sales settings */ finance: office(roleOf('finance')) }
 const log = { info() {}, warn() {}, error() {} }
 
 let h: Harness
@@ -71,6 +71,12 @@ async function no(session: string, method: Method, url: string, payload: unknown
   const response = await call(session, method, url, payload)
   expect(response.statusCode, response.body).toBe(status)
   return response.json().error
+}
+// B-W2b-F38: company B, and the reminder switches as a person sets them in Sales settings (the tenant-wide row).
+const companyB = idOf('company:B')
+async function switchReminders(on: { quote: boolean; fitting: boolean }): Promise<Json> {
+  const { settings } = await ok('finance', 'GET', '/sales/settings')
+  return ok('finance', 'PUT', '/sales/settings/reminders', { quoteRemindersEnabled: on.quote, fittingRemindersEnabled: on.fitting, ...(settings.tenant ? { version: settings.tenant.version } : {}) })
 }
 const events = async (type: string, subject: string) => admin(`SELECT payload FROM "OutboxEvent" WHERE "tenantId" = $1 AND type = $2 AND subject = $3 ORDER BY "occurredAt", id`, [T, type, subject])
 
@@ -173,6 +179,8 @@ describe('validity: EXPIRED after the last day, a reminder before it, a new vers
   })
 
   it('the job marks a sent version past its last day EXPIRED, once; a revise revives it', async () => {
+    // B-W2b-F38: expiry does not depend on the quote reminder switch, off here (the default).
+    expect((await ok('sales', 'GET', `/sales/settings?companyId=${companyA}`)).settings.reminders).toMatchObject({ quoteRemindersEnabled: false })
     const ended = await draftQuote()
     await markSent(ended, new Date(Date.now() - 20 * 86_400_000), addDays(today, -1))
     const clock = fixedClock(new Date())
@@ -191,10 +199,22 @@ describe('validity: EXPIRED after the last day, a reminder before it, a new vers
     expect(revived).toMatchObject({ status: 'DRAFT', currentRevision: 2 })
   })
 
-  it('the job reminds the customer three days before the last day, once, on the quote thread, without a link or an amount', async () => {
+  it('the job reminds the customer three days before the last day, once, on the quote thread, without a link or an amount — once the switch is on', async () => {
     const ending = await draftQuote()
     await markSent(ending, new Date(Date.now() - 10 * 86_400_000), addDays(today, 2))
     const clock = fixedClock(new Date())
+    // B-W2b-F38: switched off (the default), the due reminder is not sent and nothing is marked or kept.
+    expect((await ok('sales', 'GET', `/sales/quotes/${ending.id}/terms`)).validity).toMatchObject({ state: 'ENDS_SOON', reminderSentAt: null, remindersEnabled: false })
+    const off = await runQuoteValidity({ database: h.database, log, clock })
+    expect(off.switchedOff).toBeGreaterThanOrEqual(1)
+    expect(off.reminded).toBe(0)
+    expect((await one(`SELECT "reminderSentAt" FROM "QuoteVersion" WHERE id = $1`, [ending.current.id])).reminderSentAt).toBeNull()
+    expect(await events('quote.reminder_sent', ending.id)).toEqual([])
+    expect((await one(`SELECT count(*)::int AS n FROM "EmailOutbound" WHERE "recordType" = 'Quote' AND "recordId" = $1`, [ending.id])).n).toBe(0)
+    expect((await one(`SELECT count(*)::int AS n FROM "IdempotencyReceipt" WHERE key = $1`, [`quote-reminder-${ending.current.id}`])).n).toBe(0)
+    // Switched on in Sales settings (as a person would): the next run reminds it.
+    expect((await switchReminders({ quote: true, fitting: false })).settings.reminders).toMatchObject({ quoteRemindersEnabled: true, fittingRemindersEnabled: false, source: 'TENANT' })
+    expect((await ok('sales', 'GET', `/sales/quotes/${ending.id}/terms`)).validity.remindersEnabled).toBe(true)
     const result = await runQuoteValidity({ database: h.database, log, clock })
     expect(result.reminded).toBeGreaterThanOrEqual(1)
     const version = await one(`SELECT status, "reminderSentAt" FROM "QuoteVersion" WHERE id = $1`, [ending.current.id])
@@ -210,6 +230,32 @@ describe('validity: EXPIRED after the last day, a reminder before it, a new vers
     expect(terms.validity).toMatchObject({ state: 'ENDS_SOON', daysLeft: 2, reminderOn: null, reminderSentAt: expect.any(String) })
     await runQuoteValidity({ database: h.database, log, clock })
     expect((await events('quote.reminder_sent', ending.id)).length).toBe(1)
+  })
+})
+
+// B-W2b-F38 (Owner 2026-11-13, option A): PUT /sales/settings/reminders, the two switches per company, off by default.
+describe('the reminder switches in Sales settings: per company, off by default, changed by the settings right at the row\'s version', () => {
+  it('a company follows the tenant\'s switches until it has its own row, then keeps them; refusals in words', async () => {
+    // Only the settings right changes them; a company without its own row is refused (it follows the tenant's).
+    await no('sales', 'PUT', '/sales/settings/reminders', { quoteRemindersEnabled: false, fittingRemindersEnabled: false }, 403)
+    const follows = await no('finance', 'PUT', '/sales/settings/reminders', { companyId: companyB, quoteRemindersEnabled: false, fittingRemindersEnabled: true }, 400)
+    expect(follows.issues.map((issue: Json) => issue.path)).toEqual(['body/companyId'])
+    expect((await ok('finance', 'GET', `/sales/settings?companyId=${companyB}`)).settings.reminders).toMatchObject({ quoteRemindersEnabled: true, fittingRemindersEnabled: false, source: 'TENANT', canManage: true })
+    // Company B gets its own sales settings (its quote rules): its switches start as the ones it followed.
+    const own = await ok('finance', 'PUT', '/sales/settings', { companyId: companyB, marginFloorPct: '20', discountLimitPct: '15', defaultValidityDays: 30, defaultDepositPct: null })
+    expect(own.settings).toMatchObject({ companyId: companyB, quoteRemindersEnabled: true, fittingRemindersEnabled: false })
+    // Its own switch, at its version; a stale version and a missing one are refused.
+    const off = await ok('finance', 'PUT', '/sales/settings/reminders', { companyId: companyB, quoteRemindersEnabled: false, fittingRemindersEnabled: true, version: own.settings.version })
+    expect(off.settings.company).toMatchObject({ quoteRemindersEnabled: false, fittingRemindersEnabled: true, version: own.settings.version + 1 })
+    expect(off.settings.reminders).toMatchObject({ quoteRemindersEnabled: false, fittingRemindersEnabled: true, source: 'COMPANY' })
+    await no('finance', 'PUT', '/sales/settings/reminders', { companyId: companyB, quoteRemindersEnabled: true, fittingRemindersEnabled: true, version: own.settings.version }, 409)
+    await no('finance', 'PUT', '/sales/settings/reminders', { companyId: companyB, quoteRemindersEnabled: true, fittingRemindersEnabled: true }, 409)
+    // Company A still follows the tenant's (on for quotes); B's own switch is B's only.
+    expect((await ok('sales', 'GET', `/sales/settings?companyId=${companyA}`)).settings.reminders).toMatchObject({ quoteRemindersEnabled: true, source: 'TENANT', canManage: false })
+    // Audited and announced with the fields that changed.
+    const audit = await one(`SELECT action, before, after FROM "AuditLog" WHERE "tenantId" = $1 AND "recordType" = 'SalesSettings' AND "recordId" = $2 AND action = 'sales.saveReminderSwitches' ORDER BY at DESC, id DESC LIMIT 1`, [T, companyB])
+    expect(audit).toMatchObject({ before: { quoteRemindersEnabled: true, fittingRemindersEnabled: false }, after: { companyId: companyB, quoteRemindersEnabled: false, fittingRemindersEnabled: true } })
+    expect((await events('sales_settings.changed', companyB)).at(-1)?.payload).toEqual({ settingsId: companyB, fields: ['quoteRemindersEnabled', 'fittingRemindersEnabled'] })
   })
 })
 

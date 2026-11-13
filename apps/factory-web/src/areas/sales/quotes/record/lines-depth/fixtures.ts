@@ -48,7 +48,7 @@ export const TERMS: QuoteTerms = {
   depositPct: '30',
   promiseDate: '2026-12-15',
   customerIncoterm: 'EXW',
-  validity: { validUntil: '2026-11-30', firmOffer: false, state: 'NOT_SENT', daysLeft: null, reminderOn: null, reminderSentAt: null, expiredAt: null },
+  validity: { validUntil: '2026-11-30', firmOffer: false, state: 'NOT_SENT', daysLeft: null, reminderOn: null, reminderSentAt: null, expiredAt: null, /* B-W2b-F38 */ remindersEnabled: true },
   lines: [
     { lineId: L1, seq: 10, kind: 'SIZE_GRID', label: 'DEMO-JKT-01 BLK', quantity: 8, deliveries: [{ id: '0190f0e2-8888-7000-8000-900000000001', deliveryDate: '2026-12-02', sizes: { '50': 2, '52': 2 }, quantity: 4, note: 'Prima consegna per la fiera' }], atPromiseDate: { '52': 2, '54': 2 } },
     { lineId: L2, seq: 20, kind: 'SIZE_GRID', label: 'DEMO-JKT-01 RED', quantity: 6, deliveries: [], atPromiseDate: {} },
@@ -228,7 +228,9 @@ export const designScreen = defineDesignScreen<DepthRecordDesignModel>({
     c('terms', 'Sales · Terms & delivery in depth (draft)', { tab: 'terms', grains: GRAINS.sales, can: CAN.sales, quote: ready(withoutCost(QUOTE)) }, { terms: terms() }, 'Acceptance mode, Check capacity (Planning › Promise dates), Incoterm and place, ship complete, the schedule per line.'),
     c('terms-changed', 'Terms in depth: Incoterm changed, Save delivery terms', { tab: 'terms', grains: GRAINS.sales, can: CAN.sales, quote: ready(withoutCost(QUOTE)) }, { terms: terms({ draft: { incoterm: 'FCA', place: '', shipComplete: false } }) }),
     c('terms-no-deposit', 'Terms in depth: sign and pay held without a deposit', { tab: 'terms', grains: GRAINS.sales, can: CAN.sales, quote: ready(withoutCost(QUOTE)) }, { terms: terms({ terms: { status: 'ready', value: { ...TERMS, depositPct: null } } }) }),
-    c('terms-sent', 'Terms in depth of a sent version (ends soon, reminder sent)', { tab: 'terms', quote: ready(SENT) }, { terms: terms({ readOnly: READ_ONLY_SENT, terms: { status: 'ready', value: { ...TERMS, status: 'SENT', editable: false, acceptanceMode: 'SIGN_AND_PAY', validity: { validUntil: '2026-11-01', firmOffer: true, state: 'ENDS_SOON', daysLeft: 3, reminderOn: '2026-10-29', reminderSentAt: '2026-10-29T06:15:00.000Z', expiredAt: null } } } }) }),
+    c('terms-sent', 'Terms in depth of a sent version (ends soon, reminder sent)', { tab: 'terms', quote: ready(SENT) }, { terms: terms({ readOnly: READ_ONLY_SENT, terms: { status: 'ready', value: { ...TERMS, status: 'SENT', editable: false, acceptanceMode: 'SIGN_AND_PAY', validity: { validUntil: '2026-11-01', firmOffer: true, state: 'ENDS_SOON', daysLeft: 3, reminderOn: '2026-10-29', reminderSentAt: '2026-10-29T06:15:00.000Z', expiredAt: null, /* B-W2b-F38 */ remindersEnabled: true } } } }) }),
+    // B-W2b-F38: the company's quote reminder switched off in Sales settings: the line says so instead of a day.
+    c('terms-reminder-off', 'Terms in depth of a sent version whose company has the quote reminder off', { tab: 'terms', quote: ready(SENT) }, { terms: terms({ readOnly: READ_ONLY_SENT, terms: { status: 'ready', value: { ...TERMS, status: 'SENT', editable: false, validity: { validUntil: '2026-11-20', firmOffer: false, state: 'OPEN', daysLeft: 12, reminderOn: '2026-11-17', reminderSentAt: null, expiredAt: null, remindersEnabled: false } } } }) }),
     c('terms-no-planning', 'Terms in depth: Check capacity held without the planning right', { tab: 'terms', grains: GRAINS.sales, can: CAN.sales, quote: ready(withoutCost(QUOTE)) }, { terms: terms({ capacityHref: null }) }),
     c('terms-error', 'Terms in depth could not be read', { tab: 'terms' }, { terms: terms({ terms: { status: 'error' } }) }),
     c('versions', 'Versions in the list frame', { tab: 'versions', quote: ready(quote({ currentRevision: 2, current: { revision: 2 } })), versions: { items: VERSIONS, people: { [PEOPLE.sales]: 'Sara Vendite' }, problem: null } }, { versions: versionsList() }),

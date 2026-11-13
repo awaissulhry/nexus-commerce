@@ -21,6 +21,9 @@ export const SALES_SETTINGS_COLUMNS = {
   discountLimitPct: true,
   defaultValidityDays: true,
   defaultDepositPct: true,
+  // B-W2b-F38: the reminder switches travel with the row (GET /sales/settings shows them; ./reminder-switches.ts reads them).
+  quoteRemindersEnabled: true,
+  fittingRemindersEnabled: true,
   version: true,
   updatedAt: true,
 } as const satisfies Prisma.SalesSettingsSelect

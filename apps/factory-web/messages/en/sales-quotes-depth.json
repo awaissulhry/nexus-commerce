@@ -652,6 +652,7 @@
       "noReminder": "None (sent too close to the end, or no end date)",
       "reminder": "Reminder to the customer",
       "reminderOn": "On {date}, 3 days before the last day",
+      "reminderOff": "No automatic reminder: switched off in Sales settings",
       "reminderSent": "Sent {at}"
     }
   },

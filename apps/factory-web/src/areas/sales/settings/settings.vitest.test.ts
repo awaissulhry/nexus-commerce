@@ -10,12 +10,16 @@ import { OFFICE_NAV, officeNavFor } from '../../../shell/nav/office-nav'
 import type { PolicyAnswer, SalesSettings } from './api'
 import { designScreen } from './fixtures'
 import { policyBody, policyDraftOf, policyProblems, quoteBody, quoteDraftOf, quoteProblems, refusalOf, ruleSentence, salesSeries, settingsCan, sourceWords } from './model'
+// B-W2b-F38: the reminder switches.
+import { reminderWords, remindersBody, remindersDraftOf, remindersFollow } from './model'
 
 const SETTINGS: SalesSettings = {
-  tenant: { id: 't', companyId: null, marginFloorPct: '20', discountLimitPct: '15', defaultValidityDays: 30, defaultDepositPct: '30', version: 4, updatedAt: '2026-10-31T09:00:00.000Z' },
+  tenant: { id: 't', companyId: null, marginFloorPct: '20', discountLimitPct: '15', defaultValidityDays: 30, defaultDepositPct: '30', /* B-W2b-F38 */ quoteRemindersEnabled: true, fittingRemindersEnabled: false, version: 4, updatedAt: '2026-10-31T09:00:00.000Z' },
   company: null,
   inForce: { marginFloorPct: '20', discountLimitPct: '15', defaultValidityDays: 30, defaultDepositPct: '30', source: 'TENANT' },
   defaults: { marginFloorPct: '20', discountLimitPct: '15', defaultValidityDays: 30, defaultDepositPct: '30', source: 'DEFAULT' },
+  // B-W2b-F38: the group's switches, followed by a company without its own row.
+  reminders: { quoteRemindersEnabled: true, fittingRemindersEnabled: false, source: 'TENANT', canManage: true },
 }
 const POLICY: PolicyAnswer = {
   tenant: { id: 't', companyId: null, windowDays: 30, goodsDueDays: 15, freightPaidBy: 'BY_CAUSE', restockingFeePct: '10', conditions: null, version: 4, updatedAt: '2026-10-31T09:00:00.000Z' },
@@ -58,6 +62,36 @@ describe('the return policy', () => {
   it('a refusal for a company that follows the group says so; a stale version reads again', () => {
     expect(refusalOf(new ApiError('invalid', 400, 'invalid', 'x', 'r', [{ path: 'body/companyId', message: 'No sales settings of its own.' }]))).toEqual({ key: 'refusal.followsGroup' })
     expect(refusalOf(new ApiError('conflict', 409, 'conflict', 'x', 'r', []))).toEqual({ key: 'refusal.stale' })
+  })
+})
+
+// B-W2b-F38 (Owner 2026-11-13, option A): a switch per company for each automatic reminder, off by default.
+describe('the automatic reminders: two switches on the settings row, saved on their own at its version', () => {
+  it('a company without its own row follows the group\'s switches (changed there); the group saves at its version', () => {
+    expect(remindersFollow(SETTINGS, 'company')).toBe(true)
+    expect(remindersFollow(SETTINGS, 'group')).toBe(false)
+    expect(remindersDraftOf(SETTINGS, 'company')).toEqual({ quote: true, fitting: false })
+    expect(remindersDraftOf(SETTINGS, 'group')).toEqual({ quote: true, fitting: false })
+    expect(remindersBody({ quote: false, fitting: true }, SETTINGS, 'group', 'c1')).toEqual({ quoteRemindersEnabled: false, fittingRemindersEnabled: true, version: 4 })
+  })
+
+  it('a company with its own row saves its own switches with its id and version; no row and no reminders: both off', () => {
+    const own: SalesSettings = { ...SETTINGS, company: { ...SETTINGS.tenant!, id: 'c1', companyId: 'c1', quoteRemindersEnabled: false, fittingRemindersEnabled: true, version: 7 }, reminders: { quoteRemindersEnabled: false, fittingRemindersEnabled: true, source: 'COMPANY', canManage: true } }
+    expect(remindersFollow(own, 'company')).toBe(false)
+    expect(remindersDraftOf(own, 'company')).toEqual({ quote: false, fitting: true })
+    expect(remindersBody({ quote: true, fitting: true }, own, 'company', 'c1')).toEqual({ companyId: 'c1', quoteRemindersEnabled: true, fittingRemindersEnabled: true, version: 7 })
+    const none: SalesSettings = { ...SETTINGS, tenant: null, reminders: { quoteRemindersEnabled: false, fittingRemindersEnabled: false, source: 'DEFAULT', canManage: true } }
+    expect(remindersDraftOf(none, 'group')).toEqual({ quote: false, fitting: false })
+    expect(remindersBody({ quote: true, fitting: false }, none, 'group', 'c1')).toEqual({ quoteRemindersEnabled: true, fittingRemindersEnabled: false })
+  })
+
+  it('each switch in words: on, or off with what that means (no key, no English sentence from the API)', () => {
+    expect(reminderWords(true)).toEqual({ key: 'reminders.on' })
+    expect(reminderWords(false)).toEqual({ key: 'reminders.off' })
+    for (const locale of LOCALES) {
+      const words = (CATALOGUE[locale]['sales-settings'] ?? {}) as Record<string, string>
+      for (const key of ['reminders.title', 'reminders.quoteWhat', 'reminders.fittingWhat', 'reminders.on', 'reminders.off', 'done.reminders']) expect(words[key], `${locale} ${key}`).toBeTruthy()
+    }
   })
 })
 

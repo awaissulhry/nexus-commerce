@@ -66,6 +66,8 @@ export const validityView = output({
   /** The day the reminder goes to the customer (null: none will). */
   reminderOn: businessDate().nullable(),
   reminderSentAt: instant().nullable(),
+  /** B-W2b-F38: the quote reminder switch of the quote's company (Sales settings; off by default): false, no reminder goes. */
+  remindersEnabled: z.boolean(),
   /** When it reached EXPIRED (its closedAt). */
   expiredAt: instant().nullable(),
 })
