@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url'
 import type { FastifyInstance } from 'fastify'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { grainPermission } from '@nexus/factory-domain/auth/grains/grains'
 import { templateOf } from '@nexus/factory-domain/auth/roles/templates'
 import { newId } from '@nexus/factory-domain/core/ids'
@@ -523,5 +523,30 @@ describe('B-W2b-24: a connection failing (INTEGRATION_FAILING) and the restore d
     expect(await fanOutSince(['timer.fired'])).toBe(0)
     const bell = await ok('owner', 'GET', '/notifications?tab=SYSTEM')
     expect((bell.items as Json[]).find((item) => item.anchor === `drill-due:${timer}`)).toMatchObject({ sentence: `The next restore drill is due on ${plusCalendarDays(drilledOn, 90)}: the last one that passed was on ${drilledOn}` })
+  })
+})
+
+describe('a date rule’s dry run counts from the Rome day, not the UTC day (B-W2b-F35)', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('at 00:30 in Rome (23:30 UTC) a certificate whose last day is ten Rome days away is in a ten-day window, ten days left', async () => {
+    const before = await one<{ validTo: string }>(`SELECT "validTo"::text AS "validTo" FROM "Certificate" WHERE id = $1`, [ids.cert])
+    await force(`UPDATE "Certificate" SET "validTo" = '2026-11-23'::date WHERE id = $1`, [ids.cert])
+    try {
+      const rule = await ruleOf('CERTIFICATE_EXPIRING')
+      const tried = async () => (await ok('owner', 'POST', `/alerts/rules/${rule.id}/test`, { threshold: { daysBefore: 10 } })).sample.find((entry: Json) => entry.record.id === ids.cert)?.sentence ?? null
+      // The dry run's "now" is `Date`, pinned here. 23:30 UTC on 12 November is 00:30 on 13 November in Rome.
+      vi.useFakeTimers({ toFake: ['Date'] })
+      vi.setSystemTime(new Date('2026-11-12T23:30:00.000Z'))
+      expect(await tried()).toContain('(10 days left)')
+      // At 12:00 in Rome both days agree.
+      vi.setSystemTime(new Date('2026-11-13T11:00:00.000Z'))
+      expect(await tried()).toContain('(10 days left)')
+    } finally {
+      vi.useRealTimers()
+      await force(`UPDATE "Certificate" SET "validTo" = $2::date WHERE id = $1`, [ids.cert, before.validTo])
+    }
   })
 })

@@ -269,3 +269,18 @@ describe('a CE test sample (PRD-158)', () => {
     expect((await eventsOf(made.id)).filter((event) => event.type === 'sample_round.test_recorded')).toHaveLength(2)
   })
 })
+
+describe('a swatch is sent on its Rome day, not its UTC day (B-W2b-F35)', () => {
+  it('a swatch sent at 23:30 UTC on 12 November (00:30 in Rome) was sent on 13 November, as the brand’s approval page says', async () => {
+    const leather = (await one('SELECT id FROM "Item" WHERE "tenantId" = $1 AND code = $2', [tenant, 'SEED-LEA-100'])).id
+    const lot = (await one('SELECT id FROM "Lot" WHERE "tenantId" = $1 AND code = $2', [tenant, 'SEED-LOT-LEA-01'])).id
+    // SEED-JKT-01 is every company's: a swatch is asked on a round of it.
+    const round = (await as(manager, 'GET', `/sales/samples/rounds?styleId=${jacket1}&kind=FIT&stage=REQUESTED`)).rows[0].id
+    const { swatch } = await as(sales, 'POST', '/sales/samples/swatches', { styleId: jacket1, roundId: round, kind: 'LEATHER', itemId: leather, lotId: lot, sentAt: '2026-11-12T23:30:00.000Z' }, 201)
+    expect(swatch.sentAt).toBe('2026-11-12T23:30:00.000Z')
+    const photo = await photoOf('SampleSwatch', swatch.id, 'Made-up swatch F35.png')
+    const asked = await as(sales, 'POST', '/approvals-out', { kind: 'LEATHER', recordType: 'SampleSwatch', recordId: swatch.id, question: 'Approve the leather lot (made up).', fileIds: [photo], send: false }, 201)
+    const page = await viaLink(tokenOf(asked.url), 'GET', '/link/approval?language=en')
+    expect(page.content.facts).toContainEqual({ label: 'Sent on', value: '2026-11-13' })
+  })
+})

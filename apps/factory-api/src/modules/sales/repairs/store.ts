@@ -1,6 +1,6 @@
 import type { FactoryClient, Prisma } from '@nexus/factory-db'
 import { can } from '@nexus/factory-domain/core/permissions'
-import { toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
+import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { QUALITY_NCR_VIEW } from '@nexus/factory-domain/quality/ncr/permissions'
 import {
   REPAIR_LIMITS,
@@ -136,7 +136,7 @@ export async function garmentOf(db: Reader, serial: string | null): Promise<Garm
   })
   if (!row) return null
   const cell = row.workOrderSize
-  return { serial: row.serial, styleId: cell.styleId, colourwayId: cell.colourwayId, size: cell.size, partyId: cell.partyId, madeOn: dayOf(row.createdAt), workOrderNumber: cell.workOrder.number, batchNumber: cell.workOrder.batchNumber, status: row.status }
+  return { serial: row.serial, styleId: cell.styleId, colourwayId: cell.colourwayId, size: cell.size, partyId: cell.partyId, madeOn: businessDate(row.createdAt), workOrderNumber: cell.workOrder.number, batchNumber: cell.workOrder.batchNumber, status: row.status }
 }
 
 export async function styleOf(db: Reader, styleId: string | null) {

@@ -1,4 +1,4 @@
-import { BUSINESS_TIME_ZONE } from '../../core/time'
+import { BUSINESS_TIME_ZONE, businessDate } from '../../core/time'
 import { formatDateTime } from '../../documents/format'
 import type { DocumentLanguage } from '../../documents/model'
 import type { DiscrepancyReport, ReportColumn } from '../../inventory/receipts/report'
@@ -150,7 +150,8 @@ export function ppeReceipt(input: ReceiptInput): DiscrepancyReport {
   }))
   const intro = input.signature ? `«${input.signature.statement}»` : w.paperIntro
   const banner = input.state === 'VOIDED' ? w.voided : input.sample ? w.sample : null
-  const stamp = new Date(input.issuedAt).toISOString().slice(0, 10)
+  // B-W2b-F35: the Rome day it was handed over (the facts above print the Rome time), not its UTC day.
+  const stamp = businessDate(new Date(input.issuedAt))
   return {
     language: input.language,
     meta: { title: `${w.title} · ${input.person.name} · ${stamp}`, subject: `${w.title} ${stamp}`, createdAt: input.createdAt },

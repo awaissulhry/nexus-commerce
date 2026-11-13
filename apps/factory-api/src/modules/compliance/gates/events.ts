@@ -7,7 +7,7 @@ import { COMPLIANCE_GATES, GATE_WORDS, type ComplianceGate } from '@nexus/factor
 import { DomainError, ForbiddenError, NotFoundError } from '@nexus/factory-domain/core/errors'
 import { newId } from '@nexus/factory-domain/core/ids'
 import { can, scopeWhere } from '@nexus/factory-domain/core/permissions'
-import { toUtcIso } from '@nexus/factory-domain/core/time'
+import { businessDate, toUtcIso } from '@nexus/factory-domain/core/time'
 import { COMMAND_SETTINGS, runCommand, type CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { heldRoles } from '../../../platform/auth/roles/access'
@@ -303,7 +303,7 @@ export async function checkGateNow(request: FastifyRequest, query: { readonly ga
       const facts = await shipmentTargets(db, query.subjectId)
       if (!facts || !can(actor, CERTIFICATES_VIEW, { companyId: facts.companyId })) throw new NotFoundError('Shipment not found.')
       for (const [styleId, targets] of facts.styles) {
-        answers.push(await decideGate(db, { gate: query.gate, subjectType: 'Shipment', subjectId: query.subjectId, subjectWords: `Shipment ${facts.number}`, companyId: facts.companyId, siteId: facts.siteId, styleId, targets, day: now.toISOString().slice(0, 10), now }))
+        answers.push(await decideGate(db, { gate: query.gate, subjectType: 'Shipment', subjectId: query.subjectId, subjectWords: `Shipment ${facts.number}`, companyId: facts.companyId, siteId: facts.siteId, styleId, targets, day: businessDate(now), now }))
       }
     }
     const styles = new Map<string, string>()
