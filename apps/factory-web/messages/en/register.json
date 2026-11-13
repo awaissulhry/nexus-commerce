@@ -68,7 +68,8 @@
     "Nonconformance": "A nonconformance (NCR)",
     "Complaint": "A customer complaint",
     "ReturnAuthorisation": "A customer return (RMA)",
-    "AuthorityRequest": "An authority request"
+    "AuthorityRequest": "An authority request",
+    "ProductSafetyReport": "A product-safety report"
   },
   "list": {
     "table": "PPE register entries",

@@ -134,6 +134,8 @@ import { PORTAL_SAMPLES_READERS } from '../../sales/portal-samples/permissions'
 import { SALES_CREDIT_ADDS } from '../../sales/credit/permissions'
 // B-W2b-345: warranty and service cases.
 import { SALES_SERVICE_ADDS } from '../../sales/service/permissions'
+// B-W2b-351: product-safety reports and the accident log (quality the product-safety role; sales records; the production manager reads).
+import { SALES_SAFETY_ADDS } from '../../sales/safety-reports/permissions'
 
 /**
  * The system role templates (plan A1 §3.11 "Role"; feature PLT-030): ready roles every tenant gets as system roles
@@ -1015,7 +1017,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-300
   ...(audience === 'office' ? (INVENTORY_UNPLANNED_ADDS[key] ?? []) : []),
   // B-W2b-345
-  ...(audience === 'office' ? (SALES_SERVICE_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (SALES_SERVICE_ADDS[key] ?? []) : []),
+  // B-W2b-351
+  ...(audience === 'office' ? (SALES_SAFETY_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the

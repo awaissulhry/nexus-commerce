@@ -45,7 +45,9 @@ export const REGISTER_SOURCE_TYPES = ['QualityReleaseReversal', 'QualityRelease'
   // its inspection, opens its return's one entry; the register guard accepts it since …_followups_f1_w2b_guards).
   'ReturnAuthorisation',
   // B-W2b-260: an authority's request (Reg. (EU) 2019/1020 art. 4(3)) opens its one entry (the register guard accepts it since …_recall_claims_w2b_guards).
-  'AuthorityRequest'] as const
+  'AuthorityRequest',
+  // B-W2b-351: a product-safety report filed in the register (the register guard accepts it since …_service_safety_w2b_guards).
+  'ProductSafetyReport'] as const
 export type RegisterSourceType = (typeof REGISTER_SOURCE_TYPES)[number]
 
 export const KIND_WORDS: Readonly<Record<RegisterKind, string>> = Object.freeze({ COMPLAINT: 'complaint', NON_CONFORMITY: 'non-conformity', RECALL: 'recall',
