@@ -1,0 +1,125 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/bank.prisma (rules: src/ownership.ts; roles: src/roles.ts). Finance (and the worker and scheduler, in the tenant's system context: the matcher, the nightly integrity checks) keeps the company's bank accounts, imports statement files and their lines, matches them, writes off small differences, prepares Ri.Ba. batches, stops reminders, types a customer's own figures, makes the week's payment proposal, keeps the accountant's chart and bridge switch, records what an accounting export handed over and each integrity check run, through apps/factory-api's modules/payments, receivables, payables and accounting (B-W2b-393, -402, -403, -408), always through command(); the API keeps staff to the companies their grants reach and money to its grain (A1 §2.6). The floor reads nothing here (no money on the floor). No portal or link session reads any of it: no partner grant. Nobody deletes a bank account, a statement, a line, an accepted match, a write-off, a batch, a stop, a proposal, a mapping in force, a document of an exported batch or a check run: the …_bank_bridge_w2b_guards triggers refuse it for every login. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "BankAccount": {
+      "about": "Finance keeps each company's own bank accounts (FIN-130): holder, IBAN, BIC, bank, currency; switched off, never deleted. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "BankStatement": {
+      "about": "Finance imports a statement file downloaded from the bank (FIN-130: CAMT.053, CSV, XLSX, OFX) into an account; what the bank said never changes. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] }
+      }
+    },
+    "BankLine": {
+      "about": "The import writes each movement of a statement once per account (FIN-130; a duplicate is refused by its fingerprint); never changed. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] }
+      }
+    },
+    "BankMatch": {
+      "about": "The matcher (the office or the system) suggests what a bank line is for, with how sure and why (FIN-132); a person accepts one, or chooses another; a wrong acceptance is reversed; a suggestion is deleted when it no longer holds. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "PaymentWriteOff": {
+      "about": "Finance writes off a small difference within the company's tolerance at matching (FIN-119); append-only, a wrong one reversed by a new row. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] }
+      }
+    },
+    "RibaBatch": {
+      "about": "Finance prepares a Ri.Ba. batch of the instalments due in a window (FIN-126), issues its CBI file behind the company's switch, or cancels the draft. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "RibaItem": {
+      "about": "Finance adds an invoice instalment to a draft Ri.Ba. batch (or removes it), then records it PAID or returned UNPAID with the bank's fee (FIN-126). Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "ReminderStop": {
+      "about": "Finance (or the system, when a payment is being processed) stops the reminders of an invoice for a reason, until a day or until lifted (FIN-112). Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "CustomerStatementFigures": {
+      "about": "Finance types a B2B customer's own figures from the statement it sent (FIN-135) and corrects them. Office only (no portal page shows them).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "PaymentProposal": {
+      "about": "Finance makes the week's payment proposal (FIN-140); someone else approves it (FIN-142, Q3 = A), it is paid or cancelled. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "PaymentProposalLine": {
+      "about": "Finance adds, changes and removes the supplier invoices of a draft payment proposal, each with the supplier's ACTIVE bank account (FIN-140). Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "AccountMapping": {
+      "about": "Finance keeps the accountant's chart per company (FIN-152): an account per item group, tax code, cost category, payment method or party group from a day; a row not yet in force is changed or removed. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "AccountingSettings": {
+      "about": "Finance keeps the accountant's bridge switch of each company and the tenant-wide one (OFF by default; GATE-ACCOUNTANT). Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "ExportedDocument": {
+      "about": "The export job writes the documents a draft accounting export hands over (FIN-154); the nightly check flags a document changed after it was exported. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "IntegrityCheckRun": {
+      "about": "The scheduler (in the tenant's system context) or a person records each run of a named integrity check (FIN-157); append-only. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] }
+      }
+    }
+  }
+}

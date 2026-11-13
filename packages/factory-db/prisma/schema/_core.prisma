@@ -235,6 +235,14 @@ model Company {
   standardCosts        StandardCost[]
   accountingExports    AccountingExport[]
   periodLocks          PeriodLock[]
+  // W2b-6 bank.prisma (schema wave 50/57): its own bank accounts, customers' own figures, payment proposals, account
+  // mapping, the accountant's bridge settings and integrity check runs.
+  bankAccounts             BankAccount[]
+  customerStatementFigures CustomerStatementFigures[]
+  paymentProposals         PaymentProposal[]
+  accountMappings          AccountMapping[]
+  accountingSettings       AccountingSettings[]
+  integrityCheckRuns       IntegrityCheckRun[]
   // costing.prisma: its own labour rates and costing settings (tenant-wide rows have none).
   labourRates          LabourRate[]
   /// @not-money the relation to its costing settings rows (an overhead percentage, no amount)

@@ -221,6 +221,16 @@ model ReceivablesSettings {
   /// No reminder for less than this open amount (minor units), when set.
   /// @grain price
   minimumAmount         Int?
+  /// W2b-6 (schema wave 50/57, B-W2b-370; FIN-126, GATE-ACCOUNTANT): the company's Ri.Ba. switch: a Ri.Ba. batch is
+  /// issued (its CBI file made) only while true (OFF by default, until the accountant and the bank confirm).
+  ribaOn                    Boolean          @default(false)
+  /// W2b-6 (FIN-128; the Owner's rule of 11-13): a payment-received notice is e-mailed to the customer only while true (OFF
+  /// by default; the staff's notice needs no switch).
+  paymentNoticeToCustomerOn Boolean          @default(false)
+  /// W2b-6 (FIN-119; GATE-ACCOUNTANT): the largest small difference written off at matching, minor units, 0 or more; null:
+  /// none is written off (the company's row wins, a null follows the tenant-wide row).
+  /// @grain price
+  writeOffToleranceAmount   Int?
   version               Int              @default(1)
   createdAt             DateTime         @default(now()) @db.Timestamptz(3)
   updatedAt             DateTime         @default(now()) @updatedAt @db.Timestamptz(3)

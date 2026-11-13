@@ -692,7 +692,9 @@ describe('the ledgers', () => {
     ] as const) {
       await expect(admin(`UPDATE "${table}" SET "createdById" = NULL WHERE id = $1`, [id])).rejects.toThrow(new RegExp(`append-only: UPDATE on "${table}" is refused`))
       await expect(admin(`DELETE FROM "${table}" WHERE id = $1`, [id])).rejects.toThrow(new RegExp(`append-only: DELETE on "${table}" is refused`))
-      await expect(admin(`TRUNCATE "${table}"`)).rejects.toThrow(new RegExp(`append-only: TRUNCATE on "${table}" is refused`))
+      // CASCADE: B-W2b-370's write-offs reference the allocations (a plain TRUNCATE stops at that foreign key); the table's own
+      // trigger still refuses first.
+      await expect(admin(`TRUNCATE "${table}" CASCADE`)).rejects.toThrow(new RegExp(`append-only: TRUNCATE on "${table}" is refused`))
     }
     await expect(
       insert(partner(A.P1), 'SdiNotification', { id: randomUUID(), partyId: A.P1, invoiceId: seeded.sampleInvoiceId, submissionId: seeded.sampleSubmissionIds[1], type: 'RC', receivedAt: new Date().toISOString(), payload: {} }),
