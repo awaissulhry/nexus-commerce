@@ -31,7 +31,7 @@ const vaultView = output({
   asked: z.array(output({ category: z.enum(VAULT_CATEGORIES), required: z.boolean(), codes: z.array(z.string()), words: z.string(), laws: z.array(z.string()), state: askState, fileId: id().nullable(), expiresOn: businessDate().nullable(), waiting: z.boolean(), unlocks: z.string().nullable() })),
   /** What the materials it sells us need (a leather's chromium VI test report, a protector's certificate), and whether a PO of it is held at Send. */
   materials: z.array(output({ itemId: id(), code: z.string(), name: z.string(), kind: z.string(), needs: z.enum(['CR_VI_TEST_REPORT', 'PPE_CERTIFICATE']), law: z.string(), state: askState, fileId: id().nullable(), certificate: output({ id: id(), number: z.string(), standard: z.string() }).nullable(), expiresOn: businessDate().nullable(), checkedAtSend: z.boolean(), heldAtSend: z.boolean() })),
-  documents: z.array(output({ fileId: id(), category: z.enum(VAULT_CATEGORIES), name: z.string(), issuer: z.string().nullable(), number: z.string().nullable(), issuedOn: z.string().nullable(), expiresOn: businessDate().nullable(), daysLeft: z.number().int().nullable(), state: documentState, source: z.enum(['PORTAL', 'QUESTIONNAIRE', 'OFFICE']), uploadId: id().nullable(), articleCodes: z.array(z.string()), addedAt: instant() })),
+  documents: z.array(output({ fileId: id(), category: z.enum(VAULT_CATEGORIES), /** B-W2b-377: a SUPPLIER_DOCUMENT_TYPE code, null when nobody said. */ documentTypeCode: z.string().nullable(), name: z.string(), issuer: z.string().nullable(), number: z.string().nullable(), issuedOn: z.string().nullable(), expiresOn: businessDate().nullable(), daysLeft: z.number().int().nullable(), state: documentState, source: z.enum(['PORTAL', 'QUESTIONNAIRE', 'OFFICE']), uploadId: id().nullable(), articleCodes: z.array(z.string()), addedAt: instant() })),
   /** "POs for A12 and A14 need a valid chromium VI test report in force to be sent." */
   gateSentences: z.array(z.string()),
   nextStep: z.string(),
@@ -138,6 +138,8 @@ const requirementView = output({
 
 const requestView = output({
   lineId: id(),
+  /** B-W2b-377: the approval engine's request (Home › Approvals), null for one asked before it. */
+  taskId: id().nullable(),
   state: z.enum(['WAITING', 'APPROVED', 'REJECTED', 'WITHDRAWN']),
   reason: z.string(),
   askedBy: output({ id: id(), name: z.string().nullable(), me: z.boolean() }),
@@ -173,7 +175,12 @@ export const askOverrideContract = defineContract({
 
 export const decideOverrideContract = defineContract({
   params: orderParams,
-  body: input({ decision: z.enum(['APPROVED', 'REJECTED']), words: z.string().max(OVERRIDE_LIMITS.words).nullable().optional() }),
+  body: input({
+    decision: z.enum(['APPROVED', 'REJECTED']),
+    words: z.string().max(OVERRIDE_LIMITS.words).nullable().optional(),
+    /** B-W2b-377: a no's reason code of the APPROVAL_REJECT list (left out: OTHER). */
+    reasonCode: z.string().regex(/^[A-Z][A-Z0-9_]{1,39}$/).optional(),
+  }),
   response: { 200: complianceView },
 })
 

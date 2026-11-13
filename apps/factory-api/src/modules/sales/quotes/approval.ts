@@ -6,6 +6,8 @@ import type { CommandCaller, CommandTools } from '../../../core/command'
 import { fingerprintOf, refreshVersion, versionNow } from './pricing'
 import { assertDraft, detailInCommand, onQuote, withdrawPending } from './quotes'
 import { decimal, grainsOf, officeContextOf, officeQuote, readLineRecords, type QuoteRow, type VersionRow } from './store'
+// B-W2b-377: nobody decides their own request (the database's QuoteApproval_not_own answered in words).
+import { assertNotOwnQuoteApproval, decidingQuote } from './approval-guard'
 import { readFacts, type QuoteDetail } from './views'
 
 /**
@@ -75,7 +77,7 @@ async function decidable(tools: CommandTools, version: VersionRow) {
   if (version.status !== 'PENDING_APPROVAL') throw new InvalidStateError(`The quote is ${STATUS_WORDS[version.status]}: no approval request is waiting.`)
   const pending = await tools.tx.quoteApproval.findFirst({ where: { versionId: version.id, status: 'PENDING' }, select: { id: true, reasons: true, details: true, createdById: true } })
   if (!pending) throw new InvalidStateError('No approval request is waiting.')
-  if (pending.createdById !== null && pending.createdById === context.actorId) throw new ForbiddenError('You asked for this approval: another approver decides.')
+  assertNotOwnQuoteApproval(pending, context.actorId)
   if (pending.reasons.includes('MARGIN_FLOOR') && !grainsOf(context).has('margin')) throw new ForbiddenError('This request is about the margin floor: deciding it needs a role that sees margins.')
   const asked = (pending.details as { fingerprint?: unknown } | null)?.fingerprint
   if (asked !== fingerprintOf(version, await readLineRecords(tools.tx, version.id))) {
@@ -90,7 +92,7 @@ export async function approve(caller: CommandCaller, quoteId: string, body: { ve
   const quote = await officeQuote(caller, quoteId, QUOTES_APPROVE)
   return onQuote(caller, quote, { name: 'quotes.approve', idempotencyKey, input: { quoteId, ...body }, version: body.version }, async (tools, current, version) => {
     const pending = await decidable(tools, version)
-    await tools.tx.quoteApproval.update({ where: { id: pending.id }, data: { status: 'APPROVED', decidedAt: tools.now, decidedById: actorIdOf(tools), decisionNote: blankToNull(body.note), version: { increment: 1 } }, select: { id: true } })
+    await decidingQuote(() => tools.tx.quoteApproval.update({ where: { id: pending.id }, data: { status: 'APPROVED', decidedAt: tools.now, decidedById: actorIdOf(tools), decisionNote: blankToNull(body.note), version: { increment: 1 } }, select: { id: true } }))
     await moveTo(tools, current, version, 'APPROVED')
     tools.audit({ action: 'quotes.approve', recordType: 'Quote', recordId: current.id, companyId: current.companyId, before: { status: 'PENDING_APPROVAL', approval: 'PENDING' }, after: { status: 'APPROVED', approvalId: pending.id, approval: 'APPROVED', note: blankToNull(body.note) } })
     tools.emit({ type: 'quote.approval_decided', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId: version.id, approvalId: pending.id, status: 'APPROVED' } })
@@ -106,7 +108,7 @@ export async function reject(caller: CommandCaller, quoteId: string, body: { ver
   return onQuote(caller, quote, { name: 'quotes.reject', idempotencyKey, input: { quoteId, ...body }, version: body.version }, async (tools, current, version) => {
     const pending = await decidable(tools, version)
     const reason = body.reason.trim()
-    await tools.tx.quoteApproval.update({ where: { id: pending.id }, data: { status: 'REJECTED', decidedAt: tools.now, decidedById: actorIdOf(tools), decisionNote: reason, version: { increment: 1 } }, select: { id: true } })
+    await decidingQuote(() => tools.tx.quoteApproval.update({ where: { id: pending.id }, data: { status: 'REJECTED', decidedAt: tools.now, decidedById: actorIdOf(tools), decisionNote: reason, version: { increment: 1 } }, select: { id: true } }))
     await moveTo(tools, current, version, 'DRAFT')
     tools.audit({ action: 'quotes.reject', recordType: 'Quote', recordId: current.id, companyId: current.companyId, before: { status: 'PENDING_APPROVAL', approval: 'PENDING' }, after: { status: 'DRAFT', approvalId: pending.id, approval: 'REJECTED' }, reason })
     tools.emit({ type: 'quote.approval_decided', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId: version.id, approvalId: pending.id, status: 'REJECTED' } })

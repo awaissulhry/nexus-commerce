@@ -98,7 +98,8 @@ export function Approvals() {
     const view = controls.view
     const built = rowsOf(view, { tasks: tasks?.rows ?? [], quotes: view === 'overdue' ? [] : (quotes?.approvals ?? []), items: today?.items ?? [] })
     return built.map((row): InboxRow => {
-      if (row.task) return { ...row, href: `${prefix}${recordAddress({ type: row.task.record.type, id: row.task.record.id, companyId: row.task.companyId, siteId: row.task.siteId }, OFFICE_PAGES)}` }
+      // B-W2b-377: a subject with no page of its own (a credit check, a bank account, a return or receipt line) opens its parent's.
+      if (row.task) return { ...row, href: `${prefix}${recordAddress({ type: (row.task.record.parent ?? row.task.record).type, id: (row.task.record.parent ?? row.task.record).id, companyId: row.task.companyId, siteId: row.task.siteId }, OFFICE_PAGES)}` }
       if (row.quote) return { ...row, href: `${prefix}/sales/quotes/${row.quote.quoteId}?tab=approval` }
       return { ...row, href: row.item ? queueItem(row.item, prefix).href : null }
     })

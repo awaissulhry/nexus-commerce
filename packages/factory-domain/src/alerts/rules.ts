@@ -345,6 +345,8 @@ export const ALERT_TEMPLATES = {
   'alerts.HOLD_TOO_LONG': { en: '{label} has been on hold for {hours} hours (the rule says {threshold} h).', it: '{label} è bloccato da {hours} ore (la regola dice {threshold} h).' },
   'alerts.MATERIAL_SHORT': { en: 'Material {item} is short for released work order {label}.', it: "Il materiale {item} manca per l'ordine di lavoro rilasciato {label}." },
   'alerts.APPROVAL_OVERDUE': { en: 'Quote {label} has waited {hours} hours for its approval.', it: 'Il preventivo {label} aspetta la sua approvazione da {hours} ore.' },
+  // B-W2b-377: a request of the approval engine (its record in words as the label).
+  'alerts.APPROVAL_OVERDUE.TASK': { en: 'The request {label} has waited {hours} hours for its approval.', it: 'La richiesta {label} aspetta la sua approvazione da {hours} ore.' },
   'alerts.PO_NOT_CONFIRMED': { en: 'Purchase order {label} is not confirmed {days} days after it was sent.', it: "L'ordine di acquisto {label} non è confermato {days} giorni dopo l'invio." },
   'alerts.CERTIFICATE_EXPIRING': { en: 'Certificate {label} expires on {dueDate} ({days} days left).', it: 'Il certificato {label} scade il {dueDate} (mancano {days} giorni).' },
   'alerts.INVOICE_DEADLINE': { en: 'The goods of DDT {label} must be invoiced by {dueDate} ({days} days left).', it: 'La merce del DDT {label} va fatturata entro il {dueDate} (mancano {days} giorni).' },
@@ -394,7 +396,7 @@ export function alertPhrase(kind: string, label: string, facts: unknown): AlertP
     case 'MATERIAL_SHORT':
       return { key: 'alerts.MATERIAL_SHORT', params: { label, item: text('item') } }
     case 'APPROVAL_OVERDUE':
-      return { key: 'alerts.APPROVAL_OVERDUE', params: { label, hours: num('hours') } }
+      return { key: f.task === true ? 'alerts.APPROVAL_OVERDUE.TASK' : 'alerts.APPROVAL_OVERDUE', params: { label, hours: num('hours') } }
     case 'PO_NOT_CONFIRMED':
       return { key: 'alerts.PO_NOT_CONFIRMED', params: { label, days: num('days') } }
     case 'CERTIFICATE_EXPIRING':

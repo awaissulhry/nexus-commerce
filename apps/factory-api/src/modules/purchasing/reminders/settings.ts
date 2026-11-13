@@ -8,6 +8,7 @@ import { effectiveSwitch, switchWords } from '@nexus/factory-domain/purchasing/r
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
 import { actorOf, type OfficeContext } from '../../../core/context'
 import { officeContextOf, type Reader } from '../store'
+import { timingFrom } from './chase'
 
 /**
  * The Owner's per-company switch for automatic PO confirmation reminders (B-W2b-14; B-W2a-52's follow-up Z1:09; W2b plan
@@ -23,10 +24,10 @@ import { officeContextOf, type Reader } from '../store'
  * purchasing/reminders/settings effectiveSwitch). `purchasing_settings.changed` tells the screens.
  */
 
-const COLUMNS = { id: true, companyId: true, confirmationRemindersEnabled: true, version: true, updatedAt: true } as const satisfies Prisma.PurchasingSettingsSelect
+const COLUMNS = { id: true, companyId: true, confirmationRemindersEnabled: true, version: true, updatedAt: true, confirmByHours: true, reminderCadenceDays: true } as const satisfies Prisma.PurchasingSettingsSelect
 type SettingsRow = Prisma.PurchasingSettingsGetPayload<{ select: typeof COLUMNS }>
 
-const viewOf = (row: SettingsRow | null) => (row ? { id: row.id, companyId: row.companyId, confirmationRemindersEnabled: row.confirmationRemindersEnabled, version: row.version, updatedAt: toUtcIso(row.updatedAt) } : null)
+const viewOf = (row: SettingsRow | null) => (row ? { id: row.id, companyId: row.companyId, confirmationRemindersEnabled: row.confirmationRemindersEnabled, confirmByHours: row.confirmByHours, reminderCadenceDays: row.reminderCadenceDays, version: row.version, updatedAt: toUtcIso(row.updatedAt) } : null)
 
 const tenantOf = (context: OfficeContext): string => context.tenantId
 
@@ -58,7 +59,9 @@ export async function getReminderSettings(caller: CommandCaller, query: { readon
     const rows = await settingsRowsOf(client, tenantOf(context), companyId)
     const state = companyId === null ? effectiveSwitch(rows.tenant, null) : effectiveSwitch(rows.company, rows.tenant)
     const source = companyId === null && state.source === 'COMPANY' ? 'TENANT' : state.source
-    return { companyId, source, on: state.on, words: switchWords({ on: state.on, source }), mayChange: mayAt(context, PURCHASING_REMINDERS_SWITCH, companyId), company: viewOf(rows.company), tenant: viewOf(rows.tenant) }
+    // B-W2b-377: the confirm-by hours and the reminders' cadence that hold for it (./chase.ts).
+    const timing = companyId === null ? timingFrom(rows.tenant, null) : timingFrom(rows.company, rows.tenant)
+    return { companyId, source, on: state.on, words: switchWords({ on: state.on, source }), mayChange: mayAt(context, PURCHASING_REMINDERS_SWITCH, companyId), company: viewOf(rows.company), tenant: viewOf(rows.tenant), timing: { confirmByHours: timing.confirmByHours, cadenceDays: timing.cadenceDays, source: { ...timing.source } } }
   })
 }
 

@@ -55,6 +55,12 @@ export interface AskInput {
   readonly note?: string | null
   /** The change as it will be written, when the module names it (default: the kind's). */
   readonly changes?: readonly PreviewChange[]
+  /**
+   * B-W2b-377: a domain rule that always needs a second person's yes (a purchase order sent without a valid document, a receipt
+   * beyond its tolerance): when no switched-on rule holds, the request is still asked, of this office role, naming no rule
+   * (the database's "none: a domain switch asked"). Left out: no rule, no request (as before).
+   */
+  readonly whenNoRule?: { readonly approverRoleId: string; readonly requireStepUp: boolean }
 }
 
 export type AskOutcome =
@@ -128,8 +134,9 @@ export async function askApproval(tools: CommandTools, input: AskInput): Promise
     select: { id: true, companyId: true, sequence: true, createdAt: true, active: true, effectiveFrom: true, condition: true, approverRoleId: true, approverUserId: true, signatureMeaning: true, requireStepUp: true, dueHours: true },
   })
   const choice = chooseRules(rules, { companyId: subject.companyId, facts: subject.facts, askers }, kind.fields, now)
-  if (choice.matched.length === 0) return { asked: false }
-  const rule = choice.deciding
+  if (choice.matched.length === 0 && !input.whenNoRule) return { asked: false }
+  // B-W2b-377: no rule holds, and the module's own rule asks a yes anyway: its role decides, with no rule named.
+  const rule = choice.matched.length === 0 && input.whenNoRule ? { approverRoleId: input.whenNoRule.approverRoleId, approverUserId: null, signatureMeaning: null, requireStepUp: input.whenNoRule.requireStepUp, dueHours: null } : choice.deciding
   if (!rule) throw new DomainError('conflict', APPROVAL_REFUSALS.NAMED_SELF, [{ path: 'approver', message: APPROVAL_REFUSALS.NAMED_SELF }])
 
   const changes = input.changes ?? subject.changes
@@ -210,7 +217,11 @@ export type Recheck =
 export async function recheck(db: Reader, task: Pick<TaskRow, 'kind' | 'recordType' | 'recordId' | 'preview' | 'fingerprint'>): Promise<Recheck> {
   const kind = kindOf(task.kind)
   if (!kind || kind.recordType !== task.recordType) return { state: 'UNKNOWN_KIND' }
-  const subject = await kind.read(db, task.recordId)
+  return recheckSubject(task, kind, await kind.read(db, task.recordId))
+}
+
+/** B-W2b-377: the re-check of a subject read already (the inbox reads each row's subject once for its words too). */
+export function recheckSubject(task: Pick<TaskRow, 'kind' | 'recordType' | 'recordId' | 'preview' | 'fingerprint'>, kind: ApprovalKindDefinition, subject: ApprovalSubject | null): Recheck {
   if (!subject) return { state: 'GONE' }
   const preview = parsePreview(task.preview)
   const now = approvalFingerprint({ kind: task.kind, recordType: task.recordType, recordId: task.recordId, subject: subject.snapshot, changes: preview.changes })

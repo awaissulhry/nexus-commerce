@@ -19,9 +19,9 @@ import { Dec, parseDecimal } from '../../tax/decimal'
  *   under     within the tolerance under, the line counts as received (the order no longer waits for the rest); below it
  *             the line stays open (a partial delivery, said in words). A short delivery is never refused.
  *   over      beyond the tolerance over: BLOCK refuses the receipt (receive at most the limit; the rest goes back);
- *             APPROVAL needs a person's yes, and the yes for a receipt is not built (no approval kind for it): the receipt
- *             is refused the same way, saying so (fail closed). Without any rule the W1 rule stands: exactly as
- *             ordered, more only with the receiver's reason.
+ *             APPROVAL needs a person's yes: the office's receipt waits OPEN for a RECEIPT_OVER_TOLERANCE yes per such line
+ *             (B-W2b-377); the goods-in tablet and goods without a PO refuse it in words (the office asks the yes). Without
+ *             any rule the W1 rule stands: exactly as ordered, more only with the receiver's reason.
  */
 
 export const TOLERANCE_ACTIONS = ['BLOCK', 'APPROVAL'] as const
@@ -118,7 +118,9 @@ export function receiptToleranceOf(line: { readonly areaTolerancePct: string | n
 export function beyondToleranceRefusal(words: string, tolerance: ReceiptTolerance, upTo: string): string | null {
   if (tolerance.whenBeyond === 'REASON') return null
   if (tolerance.whenBeyond === 'BLOCK') return `${words} Beyond the delivery tolerance (+${tolerance.overPct} %) the extra is refused: receive at most ${upTo} in all; the rest goes back to the supplier.`
-  return `${words} Beyond the delivery tolerance (+${tolerance.overPct} %) the extra needs a person's yes, and a yes for a receipt is not built yet: receive at most ${upTo} in all now; the buyer agrees the rest with the supplier.`
+  // B-W2b-377: the office's receipt waits for the yes (modules/inventory/receiving/tolerance-hold.ts); these words are the goods-in
+  // tablet's and goods without a PO's, which ask no yes.
+  return `${words} Beyond the delivery tolerance (+${tolerance.overPct} %) the extra needs a person's yes: the office records this receipt to ask it, or receive at most ${upTo} in all here.`
 }
 
 /** The most a line may hold, in words ("110 m²"), for the refusal. */

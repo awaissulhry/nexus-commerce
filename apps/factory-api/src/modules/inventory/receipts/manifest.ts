@@ -16,6 +16,9 @@ export const manifest = defineManifest({
   'GET /inventory/receipts/:receiptId': { audiences: ['office'], permission: 'inventory.stock.view', scope: 'record' },
   'GET /inventory/receipts/:receiptId/lots': { audiences: ['office'], permission: 'inventory.stock.view', scope: 'record' },
   'POST /inventory/receipts': { audiences: ['office'], permission: 'inventory.receive', scope: 'record' },
+  // B-W2b-377: a receipt that waited for the yes of its lines beyond their tolerance: posted, or cancelled.
+  'POST /inventory/receipts/:receiptId/post': { audiences: ['office'], permission: 'inventory.receive', scope: 'record' },
+  'POST /inventory/receipts/:receiptId/cancel': { audiences: ['office'], permission: 'inventory.receive', scope: 'record' },
   'POST /inventory/receipts/:receiptId/reverse': { audiences: ['office'], permission: 'inventory.reverse', scope: 'record' },
   // B-W2a-31 (SCM-115): the supplier's delivery note photo, office and floor (files.upload checked by the handler for the office).
   'POST /inventory/receipts/:receiptId/ddt-photos': { audiences: ['office', 'floor'], permission: 'inventory.receive', scope: 'record' },

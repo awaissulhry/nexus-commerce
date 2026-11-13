@@ -8,6 +8,7 @@ import { serverClock } from '../../../core/time'
 import { detailInCommand, onOrder } from '../orders'
 import { officeContextOf, officeOrder, type Reader } from '../store'
 import { remindersOn } from './settings'
+import { cadenceState, timingFor, type Timing } from './chase'
 
 /**
  * The supplier's confirm-by deadline and the reminders of an order (B-W2a-52; SCM-087): the office moves the deadline
@@ -41,7 +42,7 @@ export async function moveConfirmBy(caller: CommandCaller, orderId: string, body
 }
 
 /** The reminders of one order, with where the next one stands (also the due list's row). */
-export async function remindersOf(db: Reader, order: { readonly id: string; readonly status: string; readonly revision: number; readonly confirmBy: Date | null }, now: Date) {
+export async function remindersOf(db: Reader, order: { readonly id: string; readonly status: string; readonly revision: number; readonly confirmBy: Date | null }, now: Date, timing?: Timing) {
   const rows = await db.purchaseOrderReminder.findMany({
     where: { purchaseOrderId: order.id },
     orderBy: [{ sentAt: 'asc' }, { id: 'asc' }],
@@ -50,7 +51,10 @@ export async function remindersOf(db: Reader, order: { readonly id: string; read
   const people = new Map((await db.user.findMany({ where: { id: { in: [...new Set(rows.flatMap((row) => (row.sentById ? [row.sentById] : [])))] } }, select: { id: true, displayName: true } })).map((user) => [user.id, user.displayName]))
   const mailIds = rows.flatMap((row) => (row.emailOutboundId ? [row.emailOutboundId] : []))
   const mails = new Map((mailIds.length === 0 ? [] : await db.emailOutbound.findMany({ where: { id: { in: mailIds } }, select: { id: true, status: true } })).map((mail) => [mail.id, mail.status]))
-  const state = reminderState({ status: order.status, revision: order.revision, confirmBy: order.confirmBy, reminders: rows.filter((row) => row.revision === order.revision) }, now)
+  // B-W2b-377: a chase is a reminder of its own kind; the confirmation reminders are spaced by the company's cadence.
+  const confirmations = rows.filter((row) => row.revision === order.revision && row.kind === 'CONFIRMATION')
+  const base = reminderState({ status: order.status, revision: order.revision, confirmBy: order.confirmBy, reminders: confirmations }, now)
+  const state = timing && base.nextAt !== null ? { ...base, nextAt: cadenceState(confirmations, order.confirmBy, timing.cadenceDays, now).nextAt } : base
   return {
     confirmBy: order.confirmBy ? toUtcIso(order.confirmBy) : null,
     overdue: state.overdue,
@@ -77,5 +81,5 @@ export async function orderReminders(caller: CommandCaller, orderId: string) {
   const order = await officeOrder(caller, orderId)
   const tenantId = officeContextOf(caller).tenantId
   // B-W2b-14: the Owner's switch for the order's company (its row, else the tenant's, else OFF).
-  return caller.withClient(async (client) => ({ purchaseOrderId: order.id, number: order.number, status: order.status, revision: order.revision, automatic: await remindersOn(client, tenantId, order.companyId), ...(await remindersOf(client, order, serverClock.now())) }))
+  return caller.withClient(async (client) => ({ purchaseOrderId: order.id, number: order.number, status: order.status, revision: order.revision, automatic: await remindersOn(client, tenantId, order.companyId), ...(await remindersOf(client, order, serverClock.now(), await timingFor(client, tenantId, order.companyId))) }))
 }

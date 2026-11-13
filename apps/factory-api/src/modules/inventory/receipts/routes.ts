@@ -38,6 +38,9 @@ import { correctSupplierDdt } from './ddt-correction'
 import { recordReceipt } from './record'
 import { inlineDisposition, previewReport, reportCheck, sendReport } from './report'
 import { reverseReceipt } from './reverse'
+// B-W2b-377 (SCM-061): a receipt beyond a tolerance that needs a yes waits OPEN; posted after the yes, or cancelled.
+import { cancelHeldReceipt, postHeldReceipt } from '../receiving/tolerance-hold'
+import { cancelHeldReceiptContract, postHeldReceiptContract } from './contract'
 
 /**
  * Goods receipts against a purchase order (B-W1-32): record one (the receipt, its lots and hides one by one, its moves
@@ -57,7 +60,13 @@ export default defineRoutes('inventory.receipts', manifest, async (app) => {
 
   app.get('/inventory/receipts/:receiptId/lots', { schema: receiptLotsContract }, async (request) => receiptLots(request, request.params.receiptId))
 
-  app.post('/inventory/receipts', { schema: recordReceiptContract }, async (request, reply) => reply.code(201).send(await recordReceipt(request, request.body, idempotencyKeyFrom(request))))
+  app.post('/inventory/receipts', { schema: recordReceiptContract }, async (request, reply) => {
+    const result = await recordReceipt(request, request.body, idempotencyKeyFrom(request))
+    // B-W2b-377: 202 when lines wait for a yes (the receipt is OPEN, nothing posted).
+    return reply.code(result.held.length > 0 ? 202 : 201).send(result)
+  })
+  app.post('/inventory/receipts/:receiptId/post', { schema: postHeldReceiptContract }, async (request, reply) => reply.code(201).send(await postHeldReceipt(request, request.params.receiptId, idempotencyKeyFrom(request))))
+  app.post('/inventory/receipts/:receiptId/cancel', { schema: cancelHeldReceiptContract }, async (request) => cancelHeldReceipt(request, request.params.receiptId, request.body, idempotencyKeyFrom(request)))
 
   app.post('/inventory/receipts/:receiptId/reverse', { schema: reverseReceiptContract }, async (request, reply) =>
     reply.code(201).send(await reverseReceipt(request, request.params.receiptId, request.body, idempotencyKeyFrom(request))),

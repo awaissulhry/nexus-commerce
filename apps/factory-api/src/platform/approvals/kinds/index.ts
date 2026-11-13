@@ -20,6 +20,9 @@ import { MATERIAL_SUBSTITUTION_KIND } from './material-substitution'
 import { SALES_ORDER_KIND } from './sales-order'
 // B-W2b-309: a confirmed order changed, asking its yes again.
 import { SALES_ORDER_CHANGE_KIND } from './sales-order-change'
+// B-W2b-377: a purchase order sent without a valid document; a receipt line beyond its delivery tolerance.
+import { PURCHASE_ORDER_COMPLIANCE_KIND } from '../../../modules/purchasing/compliance-override/kind'
+import { RECEIPT_OVER_TOLERANCE_KIND } from './receipt-over-tolerance'
 
 /**
  * The approval kinds the engine knows (B-W2b-282): one file per kind (./kind.ts says what it gives). A later step adds its
@@ -37,6 +40,8 @@ import { SALES_ORDER_CHANGE_KIND } from './sales-order-change'
  *   MATERIAL_SUBSTITUTION  a substitute on a work order's BOM line before it is used (B-W2b-298; approved, refused or withdrawn)
  *   SALES_ORDER      a sales order made waiting for a yes, CONFIRMED on the yes, CANCELLED on the no (B-W2b-303)
  *   SALES_ORDER_CHANGE  a confirmed order changed, asking its yes again; the change stays written, a no is put back by a person (B-W2b-309)
+ *   PURCHASE_ORDER_COMPLIANCE  a purchase order sent without a valid document it needs (B-W2b-377; asked even with no rule)
+ *   RECEIPT_OVER_TOLERANCE     a receipt line beyond its delivery tolerance, held until the yes (B-W2b-377; asked even with no rule)
  */
 const KINDS: readonly ApprovalKindDefinition[] = Object.freeze([
   PURCHASE_ORDER_KIND,
@@ -58,6 +63,9 @@ const KINDS: readonly ApprovalKindDefinition[] = Object.freeze([
   SALES_ORDER_KIND,
   // B-W2b-309
   SALES_ORDER_CHANGE_KIND,
+  // B-W2b-377
+  PURCHASE_ORDER_COMPLIANCE_KIND,
+  RECEIPT_OVER_TOLERANCE_KIND,
 ])
 
 function registry(kinds: readonly ApprovalKindDefinition[]): Map<ApprovalTaskKind, ApprovalKindDefinition> {
