@@ -45,7 +45,9 @@ import './listbox-actions.css'
 import './listbox-rows.css'
 import { groupOptions } from '../lib/group-options'
 import { searchOptions } from '../lib/option-search'
+import { mergeLabels } from '../lib/labels'
 import type { ListboxOption } from './Listbox'
+import { LISTBOX_LABELS, type ListboxLabels } from './ListboxLabels'
 
 /**
  * Past this many options the panel offers its own search field (D18: search at 9+, so the field
@@ -195,16 +197,19 @@ export interface ListboxPanelProps {
   actions?: readonly ListboxPanelAction[]
   /** The actions' group name for a screen reader. Default "Actions". */
   actionsLabel?: string
+  /** B-W2b-F41: the panel's words in the person's language; a word left out stays English. */
+  labels?: Partial<ListboxLabels>
 }
 
 const sameText = (a: string, b: string) => a.trim().toLocaleLowerCase() === b.trim().toLocaleLowerCase()
 
 export function ListboxPanel({
-  options, value, onCommit, onCancel, query, searchable, searchPlaceholder = 'Search…',
+  options, value, onCommit, onCancel, query, searchable, searchPlaceholder,
   emptyLabel, autoFocus = true, style, className, panelRef,
   activeIndex, onActiveIndexChange, onMatchesChange, idPrefix, ariaLabel, optionTabIndex,
-  initialQuery, allowCustom, onKeyChoice, actions, actionsLabel = 'Actions',
+  initialQuery, allowCustom, onKeyChoice, actions, actionsLabel, labels,
 }: ListboxPanelProps) {
+  const words = mergeLabels(LISTBOX_LABELS, labels)
   const [ownQuery, setOwnQuery] = useState(initialQuery ?? '')
   /**
    * `null` until the operator moves: the highlight then IS the selected row (Step 4.3 #2, T1). It
@@ -247,7 +252,7 @@ export function ListboxPanel({
   const listed = grouped?.flat ?? ranked
   const typed = allowCustom && !external ? q.trim() : ''
   const custom: ListboxOption | null = typed && !options.some((o) => sameText(o.value, typed) || (typeof o.label === 'string' && sameText(o.label, typed)))
-    ? { value: typed, label: `Use "${typed}"` }
+    ? { value: typed, label: words.useTyped(typed) }
     : null
   const matches = custom ? [custom, ...listed] : listed
   // While the operator types, the highlight starts on the best match — past the typed-text row when there is one.
@@ -379,7 +384,7 @@ export function ListboxPanel({
           {emptyLabel}
         </button>
       )}
-      {matches.length === 0 && <div className="nds-combo-empty">No matches</div>}
+      {matches.length === 0 && <div className="nds-combo-empty">{words.noMatches}</div>}
       {groups
         ? (() => {
             let i = custom ? 0 : -1
@@ -465,14 +470,14 @@ export function ListboxPanel({
         <div className="nds-combo-search">
           <Search size={13} aria-hidden />
           <input autoFocus={autoFocus} value={ownQuery} onChange={(e) => { setOwnQuery(e.target.value); if (controlled) moveActive(() => 0); else setOwnActive(null) }}
-            placeholder={searchPlaceholder} aria-label="Search options" />
+            placeholder={searchPlaceholder === undefined ? words.search : searchPlaceholder} aria-label={words.searchOptions} />
         </div>
       )}
       {acts.length ? (
         <div role="listbox" id={idPrefix ? `${idPrefix}-listbox` : undefined} aria-label={ariaLabel}>{list}</div>
       ) : list}
       {acts.length > 0 && (
-        <div className="nds-listbox-actions" role="group" aria-label={actionsLabel}>
+        <div className="nds-listbox-actions" role="group" aria-label={actionsLabel === undefined ? words.actions : actionsLabel}>
           {acts.map((a, k) => {
             const i = matches.length + k
             return (

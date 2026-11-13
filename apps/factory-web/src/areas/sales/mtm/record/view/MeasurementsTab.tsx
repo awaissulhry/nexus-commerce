@@ -3,7 +3,7 @@
 import { useId } from 'react'
 import Link from 'next/link'
 import { ArrowLeftRight, Check, MessageSquareWarning, PencilRuler, Send } from 'lucide-react'
-import { Banner, Card, EmptyState, Field, Listbox } from '@nexus/ui/components'
+import { Banner, Card, EmptyState, Field } from '@nexus/ui/components'
 import { Button, InfoTip, Select, Spinner, Tag } from '@nexus/ui/primitives'
 import { CheckList, Section, type CheckLine } from '../../../../quality/_shared/parts'
 import { Timeline } from '../../../../../lib/i18n/ds-parts'
@@ -11,6 +11,7 @@ import type { ProfileRecord, Revision } from '../../api'
 import { basicLines, beyondPoints, brokenRules, formPoints, measureLines, rangeVerdict, reviewDraftFor, reviewHeld, rightHeld, ruleWords, styleFindingsOf, templatesHref, type Phrase } from '../../model'
 import { ReviewPill, useWords } from '../../parts'
 import type { ProfileRecordActions, ProfileRecordModel } from '../view-model'
+import { Listbox } from '../../../../../lib/i18n/ds-parts' // B-W2b-F41: the DS parts in the page's language
 
 /**
  * The rider profile's Measurements tab (design rider.measurements): the revision read (a Listbox of every revision; Compare two;

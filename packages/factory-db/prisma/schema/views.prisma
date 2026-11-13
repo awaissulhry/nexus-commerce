@@ -44,6 +44,8 @@ model SavedView {
   role       Role?       @relation(fields: [tenantId, roleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   company    Company?    @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   exportJobs ExportJob[]
+  // W2b notify-depth.prisma (wave 47/57): the people who follow it (removed with it).
+  followers  ViewFollower[]
 
   @@unique([tenantId, ownerId, listKey, name])
   // The target of the exports' tenant-safe reference.

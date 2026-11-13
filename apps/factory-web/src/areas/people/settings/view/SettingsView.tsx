@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from 'react'
 import { MoreHorizontal } from 'lucide-react'
-import { Banner, Card, EmptyState, Field, Menu, MultiSelect } from '@nexus/ui/components'
+import { Banner, Card, EmptyState, Field, Menu } from '@nexus/ui/components'
 import { LawRef } from '@nexus/ui/components/LawRef/index'
 import { Button, Input, NumberStepper, SegmentedControl, Skeleton, Spinner, Toggle } from '@nexus/ui/primitives'
 import type { AttendanceSettings } from '@nexus/factory-domain/people/attendance/rules'
@@ -17,6 +17,7 @@ import { exampleOf, isChecked, lawHours, LIMIT_ORDER, limitHeld, limitsChanged, 
 import { AbsenceCard, CodeDialog, type AbsenceState, type CodesActions } from './AbsenceCard'
 import { ConsultantDialog, PayrollCard, ReviewCard, type PayrollActions, type PayrollState, type ReviewActions, type ReviewState } from './PayrollCard'
 import { GateDialogs, PrivacyCard, type PrivacyActions, type PrivacyState } from './PrivacyCard'
+import { MultiSelect } from '../../../../lib/i18n/ds-parts' // B-W2b-F41: the DS parts in the page's language
 import '../settings.css'
 
 /** A section's read: its own loading and its own failure (the other sections keep working). */

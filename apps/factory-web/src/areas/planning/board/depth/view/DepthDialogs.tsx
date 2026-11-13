@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Banner, EmptyState, Field, KeyValue, MultiSelect, SummaryTable } from '@nexus/ui/components'
+import { Banner, EmptyState, Field, KeyValue, SummaryTable } from '@nexus/ui/components'
 import { Button, NumberStepper, RadioCard, SegmentedControl, Select, Skeleton, Spinner, Tag } from '@nexus/ui/primitives'
 import { ExportJobDialog } from '../../../../../list-frame/tools/dialogs'
 import { DateField, Modal, ReviewChangesModal, Textarea } from '../../../../../lib/i18n/ds-parts'
@@ -13,6 +13,7 @@ import { whenWords, type Refusal } from '../../model'
 import type { BoardActions, BoardDialog, BoardViewModel } from '../../view-model'
 import { backlogChanges, backlogLeftOut, materialWords, sheetLanes, triedMoveWords, type DepthWords } from '../model'
 import { DaySheetPreview } from './DaySheetPreview'
+import { MultiSelect } from '../../../../../lib/i18n/ds-parts' // B-W2b-F41: the DS parts in the page's language
 
 /**
  * The board's W2b pop-ups (SCR-122, B-W2b-337): the material check of a drop ("Leather arrives 14 Nov. Earliest start with

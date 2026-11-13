@@ -1,13 +1,14 @@
 'use client'
 
 import { useEffect, useId } from 'react'
-import { Banner, Field, Listbox } from '@nexus/ui/components'
+import { Banner, Field } from '@nexus/ui/components'
 import { Button, Spinner } from '@nexus/ui/primitives'
 import { Modal, Textarea } from '../../../../lib/i18n/ds-parts'
 import { finishProblems } from '../depth/model'
 import type { FinishReason } from '../model'
 import type { CloseActions, CloseModel } from '../view-model'
 import { say, useWords } from './parts'
+import { Listbox } from '../../../../lib/i18n/ds-parts' // B-W2b-F41: the DS parts in the page's language
 
 /**
  * Close return (design sales.returns/pop:returns.close; row ⋯ and the record): the finish reason (required; SAL-360's six,

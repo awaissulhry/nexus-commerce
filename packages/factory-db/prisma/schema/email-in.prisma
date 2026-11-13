@@ -17,6 +17,10 @@
 // these rows. The raw mail is never shown; the stored HTML is sanitised. Rows are never deleted; what SES said never
 // changes, what the mail held is written once, and the status moves only along the machine (the …_email_in_guards
 // trigger, for every login).
+//
+// W2b schema wave 47/57 (B-W2b-366; COL-021, COL-027): team inboxes and the capture address (notify-depth.prisma). A mail
+// carries its team inbox, its assignee, closed, snoozed and a follow-up; these work columns still move once it is MATCHED
+// (the …_notify_depth_w2b_guards migration redefines the guard above for that).
 
 /// One mail SES received for the tenant (A1 §2.3 EmailInbound).
 model InboundEmail {
@@ -94,6 +98,20 @@ model InboundEmail {
   sortedAt        DateTime?            @db.Timestamptz(3)
   /// The person who assigned, released or rejected it (null: the worker).
   sortedById      String?              @db.Uuid
+  /// W2b (schema wave 47/57, B-W2b-366; COL-027; design home.mail "Team inbox: assign to a person, close, snooze,
+  /// follow-up that cancels itself when the partner replies"): the team inbox it came to (by the local part of a
+  /// recipient, a capture address's default, or moved by a person), of the mail's company when it has one; the office
+  /// user it is assigned to and when (both or neither: it leaves the queue for the others); closed when done (when, and
+  /// by whom: null the system); snoozed off the queue until a time; a follow-up until a time, when it comes back unless a
+  /// later mail joins its thread first (the database then clears it, …_notify_depth_w2b_guards). These move on a MATCHED
+  /// mail too; a REJECTED one changes no more.
+  teamInboxId     String?              @db.Uuid
+  assigneeId      String?              @db.Uuid
+  assignedAt      DateTime?            @db.Timestamptz(3)
+  closedAt        DateTime?            @db.Timestamptz(3)
+  closedById      String?              @db.Uuid
+  snoozedUntil    DateTime?            @db.Timestamptz(3)
+  followUpUntil   DateTime?            @db.Timestamptz(3)
   version         Int                  @default(1)
   createdAt       DateTime             @default(now()) @db.Timestamptz(3)
   updatedAt       DateTime             @default(now()) @updatedAt @db.Timestamptz(3)
@@ -107,6 +125,9 @@ model InboundEmail {
   senderParty   Party?             @relation(fields: [tenantId, senderPartyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   // The contact is one of the sender party's own contacts.
   senderContact PartyContact?      @relation(fields: [tenantId, senderPartyId, senderContactId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b notify-depth.prisma (wave 47/57): its team inbox and its assignee (Restrict, as above).
+  teamInbox     TeamInbox?         @relation(fields: [tenantId, teamInboxId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  assignee      User?              @relation("InboundEmailAssignee", fields: [tenantId, assigneeId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([tenantId, sesMessageId])
   @@unique([tenantId, emailMessageId])
@@ -114,6 +135,9 @@ model InboundEmail {
   @@index([tenantId, status, receivedAt])
   // A thread's received mail.
   @@index([tenantId, threadId])
+  // W2b (wave 47/57): a team inbox's open mail, and the mail assigned to a person.
+  @@index([tenantId, teamInboxId, closedAt])
+  @@index([tenantId, assigneeId])
 }
 
 /// Where a received mail is: RECEIVED → FETCHED | REJECTED (a virus) | FAILED (the raw mail could not be read);

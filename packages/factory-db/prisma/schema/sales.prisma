@@ -922,6 +922,9 @@ model SalesSettings {
   /// W2b (schema wave 23, B-W2b-157/-183's option; design portal.customer.orders "Ask to cancel" "Fee 15%"): the fee a
   /// customer's cancel request is charged, in percent of the cancelled lines' net value (0 to 100); null: free.
   cancelFeePct           Decimal?            @db.Decimal(7, 4)
+  /// W2b-6 (schema wave 47/57, B-W2b-366; SAL-033, B-W2b-295's need): the addresses whose mail makes an inquiry by itself
+  /// (`sales@…`), lower case, each once, at most 20; empty: none (an inquiry is made from a mail by hand).
+  inquiryAddresses       String[]            @default([])
   /// W2b-5 (schema wave 39/44, B-W2b-281; SAL-248): the caparra penitenziale (DepositKind CAPARRA_PENITENZIALE, c.c. art.
   /// 1386) may be asked: OFF by default and until the accountant's word on its wording (GATE-ACCOUNTANT). Read for a
   /// company from its own row, else from the tenant-wide row, else off.

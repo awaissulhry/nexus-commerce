@@ -102,6 +102,13 @@ model User {
   followedRecords     RecordFollower[]
   mentions            MessageMention[]
   assignedTasks       Task[]
+  // W2b notify-depth.prisma (wave 47/57): their notification choices, push devices, followed views, reminders, and the
+  // team-inbox mail assigned to them.
+  notificationPreferences NotificationPreference[]
+  pushSubscriptions       PushSubscription[]
+  followedViews           ViewFollower[]
+  reminders               Reminder[]
+  assignedInboundEmails   InboundEmail[]          @relation("InboundEmailAssignee")
   // views.prisma: their saved views, their exports and the reports sent to them.
   savedViews          SavedView[]
   exportJobs          ExportJob[]

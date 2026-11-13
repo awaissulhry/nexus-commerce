@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Banner, Card, EmptyState, Field, OrderedList } from '@nexus/ui/components'
+import { Banner, Card, EmptyState, Field } from '@nexus/ui/components'
 import { Button, NumberStepper, Pill, Select, Toggle } from '@nexus/ui/primitives'
 import { EditModeBar, Modal } from '../../../../lib/i18n/ds-parts'
 import { formatDate, formatNumber } from '../../../../lib/i18n/format'
@@ -12,6 +12,7 @@ import { recordKindOf, TRIGGER_EVENTS, type ChipKind, type Frequency, type Trigg
 import { chipPickable, DUE_HOURS_MAX, frequencyWords, planHref, ruleProblems, rulesChanges, rulesPlan, type EventFacts, type RuleDraft, type RulePlanFacts } from '../model'
 import { AddIcon, ChipEditor, ChipsLine, problemAt, SectionHead, useSay } from './parts'
 import type { PlansModel } from './PlansView'
+import { OrderedList } from '../../../../lib/i18n/ds-parts' // B-W2b-F41: the DS parts in the page's language
 
 export interface TriggersActions {
   onRules?: (drafts: RuleDraft[]) => void

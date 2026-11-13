@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from 'react'
 import { FileSearch, MoreHorizontal, SlidersHorizontal, X } from 'lucide-react'
-import { Banner, EmptyState, Menu, MultiSelect } from '@nexus/ui/components'
+import { Banner, EmptyState, Menu } from '@nexus/ui/components'
 import { SectionLayout } from '@nexus/ui/patterns'
 import { Button, Select, Tag } from '@nexus/ui/primitives'
 import { AsOf } from '../../../../lib/i18n/ds-parts'
@@ -16,6 +16,7 @@ import { AllActionsDialog, EvidenceFinder, KeysDialog } from './dialogs'
 import { OverrideModal } from './OverrideModal'
 import { ActionsPanel, cellWord, ExpiryPanel, GatesPanel, KpiPanel, MatrixPanel } from './Panels'
 import { STATUS_SECTIONS, type StatusActions, type StatusModel, type StatusSection } from './types'
+import { MultiSelect } from '../../../../lib/i18n/ds-parts' // B-W2b-F41: the DS parts in the page's language
 import '../status.css'
 
 export type { Read, StatusActions, StatusModel } from './types'

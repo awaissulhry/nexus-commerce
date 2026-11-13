@@ -1,11 +1,12 @@
 'use client'
 
-import { Banner, Field, Listbox } from '@nexus/ui/components'
+import { Banner, Field } from '@nexus/ui/components'
 import { Button, Input, RadioCard, SegmentedControl, Skeleton } from '@nexus/ui/primitives'
 import { ActionConfirm, Modal, StepUpModal } from '../../../../lib/i18n/ds-parts'
 import type { Locale } from '../../../../lib/i18n/locales'
 import { useT } from '../../../../lib/i18n/provider'
 import type { HandoverSummary, InviteDraft } from '../model'
+import { Listbox } from '../../../../lib/i18n/ds-parts' // B-W2b-F41: the DS parts in the page's language
 
 /**
  * The account pop-ups every partner kind's admin and person share (lifted from the customer's Account, B-W2b-196, by

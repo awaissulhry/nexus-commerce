@@ -4,11 +4,12 @@ import { useEffect } from 'react'
 import { Hand } from 'lucide-react'
 import { HOLD_SUBJECT_TYPES, type HoldSubjectType } from '@nexus/factory-domain/quality/holds/rules'
 import { Banner, Field } from '@nexus/ui/components'
-import { Button, Kbd, Select, Skeleton, Spinner, TagInput, Toggle, Input } from '@nexus/ui/primitives'
+import { Button, Kbd, Select, Skeleton, Spinner, Toggle, Input } from '@nexus/ui/primitives'
 import { Modal, Textarea } from '../../../../../lib/i18n/ds-parts'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { blocksKey, isStock, kindKey, nounKey, quantityWords, placeable, placeProblems, withKind, type PlaceDraft, type PlaceModel } from '../../model'
 import { HoldsMessages } from '../../view/parts'
+import { TagInput } from '../../../../../lib/i18n/ds-parts' // B-W2b-F41: the DS parts in the page's language
 
 /** Words of a work order's status change when the hold names it (the preview's `move`). */
 const MOVE_KEY = { HOLD: 'place.wo.HOLD', ALREADY: 'place.wo.ALREADY', KEEP: 'place.wo.KEEP', REFUSED: 'place.wo.REFUSED' } as const

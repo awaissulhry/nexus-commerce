@@ -24,6 +24,8 @@
 import { useMemo, useState, type ComponentType, type ReactNode } from 'react'
 import { ChevronDown, ExternalLink } from 'lucide-react'
 import { resolveActiveNav } from './app-rail-active'
+import { mergeLabels } from '../../lib/labels'
+import { APP_RAIL_LABELS, type AppRailLabels } from './AppRailLabels'
 import type { LucideIcon } from 'lucide-react'
 
 /** What the rail passes to the app's link: the row's address, class, current-page state, name and content. */
@@ -82,8 +84,8 @@ export interface RailNavItem {
 }
 
 /** Shared trailing indicator (dot or Connect) for a nav row. */
-function RailIndicator({ indicator }: { indicator?: 'action' | 'warning' | 'disconnected' }) {
-  if (indicator === 'disconnected') return <span className="h10-connect">Connect</span>
+function RailIndicator({ indicator, connect = APP_RAIL_LABELS.connect }: { indicator?: 'action' | 'warning' | 'disconnected'; connect?: string }) {
+  if (indicator === 'disconnected') return <span className="h10-connect">{connect}</span>
   if (indicator === 'action') return <span className="h10-dot action" aria-hidden="true" />
   if (indicator === 'warning') return <span className="h10-dot warning" aria-hidden="true" />
   return null
@@ -122,9 +124,12 @@ export interface AppRailProps {
   pinned?: boolean
   /** Opens the "all markets" modal for a channel sub-item (Amazon/eBay). */
   onSeeAllMarkets?: (sub: RailSubItem) => void
+  /** B-W2b-F41: the rail's own words in the person's language; a word left out stays English. */
+  labels?: Partial<AppRailLabels>
 }
 
-export function AppRail({ navItems, pathname, LinkComponent, brand, header, footer, pinned, onSeeAllMarkets }: AppRailProps) {
+export function AppRail({ navItems, pathname, LinkComponent, brand, header, footer, pinned, onSeeAllMarkets, labels }: AppRailProps) {
+  const words = mergeLabels(APP_RAIL_LABELS, labels)
   const isActiveHref = (href: string) =>
     pathname === href || pathname.startsWith(`${href}/`)
 
@@ -182,7 +187,7 @@ export function AppRail({ navItems, pathname, LinkComponent, brand, header, foot
 
       {header != null && <div className="h10-railhdr-wrap">{header}</div>}
 
-      <nav className="h10-nav" aria-label="Application navigation">
+      <nav className="h10-nav" aria-label={words.navigation}>
         {navItems.map((it) => {
           const hasChildren = !!it.children?.length
           // A parent is "section-active" (subtle highlight) when you're on one
@@ -201,7 +206,7 @@ export function AppRail({ navItems, pathname, LinkComponent, brand, header, foot
           const isOpen = hasChildren && !!open[it.href]
           /* Step 4 (2026-10-01) — the resting rail shows only icons; its labels fade in on hover. The link carries its
              name itself, so it is named however the label is drawn ("Products, 4 pending"). */
-          const itemName = it.badge !== undefined && it.badge > 0 ? `${it.label}, ${it.badge} pending` : it.label
+          const itemName = it.badge !== undefined && it.badge > 0 ? words.withCount(it.label, it.badge) : it.label
 
           const bodyInner = (
             <>
@@ -210,12 +215,12 @@ export function AppRail({ navItems, pathname, LinkComponent, brand, header, foot
               {it.badge !== undefined && it.badge > 0 && (
                 <span
                   className="h10-nav-badge"
-                  aria-label={`${it.badge} pending`}
+                  aria-label={words.count(it.badge)}
                 >
                   {it.badge > 99 ? '99+' : it.badge}
                 </span>
               )}
-              <RailIndicator indicator={it.indicator} />
+              <RailIndicator indicator={it.indicator} connect={words.connect} />
             </>
           )
 
@@ -227,7 +232,7 @@ export function AppRail({ navItems, pathname, LinkComponent, brand, header, foot
                   target="_blank"
                   rel="noopener noreferrer"
                   className="h10-item"
-                  aria-label={`${itemName} (opens in a new tab)`}
+                  aria-label={words.newTab(itemName)}
                 >
                   {bodyInner}
                   <ExternalLink className="ext" size={14} aria-hidden="true" />
@@ -249,7 +254,7 @@ export function AppRail({ navItems, pathname, LinkComponent, brand, header, foot
                   <button
                     type="button"
                     className="h10-parent-chev"
-                    aria-label={isOpen ? `Collapse ${it.label}` : `Expand ${it.label}`}
+                    aria-label={isOpen ? words.collapse(it.label) : words.expand(it.label)}
                     aria-expanded={isOpen}
                     onClick={(e) => {
                       e.preventDefault()
@@ -291,7 +296,7 @@ export function AppRail({ navItems, pathname, LinkComponent, brand, header, foot
                           className={`h10-subitem ${childActive ? 'on' : ''}`}
                         >
                           <span className="sublbl">{c.label}</span>
-                          <RailIndicator indicator={c.indicator} />
+                          <RailIndicator indicator={c.indicator} connect={words.connect} />
                         </LinkComponent>
                       )
                     }
@@ -307,12 +312,12 @@ export function AppRail({ navItems, pathname, LinkComponent, brand, header, foot
                           <LinkComponent href={c.href} className="subname">
                             {c.label}
                           </LinkComponent>
-                          <RailIndicator indicator={c.indicator} />
+                          <RailIndicator indicator={c.indicator} connect={words.connect} />
                           <button
                             type="button"
                             className="subchev-btn"
                             aria-expanded={subOpen}
-                            aria-label={subOpen ? `Collapse ${c.label} markets` : `Expand ${c.label} markets`}
+                            aria-label={subOpen ? words.collapseMarkets(c.label) : words.expandMarkets(c.label)}
                             onClick={() => toggle(c.href)}
                           >
                             <ChevronDown
@@ -343,7 +348,7 @@ export function AppRail({ navItems, pathname, LinkComponent, brand, header, foot
                                   onClick={() => onSeeAllMarkets(c)}
                                 >
                                   <span className="mname">
-                                    See all {c.moreMarketsCount} markets
+                                    {words.seeAllMarkets(c.moreMarketsCount)}
                                   </span>
                                 </button>
                               )}

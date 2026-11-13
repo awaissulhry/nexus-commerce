@@ -153,6 +153,8 @@ model SecretValue {
   carrierAccount      CarrierAccount? @relation("CarrierAccountNumber")
   partyCarrierAccount Party?          @relation("PartyCarrierAccount")
   webhookSecretOf IntegrationAccount[] @relation("IntegrationAccountWebhookSecret")
+  // W2b notify-depth.prisma (wave 47/57): the push subscription whose keys it seals (purpose `notifications.push`).
+  pushSubscription PushSubscription?
 
   // The target of the accounts' tenant-safe references.
   @@unique([tenantId, id])

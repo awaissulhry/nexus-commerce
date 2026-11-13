@@ -82,3 +82,7 @@ export { REVIEW_CHANGES_LABELS, type ReviewChangesLabels } from './ReviewChanges
 export { DETAIL_MODAL_LABELS, type DetailModalLabels } from './DetailModalLabels'
 export { STEP_UP_MODAL_LABELS, type StepUpModalLabels } from './StepUpModalLabels'
 export { PREFERENCES_MODAL_LABELS, type PreferencesModalLabels } from './PreferencesModalLabels'
+// B-W2b-F41: the words of the parts that spoke English only (WorkspaceSubheader, Lightbox, ReplyComposer).
+export { WORKSPACE_SUBHEADER_LABELS, type WorkspaceSubheaderLabels } from './WorkspaceSubheaderLabels'
+export { LIGHTBOX_LABELS, type LightboxLabels } from './LightboxLabels'
+export { REPLY_COMPOSER_LABELS, type ReplyComposerLabels } from './ReplyComposerLabels'
