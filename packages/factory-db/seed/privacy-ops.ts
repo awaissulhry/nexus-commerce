@@ -35,7 +35,8 @@ import { seed as seedAuth } from './auth'
  *              company A: invoices 120 months then archived. All only report.
  *   sweeps     report runs (DONE: the first row), mail (FAILED, a code), job runs (DONE): each a REPORT.
  *   errors     the refused SDI send of the integration seed (OPEN: the first row), its rejected webhook (DISMISSED with the
- *              reason), a mail send that timed out (RETRIED by the owner), an outbox event that went DEAD (OPEN).
+ *              reason), a mail send that timed out (RETRIED by the owner), an outbox event whose job failed (OPEN; the event
+ *              itself PUBLISHED: the golden flows leave no event undelivered).
  *   runs       outbox.lag twice (SUCCEEDED: the first row), portalTasks.remind (FAILED, its error), a run of
  *              portalNotifications.digest the owner asked for (SUCCEEDED).
  *
@@ -78,7 +79,7 @@ export interface PrivacyOpsSeed {
   readonly erasureIds: readonly string[]
   readonly ruleIds: { readonly reportRuns: string; readonly inboundMail: string; readonly invoicesA: string; readonly errors: string; readonly runs: string; readonly exports: string }
   readonly sweepIds: readonly string[]
-  readonly errorIds: { readonly sdiRefused: string; readonly webhookRejected: string; readonly mailTimeout: string; readonly outboxDead: string }
+  readonly errorIds: { readonly sdiRefused: string; readonly webhookRejected: string; readonly mailTimeout: string; readonly jobFailed: string }
   readonly runIds: readonly string[]
 }
 
@@ -118,7 +119,7 @@ export async function seed(context: SeedContext): Promise<PrivacyOpsSeed> {
       sdiRefused: firstId('privacy-ops:error:sdi-refused'),
       webhookRejected: id('privacy-ops:error:webhook-rejected'),
       mailTimeout: id('privacy-ops:error:mail-timeout'),
-      outboxDead: id('privacy-ops:error:outbox-dead'),
+      jobFailed: id('privacy-ops:error:job-failed'),
     },
     runIds: [firstId('privacy-ops:run:outbox-lag:1'), id('privacy-ops:run:outbox-lag:2'), id('privacy-ops:run:portal-remind'), id('privacy-ops:run:digest-now')],
   }
@@ -320,7 +321,8 @@ export async function seed(context: SeedContext): Promise<PrivacyOpsSeed> {
   // --- the error queue (PLT-201) ------------------------------------------------------------------------------------------
   const E = result.errorIds
   const timeoutCall = id('privacy-ops:call:mail-timeout')
-  const deadEvent = id('privacy-ops:outbox:dead')
+  // Sorts last (eight f's): the isolation tests copy a tenant's FIRST outbox event, and a copy is born PENDING.
+  const failedEvent = `ffffffff${id('privacy-ops:outbox:job-failed').slice(8)}`
   const errorItems: Prisma.IntegrationErrorItemCreateManyInput[] = [
     {
       id: E.sdiRefused,
@@ -365,15 +367,15 @@ export async function seed(context: SeedContext): Promise<PrivacyOpsSeed> {
       updatedAt: minutes(120),
     },
     {
-      id: E.outboxDead,
+      id: E.jobFailed,
       companyId: companyA,
-      key: `outbox:${deadEvent}`,
+      key: `outbox:${failedEvent}`,
       source: IntegrationErrorSource.OUTBOX,
-      sourceId: deadEvent,
+      sourceId: failedEvent,
       operation: 'seed.example',
-      reasonCode: 'publish_failed',
-      reasonText: 'The queue refused the event five times (made up).',
-      tries: 5,
+      reasonCode: 'job_failed',
+      reasonText: 'The job that handles the event failed three times (made up).',
+      tries: 3,
       firstFailedAt: minutes(150),
       lastFailedAt: minutes(170),
       createdAt: minutes(170),
@@ -401,17 +403,17 @@ export async function seed(context: SeedContext): Promise<PrivacyOpsSeed> {
         ],
         skipDuplicates: true,
       })
-      // An event no handler knows (as seed/outbox.ts), which the relay gave up on.
+      // An event no handler knows (as seed/outbox.ts), published, whose job failed.
       await tx.outboxEvent.createMany({
         data: [
           {
-            id: deadEvent,
+            id: failedEvent,
             companyId: companyA,
             type: 'seed.example',
             version: 1,
             context: 'seed',
             subject: companyA,
-            correlationId: 'seed-privacy-ops-dead',
+            correlationId: 'seed-privacy-ops-job-failed',
             source: 'seed.example',
             occurredAt: minutes(140),
             payload: { seeded: true },
@@ -419,7 +421,7 @@ export async function seed(context: SeedContext): Promise<PrivacyOpsSeed> {
         ],
         skipDuplicates: true,
       })
-      await tx.outboxEvent.updateMany({ where: { id: deadEvent, status: 'PENDING' }, data: { status: 'DEAD', attempts: 5, lastError: 'seed: the queue refused it (made up)' } })
+      await tx.outboxEvent.updateMany({ where: { id: failedEvent, status: 'PENDING' }, data: { status: 'PUBLISHED', attempts: 1, publishedAt: minutes(141) } })
       await tx.integrationErrorItem.createMany({ data: errorItems, skipDuplicates: true })
       await tx.integrationErrorItem.updateMany({
         where: { id: E.webhookRejected, state: IntegrationErrorState.OPEN },
