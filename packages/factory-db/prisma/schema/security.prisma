@@ -1,0 +1,204 @@
+// Security and audit in depth (W2b-6, schema wave 52/57, B-W2b-373; features PLT-031, PLT-063, PLT-064, PLT-068, PLT-074,
+// PLT-075; design admin.security "Session lengths", "Actions that ask for a fresh code", "Security events"; admin.audit
+// "Who looked"; shell.profile and admin.users "Where I'm signed in"; Owner answer W2b-6 question 3 = A). Roles, sessions,
+// step-up and the audit log exist since W0 (roles.prisma, auth.prisma, audit.prisma); this keeps the session lengths and the
+// step-up rules as data and records every step-up try, the security events and the reads of sensitive records. Rule 2: GDPR
+// art. 32 asks to know who read personal data; every sign-in is a security event. Beside it: Role.archivedAt and
+// archivedById (roles.prisma: a custom role is archived, never deleted), Session's device and place and the SessionEndReason
+// values ENDED_BY_USER and ENDED_BY_ADMIN (auth.prisma).
+//
+//   SecuritySettings  the tenant's session lengths (office idle and longest; portal idle and longest, never beyond A1's 30
+//                     minutes and 12 hours, which the database holds on every partner session) and its step-up rules (the
+//                     risky actions switched off, the failures in a row before step-up locks, how long it locks). The floor
+//                     keeps its idle minutes and shift ends per site (floor-auth.prisma FloorSettings). No row: the defaults.
+//   StepUpAttempt     every try to step up on a session (PLT-063): who, when, for which action, the result, and the
+//                     fingerprint of the code that worked (a code works once per person: the unique key). Step-up locks
+//                     after the tenant's failures in a row within its lock time, and while locked a try is only recorded as
+//                     LOCKED. Append-only.
+//   SecurityEvent     what security watches (PLT-075): sign-ins and failed ones (also with an address nobody has),
+//                     lockouts, two-factor changes, refusals, role changes, API key use, exports, step-up locks; who (or
+//                     nobody known), from where (the address's keyed hash and country, never the address), on which
+//                     surface, about which record, with details as codes. Append-only.
+//   ReadLog           who opened, downloaded or exported a sensitive record (PLT-074; Owner answer question 3 = A): only an
+//                     office person, only a record type of the list the database holds (cost sheets, personal data,
+//                     certificates, exports). Read by administrators and the Owner only (the API's permission); never a
+//                     figure about a person, never used to judge anyone's work (Statuto dei Lavoratori art. 4); the staff
+//                     notice says so in one line. Protected safety data keeps its own log (health.prisma ProtectedView).
+//                     Append-only.
+//
+// The ledgers carry no foreign key (as AuditLog): a ledger keeps what was true when it was written, and the person, the
+// session and the record are named by id. The …_security_audit_w2b_guards triggers hold the rules for every login.
+
+/// The security settings of a tenant (PLT-063, PLT-068; design admin.security). The row's id is the tenant's own id: at
+/// most one per tenant, read by that id; no row: the defaults below. Lengthening a session or switching a step-up off
+/// widens access: the API asks a fresh code for it. Changed, never deleted.
+model SecuritySettings {
+  /// The tenant's own id.
+  id                 String   @id @db.Uuid
+  tenantId           String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// An office session ends after this long without use: 15 minutes to 24 hours (a working day by default).
+  officeIdleMinutes  Int      @default(480)
+  /// An office session ends this long after sign-in at the latest: 1 hour to 30 days, never shorter than the idle time.
+  officeLongestHours Int      @default(168)
+  /// A portal session ends after this long without use: 5 to 30 minutes (A1 §3.10's 30 minutes at most).
+  portalIdleMinutes  Int      @default(30)
+  /// A portal session ends this long after sign-in at the latest: 1 to 12 hours (A1 §3.10's 12 hours at most).
+  portalLongestHours Int      @default(12)
+  /// The risky actions switched off: they ask no fresh code (the keys of factory-domain's step-up actions, each once).
+  /// Empty: every risky action asks one, also one added later.
+  stepUpOff          String[] @default([])
+  /// Wrong or reused codes in a row (since the last code that worked) within the lock time before step-up locks: 3 to 10.
+  stepUpMaxFailures  Int      @default(5)
+  /// How long those failures count, and so how long step-up stays locked after the last of them: 5 minutes to 24 hours.
+  stepUpLockMinutes  Int      @default(15)
+  version            Int      @default(1)
+  createdAt          DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById        String?  @db.Uuid
+}
+
+/// One try to step up (PLT-063): a person typed a code on a session to open a risky action. A code that worked is kept as
+/// its fingerprint, so it works once; wrong and reused codes count towards the lock (SecuritySettings: so many in a row
+/// within the lock time, since the last code that worked); while step-up is locked, a try is recorded as LOCKED and no
+/// code is checked. Written by the API in its own command, also when the step-up fails. Never changed or removed.
+/// @append-only
+model StepUpAttempt {
+  id              String       @id @db.Uuid
+  tenantId        String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The person stepping up (User.id).
+  userId          String       @db.Uuid
+  /// The session the code was typed on (Session.id), the person's own.
+  sessionId       String       @db.Uuid
+  /// Server time.
+  at              DateTime     @default(now()) @db.Timestamptz(3)
+  result          StepUpResult
+  /// The risky action it was for (a key of factory-domain's step-up actions); null: a step-up for every risky action.
+  action          String?
+  /// SUCCESS only: a keyed hash of the code that worked (and its time step), never the code; unique per person.
+  codeFingerprint String?
+
+  // A code works once per person.
+  @@unique([tenantId, userId, codeFingerprint])
+  @@index([tenantId, userId, at])
+}
+
+/// The result of a step-up try.
+enum StepUpResult {
+  /// The code was right: the session may do the risky action for a few minutes (Session.stepUpAt).
+  SUCCESS
+  WRONG_CODE
+  /// A code that already worked once.
+  REUSED_CODE
+  /// Step-up was locked: no code was checked.
+  LOCKED
+}
+
+/// One security event (PLT-075; design admin.security "Security events"): written by the API as it happens, also when
+/// nobody is known (a sign-in with an address no person has). Floor rows carry the device's site, portal and link rows may
+/// carry the party. Read by administrators (the API's permission). Never changed or removed.
+/// @append-only
+model SecurityEvent {
+  id         String            @id @db.Uuid
+  tenantId   String            @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The floor device's site: set exactly on a FLOOR event (the floor policy checks it).
+  siteId     String?           @db.Uuid
+  /// The party of a PORTAL or LINK event, when known (the partner policy checks it).
+  partyId    String?           @db.Uuid
+  /// Server time.
+  at         DateTime          @default(now()) @db.Timestamptz(3)
+  kind       SecurityEventKind
+  /// Where it came in.
+  surface    SecuritySurface
+  /// Who: the office or portal person (User.id), the floor worker (Worker.id) or the link's row; null only when nobody is
+  /// known (a failed sign-in with an unknown address, an API key's use).
+  actorId    String?           @db.Uuid
+  /// A keyed hash (HMAC-SHA-256, hex) of the shortened client address, as Session.ipHash: never the address.
+  ipHash     String?
+  /// The address's country (ISO 3166-1 alpha-2), when the API could tell.
+  ipCountry  String?
+  /// The record it is about (a model name and its id: the role changed, the export run), both or neither.
+  recordType String?
+  recordId   String?           @db.Uuid
+  /// What else, as codes: an object of up to 20 keys whose values are short words, numbers, true/false or lists of them
+  /// (`{ "reason": "WRONG_PASSWORD" }`, `{ "permission": "costing.view" }`); never an e-mail address or free text about a person.
+  details    Json              @default("{}")
+
+  @@index([tenantId, at])
+  @@index([tenantId, kind, at])
+  @@index([tenantId, actorId, at])
+}
+
+/// What a security event is.
+enum SecurityEventKind {
+  /// A person signed in (Rule 2: every sign-in is a security event).
+  SIGN_IN
+  /// A wrong password, code or PIN, or an address nobody has (details.reason).
+  SIGN_IN_FAILED
+  /// An account, a PIN or a link locked after wrong secrets.
+  LOCKOUT
+  /// Two-factor set up, switched off or reset for a person.
+  MFA_CHANGED
+  /// A signed-in session asked for something its permissions do not give (details.permission).
+  PERMISSION_DENIED
+  /// A role edited, given or ended (the record: the role or the assignment).
+  ROLE_CHANGED
+  /// An API key was used (no person: actorId null).
+  API_KEY_USED
+  /// Data left the system as a file (the record: the export).
+  EXPORT
+  /// Step-up locked after wrong codes (StepUpAttempt).
+  STEP_UP_LOCKED
+}
+
+/// Where a security event or a read came in.
+enum SecuritySurface {
+  /// The Office (the web app and its API calls with an office session).
+  OFFICE
+  /// A partner's portal.
+  PORTAL
+  /// A floor device.
+  FLOOR
+  /// A one-off link.
+  LINK
+  /// A direct API call with an API key.
+  API
+  /// The worker or the scheduler (a job; a report sent by itself).
+  SYSTEM
+}
+
+/// One read of a sensitive record by an office person (PLT-074; Owner answer W2b-6 question 3 = A): who opened, downloaded
+/// or exported which record, where, when. Only a record type of the list the database holds (cost sheets; personal data:
+/// people, accounts, contacts, measurements, leavers, absences, attendance, earnings and pay statements; certificates and
+/// training records; exports); protected safety data keeps its own log (health.prisma ProtectedView). Read by
+/// administrators and the Owner only (the API's permission); it never feeds a figure about one person and is never used to
+/// judge anyone's work (the staff notice says so). Never changed or removed.
+/// @append-only
+model ReadLog {
+  id         String          @id @db.Uuid
+  tenantId   String          @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The office person who read it (User.id, audience OFFICE).
+  userId     String          @db.Uuid
+  /// The record read: its model name (one of the database's list) and its id.
+  recordType String
+  recordId   String          @db.Uuid
+  action     ReadAction
+  /// OFFICE (a screen), API (a direct API call) or SYSTEM (sent to the person by a job: a report, a digest).
+  surface    SecuritySurface
+  /// Server time.
+  at         DateTime        @default(now()) @db.Timestamptz(3)
+
+  // "Who looked" at one record, newest first.
+  @@index([tenantId, recordType, recordId, at])
+  // "Filter by person" (a list, never a count).
+  @@index([tenantId, userId, at])
+}
+
+/// How a sensitive record was read.
+enum ReadAction {
+  /// Opened on a screen.
+  VIEW
+  /// Downloaded or printed as a file.
+  DOWNLOAD
+  /// Included in an export.
+  EXPORT
+}

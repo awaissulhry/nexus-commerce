@@ -811,7 +811,8 @@
         "SHIPPED": "Shipped",
         "CLOSED": "Closed",
         "CANCELLED": "Cancelled",
-        "PENDING_APPROVAL": "Waiting (factory review or approval)"
+        "PENDING_APPROVAL": "Waiting (factory review or approval)",
+        "DELIVERED": "Delivered"
       }
     }
   },

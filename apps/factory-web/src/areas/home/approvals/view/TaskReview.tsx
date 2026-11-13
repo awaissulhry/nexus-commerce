@@ -103,11 +103,13 @@ export function TaskReview({ model, actions, conversation, kindWords }: { model:
     )
   ) : null
 
+  // B-W2b-377 (B-W2b-361's gap): the request in words from codes (its kind and its record), never the API's English summary.
+  const sentence = task ? (task.record.label ? t('row.task', { kind: said(task.kindLabel, locale), label: task.record.label }) : said(task.kindLabel, locale)) : undefined
   const decided = detail?.decided ?? null
   const body = !task ? null : tab === 'change' ? (
     <div className="fw-apv-review">
       <Banner tone="info" title={t('review.asked', { who: task.requester.me ? t('you') : task.requester.kind === 'WORKER' ? t('aWorker') : task.requester.name, at: formatDateTime(task.requestedAt, { locale }) })}>
-        {task.summary}
+        {sentence}
       </Banner>
       {decided && (
         <Banner tone={task.status === 'APPROVED' ? 'success' : 'neutral'} title={t('review.decided', { status: t(`status.${task.status}`), who: decided.by.me ? t('you') : decided.by.name, at: formatDateTime(decided.at, { locale }) })}>
@@ -192,7 +194,7 @@ export function TaskReview({ model, actions, conversation, kindWords }: { model:
         open
         onClose={() => actions?.onOpen?.(null)}
         title={title}
-        subtitle={task ? task.summary : undefined}
+        subtitle={sentence}
         meta={
           task ? (
             <>

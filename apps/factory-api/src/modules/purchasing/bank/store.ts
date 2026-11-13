@@ -46,28 +46,6 @@ export const ACCOUNT_COLUMNS = {
 } as const satisfies Prisma.SupplierBankAccountSelect
 export type AccountRow = Prisma.SupplierBankAccountGetPayload<{ select: typeof ACCOUNT_COLUMNS }>
 
-/**
- * What a supplier's portal reads of its own accounts (the partner grants hide who called and who checked, and the call-back
- * number); the IBAN only masked (B-W2b-287's Decided 1: the partner could read its own full IBAN, we never send it).
- */
-export const PARTNER_ACCOUNT_COLUMNS = {
-  id: true,
-  ibanCountry: true,
-  ibanLast4: true,
-  bankName: true,
-  holder: true,
-  currency: true,
-  status: true,
-  proposedAt: true,
-  callBackAt: true,
-  activatedAt: true,
-  refusedAt: true,
-  refuseReason: true,
-  retiredAt: true,
-  version: true,
-} as const satisfies Prisma.SupplierBankAccountSelect
-export type PartnerAccountRow = Prisma.SupplierBankAccountGetPayload<{ select: typeof PARTNER_ACCOUNT_COLUMNS }>
-
 const [proposedEvent, calledBackEvent, activatedEvent, refusedEvent, retiredEvent] = qualificationEvents
 
 export { proposedEvent, calledBackEvent, refusedEvent, retiredEvent }

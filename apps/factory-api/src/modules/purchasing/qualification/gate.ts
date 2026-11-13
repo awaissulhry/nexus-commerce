@@ -7,13 +7,16 @@ import { PURCHASING_SEND, PURCHASING_VIEW } from '@nexus/factory-domain/purchasi
 import { decisionWordsOf, OVERRIDE_REFUSALS, overrideReasonOf, type GateAnswer } from '@nexus/factory-domain/purchasing/qualification/gate'
 import { PURCHASING_COMPLIANCE_OVERRIDE } from '@nexus/factory-domain/purchasing/qualification/permissions'
 import { events as qualificationEvents } from '@nexus/factory-domain/supplier-qualification/events'
-import { command, type CommandCaller, type CommandTools } from '../../../core/command'
+import { command, type CommandCaller } from '../../../core/command'
 import { serverClock } from '../../../core/time'
-import { newId } from '@nexus/factory-domain/core/ids'
 import { actorOf } from '../../../core/context'
-import { historyLine } from '../../../platform/approvals/engine'
+import type { FastifyRequest } from 'fastify'
+import { officeSessionOf } from '../../../platform/auth/sessions/authenticator'
+// B-W2b-377: the override is a PURCHASE_ORDER_COMPLIANCE request of the approval engine.
+import { askComplianceYes, decideComplianceYes, isTaskApprover, withdrawComplianceYes } from '../compliance-override/requests'
+import { APPROVAL_REFUSALS } from '@nexus/factory-domain/approvals/rules'
 import { officeContextOf, officeOrder, readOrder, type OrderRow, type Reader } from '../store'
-import { ASK_ACTION, DECIDE_ACTION, gateAnswerOf, lockOrder, namesOf, overrideRequestsOf, todayOf, WITHDRAW_ACTION, type OverrideRequest } from './store'
+import { ASK_ACTION, gateAnswerOf, lockOrder, namesOf, todayOf, type OverrideRequest } from './store'
 
 /**
  * The compliance gate on a purchase order (B-W2b-315; SCM-022; domain purchasing/qualification/gate): what holds an order at
@@ -30,13 +33,14 @@ import { ASK_ACTION, DECIDE_ACTION, gateAnswerOf, lockOrder, namesOf, overrideRe
  *   POST …/compliance-override/withdraw                the one who asked takes it back
  *   GET  /purchasing/compliance-overrides              the requests waiting for a yes (the decider's list)
  *
- * The request and its decision are domain lines of the approval engine on the PurchaseOrder (B-W2b-282's `historyLine`:
- * the order's approval history shows them); what a request covers (the fingerprint of what held the order) is on its audit
- * row. The order's own version does not move (a pending purchase-order approval of B-W2b-305 stays current). Without an
- * approval kind of its own (Schema needs) the request is not in Home › Approvals: its list is the route above.
+ * B-W2b-377: the request is a PURCHASE_ORDER_COMPLIANCE request of the approval engine (../compliance-override): listed in
+ * Home › Approvals, decided there or here by its approver (a rule's, else the office role that decides overrides), never by
+ * who asked. Requests asked before it (domain lines of the engine on the PurchaseOrder) are still read. What a request covers
+ * (the fingerprint of what held the order) is on its ask's audit row. The order's own version does not move (a pending
+ * purchase-order approval of B-W2b-305 stays current).
  */
 
-const [, , , , , , askedEvent, decidedEvent, withdrawnEvent] = qualificationEvents
+const [, , , , , , askedEvent] = qualificationEvents
 
 const OVERRIDABLE: readonly string[] = ['DRAFT', 'PENDING_APPROVAL']
 
@@ -68,6 +72,8 @@ function requestView(request: OverrideRequest | undefined, gate: GateAnswer, nam
   const state: 'WAITING' | 'APPROVED' | 'REJECTED' | 'WITHDRAWN' = request.decision === null ? 'WAITING' : request.decision.action
   return {
     lineId: request.lineId,
+    // B-W2b-377: the engine's request (Home › Approvals `?open=<taskId>`), null for one asked before it.
+    taskId: request.taskId,
     state,
     reason: request.reason,
     askedBy: { id: request.askedById, name: names.get(request.askedById) ?? null, me: request.askedById === me },
@@ -89,7 +95,9 @@ async function complianceView(caller: CommandCaller, order: OrderRow) {
   const waiting = newest?.decision === null
   const place = { companyId: order.companyId, siteId: order.siteId, partyId: order.partyId }
   const mayAsk = can(actor, PURCHASING_SEND, place) && OVERRIDABLE.includes(order.status) && answer.blocks.length > 0 && !answer.overridden && !(waiting && newest?.fingerprint === answer.fingerprint)
-  const mayDecide = can(actor, PURCHASING_COMPLIANCE_OVERRIDE, place) && waiting === true && newest!.askedById !== context.actorId
+  // B-W2b-377: an engine request is decided by its approver (a rule's, or the role that decides overrides) only.
+  const notApprover = waiting === true && newest!.taskId !== null && !(await caller.withClient((client) => isTaskApprover(client, newest!.taskId!, context.actorId, serverClock.now())))
+  const mayDecide = can(actor, PURCHASING_COMPLIANCE_OVERRIDE, place) && waiting === true && newest!.askedById !== context.actorId && !notApprover
   return {
     order: { id: order.id, number: order.number, status: order.status, partyId: order.partyId, version: order.version },
     requirements: answer.requirements.map((entry) => ({ ...entry, lineIds: [...entry.lineIds], seqs: [...entry.seqs], itemIds: [...entry.itemIds], itemCodes: [...entry.itemCodes] })),
@@ -101,7 +109,7 @@ async function complianceView(caller: CommandCaller, order: OrderRow) {
     request: requestView(newest, answer, names, context.actorId),
     may: { ask: mayAsk, decide: mayDecide, withdraw: waiting === true && newest!.askedById === context.actorId },
     heldWhy: {
-      decide: !waiting ? OVERRIDE_REFUSALS.notWaiting : newest!.askedById === context.actorId ? OVERRIDE_REFUSALS.own : !can(actor, PURCHASING_COMPLIANCE_OVERRIDE, place) ? 'You need purchasing.compliance.override.' : null,
+      decide: !waiting ? OVERRIDE_REFUSALS.notWaiting : newest!.askedById === context.actorId ? OVERRIDE_REFUSALS.own : !can(actor, PURCHASING_COMPLIANCE_OVERRIDE, place) ? 'You need purchasing.compliance.override.' : notApprover ? APPROVAL_REFUSALS.NOT_APPROVER : null,
     },
   }
 }
@@ -138,17 +146,18 @@ export async function askOverride(caller: CommandCaller, orderId: string, body: 
     if (answer.blocks.length === 0 || answer.overridden) throw new DomainError('conflict', OVERRIDE_REFUSALS.nothingHeld, [{ path: 'compliance', message: OVERRIDE_REFUSALS.nothingHeld }])
     const newest = requests[0]
     if (newest && newest.decision === null && newest.fingerprint === answer.fingerprint) throw new DomainError('conflict', OVERRIDE_REFUSALS.waiting, [{ path: 'compliance/override', message: OVERRIDE_REFUSALS.waiting }])
-    const lineId = await historyLine(tools, { companyId: order.companyId, recordType: 'PurchaseOrder', recordId: order.id, action: 'REQUESTED', byId: context.actorId, words: reason.reason })
+    // B-W2b-377: a PURCHASE_ORDER_COMPLIANCE request of the approval engine (Home › Approvals), not a domain line.
+    const taskId = await askComplianceYes(tools, order, context.actorId, reason.reason)
     tools.audit({
       action: ASK_ACTION,
       recordType: 'PurchaseOrder',
       recordId: order.id,
       companyId: order.companyId,
       siteId: order.siteId,
-      after: { requestLineId: lineId, fingerprint: answer.fingerprint, reason: reason.reason, held: answer.blocks.map((entry) => ({ kind: entry.kind, seqs: [...entry.seqs], itemCodes: [...entry.itemCodes], ruleId: entry.ruleId, state: entry.state })) },
+      after: { taskId, fingerprint: answer.fingerprint, reason: reason.reason, held: answer.blocks.map((entry) => ({ kind: entry.kind, seqs: [...entry.seqs], itemCodes: [...entry.itemCodes], ruleId: entry.ruleId, state: entry.state })) },
     })
     tools.emit(eventFor(askedEvent, { subject: order.id, companyId: order.companyId, siteId: order.siteId, payload: { ...party(order), held: answer.blocks.length } }))
-    return { requestLineId: lineId }
+    return { taskId }
   })
   return getCompliance(caller, orderId)
 }
@@ -157,50 +166,30 @@ export async function askOverride(caller: CommandCaller, orderId: string, body: 
  * POST …/compliance-override/decide (purchasing.compliance.override; a yes needs a fresh step-up): the newest request
  * waiting, decided by someone who did not ask it; a yes only while it covers exactly what holds the order.
  */
-export async function decideOverride(caller: CommandCaller, orderId: string, body: { readonly decision: 'APPROVED' | 'REJECTED'; readonly words?: string | null | undefined }, stepUp: () => void, idempotencyKey?: string) {
+export async function decideOverride(caller: CommandCaller, orderId: string, body: { readonly decision: 'APPROVED' | 'REJECTED'; readonly words?: string | null | undefined; readonly reasonCode?: string | undefined }, stepUp: () => void, idempotencyKey?: string) {
   const context = officeContextOf(caller)
   const seen = await decidableOrder(caller, orderId)
   if (!can(actorOf(context), PURCHASING_COMPLIANCE_OVERRIDE, { companyId: seen.companyId, siteId: seen.siteId, partyId: seen.partyId })) throw new ForbiddenError('Deciding a send without a valid document needs purchasing.compliance.override.')
   const words = decisionWordsOf(body.decision, body.words)
   if ('issue' in words) throw new ValidationError(words.issue.message, [words.issue])
-  if (body.decision === 'APPROVED') stepUp()
-  await command(caller, { name: 'purchasing.compliance.overrideDecide', idempotencyKey, input: { orderId, ...body } }, async (tools: CommandTools) => {
-    await lockOrder(tools.tx, seen.id)
-    const order = (await readOrder(tools.tx, seen.id))!
-    const requests = await overrideRequestsOf(tools.tx, order.id)
-    const newest = requests[0]
-    if (!newest || newest.decision !== null) throw new DomainError('conflict', OVERRIDE_REFUSALS.notWaiting, [{ path: 'compliance/override', message: OVERRIDE_REFUSALS.notWaiting }])
-    if (newest.askedById === context.actorId) throw new DomainError('forbidden', OVERRIDE_REFUSALS.own, [{ path: 'refusal/OWN_REQUEST', message: OVERRIDE_REFUSALS.own }])
-    if (body.decision === 'APPROVED') {
-      if (!OVERRIDABLE.includes(order.status)) throw new DomainError('conflict', OVERRIDE_REFUSALS.notDraft, [{ path: 'status', message: OVERRIDE_REFUSALS.notDraft }])
-      const { answer } = await gateAnswerOf(tools.tx, order, todayOf(tools.now))
-      if (newest.fingerprint === null || newest.fingerprint !== answer.fingerprint) throw new DomainError('conflict', OVERRIDE_REFUSALS.changed, [{ path: 'refusal/STALE', message: OVERRIDE_REFUSALS.changed }])
+  // B-W2b-377: the engine decides it (never the asker, only its approver, re-read first: what holds the order changed → STALE).
+  const stepUpAt = (): Date => {
+    stepUp()
+    try {
+      return officeSessionOf(caller as FastifyRequest).stepUpAt ?? serverClock.now()
+    } catch {
+      return serverClock.now()
     }
-    const lineId = await historyLine(tools, { companyId: order.companyId, recordType: 'PurchaseOrder', recordId: order.id, action: body.decision, byId: context.actorId, words: words.words })
-    tools.audit({ action: DECIDE_ACTION, recordType: 'PurchaseOrder', recordId: order.id, companyId: order.companyId, siteId: order.siteId, after: { requestLineId: newest.lineId, decisionLineId: lineId, decision: body.decision, fingerprint: newest.fingerprint, words: words.words } })
-    tools.emit(eventFor(decidedEvent, { subject: order.id, companyId: order.companyId, siteId: order.siteId, payload: { ...party(order), decision: body.decision } }))
-    return { decisionLineId: lineId }
-  })
+  }
+  await decideComplianceYes(caller, orderId, { decision: body.decision, words: words.words, reasonCode: body.reasonCode }, stepUpAt, OVERRIDE_REFUSALS.notWaiting, idempotencyKey)
   return getCompliance(caller, orderId)
 }
 
 /** POST …/compliance-override/withdraw (purchasing.send): the one who asked takes the request back. */
 export async function withdrawOverride(caller: CommandCaller, orderId: string, idempotencyKey?: string) {
-  const context = officeContextOf(caller)
-  const seen = await officeOrder(caller, orderId, PURCHASING_SEND)
-  await command(caller, { name: 'purchasing.compliance.overrideWithdraw', idempotencyKey, input: { orderId } }, async (tools) => {
-    await lockOrder(tools.tx, seen.id)
-    const order = (await readOrder(tools.tx, seen.id))!
-    const newest = (await overrideRequestsOf(tools.tx, order.id))[0]
-    if (!newest || newest.decision !== null) throw new DomainError('conflict', OVERRIDE_REFUSALS.notWaiting, [{ path: 'compliance/override', message: OVERRIDE_REFUSALS.notWaiting }])
-    if (newest.askedById !== context.actorId) throw new DomainError('forbidden', OVERRIDE_REFUSALS.notAsker, [{ path: 'refusal/NOT_REQUESTER', message: OVERRIDE_REFUSALS.notAsker }])
-    // The engine's historyLine writes decisions; a withdrawal is its own line (the database allows it, naming who took it back).
-    const lineId = newId()
-    await tools.tx.approvalEvent.create({ data: { id: lineId, companyId: order.companyId, taskId: null, recordType: 'PurchaseOrder', recordId: order.id, action: 'WITHDRAWN', byId: context.actorId, at: tools.now, createdAt: tools.now, createdById: context.actorId }, select: { id: true } })
-    tools.audit({ action: WITHDRAW_ACTION, recordType: 'PurchaseOrder', recordId: order.id, companyId: order.companyId, siteId: order.siteId, after: { requestLineId: newest.lineId, withdrawLineId: lineId } })
-    tools.emit(eventFor(withdrawnEvent, { subject: order.id, companyId: order.companyId, siteId: order.siteId, payload: party(order) }))
-    return { withdrawLineId: lineId }
-  })
+  await officeOrder(caller, orderId, PURCHASING_SEND)
+  // B-W2b-377: the engine's withdraw (only who asked: 403 refusal/NOT_REQUESTER).
+  await withdrawComplianceYes(caller, orderId, OVERRIDE_REFUSALS.notWaiting, idempotencyKey)
   return getCompliance(caller, orderId)
 }
 
@@ -218,8 +207,10 @@ export async function listOverrides(caller: CommandCaller, query: { readonly com
       orderBy: [{ at: 'desc' }, { id: 'desc' }],
       take: 500,
     })
+    // B-W2b-377: the engine's waiting PURCHASE_ORDER_COMPLIANCE requests (the domain lines above are the ones asked before it).
+    const tasks = await client.approvalTask.findMany({ where: { kind: 'PURCHASE_ORDER_COMPLIANCE', status: 'PENDING', ...(query.companyId ? { companyId: query.companyId } : {}) }, select: { recordId: true }, orderBy: [{ requestedAt: 'desc' }, { id: 'desc' }], take: 500 })
     const rows = []
-    for (const orderId of [...new Set(asked.map((row) => row.recordId))]) {
+    for (const orderId of [...new Set([...tasks.map((row) => row.recordId), ...asked.map((row) => row.recordId)])]) {
       const order = await readOrder(client, orderId)
       if (!order || !OVERRIDABLE.includes(order.status)) continue
       if (!can(actor, PURCHASING_COMPLIANCE_OVERRIDE, { companyId: order.companyId, siteId: order.siteId, partyId: order.partyId })) continue

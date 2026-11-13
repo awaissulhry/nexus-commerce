@@ -51,6 +51,9 @@ import { scanSweepCron } from './platform/files/scan/sweep'
 import { setReportSource } from './observability/tracker'
 // B-W2a-52: the daily purchase order confirmation reminders (sends nothing while a company's switch is off: the default).
 import { confirmationRemindersCron } from './modules/purchasing/reminders/daily'
+// B-W2b-377: a receipt released by its last yes posted for its receiver; the daily chase reminders (behind the Owner's switch).
+import { releasedReceiptHandler } from './modules/inventory/receiving/tolerance-hold'
+import { chaseRemindersCron } from './modules/purchasing/reminders/chase'
 // B-W2a-55: the payment reminder ladder (prepares reminders on its timers; a person approves and sends each one).
 import { ladderCron, ladderHandlers } from './modules/receivables/ladder'
 // B-W2a-61: a customer return's decided credit drafts its credit notes (a person issues them).
@@ -244,6 +247,8 @@ const W2B_317_HANDLERS: readonly EventHandler[] = [supplyLateHandler()]
 const W2B_294_HANDLERS: readonly EventHandler[] = [orderScheduleHandler()]
 // B-W2b-340
 const W2B_340_HANDLERS: readonly EventHandler[] = [orderOptionsHandler()]
+// B-W2b-377: a receipt whose lines beyond their tolerance all got their yes, posted for the person who recorded it.
+const W2B_377_HANDLERS: readonly EventHandler[] = [releasedReceiptHandler()]
 // B-W2b-11: the reports (one file each in modules/insights/reports/defs/), read by an export of a report.
 await loadReports(fileURLToPath(new URL('.', import.meta.url)))
 // B-W2b-120: the safety calendar's sources (one file each in modules/safety/calendar/sources/), read by an export of the calendar.
@@ -312,7 +317,7 @@ if (mode === 'worker') {
   await moveLiftsAll({ database, log }).catch((error) => log.error({ err: error }, 'the unblocked addresses could not be moved at start'))
   await writeStepsAll({ database, log }).catch((error) => log.error({ err: error }, 'the first-load steps could not be written at start'))
   const relay = startRelay({ database, publish: queuePublisher(kit), log })
-  const workers = startEventWorkers({ kit, handlers: [...HANDLERS, ...W2A_20_HANDLERS, ...W2A_32_HANDLERS, ...W2A_33_HANDLERS, ...W2A_55_HANDLERS, ...W2A_61_HANDLERS, ...W2A_62_HANDLERS, ...W2B_15_HANDLERS, ...W2B_40_HANDLERS, ...W2B_37_HANDLERS, ...W2B_42_HANDLERS, ...W2B_43_HANDLERS, ...W2B_101_HANDLERS, ...W2B_118_HANDLERS, ...W2B_125_HANDLERS, ...W2B_135_HANDLERS, ...W2B_160_HANDLERS, ...W2B_167_HANDLERS, ...W2B_185_HANDLERS, ...W2B_170_HANDLERS, ...W2B_200_HANDLERS, ...W2B_225_HANDLERS, ...W2B_251_HANDLERS, ...W2B_260_HANDLERS, ...W2B_256_HANDLERS, ...W2B_263_HANDLERS, ...W2B_313_HANDLERS, ...W2B_292_HANDLERS, ...W2B_305_HANDLERS, ...W2B_304_HANDLERS, ...W2B_317_HANDLERS, ...W2B_294_HANDLERS, ...W2B_340_HANDLERS], database, live: redis, log })
+  const workers = startEventWorkers({ kit, handlers: [...HANDLERS, ...W2A_20_HANDLERS, ...W2A_32_HANDLERS, ...W2A_33_HANDLERS, ...W2A_55_HANDLERS, ...W2A_61_HANDLERS, ...W2A_62_HANDLERS, ...W2B_15_HANDLERS, ...W2B_40_HANDLERS, ...W2B_37_HANDLERS, ...W2B_42_HANDLERS, ...W2B_43_HANDLERS, ...W2B_101_HANDLERS, ...W2B_118_HANDLERS, ...W2B_125_HANDLERS, ...W2B_135_HANDLERS, ...W2B_160_HANDLERS, ...W2B_167_HANDLERS, ...W2B_185_HANDLERS, ...W2B_170_HANDLERS, ...W2B_200_HANDLERS, ...W2B_225_HANDLERS, ...W2B_251_HANDLERS, ...W2B_260_HANDLERS, ...W2B_256_HANDLERS, ...W2B_263_HANDLERS, ...W2B_313_HANDLERS, ...W2B_292_HANDLERS, ...W2B_305_HANDLERS, ...W2B_304_HANDLERS, ...W2B_317_HANDLERS, ...W2B_294_HANDLERS, ...W2B_340_HANDLERS, ...W2B_377_HANDLERS], database, live: redis, log })
   stops.push(() => relay.stop(), () => workers.close())
 } else {
   const crons: CronJob[] = [outboxLagCron({ database, kit, log }), rolesSyncCron({ database, log }), certificateExpiryCron({ database, log }), sdiPollCron({ database, log }), trackingPollCron({ database, log }), nightlyPlanCron({ database, log }), exportExpiryCron({ database, log })]
@@ -327,6 +332,8 @@ if (mode === 'worker') {
   crons.push(scanSweepCron({ database, log }))
   // B-W2a-52: confirmation reminders to suppliers, only for a company that switched them on (none until a setting exists).
   crons.push(confirmationRemindersCron({ database, log }))
+  // B-W2b-377: chase reminders for late lines (mail only for a company whose automatic reminders are on: OFF by default).
+  crons.push(chaseRemindersCron({ database, log }))
   // B-W2a-55: the reminder ladder's daily pass (06:00): stale reminders cancelled, the invoices' ladder timers kept in step.
   crons.push(ladderCron({ database, log }))
   // B-W2a-62: every 15 minutes, the supplier invoices SDI delivered (per company whose SDI intermediary is chosen: the FAKE locally).

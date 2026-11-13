@@ -63,7 +63,8 @@ function Inbox_({ model, actions, mailSwitch, conversation }: { model: InboxView
     return home(`today.kind.${row.kind}`)
   }
   const sentenceOf = (row: InboxRow): string => {
-    if (row.task) return row.task.summary
+    // B-W2b-377 (B-W2b-361's gap): words from codes — the kind and the record in words, never the API's English summary.
+    if (row.task) return row.task.record.label ? t('row.task', { kind: kindWords(row), label: row.task.record.label }) : kindWords(row)
     if (row.quote) {
       const quote = row.quote
       if (quote.reasons.includes('MARGIN_FLOOR') && quote.marginPct !== undefined && quote.marginFloorPct !== undefined) return w1('sentence.margin', { number: quote.number, customer: quote.partyName, pct: percent(quote.marginPct, locale), floor: percent(quote.marginFloorPct, locale) })

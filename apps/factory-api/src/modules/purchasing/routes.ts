@@ -144,7 +144,9 @@ import { makeLetter, previewLetter } from './claims/letter'
 import { announceClaimPhoto, completeClaimPhoto, removeClaimPhoto } from './claims/photos'
 import { requireStepUp } from '../../platform/auth/office/account'
 import { getReminderSettings, putReminderSwitch } from './reminders/settings'
-import { reminderSettingsContract, reminderSwitchContract } from './reminders/settings-contract'
+import { reminderSettingsContract, reminderSwitchContract, reminderTimingContract } from './reminders/settings-contract'
+// B-W2b-377: the reminders' confirm-by hours and cadence (./reminders/chase.ts).
+import { putReminderTiming } from './reminders/chase'
 import { processFiles } from '../../platform/files/service'
 // B-W2b-174: supplier orders in the portal (./portal-orders).
 import { declineInPortal, confirmInPortal } from './portal-orders/answer'
@@ -237,6 +239,8 @@ import * as bankContracts from './bank/contract'
 import { portalBank, portalProposeBank } from './portal-profile/bank'
 import * as qualificationContracts from './qualification/contract'
 import * as complianceGate from './qualification/gate'
+// B-W2b-377: supplier document types.
+import { documentTypeContract, setDocumentType } from './suppliers/document-types'
 import * as qualifications from './qualification/qualifications'
 import { getVault, vaultSummary as getVaultSummary } from './qualification/vault'
 // B-W2b-350: purchasing reports (./reports): the spend and the lines behind one of its bars.
@@ -506,6 +510,7 @@ export default defineRoutes('purchasing', manifest, async (app) => {
   // B-W2b-14 (Z1:09): the Owner's per-company switch for automatic PO confirmation reminders (OFF by default; ON asks step-up).
   app.get('/purchasing/reminders/settings', { schema: reminderSettingsContract }, async (request) => getReminderSettings(request, request.query))
   app.put('/purchasing/reminders/settings/switch', { schema: reminderSwitchContract }, async (request) => putReminderSwitch(request, request.body, () => requireStepUp(officeAuthOf(app), request), idempotencyKeyFrom(request)))
+  app.put('/purchasing/reminders/settings/timing', { schema: reminderTimingContract }, async (request) => putReminderTiming(request, request.body, idempotencyKeyFrom(request)))
 
   // B-W2b-219: the leather area tolerance where a PO line names none (the incoming area check and the re-measure read it).
   app.get('/purchasing/settings/leather-tolerance', { schema: getLeatherToleranceContract }, async (request) => getLeatherTolerance(request, request.query))
@@ -759,6 +764,9 @@ export default defineRoutes('purchasing', manifest, async (app) => {
   app.post('/purchasing/suppliers/:partyId/qualifications/:qualificationId/lift', { schema: qualificationContracts.liftQualificationContract }, async (request) => qualifications.liftQualification(request, request.params.partyId, request.params.qualificationId, request.body, idempotencyKeyFrom(request)))
 
   app.post('/purchasing/suppliers/:partyId/qualifications/:qualificationId/withdraw', { schema: qualificationContracts.withdrawQualificationContract }, async (request) => qualifications.withdrawQualification(request, request.params.partyId, request.params.qualificationId, request.body, idempotencyKeyFrom(request)))
+  // B-W2b-377 (SCM-020): what a supplier's document is (./suppliers/document-types.ts): the vault and the PO gate match it.
+  app.put('/purchasing/suppliers/:partyId/documents/:fileId/type', { schema: documentTypeContract }, async (request) => setDocumentType(request, request.params.partyId, request.params.fileId, request.body, idempotencyKeyFrom(request)))
+
   // B-W2b-315 (SCM-022): the compliance gate on a PO (./qualification/gate.ts): what holds it, "Send without a valid document?".
   app.get('/purchasing/orders/:purchaseOrderId/compliance', { schema: qualificationContracts.complianceContract }, async (request) => complianceGate.getCompliance(request, request.params.purchaseOrderId))
 

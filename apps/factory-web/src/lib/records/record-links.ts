@@ -225,6 +225,8 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   EvidencePack: '/compliance/techfiles/pack?pack=[id]',
   // B-W2b-307 Home › Approvals (SCR-030): a request of the approval engine opens its review in the inbox (Today, the bell).
   ApprovalTask: '/home/approvals?open=[id]',
+  // B-W2b-377: a supplier's bank change request opens the supplier's Bank details tab (the request's parent: its party).
+  SupplierBank: '/purchasing/suppliers/[id]?tab=bank',
   // B-W2b-322 Sales › Inquiries (SCR-105): an inquiry opens its full page (the list opens it in its DetailModal, `?open=`).
   Inquiry: '/sales/inquiries/[id]',
   // B-W2b-354 Purchasing › Settings (SCR-256): a delivery tolerance opens in its dialog.

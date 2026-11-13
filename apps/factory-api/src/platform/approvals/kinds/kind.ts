@@ -71,4 +71,9 @@ export interface ApprovalKindDefinition {
   onRejected?(tools: CommandTools, task: TaskRef): Promise<void>
   onWithdrawn?(tools: CommandTools, task: TaskRef): Promise<void>
   onStale?(tools: CommandTools, task: TaskRef): Promise<void>
+  /**
+   * B-W2b-377 (B-W2b-361's gap): the record whose page shows the subject, when the subject has no page of its own (a credit
+   * check → its order, a bank account → its supplier, a return line → its return, a receipt line → its receipt).
+   */
+  parent?(client: Reader, recordId: string): Promise<{ readonly type: string; readonly id: string } | null>
 }

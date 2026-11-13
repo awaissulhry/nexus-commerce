@@ -123,7 +123,8 @@ describe('grants and the seed', () => {
       scopedBy: ['party'],
       hiddenColumns: ['passwordHash', 'passwordChangedAt', 'mustChangePassword', 'failedAttempts', 'lockedUntil', 'totpSecretEnc', 'totpPendingSecretEnc', 'totpLastStep', 'recoveryCodeHashes', 'createdById'],
     })
-    expect(of('Session').access.factory_partner_runtime).toEqual({ privileges: ['select'], scopedBy: ['party'], hiddenColumns: ['ipHash'] })
+    // B-W2b-373: the place a session signed in from (country, city) is hidden from the partner too.
+    expect(of('Session').access.factory_partner_runtime).toEqual({ privileges: ['select'], scopedBy: ['party'], hiddenColumns: ['ipHash', 'ipCountry', 'ipCity'] })
     expect(of('PartnerNoticeAck').access.factory_runtime!.privileges).toEqual(['select', 'insert'])
   })
 
@@ -141,6 +142,8 @@ describe('grants and the seed', () => {
       await expect(sql(p1(), `SELECT "${column}" FROM "User" LIMIT 1`)).rejects.toThrow(DENIED)
     }
     await expect(sql(p1(), 'SELECT "ipHash" FROM "Session" LIMIT 1')).rejects.toThrow(DENIED)
+    await expect(sql(p1(), 'SELECT "ipCity" FROM "Session" LIMIT 1')).rejects.toThrow(DENIED)
+    await expect(sql(p1(), 'SELECT "ipCountry" FROM "Session" LIMIT 1')).rejects.toThrow(DENIED)
     await expect(as(p1(), (client) => client.user.findMany())).rejects.toThrow(DENIED)
     await expect(run(p1(), 'UPDATE "User" SET "displayName" = "displayName" WHERE false')).rejects.toThrow(DENIED)
     await expect(run(p1(), 'UPDATE "Session" SET "revokedAt" = now() WHERE false')).rejects.toThrow(DENIED)

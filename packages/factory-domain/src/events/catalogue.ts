@@ -252,6 +252,8 @@ import { events as suppliersDepth } from '../suppliers-depth/events'
 import { events as inventoryTasks } from '../inventory-tasks/events'
 // B-W2b-315: supplier qualification and bank details (supplier_bank_account.*, supplier_qualification.changed, purchase_order.compliance_override_*).
 import { events as supplierQualification } from '../supplier-qualification/events'
+// B-W2b-377: approvals and buying follow-ups (a held receipt and its release, chase reminders, supplier document types).
+import { events as buyingFollowups } from '../buying-followups/events'
 // B-W2b-326: transfers between sites (inventory.transfer_changed).
 import { events as inventoryTransfers } from '../inventory-transfers/events'
 // B-W2b-299: counts in depth (a unit scanned into a count, a count schedule changed or counted).
@@ -596,6 +598,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...configurator,
   // B-W2b-371
   ...mtmPhotos,
+  // B-W2b-377
+  ...buyingFollowups,
   // B-W2b-384
   ...shippingCartons,
 ] as const satisfies readonly EventDefinition[]

@@ -57,6 +57,9 @@ export function customerStatusOf(status: SalesOrderStatus, shipments: LeftShipme
     // W2b-5 (B-W2b-281): an order waiting for the office's yes is, to the customer, still requested.
     case 'PENDING_APPROVAL':
       return 'REQUESTED'
+    // W2b-6 (B-W2b-372): the office's own delivered mark.
+    case 'DELIVERED':
+      return 'DELIVERED'
   }
 }
 
