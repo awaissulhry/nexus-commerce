@@ -130,6 +130,9 @@ export const LINE_COLUMNS = {
   marginPct: true,
   costSnapshot: true,
   version: true,
+  // B-W2b-358: a made-to-measure unit's revision and base size (its cost is the base size's cell, quotes/mtm-line.ts).
+  measurementProfileId: true,
+  baseSize: true,
 } as const satisfies Prisma.QuoteLineSelect
 export type LineRow = Prisma.QuoteLineGetPayload<{ select: typeof LINE_COLUMNS }>
 
@@ -187,8 +190,9 @@ export const moneyLineOf = (line: LineRecord): MoneyLine => ({
   listUnitPrice: decimal(line.listUnitPrice),
   sizes: line.sizes,
   costAmount: line.costAmount,
-  // B-W2b-330 (SAL-181): a fee line has no size rows: its own pieces.
-  ...(line.kind === 'FEE' ? { quantity: line.quantity } : {}),
+  // B-W2b-330 (SAL-181): a fee line has no size rows: its own pieces. B-W2b-358: a made-to-measure unit neither (its one
+  // piece; without it the money read 0 pieces and the database refused the line: W1's PATCH on SEED-Q-0002 answered 500).
+  ...(line.kind === 'FEE' || line.kind === 'MADE_TO_MEASURE' ? { quantity: line.quantity } : {}),
 })
 
 /** The quote the office may see (else 404) and act on with `permission` (else 403). */

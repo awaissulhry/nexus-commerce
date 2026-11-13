@@ -85,6 +85,11 @@
     "STYLE_PHASE_OUT": "Un modello è in uscita o fuori produzione: verifica che si possa ancora produrre prima di prometterlo.",
     "NOT_SOLD_IN_MARKET": "Un modello non è venduto nel mercato di destinazione della merce: etichette, dichiarazione e certificati potrebbero non coprirlo.",
     "BLOCKED_MATERIAL": "Un materiale di una riga è bloccato: non si può usare finché non è di nuovo approvato o sostituito.",
+    "MTM_NOT_STARTED": "Il modello di un capo su misura non è su misura, o il su misura non è ancora partito per il suo modello di misure.",
+    "MTM_OUTSIDE_RANGE": "Un capo su misura è fuori dalla gamma certificata del modello base: lo rivede un modellista.",
+    "MTM_NOT_CONFIRMED": "La fabbrica non ha ancora confermato le misure di un pilota: l'ordine aspetta la revisione.",
+    "MTM_NOT_LATEST": "Un capo su misura usa una revisione vecchia: il pilota ha misure più recenti.",
+    "MTM_OLD_MEASURES": "Le misure di un pilota hanno più di 12 mesi: chiedi una nuova misurazione.",
     "pass": {
       "approval": "Approvazione fatta o non necessaria",
       "validity": "Validità impostata",

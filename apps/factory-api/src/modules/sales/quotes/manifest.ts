@@ -16,6 +16,11 @@ export const manifest = defineManifest({
   'POST /sales/quotes/:quoteId/lines': { audiences: ['office'], permission: 'quotes.manage', scope: 'record' },
   'PATCH /sales/quotes/:quoteId/lines/:lineId': { audiences: ['office'], permission: 'quotes.manage', scope: 'record' },
   'DELETE /sales/quotes/:quoteId/lines/:lineId': { audiences: ['office'], permission: 'quotes.manage', scope: 'record' },
+  // B-W2b-358 (MM1:01, SAL-276): made-to-measure units (the handler also checks sales.measurements.view over the customer).
+  'POST /sales/quotes/:quoteId/lines/made-to-measure': { audiences: ['office'], permission: 'quotes.manage', scope: 'record' },
+  'PATCH /sales/quotes/:quoteId/lines/:lineId/made-to-measure': { audiences: ['office'], permission: 'quotes.manage', scope: 'record' },
+  'POST /sales/quotes/:quoteId/lines/:lineId/out-of-chart': { audiences: ['office'], permission: 'quotes.manage', scope: 'record' },
+  'GET /sales/quotes/:quoteId/made-to-measure': { audiences: ['office'], permission: 'quotes.view', scope: 'record' },
   'POST /sales/quotes/:quoteId/recompute': { audiences: ['office'], permission: 'quotes.manage', scope: 'record' },
   'POST /sales/quotes/:quoteId/approval': { audiences: ['office'], permission: 'quotes.manage', scope: 'record' },
   'POST /sales/quotes/:quoteId/approval/approve': { audiences: ['office'], permission: 'quotes.approve', scope: 'record' },

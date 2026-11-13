@@ -26,6 +26,13 @@ export const manifest = defineManifest({
   'DELETE /product/points-of-measure/:pomId/picture': libraryManage,
   // B-W2b-283 (FU1:03): the measurement templates, listed for pickers (./templates.ts).
   'GET /product/measurement-templates': libraryView,
+  // B-W2b-358 (B-W1-17): the template page and its writes (./templates-write.ts).
+  'GET /product/measurement-templates/:templateId': libraryView,
+  'POST /product/measurement-templates': libraryManage,
+  'PATCH /product/measurement-templates/:templateId': libraryManage,
+  'PUT /product/measurement-templates/:templateId/points': libraryManage,
+  'POST /product/measurement-templates/:templateId/archive': libraryManage,
+  'POST /product/measurement-templates/:templateId/restore': libraryManage,
   'GET /product/styles/:styleId/revisions/:revisionId/measurement-spec': specView,
   'POST /product/styles/:styleId/revisions/:revisionId/measurement-spec': specManage,
   'PATCH /product/styles/:styleId/revisions/:revisionId/measurement-spec': specManage,

@@ -17,6 +17,8 @@ import { carryToOrderInCommand } from '../quote-terms/carry'
 import { askOrderApproval, planOrderApproval } from '../orders-depth/approval'
 import { refuseOrderLineRules } from '../orders-depth/line-rules'
 import { openSeasonOrNull } from '../seasons/store'
+// B-W2b-358 (SAL-292, PRD-017): a made-to-measure unit's style still flagged; the order waits for the factory review.
+import { mtmOrderPlan } from '../mtm/order-gate'
 
 /**
  * The order of an accepted quote version (B-W1-25; SAL-200 "quote to order in one step", SAL-203; Owner answer S1: made
@@ -198,6 +200,9 @@ export async function makeOrderInCommand(tools: CommandTools, versionId: string,
     requesterId: actorIdOf(tools) ?? version.sentById,
   })
   if (approval.waits) status = 'PENDING_APPROVAL'
+  // B-W2b-358: a unit of a style no longer made to measure is refused in words (409, before the database's guard); a unit whose
+  // measures the factory has not confirmed makes the order wait (PENDING_APPROVAL): the review's CONFIRM lets it go on.
+  if ((await mtmOrderPlan(tx, quoteLines)).waits) status = 'PENDING_APPROVAL'
   await tx.salesOrder.create({
     data: {
       id,

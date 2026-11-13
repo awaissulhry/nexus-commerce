@@ -12,6 +12,8 @@ import { findRevision, type RevisionRow } from '../../product/bom/store'
 import { quoteRulesFor } from './rules'
 // B-W2b-330 (SAL-189): the floor of the version's maker.
 import { withPersonFloor } from '../price-waterfall/floors'
+// B-W2b-358: a made-to-measure unit's cost target.
+import { mtmCostTarget } from './mtm-line'
 import { decimal, moneyLineOf, quotePartyOf, readLineRecords, storedVat, treatmentFor, VERSION_COLUMNS, type LineRecord, type QuoteParty, type QuoteRow, type Reader, type VersionRow } from './store'
 
 /**
@@ -128,7 +130,8 @@ export async function refreshVersion(tools: CommandTools, quote: QuoteRow, versi
   for (const line of lines) {
     if (recost !== 'all' && !recost.has(line.id)) continue
     // B-W2b-330 (SAL-181): a fee has no cost sheet: its cost is 0, its margin all of its net.
-    const result: CostedLine = line.kind === 'FEE' ? { cost: { complete: true, unitCost: '0', amount: 0 }, snapshot: null } : await costLine(tx, cache, line, company, now)
+    // B-W2b-358: a made-to-measure unit is costed as one piece of its base size (./mtm-line.ts mtmCostTarget).
+    const result: CostedLine = line.kind === 'FEE' ? { cost: { complete: true, unitCost: '0', amount: 0 }, snapshot: null } : await costLine(tx, cache, mtmCostTarget(line), company, now)
     costed.set(line.id, result)
     await tx.quoteLine.update({
       where: { id: line.id },
