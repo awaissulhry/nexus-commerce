@@ -137,7 +137,7 @@ export async function listProfiles(caller: CommandCaller, query: ProfilesQuery) 
           nextFittingAt: fitting ? toUtcIso(fitting.startsAt) : null,
         }
       }),
-      total: shown.length,
+      matching: shown.length,
       tiles,
       asOf: toUtcIso(now),
     }

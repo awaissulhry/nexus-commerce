@@ -4,7 +4,7 @@ import { can } from '@nexus/factory-domain/core/permissions'
 import { businessDate } from '@nexus/factory-domain/core/time'
 import { markMoney } from '@nexus/factory-domain/money/marked'
 import { SALES_MEASUREMENTS_VIEW } from '@nexus/factory-domain/sales/measure-link/permissions'
-import type { MtmLineBody, MtmLineEditBody, OutOfChartBody } from '@nexus/factory-domain/sales/mtm/contracts'
+import type { OutOfChartBody } from '@nexus/factory-domain/sales/mtm/contracts'
 import { notStartedProblem } from '@nexus/factory-domain/sales/mtm/rules'
 import { QUOTES_MANAGE, QUOTES_VIEW } from '@nexus/factory-domain/sales/quotes/permissions'
 import { isIssueList, MAX_QUOTE_LINES, resolvePrice } from '@nexus/factory-domain/sales/quotes/quotes'
@@ -45,6 +45,35 @@ import type { QuoteDetail } from './views'
  * (./pricing.ts). Outside the certified range is not refused here: the line rule (modules/sales/mtm/line-check) holds the send and
  * the order. Each write is one command on the Quote: audit, quote.lines_changed.
  */
+
+/** A unit's fields as the routes send them (sales/mtm/contracts mtmLineBody; W1's add-line body maps onto it). */
+export interface MtmLineInput {
+  readonly version: number
+  readonly styleId: string
+  readonly colourwayId: string
+  readonly styleRevisionId?: string | null | undefined
+  readonly measurementProfileId: string
+  readonly baseSize?: string | null | undefined
+  readonly unitPrice?: string | null | undefined
+  readonly listUnitPrice?: string | null | undefined
+  readonly discountPct?: string | null | undefined
+  readonly description?: string | null | undefined
+  readonly note?: string | null | undefined
+}
+
+/** A unit's changes (sales/mtm/contracts mtmLineEditBody; W1's edit-line body maps onto it). */
+export interface MtmLineChange {
+  readonly version: number
+  readonly colourwayId?: string | undefined
+  readonly styleRevisionId?: string | null | undefined
+  readonly measurementProfileId?: string | undefined
+  readonly baseSize?: string | null | undefined
+  readonly unitPrice?: string | null | undefined
+  readonly listUnitPrice?: string | null | undefined
+  readonly discountPct?: string | null | undefined
+  readonly description?: string | null | undefined
+  readonly note?: string | null | undefined
+}
 
 const invalid = (issues: Issue[]): ValidationError => new ValidationError(issues.length === 1 ? issues[0]!.message : 'The made-to-measure unit cannot be saved.', issues)
 const blankToNull = (value: string | null | undefined): string | null => (value === undefined || value === null || value.trim() === '' ? null : value.trim())
@@ -168,7 +197,7 @@ export async function addUnitInCommand(tools: CommandTools, current: QuoteRow, v
 }
 
 /** POST /sales/quotes/:quoteId/lines/made-to-measure (and W1's POST …/lines with kind MADE_TO_MEASURE). */
-export async function addMadeToMeasureLine(caller: CommandCaller, quoteId: string, body: MtmLineBody, idempotencyKey?: string): Promise<{ quote: QuoteDetail }> {
+export async function addMadeToMeasureLine(caller: CommandCaller, quoteId: string, body: MtmLineInput, idempotencyKey?: string): Promise<{ quote: QuoteDetail }> {
   const quote = await officeQuote(caller, quoteId, QUOTES_MANAGE)
   const profile = await profileFor(caller, quote, body.measurementProfileId, 'body/measurementProfileId')
   return onQuote(caller, quote, { name: 'quotes.addMtmLine', idempotencyKey, input: { quoteId, ...body }, version: body.version }, async (tools, current, version) => {
@@ -184,7 +213,7 @@ async function lineOf(tx: CommandTx, versionId: string, lineId: string): Promise
 }
 
 /** PATCH /sales/quotes/:quoteId/lines/:lineId/made-to-measure (and W1's PATCH …/lines/:lineId on a unit). */
-export async function editMadeToMeasureLine(caller: CommandCaller, quoteId: string, lineId: string, body: MtmLineEditBody, idempotencyKey?: string): Promise<{ quote: QuoteDetail }> {
+export async function editMadeToMeasureLine(caller: CommandCaller, quoteId: string, lineId: string, body: MtmLineChange, idempotencyKey?: string): Promise<{ quote: QuoteDetail }> {
   const quote = await officeQuote(caller, quoteId, QUOTES_MANAGE)
   const profile = body.measurementProfileId ? await profileFor(caller, quote, body.measurementProfileId, 'body/measurementProfileId') : null
   return onQuote(caller, quote, { name: 'quotes.editMtmLine', idempotencyKey, input: { quoteId, lineId, ...body }, version: body.version }, async (tools, current, version) => {

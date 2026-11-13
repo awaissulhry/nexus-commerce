@@ -1,5 +1,6 @@
 import { z } from 'zod'
-import { businessDate, id, input, instant, output } from '../../core/contracts'
+import { businessDate, id, input, instant, output, unitPrice } from '../../core/contracts'
+import { money } from '../../money/marked'
 import { PRODUCT_TYPES } from '../../product/styles/rules'
 import { MTM_LINE_CODES } from './codes'
 import { MTM_OFFICE_LIMITS, REVIEW_DECISIONS, REVIEW_STATUSES } from './rules'
@@ -106,7 +107,8 @@ export const profileRowView = output({
 
 export const profilesView = output({
   rows: z.array(profileRowView),
-  total: z.number().int(),
+  /** The riders matching the filters (the rows are a page of them). */
+  matching: z.number().int(),
   tiles: output({ waitingReview: z.number().int(), needMore: z.number().int(), older: z.number().int(), fittingsThisWeek: z.number().int(), outsideRange: z.null() }),
   asOf: z.string(),
 })
@@ -264,8 +266,8 @@ export const mtmLineBody = input({
   measurementProfileId: id(),
   /** A size of the style's range; default: the size the measures point to (the template's base size rule). */
   baseSize: z.string().trim().min(1).max(20).nullish(),
-  unitPrice: z.string().trim().max(24).nullish(),
-  listUnitPrice: z.string().trim().max(24).nullish(),
+  unitPrice: money.price(unitPrice().nullish()),
+  listUnitPrice: money.price(unitPrice().nullish()),
   discountPct: z.string().trim().max(12).nullish(),
   description: text(500).nullish(),
   note: text(2000).nullish(),
@@ -280,8 +282,8 @@ export const mtmLineEditBody = input({
   /** Another revision of the same rider and garment type: the newest. */
   measurementProfileId: id().optional(),
   baseSize: z.string().trim().min(1).max(20).nullish(),
-  unitPrice: z.string().trim().max(24).nullish(),
-  listUnitPrice: z.string().trim().max(24).nullish(),
+  unitPrice: money.price(unitPrice().nullish()),
+  listUnitPrice: money.price(unitPrice().nullish()),
   discountPct: z.string().trim().max(12).nullish(),
   description: text(500).nullish(),
   note: text(2000).nullish(),
@@ -329,7 +331,7 @@ export const documentUnitsView = output({
 
 export const templatePointBody = input({
   /** Its key in a profile and in a size's body measures ("chest"), unique in the template; a point keeps its id while its code stays. */
-  code: z.string().trim().regex(/^[a-z][a-zA-Z0-9_]{0,59}$/, { message: 'A code of letters, digits and _ starting with a small letter ("chest", "back_length").' }),
+  code: z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9_.-]{0,59}$/, { message: 'A code of letters, digits, _ . and -, no spaces ("chest", "back_length").' }),
   name: oneLine(200),
   nameI18n: nameWords.nullish(),
   uom: z.enum(['CM', 'MM']).default('CM'),
