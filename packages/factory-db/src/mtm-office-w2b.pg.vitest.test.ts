@@ -154,7 +154,10 @@ describe('appointments (SAL-054)', () => {
   })
 
   it('are done or missed only once they started, cancelled with why, and then final but the notes', async () => {
-    const booked = await newAppointment()
+    // ---- B-W2b-F43: an appointment a week ahead on every day the test runs (the seeded booked fitting's day passes on 2 Dec 2026, and
+    // from then "only once it started" no longer refused).
+    const booked = await newAppointment({ startsAt: later(7 * 24 * 60), endsAt: later(7 * 24 * 60 + 60) })
+    // ---- end B-W2b-F43
     await expect(update(office(), 'Appointment', booked, `status = 'DONE', "closedAt" = now()`)).rejects.toThrow(/only once it started/)
     await expect(update(office(), 'Appointment', booked, `status = 'CANCELLED', "closedAt" = now()`)).rejects.toThrow(/why it was cancelled/)
     await expect(update(office(), 'Appointment', booked, `status = 'CANCELLED', "cancelReason" = 'The rider is ill'`)).rejects.toThrow(/closed .* exactly with when/)

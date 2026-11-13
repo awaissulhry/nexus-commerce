@@ -4,6 +4,12 @@ import { atpRow, atpTotal, atpWeeks, stockDateFor } from './atp'
 import { bridgeOf, copyFree, freeAfterLoad, freeWhenEmpty, walkSteps, type CtpLane } from './ctp'
 import { PLANNING_PROMISE_ADDS, PLANNING_PROMISE_DEFINITIONS } from './permissions'
 import { arrivalsOf, bridgeWords, currentPromiseOf, materialDateOf, promiseAskProblems, promisePlanOf, sizeGroupsOf, type MaterialNeed, type StoredPromise } from './rules'
+// B-W2b-F44: the rule's two parts, on THE calendars service's days and minutes.
+import { localInstant, plusDays } from '../../calendars/dates'
+import { publicHolidays } from '../../calendars/holidays'
+import { businessDayStart } from '../../core/time'
+import { dayOf, nextWorkingDay, workingCalendar, workingMinutesBetween, type DayException } from '../../calendars/working-time'
+import { makeDayOf, minutesLeftToday } from './ctp'
 
 /** B-W2b-301: available to promise, the capacity walk and its bridge, material arrivals, sizes apart, the promise rows. */
 
@@ -191,3 +197,44 @@ describe('permissions', () => {
     expect(PLANNING_PROMISE_ADDS.planner).toEqual(['planning.promise.view', 'planning.promise.manage'])
   })
 })
+
+// ---- B-W2b-F44 (begin): a garment still to make is never promised for today; today counts only the minutes left ----------------
+
+describe('B-W2b-F44: never today for a garment to make, today only from now (Owner 2026-11-13, option A)', () => {
+  // A company calendar as the seed's: Monday to Friday, the planning default's one shift (08:00-17:00, lunch 12:00-13:00:
+  // 480 minutes), Italy's national holidays; Rome's time.
+  const ROME = 'Europe/Rome'
+  const holidays = new Map<string, DayException>(publicHolidays('IT', 2026).map((day) => [day.date, { date: day.date, kind: 'HOLIDAY', name: day.name, shiftPatternId: null }]))
+  const calendar = workingCalendar({ layers: [{ id: 'company', scope: 'COMPANY', name: 'Company', workingWeekdays: [1, 2, 3, 4, 5], shiftPatternId: null, days: holidays }], patterns: new Map(), timeZone: ROME, window: { from: '2026-11-01', to: '2026-12-31' } })
+  const at = (date: string, time: string) => localInstant(date, Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5)), ROME)
+  const leftAt = (date: string, time: string) => minutesLeftToday(dayOf(calendar, date).minutes, workingMinutesBetween(calendar, at(date, time), businessDayStart(plusDays(date, 1), ROME)))
+
+  it('today counts only the working minutes still left from now; never more than the day, the day when unknown', () => {
+    // A Wednesday, the Friday before a weekend, the Monday before the Immacolata (8 Dec).
+    for (const date of ['2026-11-18', '2026-11-13', '2026-12-07']) {
+      expect(dayOf(calendar, date).minutes, date).toBe(480)
+      expect(leftAt(date, '07:00'), date).toBe(480)
+      expect(leftAt(date, '09:00'), date).toBe(420)
+      expect(leftAt(date, '12:30'), date).toBe(240)
+      expect(leftAt(date, '17:30'), date).toBe(0)
+    }
+    expect(dayOf(calendar, '2026-12-08')).toMatchObject({ working: false, reason: 'HOLIDAY', minutes: 0 })
+    expect(minutesLeftToday(480, null)).toBe(480)
+    expect(minutesLeftToday(480, 600)).toBe(480)
+    expect(minutesLeftToday(null, 30)).toBe(0)
+  })
+
+  it('a garment to make: the walk finished today is promised on the next working day; a later finish stays', () => {
+    const first = (date: string) => nextWorkingDay(calendar, date).date!
+    expect(first('2026-11-18')).toBe('2026-11-19')
+    expect(first('2026-11-13')).toBe('2026-11-16') // over the weekend
+    expect(first('2026-12-07')).toBe('2026-12-09') // over the Immacolata
+    expect(makeDayOf('2026-11-18', first('2026-11-18'))).toBe('2026-11-19')
+    expect(makeDayOf('2026-11-13', first('2026-11-13'))).toBe('2026-11-16')
+    expect(makeDayOf('2026-12-07', first('2026-12-07'))).toBe('2026-12-09')
+    // A finish on a closed day before the first working day moves to it; a later finish is kept as walked.
+    expect(makeDayOf('2026-11-14', first('2026-11-13'))).toBe('2026-11-16')
+    expect(makeDayOf('2026-11-17', first('2026-11-13'))).toBe('2026-11-17')
+  })
+})
+// B-W2b-F44 (end)

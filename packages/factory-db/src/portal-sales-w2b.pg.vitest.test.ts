@@ -275,7 +275,11 @@ describe('change and cancel requests', () => {
   it('asked OPEN of an order open to amendments; a cancel gives its reason code, a change none; a date not already past', async () => {
     await expect(newChange({ kind: 'CANCEL' })).rejects.toThrow(/a cancel gives a code of the CANCEL reason list/)
     await expect(newChange({ reasonCode: 'LEAD_TIME' })).rejects.toThrow(/a change has no reason code/)
-    await expect(newChange({ kind: 'CANCEL', reasonCode: 'LEAD_TIME', requestedDate: '2027-01-10' })).rejects.toThrow(/asks no date or address/)
+    // ---- B-W2b-F43: a day still to come on every day the test runs (30 days after the server's day), not 2027-01-10: from that day
+    // the "already past" refusal came first.
+    const comingDay = (await admin(`SELECT (current_date + 30)::text AS day`))[0]!.day as string
+    await expect(newChange({ kind: 'CANCEL', reasonCode: 'LEAD_TIME', requestedDate: comingDay })).rejects.toThrow(/asks no date or address/)
+    // ---- end B-W2b-F43
     await expect(newChange({ kind: 'CANCEL', reasonCode: 'lead time' })).rejects.toThrow(/a code of the CANCEL reason list/)
     await expect(newChange({ status: 'ACCEPTED' })).rejects.toThrow(/a new change request is OPEN/)
     await expect(newChange({ requestedDate: '2020-01-02' })).rejects.toThrow(/a day already past when it was asked/)

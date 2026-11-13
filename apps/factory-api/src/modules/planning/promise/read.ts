@@ -17,6 +17,9 @@ import { answerPromises, type AskAnswer, type PromiseAsk, type PromiseWhere } fr
 import { mayPromiseAt, plantOf, promiseSite, readSkuFlows, readStockStyles, readStyleFacts } from './store'
 // B-W2b-365: the options asked or chosen on the quote line.
 import { askedOptions, quoteLineOptionsOf } from './steps'
+// B-W2b-F44: the first day a garment still to make may be promised (the site's calendar, THE calendars service).
+import { plusDays } from '@nexus/factory-domain/calendars/dates'
+import { addWorkingDaysFor } from '../../../platform/calendars/service'
 
 /**
  * Reading promise dates (B-W2b-301; design planning.promise › atp, the Promise calculator, Sales › Quote "Suggest date"):
@@ -34,13 +37,25 @@ export interface WhereView {
   readonly planVersion: { readonly id: string; readonly version: number } | null
 }
 
+// B-W2b-F44 (begin)
+/**
+ * The first working day after `today` on the site's calendar (site → company; THE calendars service's next working day): a
+ * garment still to make is promised on it at the earliest, never for today (Owner 2026-11-13, option A). None within the
+ * service's horizon (three years): the day after.
+ */
+export async function firstMakeDayOf(db: Reader, site: SiteRow, today: BusinessDate): Promise<BusinessDate> {
+  return (await addWorkingDaysFor(db, { scope: 'SITE', id: site.id }, today, 1)).date ?? plusDays(today, 1)
+}
+// B-W2b-F44 (end)
+
 /** Where the question is asked: the site's day, the market of the destination, the working plan read. */
 export async function whereOf(db: Reader, site: SiteRow, now: Date, country: string | null): Promise<{ where: PromiseWhere; view: WhereView }> {
   const today = businessDate(now, site.timezone)
   const { market, destination } = await marketFor(db, country)
   const plan = await db.planVersion.findFirst({ where: { siteId: site.id, kind: 'WORKING' }, select: { id: true, version: true } })
+  const firstMakeDay = await firstMakeDayOf(db, site, today) // B-W2b-F44
   return {
-    where: { site, today, now, market, destination },
+    where: { site, today, now, market, destination, firstMakeDay /* B-W2b-F44 */ },
     view: { site: { id: site.id, companyId: site.companyId, code: site.code, name: site.name }, today, asOf: toUtcIso(now), market: market ? { code: market.code, name: market.name } : null, destination, planVersion: plan },
   }
 }

@@ -10,6 +10,7 @@ import { seed as seedAuth } from '../seed/auth'
 import { seed as seedBuyingDepth } from '../seed/buying-depth'
 import { seed as seedCalendar } from '../seed/calendar'
 import { seed as seedCapa } from '../seed/capa'
+import { seed as seedCarriers } from '../seed/carriers'
 import { seed as seedChanges } from '../seed/changes'
 import { seed as seedCollab } from '../seed/collab'
 import { seed as seedCompliance } from '../seed/compliance'
@@ -450,6 +451,11 @@ beforeAll(async () => {
   // reminder, a turned-off capture address) are the plain ones a copy may repeat.
   await seedNotifyDepth({ db: factory, namespace: 'iso-a' })
   await seedNotifyDepth({ db: factory, namespace: 'iso-b' })
+  // The carriers, labels and dispatch schema of W2b-6 (wave 48/57): carrier contracts (the first switched off without its
+  // number), a customer's carrier account, a live site, a parcel's values, pickups (the first one that failed), day sheets (the
+  // first an open one), a reprint and a printer that prints straight from the station: the plain ones a copy may repeat.
+  await seedCarriers({ db: factory, namespace: 'iso-a' })
+  await seedCarriers({ db: factory, namespace: 'iso-b' })
   // Every seed of both tenants: under a full parallel run this takes more than a minute.
 }, 120_000)
 
@@ -498,6 +504,7 @@ it('covers every classified table and every runtime role', () => {
     'CapaAction',
     'CapaSource',
     'CaptureAddress',
+    'CarrierAccount',
     'CarrierCutOff',
     'CauseCode',
     'Certificate',
@@ -544,6 +551,7 @@ it('covers every classified table and every runtime role', () => {
     'Device',
     'DeviceEnrolment',
     'DispatchAssignment',
+    'DispatchManifest',
     'DispositionCode',
     'DistributorNotice',
     'DueTimer',
@@ -743,6 +751,7 @@ it('covers every classified table and every runtime role', () => {
     'PeriodLock',
     'Phrase',
     'PhraseTranslation',
+    'PickupRequest',
     'PiecePaySwitch',
     'PieceRateEntry',
     'PieceRateTable',

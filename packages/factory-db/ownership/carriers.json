@@ -1,0 +1,31 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/carriers.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office keeps the company's own carrier contracts (the account numbers are sealed SecretValue rows: a contract names its secret, never the number), books pickups and keeps the day's sheets through apps/factory-api's modules/shipping (B-W2b-390, -391, -395, -400), always through command(); the API keeps staff to the companies and sites their grants reach. The floor (factory_floor_runtime: the packing bench and the dock) reads its OWN site's pickups and day sheets, never a carrier contract. Portal and one-off link sessions (factory_partner_runtime) read none of them. Nobody deletes a contract (switched off), a pickup (cancelled) or a day sheet (closed); the …_carriers_w2b_guards triggers refuse it. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "CarrierAccount": {
+      "about": "The office keeps a company's own contracts with carriers (LOG-033): the carrier, the site (or every site), the sealed account number, 'use only our rates', switched off. The floor and portal sessions never see them.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "PickupRequest": {
+      "about": "The office books a carrier pickup for a site (LOG-048), records the carrier's answer (CONFIRMED, FAILED with why) and cancels it. The site's floor reads its own (the dock sees when the driver comes).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"] }
+      }
+    },
+    "DispatchManifest": {
+      "about": "The office opens the day's sheet of a site for a carrier (LOG-049), puts the shipments handed over on it and closes it once with its PDF. The site's floor reads its own (the dock prints the sheet for the driver).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"] }
+      }
+    }
+  }
+}

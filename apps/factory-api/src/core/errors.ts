@@ -9,6 +9,8 @@ import { databaseWarehouseRefusal } from '@nexus/factory-domain/inventory/wareho
 // B-W2b-279 (W2b-5 schema wave 37/44): a contact or party write that reached the database's party rules is a 409 in words.
 import { databasePartyRefusal } from '@nexus/factory-domain/parties/refusals'
 // B-W2b-332: a draft line that a request to buy was converted into is not removed (the database keeps it): a 409 in words.
+// B-W2b-367 (W2b-6 schema wave 48/57): a shipment write that reached the database's carrier rules is a 409 in words.
+import { databaseCarrierRefusal } from '@nexus/factory-domain/shipping/carrier-refusals'
 import { askedLineRefusal } from '@nexus/factory-domain/purchasing/ask-to-buy/ask-to-buy'
 import type { ErrorBody } from '@nexus/factory-domain/core/contracts'
 import { reportError } from '../observability/tracker'
@@ -178,6 +180,19 @@ function partyRefusal(error: unknown): MappedError | null {
   return words ? { status: STATUS_OF.conflict, code: 'conflict', message: words.message, issues: [{ path: words.path, message: words.message }], unexpected: false } : null
 }
 
+/**
+ * B-W2b-367 (W2b-6 schema wave 48/57): the database's own refusal of a shipment write by the carrier rules (…_carriers_w2b_guards
+ * Shipment_carriers_check: a carrier booked by hand, the customer's collection, the day's sheet), when a write reached it without
+ * its command's check (W1's shipment, packing and label routes): a 409 in words (factory-domain shipping/carrier-refusals),
+ * never a 500.
+ */
+function carrierRefusal(error: unknown): MappedError | null {
+  const cause = (error as { meta?: { driverAdapterError?: { cause?: { originalCode?: unknown; originalMessage?: unknown } } } } | null)?.meta?.driverAdapterError?.cause
+  if (cause?.originalCode !== '23514' || typeof cause.originalMessage !== 'string') return null
+  const words = databaseCarrierRefusal(cause.originalMessage)
+  return words ? { status: STATUS_OF.conflict, code: 'conflict', message: words.message, issues: [{ path: words.path, message: words.message }], unexpected: false } : null
+}
+
 // B-W2b-309 (SAL-306) ----------------------------------------------------------------------------------------------------
 /**
  * The database's own refusal to issue or hold a customer's own lot for another customer's work (…_sales_orders_depth_w2b_guards
@@ -213,6 +228,9 @@ export function mapError(error: unknown): MappedError {
   if (lockedRevision) return lockedRevision
   const warehouse = warehouseRefusal(error)
   if (warehouse) return warehouse
+  // B-W2b-367
+  const carrier = carrierRefusal(error)
+  if (carrier) return carrier
   // B-W2b-309
   const owned = customerOwnedRefusal(error)
   if (owned) return owned

@@ -29,7 +29,11 @@ import { ApiError, BUSY_RETRY_AFTER_SECONDS, mapError } from './errors'
  * `node scripts/factory/run-pg-tests.mjs apps/factory-api`.
  */
 
-const NOW = '2026-10-28T09:00:00.000Z'
+// ---- B-W2b-F43: the commands' fixed clock is the run's own start (to the second), not 2026-10-28: a receipt it writes ends a
+// set time after it, and once the real day was past that end the database let the owner purge every receipt (an expired one may
+// go), so "append-only" no longer refused (a fake clock on 2026-12-07 found it).
+const NOW = new Date(Math.floor(Date.now() / 1000) * 1000).toISOString()
+// ---- end B-W2b-F43
 const SETTINGS: CommandSettings = { ...COMMAND_SETTINGS, clock: fixedClock(NOW) }
 
 let db: MigratedDatabase
@@ -417,7 +421,7 @@ describe('audiences', () => {
   it('a floor write is audited with the device, its site and the device time; the floor reads no audit row', async () => {
     const k = key()
     const context = floorA()
-    const deviceTime = new Date('2026-10-28T08:59:58.000Z')
+    const deviceTime = new Date(Date.parse(NOW) - 2_000) // B-W2b-F43: two seconds before the commands' clock, as before
     const recordId = newId()
     await runCommand(as(context), { name: 'scans.record', idempotencyKey: k, input: {}, deviceTime }, async ({ audit }) => {
       audit({ recordType: 'OperationScan', recordId, after: { qty: '12' } })

@@ -34,6 +34,9 @@ import { certificatesOn, type SizeCertificate } from './certificates'
 import { readRouting, readSkuFlows, readStyleFacts, revisionFor, skuKey, withPromiseLines, type RevisionFacts, type RoutingStepRow, type SkuFlows, type StyleFacts } from './store'
 // B-W2b-365: a step only for some options counts when the garment asked has one of them.
 import { stepsForOptions } from './steps'
+// B-W2b-F44: today counts only the minutes left from now; a garment still to make is never promised for today.
+import type { CapacityDay } from '@nexus/factory-domain/planning/capacity/available'
+import { makeDayOf, minutesLeftToday } from '@nexus/factory-domain/planning/promise/ctp'
 
 /**
  * The promise engine (B-W2b-301; PLN-168, PLN-169, PLN-171, PLN-179): when can these garments be ready, per size. THE
@@ -50,6 +53,10 @@ import { stepsForOptions } from './steps'
  *   5. certificates  again on each size's day: a certificate that ends before it does not promise the size (PLN-179)
  *
  * Several asks (a quote's lines) share the stock and the capacity in the order given.
+ *
+ * B-W2b-F44 (Owner 2026-11-13, option A): today counts only the lanes' working minutes still left from now (lanesOf), and a
+ * garment still to make (step 3 on) is promised for the next working day of the site's calendar at the earliest, never for
+ * today (`where.firstMakeDay`, factory-domain makeDayOf); stock already made and free (step 2) may still be promised today.
  */
 
 export interface PromiseAsk {
@@ -79,6 +86,8 @@ export interface PromiseWhere {
   readonly now: Date
   readonly market: GateMarket | null
   readonly destination: string | null
+  /** B-W2b-F44: the first working day after today on the site's calendar: a garment still to make is never promised before it. */
+  readonly firstMakeDay: BusinessDate
 }
 
 export interface SizeAnswer {
@@ -135,8 +144,8 @@ interface Lanes {
 
 const laneKeyOf = (kind: string, id: string) => `${kind}:${id}`
 
-/** The site's lanes over the horizon: available and booked minutes per day, the backlog that waits first. */
-export function lanesOf(world: CapacityWorld, today: BusinessDate): Lanes {
+/** The site's lanes over the horizon: available and booked minutes per day, the backlog that waits first (B-W2b-F44: today only from `now`). */
+export function lanesOf(world: CapacityWorld, today: BusinessDate, now: Date): Lanes {
   const last = plusDays(today, CTP_HORIZON_DAYS)
   const days: TimedBucket[] = []
   for (let date = today; date <= last; date = plusDays(date, 1)) days.push({ key: date, from: date, to: date, start: businessDayStart(date, world.site.timezone), end: businessDayStart(plusDays(date, 1), world.site.timezone) })
@@ -145,10 +154,16 @@ export function lanesOf(world: CapacityWorld, today: BusinessDate): Lanes {
     const setup = { people: state.people, unit: state.lane.kind === 'LINE' ? ('people' as const) : ('stations' as const), efficiencyPct: state.efficiencyPct }
     const booked = bookedOf(world, state, days)
     const byDate = new Map(state.days.map((day) => [day.date, day]))
+    // B-W2b-F44 (begin): today counts only the lane's working minutes still left from now to the end of the site's day (THE
+    // calendars service through the capacity world: state.working); what released work books today stays booked, so what
+    // no longer fits today waits first from the next day (freeAfterLoad's backlog).
+    const todayEnd = days[1]?.start ?? businessDayStart(plusDays(today, 1), world.site.timezone)
+    const counted = (day: CapacityDay): CapacityDay => (day.date === today ? { ...day, minutes: minutesLeftToday(day.minutes, state.working(now, todayEnd)) } : day)
+    // B-W2b-F44 (end)
     const laneDays = state.calendar
       ? days.map((bucket) => {
           const day = byDate.get(bucket.from)
-          return { date: bucket.from, available: day ? availableOf(setup, [day]).availableMinutes : new Dec(0), booked: booked.get(bucket.key)?.booked ?? new Dec(0) }
+          return { date: bucket.from, available: day ? availableOf(setup, [counted(day)] /* B-W2b-F44 */).availableMinutes : new Dec(0), booked: booked.get(bucket.key)?.booked ?? new Dec(0) }
         })
       : []
     let backlog: Decimal = new Dec(0)
@@ -355,7 +370,7 @@ export async function answerPromises(db: Reader, where: PromiseWhere, asks: read
 
   // 4. Capacity: the site's lanes, their load and backlog, walked in the asks' order.
   const world = await capacityWorld(db, site, { from: today, to: plusDays(today, CTP_HORIZON_DAYS) }, today)
-  const lanes = lanesOf(world, today)
+  const lanes = lanesOf(world, today, now) // B-W2b-F44: today from now
   const free: FreeMap = freeAfterLoad(lanes.lanes)
   const empty = freeWhenEmpty(lanes.lanes)
   const makeLeadOf = await makeLeadTimes(db, site, prepared)
@@ -400,6 +415,11 @@ export async function answerPromises(db: Reader, where: PromiseWhere, asks: read
         emptyFinish = base.finish
         steps = [...real.steps]
       }
+      // B-W2b-F44 (begin): a garment still to make is promised for the next working day at the earliest, never for today; the
+      // empty plant's walk too, so the bridge adds up (the days the rule adds are base lead time).
+      if (finish !== null) finish = makeDayOf(finish, where.firstMakeDay)
+      if (emptyFinish !== null) emptyFinish = makeDayOf(emptyFinish, where.firstMakeDay)
+      // B-W2b-F44 (end)
       const bridge = finish === null ? null : bridgeOf(today, date, emptyFinish ?? finish, finish)
       for (const size of group) finishOf.set(size, { finish, bridge, steps })
       lastSteps = steps

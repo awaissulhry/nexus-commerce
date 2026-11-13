@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import type { FastifyInstance } from 'fastify'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { openFactoryDatabase, RUNTIME_LOGIN, type FactoryDatabase } from '@nexus/factory-db'
 import { migratedDatabase, type MigratedDatabase } from '@nexus/factory-db/testing'
 import { plusDays } from '@nexus/factory-domain/calendars/dates'
@@ -72,6 +72,11 @@ const lineOf = (list: Json, lineId: string | undefined): Json => (list.lines as 
 const sizeOf = (line: Json, size: string): Json => (line.sizes as Json[]).find((entry) => entry.size === size)!
 
 beforeAll(async () => {
+  // ---- B-W2b-F43: the clock is fixed at Friday 13 Nov 2026 09:00 UTC (10:00 at the plant), in the seeds' week, and runs on from
+  // there. The expectations read the seeds' fixed days (PO1 confirmed for 13 Nov, the orders' promised days) and failed once those
+  // days passed (a fake clock on 2026-12-07 found it); the routes read the same clock (serverClock).
+  vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-11-13T09:00:00.000Z'), shouldAdvanceTime: true })
+  // ---- end B-W2b-F43
   db = await migratedDatabase('promise_keep')
   database = await openFactoryDatabase({ connectionString: db.url(RUNTIME_LOGIN), pool: { max: 8 } })
   await seedCore({ db: database, namespace: ns })
@@ -115,6 +120,7 @@ afterAll(async () => {
   await app?.close()
   await database?.close()
   await db?.close()
+  vi.useRealTimers() // B-W2b-F43
 }, 60_000)
 
 describe('one promise history per line (PLN-173)', { timeout: 180_000 }, () => {
@@ -187,6 +193,8 @@ describe('orders at risk (PLN-174)', { timeout: 300_000 }, () => {
         const expected = size.current === null ? 'NOT_PROMISED' : size.current < today ? 'LATE' : size.finish === null || size.finish > size.current ? 'AT_RISK' : 'ON_TIME'
         expect(size.risk, `${line.order.number} ${size.size}`).toBe(expected)
         if (size.current && size.finish) expect(size.slackDays).toBe(Math.round((Date.parse(size.current) - Date.parse(size.finish)) / 86_400_000))
+        // B-W2b-F44: what is still to make (a work order, a planned order, the engine's) never finishes today; only stock ready now does.
+        if (size.finish !== null && size.finishSource !== 'STOCK') expect(size.finish > today, `${line.order.number} ${size.size} ${size.finishSource} ${size.finish}`).toBe(true)
       }
     }
     // The tiles count the lines in them; the risk counts add up to the lines.
@@ -217,6 +225,8 @@ describe('the re-promise workflow (PLN-175)', { timeout: 300_000 }, () => {
     expect(draft.reasons.map((reason: Json) => reason.code)).toContain('MATERIAL_LATE')
     expect(['it', 'en']).toContain(draft.language)
     expect(draft.plan.length).toBeGreaterThan(0)
+    // B-W2b-F44: a size still to make is proposed for the next working day at the earliest, never for today.
+    for (const row of draft.plan as Json[]) if (row.state === 'MAKE' && row.proposed !== null) expect(row.proposed > today, `${row.size} ${row.proposed}`).toBe(true)
   })
 
   it('planning proposes; it waits for sales as a task on the order', async () => {

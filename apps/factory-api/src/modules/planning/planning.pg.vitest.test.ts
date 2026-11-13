@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import type { FastifyInstance } from 'fastify'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { openFactoryDatabase, RUNTIME_LOGIN, type FactoryDatabase } from '@nexus/factory-db'
 import { migratedDatabase, type MigratedDatabase } from '@nexus/factory-db/testing'
 import { newId } from '@nexus/factory-domain/core/ids'
@@ -148,6 +148,11 @@ async function draftPurchase(number: string, itemId: string, colourId: string | 
 }
 
 beforeAll(async () => {
+  // ---- B-W2b-F43: the clock is fixed at Friday 13 Nov 2026 09:00 UTC (10:00 at the plant), in the seeds' week, and runs on from
+  // there. The expectations read the seeds' fixed days (SEED-SO-0002 due 4 Dec: a LATE warning from 5 Dec) and failed once those
+  // days passed (a fake clock on 2026-12-07 found it); the routes read the same clock (serverClock).
+  vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-11-13T09:00:00.000Z'), shouldAdvanceTime: true })
+  // ---- end B-W2b-F43
   db = await migratedDatabase('planning')
   database = await openFactoryDatabase({ connectionString: db.url(RUNTIME_LOGIN), pool: { max: 8 } })
   for (const namespace of [ns.a, ns.b]) await seedCore({ db: database, namespace })
@@ -164,6 +169,7 @@ afterAll(async () => {
   await app?.close()
   await database?.close()
   await db?.close()
+  vi.useRealTimers() // B-W2b-F43
 }, 60_000)
 
 describe('a run explodes the open orders through their released BOMs (PLN-062, PLN-063)', () => {
@@ -323,10 +329,13 @@ describe('two runs of one site never overlap (PLN-062)', () => {
     }
     // A RUNNING row (a run the lock does not cover) refuses it too; the partial unique index is the backstop.
     const stuck = newId()
-    await admin(`INSERT INTO "PlanningRun" (id, "tenantId", "companyId", "siteId", trigger, status, "startedAt") VALUES ($1, $2, $3, $4, 'MANUAL', 'RUNNING', now())`, [stuck, A.tenant, A.companyA, A.siteA1])
+    // ---- B-W2b-F43: the stuck run is dated by the test's clock (the app's, fixed above), not the database's now(): once the real
+    // day is past the fixed one, a now() row would be newer than every run after it (and taken for the latest attempt).
+    await admin(`INSERT INTO "PlanningRun" (id, "tenantId", "companyId", "siteId", trigger, status, "startedAt") VALUES ($1, $2, $3, $4, 'MANUAL', 'RUNNING', $5)`, [stuck, A.tenant, A.companyA, A.siteA1, new Date()])
+    // ---- end B-W2b-F43
     expect((await refused('planner', 'POST', '/planning/runs', { siteId: A.siteA1 }, 409)).message).toMatch(/is going since/)
     await expect(admin(`INSERT INTO "PlanningRun" (id, "tenantId", "companyId", "siteId", trigger, status, "startedAt") VALUES ($1, $2, $3, $4, 'MANUAL', 'RUNNING', now())`, [newId(), A.tenant, A.companyA, A.siteA1])).rejects.toThrow(/PlanningRun_one_running_per_site/)
-    await admin(`UPDATE "PlanningRun" SET status = 'FAILED', "finishedAt" = now(), error = 'Stopped by the test' WHERE id = $1`, [stuck])
+    await admin(`UPDATE "PlanningRun" SET status = 'FAILED', "finishedAt" = $2, error = 'Stopped by the test' WHERE id = $1`, [stuck, new Date()]) // B-W2b-F43: the test's clock
     // Another site plans meanwhile.
     expect((await ok('planner', 'POST', '/planning/runs', { siteId: A.siteB1 }, 201)).run).toMatchObject({ siteId: A.siteB1, status: 'DONE', orderLines: 0 })
   })

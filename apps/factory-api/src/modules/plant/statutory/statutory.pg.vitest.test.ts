@@ -208,8 +208,14 @@ describe('reminders: the cron reminds each due date once, when its window opens'
     expect(again.reminded).toBe(0)
     let plan = (await ok('viewer', 'GET', `/plant/checks/plans/${sewPlan.id}`)).plan
     expect(plan.lastRemindedAt).not.toBeNull()
-    // The earthing plan's window (30 days before 2027-03-15) is not open today: no reminder.
-    expect(await outbox('machine_check.due', care.planIds.earthing)).toEqual(today < '2027-02-13' ? [] : expect.any(Array))
+    // ---- B-W2b-F43: the earthing plan's window (seeded: 30 days before 2027-03-15) read from the plan, so the line checks something
+    // on every day (from 2027-02-13 it was `expect.any(Array)`): no reminder while its window is shut; once it opened, the one
+    // reminder of that due date (overdue after the day).
+    const earthing = (await ok('viewer', 'GET', `/plant/checks/plans/${care.planIds.earthing}`)).plan
+    const earthingDue = (await outbox('machine_check.due', care.planIds.earthing)).map((row) => row.payload)
+    if (today < earthing.reminderFrom) expect(earthingDue).toEqual([])
+    else expect(earthingDue).toEqual([expect.objectContaining({ planId: care.planIds.earthing, nextDueOn: earthing.nextDueOn, reminderDays: earthing.reminderDays, overdue: earthing.nextDueOn < today })])
+    // ---- end B-W2b-F43
     plan = (await ok('checker', 'POST', `/plant/checks/plans/${sewPlan.id}/move`, { version: plan.version, nextDueOn: addDays(today, 60), reason: 'Later (made-up).' })).plan
     expect(plan.lastRemindedAt).toBeNull()
     expect((await runCheckReminders({ database: h.database, log: quiet, clock: at(new Date()) })).reminded).toBe(0)

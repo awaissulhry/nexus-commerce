@@ -8,11 +8,14 @@ describe('databasePartyRefusal()', () => {
     expect(databasePartyRefusal('parties: party x rides for a team, so it is a person (PERSON), never its own team')?.path).toBe(PARTY_REFUSAL_ISSUES.rider)
     expect(databasePartyRefusal('parties: party x has riders, so it stays an organisation (move its riders first)')?.path).toBe(PARTY_REFUSAL_ISSUES.team)
     expect(databasePartyRefusal('parties: party x has riders, so it stays an organisation (move its riders first)')?.message).toMatch(/Move its riders first/)
+    expect(databasePartyRefusal('parties: party x keeps a carrier account only with its preferred carrier')?.path).toBe(PARTY_REFUSAL_ISSUES.carrier)
+    expect(databasePartyRefusal('parties: the default carrier service of party x is 1 to 100 characters on one line, with its preferred carrier')?.path).toBe(PARTY_REFUSAL_ISSUES.carrier)
   })
 
   it('leaves every other message alone', () => {
     expect(databasePartyRefusal('parties: the default deposit of party x is above 0 and at most 100 percent, or none')).toBeNull()
     expect(databasePartyRefusal('customers: inquiry x is logged open')).toBeNull()
     expect(databasePartyRefusal('parties: the erasure of contact x has when and by whom, both or neither')).toBeNull()
+    expect(databasePartyRefusal("parties: party x's shipments are billed COLLECT only on a carrier account it keeps (sealed)")).toBeNull()
   })
 })
