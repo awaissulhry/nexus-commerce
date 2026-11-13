@@ -36,6 +36,9 @@ export function sampleDocument(type: DocumentType, language: DocumentLanguage, c
       return { ...base, totals, validUntil: date, paymentTerms: '30 days' }
     case 'PURCHASE_ORDER':
       return { ...base, totals, deliveryDate: date, deliveryTerms: 'EXW' }
+    // B-W2b-303
+    case 'ORDER_CONFIRMATION':
+      return { ...base, totals, deliveryDate: date, paymentTerms: '30 days', deliveryTerms: 'EXW' }
     case 'INVOICE_COPY':
       return { ...base, totals, invoice: { kind: 'TD01' } }
     case 'PACKING_LIST':

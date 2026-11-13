@@ -23,7 +23,8 @@ import type { CurrencyCode, DecimalString, MinorUnits } from '../core/money'
  * The fixed layouts (GAP-008). The invoice is a COPY: the legal invoice is the FatturaPA XML sent through SDI. The
  * packing list (B-W1-46, LOG-039) says which garments are in which parcel of a shipment: no prices, not a fiscal document.
  */
-export const DOCUMENT_TYPES = ['QUOTE', 'PURCHASE_ORDER', 'DDT', 'INVOICE_COPY', 'PACKING_LIST'] as const
+// B-W2b-303 (SAL-208): ORDER_CONFIRMATION, the confirmation of a sales order (one version per change, sent on its thread).
+export const DOCUMENT_TYPES = ['QUOTE', 'PURCHASE_ORDER', 'DDT', 'INVOICE_COPY', 'PACKING_LIST', 'ORDER_CONFIRMATION'] as const
 export type DocumentType = (typeof DOCUMENT_TYPES)[number]
 
 /** The languages every layout is printed in. */

@@ -8,6 +8,8 @@ import { MAX_REASON, SALES_ORDER_STATUSES } from '@nexus/factory-domain/sales/or
 import { MILESTONE_KINDS, MILESTONE_STATUSES } from '@nexus/factory-domain/sales/orders/schedule'
 import { DEPOSIT_KINDS, MAX_QUOTE_LINES, MAX_SIZE_QUANTITY, MAX_TEXT } from '@nexus/factory-domain/sales/quotes/quotes'
 import { orderView } from './contract'
+// B-W2b-303: the season and the priority of a typed order.
+import { ORDERS_DEPTH_LIMITS, SALES_ORDER_PRIORITY_LEVELS } from '@nexus/factory-domain/sales/orders-depth/rules'
 
 /**
  * The contracts of an order every day (B-W2a-30; SAL-202, SAL-209, SAL-210, SAL-211, SAL-216, SAL-217): manual entry and
@@ -60,6 +62,10 @@ const manualBody = input({
   shipToAddressId: id().nullish(),
   language: z.enum(['it', 'en']).optional(),
   internalNote: text(MAX_TEXT.internalNote).nullish(),
+  // B-W2b-303 (SAL-277, SAL-207): an open season of the company; the priority and its urgent reason.
+  seasonId: id().nullish(),
+  priorityLevel: z.enum(SALES_ORDER_PRIORITY_LEVELS).optional(),
+  urgentReason: z.string().max(ORDERS_DEPTH_LIMITS.urgentReason + 10).nullish(),
   lines: z.array(newLineInput).min(1).max(MAX_QUOTE_LINES),
 })
 

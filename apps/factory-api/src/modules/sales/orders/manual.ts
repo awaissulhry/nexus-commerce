@@ -39,6 +39,10 @@ import { asDay, dayOf, hasOrderSeries, type Reader } from './store'
 import type { OrderView } from './views'
 // B-W2b-304 (SAL-237, SAL-244): the credit check of an order being made.
 import { planOrderCredit, recordOrderCredit, type OrderStep } from '../credit/check'
+// B-W2b-303 (SAL-205, SAL-207, SAL-277): a SALES_ORDER rule may make it wait; its priority; its season.
+import { priorityOf, type SalesOrderPriorityLevel } from '@nexus/factory-domain/sales/orders-depth/rules'
+import { askOrderApproval, planOrderApproval } from '../orders-depth/approval'
+import { assertOpenSeason } from '../seasons/store'
 
 /**
  * Manual order entry (B-W2a-30; SAL-202 "direct orders without a quote for repeat business"; the design's New order
@@ -75,10 +79,14 @@ export interface ManualOrderBody {
   readonly shipToAddressId?: string | null | undefined
   readonly language?: 'it' | 'en' | undefined
   readonly internalNote?: string | null | undefined
+  // B-W2b-303: an open season of the company; the priority (default NORMAL) and its urgent reason (with URGENT only).
+  readonly seasonId?: string | null | undefined
+  readonly priorityLevel?: SalesOrderPriorityLevel | undefined
+  readonly urgentReason?: string | null | undefined
   readonly lines: readonly NewLineInput[]
 }
 
-interface ManualPlan {
+export interface ManualPlan {
   readonly party: QuoteParty
   readonly currency: string
   readonly taxMode: PartyTaxMode
@@ -100,7 +108,8 @@ interface ManualPlan {
 }
 
 /** The order as it would be made, or the problems in words (by path). A party that cannot be quoted is a 409. */
-async function planManualOrder(db: Reader, body: ManualOrderBody, now: Date, picked: { id: string } | null): Promise<ManualPlan | Issue[]> {
+// B-W2b-303: exported for the sheet import's dry run (modules/sales/order-import: the same judgement as the apply).
+export async function planManualOrder(db: Reader, body: ManualOrderBody, now: Date, picked: { id: string } | null): Promise<ManualPlan | Issue[]> {
   const today = businessDate(now)
   const issues: Issue[] = []
   const company = await db.company.findUnique({ where: { id: body.companyId }, select: { id: true, currency: true } })
@@ -285,7 +294,7 @@ export async function createManualOrder(caller: CommandCaller, body: ManualOrder
  * return): the plan (refused in words), the SALES_ORDER number, the CONFIRMED order and its lines, the deposit request
  * when one is asked, the payment schedule, the audit row and sales_order.created. The caller checked orders.manage.
  */
-export async function makeManualOrderInCommand(tools: CommandTools, body: ManualOrderBody, picked: { id: string } | null, creditStep: OrderStep | null = 'ORDER'): Promise<{ orderId: string; number: string }> {
+export async function makeManualOrderInCommand(tools: CommandTools, body: ManualOrderBody, picked: { id: string } | null, creditStep: OrderStep | null = 'ORDER', options: { readonly requesterId?: string | null } = {} /* B-W2b-303: who asks a SALES_ORDER yes (the sheet import's applier) */): Promise<{ orderId: string; number: string }> {
   const { tx, now } = tools
   const today = businessDate(now)
   if (!(await hasOrderSeries(tx, body.companyId))) throw new ConflictError('The company has no active SALES_ORDER number series: an administrator adds one under Numbering, then the order can be made.')
@@ -299,7 +308,17 @@ export async function makeManualOrderInCommand(tools: CommandTools, body: Manual
   // B-W2b-304: over the customer's credit limit where the company holds: the order waits as PENDING_APPROVAL for a yes
   // (a replacement of returned goods is checked by nothing: creditStep null).
   const credit = creditStep ? await planOrderCredit(tools, { step: creditStep, partyId: plan.party.row.id, companyId: body.companyId, grossAmount: plan.priced.grossAmount, currency: plan.currency }) : null
-  const status = credit?.status ?? 'CONFIRMED'
+  let status: 'CONFIRMED' | 'PENDING_APPROVAL' = credit?.status ?? 'CONFIRMED'
+  // B-W2b-303 (SAL-207, SAL-277): the priority and the season (an open one of the company: 400 / 409 in words).
+  const priority = priorityOf({ priorityLevel: body.priorityLevel ?? 'NORMAL', urgentReason: body.urgentReason })
+  if (Array.isArray(priority)) throw invalid(priority)
+  const season = await assertOpenSeason(tx, body.seasonId, body.companyId)
+  // B-W2b-303 (SAL-205): a SALES_ORDER rule that holds makes the order wait (a replacement of returned goods is not a sale:
+  // creditStep null, no rule).
+  const approval = creditStep
+    ? await planOrderApproval(tools, { ...(options.requesterId !== undefined ? { requesterId: options.requesterId } : {}), companyId: body.companyId, shape: { currency: plan.currency, netAmount: plan.priced.netAmount, customerCode: plan.party.row.code, priorityLevel: priority.priorityLevel, fromQuote: false, lines: plan.priced.lines.map((line) => ({ kind: 'SIZE_GRID', quantity: line.quantity, unitPrice: line.unitPrice, priceSteps: null })) } })
+    : null
+  if (approval?.waits) status = 'PENDING_APPROVAL'
   await tx.salesOrder.create({
     data: {
       id,
@@ -328,6 +347,10 @@ export async function makeManualOrderInCommand(tools: CommandTools, body: Manual
       grossAmount: plan.priced.grossAmount,
       costAmount: plan.priced.costAmount,
       internalNote: plan.internalNote,
+      // B-W2b-303
+      seasonId: season?.id ?? null,
+      priorityLevel: priority.priorityLevel,
+      urgentReason: priority.urgentReason,
       ...stamp,
     },
     select: { id: true },
@@ -400,6 +423,8 @@ export async function makeManualOrderInCommand(tools: CommandTools, body: Manual
   const steps = await makeScheduleInCommand(tools, { id, number: number.formatted, companyId: body.companyId, partyId: plan.party.row.id, currency: plan.currency, grossAmount: plan.priced.grossAmount, promiseDate: plan.promiseDate === null ? null : asDay(plan.promiseDate), paymentTermsId: plan.paymentTermsId }, deposit)
   // B-W2b-304: the order's credit check (and on a hold the request for a yes, asked by the person making it).
   await recordOrderCredit(tools, credit?.plan ?? null, id)
+  // B-W2b-303: the request for the yes a SALES_ORDER rule wants.
+  await askOrderApproval(tools, id, approval)
   tools.audit({
     action: 'orders.makeManual',
     recordType: 'SalesOrder',
