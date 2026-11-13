@@ -538,7 +538,9 @@ export const EMPTY_DECISION: DecisionDraft = Object.freeze({ disposition: '', ou
  * The dispositions an office person picks from (REMAKE is refused in W2a: the made-to-measure office decides it later).
  * B-W2b-352: SIZE_EXCHANGE (B-W2b-346), the same garment in another size on the replacement order.
  */
-export const PICKABLE_DISPOSITIONS: readonly ReturnDisposition[] = ['REPAIR', 'REPLACE', 'SIZE_EXCHANGE', 'CREDIT_ONLY', 'RETURN_UNCHANGED', 'SCRAP']
+export const PICKABLE_DISPOSITIONS: readonly ReturnDisposition[] = ['REPAIR', 'REPLACE', 'SIZE_EXCHANGE', 'CREDIT_ONLY', 'RETURN_UNCHANGED', 'SCRAP',
+  // B-W2b-360 (SAL-353): REMAKE of a made-to-measure unit (the API refuses it in words for any other line; its goods scrapped).
+  'REMAKE']
 
 /** Where the goods may go for a disposition, the usual one first. */
 export const outcomesFor = (disposition: ReturnDisposition | ''): readonly GoodsOutcome[] => (disposition ? OUTCOMES_BY_DISPOSITION[disposition] : [])

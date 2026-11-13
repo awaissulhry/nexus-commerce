@@ -173,6 +173,8 @@ import { events as quoteSpeedups } from '../quote-speedups/events'
 import { events as orderChanges } from '../order-changes/events'
 // B-W2b-358: the made-to-measure office.
 import { events as mtmOffice } from '../mtm-office/events'
+// B-W2b-360: fittings, alterations and remakes.
+import { events as fittings } from '../fittings/events'
 // B-W2b-238: materials in depth (a material's approval decided).
 import { events as materialsDepth } from '../materials-depth/events'
 // B-W2b-230: the tech pack (a new PDF version of a revision's tech pack kept).
@@ -582,6 +584,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...orderChanges,
   // B-W2b-358
   ...mtmOffice,
+  // B-W2b-360
+  ...fittings,
 ] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */

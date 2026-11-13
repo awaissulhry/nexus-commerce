@@ -2128,6 +2128,7 @@
     "sales_safety_log": "Keep the accident log (GPSR art. 20): record the accident a report tells of, correct or complete it with a new revision, and record when the authority was told and its reference",
     "sales_mtm_record": "Record a rider's measurements as a new revision (who measured, where, the privacy notice given) and print the made-to-measure worksheet",
     "sales_mtm_review": "The factory review of a rider's measurements: confirm them before a made-to-measure order goes on, or ask the rider or dealer for more (never measures you took yourself)",
+    "sales_fittings_manage": "Book, move, close and cancel fittings, showroom visits and measuring sessions (the invite mailed to the rider), record what a fitting found per point and open its alteration",
     "production_instructions_view": "See the work instructions of the operations: steps, photos and videos, versions, the printed sheet, and how many saw a version (counts, never a name)",
     "production_instructions_manage": "Write work instructions: a draft with steps per language, critical points, safety notes, icons, the ticks the tablet asks, photos and videos; discard a draft, archive or restore; bring the typed step lines of the routings in",
     "production_instructions_approve": "Approve another person's draft of a work instruction: the floor shows it from then on (never your own draft)",
