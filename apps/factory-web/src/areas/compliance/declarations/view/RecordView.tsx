@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { ExternalLink, Lock, MoreHorizontal, RefreshCw } from 'lucide-react'
-import { Banner, Card, EmptyState, Field, KeyValue, Menu, MultiSelect, SummaryTable, type MenuItemDef } from '@nexus/ui/components'
+import { Banner, Card, EmptyState, Field, KeyValue, Menu, SummaryTable, type MenuItemDef } from '@nexus/ui/components'
 import { LawRef } from '@nexus/ui/components/LawRef/index'
 import { PdfViewer } from '@nexus/ui/components/PdfViewer/index'
 import { QrCode } from '@nexus/ui/components/QrCode/index'
@@ -35,6 +35,7 @@ import {
 } from '../model'
 import type { RecordActions, RecordModel } from '../view-model'
 import { DeclarationsMessages, GateBanner, ProblemList, SourceTag, StatusPill, useDay, useLanguage, useWords } from './parts'
+import { MultiSelect } from '../../../../lib/i18n/ds-parts' // B-W2b-F41: the DS parts in the page's language
 
 /**
  * SCR-052-record — a declaration or a leaflet (design compliance.declarations › rec:Declaration; PRD-292, PRD-293, PRD-295,

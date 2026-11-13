@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Check, Search, SlidersHorizontal } from 'lucide-react'
-import { EmptyState, Listbox } from '@nexus/ui/components'
+import { EmptyState } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, Input, Select } from '@nexus/ui/primitives'
 import { CellSaveMark } from '../../../../lib/i18n/ds-parts'
@@ -14,6 +14,7 @@ import type { ListKey } from '../../../../list-frame/model'
 import type { StrategyItem } from '../api'
 import { BULK_MAX, cellHeld, colourRows, filtered, ITEM_KINDS, itemSub, STRATEGIES, type MpsControls } from '../model'
 import type { MpsActions, MpsModel } from '../view-model'
+import { Listbox } from '../../../../lib/i18n/ds-parts' // B-W2b-F41: the DS parts in the page's language
 
 interface Words {
   readonly t: Translate

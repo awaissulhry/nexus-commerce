@@ -8,6 +8,7 @@
  *
  * Framework-free: the component keeps the state, these functions decide it (Node tests).
  */
+import { WORKSPACE_SUBHEADER_LABELS, type WorkspaceSubheaderLabels } from './WorkspaceSubheaderLabels'
 
 /** The minimum a row needs here (structural, so the component's `WorkspaceNavItem` fits). */
 export interface NavTreeItem {
@@ -19,7 +20,7 @@ export interface NavTreeItem {
 }
 
 /** The noun for the rows under a row when the feature names none: "Show Amazon items". */
-export const DEFAULT_CHILDREN_LABEL = 'items'
+export const DEFAULT_CHILDREN_LABEL = WORKSPACE_SUBHEADER_LABELS.rowsNoun
 
 /** A row is a parent when it has at least one row under it. An empty `children` draws a plain row (no chevron). */
 export function isNavParent(item: NavTreeItem): boolean {
@@ -120,22 +121,22 @@ export function mergeRemembered(
   return same ? choices : merged
 }
 
-/** The rows' noun ("markets"); the feature's own or the default. */
-export function childrenNoun(item: NavTreeItem): string {
-  return item.childrenLabel?.trim() || DEFAULT_CHILDREN_LABEL
+/** The rows' noun ("markets"); the feature's own or the default (B-W2b-F41: `words.rowsNoun` when given). */
+export function childrenNoun(item: NavTreeItem, words: WorkspaceSubheaderLabels = WORKSPACE_SUBHEADER_LABELS): string {
+  return item.childrenLabel?.trim() || words.rowsNoun
 }
 
-/** The chevron's name: "Show Amazon markets" / "Hide Amazon markets". */
-export function navToggleLabel(item: NavTreeItem, open: boolean): string {
-  return `${open ? 'Hide' : 'Show'} ${item.label} ${childrenNoun(item)}`
+/** The chevron's name: "Show Amazon markets" / "Hide Amazon markets" (B-W2b-F41: in `words`, English by default). */
+export function navToggleLabel(item: NavTreeItem, open: boolean, words: WorkspaceSubheaderLabels = WORKSPACE_SUBHEADER_LABELS): string {
+  return (open ? words.hideRows : words.showRows)(item.label, childrenNoun(item, words))
 }
 
 /** The name of the list under a row: "Amazon markets". */
-export function navChildrenGroupLabel(item: NavTreeItem): string {
-  return `${item.label} ${childrenNoun(item)}`
+export function navChildrenGroupLabel(item: NavTreeItem, words: WorkspaceSubheaderLabels = WORKSPACE_SUBHEADER_LABELS): string {
+  return words.rows(item.label, childrenNoun(item, words))
 }
 
 /** Words for a screen reader on a closed parent that holds the page (beside the dot). */
-export function navCurrentInsideText(item: NavTreeItem): string {
-  return `(the current page is in ${item.label})`
+export function navCurrentInsideText(item: NavTreeItem, words: WorkspaceSubheaderLabels = WORKSPACE_SUBHEADER_LABELS): string {
+  return words.currentInside(item.label)
 }

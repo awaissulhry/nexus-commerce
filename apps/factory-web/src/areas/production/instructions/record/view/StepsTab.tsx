@@ -1,7 +1,7 @@
 'use client'
 
 import { ChevronDown, ChevronRight, Plus, ShieldAlert, Trash2 } from 'lucide-react'
-import { Card, EmptyState, Field, OrderedList } from '@nexus/ui/components'
+import { Card, EmptyState, Field } from '@nexus/ui/components'
 import { Button, Checkbox, Input, SegmentedControl, Select, Spinner, Tag } from '@nexus/ui/primitives'
 import { INSTRUCTION_LIMITS } from '@nexus/factory-domain/production/instructions/rules'
 import { Textarea } from '../../../../../lib/i18n/ds-parts'
@@ -27,6 +27,7 @@ import {
 } from '../../model'
 import { LanguageChips, StepIcon, useSay, VersionPill } from '../../view/parts'
 import type { RecordModel } from './InstructionRecordView'
+import { OrderedList } from '../../../../../lib/i18n/ds-parts' // B-W2b-F41: the DS parts in the page's language
 
 export interface StepsActions {
   onDraft?: (draft: VersionDraft) => void

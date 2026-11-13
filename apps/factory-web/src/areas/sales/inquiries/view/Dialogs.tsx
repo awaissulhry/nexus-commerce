@@ -2,12 +2,13 @@
 
 import { useEffect, type ReactNode } from 'react'
 import { FilePlus2, XCircle } from 'lucide-react'
-import { Banner, Field, ListboxPanel, SummaryTable } from '@nexus/ui/components'
+import { Banner, Field, SummaryTable } from '@nexus/ui/components'
 import { Button, Input, RadioCard, Skeleton } from '@nexus/ui/primitives'
 import { Modal, Textarea } from '../../../../lib/i18n/ds-parts'
 import type { Assignees } from '../api'
 import { DECLINE_REASONS, declineHeld, lostHeld, type DeclineDraft, type DeclineReason, type Loaded, type Notice, type Phrase, type QuotePreview } from '../model'
 import { NoticeLine, useWords } from '../parts'
+import { ListboxPanel } from '../../../../lib/i18n/ds-parts' // B-W2b-F41: the DS parts in the page's language
 
 /** ⌘↵ / Ctrl+↵ inside a dialog: its primary action (the design's kb). */
 function useSubmitKey(onSubmit: () => void, held: boolean) {

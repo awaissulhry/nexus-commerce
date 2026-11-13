@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, type ReactNode } from 'react'
-import { Banner, Field, KeyValue, MultiSelect, SummaryTable } from '@nexus/ui/components'
+import { Banner, Field, KeyValue, SummaryTable } from '@nexus/ui/components'
 import { LawRef } from '@nexus/ui/components/LawRef/index'
 import { Button, Checkbox, Input, Pill, RadioCard, Select, Spinner, Tag } from '@nexus/ui/primitives'
 import type { ReviewChange } from '@nexus/ui/patterns'
@@ -14,6 +14,7 @@ import { clockFull, dayLong, dayShort, hoursWords, minuteOfClock, overtimeHeld, 
 import type { AssignDraft, OvertimeDraft, RequestState, ReviewPhase, ShiftsActions, ShiftsDialog, ShiftsModel } from '../view-model'
 import { said, useShiftWords, type ShiftWords } from './parts'
 import { shiftOptions } from './RosterSheet'
+import { MultiSelect } from '../../../../lib/i18n/ds-parts' // B-W2b-F41: the DS parts in the page's language
 
 /**
  * Every pop-up of People › Shifts: Assign shifts (who, days, which shift; "Only these days" or the person's "Default shift")

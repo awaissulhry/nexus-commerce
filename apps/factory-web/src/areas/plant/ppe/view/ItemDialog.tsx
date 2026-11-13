@@ -2,12 +2,13 @@
 
 import { Archive, ArchiveRestore, Save } from 'lucide-react'
 import { Banner, Field } from '@nexus/ui/components'
-import { Button, Input, Select, Spinner, TagInput } from '@nexus/ui/primitives'
+import { Button, Input, Select, Spinner } from '@nexus/ui/primitives'
 import { PPE_LIMITS } from '@nexus/factory-domain/safety/ppe/rules'
 import { Modal, Textarea } from '../../../../lib/i18n/ds-parts'
 import { archiveHeld, atField, categoryMark, codeOf, itemDraftProblems, itemHeld, PPE_CATEGORIES, type ItemDraft } from '../model'
 import type { ItemState, PpePageActions, PpePageModel } from '../view-model'
 import { problemText, SectionFailed, useWords } from './parts'
+import { TagInput } from '../../../../lib/i18n/ds-parts' // B-W2b-F41: the DS parts in the page's language
 
 /**
  * PPE item (design pop:item; band secondary `c`, a catalogue row): the fields of the catalogue — code (capitals, never changed

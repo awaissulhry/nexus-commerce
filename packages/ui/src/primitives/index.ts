@@ -42,5 +42,6 @@ export { ColorSwatchPicker, SWATCHES } from './ColorSwatchPicker'
 export type { ColorSwatchPickerProps } from './ColorSwatchPicker'
 // DS words in the person's language (B-W2b-04, 2026-10-31): each part's optional `labels` prop; English defaults.
 export { TEXTAREA_LABELS, type TextareaLabels } from './TextareaLabels'
+export { TAG_INPUT_LABELS, type TagInputLabels } from './TagInputLabels' // B-W2b-F41
 export { ICON_PICKER_LABELS, type IconPickerLabels } from './IconPickerLabels'
 export { COLOR_SWATCH_PICKER_LABELS, type ColorSwatchPickerLabels } from './ColorSwatchPickerLabels'

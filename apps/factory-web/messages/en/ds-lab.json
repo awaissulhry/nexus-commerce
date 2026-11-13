@@ -92,5 +92,42 @@
   },
   "edit": {
     "message": "Edit a field: the bar counts the changes."
+  },
+  "f41": {
+    "section": "Navigation, pickers, lists, photos and replies",
+    "navigation": "Area navigation",
+    "navLabel": "Warehouse pages",
+    "navHere": "Warehouse › Stock",
+    "navGroup": "Goods",
+    "navStock": "Stock",
+    "navHides": "Hides",
+    "navTrims": "Trims",
+    "navMoves": "Movements",
+    "change": "Before → after",
+    "changeHours": "Hours",
+    "changeShift": "Shift",
+    "changeNote": "Note",
+    "changeOld": "To check",
+    "multi": "Languages",
+    "langIt": "Italian",
+    "langEn": "English",
+    "langDe": "German",
+    "listbox": "Reason",
+    "reasonLate": "Supplier delay",
+    "reasonHide": "Hide rejected",
+    "ordered": "Steps",
+    "step": {
+      "cut": "Cutting",
+      "sew": "Sewing",
+      "check": "Inspection"
+    },
+    "tags": "Sizes",
+    "reply": "Note on the record",
+    "replyRule": "Seen by the office only.",
+    "replySend": "Add the note",
+    "openPhotos": "Photos",
+    "photoFront": "Jacket, front",
+    "photoBack": "Jacket, back",
+    "photoCaption": "Sample DEMO-7, fitting of 3 November."
   }
 }

@@ -2,13 +2,14 @@
 
 import { useMemo } from 'react'
 import Link from 'next/link'
-import { Banner, EmptyState, Field, MultiSelect, SummaryTable } from '@nexus/ui/components'
+import { Banner, EmptyState, Field, SummaryTable } from '@nexus/ui/components'
 import { Button, Select, SegmentedControl, Spinner } from '@nexus/ui/primitives'
 import { Modal } from '../../../../lib/i18n/ds-parts'
 import type { Preview } from '../api'
 import { KINDS, languageCheck, mayGenerate, packHref, recordHref } from '../model'
 import type { DeclarationsPageActions, DeclarationsPageModel, NewState, TranslateState, UnrecordedState } from '../view-model'
 import { LanguageTag, PartFailed, PartLoading, ProblemList, SourceTag, useDay, useLanguage, useWords } from './parts'
+import { MultiSelect } from '../../../../lib/i18n/ds-parts' // B-W2b-F41: the DS parts in the page's language
 
 /** The languages a new draft may be made in: the markets' languages and the factory's two (a prefill keeps its own). */
 export function languageOptions(coverage: readonly string[], extra: readonly (string | null)[] = []): string[] {

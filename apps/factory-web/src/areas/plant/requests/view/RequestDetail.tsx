@@ -4,7 +4,6 @@ import { useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { AlertTriangle, Check, CircleCheck, ExternalLink, Footprints, GitMerge, Lock, ShieldCheck, Wrench, X } from 'lucide-react'
 import { Banner, Card, KeyValue, type TimelineStep } from '@nexus/ui/components'
-import { Lightbox } from '@nexus/ui/patterns'
 import { Button, Kbd, Tag } from '@nexus/ui/primitives'
 import { DetailModal, Timeline } from '../../../../lib/i18n/ds-parts'
 import { formatDate, formatDateTime } from '../../../../lib/i18n/format'
@@ -15,6 +14,7 @@ import type { DeepRequest, DeepRequestRecord } from '../depth/api'
 import { escalatedWords, goHeld, groupOfRecord, lightboxPhotos, lockHeld, progressRows, routedWords, trailSteps, worksHeld } from '../depth/model'
 import type { RequestsListActions, RequestsListModel } from '../view-model'
 import { MediaList } from './MediaList'
+import { Lightbox } from '../../../../lib/i18n/ds-parts' // B-W2b-F41: the DS parts in the page's language
 
 /**
  * The request's detail (design plant.requests/pop:request, a DetailModal opened by Enter or `?open=<request>`): the

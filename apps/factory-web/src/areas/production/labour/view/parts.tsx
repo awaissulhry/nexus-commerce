@@ -6,7 +6,6 @@ import { CalendarCheck, Clock, MessageSquareWarning, PencilLine, type LucideIcon
 import { LawRef } from '@nexus/ui/components/LawRef/index'
 import { PrivacyNote } from '@nexus/ui/components/PrivacyNote/index'
 import { Banner, type TimelineStep } from '@nexus/ui/components'
-import { ChangeValue } from '@nexus/ui/grid'
 import { Pill, Skeleton, Tag } from '@nexus/ui/primitives'
 import type { InboxKind, LineDayState } from '@nexus/factory-domain/production/labour/rules'
 import { useDsWords } from '../../../../lib/i18n/ds-parts'
@@ -14,6 +13,7 @@ import { formatDate, formatDateTime } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import type { Change, OffStandardCode } from '../api'
 import { agePhrase, ageTone, changeLines, DAY_TONE, KIND_TONE, LABOUR_NAMESPACE, type LegalRow, type Phrase, type ValueWords } from '../model'
+import { ChangeValue } from '../../../../lib/i18n/ds-parts' // B-W2b-F41: the DS parts in the page's language
 
 /** Small parts of Labour & corrections: views only, they fetch nothing. */
 

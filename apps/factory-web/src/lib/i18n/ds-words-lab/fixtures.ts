@@ -21,5 +21,8 @@ export const designScreen = defineDesignScreen<DsWordsLabModel>({
     { id: 'confirm', label: 'Typed confirmation', model: { open: 'confirm' }, note: 'Type DEMO-7 and tick the box to arm the button.' },
     { id: 'preferences', label: 'Customise columns', model: { open: 'preferences' }, note: 'Columns, grouping and display tabs.' },
     { id: 'modal', label: 'Plain dialog', model: { open: 'modal' }, note: 'The close button’s name.' },
+    // B-W2b-F41: the parts that spoke English only (their section is on "Every part").
+    { id: 'navigation', label: 'Area navigation open', model: { open: 'navigation' }, note: 'The close button, a row’s chevron and its list; close the row for the words beside its dot (B-W2b-F41).' },
+    { id: 'lightbox', label: 'Photos', model: { open: 'lightbox' }, note: 'Title, counter, Previous held at the first photo, the strip, the keys line, Close (B-W2b-F41).' },
   ],
 })

@@ -29,18 +29,32 @@ export function replyOverWords(over: number, limit: number): string {
   return `Cut ${over.toLocaleString('en-US')} ${over === 1 ? 'character' : 'characters'} to send it (the limit is ${limit.toLocaleString('en-US')}).`
 }
 
+/** The words the rules below write (B-W2b-F41: the composer's `labels`; English by default). */
+export interface ReplyRuleWords {
+  sentHeld: string
+  emptyHeld: string
+  over: (over: number, limit: number) => string
+  length: (count: number) => string
+}
+
+const ENGLISH: ReplyRuleWords = {
+  sentHeld: REPLY_SENT_HELD,
+  emptyHeld: REPLY_EMPTY_HELD,
+  over: (over, limit) => replyOverWords(over, limit),
+  length: (n) => `${n.toLocaleString('en-US')} ${n === 1 ? 'character' : 'characters'}`,
+}
+
 /** Why the send is held, or null when it may run. */
-export function replyHeldReason({ held, sent, text, limit }: ReplyHeldInput): string | null {
+export function replyHeldReason({ held, sent, text, limit }: ReplyHeldInput, words: Pick<ReplyRuleWords, 'sentHeld' | 'emptyHeld' | 'over'> = ENGLISH): string | null {
   if (held) return held
-  if (sent) return REPLY_SENT_HELD
+  if (sent) return words.sentHeld
   const over = charactersOver(countCharacters(text), limit)
-  if (limit != null && over > 0) return replyOverWords(over, limit)
-  if (text.trim().length === 0) return REPLY_EMPTY_HELD
+  if (limit != null && over > 0) return words.over(over, limit)
+  if (text.trim().length === 0) return words.emptyHeld
   return null
 }
 
 /** The counter when there is no limit: "312 characters", "1 character". */
-export function replyLengthWords(text: string): string {
-  const n = countCharacters(text)
-  return `${n.toLocaleString('en-US')} ${n === 1 ? 'character' : 'characters'}`
+export function replyLengthWords(text: string, words: Pick<ReplyRuleWords, 'length'> = ENGLISH): string {
+  return words.length(countCharacters(text))
 }

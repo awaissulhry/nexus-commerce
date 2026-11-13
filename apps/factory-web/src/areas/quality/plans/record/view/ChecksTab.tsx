@@ -1,7 +1,7 @@
 'use client'
 
 import { Camera, Lock } from 'lucide-react'
-import { EmptyState, Field, OrderedList } from '@nexus/ui/components'
+import { EmptyState, Field } from '@nexus/ui/components'
 import { Builder } from '@nexus/ui/patterns'
 import { Button, Checkbox, Input, Pill, Select } from '@nexus/ui/primitives'
 import { EditModeBar, Textarea } from '../../../../../lib/i18n/ds-parts'
@@ -11,6 +11,7 @@ import { CHECK_CLASSES, CHECK_TYPES, MEASURE_UOMS, PLAN_LIMITS, takesResult, typ
 import { checksSummary, newCheck, specOf, versionProblems, withType, type CheckDraft, type Problem } from '../../model'
 import { AddIcon, problemAt, useSay } from '../../view/parts'
 import type { PlanRecordModel } from './PlanRecordView'
+import { OrderedList } from '../../../../../lib/i18n/ds-parts' // B-W2b-F41: the DS parts in the page's language
 
 export interface ChecksActions {
   onChecks?: (checks: CheckDraft[]) => void

@@ -8,6 +8,8 @@ import { useClickAway } from './useClickAway'
 import { usePopoverPosition } from './usePopoverPosition'
 import { OptionList, type OptionListItem } from './OptionList'
 import { opensDark } from '../lib/opens-dark'
+import { mergeLabels } from '../lib/labels'
+import { MULTI_SELECT_LABELS, type MultiSelectLabels } from './MultiSelectLabels'
 
 /** The list's item shape, aliased so this component and `OptionList` cannot drift apart. */
 export type MultiSelectOption = OptionListItem
@@ -45,6 +47,8 @@ export interface MultiSelectProps {
    * the Button's `heldReason`.
    */
   heldReason?: string | null
+  /** B-W2b-F41: the trigger's and the list's words in the person's language; a word left out stays English. */
+  labels?: Partial<MultiSelectLabels>
 }
 
 /**
@@ -54,8 +58,9 @@ export interface MultiSelectProps {
  * `OptionList`, shared with the grid's column-menu set filter so the two controls are the same
  * control and not two files that agree today. See `OptionList` for why.
  */
-export function MultiSelect({ options, value, onChange, placeholder = 'All', className,
-  ariaLabel, searchable, searchPlaceholder, size = 'md', width, minSelected = 0, formatLabel, id, labelledBy, heldReason }: MultiSelectProps) {
+export function MultiSelect({ options, value, onChange, placeholder, className,
+  ariaLabel, searchable, searchPlaceholder, size = 'md', width, minSelected = 0, formatLabel, id, labelledBy, heldReason, labels }: MultiSelectProps) {
+  const words = mergeLabels(MULTI_SELECT_LABELS, labels)
   const [open, setOpen] = useState(false)
   const valueId = useId()
   const held = !!heldReason
@@ -65,7 +70,7 @@ export function MultiSelect({ options, value, onChange, placeholder = 'All', cla
   useClickAway([ref, popRef], () => setOpen(false), open)
 
   const allChecked = value.length === options.length && options.length > 0
-  const label = formatLabel && value.length > 0 ? formatLabel(value) : value.length === 0 ? placeholder : allChecked ? 'All' : `${value.length} selected`
+  const label = formatLabel && value.length > 0 ? formatLabel(value) : value.length === 0 ? (placeholder === undefined ? words.all : placeholder) : allChecked ? words.all : words.selected(value.length)
 
   /**
    * Step 4.3 #2 (T1) — focus. The popover is portalled to `<body>`, so without this a keyboard user
@@ -121,6 +126,7 @@ export function MultiSelect({ options, value, onChange, placeholder = 'All', cla
               searchable={searchable}
               searchPlaceholder={searchPlaceholder}
               minSelected={minSelected}
+              labels={labels}
             />
           </div>,
           document.body,

@@ -3,7 +3,7 @@
 import { useMemo, useRef } from 'react'
 import Link from 'next/link'
 import { CheckCircle2, Paperclip, XCircle } from 'lucide-react'
-import { Banner, Field, MultiSelect } from '@nexus/ui/components'
+import { Banner, Field } from '@nexus/ui/components'
 import { DueCell } from '@nexus/ui/components/DueCell/index'
 import type { ColDef, ICellRendererParams } from '@nexus/ui/grid'
 import { Button, Input, Select, Spinner } from '@nexus/ui/primitives'
@@ -13,6 +13,7 @@ import type { Assessment, Measure, Owner } from '../api'
 import { atField, measureChanged, measureProblems, moveAsks, moveHeld, MEASURE_SOURCES, sourceWords, versionNo, type MeasureStatus } from '../model'
 import type { CellState, MeasureActions, MeasureDialogState, MoveState, Read, RiskFrame } from '../view-model'
 import { CellMark, problemText, StatusPill, useCost, useDay, useWhen, useWords } from './parts'
+import { MultiSelect } from '../../../../lib/i18n/ds-parts' // B-W2b-F41: the DS parts in the page's language
 
 /** What the measure columns need from the page or the record. */
 export interface MeasureColumnsInput {
