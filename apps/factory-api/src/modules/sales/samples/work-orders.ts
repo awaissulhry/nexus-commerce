@@ -23,6 +23,8 @@ import { hasSeries, readOrderLines, type Reader } from '../../production/work-or
 import { createSampleWorkOrder, createWorkOrder, type SampleWorkOrder } from '../../production/work-orders/work-orders'
 import { readRound } from './rounds'
 import { databaseRefusal, dayOrNull, officeRound, readRoundRow, refuse, type RoundData } from './store'
+// B-W2b-365: the configuration sampled (the cells of a work order without an order line carry it).
+import { sampleOptionGroups, sampleOptionValues } from './work-order-options'
 
 /**
  * The sample work order (B-W2b-246; MES-018 "Sample and prototype work orders"; design products.samples › Sample "What was
@@ -40,7 +42,8 @@ import { databaseRefusal, dayOrNull, officeRound, readRoundRow, refuse, type Rou
  * SAMPLE work order's cell may name no order line), without one: an internal or uncharged proto, fit or salesman round
  * (`withoutLineRefusal`) makes its work order from its own cells, each a colourway and size of the style (a cell of "any
  * colourway" takes the colourway asked, else the style's only active one). Such a work order ships on no order's shipment,
- * is invoiced on no order and comes back on no return (shipping, invoicing and returns refuse it in words).
+ * is invoiced on no order and comes back on no return (shipping, invoicing and returns refuse it in words). B-W2b-365: its
+ * cells carry the configuration sampled (`optionValueIds`, ./work-order-options), as an order line's cells carry its picks.
  */
 
 const LINE_LIMIT = 100
@@ -123,6 +126,7 @@ export async function workOrderOptions(caller: CommandCaller, roundId: string) {
           quantity: cell.quantity,
         })),
         colourways,
+        options: await sampleOptionGroups(db, round.styleId), // B-W2b-365
       },
       blockers,
       warnings,
@@ -162,6 +166,8 @@ export async function makeWorkOrder(caller: CommandCaller, roundId: string, body
   })
   if (!body.lines) return makeWithoutLine(caller, round, body, idempotencyKey, { note, due, sample })
   if (body.colourwayId !== undefined) throw new ValidationError('A colourway is named only for a work order without an order line.', [{ path: 'body/colourwayId', message: "Leave it out: each order line makes its own colourway." }])
+  // B-W2b-365: on order lines each cell takes the options chosen on its line.
+  if (body.optionValueIds !== undefined) throw new ValidationError('Options are named only for a work order without an order line.', [{ path: 'body/optionValueIds', message: 'Leave them out: each cell takes the options chosen on its order line.' }])
   const lineIds = body.lines.map((line) => line.salesOrderLineId)
   const named = new Set<string>()
   body.lines.forEach((line, index) => {
@@ -220,9 +226,11 @@ async function makeWithoutLine(
   made: { note: string; due: { dueDate?: BusinessDate }; sample: (revisionId: string) => SampleWorkOrder },
 ) {
   refuse(noLineRefusalOf(round))
-  const { revision, style, colourways } = await caller.withClient(async (db) => ({
+  const { revision, style, colourways, optionValueIds } = await caller.withClient(async (db) => ({
     revision: await db.styleRevision.findUniqueOrThrow({ where: { id: round.revisionId }, select: { id: true, revision: true, status: true } }),
     ...(await styleFacts(db, round)),
+    // B-W2b-365: the configuration sampled, checked against the style's offer.
+    optionValueIds: await sampleOptionValues(db, round.styleId, body.optionValueIds, 'body/optionValueIds'),
   }))
   refuse(revisionRefusal(revision))
   const plan = cellsWithoutLine(cellsOf(round.cells), { code: style.code, sizes: style.sizes, colourwayIds: colourways.map((row) => row.id) }, body.colourwayId ?? null, 'body')
@@ -232,7 +240,7 @@ async function makeWithoutLine(
     ...made.due,
     ...(body.priority !== undefined ? { priority: body.priority } : {}),
     note: made.note,
-    cells: plan.cells,
+    cells: plan.cells.map((cell) => ({ ...cell, optionValueIds })),
   }
   const { workOrder } = await createSampleWorkOrder(caller, input, idempotencyKey, { ...made.sample(round.revisionId), styleId: round.styleId, companyId: round.companyId }).catch(databaseRefusal)
   return { workOrder: { id: workOrder.id, number: workOrder.number, status: workOrder.status }, round: await readRound(caller, round.id) }

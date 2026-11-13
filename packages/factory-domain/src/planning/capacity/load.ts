@@ -37,6 +37,11 @@ export interface LoadOperation {
   readonly workCentreId: string
   /** Whole garments done there (good + scrapped by the standing scans). */
   readonly done: number
+  /**
+   * B-W2b-365: the garments it is done on: those of the cells its routing step is for (a step only for some sizes,
+   * colourways or options; product/routing-depth `stepIsFor`); left out: every garment of the work order.
+   */
+  readonly pieces?: number
 }
 
 export interface LoadWorkOrder {
@@ -131,7 +136,7 @@ export function loadParts(workOrders: readonly LoadWorkOrder[], slots: readonly 
     const own = slots.filter((slot) => slot.workOrderId === workOrder.id)
     const whole = own.filter((slot) => slot.operationId === null)
     for (const operation of workOrder.operations) {
-      const pieces = Math.max(0, workOrder.pieces - operation.done)
+      const pieces = Math.max(0, (operation.pieces ?? workOrder.pieces) - operation.done) // B-W2b-365
       const minutes = loadMinutes(operation.standardMinutes, pieces)
       if (pieces === 0 || minutes.lte(0)) continue
       const opSlots = own.filter((slot) => slot.operationId === operation.id)

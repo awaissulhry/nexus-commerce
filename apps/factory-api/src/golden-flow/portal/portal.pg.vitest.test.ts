@@ -795,8 +795,14 @@ describe('the W2b-3 golden flow: a customer, a tannery and a workshop online, an
     const seeded = (await ok(P.buyer, 'GET', `/purchasing/subcontracting/orders/${id('subcontract:SC-0001')}`)).order
     await ok(P.buyer, 'POST', `/purchasing/subcontracting/orders/${seeded.id}/cancel`, { version: seeded.version, reason: 'Given to the workshop again from today’s plan' })
     const back = addDays(today(), 10)
+    // B-W2b-365: an order made by hand goes to a workshop approved for the work: the buyer approves P2's pending sewing
+    // qualification (seed/suppliers-depth.ts), resting on P2's accepted document (seed/portal-followups.ts).
+    const P2 = id('party:P2')
+    const pending = ((await ok(P.buyer, 'GET', `/purchasing/suppliers/${P2}/qualifications`)).qualifications as Json[]).find((row) => row.status === 'PENDING' && row.scope.workCentreKinds.includes('SEWING'))!
+    const evidenced = ((await ok(P.buyer, 'PATCH', `/purchasing/suppliers/${P2}/qualifications/${pending.id}`, { version: pending.version, evidence: [{ recordType: 'SupplierDocumentUpload', recordId: id('portal-followups:upload:P2:certificate') }] })).qualifications as Json[]).find((row) => row.id === pending.id)!
+    await ok(P.buyer, 'POST', `/purchasing/suppliers/${P2}/qualifications/${pending.id}/decide`, { version: evidenced.version, decision: 'APPROVED' })
     let order = (
-      await ok(P.buyer, 'POST', '/purchasing/subcontracting/orders', { workOrderId: id('production:work-order:WO-0001'), partyId: id('party:P2'), expectedBackDate: back, operations: [{ workOrderOperationId: id('production:WO-0001:operation:20'), pricePerPiece: '4.50', expectedBackDate: back }] }, 201)
+      await ok(P.buyer, 'POST', '/purchasing/subcontracting/orders', { workOrderId: id('production:work-order:WO-0001'), partyId: P2, expectedBackDate: back, operations: [{ workOrderOperationId: id('production:WO-0001:operation:20'), pricePerPiece: '4.50', expectedBackDate: back }] }, 201)
     ).order
     order = (await ok(P.buyer, 'POST', `/purchasing/subcontracting/orders/${order.id}/kit`, { version: order.version, lines: [{ itemId: id('product:item:lining'), itemColourId: id('product:item-colour:lining:GRY'), lotId: id('inventory:lot:LIN-01'), quantity: '12.6', uom: 'M' }] }, 201)).order
     // REFUSAL: a job link before the order is sent.

@@ -57,6 +57,9 @@ describe('load in standard minutes (PLN-116)', () => {
     expect(loadParts([workOrder({ lineId: 'L1' })], [], [{ lineId: 'L1', workCentreIds: null }]).filter((part) => part.laneKind === 'LINE')).toHaveLength(2)
     expect(loadParts([workOrder({ pieces: 2, operations: [{ ...workOrder().operations[1]! }] })], [], lines)).toEqual([])
     expect(loadParts([workOrder({ dueDate: null })], [], lines)[0]!.placement).toEqual({ placedBy: 'NO_DATE' })
+    // B-W2b-365: an operation done on some cells only (its step only for some sizes, colourways or options) books their garments.
+    const some = loadParts([workOrder({ operations: [{ ...workOrder().operations[0]!, pieces: 3 }, { ...workOrder().operations[1]!, pieces: 2 }] })], [], lines)
+    expect(some.map((part) => [part.operationId, part.pieces, part.minutes.toFixed(1)])).toEqual([['op-cut', 3, '37.5']])
   })
 
   it("follows the board: an operation's slots give its time and, on a line, its line, by their booked share", () => {
