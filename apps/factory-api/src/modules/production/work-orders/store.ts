@@ -116,13 +116,15 @@ export interface CellRow {
   readonly partyId: string | null
   readonly lineSeq: number | null
   readonly salesOrderId: string | null
+  /** B-W2b-340 (CF1:03): the option values chosen on its order line (WorkOrderSize.optionValueIds; B-W2b-225's stepIsFor reads them). */
+  readonly optionValueIds?: readonly string[]
 }
 
 /** The work order's cells: colourways in code order, sizes in the style's range order (then by code). */
 export async function readCells(db: Reader, workOrderId: string, styleSizes: readonly string[]): Promise<CellRow[]> {
   const rows = await db.workOrderSize.findMany({
     where: { workOrderId },
-    select: { id: true, version: true, colourwayId: true, size: true, quantity: true, salesOrderLineId: true, partyId: true },
+    select: { id: true, version: true, colourwayId: true, size: true, quantity: true, salesOrderLineId: true, partyId: true, /* B-W2b-340 */ optionValueIds: true },
   })
   if (rows.length === 0) return []
   const colourways = await db.colourway.findMany({ where: { id: { in: [...new Set(rows.map((row) => row.colourwayId))] } }, select: { id: true, code: true, name: true } })
