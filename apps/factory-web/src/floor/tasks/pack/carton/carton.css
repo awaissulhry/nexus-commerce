@@ -1,0 +1,211 @@
+/*
+ * Scan into the carton (B-W2b-387): layout only, inside the DS FloorFrame and the bench's own pack.css. Sizes read the floor
+ * tier's `--nds-density-*` tokens; colours are semantic `--nds-*` roles painted as the floor kit paints a tone
+ * (`--nds-<tone>-text` on `--nds-<tone>-soft`, the edge in `--nds-<tone>`). No raw colour. A state is always its words and
+ * numbers too, never colour alone.
+ */
+
+/* ── the flash of the last scan: big, beside the scan field; a refusal pulses once in the danger tone ───────────────────── */
+.fw-pack-flash {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-density-gap);
+  padding: var(--nds-density-gap) var(--nds-density-pad-x);
+  border: 2px solid var(--nds-border);
+  border-inline-start-width: 10px;
+  border-radius: var(--nds-density-radius);
+}
+.fw-pack-flash-icon {
+  display: inline-flex;
+  flex: none;
+}
+.fw-pack-flash-icon svg {
+  width: calc(var(--nds-density-icon) * 1.5);
+  height: calc(var(--nds-density-icon) * 1.5);
+}
+.fw-pack-flash-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+.fw-pack-flash-code {
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+.fw-pack-flash-words {
+  font-size: calc(var(--nds-density-font-body) * 1.25);
+  font-weight: var(--nds-font-weight-bold);
+  line-height: 1.25;
+}
+.fw-pack-flash[data-tone='success'] {
+  border-color: var(--nds-success);
+  background: var(--nds-success-soft);
+  color: var(--nds-success-text);
+}
+.fw-pack-flash[data-tone='info'] {
+  border-color: var(--nds-info);
+  background: var(--nds-info-soft);
+  color: var(--nds-info-text);
+}
+.fw-pack-flash[data-tone='warning'] {
+  border-color: var(--nds-warning);
+  background: var(--nds-warning-soft);
+  color: var(--nds-warning-text);
+}
+.fw-pack-flash[data-tone='danger'] {
+  border-color: var(--nds-danger);
+  background: var(--nds-danger-soft);
+  color: var(--nds-danger-text);
+  animation: fw-pack-flash-danger 0.9s ease-out;
+}
+@keyframes fw-pack-flash-danger {
+  0%,
+  45% {
+    outline: calc(var(--nds-density-focus-w) * 2) solid var(--nds-danger);
+  }
+  100% {
+    outline: calc(var(--nds-density-focus-w) * 2) solid transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fw-pack-flash[data-tone='danger'] {
+    animation: none;
+  }
+}
+
+/* ── the size grid: packed of ordered; while a batch label waits for its size, the sizes it may be are buttons ───────────── */
+.fw-pack-grid-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.fw-pack-grid th[scope='row'] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+}
+.fw-pack-grid-serial {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-normal);
+}
+.fw-pack-grid-tick {
+  display: inline-flex;
+  margin-inline-end: var(--nds-space-4);
+  vertical-align: middle;
+}
+.fw-pack-grid-tick svg {
+  width: 1em;
+  height: 1em;
+}
+.fw-pack-grid-choose {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--nds-density-control-h);
+  min-height: var(--nds-density-control-h);
+  padding: 0 var(--nds-space-10);
+  border: 2px solid var(--nds-primary);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-primary-soft);
+  color: var(--nds-primary);
+  font: inherit;
+  font-weight: var(--nds-font-weight-bold);
+  cursor: pointer;
+}
+.fw-pack-grid-choose:focus-visible {
+  outline: var(--nds-density-focus-w) solid var(--nds-primary);
+  outline-offset: var(--nds-density-focus-offset);
+}
+
+/* ── a carton: its contents and its facts; the one a take-out works on carries the warning edge ──────────────────────── */
+.fw-pack-carton[data-out='true'] {
+  border-inline-start: 6px solid var(--nds-warning);
+}
+.fw-pack-contents {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  margin: 0;
+  padding-inline-start: 1.2em;
+  font-size: var(--nds-density-font-body);
+}
+.fw-pack-carton-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6) var(--nds-density-gap);
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-density-font-label);
+}
+.fw-pack-carton-facts > span,
+.fw-pack-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+/* ── Close carton: what it is packed in, big buttons in a wrapping row ─────────────────────────────────────────────────── */
+.fw-pack-packaging {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 14rem), 1fr));
+  gap: var(--nds-density-target-gap);
+}
+.fw-pack-packaging-option .nds-floor-btn-label {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-2);
+  text-align: start;
+}
+.fw-pack-packaging-name {
+  font-weight: var(--nds-font-weight-bold);
+}
+.fw-pack-packaging-meta {
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-normal);
+}
+
+/* ── the marks preview and the marks as a PDF ──────────────────────────────────────────────────────────────────────────── */
+.fw-pack-marks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+.fw-pack-pdf {
+  width: 100%;
+}
+
+/* ── the scans the tablet keeps ─────────────────────────────────────────────────────────────────────────────────────────── */
+.fw-pack-kept {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  padding: var(--nds-space-12) var(--nds-density-pad-x);
+  border: 1px dashed var(--nds-border);
+  border-radius: var(--nds-density-radius);
+}
+.fw-pack-kept-codes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6) var(--nds-space-12);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--nds-density-font-label);
+}
+.fw-pack-kept-refused {
+  display: block;
+}
+
+/* ── a carton's contents on Scan anything's card: one line each ─────────────────────────────────────────────────────────── */
+.fw-pack-card-contents {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}

@@ -8,6 +8,7 @@ import { zxingCamera } from '../camera'
 import { useFloor, useFloorRouter } from '../FloorApp'
 import { useFloorKeys } from '../keys'
 import { lookupMachine } from '../tasks/machine/api'
+import { lookupCarton } from '../tasks/scan/result/carton/api'
 import { TASK_ROUTES } from '../tasks/routes'
 import { cabinetOfScan, CABINET_PATH } from '../tasks/sds/model'
 import { planScan, readScan, resultCode, resultType, type Lookup, type ScanResult } from './scan-model'
@@ -74,7 +75,7 @@ export function FloorScan() {
           setLoading(null)
         }
       }
-      feedback(found.kind === 'hide' || found.kind === 'workOrder' || found.kind === 'location' || found.kind === 'machine' ? 'success' : found.kind === 'notOnFloor' || found.kind === 'cutTicket' || found.kind === 'trolley' ? 'warning' : 'error')
+      feedback(found.kind === 'hide' || found.kind === 'workOrder' || found.kind === 'location' || found.kind === 'machine' || found.kind === 'carton' ? 'success' : found.kind === 'notOnFloor' || found.kind === 'cutTicket' || found.kind === 'trolley' ? 'warning' : 'error')
       setResult(found)
       setRecent((current) => [{ code: resultCode(found) || read.code, type: resultType(found), at: new Date().toISOString() }, ...current].slice(0, MAX_RECENT))
     },
@@ -91,6 +92,8 @@ export function FloorScan() {
         return lookupLocation(api, me!.site.id, code)
       case 'machine':
         return lookupMachine(api, code)
+      case 'carton':
+        return lookupCarton(api, code)
     }
   }
 
@@ -107,7 +110,7 @@ export function FloorScan() {
   if (!me) return null
   return (
     <ScanView
-      model={{ frame, result, loading, recent, held: me.notice.blocksScans, canCut: me.permissions.includes('production.cut') && !me.notice.blocksScans, canReport: me.permissions.includes('plant.report') }}
+      model={{ frame, result, loading, recent, held: me.notice.blocksScans, canCut: me.permissions.includes('production.cut') && !me.notice.blocksScans, canReport: me.permissions.includes('plant.report'), canPack: me.permissions.includes('shipping.pack') && !me.notice.blocksScans }}
       onFrame={onFrame}
       onAction={(action) => {
         if (action.type === 'scan') return void look(action.code)
@@ -116,6 +119,8 @@ export function FloorScan() {
         if (action.type === 'cut') return store.openWith(TASK_ROUTES.cut, action.code)
         // B-W2a-73: a machine's card opens the machine problem with its tag (never held by the notice: a safety report).
         if (action.type === 'report') return store.openWith(TASK_ROUTES.machine, action.code)
+        // B-W2b-387: a carton's card opens its shipment at the packing bench (SCR-098 takes the marks' code).
+        if (action.type === 'pack') return store.openWith(TASK_ROUTES.pack, action.code)
       }}
       camera={zxingCamera}
     />

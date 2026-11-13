@@ -65,11 +65,12 @@ export interface ApiClient {
    * with a body (`method`, `body`: a draft rendered from what the person typed, never stored) answers the same way.
    * B-W2b-383 (XF8:05): `onHeaders` reads the answer's own headers beside the bytes (the bin labels PDF's
    * `x-labels-refused`), on a good answer only.
+   * B-W2b-387: a POST that records something (a floor device's marks PDF) carries its `idempotencyKey`.
    */
   bytes(path: string, options?: BytesOptions): Promise<Uint8Array>
 }
 
-export type BytesOptions = Pick<RequestOptions<unknown>, 'query' | 'signal' | 'body'> & { method?: 'GET' | 'POST'; onHeaders?: (headers: Headers) => void }
+export type BytesOptions = Pick<RequestOptions<unknown>, 'query' | 'signal' | 'body' | 'idempotencyKey'> & { method?: 'GET' | 'POST'; onHeaders?: (headers: Headers) => void }
 
 const UNSAFE: ReadonlySet<HttpMethod> = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 
@@ -155,7 +156,7 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
     let response: Response
     try {
       const method = read.method ?? 'GET'
-      const headers = requestHeaders(options, method, method === 'POST' ? { body: read.body ?? {} } : {})
+      const headers = requestHeaders(options, method, method === 'POST' ? { body: read.body ?? {}, idempotencyKey: read.idempotencyKey } : {})
       headers.set('accept', 'application/pdf, application/json')
       response = await doFetch(apiUrl(options.baseUrl, path, read.query), {
         method,

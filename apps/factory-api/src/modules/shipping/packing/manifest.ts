@@ -18,4 +18,6 @@ export const manifest = defineManifest({
   'POST /shipping/packing/:shipmentId/unpack': { audiences: ['office', 'floor'], permission: 'shipping.pack', scope: 'record' },
   // The office's documents (the live DDT, the packing list) on the site's packing printer (SCR-098 "Documents").
   'POST /shipping/packing/:shipmentId/documents/print': { audiences: ['office', 'floor'], permission: 'shipping.pack', scope: 'record' },
+  // B-W2b-387: the carton its marks' code names (floor.scan "Carton"; the bench), never a customer or money.
+  'GET /shipping/cartons/scan': { audiences: ['office', 'floor'], permission: 'shipping.pack', scope: 'record' },
 })

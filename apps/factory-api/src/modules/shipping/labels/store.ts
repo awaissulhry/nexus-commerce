@@ -125,11 +125,15 @@ export async function labelFilesOf(db: CommandTx, parcels: readonly { readonly i
 }
 
 /** The latest print job of each parcel. */
-async function printsOf(db: CommandTx, parcelIds: readonly string[]) {
-  if (parcelIds.length === 0) return new Map<string, { jobId: string; status: string; createdAt: string }>()
-  const jobs = await db.printJob.findMany({ where: { recordType: 'Parcel', recordId: { in: [...parcelIds] } }, select: { id: true, recordId: true, status: true, createdAt: true }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] })
+async function printsOf(db: CommandTx, parcels: readonly { readonly id: string; readonly trackingNumber: string | null }[]) {
+  // B-W2b-387: a parcel's print jobs are also its carton marks (B-W2b-384, scanId `<shipment>-<n>`): its LABEL's are those
+  // that carry its tracking number, so a parcel without a label has none and a marks reprint never reads as the label's.
+  const labelled = parcels.filter((parcel): parcel is { id: string; trackingNumber: string } => parcel.trackingNumber !== null)
+  if (labelled.length === 0) return new Map<string, { jobId: string; status: string; createdAt: string }>()
+  const tracking = new Map(labelled.map((parcel) => [parcel.id, parcel.trackingNumber]))
+  const jobs = await db.printJob.findMany({ where: { recordType: 'Parcel', recordId: { in: labelled.map((parcel) => parcel.id) } }, select: { id: true, recordId: true, status: true, scanId: true, createdAt: true }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] })
   const latest = new Map<string, { jobId: string; status: string; createdAt: string }>()
-  for (const job of jobs) if (!latest.has(job.recordId)) latest.set(job.recordId, { jobId: job.id, status: job.status, createdAt: toUtcIso(job.createdAt) })
+  for (const job of jobs) if (!latest.has(job.recordId) && job.scanId === tracking.get(job.recordId)) latest.set(job.recordId, { jobId: job.id, status: job.status, createdAt: toUtcIso(job.createdAt) })
   return latest
 }
 
@@ -199,7 +203,7 @@ export async function voidedLabelsOf(db: CommandTx, parcels: readonly { readonly
 export async function labelsView(db: CommandTx, shipment: ShipmentHeader, now: Date, withVoided = true) {
   const rows = await readLabelParcels(db, shipment.id)
   const files = await labelFilesOf(db, rows)
-  const prints = await printsOf(db, rows.map((row) => row.id))
+  const prints = await printsOf(db, rows)
   const settings = await db.shippingSettings.findUnique({ where: { id: shipment.siteId }, select: { cutOffTime: true, labelPrinterId: true } })
   const cutOff = cutOffOf(settings?.cutOffTime ?? null, now)
   const parcels = rows.map(labelParcelOf)

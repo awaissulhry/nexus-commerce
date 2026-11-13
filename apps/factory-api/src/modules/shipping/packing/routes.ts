@@ -12,6 +12,7 @@ import {
   removeParcelContract,
   unpackSerialContract,
 } from './contract'
+import { cartonOfCode, cartonScanContract } from './floor-view'
 import { manifest } from './manifest'
 import { addParcel, changeParcel, getPacking, packingQueue, packSerial, packShipment, placeLine, printDocuments, removeParcel, unpackSerial, unpackShipment } from './packing'
 
@@ -53,4 +54,7 @@ export default defineRoutes('shipping.packing', manifest, async (app) => {
   app.post('/shipping/packing/:shipmentId/documents/print', { schema: printDocumentsContract }, async (request, reply) =>
     reply.code(201).send(await printDocuments(request, request.params.shipmentId, request.body, idempotencyKeyFrom(request))),
   )
+
+  // B-W2b-387: a carton by the code its marks carry (Scan anything's card; the bench opens its shipment).
+  app.get('/shipping/cartons/scan', { schema: cartonScanContract }, async (request) => cartonOfCode(request, request.query.code))
 })

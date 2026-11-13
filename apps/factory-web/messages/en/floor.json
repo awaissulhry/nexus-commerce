@@ -351,7 +351,7 @@
       "held": {
         "receive": "No network: receiving goods waits for the network (a receipt and its lots take their numbers from the office). Other work is saved on this tablet.",
         "inspect": "No network: inspections and releases wait for the network (they take their number from the office). Scans are saved on this tablet.",
-        "serials": "No network: garment serials and their labels wait for the network (the office gives them). Other work is saved on this tablet."
+        "pack": "No network: garments scanned into cartons are saved on this tablet and sent when the network is back. Closing a carton, Packed, printing and garment serials wait for the network."
       }
     },
     "resume": {

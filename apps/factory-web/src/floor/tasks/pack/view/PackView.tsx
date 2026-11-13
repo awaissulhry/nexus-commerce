@@ -1,31 +1,42 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { ArrowLeft, Box, CircleAlert, CircleCheck, CircleMinus, FileText, House, Lock, Package, PackageCheck, PackageOpen, PackagePlus, Printer, RotateCcw, ScanLine, ShieldCheck, Tag, Trash2, Truck } from 'lucide-react'
+import { ArrowLeft, Box, CircleAlert, CircleCheck, CircleMinus, CloudOff, FileText, House, Lock, Package, PackageCheck, PackageOpen, Printer, RotateCcw, ScanLine, ShieldAlert, ShieldCheck, Tag, Truck, X } from 'lucide-react'
 import { LABEL_PRINT_TONE } from '@nexus/ui/components/LabelPreview/index'
-import { FloorActionBar, FloorButton, FloorList, FloorListRow, QuantityPad, ScanInput, type CameraScanner, type FloorAction, type FloorActions, type FloorTone } from '@nexus/ui/floor'
-import { formatDate, formatNumber, formatTime } from '../../../../lib/i18n/format'
+import { PdfViewer } from '@nexus/ui/components/PdfViewer/index'
+import { FloorActionBar, FloorButton, FloorList, FloorListRow, ScanInput, type CameraScanner, type FloorAction, type FloorActions, type FloorTone } from '@nexus/ui/floor'
+import { formatDate, formatTime } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import type { Translate } from '../../../../lib/i18n/messages'
+import { pdfViewerLabels } from '../../../../lib/pdf/labels'
 import { FloorFrameView, type FrameAction, type FrameModel } from '../../../frame/view/FloorFrameView'
 import { FloorState } from '../../../frame/view/FloorState'
 import type { TaskProblem } from '../../shared/task-api'
 import { HeldLine, ListFooter, ProblemState, TaskCard, TaskLine } from '../../shared/view/TaskParts'
 import type { JobStatus } from '../api'
-import type { DocumentsState, LeftItem, PackCarton, PackCell, PackShipment, SerialRefusal } from '../model'
+import type { BenchPackaging } from '../carton/api'
+import type { BenchLeft, BenchMain, CloseChoice, HoldReason, KeptScan, MarksNote, PackCartonView, PackGrid, ScanFlash } from '../carton/model'
+import { CartonCard, KeptScans, LeftList, leftWords, ScanFlashLine } from '../carton/view/CartonParts'
+import { CloseCarton } from '../carton/view/CloseCarton'
+import { MarksResult, type MarksPreviewFacts } from '../carton/view/MarksResult'
+import { PackSizeGrid } from '../carton/view/PackSizeGrid'
+import type { PackedSummary } from '../done/model'
+import { PackedDone } from '../done/view/PackedDone'
+import type { DocumentsState, PackHead } from '../model'
 import '../pack.css'
+import '../carton/carton.css'
 
 /**
- * SCR-098 — the packing bench on the floor tablet (design floor.pack; LOG-002, LOG-039, QHS-073). One shipment at a
- * time: the site's shipments to pack (scan the pack slip, or pick a row: never a customer's name on a shared screen),
- * "Released?" (only garments quality released are on a shipment: the API plans lines from them, and a serial that is
- * not released is refused at the scan), the cartons — scan each garment into the current carton (a serial label, or a
- * batch-tracked garment's label: 0 taps after the scan), "Put the rest" of a size in one tap, Close carton = weigh it,
- * the size grid planned vs packed live — then Packing done; once packed, the carrier labels and the office's DDT and
- * packing list print on the station's printers with one tap (each print job's state with its icon and word, Retry on a
- * failed one), held with the reason while the office has not issued the DDT or bought the labels. Packing needs the
- * network (it is not in the tablet's queue): offline every write waits, with the reason, and the last read stays with
- * its time. No money, never another person.
+ * SCR-098 — the packing bench on the floor tablet (design floor.pack; LOG-002, LOG-003, LOG-007, LOG-010, LOG-013, LOG-019,
+ * LOG-039, QHS-073). One shipment at a time: the site's shipments to pack (scan the pack slip or a carton's marks, or pick a
+ * row: never a customer's name on a shared screen), "Released?" (only released garments are on a shipment; a hold turns it
+ * red and stops the scans with its reason), then B-W2b-387's Scan into the carton: each garment scanned goes into the open
+ * carton (0 taps), the size grid ordered against packed live, a wrong piece flashes big with its reason, a batch label that
+ * names no size makes its sizes buttons on the grid; scans keep on the tablet while the network is gone; a garment comes out
+ * of a carton; Close carton = what it is packed in and its weight, then its contents stored and its marks printed (or why
+ * not, with Print again and the marks as a PDF made here); the carton list "Carton 2 of 3"; Packed. Once packed: the carrier
+ * labels and the office's DDT and packing list on the station's printers, then Packed's summary. No money, never another
+ * person.
  */
 
 export interface PackRowModel {
@@ -36,14 +47,6 @@ export interface PackRowModel {
   garments: number
   cartons: number
 }
-
-/** The shipment as the bench shows it (model.ts `shipmentModel`). */
-export type ShipmentModel = PackShipment
-
-/** What the last scan did, said on the step (never a toast). */
-export type ScanNote =
-  | { kind: 'packed'; code: string; cell: string; carton: number; rest?: number }
-  | { kind: 'refused'; code: string; why: SerialRefusal | 'noRoom' | 'serialTracked' | 'batchDone' | 'unknown' | 'notDraft' | 'offline'; cell?: string | null }
 
 export interface JobModel {
   id: string
@@ -59,14 +62,38 @@ export interface DocumentsModel extends DocumentsState {
   jobs: JobModel[]
 }
 
+/** Scan into the carton as the view draws it (Pack.tsx builds it from the bench and the screen's own state). */
+export interface BenchStep {
+  grid: PackGrid
+  cartons: readonly PackCartonView[]
+  /** The carton scans go into (null: the next scan opens one). */
+  current: PackCartonView | null
+  left: readonly BenchLeft[]
+  main: BenchMain
+  /** The hold in force (scans stop), by its reason. */
+  hold: HoldReason | null
+  flash: ScanFlash | null
+  /** The next scan takes a garment out of this carton. */
+  takeOut: { cartonId: string; seq: number } | null
+  /** A batch label named no size: the cells to tap on the grid. */
+  choosing: readonly string[] | null
+  close: { choice: CloseChoice; types: readonly BenchPackaging[]; suggestedId: string | null; held: 'noPackaging' | 'packaging' | 'weight' | null; overweightMax: string | null } | null
+  marks: { note: MarksNote; job: JobStatus | null; facts: MarksPreviewFacts | null } | null
+  /** The cartons whose marks were just sent to the printer again. */
+  printedMarks: readonly number[] | null
+  kept: { waiting: readonly KeptScan[]; refused: readonly KeptScan[] }
+  /** The marks as a PDF made here: being made, or its bytes. */
+  pdf: { bytes: Uint8Array; number: string } | 'loading' | null
+}
+
 export type PackStep =
   | { kind: 'loading'; code?: string | null }
   | { kind: 'noPermission' }
   | { kind: 'problem'; problem: TaskProblem; code?: string | null }
   | { kind: 'list'; rows: PackRowModel[]; scanned?: { code: string; why: 'notFound' | 'serialFirst' } | null }
-  | { kind: 'pack'; shipment: ShipmentModel; weigh: { cartonId: string; seq: number; value: number | null } | null; note: ScanNote | null; unpackHeld: 'labelled' | 'ddt' | null }
-  | { kind: 'documents'; shipment: ShipmentModel; documents: DocumentsModel; unpackHeld: 'labelled' | 'ddt' | null }
-  | { kind: 'done'; number: string; cartons: number; labelsPrinted: boolean }
+  | { kind: 'pack'; head: PackHead; bench: BenchStep }
+  | { kind: 'documents'; head: PackHead; documents: DocumentsModel; unpackHeld: 'labelled' | 'ddt' | null }
+  | { kind: 'done'; summary: PackedSummary }
 
 export interface PackViewModel {
   frame: FrameModel
@@ -89,14 +116,19 @@ export type PackAction =
   | { type: 'back' }
   | { type: 'home' }
   | { type: 'retry' }
-  | { type: 'add-carton' }
-  | { type: 'pick-carton'; id: string }
+  | { type: 'choose-cell'; cellId: string }
+  | { type: 'take-out'; cartonId: string }
   | { type: 'remove-carton'; id: string }
-  | { type: 'put-rest'; cellId: string }
-  | { type: 'close-carton' }
-  | { type: 'weigh-value'; value: number | null }
-  | { type: 'weigh-confirm' }
-  | { type: 'weigh-cancel' }
+  | { type: 'close-carton'; cartonId: string }
+  | { type: 'close-packaging'; id: string }
+  | { type: 'close-weight'; value: number | null }
+  | { type: 'close-confirm' }
+  | { type: 'close-cancel' }
+  | { type: 'marks-print'; parcelIds?: string[] }
+  | { type: 'marks-retry' }
+  | { type: 'marks-pdf'; parcelIds: string[] }
+  | { type: 'pdf-print' }
+  | { type: 'pdf-close' }
   | { type: 'packed' }
   | { type: 'unpack' }
   | { type: 'documents' }
@@ -124,7 +156,9 @@ const JOB_TONE: Readonly<Record<JobStatus, FloorTone>> = {
 
 export function PackView({ model, onAction, onFrame, camera }: PackViewProps) {
   const t = useT('floor-pack')
+  const d = useT('floor-pack-depth')
   const tt = useT('floor-tasks')
+  const shell = useT('shell')
   const locale = useLocale()
   const send = (action: PackAction) => onAction?.(action)
   const { step } = model
@@ -132,7 +166,6 @@ export function PackView({ model, onAction, onFrame, camera }: PackViewProps) {
   const busyHeld = model.busy ? t('busy') : null
   const back: FloorAction = { label: tt('action.back'), icon: <ArrowLeft />, onPress: () => send({ type: 'back' }), variant: 'secondary' }
   const time = (value: string) => formatTime(value, { locale, timeZone: model.timeZone })
-  const kg = (text: string | null) => (text === null ? '—' : t('carton.kg', { weight: formatNumber(Number.parseFloat(text), locale, { maximumFractionDigits: 2 }) }))
 
   let body: ReactNode = null
   let bar: FloorActions | null = null
@@ -142,13 +175,14 @@ export function PackView({ model, onAction, onFrame, camera }: PackViewProps) {
       {tt('asOf', { time: time(model.asOf) })}
     </TaskLine>
   ) : null
-  const notice = model.notice ? <NoticeLine problem={model.notice} t={t} tt={tt} /> : null
-  const scan = (label: string, hint: string) => (
+  const notice = model.notice ? <NoticeLine problem={model.notice} t={t} d={d} tt={tt} /> : null
+  const scan = (label: string, hint: string, disabled = false) => (
     <ScanInput
       label={label}
       hint={hint}
       scannedLabel={(code) => t('scan.read', { code })}
       keyboardLabel={t('scan.type')}
+      disabled={disabled}
       camera={camera ? { scanner: camera, startLabel: t('scan.camera.start'), stopLabel: t('scan.camera.stop'), errorLabel: t('scan.camera.error') } : undefined}
       onScan={(code) => send({ type: 'scan', code })}
     />
@@ -222,112 +256,149 @@ export function PackView({ model, onAction, onFrame, camera }: PackViewProps) {
     }
 
     case 'pack': {
-      const { shipment, weigh, note } = step
-      const current = shipment.current
-      const draft = shipment.status === 'DRAFT'
+      const { head, bench } = step
       const writeHeld = offlineHeld ?? busyHeld
-      const left = shipment.left
+      const holdWords = bench.hold ? d('gate.held', { reason: d(`gate.reason.${bench.hold}`) }) : null
+      if (bench.pdf) {
+        body = (
+          <>
+            <ShipmentStrip head={head} t={t} d={d} current={bench.current} />
+            {bench.pdf === 'loading' ? (
+              <FloorState tone="info" icon={<FileText />} title={d('marks.pdfLoading')} busy />
+            ) : (
+              <div className="fw-pack-pdf">
+                <PdfViewer src={bench.pdf.bytes} title={d('marks.pdfTitle', { number: bench.pdf.number })} fileName={`${bench.pdf.number}-marks.pdf`} labels={pdfViewerLabels(shell)} height="min(64vh, 900px)" />
+              </div>
+            )}
+          </>
+        )
+        bar = actions([
+          { label: d('marks.pdfClose'), icon: <X />, variant: 'secondary', onPress: () => send({ type: 'pdf-close' }) },
+          { label: d('marks.pdfPrint'), icon: <Printer />, onPress: () => send({ type: 'pdf-print' }), heldReason: bench.pdf === 'loading' ? d('marks.pdfLoading') : null },
+        ])
+        break
+      }
+      const close = bench.close
+      const scanHint = bench.hold ? d('scan.held') : bench.takeOut ? d('scan.out', { seq: bench.takeOut.seq }) : bench.current ? d('scan.into', { seq: bench.current.seq }) : d('scan.new')
+      const others = bench.cartons.filter((carton) => carton.id !== bench.current?.id)
+      const cartonActions = (carton: PackCartonView) => {
+        if (carton.labelled || bench.hold) return undefined
+        return {
+          held: writeHeld,
+          takeOut: carton.garments > 0 ? () => send({ type: 'take-out', cartonId: carton.id }) : undefined,
+          close: !carton.closed && carton.garments > 0 && carton.id !== bench.current?.id ? () => send({ type: 'close-carton', cartonId: carton.id }) : undefined,
+          weigh: carton.closed && carton.garments > 0 && carton.grossKg === null ? () => send({ type: 'close-carton', cartonId: carton.id }) : undefined,
+          remove: carton.garments === 0 ? () => send({ type: 'remove-carton', id: carton.id }) : undefined,
+        }
+      }
       body = (
         <>
-          <ShipmentStrip shipment={shipment} t={t} />
-          <ReleasedLine shipment={shipment} t={t} />
-          {!draft ? (
-            <TaskLine tone="info" icon={<PackageCheck />}>
-              {t('pack.alreadyPacked')}
+          <ShipmentStrip head={head} t={t} d={d} current={bench.current} />
+          {holdWords ? (
+            <TaskLine tone="danger" icon={<ShieldAlert />} alert>
+              {holdWords}
             </TaskLine>
-          ) : null}
+          ) : (
+            <ReleasedLine head={head} t={t} />
+          )}
           <div className="fw-task-split fw-pack-split">
             <section className="fw-floor-stack" aria-labelledby="fw-pack-carton">
               <h2 id="fw-pack-carton" className="fw-floor-section-title">
                 <span className="fw-floor-inline-icon" aria-hidden="true">
                   <Box />
                 </span>
-                {current ? t('carton.current', { seq: current.seq, count: shipment.cartons.length }) : t('carton.none')}
+                {close ? d('close.title', { seq: close.choice.seq }) : d('scan.label')}
               </h2>
-              {weigh ? (
-                <QuantityPad
-                  label={t('weigh.label', { seq: weigh.seq })}
-                  value={weigh.value}
-                  onChange={(value) => send({ type: 'weigh-value', value })}
-                  unit={t('weigh.unit')}
-                  min={0.01}
-                  max={999}
-                  decimals={2}
-                  decimalSeparator={locale === 'it' ? ',' : '.'}
-                  separatorLabel={t('weigh.separator')}
-                  decrementLabel={t('pad.minus')}
-                  incrementLabel={t('pad.plus')}
-                  clearLabel={t('pad.clear')}
-                  backLabel={t('pad.back')}
-                  emptyLabel={t('weigh.empty')}
-                  rangeLabel={() => t('weigh.range')}
-                  onConfirm={() => send({ type: 'weigh-confirm' })}
-                  confirmLabel={t('weigh.save')}
-                  confirmHeldReason={writeHeld}
-                  autoFocus
+              {close ? (
+                <CloseCarton
+                  choice={close.choice}
+                  types={close.types}
+                  suggestedId={close.suggestedId}
+                  held={writeHeld ?? (close.held ? d(`close.held.${close.held}`) : null)}
+                  overweightMax={close.overweightMax}
+                  t={d}
+                  locale={locale}
+                  onPackaging={(id) => send({ type: 'close-packaging', id })}
+                  onWeight={(value) => send({ type: 'close-weight', value })}
+                  onConfirm={() => send({ type: 'close-confirm' })}
                 />
               ) : (
                 <>
-                  {draft ? scan(t('pack.scan'), current ? t('pack.hint', { seq: current.seq }) : t('pack.hintNew')) : null}
-                  {note ? <ScanNoteLine note={note} t={t} /> : null}
-                  {current ? <CartonCard carton={current} t={t} kg={kg} current /> : <p className="fw-floor-lead">{draft ? t('carton.noneLead') : t('carton.noneDone')}</p>}
-                  {draft ? <RestButtons cells={shipment.cells} t={t} send={send} held={writeHeld} /> : null}
+                  {scan(d('scan.label'), scanHint, Boolean(bench.hold))}
+                  {bench.flash ? <ScanFlashLine key={bench.flash.seq} flash={bench.flash} t={d} locale={locale} /> : null}
+                  <KeptScans waiting={bench.kept.waiting} refused={bench.kept.refused} t={d} />
+                  {bench.printedMarks ? (
+                    <TaskLine tone="success" icon={<CircleCheck />}>
+                      {d('marks.printed', { cartons: bench.printedMarks.join(', ') })}
+                    </TaskLine>
+                  ) : null}
+                  {bench.marks ? (
+                    <MarksResult
+                      note={bench.marks.note}
+                      facts={bench.marks.facts}
+                      job={bench.marks.job}
+                      t={d}
+                      held={writeHeld}
+                      onAgain={() => (bench.marks?.job === 'FAILED' ? send({ type: 'marks-retry' }) : send({ type: 'marks-print', parcelIds: [bench.marks!.note.cartonId] }))}
+                      onPdf={() => send({ type: 'marks-pdf', parcelIds: [bench.marks!.note.cartonId] })}
+                    />
+                  ) : null}
+                  {bench.current ? (
+                    <CartonCard carton={bench.current} t={d} locale={locale} takingOut={bench.takeOut?.cartonId === bench.current.id} actions={cartonActions(bench.current)} />
+                  ) : (
+                    <p className="fw-floor-lead">{d('carton.none')}</p>
+                  )}
                 </>
               )}
-              {offlineHeld ? <HeldLine text={offlineHeld} /> : null}
+              {!model.online ? (
+                <TaskLine tone="warning" icon={<CloudOff />}>
+                  {d('offline')}
+                </TaskLine>
+              ) : null}
               {notice}
             </section>
             <section className="fw-floor-stack" aria-labelledby="fw-pack-grid">
               <h2 id="fw-pack-grid" className="fw-floor-subtitle">
-                {t('grid.title', { packed: shipment.packed, garments: shipment.garments })}
+                {d('grid.title', { packed: bench.grid.packed, ordered: bench.grid.ordered })}
               </h2>
-              <PackGrid grid={shipment.grid} t={t} />
-              <h2 className="fw-floor-subtitle">{t('cartons.title', { count: shipment.cartons.length })}</h2>
-              {shipment.cartons.length === 0 ? <p className="fw-floor-muted">{t('cartons.empty')}</p> : null}
-              {shipment.cartons.map((carton) => (
-                <CartonCard key={carton.id} carton={carton} t={t} kg={kg} current={carton.id === current?.id} onPick={draft && carton.id !== current?.id && !carton.labelled ? () => send({ type: 'pick-carton', id: carton.id }) : undefined} onRemove={draft && carton.garments === 0 && !carton.labelled ? () => send({ type: 'remove-carton', id: carton.id }) : undefined} held={writeHeld} />
+              <PackSizeGrid grid={bench.grid} choosing={close ? null : bench.choosing} onChoose={(cellId) => send({ type: 'choose-cell', cellId })} t={d} locale={locale} />
+              <h2 className="fw-floor-subtitle">{d('carton.list', { count: bench.cartons.length })}</h2>
+              {bench.cartons.length === 0 ? <p className="fw-floor-muted">{d('carton.listEmpty')}</p> : null}
+              {others.map((carton) => (
+                <CartonCard key={carton.id} carton={carton} t={d} locale={locale} takingOut={bench.takeOut?.cartonId === carton.id} actions={close ? undefined : cartonActions(carton)} />
               ))}
-              {left.length > 0 ? (
-                <ul className="fw-pack-left" aria-label={t('left.title')}>
-                  {left.map((item) => (
-                    <li key={item.kind}>{leftWords(item, t)}</li>
-                  ))}
-                </ul>
-              ) : draft ? (
-                <TaskLine tone="success" icon={<CircleCheck />}>
-                  {t('left.none')}
-                </TaskLine>
-              ) : null}
+              <LeftList left={bench.left} t={d} />
             </section>
           </div>
         </>
       )
-      // The pad confirms the weight (its button and Enter); the bar only steps back.
-      if (weigh) bar = actions([{ ...back, label: t('weigh.cancel'), onPress: () => send({ type: 'weigh-cancel' }) }])
-      else if (!draft) bar = actions([back, { label: t('documents.open'), icon: <Printer />, onPress: () => send({ type: 'documents' }) }])
+      if (close) bar = actions([{ ...back, label: d('close.cancel'), onPress: () => send({ type: 'close-cancel' }) }])
       else {
-        const done = left.length === 0
-        const closable = current !== null && current.garments > 0
-        bar = actions([
-          back,
-          { label: t('carton.add'), icon: <PackagePlus />, variant: 'secondary', onPress: () => send({ type: 'add-carton' }), heldReason: writeHeld },
-          done
-            ? { label: t('pack.done'), icon: <PackageCheck />, onPress: () => send({ type: 'packed' }), heldReason: writeHeld }
-            : { label: t('carton.close'), icon: <Box />, onPress: () => send({ type: 'close-carton' }), heldReason: writeHeld ?? (closable ? null : current ? t('carton.held.empty') : t('carton.held.none')) },
-        ])
+        const main = bench.main
+        const held = bench.hold ? d('main.held.hold') : writeHeld
+        const mainAction: FloorAction =
+          main.kind === 'close'
+            ? { label: d('main.close', { seq: main.carton.seq }), icon: <Box />, onPress: () => send({ type: 'close-carton', cartonId: main.carton.id }), heldReason: held }
+            : main.kind === 'marks'
+              ? { label: d('main.marks'), icon: <Printer />, onPress: () => send({ type: 'marks-print' }), heldReason: held }
+              : main.kind === 'packed'
+                ? { label: d('main.packed'), icon: <PackageCheck />, onPress: () => send({ type: 'packed' }), heldReason: held }
+                : { label: bench.current ? d('main.close', { seq: bench.current.seq }) : d('main.packed'), icon: <Box />, onPress: () => undefined, heldReason: held ?? (main.why === null || main.why.kind === 'toScan' ? d('main.held.scan') : leftWords(main.why, d)) }
+        const marksDue = main.kind !== 'marks' && bench.left.find((item) => item.kind === 'marks')
+        bar = actions([back, marksDue ? { label: d('main.marks'), icon: <Printer />, variant: 'secondary', onPress: () => send({ type: 'marks-print' }), heldReason: held } : null, mainAction])
       }
       break
     }
 
     case 'documents': {
-      const { shipment, documents } = step
+      const { head, documents } = step
       const labels = documents.labels
       const docs = documents.documents
       const printHeld = offlineHeld ?? busyHeld ?? (documents.printable ? null : t('documents.held.nothing'))
       const printed = documents.jobs.length > 0
       body = (
         <>
-          <ShipmentStrip shipment={shipment} t={t} />
+          <ShipmentStrip head={head} t={t} d={d} current={null} />
           <div className="fw-task-split">
             <section className="fw-floor-stack" aria-labelledby="fw-pack-labels">
               <h2 id="fw-pack-labels" className="fw-floor-section-title">
@@ -338,7 +409,7 @@ export function PackView({ model, onAction, onFrame, camera }: PackViewProps) {
               </h2>
               {labels.held === 'notNeeded' ? (
                 <TaskLine tone="info" icon={<Truck />}>
-                  {t(`labels.notNeeded.${shipment.transportBy}`)}
+                  {t(`labels.notNeeded.${head.transportBy}`)}
                 </TaskLine>
               ) : (
                 <>
@@ -365,7 +436,7 @@ export function PackView({ model, onAction, onFrame, camera }: PackViewProps) {
                   code={docs.ddtNumber}
                   facts={[
                     { label: t('documents.date'), value: docs.ddtDate ? formatDate(`${docs.ddtDate}T12:00:00Z`, { locale, timeZone: model.timeZone }) : '—' },
-                    { label: t('documents.cartons'), value: String(shipment.cartons.length) },
+                    { label: t('documents.cartons'), value: String(head.cartons) },
                     { label: t('documents.packingList'), value: docs.packingList ? t('documents.yes') : t('documents.no') },
                   ]}
                 />
@@ -399,23 +470,21 @@ export function PackView({ model, onAction, onFrame, camera }: PackViewProps) {
           {notice}
         </>
       )
+      // Finish is the main action once something printed, or when nothing can print here (the summary says why).
+      const finish = printed || !documents.printable
       bar = actions([
         back,
         { label: t('pack.unpack'), icon: <PackageOpen />, variant: 'secondary', onPress: () => send({ type: 'unpack' }), heldReason: offlineHeld ?? (step.unpackHeld ? t(`unpack.held.${step.unpackHeld}`) : busyHeld) },
-        printed ? { label: t('documents.finish'), icon: <CircleCheck />, onPress: () => send({ type: 'finish' }) } : { label: t('documents.print'), icon: <Printer />, onPress: () => send({ type: 'print' }), heldReason: printHeld },
+        finish ? { label: t('documents.finish'), icon: <CircleCheck />, onPress: () => send({ type: 'finish' }) } : { label: t('documents.print'), icon: <Printer />, onPress: () => send({ type: 'print' }), heldReason: printHeld },
       ])
       break
     }
 
     case 'done':
-      body = (
-        <FloorState tone="success" icon={<PackageCheck />} title={t('done.title', { number: step.number })} text={step.labelsPrinted ? t('done.bodyLabels', { count: step.cartons }) : t('done.body', { count: step.cartons })}>
-          <p className="fw-floor-card-code">{step.number}</p>
-        </FloorState>
-      )
+      body = <PackedDone summary={step.summary} t={d} />
       bar = [
         { label: tt('action.home'), icon: <House />, variant: 'secondary', onPress: () => send({ type: 'home' }) },
-        { label: t('done.next'), icon: <ScanLine />, onPress: () => send({ type: 'next' }) },
+        { label: d('done.next'), icon: <ScanLine />, onPress: () => send({ type: 'next' }) },
       ]
       break
   }
@@ -432,8 +501,14 @@ export function PackView({ model, onAction, onFrame, camera }: PackViewProps) {
 
 // ---- parts ---------------------------------------------------------------------------------------------------------------
 
-function ShipmentStrip({ shipment, t }: { shipment: ShipmentModel; t: Translate }) {
-  const parts = [shipment.number, t(`status.${shipment.status}`), shipment.carrier ? t('list.carrier', { carrier: shipment.carrier }) : t(`transport.${shipment.transportBy}`), t('strip.cartons', { count: shipment.cartons.length })]
+/** The shipment on top (design header status: Shipment, Carton n of N): number · state · carrier · the carton scans go into. */
+function ShipmentStrip({ head, t, d, current }: { head: PackHead; t: Translate; d: Translate; current: PackCartonView | null }) {
+  const parts = [
+    head.number,
+    t(`status.${head.status}`),
+    head.carrier ? t('list.carrier', { carrier: head.carrier }) : t(`transport.${head.transportBy}`),
+    current ? d('carton.open', { seq: current.seq }) : t('strip.cartons', { count: head.cartons }),
+  ]
   return (
     <p className="fw-pack-strip" role="status">
       <span className="fw-floor-inline-icon" aria-hidden="true">
@@ -445,155 +520,29 @@ function ShipmentStrip({ shipment, t }: { shipment: ShipmentModel; t: Translate 
 }
 
 /** "Released?" (design gate): the API plans a shipment from released garments only; the batches it names. */
-function ReleasedLine({ shipment, t }: { shipment: ShipmentModel; t: Translate }) {
+function ReleasedLine({ head, t }: { head: PackHead; t: Translate }) {
   return (
     <TaskLine tone="success" icon={<ShieldCheck />}>
-      {shipment.batches.length > 0 ? t('released.batches', { batches: shipment.batches.join(', ') }) : t('released.plain')}
+      {head.batches.length > 0 ? t('released.batches', { batches: head.batches.join(', ') }) : t('released.plain')}
     </TaskLine>
   )
 }
 
-function ScanNoteLine({ note, t }: { note: ScanNote; t: Translate }) {
-  if (note.kind === 'packed') {
+function NoticeLine({ problem, t, d, tt }: { problem: TaskProblem; t: Translate; d: Translate; tt: Translate }) {
+  if (problem.kind === 'refused') {
+    // The bench's own refusals in its words; another module's (a W1 route) in the office's.
+    const known = d(`refusal.${problem.code}`)
+    const words = known === `refusal.${problem.code}` ? `${problem.message} ${problem.fix ?? ''}`.trim() : known
     return (
-      <TaskLine tone="success" icon={<CircleCheck />}>
-        {note.rest ? t('note.rest', { count: note.rest, cell: note.cell, seq: note.carton }) : t('note.packed', { code: note.code, cell: note.cell, seq: note.carton })}
+      <TaskLine tone="danger" icon={<CircleAlert />} alert>
+        {t('notice.refused', { words })}
       </TaskLine>
     )
   }
-  return (
-    <TaskLine tone="danger" icon={<CircleAlert />} alert>
-      <strong className="fw-pack-code">{note.code}</strong> {t(`refused.${note.why}`, { cell: note.cell ?? '' })}
-    </TaskLine>
-  )
-}
-
-function CartonCard({ carton, t, kg, current, onPick, onRemove, held }: { carton: PackCarton; t: Translate; kg: (text: string | null) => string; current?: boolean; onPick?: () => void; onRemove?: () => void; held?: string | null }) {
-  const state = carton.labelled ? t('carton.labelled') : carton.weightKg !== null ? t('carton.closed') : t('carton.open')
-  const tone: FloorTone = carton.labelled ? 'info' : carton.weightKg !== null ? 'success' : current ? 'primary' : 'neutral'
-  return (
-    <section className="fw-floor-card fw-pack-carton" data-current={current ? 'true' : undefined} aria-labelledby={`fw-pack-carton-${carton.id}`}>
-      <header className="fw-floor-card-head">
-        <span className="fw-floor-card-icon" aria-hidden="true">
-          <Box />
-        </span>
-        <span className="fw-floor-card-title">
-          <span className="fw-floor-card-type">{current ? t('carton.thisOne') : t('carton.type')}</span>
-          <span id={`fw-pack-carton-${carton.id}`} className="fw-floor-card-code">
-            {t('carton.seq', { seq: carton.seq })}
-          </span>
-        </span>
-        <span className="fw-task-big">
-          <span className="fw-task-big-value">{carton.garments}</span>
-          <span className="fw-task-big-label">{t('list.garments')}</span>
-        </span>
-        <span className="fw-floor-pill" data-tone={tone}>
-          {state}
-        </span>
-      </header>
-      <p className="fw-floor-muted">
-        {carton.contents.length > 0 ? carton.contents.map((entry) => (entry.serials > 0 ? t('carton.lineSerials', { cell: entry.label, count: entry.quantity, serials: entry.serials }) : t('carton.line', { cell: entry.label, count: entry.quantity }))).join(' · ') : t('carton.empty')}
-        {' · '}
-        {carton.weightKg !== null ? kg(carton.weightKg) : t('carton.notWeighed')}
-        {carton.trackingNumber ? ` · ${t('labels.tracking', { number: carton.trackingNumber })}` : ''}
-      </p>
-      {onPick || onRemove ? (
-        <div className="fw-floor-row-actions fw-pack-carton-actions">
-          {onRemove ? (
-            <FloorButton size="md" variant="secondary" icon={<Trash2 />} heldReason={held ?? null} onClick={onRemove}>
-              {t('carton.remove')}
-            </FloorButton>
-          ) : null}
-          {onPick ? (
-            <FloorButton size="md" variant="secondary" icon={<Box />} heldReason={held ?? null} onClick={onPick}>
-              {t('carton.pick')}
-            </FloorButton>
-          ) : null}
-        </div>
-      ) : null}
-    </section>
-  )
-}
-
-/** One tap per size still out of a carton: "Put the rest of RED 52 in this carton" (batch-tracked garments only). */
-function RestButtons({ cells, t, send, held }: { cells: readonly PackCell[]; t: Translate; send: (action: PackAction) => void; held: string | null }) {
-  const open = cells.filter((cell) => cell.loose > 0 && !cell.serialTracked)
-  const serial = cells.filter((cell) => cell.loose > 0 && cell.serialTracked)
-  if (open.length === 0 && serial.length === 0) return null
-  return (
-    <div className="fw-floor-stack">
-      {open.length > 0 ? (
-        <div className="fw-pack-rest" role="group" aria-label={t('rest.title')}>
-          {open.map((cell) => (
-            <FloorButton key={cell.id} size="md" variant="secondary" icon={<PackagePlus />} heldReason={held} onClick={() => send({ type: 'put-rest', cellId: cell.id })}>
-              {t('rest.put', { count: cell.loose, cell: `${cell.styleCode} ${cell.colourwayCode} ${cell.size}` })}
-            </FloorButton>
-          ))}
-        </div>
-      ) : null}
-      {serial.map((cell) => (
-        <TaskLine key={cell.id} tone="info" icon={<ScanLine />}>
-          {t('rest.serials', { count: cell.loose, cell: `${cell.styleCode} ${cell.colourwayCode} ${cell.size}` })}
-        </TaskLine>
-      ))}
-    </div>
-  )
-}
-
-/** Stand-in for the design's SizeGridView at floor density: per style and colour, each size's packed of planned. */
-function PackGrid({ grid, t }: { grid: ShipmentModel['grid']; t: Translate }) {
-  return (
-    <table className="fw-pack-grid">
-      <caption className="fw-pack-sr">{t('grid.caption')}</caption>
-      <thead>
-        <tr>
-          <th scope="col">{t('grid.style')}</th>
-          {grid.sizes.map((size) => (
-            <th key={size} scope="col">
-              {size}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {grid.rows.map((row) => (
-          <tr key={row.key}>
-            <th scope="row">{row.label}</th>
-            {row.sizes.map((cell) => (
-              <td key={cell.size} data-state={cell.planned === 0 ? 'none' : cell.packed >= cell.planned ? 'done' : cell.packed > 0 ? 'part' : 'todo'}>
-                {cell.planned === 0 ? '—' : t('grid.cell', { packed: cell.packed, planned: cell.planned })}
-              </td>
-            ))}
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  )
-}
-
-function leftWords(item: LeftItem, t: Translate): string {
-  switch (item.kind) {
-    case 'noLines':
-      return t('left.noLines')
-    case 'loose':
-      return t('left.loose', { count: item.count })
-    case 'noCartons':
-      return t('left.noCartons')
-    case 'unweighed':
-      return t('left.unweighed', { cartons: item.seqs.join(', ') })
-    case 'empty':
-      return t('left.empty', { cartons: item.seqs.join(', ') })
-    case 'serials':
-      return t('left.serials', { count: item.count })
-  }
-}
-
-function NoticeLine({ problem, t, tt }: { problem: TaskProblem; t: Translate; tt: Translate }) {
-  if (problem.kind === 'refused' || (problem.kind === 'conflict' && problem.message)) {
-    const message = problem.kind === 'refused' ? `${problem.message} ${problem.fix ?? ''}`.trim() : (problem.message ?? '')
+  if (problem.kind === 'conflict' && problem.message) {
     return (
       <TaskLine tone="danger" icon={<CircleAlert />} alert>
-        {t('notice.refused', { words: message })}
+        {t('notice.refused', { words: problem.message })}
       </TaskLine>
     )
   }

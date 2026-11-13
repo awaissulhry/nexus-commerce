@@ -77,7 +77,7 @@ const built = [
   ...[...WHAT_KEYS, 'other'].map((key) => `sync.what.${key}`),
   ...REFUSAL_WORDS.flatMap((code) => [`sync.refusal.${code}.message`, `sync.refusal.${code}.fix`]),
   ...SCAN_ID_KINDS.map((kind) => `sync.numbers.kind.${kind}`),
-  ...['receive', 'inspect', 'serials'].map((held) => `home.offline.held.${held}`),
+  ...['receive', 'inspect', 'pack'].map((held) => `home.offline.held.${held}`),
   ...['signedOut', 'unavailable'].map((problem) => `sync.problem.${problem}`),
   ...['kept', 'low', 'mayClear'].map((storage) => `sync.storage.${storage}`),
   ...['ahead', 'behind'].map((way) => `sync.clock.${way}`),
@@ -103,7 +103,7 @@ const LEFT_KEY = new RegExp(`(?:^|[\\s>"])(?:${PREFIXES.filter((prefix) => prefi
 
 function render(screen: DesignScreen<unknown>, model: unknown, locale: (typeof LOCALES)[number]): string {
   const View = screen.view as ComponentType<{ model: unknown }>
-  return renderToString(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['floor']) }, createElement(View, { model })))
+  return renderToString(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['floor', /* B-W2b-387: the carton card */ 'floor-pack', 'floor-pack-depth']) }, createElement(View, { model })))
 }
 
 describe('every floor design case draws in both languages', () => {
