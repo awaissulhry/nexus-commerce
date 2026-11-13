@@ -92,5 +92,42 @@
   },
   "edit": {
     "message": "Modifica un campo: la barra conta le modifiche."
+  },
+  "f41": {
+    "section": "Navigazione, scelte, elenchi, foto e risposte",
+    "navigation": "Navigazione dell'area",
+    "navLabel": "Pagine di Magazzino",
+    "navHere": "Magazzino › Giacenze",
+    "navGroup": "Merci",
+    "navStock": "Giacenze",
+    "navHides": "Pelli",
+    "navTrims": "Accessori",
+    "navMoves": "Movimenti",
+    "change": "Prima → dopo",
+    "changeHours": "Ore",
+    "changeShift": "Turno",
+    "changeNote": "Nota",
+    "changeOld": "Da rivedere",
+    "multi": "Lingue",
+    "langIt": "Italiano",
+    "langEn": "Inglese",
+    "langDe": "Tedesco",
+    "listbox": "Motivo",
+    "reasonLate": "Ritardo del fornitore",
+    "reasonHide": "Pelle scartata",
+    "ordered": "Fasi",
+    "step": {
+      "cut": "Taglio",
+      "sew": "Cucito",
+      "check": "Controllo"
+    },
+    "tags": "Taglie",
+    "reply": "Nota alla pratica",
+    "replyRule": "La vede solo l'ufficio.",
+    "replySend": "Aggiungi la nota",
+    "openPhotos": "Foto",
+    "photoFront": "Giacca, davanti",
+    "photoBack": "Giacca, dietro",
+    "photoCaption": "Campione DEMO-7, prova del 3 novembre."
   }
 }

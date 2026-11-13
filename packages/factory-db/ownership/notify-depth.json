@@ -1,0 +1,61 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/notify-depth.prisma (rules: src/ownership.ts; roles: src/roles.ts). Office only (W2b schema wave 47/57, B-W2b-366): apps/factory-api's notifications in depth (B-W2b-385: preferences, push, following a view), My work and reminders (B-W2b-388) and mail in depth (B-W2b-394: team inboxes, the capture address) write them through command(), the worker and the scheduler in the tenant's system context; the API keeps each person to their own choices, devices, followed views and reminders, and checks email.triage on the team inboxes. The floor and portal or link sessions read and write nothing here. Personal data: a person's own choices, devices (label, endpoint, sealed keys) and reminders (purpose: the office account), tagged in the schema comments, not in the People `personal` map. The …_notify_depth_w2b_guards triggers hold the rest (keys, office users, a push subscription's keys and turning off, a reminder's machine, team inbox members, one live capture address per company). After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "NotificationPreference": {
+      "about": "The office writes a person's choice per kind of news and channel (each cell of the matrix saves at once) and removes the person's rows to reset them to their role's defaults; the fan-out and the digest read them.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "RoleNotificationDefault": {
+      "about": "Admins set an office role's default per kind of news and channel, and remove one to go back to the quiet default; the matrix and the fan-out read them.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "PushSubscription": {
+      "about": "A person turns push on for a device (its keys sealed as a SecretValue), renames and turns it off; the push sender marks it used, or turns it off when the push service says it is gone. Turned off, never deleted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "ViewFollower": {
+      "about": "A person follows and unfollows a saved view; the follow job counts the view for them (fingerprint, count, when) and tells them what entered or left it. Deleting the view removes its followers.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "Reminder": {
+      "about": "A person sets a reminder on a record or a message, puts it off, marks it done (and undoes that) or removes it; the scheduler brings it back at its time or when the record changes; Today and My tasks read a person's own.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "TeamInbox": {
+      "about": "Admins make a company's team inboxes (name, address local part, members) and switch them off; the mail worker puts mail in them and the mail queue reads them. Never deleted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "CaptureAddress": {
+      "about": "Admins make a company's capture address (a new one when a leaked one is turned off) and choose its default team inbox; the mail worker reads it to take forwarded mail. Never deleted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    }
+  }
+}

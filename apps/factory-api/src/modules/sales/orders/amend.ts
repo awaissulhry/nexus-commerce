@@ -136,7 +136,7 @@ export async function planAmendment(db: Reader, order: OrderRow, status: OrderRo
   if (stateProblem) return [{ path: 'body', message: stateProblem }]
   if (facts.lines.some((line) => line.kind === 'FEE')) return [{ path: 'body', message: 'This order has a fee line: a fee is changed on its own line, so the order is not amended here.' }]
   const lines = facts.lines.filter(isGoodsLine)
-  if (lines.some((line) => line.kind === 'MADE_TO_MEASURE')) return [{ path: 'body', message: 'This order has a made-to-measure unit: made-to-measure comes later, so the order is not amended here.' }]
+  // B-W2b-368 (XF1:01): an order with a made-to-measure unit is amended too; the unit is kept as it was sold (./amendments/mtm).
   const inWorkOrders = new Map<string, Map<string, number>>()
   for (const row of facts.progress.rows) {
     if (row.inWorkOrders === 0) continue

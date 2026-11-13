@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { CASE_CHIPS as DOMAIN_CHIPS, COMPLAINT_CASE_STATES, MILESTONE_STEPS, OUTCOMES_WANTED, RETURN_CASE_STATES } from '@nexus/factory-domain/sales/portal-returns/rules'
+import { CASE_CHIPS as DOMAIN_CHIPS, COMPLAINT_CASE_STATES, MILESTONE_STEPS, OUTCOMES_WANTED, RECORDED_OUTCOMES_WANTED, RETURN_CASE_STATES } from '@nexus/factory-domain/sales/portal-returns/rules'
 import { RETURN_DISPOSITIONS, RETURN_GRADES } from '@nexus/factory-domain/sales/returns/rules'
 import { ApiError } from '../../../lib/api/errors'
 import type { DesignScreen } from '../../../lib/design/design-screen'
@@ -250,7 +250,8 @@ describe('words', () => {
         ...COMPLAINT_CASE_STATES.map((state) => `state.COMPLAINT.${state}`),
         ...MILESTONE_STEPS.map((step) => `step.${step}`),
         ...COMPLAINT_CASE_STATES.map((state) => `step.${state}`),
-        ...OUTCOMES_WANTED.map((code) => `outcome.${code}`),
+        // B-W2b-368: the recorded wish (REMAKE too) is shown on the request.
+        ...RECORDED_OUTCOMES_WANTED.map((code) => `outcome.${code}`),
         ...RETURN_GRADES.map((grade) => `grade.${grade}`),
         ...RETURN_DISPOSITIONS.map((code) => `disposition.${code}`),
         ...['PORTAL', 'LINK', 'OFFICE', 'EMAIL', 'PHONE', 'OTHER'].map((via) => `via.${via}`),

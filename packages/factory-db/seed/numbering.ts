@@ -141,6 +141,9 @@ export async function seed({ db, namespace }: SeedContext): Promise<void> {
       // f's as above.
       { id: `ffffffff${id(`series:${company}:SERVICE_CASE:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'SERVICE_CASE', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'SVC-{YYYY}-{N:4}', fiscal: false, createdById: actorId },
       { id: `ffffffff${id(`series:${company}:SAFETY_REPORT:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'SAFETY_REPORT', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'PSR-{YYYY}-{N:4}', fiscal: false, createdById: actorId },
+      // W2b-6 wave 48/57: proforma invoices (non-fiscal) are numbered from it when a record's first proforma is made
+      // (B-W2b-391): without it, no proforma can be made. Eight f's as above.
+      { id: `ffffffff${id(`series:${company}:PROFORMA:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'PROFORMA', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'PF-{YYYY}-{N:4}', fiscal: false, createdById: actorId },
     )
     if (company === 'A') {
       allocations.push({

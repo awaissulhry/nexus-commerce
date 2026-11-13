@@ -18,8 +18,8 @@ import { inlineDisposition, travellerPdf, travellersPdf } from './traveller'
 /**
  * Work orders from sales order lines with a frozen specification (B-W1-38; MES-001, MES-002, MES-005, MES-007,
  * MES-305; A2 SCR-069, SCR-070): the list and record, a DRAFT and its cells and details, the release check and the
- * release, start / complete / close / cancel, and the frozen spec against today's master. Made-to-measure work orders
- * come later (B-W1-17/18): a made-to-measure line is refused (409). B-W2b-51: the rush flag (create, PATCH, list), split a
+ * release, start / complete / close / cancel, and the frozen spec against today's master. B-W2b-368: a made-to-measure
+ * unit is its own MADE_TO_MEASURE work order (./mtm-cells). B-W2b-51: the rush flag (create, PATCH, list), split a
  * DRAFT (preview and split), the travellers (PDF with a QR); the bulk release is the list frame's (platform/views/bulk).
  */
 export default defineRoutes('production.work-orders', manifest, async (app) => {

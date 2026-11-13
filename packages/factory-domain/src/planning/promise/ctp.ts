@@ -19,6 +19,9 @@ import { Dec, type Decimal } from '../../tax/decimal'
  *
  * The bridge splits the days from today to the finish: material (today → the material's day), base lead time (the same
  * walk on an empty plant) and queue (what today's load adds). Days are calendar days; dates are the site's days.
+ *
+ * B-W2b-F44 (Owner 2026-11-13, option A): today counts only the minutes still left from now (minutesLeftToday), and a garment
+ * still to make is promised for the next working day at the earliest, never for today (makeDayOf).
  */
 
 export const CTP_HORIZON_DAYS = 182
@@ -212,4 +215,24 @@ export function bridgeOf(today: BusinessDate, materialDate: BusinessDate, emptyF
   const materialDays = Math.min(spanDays, Math.max(0, daysFrom(today, start)))
   const baseDays = Math.min(spanDays - materialDays, Math.max(0, daysFrom(start, emptyFinish)))
   return { materialDays, baseDays, queueDays: spanDays - materialDays - baseDays, spanDays, materialDate: start, finish }
+}
+
+// ---- B-W2b-F44 (Owner 2026-11-13, option A): a garment still to make is never promised for today ----------------------------
+
+/**
+ * B-W2b-F44: the first day a garment still to make can be promised: the walk's finish, never before `firstMakeDay` (the
+ * first working day after today on the site's calendar, from THE calendars service). Applied to the real walk and to the
+ * empty plant's walk alike, so the bridge still adds up: the days the rule adds are base lead time, the queue stays what
+ * today's load adds beyond them. Stock already made and free is never walked (atp's stockDateFor) and may be promised today.
+ */
+export const makeDayOf = (finish: BusinessDate, firstMakeDay: BusinessDate): BusinessDate => (finish < firstMakeDay ? firstMakeDay : finish)
+
+/**
+ * B-W2b-F44: today's working minutes on a lane are only those still left from now (the calendars service's working minutes
+ * from now to the end of the site's day), never more than the day's own; unknown (no calendar loaded that far): the day's.
+ * Later days count in full.
+ */
+export function minutesLeftToday(dayMinutes: number | null, leftFromNow: number | null): number {
+  const day = Math.max(0, dayMinutes ?? 0)
+  return leftFromNow === null ? day : Math.max(0, Math.min(day, leftFromNow))
 }

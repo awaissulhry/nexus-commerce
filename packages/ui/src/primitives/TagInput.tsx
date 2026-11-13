@@ -1,6 +1,8 @@
 'use client'
 import { useRef, useState, type KeyboardEvent } from 'react'
 import { X } from 'lucide-react'
+import { mergeLabels } from '../lib/labels'
+import { TAG_INPUT_LABELS, type TagInputLabels } from './TagInputLabels'
 
 export interface TagInputProps {
   value: string[]
@@ -11,12 +13,16 @@ export interface TagInputProps {
   className?: string
   maxTags?: number
   'aria-label'?: string
+  /** B-W2b-F41: the field's words in the person's language; a word left out stays English. */
+  labels?: Partial<TagInputLabels>
 }
 
 export function TagInput({
-  value, onChange, placeholder = 'Add value…', suggestions = [],
-  disabled = false, className, maxTags, 'aria-label': ariaLabel,
+  value, onChange, placeholder: placeholderProp, suggestions = [],
+  disabled = false, className, maxTags, 'aria-label': ariaLabel, labels,
 }: TagInputProps) {
+  const words = mergeLabels(TAG_INPUT_LABELS, labels)
+  const placeholder = placeholderProp === undefined ? words.add : placeholderProp
   const [input, setInput] = useState('')
   const [open, setOpen] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -42,7 +48,7 @@ export function TagInput({
         {value.map((tag, i) => (
           <span key={tag} className="nds-taginput-chip">
             {tag}
-            <button type="button" aria-label={`Remove ${tag}`}
+            <button type="button" aria-label={words.remove(tag)}
               onClick={(e) => { e.stopPropagation(); onChange(value.filter((_, j) => j !== i)) }}>
               <X size={12} aria-hidden />
             </button>

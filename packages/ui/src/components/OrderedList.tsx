@@ -5,6 +5,8 @@ import { ArrowDown, ArrowUp, GripVertical } from 'lucide-react'
 import { ToolbarButton } from '../primitives/ToolbarButton'
 import { usePointerReorder } from './usePointerReorder'
 import { useSortableDrag } from './useSortableDrag'
+import { mergeLabels } from '../lib/labels'
+import { ORDERED_LIST_LABELS, type OrderedListLabels } from './OrderedListLabels'
 
 export interface OrderedListProps {
   label: string
@@ -26,22 +28,25 @@ export interface OrderedListProps {
    * Off by default, so every current list behaves exactly as before until it opts in (`useSortableDrag`).
    */
   liveDrag?: boolean
+  /** B-W2b-F41: the list's words in the person's language; a word left out stays English. */
+  labels?: Partial<OrderedListLabels>
 }
 
 /** Controlled ordering with equivalent pointer and keyboard actions; identities remain stable. */
-export function OrderedList({ label, items, onChange, renderItem, itemLabel = item => item, disabled = false, draggable = true, keyboardGrip = false, compact = false, liveDrag = false }: OrderedListProps) {
+export function OrderedList({ label, items, onChange, renderItem, itemLabel = item => item, disabled = false, draggable = true, keyboardGrip = false, compact = false, liveDrag = false, labels }: OrderedListProps) {
+  const words = mergeLabels(ORDERED_LIST_LABELS, labels)
   const dragged = useRef<string | null>(null)
   const [announcement, setAnnouncement] = useState('')
   const move = (from: number, to: number) => {
     if (disabled || from < 0 || to < 0 || to >= items.length || from === to) return
     const next = [...items]; const [item] = next.splice(from, 1); next.splice(to, 0, item)
-    onChange(next); setAnnouncement(`${itemLabel(item)}, position ${to + 1} of ${items.length}`)
+    onChange(next); setAnnouncement(words.position(itemLabel(item), to + 1, items.length))
   }
   const pointer = usePointerReorder({ disabled, onMove: move })
   const live = liveDrag && draggable && items.length > 1
   const sort = useSortableDrag({
     disabled: disabled || !live, onMove: move,
-    onDragState: state => { if (state) setAnnouncement(`${itemLabel(items[state.from])}, moving to position ${state.to + 1} of ${items.length}`) },
+    onDragState: state => { if (state) setAnnouncement(words.moving(itemLabel(items[state.from]), state.to + 1, items.length)) },
   })
   return <>
     <ol ref={live ? sort.listRef as unknown as Ref<HTMLOListElement> : undefined}
@@ -52,7 +57,7 @@ export function OrderedList({ label, items, onChange, renderItem, itemLabel = it
         onDragOver={live ? undefined : event => { if (dragged.current && !disabled) event.preventDefault() }}
         onDrop={live ? undefined : event => { event.preventDefault(); if (dragged.current) move(items.indexOf(dragged.current), index); dragged.current = null }}>
         {draggable && items.length > 1 && (keyboardGrip
-          ? <ToolbarButton className="nds-ordered-list-grip" tooltip={false} label={`Reorder ${itemLabel(item)}; use arrow keys`} icon={<GripVertical size={16} />} disabled={disabled}
+          ? <ToolbarButton className="nds-ordered-list-grip" tooltip={false} label={words.reorder(itemLabel(item))} icon={<GripVertical size={16} />} disabled={disabled}
               data-nds-sort-handle=""
               onKeyDown={event => {
                 if (event.key === 'Escape') pointer.cancel()
@@ -63,8 +68,8 @@ export function OrderedList({ label, items, onChange, renderItem, itemLabel = it
             ? <span className="nds-ordered-list-handle" data-nds-sort-handle="" aria-hidden><GripVertical size={16} /></span>
             : <span draggable={!disabled} onDragStart={event => { dragged.current = item; event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', item) }} onDragEnd={() => { dragged.current = null }} aria-hidden><GripVertical size={16} /></span>)}
         <span className="nds-ordered-list-content">{renderItem ? renderItem(item) : item}</span>
-        {items.length > 1 && !keyboardGrip && <><ToolbarButton label={`Move ${itemLabel(item)} up`} icon={<ArrowUp size={16} />} disabled={disabled || index === 0} onClick={() => move(index, index - 1)} />
-        <ToolbarButton label={`Move ${itemLabel(item)} down`} icon={<ArrowDown size={16} />} disabled={disabled || index === items.length - 1} onClick={() => move(index, index + 1)} /></>}
+        {items.length > 1 && !keyboardGrip && <><ToolbarButton label={words.moveUp(itemLabel(item))} icon={<ArrowUp size={16} />} disabled={disabled || index === 0} onClick={() => move(index, index - 1)} />
+        <ToolbarButton label={words.moveDown(itemLabel(item))} icon={<ArrowDown size={16} />} disabled={disabled || index === items.length - 1} onClick={() => move(index, index + 1)} /></>}
       </li>})}
     </ol>
     <span className="sr-only" role="status">{announcement}</span>

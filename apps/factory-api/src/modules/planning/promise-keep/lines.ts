@@ -21,6 +21,8 @@ import { materialStartsOf } from '../schedule-depth/material'
 import { certificatesOn, marketFor, type SizeCertificate } from '../promise/certificates'
 import { answerPromises, type PromiseAsk } from '../promise/engine'
 import { whereOf } from '../promise/read'
+// B-W2b-F44: a garment still to make is never planned to finish today (the site's next working day at the earliest).
+import { firstMakeDayOf } from '../promise/read'
 import { mayPromiseAt, promiseSite, readPromiseRows } from '../promise/store'
 import { dayOf, type Reader, type SiteRow } from '../store'
 import { customerOf, KEEP_LINE_SELECT, KEEP_ORDER_STATUSES, originalOf, readProposals, shippedOfLines, sizesOfLine, typedOf, type KeepLine } from './store'
@@ -40,6 +42,9 @@ import { customerOf, KEEP_LINE_SELECT, KEEP_ORDER_STATUSES, originalOf, readProp
  * plan's planned work orders, and the promise engine for what nothing makes yet — asked for every line at once in the
  * ranked backlog's order (PLN-177), so the first order takes the first free capacity. The certificate on the size's
  * promised day (PLN-179). The line: the worst size's risk, its latest dates (ship complete), its changes and slips.
+ *
+ * B-W2b-F44 (Owner 2026-11-13, option A): garments still to make (an open work order, a planned order, the engine's) never
+ * finish before the site's next working day; only stock ready now finishes today.
  */
 
 export const LINES_LIMIT = 300
@@ -69,8 +74,8 @@ interface WorkOrderFinish {
   readonly words: string | null
 }
 
-/** Per open work order: where the board finishes it, and when its material lets it finish. */
-async function workOrderFinishes(db: Reader, site: SiteRow, ids: readonly string[], dueOf: ReadonlyMap<string, BusinessDate | null>, today: BusinessDate, now: Date): Promise<Map<string, WorkOrderFinish>> {
+/** Per open work order: where the board finishes it, and when its material lets it finish (B-W2b-F44: never before `firstMakeDay`). */
+async function workOrderFinishes(db: Reader, site: SiteRow, ids: readonly string[], dueOf: ReadonlyMap<string, BusinessDate | null>, today: BusinessDate, now: Date, firstMakeDay: BusinessDate): Promise<Map<string, WorkOrderFinish>> {
   const out = new Map<string, WorkOrderFinish>()
   if (ids.length === 0) return out
   const world = await scheduleWorld(db, site, { from: today, to: today }, now)
@@ -106,7 +111,7 @@ async function workOrderFinishes(db: Reader, site: SiteRow, ids: readonly string
       materialStart: start?.startDay ?? null,
       materialState: start?.state ?? null,
       delayDays,
-      finish: finish !== null && finish < today ? today : finish,
+      finish: finish !== null && finish < firstMakeDay ? firstMakeDay : finish, // B-W2b-F44: still to make, never today
       source: plannedFinish !== null ? 'BOARD' : 'WORK_ORDER_DUE',
       words: start && (delayDays > 0 || notCovered) ? start.words : null,
     })
@@ -155,6 +160,7 @@ export async function promiseLinesOf(db: Reader, context: OfficeContext, site: S
   const lines = read.slice(0, limit)
   if (lines.length === 0) return { today, lines: [] as ReturnType<typeof lineViewOf>[], complete }
   const lineIds = lines.map((line) => line.id)
+  const firstMakeDay = await firstMakeDayOf(db, site, today) // B-W2b-F44
   const shipped = await shippedOfLines(db, lineIds)
   const promiseRows = await readPromiseRows(db, lineIds)
 
@@ -166,7 +172,7 @@ export async function promiseLinesOf(db: Reader, context: OfficeContext, site: S
   })
   const isOpen = (status: string) => (OPEN_WORK_ORDER_STATUSES as readonly string[]).includes(status)
   const dueOf = new Map(cells.map((cell) => [cell.workOrderId, cell.workOrder.dueDate ? dayOf(cell.workOrder.dueDate) : null]))
-  const finishes = await workOrderFinishes(db, site, [...new Set(cells.filter((cell) => isOpen(cell.workOrder.status)).map((cell) => cell.workOrderId))], dueOf, today, now)
+  const finishes = await workOrderFinishes(db, site, [...new Set(cells.filter((cell) => isOpen(cell.workOrder.status)).map((cell) => cell.workOrderId))], dueOf, today, now, firstMakeDay /* B-W2b-F44 */)
   const styleIds = [...new Set(lines.map((line) => line.styleId))]
   const planned = await db.plannedWorkOrder.findMany({ where: { siteId: site.id, status: 'PLANNED', styleId: { in: styleIds } }, select: { id: true, demand: true, dueDate: true }, orderBy: [{ dueDate: 'asc' }, { id: 'asc' }] })
   const plannedFor = (lineId: string, size: string | null) =>
@@ -252,7 +258,7 @@ export async function promiseLinesOf(db: Reader, context: OfficeContext, site: S
   const mayRepromise = mayPromiseAt(context, PLANNING_PROMISE_MANAGE, site)
 
   const views = facts.map(({ line, sizes }) =>
-    lineViewOf({ line, sizes, rows: promiseRows.get(line.id) ?? [], today, engineOf, certificateOf, askSize, waiting: proposals.find((proposal) => proposal.orderLineId === line.id && proposal.state === 'WAITING') ?? null, monthFrom, monthTo, position: positions.get(line.orderId) ?? null, mayRepromise }),
+    lineViewOf({ line, sizes, rows: promiseRows.get(line.id) ?? [], today, firstMakeDay /* B-W2b-F44 */, engineOf, certificateOf, askSize, waiting: proposals.find((proposal) => proposal.orderLineId === line.id && proposal.state === 'WAITING') ?? null, monthFrom, monthTo, position: positions.get(line.orderId) ?? null, mayRepromise }),
   )
   return { today, lines: views, complete }
 }
@@ -262,6 +268,8 @@ function lineViewOf(input: {
   sizes: { size: string | null; ordered: number; shipped: number; open: number; readyNow: number; uncovered: number; workOrders: (WorkOrderFinish & { pieces: number })[]; plannedOrders: { id: string; pieces: number; dueDate: BusinessDate }[] }[]
   rows: Parameters<typeof sizeTimeline>[1]
   today: BusinessDate
+  /** B-W2b-F44: the site's next working day: a planned order's garments, still to make, never finish before it. */
+  firstMakeDay: BusinessDate
   engineOf: ReadonlyMap<string, { state: SizeState; date: BusinessDate | null }>
   certificateOf: ReadonlyMap<string, SizeCertificate>
   askSize: (line: KeepLine, size: string | null) => string
@@ -280,7 +288,7 @@ function lineViewOf(input: {
     const candidates: { date: BusinessDate | null; source: FinishSource }[] = [
       ...(entry.readyNow > 0 ? [{ date: today, source: 'STOCK' as FinishSource }] : []),
       ...entry.workOrders.map((row) => ({ date: row.finish, source: row.source })),
-      ...entry.plannedOrders.map((row) => ({ date: row.dueDate < today ? today : row.dueDate, source: 'PLANNED_ORDER' as FinishSource })),
+      ...entry.plannedOrders.map((row) => ({ date: row.dueDate < input.firstMakeDay ? input.firstMakeDay : row.dueDate, source: 'PLANNED_ORDER' as FinishSource })), // B-W2b-F44
       ...(entry.uncovered > 0 ? [{ date: engine?.date ?? null, source: 'CAPABLE' as FinishSource }] : []),
     ]
     const unknown = candidates.some((candidate) => candidate.date === null)

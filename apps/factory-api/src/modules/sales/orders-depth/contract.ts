@@ -48,7 +48,8 @@ export const splitContract = defineContract({
   response: { 201: output({ order: orderView, amendment: output({ id: id(), revision: z.number().int() }), orders: z.array(output({ id: id(), number: z.string() })) }) },
 })
 
-const waitReason = z.enum(['REQUEST_PENDING', 'NO_REQUEST', 'CREDIT_HOLD'])
+// B-W2b-368 (XF1:02): MEASUREMENTS, the factory review of a made-to-measure unit's measures.
+const waitReason = z.enum(['REQUEST_PENDING', 'NO_REQUEST', 'CREDIT_HOLD', 'MEASUREMENTS'])
 export const approvalStateContract = defineContract({
   params: orderParams,
   response: {

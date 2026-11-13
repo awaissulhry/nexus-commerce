@@ -102,6 +102,8 @@ model Company {
   sessions     Session[]
   // integration.prisma: the company's accounts with outside services.
   integrationAccounts IntegrationAccount[]
+  // W2b-6 carriers.prisma (wave 48/57): its own carrier contracts.
+  carrierAccounts     CarrierAccount[]
   // files.prisma: the company's files.
   files               StoredFile[]
   // W2b files-depth.prisma (wave 18/22): the documents its record types must have before a status move.
@@ -165,6 +167,10 @@ model Company {
   complianceDocuments  ComplianceDocument[]
   // email-in.prisma: the mail received through the company's SES account.
   inboundEmails        InboundEmail[]
+  // W2b notify-depth.prisma (wave 47/57): its team inboxes, its capture addresses, the reminders about its records.
+  teamInboxes          TeamInbox[]
+  captureAddresses     CaptureAddress[]
+  reminders            Reminder[]
   // W2b-4 substances.prisma (wave 31/33): its own restricted substances, substance rules and test plan rules, and the
   // declarations it asked of suppliers.
   restrictedSubstances        RestrictedSubstance[]
@@ -373,6 +379,10 @@ model Site {
   threads       Thread[]
   // print.prisma: the site's printers.
   printers      Printer[]
+  // W2b-6 carriers.prisma (wave 48/57): the carrier contracts for it alone, its pickups and its day sheets.
+  carrierAccounts   CarrierAccount[]
+  pickupRequests    PickupRequest[]
+  dispatchManifests DispatchManifest[]
   // sales.prisma: the sales order lines it makes.
   salesOrderLines SalesOrderLine[]
   // supply.prisma: the purchase orders delivered to it and its planning runs.

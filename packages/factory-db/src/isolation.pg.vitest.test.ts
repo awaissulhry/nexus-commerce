@@ -10,6 +10,7 @@ import { seed as seedAuth } from '../seed/auth'
 import { seed as seedBuyingDepth } from '../seed/buying-depth'
 import { seed as seedCalendar } from '../seed/calendar'
 import { seed as seedCapa } from '../seed/capa'
+import { seed as seedCarriers } from '../seed/carriers'
 import { seed as seedChanges } from '../seed/changes'
 import { seed as seedCollab } from '../seed/collab'
 import { seed as seedCompliance } from '../seed/compliance'
@@ -37,6 +38,7 @@ import { seed as seedLinks } from '../seed/links'
 import { seed as seedLinksDepth } from '../seed/links-depth'
 import { seed as seedMoney } from '../seed/money'
 import { seed as seedMtmOffice } from '../seed/mtm-office'
+import { seed as seedNotifyDepth } from '../seed/notify-depth'
 import { seed as seedNumbering } from '../seed/numbering'
 import { seed as seedNumberingBlocks } from '../seed/numbering-blocks'
 import { seed as seedOps } from '../seed/ops'
@@ -444,6 +446,16 @@ beforeAll(async () => {
   // off), SH-0002's holds (both released) and cut-offs per carrier: the plain ones a copy may repeat.
   await seedPacking({ db: factory, namespace: 'iso-a' })
   await seedPacking({ db: factory, namespace: 'iso-b' })
+  // The notifications, My work and mail schema of W2b-6 (wave 47/57): preferences, role defaults, push devices, view follows,
+  // reminders, team inboxes and capture addresses; their first rows (a turned-off push device without keys, a waiting
+  // reminder, a turned-off capture address) are the plain ones a copy may repeat.
+  await seedNotifyDepth({ db: factory, namespace: 'iso-a' })
+  await seedNotifyDepth({ db: factory, namespace: 'iso-b' })
+  // The carriers, labels and dispatch schema of W2b-6 (wave 48/57): carrier contracts (the first switched off without its
+  // number), a customer's carrier account, a live site, a parcel's values, pickups (the first one that failed), day sheets (the
+  // first an open one), a reprint and a printer that prints straight from the station: the plain ones a copy may repeat.
+  await seedCarriers({ db: factory, namespace: 'iso-a' })
+  await seedCarriers({ db: factory, namespace: 'iso-b' })
   // Every seed of both tenants: under a full parallel run this takes more than a minute.
 }, 120_000)
 
@@ -491,6 +503,8 @@ it('covers every classified table and every runtime role', () => {
     'Capa',
     'CapaAction',
     'CapaSource',
+    'CaptureAddress',
+    'CarrierAccount',
     'CarrierCutOff',
     'CauseCode',
     'Certificate',
@@ -537,6 +551,7 @@ it('covers every classified table and every runtime role', () => {
     'Device',
     'DeviceEnrolment',
     'DispatchAssignment',
+    'DispatchManifest',
     'DispositionCode',
     'DistributorNotice',
     'DueTimer',
@@ -674,6 +689,7 @@ it('covers every classified table and every runtime role', () => {
     'Nonconformance',
     'Notification',
     'NotificationDelivery',
+    'NotificationPreference',
     'NotifiedBody',
     'NumberAllocation',
     'NumberBlock',
@@ -735,6 +751,7 @@ it('covers every classified table and every runtime role', () => {
     'PeriodLock',
     'Phrase',
     'PhraseTranslation',
+    'PickupRequest',
     'PiecePaySwitch',
     'PieceRateEntry',
     'PieceRateTable',
@@ -788,6 +805,7 @@ it('covers every classified table and every runtime role', () => {
     'PurchaseOrderRevision',
     'PurchaseRequest',
     'PurchasingSettings',
+    'PushSubscription',
     'QualityAlertRule',
     'QualityHold',
     'QualityHoldGroup',
@@ -815,6 +833,7 @@ it('covers every classified table and every runtime role', () => {
     'RecordShare',
     'Refund',
     'RegulationOrStandard',
+    'Reminder',
     'Remnant',
     'RepairEstimate',
     'RepairEstimateLine',
@@ -842,6 +861,7 @@ it('covers every classified table and every runtime role', () => {
     'RlsNotice',
     'Role',
     'RoleAssignment',
+    'RoleNotificationDefault',
     'RoleSheet',
     'RoleSheetItem',
     'RosterEntry',
@@ -946,6 +966,7 @@ it('covers every classified table and every runtime role', () => {
     'SvhcListVersion',
     'Task',
     'Team',
+    'TeamInbox',
     'TeamMember',
     'TechnicalFile',
     'TechnicalFileItem',
@@ -965,6 +986,7 @@ it('covers every classified table and every runtime role', () => {
     'User',
     'Variant',
     'ViesCheck',
+    'ViewFollower',
     'WarehouseTask',
     'WhatIfScenario',
     'WorkCalendar',

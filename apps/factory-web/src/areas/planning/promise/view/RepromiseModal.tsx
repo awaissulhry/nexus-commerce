@@ -1,13 +1,14 @@
 'use client'
 
 import { Check, Send, Undo2, X } from 'lucide-react'
-import { Banner, EmptyState, Field, Listbox, SummaryTable } from '@nexus/ui/components'
+import { Banner, EmptyState, Field, SummaryTable } from '@nexus/ui/components'
 import { Button, Input, Pill, Skeleton, Spinner, Toggle } from '@nexus/ui/primitives'
 import { DateField, Modal, Textarea } from '../../../../lib/i18n/ds-parts'
 import { formatDateTime } from '../../../../lib/i18n/format'
 import type { Proposal, RepromiseDraft } from '../api'
 import { certificateWords, dayWords, decisionHolds, formHeld, formProblems, movedSizes, previewStale, sizeKey, sizeName, type RepromiseForm, type Words } from '../model'
 import type { PromiseActions, PromiseModel, RepromiseDialog } from '../view-model'
+import { Listbox } from '../../../../lib/i18n/ds-parts' // B-W2b-F41: the DS parts in the page's language
 
 /**
  * The Re-promise modal (design planning.promise pop:repromise "Re-promise SO-1043", the row verb or `p`): the proposed day per

@@ -57,6 +57,9 @@ import { useOrderDepth } from '../depth/use-order-depth'
 import { NAMESPACE as DEPTH } from '../depth/model'
 // B-W2b-340: the configurator of an order line (its "Options" dialog).
 import { OrderLineOptions } from './configurator/OrderLineOptions'
+// B-W2b-368 (XF1:02): "Waits for the factory review" with each unit's review.
+import { useReviewBanner } from './review-banner/use-review-banner'
+import { ReviewBanner } from './review-banner/view/ReviewBanner'
 import { createElement } from 'react'
 
 /**
@@ -368,8 +371,11 @@ function RecordContainer({ orderId }: { orderId: string }) {
     },
   })
 
+  const reviewBanner = useReviewBanner(api, order.status === 'ready' ? order.value : null, session.permissions, prefix) // B-W2b-368
+
   const model: OrderRecordModel = {
     depth: depth.model, // B-W2b-323
+    reviewBanner: createElement(ReviewBanner, { model: reviewBanner.model, onRetry: reviewBanner.retry }), // B-W2b-368
     prefix,
     can,
     cancelReasons,

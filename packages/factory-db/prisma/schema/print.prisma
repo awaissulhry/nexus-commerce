@@ -9,6 +9,11 @@
 // only). Until then the only relay is FAKE: it records jobs and sends nothing (local and test runs). A job's content
 // (printer, payload, copies, record) never changes after it is queued; jobs and printers are never deleted (the
 // …_print_guards trigger).
+//
+// W2b-6 (schema wave 48/57, B-W2b-367; LOG-026, LOG-027): a printer says how its jobs reach it: DIRECT (ZPL straight from
+// the station's browser to a label printer it can reach, no desktop agent), RELAY (the site's relay, as before) or PDF (the
+// browser prints a PDF). A job that prints an earlier job of the same record again (a carrier, SSCC or carton label,
+// without buying a new one) names that job and why; both are fixed once it is queued.
 
 /// A printer of a site (GAP-007). A LABEL_ZPL printer takes ZPL on its label stock; an A4_PDF printer takes PDFs.
 model Printer {
@@ -31,6 +36,9 @@ model Printer {
   labelHeightMm Int?
   /// ACTIVE takes jobs; PAUSED takes none for now (out of labels, maintenance); ARCHIVED is no longer used.
   status        PrinterStatus @default(ACTIVE)
+  /// W2b-6 (schema wave 48/57, B-W2b-367; LOG-026): how its jobs reach it (carriers.prisma PrinterMode): DIRECT only for a
+  /// label printer; RELAY (the default) as before.
+  mode          PrinterMode   @default(RELAY)
   version       Int           @default(1)
   createdAt     DateTime      @default(now()) @db.Timestamptz(3)
   updatedAt     DateTime      @default(now()) @updatedAt @db.Timestamptz(3)
@@ -108,6 +116,11 @@ model PrintJob {
   /// Who asked: an office user, or the operator on a floor device (with the device).
   requestedById String?          @db.Uuid
   deviceId      String?          @db.Uuid
+  /// W2b-6 (schema wave 48/57, B-W2b-367; LOG-027): the earlier job of the same record and company it prints again (a
+  /// label reprinted without buying a new one), and why (a person's words, 3 to 200 characters on one line); both or
+  /// neither, fixed once queued. Who and when: requestedById, createdAt.
+  reprintOfId   String?          @db.Uuid
+  reprintReason String?
   version       Int              @default(1)
   createdAt     DateTime         @default(now()) @db.Timestamptz(3)
   updatedAt     DateTime         @default(now()) @updatedAt @db.Timestamptz(3)
@@ -116,7 +129,13 @@ model PrintJob {
   printer Printer     @relation(fields: [tenantId, companyId, siteId, printerId], references: [tenantId, companyId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
   file    StoredFile? @relation(fields: [tenantId, fileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b-6 (wave 48/57): the job it prints again, and the jobs that print it again (Restrict, not Prisma's SetNull default:
+  // that would also clear tenantId and companyId).
+  reprintOf PrintJob?  @relation("PrintJobReprint", fields: [tenantId, companyId, reprintOfId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  reprints  PrintJob[] @relation("PrintJobReprint")
 
+  // W2b-6: the target of a reprint's reference: a job of the same company.
+  @@unique([tenantId, companyId, id])
   // A printer's queue, newest first.
   @@index([tenantId, printerId, status])
   // A record's print history.

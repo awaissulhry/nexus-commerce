@@ -21,13 +21,15 @@ import { lockReturn, touchReturn } from '../returns/rma'
 import { readLines } from '../returns/store'
 import { outcomesOf, type OutcomesView } from './outcomes'
 import { REMAKE_ACTION, remakeOf, RETURN_RECORD } from './store'
+// B-W2b-368 (XF1:03): the RMA records the customer's wish REMAKE (wave 45's ReturnOutcomeWanted).
+import { REMAKE_WISH } from '../returns/outcomes/remake'
 
 /**
  * A remake asked with photos (B-W2b-346; SAL-298 "Remake request with photos"; design links.claim "Remake (made-to-measure
  * fit)": what is wrong with the fit + front and back photos; follow-ups RX2:01 the claim link offers Remake, RX2:02 the
  * portal's new return offers Remake). Three doors, one record: the RMA, its line for the item, and the audit row
- * `returnsOutcomes.remakeAsked` (the lines it is for, how it came, the fit in words; ReturnOutcomeWanted has no REMAKE: a
- * schema need) written in the command that asks it, with event return.remake_asked.
+ * `returnsOutcomes.remakeAsked` (the lines it is for, how it came, the fit in words) written in the command that asks it, with
+ * event return.remake_asked; B-W2b-368: and the RMA's wish REMAKE (ReturnOutcomeWanted since wave 45).
  *
  *   office  `POST /sales/returns/:returnId/remake` {version, lineIds, fit} on an RMA the office made (REQUESTED, AUTHORISED or
  *           RECEIVED, its lines not decided; once per RMA): sales.returns.manage. The photos are W2a's line photos.
@@ -84,7 +86,7 @@ export async function askRemake(caller: CommandCaller, returnId: string, body: {
       else if (line.creditWithoutReturn) problems.push({ path: `body/lineIds/${index}`, message: `Line ${line.seq} was credited without the goods: nothing is made again of it.` })
     }
     if (problems.length > 0) issues(problems, 'Some lines cannot take a remake.')
-    await touchReturn(tools, rma)
+    await touchReturn(tools, rma, REMAKE_WISH) // B-W2b-368: the wish REMAKE (REQUESTED, AUTHORISED or RECEIVED: remakeHeld above)
     remakeAskedInCommand(tools, rma, body.lineIds, 'OFFICE', body.fit)
     return null
   })
@@ -108,7 +110,8 @@ async function requestOf(db: Reader, body: RemakeBody): Promise<{ request: Retur
 
 async function remakeInCommand(tools: CommandTools, place: Place, scope: ClaimScope, request: ReturnRequestBody, fit: string, who: { readonly via: 'PORTAL' | 'LINK'; readonly personId: string | null; readonly linkId: string | null }) {
   const made = await createRequestInCommand(tools, place, scope, request, who)
-  const row = await tools.tx.returnAuthorisation.findUniqueOrThrow({ where: { id: made.returnId }, select: { siteId: true } })
+  // B-W2b-368: the request's wish is REMAKE (a request from outside offers REPLACE, REPAIR or CREDIT; the remake sets its own).
+  const row = await tools.tx.returnAuthorisation.update({ where: { id: made.returnId }, data: REMAKE_WISH, select: { siteId: true } })
   remakeAskedInCommand(tools, { id: made.returnId, number: made.number, companyId: place.companyId, siteId: row.siteId }, made.lineIds, who.via, fit)
   return made
 }

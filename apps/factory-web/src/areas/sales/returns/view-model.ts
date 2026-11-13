@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import type { LiveState, Tone } from '../../quality/_shared/model'
 import type { StepUpState } from '../../quality/_shared/hooks'
 import type {
@@ -211,6 +212,8 @@ export interface RmaModel {
   readonly dockOpen: boolean
   /** B-W2b-352: the W2b parts (policy, deadline, credit without the goods, fees, split, size exchange, remake asked). */
   readonly depth?: RmaDepthModel
+  /** B-W2b-368 (XF1:03): a line's remake outcome (./outcome-remake), drawn by the container; absent or null: nothing to say. */
+  readonly remakeLine?: (lineId: string, disposition: string) => ReactNode
 }
 
 export interface RmaActions extends CloseActions, NewRepairActions, RmaDepthActions {

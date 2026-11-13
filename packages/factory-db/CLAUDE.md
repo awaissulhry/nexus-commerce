@@ -267,6 +267,40 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    and GarmentSerial (the carton of its line's shipment, set while RELEASED and DRAFT; `GarmentSerial_unpack_carton`, a
    BEFORE trigger that fires after the guard, clears the carton when the line is cleared); no earlier function redefined;
    it calls recall's `factory_recall_words_ok` and `factory_recall_not_future`):
+   `…_notify_depth_w2b_guards` (W2b-6 schema wave 47/57, B-W2b-366, notifications, My work and mail in depth: an office
+   person's notification preferences and an office role's defaults (person or role, kind, channel and key fixed, the key
+   beginning `pref:`/`default:` with them: one row each; the daily digest only on EMAIL); push subscriptions (the endpoint
+   https and fixed, a live one with its keys sealed as a SecretValue of purpose `notifications.push`, the keys going only
+   once it is turned off, turned off once and then frozen, one live per endpoint: a partial unique; never deleted); view
+   follows (the key `view:<view>:<person>`, an ONLY_ME view followed only by its owner, the last count all three or none
+   and only forward; removed with their view: ON DELETE CASCADE); reminders (born waiting, AT_TIME with a time after
+   `since`, a new time or kind only with a later `since`, came back once and cleared only by a put-off, done then frozen
+   but for Undo, a message of the record's own thread); team inboxes (the local part, not `r-`/`c-`, members office people
+   each once; never deleted); capture addresses (a base32 token, the default inbox switched on, turned off once then
+   frozen, one live per company: a partial unique; never deleted); InboundEmail's team-inbox columns (its own triggers
+   `InboundEmail_team_inbox_check` and `InboundEmail_follow_up_ends`: a later MATCHED mail on the thread clears the earlier
+   mails' follow-ups); EmailOutbound.bounceKind written PERMANENT with bouncedAt by its own BEFORE trigger
+   `EmailOutbound_bounce_kind` (and filled for the rows that bounced before); SalesSettings.inquiryAddresses checked by its
+   own trigger; it redefines W0's `factory_inbound_email_guard` (a MATCHED mail's team-inbox columns still move), the rest
+   word for word; it calls recall's `factory_recall_words_ok`, `factory_recall_not_future` and
+   `factory_recall_model_name_ok`):
+   `…_carriers_w2b_guards` (W2b-6 schema wave 48/57, B-W2b-367, carriers, labels and dispatch: our own carrier contracts (the
+   number a SecretValue of purpose `shipping.carrier_account`, required while live; company, site, carrier fixed; one live per
+   company, site or every site, and carrier: a partial unique; never deleted), pickups (what was asked fixed; REQUESTED →
+   CONFIRMED | FAILED | CANCELLED, CONFIRMED → FAILED | CANCELLED, the last two final; the provider's reference set once; why it
+   failed exactly when FAILED; an address with a two-capital country; never deleted) and day sheets (company, site, carrier and
+   day fixed; closed once with when and its own file, then frozen; one per site, carrier and day; never deleted); its own
+   triggers on Shipment (a hand-typed tracking number only for a CARRIER shipment with no Sendcloud shipment; who collected, the
+   plate and a signature of the shipment only when the customer collects; a day sheet only for a CARRIER shipment of its
+   carrier, PACKED or gone, on and off only while the sheets are open (FOR SHARE), never back to DRAFT or CANCELLED on one),
+   Parcel (declared value 0 or more, insured above 0 and at most declared), ShippingSettings (live exactly with when and who,
+   fixed while live, cleared in test mode), Party (the customer's carrier account a SecretValue of purpose
+   `parties.carrier_account` with its preferred carrier; COLLECT and THIRD_PARTY only with it), Printer (DIRECT only on a label
+   printer) and PrintJob (a reprint of the same record with 3-200 characters of why, fixed once queued); it redefines the
+   portal follow-ups' `factory_shipment_guard` (the hand-typed tracking number and the day sheet still change once the goods
+   left) and wave 45's `factory_generated_document_check` (PROFORMA of a Shipment, SampleShipment or DepositRequest with its
+   record's PROFORMA NumberAllocation; MANIFEST of a DispatchManifest; SHIPPING_MARKS and SHIPMENT_PACK of a Shipment); it calls
+   recall's `factory_recall_words_ok` and `factory_recall_not_future`):
    triggers, partial unique indexes and deferred
    constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new

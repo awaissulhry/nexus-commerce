@@ -6,7 +6,6 @@ import { openFactoryDatabase, RUNTIME_LOGIN, type FactoryDatabase, type Prisma }
 import { migratedDatabase, type MigratedDatabase } from '@nexus/factory-db/testing'
 import { newId } from '@nexus/factory-domain/core/ids'
 import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
-import { MADE_TO_MEASURE_LATER } from '@nexus/factory-domain/production/work-orders/cells'
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedCore } from '../../../../../../packages/factory-db/seed/_core'
 import { seed as seedNumbering } from '../../../../../../packages/factory-db/seed/numbering'
@@ -368,7 +367,7 @@ describe('a work order from order lines (MES-001, MES-002)', () => {
     expect((await ok('viewer', 'GET', `/production/work-orders/counts?siteId=${A.siteA1}`)).counts.draft).toBe(all.filter((row: Json) => row.status === 'DRAFT' && row.siteId === A.siteA1).length)
   })
 
-  it('takes only what is open on the line, one style, and refuses a made-to-measure line (deferred: 409)', async () => {
+  it('takes only what is open on the line, one style; a made-to-measure unit of a style not made to measure is refused in words (409)', async () => {
     const order = await salesOrder({ lines: [{ colour: 'BLK', sizes: { '50': 1, '52': 3 } }] })
     const line = order.lineIds[0]!
     await create([{ salesOrderLineId: line, sizes: [{ size: '52', quantity: 2 }] }])
@@ -387,11 +386,12 @@ describe('a work order from order lines (MES-001, MES-002)', () => {
     expect(otherStyle.issues).toContainEqual({ path: 'body/lines/1', message: `${mixed.number} line 20 is another style: a work order makes one style.` })
 
     // B-W2b-F30: since B-W2b-297 (schema wave 44) the database refuses a made-to-measure line whose style is not flagged
-    // made to measure (Style.mtmAllowed), so the style is flagged for this order only; the work order must still refuse it.
+    // made to measure (Style.mtmAllowed), so the style is flagged for this order only. B-W2b-368: a unit is its own work order
+    // (modules/sales/mtm/followups.pg), refused in words while its style is no longer made to measure (GATE-MTM).
     await admin('UPDATE "Style" SET "mtmAllowed" = true WHERE id = $1', [A.style])
     const mtm = await salesOrder({ lines: [{ madeToMeasure: true }] })
     await admin('UPDATE "Style" SET "mtmAllowed" = false WHERE id = $1', [A.style])
-    expect(await refused('planner', 'POST', '/production/work-orders', { lines: [{ salesOrderLineId: mtm.lineIds[0]! }] }, 409)).toMatchObject({ code: 'conflict', message: MADE_TO_MEASURE_LATER })
+    expect(await refused('planner', 'POST', '/production/work-orders', { lines: [{ salesOrderLineId: mtm.lineIds[0]! }] }, 409)).toMatchObject({ code: 'conflict', message: `${mtm.number} line 10: SEED-JKT-02 is not made to measure: a person flags the style first (PRD-017).` })
     expect((await refused('viewer', 'POST', '/production/work-orders', { lines: [{ salesOrderLineId: line }] }, 403)).code).toBe('forbidden')
   })
 

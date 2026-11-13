@@ -27,6 +27,11 @@ import {
 } from '@nexus/ui/patterns'
 import { ColorSwatchPicker as DsColorSwatchPicker, IconPicker as DsIconPicker, Textarea as DsTextarea } from '@nexus/ui/primitives'
 import { CellSaveMark as DsCellSaveMark, GridDensityToggle as DsGridDensityToggle } from '@nexus/ui/grid'
+// B-W2b-F41: the parts that spoke English only.
+import { Listbox as DsListbox, ListboxPanel as DsListboxPanel, MultiSelect as DsMultiSelect, OrderedList as DsOrderedList } from '@nexus/ui/components'
+import { Lightbox as DsLightbox, ReplyComposer as DsReplyComposer } from '@nexus/ui/patterns'
+import { TagInput as DsTagInput } from '@nexus/ui/primitives'
+import { ChangeValue as DsChangeValue } from '@nexus/ui/grid'
 import { dsLabels, type DsLabels } from './ds-labels'
 import { CATALOGUE, createTranslator } from './messages'
 import { DEFAULT_LOCALE, type Locale } from './locales'
@@ -113,3 +118,14 @@ export const GridDensityToggle = (props: ComponentPropsWithoutRef<typeof DsGridD
 export const Textarea = forwardRef<HTMLTextAreaElement, ComponentPropsWithoutRef<typeof DsTextarea>>(function Textarea(props, ref) {
   return <DsTextarea ref={ref} {...props} labels={own(useDsWords().textarea, props.labels)} />
 })
+
+// B-W2b-F41 — the parts that spoke English only (the Office shell's AppRail and WorkspaceSubheader take their words in
+// the shell itself, which imports nothing from here). Lightbox's dialog and ReplyComposer's text field speak too.
+export const MultiSelect: typeof DsMultiSelect = (props) => <DsMultiSelect {...props} labels={own(useDsWords().multiSelect, props.labels)} />
+export const Listbox: typeof DsListbox = (props) => <DsListbox {...props} labels={own(useDsWords().listbox, props.labels)} />
+export const ListboxPanel: typeof DsListboxPanel = (props) => <DsListboxPanel {...props} labels={own(useDsWords().listbox, props.labels)} />
+export const OrderedList: typeof DsOrderedList = (props) => <DsOrderedList {...props} labels={own(useDsWords().orderedList, props.labels)} />
+export const TagInput: typeof DsTagInput = (props) => <DsTagInput {...props} labels={own(useDsWords().tagInput, props.labels)} />
+export const Lightbox: typeof DsLightbox = (props) => <DsLightbox {...props} labels={own(useDsWords().lightbox, props.labels)} />
+export const ReplyComposer: typeof DsReplyComposer = (props) => <DsReplyComposer {...props} labels={own(useDsWords().replyComposer, props.labels)} />
+export const ChangeValue = (props: ComponentPropsWithoutRef<typeof DsChangeValue>) => <DsChangeValue {...props} labels={own(useDsWords().changeValue, props.labels)} />

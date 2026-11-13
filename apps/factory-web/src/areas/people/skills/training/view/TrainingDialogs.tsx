@@ -3,7 +3,7 @@
 import { type ReactNode } from 'react'
 import Link from 'next/link'
 import { Plus, Trash2 } from 'lucide-react'
-import { Banner, Field, FileRow, KeyValue, MultiSelect, SummaryTable } from '@nexus/ui/components'
+import { Banner, Field, FileRow, KeyValue, SummaryTable } from '@nexus/ui/components'
 import { Button, Checkbox, Input, Pill, SegmentedControl, Select, Spinner } from '@nexus/ui/primitives'
 import { DateField, FileDropzone, Modal, ReviewChangesPanel } from '../../../../../lib/i18n/ds-parts'
 import { useLocale } from '../../../../../lib/i18n/provider'
@@ -35,6 +35,7 @@ import {
 } from '../model'
 import type { PersonOption, TrainingDialog, TrainingDialogActions } from '../use-training'
 import { Law, ProblemBanner, useDay, useLanguage, useTrainingWords } from './parts'
+import { MultiSelect } from '../../../../../lib/i18n/ds-parts' // B-W2b-F41: the DS parts in the page's language
 
 export interface TrainingDialogsModel {
   dialog: TrainingDialog | null

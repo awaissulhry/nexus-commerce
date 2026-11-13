@@ -260,5 +260,7 @@ export const WAIT_WORDS = Object.freeze({
   REQUEST_PENDING: { en: 'It waits for a yes: a sales order rule asks one before it goes on.', it: "Attende un sì: una regola degli ordini lo chiede prima che proceda." },
   NO_REQUEST: { en: 'It waits for a yes, but nobody has asked for one yet (the request was turned down, taken back or went stale): ask for a yes, or cancel the order.', it: 'Attende un sì, ma nessuno lo ha ancora chiesto (la richiesta è stata respinta, ritirata o non è più valida): chiedi un sì, o annulla l\'ordine.' },
   CREDIT_HOLD: { en: "It waits for the customer's credit: a credit override or a new check lets it go on.", it: 'Attende il fido del cliente: una deroga o un nuovo controllo lo lasciano proseguire.' },
+  // B-W2b-368 (XF1:02): a made-to-measure unit's measures wait for the factory review (B-W2b-358's rule; not a database value).
+  MEASUREMENTS: { en: "It waits for the factory review: a made-to-measure unit's measures are not confirmed yet. The review confirms them (the order then goes on) or asks the rider for more.", it: 'Attende il controllo della fabbrica: le misure di un capo su misura non sono ancora confermate. Il controllo le conferma (poi l\'ordine prosegue) o chiede altre misure al pilota.' },
 } satisfies Record<string, Words>)
 export type WaitReason = keyof typeof WAIT_WORDS

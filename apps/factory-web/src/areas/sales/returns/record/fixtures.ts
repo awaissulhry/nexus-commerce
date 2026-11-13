@@ -31,7 +31,7 @@ function depthFor(rma: Rma): RmaDepthModel {
 
 type DesignModel = { readonly kind: 'rma'; readonly role: RoleCase; readonly model: RmaModel } | { readonly kind: 'repair'; readonly role: RoleCase; readonly model: RepairModel }
 
-function rmaModel(role: RoleCase, over: Partial<RmaModel> = {}): RmaModel {
+export function rmaModel(role: RoleCase, over: Partial<RmaModel> = {}): RmaModel {
   return {
     prefix: PREFIX,
     can: canFor(role),

@@ -82,6 +82,8 @@ export const NUMBER_KINDS = [
   // document kinds.
   'SERVICE_CASE',
   'SAFETY_REPORT',
+  // W2b-6 wave 48/57 (factory-db numbering.prisma): a proforma invoice (PF-…), non-fiscal, an office document kind.
+  'PROFORMA',
   // W2b-2 wave 8 (factory-db numbering.prisma): a bundle's coupon for one operation (CP-…), a scan-id kind.
   'COUPON',
   // W2b-2 wave 12 (factory-db numbering.prisma): a fabric roll's tag (RL-…) and a remnant's tag (RM-…), scan-id kinds.
@@ -252,6 +254,7 @@ const DEFAULT_PREFIX: Readonly<Record<DocumentKind, string>> = {
   // SVC, not SC: SC- is a subcontract order's.
   SERVICE_CASE: 'SVC',
   SAFETY_REPORT: 'PSR',
+  PROFORMA: 'PF',
 }
 
 /** The pattern a new series gets when the admin types none: `FT-{YYYY}-{N:5}` (yearly) or `LOT-{N:6}` (never resets). */

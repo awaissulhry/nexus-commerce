@@ -23,6 +23,10 @@ import { scopeChip, scopeOf } from '../../scope/scope-model'
 import { CompanySwitcherView, type CompanySwitcherViewModel } from '../../switcher/view/CompanySwitcherView'
 import { areaTabHref, phoneNav, type LastPages } from '../phone-bar'
 import '../office-shell.css'
+// B-W2b-F41: the rail's and the area navigation's own words (the ds-words catalogue).
+import { dsLabels } from '../../../lib/i18n/ds-labels'
+import { CATALOGUE, createTranslator } from '../../../lib/i18n/messages'
+import { useLocale } from '../../../lib/i18n/provider'
 
 /**
  * SCR-003 — the Office shell (PLT-160, PLT-173; A2 §1, §2.1). Composed from design-system parts only:
@@ -121,6 +125,10 @@ const isPlainClick = (event: MouseEvent<HTMLAnchorElement>) => event.button === 
 export function OfficeShellView({ model, children, onNavigate, onSiteChange, onSignOut, onPaletteQuery }: OfficeShellViewProps) {
   const t = useT('shell')
   const named = useScopedT('shell')
+  // B-W2b-F41: AppRail's and WorkspaceSubheader's words in the person's language, read from the catalogue as
+  // lib/i18n/ds-parts reads them (the frame loads `shell` only, and imports nothing from ds-parts, which brings the grid).
+  const locale = useLocale()
+  const ds = useMemo(() => dsLabels(createTranslator(locale, CATALOGUE[locale]['ds-words'] ?? {}), locale), [locale])
   const { mode, cycleTheme } = useTheme()
   const [paletteOpen, setPaletteOpen] = useState(model.paletteOpen ?? false)
   const [areaNavOpen, setAreaNavOpen] = useState(false)
@@ -321,7 +329,7 @@ export function OfficeShellView({ model, children, onNavigate, onSiteChange, onS
       ))}
 
       <div ref={body} className="fw-office-body">
-        <AppRail navItems={areaRailItems(nav, count).map((item) => ({ ...item, href: toHref(item.href) }))} pathname={fullPath} LinkComponent={ShellLink} />
+        <AppRail navItems={areaRailItems(nav, count).map((item) => ({ ...item, href: toHref(item.href) }))} pathname={fullPath} LinkComponent={ShellLink} labels={ds.appRail} /* B-W2b-F41 */ />
         <div className="fw-office-page">
           {area?.sections?.length ? (
             <div className="fw-office-subheader">
@@ -333,6 +341,7 @@ export function OfficeShellView({ model, children, onNavigate, onSiteChange, onS
                 onNavigate={(event, item) => openRow(event, item.href)}
                 navigationOpen={areaNavOpen}
                 onNavigationOpenChange={setAreaNavOpen}
+                labels={ds.workspaceSubheader} /* B-W2b-F41 */
                 header={
                   <DetailHeader dense title={here} meta={above || undefined} status={liveStatus} actions={printAction} />
                 }

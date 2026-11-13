@@ -14,6 +14,8 @@ export {
   type RailNavItem,
   type RailSubItem,
 } from './AppRail'
+// B-W2b-F41: the rail's words (its optional `labels` prop); English defaults.
+export { APP_RAIL_LABELS, type AppRailLabels } from './AppRailLabels'
 export { hrefMatchesPath, resolveActiveNav, type ActiveNavMatch, type ActiveNavNode } from './app-rail-active'
 export {
   AREA_NAV_VIEWS,

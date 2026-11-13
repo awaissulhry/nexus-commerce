@@ -137,7 +137,7 @@
     "lines": "Order lines",
     "line": "Line {seq} · {style} {colourway}",
     "sizeOpen": "{size} ×{open}",
-    "mtmLater": "Made-to-measure: comes in a later step",
+    "mtmUnit": "Made-to-measure unit, base size {size}: made on its own work order (ticking it leaves it alone)",
     "lineFull": "Nothing open: already on work orders",
     "sizes": "Pieces per colourway and size",
     "over": "At most {open}: the rest is on other work orders",
@@ -310,7 +310,8 @@
     "CELLS": {
       "OK": "{cells} size cells to make.",
       "BLOCKED": "Some sizes are not in the style any more.",
-      "scope": "Some cells wait for a later release of the style's revision."
+      "scope": "Some cells wait for a later release of the style's revision.",
+      "unit": "The made-to-measure unit is not ready to make yet."
     },
     "DEPOSIT": {
       "OK": "Every order's deposit is paid or waived.",
@@ -337,6 +338,8 @@
     "bom": "{cell}: the BOM does not cover it",
     "size": "{cell}: the size is not in the style any more",
     "scope": "{cell}: not released yet — release more of the revision (Products › Styles › Versions & changes), or take it out of the work order",
+    "measures": "{cell}: the rider's measures wait for the factory review (Sales › Made-to-measure: the production manager confirms them)",
+    "mtm": "{cell}: made-to-measure has stopped for its measurement template (Products › Sizes & measurements › Measurement templates)",
     "deposit": "{order} waits for its deposit",
     "material": {
       "short": "{material}: {short} {uom} short ({needed} needed, {available} available)",

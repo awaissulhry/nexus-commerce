@@ -3,6 +3,8 @@
 import { useState, type ReactNode } from 'react'
 import { Search } from 'lucide-react'
 import { searchOptions } from '../lib/option-search'
+import { mergeLabels } from '../lib/labels'
+import { OPTION_LIST_LABELS, type OptionListLabels } from './MultiSelectLabels'
 
 /**
  * OptionList — the checkbox option list, declared ONCE.
@@ -63,6 +65,8 @@ export interface OptionListProps {
   minSelected?: number
   /** Text the search field starts with — the key that opened a grid cell by typing (AG's `eventKey`). */
   initialQuery?: string
+  /** B-W2b-F41: the list's words in the person's language; a word left out stays English. */
+  labels?: Partial<OptionListLabels>
 }
 
 /** The next selection after toggling `v`, never dropping below `minSelected`. PURE. */
@@ -79,13 +83,15 @@ export function OptionList({
   value,
   onChange,
   searchable,
-  searchPlaceholder = 'Search…',
+  searchPlaceholder,
   listClassName,
   selectAll = true,
-  emptyLabel = 'No matches',
+  emptyLabel,
   minSelected = 0,
   initialQuery = '',
+  labels,
 }: OptionListProps) {
+  const words = mergeLabels(OPTION_LIST_LABELS, labels)
   const [q, setQ] = useState(initialQuery)
 
   const allChecked = value.length === options.length && options.length > 0
@@ -109,8 +115,8 @@ export function OptionList({
             autoFocus
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder={searchPlaceholder}
-            aria-label="Search options"
+            placeholder={searchPlaceholder === undefined ? words.search : searchPlaceholder}
+            aria-label={words.searchOptions}
           />
         </div>
       )}
@@ -125,13 +131,13 @@ export function OptionList({
               }}
               onChange={toggleAll}
             />
-            <span>Select all</span>
+            <span>{words.selectAll}</span>
           </label>
         )}
-        {matches.length === 0 && <div className="nds-combo-empty">{emptyLabel}</div>}
+        {matches.length === 0 && <div className="nds-combo-empty">{emptyLabel === undefined ? words.noMatches : emptyLabel}</div>}
         {matches.map((o) => (
           <label key={o.value} className={['nds-ms-opt', value.includes(o.value) ? 'sel' : ''].filter(Boolean).join(' ')}
-            title={locked(o.value) ? `At least ${minSelected} must stay selected` : undefined}>
+            title={locked(o.value) ? words.atLeast(minSelected) : undefined}>
             <input type="checkbox" checked={value.includes(o.value)} onChange={() => toggle(o.value)}
               aria-disabled={locked(o.value) || undefined} />
             <span>{o.label}</span>

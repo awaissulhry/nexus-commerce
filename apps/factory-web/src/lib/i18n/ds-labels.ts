@@ -53,6 +53,11 @@ import type { VersionCompareLabels } from '@nexus/ui/patterns/VersionCompare/ind
 import type { RuleBuilderLabels } from '@nexus/ui/patterns/RuleBuilder/index'
 import type { SizeColumnsLabels } from '@nexus/ui/grid/size-columns/index'
 import type { GarmentZoneMapLabels } from '@nexus/ui/components/GarmentZoneMap/index'
+// B-W2b-F41: the parts that spoke English only.
+import type { ListboxLabels, MultiSelectLabels, OrderedListLabels } from '@nexus/ui/components'
+import type { AppRailLabels, LightboxLabels, ReplyComposerLabels, WorkspaceSubheaderLabels } from '@nexus/ui/patterns'
+import type { ChangeValueLabels } from '@nexus/ui/grid'
+import type { TagInputLabels } from '@nexus/ui/primitives'
 import { formatDateTime, formatNumber, DEFAULT_TIME_ZONE } from './format'
 import { INTL_LOCALE, type Locale } from './locales'
 import type { Translate } from './messages'
@@ -146,6 +151,16 @@ export interface DsLabels {
   ruleBuilder: RuleBuilderLabels
   sizeColumns: SizeColumnsLabels
   garmentZoneMap: GarmentZoneMapLabels
+  // B-W2b-F41
+  workspaceSubheader: WorkspaceSubheaderLabels
+  appRail: AppRailLabels
+  changeValue: ChangeValueLabels
+  multiSelect: MultiSelectLabels
+  listbox: ListboxLabels
+  orderedList: OrderedListLabels
+  tagInput: TagInputLabels
+  lightbox: LightboxLabels
+  replyComposer: ReplyComposerLabels
 }
 
 const MINUTE = 60_000
@@ -215,6 +230,11 @@ export function dsLabels(t: Translate, locale: Locale, timeZone: string = DEFAUL
     states: { empty: t('confirmPhrase.empty'), partial: t('confirmPhrase.partial'), mismatch: t('confirmPhrase.mismatch'), match: t('confirmPhrase.match') },
   }
   const close = t('modal.close')
+  // B-W2b-F41: named once, as the Lightbox reuses `close`: the ReplyComposer's text field reuses these.
+  const textarea: TextareaLabels = {
+    counter: (used, limit) => t('textarea.counter', { used: num(used), limit: num(limit) }),
+    tooLong: (over) => t('textarea.tooLong', { count: over, n: num(over) }),
+  }
   const p = (key: string, params?: Record<string, string | number>) => t(`preferences.${key}`, params)
   const r = (key: string, params?: Record<string, string | number>) => t(`review.${key}`, params)
   const d = (key: string, params?: Record<string, string | number>) => t(`detail.${key}`, params)
@@ -412,10 +432,7 @@ export function dsLabels(t: Translate, locale: Locale, timeZone: string = DEFAUL
     },
     combobox: { search: t('combobox.search'), noMatches: t('combobox.noMatches') },
     confirmPhrase,
-    textarea: {
-      counter: (used, limit) => t('textarea.counter', { used: num(used), limit: num(limit) }),
-      tooLong: (over) => t('textarea.tooLong', { count: over, n: num(over) }),
-    },
+    textarea, // B-W2b-F41: named above
     // B-W2b-09 — the shared parts the W2a screens composed.
     fileRow: { replace: t('fileRow.replace'), remove: t('fileRow.remove') },
     saveStatus: {
@@ -519,6 +536,129 @@ export function dsLabels(t: Translate, locale: Locale, timeZone: string = DEFAUL
     ...qualityFloorLabels(t),
     ...portalLinkLabels(t),
     ...productPartsLabels(t),
+    ...englishOnlyPartsLabels(t, locale, { modal: { close }, textarea }),
+  }
+}
+
+/**
+ * B-W2b-F41 — the words of the parts that spoke English only (`ds-words`: workspaceSubheader, appRail, changeValue,
+ * multiSelect, listbox, orderedList, tagInput, lightbox, replyComposer). The Lightbox's dialog and the composer's text
+ * field reuse the words of `modal` and `textarea`. Counts in a sentence keep the DS's plain digits (a badge, a position);
+ * the composer's character counts take the language's separators, as the Textarea counter does.
+ */
+function englishOnlyPartsLabels(
+  t: Translate,
+  locale: Locale,
+  shared: { modal: ModalLabels; textarea: TextareaLabels },
+): Pick<DsLabels, 'workspaceSubheader' | 'appRail' | 'changeValue' | 'multiSelect' | 'listbox' | 'orderedList' | 'tagInput' | 'lightbox' | 'replyComposer'> {
+  const k = (part: string) => (key: string, params?: Record<string, string | number>) => t(`${part}.${key}`, params)
+  const ws = k('workspaceSubheader')
+  const ar = k('appRail')
+  const cv = k('changeValue')
+  const ms = k('multiSelect')
+  const lb = k('listbox')
+  const ol = k('orderedList')
+  const ti = k('tagInput')
+  const lx = k('lightbox')
+  const rc = k('replyComposer')
+  const num = (n: number) => formatNumber(n, locale)
+  const multiSelect: MultiSelectLabels = {
+    search: ms('search'),
+    searchOptions: ms('searchOptions'),
+    selectAll: ms('selectAll'),
+    noMatches: ms('noMatches'),
+    atLeast: (count) => ms('atLeast', { count }),
+    all: ms('all'),
+    selected: (count) => ms('selected', { count }),
+  }
+  return {
+    workspaceSubheader: {
+      // The DS says the navigation in lower case inside the button's name ("Expand warehouse pages"); so do both languages.
+      expand: (navigation) => ws('expand', { navigation: navigation.toLowerCase() }),
+      collapse: (navigation) => ws('collapse', { navigation: navigation.toLowerCase() }),
+      close: (navigation) => ws('close', { navigation }),
+      rowsNoun: ws('rowsNoun'),
+      showRows: (label, noun) => ws('showRows', { label, noun }),
+      hideRows: (label, noun) => ws('hideRows', { label, noun }),
+      rows: (label, noun) => ws('rows', { label, noun }),
+      currentInside: (label) => ws('currentInside', { label }),
+    },
+    appRail: {
+      navigation: ar('navigation'),
+      withCount: (label, count) => ar('withCount', { label, count }),
+      count: (count) => ar('count', { count }),
+      newTab: (name) => ar('newTab', { name }),
+      expand: (label) => ar('expand', { label }),
+      collapse: (label) => ar('collapse', { label }),
+      expandMarkets: (label) => ar('expandMarkets', { label }),
+      collapseMarkets: (label) => ar('collapseMarkets', { label }),
+      seeAllMarkets: (count) => ar('seeAllMarkets', { count }),
+      connect: ar('connect'),
+    },
+    changeValue: {
+      removed: cv('removed'),
+      unchanged: cv('unchanged'),
+      noValue: cv('noValue'),
+      more: (count) => cv('more', { count }),
+      changes: (count) => cv('changes', { count }),
+      saidChanged: (head, from, to) => cv('saidChanged', { head, from, to }),
+      saidAdded: (head, to) => cv('saidAdded', { head, to }),
+      saidRemoved: (head, from) => cv('saidRemoved', { head, from }),
+      saidUnchanged: (head, to) => cv('saidUnchanged', { head, to }),
+      saidEmpty: (head) => cv('saidEmpty', { head }),
+      saidMore: (count) => cv('saidMore', { count }),
+      saidAndMore: (lines, more) => cv('saidAndMore', { lines, more }),
+      saidNone: cv('saidNone'),
+      saidJoin: '; ',
+    },
+    multiSelect,
+    listbox: {
+      select: lb('select'),
+      search: lb('search'),
+      searchOptions: lb('searchOptions'),
+      noMatches: lb('noMatches'),
+      useTyped: (text) => lb('useTyped', { text }),
+      actions: lb('actions'),
+    },
+    orderedList: {
+      moveUp: (item) => ol('moveUp', { item }),
+      moveDown: (item) => ol('moveDown', { item }),
+      reorder: (item) => ol('reorder', { item }),
+      position: (item, place, total) => ol('position', { item, place, total }),
+      moving: (item, place, total) => ol('moving', { item, place, total }),
+    },
+    tagInput: { add: ti('add'), remove: (tag) => ti('remove', { tag }) },
+    lightbox: {
+      title: (place, total) => lx('title', { place, total }),
+      counter: (place, total) => lx('counter', { place, total }),
+      previous: lx('previous'),
+      next: lx('next'),
+      only: lx('only'),
+      first: lx('first'),
+      last: lx('last'),
+      photos: lx('photos'),
+      thumb: (place, total, current) => lx(current ? 'thumbCurrent' : 'thumb', { place, total }),
+      move: lx('move'),
+      close: lx('close'),
+      modal: shared.modal,
+    },
+    replyComposer: {
+      title: rc('title'),
+      label: rc('label'),
+      placeholder: rc('placeholder'),
+      templates: rc('templates'),
+      draft: rc('draft'),
+      drafting: rc('drafting'),
+      sending: rc('sending'),
+      sent: rc('sent'),
+      text: rc('text'),
+      englishOnly: rc('englishOnly'),
+      sentHeld: rc('sentHeld'),
+      emptyHeld: rc('emptyHeld'),
+      over: (over, limit) => rc('over', { count: over, n: num(over), limit: num(limit) }),
+      length: (count) => rc('length', { count, n: num(count) }),
+      textarea: shared.textarea,
+    },
   }
 }
 

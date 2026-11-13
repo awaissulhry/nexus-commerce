@@ -36,6 +36,8 @@ import { currencyOf, LINE_COLUMNS, lineKeyOf, lineValue, moveKeyPrefix, readLine
 import { defaultPlaceFor } from '../../inventory/locations-depth/defaults'
 // B-W2b-360 (SAL-353): REMAKE of a made-to-measure unit (W2a refused it: "comes later").
 import { REMAKE_DEFAULT_OUTCOME, remakeDecisionFor } from '../fittings/remake'
+// B-W2b-368 (XF1:03): the preview offers REMAKE for a made-to-measure unit's line.
+import { remakeChoicesOf, type RemakeChoice } from './outcomes/remake'
 
 /**
  * The decision (B-W2a-43; SAL-341 "Disposition decides the outcome"; design rma.inspection "Each line inspected and
@@ -191,14 +193,14 @@ async function planDecisions(db: Reader, rma: Pick<RmaRow, 'id' | 'siteId' | 'co
 
 const amountText = (amount: number | null, currency: string | null): string | null => (amount !== null && currency ? `${fromMinorUnits(amount, currency).toFixed(2)} ${currency}` : null)
 
-/** Every disposition (but REMAKE, W2b) with its outcomes for a line, each held with its reason. */
-function optionsOf(line: LineRow, sold: SoldFacts | undefined, value: number | null) {
+/** Every disposition with its outcomes for a line, each held with its reason; B-W2b-368: REMAKE only for a made-to-measure unit's line. */
+function optionsOf(line: LineRow, sold: SoldFacts | undefined, value: number | null, remake: RemakeChoice | undefined) {
   const graded = gradedOf(line, sold)
-  return RETURN_DISPOSITIONS.filter((disposition) => disposition !== 'REMAKE').map((disposition) => ({
+  return RETURN_DISPOSITIONS.filter((disposition) => disposition !== 'REMAKE' || remake !== undefined).map((disposition) => ({
     disposition,
     outcomes: OUTCOMES_BY_DISPOSITION[disposition].map((outcome) => {
       const held = decisionProblems({ disposition, goodsOutcome: outcome }, { received: line.receivedQuantity, value, ...(graded ?? {}) }).find((problem) => problem.path === 'goodsOutcome')
-      return { outcome, held: held?.message ?? null }
+      return { outcome, held: (disposition === 'REMAKE' ? (remake?.refusal ?? null) : null) ?? held?.message ?? null }
     }),
     defaultCredit: asMoney('price', defaultCredit(disposition, value)),
   }))
@@ -209,6 +211,7 @@ export async function previewDecisions(caller: CommandCaller, returnId: string, 
   const { rma } = await officeReturn(caller, returnId, SALES_RETURNS_DECIDE)
   return caller.withClient(async (client) => {
     const planned = await planDecisions(client, rma, body)
+    const remakes = await remakeChoicesOf(client, planned.map((entry) => entry.line)) // B-W2b-368
     return {
       ok: planned.every((entry) => entry.problems.length === 0) && DECIDING_STATUSES.includes(rma.status as ReturnStatus),
       problems: [...(DECIDING_STATUSES.includes(rma.status as ReturnStatus) ? [] : [{ path: 'status', message: `Return ${rma.number} is ${rma.status.toLowerCase()}: lines are decided once goods arrived, before it closes.` }]), ...planned.flatMap((entry) => entry.problems)],
@@ -227,7 +230,7 @@ export async function previewDecisions(caller: CommandCaller, returnId: string, 
           followUp: followUpOf(entry.disposition, entry.creditAmount),
           effect: effectWords(decision, entry.place?.code ?? null),
           effectWithAmount: asMoney('price', effectWithAmount(decision, entry.place?.code ?? null, amountText(entry.creditAmount, currency))),
-          options: optionsOf(entry.line, entry.sold, entry.value),
+          options: optionsOf(entry.line, entry.sold, entry.value, remakes.get(entry.line.id)),
           problems: entry.problems,
         }
       }),

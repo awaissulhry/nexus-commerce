@@ -3,7 +3,7 @@
 import { useMemo } from 'react'
 import Link from 'next/link'
 import { Trash2 } from 'lucide-react'
-import { Banner, ChangeReview, EmptyState, Field, KeyValue, Menu, OrderedList } from '@nexus/ui/components'
+import { Banner, ChangeReview, EmptyState, Field, KeyValue, Menu } from '@nexus/ui/components'
 import type { ColDef, ICellRendererParams } from '@nexus/ui/grid'
 import { Button, Checkbox, Input, Select, Tag } from '@nexus/ui/primitives'
 import { ActionConfirm, DateField, JobProgress, Modal, Textarea } from '../../../../lib/i18n/ds-parts'
@@ -17,6 +17,7 @@ import type { ColumnKey, ShowAnswer } from '../api'
 import { changeSides, checkWords, COLUMN_KEYS, columnsHeld, confirmHeld, correctHeld, delimiterKey, formatChoices, formatWords, meaningOf, monthWords, placeOf, recordHref, sendHeld, withKey, type ColumnDraft, type PayrollCan } from '../model'
 import type { CancelDialog, ColumnsDialog, ConfirmDialog, CorrectDialog, ExportDialogActions, ExportDialogs, PayrollActions, PayrollModel, SendDialog, ShowDialog } from '../view-model'
 import { dayWords, LayoutWarning, SectionLoading, ToConfirm, usePayrollWords, useSaid, type PayrollWords } from './parts'
+import { OrderedList } from '../../../../lib/i18n/ds-parts' // B-W2b-F41: the DS parts in the page's language
 
 // ---- "Show me" -------------------------------------------------------------------------------------------------------------------
 

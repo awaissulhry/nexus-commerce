@@ -1,0 +1,191 @@
+// Carriers, labels and dispatch (W2b-6, schema wave 48/57, B-W2b-367; features LOG-013, LOG-026, LOG-027, LOG-031,
+// LOG-033, LOG-035, LOG-038, LOG-041, LOG-042, LOG-048, LOG-049, LOG-053, LOG-058, LOG-122; design warehouse.shipping
+// "Carrier connection" (W2b own carrier contracts), "Test mode"): what the dispatch desk keeps beyond W1. Rule 1: the
+// dispatch desk books carriers every day. Sendcloud stays the only carrier connection (W1, Owner answer Q20: the
+// factory company's own account; FAKE until it exists); an account number is a secret, sealed in a SecretValue
+// (integration.prisma), never stored or shown in plain text.
+//
+//   CarrierAccount    our own contract with a carrier (LOG-033): a company's account number with the carrier (sealed),
+//                     for every site of the company or one site, and "use only our rates" (labels for that carrier are
+//                     bought on this contract, never at the aggregator's rates); switched off, never deleted. One live
+//                     contract per company, site (or every site) and carrier.
+//   PickupRequest     a pickup booked with a carrier (LOG-048): the site, the carrier, when the goods are ready, how many
+//                     parcels and pallets, the address, the weekdays it repeats on (none: once), REQUESTED → CONFIRMED |
+//                     FAILED | CANCELLED, the carrier's (or Sendcloud's) reference and, when it failed, why in words: a
+//                     failure stays visible on the request. Booked through Sendcloud where the carrier offers it, else
+//                     by phone (the note says with whom). Never deleted.
+//   DispatchManifest  the day's sheet of a site for one carrier (LOG-049): the shipments handed over that day
+//                     (Shipment.manifestId), for the driver to sign; closed once, with when, by whom and the sheet as
+//                     closed (its PDF), then frozen with its shipments. One per site, carrier and day. Never deleted.
+//
+// Beside them (each file's own lines): the customer's account with its carrier, its default service and who the carrier
+// bills (parties.prisma Party, LOG-038); a site's test mode with when it went live and who said so, and the value above
+// which a parcel is insured (shipping.prisma ShippingSettings, LOG-035, LOG-042); a shipment's express service, who pays
+// the duties and paperless trade (LOG-041), a manual carrier's tracking number typed by hand, who collected for the
+// customer with the plate and the signature (LOG-053, LOG-122) and its day sheet (LOG-049); a parcel's declared and
+// insured values (LOG-042); a printer's mode DIRECT, RELAY or PDF (LOG-026) and a print job that prints an earlier one
+// again with why (LOG-027) (print.prisma); NumberKind PROFORMA (numbering.prisma) and the generated documents PROFORMA,
+// MANIFEST, SHIPPING_MARKS and SHIPMENT_PACK (gendocs.prisma; LOG-058, LOG-049, LOG-013, LOG-031).
+//
+// apps/factory-api's modules/shipping writes these tables (B-W2b-390 test mode and own transport, B-W2b-391 labels,
+// reprints, the shipment pack and the proforma, B-W2b-395 pickups, the day's manifest and the customer's collection,
+// B-W2b-400 carrier contracts and services), always through command(); the hand-written …_carriers_w2b_guards migration
+// holds their rules for every login, the owner included. Anything that would book a carrier by itself stays on the FAKE
+// Sendcloud account and behind the site's test mode (on by default).
+//
+// Who sees what (ownership/carriers.json): the office reads and writes. The floor (the packing bench and the dock) reads its
+// own site's pickups and day sheets, never a carrier contract. Portal and link sessions read none of them.
+
+/// Who the carrier bills for a party's shipments (LOG-038).
+enum FreightBilling {
+  /// We pay, on our own contract or at the aggregator's rates (the default).
+  SENDER
+  /// The customer pays, on its own account with the carrier (porto assegnato).
+  COLLECT
+  /// Another party pays, on its account with the carrier (a brand paying for its dealer).
+  THIRD_PARTY
+}
+
+/// Who pays the duties and taxes of an export (LOG-041; DAP or DDP).
+enum DutyPayer {
+  /// We pay them (DDP).
+  SENDER
+  /// The receiver pays them on delivery (DAP).
+  RECEIVER
+}
+
+/// How a print job reaches a printer (LOG-026), beside the relay a printer names.
+enum PrinterMode {
+  /// ZPL straight from the station's browser to a label printer it can reach; no desktop agent.
+  DIRECT
+  /// Through the site's print relay (W0; FAKE until the Owner chooses one).
+  RELAY
+  /// The browser prints a PDF (a download).
+  PDF
+}
+
+/// Where a pickup request stands (LOG-048).
+enum PickupStatus {
+  /// Asked of the carrier (through Sendcloud, or by phone); no answer yet.
+  REQUESTED
+  /// The carrier said yes.
+  CONFIRMED
+  /// The carrier said no, or did not come: why is in errorWords. Final: a new try is a new request.
+  FAILED
+  /// We called it off. Final.
+  CANCELLED
+}
+
+/// Our own contract with a carrier (LOG-033; design warehouse.shipping "W2b own carrier contracts"): the company's account
+/// number with the carrier (sealed: a SecretValue of purpose `shipping.carrier_account`, never shown again once saved),
+/// for one site of the company or every site, and whether labels for that carrier are bought only on it. Switched off
+/// (active false), never deleted; one live contract per company, site (or every site) and carrier.
+model CarrierAccount {
+  id                    String   @id @db.Uuid
+  tenantId              String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company whose contract it is. Never changes.
+  companyId             String   @db.Uuid
+  /// The site of the company it is for; null: every site of the company. Never changes.
+  siteId                String?  @db.Uuid
+  /// The carrier, as ShippingSettings.defaultCarrierCode and Shipment.carrierCode name it ("brt"): 1 to 40 characters, no
+  /// spaces. Never changes.
+  carrierCode           String
+  /// The account number, sealed (purpose `shipping.carrier_account`); required while it is live; null: removed with the
+  /// contract switched off.
+  accountNumberSecretId String?  @db.Uuid
+  /// "Use only our rates": labels for this carrier from this company (or site) are bought on this contract only, never at
+  /// the aggregator's rates.
+  ownRatesOnly          Boolean  @default(false)
+  /// False: switched off (labels are no longer bought on it).
+  active                Boolean  @default(true)
+  version               Int      @default(1)
+  createdAt             DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById           String?  @db.Uuid
+
+  company             Company      @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and companyId.
+  site                Site?        @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  accountNumberSecret SecretValue? @relation("CarrierAccountNumber", fields: [tenantId, accountNumberSecretId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // One sealed number per contract (a secret is never shared).
+  @@unique([tenantId, accountNumberSecretId])
+  // A company's contracts by carrier (the label purchase, the settings page).
+  @@index([tenantId, companyId, carrierCode])
+}
+
+/// A pickup booked with a carrier (LOG-048; B-W2b-395): the site, the carrier, when the goods are ready, how many parcels
+/// and pallets, the address, the weekdays it repeats on (none: a one-off), where it stands, the carrier's (or
+/// Sendcloud's) reference, why it failed and a note (a pickup booked by phone: with whom). What was asked never changes
+/// (a change is a new request); FAILED and CANCELLED are final. Never deleted.
+model PickupRequest {
+  id                String         @id @db.Uuid
+  tenantId          String         @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The site's company, and the site the goods are collected from. Never change.
+  companyId         String         @db.Uuid
+  siteId            String         @db.Uuid
+  /// The carrier ("brt"): 1 to 40 characters, no spaces.
+  carrierCode       String
+  /// When the goods are ready to be collected (the first time, for a recurring pickup).
+  readyAt           DateTime       @db.Timestamptz(3)
+  /// Parcels and pallets to collect, each 0 to 9999, at least one of either.
+  parcels           Int
+  pallets           Int
+  /// Where to collect them, as sent: { name, line1, line2?, postalCode, city, province?, country, phone?, email? } (the
+  /// shape of ShippingSettings.senderAddress; country ISO 3166-1 alpha-2).
+  address           Json
+  /// The weekdays it repeats on, each once; empty: a one-off.
+  repeatWeekdays    IsoWeekday[]   @default([])
+  /// REQUESTED → CONFIRMED | FAILED | CANCELLED; CONFIRMED → FAILED (the driver did not come) | CANCELLED.
+  status            PickupStatus   @default(REQUESTED)
+  /// The carrier's (or Sendcloud's) reference of the pickup, 1 to 100 characters on one line; set once, never changed.
+  providerReference String?
+  /// Why it failed, in words for a person (1 to 2000 characters): exactly when FAILED.
+  errorWords        String?
+  /// A note of the office (1 to 2000 characters): a pickup booked by phone, with whom.
+  note              String?
+  version           Int            @default(1)
+  createdAt         DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById       String?        @db.Uuid
+
+  site Site @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // A site's pickups by day (the dock, the shipment queue).
+  @@index([tenantId, siteId, readyAt])
+}
+
+/// The day's sheet of a site for one carrier (LOG-049; B-W2b-395): the shipments handed over to that carrier that day
+/// name it (Shipment.manifestId), for the driver to sign. Open while the day runs; closed once, with when, by whom (null:
+/// the system) and the sheet as closed (a PDF, a file of the manifest; its versions are GeneratedDocument rows of kind
+/// MANIFEST), then frozen with its shipments. One per site, carrier and day. Never deleted.
+model DispatchManifest {
+  id          String    @id @db.Uuid
+  tenantId    String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The site's company, and the site. Never change.
+  companyId   String    @db.Uuid
+  siteId      String    @db.Uuid
+  /// The carrier ("brt"), as its shipments name it: 1 to 40 characters, no spaces. Never changes.
+  carrierCode String
+  /// The business day it is the sheet of (the site's zone). Never changes.
+  day         DateTime  @db.Date
+  /// When it was closed (not in the future) and the sheet as closed (a StoredFile of the manifest), both or neither, set
+  /// once; by whom (null: the system), only with them.
+  closedAt    DateTime? @db.Timestamptz(3)
+  closedById  String?   @db.Uuid
+  fileId      String?   @db.Uuid
+  version     Int       @default(1)
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?   @db.Uuid
+
+  site      Site        @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  file      StoredFile? @relation("DispatchManifestFile", fields: [tenantId, fileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // shipping.prisma: the shipments on the sheet.
+  shipments Shipment[]
+
+  @@unique([tenantId, siteId, carrierCode, day])
+  // The target of the shipments' reference: a manifest of the shipment's site.
+  @@unique([tenantId, siteId, id])
+}

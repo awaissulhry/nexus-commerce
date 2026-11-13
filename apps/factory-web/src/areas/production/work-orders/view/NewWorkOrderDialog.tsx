@@ -145,7 +145,7 @@ export function NewWorkOrderDialog({ model, can, actions }: { model: NewWorkOrde
             <legend className="fw-pr-h3">{t('new.lines')}</legend>
             {lines.map((line) => {
               const open = line.sizes.reduce((sum, size) => sum + size.open, 0)
-              const reason = line.madeToMeasure ? t('new.mtmLater') : open === 0 ? t('new.lineFull') : null
+              const reason = open === 0 ? t('new.lineFull') : null
               return (
                 <Checkbox
                   key={line.id}
@@ -156,7 +156,8 @@ export function NewWorkOrderDialog({ model, can, actions }: { model: NewWorkOrde
                     <span className="fw-pr-check-body">
                       <span>{t('new.line', { seq: line.seq, colourway: line.colourwayCode, style: line.styleCode })}</span>
                       <span className="fw-pr-cell-sub">
-                        {reason ?? line.sizes.filter((size) => size.open > 0).map((size) => t('new.sizeOpen', { size: size.size, open: size.open })).join(' · ')}
+                        {/* B-W2b-368: a made-to-measure unit is one piece of its base size, on its own work order. */}
+                        {reason ?? (line.madeToMeasure ? t('new.mtmUnit', { size: line.sizes[0]?.size ?? '—' }) : line.sizes.filter((size) => size.open > 0).map((size) => t('new.sizeOpen', { size: size.size, open: size.open })).join(' · '))}
                       </span>
                     </span>
                   }

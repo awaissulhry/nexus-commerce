@@ -4,7 +4,6 @@ import { useEffect, useRef, type ReactNode } from 'react'
 import Link from 'next/link'
 import { AlertTriangle, Ban, CalendarCheck, CheckCheck, CircleCheck, ExternalLink, MoreHorizontal, Pause, Pencil, Play, RotateCcw, Undo2, X } from 'lucide-react'
 import { Banner, Card, Field, KeyValue, Menu, type TabItem } from '@nexus/ui/components'
-import { Lightbox } from '@nexus/ui/patterns'
 import { Button, Select, Spinner, Tag, Input } from '@nexus/ui/primitives'
 import { Modal, Textarea } from '../../../../../lib/i18n/ds-parts'
 import { formatDate, formatDateTime } from '../../../../../lib/i18n/format'
@@ -21,6 +20,7 @@ import { JOB_TABS, type JobRecordActions, type JobRecordModel } from '../../view
 import { CloseForm } from '../../view/CloseForm'
 import { HandBackDialog } from '../../view/HandBackDialog'
 import { LeadConfirmPanel, LockPanel, PhotosTab } from './DepthParts'
+import { Lightbox } from '../../../../../lib/i18n/ds-parts' // B-W2b-F41: the DS parts in the page's language
 
 export type { JobRecordActions, JobRecordModel } from '../../view-model'
 
