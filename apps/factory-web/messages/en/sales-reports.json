@@ -1,0 +1,386 @@
+{
+  "common": {
+    "loading": "Reading…",
+    "retry": "Try again",
+    "pieces_one": "{count} piece",
+    "pieces_other": "{count} pieces",
+    "noPrice": "Amounts: shown only with the price permission.",
+    "incomplete": "More records than one report reads: the first 5,000 are counted.",
+    "mixed": "In several currencies: each is shown, never added.",
+    "moreGroups_one": "{count} more group is counted in the totals.",
+    "moreGroups_other": "{count} more groups are counted in the totals.",
+    "ordersOutside": "Orders are not in your role",
+    "ordersOutsideBody": "This panel counts sales orders: it needs the right to see them."
+  },
+  "problem": {
+    "read": "The report could not be read. Try again in a moment.",
+    "forbidden": "This report is not in your role.",
+    "offline": "No answer from the server: you may be offline.",
+    "gone": "This company is not there any more."
+  },
+  "noAccess": {
+    "title": "Sales reports are not in your role",
+    "body": "Ask an administrator for the sales reports permission."
+  },
+  "band": {
+    "label": "Sales reports",
+    "reading": "Reading the figures…",
+    "arrange": "Arrange",
+    "print": "Print",
+    "more": "More actions",
+    "csv": {
+      "intake": "Export order intake (CSV)",
+      "backlog": "Export the backlog (CSV)",
+      "returns": "Export the return lines (CSV)"
+    },
+    "csvHeld": "Wait until the panel has been read.",
+    "dashboard": "Save as dashboard (Home)",
+    "dashboardHeld": "Dashboards on Home come later: the panels cannot be saved there yet.",
+    "keys": "Keyboard shortcuts"
+  },
+  "live": {
+    "connecting": "Connecting",
+    "live": "Live",
+    "offline": "Offline: figures may be old"
+  },
+  "scope": {
+    "label": "Company and period",
+    "allCompanies": "Every company you work in",
+    "period": "Orders booked, quotes and returns from {from} to {to}; the backlog is now.",
+    "wholeCompany": "Sales reports cover the whole company (orders are not kept per site).",
+    "noPrice": "Without the price permission the figures are pieces and counts."
+  },
+  "section": {
+    "strip": "Headline",
+    "intake": "Order intake",
+    "backlog": "Backlog by promise week",
+    "returns": "Return reasons"
+  },
+  "keys": {
+    "title": "Keyboard shortcuts",
+    "arrange": "Arrange the panels",
+    "print": "Open the print view",
+    "bar": "Open what a focused bar, week or cell counts",
+    "nextBar": "Next or previous week or month in the dialog",
+    "help": "This list"
+  },
+  "time": {
+    "minutes": "{value} min",
+    "hours": "{value} h",
+    "days": "{value} working days",
+    "hoursElapsed": "{value} h",
+    "daysElapsed": "{value} days"
+  },
+  "strip": {
+    "hint": "The period in five numbers, from {from} to {to}.",
+    "failed": "The headline could not be read",
+    "notInRole": "Not in your role",
+    "intake": "Order intake",
+    "intakeHint": "Orders: {orders} · pieces booked: {pieces}",
+    "backlog": "Backlog",
+    "backlogHint": "Pieces to ship: {pieces} · late: {late}",
+    "winRate": "Quote win rate",
+    "winHint": "{accepted} of {decided} decided won · {expired} expired",
+    "winNone": "No quote was decided in the period",
+    "speed": "Median quote speed",
+    "speedHint_one": "From new to sent, {count} quote",
+    "speedHint_other": "From new to sent, {count} quotes",
+    "speedNone": "No quote was first sent in the period",
+    "returnRate": "Return rate",
+    "returnHint": "Pieces asked back: {pieces} of {shipped} shipped",
+    "returnNoShipped": "Pieces asked back: {pieces}; nothing shipped in the period",
+    "definition": "Intake, backlog and the return rate open what they count; the quote tiles open Sales › Quotes."
+  },
+  "intake": {
+    "hint": "Orders booked from {from} to {to}.",
+    "by": "Bars by",
+    "byOption": {
+      "week": "Week",
+      "month": "Month"
+    },
+    "split": "Split by",
+    "splitOption": {
+      "none": "No split",
+      "customer": "Customer",
+      "style": "Style",
+      "season": "Season"
+    },
+    "failed": "Order intake could not be read",
+    "axes": "Booked per week or month; orders booked",
+    "empty": "No orders in this period",
+    "emptyHint": "An order counts here on the day it is booked, once confirmed. Pick a longer period.",
+    "none": {
+      "none": "Every order",
+      "customer": "No customer",
+      "style": "No style",
+      "season": "No season"
+    },
+    "fees": "Fees and charges",
+    "others": "Others",
+    "kv": {
+      "orders": "Orders booked",
+      "ordersHint": "Confirmed in the period; never a cancelled one",
+      "pieces": "Pieces",
+      "piecesHint": "Garment lines; fee lines have none",
+      "value": "Value booked",
+      "valueHint": "Net, before VAT, at the orders' value now"
+    },
+    "chartLabel": "Order intake: {measure} per bar and orders booked",
+    "measure": {
+      "value": "Value booked",
+      "pieces": "Pieces booked"
+    },
+    "axis": {
+      "value": "Value ({currency})",
+      "pieces": "Pieces",
+      "orders": "Orders"
+    },
+    "series": {
+      "orders": "Orders booked"
+    },
+    "captionValue": "The bars are the net value booked (split into the largest groups when split); the line counts the orders booked.",
+    "captionPieces": "The bars are the pieces booked (split into the largest groups when split); the line counts the orders booked.",
+    "bucketsLabel": "Weeks or months: each opens its orders",
+    "bucketOrders_one": "{count} order",
+    "bucketOrders_other": "{count} orders",
+    "bucketOpen": "Open the orders booked in {bucket}",
+    "bucketNone": "Nothing booked",
+    "tableLabel": "Order intake by {split}",
+    "col": {
+      "customer": "Customer",
+      "style": "Style",
+      "season": "Season",
+      "none": "Orders",
+      "orders": "Orders",
+      "pieces": "Pieces",
+      "value": "Value",
+      "share": "Share"
+    },
+    "groupOpen": "Open the orders of {name}",
+    "definition": "Booked = confirmed: an order waiting for a yes counts once confirmed, on its order date; a cancelled order and a return's replacement never count. An order split off another counts on the day its first order was booked.",
+    "styleNote": "By style an order counts once in each style it holds; its pieces and value are the style's lines."
+  },
+  "backlog": {
+    "hint": "Confirmed and not shipped, on {today}: every open size at its promise now.",
+    "by": "Table by",
+    "byOption": {
+      "customer": "Customer",
+      "style": "Style"
+    },
+    "failed": "The backlog could not be read",
+    "axes": "Open pieces per promise week; value or orders",
+    "empty": "Nothing waits to be shipped",
+    "emptyHint": "Every confirmed order has shipped, or none is open.",
+    "earlierShort": "Earlier",
+    "laterShort": "Later",
+    "noneShort": "None",
+    "earlier": "Promised by {day}",
+    "later": "Promised from {day}",
+    "none": "No promise",
+    "kv": {
+      "pieces": "Open pieces",
+      "piecesHint": "Orders: {orders} · lines: {lines}",
+      "late": "Late",
+      "lateHint": "Pieces whose promise is before today",
+      "noneLate": "Nothing is late",
+      "weeks": "Promise weeks",
+      "weeksHint": "Weeks with pieces promised",
+      "value": "Open value",
+      "valueHint": "The open pieces' share of each line's net value"
+    },
+    "chartLabel": "Backlog: open pieces per promise week, late pieces apart",
+    "series": {
+      "pieces": "Open pieces",
+      "late": "Late",
+      "due": "Due",
+      "value": "Open value",
+      "orders": "Orders"
+    },
+    "axis": {
+      "pieces": "Pieces",
+      "value": "Value ({currency})",
+      "orders": "Orders"
+    },
+    "caption": "Late pieces (a promise before today) are red. A week before this one holds only late pieces.",
+    "weeksLabel": "Promise weeks: each opens its open sizes",
+    "weekOpen": "Open the sizes promised in {week}",
+    "thisWeek": "This week",
+    "lateTag": "Late",
+    "ofThemLate_one": "{count} late",
+    "ofThemLate_other": "{count} late",
+    "weekNone": "Nothing promised",
+    "tableLabel": "Backlog by {by}",
+    "col": {
+      "customer": "Customer",
+      "style": "Style",
+      "total": "Total",
+      "value": "Open value",
+      "week": "Promise week"
+    },
+    "horizon": {
+      "late": "Late",
+      "thisWeek": "This week",
+      "next4": "Next 4 weeks",
+      "later": "Later",
+      "none": "No promise"
+    },
+    "groupOpen": "Open the open sizes of {name}",
+    "cellOpen": "Open the sizes of {name}: {horizon}",
+    "definition": "The open orders (confirmed, in production, ready, partly shipped): each size ordered less what shipped, a line closed short left out, at the promise now (the promise history, else the date typed on the line or order). Promise dates are planning's; this report never changes them."
+  },
+  "returns": {
+    "hint": "Return lines asked for from {from} to {to}.",
+    "also": "Also by",
+    "alsoOption": {
+      "style": "Style",
+      "size": "Size",
+      "colour": "Colour",
+      "customer": "Customer"
+    },
+    "failed": "Return reasons could not be read",
+    "axes": "Pieces by reason; style by size",
+    "outside": "Returns are not in your role",
+    "outsideBody": "This panel counts customer returns: it needs the right to see them.",
+    "empty": "No returns in this period",
+    "emptyHint": "A return counts on the day it was asked for; turned down and cancelled ones never count.",
+    "unknown": "Not known",
+    "noSize": "No size",
+    "kv": {
+      "pieces": "Pieces asked back",
+      "piecesHint": "Returns: {returns} · lines: {lines}",
+      "rate": "Return rate",
+      "rateOutside": "Shipments are counted with the right to see orders",
+      "rateHint": "Of {shipped} pieces shipped in the period",
+      "reasons": "Reasons given",
+      "top": "Most often: {reason}",
+      "credited": "Credited",
+      "creditedHint": "Credits decided so far, net"
+    },
+    "byReason": "By reason",
+    "barSub": "Returns: {returns} · lines: {lines}",
+    "noGroups": "Reasons are shown one by one: reason groups are not kept yet.",
+    "alsoTitle": {
+      "style": "By style",
+      "size": "By size",
+      "colour": "By colour",
+      "customer": "By customer"
+    },
+    "heatTitle": "Most returned styles by size",
+    "heatNone": "Nothing came back",
+    "heatCellNone": "{style}, size {size}: nothing asked back",
+    "heatCell": "{style}, size {size}: {count} pieces asked back",
+    "definition": "Each return line counts the pieces asked back, with the customer's reason (the return reason list of Sales settings). The style, colour and size are the order line's it names.",
+    "col": {
+      "returns": "Returns"
+    },
+    "printRate": "Return rate {rate} of {shipped} pieces shipped."
+  },
+  "drill": {
+    "first": "This is the first one.",
+    "last": "This is the last one.",
+    "noSteps": "No next one: this opens a whole group or period.",
+    "previous": "Previous",
+    "next": "Next",
+    "export": "Export (CSV)",
+    "exportHeld": "Nothing to export.",
+    "openList": {
+      "intake": "Open Orders",
+      "backlog": "Open Orders",
+      "returns": "Open Returns & repairs"
+    },
+    "count": "Rows",
+    "countHint": {
+      "intake": "Orders booked",
+      "backlog": "Open sizes",
+      "returns": "Return lines"
+    },
+    "list": "The list",
+    "listName": {
+      "intake": "Sales › Orders",
+      "backlog": "Sales › Orders",
+      "returns": "Sales › Returns & repairs"
+    },
+    "listHint": {
+      "intake": "Every order, searched by the customer when this is one customer's: the list takes no period, style or season.",
+      "backlog": "The open orders, searched by the customer when this is one customer's: the list takes no promise week.",
+      "returns": "Every return, searched by the customer when this is one customer's: the list takes no reason or period."
+    },
+    "empty": "Nothing here",
+    "emptyHint": "No record makes this number.",
+    "more": "The first {shown} of {count} rows are shown; the file has them all.",
+    "keys": "J / K open the next and previous one.",
+    "title": {
+      "intake": "Orders behind this bar",
+      "backlog": "Open sizes behind this bar",
+      "returns": "Return lines behind this bar"
+    },
+    "wholePeriod": "From {from} to {to}",
+    "allBacklog": "The whole backlog",
+    "splitOff": "Split off on {day}",
+    "lineOf": "{number} line {seq}",
+    "madeToMeasure": "Made to measure",
+    "promiseRecord": "From the promise history",
+    "size": "Size {size}",
+    "notDecided": "Not decided",
+    "col": {
+      "order": "Order",
+      "customer": "Customer",
+      "bookedOn": "Booked on",
+      "season": "Season",
+      "pieces": "Pieces",
+      "value": "Value",
+      "orderLine": "Order line",
+      "style": "Style",
+      "size": "Size",
+      "open": "Open",
+      "promise": "Promise",
+      "returnLine": "Return line",
+      "requestedOn": "Asked on",
+      "reason": "Reason",
+      "credited": "Credited",
+      "return": "Return",
+      "line": "Line",
+      "colour": "Colour"
+    }
+  },
+  "print": {
+    "title": "Sales reports",
+    "period": "Period",
+    "intake": "Order intake",
+    "backlog": "Backlog",
+    "backlogOn": "on {day}",
+    "held": "Wait until every part has been read.",
+    "back": "Back to the report",
+    "failed": "A part of the report could not be read",
+    "total": "Total"
+  },
+  "speed": {
+    "title": "Quote speed",
+    "hint": "How fast we answer and how often we win, this month.",
+    "failed": "Quote speed could not be read",
+    "tile": {
+      "answer": "Median time from new to sent",
+      "decision": "Median time from sent to decision",
+      "winRate": "Win rate (accepted ÷ decided)",
+      "won": "Value won"
+    },
+    "answerHint_one": "{count} quote first sent this month",
+    "answerHint_other": "{count} quotes first sent this month",
+    "answerNone": "No quote first sent this month",
+    "decisionHint_one": "{count} quote accepted or declined",
+    "decisionHint_other": "{count} quotes accepted or declined",
+    "decisionNone": "No quote decided this month",
+    "winHint": "{accepted} of {decided} decided · {expired} expired, not counted",
+    "winNone": "No quote decided this month",
+    "wonHint_one": "{count} quote accepted, net",
+    "wonHint_other": "{count} quotes accepted, net",
+    "wonMixed_one": "{count} quote accepted, in several currencies",
+    "wonMixed_other": "{count} quotes accepted, in several currencies",
+    "definition": "New = when the inquiry came in (or the quote was made), in working time on the company's calendar; decided = accepted or declined by the customer.",
+    "opens": "Each tile opens Sales reports for this month.",
+    "noReports": "Sales reports are not in your role.",
+    "loading": "Reading…",
+    "retry": "Try again",
+    "incomplete": "More quotes than one report reads: the first 5,000 are counted."
+  }
+}

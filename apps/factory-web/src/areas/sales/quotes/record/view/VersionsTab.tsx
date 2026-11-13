@@ -1,5 +1,6 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import { Download } from 'lucide-react'
 import { Banner, Card, EmptyState, SummaryTable } from '@nexus/ui/components'
 import { Button, Pill, Spinner } from '@nexus/ui/primitives'
@@ -14,7 +15,7 @@ import type { QuoteRecordActions, QuoteRecordViewModel } from '../record-model'
  * and when, its totals (price grain), what changed, the decision, its PDF. "Make version N" from a sent quote copies the
  * lines into a new draft; the sent one stays valid until the new one is sent.
  */
-export function VersionsTab({ quote, model, actions }: { quote: QuoteDetail; model: QuoteRecordViewModel; actions?: QuoteRecordActions }) {
+export function VersionsTab({ quote, model, actions, depth }: { quote: QuoteDetail; model: QuoteRecordViewModel; actions?: QuoteRecordActions; /** B-W2b-316: the versions in the list frame, two selected → Compare (replaces the table). */ depth?: ReactNode }) {
   const t = useT('sales')
   const locale = useLocale()
   const { versions } = model
@@ -68,11 +69,13 @@ export function VersionsTab({ quote, model, actions }: { quote: QuoteDetail; mod
   }))
   return (
     <div className="fw-q-stack">
-      <Card>
-        <div className="fw-q-table">
-          <SummaryTable label={t('versions.tableLabel')} columns={columns} rows={rows} density="roomy" stackOnPhone />
-        </div>
-      </Card>
+      {depth ?? (
+        <Card>
+          <div className="fw-q-table">
+            <SummaryTable label={t('versions.tableLabel')} columns={columns} rows={rows} density="roomy" stackOnPhone />
+          </div>
+        </Card>
+      )}
       {quote.current.status === 'SENT' && (
         <Card padded>
           <p className="fw-q-hint">{t('versions.reviseNote', { revision: quote.currentRevision, next: quote.currentRevision + 1 })}</p>

@@ -28,6 +28,10 @@ import { libraryContract, numbersContract, reportAboutContract, reportResultsCon
 import { myNumbers } from './reports/numbers'
 import { loadReports } from './reports/registry'
 import { library, reportAbout, reportResults, reportSchedule, type ResultsQuery } from './reports/run'
+// B-W2b-348: Sales reports (sales-reports/): the headline, the order intake, the backlog by promise week, the return reasons,
+// quote speed (Sales › Quotes).
+import { backlogContract, headlineContract, intakeContract, quoteSpeedContract, returnsContract } from './sales-reports/contract'
+import { backlogAnswer, headlineAnswer, intakeAnswer, quoteSpeedAnswer, returnsAnswer } from './sales-reports/reads'
 
 /**
  * Home › Today (B-W1-52; ANA-037; A2 SCR-029 "Today", SCR-031 W1 "Overview"): the needs-attention list computed from the
@@ -71,4 +75,11 @@ export default defineRoutes('insights', manifest, async (app) => {
   app.get('/reports/:key', { schema: reportAboutContract }, async (request) => reportAbout(request, request.params.key))
   app.get('/reports/:key/results', { schema: reportResultsContract }, async (request) => reportResults(request, request.params.key, request.query as ResultsQuery))
   app.get('/reports/:key/schedule', { schema: reportScheduleContract }, async (request) => reportSchedule(request, request.params.key))
+
+  // B-W2b-348 (SAL-105, SAL-106, SAL-458; design sales.reports SCR-250 and Sales › Quotes sec quotes.speed): read only, office.
+  app.get('/sales/reports/headline', { schema: headlineContract }, async (request) => headlineAnswer(request, request.query))
+  app.get('/sales/reports/intake', { schema: intakeContract }, async (request) => intakeAnswer(request, request.query))
+  app.get('/sales/reports/backlog', { schema: backlogContract }, async (request) => backlogAnswer(request, request.query))
+  app.get('/sales/reports/returns', { schema: returnsContract }, async (request) => returnsAnswer(request, request.query))
+  app.get('/sales/reports/quote-speed', { schema: quoteSpeedContract }, async (request) => quoteSpeedAnswer(request, request.query))
 })

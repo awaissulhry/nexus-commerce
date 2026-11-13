@@ -1,0 +1,218 @@
+/*
+ * The quote record's W2b parts (B-W2b-316) LAYOUT: the Warnings list, the Blocks | Table bar, the composer's "Also", the
+ * line drawer and its delivery schedule, the review forms, Target price, the terms parts, the compare and the deposit's
+ * pay-online row. Controls are the design system's; this file places them with semantic tokens only.
+ */
+.fw-qd-head,
+.fw-qd-viewbar,
+.fw-qd-also,
+.fw-qd-actions,
+.fw-qd-pair,
+.fw-qd-counts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-qd-head {
+  justify-content: space-between;
+}
+
+.fw-qd-head .fw-q-h2,
+.fw-qd-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-qd-grow {
+  flex: 1 1 auto;
+}
+
+.fw-qd-warnlist,
+.fw-qd-problems,
+.fw-qd-deliveries {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-qd-warn {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--nds-space-8);
+  padding-block: var(--nds-space-6);
+  border-top: 1px solid var(--nds-border);
+}
+
+.fw-qd-warn:first-child {
+  border-top: 0;
+}
+
+.fw-qd-warn-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-qd-warn-go {
+  white-space: nowrap;
+  color: var(--nds-text-link);
+}
+
+.fw-qd-also {
+  border-top: 1px solid var(--nds-border);
+  padding-top: var(--nds-space-8);
+}
+
+.fw-qd-rowlink {
+  all: unset;
+  cursor: pointer;
+  color: var(--nds-text-link);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-qd-rowlink:focus-visible {
+  box-shadow: var(--nds-focus-ring);
+  outline: 2px solid rgb(var(--nds-focus-rgb));
+  outline-offset: 2px;
+}
+
+/* The line drawer (docked beside the record, its own scroll). */
+.fw-qd-drawer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-qd-drawer-part {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-qd-drawer-grid {
+  overflow-x: auto;
+  min-width: 0;
+}
+
+.fw-qd-drawer-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  width: 100%;
+}
+
+.fw-qd-keys {
+  display: inline-flex;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.fw-qd-delivery {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  padding: var(--nds-space-8);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+}
+
+.fw-qd-delivery-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+}
+
+.fw-qd-delivery-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-qd-delivery-sizes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: var(--nds-space-6);
+}
+
+/* The forms above a review's table. */
+.fw-qd-lead {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+.fw-qd-totals {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--nds-space-8);
+}
+
+.fw-qd-paste textarea,
+textarea.fw-qd-paste {
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-sm);
+}
+
+/* Target price. */
+.fw-qd-goal-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  align-items: end;
+  gap: var(--nds-space-10);
+}
+
+/* Terms & delivery parts inside W1's cards. */
+.fw-qd-terms-part {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  margin-top: var(--nds-space-8);
+  padding-top: var(--nds-space-10);
+  border-top: 1px solid var(--nds-border);
+  min-width: 0;
+}
+
+.fw-qd-pair {
+  align-items: end;
+}
+
+.fw-qd-compare-part {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-qd-pay {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin-top: var(--nds-space-8);
+}
+
+@media (max-width: 719px) {
+  .fw-qd-warn {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .fw-qd-warn-go {
+    grid-column: 2;
+  }
+}

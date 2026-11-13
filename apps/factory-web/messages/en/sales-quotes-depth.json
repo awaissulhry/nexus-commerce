@@ -1,0 +1,843 @@
+{
+  "block": {
+    "fill": "Fill by curve…",
+    "openLine": "Open line {colour}"
+  },
+  "bulk": {
+    "problem": {
+      "EMPTY": "{line}: no piece would be left: a line keeps at least one.",
+      "GRID": "{line}: the grid refuses a size (not offered or above the most a size takes).",
+      "LINE": "{line}: this line cannot change this way.",
+      "SCHEDULE": "{line}: its delivery schedule would no longer fit: change the schedule first (Open line)."
+    }
+  },
+  "common": {
+    "dismiss": "Dismiss",
+    "loading": "Reading…",
+    "retry": "Try again",
+    "working": "Working…"
+  },
+  "compare": {
+    "field": {
+      "acceptanceMode": "Acceptance",
+      "adjustmentReason": "Reason",
+      "currency": "Currency",
+      "deliveries": "Delivery schedule",
+      "deposit": "Deposit",
+      "description": "Text",
+      "discountPct": "Discount %",
+      "firmOffer": "Firm offer",
+      "incoterm": "Incoterm",
+      "language": "Language",
+      "listUnitPrice": "List price",
+      "marginPct": "Margin %",
+      "net": "Net",
+      "note": "Note",
+      "options": "Options",
+      "paymentTerms": "Payment terms",
+      "promiseDate": "Promise date",
+      "quantity": "Times",
+      "revision": "Revision",
+      "section": "Section",
+      "seq": "Place",
+      "shipComplete": "Ship complete",
+      "sizePrices": "Price by size",
+      "terms": "Terms",
+      "termsVersion": "Terms version",
+      "unitPrice": "Unit price",
+      "validUntil": "Valid until"
+    },
+    "from": "From",
+    "held": {
+      "notDraft": "Only a draft takes a change note: make version {next} first.",
+      "reading": "Wait for the compare.",
+      "same": "Nothing differs."
+    },
+    "noPrices": "Prices are not in your role: the compare shows pieces and terms.",
+    "noteDone": "In the change note",
+    "noteSaved": "The draft’s What changed now holds this difference.",
+    "option": "Version {n} · {status}",
+    "pickTwo": "Pick two different versions to compare.",
+    "reading": "Comparing…",
+    "same": "The two versions are the same.",
+    "section": {
+      "lines": "Lines",
+      "margin": "Margin",
+      "prices": "Prices",
+      "terms": "Terms & delivery"
+    },
+    "sentOn": "sent {date}",
+    "swap": "Swap the two versions",
+    "title": "Compare versions",
+    "to": "To",
+    "total": {
+      "deposit": "Deposit",
+      "gross": "Gross",
+      "lines": "Lines",
+      "marginPct": "Margin %",
+      "net": "Net",
+      "pieces": "Pieces",
+      "vat": "VAT"
+    },
+    "unchanged": "The same in both: {sections}.",
+    "useNote": "Use as change note",
+    "version": "Version {n}",
+    "yes": "Yes"
+  },
+  "composer": {
+    "also": "Also:",
+    "fromInquiry": "From inquiry {number}",
+    "paste": "Paste lines"
+  },
+  "curve": {
+    "bulk": {
+      "archive_one": "Archive 1",
+      "archive_other": "Archive {count}",
+      "restore_one": "Restore 1",
+      "restore_other": "Restore {count}"
+    },
+    "col": {
+      "company": "Company",
+      "name": "Curve",
+      "status": "Status",
+      "total": "Total"
+    },
+    "company": "Company",
+    "count_one": "1 curve",
+    "count_other": "{count} curves",
+    "dialog": {
+      "edit": "Size curve · {name}",
+      "new": "New size curve"
+    },
+    "done": {
+      "archived_one": "1 curve archived.",
+      "archived_other": "{count} curves archived.",
+      "created": "Curve {name} made.",
+      "restored_one": "1 curve restored.",
+      "restored_other": "{count} curves restored.",
+      "saved": "Curve {name} saved."
+    },
+    "empty": "No size curve yet",
+    "emptyBody": "A curve spreads a total over the sizes of a scale: 50 20 % · 52 40 % · 54 40 %.",
+    "emptyHere": "No curve here",
+    "failed": "Couldn't read the size curves.",
+    "held": {
+      "archived": "Archived: restore it to change it.",
+      "right": "Your role cannot keep size curves."
+    },
+    "how": "On a quote: a style block’s ⋯ › Fill by curve, type the total, the sizes stay editable.",
+    "keys": {
+      "new": "New curve"
+    },
+    "name": "Name",
+    "new": "New curve",
+    "pickScale": "Pick a scale",
+    "problem": {
+      "name": "Give it a name.",
+      "nameLong": "A name of at most {max} characters.",
+      "none": "Give at least one size a share.",
+      "scale": "Pick its size scale.",
+      "share": "Size {size}: a percent up to 100 with at most 4 decimals.",
+      "total": "The shares total {total} %: a curve totals exactly 100 %."
+    },
+    "save": "Save curve",
+    "scale": "Size scale",
+    "scaleHint": "Its sizes are the curve’s.",
+    "scaleKept": "A curve keeps its scale.",
+    "scaleOption": "{code} · {name}",
+    "scalesFailed": "Couldn't read the size scales.",
+    "shareOf": "{size} %",
+    "shares": "Percent per size",
+    "sub": "Saved percent curves for Fill by curve on a quote’s lines; a curve totals exactly 100 %.",
+    "title": "Size curves",
+    "total": "Total {total}",
+    "totalHint": "Save waits until the total is exactly 100 %.",
+    "totalOk": "Exactly 100 %: it can be saved.",
+    "totalUnknown": "Total: a share is not a number"
+  },
+  "drawer": {
+    "addDelivery": "Add delivery",
+    "allAtPromise": "No schedule: every piece goes at the promise date ({date}).",
+    "allAtPromiseNone": "No schedule: every piece goes at the promise date (not set yet).",
+    "allScheduled": "Every piece is scheduled.",
+    "certAll": "Every size is covered by a valid certificate.",
+    "certRefused_one": "1 size without a valid certificate: {sizes}.",
+    "certRefused_other": "{count} sizes without a valid certificate: {sizes}.",
+    "close": "Close the line",
+    "colourway": "Colourway",
+    "customerNote": "Note for the customer",
+    "date": "Date",
+    "deliveryN": "Delivery {n}",
+    "description": "Text on the PDF",
+    "discard": "Discard",
+    "feeNoSchedule": "A fee has no delivery.",
+    "held": {
+      "first": "This is the first line.",
+      "fix_one": "Fix 1 thing first.",
+      "fix_other": "Fix {count} things first.",
+      "last": "This is the last line.",
+      "many": "A line has at most 24 deliveries.",
+      "noChange": "Nothing changed yet.",
+      "oneUnit": "A made-to-measure unit has one delivery."
+    },
+    "next": "Next line",
+    "note": "Note",
+    "notes": "Notes",
+    "pieces": "Pieces",
+    "piecesOf": "Pieces of delivery {n}",
+    "position": "Line {index} of {count} · {kind}",
+    "previous": "Previous line",
+    "problem": {
+      "empty": "Delivery {n}: type its pieces.",
+      "fee": "A fee has no delivery schedule.",
+      "many": "At most {max} deliveries per line.",
+      "noDate": "Delivery {n}: pick a date.",
+      "note": "Delivery {n}: the note is longer than {max} characters.",
+      "oneUnit": "A made-to-measure unit has one delivery.",
+      "over": "Size {size}: more scheduled than the {pieces} pieces of the line.",
+      "past": "Delivery {n}: the date has passed.",
+      "pieces": "Delivery {n}, size {size}: whole pieces only.",
+      "size": "Size {size} is not on this line.",
+      "twice": "Delivery {n}: the same date twice."
+    },
+    "problems": "What to fix",
+    "removeDelivery": "Remove delivery {n}",
+    "rest": "The rest at the promise date ({date}): {sizes}.",
+    "restNoDate": "The rest at the promise date (not set yet): {sizes}.",
+    "save": "Save schedule",
+    "schedule": "Delivery schedule",
+    "scheduleFailed": "Couldn't read the delivery schedule.",
+    "scheduleHint": "Deliveries by date with their pieces per size; what is not scheduled goes at the promise date.",
+    "sizeOf": "{size} (of {max})",
+    "sizes": "Sizes and price",
+    "style": "Style",
+    "theUnit": "the unit",
+    "title": "Line {seq} · {style} · {colour}"
+  },
+  "fill": {
+    "curve": "Size curve",
+    "curveHint": "The curves of this style’s size scale (Sales › Sales settings).",
+    "editable": "The sizes stay editable after the fill.",
+    "noCurves": "No curve for this size scale yet: add one in Sales › Sales settings.",
+    "pick": "Pick a curve",
+    "totalOf": "Total pieces · {line}"
+  },
+  "from": {
+    "allSet_one": "Its line is ready: nothing to pick.",
+    "allSet_other": "Its {count} lines are ready: nothing to pick.",
+    "colourAtUse": "chosen at use",
+    "colourway": "Colourway",
+    "doneBodyInquiry": "{number} was made from inquiry {from}; the inquiry is marked quoted.",
+    "doneBody_one": "{number} was made from {from} with 1 line.",
+    "doneBody_other": "{number} was made from {from} with {count} lines.",
+    "doneTitle": "{number} is ready",
+    "held": {
+      "inquiry": "Pick an inquiry.",
+      "noInquiries": "Your role does not see inquiries.",
+      "noInquiryManage": "Your role cannot make a quote from an inquiry.",
+      "pieces": "Line {line}, size {size}: whole pieces only.",
+      "reading": "Wait for the template.",
+      "template": "Pick a template.",
+      "templateFailed": "The template could not be read: pick it again."
+    },
+    "inquiriesFound_one": "1 open inquiry",
+    "inquiriesFound_other": "{count} open inquiries",
+    "inquiryLine": "{pieces} pieces · received {received}",
+    "left": {
+      "archived": "Line {line}: the style is archived.",
+      "feeNet": "Line {line}: the fee is net and this customer buys VAT included: add it on the quote.",
+      "feeNoPrice": "Line {line}: a fee without a price: add it on the quote with its price.",
+      "mtm": "Line {line}: a made-to-measure unit is quoted on its own.",
+      "noColourway": "Line {line}: no colourway was picked: add it on the quote.",
+      "noSizes": "Line {line}: no pieces were typed: add them on the quote.",
+      "noStyle": "Line {line}: no style is named.",
+      "noneOffered": "Line {line}: none of its sizes is offered in this colourway.",
+      "other": "Line {line}: not added.",
+      "privateLabel": "Line {line}: another customer’s private-label style.",
+      "scope": "Line {line}: the style is not released for this colourway or size.",
+      "size": "Line {line}: size {size} is not offered in its colourway.",
+      "skipped": "Line {line}: left out as you chose."
+    },
+    "leftTitle_one": "1 thing was left out",
+    "leftTitle_other": "{count} things were left out",
+    "lineOf": "Line {line} · {style} · {colour}",
+    "noInquiries": "This customer has no open inquiry.",
+    "noTemplates": "No template yet: make one in Sales › Sales settings.",
+    "noneOfferedYet": "This colourway is not made in any size yet: what you type is left out and said after the make.",
+    "open": "Open {number}",
+    "openLines_one": "1 line is chosen when the quote is made: pick its colourway or pieces, or leave it out.",
+    "openLines_other": "{count} lines are chosen when the quote is made: pick their colourway or pieces, or leave them out.",
+    "option": {
+      "inquiry": "Inquiry",
+      "template": "Template"
+    },
+    "optionBody": {
+      "inquiry": "One of this customer’s open inquiries: its lines and the brand’s tech pack.",
+      "template": "A saved start: lines in sections, validity, terms, acceptance mode."
+    },
+    "pickColourway": "Pick a colourway",
+    "piecesOf": "Pieces per size of line {line}",
+    "skip": "Leave out",
+    "templateHint": "This company’s templates and every company’s.",
+    "templateLine": "{lines} lines · used {used} times",
+    "templateSearch": "Find a template",
+    "templatesFound_one": "1 template",
+    "templatesFound_other": "{count} templates",
+    "unfilled": "A line you do not fill is left out and said after the quote is made.",
+    "wanted": "Wanted by {date}",
+    "warnings_one": "1 note on the price basis: check the lines.",
+    "warnings_other": "{count} notes on the price basis: check the lines."
+  },
+  "goal": {
+    "apply_one": "Apply to 1 line",
+    "apply_other": "Apply to {count} lines",
+    "approval": "Approval",
+    "col": {
+      "discount": "Discount",
+      "from": "Now",
+      "line": "Line",
+      "margin": "Margin %",
+      "to": "At the target"
+    },
+    "discountNeeded": "Discount needed",
+    "discountValue": "{pct} off the start",
+    "fromTo": "{from} → {to}",
+    "gap": "Left by rounding",
+    "gross": "Gross total after",
+    "held": {
+      "belowCost": "Below cost — an approver must allow it: price the line by hand.",
+      "noLines": "Add a line with a size run first.",
+      "noPlan": "No plan for this target yet.",
+      "price": "Type the target unit price.",
+      "reading": "Wait for what it takes.",
+      "refused": "A rule refuses this price.",
+      "total": "Type the target total."
+    },
+    "heldTitle_one": "1 line is held",
+    "heldTitle_other": "{count} lines are held",
+    "inquiry": "The customer’s target in inquiry {number}: {price}.",
+    "intro": "Type the customer’s target and see what it takes before anything changes.",
+    "line": "Line",
+    "linesLabel": "Each line at the target",
+    "marginAmount": "Margin € after",
+    "marginPct": "Margin %",
+    "needsApproval": "Needs approval after this change",
+    "net": "Net total",
+    "noApproval": "No approval needed",
+    "noneUnder": "None",
+    "of": "Target for",
+    "ofLine": "A line",
+    "ofTotal": "The quote total",
+    "raiseValue": "{pct} above the start",
+    "reading": "Working out what it takes…",
+    "reason": "Written with the reason \"Target price\".",
+    "title": "Target price",
+    "totalGross": "Target total (VAT included)",
+    "totalNet": "Target total (net)",
+    "underFloor": "Lines under the floor",
+    "unitGross": "Target unit price (VAT included)",
+    "unitNet": "Target unit price (net)",
+    "useInquiry": "Use it",
+    "valueHint": "In {currency}."
+  },
+  "held": {
+    "noPrice": "Your role does not see prices.",
+    "sizeRunOnly": "Pick lines with a size run: a fee or a made-to-measure unit has no sizes."
+  },
+  "incoterm": {
+    "CFR": "CFR · Cost and Freight",
+    "CIF": "CIF · Cost, Insurance and Freight",
+    "CIP": "CIP · Carriage and Insurance Paid To",
+    "CPT": "CPT · Carriage Paid To",
+    "DAP": "DAP · Delivered at Place",
+    "DDP": "DDP · Delivered Duty Paid",
+    "DPU": "DPU · Delivered at Place Unloaded",
+    "EXW": "EXW · Ex Works",
+    "FAS": "FAS · Free Alongside Ship",
+    "FCA": "FCA · Free Carrier",
+    "FOB": "FOB · Free On Board"
+  },
+  "keys": {
+    "toggleView": "Switch Blocks and Table"
+  },
+  "notice": {
+    "acceptanceSaved": "Acceptance mode saved.",
+    "deliverySaved": "Delivery terms saved.",
+    "goalApplied_one": "Target price applied to 1 line, with the reason \"Target price\".",
+    "goalApplied_other": "Target price applied to {count} lines, with the reason \"Target price\".",
+    "scheduleSaved": "Delivery schedule of line {line} saved."
+  },
+  "page": {
+    "more": "More",
+    "promise": "Promise dates",
+    "promiseHeld": "Your role does not open Planning › Promise dates.",
+    "promiseHint": "Opens Planning › Promise dates",
+    "templates": "Quote templates",
+    "templatesHint": "Opens Sales › Sales settings"
+  },
+  "paste": {
+    "area": "Cells from a sheet",
+    "areaHint": "The first row names Style, Colourway, an optional Price and the size codes; one row per style and colour.",
+    "columns": "Columns found: style, colourway, sizes {sizes} · {rows} rows.",
+    "columnsPrice": "A price column too.",
+    "count": {
+      "added_one": "1 new line",
+      "added_other": "{count} new lines",
+      "cells_one": "1 cell left out",
+      "cells_other": "{count} cells left out",
+      "changed_one": "1 line changed",
+      "changed_other": "{count} lines changed",
+      "skipped_one": "1 row left out",
+      "skipped_other": "{count} rows left out"
+    },
+    "held": {
+      "empty": "Paste the cells first."
+    },
+    "left": {
+      "archived": "Row {row}: the style is archived.",
+      "cell": "Row {row}, size {size}: not whole pieces.",
+      "colourway": "Row {row}: not an active colourway of the style.",
+      "notOffered": "Row {row}: size {size} is not offered in this colourway.",
+      "notSize": "Row {row}: {size} is not a size of the style.",
+      "nothing": "Row {row}: no piece can land.",
+      "other": "Row {row}: it cannot land.",
+      "priceBad": "Row {row}: the price cannot be read: the list price is taken.",
+      "priceKept": "Row {row}: the line is already on the quote and keeps its price (change it with Target price).",
+      "schedule": "Row {row}: the line’s delivery schedule would no longer fit.",
+      "style": "Row {row}: not a style this company sells.",
+      "twice": "Row {row}: this style and colour are pasted twice."
+    },
+    "leftTitle_one": "1 thing could not land",
+    "leftTitle_other": "{count} things could not land",
+    "notThere": "Not on the quote",
+    "price": {
+      "KEPT": "the line keeps its price",
+      "LIST": "the customer’s list price",
+      "NONE": "no price yet",
+      "TYPED": "the pasted price"
+    },
+    "problem": {
+      "colourway": "The first row names a Colourway column.",
+      "long": "At most {max} characters a paste.",
+      "rows": "Paste the column names and at least one row.",
+      "shape": "The first row cannot be read: Style, Colourway and the sizes.",
+      "sizes": "The other columns of the first row are the size codes.",
+      "style": "The first row names a Style column.",
+      "twice": "A size is a column twice."
+    },
+    "save": "Add {added} lines · change {changed}",
+    "summary": "Only this draft changes: a price lands on a new line only.",
+    "title": "Paste lines",
+    "what": {
+      "add": "New line",
+      "change": "Pieces per size"
+    },
+    "where": "Row {row} · {style} {colourway}"
+  },
+  "pay": {
+    "confirmBody": "It goes to {to}. An older page sent to that address stops working.",
+    "confirmBodyNoContact": "It goes to the customer’s invoices or orders contact. An older page sent to that address stops working.",
+    "confirmTitle": "Send the pay-online page?",
+    "failed": "The mail to {to} did not go: try again later (the page stays open until {until}).",
+    "held": {
+      "notOpen": "The deposit is no longer open.",
+      "right": "Finance sends it: it needs the right to record payments."
+    },
+    "hint": "Links › Pay online: bank transfer or card, mailed to the quote’s contact.",
+    "keep": "Not now",
+    "send": "Send the pay-online page",
+    "sendGo": "Send",
+    "sending": "Sending…",
+    "sent": "Sent to {to}; the page stays open until {until}."
+  },
+  "review": {
+    "allOn": "All on {date}",
+    "discount": "{pct} discount needed",
+    "held": {
+      "BELOW_COST": "{line}: below cost — an approver must allow it: price this line by hand on Price & margin.",
+      "REFUSED": "{line}: a rule refuses this price.",
+      "curve": "Pick a curve.",
+      "date": "Pick a date.",
+      "delta": "Type the pieces to add (minus to take away).",
+      "discount": "Type a discount from 0 to 100 %.",
+      "past": "The date has passed.",
+      "pct": "Type a percent (minus to lower).",
+      "pieces": "Type whole pieces.",
+      "price": "Type a unit price.",
+      "totals": "Type the total pieces of each line."
+    },
+    "lead": {
+      "delivery": "Delivery date",
+      "deliveryHint": "Each line gets one delivery with all its pieces on this date.",
+      "discount": "Discount off each line’s start (%)",
+      "discountHint": "From the list price, the suggested price or the price typed first.",
+      "price": "New unit price",
+      "priceHint": "Written with the reason \"Target price\"; the start of each line is kept.",
+      "sizeHint": {
+        "DELTA": "Never below 0: a size at 0 leaves the line.",
+        "FILL_EMPTY": "Only the sizes the colourway offers and the line does not have yet.",
+        "PERCENT": "Rounded to whole pieces on the sizes that have pieces; -10 lowers by 10 %.",
+        "SET": "Every size the line takes gets these pieces."
+      },
+      "sizeKind": "How the sizes change",
+      "sizeValue": {
+        "DELTA": "Pieces per size",
+        "FILL_EMPTY": "Pieces per empty size",
+        "PERCENT": "Percent",
+        "SET": "Pieces per size"
+      }
+    },
+    "leftOutSizes": "left out: {sizes}",
+    "margin": "margin {pct}",
+    "pieces": "pieces {from} → {to}",
+    "raise": "{pct} above the start",
+    "remainder": "the rest on {size} ({pieces})",
+    "removed": "Removed",
+    "result": {
+      "added": "Added",
+      "gone": "No longer on the quote",
+      "removed": "Removed",
+      "saved": "Saved"
+    },
+    "save": {
+      "delivery_one": "Set 1 delivery date",
+      "delivery_other": "Set {count} delivery dates",
+      "discount_one": "Set 1 discount",
+      "discount_other": "Set {count} discounts",
+      "fill_one": "Fill 1 line",
+      "fill_other": "Fill {count} lines",
+      "price_one": "Set 1 price",
+      "price_other": "Set {count} prices",
+      "remove_one": "Remove 1 line",
+      "remove_other": "Remove {count} lines",
+      "sizes_one": "Change 1 line",
+      "sizes_other": "Change {count} lines"
+    },
+    "sizeKind": {
+      "DELTA": "Add or take pieces",
+      "FILL_EMPTY": "Fill the empty sizes",
+      "PERCENT": "By a percent",
+      "SET": "Set the pieces"
+    },
+    "summary": "Only this draft changes: nothing is sent to the customer.",
+    "title": {
+      "delivery_one": "Set the delivery date of 1 line",
+      "delivery_other": "Set the delivery date of {count} lines",
+      "discount_one": "Set the discount of 1 line",
+      "discount_other": "Set the discount of {count} lines",
+      "fill_one": "Fill 1 line by a curve",
+      "fill_other": "Fill {count} lines by a curve",
+      "price_one": "Set the price of 1 line",
+      "price_other": "Set the price of {count} lines",
+      "remove_one": "Remove 1 line",
+      "remove_other": "Remove {count} lines",
+      "sizes_one": "Change the sizes of 1 line",
+      "sizes_other": "Change the sizes of {count} lines"
+    },
+    "verb": {
+      "removed": "removed",
+      "saved": "saved"
+    },
+    "what": {
+      "delivery": "Delivery",
+      "line": "Line",
+      "sizes": "Pieces per size",
+      "unitPrice": "Unit price"
+    }
+  },
+  "table": {
+    "atPromise": "At the promise date",
+    "bulk": {
+      "delivery_one": "Set delivery date for 1 line",
+      "delivery_other": "Set delivery date for {count} lines",
+      "discount_one": "Set discount for 1 line",
+      "discount_other": "Set discount for {count} lines",
+      "price_one": "Set price for 1 line",
+      "price_other": "Set price for {count} lines",
+      "remove_one": "Remove 1 line",
+      "remove_other": "Remove {count} lines",
+      "sizes_one": "Change sizes of 1 line",
+      "sizes_other": "Change sizes of {count} lines"
+    },
+    "col": {
+      "colourway": "Colourway",
+      "delivery": "Delivery",
+      "discount": "Discount",
+      "kind": "Kind",
+      "quantity": "Pieces",
+      "seq": "Seq",
+      "sizes": "Sizes",
+      "style": "Style",
+      "vat": "VAT",
+      "warnings": "Warnings"
+    },
+    "count_one": "1 line",
+    "count_other": "{count} lines",
+    "deliveryMany": "{count} deliveries from {date}",
+    "deliveryOne": "{date}",
+    "kind": {
+      "FEE": "Fee",
+      "MADE_TO_MEASURE": "Made to measure",
+      "SIZE_GRID": "Size run"
+    },
+    "label": "Quote lines",
+    "openLine": "Open line {line}",
+    "warnings_one": "1 warning",
+    "warnings_other": "{count} warnings"
+  },
+  "terms": {
+    "acceptance": {
+      "SIGN": "Sign",
+      "SIGNBody": "The customer accepts by signing on the link.",
+      "SIGN_AND_PAY": "Sign and pay the deposit",
+      "SIGN_AND_PAYBody": "The customer signs, then pays the deposit online (bank transfer or card).",
+      "label": "Acceptance mode",
+      "needsDeposit": "Set a deposit first (Payment and deposit)."
+    },
+    "capacity": "Check capacity",
+    "capacityHeld": "Your role does not open Planning › Promise dates.",
+    "capacityHint": "Planning › Promise dates works out a date for these lines.",
+    "col": {
+      "deliveries": "Deliveries",
+      "edit": "Edit",
+      "line": "Line",
+      "rest": "At the promise date"
+    },
+    "customerIncoterm": "This customer usually buys {code}.",
+    "discard": "Discard",
+    "failed": "Couldn't read the delivery terms.",
+    "held": {
+      "noChange": "Nothing changed yet."
+    },
+    "incoterm": "Incoterm",
+    "incotermHint": "Incoterms 2020: who pays and bears the risk up to where.",
+    "noIncoterm": "None",
+    "openLine": "Open line",
+    "place": "Place",
+    "placeHint": "The named place of the Incoterm (one line).",
+    "problem": {
+      "incoterm": "Pick an Incoterm of the list.",
+      "place": "An Incoterm needs its place.",
+      "placeAlone": "A place needs its Incoterm.",
+      "placeLong": "The place is one line of at most {max} characters."
+    },
+    "restNone": "Nothing: all scheduled",
+    "saveDelivery": "Save delivery terms",
+    "saving": "Saving…",
+    "schedule": "Delivery schedule per line",
+    "scheduleAllNoDate": "No line has a schedule: everything goes at the promise date (not set yet).",
+    "scheduleAllPromise": "No line has a schedule: everything goes at the promise date ({date}).",
+    "scheduleNoLines": "Add lines first.",
+    "scheduleSome_one": "1 line has its own schedule; edit it in the line.",
+    "scheduleSome_other": "{count} lines have their own schedule; edit each in its line.",
+    "seaOnly": "sea and inland waterway",
+    "ship": "Shipping",
+    "shipAsReady": "Ship as ready",
+    "shipAsReadyBody": "What is ready leaves, the rest follows.",
+    "shipComplete": "Ship complete",
+    "shipCompleteBody": "Everything leaves together.",
+    "useCustomer": "Use {code}",
+    "validity": {
+      "CLOSED": "Closed",
+      "ENDED": "Ended: it expires tonight",
+      "ENDS_SOON_one": "Ends soon · 1 day left",
+      "ENDS_SOON_other": "Ends soon · {count} days left",
+      "EXPIRED": "Expired",
+      "LAST_DAY": "Last day today",
+      "NOT_SENT": "Not sent yet",
+      "OPEN_one": "Open · 1 day left",
+      "OPEN_other": "Open · {count} days left",
+      "expiredAt": "Expired at",
+      "label": "The offer",
+      "noReminder": "None (sent too close to the end, or no end date)",
+      "reminder": "Reminder to the customer",
+      "reminderOn": "On {date}, 3 days before the last day",
+      "reminderSent": "Sent {at}"
+    }
+  },
+  "tpl": {
+    "add": "Add the line",
+    "addLine": "Add a line",
+    "bulk": {
+      "archive_one": "Archive 1",
+      "archive_other": "Archive {count}",
+      "restore_one": "Restore 1",
+      "restore_other": "Restore {count}"
+    },
+    "col": {
+      "acceptance": "Acceptance",
+      "company": "Company",
+      "lines": "Lines",
+      "name": "Template",
+      "sections": "Sections",
+      "status": "Status",
+      "updated": "Changed",
+      "used": "Used"
+    },
+    "company": "Company",
+    "companyHint": "Every company: a quote of any company may start from it.",
+    "count_one": "1 template",
+    "count_other": "{count} templates",
+    "create": "Make template",
+    "deposit": "Deposit %",
+    "depositHint": "Empty: the customer’s or the settings’ deposit.",
+    "description": "Description",
+    "dialog": {
+      "edit": "Template · {name}",
+      "new": "New quote template"
+    },
+    "done": {
+      "archived_one": "1 template archived.",
+      "archived_other": "{count} templates archived.",
+      "created": "Template made.",
+      "partly": "{done} done, {failed} refused (changed meanwhile): the list is read again.",
+      "restored_one": "1 template restored.",
+      "restored_other": "{count} templates restored.",
+      "saved": "Template saved."
+    },
+    "down": "Move line {n} down",
+    "empty": "No template yet",
+    "emptyArchived": "No archived template",
+    "emptyBody": "Make one empty or from a quote you send often.",
+    "everyCompany": "Every company",
+    "failed": "Couldn't read the templates.",
+    "filter": {
+      "ACTIVE": "Active",
+      "ALL": "All",
+      "ARCHIVED": "Archived"
+    },
+    "firmOffer": "Firm offer",
+    "fromQuote": {
+      "every": "For every company (its styles must be of every company)",
+      "found_one": "1 quote",
+      "found_other": "{count} quotes",
+      "hint": "Type part of its number or the customer’s name.",
+      "line": "Version {revision} · {lines} lines · {units} pieces",
+      "none": "No quote found.",
+      "search": "Quote number",
+      "type": "Type to find the quote."
+    },
+    "held": {
+      "archived": "Archived: restore it to change it.",
+      "first": "Already the first line.",
+      "last": "Already the last line.",
+      "noChange": "Nothing changed yet.",
+      "noneActive": "None of the selected is active.",
+      "noneArchived": "None of the selected is archived.",
+      "pickQuote": "Pick the quote.",
+      "pickStyle": "Pick a style first.",
+      "right": "Your role cannot keep quote templates."
+    },
+    "keys": {
+      "new": "New template"
+    },
+    "language": "Language",
+    "lineCol": {
+      "actions": "Order",
+      "colourway": "Colourway",
+      "price": "Unit price",
+      "section": "Section",
+      "sizes": "Pieces per size",
+      "style": "Style"
+    },
+    "lines": "Lines",
+    "name": "Name",
+    "new": "New template",
+    "noLines": "No line yet: add the styles below.",
+    "noStyles": "No style found",
+    "otherStyle": "Another style",
+    "pickStyle": "Style found",
+    "piecesHint": "Pieces per size; leave every size empty to type them when the quote is made.",
+    "price": "Unit price",
+    "priceFromList": "from the price list",
+    "priceHint": "Empty: the customer’s price list prices it.",
+    "problem": {
+      "deposit": "A deposit from 0 to 100 %.",
+      "incoterm": "An Incoterm and its place go together.",
+      "lines": "At most {max} lines.",
+      "name": "Give it a name.",
+      "nameLong": "A name of at most {max} characters.",
+      "payNeedsDeposit": "Sign and pay the deposit needs a deposit.",
+      "pieces": "Line {n}: whole pieces only.",
+      "price": "Line {n}: the price cannot be read.",
+      "validity": "Validity from 1 to {max} days."
+    },
+    "readOnly": "Read only: your role can view templates, not change them.",
+    "remove": "Remove line {n}",
+    "save": "Save template",
+    "saveFromQuote": "Make template from the quote",
+    "section": "Section",
+    "sectionHint": "A heading on the quote (\"Jackets\"); optional.",
+    "sizesAtUse": "typed at use",
+    "start": {
+      "empty": "Empty",
+      "quote": "A quote"
+    },
+    "startBody": {
+      "empty": "Type its header and add its lines here.",
+      "quote": "A quote in template mode: its current version’s lines, sections and terms."
+    },
+    "startFrom": "Start from",
+    "status": {
+      "ACTIVE": "Active",
+      "ARCHIVED": "Archived"
+    },
+    "statusLabel": "Show",
+    "style": "Style",
+    "styleHint": "Type a style code or name.",
+    "stylesFound_one": "1 style: pick it",
+    "stylesFound_other": "{count} styles: pick one",
+    "sub": "Saved starts of a quote: lines in sections, validity, terms, acceptance mode. New quote › Start from: Template uses them.",
+    "termsVersion": "Terms version",
+    "title": "Quote templates",
+    "up": "Move line {n} up",
+    "validity": "Validity (days)",
+    "validityHint": "Empty: the sales settings’ days."
+  },
+  "versions": {
+    "compare": "Compare",
+    "compareLatest": "Compare {from} with {to}",
+    "compareThese": "Compare {from} and {to}",
+    "count_one": "1 version",
+    "count_other": "{count} versions",
+    "downloadOf": "Download the PDF of version {revision}",
+    "pickTwo": "Select exactly two versions."
+  },
+  "view": {
+    "blocks": "Blocks",
+    "blocksHint": "One card per style: colours × sizes.",
+    "label": "Show the lines as",
+    "table": "Table",
+    "tableHint": "Every line flat: select several to change them at once."
+  },
+  "warn": {
+    "code": {
+      "ACCOUNT_OVERDUE": "The customer has overdue invoices with this company: check with finance before you promise more.",
+      "other": "A rule asks to check this quote before it is sent."
+    },
+    "countBlocks_one": "1 stops the send",
+    "countBlocks_other": "{count} stop the send",
+    "countInfo_one": "1 to know",
+    "countInfo_other": "{count} to know",
+    "countWarnings_one": "1 to check",
+    "countWarnings_other": "{count} to check",
+    "failed": "Couldn't read the warnings.",
+    "feedsSend": "The send dialog checks the same rules.",
+    "fix": "Fix",
+    "lines_one": "Line {lines}",
+    "lines_other": "Lines {lines}",
+    "open": "Open",
+    "overdue": {
+      "days_one": "1 day late",
+      "days_other": "up to {count} days late",
+      "invoices_one": "1 invoice",
+      "invoices_other": "{count} invoices"
+    },
+    "severity": {
+      "BLOCKS": "Stops the send",
+      "INFO": "To know",
+      "WARNING": "Check"
+    },
+    "title": "Warnings"
+  }
+}
