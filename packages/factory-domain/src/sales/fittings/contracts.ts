@@ -146,6 +146,8 @@ export const appointmentView = output({
   may: output({ move: z.boolean(), close: z.boolean(), cancel: z.boolean(), invite: z.boolean(), ledTo: z.boolean(), result: z.boolean(), notes: z.boolean() }),
   /** Why the booked actions are not offered (closed, made-to-measure off, no right), or null. */
   why: z.string().nullable(),
+  /** B-W2b-F38: the fitting reminder switch of the appointment's company (Sales settings; off by default): false, no reminder goes. */
+  reminderEnabled: z.boolean(),
 })
 
 const warning = output({ path: z.string(), message: z.string() })
@@ -241,6 +243,8 @@ export const fittingsTabView = output({
   /** Made-to-measure has started for the garment type's template (GATE-MTM): nothing is booked or recorded while off. */
   started: z.boolean(),
   may: output({ book: z.boolean(), record: z.boolean() }),
+  /** B-W2b-F38: the fitting reminder switch of the company asked (`?companyId`, the screen's company); null: none asked. */
+  remindersEnabled: z.boolean().nullable(),
 })
 
 // ---- the remake order (SAL-353) ------------------------------------------------------------------------------------------------

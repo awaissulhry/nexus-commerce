@@ -11,6 +11,8 @@ import type { Reason, ReasonListView } from '../../_shared/reasons/api'
 import { ReasonListsView, type ReasonListsModel } from '../../_shared/reasons/view/ReasonListsView'
 import type { PolicyAnswer, SalesSettings, Series } from './api'
 import { policyDraftOf, quoteDraftOf, settingsCan } from './model'
+// B-W2b-F38: the reminder switches.
+import { remindersDraftOf } from './model'
 import { SalesSettingsView, type SalesSettingsModel } from './view/SalesSettingsView'
 
 /**
@@ -35,10 +37,12 @@ const ROLE_PERMISSIONS = {
 type RoleCase = keyof typeof ROLE_PERMISSIONS
 
 const SETTINGS: SalesSettings = {
-  tenant: { id: 'demo-tenant', companyId: null, marginFloorPct: '20', discountLimitPct: '15', defaultValidityDays: 30, defaultDepositPct: '30', version: 4, updatedAt: NOW },
-  company: { id: COMPANY_ID, companyId: COMPANY_ID, marginFloorPct: '22', discountLimitPct: '12', defaultValidityDays: 45, defaultDepositPct: '30', version: 7, updatedAt: NOW },
+  // B-W2b-F38: the group's reminders off (the default); this company switched the quote reminder on.
+  tenant: { id: 'demo-tenant', companyId: null, marginFloorPct: '20', discountLimitPct: '15', defaultValidityDays: 30, defaultDepositPct: '30', quoteRemindersEnabled: false, fittingRemindersEnabled: false, version: 4, updatedAt: NOW },
+  company: { id: COMPANY_ID, companyId: COMPANY_ID, marginFloorPct: '22', discountLimitPct: '12', defaultValidityDays: 45, defaultDepositPct: '30', quoteRemindersEnabled: true, fittingRemindersEnabled: false, version: 7, updatedAt: NOW },
   inForce: { marginFloorPct: '22', discountLimitPct: '12', defaultValidityDays: 45, defaultDepositPct: '30', source: 'COMPANY' },
   defaults: { marginFloorPct: '20', discountLimitPct: '15', defaultValidityDays: 30, defaultDepositPct: '30', source: 'DEFAULT' },
+  reminders: { quoteRemindersEnabled: true, fittingRemindersEnabled: false, source: 'COMPANY', canManage: true },
 }
 const POLICY: PolicyAnswer = {
   tenant: { id: 'demo-tenant', companyId: null, windowDays: 30, goodsDueDays: 15, freightPaidBy: 'BY_CAUSE', restockingFeePct: '10', conditions: 'Unworn, with labels and in the original bag (made-up).', version: 4, updatedAt: NOW },
@@ -90,7 +94,7 @@ function pageModel(role: RoleCase, over: Partial<SalesSettingsModel> = {}): Sale
 /** The API leaves the margin floor out for a reader without the margin grain. */
 function stripMargin(settings: SalesSettings): SalesSettings {
   const drop = <T extends { marginFloorPct?: string }>(row: T | null): T | null => (row ? { ...row, marginFloorPct: undefined } : null)
-  return { tenant: drop(settings.tenant), company: drop(settings.company), inForce: drop(settings.inForce)!, defaults: drop(settings.defaults)! }
+  return { tenant: drop(settings.tenant), company: drop(settings.company), inForce: drop(settings.inForce)!, defaults: drop(settings.defaults)!, /* B-W2b-F38 */ reminders: settings.reminders }
 }
 
 function SettingsDesign({ model }: { model: DesignModel }) {
@@ -113,7 +117,9 @@ function SettingsDesign({ model }: { model: DesignModel }) {
       reasons,
       actions: {
         onScope: (scope) => setPage((current) => ({ ...current, scope, series: scope === 'group' ? null : current.series })),
-        onEdit: (card) => setPage((current) => ({ ...current, edit: card && current.settings.value && current.policy.value ? { card, quote: quoteDraftOf(current.settings.value, current.scope), policy: policyDraftOf(current.policy.value, current.scope), busy: false, problem: null, showProblems: false } : null })),
+        onEdit: (card) => setPage((current) => ({ ...current, edit: card && current.settings.value && current.policy.value ? { card, quote: quoteDraftOf(current.settings.value, current.scope), policy: policyDraftOf(current.policy.value, current.scope), /* B-W2b-F38 */ reminders: remindersDraftOf(current.settings.value, current.scope), busy: false, problem: null, showProblems: false } : null })),
+        // B-W2b-F38: the reminder switches as toggled.
+        onRemindersDraft: (patch) => setPage((current) => (current.edit ? { ...current, edit: { ...current.edit, reminders: { ...current.edit.reminders, ...patch } } } : current)),
         onQuoteDraft: (patch) => setPage((current) => (current.edit ? { ...current, edit: { ...current.edit, quote: { ...current.edit.quote, ...patch } } } : current)),
         onPolicyDraft: (patch) => setPage((current) => (current.edit ? { ...current, edit: { ...current.edit, policy: { ...current.edit.policy, ...patch } } } : current)),
         onSave: () => setPage((current) => (current.edit ? { ...current, edit: { ...current.edit, showProblems: true } } : current)),
@@ -123,7 +129,7 @@ function SettingsDesign({ model }: { model: DesignModel }) {
   )
 }
 
-const editing = (card: 'approval' | 'quote' | 'policy', patch: Partial<NonNullable<SalesSettingsModel['edit']>> = {}): NonNullable<SalesSettingsModel['edit']> => ({ card, quote: quoteDraftOf(SETTINGS, 'company'), policy: policyDraftOf(POLICY, 'company'), busy: false, problem: null, showProblems: false, ...patch })
+const editing = (card: 'approval' | 'quote' | 'policy' | /* B-W2b-F38 */ 'reminders', patch: Partial<NonNullable<SalesSettingsModel['edit']>> = {}): NonNullable<SalesSettingsModel['edit']> => ({ card, quote: quoteDraftOf(SETTINGS, 'company'), policy: policyDraftOf(POLICY, 'company'), /* B-W2b-F38 */ reminders: remindersDraftOf(SETTINGS, 'company'), busy: false, problem: null, showProblems: false, ...patch })
 
 export const designScreen = defineDesignScreen<DesignModel>({
   screen: 'SCR-235',
@@ -139,7 +145,9 @@ export const designScreen = defineDesignScreen<DesignModel>({
     { id: 'edit-approval-step-up-cancelled', label: 'The code not given: nothing saved, said on the card', model: { role: 'finance', page: pageModel('finance', { edit: editing('approval', { quote: { ...quoteDraftOf(SETTINGS, 'company'), discountLimitPct: '25' }, problem: { key: 'stepUp.cancelled' } }) }) } },
     { id: 'edit-problems', label: 'Apply pressed with a wrong percent and validity', model: { role: 'finance', page: pageModel('finance', { edit: editing('quote', { quote: { ...quoteDraftOf(SETTINGS, 'company'), validityDays: '400', depositPct: '0' }, showProblems: true }) }) } },
     { id: 'edit-policy', label: 'Editing the return policy', model: { role: 'finance', page: pageModel('finance', { edit: editing('policy') }) } },
-    { id: 'follows-group', label: 'A company that follows the group’s policy (Give it its own settings)', model: { role: 'finance', page: pageModel('finance', { settings: { value: { ...SETTINGS, company: null, inForce: { ...SETTINGS.inForce, source: 'TENANT' } }, problem: null }, policy: { value: { ...POLICY, company: null, followsTenant: true, inForce: { windowDays: 30, goodsDueDays: 15, freightPaidBy: 'BY_CAUSE', restockingFeePct: '10', conditions: POLICY.tenant!.conditions } }, problem: null } }) } },
+    // B-W2b-F38: the automatic reminders switched on and off here (the fitting reminder turned on in the draft).
+    { id: 'edit-reminders', label: 'Editing the automatic reminders: each switch says what it sends, to whom and when', model: { role: 'finance', page: pageModel('finance', { edit: editing('reminders', { reminders: { quote: true, fitting: true } }) }) } },
+    { id: 'follows-group', label: 'A company that follows the group’s policy (Give it its own settings)', model: { role: 'finance', page: pageModel('finance', { settings: { value: { ...SETTINGS, company: null, inForce: { ...SETTINGS.inForce, source: 'TENANT' }, /* B-W2b-F38 */ reminders: { quoteRemindersEnabled: false, fittingRemindersEnabled: false, source: 'TENANT', canManage: true } }, problem: null }, policy: { value: { ...POLICY, company: null, followsTenant: true, inForce: { windowDays: 30, goodsDueDays: 15, freightPaidBy: 'BY_CAUSE', restockingFeePct: '10', conditions: POLICY.tenant!.conditions } }, problem: null } }) } },
     { id: 'sales', label: 'Sales: reads; changing is held with its reason', model: { role: 'sales', page: pageModel('sales') } },
     { id: 'read-only', label: 'Read-only: values as text with why; no margin floor without the margin right', model: { role: 'readOnly', page: pageModel('readOnly') } },
     { id: 'no-permission', label: 'No permission: which one and who grants it', model: { role: 'none', page: pageModel('none') } },

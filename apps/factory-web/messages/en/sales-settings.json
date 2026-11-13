@@ -29,7 +29,8 @@
     "approval": "Quote approval rules applied.",
     "own": "{code} has its own sales settings now.",
     "policy": "Return policy applied.",
-    "quote": "Quote defaults applied."
+    "quote": "Quote defaults applied.",
+    "reminders": "Automatic reminders applied."
   },
   "freight": {
     "BY_CAUSE": "By cause (us when the cause is ours)",
@@ -125,6 +126,20 @@
     "forbidden": "Your role may not change these settings.",
     "invalid": "Refused as it is: check the fields.",
     "stale": "Someone changed these settings in the meantime: they were read again."
+  },
+  "reminders": {
+    "title": "Automatic reminders",
+    "sub": "Mails that go to customers on their own, with nobody pressing Send. Each one is off until you switch it on.",
+    "quote": "Quote reminder",
+    "quoteWhat": "One mail to the customer, at the address the quote went to, 3 days before a sent quote’s last day, from the person who sent it: the quote’s number and its last day, no prices and no link. A quote still expires after its last day either way.",
+    "fitting": "Fitting reminder",
+    "fittingWhat": "One mail to the rider 24 hours before a booked fitting or visit, with the calendar invite: when and where. The invites, changes and cancellations you send go out either way.",
+    "on": "On",
+    "off": "Off: no reminder is sent",
+    "failed": "Couldn’t load the automatic reminders",
+    "follows": "This company follows the group’s automatic reminders",
+    "followsBody": "Change the group’s (The whole group), or give this company its own sales settings first: it then keeps the switches it followed until you change them.",
+    "later": "Switching one on reminds what is due from the next run on; nothing that was skipped while it was off is lost."
   },
   "rule": {
     "sentence": "A quote needs approval when its margin is under {margin} % or a line’s discount is over {discount} %.",

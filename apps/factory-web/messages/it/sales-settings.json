@@ -29,7 +29,8 @@
     "approval": "Regole di approvazione applicate.",
     "own": "{code} ora ha impostazioni vendite proprie.",
     "policy": "Politica dei resi applicata.",
-    "quote": "Valori predefiniti applicati."
+    "quote": "Valori predefiniti applicati.",
+    "reminders": "Promemoria automatici applicati."
   },
   "freight": {
     "BY_CAUSE": "Secondo la causa (noi quando è nostra)",
@@ -125,6 +126,20 @@
     "forbidden": "Il tuo ruolo non può cambiare queste impostazioni.",
     "invalid": "Rifiutato così com’è: controlla i campi.",
     "stale": "Qualcuno ha cambiato queste impostazioni nel frattempo: sono state rilette."
+  },
+  "reminders": {
+    "title": "Promemoria automatici",
+    "sub": "Mail che partono da sole verso i clienti, senza che nessuno prema Invia. Ognuna resta spenta finché non la accendi.",
+    "quote": "Promemoria del preventivo",
+    "quoteWhat": "Una mail al cliente, all’indirizzo a cui è andato il preventivo, 3 giorni prima dell’ultimo giorno di un preventivo inviato, da chi lo ha inviato: il numero del preventivo e il suo ultimo giorno, senza prezzi e senza link. Il preventivo scade comunque dopo il suo ultimo giorno.",
+    "fitting": "Promemoria della prova",
+    "fittingWhat": "Una mail al pilota 24 ore prima di una prova o di una visita fissata, con l’invito per il calendario: quando e dove. Gli inviti, le modifiche e le disdette che invii tu partono comunque.",
+    "on": "Acceso",
+    "off": "Spento: nessun promemoria viene inviato",
+    "failed": "Impossibile caricare i promemoria automatici",
+    "follows": "Questa società segue i promemoria automatici del gruppo",
+    "followsBody": "Cambia quelli del gruppo (Tutto il gruppo), oppure dai prima a questa società impostazioni vendite proprie: poi terrà gli interruttori che seguiva finché non li cambi.",
+    "later": "Quando ne accendi uno, dal giro successivo ricorda ciò che è in scadenza; nulla di ciò che è stato saltato mentre era spento va perso."
   },
   "rule": {
     "sentence": "Un preventivo richiede approvazione quando il margine è sotto il {margin} % o lo sconto di una riga supera il {discount} %.",

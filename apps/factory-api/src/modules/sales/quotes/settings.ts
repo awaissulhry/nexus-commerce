@@ -11,6 +11,9 @@ import { actorOf } from '../../../core/context'
 import { mayWrite } from '../../product/materials/store'
 import { rulesInForce, SALES_SETTINGS_COLUMNS, settingsRowsFor, type SalesSettingsRow } from './rules'
 import { officeContextOf } from './store'
+// B-W2b-F38: the reminder switches (quote reminder, fitting reminder) on the same row.
+import { remindersInForce } from '@nexus/factory-domain/sales/reminder-switches/rules'
+import { reminderSwitchesFor } from './reminder-switches'
 
 /**
  * The sales settings (B-W1-21; SAL-184, FIN-023; the design's Sales settings): the quote rules of a company, or the
@@ -29,6 +32,9 @@ const settingsView = (row: SalesSettingsRow) => ({
   discountLimitPct: decimalText(row.discountLimitPct.toString()),
   defaultValidityDays: row.defaultValidityDays,
   defaultDepositPct: row.defaultDepositPct === null ? null : decimalText(row.defaultDepositPct.toString()),
+  // B-W2b-F38: the row's reminder switches (off by default).
+  quoteRemindersEnabled: row.quoteRemindersEnabled,
+  fittingRemindersEnabled: row.fittingRemindersEnabled,
   version: row.version,
   updatedAt: toUtcIso(row.updatedAt),
 })
@@ -57,6 +63,8 @@ export async function getSalesSettings(caller: CommandCaller, query: { companyId
         company: company && settingsView(company),
         inForce: rulesView(rulesInForce(rows, companyId)),
         defaults: rulesView(QUOTE_RULE_DEFAULTS),
+        // B-W2b-F38: the reminder switches in force (its own row, else the tenant's, else off) and whether the caller may change them.
+        reminders: { ...remindersInForce(rows, companyId), canManage: mayWrite(actorOf(context), SALES_SETTINGS_MANAGE, companyId) },
       },
     }
   })
@@ -113,8 +121,11 @@ export async function saveSalesSettings(caller: CommandCaller, body: SaveSalesSe
       const row = existing ? await tx.salesSettings.findUniqueOrThrow({ where: { id }, select: SALES_SETTINGS_COLUMNS }) : null
       const before = row === null ? null : settingsView(row)
       const changed = before === null ? [...FIELDS] : FIELDS.filter((field) => String(before[field]) !== String(wanted[field]))
+      // B-W2b-F38: a company's first row keeps the reminder switches it followed (the tenant's, else off): giving it its own
+      // settings never switches a reminder on or off by itself.
+      const carried = row === null && companyId !== null ? await reminderSwitchesFor(tx, null) : null
       if (row === null) {
-        await tx.salesSettings.create({ data: { id, companyId, ...wanted, createdAt: now, updatedAt: now, createdById: context.actorId }, select: { id: true } })
+        await tx.salesSettings.create({ data: { id, companyId, ...wanted, ...(carried ? { quoteRemindersEnabled: carried.quoteRemindersEnabled, fittingRemindersEnabled: carried.fittingRemindersEnabled } : {}), createdAt: now, updatedAt: now, createdById: context.actorId }, select: { id: true } })
       } else if (changed.length > 0) {
         await tx.salesSettings.update({ where: { id }, data: { ...wanted, updatedAt: now }, select: { id: true } })
       }
@@ -133,4 +144,63 @@ export async function saveSalesSettings(caller: CommandCaller, body: SaveSalesSe
     throw error
   })
   return result
+}
+
+// ---- B-W2b-F38: the reminder switches ----------------------------------------------------------------------------------
+
+export interface SaveReminderSwitchesInput {
+  readonly companyId?: string | undefined
+  readonly quoteRemindersEnabled: boolean
+  readonly fittingRemindersEnabled: boolean
+  /** Required once the row exists (the edit-conflict guard); absent only when the tenant's row does not exist yet. */
+  readonly version?: number | undefined
+}
+
+const SWITCHES = ['quoteRemindersEnabled', 'fittingRemindersEnabled'] as const
+
+/**
+ * PUT /sales/settings/reminders (sales.settings.manage; B-W2b-F38, Owner 2026-11-13 option A): the two automatic reminder mails
+ * of a company, or of the tenant (a grant over every company) — the quote reminder 3 days before a sent quote's last day and
+ * the rider's reminder 24 hours before a BOOKED appointment, each on or off (off by default). ONE command on the row at its
+ * version (audit before/after, sales_settings.changed with the fields); no margin grain needed (only the two switches change).
+ * A company without its own row follows the tenant's switches and is refused in words (its row also holds its quote rules);
+ * the tenant's row is made with the quote defaults when it does not exist yet. Answers the settings read of that scope.
+ */
+export async function saveReminderSwitches(caller: CommandCaller, body: SaveReminderSwitchesInput, idempotencyKey?: string) {
+  const context = officeContextOf(caller)
+  const companyId = body.companyId ?? null
+  if (!mayWrite(actorOf(context), SALES_SETTINGS_MANAGE, companyId)) throw new ForbiddenError(companyId === null ? 'The tenant-wide sales settings are changed only by a role over every company.' : undefined)
+  if (companyId !== null) await assertCompany(caller, companyId)
+  const id = companyId ?? context.tenantId
+  const existing = await caller.withClient((client) => client.salesSettings.findUnique({ where: { id }, select: SALES_SETTINGS_COLUMNS }))
+  if (!existing && companyId !== null) {
+    throw new ValidationError('This company follows the tenant-wide sales settings: change the tenant’s reminders, or give the company its own sales settings first.', [{ path: 'body/companyId', message: 'No sales settings of its own.' }])
+  }
+  if (existing && body.version === undefined) throw new ConflictError('These sales settings exist: send their version to change them.')
+  if (!existing && body.version !== undefined) throw new ConflictError('These sales settings do not exist yet: save them without a version.')
+  const wanted = { quoteRemindersEnabled: body.quoteRemindersEnabled, fittingRemindersEnabled: body.fittingRemindersEnabled }
+  await command(
+    caller,
+    { name: 'sales.saveReminderSwitches', idempotencyKey, input: body, ...(existing ? { record: { type: 'SalesSettings', id, expectedVersion: body.version } } : {}) },
+    async (tools) => {
+      const { tx, now } = tools
+      const row = existing ? await tx.salesSettings.findUniqueOrThrow({ where: { id }, select: SALES_SETTINGS_COLUMNS }) : null
+      const before = row === null ? { quoteRemindersEnabled: false, fittingRemindersEnabled: false } : { quoteRemindersEnabled: row.quoteRemindersEnabled, fittingRemindersEnabled: row.fittingRemindersEnabled }
+      const changed = SWITCHES.filter((field) => before[field] !== wanted[field])
+      if (row === null) {
+        // The tenant's row with the quote defaults (the rules in force without a row), then the switches on it.
+        const defaults = QUOTE_RULE_DEFAULTS
+        await tx.salesSettings.create({ data: { id, companyId: null, marginFloorPct: defaults.marginFloorPct, discountLimitPct: defaults.discountLimitPct, defaultValidityDays: defaults.defaultValidityDays, defaultDepositPct: defaults.defaultDepositPct, ...wanted, createdAt: now, updatedAt: now, createdById: context.actorId }, select: { id: true } })
+      } else if (changed.length > 0) {
+        await tx.salesSettings.update({ where: { id }, data: { ...wanted, updatedAt: now }, select: { id: true } })
+      }
+      tools.audit({ recordType: 'SalesSettings', recordId: id, companyId, before, after: { companyId, ...wanted } })
+      if (changed.length > 0) tools.emit({ type: 'sales_settings.changed', subject: id, companyId, payload: { settingsId: id, fields: [...changed] } })
+      return null
+    },
+  ).catch((error: unknown) => {
+    if ((error as { code?: unknown } | null)?.code === 'P2002') throw new ConflictError('These sales settings were just saved by someone else: reload them.')
+    throw error
+  })
+  return getSalesSettings(caller, companyId === null ? {} : { companyId })
 }

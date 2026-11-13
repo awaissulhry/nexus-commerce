@@ -40,6 +40,6 @@ export const recordResultContract = defineContract({ body: resultBody, response:
 export const getResultContract = defineContract({ params: result, response: { 200: output({ result: resultView }) } })
 export const alterationContract = defineContract({ params: result, body: alterationBody, response: { 201: alteredView } })
 export const revisionContract = defineContract({ params: result, body: revisionBody, response: { 200: output({ result: resultView }) } })
-export const profileFittingsContract = defineContract({ params: input({ profileId: id() }), response: { 200: output({ fittings: fittingsTabView }) } })
+export const profileFittingsContract = defineContract({ params: input({ profileId: id() }), /* B-W2b-F38: the screen's company, for its reminder switch */ querystring: input({ companyId: id().optional() }), response: { 200: output({ fittings: fittingsTabView }) } })
 export const getRemakeContract = defineContract({ params: input({ returnId: id() }), response: { 200: output({ remake: remakeView }) } })
 export const remakeOrderContract = defineContract({ params: input({ returnId: id() }), body: remakeOrderBody, response: { 201: remadeView } })

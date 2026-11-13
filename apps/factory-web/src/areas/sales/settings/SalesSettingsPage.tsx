@@ -15,6 +15,9 @@ import { SizeCurvesSection } from './curves/CurvesSection'
 import { QuoteTemplatesSection } from './templates/TemplatesSection'
 // B-W2b-343: Quote approval rules › Margin floor % per role (B-W2b-330's API).
 import { MarginFloorsSection } from './floors/FloorsSection'
+// B-W2b-F38: the automatic reminder switches (their own save, no margin grain).
+import { saveReminders } from './api'
+import { remindersBody, remindersDraftOf } from './model'
 
 /**
  * `/w/<company>/sales/settings` (SCR-235): reads the sales settings and the return policy of the scope (this company, or
@@ -92,7 +95,7 @@ export function SalesSettingsPage() {
   const save = async () => {
     const current = edit
     if (!current || current.busy || !settings.value) return
-    const problems = current.card === 'policy' ? policyProblems(current.policy) : quoteProblems(current.quote, can.margin)
+    const problems = current.card === 'policy' ? policyProblems(current.policy) : /* B-W2b-F38 */ current.card === 'reminders' ? [] : quoteProblems(current.quote, can.margin)
     if (problems.length > 0) return setEdit({ ...current, showProblems: true })
     setEdit({ ...current, busy: true, problem: null })
     saving.current = true
@@ -100,6 +103,9 @@ export function SalesSettingsPage() {
       if (current.card === 'policy') {
         if (!policy.value) return
         await saveReturnPolicy(api, policyBody(current.policy, policy.value, scope, company?.id ?? ''))
+      } else if (current.card === 'reminders') {
+        // B-W2b-F38: the two switches at the row's version.
+        await saveReminders(api, remindersBody(current.reminders, settings.value, scope, company?.id ?? ''))
       } else {
         const body = quoteBody(current.quote, settings.value, scope, company?.id ?? '')
         await guard('stepUp.sentence', () => saveSalesSettings(api, body))
@@ -160,6 +166,8 @@ export function SalesSettingsPage() {
             card,
             quote: settings.value ? quoteDraftOf(settings.value, scope) : { marginFloorPct: '', discountLimitPct: '', validityDays: '', depositPct: '' },
             policy: policy.value ? policyDraftOf(policy.value, scope) : { windowDays: '', goodsDueDays: '', freightPaidBy: '', restockingFeePct: '', conditions: '' },
+            // B-W2b-F38: the reminder switches of the scope.
+            reminders: settings.value ? remindersDraftOf(settings.value, scope) : { quote: false, fitting: false },
             busy: false,
             problem: null,
             showProblems: false,
@@ -167,6 +175,8 @@ export function SalesSettingsPage() {
         },
         onQuoteDraft: (patch) => setEdit((open) => (open ? { ...open, quote: { ...open.quote, ...patch } } : open)),
         onPolicyDraft: (patch) => setEdit((open) => (open ? { ...open, policy: { ...open.policy, ...patch } } : open)),
+        // B-W2b-F38
+        onRemindersDraft: (patch) => setEdit((open) => (open ? { ...open, reminders: { ...open.reminders, ...patch } } : open)),
         onSave: () => void save(),
         onOwnSettings: () => void ownSettings(),
         onReload: () => void load(),

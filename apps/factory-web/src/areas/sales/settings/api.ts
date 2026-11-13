@@ -22,6 +22,9 @@ const settingsRow = z.object({
   discountLimitPct: z.string(),
   defaultValidityDays: z.number(),
   defaultDepositPct: z.string().nullable(),
+  // B-W2b-F38: the row's reminder switches.
+  quoteRemindersEnabled: z.boolean(),
+  fittingRemindersEnabled: z.boolean(),
   version: z.number(),
   updatedAt: z.string(),
 })
@@ -29,7 +32,11 @@ export type SettingsRow = z.infer<typeof settingsRow>
 const rules = z.object({ marginFloorPct: z.string().optional(), discountLimitPct: z.string(), defaultValidityDays: z.number(), defaultDepositPct: z.string().nullable(), source: z.enum(['DEFAULT', 'TENANT', 'COMPANY']) })
 export type QuoteRulesView = z.infer<typeof rules>
 
-const settingsSchema = z.object({ settings: z.object({ tenant: settingsRow.nullable(), company: settingsRow.nullable(), inForce: rules, defaults: rules }) })
+// B-W2b-F38: the reminder switches in force for the scope (its own row, else the group's, else off) and whether they may change here.
+const reminders = z.object({ quoteRemindersEnabled: z.boolean(), fittingRemindersEnabled: z.boolean(), source: z.enum(['DEFAULT', 'TENANT', 'COMPANY']), canManage: z.boolean() })
+export type RemindersView = z.infer<typeof reminders>
+
+const settingsSchema = z.object({ settings: z.object({ tenant: settingsRow.nullable(), company: settingsRow.nullable(), inForce: rules, defaults: rules, /* B-W2b-F38 */ reminders }) })
 export type SalesSettings = z.infer<typeof settingsSchema>['settings']
 
 export const getSalesSettings = (api: ApiClient, companyId: string | null, signal?: AbortSignal): Promise<SalesSettings> =>
@@ -45,6 +52,17 @@ export interface QuoteRulesBody {
 }
 
 export const saveSalesSettings = (api: ApiClient, body: QuoteRulesBody) => api.request('PUT', '/sales/settings', { body, schema: z.object({ settings: settingsRow }), idempotencyKey: newIdempotencyKey() })
+
+// B-W2b-F38: the two automatic reminder mails of the scope, on or off, at the row's version (sales.settings.manage).
+export interface RemindersBody {
+  companyId?: string
+  quoteRemindersEnabled: boolean
+  fittingRemindersEnabled: boolean
+  version?: number
+}
+
+export const saveReminders = (api: ApiClient, body: RemindersBody): Promise<SalesSettings> =>
+  api.request('PUT', '/sales/settings/reminders', { body, schema: settingsSchema, idempotencyKey: newIdempotencyKey() }).then((answer) => answer.settings)
 
 const policy = z.object({ windowDays: z.number().nullable(), goodsDueDays: z.number().nullable(), freightPaidBy: z.enum(FREIGHT_PAYERS).nullable(), restockingFeePct: z.string().nullable(), conditions: z.string().nullable() })
 export type ReturnPolicy = z.infer<typeof policy>

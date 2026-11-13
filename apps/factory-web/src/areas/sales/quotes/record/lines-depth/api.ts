@@ -80,6 +80,8 @@ export const termsSchema = z.object({
     reminderOn: z.string().nullable(),
     reminderSentAt: z.string().nullable(),
     expiredAt: z.string().nullable(),
+    /** B-W2b-F38: the quote reminder switch of the quote's company (Sales settings; off: no reminder goes). */
+    remindersEnabled: z.boolean(),
   }),
   lines: z.array(lineScheduleSchema),
   quoteVersion: z.number(),

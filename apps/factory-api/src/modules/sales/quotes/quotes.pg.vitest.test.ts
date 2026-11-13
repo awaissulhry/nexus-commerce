@@ -551,6 +551,8 @@ describe('the sales settings: the quote rules of the tenant and of a company (SA
       company: null,
       inForce: { marginFloorPct: '20', discountLimitPct: '15', defaultValidityDays: 30, defaultDepositPct: '30', source: 'DEFAULT' },
       defaults: { marginFloorPct: '20', discountLimitPct: '15', defaultValidityDays: 30, defaultDepositPct: '30', source: 'DEFAULT' },
+      // B-W2b-F38: both reminders off without a row (the Owner's default); finance may change them.
+      reminders: { quoteRemindersEnabled: false, fittingRemindersEnabled: false, source: 'DEFAULT', canManage: true },
     })
     expect((await ok('sales', 'GET', settingsUrl)).settings.inForce).toEqual({ marginFloorPct: '20', discountLimitPct: '15', defaultValidityDays: 30, defaultDepositPct: '30', source: 'DEFAULT' })
     expect((await ok('salesPriceOnly', 'GET', settingsUrl)).settings.inForce).toEqual({ discountLimitPct: '15', defaultValidityDays: 30, defaultDepositPct: '30', source: 'DEFAULT' })

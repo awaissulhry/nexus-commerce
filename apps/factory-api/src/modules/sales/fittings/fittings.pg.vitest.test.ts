@@ -137,6 +137,11 @@ afterAll(async () => {
 }, 60_000)
 
 const appointmentOf = async (id: string) => (await ok('sales', 'GET', `/sales/fittings/appointments/${id}`)).appointment
+// B-W2b-F38: the reminder switches as a person sets them in Sales settings (the tenant-wide row: company A has none of its own).
+async function switchReminders(on: { quote: boolean; fitting: boolean }): Promise<Json> {
+  const { settings } = await ok('owner', 'GET', '/sales/settings')
+  return ok('owner', 'PUT', '/sales/settings/reminders', { quoteRemindersEnabled: on.quote, fittingRemindersEnabled: on.fitting, ...(settings.tenant ? { version: settings.tenant.version } : {}) })
+}
 const book = (body: Json, person: Person = 'sales', status = 201) => ok(person, 'POST', '/sales/fittings/appointments', { companyId: companyA, partyId: S.r1, place: 'Made-up showroom', ...body }, status)
 let fitting = ''
 
@@ -153,6 +158,8 @@ describe('appointments with the invite and the reminder (SAL-054)', { timeout: S
     const booked = await book({ kind: 'FITTING', measurementProfileId: rev1, startsAt: at(72), endsAt: at(73), withUserId: PEOPLE.sales, notes: 'Bring the back protector.', language: 'en' })
     fitting = booked.appointment.id
     expect(booked).toMatchObject({ mailed: true, delivery: 'SENT', warnings: [] })
+    // B-W2b-F38: the invite a person sends does not depend on the reminder switch (off by default).
+    expect(booked.appointment.reminderEnabled).toBe(false)
     expect(booked.appointment).toMatchObject({ kind: 'FITTING', status: 'BOOKED', rider: { contactId: S.contact, name: RIDER }, profile: { id: rev1, revision: 1, garmentType: 'JACKET' }, with: { userId: PEOPLE.sales, name: 'Made-up sales' }, mailTo: true, version: 1, may: { move: true, close: false, cancel: true, invite: true, result: false } })
     expect(booked.appointment.mails).toMatchObject([{ mail: 'INVITE', status: 'SENT' }])
     const mail = await one(`SELECT "templateKey", "recordType", status::text, subject FROM "EmailOutbound" WHERE "tenantId" = $1 AND "recordId" = $2`, [T, fitting])
@@ -185,11 +192,24 @@ describe('appointments with the invite and the reminder (SAL-054)', { timeout: S
     await no('sales', 'PATCH', `/sales/fittings/appointments/${fitting}`, { version: 1, place: 'Made-up paddock' }, 409)
   })
 
-  it('reminds the rider once, the day before, of a visit booked days ago (the hourly cron); not twice', async () => {
+  it('reminds the rider once, the day before, of a visit booked days ago (the hourly cron), only once the switch is on; not twice', async () => {
     const visit = (await book({ kind: 'SHOWROOM', garmentType: 'JACKET', contactId: S.contact, startsAt: at(20), endsAt: at(21), invite: false })).appointment
     expect(visit).toMatchObject({ garmentType: 'JACKET', profile: null, inviteSentAt: null })
     // Test data past its guards: booked three days ago.
     await force(`UPDATE "Appointment" SET "createdAt" = now() - interval '3 days' WHERE id = $1`, [visit.id])
+    // B-W2b-F38: switched off (the default), the due reminder is not sent and nothing is marked or kept.
+    expect((await ok('owner', 'GET', `/sales/settings?companyId=${companyA}`)).settings.reminders).toMatchObject({ fittingRemindersEnabled: false })
+    expect((await appointmentOf(visit.id)).reminderEnabled).toBe(false)
+    expect((await ok('sales', 'GET', `/sales/mtm/profiles/${rev1}/fittings?companyId=${companyA}`)).fittings.remindersEnabled).toBe(false)
+    const off = await runFittingReminders({ database: h.database, log: silent })
+    expect(off).toMatchObject({ reminded: 0, failed: 0 })
+    expect(off.switchedOff).toBeGreaterThanOrEqual(1)
+    expect((await one(`SELECT "reminderSentAt" FROM "Appointment" WHERE id = $1`, [visit.id])).reminderSentAt).toBeNull()
+    expect((await one(`SELECT count(*)::int AS n FROM "EmailOutbound" WHERE "recordId" = $1`, [visit.id])).n).toBe(0)
+    expect((await one(`SELECT count(*)::int AS n FROM "IdempotencyReceipt" WHERE key LIKE $1`, [`fitting-reminder-${visit.id}-%`])).n).toBe(0)
+    // Switched on in Sales settings (as a person would): the next run reminds what is due.
+    expect((await switchReminders({ quote: false, fitting: true })).settings.reminders).toMatchObject({ fittingRemindersEnabled: true, quoteRemindersEnabled: false, source: 'TENANT' })
+    expect((await appointmentOf(visit.id)).reminderEnabled).toBe(true)
     const first = await runFittingReminders({ database: h.database, log: silent })
     expect(first.reminded).toBeGreaterThanOrEqual(1)
     const reminded = await one(`SELECT "reminderSentAt", version FROM "Appointment" WHERE id = $1`, [visit.id])

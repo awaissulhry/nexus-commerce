@@ -20,6 +20,8 @@ import { changePromiseInCommand } from '../orders/moves'
 import { dayOrNull } from '../orders/store'
 import { createRepairInCommand } from '../repairs/create'
 import { appointmentRows, APPOINTMENT_SELECT, bookedGarmentsOf, garmentRefusal, mayOn, RESULT_RECORD, RESULT_SELECT, resultNotFound, resultOf, resultViews, sees, type Reader, type ResultRow } from './store'
+// B-W2b-F38: the fitting reminder switch of the screen's company.
+import { reminderOnFor } from '../quotes/reminder-switches'
 
 /**
  * What a fitting found and the alteration loop (B-W2b-360; SAL-297 "Alteration loop after fitting"; design sales.mtm › Fittings
@@ -254,7 +256,7 @@ export async function nameRevision(caller: CommandCaller, id: string, body: Revi
 // ---- the rider profile's Fittings tab -------------------------------------------------------------------------------------------
 
 /** GET /sales/mtm/profiles/:profileId/fittings */
-export async function profileFittings(caller: CommandCaller, profileId: string) {
+export async function profileFittings(caller: CommandCaller, profileId: string, /* B-W2b-F38 */ query: { readonly companyId?: string | undefined } = {}) {
   const context = officeOf(caller)
   const actor = actorOf(context)
   const now = serverClock.now()
@@ -286,6 +288,8 @@ export async function profileFittings(caller: CommandCaller, profileId: string) 
       nextFittingAt: next ? toUtcIso(next) : null,
       started,
       may: { book: manage && started, record: manage && started },
+      // B-W2b-F38: the fitting reminder switch of the screen's company, when it is named.
+      remindersEnabled: query.companyId === undefined ? null : await reminderOnFor(db, query.companyId, 'FITTING'),
     }
   })
 }

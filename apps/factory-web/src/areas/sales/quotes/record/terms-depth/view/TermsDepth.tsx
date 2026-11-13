@@ -77,7 +77,8 @@ export function ValidityPart({ model, actions }: { model: TermsDepthModel; actio
           { label: t('terms.validity.label'), value: <Pill tone={validity.state === 'EXPIRED' || validity.state === 'ENDED' ? 'danger' : validity.state === 'LAST_DAY' || validity.state === 'ENDS_SOON' ? 'warning' : 'neutral'}>{say(validityWords(validity))}</Pill> },
           {
             label: t('terms.validity.reminder'),
-            value: validity.reminderSentAt ? t('terms.validity.reminderSent', { at: formatDateTime(validity.reminderSentAt, { locale }) }) : validity.reminderOn ? t('terms.validity.reminderOn', { date: formatDate(`${validity.reminderOn}T12:00:00Z`, { locale }) }) : t('terms.validity.noReminder'),
+            // B-W2b-F38: switched off in Sales settings, no reminder goes (one already sent stays said).
+            value: validity.reminderSentAt ? t('terms.validity.reminderSent', { at: formatDateTime(validity.reminderSentAt, { locale }) }) : !validity.remindersEnabled ? t('terms.validity.reminderOff') : validity.reminderOn ? t('terms.validity.reminderOn', { date: formatDate(`${validity.reminderOn}T12:00:00Z`, { locale }) }) : t('terms.validity.noReminder'),
           },
           ...(validity.expiredAt ? [{ label: t('terms.validity.expiredAt'), value: formatDateTime(validity.expiredAt, { locale }) }] : []),
         ]}

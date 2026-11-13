@@ -305,6 +305,8 @@ export const APPOINTMENT: Appointment = {
   createdBy: ME_PERSON,
   may: { move: true, close: false, cancel: true, invite: true, ledTo: false, result: false, notes: true },
   why: null,
+  // B-W2b-F38: the company's fitting reminder off (the Owner's default): the panel says no automatic reminder goes.
+  reminderEnabled: false,
 }
 export const APPOINTMENT_DONE: Appointment = { ...APPOINTMENT, ...APPOINTMENTS[1]!, closedAt: at(11, 4, 16), closedBy: { id: PEOPLE[2]!.id, name: 'Demo Fitter' }, notes: null, mails: [], resultList: [{ id: uid('6901', 1), verdict: 'ALTER', fittedAt: at(11, 4, 15, 40), salesOrderLineId: uid('6601', 1) }], may: { move: false, close: false, cancel: false, invite: false, ledTo: false, result: true, notes: true } }
 
@@ -335,7 +337,7 @@ export const RESULT_ALTER: FittingResult = {
 export const RESULT_TO_ALTER: FittingResult = { ...RESULT_ALTER, id: uid('6901', 2), alteration: null, promise: { current: '2026-12-04', byAlteration: '2026-12-09' }, may: { alteration: true, revision: true } }
 export const RESULT_MOVED: FittingResult = { ...RESULT_ALTER, promise: { current: '2026-12-04', byAlteration: '2026-12-09' } }
 
-export const FITTINGS: FittingsTab = { profileId: PROFILE_ID, riderName: RECORD.riderName, garmentType: 'JACKET', appointments: APPOINTMENTS, results: [RESULT_MOVED], nextFittingAt: at(11, 18, 10), started: true, may: { book: true, record: true } }
+export const FITTINGS: FittingsTab = { profileId: PROFILE_ID, riderName: RECORD.riderName, garmentType: 'JACKET', appointments: APPOINTMENTS, results: [RESULT_MOVED], nextFittingAt: at(11, 18, 10), started: true, may: { book: true, record: true }, /* B-W2b-F38: off by default */ remindersEnabled: false }
 export const FITTINGS_OFF: FittingsTab = { ...FITTINGS, appointments: [APPOINTMENTS[2]!], results: [], nextFittingAt: null, started: false, may: { book: false, record: false } }
 export const FITTINGS_EMPTY: FittingsTab = { ...FITTINGS, appointments: [], results: [], nextFittingAt: null }
 

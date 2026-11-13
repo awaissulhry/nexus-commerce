@@ -8,6 +8,8 @@ import { QUOTES_MANAGE } from '@nexus/factory-domain/sales/quotes/permissions'
 import { command, COMMAND_SETTINGS, type CommandCaller, type CommandTools } from '../../../core/command'
 import { assertDraft } from '../quotes/quotes'
 import { day, decimal, officeQuote, readCurrentVersion, readLineRecords, readQuote, type QuoteRow, type Reader, type VersionRow } from '../quotes/store'
+// B-W2b-F38: whether the quote reminder goes for the quote's company.
+import { reminderOnFor } from '../quotes/reminder-switches'
 
 /**
  * A quote's delivery terms and delivery schedule (B-W2b-294; SAL-151 "Delivery schedule on a line", SAL-162 "Incoterms and
@@ -72,6 +74,8 @@ export async function termsViewOf(db: Reader, quote: QuoteRow, version: VersionR
       daysLeft: validity.daysLeft,
       reminderOn: validity.reminderOn,
       reminderSentAt: extra.reminderSentAt ? toUtcIso(extra.reminderSentAt) : null,
+      // B-W2b-F38: the company's quote reminder switch (off: the job sends no reminder for it).
+      remindersEnabled: await reminderOnFor(db, quote.companyId, 'QUOTE'),
       expiredAt: version.status === 'EXPIRED' && extra.closedAt ? toUtcIso(extra.closedAt) : null,
     },
     lines: lines.map((line) => {

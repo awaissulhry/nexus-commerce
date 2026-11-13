@@ -912,6 +912,13 @@ model SalesSettings {
   /// 1386) may be asked: OFF by default and until the accountant's word on its wording (GATE-ACCOUNTANT). Read for a
   /// company from its own row, else from the tenant-wide row, else off.
   caparraPenitenzialeEnabled Boolean       @default(false)
+  /// B-W2b-F38 (Owner 2026-11-13, option A): the automatic reminder mails to customers, a switch each, OFF by default.
+  /// Read for a company from its own row, else from the tenant-wide row, else off. quoteRemindersEnabled: the one
+  /// reminder 3 days before a sent quote's last day (the daily quote validity job); fittingRemindersEnabled: the rider's
+  /// reminder 24 hours before a BOOKED appointment (the hourly fitting reminder job). A quote's expiry and the invites,
+  /// updates and cancellations a person sends do not depend on them.
+  quoteRemindersEnabled   Boolean @default(false)
+  fittingRemindersEnabled Boolean @default(false)
   version             Int      @default(1)
   createdAt           DateTime @default(now()) @db.Timestamptz(3)
   updatedAt           DateTime @default(now()) @updatedAt @db.Timestamptz(3)

@@ -41,6 +41,9 @@ import { cancelQuote, createQuote, getQuote, listQuotes, updateQuote } from './q
 import { reviseQuote, sendCheck, sendNewLink, sendQuote } from './send'
 import { duplicateQuote } from './duplicate'
 import { getSalesSettings, saveSalesSettings } from './settings'
+// B-W2b-F38: the reminder switches.
+import { saveReminderSwitchesContract } from './contract'
+import { saveReminderSwitches } from './settings'
 import { listVersions } from './versions'
 import { listQuoteApprovals, nextQuoteNumber } from './approvals'
 import { inlineDisposition, previewQuotePdf } from './preview'
@@ -134,4 +137,6 @@ export default defineRoutes('sales.quotes', manifest, async (app) => {
 
   // B-W2b-16: raising an approval limit asks for a fresh step-up (checked in saveSalesSettings after the other checks).
   app.put('/sales/settings', { schema: saveSettingsContract }, async (request) => saveSalesSettings(request, request.body, idempotencyKeyFrom(request), () => requireStepUp(officeAuthOf(app), request)))
+  // B-W2b-F38: the two automatic reminder mails, on or off, at the row's version (sales.settings.manage; no step-up, no grain).
+  app.put('/sales/settings/reminders', { schema: saveReminderSwitchesContract }, async (request) => saveReminderSwitches(request, request.body, idempotencyKeyFrom(request)))
 })
