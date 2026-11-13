@@ -748,8 +748,7 @@
     "write": "Non è andato a buon fine: riprova.",
     "scheduled_one": "Una barra del tabellone di pianificazione prenota una fase che verrebbe tolta: aprila lì e scegli Rimetti tra quelli da pianificare (Pianificazione › Tabellone di pianificazione), poi riprova.",
     "scheduled_other": "{count} barre del tabellone di pianificazione prenotano fasi che verrebbero tolte: aprile lì una per una e scegli Rimetti tra quelli da pianificare (Pianificazione › Tabellone di pianificazione), poi riprova.",
-    "scheduledPublished": "Un piano pubblicato al reparto prenota una fase che verrebbe tolta, e un piano pubblicato non cambia mai: annulla questo ordine e creane uno nuovo.",
-    "scheduledRecorded": "Il registro del tabellone di pianificazione (Pianificazione › Tabellone di pianificazione › Modifiche) nomina una fase che verrebbe tolta, e il registro conserva ogni fase che nomina: lascia l’ordine com’è, oppure annullalo e creane uno nuovo."
+    "scheduledPublished": "Un piano pubblicato al reparto prenota una fase che verrebbe tolta, e un piano pubblicato non cambia mai: annulla questo ordine e creane uno nuovo."
   },
   "refusal": {
     "other": "Le regole del reparto ora lo rifiutano.",

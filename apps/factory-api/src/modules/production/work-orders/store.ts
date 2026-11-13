@@ -1,7 +1,5 @@
 import type { FactoryClient, Prisma } from '@nexus/factory-db'
 import { DomainError, InvalidStateError } from '@nexus/factory-domain/core/errors'
-// B-W2b-F36: the refusal when the board's record names an operation lists its issues.
-import type { Issue } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import type { BusinessDate } from '@nexus/factory-domain/core/time'
 import { whenWords } from '@nexus/factory-domain/planning/schedule/time'
@@ -270,7 +268,7 @@ export interface BookedRefusal {
   readonly doing: string
   /** Only the working plan books them: what to do after "send them back to the tray on the planning board, then …". */
   readonly then: string
-  /** A published version books one (it never changes): what to do instead. B-W2b-F36: also when the board's record names one. */
+  /** A published version books one (it never changes): what to do instead. */
   readonly published: string
 }
 
@@ -283,8 +281,8 @@ const OPERATION_COLUMNS = { id: true, seq: true, routingSeq: true, code: true, n
  * words that name each slot and what to do: a slot of the working plan goes back to the tray on the planning board
  * first; a slot of a published version is kept as the floor was given it, for good. Issues `scheduleSlots/<plan
  * kind>/<slot id>`, one per slot.
- * B-W2b-F36: an operation the board's record names (B-W2b-329's append-only change log) is kept for good the same way:
- * refused with the caller's `published` words, issues `scheduleChanges/<change id>` (recordedRefusal).
+ * B-W2b-F39: the board's record (ScheduleChange) names an operation by id with its own copy (seq, name), no foreign key, so
+ * it never holds one: once its bars went back to the tray the operation leaves, and the record still names it.
  */
 async function refuseBooked(tx: CommandTx, workOrder: Pick<Header, 'number' | 'siteId'>, operations: readonly { id: string; seq: number; name: string }[], refusal: BookedRefusal): Promise<void> {
   if (operations.length === 0) return
@@ -293,13 +291,7 @@ async function refuseBooked(tx: CommandTx, workOrder: Pick<Header, 'number' | 's
     select: { id: true, planKind: true, planVersionId: true, workOrderOperationId: true, lineId: true, workCentreId: true, partyId: true, startAt: true },
     orderBy: [{ startAt: 'asc' }, { id: 'asc' }],
   })
-  // ---- B-W2b-F36: the board's record names one --------------------------------------------------------------------------
-  // The board's change log (B-W2b-329, ScheduleChange) is append-only and names the operation of each bar it logs, by a
-  // foreign key the database keeps (Restrict): once a bar of an operation was placed, moved or sent back to the tray on
-  // the board, that operation never goes away. Refused here in words, like a published slot (the delete was a 500).
-  const recorded = await recordedOperations(tx, operations)
-  if (slots.length === 0 && recorded.length === 0) return
-  // ---- end B-W2b-F36 ----------------------------------------------------------------------------------------------------
+  if (slots.length === 0) return
   const idsOf = (pick: (slot: (typeof slots)[number]) => string | null): string[] => [...new Set(slots.map(pick).filter((value): value is string => value !== null))]
   const site = await tx.site.findUniqueOrThrow({ where: { id: workOrder.siteId }, select: { timezone: true } })
   const lines = new Map((await tx.line.findMany({ where: { id: { in: idsOf((slot) => slot.lineId) } }, select: { id: true, code: true } })).map((row) => [row.id, `line ${row.code}`]))
@@ -316,11 +308,6 @@ async function refuseBooked(tx: CommandTx, workOrder: Pick<Header, 'number' | 's
   const booked = new Set(slots.map((slot) => slot.workOrderOperationId)).size
   const published = slots.some((slot) => slot.planKind === 'PUBLISHED')
   const what = booked === 1 ? 'an operation' : `${booked} operations`
-  // B-W2b-F36: no move on the board brings back an operation the record names: the refusal says what stays instead.
-  if (recorded.length > 0) {
-    const issues = slots.map((slot, index) => ({ path: `scheduleSlots/${slot.planKind}/${slot.id}`, message: words[index]! }))
-    throw recordedRefusal(workOrder, slots.length > 0 ? { what, words, issues } : null, recorded, refusal, site.timezone)
-  }
   const fix = published
     ? `A published plan keeps its slots as the floor was given them, so ${booked === 1 ? 'that operation stays' : 'those operations stay'}: ${refusal.published}.`
     : `Send ${slots.length === 1 ? 'it' : 'them'} back to the tray on the planning board (Planning › Planning board), then ${refusal.then}.`
@@ -330,58 +317,6 @@ async function refuseBooked(tx: CommandTx, workOrder: Pick<Header, 'number' | 's
     slots.map((slot, index) => ({ path: `scheduleSlots/${slot.planKind}/${slot.id}`, message: words[index]! })),
   )
 }
-
-// ---- B-W2b-F36: the operations the board's record names -------------------------------------------------------------------
-
-/** The last change of an operation's bar in the board's record, by its kind (ScheduleChangeKind; a PUBLISH names none). */
-const RECORDED_VERBS: Readonly<Record<string, string>> = { PLACE: 'placed', MOVE: 'moved', REMOVE: 'sent back to the tray', PIN: 'pinned', UNPIN: 'unpinned', UNDO: 'changed back' }
-
-interface RecordedOperation {
-  readonly op: { readonly id: string; readonly seq: number; readonly name: string }
-  /** Its latest change in the record. */
-  readonly last: { readonly id: string; readonly kind: string; readonly changedAt: Date }
-}
-
-/** The operations the board's record names (ScheduleChange of B-W2b-329), in the order given, each with its latest change. */
-async function recordedOperations(tx: CommandTx, operations: readonly { id: string; seq: number; name: string }[]): Promise<RecordedOperation[]> {
-  const changes = await tx.scheduleChange.findMany({
-    where: { workOrderOperationId: { in: operations.map((op) => op.id) } },
-    select: { id: true, workOrderOperationId: true, kind: true, changedAt: true },
-    orderBy: [{ changedAt: 'desc' }, { id: 'desc' }],
-  })
-  const last = new Map<string, (typeof changes)[number]>()
-  for (const change of changes) if (change.workOrderOperationId && !last.has(change.workOrderOperationId)) last.set(change.workOrderOperationId, change)
-  return operations.flatMap((op) => {
-    const change = last.get(op.id)
-    return change ? [{ op, last: change }] : []
-  })
-}
-
-/**
- * The 409 when the board's record names an operation that would go away: the bars that book one (if any) as refuseBooked
- * says them, then the record's operations and what to do instead (the caller's `published` words: the record, like a
- * published plan, never changes). Issues `scheduleSlots/<plan kind>/<slot id>` per bar and `scheduleChanges/<change id>`
- * (its latest change) per operation the record names.
- */
-function recordedRefusal(
-  workOrder: Pick<Header, 'number'>,
-  booked: { readonly what: string; readonly words: readonly string[]; readonly issues: readonly Issue[] } | null,
-  recorded: readonly RecordedOperation[],
-  refusal: BookedRefusal,
-  timeZone: string,
-): DomainError {
-  const names = recorded.map(({ op }) => `Op ${op.seq} ${op.name}`)
-  const stays = recorded.length === 1 ? 'that operation stays' : 'those operations stay'
-  const where = 'Planning › Planning board › Changes'
-  const message = booked
-    ? `${refusal.doing} would take away ${booked.what} of work order ${workOrder.number} that the planning board books: ${booked.words.join('; ')}. The board's record names ${names.join(', ')} and keeps every operation it names (${where}), so ${stays}: ${refusal.published}.`
-    : `${refusal.doing} would take away ${recorded.length === 1 ? 'an operation' : `${recorded.length} operations`} of work order ${workOrder.number} that the planning board's record names: ${names.join('; ')}. The record keeps every operation it names (${where}), so ${stays}: ${refusal.published}.`
-  return new DomainError('conflict', message, [
-    ...(booked?.issues ?? []),
-    ...recorded.map(({ op, last }) => ({ path: `scheduleChanges/${last.id}`, message: `Op ${op.seq} ${op.name}: last ${RECORDED_VERBS[last.kind] ?? 'changed'} at ${whenWords(last.changedAt.getTime(), timeZone)}` })),
-  ])
-}
-// ---- end B-W2b-F36 ------------------------------------------------------------------------------------------------------------
 
 /**
  * A DRAFT's stored operations brought to `planned` (one per routing step it takes; seq = the step's place): the row of

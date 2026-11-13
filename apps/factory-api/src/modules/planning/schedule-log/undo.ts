@@ -18,7 +18,7 @@ import { laneFacts, lockedWorkingPlan, SLOT_COLUMNS, userNamesOf, type SlotRow }
 import { logChanges, type LoggedPlace } from '../schedule-depth/log'
 import { pinnedRefusal } from '../schedule-depth/pins'
 import type { UndoBody } from './contract'
-import { byWords, CHANGE_COLUMNS, entriesOf, factsOf, laterWords, latestOfSlots, slotsNowOf, whatOf, type ChangeRow } from './feed'
+import { byWords, CHANGE_COLUMNS, entriesOf, factsOf, laterWords, latestOfSlots, operationsOf, slotsNowOf, whatOf, type ChangeRow } from './feed'
 
 /**
  * Undo one change of the board's log (B-W2b-329; PLN-149; design planning.board "Undo one move", "⌘Z … undo while the bar
@@ -75,12 +75,14 @@ function openOn(world: ScheduleWorld, row: ChangeRow) {
 /** The undo's refusals before any write, in words (the domain's order: kind, once, still ours). */
 async function assertUndoable(tx: CommandTools['tx'], row: ChangeRow, site: SiteRow): Promise<SlotRow | null> {
   const fact = factsOf(row)
-  const what = whatOf(row)
+  // B-W2b-F39: the operation may have left its work order since (the record's copy names it): never undone (OPERATION_GONE).
+  const operation = (await operationsOf(tx, [row])).get(row.id) ?? null
+  const what = whatOf(row, operation)
   const undone = row.undoneBy[0] ?? null
   const latest = row.slotId ? (await latestOfSlots(tx, [row.slotId])).get(row.slotId) : undefined
   const slotNow = row.slotId ? ((await slotsNowOf(tx, [row.slotId])).get(row.slotId) ?? null) : null
   // The permission was asked before the command (changeTarget): here the kind, once, and still ours.
-  const code = undoHoldOf(fact, { undone: undone !== null, latestOfSlot: latest?.id ?? null, slot: slotNow, may: true })
+  const code = undoHoldOf(fact, { undone: undone !== null, latestOfSlot: latest?.id ?? null, slot: slotNow, may: true, operationGone: operation !== null && !operation.onWorkOrder })
   if (code && code !== 'NO_PERMISSION') {
     const names = await userNamesOf(tx, [undone?.changedById ?? null, latest?.changedById ?? null])
     const later = latest && latest.id !== row.id ? laterWords(latest, names, site.timezone) : null

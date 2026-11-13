@@ -241,6 +241,12 @@ describe('the promise history', () => {
 describe('the board: changes, pins, what-ifs', () => {
   const change = (changes: Record<string, unknown>) => copyRow(office(), 'ScheduleChange', d.scheduleChangeIds.move, { id: randomUUID(), changedAt: now(), createdAt: now(), ...changes })
   const noSides = { fromLineId: null, fromStartAt: null, fromEndAt: null, toLineId: null, toStartAt: null, toEndAt: null }
+  // B-W2b-F39: a change names its operation with a copy of it (seq and name), or none of the three.
+  const noOperation = { workOrderOperationId: null, operationSeq: null, operationName: null }
+  const copyOf = async (operationId: string) => {
+    const [op] = await admin('SELECT seq, name FROM "WorkOrderOperation" WHERE id = $1', [operationId])
+    return { workOrderOperationId: operationId, operationSeq: op!.seq as number, operationName: op!.name as string }
+  }
 
   it('logs each kind of change with its parts, on the site\'s working plan', async () => {
     expect(await change({})).toBe(1)
@@ -253,7 +259,7 @@ describe('the board: changes, pins, what-ifs', () => {
     await expect(change({ kind: 'PIN' })).rejects.toThrow(/PIN and UNPIN name the slot only/)
     expect(await change({ kind: 'UNPIN', ...noSides })).toBe(1)
     await expect(change({ kind: 'PUBLISH', ...noSides })).rejects.toThrow(/PUBLISH names the published version and no slot/)
-    expect(await change({ kind: 'PUBLISH', ...noSides, slotId: null, workOrderId: null, workOrderOperationId: null, publishedVersionId: sch.publishedPlanId })).toBe(1)
+    expect(await change({ kind: 'PUBLISH', ...noSides, slotId: null, workOrderId: null, ...noOperation, publishedVersionId: sch.publishedPlanId })).toBe(1)
     await expect(change({ planVersionId: sch.publishedPlanId })).rejects.toThrow(/of its site's WORKING plan/)
     await expect(change({ reason: ' ' })).rejects.toThrow(/keeps its reason in at most 2000 characters/)
     await expect(change({ changedAt: later(1) })).rejects.toThrow(/made not in the future/)
@@ -268,7 +274,24 @@ describe('the board: changes, pins, what-ifs', () => {
     expect(await undo({})).toBe(1)
     await expect(undo({})).rejects.toThrow(/ScheduleChange_one_undo|unique/i)
     // The undo of a pin puts back nothing but the pin.
-    expect(await change({ kind: 'UNDO', ...noSides, slotId: A.slotPack, workOrderOperationId: sch.production.operationIds.pack, undoesChangeId: d.scheduleChangeIds.pin })).toBe(1)
+    expect(await change({ kind: 'UNDO', ...noSides, slotId: A.slotPack, ...(await copyOf(sch.production.operationIds.pack)), undoesChangeId: d.scheduleChangeIds.pin })).toBe(1)
+  })
+
+  // B-W2b-F39 (Owner decision 2026-11-13): the record keeps its own copy of the operation; no foreign key holds the operation.
+  it('names its operation by id with a copy of its seq and name, checked when written; no foreign key holds the operation', async () => {
+    const sew = await copyOf(sch.production.operationIds.sew)
+    expect(await change({ ...sew })).toBe(1)
+    await expect(change({ operationSeq: null })).rejects.toThrow(/keeps the copy of its operation \(its seq and name\) exactly when it names one/)
+    await expect(change({ ...noOperation, operationName: sew.operationName })).rejects.toThrow(/keeps the copy of its operation/)
+    await expect(change({ operationSeq: sew.operationSeq + 1 })).rejects.toThrow(/names an operation of its work order with the operation's seq and name/)
+    await expect(change({ operationName: `${sew.operationName} (made-up)` })).rejects.toThrow(/names an operation of its work order with the operation's seq and name/)
+    // An operation of no work order of the site (what the foreign key refused at insert).
+    await expect(change({ workOrderOperationId: randomUUID() })).rejects.toThrow(/names an operation of its work order/)
+    // A whole-order part names none.
+    expect(await change({ ...noOperation })).toBe(1)
+    expect(await admin(`SELECT count(*)::int AS n FROM pg_constraint WHERE conrelid = '"ScheduleChange"'::regclass AND confrelid = '"WorkOrderOperation"'::regclass`)).toEqual([{ n: 0 }])
+    // The seed's changes carry their copy.
+    expect(await admin(`SELECT count(*)::int AS n FROM "ScheduleChange" WHERE "workOrderOperationId" IS NOT NULL AND ("operationSeq" IS NULL OR "operationName" IS NULL)`)).toEqual([{ n: 0 }])
   })
 
   it('is written once: never changed, removed or truncated', async () => {

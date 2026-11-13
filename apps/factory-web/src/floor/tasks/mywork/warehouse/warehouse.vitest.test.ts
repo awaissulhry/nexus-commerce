@@ -79,11 +79,13 @@ describe('the warehouse task inbox', () => {
 })
 
 describe('My work at the warehouse on Home (B-W2b-308)', () => {
-  it('My work joins the warehouse first; Move & put away follows Receive; Incident and Scan stay on page one', () => {
+  // B-W2b-F37: Pick & issue follows Receive and Move & put away follows Pick & issue (the tree's order; Owner 2026-11-13).
+  it('My work joins the warehouse first; Pick & issue follows Receive, then Move & put away; Incident and Scan stay on page one', () => {
     const lead = ['floor.work', 'inventory.receive', 'inventory.transfer', 'inventory.issue', 'plant.report']
     const tiles = homeTiles('warehouse', lead, false)
-    expect(tiles.map((tile) => tile.key).slice(0, 4)).toEqual(['mywork', 'receive', 'move', 'pick'])
-    expect(tilePage(tiles, 0).tiles.map((tile) => tile.key)).toEqual(['mywork', 'receive', 'move', 'incident', 'scan'])
+    expect(tiles.map((tile) => tile.key).slice(0, 4)).toEqual(['mywork', 'receive', 'pick', 'move'])
+    expect(tilePage(tiles, 0).tiles.map((tile) => tile.key)).toEqual(['mywork', 'receive', 'pick', 'incident', 'scan'])
+    expect(tilePage(tiles, 1).tiles.map((tile) => tile.key)[0]).toBe('move')
     // A line tablet or a phone has neither (no warehouse there).
     for (const device of ['LINE', 'PHONE']) expect(homeTiles(null, lead, false, device).map((tile) => tile.key)).not.toContain('move')
   })

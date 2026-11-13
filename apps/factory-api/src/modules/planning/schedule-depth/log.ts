@@ -47,6 +47,13 @@ export async function logChanges(tx: CommandTx, site: SiteRow, planVersionId: st
   // refuses the change it records.
   const [clock] = await tx.$queryRaw<{ now: Date }[]>`SELECT clock_timestamp() AS now`
   const at = clock && now.getTime() - clock.now.getTime() > 60_000 ? clock.now : now
+  // B-W2b-F39: each row keeps a copy of the operation it names (its seq and name as they are now): the operation may leave
+  // its work order later (a draft's release, revision or a repair's steps), the record still names it. The database checks
+  // the copy against the operation (ScheduleChange_operation_copy).
+  const operationIds = [...new Set(changes.flatMap((change) => (change.operationId ? [change.operationId] : [])))]
+  const operations = new Map(
+    (operationIds.length > 0 ? await tx.workOrderOperation.findMany({ where: { id: { in: operationIds } }, select: { id: true, seq: true, name: true } }) : []).map((op) => [op.id, op]),
+  )
   await tx.scheduleChange.createMany({
     data: changes.map((change) => {
       const from = change.from ? laneColumns(change.from.lane) : NO_LANE
@@ -59,6 +66,8 @@ export async function logChanges(tx: CommandTx, site: SiteRow, planVersionId: st
         slotId: change.slotId,
         workOrderId: change.workOrderId,
         workOrderOperationId: change.operationId,
+        operationSeq: change.operationId ? (operations.get(change.operationId)?.seq ?? null) : null, // B-W2b-F39
+        operationName: change.operationId ? (operations.get(change.operationId)?.name ?? null) : null, // B-W2b-F39
         fromLineId: from.lineId,
         fromWorkCentreId: from.workCentreId,
         fromPartyId: from.partyId,
