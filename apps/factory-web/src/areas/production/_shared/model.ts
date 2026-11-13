@@ -247,6 +247,8 @@ export function checkItems(check: ReleaseCheck, workOrder: Pick<WorkOrder, 'cell
     if (entry.code === 'BOM' && entry.state === 'BLOCKED' && !workOrder.revision) wordKey = 'check.noRevision'
     // B-W2b-245: the cells refused only because they wait for a later release of the revision (B-W2b-231's scope).
     if (entry.code === 'CELLS' && entry.state === 'BLOCKED' && entry.problems.length > 0 && entry.problems.every((problem) => problem.path.endsWith('/scope'))) wordKey = 'check.CELLS.scope'
+    // B-W2b-368 (XF1:01): a made-to-measure unit waits for its factory review, or made-to-measure stopped for its template.
+    if (entry.code === 'CELLS' && entry.state === 'BLOCKED' && entry.problems.length > 0 && entry.problems.every((problem) => problem.path.endsWith('/measures') || problem.path.endsWith('/mtm'))) wordKey = 'check.CELLS.unit'
     // No kind named: the routing has no step at all (no revision, or a routing without operations).
     if (entry.code === 'WORK_CENTRES' && entry.state === 'BLOCKED' && !entry.problems.some((problem) => problem.path.startsWith('checks/WORK_CENTRES/'))) wordKey = 'check.WORK_CENTRES.noSteps'
     // B-W2a-46: a shortage the plan expects in time passes MATERIAL (its own words); a hold names how many.
@@ -265,6 +267,9 @@ function problemWords(path: string, code: ReleaseCheckCode, check: ReleaseCheck,
     if (parts[2] === 'size') return [phrase('problem.size', { cell })]
     // B-W2b-245: a cell outside the style revision's release scope (B-W2b-231: it waits for a later release).
     if (parts[2] === 'scope') return [phrase('problem.scope', { cell })]
+    // B-W2b-368 (XF1:01): the unit's measures not confirmed by the factory review; made-to-measure off for its template.
+    if (parts[2] === 'measures') return [phrase('problem.measures', { cell })]
+    if (parts[2] === 'mtm') return [phrase('problem.mtm', { cell })]
   }
   if (parts[0] === 'orders' && parts[1]) {
     const order = workOrder.orders.find((entry) => entry.id === parts[1])

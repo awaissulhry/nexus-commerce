@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { CASE_CHIPS, CASE_TYPES, MILESTONE_STEPS, OUTCOMES_WANTED } from '@nexus/factory-domain/sales/portal-returns/rules'
+import { CASE_CHIPS, CASE_TYPES, MILESTONE_STEPS, OUTCOMES_WANTED, RECORDED_OUTCOMES_WANTED } from '@nexus/factory-domain/sales/portal-returns/rules'
 import { newIdempotencyKey, type ApiClient } from '../../../lib/api/client'
 
 /**
@@ -98,7 +98,8 @@ export const returnRecordSchema = z.object({
   request: z.object({
     opened: z.string(),
     via: z.string(),
-    outcomeWanted: z.object({ code: z.enum(OUTCOMES_WANTED), words }).nullable(),
+    // B-W2b-368 (XF1:03): a remake asked records the wish REMAKE (wave 45); a request offers the other three.
+    outcomeWanted: z.object({ code: z.enum(RECORDED_OUTCOMES_WANTED), words }).nullable(),
     note: z.string().nullable(),
     photos: z.array(fileSchema),
     lines: z.array(

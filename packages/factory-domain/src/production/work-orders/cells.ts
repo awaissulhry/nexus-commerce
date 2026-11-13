@@ -8,8 +8,9 @@ import type { Issue } from '../../core/errors'
  * other work orders that are not CANCELLED (a cancelled work order gives its pieces back). One cell per colourway and
  * size (the table's unique key). Cells change only while the work order is a DRAFT (the …_production_guards trigger).
  *
- * Made-to-measure units (MES-003) are deferred by the Owner (Q9: the first order is a brand size run; B-W1-17/18): a
- * made-to-measure line is refused with MADE_TO_MEASURE_LATER, never made into a size-grid cell.
+ * Made-to-measure units (MES-003; B-W2b-368, XF1:01): a unit's order line reads as one piece of its base size (the API's
+ * readOrderLines), so these rules make its one cell, once; the API makes it on its own MADE_TO_MEASURE work order with the
+ * line's measurement profile revision, never on a size grid's.
  */
 
 /** Order statuses a work order is made for: confirmed, and already in production. */
@@ -21,9 +22,6 @@ export const MAX_CELLS = 400
 export const MAX_LINES = 50
 /** Most pieces in one cell. */
 export const MAX_CELL_PIECES = 100_000
-
-export const MADE_TO_MEASURE_LATER =
-  'Made-to-measure comes later: this step makes size-run work orders only (the made-to-measure unit work order is B-W1-17/18, deferred by the Owner).'
 
 /** A sales order line as the cell rules read it. */
 export interface OrderLineFacts {
@@ -84,8 +82,8 @@ export function openSizes(line: Pick<OrderLineFacts, 'sizes' | 'onWorkOrders'>):
 const lineLabel = (line: Pick<OrderLineFacts, 'orderNumber' | 'seq'>): string => `${line.orderNumber} line ${line.seq}`
 
 /**
- * Why the line cannot make cells of this work order (empty: it can). The made-to-measure refusal is not here: the
- * caller refuses such a line first, with its own answer (MADE_TO_MEASURE_LATER).
+ * Why the line cannot make cells of this work order (empty: it can). A made-to-measure unit's own rules (its own work order,
+ * GATE-MTM) are the API's (production/work-orders/mtm-cells).
  */
 export function lineProblems(line: OrderLineFacts, target: CellTarget, path: string): Issue[] {
   const problems: Issue[] = []

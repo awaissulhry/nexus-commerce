@@ -27,6 +27,8 @@ import { materialReadinessOf, readReleaseBlockers, type PlanCache, type ReleaseB
 // B-W2b-231 (PRD-191): a cell outside what the revision is released for waits for a later release of it.
 import { scopedCellsCheck, type WorkOrderScope } from '@nexus/factory-domain/product/release/work-orders'
 import { workOrderScopeOf } from '../../product/release/scope'
+// B-W2b-368 (XF1:01): a made-to-measure unit is released once its measures are confirmed (the factory review), made-to-measure on.
+import { readUnitCells, unitCellsCheck, type UnitCell } from './mtm-cells'
 import { ORDER_DEPOSIT_ONLY } from '../../sales/deposits/deposits'
 import type { UnusableReason } from '@nexus/factory-domain/planning/usable'
 import { decimalOf, decimalText } from '@nexus/factory-domain/product/units/units'
@@ -283,6 +285,8 @@ export interface ReleaseFacts extends Basics {
   readonly blockers: ReleaseBlockerFacts
   /** B-W2b-231: what its revision is released for (null: every colourway and size). */
   readonly scope: WorkOrderScope | null
+  /** B-W2b-368: a MADE_TO_MEASURE work order's cell with its revision and review (null for any other kind). */
+  readonly units?: UnitCell[] | null
 }
 
 /**
@@ -339,7 +343,8 @@ export async function readReleaseFacts(db: Reader, basics: Basics, date: Busines
   const short = material.some((line) => decimalOf(line.short).gt(0))
   const blockers = await readReleaseBlockers(db, workOrder, date, { cache: plans, readiness, short })
   const scope = await workOrderScopeOf(db, revision?.styleId === style.id ? revision : null, style.sizes)
-  return { ...basics, current, parts, spec, gates, deposits, material, batchSeries, blockers, scope }
+  const units = await readUnitCells(db, workOrder, cells) // B-W2b-368
+  return { ...basics, current, parts, spec, gates, deposits, material, batchSeries, blockers, scope, units }
 }
 
 /** THE release check: the record's checklist and the release's refusal are this one answer. */
@@ -370,10 +375,14 @@ export function checklistOf(facts: ReleaseFacts, override: { readonly reason: st
     certificateCheck(facts.gates),
     workCentresCheck(site.code, parts.steps, parts.variants, cells.map((cell) => ({ colourwayId: cell.colourwayId, size: cell.size, /* B-W2b-340 */ optionValueIds: cell.optionValueIds, label: cellLabel(cell) })), spec.missing),
     bomCheck(revision, spec.gaps),
-    scopedCellsCheck(
-      cellsCheck(cells.map((cell) => ({ id: cell.id, label: cellLabel(cell), inRange: style.sizes.includes(cell.size) }))),
-      facts.scope,
-      cells.map((cell) => ({ id: cell.id, label: cellLabel(cell), colourwayId: cell.colourwayId, size: cell.size })),
+    // B-W2b-368: a unit's measures confirmed by the factory review and made-to-measure on, as problems of CELLS.
+    unitCellsCheck(
+      scopedCellsCheck(
+        cellsCheck(cells.map((cell) => ({ id: cell.id, label: cellLabel(cell), inRange: style.sizes.includes(cell.size) }))),
+        facts.scope,
+        cells.map((cell) => ({ id: cell.id, label: cellLabel(cell), colourwayId: cell.colourwayId, size: cell.size })),
+      ),
+      facts.units ?? null,
     ),
     depositCheck(facts.deposits, facts.workOrder.kind), // B-W2b-284: a sample of no order line needs no deposit
     materialReadinessCheck(facts.material, materialReadinessOf(facts.blockers.readiness), override),

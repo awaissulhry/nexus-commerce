@@ -73,6 +73,7 @@ import {
   frozenCells,
   frozenGroups,
   frozenOffer,
+  onlyMeasurements,
   frozenProblemsOf,
   materialRows,
   NAMESPACE,
@@ -148,7 +149,12 @@ describe('the yes an order waits for', () => {
     expect(askHeld(APPROVAL_PENDING, { manage: true })?.key).toBe('held.askStanding')
     expect(withdrawHeld(APPROVAL_PENDING, { manage: true })).toBeNull()
     expect(withdrawHeld(APPROVAL_CREDIT, { manage: true })?.key).toBe('held.withdrawNotYours')
-    expect([...WAIT_REASONS].sort()).toEqual(['CREDIT_HOLD', 'NO_REQUEST', 'REQUEST_PENDING'])
+    expect([...WAIT_REASONS].sort()).toEqual(['CREDIT_HOLD', 'MEASUREMENTS', 'NO_REQUEST', 'REQUEST_PENDING'])
+    // B-W2b-368: the factory review comes last among the reasons; an order waiting only for it shows no yes banner.
+    expect(waitPhrases({ reasons: [{ reason: 'MEASUREMENTS' }, { reason: 'CREDIT_HOLD' }] }).map((entry) => entry.key)).toEqual(['wait.CREDIT_HOLD', 'wait.MEASUREMENTS'])
+    expect(onlyMeasurements({ reasons: [{ reason: 'MEASUREMENTS' }] })).toBe(true)
+    expect(onlyMeasurements({ reasons: [{ reason: 'MEASUREMENTS' }, { reason: 'CREDIT_HOLD' }] })).toBe(false)
+    expect(onlyMeasurements({ reasons: [] })).toBe(false)
   })
 })
 

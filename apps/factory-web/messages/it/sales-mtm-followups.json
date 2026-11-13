@@ -1,0 +1,77 @@
+{
+  "banner": {
+    "title": "Attende il controllo della fabbrica",
+    "reason": "Le misure di un capo su misura non sono ancora confermate: l’ordine prosegue da solo appena il controllo della fabbrica le conferma.",
+    "unit": "Riga {seq} · {style} {colourway} · {rider}",
+    "review": {
+      "WAITING": "Misure {garment}, revisione {revision}: in attesa del controllo",
+      "NEED_MORE": "Misure {garment}, revisione {revision}: sono state chieste altre misure al pilota (si controlla la revisione successiva)"
+    },
+    "open": "Apri il controllo",
+    "held": {
+      "right": "I tuoi ruoli non mostrano le misure: per aprire il controllo serve il permesso di vedere le misure (dati del corpo)."
+    },
+    "off": "Il su misura è fermo per {garment}: le sue regole sono spente finché il titolare non le riavvia (Prodotti › Taglie e misure › Modelli di misure).",
+    "after": "Il controllo lo fa il responsabile di produzione (il permesso di controllare le misure); nessuno conferma misure prese da sé.",
+    "reading": "Lettura dei capi su misura…",
+    "failed": "Impossibile leggere i capi su misura",
+    "retry": "Riprova",
+    "problem": {
+      "forbidden": "I tuoi ruoli non permettono di leggere i capi di questo ordine.",
+      "unavailable": "Il servizio non è raggiungibile ora: riprova tra poco.",
+      "internal": "Qualcosa non ha funzionato: riprova."
+    }
+  },
+  "fix": {
+    "open": "Apri il profilo del pilota",
+    "MTM_NOT_STARTED": "Riga {seq} ({rider}): il su misura non è avviato per {garment}, o il modello non è su misura. Il profilo del pilota dice dove si avvia.",
+    "MTM_OUTSIDE_RANGE": "Riga {seq} ({rider}): le misure (revisione {revision}) sono fuori dalla gamma certificata del modello base: le rivede un modellista.",
+    "MTM_NOT_CONFIRMED": "Riga {seq} ({rider}): la fabbrica non ha ancora confermato le misure {garment} (revisione {revision}): l’ordine attenderà il controllo.",
+    "MTM_NOT_LATEST": "Riga {seq} ({rider}): fatto sulla revisione {revision}, ma il pilota ha misure più recenti (revisione {latest}): sposta il capo sulla revisione più recente.",
+    "MTM_OLD_MEASURES": "Riga {seq} ({rider}): le misure {garment} hanno più di 12 mesi: chiedi al pilota una nuova misura.",
+    "general": {
+      "MTM_NOT_STARTED": "Il modello di un capo su misura non è su misura, o il su misura non è avviato per il suo modello di misure.",
+      "MTM_OUTSIDE_RANGE": "Un capo su misura è fuori dalla gamma certificata del modello base: lo rivede un modellista.",
+      "MTM_NOT_CONFIRMED": "La fabbrica non ha ancora confermato le misure di un pilota: l’ordine attende il controllo.",
+      "MTM_NOT_LATEST": "Un capo su misura è fatto su una revisione vecchia: il pilota ha misure più recenti.",
+      "MTM_OLD_MEASURES": "Le misure di un pilota hanno più di 12 mesi: chiedi una nuova misura."
+    }
+  },
+  "remake": {
+    "title": "Rifacimento di un capo su misura",
+    "unit": "{order} riga {seq}: {style} {colourway}, taglia base {size}",
+    "madeTo": "Fatto sulla revisione {revision} delle misure del pilota",
+    "remakeToSame": "Il rifacimento si fa sulla stessa revisione ({revision})",
+    "remakeToNewer": "Il rifacimento si fa sulla revisione più recente del pilota ({revision})",
+    "review": {
+      "WAITING": "in attesa del controllo della fabbrica",
+      "CONFIRMED": "confermata dal controllo della fabbrica",
+      "NEED_MORE": "sono state chieste altre misure al pilota",
+      "other": "il suo controllo non è noto"
+    },
+    "goods": "Il capo reso era fatto su un corpo: si rottama o resta in quarantena, non torna mai a magazzino.",
+    "makeHint": "Un nuovo ordine senza prezzo, un capo per ogni riga decisa Rifacimento; attende il controllo della fabbrica finché le misure lo attendono.",
+    "make": "Crea l’ordine di rifacimento",
+    "order": "Ordine di rifacimento {number}",
+    "orderWaits": "Ordine di rifacimento {number}: attende il controllo della fabbrica",
+    "openOrder": "Apri l’ordine",
+    "held": {
+      "right": "Servono i permessi di decidere i resi, gestire gli ordini e vedere le misure.",
+      "off": "Il su misura è fermo per il modello di misure del capo: il titolare lo riavvia (Prodotti › Taglie e misure › Modelli di misure).",
+      "decide": "Prima salva la decisione della riga {seq} come Rifacimento.",
+      "status": "La merce deve essere arrivata (ricevuta o ispezionata) prima dell’ordine di rifacimento.",
+      "offline": "Sei offline: crealo quando torna la rete.",
+      "busy": "Creazione dell’ordine di rifacimento…"
+    },
+    "notUnit": "La riga {seq} non è un capo su misura: il rifacimento è per i capi su misura (sostituiscilo).",
+    "reading": "Lettura del capo su misura…",
+    "failed": "Impossibile leggere il capo su misura",
+    "retry": "Riprova",
+    "problem": {
+      "forbidden": "I tuoi ruoli non lo permettono.",
+      "moved": "Il reso è cambiato nel frattempo: è stato riletto, riprova.",
+      "unavailable": "Il servizio non è raggiungibile ora: riprova tra poco.",
+      "internal": "Qualcosa non ha funzionato: riprova."
+    }
+  }
+}

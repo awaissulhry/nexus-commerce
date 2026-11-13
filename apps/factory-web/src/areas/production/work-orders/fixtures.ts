@@ -59,7 +59,8 @@ const OPEN_LINES: OpenLines = {
   lines: [
     { id: 'line-1', seq: 1, kind: 'SIZE_GRID', styleId: 'style-1', styleCode: 'DEMO-JKT-01', styleName: 'Giacca pelle demo', colourwayId: 'cw-1', colourwayCode: 'BLK', madeToMeasure: false, sizes: [{ size: '48', ordered: 6, onWorkOrders: 4, open: 2 }, { size: '50', ordered: 10, onWorkOrders: 6, open: 4 }, { size: '52', ordered: 10, onWorkOrders: 6, open: 4 }, { size: '54', ordered: 6, onWorkOrders: 4, open: 2 }] },
     { id: 'line-2', seq: 2, kind: 'SIZE_GRID', styleId: 'style-1', styleCode: 'DEMO-JKT-01', styleName: 'Giacca pelle demo', colourwayId: 'cw-2', colourwayCode: 'RED', madeToMeasure: false, sizes: [{ size: '50', ordered: 6, onWorkOrders: 3, open: 3 }, { size: '52', ordered: 6, onWorkOrders: 3, open: 3 }] },
-    { id: 'line-3', seq: 3, kind: 'MADE_TO_MEASURE', styleId: 'style-1', styleCode: 'DEMO-JKT-01', styleName: 'Giacca pelle demo', colourwayId: 'cw-1', colourwayCode: 'BLK', madeToMeasure: true, sizes: [] },
+    // B-W2b-368: a made-to-measure unit reads as one piece of its base size.
+    { id: 'line-3', seq: 3, kind: 'MADE_TO_MEASURE', styleId: 'style-1', styleCode: 'DEMO-JKT-01', styleName: 'Giacca pelle demo', colourwayId: 'cw-1', colourwayCode: 'BLK', madeToMeasure: true, sizes: [{ size: '52', ordered: 1, onWorkOrders: 0, open: 1 }] },
     { id: 'line-4', seq: 4, kind: 'SIZE_GRID', styleId: 'style-2', styleCode: 'DEMO-PNT-02', styleName: 'Pantalone pelle demo', colourwayId: 'cw-3', colourwayCode: 'BLK', madeToMeasure: false, sizes: [{ size: '50', ordered: 4, onWorkOrders: 0, open: 4 }] },
   ],
 }
@@ -148,6 +149,8 @@ export const designScreen = defineDesignScreen<ListCase>({
       model: base('manager', { newOrder: chosen({ styleId: 'style-2', picked: ['line-4'], grid: { 'line-4': { '50': 4 } } }) }),
     },
     { id: 'new-over', label: 'New work order: a size asks more than is open: Create held, the cell says why', model: base('manager', { newOrder: chosen({ grid: { 'line-1': { '48': 5, '50': 4, '52': 4, '54': 2 }, 'line-2': { '50': 3, '52': 3 } } }) }) },
+    // B-W2b-368 (XF1:01): a made-to-measure unit ticked alone (its own work order, one piece of its base size).
+    { id: 'new-unit', label: 'New work order: a made-to-measure unit ticked — alone, one piece of its base size (its own work order)', model: base('manager', { newOrder: chosen({ picked: ['line-3'], grid: { 'line-3': { '52': 1 } } }) }) },
     { id: 'new-failed', label: 'New work order: the API refused it (the order changed meanwhile)', model: base('manager', { newOrder: chosen({ problem: { key: 'error.conflict' } }) }) },
     { id: 'new-none', label: 'New work order: no confirmed order matches', model: base('manager', { newOrder: { ...NO_NEW_ORDER, query: 'ZZZ', orders: [] } }) },
     // ---- B-W2a-46: readiness word, On hold, Hold N ----

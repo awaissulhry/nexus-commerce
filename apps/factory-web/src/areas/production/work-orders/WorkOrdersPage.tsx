@@ -21,7 +21,7 @@ import { abilitiesOf, liveTouches, readProblem, viewFromAddress, viewQuery, writ
 import { daysLate } from '@nexus/factory-domain/production/work-orders/machine'
 import { isRelativeDay, type RelativeDay } from '@nexus/factory-domain/views/quick/relative'
 import { modeOfAddress, type ListMode } from '../../../list-frame/w2b/model'
-import { linesOfStyle, NO_NEW_ORDER, openGridOf, stylesOf, type BulkReleaseModel, type NewWorkOrderModel, type WorkOrdersListModel } from './list-model'
+import { linesOfStyle, NO_NEW_ORDER, openGridOf, pickedAfter, stylesOf, type BulkReleaseModel, type NewWorkOrderModel, type WorkOrdersListModel } from './list-model'
 import { WorkOrdersListView } from './view/WorkOrdersListView'
 import { getReadiness, holdReasons, placeHold, type ReadinessRow } from './daily/api'
 import { DAILY_NAMESPACE, dailyCan, dailyProblem, NO_DAILY, READINESS_STATUSES, type DailyModel } from './daily/model'
@@ -355,7 +355,7 @@ function WorkOrdersContainer() {
             setNewOrder((current) => {
               if (!current) return current
               const line = current.lines?.lines.find((entry) => entry.id === lineId)
-              const picked = on ? [...new Set([...current.picked, lineId])] : current.picked.filter((id) => id !== lineId)
+              const picked = pickedAfter(current.lines?.lines ?? [], current.picked, lineId, on) // B-W2b-368: a unit alone
               const grid = { ...current.grid }
               if (on && line && !grid[lineId]) grid[lineId] = openGridOf(line)
               return { ...current, picked, grid }

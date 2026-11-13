@@ -1,0 +1,77 @@
+{
+  "banner": {
+    "title": "Waits for the factory review",
+    "reason": "A made-to-measure unit's measures are not confirmed yet: the order goes on by itself once the factory review confirms them.",
+    "unit": "Line {seq} · {style} {colourway} · {rider}",
+    "review": {
+      "WAITING": "{garment} measures, revision {revision}: waiting for the review",
+      "NEED_MORE": "{garment} measures, revision {revision}: more was asked from the rider (the next revision is reviewed)"
+    },
+    "open": "Open the review",
+    "held": {
+      "right": "Your roles do not show measurements: opening the review needs the right to see measurements (body data)."
+    },
+    "off": "Made-to-measure has stopped for {garment}: its rules are off until the Owner starts them again (Products › Sizes & measurements › Measurement templates).",
+    "after": "The production manager reviews (the right to review measurements); nobody confirms measures they took.",
+    "reading": "Reading the made-to-measure units…",
+    "failed": "Couldn’t read the made-to-measure units",
+    "retry": "Try again",
+    "problem": {
+      "forbidden": "Your roles do not allow reading this order’s units.",
+      "unavailable": "The service is not reachable now: try again in a moment.",
+      "internal": "Something went wrong: try again."
+    }
+  },
+  "fix": {
+    "open": "Open the rider profile",
+    "MTM_NOT_STARTED": "Line {seq} ({rider}): made-to-measure has not started for {garment}, or the style is not made to measure. The rider profile says where it is started.",
+    "MTM_OUTSIDE_RANGE": "Line {seq} ({rider}): the measures (revision {revision}) are outside the basic model’s certified range: a pattern maker reviews the unit.",
+    "MTM_NOT_CONFIRMED": "Line {seq} ({rider}): the factory has not confirmed the {garment} measures (revision {revision}) yet: the order will wait for the review.",
+    "MTM_NOT_LATEST": "Line {seq} ({rider}): made to revision {revision}, but the rider has newer measures (revision {latest}): move the unit to the newest revision.",
+    "MTM_OLD_MEASURES": "Line {seq} ({rider}): the {garment} measures are older than 12 months: ask the rider for a new measure.",
+    "general": {
+      "MTM_NOT_STARTED": "A made-to-measure unit’s style is not made to measure, or made-to-measure has not started for its measurement template.",
+      "MTM_OUTSIDE_RANGE": "A made-to-measure unit is outside the certified range of the basic model: a pattern maker reviews it.",
+      "MTM_NOT_CONFIRMED": "The factory has not confirmed a rider’s measures yet: the order waits for the review.",
+      "MTM_NOT_LATEST": "A made-to-measure unit is made to an older revision: the rider has newer measures.",
+      "MTM_OLD_MEASURES": "A rider’s measures are older than 12 months: ask for a new measure."
+    }
+  },
+  "remake": {
+    "title": "Remake of a made-to-measure unit",
+    "unit": "{order} line {seq}: {style} {colourway}, base size {size}",
+    "madeTo": "Made to revision {revision} of the rider’s measures",
+    "remakeToSame": "The remake is made to the same revision ({revision})",
+    "remakeToNewer": "The remake is made to the rider’s newest revision ({revision})",
+    "review": {
+      "WAITING": "waiting for the factory review",
+      "CONFIRMED": "confirmed by the factory review",
+      "NEED_MORE": "more was asked from the rider",
+      "other": "its review is not known"
+    },
+    "goods": "The returned unit was made to a body: it is scrapped or held in quarantine, never put back into stock.",
+    "makeHint": "One new order at no price, one unit for each line decided Remake; it waits for the factory review while the measures do.",
+    "make": "Make the remake order",
+    "order": "Remake order {number}",
+    "orderWaits": "Remake order {number}: waits for the factory review",
+    "openOrder": "Open the order",
+    "held": {
+      "right": "It needs the rights to decide returns, manage orders and see measurements.",
+      "off": "Made-to-measure has stopped for the unit’s measurement template: the Owner starts it again (Products › Sizes & measurements › Measurement templates).",
+      "decide": "Save the decision of line {seq} as Remake first.",
+      "status": "The goods must have arrived (received or inspected) before the remake order.",
+      "offline": "You are offline: make it when the network is back.",
+      "busy": "Making the remake order…"
+    },
+    "notUnit": "Line {seq} is not a made-to-measure unit: a remake is for made-to-measure units (replace it instead).",
+    "reading": "Reading the made-to-measure unit…",
+    "failed": "Couldn’t read the made-to-measure unit",
+    "retry": "Try again",
+    "problem": {
+      "forbidden": "Your roles do not allow this.",
+      "moved": "The return changed meanwhile: it was read again, try again.",
+      "unavailable": "The service is not reachable now: try again in a moment.",
+      "internal": "Something went wrong: try again."
+    }
+  }
+}

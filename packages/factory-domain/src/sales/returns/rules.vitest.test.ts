@@ -97,10 +97,12 @@ describe('grading and the suggested outcome (QHS-117)', () => {
 
 describe('the decision (SAL-341)', () => {
   const facts = { received: 1, value: 42_000, grade: 'NEW', cause: 'NO_FAULT', ppe: false, reasonCode: 'WRONG_SIZE' } as const
-  it('fits each disposition its outcomes and refuses the remake (made to measure, later)', () => {
+  it('fits each disposition its outcomes; a remake scraps or quarantines the unit (B-W2b-368)', () => {
     expect(decisionProblems({ disposition: 'CREDIT_ONLY', goodsOutcome: 'RESTOCK' }, facts)).toEqual([])
     expect(decisionProblems({ disposition: 'RETURN_UNCHANGED', goodsOutcome: 'RESTOCK' }, facts).map((problem) => problem.path)).toEqual(['goodsOutcome'])
-    expect(decisionProblems({ disposition: 'REMAKE', goodsOutcome: 'SCRAP' }, facts)[0]!.message).toMatch(/made-to-measure/)
+    expect(OUTCOMES_BY_DISPOSITION.REMAKE).toEqual(['SCRAP', 'QUARANTINE'])
+    expect(decisionProblems({ disposition: 'REMAKE', goodsOutcome: 'SCRAP' }, facts)).toEqual([])
+    expect(decisionProblems({ disposition: 'REMAKE', goodsOutcome: 'RESTOCK' }, facts).map((problem) => problem.message)).toEqual(['Remake: the goods are scrapped, or are held in quarantine.'])
     expect(OUTCOMES_BY_DISPOSITION.SCRAP).toEqual(['SCRAP'])
   })
   it('never credits more than what came back is worth, and a credit only needs one', () => {

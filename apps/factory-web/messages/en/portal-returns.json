@@ -300,7 +300,8 @@
   "outcome": {
     "REPLACE": "A replacement",
     "REPAIR": "A repair",
-    "CREDIT": "A credit note"
+    "CREDIT": "A credit note",
+    "REMAKE": "A remake"
   },
   "cancel": {
     "title": "Cancel this request?",

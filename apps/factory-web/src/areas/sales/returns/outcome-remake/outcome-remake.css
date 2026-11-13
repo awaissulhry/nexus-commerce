@@ -1,0 +1,61 @@
+/*
+ * B-W2b-368 — a remake as a return outcome on the RMA record (SCR-112, Inspection & decision): LAYOUT only. Semantic tokens, no
+ * colours of its own, no page max-width (Owner rule 2026-10-29): the part fills its line's column.
+ */
+.fw-mtr-remake {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-md);
+}
+
+.fw-mtr-h4 {
+  margin: 0;
+  color: var(--nds-text-strong);
+  font-size: var(--nds-font-size-sm);
+  font-weight: 600;
+}
+
+.fw-mtr-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-mtr-unit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-6) var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-mtr-strong {
+  color: var(--nds-text-strong);
+  font-weight: 600;
+}
+
+.fw-mtr-hint,
+.fw-mtr-reading {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-mtr-reading {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  margin: 0;
+}
+
+.fw-mtr-problem {
+  margin: 0;
+  color: var(--nds-danger-text);
+  font-size: var(--nds-font-size-sm);
+}

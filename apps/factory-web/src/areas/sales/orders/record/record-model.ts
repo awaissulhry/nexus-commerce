@@ -123,6 +123,8 @@ export interface OrderRecordModel {
   depth?: OrderDepthModel
   /** B-W2b-340: a colour line's "Options" (the configurator of the order line, its own container); absent: not drawn. */
   lineOptions?: (line: Order['lines'][number]) => ReactNode
+  /** B-W2b-368 (XF1:02): "Waits for the factory review" (./review-banner), drawn by the container; absent: nothing to say. */
+  reviewBanner?: ReactNode
   /** Design cases: what a dialog holds typed. */
   draft?: { date?: string; reason?: string; reasonCode?: string; lineIds?: string[]; scope?: 'order' | 'lines'; amount?: string; reference?: string; receivedOn?: string; issue?: boolean; message?: string; typed?: string }
 }

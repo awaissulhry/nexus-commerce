@@ -15,6 +15,7 @@ import { withPersonFloor } from '../price-waterfall/floors'
 // B-W2b-358: a made-to-measure unit's cost target.
 import { mtmCostTarget } from './mtm-line'
 import { decimal, moneyLineOf, quotePartyOf, readLineRecords, storedVat, treatmentFor, VERSION_COLUMNS, type LineRecord, type QuoteParty, type QuoteRow, type Reader, type VersionRow } from './store'
+import { unitFingerprint } from '../mtm/fingerprint'
 
 /**
  * A quote version's money, written (B-W1-21): the cost of a line from its style's cost sheet (costing, B-W1-16: the
@@ -208,7 +209,8 @@ export function fingerprintOf(version: Pick<VersionRow, 'currency' | 'taxMode' |
     vatAmount: version.vatAmount,
     grossAmount: version.grossAmount,
     costAmount: version.costAmount,
-    lines: lines.map((line) => [line.seq, line.styleId, line.styleRevisionId, line.colourwayId, decimal(line.unitPrice), decimal(line.listUnitPrice), line.costAmount, line.vatRatePct.toFixed(2), line.vatNature, line.sizes.map((row) => [row.size, row.quantity, row.unitPrice])]),
+    // B-W2b-368 (XF1:05): a made-to-measure unit's revision and base size (../mtm/fingerprint.ts; a size-grid line adds nothing).
+    lines: lines.map((line) => [line.seq, line.styleId, line.styleRevisionId, line.colourwayId, decimal(line.unitPrice), decimal(line.listUnitPrice), line.costAmount, line.vatRatePct.toFixed(2), line.vatNature, line.sizes.map((row) => [row.size, row.quantity, row.unitPrice]), ...unitFingerprint(line)]),
   }
   return createHash('sha256').update(JSON.stringify(content)).digest('hex')
 }
