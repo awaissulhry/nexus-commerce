@@ -34,6 +34,8 @@ let ids: InventoryFixture['ids']
 let app: FastifyInstance
 let serial = 0
 const idem = () => `depth-${Date.now()}-${++serial}`
+// B-W2b-383 (XF8:05): the web's origin (made up), for the answer headers a page may read.
+const WEB = 'http://localhost:3200'
 const extra = { customer: newId(), supplier: newId(), archivedCustomer: newId(), printer: newId(), count: newId(), user: newId() }
 
 const grant = (permissions: readonly Permission[], companies: Grant['companies'] = 'all', sites: Grant['sites'] = 'all'): Grant => ({ permissions, companies, sites, parties: 'all' })
@@ -74,7 +76,7 @@ beforeAll(async () => {
   ids = f.ids
   const SESSIONS = sessions()
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', webOrigin: WEB, trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
     { database: f.database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
   )
   await f.admin(
@@ -225,6 +227,15 @@ describe('bin labels (SCM-178)', () => {
     expect(text).toContain('A1-R1-01')
     expect(text).toContain('Ubicazione')
     expect((await call('company-two', 'POST', '/inventory/locations/labels/pdf', { locationIds: [ids.bin1] })).statusCode).toBe(404)
+    // B-W2b-383 (XF8:05): how many asked places got no label, in a header the web's page may read (exposed by CORS).
+    expect(answer.headers['x-labels-refused']).toBe('0')
+    const outside = (await f.admin<{ id: string }>(`SELECT id FROM "Location" WHERE "tenantId" = $1 AND kind = 'CUSTOMER' ORDER BY code LIMIT 1`, [ids.tenantA]))[0]!.id
+    const fromWeb = await app.inject({ method: 'POST', url: '/inventory/locations/labels/pdf', headers: { 'x-test-session': 'manager', 'idempotency-key': idem(), origin: WEB }, payload: { locationIds: [ids.bin1, outside], copies: 1, language: 'en' } })
+    expect(fromWeb.statusCode, fromWeb.body).toBe(200)
+    expect(pdfPageCount(fromWeb.rawPayload)).toBe(1)
+    expect(fromWeb.headers['x-labels-refused']).toBe('1')
+    expect(fromWeb.headers['access-control-allow-origin']).toBe(WEB)
+    expect(String(fromWeb.headers['access-control-expose-headers']).split(', ')).toContain('x-labels-refused')
   })
 })
 

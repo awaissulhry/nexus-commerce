@@ -122,6 +122,8 @@ describe('the index (worker side)', () => {
       ...['ServiceCase'],
       // B-W2b-351: product-safety reports (the accident log and the reports' screens, B-W2b-357).
       ...['ProductSafetyReport'],
+      // B-W2b-383: transfers between sites (Warehouse › Transfers, B-W2b-326).
+      ...['TransferOrder'],
     ].sort())
     const handlers = searchHandlers(indexers)
     expect(handlers.map((handler) => handler.name)).toEqual([INDEX_HANDLER, REBUILD_HANDLER])
@@ -273,7 +275,8 @@ describe('GET /search (the reader side)', () => {
     expect(salesB.results.map((row: Json) => row.recordId)).not.toContain(id('sales:SO1'))
     const warehouse = await search('warehouseA1', 'q=seed&limit=100')
     expect(warehouse.results.length).toBeGreaterThan(0)
-    expect(warehouse.results.every((row: Json) => ['Lot', 'Hide', 'GoodsReceipt'].includes(row.recordType) && (row.siteId === siteA1 || row.siteId === null))).toBe(true)
+    // B-W2b-383: a transfer is read with inventory.stock.view too (Warehouse › Transfers), scoped to its sending site.
+    expect(warehouse.results.every((row: Json) => ['Lot', 'Hide', 'GoodsReceipt', 'TransferOrder'].includes(row.recordType) && (row.siteId === siteA1 || row.siteId === null))).toBe(true)
     const p1 = await search('partyP1', 'q=seed&limit=100')
     expect(p1.results.length).toBeGreaterThan(0)
     expect(p1.results.every((row: Json) => row.recordId === id('party:P1') || row.recordType === 'SalesOrder')).toBe(true)

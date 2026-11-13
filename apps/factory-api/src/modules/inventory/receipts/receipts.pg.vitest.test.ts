@@ -312,7 +312,8 @@ describe('lots and the order line\'s tolerance', () => {
 
     const answer = await ok('manager', 'POST', '/inventory/receipts', body('The supplier sent full rolls; we keep them'), 201)
     const [lining, protector] = answer.receipt.lines
-    expect(lining).toMatchObject({ quantity: '110.0000', uom: 'M', note: 'Difference from the order: The supplier sent full rolls; we keep them', difference: { kind: 'OVER', difference: '10.0000' } })
+    // B-W2b-383: the note holds the receiver's words only; `difference` is the code the screen words (no English label).
+    expect(lining).toMatchObject({ quantity: '110.0000', uom: 'M', note: 'The supplier sent full rolls; we keep them', difference: { kind: 'OVER', difference: '10.0000' } })
     expect(lining.lots.map((lot: Json) => [lot.qualityStatus, lot.holds, lot.baseQuantity])).toEqual([
       ['RELEASED', [], '60.0000'],
       ['QUARANTINE', ['QUALITY_HOLD'], '50.0000'],

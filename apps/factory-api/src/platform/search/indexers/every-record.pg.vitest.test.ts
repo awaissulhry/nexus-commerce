@@ -326,3 +326,53 @@ describe('events keep the entries current', () => {
     for (const type of ['purchase_order.revision_started', 'purchase_order.lines_cancelled', 'purchase_order.lines_closed_short', 'purchase_order.confirm_by_moved', 'purchase_order.reminder_sent']) expect(po.on[type], type).toBe('subject')
   })
 })
+
+// B-W2b-383 (XF8:06): the W2b-5 records that had no search: a transfer between sites (B-W2b-326), a place by its bin label
+// code (B-W2b-289), a repair by the serial of our garment (B-W2b-342).
+describe('B-W2b-383: transfers, bin label codes and a repair’s garment serial', () => {
+  it('finds a transfer by its number and its DDT, scoped to its sending company and site, with its status', async () => {
+    const transfers = await admin<Json>(`SELECT id::text, number, "ddtNumber", "companyId"::text, "fromSiteId"::text, status::text FROM "TransferOrder" WHERE "tenantId" = $1 ORDER BY id`, [tenantId])
+    expect(transfers.length, 'the warehouse seed has transfers').toBeGreaterThan(0)
+    for (const row of transfers) {
+      expect(await entry('TransferOrder', row.id), row.number).toMatchObject({ number: row.number, companyId: row.companyId, siteId: row.fromSiteId, partyId: null, area: 'warehouse', viewPermission: 'inventory.stock.view', status: row.status })
+      const found = await search('owner', row.number)
+      expect(found.results[0], row.number).toMatchObject({ recordType: 'TransferOrder', recordId: row.id, match: 'number' })
+    }
+    const shipped = transfers.find((row) => row.ddtNumber !== null)!
+    // By its DDT number: it comes first (the other seeded transfers' numbers are only similar).
+    expect((await search('owner', shipped.ddtNumber, 'TransferOrder')).results[0]).toMatchObject({ recordType: 'TransferOrder', recordId: shipped.id })
+    // The sending plant's warehouse finds it; a reader of the other plant only does not (one scope per entry: the list shows both ends).
+    expect((await search('warehouseA1', shipped.number)).results.map((row: Json) => row.recordId)).toContain(shipped.id)
+    expect((await search('siteB1', shipped.number, 'TransferOrder')).results).toEqual([])
+    // Never a quantity of goods: the seed's shipped 30 m is not in its words.
+    expect(String((await entry('TransferOrder', shipped.id))!.searchText).split(' ')).not.toContain('30')
+  })
+
+  it('a transfer changed is read again (inventory.transfer_changed)', async () => {
+    const draft = (await admin<{ id: string; number: string }>(`SELECT id::text, number FROM "TransferOrder" WHERE "tenantId" = $1 AND status = 'DRAFT' ORDER BY id LIMIT 1`, [tenantId]))[0]!
+    await admin(`DELETE FROM "SearchEntry" WHERE "recordType" = 'TransferOrder' AND "recordId" = $1`, [draft.id])
+    expect(await entry('TransferOrder', draft.id)).toBeUndefined()
+    await indexEvent(system, indexers, envelope('inventory.transfer_changed', draft.id, { transferId: draft.id, number: draft.number, change: 'EDITED', status: 'DRAFT', previousStatus: 'DRAFT' }))
+    expect(await entry('TransferOrder', draft.id)).toMatchObject({ number: draft.number, status: 'DRAFT' })
+  })
+
+  it('finds a place by the code on its bin label, read again when the code changes (inventory.location_label_changed)', async () => {
+    const place = (await admin<{ id: string; code: string; labelCode: string }>(`SELECT id::text, code, "labelCode" FROM "Location" WHERE "tenantId" = $1 AND "labelCode" IS NOT NULL ORDER BY code LIMIT 1`, [tenantId]))[0]!
+    expect((await search('owner', place.labelCode, 'Location')).results.map((row: Json) => row.recordId)).toContain(place.id)
+    await admin(`UPDATE "Location" SET "labelCode" = 'SRCH-LBL-383' WHERE id = $1`, [place.id])
+    await indexEvent(system, indexers, envelope('inventory.location_label_changed', place.id, { locationId: place.id, code: place.code, labelCode: 'SRCH-LBL-383', change: 'CHANGED' }))
+    expect((await search('owner', 'SRCH-LBL-383', 'Location')).results.map((row: Json) => row.recordId)).toEqual([place.id])
+    await admin(`UPDATE "Location" SET "labelCode" = $2 WHERE id = $1`, [place.id, place.labelCode])
+    await indexEvent(system, indexers, envelope('inventory.location_label_changed', place.id, { locationId: place.id, code: place.code, labelCode: place.labelCode, change: 'CHANGED' }))
+  })
+
+  it('keeps the serial of our garment on its repair’s entry (repair.changed)', async () => {
+    const repair = (await admin<{ id: string }>(`SELECT id::text FROM "RepairOrder" WHERE "tenantId" = $1 ORDER BY number LIMIT 1`, [tenantId]))[0]!
+    // A garment of ours (a seeded serial: the column names one).
+    const serial = (await admin<{ serial: string }>(`SELECT serial FROM "GarmentSerial" WHERE "tenantId" = $1 ORDER BY serial LIMIT 1`, [tenantId]))[0]!.serial
+    expect(String((await entry('RepairOrder', repair.id))!.searchText)).not.toContain(serial.toLowerCase())
+    await admin(`UPDATE "RepairOrder" SET "garmentSerial" = $2 WHERE id = $1`, [repair.id, serial])
+    await indexEvent(system, indexers, envelope('repair.changed', repair.id, { repairId: repair.id }))
+    expect(String((await entry('RepairOrder', repair.id))!.searchText)).toContain(serial.toLowerCase())
+  })
+})

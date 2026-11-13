@@ -204,8 +204,11 @@ export interface PrintDialogModel {
   printers: Loaded<PrinterOption[]> | null
   posting: boolean
   problem: Phrase | null
-  /** After a print: the jobs queued, and the places refused (in words). */
-  done?: { jobs: PrintAnswer['jobs']; refused: { code: string; key: string }[] } | null
+  /**
+   * After a print: the jobs queued, and the places refused (in words). B-W2b-383: after the PDF, `pdfLeftOut` = how many
+   * places the API gave no label (its `x-labels-refused`): only then does the dialog stay open.
+   */
+  done?: { jobs: PrintAnswer['jobs']; refused: { code: string; key: string }[]; pdfLeftOut?: number } | null
 }
 
 export interface PrintActions {

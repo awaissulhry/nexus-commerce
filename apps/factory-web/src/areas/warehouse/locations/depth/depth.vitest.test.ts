@@ -1,13 +1,15 @@
 import { createElement } from 'react'
 import { renderToString } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
+import type { ApiClient } from '../../../../lib/api/client'
 import { ApiError } from '../../../../lib/api/errors'
 import { LOCALES } from '../../../../lib/i18n/locales'
-import { messagesFor } from '../../../../lib/i18n/messages'
+import { CATALOGUE, createTranslator, messagesFor } from '../../../../lib/i18n/messages'
 import { I18nProvider } from '../../../../lib/i18n/provider'
 import { LOCATIONS, ROLE_PERMISSIONS } from '../../../_shared/stock/fixtures'
 import { DEFAULTS, PICK_FACE, PLACES, PRINTERS, RACK_LABEL, TRANSIT } from '../../stock/depth/demo/fixtures'
 import { designScreen as listScreen } from '../list/fixtures'
+import { labelsRefusedOf, placeLabelsPdf } from './api'
 import { LocationsView } from '../list/view/LocationsView'
 import { designScreen as recordScreen } from '../record/fixtures'
 import { LocationRecordView } from '../record/view/LocationRecordView'
@@ -143,6 +145,22 @@ describe('B-W2b-327 bin labels: the code, the print, the PDF', () => {
     expect(printStartHeldKey(2)).toBeNull()
   })
 
+  // B-W2b-383 (XF8:05): the PDF's answer header says how many asked places got no label.
+  it('reads the PDF’s count of places without a label from its answer header', async () => {
+    expect([labelsRefusedOf('0'), labelsRefusedOf('2'), labelsRefusedOf(' 3 '), labelsRefusedOf(null), labelsRefusedOf('-1'), labelsRefusedOf('two')]).toEqual([0, 2, 3, 0, 0, 0])
+    const asked: unknown[] = []
+    const api = {
+      bytes: async (path: string, options: Parameters<ApiClient['bytes']>[1]) => {
+        asked.push([path, options?.method, options?.body])
+        options?.onHeaders?.(new Headers({ 'x-labels-refused': '1' }))
+        return new Uint8Array([1, 2])
+      },
+    } as unknown as ApiClient
+    const answer = await placeLabelsPdf(api, { locationIds: ['a', 'b'], copies: 1, language: 'it' })
+    expect(answer).toEqual({ bytes: new Uint8Array([1, 2]), refused: 1 })
+    expect(asked).toEqual([['/inventory/locations/labels/pdf', 'POST', { locationIds: ['a', 'b'], copies: 1, language: 'it' }]])
+  })
+
   it('lays the bin label out as it prints: heading, the name, the code as bars, the facts', () => {
     const layout = binLabelLayout(RACK_LABEL.label, 'Bin label')
     expect(layout).toMatchObject({ widthMm: 100, heightMm: 50 })
@@ -178,5 +196,12 @@ describe('B-W2b-327 draws every Locations design case in both languages with no 
     expect(draw(LocationRecordView, recordScreen.cases.find((item) => item.id === 'w2b-labels-transit')!.model.model)).toContain('carries no label')
     expect(draw(LocationRecordView, recordScreen.cases.find((item) => item.id === 'w2b-labels-read-only')!.model.model)).not.toContain('Save the code')
     expect(draw(LocationsView, listScreen.cases.find((item) => item.id === 'w2b-status')!.model.model)).toContain('Print labels')
+    // B-W2b-383: the PDF opened with a place the API left out says so, in both languages (the dialog portals out of a
+    // server render: its case's model and its words are checked).
+    const leftOut = listScreen.cases.find((item) => item.id === 'w2b-383-pdf-left-out')!.model.model as { print: PrintDialogModel }
+    expect(leftOut.print.done).toEqual({ jobs: [], refused: [], pdfLeftOut: 1 })
+    const say = (locale: 'it' | 'en') => createTranslator(locale, CATALOGUE[locale]['warehouse-depth'] ?? {})
+    expect([say('en')('wd.loc.print.pdfDoneTitle'), say('en')('wd.loc.print.pdfLeftOut', { count: 1 }), say('en')('wd.loc.print.pdfLeftOut', { count: 2 })]).toEqual(['The PDF is open', '1 place got no label', '2 places got no label'])
+    expect([say('it')('wd.loc.print.pdfDoneTitle'), say('it')('wd.loc.print.pdfLeftOut', { count: 1 }), say('it')('wd.loc.print.pdfLeftOutBody')]).toEqual(['Il PDF è aperto', '1 ubicazione senza etichetta', expect.stringContaining('Il PDF contiene le altre')])
   })
 })

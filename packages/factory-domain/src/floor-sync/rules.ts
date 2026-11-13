@@ -119,7 +119,9 @@ export function errorRefusal(error: { readonly code: string; readonly message: s
   // B-W2b-F31: a 409 that names its module's refusal in an issue path (`refusal/<CODE>`, e.g. a warehouse task step, or the
   // database's `warehouse/<CODE>`, e.g. a blocked place or a count's frozen line) is that refusal: its own code, words and
   // finality, so the tablet shows its words and does not send it again for ever as a generic CONFLICT.
-  const named = error.code === 'conflict' || error.code === 'invalid_state' ? error.issues?.find((issue) => NAMED_REFUSAL.test(issue.path)) : undefined
+  // B-W2b-383 (XF8:02): a 400 that names its refusal the same way (a bin move of more than lies there, `refusal/TOO_MUCH`;
+  // a whole roll or hide moved in part, `refusal/WHOLE_ONLY`) is that refusal too, never a "something missing" BAD_EVENT.
+  const named = error.code === 'conflict' || error.code === 'invalid_state' || error.code === 'validation_failed' ? error.issues?.find((issue) => NAMED_REFUSAL.test(issue.path)) : undefined
   if (named) return moduleRefusal({ code: named.path.slice(named.path.indexOf('/') + 1), message: named.message || error.message })
   switch (error.code) {
     case 'validation_failed':

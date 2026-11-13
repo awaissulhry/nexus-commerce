@@ -168,6 +168,15 @@ describe('move between bins by two scans (SCM-218)', () => {
     await refused(call('tablet', 'POST', '/inventory/bin-moves', { ...body, fromLocationId: P.bulk }, null), 400)
   })
 
+  // B-W2b-383 (XF8:02): a queued move the office refuses keeps its own code and words and is final (REFUSED on the tablet,
+  // never sent again): too much (a 400), a blocked place and a frozen count line (the database's 409s).
+  it('a queued move refused by the office keeps its refusal, final: too much, a blocked place, a frozen line', async () => {
+    const queued = (payload: Json, n: number) => applyQueued(caller('tablet'), { clientEventId: newId(), kind: 'inventory.binMove', payload: { code: 'SEED-LOT-W36-01', placeCode: 'BIN-A1-PF-01', ...payload } }, { key: `q383-${run}-${n}` })
+    expect(await queued({ fromLocationId: P.bulk, quantity: '100000' }, 1)).toMatchObject({ status: 'refused', refusal: { code: 'TOO_MUCH', final: true, message: expect.not.stringContaining('refusal/') } })
+    expect(await queued({ fromLocationId: P.bulk, quantity: '1', placeCode: 'BIN-A1-DMG-01' }, 2)).toMatchObject({ status: 'refused', refusal: { code: 'LOCATION_BLOCKED', final: true, message: 'Location A1-DMG-01 is blocked (damage): nothing moves in or out of it until it is unblocked.' } })
+    expect(await queued({ fromLocationId: P.countBay, quantity: '1' }, 3)).toMatchObject({ status: 'refused', refusal: { code: 'COUNT_FROZEN', final: true } })
+  })
+
   it('moves part of the lot from the bulk rack onto the pick face, the label being the confirmation', async () => {
     const bulk = num(await stockAt(lining.lotId, P.bulk))
     const answer = await ok(call('tablet', 'POST', '/inventory/bin-moves', { code: 'SEED-LOT-W36-01', fromLocationId: P.bulk, placeCode: 'bin-a1-pf-01', quantity: '12.5' }), 201)

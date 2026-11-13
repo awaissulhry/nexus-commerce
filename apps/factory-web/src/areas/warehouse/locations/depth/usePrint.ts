@@ -38,7 +38,8 @@ export function usePrint(api: ApiClient, can: Pick<DepthCan, 'printLabels' | 'pr
   const actions: PrintActions = {
     onChange: (draft) => setModel((current) => (current ? { ...current, draft, problem: null } : current)),
     onClose: () => {
-      const printed = (latest.current?.done?.jobs.length ?? 0) > 0
+      // B-W2b-383: places the PDF left out changed since the page read them: it reads them again too.
+      const printed = (latest.current?.done?.jobs.length ?? 0) > 0 || (latest.current?.done?.pdfLeftOut ?? 0) > 0
       setModel(null)
       if (printed) onDone()
     },
@@ -52,7 +53,7 @@ export function usePrint(api: ApiClient, can: Pick<DepthCan, 'printLabels' | 'pr
         const tab = typeof window === 'undefined' ? null : window.open('', '_blank')
         setModel({ ...current, posting: true, problem: null })
         placeLabelsPdf(api, { locationIds: ids, copies: current.draft.copies, language: current.draft.language })
-          .then((bytes) => {
+          .then(({ bytes, refused }) => {
             const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'application/pdf' }))
             if (tab && !tab.closed) tab.location.href = url
             else {
@@ -64,7 +65,8 @@ export function usePrint(api: ApiClient, can: Pick<DepthCan, 'printLabels' | 'pr
               link.remove()
             }
             setTimeout(() => URL.revokeObjectURL(url), 120_000)
-            setModel(null)
+            // B-W2b-383 (XF8:05): places the API left out (changed since the page read them) are said; else the dialog closes.
+            setModel((now) => (now && refused > 0 ? { ...now, posting: false, done: { jobs: [], refused: [], pdfLeftOut: refused } } : null))
           })
           .catch((error: unknown) => {
             tab?.close()

@@ -223,6 +223,8 @@ describe('XF5:06 — a supplier’s document carries its type; the vault and the
     expect(codes((await as('buyer', 'GET', `/purchasing/orders/${order.id}/send-check`)).checks)).toEqual(['COMPLIANCE_DOCUMENT_MISSING'])
     const vault = await as('buyer', 'GET', `/purchasing/suppliers/${P2}/documents`)
     expect(vault.documents.find((doc: Json) => doc.fileId === report)).toMatchObject({ documentTypeCode: 'AZO_TEST_REPORT' })
+    // B-W2b-383 (B-W2b-382's gap): the vault answers the file's version, the one the type's change sends.
+    expect(vault.documents.find((doc: Json) => doc.fileId === report).version).toBe(await fileVersion(report))
     expect(vault.materials.find((row: Json) => row.needs === 'CR_VI_TEST_REPORT')).toMatchObject({ state: 'MISSING', heldAtSend: true })
     // Not a type of the list; an old version.
     expect(paths((await call('buyer', 'PUT', `/purchasing/suppliers/${P2}/documents/${report}/type`, { version: await fileVersion(report), documentTypeCode: 'NOT_A_TYPE' })).body)).toEqual(['body/documentTypeCode'])
@@ -270,6 +272,10 @@ describe('XF5:03 — a receipt line beyond its tolerance waits for a RECEIPT_OVE
     // Home › Approvals: the buyer's role decides it; the receipt is the page it opens.
     const row = (await as('buyer', 'GET', '/approvals/tasks?tile=WAITING_FOR_ME')).rows.find((entry: Json) => entry.id === held.taskId)
     expect(row).toMatchObject({ kind: 'RECEIPT_OVER_TOLERANCE', record: { type: 'GoodsReceiptLine', id: receipt.lines[0].id, label: expect.stringContaining(receipt.number), parent: { type: 'GoodsReceipt', id: receipt.id } } })
+    // B-W2b-383 (B-W2b-382's gap): the label is codes only, in no language (the receipt/its line · the material).
+    expect(row.record.label).toMatch(new RegExp(`^${receipt.number}/${receipt.lines[0].seq} · \\S+$`))
+    // The line's note holds the receiver's words only: no English label before the reason.
+    expect(receipt.lines[0].note).toBe('Three spares sent with the lot')
     expect(row.facts.find((fact: Json) => fact.field === 'overPct')).toMatchObject({ value: '30' })
   })
 
