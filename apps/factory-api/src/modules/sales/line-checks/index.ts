@@ -6,6 +6,8 @@ import { releasedScopeCheck } from './released-scope'
 import { lifecycleCheck } from './lifecycle'
 import { marketsCheck } from './markets'
 import { materialsCheck } from './materials'
+// B-W2b-358 (MM1:01; PRD-017, SAL-292): the made-to-measure units' rule (its own file in modules/sales/mtm).
+import { mtmLineCheck } from '../mtm/line-check'
 
 /**
  * The rules a quote's or an order's lines must meet (plan W2b-5: "each line rule is a file in modules/sales/line-checks,
@@ -74,6 +76,9 @@ export const LINE_CHECKS: readonly LineCheck[] = Object.freeze([
   lifecycleCheck,
   marketsCheck,
   materialsCheck,
+  // B-W2b-358 (MM1:01): a made-to-measure unit: not started / outside the certified range (BLOCKS), measures not confirmed, not
+  // the newest revision, older than 12 months (WARNING).
+  mtmLineCheck,
 ])
 
 /** Every rule over the document, in LINE_CHECKS order; the BLOCKS first. */

@@ -10,6 +10,8 @@ import type { TaskRef } from '../../../platform/approvals/kinds/kind'
 import { askOverride, newestCheck, planCredit, writeCheck, type CreditPlan } from './check'
 import { readAmounts, type Reader } from './reading'
 import { officeOf } from './access'
+// B-W2b-358 (SAL-292): a made-to-measure unit's measures are confirmed before the order goes on.
+import { waitsForMeasures } from '../mtm/order-gate'
 
 /**
  * What a yes, a "check again" and an "ask for a yes" do to a credit hold (B-W2b-304; SAL-237, SAL-241).
@@ -75,6 +77,11 @@ export async function confirmWaitingOrder(tools: CommandTools, orderId: string, 
   // B-W2b-303's SALES_ORDER rule may ask a yes on the same order: it keeps waiting for that one.
   const other = await tools.tx.approvalTask.findFirst({ where: { kind: 'SALES_ORDER', recordType: 'SalesOrder', recordId: order.id, status: 'PENDING' }, select: { id: true } })
   if (other) return false
+  // B-W2b-358: a made-to-measure unit's measures the factory has not confirmed: it keeps waiting (the review's CONFIRM lets it go on).
+  if (await waitsForMeasures(tools.tx, order.id)) {
+    tools.audit({ action: 'credit.orderGoesOn', recordType: 'SalesOrder', recordId: order.id, companyId: order.companyId, after: { status: 'PENDING_APPROVAL', stillWaitsFor: 'MEASUREMENTS' }, reason: words })
+    return false
+  }
   await tools.tx.salesOrder.update({ where: { id: order.id }, data: { status: 'CONFIRMED', version: { increment: 1 }, updatedAt: tools.now }, select: { id: true } })
   tools.audit({ action: 'credit.orderGoesOn', recordType: 'SalesOrder', recordId: order.id, companyId: order.companyId, before: { status: 'PENDING_APPROVAL' }, after: { status: 'CONFIRMED' }, reason: words })
   tools.emit({ type: 'sales_order.status_changed', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, from: 'PENDING_APPROVAL', to: 'CONFIRMED', by: tools.context.audience === 'office' ? 'person' : 'system' } })

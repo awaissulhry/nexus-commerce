@@ -77,7 +77,8 @@ const PEOPLE: Record<string, Person> = {
   // A copy of the sales role without the margin grain (S2's answer b, as a custom role may be): prices only.
   salesPriceOnly: withoutGrain(fromTemplate('sales'), 'margin'),
   // A manager who may edit and approve, with every grain: asks, then may not approve their own request.
-  boss: { tenantId: tenant, actorId: newId(), permissions: [...QUOTES, 'quotes.approve', ...grainsOf(['price', 'cost', 'margin'])], companies: 'all' },
+  // B-W2b-358: a made-to-measure line names a rider's profile, read with sales.measurements.view.
+  boss: { tenantId: tenant, actorId: newId(), permissions: [...QUOTES, 'quotes.approve', 'sales.measurements.view', ...grainsOf(['price', 'cost', 'margin'])], companies: 'all' },
   // An approver without the margin grain.
   blindApprover: { tenantId: tenant, actorId: newId(), permissions: ['quotes.view', 'quotes.approve', 'money.price'], companies: 'all' },
   companyB: { tenantId: tenant, actorId: newId(), permissions: [...QUOTES, 'quotes.approve', ...grainsOf(['price', 'cost', 'margin'])], companies: [companyB] },
@@ -485,9 +486,10 @@ describe('refusals', () => {
     }
   })
 
-  it('a made-to-measure line: 409, it comes later (Owner Q9)', async () => {
+  // B-W2b-358 (MM1:01): W1's "comes later" is lifted; while the template's made-to-measure rules are off (GATE-MTM, Owner 11-10) a unit is refused.
+  it('a made-to-measure line: 409 while made-to-measure has not started for its template', async () => {
     const error = await refused('boss', 'POST', `${quoteUrl(quote.id)}/lines`, { version: quote.version, kind: 'MADE_TO_MEASURE', measurementProfileId: seedId('measurement:P1:rider:JACKET:1'), styleId: jacket, colourwayId: BLK, sizes: grid([['52', 1]]) }, 409)
-    expect(error.message).toBe('Made-to-measure comes later: quote a size-grid line for now (one style in one colourway with pieces per size).')
+    expect(error.message).toBe('Made-to-measure has not started for measurement template JACKET: its rules stay off until the Owner starts them (GATE-MTM).')
     expect(await admin('SELECT id FROM "QuoteLine" WHERE "versionId" = $1', [quote.current.id])).toEqual([])
   })
 
