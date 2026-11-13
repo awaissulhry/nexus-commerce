@@ -1,0 +1,99 @@
+/* B-W2b-343 — price lists in depth (Breaks & surcharges, Valid from–to, Import prices, the price list PDF): layout only. */
+
+.fw-pd-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+.fw-pd-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+}
+
+.fw-pd-h2 {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-pd-cell {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.fw-pd-sub {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-pd-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-pd-inline {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-pd-edit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--nds-space-4);
+  width: 100%;
+}
+
+.fw-pd-edit-input {
+  max-width: 120px;
+  text-align: right;
+}
+
+.fw-pd-mark {
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-muted);
+}
+
+.fw-pd-mark.failed {
+  color: var(--nds-danger);
+}
+
+.fw-pd-days {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-pd-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+}
+
+.fw-pd-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--nds-space-10);
+}
+
+.fw-pd-list {
+  margin: 0;
+  padding-left: var(--nds-space-16);
+}
+
+.fw-pd-print-note {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}

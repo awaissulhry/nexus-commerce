@@ -251,6 +251,10 @@
       "purchasing_supplierPrices": {
         "name": "Supplier price lists",
         "fills": "A supplier's approved sources: material, colour, purchase unit, price (cost), minimum, lead time and primary or backup, keyed by supplier, material and colour code."
+      },
+      "sales_priceLists": {
+        "name": "Price lists",
+        "fills": "A price list's prices by list code, style and colourway (or every colourway) and first day: the last day, the unit price (price) and its quantity breaks. The rows go into each list's draft version."
       }
     },
     "keys": {

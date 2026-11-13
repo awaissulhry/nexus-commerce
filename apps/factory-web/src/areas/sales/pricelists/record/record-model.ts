@@ -1,9 +1,12 @@
 import type { ReactNode } from 'react'
 import type { RecordPanelsViewModel } from '../../../../record-panels/model'
 import type { PartyRow, StyleDetail, StyleRow } from '../../quotes/api'
-import type { CompareAnswer, PriceEntry, PriceListDetail, VersionAnswer } from '../api'
+import type { CompareAnswer, PriceEntry, PriceListDetail, PriceVersion, VersionAnswer } from '../api'
 import type { Phrase, PriceListAbilities, RecordTab, Tone } from '../model'
 import type { Loaded } from '../parts'
+// B-W2b-343: Breaks & surcharges, dated prices, import, export and the price list PDF.
+import type { Minimum, PriceBreak, VersionRules } from '../depth/api'
+import type { BreakDraft, MinimumDraft, SurchargeDraft, SurchargeGridRow } from '../depth/model'
 
 /**
  * The price list record's view model (SCR-106-record; design sales.pricelists "Record: Price list"): everything the
@@ -21,6 +24,12 @@ export type RecordDialog =
   | { kind: 'compare' }
   | { kind: 'archive' }
   | { kind: 'help' }
+  // B-W2b-343
+  | { kind: 'days'; entryId: string; validFrom: string; validTo: string; price: string }
+  | { kind: 'addBreak'; draft?: BreakDraft }
+  | { kind: 'removeBreaks' }
+  | { kind: 'addSurcharge'; draft?: SurchargeDraft }
+  | { kind: 'addMinimum'; draft?: MinimumDraft }
 
 export interface StylePick {
   query: string
@@ -32,6 +41,9 @@ export interface StylePick {
   /** '' = the style's price for every colourway. */
   colourwayId: string
   price: string
+  /** B-W2b-343: the price's own days ('' = every day of the version). */
+  validFrom?: string
+  validTo?: string
 }
 
 export interface CustomerPick {
@@ -86,6 +98,50 @@ export interface PriceListRecordModel {
   panelsPreview?: RecordPanelsViewModel
   /** Design cases: the row that has the focus. */
   focusRow?: number
+  /** B-W2b-343: Breaks & surcharges (its own reads), the import's button and dialog, the version's export and PDF. */
+  breaks?: BreaksDepthModel
+  importer?: ReactNode
+}
+
+/** B-W2b-343 — the Breaks & surcharges tab's part of the record (record/use-breaks.ts on the live page). */
+export interface BreaksDepthModel {
+  can: PriceListAbilities
+  /** The version shown (the Prices tab's: the draft, else the one in force). */
+  version: PriceVersion | null
+  rules: { status: 'loading' } | { status: 'error'; problem: string } | { status: 'ready'; value: VersionRules }
+  minimums: { status: 'loading' } | { status: 'error'; problem: string } | { status: 'ready'; value: Minimum[] }
+  /** Why the rules cannot change (a `sales-prices-depth` Phrase), or null. */
+  held: Phrase | null
+  showDiscount: boolean
+  selectedBreaks: readonly string[]
+  selectedMinimums: readonly string[]
+  /** A cell's save (`<breakId>:<field>`, `<rowId>:<size>`): in flight or refused. */
+  cells: Readonly<Record<string, 'saving' | 'failed'>>
+  /** Sizes added as columns before any surcharge names them. */
+  extraSizes: readonly string[]
+  busy: boolean
+  /** In the `sales-prices-depth` catalogue. */
+  notice: { tone: Tone; words: Phrase } | null
+  /** New minimum › a material: the search and its results. */
+  materials: { query: string; results: Array<{ id: string; code: string; name: string }> | null }
+}
+
+export interface BreaksDepthActions {
+  onBreakCell?: (row: PriceBreak, field: 'unitPrice' | 'discountPct', text: string) => void
+  onSurchargeCell?: (row: SurchargeGridRow, size: string, value: string | null) => void
+  onSurchargeRefused?: (size: string, text: string) => void
+  onSelectBreaks?: (ids: readonly string[]) => void
+  onSelectMinimums?: (ids: readonly string[]) => void
+  onMoveMinimums?: (move: 'archive' | 'reactivate') => void
+  onShowDiscount?: (show: boolean) => void
+  onDialog?: (dialog: RecordDialog | null) => void
+  onAddBreak?: (draft: BreakDraft) => void
+  onRemoveBreaks?: () => void
+  onAddSurcharge?: (draft: SurchargeDraft) => void
+  onAddMinimum?: (draft: MinimumDraft) => void
+  onMaterialQuery?: (query: string) => void
+  onRetry?: () => void
+  onDismissNotice?: () => void
 }
 
 export interface PriceListRecordActions {
@@ -105,7 +161,7 @@ export interface PriceListRecordActions {
   onRemovePrices?: () => void
   onStyleQuery?: (query: string) => void
   onStylePick?: (styleId: string | null) => void
-  onStyleField?: (field: 'colourwayId' | 'price', value: string) => void
+  onStyleField?: (field: 'colourwayId' | 'price' | 'validFrom' | 'validTo', value: string) => void
   onAddPrice?: () => void
   onCustomerFrom?: (day: string) => void
   onCustomerQuery?: (query: string) => void
@@ -118,6 +174,12 @@ export interface PriceListRecordActions {
   onArchive?: () => void
   onReactivate?: () => void
   onCopyCode?: () => void
+  // B-W2b-343
+  breaks?: BreaksDepthActions
+  /** A price's days (Valid from–to), written through the dated prices. */
+  onDays?: (entry: PriceEntry, days: { validFrom: string; validTo: string; price: string }) => void
+  /** Record ⋯ Import prices. */
+  onImport?: () => void
 }
 
 export interface PriceListRecordProps {

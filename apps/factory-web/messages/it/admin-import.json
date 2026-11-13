@@ -251,6 +251,10 @@
       "purchasing_supplierPrices": {
         "name": "Listini fornitori",
         "fills": "Le fonti approvate di un fornitore: materiale, colore, unità d’acquisto, prezzo (costo), minimo, tempo di consegna e principale o di riserva, per codice fornitore, materiale e colore."
+      },
+      "sales_priceLists": {
+        "name": "Listini",
+        "fills": "I prezzi di un listino per codice listino, modello e variante colore (o ogni variante) e primo giorno: l'ultimo giorno, il prezzo unitario (prezzo) e i suoi scaglioni di quantità. Le righe entrano nella versione in bozza di ogni listino."
       }
     },
     "keys": {

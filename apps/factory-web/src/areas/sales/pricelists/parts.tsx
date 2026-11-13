@@ -22,15 +22,28 @@ import './pricelists.css'
  * words, the record band with its states (loading, not found, no right, a failed read) and the keys list behind `?`.
  */
 
-export const PRICELISTS_NAMESPACES = ['pricelists', 'lists'] as const
+// B-W2b-343: the W2b parts' words (`sales-prices-depth`) beside W2a's.
+export const PRICELISTS_NAMESPACES = ['pricelists', 'lists', 'sales-prices-depth'] as const
 
 export function PriceListsMessages({ children }: { children?: ReactNode }) {
   return <WithMessages namespaces={PRICELISTS_NAMESPACES}>{children}</WithMessages>
 }
 
 export const useWords = (): Translate => useT('pricelists')
+/** B-W2b-343: the W2b parts' catalogue. */
+export const useDepthWords = (): Translate => useT('sales-prices-depth')
 
 export const say = (t: Translate, phrase: Phrase | null | undefined): string | null => (phrase ? t(phrase.key, phrase.params) : null)
+
+/**
+ * B-W2b-343: a Phrase of either catalogue — `depth.<key>` names a key of `sales-prices-depth` (the W2b parts' words in the
+ * record's notices and dialog problems), anything else one of `pricelists`.
+ */
+export function useSayAny(): (phrase: Phrase | null | undefined) => string | null {
+  const t = useWords()
+  const d = useDepthWords()
+  return (phrase) => (phrase ? (phrase.key.startsWith('depth.') ? d(phrase.key.slice(6), phrase.params) : t(phrase.key, phrase.params)) : null)
+}
 
 export function StatePill({ state }: { state: PriceListState }) {
   const t = useWords()

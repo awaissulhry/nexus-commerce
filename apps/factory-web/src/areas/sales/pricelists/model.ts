@@ -200,7 +200,8 @@ export function baseChoices(lists: readonly PriceListRow[], companyId: string | 
 
 // ---- the record ----------------------------------------------------------------------------------------------------------
 
-export const RECORD_TABS = ['prices', 'customers', 'versions', 'activity'] as const
+// B-W2b-343: Breaks & surcharges after Prices.
+export const RECORD_TABS = ['prices', 'breaks', 'customers', 'versions', 'activity'] as const
 export type RecordTab = (typeof RECORD_TABS)[number]
 
 export function tabOf(asked: string | null | undefined): RecordTab {

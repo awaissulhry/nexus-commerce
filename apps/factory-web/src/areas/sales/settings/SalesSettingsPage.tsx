@@ -13,6 +13,8 @@ import { SalesSettingsView, type Read, type SalesSettingsModel } from './view/Sa
 // B-W2b-316: Sales settings › Quote templates and Size curves.
 import { SizeCurvesSection } from './curves/CurvesSection'
 import { QuoteTemplatesSection } from './templates/TemplatesSection'
+// B-W2b-343: Quote approval rules › Margin floor % per role (B-W2b-330's API).
+import { MarginFloorsSection } from './floors/FloorsSection'
 
 /**
  * `/w/<company>/sales/settings` (SCR-235): reads the sales settings and the return policy of the scope (this company, or
@@ -148,7 +150,7 @@ export function SalesSettingsPage() {
     <SalesSettingsView
       model={model}
       reasons={can.reasonsView ? <ReasonListsEditor lists={REASON_LIST_GROUPS.sales} /> : undefined}
-      depth={{ templates: <QuoteTemplatesSection />, curves: <SizeCurvesSection /> }}
+      depth={{ templates: <QuoteTemplatesSection />, curves: <SizeCurvesSection />, /* B-W2b-343 */ floors: <MarginFloorsSection scope={scope} companyId={companyId} /> }}
       actions={{
         onScope: setScope,
         onEdit: (card) => {
