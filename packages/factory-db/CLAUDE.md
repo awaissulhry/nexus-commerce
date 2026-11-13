@@ -235,6 +235,21 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    routing steps its cells are for, as factory-domain's `stepIsFor` reads them (a step only for sizes, colourways or
    options none of its cells has may be left out; every other step stays required); it redefines W2b wave 7's
    `factory_work_order_guard`, the rest of the body word for word):
+   `…_packing_w2b_guards` (W2b-6 schema wave 46/57, B-W2b-364, packing and the shipment queue: packaging types (name,
+   inner size all or none, tare below the maximum weight, a pallet kind exactly on a PALLET, the cost with its currency;
+   company and kind fixed) and defaults per style or size run (one live per company, kind, style and run: a partial unique);
+   carton contents (ParcelLine) written only while the shipment is a DRAFT, the size the line's, no cap while DRAFT but at
+   DRAFT → PACKED each line with contents counted exactly; mark templates (1 to 16 fields each once, an ISO 639-1 language,
+   one live per company and customer or default: a partial unique); holds on a shipment placed only while DRAFT or PACKED
+   (the shipment FOR NO KEY UPDATE), never edited, released once with why, one in force per shipment and reason (a partial
+   unique); while one is in force nothing goes into the shipment's cartons or parcels, no carrier label, no move to PACKED or
+   SHIPPED (`factory_packing_refuse_held`, the shipment FOR SHARE); cut-offs per site, carrier and weekday (HH:MM); its own
+   triggers on Shipment (the split from a DRAFT or PACKED shipment of the same order, given once; the PACKED checks of
+   contents, serials per carton and "n of N"), Parcel (its packaging a CARTON, BOX or PALLET of the shipment's company,
+   ACTIVE; "n of N"; not removed with contents), ShipmentLine (not removed with contents, its size not changed under them)
+   and GarmentSerial (the carton of its line's shipment, set while RELEASED and DRAFT; `GarmentSerial_unpack_carton`, a
+   BEFORE trigger that fires after the guard, clears the carton when the line is cleared); no earlier function redefined;
+   it calls recall's `factory_recall_words_ok` and `factory_recall_not_future`):
    triggers, partial unique indexes and deferred
    constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new

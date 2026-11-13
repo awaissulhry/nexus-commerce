@@ -419,6 +419,8 @@ model SizeScale {
   // W2b-4 sizes-depth.prisma (wave 27/33): its grade rules and prepacks.
   gradeRules GradeRule[]
   prepacks   Prepack[]
+  // W2b-6 packing.prisma (wave 46/57): the packaging its size runs take by default.
+  packagingDefaults PackagingDefault[]
   // W2b-5 sales-pricing.prisma (wave 38/44): its size curves.
   sizeCurves SizeCurve[] @relation("SizeCurveScale")
   styles  Style[]
@@ -625,6 +627,8 @@ model Style {
   productionControlTests    ProductionControlTest[]
   // W2b plantcare.prisma (wave 14/16): the clicking dies that cut it.
   clickingDies        ClickingDie[]
+  // W2b-6 packing.prisma (wave 46/57): the packaging it takes by default.
+  packagingDefaults   PackagingDefault[]
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from the style's rows.
