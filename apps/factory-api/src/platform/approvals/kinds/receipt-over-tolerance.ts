@@ -73,7 +73,9 @@ async function readSubject(client: Reader, recordId: string): Promise<ApprovalSu
   return {
     companyId: line.receipt.companyId,
     siteId: line.receipt.siteId,
-    label: `${line.receipt.number} · line ${line.seq} · ${line.item.code}`.slice(0, 200),
+    // B-W2b-383 (B-W2b-382's gap): codes only, in no language ("GR-2026-0001/10 · SEED-PRO-300": the receipt, its line, the
+    // material), as the web shows it inside its own words; the summary stays the API's (the web words the request from its facts).
+    label: `${line.receipt.number}/${line.seq} · ${line.item.code}`.slice(0, 200),
     summary: `${line.receipt.number} line ${line.seq} (${line.item.code}): more than its delivery tolerance${over === null ? '' : ` (+${over} %)`}, to be posted`.slice(0, 500),
     facts: { overPct: over, itemCode: line.item.code, itemKind: line.item.kind, supplierCode: supplier?.code ?? null, siteCode: site?.code ?? null },
     // What is received is what the yes covers: a changed quantity or a receipt posted or cancelled meanwhile makes it STALE.

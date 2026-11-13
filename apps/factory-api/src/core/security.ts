@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import rateLimit from '@fastify/rate-limit'
 import type { Redis } from 'ioredis'
+import { EXPOSED_HEADERS } from './cors-expose'
 import { ApiError, sendError } from './errors'
 import { REQUEST_ID_HEADER } from './ids'
 
@@ -71,7 +72,8 @@ function applyCors(request: FastifyRequest, reply: FastifyReply, webOrigin: stri
       .code(204)
       .send()
   }
-  void reply.header('access-control-expose-headers', REQUEST_ID_HEADER)
+  // B-W2b-383 (XF8:05): every answer header a page reads, not only the request id (core/cors-expose.ts).
+  void reply.header('access-control-expose-headers', EXPOSED_HEADERS.join(', '))
   return undefined
 }
 

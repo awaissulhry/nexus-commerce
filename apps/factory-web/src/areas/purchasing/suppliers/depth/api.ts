@@ -158,6 +158,8 @@ const vaultSchema = z.object({
       uploadId: z.string().nullable(),
       articleCodes: z.array(z.string()),
       addedAt: z.string(),
+      /** B-W2b-383 (B-W2b-382's gap): the file's row version, the one "say what it is" sends (no GET /files/:id first). */
+      version: z.number(),
     }),
   ),
   nextExpiry: z.string().nullable(),

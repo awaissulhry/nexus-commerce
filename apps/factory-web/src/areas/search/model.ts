@@ -32,7 +32,9 @@ export const SEARCH_TYPES = ['SalesOrder', 'Quote', 'Party', 'Style', 'Item', 'P
   // B-W2b-353: a service case (B-W2b-345's indexer; it opens its page, Sales › Warranty & service).
   'ServiceCase',
   // B-W2b-361: a product-safety report (B-W2b-351's indexer; it opens its page under Compliance › PPE register & recalls, B-W2b-357).
-  'ProductSafetyReport'] as const
+  'ProductSafetyReport',
+  // B-W2b-383: a transfer between sites (its indexer; it opens its page, Warehouse › Transfers).
+  'TransferOrder'] as const
 
 /** The status codes the search catalogue says in words (`search:status.<code>`); another code is not shown. */
 export const STATUS_CODES: ReadonlySet<string> = new Set([

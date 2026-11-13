@@ -97,8 +97,10 @@ beforeAll(async () => {
   // Many files in a few seconds: the seeded file store's rate limit is a person's, not a test's.
   await admin(`UPDATE "IntegrationAccount" SET "rateLimitPerMinute" = 6000, "rateLimitBurst" = 1000 WHERE "tenantId" = $1`, [T])
   await loadReports(SRC)
+  // B-W2b-383: one export per source and more every step: past the default 300 requests a minute (429 rate_limited); a high
+  // limit like the every-record search walk's (B-W2b-F26).
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET, rateLimit: { max: 10_000, timeWindowMs: 60_000 } },
     { database: h.database, routesRoot: SRC, authenticate: testAuthenticator((request) => (String(request.headers['x-test-session']) in PEOPLE ? session(String(request.headers['x-test-session']) as Person) : null)) },
   )
 }, 900_000)
@@ -188,6 +190,28 @@ describe('a report of the pack exports as Excel', () => {
     const sheet = workbook.worksheets[0]!
     expect(sheet.getRow(1).values).toEqual([undefined, 'Ordine', 'Stato'])
     expect(['Confermato', 'In produzione', 'Pronto da spedire', 'Spedito in parte']).toContain(sheet.getRow(2).getCell(2).value)
+  })
+
+  // B-W2b-383 (XF8:06): the W2b-5 lists that had no export.
+  it('Transfers: the seeded transfers newest first, states in words, the address filters them', async () => {
+    const columns = [{ key: 'number', label: 'Numero' }, { key: 'from', label: 'Da' }, { key: 'to', label: 'A' }, { key: 'status', label: 'Stato' }, { key: 'ddt', label: 'DDT' }]
+    const all = await exported('owner', { listKey: 'warehouse.transfers', format: 'CSV', columns })
+    const lines = (await bytesOf('owner', all.id)).toString('utf8').slice(1).split('\r\n').filter((line) => line !== '').map((line) => line.split(';'))
+    const seeded = await admin<{ number: string }>(`SELECT number FROM "TransferOrder" WHERE "tenantId" = $1 ORDER BY "createdAt" DESC, id DESC`, [T])
+    expect(lines.slice(1).map((line) => line[0]!.split(' · ')[0])).toEqual(seeded.map((row) => row.number))
+    const shipped = lines.find((line) => line[0]!.startsWith('SEED-TRF-0002'))!
+    expect(shipped[3]).toMatch(/^In viaggio/)
+    expect(shipped[4]).toBe('SEED-DDT-TRF-0002')
+    const drafts = await exported('owner', { listKey: 'warehouse.transfers', format: 'CSV', columns, query: 'status=DRAFT' })
+    expect(drafts.rowCount).toBe(seeded.filter((row) => row.number === 'SEED-TRF-0001').length)
+  })
+
+  it('Master schedule: the production strategy per item of the first site, strategies in words', async () => {
+    const done = await exported('owner', { listKey: 'planning.mps', format: 'CSV', columns: [{ key: 'item', label: 'Articolo' }, { key: 'strategy', label: 'Strategia' }] })
+    expect(done.rowCount).toBeGreaterThan(0)
+    const lines = (await bytesOf('owner', done.id)).toString('utf8').slice(1).split('\r\n').filter((line) => line !== '').slice(1)
+    expect(lines).toHaveLength(done.rowCount)
+    for (const line of lines) expect(line.split(';')[1], line).toMatch(/^(Su ordine|Per magazzino|Assemblaggio su ordine)( · predefinita)?$/)
   })
 })
 

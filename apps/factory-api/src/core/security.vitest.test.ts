@@ -62,13 +62,14 @@ describe('request ids', () => {
 })
 
 describe('CORS: only the web origin', () => {
-  it('allows the web origin with credentials, and exposes the request id', async () => {
+  it('allows the web origin with credentials, and exposes the request id and the headers a page reads', async () => {
     const app = await boot()
     const response = await app.inject({ method: 'POST', url: '/write', headers: { origin: WEB } })
     expect(response.statusCode).toBe(200)
     expect(response.headers['access-control-allow-origin']).toBe(WEB)
     expect(response.headers['access-control-allow-credentials']).toBe('true')
-    expect(response.headers['access-control-expose-headers']).toBe('x-request-id')
+    // B-W2b-383 (XF8:05): the bin labels PDF's count of refused places too (core/cors-expose.ts).
+    expect(response.headers['access-control-expose-headers']).toBe('x-request-id, x-labels-refused')
     expect(response.headers.vary).toBe('Origin')
   })
 
