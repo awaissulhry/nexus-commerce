@@ -40,7 +40,12 @@
  * with a change order, a sample round decided by the brand, a DoC and a label checked for a market, a recall) in its own throwaway
  * database, the same rules. The default run leaves that folder out too.
  *
- * Run: node scripts/factory/golden-flow.mjs [daily|followups|people|quality|portal|product] — exit 1 when a step fails or the server is not usable. The vitest
+ * Eighth suite (B-W2b-359): `node scripts/factory/golden-flow.mjs sales-depth` runs only src/golden-flow/sales-depth/ — the W2b-5
+ * sales, planning, buying and stock records (an inquiry to a confirmed order with options and a credit check, a promise kept,
+ * planned work to a workshop, a PO approved and received by scan, a count and a transfer, a return and a safety report) in its
+ * own throwaway database, the same rules. The default run leaves that folder out too.
+ *
+ * Run: node scripts/factory/golden-flow.mjs [daily|followups|people|quality|portal|product|sales-depth] — exit 1 when a step fails or the server is not usable. The vitest
  * database guard needs FACTORY_DATABASE_URL (loopback, factory_test… or this worktree's database) on the command line
  * when the worktree has no apps/factory-api/.env.
  */
@@ -68,19 +73,23 @@ const QUALITY = 'src/golden-flow/quality/'
 const PORTAL = 'src/golden-flow/portal/'
 // The seventh suite (B-W2b-273): the W2b-4 product and compliance records; the default run leaves it out too.
 const PRODUCT = 'src/golden-flow/product/'
+// B-W2b-359: the eighth suite, the W2b-5 sales, planning, buying and stock records; the default run leaves it out too.
+const SALES_DEPTH = 'src/golden-flow/sales-depth/'
 const SUITES = {
-  w1: { folder: FOLDER, extra: ['--exclude', `${DAILY}**`, '--exclude', `${FOLLOWUPS}**`, '--exclude', `${PEOPLE}**`, '--exclude', `${QUALITY}**`, '--exclude', `${PORTAL}**`, '--exclude', `${PRODUCT}**`] },
+  w1: { folder: FOLDER, extra: ['--exclude', `${DAILY}**`, '--exclude', `${FOLLOWUPS}**`, '--exclude', `${PEOPLE}**`, '--exclude', `${QUALITY}**`, '--exclude', `${PORTAL}**`, '--exclude', `${PRODUCT}**`, /* B-W2b-359 */ '--exclude', `${SALES_DEPTH}**`] },
   daily: { folder: DAILY, extra: [] },
   followups: { folder: FOLLOWUPS, extra: [] },
   people: { folder: PEOPLE, extra: [] },
   quality: { folder: QUALITY, extra: [] },
   portal: { folder: PORTAL, extra: [] },
   product: { folder: PRODUCT, extra: [] },
+  // B-W2b-359
+  'sales-depth': { folder: SALES_DEPTH, extra: [] },
 }
 const suiteName = process.argv[2] ?? 'w1'
 const suite = SUITES[suiteName]
 if (!suite) {
-  console.error(`golden-flow: unknown suite ${JSON.stringify(suiteName)} (w1, daily, followups, people, quality, portal, product)`)
+  console.error(`golden-flow: unknown suite ${JSON.stringify(suiteName)} (w1, daily, followups, people, quality, portal, product, sales-depth)`)
   process.exit(2)
 }
 const VITEST = join(ROOT, 'node_modules/.bin/vitest')
