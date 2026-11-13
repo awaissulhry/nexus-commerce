@@ -11,20 +11,27 @@ import { ITEM_KIND_CHOICES, type CountItemKind } from '../../api'
 import { startsLater, TIME_ZONE, type CountsCan } from '../../model'
 import { say, useWords } from '../../parts'
 import type { NewCountActions, NewCountModel, SiteChoice } from '../../view-model'
+// B-W2b-320 (cn-new W2b): the ABC class in the scope and the freeze.
+import type { AbcClass } from '../../depth/api'
+import { ABC_CHOICES, classCount } from '../../depth/model'
+import { useCountsDepthWords } from '../../depth/view/DueCounts'
 
 /**
  * New count (design warehouse.counts/pop:cn-new, opened by the band's primary button or `c`): the kind (a cycle count, or
  * the year-end physical inventory as of 31 December of a year, c.c. art. 2217), the site, the scope (a location and
  * everything under it, a material and one of its lots, a kind of material; none: the whole site), the counters' team, a
  * note, and whether counting starts at once (the expected quantities frozen now). A year-end inventory starts on its
- * date or after it: "Start now" is held with that reason before. No freeze and no ABC class (W2b). Esc closes; the
- * focus returns to the opener.
+ * date or after it: "Start now" is held with that reason before. B-W2b-320: the scope's ABC class of materials (a cycle
+ * count of the class starts at once and names no single material or lot) and the freeze (the counted lines hold their
+ * moves until each is counted; on by default). Esc closes; the focus returns to the opener.
  */
 export function NewCountDialog({ model, sites, can, actions }: { model: NewCountModel; sites: SiteChoice[]; can: CountsCan; actions?: NewCountActions }) {
   const t = useWords()
+  const { t: td } = useCountsDepthWords()
   const locale = useLocale()
   const place = { locale, timeZone: TIME_ZONE }
   const draft = model.draft
+  const byClass = classCount(draft)
   const scopeId = useId()
   const [query, setQuery] = useState(draft.item ? `${draft.item.code}` : '')
   const typed = useRef(false)
@@ -94,7 +101,7 @@ export function NewCountDialog({ model, sites, can, actions }: { model: NewCount
             value="YEAR_END"
             checked={yearEnd}
             selected={yearEnd}
-            onChange={() => actions?.onDraft?.({ kind: 'YEAR_END', start: false })}
+            onChange={() => actions?.onDraft?.({ kind: 'YEAR_END', start: false, abcClass: null })}
             title={t('kind.YEAR_END')}
             description={t('new.yearEndHint')}
           />
@@ -152,11 +159,23 @@ export function NewCountDialog({ model, sites, can, actions }: { model: NewCount
               ))}
             </Select>
           </Field>
-          <Field label={t('new.material')} hint={can.materials ? t('new.materialHint') : t('new.noMaterials')}>
+          {!yearEnd && (
+            <Field label={td('cd.new.class')} hint={byClass ? td('cd.new.classStarts') : td('cd.new.classHint')}>
+              <Select value={draft.abcClass ?? ''} onChange={(event) => actions?.onDraft?.({ abcClass: (event.target.value || null) as AbcClass | null, ...(event.target.value ? { item: null, lotId: null, start: true } : {}) })}>
+                <option value="">{td('cd.form.anyClass')}</option>
+                {ABC_CHOICES.map((abc) => (
+                  <option key={abc} value={abc}>
+                    {td('cd.scope.class', { abc })}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          )}
+          <Field label={t('new.material')} hint={byClass ? td('cd.new.classNoItem') : can.materials ? t('new.materialHint') : t('new.noMaterials')}>
             <Input
               type="search"
               leadingIcon={model.searching ? <Spinner size={12} /> : <Search size={13} aria-hidden />}
-              disabled={!can.materials}
+              disabled={!can.materials || byClass}
               placeholder={t('new.materialSearch')}
               value={query}
               onChange={(event) => {
@@ -169,7 +188,7 @@ export function NewCountDialog({ model, sites, can, actions }: { model: NewCount
           <Field label={t('new.materialPick')}>
             <Select
               value={draft.item?.id ?? ''}
-              disabled={!model.found || model.found.length === 0}
+              disabled={!model.found || model.found.length === 0 || byClass}
               onChange={(event) => actions?.onDraft?.({ item: model.found?.find((item) => item.id === event.target.value) ?? null, lotId: null })}
             >
               <option value="">{model.found === null ? t('new.searchFirst') : model.found.length === 0 ? t('new.noneFound') : t('new.anyMaterial')}</option>
@@ -181,7 +200,7 @@ export function NewCountDialog({ model, sites, can, actions }: { model: NewCount
               ))}
             </Select>
           </Field>
-          {draft.item && draft.item.tracking !== 'NONE' && (
+          {draft.item && !byClass && draft.item.tracking !== 'NONE' && (
             <Field label={t('new.lot')} hint={t('new.lotHint')}>
               <Select value={draft.lotId ?? ''} disabled={model.lots === null} onChange={(event) => actions?.onDraft?.({ lotId: event.target.value || null })}>
                 <option value="">{t('new.anyLot')}</option>
@@ -206,10 +225,17 @@ export function NewCountDialog({ model, sites, can, actions }: { model: NewCount
             <Textarea value={draft.note} maxLength={1000} rows={2} onChange={(event) => actions?.onDraft?.({ note: event.target.value })} />
           </Field>
           <div className="wide fw-cn-row">
-            <Toggle checked={draft.start && !later} disabled={later} onChange={(next: boolean) => actions?.onDraft?.({ start: next })} aria-label={t('new.start')} />
+            <Toggle checked={(draft.start || byClass) && !later} disabled={later || byClass} onChange={(next: boolean) => actions?.onDraft?.({ start: next })} aria-label={t('new.start')} />
             <span className="fw-st-cell">
               <span>{t('new.start')}</span>
-              <span className="fw-cn-hint">{startHeld ?? t('new.startHint')}</span>
+              <span className="fw-cn-hint">{startHeld ?? (byClass ? td('cd.new.classStarts') : t('new.startHint'))}</span>
+            </span>
+          </div>
+          <div className="wide fw-cn-row">
+            <Toggle checked={draft.freeze ?? false} onChange={(next: boolean) => actions?.onDraft?.({ freeze: next })} aria-label={td('cd.new.freeze')} />
+            <span className="fw-st-cell">
+              <span>{td('cd.new.freeze')}</span>
+              <span className="fw-cn-hint">{td('cd.new.freezeHint')}</span>
             </span>
           </div>
         </div>

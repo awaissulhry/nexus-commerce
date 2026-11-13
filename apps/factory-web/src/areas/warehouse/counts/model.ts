@@ -9,7 +9,8 @@ import type { CountLine, CountQuery, CountRecord, CountRow, CountStatus, CountTi
  * said, and the CSV of the selection. The words live in `messages/<locale>/warehouse-counts.json`.
  */
 
-export const COUNTS_NAMESPACES = ['warehouse-counts', 'stock', 'lists'] as const
+// B-W2b-320: `warehouse-lots-counts` holds the W2b parts' words (schedules, freeze, frozen lines, blocked places).
+export const COUNTS_NAMESPACES = ['warehouse-counts', 'stock', 'lists', 'warehouse-lots-counts'] as const
 export const TIME_ZONE = 'Europe/Rome'
 
 // ---- abilities -------------------------------------------------------------------------------------------------------------
