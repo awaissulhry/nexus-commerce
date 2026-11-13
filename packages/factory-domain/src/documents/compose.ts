@@ -5,6 +5,7 @@ import { parseDecimal } from '../tax/decimal'
 import { formatDate, formatDateTime, formatDecimal, formatMoney, formatPercent, formatQuantity, formatUnitPrice } from './format'
 import { DOCUMENT_WORDS, ddtPartyHeading, type DocumentWords } from './i18n'
 import { DOCUMENT_LAYOUTS, type ColumnKey, type LayoutColumn } from './layouts'
+import { withOptions } from './options-block'
 import { addressLine, legalFooter, legalLines, legalName, legalProblems } from './legal'
 import {
   DDT_FREIGHT,
@@ -238,13 +239,14 @@ const namedAddress = (place: PostalAddress & { readonly name?: string | null }, 
   addressLine(place, language),
 ]
 
-function cell(key: ColumnKey, line: DocumentLine, currency: string, language: DocumentLanguage): string {
+function cell(key: ColumnKey, line: DocumentLine, currency: string, language: DocumentLanguage, printsOptions = false): string {
   switch (key) {
     case 'code':
       return line.code?.trim() ?? ''
     case 'description':
     case 'goods':
-      return line.description.trim()
+      // B-W2b-374 (XF3:03): the options after the description, where the layout prints them.
+      return printsOptions ? withOptions(line.description.trim(), line.options, language) : line.description.trim()
     case 'quantity':
       return formatQuantity(line.quantity, language)
     case 'uom':
@@ -379,7 +381,7 @@ export function composeDocument(input: DocumentInput): ComposedDocument {
     banner: input.sample === true ? words.notices.sample : null,
     blocks: blocks(input, words),
     facts: facts(input, words),
-    table: { columns, rows: input.lines.map((line) => columns.map((entry) => cell(entry.key, line, input.currency, language))) },
+    table: { columns, rows: input.lines.map((line) => columns.map((entry) => cell(entry.key, line, input.currency, language, layout.printsOptions === true))) },
     totals: totals(input, words),
     notes: filled(input.notes) ? { label: words.notes, value: input.notes.trim() } : null,
     notices,

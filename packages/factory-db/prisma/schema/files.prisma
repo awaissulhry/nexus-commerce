@@ -185,6 +185,10 @@ model StoredFile {
   supplierInvoiceFileXmlOf SupplierInvoiceFile[] @relation("SupplierInvoiceFileXml")
   sdiInboxItemXmlOf        SdiInboxItem[]        @relation("SdiInboxItemXml")
   accountingExportFiles AccountingExportFile[] @relation("AccountingExportFile")
+  // W2b-6 bank.prisma (schema wave 50/57): the bank statement, Ri.Ba. file or customer's statement it is.
+  bankStatements           BankStatement[]            @relation("BankStatementFile")
+  ribaBatchFiles           RibaBatch[]                @relation("RibaBatchFile")
+  customerStatementFigures CustomerStatementFigures[] @relation("CustomerStatementFiguresFile")
   // W2b pay.prisma (wave 6/7): the rate sheets, signed rate receipts, worker statements and payroll export files it is.
   ratePublicationSheets     RatePublication[]     @relation("RatePublicationSheet")
   rateAcknowledgementPapers RateAcknowledgement[] @relation("RateAcknowledgementPaper")

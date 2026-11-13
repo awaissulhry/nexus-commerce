@@ -12,6 +12,9 @@ import { findingsOf, groupRules, nameIn, orderChange, priceSummary, surchargeWor
 import { ConfiguratorMessages, useConfiguratorWords } from '../words'
 import type { LineConfigurator } from '../api'
 import '../configurator.css'
+// B-W2b-374: what a group takes; an order line's artwork in the portal.
+import { pickersOf } from '@nexus/factory-domain/product/options/takes'
+import { PortalShare } from '../../../../_shared/options-entry/PortalShare'
 
 type Read = { status: 'loading' } | { status: 'error'; problem: Say } | { status: 'ready' }
 
@@ -52,6 +55,8 @@ export interface ConfiguratorActions {
   onArtwork?: (files: File[]) => void
   onOpenArtwork?: (file: ArtworkFile) => void
   onRemoveArtwork?: (file: ArtworkFile) => void
+  /** B-W2b-374 (XF3:04): an order line's artwork shown in (or taken out of) the customer's portal. */
+  onShareArtwork?: (file: ArtworkFile, shown: boolean) => void
   onRetry?: () => void
   onDismissNotice?: () => void
   onStyle?: (styleId: string) => void
@@ -259,7 +264,7 @@ function Group({ group, model, actions, editable }: { group: OptionGroupView; mo
       {chosen.map((pick) => {
         const value = group.values.find((entry) => entry.id === pick.valueId)
         if (!value) return null
-        return <PickExtras key={pick.valueId} value={value} pick={pick} choices={model.style!.choices} editable={editable && model.mode !== 'BENCH'} bench={model.mode === 'BENCH'} actions={actions} />
+        return <PickExtras key={pick.valueId} value={value} pick={pick} choices={model.style!.choices} editable={editable && model.mode !== 'BENCH'} bench={model.mode === 'BENCH'} actions={actions} takes={group.takes ?? null} />
       })}
       {rules.length > 0 && (
         <ul className="fw-cfg-rules" aria-label={t('groups.rules')}>
@@ -293,11 +298,15 @@ function ValueNote({ value, locale, grains }: { value: OptionValueView; locale: 
   return <span>{parts.join(' · ')}</span>
 }
 
-function PickExtras({ value, pick, choices, editable, bench, actions }: { value: OptionValueView; pick: DraftPick; choices: Choices; editable: boolean; bench: boolean; actions?: ConfiguratorActions }) {
+function PickExtras({ value, pick, choices, editable, bench, actions, takes }: { value: OptionValueView; pick: DraftPick; choices: Choices; editable: boolean; bench: boolean; actions?: ConfiguratorActions; /** B-W2b-374 (XF3:05) */ takes?: 'COLOUR' | 'MATERIAL' | null }) {
   const { t, say, lang } = useConfiguratorWords()
   const problem = value.freeText ? textProblem(value, pick.text) : null
   const leather = choices.leathers.find((entry) => entry.id === pick.itemId) ?? null
   const colour = choices.colours.find((entry) => entry.id === pick.colourId) ?? null
+  // B-W2b-374 (XF3:05): only the picker the group takes (both when it takes either).
+  const offers = pickersOf(takes ?? null)
+  const colours = offers.colour ? choices.colours : []
+  const leathers = offers.material ? choices.leathers : []
   return (
     <div className="fw-cfg-extras">
       {value.freeText && (
@@ -305,15 +314,15 @@ function PickExtras({ value, pick, choices, editable, bench, actions }: { value:
           <Input value={pick.text} maxLength={value.freeTextMaxLength ?? undefined} disabled={!editable && !bench} onChange={(event) => actions?.onText?.(value.id, event.currentTarget.value)} />
         </Field>
       )}
-      {!bench && (choices.colours.length > 0 || choices.leathers.length > 0) && (
+      {!bench && (colours.length > 0 || leathers.length > 0) && (
         <div className="fw-cfg-material">
-          {choices.colours.length > 0 && (
+          {colours.length > 0 && (
             <Field label={t('groups.colour')}>
               <span className="fw-cfg-swatch-field">
                 {colour && <Swatch hex={colour.hex} name={nameIn(colour, lang)} code={colour.code} size="sm" noHex={t('groups.noHex')} />}
                 <Select size="sm" value={pick.colourId ?? ''} disabled={!editable} onChange={(event) => actions?.onColour?.(value.id, event.currentTarget.value || null)}>
                   <option value="">{t('groups.none')}</option>
-                  {choices.colours.map((entry) => (
+                  {colours.map((entry) => (
                     <option key={entry.id} value={entry.id}>
                       {entry.code} · {nameIn(entry, lang)}
                     </option>
@@ -322,11 +331,11 @@ function PickExtras({ value, pick, choices, editable, bench, actions }: { value:
               </span>
             </Field>
           )}
-          {choices.leathers.length > 0 && (
+          {leathers.length > 0 && (
             <Field label={t('groups.leather')}>
               <Select size="sm" value={pick.itemId ?? ''} disabled={!editable} onChange={(event) => actions?.onLeather?.(value.id, event.currentTarget.value || null, null)}>
                 <option value="">{t('groups.none')}</option>
-                {choices.leathers.map((entry) => (
+                {leathers.map((entry) => (
                   <option key={entry.id} value={entry.id}>
                     {entry.code} · {entry.name}
                   </option>
@@ -334,7 +343,7 @@ function PickExtras({ value, pick, choices, editable, bench, actions }: { value:
               </Select>
             </Field>
           )}
-          {leather && leather.colours.length > 0 && (
+          {offers.material && leather && leather.colours.length > 0 && (
             <Field label={t('groups.leatherColour')}>
               <Select size="sm" value={pick.itemColourId ?? ''} disabled={!editable} onChange={(event) => actions?.onLeather?.(value.id, leather.id, event.currentTarget.value || null)}>
                 <option value="">{t('groups.none')}</option>
@@ -447,9 +456,13 @@ function Artwork({ model, actions }: { model: ConfiguratorModel; actions?: Confi
             status={file.status === 'PENDING_UPLOAD' ? t('artwork.pending') : file.status === 'QUARANTINED' ? t('artwork.quarantined') : file.from === 'QUOTE_LINE' ? t('artwork.fromQuote') : undefined}
             actions={
               file.status === 'AVAILABLE' ? (
-                <Button size="sm" variant="ghost" onClick={() => actions?.onOpenArtwork?.(file)}>
-                  {t('artwork.open')}
-                </Button>
+                <>
+                  <Button size="sm" variant="ghost" onClick={() => actions?.onOpenArtwork?.(file)}>
+                    {t('artwork.open')}
+                  </Button>
+                  {/* B-W2b-374 (XF3:04): an order line's artwork in the customer's portal. */}
+                  {model.mode === 'ORDER' && <PortalShare shown={file.portal === true} may={line.may.share === true} onShare={actions?.onShareArtwork ? (shown) => actions.onShareArtwork?.(file, shown) : undefined} />}
+                </>
               ) : undefined
             }
             onRemove={line.may.artwork && file.from === 'LINE' && actions?.onRemoveArtwork ? () => actions.onRemoveArtwork?.(file) : undefined}

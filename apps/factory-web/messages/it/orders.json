@@ -864,7 +864,8 @@
       "catalogue": "{line}: questo modello o colore ora non si può ordinare (archiviato, o non offerto).",
       "moved": "{line}: nel frattempo l'ordine è cambiato: rileggilo.",
       "text": "{line}: un testo è troppo lungo.",
-      "other": "{line}: controlla questa riga."
+      "other": "{line}: controlla questa riga.",
+      "options": "Riga {line}: le sue opzioni non si possono prendere così: apri le sue Opzioni."
     }
   },
   "closeLines": {

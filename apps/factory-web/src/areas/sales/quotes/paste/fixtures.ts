@@ -32,6 +32,22 @@ export const designScreen = defineDesignScreen<PasteLinesModel>({
     { id: 'bad-head', label: 'A first row that cannot be read', model: model({ text: 'Codice\t50\t52\nDEMO-JKT-01\t1\t2', preview: null }) },
     { id: 'sample', label: 'The sample shape pasted', model: model({ text: PASTE_SAMPLE, preview: { ...PREVIEW, rows: [PREVIEW.rows[0]!], counts: { rows: 1, added: 0, changed: 1, skipped: 0, cellsLanded: 3, cellsLeftOut: 0 } } }) },
     { id: 'done', label: 'Written: 1 added, 1 changed', model: model({ state: { phase: 'done', results: { '2': { ok: true, words: { key: 'review.result.saved' } }, '3': { ok: true, words: { key: 'review.result.added' } } } } }) },
+    // B-W2b-374 (XF3:01): an Options column — a new line takes the values it names; what cannot be read is said.
+    {
+      id: 'w2b-374-options',
+      label: 'An Options column: a new line takes its options, an unknown one and a line already there said',
+      model: model({
+        text: 'Style\tColourway\tOptions\t50\t52\nDEMO-JKT-01\tBLK\tLINER:YES\t2\t6\nDEMO-JKT-01\tRED\tLINER:YES, NAME:NAME=ROSSI, HUMP:XL\t1\t3',
+        preview: {
+          ...PREVIEW,
+          rows: [
+            { ...PREVIEW.rows[0]!, sizes: { '50': 2, '52': 6 }, after: { '50': 2, '52': 6, '54': 2 }, leftOut: [{ size: null, message: "Row 2: the options are not written on a line already on the quote: change them in the line's Options." }] },
+            { ...PREVIEW.rows[1]!, sizes: { '50': 1, '52': 3 }, after: { '50': 1, '52': 3 }, priceFrom: 'LIST', options: 2, leftOut: [{ size: null, message: 'Row 3: option HUMP:XL is not one the style offers.' }] },
+          ],
+          counts: { rows: 2, added: 1, changed: 1, skipped: 0, cellsLanded: 4, cellsLeftOut: 0 },
+        },
+      }),
+    },
     { id: 'failed', label: 'The check failed', model: model({ preview: null, state: { phase: 'failed', problem: { ns: 'sales', key: 'problem.write.unavailable' } } }) },
   ],
 })

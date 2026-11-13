@@ -181,7 +181,10 @@ function Ready({ group, model, actions }: { group: GroupRecord; model: GroupReco
       ) : model.tab === 'styles' ? (
         <StylesTab group={group} model={model} actions={actions} />
       ) : (
-        <OptionsTab group={group} model={model} actions={actions} />
+        <>
+          {model.takes /* B-W2b-374: what a chosen value takes */}
+          <OptionsTab group={group} model={model} actions={actions} />
+        </>
       )}
       {dialog?.kind === 'edit' && <GroupFormDialog form={dialog.form} onDraft={actions?.onGroupDraft} onSave={actions?.onSaveGroup} onClose={() => actions?.onDialog?.(null)} />}
       {dialog?.kind === 'help' && (

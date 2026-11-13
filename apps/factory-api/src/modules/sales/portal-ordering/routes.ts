@@ -39,6 +39,9 @@ import { acceptRequest, listOfficeRequests, officeRequestView, refuseRequest } f
 import { pastOrder, pastOrders, reorderInto } from './reorder'
 import { addLines, changeHeader, changeLine, createDraft, discardDraft, getRequest, listRequests, removeLine, sendRequest, takeTodaysPrices, withdrawRequest } from './requests'
 import { orderTemplate, uploadSheet } from './upload'
+// B-W2b-374 (XF3:04): an option's artwork in the portal.
+import { processFiles } from '../../../platform/files/service'
+import { openArtworkContract, openPortalArtwork, portalOptionsContract, portalOrderOptions, shareArtworkContract, shareOrderArtwork } from './artwork'
 
 /**
  * Portal ordering (B-W2b-190; SAL-071 customer catalogue, SAL-072 reorder at today's prices, SAL-073 order upload with a
@@ -93,4 +96,13 @@ export default defineRoutes('portal-ordering', manifest, async (app) => {
   app.get('/sales/delivery-addresses', { schema: addressChecksContract }, async (request) => listAddressChecks(request, request.query))
   app.post('/sales/delivery-addresses/:addressId/approve', { schema: approveAddressContract }, async (request) => approveAddress(request, request.params.addressId, request.body, idempotencyKeyFrom(request), appClock(app)))
   app.post('/sales/delivery-addresses/:addressId/refuse', { schema: refuseAddressContract }, async (request) => refuseAddress(request, request.params.addressId, request.body, idempotencyKeyFrom(request), appClock(app)))
+
+  // B-W2b-374 (XF3:04): an option's artwork in the portal.
+  app.put('/sales/orders/:orderId/lines/:lineId/artwork/:fileId/portal', { schema: shareArtworkContract }, async (request) =>
+    shareOrderArtwork(request, request.params.orderId, request.params.lineId, request.params.fileId, request.body, idempotencyKeyFrom(request)),
+  )
+  app.get('/portal/sales-orders/:orderId/options', { schema: portalOptionsContract }, async (request) => portalOrderOptions(app, request, request.params.orderId))
+  app.post('/portal/sales-orders/:orderId/artwork/:fileId/open', { schema: openArtworkContract }, async (request) =>
+    openPortalArtwork(app, processFiles(), request, request.params.orderId, request.params.fileId, request.body, idempotencyKeyFrom(request)),
+  )
 })

@@ -42,4 +42,8 @@ export const manifest = defineManifest({
   'GET /sales/delivery-addresses': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
   'POST /sales/delivery-addresses/:addressId/approve': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
   'POST /sales/delivery-addresses/:addressId/refuse': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
+  // B-W2b-374 (XF3:04): an option's artwork in the portal (the office shows it; the customer opens it, logged).
+  'PUT /sales/orders/:orderId/lines/:lineId/artwork/:fileId/portal': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
+  'GET /portal/sales-orders/:orderId/options': { audiences: ['partner'], permission: 'portal.salesOrders.view', scope: 'party' },
+  'POST /portal/sales-orders/:orderId/artwork/:fileId/open': { audiences: ['partner'], permission: 'portal.salesOrders.view', scope: 'party' },
 })

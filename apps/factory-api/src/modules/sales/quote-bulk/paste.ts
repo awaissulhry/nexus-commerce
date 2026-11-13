@@ -12,6 +12,10 @@ import { refreshVersion } from '../quotes/pricing'
 import { assertDraft, assertQuotable, detailInCommand, onQuote } from '../quotes/quotes'
 import { officeQuote, quotePartyOf, readLineRecords, type LineRecord, type QuoteRow, type Reader, type VersionRow } from '../quotes/store'
 import { gridFactsOf, labelsOf, planGrid, previewTarget, schedulesOf, sizesRecord, writeGrid, type PlannedGrid } from './grid'
+// B-W2b-374 (XF3:01): a pasted new line's options.
+import type { LinePick } from '@nexus/factory-domain/sales/configurator/rules'
+import { checkStyleOptions } from '../../product/options/check'
+import { pastedPicks, writePastedPicks } from '../quotes/copy-options'
 
 /**
  * Paste lines from a sheet (B-W2b-302; SAL-160; design quote.lines.composer "Paste lines (W2b)", quote.lines.blocks "paste a
@@ -39,6 +43,8 @@ export interface PasteRowInput {
   /** Size code → pieces. */
   readonly sizes: Readonly<Record<string, number>>
   readonly unitPrice?: string | null | undefined
+  /** B-W2b-374 (XF3:01): a new line's options ("LINER:YES, NAME:NAME=BIANCHI"). */
+  readonly options?: string | null | undefined
 }
 
 export interface PasteInput {
@@ -60,7 +66,7 @@ interface PlannedRow {
   readonly action: 'ADD' | 'CHANGE' | 'SKIP'
   readonly line: LineRecord | null
   readonly grid: PlannedGrid | null
-  readonly add: { styleId: string; colourwayId: string; revisionId: string | null; styleCode: string; styleName: string; colourwayName: string; rows: SizeRow[]; unitPrice: string | null } | null
+  readonly add: { styleId: string; colourwayId: string; revisionId: string | null; styleCode: string; styleName: string; colourwayName: string; rows: SizeRow[]; unitPrice: string | null; /** B-W2b-374 */ picks: LinePick[] } | null
   readonly landed: Record<string, number>
   readonly leftOut: LeftOut[]
   readonly priceFrom: 'TYPED' | 'LIST' | 'NONE' | 'KEPT' | null
@@ -69,7 +75,7 @@ interface PlannedRow {
 /** The rows of the paste: parsed from the text (its shape refused in words), or as sent. */
 function rowsOf(body: PasteInput): PastedRow[] {
   if ((body.text === undefined) === (body.rows === undefined)) throw new ValidationError('Paste the cells (text) or send the rows, one of the two.', [{ path: 'body/text', message: 'Send text or rows.' }])
-  if (body.rows) return body.rows.map((row, index) => ({ row: index + 1, style: row.style.trim(), colourway: row.colourway.trim(), cells: Object.fromEntries(Object.entries(row.sizes).map(([size, pieces]) => [size.trim(), String(pieces)])), unitPrice: row.unitPrice ?? null }))
+  if (body.rows) return body.rows.map((row, index) => ({ row: index + 1, style: row.style.trim(), colourway: row.colourway.trim(), cells: Object.fromEntries(Object.entries(row.sizes).map(([size, pieces]) => [size.trim(), String(pieces)])), unitPrice: row.unitPrice ?? null, options: row.options ?? null }))
   const sheet = parsePastedSheet(body.text!)
   if (sheet.problems.length > 0) throw new ValidationError(sheet.problems[0]!.message, sheet.problems)
   return sheet.rows
@@ -143,6 +149,8 @@ async function planPaste(db: Reader, current: QuoteRow, version: VersionRow, row
         continue
       }
       if (row.unitPrice !== null) leftOut.push({ size: null, message: `Row ${row.row}: the price is not written on a line already on the quote: change it with Target price or Price & margin.` })
+      // B-W2b-374: a line already on the quote keeps its options (they change in its Options).
+      if (row.options) leftOut.push({ size: null, message: `Row ${row.row}: the options are not written on a line already on the quote: change them in the line's Options.` })
       planned.push({ row: row.row, style: style.code, colourway: colourway.code, action: 'CHANGE', line: existing, grid, add: null, landed: sizesRecord(cells), leftOut, priceFrom: 'KEPT' })
       continue
     }
@@ -161,6 +169,17 @@ async function planPaste(db: Reader, current: QuoteRow, version: VersionRow, row
     const typed = priceProblem ? null : row.unitPrice
     const listed = listPriceOf(chain, version.taxMode, party, style.id, colourway.id)
     room--
+    // B-W2b-374 (XF3:01): the Options cell read as the style's values and checked by its rules (what cannot be read is said).
+    const pasted = await pastedPicks(db, style.id, row.row, row.options ?? null)
+    for (const message of pasted.problems) leftOut.push({ size: null, message })
+    let picks = pasted.picks
+    if (picks.length > 0) {
+      const check = await checkStyleOptions(db, style.id, picks, { useDefaults: true })
+      if (!check.check.ok) {
+        leftOut.push({ size: null, message: `Row ${row.row}: the options were left out (${check.check.blocks[0]!.message.en.replace(/\.$/, '')}): choose them in the line's Options.` })
+        picks = []
+      }
+    }
     const revision = await db.styleRevision.findFirst({ where: { styleId: style.id, status: 'RELEASED' }, select: { id: true } })
     const revisionId = revision?.id ?? (await db.styleRevision.findFirst({ where: { styleId: style.id, status: 'DRAFT' }, orderBy: { revision: 'desc' }, select: { id: true } }))?.id ?? null
     planned.push({
@@ -170,7 +189,7 @@ async function planPaste(db: Reader, current: QuoteRow, version: VersionRow, row
       action: 'ADD',
       line: null,
       grid: null,
-      add: { styleId: style.id, colourwayId: colourway.id, revisionId, styleCode: style.code, styleName: style.name, colourwayName: colourway.name, rows: rowsToAdd.sort((a, b) => facts.range.indexOf(a.size) - facts.range.indexOf(b.size)).map((cell) => ({ ...cell, unitPrice: null })), unitPrice: typed },
+      add: { styleId: style.id, colourwayId: colourway.id, revisionId, styleCode: style.code, styleName: style.name, colourwayName: colourway.name, rows: rowsToAdd.sort((a, b) => facts.range.indexOf(a.size) - facts.range.indexOf(b.size)).map((cell) => ({ ...cell, unitPrice: null })), unitPrice: typed, picks },
       landed: sizesRecord(rowsToAdd),
       leftOut,
       priceFrom: typed !== null ? 'TYPED' : listed ? 'LIST' : 'NONE',
@@ -196,6 +215,8 @@ function answerOf(planned: readonly PlannedRow[], preview: boolean) {
       before: row.grid ? row.grid.before : null,
       after: row.grid ? row.grid.after : row.add ? row.landed : null,
       priceFrom: row.priceFrom,
+      // B-W2b-374: the options a new line takes.
+      options: row.add?.picks.length ?? 0,
       leftOut: row.leftOut,
       words: row.leftOut.length > 0 ? row.leftOut.map((entry) => entry.message).join(' ') : row.action === 'ADD' ? 'a new line' : 'the line takes the pasted sizes',
     })),
@@ -221,6 +242,8 @@ export async function pasteLines(caller: CommandCaller, quoteId: string, body: P
     const recost = new Set<string>()
     let seq = Math.max(0, ...lines.map((line) => line.seq))
     let fromList = false
+    // B-W2b-374: the new lines whose pasted options are written once the version keeps its list.
+    const withOptions: { row: PlannedRow; lineId: string }[] = []
     for (const row of landing) {
       if (row.action === 'CHANGE') {
         await writeGrid(tools, row.line!, current.partyId, row.grid!.rows)
@@ -234,8 +257,17 @@ export async function pasteLines(caller: CommandCaller, quoteId: string, body: P
       const id = newId()
       await addLine(tools, current, version, id, seq, add, listed?.onBasis ?? null)
       recost.add(id)
+      if (add.picks.length > 0) withOptions.push({ row, lineId: id })
     }
     if (fromList) await keepListVersion(tools, version, chain)
+    // B-W2b-374 (XF3:01): each new line's options, written and priced as its configurator would (what fails is said, the line stays).
+    for (const entry of withOptions) {
+      const problem = await writePastedPicks(tools, current.id, entry.lineId, entry.row.row, entry.row.add!.picks)
+      if (problem) {
+        entry.row.leftOut.push({ size: null, message: problem })
+        entry.row.add!.picks.length = 0
+      }
+    }
     await refreshVersion(tools, current, version, recost)
     tools.audit({
       action: 'quotes.pasteLines',

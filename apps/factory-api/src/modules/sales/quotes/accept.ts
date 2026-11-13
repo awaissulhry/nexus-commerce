@@ -21,6 +21,9 @@ import { officeAuthOf } from '../../../platform/auth/sessions/office-auth'
 import { depositOfVersion, depositViewOf, instructionsFor } from '../deposits/deposits'
 import { afterAcceptance } from './after-acceptance'
 import { CUSTOMER_QUOTE_COLUMNS, customerQuoteOf, dayOf, lineLabels, readCustomerLines, readCustomerVersions, type CustomerVersionRow, type Reader } from './frozen'
+// B-W2b-374: the lines' options on the link page.
+import { optionsText } from '@nexus/factory-domain/documents/options-block'
+import { quoteLinesPrinted } from '../configurator/printed'
 // B-W2b-165 (SAL-199): the proofs the customer accepts with the quote.
 import { acceptProofsInCommand, linkProofsOf } from '../quote-proofs/link'
 // B-W2b-325 (SAL-170): the discount shown on the document.
@@ -108,7 +111,9 @@ async function linkView(request: FastifyRequest, facts: LinkFacts) {
     const depositDueDays = await depositDueDaysFor(client, terms?.paymentTermsId ?? null)
     // B-W2b-325 (SAL-170): the page shows what the PDF printed (the version's price list's choice).
     const showDiscount = await discountShownFor(client, terms?.priceListVersionId ?? null)
-    return { company, labels, deposit, instructions, depositDueDays, showDiscount }
+    // B-W2b-374 (XF3:03): the page shows the options the PDF printed (the library's names read in the tenant's scope).
+    const options = await quoteLinesPrinted(client, lines.map((line) => line.id), language)
+    return { company, labels, deposit, instructions, depositDueDays, showDiscount, options }
   })
   const customer = customerQuoteOf({
     quote,
@@ -121,6 +126,7 @@ async function linkView(request: FastifyRequest, facts: LinkFacts) {
     date: businessDate(version.sentAt ?? version.createdAt),
     depositDueDays: extra.depositDueDays,
     showDiscount: extra.showDiscount,
+    options: extra.options,
   })
   const proofs = await request.withClient((client) => linkProofsOf(client, version.id))
   const acceptance = version.status === 'ACCEPTED' ? await request.withClient((client) => client.quoteAcceptance.findFirst({ where: { versionId: version.id }, select: { signerName: true, acceptedAt: true, documentSha256: true, termsVersion: true } })) : null
@@ -159,6 +165,8 @@ async function linkView(request: FastifyRequest, facts: LinkFacts) {
         vatNature: line.vatNature,
         sizes: line.sizes.map((row) => ({ size: row.size, quantity: row.quantity, unitPrice: asMoney('price', row.unitPrice) })),
         sizesText: sizesText(line.sizes, customer.currency, customer.language),
+        // B-W2b-374: the options as the PDF prints them.
+        optionsText: optionsText(line.options, customer.language),
       })),
       totals: asMoney('price', { net: customer.totals.net, vat: customer.totals.vat.map((entry) => ({ ...entry })), gross: customer.totals.gross }),
       deposit: customer.deposit ? { pct: customer.deposit.pct, kind: customer.deposit.kind, amount: asMoney('price', customer.deposit.amount) } : null,

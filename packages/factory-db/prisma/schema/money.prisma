@@ -174,6 +174,9 @@ model Invoice {
   // receivables.prisma (W2a): the refunds of what this credit note credits on a paid invoice.
   refunds        Refund[]        @relation("RefundCreditNote")
   allocations    PaymentAllocation[]
+  // W2b-6 bank.prisma (schema wave 50/57): the Ri.Ba. items that collect its instalments, the stops on its reminders.
+  ribaItems      RibaItem[]
+  reminderStops  ReminderStop[]
   // W2b portal-sales.prisma (wave 21/22): its card and SEPA payments at the provider.
   paymentIntents PaymentIntent[]
   // W2b-6 tax.prisma (wave 49/57): the run that previewed it, the declaration of intent it rests on, the invoice a debit
@@ -513,6 +516,9 @@ model Payment {
   // receivables.prisma (W2a): what is paid back of its unplaced part (a credit balance).
   refunds     Refund[]
   allocations PaymentAllocation[]
+  // W2b-6 bank.prisma (schema wave 50/57): the bank lines matched to it, the small differences written off on it.
+  bankMatches BankMatch[]
+  writeOffs   PaymentWriteOff[]
   // W2b portal-sales.prisma (wave 21/22): the card or SEPA payment intent it was recorded for.
   paymentIntents PaymentIntent[]
 
@@ -580,6 +586,8 @@ model PaymentAllocation {
   // W2b: the reversal of a NONE deposit's allocation this one carries onto an invoice, and the carry of a reversal.
   carriedFrom    PaymentAllocation?  @relation("PaymentAllocationCarry", fields: [tenantId, paymentId, carriedFromId], references: [tenantId, paymentId, id], onDelete: Restrict, onUpdate: Restrict)
   carries        PaymentAllocation[] @relation("PaymentAllocationCarry")
+  // W2b-6 bank.prisma (schema wave 50/57): what is written off of what it left open on its invoice.
+  writeOffs      PaymentWriteOff[]
 
   // The target of the reversals' reference: an allocation of the same payment.
   @@unique([tenantId, paymentId, id])

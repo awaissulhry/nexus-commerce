@@ -34,4 +34,7 @@ export const manifest = defineManifest({
   'POST /product/styles/:styleId/options/:groupId/withdraw': styles,
   'POST /product/styles/:styleId/options/check': view,
   'PUT /product/styles/:styleId/revisions/:revisionId/bom/lines/:lineId/option': bom,
+  // B-W2b-374 (XF3:05): what a chosen value of the group takes with it.
+  'GET /product/option-groups/:groupId/takes': view,
+  'PUT /product/option-groups/:groupId/takes': manage,
 })

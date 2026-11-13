@@ -247,7 +247,9 @@ describe('bank accounts (SCM-007): never changed in place', () => {
   it('are never deleted', async () => {
     await expect(run(office(), `DELETE FROM "SupplierBankAccount" WHERE id = $1::uuid`, s.bankAccountIds.pending)).rejects.toThrow(/permission denied/)
     await expect(admin(`DELETE FROM "SupplierBankAccount" WHERE id = $1::uuid`, [s.bankAccountIds.pending])).rejects.toThrow(/never deleted/)
-    await expect(admin(`TRUNCATE "SupplierBankAccount"`)).rejects.toThrow(/TRUNCATE on "SupplierBankAccount" is refused/)
+    // CASCADE: B-W2b-370's payment proposal lines reference the accounts (a plain TRUNCATE stops at that foreign key); the table's
+    // own trigger still refuses first.
+    await expect(admin(`TRUNCATE "SupplierBankAccount" CASCADE`)).rejects.toThrow(/TRUNCATE on "SupplierBankAccount" is refused/)
   })
 
   it("are proposed in the portal only PROPOSED, of the supplier's own party, by one of its own people; the call-back and the checker stay unread", async () => {

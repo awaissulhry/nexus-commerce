@@ -299,7 +299,7 @@ describe('quote and purchase order', () => {
   it('prints a quote with its validity and totals, and a PO with its supplier, delivery and the order-number notice', () => {
     const quote = composeDocument({ ...invoice(), type: 'QUOTE', number: 'Q-2026-0007', validUntil: '2026-11-30', invoice: null, references: [{ kind: 'CUSTOMER_ORDER', number: 'RFQ-1' }] })
     expect(quote.title).toBe('Offerta')
-    expect(quote.layout).toBe('QUOTE/1')
+    expect(quote.layout).toBe('QUOTE/2')
     expect(quote.blocks[0]!.heading).toBe('Cliente')
     expect(factsOf(quote)).toEqual({ 'Vs. ordine': 'RFQ-1', 'Valida fino al': '30/11/2026', Pagamento: 'Bonifico 30 gg' })
     expect(quote.totals.at(-1)).toEqual({ label: 'Totale offerta', value: '€ 654,47', strong: true })
