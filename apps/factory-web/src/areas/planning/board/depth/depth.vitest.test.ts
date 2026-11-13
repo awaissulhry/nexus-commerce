@@ -138,6 +138,21 @@ describe('the change log in words', () => {
     expect(myLatestUndoable(CHANGES.entries, null)).toBeNull()
     expect(changeLabel(mine!, dwords('it'))).toBe('Op 20 Cucito di WO-0101 spostata')
   })
+
+  // B-W2b-F39: the record keeps a change whose operation left its work order, by its copy, and never undoes it.
+  it('names an operation that left its work order by the record\'s copy, and says why its change is not undone', () => {
+    const w = dwords()
+    const [mine] = CHANGES.entries
+    const gone = { ...mine!, kind: 'REMOVE' as const, onBoard: false, operation: { id: mine!.operation!.id, seq: 25, code: null, name: 'Cucito', onWorkOrder: false }, undo: { may: false, code: 'OPERATION_GONE' as const } }
+    expect(changeLabel(gone, w)).toBe('Sent Op 25 Cucito of WO-0101 (no longer on the work order) back to the tray')
+    expect(changeLabel(gone, dwords('it'))).toContain("Op 25 Cucito di WO-0101 (non più nell'ordine di lavoro)")
+    expect(undoHeldWords(gone, w)).toBe('Its operation is no longer on the work order: the record keeps this change, but it is not undone.')
+    const unnamed = { ...gone, operation: { ...gone.operation, seq: null, name: null } }
+    expect(changeLabel(unnamed, w)).toBe('Sent an operation of WO-0101 (no longer on the work order) back to the tray')
+    const refused = new ApiError('conflict', 409, 'conflict', '…', null, [{ path: 'refusal/OPERATION_GONE', message: '' }])
+    expect(refusalOf(refused)).toEqual({ code: 'OPERATION_GONE' })
+    expect(refusalWords({ code: 'OPERATION_GONE' }, words('en'))).toBe('Its operation is no longer on the work order: this change is kept, not undone.')
+  })
 })
 
 describe('the problems list: three W2b kinds and their quick fixes', () => {
@@ -275,7 +290,7 @@ describe('every design case draws in both languages with no key left on screen',
       for (const why of MOVE_WHYS) has(`backlog.why.${why}`)
       for (const code of KEPT_CODES) has(`backlog.kept.${code}`)
       for (const code of SKIP_CODES) has(`backlog.skipped.${code}`)
-      for (const code of ['PINNED', 'ALREADY_PINNED', 'NOT_PINNED', 'NOTHING_TO_PIN', 'NOTHING_TO_RESCHEDULE', 'WHAT_IF_CONFLICTS', 'WHAT_IF_CLOSED', 'NOT_UNDOABLE', 'ALREADY_UNDONE', 'CHANGED_SINCE']) has(`refusal.${code}`)
+      for (const code of ['PINNED', 'ALREADY_PINNED', 'NOT_PINNED', 'NOTHING_TO_PIN', 'NOTHING_TO_RESCHEDULE', 'WHAT_IF_CONFLICTS', 'WHAT_IF_CLOSED', 'NOT_UNDOABLE', 'ALREADY_UNDONE', 'CHANGED_SINCE', /* B-W2b-F39 */ 'OPERATION_GONE']) has(`refusal.${code}`)
       for (const status of ['LATE', 'AT_RISK', 'ON_TIME', 'NO_DUE_DATE', 'DONE']) has(`status.${status}`)
       for (const floor of ['CURRENT', 'UPCOMING', 'REPLACED']) has(`version.floor.${floor}`)
       for (const problem of ['forbidden', 'offline', 'failed', 'noSite']) has(`error.${problem}`)

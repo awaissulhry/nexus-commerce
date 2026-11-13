@@ -126,6 +126,8 @@
     "undoOne": "Undo: {what}",
     "what": "Op {seq} {operation} of {order}",
     "whatPart": "part of {order}",
+    "whatGone": "Op {seq} {operation} of {order} (no longer on the work order)",
+    "whatGoneUnnamed": "an operation of {order} (no longer on the work order)",
     "kind": {
       "PLACE": "Placed {what} on {lane}",
       "MOVE": "Moved {what}",
@@ -160,6 +162,7 @@
       "ALREADY_UNDONE": "This change is already undone.",
       "ALREADY_UNDONE_BY": "Already undone by {name}, {time}.",
       "CHANGED_SINCE": "The bar changed since: only the latest change of a bar is undone, while it is where that change left it.",
+      "OPERATION_GONE": "Its operation is no longer on the work order: the record keeps this change, but it is not undone.",
       "NO_PERMISSION": "Undoing this change needs the permission it was made with (a pin: the permission to pin; a move: to plan)."
     }
   },
@@ -429,7 +432,8 @@
     "WHAT_IF_CLOSED": "This what-if is already applied or discarded.",
     "NOT_UNDOABLE": "This change is not undone (a publish, an undo or a part taken off).",
     "ALREADY_UNDONE": "This change is already undone.",
-    "CHANGED_SINCE": "The bar changed since: only its latest change is undone."
+    "CHANGED_SINCE": "The bar changed since: only its latest change is undone.",
+    "OPERATION_GONE": "Its operation is no longer on the work order: this change is kept, not undone."
   },
   "error": {
     "forbidden": "You do not have the permission to see this.",

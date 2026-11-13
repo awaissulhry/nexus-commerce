@@ -24,9 +24,10 @@ import { LOCAL_COOKIE_SECRET } from '../../../env'
  * order of SEED-JKT-02 BLK that fixes no revision. Every name and number is made up. Run with
  * `node scripts/factory/run-pg-tests.mjs work-orders/scheduled-drafts`.
  *
- * B-W2b-F36: the board's change log (B-W2b-329, ScheduleChange: append-only, its foreign key to the operation kept) names the
- * operation of every bar placed, moved or sent back to the tray on the board, so such an operation never goes away: the
- * release, the revision and a repair's steps refuse in words (it was a 500 on the foreign key), never a Send back to the tray.
+ * B-W2b-F39 (Owner decision 2026-11-13): the board's change log (B-W2b-329, ScheduleChange, append-only) names the operation
+ * of every bar placed, moved or sent back to the tray by id with its own copy (seq, name), no foreign key: so a bar sent
+ * back to the tray lets its operation leave again (B-W2a-F3's "send it back to the tray, then …"), and the log still names
+ * it, by its copy, "no longer on the work order"; a change of it is never undone (409 OPERATION_GONE in words).
  */
 
 const NS = 'w2a-f3-scheduled-drafts'
@@ -65,12 +66,10 @@ const workOrderOf = async (number: string) => (await admin<{ id: string; status:
 const opsOf = (workOrderId: string) => admin<Op>(`SELECT id, seq, "routingSeq", name FROM "WorkOrderOperation" WHERE "workOrderId" = $1 ORDER BY seq`, [workOrderId])
 const slotsOf = (workOrderId: string) =>
   admin<{ id: string; planKind: string; operationId: string | null; version: number }>(`SELECT id, "planKind", "workOrderOperationId" AS "operationId", version FROM "ScheduleSlot" WHERE "workOrderId" = $1 ORDER BY "startAt", id`, [workOrderId])
-// B-W2b-F36: the changes of the board's record that name an operation, the latest first (as the API orders them).
-const changesOf = (operationId: string) => admin<{ id: string; kind: string }>(`SELECT id, kind::text AS kind FROM "ScheduleChange" WHERE "workOrderOperationId" = $1 ORDER BY "changedAt" DESC, id DESC`, [operationId])
-const recordWords = (doing: string, number: string, op: string, instead: string) =>
-  `${doing} would take away an operation of work order ${number} that the planning board's record names: ${op}. The record keeps every operation it names (Planning › Planning board › Changes), so that operation stays: ${instead}.`
-const recordAlso = (op: string, instead: string) => `The board's record names ${op} and keeps every operation it names (Planning › Planning board › Changes), so that operation stays: ${instead}.`
-const lastAt = (verb: string) => expect.stringMatching(new RegExp(`^Op \\d+ .+: last ${verb} at \\d{1,2} [A-Z][a-z]{2} \\d{2}:\\d{2}$`))
+// B-W2b-F39: the changes of the board's record that name an operation, the latest first (as the API orders them), with the
+// copy of the operation each keeps (its seq and name when the change was written).
+const changesOf = (operationId: string) =>
+  admin<{ id: string; kind: string; seq: number | null; name: string | null }>(`SELECT id, kind::text AS kind, "operationSeq" AS seq, "operationName" AS name FROM "ScheduleChange" WHERE "workOrderOperationId" = $1 ORDER BY "changedAt" DESC, id DESC`, [operationId])
 /** SEED-WO-0002's stored operations copied onto a draft, as the seed stores a draft spec; how many rows were copied. */
 async function copySeedOperations(workOrderId: string): Promise<number> {
   const result = await db.admin.query(
@@ -156,6 +155,9 @@ afterAll(async () => {
 describe('B-W2a-F3: a draft whose operations are on the planning board', () => {
   let seeded: Op[] = []
   let seedSlot = ''
+  // B-W2b-F39: the second copy of SEED-WO-0002's sewing (test 3), and the made-up draft whose copy left on its release (test 5).
+  let seedExtra = ''
+  let released: { workOrder: { id: string; number: string }; extra: string; sewName: string } | null = null
 
   it('the seed case: SEED-WO-0002 is a DRAFT with four stored operations, its sewing on line L1 in the working plan', async () => {
     const wo = await workOrderOf('SEED-WO-0002')
@@ -177,7 +179,7 @@ describe('B-W2a-F3: a draft whose operations are on the planning board', () => {
     expect(await admin(`SELECT count(*)::int AS n FROM "WorkOrderMaterial" WHERE "workOrderId" = $1`, [wo.id])).toEqual([{ n: 0 }])
   })
 
-  it('an operation the release would take away while a bar books it: refused in words naming the bar, nothing changes; the bar gone, nothing holds it', async () => {
+  it('an operation the release would take away while a bar books it: refused in words naming the bar, nothing changes; sent back to the tray, it goes', async () => {
     const wo = await workOrderOf('SEED-WO-0002')
     const sew = seeded[1]!
     // A second copy of the sewing step (a stored draft spec may hold one; the release keeps one operation per step),
@@ -207,12 +209,11 @@ describe('B-W2a-F3: a draft whose operations are on the planning board', () => {
     expect((await opsOf(wo.id)).map((op) => op.id)).toEqual([seeded[0]!.id, sew.id, extra, seeded[2]!.id, seeded[3]!.id])
     expect((await slotsOf(wo.id)).map((slot) => slot.id)).toEqual([seedSlot, bar])
 
-    // B-W2b-F36: the bar came in by SQL, as a draft spec stored before the board's record (B-W2b-329) holds one, and goes the
-    // same way, so no change of the record names the copy. Sent back to the tray on the board, the record would name it for
-    // good and the release would refuse (the B-W2b-F36 test after the release).
-    await admin(`DELETE FROM "ScheduleSlot" WHERE id = $1`, [bar])
-    expect(await changesOf(extra)).toEqual([])
+    await ok('POST', `/planning/schedule/slots/${bar}/remove`, { version: 1 })
     expect((await slotsOf(wo.id)).map((slot) => slot.id)).toEqual([seedSlot])
+    // B-W2b-F39: the board's record names the copy by its own copy of it (its bar came in by SQL: no PLACE).
+    expect(await changesOf(extra)).toEqual([{ id: expect.any(String), kind: 'REMOVE', seq: 25, name: sew.name }])
+    seedExtra = extra
   })
 
   it('the release keeps the row of every step that stays: 200 RELEASED, the bar still names a live operation of its step, now a booking', async () => {
@@ -231,9 +232,12 @@ describe('B-W2a-F3: a draft whose operations are on the planning board', () => {
     const site = idOf('site:A1')
     const board = await ok('GET', `/planning/schedule?siteId=${site}&from=2026-11-16&to=2026-11-20`)
     expect((board.slots as Json[]).filter((slot) => slot.workOrderId === wo.id)).toEqual([expect.objectContaining({ id: seedSlot, operationId: seeded[1]!.id, booksCapacity: true })])
+    // B-W2b-F39: the copy left its work order; the board's record still names it, by its copy.
+    expect(ops.map((op) => op.id)).not.toContain(seedExtra)
+    expect(await changesOf(seedExtra)).toEqual([{ id: expect.any(String), kind: 'REMOVE', seq: 25, name: seeded[1]!.name }])
   })
 
-  it("B-W2b-F36: an operation the board's record names (its bar placed, then sent back to the tray on the board): the release refuses in words, never a 500, and nothing changes", async () => {
+  it('B-W2b-F39: a copy of a step placed through the board: the release refuses while its bar books it; sent back to the tray, the release goes and the record keeps both changes by their copy', async () => {
     // A draft from the made-up order with SEED-WO-0002's operations stored as the seed stores a draft spec, and a second copy
     // of its sewing (seq 25) that the release would take away, placed on line L1 through the board (the record logs it).
     const lineId = await madeUpOrder({ '52': 1 })
@@ -250,41 +254,53 @@ describe('B-W2a-F3: a draft whose operations are on the planning board', () => {
     expect(before).toHaveLength(copied + 1)
     const placed = await ok('POST', '/planning/schedule/slots', { workOrderId: workOrder.id, operationId: extra, lane: { kind: 'LINE', id: lineL1 }, startAt: '2026-11-25T08:00:00.000Z', overloadReason: 'Made-up reason to keep it there.' }, 201)
     const bar = placed.slot.id as string
-    const [place] = await changesOf(extra)
-    expect(place).toMatchObject({ kind: 'PLACE' })
     const current = await workOrderOf(workOrder.number)
-    const instead = 'cancel this work order and make a new one'
 
-    // While the bar books it: the bar and the record named, and no Send back to the tray (it would not help).
+    // While the bar books it: refused naming the bar, with B-W2a-F3's Send it back to the tray, then release it.
     const booked = await release(workOrder.id, current.version)
     expect(booked.statusCode, booked.body).toBe(409)
     const words = `Op 25 ${sew.name} on line L1 from 25 Nov 09:00 (working plan)`
     expect(booked.json().error).toMatchObject({
       code: 'conflict',
-      message: `The release would take away an operation of work order ${workOrder.number} that the planning board books: ${words}. ${recordAlso(`Op 25 ${sew.name}`, instead)}`,
-      issues: [
-        { path: `scheduleSlots/WORKING/${bar}`, message: words },
-        { path: `scheduleChanges/${place!.id}`, message: lastAt('placed') },
-      ],
-    })
-
-    // Sent back to the tray: the record names it still (its PLACE and its REMOVE): refused in the record's words.
-    await ok('POST', `/planning/schedule/slots/${bar}/remove`, { version: 1 })
-    const [remove] = await changesOf(extra)
-    expect(remove).toMatchObject({ kind: 'REMOVE' })
-    const recorded = await release(workOrder.id, current.version)
-    expect(recorded.statusCode, recorded.body).toBe(409)
-    expect(recorded.json().error).toMatchObject({
-      code: 'conflict',
-      message: recordWords('The release', workOrder.number, `Op 25 ${sew.name}`, instead),
-      issues: [{ path: `scheduleChanges/${remove!.id}`, message: lastAt('sent back to the tray') }],
+      message: `The release would take away an operation of work order ${workOrder.number} that the planning board books: ${words}. ${tray}, then release it.`,
+      issues: [{ path: `scheduleSlots/WORKING/${bar}`, message: words }],
     })
     expect(await workOrderOf(workOrder.number)).toMatchObject({ status: 'DRAFT', version: current.version })
     expect(await opsOf(workOrder.id)).toEqual(before)
+
+    // Sent back to the tray: the release goes (it was a 500, then a refusal), the copy leaves, the other steps keep their rows.
+    await ok('POST', `/planning/schedule/slots/${bar}/remove`, { version: 1 })
+    const response = await release(workOrder.id, current.version)
+    expect(response.statusCode, response.body).toBe(200)
+    expect(response.json().workOrder).toMatchObject({ status: 'RELEASED' })
+    expect(await opsOf(workOrder.id)).toEqual(before.filter((op) => op.id !== extra))
+    // The board's record keeps both changes of the copy, each with its copy of the operation.
+    expect(await changesOf(extra)).toEqual([
+      { id: expect.any(String), kind: 'REMOVE', seq: 25, name: sew.name },
+      { id: expect.any(String), kind: 'PLACE', seq: 25, name: sew.name },
+    ])
+    released = { workOrder: { id: workOrder.id, number: workOrder.number }, extra, sewName: sew.name }
+  })
+
+  it("B-W2b-F39: the board's Changes list names the operation that left by its copy, and its changes are not undone (409 in words)", async () => {
+    const { workOrder, extra, sewName } = released!
+    const what = `Op 25 ${sewName} of ${workOrder.number} (no longer on the work order)`
+    const words = `${what}: the record keeps this change, but it is not undone.`
+    const feed = await ok('GET', `/planning/schedule/changes?siteId=${idOf('site:A1')}&since=ALL&workOrderId=${workOrder.id}`)
+    const gone = { id: extra, seq: 25, code: null, name: sewName, onWorkOrder: false }
+    expect(feed.entries).toEqual([
+      expect.objectContaining({ kind: 'REMOVE', onBoard: false, operation: gone, undo: { may: false, code: 'OPERATION_GONE', permission: 'planning.schedule.manage', words }, words: expect.stringMatching(new RegExp(`^Sent ${what.replace(/[()]/g, '\\$&')} back to the tray from L1 · 25 Nov 09:00`)) }),
+      expect.objectContaining({ kind: 'PLACE', onBoard: false, operation: gone, undo: expect.objectContaining({ may: false, code: 'OPERATION_GONE' }), words: expect.stringMatching(/^Placed Op 25 .+ \(no longer on the work order\) on L1 · 25 Nov 09:00/) }),
+    ])
+    const [remove] = feed.entries as Json[]
+    const error = await refused('POST', `/planning/schedule/changes/${remove!.id}/undo`, {}, 409)
+    expect(error).toMatchObject({ code: 'conflict', message: words, issues: [{ path: 'refusal/OPERATION_GONE' }] })
+    // Nothing changed: no undo in the record, no bar on the board.
+    expect((await changesOf(extra)).map((change) => change.kind)).toEqual(['REMOVE', 'PLACE'])
     expect(await slotsOf(workOrder.id)).toEqual([])
   })
 
-  it("a repair's steps: one left out while a bar books it is refused naming the bar and the board's record; a step that stays keeps its row and its bar", async () => {
+  it("a repair's steps: one left out while a bar books it is refused naming the bar; a step that stays keeps its row and its bar; sent back to the tray, it is left out", async () => {
     const repair = (await admin<{ id: string }>(`SELECT id FROM "RepairOrder" WHERE "tenantId" = $1 AND number = 'SEED-REP-0001'`, [T]))[0]!.id
     const { workOrder } = await ok('POST', '/production/work-orders/repairs', { repairOrderId: repair, routingSeqs: [20, 30] }, 201)
     const [sew, qc] = await opsOf(workOrder.id)
@@ -294,16 +310,10 @@ describe('B-W2a-F3: a draft whose operations are on the planning board', () => {
 
     const error = await refused('PUT', `/production/work-orders/${workOrder.id}/repair-steps`, { routingSeqs: [30] }, 409)
     const words = `Op 20 ${sew!.name} on line L1 from 23 Nov 09:00 (working plan)`
-    // B-W2b-F36: placed through the board, the step is in the board's record for good: the refusal says so, no Send back to the tray.
-    const [place] = await changesOf(sew!.id)
-    const instead = 'keep those steps on the repair'
     expect(error).toMatchObject({
       code: 'conflict',
-      message: `Leaving out these steps would take away an operation of work order ${workOrder.number} that the planning board books: ${words}. ${recordAlso(`Op 20 ${sew!.name}`, instead)}`,
-      issues: [
-        { path: `scheduleSlots/WORKING/${bar}`, message: words },
-        { path: `scheduleChanges/${place!.id}`, message: lastAt('placed') },
-      ],
+      message: `Leaving out these steps would take away an operation of work order ${workOrder.number} that the planning board books: ${words}. ${tray}, then change the steps.`,
+      issues: [{ path: `scheduleSlots/WORKING/${bar}`, message: words }],
     })
     expect(await opsOf(workOrder.id)).toEqual([sew, qc])
 
@@ -314,25 +324,24 @@ describe('B-W2a-F3: a draft whose operations are on the planning board', () => {
     expect(after[1]!.id).toBe(sew!.id)
     expect((await slotsOf(workOrder.id)).map((slot) => [slot.id, slot.operationId])).toEqual([[bar, sew!.id]])
 
-    // B-W2b-F36: sent back to the tray on the board, the record names sewing still (its PLACE and its REMOVE): leaving it out
-    // now is refused in the record's words (it was a 500), and nothing changes.
+    // B-W2b-F39: sent back to the tray on the board, sewing is left out (it was a 500, then a refusal); the board's record keeps
+    // its changes, each with the copy of sewing as it was then (its place moved with the steps).
     await ok('POST', `/planning/schedule/slots/${bar}/remove`, { version: (await slotsOf(workOrder.id))[0]!.version })
-    const [remove] = await changesOf(sew!.id)
-    const again = await refused('PUT', `/production/work-orders/${workOrder.id}/repair-steps`, { routingSeqs: [10] }, 409)
-    expect(again).toMatchObject({
-      code: 'conflict',
-      message: recordWords('Leaving out these steps', workOrder.number, `Op ${after[1]!.seq} ${sew!.name}`, instead),
-      issues: [{ path: `scheduleChanges/${remove!.id}`, message: lastAt('sent back to the tray') }],
-    })
-    expect(await opsOf(workOrder.id)).toEqual(after)
+    const left = await ok('PUT', `/production/work-orders/${workOrder.id}/repair-steps`, { routingSeqs: [10] })
+    expect((left.workOrder.spec.operations as Json[]).map((op) => op.routingSeq)).toEqual([10])
+    expect(await opsOf(workOrder.id)).toEqual([after[0]])
+    expect(await changesOf(sew!.id)).toEqual([
+      { id: expect.any(String), kind: 'REMOVE', seq: after[1]!.seq, name: sew!.name },
+      { id: expect.any(String), kind: 'PLACE', seq: sew!.seq, name: sew!.name },
+    ])
   })
 
-  it("changing the revision of a draft whose operations a bar books: refused naming the bar and the board's record; sent back to the tray, still refused in the record's words; a draft the board never booked changes", async () => {
+  it('changing the revision of a draft whose operations a bar books: refused naming the bar; sent back to the tray, it changes', async () => {
     // A draft from the made-up order (it fixes no revision: the style's released revision 1), its draft spec stored as
     // the seed stores one (no route stores the operations of a size run before its release), its sewing on line L1.
     const lineId = await madeUpOrder({ '54': 1 })
     const { workOrder } = await ok('POST', '/production/work-orders', { siteId: idOf('site:A1'), lines: [{ salesOrderLineId: lineId, sizes: [{ size: '54', quantity: 1 }] }] }, 201)
-    // B-W2b-F36: as many as were copied (SEED-WO-0002's four; the count is not this test's subject).
+    // As many as were copied (SEED-WO-0002's four; the count is not this test's subject).
     const copied = await copySeedOperations(workOrder.id)
     const sew = (await opsOf(workOrder.id)).find((op) => op.routingSeq === 20)!
     const placed = await ok('POST', '/planning/schedule/slots', { workOrderId: workOrder.id, operationId: sew.id, lane: { kind: 'LINE', id: lineL1 }, startAt: '2026-11-24T08:00:00.000Z', overloadReason: 'Made-up reason to keep it there.' }, 201)
@@ -348,39 +357,22 @@ describe('B-W2a-F3: a draft whose operations are on the planning board', () => {
     const current = await workOrderOf(workOrder.number)
     const error = await refused('PATCH', `/production/work-orders/${workOrder.id}`, { version: current.version, styleRevisionId: revision2 }, 409)
     const words = `Op 20 ${sew.name} on line L1 from 24 Nov 09:00 (working plan)`
-    // B-W2b-F36: placed through the board, sewing is in the board's record for good: the refusal says so, no Send back to the tray.
-    const [place] = await changesOf(sew.id)
-    const instead = 'keep this revision, or cancel the work order and make a new one on the other revision'
     expect(error).toMatchObject({
       code: 'conflict',
-      message: `Changing the revision would take away an operation of work order ${workOrder.number} that the planning board books: ${words}. ${recordAlso(`Op 20 ${sew.name}`, instead)}`,
-      issues: [
-        { path: `scheduleSlots/WORKING/${bar}`, message: words },
-        { path: `scheduleChanges/${place!.id}`, message: lastAt('placed') },
-      ],
+      message: `Changing the revision would take away an operation of work order ${workOrder.number} that the planning board books: ${words}. ${tray}, then change the revision.`,
+      issues: [{ path: `scheduleSlots/WORKING/${bar}`, message: words }],
     })
     expect(await workOrderOf(workOrder.number)).toMatchObject({ styleRevisionId: revision1, version: current.version })
     expect((await opsOf(workOrder.id)).length).toBe(copied)
 
-    // Sent back to the tray: the record names sewing still (its PLACE and its REMOVE): refused in its words (it was a 500).
     await ok('POST', `/planning/schedule/slots/${bar}/remove`, { version: 1 })
-    const [remove] = await changesOf(sew.id)
-    const recorded = await refused('PATCH', `/production/work-orders/${workOrder.id}`, { version: current.version, styleRevisionId: revision2 }, 409)
-    expect(recorded).toMatchObject({
-      code: 'conflict',
-      message: recordWords('Changing the revision', workOrder.number, `Op 20 ${sew.name}`, instead),
-      issues: [{ path: `scheduleChanges/${remove!.id}`, message: lastAt('sent back to the tray') }],
-    })
-    expect(await workOrderOf(workOrder.number)).toMatchObject({ styleRevisionId: revision1, version: current.version })
-    expect((await opsOf(workOrder.id)).length).toBe(copied)
-
-    // A draft whose stored operations the board never booked: its revision changes, its draft spec goes (B-W2a-F3 as before).
-    const otherLine = await madeUpOrder({ '50': 1 })
-    const other = (await ok('POST', '/production/work-orders', { siteId: idOf('site:A1'), lines: [{ salesOrderLineId: otherLine, sizes: [{ size: '50', quantity: 1 }] }] }, 201)).workOrder
-    expect(await copySeedOperations(other.id)).toBe(copied)
-    const otherNow = await workOrderOf(other.number)
-    const changed = await ok('PATCH', `/production/work-orders/${other.id}`, { version: otherNow.version, styleRevisionId: revision2 })
+    const changed = await ok('PATCH', `/production/work-orders/${workOrder.id}`, { version: current.version, styleRevisionId: revision2 })
     expect(changed.workOrder.revision).toMatchObject({ id: revision2, revision: 2, status: 'DRAFT' })
-    expect(await opsOf(other.id)).toEqual([])
+    expect(await opsOf(workOrder.id)).toEqual([])
+    // B-W2b-F39: the board's record keeps sewing's changes by their copy (it was a 500, then a refusal).
+    expect(await changesOf(sew.id)).toEqual([
+      { id: expect.any(String), kind: 'REMOVE', seq: 20, name: sew.name },
+      { id: expect.any(String), kind: 'PLACE', seq: 20, name: sew.name },
+    ])
   })
 })

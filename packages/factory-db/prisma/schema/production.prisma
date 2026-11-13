@@ -429,9 +429,9 @@ model WorkOrderOperation {
   libraryOperation Operation?       @relation(fields: [tenantId, operationId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   workCentre       WorkCentre       @relation(fields: [tenantId, siteId, workCentreId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   // W2b-5 (wave 41/44): the subcontract order it is outsourced to (Restrict, not Prisma's SetNull default for an optional
-  // relation: that would also clear tenantId, siteId and workOrderId); the board's changes of its slots.
+  // relation: that would also clear tenantId, siteId and workOrderId). B-W2b-F39: the board's changes of its slots name it by
+  // id with a copy (ScheduleChange.operationSeq, operationName), no relation: it may leave a draft, its changes stay.
   subcontractOrder SubcontractOrder? @relation("WorkOrderOperationOutsourced", fields: [tenantId, siteId, workOrderId, subcontractOrderId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
-  scheduleChanges  ScheduleChange[]
   scans            OperationScan[]
   correctionRequests ScanCorrectionRequest[]
   // W2b labour.prisma (wave 7/7): the steps ticked at it, its coupons, the scan findings and the dispatch about it.

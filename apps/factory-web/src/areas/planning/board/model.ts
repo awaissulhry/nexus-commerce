@@ -536,7 +536,8 @@ export type Refusal =
   // B-W2b-337: the W2b refusals (B-W2b-312 pins, the reschedules, what-if; B-W2b-329 undo), issue `refusal/<CODE>`.
   | { code: (typeof W2B_REFUSALS)[number] }
 
-const W2B_REFUSALS = ['PINNED', 'ALREADY_PINNED', 'NOT_PINNED', 'NOTHING_TO_PIN', 'NOTHING_TO_RESCHEDULE', 'WHAT_IF_CONFLICTS', 'WHAT_IF_CLOSED', 'NOT_UNDOABLE', 'ALREADY_UNDONE', 'CHANGED_SINCE'] as const
+// B-W2b-F39: OPERATION_GONE, the undo of a change whose operation left its work order (the record keeps it).
+const W2B_REFUSALS = ['PINNED', 'ALREADY_PINNED', 'NOT_PINNED', 'NOTHING_TO_PIN', 'NOTHING_TO_RESCHEDULE', 'WHAT_IF_CONFLICTS', 'WHAT_IF_CLOSED', 'NOT_UNDOABLE', 'ALREADY_UNDONE', 'CHANGED_SINCE', 'OPERATION_GONE'] as const
 
 const CONFLICTS: ReadonlyArray<[RegExp, Refusal['code']]> = [
   [/ does .*; Op \d+|is done at .*: change its work centre/, 'LANE_DOES_NOT'],
