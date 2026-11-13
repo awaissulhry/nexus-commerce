@@ -120,6 +120,8 @@ describe('the index (worker side)', () => {
       ...['Inquiry'],
       // B-W2b-345: warranty and service cases (Sales › After-sales › Warranty & service, B-W2b-353).
       ...['ServiceCase'],
+      // B-W2b-351: product-safety reports (the accident log and the reports' screens, B-W2b-357).
+      ...['ProductSafetyReport'],
     ].sort())
     const handlers = searchHandlers(indexers)
     expect(handlers.map((handler) => handler.name)).toEqual([INDEX_HANDLER, REBUILD_HANDLER])

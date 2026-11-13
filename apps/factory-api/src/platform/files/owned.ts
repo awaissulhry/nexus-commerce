@@ -80,6 +80,9 @@ export const MODULE_OWNED_FILES: Readonly<Record<string, ModuleOwnedFiles>> = Ob
   // B-W2b-288 (FU2:01): the PPE consultant's file of a PPE text approval (modules/compliance/ppe-texts): every kind; the
   // approval rests on it (GATE-PPE-TEXTS), announced before the approval is recorded with its id.
   PpeTextApproval: { route: 'POST /compliance/ppe-texts/evidence, then POST /compliance/ppe-texts' },
+  // B-W2b-351: a product-safety report's photos (modules/sales/safety-reports): every kind, office only (a photo may show an injury;
+  // GDPR art. 9); from the office, and after the send from the public DoC page or the portal with the report's own rights.
+  ProductSafetyReport: { route: 'POST /sales/safety-reports/:reportId/photos (or POST /public/safety-reports/photos, POST /portal/safety-reports/:reportId/photos), then POST …/:fileId/complete' },
 })
 
 /**
@@ -103,6 +106,8 @@ export const MODULE_READ_FILES: Readonly<Record<string, string>> = Object.freeze
   HealthVisit: 'none: a visit keeps no file',
   // B-W2b-171: a rider's body photos (sales.measurements.view, each opening recorded); files.read never reaches them.
   MeasurementProfile: 'POST /sales/measurement-profiles/:profileId/photos/:fileId/open',
+  // B-W2b-351: a product-safety report's photos (sales.safety.view, each opening recorded on the report); files.read never reaches them.
+  ProductSafetyReport: 'POST /sales/safety-reports/:reportId/photos/:fileId/open',
 })
 
 export const readsThroughModule = (recordType: string): boolean => Object.hasOwn(MODULE_READ_FILES, recordType)

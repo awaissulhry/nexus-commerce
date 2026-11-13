@@ -348,6 +348,8 @@ import { definePermissions, permissionRegistry, type PermissionDefinition } from
 import { SALES_CREDIT_DEFINITIONS, SALES_CREDIT_PERMISSIONS } from '../../sales/credit/permissions'
 // B-W2b-345: warranty and service cases (sales.service.view, .manage, .decide).
 import { SALES_SERVICE_DEFINITIONS, SALES_SERVICE_PERMISSIONS } from '../../sales/service/permissions'
+// B-W2b-351: product-safety reports and the accident log (sales.safety.view, .manage, .injury, .log).
+import { SALES_SAFETY_DEFINITIONS, SALES_SAFETY_PERMISSIONS } from '../../sales/safety-reports/permissions'
 
 /**
  * Every permission of the factory, assembled (feature PLT-029). A module that adds routes declares its permissions
@@ -986,6 +988,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   INVENTORY_UNPLANNED_DEFINITIONS,
   // B-W2b-345: warranty and service cases (area `sales`).
   SALES_SERVICE_DEFINITIONS,
+  // B-W2b-351: product-safety reports and the accident log (area `sales`).
+  SALES_SAFETY_DEFINITIONS,
 ])
 
 /** The area of the permissions only floor roles hold (and floor roles hold no other, but FLOOR_SHARED_PERMISSIONS). */
@@ -1338,6 +1342,8 @@ for (const name of INVENTORY_COUNTS_DEPTH_PERMISSIONS) if (!FACTORY_PERMISSIONS.
 for (const name of SALES_CREDIT_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-345: warranty and service cases.
 for (const name of SALES_SERVICE_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-351: product-safety reports and the accident log.
+for (const name of SALES_SAFETY_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

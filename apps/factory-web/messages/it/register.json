@@ -68,7 +68,8 @@
     "Nonconformance": "Una non conformità (NCR)",
     "Complaint": "Un reclamo del cliente",
     "ReturnAuthorisation": "Un reso del cliente (RMA)",
-    "AuthorityRequest": "Una richiesta dell'autorità"
+    "AuthorityRequest": "Una richiesta dell'autorità",
+    "ProductSafetyReport": "Una segnalazione di sicurezza del prodotto"
   },
   "list": {
     "table": "Voci del registro DPI",
