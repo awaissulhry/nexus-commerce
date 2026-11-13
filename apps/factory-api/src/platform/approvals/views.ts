@@ -1,5 +1,6 @@
 import type { z } from 'zod'
 import {
+  APPROVAL_KIND_WORDS,
   APPROVAL_REFUSALS,
   changeSize,
   ownRequestWords,
@@ -16,7 +17,7 @@ import type { Grain } from '@nexus/factory-domain/auth/grains/grains'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { actorOf, type OfficeContext } from '../../core/context'
 import type { taskDetail, taskRow } from './contract'
-import { recheck, type Recheck } from './engine'
+import { recheckSubject, type Recheck } from './engine'
 import type { HistoryLine } from './history/source'
 import { kindOf } from './kinds'
 import { reasonWords } from '../reasons/service'
@@ -31,7 +32,8 @@ import { askersOfTask, decideCheck, decidersOf, fieldsOfKind, grainsOf, heldGrai
 export type TaskRowView = z.infer<typeof taskRow>
 export type TaskDetailView = z.infer<typeof taskDetail>
 
-export const kindLabelOf = (kind: string): Words => kindOf(kind)?.label ?? { en: kind.charAt(0) + kind.slice(1).toLowerCase().replace(/_/g, ' '), it: kind.charAt(0) + kind.slice(1).toLowerCase().replace(/_/g, ' ') }
+// B-W2b-377 (B-W2b-361's gap): a kind no step registered yet is said from the domain's words (it, en), never its code.
+export const kindLabelOf = (kind: string): Words => kindOf(kind)?.label ?? APPROVAL_KIND_WORDS[kind as ApprovalTaskKind] ?? { en: kind, it: kind }
 
 const labelOf = (fields: readonly ApprovalField[], field: string): Words | null => fields.find((entry) => entry.id === field)?.label ?? null
 
@@ -70,7 +72,22 @@ function sentenceOf(rule: RuleRef, grains: ReadonlySet<Grain>, names: { people: 
   return { en: ruleSentence(input, 'en'), it: ruleSentence(input, 'it') }
 }
 
-function rowOf(task: TaskRow, view: ViewContext, data: Awaited<ReturnType<typeof lookups>>, recheckState: Recheck | null): TaskRowView {
+/** B-W2b-377: what a row says of its subject beyond its code: the record in words now, and the page it belongs to. */
+interface SubjectWords {
+  readonly label: string | null
+  readonly parent: { readonly type: string; readonly id: string } | null
+}
+
+/** A row's subject read once by its kind: its re-check (pending only) and its words. */
+async function subjectOfTask(db: Reader, task: TaskRow): Promise<{ readonly recheck: Recheck | null; readonly words: SubjectWords }> {
+  const kind = kindOf(task.kind)
+  if (!kind || kind.recordType !== task.recordType) return { recheck: task.status === 'PENDING' ? { state: 'UNKNOWN_KIND' } : null, words: { label: null, parent: null } }
+  const subject = await kind.read(db, task.recordId)
+  const parent = kind.parent ? await kind.parent(db, task.recordId) : null
+  return { recheck: task.status === 'PENDING' ? recheckSubject(task, kind, subject) : null, words: { label: subject?.label ?? null, parent: parent ? { type: parent.type, id: parent.id } : null } }
+}
+
+function rowOf(task: TaskRow, view: ViewContext, data: Awaited<ReturnType<typeof lookups>>, recheckState: Recheck | null, words: SubjectWords): TaskRowView {
   const me = view.context.actorId
   const grains = grainsOf(actorOf(view.context))
   const fields = fieldsOfKind(task.kind)
@@ -86,7 +103,7 @@ function rowOf(task: TaskRow, view: ViewContext, data: Awaited<ReturnType<typeof
     kindLabel: kindLabelOf(task.kind),
     status: task.status,
     summary: task.summary,
-    record: { type: task.recordType, id: task.recordId },
+    record: { type: task.recordType, id: task.recordId, label: words.label, parent: words.parent },
     companyId: task.companyId,
     siteId: task.siteId,
     requester: task.requestedById
@@ -120,15 +137,19 @@ function rowOf(task: TaskRow, view: ViewContext, data: Awaited<ReturnType<typeof
 export async function taskRows(db: Reader, tasks: readonly TaskRow[], view: ViewContext): Promise<TaskRowView[]> {
   const data = await lookups(db, tasks, false)
   const rows: TaskRowView[] = []
-  for (const task of tasks) rows.push(rowOf(task, view, data, task.status === 'PENDING' ? await recheck(db, task) : null))
+  for (const task of tasks) {
+    const subject = await subjectOfTask(db, task)
+    rows.push(rowOf(task, view, data, subject.recheck, subject.words))
+  }
   return rows
 }
 
 /** One request as the review popup reads it: its change, its re-check line, its rules, who may decide, its history. */
 export async function taskDetailOf(db: Reader, task: TaskRow, view: ViewContext, history: readonly HistoryLine[]): Promise<TaskDetailView> {
   const data = await lookups(db, [task], true)
-  const state = task.status === 'PENDING' ? await recheck(db, task) : null
-  const row = rowOf(task, view, data, state)
+  const subject = await subjectOfTask(db, task)
+  const state = subject.recheck
+  const row = rowOf(task, view, data, state, subject.words)
   const me = view.context.actorId
   const grains = grainsOf(actorOf(view.context))
   const fields = fieldsOfKind(task.kind)

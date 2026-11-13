@@ -33,9 +33,33 @@ export const APPROVAL_TASK_KINDS = [
   'CREDIT_WITHOUT_RETURN',
   'SUPPLIER_BANK_CHANGE',
   'PURCHASE_REQUEST',
+  // B-W2b-377 (B-W2b-363's database values): a purchase order sent without a valid document; a receipt line beyond its tolerance.
+  'PURCHASE_ORDER_COMPLIANCE',
+  'RECEIPT_OVER_TOLERANCE',
 ] as const
 export type ApprovalTaskKind = (typeof APPROVAL_TASK_KINDS)[number]
 export const isApprovalTaskKind = (value: unknown): value is ApprovalTaskKind => typeof value === 'string' && (APPROVAL_TASK_KINDS as readonly string[]).includes(value)
+
+/**
+ * B-W2b-377: every kind in words (it, en), so a kind no step registered yet is never said in English to an Italian reader
+ * (B-W2b-361's gap: the API's fallback was the code). A kind's file keeps its own label; this is the fallback.
+ */
+export const APPROVAL_KIND_WORDS: Readonly<Record<ApprovalTaskKind, Words>> = Object.freeze({
+  PURCHASE_ORDER: { en: 'Purchase order', it: "Ordine d'acquisto" },
+  PURCHASE_ORDER_CHANGE: { en: 'Purchase order change', it: "Modifica di un ordine d'acquisto" },
+  SALES_ORDER: { en: 'Sales order', it: 'Ordine di vendita' },
+  SALES_ORDER_CHANGE: { en: 'Sales order change', it: 'Modifica di un ordine di vendita' },
+  PRICE_CHANGE: { en: 'Price change', it: 'Modifica di prezzo' },
+  STOCK_ADJUSTMENT: { en: 'Stock adjustment', it: 'Rettifica di magazzino' },
+  COUNT_VARIANCE: { en: 'Count difference', it: 'Differenza di inventario' },
+  MATERIAL_SUBSTITUTION: { en: 'Material substitution', it: 'Sostituzione di materiale' },
+  CREDIT_OVERRIDE: { en: 'Credit override', it: 'Sblocco del fido' },
+  CREDIT_WITHOUT_RETURN: { en: 'Credit without a return', it: 'Accredito senza reso' },
+  SUPPLIER_BANK_CHANGE: { en: "Supplier's bank details change", it: 'Modifica delle coordinate bancarie di un fornitore' },
+  PURCHASE_REQUEST: { en: 'Purchase request', it: "Richiesta d'acquisto" },
+  PURCHASE_ORDER_COMPLIANCE: { en: 'Send without a valid document', it: 'Invio senza un documento valido' },
+  RECEIPT_OVER_TOLERANCE: { en: 'Receipt beyond its tolerance', it: 'Ricevimento oltre la tolleranza' },
+})
 
 /** What a signature means (PLT-105). */
 export const APPROVAL_MEANINGS = ['REVIEWED', 'APPROVED', 'RELEASED', 'VERIFIED'] as const

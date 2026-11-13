@@ -544,7 +544,9 @@
           "CREDIT_OVERRIDE": "credit override",
           "CREDIT_WITHOUT_RETURN": "credit without a return",
           "SUPPLIER_BANK_CHANGE": "supplier's bank details change",
-          "PURCHASE_REQUEST": "purchase request"
+          "PURCHASE_REQUEST": "purchase request",
+          "PURCHASE_ORDER_COMPLIANCE": "send without a valid document",
+          "RECEIPT_OVER_TOLERANCE": "receipt beyond its tolerance"
         }
       },
       "TASK_DUE.TODAY": "Your task \"{title}\" is due today.",
@@ -564,6 +566,7 @@
       "alerts.HOLD_TOO_LONG": "{label} has been on hold for {hours} hours (the rule says {threshold} h).",
       "alerts.MATERIAL_SHORT": "Material {item} is short for released work order {label}.",
       "alerts.APPROVAL_OVERDUE": "Quote {label} has waited {hours} hours for its approval.",
+      "alerts.APPROVAL_OVERDUE.TASK": "The request {label} has waited {hours} hours for its approval.",
       "alerts.PO_NOT_CONFIRMED": "Purchase order {label} is not confirmed {days} days after it was sent.",
       "alerts.CERTIFICATE_EXPIRING": "Certificate {label} expires on {dueDate} ({days} days left).",
       "alerts.INVOICE_DEADLINE": "The goods of DDT {label} must be invoiced by {dueDate} ({days} days left).",

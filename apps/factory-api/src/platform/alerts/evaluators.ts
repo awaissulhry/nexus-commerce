@@ -16,6 +16,9 @@ import { workingTimeFindings } from '../../modules/people/limits/warnings'
 import { lowStockFindings } from '../../modules/inventory/low-stock/alerts'
 // B-W2b-350: the supply alerts (a line confirmed later than needed; a supplier put on hold, blocked or limited).
 import { confirmedLateFindings, supplierStatusFindings } from '../../modules/purchasing/reports/supply-alerts'
+// B-W2b-377: the approval engine's requests overdue (their record in words, read by their kind).
+import { kindOf } from '../approvals/kinds'
+import { kindLabelOf } from '../approvals/views'
 
 /**
  * What each kind of rule watches (B-W2a-33; factory-domain alerts/kinds), read in the tenant's system scope: the records a
@@ -131,11 +134,16 @@ const materialShort: Find = async (tx, rule, _now, only) => {
   })
 }
 
-/** APPROVAL_OVERDUE: quote approval requests still PENDING N hours after they were asked (one alert per quote). */
+/**
+ * APPROVAL_OVERDUE: quote approval requests still PENDING N hours after they were asked (one alert per quote), and (B-W2b-377)
+ * every request of the approval engine (ApprovalTask: a purchase order, a stock adjustment, a send without a valid document …)
+ * still PENDING N hours after it was asked (one alert per request, its record in words as the label).
+ */
 const approvalOverdue: Find = async (tx, rule, now, only) => {
   const { hours } = thresholdOf('APPROVAL_OVERDUE', rule.threshold) as { hours: number }
+  const tasks = await approvalTasksOverdue(tx, rule, now, hours, only)
   const approvals = await tx.quoteApproval.findMany({ where: { status: 'PENDING', createdAt: { lte: new Date(now.getTime() - hours * HOUR) } }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: FIND_LIMIT, select: { versionId: true, createdAt: true } })
-  if (approvals.length === 0) return []
+  if (approvals.length === 0) return tasks
   const versions = await tx.quoteVersion.findMany({ where: { id: { in: approvals.map((row) => row.versionId) }, ...(only ? { quoteId: { in: [...only] } } : {}) }, select: { id: true, quoteId: true } })
   const quotes = await tx.quote.findMany({ where: { id: { in: [...new Set(versions.map((row) => row.quoteId))] }, ...placeWhere(rule, false) }, select: { id: true, number: true, companyId: true, partyId: true } })
   const findings: Finding[] = []
@@ -144,6 +152,24 @@ const approvalOverdue: Find = async (tx, rule, now, only) => {
     if (asked.length === 0) continue
     const oldest = Math.min(...asked)
     findings.push({ recordType: 'Quote', recordId: quote.id, label: quote.number, scope: { companyId: quote.companyId, siteId: null, partyId: quote.partyId }, facts: { hours: Math.floor((now.getTime() - oldest) / HOUR), threshold: hours, askedAt: new Date(oldest).toISOString() } })
+  }
+  return [...tasks, ...findings]
+}
+
+/** B-W2b-377: the approval engine's requests still PENDING N hours after they were asked (`only`: the requests rechecked). */
+async function approvalTasksOverdue(tx: CommandTx, rule: RuleInput, now: Date, hours: number, only?: readonly string[]): Promise<Finding[]> {
+  const tasks = await tx.approvalTask.findMany({
+    where: { ...idIn(only), ...placeWhere(rule), status: 'PENDING', requestedAt: { lte: new Date(now.getTime() - hours * HOUR) } },
+    orderBy: [{ requestedAt: 'asc' }, { id: 'asc' }],
+    take: FIND_LIMIT,
+    select: { id: true, kind: true, recordId: true, companyId: true, siteId: true, summary: true, requestedAt: true },
+  })
+  const findings: Finding[] = []
+  for (const task of tasks) {
+    // The record in words as its kind reads it now ("SEED-PO-0002 · Conceria Seed"); a kind nobody registered: the kind's words.
+    const subject = await kindOf(task.kind)?.read(tx, task.recordId)
+    const label = subject?.label ?? kindLabelOf(task.kind).en
+    findings.push({ recordType: 'ApprovalTask', recordId: task.id, label, scope: { companyId: task.companyId, siteId: task.siteId, partyId: null }, facts: { hours: Math.floor((now.getTime() - task.requestedAt.getTime()) / HOUR), threshold: hours, askedAt: task.requestedAt.toISOString(), task: true, kind: task.kind } })
   }
   return findings
 }

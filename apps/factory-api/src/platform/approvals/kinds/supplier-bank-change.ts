@@ -143,6 +143,11 @@ export const SUPPLIER_BANK_CHANGE_KIND: ApprovalKindDefinition = Object.freeze({
     })
     return rows.map((row) => row.id)
   },
+  // B-W2b-377 (B-W2b-361's gap): the supplier's Bank details tab opens (the web's RECORD_PAGES SupplierBank), not the account's panels.
+  async parent(client: Reader, recordId: string) {
+    const account = await client.supplierBankAccount.findUnique({ where: { id: recordId }, select: { partyId: true } })
+    return account ? { type: 'SupplierBank', id: account.partyId } : null
+  },
   async onApproved(tools: CommandTools, task: TaskRef) {
     const found = await waiting(tools, task)
     if (!found) return

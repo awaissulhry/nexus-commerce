@@ -12,7 +12,7 @@ import { PARTIES_VIEW } from '../parties/permissions'
 import { PURCHASING_VIEW } from '../purchasing/permissions'
 import { QUALITY_HOLDS_VIEW } from '../quality/holds/permissions'
 import { ORDERS_VIEW } from '../sales/orders/permissions'
-import { QUOTES_VIEW } from '../sales/quotes/permissions'
+import { APPROVALS_VIEW } from '../approvals/permissions'
 import type { TimerKind } from '../timers/rules'
 
 /** B-W2b-24: seeing a connection (auth/permissions/catalogue INTEGRATIONS_VIEW; named here so the catalogue is not imported). */
@@ -143,8 +143,9 @@ export const KINDS: Readonly<Record<RuleKind, KindSpec>> = Object.freeze({
     kind: 'APPROVAL_OVERDUE',
     trigger: 'CONDITION',
     recordType: 'Quote',
-    view: QUOTES_VIEW,
-    // A quote's approval request still PENDING this many hours after it was asked.
+    // B-W2b-377: every approval request (the engine's ApprovalTask as well as a quote's), seen by whoever reads approvals.
+    view: APPROVALS_VIEW,
+    // A quote's approval request, or a request of the approval engine, still PENDING this many hours after it was asked.
     threshold: z.strictObject({ hours: whole(1, 720).default(24) }),
     builtIn: { name: { en: 'Approval waiting more than 24 hours', it: 'Approvazione in attesa da più di 24 ore' }, threshold: { hours: 24 }, severity: 'WARNING', cooldownMinutes: 1440, recipientRole: 'finance' },
     label: { en: 'Approvals overdue', it: 'Approvazioni in ritardo' },
@@ -152,6 +153,10 @@ export const KINDS: Readonly<Record<RuleKind, KindSpec>> = Object.freeze({
       { event: 'quote.approval_decided', key: 'quoteId' },
       { event: 'quote.reopened', key: 'quoteId' },
       { event: 'quote.cancelled', key: 'quoteId' },
+      // B-W2b-377: a request of the approval engine decided, taken back or found changed.
+      { event: 'approval.decided', key: 'taskId' },
+      { event: 'approval.withdrawn', key: 'taskId' },
+      { event: 'approval.stale', key: 'taskId' },
     ],
   }),
   PO_NOT_CONFIRMED: spec({

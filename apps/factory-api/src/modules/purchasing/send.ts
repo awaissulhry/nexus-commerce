@@ -11,6 +11,8 @@ import { identityAt } from '@nexus/factory-domain/parties/tax'
 import { purchaseOrderDocument, purchaseOrderDocumentNumber, purchaseOrderMail, type SupplierOrder } from '@nexus/factory-domain/purchasing/document'
 import { newLinkProblem, supplierLanguageOf, type PurchaseOrderStatus, type SendCheck } from '@nexus/factory-domain/purchasing/orders'
 import { CONFIRM_DAYS, confirmByProblem, defaultConfirmBy } from '@nexus/factory-domain/purchasing/orders/delivery'
+// B-W2b-377: the confirm-by hours of the company's purchasing settings.
+import { defaultConfirmByFor } from './reminders/chase'
 import { MAX_CHANGE_NOTE, revisionMailOpening } from '@nexus/factory-domain/purchasing/revisions/revisions'
 import { PURCHASING_SEND } from '@nexus/factory-domain/purchasing/permissions'
 import { command, type CommandCaller } from '../../core/command'
@@ -196,7 +198,8 @@ export async function sendCheck(caller: CommandCaller, orderId: string) {
       subject: mail.subject,
       message: mail.stored,
       // B-W2a-52: the deadline the send sets unless the dialog gives one, and what a later revision changes.
-      confirmBy: toUtcIso(defaultConfirmBy(now, today, words.arrivalDay)),
+      // B-W2b-377: the company's confirm-by hours when its purchasing settings set them (./reminders/chase.ts).
+      confirmBy: toUtcIso(await defaultConfirmByFor(client, officeContextOf(caller).tenantId, order.companyId, now, defaultConfirmBy(now, today, words.arrivalDay))),
       revision: order.revision,
       changes: words.changes?.words ?? null,
     }
@@ -374,7 +377,7 @@ export async function sendAs(host: SendHost, orderId: string, body: SendBody, id
       const file = await recordGeneratedFile(tools, plan.file, { details: { documentType: 'PURCHASE_ORDER', number: plan.documentNumber, layout: plan.layout, language: plan.language } })
       const netAmount = await refreshTotal(tools, current.id)
       // B-W2a-52 (SCM-087): the deadline for the supplier's answer, after the send time (the trigger checks it).
-      const confirmBy = plan.confirmBy ?? defaultConfirmBy(tools.now, businessDate(tools.now), plan.arrivalDay)
+      const confirmBy = plan.confirmBy ?? (await defaultConfirmByFor(tx, context.tenantId, current.companyId, tools.now, defaultConfirmBy(tools.now, businessDate(tools.now), plan.arrivalDay)))
       const late = confirmByProblem(confirmBy, { now: tools.now, sentAt: tools.now, linkExpiresAt: plan.terms.expiresAt })
       if (late) throw new ValidationError(late, [{ path: 'body/confirmBy', message: late }])
       await tx.purchaseOrder.update({ where: { id: current.id }, data: { status: 'SENT', sentAt: tools.now, sentById: context.actorId, confirmBy, orderDate: new Date(`${businessDate(tools.now)}T00:00:00.000Z`) }, select: { id: true } })

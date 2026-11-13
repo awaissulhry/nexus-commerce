@@ -157,11 +157,11 @@ describe('the compliance gate on a PO (SCM-022)', () => {
     const own = await call('owner', 'POST', `/purchasing/orders/${second.id}/compliance-override/decide`, { decision: 'APPROVED' })
     expect(own.status).toBe(403)
     expect(paths(own.body)).toEqual(['refusal/OWN_REQUEST'])
-    // The database refuses it too, whoever writes the line.
-    const asked = (await sql<{ byId: string }>(`SELECT "byId" FROM "ApprovalEvent" WHERE "recordId" = $1 AND action = 'REQUESTED'`, [second.id]))[0]!
+    // The database refuses it too, whoever writes the yes (B-W2b-377: the request is a PURCHASE_ORDER_COMPLIANCE task).
+    const asked = (await sql<{ id: string; requestedById: string }>(`SELECT id, "requestedById" FROM "ApprovalTask" WHERE "recordId" = $1 AND kind = 'PURCHASE_ORDER_COMPLIANCE' AND status = 'PENDING'`, [second.id]))[0]!
     await expect(
-      h.database.withScope({ audience: 'office', tenantId: tenant, actorId: asked.byId }, (client) =>
-        client.approvalEvent.create({ data: { id: newId(), companyId: companyA, taskId: null, recordType: 'PurchaseOrder', recordId: second.id, action: 'APPROVED', byId: asked.byId, at: new Date(), createdById: asked.byId }, select: { id: true } }),
+      h.database.withScope({ audience: 'office', tenantId: tenant, actorId: asked.requestedById }, (client) =>
+        client.approvalTask.update({ where: { id: asked.id }, data: { status: 'APPROVED', decidedAt: new Date(), decidedById: asked.requestedById, stepUpAt: new Date(), version: { increment: 1 } }, select: { id: true } }),
       ),
     ).rejects.toThrow(/nobody approves their own request/)
     // A no needs words; the one who asked takes the request back.

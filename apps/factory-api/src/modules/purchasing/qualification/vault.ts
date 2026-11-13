@@ -7,6 +7,7 @@ import { SUPPLIER_CHANGES_DECIDE, SUPPLIER_DOCUMENTS_REVIEW } from '@nexus/facto
 import { LAW } from '@nexus/factory-domain/purchasing/qualification/gate'
 import { PURCHASING_QUALIFICATION_MANAGE } from '@nexus/factory-domain/purchasing/qualification/permissions'
 import { askedOf, askStateOf, bestDocument, documentStateOf, unlocksWords, VAULT_CATEGORIES } from '@nexus/factory-domain/purchasing/qualification/vault'
+import { documentsFor } from '../suppliers/document-types'
 import { hasSupplierRole, type SupplierKind } from '@nexus/factory-domain/purchasing/suppliers-depth/rules'
 import type { CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
@@ -64,6 +65,8 @@ async function materialsOf(db: Reader, partyId: string): Promise<MaterialRow[]> 
 const documentView = (doc: VaultFile, today: BusinessDate) => ({
   fileId: doc.fileId,
   category: doc.category,
+  // B-W2b-377: what document it is (null: nobody said; it still meets its category's asks).
+  documentTypeCode: doc.documentTypeCode,
   name: doc.name,
   issuer: doc.issuer,
   number: doc.number,
@@ -102,14 +105,15 @@ export async function getVault(caller: CommandCaller, partyId: string) {
   const waitingCategories = new Set(read.uploads.map((upload) => upload.category))
   const crViMaterials = read.materials.filter((row) => row.requiresCrViTest)
   const asked = askedOf(kinds).map((entry) => {
-    const doc = bestDocument(read.files, entry.category, today)
+    // B-W2b-377: a document meets an ask by its type (or untyped, by its category as before).
+    const doc = bestDocument(documentsFor(read.files, entry.codes), entry.category, today)
     const unlocks = entry.category === 'TEST_REPORT' ? unlocksWords(crViMaterials.map((row) => row.code), 'a valid chromium VI test report') : null
     return { ...entry, codes: [...entry.codes], laws: [...entry.laws], state: askStateOf(doc, today), fileId: doc?.fileId ?? null, expiresOn: doc?.expiresOn ?? null, waiting: waitingCategories.has(entry.category), unlocks: unlocks || null }
   })
   const materials = read.materials.flatMap((row) => {
     const out = []
     if (row.requiresCrViTest) {
-      const doc = bestDocument(read.files, 'TEST_REPORT', today, row.articleCodes)
+      const doc = bestDocument(documentsFor(read.files, ['CR_VI_TEST_REPORT']), 'TEST_REPORT', today, row.articleCodes)
       const state = askStateOf(doc, today)
       const checked = kinds.includes('TANNERY')
       out.push({ itemId: row.itemId, code: row.code, name: row.name, kind: row.kind, needs: 'CR_VI_TEST_REPORT' as const, law: LAW.CR_VI_TEST_REPORT, state, fileId: doc?.fileId ?? null, certificate: null, expiresOn: doc?.expiresOn ?? null, checkedAtSend: checked, heldAtSend: checked && (state === 'MISSING' || state === 'EXPIRED') })
@@ -179,7 +183,7 @@ export async function getVault(caller: CommandCaller, partyId: string) {
 /** The counts of one supplier's vault on a day. */
 function countsOf(row: Pick<SupplierRow, 'supplierKinds'>, files: readonly VaultFile[], today: BusinessDate) {
   const states = files.map((doc) => documentStateOf(doc.expiresOn, today))
-  const missing = askedOf([...row.supplierKinds] as SupplierKind[]).filter((entry) => entry.required && askStateOf(bestDocument(files, entry.category, today), today) === 'MISSING').length
+  const missing = askedOf([...row.supplierKinds] as SupplierKind[]).filter((entry) => entry.required && askStateOf(bestDocument(documentsFor(files, entry.codes), entry.category, today), today) === 'MISSING').length
   return { valid: states.filter((state) => state === 'VALID').length, expiring: states.filter((state) => state === 'EXPIRING').length, expired: states.filter((state) => state === 'EXPIRED').length, missing }
 }
 
@@ -196,10 +200,10 @@ export async function vaultSummary(caller: CommandCaller, query: { readonly comp
       take: 2000,
     })
     const seen = parties.filter((row) => hasSupplierRole(row.roles) && can(actor, PARTIES_VIEW, { companyId: row.companyId, partyId: row.id }))
-    const files = seen.length === 0 ? [] : await client.storedFile.findMany({ where: { recordType: 'Party', recordId: { in: seen.map((row) => row.id) }, status: 'AVAILABLE', supersededAt: null, category: { in: [...VAULT_CATEGORIES] } }, select: { id: true, recordId: true, category: true, expiresOn: true } })
+    const files = seen.length === 0 ? [] : await client.storedFile.findMany({ where: { recordType: 'Party', recordId: { in: seen.map((row) => row.id) }, status: 'AVAILABLE', supersededAt: null, category: { in: [...VAULT_CATEGORIES] } }, select: { id: true, recordId: true, category: true, expiresOn: true, documentTypeCode: true } })
     const byParty = new Map<string, VaultFile[]>()
     for (const file of files) {
-      const doc = { fileId: file.id, category: file.category as VaultFile['category'], expiresOn: file.expiresOn ? dayOf(file.expiresOn) : null, articleCodes: [], name: '', addedAt: new Date(0), issuer: null, number: null, issuedOn: null, source: 'OFFICE' as const, uploadId: null, seriesId: file.id }
+      const doc = { fileId: file.id, category: file.category as VaultFile['category'], documentTypeCode: file.documentTypeCode, expiresOn: file.expiresOn ? dayOf(file.expiresOn) : null, articleCodes: [], name: '', addedAt: new Date(0), issuer: null, number: null, issuedOn: null, source: 'OFFICE' as const, uploadId: null, seriesId: file.id }
       byParty.set(file.recordId, [...(byParty.get(file.recordId) ?? []), doc])
     }
     const suppliers = seen.map((row) => ({ partyId: row.id, code: row.code, ...countsOf(row, byParty.get(row.id) ?? [], today) }))

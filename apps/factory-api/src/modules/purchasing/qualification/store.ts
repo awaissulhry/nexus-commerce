@@ -10,6 +10,7 @@ import type { SupplierKind } from '@nexus/factory-domain/purchasing/suppliers-de
 import { requiredDocumentsProblems } from '../../../platform/files/required/check'
 import type { CommandTx } from '../../../core/command'
 import { isOpenLine } from '../views'
+import { documentsFor } from '../suppliers/document-types'
 import { readLines, type OrderRow, type Reader } from '../store'
 
 /**
@@ -26,6 +27,8 @@ export const WITHDRAW_ACTION = 'purchasing.compliance.overrideWithdraw'
 
 /** A document of the vault as the office reads it. */
 export interface VaultFile extends VaultDocument {
+  /** B-W2b-377: what document it is (a SUPPLIER_DOCUMENT_TYPE code), null when nobody said. */
+  readonly documentTypeCode: string | null
   readonly name: string
   readonly addedAt: Date
   readonly issuer: string | null
@@ -36,7 +39,7 @@ export interface VaultFile extends VaultDocument {
   readonly seriesId: string
 }
 
-const FILE_SELECT = { id: true, category: true, expiresOn: true, originalName: true, createdAt: true, seriesId: true } as const satisfies Prisma.StoredFileSelect
+const FILE_SELECT = { id: true, category: true, expiresOn: true, originalName: true, createdAt: true, seriesId: true, documentTypeCode: true } as const satisfies Prisma.StoredFileSelect
 
 /** The files an accepted questionnaire of the party put in force (by file id), with the question each answered. */
 export async function questionnaireFilesOf(db: Reader, partyId: string, companyId?: string | null): Promise<Map<string, { readonly responseId: string; readonly companyId: string; readonly key: string; readonly issuer: string | null; readonly number: string | null; readonly issuedOn: string | null }>> {
@@ -77,6 +80,7 @@ export async function vaultFilesOf(db: Reader, partyId: string): Promise<VaultFi
       {
         fileId: file.id,
         category: file.category as VaultCategory,
+        documentTypeCode: file.documentTypeCode,
         expiresOn: file.expiresOn ? dayOf(file.expiresOn) : null,
         articleCodes: upload ? [...upload.articleCodes] : [],
         name: file.originalName,
@@ -150,7 +154,8 @@ export async function gateFactsOf(db: Reader, order: Pick<OrderRow, 'id' | 'part
     supplierKinds: [...party.supplierKinds] as SupplierKind[],
     today,
     lines: gateLines,
-    documents: (await vaultFilesOf(db, order.partyId)).filter((doc) => doc.category === 'TEST_REPORT'),
+    // B-W2b-377: a test report typed as the chromium VI one (or untyped, as before the types).
+    documents: documentsFor((await vaultFilesOf(db, order.partyId)).filter((doc) => doc.category === 'TEST_REPORT'), ['CR_VI_TEST_REPORT']),
     certificates: await certificatesFor(db, ppe, order.partyId, order.companyId, today),
     rules: await rulesBeforeSent(db, order.id, today),
   }
@@ -158,7 +163,10 @@ export async function gateFactsOf(db: Reader, order: Pick<OrderRow, 'id' | 'part
 
 /** One request to send the order without its documents, with its decision (null: none yet). */
 export interface OverrideRequest {
+  /** The request's line (an engine request: its task's id). */
   readonly lineId: string
+  /** B-W2b-377: the PURCHASE_ORDER_COMPLIANCE request of the approval engine (null: a domain line written before it). */
+  readonly taskId: string | null
   readonly askedById: string
   readonly askedAt: Date
   readonly reason: string
@@ -183,7 +191,7 @@ export async function overrideRequestsOf(db: Reader, orderId: string): Promise<O
   const out: OverrideRequest[] = []
   let current: { lineId: string; askedById: string; askedAt: Date; reason: string; decision: OverrideRequest['decision'] } | null = null
   const close = () => {
-    if (current) out.push({ ...current, fingerprint: fingerprints.get(current.lineId) ?? null })
+    if (current) out.push({ ...current, taskId: null, fingerprint: fingerprints.get(current.lineId) ?? null })
   }
   for (const line of lines) {
     if (line.action === 'REQUESTED') {
@@ -194,7 +202,37 @@ export async function overrideRequestsOf(db: Reader, orderId: string): Promise<O
     }
   }
   close()
-  return out.reverse()
+  // B-W2b-377: the engine's PURCHASE_ORDER_COMPLIANCE requests (the ask's audit row names its task), newest first with the lines.
+  return [...out, ...(await taskRequestsOf(db, orderId, asks))].sort((a, b) => b.askedAt.getTime() - a.askedAt.getTime() || (a.lineId < b.lineId ? 1 : -1))
+}
+
+/** The order's requests asked of the approval engine (B-W2b-377), each with the reason and fingerprint of its ask. */
+async function taskRequestsOf(db: Reader, orderId: string, asks: readonly { readonly after: unknown }[]): Promise<OverrideRequest[]> {
+  const tasks = await db.approvalTask.findMany({
+    where: { kind: 'PURCHASE_ORDER_COMPLIANCE', recordType: 'PurchaseOrder', recordId: orderId },
+    select: { id: true, status: true, requestedById: true, requestedAt: true, decidedById: true, decidedAt: true, comment: true, rejectReason: true, withdrawnAt: true, withdrawnById: true, staleAt: true },
+    orderBy: [{ requestedAt: 'desc' }, { id: 'desc' }],
+    take: 100,
+  })
+  if (tasks.length === 0) return []
+  const byTask = new Map<string, { fingerprint: string | null; reason: string }>()
+  for (const row of asks) {
+    const after = (row.after ?? {}) as { taskId?: unknown; fingerprint?: unknown; reason?: unknown }
+    if (typeof after.taskId === 'string' && !byTask.has(after.taskId)) byTask.set(after.taskId, { fingerprint: typeof after.fingerprint === 'string' ? after.fingerprint : null, reason: typeof after.reason === 'string' ? after.reason : '' })
+  }
+  return tasks.map((task): OverrideRequest => {
+    const ask = byTask.get(task.id)
+    const decision: OverrideRequest['decision'] =
+      task.status === 'APPROVED' || task.status === 'REJECTED'
+        ? { action: task.status, byId: task.decidedById, at: task.decidedAt!, words: task.status === 'APPROVED' ? task.comment : task.rejectReason }
+        : task.status === 'WITHDRAWN'
+          ? { action: 'WITHDRAWN', byId: task.withdrawnById, at: task.withdrawnAt!, words: null }
+          : task.status === 'STALE'
+            ? // Found changed before its yes: taken back by the system (what holds the order now needs a new request).
+              { action: 'WITHDRAWN', byId: null, at: task.staleAt!, words: null }
+            : null
+    return { lineId: task.id, taskId: task.id, askedById: task.requestedById ?? '', askedAt: task.requestedAt, reason: ask?.reason ?? '', fingerprint: ask?.fingerprint ?? null, decision }
+  })
 }
 
 /** The newest request as the gate reads it (a newer one supersedes an older one still waiting). */

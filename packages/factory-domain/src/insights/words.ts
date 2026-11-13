@@ -57,6 +57,9 @@ export const CODE_WORDS: Readonly<Record<string, Readonly<Record<string, string>
     CREDIT_WITHOUT_RETURN: 'credit without a return',
     SUPPLIER_BANK_CHANGE: "supplier's bank details change",
     PURCHASE_REQUEST: 'purchase request',
+    // B-W2b-377
+    PURCHASE_ORDER_COMPLIANCE: 'send without a valid document',
+    RECEIPT_OVER_TOLERANCE: 'receipt beyond its tolerance',
   },
 })
 

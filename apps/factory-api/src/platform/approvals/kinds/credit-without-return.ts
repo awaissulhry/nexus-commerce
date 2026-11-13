@@ -162,4 +162,9 @@ export const CREDIT_WITHOUT_RETURN_KIND: ApprovalKindDefinition = Object.freeze(
     if (creditAmount === null) throw new Error(`approvals: request ${task.id} names no credit`)
     await creditWithoutReturnInCommand(tools, { lineId: task.recordId, creditAmount, decidedById: task.requestedById ?? task.decidedById!, taskId: task.id })
   },
+  // B-W2b-377 (B-W2b-361's gap): the return opens, not the line's panels.
+  async parent(client: Reader, recordId: string) {
+    const line = await client.returnLine.findUnique({ where: { id: recordId }, select: { returnId: true } })
+    return line ? { type: 'ReturnAuthorisation', id: line.returnId } : null
+  },
 })
