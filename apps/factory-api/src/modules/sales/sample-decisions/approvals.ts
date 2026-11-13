@@ -1,6 +1,6 @@
 import type { Prisma } from '@nexus/factory-db'
 import { SAMPLE_ROUND_RECORD, SAMPLE_SWATCH_RECORD, type ApprovalLocale } from '@nexus/factory-domain/approvals-out/kinds'
-import { toUtcIso } from '@nexus/factory-domain/core/time'
+import { businessDate, toUtcIso } from '@nexus/factory-domain/core/time'
 import { SALES_SAMPLES_DECIDE } from '@nexus/factory-domain/sales/sample-decisions/permissions'
 import { answerHeldWords, askRefusal, decisionOfAnswer, noCompanyRefusal, swatchAnswerHeldWords, swatchAskRefusal, type SwatchKind } from '@nexus/factory-domain/sales/sample-decisions/rules'
 import { SALES_SAMPLES_VIEW } from '@nexus/factory-domain/sales/samples/permissions'
@@ -181,7 +181,7 @@ export const SAMPLE_SWATCH_ADAPTER: RecordAdapter = Object.freeze<RecordAdapter>
         { label: words(locale, 'Materiale', 'Material'), value: item ? `${item.code} ${item.name}` : '' },
         ...(colour ? [{ label: words(locale, 'Colore', 'Colour'), value: `${colour.code} ${colour.name}` }] : []),
         ...(lot ? [{ label: words(locale, 'Lotto', 'Lot'), value: lot.code }] : []),
-        ...(swatch.sentAt ? [{ label: words(locale, 'Inviato il', 'Sent on'), value: swatch.sentAt.toISOString().slice(0, 10) }] : []),
+        ...(swatch.sentAt ? [{ label: words(locale, 'Inviato il', 'Sent on'), value: businessDate(swatch.sentAt) }] : []),
       ],
       revisedOrder: null,
     }

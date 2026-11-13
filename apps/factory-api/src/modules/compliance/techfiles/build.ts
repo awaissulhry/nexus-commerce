@@ -24,7 +24,7 @@ import { processFiles, type FilesRuntime } from '../../../platform/files/service
 import { defineHandler, type EventHandler } from '../../../platform/outbox/dispatch'
 import { currentFileOf, readDocumentFiles } from '../../product/compliance/read'
 import { writeZip, type ZipEntry } from '../../accounting/guest/zip'
-import { dateOfDay, dayOf, settings, techfilesClock, type Reader } from './common'
+import { dateOfDay, dayOf, instantDayOf, settings, techfilesClock, type Reader } from './common'
 import { renderPackPdf } from './pdf'
 import { coveringCertificates, evidenceOf, readItems, type FileRow } from './store'
 
@@ -179,7 +179,7 @@ async function collect(db: Reader, pack: Pack, file: FileRow) {
     const evidence = await evidenceOf(db, items)
     const index = items.map((item) => {
       const view = evidence(item)
-      return { point: item.point as AnnexIIIPoint, state: item.state, evidence: view ? view.label : item.note ?? '-', reviewedOn: dayOf(item.reviewedAt) }
+      return { point: item.point as AnnexIIIPoint, state: item.state, evidence: view ? view.label : item.note ?? '-', reviewedOn: instantDayOf(item.reviewedAt) }
     })
     paper.index = index
     addSection('Technical file index (Annex III)', 'technical-file-index.json', 'TechnicalFile', file.id, index.map((row) => ({ ...row, law: POINT_INFO[row.point].law })))
@@ -193,7 +193,7 @@ async function collect(db: Reader, pack: Pack, file: FileRow) {
         revision: signed.revision,
         signedByName: signed.signedByName ?? '',
         signedByFunction: signed.signedByFunction ?? '',
-        signedOn: dayOf(signed.signedAt) ?? '',
+        signedOn: instantDayOf(signed.signedAt) ?? '',
         classReasoning: signed.classReasoning,
         rows: rows.map((row) => ({ hazard: row.hazardNote ? `${words(row.hazard)}: ${row.hazardNote}` : words(row.hazard), zone: row.garmentZone, intendedUse: row.intendedUse, misuse: row.foreseeableMisuse, control: row.control, clause: row.standardClause, residual: row.residualRisk })),
       }
@@ -242,7 +242,7 @@ async function collect(db: Reader, pack: Pack, file: FileRow) {
     const releases = orderIds.length ? await db.qualityRelease.findMany({ where: { workOrderId: { in: orderIds } }, select: { inspectionId: true, quantity: true } }) : []
     paper.inspections = inspections.map((row) => {
       const order = orders.find((entry) => entry.id === row.workOrderId)!
-      return { workOrder: order.number, batch: order.batchNumber, inspection: row.number ?? row.id.slice(0, 8), status: row.status, decidedOn: dayOf(row.decidedAt), released: releases.filter((release) => release.inspectionId === row.id).reduce((sum, release) => sum + release.quantity, 0) }
+      return { workOrder: order.number, batch: order.batchNumber, inspection: row.number ?? row.id.slice(0, 8), status: row.status, decidedOn: instantDayOf(row.decidedAt), released: releases.filter((release) => release.inspectionId === row.id).reduce((sum, release) => sum + release.quantity, 0) }
     })
     addSection('Final inspections and releases', 'inspections.json', 'TechnicalFile', file.id, paper.inspections)
   }

@@ -1,5 +1,6 @@
 import { NotFoundError } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
+import { businessDate } from '@nexus/factory-domain/core/time'
 import { PAYMENTS_VIEW } from '@nexus/factory-domain/payments/permissions'
 import { openOnDeposit, openOnInvoice } from '@nexus/factory-domain/payments/payments'
 import { suggestOldestFirst, unplacedOf } from '@nexus/factory-domain/payments/refunds'
@@ -33,6 +34,7 @@ import { allocatedOf, assertMay, officeContextOf } from './store'
  * screen's "Carry the deposit"), `carriedDepositAmount` what carried deposits place on the invoice (inside its paid part).
  */
 
+/** A DATE column's day (Prisma reads it as UTC midnight). An instant's day is its Rome day: `businessDate` (B-W2b-F35). */
 const day = (value: Date): string => value.toISOString().slice(0, 10)
 
 export async function openItems(caller: CommandCaller, query: { companyId: string; partyId: string; paymentId?: string | undefined; amount?: number | undefined }) {
@@ -79,7 +81,7 @@ export async function openItems(caller: CommandCaller, query: { companyId: strin
           stepKind: kind === 'DEPOSIT' || kind === 'BEFORE_SHIPPING' ? kind : null,
           orderId: request.orderId,
           orderNumber: request.order?.number ?? null,
-          date: day(request.createdAt),
+          date: businessDate(request.createdAt),
           dueDate: day(request.dueDate),
           currency: request.currency,
           amount: request.amount,

@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { FastifyInstance } from 'fastify'
 import type { Redis } from 'ioredis'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { openFactoryDatabase, RUNTIME_LOGIN, type FactoryDatabase } from '@nexus/factory-db'
 import { migratedDatabase, type MigratedDatabase } from '@nexus/factory-db/testing'
 import { newId } from '@nexus/factory-domain/core/ids'
@@ -78,6 +78,8 @@ const SESSIONS: Record<string, SessionContext> = {
   packerA1b: floor(A.siteA1, A.companyA, ['shipping.pack'], A.lead),
   packerB1: floor(A.siteB1, A.companyB, ['shipping.pack']),
   floorNoPack: floor(A.siteA1, A.companyA, ['floor.work']),
+  // B-W2b-F35: who keeps the compliance requirements and reads a gate's answer.
+  rules: office(A.tenant, [grant(['compliance.certificates.view', 'compliance.requirements.manage'])]),
 }
 
 type Json = Record<string, any>
@@ -493,5 +495,32 @@ describe('a reversal reduces what can ship (Reg. (EU) 2016/425 art. 8(8); tenant
     expect(await readyCell('otherTenant', blk52)).toBeUndefined()
     const refusal = await refused('otherTenant', 'POST', '/shipping/shipments', { salesOrderId: seedB.quality.production.salesOrderId, lines: [{ workOrderSizeId: blk52, quantity: 1 }] }, 409)
     expect(refusal.message).toBe('Only released garments ship: SEED-WO-0001 BLK 52 has 0 released (less reversals) and 0 on shipments, so 0 can still ship; 1 asked.')
+  })
+})
+
+describe('the gate check of a shipment decides for the Rome day, not the UTC day (B-W2b-F35)', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('at 00:30 in Rome (23:30 UTC) a requirement that starts that Rome day applies, one that ended the day before does not', async () => {
+    for (const [code, dates] of [['F35-FROM-13', { appliesFrom: '2026-11-13' }], ['F35-UNTIL-12', { appliesUntil: '2026-11-12' }]] as const) {
+      await ok('rules', 'POST', '/compliance/requirements', { code, kind: 'DECLARATION', name: `A made-up declaration (${code})`, legalReference: 'Made-up law 1', ...dates }, 201)
+    }
+    const linesNow = async () => {
+      const answer = await ok('rules', 'GET', `/compliance/gates/check?gate=SHIPMENT&subjectType=Shipment&subjectId=${seedA.draftShipmentId}`)
+      return (answer.decisions as Json[]).flatMap((decision) => (decision.lines as Json[]).map((line) => line.requirement.code as string))
+    }
+    // The check's "now" is `Date`, pinned here. 23:30 UTC on 12 November is 00:30 on 13 November in Rome.
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-11-12T23:30:00.000Z'))
+    const atNight = await linesNow()
+    expect(atNight).toContain('F35-FROM-13')
+    expect(atNight).not.toContain('F35-UNTIL-12')
+    // At 12:00 in Rome both days agree.
+    vi.setSystemTime(new Date('2026-11-13T11:00:00.000Z'))
+    const atNoon = await linesNow()
+    expect(atNoon).toContain('F35-FROM-13')
+    expect(atNoon).not.toContain('F35-UNTIL-12')
   })
 })

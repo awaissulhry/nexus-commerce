@@ -18,7 +18,7 @@ import { testAuthenticator, type SessionContext } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { applySystemRoleChanges, systemRoleChanges } from '../../../platform/auth/roles/system-roles'
 import { addUser, Browser, enrolTotp, startHarness, stepUp, type Harness, type TestTenant } from '../../../platform/auth/sessions/testing/harness'
-import { pdfFlatText } from '../../../platform/documents/testing/pdf-text'
+import { pdfFlatText, pdfTextRuns } from '../../../platform/documents/testing/pdf-text'
 import { systemContext } from '../../../platform/outbox/system'
 import { buildPack } from './build'
 
@@ -383,5 +383,52 @@ describe('evidence packs (PRD-299)', () => {
     const archived = await ok('keeper', 'POST', `/compliance/techfiles/${jkt01File.file.id}/archive`, { version: record.file.version, reason: 'Made-up: left the market.' })
     expect(archived.file).toMatchObject({ status: 'ARCHIVED', archiveReason: 'Made-up: left the market.', retention: 'KEPT' })
     await no('keeper', 'PATCH', `/compliance/techfiles/${jkt01File.file.id}`, { version: archived.file.version, keeperId: null }, 409)
+  })
+})
+
+describe('the day of an instant is its Rome day, not its UTC day (B-W2b-F35)', () => {
+  // 23:30 UTC on 12 November is 00:30 on 13 November in Rome. The instants are written as a command at that clock writes
+  // them, past their guards on the admin's session (this file's last tests: nothing after them reads these rows).
+  const AFTER_MIDNIGHT_IN_ROME = '2026-11-12T23:30:00.000Z'
+  async function force(sql: string, values: unknown[] = []): Promise<number> {
+    await admin('SET session_replication_role = replica')
+    try {
+      return (await h.db.admin.query(sql, values)).rowCount ?? 0
+    } finally {
+      await admin('SET session_replication_role = DEFAULT')
+    }
+  }
+  /** The pack's PDF built now: its text runs (one per table cell or line). */
+  async function packText(fileId: string, include: string[]): Promise<string[]> {
+    const asked = await ok('keeper', 'POST', `/compliance/techfiles/${fileId}/packs`, { purpose: 'CUSTOMER', language: 'en', recipient: 'Made-up customer F35', scope: { kind: 'STYLE' }, include })
+    expect(await buildPack(callerFor(h.database, systemContext(T.tenant, newId())), asked.pack.id, { files: h.files })).toBe('built')
+    const { pack } = await ok('viewer', 'GET', `/compliance/evidence-packs/${asked.pack.id}`)
+    const row = (await admin<{ storeAccountId: string; storageKey: string; sizeBytes: number }>('SELECT "storeAccountId", "storageKey", "sizeBytes" FROM "StoredFile" WHERE id = $1', [pack.pdf.id]))[0]!
+    return pdfTextRuns((await h.files.storage.read(callerFor(h.database, systemContext(T.tenant, newId())), row.storeAccountId, row.storageKey, row.sizeBytes))!)
+  }
+  const days = (runs: string[]) => new Set(runs.filter((run) => /^\d{4}-\d{2}-\d{2}$/.test(run.trim())).map((run) => run.trim()))
+
+  it('a report file made available at 00:30 in Rome is listed on that Rome day', async () => {
+    const url = `/compliance/techfiles/${seeded.technicalFileIds.open}/test-reports`
+    const item = ((await ok('viewer', 'GET', url)).reports as Json[]).find((row) => row.source === 'TECHFILE_ITEM')!
+    expect(item).toBeDefined()
+    expect(await force('UPDATE "StoredFile" SET "availableAt" = $2 WHERE id = $1', [item.file.id, AFTER_MIDNIGHT_IN_ROME])).toBe(1)
+    expect(((await ok('viewer', 'GET', url)).reports as Json[]).find((row) => row.id === item.id)).toMatchObject({ source: 'TECHFILE_ITEM', date: '2026-11-13' })
+  })
+
+  it('a pack prints the Rome day a point was reviewed, the risk assessment signed and an inspection decided', async () => {
+    const file = jkt01File.file.id
+    expect(await force('UPDATE "TechnicalFileItem" SET "reviewedAt" = $2 WHERE "technicalFileId" = $1 AND "reviewedAt" IS NOT NULL', [file, AFTER_MIDNIGHT_IN_ROME])).toBeGreaterThan(0)
+    expect(await force(`UPDATE "ProductRiskAssessment" SET "signedAt" = $2 WHERE "technicalFileId" = $1 AND status = 'SIGNED'`, [file, AFTER_MIDNIGHT_IN_ROME])).toBeGreaterThan(0)
+    const index = await packText(file, ['TECHFILE_INDEX', 'RISK_ASSESSMENT'])
+    expect(index.join(' ').replace(/\s+/g, ' ')).toContain('Signed on 2026-11-13')
+    expect(days(index)).toContain('2026-11-13')
+    expect(days(index)).not.toContain('2026-11-12')
+    // SEED-JKT-02's batches: their decided inspections.
+    const open = seeded.technicalFileIds.open
+    expect(await force(`UPDATE "Inspection" SET "decidedAt" = $2 WHERE "decidedAt" IS NOT NULL AND "workOrderId" IN (SELECT w.id FROM "WorkOrder" w JOIN "TechnicalFile" f ON f."styleId" = w."styleId" WHERE f.id = $1)`, [open, AFTER_MIDNIGHT_IN_ROME])).toBeGreaterThan(0)
+    const inspections = await packText(open, ['INSPECTIONS'])
+    expect(days(inspections)).toContain('2026-11-13')
+    expect(days(inspections)).not.toContain('2026-11-12')
   })
 })
