@@ -31,14 +31,19 @@ import { amountText, type CoreLine } from '../invoices'
  * editable after the goods left, B-W2a-48: the issue reads it again).
  */
 
-export const CHARGE_KINDS = ['FREIGHT', 'PACKAGING', 'SAMPLES', 'FEE', 'OTHER'] as const
+// W2b-6 (factory-db money.prisma InvoiceChargeKind, schema wave 49/57, B-W2b-369; Owner 11-13): STAMP_DUTY, the stamp duty
+// charged to the customer (Natura N1, one per invoice, behind the company's stamp duty switch, GATE-ACCOUNTANT). Nobody types
+// it: B-W2b-392 adds it from the invoice's stamp duty; a person's charge is one of TYPED_CHARGE_KINDS.
+export const CHARGE_KINDS = ['FREIGHT', 'PACKAGING', 'SAMPLES', 'FEE', 'OTHER', 'STAMP_DUTY'] as const
 export type ChargeKind = (typeof CHARGE_KINDS)[number]
+/** The charges a person adds to an invoice (the routes' line input). */
+export const TYPED_CHARGE_KINDS = ['FREIGHT', 'PACKAGING', 'SAMPLES', 'FEE', 'OTHER'] as const satisfies readonly ChargeKind[]
 export const isChargeKind = (value: unknown): value is ChargeKind => typeof value === 'string' && (CHARGE_KINDS as readonly string[]).includes(value)
 
 /** The kinds in words, for the screens and a line's default description. */
 export const CHARGE_KIND_WORDS: Readonly<Record<DocumentLanguage, Readonly<Record<ChargeKind, string>>>> = Object.freeze({
-  it: { FREIGHT: 'Spese di trasporto', PACKAGING: 'Spese di imballaggio', SAMPLES: 'Campionatura', FEE: 'Maggiorazione', OTHER: 'Altre spese' },
-  en: { FREIGHT: 'Freight', PACKAGING: 'Packaging', SAMPLES: 'Samples', FEE: 'Fee', OTHER: 'Other charge' },
+  it: { FREIGHT: 'Spese di trasporto', PACKAGING: 'Spese di imballaggio', SAMPLES: 'Campionatura', FEE: 'Maggiorazione', OTHER: 'Altre spese', STAMP_DUTY: 'Imposta di bollo' },
+  en: { FREIGHT: 'Freight', PACKAGING: 'Packaging', SAMPLES: 'Samples', FEE: 'Fee', OTHER: 'Other charge', STAMP_DUTY: 'Stamp duty' },
 })
 
 /** The charge rules and their law; UNVERIFIED ones wait for the accountant (HANDOFF "For the accountant"). */

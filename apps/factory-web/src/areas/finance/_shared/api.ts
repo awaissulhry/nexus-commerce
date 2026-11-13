@@ -11,15 +11,18 @@ import { newIdempotencyKey } from '../../../lib/api/client'
  * API's English words (messages, SDI titles, deadline words) are never drawn: the screens say their own from the codes.
  */
 
-export const INVOICE_DOC_TYPES = ['TD01', 'TD02', 'TD04', 'TD24'] as const
+// B-W2b-369 (factory-domain invoicing/invoices, wave 49/57): TD05 the debit note, TD16-TD19 the self-invoices.
+export const INVOICE_DOC_TYPES = ['TD01', 'TD02', 'TD04', 'TD24', 'TD05', 'TD16', 'TD17', 'TD18', 'TD19'] as const
 export type DocType = (typeof INVOICE_DOC_TYPES)[number]
 export const INVOICE_STATUSES = ['DRAFT', 'ISSUED', 'SENT', 'DELIVERED', 'NOT_DELIVERABLE', 'REJECTED', 'ERROR'] as const
 export type InvoiceStatus = (typeof INVOICE_STATUSES)[number]
 // CHARGE: W2a's accessory charge (factory-db InvoiceLineKind, wave 7/7) with its kind (B-W2a-54; B-W2a-80 draws them).
 export const LINE_KINDS = ['GOODS', 'SERVICE', 'DEPOSIT_DEDUCTION', 'CHARGE'] as const
-/** What a charge line bills (factory-domain invoicing/charges CHARGE_KINDS). */
-export const CHARGE_KINDS = ['FREIGHT', 'PACKAGING', 'SAMPLES', 'FEE', 'OTHER'] as const
+/** What a charge line bills (factory-domain invoicing/charges CHARGE_KINDS; STAMP_DUTY since B-W2b-369, the rule's). */
+export const CHARGE_KINDS = ['FREIGHT', 'PACKAGING', 'SAMPLES', 'FEE', 'OTHER', 'STAMP_DUTY'] as const
 export type ChargeKind = (typeof CHARGE_KINDS)[number]
+/** The charges a person adds (factory-domain TYPED_CHARGE_KINDS): the stamp duty is never typed. */
+export const TYPED_CHARGE_KINDS = ['FREIGHT', 'PACKAGING', 'SAMPLES', 'FEE', 'OTHER'] as const satisfies readonly ChargeKind[]
 export const SDI_STATE_CODES = ['DRAFT', 'NOT_SENT', 'SENDING', 'AT_SDI', 'DELIVERED', 'NOT_DELIVERED', 'REJECTED', 'ERROR'] as const
 export type SdiStateCode = (typeof SDI_STATE_CODES)[number]
 export const SDI_NEXT_ACTIONS = ['ISSUE', 'SEND', 'WAIT', 'FIX_AND_RESEND', 'SEND_AGAIN', 'CHECK_COPY', 'NONE'] as const

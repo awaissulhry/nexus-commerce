@@ -200,6 +200,8 @@ model Party {
   // money.prisma: the invoices it is the buyer of and the payments it made.
   invoices             Invoice[]
   payments             Payment[]
+  // W2b-6 tax.prisma (wave 49/57): as a customer, the declarations of intent it sent.
+  declarationsOfIntent DeclarationOfIntent[]
   // W2a receivables.prisma, payables.prisma (wave 7/7): the refunds paid to it, the reminders it was sent, and as a
   // supplier or subcontractor the invoices it sent.
   refunds              Refund[]

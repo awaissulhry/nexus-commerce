@@ -11,7 +11,7 @@ import type { Invoice } from '../../../_shared/api'
 import { dayInstant, DEADLINE_TONE, deadlineWords, money, STATUS_TONE, type FinanceAbilities, type Phrase } from '../../../_shared/model'
 import { DialogFrame } from '../../../_shared/parts'
 import type { DeferredGroup, ReturnCredit } from '../api'
-import { CHARGE_KINDS, chargeProblems, ddtsOf, monthWords, returnCreditHeld, skipKey, type ChargeDraft, type ChargeKind } from '../model'
+import { TYPED_CHARGE_KINDS, chargeProblems, ddtsOf, monthWords, returnCreditHeld, skipKey, type ChargeDraft, type ChargeKind } from '../model'
 
 /**
  * The invoice screens' every-day dialogs (B-W2a-80), composed from the DS (packages/ui is frozen): Add a charge line
@@ -66,7 +66,7 @@ export function ChargeDialog({
             }}
           >
             <option value="">{d('charge.pickKind')}</option>
-            {CHARGE_KINDS.map((kind) => (
+            {TYPED_CHARGE_KINDS.map((kind) => (
               <option key={kind} value={kind}>
                 {kindWords(d, kind)}
               </option>

@@ -170,6 +170,10 @@ model StoredFile {
   invoiceXmlOf   Invoice[]       @relation("InvoiceXml")
   invoicePdfOf   Invoice[]       @relation("InvoicePdf")
   sdiSubmissions SdiSubmission[]
+  // W2b-6 tax.prisma (wave 49/57): the declarations of intent whose check receipt it is, our own copies of SDI sends whose
+  // XML it is.
+  declarationOfIntentReceipts DeclarationOfIntent[] @relation("DeclarationOfIntentReceipt")
+  sdiArchiveCopyXmlOf         SdiArchiveCopy[]      @relation("SdiArchiveCopyXml")
   // W2a payables.prisma, accounting.prisma (wave 7/7): the supplier invoices whose XML or PDF it is, the accounting
   // export file it is.
   supplierInvoiceXmlOf  SupplierInvoice[]      @relation("SupplierInvoiceXml")

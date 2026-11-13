@@ -208,6 +208,18 @@ model Company {
   // money.prisma: its invoices and the payments it received.
   invoices             Invoice[]
   payments             Payment[]
+  // W2b-6 tax.prisma, currency.prisma (wave 49/57): its tax codes, the declarations of intent it received, its stamp duty
+  // quarters, self-invoices, e-invoice settings, copies of its SDI sends, invoice runs, deposit rules on cancellation and
+  // the currencies its documents may be in.
+  taxCodes                 TaxCode[]
+  declarationsOfIntent     DeclarationOfIntent[]
+  stampDutyQuarters        StampDutyQuarter[]
+  selfInvoices             SelfInvoice[]
+  eInvoiceSettings         CompanyEInvoiceSettings[]
+  sdiArchiveCopies         SdiArchiveCopy[]
+  invoiceRuns              InvoiceRun[]
+  depositCancellationRules DepositCancellationRule[]
+  currencies               Currency[]
   // W2a receivables.prisma, payables.prisma, cost-ledger.prisma, accounting.prisma (wave 7/7): its refunds, payment
   // reminders and receivables settings, the supplier invoices it received, its standard costs, accounting exports and
   // period locks.

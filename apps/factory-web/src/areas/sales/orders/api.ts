@@ -64,7 +64,8 @@ export const SDI_NEXT_ACTIONS = ['ISSUE', 'SEND', 'WAIT', 'FIX_AND_RESEND', 'SEN
 export const SETTLEMENT_GAPS = ['ORDER_CANCELLED', 'NOT_SHIPPED', 'NOT_INVOICED', 'OVER_INVOICED', 'NO_INVOICE', 'AT_SDI', 'DEPOSIT_NOT_DEDUCTED', 'DEPOSIT_NOT_INVOICED', 'BALANCE_DUE', 'REFUND_DUE'] as const
 export const WORK_ORDER_STATUSES = ['DRAFT', 'RELEASED', 'IN_PROGRESS', 'COMPLETED', 'CLOSED', 'CANCELLED'] as const
 export const SHIPMENT_STATUSES = ['DRAFT', 'PACKED', 'SHIPPED', 'DELIVERED', 'RETURNED', 'CANCELLED'] as const
-export const INVOICE_DOC_TYPES = ['TD01', 'TD02', 'TD04', 'TD24'] as const
+// B-W2b-369 (factory-domain invoicing/invoices, wave 49/57): TD05 the debit note, TD16-TD19 the self-invoices.
+export const INVOICE_DOC_TYPES = ['TD01', 'TD02', 'TD04', 'TD24', 'TD05', 'TD16', 'TD17', 'TD18', 'TD19'] as const
 export const INVOICE_STATUSES = ['DRAFT', 'ISSUED', 'SENT', 'DELIVERED', 'NOT_DELIVERABLE', 'REJECTED', 'ERROR'] as const
 
 const instant = z.string()

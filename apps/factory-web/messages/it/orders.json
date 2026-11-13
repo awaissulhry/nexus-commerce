@@ -527,7 +527,12 @@
     "TD01": "Fattura (TD01)",
     "TD02": "Fattura di acconto (TD02)",
     "TD04": "Nota di credito (TD04)",
-    "TD24": "Fattura differita (TD24)"
+    "TD24": "Fattura differita (TD24)",
+    "TD05": "Nota di debito (TD05)",
+    "TD16": "Integrazione reverse charge interno (TD16)",
+    "TD17": "Autofattura, servizi dall'estero (TD17)",
+    "TD18": "Integrazione, beni dall'UE (TD18)",
+    "TD19": "Autofattura, beni in Italia (TD19)"
   },
   "invoiceStatus": {
     "DRAFT": "Bozza",

@@ -18,8 +18,8 @@ import {
 } from './kinds'
 
 describe('number kinds and periods', () => {
-  it('marks invoices, deposit invoices, credit notes and DDTs as fiscal, and nothing else', () => {
-    expect(NUMBER_KINDS.filter(isFiscalKind)).toEqual(['DDT', 'INVOICE', 'DEPOSIT_INVOICE', 'CREDIT_NOTE'])
+  it('marks invoices, deposit invoices, credit notes, DDTs and self-invoices as fiscal, and nothing else', () => {
+    expect(NUMBER_KINDS.filter(isFiscalKind)).toEqual(['DDT', 'INVOICE', 'DEPOSIT_INVOICE', 'CREDIT_NOTE', 'SELF_INVOICE'])
     expect(FISCAL_KINDS.every((kind) => NUMBER_KINDS.includes(kind))).toBe(true)
   })
 

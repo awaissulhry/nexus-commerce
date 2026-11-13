@@ -141,6 +141,9 @@ export async function seed({ db, namespace }: SeedContext): Promise<void> {
       // f's as above.
       { id: `ffffffff${id(`series:${company}:SERVICE_CASE:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'SERVICE_CASE', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'SVC-{YYYY}-{N:4}', fiscal: false, createdById: actorId },
       { id: `ffffffff${id(`series:${company}:SAFETY_REPORT:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'SAFETY_REPORT', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'PSR-{YYYY}-{N:4}', fiscal: false, createdById: actorId },
+      // W2b-6 wave 49/57: self-invoices (TD16-TD19) are numbered from it, a fiscal series of their own (B-W2b-401), while the
+      // company's self-invoice switch is on (GATE-ACCOUNTANT). Eight f's as above.
+      { id: `ffffffff${id(`series:${company}:SELF_INVOICE:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'SELF_INVOICE', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'AF-{YYYY}-{N:4}', fiscal: true, createdById: actorId },
     )
     if (company === 'A') {
       allocations.push({

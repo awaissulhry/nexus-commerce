@@ -82,6 +82,9 @@ export const NUMBER_KINDS = [
   // document kinds.
   'SERVICE_CASE',
   'SAFETY_REPORT',
+  // W2b-6 wave 49/57 (factory-db numbering.prisma): a self-invoice TD16-TD19 (AF-…), a fiscal series of its own, an office
+  // document kind.
+  'SELF_INVOICE',
   // W2b-2 wave 8 (factory-db numbering.prisma): a bundle's coupon for one operation (CP-…), a scan-id kind.
   'COUPON',
   // W2b-2 wave 12 (factory-db numbering.prisma): a fabric roll's tag (RL-…) and a remnant's tag (RM-…), scan-id kinds.
@@ -117,7 +120,7 @@ export function isDocumentKind(value: unknown): value is DocumentKind {
  * for invoices, credit notes and deposit invoices; DPR 472/1996 for the DDT). A fiscal series also refuses a document
  * dated before its last number's date, and keeps every number within FatturaPA's 20 characters.
  */
-export const FISCAL_KINDS: readonly NumberKind[] = ['DDT', 'INVOICE', 'DEPOSIT_INVOICE', 'CREDIT_NOTE']
+export const FISCAL_KINDS: readonly NumberKind[] = ['DDT', 'INVOICE', 'DEPOSIT_INVOICE', 'CREDIT_NOTE', 'SELF_INVOICE']
 
 export function isNumberKind(value: unknown): value is NumberKind {
   return typeof value === 'string' && (NUMBER_KINDS as readonly string[]).includes(value)
@@ -252,6 +255,8 @@ const DEFAULT_PREFIX: Readonly<Record<DocumentKind, string>> = {
   // SVC, not SC: SC- is a subcontract order's.
   SERVICE_CASE: 'SVC',
   SAFETY_REPORT: 'PSR',
+  // AF: autofattura (the self-invoices TD16-TD19).
+  SELF_INVOICE: 'AF',
 }
 
 /** The pattern a new series gets when the admin types none: `FT-{YYYY}-{N:5}` (yearly) or `LOT-{N:6}` (never resets). */

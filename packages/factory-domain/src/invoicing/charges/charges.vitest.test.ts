@@ -5,7 +5,7 @@ import { LEGAL_WORDING, nonTaxable, taxable } from '../../tax/vat-treatment'
 import { fatturaPaInputOf, type IssuedInvoice, type StoredLine } from '../document'
 import { buildFatturaPa } from '../fatturapa/build'
 import { computeInvoiceTotals, lineProblems, storedVatOf, type CoreLine } from '../invoices'
-import { CHARGE_KIND_WORDS, CHARGE_KINDS, CHARGE_RULES, chargeLineProblems, chargeVat, freightDescription, freightLine, freightProblems, type ShipmentFreight } from './charges'
+import { CHARGE_KIND_WORDS, CHARGE_KINDS, CHARGE_RULES, chargeLineProblems, chargeVat, freightDescription, freightLine, freightProblems, TYPED_CHARGE_KINDS, type ShipmentFreight } from './charges'
 
 // Every company, party, VAT number, DDT and amount here is made up (the FatturaPA samples' fake numbers: office 000).
 
@@ -26,7 +26,10 @@ const xsdErrors = async (xml: string) =>
 
 describe('charge lines (FIN-060): what they bill, their VAT, the freight of a shipment', () => {
   it('the kinds are the database enum, each in words; the accessory VAT rule waits for the accountant', () => {
-    expect(CHARGE_KINDS).toEqual(['FREIGHT', 'PACKAGING', 'SAMPLES', 'FEE', 'OTHER'])
+    expect(CHARGE_KINDS).toEqual(['FREIGHT', 'PACKAGING', 'SAMPLES', 'FEE', 'OTHER', 'STAMP_DUTY'])
+    // B-W2b-369: the stamp duty charged to the customer is the rule's, never typed by a person.
+    expect(TYPED_CHARGE_KINDS).toEqual(['FREIGHT', 'PACKAGING', 'SAMPLES', 'FEE', 'OTHER'])
+    expect(CHARGE_KIND_WORDS.it.STAMP_DUTY).toBe('Imposta di bollo')
     expect(CHARGE_KIND_WORDS.it.FREIGHT).toBe('Spese di trasporto')
     expect(CHARGE_KIND_WORDS.en.SAMPLES).toBe('Samples')
     expect(CHARGE_RULES.ACCESSORY_FOLLOWS_GOODS).toMatchObject({ law: 'DPR 633/1972 art. 12 c.1', status: 'UNVERIFIED' })
