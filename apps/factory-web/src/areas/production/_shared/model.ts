@@ -462,7 +462,8 @@ export function readProblem(error: unknown): string {
 
 /**
  * A refused write, as words: a cutting or bundle refusal by its code (`refusal/<CODE>`), bars of the planning board that
- * book an operation the change would take away (`scheduleSlots/<WORKING|PUBLISHED>/<slot>`, B-W2a-F3), a changed record
+ * book an operation the change would take away (`scheduleSlots/<WORKING|PUBLISHED>/<slot>`, B-W2a-F3), the board's record
+ * that names one (`scheduleChanges/<change>`, B-W2b-F36), a changed record
  * (409 without a refusal: read again), no right, a bad request, no answer.
  */
 export function writeProblem(error: unknown, area: 'workOrder' | 'cut' | 'bundle' = 'workOrder'): Phrase {
@@ -472,6 +473,9 @@ export function writeProblem(error: unknown, area: 'workOrder' | 'cut' | 'bundle
   if (code && area === 'cut' && CUT_CODES.has(code)) return phrase(`refusal.cut.${code}`)
   if (code && area === 'bundle' && BUNDLE_CODES.has(code)) return phrase(`refusal.bundle.${code}`)
   if (code) return phrase('refusal.other')
+  // B-W2b-F36: the board's record names an operation the change would take away (`scheduleChanges/<change>`): it keeps it for
+  // good, so no Send back to the tray helps (before the bars: the same refusal names them too).
+  if (error.issues.map(issuePath).some((path) => path.startsWith('scheduleChanges/'))) return phrase('error.scheduledRecorded')
   const booked = error.issues.map(issuePath).filter((path) => path.startsWith('scheduleSlots/'))
   if (booked.some((path) => path.startsWith('scheduleSlots/PUBLISHED/'))) return phrase('error.scheduledPublished')
   if (booked.length > 0) return phrase('error.scheduled', { count: booked.length })
