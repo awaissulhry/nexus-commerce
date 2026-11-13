@@ -29,4 +29,12 @@ export const manifest = defineManifest({
   'GET /reports/:key': { audiences: ['office'], permission: 'home.reports.view', scope: 'record' },
   'GET /reports/:key/results': { audiences: ['office'], permission: 'home.reports.view', scope: 'record' },
   'GET /reports/:key/schedule': { audiences: ['office'], permission: 'home.reports.view', scope: 'record' },
+  // B-W2b-348 (sales-reports/): Sales reports, office only, read only: sales.reports.view over the screen's company, each figure
+  // also the records' own view (orders.view, quotes.view, sales.returns.view) and every amount the price grain (`record`).
+  // Quote speed is a section of Sales › Quotes: quotes.view.
+  'GET /sales/reports/headline': { audiences: ['office'], permission: 'sales.reports.view', scope: 'record' },
+  'GET /sales/reports/intake': { audiences: ['office'], permission: 'sales.reports.view', scope: 'record' },
+  'GET /sales/reports/backlog': { audiences: ['office'], permission: 'sales.reports.view', scope: 'record' },
+  'GET /sales/reports/returns': { audiences: ['office'], permission: 'sales.reports.view', scope: 'record' },
+  'GET /sales/reports/quote-speed': { audiences: ['office'], permission: 'quotes.view', scope: 'record' },
 })

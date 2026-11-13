@@ -44,7 +44,9 @@
       "returns": "Resi e riparazioni",
       "service": "Garanzia e assistenza",
       "settings": "Impostazioni",
-      "salesSettings": "Impostazioni vendite"
+      "salesSettings": "Impostazioni vendite",
+      "reportsGroup": "Report",
+      "reports": "Report vendite"
     },
     "purchasing": {
       "area": "Acquisti",
