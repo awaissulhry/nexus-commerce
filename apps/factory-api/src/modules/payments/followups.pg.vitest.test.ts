@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import type { FastifyInstance } from 'fastify'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { newId } from '@nexus/factory-domain/core/ids'
 import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
 import { businessDate } from '@nexus/factory-domain/core/time'
@@ -183,5 +183,32 @@ describe('a HARD-locked month answers 409 in words on payments (Z8:10)', () => {
     const answer = await call('finance', 'POST', '/payments', { companyId: A.company, partyId: A.P1, amount: 1_000, receivedOn: '2026-09-15', externalRef: 'CRO-W2B21-HARD' })
     expect(answer.statusCode, answer.body).toBe(409)
     expect(answer.json().error.message).toMatch(/closed for good/)
+  })
+})
+
+describe('the days a person reads are Rome days, not UTC days (B-W2b-F35)', () => {
+  // 23:30 UTC on 12 November is 00:30 on 13 November in Rome: for that hour the UTC day and the business day differ.
+  const AFTER_MIDNIGHT_IN_ROME = new Date('2026-11-12T23:30:00.000Z')
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('a bank reference recorded at 00:30 in Rome is refused later as recorded on that Rome day', async () => {
+    // The command's "now" is `Date`, pinned here.
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(AFTER_MIDNIGHT_IN_ROME)
+    const { payment } = await ok('finance', 'POST', '/payments', { companyId: A.company, partyId: A.P1, amount: 1_000, receivedOn: '2026-11-12', externalRef: 'TRN-W2BF35-ROME' }, 201)
+    expect(payment.createdAt).toBe('2026-11-12T23:30:00.000Z')
+    vi.useRealTimers()
+    const twice = await refused('finance', 'POST', '/payments', { companyId: A.company, partyId: A.P1, amount: 1_000, receivedOn: '2026-11-12', externalRef: 'TRN-W2BF35-ROME' }, 409)
+    expect(twice.message).toBe(`This bank reference was recorded on 2026-11-13 (payment ${payment.id}, received 2026-11-12): a transfer is counted once.`)
+  })
+
+  it('a deposit request made at 00:30 in Rome is an open item of that Rome day', async () => {
+    // Its createdAt as a command at that clock writes it; its due date is a DATE column, read as it is.
+    const request = randomUUID()
+    await admin(`INSERT INTO "DepositRequest" (id, "tenantId", "companyId", "partyId", "orderId", kind, currency, amount, "dueDate", "fiscalDocument", "fiscalRule", "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5, 'ACCONTO', 'EUR', 20000, '2026-11-20', 'NONE', 'test.deposit.EU_B2B_VIES', $6, $6)`, [request, A.tenant, A.company, A.P1, A.SO2, AFTER_MIDNIGHT_IN_ROME])
+    const { items } = await ok('finance', 'GET', `/payments/open-items?companyId=${A.company}&partyId=${A.P1}`)
+    expect(items.find((item: Json) => item.id === request)).toMatchObject({ target: 'DEPOSIT_REQUEST', date: '2026-11-13', dueDate: '2026-11-20' })
   })
 })

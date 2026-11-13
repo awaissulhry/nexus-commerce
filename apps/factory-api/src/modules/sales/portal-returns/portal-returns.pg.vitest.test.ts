@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { newId } from '@nexus/factory-domain/core/ids'
 import type { Permission } from '@nexus/factory-domain/core/permissions'
 // The factory-db seeds are no package export: a test reads them where they live.
@@ -15,6 +15,7 @@ import { usePortalOptions } from '../../../platform/auth/portal/service'
 import { freshGuard, mailedCode, portalBrowser, portalWorld } from '../../../platform/auth/portal/testing/portal'
 import { applySystemRoleChanges, systemRoleChanges } from '../../../platform/auth/roles/system-roles'
 import { addUser, Browser, startHarness, type Harness, type TestTenant } from '../../../platform/auth/sessions/testing/harness'
+import { moveCapa } from '../../quality/capa/capa'
 import { makeReport } from '../../quality/capa/report'
 import { publishAnswer, shareEightD } from '../../quality/complaints/portal/publish'
 import { authoriseReturn, rejectReturn } from './office'
@@ -395,5 +396,25 @@ describe('"Report a problem" by a claim link', { timeout: SLOW_TEST_TIMEOUT_MS }
     // REFUSED: a case this link did not open (404), a garbage token (404).
     expect((await linkCall(token, 'GET', `/link/claim/cases/RETURN/${requested.id}`)).statusCode).toBe(404)
     expect((await linkCall('garbage', 'GET', '/link/claim')).statusCode).toBe(404)
+  })
+})
+
+describe('the investigation’s steps are dated by their Rome day, not their UTC day (B-W2b-F35)', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('a step reached at 23:30 UTC on 12 November (00:30 in Rome) shows 13 November to the customer', async () => {
+    const { version } = await one<{ version: number }>('SELECT version FROM "Capa" WHERE id = $1', [EIGHT_D])
+    // The command's "now" is `Date`, pinned here: its audit row (the day the stage was reached) is written at 23:30 UTC.
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-11-12T23:30:00.000Z'))
+    await moveCapa(officeCaller(), EIGHT_D, { version, to: 'D4' })
+    vi.useRealTimers()
+    const steps = (await ok(browsers.quality, `/portal/complaints/${CMP1}`)).complaint.investigation.steps as Json[]
+    expect(steps.slice(2, 4).map((step) => [step.stage, step.state, step.on])).toEqual([
+      ['D3', 'DONE', '2026-11-13'],
+      ['D4', 'CURRENT', '2026-11-13'],
+    ])
   })
 })
