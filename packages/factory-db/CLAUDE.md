@@ -231,6 +231,10 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    folder drops ScheduleChange's foreign key to WorkOrderOperation and adds `operationSeq`, `operationName`; its own trigger
    `ScheduleChange_operation_copy` checks the copy against the operation at insert; the changes written before it keep no
    copy (filling them would change an append-only ledger); no earlier function redefined):
+   `…_production_option_steps_w2b_guards` (B-W2b-F40, no schema folder of its own: a work order is released with the
+   routing steps its cells are for, as factory-domain's `stepIsFor` reads them (a step only for sizes, colourways or
+   options none of its cells has may be left out; every other step stays required); it redefines W2b wave 7's
+   `factory_work_order_guard`, the rest of the body word for word):
    triggers, partial unique indexes and deferred
    constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new
