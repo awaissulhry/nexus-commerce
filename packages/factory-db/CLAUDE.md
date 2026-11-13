@@ -284,6 +284,23 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    own trigger; it redefines W0's `factory_inbound_email_guard` (a MATCHED mail's team-inbox columns still move), the rest
    word for word; it calls recall's `factory_recall_words_ok`, `factory_recall_not_future` and
    `factory_recall_model_name_ok`):
+   `…_carriers_w2b_guards` (W2b-6 schema wave 48/57, B-W2b-367, carriers, labels and dispatch: our own carrier contracts (the
+   number a SecretValue of purpose `shipping.carrier_account`, required while live; company, site, carrier fixed; one live per
+   company, site or every site, and carrier: a partial unique; never deleted), pickups (what was asked fixed; REQUESTED →
+   CONFIRMED | FAILED | CANCELLED, CONFIRMED → FAILED | CANCELLED, the last two final; the provider's reference set once; why it
+   failed exactly when FAILED; an address with a two-capital country; never deleted) and day sheets (company, site, carrier and
+   day fixed; closed once with when and its own file, then frozen; one per site, carrier and day; never deleted); its own
+   triggers on Shipment (a hand-typed tracking number only for a CARRIER shipment with no Sendcloud shipment; who collected, the
+   plate and a signature of the shipment only when the customer collects; a day sheet only for a CARRIER shipment of its
+   carrier, PACKED or gone, on and off only while the sheets are open (FOR SHARE), never back to DRAFT or CANCELLED on one),
+   Parcel (declared value 0 or more, insured above 0 and at most declared), ShippingSettings (live exactly with when and who,
+   fixed while live, cleared in test mode), Party (the customer's carrier account a SecretValue of purpose
+   `parties.carrier_account` with its preferred carrier; COLLECT and THIRD_PARTY only with it), Printer (DIRECT only on a label
+   printer) and PrintJob (a reprint of the same record with 3-200 characters of why, fixed once queued); it redefines the
+   portal follow-ups' `factory_shipment_guard` (the hand-typed tracking number and the day sheet still change once the goods
+   left) and wave 45's `factory_generated_document_check` (PROFORMA of a Shipment, SampleShipment or DepositRequest with its
+   record's PROFORMA NumberAllocation; MANIFEST of a DispatchManifest; SHIPPING_MARKS and SHIPMENT_PACK of a Shipment); it calls
+   recall's `factory_recall_words_ok` and `factory_recall_not_future`):
    `…_tax_currency_w2b_guards` (W2b-6 schema wave 49/57, B-W2b-369, invoicing, tax and currency: tax codes as data (a rate or a
    Natura with its law, ACTIVE versions of a code that never overlap: a transaction advisory lock per code; a version in force
    never edited, ended from yesterday on and a new one made; VERIFIED never back, the accountant's confirmation once; deleted

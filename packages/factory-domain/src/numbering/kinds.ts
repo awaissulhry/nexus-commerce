@@ -82,6 +82,8 @@ export const NUMBER_KINDS = [
   // document kinds.
   'SERVICE_CASE',
   'SAFETY_REPORT',
+  // W2b-6 wave 48/57 (factory-db numbering.prisma): a proforma invoice (PF-…), non-fiscal, an office document kind.
+  'PROFORMA',
   // W2b-6 wave 49/57 (factory-db numbering.prisma): a self-invoice TD16-TD19 (AF-…), a fiscal series of its own, an office
   // document kind.
   'SELF_INVOICE',
@@ -255,6 +257,7 @@ const DEFAULT_PREFIX: Readonly<Record<DocumentKind, string>> = {
   // SVC, not SC: SC- is a subcontract order's.
   SERVICE_CASE: 'SVC',
   SAFETY_REPORT: 'PSR',
+  PROFORMA: 'PF',
   // AF: autofattura (the self-invoices TD16-TD19).
   SELF_INVOICE: 'AF',
 }

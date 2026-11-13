@@ -339,8 +339,9 @@ describe('the walls', () => {
       'TrackingEvent',
     ])
     // W2a schema wave 6/7 (LOG-105): the freight figures are prices (the shipment's charge, the site's rule), hidden from
-    // the floor; nothing else here holds money.
-    const prices: Record<string, string[]> = { Shipment: ['freightCharge'], ShippingSettings: ['freightAmount', 'freightFreeFrom'] }
+    // the floor; nothing else here holds money. W2b-6 schema wave 48/57 (B-W2b-367; LOG-042): a parcel's declared and insured
+    // values and the site's insured-above value are prices too, hidden from the floor.
+    const prices: Record<string, string[]> = { Shipment: ['freightCharge'], ShippingSettings: ['freightAmount', 'freightFreeFrom', 'insureAbove'], Parcel: ['declaredValue', 'insuredValue'] }
     // W2b schema wave 1/7 (B-W2b-01): the shipment's freight cost (the carrier's invoice) is a cost, office only; its
     // currency goes with it (hidden from the floor and the partner too).
     // W2b schema wave 34/44 (B-W2b-275): the lab's price of a lab result is a cost, office only; its currency goes with it.

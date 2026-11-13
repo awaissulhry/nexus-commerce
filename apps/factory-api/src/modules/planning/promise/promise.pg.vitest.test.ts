@@ -2,6 +2,9 @@ import { randomBytes } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import type { FastifyInstance } from 'fastify'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+// B-W2b-F44: the rule on a fixed clock.
+import { afterEach, vi } from 'vitest'
+import { localInstant } from '@nexus/factory-domain/calendars/dates'
 import { openFactoryDatabase, RUNTIME_LOGIN, type FactoryDatabase } from '@nexus/factory-db'
 import { migratedDatabase, type MigratedDatabase } from '@nexus/factory-db/testing'
 import { plusDays } from '@nexus/factory-domain/calendars/dates'
@@ -180,7 +183,7 @@ describe('the promise calculator (PLN-169, PLN-171, PLN-179)', { timeout: 120_00
     // 50: made (material and the routing's lanes); the bridge adds up to its date.
     const s50 = sizeOf(answer, '50')
     expect(s50).toMatchObject({ state: 'MAKE', fromStock: 0, toMake: 2, certificate: { state: 'OK', certificate: 'SEED-CERT-0003' } })
-    expect(s50.date >= today).toBe(true)
+    expect(s50.date > today).toBe(true) // B-W2b-F44: to make, never today (was: >= today)
     expect(s50.bridge.materialDays + s50.bridge.baseDays + s50.bridge.queueDays).toBe(s50.bridge.spanDays)
     expect(s50.bridge.finish).toBe(s50.date)
     // 52 is made to stock: from available to promise when it has one free, else made.
@@ -267,6 +270,8 @@ describe("an order line's promise per size (PLN-171, PLN-179)", { timeout: 180_0
       expect(entry.current).toMatchObject({ source: 'TYPED', date: view.order.promiseDate })
       if (entry.open > 0) expect(entry.workOrders.length + entry.plannedOrders.length + entry.uncovered).toBeGreaterThan(0)
       else expect(entry.state).toBe('SHIPPED')
+      // B-W2b-F44: a size still to make is proposed for the next working day at the earliest, never for today.
+      if (entry.state === 'MAKE') expect(entry.proposed > today, `${entry.size} ${entry.proposed}`).toBe(true)
     }
     expect(view.sizes.find((entry: Json) => entry.size === '54')).toMatchObject({ state: 'NOT_CERTIFIED', proposed: null })
     await refused('noOrders', 'GET', `/planning/promise/order-lines/${A.so2Blk}`, undefined, 404)
@@ -318,3 +323,53 @@ describe("an order line's promise per size (PLN-171, PLN-179)", { timeout: 180_0
     await expect(admin(`UPDATE "PromiseRecord" SET "promisedDate" = $2::date WHERE "salesOrderLineId" = $1`, [A.so2Blk, later])).rejects.toThrow()
   })
 })
+
+// ---- B-W2b-F44 (begin): a garment still to make is never promised for today; today counts only the minutes left -------------
+
+describe('B-W2b-F44: never today for a garment to make, today only from now, on a fixed clock (Owner 2026-11-13, option A)', { timeout: 300_000 }, () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+  const pin = (date: string, time: string) => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(localInstant(date, Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5)), 'Europe/Rome'))
+  }
+  const DAYS: [string, string, string][] = [
+    ['2026-11-18', 'a Wednesday', '2026-11-19'],
+    ['2026-11-13', 'the last working day before a weekend', '2026-11-16'],
+    ['2026-12-07', 'the day before an Italian holiday (Immacolata)', '2026-12-09'],
+  ]
+  for (const [date, label, next] of DAYS) {
+    it(`${label}, ${date}: at 09:00 the rest of the day counts, at 17:30 nothing; to make is promised ${next} at the earliest, stock free today`, async () => {
+      for (const time of ['09:00', '17:30']) {
+        pin(date, time)
+        const { answer, today: asked } = await ok('sales', 'POST', '/planning/promise/calculate', { siteId: A.site, styleId: A.jkt02, colourwayId: A.blk, sizes: [{ size: '50', quantity: 2 }, { size: '52', quantity: 1 }] })
+        const view = await ok('reader', 'GET', `/planning/promise/order-lines/${A.so2Blk}`)
+        vi.useRealTimers()
+        const at = `${date} ${time}`
+        expect(asked, at).toBe(date)
+        // 50 is still to make: never today, the site's next working day at the earliest (the leather is there today).
+        const s50 = sizeOf(answer, '50')
+        expect(s50, at).toMatchObject({ state: 'MAKE', toMake: 2, date: next, readyDate: next, material: { date } })
+        expect(s50.bridge.materialDays + s50.bridge.baseDays + s50.bridge.queueDays, at).toBe(s50.bridge.spanDays)
+        expect(s50.bridge.finish, at).toBe(next)
+        expect(answer.date, at).toBe(next)
+        // 52 is made to stock and one is free: stock already made may still be promised for today.
+        expect(sizeOf(answer, '52'), at).toMatchObject({ state: 'FROM_STOCK', fromStock: 1, toMake: 0, date })
+        // Today only from now: at 09:00 the cutting starts today; at 17:30 the cutting centre's day is over (08:00-17:00), so
+        // no step starts before the next working day.
+        if (time === '09:00') expect(answer.steps[0].start, at).toBe(date)
+        else expect((answer.steps as Json[]).every((step) => step.start >= next), `${at} ${JSON.stringify(answer.steps)}`).toBe(true)
+        // The order line: a size still to make is proposed for the next working day at the earliest; when everything making it
+        // finishes today or before (the board's day, a due date passed), exactly then.
+        for (const size of view.sizes as Json[]) {
+          if (size.state !== 'MAKE') continue
+          expect(size.proposed >= next, `${at} size ${size.size} ${size.proposed}`).toBe(true)
+          const finishes = (size.workOrders as Json[]).map((row) => (row.finish ?? date) as string)
+          if (size.plannedOrders.length === 0 && size.uncovered === 0 && finishes.every((finish) => finish <= date)) expect(size.proposed, `${at} size ${size.size}`).toBe(next)
+        }
+      }
+    })
+  }
+})
+// B-W2b-F44 (end)

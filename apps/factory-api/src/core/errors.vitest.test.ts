@@ -109,6 +109,16 @@ describe('mapError()', () => {
     expect(mapError(other).status).toBe(500)
   })
 
+  it("B-W2b-367: answers the database's carrier refusal of a shipment write as a 409 in words, never a 500", () => {
+    const refusal = prismaError('P2010', 'Raw query failed.', {
+      driverAdapterError: { cause: { originalCode: '23514', originalMessage: 'carriers: shipment x records who collected it, the plate and the signature only when the customer collects (RECIPIENT)' } },
+    })
+    const words = "This shipment records the customer's collection (who collected it, the plate, the signature): it stays a collection by the customer."
+    expect(mapError(refusal)).toEqual({ status: 409, code: 'conflict', message: words, issues: [{ path: 'shipping/CUSTOMER_COLLECTED', message: words }], unexpected: false })
+    const other = prismaError('P2010', 'Raw query failed.', { driverAdapterError: { cause: { originalCode: '23514', originalMessage: 'carriers: pickup request x cannot move from FAILED to CONFIRMED' } } })
+    expect(mapError(other).status).toBe(500)
+  })
+
   it("B-W2b-279: answers the database's refusal of an erased contact's new data as a 409 in words, never a 500", () => {
     const refusal = prismaError('P2010', 'Raw query failed.', {
       driverAdapterError: { cause: { originalCode: '23514', originalMessage: 'parties: contact x was erased; its name, e-mail and phone stay blank and it stays archived (a new contact is made for new data)' } },

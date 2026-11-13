@@ -84,6 +84,18 @@ model Party {
   incoterm             String?
   /// The carrier its goods go with by default (the carrier's code, as on a shipment).
   preferredCarrierCode String?
+  /// W2b-6 (schema wave 48/57, B-W2b-367; LOG-038): the account the carrier bills when we ship on the customer's account
+  /// (its own, or a third party's), with the preferred carrier: sealed in a SecretValue of purpose
+  /// `parties.carrier_account`, never shown again once saved; required for COLLECT and THIRD_PARTY. A reference to a secret,
+  /// for the office only: the partner role can neither read nor write it.
+  /// @internal
+  carrierAccountSecretId String?        @db.Uuid
+  /// W2b-6 (LOG-038): the carrier service its shipments take by default (Sendcloud's shipping method, as
+  /// Shipment.serviceCode; 1 to 100 characters on one line), with the preferred carrier; null: the site's default.
+  defaultCarrierService  String?
+  /// W2b-6 (LOG-038): who the carrier bills for its shipments: SENDER (we pay; the default), COLLECT (it pays, on its own
+  /// account) or THIRD_PARTY (another party's account).
+  freightBilling         FreightBilling @default(SENDER)
   /// The smallest order it is offered, net, in its currency (minor units), 0 or more; null: none.
   /// @grain price
   minimumOrderAmount   Int?
@@ -106,6 +118,9 @@ model Party {
   // SetNull default for an optional relation: that would also clear tenantId).
   team                Party?               @relation("PartyTeam", fields: [tenantId, teamPartyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   riders              Party[]              @relation("PartyTeam")
+  // W2b-6 carriers (wave 48/57): the sealed account number its carrier bills (Restrict, not Prisma's SetNull default for an
+  // optional relation: that would also clear tenantId).
+  carrierAccountSecret SecretValue?        @relation("PartyCarrierAccount", fields: [tenantId, carrierAccountSecretId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   addresses           PartyAddress[]
   contacts            PartyContact[]
   taxIdentities       PartyTaxIdentity[]
@@ -272,6 +287,8 @@ model Party {
   scheduleSlots           ScheduleSlot[]
 
   @@unique([tenantId, code])
+  // W2b-6 (wave 48/57): one sealed carrier account per party (a secret is never shared).
+  @@unique([tenantId, carrierAccountSecretId])
   // The target of the tenant-safe references from the party's rows.
   @@unique([tenantId, id])
   // W2b-5 (wave 37/44): a team's riders.

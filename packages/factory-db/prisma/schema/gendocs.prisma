@@ -34,7 +34,10 @@ model GeneratedDocument {
   /// tables exist, MachineCheckResult (CHECK_REPORT), RiskAssessmentVersion (DVR_FROZEN), PpeIssue (PPE_RECEIPT).
   /// W2b-5 (wave 39/44): SalesOrder (ORDER_CONFIRMATION). W2b-5 (wave 44/44): MeasurementProfile (MTM_WORKSHEET; a profile
   /// has no company: the document names the company whose papers it is, and no site). W2b-6 (wave 45/57): PriceListVersion
-  /// (PRICE_LIST; of its list's company, or of any company of the tenant for a tenant-wide list; no site).
+  /// (PRICE_LIST; of its list's company, or of any company of the tenant for a tenant-wide list; no site). W2b-6 (wave
+  /// 48/57): Shipment (SHIPPING_MARKS, SHIPMENT_PACK), DispatchManifest (MANIFEST), and Shipment, SampleShipment or
+  /// DepositRequest (PROFORMA: for customs, samples or a prepayment request; with the number its record took from the
+  /// company's PROFORMA series; a sample shipment's or deposit request's has no site).
   recordType  String
   recordId    String                @db.Uuid
   kind        GeneratedDocumentKind
@@ -116,4 +119,13 @@ enum GeneratedDocumentKind {
   /// W2b-6 (schema wave 45/57, B-W2b-363; SAL-165, B-W2b-325, -343): the price list PDF of a PriceListVersion (no site): its
   /// prices with their days, breaks and size surcharges, never a cost; stored so a mail attaches the same file.
   PRICE_LIST
+  /// W2b-6 (schema wave 48/57, B-W2b-367; LOG-058): a non-fiscal proforma invoice with its own number (NumberKind PROFORMA)
+  /// for customs, samples or a prepayment request: of a Shipment, a SampleShipment or a DepositRequest.
+  PROFORMA
+  /// W2b-6 (LOG-049): the day's sheet of a DispatchManifest, for the driver to sign.
+  MANIFEST
+  /// W2b-6 (LOG-013): a Shipment's carton marks, one page per carton.
+  SHIPPING_MARKS
+  /// W2b-6 (LOG-031): a Shipment's papers in one PDF: carrier labels, packing list, DDT and commercial invoice.
+  SHIPMENT_PACK
 }
