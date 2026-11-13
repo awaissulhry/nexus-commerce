@@ -15,6 +15,8 @@ import { databaseCarrierRefusal } from '@nexus/factory-domain/shipping/carrier-r
 // handed-over rules is a 409 in words.
 import { databaseBankRefusal } from '@nexus/factory-domain/payments/bank-refusals'
 import { askedLineRefusal } from '@nexus/factory-domain/purchasing/ask-to-buy/ask-to-buy'
+// B-W2b-385: a notification preference, push device or view follow write that reached the database's rules is a 409 in words.
+import { databaseNotificationRefusal } from '@nexus/factory-domain/notifications/preferences/refusals'
 import type { ErrorBody } from '@nexus/factory-domain/core/contracts'
 import { reportError } from '../observability/tracker'
 
@@ -209,6 +211,19 @@ function bankRefusal(error: unknown): MappedError | null {
   return words ? { status: STATUS_OF.conflict, code: 'conflict', message: words.message, issues: [{ path: words.path, message: words.message }], unexpected: false } : null
 }
 
+/**
+ * B-W2b-385 (W2b-6 schema wave 47/57's rules, …_notify_depth_w2b_guards): the database's own refusal of a notification
+ * preference, a role default, a push device or a view follow (check_violation 'notifications: …' / 'views: …'), when a write
+ * reached it without its command's check (a race: a device turned off from another tab): a 409 in words (factory-domain
+ * notifications/preferences/refusals), never a 500.
+ */
+function notificationRefusal(error: unknown): MappedError | null {
+  const cause = (error as { meta?: { driverAdapterError?: { cause?: { originalCode?: unknown; originalMessage?: unknown } } } } | null)?.meta?.driverAdapterError?.cause
+  if (cause?.originalCode !== '23514' || typeof cause.originalMessage !== 'string') return null
+  const words = databaseNotificationRefusal(cause.originalMessage)
+  return words ? { status: STATUS_OF.conflict, code: 'conflict', message: words.message, issues: [{ path: words.path, message: words.message }], unexpected: false } : null
+}
+
 // B-W2b-309 (SAL-306) ----------------------------------------------------------------------------------------------------
 /**
  * The database's own refusal to issue or hold a customer's own lot for another customer's work (…_sales_orders_depth_w2b_guards
@@ -253,6 +268,9 @@ export function mapError(error: unknown): MappedError {
   // B-W2b-309
   const owned = customerOwnedRefusal(error)
   if (owned) return owned
+  // B-W2b-385
+  const notification = notificationRefusal(error)
+  if (notification) return notification
   // B-W2b-332
   const askedLine = askedLineRefusal(error)
   if (askedLine) return { status: STATUS_OF.conflict, code: 'conflict', message: askedLine.message, issues: [askedLine], unexpected: false }

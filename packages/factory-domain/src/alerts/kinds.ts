@@ -12,6 +12,8 @@ import { PARTIES_VIEW } from '../parties/permissions'
 import { PURCHASING_VIEW } from '../purchasing/permissions'
 import { QUALITY_HOLDS_VIEW } from '../quality/holds/permissions'
 import { ORDERS_VIEW } from '../sales/orders/permissions'
+// B-W2b-385 (NT1:04): a return that arrived after its deadline is seen on the return (sales.returns.view).
+import { SALES_RETURNS_VIEW } from '../sales/returns/permissions'
 import { QUOTES_VIEW } from '../sales/quotes/permissions'
 import type { TimerKind } from '../timers/rules'
 
@@ -44,7 +46,8 @@ const INTEGRATIONS_VIEW = 'integrations.view' satisfies Permission
 // B-W2b-314: LOW_STOCK (SCM-281), a material below its planning minimum at a site.
 // B-W2b-350: the supply alerts (SCM-174) beside PO_NOT_CONFIRMED (not confirmed in time): PO_CONFIRMED_LATE (confirmed later
 // than needed) and SUPPLIER_STATUS_CHANGED (a supplier put on hold, blocked, limited or made inactive).
-export const RULE_KINDS = ['ORDER_LATE_RISK', 'HOLD_TOO_LONG', 'MATERIAL_SHORT', 'APPROVAL_OVERDUE', 'PO_NOT_CONFIRMED', 'CERTIFICATE_EXPIRING', 'INVOICE_DEADLINE', 'INTEGRATION_FAILING', 'WORKING_TIME_LIMIT', 'LOW_STOCK', 'PO_CONFIRMED_LATE', 'SUPPLIER_STATUS_CHANGED'] as const
+// B-W2b-385 (NT1:04, B-W2b-341's gap): RETURN_ARRIVED_LATE, a return whose goods reached the dock after their deadline.
+export const RULE_KINDS = ['ORDER_LATE_RISK', 'HOLD_TOO_LONG', 'MATERIAL_SHORT', 'APPROVAL_OVERDUE', 'PO_NOT_CONFIRMED', 'CERTIFICATE_EXPIRING', 'INVOICE_DEADLINE', 'INTEGRATION_FAILING', 'WORKING_TIME_LIMIT', 'LOW_STOCK', 'PO_CONFIRMED_LATE', 'SUPPLIER_STATUS_CHANGED', 'RETURN_ARRIVED_LATE'] as const
 export type RuleKind = (typeof RULE_KINDS)[number]
 export const isRuleKind = (value: unknown): value is RuleKind => typeof value === 'string' && (RULE_KINDS as readonly string[]).includes(value)
 
@@ -271,6 +274,20 @@ export const KINDS: Readonly<Record<RuleKind, KindSpec>> = Object.freeze({
     builtIn: { name: { en: 'Supplier put on hold, blocked or limited', it: 'Fornitore sospeso, bloccato o con condizioni' }, threshold: { days: 7 }, severity: 'WARNING', cooldownMinutes: 1440, recipientRole: 'buyer' },
     label: { en: 'Supplier status changes', it: 'Cambi di stato dei fornitori' },
     recheck: [{ event: 'supplier.status_changed', key: 'partyId' }],
+  }),
+  // B-W2b-385 (NT1:04 "a late return arrival raises its alert"; B-W2b-341's late arrival was a reading only).
+  RETURN_ARRIVED_LATE: spec({
+    kind: 'RETURN_ARRIVED_LATE',
+    trigger: 'CONDITION',
+    // One alert per return: its goods were received (RECEIVED or INSPECTED, not closed yet) on a Rome day after the day they
+    // were due back by (returns-depth/rules arrivalOf LATE: the withdrawal's 14 days, or the deadline the office set). It
+    // clears when the return is closed (refunded or not). No numbers: late is late.
+    recordType: 'ReturnAuthorisation',
+    view: SALES_RETURNS_VIEW,
+    threshold: z.strictObject({}),
+    builtIn: { name: { en: 'Return arrived after its deadline', it: 'Reso arrivato dopo la scadenza' }, threshold: {}, severity: 'WARNING', cooldownMinutes: 1440, recipientRole: 'sales' },
+    label: { en: 'Returns that arrived after their deadline', it: 'Resi arrivati dopo la scadenza' },
+    recheck: [{ event: 'return.status_changed', key: 'returnId' }],
   }),
 })
 

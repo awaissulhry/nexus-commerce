@@ -51,6 +51,9 @@ export interface NotificationInsert {
   readonly actorId: string | null
   readonly groupKey: string
   readonly createdAt: Date
+  /** B-W2b-385: kept quiet (off in the app, on by e-mail or push): read and done the moment it is made (= createdAt). */
+  readonly readAt?: Date
+  readonly doneAt?: Date
 }
 
 /** Inserts the fan-out's rows; a row of the same person and event is skipped (a replayed event makes none). How many were new. */
@@ -82,13 +85,14 @@ export async function ownNotifications(client: Client, userId: string, ids: read
   return client.notification.findMany({ where: { userId, id: { in: [...new Set(ids)] } }, select: NOTIFICATION_COLUMNS })
 }
 
-/** One delivery attempt (append-only): an e-mail SENT names its mail; SKIPPED and FAILED say why. */
+/** One delivery attempt (append-only): an e-mail SENT names its mail; SKIPPED and FAILED say why. B-W2b-385: a push's too. */
 export async function logDeliveries(
   tx: CommandTx,
   rows: readonly { readonly id: string; readonly notificationId: string; readonly outcome: 'SENT' | 'SKIPPED' | 'FAILED'; readonly emailOutboundId: string | null; readonly detail: string | null }[],
   at: Date,
   requestId: string,
+  channel: 'EMAIL' | 'PUSH' = 'EMAIL',
 ): Promise<void> {
   if (rows.length === 0) return
-  await tx.notificationDelivery.createMany({ data: rows.map((row) => ({ ...row, channel: 'EMAIL' as const, at, requestId, createdAt: at })) })
+  await tx.notificationDelivery.createMany({ data: rows.map((row) => ({ ...row, channel, at, requestId, createdAt: at })) })
 }

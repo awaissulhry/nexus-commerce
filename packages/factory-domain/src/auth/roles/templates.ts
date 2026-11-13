@@ -142,6 +142,8 @@ import { SALES_SAFETY_ADDS } from '../../sales/safety-reports/permissions'
 import { SALES_MTM_ADDS } from '../../sales/mtm/permissions'
 // B-W2b-360: fittings, alterations and remakes (sales and the production manager record fittings, the administrator too).
 import { SALES_FITTINGS_ADDS } from '../../sales/fittings/permissions'
+// B-W2b-385: the notification defaults of each office role (the administrator sets them).
+import { NOTIFICATION_DEFAULTS_ADDS } from '../../notifications/preferences/permissions'
 
 /**
  * The system role templates (plan A1 §3.11 "Role"; feature PLT-030): ready roles every tenant gets as system roles
@@ -1031,7 +1033,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-358
   ...(audience === 'office' ? (SALES_MTM_ADDS[key] ?? []) : []),
   // B-W2b-360
-  ...(audience === 'office' ? (SALES_FITTINGS_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (SALES_FITTINGS_ADDS[key] ?? []) : []),
+  // B-W2b-385
+  ...(audience === 'office' ? (NOTIFICATION_DEFAULTS_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the

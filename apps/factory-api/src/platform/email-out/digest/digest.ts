@@ -35,6 +35,9 @@ import { serverClock, type Clock } from '../../../core/time'
 import { heldRoles } from '../../auth/roles/access'
 import { companyLegalOf } from '../../documents/documents'
 import { latestPerRecord, logDeliveries, NOTIFICATION_COLUMNS } from '../../notifications/store'
+// B-W2b-385 (PLT-141): the matrix's e-mail column decides what the digest lists.
+import { choiceFor, kindOf, madeQuiet } from '@nexus/factory-domain/notifications/preferences/preferences'
+import { matrixOf } from '../../notifications/preferences/store'
 import { activeTenants, asSystem, systemContext } from '../../outbox/system'
 import { deliverOutbound } from '../outbound'
 import { processEmail, type EmailRuntime } from '../service'
@@ -48,7 +51,9 @@ import { processEmail, type EmailRuntime } from '../service'
  *
  *   1. the person's notifications since the last digest (at most 7 days back), still to look at (not read, not done,
  *      not snoozed), of the kinds they chose (mentions, assignments, approvals, alerts by default), newest first, at
- *      most 50 listed ("and N more in the app"); none: nothing is sent, the day is marked checked;
+ *      most 50 listed ("and N more in the app"); none: nothing is sent, the day is marked checked. B-W2b-385: the kinds
+ *      are the matrix's e-mail column set to "daily digest" (platform/notifications/preferences; the choice above is
+ *      its quiet default), and a notification kept quiet (off in the app) is listed too;
  *   2. the mail is composed in memory in the person's language from each notification's own params (built for them,
  *      with only the amounts their grains reached), with the company's footer; one EmailOutbound row (record `User`,
  *      template `notifications.digest`, NO body) from the tenant's default NOTIFICATION identity, sent at once through
@@ -176,14 +181,23 @@ export async function sendDigest(caller: CommandCaller, subscription: Subscripti
   const categories = digestCategoriesOf(subscription.params)
   const since = new Date(Math.max(subscription.lastSentAt?.getTime() ?? 0, now.getTime() - DIGEST_LOOKBACK_MS))
   const facts = await caller.withClient(async (client) => {
+    // B-W2b-385: still to look at, or kept quiet for the digest (off in the app); listed when the person's e-mail column says
+    // "daily digest" for its kind (their choice, their roles' defaults, else the kinds of this digest's own choice); news the
+    // matrix does not list (SYSTEM) by this digest's own choice, as before.
     const rows = await client.notification.findMany({
-      where: { userId: subscription.userId, category: { in: categories }, readAt: null, doneAt: null, createdAt: { gt: since, lte: now } },
+      where: { userId: subscription.userId, createdAt: { gt: since, lte: now }, OR: [{ readAt: null, doneAt: null }, { doneAt: { equals: client.notification.fields.createdAt } }] },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: 500,
       select: NOTIFICATION_COLUMNS,
     })
-    const latest = await latestPerRecord(client, subscription.userId, rows.filter((row) => row.snoozedAt !== null).map((row) => row.recordId))
-    const open = rows.filter((row) => stateOf(row, now, latest.get(`${row.recordType}:${row.recordId}`) ?? null) === 'OPEN')
+    const matrix = await matrixOf(client, subscription.userId, now, categories)
+    const wanted = rows.filter((row) => {
+      if (!(row.readAt === null && row.doneAt === null) && !madeQuiet(row)) return false
+      const kind = kindOf(row)
+      return kind === null ? categories.includes(row.category) : choiceFor(matrix.cells, kind).digest
+    })
+    const latest = await latestPerRecord(client, subscription.userId, wanted.filter((row) => row.snoozedAt !== null).map((row) => row.recordId))
+    const open = wanted.filter((row) => madeQuiet(row) || stateOf(row, now, latest.get(`${row.recordType}:${row.recordId}`) ?? null) === 'OPEN')
     const user = await client.user.findUnique({ where: { id: subscription.userId }, select: { email: true, displayName: true } })
     const ids = [...new Set(open.flatMap((row) => peopleOf(row)))]
     const names = new Map(ids.length ? (await client.user.findMany({ where: { id: { in: ids } }, select: { id: true, displayName: true } })).map((row) => [row.id, row.displayName]) : [])

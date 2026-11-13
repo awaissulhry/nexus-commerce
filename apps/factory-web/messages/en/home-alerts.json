@@ -23,7 +23,8 @@
     "alerts.SUPPLIER_STATUS_CHANGED.ON_HOLD": "Supplier {label} is on hold since {changedOn}: no new purchase order until it is approved again.",
     "alerts.SUPPLIER_STATUS_CHANGED.BLOCKED": "Supplier {label} is blocked since {changedOn}: no new purchase order.",
     "alerts.SUPPLIER_STATUS_CHANGED.INACTIVE": "Supplier {label} is inactive since {changedOn}: no new purchase order.",
-    "alerts.UNKNOWN": "Alert on {label}."
+    "alerts.UNKNOWN": "Alert on {label}.",
+    "alerts.RETURN_ARRIVED_LATE": "Return {label} arrived on {receivedDate}, {days} days after its deadline ({dueDate})."
   },
   "refused": {
     "title": "Not yours to open",
@@ -172,7 +173,8 @@
       "WORKING_TIME_LIMIT": "{record}: working-time limit close",
       "LOW_STOCK": "{record} below its minimum",
       "PO_CONFIRMED_LATE": "{record} confirmed later than needed",
-      "SUPPLIER_STATUS_CHANGED": "{record}: supplier status changed"
+      "SUPPLIER_STATUS_CHANGED": "{record}: supplier status changed",
+      "RETURN_ARRIVED_LATE": "{record} arrived after its deadline"
     },
     "snooze": "Snooze",
     "assign": "Assign",

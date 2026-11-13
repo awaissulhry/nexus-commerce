@@ -23,6 +23,8 @@ import { changeOrderApproval } from './change-orders'
 import { smvChange } from './smv-changes'
 import { planVersion } from './plan-versions'
 import { approvalTask } from './approval-tasks'
+// B-W2b-385 (NT1:02): inquiries waiting for us over a working day.
+import { inquiryWaiting } from './inquiries'
 
 /** One source per kind of Today (factory-domain insights/attention ATTENTION_KINDS). */
 export const SOURCES: Readonly<Record<AttentionKind, Source>> = Object.freeze({
@@ -61,4 +63,6 @@ export const SOURCES: Readonly<Record<AttentionKind, Source>> = Object.freeze({
   SMV_CHANGE: smvChange,
   PLAN_VERSION: planVersion,
   APPROVAL_TASK: approvalTask,
+  // B-W2b-385 (NT1:02): an inquiry waiting for us over a working day, the assignee's or (nobody has it) the answerers'.
+  INQUIRY_WAITING: inquiryWaiting,
 })

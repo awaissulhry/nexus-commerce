@@ -26,6 +26,8 @@ import { QUALITY_LOTS_REJECT, QUALITY_LOTS_RELEASE, QUALITY_LOTS_VIEW } from '..
 import { QUALITY_NCR_APPROVE, QUALITY_NCR_VIEW } from '../quality/ncr/permissions'
 import { ORDERS_MANAGE, ORDERS_VIEW } from '../sales/orders/permissions'
 import { QUOTES_APPROVE, QUOTES_VIEW } from '../sales/quotes/permissions'
+// B-W2b-385 (NT1:02): an inquiry waiting for us over a working day.
+import { SALES_INQUIRIES_MANAGE, SALES_INQUIRIES_VIEW } from '../sales/inquiries/permissions'
 import { SUPPLIER_CHANGES_DECIDE, SUPPLIER_DOCUMENTS_REVIEW } from '../purchasing/portal-profile/permissions'
 import { Dec } from '../tax/decimal'
 import { TASKS_MANAGE } from '../tasks/permissions'
@@ -101,6 +103,10 @@ export const ATTENTION_KINDS = [
   'SMV_CHANGE',
   'PLAN_VERSION',
   'APPROVAL_TASK',
+  // B-W2b-385 (NT1:02, B-W2b-322's gap "Today has no inquiry source"): an open inquiry that waits for us over one working day
+  // (the inquiries list's WAITING_US tile), for whoever has it, or — nobody has it yet — whoever answers the company's
+  // inquiries; opened on the inquiry.
+  'INQUIRY_WAITING',
 ] as const
 export type AttentionKind = (typeof ATTENTION_KINDS)[number]
 
@@ -420,6 +426,17 @@ export const KIND_RULES: Readonly<Record<AttentionKind, KindRule>> = Object.free
     act: [APPROVALS_DECIDE],
     decide: 'REVIEW',
     live: ['approval.requested', 'approval.decided', 'approval.withdrawn', 'approval.stale'],
+  }),
+  // B-W2b-385: an inquiry waiting for us over a working day (modules/insights/sources/inquiries.ts): the assignee's, or while
+  // nobody has it, everyone's who answers the company's inquiries.
+  INQUIRY_WAITING: rule({
+    kind: 'INQUIRY_WAITING',
+    category: 'ALERT',
+    label: 'Inquiries waiting for an answer over a working day',
+    view: SALES_INQUIRIES_VIEW,
+    act: [SALES_INQUIRIES_MANAGE],
+    decide: 'OPEN',
+    live: ['inquiry.received', 'inquiry.changed', 'inquiry.closed'],
   }),
   RULE_ALERT: rule({
     kind: 'RULE_ALERT',
