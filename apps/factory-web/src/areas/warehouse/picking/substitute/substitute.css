@@ -1,0 +1,66 @@
+/*
+ * B-W2b-320 — "Use a substitute" LAYOUT (Picking and the work order's Materials share the dialog): its column, the forms
+ * (as many columns as fit), the lists of standing substitutes and lot warnings, the withdraw row. The controls are the
+ * design system's; semantic tokens only.
+ */
+.fw-sub {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-sub-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: var(--nds-space-12) var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-sub-form .wide {
+  grid-column: 1 / -1;
+}
+
+.fw-sub-h3 {
+  margin: 0;
+  color: var(--nds-text-strong);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-sub-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-sub-list > li {
+  overflow-wrap: anywhere;
+}
+
+.fw-sub-withdraw {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin-top: var(--nds-space-6);
+}
+
+.fw-sub-buttons {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-sub-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  min-width: 0;
+}

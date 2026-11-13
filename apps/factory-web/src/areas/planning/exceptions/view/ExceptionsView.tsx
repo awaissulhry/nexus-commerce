@@ -16,6 +16,8 @@ import { ackHeld, acknowledgeable, impactOf, kindTone, NAMESPACE, ownerWords, re
 import type { ExceptionsActions, ExceptionsModel } from '../view-model'
 import { ExceptionDetail } from './ExceptionDetail'
 import { ExceptionDialogs } from './ExceptionDialogs'
+// B-W2b-336: the tile "Supplier dates later than needed".
+import { SUPPLY_LATE_NAMESPACE } from '../supply-late/model'
 import '../exceptions.css'
 
 export type { ExceptionsActions, ExceptionsModel } from '../view-model'
@@ -31,7 +33,7 @@ const focusedRowId = (): string | null => (typeof document === 'undefined' ? nul
  */
 export function ExceptionsView({ model, actions }: { model: ExceptionsModel; actions?: ExceptionsActions }) {
   return (
-    <WithMessages namespaces={[NAMESPACE, 'buying', 'lists']}>
+    <WithMessages namespaces={[NAMESPACE, 'buying', 'lists', SUPPLY_LATE_NAMESPACE]}>
       <ExceptionsScreen model={model} actions={actions} />
     </WithMessages>
   )
@@ -47,6 +49,7 @@ function useWords(timeZone?: string): Words {
 function ExceptionsScreen({ model, actions }: { model: ExceptionsModel; actions?: ExceptionsActions }) {
   const words = useWords(model.timeZone)
   const { t, locale } = words
+  const late = useT(SUPPLY_LATE_NAMESPACE)
   const place = { locale, timeZone: model.timeZone }
   const [query, setQuery] = useState(model.controls.q)
   useEffect(() => setQuery(model.controls.q), [model.controls.q])
@@ -261,7 +264,21 @@ function ExceptionsScreen({ model, actions }: { model: ExceptionsModel; actions?
             hint: t(`tile.hint.${tile.id}`),
             onClick: () => actions?.onView?.(model.controls.view === tile.view ? 'queue' : tile.view),
             active: tileView === tile.view,
-          }))}
+          }))
+            // B-W2b-336: Supplier dates later than needed (a saved filter: the queue's supply too late).
+            .concat(
+              model.supplyLate
+                ? [
+                    {
+                      label: late('supplyLate.tile'),
+                      value: model.supplyLate.list.status === 'ready' ? String(model.supplyLate.list.value.tile) : '—',
+                      hint: late(model.supplyLate.list.status === 'error' ? 'supplyLate.tileError' : 'supplyLate.tileHint'),
+                      onClick: () => actions?.supplyLate?.onTile?.(),
+                      active: model.controls.kind === 'SUPPLY_LATE' && model.controls.view === 'queue',
+                    },
+                  ]
+                : [],
+            )}
         />
       </section>
 

@@ -3,6 +3,8 @@ import type { PlanningSite } from '../board/api'
 import type { ExceptionList, PlanningException } from './api'
 import type { ExceptionKind } from './api'
 import type { ExceptionsCan, ExceptionsControls, ExceptionsView } from './model'
+// B-W2b-336: supply too late (the tile "Supplier dates later than needed", the detail's fixes, Check now).
+import type { SupplyLateActions, SupplyLateSlot } from './supply-late/use-supply-late'
 
 /**
  * The ONE view model of Planning › Exceptions (SCR-125) and what it may ask for. The view fetches nothing: the page
@@ -50,6 +52,8 @@ export interface ExceptionsModel {
   /** The page's clock (the snooze choices are worked out from it). */
   now: number
   timeZone?: string
+  /** B-W2b-336: supply too late (absent: the part is not drawn). */
+  supplyLate?: SupplyLateSlot
   /** Design cases: preset selection, focused row, keys panel. */
   selected?: readonly string[]
   focusRow?: number
@@ -78,4 +82,6 @@ export interface ExceptionsActions {
   onKeys?: () => void
   onCloseDialog?: () => void
   onDismissNotice?: () => void
+  /** B-W2b-336: supply too late. */
+  supplyLate?: SupplyLateActions
 }

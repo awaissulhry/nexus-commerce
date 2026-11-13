@@ -14,6 +14,9 @@ import { acknowledgeExceptions, getException, KINDS, listExceptions, resolveExce
 import { acknowledgeable, apiQueryOf, controlsOf, csvOfRows, exceptionsCan, NAMESPACE, noteProblem, queryOf, readProblemOf, refusalOf, type ExceptionsControls } from './model'
 import type { ExceptionsDialog, ExceptionsModel, ExceptionsNotice, Loaded } from './view-model'
 import { ExceptionsView } from './view/ExceptionsView'
+// B-W2b-336: supply too late.
+import { SUPPLY_LATE_NAMESPACE } from './supply-late/model'
+import { useSupplyLate } from './supply-late/use-supply-late'
 
 /**
  * `/w/<company>/planning/exceptions` (SCR-125; Planning › Exceptions, planning.view): the company's planning sites
@@ -24,7 +27,7 @@ import { ExceptionsView } from './view/ExceptionsView'
  */
 export function ExceptionsPage() {
   return (
-    <WithMessages namespaces={[NAMESPACE, 'buying', 'lists']}>
+    <WithMessages namespaces={[NAMESPACE, 'buying', 'lists', SUPPLY_LATE_NAMESPACE]}>
       <ExceptionsContainer />
     </WithMessages>
   )
@@ -262,6 +265,18 @@ function ExceptionsContainer() {
     }
   }, [api, siteId, running, load])
 
+  // B-W2b-336: supply too late — the tile, the open detail's fixes read fresh, Check now; a supplier's new date checked counts an update.
+  const openRow = detail?.loaded.status === 'ready' ? detail.loaded.value : detail ? rowsRef.current.find((row) => row.id === detail.id) : undefined
+  const supplyLate = useSupplyLate({
+    api,
+    permissions: session.permissions,
+    siteId,
+    open: detail && openRow ? { id: detail.id, kind: openRow.kind } : null,
+    onNewItem: () => setUpdates((count) => count + 1),
+    onChecked: () => void load(),
+    enabled: can.view && sites.status === 'ready',
+  })
+
   const model: ExceptionsModel = {
     prefix,
     can,
@@ -282,6 +297,7 @@ function ExceptionsContainer() {
     dialog,
     now,
     timeZone,
+    supplyLate: supplyLate.slot,
   }
 
   return (
@@ -313,6 +329,7 @@ function ExceptionsContainer() {
         onKeys: () => setDialog({ kind: 'keys' }),
         onCloseDialog: () => setDialog(null),
         onDismissNotice: () => setNotice(null),
+        supplyLate: { ...supplyLate.actions, onTile: () => setControls({ kind: controlsRef.current.kind === 'SUPPLY_LATE' ? null : 'SUPPLY_LATE', view: 'queue', open: null }) },
       }}
     />
   )

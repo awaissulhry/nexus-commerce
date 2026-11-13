@@ -17,6 +17,9 @@ import { LOT_MENU_VIEWS, LOT_TILES, type LotsListActions, type LotsListModel, ty
 import { KeysModal, LotsMessages, useWords } from '../../shared/parts'
 import { ReleaseDialog } from '../../release/ReleaseDialog'
 import { TraceDialog } from '../../trace/TraceDialog'
+// B-W2b-320: the Lifecycle column, the Depleted and Documents expiring views, the documents tile.
+import { DEPTH_NAMESPACE, isDepthView, LIFECYCLE_TONE } from '../../depth/model'
+import { useT } from '../../../../../lib/i18n/provider'
 
 export type { LotsListActions, LotsListModel } from '../../model'
 
@@ -40,6 +43,8 @@ export function LotsListView({ model, actions }: { model: LotsListModel; actions
 
 function LotsList({ model, actions }: { model: LotsListModel; actions?: LotsListActions }) {
   const t = useWords()
+  const td = useT(DEPTH_NAMESPACE)
+  const facts = model.depth?.facts ?? null
   const locale = useLocale()
   const place = { locale, timeZone: model.timeZone }
   const [query, setQuery] = useState(model.q)
@@ -145,6 +150,20 @@ function LotsList({ model, actions }: { model: LotsListModel; actions?: LotsList
     const OnHandCell = ({ data }: ICellRendererParams<LotRow>) =>
       data ? data.item.tracking === 'HIDE' ? <Dual hides={data.hides} area={data.onHand} uom={data.item.baseUom} both /> : <Qty value={data.onHand} uom={data.item.baseUom} /> : null
     const IssuedCell = ({ data }: ICellRendererParams<LotRow>) => (data ? <span className="fw-st-num" title={data.issuedTo === 0 ? undefined : t('lt.issuedTo', { count: data.issuedTo })}>{data.issuedTo === 0 ? '—' : String(data.issuedTo)}</span> : null)
+    // B-W2b-320 (lt-grid "Lifecycle (W2b)"): the lot's lifecycle, and its family (split from, or N child lots).
+    const LifecycleCell = ({ data }: ICellRendererParams<LotRow>) => {
+      const fact = data ? facts?.[data.id] : undefined
+      if (!data) return null
+      if (!fact) return <span className="fw-st-sub">—</span>
+      return (
+        <span className="fw-st-cell">
+          <span>
+            <Pill tone={LIFECYCLE_TONE[fact.lifecycle]}>{td(`ld.life.state.${fact.lifecycle}`)}</Pill>
+          </span>
+          {fact.parentLot ? <span className="fw-st-sub">{td('ld.list.childOf', { code: fact.parentLot.code })}</span> : fact.childLots > 0 ? <span className="fw-st-sub">{td('ld.list.children', { count: fact.childLots })}</span> : fact.documentsExpiring > 0 ? <span className="fw-st-sub fw-st-warning">{td('ld.list.expiring', { count: fact.documentsExpiring })}</span> : null}
+        </span>
+      )
+    }
     const MoreCell = ({ data }: ICellRendererParams<LotRow>) =>
       data ? (
         <Menu
@@ -171,9 +190,10 @@ function LotsList({ model, actions }: { model: LotsListModel; actions?: LotsList
       { colId: 'evidence', headerName: t('lt.col.evidence'), minWidth: 120, flex: 0.8, cellRenderer: EvidenceCell },
       { colId: 'onHand', headerName: t('lt.col.onHand'), minWidth: 150, flex: 0.9, type: 'rightAligned', cellRenderer: OnHandCell },
       { colId: 'issued', headerName: t('lt.col.issued'), minWidth: 90, flex: 0.6, type: 'rightAligned', cellRenderer: IssuedCell },
+      { colId: 'lifecycle', headerName: td('ld.list.col'), minWidth: 130, flex: 0.9, cellRenderer: LifecycleCell },
       { colId: 'more', headerName: t('rec.actions'), minWidth: 84, maxWidth: 84, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
     ]
-  }, [t, locale, model.prefix, model.can.lotsView, model.timeZone])
+  }, [t, td, facts, locale, model.prefix, model.can.lotsView, model.timeZone])
 
   if (!model.can.stockView) {
     return (
@@ -239,7 +259,7 @@ function LotsList({ model, actions }: { model: LotsListModel; actions?: LotsList
       <Select size="sm" aria-label={t('lt.list.viewLabel')} value={model.view} onChange={(event) => actions?.onView?.(event.target.value as LotView)}>
         {LOT_MENU_VIEWS.map((view) => (
           <option key={view} value={view}>
-            {t(`lt.view.${view}`)}
+            {isDepthView(view) ? td(`ld.view.${view}`) : t(`lt.view.${view}`)}
           </option>
         ))}
       </Select>
@@ -275,16 +295,26 @@ function LotsList({ model, actions }: { model: LotsListModel; actions?: LotsList
       </div>
 
       <MetricStrip
-        metrics={LOT_TILES.map((tile) => {
-          const count = tile.count(model.counts)
-          return {
-            label: t(`lt.tile.${tile.id}`),
-            value: count === null ? '—' : String(count),
-            hint: t(`lt.tileHint.${tile.id}`),
-            onClick: () => actions?.onView?.(model.view === tile.view ? 'all' : tile.view),
-            active: tileView === tile.view,
-          }
-        })}
+        metrics={[
+          ...LOT_TILES.map((tile) => {
+            const count = tile.count(model.counts)
+            return {
+              label: t(`lt.tile.${tile.id}`),
+              value: count === null ? '—' : String(count),
+              hint: t(`lt.tileHint.${tile.id}`),
+              onClick: () => actions?.onView?.(model.view === tile.view ? 'all' : tile.view),
+              active: tileView === tile.view,
+            }
+          }),
+          // B-W2b-320 (lt-metrics "Documents expiring in 30 days (W2b)"): a lot whose document (or its parent's) ends soon.
+          {
+            label: td('ld.list.tile'),
+            value: model.depth?.counts ? String(model.depth.counts.documentsExpiring) : '—',
+            hint: td('ld.list.tileHint'),
+            onClick: () => actions?.onView?.(model.view === 'expiring' ? 'all' : 'expiring'),
+            active: model.view === 'expiring',
+          },
+        ]}
       />
 
       <ListFrame<LotRow>

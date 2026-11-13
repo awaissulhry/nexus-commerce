@@ -198,9 +198,12 @@
       "exceptions": "Exceptions",
       "dates": "Dates",
       "milestones": "Time & action",
+      "promise": "Promise dates",
       "longRange": "Long range",
       "demand": "Demand & forecast",
       "mps": "Master schedule & S&OP",
+      "reportsGroup": "Reports",
+      "reports": "Planning reports",
       "settingsGroup": "Settings",
       "settings": "Planning settings"
     },

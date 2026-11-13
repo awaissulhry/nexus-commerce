@@ -20,6 +20,12 @@ import { demandLabel, demandRecord, holdsBySubject, reasonLabel } from '../../..
 import { WriteOffDialog } from '../../../stock/daily/WriteOffDialog'
 import { TraceDialog } from '../../trace/TraceDialog'
 import { TraceTree } from '../../trace/TraceTree'
+// B-W2b-320: the lot's W2b parts (design lt-release, lt-facts, lt-stock, lt-status, lt-holds, lt-trace-tree; pop lt-split, lt-report).
+import { splitHeldKey } from '../../depth/model'
+import { AttributesDialog } from '../../depth/view/AttributesDialog'
+import { AttributesFacts, DepletedLine, DepthNotice, IncomingCheck, IncomingList, LifecycleCard, LifecyclePill, SeparationLine, useDepthWords } from '../../depth/view/DepthParts'
+import { SplitDialog } from '../../depth/view/SplitDialog'
+import { ReportsCard, TraceReportDialog } from '../../depth/view/TraceReportDialog'
 
 export type { LotRecordActions, LotRecordModel } from '../../model'
 
@@ -48,6 +54,9 @@ function LotRecordBody({ model, actions, panels }: { model: LotRecordModel; acti
   const locale = useLocale()
   const place = { locale, timeZone: model.timeZone }
   const listHref = `${model.prefix}/warehouse/lots`
+  const { t: td, say } = useDepthWords()
+  const depth = model.depth ?? null
+  const dv = depth?.depth.value ?? null
   const record = model.record
   const value = record.status === 'ready' ? record.value : null
   const lot = value?.lot ?? null
@@ -97,6 +106,17 @@ function LotRecordBody({ model, actions, panels }: { model: LotRecordModel; acti
           ...(lot.receipt ? [{ id: 'receipt', label: t('lt.openReceipt', { number: lot.receipt.number }), href: `${model.prefix}/warehouse/receipts/${encodeURIComponent(lot.receipt.id)}` }] : []),
           { id: 'hides', label: t('lt.openHides'), href: `${model.prefix}/warehouse/hides?lot=${encodeURIComponent(lot.id)}&view=all` },
           { id: 'copy', label: t('lt.record.copyCode'), onSelect: () => void navigator.clipboard?.writeText(lot.code).catch(() => undefined) },
+          // B-W2b-320: Split into shade groups (lt-split) and Trace report (lt-report), each held with why.
+          ...(depth
+            ? (() => {
+                const splitWait = say(splitHeldKey({ tracking: lot.item.tracking, qualityStatus: lot.qualityStatus }, depth.can, dv?.may)) ?? (dv ? null : td('ld.common.reading'))
+                const reportWait = depth.can.report && (!dv || dv.may.report) ? null : td('ld.report.held.noRight')
+                return [
+                  { id: 'split', label: td('ld.split.menu'), disabled: !!splitWait, description: splitWait ?? undefined, onSelect: () => actions?.depth?.onSplit?.(true) },
+                  { id: 'report', label: td('ld.report.menu'), disabled: !!reportWait, description: reportWait ?? undefined, onSelect: () => actions?.depth?.onReport?.(true) },
+                ]
+              })()
+            : []),
         ]}
       />
     </span>
@@ -118,6 +138,7 @@ function LotRecordBody({ model, actions, panels }: { model: LotRecordModel; acti
         lot ? (
           <>
             <QualityPill status={lot.qualityStatus} />
+            {dv && <LifecyclePill state={dv.lifecycle.state} />}
             {(lot.crVi.required || lot.crVi.status !== 'NOT_REQUIRED') && <CrViPill status={lot.crVi.status} value={lot.crVi.valueMgKg} limit={lot.crVi.limitMgKg} />}
             <Tag tone="neutral">{lot.siteCode}</Tag>
             <span className="fw-wl-hint">{lot.receivedAt ? t('lt.record.received', { date: formatDate(lot.receivedAt, place) }) : t('lt.opening')}</span>
@@ -143,6 +164,7 @@ function LotRecordBody({ model, actions, panels }: { model: LotRecordModel; acti
           }
         />
       )}
+      {depth && <DepthNotice model={depth} actions={actions?.depth} />}
       {lot?.qualityStatus === 'REJECTED' && <Banner tone="info" title={t('lt.record.rejected', { date: lot.qualityDecidedAt ? formatDate(lot.qualityDecidedAt, place) : '—' })}>{lot.qualityNote ?? undefined}</Banner>}
       {value && rejectedWithStock(value) && <RejectedStock value={value} model={model} actions={actions} />}
       {value && (
@@ -155,7 +177,14 @@ function LotRecordBody({ model, actions, panels }: { model: LotRecordModel; acti
                 <TraceTab value={value} model={model} />
                 <Card padded>
                   <div className="fw-wl-stack tight">
-                    <h3 className="fw-wl-h3">{t('lt.tree.title')}</h3>
+                    <div className="fw-wl-card-head">
+                      <h3 className="fw-wl-h3">{t('lt.tree.title')}</h3>
+                      {depth && (
+                        <Button size="sm" heldReason={depth.can.report && (!dv || dv.may.report) ? null : td('ld.report.held.noRight')} onClick={() => actions?.depth?.onReport?.(true)}>
+                          {td('ld.report.menu')}
+                        </Button>
+                      )}
+                    </div>
                     <p className="fw-wl-hint">{t('lt.tree.intro')}</p>
                     {model.trace && (
                       <PartState value={model.trace} label={t('lt.tree.title')} onRetry={actions?.onRetryTrace}>
@@ -164,6 +193,7 @@ function LotRecordBody({ model, actions, panels }: { model: LotRecordModel; acti
                     )}
                   </div>
                 </Card>
+                {depth && <ReportsCard model={depth} timeZone={model.timeZone} actions={actions?.depth} />}
               </>
             )}
             {model.tab === 'moves' && (
@@ -182,6 +212,9 @@ function LotRecordBody({ model, actions, panels }: { model: LotRecordModel; acti
       )}
       {model.writeOff && <WriteOffDialog model={model.writeOff} actions={actions?.writeOff} />}
       {model.find && <TraceDialog model={model.find} actions={actions?.find} />}
+      {depth?.attributes && dv && <AttributesDialog depth={dv} model={depth.attributes} actions={actions?.depth} />}
+      {depth?.split && <SplitDialog model={depth.split} can={depth.can} prefix={model.prefix} actions={actions?.depth} />}
+      {depth?.report && lot && <TraceReportDialog code={lot.code} model={depth.report} can={depth.can} timeZone={model.timeZone} actions={actions?.depth} />}
     </RecordFrame>
   )
 }
@@ -246,6 +279,7 @@ function OverviewTab({ value, model, actions, decideHref, keyHref }: { value: Lo
                 {(checklist) => <Checklist checklist={checklist} lot={lot} decideHref={decideHref} t={t} />}
               </PartState>
             )}
+            {model.depth && <IncomingCheck model={model.depth} prefix={model.prefix} />}
           </div>
         </Card>
         <Card padded>
@@ -276,6 +310,7 @@ function OverviewTab({ value, model, actions, decideHref, keyHref }: { value: Lo
                 { label: t('lt.facts.received'), value: lot.receivedAt ? formatDateTime(lot.receivedAt, place) : '—' },
               ]}
             />
+            {model.depth && <AttributesFacts model={model.depth} actions={actions?.depth} />}
           </div>
         </Card>
         <Card padded>
@@ -287,7 +322,10 @@ function OverviewTab({ value, model, actions, decideHref, keyHref }: { value: Lo
               </Link>
             </div>
             {value.stock.length === 0 ? (
-              <p className="fw-wl-hint">{t('lt.where.nothing')}</p>
+              <>
+                <p className="fw-wl-hint">{t('lt.where.nothing')}</p>
+                {model.depth && <DepletedLine model={model.depth} timeZone={model.timeZone} />}
+              </>
             ) : (
               <SummaryTable
                 label={t('lt.where.title')}
@@ -337,32 +375,35 @@ function OverviewTab({ value, model, actions, decideHref, keyHref }: { value: Lo
           </div>
         </Card>
       </div>
-      <Card padded>
-        <div className="fw-wl-stack tight">
-          <h3 className="fw-wl-h3">{t('lt.side.title')}</h3>
-          <span className="fw-wl-chips">
-            <QualityPill status={lot.qualityStatus} />
-          </span>
-          <p className="fw-wl-text">{lotHold ? t('lt.side.onHold', { reason: reasonLabel(model.holdReasons, lotHold.reasonCode, locale) }) : wait ? t(`stock:${wait}`) : t('lt.side.usable')}</p>
-          {lot.qualityDecidedAt && <p className="fw-wl-hint">{t('lt.side.decided', { date: formatDateTime(lot.qualityDecidedAt, place) })}</p>}
-          {lot.qualityNote && <p className="fw-wl-hint">{t('lt.side.note', { note: lot.qualityNote })}</p>}
-          <KeyValue
-            dense
-            labelCase="sentence"
-            items={[
-              { label: t('lt.side.crVi'), value: lot.crVi.required || lot.crVi.status !== 'NOT_REQUIRED' ? <CrViPill status={lot.crVi.status} value={lot.crVi.valueMgKg} limit={lot.crVi.limitMgKg} /> : t('stock:crVi.NOT_REQUIRED') },
-              { label: t('lt.side.evidence'), value: lot.crVi.evidence ? t(`stock:evidence.${lot.crVi.evidence}`) : lot.crVi.required ? t('stock:evidence.missing') : '—', hint: lot.crVi.testedOn ? t('lt.side.testedOn', { date: formatDate(`${lot.crVi.testedOn}T12:00:00Z`, place) }) : undefined },
-              { label: t('lt.side.documents'), value: t('lt.documents', { count: lot.documents }) },
-              { label: t('lt.side.onHand'), value: leather ? <Dual hides={lot.hides} area={lot.onHand} uom={lot.item.baseUom} both /> : <Qty value={lot.onHand} uom={lot.item.baseUom} /> },
-            ]}
-          />
-          {model.can.lotsView && (
-            <Link className="fw-st-link" href={decideHref}>
-              {t('lt.decide')}
-            </Link>
-          )}
-        </div>
-      </Card>
+      <div className="fw-wl-stack">
+        <Card padded>
+          <div className="fw-wl-stack tight">
+            <h3 className="fw-wl-h3">{t('lt.side.title')}</h3>
+            <span className="fw-wl-chips">
+              <QualityPill status={lot.qualityStatus} />
+            </span>
+            <p className="fw-wl-text">{lotHold ? t('lt.side.onHold', { reason: reasonLabel(model.holdReasons, lotHold.reasonCode, locale) }) : wait ? t(`stock:${wait}`) : t('lt.side.usable')}</p>
+            {lot.qualityDecidedAt && <p className="fw-wl-hint">{t('lt.side.decided', { date: formatDateTime(lot.qualityDecidedAt, place) })}</p>}
+            {lot.qualityNote && <p className="fw-wl-hint">{t('lt.side.note', { note: lot.qualityNote })}</p>}
+            <KeyValue
+              dense
+              labelCase="sentence"
+              items={[
+                { label: t('lt.side.crVi'), value: lot.crVi.required || lot.crVi.status !== 'NOT_REQUIRED' ? <CrViPill status={lot.crVi.status} value={lot.crVi.valueMgKg} limit={lot.crVi.limitMgKg} /> : t('stock:crVi.NOT_REQUIRED') },
+                { label: t('lt.side.evidence'), value: lot.crVi.evidence ? t(`stock:evidence.${lot.crVi.evidence}`) : lot.crVi.required ? t('stock:evidence.missing') : '—', hint: lot.crVi.testedOn ? t('lt.side.testedOn', { date: formatDate(`${lot.crVi.testedOn}T12:00:00Z`, place) }) : undefined },
+                { label: t('lt.side.documents'), value: t('lt.documents', { count: lot.documents }) },
+                { label: t('lt.side.onHand'), value: leather ? <Dual hides={lot.hides} area={lot.onHand} uom={lot.item.baseUom} both /> : <Qty value={lot.onHand} uom={lot.item.baseUom} /> },
+              ]}
+            />
+            {model.can.lotsView && (
+              <Link className="fw-st-link" href={decideHref}>
+                {t('lt.decide')}
+              </Link>
+            )}
+          </div>
+        </Card>
+        {model.depth && <LifecycleCard model={model.depth} actions={actions?.depth} prefix={model.prefix} timeZone={model.timeZone} />}
+      </div>
     </div>
   )
 }
@@ -565,6 +606,7 @@ function QualityTab({ value, model, actions, decideHref }: { value: LotRecord; m
           ) : (
             <p className="fw-wl-hint">{t('lt.record.noQuality')}</p>
           )}
+          {model.depth && <SeparationLine model={model.depth} />}
         </div>
       </Card>
       <Card padded>
@@ -577,7 +619,7 @@ function QualityTab({ value, model, actions, decideHref }: { value: LotRecord; m
               {(holds) => <HoldLinks holds={holds} model={model} />}
             </PartState>
           )}
-          <p className="fw-wl-hint">{t('lt.quality.inspections')}</p>
+          {model.depth ? <IncomingList model={model.depth} prefix={model.prefix} timeZone={model.timeZone} /> : <p className="fw-wl-hint">{t('lt.quality.inspections')}</p>}
         </div>
       </Card>
     </div>

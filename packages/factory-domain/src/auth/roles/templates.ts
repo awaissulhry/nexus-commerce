@@ -110,6 +110,8 @@ import { INVENTORY_LOTS_DEPTH_ADDS } from '../../inventory/lots-depth/permission
 import { INVENTORY_REPORTS_ADDS } from '../../inventory/reports/permissions'
 // B-W2b-350: purchasing reports (the buyer, planner, production manager, finance and the warehouse read them).
 import { PURCHASING_REPORTS_ADDS } from '../../purchasing/reports/permissions'
+// B-W2b-349: planning reports (the planner, the production manager and the buyer read them).
+import { PLANNING_REPORTS_ADDS } from '../../planning/reports/permissions'
 // B-W2b-300: goods without a PO (the buyer and the warehouse name the order or send them back).
 import { INVENTORY_UNPLANNED_ADDS } from '../../inventory/unplanned/permissions'
 // B-W2b-260: recall, withdrawal and authority (the quality inspector drafts them and speaks for the company outward).
@@ -996,6 +998,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (PLANNING_STRATEGY_ADDS[key] ?? []) : []),
   // B-W2b-350
   ...(audience === 'office' ? (PURCHASING_REPORTS_ADDS[key] ?? []) : []),
+  // B-W2b-349
+  ...(audience === 'office' ? (PLANNING_REPORTS_ADDS[key] ?? []) : []),
   // B-W2b-326
   ...(audience === 'office' ? (TRANSFERS_ADDS[key] ?? []) : []),
   // B-W2b-299

@@ -11,6 +11,8 @@ import { DAILY_NAMESPACE, leatherMaterials, readinessView, reserveHeld } from '.
 import { PrintButton, ReadinessPill, say } from '../../daily/view/DailyParts'
 // B-W2b-130: Leather (wo-leather W2b: the shade lots and the one shade lot rule).
 import { LeatherPanel } from '../leather/view/LeatherPanel'
+// B-W2b-320 (wo-materials "Substitute… (W2b)"): the warehouse's Use a substitute.
+import { WorkOrderSubstitute } from '../../materials/substitute/WorkOrderSubstitute'
 
 /**
  * Materials (design wo-leather, wo-materials; MES-005, SCM-215): what the work order plans per material and colour
@@ -40,6 +42,7 @@ export function MaterialsTab({ workOrder, model, actions }: { workOrder: WorkOrd
           <h2 className="fw-pr-h2">{t('materials.planned')}</h2>
           <span className="fw-pr-actions">
             <span className="fw-pr-hint">{workOrder.spec.frozen ? t('materials.frozen') : t('materials.wouldFreeze')}</span>
+            {model.substitute && <WorkOrderSubstitute model={model.substitute} prefix={model.prefix} actions={actions?.substitute} />}
             {daily && leathers.length === 1 && (
               <Button size="sm" heldReason={reserveWait} onClick={() => reserve(leathers[0]!)}>
                 {tw('reserve.button')}

@@ -1,4 +1,6 @@
-import { CalendarClock, CalendarRange, ChartGantt, Gauge, Layers, ListChecks, Network, Scissors, Siren, SlidersHorizontal, TrendingUp } from 'lucide-react'
+import { CalendarCheck, CalendarClock, CalendarRange, ChartGantt, Gauge, Layers, ListChecks, Network, Scissors, Siren, SlidersHorizontal, TrendingUp } from 'lucide-react'
+// B-W2b-349: the Reports group's icon.
+import { BarChart3 } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -38,7 +40,11 @@ export const officeArea: OfficeAreaNav = {
       {
         id: 'planning-dates',
         label: 'shell:nav.planning.dates',
-        items: [{ id: 'planning-milestones', label: 'shell:nav.planning.milestones', href: '/planning/milestones', icon: CalendarClock, permission: 'planning.view' }],
+        items: [
+          // B-W2b-336: Promise dates (SCR-109), before Time & action (the design's order); planning.promise.view (sales asks "when?" too).
+          { id: 'planning-promise', label: 'shell:nav.planning.promise', href: '/planning/promise', icon: CalendarCheck, permission: 'planning.promise.view' },
+          { id: 'planning-milestones', label: 'shell:nav.planning.milestones', href: '/planning/milestones', icon: CalendarClock, permission: 'planning.view' },
+        ],
       },
       // B-W2b-339: Long range › Demand & forecast (SCR-374) and Master schedule & S&OP (SCR-202; its W2b part, the production
       // strategy per item), the design's group "Planning › Long range" (Scenarios is W3).
@@ -49,6 +55,13 @@ export const officeArea: OfficeAreaNav = {
           { id: 'planning-demand', label: 'shell:nav.planning.demand', href: '/planning/demand', icon: TrendingUp, permission: 'planning.view' },
           { id: 'planning-mps', label: 'shell:nav.planning.mps', href: '/planning/mps', icon: Layers, permission: 'planning.view' },
         ],
+      },
+      // B-W2b-349: Reports › Planning reports (SCR-254; GET /planning/reports/adherence, /utilisation, /cover), the design's group
+      // "Planning › Reports", before Settings.
+      {
+        id: 'planning-reports',
+        label: 'shell:nav.planning.reportsGroup',
+        items: [{ id: 'planning-reports', label: 'shell:nav.planning.reports', href: '/planning/reports', icon: BarChart3, permission: 'planning.reports.view' }],
       },
       // B-W2a-59: Settings › Planning settings (SCR-124 calendars & shifts, SCR-127 item planning settings).
       {

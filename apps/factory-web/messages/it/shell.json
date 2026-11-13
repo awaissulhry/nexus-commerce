@@ -198,9 +198,12 @@
       "exceptions": "Eccezioni",
       "dates": "Date",
       "milestones": "Calendario T&A",
+      "promise": "Date promesse",
       "longRange": "Lungo periodo",
       "demand": "Domanda e previsioni",
       "mps": "Piano principale e S&OP",
+      "reportsGroup": "Report",
+      "reports": "Report pianificazione",
       "settingsGroup": "Impostazioni",
       "settings": "Impostazioni pianificazione"
     },

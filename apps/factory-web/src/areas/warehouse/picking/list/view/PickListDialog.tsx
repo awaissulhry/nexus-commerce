@@ -12,6 +12,9 @@ import type { PickSheet, SheetLine } from '../../api'
 import { kitCheck, kitHeld, kitPlaceWords, markCompleteHeld, READINESS_TONE, stopsOf, walkOrder, type PickingCan } from '../../model'
 import { CheckList, KitPill, say, useHeldWords, useQty, useReadinessWord, useWords } from '../../parts'
 import type { PickingListActions, SheetModel } from '../../view-model'
+// B-W2b-320 (pk-sub, "a short line"): Use a substitute.
+import type { SubCan } from '../../substitute/model'
+import { useSubWords } from '../../substitute/view/SubstituteDialog'
 
 /**
  * pop:pk-list — "Pick list WO-…" (design warehouse.picking): the lines in the order the picker walks (by bin path), each
@@ -27,6 +30,7 @@ export function PickListDialog({
   ids,
   prefix,
   can,
+  subCan,
   timeZone,
   actions,
 }: {
@@ -34,6 +38,7 @@ export function PickListDialog({
   ids: readonly string[]
   prefix: string
   can: PickingCan
+  subCan?: SubCan
   timeZone: string
   actions?: PickingListActions
 }) {
@@ -118,7 +123,7 @@ export function PickListDialog({
         ) : undefined
       }
     >
-      {sheet && <SheetBody sheet={sheet} model={model} can={can} actions={actions} qty={qty} held={held} timeZone={timeZone} />}
+      {sheet && <SheetBody sheet={sheet} model={model} can={can} subCan={subCan} actions={actions} qty={qty} held={held} timeZone={timeZone} />}
     </DetailModal>
   )
 }
@@ -189,8 +194,16 @@ function KitChecked({ sheet, model, can, actions, timeZone }: { sheet: PickSheet
   )
 }
 
-function SheetBody({ sheet, model, can, actions, qty, held, timeZone }: { sheet: PickSheet; model: SheetModel; can: PickingCan; actions?: PickingListActions; qty: ReturnType<typeof useQty>; held: ReturnType<typeof useHeldWords>; timeZone: string }) {
+function SheetBody({ sheet, model, can, subCan, actions, qty, held, timeZone }: { sheet: PickSheet; model: SheetModel; can: PickingCan; subCan?: SubCan; actions?: PickingListActions; qty: ReturnType<typeof useQty>; held: ReturnType<typeof useHeldWords>; timeZone: string }) {
   const t = useWords()
+  const { t: ts } = useSubWords()
+  // B-W2b-320: a short line offers "Use a substitute" (another lot or an approved alternative, with a yes).
+  const substitute = (line: SheetLine) =>
+    subCan && !line.covered && actions?.onSubstitute ? (
+      <Button size="sm" variant="quiet" heldReason={subCan.ask ? null : ts('sb.held.noRight')} onClick={() => actions?.onSubstitute?.({ workOrderId: sheet.workOrder.id, number: sheet.workOrder.number, material: { itemId: line.itemId, itemColourId: line.itemColourId } })}>
+        {ts('sb.open')}
+      </Button>
+    ) : null
   const locale = useLocale()
   const lines = walkOrder(sheet.lines)
   const check = kitCheck(sheet)
@@ -248,8 +261,9 @@ function SheetBody({ sheet, model, can, actions, qty, held, timeZone }: { sheet:
                 {qty(line.planned, line.baseUom)}
               </span>,
               picked(line),
-              <span key="s" className={line.covered ? 'fw-st-num' : 'fw-st-num strong'}>
-                {line.covered ? '—' : qty(line.toIssue, line.baseUom)}
+              <span key="s" className="fw-st-cell">
+                <span className={line.covered ? 'fw-st-num' : 'fw-st-num strong'}>{line.covered ? '—' : qty(line.toIssue, line.baseUom)}</span>
+                {substitute(line)}
               </span>,
             ],
           }))}
