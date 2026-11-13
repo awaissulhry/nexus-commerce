@@ -2128,6 +2128,7 @@
     "sales_safety_log": "Tenere il registro degli incidenti (GPSR art. 20): registrare l'incidente di una segnalazione, correggerlo o completarlo con una nuova revisione e registrare quando è stata avvisata l'autorità e il riferimento",
     "sales_mtm_record": "Registrare le misure di un pilota come nuova revisione (chi ha misurato, dove, l'informativa privacy data) e stampare la scheda su misura",
     "sales_mtm_review": "La revisione di fabbrica delle misure di un pilota: confermarle prima che un ordine su misura vada avanti, o chiedere altre misure al pilota o al rivenditore (mai misure prese da te)",
+    "sales_fittings_manage": "Fissare, spostare, chiudere e annullare prove, visite in showroom e prese delle misure (l'invito inviato al pilota), registrare l'esito di una prova per punto e aprirne la modifica",
     "production_instructions_view": "Vedere le istruzioni di lavoro delle operazioni: passi, foto e video, versioni, la scheda stampata e quanti hanno visto una versione (conteggi, mai un nome)",
     "production_instructions_manage": "Scrivere istruzioni di lavoro: una bozza con passi per lingua, punti critici, note di sicurezza, icone, le spunte chieste dal tablet, foto e video; scartare una bozza, archiviare o ripristinare; riportare le righe di passi scritte nei cicli",
     "production_instructions_approve": "Approvare la bozza di un'altra persona di un'istruzione di lavoro: il reparto la vede da quel momento (mai la propria bozza)",

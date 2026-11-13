@@ -43,6 +43,14 @@ import { planOrderCredit, recordOrderCredit, type OrderStep } from '../credit/ch
 import { priorityOf, type SalesOrderPriorityLevel } from '@nexus/factory-domain/sales/orders-depth/rules'
 import { askOrderApproval, planOrderApproval } from '../orders-depth/approval'
 import { assertOpenSeason } from '../seasons/store'
+// B-W2b-360 (SAL-353): a remake order's made-to-measure units wait for the factory review like any unit.
+import { mtmOrderPlan } from '../mtm/order-gate'
+
+/** B-W2b-360: a line of a manual order made as a made-to-measure unit (the remake order of a return, modules/sales/fittings). */
+export interface ManualUnit {
+  readonly measurementProfileId: string
+  readonly baseSize: string | null
+}
 
 /**
  * Manual order entry (B-W2a-30; SAL-202 "direct orders without a quote for repeat business"; the design's New order
@@ -294,7 +302,7 @@ export async function createManualOrder(caller: CommandCaller, body: ManualOrder
  * return): the plan (refused in words), the SALES_ORDER number, the CONFIRMED order and its lines, the deposit request
  * when one is asked, the payment schedule, the audit row and sales_order.created. The caller checked orders.manage.
  */
-export async function makeManualOrderInCommand(tools: CommandTools, body: ManualOrderBody, picked: { id: string } | null, creditStep: OrderStep | null = 'ORDER', options: { readonly requesterId?: string | null } = {} /* B-W2b-303: who asks a SALES_ORDER yes (the sheet import's applier) */): Promise<{ orderId: string; number: string }> {
+export async function makeManualOrderInCommand(tools: CommandTools, body: ManualOrderBody, picked: { id: string } | null, creditStep: OrderStep | null = 'ORDER', options: { readonly requesterId?: string | null; readonly units?: readonly (ManualUnit | null)[] } = {} /* B-W2b-303: who asks a SALES_ORDER yes (the sheet import's applier); B-W2b-360: `units` */): Promise<{ orderId: string; number: string }> {
   const { tx, now } = tools
   const today = businessDate(now)
   if (!(await hasOrderSeries(tx, body.companyId))) throw new ConflictError('The company has no active SALES_ORDER number series: an administrator adds one under Numbering, then the order can be made.')
@@ -319,6 +327,10 @@ export async function makeManualOrderInCommand(tools: CommandTools, body: Manual
     ? await planOrderApproval(tools, { ...(options.requesterId !== undefined ? { requesterId: options.requesterId } : {}), companyId: body.companyId, shape: { currency: plan.currency, netAmount: plan.priced.netAmount, customerCode: plan.party.row.code, priorityLevel: priority.priorityLevel, fromQuote: false, lines: plan.priced.lines.map((line) => ({ kind: 'SIZE_GRID', quantity: line.quantity, unitPrice: line.unitPrice, priceSteps: null })) } })
     : null
   if (approval?.waits) status = 'PENDING_APPROVAL'
+  // B-W2b-360 (SAL-353): a line named in `options.units` is a made-to-measure unit on its revision (one piece of its base size, no
+  // size row); its order waits (PENDING_APPROVAL) while a unit's measures wait for the factory review (B-W2b-358's rule).
+  const unitOf = (index: number): ManualUnit | null => options.units?.[index] ?? null
+  if (options.units && (await mtmOrderPlan(tx, plan.priced.lines.flatMap((line, index) => (unitOf(index) ? [{ seq: line.seq, kind: 'MADE_TO_MEASURE', styleId: line.styleId, measurementProfileId: unitOf(index)!.measurementProfileId }] : [])))).waits) status = 'PENDING_APPROVAL'
   await tx.salesOrder.create({
     data: {
       id,
@@ -355,7 +367,7 @@ export async function makeManualOrderInCommand(tools: CommandTools, body: Manual
     },
     select: { id: true },
   })
-  for (const line of plan.priced.lines) {
+  for (const [index, line] of plan.priced.lines.entries()) {
     const lineId = newId()
     await tx.salesOrderLine.create({
       data: {
@@ -364,7 +376,8 @@ export async function makeManualOrderInCommand(tools: CommandTools, body: Manual
         orderId: id,
         partyId: plan.party.row.id,
         seq: line.seq,
-        kind: 'SIZE_GRID',
+        // B-W2b-360: a made-to-measure unit (options.units) or a size grid.
+        ...(unitOf(index) ? { kind: 'MADE_TO_MEASURE' as const, measurementProfileId: unitOf(index)!.measurementProfileId, baseSize: unitOf(index)!.baseSize } : { kind: 'SIZE_GRID' as const }),
         styleId: line.styleId,
         styleRevisionId: line.styleRevisionId,
         colourwayId: line.colourwayId,
@@ -382,7 +395,8 @@ export async function makeManualOrderInCommand(tools: CommandTools, body: Manual
       },
       select: { id: true },
     })
-    await tx.salesOrderLineSize.createMany({ data: line.sizes.map((size) => ({ id: newId(), lineId, partyId: plan.party.row.id, size: size.size, quantity: size.quantity, unitPrice: size.unitPrice, ...stamp })) })
+    // B-W2b-360: a made-to-measure unit has no size rows (the database's size guard).
+    if (!unitOf(index)) await tx.salesOrderLineSize.createMany({ data: line.sizes.map((size) => ({ id: newId(), lineId, partyId: plan.party.row.id, size: size.size, quantity: size.quantity, unitPrice: size.unitPrice, ...stamp })) })
   }
   // The deposit (B-W1-24's rules: its legal kind and fiscal decision), named on the order: no quote version.
   let deposit: { id: string; amount: number; dueDate: Date; depositPct: Prisma.Decimal | null } | null = null
