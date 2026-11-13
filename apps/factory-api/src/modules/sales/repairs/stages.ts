@@ -1,7 +1,7 @@
 import type { Prisma } from '@nexus/factory-db'
 import { InvalidStateError, NotFoundError, type Issue } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
-import { parseInstant, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
+import { businessDate, parseInstant, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { SALES_REPAIRS_MANAGE, SALES_REPAIRS_RECEIVE } from '@nexus/factory-domain/sales/repairs/permissions'
 import {
   cancelProblems,
@@ -131,7 +131,8 @@ export async function receiveRepair(caller: CommandCaller, repairId: string, bod
     if (at.getTime() > now.getTime() + 5 * 60_000) problems.push({ path: 'body/at', message: 'The garment arrived now or earlier.' })
     if (tooLong(number, REPAIR_LIMITS.ddtNumber)) problems.push({ path: 'body/inboundDdtNumber', message: `At most ${REPAIR_LIMITS.ddtNumber} characters.` })
     if (date && !number) problems.push({ path: 'body/inboundDdtNumber', message: "The customer's DDT number, with its date." })
-    if (date && date > at.toISOString().slice(0, 10)) problems.push({ path: 'body/inboundDdtDate', message: "The customer's DDT is dated on or before the day the garment arrived." })
+    // The arrival's day in Rome (a business date), never its UTC day: they differ from 00:00 to 01:00 (02:00 in summer).
+    if (date && date > businessDate(at)) problems.push({ path: 'body/inboundDdtDate', message: "The customer's DDT is dated on or before the day the garment arrived." })
     if (problems.length > 0) refuse(problems, 'The arrival cannot be recorded like this.')
     const note = noteOf(body.note, null)
     await moveStageInCommand(tools, repair, 'RECEIVED', {
@@ -314,7 +315,7 @@ export async function changeRepair(caller: CommandCaller, repairId: string, body
       else {
         if (tooLong(number, REPAIR_LIMITS.ddtNumber)) problems.push({ path: 'body/inboundDdtNumber', message: `At most ${REPAIR_LIMITS.ddtNumber} characters.` })
         if (date && !number) problems.push({ path: 'body/inboundDdtNumber', message: "The customer's DDT number, with its date." })
-        if (date && date > repair.receivedAt.toISOString().slice(0, 10)) problems.push({ path: 'body/inboundDdtDate', message: "The customer's DDT is dated on or before the day the garment arrived." })
+        if (date && date > businessDate(repair.receivedAt)) problems.push({ path: 'body/inboundDdtDate', message: "The customer's DDT is dated on or before the day the garment arrived." })
         set('inboundDdtNumber', number)
         set('inboundDdtDate', date ? asDay(date) : null, date)
       }

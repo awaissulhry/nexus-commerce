@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url'
 import type { FastifyInstance } from 'fastify'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { newId } from '@nexus/factory-domain/core/ids'
 import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
 import { businessDate } from '@nexus/factory-domain/core/time'
@@ -362,5 +362,43 @@ describe('the list, its tiles and the record’s thread', () => {
     expect(posted.status, JSON.stringify(posted.body)).toBe(201)
     const [thread] = await admin(`SELECT "companyId", "siteId", "partyId" FROM "Thread" WHERE "recordType" = 'RepairOrder' AND "recordId" = $1`, [fromRma.repair.id])
     expect(thread).toEqual({ companyId: companyA, siteId: siteA, partyId: P1 })
+  })
+})
+
+describe('the customer’s DDT is dated on or before the arrival’s day in Rome, not in UTC (B-W2b-F34)', () => {
+  // Every command's "now" is `Date`, pinned here. 23:30 UTC on 12 November is 00:30 on 13 November in Rome: the UTC day
+  // and the business day differ for that hour. At 12:00 in Rome both days agree.
+  const AFTER_MIDNIGHT_IN_ROME = new Date('2026-11-12T23:30:00.000Z')
+  const NOON_IN_ROME = new Date('2026-11-13T11:00:00.000Z')
+  const DATED_AFTER = [{ path: 'body/inboundDdtDate', message: "The customer's DDT is dated on or before the day the garment arrived." }]
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+  // Made on the real clock (its number's date), received on the pinned one.
+  const awaiting = async (problem: string): Promise<Json> => (await ok('sales', 'POST', '/sales/repairs', { companyId: companyA, partyId: P1, problem }, 201)).repair
+  const pin = (instant: Date) => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(instant)
+  }
+
+  it('at 00:30 in Rome (23:30 UTC) takes a DDT of that Rome day, on arrival and in the header; the next day is refused', async () => {
+    const repair = await awaiting('Collar seam open.')
+    pin(AFTER_MIDNIGHT_IN_ROME)
+    expect((await refused('warehouse', 'POST', `/sales/repairs/${repair.id}/receive`, { version: repair.version, inboundDdtNumber: 'P1-DDT-F34-1', inboundDdtDate: '2026-11-14' }, 400)).issues).toEqual(DATED_AFTER)
+    const received = await ok('warehouse', 'POST', `/sales/repairs/${repair.id}/receive`, { version: repair.version, inboundDdtNumber: 'P1-DDT-F34-1', inboundDdtDate: '2026-11-13' })
+    expect(received.repair).toMatchObject({ stage: 'RECEIVED', receivedAt: '2026-11-12T23:30:00.000Z', inboundDdt: { number: 'P1-DDT-F34-1', date: '2026-11-13' } })
+    // The header checks against the stored arrival, whatever the clock says when it is changed.
+    vi.useRealTimers()
+    const edited = await ok('sales', 'PATCH', `/sales/repairs/${repair.id}`, { version: received.repair.version, inboundDdtNumber: 'P1-DDT-F34-2', inboundDdtDate: '2026-11-13' })
+    expect(edited.repair.inboundDdt).toEqual({ number: 'P1-DDT-F34-2', date: '2026-11-13' })
+    expect((await refused('sales', 'PATCH', `/sales/repairs/${repair.id}`, { version: edited.repair.version, inboundDdtDate: '2026-11-14' }, 400)).issues).toEqual(DATED_AFTER)
+  })
+
+  it('at 12:00 in Rome takes a DDT of the same day and refuses the next one', async () => {
+    const repair = await awaiting('Zip pull broken.')
+    pin(NOON_IN_ROME)
+    expect((await refused('warehouse', 'POST', `/sales/repairs/${repair.id}/receive`, { version: repair.version, inboundDdtNumber: 'P1-DDT-F34-3', inboundDdtDate: '2026-11-14' }, 400)).issues).toEqual(DATED_AFTER)
+    const received = await ok('warehouse', 'POST', `/sales/repairs/${repair.id}/receive`, { version: repair.version, inboundDdtNumber: 'P1-DDT-F34-3', inboundDdtDate: '2026-11-13' })
+    expect(received.repair).toMatchObject({ stage: 'RECEIVED', receivedAt: '2026-11-13T11:00:00.000Z', inboundDdt: { number: 'P1-DDT-F34-3', date: '2026-11-13' } })
   })
 })

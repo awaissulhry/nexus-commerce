@@ -99,6 +99,8 @@ import { SALES_SAMPLE_DECISIONS_ADDS } from '../../sales/sample-decisions/permis
 import { PLANNING_MILESTONES_ADDS } from '../../planning/milestones/permissions'
 // B-W2b-319: the production strategy per item.
 import { PLANNING_STRATEGY_ADDS } from '../../planning/strategy/permissions'
+// B-W2b-294: quote templates (sales and finance keep them).
+import { QUOTE_TEMPLATES_ADDS } from '../../sales/quote-templates/permissions'
 // B-W2b-306: MRP you can trust (action messages; protected edits and bulk edit of planned orders).
 import { PLANNING_ACTIONS_ADDS } from '../../planning/actions/permissions'
 // B-W2b-247: the colour library and the brands' branding sets.
@@ -1008,6 +1010,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...((audience === 'office' ? INVENTORY_COUNTS_DEPTH_ADDS : INVENTORY_COUNTS_DEPTH_FLOOR_ADDS)[key] ?? []),
   // B-W2b-304
   ...(audience === 'office' ? (SALES_CREDIT_ADDS[key] ?? []) : []),
+  // B-W2b-294
+  ...(audience === 'office' ? (QUOTE_TEMPLATES_ADDS[key] ?? []) : []),
   // B-W2b-306
   ...(audience === 'office' ? (PLANNING_ACTIONS_ADDS[key] ?? []) : []),
   // B-W2b-300

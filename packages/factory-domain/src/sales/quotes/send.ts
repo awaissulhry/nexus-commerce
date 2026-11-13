@@ -3,6 +3,8 @@ import type { BusinessDate } from '../../core/time'
 import { PURPOSE_RULES } from '../../links/purposes'
 import type { TaxIdentityFields, PartyTaxMode } from '../../parties/tax'
 import { addDays, sendBlockers, STATUS_WORDS, type QuoteIssue, type QuoteVersionStatus } from './quotes'
+// B-W2b-294: the customer and product rules' codes.
+import { LINE_RULE_CODES } from '../quote-warnings/codes'
 
 /**
  * Sending a quote (B-W1-24; A1 §2.5 "Sending freezes a version"; SAL-157, SAL-192; the design's Send dialog `quotes.send`),
@@ -21,7 +23,8 @@ import { addDays, sendBlockers, STATUS_WORDS, type QuoteIssue, type QuoteVersion
 
 // B-W2b-165 (SAL-199): PROOF_NOT_READY, a proof of the version still uploading, being checked or refused (sales/quote-proofs).
 // B-W2b-325 (SAL-178): BELOW_MINIMUM, a minimum order quantity the version does not reach (api sales/line-checks).
-export const SEND_CHECK_CODES = ['COMPANY_LEGAL', 'BILL_TO_INCOMPLETE', 'SHIP_TO_INCOMPLETE', 'SDI_IDENTITY', 'VAT_CHANGED', 'FIRM_OFFER_STANDS', 'TERMS_VERSION', 'NO_BANK_DETAILS', 'PROOF_NOT_READY', 'BELOW_MINIMUM'] as const
+// B-W2b-294 (SAL-147; QT1:01, QT1:02): the customer and product rules of api sales/line-checks (sales/quote-warnings LINE_RULE_CODES).
+export const SEND_CHECK_CODES = ['COMPANY_LEGAL', 'BILL_TO_INCOMPLETE', 'SHIP_TO_INCOMPLETE', 'SDI_IDENTITY', 'VAT_CHANGED', 'FIRM_OFFER_STANDS', 'TERMS_VERSION', 'NO_BANK_DETAILS', 'PROOF_NOT_READY', 'BELOW_MINIMUM', ...LINE_RULE_CODES] as const
 export type SendCheckCode = (typeof SEND_CHECK_CODES)[number]
 
 export interface SendCheck {
