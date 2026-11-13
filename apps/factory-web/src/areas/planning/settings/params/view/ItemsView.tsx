@@ -44,6 +44,10 @@ import {
 } from '../model'
 import { cellKeys, ElsewhereBanner, KeysDialog, NoticeBanner, SaveMark, useSay } from './cells'
 import '../params.css'
+// B-W2b-335: the planning rules per item (lot sizing, plan by style, colour or size, scrap, yield, delay days).
+import { ITEM_RULES_NAMESPACE, type RuleField } from '../../items/model'
+import type { RuleInput } from '../../items/use-item-rules'
+import { isRuleDialog, RuleDialog, ruleColumns, useRuleSay, type RuleDialogState } from '../../items/view/RuleColumns'
 
 export type ItemsDialog =
   | { kind: 'method'; key: string; method?: PlanningMethod; first?: string; second?: string }
@@ -51,6 +55,7 @@ export type ItemsDialog =
   | { kind: 'bulk'; step: 'fields' | 'review'; draft: BulkDraft }
   | { kind: 'defaults' }
   | { kind: 'keys' }
+  | RuleDialogState
 
 export interface SupplierChoices {
   itemId: string
@@ -100,11 +105,13 @@ export interface ItemsActions {
   /** "Plan N by defaults": the rows with site parameters are removed. */
   onDefaults?: (rows: readonly ItemRow[]) => Promise<boolean>
   onDismissNotice?: () => void
+  /** B-W2b-335: a rule cell typed or a rule dialog's change. */
+  onRule?: (row: ItemRow, field: RuleField, input: RuleInput) => void
 }
 
 export function ItemsView({ model, actions }: { model: ItemsModel; actions?: ItemsActions }) {
   return (
-    <WithMessages namespaces={PARAMS_NAMESPACES}>
+    <WithMessages namespaces={[...PARAMS_NAMESPACES, ITEM_RULES_NAMESPACE]}>
       <Items model={model} actions={actions} />
     </WithMessages>
   )
@@ -116,6 +123,8 @@ function Items({ model, actions }: { model: ItemsModel; actions?: ItemsActions }
   const t = useT('planning-params')
   const ts = useT('planning-settings')
   const say = useSay()
+  const ti = useT(ITEM_RULES_NAMESPACE)
+  const sayRule = useRuleSay()
   const locale = useLocale()
   const held = manageHeld('items', model.can)
   const heldText = held ? ts(held) : null
@@ -221,9 +230,10 @@ function Items({ model, actions }: { model: ItemsModel; actions?: ItemsActions }
       choice('makeSite', MakeSiteCell, (row) => ({ kind: 'source', key: row.key, source: 'MAKE' })),
       ...DAY_FIELDS.map(number),
       ...ITEM_QTY_FIELDS.map(number),
+      ...ruleColumns({ t: ti, say: sayRule, can: { manageItems: can, strategy: !!latest.current.model.can.strategy }, mark, unitOf, open: (dialog) => latest.current.setDialog(dialog), onRule: (row, field, input) => latest.current.actions?.onRule?.(row, field, input) }),
     ]
     // The marks repaint the cells; the rest of the model is read through `latest`.
-  }, [t, locale, can, heldText, marksKey, say])
+  }, [t, ti, sayRule, locale, can, heldText, marksKey, say, model.can.strategy])
 
   const ownKeys: ListKey[] = can
     ? [
@@ -339,6 +349,7 @@ function Items({ model, actions }: { model: ItemsModel; actions?: ItemsActions }
       {dialog?.kind === 'bulk' && <BulkDialog dialog={dialog} rows={picked} busy={model.busy} onDraft={setDialog} actions={actions} onClose={close} onDone={() => setSelected([])} />}
       {dialog?.kind === 'defaults' && <DefaultsDialog rows={withRows} busy={model.busy} actions={actions} onClose={close} onDone={() => setSelected([])} />}
       {dialog?.kind === 'keys' && <KeysDialog keys={ownKeys} selection onClose={close} />}
+      {isRuleDialog(dialog) && <RuleDialog dialog={dialog} rows={model.rows} can={{ manageItems: can, strategy: !!model.can.strategy }} unitOf={(row) => t(`pp.uom.${row.item.baseUom}`)} onRule={actions?.onRule} onClose={close} />}
     </section>
   )
 }

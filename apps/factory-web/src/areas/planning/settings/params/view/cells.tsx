@@ -12,16 +12,18 @@ import type { Mark, Notice, Words } from '../model'
 export function useSay(): (words: Words | null | undefined) => string {
   const tp = useT('planning-params')
   const ts = useT('planning-settings')
+  // B-W2b-335: the planning rules per item say their words from planning-mrp-depth (`items.`).
+  const ti = useT('planning-mrp-depth')
   return useCallback(
     (words: Words | null | undefined) => {
       if (!words) return ''
-      const tr = (key: string, params?: Readonly<Record<string, string | number>>) => (key.startsWith('ps.') || key.startsWith('cal.') ? ts(key, params) : tp(key, params))
+      const tr = (key: string, params?: Readonly<Record<string, string | number>>) => (key.startsWith('ps.') || key.startsWith('cal.') ? ts(key, params) : key.startsWith('items.') ? ti(key, params) : tp(key, params))
       const params = Object.fromEntries(
-        Object.entries(words.params ?? {}).map(([name, value]) => [name, typeof value === 'string' && /^p[ps]\./.test(value) ? value.split('|').map((key) => tr(key)).join(', ') : value]),
+        Object.entries(words.params ?? {}).map(([name, value]) => [name, typeof value === 'string' && /^(p[ps]|items)\./.test(value) ? value.split('|').map((key) => tr(key)).join(', ') : value]),
       )
       return tr(words.key, params)
     },
-    [tp, ts],
+    [tp, ts, ti],
   )
 }
 

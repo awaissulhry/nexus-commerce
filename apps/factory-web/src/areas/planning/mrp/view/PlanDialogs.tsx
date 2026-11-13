@@ -13,6 +13,9 @@ import { dayAt, money, quantity } from '../../../_shared/buying/model'
 import { SET_ASIDE, type SetAsideReason } from '../api'
 import { draftCards, moveFirmProblem, MRP_NAMESPACE, runSeconds, sendable, type DraftDialog, type PlanActions, type PlanModel } from '../model'
 import '../mrp.css'
+// B-W2b-335 (design pop:run-log "Per run: inputs snapshot and warnings").
+import { DEPTH_NAMESPACE } from '../depth/model'
+import { RunLogPanel } from '../depth/view/RunLogPanel'
 
 /**
  * The plan's dialogs: Draft purchase orders (one card per supplier: its lines, its open draft or a new one, the lines
@@ -269,11 +272,18 @@ function History({ model, actions }: { model: PlanModel; actions?: PlanActions }
   const t = useT('buying')
   const locale = useLocale()
   const place = { locale, timeZone: model.timeZone }
+  const d = useT(DEPTH_NAMESPACE)
   const dialog = model.dialog as Extract<NonNullable<PlanModel['dialog']>, { kind: 'history' }>
   const tone = (status: string) => (status === 'DONE' ? 'success' : status === 'FAILED' ? 'danger' : status === 'RUNNING' ? 'info' : 'neutral')
+  const close = () => {
+    actions?.depth?.onLog?.(null)
+    actions?.onCloseDialog?.()
+  }
   return (
-    <Modal open onClose={() => actions?.onCloseDialog?.()} title={t('plan.history')} size="xl" footer={<Button size="sm" variant="primary" onClick={() => actions?.onCloseDialog?.()}>{t('common.close')}</Button>}>
-      {dialog.problem ? (
+    <Modal open onClose={close} title={t('plan.history')} size="xl" footer={<Button size="sm" variant="primary" onClick={close}>{t('common.close')}</Button>}>
+      {model.depth?.log ? (
+        <RunLogPanel model={model.depth} actions={actions?.depth} timeZone={model.timeZone} />
+      ) : dialog.problem ? (
         <Banner tone="danger" title={t(dialog.problem)} />
       ) : dialog.runs === null ? (
         <p className="fw-by-hint" role="status">
@@ -284,10 +294,10 @@ function History({ model, actions }: { model: PlanModel; actions?: PlanActions }
       ) : (
         <SummaryTable
           label={t('plan.history')}
-          density="compact"
           stackOnPhone
-          columns={[t('plan.hist.started'), t('plan.hist.trigger'), t('plan.hist.took'), t('plan.hist.orderLines'), t('plan.hist.lines'), t('plan.hist.status')]}
-          align={['left', 'left', 'right', 'right', 'right', 'left']}
+          columns={[t('plan.hist.started'), t('plan.hist.trigger'), t('plan.hist.took'), t('plan.hist.orderLines'), t('plan.hist.lines'), t('plan.hist.status'), ...(model.depth ? [d('log.column')] : [])]}
+          align={['left', 'left', 'right', 'right', 'right', 'left', 'left']}
+          density={model.depth ? 'roomy' : 'compact'}
           rows={dialog.runs.map((run) => ({
             id: run.id,
             cells: [
@@ -300,6 +310,19 @@ function History({ model, actions }: { model: PlanModel; actions?: PlanActions }
                 <Pill tone={tone(run.status)}>{t(`plan.runStatus.${run.status}`)}</Pill>
                 {run.status === 'FAILED' && <span className="fw-by-hint">{t('plan.hist.failedNote')}</span>}
               </span>,
+              ...(model.depth
+                ? [
+                    run.status === 'DONE' || run.status === 'SUPERSEDED' ? (
+                      <Button key="log" size="sm" variant="link" onClick={() => actions?.depth?.onLog?.(run.id)} aria-label={d('log.open', { time: formatDateTime(run.startedAt, place) })}>
+                        {d('log.openShort')}
+                      </Button>
+                    ) : (
+                      <span key="log" className="fw-by-hint">
+                        {d('log.none')}
+                      </span>
+                    ),
+                  ]
+                : []),
             ],
           }))}
         />

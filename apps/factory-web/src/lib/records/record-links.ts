@@ -130,6 +130,8 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   // Sales › Returns & repairs (SCR-112, B-W2a-77): a customer return (RMA) and a repair or alteration.
   ReturnAuthorisation: '/sales/returns/[id]',
   RepairOrder: '/sales/returns/repairs/[id]',
+  // B-W2b-353 Sales › Warranty & service (SCR-413): a service case opens its page.
+  ServiceCase: '/sales/service/[id]',
   // B-W2b-63 People › Payroll export (SCR-159): a file made for the labour consultant opens as Past export.
   PayrollExport: '/people/payroll/[id]',
   // Finance › Accounting export (SCR-156, B-W2a-51): a batch opens on its files tab (its checks, explanations and files).
@@ -335,6 +337,12 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/planning/demand': '/planning/demand',
   '/planning/demand/rows': '/planning/demand',
   '/planning/strategy': '/planning/mps',
+  // B-W2b-336: the promise list and its re-promises (SCR-109, `?site=` `?tile=` `?risk=` `?q=`), available to promise (`?style=`)
+  // and the supply-too-late tile of the exceptions (SCR-125).
+  '/planning/promises': '/planning/promise',
+  '/planning/promises/re-promises': '/planning/promise',
+  '/planning/promise/atp': '/planning/promise',
+  '/planning/exceptions/supply-late': '/planning/exceptions',
   // B-W2a-53: the plant's lists (the requests queue reads `?tile=`, the jobs `?view=`, the machines `?view=` and `?q=`).
   '/plant/requests': '/plant/requests',
   '/plant/jobs': '/plant/jobs',
@@ -382,6 +390,8 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/production/instructions': '/production/instructions',
   // B-W2b-322: the inquiries (SCR-105) read `?tile=`, `?source=`, `?party=`, `?prospect=1`, `?q=`.
   '/sales/inquiries': '/sales/inquiries',
+  // B-W2b-353: the service cases (SCR-217) read `?view=`, `?kind=`, `?cover=`, `?serial=`, `?q=`.
+  '/sales/service/cases': '/sales/service',
   // B-W2b-261: the sample rounds (SCR-110) read `?tile=`, `?kind=`, `?party=`, `?internal=1`, `?style=`, `?q=`.
   '/sales/samples/rounds': '/products/samples',
   // B-W2b-244: the changes (SCR-117) read `?tile=` (B-W2b-226's request and order tiles are its saved rows), `?style=` or

@@ -97,6 +97,7 @@
     "PointOfMeasure": "Point of measure",
     "GradeRule": "Grade rule",
     "Inquiry": "Inquiry",
+    "ServiceCase": "Service case",
     "other": "Record"
   },
   "chip": {
@@ -144,6 +145,7 @@
     "PointOfMeasure": "Points of measure",
     "GradeRule": "Grade rules",
     "Inquiry": "Inquiries",
+    "ServiceCase": "Service cases",
     "other": "Other records"
   },
   "status": {
@@ -238,6 +240,9 @@
     "ASSIGNED": "In progress",
     "NEED_INFO": "Need info",
     "QUOTED": "Quoted",
-    "LOST": "Lost"
+    "LOST": "Lost",
+    "WAITING_CUSTOMER": "Waiting for the customer",
+    "WAITING_PART": "Waiting for a part",
+    "RESOLVED": "Resolved"
   }
 }

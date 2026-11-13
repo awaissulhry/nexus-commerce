@@ -97,6 +97,7 @@
     "PointOfMeasure": "Punto di misura",
     "GradeRule": "Regola di sviluppo taglie",
     "Inquiry": "Richiesta",
+    "ServiceCase": "Caso di assistenza",
     "other": "Record"
   },
   "chip": {
@@ -144,6 +145,7 @@
     "PointOfMeasure": "Punti di misura",
     "GradeRule": "Regole di sviluppo taglie",
     "Inquiry": "Richieste",
+    "ServiceCase": "Casi di assistenza",
     "other": "Altri record"
   },
   "status": {
@@ -238,6 +240,9 @@
     "ASSIGNED": "In lavorazione",
     "NEED_INFO": "Servono informazioni",
     "QUOTED": "Preventivata",
-    "LOST": "Persa"
+    "LOST": "Persa",
+    "WAITING_CUSTOMER": "In attesa del cliente",
+    "WAITING_PART": "In attesa di un ricambio",
+    "RESOLVED": "Risolto"
   }
 }

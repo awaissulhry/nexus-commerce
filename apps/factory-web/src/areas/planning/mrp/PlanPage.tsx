@@ -17,6 +17,10 @@ import { PlanView } from './view/PlanView'
 import { listAsked } from '../../purchasing/requests/ask/api'
 import { useAskToBuy } from '../../purchasing/requests/ask/AskToBuy'
 import { ASK_NAMESPACE, type ShortageLine } from '../../purchasing/requests/ask/model'
+// B-W2b-335: the W2b parts (To make, action messages, the run log, the projected stock of a material).
+import { OFFICE_PAGES } from '../../../shell/nav/office-nav'
+import { DEPTH_NAMESPACE } from './depth/model'
+import { useDepth } from './depth/use-depth'
 
 /**
  * `/w/<company>/planning/mrp` (SCR-055): the company's sites (`?site=`, else the first), the site's latest plan with its
@@ -27,7 +31,7 @@ import { ASK_NAMESPACE, type ShortageLine } from '../../purchasing/requests/ask/
  */
 export function PlanPage() {
   return (
-    <WithMessages namespaces={['buying', MRP_NAMESPACE, 'lists', ASK_NAMESPACE]}>
+    <WithMessages namespaces={['buying', MRP_NAMESPACE, 'lists', ASK_NAMESPACE, DEPTH_NAMESPACE]}>
       <PlanContainer />
     </WithMessages>
   )
@@ -46,6 +50,7 @@ function PlanContainer() {
   const q = params?.get('q') ?? ''
   const siteParam = params?.get('site') ?? null
   const lineParam = params?.get('line') ?? null
+  const profileParam = params?.get('profile') ?? null
 
   const [sites, setSites] = useState<Loaded<SiteOption[]>>({ status: 'loading' })
   const [plan, setPlan] = useState<Loaded<Plan>>({ status: 'loading' })
@@ -92,20 +97,22 @@ function PlanContainer() {
   })
 
   const address = useCallback(
-    (next: { view?: PlanViewName; q?: string; site?: string | null; line?: string | null }) => {
+    (next: { view?: PlanViewName; q?: string; site?: string | null; line?: string | null; profile?: string | null }) => {
       const query = new URLSearchParams()
       const nextSite = next.site === undefined ? siteParam : next.site
       const nextView = next.view ?? view
       const nextQ = next.q ?? q
       const nextLine = next.line === undefined ? lineParam : next.line
+      const nextProfile = next.profile === undefined ? profileParam : next.profile
       if (nextSite) query.set('site', nextSite)
       if (nextView !== 'open') query.set('view', nextView)
       if (nextQ.trim()) query.set('q', nextQ.trim())
       if (nextLine) query.set('line', nextLine)
+      if (nextProfile) query.set('profile', nextProfile)
       const qs = query.toString()
       return `${pathname}${qs ? `?${qs}` : ''}`
     },
-    [pathname, siteParam, view, q, lineParam],
+    [pathname, siteParam, view, q, lineParam, profileParam],
   )
 
   const loadSites = useCallback(async () => {
@@ -156,12 +163,30 @@ function PlanContainer() {
     void load()
   }, [load, sites.status])
 
+  // B-W2b-335: the W2b parts read beside the plan (again after a run, a W2b write or a W2b event).
+  const depth = useDepth({
+    api,
+    siteId,
+    runId: plan.status === 'ready' ? (plan.value.run?.id ?? null) : null,
+    permissions: session.permissions,
+    enabled: can.planView,
+    built: OFFICE_PAGES,
+    profileLine: profileParam,
+    setProfileLine: (lineId) => router.replace(address({ profile: lineId })),
+    materialOf: (lineId) => {
+      const line = linesById([lineId])[0]
+      return line ? { itemId: line.item.id, itemColourId: line.colour?.id ?? null } : null
+    },
+    onPlanChanged: () => void load(),
+  })
+
   // Live: a run of this site finished (the plan shown changes under the person: "1 update · Show"); a decision or an
   // order moved (read again quietly: rows never move under the cursor, only their words change).
   const reread = useCoalesced(() => void load(), 800)
   const live = useLive(
     (change) => {
       const own = change.fields.siteId === undefined || change.fields.siteId === siteId
+      depth.onLive(change.type, change.fields.siteId)
       if (change.type === 'planning.run_finished' && own) setUpdates((count) => count + 1)
       else if ((change.type.startsWith('planning.') && own) || change.type.startsWith('purchase_order.')) reread()
     },
@@ -441,6 +466,7 @@ function PlanContainer() {
     canFirm,
     canAsk,
     asked,
+    depth: depth.model,
   }
 
   return (
@@ -451,7 +477,7 @@ function PlanContainer() {
         onAskToBuy: (row) =>
           siteId &&
           ask.open({ siteId, workOrder: { id: row.workOrder.id, number: row.workOrder.number }, material: { itemId: row.material.itemId, itemColourId: row.material.itemColourId, label: row.material.label, uom: row.material.uom }, word: row.word, short: row.short, neededBy: row.neededBy }),
-        onSite: (next) => router.replace(address({ site: next, line: null })),
+        onSite: (next) => router.replace(address({ site: next, line: null, profile: null })),
         onView: (next) => router.replace(address({ view: next })),
         onSearch: (next) => router.replace(address({ q: next })),
         onRetry: () => (sites.status === 'error' ? void loadSites() : void load()),
@@ -508,6 +534,7 @@ function PlanContainer() {
           onDate: (date) => setDialog((current) => (current?.kind === 'moveFirm' ? { ...current, date, problem: null } : current)),
           onConfirm: () => void moveFirm(),
         },
+        depth: depth.actions,
         onSendDrafts: () => void sendStep(),
         onSendConfirm: () => void sendConfirm(),
         setAside: {

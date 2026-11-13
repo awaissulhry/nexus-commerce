@@ -42,6 +42,7 @@
       "pricelists": "Listini e contratti",
       "aftersales": "Post-vendita",
       "returns": "Resi e riparazioni",
+      "service": "Garanzia e assistenza",
       "settings": "Impostazioni",
       "salesSettings": "Impostazioni vendite"
     },
@@ -197,6 +198,7 @@
       "exceptions": "Eccezioni",
       "dates": "Date",
       "milestones": "Calendario T&A",
+      "promise": "Date promesse",
       "longRange": "Lungo periodo",
       "demand": "Domanda e previsioni",
       "mps": "Piano principale e S&OP",

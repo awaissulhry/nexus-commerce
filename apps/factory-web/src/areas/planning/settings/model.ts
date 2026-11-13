@@ -32,6 +32,8 @@ export interface SettingsCan {
   suppliers: boolean
   /** audit.read: "Changed by …" opens the audit log. */
   audit: boolean
+  /** B-W2b-335: planning.strategy.manage — an item's plan level (style, colour or size) too. */
+  strategy?: boolean
 }
 
 export function settingsCan(permissions: readonly string[]): SettingsCan {
@@ -44,6 +46,7 @@ export function settingsCan(permissions: readonly string[]): SettingsCan {
     manageItems: held.has('planning.items.manage'),
     suppliers: held.has('purchasing.view'),
     audit: held.has('audit.read'),
+    strategy: held.has('planning.strategy.manage'),
   }
 }
 
