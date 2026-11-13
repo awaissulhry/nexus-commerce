@@ -303,6 +303,8 @@ describe('navigation, pages, words and the design fixtures', () => {
     used.add('today.kind.DELIVERY_ADDRESS')
     // B-W2b-307: change orders, SMV changes, inspection plan versions and the approval engine's requests waiting for my yes.
     for (const kind of ['CHANGE_ORDER', 'SMV_CHANGE', 'PLAN_VERSION', 'APPROVAL_TASK']) used.add(`today.kind.${kind}`)
+    // B-W2b-385: inquiries waiting for us over a working day.
+    used.add('today.kind.INQUIRY_WAITING')
     for (const severity of ['HIGH', 'MEDIUM', 'LOW']) used.add(`today.severity.${severity}`)
     for (const group of ['NOW', 'TODAY', 'THIS_WEEK', 'LATER']) used.add(`today.group.${group}`)
     for (const panel of PANELS) {

@@ -12,6 +12,7 @@ import { seed as seedCore } from '../../../../../../packages/factory-db/seed/_co
 import { seed as seedEmail } from '../../../../../../packages/factory-db/seed/email'
 import { seed as seedSalesPricing } from '../../../../../../packages/factory-db/seed/sales-pricing'
 import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
+import { textOf } from '../../../adapters/ses/fake'
 import { buildApp } from '../../../core/app'
 import { testAuthenticator, type SessionContext } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
@@ -199,7 +200,7 @@ describe('validity: EXPIRED after the last day, a reminder before it, a new vers
     expect(revived).toMatchObject({ status: 'DRAFT', currentRevision: 2 })
   })
 
-  it('the job reminds the customer three days before the last day, once, on the quote thread, without a link or an amount — once the switch is on', async () => {
+  it('the job reminds the customer three days before the last day, once, on the quote thread, without an amount — once the switch is on; the mail carries a new accept link the thread never keeps (B-W2b-385, NT1:05)', async () => {
     const ending = await draftQuote()
     await markSent(ending, new Date(Date.now() - 10 * 86_400_000), addDays(today, 2))
     const clock = fixedClock(new Date())
@@ -226,6 +227,12 @@ describe('validity: EXPIRED after the last day, a reminder before it, a new vers
     expect(mail.to).toEqual([ending.contact.email])
     expect(mail.bodyText).toContain(`valido fino al ${addDays(today, 2).split('-').reverse().join('/')} compreso`)
     expect(mail.bodyText).not.toMatch(/https?:|#token=|€/)
+    // B-W2b-385 (NT1:05): a second accept link to the same address (the first keeps working); the mail that left carries it.
+    expect(mail.status).toBe('SENT')
+    const links = await h.db.admin.query(`SELECT email, "revokedAt" FROM "OneOffLink" WHERE "recordType" = 'Quote' AND "recordId" = $1 AND purpose = 'QUOTE_ACCEPT' ORDER BY "createdAt"`, [ending.id])
+    expect(links.rows.at(-1)).toMatchObject({ email: ending.contact.email.toLowerCase(), revokedAt: null })
+    const sent = h.ses.mails.find((entry) => entry.outboundId === reminded!.payload.outboundId)!
+    expect(textOf(sent.raw)).toMatch(/\/l#token=\S+/)
     const terms = await ok('sales', 'GET', `/sales/quotes/${ending.id}/terms`)
     expect(terms.validity).toMatchObject({ state: 'ENDS_SOON', daysLeft: 2, reminderOn: null, reminderSentAt: expect.any(String) })
     await runQuoteValidity({ database: h.database, log, clock })

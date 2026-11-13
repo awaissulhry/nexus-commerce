@@ -109,7 +109,8 @@
       "CHANGE_ORDER": "Change orders to approve",
       "SMV_CHANGE": "SMV changes to approve",
       "PLAN_VERSION": "Inspection plan versions to approve",
-      "APPROVAL_TASK": "Requests waiting for your yes"
+      "APPROVAL_TASK": "Requests waiting for your yes",
+      "INQUIRY_WAITING": "Inquiries waiting over a working day"
     },
     "severity": {
       "HIGH": "Urgent",
@@ -587,7 +588,13 @@
       "alerts.SUPPLIER_STATUS_CHANGED.INACTIVE": "Supplier {label} is inactive since {changedOn}: no new purchase order.",
       "why.RULE_ALERT.assigned": "It is assigned to you.",
       "why.RULE_ALERT.recipient": "The rule \"{rule}\" tells you.",
-      "alerts.UNKNOWN": "Alert on {label}."
+      "alerts.UNKNOWN": "Alert on {label}.",
+      "alerts.RETURN_ARRIVED_LATE": "Return {label} arrived on {receivedDate}, {days} days after its deadline ({dueDate}).",
+      "INQUIRY_WAITING.ASSIGNED": "Inquiry {number} from {from} has waited more than a working day for your answer.",
+      "INQUIRY_WAITING.NEW": "Inquiry {number} from {from} has waited more than a working day, and nobody has it yet.",
+      "INQUIRY_WAITING.blocks": "The customer waits for an answer.",
+      "why.INQUIRY_WAITING.sales_inquiries_manage": "You answer this company's inquiries.",
+      "why.INQUIRY_WAITING.assigned": "It was given to you."
     },
     "actions": {
       "menu": "Actions on {record}",

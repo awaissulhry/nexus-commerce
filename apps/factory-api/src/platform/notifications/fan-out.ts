@@ -12,6 +12,10 @@ import { defineHandler, type EventHandler } from '../outbox/dispatch'
 import { heldRoles } from '../auth/roles/access'
 import { insertNotifications, latestOfGroup, type NotificationInsert } from './store'
 import { FAN_OUT_RULES } from './rules'
+// B-W2b-385 (PLT-141): each person's matrix decides the bell, the instant mail and the push.
+import { choiceFor, kindOf, type KindChoice } from '@nexus/factory-domain/notifications/preferences/preferences'
+import { deliverInstant } from './preferences/deliver'
+import { matrixOf } from './preferences/store'
 
 /**
  * The fan-out (B-W2a-20; PLT-138, PLT-142, PLT-152): the worker's handler `notifications.fanOut` turns one outbox event
@@ -120,10 +124,19 @@ export async function fanOut(caller: CommandCaller, event: Pick<EventEnvelope, '
       // One per person per event (the table's key); nobody is told about what they did themselves.
       const seen = new Set<string>()
       const rows: NotificationInsert[] = []
+      // B-W2b-385: the person's choice for the draft's kind (their matrix, read once per person): off everywhere makes nothing;
+      // off in the app keeps it quiet (read and done at once) for its mail or push.
+      const matrices = new Map<string, Awaited<ReturnType<typeof matrixOf>>>()
+      const choiceOf = async (draft: Draft): Promise<KindChoice> => {
+        if (!matrices.has(draft.userId)) matrices.set(draft.userId, await matrixOf(tx, draft.userId, now))
+        return choiceFor(matrices.get(draft.userId)!.cells, kindOf(draft))
+      }
       for (const draft of drafts) {
         if (draft.actorId !== null && draft.actorId === draft.userId) continue
         if (seen.has(draft.userId)) continue
         seen.add(draft.userId)
+        const choice = await choiceOf(draft)
+        if (!choice.made) continue
         const id = newId()
         const previous = await latestOfGroup(tx, draft.userId, draft.record.type, draft.record.id, draft.category, new Date(now.getTime() - GROUP_WINDOW_MS))
         rows.push({
@@ -142,6 +155,7 @@ export async function fanOut(caller: CommandCaller, event: Pick<EventEnvelope, '
           actorId: draft.actorId,
           groupKey: groupKeyFor(previous, id, now),
           createdAt: now,
+          ...(choice.inApp ? {} : { readAt: now, doneAt: now }),
         })
       }
       const made = await insertNotifications(tx, rows)
@@ -153,6 +167,8 @@ export async function fanOut(caller: CommandCaller, event: Pick<EventEnvelope, '
       return made
     },
   )
+  // B-W2b-385: the instant mails and pushes, after the command (also after a repeat: only what was not delivered yet).
+  await deliverInstant(caller, event.eventId)
   // A repeated job answers from the receipt: nothing was made this time.
   return replayed ? 0 : result
 }

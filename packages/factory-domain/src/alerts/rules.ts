@@ -311,6 +311,9 @@ function whenWords(kind: RuleKind, threshold: Record<string, number | boolean>, 
       return it
         ? `Quando un fornitore viene approvato con condizioni, sospeso, bloccato o reso inattivo (avviso per ${days(n('days'))})`
         : `When a supplier is approved with conditions, put on hold, blocked or made inactive (an alert for ${days(n('days'))})`
+    // B-W2b-385 (NT1:04)
+    case 'RETURN_ARRIVED_LATE':
+      return it ? 'Quando la merce di un reso arriva dopo la sua scadenza' : 'When the goods of a return arrive after their deadline'
   }
 }
 
@@ -371,6 +374,8 @@ export const ALERT_TEMPLATES = {
   'alerts.SUPPLIER_STATUS_CHANGED.BLOCKED': { en: 'Supplier {label} is blocked since {changedOn}: no new purchase order.', it: 'Il fornitore {label} è bloccato dal {changedOn}: nessun nuovo ordine di acquisto.' },
   'alerts.SUPPLIER_STATUS_CHANGED.INACTIVE': { en: 'Supplier {label} is inactive since {changedOn}: no new purchase order.', it: 'Il fornitore {label} è inattivo dal {changedOn}: nessun nuovo ordine di acquisto.' },
   'alerts.INVOICE_DEADLINE.LATE': { en: 'The goods of DDT {label} were due to be invoiced by {dueDate}: {days} days late.', it: 'La merce del DDT {label} andava fatturata entro il {dueDate}: {days} giorni di ritardo.' },
+  // B-W2b-385 (NT1:04)
+  'alerts.RETURN_ARRIVED_LATE': { en: 'Return {label} arrived on {receivedDate}, {days} days after its deadline ({dueDate}).', it: 'Il reso {label} è arrivato il {receivedDate}, {days} giorni dopo la scadenza ({dueDate}).' },
 } as const satisfies Record<string, Words>
 export type AlertTemplateKey = keyof typeof ALERT_TEMPLATES
 
@@ -420,6 +425,9 @@ export function alertPhrase(kind: string, label: string, facts: unknown): AlertP
       const known = status === 'CONDITIONAL' || status === 'ON_HOLD' || status === 'BLOCKED' || status === 'INACTIVE'
       return { key: known ? `alerts.SUPPLIER_STATUS_CHANGED.${status}` : 'alerts.SUPPLIER_STATUS_CHANGED', params: { label, changedOn: text('changedOn') } }
     }
+    // B-W2b-385 (NT1:04)
+    case 'RETURN_ARRIVED_LATE':
+      return { key: 'alerts.RETURN_ARRIVED_LATE', params: { label, receivedDate: text('receivedDate'), dueDate: text('dueDate'), days: num('daysLate') } }
     case 'WORKING_TIME_LIMIT':
       return { key: text('limit') === 'OVERTIME_YEARLY_CAP' || text('limit') === 'DAILY_REST' || text('limit') === 'WEEKLY_AVERAGE' ? `alerts.WORKING_TIME_LIMIT.${text('limit') as 'DAILY_REST'}` : 'alerts.WORKING_TIME_LIMIT', params: { label } }
     default:

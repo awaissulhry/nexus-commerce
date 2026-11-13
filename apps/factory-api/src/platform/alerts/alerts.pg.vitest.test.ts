@@ -177,7 +177,8 @@ describe('the engine (scheduler and worker)', () => {
     // B-W2b-42: + WORKING_TIME_LIMIT (no site's attendance is on in the seed, so it raises nothing).
     // B-W2b-314: + LOW_STOCK (a material below its planning minimum).
     // B-W2b-350: + PO_CONFIRMED_LATE, SUPPLIER_STATUS_CHANGED (the supply alerts).
-    expect(run.builtIns).toBe(8)
+    // B-W2b-385: + RETURN_ARRIVED_LATE (a return that arrived after its deadline).
+    expect(run.builtIns).toBe(9)
     expect((await admin(`SELECT "ruleKind" FROM "AlertRule" WHERE "tenantId" = $1 AND "builtIn" ORDER BY 1`, [T])).map((row) => row.ruleKind)).toEqual([
       'APPROVAL_OVERDUE',
       'CERTIFICATE_EXPIRING',
@@ -189,6 +190,7 @@ describe('the engine (scheduler and worker)', () => {
       'ORDER_LATE_RISK',
       'PO_CONFIRMED_LATE',
       'PO_NOT_CONFIRMED',
+      'RETURN_ARRIVED_LATE',
       'SUPPLIER_STATUS_CHANGED',
       'WORKING_TIME_LIMIT',
     ])
@@ -223,9 +225,11 @@ describe('the engine (scheduler and worker)', () => {
       // B-W2b-314: + LOW_STOCK's built-in (6 made; nothing in this seed is below its minimum, so it raises nothing).
       // B-W2b-350: + the two supply alerts' built-ins (8 made; no line of this seed is confirmed later than needed and no
       // supplier's status changed, so they raise nothing).
-      { type: 'alert.rule_changed', n: 8 },
+      // One per built-in rule made (B-W2b-385: + RETURN_ARRIVED_LATE).
+      { type: 'alert.rule_changed', n: 9 },
     ])
-    expect((await one(`SELECT count(*)::int AS n FROM "OutboxEvent" WHERE "tenantId" = $1`, [T])).n).toBe(before + 12)
+    // B-W2b-385: + the late return's built-in rule (12 → 13).
+    expect((await one(`SELECT count(*)::int AS n FROM "OutboxEvent" WHERE "tenantId" = $1`, [T])).n).toBe(before + 13)
   })
 
   it('a second pass (a replay, the next tick) raises nothing twice and writes nothing at all', async () => {
@@ -401,8 +405,8 @@ describe('the rules and the date timers (home.alerts Rules, admin.automation Rem
   it('lists the rules as sentences with their numbers, recipients, last fired and fired in 7 days', async () => {
     const list = await ok('planner', 'GET', '/alerts/rules')
     // B-W2b-24: + INTEGRATION_FAILING (a rule's sentence is no record: listed to whoever reads the rules).
-    // B-W2b-350: + PO_CONFIRMED_LATE (the planner reads the rules) and SUPPLIER_STATUS_CHANGED.
-    expect((list.rules as Json[]).map((rule) => rule.ruleKind).sort()).toEqual(['APPROVAL_OVERDUE', 'CERTIFICATE_EXPIRING', 'HOLD_TOO_LONG', 'INTEGRATION_FAILING', 'INVOICE_DEADLINE', 'LOW_STOCK', 'MATERIAL_SHORT', 'ORDER_LATE_RISK', 'PO_CONFIRMED_LATE', 'PO_NOT_CONFIRMED', 'SUPPLIER_STATUS_CHANGED', 'WORKING_TIME_LIMIT'])
+    // B-W2b-350: + PO_CONFIRMED_LATE (the planner reads the rules) and SUPPLIER_STATUS_CHANGED. B-W2b-385: + RETURN_ARRIVED_LATE.
+    expect((list.rules as Json[]).map((rule) => rule.ruleKind).sort()).toEqual(['APPROVAL_OVERDUE', 'CERTIFICATE_EXPIRING', 'HOLD_TOO_LONG', 'INTEGRATION_FAILING', 'INVOICE_DEADLINE', 'LOW_STOCK', 'MATERIAL_SHORT', 'ORDER_LATE_RISK', 'PO_CONFIRMED_LATE', 'PO_NOT_CONFIRMED', 'RETURN_ARRIVED_LATE', 'SUPPLIER_STATUS_CHANGED', 'WORKING_TIME_LIMIT'])
     const hold = (list.rules as Json[]).find((rule) => rule.ruleKind === 'HOLD_TOO_LONG')!
     expect(hold).toMatchObject({ threshold: { hours: 24 }, recipient: { name: 'Quality inspector' }, cooldownWords: 'at most once a day', enabled: true, builtIn: true, canChange: false, timers: null })
     expect(hold.place.label).toBeTruthy()

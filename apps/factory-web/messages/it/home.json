@@ -109,7 +109,8 @@
       "CHANGE_ORDER": "Ordini di modifica da approvare",
       "SMV_CHANGE": "Modifiche dei tempi standard da approvare",
       "PLAN_VERSION": "Versioni dei piani di ispezione da approvare",
-      "APPROVAL_TASK": "Richieste in attesa del tuo sì"
+      "APPROVAL_TASK": "Richieste in attesa del tuo sì",
+      "INQUIRY_WAITING": "Richieste in attesa da più di un giorno lavorativo"
     },
     "severity": {
       "HIGH": "Urgente",
@@ -587,7 +588,13 @@
       "alerts.SUPPLIER_STATUS_CHANGED.INACTIVE": "Il fornitore {label} è inattivo dal {changedOn}: nessun nuovo ordine di acquisto.",
       "why.RULE_ALERT.assigned": "È assegnato a te.",
       "why.RULE_ALERT.recipient": "La regola \"{rule}\" avvisa te.",
-      "alerts.UNKNOWN": "Avviso su {label}."
+      "alerts.UNKNOWN": "Avviso su {label}.",
+      "alerts.RETURN_ARRIVED_LATE": "Il reso {label} è arrivato il {receivedDate}, {days} giorni dopo la scadenza ({dueDate}).",
+      "INQUIRY_WAITING.ASSIGNED": "La richiesta {number} di {from} aspetta la tua risposta da più di un giorno lavorativo.",
+      "INQUIRY_WAITING.NEW": "La richiesta {number} di {from} aspetta da più di un giorno lavorativo e nessuno la segue ancora.",
+      "INQUIRY_WAITING.blocks": "Il cliente aspetta una risposta.",
+      "why.INQUIRY_WAITING.sales_inquiries_manage": "Rispondi alle richieste di questa azienda.",
+      "why.INQUIRY_WAITING.assigned": "È stata affidata a te."
     },
     "actions": {
       "menu": "Azioni su {record}",

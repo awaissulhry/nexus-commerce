@@ -42,6 +42,8 @@ export const THRESHOLD_FIELDS: Readonly<Record<RuleKind, { readonly numbers: rea
   // B-W2b-350: a line confirmed at least this many days later than needed; a supplier's status change stays an alert this long.
   PO_CONFIRMED_LATE: { numbers: [{ key: 'days', min: 1, max: 60, unit: 'days' }], workingDays: false },
   SUPPLIER_STATUS_CHANGED: { numbers: [{ key: 'days', min: 1, max: 90, unit: 'days' }], workingDays: false },
+  // B-W2b-385: no number (late is late: the return's own deadline).
+  RETURN_ARRIVED_LATE: { numbers: [], workingDays: false },
 })
 
 /** The kind's one number edited in the rules list itself (inline), or null (none, as "Material short"). */
