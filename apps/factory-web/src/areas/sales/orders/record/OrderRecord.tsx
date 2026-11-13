@@ -51,6 +51,10 @@ import { OrderRecordView } from './view/OrderRecordView'
 import { partnerProblem, portalAddress } from '../../../admin/users/partners/model'
 import { openPreview } from '../../../admin/users/partners/preview'
 import { useScheduleSteps } from './schedule/use-schedule-steps'
+// ---- B-W2b-323 (orders in depth on screen) ----
+import { useLocale } from '../../../../lib/i18n/provider'
+import { useOrderDepth } from '../depth/use-order-depth'
+import { NAMESPACE as DEPTH } from '../depth/model'
 
 /**
  * `/w/<company>/sales/orders/<id>` (SCR-039): loads the order (orders.view; the API checks its company and customer),
@@ -65,7 +69,7 @@ import { useScheduleSteps } from './schedule/use-schedule-steps'
  */
 export function OrderRecord({ orderId }: { orderId: string }) {
   return (
-    <WithMessages namespaces={['orders', 'sales', 'lists', 'records']}>
+    <WithMessages namespaces={['orders', 'sales', 'lists', 'records', DEPTH /* B-W2b-323 */]}>
       <RecordContainer orderId={orderId} />
     </WithMessages>
   )
@@ -341,7 +345,28 @@ function RecordContainer({ orderId }: { orderId: string }) {
   const [portalOpening, setPortalOpening] = useState(false)
   const portal = session.permissions.includes('partners.preview') ? { held: null, opening: portalOpening } : { held: { key: 'held.portalRight' }, opening: false }
 
+  // B-W2b-323: the orders in depth (reads by tab, writes with the order's version; an answered order replaces the page's).
+  const locale = useLocale()
+  const depth = useOrderDepth({
+    api,
+    session,
+    order: order.status === 'ready' ? order.value : null,
+    tab,
+    language: locale === 'en' ? 'en' : 'it',
+    onOrder: (next) => {
+      setValue(next)
+      loadParts(next)
+    },
+    onReload: () => void load(),
+    onAmendDone: () => {
+      setAmend(null)
+      setChanged(null)
+      setDialog(null)
+    },
+  })
+
   const model: OrderRecordModel = {
+    depth: depth.model, // B-W2b-323
     prefix,
     can,
     cancelReasons,
@@ -395,6 +420,15 @@ function RecordContainer({ orderId }: { orderId: string }) {
         },
         onRetry: () => void load(),
         onRetryMargin: margin.retry,
+        // ---- B-W2b-323 ----
+        depth: depth.actions,
+        onPricedOffer: () => {
+          const draft = amendRef.current
+          const value = current.current
+          if (!draft || !value) return
+          setDialog(null)
+          depth.actions.onPricedStart?.(amendBody(draft, value))
+        },
         scheduleSteps: scheduleSteps.actions,
         onRetryPart: (which) => {
           if (which === 'cancelCheck') {

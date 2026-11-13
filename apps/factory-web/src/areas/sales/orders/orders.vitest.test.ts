@@ -139,9 +139,10 @@ describe('the saved rows, the address and the API query (one filter model)', () 
   })
 
   it('a tile is a saved rows view; its count is the board’s (unknown: null, never 0)', () => {
-    expect(TILES.map((tile) => tile.rows)).toEqual(['late', 'deposit', 'IN_PRODUCTION', 'READY'])
+    // B-W2b-323: + reaccept (Waiting for the customer to accept a change).
+    expect(TILES.map((tile) => tile.rows)).toEqual(['late', 'deposit', 'IN_PRODUCTION', 'READY', 'reaccept'])
     // The board's own filters mean the same rows as the tiles' saved views.
-    for (const tile of BOARD.tiles) expect(rowsQuery(TILES.find((entry) => entry.key === tile.key)!.rows, '')).toMatchObject(Object.fromEntries(Object.entries(tile.filter).map(([key, value]) => [key, key === 'late' ? true : value])))
+    for (const tile of BOARD.tiles) expect(rowsQuery(TILES.find((entry) => entry.key === tile.key)!.rows, '')).toMatchObject(Object.fromEntries(Object.entries(tile.filter).map(([key, value]) => [key, key === 'late' || key === 'reaccept' /* B-W2b-323 */ ? true : value])))
     expect(tileCount(BOARD, 'late')).toBe(2)
     expect(tileCount(null, 'late')).toBeNull()
   })

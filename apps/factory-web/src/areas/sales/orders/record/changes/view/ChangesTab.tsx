@@ -10,6 +10,7 @@ import type { Amendment, Order } from '../../../api'
 import { moneyChange } from '../../../daily-model'
 import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
 import { PartState } from '../../view/OrderRecordView'
+import { ChangesDepth } from '../../../changes-depth/view/ChangesDepth' // B-W2b-323
 
 /**
  * SCR-107 — Order changes (design `order.changes.list`, SAL-217): each change to the confirmed order, numbered, with who
@@ -77,6 +78,8 @@ export function ChangesTab({ order, model, actions }: { order: Order; model: Ord
   return (
     <div className="fw-so-stack">
       {waiting && <Banner tone="warning" title={t('changes.waiting', { date: formatDate(waiting, { locale }) })} />}
+      {/* B-W2b-323: the new yes a change waits for, What is frozen, Priced change requests. */}
+      <ChangesDepth order={order} model={model.depth} actions={actions?.depth} prefix={model.prefix} />
       <Card padded>
         <div className="fw-so-card-head">
           <h2 className="fw-so-h2">{t('changes.title')}</h2>

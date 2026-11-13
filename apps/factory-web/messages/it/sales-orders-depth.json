@@ -1,0 +1,541 @@
+{
+  "common": {
+    "cancel": "Annulla",
+    "dismiss": "Chiudi",
+    "done": "Fatto",
+    "retry": "Riprova",
+    "working": "In corso…"
+  },
+  "action": {
+    "priority": "Imposta priorità…",
+    "season": "Imposta stagione…"
+  },
+  "held": {
+    "busy": "Attendere: un salvataggio è in corso",
+    "noManage": "Modificare un ordine richiede il permesso vendite di gestire gli ordini",
+    "final": "L’ordine è chiuso o annullato: non cambia più nulla",
+    "prioritySame": "L’ordine ha già questa priorità",
+    "seasonSame": "L’ordine ha già questa stagione",
+    "reading": "Lettura in corso…",
+    "noneSelected": "Seleziona almeno un ordine",
+    "tooMany": "Al massimo {max} ordini alla volta",
+    "notWaiting": "L’ordine non è in attesa di approvazione",
+    "askStanding": "C’è già una richiesta aperta, oppure il fido del cliente blocca l’ordine",
+    "withdrawNotYours": "Solo chi ha chiesto può ritirare la richiesta",
+    "putBackNot": "Questa modifica non si può più annullare",
+    "confirmationWaiting": "L’ordine è in attesa di approvazione: la conferma viene dopo",
+    "confirmationCancelled": "L’ordine è stato annullato: nessuna conferma",
+    "confirmationNot": "Ora non si può fare la conferma di questo ordine"
+  },
+  "priority": {
+    "level": {
+      "LOW": "Bassa",
+      "NORMAL": "Normale",
+      "HIGH": "Alta",
+      "URGENT": "Urgente"
+    },
+    "means": {
+      "LOW": "Servito dopo gli altri quando la capacità è poca.",
+      "NORMAL": "Il posto normale nel portafoglio ordini.",
+      "HIGH": "Pianificato prima degli ordini normali.",
+      "URGENT": "Pianificato per primo; scrivi il motivo in una riga."
+    },
+    "title": "Priorità di {number}",
+    "titleOne": "Urgente: perché?",
+    "legend": "Priorità",
+    "go": "Imposta priorità",
+    "reason": "Perché è urgente",
+    "reasonHint": "Una riga, al massimo {max} caratteri; la vedono il pianificatore e la bacheca.",
+    "problem": {
+      "reason": "Scrivi perché è urgente (una riga).",
+      "long": "Il motivo è troppo lungo (al massimo 500 caratteri).",
+      "oneLine": "Il motivo è una riga sola."
+    }
+  },
+  "selection": {
+    "title": "Imposta la priorità di {count} ordini",
+    "go_one": "Imposta per {count} ordine",
+    "go_other": "Imposta per {count} ordini",
+    "done": "Priorità {level}",
+    "changed_one": "{count} ordine cambiato",
+    "changed_other": "{count} ordini cambiati",
+    "unchanged_one": "{count} ordine l’aveva già",
+    "unchanged_other": "{count} ordini l’avevano già",
+    "skipped_one": "{count} ordine escluso (chiuso, annullato o non tuo): {numbers}",
+    "skipped_other": "{count} ordini esclusi (chiusi, annullati o non tuoi): {numbers}",
+    "unknown_one": "{count} ordine non trovato",
+    "unknown_other": "{count} ordini non trovati",
+    "nothing": "Non è cambiato nulla."
+  },
+  "season": {
+    "tag": "Stagione {code}",
+    "title": "Stagione di {number}",
+    "go": "Imposta stagione",
+    "label": "Stagione",
+    "hint": "Le stagioni aperte dell’azienda; una stagione chiusa non accetta ordini.",
+    "none": "L’azienda non ha stagioni aperte.",
+    "noSeason": "Nessuna stagione",
+    "reading": "Lettura delle stagioni…",
+    "runs": "Periodo",
+    "runsValue": "{from} – {to}",
+    "book": "Chiusura raccolta ordini",
+    "state": "Stato",
+    "stateValue": {
+      "OPEN": "Aperta",
+      "BOOK_CLOSED": "Raccolta ordini chiusa",
+      "ENDED": "Terminata",
+      "CLOSED": "Chiusa"
+    }
+  },
+  "wait": {
+    "title": "In attesa di approvazione",
+    "REQUEST_PENDING": "C’è una richiesta aperta: chi decide risponde in Home › Approvazioni.",
+    "NO_REQUEST": "Non è stato ancora chiesto a nessuno: chiedi l’approvazione.",
+    "CREDIT_HOLD": "Il fido del cliente blocca l’ordine: decide l’Amministrazione.",
+    "asked": "Chiesta il {date}",
+    "askedOf": "Chiesta a {who} il {date}",
+    "mine": "l’hai chiesta tu",
+    "ask": "Chiedi l’approvazione",
+    "withdraw": "Ritira la richiesta",
+    "openApprovals": "Apri Approvazioni",
+    "failed": "Impossibile leggere perché l’ordine è in attesa",
+    "askTitle": "Chiedi l’approvazione di {number}",
+    "askBody": "Le regole dell’azienda dicono chi decide. Nessuno approva la propria richiesta.",
+    "note": "Una nota per chi decide",
+    "noteHint": "Facoltativa.",
+    "withdrawTitle": "Ritirare la richiesta su {number}?",
+    "withdrawBody": "L’ordine resta in attesa; si può chiedere di nuovo più tardi."
+  },
+  "notice": {
+    "priority": "Priorità impostata.",
+    "season": "Stagione impostata.",
+    "seasonCleared": "Stagione tolta.",
+    "asked": "Approvazione chiesta.",
+    "withdrawn": "Richiesta ritirata.",
+    "confirmationSame": "Nulla è cambiato dalla versione {version}: la conferma resta quella.",
+    "planned": "Pianificato dalla distinta: {made} nuovi, {changed} cambiati, {removed} tolti.",
+    "putBack": "L’ordine è tornato com’era.",
+    "putBackDeposit": "Revisione {revision} annullata; l’acconto aggiuntivo ancora aperto è stato annullato.",
+    "priced": "Modifica con prezzo {revision} registrata: il cliente la accetta dal link che inviamo.",
+    "pricedWaiting": "Modifica con prezzo {revision} registrata; è in attesa di approvazione in Home › Approvazioni."
+  },
+  "problem": {
+    "read": {
+      "signed_out": "Sessione scaduta: accedi di nuovo.",
+      "forbidden": "Non hai accesso a questo.",
+      "not_found": "Non trovato: potrebbe essere stato rimosso.",
+      "unavailable": "Il server non ha risposto: riprova tra poco.",
+      "rate_limited": "Troppi tentativi: attendi un momento.",
+      "internal": "Qualcosa è andato storto da parte nostra."
+    },
+    "write": {
+      "signed_out": "Sessione scaduta: accedi di nuovo.",
+      "forbidden": "Non puoi farlo.",
+      "not_found": "Ordine non trovato.",
+      "unavailable": "Il server non ha risposto: nulla è stato salvato; riprova.",
+      "rate_limited": "Troppi tentativi: attendi un momento.",
+      "step_up": "Conferma con un nuovo codice dell’app di autenticazione.",
+      "internal": "Qualcosa è andato storto da parte nostra: nulla è stato salvato.",
+      "invalid": "La richiesta è stata rifiutata così com’è: controlla i campi.",
+      "moved": "Qualcuno ha cambiato l’ordine nel frattempo: è stato riletto; riprova.",
+      "state": "Lo stato dell’ordine ora non lo permette.",
+      "season": "Quella stagione è chiusa o appartiene a un’altra azienda.",
+      "noRecipient": "Il cliente non ha un contatto ordini con e-mail: aggiungilo prima.",
+      "letterhead": "La conferma non si può fare: l’intestazione dell’azienda è incompleta (ragione sociale, sede, partita IVA, codice fiscale, REA). Completala in Sistema › Società e stabilimenti."
+    }
+  },
+  "stage": {
+    "RELEASED": "Rilasciato in produzione",
+    "CUT": "Taglio iniziato",
+    "SEWING": "Cucitura iniziata",
+    "FINISHED": "Capi finiti",
+    "SHIPPED": "Spedito",
+    "none": "Non ancora in produzione"
+  },
+  "field": {
+    "SIZE_QUANTITY": "Taglie e quantità",
+    "COLOURWAY": "Variante colore",
+    "OPTION": "Opzioni",
+    "DELIVERY_DATE": "Data di consegna",
+    "SHIP_TO": "Indirizzo di consegna",
+    "PRICE": "Prezzi"
+  },
+  "frozenField": {
+    "SIZE_QUANTITY": "taglia bloccata"
+  },
+  "frozen": {
+    "cell": "{stage} — {field}",
+    "blocked": "{stage} — {field} definitivamente",
+    "how": "Una modifica è una modifica con prezzo che il cliente accetta.",
+    "blockedHow": "Non si può più cambiare.",
+    "label": "Taglie bloccate dalla fase di produzione"
+  },
+  "freeze": {
+    "title": "Cosa è bloccato",
+    "open": "Ancora modificabile",
+    "priced": "Da «{stage}»: una modifica con prezzo che il cliente accetta",
+    "blocked": "Da «{stage}»: non si può più cambiare",
+    "stage": "L’ordine è arrivato a «{stage}» il {date}.",
+    "notStarted": "Non ancora in produzione: è tutto ancora modificabile.",
+    "noRules": "L’azienda non ha regole di blocco: ogni campo resta modificabile.",
+    "failed": "Impossibile leggere cosa è bloccato",
+    "reading": "Lettura di cosa è bloccato…"
+  },
+  "offer": {
+    "priced": "Bloccato dalla fase di produzione: invialo come modifica con prezzo che il cliente accetta.",
+    "blocked": "Bloccato definitivamente: questa modifica non si può più fare.",
+    "go": "Invia come modifica con prezzo",
+    "line": "{line}: {field}",
+    "order": "L’ordine: {field}"
+  },
+  "priced": {
+    "title": "Modifica con prezzo {revision} di {number}",
+    "how": "La modifica viene registrata ora; poi il cliente ne accetta il prezzo dal link che inviamo.",
+    "stage": "L’ordine è arrivato a «{stage}».",
+    "reading": "Calcolo del prezzo della modifica…",
+    "problems": "La modifica è rifiutata così com’è ({count})",
+    "tableLabel": "Cosa cambia e il suo prezzo",
+    "col": {
+      "line": "Riga",
+      "words": "Parole per il cliente",
+      "price": "Variazione di prezzo"
+    },
+    "labelOf": "Parole per il cliente: {line}",
+    "labelPlaceholder": "es. Una giacca in più in 52, tagliata a parte",
+    "lineKind": {
+      "ADDED": "Riga aggiunta",
+      "REMOVED": "Riga tolta",
+      "CHANGED": "Nuovo prezzo"
+    },
+    "fee": "Costo della modifica (netto)",
+    "feeHint": "Facoltativo, in {currency}.",
+    "change": "Variazione di valore (netto)",
+    "feeValue": "Costo",
+    "noPrice": "I prezzi non ti sono visibili: il prezzo della modifica lo fa l’ufficio.",
+    "deposit": "Acconto aggiuntivo",
+    "depositMode": {
+      "default": "La percentuale dell’ordine",
+      "none": "Nessuno",
+      "pct": "Una percentuale",
+      "amount": "Un importo"
+    },
+    "pct": "Percentuale dell’aumento",
+    "amount": "Importo ({currency})",
+    "kind": "Tipo",
+    "kindHint": "Come conta l’acconto se l’ordine viene annullato.",
+    "dueDate": "Scadenza",
+    "dueHint": "Facoltativa: altrimenti i termini dell’ordine.",
+    "depositValue": "Acconto aggiuntivo {amount} ({pct} % dell’aumento).",
+    "depositNone": "Nessun acconto aggiuntivo: l’ordine non aumenta.",
+    "yes": {
+      "WOULD_ASK": "Questa modifica attenderà un’approvazione (Home › Approvazioni).",
+      "NOBODY_TO_ASK": "Una regola chiede un’approvazione ma nessun altro può decidere: la chiede un’altra persona dell’ufficio."
+    },
+    "customer": "Il cliente la accetta o la rifiuta dopo; un rifiuto lo annulla una persona.",
+    "reason": "Perché (resta con la modifica)",
+    "reasonHint": "Le parole del cliente o dell’ufficio, una o due righe.",
+    "go": "Registra la modifica con prezzo",
+    "held": {
+      "reading": "Attendere: si sta calcolando il prezzo",
+      "failed": "Impossibile calcolare il prezzo: riprova",
+      "problems": "La modifica è rifiutata così com’è"
+    },
+    "problem": {
+      "fee": "Un costo sopra 0, con al massimo 2 decimali.",
+      "pct": "Una percentuale sopra 0 e al massimo 100.",
+      "amount": "Un importo sopra 0, con al massimo 2 decimali; al massimo l’aumento dell’ordine.",
+      "dueDate": "Una scadenza da oggi in poi.",
+      "label": "Le parole per il cliente sono una riga di al massimo 200 caratteri.",
+      "reason": "Scrivi il perché (resta con la modifica).",
+      "reasonLong": "Il motivo è troppo lungo (al massimo 500 caratteri).",
+      "deposit": "L’acconto aggiuntivo è rifiutato così com’è (il tipo potrebbe essere disattivato, o supera l’aumento).",
+      "frozenLine": "{line}: {field} non si può più cambiare",
+      "frozenOrder": "{field} dell’ordine non si può più cambiare",
+      "lines": "Una riga è rifiutata così com’è: controlla la modifica",
+      "other": "La modifica è rifiutata così com’è"
+    }
+  },
+  "depositKind": {
+    "ACCONTO": "Acconto (va a conto del prezzo)",
+    "CAPARRA": "Caparra confirmatoria",
+    "CAPARRA_PENITENZIALE": "Caparra penitenziale",
+    "off": "{kind} — disattivata",
+    "offWhy": "La caparra penitenziale è disattivata finché il commercialista non la conferma."
+  },
+  "depositStatus": {
+    "OPEN": "aperto",
+    "PAID": "pagato",
+    "WAIVED": "condonato",
+    "CANCELLED": "annullato"
+  },
+  "pricedList": {
+    "title": "Richieste di modifica con prezzo",
+    "subtitle": "Una modifica dopo l’avvio della produzione ha un prezzo e richiede il sì del cliente.",
+    "col": {
+      "change": "Modifica",
+      "money": "Costo extra e prezzo",
+      "decision": "Decisione del cliente",
+      "actions": "Prossimo passo"
+    },
+    "revision": "Revisione {revision}",
+    "count": {
+      "changed_one": "{count} riga cambiata",
+      "changed_other": "{count} righe cambiate",
+      "added_one": "{count} riga aggiunta",
+      "added_other": "{count} righe aggiunte",
+      "removed_one": "{count} riga tolta",
+      "removed_other": "{count} righe tolte"
+    },
+    "pieces": "pezzi {before} → {after}",
+    "feeOnly": "Solo un costo",
+    "fee": "costo {amount}",
+    "deposit": "acconto aggiuntivo {amount} ({kind}, {status})",
+    "empty": "Ancora nessuna modifica con prezzo",
+    "emptyBody": "Una modifica bloccata dalle regole dopo l’avvio della produzione diventa una modifica con prezzo da Modifica ordine.",
+    "failed": "Impossibile leggere le modifiche",
+    "reading": "Lettura delle modifiche…"
+  },
+  "decision": {
+    "NOT_NEEDED": "Il cliente non deve accettarla",
+    "NOT_ASKED": "Non ancora inviata al cliente",
+    "WAITING": "In attesa del cliente",
+    "ACCEPTED": "Accettata dal cliente",
+    "REFUSED": "Rifiutata dal cliente",
+    "EXPIRED": "Il cliente non ha risposto in tempo",
+    "WITHDRAWN": "La richiesta al cliente è stata ritirata",
+    "answered": "Risposta il {date}"
+  },
+  "changeYes": {
+    "state": {
+      "NOT_ASKED": "Nessuna approvazione necessaria",
+      "WAITING": "In attesa di approvazione",
+      "APPROVED": "Approvata",
+      "TURNED_DOWN": "Respinta",
+      "STALE": "L’ordine è cambiato da allora: chiedi di nuovo",
+      "WITHDRAWN": "Ritirata"
+    },
+    "because": "Motivo: {reason}",
+    "waiting": "Una modifica attende un’approvazione dal {date}",
+    "waitingBody": "Nessun’altra modifica dell’ordine è accettata finché non viene decisa."
+  },
+  "putBack": {
+    "title": "Annullare la revisione {revision} di {number}?",
+    "body": "L’ordine torna com’era prima della revisione {revision}, come nuova revisione; nulla viene cancellato.",
+    "deposit": "L’acconto aggiuntivo ancora aperto viene annullato con essa.",
+    "reason": "Perché",
+    "reasonHint": "Facoltativo.",
+    "go": "Annulla la modifica",
+    "of": "Annulla la revisione {revision}"
+  },
+  "materials": {
+    "title": "Materiali forniti dal cliente",
+    "plan": "Pianifica dalla distinta",
+    "col": {
+      "material": "Materiale",
+      "colour": "Colore",
+      "expected": "Previsto",
+      "received": "Ricevuto",
+      "used": "Usato",
+      "left": "Rimanente"
+    },
+    "lot": "Lotto {code}",
+    "moreLots_one": "+{count} lotto",
+    "moreLots_other": "+{count} lotti",
+    "short": "Usato più del ricevuto",
+    "count_one": "{count} materiale",
+    "count_other": "{count} materiali",
+    "empty": "Il cliente non fornisce nulla per questo ordine",
+    "emptyBody": "Quando il marchio invia pelle, accessori o etichette, Pianifica dalla distinta elenca cosa serve a ogni riga.",
+    "failed": "Impossibile caricare i materiali del cliente",
+    "reading": "Lettura dei materiali del cliente…",
+    "notPlanned_one": "La distinta chiede {count} materiale che l’ordine non ha ancora: Pianifica dalla distinta lo aggiunge",
+    "notPlanned_other": "La distinta chiede {count} materiali che l’ordine non ha ancora: Pianifica dalla distinta li aggiunge",
+    "notPlannedRow": "{item}: {expected}",
+    "problems_one": "La distinta di {count} riga non è rilasciata: chiedi allo sviluppo prodotto",
+    "problems_other": "Le distinte di {count} righe non sono rilasciate: chiedi allo sviluppo prodotto",
+    "never": "Il materiale del cliente non viene mai valorizzato."
+  },
+  "confirmation": {
+    "title": "Conferma d’ordine",
+    "newTab": "Apri in una nuova scheda",
+    "failed": "Impossibile leggere la conferma",
+    "reading": "Lettura della conferma…",
+    "make": "Crea la conferma",
+    "makeNew": "Crea la versione {version}",
+    "send": "Invia…",
+    "none": "Non ancora creata",
+    "noneBody": "La conferma riporta le righe con taglie, prezzi, date, termini e la classe di certificazione di ogni modello.",
+    "outdated": "L’ordine è cambiato dalla versione {version}: crea una nuova versione prima di inviarla.",
+    "pdfTitle": "Conferma {number} v{version}",
+    "pdfFailed": "Impossibile aprire il PDF",
+    "pdfReading": "Apertura del PDF…",
+    "noFiles": "Leggere i file richiede il permesso sui file.",
+    "version": "Versione",
+    "versionValue": "Versione {version}",
+    "made": "Creata",
+    "state": "Stato",
+    "stateValue": {
+      "none": "Non ancora creata",
+      "upToDate": "Riporta l’ordine com’è ora",
+      "outdated": "L’ordine è cambiato da allora",
+      "notYet": "Non ancora possibile"
+    },
+    "sent": "Inviata al cliente",
+    "sentValue": "Versione {version} il {date}",
+    "sentWhere": "La mail è nella conversazione dell’ordine (Attività).",
+    "notSent": "Non ancora inviata",
+    "versions": "Versioni create",
+    "sentTag": "Conferma v{version} inviata"
+  },
+  "send": {
+    "title": "Invia la conferma di {number}",
+    "document": "Conferma d’ordine {number} v{version}",
+    "documentNew": "Conferma d’ordine {number} (nuova versione)",
+    "freeze": "La versione {version} parte così com’è; una modifica successiva dell’ordine crea una nuova versione.",
+    "freezeNew": "Viene creata una nuova versione dell’ordine com’è ora, poi inviata.",
+    "can": "Leggere la conferma e rispondere nella conversazione dell’ordine.",
+    "check": {
+      "confirmed": "L’ordine è confermato",
+      "recipient": "Va a {email}",
+      "noRecipient": "Il cliente non ha un contatto ordini con e-mail",
+      "newVersion": "Verrà creata una nuova versione dell’ordine com’è ora",
+      "upToDate": "La versione {version} riporta l’ordine com’è ora"
+    }
+  },
+  "tab": {
+    "title": "Conferma di {number}",
+    "made": "Creata {when}",
+    "print": "Stampa",
+    "printHeld": "Attendi il PDF",
+    "noRight": {
+      "title": "Nessun accesso agli ordini",
+      "body": "Leggere una conferma d’ordine richiede il permesso sugli ordini."
+    }
+  },
+  "pack": {
+    "title": "Scheda tecnica del marchio in vigore",
+    "from": "Dalla richiesta {number}",
+    "failed": "Impossibile leggere la scheda tecnica",
+    "reading": "Lettura della scheda tecnica…",
+    "noInquiry": "L’ordine non viene da una richiesta con scheda tecnica.",
+    "none": "La richiesta non indica file della scheda tecnica.",
+    "version": "Versione del marchio: {version}",
+    "inForce": "Versione {version}, in vigore",
+    "newer": "Indicata la versione {named}; ora è in vigore la versione {current}",
+    "gone": "Nessuna versione è più disponibile",
+    "open": "Apri"
+  },
+  "forecast": {
+    "col": "Previsione fine produzione",
+    "noRight": "—",
+    "reading": "…",
+    "failed": "—",
+    "none": "Non pianificata",
+    "unknown": "Non ancora nota",
+    "spare_one": "{count} giorno di margine",
+    "spare_other": "{count} giorni di margine",
+    "short_one": "{count} giorno di ritardo",
+    "short_other": "{count} giorni di ritardo",
+    "failedTitle": "Impossibile leggere la previsione di fine produzione"
+  },
+  "finish": {
+    "STOCK": "Da magazzino",
+    "BOARD": "La bacheca di pianificazione",
+    "WORK_ORDER_DUE": "La scadenza di un ordine di lavoro",
+    "PLANNED_ORDER": "Un ordine pianificato",
+    "CAPABLE": "Il prima possibile per lo stabilimento",
+    "NONE": "Ancora nulla dice quando"
+  },
+  "risk": {
+    "LATE": "In ritardo",
+    "AT_RISK": "A rischio",
+    "NOT_PROMISED": "Senza promessa",
+    "ON_TIME": "In tempo"
+  },
+  "milestone": {
+    "title": "Tappe",
+    "late_one": "{count} in ritardo",
+    "late_other": "{count} in ritardo",
+    "lateBy_one": "{count} giorno di ritardo",
+    "lateBy_other": "{count} giorni di ritardo",
+    "failed": "Impossibile leggere le tappe",
+    "reading": "Lettura delle tappe…",
+    "none": "Nessuna tappa per questo ordine.",
+    "target": "obiettivo {date}",
+    "state": {
+      "STARTED_BEFORE": "Avviato prima del controllo"
+    },
+    "kind": {
+      "GATE": "Controllo",
+      "START": "Avvio produzione",
+      "SHIP": "Spedizione"
+    }
+  },
+  "gate": {
+    "SAMPLE_APPROVED": "Campione approvato",
+    "LEATHER_APPROVED": "Pelle approvata",
+    "TRIMS_IN": "Accessori arrivati",
+    "PP_SAMPLE": "Campione di preproduzione",
+    "LAB_PASSED": "Prova di laboratorio superata",
+    "OTHER": "Controllo"
+  },
+  "list": {
+    "col": {
+      "priority": "Priorità",
+      "season": "Stagione"
+    },
+    "priorityOf": "Priorità di {number}",
+    "saved": "Salvato",
+    "refused": "Non salvato",
+    "print": "Stampa la conferma",
+    "setPriority_one": "Imposta priorità per {count}",
+    "setPriority_other": "Imposta priorità per {count}",
+    "more": "Altre azioni",
+    "keys": "Scorciatoie da tastiera"
+  },
+  "import": {
+    "action": "Importa ordini…",
+    "hint": "Da un foglio: prima una prova, nulla viene scritto fino ad Applica.",
+    "held": {
+      "manage": "Importare ordini richiede il permesso di modificare gli ordini",
+      "run": "Importare richiede il permesso di eseguire importazioni e caricare file"
+    }
+  },
+  "week": {
+    "label": "Per settimana promessa",
+    "site": "Sede",
+    "asOf": "Aggiornato alle {time}",
+    "forbidden": {
+      "title": "Le date promesse non sono visibili per te",
+      "body": "La vista per settimana promessa richiede il permesso sulle promesse."
+    },
+    "noSite": {
+      "title": "Nessuna sede da leggere",
+      "body": "I tuoi ruoli non raggiungono nessuna sede di questa azienda."
+    },
+    "failed": "Impossibile leggere le promesse",
+    "empty": {
+      "title": "Nulla di aperto da finire",
+      "body": "Ogni riga d’ordine aperta di questa sede è spedita, oppure nessuna corrisponde alla ricerca."
+    },
+    "incomplete": "Più righe aperte di quante ne copra una lettura: sono mostrate le promesse più vicine.",
+    "how": "Le schede non si trascinano: Cambia data promessa… apre la scheda Date dell’ordine.",
+    "earlier": "In ritardo",
+    "later": "Più avanti",
+    "none": "Senza promessa",
+    "week": "Settimana {week}",
+    "thisWeek": "Questa settimana",
+    "late": "Promessa scaduta",
+    "units_one": "{count} pezzo",
+    "units_other": "{count} pezzi",
+    "range": "{from} – {to}",
+    "nothing": "Nulla da finire questa settimana.",
+    "cardMenu": "Azioni per {number}",
+    "open": "Apri",
+    "changePromise": "Cambia data promessa…",
+    "cardUnits_one": "{count} pezzo",
+    "cardUnits_other": "{count} pezzi",
+    "cardLines_one": "{count} riga",
+    "cardLines_other": "{count} righe"
+  }
+}

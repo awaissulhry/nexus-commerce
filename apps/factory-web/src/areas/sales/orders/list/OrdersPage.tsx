@@ -13,6 +13,11 @@ import { newOrderAddress } from '../new/new-model'
 import type { NewOrderDialogModel, OrdersListModel } from './list-model'
 import { OrdersListView } from './view/OrdersListView'
 import { useListMargins } from './margin/use-list-margins'
+// ---- B-W2b-323 (orders in depth on screen) ----
+import { useListDepth } from '../list-depth/use-list-depth'
+import { usePromiseWeek } from '../week/use-promise-week'
+import { useOrdersImport } from '../import/use-orders-import'
+import { NAMESPACE as DEPTH } from '../depth/model'
 
 /**
  * `/w/<company>/sales/orders` (SCR-038): reads the orders of the saved rows view and the search from the address (the
@@ -26,7 +31,7 @@ import { useListMargins } from './margin/use-list-margins'
  */
 export function OrdersPage() {
   return (
-    <WithMessages namespaces={['orders', 'lists']}>
+    <WithMessages namespaces={['orders', 'lists', DEPTH /* B-W2b-323 */]}>
       <OrdersContainer />
     </WithMessages>
   )
@@ -53,6 +58,7 @@ function OrdersContainer() {
   const [asOf, setAsOf] = useState<string | null>(null)
   const [updates, setUpdates] = useState(0)
   const [notice, setNotice] = useState<OrdersListModel['notice']>(null)
+  const [weekTick, setWeekTick] = useState(0) // B-W2b-323
   const readId = useRef(0)
   const companyId = session.company?.id ?? session.companies[0]?.id ?? ''
   const [newOrder, setNewOrder] = useState<NewOrderDialogModel | null>(params?.get('new') === '1' && can.manage ? emptyNew(session.companies, companyId) : null)
@@ -72,6 +78,13 @@ function OrdersContainer() {
   const load = useCallback(async (silent = false) => {
     const id = ++readId.current
     readBoard(id)
+    // B-W2b-323: By promise week reads its own lines (usePromiseWeek); the page keeps the tiles.
+    if (layout === 'week') {
+      setAsOf(new Date().toISOString())
+      setUpdates(0)
+      setWeekTick((tick) => tick + 1)
+      return
+    }
     if (layout === 'board') {
       const shown = boardLanes(rows)
       // A live re-read keeps the cards in place (the focus stays) until the new ones arrive.
@@ -131,7 +144,7 @@ function OrdersContainer() {
   const live = useLive(
     (change) => {
       if (!listTouches(change)) return
-      if (layout === 'board') {
+      if (layout === 'board' || layout === 'week' /* B-W2b-323 */) {
         rereadBoard()
         return
       }
@@ -183,13 +196,25 @@ function OrdersContainer() {
   // B-W2a-72: the Margin % column (margin grain): the margins of the orders on screen.
   const margins = useListMargins(api, layout === 'board' ? null : list.items, q, session.permissions, asOf)
 
-  const model: OrdersListModel = { prefix, can, today: romeToday(), layout, rows, q, list, lanes, board, asOf, live, updates, notice, newOrder, margins }
+  // ---- B-W2b-323: priority and season, By promise week, Import orders ----
+  const listDepth = useListDepth(api, layout === 'list' ? list.items : null, session.permissions, (changes) =>
+    setList((current) => ({ ...current, items: current.items?.map((row) => { const change = changes.find((entry) => entry.id === row.id); return change?.version ? { ...row, version: change.version } : row }) ?? null })),
+  )
+  const week = usePromiseWeek(api, session, { enabled: layout === 'week', asked: params?.get('site') ?? null, q, tick: weekTick })
+  const importer = useOrdersImport(api, session, locale === 'en' ? 'en' : 'it', () => void load())
+
+  const model: OrdersListModel = {
+    prefix, can, today: romeToday(), layout, rows, q, list, lanes, board, asOf, live, updates, notice, newOrder, margins,
+    depth: listDepth.model,
+    week: { state: week.state, sites: week.sites, siteId: week.siteId },
+    importer: { held: importer.held, sheet: importer.model },
+  }
 
   return (
     <OrdersListView
       model={model}
       actions={{
-        onRows: (next) => go({ rows: next }),
+        onRows: (next) => go({ rows: next, ...(layout === 'week' ? { layout: 'list' as const } : {}) /* B-W2b-323: a tile opens the list */ }),
         onLayout: (next) => go({ layout: next }),
         onSearch: (next) => go({ q: next }),
         onMore: () => void more(),
@@ -214,6 +239,16 @@ function OrdersContainer() {
             .catch((error: unknown) => setNewOrder((current) => (current ? { ...current, partyProblem: readProblem(error) } : current)))
         },
         onNewField: (field, value) => setNewOrder((current) => (current ? { ...current, [field]: value } : current)),
+        // ---- B-W2b-323 ----
+        depth: listDepth.actions,
+        onImport: importer.open,
+        importActions: importer.actions,
+        onWeekSite: (siteId) => {
+          const next = new URLSearchParams(params?.toString() ?? '')
+          next.set('site', siteId)
+          router.replace(`${pathname}?${next.toString()}`)
+        },
+        onWeekRetry: week.retry,
         onNewCreate: () => {
           if (!newOrder?.party) return
           router.push(newOrderAddress(prefix, { companyId: newOrder.companyId, partyId: newOrder.party.id, contactId: newOrder.contactId, customerRef: newOrder.customerRef }))
