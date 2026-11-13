@@ -1,0 +1,308 @@
+// Notifications, My work and mail in depth (W2b schema wave 47/57, B-W2b-366; features PLT-140, PLT-141, PLT-151, COL-021,
+// COL-027, COL-031, COL-041; design home.notifications popups preferences and push-enrol, home.today "Changed since you
+// looked" and "My saved views", home.tasks "Reminders", home.mail "Team inboxes" and the band's "Copy capture address").
+// Notifications, followers, tasks and the daily digest exist since W2a (collab.prisma, views.prisma); this adds their depth:
+//
+//   NotificationPreference   one office person's choice for one kind of news on one channel: as it happens, in the daily
+//                            digest (e-mail only) or off (the preferences matrix, PLT-141). No row: the role's default, else
+//                            the API's quiet default.
+//   RoleNotificationDefault  an office role's default for one kind of news on one channel (admins set them; the matrix shows
+//                            them as "Default for Planner").
+//   PushSubscription         one phone or browser a person turned push on for (Web Push, PLT-140): its label, its push
+//                            endpoint, its keys sealed as a SecretValue, when it was last used and when it was turned off.
+//   ViewFollower             a person following one saved view (PLT-151): what the view held when it was last counted for
+//                            them (a fingerprint of its row ids, how many, when), so "changed since you looked" and "entered
+//                            or left the view" can be told.
+//   Reminder                 "remind me about this" (COL-041): a record, or a message of its thread, that comes back to one
+//                            person's Today at a time or when the record changes, with a note; came back, done.
+//   TeamInbox                a shared mailbox of a company (orders@, quotes@; COL-027): its name, the local part of its
+//                            address and its members. The mail itself carries the inbox, the assignee, closed, snoozed and
+//                            the follow-up (email-in.prisma InboundEmail).
+//   CaptureAddress           the address a company's people forward or BCC mail to (COL-021): a secret token, the team inbox
+//                            unmatched mail lands in. No staff mailbox is ever read (Statuto dei Lavoratori art. 4).
+// Also in this wave: InboundEmail's team-inbox columns (email-in.prisma), EmailOutbound.bounceKind (email.prisma; COL-031:
+// sent, delivered or bounced on every message) and SalesSettings.inquiryAddresses (sales.prisma; mail to these makes an
+// inquiry).
+//
+// Records are named by recordType + recordId (as threads and tasks), so these tables wait for no module. People are named
+// by user id only. Everything here is one person's own (their choices, devices, reminders, the views they follow) or a
+// company's mail set-up: office only (factory_runtime); the floor and the portal read and write none of it, and nothing
+// here counts per person beyond a person's own list (Statuto art. 4; Owner answer W1). Personal data: a person's own
+// choices and devices (purpose: the office account; the device label and endpoint are the person's), tagged here and in
+// ownership/notify-depth.json, not in the People `personal` map (as PartnerEmailPreference). The hand-written migration
+// …_notify_depth_w2b_guards holds the rules Prisma does not model.
+
+/// One office person's choice for one kind of news on one channel (PLT-141; design home.notifications › Preferences: each
+/// cell saves at once). The person resets to their role's defaults by removing their rows. Personal data (the person's own
+/// choice; purpose: the office account).
+model NotificationPreference {
+  id        String                        @id @db.Uuid
+  tenantId  String                        @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The office user whose choice it is. Never changes.
+  userId    String                        @db.Uuid
+  /// The kind of news (a row of the matrix). Never changes.
+  event     NotificationEventKind
+  /// The channel (a column of the matrix). Never changes.
+  channel   NotificationPreferenceChannel
+  /// As it happens, in the daily digest (EMAIL only) or off.
+  cadence   NotificationCadence
+  /// `pref:<userId>:<event>:<channel>`: one row per person, kind and channel (the API writes exactly this; the database
+  /// checks it begins so). Never changes.
+  key       String
+  version   Int                           @default(1)
+  createdAt DateTime                      @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime                      @default(now()) @updatedAt @db.Timestamptz(3)
+
+  user User @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, key])
+  // A person's matrix.
+  @@index([tenantId, userId])
+}
+
+/// An office role's default for one kind of news on one channel (PLT-141: admins set defaults per role). A person without
+/// a row of their own gets the default of their roles (the API picks among several), else the API's quiet default.
+/// Removed to go back to that quiet default.
+model RoleNotificationDefault {
+  id          String                        @id @db.Uuid
+  tenantId    String                        @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The office role (Role, audience OFFICE); a system role's key is its template's (`planner`). Never changes.
+  roleId      String                        @db.Uuid
+  /// Never changes.
+  event       NotificationEventKind
+  /// Never changes.
+  channel     NotificationPreferenceChannel
+  cadence     NotificationCadence
+  /// `default:<roleId>:<event>:<channel>`: one row per role, kind and channel (the API writes exactly this; the database
+  /// checks it begins so). Never changes.
+  key         String
+  version     Int                           @default(1)
+  createdAt   DateTime                      @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime                      @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?                       @db.Uuid
+
+  role Role @relation(fields: [tenantId, roleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, key])
+  // A role's defaults.
+  @@index([tenantId, roleId])
+}
+
+/// The kinds of news a person chooses for (design: the rows of the preferences matrix).
+enum NotificationEventKind {
+  /// Someone @mentioned me.
+  MENTIONED
+  /// Something was assigned to me (a task, an alert, a row of Today).
+  ASSIGNED
+  /// An approval waits for me.
+  APPROVAL_WAITING
+  /// An approval I asked for was decided.
+  APPROVAL_DECIDED
+  /// A record or a saved view I follow changed (an item entered or left the view).
+  FOLLOWING_CHANGED
+  /// An alert fired on my area.
+  AREA_ALERT
+  /// A mail of a team inbox was assigned to me.
+  MAIL_ASSIGNED
+}
+
+/// Where a notification reaches the person (design: the columns of the matrix).
+enum NotificationPreferenceChannel {
+  /// The bell and home.notifications.
+  IN_APP
+  EMAIL
+  /// Web Push to the person's phones and browsers (PushSubscription).
+  PUSH
+}
+
+/// How often (design: Instant · Daily digest · Off).
+enum NotificationCadence {
+  INSTANT
+  /// Listed in the person's daily digest mail (EMAIL only).
+  DAILY_DIGEST
+  OFF
+}
+
+/// One phone or browser a person turned push on for (PLT-140; design home.notifications › Push on this device, "Get urgent
+/// items on this phone"): Web Push to installed web apps (Android, iPhone home-screen apps from iOS 16.4). The server's
+/// VAPID keys are the environment's secrets; the subscription's own keys are sealed here. Turned off, never deleted.
+/// Personal data (the person's device; purpose: the office account).
+model PushSubscription {
+  id           String       @id @db.Uuid
+  tenantId     String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The office user who turned push on, on this device. Never changes.
+  userId       String       @db.Uuid
+  /// The name the person gave the device ("Phone", "Office laptop"): 1 to 100 characters of one line.
+  deviceLabel  String
+  /// The push service's endpoint (https), as the browser gave it. Never changes. One live subscription per endpoint (a
+  /// partial unique index, …_notify_depth_w2b_guards).
+  endpoint     String
+  /// The subscription's keys (p256dh and auth), sealed: a SecretValue of purpose `notifications.push`, set while it is
+  /// live; cleared once it is turned off (and the secret deleted), never set again.
+  keysSecretId String?      @db.Uuid
+  /// The last push the push service took for it.
+  lastUsedAt   DateTime?    @db.Timestamptz(3)
+  /// Turned off: by the person, or by the system when the push service said the subscription is gone. Set once.
+  revokedAt    DateTime?    @db.Timestamptz(3)
+  version      Int          @default(1)
+  createdAt    DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById  String?      @db.Uuid
+
+  user User         @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  keys SecretValue? @relation(fields: [tenantId, keysSecretId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // One subscription per sealed secret.
+  @@unique([tenantId, keysSecretId])
+  // A person's devices.
+  @@index([tenantId, userId])
+}
+
+/// A person following one saved view (PLT-151; design home.today "My saved views", "Changed since you looked"): told when
+/// an item enters or leaves it. Unfollowing removes the row; deleting the view removes its followers. Following starts at
+/// createdAt.
+model ViewFollower {
+  id              String    @id @db.Uuid
+  tenantId        String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The office user who follows it. Never changes.
+  userId          String    @db.Uuid
+  /// The saved view (views.prisma). Never changes. A view only its owner sees (ONLY_ME) is followed only by its owner.
+  viewId          String    @db.Uuid
+  /// `view:<viewId>:<userId>`: one row per view and person (the API writes exactly this; the database checks it begins
+  /// so). Never changes.
+  key             String
+  /// What the view held when it was last counted for the person ("since you looked"): the SHA-256 (hex) of its sorted row
+  /// ids, how many rows, and when. All three or none (not counted yet).
+  lastFingerprint String?
+  lastCount       Int?
+  lastCountedAt   DateTime? @db.Timestamptz(3)
+  version         Int       @default(1)
+  createdAt       DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
+
+  user User      @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // The view's owner deletes it (platform/views): its followers go with it.
+  view SavedView @relation(fields: [tenantId, viewId], references: [tenantId, id], onDelete: Cascade, onUpdate: Restrict)
+
+  @@unique([tenantId, key])
+  // The views a person follows.
+  @@index([tenantId, userId])
+  // A view's followers.
+  @@index([tenantId, viewId])
+}
+
+/// "Remind me about this" (COL-041; design home.tasks "Reminders", shell Remind me: later today, tomorrow, Monday, a date or
+/// when it changes): a record, or a message of its thread, that comes back to one person's Today. Removed by its person.
+model Reminder {
+  id          String       @id @db.Uuid
+  tenantId    String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The office user it reminds. Never changes.
+  userId      String       @db.Uuid
+  /// The record's company (its company tag on Today); null: a tenant-wide record. Never changes.
+  companyId   String?      @db.Uuid
+  /// The record it is about and its label when the reminder was set (`PO-2026-0031`). Never change.
+  recordType  String
+  recordId    String       @db.Uuid
+  recordLabel String
+  /// A message of the record's thread it is about, if any (it opens the record at the message). Never changes.
+  messageId   String?      @db.Uuid
+  /// When it comes back: AT_TIME (remindAt) or ON_CHANGE (the record changes after `since`).
+  kind        ReminderKind
+  /// AT_TIME: the time it comes back, after `since`; null for ON_CHANGE.
+  remindAt    DateTime?    @db.Timestamptz(3)
+  /// The moment it watches from: when it was set, or last put off (a new time or kind moves it on). Never goes back.
+  since       DateTime     @db.Timestamptz(3)
+  /// The person's own words ("supplier promised a date"): 1 to 500 characters.
+  note        String?
+  /// When it came back to Today (its time passed, or the record changed); cleared only when it is put off again.
+  cameBackAt  DateTime?    @db.Timestamptz(3)
+  /// Done (off Today, kept); cleared again by Undo.
+  doneAt      DateTime?    @db.Timestamptz(3)
+  version     Int          @default(1)
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+
+  user    User     @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  company Company? @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  message Message? @relation(fields: [tenantId, messageId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // A person's reminders (home.tasks, Today).
+  @@index([tenantId, userId, doneAt])
+  // The scheduler: AT_TIME reminders whose time came.
+  @@index([tenantId, remindAt])
+  // ON_CHANGE: a record's reminders.
+  @@index([tenantId, recordType, recordId])
+}
+
+/// When a reminder comes back.
+enum ReminderKind {
+  /// At remindAt.
+  AT_TIME
+  /// When the record changes after `since`.
+  ON_CHANGE
+}
+
+/// A shared mailbox of a company (COL-027; design home.mail "Team inboxes (W2b: orders@, quotes@)"): mail to its address
+/// (its local part at the company's receiving domain) lands in it; its members see it and take it. Switched off, never
+/// deleted.
+model TeamInbox {
+  id          String   @id @db.Uuid
+  tenantId    String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// Never changes.
+  companyId   String   @db.Uuid
+  /// The name the queue shows ("Orders"): 1 to 100 characters of one line, unique in the company.
+  name        String
+  /// The local part of its address (`orders` in orders@<the company's receiving domain>), lower case, unique in the
+  /// company.
+  localPart   String
+  /// Its members: office users of the tenant, each once (at most 200).
+  memberIds   String[] @default([]) @db.Uuid
+  /// Off: no new mail is put in it, and it is named by no new mail; kept for the mail it holds.
+  active      Boolean  @default(true)
+  version     Int      @default(1)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?  @db.Uuid
+
+  company          Company          @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  inboundEmails    InboundEmail[]
+  captureAddresses CaptureAddress[]
+
+  @@unique([tenantId, companyId, name])
+  @@unique([tenantId, companyId, localPart])
+  // The targets of the mails' and the capture addresses' tenant-safe references.
+  @@unique([tenantId, id])
+  @@unique([tenantId, companyId, id])
+}
+
+/// The address a company's people forward or BCC any mail to (COL-021; design home.mail band "Copy capture address",
+/// admin.connections): `c-<token>@<the company's reply domain>`. Mail to it is matched to the party and the record, or
+/// lands in its default team inbox (else in mail to sort). One live address per company (a partial unique index); a
+/// leaked one is turned off and a new one made. Never deleted.
+model CaptureAddress {
+  id                 String    @id @db.Uuid
+  tenantId           String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// Never changes.
+  companyId          String    @db.Uuid
+  /// The address's secret part: 26 random lower-case base32 characters, unique everywhere (as a thread's reply token).
+  /// Never changes.
+  token              String
+  /// The team inbox (of the company, switched on when named) unmatched mail to it lands in; null: mail to sort.
+  defaultTeamInboxId String?   @db.Uuid
+  /// Turned off: mail to it is no longer taken. Set once; then the row changes no more.
+  revokedAt          DateTime? @db.Timestamptz(3)
+  version            Int       @default(1)
+  createdAt          DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById        String?   @db.Uuid
+
+  company          Company    @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and companyId.
+  defaultTeamInbox TeamInbox? @relation(fields: [tenantId, companyId, defaultTeamInboxId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([token])
+  // A company's addresses.
+  @@index([tenantId, companyId])
+}

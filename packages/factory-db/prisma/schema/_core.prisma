@@ -165,6 +165,10 @@ model Company {
   complianceDocuments  ComplianceDocument[]
   // email-in.prisma: the mail received through the company's SES account.
   inboundEmails        InboundEmail[]
+  // W2b notify-depth.prisma (wave 47/57): its team inboxes, its capture addresses, the reminders about its records.
+  teamInboxes          TeamInbox[]
+  captureAddresses     CaptureAddress[]
+  reminders            Reminder[]
   // W2b-4 substances.prisma (wave 31/33): its own restricted substances, substance rules and test plan rules, and the
   // declarations it asked of suppliers.
   restrictedSubstances        RestrictedSubstance[]
