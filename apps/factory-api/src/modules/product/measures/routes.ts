@@ -24,6 +24,8 @@ import { createPom, getPom, listPoms, setPomStatus, updatePom } from './points'
 import { addSpecPoints, approveSpec, archiveSpec, getSpec, removeSpecPoints, reorderSpecPoints, reopenSpec, startSpec, updateSpec, writeSpecCells } from './spec'
 // B-W2b-283 (FU1:03): the measurement templates, listed for pickers.
 import { listTemplates, listTemplatesContract } from './templates'
+// B-W2b-358 (B-W1-17): the measurement template page and its writes.
+import { createTemplate, editTemplate, editTemplateContract, getTemplate, getTemplateContract, moveTemplate, moveTemplateContract, newTemplateContract, replacePoints, templatePointsContract } from './templates-write'
 
 /**
  * Points of measure and the measurement spec (product module, B-W2b-224; PRD-049, PRD-052, PRD-062, PRD-063, PRD-069;
@@ -49,6 +51,13 @@ export default defineRoutes('product.measures', manifest, async (app) => {
   app.delete('/product/points-of-measure/:pomId/picture', { schema: clearPictureContract }, async (request) => ({ point: await clearPicture(request, request.params.pomId, request.query.version, idempotencyKeyFrom(request)) }))
   // B-W2b-283 (FU1:03).
   app.get('/product/measurement-templates', { schema: listTemplatesContract }, async (request) => listTemplates(request, request.query))
+  // B-W2b-358 (B-W1-17): the template page and its writes (./templates-write.ts).
+  app.get('/product/measurement-templates/:templateId', { schema: getTemplateContract }, async (request) => getTemplate(request, request.params.templateId))
+  app.post('/product/measurement-templates', { schema: newTemplateContract }, async (request, reply) => reply.code(201).send(await createTemplate(request, request.body, idempotencyKeyFrom(request))))
+  app.patch('/product/measurement-templates/:templateId', { schema: editTemplateContract }, async (request) => editTemplate(request, request.params.templateId, request.body, idempotencyKeyFrom(request)))
+  app.put('/product/measurement-templates/:templateId/points', { schema: templatePointsContract }, async (request) => replacePoints(request, request.params.templateId, request.body, idempotencyKeyFrom(request)))
+  app.post('/product/measurement-templates/:templateId/archive', { schema: moveTemplateContract }, async (request) => moveTemplate(request, request.params.templateId, 'ARCHIVED', request.body, idempotencyKeyFrom(request)))
+  app.post('/product/measurement-templates/:templateId/restore', { schema: moveTemplateContract }, async (request) => moveTemplate(request, request.params.templateId, 'ACTIVE', request.body, idempotencyKeyFrom(request)))
 
   app.get('/product/styles/:styleId/revisions/:revisionId/measurement-spec', { schema: getSpecContract }, async (request) => ({ spec: await getSpec(request, request.params.styleId, request.params.revisionId) }))
   app.post('/product/styles/:styleId/revisions/:revisionId/measurement-spec', { schema: startSpecContract }, async (request, reply) =>

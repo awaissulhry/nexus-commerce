@@ -1,4 +1,4 @@
-import { DomainError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
+import { NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { businessDate } from '@nexus/factory-domain/core/time'
 import { markMoney } from '@nexus/factory-domain/money/marked'
@@ -12,14 +12,16 @@ import { decimal, officeQuote, quotePartyOf, readLineRecords, type LineRecord, t
 import type { QuoteDetail } from './views'
 // B-W2b-294 (SAL-151): a size change keeps what the line's delivery schedule brings.
 import { assertScheduleFits } from '../quote-terms/carry'
+// B-W2b-358 (MM1:01): made-to-measure units.
+import { addMadeToMeasureLine, editMadeToMeasureLine } from './mtm-line'
 
 /**
  * A draft quote's lines (B-W1-21; SAL-203, SAL-268; A2 SCR-034 "Style blocks", SCR-035 "Quote line"): a style in one
  * colourway as a size grid (whole pieces per size of the style's range that the colourway offers as an ACTIVE SKU; a
  * size may have its own price), its unit price (or a list price and a discount), its description and note. A line is
  * costed from its style revision's cost sheet when it is added and whenever its colourway, revision or sizes change;
- * any change brings the version's money up to date (pricing.ts refreshVersion). A made-to-measure line is refused for now
- * (Owner Q9: made-to-measure comes later). Each write is one command on the Quote.
+ * any change brings the version's money up to date (pricing.ts refreshVersion). A made-to-measure unit is ./mtm-line.ts's
+ * (B-W2b-358). Each write is one command on the Quote.
  */
 
 const blankToNull = (value: string | null | undefined): string | null => (value === undefined || value === null || value.trim() === '' ? null : value.trim())
@@ -31,9 +33,8 @@ const blankToNull = (value: string | null | undefined): string | null => (value 
 export const defaultLineDescription = (style: { readonly code: string; readonly name: string }, colourway: { readonly name: string }): string => `${style.code} ${style.name} - ${colourway.name}`
 const actorIdOf = (tools: Pick<CommandTools, 'context'>): string | null => (tools.context.audience === 'office' ? tools.context.actorId : null)
 
-/** Made-to-measure is deferred (Owner Q9): a 409 that says so. */
-export const madeToMeasureLater = (): DomainError =>
-  new DomainError('conflict', 'Made-to-measure comes later: quote a size-grid line for now (one style in one colourway with pieces per size).', [{ path: 'body/kind', message: 'MADE_TO_MEASURE is not available yet.' }])
+// B-W2b-358 (MM1:01): W1's "made-to-measure comes later" is lifted: a MADE_TO_MEASURE line is ./mtm-line.ts's (made-to-measure
+// started per template and the style flagged; refused there in words while it is not).
 
 const invalid = (issues: Issue[]): ValidationError => new ValidationError(issues.length === 1 ? issues[0]!.message : 'The line cannot be saved.', issues)
 
@@ -110,8 +111,19 @@ export interface AddLineInput extends LineFields {
 
 /** quotes.manage: a size-grid line on the DRAFT version, costed and priced; the version's money follows. */
 export async function addLine(caller: CommandCaller, quoteId: string, body: AddLineInput, idempotencyKey?: string): Promise<{ quote: QuoteDetail }> {
+  // B-W2b-358: a made-to-measure unit (one piece, a rider's measurement profile, no size grid) is ./mtm-line.ts's.
+  if (body.kind === 'MADE_TO_MEASURE' || (body.measurementProfileId !== undefined && body.measurementProfileId !== null)) {
+    const issues: Issue[] = [
+      ...(body.kind !== 'MADE_TO_MEASURE' ? [{ path: 'body/kind', message: 'A line with a measurement profile is a made-to-measure unit: send kind MADE_TO_MEASURE.' }] : []),
+      ...(!body.measurementProfileId ? [{ path: 'body/measurementProfileId', message: "A made-to-measure unit names the rider's measurement profile." }] : []),
+      // W1's body asks a size grid: for a unit, one size with one piece, its base size (POST …/lines/made-to-measure takes none).
+      ...(body.sizes.length !== 1 || body.sizes[0]!.quantity !== 1 ? [{ path: 'body/sizes', message: 'A made-to-measure unit is one piece: send its base size with quantity 1 (or none at …/lines/made-to-measure).' }] : []),
+    ]
+    if (issues.length > 0) throw invalid(issues)
+    const { kind: _kind, sizes, measurementProfileId, ...rest } = body
+    return addMadeToMeasureLine(caller, quoteId, { ...rest, measurementProfileId: measurementProfileId!, baseSize: sizes[0]!.size }, idempotencyKey)
+  }
   const quote = await officeQuote(caller, quoteId, QUOTES_MANAGE)
-  if (body.kind === 'MADE_TO_MEASURE' || (body.measurementProfileId !== undefined && body.measurementProfileId !== null)) throw madeToMeasureLater()
   return onQuote(caller, quote, { name: 'quotes.addLine', idempotencyKey, input: { quoteId, ...body }, version: body.version }, async (tools, current, version) => {
     const { tx, now } = tools
     assertDraft(version)
@@ -183,6 +195,13 @@ export async function addLine(caller: CommandCaller, quoteId: string, body: AddL
  */
 export async function editLine(caller: CommandCaller, quoteId: string, lineId: string, body: LineFields & { version: number }, idempotencyKey?: string): Promise<{ quote: QuoteDetail }> {
   const quote = await officeQuote(caller, quoteId, QUOTES_MANAGE)
+  // B-W2b-358: a made-to-measure unit is changed by ./mtm-line.ts (its revision and base size there; no size grid).
+  const kind = isUuid(lineId) ? (await caller.withClient((client) => client.quoteLine.findUnique({ where: { id: lineId }, select: { kind: true } })))?.kind : undefined
+  if (kind === 'MADE_TO_MEASURE') {
+    if (body.sizes !== undefined) throw invalid([{ path: 'body/sizes', message: 'A made-to-measure unit has no size grid: change its base size (…/made-to-measure).' }])
+    const { sizes: _sizes, ...rest } = body
+    return editMadeToMeasureLine(caller, quoteId, lineId, rest, idempotencyKey)
+  }
   return onQuote(caller, quote, { name: 'quotes.editLine', idempotencyKey, input: { quoteId, lineId, ...body }, version: body.version }, async (tools, current, version) => {
     const { tx } = tools
     assertDraft(version)

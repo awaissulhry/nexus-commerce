@@ -13,6 +13,8 @@ import { officeContextOf } from '../orders/access'
 import { cancelOrderInCommand } from '../orders/moves'
 import { officeOrder } from '../orders/moves'
 import { readOrder, type Reader } from '../orders/store'
+// B-W2b-358 (SAL-292): a made-to-measure unit's measures are confirmed before the order goes on.
+import { waitsForMeasures } from '../mtm/order-gate'
 
 /**
  * Orders waiting for a yes (B-W2b-303; SAL-205 "pending approval status"; plan "An order that breaks a SALES_ORDER rule waits
@@ -100,6 +102,11 @@ export async function approvedInCommand(tools: CommandTools, task: TaskRef): Pro
   const hold = await creditHoldOf(tx, order.id)
   if (hold) {
     tools.audit({ action: 'orders.approvalYes', recordType: 'SalesOrder', recordId: order.id, companyId: order.companyId, after: { taskId: task.id, status: 'PENDING_APPROVAL', stillWaitsFor: 'CREDIT', creditCheckId: hold.checkId } })
+    return
+  }
+  // B-W2b-358: the yes is kept; the order waits for the factory review of a made-to-measure unit (the CONFIRM lets it go on).
+  if (await waitsForMeasures(tx, order.id)) {
+    tools.audit({ action: 'orders.approvalYes', recordType: 'SalesOrder', recordId: order.id, companyId: order.companyId, after: { taskId: task.id, status: 'PENDING_APPROVAL', stillWaitsFor: 'MEASUREMENTS' } })
     return
   }
   await tx.salesOrder.update({ where: { id: order.id }, data: { status: 'CONFIRMED', version: { increment: 1 }, updatedAt: now }, select: { id: true } })

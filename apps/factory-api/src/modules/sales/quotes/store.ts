@@ -130,6 +130,9 @@ export const LINE_COLUMNS = {
   marginPct: true,
   costSnapshot: true,
   version: true,
+  // B-W2b-358: a made-to-measure unit's revision and base size (its cost is the base size's cell, quotes/mtm-line.ts).
+  measurementProfileId: true,
+  baseSize: true,
 } as const satisfies Prisma.QuoteLineSelect
 export type LineRow = Prisma.QuoteLineGetPayload<{ select: typeof LINE_COLUMNS }>
 
