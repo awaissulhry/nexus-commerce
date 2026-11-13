@@ -7,6 +7,9 @@ import type { Grains } from '../../model'
 // B-W2b-343: the cost breakdown and the waterfall (price-depth/LineWaterfall.tsx).
 import { LineWaterfall } from '../price-depth/LineWaterfall'
 import { PRICE_DEPTH_NS } from '../price-depth/model'
+// B-W2b-340: the configurator of the line (configurator/QuoteLineOptions.tsx).
+import { QuoteLineOptions } from '../configurator/QuoteLineOptions'
+import { CONFIGURATOR_NS } from '../configurator/model'
 
 /**
  * The line drawer's open slot (design pop:quotes.lineDrawer): the parts later steps add to a quote line, each a section
@@ -51,6 +54,12 @@ export function lineDrawerSections(context: LineDrawerContext): LineDrawerSectio
   if (context.grains.price) {
     const words = createTranslator(context.locale ?? 'it', messagesFor(context.locale ?? 'it', [PRICE_DEPTH_NS])[PRICE_DEPTH_NS] ?? {})
     sections.push({ id: 'waterfall', order: 10, title: words('drawer.title'), body: createElement(LineWaterfall, { key: context.line.id, api: context.api, quote: context.quote, line: context.line, grains: context.grains, editable: context.editable, onQuote: context.onQuote }) })
+  }
+  // B-W2b-340: Options (the style's options with their rules and surcharges, panel colours and leather, the artwork, the price
+  // and margin as checked, the colourway's picture); a goods line only (a fee takes none).
+  if (context.line.kind !== 'FEE') {
+    const options = createTranslator(context.locale ?? 'it', messagesFor(context.locale ?? 'it', [CONFIGURATOR_NS])[CONFIGURATOR_NS] ?? {})
+    sections.push({ id: 'options', order: 20, title: options('section.title'), body: createElement(QuoteLineOptions, { key: context.line.id, api: context.api, quote: context.quote, line: context.line, grains: context.grains, onQuote: context.onQuote }) })
   }
   return sections.sort((a, b) => a.order - b.order)
 }

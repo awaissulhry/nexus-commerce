@@ -10,6 +10,8 @@ import { createGroupBodyOf, DISMISSED_STORE, formProblem, filtersOf, groupDraftO
 import { useOnline } from './online'
 import type { GroupFormModel, OptionsViewModel } from './view-model'
 import { OptionsView } from './view/OptionsView'
+// B-W2b-340 (SAL-249): Test a combination.
+import { TestCombination } from './upkeep/TestCombination'
 
 const readDismissed = (): string[] => {
   try {
@@ -175,7 +177,7 @@ export function OptionsPage() {
     }
   }
 
-  const model: OptionsViewModel = { prefix, companyId, can, filters, rows, counts, countsFailed, style, asOf, updates, dismissed, notice, busy, newGroup, offline: !online }
+  const model: OptionsViewModel = { prefix, companyId, can, filters, rows, counts, countsFailed, style, asOf, updates, dismissed, notice, busy, newGroup, offline: !online, /* B-W2b-340 */ bench: <TestCombination api={api} styleId={filters.style || null} permissions={session.permissions} /> }
 
   return (
     <OptionsView

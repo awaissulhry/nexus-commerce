@@ -287,7 +287,8 @@ describe('every key the quote screens name exists in it and en', () => {
   it('sales', () => {
     // B-W2b-316: the W2b parts speak `sales-quotes-depth` (tested in record/lines-depth/depth.vitest).
     // B-W2b-343: price-depth speaks `sales-prices-depth` (tested in record/price-depth/price-depth.vitest).
-    const depth = /quotes[\\/](record[\\/](lines-depth|terms-depth|versions-depth|goalseek|price-depth)|new-from|paste)[\\/]/
+    // B-W2b-340: the configurator speaks `sales-configurator` (tested in record/configurator/configurator.vitest).
+    const depth = /quotes[\\/](record[\\/](lines-depth|terms-depth|versions-depth|goalseek|price-depth|configurator)|new-from|paste)[\\/]/
     const keys = [...literalKeys(['areas/sales/quotes'], SALES_PREFIXES, depth), ...salesBuilt].filter((key) => !/^(quotes|money|sales)\./.test(key))
     expect(keys.length).toBeGreaterThan(300)
     expect(keys.filter((key) => !has('sales', key))).toEqual([])

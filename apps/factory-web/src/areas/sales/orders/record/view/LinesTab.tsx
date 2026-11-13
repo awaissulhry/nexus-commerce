@@ -75,6 +75,7 @@ export function LinesTab({ order, model, actions }: { order: Order; model: Order
               cells: [
                 <span key="c" className="fw-so-cell">
                   {line.colourway ? `${line.colourway.code} · ${line.colourway.name}` : '—'}
+                  {model.lineOptions?.(line) /* B-W2b-340: the line's options */}
                   {line.closedShort && (
                     <span className="fw-so-closed">
                       <Tag tone="warning">{t('lines.closedShort', { count: line.closedShort.quantity })}</Tag>

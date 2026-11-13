@@ -90,6 +90,10 @@
     "MTM_NOT_CONFIRMED": "La fabbrica non ha ancora confermato le misure di un pilota: l'ordine aspetta la revisione.",
     "MTM_NOT_LATEST": "Un capo su misura usa una revisione vecchia: il pilota ha misure più recenti.",
     "MTM_OLD_MEASURES": "Le misure di un pilota hanno più di 12 mesi: chiedi una nuova misurazione.",
+    "OPTIONS_REFUSED": "Le opzioni di una riga non rispettano più le loro regole (un'opzione o una regola è cambiata): sceglile di nuovo nella riga.",
+    "OPTIONS_MISSING": "L'articolo chiede opzioni che nessuno ha scelto su una riga: sceglile nella riga.",
+    "OPTIONS_OUTSIDE_CERTIFICATE": "Un'opzione porta un capo fuori dal suo certificato.",
+    "OPTIONS_NOT_PRICED": "Le opzioni di una riga aggiungono al prezzo, ma il prezzo non le comprende: salva di nuovo le opzioni nella riga.",
     "pass": {
       "approval": "Approvazione fatta o non necessaria",
       "validity": "Validità impostata",

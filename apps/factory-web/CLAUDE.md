@@ -312,6 +312,14 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   the record panels; Make quote, Assign, Ask for more information, Decline with an optional message through the thread, Mark as lost), New
   inquiry (`c`) and "Make an inquiry" from a mail (`?mail=`: Mail to sort can link there). Row verbs are held before the click with
   factory-domain's own refusals (model.ts). `RECORD_PAGES.Inquiry` opens the full page; search type `Inquiry`.
+- `src/areas/sales/quotes/record/configurator/` — the configurator on a quote or order line (B-W2b-340 on its own API, modules/sales/configurator;
+  SCR-425; catalogue `sales-configurator`, CSS prefix `fw-cfg-`): ONE container `use-configurator.ts` (reads, the person's draft, every change
+  checked by POST …/configurator/check debounced — the price, margin and surcharges are the API's (B-W2b-330's waterfall), never computed
+  here —, Save = PUT …/options at the document's version, artwork announce → PUT → complete), `model.ts` (pure: picks, the body, why Save
+  waits, surcharge words = products/options `surchargeText`), ONE view `view/ConfiguratorView.tsx` (QUOTE, ORDER, BENCH). The quote line
+  drawer's section `options` (order 20, `QuoteLineOptions`, one entry in lines-depth/drawer-sections.tsx); the order's Lines: an "Options"
+  button per colour line (`orders/record/configurator/OrderLineOptions.tsx`, a Modal, through OrderRecordModel `lineOptions`); Products ›
+  Options & rules: "Test a combination" (`products/options/upkeep/`, SCR-426, through OptionsViewModel `bench`).
 - `src/areas/sales/service/` — Sales › After-sales › Warranty & service (B-W2b-353 on B-W2b-345's API; SCR-217
   `/sales/service?view=&kind=&cover=&serial=&q=&new=1`, SCR-413 the case `/sales/service/<id>?tab=case|warranty|linked|actions|activity&do=`;
   catalogue `sales-service`, CSS prefix `fw-svc-`): tiles = the API's `view` (a tile's chip in the filter row; "—" when not counted), the

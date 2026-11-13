@@ -190,9 +190,12 @@ function Options({ model, actions }: { model: OptionsViewModel; actions?: Option
         intro={t('page.intro')}
         status={<Freshness asOf={model.asOf} />}
         actions={
-          <Button size="sm" variant="primary" heldReason={newHeld} onClick={() => actions?.onNewGroup?.(true)} aria-keyshortcuts="c">
-            <Plus size={14} aria-hidden /> {t('page.new')}
-          </Button>
+          <>
+            {model.bench /* B-W2b-340: Test a combination (upkeep/TestCombination.tsx) */}
+            <Button size="sm" variant="primary" heldReason={newHeld} onClick={() => actions?.onNewGroup?.(true)} aria-keyshortcuts="c">
+              <Plus size={14} aria-hidden /> {t('page.new')}
+            </Button>
+          </>
         }
       />
 

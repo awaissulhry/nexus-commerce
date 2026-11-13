@@ -35,6 +35,15 @@ describe('where a result opens (B-W2a-32)', () => {
     expect(SEARCH_TYPES).toEqual(expect.arrayContaining(['PointOfMeasure', 'GradeRule']))
   })
 
+  // B-W2b-361: a product-safety report (B-W2b-351's indexer) is a search type with its words, and opens its page (B-W2b-357).
+  it('opens a product-safety report on its page under the register, said as a report, never "Record"', () => {
+    expect(resultHref(result({ recordType: 'ProductSafetyReport', area: 'sales' }), place)).toBe('/w/DEMO/compliance/register/accidents/reports/r1')
+    expect(SEARCH_TYPES).toContain('ProductSafetyReport')
+    expect(typeKey('ProductSafetyReport')).toBe('type.ProductSafetyReport')
+    expect(SEARCH_VIEW_PERMISSIONS).toContain('sales.safety.view')
+    expect(statusKey('ASSESSING')).not.toBeNull()
+  })
+
   it('opens a record type without a page of its own in its panels', () => {
     expect(resultHref(result({ recordType: 'Gizmo', number: 'GZ-1' }), place)).toBe('/w/DEMO/records/Gizmo/r1?label=GZ-1')
   })

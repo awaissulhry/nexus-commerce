@@ -1,4 +1,5 @@
 import type { RecordPanelsViewModel } from '../../../../record-panels/model'
+import type { ReactNode } from 'react' // B-W2b-340
 import type { StyleDetail, StyleRow, VersionsAnswer } from '../../quotes/api'
 import type { AmendmentsAnswer, AmendPreview, CancelCheck, CancelReason, CloseLinesAnswer, CopyAnswer, DepositLinkAnswer, DepositReceived, Order, OrderWorkOrder, Schedule, SdiStatus, Settlement } from '../api'
 import type { DraftLine } from '../daily-model'
@@ -120,6 +121,8 @@ export interface OrderRecordModel {
   /** B-W2b-323: the orders in depth (priority, season, the yes it waits for, what is frozen, priced changes, the customer's
    *  materials, the confirmation, the tech pack, the finish forecast, the milestones); absent: not drawn. */
   depth?: OrderDepthModel
+  /** B-W2b-340: a colour line's "Options" (the configurator of the order line, its own container); absent: not drawn. */
+  lineOptions?: (line: Order['lines'][number]) => ReactNode
   /** Design cases: what a dialog holds typed. */
   draft?: { date?: string; reason?: string; reasonCode?: string; lineIds?: string[]; scope?: 'order' | 'lines'; amount?: string; reference?: string; receivedOn?: string; issue?: boolean; message?: string; typed?: string }
 }

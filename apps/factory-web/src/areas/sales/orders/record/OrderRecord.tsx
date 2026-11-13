@@ -55,6 +55,9 @@ import { useScheduleSteps } from './schedule/use-schedule-steps'
 import { useLocale } from '../../../../lib/i18n/provider'
 import { useOrderDepth } from '../depth/use-order-depth'
 import { NAMESPACE as DEPTH } from '../depth/model'
+// B-W2b-340: the configurator of an order line (its "Options" dialog).
+import { OrderLineOptions } from './configurator/OrderLineOptions'
+import { createElement } from 'react'
 
 /**
  * `/w/<company>/sales/orders/<id>` (SCR-039): loads the order (orders.view; the API checks its company and customer),
@@ -398,6 +401,8 @@ function RecordContainer({ orderId }: { orderId: string }) {
     margin: margin.model,
     scheduleSteps: scheduleSteps.model,
     portal,
+    // B-W2b-340
+    lineOptions: order.status === 'ready' ? (line) => createElement(OrderLineOptions, { key: line.id, api, order: order.value, line, permissions: session.permissions, onReload: () => void load() }) : undefined,
   }
 
   const value = order.status === 'ready' ? order.value : null

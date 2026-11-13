@@ -42,6 +42,8 @@ import { quoteLineChecks, withLineChecks } from '../line-checks/documents'
 import { discountShownFor } from '../pricing-depth/store'
 // B-W2b-304 (SAL-148): the customer's credit checked when the quote goes out (shown, never held).
 import { quoteCreditInCommand } from '../credit/check'
+// B-W2b-340 (SAL-133): the options chosen on the lines go to the new version.
+import { carryOptionsToRevision } from '../configurator/copy'
 
 /**
  * Sending a quote (B-W1-24; A1 §2.5 "Sending freezes a version"; SAL-157, SAL-192, SAL-194, SAL-093; GAP-005, GAP-008;
@@ -513,6 +515,8 @@ export async function reviseQuote(caller: CommandCaller, quoteId: string, body: 
     await copyLines(tools, from.id, versionId, current.partyId)
     // B-W2b-294
     await carryToRevisionInCommand(tools, from.id, versionId)
+    // B-W2b-340
+    await carryOptionsToRevision(tools, from.id, versionId)
     await tx.quote.update({ where: { id: current.id }, data: { status: 'DRAFT', currentRevision: revision }, select: { id: true } })
     const after = (await readQuote(tx, current.id))!
     await refreshVersion(tools, after, await readCurrentVersion(tx, after), new Set())
