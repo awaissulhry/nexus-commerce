@@ -558,7 +558,15 @@ describe('the list, the board and the tiles (SAL-214: counts that match the list
     }
     expect(board.byStatus.find((row: Json) => row.status === 'PARTLY_SHIPPED').count).toBe(1)
     const late = (await ok('a.sales', 'GET', '/sales/orders?late=true')).orders
-    expect(late.map((row: Json) => [row.number, row.daysLate > 0])).toEqual([['SEED-SO-0001', true]])
+    // ---- B-W2b-F43: late = the open orders promised before today, read from the database, so the list holds on every day (it was
+    // SEED-SO-0001 alone, which failed once SEED-SO-0003's seeded promise, 11 Dec 2026, had passed).
+    const promisedBefore = await admin<{ number: string }>(
+      `SELECT number FROM "SalesOrder" WHERE "tenantId" = $1 AND status::text IN ('CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED') AND "promiseDate" < $2::date ORDER BY number`,
+      [T.a, TODAY],
+    )
+    expect(promisedBefore.map((row) => row.number)).toContain('SEED-SO-0001')
+    expect(late.map((row: Json) => [row.number, row.daysLate > 0]).sort()).toEqual(promisedBefore.map((row) => [row.number, true]))
+    // ---- end B-W2b-F43
     const waitingDeposit = (await ok('a.sales', 'GET', '/sales/orders?deposit=OPEN&limit=200')).orders.map((row: Json) => row.number)
     expect(waitingDeposit).toContain(order.number)
     expect(waitingDeposit).not.toContain(`SO-${YEAR}-0001`) // cancelled with its deposit

@@ -15,6 +15,13 @@ import { testAuthenticator, type SessionContext } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { startHarness, type Harness } from '../../../platform/auth/sessions/testing/harness'
 
+// ---- B-W2b-F43: the clock is fixed at Friday 13 Nov 2026 09:00 UTC (10:00 at the plant), in the seeds' week, and runs on from
+// there: the expectations read the seeds' fixed days and failed once those days passed (a fake clock on 2026-12-07 or 2027-01-15
+// found it). The routes read the same clock (serverClock); the office sign-in keeps its own movable clock.
+vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-11-13T09:00:00.000Z'), shouldAdvanceTime: true })
+afterAll(() => vi.useRealTimers())
+// ---- end B-W2b-F43
+
 /**
  * Sample rounds (B-W2b-246; SAL-311, SAL-316, MES-018) through the app's real routes on a throwaway PostgreSQL 17 database from
  * the migrations (the runtime login: row-level security and B-W2b-212's …_changes_samples_w2b_guards are real), on the seeds up

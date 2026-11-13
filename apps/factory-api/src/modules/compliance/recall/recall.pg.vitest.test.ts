@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url'
 import type { FastifyInstance } from 'fastify'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { publicDocCodeOf } from '@nexus/factory-domain/compliance/public-doc/code'
 import { newId } from '@nexus/factory-domain/core/ids'
 import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
@@ -26,6 +26,13 @@ import { ensureThread, writeMessage } from '../../../platform/threads/threads'
 import { readPublicNotices } from '../public-doc/notice'
 import { guarded } from './common'
 import { distributorHandlers } from './distributors'
+
+// ---- B-W2b-F43: the clock is fixed at Friday 13 Nov 2026 09:00 UTC (10:00 at the plant), in the seeds' week, and runs on from
+// there: the expectations read the seeds' fixed days and failed once those days passed (a fake clock on 2026-12-07 or 2027-01-15
+// found it). The routes read the same clock (serverClock); the office sign-in keeps its own movable clock.
+vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-11-13T09:00:00.000Z'), shouldAdvanceTime: true })
+afterAll(() => vi.useRealTimers())
+// ---- end B-W2b-F43
 
 /**
  * Recall, withdrawal and authority (B-W2b-260; PRD-387, PRD-388, PRD-390; RG1:01, RG1:02) through the app's real routes on a
