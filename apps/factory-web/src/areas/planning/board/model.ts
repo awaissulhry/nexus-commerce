@@ -44,6 +44,8 @@ export interface BoardControls {
   materialMark: boolean
   /** The bar popover's work order. */
   wo: string | null
+  /** B-W2b-337: the planner's private what-if scenario being tried (design sec:whatif); null = what-if off. */
+  whatIf: string | null
 }
 
 export const DEFAULT_CONTROLS: BoardControls = Object.freeze({
@@ -59,6 +61,7 @@ export const DEFAULT_CONTROLS: BoardControls = Object.freeze({
   late: true,
   materialMark: true,
   wo: null,
+  whatIf: null,
 })
 
 const list = (value: string | null | undefined): string[] => (value ? value.split(',').map((part) => part.trim()).filter(Boolean) : [])
@@ -84,6 +87,7 @@ export function controlsOf(params: { get(name: string): string | null } | null |
     late: marks ? marks.has('late') : true,
     materialMark: marks ? marks.has('material') : true,
     wo: get('wo'),
+    whatIf: get('whatif'),
   }
 }
 
@@ -101,6 +105,7 @@ export function queryOf(controls: BoardControls): string {
   if (controls.material) query.set('material', '1')
   if (!controls.late || !controls.materialMark) query.set('hl', [controls.late ? 'late' : null, controls.materialMark ? 'material' : null].filter(Boolean).join(','))
   if (controls.wo) query.set('wo', controls.wo)
+  if (controls.whatIf) query.set('whatif', controls.whatIf)
   return query.toString()
 }
 
@@ -142,6 +147,8 @@ export interface Words {
   t: Translate
   locale: Locale
   timeZone: string
+  /** B-W2b-337: the words of `planning-board-depth` (the W2b refusals); without it those refusals say the generic sentence. */
+  td?: Translate
 }
 
 const number = (value: number, locale: Locale, digits = 0) => new Intl.NumberFormat(INTL_LOCALE[locale], { maximumFractionDigits: digits }).format(value)
@@ -526,6 +533,10 @@ export type Refusal =
   | { code: 'FORBIDDEN' | 'NOT_FOUND' | 'INVALID' | 'OFFLINE' | 'SIGNED_OUT' | 'FAILED' }
   // B-W2b-263: the order waits on a pre-production gate not passed (the API's issues `gate/<id>`): Start before the gate?
   | { code: 'GATE_NOT_PASSED'; gates: string[] }
+  // B-W2b-337: the W2b refusals (B-W2b-312 pins, the reschedules, what-if; B-W2b-329 undo), issue `refusal/<CODE>`.
+  | { code: (typeof W2B_REFUSALS)[number] }
+
+const W2B_REFUSALS = ['PINNED', 'ALREADY_PINNED', 'NOT_PINNED', 'NOTHING_TO_PIN', 'NOTHING_TO_RESCHEDULE', 'WHAT_IF_CONFLICTS', 'WHAT_IF_CLOSED', 'NOT_UNDOABLE', 'ALREADY_UNDONE', 'CHANGED_SINCE'] as const
 
 const CONFLICTS: ReadonlyArray<[RegExp, Refusal['code']]> = [
   [/ does .*; Op \d+|is done at .*: change its work centre/, 'LANE_DOES_NOT'],
@@ -553,6 +564,8 @@ export function refusalOf(error: unknown): Refusal {
     if (paths.includes('body/overloadReason') || paths.some((path) => path.startsWith('over/'))) return { code: 'OVERLOAD' }
     if (paths.includes('body/version')) return { code: 'PLAN_CHANGED' }
     if (paths.includes('refusal/GATE_NOT_PASSED')) return { code: 'GATE_NOT_PASSED', gates: paths.filter((path) => path.startsWith('gate/')).map((path) => path.slice('gate/'.length)) } // B-W2b-263
+    const w2b = W2B_REFUSALS.find((code) => paths.includes(`refusal/${code}`)) // B-W2b-337
+    if (w2b) return { code: w2b }
     for (const [pattern, code] of CONFLICTS) if (pattern.test(error.message)) return { code } as Refusal
     return { code: 'CONFLICT' }
   }
@@ -570,6 +583,8 @@ export function refusalWords(refusal: Refusal, words: Words): string {
     if (refusal.name && time) return words.t('refusal.MOVED_BY', { name: refusal.name, time })
     return time ? words.t('refusal.MOVED', { time }) : words.t('refusal.MOVED_SOMEONE')
   }
+  // B-W2b-337: the W2b refusals are said by `planning-board-depth`.
+  if ((W2B_REFUSALS as readonly string[]).includes(refusal.code)) return words.td ? words.td(`refusal.${refusal.code}`) : words.t('refusal.CONFLICT')
   return words.t(`refusal.${refusal.code}`)
 }
 

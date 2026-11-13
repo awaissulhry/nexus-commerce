@@ -1,0 +1,97 @@
+/*
+ * Planning › Planning board in depth (SCR-122, SCR-407, SCR-408; B-W2b-337) LAYOUT: the What-if section, the Changes feed, the
+ * W2b dialogs' forms and lists, the day sheet preview and the published version tab. Semantic tokens only, no colours of their
+ * own; no page max-width (the board's sections fill the main area); nothing scrolls the page sideways.
+ */
+.fw-pbd-whatif,
+.fw-pbd-log,
+.fw-pbd-stack,
+.fw-pbd-sheets {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-pbd-head,
+.fw-pbd-actions,
+.fw-pbd-filters,
+.fw-pbd-inline,
+.fw-pbd-deltas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6) var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-pbd-head {
+  justify-content: space-between;
+}
+
+.fw-pbd-deltas,
+.fw-pbd-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-pbd-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+
+.fw-pbd-move,
+.fw-pbd-entry {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-8);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-pbd-change {
+  display: inline-flex;
+  min-width: 0;
+}
+
+.fw-pbd-change-lines {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4);
+}
+
+.fw-pbd-change-from {
+  color: var(--nds-text-muted);
+}
+
+.fw-pbd-change-arrow {
+  color: var(--nds-text-muted);
+  flex: none;
+}
+
+.fw-pbd-change-to {
+  font-weight: var(--nds-font-weight-medium);
+}
+
+.fw-pbd-choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
+  gap: var(--nds-space-8);
+}
+
+.fw-pbd-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 14rem), 1fr));
+  gap: var(--nds-space-8) var(--nds-space-12);
+  align-items: start;
+}
+
+.fw-pbd-h1 {
+  margin: 0;
+  font-size: var(--nds-font-size-lg);
+  font-weight: var(--nds-font-weight-semibold);
+}

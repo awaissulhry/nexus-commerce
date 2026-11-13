@@ -1,13 +1,21 @@
 import { defineDesignScreen } from '../../../lib/design/design-screen'
-import type { BarDetail, Board, BoardLane, BoardSlot, BoardWorkOrder, PlaceByDueDate, PlanningSite, PublishedVersion, PublishPreview } from './api'
+import type { AllocationWorkshops, KitTiming, WorkOrderWorkshops } from '../allocation/depth/api'
+import type { Subcontractors } from '../capacity/depth/api'
+import type { BarDetail, Board, BoardLane, BoardSlot, BoardWorkOrder, FloorView, PlaceByDueDate, PlanningSite, PublishedVersion, PublishPreview } from './api'
+import type { BacklogRun, ChangeEntry, ChangesPage, DaySheetPaper, WhatIf } from './depth/api'
 import { DEFAULT_CONTROLS, type BoardControls } from './model'
-import type { BoardDialog, BoardViewModel } from './view-model'
+import { whatIfBoard as whatIfBoardOf } from './depth/model'
+import type { BoardDepth, BoardDialog, BoardViewModel, ChangesState } from './view-model'
 import { BoardView } from './view/BoardView'
 
 /**
  * SCR-122 Planning board with made-up data: an invented site ("Stabilimento Esempio"), invented lines, styles and work
  * orders, an invented planner ("Marta Esempio"). Nothing here is a real company, person, order or number. Design-only.
  * The week shown starts on Monday 16 November 2026 (today in these cases).
+ *
+ * B-W2b-337 (the board in depth): every bar has its state on the floor, one bar is pinned, the workshop lane says what it is
+ * approved for and its weekly capacity, the problems list has its three W2b kinds, and the Changes feed its made-up moves;
+ * the new cases show What-if, Move to a subcontractor, the material check, Print day sheets, Reschedule backlog and Export.
  */
 
 const uid = (block: string, n: number) => `0190f0e2-${block}-7000-8000-${String(n).padStart(12, '0')}`
@@ -145,7 +153,9 @@ export const WORK_ORDERS: BoardWorkOrder[] = [
     booksCapacity: true,
     minutes: '2000.0',
     schedule: schedule('LATE', 'PLAN_FINISHES_LATE', at(17, 8), [at(18, 8), at(21, 12)]),
-    readiness: { word: 'EXPECTED', date: day(17) },
+    readiness: { word: 'EXPECTED', date: day(18) },
+    // B-W2b-337: the leather arrives on Wednesday, the work may start on Thursday (the bar starts on Wednesday: a W2b problem).
+    materialStart: { state: 'ARRIVES', arrives: day(18), startDay: day(19), earliestStart: at(19, 8), setBy: { label: 'PEL-CAP-NERO · Pelle bovina nero', arrives: day(18), purchaseOrderNumber: 'PO-ESEMPIO-0007', source: 'PURCHASE_ORDER' }, notCovered: [] },
     operations: [operation(102, 20, 'sew', 25, 80, lineLane(LINE2), [at(18, 8), at(18, 17)], [slotId(4)], { startsLate: true })],
   },
   {
@@ -207,6 +217,10 @@ export const WORK_ORDERS: BoardWorkOrder[] = [
   },
 ]
 
+// B-W2b-337: a bar's state on the floor (made-up scans).
+const floor = (state: FloorView['state'], done: number, of: number, running = 0, paused = 0, since: string | null = null): FloorView => ({ state, done, of, pct: Math.round((done * 100) / of), runningBundles: running, pausedBundles: paused, since, pauseReasonCode: state === 'PAUSED' ? 'BREAK' : null, lastScanAt: since })
+const MARTA = { id: uid('3333', 2), name: 'Marta Esempio' }
+
 const slot = (n: number, workOrder: BoardWorkOrder, operationIndex: number | null, lane: BoardSlot['lane'], start: string, end: string, minutes: number, extra: Partial<BoardSlot> = {}): BoardSlot => ({
   id: slotId(n),
   version: 2,
@@ -231,12 +245,12 @@ const slot = (n: number, workOrder: BoardWorkOrder, operationIndex: number | nul
 const [WO101, WO102, WO103, WO104, WO105] = WORK_ORDERS as [BoardWorkOrder, BoardWorkOrder, BoardWorkOrder, BoardWorkOrder, BoardWorkOrder]
 
 export const SLOTS: BoardSlot[] = [
-  slot(1, WO101, 0, centreLane(CENTRE.cut), at(16, 8), at(16, 14), 720),
-  slot(2, WO101, 1, lineLane(LINE1), at(17, 8), at(18, 16), 3600),
-  slot(3, WO101, 2, centreLane(CENTRE.qc), at(19, 8), at(19, 14), 360),
-  slot(4, WO102, 0, lineLane(LINE2), at(18, 8), at(18, 17), 2000, { startsLate: true }),
-  slot(5, WO103, 0, lineLane(LINE1), at(18, 8), at(18, 17), 1600, { overloadReason: 'Straordinario di sabato (esempio)', updatedBy: { id: uid('3333', 2), name: 'Marta Esempio' }, updatedAt: at(16, 9, 12), version: 5 }),
-  slot(6, WO105, null, { kind: 'WORKSHOP', id: WORKSHOP.id }, at(17, 8), at(20, 17), 350, { pieces: 10 }),
+  slot(1, WO101, 0, centreLane(CENTRE.cut), at(16, 8), at(16, 14), 720, { floor: floor('RUNNING', 90, 120) }),
+  slot(2, WO101, 1, lineLane(LINE1), at(17, 8), at(18, 16), 3600, { floor: floor('RUNNING', 30, 120, 2, 0, at(16, 8, 30)) }),
+  slot(3, WO101, 2, centreLane(CENTRE.qc), at(19, 8), at(19, 14), 360, { floor: floor('NOT_STARTED', 0, 120) }),
+  slot(4, WO102, 0, lineLane(LINE2), at(18, 8), at(18, 17), 2000, { startsLate: true, floor: floor('PAUSED', 10, 80, 0, 1, at(16, 9, 0)) }),
+  slot(5, WO103, 0, lineLane(LINE1), at(18, 8), at(18, 17), 1600, { overloadReason: 'Straordinario di sabato (esempio)', updatedBy: MARTA, updatedAt: at(16, 9, 12), version: 5, pinned: true, pinnedAt: at(16, 9, 14), pinnedBy: MARTA, floor: floor('NOT_STARTED', 0, 40) }),
+  slot(6, WO105, null, { kind: 'WORKSHOP', id: WORKSHOP.id }, at(17, 8), at(20, 17), 350, { pieces: 10, floor: floor('DONE', 10, 10) }),
 ]
 
 export const BOARD: Board = {
@@ -268,6 +282,12 @@ export const BOARD: Board = {
     { kind: 'OVERBOOKED', lane: lineLane(LINE1), date: day(18), bucketKey: day(18), overMinutes: '340.0', loadPct: '111.1', workOrderId: null, daysLate: null },
     { kind: 'FINISHES_LATE', lane: null, date: day(20), bucketKey: null, overMinutes: null, loadPct: null, workOrderId: WO102.id, daysLate: 1 },
     { kind: 'FINISHES_LATE', lane: null, date: day(19), bucketKey: null, overMinutes: null, loadPct: null, workOrderId: WO105.id, daysLate: 4 },
+  ],
+  // B-W2b-337 (B-W2b-312): the problems list's three W2b kinds.
+  moreProblems: [
+    { kind: 'IN_THE_PAST', lane: centreLane(CENTRE.cut), date: day(16), workOrderId: WO101.id, slotId: slotId(1) },
+    { kind: 'MATERIAL_NOT_IN_TIME', lane: lineLane(LINE2), date: day(19), workOrderId: WO102.id, slotId: slotId(4) },
+    { kind: 'GATE_NOT_PASSED', lane: lineLane(LINE1), date: day(18), workOrderId: WO103.id, slotId: slotId(5) },
   ],
 }
 
@@ -354,6 +374,244 @@ const VERSIONS: PublishedVersion[] = [
   { id: uid('abce', 1), number: 1, coversFrom: day(30, 10), coversTo: day(5), effectiveFrom: at(30, 6, 0, 10), publishedAt: at(29, 18, 0, 10), publishedBy: { id: ME, name: 'Anna Esempio' }, slots: 4 },
 ]
 
+// ---- B-W2b-337: the board in depth (made-up) ------------------------------------------------------------------------------
+
+const ANNA = { id: ME, name: 'Anna Esempio' }
+const laneNamed = (lane: { id: string; code: string; name: string }, kind: 'LINE' | 'WORK_CENTRE' | 'WORKSHOP') => ({ kind, id: lane.id, code: lane.code, name: lane.name })
+const changeId = (n: number) => uid('c0c0', n)
+const entry = (n: number, over: Partial<ChangeEntry>): ChangeEntry => ({
+  id: changeId(n),
+  kind: 'MOVE',
+  changedAt: at(16, 9, 30),
+  changedBy: ANNA,
+  slotId: slotId(2),
+  onBoard: true,
+  workOrder: { id: WO101.id, number: WO101.number },
+  operation: { id: WO101.operations[1]!.id, seq: 20, code: 'SEW-20', name: CENTRE.sew.name },
+  from: null,
+  to: null,
+  reason: null,
+  whatIfScenarioId: null,
+  publishedVersion: null,
+  undoes: null,
+  undoneBy: null,
+  undo: { may: true, code: null },
+  ...over,
+})
+
+export const CHANGES: ChangesPage = {
+  plan: { id: uid('abcd', 1), version: 12 },
+  since: { id: uid('abce', 3), number: 3, publishedAt: at(12, 17, 30) },
+  entries: [
+    entry(6, { from: { lane: laneNamed(LINE2, 'LINE'), startAt: at(17, 8), endAt: at(18, 16) }, to: { lane: laneNamed(LINE1, 'LINE'), startAt: at(17, 8), endAt: at(18, 16) } }),
+    entry(5, { kind: 'PIN', changedAt: at(16, 9, 14), changedBy: MARTA, slotId: slotId(5), workOrder: { id: WO103.id, number: WO103.number }, operation: { id: WO103.operations[0]!.id, seq: 20, code: 'SEW-20', name: CENTRE.sew.name } }),
+    entry(4, { changedAt: at(16, 9, 12), changedBy: MARTA, slotId: slotId(5), workOrder: { id: WO103.id, number: WO103.number }, operation: { id: WO103.operations[0]!.id, seq: 20, code: 'SEW-20', name: CENTRE.sew.name }, from: { lane: laneNamed(LINE2, 'LINE'), startAt: at(19, 8), endAt: at(19, 17) }, to: { lane: laneNamed(LINE1, 'LINE'), startAt: at(18, 8), endAt: at(18, 17) }, reason: 'Straordinario di sabato (esempio)', undo: { may: false, code: 'CHANGED_SINCE' } }),
+    entry(3, { kind: 'UNDO', changedAt: at(13, 17, 50), slotId: slotId(3), operation: { id: WO101.operations[2]!.id, seq: 30, code: 'QC-30', name: CENTRE.qc.name }, from: { lane: laneNamed(CENTRE.qc, 'WORK_CENTRE'), startAt: at(20, 8), endAt: at(20, 14) }, to: { lane: laneNamed(CENTRE.qc, 'WORK_CENTRE'), startAt: at(19, 8), endAt: at(19, 14) }, undoes: { id: changeId(2), kind: 'MOVE' }, undo: { may: false, code: 'NOT_UNDOABLE' } }),
+    entry(2, { changedAt: at(13, 17, 40), slotId: slotId(3), operation: { id: WO101.operations[2]!.id, seq: 30, code: 'QC-30', name: CENTRE.qc.name }, from: { lane: laneNamed(CENTRE.qc, 'WORK_CENTRE'), startAt: at(19, 8), endAt: at(19, 14) }, to: { lane: laneNamed(CENTRE.qc, 'WORK_CENTRE'), startAt: at(20, 8), endAt: at(20, 14) }, undoneBy: { id: changeId(3), changedAt: at(13, 17, 50), changedBy: ANNA }, undo: { may: false, code: 'ALREADY_UNDONE' } }),
+    entry(1, { kind: 'PLACE', changedAt: at(13, 17, 20), changedBy: MARTA, slotId: slotId(6), workOrder: { id: WO105.id, number: WO105.number }, operation: null, to: { lane: laneNamed(WORKSHOP, 'WORKSHOP'), startAt: at(17, 8), endAt: at(20, 17) } }),
+  ],
+  next: 'older',
+}
+
+const changesState = (over: Partial<ChangesState> = {}): ChangesState => ({ read: { status: 'ready', value: CHANGES }, since: 'PUBLISHED', kinds: [], planner: null, planners: [ANNA, MARTA], ...over })
+
+const WORKSHOPS: AllocationWorkshops = {
+  site: SITE,
+  today: TODAY,
+  asOf: NOW,
+  window: { from: TODAY, to: day(13, 12) },
+  workshops: [
+    {
+      id: WORKSHOP.id,
+      code: WORKSHOP.code,
+      name: WORKSHOP.name,
+      location: { id: uid('7171', 1), code: 'SUB-BETA' },
+      active: true,
+      supplierProblem: null,
+      durc: { checked: true, state: 'MET', expiresOn: '2027-06-30' },
+      capacity: [{ workCentreKind: 'SEWING', unit: 'MINUTES', available: '9600.0', booked: '350.0', proposed: '0.0', loadPct: '3.6', over: false }],
+      qualifications: [
+        { workCentreKind: 'SEWING', qualified: true, standing: 'QUALIFIED', words: 'Qualified.' },
+        { workCentreKind: 'CUTTING', qualified: false, standing: 'NONE', words: 'Not qualified.' },
+      ],
+    },
+  ],
+  workOrders: [],
+}
+
+const SUBCONTRACTORS: Subcontractors = {
+  site: SITE,
+  from: DAYS[0]!,
+  to: DAYS[DAYS.length - 1]!,
+  bucket: 'DAY',
+  today: TODAY,
+  asOf: NOW,
+  buckets: DAYS.map((date) => ({ key: date, kind: 'DAY', from: date, to: date })),
+  lanes: [
+    {
+      kind: 'WORKSHOP',
+      id: WORKSHOP.id,
+      code: WORKSHOP.code,
+      name: WORKSHOP.name,
+      location: { id: uid('7171', 1), code: 'SUB-BETA' },
+      workCentreKind: 'SEWING',
+      unit: 'MINUTES',
+      known: true,
+      capacity: [{ id: uid('7272', 1), perWeek: 2400, validFrom: '2026-01-01', validTo: null }],
+      cells: DAYS.map((date) => {
+        const open = weekday(date)
+        const booked = date >= day(17) && date <= day(20) ? 87.5 : 0
+        return { key: date, from: date, to: date, available: open ? '480.0' : '0.0', booked: booked.toFixed(1), proposed: '0.0', loadPct: open ? ((booked / 480) * 100).toFixed(1) : null, over: false, openDays: open ? 1 : 0, closedDays: open ? 0 : 1 }
+      }),
+      overall: { available: '4800.0', booked: '350.0', proposed: '0.0', loadPct: '7.3', over: false },
+    },
+  ],
+  tiles: { subcontractorsOverThisWeek: 0, workshopsWithoutCapacity: 0 },
+}
+
+export const DEPTH: BoardDepth = {
+  may: { pin: true, outsource: true, order: true, export: true },
+  whatIf: null,
+  changes: changesState(),
+  workshops: { status: 'ready', value: WORKSHOPS },
+  subcontractors: { status: 'ready', value: SUBCONTRACTORS },
+}
+
+const WHAT_IF_ID = uid('d0d0', 1)
+export const WHAT_IF: WhatIf = {
+  id: WHAT_IF_ID,
+  siteId: SITE.id,
+  name: null,
+  status: 'DRAFT',
+  version: 3,
+  basedAt: at(16, 9, 35),
+  planChanged: false,
+  planVersion: 12,
+  moves: [
+    { kind: 'MOVE', slotId: slotId(4), slotVersion: 2, workOrderId: WO102.id, number: WO102.number, operationId: WO102.operations[0]!.id, operation: { seq: 20, code: 'SEW-20', name: CENTRE.sew.name }, from: { lane: lineLane(LINE2), startAt: at(18, 8), endAt: at(18, 17) }, to: { lane: lineLane(LINE1), startAt: at(19, 8), endAt: at(19, 17) }, conflict: null, material: { state: 'ARRIVES', startAt: at(19, 8), inTime: true, earliestStart: at(19, 8), snapTo: null } },
+    { kind: 'PLACE', slotId: null, slotVersion: null, workOrderId: WO105.id, number: WO105.number, operationId: WO105.operations[0]!.id, operation: { seq: 20, code: 'SEW-20', name: CENTRE.sew.name }, from: null, to: { lane: lineLane(LINE2), startAt: at(17, 8), endAt: at(17, 16) }, conflict: null, material: { state: 'ARRIVES', startAt: at(17, 8), inTime: false, earliestStart: at(24, 8), snapTo: at(24, 8) } },
+  ],
+  conflicts: 0,
+  effect: {
+    lateOrders: { before: 2, after: 1 },
+    overMinutes: { before: '340.0', after: '0.0' },
+    window: { from: TODAY, to: day(13, 12) },
+    lanes: [
+      { lane: lineLane(LINE1), code: LINE1.code, name: LINE1.name, from: day(18), to: day(19), beforePct: '111.1', afterPct: '98.0' },
+      { lane: lineLane(LINE2), code: LINE2.code, name: LINE2.name, from: day(17), to: day(18), beforePct: '52.1', afterPct: '88.5' },
+    ],
+    orders: [
+      { workOrderId: WO102.id, number: WO102.number, before: { status: 'LATE', plannedStart: at(18, 8), plannedFinish: at(21, 12) }, after: { status: 'ON_TIME', plannedStart: at(19, 8), plannedFinish: at(19, 17) } },
+      { workOrderId: WO105.id, number: WO105.number, before: { status: 'LATE', plannedStart: null, plannedFinish: null }, after: { status: 'LATE', plannedStart: at(17, 8), plannedFinish: at(20, 17) } },
+    ],
+  },
+}
+
+const BACKLOG: BacklogRun = {
+  planVersion: 12,
+  applied: false,
+  moves: [
+    { workOrderId: WO101.id, number: WO101.number, operationId: WO101.operations[0]!.id, operation: { seq: 10, code: 'CUT-10', name: CENTRE.cut.name }, slotId: slotId(1), lane: centreLane(CENTRE.cut), from: { startAt: at(16, 8), endAt: at(16, 14) }, to: { startAt: at(16, 10), endAt: at(16, 16) }, minutes: '720.0', why: 'PAST', over: [] },
+    { workOrderId: WO101.id, number: WO101.number, operationId: WO101.operations[1]!.id, operation: { seq: 20, code: 'SEW-20', name: CENTRE.sew.name }, slotId: slotId(2), lane: lineLane(LINE1), from: { startAt: at(17, 8), endAt: at(18, 16) }, to: { startAt: at(17, 9), endAt: at(18, 17) }, minutes: '3600.0', why: 'PUSHED', over: [{ lane: lineLane(LINE1), date: day(18) }] },
+  ],
+  orders: [{ workOrderId: WO101.id, number: WO101.number, dueDate: day(27), finish: at(19, 15), daysLate: null, moves: 2 }],
+  kept: [{ workOrderId: WO103.id, operationId: WO103.operations[0]!.id, slotId: slotId(5), code: 'PINNED_IN_THE_PAST' }],
+  skipped: [],
+  overbooked: 1,
+}
+
+export const PAPER: DaySheetPaper = {
+  language: 'it',
+  title: 'Fogli del giorno',
+  columns: ['Inizio', 'Fine', 'Ordine di lavoro', 'Modello', 'Operazione', 'Pezzi', 'Min', 'Consegna', 'Stato', 'Fatto'],
+  sheets: [
+    {
+      heading: 'Linea L1 · Linea 1',
+      facts: [
+        { label: 'Stabilimento', value: 'ST1 · Stabilimento Esempio' },
+        { label: 'Giorno', value: 'mar 17 nov 2026' },
+        { label: 'Piano', value: 'v3, pubblicata 2026-11-12 17:30' },
+      ],
+      banner: null,
+      rows: [{ rush: false, pinned: false, cells: ['08:00', '16:00 (mer 18)', 'WO-0101', 'MOD-001 Giacca Aero', 'Op 20 Cucito', '120', '3600', '27 nov', 'In corso 30/120', ''] }],
+      empty: null,
+      footer: 'Totale: 120 pezzi · 3600 min · carico 58,8% (1800 / 3060 min)',
+    },
+    {
+      heading: 'Linea L2 · Linea 2',
+      facts: [
+        { label: 'Stabilimento', value: 'ST1 · Stabilimento Esempio' },
+        { label: 'Giorno', value: 'mar 17 nov 2026' },
+        { label: 'Piano', value: 'v3, pubblicata 2026-11-12 17:30' },
+      ],
+      banner: null,
+      rows: [],
+      empty: 'Niente in programma su questa linea in questo giorno.',
+      footer: 'Totale: 0 pezzi · 0 min · carico 0% (0 / 2160 min)',
+    },
+  ],
+  foot: 'Stampato dal tabellone di pianificazione · Stabilimento Esempio',
+  pageLabel: 'Pagina',
+  fileName: 'fogli-giorno-2026-11-17.pdf',
+}
+const PAPER_WORKING: DaySheetPaper = { ...PAPER, sheets: PAPER.sheets.map((sheet) => ({ ...sheet, facts: sheet.facts.map((fact) => (fact.label === 'Piano' ? { ...fact, value: 'Piano di lavoro, non pubblicato' } : fact)), banner: 'Piano di lavoro, non ancora pubblicato: il reparto lavora con la v3.' })) }
+
+const SUB_WORKSHOPS: WorkOrderWorkshops = {
+  workOrder: { id: WO101.id, number: WO101.number, status: WO101.status, version: WO101.version, garments: 120, style: WO101.style.code },
+  asOf: NOW,
+  operations: [{ id: WO101.operations[1]!.id, seq: 20, code: 'SEW-20', name: CENTRE.sew.name, workCentreKind: 'SEWING', outsourced: false, subcontractOrderId: null, outsideStep: false, version: 4 }],
+  mayOutsource: true,
+  workshops: [
+    { id: WORKSHOP.id, code: WORKSHOP.code, name: WORKSHOP.name, location: { id: uid('7171', 1), code: 'SUB-BETA' }, active: true, supplierProblem: null, durc: { checked: true, state: 'MET', expiresOn: '2027-06-30' }, capacity: WORKSHOPS.workshops[0]!.capacity, routing: false, offered: true, held: [], warnings: [], operations: [{ operationId: WO101.operations[1]!.id, qualified: true, standing: 'QUALIFIED', words: 'Qualified.' }] },
+    {
+      id: uid('5555', 2),
+      code: 'LAB-G',
+      name: 'Laboratorio Gamma',
+      location: { id: uid('7171', 2), code: 'SUB-GAMMA' },
+      active: true,
+      supplierProblem: null,
+      durc: { checked: true, state: 'EXPIRED', expiresOn: '2026-11-05' },
+      capacity: [],
+      routing: false,
+      offered: false,
+      held: [{ code: 'NO_VALID_DURC', words: 'No valid DURC: it expired on 2026-11-05.' }, { code: 'NOT_QUALIFIED', words: 'Not approved for sewing (Op 20 Cucito): being reviewed: not qualified yet.' }],
+      warnings: [],
+      operations: [{ operationId: WO101.operations[1]!.id, qualified: false, standing: 'IN_REVIEW', words: 'Being reviewed.' }],
+    },
+  ],
+}
+
+const SUB_KIT: KitTiming = {
+  workOrder: { id: WO101.id, number: WO101.number, status: WO101.status, garments: 120 },
+  workshop: { id: WORKSHOP.id, code: WORKSHOP.code, name: WORKSHOP.name },
+  operations: [{ id: WO101.operations[1]!.id, seq: 20, code: 'SEW-20', name: CENTRE.sew.name, workCentreKind: 'SEWING' }],
+  pieces: 120,
+  start: day(17),
+  startSource: 'SCHEDULE',
+  transportDays: 1,
+  transportSource: 'WORKSHOP',
+  kitShipOn: day(16),
+  kitDueAt: at(16, 8),
+  late: false,
+  workDays: 3,
+  workDaysSource: 'CAPACITY',
+  backOn: day(20),
+  closedDaysSkipped: 0,
+  kit: {
+    note: null,
+    lines: [
+      { item: { id: uid('3131', 1), code: 'PEL-CAP-NERO', name: 'Pelle bovina nero' }, colour: { id: uid('3232', 1), code: 'NERO' }, quantity: '86.400', uom: 'DM2' },
+      { item: { id: uid('3131', 2), code: 'FOD-MESH', name: 'Fodera rete' }, colour: null, quantity: '13.230', uom: 'M' },
+    ],
+  },
+  laterOperations: [{ id: WO101.operations[2]!.id, seq: 30, name: CENTRE.qc.name, earliestStart: day(23), latestStart: day(23), finishesLate: false }],
+  finishesLate: false,
+}
+
+const subcontract = (over: Partial<Extract<BoardDialog, { kind: 'subcontract' }>> = {}): BoardDialog => ({ kind: 'subcontract', slotId: slotId(2), workOrderId: WO101.id, operationId: WO101.operations[1]!.id, partyId: WORKSHOP.id, start: null, pieces: 120, workshops: { status: 'ready', value: SUB_WORKSHOPS }, timing: { status: 'ready', value: SUB_KIT }, ...over })
+const print = (over: Partial<Extract<BoardDialog, { kind: 'print' }>> = {}): BoardDialog => ({ kind: 'print', lanes: [`LINE:${LINE1.id}`, `LINE:${LINE2.id}`], date: day(17), language: 'it', plan: 'PUBLISHED', paper: { status: 'ready', value: PAPER }, ...over })
+const EXPORT_JOB = { id: uid('e0e0', 1), listKey: 'planning.board', format: 'XLSX' as const, status: 'RUNNING' as const, title: 'Tabellone di pianificazione', viewName: null, columns: [], omitted: [], rowsDone: 4, rowCount: 6, failureReason: null, file: null, createdAt: at(16, 9, 40), startedAt: at(16, 9, 40), finishedAt: null, expiresAt: null }
+
 const base = (over: Partial<BoardViewModel> = {}, controls: Partial<BoardControls> = {}): BoardViewModel => ({
   prefix: PREFIX,
   me: ME,
@@ -365,8 +623,12 @@ const base = (over: Partial<BoardViewModel> = {}, controls: Partial<BoardControl
   dialog: null,
   notice: null,
   focus: null,
+  depth: DEPTH,
   ...over,
 })
+const depthCase = (depth: Partial<BoardDepth>, over: Partial<BoardViewModel> = {}, controls: Partial<BoardControls> = {}): BoardViewModel => base({ depth: { ...DEPTH, ...depth }, ...over }, controls)
+// The what-if board: the working plan with the scenario's moves (the container does this; the design draws it the same way).
+const whatIfRead = (scenario: WhatIf): BoardViewModel['read'] => ({ status: 'ready', value: whatIfBoardOf(BOARD, scenario) })
 
 const readOnly: Board = { ...BOARD, plan: { ...BOARD.plan, mayChange: false, mayPublish: false, publishHeld: 'Publishing needs planning.schedule.publish at this site.' } }
 const held: Board = { ...BOARD, plan: { ...BOARD.plan, changesSincePublished: { moved: 0, added: 0, removed: 0 }, publishHeld: 'Nothing changed since v3 was published for Tue 17 Nov to Mon 23 Nov.' } }
@@ -400,5 +662,34 @@ export const designScreen = defineDesignScreen<BoardViewModel>({
     { id: 'loading', label: 'Loading', model: base({ read: { status: 'loading' }, save: { state: 'idle' } }) },
     { id: 'error', label: 'Could not load', model: base({ read: { status: 'error', problem: 'failed' }, save: { state: 'idle' } }), note: 'A failed read is never drawn as an empty board.' },
     { id: 'no-permission', label: 'No permission', model: base({ read: { status: 'error', problem: 'forbidden' }, save: { state: 'idle' } }) },
+    // ---- B-W2b-337 ----
+    { id: 'whatif', label: 'What-if on (planner)', model: depthCase({ whatIf: { read: { status: 'ready', value: WHAT_IF } } }, { read: whatIfRead(WHAT_IF) }, { whatIf: WHAT_IF_ID }), note: 'Design sec:whatif — the banner across the board, the deltas (late orders 2 → 1 · overtime 6 h → 0 h · L1 111% → 98% …), the tried moves and the orders that move; WO-0102 tried on Line 1 and WO-0105 placed on Line 2 (before its material). Publish and Place are held while what-if is on; w turns it off.' },
+    { id: 'whatif-empty', label: 'What-if just started', model: depthCase({ whatIf: { read: { status: 'ready', value: { ...WHAT_IF, moves: [], effect: { ...WHAT_IF.effect, lanes: [], orders: [] } } } } }, {}, { whatIf: WHAT_IF_ID }), note: 'No move tried yet: Apply is held with the reason.' },
+    { id: 'whatif-changed', label: 'What-if: the plan changed meanwhile', model: depthCase({ whatIf: { read: { status: 'ready', value: { ...WHAT_IF, planChanged: true, conflicts: 1, moves: [{ ...WHAT_IF.moves[0]!, conflict: { code: 'SLOT_MOVED' } }, WHAT_IF.moves[1]!] } } } }, { read: whatIfRead(WHAT_IF) }, { whatIf: WHAT_IF_ID }) },
+    { id: 'whatif-conflicts', label: 'Apply refused: conflicts', model: depthCase({ whatIf: { read: { status: 'ready', value: WHAT_IF } } }, { read: whatIfRead(WHAT_IF), dialog: { kind: 'whatifConflicts', conflicts: [{ index: 0, code: 'SLOT_MOVED' }] } }, { whatIf: WHAT_IF_ID }), note: 'ReviewChangesModal: the moves that clash with the working plan now; Apply the other move.' },
+    { id: 'whatif-loading', label: 'What-if being read', model: depthCase({ whatIf: { read: { status: 'loading' } } }, {}, { whatIf: WHAT_IF_ID }) },
+    { id: 'whatif-error', label: 'What-if could not load', model: depthCase({ whatIf: { read: { status: 'error', problem: 'failed' } } }, {}, { whatIf: WHAT_IF_ID }) },
+    { id: 'material', label: 'Drop before the material', model: dialogCase({ kind: 'material', answer: { workOrder: { id: WO102.id, number: WO102.number }, materialStart: WO102.materialStart!, check: { state: 'ARRIVES', startAt: at(17, 8), inTime: false, earliestStart: at(19, 8), snapTo: at(19, 8) } } }), note: 'Material-aware drop: Snap to the earliest start with material · Keep my date · Cancel (never refused); the words from the material and its dates.' },
+    { id: 'bar-pinned', label: 'Bar detail: pinned bar', model: dialogCase({ kind: 'bar', workOrderId: WO103.id, slotId: slotId(5), detail: { status: 'ready', value: { ...BAR, workOrder: WO103, slots: [SLOTS[4]!] } } }), note: 'The bar’s W2b part: its floor state, pinned by whom and when, Unpin · Pin the whole order · Move to a subcontractor.' },
+    { id: 'pin-refused', label: 'Move of a pinned bar refused', model: base({ save: { state: 'failed', refusal: { code: 'PINNED' } } }), note: 'A drag of a pinned bar: the DS refuses it at once; the API’s 409 PINNED says it in our words.' },
+    { id: 'subcontract', label: 'Move to a subcontractor', model: dialogCase(subcontract()), note: 'Pop:subcontract-move — approved workshops only, Laboratorio Gamma held (no valid DURC, not approved for sewing); the kit leaves the day before the start, the kit list from the bill of materials; Move and plan the kit.' },
+    { id: 'subcontract-loading', label: 'Move to a subcontractor: reading', model: dialogCase(subcontract({ workshops: { status: 'loading' }, timing: null, partyId: null })) },
+    { id: 'subcontract-error', label: 'Move to a subcontractor: could not load', model: dialogCase(subcontract({ workshops: { status: 'error', problem: 'failed' }, timing: null, partyId: null })) },
+    { id: 'subcontract-held', label: 'Move to a subcontractor: no permission', model: depthCase({ may: { ...DEPTH.may, outsource: false, order: false } }, { dialog: subcontract() }), note: 'Held with the missing permission in words.' },
+    { id: 'subcontract-done', label: 'Moved to a subcontractor', model: dialogCase(subcontract({ done: { answer: { operation: { id: WO101.operations[1]!.id, seq: 20, name: CENTRE.sew.name, version: 5, outsourced: true, subcontractOrderId: uid('5151', 1) }, workshop: { id: WORKSHOP.id, code: WORKSHOP.code, name: WORKSHOP.name }, order: { id: uid('5151', 1), number: 'SC-ESEMPIO-0001', status: 'DRAFT', kitDueAt: at(16, 8) }, orderWords: null, timing: { start: day(17), kitShipOn: day(16), kitDueAt: at(16, 8), late: false, backOn: day(20) }, warnings: [] }, stayed: null } })) },
+    { id: 'print', label: 'Print day sheets', model: dialogCase(print()), note: 'Pop:print — Lines (MultiSelect), the day, the sheets’ language and which plan; the preview says what the PDF says; Open PDF opens it in a new tab.' },
+    { id: 'print-working', label: 'Print the working plan', model: dialogCase(print({ plan: 'WORKING', paper: { status: 'ready', value: PAPER_WORKING } })) },
+    { id: 'print-no-version', label: 'Print: no published version that day', model: dialogCase(print({ date: day(28), paper: { status: 'noVersion' } })), note: 'Held with the reason: publish first, or print the working plan.' },
+    { id: 'print-loading', label: 'Print: reading the sheets', model: dialogCase(print({ paper: { status: 'loading' } })) },
+    { id: 'backlog', label: 'Reschedule backlog', model: dialogCase({ kind: 'backlog', preview: { status: 'ready', value: BACKLOG } }), note: 'ReviewChangesModal: each bar from → to with why it moves; the pinned bar left in the past stays; a reason is asked because a lane goes over.' },
+    { id: 'backlog-nothing', label: 'Reschedule backlog: nothing to move', model: dialogCase({ kind: 'backlog', preview: { status: 'nothing' } }) },
+    { id: 'backlog-loading', label: 'Reschedule backlog: reading', model: dialogCase({ kind: 'backlog', preview: { status: 'loading' } }) },
+    { id: 'export', label: 'Export board (XLSX)', model: dialogCase({ kind: 'export', job: EXPORT_JOB, problem: null }), note: 'The list frame’s export job (planning.board): its progress, then the file.' },
+    { id: 'changes-all', label: 'Changes: the whole log, one planner', model: depthCase({ changes: changesState({ since: 'ALL', planner: MARTA.id, kinds: ['MOVE', 'PIN'] }) }) },
+    { id: 'changes-empty', label: 'Changes: no moves since v3', model: depthCase({ changes: changesState({ read: { status: 'ready', value: { ...CHANGES, entries: [], next: null } } }) }) },
+    { id: 'changes-loading', label: 'Changes being read', model: depthCase({ changes: changesState({ read: { status: 'loading' } }) }) },
+    { id: 'changes-error', label: 'Changes could not load', model: depthCase({ changes: changesState({ read: { status: 'error', problem: 'failed' } }) }) },
+    { id: 'undo-refused', label: 'Undo refused', model: depthCase({ changes: changesState({ error: { code: 'CHANGED_SINCE' } }) }, { save: { state: 'failed', refusal: { code: 'CHANGED_SINCE' } } }), note: 'A 409 CHANGED_SINCE on Undo, in our words.' },
+    { id: 'workshops-checking', label: 'Workshops being checked', model: depthCase({ workshops: { status: 'loading' }, subcontractors: { status: 'loading' } }), note: 'While the approvals are read, a drop on the workshop lane from another lane is held with the reason.' },
   ],
 })
