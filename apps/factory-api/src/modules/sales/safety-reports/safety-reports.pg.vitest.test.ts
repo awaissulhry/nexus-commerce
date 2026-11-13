@@ -5,6 +5,7 @@ import { newId } from '@nexus/factory-domain/core/ids'
 import type { Permission } from '@nexus/factory-domain/core/permissions'
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedCore } from '../../../../../../packages/factory-db/seed/_core'
+import { seed as seedEmail } from '../../../../../../packages/factory-db/seed/email'
 import { seed as seedFiles } from '../../../../../../packages/factory-db/seed/files'
 import { seed as seedPrivacy } from '../../../../../../packages/factory-db/seed/privacy'
 import { seed as seedService } from '../../../../../../packages/factory-db/seed/service'
@@ -24,7 +25,7 @@ import { useSafetyReportsOutside } from './outside'
  * Product-safety reports and the accident log on the local stack (B-W2b-351; SAL-414, SAL-415, SAL-423), through the real app,
  * real office sign-ins, a real portal sign-in by code and the public DoC code of a released batch: the factory-db seeds up to the
  * service wave (the serials SEED-SN-0001..0003 of batch SEED-BT-0003 made for P1, WO-0001 released as batch SEED-BT-0001, the
- * seeded reports PSR-SEED-0001..0003), company A's public privacy notice, a quality desk (the product-safety role: view, manage,
+ * seeded reports PSR-SEED-0001..0003), company A's public privacy notice and FAKE sending address, a quality desk (the product-safety role: view, manage,
  * injury, log, the register), a sales desk (view, manage; no injury), a reader, P1's portal buyer and viewer. Every name,
  * number and word is made up (no real injury words); every date is counted from the test's own day.
  * Run with `node scripts/factory/run-pg-tests.mjs modules/sales/safety-reports/`.
@@ -87,7 +88,8 @@ async function nowhereElse(words: string) {
   }
 }
 
-const QUALITY: Permission[] = ['home.view', 'sales.safety.view', 'sales.safety.manage', 'sales.safety.injury', 'sales.safety.log', 'sales.service.view', 'sales.service.manage', 'compliance.register.view', 'compliance.register.manage', 'threads.read']
+// files.read too: the report's photos must stay out of the generic files routes even for a role that reads files.
+const QUALITY: Permission[] = ['home.view', 'sales.safety.view', 'sales.safety.manage', 'sales.safety.injury', 'sales.safety.log', 'sales.service.view', 'sales.service.manage', 'compliance.register.view', 'compliance.register.manage', 'threads.read', 'files.read']
 const DESK: Permission[] = ['home.view', 'sales.safety.view', 'sales.safety.manage', 'sales.service.view', 'sales.service.manage', 'threads.read']
 const READER: Permission[] = ['home.view', 'sales.safety.view']
 
@@ -124,6 +126,8 @@ beforeAll(async () => {
   await seedService({ db: h.database, namespace: NS })
   await seedFiles({ db: h.database, namespace: NS })
   await seedPrivacy({ db: h.database, namespace: NS })
+  // Company A's FAKE sending address: the portal's sign-in code goes by mail.
+  await seedEmail({ db: h.database, namespace: NS })
   const actorId = newId()
   await h.database.withScope({ audience: 'office', tenantId: T, actorId }, async (client) => {
     await applySystemRoleChanges(client, await systemRoleChanges(client), { now: h.clock.now(), actorId })
@@ -258,7 +262,8 @@ describe('quality follows it up: seen, assessed, filed in the register, the auth
     expect(graded.entry).toMatchObject({ revision: 2, outcome: 'SERIOUS_HARM', place: 'Made-up: a track day, turn 4', authority: null })
     expect(graded.report.accidentLog.state).toMatchObject({ told: false, mustTell: true })
     expect((await ok(browsers.quality, '/sales/safety-reports/counts')).tiles.accidentsToTell).toBe(1)
-    const toldAt = new Date(h.clock.now().getTime() - 60_000).toISOString()
+    // The office's commands run on the server's clock (the harness clock moved ahead with the portal sign-ins): told a while ago.
+    const toldAt = new Date(Date.now() - 10 * 60_000).toISOString()
     const told = await done(await post(browsers.quality, `/sales/safety-reports/${mailed.id}/accident-log`, { version: graded.report.version, authorityToldAt: toldAt, authorityReference: 'MADE-UP-SBG-0001', note: 'Made-up: told through the Safety Business Gateway.' }), 201)
     mailed = told.report
     expect(told.entry).toMatchObject({ revision: 3, outcome: 'SERIOUS_HARM', authority: { reference: 'MADE-UP-SBG-0001', noticeId: null } })
