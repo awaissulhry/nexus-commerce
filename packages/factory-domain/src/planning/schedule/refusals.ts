@@ -67,6 +67,9 @@ export const SCHEDULE_REFUSALS = [
   'ALREADY_UNDONE',
   /** The slot changed since the change: only the latest change of a bar is undone, while the bar is where it left it. */
   'CHANGED_SINCE',
+  // B-W2b-F39: the change names an operation that left its work order since (the record keeps a copy of it).
+  /** The change's operation is no longer on its work order: the record keeps the change, it is not undone. */
+  'OPERATION_GONE',
 ] as const
 export type ScheduleRefusalCode = (typeof SCHEDULE_REFUSALS)[number]
 

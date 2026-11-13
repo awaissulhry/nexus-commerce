@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { changeWords, inverseOf, placeWords, resultHolds, standingLatest, undoHoldOf, undoHoldWords, undoPermissionOf, type ChangeFacts, type ChangePlace } from './changes'
+import { changeWhat, changeWords, inverseOf, placeWords, resultHolds, standingLatest, undoHoldOf, undoHoldWords, undoPermissionOf, type ChangeFacts, type ChangePlace } from './changes'
 import { compareVersion, compareWords, type CompareSlot } from './compare'
 import { daySheetPaper, type SheetFacts } from './day-sheet'
 import { floorStatusOf, floorStatusWords, type FloorScanRow } from './floor-status'
@@ -64,17 +64,33 @@ const slotAt = (p: ChangePlace, pinned = false) => ({ lane: p.lane, startAt: p.s
 describe('the change log and its undo (PLN-149)', () => {
   it('undoes only the latest change of a bar while the bar is where it left it, once, with its permission', () => {
     const move = change('MOVE', A, B)
-    expect(undoHoldOf(move, { undone: false, latestOfSlot: 'c1', slot: slotAt(B), may: true })).toBeNull()
-    expect(undoHoldOf(move, { undone: true, latestOfSlot: 'c1', slot: slotAt(B), may: true })).toBe('ALREADY_UNDONE')
-    expect(undoHoldOf(move, { undone: false, latestOfSlot: 'c2', slot: slotAt(B), may: true })).toBe('CHANGED_SINCE')
+    expect(undoHoldOf(move, { undone: false, latestOfSlot: 'c1', slot: slotAt(B), may: true, operationGone: false })).toBeNull()
+    expect(undoHoldOf(move, { undone: true, latestOfSlot: 'c1', slot: slotAt(B), may: true, operationGone: false })).toBe('ALREADY_UNDONE')
+    expect(undoHoldOf(move, { undone: false, latestOfSlot: 'c2', slot: slotAt(B), may: true, operationGone: false })).toBe('CHANGED_SINCE')
     // Moved again by a write the log never saw: not where it left it.
-    expect(undoHoldOf(move, { undone: false, latestOfSlot: 'c1', slot: slotAt(A), may: true })).toBe('CHANGED_SINCE')
-    expect(undoHoldOf(move, { undone: false, latestOfSlot: 'c1', slot: slotAt(B), may: false })).toBe('NO_PERMISSION')
-    expect(undoHoldOf(change('PUBLISH', null, null, null), { undone: false, latestOfSlot: null, slot: null, may: true })).toBe('NOT_UNDOABLE')
-    expect(undoHoldOf(change('UNDO', null, A), { undone: false, latestOfSlot: 'c1', slot: slotAt(A), may: true })).toBe('NOT_UNDOABLE')
+    expect(undoHoldOf(move, { undone: false, latestOfSlot: 'c1', slot: slotAt(A), may: true, operationGone: false })).toBe('CHANGED_SINCE')
+    expect(undoHoldOf(move, { undone: false, latestOfSlot: 'c1', slot: slotAt(B), may: false, operationGone: false })).toBe('NO_PERMISSION')
+    expect(undoHoldOf(change('PUBLISH', null, null, null), { undone: false, latestOfSlot: null, slot: null, may: true, operationGone: false })).toBe('NOT_UNDOABLE')
+    expect(undoHoldOf(change('UNDO', null, A), { undone: false, latestOfSlot: 'c1', slot: slotAt(A), may: true, operationGone: false })).toBe('NOT_UNDOABLE')
     // A part's removal goes back on the allocation board (its garments are not in the log).
-    expect(undoHoldOf(change('REMOVE', A, null, null), { undone: false, latestOfSlot: 'c1', slot: null, may: true })).toBe('NOT_UNDOABLE')
-    expect(undoHoldOf(change('REMOVE', A, null), { undone: false, latestOfSlot: 'c1', slot: null, may: true })).toBeNull()
+    expect(undoHoldOf(change('REMOVE', A, null, null), { undone: false, latestOfSlot: 'c1', slot: null, may: true, operationGone: false })).toBe('NOT_UNDOABLE')
+    expect(undoHoldOf(change('REMOVE', A, null), { undone: false, latestOfSlot: 'c1', slot: null, may: true, operationGone: false })).toBeNull()
+  })
+
+  // B-W2b-F39: the record keeps a change whose operation left its work order (a draft's release, revision, repair steps).
+  it('keeps a change whose operation left its work order, and never undoes it', () => {
+    const removed = change('REMOVE', A, null)
+    expect(undoHoldOf(removed, { undone: false, latestOfSlot: 'c1', slot: null, may: true, operationGone: true })).toBe('OPERATION_GONE')
+    // A publish or an undo says so first; an undone change stays ALREADY_UNDONE.
+    expect(undoHoldOf(change('UNDO', null, A), { undone: false, latestOfSlot: 'c1', slot: null, may: true, operationGone: true })).toBe('NOT_UNDOABLE')
+    expect(undoHoldOf(removed, { undone: true, latestOfSlot: 'c1', slot: null, may: true, operationGone: true })).toBe('ALREADY_UNDONE')
+    const what = changeWhat('WO-0101', { seq: 25, name: 'Sew', onWorkOrder: false })
+    expect(what).toBe('Op 25 Sew of WO-0101 (no longer on the work order)')
+    expect(changeWhat('WO-0101', { seq: 20, name: 'Sew', onWorkOrder: true })).toBe('Op 20 Sew of WO-0101')
+    // A change written before the record kept its copy.
+    expect(changeWhat('WO-0101', { seq: null, name: null, onWorkOrder: false })).toBe("WO-0101's operation (no longer on the work order)")
+    expect(changeWhat('WO-0101', null)).toBe("WO-0101's part of the order")
+    expect(undoHoldWords('OPERATION_GONE', { kind: 'REMOVE', operationId: 'op-1', what, undoneBy: null, later: null, permission: '' })).toBe('Op 25 Sew of WO-0101 (no longer on the work order): the record keeps this change, but it is not undone.')
   })
 
   it('goes back one change at a time: an undone change and its undo do not stand', () => {

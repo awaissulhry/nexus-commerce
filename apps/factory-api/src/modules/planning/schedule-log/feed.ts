@@ -3,7 +3,7 @@ import { ValidationError } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import { parseInstant, toUtcIso } from '@nexus/factory-domain/core/time'
 import { PLANNING_VIEW } from '@nexus/factory-domain/planning/permissions'
-import { CHANGE_KINDS, CHANGE_LOG_LIMITS, changeWords, isUndoable, standingLatest, undoHoldOf, undoHoldWords, undoPermissionOf, type ChangeFacts, type ChangeKind, type ChangePlace, type SlotNow } from '@nexus/factory-domain/planning/schedule-log/changes'
+import { CHANGE_KINDS, CHANGE_LOG_LIMITS, changeWhat, changeWords, isUndoable, standingLatest, undoHoldOf, undoHoldWords, undoPermissionOf, type ChangeFacts, type ChangeKind, type ChangePlace, type SlotNow } from '@nexus/factory-domain/planning/schedule-log/changes'
 import { laneKey, laneOfSlot, type LaneRef } from '@nexus/factory-domain/planning/schedule/slots'
 import { whenWords } from '@nexus/factory-domain/planning/schedule/time'
 import type { CommandCaller } from '../../../core/command'
@@ -32,6 +32,8 @@ export const CHANGE_COLUMNS = {
   slotId: true,
   workOrderId: true,
   workOrderOperationId: true,
+  operationSeq: true, // B-W2b-F39: the record's copy of the operation (its seq and name when the change was written)
+  operationName: true,
   fromLineId: true,
   fromWorkCentreId: true,
   fromPartyId: true,
@@ -49,7 +51,6 @@ export const CHANGE_COLUMNS = {
   changedById: true,
   changedAt: true,
   workOrder: { select: { id: true, number: true } },
-  operation: { select: { id: true, seq: true, code: true, name: true } },
   publishedVersion: { select: { id: true, number: true } },
   undoes: { select: { id: true, kind: true } },
   undoneBy: { select: { id: true, changedAt: true, changedById: true }, take: 1 },
@@ -84,9 +85,33 @@ export async function laneNamesOf(db: Reader, lanes: Iterable<LaneRef>): Promise
   return out
 }
 
-/** "Op 20 Sew of SEED-WO-0001" / "SEED-WO-0001's part of the order". */
-export const whatOf = (row: Pick<ChangeRow, 'workOrder' | 'operation'>): string =>
-  row.operation ? `Op ${row.operation.seq} ${row.operation.name} of ${row.workOrder?.number ?? 'the work order'}` : `${row.workOrder?.number ?? 'The work order'}'s part of the order`
+// ---- B-W2b-F39: the operation a change names, on its work order now or by the record's copy --------------------------------
+
+/** The operation of an entry: live (`onWorkOrder`), or gone with the record's copy (no code; no seq and name before B-W2b-F39). */
+export interface OperationView {
+  readonly id: string
+  readonly seq: number | null
+  readonly code: string | null
+  readonly name: string | null
+  readonly onWorkOrder: boolean
+}
+
+/** The operation each row names (by row id): read now from its work order, else the record's copy (null: it names none). */
+export async function operationsOf(db: Reader, rows: readonly Pick<ChangeRow, 'id' | 'workOrderOperationId' | 'operationSeq' | 'operationName'>[]): Promise<Map<string, OperationView | null>> {
+  const ids = [...new Set(rows.flatMap((row) => (row.workOrderOperationId ? [row.workOrderOperationId] : [])))]
+  const live = new Map((ids.length > 0 ? await db.workOrderOperation.findMany({ where: { id: { in: ids } }, select: { id: true, seq: true, code: true, name: true } }) : []).map((op) => [op.id, op]))
+  return new Map(
+    rows.map((row) => {
+      if (!row.workOrderOperationId) return [row.id, null]
+      const op = live.get(row.workOrderOperationId)
+      return [row.id, op ? { id: op.id, seq: op.seq, code: op.code, name: op.name, onWorkOrder: true } : { id: row.workOrderOperationId, seq: row.operationSeq, code: null, name: row.operationName, onWorkOrder: false }]
+    }),
+  )
+}
+
+/** "Op 20 Sew of SEED-WO-0001" / "Op 25 Sew of SEED-WO-0002 (no longer on the work order)" / "SEED-WO-0001's part of the order". */
+export const whatOf = (row: Pick<ChangeRow, 'workOrder'>, operation: OperationView | null): string => changeWhat(row.workOrder?.number ?? null, operation)
+// ---- end B-W2b-F39 ---------------------------------------------------------------------------------------------------------
 
 const VERBS: Record<ChangeKind, string> = { PLACE: 'placed', MOVE: 'moved', REMOVE: 'sent back to the tray', PIN: 'pinned', UNPIN: 'unpinned', PUBLISH: 'published', UNDO: 'a change undone' }
 
@@ -133,6 +158,7 @@ export async function entriesOf(db: Reader, caller: CommandCaller, site: SiteRow
   const now = await slotsNowOf(db, slotIds)
   const lanes = await laneNamesOf(db, facts.flatMap((fact) => [fact.from?.lane, fact.to?.lane].filter((lane): lane is LaneRef => lane !== undefined)))
   const names = await userNamesOf(db, [...rows.map((row) => row.changedById), ...rows.flatMap((row) => row.undoneBy.map((undo) => undo.changedById)), ...[...latest.values()].map((row) => row.changedById)])
+  const operations = await operationsOf(db, rows) // B-W2b-F39
   const who = (userId: string | null) => (userId ? { id: userId, name: names.get(userId) ?? '' } : null)
   const placeView = (side: ChangePlace | null) => {
     if (!side) return null
@@ -144,12 +170,13 @@ export async function entriesOf(db: Reader, caller: CommandCaller, site: SiteRow
     const fact = facts[index]!
     const kind = row.kind as ChangeKind
     const undone = row.undoneBy[0] ?? null
-    const what = whatOf(row)
+    const operation = operations.get(row.id) ?? null // B-W2b-F39
+    const what = whatOf(row, operation)
     const slot = row.slotId ? (now.get(row.slotId) ?? null) : null
     const last = row.slotId ? (latest.get(row.slotId) ?? null) : null
     const permission = isUndoable(kind) ? undoPermissionOf(kind) : null
     const may = permission !== null && mayAt(context, permission, { companyId: site.companyId, siteId: site.id })
-    const code = undoHoldOf(fact, { undone: undone !== null, latestOfSlot: last?.id ?? null, slot, may })
+    const code = undoHoldOf(fact, { undone: undone !== null, latestOfSlot: last?.id ?? null, slot, may, operationGone: operation !== null && !operation.onWorkOrder })
     const later = last && last.id !== row.id ? laterWords(last, names, tz) : null
     const undoneWords = undone ? byWords(undone, names, tz) : null
     return {
@@ -160,7 +187,7 @@ export async function entriesOf(db: Reader, caller: CommandCaller, site: SiteRow
       slotId: row.slotId,
       onBoard: slot !== null,
       workOrder: row.workOrder ? { id: row.workOrder.id, number: row.workOrder.number } : null,
-      operation: row.operation ? { id: row.operation.id, seq: row.operation.seq, code: row.operation.code, name: row.operation.name } : null,
+      operation, // B-W2b-F39: live, or the record's copy (onWorkOrder false)
       from: placeView(fact.from),
       to: placeView(fact.to),
       reason: row.reason,

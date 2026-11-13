@@ -694,9 +694,10 @@ export const FLOOR: ReadonlyArray<{
   { id: 'floor.fabriccut', title: 'Fabric cutting', titleIt: 'Taglio tessuto', tile: 'fabriccut', modes: ['cutting'] },
   { id: 'floor.bundles', title: 'Bundles & tickets', titleIt: 'Fasci e cartellini', tile: 'bundles', modes: ['cutting'] },
   { id: 'floor.receive', title: 'Receive goods', titleIt: 'Ricevi merce', tile: 'receive', modes: ['warehouse'] },
-  // B-W2b-308: Move & put away (SCR-177), after Receive.
-  { id: 'floor.move', title: 'Move & put away', titleIt: 'Sposta e ubica', tile: 'move', modes: ['warehouse'] },
+  // B-W2b-F37: Pick & issue before Move & put away, the tree's own order (floor.receive, floor.pick, floor.move; Owner 2026-11-13).
   { id: 'floor.pick', title: 'Pick & issue', titleIt: 'Preleva e consegna', tile: 'pick', modes: ['warehouse'] },
+  // B-W2b-308: Move & put away (SCR-177). B-W2b-F37: after Pick & issue.
+  { id: 'floor.move', title: 'Move & put away', titleIt: 'Sposta e ubica', tile: 'move', modes: ['warehouse'] },
   // B-W2b-310: Count (SCR-178), after Pick & issue (tile family Warehouse).
   { id: 'floor.count', title: 'Count', titleIt: 'Conta', tile: 'count', modes: ['warehouse'] },
   // W2a: B-W2a-76 Receive a return (SCR-180) and Subcontract kits (SCR-181).

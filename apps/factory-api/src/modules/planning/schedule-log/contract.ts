@@ -28,8 +28,12 @@ export const changeEntry = output({
   /** The slot is on the working plan now. */
   onBoard: z.boolean(),
   workOrder: output({ id: id(), number: z.string() }).nullable(),
-  /** null: a whole-order part (or a publish). */
-  operation: output({ id: id(), seq: z.number().int(), code: z.string(), name: z.string() }).nullable(),
+  /**
+   * null: a whole-order part (or a publish). B-W2b-F39: `onWorkOrder` false when the operation left its work order since (a
+   * draft's release, revision or a repair's steps): then the record's copy, its seq and name when the change was written
+   * (null for a change written before the record kept one), and no code.
+   */
+  operation: output({ id: id(), seq: z.number().int().nullable(), code: z.string().nullable(), name: z.string().nullable(), onWorkOrder: z.boolean() }).nullable(),
   /** Where it was and where it went (ChangeValue from → to). */
   from: place.nullable(),
   to: place.nullable(),

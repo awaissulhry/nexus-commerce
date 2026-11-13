@@ -326,7 +326,11 @@ export const changeTone = (entry: Pick<ChangeEntry, 'kind'>) => toneOf[entry.kin
 /** What the change was about: "Op 20 Sewing of WO-0101", "part of WO-0101". */
 export function changeWhat(entry: Pick<ChangeEntry, 'operation' | 'workOrder'>, words: Pick<DepthWords, 't'>): string {
   const order = entry.workOrder?.number ?? '—'
-  return entry.operation ? words.t('log.what', { seq: entry.operation.seq, operation: entry.operation.name, order }) : words.t('log.whatPart', { order })
+  const op = entry.operation
+  if (!op) return words.t('log.whatPart', { order })
+  // B-W2b-F39: an operation that left its work order since, by the record's copy ("… (no longer on the work order)").
+  if (!op.onWorkOrder) return op.seq !== null && op.name !== null ? words.t('log.whatGone', { seq: op.seq, operation: op.name, order }) : words.t('log.whatGoneUnnamed', { order })
+  return words.t('log.what', { seq: op.seq ?? '—', operation: op.name ?? '—', order })
 }
 
 /** The entry's head line in words. */

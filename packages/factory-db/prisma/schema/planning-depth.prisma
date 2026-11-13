@@ -320,7 +320,8 @@ model PromiseRecord {
 /// published, or a change undone; the slot and its work order (operation), from lane and time and to lane and time, by
 /// whom, when and why, and the what-if it was applied from. Written once, never changed or removed: an undo is a new row
 /// naming the change it undoes (one undo per change). The slot is named by id only: a working slot is removed freely, its
-/// changes stay.
+/// changes stay. B-W2b-F39: the operation too (by id, with a copy of its seq and name made when the change was written), so
+/// a draft's operation leaves its work order once its bar went back to the tray, and its changes stay.
 /// @append-only
 model ScheduleChange {
   id                   String             @id @db.Uuid
@@ -333,6 +334,12 @@ model ScheduleChange {
   slotId               String?            @db.Uuid
   workOrderId          String?            @db.Uuid
   workOrderOperationId String?            @db.Uuid
+  /// B-W2b-F39: the operation as it was when the change was written (its seq and name), exactly when the change names one
+  /// (the …_planning_board_record_guards trigger checks them against the operation at insert; a change written before
+  /// that step keeps none); the operation may leave its work order later (a draft's release, revision or a repair's
+  /// steps), the copy stays.
+  operationSeq         Int?
+  operationName        String?
   /// Where the slot was (MOVE, REMOVE; UNDO as needed): one lane (a line, a work centre or a workshop) from a start to a
   /// later end; all or none.
   fromLineId           String?            @db.Uuid
@@ -364,7 +371,6 @@ model ScheduleChange {
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
   publishedVersion PlanVersion?        @relation("ScheduleChangePublished", fields: [tenantId, siteId, publishedVersionId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   workOrder        WorkOrder?          @relation(fields: [tenantId, siteId, workOrderId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
-  operation        WorkOrderOperation? @relation(fields: [tenantId, siteId, workOrderId, workOrderOperationId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
   undoes           ScheduleChange?     @relation("ScheduleChangeUndo", fields: [tenantId, siteId, undoesChangeId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   undoneBy         ScheduleChange[]    @relation("ScheduleChangeUndo")
   whatIfScenario   WhatIfScenario?     @relation(fields: [tenantId, siteId, whatIfScenarioId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
