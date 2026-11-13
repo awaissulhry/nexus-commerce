@@ -4933,7 +4933,7 @@ ALTER TABLE "public"."Session" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."Session" FORCE ROW LEVEL SECURITY;
 DO $$ DECLARE existing record; BEGIN FOR existing IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'Session' LOOP EXECUTE format('DROP POLICY %I ON %I.%I', existing.policyname, 'public', 'Session'); END LOOP; END $$;
 REVOKE ALL ON TABLE "public"."Session" FROM PUBLIC, "factory_floor_runtime", "factory_partner_runtime", "factory_platform", "factory_runtime";
-GRANT SELECT ("absoluteExpiresAt", "audience", "browser", "companyId", "createdAt", "deviceLabel", "id", "idleExpiresAt", "ipCity", "ipCountry", "lastSeenAt", "mfaAt", "partyId", "previewById", "previewOfPartyId", "revokedAt", "revokedReason", "stepUpAt", "tenantId", "tokenHash", "userAgent", "userId") ON TABLE "public"."Session" TO "factory_partner_runtime";
+GRANT SELECT ("absoluteExpiresAt", "audience", "browser", "companyId", "createdAt", "deviceLabel", "id", "idleExpiresAt", "lastSeenAt", "mfaAt", "partyId", "previewById", "previewOfPartyId", "revokedAt", "revokedReason", "stepUpAt", "tenantId", "tokenHash", "userAgent", "userId") ON TABLE "public"."Session" TO "factory_partner_runtime";
 GRANT SELECT, INSERT, UPDATE ON TABLE "public"."Session" TO "factory_runtime";
 CREATE POLICY "factory_partner_runtime_select" ON "public"."Session" AS PERMISSIVE FOR SELECT TO "factory_partner_runtime" USING ("partyId" = NULLIF(current_setting('factory.party_id', true), '')::uuid AND "tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
 CREATE POLICY "factory_runtime_select" ON "public"."Session" AS PERMISSIVE FOR SELECT TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
