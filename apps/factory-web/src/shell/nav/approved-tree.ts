@@ -95,14 +95,8 @@ export const OFFICE: readonly TreeArea[] = [
         labelIt: 'Ordini speciali',
         hideLabel: false,
         pages: [
-          {
-            id: 'sales.mtm',
-            title: 'Made-to-measure',
-            titleIt: 'Su misura',
-            wave: 'W1',
-            href: null,
-            deferred: 'GATE-MTM not passed (Owner answer Q9 = a, 2026-10-28): made-to-measure moves out of W1.',
-          },
+          // B-W2b-362: built in W2b-5 (Owner 11-10 Q1 = A), switched off per measurement template until made-to-measure starts.
+          { id: 'sales.mtm', title: 'Made-to-measure', titleIt: 'Su misura', wave: 'W1', href: '/sales/made-to-measure' },
         ],
       },
       // W2a: B-W2a-77 Returns & repairs (SCR-111, SCR-112).

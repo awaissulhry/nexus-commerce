@@ -236,7 +236,7 @@ const OWN_CATALOGUE = new Set(['approval', 'properties', 'whereused'])
 // B-W2b-235: operations in depth speak their own catalogue (products-operations-depth; its own key test in operations/depth).
 const OWN_OPERATIONS_CATALOGUE = new Set(['depth'])
 // B-W2b-240: sizes in depth speak their own catalogue (products-sizes-depth; its own key test in sizes/depth).
-const OWN_SIZES_CATALOGUE = new Set(['depth'])
+const OWN_SIZES_CATALOGUE = new Set(['depth', /* B-W2b-362: the measurement templates speak products-mtm-templates (their own key test in sizes/templates) */ 'templates'])
 function sources(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const path = join(dir, entry.name)

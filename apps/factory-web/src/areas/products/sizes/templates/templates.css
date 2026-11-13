@@ -1,0 +1,107 @@
+/*
+ * Products › Sizes & measurements › Measurement templates (B-W2b-362, B-W1-17): layout only, semantic tokens. The page fills
+ * the shell's main area (no max-width of its own: Owner rule 2026-10-29); the library's own classes (fw-lib-*) do the rest.
+ */
+
+.fw-mtt-points {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: none;
+}
+
+.fw-mtt-point {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-10) var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
+  min-width: 0;
+}
+
+.fw-mtt-point-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-6) var(--nds-space-10);
+}
+
+.fw-mtt-point-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 180px), 1fr));
+  gap: var(--nds-space-8) var(--nds-space-12);
+  align-items: start;
+}
+
+.fw-mtt-wide {
+  grid-column: 1 / -1;
+}
+
+.fw-mtt-order {
+  font-variant-numeric: tabular-nums;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-mtt-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
+  gap: var(--nds-space-8) var(--nds-space-16);
+}
+
+.fw-mtt-switch {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+}
+
+.fw-mtt-rules {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-mtt-rule {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nds-space-4) var(--nds-space-10);
+  padding: var(--nds-space-6) 0;
+  border-bottom: 1px solid var(--nds-border);
+}
+
+.fw-mtt-rule-words {
+  flex: 1 1 260px;
+  min-width: 0;
+  color: var(--nds-text);
+  overflow-wrap: anywhere;
+}
+
+.fw-mtt-two {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-14);
+  align-items: start;
+}
+
+@media (min-width: 1180px) {
+  .fw-mtt-two {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  }
+}
+
+.fw-mtt-archived {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}

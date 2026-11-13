@@ -22,9 +22,9 @@ export interface LibrarySwitchActions {
 
 /**
  * The Sizes page's view switch (B-W2b-240; design products.sizes sec:sizes.view "SegmentedControl: Size scales ·
- * Measurement templates · Points of measure (W2b) · Grade rules (W2b)", keys 1–3; the address keeps it, `?view=`) and
- * its Import (W2b) — a sheet of points of measure or of grade rules, through the import wizard. The measurement
- * templates have no list on the API yet: no segment is drawn for them. It fetches nothing.
+ * Measurement templates · Points of measure (W2b) · Grade rules (W2b)", keys 1–4; the address keeps it, `?view=`) and
+ * its Import (W2b) — a sheet of points of measure or of grade rules, through the import wizard. B-W2b-362: the
+ * measurement templates (B-W1-17) are the second segment now (B-W2b-283's list). It fetches nothing.
  */
 export function LibrarySwitch({ model, actions }: { model: LibrarySwitchModel; actions?: LibrarySwitchActions }) {
   return (
