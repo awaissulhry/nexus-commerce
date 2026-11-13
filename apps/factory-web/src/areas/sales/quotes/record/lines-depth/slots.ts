@@ -30,4 +30,8 @@ export interface QuoteDepthSlots {
   depositActions?: ReactNode
   /** The line drawer and the W2b dialogs (paste, fill, bulk, compare). */
   overlay?: ReactNode
+  // B-W2b-343 (prices on screen, price-depth/use-price-depth.tsx): Price & margin › Pricing by line in place of W1's table,
+  // and a style block's discount and price by size under its prices.
+  pricing?: ReactNode
+  blockPrices?: (block: { styleId: string; lines: readonly QuoteLine[] }) => ReactNode
 }

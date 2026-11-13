@@ -9,7 +9,9 @@ import type { PartyRow, StyleDetail, StyleRow } from '../../quotes/api'
 import type { CompareAnswer, PriceEntry, PriceListDetail, PriceListRow, PriceVersion } from '../api'
 import { abilitiesOf, emptyNewList, NO_FILTERS, type PriceListAbilities } from '../model'
 import type { NewListModel, PriceListsViewModel } from '../list/list-model'
-import type { PriceListRecordModel } from '../record/record-model'
+import type { BreaksDepthModel, PriceListRecordModel } from '../record/record-model'
+import type { Minimum, VersionRules } from '../depth/api'
+import { rulesHeld } from '../depth/model'
 
 /**
  * Made-up price lists for the design cases of SCR-106 (B-W2a-49): "Demo", "Esempio", "Prova" names, invented codes and
@@ -166,6 +168,8 @@ const entry = (n: number, style: (typeof styles)[keyof typeof styles], colour: (
   standardCost,
   marginPct,
   belowFloor,
+  validFrom: null,
+  validTo: null,
   version: 1,
 })
 
@@ -281,6 +285,8 @@ export function recordModel(role: PriceListRole, over: Partial<PriceListRecordMo
     customerPick: { query: '', results: CUSTOMER_ROWS, problem: null, picked: [] },
     compare: { beforeId: V1.id, afterId: V2.id, answer: COMPARE, problem: null, loading: false },
     panelsPreview: PANELS,
+    // B-W2b-343: Breaks & surcharges.
+    breaks: breaksModel(role),
     ...over,
   }
 }
@@ -290,4 +296,86 @@ export function v1Prices(role: PriceListRole): PriceListRecordModel['prices'] {
   const abilities = can(role)
   const entries = abilities.cost ? V1_ENTRIES : abilities.price ? withoutCost(V1_ENTRIES) : withoutMoney(V1_ENTRIES)
   return { answer: { version: V1, entries }, problem: null, loading: false }
+}
+
+// ---- B-W2b-343: Breaks & surcharges, dated prices, minimums (made-up rows of version 2) ----------------------------------
+
+/** Version 2's prices with GLV-DEMO-01 priced by season (two dated rows) — the Prices tab's Valid from–to. */
+export const V2_DATED: PriceEntry[] = [
+  ...V2_ENTRIES.filter((row) => row.style.code !== 'GLV-DEMO-01'),
+  { ...entry(15, styles.glv1, null, '69.50', '31.20', '55.1079'), validFrom: '2026-11-21', validTo: '2027-02-28' },
+  { ...entry(16, styles.glv1, null, '74.90', '31.20', '58.3445'), validFrom: '2027-03-01', validTo: null },
+]
+
+const rulesEntry = (row: PriceEntry) => ({ id: row.id, styleId: row.styleId, style: { code: row.style.code, name: row.style.name }, colourwayId: row.colourwayId, colourway: row.colourway, unitPrice: row.unitPrice, validFrom: row.validFrom, validTo: row.validTo })
+
+export const RULES: VersionRules = {
+  list: { id: DETAIL.id, code: DETAIL.code, currency: 'EUR', showDiscount: true },
+  version: { id: V2.id, revision: 2, status: 'DRAFT', version: 4, updatedAt: '2026-10-29T10:00:00.000Z' },
+  breaks: [
+    { id: uid('6111', 1), entryId: V2_ENTRIES[0]!.id, entry: rulesEntry(V2_ENTRIES[0]!), minQuantity: 10, unitPrice: '425', discountPct: null, version: 1 },
+    { id: uid('6111', 2), entryId: V2_ENTRIES[0]!.id, entry: rulesEntry(V2_ENTRIES[0]!), minQuantity: 50, unitPrice: '415', discountPct: null, version: 1 },
+    { id: uid('6111', 3), entryId: V2_ENTRIES[2]!.id, entry: rulesEntry(V2_ENTRIES[2]!), minQuantity: 20, unitPrice: null, discountPct: '4', version: 1 },
+    { id: uid('6111', 4), entryId: null, entry: null, minQuantity: 100, unitPrice: null, discountPct: '3', version: 1 },
+  ],
+  sizeSurcharges: [
+    { id: uid('6112', 1), styleId: null, style: null, size: '56', amount: '20', currency: 'EUR', pct: null, version: 1 },
+    { id: uid('6112', 2), styleId: null, style: null, size: '58', amount: '25', currency: 'EUR', pct: null, version: 1 },
+    { id: uid('6112', 3), styleId: styles.jkt2.id, style: { code: styles.jkt2.code, name: styles.jkt2.name }, size: '54', amount: null, currency: null, pct: '5', version: 1 },
+  ],
+  styleSurcharges: [{ id: uid('6112', 4), styleId: styles.jkt1.id, style: { code: styles.jkt1.code, name: styles.jkt1.name }, size: '54', amount: '15', currency: 'EUR', pct: null, version: 1 }],
+}
+export const RULES_V1: VersionRules = { ...RULES, version: { id: V1.id, revision: 1, status: 'ACTIVE', version: 2, updatedAt: '2026-01-14T15:00:00.000Z' }, breaks: RULES.breaks.slice(0, 1), sizeSurcharges: RULES.sizeSurcharges.slice(0, 1) }
+
+const minimum = (n: number, over: Partial<Minimum>): Minimum => ({
+  id: uid('6113', n),
+  companyId: DETAIL.companyId,
+  priceListId: DETAIL.id,
+  subject: 'STYLE',
+  styleId: styles.jkt2.id,
+  style: { id: styles.jkt2.id, code: styles.jkt2.code, name: styles.jkt2.name },
+  productType: null,
+  itemId: null,
+  item: null,
+  minQuantity: 5,
+  per: 'LINE',
+  action: 'BLOCK',
+  surchargeAmount: null,
+  currency: null,
+  surchargePct: null,
+  note: null,
+  status: 'ACTIVE',
+  version: 1,
+  createdAt: '2026-10-20T09:00:00.000Z',
+  updatedAt: '2026-10-20T09:00:00.000Z',
+  ...over,
+})
+export const MINIMUMS: Minimum[] = [
+  minimum(1, {}),
+  minimum(2, { subject: 'PRODUCT_TYPE', styleId: null, style: null, productType: 'GLOVES', minQuantity: 20, per: 'ORDER', action: 'SURCHARGE', surchargeAmount: '12', currency: 'EUR', note: 'Piccole serie di guanti' }),
+  minimum(3, { subject: 'MATERIAL', styleId: null, style: null, itemId: uid('6114', 1), item: { id: uid('6114', 1), code: 'PELLE-DEMO-08', name: 'Pelle bovina demo 1,2 mm' }, minQuantity: 30, per: 'COLOURWAY', action: 'WARN' }),
+  minimum(4, { minQuantity: 3, per: 'COLOURWAY', action: 'WARN', status: 'ARCHIVED' }),
+]
+
+/** The Breaks & surcharges part of the record as a role sees it (version 2, the draft). */
+export function breaksModel(role: PriceListRole, over: Partial<BreaksDepthModel> = {}): BreaksDepthModel {
+  const abilities = can(role)
+  const money = abilities.price
+  const rules: VersionRules = money ? RULES : { ...RULES, breaks: RULES.breaks.map(({ unitPrice: _p, discountPct: _d, entry, ...rest }) => ({ ...rest, entry: entry ? { ...entry, unitPrice: undefined } : null }) as VersionRules['breaks'][number]), sizeSurcharges: [], styleSurcharges: [] }
+  return {
+    can: abilities,
+    version: V2,
+    rules: { status: 'ready', value: rules },
+    minimums: { status: 'ready', value: MINIMUMS },
+    held: rulesHeld(DETAIL, V2, abilities),
+    showDiscount: true,
+    selectedBreaks: [],
+    selectedMinimums: [],
+    cells: {},
+    extraSizes: [],
+    busy: false,
+    notice: null,
+    materials: { query: '', results: [{ id: uid('6114', 1), code: 'PELLE-DEMO-08', name: 'Pelle bovina demo 1,2 mm' }, { id: uid('6114', 2), code: 'FODERA-DEMO-02', name: 'Fodera rete demo' }] },
+    ...over,
+  }
 }

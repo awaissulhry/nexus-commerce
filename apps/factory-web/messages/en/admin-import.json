@@ -255,6 +255,10 @@
       "sales_orders": {
         "name": "Sales orders",
         "fills": "Orders taken outside Nexus: one order per order reference, its lines by style, colour and size, with quantity, price, the customer’s PO, dates, season and priority."
+      },
+      "sales_priceLists": {
+        "name": "Price lists",
+        "fills": "A price list's prices by list code, style and colourway (or every colourway) and first day: the last day, the unit price (price) and its quantity breaks. The rows go into each list's draft version."
       }
     },
     "keys": {

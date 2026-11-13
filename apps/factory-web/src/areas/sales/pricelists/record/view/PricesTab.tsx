@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Percent, Plus, Search, Trash2 } from 'lucide-react'
+import { CalendarRange, Percent, Plus, Search, Trash2 } from 'lucide-react'
 import { Banner, Card, EmptyState, Field, KeyValue } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, Input, Select, Tag } from '@nexus/ui/primitives'
@@ -12,7 +12,8 @@ import { useLocale } from '../../../../../lib/i18n/provider'
 import { percent, unitPrice } from '../../../quotes/model'
 import type { PriceEntry, PriceListDetail } from '../../api'
 import { entriesMatching, nextVersionHeld, priceColumnIds, pricesHeld, sortedEntries, versionToShow } from '../../model'
-import { PartState, useDay, useValidity, useWords, VersionPill } from '../../parts'
+import '../../depth/depth.css'
+import { PartState, useDay, useDepthWords, useValidity, useWords, VersionPill } from '../../parts'
 import type { CellState, PriceListRecordActions, PriceListRecordModel } from '../record-model'
 
 /**
@@ -24,6 +25,7 @@ import type { CellState, PriceListRecordActions, PriceListRecordModel } from '..
  */
 export function PricesTab({ list, model, actions }: { list: PriceListDetail; model: PriceListRecordModel; actions?: PriceListRecordActions }) {
   const t = useWords()
+  const d = useDepthWords()
   const locale = useLocale()
   const day = useDay()
   const validity = useValidity()
@@ -94,17 +96,37 @@ export function PricesTab({ list, model, actions }: { list: PriceListDetail; mod
           {data.belowFloor ? <Tag tone="warning">{t('prices.belowFloor')}</Tag> : null}
         </span>
       ) : null
+    // B-W2b-343: Valid from–to — the price's own days inside its version; on the draft "Set days" (through the dated prices).
+    const DaysCell = ({ data }: ICellRendererParams<PriceEntry>) => {
+      if (!data) return null
+      const words = data.validFrom || data.validTo ? validity(data.validFrom, data.validTo) : d('days.always')
+      if (!live.current.editable) return <span>{words}</span>
+      return (
+        <span className="fw-pld-days">
+          <span>{words}</span>
+          <Button
+            size="sm"
+            variant="quiet"
+            aria-label={d('days.setOf', { style: data.style.code, colour: data.colourway?.code ?? t('prices.everyColour') })}
+            onClick={() => live.current.actions?.onDialog?.({ kind: 'days', entryId: data.id, validFrom: data.validFrom ?? '', validTo: data.validTo ?? '', price: data.unitPrice ?? '' })}
+          >
+            <CalendarRange size={13} aria-hidden />
+          </Button>
+        </span>
+      )
+    }
     const all: Record<string, ColDef<PriceEntry>> = {
       style: { colId: 'style', headerName: t('prices.col.style'), minWidth: 160, flex: 1.4, cellRenderer: StyleCell, valueGetter: (params) => params.data?.style.code ?? '' },
       colour: { colId: 'colour', headerName: t('prices.col.colour'), minWidth: 160, flex: 1.4, cellRenderer: ColourCell, valueGetter: (params) => params.data?.colourway?.code ?? '' },
       price: { colId: 'price', headerName: t('prices.col.price'), minWidth: 170, flex: 1, type: 'rightAligned', cellRenderer: PriceCell, valueGetter: (params) => params.data?.unitPrice ?? '' },
       cost: { colId: 'cost', headerName: t('prices.col.cost'), minWidth: 140, flex: 1, type: 'rightAligned', valueGetter: (params) => unitPrice(params.data?.standardCost, list.currency, locale) },
       margin: { colId: 'margin', headerName: t('prices.col.margin'), minWidth: 170, flex: 1, cellRenderer: MarginCell, valueGetter: (params) => params.data?.marginPct ?? '' },
+      days: { colId: 'days', headerName: d('days.col'), minWidth: 210, flex: 1.2, cellRenderer: DaysCell, valueGetter: (params) => params.data?.validFrom ?? '' },
     }
     // Money by grain: a column the person's grains do not reach is absent (the API sends no such field either).
-    return priceColumnIds(model.can).map((id) => all[id]!)
+    return [...priceColumnIds(model.can), 'days'].map((id) => all[id]!)
     // Words, the person's grains and the language: a change rebuilds the cells; the edit state is read through `live`.
-  }, [t, locale, model.prefix, model.can.price, model.can.cost, model.can.margin, list.currency, editable, model.cells])
+  }, [t, d, locale, model.prefix, model.can.price, model.can.cost, model.can.margin, list.currency, editable, model.cells, validity])
 
   const nextHeld = nextVersionHeld(list, model.can)
   const bulkHeld = held ? t(held) : model.busy ? t('held.busy') : null

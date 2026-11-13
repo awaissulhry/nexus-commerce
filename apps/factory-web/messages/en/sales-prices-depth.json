@@ -1,0 +1,505 @@
+{
+  "common": {
+    "back": "Back",
+    "dismiss": "Dismiss",
+    "loading": "Loading…",
+    "retry": "Try again",
+    "working": "Working…"
+  },
+  "tab": {
+    "breaks": "Breaks & surcharges"
+  },
+  "held": {
+    "busy": "A change is being saved: wait a moment.",
+    "fee": "A fee keeps the price typed on it: it has no waterfall.",
+    "noList": "No price list prices this line: it cannot start from a list price.",
+    "noCost": "The line's cost is not complete yet: a price from the cost waits for its cost sheet.",
+    "noCostSheet": "The style has no cost sheet: a price from the cost needs one.",
+    "noneList": "None of the selected lines can start from a list price.",
+    "noneCost": "None of the selected lines has a price from its cost.",
+    "noPrice": "Prices need the price grain (money.price): your role does not have it.",
+    "archived": "The list is archived: reactivate it to change it.",
+    "noManage": "Changing price lists needs pricelists.manage: your role reads them only.",
+    "noVersion": "The list has no version yet.",
+    "activeVersion": "Version {revision} is in force: its rules stay as they are. Make the next version to change them.",
+    "activeHasDraft": "Version {revision} is in force and keeps its rules: change them on the draft."
+  },
+  "cell": {
+    "saving": "Saving…",
+    "failed": "Not saved"
+  },
+  "flag": {
+    "negative": "Loss",
+    "belowFloor": "Under the floor"
+  },
+  "fee": {
+    "DEVELOPMENT": "Development fee",
+    "SAMPLE": "Sample fee",
+    "TOOLING": "Tooling fee",
+    "OTHER": "Fee"
+  },
+  "keys": {
+    "open": "Open the line drawer with its waterfall"
+  },
+  "pricing": {
+    "title": "Pricing by line",
+    "sub": "How each price was reached and what each line earns.",
+    "floorRole": "This version is held to its maker's role floor: {floor}.",
+    "floorCompany": "This version is held to the company floor: {floor}.",
+    "count_one": "{count} line",
+    "count_other": "{count} lines",
+    "failed": "The pricing by line couldn't be read",
+    "howEdit": "Type a net in its cell: a manual change asks its reason. A row opens the line drawer with its waterfall.",
+    "howOpen": "A row opens the line drawer with its waterfall."
+  },
+  "col": {
+    "line": "Line",
+    "qty": "Pcs",
+    "list": "List price",
+    "options": "Options",
+    "break": "Quantity break",
+    "breakFrom_one": "from {count} piece",
+    "breakFrom_other": "from {count} pieces",
+    "manual": "Manual change",
+    "typedStart": "Typed price",
+    "net": "Net unit",
+    "netGross": "Unit price incl. VAT",
+    "netOf": "Net unit of line {line}",
+    "cost": "Unit cost",
+    "source": "Cost source",
+    "revReleased": "Rev {revision} released",
+    "revDraft": "Draft rev {revision}, estimate",
+    "pricedOn": "priced {date}",
+    "marginAmount": "Margin €",
+    "margin": "Margin %"
+  },
+  "bulk": {
+    "list_one": "Re-price {count} from the list",
+    "list_other": "Re-price {count} from the list",
+    "cost_one": "Price {count} from the cost",
+    "cost_other": "Price {count} from the cost",
+    "doneLIST_one": "{count} line re-priced from its list.",
+    "doneLIST_other": "{count} lines re-priced from their list.",
+    "doneSUGGESTED_one": "{count} line priced from its cost.",
+    "doneSUGGESTED_other": "{count} lines priced from their cost.",
+    "partly": "{count} priced; refused: lines {refused}. Open a line to see why."
+  },
+  "done": {
+    "LIST": "Line {line} re-priced from its list.",
+    "SUGGESTED": "Line {line} priced from its cost.",
+    "NET": "Line {line}: the new net is saved with its reason."
+  },
+  "manual": {
+    "title": "Manual change · {line}",
+    "now": "Net now",
+    "new": "New net",
+    "kept": "Kept",
+    "keptLIST": "Starts from the list price",
+    "keptSUGGESTED": "Starts from the price of the cost",
+    "keptNone": "Starts from the price typed here",
+    "keptTyped": "Starts from the price typed {price} ({reason})",
+    "keptDiscount": "discount {pct}",
+    "net": "New net unit",
+    "netHint": "On the quote's basis, as the line shows it.",
+    "reason": "Reason",
+    "reasonHint": "From the price adjustment reasons (Sales settings).",
+    "reasonPick": "Choose a reason…",
+    "note": "Note",
+    "noteNeeded": "Note (this reason asks for one)",
+    "save": "Save the new net",
+    "problem": {
+      "price": "Type a net unit price above 0.",
+      "same": "The net is already this price.",
+      "reason": "Choose the reason of the change.",
+      "note": "This reason asks for a note: say why.",
+      "noteLong": "A note of at most 500 characters."
+    }
+  },
+  "problem": {
+    "reason": "This reason is no longer in the list: choose another.",
+    "note": "This reason asks for a note: say why.",
+    "start": "The price cannot start this way now (no list or no cost): read the line again.",
+    "price": "The new price does not add up: check the figures and try again.",
+    "state": "This line can no longer be priced here (a fee, or the version is no longer a draft).",
+    "read": {
+      "signed_out": "You are signed out: sign in again.",
+      "forbidden": "Your role cannot read this.",
+      "not_found": "It is no longer there.",
+      "unavailable": "The server is not answering: try again in a moment.",
+      "rate_limited": "Too many requests: try again in a moment.",
+      "contract": "The answer was not what this screen expects: reload the page.",
+      "internal": "Something went wrong: try again."
+    },
+    "write": {
+      "moved": "Someone else changed it meanwhile: it was read again, nothing was overwritten.",
+      "internal": "Something went wrong: nothing was saved.",
+      "signed_out": "You are signed out: sign in again.",
+      "forbidden": "Your role cannot change this.",
+      "not_found": "It is no longer there.",
+      "step_up": "This change asks for a fresh authenticator code.",
+      "rate_limited": "Too many requests: try again in a moment.",
+      "unavailable": "The server is not answering: nothing was saved."
+    }
+  },
+  "step": {
+    "LIST": "List price",
+    "SUGGESTED": "Price from the cost",
+    "MANUAL_START": "Price typed by hand",
+    "MANUAL": "Manual change",
+    "BREAK": "Quantity break",
+    "BREAK_FROM_one": "Quantity break from {count} piece",
+    "BREAK_FROM_other": "Quantity break from {count} pieces",
+    "OPTION": "Option",
+    "DISCOUNT": "Discount {pct} %",
+    "SIZE_SURCHARGE": "Size surcharge ({sizes})",
+    "NET": "Net",
+    "listOf": "{code} version {revision}",
+    "listCode": "{code}",
+    "breakPieces_one": "{count} piece counted",
+    "breakPieces_other": "{count} pieces counted",
+    "pct": "{pct} %",
+    "reason": "{reason}",
+    "reasonNote": "{reason}: {note}"
+  },
+  "scope": {
+    "VERSION_STYLE": "this list, for this style",
+    "VERSION": "this list, every style",
+    "STYLE": "the style's own"
+  },
+  "drawer": {
+    "title": "Cost breakdown and waterfall",
+    "noPrice": "Prices need the price grain (money.price): your role does not have it.",
+    "failed": "The line's price couldn't be read",
+    "waterfall": "How line {line} is priced",
+    "mismatch": "The steps add up to {total}; the line says {given}.",
+    "noSteps": "Priced at {price} by hand, without a waterfall: re-price it to see how a price is reached.",
+    "noStepsList": "Priced at {price} without a waterfall: re-price it from the list to see the list price, its break and its surcharges.",
+    "stepsProblem": "The stored steps no longer add up to the line's price: re-price it.",
+    "bySize": "Price by size: what each size adds",
+    "sizeAdds": "{size} {amount}",
+    "listDays": "List {code}: the price of {days}.",
+    "listAlways": "List {code}.",
+    "costTitle": "Cost breakdown",
+    "noCostGrain": "The cost needs the cost grain (money.cost): your role does not have it.",
+    "noCosting": "The cost sheet needs costing.view: your role does not have it.",
+    "costNoCells": "The cost sheet has no cell for this line's colour and sizes.",
+    "costChart": "What one piece of line {line} costs today",
+    "margin": "Margin of this line",
+    "marginToday": "At today's cost: {pct}.",
+    "suggested": "The cost suggests {price} at the floor.",
+    "suggestedAt": "The cost suggests {price} to earn {pct}.",
+    "reprice": "Re-price from the list",
+    "fromCost": "Price from the cost",
+    "changeNet": "Change the net…"
+  },
+  "cost": {
+    "material": "Materials",
+    "labour": "Labour",
+    "overhead": "Overhead",
+    "total": "Cost per piece",
+    "known": "Known so far",
+    "kept": "Cost the quote keeps",
+    "today": "Cost sheet today",
+    "incomplete": "Not complete yet",
+    "changedUp": "+ {amount} since priced",
+    "changedDown": "− {amount} since priced",
+    "changedHint": "The cost changed since the line was priced: re-price it from the list or from the cost.",
+    "changedHintView": "The cost changed since the line was priced."
+  },
+  "block": {
+    "label": "Discount and price by size",
+    "discount": "Discount {pct}",
+    "bySize": "Price by size:",
+    "size": "{size} {price}"
+  },
+  "record": {
+    "pdf": "Price list PDF",
+    "pdfHint": "Opens in a new tab: print it or save it as a PDF.",
+    "exportXlsx": "Export prices (XLSX, to import again)",
+    "exportCsv": "Export prices (CSV)",
+    "import": "Import prices…"
+  },
+  "days": {
+    "col": "Valid from–to",
+    "always": "Every day of the version",
+    "setOf": "Set the days of {style} {colour}",
+    "title": "Days of {price}",
+    "body": "A price may hold on days of its own inside its version (a season's price). Two prices of one style and colourway never hold on the same day.",
+    "from": "Valid from",
+    "fromHint": "Empty: from the version's first day.",
+    "to": "Valid to",
+    "toHint": "Empty: to the version's last day.",
+    "addHint": "Empty: every day of the version.",
+    "price": "Unit price ({currency})",
+    "save": "Save the days",
+    "newStart": "A new first day writes the price again from that day.",
+    "newStartBreaks_one": "A new first day writes the price again from that day: its own quantity break goes with the old row.",
+    "newStartBreaks_other": "A new first day writes the price again from that day: its {count} own quantity breaks go with the old row.",
+    "done": "{style}: the days are saved.",
+    "held": {
+      "order": "The last day comes before the first.",
+      "overlap": "Another price of this style and colourway holds on these days ({from} – {to}).",
+      "undated": "A price of this style and colourway holds every day: give it its own days first.",
+      "price": "Type a unit price above 0."
+    }
+  },
+  "discount": {
+    "title": "The discount on documents",
+    "sub": "What the quotes and confirmations of this list's customers print.",
+    "net": "The net price only",
+    "show": "The list price and the discount",
+    "doneShow": "Documents now show the list price and the discount.",
+    "doneNet": "Documents now show the net price only.",
+    "refused": "The choice couldn't be saved: the list was read again."
+  },
+  "breaks": {
+    "title": "Quantity breaks",
+    "sub": "From a number of pieces a price gets lower: a price's own break, or a discount on every price of the version.",
+    "ofVersion": "The rules of version {revision}.",
+    "add": "Add a break",
+    "addTitle": "Add a quantity break",
+    "addBody": "The pieces are every line of a quote or order priced by this price.",
+    "addGo": "Add the break",
+    "everyPrice": "Every price (a discount)",
+    "everyColour": "every colourway",
+    "days": "{from} – {to}",
+    "col": {
+      "price": "Price",
+      "from": "From",
+      "listPrice": "List price",
+      "unitPrice": "Unit price",
+      "discount": "Discount %"
+    },
+    "pieces_one": "{count} piece",
+    "pieces_other": "{count} pieces",
+    "fromHint": "From 2 pieces on.",
+    "gives": "The break gives",
+    "givesPct": "A discount",
+    "givesPrice": "A unit price",
+    "priceOf": "Unit price from {count} pieces of {of}",
+    "pctOf": "Discount from {count} pieces of {of}",
+    "count_one": "{count} break",
+    "count_other": "{count} breaks",
+    "empty": "No quantity breaks",
+    "emptyBody": "Add one: from a number of pieces a price gets lower.",
+    "emptyView": "This version has none.",
+    "remove_one": "Remove {count} break",
+    "remove_other": "Remove {count} breaks",
+    "removeTitle_one": "Remove {count} break?",
+    "removeTitle_other": "Remove {count} breaks?",
+    "removeBody": "Their prices go back to the list price at every quantity. Quotes already priced keep their prices.",
+    "added_one": "Break from {count} piece added.",
+    "added_other": "Break from {count} pieces added.",
+    "removed_one": "{count} break removed.",
+    "removed_other": "{count} breaks removed.",
+    "refused": "The break was refused: a break lowers its price (a unit price under it, or a discount under 100 %), once per price and quantity.",
+    "held": {
+      "quantity": "Type the pieces: a whole number from 2.",
+      "everyPct": "A break on every price is a discount, not a unit price.",
+      "twice": "There is already a break from {count} pieces for this price: change it in its row.",
+      "pct": "Type a discount above 0 and under 100 %.",
+      "price": "Type a unit price above 0.",
+      "lower": "A break lowers the price: under {price}.",
+      "none": "Select the breaks to remove."
+    }
+  },
+  "surcharges": {
+    "title": "Size surcharges",
+    "sub": "What a size adds to the unit price: an amount or a percent per size, for every style of the version or one style. A style's own surcharges apply where this list sets none.",
+    "add": "Add a surcharge",
+    "addTitle": "Add a size surcharge",
+    "addBody": "Each size takes an amount or a percent; a size already set takes the new figure.",
+    "addGo": "Add the surcharge",
+    "everyStyle": "Every style",
+    "own": "the style's own (kept on the style)",
+    "kindAmount": "Amount ({currency})",
+    "kindPct": "Percent of the price",
+    "col": {
+      "who": "For"
+    },
+    "cellOf": "{who}, size {size}, {kind}",
+    "sizes": "Sizes",
+    "sizesHint": "One or more, comma apart: 54, 56.",
+    "gives": "The surcharge is",
+    "givesAmount": "An amount ({currency})",
+    "givesPct": "A percent of the price",
+    "count_one": "{count} size",
+    "count_other": "{count} sizes",
+    "empty": "No size surcharges",
+    "emptyBody": "Add one: what a size adds to the unit price.",
+    "emptyView": "This version has none.",
+    "how": "Type in a cell to change it (saved when you leave it); empty it to remove it. A size takes an amount or a percent: typing one replaces the other.",
+    "howView": "A style's own surcharges are kept on the style.",
+    "added_one": "{count} size surcharge saved.",
+    "added_other": "{count} size surcharges saved.",
+    "notNumber": "Size {size}: \"{text}\" is not a number. The figure stays as it was.",
+    "refused": "The surcharge was refused: an amount above 0 or a percent from 0 to 100, one per size.",
+    "held": {
+      "sizes": "Type at least one size.",
+      "size": "A size code has at most 40 characters, without spaces.",
+      "amount": "Type an amount above 0.",
+      "pct": "Type a percent above 0 and at most 100."
+    }
+  },
+  "minimums": {
+    "title": "Minimum order quantities",
+    "sub": "What this list's customers must order at least, of a style, a kind of garment or a material: warned, blocked, or asked a small-run surcharge.",
+    "add": "New minimum",
+    "addTitle": "New minimum order quantity",
+    "addBody": "It binds the customers of {code}.",
+    "addGo": "Create the minimum",
+    "col": {
+      "subject": "Applies to",
+      "minimum": "Minimum",
+      "action": "Below it",
+      "note": "Note",
+      "status": "Status"
+    },
+    "subject": {
+      "STYLE": "A style",
+      "PRODUCT_TYPE": "A kind of garment",
+      "MATERIAL": "A material"
+    },
+    "type": {
+      "JACKET": "Jackets",
+      "TROUSERS": "Trousers",
+      "SUIT": "Suits",
+      "GLOVES": "Gloves",
+      "VEST": "Vests",
+      "OTHER": "Other garments"
+    },
+    "action": {
+      "WARN": "Warn",
+      "BLOCK": "Block",
+      "SURCHARGE": "Small-run surcharge"
+    },
+    "actionHint": {
+      "WARN": "The quote and the order say it; they still go out.",
+      "BLOCK": "The quote cannot be sent and the office order cannot be confirmed below it.",
+      "SURCHARGE": "The quote says the small-run surcharge (priced by hand on the line)."
+    },
+    "per": {
+      "ORDER": "{count} pcs per order",
+      "COLOURWAY": "{count} pcs per colourway",
+      "LINE": "{count} pcs per line"
+    },
+    "perName": {
+      "ORDER": "Per order",
+      "COLOURWAY": "Per colourway",
+      "LINE": "Per line"
+    },
+    "status": {
+      "ACTIVE": "Active",
+      "ARCHIVED": "Archived"
+    },
+    "surchargeAmount": "+ {amount} a piece",
+    "surchargePct": "+ {pct} of the price",
+    "pick": "Choose…",
+    "materialSearch": "Find a material",
+    "quantity": "Minimum pieces",
+    "countedPer": "Counted",
+    "surchargeKind": "The surcharge is",
+    "count_one": "{count} minimum",
+    "count_other": "{count} minimums",
+    "empty": "No minimum order quantities",
+    "emptyBody": "Add one for a style, a kind of garment or a material.",
+    "archive_one": "Archive {count}",
+    "archive_other": "Archive {count}",
+    "reactivate_one": "Reactivate {count}",
+    "reactivate_other": "Reactivate {count}",
+    "added": "Minimum created.",
+    "archived_one": "{count} minimum archived.",
+    "archived_other": "{count} minimums archived.",
+    "reactivated_one": "{count} minimum reactivated.",
+    "reactivated_other": "{count} minimums reactivated.",
+    "movedPartly": "{count} changed, {left} refused (changed meanwhile, or a twin is active): the list was read again.",
+    "refused": "The minimum was refused: check its figures.",
+    "refusedTwin": "An active minimum with the same subject and count exists already: archive it first.",
+    "held": {
+      "style": "Choose the style.",
+      "type": "Choose the kind of garment.",
+      "item": "Choose the material.",
+      "quantity": "Type the minimum: a whole number from 2.",
+      "amount": "Type the surcharge: an amount above 0.",
+      "pct": "Type the surcharge: a percent above 0 and at most 100.",
+      "note": "A note of at most 500 characters.",
+      "twin": "An active minimum with the same subject and count exists already.",
+      "noneActive": "None of the selected minimums is active.",
+      "noneArchived": "None of the selected minimums is archived."
+    }
+  },
+  "import": {
+    "action": "Import prices",
+    "title": "Import prices",
+    "everyCompany": "Every company",
+    "held": {
+      "manage": "Importing prices needs pricelists.manage: your role reads price lists only.",
+      "price": "Importing prices needs the price grain (money.price).",
+      "run": "Running an import needs imports.run and files.upload: your role has not got them."
+    }
+  },
+  "print": {
+    "title": "{code} · {name}",
+    "titleNone": "Price list",
+    "version": "Version",
+    "versionDraft": "Version {revision} (draft)",
+    "versionActive": "Version {revision}",
+    "days": "Valid",
+    "currency": "Currency",
+    "kind": "Kind",
+    "held": "Still reading the price list.",
+    "back": "Back to the price list",
+    "failed": "The price list couldn't be read",
+    "noPriceTitle": "No prices to print",
+    "noVersion": "The list has no version yet.",
+    "prices_one": "{count} price",
+    "prices_other": "{count} prices",
+    "showsDiscount": "Documents of this list show the list price and the discount.",
+    "netOnly": "Documents of this list show the net price only."
+  },
+  "floors": {
+    "title": "Margin floor % per role",
+    "sub": "A quote version is held to the lowest floor of its maker's roles; a role without one keeps the company floor. Under the floor a quote needs an approval.",
+    "noMargin": "The floors need the margin grain (money.margin): your role does not have it.",
+    "edit": "Change the floors",
+    "save": "Save the floors",
+    "discard": "Discard",
+    "failed": "The floors couldn't be read",
+    "noRoles": "This company has no office roles yet.",
+    "fromCompany": "In force: the floors of {code}. The company floor is {floor}.",
+    "fromGroup": "In force: the group's floors. The company floor is {floor}.",
+    "fromNone": "No role has a floor of its own: every role keeps the company floor, {floor}.",
+    "fieldHint": "Empty: the company floor ({floor}).",
+    "fieldOf": "Floor % of {role}",
+    "col": {
+      "role": "Role",
+      "own": "Its own floor here",
+      "inForce": "In force"
+    },
+    "companyFloor": "Company floor {floor}",
+    "lowers": "This lowers a floor: more quotes go out without an approval. Saving asks for a fresh authenticator code.",
+    "stepUpTitle": "Confirm it's you",
+    "stepUpSentence": "Lowering a margin floor lets more quotes go out without an approval.",
+    "stepUpConfirm": "Confirm and save",
+    "stepUpCancelled": "The code was not given: nothing was saved.",
+    "done": "The margin floors are saved.",
+    "refused": "The floors couldn't be saved.",
+    "refusedMoved": "Someone else changed these settings meanwhile: they were read again, nothing was overwritten.",
+    "refusedNoRow": "This scope has no settings of its own yet: save its quote rules first.",
+    "refusedRoles": "A role is no longer an office role of this company: read the floors again.",
+    "held": {
+      "manage": "Changing the floors needs sales.settings.manage.",
+      "noRowCompany": "This company follows the group's settings: give it its own settings first (Quote rules).",
+      "noRowGroup": "The group has no settings yet: save the group's quote rules first.",
+      "same": "Nothing changed yet.",
+      "pct": "{role}: type a percent from 0 to 100."
+    }
+  },
+  "stepUp": {
+    "problem": {
+      "unavailable": "The code couldn't be checked: try again.",
+      "locked": "Too many tries: wait a few minutes.",
+      "wrong": "That code is wrong or already used: type the new one."
+    }
+  }
+}
