@@ -7,7 +7,10 @@ import { callerFor, COMMAND_SETTINGS, runCommand, type CommandCaller, type Comma
 import { defineCron, type CronJob } from '../../../core/cron'
 import type { Log } from '../../../core/queue'
 import { serverClock, type Clock } from '../../../core/time'
-import { sendEmail } from '../../../platform/email-out/outbound'
+import { processEmail, type EmailRuntime } from '../../../platform/email-out/service'
+// B-W2b-385 (NT1:05): the reminder carries a new accept link, made as the send makes one, delivered in this process.
+import { acceptLinkTerms, insertAcceptLink, mintAcceptLink } from '../quotes/accept-links'
+import { deliverLinkMail, queueLinkMail } from '../quotes/mail'
 import { activeTenants, asSystem, systemContext } from '../../../platform/outbox/system'
 import { day } from '../quotes/store'
 // B-W2b-F38: the quote reminder goes only for a company whose switch is on (off by default).
@@ -24,9 +27,12 @@ import { reminderOnFor, reminderSwitchBook, ReminderSwitchedOff } from '../quote
  *   reminder   each SENT current version whose reminder is due (factory-domain quote-terms validityOf: REMINDER_DAYS_BEFORE
  *              days before its last day, sent at least two days before, never reminded) gets ONE mail to the customer on the
  *              quote's thread, from the person who sent it, to the address its link went to (else its contact): the offer's
- *              number, its last day, where its link is; no link (a link is never stored) and no amount. reminderSentAt is set
- *              in the same command; quote.reminder_sent. The mail goes on the company's mail account (FAKE locally and in
- *              tests)
+ *              number, its last day and no amount. B-W2b-385 (NT1:05): it carries a NEW accept link to the same address (a
+ *              QUOTE_ACCEPT OneOffLink as the send makes one, until the same grace after the last day; the first one keeps
+ *              working): the thread keeps the text without the link, the mail is queued without its event and delivered in
+ *              this process right after the command with the link composed in memory (quotes/mail.ts, as the send). A mail
+ *              that could not go stays FAILED with why, not retried. reminderSentAt is set in the same command;
+ *              quote.reminder_sent. The mail goes on the company's mail account (FAKE locally and in tests)
  *   B-W2b-F38  the reminder goes only for a company whose quote reminder switch is on (Sales settings; off by default): a
  *              company with it off is skipped before any command (counted in `switchedOff`), and a switch turned off while
  *              the run goes rolls the command back. Nothing is written for it — no mail, no reminderSentAt, no receipt — so
@@ -43,6 +49,8 @@ export interface ValidityOptions {
   readonly database: FactoryDatabase
   readonly log: Log
   readonly clock?: Clock
+  /** B-W2b-385: the mail runtime the reminder is delivered through (default the process's). */
+  readonly runtime?: () => EmailRuntime
 }
 
 export interface ValidityRun {
@@ -82,7 +90,9 @@ async function expireVersion(caller: CommandCaller, settings: CommandSettings, v
 }
 
 /** One version's reminder, in its own command: 'sent', or why not ('not due', 'no address', 'no sender'; B-W2b-F38: 'switched off'). */
-async function remindVersion(caller: CommandCaller, settings: CommandSettings, versionId: string, today: BusinessDate): Promise<'sent' | 'not due' | 'no address' | 'no sender' | 'switched off'> {
+async function remindVersion(caller: CommandCaller, settings: CommandSettings, versionId: string, today: BusinessDate, runtime: () => EmailRuntime): Promise<'sent' | 'not due' | 'no address' | 'no sender' | 'switched off'> {
+  // B-W2b-385: the link's token and the text with it live here, in memory, never in the command's rows or its receipt.
+  const pending: { delivery: { readonly outboundId: string; readonly text: string } | null } = { delivery: null }
   // B-W2b-F38: a switch turned off after the listing rolls the command back (ReminderSwitchedOff): nothing written.
   const remind = () => runCommand(
     caller,
@@ -91,7 +101,7 @@ async function remindVersion(caller: CommandCaller, settings: CommandSettings, v
       const { tx, now } = tools
       await tx.$queryRaw`SELECT id FROM "QuoteVersion" WHERE id = ${versionId}::uuid FOR UPDATE`
       const version = await tx.quoteVersion.findUniqueOrThrow({ where: { id: versionId }, select: VERSION_FACTS })
-      const quote = await tx.quote.findUniqueOrThrow({ where: { id: version.quoteId }, select: { id: true, companyId: true, number: true, contactId: true, currentRevision: true } })
+      const quote = await tx.quote.findUniqueOrThrow({ where: { id: version.quoteId }, select: { id: true, companyId: true, partyId: true, number: true, contactId: true, currentRevision: true } })
       const validUntil = day(version.validUntil)
       const state = validityOf({ status: version.status, validUntil, sentOn: version.sentAt ? businessDate(version.sentAt) : null, reminderSentAt: version.reminderSentAt, current: version.revision === quote.currentRevision }, today)
       if (!state.reminderDue || validUntil === null || version.sentAt === null) return { outcome: 'not due' as const }
@@ -107,8 +117,14 @@ async function remindVersion(caller: CommandCaller, settings: CommandSettings, v
         return { outcome: !to ? ('no address' as const) : ('no sender' as const) }
       }
       const language = version.language === 'en' ? 'en' : 'it'
-      const mail = reminderMail({ language, number: quote.number, revision: version.revision, validUntil, sentOn: businessDate(version.sentAt), firmOffer: version.firmOffer })
-      const sent = await sendEmail(tools, { record: { type: 'Quote', id: quote.id }, sender: { userId: sender.id, name: sender.displayName, email: sender.email }, to: [to], subject: mail.subject, body: mail.body, attachments: [], locale: language })
+      // B-W2b-385 (NT1:05): a new accept link to the same address, until the same grace after the last day as the send's.
+      const terms = acceptLinkTerms(today, validUntil, now)
+      const tenantId = tools.context.audience === 'system' || tools.context.audience === 'office' ? tools.context.tenantId : ''
+      const minted = mintAcceptLink(tenantId, quote.partyId)
+      await insertAcceptLink(tools, minted, quote, { email: to, terms, actorId: sender.id })
+      const mail = reminderMail({ language, number: quote.number, revision: version.revision, validUntil, sentOn: businessDate(version.sentAt), firmOffer: version.firmOffer, linkUntil: businessDate(terms.expiresAt) })
+      const sent = await queueLinkMail(tools, { quoteId: quote.id, sender: { userId: sender.id, name: sender.displayName, email: sender.email }, to, cc: [], subject: mail.subject, storedText: mail.stored, attachments: [], locale: language })
+      pending.delivery = { outboundId: sent.outbound.id, text: mail.withLink(`${runtime().webOrigin}/l#token=${encodeURIComponent(minted.token)}`) }
       await tx.quoteVersion.update({ where: { id: version.id }, data: { reminderSentAt: now }, select: { id: true } })
       tools.audit({ action: REMIND_COMMAND, recordType: 'Quote', recordId: quote.id, companyId: quote.companyId, after: { versionId: version.id, revision: version.revision, mailed: true, outboundId: sent.outbound.id, validUntil, reminderSentAt: toUtcIso(now) } })
       tools.emit({ type: 'quote.reminder_sent', subject: quote.id, companyId: quote.companyId, payload: { quoteId: quote.id, versionId: version.id, number: quote.number, revision: version.revision, validUntil, outboundId: sent.outbound.id } })
@@ -117,7 +133,10 @@ async function remindVersion(caller: CommandCaller, settings: CommandSettings, v
     settings,
   )
   try {
-    return (await remind()).result.outcome
+    const { result, replayed } = await remind()
+    // B-W2b-385: the queued reminder leaves now, with its link (a repeat of the command has no link to send: nothing goes).
+    if (!replayed && pending.delivery) await deliverLinkMail(runtime(), caller, pending.delivery.outboundId, { text: pending.delivery.text, attachment: null })
+    return result.outcome
   } catch (error) {
     if (error instanceof ReminderSwitchedOff) return 'switched off'
     throw error
@@ -165,7 +184,7 @@ export async function runQuoteValidity(options: ValidityOptions): Promise<Validi
           continue
         }
         try {
-          const outcome = await remindVersion(caller, settings, version.id, today)
+          const outcome = await remindVersion(caller, settings, version.id, today, options.runtime ?? processEmail)
           if (outcome === 'sent') reminded++
           else if (outcome === 'switched off') switchedOff++
           else if (outcome !== 'not due') skipped++

@@ -20,6 +20,7 @@ import { amountOf, decimalMoney, filterRows, heldOf, INBOX_VIEWS, kindsOf, openI
 import { QuoteReview } from './ApprovalsView'
 import { BulkApproveDialog } from './BulkApprove'
 import { TaskReview } from './TaskReview'
+import { requestWords, saidIn } from '../words/request-words'
 import '../approvals.css'
 
 export type { InboxViewModel, InboxActions } from '../model'
@@ -58,13 +59,13 @@ function Inbox_({ model, actions, mailSwitch, conversation }: { model: InboxView
 
   // ---- each row in words ---------------------------------------------------------------------------------------------------
   const kindWords = (row: InboxRow): string => {
-    if (row.task) return locale === 'it' ? row.task.kindLabel.it : row.task.kindLabel.en
+    if (row.task) return saidIn(row.task.kindLabel, locale)
     if (row.source === 'quote') return t('kind.QUOTE_APPROVAL')
     return home(`today.kind.${row.kind}`)
   }
   const sentenceOf = (row: InboxRow): string => {
     // B-W2b-377 (B-W2b-361's gap): words from codes — the kind and the record in words, never the API's English summary.
-    if (row.task) return row.task.record.label ? t('row.task', { kind: kindWords(row), label: row.task.record.label }) : kindWords(row)
+    if (row.task) return requestWords(row.task, locale, t)
     if (row.quote) {
       const quote = row.quote
       if (quote.reasons.includes('MARGIN_FLOOR') && quote.marginPct !== undefined && quote.marginFloorPct !== undefined) return w1('sentence.margin', { number: quote.number, customer: quote.partyName, pct: percent(quote.marginPct, locale), floor: percent(quote.marginFloorPct, locale) })
@@ -299,7 +300,7 @@ function Inbox_({ model, actions, mailSwitch, conversation }: { model: InboxView
       {model.notice && (
         <Banner
           tone={model.notice.tone}
-          title={words(model.notice.key, model.notice.params)}
+          title={words(model.notice.key, model.notice.request ? { ...model.notice.params, request: requestWords(model.notice.request, locale, t) } : model.notice.params)}
           action={
             actions?.onDismissNotice ? (
               <Button size="sm" variant="quiet" onClick={actions.onDismissNotice}>

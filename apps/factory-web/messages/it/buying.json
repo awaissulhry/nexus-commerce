@@ -1324,7 +1324,8 @@
       "lots": "Un lotto non è stato accettato: controlla la quantità.",
       "receivedAt": "L’ora di ricevimento è nel futuro.",
       "series": "Questa azienda non ha ancora la serie dei ricevimenti o dei lotti: Sistema › Documenti e numerazioni.",
-      "order": "L’ordine non accetta più questa merce (modificato, annullato o già ricevuto): è stato riletto."
+      "order": "L’ordine non accetta più questa merce (modificato, annullato o già ricevuto): è stato riletto.",
+      "noApprover": "Una riga supera la sua tolleranza di consegna e serve un sì, ma nessuno può darlo: un amministratore dà a un ruolo d’ufficio il permesso di decidere ordini d’acquisto e approvazioni, oppure attiva una regola di approvazione per i ricevimenti oltre la tolleranza."
     },
     "result": {
       "title": "Registrato {number}",

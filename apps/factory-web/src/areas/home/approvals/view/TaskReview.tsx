@@ -12,6 +12,7 @@ import { ApprovalHistory } from '../../../../shell/panels/approvals/view/Approva
 import type { TaskDetail, Words } from '../api'
 import { DEPTH_NS, REVIEW_TABS, type InboxActions, type InboxViewModel, type ReviewTab } from '../model'
 import { heldOf, openIdOf, valueText, type InboxRow } from '../inbox'
+import { requestWords } from '../words/request-words'
 
 const said = (words: Words | null | undefined, locale: string, fallback = ''): string => (words ? (locale === 'it' ? words.it : words.en) : fallback)
 
@@ -83,7 +84,8 @@ export function TaskReview({ model, actions, conversation, kindWords }: { model:
   const loaded = review.detail
   const ids = items.map(openIdOf).filter((id): id is string => id !== null)
   const tabs = REVIEW_TABS.map((id) => ({ id, label: t(`review.tab.${id}`) }))
-  const recordHref = row?.href ?? null
+  // B-W2b-382: the record's page (its parent's) also when the review is opened alone, its row not in the list.
+  const recordHref = row?.href ?? review.recordHref ?? null
   const title = task ? t(task.status === 'PENDING' ? 'review.title' : 'review.titleDecided', { kind: said(task.kindLabel, locale).toLocaleLowerCase(locale) }) : t('review.titleUnknown')
 
   const checked = detail?.recheckLine ? formatTime(detail.recheckLine.checkedAt, { locale }) : model.asOf ? formatTime(model.asOf, { locale }) : '—'
@@ -104,7 +106,7 @@ export function TaskReview({ model, actions, conversation, kindWords }: { model:
   ) : null
 
   // B-W2b-377 (B-W2b-361's gap): the request in words from codes (its kind and its record), never the API's English summary.
-  const sentence = task ? (task.record.label ? t('row.task', { kind: said(task.kindLabel, locale), label: task.record.label }) : said(task.kindLabel, locale)) : undefined
+  const sentence = task ? requestWords(task, locale, t) : undefined
   const decided = detail?.decided ?? null
   const body = !task ? null : tab === 'change' ? (
     <div className="fw-apv-review">

@@ -304,6 +304,9 @@ export function summaryOf(kind: FloorSyncKind, payload: unknown): EventSummary {
       return { code: text(p.code) ?? text(p.hideId, 40) ?? text(p.lotId, 40) ?? text(p.itemId, 40), ...(workOrderId ? { workOrderId } : {}) }
     case 'inventory.substitute.issue':
       return { target: text(p.substitutionId, 40), code: text(p.code) }
+    // B-W2b-384: what was scanned and the shipment; never who.
+    case 'shipping.carton.scan':
+      return { code: text(p.code), target: text(p.shipmentId, 40) }
   }
 }
 

@@ -53,6 +53,7 @@ export const designScreen = defineDesignScreen<ReceiveCase>({
             { code: 'SHORT', seq: 10 },
             { code: 'QUARANTINE', seq: 10 },
           ],
+          held: [],
         },
       }),
     },

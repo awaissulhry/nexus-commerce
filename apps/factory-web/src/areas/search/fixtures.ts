@@ -84,6 +84,21 @@ export const designScreen = defineDesignScreen<SearchResultsViewModel>({
       model: { ...ready, q: 'ORD-2026-00042', words: ['ord-2026-00042'], rows: [{ ...PISTA[1]!, match: 'number' }, PISTA[5]!, PISTA[7]!], counts: [{ recordType: 'SalesOrder', count: 1 }, { recordType: 'Invoice', count: 1 }, { recordType: 'Shipment', count: 1 }], total: 3, more: false },
       note: 'The order with that number first; the invoice and shipment that name it follow.',
     },
+    {
+      // B-W2b-382 (XF7:03): a product-safety report is listed under Compliance, where its page is (the indexer says Sales).
+      id: 'w2b-382-safety',
+      label: 'B-W2b-382 · a product-safety report: Area says Compliance',
+      model: {
+        ...ready,
+        q: 'PSR-DEMO-0002',
+        words: ['psr-demo-0002'],
+        rows: [{ ...row(13, 'ProductSafetyReport', 'PSR-DEMO-0002', 'Giacca Pista Demo', 'Pista Demo Racing S.r.l.', 'ASSESSING', 'compliance', 'number'), href: `/w/DEMO/compliance/register/accidents/reports/${id(13)}` }],
+        counts: [{ recordType: 'ProductSafetyReport', count: 1 }],
+        total: 1,
+        more: false,
+      },
+      note: 'The row opens Compliance › PPE register & recalls › the report, and its Area column says Compliance.',
+    },
     { id: 'selected', label: 'Rows selected: copy numbers', model: { ...ready, selected: [id(2), id(3), id(7)] }, note: 'Copy numbers (2): the draft invoice has no number (its box says why).' },
     { id: 'copied', label: 'Numbers copied', model: { ...ready, notice: { tone: 'success', key: 'page.copied', count: 2 } } },
     {

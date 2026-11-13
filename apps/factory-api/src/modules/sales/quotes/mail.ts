@@ -60,7 +60,8 @@ export async function queueLinkMail(tools: CommandTools, input: LinkMailInput) {
 export interface LinkDelivery {
   /** The mail's text with the link, made in memory (never stored). */
   readonly text: string
-  readonly attachment: { readonly filename: string; readonly content: Uint8Array }
+  /** The PDF in memory; null for a mail without one (B-W2b-385: the validity reminder, quote-terms/validity.ts). */
+  readonly attachment: { readonly filename: string; readonly content: Uint8Array } | null
 }
 
 /**
@@ -80,7 +81,7 @@ export async function deliverLinkMail(runtime: EmailRuntime, caller: CommandCall
         }))
         const company = await companyLegalOf(caller, row.companyId)
         const mail = compose(
-          { template: 'thread.message', body: cleanBody(delivery.text), senderName: message.authorName, companyName: row.identity.displayName, attachmentNames: [delivery.attachment.filename] },
+          { template: 'thread.message', body: cleanBody(delivery.text), senderName: message.authorName, companyName: row.identity.displayName, attachmentNames: delivery.attachment ? [delivery.attachment.filename] : [] },
           { locale: localeOf(row.locale), company, privacyUrl: privacyNoticeUrl(runtime.webOrigin, row.companyId) },
         )
         return buildMime({
@@ -97,7 +98,7 @@ export async function deliverLinkMail(runtime: EmailRuntime, caller: CommandCall
           text: mail.text,
           html: mail.html,
           automatic: false,
-          attachments: [{ filename: delivery.attachment.filename, contentType: 'application/pdf', content: delivery.attachment.content }],
+          attachments: delivery.attachment ? [{ filename: delivery.attachment.filename, contentType: 'application/pdf', content: delivery.attachment.content }] : [],
         })
       },
     })

@@ -157,6 +157,8 @@ const lineSchema = z.object({
   lots: z.array(lotSchema),
   /** B-W2a-31 (SCM-123): received in the supplier's unit (a roll, a box) with its factor; null: in the order line's unit. */
   received: z.object({ quantity: z.string(), uom, factor: z.string() }).nullable().optional(),
+  /** B-W2b-377: since when the line waits for a yes (beyond its delivery tolerance); null when it is not held. */
+  heldForApprovalAt: z.string().nullable().optional(),
   value,
 })
 export type ReceiptLine = z.infer<typeof lineSchema>
@@ -259,7 +261,12 @@ export interface ReceiptBody {
   lines: LineBody[]
 }
 
-const recordedSchema = z.object({ receipt: receiptSchema, notes: z.array(z.object({ code: z.enum(RECEIPT_NOTE_CODES), seq: z.number().nullable() })) })
+// B-W2b-382 (on B-W2b-377): `held` — the lines that wait for a yes (202), each with its request; empty when posted (201).
+export const recordedSchema = z.object({
+  receipt: receiptSchema,
+  notes: z.array(z.object({ code: z.enum(RECEIPT_NOTE_CODES), seq: z.number().nullable() })),
+  held: z.array(z.object({ lineId: z.string(), seq: z.number(), taskId: z.string() })).default([]),
+})
 export type Recorded = z.infer<typeof recordedSchema>
 
 export function recordReceipt(api: ApiClient, body: ReceiptBody, idempotencyKey: string): Promise<Recorded> {

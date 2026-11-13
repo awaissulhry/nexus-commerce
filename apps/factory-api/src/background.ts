@@ -26,6 +26,8 @@ import { emailInHandlers } from './platform/email-in/handlers'
 import { emailSendHandler } from './platform/email-out/outbound'
 import { digestCron } from './platform/email-out/digest/digest'
 import { notificationsHandler } from './platform/notifications/fan-out'
+// B-W2b-385: the followed saved views, counted as their people every quarter of an hour (their last ids in Redis).
+import { redisIdMemory, viewFollowCron } from './platform/notifications/view-follow/evaluate'
 import { exportExpiryCron } from './platform/exports/expire'
 import { exportHandlers } from './platform/exports/worker'
 import { assertNoFakeAccountsInProduction } from './platform/gateway/boot'
@@ -392,6 +394,8 @@ if (mode === 'worker') {
   crons.push(quoteValidityCron({ database, log }))
   // B-W2b-360: hourly at minute 23, a booked appointment starting within a day reminds its rider once (made-to-measure on only).
   crons.push(fittingRemindersCron({ database, log }))
+  // B-W2b-385: every 15 minutes, the followed saved views counted as their people; a change tells them (notification.view_changed).
+  crons.push(viewFollowCron({ database, log, memory: redisIdMemory(redis, prefix) }))
   const scheduler = startCrons(crons, { redis, prefix, log })
   stops.push(() => scheduler.stop())
 }

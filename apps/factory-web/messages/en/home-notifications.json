@@ -212,7 +212,10 @@
       "following": {
         "note": "{actor} wrote a note on {record}, which you follow",
         "mail_in": "A reply arrived on {record}, which you follow",
-        "mail_out": "{actor} sent a message on {record}, which you follow"
+        "mail_out": "{actor} sent a message on {record}, which you follow",
+        "view": "{record}, a saved view you follow, changed: {entered} came in, {left} left ({count} now)",
+        "viewCount": "{record}, a saved view you follow, changed ({count} now)",
+        "changed": "{record}, which you follow, changed"
       },
       "assigned": {
         "today": "{actor} assigned you {record} on Today ({kind})",
@@ -249,7 +252,9 @@
       "safety": {
         "incidentReported": "New report {record}: {title}",
         "inailDue": "INAIL report for {record} due by {title}",
-        "inailLate": "INAIL report for {record} is late: it was due by {title}"
+        "inailLate": "INAIL report for {record} is late: it was due by {title}",
+        "productReport": "Product-safety report {record} came in: assess it",
+        "productAccident": "Product-safety report {record} came in with an accident: assess it and see whether the authority must be told"
       },
       "files": {
         "expiryDue": "{kind} on {record} expires on {title}"
@@ -266,6 +271,13 @@
         "orderDecided": "{actor} {status} change order {record}",
         "orderReleased": "Change order {record} was released: {title}",
         "workInProgress": "Change order {record} was released: {title}. It decides what happens to work orders {kind}"
+      },
+      "purchasing": {
+        "requestOrdered": "Your request to buy {record} was put on purchase order {title}",
+        "requestRefused": "{actor} refused your request to buy {record}"
+      },
+      "inquiries": {
+        "assigned": "{actor} gave you inquiry {record}"
       }
     },
     "fallback": "News on {record}",

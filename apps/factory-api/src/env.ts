@@ -38,6 +38,10 @@ import { describeUrlHost, isLoopbackUrl } from '@nexus/db-kit/url-guard'
  *   FACTORY_LOCAL_FILES_DIR   local and test only: the folder of the local file store (the store of a FAKE R2
  *                             account; platform/files), an absolute path; default a folder under the system's
  *                             temporary directory named after FACTORY_QUEUE_PREFIX
+ *   FACTORY_VAPID_PUBLIC_KEY, FACTORY_VAPID_PRIVATE_KEY, FACTORY_VAPID_SUBJECT
+ *                             optional, B-W2b-385 (PLT-140): the server's Web Push keys (a P-256 pair, base64url: 65 and 32
+ *                             bytes) and who runs it (mailto: or https), all three or none; without them push says it is not
+ *                             available (platform/notifications/push/service.ts)
  *
  * Refusals:
  *   - FACTORY_ENV local or test: the database and Redis must be on this machine (loopback), and FACTORY_QUEUE_PREFIX
@@ -105,6 +109,10 @@ const schema = z.object({
   FACTORY_AWS_ACCESS_KEY_ID: z.string().min(1).optional(),
   FACTORY_AWS_SECRET_ACCESS_KEY: z.string().min(1).optional(),
   FACTORY_LOCAL_FILES_DIR: z.string().refine(isAbsolute, { message: 'must be an absolute path' }).optional(),
+  // B-W2b-385: the Web Push keys (base64url) and their subject; checked as a pair by the push runtime.
+  FACTORY_VAPID_PUBLIC_KEY: z.string().regex(/^[A-Za-z0-9_-]{87}$/, { message: 'must be an uncompressed P-256 public key in base64url (87 characters)' }).optional(),
+  FACTORY_VAPID_PRIVATE_KEY: z.string().regex(/^[A-Za-z0-9_-]{43}$/, { message: 'must be a P-256 private key in base64url (43 characters)' }).optional(),
+  FACTORY_VAPID_SUBJECT: z.string().regex(/^(mailto:\S+@\S+|https:\/\/\S+)$/, { message: 'must be a mailto: address or an https address' }).optional(),
 })
 
 export type FactoryEnv = Readonly<

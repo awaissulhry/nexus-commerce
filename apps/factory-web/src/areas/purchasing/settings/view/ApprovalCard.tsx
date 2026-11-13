@@ -11,6 +11,8 @@ import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { ListFrame } from '../../../../list-frame/ListFrame'
 import type { ApprovalRule } from '../api'
 import { adminRuleHref, approvalStateOf, inboxHref, poFactsOf, poRulesOf } from '../model'
+// B-W2b-382 (XF7:06): a new PO rule opens with its kind chosen.
+import { newRuleHref } from '../../../admin/automation/approval-rules/new-kind/new-kind'
 import type { PurchasingSettingsActions, PurchasingSettingsModel } from '../view-model'
 import { CardDescription, CardFailed, NS } from './parts'
 
@@ -100,7 +102,7 @@ export function ApprovalCard({ model, actions }: { model: PurchasingSettingsMode
     </Button>
   ) : (
     <Button size="sm" variant="secondary" asChild>
-      <Link href={adminRuleHref(model.prefix, 'new')}>
+      <Link href={newRuleHref(model.prefix, 'PURCHASE_ORDER')}>
         <Plus size={14} aria-hidden /> {t('approval.add')}
       </Link>
     </Button>

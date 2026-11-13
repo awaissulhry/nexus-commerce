@@ -253,25 +253,42 @@ const REMINDER_WORDS = {
   it: {
     subject: (number: string) => `Promemoria: il preventivo ${number} scade presto`,
     hello: 'Buongiorno,',
-    body: (number: string, until: string, sent: string) =>
-      `le ricordiamo che il nostro preventivo ${number}, inviato il ${sent}, è valido fino al ${until} compreso. Per accettarlo usi il link della nostra email di quel giorno; se non la trova, risponda a questo messaggio e le inviamo un nuovo link.`,
+    body: (number: string, until: string, sent: string) => `le ricordiamo che il nostro preventivo ${number}, inviato il ${sent}, è valido fino al ${until} compreso.`,
+    // B-W2b-385 (NT1:05): the reminder carries its own accept link (a new one, to the same address, until the same day).
+    linkStored: (until: string) => `Per accettarlo o rifiutarlo usi il link personale di questa email (valido fino al ${until}).`,
+    link: (until: string) => `Per accettarlo o rifiutarlo apra questo link personale (valido fino al ${until}); le chiederemo di scrivere nome e cognome:`,
     firm: 'Fino a quel giorno l’offerta è irrevocabile (art. 1329 c.c.).',
     close: 'Restiamo a disposizione per qualsiasi domanda.',
   },
   en: {
     subject: (number: string) => `Reminder: quote ${number} ends soon`,
     hello: 'Hello,',
-    body: (number: string, until: string, sent: string) =>
-      `a reminder that our quote ${number}, sent on ${sent}, stands until ${until} included. To accept it, use the link in our email of that day; if you cannot find it, reply to this message and we will send you a new link.`,
+    body: (number: string, until: string, sent: string) => `a reminder that our quote ${number}, sent on ${sent}, stands until ${until} included.`,
+    linkStored: (until: string) => `To accept or decline it, use the personal link in this e-mail (valid until ${until}).`,
+    link: (until: string) => `To accept or decline it, open this personal link (valid until ${until}); we will ask you to type your full name:`,
     firm: 'Until that day it is a firm offer (Italian Civil Code art. 1329).',
     close: 'We are glad to answer any question.',
   },
 } as const
 
-/** The reminder to the customer (on the quote's thread, the record's mail): no link (a link is never stored), no amount. */
-export function reminderMail(input: { readonly language: 'it' | 'en'; readonly number: string; readonly revision: number; readonly validUntil: BusinessDate; readonly sentOn: BusinessDate; readonly firmOffer: boolean }): { readonly subject: string; readonly body: string } {
+export interface ReminderMail {
+  readonly subject: string
+  /** What the thread keeps: the reminder WITHOUT its link (a bearer token is never stored). No amount. */
+  readonly stored: string
+  /** The reminder with its accept link, made in memory just before it is sent (B-W2b-385, NT1:05). */
+  withLink(url: string): string
+}
+
+/** The reminder to the customer (on the quote's thread, the record's mail): the thread keeps it without the link; no amount. */
+export function reminderMail(input: { readonly language: 'it' | 'en'; readonly number: string; readonly revision: number; readonly validUntil: BusinessDate; readonly sentOn: BusinessDate; readonly firmOffer: boolean; /** The new link's last day. */ readonly linkUntil: BusinessDate }): ReminderMail {
   const words = REMINDER_WORDS[input.language]
   const number = quoteDocumentNumber(input.number, input.revision)
-  const body = [words.hello, words.body(number, formatDate(input.validUntil, input.language), formatDate(input.sentOn, input.language)), ...(input.firmOffer ? [words.firm] : []), words.close].join('\n\n')
-  return { subject: words.subject(number), body }
+  const linkUntil = formatDate(input.linkUntil, input.language)
+  const opening = [words.hello, words.body(number, formatDate(input.validUntil, input.language), formatDate(input.sentOn, input.language))].join('\n\n')
+  const closing = [...(input.firmOffer ? [words.firm] : []), words.close].join('\n\n')
+  return {
+    subject: words.subject(number),
+    stored: [opening, words.linkStored(linkUntil), closing].join('\n\n'),
+    withLink: (url) => [opening, `${words.link(linkUntil)}\n${url}`, closing].join('\n\n'),
+  }
 }

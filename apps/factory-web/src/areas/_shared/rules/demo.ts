@@ -18,6 +18,8 @@ const ROLES = {
   buyer: { roleId: '0190f0e2-7777-7000-8000-000000000004', name: 'Buyer' },
   // B-W2b-24: INTEGRATION_FAILING tells the administrators.
   admin: { roleId: '0190f0e2-7777-7000-8000-000000000005', name: 'Administrator' },
+  // B-W2b-385: RETURN_ARRIVED_LATE tells sales.
+  sales: { roleId: '0190f0e2-7777-7000-8000-000000000006', name: 'Sales' },
 }
 const COMPANY = { id: '0190f0e2-6666-7000-8000-000000000001', name: 'Demo Pelletteria' }
 const SITE = { id: '0190f0e2-6666-7000-8000-000000000101', name: 'Demo plant A1' }
@@ -26,7 +28,7 @@ const rid = (n: number) => `0190f0e2-8888-7000-8000-${String(n).padStart(12, '0'
 
 export function demoRule(n: number, kind: RuleKind, extra: Partial<AlertRule> = {}): AlertRule {
   const spec = KINDS[kind]
-  const recipient = extra.recipient !== undefined ? extra.recipient : ({ planner: ROLES.planner, quality_inspector: ROLES.quality, finance: ROLES.finance, buyer: ROLES.buyer, admin: ROLES.admin } as Record<string, { roleId: string; name: string }>)[spec.builtIn.recipientRole]!
+  const recipient = extra.recipient !== undefined ? extra.recipient : ({ planner: ROLES.planner, quality_inspector: ROLES.quality, finance: ROLES.finance, buyer: ROLES.buyer, admin: ROLES.admin, sales: ROLES.sales } as Record<string, { roleId: string; name: string }>)[spec.builtIn.recipientRole]!
   const place = extra.place ?? { companyId: null, siteId: null, label: null }
   const base: AlertRule = {
     id: rid(n),

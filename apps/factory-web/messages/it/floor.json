@@ -777,7 +777,8 @@
       "countScan": "Unità scansionata in un inventario",
       "countFinishBin": "Contenitore di un inventario chiuso",
       "pickIssue": "Prelevato dalla lista di prelievo",
-      "substituteIssue": "Sostituto approvato prelevato"
+      "substituteIssue": "Sostituto approvato prelevato",
+      "cartonScan": "Capo letto nel collo"
     },
     "refusal": {
       "UNKNOWN_BUNDLE": {

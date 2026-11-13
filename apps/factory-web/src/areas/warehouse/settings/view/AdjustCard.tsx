@@ -32,6 +32,8 @@ import {
   type LimitMode,
 } from '../model'
 import type { WarehouseSettingsActions, WarehouseSettingsModel } from '../view-model'
+// B-W2b-382 (XF7:06): a new adjustment rule opens with its kind chosen.
+import { newRuleHref } from '../../../admin/automation/approval-rules/new-kind/new-kind'
 import { CardDescription, CardFailed, ChangedLine, Locked, NS, ReasonField, SourceWords, SwitchInForce, ViewOnly } from './parts'
 
 /**
@@ -54,7 +56,7 @@ export function AdjustCard({ model, actions, shortcut, alertsShortcut }: { model
     </Button>
   ) : (
     <Button size="sm" variant="secondary" asChild>
-      <Link href={adminRuleHref(model.prefix, 'new')}>
+      <Link href={newRuleHref(model.prefix, 'STOCK_ADJUSTMENT')}>
         <Plus size={14} aria-hidden /> {t('adjust.addRule')}
       </Link>
     </Button>

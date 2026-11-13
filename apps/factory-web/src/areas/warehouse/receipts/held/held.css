@@ -1,0 +1,54 @@
+/* B-W2b-382: a receipt that waits for a yes (prefix fw-rch-): its lines, why each waits, who is asked. Tokens only. */
+.fw-rch {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+.fw-rch-lines {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+.fw-rch-line {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  padding: var(--nds-space-8) var(--nds-space-12);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.fw-rch-what {
+  color: var(--nds-text-strong);
+  font-size: var(--nds-font-size-sm);
+}
+.fw-rch-why,
+.fw-rch-state,
+.fw-rch-hint {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+}
+.fw-rch-state.is-refused {
+  color: var(--nds-danger-text);
+}
+.fw-rch-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+}
+.fw-rch-link {
+  color: var(--nds-text-link);
+}
+.fw-rch-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+}

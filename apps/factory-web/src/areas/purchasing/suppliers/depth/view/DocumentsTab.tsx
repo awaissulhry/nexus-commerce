@@ -9,6 +9,9 @@ import type { ChangeRequest, Qualification, Qualifications, Vault } from '../api
 import { ASK_TONE, askWordsOf, changeLines, DOC_TONE, expiryWords, gateWords, moveHeld, nextStepWords, STANDING_TONE, type DepthCan, type Read, type Words } from '../model'
 import { DocumentsDialogs, type DocumentsDialog, type DocumentsDialogActions } from './DocumentsDialogs'
 import { DepthCard, ReadOr, useSay } from './parts'
+// B-W2b-382 (B-W2b-377's document types): what each document is, and its picker.
+import type { DocTypeActions, DocTypeModel } from '../doc-type/use-doc-type'
+import { DocTypeCell, DocTypeDialog } from '../doc-type/view/DocType'
 
 export interface DocumentsTabModel {
   readonly vault: Read<Vault>
@@ -23,6 +26,8 @@ export interface DocumentsTabModel {
   readonly dialog: DocumentsDialog | null
   /** The record's own companies (a qualification is per company). */
   readonly companies: ReadonlyArray<{ id: string; name: string }>
+  /** B-W2b-382: the document types (absent: the types are not drawn). */
+  readonly docType?: DocTypeModel
 }
 
 export interface DocumentsTabActions {
@@ -37,6 +42,7 @@ export interface DocumentsTabActions {
   onMove?: (qualificationId: string, move: 'decide' | 'suspend' | 'lift' | 'withdraw') => void
   onDismissNotice?: () => void
   dialogs?: DocumentsDialogActions
+  docType?: DocTypeActions
 }
 
 /**
@@ -68,6 +74,7 @@ export function DocumentsTab({ model, actions }: { model: DocumentsTabModel; act
       <ReviewCard model={model} actions={actions} />
       <QualificationsCard model={model} actions={actions} />
       <DocumentsDialogs dialog={model.dialog} companies={model.companies} today={model.today} actions={actions?.dialogs} />
+      {model.docType && <DocTypeDialog model={model.docType} actions={actions?.docType} />}
     </div>
   )
 }
@@ -172,7 +179,14 @@ function VaultCard({ model, actions }: { model: DocumentsTabModel; actions?: Doc
                       </Button>
                       {doc.articleCodes.length > 0 ? <span className="fw-spd-hint">{t('vault.covers', { codes: doc.articleCodes.join(', ') })}</span> : null}
                     </span>,
-                    t(`category.${doc.category}`),
+                    model.docType ? (
+                      <span key="k" className="fw-spd-who">
+                        <span>{t(`category.${doc.category}`)}</span>
+                        <DocTypeCell doc={doc} model={model.docType} actions={actions?.docType} />
+                      </span>
+                    ) : (
+                      t(`category.${doc.category}`)
+                    ),
                     <span key="i" className="fw-spd-who">
                       <span>{doc.issuer ?? '—'}</span>
                       {doc.number ? <span className="fw-spd-hint">{t('vault.number', { number: doc.number })}</span> : null}
