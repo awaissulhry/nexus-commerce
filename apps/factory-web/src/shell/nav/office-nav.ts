@@ -144,6 +144,8 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   // B-W2a-49: Sales › Pricing › Price lists & contracts (SCR-106) and a price list.
   '/sales/price-lists',
   '/sales/price-lists/[listId]',
+  // B-W2b-343: a price list on paper or as a PDF (SCR-420, a new tab).
+  '/sales/price-lists/[listId]/print',
   // B-W2a-77: Sales › After-sales › Returns & repairs (SCR-111), a return and a repair (SCR-112), Sales settings (SCR-235).
   '/sales/returns',
   '/sales/returns/[id]',

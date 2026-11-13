@@ -3,6 +3,8 @@ import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import { ARCHIVED_ROW, inShell, LIST_ROWS, listModel, newListModel, type PriceListRole } from '../_demo/fixtures'
 import type { PriceListsViewModel } from './list-model'
 import { PriceListsView } from './view/PriceListsView'
+// B-W2b-343: the band's Import prices.
+import { PriceListImportView } from '../import/view/PriceListImportView'
 
 /**
  * SCR-106 — Price lists & contracts (Sales › Pricing; B-W2a-49) with made-up data only: a base list for every company,
@@ -63,5 +65,7 @@ export const designScreen = defineDesignScreen<ListCase>({
     { id: 'empty', label: 'No price lists yet', model: listCase('sales', { rows: { items: [], problem: null }, tiles: { inForce: 0, startingIn30Days: 0, endingIn30Days: 0 } }) },
     { id: 'no-match', label: 'Nothing matches the search', model: listCase('sales', { filters: { rows: 'all', soon: null, kind: null, q: 'ZZZ' }, rows: { items: [], problem: null } }) },
     { id: 'no-permission', label: 'Planner: no pricelists.view (the page says so)', model: listCase('planner') },
+    { id: 'import', label: 'B-W2b-343 · The band: Import prices beside New price list', model: listCase('sales', { importer: createElement(PriceListImportView, { model: { held: null, sheet: null, button: true } }) }), note: 'Opens Import prices (SCR-419): the rows land in each list\'s draft.' },
+    { id: 'import-held', label: 'B-W2b-343 · Finance: Import prices held with the reason', model: listCase('finance', { importer: createElement(PriceListImportView, { model: { held: 'import.held.manage', sheet: null, button: true } }) }) },
   ],
 })

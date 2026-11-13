@@ -15,7 +15,7 @@ import type { QuoteRecordViewModel } from '../record-model'
  * both (net − margin is the cost: the API leaves it out otherwise); a column the person may not see is absent, and the
  * tab says so once. Prices change on the Lines tab only (one edit path).
  */
-export function PriceTab({ quote, model, depth }: { quote: QuoteDetail; model: QuoteRecordViewModel; /** B-W2b-316: Target price. */ depth?: ReactNode }) {
+export function PriceTab({ quote, model, depth, pricing }: { quote: QuoteDetail; model: QuoteRecordViewModel; /** B-W2b-316: Target price. */ depth?: ReactNode; /** B-W2b-343: Pricing by line (the list frame with the waterfall's parts) in place of the table below. */ pricing?: ReactNode }) {
   const t = useT('sales')
   const locale = useLocale()
   const current = quote.current
@@ -112,12 +112,17 @@ export function PriceTab({ quote, model, depth }: { quote: QuoteDetail; model: Q
       </p>
       {current.belowMinimum && <Banner tone="warning" title={t('terms.belowMinimum', { minimum: money(current.belowMinimum.minimum, currency, locale), short: money(current.belowMinimum.short, currency, locale) })} />}
       {(!grains.cost || !grains.margin) && <Banner tone="info" title={t(grains.margin ? 'price.grainNoteMargin' : 'price.grainNote')} />}
-      <Card>
-        <div className="fw-q-table">
-          <SummaryTable label={t('price.tableLabel')} columns={columns} rows={rows} density="roomy" stackOnPhone align={columns.map((_, index) => (index === 0 ? 'left' : 'right'))} />
-        </div>
-      </Card>
-      <p className="fw-q-hint">{t('price.editOnLines')}</p>
+      {/* B-W2b-343: Pricing by line in depth replaces W1's table and its hint. */}
+      {pricing ?? (
+        <>
+          <Card>
+            <div className="fw-q-table">
+              <SummaryTable label={t('price.tableLabel')} columns={columns} rows={rows} density="roomy" stackOnPhone align={columns.map((_, index) => (index === 0 ? 'left' : 'right'))} />
+            </div>
+          </Card>
+          <p className="fw-q-hint">{t('price.editOnLines')}</p>
+        </>
+      )}
       {depth}
     </div>
   )

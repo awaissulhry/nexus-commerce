@@ -1,0 +1,157 @@
+/* B-W2b-343 — prices on the quote record (Pricing by line, the drawer's waterfall, a block's price rows): layout only. */
+
+.fw-qpd-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-qpd-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  margin-bottom: var(--nds-space-8);
+}
+
+.fw-qpd-cell {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.fw-qpd-cell.end,
+.fw-qpd-inline.end {
+  align-items: flex-end;
+  justify-content: flex-end;
+}
+
+.fw-qpd-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  flex-wrap: wrap;
+}
+
+.fw-qpd-sub {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-qpd-muted {
+  color: var(--nds-text-muted);
+}
+
+.fw-qpd-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-qpd-rowlink {
+  all: unset;
+  cursor: pointer;
+  color: var(--nds-text-link);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-qpd-rowlink:focus-visible {
+  box-shadow: var(--nds-focus-ring);
+  outline: 2px solid rgb(var(--nds-focus-rgb));
+}
+
+.fw-qpd-net {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--nds-space-4);
+  width: 100%;
+}
+
+.fw-qpd-net-input {
+  max-width: 120px;
+  text-align: right;
+}
+
+.fw-qpd-mark {
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-muted);
+}
+
+.fw-qpd-mark.failed {
+  color: var(--nds-danger);
+}
+
+.fw-qpd-dialog,
+.fw-qpd-drawer,
+.fw-qpd-netform {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+.fw-qpd-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--nds-space-10);
+}
+
+.fw-qpd-h4 {
+  margin: var(--nds-space-8) 0 0;
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-qpd-sizes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+.fw-qpd-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-qpd-margin {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-qpd-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+}
+
+.fw-qpd-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  margin: var(--nds-space-8) 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-qpd-block-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4) var(--nds-space-12);
+}
+
+.fw-qpd-block-colour {
+  font-weight: var(--nds-font-weight-medium);
+  min-width: 48px;
+}

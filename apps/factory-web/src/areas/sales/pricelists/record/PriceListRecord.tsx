@@ -15,6 +15,11 @@ import { PriceListsMessages, type Loaded } from '../parts'
 import { customersProblem, readProblem, writeProblem } from '../problems'
 import type { CellState, CompareView, CustomerPick, PriceListRecordModel, RecordDialog, StylePick } from './record-model'
 import { PriceListRecordView } from './view/PriceListRecordView'
+// B-W2b-343: Breaks & surcharges, dated prices (Valid from–to), Import prices.
+import { setDatedPrices, type DatedRow } from '../depth/api'
+import { daysHeld, daysRows, splitRows } from '../depth/model'
+import { PriceListImport } from '../import/PriceListImport'
+import { useBreaks } from './use-breaks'
 
 const NO_STYLE: StylePick = { query: '', results: null, problem: null, chosen: null, colourwayId: '', price: '' }
 const NO_CUSTOMERS: CustomerPick = { query: '', results: null, problem: null, picked: [] }
@@ -171,16 +176,27 @@ function PriceListRecordContainer({ listId }: { listId: string }) {
     return next
   }, [])
 
-  /** ONE write of a version's rows; true when the server took it. */
+  /**
+   * ONE write of a version's rows; true when the server took it. B-W2b-343: rows of a style and colourway with a dated price
+   * go through the dated prices (W2a's cell write refuses them), the others through W2a's; both in order, each with the
+   * version's `version` the one before answered.
+   */
   const writePrices = useCallback(
-    (rows: PriceRow[], done: PriceListRecordModel['notice'] | null, cellIds: readonly string[] = []) =>
+    (rows: PriceRow[], done: PriceListRecordModel['notice'] | null, cellIds: readonly string[] = [], datedRows: DatedRow[] = []) =>
       enqueue(async () => {
         const answer = answerRef.current
         if (!answer) return false
         inFlight.current++
         if (cellIds.length > 0) setCells((current) => ({ ...current, ...Object.fromEntries(cellIds.map((id) => [id, 'saving' as const])) }))
         try {
-          const next = await setPrices(api, listId, answer.version, rows)
+          const split = splitRows(
+            answer.entries,
+            rows.map((row) => ({ entry: answer.entries.find((entry) => entry.styleId === row.styleId && entry.colourwayId === row.colourwayId && entry.validFrom === null) ?? null, ...row })),
+          )
+          let next = answer
+          if (split.plain.length > 0) next = await setPrices(api, listId, next.version, split.plain)
+          const dated = [...split.dated, ...datedRows]
+          if (dated.length > 0) next = await setDatedPrices(api, listId, next.version, dated)
           answerRef.current = next
           setPricesState({ answer: next, problem: null, loading: false })
           setCells((current) => Object.fromEntries(Object.entries(current).filter(([id]) => !cellIds.includes(id))))
@@ -212,7 +228,9 @@ function PriceListRecordContainer({ listId }: { listId: string }) {
       setNotice({ tone: 'warning', words: { key: 'prices.invalid', params: { style: entry.style.code } } })
       return
     }
-    void writePrices([{ styleId: entry.styleId, colourwayId: entry.colourwayId, unitPrice: parsed }], null, [entry.id])
+    // B-W2b-343: a dated price (or one of a style with dated prices) is written with its days.
+    if (entry.validFrom !== null || entry.validTo !== null) void writePrices([], null, [entry.id], [{ styleId: entry.styleId, colourwayId: entry.colourwayId, validFrom: entry.validFrom, validTo: entry.validTo, unitPrice: parsed }])
+    else void writePrices([{ styleId: entry.styleId, colourwayId: entry.colourwayId, unitPrice: parsed }], null, [entry.id])
   }
 
   /** A list write (customers, archive): the record it answers replaces ours. */
@@ -265,6 +283,10 @@ function PriceListRecordContainer({ listId }: { listId: string }) {
       .catch((error: unknown) => setCompare((current) => (current.beforeId === beforeId && current.afterId === afterId ? { ...current, problem: readProblem(error), loading: false } : current)))
   }
 
+  // B-W2b-343: Breaks & surcharges (its own reads and writes) and Import prices (the wizard on the list's company).
+  const breaks = useBreaks({ api, list: value, version: shown, entries: prices.answer?.entries ?? [], can, tab, dialog, setDialog: setDialogState, setDialogProblem, onList: () => void loadList() })
+  const [importing, setImporting] = useState(false)
+
   const versionHref = (versionId: string, nextTab = 'prices') => `${prefix}/sales/price-lists/${encodeURIComponent(listId)}?tab=${nextTab}&version=${encodeURIComponent(versionId)}`
 
   const model: PriceListRecordModel = {
@@ -290,6 +312,9 @@ function PriceListRecordContainer({ listId }: { listId: string }) {
     stylePick,
     customerPick,
     compare,
+    // B-W2b-343
+    breaks: breaks.model,
+    importer: value && importing ? <PriceListImport companyId={value.companyId} open onClose={() => setImporting(false)} onApplied={() => { void loadList(); if (shown) void loadPrices(shown.id) }} /> : null,
   }
 
   return (
@@ -318,9 +343,14 @@ function PriceListRecordContainer({ listId }: { listId: string }) {
           if (!answer || !value) return
           const plan = raisePlan(answer.entries, selectedPrices, pct, value.currency)
           setBusy(true)
+          // B-W2b-343: dated prices keep their days (the dated prices' write); the others W2a's.
+          const undated = plan.filter((row) => row.entry.validFrom === null && row.entry.validTo === null)
+          const dated = plan.filter((row) => !undated.includes(row))
           void writePrices(
-            plan.map((row) => ({ styleId: row.entry.styleId, colourwayId: row.entry.colourwayId, unitPrice: row.next })),
+            undated.map((row) => ({ styleId: row.entry.styleId, colourwayId: row.entry.colourwayId, unitPrice: row.next })),
             { tone: 'success', words: { key: 'raise.done', params: { count: plan.length, pct } } },
+            [],
+            dated.map((row) => ({ styleId: row.entry.styleId, colourwayId: row.entry.colourwayId, validFrom: row.entry.validFrom, validTo: row.entry.validTo, unitPrice: row.next })),
           ).then((ok) => {
             setBusy(false)
             if (ok) {
@@ -334,9 +364,13 @@ function PriceListRecordContainer({ listId }: { listId: string }) {
           if (!answer) return
           const chosen = answer.entries.filter((entry) => selectedPrices.includes(entry.id))
           setBusy(true)
+          // B-W2b-343: a dated price is removed by its first day.
+          const undated = chosen.filter((entry) => entry.validFrom === null && entry.validTo === null)
           void writePrices(
-            chosen.map((entry) => ({ styleId: entry.styleId, colourwayId: entry.colourwayId, unitPrice: null })),
+            undated.map((entry) => ({ styleId: entry.styleId, colourwayId: entry.colourwayId, unitPrice: null })),
             { tone: 'success', words: { key: 'remove.done', params: { count: chosen.length } } },
+            [],
+            chosen.filter((entry) => !undated.includes(entry)).map((entry) => ({ styleId: entry.styleId, colourwayId: entry.colourwayId, validFrom: entry.validFrom, validTo: entry.validTo, unitPrice: null })),
           ).then((ok) => {
             setBusy(false)
             if (ok) {
@@ -361,7 +395,9 @@ function PriceListRecordContainer({ listId }: { listId: string }) {
           const price = parseListPrice(stylePick.price)
           if (!chosen || price === null) return
           setBusy(true)
-          void writePrices([{ styleId: chosen.id, colourwayId: stylePick.colourwayId || null, unitPrice: price }], { tone: 'success', words: { key: 'add.done', params: { style: chosen.code } } }).then((ok) => {
+          // B-W2b-343: a price with days of its own is a dated price.
+          const days = stylePick.validFrom || stylePick.validTo ? [{ styleId: chosen.id, colourwayId: stylePick.colourwayId || null, validFrom: stylePick.validFrom || null, validTo: stylePick.validTo || null, unitPrice: price }] : []
+          void writePrices(days.length > 0 ? [] : [{ styleId: chosen.id, colourwayId: stylePick.colourwayId || null, unitPrice: price }], { tone: 'success', words: { key: 'add.done', params: { style: chosen.code } } }, [], days).then((ok) => {
             setBusy(false)
             if (ok) setDialogState(null)
           })
@@ -426,6 +462,19 @@ function PriceListRecordContainer({ listId }: { listId: string }) {
         },
         onArchive: () => value && void listWrite(() => moveList(api, value, 'archive'), { tone: 'success', words: { key: 'archive.done', params: { code: value.code } } }, 'archive.refused'),
         onReactivate: () => value && void listWrite(() => moveList(api, value, 'reactivate'), { tone: 'success', words: { key: 'archive.reactivated', params: { code: value.code } } }, 'archive.refusedReactivate'),
+        // B-W2b-343
+        breaks: breaks.actions,
+        onImport: can.manage ? () => setImporting(true) : undefined,
+        onDays: (entry, days) => {
+          const answer = answerRef.current
+          const price = parseListPrice(days.price)
+          if (!answer || price === null || daysHeld(answer.entries, { styleId: entry.styleId, colourwayId: entry.colourwayId, validFrom: days.validFrom, validTo: days.validTo, exceptId: entry.id })) return
+          setBusy(true)
+          void writePrices([], { tone: 'success', words: { key: 'depth.days.done', params: { style: entry.style.code } } }, [], daysRows(entry, days.validFrom, days.validTo, price)).then((ok) => {
+            setBusy(false)
+            if (ok) setDialogState(null)
+          })
+        },
         onCopyCode: () => {
           if (!value) return
           void navigator.clipboard?.writeText(value.code).then(

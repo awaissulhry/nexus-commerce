@@ -12,6 +12,8 @@ import { PriceListsMessages } from '../parts'
 import { createProblem, readProblem } from '../problems'
 import type { NewListModel, PriceListsViewModel } from './list-model'
 import { PriceListsView } from './view/PriceListsView'
+// B-W2b-343: Import prices on the band.
+import { PriceListImport } from '../import/PriceListImport'
 
 /**
  * `/w/<company>/sales/price-lists` (SCR-106): reads the lists the company may use (its own and every company's;
@@ -145,7 +147,23 @@ function PriceListsContainer() {
     void load()
   }
 
-  const model: PriceListsViewModel = { prefix, can, filters, rows, tiles, asOf, live, updates, notice, selected, newList, dialog, busy }
+  const model: PriceListsViewModel = {
+    prefix,
+    can,
+    filters,
+    rows,
+    tiles,
+    asOf,
+    live,
+    updates,
+    notice,
+    selected,
+    newList,
+    dialog,
+    busy,
+    // B-W2b-343: Import prices (the rows land in each list's draft; the job of the page's company, or every company).
+    importer: can.view ? <PriceListImport companyId={companyId} button onApplied={() => void load()} /> : null,
+  }
   return (
     <PriceListsView
       model={model}

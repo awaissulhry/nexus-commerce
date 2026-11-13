@@ -47,7 +47,7 @@ export function LinesTab({ quote, model, actions, step, depth }: { quote: QuoteD
               <EmptyState title={t('lines.empty.title')} description={t(editable ? 'lines.empty.body' : 'lines.empty.bodyReadOnly')} />
             </Card>
           ) : (
-            blocks.map((block) => <StyleBlockCard key={block.styleId} block={block} quote={quote} model={model} actions={actions} editable={editable} depthItems={depth?.blockItems?.(block)} />)
+            blocks.map((block) => <StyleBlockCard key={block.styleId} block={block} quote={quote} model={model} actions={actions} editable={editable} depthItems={depth?.blockItems?.(block)} /* B-W2b-343 */ blockPrices={depth?.blockPrices?.(block)} />)
           )}
           {editable && (
             <p className="fw-q-hint fw-q-tablefoot">
@@ -190,7 +190,7 @@ function Composer({ model, actions, extra }: { model: QuoteRecordViewModel; acti
   )
 }
 
-function StyleBlockCard({ block, quote, model, actions, editable, depthItems = [] }: { block: StyleBlock; quote: QuoteDetail; model: QuoteRecordViewModel; actions?: QuoteRecordActions; editable: boolean; depthItems?: MenuItemDef[] }) {
+function StyleBlockCard({ block, quote, model, actions, editable, depthItems = [], blockPrices }: { block: StyleBlock; quote: QuoteDetail; model: QuoteRecordViewModel; actions?: QuoteRecordActions; editable: boolean; depthItems?: MenuItemDef[]; /** B-W2b-343: the block's discount and price by size. */ blockPrices?: ReactNode }) {
   const t = useT('sales')
   const locale = useLocale()
   const style: StyleDetail | null = model.styles[block.styleId] ?? null
@@ -304,6 +304,8 @@ function StyleBlockCard({ block, quote, model, actions, editable, depthItems = [
       )}
       </div>
       <SummaryTable label={t('lines.pricesOf', { style: block.code })} columns={columns} rows={priceRows} density="roomy" stackOnPhone align={columns.map((_, index) => (index === 0 ? 'left' : 'right'))} />
+      {/* B-W2b-343: Discount % and Price by size (the second price row of the design). */}
+      {blockPrices}
       {confirmRemove && (
         <Modal
           open

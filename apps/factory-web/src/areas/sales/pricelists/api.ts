@@ -36,6 +36,8 @@ export const listRowSchema = z.object({
   customers: z.number(),
   startsSoon: z.boolean(),
   endsSoon: z.boolean(),
+  /** B-W2b-325 / -343 (SAL-170): its documents show the list price and the discount (else the net price only). */
+  showDiscount: z.boolean().optional(),
   version: z.number(),
   updatedAt: z.string(),
 })
@@ -81,6 +83,9 @@ export const entrySchema = z.object({
   standardCost: z.string().nullable().optional(),
   marginPct: z.string().nullable().optional(),
   belowFloor: z.boolean().optional(),
+  /** B-W2b-325 / -343: the price's days inside its version (null: every day of it). */
+  validFrom: z.string().nullable().default(null),
+  validTo: z.string().nullable().default(null),
   version: z.number(),
 })
 export type PriceEntry = z.infer<typeof entrySchema>

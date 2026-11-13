@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import type { PriceListKind, PriceListRow } from '../api'
 import type { ListFilters, NewListDraft, Phrase, PriceListAbilities, Tone } from '../model'
 
@@ -30,6 +31,8 @@ export interface PriceListsViewModel {
   busy: boolean
   /** Design cases: the row that has the focus. */
   focusRow?: number
+  /** B-W2b-343: the band's Import prices (its button and wizard: import/PriceListImport.tsx on the live page). */
+  importer?: ReactNode
 }
 
 export interface PriceListsActions {

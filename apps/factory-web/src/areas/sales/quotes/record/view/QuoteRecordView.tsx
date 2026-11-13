@@ -318,7 +318,7 @@ function ReadyRecord({ quote, model, actions, sendActions, panels, proofs, depth
       <div className={showDock ? 'fw-q-body has-dock' : 'fw-q-body'}>
         <div className="fw-q-main">
           {model.tab === 'lines' && <LinesTab quote={quote} model={model} actions={actions} step={step} depth={depth} />}
-          {model.tab === 'price' && <PriceTab quote={quote} model={model} depth={depth?.price} />}
+          {model.tab === 'price' && <PriceTab quote={quote} model={model} depth={depth?.price} /* B-W2b-343 */ pricing={depth?.pricing} />}
           {model.tab === 'terms' && <TermsTab quote={quote} model={model} actions={actions} depth={depth} />}
           {model.tab === 'versions' && <VersionsTab quote={quote} model={model} actions={actions} depth={depth?.versionsList} />}
           {model.tab === 'approval' && <ApprovalTab quote={quote} model={model} actions={actions} />}

@@ -48,6 +48,8 @@ import { QuoteProofs } from './proofs/QuoteProofs'
 // B-W2b-316: the quote record's W2b parts (warnings, table view, paste, fill by curve, line drawer, target price, terms in
 // depth, compare versions, the deposit's pay-online page) fill the view's slots.
 import { useQuoteDepth } from './lines-depth/use-depth'
+// B-W2b-343: prices on screen (Pricing by line, a block's discount and price by size; the drawer's waterfall is a drawer section).
+import { usePriceDepth } from './price-depth/use-price-depth'
 
 const WIDE = '(min-width: 1280px)'
 const DOCK_KEY = 'fw.sales.dock.Quote'
@@ -481,6 +483,8 @@ function QuoteRecordContainer({ quoteId }: { quoteId: string }) {
 
   // B-W2b-316: the W2b parts' container (its own reads and writes; the quote it answers comes back through setValue).
   const depth = useQuoteDepth({ api, quote: value, prefix, tab, me: session.user.id, permissions: session.permissions, grains, can, styles, versions, today: romeToday(), onQuote: setValue, onVersions: () => void loadVersions() })
+  // B-W2b-343: the price parts' container (its own reads and writes; the quote it answers comes back through setValue).
+  const priceDepth = usePriceDepth({ api, quote: value, tab, grains, can, onQuote: setValue })
 
   const model: QuoteRecordViewModel = {
     prefix,
@@ -514,7 +518,7 @@ function QuoteRecordContainer({ quoteId }: { quoteId: string }) {
   return (
     <QuoteRecordView
       model={model}
-      depth={depth}
+      depth={{ ...depth, ...priceDepth }}
       proofs={value ? <QuoteProofs api={api} quoteId={value.id} /> : null}
       panels={value ? <RecordPanels record={{ type: 'Quote', id: value.id, companyId: value.companyId, siteId: null }} title={`${value.number} · ${value.party.legalName}`} party={{ id: value.partyId, name: value.party.legalName, emails: value.contact?.email ? [value.contact.email] : [] }} /> : null}
       actions={{

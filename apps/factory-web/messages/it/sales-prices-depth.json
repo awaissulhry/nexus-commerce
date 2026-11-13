@@ -1,0 +1,505 @@
+{
+  "common": {
+    "back": "Indietro",
+    "dismiss": "Chiudi",
+    "loading": "Caricamento…",
+    "retry": "Riprova",
+    "working": "In corso…"
+  },
+  "tab": {
+    "breaks": "Scaglioni e maggiorazioni"
+  },
+  "held": {
+    "busy": "Si sta salvando una modifica: attendi un momento.",
+    "fee": "Un addebito tiene il prezzo scritto su di esso: non ha una scala di prezzo.",
+    "noList": "Nessun listino prezza questa riga: non può partire da un prezzo di listino.",
+    "noCost": "Il costo della riga non è ancora completo: il prezzo dal costo attende la sua scheda costi.",
+    "noCostSheet": "Il modello non ha una scheda costi: il prezzo dal costo ne ha bisogno.",
+    "noneList": "Nessuna delle righe scelte può partire da un prezzo di listino.",
+    "noneCost": "Nessuna delle righe scelte ha un prezzo dal suo costo.",
+    "noPrice": "I prezzi richiedono il livello prezzo (money.price): il tuo ruolo non lo ha.",
+    "archived": "Il listino è archiviato: riattivalo per modificarlo.",
+    "noManage": "Modificare i listini richiede pricelists.manage: il tuo ruolo li legge soltanto.",
+    "noVersion": "Il listino non ha ancora una versione.",
+    "activeVersion": "La versione {revision} è in vigore: le sue regole restano come sono. Crea la versione successiva per cambiarle.",
+    "activeHasDraft": "La versione {revision} è in vigore e tiene le sue regole: cambiale nella bozza."
+  },
+  "cell": {
+    "saving": "Salvataggio…",
+    "failed": "Non salvato"
+  },
+  "flag": {
+    "negative": "In perdita",
+    "belowFloor": "Sotto la soglia"
+  },
+  "fee": {
+    "DEVELOPMENT": "Addebito sviluppo",
+    "SAMPLE": "Addebito campione",
+    "TOOLING": "Addebito attrezzature",
+    "OTHER": "Addebito"
+  },
+  "keys": {
+    "open": "Apri il pannello della riga con la sua scala di prezzo"
+  },
+  "pricing": {
+    "title": "Prezzi per riga",
+    "sub": "Come è nato ogni prezzo e quanto rende ogni riga.",
+    "floorRole": "Questa versione segue la soglia del ruolo di chi l'ha creata: {floor}.",
+    "floorCompany": "Questa versione segue la soglia dell'azienda: {floor}.",
+    "count_one": "{count} riga",
+    "count_other": "{count} righe",
+    "failed": "Non è stato possibile leggere i prezzi per riga",
+    "howEdit": "Scrivi un netto nella sua cella: una modifica manuale chiede il suo motivo. Una riga apre il pannello con la sua scala di prezzo.",
+    "howOpen": "Una riga apre il pannello con la sua scala di prezzo."
+  },
+  "col": {
+    "line": "Riga",
+    "qty": "Pz",
+    "list": "Prezzo di listino",
+    "options": "Opzioni",
+    "break": "Scaglione di quantità",
+    "breakFrom_one": "da {count} pezzo",
+    "breakFrom_other": "da {count} pezzi",
+    "manual": "Modifica manuale",
+    "typedStart": "Prezzo scritto",
+    "net": "Netto unitario",
+    "netGross": "Prezzo unitario IVA inclusa",
+    "netOf": "Netto unitario della riga {line}",
+    "cost": "Costo unitario",
+    "source": "Origine del costo",
+    "revReleased": "Rev {revision} rilasciata",
+    "revDraft": "Bozza rev {revision}, stima",
+    "pricedOn": "calcolato il {date}",
+    "marginAmount": "Margine €",
+    "margin": "Margine %"
+  },
+  "bulk": {
+    "list_one": "Riprezza {count} dal listino",
+    "list_other": "Riprezza {count} dal listino",
+    "cost_one": "Prezza {count} dal costo",
+    "cost_other": "Prezza {count} dal costo",
+    "doneLIST_one": "{count} riga riprezzata dal suo listino.",
+    "doneLIST_other": "{count} righe riprezzate dal loro listino.",
+    "doneSUGGESTED_one": "{count} riga prezzata dal suo costo.",
+    "doneSUGGESTED_other": "{count} righe prezzate dal loro costo.",
+    "partly": "{count} prezzate; rifiutate: righe {refused}. Apri una riga per vedere il motivo."
+  },
+  "done": {
+    "LIST": "Riga {line} riprezzata dal suo listino.",
+    "SUGGESTED": "Riga {line} prezzata dal suo costo.",
+    "NET": "Riga {line}: il nuovo netto è salvato con il suo motivo."
+  },
+  "manual": {
+    "title": "Modifica manuale · {line}",
+    "now": "Netto attuale",
+    "new": "Nuovo netto",
+    "kept": "Resta",
+    "keptLIST": "Parte dal prezzo di listino",
+    "keptSUGGESTED": "Parte dal prezzo del costo",
+    "keptNone": "Parte dal prezzo scritto qui",
+    "keptTyped": "Parte dal prezzo scritto {price} ({reason})",
+    "keptDiscount": "sconto {pct}",
+    "net": "Nuovo netto unitario",
+    "netHint": "Sulla base dell'offerta, come lo mostra la riga.",
+    "reason": "Motivo",
+    "reasonHint": "Dai motivi di modifica prezzo (Impostazioni vendite).",
+    "reasonPick": "Scegli un motivo…",
+    "note": "Nota",
+    "noteNeeded": "Nota (questo motivo la chiede)",
+    "save": "Salva il nuovo netto",
+    "problem": {
+      "price": "Scrivi un netto unitario sopra 0.",
+      "same": "Il netto è già questo prezzo.",
+      "reason": "Scegli il motivo della modifica.",
+      "note": "Questo motivo chiede una nota: spiega perché.",
+      "noteLong": "Una nota di al massimo 500 caratteri."
+    }
+  },
+  "problem": {
+    "reason": "Questo motivo non è più nella lista: scegline un altro.",
+    "note": "Questo motivo chiede una nota: spiega perché.",
+    "start": "Il prezzo non può partire così adesso (nessun listino o nessun costo): rileggi la riga.",
+    "price": "Il nuovo prezzo non torna: controlla le cifre e riprova.",
+    "state": "Questa riga non si può più prezzare qui (un addebito, o la versione non è più una bozza).",
+    "read": {
+      "signed_out": "Sei uscito: accedi di nuovo.",
+      "forbidden": "Il tuo ruolo non può leggerlo.",
+      "not_found": "Non c'è più.",
+      "unavailable": "Il server non risponde: riprova tra un momento.",
+      "rate_limited": "Troppe richieste: riprova tra un momento.",
+      "contract": "La risposta non è quella che questa schermata si aspetta: ricarica la pagina.",
+      "internal": "Qualcosa è andato storto: riprova."
+    },
+    "write": {
+      "moved": "Qualcun altro l'ha cambiato nel frattempo: è stato riletto, nulla è stato sovrascritto.",
+      "internal": "Qualcosa è andato storto: nulla è stato salvato.",
+      "signed_out": "Sei uscito: accedi di nuovo.",
+      "forbidden": "Il tuo ruolo non può modificarlo.",
+      "not_found": "Non c'è più.",
+      "step_up": "Questa modifica chiede un nuovo codice di autenticazione.",
+      "rate_limited": "Troppe richieste: riprova tra un momento.",
+      "unavailable": "Il server non risponde: nulla è stato salvato."
+    }
+  },
+  "step": {
+    "LIST": "Prezzo di listino",
+    "SUGGESTED": "Prezzo dal costo",
+    "MANUAL_START": "Prezzo scritto a mano",
+    "MANUAL": "Modifica manuale",
+    "BREAK": "Scaglione di quantità",
+    "BREAK_FROM_one": "Scaglione da {count} pezzo",
+    "BREAK_FROM_other": "Scaglione da {count} pezzi",
+    "OPTION": "Opzione",
+    "DISCOUNT": "Sconto {pct} %",
+    "SIZE_SURCHARGE": "Maggiorazione taglia ({sizes})",
+    "NET": "Netto",
+    "listOf": "{code} versione {revision}",
+    "listCode": "{code}",
+    "breakPieces_one": "{count} pezzo contato",
+    "breakPieces_other": "{count} pezzi contati",
+    "pct": "{pct} %",
+    "reason": "{reason}",
+    "reasonNote": "{reason}: {note}"
+  },
+  "scope": {
+    "VERSION_STYLE": "questo listino, per questo modello",
+    "VERSION": "questo listino, ogni modello",
+    "STYLE": "del modello"
+  },
+  "drawer": {
+    "title": "Composizione del costo e scala di prezzo",
+    "noPrice": "I prezzi richiedono il livello prezzo (money.price): il tuo ruolo non lo ha.",
+    "failed": "Non è stato possibile leggere il prezzo della riga",
+    "waterfall": "Come è prezzata la riga {line}",
+    "mismatch": "I passaggi sommano {total}; la riga dice {given}.",
+    "noSteps": "Prezzata {price} a mano, senza scala di prezzo: riprezzala per vedere come nasce un prezzo.",
+    "noStepsList": "Prezzata {price} senza scala di prezzo: riprezzala dal listino per vedere il prezzo di listino, il suo scaglione e le sue maggiorazioni.",
+    "stepsProblem": "I passaggi salvati non tornano più con il prezzo della riga: riprezzala.",
+    "bySize": "Prezzo per taglia: quanto aggiunge ogni taglia",
+    "sizeAdds": "{size} {amount}",
+    "listDays": "Listino {code}: il prezzo di {days}.",
+    "listAlways": "Listino {code}.",
+    "costTitle": "Composizione del costo",
+    "noCostGrain": "Il costo richiede il livello costo (money.cost): il tuo ruolo non lo ha.",
+    "noCosting": "La scheda costi richiede costing.view: il tuo ruolo non lo ha.",
+    "costNoCells": "La scheda costi non ha una cella per il colore e le taglie di questa riga.",
+    "costChart": "Quanto costa oggi un pezzo della riga {line}",
+    "margin": "Margine di questa riga",
+    "marginToday": "Al costo di oggi: {pct}.",
+    "suggested": "Il costo suggerisce {price} alla soglia.",
+    "suggestedAt": "Il costo suggerisce {price} per guadagnare {pct}.",
+    "reprice": "Riprezza dal listino",
+    "fromCost": "Prezza dal costo",
+    "changeNet": "Cambia il netto…"
+  },
+  "cost": {
+    "material": "Materiali",
+    "labour": "Manodopera",
+    "overhead": "Costi generali",
+    "total": "Costo al pezzo",
+    "known": "Noto finora",
+    "kept": "Costo che tiene l'offerta",
+    "today": "Scheda costi oggi",
+    "incomplete": "Non ancora completo",
+    "changedUp": "+ {amount} dal calcolo",
+    "changedDown": "− {amount} dal calcolo",
+    "changedHint": "Il costo è cambiato da quando la riga è stata prezzata: riprezzala dal listino o dal costo.",
+    "changedHintView": "Il costo è cambiato da quando la riga è stata prezzata."
+  },
+  "block": {
+    "label": "Sconto e prezzo per taglia",
+    "discount": "Sconto {pct}",
+    "bySize": "Prezzo per taglia:",
+    "size": "{size} {price}"
+  },
+  "record": {
+    "pdf": "PDF del listino",
+    "pdfHint": "Si apre in una nuova scheda: stampalo o salvalo come PDF.",
+    "exportXlsx": "Esporta i prezzi (XLSX, da reimportare)",
+    "exportCsv": "Esporta i prezzi (CSV)",
+    "import": "Importa prezzi…"
+  },
+  "days": {
+    "col": "Valido dal–al",
+    "always": "Ogni giorno della versione",
+    "setOf": "Imposta i giorni di {style} {colour}",
+    "title": "Giorni di {price}",
+    "body": "Un prezzo può valere in giorni suoi dentro la versione (il prezzo di una stagione). Due prezzi di uno stesso modello e colore non valgono mai nello stesso giorno.",
+    "from": "Valido dal",
+    "fromHint": "Vuoto: dal primo giorno della versione.",
+    "to": "Valido al",
+    "toHint": "Vuoto: fino all'ultimo giorno della versione.",
+    "addHint": "Vuoto: ogni giorno della versione.",
+    "price": "Prezzo unitario ({currency})",
+    "save": "Salva i giorni",
+    "newStart": "Un nuovo primo giorno riscrive il prezzo da quel giorno.",
+    "newStartBreaks_one": "Un nuovo primo giorno riscrive il prezzo da quel giorno: il suo scaglione va via con la vecchia riga.",
+    "newStartBreaks_other": "Un nuovo primo giorno riscrive il prezzo da quel giorno: i suoi {count} scaglioni vanno via con la vecchia riga.",
+    "done": "{style}: i giorni sono salvati.",
+    "held": {
+      "order": "L'ultimo giorno viene prima del primo.",
+      "overlap": "Un altro prezzo di questo modello e colore vale in questi giorni ({from} – {to}).",
+      "undated": "Un prezzo di questo modello e colore vale ogni giorno: dagli prima i suoi giorni.",
+      "price": "Scrivi un prezzo unitario sopra 0."
+    }
+  },
+  "discount": {
+    "title": "Lo sconto sui documenti",
+    "sub": "Cosa stampano le offerte e le conferme dei clienti di questo listino.",
+    "net": "Solo il prezzo netto",
+    "show": "Il prezzo di listino e lo sconto",
+    "doneShow": "I documenti ora mostrano il prezzo di listino e lo sconto.",
+    "doneNet": "I documenti ora mostrano solo il prezzo netto.",
+    "refused": "Non è stato possibile salvare la scelta: il listino è stato riletto."
+  },
+  "breaks": {
+    "title": "Scaglioni di quantità",
+    "sub": "Da un certo numero di pezzi un prezzo scende: lo scaglione di un prezzo, o uno sconto su ogni prezzo della versione.",
+    "ofVersion": "Le regole della versione {revision}.",
+    "add": "Aggiungi uno scaglione",
+    "addTitle": "Aggiungi uno scaglione di quantità",
+    "addBody": "I pezzi sono tutte le righe di un'offerta o di un ordine prezzate da questo prezzo.",
+    "addGo": "Aggiungi lo scaglione",
+    "everyPrice": "Ogni prezzo (uno sconto)",
+    "everyColour": "ogni colore",
+    "days": "{from} – {to}",
+    "col": {
+      "price": "Prezzo",
+      "from": "Da",
+      "listPrice": "Prezzo di listino",
+      "unitPrice": "Prezzo unitario",
+      "discount": "Sconto %"
+    },
+    "pieces_one": "{count} pezzo",
+    "pieces_other": "{count} pezzi",
+    "fromHint": "Da 2 pezzi in su.",
+    "gives": "Lo scaglione dà",
+    "givesPct": "Uno sconto",
+    "givesPrice": "Un prezzo unitario",
+    "priceOf": "Prezzo unitario da {count} pezzi di {of}",
+    "pctOf": "Sconto da {count} pezzi di {of}",
+    "count_one": "{count} scaglione",
+    "count_other": "{count} scaglioni",
+    "empty": "Nessuno scaglione di quantità",
+    "emptyBody": "Aggiungine uno: da un certo numero di pezzi un prezzo scende.",
+    "emptyView": "Questa versione non ne ha.",
+    "remove_one": "Togli {count} scaglione",
+    "remove_other": "Togli {count} scaglioni",
+    "removeTitle_one": "Togliere {count} scaglione?",
+    "removeTitle_other": "Togliere {count} scaglioni?",
+    "removeBody": "I loro prezzi tornano al prezzo di listino a ogni quantità. Le offerte già prezzate tengono i loro prezzi.",
+    "added_one": "Scaglione da {count} pezzo aggiunto.",
+    "added_other": "Scaglione da {count} pezzi aggiunto.",
+    "removed_one": "{count} scaglione tolto.",
+    "removed_other": "{count} scaglioni tolti.",
+    "refused": "Lo scaglione è stato rifiutato: uno scaglione abbassa il suo prezzo (un prezzo unitario più basso, o uno sconto sotto il 100 %), uno per prezzo e quantità.",
+    "held": {
+      "quantity": "Scrivi i pezzi: un numero intero da 2.",
+      "everyPct": "Uno scaglione su ogni prezzo è uno sconto, non un prezzo unitario.",
+      "twice": "C'è già uno scaglione da {count} pezzi per questo prezzo: cambialo nella sua riga.",
+      "pct": "Scrivi uno sconto sopra 0 e sotto il 100 %.",
+      "price": "Scrivi un prezzo unitario sopra 0.",
+      "lower": "Uno scaglione abbassa il prezzo: sotto {price}.",
+      "none": "Scegli gli scaglioni da togliere."
+    }
+  },
+  "surcharges": {
+    "title": "Maggiorazioni per taglia",
+    "sub": "Quanto aggiunge una taglia al prezzo unitario: un importo o una percentuale per taglia, per ogni modello della versione o per un modello. Le maggiorazioni del modello valgono dove questo listino non ne fissa.",
+    "add": "Aggiungi una maggiorazione",
+    "addTitle": "Aggiungi una maggiorazione per taglia",
+    "addBody": "Ogni taglia prende un importo o una percentuale; una taglia già fissata prende la nuova cifra.",
+    "addGo": "Aggiungi la maggiorazione",
+    "everyStyle": "Ogni modello",
+    "own": "del modello (tenuta sul modello)",
+    "kindAmount": "Importo ({currency})",
+    "kindPct": "Percentuale del prezzo",
+    "col": {
+      "who": "Per"
+    },
+    "cellOf": "{who}, taglia {size}, {kind}",
+    "sizes": "Taglie",
+    "sizesHint": "Una o più, separate da virgola: 54, 56.",
+    "gives": "La maggiorazione è",
+    "givesAmount": "Un importo ({currency})",
+    "givesPct": "Una percentuale del prezzo",
+    "count_one": "{count} taglia",
+    "count_other": "{count} taglie",
+    "empty": "Nessuna maggiorazione per taglia",
+    "emptyBody": "Aggiungine una: quanto aggiunge una taglia al prezzo unitario.",
+    "emptyView": "Questa versione non ne ha.",
+    "how": "Scrivi in una cella per cambiarla (si salva quando la lasci); svuotala per toglierla. Una taglia prende un importo o una percentuale: scriverne uno sostituisce l'altro.",
+    "howView": "Le maggiorazioni di un modello sono tenute sul modello.",
+    "added_one": "{count} maggiorazione per taglia salvata.",
+    "added_other": "{count} maggiorazioni per taglia salvate.",
+    "notNumber": "Taglia {size}: \"{text}\" non è un numero. La cifra resta com'era.",
+    "refused": "La maggiorazione è stata rifiutata: un importo sopra 0 o una percentuale da 0 a 100, una per taglia.",
+    "held": {
+      "sizes": "Scrivi almeno una taglia.",
+      "size": "Un codice taglia ha al massimo 40 caratteri, senza spazi.",
+      "amount": "Scrivi un importo sopra 0.",
+      "pct": "Scrivi una percentuale sopra 0 e al massimo 100."
+    }
+  },
+  "minimums": {
+    "title": "Quantità minime d'ordine",
+    "sub": "Quanto devono ordinare almeno i clienti di questo listino, di un modello, di un tipo di capo o di un materiale: avvisati, bloccati, o con una maggiorazione piccola serie.",
+    "add": "Nuovo minimo",
+    "addTitle": "Nuova quantità minima d'ordine",
+    "addBody": "Vale per i clienti di {code}.",
+    "addGo": "Crea il minimo",
+    "col": {
+      "subject": "Vale per",
+      "minimum": "Minimo",
+      "action": "Sotto il minimo",
+      "note": "Nota",
+      "status": "Stato"
+    },
+    "subject": {
+      "STYLE": "Un modello",
+      "PRODUCT_TYPE": "Un tipo di capo",
+      "MATERIAL": "Un materiale"
+    },
+    "type": {
+      "JACKET": "Giacche",
+      "TROUSERS": "Pantaloni",
+      "SUIT": "Tute",
+      "GLOVES": "Guanti",
+      "VEST": "Gilet",
+      "OTHER": "Altri capi"
+    },
+    "action": {
+      "WARN": "Avvisa",
+      "BLOCK": "Blocca",
+      "SURCHARGE": "Maggiorazione piccola serie"
+    },
+    "actionHint": {
+      "WARN": "L'offerta e l'ordine lo dicono; partono lo stesso.",
+      "BLOCK": "Sotto il minimo l'offerta non si può inviare e l'ordine d'ufficio non si può confermare.",
+      "SURCHARGE": "L'offerta indica la maggiorazione piccola serie (prezzata a mano sulla riga)."
+    },
+    "per": {
+      "ORDER": "{count} pz per ordine",
+      "COLOURWAY": "{count} pz per colore",
+      "LINE": "{count} pz per riga"
+    },
+    "perName": {
+      "ORDER": "Per ordine",
+      "COLOURWAY": "Per colore",
+      "LINE": "Per riga"
+    },
+    "status": {
+      "ACTIVE": "Attivo",
+      "ARCHIVED": "Archiviato"
+    },
+    "surchargeAmount": "+ {amount} al pezzo",
+    "surchargePct": "+ {pct} del prezzo",
+    "pick": "Scegli…",
+    "materialSearch": "Cerca un materiale",
+    "quantity": "Pezzi minimi",
+    "countedPer": "Contati",
+    "surchargeKind": "La maggiorazione è",
+    "count_one": "{count} minimo",
+    "count_other": "{count} minimi",
+    "empty": "Nessuna quantità minima d'ordine",
+    "emptyBody": "Aggiungine una per un modello, un tipo di capo o un materiale.",
+    "archive_one": "Archivia {count}",
+    "archive_other": "Archivia {count}",
+    "reactivate_one": "Riattiva {count}",
+    "reactivate_other": "Riattiva {count}",
+    "added": "Minimo creato.",
+    "archived_one": "{count} minimo archiviato.",
+    "archived_other": "{count} minimi archiviati.",
+    "reactivated_one": "{count} minimo riattivato.",
+    "reactivated_other": "{count} minimi riattivati.",
+    "movedPartly": "{count} cambiati, {left} rifiutati (cambiati nel frattempo, o un gemello è attivo): la lista è stata riletta.",
+    "refused": "Il minimo è stato rifiutato: controlla le sue cifre.",
+    "refusedTwin": "Esiste già un minimo attivo con lo stesso oggetto e conteggio: archivialo prima.",
+    "held": {
+      "style": "Scegli il modello.",
+      "type": "Scegli il tipo di capo.",
+      "item": "Scegli il materiale.",
+      "quantity": "Scrivi il minimo: un numero intero da 2.",
+      "amount": "Scrivi la maggiorazione: un importo sopra 0.",
+      "pct": "Scrivi la maggiorazione: una percentuale sopra 0 e al massimo 100.",
+      "note": "Una nota di al massimo 500 caratteri.",
+      "twin": "Esiste già un minimo attivo con lo stesso oggetto e conteggio.",
+      "noneActive": "Nessuno dei minimi scelti è attivo.",
+      "noneArchived": "Nessuno dei minimi scelti è archiviato."
+    }
+  },
+  "import": {
+    "action": "Importa prezzi",
+    "title": "Importa prezzi",
+    "everyCompany": "Ogni azienda",
+    "held": {
+      "manage": "Importare prezzi richiede pricelists.manage: il tuo ruolo legge soltanto i listini.",
+      "price": "Importare prezzi richiede il livello prezzo (money.price).",
+      "run": "Eseguire un'importazione richiede imports.run e files.upload: il tuo ruolo non li ha."
+    }
+  },
+  "print": {
+    "title": "{code} · {name}",
+    "titleNone": "Listino",
+    "version": "Versione",
+    "versionDraft": "Versione {revision} (bozza)",
+    "versionActive": "Versione {revision}",
+    "days": "Valido",
+    "currency": "Valuta",
+    "kind": "Tipo",
+    "held": "Sto ancora leggendo il listino.",
+    "back": "Torna al listino",
+    "failed": "Non è stato possibile leggere il listino",
+    "noPriceTitle": "Nessun prezzo da stampare",
+    "noVersion": "Il listino non ha ancora una versione.",
+    "prices_one": "{count} prezzo",
+    "prices_other": "{count} prezzi",
+    "showsDiscount": "I documenti di questo listino mostrano il prezzo di listino e lo sconto.",
+    "netOnly": "I documenti di questo listino mostrano solo il prezzo netto."
+  },
+  "floors": {
+    "title": "Soglia di margine % per ruolo",
+    "sub": "Una versione d'offerta segue la soglia più bassa dei ruoli di chi l'ha creata; un ruolo senza soglia tiene quella dell'azienda. Sotto la soglia un'offerta chiede un'approvazione.",
+    "noMargin": "Le soglie richiedono il livello margine (money.margin): il tuo ruolo non lo ha.",
+    "edit": "Cambia le soglie",
+    "save": "Salva le soglie",
+    "discard": "Annulla",
+    "failed": "Non è stato possibile leggere le soglie",
+    "noRoles": "Questa azienda non ha ancora ruoli d'ufficio.",
+    "fromCompany": "In vigore: le soglie di {code}. La soglia dell'azienda è {floor}.",
+    "fromGroup": "In vigore: le soglie del gruppo. La soglia dell'azienda è {floor}.",
+    "fromNone": "Nessun ruolo ha una soglia sua: ogni ruolo tiene la soglia dell'azienda, {floor}.",
+    "fieldHint": "Vuoto: la soglia dell'azienda ({floor}).",
+    "fieldOf": "Soglia % di {role}",
+    "col": {
+      "role": "Ruolo",
+      "own": "La sua soglia qui",
+      "inForce": "In vigore"
+    },
+    "companyFloor": "Soglia azienda {floor}",
+    "lowers": "Questo abbassa una soglia: più offerte partono senza approvazione. Salvare chiede un nuovo codice di autenticazione.",
+    "stepUpTitle": "Conferma che sei tu",
+    "stepUpSentence": "Abbassare una soglia di margine fa partire più offerte senza approvazione.",
+    "stepUpConfirm": "Conferma e salva",
+    "stepUpCancelled": "Il codice non è stato dato: nulla è stato salvato.",
+    "done": "Le soglie di margine sono salvate.",
+    "refused": "Non è stato possibile salvare le soglie.",
+    "refusedMoved": "Qualcun altro ha cambiato queste impostazioni nel frattempo: sono state rilette, nulla è stato sovrascritto.",
+    "refusedNoRow": "Questo ambito non ha ancora impostazioni sue: salva prima le sue regole delle offerte.",
+    "refusedRoles": "Un ruolo non è più un ruolo d'ufficio di questa azienda: rileggi le soglie.",
+    "held": {
+      "manage": "Cambiare le soglie richiede sales.settings.manage.",
+      "noRowCompany": "Questa azienda segue le impostazioni del gruppo: dalle prima impostazioni sue (Regole delle offerte).",
+      "noRowGroup": "Il gruppo non ha ancora impostazioni: salva prima le regole delle offerte del gruppo.",
+      "same": "Non è ancora cambiato nulla.",
+      "pct": "{role}: scrivi una percentuale da 0 a 100."
+    }
+  },
+  "stepUp": {
+    "problem": {
+      "unavailable": "Non è stato possibile controllare il codice: riprova.",
+      "locked": "Troppi tentativi: attendi qualche minuto.",
+      "wrong": "Il codice è sbagliato o già usato: scrivi quello nuovo."
+    }
+  }
+}
