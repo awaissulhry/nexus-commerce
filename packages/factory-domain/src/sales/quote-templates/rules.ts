@@ -137,6 +137,20 @@ export interface PlannedLine {
   readonly note: string | null
 }
 
+/** B-W2b-302: a template's fee line as the quote's FEE line (B-W2b-330: once, its kind, its price; no sizes). */
+export interface PlannedFee {
+  readonly templateLineId: string
+  readonly seq: number
+  readonly section: string | null
+  readonly feeKind: SalesFeeKind
+  readonly styleId: string
+  /** The template's or the one picked; null: B-W2b-330's default (a goods line's of the style, else its first active one). */
+  readonly colourwayId: string | null
+  readonly unitPrice: string
+  readonly description: string | null
+  readonly note: string | null
+}
+
 /** A template line that does not become a quote line, and why (in words). */
 export interface LeftOut {
   readonly seq: number
@@ -146,21 +160,26 @@ export interface LeftOut {
 
 /**
  * Which template lines become lines of the new quote: a size grid line in its colourway (the template's, or the one picked)
- * with its pieces (the template's, or the ones typed); a line without either is left out and said, as is a fee line (a quote
- * line of a fee is priced with the waterfall's fees, which come later) and a line the person leaves out.
+ * with its pieces (the template's, or the ones typed); a line without either is left out and said, as is a line the person
+ * leaves out. B-W2b-302 (lead note 11-12, after B-W2b-330): a fee line becomes a FEE quote line (`fees`: its kind, once, at
+ * the template's price, its colourway the template's or the one picked; no sizes); a fee without a price is left out.
  */
-export function planStart(lines: readonly (TemplateLineInput & { readonly id: string })[], picks: readonly LinePick[]): { readonly lines: PlannedLine[]; readonly leftOut: LeftOut[] } {
+export function planStart(lines: readonly (TemplateLineInput & { readonly id: string })[], picks: readonly LinePick[]): { readonly lines: PlannedLine[]; readonly leftOut: LeftOut[]; readonly fees: PlannedFee[] } {
   const byLine = new Map(picks.map((pick) => [pick.templateLineId, pick]))
   const planned: PlannedLine[] = []
   const leftOut: LeftOut[] = []
+  // B-W2b-302
+  const fees: PlannedFee[] = []
   for (const line of [...lines].sort((a, b) => a.seq - b.seq)) {
     const pick = byLine.get(line.id)
     if (pick?.skip) {
       leftOut.push({ seq: line.seq, size: null, reason: 'Left out when the quote was made.' })
       continue
     }
+    // B-W2b-302: a fee line is a FEE quote line (B-W2b-330's fees), priced at the template's price.
     if (line.kind === 'FEE') {
-      leftOut.push({ seq: line.seq, size: null, reason: 'A fee line is not added to a quote yet: add the fee by hand once fees are priced on quotes.' })
+      if (line.unitPrice === null || line.feeKind === null) leftOut.push({ seq: line.seq, size: null, reason: 'A fee without a price on the template is not added: add the fee on the quote with its price.' })
+      else fees.push({ templateLineId: line.id, seq: line.seq, section: line.section, feeKind: line.feeKind, styleId: line.styleId, colourwayId: pick?.colourwayId ?? line.colourwayId, unitPrice: line.unitPrice, description: line.description, note: line.note })
       continue
     }
     const colourwayId = pick?.colourwayId ?? line.colourwayId
@@ -175,5 +194,5 @@ export function planStart(lines: readonly (TemplateLineInput & { readonly id: st
     }
     planned.push({ templateLineId: line.id, seq: line.seq, section: line.section, styleId: line.styleId, colourwayId, sizes, unitPrice: line.unitPrice, description: line.description, note: line.note })
   }
-  return { lines: planned, leftOut }
+  return { lines: planned, leftOut, fees }
 }
