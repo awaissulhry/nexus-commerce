@@ -526,6 +526,12 @@ model PurchasingSettings {
   /// a leather lot whose order line names none (PurchaseOrderLine.areaTolerancePct wins): the incoming area check and the
   /// re-measure read it. null: not set on this row (a company row follows the tenant-wide one; no row: 2 %, the domain's).
   leatherAreaTolerancePct      Decimal? @db.Decimal(7, 4)
+  /// W2b-6 (schema wave 45/57, B-W2b-363; SCM-087, B-W2b-305, -354): the company's confirm-by, in hours after the send (1 to
+  /// 720): a sent order's PurchaseOrder.confirmBy unless the buyer gives one; and the days between two reminders of one order
+  /// (1 to 30: the next CONFIRMATION or CHASE no sooner). null: not set on this row (a company row follows the tenant-wide
+  /// one; no row: W2a's 48 hours and one a day).
+  confirmByHours               Int?
+  reminderCadenceDays          Int?
   version                      Int      @default(1)
   createdAt                    DateTime @default(now()) @db.Timestamptz(3)
   updatedAt                    DateTime @default(now()) @updatedAt @db.Timestamptz(3)

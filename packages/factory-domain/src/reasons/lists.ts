@@ -7,8 +7,9 @@ import { DEFECT_KINDS } from '../production/scans/reasons'
  * first, words second: MES-125, QHS-007).
  *
  * Two tables keep them and ONE editor edits both:
- *   - REASON_CODE (factory-db reasons.prisma ReasonCode): the thirteen lists of REASON_CODE_LISTS (W2b-5 added APPROVAL_REJECT,
- *     why an approver said no: B-W2b-276, and PRICE_ADJUSTMENT, why a line's price was changed by hand: B-W2b-280), with words in Italian,
+ *   - REASON_CODE (factory-db reasons.prisma ReasonCode): the fourteen lists of REASON_CODE_LISTS (W2b-5 added APPROVAL_REJECT,
+ *     why an approver said no: B-W2b-276, and PRICE_ADJUSTMENT, why a line's price was changed by hand: B-W2b-280; W2b-6 added
+ *     SUPPLIER_DOCUMENT_TYPE, what a supplier's document is: B-W2b-363), with words in Italian,
  *     English and the other floor languages, an icon, a colour and "needs a note";
  *   - SCRAP_REASON (factory-db production.prisma ScrapReason, W1): the operation screen's SCRAP and REWORK reasons, which
  *     the scans reference (OperationScanDefect); since W2b (B-W2b-01's columns, B-W2b-10 turns them on; MES-125) they keep
@@ -20,7 +21,7 @@ import { DEFECT_KINDS } from '../production/scans/reasons'
  */
 
 /** The lists of ReasonCode, in the order of factory-db's ReasonList enum (an API test compares them). */
-export const REASON_CODE_LISTS = ['PAUSE', 'DOWNTIME', 'HELP_CALL', 'ADJUSTMENT', 'HOLD', 'CANCEL', 'WRITE_OFF', 'RETURN', 'DISCREPANCY', 'CLAIM', 'DOWNGRADE', 'APPROVAL_REJECT', 'PRICE_ADJUSTMENT'] as const
+export const REASON_CODE_LISTS = ['PAUSE', 'DOWNTIME', 'HELP_CALL', 'ADJUSTMENT', 'HOLD', 'CANCEL', 'WRITE_OFF', 'RETURN', 'DISCREPANCY', 'CLAIM', 'DOWNGRADE', 'APPROVAL_REJECT', 'PRICE_ADJUSTMENT', 'SUPPLIER_DOCUMENT_TYPE'] as const
 export type ReasonCodeList = (typeof REASON_CODE_LISTS)[number]
 
 /** The operation screen's lists: ScrapReason's kinds (production/scans DEFECT_KINDS). */
@@ -58,12 +59,13 @@ export const fieldsOf = (_list: ReasonList): ReasonFields => ALL_FIELDS
 /**
  * The lists each settings page shows (the hosts of the one editor): Production › Floor rules & codes (design fr-reasons:
  * pause, scrap, rework, downtime, help call, adjustment, hold, cancel), the warehouse's (write-offs, adjustments), sales
- * settings (returns, cancellations), purchasing (delivery discrepancies, supplier claims) and quality (holds, downgrades).
+ * settings (returns, cancellations), purchasing (delivery discrepancies, supplier claims, supplier document types) and quality
+ * (holds, downgrades).
  */
 export const REASON_LIST_GROUPS = Object.freeze({
   floorRules: Object.freeze(['PAUSE', 'SCRAP', 'REWORK', 'DOWNTIME', 'HELP_CALL', 'ADJUSTMENT', 'HOLD', 'CANCEL'] as const satisfies readonly ReasonList[]),
   warehouse: Object.freeze(['WRITE_OFF', 'ADJUSTMENT'] as const satisfies readonly ReasonList[]),
   sales: Object.freeze(['RETURN', 'CANCEL', 'PRICE_ADJUSTMENT'] as const satisfies readonly ReasonList[]),
-  purchasing: Object.freeze(['DISCREPANCY', 'CLAIM'] as const satisfies readonly ReasonList[]),
+  purchasing: Object.freeze(['DISCREPANCY', 'CLAIM', 'SUPPLIER_DOCUMENT_TYPE'] as const satisfies readonly ReasonList[]),
   quality: Object.freeze(['HOLD', 'DOWNGRADE'] as const satisfies readonly ReasonList[]),
 })

@@ -29,6 +29,10 @@ model ReasonCode {
   needsDetail Boolean    @default(false)
   /// Tiles and pickers show the list in this order (lower first).
   sortOrder   Int        @default(0)
+  /// W2b-6 (schema wave 45/57, B-W2b-363; SAL-458, B-W2b-348): the group the reason is reported under ("Fit", "Quality",
+  /// "Transport"), as the office writes it: 1 to 120 characters, one line, no space at either end; the reasons of a list
+  /// with the same words are one group. null: no group (reported on its own).
+  group       String?
   active      Boolean    @default(true)
   version     Int        @default(1)
   createdAt   DateTime   @default(now()) @db.Timestamptz(3)
@@ -67,4 +71,7 @@ enum ReasonList {
   APPROVAL_REJECT
   /// W2b-5 (schema wave 38/44, B-W2b-280; SAL-175): why a line's price was changed by hand (QuoteLine.priceSteps' MANUAL step).
   PRICE_ADJUSTMENT
+  /// W2b-6 (schema wave 45/57, B-W2b-363; SCM-020, B-W2b-315): what a supplier's document is (StoredFile.documentTypeCode):
+  /// DURC, LWG_AUDIT, ISO_9001, REACH_DECLARATION …
+  SUPPLIER_DOCUMENT_TYPE
 }

@@ -20,6 +20,7 @@
     "DOWNGRADE": "Downgrades",
     "APPROVAL_REJECT": "Approval rejections",
     "PRICE_ADJUSTMENT": "Price adjustments",
+    "SUPPLIER_DOCUMENT_TYPE": "Supplier document types",
     "SCRAP": "Scrap",
     "REWORK": "Rework"
   },
@@ -37,6 +38,7 @@
     "DOWNGRADE": "Why goods went down to a lower quality.",
     "APPROVAL_REJECT": "Why an approver said no to a request: every no names one, with the words.",
     "PRICE_ADJUSTMENT": "Why a line's price was changed by hand: every manual change on a quote or order line names one.",
+    "SUPPLIER_DOCUMENT_TYPE": "What a supplier's document is (a DURC, an LWG audit, an ISO 9001 certificate): each document of a supplier's vault may name one.",
     "SCRAP": "Why a garment is lost at an operation: the operation screen's scrap tiles.",
     "REWORK": "Why a garment goes back to be made again: the operation screen's rework tiles."
   },

@@ -116,6 +116,21 @@ const ROWS: Readonly<Record<ReasonCodeList, readonly Row[]>> = {
     ['TARGET_PRICE', 'Prezzo obiettivo', 'Target price', 'percent', INDIGO],
     OTHER(),
   ],
+  // W2b-6 (B-W2b-363; SCM-020, B-W2b-315): what a supplier's document is (StoredFile.documentTypeCode), the vault's asks
+  // (purchasing/qualification/vault.ts ASKED_BY_KIND codes) and an ISO 9001 certificate.
+  SUPPLIER_DOCUMENT_TYPE: [
+    ['DURC', 'DURC (regolarità contributiva)', 'DURC (social contributions)', 'shield', BLUE],
+    ['LWG_AUDIT', 'Audit LWG', 'LWG audit', 'leaf', EMERALD],
+    ['ISO_9001', 'Certificato ISO 9001', 'ISO 9001 certificate', 'award', INDIGO],
+    ['REACH_DECLARATION', 'Dichiarazione REACH', 'REACH declaration', 'flag', AMBER],
+    ['CR_VI_TEST_REPORT', 'Rapporto di prova cromo VI', 'Chromium VI test report', 'alert', RED],
+    ['AZO_TEST_REPORT', 'Rapporto di prova coloranti azoici', 'Azo dyes test report', 'alert', ORANGE],
+    ['EN_1621_CERTIFICATE', 'Certificato di esame UE del tipo (EN 1621)', 'EU type-examination certificate (EN 1621)', 'shield', VIOLET],
+    ['DECLARATION_OF_CONFORMITY', 'Dichiarazione di conformità UE', 'EU declaration of conformity', 'bookmark', PINK],
+    ['CODE_OF_CONDUCT', 'Codice di condotta firmato', 'Signed code of conduct', 'heart', EMERALD],
+    ['CARRIER_INSURANCE', 'Assicurazione del vettore', "Carrier's insurance", 'truck', BLUE],
+    OTHER(),
+  ],
 }
 
 const reasonOf = ([code, labelIt, labelEn, icon, colour, needsDetail]: Row): StandardReason => Object.freeze({ code, labelIt, labelEn, icon, colour, needsDetail: needsDetail ?? false })
