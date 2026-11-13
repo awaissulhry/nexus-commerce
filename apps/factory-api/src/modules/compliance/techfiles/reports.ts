@@ -1,7 +1,7 @@
 import type { FastifyRequest } from 'fastify'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { actorOf } from '../../../core/context'
-import { dayOf, officeOf, techfilesClock } from './common'
+import { dayOf, instantDayOf, officeOf, techfilesClock } from './common'
 import { coveringCertificates, readFile, readItems } from './store'
 
 /**
@@ -62,7 +62,7 @@ export async function testReports(request: FastifyRequest, fileId: string) {
           standardClause: certificate?.standard ?? null,
           sample: null,
           result: null,
-          date: dayOf(row.availableAt),
+          date: instantDayOf(row.availableAt),
           batchNumber: null,
           file: { id: row.id, name: row.originalName, sha256: row.sha256 },
           certificate: ref(certificate),
@@ -79,7 +79,7 @@ export async function testReports(request: FastifyRequest, fileId: string) {
           standardClause: null,
           sample: null,
           result: null,
-          date: dayOf(row.availableAt),
+          date: instantDayOf(row.availableAt),
           batchNumber: null,
           file: { id: row.id, name: row.originalName, sha256: row.sha256 },
           certificate: ref(named),

@@ -1,6 +1,6 @@
 import type { FactoryClient, Prisma } from '@nexus/factory-db'
 import { isUuid } from '@nexus/factory-domain/core/ids'
-import { toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
+import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { CASE_LIMITS } from '@nexus/factory-domain/sales/portal-returns/rules'
 import type { CommandTx } from '../../../core/command'
 
@@ -202,15 +202,15 @@ export async function capasOf(db: Reader, complaintIds: readonly string[]): Prom
   return found
 }
 
-/** The day each stage of a CAPA was first reached (its audit rows; the first stage on its opening day). */
+/** The day each stage of a CAPA was first reached (its audit rows; the first stage on its opening day), in Rome (B-W2b-F35). */
 export async function stagesReachedOf(db: Reader, capa: ComplaintCapa): Promise<Map<string, BusinessDate>> {
   const rows = await db.auditLog.findMany({ where: { recordType: 'Capa', recordId: capa.id }, select: { at: true, after: true }, orderBy: [{ at: 'asc' }, { id: 'asc' }] })
   const reached = new Map<string, BusinessDate>()
   for (const row of rows) {
     const status = (row.after as Record<string, unknown> | null)?.status
-    if (typeof status === 'string' && !reached.has(status)) reached.set(status, dayOf(row.at))
+    if (typeof status === 'string' && !reached.has(status)) reached.set(status, businessDate(row.at))
   }
-  if (capa.closedAt && !reached.has('CLOSED')) reached.set('CLOSED', dayOf(capa.closedAt))
+  if (capa.closedAt && !reached.has('CLOSED')) reached.set('CLOSED', businessDate(capa.closedAt))
   return reached
 }
 
