@@ -179,6 +179,10 @@ const IT: DocumentWords = {
     TD04: 'TD04 Nota di credito',
     TD05: 'TD05 Nota di debito',
     TD24: 'TD24 Fattura differita',
+    TD16: 'TD16 Integrazione fattura reverse charge interno',
+    TD17: 'TD17 Integrazione/autofattura per acquisto servizi dall\'estero',
+    TD18: 'TD18 Integrazione per acquisto di beni intracomunitari',
+    TD19: 'TD19 Integrazione/autofattura per acquisto di beni ex art. 17 c.2 DPR 633/72',
   },
   totals: {
     net: 'Imponibile',
@@ -289,6 +293,10 @@ const EN: DocumentWords = {
     TD04: 'TD04 Credit note',
     TD05: 'TD05 Debit note',
     TD24: 'TD24 Deferred invoice',
+    TD16: 'TD16 Domestic reverse-charge integration',
+    TD17: 'TD17 Self-invoice for services bought abroad',
+    TD18: 'TD18 Integration for goods bought in the EU',
+    TD19: 'TD19 Self-invoice for goods in Italy (art. 17 c.2 DPR 633/72)',
   },
   totals: {
     net: 'Net amount',

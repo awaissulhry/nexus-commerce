@@ -23,7 +23,9 @@ import { nonTaxable, taxable, type VatTreatment } from '../tax/vat-treatment'
  * states of B-W1-50.
  */
 
-export const INVOICE_DOC_TYPES = ['TD01', 'TD02', 'TD04', 'TD24'] as const
+// W2b-6 (factory-db money.prisma InvoiceDocType, schema wave 49/57, B-W2b-369): TD05 the debit note, TD16-TD19 the
+// self-invoices (factory-db tax.prisma SelfInvoice). No route makes them yet: B-W2b-401 builds them (and their FatturaPA).
+export const INVOICE_DOC_TYPES = ['TD01', 'TD02', 'TD04', 'TD24', 'TD05', 'TD16', 'TD17', 'TD18', 'TD19'] as const
 export type InvoiceDocType = (typeof INVOICE_DOC_TYPES)[number]
 
 export const INVOICE_STATUSES = ['DRAFT', 'ISSUED', 'SENT', 'DELIVERED', 'NOT_DELIVERABLE', 'REJECTED', 'ERROR'] as const
@@ -41,6 +43,11 @@ export const DOC_TYPE_WORDS: Readonly<Record<InvoiceDocType, string>> = Object.f
   TD02: 'Deposit invoice',
   TD04: 'Credit note',
   TD24: 'Deferred invoice',
+  TD05: 'Debit note',
+  TD16: 'Reverse-charge integration',
+  TD17: 'Self-invoice for services from abroad',
+  TD18: 'Self-invoice for goods from the EU',
+  TD19: 'Self-invoice for goods in Italy',
 })
 
 /** The moves of an invoice, as the database allows them (the issue is the only one this module makes in W1). */
@@ -58,12 +65,14 @@ export const invoiceMachine = defineMachine<InvoiceStatus>({
 
 /**
  * The series kinds that may number a type, in the order they are tried: a TD02 from the company's DEPOSIT_INVOICE
- * series when it keeps one (a sezionale), else its INVOICE series; a TD04 likewise from CREDIT_NOTE; TD01 and TD24 from
- * INVOICE (the …_money_guards trigger allows exactly these).
+ * series when it keeps one (a sezionale), else its INVOICE series; a TD04 likewise from CREDIT_NOTE; a self-invoice
+ * (TD16-TD19, W2b-6) from SELF_INVOICE; TD01, TD24 and TD05 from INVOICE (the …_money_guards trigger, as
+ * …_tax_currency_w2b_guards redefines it, allows exactly these).
  */
 export function seriesKindsFor(docType: InvoiceDocType): readonly NumberKind[] {
   if (docType === 'TD02') return ['DEPOSIT_INVOICE', 'INVOICE']
   if (docType === 'TD04') return ['CREDIT_NOTE', 'INVOICE']
+  if (docType === 'TD16' || docType === 'TD17' || docType === 'TD18' || docType === 'TD19') return ['SELF_INVOICE', 'INVOICE']
   return ['INVOICE']
 }
 

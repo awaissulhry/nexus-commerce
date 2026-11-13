@@ -1,4 +1,4 @@
-import { CHARGE_KINDS, type ChargeKind, type Invoice, type InvoiceLine, type LineInput, type QueueDdt } from '../../_shared/api'
+import { CHARGE_KINDS, TYPED_CHARGE_KINDS, type ChargeKind, type Invoice, type InvoiceLine, type LineInput, type QueueDdt } from '../../_shared/api'
 import { ddtHeld, lineInputsOf, parsePrice, parseQuantity, PAYABLE, type FinanceAbilities, type Phrase } from '../../_shared/model'
 import type { Deferred, DeferredGroup, ReturnCredit, ReturnCreditSkip } from './api'
 
@@ -98,7 +98,7 @@ export function freightWords(ddt: Pick<QueueDdt, 'freight'>): { key: string; amo
 
 // ---- charge lines --------------------------------------------------------------------------------------------------------
 
-export { CHARGE_KINDS }
+export { CHARGE_KINDS, TYPED_CHARGE_KINDS }
 export type { ChargeKind }
 
 /** The charge lines of an invoice (B-W2a-54: freight, packaging, samples, a fee, another charge). */

@@ -1,0 +1,399 @@
+// Invoicing in depth and its tax duties (W2b-6, schema wave 49/57, B-W2b-369; features FIN-063, FIN-068, FIN-071,
+// FIN-076, FIN-080, FIN-095, FIN-096, FIN-097, FIN-100, FIN-101, FIN-107; design finance.invoices "Monthly invoice run",
+// "Stamp duty this quarter", the e-invoice test mode banner; finance.payables "Self-invoices"; finance.settings "Tax per
+// company", "E-invoicing" test mode, "Deposits" refund on cancellation). apps/factory-api's modules/invoicing writes these
+// rows (B-W2b-392 tax rules as data, B-W2b-396 invoicing in depth, B-W2b-401 e-invoicing in depth), always through
+// command(). The currency tables are currency.prisma's; the columns these rows add to the invoice (its language, its rate,
+// its run, its declaration of intent, the invoice a debit note adds to) are money.prisma's, the due-date conventions on the
+// payment terms pricing.prisma's.
+//
+//   - TaxCode (FIN-107): the tax codes of a company as data, no longer code: a rate or a Natura with its law and the key
+//     the accountant's account mapping reads, valid from a day (to a day or open). factory-domain tax/rules.ts holds the
+//     same rules as code today; a code says which rule it is (ruleId) and stays UNVERIFIED until a person records the
+//     accountant's confirmation. A version in force is never edited: a new version is made (the old one ends);
+//   - DeclarationOfIntent (FIN-100): a habitual exporter's declaration of intent (DPR 633/1972 art. 8 c.1 lett. c; DL
+//     746/1983 art. 1): its protocol number and date at the tax agency, the year and the amount it covers, what is used of
+//     it, the check on the tax agency's site with its receipt, a revocation; an invoice names the one its N3.5 lines rest
+//     on (Invoice.declarationOfIntentId);
+//   - StampDutyQuarter (FIN-101): the stamp duty of a quarter's e-invoices (DM 17.6.2014 art. 6): how many invoices, the
+//     total, and when it was paid and by whom;
+//   - SelfInvoice (FIN-095): the self-invoice (integrazione / autofattura) a foreign supplier's invoice asks for, TD17
+//     services from abroad, TD18 goods from the EU, TD19 goods already in Italy (DPR 633/1972 art. 17 c.2), with its
+//     deadline; the document sent to SDI is an Invoice of that type (money.prisma), numbered from the SELF_INVOICE series;
+//   - CompanyEInvoiceSettings (FIN-096 and GATE-ACCOUNTANT): a company's e-invoice test mode (SDI has no sandbox: simulated
+//     answers until a person takes the company live) and the switches of the tax duties, OFF until the accountant confirms;
+//   - SdiArchiveCopy (FIN-097): our own copy of every send's XML and SDI's receipts, with the intermediary that held them,
+//     so a change of intermediary loses nothing;
+//   - InvoiceRun (FIN-068): the monthly invoice run: the customers picked, every deferred invoice previewed, then issued in
+//     one session (Invoice.invoiceRunId);
+//   - DepositCancellationRule (FIN-080): what happens to a deposit when an order is cancelled, per deposit kind and who
+//     cancels (and for made-to-measure orders apart: D.Lgs. 206/2005 art. 59 lett. c), and which document follows.
+//
+// GATE-ACCOUNTANT (lead decision 11-13; Owner 11-13: stamp duty is charged to the customer as an invoice line): the tax
+// codes, stamp duty, declarations of intent and self-invoices are built behind the company's switches in
+// CompanyEInvoiceSettings, all OFF by default. The database refuses, while a company's switch is off, the step that would
+// reach a customer or the tax agency: an invoice naming a declaration of intent, a STAMP_DUTY charge line, a self-invoice
+// (TD16-TD19) leaving DRAFT; the API reads the switches for the rest. Every rule the accountant has not confirmed stays
+// marked UNVERIFIED (TaxCode.verification), as factory-domain tax/rules.ts marks it.
+//
+// Money (A1 §2.1, §2.6): amounts are Int minor units of euro (a declaration's amounts, the stamp duty), price grain: they
+// are the sales side's.
+//
+// Who sees what (ownership/tax.json): the office only; the floor, portal and link sessions read nothing here. The
+// …_tax_currency_w2b_guards triggers hold the rules, for every login.
+
+/// A company's tax code as data (FIN-107): a VAT rate, or a Natura code with the law that says why, valid from a day to
+/// a day (or open), with the key the accountant's account mapping reads. One ACTIVE version of a code per company and
+/// country on any day; a version in force (from its first day on) is never edited: a new version is made and the old one
+/// ends. A version made by mistake is ARCHIVED (deleted only before its first day).
+model TaxCode {
+  id             String              @id @db.Uuid
+  tenantId       String              @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId      String              @db.Uuid
+  /// The tax system it belongs to, ISO 3166-1 alpha-2 (IT for Italian VAT).
+  country        String
+  /// The company's code for the treatment, 1-20 capitals, digits, dot, underscore or hyphen: "22", "N3.2", "N3.5-DI".
+  code           String
+  /// What the office reads, one line, 1-200.
+  label          String
+  /// The rate in percent, 0.00 to 100.00 (AliquotaIVA); 0.00 exactly when the code carries a Natura.
+  ratePct        Decimal             @db.Decimal(5, 2)
+  /// Natura (N1 … N7, the detailed codes SDI accepts since 2021) and the law that says why (RiferimentoNormativo, 1-100
+  /// characters): both, exactly when the rate is 0.
+  natura         String?
+  legalRef       String?
+  /// The key the accountant's account mapping reads for this code (B-W2b-370), 1-60 characters without spaces.
+  accountCodeKey String?
+  /// The rule of factory-domain tax/rules.ts it applies (its id, "INTRA_EU_SUPPLY_OF_GOODS"), when it applies one.
+  ruleId         String?
+  /// UNVERIFIED until a person records the accountant's confirmation (confirmedAt and confirmedById, both, set once with
+  /// VERIFIED); a VERIFIED code never goes back. A code read from the primary law may be inserted VERIFIED without them.
+  verification   TaxRuleVerification @default(UNVERIFIED)
+  confirmedAt    DateTime?           @db.Timestamptz(3)
+  confirmedById  String?             @db.Uuid
+  /// Valid from this day (Europe/Rome) to that day, both included; null: open.
+  validFrom      DateTime            @db.Date
+  validTo        DateTime?           @db.Date
+  status         MasterStatus        @default(ACTIVE)
+  version        Int                 @default(1)
+  createdAt      DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime            @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById    String?             @db.Uuid
+
+  company Company @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // A company's codes; the versions of one code (no unique key: the versions of a code do not overlap, the guards'
+  // rule, and the generated isolation tests copy a row).
+  @@index([tenantId, companyId, country, code])
+}
+
+/// Whether a tax rule is settled (factory-domain tax/rules.ts TaxRuleStatus).
+enum TaxRuleVerification {
+  /// Read from the primary law or the official FatturaPA / SDI rules, or confirmed by the accountant.
+  VERIFIED
+  /// Our reading, waiting for the accountant (GATE-ACCOUNTANT).
+  UNVERIFIED
+}
+
+/// A customer's declaration of intent to buy without VAT (FIN-100; DPR 633/1972 art. 8 c.1 lett. c, DL 746/1983 art. 1,
+/// N3.5): the tax agency's protocol number and date, the year and the amount it covers, what invoices used of it, the
+/// check on the tax agency's site with its receipt, and its revocation. One live declaration per protocol number. Never
+/// deleted; revoked, then frozen.
+model DeclarationOfIntent {
+  id             String    @id @db.Uuid
+  tenantId       String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company it is addressed to (the supplier) and the customer that sent it (the exporter).
+  companyId      String    @db.Uuid
+  partyId        String    @db.Uuid
+  /// The tax agency's receipt protocol: 17 digits, a hyphen, 6 digits ("26123456789012345-000001"), and its date (not in
+  /// the future).
+  protocolNumber String
+  protocolDate   DateTime  @db.Date
+  /// The year whose purchases it covers: the protocol's year or the next.
+  year           Int
+  /// The amount declared for our supplies, euro minor units, above 0, and what issued invoices used of it, 0 up to it.
+  /// @grain price
+  amount         Int
+  /// @grain price
+  usedAmount     Int       @default(0)
+  /// The check on the tax agency's site (that the protocol exists for this customer and us): when, by whom, and the
+  /// receipt it printed (a StoredFile of the declaration): all three, set once.
+  checkedAt      DateTime? @db.Timestamptz(3)
+  checkedById    String?   @db.Uuid
+  receiptFileId  String?   @db.Uuid
+  /// Revoked (the customer withdrew it, or it proved invalid): when and why (3-500), both, once; then frozen.
+  revokedAt      DateTime? @db.Timestamptz(3)
+  revokeReason   String?
+  version        Int       @default(1)
+  createdAt      DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById    String?   @db.Uuid
+
+  company     Company     @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  party       Party       @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  receiptFile StoredFile? @relation("DeclarationOfIntentReceipt", fields: [tenantId, receiptFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // money.prisma: the invoices whose N3.5 lines rest on it.
+  invoices    Invoice[]
+
+  // The target of the invoices' reference: the same company and customer.
+  @@unique([tenantId, companyId, partyId, id])
+  // A customer's declarations by year.
+  @@index([tenantId, partyId, year])
+}
+
+/// The stamp duty of a company's e-invoices of one quarter (FIN-101; DM 17.6.2014 art. 6: paid for the quarter, virtually):
+/// how many invoices carried it and its total, then when and by whom it was paid. One row per company and quarter;
+/// recounted until paid, then frozen. Never deleted.
+model StampDutyQuarter {
+  id           String    @id @db.Uuid
+  tenantId     String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId    String    @db.Uuid
+  /// The quarter's first day: 1 January, 1 April, 1 July or 1 October.
+  quarterStart DateTime  @db.Date
+  /// The issued invoices of the quarter that carry stamp duty, and its total, euro minor units: 0 or more each.
+  invoiceCount Int       @default(0)
+  /// @grain price
+  total        Int       @default(0)
+  /// Paid: when (not in the future) and by whom, both; then the row is frozen.
+  paidAt       DateTime? @db.Timestamptz(3)
+  paidById     String?   @db.Uuid
+  version      Int       @default(1)
+  createdAt    DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById  String?   @db.Uuid
+
+  company Company @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, companyId, quarterStart])
+}
+
+/// The self-invoice (integrazione / autofattura) a foreign supplier's invoice asks for (FIN-095; DPR 633/1972 art. 17
+/// c.2; design finance.payables "Self-invoices"): its kind, its deadline, and the document sent to SDI for it (an Invoice
+/// of that type, money.prisma, whose buyer is the supplier). PENDING → ISSUED (its invoice issued, the company's
+/// self-invoice switch on) | CANCELLED (why; not needed after all). One live self-invoice per supplier invoice. Never
+/// deleted.
+model SelfInvoice {
+  id                String            @id @db.Uuid
+  tenantId          String            @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company that integrates the invoice and the foreign supplier that sent it.
+  companyId         String            @db.Uuid
+  partyId           String            @db.Uuid
+  supplierInvoiceId String            @db.Uuid
+  /// TD17 services from abroad, TD18 goods from another EU state, TD19 goods already in Italy (art. 17 c.2).
+  kind              SelfInvoiceKind
+  /// The last day it may be sent to SDI (Europe/Rome): the API computes it (UNVERIFIED: the 15th of the month after the
+  /// one the invoice was received in); moved only while PENDING.
+  deadline          DateTime          @db.Date
+  status            SelfInvoiceStatus @default(PENDING)
+  /// The invoice of type `kind` sent to SDI for it, of the company, to the supplier: named once while PENDING (a draft),
+  /// issued when the self-invoice is ISSUED. One self-invoice per invoice.
+  invoiceId         String?           @db.Uuid
+  /// CANCELLED: when and why (3-500 characters), both.
+  cancelledAt       DateTime?         @db.Timestamptz(3)
+  cancelReason      String?
+  version           Int               @default(1)
+  createdAt         DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime          @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById       String?           @db.Uuid
+
+  company         Company         @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  supplierInvoice SupplierInvoice @relation(fields: [tenantId, companyId, partyId, supplierInvoiceId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, companyId and partyId.
+  invoice         Invoice?        @relation("SelfInvoiceDocument", fields: [tenantId, companyId, partyId, invoiceId], references: [tenantId, companyId, buyerPartyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // An invoice is the document of one self-invoice (a NULL never clashes). One live (not CANCELLED) self-invoice per
+  // supplier invoice: the partial unique SelfInvoice_one_live of the guards migration.
+  @@unique([tenantId, invoiceId])
+  // What is due, by deadline; a supplier invoice's.
+  @@index([tenantId, companyId, status, deadline])
+  @@index([tenantId, supplierInvoiceId])
+}
+
+/// The FatturaPA type of a self-invoice (TipoDocumento).
+enum SelfInvoiceKind {
+  /// Integrazione/autofattura per acquisto servizi dall'estero.
+  TD17
+  /// Integrazione per acquisto di beni intracomunitari.
+  TD18
+  /// Integrazione/autofattura per acquisto di beni ex art. 17 c.2 DPR 633/1972 (goods already in Italy).
+  TD19
+}
+
+/// PENDING → ISSUED | CANCELLED; both final.
+enum SelfInvoiceStatus {
+  PENDING
+  ISSUED
+  CANCELLED
+}
+
+/// A company's e-invoicing settings (FIN-096; design finance.settings "E-invoicing", the test mode banner) and the
+/// switches of its tax duties (GATE-ACCOUNTANT). The row's id is the company's id (one row per company; the API upserts
+/// it); no row: test mode, simulated answers DELIVERED, every switch off.
+model CompanyEInvoiceSettings {
+  /// The company's id.
+  id                     String                   @id @db.Uuid
+  tenantId               String                   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId              String                   @db.Uuid
+  /// Test mode (SDI has no sandbox): nothing goes to SDI, the provider's answer is simulated (simulateOutcome) and every
+  /// invoice page shows the banner. Going live = testMode false with liveSince (not in the future) and liveSetById (after
+  /// a step-up), all three in one write; both fixed while live, both cleared when it goes back to test mode.
+  testMode               Boolean                  @default(true)
+  liveSince              DateTime?                @db.Timestamptz(3)
+  liveSetById            String?                  @db.Uuid
+  /// The answer test mode simulates for the next sends.
+  simulateOutcome        EInvoiceSimulatedOutcome @default(DELIVERED)
+  /// GATE-ACCOUNTANT (OFF until the accountant confirms, lead decision 11-13): the company's tax codes as data are read
+  /// (TaxCode, B-W2b-392); stamp duty is charged to the customer as an invoice line and counted per quarter (Owner
+  /// 11-13); declarations of intent are used on invoices; self-invoices TD16-TD19 are issued (B-W2b-401).
+  taxCodesOn             Boolean                  @default(false)
+  stampDutyOn            Boolean                  @default(false)
+  declarationsOfIntentOn Boolean                  @default(false)
+  selfInvoicesOn         Boolean                  @default(false)
+  version                Int                      @default(1)
+  createdAt              DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime                 @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById            String?                  @db.Uuid
+
+  company Company @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, companyId])
+}
+
+/// What test mode answers in place of SDI (FIN-096).
+enum EInvoiceSimulatedOutcome {
+  /// RC: delivered.
+  DELIVERED
+  /// NS: rejected (the office practises the correction under the same number and date).
+  REJECTED
+  /// MC: not deliverable; the invoice sits in the buyer's tax area.
+  NOT_DELIVERABLE
+}
+
+/// Our own copy of one send to SDI (FIN-097): the XML sent and SDI's signed receipts as our own fiscal-archive files, with
+/// the intermediary that held them then, so a change of intermediary loses nothing. One per send (`key` = "sdi:" and the
+/// send's id); receipts are only added. Never deleted.
+model SdiArchiveCopy {
+  id             String   @id @db.Uuid
+  tenantId       String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The invoice's company and party (the send's reference), the invoice and the send.
+  companyId      String   @db.Uuid
+  partyId        String   @db.Uuid
+  invoiceId      String   @db.Uuid
+  submissionId   String   @db.Uuid
+  /// "sdi:<the send's id>" (one copy per send).
+  key            String
+  /// The intermediary that held the send and its receipts, as named then ("Openapi", "FAKE"), one line, 1-100.
+  providerName   String
+  /// The XML sent: a FISCAL_ARCHIVE StoredFile of the invoice (usually the send's own file). Fixed.
+  xmlFileId      String   @db.Uuid
+  /// SDI's signed receipts kept so far: FISCAL_ARCHIVE StoredFiles of the company, each once; only added to.
+  receiptFileIds String[] @default([]) @db.Uuid
+  /// When the copy was last made complete (only later).
+  copiedAt       DateTime @db.Timestamptz(3)
+  version        Int      @default(1)
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById    String?  @db.Uuid
+
+  company    Company       @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  submission SdiSubmission @relation(fields: [tenantId, partyId, invoiceId, submissionId], references: [tenantId, partyId, invoiceId, id], onDelete: Restrict, onUpdate: Restrict)
+  xmlFile    StoredFile    @relation("SdiArchiveCopyXml", fields: [tenantId, xmlFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, key])
+  @@index([tenantId, invoiceId])
+}
+
+/// The monthly invoice run (FIN-068; design finance.invoices "Monthly invoice run"): a company's month, the customers
+/// picked, every deferred invoice previewed as a draft naming the run (Invoice.invoiceRunId), then issued and sent in one
+/// session. PREVIEW → ISSUED (when and by whom; no draft left in it); an ISSUED run is frozen. A PREVIEW run with no
+/// invoice may be deleted.
+model InvoiceRun {
+  id          String           @id @db.Uuid
+  tenantId    String           @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId   String           @db.Uuid
+  /// The month invoiced: its first day.
+  month       DateTime         @db.Date
+  /// The customers picked: parties of the tenant, each once, 1 to 1000.
+  partyIds    String[]         @db.Uuid
+  status      InvoiceRunStatus @default(PREVIEW)
+  /// ISSUED: when and by whom, both.
+  issuedAt    DateTime?        @db.Timestamptz(3)
+  issuedById  String?          @db.Uuid
+  version     Int              @default(1)
+  createdAt   DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime         @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?          @db.Uuid
+
+  company  Company   @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // money.prisma: the invoices it previews and issues.
+  invoices Invoice[]
+
+  // The target of the invoices' reference: the same company.
+  @@unique([tenantId, companyId, id])
+  @@index([tenantId, companyId, month])
+}
+
+/// PREVIEW → ISSUED.
+enum InvoiceRunStatus {
+  PREVIEW
+  ISSUED
+}
+
+/// What happens to a deposit when an order is cancelled (FIN-080; design finance.settings "Deposits" refund on
+/// cancellation): per company, deposit kind and who cancels, for made-to-measure orders or the others (D.Lgs. 206/2005
+/// art. 59 lett. c: no withdrawal from made-to-measure goods) or for any order, what share is kept, how the rest is paid
+/// back, and which document follows. UNVERIFIED until the accountant confirms (GATE-ACCOUNTANT): the rules are data. One
+/// ACTIVE rule per company, kind, side and order type; archived, never deleted.
+model DepositCancellationRule {
+  id            String                      @id @db.Uuid
+  tenantId      String                      @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId     String                      @db.Uuid
+  depositKind   DepositKind
+  cancelledBy   DepositCancelledBy
+  /// true: made-to-measure orders only; false: the other orders only; null: any order (a rule of either kind wins).
+  madeToMeasure Boolean?
+  /// The share of the deposit kept, percent 0 to 100: above 0 exactly for KEEP_PERCENT.
+  keepPct       Decimal                     @db.Decimal(7, 4)
+  refundRule    DepositRefundRule
+  /// The document that follows for what is paid back.
+  documentKind  DepositCancellationDocument
+  /// Words for the office, 1-500.
+  note          String?
+  status        MasterStatus                @default(ACTIVE)
+  version       Int                         @default(1)
+  createdAt     DateTime                    @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime                    @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById   String?                     @db.Uuid
+
+  company Company @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // One ACTIVE rule per company, kind, side and order type: the partial unique DepositCancellationRule_one_active of the
+  // guards migration.
+  @@index([tenantId, companyId])
+}
+
+/// Who cancels the order.
+enum DepositCancelledBy {
+  CUSTOMER
+  /// We do (the company withdraws).
+  COMPANY
+}
+
+/// How the deposit is paid back.
+enum DepositRefundRule {
+  /// All of it.
+  REFUND_ALL
+  /// The share keepPct is kept, the rest paid back (100: all kept).
+  KEEP_PERCENT
+  /// Twice the deposit (a caparra confirmatoria when we withdraw, c.c. art. 1385).
+  REFUND_DOUBLE
+}
+
+/// The document that follows for what is paid back.
+enum DepositCancellationDocument {
+  /// A credit note (TD04) of the deposit invoice (TD02) for the part paid back.
+  CREDIT_NOTE
+  /// No fiscal document (no deposit invoice was issued, or nothing is paid back).
+  NONE
+}

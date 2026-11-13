@@ -134,6 +134,8 @@ model SupplierInvoice {
   sdiFile    SupplierInvoiceFile? @relation(fields: [tenantId, companyId, partyId, sdiFileId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   claim      SupplierClaim?       @relation(fields: [tenantId, claimSiteId, partyId, claimId], references: [tenantId, siteId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   inboxItems SdiInboxItem[]
+  // W2b-6 tax.prisma (wave 49/57): the self-invoices (TD17-TD19) a foreign supplier's invoice asks for.
+  selfInvoices SelfInvoice[]
 
   // An invoice SDI delivered is recorded once: one invoice per IdentificativoSdI (the partial unique
   // SupplierInvoice_one_per_sdi_delivery of …_followups_quality_money_w2b_guards, a NULL body) and, for a file of

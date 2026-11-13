@@ -288,6 +288,7 @@
       "SERVICE_CASE": "Caso di assistenza",
       "SAFETY_REPORT": "Segnalazione di sicurezza del prodotto",
       "PROFORMA": "Fattura proforma",
+      "SELF_INVOICE": "Autofattura (TD16-TD19)",
       "PAYROLL_EXPORT": "Esportazione paghe",
       "PORTAL_REQUEST": "Richiesta d'ordine dal portale"
     },
