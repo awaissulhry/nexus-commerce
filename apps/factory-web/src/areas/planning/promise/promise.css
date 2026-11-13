@@ -1,0 +1,313 @@
+/*
+ * Planning › Promise dates (SCR-109) LAYOUT: the band, the three sections, the lines' cells, the history and week popovers,
+ * Available to promise's controls, the dialogs' parts. The controls are the design system's; this file only places them,
+ * with semantic tokens. No page max-width (Owner rule 2026-10-29): the page fills the shell's main area.
+ */
+.fw-pdt {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-pdt-head,
+.fw-pdt-section-head,
+.fw-pdt-atp-controls,
+.fw-pdt-atp-week {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-pdt-atp-controls {
+  justify-content: flex-start;
+}
+
+.fw-pdt-atp-style {
+  flex: none;
+  min-width: 0;
+}
+
+.fw-pdt-section,
+.fw-pdt-atp {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-pdt-atp-loading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+
+.fw-pdt-inline,
+.fw-pdt-cell-inline {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-pdt-nowrap {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-pdt-status {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-10);
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pdt-h2 {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-pdt-h3 {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-pdt-hint {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pdt-text {
+  margin: 0;
+}
+
+.fw-pdt-list {
+  margin: 0;
+  padding-left: var(--nds-space-16);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+/* A cell of the lines: a main line and a smaller one under it. */
+.fw-pdt-cell {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  height: 100%;
+  line-height: 1.3;
+}
+
+.fw-pdt-sub {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
+}
+
+.fw-pdt-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.fw-pdt-late {
+  color: var(--nds-danger-text);
+}
+
+.fw-pdt-link {
+  color: var(--nds-text-link);
+  text-decoration: none;
+}
+
+.fw-pdt-link:hover,
+.fw-pdt-link:focus-visible {
+  text-decoration: underline;
+}
+
+.fw-pdt-newtab {
+  display: inline-flex;
+  align-items: center;
+  color: var(--nds-text-muted);
+}
+
+.fw-pdt-newtab:hover,
+.fw-pdt-newtab:focus-visible {
+  color: var(--nds-text-link);
+}
+
+/* The triggers of the history popover (Changes) and the week popover (a cell of Available to promise). */
+.fw-pdt-trigger {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  align-items: center;
+}
+
+.fw-pdt-changes {
+  color: var(--nds-text-link);
+}
+
+.fw-pdt-num {
+  width: 100%;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-pdt-num.zero {
+  color: var(--nds-text-muted);
+}
+
+.fw-pdt-num.short {
+  color: var(--nds-danger-text);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-pdt-atp-size {
+  padding-left: var(--nds-space-12);
+}
+
+/* The popovers. */
+.fw-pdt-pop {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 260px;
+  max-width: 460px;
+}
+
+.fw-pdt-pop-sum,
+.fw-pdt-pop-head {
+  margin: 0;
+}
+
+.fw-pdt-pop-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+
+.fw-pdt-pop-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+}
+
+.fw-pdt-pop-main {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-pdt-dl {
+  display: grid;
+  grid-template-columns: max-content auto;
+  gap: var(--nds-space-2) var(--nds-space-12);
+  margin: 0;
+}
+
+.fw-pdt-dl dt {
+  color: var(--nds-text-muted);
+}
+
+.fw-pdt-dl dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The dialogs. */
+.fw-pdt-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-pdt-dialog-part {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-pdt-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--nds-space-10) var(--nds-space-16);
+}
+
+.fw-pdt-date {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 150px;
+}
+
+.fw-pdt-problem {
+  color: var(--nds-danger-text);
+  font-size: var(--nds-font-size-xs);
+}
+
+.fw-pdt-toggle {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+/* The message to the customer, as they will read it. */
+.fw-pdt-mail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  padding: var(--nds-space-10) var(--nds-space-12);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+}
+
+.fw-pdt-mail-body {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+/* The calculator's answer. */
+.fw-pdt-answer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-pdt-answer-day {
+  font-size: var(--nds-font-size-lg);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-pdt-details summary {
+  cursor: pointer;
+  color: var(--nds-text-link);
+}
+
+@media print {
+  .fw-pdt-head .fw-pdt-inline {
+    display: none;
+  }
+}

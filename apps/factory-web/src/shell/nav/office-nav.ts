@@ -184,9 +184,14 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/planning/settings/calendar-print',
   // B-W2b-263: Time & action (SCR-253).
   '/planning/milestones',
+  // B-W2b-336: Planning › Dates › Promise dates (SCR-109).
+  '/planning/promise',
   // B-W2b-339: Planning › Long range › Demand & forecast (SCR-374) and Master schedule & S&OP (SCR-202).
   '/planning/demand',
   '/planning/mps',
+  // B-W2b-349: Planning reports (SCR-254) and their print view (SCR-409, a new tab).
+  '/planning/reports',
+  '/planning/reports/print',
   // B-W1-32 part 2: Receipts (SCR-063), receiving against a PO with lots and hides one by one (SCR-061/062), a receipt.
   '/warehouse/receipts',
   '/warehouse/receipts/new',

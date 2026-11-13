@@ -76,6 +76,8 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   TransferOrder: '/warehouse/transfers/[id]',
   // B-W2b-327: an adjustment waiting for a yes (the STOCK_ADJUSTMENT request's subject) opens Movements' Waiting for approval.
   StockAdjustment: '/warehouse/moves?waiting=[id]',
+  // B-W2b-320: a substitute asked for a work order's line (Home › Approvals' subject): Picking's substitutes, that one first.
+  MaterialSubstitution: '/warehouse/picking?substitution=[id]',
   // Compliance › PPE register & recalls (SCR-113).
   PpeRegisterEntry: '/compliance/register/[id]',
   // B-W2b-271: a recall or withdrawal of a register entry (SCR-328).
@@ -333,6 +335,12 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/planning/demand': '/planning/demand',
   '/planning/demand/rows': '/planning/demand',
   '/planning/strategy': '/planning/mps',
+  // B-W2b-336: the promise list and its re-promises (SCR-109, `?site=` `?tile=` `?risk=` `?q=`), available to promise (`?style=`)
+  // and the supply-too-late tile of the exceptions (SCR-125).
+  '/planning/promises': '/planning/promise',
+  '/planning/promises/re-promises': '/planning/promise',
+  '/planning/promise/atp': '/planning/promise',
+  '/planning/exceptions/supply-late': '/planning/exceptions',
   // B-W2a-53: the plant's lists (the requests queue reads `?tile=`, the jobs `?view=`, the machines `?view=` and `?q=`).
   '/plant/requests': '/plant/requests',
   '/plant/jobs': '/plant/jobs',

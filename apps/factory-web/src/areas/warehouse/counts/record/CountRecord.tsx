@@ -43,6 +43,9 @@ import { CountsMessages } from '../parts'
 import type { CellSave, CountRecordModel, FoundDraft, FoundModel, LinesPart, Loaded, Notice, PlaceChoice, RecordDialog } from '../view-model'
 import { RecordPanels } from '../../../../record-panels/RecordPanels'
 import { CountRecordView } from './view/CountRecordView'
+// B-W2b-320: the places the count blocks (conn "Locations (blocked during a count)").
+import { blockedPlaces, type BlockedPlace } from '../depth/api'
+import { placesOfCount } from '../depth/model'
 
 /**
  * The count record container (`/w/<company>/warehouse/counts/<id>?tab=lines|differences|approval`, SCR-132 record):
@@ -119,6 +122,18 @@ function CountRecordContainer({ countId }: { countId: string }) {
       .then(setPlaces)
       .catch(() => setPlaces(null))
   }, [api, can.view, countId])
+
+  // B-W2b-320: the places this count blocks now (B-W2b-289's blocked places of its site; inventory.locations.view).
+  const [blocked, setBlocked] = useState<BlockedPlace[] | null>(null)
+  const countSite = record.status === 'ready' ? record.value.site.id : null
+  const countNumber = record.status === 'ready' ? record.value.number : null
+  const countStatus = record.status === 'ready' ? record.value.status : null
+  useEffect(() => {
+    if (!can.locations || !countSite || !countNumber) return
+    blockedPlaces(api, countSite)
+      .then((rows) => setBlocked(placesOfCount(rows, countNumber)))
+      .catch(() => setBlocked(null))
+  }, [api, can.locations, countSite, countNumber, countStatus])
 
   const load = useCallback(async () => {
     if (!can.view) {
@@ -527,6 +542,7 @@ function CountRecordContainer({ countId }: { countId: string }) {
     notice,
     now: new Date().toISOString(),
     places,
+    blocked,
   }
   // B-W2b-15: the count's thread, files and history (Activity), of its company and site.
   const panels = value && can.threads ? <RecordPanels record={{ type: 'StockCount', id: value.id, companyId: value.companyId, siteId: value.site.id }} title={value.number} /> : null

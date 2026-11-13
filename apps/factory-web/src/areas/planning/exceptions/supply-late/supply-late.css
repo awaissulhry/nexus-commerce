@@ -1,0 +1,101 @@
+/*
+ * Supply too late's fixes in the exception's DetailModal (SCR-125, B-W2b-336) LAYOUT: the four fixes, one entry per record they
+ * point to. The controls are the design system's; this file only places them, with semantic tokens.
+ */
+.fw-psl {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-psl-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-6) var(--nds-space-12);
+}
+
+.fw-psl-inline {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-psl-h3 {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-psl-hint,
+.fw-psl-sub {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-psl-sub {
+  font-size: var(--nds-font-size-xs);
+}
+
+.fw-psl-text {
+  min-width: 0;
+}
+
+.fw-psl-fixes {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+}
+
+.fw-psl-fix {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  padding-bottom: var(--nds-space-8);
+  border-bottom: 1px solid var(--nds-border-subtle);
+}
+
+.fw-psl-fix:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.fw-psl-fix-head {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-psl-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+
+.fw-psl-entry {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-4) var(--nds-space-10);
+}
+
+.fw-psl-link {
+  color: var(--nds-text-link);
+  text-decoration: none;
+}
+
+.fw-psl-link:hover,
+.fw-psl-link:focus-visible {
+  text-decoration: underline;
+}

@@ -15,6 +15,10 @@ import { LIST_VIEWS, TILES, type ListView } from '../../model'
 import { CountsMessages, KeysModal, KindTag, Money, NoCountsAccess, say, scopeText, StatusPill, useWords } from '../../parts'
 import type { CountsListActions, CountsListModel } from '../../view-model'
 import { NewCountDialog } from './NewCountDialog'
+// B-W2b-320: Count schedule (page.h), the "Due this week" tile (cn-metrics), Due counts (cn-schedule).
+import { CalendarClock } from 'lucide-react'
+import { DUE_SECTION_ID, DueCounts, useCountsDepthWords } from '../../depth/view/DueCounts'
+import { ScheduleDialog } from '../../depth/view/ScheduleDialog'
 
 export type { CountsListActions, CountsListModel } from '../../view-model'
 
@@ -35,6 +39,7 @@ export function CountsListView({ model, actions }: { model: CountsListModel; act
 
 function CountsList({ model, actions }: { model: CountsListModel; actions?: CountsListActions }) {
   const t = useWords()
+  const { t: td } = useCountsDepthWords()
   const locale = useLocale()
   const place = { locale, timeZone: model.timeZone }
   const [query, setQuery] = useState(model.q)
@@ -261,7 +266,14 @@ function CountsList({ model, actions }: { model: CountsListModel; actions?: Coun
           {' · '}
           {t(`stock:live.${model.live}`)}
         </span>
-        {newButton}
+        <span className="fw-st-actions">
+          {model.schedules && (
+            <Button size="sm" onClick={() => actions?.schedules?.onSchedules?.(true)}>
+              <CalendarClock size={14} aria-hidden /> {td('cd.schedule.open')}
+            </Button>
+          )}
+          {newButton}
+        </span>
       </div>
 
       {model.notice && (
@@ -279,14 +291,33 @@ function CountsList({ model, actions }: { model: CountsListModel; actions?: Coun
       )}
 
       <MetricStrip
-        metrics={TILES.map((tile) => ({
-          label: t(`tile.${tile.id}`),
-          value: model.tiles ? String(tile.count(model.tiles)) : '—',
-          hint: t(`tileHint.${tile.id}`),
-          onClick: () => actions?.onView?.(model.view === tile.view ? 'open' : tile.view),
-          active: tileView === tile.view,
-        }))}
+        metrics={[
+          // B-W2b-320 (cn-metrics "Due this week (W2b)"): the schedules due this week; it takes the focus to Due counts.
+          ...(model.schedules
+            ? [
+                {
+                  label: td('cd.due.tile'),
+                  value: model.schedules.due.value ? String(model.schedules.due.value.tiles.dueThisWeek) : '—',
+                  hint: model.schedules.due.value ? td('cd.due.tileHint', { overdue: model.schedules.due.value.tiles.overdue, today: model.schedules.due.value.tiles.dueToday }) : td('cd.due.tileHintNone'),
+                  onClick: () => {
+                    const heading = document.getElementById(DUE_SECTION_ID)
+                    heading?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+                    heading?.focus({ preventScroll: true })
+                  },
+                  active: false,
+                },
+              ]
+            : []),
+          ...TILES.map((tile) => ({
+            label: t(`tile.${tile.id}`),
+            value: model.tiles ? String(tile.count(model.tiles)) : '—',
+            hint: t(`tileHint.${tile.id}`),
+            onClick: () => actions?.onView?.(model.view === tile.view ? 'open' : tile.view),
+            active: tileView === tile.view,
+          })),
+        ]}
       />
+      {model.schedules && <DueCounts model={model.schedules} can={model.can} prefix={model.prefix} timeZone={model.timeZone} actions={actions?.schedules} />}
 
       <ListFrame<CountRow>
         label={t('list.tableLabel')}
@@ -315,6 +346,7 @@ function CountsList({ model, actions }: { model: CountsListModel; actions?: Coun
       <p className="fw-cn-hint">{t(model.can.cost ? 'list.footCost' : 'list.foot')}</p>
 
       {model.newCount && <NewCountDialog model={model.newCount} sites={model.sites} can={model.can} actions={actions} />}
+      {model.schedules?.dialog && <ScheduleDialog model={model.schedules.dialog} can={model.can} sites={model.sites} places={model.schedulePlaces ?? null} timeZone={model.timeZone} actions={actions?.schedules} />}
       {help && <KeysModal own={ownKeys} onClose={() => setHelp(false)} />}
     </div>
   )

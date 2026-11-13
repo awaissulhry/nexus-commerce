@@ -227,6 +227,8 @@ import { QUALIFICATION_DEFINITIONS, QUALIFICATION_PERMISSIONS } from '../../purc
 import { PLANNING_STRATEGY_DEFINITIONS, PLANNING_STRATEGY_PERMISSIONS } from '../../planning/strategy/permissions'
 // B-W2b-350: purchasing reports (purchasing.reports.view: spend and late lines; each figure also purchasing.view).
 import { PURCHASING_REPORTS_DEFINITIONS, PURCHASING_REPORTS_PERMISSIONS } from '../../purchasing/reports/permissions'
+// B-W2b-349: planning reports (planning.reports.view: adherence, utilisation, material cover; each figure also planning.view).
+import { PLANNING_REPORTS_DEFINITIONS, PLANNING_REPORTS_PERMISSIONS } from '../../planning/reports/permissions'
 // B-W2b-299: counts in depth (inventory.counts.scan: count by scanning every unit, shared with the floor).
 import { INVENTORY_COUNTS_DEPTH_DEFINITIONS, INVENTORY_COUNTS_DEPTH_FLOOR_PERMISSIONS, INVENTORY_COUNTS_DEPTH_PERMISSIONS } from '../../inventory/counts-depth/permissions'
 // B-W2b-306: MRP you can trust (planning.actions.manage: action messages; planning.planned.edit: protected edits, bulk edit).
@@ -974,6 +976,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PLANNING_STRATEGY_DEFINITIONS,
   // B-W2b-350: purchasing reports (area `purchasing`, declared above).
   PURCHASING_REPORTS_DEFINITIONS,
+  // B-W2b-349: planning reports (area `planning`, declared above).
+  PLANNING_REPORTS_DEFINITIONS,
   // B-W2b-299: counts in depth (area `inventory`).
   INVENTORY_COUNTS_DEPTH_DEFINITIONS,
   // B-W2b-304: credit limits (area `sales`).
@@ -1330,6 +1334,8 @@ for (const name of [...BANK_PERMISSIONS, ...QUALIFICATION_PERMISSIONS]) if (!FAC
 for (const name of PORTAL_BANK_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.partner !== true) throw new Error(`${name} is a partner permission but not declared as one`)
 // B-W2b-350: purchasing reports.
 for (const name of PURCHASING_REPORTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-349: planning reports.
+for (const name of PLANNING_REPORTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-299: counts in depth.
 for (const name of INVENTORY_COUNTS_DEPTH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-304: credit limits.

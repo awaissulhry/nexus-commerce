@@ -198,7 +198,11 @@ export const OFFICE: readonly TreeArea[] = [
         label: 'Dates',
         labelIt: 'Date',
         hideLabel: false,
-        pages: [{ id: 'planning.milestones', title: 'Time & action', titleIt: 'Calendario T&A', wave: 'W2b', href: '/planning/milestones' }],
+        pages: [
+          // W2b: B-W2b-336 Promise dates (SCR-109), first in the group (the design's order).
+          { id: 'planning.promise', title: 'Promise dates', titleIt: 'Date promesse', wave: 'W2b', href: '/planning/promise' },
+          { id: 'planning.milestones', title: 'Time & action', titleIt: 'Calendario T&A', wave: 'W2b', href: '/planning/milestones' },
+        ],
       },
       // W2b: B-W2b-339 Demand & forecast (SCR-374) and Master schedule & S&OP (SCR-202), the design's group "Long range".
       {
@@ -210,6 +214,8 @@ export const OFFICE: readonly TreeArea[] = [
           { id: 'planning.mps', title: 'Master schedule & S&OP', titleIt: 'Piano principale e S&OP', wave: 'W2b', href: '/planning/mps' },
         ],
       },
+      // W2b: B-W2b-349 Planning reports (SCR-254), the design's group "Reports", before Settings.
+      { label: 'Reports', labelIt: 'Report', hideLabel: false, pages: [{ id: 'planning.reports', title: 'Planning reports', titleIt: 'Report pianificazione', wave: 'W2b', href: '/planning/reports' }] },
       // W2a: B-W2a-59 Planning settings (SCR-124, SCR-127).
       {
         label: 'Settings',

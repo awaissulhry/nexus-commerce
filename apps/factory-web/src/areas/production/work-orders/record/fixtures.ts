@@ -5,6 +5,8 @@ import { bundlesOf, canOf, cutLogOf, FINAL, inShell, panels, panelsModel, PICK, 
 import { PART_LOADING, type WorkOrderRecordModel } from './record-model'
 import { AVAILABILITY, DAILY_ROLE_OF, dailyFor, heldWorkOrder, HOLD, HOLD_RECORD, releaseCheckW2a } from '../daily/demo/fixtures'
 import { WorkOrderRecordView } from './view/WorkOrderRecordView'
+// B-W2b-320: Materials › Substitute… (made-up).
+import { BOM_LINES, dialogModel as subDialog, SUB_CAN } from '../../../warehouse/picking/substitute/demo/fixtures'
 import { LABOUR, labourAs, NO_OFF_STANDARD } from '../labour/fixtures'
 import type { SplitModel } from '../every-shift/use-split'
 // B-W2b-130: Materials › Leather (the one shade lot rule), made-up.
@@ -192,5 +194,9 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'w2b-leather-error', label: 'W2b · Leather: the read failed, with Try again', model: recordCase('manager', 'IN_PROGRESS', { tab: 'materials', leather: { value: null, problem: 'error.offline' } }) },
     { id: 'w2b-leather-sales', label: 'W2b · Sales (read-only): the leather’s shade lots, no pick list', model: recordCase('sales', 'IN_PROGRESS', { tab: 'materials' }) },
     { id: 'w2b-minutes-no-cost', label: 'W2b · Minutes without the cost grain: the minutes stay, the cost says why not', model: recordCase('manager', 'IN_PROGRESS', { tab: 'labour', labour: labourAs('manager', LABOUR) }) },
+    // B-W2b-320: Materials › Substitute… opens the warehouse's Use a substitute (made-up).
+    { id: 'w2b-320-substitute', label: 'B-W2b-320 · Materials › Substitute… (the warehouse’s Use a substitute)', model: recordCase('manager', 'IN_PROGRESS', { tab: 'materials', substitute: { can: SUB_CAN, status: 'IN_PROGRESS', dialog: null } }) },
+    { id: 'w2b-320-substitute-open', label: 'B-W2b-320 · Substitute…: pick the BOM line first, then its choices', model: recordCase('manager', 'IN_PROGRESS', { tab: 'materials', substitute: { can: SUB_CAN, status: 'IN_PROGRESS', dialog: subDialog({ lines: { value: BOM_LINES, problem: null }, bomLineId: BOM_LINES[0]!.bomLineId }) } }) },
+    { id: 'w2b-320-substitute-held', label: 'B-W2b-320 · Substitute… held: a draft work order', model: draft('manager', 'blocked', { tab: 'materials', substitute: { can: SUB_CAN, status: 'DRAFT', dialog: null } }) },
   ],
 })
