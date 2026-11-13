@@ -136,6 +136,9 @@ model SupplierInvoice {
   inboxItems SdiInboxItem[]
   // W2b-6 tax.prisma (wave 49/57): the self-invoices (TD17-TD19) a foreign supplier's invoice asks for.
   selfInvoices SelfInvoice[]
+  // W2b-6 bank.prisma (schema wave 50/57): the bank lines matched to it, the payment proposal lines that pay it.
+  bankMatches          BankMatch[]
+  paymentProposalLines PaymentProposalLine[]
 
   // An invoice SDI delivered is recorded once: one invoice per IdentificativoSdI (the partial unique
   // SupplierInvoice_one_per_sdi_delivery of …_followups_quality_money_w2b_guards, a NULL body) and, for a file of
@@ -367,6 +370,10 @@ model PayablesSettings {
   sdiApproverIds            String[]              @default([]) @db.Uuid
   /// The extra separation of duties: true: whoever accepted a difference of an invoice does not approve it.
   accepterMayNotApprove     Boolean?
+  /// W2b-6 (schema wave 50/57, B-W2b-370; B-W2b-403's remittance advice): the company's switch: a remittance advice is
+  /// e-mailed to the supplier when it is paid only while true (OFF by default: nothing reaches a supplier by itself; FAKE
+  /// mail until the mail domain).
+  remittanceMailOn          Boolean               @default(false)
   version                   Int                   @default(1)
   createdAt                 DateTime              @default(now()) @db.Timestamptz(3)
   updatedAt                 DateTime              @default(now()) @updatedAt @db.Timestamptz(3)
