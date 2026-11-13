@@ -7,7 +7,8 @@ import { decimalValue } from '../../../_shared/stock/model'
  * speak (`warehouse-lots`, beside the shared `stock`).
  */
 
-export const LOTS_NAMESPACES = ['stock', 'lists', 'records', 'warehouse-lots'] as const
+// B-W2b-320: `warehouse-lots-counts` holds the W2b parts' words (Lifecycle, split, trace report).
+export const LOTS_NAMESPACES = ['stock', 'lists', 'records', 'warehouse-lots', 'warehouse-lots-counts'] as const
 
 /** A part a screen reads: loading, there, failed (its words, a key of `stock`), gone, or not this person's. */
 export type Loaded<T> = { status: 'loading' } | { status: 'ready'; value: T } | { status: 'error'; problem: string } | { status: 'not_found' } | { status: 'forbidden' }

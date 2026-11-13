@@ -1,0 +1,39 @@
+/*
+ * B-W2b-320 — Warehouse › Lots & traceability, the W2b parts' LAYOUT (the attributes form, Split into shade groups, the
+ * trace report): the dialogs' column, their forms (as many columns as fit), a split group's row. The controls are the
+ * design system's; semantic tokens only. No page max-width (Owner rule 2026-10-29).
+ */
+.fw-ld-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-ld-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: var(--nds-space-12) var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-ld-form .wide {
+  grid-column: 1 / -1;
+}
+
+/* A group of the split: its shade group or label, how many hides, the child lot it becomes, Remove. */
+.fw-ld-group {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.2fr) minmax(160px, 1fr) minmax(140px, 1fr) auto;
+  align-items: end;
+  gap: var(--nds-space-8) var(--nds-space-12);
+  min-width: 0;
+  padding-block: var(--nds-space-6);
+  border-bottom: 1px solid var(--nds-border-subtle);
+}
+
+@media (max-width: 720px) {
+  .fw-ld-group {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

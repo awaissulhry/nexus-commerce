@@ -1,0 +1,349 @@
+{
+  "common": {
+    "loading": "Reading…",
+    "retry": "Try again"
+  },
+  "problem": {
+    "read": "The report could not be read. Try again in a moment.",
+    "forbidden": "This report is not in your role.",
+    "offline": "No answer from the server: you may be offline.",
+    "gone": "This site is not there any more."
+  },
+  "noAccess": {
+    "title": "Planning reports are not in your role",
+    "body": "Ask an administrator for the planning reports permission (planner, production manager or buyer)."
+  },
+  "noSite": {
+    "title": "No site to report on",
+    "body": "Planning works per site, and none of this company's sites is in your role.",
+    "notPlanned": "These reports read a site's plan: you need the permission to see planning as well."
+  },
+  "band": {
+    "label": "Report actions",
+    "reading": "Reading…",
+    "arrange": "Arrange",
+    "print": "Print",
+    "more": "More report actions",
+    "monthly": "E-mail me this every month",
+    "monthlyHeld": "Not yet: report e-mails come with the report subscriptions in a later wave.",
+    "csv": {
+      "adherence": "Export schedule adherence (CSV)",
+      "utilisation": "Export the utilisation trend (CSV)",
+      "cover": "Export material cover (CSV)"
+    },
+    "csvHeld": "Held until the panel has been read.",
+    "keys": "Keyboard shortcuts"
+  },
+  "live": {
+    "connecting": "Connecting",
+    "live": "Live",
+    "offline": "Offline: figures may be old"
+  },
+  "scope": {
+    "label": "What the report covers",
+    "period": "Work finished and earned from {from} to {to}",
+    "oneSite": "Showing {site}",
+    "oneSiteBody": "Planning works per site: the top bar says all sites, so the first one is shown. Pick another site in the top bar."
+  },
+  "section": {
+    "adherence": "Schedule adherence",
+    "utilisation": "Utilisation trend",
+    "cover": "Material cover"
+  },
+  "keys": {
+    "title": "Keyboard shortcuts",
+    "arrange": "Arrange panels",
+    "print": "Print view (new tab)",
+    "bar": "Open the work orders behind a focused week, cell or point",
+    "nextBar": "In the work orders behind a bar: the next or the previous week",
+    "help": "This list"
+  },
+  "adherence": {
+    "hint": "Work orders finished from {from} to {to}, against the plan the floor had when each one started.",
+    "line": "Line",
+    "allLines": "All lines",
+    "noLine": "Not on a line",
+    "all": "All lines",
+    "axes": "Weeks across; % on time on the left, work orders finished on the right.",
+    "failed": "Couldn't load schedule adherence",
+    "empty": "No finished work orders in this period",
+    "emptyHint": "A work order counts here in the week it was completed. Pick a longer period or another site.",
+    "kv": {
+      "onTime": "On time",
+      "onTimeHint": "{onTime} of {planned} measured against a plan",
+      "finished": "Finished",
+      "allPlanned": "Every one was on a plan",
+      "notPlanned_one": "{count} was on no plan: counted apart",
+      "notPlanned_other": "{count} were on no plan: counted apart",
+      "late": "Late",
+      "meanFinish": "Finished {days} days from plan on average",
+      "startedLate": "Started late",
+      "meanStart": "Started {days} days from plan on average"
+    },
+    "chartLabel": "Schedule adherence by week: {line}",
+    "series": {
+      "onTime": "On time",
+      "finished": "Finished"
+    },
+    "axis": {
+      "onTime": "On time (%)",
+      "finished": "Work orders finished"
+    },
+    "caption": "The line is the share finished on or before the day of their last bar on the plan; the bars count the work orders finished that week. A week with nothing measured has no point.",
+    "weeksLabel": "The weeks: each opens the work orders behind it",
+    "weekOpen": "Open the work orders finished in {week}",
+    "weekNone": "None finished",
+    "cell": "{onTime} of {planned} on time",
+    "cellUnplanned_one": "{count} on no plan",
+    "cellUnplanned_other": "{count} on no plan",
+    "cellOpen": "Open the work orders behind {line}, {week}",
+    "tableLabel": "Schedule adherence per line and week",
+    "col": {
+      "line": "Line",
+      "period": "Period"
+    },
+    "state": {
+      "ON_TIME": "On time",
+      "LATE": "Late",
+      "NOT_PLANNED": "On no plan"
+    },
+    "definition": "Planned: the first bar's start and the last bar's end of the work order on the version the floor had when its work started (else the first version with it, else the working plan). Actual: its first recorded work and its completion. Days are the site's days; a later replan never moves the goalposts.",
+    "incomplete": "More than 5,000 work orders finished in this period: the first 5,000 are counted.",
+    "printTotals": "{late} late, {notPlanned} on no plan; finished {days} days from plan on average.",
+    "csv": {
+      "line": "Line",
+      "week": "Week",
+      "finished": "Finished",
+      "planned": "On a plan",
+      "onTime": "On time",
+      "late": "Late",
+      "notPlanned": "On no plan",
+      "onTimePct": "On time (%)",
+      "meanFinish": "Mean finish (days)",
+      "meanStart": "Mean start (days)"
+    }
+  },
+  "utilisation": {
+    "hint_one": "What happened from {from} to {to}, and the plan's load for this week ({count} week ahead).",
+    "hint_other": "What happened from {from} to {to}, and the plan's load for {count} weeks from this one.",
+    "hintPast": "What happened from {from} to {to}; no load ahead.",
+    "lane": "Lane on the chart",
+    "laneKind": {
+      "PLANT": "Plant",
+      "LINE": "Line",
+      "WORK_CENTRE": "Work centre",
+      "WORKSHOP": "Workshop"
+    },
+    "plant": "The whole plant",
+    "kind": {
+      "CUTTING": "cutting",
+      "SEWING": "sewing",
+      "ASSEMBLY": "assembly",
+      "FINISHING": "finishing",
+      "INSPECTION": "inspection",
+      "PACKING": "packing",
+      "SUBCONTRACT": "subcontracting"
+    },
+    "ahead": "Weeks of load ahead",
+    "aheadNone": "No load ahead",
+    "aheadWeeks_one": "{count} week ahead",
+    "aheadWeeks_other": "{count} weeks ahead",
+    "axes": "Weeks across; utilisation on the left, the plan's load on the right.",
+    "failed": "Couldn't load utilisation trend",
+    "empty": "No load in this period",
+    "emptyHint": "Nothing was earned on the lines and work centres in the period and nothing is booked ahead.",
+    "chartLabel": "Utilisation and load by week: {lane}",
+    "series": {
+      "used": "Utilisation",
+      "load": "Load"
+    },
+    "axis": {
+      "used": "Utilisation (%)",
+      "load": "Load (%)"
+    },
+    "caption": "The line is what happened (earned standard minutes over the minutes its people were there); the bars are the plan's load (booked over capacity, as Capacity & load counts it).",
+    "yardstick": "Its planned efficiency is {pct}.",
+    "weeksLabel": "The weeks of {lane}: each opens the work orders behind it",
+    "weekOpen": "Open the work orders behind {lane}, {week}",
+    "used": "Used {pct}",
+    "load": "Load {pct}",
+    "noCapacity": "No capacity set",
+    "band": {
+      "LOW": "Low",
+      "MEDIUM": "Medium",
+      "HIGH": "High",
+      "OVER": "Over capacity",
+      "UNKNOWN": "Nothing available"
+    },
+    "cellOpen": "Open the work orders behind {lane}, {week}",
+    "workshopHeld": "A workshop's weeks open on Capacity & load.",
+    "openCapacity": "Open Capacity & load",
+    "tableLabel": "Utilisation and load per lane and week",
+    "col": {
+      "lane": "Lane",
+      "ahead": "ahead"
+    },
+    "definition": "Utilisation: the standard minutes of the good whole garments reported on the lane's stations that week (never per person or station), over its people × its working time. Load: the open work orders' minutes still to do, placed by the board, over the lane's capacity at its planned efficiency.",
+    "workshopPast": "A workshop's past weeks say nothing: its jobs are what is left from today.",
+    "csv": {
+      "lane": "Lane",
+      "week": "Week",
+      "earned": "Earned (min)",
+      "available": "Present (min)",
+      "used": "Utilisation (%)",
+      "booked": "Booked",
+      "capacity": "Capacity",
+      "load": "Load (%)",
+      "unit": "Unit"
+    }
+  },
+  "cover": {
+    "hint": "What the site's plan needs from {from} to {to}, the soonest to run out first.",
+    "hintWeeks_one": "What the site's plan needs in the next {count} week.",
+    "hintWeeks_other": "What the site's plan needs in the next {count} weeks.",
+    "horizon": "Horizon",
+    "weeks_one": "{count} week",
+    "weeks_other": "{count} weeks",
+    "failed": "Couldn't load material cover",
+    "empty": "No material has demand in this horizon",
+    "emptyHint": "No order of this site needs material in these weeks, and no material is below its safety stock.",
+    "counts": "{shortNow} short now · {stockOut} running out in the horizon · {belowSafety} below safety stock · {covered} covered",
+    "count_one": "{count} material",
+    "count_other": "{count} materials",
+    "countAtLeast_one": "At least {count} material",
+    "countAtLeast_other": "At least {count} materials",
+    "more_one": "{count} more material is counted above but not listed.",
+    "more_other": "{count} more materials are counted above but not listed.",
+    "col": {
+      "material": "Material",
+      "cover": "Days of cover",
+      "when": "Stock-out date",
+      "stock": "On hand and needs",
+      "purchases": "Open POs",
+      "more": "More"
+    },
+    "action": {
+      "BUY": "bought",
+      "MAKE": "made"
+    },
+    "days_one": "{count} day",
+    "days_other": "{count} days",
+    "beyond_one": "More than {count} day",
+    "beyond_other": "More than {count} days",
+    "state": {
+      "SHORT_NOW": "Short now",
+      "STOCK_OUT": "Runs out",
+      "BELOW_SAFETY": "Below safety stock",
+      "COVERED": "Covered"
+    },
+    "stockOutOn": "Runs out on {day}",
+    "noStockOut": "Not in the horizon",
+    "belowSafetyOn": "Below safety stock on {day}",
+    "aboveSafety": "Stays above its safety stock",
+    "noSafety": "No safety stock set",
+    "onHand": "On hand {quantity}",
+    "needs": "Needs {demand}; {receipts} coming",
+    "noPurchases": "No open purchase order",
+    "purchases_one": "{count} order, {quantity} to come",
+    "purchases_other": "{count} orders, {quantity} to come",
+    "nextDue": "Next due {day}:",
+    "menu": "Actions for {material}",
+    "draft": "Draft PO",
+    "openMaterial": "Open the material",
+    "openPo": "Open {number}",
+    "openPoNone": "Open the next purchase order",
+    "exportSelected_one": "Export {count} material (CSV)",
+    "exportSelected_other": "Export {count} materials (CSV)",
+    "exportHeld": "Select the materials to export first.",
+    "definition": "Projected stock: the usable stock on hand plus the open purchase lines (and a firm planned order) on their due day, less what the orders still need on the day each needs it, nothing more ordered — the item profile's numbers (What to buy & make › Projected stock). The stock-out date is the first day it falls below zero; days of cover count the days until then.",
+    "csv": {
+      "code": "Code",
+      "name": "Material",
+      "colour": "Colour",
+      "unit": "Unit",
+      "onHand": "On hand",
+      "safety": "Safety stock",
+      "demand": "Needed in horizon",
+      "receipts": "Coming (open POs, firm planned orders)",
+      "days": "Days of cover",
+      "stockOut": "Stock-out date",
+      "belowSafety": "Below safety stock on",
+      "state": "State",
+      "orders": "Open POs",
+      "onOrder": "Quantity on order",
+      "nextDue": "Next due"
+    }
+  },
+  "draft": {
+    "heldRight": "Draft PO needs the right to manage purchase orders.",
+    "heldMake": "This material is made, not bought: its planned work is on What to buy & make.",
+    "heldNothing": "Nothing is left to order: the open purchase lines and stock cover it."
+  },
+  "drill": {
+    "title": "Work orders behind this bar",
+    "subtitle": "{name} · {when}",
+    "wholePeriod": "the whole period",
+    "failed": "Couldn't load the work orders behind this bar",
+    "empty": "No work order behind this bar",
+    "emptyHint": "Nothing makes this number: pick another week or line.",
+    "tableLabel": "The work orders behind this bar",
+    "col": {
+      "workOrder": "Work order",
+      "style": "Style",
+      "line": "Line",
+      "planned": "Planned start – finish",
+      "actual": "Actual start – finish",
+      "plannedStart": "Planned start",
+      "plannedFinish": "Planned finish",
+      "actualStart": "Actual start",
+      "actualFinish": "Actual finish",
+      "startDays": "Start (days)",
+      "finishDays": "Finish (days)",
+      "state": "State",
+      "operation": "Operation",
+      "lane": "Lane",
+      "garments": "Garments",
+      "pieces": "Garments to do",
+      "minutes": "Minutes",
+      "placedBy": "Placed by",
+      "part": "Part"
+    },
+    "version": "Version {number}",
+    "working": "Working plan (never published)",
+    "notPlanned": "On no plan",
+    "operation": "Op {seq} {name}",
+    "placedBy": {
+      "SLOT": "The board",
+      "DUE_DATE": "Its due date"
+    },
+    "earnedTitle": "Earned: {minutes}",
+    "earnedNone": "Nothing was earned here in the period's days of this week.",
+    "bookedTitle": "Booked ahead: {minutes}",
+    "bookedNone": "Nothing is booked here this week.",
+    "more_one": "{count} more row is counted but not listed.",
+    "more_other": "{count} more rows are counted but not listed.",
+    "keys": "J and K open the next and the previous week of the same line or lane.",
+    "previous": "Previous week",
+    "next": "Next week",
+    "first": "This is the first week of the period.",
+    "last": "This is the last week of the period.",
+    "noWeeks": "This shows the whole period: there is no other week to move to.",
+    "export": "Export (CSV)",
+    "exportHeld": "Held until there are work orders to export.",
+    "openList": "Open the list",
+    "openHeld": "The work orders list takes no \"finished in this week on this line\" filter yet: each work order above opens its own page.",
+    "openCapacity": "Open Capacity & load"
+  },
+  "print": {
+    "title": "Planning reports",
+    "site": "Site",
+    "period": "Period",
+    "ahead": "Load ahead",
+    "horizon": "Material horizon",
+    "back": "Back to the report",
+    "held": "Held until every part has been read.",
+    "failed": "A part of the report could not be read",
+    "coverMore_one": "The first {count} material is printed: the report on screen lists the rest.",
+    "coverMore_other": "The first {count} materials are printed: the report on screen lists the rest."
+  }
+}

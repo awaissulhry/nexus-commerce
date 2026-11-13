@@ -58,6 +58,11 @@ import { daySheetsPaper, daySheetsPdf } from './schedule-log/day-sheets'
 import { changes } from './schedule-log/feed'
 import { undoChange } from './schedule-log/undo'
 import { versionBoard } from './schedule-log/version-board'
+// B-W2b-349: planning reports (./reports) — schedule adherence, the utilisation trend, material cover, the work orders behind a figure.
+import { adherenceAnswer, adherenceWorkOrdersAnswer } from './reports/adherence'
+import { adherenceContract, adherenceWorkOrdersContract, coverContract, utilisationContract, utilisationWorkOrdersContract } from './reports/contract'
+import { coverAnswer } from './reports/cover'
+import { utilisationAnswer, utilisationWorkOrdersAnswer } from './reports/utilisation'
 import { inlineDisposition } from '../production/work-orders/traveller'
 // B-W2b-132: the leather and cut plan (need per order with one shade's answer, certified protectors, yield and the cutting loss).
 import { acceptLossContract, dismissLossContract, needContract, protectorsContract, yieldContract } from './leather/contract'
@@ -319,4 +324,12 @@ export default defineRoutes('planning', manifest, async (app) => {
   app.patch('/planning/planned-orders/:plannedOrderId', { schema: editPlannedOrderContract }, async (request) => editPlannedOrder(request, request.params.plannedOrderId, request.body, idempotencyKeyFrom(request)))
   app.post('/planning/planned-orders/:plannedOrderId/reset', { schema: resetPlannedOrderContract }, async (request) => resetPlannedOrder(request, request.params.plannedOrderId, request.body, idempotencyKeyFrom(request)))
   app.post('/planning/requirements/:requirementId/order-specific', { schema: pegRequirementContract }, async (request) => pegRequirement(request, request.params.requirementId, request.body, idempotencyKeyFrom(request)))
+  // B-W2b-349 (PLN-202, PLN-204, PLN-207): planning reports (./reports; SCR-254) — schedule adherence per line and week, the
+  // utilisation trend per line, the plant and workshop, the material cover with projected stock-outs, and the work orders behind
+  // a bar or a point (pop drill). Read only.
+  app.get('/planning/reports/adherence', { schema: adherenceContract }, async (request) => adherenceAnswer(request, request.query))
+  app.get('/planning/reports/adherence/work-orders', { schema: adherenceWorkOrdersContract }, async (request) => adherenceWorkOrdersAnswer(request, request.query))
+  app.get('/planning/reports/utilisation', { schema: utilisationContract }, async (request) => utilisationAnswer(request, request.query))
+  app.get('/planning/reports/utilisation/work-orders', { schema: utilisationWorkOrdersContract }, async (request) => utilisationWorkOrdersAnswer(request, request.query))
+  app.get('/planning/reports/cover', { schema: coverContract }, async (request) => coverAnswer(request, request.query))
 })

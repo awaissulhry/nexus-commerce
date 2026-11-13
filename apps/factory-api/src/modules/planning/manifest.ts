@@ -187,4 +187,11 @@ export const manifest = defineManifest({
   'POST /planning/work-orders/:workOrderId/operations/:operationId/outside': { audiences: ['office'], permission: 'planning.subcontract.outsource', scope: 'record' },
   'POST /planning/work-orders/:workOrderId/operations/:operationId/in-house': { audiences: ['office'], permission: 'planning.subcontract.outsource', scope: 'record' },
   'PUT /planning/subcontract-orders/:subcontractOrderId/kit-due': { audiences: ['office'], permission: 'planning.subcontract.outsource', scope: 'record' },
+  // B-W2b-349 (./reports): planning reports, office only, read only: planning.reports.view over the site with planning.view (siteFor:
+  // a site the caller does not plan is not found).
+  'GET /planning/reports/adherence': { audiences: ['office'], permission: 'planning.reports.view', scope: 'record' },
+  'GET /planning/reports/adherence/work-orders': { audiences: ['office'], permission: 'planning.reports.view', scope: 'record' },
+  'GET /planning/reports/utilisation': { audiences: ['office'], permission: 'planning.reports.view', scope: 'record' },
+  'GET /planning/reports/utilisation/work-orders': { audiences: ['office'], permission: 'planning.reports.view', scope: 'record' },
+  'GET /planning/reports/cover': { audiences: ['office'], permission: 'planning.reports.view', scope: 'record' },
 })

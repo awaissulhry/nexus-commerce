@@ -3,6 +3,9 @@ import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import { COUNT_ROWS, inShell, listModel, MATERIALS, newCountModel, type CountRole } from '../demo/fixtures'
 import type { CountsListModel } from '../view-model'
 import { CountsListView } from './view/CountsListView'
+// B-W2b-320: the count schedules (Due counts, the tile, Count schedule), New count's class and freeze (made-up).
+import { BAD_FORM, DUE, EDIT_FORM, NEW_FORM, RETIRED, SCHEDULES, schedulesDialog, schedulesModel } from '../depth/demo/fixtures'
+import { PLACES } from '../demo/fixtures'
 
 /**
  * SCR-132 — Counts (Warehouse › In the warehouse) with made-up data only: cycle counts of a rack, of leather and of a
@@ -64,5 +67,21 @@ export const designScreen = defineDesignScreen<CountsCase>({
     { id: 'empty', label: 'No counts yet', model: listCase('warehouse', { rows: { items: [], more: false, problem: null }, tiles: { drafts: 0, counting: 0, waitingApproval: 0, toApply: 0, yearEnd: 0 } }) },
     { id: 'no-match', label: 'Nothing matches the search', model: listCase('warehouse', { q: 'ZZZ', rows: { items: [], more: false, problem: null } }) },
     { id: 'sales', label: 'Sales: no inventory.counts.view (the page says so)', model: listCase('sales') },
+    // ---- B-W2b-320: Due counts, Due this week, Count schedule, New count with its class and freeze ----------------------
+    { id: 'w2b-due', label: 'B-W2b-320 — Due counts: rack A overdue 3 days, class A due today, leather this week; Due this week 3; places blocked', model: listCase('warehouse', { schedules: schedulesModel() }) },
+    { id: 'w2b-due-selected', label: 'B-W2b-320 — Two schedules selected: Start 2 counts', model: listCase('warehouse', { schedules: schedulesModel({ selected: [SCHEDULES[0]!.id, SCHEDULES[1]!.id] }) }), note: 'Select rows in Due counts with x / Space; Start N counts makes each schedule’s own count.' },
+    { id: 'w2b-due-starting', label: 'B-W2b-320 — Starting two counts', model: listCase('warehouse', { schedules: schedulesModel({ starting: [SCHEDULES[0]!.id, SCHEDULES[1]!.id] }) }) },
+    { id: 'w2b-due-started', label: 'B-W2b-320 — Started: 2 counts, one refused (said)', model: listCase('warehouse', { schedules: schedulesModel({ notice: { tone: 'warning', words: { key: 'cd.start.some', params: { started: 1, count: 2 } } } }) }) },
+    { id: 'w2b-due-empty', label: 'B-W2b-320 — Nothing due this week', model: listCase('warehouse', { schedules: schedulesModel({ due: { value: { ...DUE, tiles: { overdue: 0, dueToday: 0, dueThisWeek: 0 }, rows: [] }, problem: null }, blocked: [] }) }) },
+    { id: 'w2b-due-error', label: "B-W2b-320 — The due counts couldn't be read", model: listCase('warehouse', { schedules: schedulesModel({ due: { value: null, problem: 'problem.offline' } }) }) },
+    { id: 'w2b-due-read-only', label: 'B-W2b-320 — Read-only: sees what is due, Start count held (inventory.counts.manage)', model: listCase('readOnly', { schedules: schedulesModel({ blocked: null }) }) },
+    { id: 'w2b-schedules', label: 'B-W2b-320 — Count schedule: the active schedules', model: listCase('warehouse', { schedules: schedulesModel({ dialog: schedulesDialog() }) }) },
+    { id: 'w2b-schedules-all', label: 'B-W2b-320 — Count schedule: all, a retired one (Reactivate)', model: listCase('warehouse', { schedules: schedulesModel({ dialog: schedulesDialog({ filter: 'all', list: { items: [...SCHEDULES, RETIRED], problem: null } }) }) }) },
+    { id: 'w2b-schedule-new', label: 'B-W2b-320 — New schedule: bin A1 every 10 days', model: listCase('warehouse', { schedules: schedulesModel({ dialog: schedulesDialog({ form: NEW_FORM }) }), schedulePlaces: PLACES }) },
+    { id: 'w2b-schedule-edit', label: 'B-W2b-320 — Edit schedule: class A every 14 days', model: listCase('warehouse', { schedules: schedulesModel({ dialog: schedulesDialog({ form: EDIT_FORM }) }), schedulePlaces: PLACES }) },
+    { id: 'w2b-schedule-problems', label: 'B-W2b-320 — New schedule held: nothing to count, every 400 days', model: listCase('warehouse', { schedules: schedulesModel({ dialog: schedulesDialog({ form: BAD_FORM }) }), schedulePlaces: PLACES }) },
+    { id: 'w2b-schedule-refused', label: 'B-W2b-320 — Schedule refused: a place of another kind (said in words)', model: listCase('warehouse', { schedules: schedulesModel({ dialog: schedulesDialog({ form: NEW_FORM, problem: { key: 'cd.form.problem.place' } }) }), schedulePlaces: PLACES }) },
+    { id: 'w2b-new-freeze', label: 'B-W2b-320 — New count: freeze the counted lines’ moves (on)', model: listCase('warehouse', { schedules: schedulesModel(), newCount: newCountModel({}, { freeze: true }) }) },
+    { id: 'w2b-new-class', label: 'B-W2b-320 — New count of class A: starts at once, no single material', model: listCase('warehouse', { schedules: schedulesModel(), newCount: newCountModel({}, { abcClass: 'A', locationId: null, freeze: true, start: true }) }) },
   ],
 })

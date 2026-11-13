@@ -62,6 +62,8 @@ const countSchema = z.object({
   version: z.number(),
   createdAt: z.string(),
   updatedAt: z.string(),
+  /** B-W2b-320 (B-W2b-299, SCM-226): the count freezes its lines' moves until each is counted. */
+  freezeMoves: z.boolean().optional(),
 })
 export type CountRow = z.infer<typeof countSchema>
 
@@ -117,6 +119,9 @@ const lineSchema = z.object({
   differenceAmount: costMinor,
   movedSinceSnapshot: z.boolean(),
   version: z.number(),
+  /** B-W2b-320 (B-W2b-299): the line holds its moves now (frozen, not counted or its recount not done), and the units scanned. */
+  frozen: z.boolean().optional(),
+  scans: z.number().optional(),
 })
 export type CountLine = z.infer<typeof lineSchema>
 
@@ -193,6 +198,9 @@ export interface NewCountBody {
   countTeam?: string
   note?: string
   start?: boolean
+  /** B-W2b-320 (B-W2b-299): freeze the counted lines' moves until each is counted; count one ABC class (starts at once). */
+  freeze?: boolean
+  abcClass?: 'A' | 'B' | 'C'
 }
 
 export const createCount = (api: ApiClient, body: NewCountBody) => api.post('/inventory/stock-counts', { body, schema: one, ...key() }).then((answer) => answer.count)
