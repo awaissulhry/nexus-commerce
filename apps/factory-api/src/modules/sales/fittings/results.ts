@@ -19,7 +19,7 @@ import { assertMayProfile, chainOf, measurementsOf, nextFittingOf, officeOf, pro
 import { changePromiseInCommand } from '../orders/moves'
 import { dayOrNull } from '../orders/store'
 import { createRepairInCommand } from '../repairs/create'
-import { appointmentRows, APPOINTMENT_SELECT, garmentRefusal, mayOn, RESULT_RECORD, RESULT_SELECT, resultNotFound, resultOf, resultViews, sees, type Reader, type ResultRow } from './store'
+import { appointmentRows, APPOINTMENT_SELECT, bookedGarmentsOf, garmentRefusal, mayOn, RESULT_RECORD, RESULT_SELECT, resultNotFound, resultOf, resultViews, sees, type Reader, type ResultRow } from './store'
 
 /**
  * What a fitting found and the alteration loop (B-W2b-360; SAL-297 "Alteration loop after fitting"; design sales.mtm › Fittings
@@ -39,8 +39,8 @@ import { appointmentRows, APPOINTMENT_SELECT, garmentRefusal, mayOn, RESULT_RECO
  *   POST /sales/fittings/results/:id/revision       ALTER or REMAKE: names the new revision it led to (recorded first through
  *                                                   B-W2b-358's POST /sales/mtm/profiles/:id/revisions), once
  *   GET  /sales/mtm/profiles/:profileId/fittings    the rider profile's Fittings tab: the appointments of the rider's garment
- *                                                   type (every revision, and the rider's sessions not yet tied to one) and the
- *                                                   fittings' results
+ *                                                   type (every revision, and the rider's — by contact or name — not yet tied to
+ *                                                   one, booked for that garment type) and the fittings' results
  *
  * Who: sales.fittings.manage over the result's company and customer (reading: sales.measurements.view); the alteration also
  * sales.repairs.manage. Made-to-measure switched off for the profile's template (GATE-MTM): nothing is recorded or opened. Every
@@ -264,12 +264,15 @@ export async function profileFittings(caller: CommandCaller, profileId: string) 
   return caller.withClient(async (db) => {
     const chain = await chainOf(db, row)
     const ids = chain.map((revision) => revision.id)
+    // The chain's appointments, and the rider's not yet tied to a revision (by its contact or its name) booked for this garment type.
+    const contactIds = [...new Set(chain.flatMap((revision) => (revision.contactId ? [revision.contactId] : [])))]
     const appointments = await db.appointment.findMany({
-      where: { partyId: row.partyId, OR: [{ measurementProfileId: { in: ids } }, { measurementProfileId: null, riderName: row.riderName }] },
+      where: { partyId: row.partyId, OR: [{ measurementProfileId: { in: ids } }, { measurementProfileId: null, riderName: row.riderName }, ...(contactIds.length > 0 ? [{ measurementProfileId: null, contactId: { in: contactIds } }] : [])] },
       select: APPOINTMENT_SELECT,
       orderBy: [{ startsAt: 'desc' }, { id: 'asc' }],
     })
-    const seen = appointments.filter((appointment) => sees(context, appointment))
+    const booked = await bookedGarmentsOf(db, appointments.filter((appointment) => appointment.measurementProfileId === null).map((appointment) => appointment.id))
+    const seen = appointments.filter((appointment) => sees(context, appointment) && (appointment.measurementProfileId !== null || booked.get(appointment.id) === row.garmentType))
     const results = (await db.fittingResult.findMany({ where: { measurementProfileId: { in: ids } }, select: RESULT_SELECT, orderBy: [{ fittedAt: 'desc' }, { id: 'asc' }] })).filter((result) => sees(context, result))
     const next = await nextFittingOf(db, ids, now)
     const started = (await garmentRefusal(db, row.garmentType)) === null
