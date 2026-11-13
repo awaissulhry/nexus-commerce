@@ -1,0 +1,843 @@
+{
+  "block": {
+    "fill": "Riempi con una curva…",
+    "openLine": "Apri la riga {colour}"
+  },
+  "bulk": {
+    "problem": {
+      "EMPTY": "{line}: non resterebbe alcun pezzo: una riga ne tiene almeno uno.",
+      "GRID": "{line}: la griglia rifiuta una taglia (non offerta o oltre il massimo).",
+      "LINE": "{line}: questa riga non può cambiare così.",
+      "SCHEDULE": "{line}: il piano di consegna non tornerebbe più: cambia prima il piano (Apri la riga)."
+    }
+  },
+  "common": {
+    "dismiss": "Chiudi",
+    "loading": "Lettura in corso…",
+    "retry": "Riprova",
+    "working": "In corso…"
+  },
+  "compare": {
+    "field": {
+      "acceptanceMode": "Accettazione",
+      "adjustmentReason": "Motivo",
+      "currency": "Valuta",
+      "deliveries": "Piano di consegna",
+      "deposit": "Acconto",
+      "description": "Testo",
+      "discountPct": "Sconto %",
+      "firmOffer": "Offerta ferma",
+      "incoterm": "Incoterm",
+      "language": "Lingua",
+      "listUnitPrice": "Prezzo di listino",
+      "marginPct": "Margine %",
+      "net": "Netto",
+      "note": "Nota",
+      "options": "Opzioni",
+      "paymentTerms": "Termini di pagamento",
+      "promiseDate": "Data promessa",
+      "quantity": "Volte",
+      "revision": "Revisione",
+      "section": "Sezione",
+      "seq": "Posizione",
+      "shipComplete": "Spedizione completa",
+      "sizePrices": "Prezzo per taglia",
+      "terms": "Condizioni",
+      "termsVersion": "Versione delle condizioni",
+      "unitPrice": "Prezzo unitario",
+      "validUntil": "Valido fino al"
+    },
+    "from": "Da",
+    "held": {
+      "notDraft": "Solo una bozza accetta una nota: prima crea la versione {next}.",
+      "reading": "Attendi il confronto.",
+      "same": "Nulla è diverso."
+    },
+    "noPrices": "I prezzi non sono nel tuo ruolo: il confronto mostra pezzi e condizioni.",
+    "noteDone": "Nella nota delle modifiche",
+    "noteSaved": "Il campo Cosa è cambiato della bozza ora contiene questa differenza.",
+    "option": "Versione {n} · {status}",
+    "pickTwo": "Scegli due versioni diverse da confrontare.",
+    "reading": "Confronto in corso…",
+    "same": "Le due versioni sono uguali.",
+    "section": {
+      "lines": "Righe",
+      "margin": "Margine",
+      "prices": "Prezzi",
+      "terms": "Condizioni e consegna"
+    },
+    "sentOn": "inviata il {date}",
+    "swap": "Scambia le due versioni",
+    "title": "Confronta versioni",
+    "to": "A",
+    "total": {
+      "deposit": "Acconto",
+      "gross": "Lordo",
+      "lines": "Righe",
+      "marginPct": "Margine %",
+      "net": "Netto",
+      "pieces": "Pezzi",
+      "vat": "IVA"
+    },
+    "unchanged": "Uguale in entrambe: {sections}.",
+    "useNote": "Usa come nota delle modifiche",
+    "version": "Versione {n}",
+    "yes": "Sì"
+  },
+  "composer": {
+    "also": "Anche:",
+    "fromInquiry": "Dalla richiesta {number}",
+    "paste": "Incolla righe"
+  },
+  "curve": {
+    "bulk": {
+      "archive_one": "Archivia 1",
+      "archive_other": "Archivia {count}",
+      "restore_one": "Ripristina 1",
+      "restore_other": "Ripristina {count}"
+    },
+    "col": {
+      "company": "Azienda",
+      "name": "Curva",
+      "status": "Stato",
+      "total": "Totale"
+    },
+    "company": "Azienda",
+    "count_one": "1 curva",
+    "count_other": "{count} curve",
+    "dialog": {
+      "edit": "Curva taglie · {name}",
+      "new": "Nuova curva taglie"
+    },
+    "done": {
+      "archived_one": "1 curva archiviata.",
+      "archived_other": "{count} curve archiviate.",
+      "created": "Curva {name} creata.",
+      "restored_one": "1 curva ripristinata.",
+      "restored_other": "{count} curve ripristinate.",
+      "saved": "Curva {name} salvata."
+    },
+    "empty": "Ancora nessuna curva taglie",
+    "emptyBody": "Una curva distribuisce un totale sulle taglie di una scala: 50 20 % · 52 40 % · 54 40 %.",
+    "emptyHere": "Nessuna curva qui",
+    "failed": "Impossibile leggere le curve taglie.",
+    "held": {
+      "archived": "Archiviata: ripristinala per modificarla.",
+      "right": "Il tuo ruolo non può gestire le curve taglie."
+    },
+    "how": "Nel preventivo: ⋯ del blocco modello › Riempi con una curva, indica il totale, le taglie restano modificabili.",
+    "keys": {
+      "new": "Nuova curva"
+    },
+    "name": "Nome",
+    "new": "Nuova curva",
+    "pickScale": "Scegli una scala",
+    "problem": {
+      "name": "Dagli un nome.",
+      "nameLong": "Un nome di al massimo {max} caratteri.",
+      "none": "Dai una quota ad almeno una taglia.",
+      "scale": "Scegli la sua scala taglie.",
+      "share": "Taglia {size}: una percentuale fino a 100 con al massimo 4 decimali.",
+      "total": "Le quote sommano {total} %: una curva somma esattamente 100 %."
+    },
+    "save": "Salva la curva",
+    "scale": "Scala taglie",
+    "scaleHint": "Le sue taglie sono quelle della curva.",
+    "scaleKept": "Una curva mantiene la sua scala.",
+    "scaleOption": "{code} · {name}",
+    "scalesFailed": "Impossibile leggere le scale taglie.",
+    "shareOf": "{size} %",
+    "shares": "Percentuale per taglia",
+    "sub": "Curve in percentuale per Riempi con una curva sulle righe del preventivo; una curva somma esattamente 100 %.",
+    "title": "Curve taglie",
+    "total": "Totale {total}",
+    "totalHint": "Salva attende che il totale sia esattamente 100 %.",
+    "totalOk": "Esattamente 100 %: si può salvare.",
+    "totalUnknown": "Totale: una quota non è un numero"
+  },
+  "drawer": {
+    "addDelivery": "Aggiungi consegna",
+    "allAtPromise": "Nessun piano: tutti i pezzi partono alla data promessa ({date}).",
+    "allAtPromiseNone": "Nessun piano: tutti i pezzi partono alla data promessa (non ancora fissata).",
+    "allScheduled": "Tutti i pezzi sono pianificati.",
+    "certAll": "Ogni taglia è coperta da un certificato valido.",
+    "certRefused_one": "1 taglia senza certificato valido: {sizes}.",
+    "certRefused_other": "{count} taglie senza certificato valido: {sizes}.",
+    "close": "Chiudi la riga",
+    "colourway": "Variante colore",
+    "customerNote": "Nota per il cliente",
+    "date": "Data",
+    "deliveryN": "Consegna {n}",
+    "description": "Testo sul PDF",
+    "discard": "Annulla modifiche",
+    "feeNoSchedule": "Un addebito non ha consegne.",
+    "held": {
+      "first": "È la prima riga.",
+      "fix_one": "Correggi prima 1 cosa.",
+      "fix_other": "Correggi prima {count} cose.",
+      "last": "È l’ultima riga.",
+      "many": "Una riga ha al massimo 24 consegne.",
+      "noChange": "Nessuna modifica.",
+      "oneUnit": "Un capo su misura ha una sola consegna."
+    },
+    "next": "Riga successiva",
+    "note": "Nota",
+    "notes": "Note",
+    "pieces": "Pezzi",
+    "piecesOf": "Pezzi della consegna {n}",
+    "position": "Riga {index} di {count} · {kind}",
+    "previous": "Riga precedente",
+    "problem": {
+      "empty": "Consegna {n}: indica i pezzi.",
+      "fee": "Un addebito non ha piano di consegna.",
+      "many": "Al massimo {max} consegne per riga.",
+      "noDate": "Consegna {n}: scegli una data.",
+      "note": "Consegna {n}: la nota supera {max} caratteri.",
+      "oneUnit": "Un capo su misura ha una sola consegna.",
+      "over": "Taglia {size}: pianificati più dei {pieces} pezzi della riga.",
+      "past": "Consegna {n}: la data è passata.",
+      "pieces": "Consegna {n}, taglia {size}: solo pezzi interi.",
+      "size": "La taglia {size} non è in questa riga.",
+      "twice": "Consegna {n}: la stessa data due volte."
+    },
+    "problems": "Da correggere",
+    "removeDelivery": "Elimina la consegna {n}",
+    "rest": "Il resto alla data promessa ({date}): {sizes}.",
+    "restNoDate": "Il resto alla data promessa (non ancora fissata): {sizes}.",
+    "save": "Salva il piano",
+    "schedule": "Piano di consegna",
+    "scheduleFailed": "Impossibile leggere il piano di consegna.",
+    "scheduleHint": "Consegne per data con i pezzi per taglia; quello che non è pianificato parte alla data promessa.",
+    "sizeOf": "{size} (su {max})",
+    "sizes": "Taglie e prezzo",
+    "style": "Modello",
+    "theUnit": "il capo",
+    "title": "Riga {seq} · {style} · {colour}"
+  },
+  "fill": {
+    "curve": "Curva taglie",
+    "curveHint": "Le curve della scala taglie di questo modello (Vendite › Impostazioni vendite).",
+    "editable": "Le taglie restano modificabili dopo il riempimento.",
+    "noCurves": "Nessuna curva per questa scala taglie: aggiungila in Vendite › Impostazioni vendite.",
+    "pick": "Scegli una curva",
+    "totalOf": "Totale pezzi · {line}"
+  },
+  "from": {
+    "allSet_one": "La sua riga è pronta: niente da scegliere.",
+    "allSet_other": "Le sue {count} righe sono pronte: niente da scegliere.",
+    "colourAtUse": "scelta all’uso",
+    "colourway": "Variante colore",
+    "doneBodyInquiry": "{number} è stato creato dalla richiesta {from}; la richiesta risulta quotata.",
+    "doneBody_one": "{number} è stato creato da {from} con 1 riga.",
+    "doneBody_other": "{number} è stato creato da {from} con {count} righe.",
+    "doneTitle": "{number} è pronto",
+    "held": {
+      "inquiry": "Scegli una richiesta.",
+      "noInquiries": "Il tuo ruolo non vede le richieste.",
+      "noInquiryManage": "Il tuo ruolo non può creare un preventivo da una richiesta.",
+      "pieces": "Riga {line}, taglia {size}: solo pezzi interi.",
+      "reading": "Attendi il modello.",
+      "template": "Scegli un modello.",
+      "templateFailed": "Il modello non si legge: sceglilo di nuovo."
+    },
+    "inquiriesFound_one": "1 richiesta aperta",
+    "inquiriesFound_other": "{count} richieste aperte",
+    "inquiryLine": "{pieces} pezzi · ricevuta il {received}",
+    "left": {
+      "archived": "Riga {line}: il modello è archiviato.",
+      "feeNet": "Riga {line}: l’addebito è netto e questo cliente compra IVA inclusa: aggiungilo nel preventivo.",
+      "feeNoPrice": "Riga {line}: un addebito senza prezzo: aggiungilo nel preventivo con il prezzo.",
+      "mtm": "Riga {line}: un capo su misura si quota a parte.",
+      "noColourway": "Riga {line}: nessuna variante scelta: aggiungila nel preventivo.",
+      "noSizes": "Riga {line}: nessun pezzo indicato: aggiungili nel preventivo.",
+      "noStyle": "Riga {line}: nessun modello indicato.",
+      "noneOffered": "Riga {line}: nessuna sua taglia è offerta in questa variante.",
+      "other": "Riga {line}: non aggiunta.",
+      "privateLabel": "Riga {line}: un modello private label di un altro cliente.",
+      "scope": "Riga {line}: il modello non è rilasciato per questa variante o taglia.",
+      "size": "Riga {line}: la taglia {size} non è offerta nella sua variante.",
+      "skipped": "Riga {line}: esclusa come scelto."
+    },
+    "leftTitle_one": "1 cosa è stata esclusa",
+    "leftTitle_other": "{count} cose sono state escluse",
+    "lineOf": "Riga {line} · {style} · {colour}",
+    "noInquiries": "Questo cliente non ha richieste aperte.",
+    "noTemplates": "Nessun modello: creane uno in Vendite › Impostazioni vendite.",
+    "noneOfferedYet": "Questa variante non è ancora prodotta in alcuna taglia: quello che indichi viene escluso e indicato dopo la creazione.",
+    "open": "Apri {number}",
+    "openLines_one": "1 riga si sceglie quando nasce il preventivo: indica variante o pezzi, oppure escludila.",
+    "openLines_other": "{count} righe si scelgono quando nasce il preventivo: indica variante o pezzi, oppure escludile.",
+    "option": {
+      "inquiry": "Richiesta",
+      "template": "Modello di preventivo"
+    },
+    "optionBody": {
+      "inquiry": "Una delle richieste aperte del cliente: le sue righe e la scheda tecnica del marchio.",
+      "template": "Una partenza salvata: righe in sezioni, validità, condizioni, modalità di accettazione."
+    },
+    "pickColourway": "Scegli una variante",
+    "piecesOf": "Pezzi per taglia della riga {line}",
+    "skip": "Escludi",
+    "templateHint": "I modelli di questa azienda e quelli di tutte le aziende.",
+    "templateLine": "{lines} righe · usato {used} volte",
+    "templateSearch": "Cerca un modello",
+    "templatesFound_one": "1 modello",
+    "templatesFound_other": "{count} modelli",
+    "unfilled": "Una riga non compilata viene esclusa e indicata dopo la creazione.",
+    "wanted": "Richiesta per il {date}",
+    "warnings_one": "1 nota sulla base prezzi: controlla le righe.",
+    "warnings_other": "{count} note sulla base prezzi: controlla le righe."
+  },
+  "goal": {
+    "apply_one": "Applica a 1 riga",
+    "apply_other": "Applica a {count} righe",
+    "approval": "Approvazione",
+    "col": {
+      "discount": "Sconto",
+      "from": "Ora",
+      "line": "Riga",
+      "margin": "Margine %",
+      "to": "All’obiettivo"
+    },
+    "discountNeeded": "Sconto necessario",
+    "discountValue": "{pct} sul punto di partenza",
+    "fromTo": "{from} → {to}",
+    "gap": "Differenza di arrotondamento",
+    "gross": "Totale lordo dopo",
+    "held": {
+      "belowCost": "Sotto costo — deve consentirlo chi approva: prezza la riga a mano.",
+      "noLines": "Prima aggiungi una riga con griglia taglie.",
+      "noPlan": "Ancora nessun piano per questo obiettivo.",
+      "price": "Indica il prezzo unitario obiettivo.",
+      "reading": "Attendi il calcolo.",
+      "refused": "Una regola rifiuta questo prezzo.",
+      "total": "Indica il totale obiettivo."
+    },
+    "heldTitle_one": "1 riga è bloccata",
+    "heldTitle_other": "{count} righe sono bloccate",
+    "inquiry": "L’obiettivo del cliente nella richiesta {number}: {price}.",
+    "intro": "Indica l’obiettivo del cliente e guarda cosa comporta prima di cambiare qualcosa.",
+    "line": "Riga",
+    "linesLabel": "Ogni riga all’obiettivo",
+    "marginAmount": "Margine € dopo",
+    "marginPct": "Margine %",
+    "needsApproval": "Serve un’approvazione dopo questa modifica",
+    "net": "Totale netto",
+    "noApproval": "Nessuna approvazione necessaria",
+    "noneUnder": "Nessuna",
+    "of": "Obiettivo per",
+    "ofLine": "Una riga",
+    "ofTotal": "Il totale del preventivo",
+    "raiseValue": "{pct} sopra il punto di partenza",
+    "reading": "Calcolo di cosa comporta…",
+    "reason": "Scritto con il motivo \"Prezzo obiettivo\".",
+    "title": "Prezzo obiettivo",
+    "totalGross": "Totale obiettivo (IVA inclusa)",
+    "totalNet": "Totale obiettivo (netto)",
+    "underFloor": "Righe sotto il minimo",
+    "unitGross": "Prezzo unitario obiettivo (IVA inclusa)",
+    "unitNet": "Prezzo unitario obiettivo (netto)",
+    "useInquiry": "Usalo",
+    "valueHint": "In {currency}."
+  },
+  "held": {
+    "noPrice": "Il tuo ruolo non vede i prezzi.",
+    "sizeRunOnly": "Scegli righe con una griglia taglie: un addebito o un capo su misura non ha taglie."
+  },
+  "incoterm": {
+    "CFR": "CFR · Costo e nolo",
+    "CIF": "CIF · Costo, assicurazione e nolo",
+    "CIP": "CIP · Trasporto e assicurazione pagati fino a",
+    "CPT": "CPT · Trasporto pagato fino a",
+    "DAP": "DAP · Reso al luogo di destinazione",
+    "DDP": "DDP · Reso sdoganato",
+    "DPU": "DPU · Reso al luogo di destinazione scaricato",
+    "EXW": "EXW · Franco fabbrica",
+    "FAS": "FAS · Franco lungo bordo",
+    "FCA": "FCA · Franco vettore",
+    "FOB": "FOB · Franco a bordo"
+  },
+  "keys": {
+    "toggleView": "Passa da Blocchi a Tabella"
+  },
+  "notice": {
+    "acceptanceSaved": "Modalità di accettazione salvata.",
+    "deliverySaved": "Condizioni di consegna salvate.",
+    "goalApplied_one": "Prezzo obiettivo applicato a 1 riga, con il motivo \"Prezzo obiettivo\".",
+    "goalApplied_other": "Prezzo obiettivo applicato a {count} righe, con il motivo \"Prezzo obiettivo\".",
+    "scheduleSaved": "Piano di consegna della riga {line} salvato."
+  },
+  "page": {
+    "more": "Altro",
+    "promise": "Date promesse",
+    "promiseHeld": "Il tuo ruolo non apre Pianificazione › Date promesse.",
+    "promiseHint": "Apre Pianificazione › Date promesse",
+    "templates": "Modelli di preventivo",
+    "templatesHint": "Apre Vendite › Impostazioni vendite"
+  },
+  "paste": {
+    "area": "Celle da un foglio",
+    "areaHint": "La prima riga indica Modello, Variante colore, un eventuale Prezzo e i codici taglia; una riga per modello e colore.",
+    "columns": "Colonne trovate: modello, variante, taglie {sizes} · {rows} righe.",
+    "columnsPrice": "Anche una colonna prezzo.",
+    "count": {
+      "added_one": "1 riga nuova",
+      "added_other": "{count} righe nuove",
+      "cells_one": "1 cella esclusa",
+      "cells_other": "{count} celle escluse",
+      "changed_one": "1 riga cambiata",
+      "changed_other": "{count} righe cambiate",
+      "skipped_one": "1 riga esclusa",
+      "skipped_other": "{count} righe escluse"
+    },
+    "held": {
+      "empty": "Prima incolla le celle."
+    },
+    "left": {
+      "archived": "Riga {row}: il modello è archiviato.",
+      "cell": "Riga {row}, taglia {size}: non sono pezzi interi.",
+      "colourway": "Riga {row}: non è una variante attiva del modello.",
+      "notOffered": "Riga {row}: la taglia {size} non è offerta in questa variante.",
+      "notSize": "Riga {row}: {size} non è una taglia del modello.",
+      "nothing": "Riga {row}: nessun pezzo può entrare.",
+      "other": "Riga {row}: non può entrare.",
+      "priceBad": "Riga {row}: il prezzo non si legge: vale il prezzo di listino.",
+      "priceKept": "Riga {row}: la riga è già nel preventivo e mantiene il prezzo (cambialo con Prezzo obiettivo).",
+      "schedule": "Riga {row}: il piano di consegna della riga non tornerebbe più.",
+      "style": "Riga {row}: non è un modello venduto da questa azienda.",
+      "twice": "Riga {row}: questo modello e colore sono incollati due volte."
+    },
+    "leftTitle_one": "1 cosa non è entrata",
+    "leftTitle_other": "{count} cose non sono entrate",
+    "notThere": "Non nel preventivo",
+    "price": {
+      "KEPT": "la riga mantiene il suo prezzo",
+      "LIST": "il prezzo di listino del cliente",
+      "NONE": "ancora senza prezzo",
+      "TYPED": "il prezzo incollato"
+    },
+    "problem": {
+      "colourway": "La prima riga deve avere una colonna Variante colore.",
+      "long": "Al massimo {max} caratteri per incolla.",
+      "rows": "Incolla i nomi delle colonne e almeno una riga.",
+      "shape": "La prima riga non si legge: Modello, Variante colore e le taglie.",
+      "sizes": "Le altre colonne della prima riga sono i codici taglia.",
+      "style": "La prima riga deve avere una colonna Modello.",
+      "twice": "Una taglia compare in due colonne."
+    },
+    "save": "Aggiungi {added} righe · cambiane {changed}",
+    "summary": "Cambia solo questa bozza: un prezzo vale solo per una riga nuova.",
+    "title": "Incolla righe",
+    "what": {
+      "add": "Riga nuova",
+      "change": "Pezzi per taglia"
+    },
+    "where": "Riga {row} · {style} {colourway}"
+  },
+  "pay": {
+    "confirmBody": "Va a {to}. Una pagina inviata prima a quell’indirizzo smette di funzionare.",
+    "confirmBodyNoContact": "Va al contatto fatture o ordini del cliente. Una pagina inviata prima a quell’indirizzo smette di funzionare.",
+    "confirmTitle": "Inviare la pagina di pagamento online?",
+    "failed": "La mail a {to} non è partita: riprova più tardi (la pagina resta aperta fino al {until}).",
+    "held": {
+      "notOpen": "L’acconto non è più aperto.",
+      "right": "La invia l’amministrazione: serve il permesso di registrare i pagamenti."
+    },
+    "hint": "Link › Pagamento online: bonifico o carta, inviato al contatto del preventivo.",
+    "keep": "Non ora",
+    "send": "Invia la pagina di pagamento online",
+    "sendGo": "Invia",
+    "sending": "Invio in corso…",
+    "sent": "Inviata a {to}; la pagina resta aperta fino al {until}."
+  },
+  "review": {
+    "allOn": "Tutto il {date}",
+    "discount": "sconto necessario {pct}",
+    "held": {
+      "BELOW_COST": "{line}: sotto costo — deve consentirlo chi approva: prezza la riga a mano in Prezzo e margine.",
+      "REFUSED": "{line}: una regola rifiuta questo prezzo.",
+      "curve": "Scegli una curva.",
+      "date": "Scegli una data.",
+      "delta": "Indica i pezzi da aggiungere (meno per togliere).",
+      "discount": "Indica uno sconto da 0 a 100 %.",
+      "past": "La data è passata.",
+      "pct": "Indica una percentuale (meno per ridurre).",
+      "pieces": "Indica pezzi interi.",
+      "price": "Indica un prezzo unitario.",
+      "totals": "Indica il totale dei pezzi di ogni riga."
+    },
+    "lead": {
+      "delivery": "Data di consegna",
+      "deliveryHint": "Ogni riga riceve una consegna con tutti i suoi pezzi in questa data.",
+      "discount": "Sconto sul punto di partenza di ogni riga (%)",
+      "discountHint": "Dal prezzo di listino, dal prezzo suggerito o dal primo prezzo indicato.",
+      "price": "Nuovo prezzo unitario",
+      "priceHint": "Scritto con il motivo \"Prezzo obiettivo\"; il punto di partenza di ogni riga resta.",
+      "sizeHint": {
+        "DELTA": "Mai sotto 0: una taglia a 0 esce dalla riga.",
+        "FILL_EMPTY": "Solo le taglie offerte dalla variante che la riga non ha ancora.",
+        "PERCENT": "Arrotondato a pezzi interi sulle taglie con pezzi; -10 riduce del 10 %.",
+        "SET": "Ogni taglia della riga prende questi pezzi."
+      },
+      "sizeKind": "Come cambiano le taglie",
+      "sizeValue": {
+        "DELTA": "Pezzi per taglia",
+        "FILL_EMPTY": "Pezzi per taglia vuota",
+        "PERCENT": "Percentuale",
+        "SET": "Pezzi per taglia"
+      }
+    },
+    "leftOutSizes": "escluse: {sizes}",
+    "margin": "margine {pct}",
+    "pieces": "pezzi {from} → {to}",
+    "raise": "{pct} sopra il punto di partenza",
+    "remainder": "il resto sulla {size} ({pieces})",
+    "removed": "Eliminata",
+    "result": {
+      "added": "Aggiunta",
+      "gone": "Non è più nel preventivo",
+      "removed": "Eliminata",
+      "saved": "Salvata"
+    },
+    "save": {
+      "delivery_one": "Imposta 1 consegna",
+      "delivery_other": "Imposta {count} consegne",
+      "discount_one": "Imposta 1 sconto",
+      "discount_other": "Imposta {count} sconti",
+      "fill_one": "Riempi 1 riga",
+      "fill_other": "Riempi {count} righe",
+      "price_one": "Imposta 1 prezzo",
+      "price_other": "Imposta {count} prezzi",
+      "remove_one": "Elimina 1 riga",
+      "remove_other": "Elimina {count} righe",
+      "sizes_one": "Cambia 1 riga",
+      "sizes_other": "Cambia {count} righe"
+    },
+    "sizeKind": {
+      "DELTA": "Aggiungi o togli pezzi",
+      "FILL_EMPTY": "Riempi le taglie vuote",
+      "PERCENT": "Di una percentuale",
+      "SET": "Imposta i pezzi"
+    },
+    "summary": "Cambia solo questa bozza: niente viene inviato al cliente.",
+    "title": {
+      "delivery_one": "Imposta la consegna di 1 riga",
+      "delivery_other": "Imposta la consegna di {count} righe",
+      "discount_one": "Imposta lo sconto di 1 riga",
+      "discount_other": "Imposta lo sconto di {count} righe",
+      "fill_one": "Riempi 1 riga con una curva",
+      "fill_other": "Riempi {count} righe con una curva",
+      "price_one": "Imposta il prezzo di 1 riga",
+      "price_other": "Imposta il prezzo di {count} righe",
+      "remove_one": "Elimina 1 riga",
+      "remove_other": "Elimina {count} righe",
+      "sizes_one": "Cambia le taglie di 1 riga",
+      "sizes_other": "Cambia le taglie di {count} righe"
+    },
+    "verb": {
+      "removed": "eliminate",
+      "saved": "salvate"
+    },
+    "what": {
+      "delivery": "Consegna",
+      "line": "Riga",
+      "sizes": "Pezzi per taglia",
+      "unitPrice": "Prezzo unitario"
+    }
+  },
+  "table": {
+    "atPromise": "Alla data promessa",
+    "bulk": {
+      "delivery_one": "Imposta la consegna di 1 riga",
+      "delivery_other": "Imposta la consegna di {count} righe",
+      "discount_one": "Imposta lo sconto di 1 riga",
+      "discount_other": "Imposta lo sconto di {count} righe",
+      "price_one": "Imposta il prezzo di 1 riga",
+      "price_other": "Imposta il prezzo di {count} righe",
+      "remove_one": "Elimina 1 riga",
+      "remove_other": "Elimina {count} righe",
+      "sizes_one": "Cambia le taglie di 1 riga",
+      "sizes_other": "Cambia le taglie di {count} righe"
+    },
+    "col": {
+      "colourway": "Variante colore",
+      "delivery": "Consegna",
+      "discount": "Sconto",
+      "kind": "Tipo",
+      "quantity": "Pezzi",
+      "seq": "N.",
+      "sizes": "Taglie",
+      "style": "Modello",
+      "vat": "IVA",
+      "warnings": "Avvisi"
+    },
+    "count_one": "1 riga",
+    "count_other": "{count} righe",
+    "deliveryMany": "{count} consegne dal {date}",
+    "deliveryOne": "{date}",
+    "kind": {
+      "FEE": "Addebito",
+      "MADE_TO_MEASURE": "Su misura",
+      "SIZE_GRID": "Griglia taglie"
+    },
+    "label": "Righe del preventivo",
+    "openLine": "Apri la riga {line}",
+    "warnings_one": "1 avviso",
+    "warnings_other": "{count} avvisi"
+  },
+  "terms": {
+    "acceptance": {
+      "SIGN": "Firma",
+      "SIGNBody": "Il cliente accetta firmando dal link.",
+      "SIGN_AND_PAY": "Firma e paga l’acconto",
+      "SIGN_AND_PAYBody": "Il cliente firma, poi paga l’acconto online (bonifico o carta).",
+      "label": "Modalità di accettazione",
+      "needsDeposit": "Prima imposta un acconto (Pagamento e acconto)."
+    },
+    "capacity": "Verifica la capacità",
+    "capacityHeld": "Il tuo ruolo non apre Pianificazione › Date promesse.",
+    "capacityHint": "Pianificazione › Date promesse calcola una data per queste righe.",
+    "col": {
+      "deliveries": "Consegne",
+      "edit": "Modifica",
+      "line": "Riga",
+      "rest": "Alla data promessa"
+    },
+    "customerIncoterm": "Questo cliente di solito compra {code}.",
+    "discard": "Annulla modifiche",
+    "failed": "Impossibile leggere le condizioni di consegna.",
+    "held": {
+      "noChange": "Nessuna modifica."
+    },
+    "incoterm": "Incoterm",
+    "incotermHint": "Incoterms 2020: chi paga e chi rischia fino a dove.",
+    "noIncoterm": "Nessuno",
+    "openLine": "Apri la riga",
+    "place": "Luogo",
+    "placeHint": "Il luogo indicato dell’Incoterm (una riga).",
+    "problem": {
+      "incoterm": "Scegli un Incoterm dell’elenco.",
+      "place": "Un Incoterm ha bisogno del luogo.",
+      "placeAlone": "Un luogo ha bisogno dell’Incoterm.",
+      "placeLong": "Il luogo è una riga di al massimo {max} caratteri."
+    },
+    "restNone": "Niente: tutto pianificato",
+    "saveDelivery": "Salva le condizioni di consegna",
+    "saving": "Salvataggio…",
+    "schedule": "Piano di consegna per riga",
+    "scheduleAllNoDate": "Nessuna riga ha un piano: tutto parte alla data promessa (non ancora fissata).",
+    "scheduleAllPromise": "Nessuna riga ha un piano: tutto parte alla data promessa ({date}).",
+    "scheduleNoLines": "Prima aggiungi righe.",
+    "scheduleSome_one": "1 riga ha un suo piano; modificalo nella riga.",
+    "scheduleSome_other": "{count} righe hanno un loro piano; modificalo nella riga.",
+    "seaOnly": "via mare e vie navigabili",
+    "ship": "Spedizione",
+    "shipAsReady": "Spedizione appena pronto",
+    "shipAsReadyBody": "Parte quello che è pronto, il resto segue.",
+    "shipComplete": "Spedizione completa",
+    "shipCompleteBody": "Tutto parte insieme.",
+    "useCustomer": "Usa {code}",
+    "validity": {
+      "CLOSED": "Chiusa",
+      "ENDED": "Terminata: scade stanotte",
+      "ENDS_SOON_one": "Sta per scadere · resta 1 giorno",
+      "ENDS_SOON_other": "Sta per scadere · restano {count} giorni",
+      "EXPIRED": "Scaduta",
+      "LAST_DAY": "Oggi è l’ultimo giorno",
+      "NOT_SENT": "Non ancora inviata",
+      "OPEN_one": "Aperta · resta 1 giorno",
+      "OPEN_other": "Aperta · restano {count} giorni",
+      "expiredAt": "Scaduta il",
+      "label": "L’offerta",
+      "noReminder": "Nessuno (inviata troppo vicino alla scadenza, o senza scadenza)",
+      "reminder": "Promemoria al cliente",
+      "reminderOn": "Il {date}, 3 giorni prima dell’ultimo giorno",
+      "reminderSent": "Inviato {at}"
+    }
+  },
+  "tpl": {
+    "add": "Aggiungi la riga",
+    "addLine": "Aggiungi una riga",
+    "bulk": {
+      "archive_one": "Archivia 1",
+      "archive_other": "Archivia {count}",
+      "restore_one": "Ripristina 1",
+      "restore_other": "Ripristina {count}"
+    },
+    "col": {
+      "acceptance": "Accettazione",
+      "company": "Azienda",
+      "lines": "Righe",
+      "name": "Modello",
+      "sections": "Sezioni",
+      "status": "Stato",
+      "updated": "Modificato",
+      "used": "Usato"
+    },
+    "company": "Azienda",
+    "companyHint": "Tutte le aziende: un preventivo di qualsiasi azienda può partire da qui.",
+    "count_one": "1 modello",
+    "count_other": "{count} modelli",
+    "create": "Crea il modello",
+    "deposit": "Acconto %",
+    "depositHint": "Vuoto: l’acconto del cliente o delle impostazioni.",
+    "description": "Descrizione",
+    "dialog": {
+      "edit": "Modello · {name}",
+      "new": "Nuovo modello di preventivo"
+    },
+    "done": {
+      "archived_one": "1 modello archiviato.",
+      "archived_other": "{count} modelli archiviati.",
+      "created": "Modello creato.",
+      "partly": "{done} fatti, {failed} rifiutati (cambiati nel frattempo): l’elenco è stato riletto.",
+      "restored_one": "1 modello ripristinato.",
+      "restored_other": "{count} modelli ripristinati.",
+      "saved": "Modello salvato."
+    },
+    "down": "Sposta giù la riga {n}",
+    "empty": "Ancora nessun modello",
+    "emptyArchived": "Nessun modello archiviato",
+    "emptyBody": "Creane uno vuoto o da un preventivo che invii spesso.",
+    "everyCompany": "Tutte le aziende",
+    "failed": "Impossibile leggere i modelli.",
+    "filter": {
+      "ACTIVE": "Attivi",
+      "ALL": "Tutti",
+      "ARCHIVED": "Archiviati"
+    },
+    "firmOffer": "Offerta ferma",
+    "fromQuote": {
+      "every": "Per tutte le aziende (i suoi modelli devono essere di tutte le aziende)",
+      "found_one": "1 preventivo",
+      "found_other": "{count} preventivi",
+      "hint": "Scrivi parte del numero o il nome del cliente.",
+      "line": "Versione {revision} · {lines} righe · {units} pezzi",
+      "none": "Nessun preventivo trovato.",
+      "search": "Numero del preventivo",
+      "type": "Scrivi per trovare il preventivo."
+    },
+    "held": {
+      "archived": "Archiviato: ripristinalo per modificarlo.",
+      "first": "È già la prima riga.",
+      "last": "È già l’ultima riga.",
+      "noChange": "Nessuna modifica.",
+      "noneActive": "Nessuno dei selezionati è attivo.",
+      "noneArchived": "Nessuno dei selezionati è archiviato.",
+      "pickQuote": "Scegli il preventivo.",
+      "pickStyle": "Prima scegli un modello.",
+      "right": "Il tuo ruolo non può gestire i modelli di preventivo."
+    },
+    "keys": {
+      "new": "Nuovo modello"
+    },
+    "language": "Lingua",
+    "lineCol": {
+      "actions": "Ordine",
+      "colourway": "Variante colore",
+      "price": "Prezzo unitario",
+      "section": "Sezione",
+      "sizes": "Pezzi per taglia",
+      "style": "Modello"
+    },
+    "lines": "Righe",
+    "name": "Nome",
+    "new": "Nuovo modello",
+    "noLines": "Ancora nessuna riga: aggiungi i modelli qui sotto.",
+    "noStyles": "Nessun modello trovato",
+    "otherStyle": "Un altro modello",
+    "pickStyle": "Modello trovato",
+    "piecesHint": "Pezzi per taglia; lascia vuote tutte le taglie per indicarle quando nasce il preventivo.",
+    "price": "Prezzo unitario",
+    "priceFromList": "dal listino",
+    "priceHint": "Vuoto: lo prezza il listino del cliente.",
+    "problem": {
+      "deposit": "Un acconto da 0 a 100 %.",
+      "incoterm": "Incoterm e luogo vanno insieme.",
+      "lines": "Al massimo {max} righe.",
+      "name": "Dagli un nome.",
+      "nameLong": "Un nome di al massimo {max} caratteri.",
+      "payNeedsDeposit": "Firma e paga l’acconto richiede un acconto.",
+      "pieces": "Riga {n}: solo pezzi interi.",
+      "price": "Riga {n}: il prezzo non si legge.",
+      "validity": "Validità da 1 a {max} giorni."
+    },
+    "readOnly": "Sola lettura: il tuo ruolo vede i modelli ma non li modifica.",
+    "remove": "Elimina la riga {n}",
+    "save": "Salva il modello",
+    "saveFromQuote": "Crea il modello dal preventivo",
+    "section": "Sezione",
+    "sectionHint": "Un titolo nel preventivo (\"Giacche\"); facoltativo.",
+    "sizesAtUse": "indicati all’uso",
+    "start": {
+      "empty": "Vuoto",
+      "quote": "Un preventivo"
+    },
+    "startBody": {
+      "empty": "Indica intestazione e righe qui.",
+      "quote": "Un preventivo come modello: righe, sezioni e condizioni della versione corrente."
+    },
+    "startFrom": "Parti da",
+    "status": {
+      "ACTIVE": "Attivo",
+      "ARCHIVED": "Archiviato"
+    },
+    "statusLabel": "Mostra",
+    "style": "Modello",
+    "styleHint": "Scrivi codice o nome del modello.",
+    "stylesFound_one": "1 modello: sceglilo",
+    "stylesFound_other": "{count} modelli: scegline uno",
+    "sub": "Partenze salvate di un preventivo: righe in sezioni, validità, condizioni, modalità di accettazione. Nuovo preventivo › Parti da: Modello li usa.",
+    "termsVersion": "Versione delle condizioni",
+    "title": "Modelli di preventivo",
+    "up": "Sposta su la riga {n}",
+    "validity": "Validità (giorni)",
+    "validityHint": "Vuoto: i giorni delle impostazioni vendite."
+  },
+  "versions": {
+    "compare": "Confronta",
+    "compareLatest": "Confronta {from} con {to}",
+    "compareThese": "Confronta {from} e {to}",
+    "count_one": "1 versione",
+    "count_other": "{count} versioni",
+    "downloadOf": "Scarica il PDF della versione {revision}",
+    "pickTwo": "Seleziona esattamente due versioni."
+  },
+  "view": {
+    "blocks": "Blocchi",
+    "blocksHint": "Una scheda per modello: colori × taglie.",
+    "label": "Mostra le righe come",
+    "table": "Tabella",
+    "tableHint": "Tutte le righe in elenco: selezionane più di una per cambiarle insieme."
+  },
+  "warn": {
+    "code": {
+      "ACCOUNT_OVERDUE": "Il cliente ha fatture scadute con questa azienda: verifica con l’amministrazione prima di promettere altro.",
+      "other": "Una regola chiede di controllare il preventivo prima dell’invio."
+    },
+    "countBlocks_one": "1 blocca l’invio",
+    "countBlocks_other": "{count} bloccano l’invio",
+    "countInfo_one": "1 da sapere",
+    "countInfo_other": "{count} da sapere",
+    "countWarnings_one": "1 da controllare",
+    "countWarnings_other": "{count} da controllare",
+    "failed": "Impossibile leggere gli avvisi.",
+    "feedsSend": "La finestra di invio controlla le stesse regole.",
+    "fix": "Correggi",
+    "lines_one": "Riga {lines}",
+    "lines_other": "Righe {lines}",
+    "open": "Apri",
+    "overdue": {
+      "days_one": "in ritardo di 1 giorno",
+      "days_other": "fino a {count} giorni di ritardo",
+      "invoices_one": "1 fattura",
+      "invoices_other": "{count} fatture"
+    },
+    "severity": {
+      "BLOCKS": "Blocca l’invio",
+      "INFO": "Da sapere",
+      "WARNING": "Da controllare"
+    },
+    "title": "Avvisi"
+  }
+}

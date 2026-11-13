@@ -64,10 +64,10 @@ export interface SalesSettingsActions {
   onStepUpCancel?: () => void
 }
 
-export function SalesSettingsView({ model, actions, reasons }: { model: SalesSettingsModel; actions?: SalesSettingsActions; reasons?: ReactNode }) {
+export function SalesSettingsView({ model, actions, reasons, depth }: { model: SalesSettingsModel; actions?: SalesSettingsActions; reasons?: ReactNode; /** B-W2b-316: Quote templates and Size curves (settings/{templates,curves}). */ depth?: { templates?: ReactNode; curves?: ReactNode } }) {
   return (
     <QualityMessages namespaces={['sales-settings']}>
-      <Settings model={model} actions={actions} reasons={reasons} />
+      <Settings model={model} actions={actions} reasons={reasons} depth={depth} />
     </QualityMessages>
   )
 }
@@ -80,7 +80,7 @@ function useWords(): Translate {
 
 const say = (t: Translate, words: Words | null | undefined): string => (words ? t(words.key, words.params) : '')
 
-function Settings({ model, actions, reasons }: { model: SalesSettingsModel; actions?: SalesSettingsActions; reasons?: ReactNode }) {
+function Settings({ model, actions, reasons, depth }: { model: SalesSettingsModel; actions?: SalesSettingsActions; reasons?: ReactNode; depth?: { templates?: ReactNode; curves?: ReactNode } }) {
   const t = useWords()
   const { can } = model
 
@@ -153,6 +153,9 @@ function Settings({ model, actions, reasons }: { model: SalesSettingsModel; acti
         <PolicyCard model={model} actions={actions} />
         <NumberingCard model={model} />
       </div>
+      {/* B-W2b-316: Quote templates and Size curves. */}
+      {can.quotesView && depth?.templates}
+      {can.quotesView && depth?.curves}
       <Section title={t('reasons.title')} sub={t('reasons.sub')} id="fw-ss-reasons">
         {can.reasonsView ? (reasons ?? <p className="fw-q-hint">{t('reasons.none')}</p>) : <p className="fw-q-hint">{t('reasons.noRight')}</p>}
       </Section>

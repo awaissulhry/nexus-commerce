@@ -17,6 +17,9 @@ import { activeFilterCount, APPROVAL_TONE, droppedWords, isExpiring, money, NO_F
 import { DuplicateDialog } from '../../duplicate/view/DuplicateDialog'
 import type { NewQuoteModel, QuotesListActions, QuotesListViewModel } from '../list-model'
 import '../../quotes.css'
+// B-W2b-316: New quote › Start from Template / Inquiry, the page's ⋯ links.
+import { NewFromBody, NewFromDone, StartFromOption, useHeldWords } from '../../new-from/view/NewFrom'
+import { QuotesPageLinks } from '../../new-from/view/PageLinks'
 
 export type { QuotesListViewModel, QuotesListActions } from '../list-model'
 
@@ -190,9 +193,12 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
             {model.asOf ? t('list.updated', { time: formatTime(model.asOf, { locale }) }) : t('list.notYet')}
           </span>
         </div>
-        <Button size="sm" variant="primary" heldReason={model.can.manage ? null : t('held.noManage')} onClick={() => actions?.onNewQuote?.(true)} aria-keyshortcuts="c">
-          <Plus size={14} aria-hidden /> {t('list.new')}
-        </Button>
+        <span className="fw-q-actions">
+          <Button size="sm" variant="primary" heldReason={model.can.manage ? null : t('held.noManage')} onClick={() => actions?.onNewQuote?.(true)} aria-keyshortcuts="c">
+            <Plus size={14} aria-hidden /> {t('list.new')}
+          </Button>
+          {model.pageLinks && <QuotesPageLinks model={model.pageLinks} />}
+        </span>
       </div>
 
       {model.notice && (
@@ -399,14 +405,18 @@ function NewQuoteDialog({ model, actions }: { model: NewQuoteModel; actions?: Qu
   const contacts = party?.contacts.filter((contact) => contact.status === 'ACTIVE') ?? []
   const blocked = party && party.status !== 'ACTIVE' ? t('newQuote.held.party', { status: t(`partyStatus.${party.status}`) }) : null
   const noIdentity = party && !party.taxIdentities.some((identity) => identity.current) ? t('newQuote.held.identity') : null
+  const fromWords = useHeldWords()
+  const newFrom = model.newFrom ?? null
   const startFrom = model.startFrom ?? 'blank'
   const past = model.past ?? null
   const chosenPast = past?.results?.find((row) => row.id === past.chosenId) ?? null
-  const pastHeld = startFrom === 'past' && !chosenPast ? t('newQuote.held.past') : null
+  const pastHeld = newFrom?.active ? fromWords(model.newFromHeld ?? null) : startFrom === 'past' && !chosenPast ? t('newQuote.held.past') : null
   const held = !party ? t('newQuote.held.customer') : (blocked ?? noIdentity ?? pastHeld ?? (model.busy ? t('held.busy') : null))
   const create = () => {
     if (!held) actions?.onCreate?.()
   }
+  // B-W2b-316: a template or inquiry start that left something out says it before the quote opens.
+  if (newFrom?.done) return <NewFromDone done={newFrom.done} onOpen={(quoteId) => actions?.onPastOpen?.(quoteId)} onClose={() => actions?.onNewQuote?.(false)} />
   // B-W2a-49: a copy said what it left out — shown before the new quote opens.
   const done = past?.done ?? null
   if (done) {
@@ -453,7 +463,7 @@ function NewQuoteDialog({ model, actions }: { model: NewQuoteModel; actions?: Qu
         <>
           <Button onClick={() => actions?.onNewQuote?.(false)}>{t('common.back')}</Button>
           <Button variant="primary" heldReason={held} onClick={create} aria-keyshortcuts="Meta+Enter Control+Enter">
-            {startFrom === 'past' && chosenPast ? t('newQuote.createFrom', { number: chosenPast.number }) : t('newQuote.create')}
+            {startFrom === 'past' && chosenPast && !newFrom?.active ? t('newQuote.createFrom', { number: chosenPast.number }) : t('newQuote.create')}
           </Button>
         </>
       }
@@ -559,10 +569,13 @@ function NewQuoteDialog({ model, actions }: { model: NewQuoteModel; actions?: Qu
             <fieldset className="fw-q-radios">
               <legend className="fw-q-legend">{t('newQuote.startFrom')}</legend>
               {START_FROM.map((from) => (
-                <RadioCard key={from} name="fw-q-start-from" value={from} checked={startFrom === from} selected={startFrom === from} onChange={() => actions?.onStartFrom?.(from)} title={t(`newQuote.from.${from}`)} description={t(`newQuote.fromBody.${from}`)} />
+                <RadioCard key={from} name="fw-q-start-from" value={from} checked={startFrom === from && !newFrom?.active} selected={startFrom === from && !newFrom?.active} onChange={() => actions?.onStartFrom?.(from)} title={t(`newQuote.from.${from}`)} description={t(`newQuote.fromBody.${from}`)} />
               ))}
+              {newFrom && <StartFromOption kind="template" model={newFrom} onChoose={(kind) => actions?.onNewFrom?.(kind)} />}
+              {newFrom && <StartFromOption kind="inquiry" model={newFrom} onChoose={(kind) => actions?.onNewFrom?.(kind)} />}
             </fieldset>
-            {startFrom === 'past' && past && <PastQuotes past={past} partyId={party.id} actions={actions} />}
+            {startFrom === 'past' && past && !newFrom?.active && <PastQuotes past={past} partyId={party.id} actions={actions} />}
+            {newFrom?.active && <NewFromBody model={newFrom} companyId={model.companyId} actions={actions} />}
           </>
         )}
         <p className="fw-q-hint" role="status">

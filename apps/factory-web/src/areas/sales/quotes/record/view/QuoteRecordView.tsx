@@ -14,6 +14,7 @@ import { DocumentSendView, type DocumentSendActions } from '../../../../_shared/
 import { previewHref, type QuoteDetail } from '../../api'
 import { daysUntil, nextStep, QUOTE_TABS, readOnlyReason, STATUS_TONE, type QuoteTab } from '../../model'
 import type { QuoteRecordActions, QuoteRecordViewModel } from '../record-model'
+import type { QuoteDepthSlots } from '../lines-depth/slots'
 import { DuplicateDialog } from '../../duplicate/view/DuplicateDialog'
 import { ApprovalTab } from './ApprovalTab'
 import { QuoteDialogs } from './Dialogs'
@@ -35,15 +36,15 @@ export type { QuoteRecordViewModel, QuoteRecordActions } from '../record-model'
  * beside any tab on a wide screen with ⌘J). Money follows the person's grains: cost and margin columns are absent, never
  * zero. It draws one view model and fetches nothing (QuoteRecord.tsx loads it).
  */
-export function QuoteRecordView({ model, actions, sendActions, panels, proofs }: { model: QuoteRecordViewModel; actions?: QuoteRecordActions; sendActions?: DocumentSendActions; panels?: ReactNode; /** B-W2b-165: Documents › Proofs (the container mounts it). */ proofs?: ReactNode }) {
+export function QuoteRecordView({ model, actions, sendActions, panels, proofs, depth }: { model: QuoteRecordViewModel; actions?: QuoteRecordActions; sendActions?: DocumentSendActions; panels?: ReactNode; /** B-W2b-165: Documents › Proofs (the container mounts it). */ proofs?: ReactNode; /** B-W2b-316: the W2b parts (lines-depth/slots.ts). */ depth?: QuoteDepthSlots }) {
   return (
     <WithMessages namespaces={['sales', 'records']}>
-      <QuoteRecord model={model} actions={actions} sendActions={sendActions} panels={panels} proofs={proofs} />
+      <QuoteRecord model={model} actions={actions} sendActions={sendActions} panels={panels} proofs={proofs} depth={depth} />
     </WithMessages>
   )
 }
 
-function QuoteRecord({ model, actions, sendActions, panels, proofs }: { model: QuoteRecordViewModel; actions?: QuoteRecordActions; sendActions?: DocumentSendActions; panels?: ReactNode; proofs?: ReactNode }) {
+function QuoteRecord({ model, actions, sendActions, panels, proofs, depth }: { model: QuoteRecordViewModel; actions?: QuoteRecordActions; sendActions?: DocumentSendActions; panels?: ReactNode; proofs?: ReactNode; depth?: QuoteDepthSlots }) {
   const t = useT('sales')
   const listHref = `${model.prefix}/sales/quotes`
   const loaded = model.quote
@@ -88,10 +89,10 @@ function QuoteRecord({ model, actions, sendActions, panels, proofs }: { model: Q
       </div>
     )
   }
-  return <ReadyRecord quote={loaded.value} model={model} actions={actions} sendActions={sendActions} panels={panels} proofs={proofs} />
+  return <ReadyRecord quote={loaded.value} model={model} actions={actions} sendActions={sendActions} panels={panels} proofs={proofs} depth={depth} />
 }
 
-function ReadyRecord({ quote, model, actions, sendActions, panels, proofs }: { quote: QuoteDetail; model: QuoteRecordViewModel; actions?: QuoteRecordActions; sendActions?: DocumentSendActions; panels?: ReactNode; proofs?: ReactNode }) {
+function ReadyRecord({ quote, model, actions, sendActions, panels, proofs, depth }: { quote: QuoteDetail; model: QuoteRecordViewModel; actions?: QuoteRecordActions; sendActions?: DocumentSendActions; panels?: ReactNode; proofs?: ReactNode; depth?: QuoteDepthSlots }) {
   const t = useT('sales')
   const locale = useLocale()
   const recordHref = `${model.prefix}/sales/quotes/${quote.id}`
@@ -302,6 +303,8 @@ function ReadyRecord({ quote, model, actions, sendActions, panels, proofs }: { q
           }
         />
       )}
+      {/* B-W2b-316: a W2b part's notice. */}
+      {depth?.notice}
       {status === 'PENDING_APPROVAL' && pendingRequest && (
         <Banner tone="warning" title={t('record.waitingApproval', { reasons: pendingRequest.reasons.map((reason) => t(`reason.${reason}`)).join(' · ') })}>
           {pendingRequest.createdById === model.me ? t('record.waitingYours') : t('record.waitingWho')}
@@ -314,12 +317,12 @@ function ReadyRecord({ quote, model, actions, sendActions, panels, proofs }: { q
 
       <div className={showDock ? 'fw-q-body has-dock' : 'fw-q-body'}>
         <div className="fw-q-main">
-          {model.tab === 'lines' && <LinesTab quote={quote} model={model} actions={actions} step={step} />}
-          {model.tab === 'price' && <PriceTab quote={quote} model={model} />}
-          {model.tab === 'terms' && <TermsTab quote={quote} model={model} actions={actions} />}
-          {model.tab === 'versions' && <VersionsTab quote={quote} model={model} actions={actions} />}
+          {model.tab === 'lines' && <LinesTab quote={quote} model={model} actions={actions} step={step} depth={depth} />}
+          {model.tab === 'price' && <PriceTab quote={quote} model={model} depth={depth?.price} />}
+          {model.tab === 'terms' && <TermsTab quote={quote} model={model} actions={actions} depth={depth} />}
+          {model.tab === 'versions' && <VersionsTab quote={quote} model={model} actions={actions} depth={depth?.versionsList} />}
           {model.tab === 'approval' && <ApprovalTab quote={quote} model={model} actions={actions} />}
-          {model.tab === 'documents' && <DocumentsTab quote={quote} model={model} actions={actions} proofs={proofs} />}
+          {model.tab === 'documents' && <DocumentsTab quote={quote} model={model} actions={actions} proofs={proofs} depositActions={depth?.depositActions} />}
           {model.tab === 'activity' && (activity ?? <p className="fw-q-hint">{t('record.noPanels')}</p>)}
         </div>
         {showDock && (
@@ -330,6 +333,7 @@ function ReadyRecord({ quote, model, actions, sendActions, panels, proofs }: { q
       </div>
 
       <QuoteDialogs quote={quote} model={model} actions={actions} />
+      {depth?.overlay}
       {model.duplicate && <DuplicateDialog model={model.duplicate} canManage={model.can.manage} actions={actions} />}
       {model.send && <DocumentSendView open model={model.send} actions={sendActions} />}
     </div>

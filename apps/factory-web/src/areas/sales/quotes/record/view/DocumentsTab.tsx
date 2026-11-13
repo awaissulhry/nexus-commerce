@@ -21,7 +21,7 @@ const DEPOSIT_TONE = { OPEN: 'warning', PAID: 'success', WAIVED: 'neutral', CANC
  * the acceptance's evidence (append-only) and the deposit request made at acceptance. The record's files are in
  * Activity › Files.
  */
-export function DocumentsTab({ quote, model, actions, proofs }: { quote: QuoteDetail; model: QuoteRecordViewModel; actions?: QuoteRecordActions; /** B-W2b-165 (SAL-199): the proofs panel (record/proofs). */ proofs?: ReactNode }) {
+export function DocumentsTab({ quote, model, actions, proofs, depositActions }: { quote: QuoteDetail; model: QuoteRecordViewModel; actions?: QuoteRecordActions; /** B-W2b-165 (SAL-199): the proofs panel (record/proofs). */ proofs?: ReactNode; /** B-W2b-316: the deposit's pay-online page. */ depositActions?: ReactNode }) {
   const t = useT('sales')
   const shell = useT('shell')
   const locale = useLocale()
@@ -157,6 +157,7 @@ export function DocumentsTab({ quote, model, actions, proofs }: { quote: QuoteDe
               ]}
             />
           )}
+          {depositActions}
         </Card>
       </div>
     </div>
