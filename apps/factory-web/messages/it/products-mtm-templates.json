@@ -74,7 +74,6 @@
     "rulesCount_other": "{count} regole in vigore ({blocking} bloccanti)",
     "archivedRule": "Non controllata",
     "twoPoints": "{point} e {other}",
-    "editLater": "Le regole sono mostrate qui come sono; per ora non si modificano da questa pagina.",
     "factsTitle": "Taglia base e limiti",
     "baseSize": "Taglia base suggerita da",
     "baseSizeFrom": "{points} (a pari merito la taglia più grande)",

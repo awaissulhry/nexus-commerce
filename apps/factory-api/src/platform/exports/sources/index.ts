@@ -70,6 +70,8 @@ import { demandRows } from './demand'
 import { scheduleBoard } from './schedule-board'
 // B-W2b-353: Sales › After-sales › Warranty & service (B-W2b-345's source, registered with its page).
 import { serviceCases } from './service-cases'
+// B-W2b-371: Sales › Special orders › Made-to-measure (the rider list; the source lives with its module).
+import { mtmProfiles } from '../../../modules/sales/mtm/list-filters/export-source'
 
 /**
  * Every list with an export (B-W2a-23; PLT-179), one file per list beside this one. A step that gives its list an export
@@ -152,4 +154,6 @@ export const EXPORT_SOURCES: readonly AnyExportSource[] = Object.freeze([
   scheduleBoard,
   // B-W2b-353: Sales › After-sales › Warranty & service.
   serviceCases,
+  // B-W2b-371: Sales › Special orders › Made-to-measure.
+  mtmProfiles,
 ])

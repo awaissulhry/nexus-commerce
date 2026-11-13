@@ -30,7 +30,7 @@ import { heldRoles } from '../auth/roles/access'
 import { audienceSees, type FileAudience, type Viewer } from '../files/rules'
 import type { AttachmentView, MessageView, ThreadView } from './contract'
 import { followInCommand } from './followers'
-import { resolveRecord, type RecordScope } from './records'
+import { mayOnThread, resolveRecord, type RecordScope } from './records'
 
 /**
  * Record threads (plan A1 §2.3, §3.7; features COL-001, COL-003, COL-020):
@@ -242,12 +242,12 @@ export async function readThread(caller: CommandCaller, record: RecordRef, page:
     let thread: SeenThread | null
     if (office) {
       const found = await officeRecord(client, record)
-      if (!can(actor, THREADS_READ, found.scope)) throw new NotFoundError('Record not found.')
+      if (!mayOnThread(actor, THREADS_READ, record.type, found.scope)) throw new NotFoundError('Record not found.')
       thread = found.thread
     } else {
       // Row-level security shows a partner only its own party's threads; "none" and "not yours" look the same.
       thread = await client.thread.findFirst({ where: recordWhere(record), select: THREAD_COMMON })
-      if (thread && !can(actor, THREADS_READ, scopeOfThread(thread))) thread = null
+      if (thread && !mayOnThread(actor, THREADS_READ, record.type, scopeOfThread(thread))) thread = null
     }
     if (!thread) return EMPTY
     const rows = (await client.message.findMany({
@@ -442,7 +442,7 @@ export async function mentionProblems(tx: CommandTx, context: RequestContext, th
     }
     // Their grants as a signed-in session would hold them (two-factor taken as proved: they will prove it to open it).
     const reader: Actor = { audience: 'office', tenantId: context.tenantId, grants: sessionGrants({ requireMfa: false }, await heldRoles(tx, userId, now), true) }
-    if (!can(reader, THREADS_READ, scopeOfThread(thread))) problems.push({ path, message: "This person cannot read this record's thread." })
+    if (!mayOnThread(reader, THREADS_READ, thread.recordType, scopeOfThread(thread))) problems.push({ path, message: "This person cannot read this record's thread." })
   }
   return problems
 }
@@ -461,8 +461,8 @@ export async function mentionablePeople(caller: CommandCaller, record: RecordRef
   const actor = actorOf(context)
   return caller.withClient(async (client) => {
     const { scope } = await officeRecord(client, record)
-    if (!can(actor, THREADS_READ, scope)) throw new NotFoundError('Record not found.')
-    if (!can(actor, THREADS_POST, scope)) throw new ForbiddenError()
+    if (!mayOnThread(actor, THREADS_READ, record.type, scope)) throw new NotFoundError('Record not found.')
+    if (!mayOnThread(actor, THREADS_POST, record.type, scope)) throw new ForbiddenError()
     const users = await client.user.findMany({
       where: { status: 'ACTIVE' },
       orderBy: [{ displayName: 'asc' }, { id: 'asc' }],
@@ -472,7 +472,7 @@ export async function mentionablePeople(caller: CommandCaller, record: RecordRef
     const people: Array<{ id: string; name: string }> = []
     for (const user of users) {
       const reader: Actor = { audience: 'office', tenantId: context.tenantId, grants: sessionGrants({ requireMfa: false }, await heldRoles(client, user.id, now), true) }
-      if (can(reader, THREADS_READ, scope)) people.push({ id: user.id, name: user.displayName })
+      if (mayOnThread(reader, THREADS_READ, record.type, scope)) people.push({ id: user.id, name: user.displayName })
     }
     return people
   })
@@ -495,8 +495,8 @@ export async function postNote(caller: CommandCaller, record: RecordRef, input: 
   const problems = noteProblems(draft)
   if (problems.length > 0) throw new ValidationError('The note is not valid.', problems)
   const { scope } = await caller.withClient((client) => officeRecord(client, record))
-  if (!can(actor, THREADS_READ, scope)) throw new NotFoundError('Record not found.')
-  if (!can(actor, THREADS_POST, scope)) throw new ForbiddenError()
+  if (!mayOnThread(actor, THREADS_READ, record.type, scope)) throw new NotFoundError('Record not found.')
+  if (!mayOnThread(actor, THREADS_POST, record.type, scope)) throw new ForbiddenError()
   if (draft.forFloor && !noteMayGoToFloor(record.type)) throw new ValidationError('The note is not valid.', [{ path: 'body/forFloor', message: FLOOR_NOTE_REFUSAL }])
 
   const { result } = await command(
@@ -505,7 +505,7 @@ export async function postNote(caller: CommandCaller, record: RecordRef, input: 
     async (tools) => {
       const { thread } = await ensureThread(tools, record, context.actorId)
       // The thread as it is now (made by this command or a racing one): its scope decides.
-      if (!can(actor, THREADS_POST, scopeOfThread(thread))) throw new ForbiddenError()
+      if (!mayOnThread(actor, THREADS_POST, record.type, scopeOfThread(thread))) throw new ForbiddenError()
       if (thread.status !== 'OPEN') throw new InvalidStateError('This thread is closed; reopen it to write a note.')
       const issues = [
         ...(await attachmentProblems(tools.tx, context, thread, draft.attachments, 'OFFICE')),
@@ -540,8 +540,8 @@ export async function setThreadStatus(
   const context = contextOf(caller)
   const actor = actorOf(context)
   const thread = await caller.withClient((client) => client.thread.findFirst({ where: recordWhere(record), select: THREAD_OFFICE }))
-  if (!thread || !can(actor, THREADS_READ, scopeOfThread(thread))) throw new NotFoundError('This record has no thread.')
-  if (!can(actor, THREADS_MANAGE, scopeOfThread(thread))) throw new ForbiddenError()
+  if (!thread || !mayOnThread(actor, THREADS_READ, record.type, scopeOfThread(thread))) throw new NotFoundError('This record has no thread.')
+  if (!mayOnThread(actor, THREADS_MANAGE, record.type, scopeOfThread(thread))) throw new ForbiddenError()
   const { result } = await command(
     caller,
     {

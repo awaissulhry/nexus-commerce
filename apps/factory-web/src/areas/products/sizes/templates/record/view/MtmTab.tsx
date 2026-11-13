@@ -1,21 +1,25 @@
 'use client'
 
 import Link from 'next/link'
-import { Play, Square } from 'lucide-react'
+import { Pencil, Play, Square } from 'lucide-react'
 import { Banner, Card, EmptyState } from '@nexus/ui/components'
 import { Button, Skeleton, Spinner, Tag } from '@nexus/ui/primitives'
 import type { TemplateView } from '../../api'
 import { ridersHref, ruleBounds, rulesFacts, ruleWords, switchHeld } from '../../model'
 import { OnOffTag, useWords } from '../../parts'
 import type { TemplateRecordActions, TemplateRecordModel } from './TemplateRecordView'
+// B-W2b-371 (XF2:05): the rule editor.
+import { ExtrasMessages, useExtras } from '../../../../../sales/mtm/photos/words'
+import { editRulesHeld } from '../../rules/model'
+import { RulesEditor } from '../../rules/view/RulesEditor'
 
 /**
  * Measurement template › Made-to-measure (B-W2b-248's rules, GATE-MTM): built switched OFF per template (Owner 11-10). The off
  * state in words and the way to start it — Start / Stop made-to-measure (product.mtm.switch, the Owner's; held with why for
  * everyone else; a reason; ONE PUT with the template's version) —, then what the template checks once on, read only: the rules
  * (each in its own words in the reader's language, Blocks / Warns, the points it compares, its bounds), the base size rule,
- * the alteration limits and tolerances, the styles measured with it and made to measure. A rule editor is not on this page
- * yet (named gap). Fetches nothing.
+ * the alteration limits and tolerances, the styles measured with it and made to measure. B-W2b-371 (XF2:05): Edit rules opens the
+ * rule editor in place (rules/view/RulesEditor.tsx; product.styles.manage, held with why). Fetches nothing.
  */
 export function MtmTab({ model, template, actions }: { model: TemplateRecordModel; template: TemplateView; actions?: TemplateRecordActions }) {
   const { t, say, locale } = useWords()
@@ -75,11 +79,21 @@ export function MtmTab({ model, template, actions }: { model: TemplateRecordMode
             {!on && <Banner tone="info" title={t(model.can.switch ? 'mtm.offOwner' : 'mtm.offOthers')} />}
           </section>
         </Card>
+        {model.rulesEdit?.draft ? (
+          <ExtrasMessages>
+            <RulesEditor rules={rules} model={model.rulesEdit} actions={actions?.rulesEdit} />
+          </ExtrasMessages>
+        ) : (
         <Card padded>
           <section className="fw-lib-stack" aria-labelledby="mtt-rules">
-            <h2 id="mtt-rules" className="fw-lib-title">
-              {t('mtm.rulesTitle')}
-            </h2>
+            <div className="fw-mtt-switch">
+              <h2 id="mtt-rules" className="fw-lib-title">
+                {t('mtm.rulesTitle')}
+              </h2>
+              <ExtrasMessages>
+                <EditRulesButton rules={rules} model={model} actions={actions} />
+              </ExtrasMessages>
+            </div>
             <p className="fw-lib-hint">{facts.active === 0 ? t('mtm.noRules') : t('mtm.rulesCount', { count: facts.active, blocking: facts.blocking })}</p>
             {sorted.length > 0 && (
               <ul className="fw-mtt-rules">
@@ -98,9 +112,9 @@ export function MtmTab({ model, template, actions }: { model: TemplateRecordMode
                 })}
               </ul>
             )}
-            <p className="fw-lib-hint">{t('mtm.editLater')}</p>
           </section>
         </Card>
+        )}
       </div>
       <Card padded>
         <section className="fw-lib-stack" aria-labelledby="mtt-facts">
@@ -131,5 +145,18 @@ export function MtmTab({ model, template, actions }: { model: TemplateRecordMode
         </section>
       </Card>
     </div>
+  )
+}
+
+/** Edit rules (B-W2b-371, XF2:05): held with why (no right, the template archived or not editable by this person); the last save's receipt. */
+function EditRulesButton({ rules, model, actions }: { rules: NonNullable<TemplateRecordModel['rules']['value']>; model: TemplateRecordModel; actions?: TemplateRecordActions }) {
+  const { t, say } = useExtras()
+  return (
+    <span className="fw-lib-inline">
+      {model.rulesEdit?.notice && <span className="fw-lib-hint">{say(model.rulesEdit.notice)}</span>}
+      <Button size="sm" variant="secondary" heldReason={say(editRulesHeld(rules, model.can))} onClick={() => actions?.rulesEdit?.onOpen?.()}>
+        <Pencil size={13} aria-hidden /> {t('rules.edit')}
+      </Button>
+    </span>
   )
 }

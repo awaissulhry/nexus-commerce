@@ -1,6 +1,6 @@
 'use client'
 
-import { CalendarX2, Image as ImageIcon, Upload } from 'lucide-react'
+import { CalendarX2, Image as ImageIcon } from 'lucide-react'
 import { Card, EmptyState } from '@nexus/ui/components'
 import { Button, Tag } from '@nexus/ui/primitives'
 import { ReadState, Section } from '../../../../quality/_shared/parts'
@@ -8,12 +8,16 @@ import type { ProfileRecord } from '../../api'
 import { photoSets, rightHeld, type Phrase } from '../../model'
 import { useWords } from '../../parts'
 import type { ProfileRecordActions, ProfileRecordModel } from '../view-model'
+// B-W2b-371 (XF2:01): the office's own photos and the fittings', each with its delete date.
+import { OfficePhotosSection } from '../../photos/view/OfficePhotos'
+import { ExtrasMessages } from '../../photos/words'
 
 /**
  * The rider profile's Photos tab (design rider.photos, SAL-286; personal data, office only): the front, side and back photos each
  * revision came with by the measurement link (B-W2b-171), when and by whom, the consent (the privacy notice ticked and when), the
  * day they are deleted; Open shows the stripped copy (location removed; the opening is recorded); "Set the deletion day" (with why,
- * logged) is the delete the platform has. Upload from the office has no route yet: held with the reason (photos come by the link).
+ * logged) is the delete the platform has. B-W2b-371 (XF2:01): then the photos taken in the office and at the fittings, each with
+ * its own delete date (photos/view/OfficePhotos.tsx: Add a photo, Open, Change the delete date).
  */
 export function PhotosTab({ model, record, actions }: { model: ProfileRecordModel; record: ProfileRecord; actions?: ProfileRecordActions }) {
   const { t, say, day, when } = useWords()
@@ -21,15 +25,16 @@ export function PhotosTab({ model, record, actions }: { model: ProfileRecordMode
   const sent = model.sent
   const linkHeld: Phrase | null = !model.can.link ? rightHeld('link') : offline ? { key: 'held.offline' } : null
   const deleteHeld: Phrase | null = !model.can.link ? rightHeld('link') : offline ? { key: 'held.offline' } : null
-  const uploadHeld = t('photos.uploadHeld')
   const sets = sent.items ? photoSets(sent.items.revisions) : []
+  const office = model.photos ? (
+    <ExtrasMessages>
+      <OfficePhotosSection model={model.photos} actions={actions?.photos} newestId={record.latestId} prefix={model.prefix} />
+    </ExtrasMessages>
+  ) : null
   const head = (
     <div className="fw-mtm-head">
       <p className="fw-mtm-hint">{t('photos.intro')}</p>
       <div className="fw-mtm-actions">
-        <Button size="sm" variant="secondary" heldReason={uploadHeld} onClick={() => undefined}>
-          <Upload size={14} aria-hidden /> {t('photos.upload')}
-        </Button>
         <Button size="sm" variant="primary" heldReason={say(linkHeld)} onClick={() => actions?.onOpenLink?.()}>
           {t('photos.askByLink')}
         </Button>
@@ -41,6 +46,7 @@ export function PhotosTab({ model, record, actions }: { model: ProfileRecordMode
       <div className="fw-mtm-stack">
         {head}
         <ReadState problem={sent.problem} loading={sent.items === null && !sent.problem} onRetry={() => actions?.onRetry?.()} failedTitle={t('photos.failed')} />
+        {office}
       </div>
     )
   return (
@@ -87,6 +93,7 @@ export function PhotosTab({ model, record, actions }: { model: ProfileRecordMode
           </Section>
         ))
       )}
+      {office}
       {sent.items.links.length > 0 && (
         <Section id="photos-links" title={t('photos.links')}>
           <ul className="fw-mtm-lines">

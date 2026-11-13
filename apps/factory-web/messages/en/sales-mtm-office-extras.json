@@ -1,0 +1,247 @@
+{
+  "view": {
+    "FRONT": "Front",
+    "SIDE": "Side",
+    "BACK": "Back",
+    "DETAIL": "Detail"
+  },
+  "verdict": {
+    "OK": "Fits",
+    "ALTER": "Alteration needed",
+    "REMAKE": "Remade"
+  },
+  "review": {
+    "WAITING": "waiting for the review",
+    "CONFIRMED": "confirmed",
+    "NEED_MORE": "more asked"
+  },
+  "status": {
+    "PENDING_APPROVAL": "Waiting",
+    "CONFIRMED": "Confirmed",
+    "IN_PRODUCTION": "In production",
+    "READY": "Ready",
+    "PARTLY_SHIPPED": "Partly shipped"
+  },
+  "lifecycle": {
+    "CONCEPT": "Concept",
+    "DEVELOPMENT": "Development",
+    "SAMPLING": "Sampling",
+    "APPROVED": "Approved",
+    "IN_PRODUCTION": "In production",
+    "PHASE_OUT": "Phasing out",
+    "DISCONTINUED": "Discontinued"
+  },
+  "photo": {
+    "add": "Add a photo",
+    "addFitting": "Add a photo of the fitting",
+    "office": "Photos taken in the office",
+    "officeSub": "The office's own photos of the rider in a base layer, per revision, each with its delete date. Personal data: office only, never shared.",
+    "failed": "Could not read the office's photos",
+    "offBody": "Made-to-measure has not started for {garment}: no photo is added until it starts.",
+    "offWhere": "Where it is started",
+    "none": "No photo taken in the office",
+    "noneBody": "Add the front, side and back in a base layer for the pattern maker; each photo is deleted on its date.",
+    "revision": "Revision {revision}",
+    "consent": "Privacy notice given: {notice} on {date}",
+    "fittings": "Photos of the fittings",
+    "fittingsSub": "Taken at a fitting, kept with what it found; each with its delete date.",
+    "fittingOf": "Fitting of {date} · revision {revision}",
+    "fittingNone": "No photo of this fitting",
+    "fittingCount_one": "{count} photo of this fitting",
+    "fittingCount_other": "{count} photos of this fitting",
+    "dismiss": "Dismiss",
+    "pending": "Not arrived",
+    "notAvailable": "This photo has not arrived or is being checked",
+    "addedBy": "Added by {name} on {when}",
+    "added": "Added on {when}",
+    "open": "Open",
+    "openAria": "Open the photo: {view}",
+    "dateButton": "Delete date",
+    "dateAria": "Change the delete date of the photo: {view}",
+    "working": "Working…",
+    "cancel": "Cancel",
+    "opening": "Opening the photo without its location data…",
+    "alt": "{view} of {rider}",
+    "stripped": "Shown without location data; the opening is recorded.",
+    "held": {
+      "reading": "The photos are being read.",
+      "off": "Made-to-measure has not started for {garment}: no photo is added until it starts (Products › Sizes & measurements › Measurement templates).",
+      "rightRecord": "Your roles do not allow this: it needs the right to record measurements.",
+      "rightFittings": "Your roles do not allow this: it needs the right to manage fittings.",
+      "rightDate": "Your roles do not allow changing this photo's delete date.",
+      "offline": "Offline: try again when the connection is back.",
+      "checked": "Being checked"
+    },
+    "upload": {
+      "title": "Add a photo of the rider",
+      "titleFitting": "Add a photo of the fitting",
+      "sub": "{rider} · office only, never shared",
+      "privacy": "A photo of the rider in a base layer is personal data: it stays in the office and is deleted on its date. Its own file name is not kept.",
+      "view": "Which view",
+      "hint": "JPEG or PNG, at most 15 MB.",
+      "picked": "Photo picked ({size} KB)",
+      "deleteOn": "Delete on",
+      "deleteOnHint": "Leave it empty: deleted 90 days after the garment ships.",
+      "save": "Add the photo",
+      "done": "The photo was added.",
+      "noFile": "Pick a photo first.",
+      "type": "A photo as JPEG or PNG (on a phone choose \"Most compatible\").",
+      "size": "At most 15 MB.",
+      "full": "At most 12 photos here: change a delete date to today first, or take them on the next revision.",
+      "store": "The photo did not reach the file store: try again.",
+      "off": "Made-to-measure has not started for this garment type: no photo is added until it starts."
+    },
+    "delete": {
+      "afterShipping": "Deleted 90 days after the garment ships",
+      "withinHour": "Deleted within the hour",
+      "on": "Deleted on {date}"
+    },
+    "date": {
+      "title": "Delete date of the photo: {view}",
+      "now": "Now: {line}.",
+      "day": "Delete on",
+      "dayHint": "From today on: today deletes the photo within the hour.",
+      "today": "Delete today",
+      "why": "Why (logged)",
+      "save": "Save the date",
+      "saveToday": "Delete today",
+      "done": "The photo is deleted on {date}.",
+      "doneToday": "The photo will be deleted within the hour.",
+      "problem": {
+        "day": "Write the day.",
+        "past": "A day from today on.",
+        "tooLate": "At most two years from today.",
+        "reason": "Say why (at most 500 characters): it is logged.",
+        "deleted": "This photo is deleted already: its date stays as it is.",
+        "same": "The photo is deleted on that day already.",
+        "stale": "This photo changed meanwhile: it was read again.",
+        "retained": "This photo is kept at least until a later day: it is not deleted before."
+      }
+    },
+    "problem": {
+      "failed": "That did not work: try again.",
+      "forbidden": "Your roles do not allow this.",
+      "notFound": "The photo or the record is no longer there.",
+      "unavailable": "The office server cannot be reached: try again.",
+      "open": "The photo could not be opened: it may be deleted or still being checked."
+    }
+  },
+  "list": {
+    "range": {
+      "hint": "The rider's newest measures against the certified range of each open unit's style",
+      "unknown": "Not checked",
+      "inside": "Inside",
+      "outside": "Outside",
+      "outsidePoints": "Outside: {points}"
+    },
+    "customer": {
+      "label": "Customer",
+      "all": "All customers",
+      "placeholder": "Customer…"
+    }
+  },
+  "rules": {
+    "edit": "Edit rules",
+    "title": "The rules, as you type them",
+    "intro": "Each rule checks the measures while they are typed and sent, once made-to-measure has started. Blocks: not taken as it stands; Warns: said and kept.",
+    "add": "Add a rule",
+    "none": "No rule: only the plausible range of each point is asked again.",
+    "code": "Code",
+    "newCode": "new rule",
+    "rowLabel": "Rule {n}: {code}",
+    "kind": "What it checks",
+    "point": "Point",
+    "pick": "Choose a point",
+    "otherOrder": "Never above",
+    "otherRatio": "Divided by",
+    "minFactor": "Smallest factor",
+    "maxFactor": "Largest factor",
+    "minValue": "Smallest ({unit})",
+    "maxValue": "Largest ({unit})",
+    "severity": "When it breaks",
+    "wordsIt": "Words in Italian",
+    "wordsEn": "Words in English",
+    "archived": "Not checked (kept)",
+    "remove": "Remove",
+    "removeAria": "Remove the rule {code}",
+    "archivedPoint": "archived",
+    "means": {
+      "ORDER": "The point is never above the other point (both in the same unit).",
+      "RATIO": "The point divided by the other point stays between the factors.",
+      "RANGE": "The point's measure stays between the values, in its unit."
+    },
+    "base": {
+      "title": "Base size",
+      "intro": "The points the suggested base size is read from, in the template's order (the first ticked decides first). None: the base size is typed.",
+      "points": "Points the base size is read from",
+      "tie": "When two sizes fit as well"
+    },
+    "tie": {
+      "LARGER": "Take the larger size",
+      "SMALLER": "Take the smaller size"
+    },
+    "limits": {
+      "title": "Tolerances and alteration limits",
+      "intro": "Per point: the inspection tolerance of a made-to-measure garment, and how far under and over the base size's measure a unit may go before a pattern maker reviews it. Empty: not set.",
+      "tolerance": "Tolerance ± ({unit})",
+      "alterationMinus": "Under, at most ({unit})",
+      "alterationPlus": "Over, at most ({unit})"
+    },
+    "noChange": "Nothing changed yet",
+    "changes_one": "{count} change to save",
+    "changes_other": "{count} changes to save",
+    "cancel": "Cancel",
+    "save": "Save the rules",
+    "done": "The rules are saved.",
+    "held": {
+      "right": "Your roles do not allow this: it needs the right to manage styles and their templates.",
+      "archived": "This template is archived: restore it first.",
+      "notEditable": "This template is not kept by your company: its rules are changed where it is kept.",
+      "busy": "Saving…",
+      "offline": "Offline: try again when the connection is back.",
+      "full": "At most 60 rules per template.",
+      "fix_one": "{count} field to fix first",
+      "fix_other": "{count} fields to fix first",
+      "nothing": "Nothing changed yet."
+    },
+    "problem": {
+      "code": "A code of 1 to 60 letters, digits, dots, dashes or underscores, each rule once.",
+      "words": "The words in Italian at least (at most 500 characters each).",
+      "point": "A point of this template (an archived point only on a rule not checked).",
+      "other": "Another point of this template (for an order rule, in the same unit).",
+      "factor": "Factors above 0 with at most 4 decimals, the smallest not above the largest; at least one.",
+      "value": "Values with at most 2 decimals, the smallest not above the largest; at least one.",
+      "kind": "This kind of rule takes other fields: check them.",
+      "base": "1 to 10 points of this template.",
+      "limit": "0 or more, in the point's unit, at most 2 decimals.",
+      "tooMany": "At most {max} rules per template.",
+      "failed": "The rules could not be saved: try again.",
+      "stale": "Someone changed the template meanwhile: the rules were read again, check them and save once more."
+    }
+  },
+  "whereUsed": {
+    "reading": "Reading where it is used…",
+    "failed": "Could not read where it is used",
+    "retry": "Try again",
+    "styles": "Styles measured with {code}",
+    "noStyles": "No style is measured with {code} yet.",
+    "orders": "Open orders it serves",
+    "ordersHeld": "Your roles do not read orders: the open orders are not shown.",
+    "noOrders": "No open order has a made-to-measure unit of {code}.",
+    "moreOrders": "Only the 100 newest open orders are listed.",
+    "mtmYes": "Made to measure",
+    "mtmNo": "Size grid only",
+    "unit": "Line {seq} · {style} {colourway} · base size {size} · revision {revision}, {review}",
+    "col": {
+      "style": "Style",
+      "name": "Name",
+      "season": "Season",
+      "state": "State",
+      "mtm": "Made to measure",
+      "order": "Order",
+      "customer": "Customer",
+      "status": "Status",
+      "units": "Made-to-measure units"
+    }
+  }
+}

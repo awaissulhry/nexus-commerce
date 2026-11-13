@@ -2,18 +2,19 @@ import type { Prisma } from '@nexus/factory-db'
 import { ConflictError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { can, scopeWhere } from '@nexus/factory-domain/core/permissions'
-import { businessDate, businessDayStart, toUtcIso } from '@nexus/factory-domain/core/time'
+import { businessDate, toUtcIso } from '@nexus/factory-domain/core/time'
 import type { Measures } from '@nexus/factory-domain/product/mtm-rules/rules'
 import { SALES_MEASUREMENTS_VIEW } from '@nexus/factory-domain/sales/measure-link/permissions'
 import type { NewProfileBody, NewRevisionBody, ProfilesQuery } from '@nexus/factory-domain/sales/mtm/contracts'
 import { SALES_MTM_RECORD, SALES_MTM_REVIEW } from '@nexus/factory-domain/sales/mtm/permissions'
 import { isOld, measuredValuesOf, outsidePoints, reviewRefusal, type ReviewStatus } from '@nexus/factory-domain/sales/mtm/rules'
 import { WORKSHEET_KIND } from '@nexus/factory-domain/sales/mtm/worksheet'
-import { addDays } from '@nexus/factory-domain/sales/quotes/quotes'
 import { command, type CommandCaller } from '../../../core/command'
 import { actorOf, type OfficeContext } from '../../../core/context'
 import { serverClock } from '../../../core/time'
 import { linkRuleChecks } from '../measure-link/checks'
+// B-W2b-371 (XF2:03): the certified range and the fittings of the week as filters.
+import { fittingWeek, rangesOf } from './list-filters/filters'
 import {
   assertMayProfile,
   chainOf,
@@ -41,9 +42,10 @@ import {
  * the record's Measurements tab, mtm.new "New measurements"):
  *
  *   GET  /sales/mtm/profiles                       the newest revision of each rider's garment type the caller reads (q, customer,
- *                                                  garment type, review state, older than 12 months), pages; the tiles: waiting for
- *                                                  the factory review, more asked of the rider, older than 12 months, fittings this
- *                                                  week ("outside the certified range" is per style: null, the record's check says it)
+ *                                                  garment type, review state, older than 12 months; B-W2b-371: outside or inside
+ *                                                  the certified range, a fitting this week), pages; the tiles: waiting for the
+ *                                                  factory review, more asked of the rider, older than 12 months, fittings this week,
+ *                                                  outside the certified range (riders; null while no unit's range is known)
  *   GET  /sales/mtm/profiles/:profileId            the record of any revision: every revision (values, who measured and where, the
  *                                                  review), the template's points, the newest revision's review (may the caller
  *                                                  decide, why not, the template's rules on it, points outside their range), the
@@ -90,21 +92,23 @@ export async function listProfiles(caller: CommandCaller, query: ProfilesQuery) 
     const chains = new Map<string, ProfileRow[]>()
     for (const row of all) chains.set(keyOf(row), [...(chains.get(keyOf(row)) ?? []), row])
     const latest = [...chains.values()].map((rows) => rows[0]!)
+    // B-W2b-371 (XF2:03): each tile counts the riders its filter shows; "outside" is known only where a unit was checked.
+    const ranges = await rangesOf(db, latest, now)
+    const fitted = await fittingWeek(db, actor, today)
+    const fitsThisWeek = (row: ProfileRow): boolean => (chains.get(keyOf(row)) ?? []).some((revision) => fitted.has(revision.id))
+    const known = latest.filter((row) => ranges.get(row.id)?.inside !== null && ranges.get(row.id)?.inside !== undefined)
     const tiles = {
       waitingReview: latest.filter((row) => row.reviewStatus === 'WAITING').length,
       needMore: latest.filter((row) => row.reviewStatus === 'NEED_MORE').length,
       older: latest.filter((row) => isOld(businessDate(row.takenAt), today)).length,
-      fittingsThisWeek: 0,
-      outsideRange: null,
+      fittingsThisWeek: latest.filter(fitsThisWeek).length,
+      outsideRange: known.length === 0 ? null : known.filter((row) => ranges.get(row.id)?.inside === false).length,
     }
-    const weekday = new Date(`${today}T12:00:00Z`).getUTCDay()
-    const monday = addDays(today, -((weekday + 6) % 7))
-    tiles.fittingsThisWeek = await db.appointment.count({
-      where: { AND: [scopeWhere(actor, SALES_MEASUREMENTS_VIEW, { party: 'partyId' }) as Prisma.AppointmentWhereInput, { kind: 'FITTING', status: { in: ['BOOKED', 'DONE'] }, startsAt: { gte: businessDayStart(monday), lt: businessDayStart(addDays(monday, 7)) } }] },
-    })
     const shown = latest
       .filter((row) => (query.review ? row.reviewStatus === query.review : true))
       .filter((row) => (query.old === undefined ? true : isOld(businessDate(row.takenAt), today) === (query.old === 'true')))
+      .filter((row) => (query.range === undefined ? true : ranges.get(row.id)?.inside === (query.range === 'inside')))
+      .filter((row) => (query.fittings === undefined ? true : fitsThisWeek(row)))
       .sort((a, b) => b.takenAt.getTime() - a.takenAt.getTime() || (a.id < b.id ? -1 : 1))
     const page = shown.slice(query.offset, query.offset + query.limit)
     const parties = new Map((page.length === 0 ? [] : await db.party.findMany({ where: { id: { in: [...new Set(page.map((row) => row.partyId))] } }, select: { id: true, code: true, legalName: true } })).map((row) => [row.id, row]))
@@ -135,6 +139,7 @@ export async function listProfiles(caller: CommandCaller, query: ProfilesQuery) 
           old: isOld(businessDate(row.takenAt), today),
           openUnits: open.filter((line) => line.measurementProfileId !== null && ids.has(line.measurementProfileId)).length,
           nextFittingAt: fitting ? toUtcIso(fitting.startsAt) : null,
+          range: { inside: ranges.get(row.id)?.inside ?? null, points: [...(ranges.get(row.id)?.points ?? [])] },
         }
       }),
       matching: shown.length,

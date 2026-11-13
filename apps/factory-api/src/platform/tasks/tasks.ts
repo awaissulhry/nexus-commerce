@@ -39,7 +39,7 @@ import { serverClock } from '../../core/time'
 import { heldRoles } from '../auth/roles/access'
 import { followInCommand } from '../threads/followers'
 import { recordLabelOf } from '../threads/labels'
-import { resolveRecord } from '../threads/records'
+import { mayOnThread, resolveRecord } from '../threads/records'
 
 /**
  * Tasks on any record (B-W2a-20; COL-037; design home.tasks "My tasks", shell.panels popup task-new and side panel
@@ -113,10 +113,10 @@ const scopeOf = (row: Pick<TaskRow, 'companyId' | 'siteId' | 'partyId'>): Scoped
 /** What the person may do with a task: see it (and why), and change it. */
 export function accessOf(actor: Actor, personId: string, row: Pick<TaskRow, 'createdById' | 'assigneeId' | 'recordType' | 'companyId' | 'siteId' | 'partyId'>): { readonly relation: TaskRelation; readonly canChange: boolean } {
   const scope = scopeOf(row)
-  const relation = relationOf(row, personId, row.recordType !== null && can(actor, THREADS_READ, scope))
+  const relation = relationOf(row, personId, row.recordType !== null && mayOnThread(actor, THREADS_READ, row.recordType, scope))
   if (relation === null) return { relation, canChange: false }
   const manages = can(actor, TASKS_MANAGE, scope) || (row.recordType === null && holds(actor, TASKS_MANAGE))
-  const canChange = manages && (relation !== 'RECORD' || can(actor, THREADS_POST, scope))
+  const canChange = manages && (relation !== 'RECORD' || mayOnThread(actor, THREADS_POST, row.recordType, scope))
   return { relation, canChange }
 }
 
@@ -126,13 +126,13 @@ async function personActor(client: Client, tenantId: string, userId: string, now
 }
 
 /** Whether this person may be given the task: ACTIVE, reaches My tasks, keeps tasks where it sits, and reads its record. */
-export async function mayBeAssigned(client: Client, tenantId: string, userId: string, scope: ScopedRecord, onRecord: boolean, now: Date): Promise<boolean> {
+export async function mayBeAssigned(client: Client, tenantId: string, userId: string, scope: ScopedRecord, onRecord: boolean, now: Date, /* B-W2b-371 */ recordType?: string | null): Promise<boolean> {
   const user = await client.user.findFirst({ where: { id: userId, status: 'ACTIVE' }, select: { id: true } })
   if (!user) return false
   const actor = await personActor(client, tenantId, userId, now)
   if (!holds(actor, HOME_VIEW)) return false
   if (!(can(actor, TASKS_MANAGE, scope) || (!onRecord && holds(actor, TASKS_MANAGE)))) return false
-  return !onRecord || can(actor, THREADS_READ, scope)
+  return !onRecord || mayOnThread(actor, THREADS_READ, recordType, scope)
 }
 
 const ASSIGNEE_REFUSED = 'This person may not be given the task: they cannot keep tasks here, or cannot see its record.'
@@ -155,13 +155,13 @@ export async function taskAssignees(caller: CommandCaller, query: { readonly rec
     let scope: ScopedRecord = { companyId: null, siteId: null, partyId: null }
     if (onRecord) {
       const found = await resolveRecord(client, query.recordType!, query.recordId!)
-      if (!found || !can(actor, THREADS_READ, found)) throw new NotFoundError('Record not found.')
-      if (!can(actor, THREADS_POST, found) || !can(actor, TASKS_MANAGE, found)) throw new ForbiddenError('You may not make tasks on this record.')
+      if (!found || !mayOnThread(actor, THREADS_READ, query.recordType, found)) throw new NotFoundError('Record not found.')
+      if (!mayOnThread(actor, THREADS_POST, query.recordType, found) || !can(actor, TASKS_MANAGE, found)) throw new ForbiddenError('You may not make tasks on this record.')
       scope = found
     } else if (!holds(actor, TASKS_MANAGE)) throw new ForbiddenError()
     const users = await client.user.findMany({ where: { status: 'ACTIVE' }, orderBy: [{ displayName: 'asc' }, { id: 'asc' }], take: ASSIGNABLE_MAX, select: { id: true, displayName: true } })
     const people: { id: string; name: string; me: boolean }[] = []
-    for (const user of users) if (await mayBeAssigned(client, context.tenantId, user.id, scope, onRecord, now)) people.push({ id: user.id, name: user.displayName, me: user.id === context.actorId })
+    for (const user of users) if (await mayBeAssigned(client, context.tenantId, user.id, scope, onRecord, now, query.recordType)) people.push({ id: user.id, name: user.displayName, me: user.id === context.actorId })
     return { people, complete: users.length < ASSIGNABLE_MAX }
   })
 }
@@ -278,7 +278,7 @@ export async function listTasks(caller: CommandCaller, query: ListQuery) {
     if (query.scope === 'RECORD') {
       if (!query.recordType || !query.recordId) throw new ValidationError('Name the record.', [{ path: 'querystring/recordId', message: 'A record list needs recordType and recordId.' }])
       const scope = await resolveRecord(client, query.recordType, query.recordId)
-      if (!scope || !can(actor, THREADS_READ, scope)) throw new NotFoundError('Record not found.')
+      if (!scope || !mayOnThread(actor, THREADS_READ, query.recordType, scope)) throw new NotFoundError('Record not found.')
       where = { recordType: query.recordType, recordId: query.recordId }
     } else {
       where = query.scope === 'MINE' ? { assigneeId: context.actorId } : { createdById: context.actorId }
@@ -369,8 +369,8 @@ export async function createTask(caller: CommandCaller, body: CreateBody, idempo
     let label: string | null = null
     if (record) {
       const found = await resolveRecord(tx, record.type, record.id)
-      if (!found || !can(actor, THREADS_READ, found)) throw new NotFoundError('Record not found.')
-      if (!can(actor, THREADS_POST, found) || !can(actor, TASKS_MANAGE, found)) throw new ForbiddenError('You may not make tasks on this record.')
+      if (!found || !mayOnThread(actor, THREADS_READ, record.type, found)) throw new NotFoundError('Record not found.')
+      if (!mayOnThread(actor, THREADS_POST, record.type, found) || !can(actor, TASKS_MANAGE, found)) throw new ForbiddenError('You may not make tasks on this record.')
       scope = found
       label = await recordLabelOf(tx, record.type, record.id)
       if (label === null) throw new NotFoundError('Record not found.')
@@ -379,7 +379,7 @@ export async function createTask(caller: CommandCaller, body: CreateBody, idempo
     } else if (!holds(actor, TASKS_MANAGE)) throw new ForbiddenError()
     // No assignee named: the task is its maker's own (My tasks); null: nobody's yet.
     const assigneeId = body.assigneeId === undefined ? context.actorId : body.assigneeId
-    if (assigneeId !== null && !(await mayBeAssigned(tx, context.tenantId, assigneeId, scope, record !== null, now))) throw new ValidationError(ASSIGNEE_REFUSED, [{ path: 'body/assigneeId', message: ASSIGNEE_REFUSED }])
+    if (assigneeId !== null && !(await mayBeAssigned(tx, context.tenantId, assigneeId, scope, record !== null, now, record?.type))) throw new ValidationError(ASSIGNEE_REFUSED, [{ path: 'body/assigneeId', message: ASSIGNEE_REFUSED }])
     const id = newId()
     const checklist = nextChecklist([], body.checklist ?? [], { userId: context.actorId, now: toUtcIso(now), newId })
     const row = await tx.task.create({
@@ -504,7 +504,7 @@ async function assignInCommand(tools: CommandTools, context: OfficeContext, row:
   if (row.status !== 'OPEN') throw refused('CLOSED')
   if (assigneeId === null && row.assigneeId === null) throw refused('NOT_ASSIGNED')
   if (assigneeId !== null && assigneeId === row.assigneeId) throw refused('ALREADY_ASSIGNED')
-  if (assigneeId !== null && !(await mayBeAssigned(tx, context.tenantId, assigneeId, scopeOf(row), row.recordType !== null, now))) throw new ValidationError(ASSIGNEE_REFUSED, [{ path: 'body/assigneeId', message: ASSIGNEE_REFUSED }])
+  if (assigneeId !== null && !(await mayBeAssigned(tx, context.tenantId, assigneeId, scopeOf(row), row.recordType !== null, now, row.recordType))) throw new ValidationError(ASSIGNEE_REFUSED, [{ path: 'body/assigneeId', message: ASSIGNEE_REFUSED }])
   const next = await writeTask(tx, row, assigneeId === null ? { assigneeId: null, assignedById: null, assignedAt: null } : { assigneeId, assignedById: context.actorId, assignedAt: now }, now)
   tools.audit({ action: 'tasks.assign', recordType: 'Task', recordId: row.id, companyId: row.companyId, siteId: row.siteId, before: { assigneeId: row.assigneeId }, after: { assigneeId } })
   emitAbout(tools, next).assigned(assigneeId, assigneeId ? context.actorId : null)

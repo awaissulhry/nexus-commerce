@@ -18,6 +18,20 @@ import { getProfile, listProfiles, recordProfile, recordRevision } from './profi
 import { orderUnits, repeatFacts, repeatOrder } from './repeat'
 import { reviewProfile } from './review'
 import { listWorksheets, makeWorksheet, openWorksheet } from './worksheet'
+// B-W2b-371: the office's and the fittings' photos, where a template is used.
+import {
+  announceFittingPhotoContract,
+  announceProfilePhotoContract,
+  completeFittingPhotoContract,
+  completeProfilePhotoContract,
+  dateFittingPhotoContract,
+  dateProfilePhotoContract,
+  listPhotosContract,
+  openPhotoContract,
+} from './photos/contract'
+import { announceFittingPhoto, announceProfilePhoto, completeFittingPhoto, completeProfilePhoto, dateFittingPhoto, dateProfilePhoto, listPhotos, openMtmPhoto } from './photos/photos'
+import { whereUsedContract } from './where-used/contract'
+import { templateWhereUsed } from './where-used/where-used'
 
 /**
  * The made-to-measure office (sales module, B-W2b-358; B-W1-17 and B-W1-18, deferred on 10-28, come back with it; SAL-276,
@@ -40,4 +54,14 @@ export default defineRoutes('sales.mtm', manifest, async (app) => {
   app.post('/sales/mtm/profiles/:profileId/worksheets', { schema: makeWorksheetContract }, async (request) => makeWorksheet(request, request.params.profileId, request.body, idempotencyKeyFrom(request)))
   app.post('/sales/mtm/profiles/:profileId/worksheets/:documentId/open', { schema: openWorksheetContract }, async (request) => openWorksheet(request, request.params.profileId, request.params.documentId, idempotencyKeyFrom(request)))
   app.get('/sales/orders/:orderId/made-to-measure', { schema: orderUnitsContract }, async (request) => orderUnits(request, request.params.orderId))
+  // B-W2b-371 (XF2:01, XF2:04)
+  app.get('/sales/mtm/profiles/:profileId/photos', { schema: listPhotosContract }, async (request) => listPhotos(request, request.params.profileId))
+  app.post('/sales/mtm/profiles/:profileId/photos', { schema: announceProfilePhotoContract }, async (request, reply) => reply.code(201).send(await announceProfilePhoto(request, request.params.profileId, request.body, idempotencyKeyFrom(request))))
+  app.post('/sales/mtm/profiles/:profileId/photos/:fileId/complete', { schema: completeProfilePhotoContract }, async (request) => completeProfilePhoto(request, request.params.profileId, request.params.fileId, idempotencyKeyFrom(request)))
+  app.put('/sales/mtm/profiles/:profileId/photos/:fileId/delete-after', { schema: dateProfilePhotoContract }, async (request) => dateProfilePhoto(request, request.params.profileId, request.params.fileId, request.body, idempotencyKeyFrom(request)))
+  app.post('/sales/fittings/results/:resultId/photos', { schema: announceFittingPhotoContract }, async (request, reply) => reply.code(201).send(await announceFittingPhoto(request, request.params.resultId, request.body, idempotencyKeyFrom(request))))
+  app.post('/sales/fittings/results/:resultId/photos/:fileId/complete', { schema: completeFittingPhotoContract }, async (request) => completeFittingPhoto(request, request.params.resultId, request.params.fileId, idempotencyKeyFrom(request)))
+  app.put('/sales/fittings/results/:resultId/photos/:fileId/delete-after', { schema: dateFittingPhotoContract }, async (request) => dateFittingPhoto(request, request.params.resultId, request.params.fileId, request.body, idempotencyKeyFrom(request)))
+  app.post('/sales/mtm/photos/:fileId/open', { schema: openPhotoContract }, async (request) => openMtmPhoto(request, request.params.fileId, idempotencyKeyFrom(request)))
+  app.get('/product/measurement-templates/:templateId/where-used', { schema: whereUsedContract }, async (request) => templateWhereUsed(request, request.params.templateId))
 })

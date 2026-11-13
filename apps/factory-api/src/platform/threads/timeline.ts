@@ -13,6 +13,8 @@ import { workerGatesFor, workersAmong } from '../../modules/people/privacy/worke
 import { AUDIT_READ, AUDIT_SCOPE_COLUMNS } from '../audit/read'
 import type { TimelineEntryView } from './contract'
 import { afterCursor, contextOf, cursorOf, officeRecord, type RecordRef } from './threads'
+// B-W2b-371: a record type's thread gate (a rider's profile: sales.measurements.view).
+import { mayOnThread } from './records'
 
 /**
  * The record's timeline (feature COL-002; A2 SCR-006): one feed, newest first, of
@@ -60,7 +62,7 @@ export async function readTimeline(
 
   return caller.withClient(async (client) => {
     const { thread, scope } = await officeRecord(client, record)
-    if (!can(actor, THREADS_READ, scope)) throw new NotFoundError('Record not found.')
+    if (!mayOnThread(actor, THREADS_READ, record.type, scope)) throw new NotFoundError('Record not found.')
     const sources: Positioned<TimelineEntryView>[][] = []
 
     const messages =

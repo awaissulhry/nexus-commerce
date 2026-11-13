@@ -105,14 +105,18 @@
     "waiting": "Da controllare",
     "needMore": "Serve altro",
     "confirmed": "Confermate",
-    "old": "Più vecchie di 12 mesi"
+    "old": "Più vecchie di 12 mesi",
+    "outside": "Fuori dal campo certificato",
+    "fittings": "Prove questa settimana"
   },
   "chip": {
     "label": "Filtri",
     "clear": "Togli il filtro {what}",
     "clearAll": "Togli tutti",
     "garment": "Tipo di capo {garment}",
-    "search": "Ricerca «{q}»"
+    "search": "Ricerca «{q}»",
+    "customer": "Cliente {customer}",
+    "customerUnnamed": "Un cliente"
   },
   "tile": {
     "waiting": "Da controllare in fabbrica",
@@ -123,8 +127,8 @@
     "hint": {
       "waiting": "Revisioni più recenti non ancora controllate dalla fabbrica",
       "needMore": "La fabbrica ha chiesto altro al pilota o al rivenditore",
-      "outside": "Si controlla per modello in ogni scheda (Controllo intervallo certificato)",
-      "fittings": "Prove fissate o fatte questa settimana; ogni riga mostra la prossima prova",
+      "outside": "Piloti le cui misure più recenti danno un capo fuori dal campo certificato del modello (— finché il su misura non è avviato)",
+      "fittings": "Piloti con una prova fissata o fatta questa settimana",
       "old": "Misurate più di 12 mesi fa: rimisurare prima di un riordino"
     },
     "failed": "Impossibile contare"
@@ -149,7 +153,6 @@
     "byOffice": "Misurate da noi",
     "old": "Rimisurare",
     "revisionValue": "Rev. {revision}",
-    "rangeHint": "Si controlla per modello nella scheda",
     "menu": "Azioni per {rider}",
     "open": "Apri",
     "openNewTab": "Apri in una nuova scheda",
@@ -425,8 +428,6 @@
   },
   "photos": {
     "intro": "Foto di fronte, fianco e schiena inviate con il link per le misure, per il modellista. Dati personali: solo ufficio.",
-    "upload": "Carica",
-    "uploadHeld": "Le foto arrivano con il link per le misure: caricarle dall’ufficio non è ancora possibile.",
     "askByLink": "Chiedi le foto con un link",
     "failed": "Impossibile leggere le foto",
     "none": "Nessuna foto",
@@ -865,7 +866,7 @@
     "quoteUnit": "Preventivo {number}: un capo sulla revisione {revision}",
     "orderUnit": "Ordine {number}: un capo sulla revisione {revision}",
     "style": "{style} · {colourway}",
-    "noThread": "Le misure del corpo sono dati personali: questa scheda non ha una conversazione. Parla del capo nel suo preventivo o ordine; ogni modifica è nel registro."
+    "noThread": "I tuoi ruoli non leggono le conversazioni dei record: note e messaggi sul pilota non sono mostrati qui."
   },
   "sheet": {
     "noRight": "Non puoi vedere questa scheda di lavoro",

@@ -3,7 +3,7 @@ import { THREADS_POST, THREADS_READ } from '@nexus/factory-domain/auth/permissio
 import { sessionGrants } from '@nexus/factory-domain/auth/roles/roles'
 import { ForbiddenError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { newId } from '@nexus/factory-domain/core/ids'
-import { can, type Actor, type ScopedRecord } from '@nexus/factory-domain/core/permissions'
+import type { Actor, ScopedRecord } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { eventFor } from '@nexus/factory-domain/events/define'
 import { events as threadEvents } from '@nexus/factory-domain/threads/events'
@@ -12,6 +12,8 @@ import { command, type CommandCaller, type CommandTools, type CommandTx } from '
 import { actorOf } from '../../core/context'
 import { heldRoles } from '../auth/roles/access'
 import { contextOf, officeRecord, type RecordRef } from './threads'
+// B-W2b-371: a record type's thread gate (a rider's profile: sales.measurements.view).
+import { mayOnThread } from './records'
 
 /**
  * Followers of a record (B-W2a-20; COL-011; design shell.panels popup followers, the band's Follow toggle,
@@ -59,9 +61,9 @@ export async function followersOf(client: FactoryClient | CommandTx, record: Rec
 }
 
 /** Whether a person (by their live office roles, two-factor taken as proved) may read the thread of a record in this scope. */
-export async function personReads(client: FactoryClient | CommandTx, tenantId: string, userId: string, scope: ScopedRecord, now: Date): Promise<boolean> {
+export async function personReads(client: FactoryClient | CommandTx, tenantId: string, userId: string, scope: ScopedRecord, now: Date, /* B-W2b-371 */ recordType?: string): Promise<boolean> {
   const reader: Actor = { audience: 'office', tenantId, grants: sessionGrants({ requireMfa: false }, await heldRoles(client, userId, now), true) }
-  return can(reader, THREADS_READ, scope)
+  return mayOnThread(reader, THREADS_READ, recordType, scope)
 }
 
 const recordOf = (record: RecordRef, scope: ScopedRecord): FollowedRecord => ({ ...record, companyId: scope.companyId ?? null, siteId: scope.siteId ?? null })
@@ -73,7 +75,7 @@ export async function listFollowers(caller: CommandCaller, record: RecordRef) {
   const actor = actorOf(context)
   return caller.withClient(async (client) => {
     const { scope } = await officeRecord(client, record)
-    if (!can(actor, THREADS_READ, scope)) throw new NotFoundError('Record not found.')
+    if (!mayOnThread(actor, THREADS_READ, record.type, scope)) throw new NotFoundError('Record not found.')
     const where = { recordType: record.type, recordId: record.id }
     // One after another: a scoped client is one transaction (no Promise.all on it).
     const rows = await client.recordFollower.findMany({ where, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: FOLLOWERS_SHOWN, select: { userId: true, reason: true, muted: true, createdAt: true, createdById: true } })
@@ -105,7 +107,7 @@ export async function setMyFollow(caller: CommandCaller, record: RecordRef, body
   if (context.audience !== 'office') throw new ForbiddenError()
   const actor = actorOf(context)
   const { scope } = await caller.withClient((client) => officeRecord(client, record))
-  if (!can(actor, THREADS_READ, scope)) throw new NotFoundError('Record not found.')
+  if (!mayOnThread(actor, THREADS_READ, record.type, scope)) throw new NotFoundError('Record not found.')
   const followed = recordOf(record, scope)
   await command(caller, { name: 'threads.follow', idempotencyKey, input: { recordType: record.type, recordId: record.id, ...body } }, async (tools) => {
     const { tx, now } = tools
@@ -141,12 +143,12 @@ export async function addFollower(caller: CommandCaller, record: RecordRef, body
   if (context.audience !== 'office') throw new ForbiddenError()
   const actor = actorOf(context)
   const { scope } = await caller.withClient((client) => officeRecord(client, record))
-  if (!can(actor, THREADS_READ, scope)) throw new NotFoundError('Record not found.')
-  if (!can(actor, THREADS_POST, scope)) throw new ForbiddenError()
+  if (!mayOnThread(actor, THREADS_READ, record.type, scope)) throw new NotFoundError('Record not found.')
+  if (!mayOnThread(actor, THREADS_POST, record.type, scope)) throw new ForbiddenError()
   const followed = recordOf(record, scope)
   await command(caller, { name: 'threads.addFollower', idempotencyKey, input: { recordType: record.type, recordId: record.id, userId: body.userId } }, async (tools) => {
     const user = await tools.tx.user.findFirst({ where: { id: body.userId, status: 'ACTIVE' }, select: { id: true } })
-    if (!user || !(await personReads(tools.tx, context.tenantId, user.id, scope, tools.now))) {
+    if (!user || !(await personReads(tools.tx, context.tenantId, user.id, scope, tools.now, record.type))) {
       const message = 'This person cannot read this record: only someone who may see it can follow it.'
       throw new ValidationError(message, [{ path: 'body/userId', message }])
     }
