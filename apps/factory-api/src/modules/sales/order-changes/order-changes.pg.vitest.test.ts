@@ -15,6 +15,8 @@ import { testAuthenticator, type SessionContext } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { applySystemRoleChanges, systemRoleChanges } from '../../../platform/auth/roles/system-roles'
 import { startHarness, type Harness } from '../../../platform/auth/sessions/testing/harness'
+import type { RequestRef } from '../../../platform/approvals-out/adapter'
+import { REACCEPTANCE_ADAPTER } from '../orders/reacceptance'
 
 /**
  * Order changes (B-W2b-309; SAL-190, SAL-218, SAL-219, SAL-221, SAL-248, SAL-306; SO2:01) on the local stack with the app's
@@ -228,6 +230,9 @@ describe('a priced change after the start, its extra deposit (SAL-219, SAL-221)'
     expect((await orderRow(order.id)).reapprovalNeededAt).not.toBeNull()
     expect(await outbox('sales_order.change_priced', order.id)).toEqual([expect.objectContaining({ amendmentId: applied.change.id, revision: 2, hasFee: true, depositRequestId: amendment.depositRequestId, reapprovalTaskId: null })])
     expect(await outbox('deposit_request.created_for_order', amendment.depositRequestId)).toEqual([expect.objectContaining({ stepKind: 'DEPOSIT', orderId: order.id })])
+    // The customer's REVISED_ORDER page (B-W2b-184) shows the price of the change, the fee and the extra deposit.
+    const content = await h.database.withScope({ audience: 'office', tenantId: A.tenant, actorId: PEOPLE.sales }, (client) => REACCEPTANCE_ADAPTER.content(client as never, { recordId: applied.change.id } as RequestRef, 'en'))
+    expect(content.facts).toEqual(expect.arrayContaining([{ label: 'Price of the change', value: 'Two more jackets, cut on their own (made-up): +€200.00' }, { label: 'Change fee', value: '€25.00' }, { label: 'Extra deposit', value: expect.stringMatching(/ · by /) }]))
     await refreshLines()
   })
 
