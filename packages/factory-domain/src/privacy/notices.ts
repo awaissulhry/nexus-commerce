@@ -21,7 +21,9 @@ import type { Issue } from '../core/errors'
  * The texts are the company's privacy consultant's; the seeds and tests hold made-up samples only.
  */
 
-export const NOTICE_KINDS = ['WORKER_FLOOR', 'OFFICE_STAFF', 'PRIVACY_PUBLIC', 'PORTAL_TERMS'] as const
+// B-W2b-375 (schema wave 53/57): SAFETY_REPORT, the notice shown with the public safety-report form and the portal's; the
+// company's outside doors of safety reports (SalesSettings.safetyReportFormOn) open only once it is published (GATE-PRIVACY).
+export const NOTICE_KINDS = ['WORKER_FLOOR', 'OFFICE_STAFF', 'PRIVACY_PUBLIC', 'PORTAL_TERMS', 'SAFETY_REPORT'] as const
 export type NoticeKind = (typeof NOTICE_KINDS)[number]
 
 export const NOTICE_STATUSES = ['DRAFT', 'PUBLISHED', 'SUPERSEDED'] as const
@@ -35,6 +37,7 @@ export const NOTICE_KIND_WORDS: Readonly<Record<NoticeKind, string>> = Object.fr
   OFFICE_STAFF: 'the staff notice (what the system keeps about office staff)',
   PRIVACY_PUBLIC: 'the public privacy notice',
   PORTAL_TERMS: 'the portal terms (what partner users acknowledge at their first visit)',
+  SAFETY_REPORT: 'the safety-report notice (shown with the public safety-report form and the portal\'s)',
 })
 
 /** The screens' languages (Q15): Italian and English. Other languages are PDFs. */

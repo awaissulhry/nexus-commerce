@@ -252,6 +252,9 @@ enum ProtectedRecordType {
   INCIDENT_PEOPLE_LIST
   /// The due list or the visit list for the doctor, with names.
   HEALTH_VISIT_LIST
+  /// W2b-6 (schema wave 53/57, B-W2b-375; B-W2b-291, -351): whether someone was hurt and the injury's words of a safety
+  /// report (the ProductSafetyInjury opened, OPEN; a print, PRINT; a photo, COPY): someone from outside, so no employee.
+  PRODUCT_SAFETY_INJURY
 }
 
 /// What of a protected record was seen.

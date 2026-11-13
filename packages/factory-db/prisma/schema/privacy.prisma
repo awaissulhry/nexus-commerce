@@ -83,6 +83,10 @@ enum PrivacyNoticeKind {
   /// W2b (B-W2b-152; GATE-PRIVACY): the portal terms and the partner portal notice, acknowledged once per version by each
   /// partner user at their first visit (PartnerNoticeAck). Live portal sign-in waits until one is published.
   PORTAL_TERMS
+  /// W2b-6 (schema wave 53/57, B-W2b-375; B-W2b-351, -357; GATE-PRIVACY): the notice shown with the public safety-report
+  /// form and the portal's (what is kept of a report, its photos and an injury, and why). The company's switch
+  /// (SalesSettings.safetyReportFormOn) opens the outside doors only once this notice is published.
+  SAFETY_REPORT
 }
 
 enum PrivacyNoticeStatus {

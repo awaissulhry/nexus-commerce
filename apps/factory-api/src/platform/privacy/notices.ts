@@ -205,6 +205,7 @@ export async function deleteNotice(caller: CommandCaller, noticeId: string, vers
 const publishWords = (kind: NoticeKind, label: string): string[] => {
   if (kind === 'WORKER_FLOOR') return [`Version ${label} is in force. Every worker reads and acknowledges it on the tablet at their next sign-in; until then no scan or cut log names them (L. 300/1970 art. 4 c.3).`]
   if (kind === 'OFFICE_STAFF') return [`Version ${label} is in force. Each office person sees it once at their next sign-in.`]
+  if (kind === 'SAFETY_REPORT') return [`Version ${label} is in force. It is shown with the safety-report form on the DoC page and in the portal; the outside doors open only once the company switches them on.`]
   return [`Version ${label} is in force at the company's public address, linked from every link page and e-mail.`]
 }
 
