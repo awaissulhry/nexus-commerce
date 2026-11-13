@@ -163,6 +163,9 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/purchasing/requests',
   // B-W2b-347: RFQs & sourcing (SCR-222): the sample and development orders.
   '/purchasing/sourcing',
+  // B-W2b-348: Sales reports (SCR-250) and their print view (SCR-427, a new tab).
+  '/sales/reports',
+  '/sales/reports/print',
   // B-W2b-350: Purchasing reports (SCR-255) and their print view (SCR-372, a new tab).
   '/purchasing/reports',
   '/purchasing/reports/print',

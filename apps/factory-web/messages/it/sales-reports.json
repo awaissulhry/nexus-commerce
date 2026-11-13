@@ -1,0 +1,386 @@
+{
+  "common": {
+    "loading": "Lettura…",
+    "retry": "Riprova",
+    "pieces_one": "{count} pezzo",
+    "pieces_other": "{count} pezzi",
+    "noPrice": "Importi: visibili solo con il permesso sui prezzi.",
+    "incomplete": "Più documenti di quanti un report ne legge: sono contati i primi 5.000.",
+    "mixed": "In più valute: ognuna è mostrata, mai sommata.",
+    "moreGroups_one": "{count} altro gruppo è contato nei totali.",
+    "moreGroups_other": "Altri {count} gruppi sono contati nei totali.",
+    "ordersOutside": "Gli ordini non sono nel tuo ruolo",
+    "ordersOutsideBody": "Questo pannello conta gli ordini cliente: serve il permesso di vederli."
+  },
+  "problem": {
+    "read": "Non è stato possibile leggere il report. Riprova tra poco.",
+    "forbidden": "Questo report non è nel tuo ruolo.",
+    "offline": "Nessuna risposta dal server: forse sei offline.",
+    "gone": "Questa azienda non c'è più."
+  },
+  "noAccess": {
+    "title": "I report vendite non sono nel tuo ruolo",
+    "body": "Chiedi a un amministratore il permesso dei report vendite."
+  },
+  "band": {
+    "label": "Report vendite",
+    "reading": "Lettura delle cifre…",
+    "arrange": "Disponi",
+    "print": "Stampa",
+    "more": "Altre azioni",
+    "csv": {
+      "intake": "Esporta l'acquisito ordini (CSV)",
+      "backlog": "Esporta il portafoglio (CSV)",
+      "returns": "Esporta le righe di reso (CSV)"
+    },
+    "csvHeld": "Attendi che il pannello sia letto.",
+    "dashboard": "Salva come cruscotto (Home)",
+    "dashboardHeld": "I cruscotti della Home arriveranno più avanti: i pannelli non si possono ancora salvare lì.",
+    "keys": "Scorciatoie da tastiera"
+  },
+  "live": {
+    "connecting": "Connessione",
+    "live": "In tempo reale",
+    "offline": "Offline: le cifre potrebbero essere vecchie"
+  },
+  "scope": {
+    "label": "Azienda e periodo",
+    "allCompanies": "Tutte le aziende in cui lavori",
+    "period": "Ordini acquisiti, preventivi e resi dal {from} al {to}; il portafoglio è a oggi.",
+    "wholeCompany": "I report vendite coprono tutta l'azienda (gli ordini non sono tenuti per stabilimento).",
+    "noPrice": "Senza il permesso sui prezzi le cifre sono pezzi e conteggi."
+  },
+  "section": {
+    "strip": "In sintesi",
+    "intake": "Acquisito ordini",
+    "backlog": "Portafoglio per settimana promessa",
+    "returns": "Motivi di reso"
+  },
+  "keys": {
+    "title": "Scorciatoie da tastiera",
+    "arrange": "Disponi i pannelli",
+    "print": "Apri la vista di stampa",
+    "bar": "Apri cosa conta la barra, la settimana o la cella selezionata",
+    "nextBar": "Settimana o mese successivo o precedente nella finestra",
+    "help": "Questo elenco"
+  },
+  "time": {
+    "minutes": "{value} min",
+    "hours": "{value} h",
+    "days": "{value} giorni lavorativi",
+    "hoursElapsed": "{value} h",
+    "daysElapsed": "{value} giorni"
+  },
+  "strip": {
+    "hint": "Il periodo in cinque numeri, dal {from} al {to}.",
+    "failed": "Non è stato possibile leggere la sintesi",
+    "notInRole": "Non nel tuo ruolo",
+    "intake": "Acquisito ordini",
+    "intakeHint": "Ordini: {orders} · pezzi acquisiti: {pieces}",
+    "backlog": "Portafoglio",
+    "backlogHint": "Pezzi da spedire: {pieces} · in ritardo: {late}",
+    "winRate": "Preventivi vinti",
+    "winHint": "{accepted} su {decided} decisi vinti · {expired} scaduti",
+    "winNone": "Nessun preventivo deciso nel periodo",
+    "speed": "Velocità mediana dei preventivi",
+    "speedHint_one": "Da nuovo a inviato, {count} preventivo",
+    "speedHint_other": "Da nuovo a inviato, {count} preventivi",
+    "speedNone": "Nessun preventivo inviato per la prima volta nel periodo",
+    "returnRate": "Tasso di reso",
+    "returnHint": "Pezzi chiesti in reso: {pieces} su {shipped} spediti",
+    "returnNoShipped": "Pezzi chiesti in reso: {pieces}; nulla spedito nel periodo",
+    "definition": "Acquisito, portafoglio e tasso di reso aprono ciò che contano; i riquadri dei preventivi aprono Vendite › Preventivi."
+  },
+  "intake": {
+    "hint": "Ordini acquisiti dal {from} al {to}.",
+    "by": "Barre per",
+    "byOption": {
+      "week": "Settimana",
+      "month": "Mese"
+    },
+    "split": "Dividi per",
+    "splitOption": {
+      "none": "Senza divisione",
+      "customer": "Cliente",
+      "style": "Modello",
+      "season": "Stagione"
+    },
+    "failed": "Non è stato possibile leggere l'acquisito ordini",
+    "axes": "Acquisito per settimana o mese; ordini acquisiti",
+    "empty": "Nessun ordine in questo periodo",
+    "emptyHint": "Un ordine conta qui nel giorno in cui è acquisito, una volta confermato. Scegli un periodo più lungo.",
+    "none": {
+      "none": "Tutti gli ordini",
+      "customer": "Senza cliente",
+      "style": "Senza modello",
+      "season": "Senza stagione"
+    },
+    "fees": "Spese e addebiti",
+    "others": "Altri",
+    "kv": {
+      "orders": "Ordini acquisiti",
+      "ordersHint": "Confermati nel periodo; mai un ordine annullato",
+      "pieces": "Pezzi",
+      "piecesHint": "Righe di capi; le righe di spesa non ne hanno",
+      "value": "Valore acquisito",
+      "valueHint": "Netto, IVA esclusa, al valore attuale degli ordini"
+    },
+    "chartLabel": "Acquisito ordini: {measure} per barra e ordini acquisiti",
+    "measure": {
+      "value": "Valore acquisito",
+      "pieces": "Pezzi acquisiti"
+    },
+    "axis": {
+      "value": "Valore ({currency})",
+      "pieces": "Pezzi",
+      "orders": "Ordini"
+    },
+    "series": {
+      "orders": "Ordini acquisiti"
+    },
+    "captionValue": "Le barre sono il valore netto acquisito (diviso nei gruppi maggiori quando diviso); la linea conta gli ordini acquisiti.",
+    "captionPieces": "Le barre sono i pezzi acquisiti (divisi nei gruppi maggiori quando diviso); la linea conta gli ordini acquisiti.",
+    "bucketsLabel": "Settimane o mesi: ognuno apre i suoi ordini",
+    "bucketOrders_one": "{count} ordine",
+    "bucketOrders_other": "{count} ordini",
+    "bucketOpen": "Apri gli ordini acquisiti in {bucket}",
+    "bucketNone": "Nulla acquisito",
+    "tableLabel": "Acquisito ordini per {split}",
+    "col": {
+      "customer": "Cliente",
+      "style": "Modello",
+      "season": "Stagione",
+      "none": "Ordini",
+      "orders": "Ordini",
+      "pieces": "Pezzi",
+      "value": "Valore",
+      "share": "Quota"
+    },
+    "groupOpen": "Apri gli ordini di {name}",
+    "definition": "Acquisito = confermato: un ordine in attesa di un sì conta una volta confermato, alla sua data ordine; un ordine annullato e la sostituzione di un reso non contano mai. Un ordine separato da un altro conta nel giorno in cui fu acquisito il primo.",
+    "styleNote": "Per modello un ordine conta una volta in ogni modello che contiene; pezzi e valore sono quelli delle righe del modello."
+  },
+  "backlog": {
+    "hint": "Confermato e non spedito, al {today}: ogni taglia aperta alla sua promessa attuale.",
+    "by": "Tabella per",
+    "byOption": {
+      "customer": "Cliente",
+      "style": "Modello"
+    },
+    "failed": "Non è stato possibile leggere il portafoglio",
+    "axes": "Pezzi aperti per settimana promessa; valore o ordini",
+    "empty": "Nulla attende la spedizione",
+    "emptyHint": "Ogni ordine confermato è stato spedito, oppure nessuno è aperto.",
+    "earlierShort": "Prima",
+    "laterShort": "Dopo",
+    "noneShort": "Nessuna",
+    "earlier": "Promesso entro il {day}",
+    "later": "Promesso dal {day}",
+    "none": "Nessuna promessa",
+    "kv": {
+      "pieces": "Pezzi aperti",
+      "piecesHint": "Ordini: {orders} · righe: {lines}",
+      "late": "In ritardo",
+      "lateHint": "Pezzi con la promessa prima di oggi",
+      "noneLate": "Nulla è in ritardo",
+      "weeks": "Settimane promesse",
+      "weeksHint": "Settimane con pezzi promessi",
+      "value": "Valore aperto",
+      "valueHint": "La quota dei pezzi aperti sul valore netto di ogni riga"
+    },
+    "chartLabel": "Portafoglio: pezzi aperti per settimana promessa, i pezzi in ritardo a parte",
+    "series": {
+      "pieces": "Pezzi aperti",
+      "late": "In ritardo",
+      "due": "In scadenza",
+      "value": "Valore aperto",
+      "orders": "Ordini"
+    },
+    "axis": {
+      "pieces": "Pezzi",
+      "value": "Valore ({currency})",
+      "orders": "Ordini"
+    },
+    "caption": "I pezzi in ritardo (promessa prima di oggi) sono in rosso. Una settimana precedente a questa contiene solo pezzi in ritardo.",
+    "weeksLabel": "Settimane promesse: ognuna apre le sue taglie aperte",
+    "weekOpen": "Apri le taglie promesse in {week}",
+    "thisWeek": "Questa settimana",
+    "lateTag": "In ritardo",
+    "ofThemLate_one": "{count} in ritardo",
+    "ofThemLate_other": "{count} in ritardo",
+    "weekNone": "Nulla promesso",
+    "tableLabel": "Portafoglio per {by}",
+    "col": {
+      "customer": "Cliente",
+      "style": "Modello",
+      "total": "Totale",
+      "value": "Valore aperto",
+      "week": "Settimana promessa"
+    },
+    "horizon": {
+      "late": "In ritardo",
+      "thisWeek": "Questa settimana",
+      "next4": "Prossime 4 settimane",
+      "later": "Più avanti",
+      "none": "Nessuna promessa"
+    },
+    "groupOpen": "Apri le taglie aperte di {name}",
+    "cellOpen": "Apri le taglie di {name}: {horizon}",
+    "definition": "Gli ordini aperti (confermati, in produzione, pronti, spediti in parte): ogni taglia ordinata meno quanto spedito, esclusa una riga chiusa in meno, alla promessa attuale (lo storico delle promesse, altrimenti la data scritta sulla riga o sull'ordine). Le date promesse sono della pianificazione; questo report non le cambia mai."
+  },
+  "returns": {
+    "hint": "Righe di reso chieste dal {from} al {to}.",
+    "also": "Anche per",
+    "alsoOption": {
+      "style": "Modello",
+      "size": "Taglia",
+      "colour": "Colore",
+      "customer": "Cliente"
+    },
+    "failed": "Non è stato possibile leggere i motivi di reso",
+    "axes": "Pezzi per motivo; modello per taglia",
+    "outside": "I resi non sono nel tuo ruolo",
+    "outsideBody": "Questo pannello conta i resi dei clienti: serve il permesso di vederli.",
+    "empty": "Nessun reso in questo periodo",
+    "emptyHint": "Un reso conta nel giorno in cui è stato chiesto; quelli rifiutati e annullati non contano mai.",
+    "unknown": "Non noto",
+    "noSize": "Senza taglia",
+    "kv": {
+      "pieces": "Pezzi chiesti in reso",
+      "piecesHint": "Resi: {returns} · righe: {lines}",
+      "rate": "Tasso di reso",
+      "rateOutside": "Le spedizioni sono contate con il permesso di vedere gli ordini",
+      "rateHint": "Su {shipped} pezzi spediti nel periodo",
+      "reasons": "Motivi indicati",
+      "top": "Il più frequente: {reason}",
+      "credited": "Accreditato",
+      "creditedHint": "Accrediti decisi finora, netti"
+    },
+    "byReason": "Per motivo",
+    "barSub": "Resi: {returns} · righe: {lines}",
+    "noGroups": "I motivi sono mostrati uno per uno: i gruppi di motivi non sono ancora tenuti.",
+    "alsoTitle": {
+      "style": "Per modello",
+      "size": "Per taglia",
+      "colour": "Per colore",
+      "customer": "Per cliente"
+    },
+    "heatTitle": "Modelli più resi per taglia",
+    "heatNone": "Nulla è tornato",
+    "heatCellNone": "{style}, taglia {size}: nulla chiesto in reso",
+    "heatCell": "{style}, taglia {size}: {count} pezzi chiesti in reso",
+    "definition": "Ogni riga di reso conta i pezzi chiesti in reso, con il motivo del cliente (l'elenco dei motivi di reso delle impostazioni vendite). Modello, colore e taglia sono quelli della riga d'ordine che nomina.",
+    "col": {
+      "returns": "Resi"
+    },
+    "printRate": "Tasso di reso {rate} su {shipped} pezzi spediti."
+  },
+  "drill": {
+    "first": "Questo è il primo.",
+    "last": "Questo è l'ultimo.",
+    "noSteps": "Nessun successivo: questa finestra apre un intero gruppo o periodo.",
+    "previous": "Precedente",
+    "next": "Successivo",
+    "export": "Esporta (CSV)",
+    "exportHeld": "Nulla da esportare.",
+    "openList": {
+      "intake": "Apri Ordini",
+      "backlog": "Apri Ordini",
+      "returns": "Apri Resi e riparazioni"
+    },
+    "count": "Righe",
+    "countHint": {
+      "intake": "Ordini acquisiti",
+      "backlog": "Taglie aperte",
+      "returns": "Righe di reso"
+    },
+    "list": "L'elenco",
+    "listName": {
+      "intake": "Vendite › Ordini",
+      "backlog": "Vendite › Ordini",
+      "returns": "Vendite › Resi e riparazioni"
+    },
+    "listHint": {
+      "intake": "Tutti gli ordini, cercati per cliente quando è di un solo cliente: l'elenco non filtra per periodo, modello o stagione.",
+      "backlog": "Gli ordini aperti, cercati per cliente quando è di un solo cliente: l'elenco non filtra per settimana promessa.",
+      "returns": "Tutti i resi, cercati per cliente quando è di un solo cliente: l'elenco non filtra per motivo o periodo."
+    },
+    "empty": "Nulla qui",
+    "emptyHint": "Nessun documento forma questo numero.",
+    "more": "Sono mostrate le prime {shown} di {count} righe; il file le contiene tutte.",
+    "keys": "J / K aprono il successivo e il precedente.",
+    "title": {
+      "intake": "Ordini dietro questa barra",
+      "backlog": "Taglie aperte dietro questa barra",
+      "returns": "Righe di reso dietro questa barra"
+    },
+    "wholePeriod": "Dal {from} al {to}",
+    "allBacklog": "Tutto il portafoglio",
+    "splitOff": "Separato il {day}",
+    "lineOf": "{number} riga {seq}",
+    "madeToMeasure": "Su misura",
+    "promiseRecord": "Dallo storico delle promesse",
+    "size": "Taglia {size}",
+    "notDecided": "Non deciso",
+    "col": {
+      "order": "Ordine",
+      "customer": "Cliente",
+      "bookedOn": "Acquisito il",
+      "season": "Stagione",
+      "pieces": "Pezzi",
+      "value": "Valore",
+      "orderLine": "Riga d'ordine",
+      "style": "Modello",
+      "size": "Taglia",
+      "open": "Aperti",
+      "promise": "Promessa",
+      "returnLine": "Riga di reso",
+      "requestedOn": "Chiesto il",
+      "reason": "Motivo",
+      "credited": "Accreditato",
+      "return": "Reso",
+      "line": "Riga",
+      "colour": "Colore"
+    }
+  },
+  "print": {
+    "title": "Report vendite",
+    "period": "Periodo",
+    "intake": "Acquisito ordini",
+    "backlog": "Portafoglio",
+    "backlogOn": "al {day}",
+    "held": "Attendi che ogni parte sia letta.",
+    "back": "Torna al report",
+    "failed": "Non è stato possibile leggere una parte del report",
+    "total": "Totale"
+  },
+  "speed": {
+    "title": "Velocità dei preventivi",
+    "hint": "Quanto velocemente rispondiamo e quanto spesso vinciamo, questo mese.",
+    "failed": "Non è stato possibile leggere la velocità dei preventivi",
+    "tile": {
+      "answer": "Tempo mediano da nuovo a inviato",
+      "decision": "Tempo mediano da inviato a decisione",
+      "winRate": "Tasso di vincita (accettati ÷ decisi)",
+      "won": "Valore vinto"
+    },
+    "answerHint_one": "{count} preventivo inviato per la prima volta questo mese",
+    "answerHint_other": "{count} preventivi inviati per la prima volta questo mese",
+    "answerNone": "Nessun preventivo inviato per la prima volta questo mese",
+    "decisionHint_one": "{count} preventivo accettato o rifiutato",
+    "decisionHint_other": "{count} preventivi accettati o rifiutati",
+    "decisionNone": "Nessun preventivo deciso questo mese",
+    "winHint": "{accepted} su {decided} decisi · {expired} scaduti, non contati",
+    "winNone": "Nessun preventivo deciso questo mese",
+    "wonHint_one": "{count} preventivo accettato, netto",
+    "wonHint_other": "{count} preventivi accettati, netti",
+    "wonMixed_one": "{count} preventivo accettato, in più valute",
+    "wonMixed_other": "{count} preventivi accettati, in più valute",
+    "definition": "Nuovo = quando è arrivata la richiesta (o è stato creato il preventivo), in tempo lavorativo sul calendario dell'azienda; deciso = accettato o rifiutato dal cliente.",
+    "opens": "Ogni riquadro apre i report vendite di questo mese.",
+    "noReports": "I report vendite non sono nel tuo ruolo.",
+    "loading": "Lettura…",
+    "retry": "Riprova",
+    "incomplete": "Più preventivi di quanti un report ne legge: sono contati i primi 5.000."
+  }
+}

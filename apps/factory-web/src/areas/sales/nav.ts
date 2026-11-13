@@ -1,5 +1,7 @@
 import { ClipboardList, Contact, FileText, Handshake, Inbox, LifeBuoy, Settings, Tags, Undo2 } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
+// B-W2b-348: the Reports section's icon.
+import { BarChart3 } from 'lucide-react'
 
 /**
  * Sales (design 01 area 2 "Sales / Vendite", group Main with no label). Labels are message keys (`shell:` =
@@ -46,6 +48,12 @@ export const officeArea: OfficeAreaNav = {
         id: 'sales-pricing',
         label: 'shell:nav.sales.pricing',
         items: [{ id: 'sales-pricelists', label: 'shell:nav.sales.pricelists', href: '/sales/price-lists', icon: Tags, permission: 'pricelists.view' }],
+      },
+      // B-W2b-348: Reports › Sales reports (SCR-250; GET /sales/reports/headline, intake, backlog, returns).
+      {
+        id: 'sales-reports',
+        label: 'shell:nav.sales.reportsGroup',
+        items: [{ id: 'sales-reports', label: 'shell:nav.sales.reports', href: '/sales/reports', icon: BarChart3, permission: 'sales.reports.view' }],
       },
       // SCR-235 (B-W2a-77): Settings › Sales settings — quote rules and defaults, return policy and reasons, numbering.
       {

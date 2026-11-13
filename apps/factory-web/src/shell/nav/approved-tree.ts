@@ -123,6 +123,8 @@ export const OFFICE: readonly TreeArea[] = [
         hideLabel: false,
         pages: [{ id: 'sales.pricelists', title: 'Price lists & contracts', titleIt: 'Listini e contratti', wave: 'W2a', href: '/sales/price-lists' }],
       },
+      // W2b: B-W2b-348 Sales reports (SCR-250, its print view SCR-427).
+      { label: 'Reports', labelIt: 'Report', hideLabel: false, pages: [{ id: 'sales.reports', title: 'Sales reports', titleIt: 'Report vendite', wave: 'W2b', href: '/sales/reports' }] },
       // W2a: B-W2a-77 Sales settings (SCR-235).
       {
         label: 'Settings',
