@@ -318,7 +318,7 @@
     "sdiNotNow": "It cannot be sent now: see its state",
     "amending": "The lines are being amended: review or discard the amendment first",
     "amendShipped": "Its lines are fixed once anything shipped: a later change is a return",
-    "amendMtm": "This order has a made-to-measure unit: it is not amended here yet",
+    "amendFee": "This order has a fee line: a fee is changed on its own line, so the order is not amended here",
     "amendState": "This order takes no amendment now",
     "closeLinesState": "Only an order that is not fully shipped closes lines",
     "closeLinesNone": "Nothing is left to close: every line shipped in full or is closed already",

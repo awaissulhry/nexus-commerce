@@ -11,6 +11,10 @@ import { RecordPanels } from '../../../../record-panels/RecordPanels'
 import { storeUrl } from '../../../../record-panels/store'
 import type { DocumentSendModel } from '../../../_shared/document-send/model'
 import { parseCc } from '../../../_shared/document-send/model'
+// B-W2b-368 (XF1:04): the send dialog's fix for the MTM_* line checks (the rider profile).
+import { quoteUnits } from '../../../_shared/document-send/fix-tab/mtm/api'
+import { isMtmCode, MTM_FIX_NAMESPACE } from '../../../_shared/document-send/fix-tab/mtm/model'
+import { MTM_PERMISSIONS } from '../../mtm/model'
 import { isApiError } from '../../../../lib/api/errors'
 import {
   addLine,
@@ -66,7 +70,7 @@ const NO_COMPOSER: ComposerState = { query: '', results: null, problem: null, ch
  */
 export function QuoteRecord({ quoteId }: { quoteId: string }) {
   return (
-    <WithMessages namespaces={['sales', 'send', 'records']}>
+    <WithMessages namespaces={['sales', 'send', 'records', /* B-W2b-368 */ MTM_FIX_NAMESPACE]}>
       <QuoteRecordContainer quoteId={quoteId} />
     </WithMessages>
   )
@@ -74,6 +78,7 @@ export function QuoteRecord({ quoteId }: { quoteId: string }) {
 
 function QuoteRecordContainer({ quoteId }: { quoteId: string }) {
   const t = useT('sales')
+  const fixT = useT(MTM_FIX_NAMESPACE) // B-W2b-368
   const api = useOfficeApi()
   const session = useOfficeSession()
   const router = useRouter()
@@ -425,6 +430,8 @@ function QuoteRecordContainer({ quoteId }: { quoteId: string }) {
     setSend((model) => (model ? { ...model, checks: { status: 'loading' } } : model))
     try {
       const check = await sendCheck(api, current.id)
+      // B-W2b-368 (XF1:04): an MTM_* check names its unit's rider profile (the units read only when such a check is there).
+      const units = check.checks.some((item) => isMtmCode(item.code)) ? await quoteUnits(api, current.id).catch(() => null) : null
       setSend((model) =>
         model
           ? {
@@ -433,7 +440,7 @@ function QuoteRecordContainer({ quoteId }: { quoteId: string }) {
               language: check.language,
               how: { kind: 'acceptLink', until: check.linkExpiresAt },
               fields: { ...model.fields, subject: model.fields.subject || check.subject || '', message: model.fields.message },
-              checks: { status: 'ready', items: sendItems(check, t, tabHref) },
+              checks: { status: 'ready', items: sendItems(check, t, tabHref, { units, t: fixT, prefix, mayOpen: session.permissions.includes(MTM_PERMISSIONS.view) }) },
             }
           : model,
       )

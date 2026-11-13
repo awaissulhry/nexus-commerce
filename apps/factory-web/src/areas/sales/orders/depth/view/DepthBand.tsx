@@ -8,7 +8,7 @@ import { formatDate } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
 import type { Order } from '../../api'
-import { askHeld, depthEditHeld, NAMESPACE, openRequest, PRIORITY_TONE, waitPhrases, withdrawHeld } from '../model'
+import { askHeld, depthEditHeld, NAMESPACE, onlyMeasurements, openRequest, PRIORITY_TONE, waitPhrases, withdrawHeld } from '../model'
 import type { OrderDepthActions, OrderDepthModel } from '../use-order-depth'
 import '../depth.css'
 
@@ -90,7 +90,8 @@ function Waiting({ model, actions, prefix }: { model: OrderDepthModel; actions?:
     ) : null
   }
   const approval = part.value
-  if (!approval.waiting) return null
+  // B-W2b-368: waiting only for the factory review — the review banner says it (no yes is asked).
+  if (!approval.waiting || onlyMeasurements(approval)) return null
   const request = openRequest(approval)
   const ask = askHeld(approval, model.can)
   const withdraw = withdrawHeld(approval, model.can)

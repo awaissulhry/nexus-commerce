@@ -92,6 +92,7 @@
     "REQUEST_PENDING": "A request is open: the person who decides answers in Home › Approvals.",
     "NO_REQUEST": "Nobody has been asked yet: ask for a yes.",
     "CREDIT_HOLD": "The customer’s credit holds the order: Finance decides.",
+    "MEASUREMENTS": "The factory review of a made-to-measure unit’s measures: the order goes on once they are confirmed.",
     "asked": "Asked on {date}",
     "askedOf": "Asked of {who} on {date}",
     "mine": "you asked",

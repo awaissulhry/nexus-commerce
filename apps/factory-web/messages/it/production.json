@@ -137,7 +137,7 @@
     "lines": "Righe d'ordine",
     "line": "Riga {seq} · {style} {colourway}",
     "sizeOpen": "{size} ×{open}",
-    "mtmLater": "Su misura: arriva in un passo successivo",
+    "mtmUnit": "Capo su misura, taglia base {size}: si fa con un ordine di produzione tutto suo (selezionarlo lascia solo lui)",
     "lineFull": "Niente di aperto: già su ordini di produzione",
     "sizes": "Pezzi per variante e taglia",
     "over": "Al massimo {open}: il resto è su altri ordini",
@@ -310,7 +310,8 @@
     "CELLS": {
       "OK": "{cells} celle taglia da produrre.",
       "BLOCKED": "Alcune taglie non sono più nel modello.",
-      "scope": "Alcune celle aspettano un rilascio successivo della revisione del modello."
+      "scope": "Alcune celle aspettano un rilascio successivo della revisione del modello.",
+      "unit": "Il capo su misura non è ancora pronto da fare."
     },
     "DEPOSIT": {
       "OK": "L'acconto di ogni ordine è pagato o condonato.",
@@ -337,6 +338,8 @@
     "bom": "{cell}: la distinta non la copre",
     "size": "{cell}: la taglia non è più nel modello",
     "scope": "{cell}: non ancora rilasciata — rilascia di più la revisione (Prodotti › Modelli › Versioni e modifiche), oppure toglila dall'ordine di lavoro",
+    "measures": "{cell}: le misure del pilota attendono il controllo della fabbrica (Vendite › Su misura: le conferma il responsabile di produzione)",
+    "mtm": "{cell}: il su misura è fermo per il suo modello di misure (Prodotti › Taglie e misure › Modelli di misure)",
     "deposit": "{order} attende l'acconto",
     "material": {
       "short": "{material}: mancano {short} {uom} (servono {needed}, disponibili {available})",
