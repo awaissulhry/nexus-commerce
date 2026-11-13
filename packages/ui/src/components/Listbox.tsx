@@ -7,6 +7,8 @@ import { useClickAway } from './useClickAway'
 import { usePopoverPosition } from './usePopoverPosition'
 import type { Size } from '../primitives/size'
 import { ListboxPanel, type ListboxPanelAction, type ListboxPanelOption } from './ListboxPanel'
+import { mergeLabels } from '../lib/labels'
+import { LISTBOX_LABELS, type ListboxLabels } from './ListboxLabels'
 
 export interface ListboxOption {
   /** Additional searchable terms without repeating them in the visible option label. */
@@ -112,6 +114,8 @@ export interface ListboxProps {
    * by that label and the value it shows ("Status Wasting"), as `MultiSelect labelledBy` is. Wins over `ariaLabel`.
    */
   labelledBy?: string
+  /** B-W2b-F41: the trigger's and the panel's words in the person's language; a word left out stays English. */
+  labels?: Partial<ListboxLabels>
 }
 
 /** Past this many options a picker gets a search box without being asked. */
@@ -123,8 +127,10 @@ export interface ListboxProps {
  * Combobox popover, no typeahead. Wave 1 gap-fill (2026-07-04): pages are
  * banned from native selects; this is what they migrate to.
  */
-export function Listbox({ size = 'md', options, value, onChange, placeholder = 'Select…', ariaLabel, id, 'aria-describedby': describedBy, className, disabled,
-  width, searchable, searchPlaceholder = 'Search…', emptyLabel, emptyIsPlaceholder = false, portalTo, actions, actionsLabel, labelledBy }: ListboxProps) {
+export function Listbox({ size = 'md', options, value, onChange, placeholder: placeholderProp, ariaLabel, id, 'aria-describedby': describedBy, className, disabled,
+  width, searchable, searchPlaceholder, emptyLabel, emptyIsPlaceholder = false, portalTo, actions, actionsLabel, labelledBy, labels }: ListboxProps) {
+  const words = mergeLabels(LISTBOX_LABELS, labels)
+  const placeholder = placeholderProp === undefined ? words.select : placeholderProp
   const [open, setOpen] = useState(false)
   const valueId = useId()
   const ref = useRef<HTMLDivElement>(null)
@@ -160,6 +166,7 @@ export function Listbox({ size = 'md', options, value, onChange, placeholder = '
             ariaLabel={actions?.length ? ariaLabel : undefined}
             actions={actions?.map((a) => ({ ...a, onSelect: () => { close(); a.onSelect() } }))}
             actionsLabel={actionsLabel}
+            labels={labels}
           />,
           /* R-VT-8: the host's container when it named one — an AG popup editor must keep the panel
              inside itself. `document.body` otherwise, which is every page call site. */

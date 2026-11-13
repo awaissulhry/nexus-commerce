@@ -1185,5 +1185,106 @@
     "marksZone": "Zone",
     "marksValue": "Value",
     "marked": "{zone}: {words}"
+  },
+  "workspaceSubheader": {
+    "expand": "Expand {navigation}",
+    "collapse": "Collapse {navigation}",
+    "close": "Close {navigation}",
+    "rowsNoun": "items",
+    "showRows": "Show {label} {noun}",
+    "hideRows": "Hide {label} {noun}",
+    "rows": "{label} {noun}",
+    "currentInside": "(the current page is in {label})"
+  },
+  "appRail": {
+    "navigation": "Application navigation",
+    "withCount": "{label}, {count} pending",
+    "count": "{count} pending",
+    "newTab": "{name} (opens in a new tab)",
+    "expand": "Expand {label}",
+    "collapse": "Collapse {label}",
+    "expandMarkets": "Expand {label} markets",
+    "collapseMarkets": "Collapse {label} markets",
+    "seeAllMarkets": "See all {count} markets",
+    "connect": "Connect"
+  },
+  "changeValue": {
+    "removed": "removed",
+    "unchanged": "unchanged",
+    "noValue": "no value",
+    "more": "+{count} more",
+    "changes_one": "{count} change",
+    "changes_other": "{count} changes",
+    "saidChanged": "{head}from {from} to {to}",
+    "saidAdded": "{head}new value {to}",
+    "saidRemoved": "{head}{from} removed",
+    "saidUnchanged": "{head}unchanged, {to}",
+    "saidEmpty": "{head}no value",
+    "saidMore_one": "{count} more change",
+    "saidMore_other": "{count} more changes",
+    "saidAndMore": "{lines}; and {more}",
+    "saidNone": "No change"
+  },
+  "multiSelect": {
+    "search": "Search…",
+    "searchOptions": "Search options",
+    "selectAll": "Select all",
+    "noMatches": "No matches",
+    "atLeast_one": "At least {count} must stay selected",
+    "atLeast_other": "At least {count} must stay selected",
+    "all": "All",
+    "selected_one": "{count} selected",
+    "selected_other": "{count} selected"
+  },
+  "listbox": {
+    "select": "Select…",
+    "search": "Search…",
+    "searchOptions": "Search options",
+    "noMatches": "No matches",
+    "useTyped": "Use \"{text}\"",
+    "actions": "Actions"
+  },
+  "orderedList": {
+    "moveUp": "Move {item} up",
+    "moveDown": "Move {item} down",
+    "reorder": "Reorder {item}; use arrow keys",
+    "position": "{item}, position {place} of {total}",
+    "moving": "{item}, moving to position {place} of {total}"
+  },
+  "tagInput": {
+    "add": "Add value…",
+    "remove": "Remove {tag}"
+  },
+  "lightbox": {
+    "title": "Photo {place} of {total}",
+    "counter": "{place} of {total}",
+    "previous": "Previous photo",
+    "next": "Next photo",
+    "only": "This is the only photo.",
+    "first": "This is the first photo.",
+    "last": "This is the last photo.",
+    "photos": "Photos",
+    "thumb": "Photo {place} of {total}",
+    "thumbCurrent": "Photo {place} of {total}, shown now",
+    "move": "move",
+    "close": "close"
+  },
+  "replyComposer": {
+    "title": "Reply",
+    "label": "Reply",
+    "placeholder": "Write a reply, pick a template or draft one with AI",
+    "templates": "Templates",
+    "draft": "Draft with AI",
+    "drafting": "Drafting a reply… this takes a few seconds.",
+    "sending": "This takes a few seconds.",
+    "sent": "Sent",
+    "text": "Reply text",
+    "englishOnly": "In English, only for you",
+    "sentHeld": "This reply was sent. A sent reply cannot be sent again.",
+    "emptyHeld": "Write a reply first.",
+    "over_one": "Cut {n} character to send it (the limit is {limit}).",
+    "over_other": "Cut {n} characters to send it (the limit is {limit}).",
+    "length_one": "{n} character",
+    "length_other": "{n} characters"
   }
 }

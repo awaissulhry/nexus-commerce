@@ -9,6 +9,8 @@ import { MediaPreview } from '../components/MediaPreview'
 import { Thumbnail } from '../components/Thumbnail'
 import type { ReturnFocusTarget } from '../components/modalStack'
 import { lightboxCounter, lightboxHeld, lightboxKey, lightboxStep, lightboxThumbLabel, type LightboxDirection } from './lightboxModel'
+import { mergeLabels } from '../lib/labels'
+import { LIGHTBOX_LABELS, type LightboxLabels } from './LightboxLabels'
 
 export interface LightboxItem {
   url: string
@@ -35,6 +37,8 @@ export interface LightboxProps {
   external?: { label: string; href: string }
   /** Where the focus goes on close. Default: what had it when the lightbox opened. */
   returnFocusTo?: ReturnFocusTarget<HTMLElement>
+  /** B-W2b-F41: the lightbox's words in the person's language; a word left out stays English. */
+  labels?: Partial<LightboxLabels>
 }
 
 /**
@@ -43,7 +47,8 @@ export interface LightboxProps {
  * a strip of thumbnails and the counter "2 of 4". ← / → move, Esc closes and gives the focus back. No wrap: at the first
  * photo Previous is HELD and says "This is the first photo." (focusable, never disabled); the same for Next at the last.
  */
-export function Lightbox({ open, onClose, items, index, onIndex, title, meta, caption, external, returnFocusTo }: LightboxProps) {
+export function Lightbox({ open, onClose, items, index, onIndex, title, meta, caption, external, returnFocusTo, labels }: LightboxProps) {
+  const words = mergeLabels(LIGHTBOX_LABELS, labels)
   const count = items.length
   const current = Math.max(0, Math.min(count - 1, index))
   const item = items[current]
@@ -75,8 +80,8 @@ export function Lightbox({ open, onClose, items, index, onIndex, title, meta, ca
     const next = lightboxStep(current, count, direction)
     if (next != null) onIndex(next)
   }
-  const prevHeld = lightboxHeld(current, count, -1)
-  const nextHeld = lightboxHeld(current, count, 1)
+  const prevHeld = lightboxHeld(current, count, -1, words)
+  const nextHeld = lightboxHeld(current, count, 1, words)
 
   return (
     <Modal
@@ -84,10 +89,11 @@ export function Lightbox({ open, onClose, items, index, onIndex, title, meta, ca
       onClose={onClose}
       size="xl"
       className="nds-lightbox"
-      title={title ?? `Photo ${lightboxCounter(current, count)}`}
+      title={title ?? words.title(Math.min(count, current + 1), count)}
       subtitle={meta}
       initialFocus="dialog"
       returnFocusTo={returnFocusTo}
+      labels={words.modal}
       headerActions={external ? (
         <Button size="sm" asChild>
           <a href={external.href} target="_blank" rel="noopener noreferrer">
@@ -101,10 +107,10 @@ export function Lightbox({ open, onClose, items, index, onIndex, title, meta, ca
         <div className="nds-lightbox-stage">
           <MediaPreview type={item.type ?? 'IMAGE'} url={item.url} label={item.alt} />
           <div className="nds-lightbox-nav">
-            <Button className="nds-lightbox-go" aria-label="Previous photo" aria-keyshortcuts="ArrowLeft" heldReason={prevHeld} onClick={() => move(-1)}>
+            <Button className="nds-lightbox-go" aria-label={words.previous} aria-keyshortcuts="ArrowLeft" heldReason={prevHeld} onClick={() => move(-1)}>
               <ChevronLeft size={18} aria-hidden focusable={false} />
             </Button>
-            <Button className="nds-lightbox-go" aria-label="Next photo" aria-keyshortcuts="ArrowRight" heldReason={nextHeld} onClick={() => move(1)}>
+            <Button className="nds-lightbox-go" aria-label={words.next} aria-keyshortcuts="ArrowRight" heldReason={nextHeld} onClick={() => move(1)}>
               <ChevronRight size={18} aria-hidden focusable={false} />
             </Button>
           </div>
@@ -112,18 +118,18 @@ export function Lightbox({ open, onClose, items, index, onIndex, title, meta, ca
         {caption != null && <p className="nds-lightbox-caption">{caption}</p>}
         <div className="nds-lightbox-foot">
           {count > 1 && (
-            <ol className="nds-lightbox-strip" aria-label="Photos">
+            <ol className="nds-lightbox-strip" aria-label={words.photos}>
               {items.map((photo, n) => (
                 <li key={`${n}:${photo.url}`} className={n === current ? 'is-current' : undefined} aria-current={n === current ? 'true' : undefined}>
-                  <Thumbnail src={photo.url} alt={photo.alt} hoverPreview={false} title={lightboxThumbLabel(n, count, n === current)} onClick={() => onIndex(n)} />
+                  <Thumbnail src={photo.url} alt={photo.alt} hoverPreview={false} title={lightboxThumbLabel(n, count, n === current, words)} onClick={() => onIndex(n)} />
                 </li>
               ))}
             </ol>
           )}
           <span className="grow" />
-          <span className="nds-lightbox-count" aria-live="polite">{lightboxCounter(current, count)}</span>
+          <span className="nds-lightbox-count" aria-live="polite">{lightboxCounter(current, count, words)}</span>
           <span className="nds-lightbox-keys" aria-hidden>
-            <Kbd>←</Kbd><Kbd>→</Kbd> move · <Kbd>Esc</Kbd> close
+            <Kbd>←</Kbd><Kbd>→</Kbd>{` ${words.move} · `}<Kbd>Esc</Kbd>{` ${words.close}`}
           </span>
         </div>
       </div>

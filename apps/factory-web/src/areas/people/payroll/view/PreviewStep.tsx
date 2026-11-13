@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react'
 import { Banner, Card, EmptyState, MetricStrip, SummaryTable } from '@nexus/ui/components'
-import { ChangeValue, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
+import { type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, Checkbox, Tag } from '@nexus/ui/primitives'
 import { useLocale } from '../../../../lib/i18n/provider'
 import { ListFrame } from '../../../../list-frame/ListFrame'
@@ -10,6 +10,7 @@ import type { CodeSum, PayrollMonth, PayrollValues } from '../api'
 import { changeSides, meaningOf, moneyText, previewColumns, previewRows, quantityText, valueText, type PreviewColumn, type PreviewRow } from '../model'
 import type { PayrollActions, PayrollModel, WizardModel } from '../view-model'
 import { dayWords, SectionLoading, usePayrollWords, useSaid } from './parts'
+import { ChangeValue } from '../../../../lib/i18n/ds-parts' // B-W2b-F41: the DS parts in the page's language
 
 /**
  * 4 · Preview (design sec:step-preview; MES-267): the numbers that will be sent. By employee code, never a name; amounts only with

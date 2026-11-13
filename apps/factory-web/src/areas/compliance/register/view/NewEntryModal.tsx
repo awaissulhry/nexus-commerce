@@ -3,12 +3,13 @@
 import { useEffect } from 'react'
 import { MapPin } from 'lucide-react'
 import { Banner, Field } from '@nexus/ui/components'
-import { Button, RadioCard, Select, Spinner, TagInput } from '@nexus/ui/primitives'
+import { Button, RadioCard, Select, Spinner } from '@nexus/ui/primitives'
 import { DateField, Modal, Textarea } from '../../../../lib/i18n/ds-parts'
 import { useLocale, useScopedT, useT } from '../../../../lib/i18n/provider'
 import { REGISTER_KINDS, REGISTER_RISKS } from '../api'
 import { canTrace, draftProblems, type NewEntryDraft, type NewEntryModel } from '../model'
 import { TraceTables } from './parts'
+import { TagInput } from '../../../../lib/i18n/ds-parts' // B-W2b-F41: the DS parts in the page's language
 
 export interface NewEntryActions {
   onDraft?: (draft: NewEntryDraft) => void

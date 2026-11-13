@@ -123,6 +123,7 @@ export { SwitchCell, switchWord, switchHandlerOf, suppressSwitchKeys, switchKeyF
 // (`actionsColumn({ primary: [a, b] | (row) => … })`, `actionVerbs` from the registry), G8 single-key grid shortcuts.
 export { ChangeValue, ChangeCell, type ChangeValueProps, type ChangeCellParams } from './renderers/ChangeCell'
 export { changeKind, changeLineText, changeLineArrowText, changeAccessibleText, changeTooltipText, changeSummaryText, changeMoreCount, asChangeValueData, type ChangeLine, type ChangeValueData, type ChangeKind } from './renderers/changeValue'
+export { CHANGE_VALUE_LABELS, type ChangeValueLabels } from './renderers/ChangeValueLabels' // B-W2b-F41
 export { rowVerbsOf, rowVerbVariant, rowVerbHeld, isMultiVerb, actionsColumnWidth, keepFromGrid, MAX_ROW_VERBS, AG_STOP_PROPAGATION_FLAG, type RowVerb, type RowVerbs, type RowVerbsInput, type RowVerbTone } from './renderers/rowVerbs'
 export { actionVerbs, type VerbAdapterOptions } from './actions/menuAdapters'
 export { useGridShortcuts, type UseGridShortcutsOptions } from './hooks/useGridShortcuts'

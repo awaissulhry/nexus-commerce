@@ -8,7 +8,11 @@
  *
  * A null is a fact here, not a gap: `from: null` means there was no value before (the change sets a NEW value),
  * `to: null` means the change REMOVES the value. Neither is ever drawn as an empty string or as "0".
+ *
+ * B-W2b-F41: the screen reader's sentence takes the part's words (`ChangeValueLabels`, English by default). The tooltip
+ * and CSV text (`changeLineArrowText`, `changeTooltipText`, `changeSummaryText`) stay English.
  */
+import { CHANGE_VALUE_LABELS, type ChangeValueLabels } from './ChangeValueLabels'
 
 export interface ChangeLine {
   /** What changes, in the operator's words: "Price", "Stock", "Title (IT)". */
@@ -46,30 +50,34 @@ export function changeMoreCount(data: ChangeValueData, compact: boolean): number
   return (compact ? Math.max(0, data.changes.length - 1) : 0) + extra(data.more)
 }
 
-/** One line, for a screen reader: "Price: from €49.90 to €44.90". */
-export function changeLineText(line: ChangeLine): string {
+/** One line said in `words` (B-W2b-F41). */
+function lineSaid(line: ChangeLine, words: ChangeValueLabels): string {
   const label = line.label.trim()
   const head = label ? `${label}: ` : ''
   switch (changeKind(line)) {
-    case 'changed': return `${head}from ${line.from} to ${line.to}`
-    case 'added': return `${head}new value ${line.to}`
-    case 'removed': return `${head}${line.from} removed`
-    case 'unchanged': return `${head}unchanged, ${line.to}`
-    case 'empty': return `${head}no value`
+    case 'changed': return words.saidChanged(head, line.from!, line.to!)
+    case 'added': return words.saidAdded(head, line.to!)
+    case 'removed': return words.saidRemoved(head, line.from!)
+    case 'unchanged': return words.saidUnchanged(head, line.to!)
+    case 'empty': return words.saidEmpty(head)
   }
 }
 
-const moreWords = (n: number) => `${n} more change${n === 1 ? '' : 's'}`
+/** One line, for a screen reader: "Price: from €49.90 to €44.90". */
+export function changeLineText(line: ChangeLine): string {
+  return lineSaid(line, CHANGE_VALUE_LABELS)
+}
 
 /**
  * Everything this surface KNOWS, for a screen reader — every line in `changes`, then "and N more changes" for `more`.
  * Never cut to the first line in a compact cell: a pointer user can hover the tooltip, a screen-reader user cannot.
+ * `words`: the part's words (B-W2b-F41), English by default.
  */
-export function changeAccessibleText(data: ChangeValueData): string {
-  const lines = data.changes.map(changeLineText)
+export function changeAccessibleText(data: ChangeValueData, words: ChangeValueLabels = CHANGE_VALUE_LABELS): string {
+  const lines = data.changes.map(line => lineSaid(line, words))
   const more = extra(data.more)
-  if (lines.length === 0) return more > 0 ? moreWords(more) : 'No change'
-  return more > 0 ? `${lines.join('; ')}; and ${moreWords(more)}` : lines.join('; ')
+  if (lines.length === 0) return more > 0 ? words.saidMore(more) : words.saidNone
+  return more > 0 ? words.saidAndMore(lines.join(words.saidJoin), words.saidMore(more)) : lines.join(words.saidJoin)
 }
 
 /** One line as the tooltip and the CSV say it, with the arrow: "Price: €49.90 → €44.90". */

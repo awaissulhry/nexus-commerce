@@ -1,9 +1,9 @@
 'use client'
 
-import { Lightbox } from '@nexus/ui/patterns'
 import { useLocale } from '../../../../../lib/i18n/provider'
 import { useWords } from '../../../lots/shared/parts'
 import { photoCaption, photoPlaceKey, shownPhotos, type PhotoLightboxActions, type PhotoLightboxModel } from '../model'
+import { Lightbox } from '../../../../../lib/i18n/ds-parts' // B-W2b-F41: the DS parts in the page's language
 
 /**
  * Hide photo (design warehouse.hides pop-up hd-photo, opened from a Thumbnail of the grid or a photo of the record): the DS

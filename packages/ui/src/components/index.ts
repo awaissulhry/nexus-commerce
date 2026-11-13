@@ -144,3 +144,7 @@ export { MEDIA_STRIP_LABELS, type MediaStripLabels } from './MediaStripLabels'
 export { COMBOBOX_LABELS, type ComboboxLabels } from './ComboboxLabels'
 export { CONFIRM_PHRASE_FIELD_LABELS, type ConfirmPhraseFieldLabels } from './ConfirmPhraseFieldLabels'
 export { ACTION_CONFIRM_LABELS, type ActionConfirmLabels } from './ActionConfirmLabels'
+// B-W2b-F41: the words of the parts that spoke English only (MultiSelect + OptionList, Listbox + ListboxPanel, OrderedList).
+export { OPTION_LIST_LABELS, MULTI_SELECT_LABELS, type OptionListLabels, type MultiSelectLabels } from './MultiSelectLabels'
+export { LISTBOX_LABELS, type ListboxLabels } from './ListboxLabels'
+export { ORDERED_LIST_LABELS, type OrderedListLabels } from './OrderedListLabels'

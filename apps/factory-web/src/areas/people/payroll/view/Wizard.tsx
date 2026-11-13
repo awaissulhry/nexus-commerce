@@ -3,7 +3,7 @@
 import { useEffect } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, ArrowRight, Check as CheckMark, ExternalLink } from 'lucide-react'
-import { Banner, Card, EmptyState, KeyValue, Listbox, Stepper } from '@nexus/ui/components'
+import { Banner, Card, EmptyState, KeyValue, Stepper } from '@nexus/ui/components'
 import { CheckList } from '@nexus/ui/patterns/checklist/index'
 import { Button, Pill, Tag } from '@nexus/ui/primitives'
 import { useDsWords } from '../../../../lib/i18n/ds-parts'
@@ -15,6 +15,7 @@ import { MappingStep } from './MappingStep'
 import { LayoutTag, LayoutWarning, NotPayroll, SectionLoading, usePayrollWords, useSaid } from './parts'
 import { PreviewStep } from './PreviewStep'
 import { SendStep } from './SendStep'
+import { Listbox } from '../../../../lib/i18n/ds-parts' // B-W2b-F41: the DS parts in the page's language
 
 /**
  * The export wizard (design people.payroll, archetype wizard; anatomy §2.6): 1 · Period and company, 2 · Checks, 3 · Code mapping,

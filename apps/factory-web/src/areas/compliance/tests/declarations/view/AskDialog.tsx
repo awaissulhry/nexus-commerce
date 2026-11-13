@@ -1,6 +1,6 @@
 'use client'
 
-import { Banner, Field, MultiSelect, SummaryTable } from '@nexus/ui/components'
+import { Banner, Field, SummaryTable } from '@nexus/ui/components'
 import { Button, Checkbox, SegmentedControl, Select, Tag } from '@nexus/ui/primitives'
 import { addDays, DECLARATION_LIMITS } from '@nexus/factory-domain/compliance/declarations-asked/rules'
 import { DECLARATION_KINDS } from '@nexus/factory-domain/compliance/substances/rules'
@@ -11,6 +11,7 @@ import { DEPTH_NAMESPACE } from '../../substances/frame/parts'
 import type { AskAnswer, DeclarationKind } from '../api'
 import { askFieldProblems, GROUP_TONE, groupWordsKey, sendHeld, sendLabel, type AskDraftState, type DeclarationsCan } from '../model'
 import type { AskModel } from '../view-model'
+import { MultiSelect } from '../../../../../lib/i18n/ds-parts' // B-W2b-F41: the DS parts in the page's language
 
 export interface AskActions {
   onAskOpen?: (itemIds: readonly string[], kinds: readonly DeclarationKind[]) => void

@@ -21,6 +21,8 @@ import type { ICellRendererParams } from 'ag-grid-community'
 
 import { EmptyValue } from './cells'
 import { asChangeValueData, changeAccessibleText, changeKind, changeMoreCount, type ChangeLine, type ChangeValueData } from './changeValue'
+import { mergeLabels } from '../../lib/labels'
+import { CHANGE_VALUE_LABELS, type ChangeValueLabels } from './ChangeValueLabels'
 
 export interface ChangeValueProps extends ChangeValueData {
   /** One line (the first change, then "+N more") — for a grid row. Default false: every line, wrapping. */
@@ -28,26 +30,29 @@ export interface ChangeValueProps extends ChangeValueData {
   /** Leave out the "Price:" labels when a neighbouring column already names the change. Screen readers still hear them. */
   hideLabels?: boolean
   className?: string
+  /** B-W2b-F41: the part's words in the person's language; a word left out stays English. */
+  labels?: Partial<ChangeValueLabels>
 }
 
 const Arrow = () => <ArrowRight size={12} strokeWidth={2.25} className="nds-change-arrow" aria-hidden />
 
-function Line({ line, hideLabel }: { line: ChangeLine; hideLabel?: boolean }) {
+function Line({ line, hideLabel, words }: { line: ChangeLine; hideLabel?: boolean; words: ChangeValueLabels }) {
   const kind = changeKind(line)
   return (
     <span className={`nds-change-line nds-change-${kind}`}>
       {!hideLabel && line.label.trim() && <span className="nds-change-label">{line.label}:</span>}
       {kind === 'changed' && <><span className="nds-change-from">{line.from}</span><Arrow /><span className="nds-change-to">{line.to}</span></>}
       {kind === 'added' && <><Arrow /><span className="nds-change-to">{line.to}</span></>}
-      {kind === 'removed' && <><span className="nds-change-from">{line.from}</span><Arrow /><span className="nds-change-gone">removed</span></>}
-      {kind === 'unchanged' && <><span className="nds-change-to">{line.to}</span> <span className="nds-change-gone">unchanged</span></>}
-      {kind === 'empty' && <span className="nds-change-gone">no value</span>}
+      {kind === 'removed' && <><span className="nds-change-from">{line.from}</span><Arrow /><span className="nds-change-gone">{words.removed}</span></>}
+      {kind === 'unchanged' && <><span className="nds-change-to">{line.to}</span> <span className="nds-change-gone">{words.unchanged}</span></>}
+      {kind === 'empty' && <span className="nds-change-gone">{words.noValue}</span>}
     </span>
   )
 }
 
 /** Before → after, for any surface. Renders nothing when there is nothing to show — the host decides what an absent change reads as. */
-export const ChangeValue = memo(function ChangeValue({ changes, more, compact = false, hideLabels, className }: ChangeValueProps) {
+export const ChangeValue = memo(function ChangeValue({ changes, more, compact = false, hideLabels, className, labels }: ChangeValueProps) {
+  const words = mergeLabels(CHANGE_VALUE_LABELS, labels)
   const data: ChangeValueData = { changes, more }
   const extra = changeMoreCount(data, compact)
   if (changes.length === 0 && extra === 0) return null
@@ -55,10 +60,10 @@ export const ChangeValue = memo(function ChangeValue({ changes, more, compact = 
   return (
     <span className={`nds-change${compact ? ' compact' : ''}${className ? ` ${className}` : ''}`}>
       <span className="nds-change-lines" aria-hidden="true">
-        {shown.map((line, i) => <Line key={`${i}:${line.label}`} line={line} hideLabel={hideLabels} />)}
-        {extra > 0 && <span className="nds-change-more">{shown.length === 0 ? `${extra} change${extra === 1 ? '' : 's'}` : `+${extra} more`}</span>}
+        {shown.map((line, i) => <Line key={`${i}:${line.label}`} line={line} hideLabel={hideLabels} words={words} />)}
+        {extra > 0 && <span className="nds-change-more">{shown.length === 0 ? words.changes(extra) : words.more(extra)}</span>}
       </span>
-      <span className="nds-vh">{changeAccessibleText(data)}</span>
+      <span className="nds-vh">{changeAccessibleText(data, words)}</span>
     </span>
   )
 })
@@ -67,6 +72,8 @@ export interface ChangeCellParams {
   /** Default TRUE in a grid (one line per row). Pass false for an `autoHeight` column that lists every change. */
   compact?: boolean
   hideLabels?: boolean
+  /** B-W2b-F41: the part's words (passed on to `ChangeValue`). */
+  labels?: Partial<ChangeValueLabels>
 }
 
 /**
@@ -76,5 +83,5 @@ export interface ChangeCellParams {
 export const ChangeCell = memo(function ChangeCell(p: ICellRendererParams & ChangeCellParams) {
   const data = asChangeValueData(p.value)
   if (!data || (data.changes.length === 0 && !data.more)) return <EmptyValue />
-  return <ChangeValue changes={data.changes} more={data.more} compact={p.compact ?? true} hideLabels={p.hideLabels} />
+  return <ChangeValue changes={data.changes} more={data.more} compact={p.compact ?? true} hideLabels={p.hideLabels} labels={p.labels} />
 })

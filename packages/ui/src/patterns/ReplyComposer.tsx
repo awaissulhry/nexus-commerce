@@ -9,6 +9,8 @@ import { Textarea } from '../primitives/Textarea'
 import { Banner } from '../components/Banner'
 import { Menu, type MenuItemDef } from '../components/Menu'
 import { replyHeldReason, replyLengthWords } from './replyComposerModel'
+import { mergeLabels } from '../lib/labels'
+import { REPLY_COMPOSER_LABELS, type ReplyComposerLabels } from './ReplyComposerLabels'
 
 export interface ReplyTemplate {
   id: string
@@ -55,6 +57,8 @@ export interface ReplyComposerProps {
   refused?: string | null
   /** Where the reply window stands ("Day 2 of 100"). */
   window?: string | null
+  /** B-W2b-F41: the composer's words in the person's language; a word left out stays English. */
+  labels?: Partial<ReplyComposerLabels>
 }
 
 /**
@@ -65,12 +69,16 @@ export interface ReplyComposerProps {
  * is read-only. The layout is `.nds-reply*` in patterns.css.
  */
 export function ReplyComposer({
-  value, onChange, limit, ruleLine, title = 'Reply', label = 'Reply', placeholder = 'Write a reply, pick a template or draft one with AI',
-  templates, onTemplate, draft, primary, secondary, sent, refused, window: replyWindow,
+  value, onChange, limit, ruleLine, title: titleProp, label: labelProp, placeholder: placeholderProp,
+  templates, onTemplate, draft, primary, secondary, sent, refused, window: replyWindow, labels,
 }: ReplyComposerProps) {
+  const words = mergeLabels(REPLY_COMPOSER_LABELS, labels)
+  const title = titleProp === undefined ? words.title : titleProp
+  const label = labelProp === undefined ? words.label : labelProp
+  const placeholder = placeholderProp === undefined ? words.placeholder : placeholderProp
   const id = `${useId()}-reply`
   const isSent = sent != null
-  const held = primary ? replyHeldReason({ held: primary.heldReason, sent: isSent, text: value, limit }) : null
+  const held = primary ? replyHeldReason({ held: primary.heldReason, sent: isSent, text: value, limit }, words) : null
   const sending = !!primary?.busy
 
   const templateItems: MenuItemDef[] = (templates ?? []).map(t => ({
@@ -97,7 +105,7 @@ export function ReplyComposer({
           size="sm"
           variant="primary"
           onClick={primary.onClick}
-          heldReason={sending ? 'This takes a few seconds.' : held}
+          heldReason={sending ? words.sending : held}
         >
           {sending && <Spinner size={13} />}
           {primary.label}
@@ -114,16 +122,16 @@ export function ReplyComposer({
         <span className="grow" />
         {!isSent && templateItems.length > 0 && (
           <Menu
-            label={<>Templates <ChevronDown size={14} aria-hidden /></>}
+            label={<>{`${words.templates} `}<ChevronDown size={14} aria-hidden /></>}
             items={templateItems}
             align="right"
             triggerProps={{ className: 'nds-btn sm' }}
           />
         )}
         {!isSent && draft && (
-          <Button size="sm" onClick={draft.onDraft} heldReason={draft.busy ? 'Drafting a reply… this takes a few seconds.' : draft.heldReason}>
+          <Button size="sm" onClick={draft.onDraft} heldReason={draft.busy ? words.drafting : draft.heldReason}>
             {draft.busy ? <Spinner size={13} /> : <Sparkles size={14} aria-hidden focusable={false} />}
-            Draft with AI
+            {words.draft}
           </Button>
         )}
       </div>
@@ -133,14 +141,14 @@ export function ReplyComposer({
         <div className="nds-reply-sent">
           <div className="nds-reply-sent-text">{sent.text}</div>
           <div className="nds-reply-sent-meta" role="status">
-            <Pill tone="success" dot>Sent</Pill>
+            <Pill tone="success" dot>{words.sent}</Pill>
             <span>{sent.at}</span>
             <span>{sent.note}</span>
           </div>
         </div>
       ) : (
         <>
-          <label className="nds-vh" htmlFor={id}>Reply text</label>
+          <label className="nds-vh" htmlFor={id}>{words.text}</label>
           <Textarea
             id={id}
             className="nds-reply-text"
@@ -151,10 +159,11 @@ export function ReplyComposer({
             readOnly={sending}
             aria-busy={sending || undefined}
             placeholder={placeholder}
+            labels={words.textarea}
           />
           {draft?.englishLine && (
             <div className="nds-reply-translation">
-              <span className="lbl"><Languages size={13} aria-hidden focusable={false} /> In English, only for you</span>
+              <span className="lbl"><Languages size={13} aria-hidden focusable={false} />{` ${words.englishOnly}`}</span>
               <span lang="en">{draft.englishLine}</span>
             </div>
           )}
@@ -162,7 +171,7 @@ export function ReplyComposer({
       )}
       {(primary || (secondary?.length ?? 0) > 0) && (
         <div className="nds-reply-foot">
-          {!isSent && limit == null && <span className="nds-reply-count" aria-live="polite">{replyLengthWords(value)}</span>}
+          {!isSent && limit == null && <span className="nds-reply-count" aria-live="polite">{replyLengthWords(value, words)}</span>}
           <span className="grow" />
           {actions}
         </div>

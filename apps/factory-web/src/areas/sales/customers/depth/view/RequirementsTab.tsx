@@ -1,12 +1,13 @@
 'use client'
 
 import { MoreHorizontal, Plus } from 'lucide-react'
-import { Banner, EmptyState, Field, Menu, MultiSelect, SummaryTable } from '@nexus/ui/components'
+import { Banner, EmptyState, Field, Menu, SummaryTable } from '@nexus/ui/components'
 import { Button, Checkbox, Radio, Select, Tag } from '@nexus/ui/primitives'
 import { Modal, Textarea, Timeline } from '../../../../../lib/i18n/ds-parts'
 import type { PartyFile, Requirement, Requirements, StyleOption } from '../api'
 import { endReasonProblem, KINDS, requirementProblems, shownOnKeys, STAGES, valueOf, writeHeld, type DepthCan, type Read, type RequirementDialog, type RequirementDraft } from '../model'
 import { DepthCard, ReadOr, useSay } from './parts'
+import { MultiSelect } from '../../../../../lib/i18n/ds-parts' // B-W2b-F41: the DS parts in the page's language
 
 /**
  * Customer › Requirements (B-W2b-324; SAL-014; design sales.customers record customer.requirements, customer.req.rules):
