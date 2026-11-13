@@ -1,16 +1,16 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { ForbiddenError } from '@nexus/factory-domain/core/errors'
 import { can } from '@nexus/factory-domain/core/permissions'
-import { maskedIban, planProposal, PORTAL_WAITING_WORDS, type BankAccountStatus } from '@nexus/factory-domain/purchasing/bank/rules'
+import { planProposal, PORTAL_WAITING_WORDS } from '@nexus/factory-domain/purchasing/bank/rules'
 import { PORTAL_SUPPLIER_BANK_PROPOSE } from '@nexus/factory-domain/purchasing/bank/permissions'
 import { ValidationError } from '@nexus/factory-domain/core/errors'
-import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { actorOf, requireContext } from '../../../core/context'
 import { portalSessionOf, type PortalSession } from '../../../platform/auth/portal/authenticator'
 import { requirePortalStepUp } from '../../../platform/auth/portal/step-up'
 import { commandOn } from '../../../platform/portal/tasks/clock'
 import { proposeInCommand, type ProposeBody } from '../bank/bank'
-import { PARTNER_ACCOUNT_COLUMNS, type PartnerAccountRow } from '../bank/store'
+// B-W2b-377 (XF5:07): the one partner read of an account — the IBAN's country and last four characters, never the whole number.
+import { PARTNER_ACCOUNT_COLUMNS, partnerAccountView } from '../suppliers/bank-partner-read'
 
 /**
  * Bank details in the supplier's portal profile (B-W2b-315; SCM-007, follow-up VN2:03 "Bank details join the supplier's
@@ -34,22 +34,6 @@ import { PARTNER_ACCOUNT_COLUMNS, type PartnerAccountRow } from '../bank/store'
 export const BANK_LIVE_EVENTS = ['supplier_bank_account.proposed', 'supplier_bank_account.called_back', 'supplier_bank_account.activated', 'supplier_bank_account.refused', 'supplier_bank_account.retired'] as const
 const SHOWN = 20
 
-const stateOf = (status: BankAccountStatus): 'USABLE' | 'WAITING' | 'REFUSED' | 'RETIRED' => (status === 'ACTIVE' ? 'USABLE' : status === 'PROPOSED' || status === 'VERIFIED' ? 'WAITING' : status)
-
-const viewOf = (row: PartnerAccountRow) => ({
-  id: row.id,
-  masked: maskedIban(row.ibanCountry, row.ibanLast4),
-  bankName: row.bankName,
-  holder: row.holder,
-  currency: row.currency,
-  state: stateOf(row.status as BankAccountStatus),
-  proposedAt: toUtcIso(row.proposedAt),
-  activatedAt: row.activatedAt ? toUtcIso(row.activatedAt) : null,
-  refusedAt: row.refusedAt ? toUtcIso(row.refusedAt) : null,
-  reason: row.status === 'REFUSED' ? row.refuseReason : null,
-  retiredAt: row.retiredAt ? toUtcIso(row.retiredAt) : null,
-})
-
 export function mayPropose(request: FastifyRequest, session: PortalSession): boolean {
   if (session.preview) return false
   return can(actorOf(requireContext(request)), PORTAL_SUPPLIER_BANK_PROPOSE, { companyId: session.company.id, partyId: session.partyId })
@@ -60,7 +44,7 @@ export async function portalBank(request: FastifyRequest) {
   const session = portalSessionOf(request)
   // The party's own accounts in its scope (row-level security: its own; the hidden columns are never selected).
   const rows = await request.withClient((client) => client.supplierBankAccount.findMany({ where: { partyId: session.partyId }, select: PARTNER_ACCOUNT_COLUMNS, orderBy: [{ proposedAt: 'desc' }, { id: 'desc' }], take: SHOWN }))
-  const accounts = rows.map(viewOf)
+  const accounts = rows.map(partnerAccountView)
   return {
     accounts,
     waitingWords: accounts.some((account) => account.state === 'WAITING') ? PORTAL_WAITING_WORDS : null,

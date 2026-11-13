@@ -382,6 +382,11 @@ async function settle(tools: CommandTools, order: OrderData, deciderId: string):
   return outcome
 }
 
+/** B-W2b-377: the approver whose yes on the order came last (null: none said yes yet). */
+async function lastApproverOf(tx: CommandTx, changeOrderId: string): Promise<string | null> {
+  return (await tx.changeApproval.findFirst({ where: { changeOrderId, decision: 'APPROVED' }, orderBy: [{ decidedAt: 'desc' }, { id: 'desc' }], select: { approverId: true } }))?.approverId ?? null
+}
+
 /** PUT /product/change-orders/:id/approvers */
 export async function setApprovers(caller: CommandCaller, changeOrderId: string, body: ApproversBody, idempotencyKey?: string): Promise<OrderView> {
   const { context, row: seen } = await readOrderFor(caller, changeOrderId, PRODUCT_CHANGES_MANAGE)
@@ -420,7 +425,9 @@ export async function setApprovers(caller: CommandCaller, changeOrderId: string,
     tools.audit({ action: 'product.changes.setApprovers', recordType: 'ChangeOrder', recordId: changeOrderId, companyId: order.companyId, before: { approvers: current.map(({ approverId, required, decision }) => ({ approverId, required, decision })) }, after: { approvers: after } })
     orderEvent(tools, order, order.status, 'APPROVERS_CHANGED', order.status === 'SUBMITTED' ? added.map(([userId]) => userId) : [])
     if (order.status === 'SUBMITTED') {
-      const outcome = await settle(tools, order, actorIdOf(tools))
+      // B-W2b-377 (XF5:01): a change of approvers that completes the approval never makes its writer the one who accepted the
+      // carried requests (the author or a raiser could): they are accepted by the approver whose yes came last.
+      const outcome = await settle(tools, order, (await lastApproverOf(tx, changeOrderId)) ?? actorIdOf(tools))
       if (outcome) orderEvent(tools, order, outcome, outcome)
     }
     return null

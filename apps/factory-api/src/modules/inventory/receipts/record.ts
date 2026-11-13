@@ -53,6 +53,8 @@ import { receiptDetail } from './read'
 import { readColours, readEarlierLots, readItems, readOrderLines, RECEIPT_COLUMNS, type ItemRow, type OrderLineRow } from './store'
 // B-W2b-289 (SCM-179): the site's default receiving place when none is named.
 import { defaultPlaceFor } from '../locations-depth/defaults'
+// B-W2b-377 (SCM-061): a line beyond a tolerance that "needs a yes" holds the receipt OPEN until its RECEIPT_OVER_TOLERANCE yes.
+import { holdReceiptInCommand, type HeldLine } from '../receiving/tolerance-hold'
 
 /**
  * Record a goods receipt against a purchase order (B-W1-32; SCM-113, SCM-116, SCM-117, SCM-187, SCM-232, SCM-233,
@@ -161,6 +163,8 @@ export interface RecordResult {
   readonly receipt: Awaited<ReturnType<typeof receiptDetail>>
   readonly notes: ReceiptNote[]
   readonly moves: PostedMove[]
+  /** B-W2b-377: the lines waiting for a yes (the receipt is OPEN, nothing posted); empty when it was posted. */
+  readonly held: HeldLine[]
 }
 
 /** What the receipt's work did, for the caller's answer. */
@@ -173,6 +177,8 @@ export interface RecordedReceipt {
   readonly orderStatus: PurchaseOrderStatus
   readonly notes: ReceiptNote[]
   readonly moves: PostedMove[]
+  /** B-W2b-377: the lines waiting for a yes (the receipt stays OPEN; nothing posted, the order not moved). */
+  readonly held?: HeldLine[]
 }
 
 export interface RecordOptions {
@@ -183,6 +189,9 @@ export interface RecordOptions {
   // B-W2b-300 (SCM-122): goods without a PO that waited OPEN post as THEIR receipt (its number kept): `name` names the order on
   // it and clears its waiting lines (modules/inventory/unplanned/office.ts) where a new receipt would be created.
   readonly unplanned?: { readonly receiptId: string; readonly number: string; name(tools: CommandTools, order: OrderForReceipt): Promise<void> } | undefined
+  // B-W2b-377 (SCM-061): a receipt that waited OPEN for the yes of its lines beyond their tolerance is posted as it was sent:
+  // its row and lines exist (their ids kept: the requests name them), every line now passes its tolerance.
+  readonly held?: { readonly receiptId: string; readonly number: string } | undefined
 }
 
 /** POST /inventory/receipts (inventory.receive over the order's company and site; office in W1). */
@@ -200,7 +209,7 @@ export async function recordReceipt(caller: CommandCaller, body: ReceiptBody, id
   const { result } = await command(caller, { name: 'inventory.receive', idempotencyKey, input: body }, async (tools) => {
     const recorded = await recordReceiptInCommand(tools, body, keyFor(idempotencyKey))
     const receipt = (await tools.tx.goodsReceipt.findUnique({ where: { id: recorded.receiptId }, select: RECEIPT_COLUMNS }))!
-    return { receipt: await receiptDetail(tools.tx, tools.context, receipt), notes: recorded.notes, moves: recorded.moves }
+    return { receipt: await receiptDetail(tools.tx, tools.context, receipt), notes: recorded.notes, moves: recorded.moves, held: recorded.held ?? [] }
   })
   return result
 }
@@ -259,6 +268,8 @@ export async function recordReceiptInCommand(tools: CommandTools, body: ReceiptB
   // 4. What came against what each order line expects: beyond its tolerance over, the receiver says why.
   const notes: ReceiptNote[] = []
   const refusals: Issue[] = []
+  // B-W2b-377: the lines beyond a tolerance that needs a yes (by the line's index: the receiver's reason).
+  const heldLines = new Map<number, string>()
   const earlier = await readEarlierLots(tx, planned.map((line) => line.orderLine.id))
   // B-W2b-296 (SCM-061): each line's tolerance over and under (its own, else the delivery tolerance, else none).
   const tolerances = await receiptTolerancesOf(tx, order, orderLines)
@@ -268,7 +279,14 @@ export async function recordReceiptInCommand(tools: CommandTools, body: ReceiptB
     const difference = lineDifference({ expected, receivedBefore: received.get(line.orderLine.id) ?? ZERO, receiving: line.baseQuantity, ...differenceTolerance(tolerance, line.orderLine.areaTolerancePct) })
     const words = differenceWords(line.label, difference, line.item.baseUom)
     const beyond = difference.kind === 'OVER' && tolerance ? beyondToleranceRefusal(words, tolerance, upToWords(difference.upTo, line.item.baseUom)) : null
-    if (beyond) refusals.push({ path: `body/lines/${line.index}/quantity`, message: beyond })
+    // B-W2b-377: beyond a tolerance that needs a yes, the office's receipt waits for it (with the receiver's reason); a receipt
+    // posted after its yes passes; the floor and goods without a PO keep the refusal in words.
+    const asksYes = beyond !== null && tolerance?.whenBeyond === 'APPROVAL' && !floor && !options.unplanned
+    if (asksYes && options.held) {
+      // Its yes was given while the receipt waited: it passes (the difference stays a note below).
+    } else if (asksYes && blank(line.body.differenceReason)) heldLines.set(line.index, blank(line.body.differenceReason)!)
+    else if (asksYes) refusals.push({ path: `body/lines/${line.index}/differenceReason`, message: `${words} Beyond the delivery tolerance the extra needs a yes: give the reason it is taken, so the approver reads it.` })
+    else if (beyond) refusals.push({ path: `body/lines/${line.index}/quantity`, message: beyond })
     else if (difference.kind === 'OVER' && !blank(line.body.differenceReason)) {
       refusals.push({ path: `body/lines/${line.index}/differenceReason`, message: `${words} Give the reason the extra is taken, or receive only what was ordered.` })
     }
@@ -301,10 +319,12 @@ export async function recordReceiptInCommand(tools: CommandTools, body: ReceiptB
 
   // 5. The receipt and its lines.
   // B-W2b-300: goods without a PO post as their own receipt (named the order, its waiting lines cleared), not a new one.
-  const receiptId = options.unplanned?.receiptId ?? newId()
-  const number = options.unplanned ? options.unplanned.number : await receiptNumber(tools, { companyId: order.companyId, receiptId, date: businessDate(receivedAt) })
+  const receiptId = options.unplanned?.receiptId ?? options.held?.receiptId ?? newId()
+  const number = options.unplanned ? options.unplanned.number : options.held ? options.held.number : await receiptNumber(tools, { companyId: order.companyId, receiptId, date: businessDate(receivedAt) })
   if (options.unplanned) await options.unplanned.name(tools, order)
-  else await tx.goodsReceipt.create({
+  else if (options.held) {
+    // B-W2b-377: the waiting receipt's own row (OPEN); its lines are the ones written when it was held.
+  } else await tx.goodsReceipt.create({
     data: {
       id: receiptId,
       companyId: order.companyId,
@@ -324,7 +344,15 @@ export async function recordReceiptInCommand(tools: CommandTools, body: ReceiptB
     select: { id: true },
   })
   const lineIds = new Map<number, string>()
+  // B-W2b-377: a held receipt keeps its lines (the requests name them): each planned line is the one of its number.
+  const kept = options.held ? new Map((await tx.goodsReceiptLine.findMany({ where: { receiptId }, select: { id: true, seq: true, purchaseOrderLineId: true, baseQuantity: true } })).map((row) => [row.seq, row])) : null
   for (const line of planned) {
+    if (kept) {
+      const row = kept.get(line.seq)
+      if (!row || row.purchaseOrderLineId !== line.orderLine.id || !new Dec(row.baseQuantity.toString()).eq(line.baseQuantity)) throw new DomainError('conflict', 'The waiting receipt does not match what was sent any more: cancel it and receive again.', [{ path: `body/lines/${line.index}`, message: 'Not the line that was held.' }])
+      lineIds.set(line.index, row.id)
+      continue
+    }
     const id = newId()
     lineIds.set(line.index, id)
     const reason = blank(line.body.differenceReason)
@@ -343,12 +371,25 @@ export async function recordReceiptInCommand(tools: CommandTools, body: ReceiptB
         hideCount: line.item.tracking === 'HIDE' ? line.lots.reduce((sum, lot) => sum + lot.hides.length, 0) : null,
         ...(line.received ? { receivedQuantity: line.received.quantity, receivedUom: line.received.uom, receivedFactor: line.received.factor } : {}),
         note: [blank(line.body.note), reason ? `Difference from the order: ${reason}` : null].filter(Boolean).join(' · ') || null,
+        // B-W2b-377: beyond a tolerance that needs a yes: held from now until it.
+        ...(heldLines.has(line.index) ? { heldForApprovalAt: now } : {}),
         createdAt: now,
         updatedAt: now,
         createdById: by.createdById,
       },
       select: { id: true },
     })
+  }
+
+  // B-W2b-377: lines beyond a tolerance that needs a yes: the receipt waits OPEN (no lot, no move, the order not moved), each
+  // such line asking its RECEIPT_OVER_TOLERANCE yes; the last yes posts it as it was sent.
+  if (heldLines.size > 0) {
+    const held = await holdReceiptInCommand(tools, {
+      receipt: { id: receiptId, number, companyId: order.companyId, siteId: order.siteId, purchaseOrderId: order.id },
+      body,
+      held: planned.filter((line) => heldLines.has(line.index)).map((line) => ({ lineId: lineIds.get(line.index)!, seq: line.seq, reason: heldLines.get(line.index)! })),
+    })
+    return { receiptId, number, order, orderStatus: order.status, notes, moves: [], held }
   }
 
   // 6. Lots (our numbers) and hides (the tenant's tags), then one RECEIPT move per hide, lot or untracked line.
@@ -540,7 +581,7 @@ export async function recordReceiptInCommand(tools: CommandTools, body: ReceiptB
       postedBy: by.audience,
     },
   })
-  return { receiptId, number, order, orderStatus: to, notes, moves }
+  return { receiptId, number, order, orderStatus: to, notes, moves, held: [] }
 }
 
 /**

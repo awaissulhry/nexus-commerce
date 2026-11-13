@@ -322,8 +322,11 @@ describe('delivery tolerances read at receipt (SCM-061)', () => {
     const second = await draft([{ itemId: protector, quantity: '10', uom: 'PCS', days: 15 }])
     const { order: sent2, token: token2 } = await send(second.id)
     await confirmAll(token2, sent2.version)
-    const beyond = await wall('manager', 'POST', '/inventory/receipts', { purchaseOrderId: second.id, lines: [{ purchaseOrderLineId: second.lines[0].id, differenceReason: 'Spares', lots: [{ quantity: '12' }] }] }, 409)
-    expect(beyond.error.message).toMatch(/needs a person's yes, and a yes for a receipt is not built yet: receive at most 11 pz in all now/)
+    // B-W2b-377: beyond a tolerance that needs a yes, the receipt waits OPEN for its RECEIPT_OVER_TOLERANCE request (202);
+    // cancelled here, the goods are received within the tolerance.
+    const beyond = await wall('manager', 'POST', '/inventory/receipts', { purchaseOrderId: second.id, lines: [{ purchaseOrderLineId: second.lines[0].id, differenceReason: 'Spares', lots: [{ quantity: '12' }] }] }, 202)
+    expect(beyond).toMatchObject({ receipt: { status: 'OPEN' }, moves: [], held: [{ taskId: expect.any(String) }] })
+    expect((await wall('manager', 'POST', `/inventory/receipts/${beyond.receipt.id}/cancel`, { reason: 'Received within the tolerance instead.' })).receipt.status).toBe('CANCELLED')
     const upTo = (await wall('manager', 'POST', '/inventory/receipts', { purchaseOrderId: second.id, lines: [{ purchaseOrderLineId: second.lines[0].id, differenceReason: 'One spare', lots: [{ quantity: '11' }] }] }, 201)).receipt
     expect(upTo.purchaseOrder.status).toBe('RECEIVED')
 

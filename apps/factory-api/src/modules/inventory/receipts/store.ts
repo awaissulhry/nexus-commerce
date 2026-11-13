@@ -62,6 +62,8 @@ export const RECEIPT_LINE_COLUMNS = {
   receivedQuantity: true,
   receivedUom: true,
   receivedFactor: true,
+  // B-W2b-377: held for a yes beyond its delivery tolerance.
+  heldForApprovalAt: true,
 } as const satisfies Prisma.GoodsReceiptLineSelect
 export type ReceiptLineRow = Prisma.GoodsReceiptLineGetPayload<{ select: typeof RECEIPT_LINE_COLUMNS }>
 

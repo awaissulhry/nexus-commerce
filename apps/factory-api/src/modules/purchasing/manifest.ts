@@ -174,6 +174,8 @@ export const manifest = defineManifest({
   // B-W2b-14 (Z1:09): where the Owner's reminder switch stands (purchasing.view) and the switch itself (the owner's, step-up).
   'GET /purchasing/reminders/settings': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
   'PUT /purchasing/reminders/settings/switch': { audiences: ['office'], permission: 'purchasing.reminders.switch', scope: 'record' },
+  // B-W2b-377: how soon suppliers are asked to confirm and how often they are reminded (the Owner's, as the switch).
+  'PUT /purchasing/reminders/settings/timing': { audiences: ['office'], permission: 'purchasing.reminders.switch', scope: 'record' },
   // B-W2b-219: the leather area tolerance where a PO line names none.
   'GET /purchasing/settings/leather-tolerance': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
   'PUT /purchasing/settings/leather-tolerance': { audiences: ['office'], permission: 'purchasing.manage', scope: 'record' },
@@ -307,6 +309,8 @@ export const manifest = defineManifest({
   'POST /purchasing/suppliers/:partyId/qualifications/:qualificationId/withdraw': { audiences: ['office'], permission: 'purchasing.qualification.manage', scope: 'record' },
   // B-W2b-315 (SCM-022): the compliance gate on a PO; asking to send without a document is purchasing.send, the yes or no
   // purchasing.compliance.override (a yes with a fresh step-up; never one's own request).
+  // B-W2b-377 (SCM-020): what a supplier's document is (files.upload over its company; parties.view over the supplier).
+  'PUT /purchasing/suppliers/:partyId/documents/:fileId/type': { audiences: ['office'], permission: 'files.upload', scope: 'record' },
   'GET /purchasing/orders/:purchaseOrderId/compliance': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
   'POST /purchasing/orders/:purchaseOrderId/compliance-override': { audiences: ['office'], permission: 'purchasing.send', scope: 'record' },
   'POST /purchasing/orders/:purchaseOrderId/compliance-override/decide': { audiences: ['office'], permission: 'purchasing.compliance.override', scope: 'record' },

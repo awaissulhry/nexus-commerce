@@ -31,7 +31,8 @@ export const taskRowSchema = z.object({
   kindLabel: words,
   status: z.enum(APPROVAL_TASK_STATUSES),
   summary: z.string(),
-  record: z.object({ type: z.string(), id: z.string() }),
+  // B-W2b-377: the record in words (no money) and, for a subject with no page of its own, the record whose page shows it.
+  record: z.object({ type: z.string(), id: z.string(), label: z.string().nullable().optional(), parent: z.object({ type: z.string(), id: z.string() }).nullable().optional() }),
   companyId: z.string(),
   siteId: z.string().nullable(),
   requester: z.object({ kind: z.enum(['PERSON', 'WORKER']), id: z.string(), name: z.string(), me: z.boolean() }),

@@ -227,6 +227,7 @@ export async function receiptDetail(db: Reader, context: RequestContext, receipt
         line.receivedQuantity !== null && line.receivedUom !== null && line.receivedFactor !== null
           ? { quantity: quantityText(line.receivedQuantity.toString()), uom: line.receivedUom, factor: line.receivedFactor.toFixed(8) }
           : null,
+      heldForApprovalAt: line.heldForApprovalAt ? toUtcIso(line.heldForApprovalAt) : null,
       orderLine: orderLine
         ? {
             seq: orderLine.seq,

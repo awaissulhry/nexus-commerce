@@ -27,6 +27,8 @@ import { DAY_SELECT, fullName, monthClosed, personOf, type Client, type PersonRo
 import { assertPersonDecides } from '../privacy/decide'
 import { legalGateFor } from '../privacy/gate'
 import { refusePersonKeys } from '../privacy/groups'
+// B-W2b-377: a person's own account is their Employee's or their linked worker's; the database's refusal answered in words.
+import { approvingTimesheet, isOwnTimesheet } from '../timesheets/approval-guard'
 import type { TimesheetsQuery } from './contract'
 
 /**
@@ -227,7 +229,7 @@ async function recordOf(db: Client, context: OfficeContext, row: Row, person: Pe
   const entries = await db.overtimeEntry.findMany({ where, select: { date: true, kind: true, minutes: true, status: true } })
   const now = serverClock.now()
   const today = businessDate(now)
-  const own = (await ownEmployeeId(db, context)) === person.id
+  const own = await isOwnTimesheet(db, person.id, context.actorId)
   const closed = await monthClosed(db, row.companyId, period.from)
   const open = await openCounts(db, [person.id], period)
   const facts = { today, daysOpen: open.days.get(person.id) ?? 0, overtimePending: open.overtime.get(person.id) ?? 0, own, actorId: context.actorId, closed }
@@ -303,7 +305,7 @@ async function refuseHeld(tools: CommandTools, context: OfficeContext, row: Row,
   const { tx, now } = tools
   const period = periodOf(row)
   const open = await openCounts(tx, [person.id], period)
-  const facts = { today: businessDate(now), daysOpen: open.days.get(person.id) ?? 0, overtimePending: open.overtime.get(person.id) ?? 0, own: (await ownEmployeeId(tx, context)) === person.id, actorId: context.actorId, closed: await monthClosed(tx, row.companyId, period.from) }
+  const facts = { today: businessDate(now), daysOpen: open.days.get(person.id) ?? 0, overtimePending: open.overtime.get(person.id) ?? 0, own: await isOwnTimesheet(tx, person.id, context.actorId), actorId: context.actorId, closed: await monthClosed(tx, row.companyId, period.from) }
   const holds = holdsOf(row, stage, facts)
   if (holds.length > 0) refuse('HELD', holds.map((code) => TIMESHEET_HOLD_WORDS[code]).join(' '), undefined, holds.map((code) => ({ path: `holds/${code}`, message: TIMESHEET_HOLD_WORDS[code] })))
 }
@@ -321,7 +323,7 @@ export async function approveAsLead(caller: CommandCaller, timesheetId: string, 
     const actorId = assertPersonDecides(tools.context, 'TIMESHEET_APPROVAL')
     const row = await rowInCommand(tools, context, person, timesheetId, body.version)
     await refuseHeld(tools, context, row, person, 'LEAD')
-    await tx.timesheetApproval.update({ where: { id: row.id }, data: { status: 'LEAD_APPROVED', leadApprovedAt: now, leadApprovedById: actorId, version: { increment: 1 } }, select: { id: true } })
+    await approvingTimesheet(() => tx.timesheetApproval.update({ where: { id: row.id }, data: { status: 'LEAD_APPROVED', leadApprovedAt: now, leadApprovedById: actorId, version: { increment: 1 } }, select: { id: true } }))
     tools.audit({ recordType: 'TimesheetApproval', recordId: row.id, companyId: row.companyId, siteId: person.siteId, before: { status: row.status }, after: { status: 'LEAD_APPROVED', employeeId: person.id, ...periodOf(row) } })
     emitChange(tools, row, person, 'LEAD_APPROVED', 'LEAD_APPROVED')
     return { timesheetId }
@@ -339,7 +341,7 @@ export async function approveAsHr(caller: CommandCaller, timesheetId: string, bo
     const actorId = assertPersonDecides(tools.context, 'TIMESHEET_APPROVAL')
     const row = await rowInCommand(tools, context, person, timesheetId, body.version)
     await refuseHeld(tools, context, row, person, 'HR')
-    await tx.timesheetApproval.update({ where: { id: row.id }, data: { status: 'APPROVED', hrApprovedAt: now, hrApprovedById: actorId, version: { increment: 1 } }, select: { id: true } })
+    await approvingTimesheet(() => tx.timesheetApproval.update({ where: { id: row.id }, data: { status: 'APPROVED', hrApprovedAt: now, hrApprovedById: actorId, version: { increment: 1 } }, select: { id: true } }))
     tools.audit({ recordType: 'TimesheetApproval', recordId: row.id, companyId: row.companyId, siteId: person.siteId, before: { status: row.status }, after: { status: 'APPROVED', employeeId: person.id, ...periodOf(row) } })
     emitChange(tools, row, person, 'APPROVED', 'APPROVED')
     return { timesheetId }
@@ -359,7 +361,7 @@ export async function sendBack(caller: CommandCaller, timesheetId: string, body:
     const actorId = assertPersonDecides(tools.context, 'TIMESHEET_APPROVAL')
     const row = await rowInCommand(tools, context, person, timesheetId, body.version)
     if (row.status === 'PENDING') refuse('NOT_APPROVED', 'This timesheet has not been approved: there is nothing to send back.')
-    if ((await ownEmployeeId(tx, context)) === person.id) refuse('OWN_TIMESHEET', TIMESHEET_HOLD_WORDS.OWN_TIMESHEET)
+    if (await isOwnTimesheet(tx, person.id, context.actorId)) refuse('OWN_TIMESHEET', TIMESHEET_HOLD_WORDS.OWN_TIMESHEET)
     if (await monthClosed(tx, row.companyId, periodOf(row).from)) refuse('MONTH_CLOSED', TIMESHEET_HOLD_WORDS.MONTH_CLOSED)
     const reason = body.reason.trim()
     await tx.timesheetApproval.update({ where: { id: row.id }, data: { status: 'PENDING', leadApprovedAt: null, leadApprovedById: null, hrApprovedAt: null, hrApprovedById: null, returnedAt: now, returnedById: actorId, returnReason: reason, version: { increment: 1 } }, select: { id: true } })

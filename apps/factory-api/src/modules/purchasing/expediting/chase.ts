@@ -4,12 +4,14 @@ import { purchaseOrderDocumentNumber } from '@nexus/factory-domain/purchasing/do
 import { chaseMail, chaseProblem, MAX_CHASE_MESSAGE, type ChaseLine } from '@nexus/factory-domain/purchasing/expediting/worklist'
 import { supplierLanguageOf } from '@nexus/factory-domain/purchasing/orders'
 import { PURCHASING_SEND } from '@nexus/factory-domain/purchasing/permissions'
-import type { CommandCaller } from '../../../core/command'
+import type { CommandCaller, CommandTools } from '../../../core/command'
 import { serverClock } from '../../../core/time'
 import { sendEmail } from '../../../platform/email-out/outbound'
 import { detailInCommand, onOrder } from '../orders'
 import { officeContextOf, officeOrder, readOrder, senderOf, type OrderRow, type Reader } from '../store'
 import { namesOf, workLinesOf, type WorkLine } from './lines'
+// B-W2b-377: a chase is a CHASE reminder of the order's revision.
+import { recordChase } from '../reminders/chase'
 
 /**
  * Chase a supplier (B-W2b-305; SCM-068; design purchasing.orders pop "Chase Conceria Alfa": "Lines late or unconfirmed;
@@ -22,7 +24,7 @@ import { namesOf, workLinesOf, type WorkLine } from './lines'
  *   POST /purchasing/orders/:purchaseOrderId/chase {version, lineIds?, message?}    purchasing.send: ONE command on the order
  */
 
-async function chaseFacts(db: Reader, order: OrderRow, today: string, now: Date) {
+export async function chaseFacts(db: Reader, order: OrderRow, today: string, now: Date) {
   const read = await workLinesOf(db, [{ id: order.id }], today, now)
   // In the order's own order (line number), as the supplier reads its order.
   const chased = read.lines.filter((line) => line.reasons.length > 0).sort((a, b) => a.seq - b.seq)
@@ -74,6 +76,31 @@ export interface ChaseBody {
   readonly message?: string | null | undefined
 }
 
+/**
+ * The chase inside a command on the order (its version compared and set): the lines named (none: every line it would chase),
+ * the mail on the order's thread, and (B-W2b-377) its PurchaseOrderReminder of kind CHASE. `sentById` null: the daily run.
+ */
+export async function chaseInCommand(tools: CommandTools, current: OrderRow, input: { readonly sender: { readonly userId: string; readonly name: string; readonly email: string | null }; readonly sentById: string | null; readonly lineIds: readonly string[] | null; readonly message: string | null }) {
+  const facts = await chaseFacts(tools.tx, current, businessDate(tools.now), tools.now)
+  const named = input.lineIds ? [...input.lineIds] : null
+  if (named) {
+    const unknown = named.findIndex((id) => !facts.chased.some((line) => line.lineId === id))
+    if (unknown >= 0) throw new ValidationError('Not a line of this order to chase: it is not late, unconfirmed or confirmed later than needed.', [{ path: `body/lineIds/${unknown}`, message: 'Not a line to chase.' }])
+  }
+  const chosen = named ? facts.chased.filter((line) => named.includes(line.lineId)) : facts.chased
+  const problem = chaseProblem(current.status, chosen.length)
+  if (problem) throw new InvalidStateError(problem)
+  if (!facts.contact?.email || facts.contact.status !== 'ACTIVE') throw new InvalidStateError('Choose an active contact with an e-mail: the chase goes to them.')
+  const mail = chaseMail({ language: facts.language, number: purchaseOrderDocumentNumber(current.number, current.revision), recipientName: facts.contact.name, lines: chosen.map((line) => chaseLineOf(line, facts.labelOf(line))), message: input.message })
+  const sent = await sendEmail(tools, { record: { type: 'PurchaseOrder', id: current.id }, sender: input.sender, to: [facts.contact.email], subject: mail.subject, body: mail.body, locale: facts.language })
+  const lineIds = chosen.map((line) => line.lineId)
+  // B-W2b-377: every chase is a reminder of the order's current revision (record › Sends "Reminders sent").
+  const reminderId = await recordChase(tools, current, { sentById: input.sentById, to: facts.contact.email, outboundId: sent.outbound.id, note: input.message })
+  tools.audit({ action: input.sentById === null ? 'purchasing.chaseAutomatic' : 'purchasing.chase', recordType: 'PurchaseOrder', recordId: current.id, companyId: current.companyId, siteId: current.siteId, after: { lineIds, reasons: chosen.map((line) => ({ lineId: line.lineId, reasons: line.reasons })), to: facts.contact.email, outboundId: sent.outbound.id, language: facts.language, reminderId } })
+  tools.emit({ type: 'purchase_order.chased', subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { purchaseOrderId: current.id, number: current.number, lineIds, outboundId: sent.outbound.id } })
+  return { lineIds, to: facts.contact.email, emailId: sent.outbound.id, sentAt: toUtcIso(tools.now), language: facts.language, reminderId }
+}
+
 /** POST …/chase: the mail to the supplier, in ONE command on the order (its version guards it). */
 export async function chaseSupplier(caller: CommandCaller, orderId: string, body: ChaseBody, idempotencyKey?: string) {
   const context = officeContextOf(caller)
@@ -81,21 +108,7 @@ export async function chaseSupplier(caller: CommandCaller, orderId: string, body
   const message = body.message?.trim() ? body.message.trim() : null
   if (message !== null && message.length > MAX_CHASE_MESSAGE) throw new ValidationError('The message is too long.', [{ path: 'body/message', message: `At most ${MAX_CHASE_MESSAGE} characters.` }])
   return onOrder(caller, order, { name: 'purchasing.chase', idempotencyKey, input: { orderId, ...body }, version: body.version }, async (tools, current) => {
-    const facts = await chaseFacts(tools.tx, (await readOrder(tools.tx, current.id))!, businessDate(tools.now), tools.now)
-    const named = body.lineIds ? [...body.lineIds] : null
-    if (named) {
-      const unknown = named.findIndex((id) => !facts.chased.some((line) => line.lineId === id))
-      if (unknown >= 0) throw new ValidationError('Not a line of this order to chase: it is not late, unconfirmed or confirmed later than needed.', [{ path: `body/lineIds/${unknown}`, message: 'Not a line to chase.' }])
-    }
-    const chosen = named ? facts.chased.filter((line) => named.includes(line.lineId)) : facts.chased
-    const problem = chaseProblem(current.status, chosen.length)
-    if (problem) throw new InvalidStateError(problem)
-    if (!facts.contact?.email || facts.contact.status !== 'ACTIVE') throw new InvalidStateError('Choose an active contact with an e-mail: the chase goes to them.')
-    const mail = chaseMail({ language: facts.language, number: purchaseOrderDocumentNumber(current.number, current.revision), recipientName: facts.contact.name, lines: chosen.map((line) => chaseLineOf(line, facts.labelOf(line))), message })
-    const sent = await sendEmail(tools, { record: { type: 'PurchaseOrder', id: current.id }, sender: await senderOf(tools.tx, context), to: [facts.contact.email], subject: mail.subject, body: mail.body, locale: facts.language })
-    const lineIds = chosen.map((line) => line.lineId)
-    tools.audit({ action: 'purchasing.chase', recordType: 'PurchaseOrder', recordId: current.id, companyId: current.companyId, siteId: current.siteId, after: { lineIds, reasons: chosen.map((line) => ({ lineId: line.lineId, reasons: line.reasons })), to: facts.contact.email, outboundId: sent.outbound.id, language: facts.language } })
-    tools.emit({ type: 'purchase_order.chased', subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { purchaseOrderId: current.id, number: current.number, lineIds, outboundId: sent.outbound.id } })
-    return { ...(await detailInCommand(tools, current.id)), chase: { lineIds, to: facts.contact.email, emailId: sent.outbound.id, sentAt: toUtcIso(tools.now), language: facts.language } }
+    const sent = await chaseInCommand(tools, (await readOrder(tools.tx, current.id))!, { sender: await senderOf(tools.tx, context), sentById: context.actorId, lineIds: body.lineIds ?? null, message })
+    return { ...(await detailInCommand(tools, current.id)), chase: { lineIds: sent.lineIds, to: sent.to, emailId: sent.emailId, sentAt: sent.sentAt, language: sent.language } }
   })
 }
