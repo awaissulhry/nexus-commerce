@@ -18,6 +18,8 @@ import {
   type Words,
 } from '../model'
 import type { BoardActions, BoardDialog, BoardViewModel, Loaded, PublishRangeKind } from '../view-model'
+// B-W2b-337: the bar's W2b actions (pin, pin the order, Move to a subcontractor), its floor state and material start.
+import { floorSentence, materialWords } from '../depth/model'
 
 /**
  * The planning board's pop-ups (design planning.board): the bar's detail (pop:bar), the drop warning (pop:drop-warning),
@@ -42,9 +44,12 @@ export function BoardDialogs({ model, actions, words }: { model: BoardViewModel;
     case 'legend':
       return <LegendDialog words={words} onClose={close} />
     case 'versions':
-      return <VersionsDialog dialog={dialog} words={words} onClose={close} />
+      return <VersionsDialog dialog={dialog} words={words} onClose={close} prefix={model.depth ? model.prefix : null} />
     case 'keys':
       return <KeysDialog words={words} onClose={close} />
+    default:
+      // B-W2b-337: the W2b pop-ups are drawn by depth/view/DepthDialogs.
+      return null
   }
 }
 
@@ -71,7 +76,8 @@ function BarDialog({ dialog, board, model, actions, words, onClose }: { dialog: 
   const number = detail?.workOrder.number ?? fromBoard?.number ?? ''
   const href = `${model.prefix}/production/work-orders/${encodeURIComponent(dialog.workOrderId)}`
   const mayChange = board?.plan.mayChange ?? false
-  const sendHeld = !mayChange ? t('held.readOnly') : model.offline ? t('held.offline') : dialog.busy ? t('held.busy') : null
+  // B-W2b-337: in what-if nothing is written to the working plan (the bar goes back to the tray by a drag, as a try).
+  const sendHeld = !mayChange ? t('held.readOnly') : model.offline ? t('held.offline') : model.depth?.whatIf && words.td ? words.td('held.inWhatIf') : dialog.busy ? t('held.busy') : null
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === 'Enter' && (event.target as HTMLElement).tagName !== 'BUTTON' && (event.target as HTMLElement).tagName !== 'A') {
       event.preventDefault()
@@ -162,7 +168,7 @@ function BarDialog({ dialog, board, model, actions, words, onClose }: { dialog: 
                     ],
                   }))}
                 />
-                <p className="fw-pb-hint">{t('bar.gates')}</p>
+                {model.depth ? <BarDepth dialog={dialog} board={board} model={model} actions={actions} words={words} /> : <p className="fw-pb-hint">{t('bar.gates')}</p>}
               </>
             )
           }}
@@ -456,6 +462,54 @@ function PlaceDialog({ dialog, board, actions, words, onClose }: { dialog: Extra
   )
 }
 
+// ---- B-W2b-337: the bar's W2b part (design "Right-click / ⋯ on a bar: Pin · Move to subcontractor · Send back to the tray") ----
+
+function BarDepth({ dialog, board, model, actions, words }: { dialog: Extract<BoardDialog, { kind: 'bar' }>; board: Board | null; model: BoardViewModel; actions?: BoardActions; words: Words }) {
+  const td = words.td ?? words.t
+  const depth = model.depth!
+  const detail = dialog.detail.status === 'ready' ? dialog.detail.value : null
+  const slot = dialog.slotId ? (board?.slots.find((entry) => entry.id === dialog.slotId) ?? detail?.slots.find((entry) => entry.id === dialog.slotId) ?? null) : null
+  const workOrder = board?.workOrders.find((entry) => entry.id === dialog.workOrderId) ?? detail?.workOrder ?? null
+  const mayChange = board?.plan.mayChange ?? false
+  const whatIf = Boolean(depth.whatIf)
+  const virtual = slot ? slot.id.startsWith('whatif:') : false
+  const pinHeld = !depth.may.pin ? td('held.pin') : model.offline ? td('held.offline') : whatIf ? td('held.pinInWhatIf') : dialog.busy ? td('held.busy') : null
+  const operation = slot?.operationId ? workOrder?.operations.find((entry) => entry.id === slot.operationId) : null
+  const outsideHeld = !mayChange ? td('held.readOnly') : !depth.may.outsource ? td('held.outsource') : model.offline ? td('held.offline') : whatIf ? td('held.inWhatIf') : !operation ? td('held.partOutside') : operation.outside ? td('held.alreadyOutside') : operation.remainingPieces === 0 ? td('held.noWorkLeft') : null
+  const floor = floorSentence(slot?.floor, { t: td, locale: words.locale, timeZone: words.timeZone })
+  const start = workOrder?.materialStart ?? null
+  const material = start && (start.state === 'ARRIVES' || start.state === 'NOT_COVERED') ? materialWords({ workOrder: { id: workOrder!.id, number: workOrder!.number }, materialStart: start, check: null }, { t: td, locale: words.locale, timeZone: words.timeZone }) : null
+  const allPinned = Boolean(board && board.slots.filter((entry) => entry.workOrderId === dialog.workOrderId).every((entry) => entry.pinned === true))
+  return (
+    <section className="fw-pbd-stack" aria-labelledby="fw-pbd-bar">
+      <h3 className="fw-pb-h3" id="fw-pbd-bar">
+        {td('bar.title')}
+      </h3>
+      {floor ? <p>{floor}</p> : null}
+      {material ? <Banner tone="warning" title={td('bar.material')}>{material}</Banner> : null}
+      {slot?.pinned ? <p className="fw-pb-hint">{slot.pinnedBy && slot.pinnedAt ? td('bar.pinnedBy', { name: slot.pinnedBy.name, time: whenWords(slot.pinnedAt, words) }) : td('bar.pinned')}</p> : null}
+      <div className="fw-pbd-actions">
+        {slot && !virtual ? (
+          <Button size="sm" aria-keyshortcuts="P" heldReason={pinHeld} onClick={() => actions?.onPin?.(slot.id, !slot.pinned)}>
+            {td(slot.pinned ? 'bar.unpin' : 'bar.pin')}
+          </Button>
+        ) : null}
+        {board?.slots.some((entry) => entry.workOrderId === dialog.workOrderId) ? (
+          <Button size="sm" variant="quiet" heldReason={pinHeld} onClick={() => actions?.onPinOrder?.(dialog.workOrderId, !allPinned)}>
+            {td(allPinned ? 'bar.unpinOrder' : 'bar.pinOrder')}
+          </Button>
+        ) : null}
+        {slot && !virtual ? (
+          <Button size="sm" variant="quiet" heldReason={outsideHeld} onClick={() => actions?.onSubcontract?.(slot.id)}>
+            {td('bar.subcontract')}
+          </Button>
+        ) : null}
+      </div>
+      <p className="fw-pb-hint">{td('bar.gates')}</p>
+    </section>
+  )
+}
+
 // ---- legend, versions, keys ----------------------------------------------------------------------------------------
 
 function LegendDialog({ words, onClose }: { words: Words; onClose: () => void }) {
@@ -470,6 +524,18 @@ function LegendDialog({ words, onClose }: { words: Words; onClose: () => void })
     [<Tag key="today" tone="info">{t('legend.today')}</Tag>, t('legend.todayWords')],
     [<Tag key="closed" tone="neutral">{t('legend.closed')}</Tag>, t('legend.closedWords')],
     [<Tag key="load" tone="danger">{t('legend.overLoad')}</Tag>, t('legend.overLoadWords')],
+    // B-W2b-337: the floor's four states (colour by tone, with words), the pin, the gate, a what-if try.
+    ...(words.td
+      ? ([
+          [<Tag key="ns" tone="neutral">{words.td('legend.notStarted')}</Tag>, words.td('legend.notStartedWords')],
+          [<Tag key="run" tone="info">{words.td('legend.running')}</Tag>, words.td('legend.runningWords')],
+          [<Tag key="pause" tone="warning">{words.td('legend.paused')}</Tag>, words.td('legend.pausedWords')],
+          [<Tag key="done" tone="success">{words.td('legend.done')}</Tag>, words.td('legend.doneWords')],
+          [<Tag key="pin" tone="neutral">{words.td('legend.pinned')}</Tag>, words.td('legend.pinnedWords')],
+          [<Tag key="gate" tone="danger">{words.td('mark.gate')}</Tag>, words.td('legend.gateWords')],
+          [<Tag key="tried" tone="info">{words.td('mark.tried')}</Tag>, words.td('legend.triedWords')],
+        ] as Array<[ReactNode, string]>)
+      : []),
   ]
   return (
     <Modal open onClose={onClose} size="md" title={t('legend.title')} footer={<Button size="sm" onClick={onClose}>{t('dialog.close')}</Button>}>
@@ -486,8 +552,10 @@ function LegendDialog({ words, onClose }: { words: Words; onClose: () => void })
   )
 }
 
-function VersionsDialog({ dialog, words, onClose }: { dialog: Extract<BoardDialog, { kind: 'versions' }>; words: Words; onClose: () => void }) {
+function VersionsDialog({ dialog, words, onClose, prefix }: { dialog: Extract<BoardDialog, { kind: 'versions' }>; words: Words; onClose: () => void; prefix: string | null }) {
   const { t, locale } = words
+  // B-W2b-337 (design tab:version): each version opens read-only in a new tab, beside the working plan.
+  const open = prefix && words.td ? words.td : null
   return (
     <Modal open onClose={onClose} size="lg" title={t('versions.title')} footer={<Button size="sm" onClick={onClose}>{t('dialog.close')}</Button>}>
       <Reading loaded={dialog.versions} words={words}>
@@ -498,7 +566,7 @@ function VersionsDialog({ dialog, words, onClose }: { dialog: Extract<BoardDialo
             <SummaryTable
               label={t('versions.title')}
               stackOnPhone
-              columns={[t('versions.number'), t('versions.covers'), t('versions.from'), t('versions.published'), t('versions.slots')]}
+              columns={[t('versions.number'), t('versions.covers'), t('versions.from'), t('versions.published'), t('versions.slots'), ...(open ? [open('versions.open')] : [])]}
               rows={(dialog.versions.status === 'ready' ? dialog.versions.value : []).map((version) => ({
                 id: version.id,
                 cells: [
@@ -507,6 +575,15 @@ function VersionsDialog({ dialog, words, onClose }: { dialog: Extract<BoardDialo
                   whenWords(version.effectiveFrom, words),
                   version.publishedBy ? t('versions.by', { name: version.publishedBy.name, time: whenWords(version.publishedAt, words) }) : whenWords(version.publishedAt, words),
                   String(version.slots),
+                  ...(open
+                    ? [
+                        <Button key="open" size="sm" variant="quiet" asChild>
+                          <a href={`${prefix}/planning/board?version=${encodeURIComponent(version.id)}`} target="_blank" rel="noopener noreferrer">
+                            {open('versions.openOne', { version: version.number })}
+                          </a>
+                        </Button>,
+                      ]
+                    : []),
                 ],
               }))}
             />
@@ -531,6 +608,12 @@ const KEYS: ReadonlyArray<[readonly string[], string]> = [
   [['⌘', '⇧', 'Z'], 'keys.redo'],
 ]
 
+/** B-W2b-337: P pins, w turns what-if on and off (their words in `planning-board-depth`). */
+const DEPTH_KEYS: ReadonlyArray<[readonly string[], string]> = [
+  [['P'], 'keys.pin'],
+  [['w'], 'keys.whatIf'],
+]
+
 function KeysDialog({ words, onClose }: { words: Words; onClose: () => void }) {
   const { t } = words
   return (
@@ -546,7 +629,20 @@ function KeysDialog({ words, onClose }: { words: Words; onClose: () => void }) {
             <dd>{t(label)}</dd>
           </div>
         ))}
+        {words.td
+          ? DEPTH_KEYS.map(([keys, label]) => (
+              <div key={label} className="fw-pb-legend-row">
+                <dt>
+                  {keys.map((key) => (
+                    <Kbd key={key}>{key}</Kbd>
+                  ))}
+                </dt>
+                <dd>{words.td!(label)}</dd>
+              </div>
+            ))
+          : null}
       </dl>
+      {words.td ? <p className="fw-pb-hint">{words.td('keys.undoLog')}</p> : null}
     </Modal>
   )
 }

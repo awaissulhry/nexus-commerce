@@ -1,0 +1,445 @@
+{
+  "band": {
+    "whatIf": "What-if"
+  },
+  "plan": {
+    "openVersion": "Open v{version} read-only (new tab)"
+  },
+  "more": {
+    "print": "Print day sheets per line (PDF)",
+    "export": "Export board (XLSX)",
+    "backlog": "Reschedule backlog"
+  },
+  "floor": {
+    "NOT_STARTED": "Not started",
+    "RUNNING": "Running · {done}/{of} ({pct}%)",
+    "UNDER_WAY": "Under way · {done}/{of} ({pct}%)",
+    "PAUSED": "Paused · {done}/{of} ({pct}%)",
+    "DONE": "Done",
+    "sentence": {
+      "NOT_STARTED": "On the floor: not started, no scan yet.",
+      "RUNNING": "On the floor: running — {done} of {of} garments done, {bundles} bundle(s) being worked since {since}.",
+      "UNDER_WAY": "On the floor: under way — {done} of {of} garments done; no bundle is being worked right now.",
+      "PAUSED": "On the floor: paused since {since} — {done} of {of} garments done, {paused} bundle(s) paused.",
+      "DONE": "On the floor: done — {done} of {of} garments through."
+    }
+  },
+  "mark": {
+    "gate": "Gate not passed",
+    "tried": "What-if"
+  },
+  "held": {
+    "offline": "Offline: nothing changes until the connection is back.",
+    "busy": "Saving: wait for the answer.",
+    "reading": "Wait until it is read.",
+    "readOnly": "You can look at the board, not change it: changing the plan needs the permission to plan this site.",
+    "inWhatIf": "What-if is on: apply your moves or leave what-if first.",
+    "whatIfReadOnly": "What-if needs the permission to change the plan at this site.",
+    "whatIfEmpty": "Try a move on the board first: nothing to apply yet.",
+    "pin": "Pinning needs the permission to pin bars (planners and production managers).",
+    "pinInWhatIf": "Pins are not tried in what-if: leave what-if to pin a bar.",
+    "outsource": "Moving work to a subcontractor needs the permission to send work outside (planners, production managers, buyers).",
+    "partOutside": "A part of an order goes to a workshop on Lines & subcontractors, not from a bar.",
+    "alreadyOutside": "This operation is already worked at a workshop.",
+    "noWorkLeft": "No work left on this operation.",
+    "workshopInWhatIf": "Work is sent to a subcontractor only through Move to a subcontractor, with its kit: it is not tried in what-if.",
+    "workshopChecking": "Checking the workshops' approvals…",
+    "workshopNotChecked": "The workshops' approvals could not be read: a workshop takes no work until they are.",
+    "workshopNotOffered": "{workshop} is not a workshop this site may send work to."
+  },
+  "whatif": {
+    "title": "What-if",
+    "banner": "What-if — nothing reaches the floor or other planners until you apply",
+    "bannerBody": "Drag bars as you like: each move is tried privately and the board shows the plan with your moves.",
+    "discard": "Discard",
+    "leave": "Leave what-if",
+    "apply_one": "Apply {moves} move to plan",
+    "apply_other": "Apply {moves} moves to plan",
+    "applyPlain": "Apply to plan",
+    "reading": "Reading the what-if…",
+    "errorTitle": "Couldn't load what-if",
+    "empty": "No move tried yet. Drag a bar on the board to see what it changes.",
+    "deltas": "What changes against the working plan",
+    "late": "late orders {before} → {after}",
+    "overtime": "overtime needed {before} → {after}",
+    "lane": "{lane} load {before} → {after}",
+    "orders_one": "orders that move: {orders}",
+    "orders_other": "orders that move: {orders}",
+    "hours": "{hours} h",
+    "notPlanned": "not planned",
+    "orderFinish": "{order} finishes {before} → {after}",
+    "planChanged": "The working plan changed since you started",
+    "planChangedBody": "Another planner moved something. Apply checks every move again and lists the ones that clash.",
+    "movesSummary_one": "{moves} move tried",
+    "movesSummary_other": "{moves} moves tried",
+    "ordersSummary_one": "{orders} order moves",
+    "ordersSummary_other": "{orders} orders move",
+    "materialLate": "Before its material",
+    "private": "Only you see this what-if. It stays as a draft until you apply or discard it.",
+    "conflictsTitle_one": "{moves} move clashes with the working plan",
+    "conflictsTitle_other": "{moves} moves clash with the working plan",
+    "conflictsSummary": "The working plan changed since you tried these moves. Apply the rest, or close and try them again on the board.",
+    "nothingElse": "Every move clashes: nothing else to apply.",
+    "applyRest_one": "Apply the other {moves} move",
+    "applyRest_other": "Apply the other {moves} moves",
+    "conflict": {
+      "SLOT_GONE": "The bar is no longer on the board",
+      "SLOT_MOVED": "Moved by someone since you tried it",
+      "SLOT_PINNED": "Pinned since you tried it",
+      "ALREADY_ON_BOARD": "The operation got a bar since",
+      "NOT_OPEN": "The work order is not open any more",
+      "OPERATION_DONE": "The operation is done",
+      "GATE_NOT_PASSED": "Its order waits on a gate not passed"
+    }
+  },
+  "status": {
+    "LATE": "Late",
+    "AT_RISK": "At risk",
+    "ON_TIME": "On time",
+    "NO_DUE_DATE": "No due date",
+    "DONE": "Done"
+  },
+  "log": {
+    "title": "Changes",
+    "hint": "Every move with who, when and from → to. Undo goes back one change while the bar is still where it left it.",
+    "filters": "Filter the changes",
+    "since": "Which changes",
+    "sinceVersion": "Since v{version}",
+    "sincePublished": "Since the last version",
+    "all": "All",
+    "chip": {
+      "MOVE": "Moves",
+      "PLACE": "Placed",
+      "REMOVE": "Back to the tray",
+      "PIN": "Pins",
+      "PUBLISH": "Publishes",
+      "UNDO": "Undos"
+    },
+    "planner": "Filter by planner",
+    "everyPlanner": "Every planner",
+    "reading": "Reading the changes…",
+    "errorTitle": "Couldn't load changes",
+    "emptySince": "No moves since v{version}",
+    "empty": "No changes yet",
+    "more": "Show older changes",
+    "undo": "Undo",
+    "undoOne": "Undo: {what}",
+    "what": "Op {seq} {operation} of {order}",
+    "whatPart": "part of {order}",
+    "kind": {
+      "PLACE": "Placed {what} on {lane}",
+      "MOVE": "Moved {what}",
+      "REMOVE": "Sent {what} back to the tray",
+      "PIN": "Pinned {what}",
+      "UNPIN": "Unpinned {what}",
+      "PUBLISH": "Published v{version} to the floor",
+      "UNDO": "Undid the {kind} of {what}"
+    },
+    "undid": {
+      "PLACE": "placement",
+      "MOVE": "move",
+      "REMOVE": "removal",
+      "PIN": "pin",
+      "UNPIN": "unpin",
+      "PUBLISH": "publish",
+      "UNDO": "undo"
+    },
+    "by": "by {name}, {time}",
+    "byNobody": "{time}",
+    "fromWhatIf": "applied from a what-if",
+    "reason": "why: {reason}",
+    "undoneBy": "undone by {name}, {time}",
+    "undone": "undone {time}",
+    "fromTo": "from {from} to {to}",
+    "toOnly": "to {to}",
+    "fromOnly": "from {from}, off the board",
+    "offBoard": "off the board",
+    "undoHeld": {
+      "NOT_UNDOABLE": "A publish or an undo is not undone.",
+      "PART_REMOVED": "A part of an order taken off is put back on Lines & subcontractors, not undone here.",
+      "ALREADY_UNDONE": "This change is already undone.",
+      "ALREADY_UNDONE_BY": "Already undone by {name}, {time}.",
+      "CHANGED_SINCE": "The bar changed since: only the latest change of a bar is undone, while it is where that change left it.",
+      "NO_PERMISSION": "Undoing this change needs the permission it was made with (a pin: the permission to pin; a move: to plan)."
+    }
+  },
+  "problems": {
+    "more": "Problems of the W2b kinds",
+    "show": "Show on board",
+    "kind": {
+      "IN_THE_PAST": "In the past",
+      "MATERIAL_NOT_IN_TIME": "Material not in time",
+      "GATE_NOT_PASSED": "Gate not passed"
+    },
+    "fix": {
+      "snap": "Snap to the material's day",
+      "backlog": "Reschedule backlog…"
+    }
+  },
+  "problem": {
+    "IN_THE_PAST": "{what} on {lane} was planned to end by {day} and still has work left.",
+    "IN_THE_PAST_PINNED": "{what} on {lane} was planned to end by {day} and still has work left; it is pinned (unpin it to reschedule it).",
+    "MATERIAL_NOT_IN_TIME": "{order} starts on the board before its material: the earliest start with material is {day}.",
+    "MATERIAL_NOT_COVERED": "{order} starts on the board while material is short with nothing ordered: {materials}.",
+    "GATE_NOT_PASSED": "{order} waits on a pre-production gate not passed: it starts only once the gate is passed, or started before it with a reason."
+  },
+  "material": {
+    "title": "{order} would start before its material",
+    "arrives": "{material} arrives {date}.",
+    "arrivesFirm": "{material} arrives {date} (a firm planned order).",
+    "earliest": "Earliest start with material: {start}.",
+    "earliestDay": "Earliest start with material: {day}.",
+    "notCovered": "{order}: material is short with nothing ordered ({materials}): no start day with material is known.",
+    "body": "The move is not refused: snap it to the earliest start with material, or keep your date (the problem stays in the list).",
+    "snap": "Snap to {start}",
+    "snapPlain": "Snap to the material's day",
+    "noDay": "No day with material is known to snap to.",
+    "keep": "Keep my date",
+    "cancel": "Cancel"
+  },
+  "subcontract": {
+    "title": "Move Op {seq} {operation} to a subcontractor",
+    "titlePlain": "Move to a subcontractor",
+    "reading": "Reading the workshops…",
+    "errorTitle": "Couldn't load the workshops",
+    "lead": "Approved workshops only for {kind}: a workshop that is not approved shows why and cannot be picked.",
+    "noWorkshops": "This site has no workshop yet.",
+    "pick": "Workshop",
+    "approved": "Approved",
+    "held": "Held",
+    "noRemark": "Approved for this operation; nothing to say.",
+    "pieces": "Garments",
+    "piecesHint": "From 1 to {pieces}.",
+    "piecesHeld": "Give whole garments, from 1 to {pieces}.",
+    "less": "One less",
+    "more": "One more",
+    "kitReading": "Reading the kit's timing…",
+    "kitError": "Couldn't read when the kit leaves",
+    "kit": "Kit list (from the bill of materials)",
+    "kitNone": "The bill of materials puts nothing in this kit.",
+    "col": {
+      "item": "Material",
+      "colour": "Colour",
+      "quantity": "Quantity"
+    },
+    "later": "What the return date drives",
+    "finishesLate": "Would finish late",
+    "plans": "It plans the subcontract order: a draft order with its kit is made for it when the work order is released; the bar moves to the workshop's lane.",
+    "plansBuyer": "It plans the work outside and moves the bar to the workshop's lane; the buyer drafts the subcontract order from Purchasing › Subcontract orders.",
+    "confirm": "Move and plan the kit",
+    "already": "This operation is already worked at a workshop.",
+    "doneHeld": "Moved: close the dialog.",
+    "barStayed": "The bar stays on its lane: {reason}"
+  },
+  "print": {
+    "title": "Print day sheets",
+    "lanes": "Lines",
+    "lanesAll": "None picked: every active line of the site.",
+    "lanesPlaceholder": "Every active line",
+    "lanesPicked_one": "{lanes} picked",
+    "lanesPicked_other": "{lanes} picked",
+    "search": "Search the lines",
+    "date": "Day",
+    "dateHeld": "Pick the day to print.",
+    "language": "Language of the sheets",
+    "languages": {
+      "it": "Italian",
+      "en": "English"
+    },
+    "plan": "Which plan",
+    "plans": {
+      "PUBLISHED": "What the floor has",
+      "WORKING": "Working plan"
+    },
+    "publishedHint": "The sheets print the published version the floor works to that day, so they match the dispatch tablets.",
+    "workingHint": "The sheets print the working plan, not published yet: each sheet says so in a banner.",
+    "reading": "Reading the sheets…",
+    "noVersion": "No published version covers this day",
+    "noVersionBody": "Publish the plan for that day first, or print the working plan.",
+    "errorTitle": "Couldn't read the sheets",
+    "noRows": "nothing planned",
+    "rows_one": "{rows} bar",
+    "rows_other": "{rows} bars",
+    "open": "Open PDF (new tab)"
+  },
+  "sheet": {
+    "lead_one": "{sheets} sheet in {language}: what the PDF says.",
+    "lead_other": "{sheets} sheets in {language}: what the PDF says."
+  },
+  "backlog": {
+    "title": "Reschedule backlog",
+    "summary": "Every unpinned bar left in the past moves to the first free time from now (and its material's day); what follows is pushed only as far as it must. Working plan only: the floor sees it once you publish.",
+    "tray": "Not on the board",
+    "why": {
+      "FORWARD": "From now on free time",
+      "PAST": "Left in the past",
+      "PUSHED": "Pushed by the operation before it",
+      "PLACED": "Placed from the tray"
+    },
+    "over": "over capacity",
+    "kept": {
+      "PINNED_IN_THE_PAST": "{order}: a pinned bar in the past stays where it is.",
+      "PINNED_BEFORE_PREVIOUS": "{order}: a pinned bar starts before the operation before it ends.",
+      "NO_WORKING_TIME": "{order}: no working time to move it to."
+    },
+    "skipped": {
+      "NOT_OPEN": "{order} is not open any more.",
+      "ON_HOLD": "{order} is on hold.",
+      "NO_DUE_DATE": "{order} has no due date.",
+      "LANE_NOT_ACTIVE": "{order}: its lane is not active.",
+      "NO_WORKING_TIME": "{order}: no working time on its lane.",
+      "GATE_NOT_PASSED": "{order} waits on a gate not passed."
+    },
+    "leftOut_one": "{bars} stays or is left out",
+    "leftOut_other": "{bars} stay or are left out",
+    "nothing": "Nothing is left in the past: nothing to move.",
+    "apply_one": "Move {moves} bar",
+    "apply_other": "Move {moves} bars",
+    "applyPlain": "Move the bars",
+    "reason_one": "Why {lanes} lane may go over capacity",
+    "reason_other": "Why {lanes} lanes may go over capacity",
+    "reasonHint": "At least 3 characters; kept with each bar.",
+    "reasonHeld_one": "Say why {lanes} lane may go over capacity (at least 3 characters).",
+    "reasonHeld_other": "Say why {lanes} lanes may go over capacity (at least 3 characters).",
+    "planChanged": "The working plan changed since the preview: read again."
+  },
+  "export": {
+    "title": "Export board (XLSX)",
+    "starting": "Asking for the export…",
+    "failed": "The export could not be asked for.",
+    "fileTitle": "Planning board",
+    "versionTitle": "Published version",
+    "column": {
+      "lane": "Lane",
+      "start": "Start",
+      "end": "End",
+      "workOrder": "Work order",
+      "style": "Style",
+      "operation": "Operation",
+      "pieces": "Pieces",
+      "minutes": "Standard minutes",
+      "due": "Due date",
+      "schedule": "Schedule",
+      "floor": "On the floor",
+      "pinned": "Pinned",
+      "note": "Note"
+    }
+  },
+  "laneKind": {
+    "LINE": "Line",
+    "WORK_CENTRE": "Work centre",
+    "WORKSHOP": "Subcontractor"
+  },
+  "version": {
+    "title": "Published version v{version}",
+    "titlePlain": "Published version",
+    "readOnly": "Read-only",
+    "back": "Working plan",
+    "export": "Export this version (XLSX)",
+    "exportHeld": "Exporting needs the Office's list tools: open the board from the Office.",
+    "reading": "Reading the version…",
+    "notFound": "No such published version",
+    "notFoundBody": "The link names a version this site does not have. Open Published versions on the board.",
+    "errorTitle": "Couldn't load the published version",
+    "note": "Note: {note}",
+    "board": "What the floor was given",
+    "boardHint": "Each bar says its state on the floor now and where the working plan has it now.",
+    "label": "Published version v{version} · {site}",
+    "held": "Version v{version} is read-only: nothing moves, pins or publishes from here.",
+    "empty": "This version has no bars on these days.",
+    "card": "Op {seq} {operation} · {style}",
+    "cardPart": "Part of the order · {style}",
+    "rush": "Rush",
+    "moved": "Working plan: {lane} · {when}",
+    "removed": "Not in the working plan any more",
+    "floor": {
+      "CURRENT": "The floor works to v{version} now ({from} to {to}, from {start}).",
+      "UPCOMING": "v{version} waits for its start: the floor works to it from {start} ({from} to {to}).",
+      "REPLACED": "v{version} was replaced by a later version ({from} to {to})."
+    },
+    "same": "The working plan is the same as v{version} on its days.",
+    "compare": "Since v{version} the working plan has {moved} moved, {added} added, {removed} removed on its days.",
+    "added_one": "{bars} bar the working plan added",
+    "added_other": "{bars} bars the working plan added",
+    "addedOne": "{lane} · {when}",
+    "legend": "Colours by the floor's state: not started, running, paused, done — each said in words on the bar."
+  },
+  "bar": {
+    "title": "On this bar",
+    "material": "Material",
+    "pinned": "Pinned: it keeps its lane and times.",
+    "pinnedBy": "Pinned by {name}, {time}: it keeps its lane and times.",
+    "pin": "Pin",
+    "unpin": "Unpin",
+    "pinOrder": "Pin the whole order",
+    "unpinOrder": "Unpin the whole order",
+    "subcontract": "Move to a subcontractor…",
+    "gates": "A bar whose order waits on a pre-production gate asks Start before the gate when it is moved."
+  },
+  "legend": {
+    "notStarted": "Not started",
+    "notStartedWords": "On the floor: no scan yet.",
+    "running": "Running · 2/7",
+    "runningWords": "On the floor: bundles being worked or under way, with the garments done of the order's.",
+    "paused": "Paused · 2/7",
+    "pausedWords": "On the floor: its bundles are paused.",
+    "done": "Done",
+    "doneWords": "On the floor: nothing left at this operation.",
+    "pinned": "Pinned",
+    "pinnedWords": "Keeps its lane and times; reschedules go around it (P pins and unpins).",
+    "gateWords": "Its order waits on a pre-production gate not passed.",
+    "triedWords": "Moved or placed in your what-if, not on the working plan."
+  },
+  "keys": {
+    "pin": "Pin or unpin the bar in focus",
+    "whatIf": "What-if on or off",
+    "undoLog": "Outside the board ⌘Z undoes your newest change of the Changes list, ⌘⇧Z makes it again as a new move."
+  },
+  "versions": {
+    "open": "Read-only",
+    "openOne": "Open v{version}"
+  },
+  "notice": {
+    "pinned": "Bar pinned.",
+    "unpinned": "Bar unpinned.",
+    "pinnedOrder_one": "{bars} bar of the order pinned.",
+    "pinnedOrder_other": "{bars} bars of the order pinned.",
+    "unpinnedOrder_one": "{bars} bar of the order unpinned.",
+    "unpinnedOrder_other": "{bars} bars of the order unpinned.",
+    "undone": "Change undone.",
+    "redone": "Made again as a new move.",
+    "nothingToUndo": "Nothing of yours to undo in the changes read.",
+    "nothingToRedo": "Nothing to make again.",
+    "outside": "Sent outside: the bar is at the workshop.",
+    "backlog_one": "{bars} bar rescheduled from the backlog.",
+    "backlog_other": "{bars} bars rescheduled from the backlog.",
+    "whatIfApplied_one": "{moves} move of the what-if applied to the plan.",
+    "whatIfApplied_other": "{moves} moves of the what-if applied to the plan.",
+    "whatIfDiscarded": "What-if discarded: the working plan is as it was.",
+    "snapped": "{order} snapped to the earliest start with material.",
+    "noSnap": "{order}: no day with material is known to snap to."
+  },
+  "refusal": {
+    "PINNED": "Not saved: the bar is pinned. Unpin it to move it.",
+    "ALREADY_PINNED": "Already pinned.",
+    "NOT_PINNED": "It is not pinned.",
+    "NOTHING_TO_PIN": "Nothing to pin: every bar of the order is already so.",
+    "NOTHING_TO_RESCHEDULE": "Nothing to move: nothing is left in the past.",
+    "WHAT_IF_CONFLICTS": "Some moves clash with the working plan as it is now.",
+    "WHAT_IF_CLOSED": "This what-if is already applied or discarded.",
+    "NOT_UNDOABLE": "This change is not undone (a publish, an undo or a part taken off).",
+    "ALREADY_UNDONE": "This change is already undone.",
+    "CHANGED_SINCE": "The bar changed since: only its latest change is undone."
+  },
+  "error": {
+    "forbidden": "You do not have the permission to see this.",
+    "offline": "No connection: try again when it is back.",
+    "failed": "Something went wrong reading it.",
+    "noSite": "No planning site yet."
+  },
+  "dialog": {
+    "retry": "Try again",
+    "close": "Close",
+    "cancel": "Cancel"
+  }
+}
