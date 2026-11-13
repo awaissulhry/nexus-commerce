@@ -3,9 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { isApiError } from '../../../lib/api/errors'
-import { recordAddress } from '../../../lib/records/record-links'
 import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
-import { RecordPanels } from '../../../record-panels/RecordPanels'
 import { OFFICE_PAGES } from '../../../shell/nav/office-nav'
 import { useApprovalHistory } from '../../../shell/panels/approvals/use-approval-history'
 import { approveQuote, getQuote, listApprovals, rejectQuote, type ApprovalRow, type ApprovalsAnswer, type QuoteDetail } from '../../sales/quotes/api'
@@ -22,6 +20,9 @@ import type { BulkLine, InboxDialog, InboxViewModel, ReviewTab } from './model'
 import { InboxView } from './view/InboxView'
 // B-W2b-188 (PLT-089): the person's own "e-mail me approvals" switch.
 import { MailMeSwitch } from '../../../record-panels/approvals/mail-me/MailMeSwitch'
+// B-W2b-382 (XF7:01, XF7:02): the request in words from its codes; its record's page (its parent's) also for the review alone.
+import { subjectAddress } from './subject-links/subject-link'
+import { RequestPanels } from './words/RequestPanels'
 
 const isApprovalChange = (type: string) => type.startsWith('approval.') || type.startsWith('quote.') || type === 'change_order.changed' || type === 'smv_version.changed' || type.startsWith('inspection_plan.')
 
@@ -99,7 +100,7 @@ export function Approvals() {
     const built = rowsOf(view, { tasks: tasks?.rows ?? [], quotes: view === 'overdue' ? [] : (quotes?.approvals ?? []), items: today?.items ?? [] })
     return built.map((row): InboxRow => {
       // B-W2b-377: a subject with no page of its own (a credit check, a bank account, a return or receipt line) opens its parent's.
-      if (row.task) return { ...row, href: `${prefix}${recordAddress({ type: (row.task.record.parent ?? row.task.record).type, id: (row.task.record.parent ?? row.task.record).id, companyId: row.task.companyId, siteId: row.task.siteId }, OFFICE_PAGES)}` }
+      if (row.task) return { ...row, href: subjectAddress(row.task, prefix, OFFICE_PAGES) }
       if (row.quote) return { ...row, href: `${prefix}/sales/quotes/${row.quote.quoteId}?tab=approval` }
       return { ...row, href: row.item ? queueItem(row.item, prefix).href : null }
     })
@@ -169,8 +170,9 @@ export function Approvals() {
   const offline = live === 'offline'
 
   // ---- deciding a request of the engine ------------------------------------------------------------------------------------
-  const afterDecision = async (decidedId: string, key: string, params: Record<string, string | number>) => {
-    setNotice({ key, tone: 'success', params })
+  const afterDecision = async (decided: TaskDetail, key: string) => {
+    const decidedId = decided.id
+    setNotice({ key, tone: 'success', request: { kindLabel: decided.kindLabel, record: decided.record } })
     setDialog(null)
     const before = rowsRef.current
     await load()
@@ -194,7 +196,7 @@ export function Approvals() {
         await stepUp(api, code)
       }
       await approveTask(api, task, comment)
-      await afterDecision(task.id, task.signatureMeaning ? 'notice.signed' : 'notice.approved', { summary: task.summary })
+      await afterDecision(task, task.signatureMeaning ? 'notice.signed' : 'notice.approved')
     } catch (error) {
       if (dialog?.kind === 'sign' || code !== null) {
         const problem = decisionProblem(isApiError(error) ? error : null)
@@ -222,7 +224,7 @@ export function Approvals() {
     setDialog((current) => (current?.kind === 'reject' ? { ...current, busy: true } : current))
     try {
       await rejectTask(api, task, reasonCode, reason)
-      await afterDecision(task.id, 'notice.rejected', { summary: task.summary })
+      await afterDecision(task, 'notice.rejected')
     } catch (error) {
       setDialog(null)
       failed(error)
@@ -241,7 +243,8 @@ export function Approvals() {
         const now = await getTask(api, row.task!.id).catch(() => null)
         // Its row as read now, through the inbox's own rule (status, mine, changed, gone, not mine), then: signed one by one.
         const leftOut = !now ? 'inbox.held.gone' : (heldOf({ ...row, task: now }, { offline: false, busy: false }) ?? (now.signatureMeaning || now.requireStepUp ? 'inbox.held.signedOneByOne' : null))
-        lines.push({ key: row.key, id: row.task!.id, version: now?.version ?? row.task!.version, label: (now?.summary ?? row.task!.summary).split(':')[0]!, summary: now?.summary ?? row.task!.summary, leftOut })
+        const read = now ?? row.task!
+        lines.push({ key: row.key, id: read.id, version: read.version, request: { kindLabel: read.kindLabel, record: read.record }, leftOut })
       }
       setDialog({ kind: 'bulk', keys, lines, state: { phase: 'ready' } })
     } catch (error) {
@@ -314,7 +317,7 @@ export function Approvals() {
     notice,
     quoteReview: openId && quoteRow ? (quoteReview && quoteReview.id === openId ? quoteReview : { id: openId, quote: { status: 'loading' } }) : null,
     quoteRejecting,
-    taskReview: openId && isTask ? { id: openId, detail: detail && detail.id === openId ? detail.value : { status: 'loading' }, history: history.model, comment, tab } : null,
+    taskReview: openId && isTask ? { id: openId, detail: detail && detail.id === openId ? detail.value : { status: 'loading' }, history: history.model, comment, tab, recordHref: task ? subjectAddress(task, prefix, OFFICE_PAGES) : null } : null,
     dialog,
   }
 
@@ -322,7 +325,7 @@ export function Approvals() {
     <InboxView
       model={model}
       mailSwitch={<MailMeSwitch api={api} />}
-      conversation={task ? <RecordPanels record={{ type: 'ApprovalTask', id: task.id, companyId: task.companyId, siteId: task.siteId }} title={task.summary} tab="thread" /> : undefined}
+      conversation={task ? <RequestPanels task={task} /> : undefined}
       actions={{
         onControls: (next) => go(next),
         onRetry: () => {

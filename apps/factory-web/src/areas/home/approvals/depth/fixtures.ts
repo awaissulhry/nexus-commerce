@@ -28,7 +28,8 @@ const task = (n: number, overrides: Partial<TaskRow> = {}): TaskRow => ({
   kindLabel: words('Price change', 'Cambio di prezzo'),
   status: 'PENDING',
   summary: `PRICE-DEMO-00${n} · Giacca Demo ${n}: list price 249.00 → 269.00`,
-  record: { type: 'PriceListLine', id: id(100 + n) },
+  // B-W2b-382: the record in words as its kind reads it (codes only): the row says "{kind}: {record}", never `summary`.
+  record: { type: 'PriceListLine', id: id(100 + n), label: `PRICE-DEMO-00${n} · Giacca Demo ${n}` },
   companyId: COMPANY,
   siteId: null,
   requester: { ...BRUNO },
@@ -59,7 +60,7 @@ const PO = task(4, {
   kind: 'PURCHASE_ORDER',
   kindLabel: words('Purchase order', "Ordine d'acquisto"),
   summary: 'PO-DEMO-0042 to Conceria Esempio: 3 lines, to be sent',
-  record: { type: 'PurchaseOrder', id: id(140) },
+  record: { type: 'PurchaseOrder', id: id(140), label: 'PO-DEMO-0042 · rev 1' },
   rule: { id: id(961), name: 'Orders over 5,000', sentence: words("Purchase order: order value over 5000 → Finance, signed 'Released'", "Ordine d'acquisto: valore dell'ordine oltre 5000 → Finanza, firmato 'Rilasciato'") },
   signatureMeaning: 'RELEASED',
   requireStepUp: true,
@@ -74,6 +75,8 @@ const PO = task(4, {
   dueAt: at(11, 15, 30),
   overdue: true,
 })
+// B-W2b-382: a credit hold of the approval engine; its subject (a credit check) has no page: its parent, the held order, does.
+const CREDIT = task(6, { kind: 'CREDIT_OVERRIDE', kindLabel: words('Credit override', 'Sblocco del fido'), summary: 'Credit check of SO-DEMO-0170: over the limit', record: { type: 'CreditCheck', id: id(160), label: 'SO-DEMO-0170 · Moto Club Esempio', parent: { type: 'SalesOrder', id: id(170) } }, facts: [], requestedAt: at(12, 8) })
 const CHANGED = task(5, { summary: 'PRICE-DEMO-005 · Pantalone Demo: list price 189.00 → 199.00', recheck: 'CHANGED', approve: { allowed: false, why: 'It changed since you looked.' }, requestedAt: at(9, 11) })
 
 const HISTORY: HistoryLine[] = [
@@ -173,9 +176,9 @@ const review = (tab: 'change' | 'context' | 'conversation' | 'history' = 'change
 
 const PRICE_KEYS = [PRICE_1, PRICE_2, PRICE_3].map((row) => `task:${row.id}`)
 const BULK_LINES: BulkLine[] = [
-  { key: PRICE_KEYS[0]!, id: PRICE_1.id, version: 1, label: 'PRICE-DEMO-001 · Giacca Demo 1', summary: PRICE_1.summary, leftOut: null },
-  { key: PRICE_KEYS[1]!, id: PRICE_2.id, version: 1, label: 'PRICE-DEMO-002 · Giacca Demo 2', summary: PRICE_2.summary, leftOut: null },
-  { key: PRICE_KEYS[2]!, id: PRICE_3.id, version: 2, label: 'PRICE-DEMO-003 · Giacca Demo 3', summary: PRICE_3.summary, leftOut: 'inbox.held.changed' },
+  { key: PRICE_KEYS[0]!, id: PRICE_1.id, version: 1, request: { kindLabel: PRICE_1.kindLabel, record: PRICE_1.record }, leftOut: null },
+  { key: PRICE_KEYS[1]!, id: PRICE_2.id, version: 1, request: { kindLabel: PRICE_2.kindLabel, record: PRICE_2.record }, leftOut: null },
+  { key: PRICE_KEYS[2]!, id: PRICE_3.id, version: 2, request: { kindLabel: PRICE_3.kindLabel, record: PRICE_3.record }, leftOut: 'inbox.held.changed' },
 ]
 
 const mineRows = rowsOf('mine', {
@@ -229,6 +232,15 @@ export const DEPTH_CASES: readonly { id: string; label: string; model: InboxView
     label: 'B-W2b-307 · a planner without approvals.view or quotes',
     model: depthModel({ can: { quotes: { view: false, manage: false, approve: false, send: false }, tasks: false, decide: false, today: true, rules: false }, grains: GRAINS.priceOnly, rows: { items: rowsOf('waiting', { tasks: [], quotes: [], items: [CHANGE_ORDER] }).map(withHref), problem: null }, counts: { waiting: 1, overdue: 0, mine: 0, decided: 0 }, changedSinceAsked: 0 }),
     note: 'Only Today’s approvals (decided on their own page); no tick boxes, no Amount; Approval rules is held in ⋯.',
+  },
+  // B-W2b-382 (XF7:01, XF7:02): the notice after a decision says the request in words; a review opened alone (its row not in
+  // the list: from the bell or Today) still opens its record's page — for a credit hold, the held order (its parent).
+  { id: 'w2b-382-notice', label: 'B-W2b-382 · after a yes: the notice says the request in words', model: depthModel({ notice: { key: 'notice.signed', tone: 'success', request: { kindLabel: PO.kindLabel, record: PO.record } } }), note: '"Signed and approved: Purchase order: PO-DEMO-0042 · rev 1" (Italian: "Firmata e approvata: Ordine d\'acquisto: …"), never the API\'s English sentence.' },
+  {
+    id: 'w2b-382-review-alone',
+    label: 'B-W2b-382 · a credit hold opened alone: Context opens the held order',
+    model: depthModel({ controls: { view: 'waiting', kind: null, q: '', changed: false, open: CREDIT.id }, taskReview: { id: CREDIT.id, detail: { status: 'ready', value: { ...PO_DETAIL, ...CREDIT, rules: [] } }, history: null, tab: 'context', recordHref: `${PREFIX}/sales/orders/${id(170)}` } }),
+    note: 'The request is not a row of this view (asked from the bell): "Open full page" opens the held sales order (the request\'s parent), not the credit check\'s record panels.',
   },
   { id: 'w2b-307-quote', label: 'B-W2b-307 · a quote opens its W1 review here', model: depthModel({ controls: { view: 'waiting', kind: null, q: '', changed: false, open: QUOTE.id }, quoteReview: { id: QUOTE.id, quote: { status: 'ready', value: pending() } } }) },
 ]

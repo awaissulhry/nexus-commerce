@@ -1324,7 +1324,8 @@
       "lots": "A lot was not accepted: check its quantity.",
       "receivedAt": "The received time is in the future.",
       "series": "This company has no goods receipt or lot number series yet: Admin › Documents & numbering.",
-      "order": "The order no longer takes these goods (changed, cancelled or already received): it was read again."
+      "order": "The order no longer takes these goods (changed, cancelled or already received): it was read again.",
+      "noApprover": "A line is beyond its delivery tolerance and needs a yes, but nobody may give it: an administrator gives an office role the right to decide purchase orders and approvals, or switches on an approval rule for receipts beyond their tolerance."
     },
     "result": {
       "title": "Posted {number}",

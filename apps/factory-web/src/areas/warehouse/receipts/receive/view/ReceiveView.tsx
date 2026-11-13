@@ -35,6 +35,7 @@ import {
   type ReceiveModel,
 } from '../../model'
 import '../../../../_shared/buying/buying.css'
+import { HeldResult } from '../../held/view/HeldResult'
 
 export type { ReceiveActions, ReceiveModel } from '../../model'
 
@@ -113,7 +114,14 @@ function Receive({ model, actions }: { model: ReceiveModel; actions?: ReceiveAct
         <DetailHeader backAsChild backLabel={<Link href={listHref}>{t('rc.back')}</Link>} title={title} actions={postButton || undefined} />
         {order && !model.result && <p className="fw-by-hint">{t('rc.receive.intro', { status: t(`poStatus.${order.status}`) })}</p>}
       </div>
-      {model.result ? <Result model={model} actions={actions} /> : draft ? <Form draft={draft} model={model} actions={actions} /> : <PickOrder model={model} actions={actions} />}
+      {model.result ? (
+        // B-W2b-382: a receipt that waits for a yes (202) is never said as posted.
+        model.held && model.result.receipt.status !== 'POSTED' ? (
+          <HeldResult model={model.held} actions={actions?.held} onAnother={actions?.onAnother} />
+        ) : (
+          <Result model={model} actions={actions} />
+        )
+      ) : draft ? <Form draft={draft} model={model} actions={actions} /> : <PickOrder model={model} actions={actions} />}
     </div>
   )
 }

@@ -10,6 +10,7 @@ import { automationAddress, controlsOf, MODULE_TIMERS, type AutomationControls, 
 import { AutomationView } from './view/AutomationView'
 // B-W2b-307: Approval rules.
 import { useApprovalRules } from './approval-rules/use-approval-rules'
+import { NEW_RULE_KIND_PARAM } from './approval-rules/new-kind/new-kind'
 
 /**
  * `/w/<company>/admin/automation` (SCR-167, the W2a part): Reminders & timers through the API client — the date rules
@@ -40,7 +41,7 @@ export function AutomationPage() {
 
   const go = useCallback((next: Partial<AutomationControls>) => router.replace(`${pathname}${automationAddress({ ...query.current, ...next })}`, { scroll: false }), [router, pathname])
   const ruling = useRules({ api, enabled: timersAllowed, manage, trigger: 'DATE', ruleParam: controls.view === 'timers' ? controls.rule : null, kinds: (kind) => kind.trigger === 'DATE', onClose: () => go({ rule: null }), onNotice: setNotice })
-  const approvals = useApprovalRules({ api, enabled: approvalsAllowed, ruleParam: controls.view === 'approvals' || (!timersAllowed && approvalsAllowed) ? controls.rule : null, readRoles: permissions.has('roles.view'), onNotice: (next) => setNotice(next ? { ...next, key: `approvals:${next.key}` } : null) })
+  const approvals = useApprovalRules({ api, enabled: approvalsAllowed, ruleParam: controls.view === 'approvals' || (!timersAllowed && approvalsAllowed) ? controls.rule : null, /* B-W2b-382 */ newKind: search.get(NEW_RULE_KIND_PARAM), readRoles: permissions.has('roles.view'), onNotice: (next) => setNotice(next ? { ...next, key: `approvals:${next.key}` } : null) })
 
   const pending = useRef<ReturnType<typeof setTimeout> | null>(null)
   const readSoon = () => {

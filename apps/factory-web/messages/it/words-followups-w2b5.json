@@ -1,0 +1,82 @@
+{
+  "held": {
+    "title": "Aspetta un sì prima di essere registrato",
+    "titleOf": "Il ricevimento {number} aspetta un sì",
+    "body_one": "Non è ancora registrato nulla: nessun lotto, nessun movimento di magazzino e l’ordine non è cambiato. 1 riga supera la sua tolleranza di consegna e aspetta un sì; dopo, il ricevimento è registrato com’è stato inserito.",
+    "body_other": "Non è ancora registrato nulla: nessun lotto, nessun movimento di magazzino e l’ordine non è cambiato. {count} righe superano la loro tolleranza di consegna e aspettano un sì; dopo l’ultimo, il ricevimento è registrato com’è stato inserito.",
+    "linesLabel": "Righe che aspettano un sì",
+    "line": "Riga {seq} · {item}",
+    "why": "{after} di {expected} {unit}: {more} {unit} più del previsto, oltre quanto consente la sua tolleranza di consegna.",
+    "whyQuantity": "{quantity} {unit} ricevuti, oltre quanto consente la sua tolleranza di consegna.",
+    "state": {
+      "PENDING": "Aspetta un sì da {who}",
+      "REJECTED": "Rifiutata: questo ricevimento non sarà registrato",
+      "unread": "Aspetta un sì (lo vedi in Home › Approvazioni)"
+    },
+    "openRequest": "Apri la richiesta",
+    "since": "In attesa dal {time}",
+    "cancel": "Annulla questo ricevimento",
+    "refusedTitle": "Una riga è stata rifiutata: questo ricevimento non sarà registrato",
+    "refusedBody": "Annullalo, poi ricevi di nuovo la merce entro la tolleranza (una correzione è un nuovo ricevimento).",
+    "releasedTitle": "Ogni riga ha il suo sì",
+    "releasedTitleOf": "Ricevimento {number}: ogni riga ha il suo sì",
+    "releasedBody": "Si registra da solo fra un momento, a nome di chi l’ha inserito. Se resta aperto (un mese chiuso, un permesso cambiato), registralo qui.",
+    "post": "Registra il ricevimento",
+    "cancelledTitle": "Il ricevimento {number} è annullato: non ne è stato registrato nulla.",
+    "cancelTitle": "Annullare il ricevimento {number}?",
+    "cancelBody": "Non ne è stato registrato nulla: nessun lotto o movimento viene stornato. Le sue richieste di un sì sono ritirate. Per prendere la merce, ricevila di nuovo entro la tolleranza.",
+    "reason": "Perché viene annullato",
+    "reasonHint": "Per esempio: i pezzi in più tornano al fornitore.",
+    "keep": "Tienilo",
+    "cancelGo": "Annulla il ricevimento",
+    "dismiss": "Chiudi",
+    "noReceive": "Solo chi riceve la merce in questa sede annulla o registra un ricevimento.",
+    "offline": "Offline: attendi la connessione.",
+    "busy": "Salvataggio in corso: attendi un momento.",
+    "notice": {
+      "cancelled": "Il ricevimento {number} è annullato: le sue richieste sono ritirate.",
+      "posted": "Il ricevimento {number} è registrato."
+    },
+    "problem": {
+      "reason": "Scrivi perché viene annullato (al massimo 1000 caratteri).",
+      "held": "Una riga aspetta ancora il suo sì: il ricevimento si registra dopo l’ultimo sì.",
+      "state": "Ora il ricevimento non può farlo: un sì è stato rifiutato, oppure nel frattempo è stato registrato o annullato. È stato riletto.",
+      "gone": "Questo ricevimento non c’è più.",
+      "failed": "Non è riuscito. Riprova."
+    },
+    "result": {
+      "open": "Apri il ricevimento",
+      "again": "Ricevi di nuovo {number}",
+      "back": "Torna ai ricevimenti"
+    }
+  },
+  "docType": {
+    "notSaid": "Tipo non indicato (vale per ogni richiesta del suo genere)",
+    "say": "Indica cos’è",
+    "change": "Cambia",
+    "openOf": "Che documento è {name}?",
+    "title": "Cos’è {name}?",
+    "body": "Indica cos’è il documento, così vale solo per le richieste a cui risponde: un DURC non è mai preso per un certificato ISO, un rapporto sui coloranti azoici mai per quello sul cromo VI. Un documento senza tipo vale ancora per ogni richiesta del suo genere.",
+    "label": "Tipo di documento",
+    "hintTyped": "Vale solo per le richieste di questo tipo.",
+    "hintNone": "Non indicato: vale per ogni richiesta del suo genere, come prima.",
+    "typesUnread": "Non è stato possibile leggere l’elenco dei tipi di documento: riprova fra un momento.",
+    "save": "Salva",
+    "cancel": "Annulla",
+    "done": "{name}: il suo tipo è salvato.",
+    "dismiss": "Chiudi",
+    "held": {
+      "noRight": "Per indicare cos’è un documento serve il permesso di aggiungere file nella sua azienda.",
+      "offline": "Offline: attendi la connessione.",
+      "reading": "Lettura del documento: un momento.",
+      "busy": "Salvataggio in corso: attendi un momento.",
+      "same": "Scegli prima un altro tipo."
+    },
+    "problem": {
+      "code": "Quel tipo non è più nell’elenco: scegline un altro (è stato riletto).",
+      "moved": "Il documento è cambiato nel frattempo: è stato riletto. Controlla e salva di nuovo.",
+      "gone": "Questo documento non è più quello in vigore (sostituito o rimosso).",
+      "failed": "Non è riuscito. Riprova."
+    }
+  }
+}

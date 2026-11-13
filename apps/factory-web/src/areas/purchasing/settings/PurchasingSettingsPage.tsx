@@ -58,6 +58,9 @@ import {
 } from './model'
 import type { DialogState, PurchasingSettingsModel, SettingsCan } from './view-model'
 import { PurchasingSettingsView } from './view/PurchasingSettingsView'
+// B-W2b-382: the reminders' timing (B-W2b-377's PUT …/settings/timing).
+import { setReminderTiming } from './timing/api'
+import { timingBody, timingChanged, timingDraftOf, timingHeld, type TimingDraft } from './timing/model'
 
 /**
  * The Purchasing settings container (`/w/<company>/purchasing/settings`, SCR-256, B-W2b-354): reads the PO approval rules
@@ -101,6 +104,8 @@ export function PurchasingSettingsPage() {
   const [materials, setMaterials] = useState<PurchasingSettingsModel['materials']>(null)
   const [reminders, setReminders] = useState<PurchasingSettingsModel['reminders']>(reading())
   const [reminderDraft, setReminderDraft] = useState<boolean | null>(null)
+  // B-W2b-382: the reminders' timing as typed (confirm-by hours, cadence days).
+  const [timingDraft, setTimingDraft] = useState<TimingDraft | null>(null)
   const [alerts, setAlerts] = useState<PurchasingSettingsModel['alerts']>(can.alerts ? reading() : null)
   const [audit, setAudit] = useState<{ tolerances: AuditEntry[] | null; settings: AuditEntry[] | null }>({ tolerances: null, settings: null })
   const [busy, setBusy] = useState<PurchasingSettingsModel['busy']>(null)
@@ -148,10 +153,11 @@ export function PurchasingSettingsPage() {
       const answer = await readReminders(api, scopeCompany)
       setReminders(ready(answer))
       setReminderDraft(answer.on)
+      setTimingDraft(timingDraftOf(answer, address.scope))
     } catch (error) {
       setReminders(failed(readProblemOf(error)))
     }
-  }, [api, can.view, scopeCompany])
+  }, [address.scope, api, can.view, scopeCompany])
 
   const loadAlerts = useCallback(async () => {
     if (!can.alerts) return
@@ -187,7 +193,7 @@ export function PurchasingSettingsPage() {
   const rows = tolerances.value
   const ownDefault = rows ? ownDefaultOf(rows, address.scope, companyId) : null
   const defaultDirty = !!(rows && defaultDraft && defaultChanges(ownDefault, defaultDraft) > 0)
-  const reminderDirty = reminders.value !== null && reminderDraft !== null && reminderDraft !== reminders.value.on
+  const reminderDirty = (reminders.value !== null && reminderDraft !== null && reminderDraft !== reminders.value.on) || (reminders.value !== null && timingDraft !== null && timingChanged(reminders.value, address.scope, timingDraft))
   const dirtyRef = useRef({ defaultDirty, reminderDirty, dialog: !!dialog })
   dirtyRef.current = { defaultDirty, reminderDirty, dialog: !!dialog }
   const live = useLive(
@@ -387,6 +393,27 @@ export function PurchasingSettingsPage() {
     }
   }, [address.scope, api, companyId, guard, loadAudit, loadReminders, refused, reminderDraft, reminders.value, wrote])
 
+  // B-W2b-382: the confirm-by hours and the cadence, the scope's row at its version (the Owner's; no step-up: nothing is sent).
+  const applyTiming = useCallback(async () => {
+    const settings = reminders.value
+    if (!settings || !timingDraft || !timingChanged(settings, address.scope, timingDraft) || timingHeld(settings, address.scope, timingDraft, false, false)) return
+    setBusy('timing')
+    try {
+      const answer = await setReminderTiming(api, timingBody(settings, timingDraft, address.scope, companyId), newIdempotencyKey())
+      setReminders(ready(answer))
+      setTimingDraft(timingDraftOf(answer, address.scope))
+      wrote()
+      setNotice({ key: 'done.timing', tone: 'success' })
+      void loadAudit()
+    } catch (error) {
+      const problem = refused(error)
+      setNotice({ key: problem.key, tone: 'danger' })
+      if (problem.reload) void loadReminders()
+    } finally {
+      setBusy(null)
+    }
+  }, [address.scope, api, companyId, loadAudit, loadReminders, refused, reminders.value, timingDraft, wrote])
+
   const save: SaveStatusState = busy ? { kind: 'saving' } : defaultDirty || reminderDirty ? { kind: 'unsaved', count: (defaultDirty ? 1 : 0) + (reminderDirty ? 1 : 0) } : lastFailed ? { kind: 'failed', count: 1 } : savedAt ? { kind: 'saved', at: savedAt } : { kind: 'idle' }
   const shownRules = poRulesOf(rules?.value ?? null, address.scope, companyId)
 
@@ -406,6 +433,7 @@ export function PurchasingSettingsPage() {
     materials,
     reminders,
     reminderDraft,
+    timingDraft,
     alerts,
     changed: {
       approval: rulesChangedOf(shownRules),
@@ -449,6 +477,9 @@ export function PurchasingSettingsPage() {
         onReminder: setReminderDraft,
         onDiscardReminder: () => reminders.value && setReminderDraft(reminders.value.on),
         onApplyReminder: () => void applyReminder(),
+        onTiming: setTimingDraft,
+        onDiscardTiming: () => reminders.value && setTimingDraft(timingDraftOf(reminders.value, address.scope)),
+        onApplyTiming: () => void applyTiming(),
         onStepUpSubmit: (code) => void submitStepUp(code),
         onStepUpCancel: cancelStepUp,
         onRetry: () => void loadAll(),

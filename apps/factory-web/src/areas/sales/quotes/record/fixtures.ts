@@ -88,6 +88,14 @@ const LINES: QuoteLine[] = [
   line('0190f0e2-8888-7000-8000-000000000002', 20, RED, 'RED', 'Rosso', [['50', 1], ['52', 3], ['54', 2]], '440', 264000, 175675, '33.4564'),
 ]
 
+/**
+ * B-W2b-382 (XF7:05): a development fee for the style in the black colourway, beside the black goods line (no size rows,
+ * invoiced once): the W1 block keeps one row per colourway — no duplicate key — and the black row's numbers stay the goods
+ * line's, also while the style is still being read.
+ */
+const FEE_LINE: QuoteLine = { ...line('0190f0e2-8888-7000-8000-000000000003', 5, BLK, 'BLK', 'Nero', [], '300', 30000, 0, '100.0000'), kind: 'FEE', quantity: 1, sizes: [], description: 'Sviluppo modello DEMO-JKT-01', unitCost: null, costAmount: 0 }
+export const WITH_FEE: QuoteLine[] = [FEE_LINE, ...LINES]
+
 type QuoteOverrides = Omit<Partial<QuoteDetail>, 'current'> & { current?: Partial<QuoteDetail['current']> }
 
 export function quote(overrides: QuoteOverrides = {}): QuoteDetail {
@@ -432,6 +440,8 @@ export const designScreen = defineDesignScreen<QuoteRecordViewModel>({
     { id: 'reject-dialog', label: 'Finance · Reject (a reason is required)', model: model({ me: PEOPLE.finance, grains: GRAINS.finance, can: CAN.finance, tab: 'approval', quote: ready(pending()), dialog: 'reject' }) },
     { id: 'approved', label: 'Sales · Approved, ready to send', model: model({ grains: GRAINS.sales, can: CAN.sales, quote: ready(withoutCost({ ...belowFloor(), status: 'APPROVED', current: { ...belowFloor().current, status: 'APPROVED' }, approval: { ...belowFloor().approval, requests: [request('APPROVED', PEOPLE.sales, { decisionNote: 'Ok per il primo ordine.' })] } })), approvals: { items: [approvalRow({ status: 'APPROVED', decidedBy: { id: PEOPLE.finance, name: 'Fiona Conti', you: false }, decidedAt: at(29, 10, 12), decisionNote: 'Ok per il primo ordine.', mayDecide: false, held: 'NOT_WAITING' })], problem: null } }) },
     { id: 'send-dialog', label: 'Sales · Send to customer (ready)', model: model({ grains: GRAINS.sales, can: CAN.sales, quote: ready(withoutCost(quote())), send: sendModel() }), note: 'The shared send part (SCR-037) on the quote: recipient, copies, subject, checks, what freezes, the PDF.' },
+    { id: 'w2b-382-fee-unread', label: 'B-W2b-382 · a fee line in a goods line’s colourway, the style still being read', model: model({ quote: ready(quote({ lines: WITH_FEE })), styles: {} }), note: 'One row per colourway (no duplicate key): Nero keeps the goods line’s pieces by size; the fee is not a grid row of its own.' },
+    { id: 'w2b-382-fee', label: 'B-W2b-382 · a fee line in a goods line’s colourway (style read)', model: model({ quote: ready(quote({ lines: WITH_FEE })) }), note: 'The black row’s pieces and price are the goods line’s; the development fee is a line of its own in Table.' },
     { id: 'price-owner', label: 'Owner · Price & margin', model: model({ tab: 'price' }) },
     { id: 'price-sales', label: 'Sales · Price & margin (no cost columns)', model: model({ tab: 'price', grains: GRAINS.sales, can: CAN.sales, quote: ready(withoutCost(belowFloor())) }) },
     { id: 'price-only', label: 'A role with prices only', model: model({ tab: 'price', grains: GRAINS.priceOnly, can: CAN.viewer, quote: ready(withoutCost(quote({ current: { marginPct: undefined, marginFloorPct: undefined, marginFloorBreached: undefined } }))) }), note: 'Without the margin grain: no margin figures at all, said once.' },

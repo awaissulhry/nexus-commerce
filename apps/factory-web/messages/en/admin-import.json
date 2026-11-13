@@ -12,7 +12,7 @@
       "last": "Last import: {when} · {state}",
       "never": "Not imported yet",
       "start": "Import",
-      "later": "Styles, price lists and workers get their imports with their own areas."
+      "later": "Some sheets also load from their own page: styles from Nexus Commerce (Products › Styles), a supplier’s price list (its Items & prices), sales orders (Sales › Orders) and a price list’s prices (its record)."
     },
     "template": {
       "xlsx": "Template (Excel)",
@@ -259,6 +259,30 @@
       "sales_priceLists": {
         "name": "Price lists",
         "fills": "A price list's prices by list code, style and colourway (or every colourway) and first day: the last day, the unit price (price) and its quantity breaks. The rows go into each list's draft version."
+      },
+      "compliance_substances": {
+        "name": "Restricted substances",
+        "fills": "The restricted substance list: REACH Annex XVII entries, the SVHC Candidate List, POPs, an AFIRM RSL or a brand’s RSL; one substance per row, found by its CAS number (a family by its name)."
+      },
+      "compliance_substanceRules": {
+        "name": "Substance rules",
+        "fills": "The rules over the substance list (a law’s, an industry RSL’s, a brand’s): what each restricts, where, the limit, the method and the evidence; one rule per row, found by its key."
+      },
+      "product_commerceStyles": {
+        "name": "Styles from a Nexus Commerce export",
+        "fills": "A Nexus Commerce product export (or a sheet with the same columns), one row per SKU: each product family becomes a draft style with its colours, sizes, SKU codes and barcodes. Nothing is sent to Nexus Commerce."
+      },
+      "product_pointsOfMeasure": {
+        "name": "Points of measure",
+        "fills": "The point of measure library: body and garment points, how to measure each, its unit and default tolerance."
+      },
+      "product_gradeRules": {
+        "name": "Grade rules",
+        "fills": "Grade rule steps: the increment of a point of measure from one size to another, or its standard increment."
+      },
+      "purchasing_packingList": {
+        "name": "Packing list of a ship notice",
+        "fills": "The tannery’s packing list of a delivery it announced, one row per hide (its number, area, grade, thickness, dye batch), checked against the purchase order before the goods arrive."
       }
     },
     "keys": {
@@ -347,7 +371,7 @@
         },
         "openOrders": {
           "name": "Open orders",
-          "what": "Orders already taken. They have no import yet: enter them as sales orders (Sales › Orders), then mark this step Nothing to load."
+          "what": "Orders already taken: load them with the sales orders import (Import a sheet › Sales orders) or enter them in Sales › Orders. This step does not compare that sheet yet: once they are in Nexus, mark it Nothing to load and say so."
         }
       },
       "state": {
@@ -357,7 +381,7 @@
         "running": "Import under way",
         "todo": "To load",
         "waiting": "Waits for an earlier step",
-        "held": "No import yet"
+        "held": "Not compared here"
       },
       "rec": {
         "rows": "Rows in the sheet {rows} · loaded {loaded}",
@@ -385,8 +409,8 @@
       },
       "held": {
         "waiting": "Finish step {step} first: the steps go in order.",
-        "noImporter": "Open orders have no import yet: enter them as sales orders, then mark this step Nothing to load.",
-        "noImporterDone": "Open orders have no import yet: use Nothing to load once they are entered as sales orders.",
+        "noImporter": "This step does not read the sales orders import yet: load open orders with Import a sheet › Sales orders (or enter them in Sales › Orders), then mark this step Nothing to load.",
+        "noImporterDone": "This step does not compare the sales orders import yet: use Nothing to load once the open orders are in Nexus.",
         "noImportRight": "Importing this sheet needs the right to run imports and to change what it loads. Ask an administrator.",
         "noDoneRight": "Marking a step done needs the right to apply imports and to change what it loads. Ask an administrator.",
         "running": "An import of this step is under way: open it and finish or cancel it first.",

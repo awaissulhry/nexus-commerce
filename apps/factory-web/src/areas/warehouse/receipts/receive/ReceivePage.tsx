@@ -7,12 +7,16 @@ import { isApiError } from '../../../../lib/api/errors'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { buyingCan, phrase, readProblem, todayIn, writeProblem, type Loaded, type Phrase } from '../../../_shared/buying/model'
-import { expectedLines, recordReceipt, type ExpectedLine, type Recorded } from '../api'
+import { expectedLines, getReceipt, recordReceipt, type ExpectedLine, type Receipt, type Recorded } from '../api'
 import { receiptBody, receiveDraft, type ReceiveDraft } from '../model'
 import { ReceiveView } from './view/ReceiveView'
 // B-W2b-182 (SCM-106): the form filled from a supplier's ship notice (`?notice=`).
 import { readOfficeNotice } from '../inbound/api'
 import { draftFromNotice } from '../inbound/model'
+// B-W2b-382 (B-W2b-377's 202): a receipt beyond its tolerance waits for a yes: said so, Cancel, posted live after the last yes.
+import { useLive } from '../../../_shared/buying/hooks'
+import { noApproverOf } from '../held/model'
+import { useHeldReceipt } from '../held/use-held-receipt'
 
 const TIME_ZONE = 'Europe/Rome'
 
@@ -99,6 +103,7 @@ function ReceiveContainer() {
     } catch (error) {
       setProblem(
         writeProblem(error, (paths, info) => {
+          if (noApproverOf(paths)) return phrase('rc.refusal.noApprover')
           if (paths.some((path) => path.includes('differenceReason'))) return phrase('rc.refusal.over')
           if (paths.some((path) => path.includes('/hides'))) return phrase('rc.refusal.hides')
           if (paths.some((path) => path.includes('/lots'))) return phrase('rc.refusal.lots')
@@ -120,9 +125,38 @@ function ReceiveContainer() {
     }
   }, [api, draft, posting])
 
+  // B-W2b-382: the held receipt's own part; a live change of it (its yes, a post, a cancel elsewhere) reads it again.
+  const recorded = result?.receipt ?? null
+  const setRecorded = useCallback((receipt: Receipt) => setResult((current) => (current ? { ...current, receipt } : current)), [])
+  const rereadRecorded = useCallback(() => {
+    if (!recorded) return
+    getReceipt(api, recorded.id)
+      .then(setRecorded)
+      .catch(() => undefined)
+  }, [api, recorded, setRecorded])
+  const live = useLive(
+    (change) => {
+      if (recorded && recorded.status === 'OPEN' && change.fields.receiptId === recorded.id) rereadRecorded()
+    },
+    rereadRecorded,
+    recorded !== null && (result?.held.length ?? 0) > 0,
+  )
+  const held = useHeldReceipt({
+    api,
+    receipt: result && result.held.length > 0 ? recorded : null,
+    held: result?.held ?? [],
+    prefix,
+    timeZone: TIME_ZONE,
+    receive: can.receive,
+    approvalsView: session.permissions.includes('approvals.view'),
+    offline: live === 'offline',
+    onReceipt: setRecorded,
+    onReload: rereadRecorded,
+  })
+
   return (
     <ReceiveView
-      model={{ prefix, can, orders, draft, posting, problem, result, timeZone: TIME_ZONE, today: todayIn(TIME_ZONE) }}
+      model={{ prefix, can, orders, draft, posting, problem, result, timeZone: TIME_ZONE, today: todayIn(TIME_ZONE), held: held.model }}
       actions={{
         onPickOrder: (id) => router.push(`${prefix}/warehouse/receipts/new?order=${encodeURIComponent(id)}`),
         onChange: (next) => {
@@ -136,6 +170,7 @@ function ReceiveContainer() {
           key.current = newIdempotencyKey()
           void load()
         },
+        held: held.actions,
       }}
     />
   )

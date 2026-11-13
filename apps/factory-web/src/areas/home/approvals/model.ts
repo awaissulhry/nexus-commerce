@@ -5,6 +5,7 @@ import type { ReviewState } from '@nexus/ui/patterns'
 import type { ApprovalHistoryActions, ApprovalHistoryModel } from '../../../shell/panels/approvals/model'
 import type { RejectReason, TaskDetail } from './api'
 import type { InboxControls, InboxCounts, InboxRow } from './inbox'
+import type { RequestFacts } from './words/request-words'
 
 /**
  * Home › Approvals (SCR-030; design home.approvals, W1: quote approvals only): the queue of requests that wait for MY
@@ -83,6 +84,8 @@ export interface TaskReviewModel {
   comment?: string
   /** The tab open (design: Change · Context · Conversation · History). */
   tab?: ReviewTab
+  /** B-W2b-382: the page of the request's record (its parent's for a subject with no page), also when its row is not listed. */
+  recordHref?: string | null
 }
 
 export const REVIEW_TABS = ['change', 'context', 'conversation', 'history'] as const
@@ -94,8 +97,8 @@ export interface BulkLine {
   /** The request's id and version as re-read (the yes sends them). */
   id: string
   version: number
-  label: string
-  summary: string
+  /** B-W2b-382: the request's kind and record as re-read, said in words by the view (never the API's English summary). */
+  request: RequestFacts
   /** null: still current; else why it is left out (an `inbox.held.` key of approvals-depth). */
   leftOut: string | null
 }
@@ -126,7 +129,8 @@ export interface InboxViewModel {
   asOf: string | null
   offline: boolean
   busy: boolean
-  notice: { key: string; tone: Tone; params?: Record<string, string | number> } | null
+  /** B-W2b-382: `request` — the decided request, said in words as the notice's `{request}`. */
+  notice: { key: string; tone: Tone; params?: Record<string, string | number>; request?: RequestFacts } | null
   /** W1's quote review (`?open=<quote approval id>`) and its reject dialog. */
   quoteReview: { id: string; quote: Loaded<QuoteDetail> } | null
   quoteRejecting: boolean

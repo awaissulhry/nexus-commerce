@@ -17,6 +17,8 @@ import type {
   StyleRow,
   VersionStatus,
 } from './api'
+// B-W2b-382: the style block's rows, one per colourway (record/lines/key.ts).
+import { colourRowsOf, gridLinesOf } from './record/lines/key'
 
 /**
  * The quotes screens' pure rules (SCR-034 list, SCR-035 record; B-W1-21, B-W1-24): what a person may see of the money
@@ -303,10 +305,10 @@ export function styleBlocks(lines: readonly QuoteLine[]): StyleBlock[] {
   return blocks
 }
 
-/** The quantities of a block's lines: colourway → size → pieces. */
+/** The quantities of a block's lines: colourway → size → pieces (B-W2b-382: its size-grid lines; a fee line has no sizes). */
 export function gridValueOf(lines: readonly QuoteLine[]): Record<string, Record<string, number>> {
   const value: Record<string, Record<string, number>> = {}
-  for (const line of lines) value[line.colourwayId] = Object.fromEntries(line.sizes.map((row) => [row.size, row.quantity]))
+  for (const line of gridLinesOf(lines)) value[line.colourwayId] = Object.fromEntries(line.sizes.map((row) => [row.size, row.quantity]))
   return value
 }
 
@@ -325,7 +327,8 @@ export function gridShapeOf(lines: readonly QuoteLine[], style: StyleDetail | nu
   for (const line of lines) for (const row of line.sizes) if (!sizeKeys.includes(row.size)) sizeKeys.push(row.size)
   return {
     sizes: sizeKeys.map((key) => ({ key, label: key })),
-    colours: lines.map((line) => ({ key: line.colourwayId, label: `${line.colourway.code} · ${line.colourway.name}`, offered: line.sizes.map((row) => row.size) })),
+    // B-W2b-382 (XF7:05): one row per colourway, also when a fee line shares a goods line's colourway.
+    colours: colourRowsOf(lines),
   }
 }
 
@@ -357,7 +360,8 @@ const sameSizes = (a: readonly { size: string; quantity: number }[], b: readonly
 export function lineWrites(lines: readonly QuoteLine[], typed: SizeGridValue): LineWrite[] {
   const writes: LineWrite[] = []
   for (const [colourwayId, row] of Object.entries(typed)) {
-    const line = lines.find((entry) => entry.colourwayId === colourwayId)
+    // B-W2b-382: the colourway's size-grid line (a fee or made-to-measure line of that colourway is never edited from the grid).
+    const line = gridLinesOf(lines).find((entry) => entry.colourwayId === colourwayId)
     const sizes = sizesOf(row)
     if (!line) {
       if (sizes.length > 0) writes.push({ kind: 'add', colourwayId, sizes })

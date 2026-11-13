@@ -12,7 +12,7 @@
       "last": "Ultima importazione: {when} · {state}",
       "never": "Mai importato",
       "start": "Importa",
-      "later": "Modelli di capo, listini e addetti avranno le loro importazioni con le rispettive aree."
+      "later": "Alcuni fogli si caricano anche dalla loro pagina: i modelli da Nexus Commerce (Prodotti › Modelli), il listino di un fornitore (i suoi Articoli e prezzi), gli ordini di vendita (Vendite › Ordini) e i prezzi di un listino (la sua scheda)."
     },
     "template": {
       "xlsx": "Modello (Excel)",
@@ -259,6 +259,30 @@
       "sales_priceLists": {
         "name": "Listini",
         "fills": "I prezzi di un listino per codice listino, modello e variante colore (o ogni variante) e primo giorno: l'ultimo giorno, il prezzo unitario (prezzo) e i suoi scaglioni di quantità. Le righe entrano nella versione in bozza di ogni listino."
+      },
+      "compliance_substances": {
+        "name": "Sostanze soggette a restrizione",
+        "fills": "L’elenco delle sostanze soggette a restrizione: voci dell’allegato XVII REACH, Candidate List SVHC, POP, una RSL AFIRM o la RSL di un marchio; una sostanza per riga, trovata dal numero CAS (una famiglia dal nome)."
+      },
+      "compliance_substanceRules": {
+        "name": "Regole sulle sostanze",
+        "fills": "Le regole sull’elenco delle sostanze (di una legge, di una RSL di settore, di un marchio): cosa limita ciascuna, dove, il limite, il metodo e la prova; una regola per riga, trovata dalla sua chiave."
+      },
+      "product_commerceStyles": {
+        "name": "Modelli da un export di Nexus Commerce",
+        "fills": "Un export prodotti di Nexus Commerce (o un foglio con le stesse colonne), una riga per SKU: ogni famiglia di prodotto diventa un modello in bozza con i suoi colori, taglie, codici SKU e codici a barre. Nulla viene inviato a Nexus Commerce."
+      },
+      "product_pointsOfMeasure": {
+        "name": "Punti di misura",
+        "fills": "La libreria dei punti di misura: punti del corpo e del capo, come misurare ciascuno, la sua unità e la tolleranza predefinita."
+      },
+      "product_gradeRules": {
+        "name": "Regole di sviluppo taglie",
+        "fills": "I passi delle regole di sviluppo taglie: l’incremento di un punto di misura da una taglia all’altra, o il suo incremento standard."
+      },
+      "purchasing_packingList": {
+        "name": "Packing list di un avviso di spedizione",
+        "fills": "La packing list della conceria per una consegna che ha annunciato, una riga per pelle (numero, superficie, scelta, spessore, bagno di tintura), confrontata con l’ordine d’acquisto prima che la merce arrivi."
       }
     },
     "keys": {
@@ -347,7 +371,7 @@
         },
         "openOrders": {
           "name": "Ordini aperti",
-          "what": "Gli ordini già presi. Non hanno ancora un'importazione: inseriscili come ordini di vendita (Vendite › Ordini), poi segna questo passo Niente da caricare."
+          "what": "Gli ordini già presi: caricali con l'importazione degli ordini di vendita (Importa un foglio › Ordini di vendita) o inseriscili in Vendite › Ordini. Questo passo non confronta ancora quel foglio: quando sono in Nexus, segnalo Niente da caricare e dillo nel motivo."
         }
       },
       "state": {
@@ -357,7 +381,7 @@
         "running": "Importazione in corso",
         "todo": "Da caricare",
         "waiting": "Attende un passo precedente",
-        "held": "Nessuna importazione ancora"
+        "held": "Non confrontato qui"
       },
       "rec": {
         "rows": "Righe nel foglio {rows} · caricate {loaded}",
@@ -385,8 +409,8 @@
       },
       "held": {
         "waiting": "Finisci prima il passo {step}: i passi vanno in ordine.",
-        "noImporter": "Gli ordini aperti non hanno ancora un'importazione: inseriscili come ordini di vendita, poi segna questo passo Niente da caricare.",
-        "noImporterDone": "Gli ordini aperti non hanno ancora un'importazione: usa Niente da caricare quando sono inseriti come ordini di vendita.",
+        "noImporter": "Questo passo non legge ancora l'importazione degli ordini di vendita: carica gli ordini aperti con Importa un foglio › Ordini di vendita (o inseriscili in Vendite › Ordini), poi segna questo passo Niente da caricare.",
+        "noImporterDone": "Questo passo non confronta ancora l'importazione degli ordini di vendita: usa Niente da caricare quando gli ordini aperti sono in Nexus.",
         "noImportRight": "Per importare questo foglio servono il diritto di eseguire importazioni e quello di modificare ciò che carica. Chiedi a un amministratore.",
         "noDoneRight": "Per segnare un passo come fatto servono il diritto di applicare importazioni e quello di modificare ciò che carica. Chiedi a un amministratore.",
         "running": "Un'importazione di questo passo è in corso: aprila e finiscila o annullala prima.",

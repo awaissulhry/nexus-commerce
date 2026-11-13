@@ -69,7 +69,7 @@ export function queryOf(address: Address): string {
 }
 
 /** Where other pages open (company-scoped: the caller passes `/w/<company>`). */
-export const adminRuleHref = (prefix: string, ruleId: string | 'new'): string => `${prefix}/admin/automation?view=approvals&rule=${encodeURIComponent(ruleId)}`
+export const adminRuleHref = (prefix: string, ruleId: string): string => `${prefix}/admin/automation?view=approvals&rule=${encodeURIComponent(ruleId)}`
 export const inboxHref = (prefix: string): string => `${prefix}/home/approvals?kind=PURCHASE_ORDER`
 export const alertRuleHref = (prefix: string, ruleId: string | 'new'): string => `${prefix}/home/alerts?rule=${encodeURIComponent(ruleId)}`
 export function auditHref(prefix: string, recordType: string, recordId?: string | null): string {

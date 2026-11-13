@@ -16,6 +16,8 @@ import { QualityTab } from './view/QualityTab'
 import { ReceivesCard } from './view/ReceivesCard'
 import { StatusDialog } from './view/StatusDialog'
 import './depth.css'
+import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
+import { useDocType } from './doc-type/use-doc-type'
 
 /** The catalogues every part of the supplier's depth reads. */
 export const DEPTH_NAMESPACES = [NS, CALENDAR_KIT_NAMESPACE]
@@ -44,7 +46,7 @@ export function supplierDepthSlot(party: Party, reload: () => void): SupplierDep
     overview: <OverviewPart party={party} reload={reload} />,
     now: <NowPart party={party} />,
     contacts: <ContactsPart party={party} reload={reload} />,
-    documents: <DocumentsPart />,
+    documents: <DocumentsPart party={party} />,
     quality: <QualityPart />,
     bank: <BankPart />,
   }
@@ -99,9 +101,13 @@ function ContactsPart({ party, reload }: { party: Party; reload: () => void }) {
   return <ReceivesCard model={{ read: state.profile.read, can: state.can, cells: state.receives.cells, notice: state.receives.notice }} actions={{ onToggle: state.receives.onToggle, onRetry: state.profile.onRetry }} />
 }
 
-function DocumentsPart() {
+function DocumentsPart({ party }: { party: Party }) {
   const state = useDepth()
   const pathname = usePathname() ?? ''
+  // B-W2b-382: what each document is (files.upload); a type saved reads the vault again.
+  const api = useOfficeApi()
+  const session = useOfficeSession()
+  const docType = useDocType({ api, partyId: party.id, mayType: session.permissions.includes('files.upload'), offline: state.live === 'offline', onTyped: state.documents.onRetry })
   return (
     <DocumentsTab
       model={{
@@ -114,8 +120,9 @@ function DocumentsPart() {
         notice: state.documents.notice,
         dialog: state.documents.dialog,
         companies: state.companies,
+        docType: docType.model,
       }}
-      actions={state.documents}
+      actions={{ ...state.documents, docType: docType.actions }}
     />
   )
 }
