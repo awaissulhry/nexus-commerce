@@ -1754,6 +1754,7 @@
     "shipping_labels_void": "Annullare un'etichetta del corriere",
     "shipping_freight_manage": "Impostare il trasporto addebitato ai clienti",
     "shipping_evidence_manage": "Gestire le prove di trasporto intra-UE",
+    "shipping_packaging_manage": "Gestire imballi e marcature dei colli",
     "parties_view": "Vedere clienti e fornitori",
     "parties_manage": "Aggiungere e modificare clienti e fornitori",
     "parties_block": "Bloccare e sbloccare un cliente o fornitore",

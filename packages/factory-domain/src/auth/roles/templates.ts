@@ -142,6 +142,8 @@ import { SALES_SAFETY_ADDS } from '../../sales/safety-reports/permissions'
 import { SALES_MTM_ADDS } from '../../sales/mtm/permissions'
 // B-W2b-360: fittings, alterations and remakes (sales and the production manager record fittings, the administrator too).
 import { SALES_FITTINGS_ADDS } from '../../sales/fittings/permissions'
+// B-W2b-384: packing in depth (the warehouse keeps the packaging types, defaults and carton mark templates).
+import { SHIPPING_PACKAGING_ADDS } from '../../shipping/packaging/permissions'
 // B-W2b-385: the notification defaults of each office role (the administrator sets them).
 import { NOTIFICATION_DEFAULTS_ADDS } from '../../notifications/preferences/permissions'
 
@@ -1034,6 +1036,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (SALES_MTM_ADDS[key] ?? []) : []),
   // B-W2b-360
   ...(audience === 'office' ? (SALES_FITTINGS_ADDS[key] ?? []) : []),
+  // B-W2b-384
+  ...(audience === 'office' ? (SHIPPING_PACKAGING_ADDS[key] ?? []) : []),
   // B-W2b-385
   ...(audience === 'office' ? (NOTIFICATION_DEFAULTS_ADDS[key] ?? []) : [])]
 /**

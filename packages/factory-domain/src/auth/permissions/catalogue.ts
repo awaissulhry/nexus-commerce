@@ -358,6 +358,8 @@ import { SALES_SAFETY_DEFINITIONS, SALES_SAFETY_PERMISSIONS } from '../../sales/
 import { SALES_MTM_DEFINITIONS, SALES_MTM_PERMISSIONS } from '../../sales/mtm/permissions'
 // B-W2b-360: fittings, alterations and remakes (book and record fittings).
 import { SALES_FITTINGS_DEFINITIONS, SALES_FITTINGS_PERMISSIONS } from '../../sales/fittings/permissions'
+// B-W2b-384: packing in depth (shipping.packaging.manage).
+import { SHIPPING_PACKAGING_DEFINITIONS, SHIPPING_PACKAGING_PERMISSIONS } from '../../shipping/packaging/permissions'
 // B-W2b-385: notifications in depth (home.notifications.manage: the notification defaults of each office role).
 import { NOTIFICATION_DEFAULTS_DEFINITIONS, NOTIFICATION_DEFAULTS_PERMISSIONS } from '../../notifications/preferences/permissions'
 
@@ -1008,6 +1010,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   SALES_MTM_DEFINITIONS,
   // B-W2b-360: fittings, alterations and remakes (area `sales`).
   SALES_FITTINGS_DEFINITIONS,
+  // B-W2b-384: packing in depth (area `shipping`).
+  SHIPPING_PACKAGING_DEFINITIONS,
   // B-W2b-385: the notification defaults of each office role (area `home`).
   NOTIFICATION_DEFAULTS_DEFINITIONS,
 ])
@@ -1372,6 +1376,8 @@ for (const name of SALES_SAFETY_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared
 for (const name of SALES_MTM_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-360: fittings, alterations and remakes.
 for (const name of SALES_FITTINGS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-384: packing in depth.
+for (const name of SHIPPING_PACKAGING_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-385: the notification defaults of each office role.
 for (const name of NOTIFICATION_DEFAULTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
