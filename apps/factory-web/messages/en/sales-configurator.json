@@ -1,0 +1,135 @@
+{
+  "section": {
+    "title": "Options",
+    "line": "Line {seq} · {style} · {colourway}"
+  },
+  "common": {
+    "loading": "Loading the options…",
+    "retry": "Try again",
+    "checking": "Checking the combination…",
+    "dismiss": "Dismiss"
+  },
+  "picture": {
+    "label": "Picture of the chosen colourway",
+    "none": "No picture of this colourway or style yet.",
+    "colourway": "Colourway {code} · {name}",
+    "fromStyle": "The style's main picture (none of this colourway yet)"
+  },
+  "price": {
+    "title": "Price and margin",
+    "now": "Unit price saved",
+    "after": "Unit price with these options",
+    "optionsAdd": "The options add a piece",
+    "margin": "Margin saved",
+    "marginAfter": "Margin with these options",
+    "noPrice": "Prices and margins are not shown to your role.",
+    "costNote": "The options' own cost is not counted in the margin yet.",
+    "manualKept": "The manual change of the price stays the same amount.",
+    "notHeld": "The saved price does not hold the saved options: save them again to price the line with them.",
+    "held": {
+      "NO_START": "The line was priced by hand, without a waterfall: give it a start (from the list or the cost) in the price waterfall above, then the options join it. Their surcharges are kept on the line meanwhile.",
+      "NOT_SIZE_GRID": "A made-to-measure unit is priced on its own: the options' surcharges are kept on the line, its price does not move by itself.",
+      "FEE": "A fee takes no options."
+    },
+    "order": {
+      "accepted": "The order keeps the price the customer accepted.",
+      "more": "These options add {amount} a piece more than accepted.",
+      "less": "These options add {amount} a piece less than accepted.",
+      "keep": "Keep the accepted price",
+      "amend": "To charge the difference, amend the order instead: the customer accepts the new price."
+    }
+  },
+  "groups": {
+    "empty": "This style offers no options.",
+    "picks": "Choose {words}",
+    "default": "Default",
+    "archived": "Archived",
+    "outside": "Outside the certificate",
+    "outsideNote": "Outside the certificate: {note}",
+    "text": "Text for {value}",
+    "textHint": "Up to {max} characters",
+    "textMissing": "Type the text this option takes.",
+    "textTooLong": "At most {max} characters.",
+    "colour": "Panel colour",
+    "leather": "Leather article",
+    "leatherColour": "Leather colour",
+    "none": "None",
+    "colourOrLeather": "A choice takes a library colour or a leather article, not both.",
+    "rules": "Rules",
+    "block": "Not allowed together",
+    "warn": "Warning",
+    "noHex": "no colour value"
+  },
+  "check": {
+    "ok": "This combination is allowed.",
+    "blocks": "Not allowed",
+    "warnings": "Read before selling",
+    "outside": "An option takes the garment outside its certificate."
+  },
+  "artwork": {
+    "title": "Customer's artwork",
+    "empty": "No artwork on this line yet.",
+    "add": "Add artwork (PDF or picture)",
+    "fromQuote": "From the quote",
+    "uploading": "Sending {name}…",
+    "pending": "Not sent yet",
+    "quarantined": "Refused by the file check",
+    "open": "Open",
+    "remove": "Remove",
+    "held": "Artwork is added while you may change this line.",
+    "problem": {
+      "type": "Artwork is a PDF or a picture (JPEG, PNG, WebP).",
+      "size": "A file is at most 25 MB.",
+      "failed": "The file could not be sent: try again."
+    },
+    "done": "{name} is on the line."
+  },
+  "save": {
+    "save": "Save options",
+    "discard": "Discard",
+    "saving": "Saving…",
+    "done": "Options saved.",
+    "doneRepriced": "Options saved; the line is priced again.",
+    "held": {
+      "unchanged": "Nothing changed yet.",
+      "blocked": "This combination is not allowed: change it first.",
+      "checking": "Wait for the combination to be checked.",
+      "keepPrice": "Choose first: keep the accepted price, or amend the order.",
+      "offline": "Offline: changes wait until the connection is back."
+    }
+  },
+  "problem": {
+    "read": "The options could not be read.",
+    "check": "The combination could not be checked: try again.",
+    "write": "The options could not be saved.",
+    "stale": "Someone changed this line in the meantime: it was read again.",
+    "forbidden": "You may not change these options.",
+    "refused": "Refused: {reason}"
+  },
+  "order": {
+    "button": "Options",
+    "buttonCount": "Options · {count}",
+    "dialog": "Options of line {seq}",
+    "close": "Close"
+  },
+  "bench": {
+    "open": "Test a combination",
+    "title": "Test a combination",
+    "hint": "A test only: choose a style and its options to see the rules, the surcharges and what changes in the making. Nothing is saved.",
+    "style": "Style",
+    "stylePlaceholder": "Search a style by code or name",
+    "pick": "Choose a style to test its options.",
+    "noStyles": "No style matches.",
+    "surcharges": "Surcharges",
+    "noSurcharge": "No surcharge",
+    "making": "What changes in the making",
+    "bom": "Materials",
+    "operations": "Operations",
+    "minutes": "Minutes added: {minutes}",
+    "atStandard": "{count} operation(s) at their standard minutes",
+    "nothing": "Nothing changes in the making.",
+    "notes": "Notes on the revision {revision}",
+    "nothingSaved": "A test: nothing is saved.",
+    "close": "Close"
+  }
+}

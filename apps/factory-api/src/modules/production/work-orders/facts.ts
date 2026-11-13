@@ -368,7 +368,7 @@ export function checklistOf(facts: ReleaseFacts, override: { readonly reason: st
     revisionCheck(style.id, revision, current),
     labelCheck(revision, revision?.labelTemplateId ? label : null),
     certificateCheck(facts.gates),
-    workCentresCheck(site.code, parts.steps, parts.variants, cells.map((cell) => ({ colourwayId: cell.colourwayId, size: cell.size, label: cellLabel(cell) })), spec.missing),
+    workCentresCheck(site.code, parts.steps, parts.variants, cells.map((cell) => ({ colourwayId: cell.colourwayId, size: cell.size, /* B-W2b-340 */ optionValueIds: cell.optionValueIds, label: cellLabel(cell) })), spec.missing),
     bomCheck(revision, spec.gaps),
     scopedCellsCheck(
       cellsCheck(cells.map((cell) => ({ id: cell.id, label: cellLabel(cell), inRange: style.sizes.includes(cell.size) }))),

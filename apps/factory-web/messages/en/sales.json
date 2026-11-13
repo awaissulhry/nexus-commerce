@@ -90,6 +90,10 @@
     "MTM_NOT_CONFIRMED": "The factory has not confirmed a rider's measures yet: the order waits for the review.",
     "MTM_NOT_LATEST": "A made-to-measure unit is made to an older revision: the rider has newer measures.",
     "MTM_OLD_MEASURES": "A rider's measures are older than 12 months: ask for a new measure.",
+    "OPTIONS_REFUSED": "A line's options no longer pass their rules (an option or a rule changed): choose them again in the line.",
+    "OPTIONS_MISSING": "The style asks for options nobody chose on a line: choose them in the line.",
+    "OPTIONS_OUTSIDE_CERTIFICATE": "An option takes a garment outside its certificate.",
+    "OPTIONS_NOT_PRICED": "A line's options add to the price, but its price does not hold them: save the options again in the line.",
     "pass": {
       "approval": "Approval done or not needed",
       "validity": "Validity set",

@@ -19,6 +19,8 @@ import { refuseOrderLineRules } from '../orders-depth/line-rules'
 import { openSeasonOrNull } from '../seasons/store'
 // B-W2b-358 (SAL-292, PRD-017): a made-to-measure unit's style still flagged; the order waits for the factory review.
 import { mtmOrderPlan } from '../mtm/order-gate'
+// B-W2b-340 (SAL-133; CF1:03): the quote lines' options go to the order's lines.
+import { carryOptionsToOrder } from '../configurator/copy'
 
 /**
  * The order of an accepted quote version (B-W1-25; SAL-200 "quote to order in one step", SAL-203; Owner answer S1: made
@@ -279,6 +281,8 @@ export async function makeOrderInCommand(tools: CommandTools, versionId: string,
   if (tools.context.audience === 'office') await refuseOrderLineRules(tools.tx, id, now)
   // B-W2b-294
   await carryToOrderInCommand(tools, id)
+  // B-W2b-340: the options chosen on the quote lines, as accepted (an order that waits for a yes takes them after it).
+  await carryOptionsToOrder(tools, id)
   const linked = await linkDeposits(tools, { id, companyId: quote.companyId }, version.id)
   // B-W2a-30 (SAL-216): the payment schedule from the terms it was accepted with and its deposit request.
   const deposit = await tx.depositRequest.findFirst({ where: { quoteVersionId: version.id, status: { in: ['OPEN', 'PAID'] } }, select: { id: true, amount: true, dueDate: true, depositPct: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })
