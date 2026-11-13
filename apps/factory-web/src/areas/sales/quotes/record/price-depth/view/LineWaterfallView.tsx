@@ -114,7 +114,7 @@ function Body({ model, actions }: { model: LineWaterfallModel; actions?: LineWat
   const suggested = pricing.suggested
 
   return (
-    <div className="fw-qp-drawer">
+    <div className="fw-qpd-drawer">
       {model.notice && (
         <Banner
           tone={model.notice.tone}
@@ -133,15 +133,15 @@ function Body({ model, actions }: { model: LineWaterfallModel; actions?: LineWat
       )}
       {pricing.stepsProblem && <Banner tone="warning" title={t('drawer.stepsProblem')} />}
       {sizes.length > 0 && (
-        <div className="fw-qp-sizes">
+        <div className="fw-qpd-sizes">
           <span className="fw-q-hint">{t('drawer.bySize')}</span>
-          <ul className="fw-qp-chips" aria-label={t('drawer.bySize')}>
+          <ul className="fw-qpd-chips" aria-label={t('drawer.bySize')}>
             {sizes.map((size) => {
               const scope = model.list?.sizeSurcharges.find((entry) => entry.size === size)?.scope
               return (
                 <li key={size}>
                   <Tag tone="neutral">{t('drawer.sizeAdds', { size, amount: signedPrice(surcharges[size], currency, locale) })}</Tag>
-                  {scope ? <span className="fw-qp-sub"> {t(`scope.${scope}`)}</span> : null}
+                  {scope ? <span className="fw-qpd-sub"> {t(`scope.${scope}`)}</span> : null}
                 </li>
               )
             })}
@@ -156,7 +156,7 @@ function Body({ model, actions }: { model: LineWaterfallModel; actions?: LineWat
         </p>
       )}
 
-      <h4 className="fw-qp-h4">{t('drawer.costTitle')}</h4>
+      <h4 className="fw-qpd-h4">{t('drawer.costTitle')}</h4>
       {!grains.cost ? (
         <p className="fw-q-hint">{t('drawer.noCostGrain')}</p>
       ) : cost.status === 'held' ? (
@@ -194,7 +194,7 @@ function Body({ model, actions }: { model: LineWaterfallModel; actions?: LineWat
                   breakdown.total === null ? (
                     t('cost.incomplete')
                   ) : (
-                    <span className="fw-qp-inline">
+                    <span className="fw-qpd-inline">
                       {money(breakdown.total)}
                       {breakdown.changed !== null && breakdown.changed !== 0 ? <Tag tone={breakdown.changed > 0 ? 'warning' : 'info'}>{t(breakdown.changed > 0 ? 'cost.changedUp' : 'cost.changedDown', { amount: money(Math.abs(breakdown.changed)) })}</Tag> : null}
                     </span>
@@ -209,7 +209,7 @@ function Body({ model, actions }: { model: LineWaterfallModel; actions?: LineWat
       )}
 
       {grains.margin && (
-        <div className="fw-qp-margin">
+        <div className="fw-qpd-margin">
           <MarginMeter
             value={pricing.marginPct === null || pricing.marginPct === undefined ? null : Number(pricing.marginPct)}
             floor={floorPct === null || floorPct === undefined ? null : Number(floorPct)}
@@ -229,7 +229,7 @@ function Body({ model, actions }: { model: LineWaterfallModel; actions?: LineWat
       )}
       {suggested && !suggested.unitPrice && pricing.kind === 'SIZE_GRID' && <p className="fw-q-hint">{t(suggested.basedOn ? 'held.noCost' : 'held.noCostSheet')}</p>}
 
-      <div className="fw-qp-actions">
+      <div className="fw-qpd-actions">
         <Button size="sm" heldReason={held('LIST')} onClick={() => actions?.onReprice?.('LIST')}>
           {model.saving === 'LIST' ? <Spinner size={12} /> : <ListRestart size={13} aria-hidden />} {t('drawer.reprice')}
         </Button>
@@ -259,14 +259,14 @@ function NetForm({ model, actions }: { model: LineWaterfallModel; actions?: Line
   const set = (patch: Partial<NetDraft>) => actions?.onNetDraft?.({ ...draft, ...patch })
   return (
     <form
-      className="fw-qp-netform"
+      className="fw-qpd-netform"
       aria-label={t('drawer.changeNet')}
       onSubmit={(event) => {
         event.preventDefault()
         if (problems.length === 0) actions?.onNetSave?.()
       }}
     >
-      <div className="fw-qp-fields">
+      <div className="fw-qpd-fields">
         <Field label={t('manual.net')} hint={t('manual.now') + ': ' + unitPrice(current, model.currency, locale)}>
           <Input inputMode="decimal" value={draft.text} onChange={(event) => set({ text: event.target.value })} aria-label={t('manual.net')} />
         </Field>
@@ -284,7 +284,7 @@ function NetForm({ model, actions }: { model: LineWaterfallModel; actions?: Line
       <Field label={t(reason?.needsDetail ? 'manual.noteNeeded' : 'manual.note')}>
         <Textarea value={draft.note} onChange={(event) => set({ note: event.target.value })} rows={2} maxLength={500} aria-label={t('manual.note')} />
       </Field>
-      <div className="fw-qp-actions">
+      <div className="fw-qpd-actions">
         <Button size="sm" type="button" onClick={() => actions?.onNetOpen?.(false)}>
           {t('common.back')}
         </Button>

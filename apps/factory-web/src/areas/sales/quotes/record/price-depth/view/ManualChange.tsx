@@ -76,7 +76,7 @@ function Dialog({ model, actions }: { model: ManualModel; actions?: ManualAction
         </>
       }
     >
-      <div className="fw-qp-dialog">
+      <div className="fw-qpd-dialog">
         <KeyValue
           dense
           labelCase="sentence"

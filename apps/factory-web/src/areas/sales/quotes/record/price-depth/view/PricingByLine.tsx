@@ -87,23 +87,23 @@ function Pricing({ model, actions }: { model: PricingByLineModel; actions?: Pric
     }
     const LineCell = ({ data }: ICellRendererParams<Row>) =>
       data ? (
-        <span className="fw-qp-cell">
-          <button type="button" className="fw-qp-rowlink" onClick={(event) => open(event, data.pricing.lineId)}>
+        <span className="fw-qpd-cell">
+          <button type="button" className="fw-qpd-rowlink" onClick={(event) => open(event, data.pricing.lineId)}>
             <strong>{data.pricing.seq}</strong> {data.line ? `${data.line.style.code} · ${data.line.colourway.code}` : ''}
           </button>
-          <span className="fw-qp-sub">{data.pricing.kind === 'SIZE_GRID' ? (data.line?.colourway.name ?? '') : t(`fee.${data.pricing.feeKind ?? 'OTHER'}`)}</span>
+          <span className="fw-qpd-sub">{data.pricing.kind === 'SIZE_GRID' ? (data.line?.colourway.name ?? '') : t(`fee.${data.pricing.feeKind ?? 'OTHER'}`)}</span>
         </span>
       ) : null
     const BreakCell = ({ data }: ICellRendererParams<Row>) => {
       if (!data) return null
       const step = breakOf(data.pricing.steps)
-      if (!step) return <span className="fw-qp-muted">—</span>
+      if (!step) return <span className="fw-qpd-muted">—</span>
       const list = live.current.list?.lines.find((entry) => entry.lineId === data.pricing.lineId)
       const same = list?.break && step.source?.id === list.break.breakId
       return (
-        <span className="fw-qp-cell end">
+        <span className="fw-qpd-cell end">
           <span>{signedPrice(step.delta, currency, locale)}</span>
-          {same && list?.break ? <span className="fw-qp-sub">{t('col.breakFrom', { count: list.break.minQuantity })}</span> : null}
+          {same && list?.break ? <span className="fw-qpd-sub">{t('col.breakFrom', { count: list.break.minQuantity })}</span> : null}
         </span>
       )
     }
@@ -114,21 +114,21 @@ function Pricing({ model, actions }: { model: PricingByLineModel; actions?: Pric
       const reasons = live.current.reasons
       if (step) {
         return (
-          <span className="fw-qp-cell end">
+          <span className="fw-qpd-cell end">
             <span>{signedPrice(step.delta, currency, locale)}</span>
-            {step.reasonCode ? <span className="fw-qp-sub">{reasonLabel(reasons, step.reasonCode, lang)}</span> : null}
+            {step.reasonCode ? <span className="fw-qpd-sub">{reasonLabel(reasons, step.reasonCode, lang)}</span> : null}
           </span>
         )
       }
       if (start?.kind === 'MANUAL') {
         return (
-          <span className="fw-qp-cell end">
+          <span className="fw-qpd-cell end">
             <span>{t('col.typedStart')}</span>
-            {start.reasonCode ? <span className="fw-qp-sub">{reasonLabel(reasons, start.reasonCode, lang)}</span> : null}
+            {start.reasonCode ? <span className="fw-qpd-sub">{reasonLabel(reasons, start.reasonCode, lang)}</span> : null}
           </span>
         )
       }
-      return <span className="fw-qp-muted">—</span>
+      return <span className="fw-qpd-muted">—</span>
     }
     const NetCell = ({ data }: ICellRendererParams<Row>) => {
       if (!data) return null
@@ -136,13 +136,13 @@ function Pricing({ model, actions }: { model: PricingByLineModel; actions?: Pric
       const mark = cells[data.pricing.lineId]
       const held = lineHeld(data.pricing, 'NET')
       const now = data.pricing.unitPrice ?? ''
-      if (!canEdit || held) return <span className="fw-qp-num">{unitPrice(data.pricing.unitPrice, currency, locale)}</span>
+      if (!canEdit || held) return <span className="fw-qpd-num">{unitPrice(data.pricing.unitPrice, currency, locale)}</span>
       return (
-        <span className="fw-qp-net">
+        <span className="fw-qpd-net">
           <Input
             key={`n-${data.pricing.lineId}-${now}-${live.current.resetKey}`}
             size="sm"
-            fieldClassName="fw-qp-net-input"
+            fieldClassName="fw-qpd-net-input"
             inputMode="decimal"
             aria-label={t('col.netOf', { line: data.pricing.seq })}
             defaultValue={now}
@@ -160,7 +160,7 @@ function Pricing({ model, actions }: { model: PricingByLineModel; actions?: Pric
             }}
           />
           {mark && (
-            <span className={`fw-qp-mark ${mark}`} role="status">
+            <span className={`fw-qpd-mark ${mark}`} role="status">
               {t(`cell.${mark}`)}
             </span>
           )}
@@ -172,12 +172,12 @@ function Pricing({ model, actions }: { model: PricingByLineModel; actions?: Pric
       const based = data.pricing.suggested?.basedOn ?? null
       const revision = based?.revision ?? data.line?.styleRevision?.revision ?? null
       const status = based?.revisionStatus ?? data.line?.styleRevision?.status ?? null
-      if (revision === null) return <span className="fw-qp-muted">{data.pricing.kind === 'SIZE_GRID' ? sales('lines.noCostSheet') : '—'}</span>
+      if (revision === null) return <span className="fw-qpd-muted">{data.pricing.kind === 'SIZE_GRID' ? sales('lines.noCostSheet') : '—'}</span>
       const on = based?.computedAt ?? based?.on ?? null
       return (
-        <span className="fw-qp-cell">
+        <span className="fw-qpd-cell">
           <span>{t(status === 'RELEASED' ? 'col.revReleased' : 'col.revDraft', { revision })}</span>
-          {on ? <span className="fw-qp-sub">{t('col.pricedOn', { date: formatDate(on.length === 10 ? `${on}T12:00:00Z` : on, { locale }) })}</span> : null}
+          {on ? <span className="fw-qpd-sub">{t('col.pricedOn', { date: formatDate(on.length === 10 ? `${on}T12:00:00Z` : on, { locale }) })}</span> : null}
         </span>
       )
     }
@@ -185,7 +185,7 @@ function Pricing({ model, actions }: { model: PricingByLineModel; actions?: Pric
       if (!data) return null
       const flag = lineFlag(data.pricing)
       return (
-        <span className="fw-qp-inline end">
+        <span className="fw-qpd-inline end">
           {percent(data.pricing.marginPct, locale)}
           {flag ? <Tag tone={flag === 'negative' ? 'danger' : 'warning'}>{t(`flag.${flag}`)}</Tag> : null}
         </span>
@@ -219,7 +219,7 @@ function Pricing({ model, actions }: { model: PricingByLineModel; actions?: Pric
   const floor = ready?.floor
 
   return (
-    <div className="fw-qp-stack">
+    <div className="fw-qpd-stack">
       {model.notice && (
         <Banner
           tone={model.notice.tone}
@@ -232,14 +232,11 @@ function Pricing({ model, actions }: { model: PricingByLineModel; actions?: Pric
         />
       )}
       {model.readOnly && <Banner tone="info" title={say(model.readOnly)} />}
-      <Card padded>
-        <div className="fw-qp-head">
-          <h3 className="fw-q-h3">{t('pricing.title')}</h3>
-          <p className="fw-q-hint">
-            {t('pricing.sub')}
-            {grains.margin && floor?.marginFloorPct !== undefined ? ` ${t(floor.source === 'ROLE' ? 'pricing.floorRole' : 'pricing.floorCompany', { floor: percent(floor.marginFloorPct, locale) })}` : ''}
-          </p>
-        </div>
+      <Card
+        header={t('pricing.title')}
+        headingLevel={3}
+        description={`${t('pricing.sub')}${grains.margin && floor?.marginFloorPct !== undefined ? ` ${t(floor.source === 'ROLE' ? 'pricing.floorRole' : 'pricing.floorCompany', { floor: percent(floor.marginFloorPct, locale) })}` : ''}`}
+      >
         <ListFrame<Row>
           label={t('pricing.title')}
           listKey={null}

@@ -46,11 +46,11 @@ export function BreaksTab({ list, model, actions }: { list: PriceListDetail; mod
     const PriceOf = ({ data }: ICellRendererParams<PriceBreak>) =>
       data ? (
         data.entry ? (
-          <span className="fw-pd-cell">
+          <span className="fw-pld-cell">
             <strong>
               {data.entry.style.code} · {data.entry.colourway ? data.entry.colourway.code : t('breaks.everyColour')}
             </strong>
-            <span className="fw-pd-sub">{data.entry.validFrom || data.entry.validTo ? t('breaks.days', { from: day(data.entry.validFrom), to: day(data.entry.validTo) }) : data.entry.style.name}</span>
+            <span className="fw-pld-sub">{data.entry.validFrom || data.entry.validTo ? t('breaks.days', { from: day(data.entry.validFrom), to: day(data.entry.validTo) }) : data.entry.style.name}</span>
           </span>
         ) : (
           <strong>{t('breaks.everyPrice')}</strong>
@@ -63,13 +63,13 @@ export function BreaksTab({ list, model, actions }: { list: PriceListDetail; mod
         const value = data[field] ?? null
         const mark = cells[`${data.id}:${field}`]
         const shown = field === 'unitPrice' ? unitPrice(value, currency, locale) : percent(value, locale)
-        if (!canEdit || (field === 'unitPrice' && data.entryId === null)) return <span className="fw-pd-num">{value === null ? '—' : shown}</span>
+        if (!canEdit || (field === 'unitPrice' && data.entryId === null)) return <span className="fw-pld-num">{value === null ? '—' : shown}</span>
         return (
-          <span className="fw-pd-edit">
+          <span className="fw-pld-edit">
             <Input
               key={`${data.id}-${field}-${value ?? ''}`}
               size="sm"
-              fieldClassName="fw-pd-edit-input"
+              fieldClassName="fw-pld-edit-input"
               inputMode="decimal"
               aria-label={t(field === 'unitPrice' ? 'breaks.priceOf' : 'breaks.pctOf', { count: data.minQuantity, of: data.entry ? data.entry.style.code : t('breaks.everyPrice') })}
               defaultValue={value ?? ''}
@@ -86,7 +86,7 @@ export function BreaksTab({ list, model, actions }: { list: PriceListDetail; mod
                 if (next !== (value ?? '')) latest.current.actions?.onBreakCell?.(data, field, next)
               }}
             />
-            {mark && <span className={`fw-pd-mark ${mark}`}>{t(`cell.${mark}`)}</span>}
+            {mark && <span className={`fw-pld-mark ${mark}`}>{t(`cell.${mark}`)}</span>}
           </span>
         )
       }
@@ -107,9 +107,9 @@ export function BreaksTab({ list, model, actions }: { list: PriceListDetail; mod
   const surchargeColumns = useMemo<ColDef<SurchargeGridRow>[]>(() => {
     const WhoCell = ({ data }: ICellRendererParams<SurchargeGridRow>) =>
       data ? (
-        <span className="fw-pd-cell">
+        <span className="fw-pld-cell">
           <strong>{data.style ? `${data.style.code} · ${data.style.name}` : t('surcharges.everyStyle')}</strong>
-          <span className="fw-pd-sub">
+          <span className="fw-pld-sub">
             {t(data.kind === 'amount' ? 'surcharges.kindAmount' : 'surcharges.kindPct', { currency })}
             {data.scope === 'STYLE' ? ` · ${t('surcharges.own')}` : ''}
           </span>
@@ -138,14 +138,14 @@ export function BreaksTab({ list, model, actions }: { list: PriceListDetail; mod
   const minimumColumns = useMemo<ColDef<Minimum>[]>(() => {
     const SubjectCell = ({ data }: ICellRendererParams<Minimum>) =>
       data ? (
-        <span className="fw-pd-cell">
+        <span className="fw-pld-cell">
           <strong>{data.subject === 'STYLE' ? (data.style ? `${data.style.code} · ${data.style.name}` : '—') : data.subject === 'PRODUCT_TYPE' ? t(`minimums.type.${data.productType ?? 'OTHER'}`) : data.item ? `${data.item.code} · ${data.item.name}` : '—'}</strong>
-          <span className="fw-pd-sub">{t(`minimums.subject.${data.subject}`)}</span>
+          <span className="fw-pld-sub">{t(`minimums.subject.${data.subject}`)}</span>
         </span>
       ) : null
     const ActionCell = ({ data }: ICellRendererParams<Minimum>) =>
       data ? (
-        <span className="fw-pd-inline">
+        <span className="fw-pld-inline">
           <Tag tone={data.action === 'BLOCK' ? 'danger' : data.action === 'WARN' ? 'warning' : 'info'}>{t(`minimums.action.${data.action}`)}</Tag>
           {data.action === 'SURCHARGE' && model.can.price ? <span>{data.surchargeAmount ? t('minimums.surchargeAmount', { amount: unitPrice(data.surchargeAmount, data.currency ?? currency, locale) }) : data.surchargePct ? t('minimums.surchargePct', { pct: percent(data.surchargePct, locale) }) : ''}</span> : null}
         </span>
@@ -167,10 +167,10 @@ export function BreaksTab({ list, model, actions }: { list: PriceListDetail; mod
 
   const section = (id: string, title: string, sub: string, action: ReactNode, body: ReactNode) => (
     <Card padded>
-      <section className="fw-pd-section" aria-labelledby={id}>
-        <div className="fw-pd-section-head">
+      <section className="fw-pld-section" aria-labelledby={id}>
+        <div className="fw-pld-section-head">
           <div>
-            <h2 id={id} className="fw-pd-h2">
+            <h2 id={id} className="fw-pld-h2">
               {title}
             </h2>
             <p className="fw-pl-hint">{sub}</p>
@@ -200,7 +200,7 @@ export function BreaksTab({ list, model, actions }: { list: PriceListDetail; mod
       {!model.can.price && <Banner tone="info" title={t('held.noPrice')} />}
 
       {section(
-        'fw-pd-discount',
+        'fw-pld-discount',
         t('discount.title'),
         t('discount.sub'),
         null,
@@ -222,7 +222,7 @@ export function BreaksTab({ list, model, actions }: { list: PriceListDetail; mod
       ) : (
         <>
           {section(
-            'fw-pd-breaks',
+            'fw-pld-breaks',
             t('breaks.title'),
             t('breaks.sub'),
             <Button size="sm" heldReason={heldWords} onClick={() => actions?.onDialog?.({ kind: 'addBreak' })}>
@@ -249,7 +249,7 @@ export function BreaksTab({ list, model, actions }: { list: PriceListDetail; mod
             />,
           )}
           {section(
-            'fw-pd-surcharges',
+            'fw-pld-surcharges',
             t('surcharges.title'),
             t('surcharges.sub'),
             <Button size="sm" heldReason={heldWords} onClick={() => actions?.onDialog?.({ kind: 'addSurcharge' })}>
@@ -278,7 +278,7 @@ export function BreaksTab({ list, model, actions }: { list: PriceListDetail; mod
       )}
 
       {section(
-        'fw-pd-minimums',
+        'fw-pld-minimums',
         t('minimums.title'),
         t('minimums.sub'),
         <Button size="sm" heldReason={minimumsHeld} onClick={() => actions?.onDialog?.({ kind: 'addMinimum' })}>

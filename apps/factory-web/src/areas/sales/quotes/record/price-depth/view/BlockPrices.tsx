@@ -36,10 +36,10 @@ function Rows({ model }: { model: BlockPricesModel }) {
     .filter((row) => row.discount !== null || row.bySize.length > 0)
   if (rows.length === 0) return null
   return (
-    <ul className="fw-qp-block" aria-label={t('block.label')}>
+    <ul className="fw-qpd-block" aria-label={t('block.label')}>
       {rows.map(({ line, discount, bySize }) => (
-        <li key={line.id} className="fw-qp-block-row">
-          <span className="fw-qp-block-colour">{line.colourway.code}</span>
+        <li key={line.id} className="fw-qpd-block-row">
+          <span className="fw-qpd-block-colour">{line.colourway.code}</span>
           {discount !== null && <span>{t('block.discount', { pct: percent(discount, locale) })}</span>}
           {bySize.length > 0 && (
             <span>

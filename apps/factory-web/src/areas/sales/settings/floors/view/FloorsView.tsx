@@ -9,6 +9,7 @@ import { WithMessages } from '../../../../../record-panels/i18n'
 import { percent } from '../../../quotes/model'
 import type { MarginFloors } from '../api'
 import { floorsChanged, floorsHeld, lowers, rowOf, type FloorWords } from '../model'
+import '../../../quotes/record/price-depth/price-depth.css'
 
 const NS = 'sales-prices-depth'
 
@@ -60,7 +61,7 @@ function Floors({ model, actions }: { model: FloorsModel; actions?: FloorsAction
   const locale = useLocale()
   const say = (words: FloorWords | null) => (words ? t(words.key, words.params) : '')
   const head = (
-    <div className="fw-qp-head">
+    <div className="fw-qpd-head">
       <h2 className="fw-q-h3" id="margin-floors">
         {t('floors.title')}
       </h2>
@@ -87,8 +88,8 @@ function Floors({ model, actions }: { model: FloorsModel; actions?: FloorsAction
   const lowering = floors && model.edit ? lowers(model.edit, floors, model.scope) : false
   return (
     <Card padded>
-      <section aria-labelledby="margin-floors" className="fw-qp-stack">
-        <div className="fw-qp-margin">
+      <section aria-labelledby="margin-floors" className="fw-qpd-stack">
+        <div className="fw-qpd-margin">
           {head}
           {!editing && (
             <Button size="sm" heldReason={held} onClick={() => actions?.onEdit?.(true)}>
@@ -130,14 +131,14 @@ function Floors({ model, actions }: { model: FloorsModel; actions?: FloorsAction
             </p>
             {editing ? (
               <form
-                className="fw-qp-dialog"
+                className="fw-qpd-dialog"
                 aria-label={t('floors.title')}
                 onSubmit={(event) => {
                   event.preventDefault()
                   if (!saveHeld) actions?.onSave?.()
                 }}
               >
-                <div className="fw-qp-fields">
+                <div className="fw-qpd-fields">
                   {floors.roles.map((role) => (
                     <Field key={role.key} label={role.name} hint={t('floors.fieldHint', { floor: percent(company ?? null, locale) })}>
                       <Input inputMode="decimal" value={model.edit![role.key] ?? ''} onChange={(event) => actions?.onDraft?.(role.key, event.target.value)} aria-label={t('floors.fieldOf', { role: role.name })} />
@@ -146,7 +147,7 @@ function Floors({ model, actions }: { model: FloorsModel; actions?: FloorsAction
                 </div>
                 {lowering && <Banner tone="warning" title={t('floors.lowers')} />}
                 {model.problem && <Banner tone="danger" title={say(model.problem)} />}
-                <div className="fw-qp-actions">
+                <div className="fw-qpd-actions">
                   <Button size="sm" type="button" onClick={() => actions?.onEdit?.(false)}>
                     {t('floors.discard')}
                   </Button>

@@ -82,9 +82,9 @@ function DaysDialog({ list, model, dialog, actions, onClose }: Props & { dialog:
         </>
       }
     >
-      <div className="fw-pd-dialog">
+      <div className="fw-pld-dialog">
         <p className="fw-pl-hint">{t('days.body')}</p>
-        <div className="fw-pd-fields">
+        <div className="fw-pld-fields">
           <Field label={t('days.from')} hint={t('days.fromHint')}>
             <DateField value={dialog.validFrom} onChange={(value) => set({ validFrom: value })} locale={INTL_LOCALE[locale]} clearable />
           </Field>
@@ -126,7 +126,7 @@ function AddBreakDialog({ list, model, draft, actions, onClose }: Props & { draf
         </>
       }
     >
-      <div className="fw-pd-dialog">
+      <div className="fw-pld-dialog">
         <p className="fw-pl-hint">{t('breaks.addBody')}</p>
         <Field label={t('breaks.col.price')}>
           <Select value={draft.entryId} onChange={(event) => set({ entryId: event.target.value })} aria-label={t('breaks.col.price')}>
@@ -139,7 +139,7 @@ function AddBreakDialog({ list, model, draft, actions, onClose }: Props & { draf
             ))}
           </Select>
         </Field>
-        <div className="fw-pd-fields">
+        <div className="fw-pld-fields">
           <Field label={t('breaks.col.from')} hint={t('breaks.fromHint')}>
             <Input inputMode="numeric" value={draft.minQuantity} onChange={(event) => set({ minQuantity: event.target.value })} aria-label={t('breaks.col.from')} />
           </Field>
@@ -148,7 +148,7 @@ function AddBreakDialog({ list, model, draft, actions, onClose }: Props & { draf
           </Field>
         </div>
         {draft.entryId !== '' && (
-          <div className="fw-pd-fields" role="radiogroup" aria-label={t('breaks.gives')}>
+          <div className="fw-pld-fields" role="radiogroup" aria-label={t('breaks.gives')}>
             <RadioCard name="break-kind" value="PCT" checked={draft.kind === 'PCT'} selected={draft.kind === 'PCT'} onChange={() => set({ kind: 'PCT' })} title={t('breaks.givesPct')} />
             <RadioCard name="break-kind" value="PRICE" checked={draft.kind === 'PRICE'} selected={draft.kind === 'PRICE'} onChange={() => set({ kind: 'PRICE' })} title={t('breaks.givesPrice')} />
           </div>
@@ -180,8 +180,8 @@ function RemoveBreaksDialog({ list, model, actions, onClose }: Props) {
         </>
       }
     >
-      <div className="fw-pd-dialog">
-        <ul className="fw-pd-list">
+      <div className="fw-pld-dialog">
+        <ul className="fw-pld-list">
           {picked.map((row) => (
             <li key={row.id}>
               {row.entry ? `${row.entry.style.code} · ${row.entry.colourway?.code ?? t('breaks.everyColour')}` : t('breaks.everyPrice')} — {t('breaks.pieces', { count: row.minQuantity })} → {row.unitPrice ? unitPrice(row.unitPrice, list.currency, locale) : row.discountPct ? `−${percent(row.discountPct, locale)}` : '—'}
@@ -216,7 +216,7 @@ function AddSurchargeDialog({ list, model, draft, actions, onClose }: Props & { 
         </>
       }
     >
-      <div className="fw-pd-dialog">
+      <div className="fw-pld-dialog">
         <p className="fw-pl-hint">{t('surcharges.addBody')}</p>
         <Field label={t('surcharges.col.who')}>
           <Select value={draft.styleId} onChange={(event) => set({ styleId: event.target.value })} aria-label={t('surcharges.col.who')}>
@@ -228,7 +228,7 @@ function AddSurchargeDialog({ list, model, draft, actions, onClose }: Props & { 
             ))}
           </Select>
         </Field>
-        <div className="fw-pd-fields">
+        <div className="fw-pld-fields">
           <Field label={t('surcharges.sizes')} hint={t('surcharges.sizesHint')}>
             <Input value={draft.sizes} onChange={(event) => set({ sizes: event.target.value })} aria-label={t('surcharges.sizes')} />
           </Field>
@@ -236,7 +236,7 @@ function AddSurchargeDialog({ list, model, draft, actions, onClose }: Props & { 
             <Input inputMode="decimal" value={draft.value} onChange={(event) => set({ value: event.target.value })} aria-label={t(draft.kind === 'amount' ? 'surcharges.kindAmount' : 'surcharges.kindPct', { currency: list.currency })} />
           </Field>
         </div>
-        <div className="fw-pd-fields" role="radiogroup" aria-label={t('surcharges.gives')}>
+        <div className="fw-pld-fields" role="radiogroup" aria-label={t('surcharges.gives')}>
           <RadioCard name="surcharge-kind" value="amount" checked={draft.kind === 'amount'} selected={draft.kind === 'amount'} onChange={() => set({ kind: 'amount' })} title={t('surcharges.givesAmount', { currency: list.currency })} />
           <RadioCard name="surcharge-kind" value="pct" checked={draft.kind === 'pct'} selected={draft.kind === 'pct'} onChange={() => set({ kind: 'pct' })} title={t('surcharges.givesPct')} />
         </div>
@@ -269,7 +269,7 @@ function AddMinimumDialog({ list, model, draft, actions, onClose }: Props & { dr
         </>
       }
     >
-      <div className="fw-pd-dialog">
+      <div className="fw-pld-dialog">
         <p className="fw-pl-hint">{t('minimums.addBody', { code: list.code })}</p>
         <Field label={t('minimums.col.subject')}>
           <Select value={draft.subject} onChange={(event) => set({ subject: event.target.value as MinimumDraft['subject'] })} aria-label={t('minimums.col.subject')}>
@@ -305,7 +305,7 @@ function AddMinimumDialog({ list, model, draft, actions, onClose }: Props & { dr
           </Field>
         )}
         {draft.subject === 'MATERIAL' && (
-          <div className="fw-pd-fields">
+          <div className="fw-pld-fields">
             <Field label={t('minimums.materialSearch')}>
               <Input type="search" value={materials.query} onChange={(event) => actions?.breaks?.onMaterialQuery?.(event.target.value)} aria-label={t('minimums.materialSearch')} />
             </Field>
@@ -321,7 +321,7 @@ function AddMinimumDialog({ list, model, draft, actions, onClose }: Props & { dr
             </Field>
           </div>
         )}
-        <div className="fw-pd-fields">
+        <div className="fw-pld-fields">
           <Field label={t('minimums.quantity')}>
             <Input inputMode="numeric" value={draft.minQuantity} onChange={(event) => set({ minQuantity: event.target.value })} aria-label={t('minimums.quantity')} />
           </Field>
@@ -346,7 +346,7 @@ function AddMinimumDialog({ list, model, draft, actions, onClose }: Props & { dr
         </div>
         <p className="fw-pl-hint">{t(`minimums.actionHint.${draft.action}`)}</p>
         {draft.action === 'SURCHARGE' && (
-          <div className="fw-pd-fields">
+          <div className="fw-pld-fields">
             <Field label={t('minimums.surchargeKind')}>
               <Select value={draft.surchargeKind} onChange={(event) => set({ surchargeKind: event.target.value as MinimumDraft['surchargeKind'] })} aria-label={t('minimums.surchargeKind')}>
                 <option value="amount">{t('surcharges.givesAmount', { currency: list.currency })}</option>

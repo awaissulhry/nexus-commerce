@@ -1,13 +1,13 @@
 /* B-W2b-343 — price lists in depth (Breaks & surcharges, Valid from–to, Import prices, the price list PDF): layout only. */
 
-.fw-pd-section {
+.fw-pld-section {
   display: flex;
   flex-direction: column;
   gap: var(--nds-space-10);
   min-width: 0;
 }
 
-.fw-pd-section-head {
+.fw-pld-section-head {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
@@ -15,20 +15,20 @@
   gap: var(--nds-space-8);
 }
 
-.fw-pd-h2 {
+.fw-pld-h2 {
   margin: 0;
   font-size: var(--nds-font-size-md);
   font-weight: var(--nds-font-weight-semibold);
 }
 
-.fw-pd-cell {
+.fw-pld-cell {
   display: flex;
   flex-direction: column;
   min-width: 0;
   line-height: 1.25;
 }
 
-.fw-pd-sub {
+.fw-pld-sub {
   color: var(--nds-text-muted);
   font-size: var(--nds-font-size-xs);
   overflow: hidden;
@@ -36,18 +36,18 @@
   white-space: nowrap;
 }
 
-.fw-pd-num {
+.fw-pld-num {
   font-variant-numeric: tabular-nums;
 }
 
-.fw-pd-inline {
+.fw-pld-inline {
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--nds-space-6);
 }
 
-.fw-pd-edit {
+.fw-pld-edit {
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
@@ -55,45 +55,45 @@
   width: 100%;
 }
 
-.fw-pd-edit-input {
+.fw-pld-edit-input {
   max-width: 120px;
   text-align: right;
 }
 
-.fw-pd-mark {
+.fw-pld-mark {
   font-size: var(--nds-font-size-xs);
   color: var(--nds-text-muted);
 }
 
-.fw-pd-mark.failed {
+.fw-pld-mark.failed {
   color: var(--nds-danger);
 }
 
-.fw-pd-days {
+.fw-pld-days {
   display: inline-flex;
   align-items: center;
   gap: var(--nds-space-6);
   min-width: 0;
 }
 
-.fw-pd-dialog {
+.fw-pld-dialog {
   display: flex;
   flex-direction: column;
   gap: var(--nds-space-10);
 }
 
-.fw-pd-fields {
+.fw-pld-fields {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: var(--nds-space-10);
 }
 
-.fw-pd-list {
+.fw-pld-list {
   margin: 0;
   padding-left: var(--nds-space-16);
 }
 
-.fw-pd-print-note {
+.fw-pld-print-note {
   color: var(--nds-text-muted);
   font-size: var(--nds-font-size-sm);
 }

@@ -8,7 +8,6 @@ import { readProblem } from '../../quotes/problems'
 import { readFloors, saveFloors, type MarginFloors } from './api'
 import { draftOf, floorsBody, floorsChanged, floorsHeld, rowOf, type FloorWords } from './model'
 import { FloorsView, type FloorsModel } from './view/FloorsView'
-import '../../quotes/record/price-depth/price-depth.css'
 
 /**
  * Sales settings › Margin floor % per role (B-W2b-343, the lead's decision 11-13: SCR-235's own block, beside B-W2b-316's

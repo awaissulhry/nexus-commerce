@@ -102,7 +102,7 @@ export function PricesTab({ list, model, actions }: { list: PriceListDetail; mod
       const words = data.validFrom || data.validTo ? validity(data.validFrom, data.validTo) : d('days.always')
       if (!live.current.editable) return <span>{words}</span>
       return (
-        <span className="fw-pd-days">
+        <span className="fw-pld-days">
           <span>{words}</span>
           <Button
             size="sm"

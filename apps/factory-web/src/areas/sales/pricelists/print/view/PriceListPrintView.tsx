@@ -98,7 +98,7 @@ function Print({ model }: { model: PriceListPrintModel }) {
         )
       ) : (
         <>
-          <p className="fw-pd-print-note">{t(rules!.list.showDiscount ? 'print.showsDiscount' : 'print.netOnly')}</p>
+          <p className="fw-pld-print-note">{t(rules!.list.showDiscount ? 'print.showsDiscount' : 'print.netOnly')}</p>
           <PrintSection title={t('print.prices', { count: prices!.entries.length })}>
             {prices!.entries.length === 0 ? (
               <p>{w('prices.empty.title')}</p>
