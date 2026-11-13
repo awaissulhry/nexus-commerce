@@ -110,7 +110,11 @@ export const OFFICE: readonly TreeArea[] = [
         label: 'After-sales',
         labelIt: 'Post-vendita',
         hideLabel: false,
-        pages: [{ id: 'sales.returns', title: 'Returns & repairs', titleIt: 'Resi e riparazioni', wave: 'W2a', href: '/sales/returns' }],
+        pages: [
+          { id: 'sales.returns', title: 'Returns & repairs', titleIt: 'Resi e riparazioni', wave: 'W2a', href: '/sales/returns' },
+          // W2b: B-W2b-353 Warranty & service (SCR-217, SCR-413).
+          { id: 'sales.service', title: 'Warranty & service', titleIt: 'Garanzia e assistenza', wave: 'W2b', href: '/sales/service' },
+        ],
       },
       // W2a: B-W2a-49 Price lists & contracts (SCR-106).
       {

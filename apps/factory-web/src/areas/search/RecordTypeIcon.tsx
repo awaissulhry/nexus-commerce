@@ -48,6 +48,8 @@ import { GitPullRequestArrow, MessageSquareDiff } from 'lucide-react'
 import { MoveHorizontal, Scaling } from 'lucide-react'
 // B-W2b-322: an inquiry's icon (as its navigation row).
 import { Inbox } from 'lucide-react'
+// B-W2b-353: a service case's icon (as its navigation row).
+import { LifeBuoy } from 'lucide-react'
 
 /** The icon of a record type in the search's rows (the palette's Records group, the All results page). */
 const ICONS: Readonly<Record<string, LucideIcon>> = Object.freeze({
@@ -103,6 +105,8 @@ const ICONS: Readonly<Record<string, LucideIcon>> = Object.freeze({
   GradeRule: Scaling,
   // B-W2b-322
   Inquiry: Inbox,
+  // B-W2b-353
+  ServiceCase: LifeBuoy,
 })
 
 export function RecordTypeIcon({ type, size = 16 }: { type: string; size?: number }) {
