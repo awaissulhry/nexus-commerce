@@ -21,6 +21,10 @@ import { Dec, type Decimal } from '@nexus/factory-domain/tax/decimal'
 import { supplierClosedDaysFor } from '../../../platform/calendars/service'
 import { workshopsOf, workingPlanOf, type WorkshopRow } from '../schedule/store'
 import { dayOf, type Reader, type SiteRow } from '../store'
+// B-W2b-365: a planned subcontract order books its workshop for the cells each step it sends is for.
+import { demandOf } from '@nexus/factory-domain/planning/planned-orders/rules'
+import { garmentsOf, STEP_VARIANT_COLUMNS } from '../capacity/steps'
+import { cellsOfDemand, lineOptionsOf } from '../planned-orders/steps'
 
 /**
  * What work to subcontractors reads (B-W2b-321), one query after another on the caller's client. No permission is checked
@@ -139,16 +143,21 @@ export async function readJobs(db: Reader, site: SiteRow, today: BusinessDate): 
     })
   }
   // The plan's planned subcontract orders: proposed.
-  const planned = await db.plannedWorkOrder.findMany({ where: { siteId: site.id, status: 'PLANNED', kind: 'SUBCONTRACT', partyId: { not: null } }, select: { id: true, partyId: true, styleId: true, styleRevisionId: true, quantity: true, startDate: true, dueDate: true, kitDueAt: true, operationSeqs: true, style: { select: { code: true } } }, orderBy: [{ startDate: 'asc' }, { id: 'asc' }] })
+  const planned = await db.plannedWorkOrder.findMany({ where: { siteId: site.id, status: 'PLANNED', kind: 'SUBCONTRACT', partyId: { not: null } }, select: { id: true, partyId: true, styleId: true, styleRevisionId: true, quantity: true, startDate: true, dueDate: true, kitDueAt: true, operationSeqs: true, style: { select: { code: true } }, /* B-W2b-365 */ colourwayId: true, demand: true }, orderBy: [{ startDate: 'asc' }, { id: 'asc' }] })
   if (planned.length > 0) {
     // The revision it names, else the style's RELEASED one, else its newest (a draft's routing still says what goes out).
     const revisions = await db.styleRevision.findMany({ where: { styleId: { in: [...new Set(planned.map((row) => row.styleId))] }, status: { in: ['RELEASED', 'DRAFT'] } }, select: { id: true, styleId: true, status: true, revision: true }, orderBy: [{ revision: 'desc' }, { id: 'asc' }] })
     const revisionOf = (row: (typeof planned)[number]) => row.styleRevisionId ?? (revisions.find((revision) => revision.styleId === row.styleId && revision.status === 'RELEASED') ?? revisions.find((revision) => revision.styleId === row.styleId))?.id ?? null
     const revisionIds = [...new Set(planned.map(revisionOf).filter((id): id is string => id !== null))]
-    const steps = revisionIds.length === 0 ? [] : await db.routingOperation.findMany({ where: { revisionId: { in: revisionIds } }, select: { revisionId: true, seq: true, workCentreKind: true, standardMinutes: true } })
+    const steps = revisionIds.length === 0 ? [] : await db.routingOperation.findMany({ where: { revisionId: { in: revisionIds } }, select: { revisionId: true, seq: true, workCentreKind: true, standardMinutes: true, /* B-W2b-365 */ ...STEP_VARIANT_COLUMNS } })
+    const options = await lineOptionsOf(db, planned.flatMap((row) => demandOf(row.demand).map((entry) => entry.orderLineId)))
     for (const row of planned) {
       const revisionId = revisionOf(row)
-      const sent = steps.filter((step) => step.revisionId === revisionId && row.operationSeqs.includes(step.seq))
+      // B-W2b-365: each step for the garments of the cells it is for (the demand's sizes; a row with no demand: its quantity).
+      const demand = demandOf(row.demand)
+      const cells = cellsOfDemand(row.colourwayId, demand, options).map((cell, index) => ({ ...cell, quantity: demand[index]!.pieces }))
+      const garmentsAt = (step: (typeof steps)[number]) => (cells.length === 0 ? row.quantity : garmentsOf(step, cells))
+      const sent = steps.filter((step) => step.revisionId === revisionId && row.operationSeqs.includes(step.seq) && garmentsAt(step) > 0)
       const start = row.kitDueAt ? businessDate(row.kitDueAt, site.timezone) : dayOf(row.startDate)
       const from = later(start, today)
       jobs.push({
@@ -159,7 +168,7 @@ export async function readJobs(db: Reader, site: SiteRow, today: BusinessDate): 
         from,
         to: later(dayOf(row.dueDate), from),
         garments: row.quantity,
-        operations: sent.map((step) => ({ workCentreKind: step.workCentreKind, minutes: new Dec(step.standardMinutes.toString()).times(row.quantity).toFixed(3) })),
+        operations: sent.map((step) => ({ workCentreKind: step.workCentreKind, minutes: new Dec(step.standardMinutes.toString()).times(garmentsAt(step)).toFixed(3) })),
         number: null,
         status: 'PLANNED',
         workOrderNumber: null,

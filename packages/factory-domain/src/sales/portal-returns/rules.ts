@@ -35,10 +35,17 @@ export type CaseType = (typeof CASE_TYPES)[number]
 /** What the customer would like (design rec Return › Request "outcome wanted (replace / repair / credit)"). */
 export const OUTCOMES_WANTED = ['REPLACE', 'REPAIR', 'CREDIT'] as const
 export type OutcomeWanted = (typeof OUTCOMES_WANTED)[number]
-export const OUTCOME_WANTED_WORDS: Readonly<Record<OutcomeWanted, Words>> = Object.freeze({
+/**
+ * What an RMA may record as the wish (factory-db ReturnOutcomeWanted): the three a request offers, and W2b-6's REMAKE
+ * (B-W2b-363), which only the remake routes write (B-W2b-346's ask, B-W2b-368), never a plain request.
+ */
+export const RECORDED_OUTCOMES_WANTED = [...OUTCOMES_WANTED, 'REMAKE'] as const
+export type RecordedOutcomeWanted = (typeof RECORDED_OUTCOMES_WANTED)[number]
+export const OUTCOME_WANTED_WORDS: Readonly<Record<RecordedOutcomeWanted, Words>> = Object.freeze({
   REPLACE: { en: 'A replacement', it: 'Una sostituzione' },
   REPAIR: { en: 'A repair', it: 'Una riparazione' },
   CREDIT: { en: 'A credit note', it: 'Una nota di credito' },
+  REMAKE: { en: 'A remake', it: 'Un rifacimento' },
 })
 
 /** The list's chips (design cases "Chips: Open (default) · Waiting for you · Closed"). */

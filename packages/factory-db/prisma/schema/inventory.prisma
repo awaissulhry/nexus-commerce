@@ -296,6 +296,11 @@ model GoodsReceiptLine {
   receivedUom         Uom?
   receivedFactor      Decimal? @db.Decimal(18, 8)
   note                String?
+  /// W2b-6 (schema wave 45/57, B-W2b-363; SCM-061, B-W2b-296): when the line was found beyond its delivery tolerance and
+  /// held for a yes (an ApprovalTask RECEIPT_OVER_TOLERANCE of this line); null: not held. Set and cleared (the yes, or
+  /// the line corrected within its tolerance) only while the receipt is OPEN, not in the future; a receipt with a held
+  /// line is never POSTED (the …_followups_sales_w2b5_guards trigger).
+  heldForApprovalAt   DateTime? @db.Timestamptz(3)
   version             Int      @default(1)
   createdAt           DateTime @default(now()) @db.Timestamptz(3)
   updatedAt           DateTime @default(now()) @updatedAt @db.Timestamptz(3)

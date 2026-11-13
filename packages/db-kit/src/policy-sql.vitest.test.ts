@@ -61,6 +61,24 @@ describe('policySql', () => {
     expect(sql).toMatch(/FOR DELETE TO "partner_rt" USING \(.+\);/)
   })
 
+  it('leaves a write-only column out of the SELECT grant only (B-W2b-363: a portal writes the IBAN it never reads back)', () => {
+    const account: TablePolicy = {
+      table: 'Account',
+      columns: ['id', 'tenantId', 'partyId', 'iban', 'ibanLast4', 'note'],
+      keyColumns: { tenant: 'tenantId', party: 'partyId' },
+      access: {
+        office_rt: { privileges: ['select', 'insert', 'update'] },
+        partner_rt: { privileges: ['select', 'insert'], scopedBy: ['party'], hiddenColumns: ['note'], writeOnlyColumns: ['iban'] },
+      },
+    }
+    const sql = tablePolicySql({ ...model, tables: [account] }, 'Account')
+    expect(sql).toContain('GRANT SELECT ("ibanLast4", "id", "partyId", "tenantId"), INSERT ("iban", "ibanLast4", "id", "partyId", "tenantId") ON TABLE "public"."Account" TO "partner_rt";')
+    expect(sql).toContain('GRANT SELECT, INSERT, UPDATE ON TABLE "public"."Account" TO "office_rt";')
+    // Without hidden columns, a write-only column alone makes the grants column-level.
+    const alone = { ...account, access: { partner_rt: { privileges: ['select', 'insert'] as const, scopedBy: ['party'], writeOnlyColumns: ['iban'] } } }
+    expect(tablePolicySql({ ...model, tables: [alone] }, 'Account')).toContain('GRANT SELECT ("ibanLast4", "id", "note", "partyId", "tenantId"), INSERT ("iban", "ibanLast4", "id", "note", "partyId", "tenantId") ON TABLE')
+  })
+
   it('does not depend on the order of the input', () => {
     const shuffled: PolicyModel = {
       ...model,
@@ -126,6 +144,13 @@ describe('policySql', () => {
     ["a value with a quote in it", { ...model, tables: [{ ...stockMove, access: { floor_rt: { privileges: ['select'], onlyValues: { qty: ["1') OR (true"] } } } }] }],
     ['a value listed twice', { ...model, tables: [{ ...stockMove, access: { floor_rt: { privileges: ['select'], onlyValues: { qty: ['1', '1'] } } } }] }],
     ['a value filter on a hidden column', { ...model, tables: [{ ...stockMove, access: { floor_rt: { privileges: ['select'], hiddenColumns: ['unitCost'], onlyValues: { unitCost: ['1'] } } } }] }],
+    ['a write-only column that is not a column', { ...model, tables: [{ ...stockMove, access: { floor_rt: { privileges: ['select', 'insert'], writeOnlyColumns: ['cost'] } } }] }],
+    ['a column both hidden and write-only', { ...model, tables: [{ ...stockMove, access: { floor_rt: { privileges: ['select', 'insert'], hiddenColumns: ['qty'], writeOnlyColumns: ['qty'] } } }] }],
+    ['a write-only column the policy reads', { ...model, tables: [{ ...stockMove, access: { floor_rt: { privileges: ['select', 'insert'], scopedBy: ['site'], writeOnlyColumns: ['siteId'] } } }] }],
+    ['a write-only column the value filter reads', { ...model, tables: [{ ...stockMove, access: { floor_rt: { privileges: ['select', 'insert'], onlyValues: { qty: ['1'] }, writeOnlyColumns: ['qty'] } } }] }],
+    ['a write-only column listed twice', { ...model, tables: [{ ...stockMove, access: { floor_rt: { privileges: ['select', 'insert'], writeOnlyColumns: ['qty', 'qty'] } } }] }],
+    ['a write-only column of a role that only reads', { ...model, tables: [{ ...stockMove, access: { floor_rt: { privileges: ['select'], writeOnlyColumns: ['qty'] } } }] }],
+    ['a write-only column of a role that cannot read', { ...model, tables: [{ ...stockMove, access: { floor_rt: { privileges: ['insert'], writeOnlyColumns: ['qty'] } } }] }],
   ])('refuses a model with %s', (_label, bad) => {
     expect(() => policySql(bad)).toThrow(PolicyModelError)
   })

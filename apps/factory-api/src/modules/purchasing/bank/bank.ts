@@ -180,14 +180,23 @@ async function seenAccount(caller: CommandCaller, partyId: string, accountId: st
  * The proposal, inside a command (the party locked): checked against the party's accounts (not the one in use, not one
  * proposed already, one open change per currency), written PROPOSED replacing the ACTIVE account of its currency. Shared
  * with the portal (`source` PORTAL: the partner scope writes no writer column).
+ *
+ * B-W2b-363: the partner scope never reads a whole IBAN (factory-db ownership: `iban` is write-only for it), so a PORTAL
+ * proposal compares what the supplier sees, the IBAN's country and last four characters (the office compares the whole
+ * IBAN, and its call-back and check see it before any payment).
  */
 export async function proposeInCommand(tools: CommandTools, party: { readonly id: string; readonly companyId: string | null }, input: ProposalInput, by: { readonly userId: string; readonly source: 'OFFICE' | 'PORTAL' }): Promise<string> {
   const plan = planProposal(input)
   if (!plan.ok) throw new ValidationError(plan.issues[0]!.message, plan.issues)
   const { proposal } = plan
   await lockParty(tools.tx, party.id)
-  const rows = await tools.tx.supplierBankAccount.findMany({ where: { partyId: party.id, status: { in: ['PROPOSED', 'VERIFIED', 'ACTIVE'] } }, select: { id: true, status: true, iban: true, currency: true } })
-  const conflict = proposalConflict(proposal, rows.map((row) => ({ status: row.status as BankAccountStatus, iban: row.iban, currency: row.currency })))
+  const where = { partyId: party.id, status: { in: ['PROPOSED' as const, 'VERIFIED' as const, 'ACTIVE' as const] } }
+  const rows =
+    by.source === 'PORTAL'
+      ? (await tools.tx.supplierBankAccount.findMany({ where, select: { id: true, status: true, currency: true, ibanCountry: true, ibanLast4: true } })).map((row) => ({ ...row, iban: `${row.ibanCountry}…${row.ibanLast4}` }))
+      : await tools.tx.supplierBankAccount.findMany({ where, select: { id: true, status: true, currency: true, iban: true } })
+  const compared = by.source === 'PORTAL' ? { ...proposal, iban: `${proposal.iban.slice(0, 2)}…${proposal.iban.slice(-4)}` } : proposal
+  const conflict = proposalConflict(compared, rows.map((row) => ({ status: row.status as BankAccountStatus, iban: row.iban, currency: row.currency })))
   if (conflict) throw new ConflictError(conflict)
   const replaces = rows.find((row) => row.status === 'ACTIVE' && row.currency === proposal.currency) ?? null
   const id = newId()

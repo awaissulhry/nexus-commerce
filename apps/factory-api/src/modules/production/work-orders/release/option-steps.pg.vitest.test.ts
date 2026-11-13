@@ -188,7 +188,8 @@ describe('a routing step only for some options (B-W2b-F40; PRD-128, CF1:03)', ()
     await choose(workOrder.id, [options.valueIds.linerYes, options.valueIds.armourStd])
     const routing = (await ok('GET', `/production/work-orders/${workOrder.id}/routing`)).routing
     expect(routing.operations.map((op: Json) => op.routingSeq)).toEqual([10, 20, 30, 40])
-    expect(routing.leftOut).toEqual([expect.objectContaining({ seq: PERF_STEP, code: 'SEED-PERF', words: expect.objectContaining({ en: expect.stringMatching(/^Only for 1 option: no cell of the work order\.$/) }) })])
+    // B-W2b-365: the preview names the option (GROUP: VALUE).
+    expect(routing.leftOut).toEqual([expect.objectContaining({ seq: PERF_STEP, code: 'SEED-PERF', words: expect.objectContaining({ en: 'Only for option SEED-OG-PERF: FRONT: no cell of the work order.' }) })])
 
     const released = await release(workOrder)
     expect(released.statusCode, released.body).toBe(200)

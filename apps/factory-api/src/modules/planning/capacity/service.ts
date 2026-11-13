@@ -9,6 +9,8 @@ import { planBuckets, uniformBuckets, weekStart, type Bucket } from '@nexus/fact
 import { Dec, type Decimal } from '@nexus/factory-domain/tax/decimal'
 import { ownerKey, workingCalendarsFor } from '../../../platform/calendars/service'
 import { wipForMany } from './wip'
+// B-W2b-365: an operation is done on the garments of the cells its routing step is for.
+import { garmentsOf, LOAD_CELL_COLUMNS, STEP_VARIANT_COLUMNS } from './steps'
 import { dayOf, type Reader, type SiteRow } from '../store'
 import { effectiveOf, readLanes, type LaneFacts } from '../settings/lanes'
 import { readSettings, settingsValuesOf, type SettingsRow } from '../settings/store'
@@ -24,7 +26,8 @@ import { CAPACITY_MAX_DAYS, type CalendarState, type CapacityLaneView } from './
  *              chain line → site → company, a work centre's work centre → site → company); never a day counted here
  *   booked     factory-domain planning/capacity/load over the RELEASED and IN_PROGRESS work orders of the site: their
  *              frozen operations' standard minutes × the garments still to do (production/scans wip for the ones in
- *              progress), placed by the site's WORKING plan slots (the board) or on their due date
+ *              progress), placed by the site's WORKING plan slots (the board) or on their due date; B-W2b-365: an
+ *              operation's garments are those of the cells its routing step is for (./steps)
  */
 
 export interface CapacityPeriod {
@@ -66,10 +69,10 @@ async function readWorkOrders(db: Reader, site: SiteRow): Promise<{ loading: Ope
       lineId: true,
       heldFromStatus: true,
       style: { select: { id: true, code: true, name: true } },
-      sizes: { select: { quantity: true } },
+      sizes: { select: LOAD_CELL_COLUMNS },
       // B-W2b-82: an unplanned operation has no target quantity, so no load: the plan stays the routing's.
       // B-W2b-321 (PLN-165): an operation done outside books its workshop (capacity/subcontractors.ts), not our lanes.
-      operations: { where: { routingSeq: { not: null }, outsourced: false }, select: { id: true, seq: true, code: true, name: true, standardMinutes: true, workCentreId: true }, orderBy: { seq: 'asc' } },
+      operations: { where: { routingSeq: { not: null }, outsourced: false }, select: { id: true, seq: true, code: true, name: true, standardMinutes: true, workCentreId: true, /* B-W2b-365 */ routingOperation: { select: STEP_VARIANT_COLUMNS } }, orderBy: { seq: 'asc' } },
     },
     orderBy: [{ dueDate: 'asc' }, { number: 'asc' }],
   })
@@ -87,7 +90,7 @@ async function readWorkOrders(db: Reader, site: SiteRow): Promise<{ loading: Ope
     if (row.status === 'IN_PROGRESS') {
       for (const operation of wips.get(row.id)?.operations ?? []) done.set(operation.operationId, operation.good + operation.scrap)
     }
-    const operations = row.operations.map((operation) => ({ ...operation, standardMinutes: operation.standardMinutes.toString(), done: done.get(operation.id) ?? 0 }))
+    const operations = row.operations.map(({ routingOperation, ...operation }) => ({ ...operation, standardMinutes: operation.standardMinutes.toString(), done: done.get(operation.id) ?? 0, /* B-W2b-365 */ pieces: garmentsOf(routingOperation, row.sizes) }))
     loading.push({
       id: row.id,
       number: row.number,
@@ -289,7 +292,7 @@ export function capacityAnswer(world: CapacityWorld, period: CapacityPeriod) {
       freeMinutesNext4Weeks: { lines: minutesText(free.LINE), workCentres: minutesText(free.WORK_CENTRE) },
       mostLoadedThisWeek: most ? { kind: most.kind, id: most.id, code: most.code, loadPct: most.pct.toDecimalPlaces(1, Dec.ROUND_HALF_UP).toFixed(1) } : null,
     },
-    workOrdersWithoutLine: world.workOrders.filter((workOrder) => !onLines.has(workOrder.id) && workOrder.operations.some((operation) => operation.done < workOrder.pieces)).length,
+    workOrdersWithoutLine: world.workOrders.filter((workOrder) => !onLines.has(workOrder.id) && workOrder.operations.some((operation) => operation.done < (operation.pieces ?? workOrder.pieces))).length,
   }
 }
 

@@ -31,6 +31,8 @@ import { certificatesOn, type SizeCertificate } from './certificates'
 import { answerPromises } from './engine'
 import { whereOf } from './read'
 import { PROMISABLE_ORDER_STATUSES, mayPromiseAt, readPromiseRows } from './store'
+// B-W2b-365: the options chosen on the line (a step only for some options counts when one of them is chosen).
+import { lineOptionsOf } from '../planned-orders/steps'
 
 /**
  * An order line's promise per size (B-W2b-301; PLN-171, PLN-179; design planning.promise "Per size when sizes differ (S–L
@@ -175,7 +177,7 @@ async function lineView(db: Reader, context: OfficeContext, line: LineRow, site:
   const engineOf = new Map<string, { date: BusinessDate | null; state: SizeState; certificate: SizeCertificate | null }>()
   if (asked.length > 0) {
     const [answer] = await answerPromises(db, where, [
-      { key: 'line', orderLineId: line.id, styleId: line.styleId, colourwayId: line.colourwayId, revisionId: line.styleRevisionId, sizes: asked.map((entry) => ({ size: askSize(entry.size), quantity: entry.uncovered })), madeToMeasure: line.kind === 'MADE_TO_MEASURE', wantedDate: null },
+      { key: 'line', orderLineId: line.id, styleId: line.styleId, colourwayId: line.colourwayId, revisionId: line.styleRevisionId, sizes: asked.map((entry) => ({ size: askSize(entry.size), quantity: entry.uncovered })), madeToMeasure: line.kind === 'MADE_TO_MEASURE', wantedDate: null, optionValueIds: (await lineOptionsOf(db, [line.id])).get(line.id) ?? [] },
     ])
     for (const size of answer!.sizes) engineOf.set(size.size, { date: size.date ?? size.readyDate, state: size.state, certificate: size.certificate })
     warnings.push(...answer!.warnings)

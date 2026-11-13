@@ -18,6 +18,9 @@ import { latestDoneRun } from '../inputs'
 import { dayOf, type Reader } from '../store'
 import type { PlannedOrderView } from './contract'
 import { PLANNED_COLUMNS, readPlanned, type PlannedRow } from './store'
+// B-W2b-365: the steps a planned order's cells are for.
+import { STEP_VARIANT_COLUMNS } from '../capacity/steps'
+import { cellsOfDemand, lineOptionsOf, stepsForCells } from './steps'
 
 /**
  * Reading the planned orders (B-W2b-293; design planning.mrp "To make"): the site's planned work orders and planned
@@ -42,13 +45,14 @@ async function contextOf(db: Reader, rows: readonly PlannedRow[]) {
   const releasedOf = new Map<string, (typeof released)[number]>()
   for (const row of released) if (!releasedOf.has(row.styleId)) releasedOf.set(row.styleId, row)
   const plannedRevisionIds = [...new Set(rows.flatMap((row) => { const id = row.styleRevisionId ?? releasedOf.get(row.styleId)?.id; return id ? [id] : [] }))]
-  const steps = plannedRevisionIds.length === 0 ? [] : await db.routingOperation.findMany({ where: { revisionId: { in: plannedRevisionIds } }, select: { revisionId: true, seq: true, code: true, name: true, supplierId: true }, orderBy: [{ revisionId: 'asc' }, { seq: 'asc' }] })
+  const steps = plannedRevisionIds.length === 0 ? [] : await db.routingOperation.findMany({ where: { revisionId: { in: plannedRevisionIds } }, select: { revisionId: true, seq: true, code: true, name: true, supplierId: true, /* B-W2b-365 */ ...STEP_VARIANT_COLUMNS }, orderBy: [{ revisionId: 'asc' }, { seq: 'asc' }] })
   const partyIds = ids((row) => row.partyId)
   const parties = partyIds.length === 0 ? [] : await db.party.findMany({ where: { id: { in: partyIds } }, select: { id: true, code: true, legalName: true, tradeName: true } })
   const lineIds = ids((row) => row.lineId)
   const lines = lineIds.length === 0 ? [] : await db.line.findMany({ where: { id: { in: lineIds } }, select: { id: true, code: true, name: true } })
   const orderLineIds = [...new Set(rows.flatMap((row) => demandOf(row.demand).map((entry) => entry.orderLineId)))]
   const orderLines = orderLineIds.length === 0 ? [] : await db.salesOrderLine.findMany({ where: { id: { in: orderLineIds } }, select: { id: true, seq: true, order: { select: { id: true, number: true } } } })
+  const options = await lineOptionsOf(db, orderLineIds) // B-W2b-365
   const workOrderIds = ids((row) => row.workOrderId)
   const workOrders = workOrderIds.length === 0 ? [] : await db.workOrder.findMany({ where: { id: { in: workOrderIds } }, select: { id: true, number: true, status: true } })
   const subcontractIds = ids((row) => row.subcontractOrderId)
@@ -70,6 +74,7 @@ async function contextOf(db: Reader, rows: readonly PlannedRow[]) {
     party: new Map(parties.map((row) => [row.id, row])),
     line: new Map(lines.map((row) => [row.id, row])),
     orderLine: new Map(orderLines.map((row) => [row.id, row])),
+    options,
     workOrder: new Map(workOrders.map((row) => [row.id, row])),
     subcontract: new Map(subcontracts.map((row) => [row.id, row])),
   }
@@ -83,7 +88,8 @@ export function plannedOrderViewOf(row: PlannedRow, facts: Context, office: Offi
   const colourway = facts.colourway.get(row.colourwayId)
   const named = row.styleRevisionId ? facts.revisionOf.get(row.styleRevisionId) : undefined
   const planned = named ?? facts.releasedOf.get(row.styleId)
-  const steps = facts.stepsOf(planned?.id)
+  // B-W2b-365: of its routing, the steps one of its cells is for (the order lines' sizes and chosen options).
+  const steps = stepsForCells(facts.stepsOf(planned?.id), cellsOfDemand(row.colourwayId, demandOf(row.demand), facts.options))
   const party = row.partyId ? facts.party.get(row.partyId) : undefined
   const line = row.lineId ? facts.line.get(row.lineId) : undefined
   const workOrder = row.workOrderId ? facts.workOrder.get(row.workOrderId) : undefined
