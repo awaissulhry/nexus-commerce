@@ -14,6 +14,9 @@ import { databaseCarrierRefusal } from '@nexus/factory-domain/shipping/carrier-r
 // B-W2b-370 (W2b-6 schema wave 50/57): a payment, refund, reminder or export write that reached the database's write-off, stop or
 // handed-over rules is a 409 in words.
 import { databaseBankRefusal } from '@nexus/factory-domain/payments/bank-refusals'
+// B-W2b-373 (W2b-6 schema wave 52/57): a role write or a new holder that reached the database's archived-role rules is a 409 in
+// words.
+import { databaseRoleRefusal } from '@nexus/factory-domain/auth/roles/refusals'
 import { askedLineRefusal } from '@nexus/factory-domain/purchasing/ask-to-buy/ask-to-buy'
 import type { ErrorBody } from '@nexus/factory-domain/core/contracts'
 import { reportError } from '../observability/tracker'
@@ -209,6 +212,19 @@ function bankRefusal(error: unknown): MappedError | null {
   return words ? { status: STATUS_OF.conflict, code: 'conflict', message: words.message, issues: [{ path: words.path, message: words.message }], unexpected: false } : null
 }
 
+/**
+ * B-W2b-373 (W2b-6 schema wave 52/57): the database's own refusal by the archived-role rules (…_security_audit_w2b_guards: an
+ * archived custom role changes no more until restored, and is given to nobody), when a write reached it without its command's
+ * check (W0's role edit, role assignment and invitation routes, a worker's floor role): a 409 in words (factory-domain
+ * auth/roles/refusals), never a 500.
+ */
+function roleRefusal(error: unknown): MappedError | null {
+  const cause = (error as { meta?: { driverAdapterError?: { cause?: { originalCode?: unknown; originalMessage?: unknown } } } } | null)?.meta?.driverAdapterError?.cause
+  if (cause?.originalCode !== '23514' || typeof cause.originalMessage !== 'string') return null
+  const words = databaseRoleRefusal(cause.originalMessage)
+  return words ? { status: STATUS_OF.conflict, code: 'conflict', message: words.message, issues: [{ path: words.path, message: words.message }], unexpected: false } : null
+}
+
 // B-W2b-309 (SAL-306) ----------------------------------------------------------------------------------------------------
 /**
  * The database's own refusal to issue or hold a customer's own lot for another customer's work (…_sales_orders_depth_w2b_guards
@@ -250,6 +266,9 @@ export function mapError(error: unknown): MappedError {
   // B-W2b-370
   const bank = bankRefusal(error)
   if (bank) return bank
+  // B-W2b-373
+  const role = roleRefusal(error)
+  if (role) return role
   // B-W2b-309
   const owned = customerOwnedRefusal(error)
   if (owned) return owned
