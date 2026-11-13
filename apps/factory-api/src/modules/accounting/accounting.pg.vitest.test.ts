@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { openFactoryDatabase, RUNTIME_LOGIN, type FactoryDatabase } from '@nexus/factory-db'
 import { migratedDatabase, type MigratedDatabase } from '@nexus/factory-db/testing'
 import { templateOf } from '@nexus/factory-domain/auth/roles/templates'
@@ -28,6 +28,13 @@ import { createSecretsService } from '../../platform/secrets/envelope'
 import { localKeyProvider } from '../../platform/secrets/local'
 import { useCountsClock } from '../inventory/counts/counts'
 import { useAccountingClock } from './store'
+
+// ---- B-W2b-F43: the clock is fixed at Friday 13 Nov 2026 09:00 UTC (10:00 at the plant), in the seeds' week, and runs on from
+// there: the expectations read the seeds' fixed days and failed once those days passed (a fake clock on 2026-12-07 or 2027-01-15
+// found it). The routes read the same clock (serverClock); the office sign-in keeps its own movable clock.
+vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-11-13T09:00:00.000Z'), shouldAdvanceTime: true })
+afterAll(() => vi.useRealTimers())
+// ---- end B-W2b-F43
 
 /**
  * Numbered accounting exports, Intrastat data and file, the year-end stock pack and the period lock on the local stack

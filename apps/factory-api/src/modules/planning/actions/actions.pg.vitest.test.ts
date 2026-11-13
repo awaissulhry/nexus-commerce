@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import type { FastifyInstance } from 'fastify'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { openFactoryDatabase, RUNTIME_LOGIN, type FactoryDatabase } from '@nexus/factory-db'
 import { migratedDatabase, type MigratedDatabase } from '@nexus/factory-db/testing'
 import { plusDays } from '@nexus/factory-domain/calendars/dates'
@@ -87,6 +87,11 @@ const messages = async (query = '') => ok('planner', 'GET', `/planning/action-me
 const today = () => businessDate(new Date(), 'Europe/Rome')
 
 beforeAll(async () => {
+  // ---- B-W2b-F43: the clock is fixed at Friday 13 Nov 2026 09:00 UTC (10:00 at the plant), in the seeds' week, and runs on from
+  // there. The expectations read the seeds' fixed days (SEED-SO-0001 promised for 18 Dec: its planned orders late from then) and failed once those
+  // days passed (a fake clock on 2027-01-15 found it); the routes read the same clock (serverClock).
+  vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-11-13T09:00:00.000Z'), shouldAdvanceTime: true })
+  // ---- end B-W2b-F43
   db = await migratedDatabase('mrp_trust')
   database = await openFactoryDatabase({ connectionString: db.url(RUNTIME_LOGIN), pool: { max: 8 } })
   await seedCore({ db: database, namespace: ns })
@@ -106,6 +111,7 @@ afterAll(async () => {
   await app?.close()
   await database?.close()
   await db?.close()
+  vi.useRealTimers() // B-W2b-F43
 }, 60_000)
 
 describe('MRP you can trust', { timeout: 120_000 }, () => {

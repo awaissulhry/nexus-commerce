@@ -2288,14 +2288,36 @@ describe('the W2a golden flow: a factory day through the HTTP routes', { timeout
     await settle()
   })
 
-  it('H04 capacity per line: the seeded week’s L1 load; a closed day on L1’s calendar takes its minutes away at once, and given back', async () => {
-    // B-W2a-16: L1 on 17 Nov 2026 = 8 people × 930 min × 85 % = 6,324 min. Holds while that day is not past (runs until
-    // 2026-11-16). B-W2b-365: SEED-WO-0001's sewing (its seeded bar, 7 × 96.5 min) went to P2 by hand in K6, so it is outsourced
-    // and books nothing on L1 any more (B-W2b-321: an outsourced operation books its workshop, not our lanes).
-    if (today() <= '2026-11-16') {
-      const seeded = await capacityOn('2026-11-16', '2026-11-20')
-      expect(l1Cell(seeded, '2026-11-17')).toMatchObject({ availableMinutes: '6324.0', bookedMinutes: '0.0', loadPct: '0.0', words: '8 people × 930 min × 85% efficiency × 1 day = 6,324 min.' })
+  it('H04 capacity per line: L1’s load on its next working days and on the seeded sewing bar’s day; a closed day on L1’s calendar takes its minutes away at once, and given back', async () => {
+    // ---- B-W2b-F43: L1's next five working days from today, on every day the suite runs (no skip by date; it was the seeded
+    // week only, until 2026-11-16). The seeds' L1 (B-W2a-16): 8 people at 85 % (seed/planning.ts LineCapacity) on the 2T pattern,
+    // 06:00-14:00 and 14:00-22:00 less a 15-minute break in each = 930 min a working day (seed/calendar.ts), so
+    // available = people × minutes × efficiency × days. Booked: nothing the suite put on L1 books it now. The M and R work orders
+    // are COMPLETED, SEED-WO-0002's sewing bar is on a DRAFT, and SEED-WO-0001's seeded sewing bar (7 × 96.5 min) went to P2 by hand
+    // in K6 (B-W2b-365: outsourced, it books its workshop, not our lanes; B-W2b-321).
+    const L1 = { people: 8, minutesPerDay: 930, efficiencyPct: 85 }
+    const perDay = (L1.people * L1.minutesPerDay * L1.efficiencyPct) / 100
+    const words = (days: number) => `${L1.people} people × ${L1.minutesPerDay} min × ${L1.efficiencyPct}% efficiency × ${days} day${days === 1 ? '' : 's'} = ${(perDay * days).toLocaleString('en-US')} min.`
+    const days: string[] = []
+    for (let n = 1; n <= 5; n += 1) days.push(await l1WorkingDay(n))
+    const span = await capacityOn(days[0]!, days[4]!)
+    const lane = (span.lanes as Json[]).find((row) => row.kind === 'LINE' && row.id === H.line())!
+    expect(lane).toMatchObject({ people: L1.people, efficiencyPct: `${L1.efficiencyPct}.00`, overall: { availableMinutes: (perDay * 5).toFixed(1), bookedMinutes: '0.0', loadPct: '0.0' } })
+    expect((lane.cells as Json[]).filter((cell) => cell.workingDays > 0).map((cell) => cell.key)).toEqual(days)
+    for (const day of days) {
+      expect(l1Cell(span, day), day).toMatchObject({ workingDays: 1, minutesPerDay: `${L1.minutesPerDay}.0`, availableMinutes: perDay.toFixed(1), bookedMinutes: '0.0', loadPct: '0.0', words: words(1) })
     }
+    // The five days as one cell: × 5 days (a holiday between them is named after the sum), no work order's operation behind it.
+    const cellOf = (from: string, to: string) => ok(P.planner, 'GET', `/planning/capacity/cell?siteId=${siteA1()}&laneKind=LINE&laneId=${H.line()}&from=${from}&to=${to}`)
+    const five = await cellOf(days[0]!, days[4]!)
+    expect(five).toMatchObject({ availableMinutes: (perDay * 5).toFixed(1), bookedMinutes: '0.0', loadPct: '0.0', orders: [] })
+    expect((five.words as string).slice(0, words(5).length)).toBe(words(5))
+    // The seeded sewing bar's own day, read from the working plan (17 Nov 2026 as seeded): L1 books nothing there either.
+    const bar = ((await ok(P.planner, 'GET', `/planning/schedule/work-orders/${H.wo1()}`)).slots as Json[]).find((entry) => entry.id === H.workingSewSlot())
+    expect(bar, 'the seeded working sewing bar of SEED-WO-0001').toMatchObject({ lane: { kind: 'LINE', id: H.line() }, booksCapacity: true })
+    const barDay = businessDate(new Date(bar!.startAt))
+    expect(await cellOf(barDay, barDay)).toMatchObject({ availableMinutes: perDay.toFixed(1), bookedMinutes: '0.0', loadPct: '0.0', words: words(1), orders: [] })
+    // ---- end B-W2b-F43
     // A closed day (B-W2a-08): the planner closes L1 on a working day ten working days out; capacity follows on the next read.
     const day = await l1WorkingDay(10)
     const before = l1Cell(await capacityOn(day), day)!

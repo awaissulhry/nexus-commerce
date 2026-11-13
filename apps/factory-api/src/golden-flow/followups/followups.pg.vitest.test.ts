@@ -541,6 +541,10 @@ describe('the W2b-0 golden flow: the W2a follow-ups through the HTTP routes', { 
     const month = monthOfDay(today())
     if (today().slice(5, 7) === '12') {
       // December closes company A's fiscal year: its HARD close waits for the year-end inventory (the W2a day covers it).
+      // ---- B-W2b-F43: no silent pass in December: the close is refused, for the missing year-end inventory and nothing else.
+      const refused = await ok(P.finance, 'POST', '/accounting/locks', { companyId: companyA(), month, level: 'HARD', phrase: lockPhrases(month).en, version: G.lock.version }, 409)
+      expect((refused.error.issues as Json[]).map((issue) => issue.path)).toEqual(['problem/YEAR_END_COUNT_MISSING'])
+      // ---- end B-W2b-F43
       return
     }
     const closed = await ok(P.finance, 'POST', '/accounting/locks', { companyId: companyA(), month, level: 'HARD', phrase: lockPhrases(month).en, version: G.lock.version })
