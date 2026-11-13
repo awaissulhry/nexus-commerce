@@ -1,0 +1,349 @@
+{
+  "common": {
+    "loading": "Lettura…",
+    "retry": "Riprova"
+  },
+  "problem": {
+    "read": "Non è stato possibile leggere il report. Riprova tra un momento.",
+    "forbidden": "Questo report non è nel tuo ruolo.",
+    "offline": "Nessuna risposta dal server: potresti essere offline.",
+    "gone": "Questo stabilimento non c'è più."
+  },
+  "noAccess": {
+    "title": "I report di pianificazione non sono nel tuo ruolo",
+    "body": "Chiedi a un amministratore il permesso sui report di pianificazione (pianificatore, responsabile di produzione o buyer)."
+  },
+  "noSite": {
+    "title": "Nessuno stabilimento su cui fare il report",
+    "body": "La pianificazione è per stabilimento, e nessuno stabilimento di questa azienda è nel tuo ruolo.",
+    "notPlanned": "Questi report leggono il piano di uno stabilimento: serve anche il permesso di vedere la pianificazione."
+  },
+  "band": {
+    "label": "Azioni del report",
+    "reading": "Lettura…",
+    "arrange": "Disponi",
+    "print": "Stampa",
+    "more": "Altre azioni del report",
+    "monthly": "Mandamelo per e-mail ogni mese",
+    "monthlyHeld": "Non ancora: le e-mail dei report arrivano con le iscrizioni ai report in una fase successiva.",
+    "csv": {
+      "adherence": "Esporta il rispetto del piano (CSV)",
+      "utilisation": "Esporta l'andamento dell'utilizzo (CSV)",
+      "cover": "Esporta la copertura materiali (CSV)"
+    },
+    "csvHeld": "In attesa finché il pannello non è stato letto.",
+    "keys": "Scorciatoie da tastiera"
+  },
+  "live": {
+    "connecting": "Connessione",
+    "live": "In diretta",
+    "offline": "Offline: i dati potrebbero essere vecchi"
+  },
+  "scope": {
+    "label": "Cosa copre il report",
+    "period": "Lavoro finito e guadagnato dal {from} al {to}",
+    "oneSite": "Si vede {site}",
+    "oneSiteBody": "La pianificazione è per stabilimento: la barra in alto dice tutti gli stabilimenti, quindi si vede il primo. Scegli un altro stabilimento nella barra in alto."
+  },
+  "section": {
+    "adherence": "Rispetto del piano",
+    "utilisation": "Andamento dell'utilizzo",
+    "cover": "Copertura materiali"
+  },
+  "keys": {
+    "title": "Scorciatoie da tastiera",
+    "arrange": "Disponi i pannelli",
+    "print": "Vista di stampa (nuova scheda)",
+    "bar": "Apri gli ordini di lavoro dietro la settimana, la cella o il punto selezionato",
+    "nextBar": "Negli ordini di lavoro dietro una barra: la settimana dopo o prima",
+    "help": "Questo elenco"
+  },
+  "adherence": {
+    "hint": "Ordini di lavoro finiti dal {from} al {to}, rispetto al piano che il reparto aveva quando ognuno è iniziato.",
+    "line": "Linea",
+    "allLines": "Tutte le linee",
+    "noLine": "Senza linea",
+    "all": "Tutte le linee",
+    "axes": "Settimane in orizzontale; % in tempo a sinistra, ordini di lavoro finiti a destra.",
+    "failed": "Impossibile caricare il rispetto del piano",
+    "empty": "Nessun ordine di lavoro finito in questo periodo",
+    "emptyHint": "Un ordine di lavoro conta qui nella settimana in cui è stato completato. Scegli un periodo più lungo o un altro stabilimento.",
+    "kv": {
+      "onTime": "In tempo",
+      "onTimeHint": "{onTime} su {planned} misurati rispetto a un piano",
+      "finished": "Finiti",
+      "allPlanned": "Ognuno era in un piano",
+      "notPlanned_one": "{count} non era in nessun piano: contato a parte",
+      "notPlanned_other": "{count} non erano in nessun piano: contati a parte",
+      "late": "In ritardo",
+      "meanFinish": "Finiti in media {days} giorni rispetto al piano",
+      "startedLate": "Iniziati in ritardo",
+      "meanStart": "Iniziati in media {days} giorni rispetto al piano"
+    },
+    "chartLabel": "Rispetto del piano per settimana: {line}",
+    "series": {
+      "onTime": "In tempo",
+      "finished": "Finiti"
+    },
+    "axis": {
+      "onTime": "In tempo (%)",
+      "finished": "Ordini di lavoro finiti"
+    },
+    "caption": "La linea è la quota finita entro il giorno della loro ultima barra nel piano; le barre contano gli ordini di lavoro finiti in quella settimana. Una settimana senza nulla da misurare non ha punto.",
+    "weeksLabel": "Le settimane: ognuna apre gli ordini di lavoro che ci sono dietro",
+    "weekOpen": "Apri gli ordini di lavoro finiti in {week}",
+    "weekNone": "Nessuno finito",
+    "cell": "{onTime} su {planned} in tempo",
+    "cellUnplanned_one": "{count} senza piano",
+    "cellUnplanned_other": "{count} senza piano",
+    "cellOpen": "Apri gli ordini di lavoro dietro {line}, {week}",
+    "tableLabel": "Rispetto del piano per linea e settimana",
+    "col": {
+      "line": "Linea",
+      "period": "Periodo"
+    },
+    "state": {
+      "ON_TIME": "In tempo",
+      "LATE": "In ritardo",
+      "NOT_PLANNED": "Senza piano"
+    },
+    "definition": "Pianificato: l'inizio della prima barra e la fine dell'ultima barra dell'ordine di lavoro nella versione che il reparto aveva quando il lavoro è iniziato (altrimenti la prima versione che lo contiene, altrimenti il piano di lavoro). Effettivo: il primo lavoro registrato e il completamento. I giorni sono quelli dello stabilimento; una ripianificazione successiva non sposta mai il traguardo.",
+    "incomplete": "Più di 5.000 ordini di lavoro finiti in questo periodo: si contano i primi 5.000.",
+    "printTotals": "{late} in ritardo, {notPlanned} senza piano; finiti in media {days} giorni rispetto al piano.",
+    "csv": {
+      "line": "Linea",
+      "week": "Settimana",
+      "finished": "Finiti",
+      "planned": "In un piano",
+      "onTime": "In tempo",
+      "late": "In ritardo",
+      "notPlanned": "Senza piano",
+      "onTimePct": "In tempo (%)",
+      "meanFinish": "Fine media (giorni)",
+      "meanStart": "Inizio medio (giorni)"
+    }
+  },
+  "utilisation": {
+    "hint_one": "Cosa è successo dal {from} al {to}, e il carico del piano per questa settimana ({count} settimana avanti).",
+    "hint_other": "Cosa è successo dal {from} al {to}, e il carico del piano per {count} settimane da questa.",
+    "hintPast": "Cosa è successo dal {from} al {to}; nessun carico avanti.",
+    "lane": "Corsia nel grafico",
+    "laneKind": {
+      "PLANT": "Stabilimento",
+      "LINE": "Linea",
+      "WORK_CENTRE": "Centro di lavoro",
+      "WORKSHOP": "Terzista"
+    },
+    "plant": "Tutto lo stabilimento",
+    "kind": {
+      "CUTTING": "taglio",
+      "SEWING": "cucito",
+      "ASSEMBLY": "assemblaggio",
+      "FINISHING": "finitura",
+      "INSPECTION": "controllo",
+      "PACKING": "imballaggio",
+      "SUBCONTRACT": "lavorazione esterna"
+    },
+    "ahead": "Settimane di carico avanti",
+    "aheadNone": "Nessun carico avanti",
+    "aheadWeeks_one": "{count} settimana avanti",
+    "aheadWeeks_other": "{count} settimane avanti",
+    "axes": "Settimane in orizzontale; utilizzo a sinistra, carico del piano a destra.",
+    "failed": "Impossibile caricare l'andamento dell'utilizzo",
+    "empty": "Nessun carico in questo periodo",
+    "emptyHint": "Nulla è stato guadagnato sulle linee e sui centri di lavoro nel periodo e nulla è prenotato avanti.",
+    "chartLabel": "Utilizzo e carico per settimana: {lane}",
+    "series": {
+      "used": "Utilizzo",
+      "load": "Carico"
+    },
+    "axis": {
+      "used": "Utilizzo (%)",
+      "load": "Carico (%)"
+    },
+    "caption": "La linea è cosa è successo (minuti standard guadagnati sui minuti in cui le persone c'erano); le barre sono il carico del piano (prenotato sulla capacità, come lo conta Capacità e carico).",
+    "yardstick": "La sua efficienza pianificata è {pct}.",
+    "weeksLabel": "Le settimane di {lane}: ognuna apre gli ordini di lavoro che ci sono dietro",
+    "weekOpen": "Apri gli ordini di lavoro dietro {lane}, {week}",
+    "used": "Utilizzo {pct}",
+    "load": "Carico {pct}",
+    "noCapacity": "Nessuna capacità impostata",
+    "band": {
+      "LOW": "Basso",
+      "MEDIUM": "Medio",
+      "HIGH": "Alto",
+      "OVER": "Oltre la capacità",
+      "UNKNOWN": "Nulla disponibile"
+    },
+    "cellOpen": "Apri gli ordini di lavoro dietro {lane}, {week}",
+    "workshopHeld": "Le settimane di un terzista si aprono in Capacità e carico.",
+    "openCapacity": "Apri Capacità e carico",
+    "tableLabel": "Utilizzo e carico per corsia e settimana",
+    "col": {
+      "lane": "Corsia",
+      "ahead": "avanti"
+    },
+    "definition": "Utilizzo: i minuti standard dei capi interi buoni registrati sulle postazioni della corsia in quella settimana (mai per persona o postazione), sulle sue persone × il suo orario di lavoro. Carico: i minuti ancora da fare degli ordini di lavoro aperti, collocati dal tabellone, sulla capacità della corsia alla sua efficienza pianificata.",
+    "workshopPast": "Le settimane passate di un terzista non dicono nulla: i suoi lavori sono ciò che resta da oggi.",
+    "csv": {
+      "lane": "Corsia",
+      "week": "Settimana",
+      "earned": "Guadagnati (min)",
+      "available": "Presenti (min)",
+      "used": "Utilizzo (%)",
+      "booked": "Prenotato",
+      "capacity": "Capacità",
+      "load": "Carico (%)",
+      "unit": "Unità"
+    }
+  },
+  "cover": {
+    "hint": "Cosa serve al piano dello stabilimento dal {from} al {to}, prima ciò che finisce prima.",
+    "hintWeeks_one": "Cosa serve al piano dello stabilimento nella prossima {count} settimana.",
+    "hintWeeks_other": "Cosa serve al piano dello stabilimento nelle prossime {count} settimane.",
+    "horizon": "Orizzonte",
+    "weeks_one": "{count} settimana",
+    "weeks_other": "{count} settimane",
+    "failed": "Impossibile caricare la copertura materiali",
+    "empty": "Nessun materiale ha domanda in questo orizzonte",
+    "emptyHint": "Nessun ordine di questo stabilimento ha bisogno di materiale in queste settimane, e nessun materiale è sotto la scorta di sicurezza.",
+    "counts": "{shortNow} mancanti ora · {stockOut} in esaurimento nell'orizzonte · {belowSafety} sotto la scorta di sicurezza · {covered} coperti",
+    "count_one": "{count} materiale",
+    "count_other": "{count} materiali",
+    "countAtLeast_one": "Almeno {count} materiale",
+    "countAtLeast_other": "Almeno {count} materiali",
+    "more_one": "Altro {count} materiale è contato sopra ma non elencato.",
+    "more_other": "Altri {count} materiali sono contati sopra ma non elencati.",
+    "col": {
+      "material": "Materiale",
+      "cover": "Giorni di copertura",
+      "when": "Data di esaurimento",
+      "stock": "Giacenza e fabbisogno",
+      "purchases": "Ordini aperti",
+      "more": "Altro"
+    },
+    "action": {
+      "BUY": "acquistato",
+      "MAKE": "prodotto"
+    },
+    "days_one": "{count} giorno",
+    "days_other": "{count} giorni",
+    "beyond_one": "Più di {count} giorno",
+    "beyond_other": "Più di {count} giorni",
+    "state": {
+      "SHORT_NOW": "Mancante ora",
+      "STOCK_OUT": "In esaurimento",
+      "BELOW_SAFETY": "Sotto la scorta di sicurezza",
+      "COVERED": "Coperto"
+    },
+    "stockOutOn": "Finisce il {day}",
+    "noStockOut": "Non nell'orizzonte",
+    "belowSafetyOn": "Sotto la scorta di sicurezza il {day}",
+    "aboveSafety": "Resta sopra la scorta di sicurezza",
+    "noSafety": "Nessuna scorta di sicurezza impostata",
+    "onHand": "Giacenza {quantity}",
+    "needs": "Servono {demand}; {receipts} in arrivo",
+    "noPurchases": "Nessun ordine di acquisto aperto",
+    "purchases_one": "{count} ordine, {quantity} in arrivo",
+    "purchases_other": "{count} ordini, {quantity} in arrivo",
+    "nextDue": "Prossimo il {day}:",
+    "menu": "Azioni per {material}",
+    "draft": "Bozza di ordine",
+    "openMaterial": "Apri il materiale",
+    "openPo": "Apri {number}",
+    "openPoNone": "Apri il prossimo ordine di acquisto",
+    "exportSelected_one": "Esporta {count} materiale (CSV)",
+    "exportSelected_other": "Esporta {count} materiali (CSV)",
+    "exportHeld": "Seleziona prima i materiali da esportare.",
+    "definition": "Giacenza prevista: la giacenza utilizzabile più le righe d'acquisto aperte (e un ordine pianificato confermato) al giorno di consegna, meno ciò che gli ordini richiedono ancora nel giorno in cui serve, senza altri ordini — i numeri del profilo articolo (Cosa comprare e produrre › Giacenza prevista). La data di esaurimento è il primo giorno in cui scende sotto zero; i giorni di copertura contano i giorni fino ad allora.",
+    "csv": {
+      "code": "Codice",
+      "name": "Materiale",
+      "colour": "Colore",
+      "unit": "Unità",
+      "onHand": "Giacenza",
+      "safety": "Scorta di sicurezza",
+      "demand": "Fabbisogno nell'orizzonte",
+      "receipts": "In arrivo (ordini aperti, ordini pianificati confermati)",
+      "days": "Giorni di copertura",
+      "stockOut": "Data di esaurimento",
+      "belowSafety": "Sotto la scorta di sicurezza il",
+      "state": "Stato",
+      "orders": "Ordini aperti",
+      "onOrder": "Quantità in ordine",
+      "nextDue": "Prossima consegna"
+    }
+  },
+  "draft": {
+    "heldRight": "La bozza di ordine richiede il permesso di gestire gli ordini di acquisto.",
+    "heldMake": "Questo materiale si produce, non si acquista: il suo lavoro pianificato è in Cosa comprare e produrre.",
+    "heldNothing": "Non resta nulla da ordinare: le righe d'acquisto aperte e la giacenza lo coprono."
+  },
+  "drill": {
+    "title": "Ordini di lavoro dietro questa barra",
+    "subtitle": "{name} · {when}",
+    "wholePeriod": "tutto il periodo",
+    "failed": "Impossibile caricare gli ordini di lavoro dietro questa barra",
+    "empty": "Nessun ordine di lavoro dietro questa barra",
+    "emptyHint": "Nulla compone questo numero: scegli un'altra settimana o linea.",
+    "tableLabel": "Gli ordini di lavoro dietro questa barra",
+    "col": {
+      "workOrder": "Ordine di lavoro",
+      "style": "Modello",
+      "line": "Linea",
+      "planned": "Inizio – fine pianificati",
+      "actual": "Inizio – fine effettivi",
+      "plannedStart": "Inizio pianificato",
+      "plannedFinish": "Fine pianificata",
+      "actualStart": "Inizio effettivo",
+      "actualFinish": "Fine effettiva",
+      "startDays": "Inizio (giorni)",
+      "finishDays": "Fine (giorni)",
+      "state": "Stato",
+      "operation": "Operazione",
+      "lane": "Corsia",
+      "garments": "Capi",
+      "pieces": "Capi da fare",
+      "minutes": "Minuti",
+      "placedBy": "Collocato da",
+      "part": "Parte"
+    },
+    "version": "Versione {number}",
+    "working": "Piano di lavoro (mai pubblicato)",
+    "notPlanned": "Senza piano",
+    "operation": "Op {seq} {name}",
+    "placedBy": {
+      "SLOT": "Il tabellone",
+      "DUE_DATE": "La sua data di consegna"
+    },
+    "earnedTitle": "Guadagnati: {minutes}",
+    "earnedNone": "Nulla è stato guadagnato qui nei giorni del periodo di questa settimana.",
+    "bookedTitle": "Prenotati avanti: {minutes}",
+    "bookedNone": "Nulla è prenotato qui questa settimana.",
+    "more_one": "Un'altra riga ({count}) è contata ma non elencata.",
+    "more_other": "Altre {count} righe sono contate ma non elencate.",
+    "keys": "J e K aprono la settimana dopo e quella prima della stessa linea o corsia.",
+    "previous": "Settimana prima",
+    "next": "Settimana dopo",
+    "first": "Questa è la prima settimana del periodo.",
+    "last": "Questa è l'ultima settimana del periodo.",
+    "noWeeks": "Qui si vede tutto il periodo: non c'è un'altra settimana a cui passare.",
+    "export": "Esporta (CSV)",
+    "exportHeld": "In attesa finché non ci sono ordini di lavoro da esportare.",
+    "openList": "Apri l'elenco",
+    "openHeld": "L'elenco degli ordini di lavoro non ha ancora un filtro \"finiti in questa settimana su questa linea\": ogni ordine di lavoro qui sopra apre la sua pagina.",
+    "openCapacity": "Apri Capacità e carico"
+  },
+  "print": {
+    "title": "Report di pianificazione",
+    "site": "Stabilimento",
+    "period": "Periodo",
+    "ahead": "Carico avanti",
+    "horizon": "Orizzonte materiali",
+    "back": "Torna al report",
+    "held": "In attesa finché ogni parte non è stata letta.",
+    "failed": "Una parte del report non è stata letta",
+    "coverMore_one": "Si stampa il primo materiale ({count}): il report a schermo elenca gli altri.",
+    "coverMore_other": "Si stampano i primi {count} materiali: il report a schermo elenca gli altri."
+  }
+}

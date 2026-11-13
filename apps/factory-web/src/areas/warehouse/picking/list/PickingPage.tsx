@@ -12,6 +12,9 @@ import { addressOf, addressText, createChoices, isPickingEvent, kitProblem, pick
 import { PickingMessages } from '../parts'
 import type { CreateModel, Notice, PickingListModel, SiteChoice } from '../view-model'
 import { PickingListView } from './view/PickingListView'
+// B-W2b-320: Use a substitute (pk-sub) and the substitutes waiting for approval (pk-metrics W2b).
+import { useSubstitute } from '../substitute/use-substitute'
+import { useSubstitutes } from '../substitute/use-substitutes'
 
 /**
  * `/w/<company>/warehouse/picking` (SCR-237): the saved row (`?view=`), the search (`?q=`) and the site (`?site=`) in the
@@ -158,14 +161,27 @@ function PickingContainer() {
     [sheet, kitBusy, kitAnswered, refreshTiles, readSheet],
   )
 
+  // B-W2b-320: the substitutes' tile and list (`?subs=1`, or `?substitution=<id>` from Home › Approvals), and the dialog.
+  const focusSub = params?.get('substitution') ?? null
+  const [subsOpen, setSubsOpen] = useState(params?.get('subs') === '1' || focusSub !== null)
+  const subs = useSubstitutes(api, { siteId, can: { ask: can.kits, view: can.view }, open: subsOpen, focus: focusSub, onChanged: () => void load() })
+  const substitute = useSubstitute(api, session.permissions, () => {
+    subs.reread()
+    if (openId) readSheet(openId)
+    refreshTiles()
+  })
   const live = useLive(
     (change) => {
+      if (change.type === 'inventory.substitution_changed') subs.reread()
       if (!isPickingEvent(change.type)) return
       setUpdates((count) => count + 1)
       refreshTiles()
       if (openId) readSheet(openId)
     },
-    () => void load(),
+    () => {
+      void load()
+      subs.reread()
+    },
     can.view,
   )
 
@@ -244,6 +260,9 @@ function PickingContainer() {
       : null,
     create: create ? { ...create, sites } : null,
     notice,
+    subCan: substitute.can,
+    substitute: substitute.model,
+    subs: { waiting: subs.waiting, open: subsOpen, model: subs.model },
   }
 
   return (
@@ -270,6 +289,10 @@ function PickingContainer() {
         onPick: (ids) => setCreate((current) => (current ? { ...current, picked: ids } : current)),
         onConfirmCreate: () => void confirmCreate(),
         onDismissNotice: () => setNotice(null),
+        onSubstitute: substitute.open,
+        substitute: substitute.actions,
+        onSubs: setSubsOpen,
+        subs: subs.actions,
       }}
     />
   )

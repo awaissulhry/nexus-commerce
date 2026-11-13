@@ -8,6 +8,8 @@ import type { ReleaseDialogModel, ReleaseLine } from '../release/model'
 import { blankFind } from '../trace/model'
 import { defaultLotView, type LotsListModel, type LotView } from '../model'
 import { LotsListView } from './view/LotsListView'
+// B-W2b-320: the Lifecycle column, the Depleted and Documents expiring views, the documents tile (made-up).
+import { DEPTH_COUNTS, factsFor } from '../depth/demo/fixtures'
 
 /**
  * SCR-201 — Lots & traceability (Warehouse › Main) with made-up data only: released, quarantined, Cr VI failed (blocked),
@@ -106,6 +108,18 @@ export const designScreen = defineDesignScreen<LotsCase>({
     { id: 'trace-finding', label: 'B-W2a-64 — Trace: looking the code up', model: listCase('warehouse', { find: { code: 'HD-DEMO-0003', state: 'finding', matches: [], problem: null } }) },
     { id: 'trace-error', label: 'B-W2a-64 — Trace: the lookup failed (offline)', model: listCase('warehouse', { find: { code: 'HD-DEMO-0003', state: 'error', matches: [], problem: 'problem.offline' } }) },
     { id: 'sales', label: 'Sales: no inventory.stock.view (the page says so)', model: listCase('sales') },
+    { id: 'w2b-lifecycle', label: 'B-W2b-320 — The Lifecycle column (in use with two child lots, quarantine, blocked, released, depleted) and the documents tile', model: listCase('owner', { depth: { facts: factsFor(LOT_ROWS.map((row) => row.id)), counts: DEPTH_COUNTS } }, 'all') },
+    {
+      id: 'w2b-depleted',
+      label: 'B-W2b-320 — Rows ▾ Depleted: the lots with nothing left (out of the other views)',
+      model: listCase('warehouse', { rows: { items: LOT_ROWS.slice(5), more: false, problem: null }, depth: { facts: factsFor(LOT_ROWS.slice(5).map((row) => row.id)), counts: DEPTH_COUNTS } }, 'depleted'),
+    },
+    {
+      id: 'w2b-expiring',
+      label: 'B-W2b-320 — Tile pressed: Documents expiring in 30 days',
+      model: listCase('quality', { rows: { items: [LOT_ROWS[0]!, LOT_ROWS[4]!], more: false, problem: null }, depth: { facts: factsFor([LOT_ROWS[0]!.id, LOT_ROWS[4]!.id]), counts: DEPTH_COUNTS } }, 'expiring'),
+    },
+    { id: 'w2b-facts-reading', label: 'B-W2b-320 — The W2b columns still reading (the column says —)', model: listCase('warehouse', { depth: { facts: null, counts: null } }) },
     { id: 'admin', label: 'Admin: no inventory.stock.view (the page says so)', model: listCase('admin') },
   ],
 })

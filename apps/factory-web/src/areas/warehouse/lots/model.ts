@@ -12,6 +12,10 @@ import type { WriteOffActions, WriteOffDialogModel } from '../stock/daily/dialog
 import type { TraceFindModel } from './trace/model'
 import type { TraceFindActions } from './trace/TraceDialog'
 import type { ReleaseActions, ReleaseDialogModel } from './release/model'
+// B-W2b-320: the W2b parts of the list (Lifecycle, Depleted, documents expiring) and of the lot record.
+import type { DepthCounts, DepthFacts } from './depth/api'
+import { DEPTH_VIEWS } from './depth/model'
+import type { LotDepthActions, LotDepthModel } from './depth/view-model'
 
 /**
  * Warehouse › Lots & traceability (SCR-201 the list, SCR-201-record a lot), pure: the saved views and tiles ⇄ the
@@ -21,16 +25,18 @@ import type { ReleaseActions, ReleaseDialogModel } from './release/model'
  */
 
 export const LOT_VIEWS = ['waiting', 'inStock', 'all', 'released', 'rejected', 'quarantine', 'crViPending', 'crViFailed', 'blocked'] as const
-export type LotView = (typeof LOT_VIEWS)[number]
+// B-W2b-320: Depleted (SCM-236: depleted lots out of the way, found here) and Documents expiring in 30 days (depth/model.ts).
+const EVERY_VIEW = [...LOT_VIEWS, ...DEPTH_VIEWS] as const
+export type LotView = (typeof EVERY_VIEW)[number]
 /** The views offered in the menu (the tiles' views too: a tile pressed shows its name there). */
-export const LOT_MENU_VIEWS: readonly LotView[] = LOT_VIEWS
+export const LOT_MENU_VIEWS: readonly LotView[] = EVERY_VIEW
 
 /** The default view: quality waits for release; everyone else sees the lots that hold stock. */
 export const defaultLotView = (can: Pick<StockCan, 'lotsRelease'>): LotView => (can.lotsRelease ? 'waiting' : 'inStock')
 
 export function lotViewOf(params: { get(name: string): string | null } | null, can: Pick<StockCan, 'lotsRelease'>): LotView {
   const asked = params?.get('view') ?? ''
-  if ((LOT_VIEWS as readonly string[]).includes(asked)) return asked as LotView
+  if ((EVERY_VIEW as readonly string[]).includes(asked)) return asked as LotView
   // The API's own filters in the address (a link from Today or a list route).
   if (params?.get('onHold') === 'true') return 'waiting'
   if (params?.get('quality') === 'BLOCKED') return 'blocked'
@@ -111,6 +117,8 @@ export interface LotsListModel {
   /** Design cases: rows selected, the keys panel open. */
   selected?: readonly string[]
   helpOpen?: boolean
+  /** B-W2b-320: the W2b columns of the rows shown (by lot id; null while read or refused) and the W2b tiles. */
+  depth?: { facts: Readonly<Record<string, DepthFacts>> | null; counts: DepthCounts | null }
 }
 
 export interface LotsListActions {
@@ -183,6 +191,8 @@ export interface LotRecordModel {
   /** Design cases: the record panels drawn without the API; the trace's "affected customers" on. */
   panelsPreview?: RecordPanelsViewModel | null
   affectedOnly?: boolean
+  /** B-W2b-320: the lot's W2b facts, attributes, split and trace report (null: not drawn). */
+  depth?: LotDepthModel | null
 }
 
 /** The lot at its site (reservations hold a site's stock, not a place) and who reserved it. */
@@ -212,6 +222,7 @@ export interface LotRecordActions {
   writeOff?: WriteOffActions
   onTrace?: () => void
   find?: TraceFindActions
+  depth?: LotDepthActions
 }
 
 /** Holds of one kind, newest first, with how many are still on (design lt-holds: grouped by kind with counts). */

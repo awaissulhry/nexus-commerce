@@ -11,6 +11,10 @@ import { part } from '../shared/model'
 import { blankFind } from '../trace/model'
 import type { Reservation } from '../../stock/daily/api'
 import { LotRecordView } from './view/LotRecordView'
+// B-W2b-320: the lot's W2b parts (made-up).
+import { BEHIND_DEPTH, DEPLETED_CHILD, depthModel, FAMILY_READ, nappaDepth, NOT_KEPT_DEPTH, QUARANTINE_DEPTH, REPORT_DONE, reportDialog, REPORTS, SPLIT_DONE, SPLIT_READ, splitDraftFor } from '../depth/demo/fixtures'
+import type { LotDepthModel } from '../depth/view-model'
+import type { SplitDraft } from '../depth/model'
 
 /**
  * SCR-201-record — a lot with made-up data only: the released nappa lot (its checklist, stock in two places, hides, used
@@ -158,5 +162,44 @@ export const designScreen = defineDesignScreen<LotCase>({
       }),
     },
     { id: 'sales', label: 'Sales: no inventory.stock.view', model: lotCase('sales') },
+    // ---- B-W2b-320: the W2b parts (lifecycle, attributes, incoming inspection, separation, split, trace report) ----------
+    { id: 'w2b-overview', label: 'B-W2b-320 — In use: lifecycle and its history, two child lots, attributes, incoming inspection passed, a document ending', model: lotCase('quality', released, { depth: depthModel(nappaDepth()) }) },
+    { id: 'w2b-warehouse', label: 'B-W2b-320 — Warehouse: sorts hides and records attributes, no trace report (held in words)', model: lotCase('warehouse', released, { depth: depthModel(nappaDepth({ may: { manage: true, split: true, report: false } }), {}, ['inventory.lots.manage']) }) },
+    { id: 'w2b-read-only', label: 'B-W2b-320 — Read-only: attributes and split held (inventory.lots.manage), no report', model: lotCase('readOnly', released, { depth: depthModel(nappaDepth({ may: { manage: false, split: false, report: false }, attributes: { ...nappaDepth().attributes, canEdit: false } }), {}, []) }) },
+    { id: 'w2b-quarantine', label: 'B-W2b-320 — In quarantine: inspection still open; you received it, another person releases it', model: lotCase('quality', quarantine, { depth: depthModel(QUARANTINE_DEPTH) }) },
+    { id: 'w2b-quality-tab', label: 'B-W2b-320 — Quality status: separation kept (received and decided by two people), holds and incoming inspections', model: lotCase('quality', released, { depth: depthModel(nappaDepth()) }, 'quality') },
+    { id: 'w2b-not-kept', label: 'B-W2b-320 — Quality status: separation not kept (the receiver decided)', model: lotCase('owner', released, { depth: depthModel(NOT_KEPT_DEPTH) }, 'quality') },
+    {
+      id: 'w2b-depleted',
+      label: 'B-W2b-320 — A child lot depleted: nothing left · depleted 29 Oct, split from its parent, the parent’s inspection',
+      model: lotCase('warehouse', released, {
+        record: { status: 'ready', value: lotRecordOf({ ...released!, id: DEPLETED_CHILD.lot.id, code: DEPLETED_CHILD.lot.code, onHand: '0.0000', hides: 0 }, { stock: [] }) },
+        figures: part({ lot: null, reservations: [] }),
+        depth: depthModel(DEPLETED_CHILD),
+      }),
+    },
+    { id: 'w2b-behind', label: 'B-W2b-320 — The ledger moved on: “Check” the lifecycle', model: lotCase('warehouse', released, { depth: depthModel(BEHIND_DEPTH) }) },
+    { id: 'w2b-checked', label: 'B-W2b-320 — Checked: the lifecycle moved (notice)', model: lotCase('warehouse', released, { depth: depthModel(nappaDepth(), { notice: { tone: 'success', words: { key: 'ld.life.checked', params: { from: 'RELEASED', to: 'IN_USE' } } } }) }) },
+    { id: 'w2b-depth-loading', label: 'B-W2b-320 — The W2b facts still reading', model: lotCase('owner', released, { depth: depthModel(null) }) },
+    { id: 'w2b-depth-error', label: "B-W2b-320 — The W2b facts couldn't be read (Try again)", model: lotCase('owner', released, { depth: depthModel(null, { depth: { value: null, problem: 'problem.offline' } }) }) },
+    { id: 'w2b-attributes', label: 'B-W2b-320 — Edit attributes: thickness range, finish, tannage, grade mix, origin', model: lotCase('quality', released, { depth: depthModel(nappaDepth(), { attributes: { draft: { thicknessMinMm: '1.1', thicknessMaxMm: '1.3', finish: 'Pieno fiore', tannage: 'CHROME', gradeMix: 'A 75, B 25', origin: 'Italia' }, busy: false, problem: null } }) }) },
+    { id: 'w2b-attributes-refused', label: 'B-W2b-320 — Edit attributes refused in words (a grade mix over 100 %)', model: lotCase('quality', released, { depth: depthModel(nappaDepth(), { attributes: { draft: { thicknessMinMm: '1,1', thicknessMaxMm: '1,3', finish: 'Pieno fiore', tannage: 'CHROME', gradeMix: 'A 75, B 40', origin: 'Italia' }, busy: false, problem: { key: 'ld.attr.problem.gradeMix' } } }) }) },
+    { id: 'w2b-split', label: 'B-W2b-320 — Split into shade groups: the inspection’s groups (1, 2, rejected apart), a reserved hide that cannot move', model: lotCase('quality', released, { depth: depthModel(nappaDepth(), { split: splitOf({}) }) }) },
+    { id: 'w2b-split-loading', label: 'B-W2b-320 — Split: reading the family’s hides', model: lotCase('quality', released, { depth: depthModel(nappaDepth(), { split: { read: { value: null, problem: null }, draft: null, busy: false, problem: null, done: null } }) }) },
+    { id: 'w2b-split-error', label: "B-W2b-320 — Split: the hides couldn't be read", model: lotCase('quality', released, { depth: depthModel(nappaDepth(), { split: { read: { value: null, problem: 'problem.offline' }, draft: null, busy: false, problem: null, done: null } }) }) },
+    { id: 'w2b-split-held', label: 'B-W2b-320 — Split held: a group without a name', model: lotCase('quality', released, { depth: depthModel(nappaDepth(), { split: splitOf({ groups: [{ key: 'g1', shadeGroupId: null, label: '' }], assign: { [SPLIT_READ.hides[0]!.id]: 'g1' } }) }) }) },
+    { id: 'w2b-split-refused', label: 'B-W2b-320 — Split refused: a place blocked by a count (said in words)', model: lotCase('quality', released, { depth: depthModel(nappaDepth(), { split: { ...splitOf({}), problem: { key: 'ld.split.refused.warehouse' } } }) }) },
+    { id: 'w2b-regroup', label: 'B-W2b-320 — Move between lots of the family (regroup): a hide into child -A; a partly cut hide stays', model: lotCase('quality', released, { depth: depthModel(nappaDepth(), { split: { read: part(FAMILY_READ), draft: { mode: 'regroup', groups: [], assign: { [FAMILY_READ.hides[0]!.id]: FAMILY_READ.lots[1]!.id }, inspectionId: null, note: 'Tonalità più vicina al lotto A' }, busy: false, problem: null, done: null } }) }) },
+    { id: 'w2b-split-done', label: 'B-W2b-320 — Split done: two child lots made, the new tags to print', model: lotCase('quality', released, { depth: depthModel(nappaDepth(), { split: { ...splitOf({}), done: SPLIT_DONE } }) }) },
+    { id: 'w2b-trace', label: 'B-W2b-320 — Trace tab: Trace report…, the reports made (who, for whom, as of, the file)', model: lotCase('quality', released, { depth: depthModel(nappaDepth(), { reports: part(REPORTS) }) }, 'trace') },
+    { id: 'w2b-trace-none', label: 'B-W2b-320 — Trace tab: no report yet; the warehouse may not make one', model: lotCase('warehouse', released, { depth: depthModel(nappaDepth({ may: { manage: true, split: true, report: false } }), { reports: part([]) }, ['inventory.lots.manage']) }, 'trace') },
+    { id: 'w2b-report', label: 'B-W2b-320 — Trace report: direction, as of, for an authority, PDF', model: lotCase('quality', released, { depth: depthModel(nappaDepth(), { reports: part(REPORTS), report: reportDialog({ draft: { ...reportDialog().draft, audience: 'AUTHORITY', recipient: 'Autorità di vigilanza di esempio', reference: 'Prot. 2026/014', requestedOn: '2026-10-29', asOf: '2026-10-28' } }) }) }, 'trace') },
+    { id: 'w2b-report-problems', label: 'B-W2b-320 — Trace report held: nobody named who asked; "as of" after today', model: lotCase('quality', released, { depth: depthModel(nappaDepth(), { report: reportDialog({ draft: { ...reportDialog().draft, asOf: '2026-11-04' } }) }) }, 'trace') },
+    { id: 'w2b-report-done', label: 'B-W2b-320 — Trace report made: counts, the child lots included, open the file again', model: lotCase('quality', released, { depth: depthModel(nappaDepth(), { reports: part(REPORTS), report: reportDialog({ done: REPORT_DONE }) }) }, 'trace') },
+    { id: 'w2b-report-error', label: "B-W2b-320 — Trace reports couldn't be read", model: lotCase('quality', released, { depth: depthModel(nappaDepth(), { reports: { value: null, problem: 'problem.offline' } }) }, 'trace') },
   ],
 })
+
+function splitOf(over: Partial<SplitDraft>): NonNullable<LotDepthModel['split']> {
+  return { read: part(SPLIT_READ), draft: { ...splitDraftFor(SPLIT_READ), ...over }, busy: false, problem: null, done: null }
+}

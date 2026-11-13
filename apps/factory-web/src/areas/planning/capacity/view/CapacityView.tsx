@@ -16,14 +16,16 @@ import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { BOARD_KIT_NAMESPACE, useBoardWords } from '../../../_shared/planning-board/words'
 import { CAPACITY_BUCKETS, type CapacityCell, type CapacityLane } from '../api'
-import { boardHref, bucketLabel, calendarHref, cellKeyOf, dayWords, howWords, laneEnd, laneNotes, lanesOf, minutesText, NAMESPACE, queryOf, TILE_IDS, todayCell, withFrom, type Words } from '../model'
+import type { WorkshopCell, WorkshopLine } from '../depth/api'
+import { DEPTH_NAMESPACE, parseWorkshopKey, proposedWords, rowsOf, todayWorkshopCell, workshopCellKey, workshopHowWords, workshopRowEnd, workshopRowWords, type CapacityRow, type Words as DepthWords } from '../depth/model'
+import { pieceLoadWords } from '../../allocation/depth/model'
+import { boardHref, bucketLabel, calendarHref, cellKeyOf, dayWords, howWords, laneEnd, laneNotes, minutesText, NAMESPACE, queryOf, TILE_IDS, todayCell, withFrom, type Words } from '../model'
 import type { CapacityActions, CapacityModel } from '../view-model'
 import { CellDetail } from './CellDetail'
+import { HeatCellDetail, LoadHeatmap, WorkshopCellDetail } from './LoadHeatmap'
 import '../capacity.css'
 
 export type { CapacityActions, CapacityModel } from '../view-model'
-
-const laneKeyOf = (lane: { kind: string; id: string }) => `${lane.kind}:${lane.id}`
 
 /**
  * SCR-123 — Planning › Capacity & load (design planning.capacity, a report): the band (site, the period with two dates,
@@ -36,7 +38,7 @@ const laneKeyOf = (lane: { kind: string; id: string }) => `${lane.kind}:${lane.i
  */
 export function CapacityView({ model, actions }: { model: CapacityModel; actions?: CapacityActions }) {
   return (
-    <WithMessages namespaces={[NAMESPACE, BOARD_KIT_NAMESPACE, 'lists']}>
+    <WithMessages namespaces={[NAMESPACE, BOARD_KIT_NAMESPACE, 'lists', DEPTH_NAMESPACE]}>
       <CapacityScreen model={model} actions={actions} />
     </WithMessages>
   )
@@ -44,17 +46,23 @@ export function CapacityView({ model, actions }: { model: CapacityModel; actions
 
 function CapacityScreen({ model, actions }: { model: CapacityModel; actions?: CapacityActions }) {
   const t = useT(NAMESPACE)
+  const td = useT(DEPTH_NAMESPACE)
   const locale = useLocale()
   const words: Words = useMemo(() => ({ t, locale }), [t, locale])
+  const depth: DepthWords = useMemo(() => ({ t: td, locale }), [td, locale])
   const kit = useBoardWords()
+  const pieceWords = useMemo(() => ({ ...kit.load, ...pieceLoadWords(td) }), [kit.load, td])
   const [selected, setSelected] = useState<readonly string[]>(model.selected ?? [])
   useEffect(() => setSelected(model.selected ?? []), [model.selected])
 
   const data = model.capacity.status === 'ready' ? model.capacity.value : null
-  const lanes = useMemo(() => (data ? lanesOf(data, model.controls.tile) : null), [data, model.controls.tile])
-  const lanesKey = lanes?.map(laneKeyOf).join(',') ?? ''
-  useEffect(() => setSelected((current) => current.filter((key) => lanesKey.includes(key))), [lanesKey])
-  const picked = (lanes ?? []).filter((lane) => selected.includes(laneKeyOf(lane)))
+  const subs = model.subcontractors?.status === 'ready' ? model.subcontractors.value : null
+  const rows = useMemo(() => (data ? rowsOf(data, subs, model.controls.tile) : null), [data, subs, model.controls.tile])
+  const lanes = useMemo(() => (rows ? rows.flatMap((row) => (row.kind === 'lane' ? [row.lane] : [])) : null), [rows])
+  const workshopLines = useMemo(() => (rows ? rows.flatMap((row) => (row.kind === 'workshop' ? [row.line] : [])) : []), [rows])
+  const rowsKey = rows?.map((row) => row.key).join(',') ?? ''
+  useEffect(() => setSelected((current) => current.filter((key) => rowsKey.includes(key))), [rowsKey])
+  const picked = (rows ?? []).filter((row) => selected.includes(row.key)).map((row) => (row.kind === 'lane' ? { kind: row.lane.kind, id: row.lane.id } : { kind: 'WORKSHOP' as const, id: row.line.id }))
 
   if (!model.canView) {
     return (
@@ -73,8 +81,18 @@ function CapacityScreen({ model, actions }: { model: CapacityModel; actions?: Ca
   const shownTo = model.controls.to ?? data?.to ?? ''
   const cellHref = (key: string) => `${model.prefix}/planning/capacity?${queryOf({ ...model.controls, cell: key })}`
 
-  const LaneCell = ({ data: lane }: ICellRendererParams<CapacityLane>) => {
-    if (!lane) return null
+  const WorkshopNameCell = (line: WorkshopLine) => (
+    <span className="fw-pc-cell">
+      <a className="fw-pc-link fw-pc-ellipsis" href={boardHref(model.prefix, model.siteId, [{ kind: 'WORKSHOP', id: line.id }], data?.from)} target="_blank" rel="noreferrer" title={t('lane.toBoard', { lane: line.name })}>
+        {line.name}
+      </a>
+      <span className="fw-pc-cell-sub fw-pc-ellipsis">{workshopRowWords(line, depth)}</span>
+    </span>
+  )
+  const LaneCell = ({ data: row }: ICellRendererParams<CapacityRow>) => {
+    if (!row) return null
+    if (row.kind === 'workshop') return WorkshopNameCell(row.line)
+    const lane = row.lane
     const notes = laneNotes(lane, words)
     return (
       <span className="fw-pc-cell">
@@ -111,16 +129,61 @@ function CapacityScreen({ model, actions }: { model: CapacityModel; actions?: Ca
       </span>
     )
   }
-  const OverallCell = ({ data: lane }: ICellRendererParams<CapacityLane>) =>
-    lane ? (
+  const WorkshopLoadCell = (line: WorkshopLine, cell: WorkshopCell | undefined, bucketName: string) => {
+    if (!cell) return <span className="fw-pc-cell-sub">—</span>
+    const key = workshopCellKey(line, cell.key)
+    const label = t('cell.title', { lane: line.name, bucket: bucketName })
+    const proposed = proposedWords(line, cell, depth)
+    const open = (event: MouseEvent<HTMLAnchorElement>) => {
+      if (!actions?.onCell || event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return
+      event.preventDefault()
+      actions.onCell(key)
+    }
+    return (
+      <span className="fw-pc-load">
+        <span className="fw-pc-cell">
+          <Link className="fw-pc-open" href={cellHref(key)} onClick={open} aria-label={t('cell.open', { what: label })}>
+            <LoadBar size="sm" label={label} booked={Number(cell.booked)} available={cell.available === null ? undefined : Number(cell.available)} words={line.unit === 'PIECES' ? pieceWords : kit.load} locale={INTL_LOCALE[locale]} />
+          </Link>
+          {proposed ? <span className="fw-pc-cell-sub fw-pc-ellipsis">{proposed}</span> : null}
+        </span>
+        <WorkshopHowPopover line={line} cell={cell} label={label} words={depth} />
+      </span>
+    )
+  }
+  const OverallCell = ({ data: row }: ICellRendererParams<CapacityRow>) => {
+    if (!row) return null
+    if (row.kind === 'workshop') {
+      const line = row.line
+      return (
+        <span className="fw-pc-load">
+          <span className="fw-pc-open">
+            <LoadBar size="sm" label={t('col.overallOf', { lane: line.name })} booked={Number(line.overall.booked)} available={line.overall.available === null ? undefined : Number(line.overall.available)} words={line.unit === 'PIECES' ? pieceWords : kit.load} locale={INTL_LOCALE[locale]} />
+          </span>
+        </span>
+      )
+    }
+    const lane = row.lane
+    return (
       <span className="fw-pc-load">
         <span className="fw-pc-open">
           <LoadBar size="sm" label={t('col.overallOf', { lane: lane.name })} booked={Number(lane.overall.bookedMinutes)} available={Number(lane.overall.availableMinutes)} words={kit.load} locale={INTL_LOCALE[locale]} />
         </span>
       </span>
-    ) : null
-  const EndCell = ({ data: lane }: ICellRendererParams<CapacityLane>) => {
-    if (!lane) return null
+    )
+  }
+  const EndCell = ({ data: row }: ICellRendererParams<CapacityRow>) => {
+    if (!row) return null
+    if (row.kind === 'workshop') {
+      const end = workshopRowEnd(row.line, data?.today ?? '', depth)
+      return (
+        <span className="fw-pc-cell" title={end.full}>
+          <span className="fw-pc-ellipsis">{end.main}</span>
+          <span className="fw-pc-cell-sub fw-pc-ellipsis">{end.full}</span>
+        </span>
+      )
+    }
+    const lane = row.lane
     const end = laneEnd(lane, words)
     return (
       <span className="fw-pc-cell" title={end.full}>
@@ -131,7 +194,7 @@ function CapacityScreen({ model, actions }: { model: CapacityModel; actions?: Ca
     )
   }
 
-  const columns: ColDef<CapacityLane>[] = [
+  const columns: ColDef<CapacityRow>[] = [
     { colId: 'lane', headerName: t('col.lane'), minWidth: 210, flex: 1.4, pinned: 'left', cellRenderer: LaneCell },
     ...(data?.buckets ?? []).map((bucket) => {
       const name = bucketLabel(bucket, words)
@@ -142,8 +205,9 @@ function CapacityScreen({ model, actions }: { model: CapacityModel; actions?: Ca
         minWidth: bucket.kind === 'DAY' ? 128 : 150,
         flex: 1,
         sortable: false,
-        cellRenderer: ({ data: lane }: ICellRendererParams<CapacityLane>) => (lane ? LoadCell(lane, lane.cells.find((cell) => cell.key === bucket.key), name) : null),
-      } satisfies ColDef<CapacityLane>
+        cellRenderer: ({ data: row }: ICellRendererParams<CapacityRow>) =>
+          !row ? null : row.kind === 'lane' ? LoadCell(row.lane, row.lane.cells.find((cell) => cell.key === bucket.key), name) : WorkshopLoadCell(row.line, row.line.cells.find((cell) => cell.key === bucket.key), name),
+      } satisfies ColDef<CapacityRow>
     }),
     { colId: 'overall', headerName: t('col.overall'), minWidth: 150, flex: 1, sortable: false, cellRenderer: OverallCell },
     { colId: 'end', headerName: t('col.end'), minWidth: 200, flex: 1.1, sortable: false, cellRenderer: EndCell },
@@ -165,13 +229,19 @@ function CapacityScreen({ model, actions }: { model: CapacityModel; actions?: Ca
         }
       />
     )
-  } else if (lanes && lanes.length === 0) {
-    state = <EmptyState title={t('empty.tileTitle')} description={t(`empty.tile.${model.controls.tile ?? 'over'}`)} action={<Button size="sm" onClick={() => actions?.onTile?.(null)}>{t('common.clearFilters')}</Button>} />
+  } else if (rows && rows.length === 0) {
+    state = <EmptyState title={t('empty.tileTitle')} description={model.controls.tile === 'subs' ? td('cp.empty.subs') : t(`empty.tile.${model.controls.tile ?? 'over'}`)} action={<Button size="sm" onClick={() => actions?.onTile?.(null)}>{t('common.clearFilters')}</Button>} />
   }
 
   const most = data?.tiles.mostLoadedThisWeek ?? null
   const mostLane = most && data ? data.lanes.find((lane) => lane.kind === most.kind && lane.id === most.id) : null
   const tiles = TILE_IDS.map((id) => {
+    if (id === 'subs') {
+      // Design tiles#1 (W2b): "Subcontractors over their capacity"; '—' until known, never 0.
+      const value = subs ? String(subs.tiles.subcontractorsOverThisWeek) : '—'
+      const hint = subs ? td('cp.tile.hint', { count: subs.tiles.workshopsWithoutCapacity }) : model.subcontractors?.status === 'error' ? td('cp.tile.error') : undefined
+      return { label: td('cp.tile.label'), value, hint, onClick: () => actions?.onTile?.(model.controls.tile === id ? null : id), active: model.controls.tile === id }
+    }
     const value = !data
       ? '—'
       : id === 'over'
@@ -185,6 +255,7 @@ function CapacityScreen({ model, actions }: { model: CapacityModel; actions?: Ca
     return { label: t(`tile.${id}`), value, hint, onClick: () => actions?.onTile?.(model.controls.tile === id ? null : id), active: model.controls.tile === id }
   })
   const cellOpen = model.controls.cell && data ? model.controls.cell : null
+  const workshopOpen = cellOpen && parseWorkshopKey(cellOpen) ? cellOpen : null
 
   return (
     <div className="fw-pc">
@@ -241,18 +312,26 @@ function CapacityScreen({ model, actions }: { model: CapacityModel; actions?: Ca
 
       {model.sites.status === 'ready' && sites.length === 0 && <Banner tone="info" title={t('page.noSites')} />}
       {data && data.workOrdersWithoutLine > 0 && <Banner tone="info" title={t('page.withoutLine', { count: data.workOrdersWithoutLine })} />}
+      {data && model.subcontractors?.status === 'error' && (
+        <Banner tone="warning" title={td('cp.subs.errorTitle')}>
+          {td('cp.subs.errorBody')}{' '}
+          <Button size="sm" variant="quiet" onClick={() => actions?.onRetrySubcontractors?.()}>
+            {t('common.retry')}
+          </Button>
+        </Banner>
+      )}
 
       <section aria-label={t('tile.title')}>
         <MetricStrip metrics={tiles} />
       </section>
 
-      <ListFrame<CapacityLane>
+      <ListFrame<CapacityRow>
         label={t('list.label')}
-        rows={state ? [] : lanes}
-        rowId={laneKeyOf}
+        rows={state ? [] : rows}
+        rowId={(row) => row.key}
         columns={columns}
-        count={lanes ? t('list.count', { count: lanes.length }) : '—'}
-        tools={model.controls.tile ? <Tag tone="info">{t(`tile.${model.controls.tile}`)}</Tag> : undefined}
+        count={rows ? (workshopLines.length > 0 ? td('cp.count', { lanes: String(lanes?.length ?? 0), workshops: String(workshopLines.length), count: rows.length }) : t('list.count', { count: rows.length })) : '—'}
+        tools={model.controls.tile ? <Tag tone="info">{model.controls.tile === 'subs' ? td('cp.tile.label') : t(`tile.${model.controls.tile}`)}</Tag> : undefined}
         selection={{
           selected,
           onChange: setSelected,
@@ -263,7 +342,7 @@ function CapacityScreen({ model, actions }: { model: CapacityModel; actions?: Ca
                   <ChartGantt size={13} aria-hidden /> <SelectionLabel>{t('bulk.board', { count: picked.length })}</SelectionLabel>
                 </a>
               </Button>
-              <Button size="sm" aria-label={t('bulk.export', { count: picked.length })} onClick={() => actions?.onExport?.(picked.map(laneKeyOf))}>
+              <Button size="sm" aria-label={t('bulk.export', { count: picked.length })} onClick={() => actions?.onExport?.((rows ?? []).filter((row) => selected.includes(row.key)).map((row) => row.key))}>
                 <Download size={13} aria-hidden /> <SelectionLabel>{t('bulk.export', { count: picked.length })}</SelectionLabel>
               </Button>
             </>
@@ -273,17 +352,27 @@ function CapacityScreen({ model, actions }: { model: CapacityModel; actions?: Ca
         updates={model.updates > 0 ? { count: model.updates, onShow: () => actions?.onShowUpdates?.() } : null}
         keys={ownKeys}
         onHelp={() => actions?.onKeys?.()}
-        onOpen={(lane) => {
-          const cell = data ? (todayCell(lane, data.today) ?? lane.cells[0]) : null
-          if (cell) actions?.onCell?.(cellKeyOf(lane, cell.key))
+        onOpen={(row) => {
+          if (row.kind === 'workshop') {
+            const cell = data ? (todayWorkshopCell(row.line, data.today) ?? row.line.cells[0]) : null
+            if (cell) actions?.onCell?.(workshopCellKey(row.line, cell.key))
+            return
+          }
+          const cell = data ? (todayCell(row.lane, data.today) ?? row.lane.cells[0]) : null
+          if (cell) actions?.onCell?.(cellKeyOf(row.lane, cell.key))
         }}
         state={state}
         focusRow={model.focusRow}
         keysOpen={model.keysOpen}
       />
       <p className="fw-pc-hint">{t('list.note')}</p>
+      {workshopLines.length > 0 ? <p className="fw-pc-hint">{td('cp.note')}</p> : null}
 
-      {cellOpen && data && <CellDetail model={model} actions={actions} data={data} lanes={lanes ?? []} words={words} />}
+      <LoadHeatmap model={model} actions={actions} words={depth} capacityWords={words} />
+
+      {cellOpen && data && !workshopOpen && <CellDetail model={model} actions={actions} data={data} lanes={lanes ?? []} words={words} />}
+      {workshopOpen && data && <WorkshopCellDetail model={model} actions={actions} lines={workshopLines.length > 0 ? workshopLines : (subs?.lanes ?? [])} words={depth} capacityWords={words} />}
+      {model.controls.heat && <HeatCellDetail model={model} actions={actions} words={depth} capacityWords={words} />}
       {model.dialog?.kind === 'keys' && (
         <Modal open onClose={() => actions?.onCloseDialog?.()} title={t('page.keys')} size="sm">
           <KeysList ownKeys={ownKeys} t={t} />
@@ -333,3 +422,20 @@ function HowPopover({ lane, cell, label, words, prefix, siteId }: { lane: Capaci
   )
 }
 
+/** "How this capacity is made" for a workshop cell: its weekly capacity, the open and closed weekdays, what is booked and proposed. */
+function WorkshopHowPopover({ line, cell, label, words }: { line: WorkshopLine; cell: WorkshopCell; label: string; words: DepthWords }) {
+  const { t } = words
+  const lines = workshopHowWords(line, cell, words)
+  return (
+    <DetailPopover trigger={<Info size={13} aria-hidden />} triggerLabel={t('cp.how.trigger', { what: label, how: lines[0] ?? '' })} label={t('cp.how.title', { what: label })} hoverDelay={0}>
+      <div className="fw-pc-how">
+        <b>{t('cp.how.title', { what: label })}</b>
+        <ul className="fw-pc-list">
+          {lines.map((entry) => (
+            <li key={entry}>{entry}</li>
+          ))}
+        </ul>
+      </div>
+    </DetailPopover>
+  )
+}

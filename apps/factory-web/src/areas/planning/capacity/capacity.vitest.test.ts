@@ -24,7 +24,7 @@ const [L1, L2, CUT, SEW] = CAPACITY.lanes
 describe('capacity: the address and the period', () => {
   it('keeps site, period, bucket, tile and cell in the address (WEEK by default)', () => {
     const controls = controlsOf(new URLSearchParams('site=s1&from=2026-11-16&to=2026-12-20&bucket=DAY&tile=over&cell=LINE:a:2026-11-16'))
-    expect(controls).toEqual({ site: 's1', from: '2026-11-16', to: '2026-12-20', bucket: 'DAY', tile: 'over', cell: 'LINE:a:2026-11-16' })
+    expect(controls).toEqual({ site: 's1', from: '2026-11-16', to: '2026-12-20', bucket: 'DAY', tile: 'over', cell: 'LINE:a:2026-11-16', heat: null })
     expect(queryOf(controls)).toBe('site=s1&from=2026-11-16&to=2026-12-20&bucket=DAY&tile=over&cell=LINE%3Aa%3A2026-11-16')
     expect(controlsOf(new URLSearchParams('from=16/11&bucket=YEAR&tile=x'))).toMatchObject({ from: null, bucket: 'WEEK', tile: null })
   })

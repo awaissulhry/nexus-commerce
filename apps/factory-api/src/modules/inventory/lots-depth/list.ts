@@ -67,6 +67,8 @@ export interface DepthListQuery {
   readonly finish?: string | undefined
   readonly origin?: string | undefined
   readonly q?: string | undefined
+  /** B-W2b-320: only these lots (the rows of a W1 view, for their W2b columns). */
+  readonly ids?: readonly string[] | undefined
   readonly cursor?: string | undefined
   readonly limit: number
 }
@@ -175,6 +177,7 @@ export async function listLotsDepth(caller: CommandCaller, query: DepthListQuery
         query.finish ? { attributes: { path: ['finish'], string_contains: query.finish } } : {},
         query.origin ? { attributes: { path: ['origin'], string_contains: query.origin } } : {},
         expiringIds ? { id: { in: expiringIds } } : {},
+        query.ids ? { id: { in: [...query.ids] } } : {},
         text
           ? { OR: [{ code: { contains: text, mode: 'insensitive' } }, { supplierLotRef: { contains: text, mode: 'insensitive' } }, { dyeBatch: { contains: text, mode: 'insensitive' } }, { shade: { contains: text, mode: 'insensitive' } }] }
           : {},
