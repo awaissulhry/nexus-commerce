@@ -850,6 +850,15 @@ describe('the EU variant: a German business customer, VIES, N3.2, no deposit inv
     expect(checked).toMatchObject({ check: { result: 'VALID' }, vies: { state: 'VALID' } })
     expect(w.vies.requests.at(-1)).toMatchObject({ countryCode: 'DE', vatNumber: '100000017' })
     EU.party = checked.party ?? party
+    // B-W2b-294 (QT1:02): a quote refuses another customer's private-label style, and the golden jacket is the brand's. For
+    // the EU variant the brand lets it join our open range: the production manager lifts the private label (the tenant's
+    // rule for a style in production set free for this one change, then back to a change order).
+    const before = (await ok(P.manager, 'GET', '/product/settings')).settings
+    const freed = (await ok(P.manager, 'PUT', '/product/settings', { companyId: null, ...(before.version ? { version: before.version } : {}), editRules: { IN_PRODUCTION: 'FREE' }, reason: 'The brand lets the golden jacket join the open range.' })).settings
+    const style = (await ok(P.manager, 'GET', `/product/styles/${G.style.id}`)).style
+    const lifted = (await ok(P.manager, 'PUT', `/product/styles/${G.style.id}/private-label`, { version: style.version, brandPartyId: null, soldUnderOurName: false, reason: 'The brand lets the golden jacket be sold to other customers.' })).privateLabel
+    expect(lifted).toMatchObject({ shownTo: 'EVERY_CUSTOMER' })
+    await ok(P.manager, 'PUT', '/product/settings', { companyId: null, version: freed.version, editRules: { IN_PRODUCTION: 'CHANGE_ORDER' }, reason: 'Back to a change order for a style in production.' })
   })
 
   it('E02 the quote is taxed as an intra-EU supply (N3.2) and needs no approval; sent and accepted by link', async () => {

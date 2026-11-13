@@ -231,6 +231,8 @@ import { PURCHASING_REPORTS_DEFINITIONS, PURCHASING_REPORTS_PERMISSIONS } from '
 import { PLANNING_REPORTS_DEFINITIONS, PLANNING_REPORTS_PERMISSIONS } from '../../planning/reports/permissions'
 // B-W2b-299: counts in depth (inventory.counts.scan: count by scanning every unit, shared with the floor).
 import { INVENTORY_COUNTS_DEPTH_DEFINITIONS, INVENTORY_COUNTS_DEPTH_FLOOR_PERMISSIONS, INVENTORY_COUNTS_DEPTH_PERMISSIONS } from '../../inventory/counts-depth/permissions'
+// B-W2b-294: quote templates (quotes.templates.manage); reading them is quotes.view, starting a quote from one quotes.manage.
+import { QUOTE_TEMPLATES_DEFINITIONS, QUOTE_TEMPLATES_PERMISSIONS } from '../../sales/quote-templates/permissions'
 // B-W2b-306: MRP you can trust (planning.actions.manage: action messages; planning.planned.edit: protected edits, bulk edit).
 import { PLANNING_ACTIONS_DEFINITIONS, PLANNING_ACTIONS_PERMISSIONS } from '../../planning/actions/permissions'
 // B-W2a-35: the plant (machines, machine requests, maintenance jobs).
@@ -982,6 +984,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   INVENTORY_COUNTS_DEPTH_DEFINITIONS,
   // B-W2b-304: credit limits (area `sales`).
   SALES_CREDIT_DEFINITIONS,
+  // B-W2b-294: quote templates (area `quotes`, declared above).
+  QUOTE_TEMPLATES_DEFINITIONS,
   // B-W2b-306: MRP you can trust (area `planning`, declared above).
   PLANNING_ACTIONS_DEFINITIONS,
   // B-W2b-300: goods without a PO (area `inventory`).
@@ -1284,6 +1288,8 @@ for (const name of COMPLIANCE_REPORTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDe
 for (const name of PLANNING_MILESTONES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-319: the production strategy per item.
 for (const name of PLANNING_STRATEGY_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-294: quote templates.
+for (const name of QUOTE_TEMPLATES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-248: made-to-measure rules.
 for (const name of PRODUCT_MTM_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-264: sourcing & claims.

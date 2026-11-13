@@ -1813,6 +1813,7 @@
     "quotes_manage": "Creare e modificare preventivi",
     "quotes_approve": "Approvare o respingere la richiesta di approvazione di un preventivo",
     "quotes_send": "Inviare un preventivo al cliente",
+    "quotes_templates_manage": "Gestire i modelli di preventivo (le partenze salvate dei preventivi) di una società, o di tutte le società",
     "sales_settings_manage": "Impostare le regole dei preventivi di una società",
     "companies_bank_view": "Vedere il conto bancario di una società",
     "companies_bank_manage": "Cambiare il conto bancario di una società",

@@ -1,5 +1,11 @@
 import type { Reader } from '../quotes/store'
 import { minimumsCheck } from './minimums'
+// B-W2b-294 (SAL-147; QT1:01, QT1:02): the customer and product warnings.
+import { privateLabelCheck } from './private-label'
+import { releasedScopeCheck } from './released-scope'
+import { lifecycleCheck } from './lifecycle'
+import { marketsCheck } from './markets'
+import { materialsCheck } from './materials'
 
 /**
  * The rules a quote's or an order's lines must meet (plan W2b-5: "each line rule is a file in modules/sales/line-checks,
@@ -22,6 +28,8 @@ export interface LineCheckLine {
   readonly quantity: number
   /** Materials chosen on the line as options (leather by article). */
   readonly optionItemIds: readonly string[]
+  /** B-W2b-294: the sizes the line has pieces of (a size grid line); none known: the size rules skip the line. */
+  readonly sizes?: readonly string[] | undefined
 }
 
 export interface LineCheckDocument {
@@ -31,6 +39,10 @@ export interface LineCheckDocument {
   readonly priceListId: string | null
   readonly currency: string
   readonly lines: readonly LineCheckLine[]
+  /** B-W2b-294: the customer (the private-label rule); none: the rule skips the document. */
+  readonly partyId?: string | null | undefined
+  /** B-W2b-294: the country the goods go to (its delivery address, ISO 3166-1); none: the market rule skips it. */
+  readonly shipToCountry?: string | null | undefined
 }
 
 export interface LineFinding {
@@ -55,6 +67,13 @@ export interface LineCheck {
 export const LINE_CHECKS: readonly LineCheck[] = Object.freeze([
   // B-W2b-325 (SAL-178): minimum order quantities per style, kind of garment or material.
   minimumsCheck,
+  // B-W2b-294 (QT1:02, QT1:01; SAL-147): another customer's private-label style and a cell outside the released scope
+  // (BLOCKS), a style being phased out, a market it is not sold in, a blocked material (WARNING).
+  privateLabelCheck,
+  releasedScopeCheck,
+  lifecycleCheck,
+  marketsCheck,
+  materialsCheck,
 ])
 
 /** Every rule over the document, in LINE_CHECKS order; the BLOCKS first. */

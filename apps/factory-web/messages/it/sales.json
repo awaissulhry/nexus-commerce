@@ -80,6 +80,11 @@
     "NO_BANK_DETAILS": "La società non ha ancora coordinate bancarie: le istruzioni per l'acconto seguiranno a parte.",
     "PROOF_NOT_READY": "Una prova è ancora in caricamento, in verifica o è stata rifiutata (Documenti › Prove): completala o toglila.",
     "BELOW_MINIMUM": "Una riga è sotto la quantità minima d'ordine del suo modello, tipo di capo o materiale (Righe): aggiungi pezzi o chiedi al cliente.",
+    "PRIVATE_LABEL": "Una riga è un modello a marchio privato di un altro cliente: si produce e si vende solo per quel marchio (Righe).",
+    "OUTSIDE_RELEASED_SCOPE": "Una riga indica una variante colore o una taglia per cui il modello non è ancora rilasciato: rilasciala prima, o quota ciò che è rilasciato (Righe).",
+    "STYLE_PHASE_OUT": "Un modello è in uscita o fuori produzione: verifica che si possa ancora produrre prima di prometterlo.",
+    "NOT_SOLD_IN_MARKET": "Un modello non è venduto nel mercato di destinazione della merce: etichette, dichiarazione e certificati potrebbero non coprirlo.",
+    "BLOCKED_MATERIAL": "Un materiale di una riga è bloccato: non si può usare finché non è di nuovo approvato o sostituito.",
     "pass": {
       "approval": "Approvazione fatta o non necessaria",
       "validity": "Validità impostata",
