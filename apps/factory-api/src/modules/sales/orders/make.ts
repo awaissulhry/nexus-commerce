@@ -13,6 +13,10 @@ import { asDay, dayOrNull, hasOrderSeries } from './store'
 import { planOrderCredit, recordOrderCredit } from '../credit/check'
 // B-W2b-294 (SAL-151, SAL-162): the accepted version's Incoterm, ship complete and delivery schedule go to the order.
 import { carryToOrderInCommand } from '../quote-terms/carry'
+// B-W2b-303 (SAL-205, SAL-277; SO1:02): a SALES_ORDER rule may make the order wait; the version's season; the line rules.
+import { askOrderApproval, planOrderApproval } from '../orders-depth/approval'
+import { refuseOrderLineRules } from '../orders-depth/line-rules'
+import { openSeasonOrNull } from '../seasons/store'
 
 /**
  * The order of an accepted quote version (B-W1-25; SAL-200 "quote to order in one step", SAL-203; Owner answer S1: made
@@ -78,6 +82,9 @@ export async function makeOrderInCommand(tools: CommandTools, versionId: string,
       paymentTerms: true,
       // B-W2a-19: the order keeps the library terms the quote was accepted with (its schedule and due dates follow them).
       paymentTermsId: true,
+      // B-W2b-303: the season the order keeps, and who sent the quote (asks the yes a rule wants at an acceptance).
+      seasonId: true,
+      sentById: true,
       promiseDate: true,
       noWithdrawal: true,
       depositAmount: true,
@@ -181,7 +188,16 @@ export async function makeOrderInCommand(tools: CommandTools, versionId: string,
   const { header } = draft
   // B-W2b-304: over the customer's credit limit where the company holds, the order waits as PENDING_APPROVAL for a yes.
   const credit = await planOrderCredit(tools, { step: 'ORDER', partyId: version.partyId, companyId: quote.companyId, grossAmount: header.grossAmount, currency: header.currency })
-  const status = credit.status === 'PENDING_APPROVAL' ? credit.status : header.status
+  let status = credit.status === 'PENDING_APPROVAL' ? credit.status : header.status
+  // B-W2b-303 (SAL-205): a SALES_ORDER rule that holds on the order makes it wait too (asked by the office person, or at an
+  // acceptance by the person who sent the quote).
+  const party = await tx.party.findUnique({ where: { id: version.partyId }, select: { code: true } })
+  const approval = await planOrderApproval(tools, {
+    companyId: quote.companyId,
+    shape: { currency: header.currency, netAmount: header.netAmount, customerCode: party?.code ?? null, priorityLevel: 'NORMAL', fromQuote: true, lines: draft.lines.map((line) => ({ kind: line.kind, quantity: line.quantity, unitPrice: line.unitPrice, priceSteps: stepsOf(quoteLines, line.quoteLineId).priceSteps ?? null })) },
+    requesterId: actorIdOf(tools) ?? version.sentById,
+  })
+  if (approval.waits) status = 'PENDING_APPROVAL'
   await tx.salesOrder.create({
     data: {
       id,
@@ -208,6 +224,8 @@ export async function makeOrderInCommand(tools: CommandTools, versionId: string,
       vatAmount: header.vatAmount,
       grossAmount: header.grossAmount,
       costAmount: header.costAmount,
+      // B-W2b-303 (SAL-277): the accepted version's season while it is OPEN (closed since: none; the database refuses a closed one).
+      seasonId: await openSeasonOrNull(tx, version.seasonId),
       ...stamp,
     },
     select: { id: true },
@@ -251,6 +269,9 @@ export async function makeOrderInCommand(tools: CommandTools, versionId: string,
       await tx.salesOrderLineSize.createMany({ data: line.sizes.map((size) => ({ id: newId(), lineId, partyId: version.partyId, size: size.size, quantity: size.quantity, unitPrice: size.unitPrice, ...stamp })) })
     }
   }
+  // B-W2b-303 (SO1:02): the office's order of a quote refuses a colourway or size outside the released scope, or another
+  // customer's private-label style (the quote's line rules; an acceptance makes the order the customer accepted).
+  if (tools.context.audience === 'office') await refuseOrderLineRules(tools.tx, id, now)
   // B-W2b-294
   await carryToOrderInCommand(tools, id)
   const linked = await linkDeposits(tools, { id, companyId: quote.companyId }, version.id)
@@ -263,6 +284,8 @@ export async function makeOrderInCommand(tools: CommandTools, versionId: string,
   )
   // B-W2b-304: the order's credit check (on a hold, the request for a yes by the office person who made it).
   await recordOrderCredit(tools, credit.plan, id)
+  // B-W2b-303: the request for the yes a SALES_ORDER rule wants.
+  await askOrderApproval(tools, id, approval)
   tools.audit({
     action: 'orders.make',
     recordType: 'SalesOrder',

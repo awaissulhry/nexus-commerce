@@ -159,6 +159,8 @@ import { events as subcontractDepth } from '../subcontract-depth/events'
 import { events as salesPricing } from '../sales-pricing/events'
 // B-W2b-294: quotes in depth (a quote template changed, a sent quote expired, its customer reminded before the end).
 import { events as quotesDepth } from '../quotes-depth/events'
+// B-W2b-303: orders in depth (priority, season, split, confirmation; a quote's season; a company's seasons).
+import { events as ordersDepth } from '../orders-depth/events'
 // B-W2b-342: repairs and alterations in depth (a request from outside, an estimate sent, answered or withdrawn).
 import { events as repairsDepth } from '../repairs-depth/events'
 // B-W2b-345: warranty and service cases.
@@ -556,6 +558,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...inventorySubstitutions,
   // B-W2b-294
   ...quotesDepth,
+  // B-W2b-303
+  ...ordersDepth,
   // B-W2b-342
   ...repairsDepth,
   // B-W2b-306

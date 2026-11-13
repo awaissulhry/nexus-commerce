@@ -187,7 +187,8 @@ describe('approval rules by condition (PLT-086)', () => {
     // B-W2b-305 (SCM-080): + the revision and the value added since the last send.
     expect(po.fields.map((field: Json) => field.id)).toEqual(['orderValue', 'currency', 'lineCount', 'supplierStatus', 'supplierCode', 'siteCode', 'revision', 'valueIncrease'])
     expect(po.fields[0]).toMatchObject({ grain: 'cost', heldReason: null })
-    expect(kinds.notRegistered).toContain('SALES_ORDER')
+    // B-W2b-303: SALES_ORDER is registered now; a change of an approved order is not yet.
+    expect(kinds.notRegistered).toContain('SALES_ORDER_CHANGE')
     const blind = await ok('buyerNoCost', 'GET', '/approvals/kinds')
     expect(blind.kinds[0].fields[0].heldReason).toBe('A money figure your roles do not show.')
   })
@@ -203,7 +204,9 @@ describe('approval rules by condition (PLT-086)', () => {
     const blind = (await ok('buyerNoCost', 'GET', '/approvals/rules')).rules.find((entry: Json) => entry.id === seeded.id)
     expect(blind.sentence.en).toBe('Purchase order: order value over … → Finance')
     expect(blind.condition.rows[0]).toMatchObject({ field: 'orderValue', value: null, held: true })
-    expect(list.rules.find((entry: Json) => entry.kind === 'SALES_ORDER')).toMatchObject({ registered: false })
+    // B-W2b-303: the seeded SALES_ORDER rule's kind is registered now; PRICE_CHANGE's is not yet.
+    expect(list.rules.find((entry: Json) => entry.kind === 'SALES_ORDER')).toMatchObject({ registered: true })
+    expect(list.rules.find((entry: Json) => entry.kind === 'PRICE_CHANGE')).toMatchObject({ registered: false })
   })
 
   it('writes a new rule OFF; refuses a fact the kind does not have, an approver who may not decide, a writer who does not keep rules', async () => {

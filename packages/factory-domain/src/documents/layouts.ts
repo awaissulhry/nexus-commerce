@@ -45,6 +45,21 @@ export const DOCUMENT_LAYOUTS: Readonly<Record<DocumentType, DocumentLayout>> = 
       column('amount', 160, 'right'),
     ],
   },
+  // B-W2b-303 (SAL-208): the order confirmation prints as the quote does (the customer reads the same columns).
+  ORDER_CONFIRMATION: {
+    id: 'ORDER_CONFIRMATION/1',
+    priced: true,
+    signatures: false,
+    columns: [
+      column('code', 110),
+      column('description', 400),
+      column('quantity', 80, 'right'),
+      column('uom', 60),
+      column('unitPrice', 120, 'right'),
+      column('discount', 70, 'right'),
+      column('amount', 160, 'right'),
+    ],
+  },
   PURCHASE_ORDER: {
     id: 'PURCHASE_ORDER/1',
     priced: true,
