@@ -42,6 +42,7 @@ import { seed as seedNumberingBlocks } from '../seed/numbering-blocks'
 import { seed as seedOps } from '../seed/ops'
 import { seed as seedOptions } from '../seed/options'
 import { seed as seedOutbox } from '../seed/outbox'
+import { seed as seedPacking } from '../seed/packing'
 import { seed as seedParties } from '../seed/parties'
 import { seed as seedPay } from '../seed/pay'
 import { seed as seedPlanning } from '../seed/planning'
@@ -438,6 +439,11 @@ beforeAll(async () => {
   // alteration one opened and a worksheet: the plain ones a copy may repeat.
   await seedMtmOffice({ db: factory, namespace: 'iso-a' })
   await seedMtmOffice({ db: factory, namespace: 'iso-b' })
+  // The packing and shipments schema of W2b-6 (wave 46/57): packaging types and defaults (the first switched off), SH-0002's
+  // carton typed, numbered and marked with its contents (the first row: a DRAFT shipment's), mark templates (the first switched
+  // off), SH-0002's holds (both released) and cut-offs per carrier: the plain ones a copy may repeat.
+  await seedPacking({ db: factory, namespace: 'iso-a' })
+  await seedPacking({ db: factory, namespace: 'iso-b' })
   // Every seed of both tenants: under a full parallel run this takes more than a minute.
 }, 120_000)
 
@@ -485,6 +491,7 @@ it('covers every classified table and every runtime role', () => {
     'Capa',
     'CapaAction',
     'CapaSource',
+    'CarrierCutOff',
     'CauseCode',
     'Certificate',
     'CertificateCoverage',
@@ -695,7 +702,10 @@ it('covers every classified table and every runtime role', () => {
     'OvertimeAgreement',
     'OvertimeEntry',
     'OvertimeRequest',
+    'PackagingDefault',
+    'PackagingType',
     'Parcel',
+    'ParcelLine',
     'PartnerEmailPreference',
     'PartnerNoticeAck',
     'PartnerTask',
@@ -878,7 +888,9 @@ it('covers every classified table and every runtime role', () => {
     'ShipNoticeHide',
     'ShipNoticeLine',
     'Shipment',
+    'ShipmentHold',
     'ShipmentLine',
+    'ShippingMarkTemplate',
     'ShippingSettings',
     'Site',
     'Size',

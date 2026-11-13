@@ -236,6 +236,8 @@ model Party {
   customerRequirements CustomerRequirement[]
   holds                PartyHold[]
   companyTerms         PartyCompanyTerms[]
+  // W2b-6 packing.prisma (wave 46/57): the carton marks of its brand orders.
+  shippingMarkTemplates ShippingMarkTemplate[]
 
   // calendar.prisma: as a supplier or subcontractor, its calendar (its closed days).
   workCalendars       WorkCalendar[]
