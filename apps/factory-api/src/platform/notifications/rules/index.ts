@@ -28,6 +28,9 @@ import { CHANGE_RULES } from '../../../modules/product/changes/notices'
 // B-W2b-307: the approval engine's requests to their deciders and the decision to who asked; an SMV change to its approvers.
 import { APPROVAL_TASK_NOTICES } from '../../../modules/insights/sources/approval-tasks'
 import { SMV_CHANGE_NOTICES } from '../../../modules/insights/sources/smv-changes'
+// B-W2b-385: following in depth (a followed saved view changed, a followed record's status moved) and the follow-ups NT1:01-03.
+import { FOLLOWING_RULES } from '../view-follow/rules'
+import { FOLLOW_UP_RULES } from './follow-ups'
 
 /**
  * The fan-out's rules, one file per source (B-W2a-20: mentions and followed records, assignments, approvals). A step that
@@ -59,4 +62,8 @@ export const FAN_OUT_RULES: readonly FanOutRule[] = Object.freeze([...THREAD_RUL
   ...CHANGE_RULES,
   // B-W2b-307: approval.requested (APPROVAL to its deciders), approval.decided (APPROVAL to who asked), an SMV change proposed (APPROVAL to its approvers).
   ...APPROVAL_TASK_NOTICES,
-  ...SMV_CHANGE_NOTICES])
+  ...SMV_CHANGE_NOTICES,
+  // B-W2b-385: notification.view_changed and the records' status moves (FOLLOWING to their followers); a request to buy answered
+  // (to who asked), an inquiry given to a person, a product-safety report (ALERT to who assesses them).
+  ...FOLLOWING_RULES,
+  ...FOLLOW_UP_RULES])

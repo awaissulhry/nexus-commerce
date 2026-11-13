@@ -14,6 +14,7 @@ import type { ApiClient } from '../../../lib/api/client'
  *   POST /purchasing/tolerances, PATCH …/:id, POST …/:id/archive | reactivate     purchasing.tolerances.manage
  *   GET  /purchasing/reminders/settings?companyId    purchasing.view: the Owner's reminder switch (B-W2b-14)
  *   PUT  /purchasing/reminders/settings/switch       purchasing.reminders.switch (ON asks a fresh step-up)
+ *   PUT  /purchasing/reminders/settings/timing       purchasing.reminders.switch: confirm-by hours and cadence (B-W2b-382, ./timing)
  *   GET  /alerts/rules?ruleKind=PO_NOT_CONFIRMED     alerts.view: the buyer's alert (B-W2a-78)
  *   GET  /audit?recordType&recordId                  audit.read ("Changed by" per card)
  *   GET  /parties?role=SUPPLIER,SUBCONTRACTOR, GET /product/materials   parties.view, product.materials.view (the pickers)
@@ -84,14 +85,28 @@ export { MAX_TOLERANCE_NOTE }
 
 // ---- the Owner's reminder switch ------------------------------------------------------------------------------------------
 
-const settingsRow = z.object({ id: z.string(), companyId: z.string().nullable(), confirmationRemindersEnabled: z.boolean(), version: z.number().int(), updatedAt: z.string() }).nullable()
-const reminderSchema = z.object({
+const settingsRow = z
+  .object({
+    id: z.string(),
+    companyId: z.string().nullable(),
+    confirmationRemindersEnabled: z.boolean(),
+    // B-W2b-382 (B-W2b-377): the send's default confirm-by and the reminders' cadence set on this row (null: not set here).
+    confirmByHours: z.number().int().nullable().optional(),
+    reminderCadenceDays: z.number().int().nullable().optional(),
+    version: z.number().int(),
+    updatedAt: z.string(),
+  })
+  .nullable()
+const timingSource = z.enum(['COMPANY', 'TENANT', 'DEFAULT'])
+export const reminderSchema = z.object({
   companyId: z.string().nullable(),
   source: z.enum(['COMPANY', 'TENANT', 'DEFAULT']),
   on: z.boolean(),
   mayChange: z.boolean(),
   company: settingsRow,
   tenant: settingsRow,
+  /** B-W2b-382 (B-W2b-377): what holds — the confirm-by hours (null: 48 hours over the supplier's open days), the cadence in days. */
+  timing: z.object({ confirmByHours: z.number().int().nullable(), cadenceDays: z.number().int(), source: z.object({ confirmByHours: timingSource, cadenceDays: timingSource }) }).optional(),
 })
 export type ReminderSettings = z.infer<typeof reminderSchema>
 

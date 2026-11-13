@@ -3,6 +3,7 @@ import type { LiveState } from '../../_shared/buying/hooks'
 import type { StepUpState } from '../../quality/_shared/hooks'
 import type { AlertRule, KindsAnswer, MaterialRef, ReminderSettings, RulesAnswer, SupplierRef, Tolerance } from './api'
 import type { Address, ChangedBy, DefaultDraft, Notice, Read, Scope, StatusFilter, ToleranceDraft, WriteProblem } from './model'
+import type { TimingDraft } from './timing/model'
 
 /** The page's catalogues: its own, and the list frame's words (`lists`). */
 export const SETTINGS_NAMESPACES = ['purchasing-settings', 'lists'] as const
@@ -55,10 +56,12 @@ export interface PurchasingSettingsModel {
   readonly reminders: Read<ReminderSettings>
   /** The switch as set on the page (null until read). */
   readonly reminderDraft: boolean | null
+  /** B-W2b-382: the confirm-by hours and the cadence as typed (null until read; design cases leave it out: as read). */
+  readonly timingDraft?: TimingDraft | null
   /** null: not read (no alerts.view). */
   readonly alerts: Read<{ rules: AlertRule[]; canAdd: boolean }> | null
   readonly changed: { readonly approval: ChangedBy | null; readonly tolerance: ChangedBy | null; readonly confirm: ChangedBy | null }
-  readonly busy: 'default' | 'dialog' | 'bulk' | 'reminders' | null
+  readonly busy: 'default' | 'dialog' | 'bulk' | 'reminders' | /* B-W2b-382 */ 'timing' | null
   readonly save: SaveStatusState
   readonly notice: Notice | null
   readonly live: LiveState
@@ -88,6 +91,10 @@ export interface PurchasingSettingsActions {
   onReminder?: (on: boolean) => void
   onDiscardReminder?: () => void
   onApplyReminder?: () => void
+  /** B-W2b-382: the reminders' timing (confirm-by hours, cadence days). */
+  onTiming?: (draft: TimingDraft) => void
+  onDiscardTiming?: () => void
+  onApplyTiming?: () => void
   onStepUpSubmit?: (code: string) => void
   onStepUpCancel?: () => void
   onRetry?: () => void

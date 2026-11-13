@@ -108,9 +108,9 @@
     "changed_other": "{count} requests changed since they were asked — they need a fresh request.",
     "show": "Show them",
     "partial": "Some requests could not be read: the list shows the others. Try again in a moment.",
-    "approved": "Approved: {summary}",
-    "signed": "Signed and approved: {summary}",
-    "rejected": "Rejected: {summary}",
+    "approved": "Approved: {request}",
+    "signed": "Signed and approved: {request}",
+    "rejected": "Rejected: {request}",
     "quoteApproved": "Quote {number} approved.",
     "quoteRejected": "Quote {number} rejected."
   },

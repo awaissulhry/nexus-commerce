@@ -181,6 +181,10 @@ export const EN_TEMPLATES: Readonly<Record<string, string>> = Object.freeze({
   'PLAN_VERSION.blocks': 'Inspections keep using the approved version until a second person approves this one.',
   'APPROVAL_TASK.PENDING': 'Waiting for your yes ({taskKind}): {summary}.',
   'APPROVAL_TASK.blocks': 'Nothing of it is carried out until someone who did not ask for it approves it.',
+  // B-W2b-385 (NT1:02)
+  'INQUIRY_WAITING.ASSIGNED': 'Inquiry {number} from {from} has waited more than a working day for your answer.',
+  'INQUIRY_WAITING.NEW': 'Inquiry {number} from {from} has waited more than a working day, and nobody has it yet.',
+  'INQUIRY_WAITING.blocks': 'The customer waits for an answer.',
 
   'why.ORDER_PROMISE.orders_manage': "You manage this customer's orders and their promise dates.",
   'why.WORK_ORDER_HELD.workorders_release': 'You release work orders at this site.',
@@ -211,6 +215,8 @@ export const EN_TEMPLATES: Readonly<Record<string, string>> = Object.freeze({
   'why.SMV_CHANGE.product_smv_approve': "You approve this company's SMV changes, and someone else proposed it.",
   'why.PLAN_VERSION.quality_plans_approve': "You approve this company's inspection plans, and someone else wrote this version.",
   'why.APPROVAL_TASK.approvals_decide': 'Its approval rule names you or your role here, and someone else asked for it.',
+  'why.INQUIRY_WAITING.sales_inquiries_manage': "You answer this company's inquiries.",
+  'why.INQUIRY_WAITING.assigned': 'It was given to you.',
 })
 
 /** At most five values, then "and N more". */
@@ -431,4 +437,9 @@ export function planVersionWords(facts: { readonly code: string; readonly number
 /** B-W2b-307: a request of the approval engine waiting for the viewer's yes (`summary`: the request's line, no money). */
 export function approvalTaskWords(facts: { readonly kind: string; readonly summary: string }): RowWords {
   return { sentence: phrase('APPROVAL_TASK.PENDING', { taskKind: [facts.kind], summary: facts.summary.replace(/[.\s]+$/, '') }), blocks: phrase('APPROVAL_TASK.blocks') }
+}
+
+/** B-W2b-385 (NT1:02): an inquiry waiting for us over a working day, the assignee's or nobody's yet. */
+export function inquiryWaitingWords(facts: { readonly number: string; readonly from: string; readonly assigned: boolean }): RowWords {
+  return { sentence: phrase(facts.assigned ? 'INQUIRY_WAITING.ASSIGNED' : 'INQUIRY_WAITING.NEW', { number: facts.number, from: facts.from }), blocks: phrase('INQUIRY_WAITING.blocks') }
 }

@@ -16,6 +16,8 @@ import { workingTimeFindings } from '../../modules/people/limits/warnings'
 import { lowStockFindings } from '../../modules/inventory/low-stock/alerts'
 // B-W2b-350: the supply alerts (a line confirmed later than needed; a supplier put on hold, blocked or limited).
 import { confirmedLateFindings, supplierStatusFindings } from '../../modules/purchasing/reports/supply-alerts'
+// B-W2b-385 (NT1:04): a return whose goods arrived after their deadline.
+import { lateReturnFindings } from '../../modules/sales/returns-depth/alerts'
 // B-W2b-377: the approval engine's requests overdue (their record in words, read by their kind).
 import { kindOf } from '../approvals/kinds'
 import { kindLabelOf } from '../approvals/views'
@@ -289,6 +291,8 @@ export const FINDERS: Readonly<Partial<Record<RuleKind, Find>>> = Object.freeze(
   // B-W2b-350: the supply alerts (one per purchase order; one per supplier).
   PO_CONFIRMED_LATE: confirmedLateFindings,
   SUPPLIER_STATUS_CHANGED: supplierStatusFindings,
+  // B-W2b-385: one per return that arrived after its deadline, until it is closed.
+  RETURN_ARRIVED_LATE: lateReturnFindings,
 })
 
 export const DATED: Readonly<Partial<Record<RuleKind, Dated>>> = Object.freeze({

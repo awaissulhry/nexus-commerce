@@ -10,7 +10,8 @@ import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { recordAddress } from '../../../../../lib/records/record-links'
 import { OFFICE_PAGES } from '../../../../../shell/nav/office-nav'
 import type { ConditionBody } from '../api'
-import { draftOf, fieldsOf, MEANINGS, NAMESPACE, newDraft, said, saveHeld, type ApprovalRulesModel, type RuleDraft } from '../model'
+import { fieldsOf, MEANINGS, NAMESPACE, said, saveHeld, type ApprovalRulesModel, type RuleDraft } from '../model'
+import { startDraft } from '../new-kind/new-kind'
 
 export interface ApprovalRuleDialogActions {
   /** Save the pop-up's draft (a new rule is written OFF); resolves true when saved. */
@@ -34,7 +35,8 @@ export function ApprovalRuleDialog({ model, actions, onClose }: { model: Approva
   const ds = useDsWords()
   const dialog = model.dialog!
   const rule = dialog.rule
-  const [draft, setDraft] = useState<RuleDraft>(() => dialog.draft ?? (rule ? draftOf(rule) : newDraft(null, model.companies.length === 1 ? model.companies[0]!.id : null)))
+  // B-W2b-382 (XF7:06): a new rule starts with the kind its page opened it for.
+  const [draft, setDraft] = useState<RuleDraft>(() => startDraft(dialog, model.companies))
   useEffect(() => {
     if (dialog.draft) setDraft(dialog.draft)
   }, [dialog.draft])

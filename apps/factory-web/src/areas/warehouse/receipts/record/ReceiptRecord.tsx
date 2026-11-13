@@ -58,6 +58,9 @@ import { ReceiptRecordView } from './view/ReceiptRecordView'
 // B-W2b-300 (SCM-119, SCM-122): the reception report and goods without a PO.
 import { NAMESPACE as DEPTH } from '../reception/model'
 import { useReceiptDepth } from '../reception/useReceiptDepth'
+// B-W2b-382 (B-W2b-377's hold): a receipt that waits for a yes — which lines and why, Cancel, Post after the last yes.
+import { useHeldReceipt } from '../held/use-held-receipt'
+import { CancelHeldDialog, HeldBanner } from '../held/view/HeldBanner'
 
 const TIME_ZONE = 'Europe/Rome'
 
@@ -257,6 +260,20 @@ function RecordContainer({ receiptId }: { receiptId: string }) {
   // B-W2b-300: the reception report (⋯) and goods without a PO (their banner and dialogs).
   const depthT = useT(DEPTH)
   const depth = useReceiptDepth({ api, receipt: value, prefix, timeZone: TIME_ZONE, label: depthT('reception.menu'), onChanged: () => void reloadReceipt() })
+  const held = useHeldReceipt({
+    api,
+    receipt: value,
+    prefix,
+    timeZone: TIME_ZONE,
+    receive: can.receive,
+    approvalsView: session.permissions.includes('approvals.view'),
+    offline: live === 'offline',
+    onReceipt: (next) => {
+      setReceipt({ status: 'ready', value: next })
+      if (next.status === 'POSTED') loadLots()
+    },
+    onReload: () => void reloadReceipt(),
+  })
 
   // B-W2a-F4: the request's own check (inventory.receipts.documents.request): the documents, the supplier's contacts.
   const requestOpen = daily?.kind === 'request' && daily.draft.check.value === null && daily.draft.check.problem === null
@@ -441,7 +458,25 @@ function RecordContainer({ receiptId }: { receiptId: string }) {
   return (
     <ReceiptRecordView
       model={model}
-      depth={depth}
+      depth={
+        held.model
+          ? {
+              ...depth,
+              banner: (
+                <>
+                  <HeldBanner model={held.model} actions={held.actions} />
+                  {depth.banner}
+                </>
+              ),
+              dialogs: (
+                <>
+                  {depth.dialogs}
+                  <CancelHeldDialog model={held.model} actions={held.actions} />
+                </>
+              ),
+            }
+          : depth
+      }
       panels={value && (tab === 'activity' || dockOpen) ? <RecordPanels record={{ type: 'GoodsReceipt', id: value.id, companyId: value.companyId, siteId: value.siteId }} title={`${value.number} · ${value.supplier.name}`} /> : null}
       actions={{
         onRetry: () => void load(),

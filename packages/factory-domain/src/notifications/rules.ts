@@ -52,7 +52,8 @@ export type NotificationState = (typeof NOTIFICATION_STATES)[number]
  * Every message key a notification may carry, with its sentence in English and Italian (the e-mail digest draws them;
  * the web draws the same keys from its own catalogue). Placeholders: {actor} the person who caused it (a user id in
  * `actorId`), {record} the record's label, {title} a task's title, {kind} a Today row's kind in words, {status} a
- * decision, {figure} the amount the reader may see (only when params hold one).
+ * decision, {figure} the amount the reader may see (only when params hold one); B-W2b-385: {count}, {entered}, {left} the
+ * rows of a followed saved view (numbers in params).
  */
 export const MESSAGE_TEMPLATES = {
   'notifications.mentioned': { en: '{actor} mentioned you on {record}', it: '{actor} ti ha menzionato su {record}' },
@@ -107,6 +108,18 @@ export const MESSAGE_TEMPLATES = {
   'notifications.approval.taskDecided': { en: '{actor} {status} your request on {record}: {title}', it: '{actor} ha {status} la tua richiesta su {record}: {title}' },
   'notifications.approval.smvAsked': { en: '{actor} asks you to approve an SMV change of operation {record}: {title}', it: '{actor} ti chiede di approvare una modifica del tempo standard dell’operazione {record}: {title}' },
   'notifications.complaint.safety': { en: 'Safety complaint {record}: {title}. It is in the PPE register; the owner acknowledges it on the complaint', it: 'Reclamo di sicurezza {record}: {title}. È nel registro DPI; il titolare ne prende atto sul reclamo' },
+  // B-W2b-385 (PLT-151): a saved view the person follows changed ({record}: the view's name; {count} rows now, {entered} came in,
+  // {left} left; without the last ids only how many now), and a record the person follows moved (its status or stage).
+  'notifications.following.view': { en: '{record}, a saved view you follow, changed: {entered} came in, {left} left ({count} now)', it: '{record}, una vista salvata che segui, è cambiata: {entered} entrati, {left} usciti (ora {count})' },
+  'notifications.following.viewCount': { en: '{record}, a saved view you follow, changed ({count} now)', it: '{record}, una vista salvata che segui, è cambiata (ora {count})' },
+  'notifications.following.changed': { en: '{record}, which you follow, changed', it: '{record}, che segui, è cambiato' },
+  // B-W2b-385 (NT1:01-03): a request to buy put on a purchase order ({title}: the order's number) or refused by the buyer, to who
+  // asked; an inquiry given to a person; a product-safety report to the people who assess them (with an accident: said).
+  'notifications.purchasing.requestOrdered': { en: 'Your request to buy {record} was put on purchase order {title}', it: 'La tua richiesta di acquisto {record} è stata messa nell’ordine di acquisto {title}' },
+  'notifications.purchasing.requestRefused': { en: '{actor} refused your request to buy {record}', it: '{actor} ha rifiutato la tua richiesta di acquisto {record}' },
+  'notifications.inquiries.assigned': { en: '{actor} gave you inquiry {record}', it: '{actor} ti ha affidato la richiesta {record}' },
+  'notifications.safety.productReport': { en: 'Product-safety report {record} came in: assess it', it: 'È arrivata la segnalazione di sicurezza {record}: valutala' },
+  'notifications.safety.productAccident': { en: 'Product-safety report {record} came in with an accident: assess it and see whether the authority must be told', it: 'È arrivata la segnalazione di sicurezza {record} con un incidente: valutala e verifica se va informata l’autorità' },
 } as const satisfies Record<string, { readonly en: string; readonly it: string }>
 export type MessageKey = keyof typeof MESSAGE_TEMPLATES
 export const MESSAGE_KEYS = Object.freeze(Object.keys(MESSAGE_TEMPLATES)) as readonly MessageKey[]
@@ -154,6 +167,10 @@ export function sentenceOf(
     kind: typeof params.kindLabel === 'string' ? params.kindLabel : String(params.kind ?? ''),
     status,
     figure: figureText(params, locale),
+    // B-W2b-385: the counts of a followed saved view.
+    count: typeof params.count === 'number' ? String(params.count) : '',
+    entered: typeof params.entered === 'number' ? String(params.entered) : '',
+    left: typeof params.left === 'number' ? String(params.left) : '',
   }
   return template.replace(/\{(\w+)\}/g, (_, name: string) => values[name] ?? '')
 }

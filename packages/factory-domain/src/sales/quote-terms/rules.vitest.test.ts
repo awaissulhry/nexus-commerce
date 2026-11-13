@@ -87,16 +87,22 @@ describe('validity: the reminder before the end, EXPIRED after (SAL-145)', () =>
     expect(validityOf({ ...sent, status: 'ACCEPTED' }, '2026-11-12')).toMatchObject({ state: 'CLOSED', daysLeft: null })
   })
 
-  it('writes the reminder without a link and without an amount, in the document language', () => {
-    const en = reminderMail({ language: 'en', number: 'Q-0004', revision: 2, validUntil: '2026-11-20', sentOn: '2026-11-01', firmOffer: true })
+  it('writes the reminder without an amount, in the document language; the thread keeps it without its link, the mail carries it (NT1:05)', () => {
+    const en = reminderMail({ language: 'en', number: 'Q-0004', revision: 2, validUntil: '2026-11-20', sentOn: '2026-11-01', firmOffer: true, linkUntil: '2026-11-27' })
     expect(en.subject).toBe('Reminder: quote Q-0004 v2 ends soon')
-    expect(en.body).toContain('stands until 20 Nov 2026 included')
-    expect(en.body).toContain('firm offer')
-    expect(en.body).not.toMatch(/https?:/)
-    const it = reminderMail({ language: 'it', number: 'Q-0004', revision: 1, validUntil: '2026-11-20', sentOn: '2026-11-01', firmOffer: false })
+    expect(en.stored).toContain('stands until 20 Nov 2026 included')
+    expect(en.stored).toContain('firm offer')
+    expect(en.stored).toContain('use the personal link in this e-mail (valid until 27 Nov 2026)')
+    expect(en.stored).not.toMatch(/https?:/)
+    const sent = en.withLink('https://factory.example.com/l#token=abc')
+    expect(sent).toContain('open this personal link (valid until 27 Nov 2026)')
+    expect(sent).toContain('https://factory.example.com/l#token=abc')
+    expect(sent).toContain('firm offer')
+    const it = reminderMail({ language: 'it', number: 'Q-0004', revision: 1, validUntil: '2026-11-20', sentOn: '2026-11-01', firmOffer: false, linkUntil: '2026-11-27' })
     expect(it.subject).toBe('Promemoria: il preventivo Q-0004 v1 scade presto')
-    expect(it.body).toContain('valido fino al 20/11/2026')
-    expect(it.body).not.toContain('irrevocabile')
+    expect(it.stored).toContain('valido fino al 20/11/2026')
+    expect(it.stored).not.toContain('irrevocabile')
+    expect(it.withLink('https://x.example.com/l#token=t')).toContain('apra questo link personale (valido fino al 27/11/2026)')
   })
 
   it('declares its events for the quote screens', () => {

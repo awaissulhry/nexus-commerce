@@ -12,6 +12,7 @@ import type { QuoteDetail, QuoteLine, StyleDetail } from '../../api'
 import { certificateIssues, gridShapeOf, gridValueOf, isEditable, listPriceState, marginTone, money, offListPct, percent, styleBlocks, styleTags, unitPrice, unitsOf, type NextStepView, type StyleBlock } from '../../model'
 import type { QuoteRecordActions, QuoteRecordViewModel } from '../record-model'
 import { sizeGridWords } from './grid-copy'
+import { lineOfColour } from '../lines/key'
 import type { QuoteDepthSlots } from '../lines-depth/slots'
 
 /**
@@ -206,7 +207,8 @@ function StyleBlockCard({ block, quote, model, actions, editable, depthItems = [
   const revision = block.revision ?? block.lines.find((line) => line.styleRevision)?.styleRevision ?? null
 
   const priceRows = shape.colours.map((colour) => {
-    const line: QuoteLine | undefined = block.lines.find((entry) => entry.colourwayId === colour.key)
+    // B-W2b-382: the colour row's size-grid line (a fee line of the same colourway is not its price).
+    const line: QuoteLine | undefined = lineOfColour(block.lines, colour.key)
     const key = `${block.styleId}:${colour.key}`
     const typedPrice = model.prices[key]
     const tone = line ? marginTone(line.marginPct, quote.current.marginFloorPct) : null

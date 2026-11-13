@@ -108,9 +108,9 @@
     "changed_other": "{count} richieste sono cambiate dopo essere state chieste: serve una nuova richiesta.",
     "show": "Mostrale",
     "partial": "Alcune richieste non sono state lette: l’elenco mostra le altre. Riprova tra poco.",
-    "approved": "Approvata: {summary}",
-    "signed": "Firmata e approvata: {summary}",
-    "rejected": "Rifiutata: {summary}",
+    "approved": "Approvata: {request}",
+    "signed": "Firmata e approvata: {request}",
+    "rejected": "Rifiutata: {request}",
     "quoteApproved": "Preventivo {number} approvato.",
     "quoteRejected": "Preventivo {number} rifiutato."
   },

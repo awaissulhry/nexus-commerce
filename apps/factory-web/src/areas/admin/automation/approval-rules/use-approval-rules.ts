@@ -7,6 +7,8 @@ import type { PanelRead } from '../../../../record-panels/model'
 import { listRoles } from '../../../admin/shared/api'
 import { createRule, fetchKinds, fetchRules, testRule, updateRule, type ApprovalRule, type ConditionBody, type KindsAnswer, type RulesAnswer, type RuleTest } from './api'
 import { bodyOf, changesOf, type ApproverRole, type RuleDialogState, type RuleDraft } from './model'
+// B-W2b-382 (XF7:06): `?rule=new&kind=` starts the new rule with its kind.
+import { newRuleKindOf } from './new-kind/new-kind'
 
 /** An API failure of this page as a key of approvals-depth. */
 export function rulesProblem(error: unknown): string {
@@ -27,8 +29,8 @@ export function rulesProblem(error: unknown): string {
  * (`?rule=<id>|new`), saves (POST — written OFF — or a PUT of what changed with the version as read), switches (PUT
  * `active`), tests. A refusal is said in the pop-up; a moved rule is read again.
  */
-export function useApprovalRules(input: { readonly api: ApiClient; readonly enabled: boolean; readonly ruleParam: string | null; readonly readRoles: boolean; readonly onNotice: (notice: { key: string; tone: 'success' | 'danger' | 'warning'; params?: Record<string, string | number> } | null) => void }) {
-  const { api, enabled, ruleParam, readRoles, onNotice } = input
+export function useApprovalRules(input: { readonly api: ApiClient; readonly enabled: boolean; readonly ruleParam: string | null; /** B-W2b-382: `&kind=` of a new rule. */ readonly newKind?: string | null; readonly readRoles: boolean; readonly onNotice: (notice: { key: string; tone: 'success' | 'danger' | 'warning'; params?: Record<string, string | number> } | null) => void }) {
+  const { api, enabled, ruleParam, newKind = null, readRoles, onNotice } = input
   const [rules, setRules] = useState<PanelRead<RulesAnswer>>({ status: 'loading' })
   const [kinds, setKinds] = useState<PanelRead<KindsAnswer>>({ status: 'loading' })
   const [roles, setRoles] = useState<PanelRead<readonly ApproverRole[]>>({ status: 'loading' })
@@ -81,7 +83,7 @@ export function useApprovalRules(input: { readonly api: ApiClient; readonly enab
 
   const ready = rules.status === 'ready' ? rules.data : null
   const opened = ruleParam && ruleParam !== 'new' ? (ready?.rules.find((rule) => rule.id === ruleParam) ?? null) : null
-  const dialog: RuleDialogState | null = !enabled || !ruleParam ? null : ruleParam === 'new' ? { mode: 'new', rule: null, test, problem } : opened ? { mode: 'edit', rule: opened, test, problem } : null
+  const dialog: RuleDialogState | null = !enabled || !ruleParam ? null : ruleParam === 'new' ? { mode: 'new', rule: null, kind: newRuleKindOf(newKind, kinds.status === 'ready' ? kinds.data.kinds : null), test, problem } : opened ? { mode: 'edit', rule: opened, test, problem } : null
 
   const save = async (draft: RuleDraft): Promise<boolean> => {
     setBusy(true)

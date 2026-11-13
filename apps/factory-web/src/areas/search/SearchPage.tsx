@@ -7,6 +7,7 @@ import { useOfficeApi, useOfficeSession } from '../../lib/session/context'
 import { OFFICE_PAGES } from '../../shell/nav/office-nav'
 import { searchRecords, type SearchAnswer } from './api'
 import { canSearchSomething, companyCodeOf, readTerms, resultHref, termsQuery, type SearchTerms } from './model'
+import { areaOfResult } from './labels/area'
 import { SearchResultsView, type SearchResultRow, type SearchResultsViewModel } from './view/SearchResultsView'
 
 /**
@@ -41,18 +42,22 @@ export function SearchPage() {
 
   const rowsOf = useCallback(
     (page: SearchAnswer): SearchResultRow[] =>
-      page.results.map((result) => ({
-        recordType: result.recordType,
-        recordId: result.recordId,
-        number: result.number,
-        title: result.title,
-        subtitle: result.subtitle,
-        status: result.status,
-        area: result.area,
-        companyCode: companyCodeOf(result.companyId, session.companies),
-        match: result.match,
-        href: resultHref(result, place),
-      })),
+      page.results.map((result) => {
+        const href = resultHref(result, place)
+        return {
+          recordType: result.recordType,
+          recordId: result.recordId,
+          number: result.number,
+          title: result.title,
+          subtitle: result.subtitle,
+          status: result.status,
+          // B-W2b-382 (XF7:03): the area of the page it opens (a product-safety report says Compliance).
+          area: areaOfResult(href, result.area),
+          companyCode: companyCodeOf(result.companyId, session.companies),
+          match: result.match,
+          href,
+        }
+      }),
     [place, session.companies],
   )
 

@@ -24,7 +24,8 @@
     "alerts.SUPPLIER_STATUS_CHANGED.ON_HOLD": "Il fornitore {label} è sospeso dal {changedOn}: nessun nuovo ordine di acquisto finché non viene approvato di nuovo.",
     "alerts.SUPPLIER_STATUS_CHANGED.BLOCKED": "Il fornitore {label} è bloccato dal {changedOn}: nessun nuovo ordine di acquisto.",
     "alerts.SUPPLIER_STATUS_CHANGED.INACTIVE": "Il fornitore {label} è inattivo dal {changedOn}: nessun nuovo ordine di acquisto.",
-    "alerts.UNKNOWN": "Avviso su {label}."
+    "alerts.UNKNOWN": "Avviso su {label}.",
+    "alerts.RETURN_ARRIVED_LATE": "Il reso {label} è arrivato il {receivedDate}, {days} giorni dopo la scadenza ({dueDate})."
   },
   "refused": {
     "title": "Non è tua da aprire",
@@ -173,7 +174,8 @@
       "WORKING_TIME_LIMIT": "{record}: limite di orario vicino",
       "LOW_STOCK": "{record} sotto il minimo",
       "PO_CONFIRMED_LATE": "{record} confermato più tardi del necessario",
-      "SUPPLIER_STATUS_CHANGED": "{record}: stato del fornitore cambiato"
+      "SUPPLIER_STATUS_CHANGED": "{record}: stato del fornitore cambiato",
+      "RETURN_ARRIVED_LATE": "{record} arrivato dopo la scadenza"
     },
     "snooze": "Rimanda",
     "assign": "Assegna",

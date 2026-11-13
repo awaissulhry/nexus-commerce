@@ -212,7 +212,10 @@
       "following": {
         "note": "{actor} ha scritto una nota su {record}, che segui",
         "mail_in": "È arrivata una risposta su {record}, che segui",
-        "mail_out": "{actor} ha inviato un messaggio su {record}, che segui"
+        "mail_out": "{actor} ha inviato un messaggio su {record}, che segui",
+        "view": "{record}, una vista salvata che segui, è cambiata: {entered} entrati, {left} usciti (ora {count})",
+        "viewCount": "{record}, una vista salvata che segui, è cambiata (ora {count})",
+        "changed": "{record}, che segui, è cambiato"
       },
       "assigned": {
         "today": "{actor} ti ha assegnato {record} su Oggi ({kind})",
@@ -249,7 +252,9 @@
       "safety": {
         "incidentReported": "Nuova segnalazione {record}: {title}",
         "inailDue": "Comunicazione INAIL per {record} da inviare entro {title}",
-        "inailLate": "Comunicazione INAIL per {record} in ritardo: era da inviare entro {title}"
+        "inailLate": "Comunicazione INAIL per {record} in ritardo: era da inviare entro {title}",
+        "productReport": "È arrivata la segnalazione di sicurezza {record}: valutala",
+        "productAccident": "È arrivata la segnalazione di sicurezza {record} con un incidente: valutala e verifica se va informata l’autorità"
       },
       "files": {
         "expiryDue": "{kind} su {record} scade il {title}"
@@ -266,6 +271,13 @@
         "orderDecided": "{actor} ha {status} l’ordine di modifica {record}",
         "orderReleased": "L’ordine di modifica {record} è stato rilasciato: {title}",
         "workInProgress": "L’ordine di modifica {record} è stato rilasciato: {title}. Decide cosa succede agli ordini di lavoro {kind}"
+      },
+      "purchasing": {
+        "requestOrdered": "La tua richiesta di acquisto {record} è stata messa nell’ordine di acquisto {title}",
+        "requestRefused": "{actor} ha rifiutato la tua richiesta di acquisto {record}"
+      },
+      "inquiries": {
+        "assigned": "{actor} ti ha affidato la richiesta {record}"
       }
     },
     "fallback": "Novità su {record}",

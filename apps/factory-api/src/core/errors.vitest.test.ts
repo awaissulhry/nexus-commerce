@@ -119,6 +119,18 @@ describe('mapError()', () => {
     expect(mapError(other).status).toBe(500)
   })
 
+  it("B-W2b-385: answers the database's notification refusals (a device turned off meanwhile, a view only its owner sees) as a 409 in words, never a 500", () => {
+    const refusal = prismaError('P2010', 'Raw query failed.', {
+      driverAdapterError: { cause: { originalCode: '23514', originalMessage: 'notifications: push subscription x was turned off at 2026-11-13 09:00:00+00; it changes no more (only its sealed keys go)' } },
+    })
+    const words = 'This device’s push was turned off meanwhile: turn push on again on the device.'
+    expect(mapError(refusal)).toEqual({ status: 409, code: 'conflict', message: words, issues: [{ path: 'push/TURNED_OFF', message: words }], unexpected: false })
+    const view = prismaError('P2010', 'Raw query failed.', { driverAdapterError: { cause: { originalCode: '23514', originalMessage: "views: view x is its owner's alone; only its owner follows it" } } })
+    expect(mapError(view)).toMatchObject({ status: 409, code: 'conflict', issues: [{ path: 'views/ONLY_ME' }] })
+    const other = prismaError('P2010', 'Raw query failed.', { driverAdapterError: { cause: { originalCode: '23514', originalMessage: 'notifications: TRUNCATE on "PushSubscription" is refused' } } })
+    expect(mapError(other).status).toBe(500)
+  })
+
   it("B-W2b-370: answers the database's write-off, reminder stop and handed-over refusals as a 409 in words, never a 500", () => {
     const refusal = prismaError('P2010', 'Raw query failed.', {
       driverAdapterError: { cause: { originalCode: '23514', originalMessage: 'payments: payment x has a write-off still standing; reverse the write-off before the payment is voided' } },

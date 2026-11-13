@@ -221,19 +221,58 @@
   "confirm": {
     "title": "Confirmation",
     "description": "When suppliers are asked to confirm an order, and how they are reminded.",
-    "by": "Confirm by",
-    "byValue": "{hours} hours after the send: {days} of the supplier’s open days, longer over its closed days.",
-    "byHint": "The buyer may ask for another time when sending, and move it while the order waits. A setting of its own for this default comes later.",
     "reminders": "Automatic reminders to suppliers",
     "on": "On",
     "off": "Off",
-    "how": "When on, the daily run mails a supplier who has not confirmed by the deadline, then once a day, at most {most} times per revision.",
+    "how": "When on, the daily run mails a supplier who has not confirmed by the deadline, then again at the cadence set above, at most {most} times per revision.",
     "byHand": "A reminder sent by hand from the order counts too. When off, the buyer reminds by hand.",
     "mails": "The reminder repeats the order’s number and its confirm-by time and attaches the order again; it carries no link (a reply from the supplier gets a new one).",
-    "turningOn": "Switching on mails real suppliers every day an order waits past its confirm-by time. Saving asks you to confirm it’s you.",
+    "turningOn": "Switching on mails real suppliers while an order waits past its confirm-by time, and chases its late lines, at the cadence set above. Saving asks you to confirm it’s you.",
     "applyOn": "Switch on",
     "applyOff": "Switch off",
     "failed": "Couldn’t load confirmation"
+  },
+  "timing": {
+    "title": "When suppliers are asked and reminded",
+    "hours": "Confirm by (hours after the send)",
+    "days": "Remind and chase every (days)",
+    "empty": "Not set here",
+    "followCompany": "Empty: this company follows every company’s setting.",
+    "followAll": "Empty: the default applies.",
+    "inForce": {
+      "hoursDefault": "Now: {hours} hours after the send ({days} of the supplier’s open days, longer over its closed days).",
+      "hours": {
+        "COMPANY": "Now: {hours} hours after the send, set for this company.",
+        "TENANT": "Now: {hours} hours after the send, every company’s setting.",
+        "DEFAULT": "Now: {hours} hours after the send."
+      },
+      "days": {
+        "COMPANY_one": "Now: every day, set for this company.",
+        "COMPANY_other": "Now: every {days} days, set for this company.",
+        "TENANT_one": "Now: every day, every company’s setting.",
+        "TENANT_other": "Now: every {days} days, every company’s setting.",
+        "DEFAULT_one": "Now: every day (the default).",
+        "DEFAULT_other": "Now: every {days} days (the default)."
+      }
+    },
+    "chase": {
+      "on_one": "Automatic reminders are on: the daily run reminds a supplier who has not confirmed and chases its late lines every day. A reminder or chase sent by hand from the order counts too.",
+      "on_other": "Automatic reminders are on: the daily run reminds a supplier who has not confirmed and chases its late lines every {days} days. A reminder or chase sent by hand from the order counts too.",
+      "off_one": "Automatic reminders are off: the daily run sends no reminder and no chase. A reminder or chase the buyer sends by hand from the order still goes.",
+      "off_other": "Automatic reminders are off: the daily run sends no reminder and no chase. A reminder or chase the buyer sends by hand from the order still goes."
+    },
+    "apply": "Save the timing",
+    "problem": {
+      "hours": "Write whole hours from {min} to {max}, or leave it empty.",
+      "days": "Write whole days from {min} to {max}, or leave it empty."
+    },
+    "held": {
+      "noRight": "Only the Owner sets when suppliers are asked to confirm and how often they are reminded.",
+      "noRightAll": "Every company’s timing is set only by a role over every company.",
+      "offline": "Offline: changes are kept on this page until the connection is back.",
+      "busy": "Saving: wait a moment.",
+      "problem": "Fix the fields first."
+    }
   },
   "switch": {
     "on": {
@@ -315,6 +354,7 @@
   },
   "done": {
     "default": "The default is saved.",
+    "timing": "The confirm-by time and the reminders’ cadence are saved.",
     "defaultRemoved": "The default is archived: deliveries follow what is in force above it. It can be reactivated from the archived rules.",
     "added": "The rule is added.",
     "saved": "The rule is saved.",

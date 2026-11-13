@@ -1,8 +1,9 @@
 'use client'
 
 import { ReviewChangesModal } from '../../../../lib/i18n/ds-parts'
-import { useT } from '../../../../lib/i18n/provider'
+import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { DEPTH_NS, type InboxActions, type InboxViewModel } from '../model'
+import { requestName, saidIn } from '../words/request-words'
 import type { InboxRow } from '../inbox'
 
 /**
@@ -14,6 +15,7 @@ import type { InboxRow } from '../inbox'
  */
 export function BulkApproveDialog({ model, rows, actions, kindWords }: { model: InboxViewModel; rows: readonly InboxRow[]; actions?: InboxActions; kindWords: (row: InboxRow) => string }) {
   const t = useT(DEPTH_NS)
+  const locale = useLocale()
   const dialog = model.dialog
   if (dialog?.kind !== 'bulk') return null
   const lines = dialog.lines
@@ -34,7 +36,8 @@ export function BulkApproveDialog({ model, rows, actions, kindWords }: { model: 
       onClose={() => actions?.onCloseDialog?.()}
       title={t('bulk.title', { count: rows.length, kind })}
       summary={t('bulk.summary')}
-      changes={current.map((line) => ({ id: line.key, where: line.label, what: line.summary, now: t('bulk.now'), next: t('bulk.next') }))}
+      // B-W2b-382: each request in words from its codes (its record, its kind), never the API's English summary.
+      changes={current.map((line) => ({ id: line.key, where: requestName(line.request, locale), what: saidIn(line.request.kindLabel, locale), now: t('bulk.now'), next: t('bulk.next') }))}
       problems={model.offline ? [t('inbox.held.offline')] : []}
       saveLabel={t('bulk.approve', { count: current.length, kind })}
       ackLabel={t('bulk.ack')}
@@ -45,7 +48,7 @@ export function BulkApproveDialog({ model, rows, actions, kindWords }: { model: 
             <ul className="fw-apv-list">
               {leftOut.map((line) => (
                 <li key={line.key}>
-                  {line.label} — {t(line.leftOut!)}
+                  {requestName(line.request, locale)} — {t(line.leftOut!)}
                 </li>
               ))}
             </ul>

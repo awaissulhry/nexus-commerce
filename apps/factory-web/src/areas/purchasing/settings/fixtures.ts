@@ -149,6 +149,10 @@ function SettingsDesign({ model: design }: { model: PurchasingSettingsModel }) {
       onBulkMove: (to) => set({ selected: [], notice: { key: to === 'archive' ? 'done.archived' : 'done.reactivated', tone: 'success', params: { count: movable(rows, current.selected, to).length } } }),
       onReminder: (on) => set({ reminderDraft: on }),
       onDiscardReminder: () => current.reminders.value && set({ reminderDraft: current.reminders.value.on }),
+      // B-W2b-382: the timing works in the browser too (nothing is saved).
+      onTiming: (timingDraft) => set({ timingDraft }),
+      onDiscardTiming: () => set({ timingDraft: undefined }),
+      onApplyTiming: () => set({ timingDraft: undefined, notice: { key: 'done.timing', tone: 'success' } }),
       onApplyReminder: () => set(current.reminderDraft ? { stepUp: { open: true, busy: false, sentence: 'stepUp.sentence', problem: null } } : { notice: { key: 'done.remindersOff', tone: 'success' } }),
       onStepUpSubmit: () => set({ stepUp: STEP_UP_CLOSED, notice: { key: 'done.remindersOn', tone: 'success' }, reminders: ready(REMINDERS_OWN_ON), reminderDraft: true }),
       onStepUpCancel: () => set({ stepUp: STEP_UP_CLOSED, notice: { key: 'stepUp.cancelled', tone: 'warning' } }),
@@ -157,6 +161,18 @@ function SettingsDesign({ model: design }: { model: PurchasingSettingsModel }) {
       onKeysClose: () => set({ keysOpen: false }),
     },
   })
+}
+
+/** B-W2b-382: this company's own timing (72 hours, every 2 days) with reminders on; a company that follows every company's. */
+const TIMING_OWN: ReminderSettings = {
+  ...REMINDERS_OWN_ON,
+  company: { ...REMINDERS_OWN_ON.company!, confirmByHours: 72, reminderCadenceDays: 2 },
+  timing: { confirmByHours: 72, cadenceDays: 2, source: { confirmByHours: 'COMPANY', cadenceDays: 'COMPANY' } },
+}
+const TIMING_FOLLOW: ReminderSettings = {
+  ...REMINDERS_FOLLOW,
+  tenant: { ...REMINDERS_FOLLOW.tenant!, confirmByHours: 48, reminderCadenceDays: 3 },
+  timing: { confirmByHours: 48, cadenceDays: 3, source: { confirmByHours: 'TENANT', cadenceDays: 'TENANT' } },
 }
 
 const STEP_UP_OPEN = { open: true, busy: false, sentence: 'stepUp.sentence', problem: null }
@@ -193,6 +209,13 @@ export const designScreen = defineDesignScreen<PurchasingSettingsModel>({
     { id: 'step-up', label: 'Confirm it’s you: a fresh 6-digit code before reminders are switched on', model: page({ reminderDraft: true, busy: 'reminders', stepUp: STEP_UP_OPEN }) },
     { id: 'step-up-wrong', label: 'Confirm it’s you: a wrong code (said in the dialog)', model: page({ reminderDraft: true, busy: 'reminders', stepUp: { ...STEP_UP_OPEN, problem: 'stepUp.problem.wrong' } }) },
     { id: 'switch-done', label: 'Reminders switched on for this company (who and when)', model: page({ reminders: ready(REMINDERS_OWN_ON), reminderDraft: true, notice: { key: 'done.remindersOn', tone: 'success' }, changed: { approval: rulesChangedOf(poRulesOf(RULES_OFF, 'company', COMPANY_ID)), tolerance: tolerancesChangedOf(TOLERANCES, TOLERANCE_AUDIT), confirm: switchChangedOf(REMINDERS_OWN_ON, 'company', SWITCH_AUDIT) } }) },
+    // B-W2b-382 (B-W2b-377's timing): Confirm by and Remind every as fields on the scope's row; the chase in words.
+    { id: 'w2b-382-timing', label: 'B-W2b-382 · Confirmation: this company asks within 72 hours and reminds every 2 days (reminders on)', model: page({ reminders: ready(TIMING_OWN), reminderDraft: true }), note: 'Each field says what holds now and where it comes from; ON: the daily run reminds and chases late lines every 2 days.' },
+    { id: 'w2b-382-timing-edit', label: 'B-W2b-382 · the timing changed: 96 hours, every 3 days (EditModeBar, ⌘S)', model: page({ reminders: ready(TIMING_OWN), reminderDraft: true, timingDraft: { hours: '96', days: '3' }, save: { kind: 'unsaved', count: 1 } }) },
+    { id: 'w2b-382-timing-bad', label: 'B-W2b-382 · the timing held: 1000 hours is more than 720', model: page({ reminders: ready(TIMING_OWN), reminderDraft: true, timingDraft: { hours: '1000', days: '2' }, save: { kind: 'unsaved', count: 1 } }) },
+    { id: 'w2b-382-timing-follow', label: 'B-W2b-382 · a company that follows every company’s timing (fields empty), reminders off: no chase is sent', model: page({ reminders: ready(TIMING_FOLLOW), reminderDraft: false }) },
+    { id: 'w2b-382-timing-buyer', label: 'B-W2b-382 · a buyer reads the timing as text (the Owner’s)', model: page({ reminders: ready({ ...TIMING_OWN, mayChange: false }) }, 'buyer') },
+    { id: 'w2b-382-timing-saved', label: 'B-W2b-382 · the timing saved', model: page({ reminders: ready(TIMING_OWN), reminderDraft: true, notice: { key: 'done.timing', tone: 'success' } }) },
     { id: 'alert-none', label: 'Confirmation: no buyer alert rule (the buyer is not told)', model: page({ alerts: ready({ rules: [], canAdd: true }) }) },
     { id: 'buyer', label: 'Buyer: keeps the tolerances; reads the approval rules (New PO rule held), the switch is the Owner’s (view only)', model: page({}, 'buyer') },
     { id: 'reader', label: 'A reader (purchasing.view + approvals.view): everything as text, every change held with why', model: page({}, 'reader') },

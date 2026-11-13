@@ -1,0 +1,82 @@
+{
+  "held": {
+    "title": "Waits for a yes before it is posted",
+    "titleOf": "Receipt {number} waits for a yes",
+    "body_one": "Nothing is posted yet: no lot, no stock move, and the order has not moved. 1 line is beyond its delivery tolerance and waits for a yes; after it the receipt is posted as it was recorded.",
+    "body_other": "Nothing is posted yet: no lot, no stock move, and the order has not moved. {count} lines are beyond their delivery tolerance and wait for a yes; after the last one the receipt is posted as it was recorded.",
+    "linesLabel": "Lines that wait for a yes",
+    "line": "Line {seq} · {item}",
+    "why": "{after} of {expected} {unit}: {more} {unit} more than expected, beyond what its delivery tolerance allows.",
+    "whyQuantity": "{quantity} {unit} received, beyond what its delivery tolerance allows.",
+    "state": {
+      "PENDING": "Waits for a yes from {who}",
+      "REJECTED": "Refused: this receipt will not be posted",
+      "unread": "Waits for a yes (see it in Home › Approvals)"
+    },
+    "openRequest": "Open the request",
+    "since": "Waiting since {time}",
+    "cancel": "Cancel this receipt",
+    "refusedTitle": "A line was refused: this receipt will not be posted",
+    "refusedBody": "Cancel it, then receive the goods again within the tolerance (a correction is a new receipt).",
+    "releasedTitle": "Every line has its yes",
+    "releasedTitleOf": "Receipt {number}: every line has its yes",
+    "releasedBody": "It is posted by itself in a moment, for the person who recorded it. If it stays open (a closed month, a right that changed), post it here.",
+    "post": "Post the receipt",
+    "cancelledTitle": "Receipt {number} is cancelled: nothing of it was posted.",
+    "cancelTitle": "Cancel receipt {number}?",
+    "cancelBody": "Nothing of it was posted: no lot or stock move is undone. Its requests for a yes are withdrawn. To take the goods, receive them again within the tolerance.",
+    "reason": "Why it is cancelled",
+    "reasonHint": "For example: the extra pieces go back to the supplier.",
+    "keep": "Keep it",
+    "cancelGo": "Cancel the receipt",
+    "dismiss": "Dismiss",
+    "noReceive": "Only a person who receives goods at this site cancels or posts a receipt.",
+    "offline": "Offline: wait for the connection.",
+    "busy": "Saving: wait a moment.",
+    "notice": {
+      "cancelled": "Receipt {number} is cancelled: its requests are withdrawn.",
+      "posted": "Receipt {number} is posted."
+    },
+    "problem": {
+      "reason": "Write why it is cancelled (at most 1000 characters).",
+      "held": "A line still waits for its yes: the receipt is posted after the last yes.",
+      "state": "The receipt cannot do that now: a yes was refused, or it was posted or cancelled meanwhile. It was read again.",
+      "gone": "This receipt is not there any more.",
+      "failed": "That did not work. Try again."
+    },
+    "result": {
+      "open": "Open the receipt",
+      "again": "Receive {number} again",
+      "back": "Back to receipts"
+    }
+  },
+  "docType": {
+    "notSaid": "Type not said (it meets any ask of its kind)",
+    "say": "Say what it is",
+    "change": "Change",
+    "openOf": "What document is {name}?",
+    "title": "What is {name}?",
+    "body": "Say what the document is, so it meets only the asks it answers: a DURC is never taken for an ISO certificate, an azo dyes report never for the chromium VI one. A document with no type still meets any ask of its kind.",
+    "label": "Document type",
+    "hintTyped": "It meets the asks of this type only.",
+    "hintNone": "Not said: it meets any ask of its kind, as before.",
+    "typesUnread": "The list of document types could not be read: try again in a moment.",
+    "save": "Save",
+    "cancel": "Cancel",
+    "done": "{name}: its type is saved.",
+    "dismiss": "Dismiss",
+    "held": {
+      "noRight": "Saying what a document is needs the right to add files at its company.",
+      "offline": "Offline: wait for the connection.",
+      "reading": "Reading the document: a moment.",
+      "busy": "Saving: wait a moment.",
+      "same": "Choose another type first."
+    },
+    "problem": {
+      "code": "That type is not in the list any more: choose another (it was read again).",
+      "moved": "The document changed meanwhile: it was read again. Check and save again.",
+      "gone": "This document is not current any more (replaced or removed).",
+      "failed": "That did not work. Try again."
+    }
+  }
+}
