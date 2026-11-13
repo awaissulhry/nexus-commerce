@@ -6,6 +6,7 @@ import type { LiveState } from '../../_shared/buying/hooks'
 import type { RecordPanelsViewModel } from '../../../record-panels/model'
 import type { ReceiptDailyActions, ReceiptDailyModel, HideListActions, HideListModel } from './daily-state'
 import type { ExpectedLine, LineBody, LotWithHides, Receipt, ReceiptBody, ReceiptCounts, ReceiptRow, ReceiptStatus, Recorded, Uom } from './api'
+import type { HeldActions, HeldModel } from './held/use-held-receipt'
 
 /**
  * Receipts (SCR-063) and receiving against a purchase order with its lots and hides one by one (SCR-061/062) — the
@@ -372,6 +373,8 @@ export interface ReceiveModel {
   result: Recorded | null
   timeZone?: string
   today?: string
+  /** B-W2b-382: the recorded receipt while it waits for a yes (202), or once it was cancelled here. */
+  held?: HeldModel | null
 }
 
 export interface ReceiveActions {
@@ -380,6 +383,8 @@ export interface ReceiveActions {
   onPost?: () => void
   onRetry?: () => void
   onAnother?: () => void
+  /** B-W2b-382: Cancel and Post of a receipt that waits for a yes. */
+  held?: HeldActions
 }
 
 /** B-W2a-63 adds Documents check (the DDT photo, Request from supplier) and Discrepancies, in the design's order. */

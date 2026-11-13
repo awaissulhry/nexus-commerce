@@ -426,7 +426,7 @@ describe('the guided first load', () => {
     expect(off).toContain('3 rows were refused')
     expect(draw('first-mismatch-no-cost')).not.toContain('Stock value')
     expect(draw('first-start')).toContain('Finish step 1 first')
-    expect(draw('first-open-orders')).toContain('Open orders have no import yet')
+    expect(draw('first-open-orders')).toContain('This step does not read the sales orders import yet')
     expect(draw('first-confirm-nothing')).toContain('Nothing to load for Open orders?')
     expect(draw('first-confirm-done', 'it')).toContain('Segnare Materiali come fatto?')
     expect(draw('first-error')).toContain('The first load could not be read')

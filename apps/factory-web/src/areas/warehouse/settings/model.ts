@@ -66,7 +66,7 @@ export function queryOf(address: Address): string {
 }
 
 /** Where other pages open (company-scoped: the caller passes `/w/<company>`). */
-export const adminRuleHref = (prefix: string, ruleId: string | 'new'): string => `${prefix}/admin/automation?view=approvals&rule=${encodeURIComponent(ruleId)}`
+export const adminRuleHref = (prefix: string, ruleId: string): string => `${prefix}/admin/automation?view=approvals&rule=${encodeURIComponent(ruleId)}`
 export const inboxHref = (prefix: string): string => `${prefix}/home/approvals?kind=STOCK_ADJUSTMENT`
 export const crViHref = (prefix: string): string => `${prefix}/compliance/settings?tab=cr6`
 export const accountingHref = (prefix: string): string => `${prefix}/finance/accounting`

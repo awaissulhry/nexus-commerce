@@ -221,19 +221,58 @@
   "confirm": {
     "title": "Conferma",
     "description": "Quando si chiede ai fornitori di confermare un ordine e come vengono sollecitati.",
-    "by": "Conferma entro",
-    "byValue": "{hours} ore dall’invio: {days} giorni lavorativi del fornitore, di più sopra i suoi giorni di chiusura.",
-    "byHint": "Chi acquista può chiedere un altro orario all’invio e spostarlo finché l’ordine aspetta. Un’impostazione propria per questo valore arriverà più avanti.",
     "reminders": "Solleciti automatici ai fornitori",
     "on": "Accesi",
     "off": "Spenti",
-    "how": "Se accesi, il giro giornaliero scrive al fornitore che non ha confermato entro la scadenza, poi una volta al giorno, al massimo {most} volte per revisione.",
+    "how": "Se accesi, il giro giornaliero scrive al fornitore che non ha confermato entro la scadenza, poi di nuovo con la cadenza impostata sopra, al massimo {most} volte per revisione.",
     "byHand": "Conta anche un sollecito inviato a mano dall’ordine. Se spenti, chi acquista sollecita a mano.",
     "mails": "Il sollecito ripete il numero dell’ordine e la sua scadenza e allega di nuovo l’ordine; non contiene link (a una risposta del fornitore ne arriva uno nuovo).",
-    "turningOn": "Accendendoli, ogni giorno in cui un ordine aspetta oltre la scadenza parte un’e-mail a fornitori veri. Il salvataggio ti chiede di confermare che sei tu.",
+    "turningOn": "Accendendoli, finché un ordine aspetta oltre la scadenza, e per le sue righe in ritardo, partono e-mail a fornitori veri con la cadenza impostata sopra. Il salvataggio ti chiede di confermare che sei tu.",
     "applyOn": "Accendi",
     "applyOff": "Spegni",
     "failed": "Impossibile caricare la conferma"
+  },
+  "timing": {
+    "title": "Quando si chiede ai fornitori e ogni quanto si sollecitano",
+    "hours": "Conferma entro (ore dall’invio)",
+    "days": "Sollecita e insegui ogni (giorni)",
+    "empty": "Non impostato qui",
+    "followCompany": "Vuoto: questa azienda segue l’impostazione di tutte le aziende.",
+    "followAll": "Vuoto: vale il predefinito.",
+    "inForce": {
+      "hoursDefault": "Ora: {hours} ore dall’invio ({days} giorni lavorativi del fornitore, di più sopra i suoi giorni di chiusura).",
+      "hours": {
+        "COMPANY": "Ora: {hours} ore dall’invio, impostato per questa azienda.",
+        "TENANT": "Ora: {hours} ore dall’invio, impostazione di tutte le aziende.",
+        "DEFAULT": "Ora: {hours} ore dall’invio."
+      },
+      "days": {
+        "COMPANY_one": "Ora: ogni giorno, impostato per questa azienda.",
+        "COMPANY_other": "Ora: ogni {days} giorni, impostato per questa azienda.",
+        "TENANT_one": "Ora: ogni giorno, impostazione di tutte le aziende.",
+        "TENANT_other": "Ora: ogni {days} giorni, impostazione di tutte le aziende.",
+        "DEFAULT_one": "Ora: ogni giorno (il predefinito).",
+        "DEFAULT_other": "Ora: ogni {days} giorni (il predefinito)."
+      }
+    },
+    "chase": {
+      "on_one": "I solleciti automatici sono accesi: il giro giornaliero sollecita il fornitore che non ha confermato e insegue le sue righe in ritardo ogni giorno. Conta anche un sollecito inviato a mano dall’ordine.",
+      "on_other": "I solleciti automatici sono accesi: il giro giornaliero sollecita il fornitore che non ha confermato e insegue le sue righe in ritardo ogni {days} giorni. Conta anche un sollecito inviato a mano dall’ordine.",
+      "off_one": "I solleciti automatici sono spenti: il giro giornaliero non invia né solleciti né inseguimenti. Un sollecito che chi acquista invia a mano dall’ordine parte comunque.",
+      "off_other": "I solleciti automatici sono spenti: il giro giornaliero non invia né solleciti né inseguimenti. Un sollecito che chi acquista invia a mano dall’ordine parte comunque."
+    },
+    "apply": "Salva i tempi",
+    "problem": {
+      "hours": "Scrivi ore intere da {min} a {max}, oppure lascia vuoto.",
+      "days": "Scrivi giorni interi da {min} a {max}, oppure lascia vuoto."
+    },
+    "held": {
+      "noRight": "Solo il titolare decide quando si chiede ai fornitori di confermare e ogni quanto si sollecitano.",
+      "noRightAll": "I tempi di tutte le aziende li imposta solo un ruolo su tutte le aziende.",
+      "offline": "Offline: le modifiche restano su questa pagina finché la connessione non torna.",
+      "busy": "Salvataggio in corso: attendi un momento.",
+      "problem": "Correggi prima i campi."
+    }
   },
   "switch": {
     "on": {
@@ -315,6 +354,7 @@
   },
   "done": {
     "default": "Il valore generale è salvato.",
+    "timing": "La scadenza di conferma e la cadenza dei solleciti sono salvate.",
     "defaultRemoved": "Il valore generale è archiviato: le consegne seguono quanto vale sopra di esso. Si può riattivare dalle regole archiviate.",
     "added": "La regola è aggiunta.",
     "saved": "La regola è salvata.",

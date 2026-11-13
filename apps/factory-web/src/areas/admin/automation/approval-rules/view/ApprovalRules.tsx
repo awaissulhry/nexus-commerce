@@ -164,7 +164,7 @@ function Rules({ model, actions }: { model: ApprovalRulesModel; actions?: Approv
           ) : undefined
         }
       />
-      {model.dialog && <ApprovalRuleDialog key={`${model.dialog.mode}:${model.dialog.rule?.id ?? 'new'}:${model.dialog.rule?.version ?? 0}`} model={model} actions={actions} onClose={() => actions?.onRule?.(null)} />}
+      {model.dialog && <ApprovalRuleDialog key={`${model.dialog.mode}:${model.dialog.rule?.id ?? 'new'}:${model.dialog.rule?.version ?? 0}:${model.dialog.kind ?? ''}`} model={model} actions={actions} onClose={() => actions?.onRule?.(null)} />}
     </div>
   )
 }

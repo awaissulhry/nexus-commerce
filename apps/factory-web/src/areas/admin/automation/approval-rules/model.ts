@@ -45,6 +45,8 @@ export type RuleDialogState = {
   readonly mode: 'new' | 'edit'
   readonly rule: ApprovalRule | null
   readonly draft?: RuleDraft
+  /** B-W2b-382: a new rule's kind chosen by the page that opened it (`&kind=`), when the API lists it. */
+  readonly kind?: string | null
   readonly test: PanelRead<RuleTest> | null
   /** A refusal of the last save (a key of approvals-depth), or null. */
   readonly problem: string | null

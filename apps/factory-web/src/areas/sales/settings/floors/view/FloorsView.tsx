@@ -161,6 +161,8 @@ function Floors({ model, actions }: { model: FloorsModel; actions?: FloorsAction
                 label={t('floors.title')}
                 columns={[t('floors.col.role'), t('floors.col.own'), t('floors.col.inForce')]}
                 align={[undefined, 'right', 'right']}
+                // B-W2b-382 (XF7:04): at phone width each role is a block, so the "Company floor 20.0%" tag stays on its card.
+                stackOnPhone
                 rows={floors.roles.map((role) => {
                   const own = row?.floors?.[role.key]
                   const force = inForce[role.key]

@@ -3,18 +3,21 @@
 import type { ReactNode } from 'react'
 import Link from 'next/link'
 import { BellRing, ExternalLink, Mail } from 'lucide-react'
-import { Card, Field } from '@nexus/ui/components'
+import { Card } from '@nexus/ui/components'
 import { Button, Pill, Skeleton, Toggle } from '@nexus/ui/primitives'
 import { EditModeBar } from '../../../../lib/i18n/ds-parts'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
-import { alertRuleHref, auditHref, buyerAlertsOf, CONFIRM_DAYS, CONFIRM_HOURS, ownSwitchRow, REMINDERS, switchHeld, switchWordsKey } from '../model'
+import { alertRuleHref, auditHref, buyerAlertsOf, ownSwitchRow, REMINDERS, switchHeld, switchWordsKey } from '../model'
+// B-W2b-382 (B-W2b-377's timing): Confirm by and Remind every as fields, the chase in words.
+import { timingDraftOf } from '../timing/model'
+import { TimingSection } from '../timing/view/TimingSection'
 import type { PurchasingSettingsActions, PurchasingSettingsModel } from '../view-model'
 import { CardDescription, CardFailed, NS, ViewOnly } from './parts'
 
 /**
  * sec:confirm — Confirmation (SCM-087; design purchasing.settings "Confirm-by hours and reminders"; follow-up PU2:01): the
- * confirm-by time a send asks by default (48 hours: two of the supplier's open days — fixed in code until a setting holds it,
- * said in words), the Owner's switch for automatic reminders to suppliers (B-W2b-14: OFF by default; ON mails real
+ * confirm-by time a send asks by default and how often the daily run reminds and chases (B-W2b-382: fields on the scope's row,
+ * ../timing; empty follows every company's, else 48 hours over the supplier's open days and every day), the Owner's switch for automatic reminders to suppliers (B-W2b-14: OFF by default; ON mails real
  * suppliers, so it asks a fresh code — "Confirm it's you" —; OFF never asks; EditModeBar, ⌘S), how the daily run reminds,
  * and the buyer's alert (the PO_NOT_CONFIRMED exception rule of Home › Alerts, shown and opened there). No money.
  */
@@ -34,9 +37,10 @@ export function ConfirmationCard({ model, actions, shortcut }: { model: Purchasi
     return (
       <div className="fw-pus-columns">
         <div className="fw-pus-stack">
-          <Field label={t('confirm.by')} hint={t('confirm.byHint')}>
-            <p className="fw-pus-value">{t('confirm.byValue', { hours: CONFIRM_HOURS, days: CONFIRM_DAYS })}</p>
-          </Field>
+          <TimingSection
+            model={{ settings, scope: model.address.scope, draft: model.timingDraft === undefined ? timingDraftOf(settings, model.address.scope) : model.timingDraft, offline: model.live === 'offline', busy: model.busy !== null, shortcut: shortcut && !changed }}
+            actions={actions}
+          />
           <section className="fw-pus-switch" aria-label={t('confirm.reminders')}>
             <div className="fw-pus-switch-row">
               {settings.mayChange ? (

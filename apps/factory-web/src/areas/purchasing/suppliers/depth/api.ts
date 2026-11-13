@@ -145,6 +145,8 @@ const vaultSchema = z.object({
     z.object({
       fileId: z.string(),
       category: z.enum(VAULT_CATEGORIES),
+      /** B-W2b-382 (B-W2b-377): a SUPPLIER_DOCUMENT_TYPE code, null when nobody said what it is. */
+      documentTypeCode: z.string().nullable().optional(),
       name: z.string(),
       issuer: z.string().nullable(),
       number: z.string().nullable(),
