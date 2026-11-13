@@ -237,6 +237,8 @@ model StoredFile {
   // privacy.prisma: the notice language and the DPIA whose PDF it is.
   privacyNoticeTexts PrivacyNoticeText[] @relation("PrivacyNoticeTextFile")
   privacyDpias       PrivacyDpia[]       @relation("PrivacyDpiaFile")
+  // W2b-6 privacy-ops.prisma (schema wave 53/57): the access requests whose package it is.
+  dataRequestPackages DataRequest[] @relation("DataRequestPackage")
   // views.prisma, ops.prisma: the export whose file it is, the restore drill it is the evidence of.
   exportJobs         ExportJob[]
   restoreDrills      RestoreDrill[]
