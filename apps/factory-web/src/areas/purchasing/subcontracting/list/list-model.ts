@@ -205,6 +205,9 @@ export function newOrderBody(draft: NewOrderDraft) {
 
 /** A refused create in this app's words (by its path), else null (the caller falls back to the kind). */
 export function newOrderRefusal(paths: readonly string[], kind: string, message: string, workshopName: string): Words | null {
+  // B-W2b-365: a workshop not approved for the work, or without a valid DURC (the API's refusal codes).
+  if (paths.includes('refusal/NOT_QUALIFIED')) return words('new.refused.notQualified', { workshop: workshopName })
+  if (paths.includes('refusal/NO_VALID_DURC')) return words('new.refused.durc', { workshop: workshopName })
   if (paths.some((path) => /operations[./]\d+[./](pieces|sizes)/.test(path))) return words('new.refused.pieces')
   if (paths.some((path) => path.includes('partyId'))) return words('new.refused.workshop')
   if (paths.some((path) => path.includes('locationId'))) return words('new.refused.location', { workshop: workshopName })

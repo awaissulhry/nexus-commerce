@@ -131,7 +131,7 @@ model PurchaseOrderRevision {
 }
 
 /// One reminder sent to a supplier about a purchase order (SCM-087): CONFIRMATION, when the order is still waiting for
-/// its answer at or after its confirm-by deadline. Written by the reminder's command (the scheduler or the buyer), with
+/// its answer at or after its confirm-by deadline; W2b-6: CHASE, when goods it owes are late or unconfirmed. Written by the reminder's command (the scheduler or the buyer), with
 /// the mail it queued; never changed or removed (the …_supply_w2a_guards triggers, for every login).
 /// @append-only
 model PurchaseOrderReminder {
@@ -166,4 +166,9 @@ model PurchaseOrderReminder {
 enum PurchaseReminderKind {
   /// The supplier has not answered the order by its confirm-by deadline.
   CONFIRMATION
+  /// W2b-6 (schema wave 45/57, B-W2b-363; SCM-087, B-W2b-305): a chase of goods still owed (lines late, unconfirmed or
+  /// confirmed later than needed), while the order waits for goods (SENT, CONFIRMED, CHANGES_PROPOSED, PARTLY_RECEIVED), of
+  /// its current revision; by the buyer, or by the scheduler at Purchasing settings' cadence (mail to suppliers only behind
+  /// the reminder switch, OFF by default).
+  CHASE
 }

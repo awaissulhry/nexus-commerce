@@ -56,6 +56,8 @@ model ReturnAuthorisation {
   /// W2b (schema wave 23, B-W2b-192's need): how the request reached us (the office, the customer's portal or a claim
   /// link: a portal or link request starts REQUESTED), what the customer would like (a replacement, a repair or a credit;
   /// null: not said) and their words (up to 2000 characters). Written when it is made, never changed.
+  /// W2b-6 (schema wave 45/57, B-W2b-363; B-W2b-346): the one change: the office marks a remake asked on an RMA it made
+  /// (outcomeWanted set to REMAKE once, while REQUESTED, AUTHORISED or RECEIVED); a REMAKE wish never changes after.
   channel            ReturnRequestChannel @default(OFFICE)
   outcomeWanted      ReturnOutcomeWanted?
   customerNote       String?
@@ -138,6 +140,9 @@ enum ReturnOutcomeWanted {
   REPAIR
   /// A credit note (the money back).
   CREDIT
+  /// W2b-6 (schema wave 45/57, B-W2b-363; SAL-298, B-W2b-346): the garment made again (a made-to-measure unit that does not
+  /// fit): asked by the portal or a claim link with the fit's words, or marked by the office on its RMA.
+  REMAKE
 }
 
 enum ReturnStatus {

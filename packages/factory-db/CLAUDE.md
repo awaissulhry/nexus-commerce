@@ -235,6 +235,38 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    routing steps its cells are for, as factory-domain's `stepIsFor` reads them (a step only for sizes, colourways or
    options none of its cells has may be left out; every other step stays required); it redefines W2b wave 7's
    `factory_work_order_guard`, the rest of the body word for word):
+   `…_followups_sales_w2b5_guards` (W2b-6 schema wave 45/57, B-W2b-363, the W2b-5 follow-ups for sales, buying and
+   approvals: REMAKE as a return's wish, marked once by the office while the RMA is open; MTM_PHOTO (of a MeasurementProfile)
+   and FITTING_PHOTO (of a FittingResult) PHOTO files, the office's only, with a delete date (`StoredFile.deleteAfter`: only
+   theirs, not before retainUntil, moved but never cleared, fixed once DELETED, still set on a superseded version); a supplier
+   file's document type, an ACTIVE code of the new SUPPLIER_DOCUMENT_TYPE reason list, only on a vault category; option groups
+   that take a COLOUR or a MATERIAL (the line options of a COLOUR group pick no material, of a MATERIAL group no library colour;
+   a group takes one only while none of its options picks the other); PRICE_LIST of a PriceListVersion; quote and timesheet
+   approvals never by the person who asked or the person's own office account (Q3 = A, own triggers `QuoteApproval_not_own`,
+   `TimesheetApproval_not_own`); a receipt line held for a yes, never POSTED while held; the confirm-by 1-720 hours and the
+   reminder cadence 1-30 days; a CHASE only while the order waits for goods, of its current revision; the partner's `iban` is
+   write-only (ownership `writeOnlyColumns`, which db-kit's policySql leaves out of the SELECT grant only; one open IBAN per
+   party stays an API rule: a partial unique broke the isolation copy); a FEE line credited against another order of its company and
+   customer with goods lines, not cancelled, whatever its own order's state, fixed once credited; a reason group's words; it
+   redefines the portal follow-ups' `factory_return_request_check`, wave 18's `factory_stored_file_guard` (`deleteAfter`
+   among a superseded version's moves), wave 44's `factory_generated_document_check` and wave 39's
+   `factory_sales_order_line_guard` (the fee credit changes in any state); it calls recall's `factory_recall_words_ok` and
+   `factory_recall_not_future`):
+   `…_packing_w2b_guards` (W2b-6 schema wave 46/57, B-W2b-364, packing and the shipment queue: packaging types (name,
+   inner size all or none, tare below the maximum weight, a pallet kind exactly on a PALLET, the cost with its currency;
+   company and kind fixed) and defaults per style or size run (one live per company, kind, style and run: a partial unique);
+   carton contents (ParcelLine) written only while the shipment is a DRAFT, the size the line's, no cap while DRAFT but at
+   DRAFT → PACKED each line with contents counted exactly; mark templates (1 to 16 fields each once, an ISO 639-1 language,
+   one live per company and customer or default: a partial unique); holds on a shipment placed only while DRAFT or PACKED
+   (the shipment FOR NO KEY UPDATE), never edited, released once with why, one in force per shipment and reason (a partial
+   unique); while one is in force nothing goes into the shipment's cartons or parcels, no carrier label, no move to PACKED or
+   SHIPPED (`factory_packing_refuse_held`, the shipment FOR SHARE); cut-offs per site, carrier and weekday (HH:MM); its own
+   triggers on Shipment (the split from a DRAFT or PACKED shipment of the same order, given once; the PACKED checks of
+   contents, serials per carton and "n of N"), Parcel (its packaging a CARTON, BOX or PALLET of the shipment's company,
+   ACTIVE; "n of N"; not removed with contents), ShipmentLine (not removed with contents, its size not changed under them)
+   and GarmentSerial (the carton of its line's shipment, set while RELEASED and DRAFT; `GarmentSerial_unpack_carton`, a
+   BEFORE trigger that fires after the guard, clears the carton when the line is cleared); no earlier function redefined;
+   it calls recall's `factory_recall_words_ok` and `factory_recall_not_future`):
    triggers, partial unique indexes and deferred
    constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new
@@ -249,6 +281,9 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
   non-loopback database off Railway. `prisma migrate diff` needs a datasource even with `--from-empty`.
 - Every model is classified (`check-ownership`): kind `tenant` (a `tenantId` column with the standard default, which
   the app never sets) or `platform`. An unclassified model gets no grant and no policy.
+- A role's access may list `writeOnlyColumns` (B-W2b-363): columns it inserts or updates but never reads back (left out of
+  its SELECT grant only, e.g. the partner's `SupplierBankAccount.iban`); a statement of that role naming one in a WHERE or
+  RETURNING is refused, so its code selects the other columns only.
 - The policies are generated, never hand-written: each policy migration holds the whole generated SQL, and the newest
   one must be the last migration and equal the generator (`check-policy-parity`).
 - The history replays from zero, unlike Commerce (`check-migrations-replay`). Never `prisma migrate reset`,

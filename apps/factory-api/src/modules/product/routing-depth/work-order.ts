@@ -12,6 +12,8 @@ import { planSpec, readBasics, readSpecParts, repairSpecOf } from '../../product
 import { stepsForWorkOrder } from '../../production/work-orders/routing-copy'
 import { cellLabel } from '../../production/work-orders/store'
 import { officeWorkOrder } from '../../production/work-orders/work-orders'
+// B-W2b-365: the preview keeps the cells' options, and says them by name.
+import { optionLabelOf, previewCellFacts } from './preview'
 import {
   checkpointViewOf,
   readColourwaysOf,
@@ -61,7 +63,7 @@ export async function getWorkOrderRouting(caller: CommandCaller, workOrderId: st
     const steps: DepthRow[] = revision ? await readDepthSteps(db, revision.id) : []
     const stepBySeq = new Map(steps.map((step) => [step.seq, step]))
     const variantsOf = new Map<string, StepVariants>(steps.map((step) => [step.id, variantsOfRow(step)]))
-    const cellFacts = cells.map((cell) => ({ colourwayId: cell.colourwayId, size: cell.size }))
+    const cellFacts = previewCellFacts(cells) // B-W2b-365
     // As the work order record (W1, B-W2a-46): a DRAFT put on hold keeps its draft spec; nothing is frozen before the release.
     const frozen = header.status !== 'DRAFT' && !(header.status === 'ON_HOLD' && header.heldFromStatus === 'DRAFT')
 
@@ -89,6 +91,7 @@ export async function getWorkOrderRouting(caller: CommandCaller, workOrderId: st
     const extras = await sizeTimesOf(db, usedSteps.map((step) => step.id))
     const colourways = await readColourwaysOf(db, style.id)
     const codeOf = (id: string) => colourways.find((row) => row.id === id)?.code ?? '?'
+    const optionLabel = await optionLabelOf(db, steps) // B-W2b-365
     const sizes = [...new Set(cells.map((cell) => cell.size))].sort((a, b) => style.sizes.indexOf(a) - style.sizes.indexOf(b))
     const libraryInstructions = new Map(
       (await db.operation.findMany({ where: { id: { in: operations.flatMap((op) => (op.operationId ? [op.operationId] : [])) } }, select: { id: true, instructions: true } })).map((row) => [row.id, row.instructions]),
@@ -98,7 +101,7 @@ export async function getWorkOrderRouting(caller: CommandCaller, workOrderId: st
       const step = op.routingSeq === null ? undefined : stepBySeq.get(op.routingSeq)
       const variants = step ? variantsOfRow(step) : null
       const plan = step?.inspectionPlanId ? plans.get(step.inspectionPlanId) : undefined
-      const words = variants ? variantWords(variants, codeOf) : null
+      const words = variants ? variantWords(variants, codeOf, optionLabel) : null
       return {
         id: op.id,
         seq: op.seq,
@@ -153,7 +156,7 @@ export async function getWorkOrderRouting(caller: CommandCaller, workOrderId: st
       cells: cells.map((cell) => ({ id: cell.id, label: cellLabel(cell), colourwayId: cell.colourwayId, size: cell.size, quantity: cell.quantity })),
       operations: rows,
       leftOut: leftOutSteps.map((step) => {
-        const words = variantWords(variantsOfRow(step), codeOf)
+        const words = variantWords(variantsOfRow(step), codeOf, optionLabel)
         return {
           stepId: step.id,
           seq: step.seq,

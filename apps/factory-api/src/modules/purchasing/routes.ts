@@ -98,6 +98,7 @@ import {
 } from './subcontracting/contract'
 import { returnKitLine, sendKit } from './subcontracting/kit'
 import * as subcontracts from './subcontracting/orders'
+import { createOutsourcedOrder } from './subcontract/create-outsourced'
 import { receiveBack } from './subcontracting/receive'
 import { subcontractorStock } from './subcontracting/stock'
 // B-W2a-76: the floor's subcontract kits (./subcontracting/floor).
@@ -366,7 +367,8 @@ export default defineRoutes('purchasing', manifest, async (app) => {
   app.get('/purchasing/subcontracting/stock', { schema: subcontractorStockContract }, async (request) => subcontractorStock(request, request.query))
   // B-W2a-56: the "New subcontract order" dialog's work order picker.
   app.get('/purchasing/subcontracting/work-orders', { schema: workOrderChoicesContract }, async (request) => subcontracts.workOrderChoices(request, request.query))
-  app.post('/purchasing/subcontracting/orders', { schema: createSubcontractContract }, async (request, reply) => reply.code(201).send(await subcontracts.createOrder(request, request.body, idempotencyKeyFrom(request))))
+  // B-W2b-365: made by hand: a qualified workshop, its operations outsourced (./subcontract/create-outsourced).
+  app.post('/purchasing/subcontracting/orders', { schema: createSubcontractContract }, async (request, reply) => reply.code(201).send(await createOutsourcedOrder(request, request.body, idempotencyKeyFrom(request))))
   app.patch('/purchasing/subcontracting/orders/:subcontractOrderId', { schema: updateSubcontractContract }, async (request) => subcontracts.updateOrder(request, request.params.subcontractOrderId, request.body, idempotencyKeyFrom(request)))
   app.post('/purchasing/subcontracting/orders/:subcontractOrderId/operations', { schema: addOperationContract }, async (request, reply) =>
     reply.code(201).send(await subcontracts.addOperation(request, request.params.subcontractOrderId, request.body, idempotencyKeyFrom(request))),

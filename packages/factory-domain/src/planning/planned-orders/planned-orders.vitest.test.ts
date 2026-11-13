@@ -226,6 +226,13 @@ describe('planned work orders from the demand (PLN-067, PLN-069, PLN-089)', () =
     // A workshop that may not get work: the order is made in-house.
     const held = proposeWork({ cells, runDate: '2026-11-12', rule: 'ONE_GRID', groups: [], sizesOf: () => ['48', '50', '52'], outsideOf: () => outsideWorkOf([{ seq: 20, supplierId: 'ws-9', transitDays: 1 }], () => ({ usable: false, why: 'WS-9 is blocked.' })) })
     expect(held.every((row) => row.kind === 'MAKE')).toBe(true)
+    // B-W2b-365: the outside work of the cells each planned order makes: a workshop step only for size 52 goes out with that group only.
+    const forSize52 = (_revisionId: string, mine: readonly { readonly size: string }[]) => (mine.some((cell) => cell.size === '52') ? outsideWorkOf([{ seq: 20, supplierId: 'ws-1', transitDays: 2 }], () => ({ usable: true, why: null })) : null)
+    const bySize = proposeWork({ cells: cells.filter((cell) => cell.line.orderLineId === 'ol-1'), runDate: '2026-11-12', rule: 'SIZE_GROUPS', groups: [['48', '50'], ['52', '54']], sizesOf: () => ['48', '50', '52'], outsideOf: forSize52 })
+    expect(bySize.map((row) => [row.sizeGroup, row.kind, row.operationSeqs.join(',')])).toEqual([
+      ['48-50', 'MAKE', ''],
+      ['52-54', 'SUBCONTRACT', '20'],
+    ])
   })
 
   it('a work order of the demand, the lead time, and what holds a row', () => {

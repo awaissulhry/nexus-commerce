@@ -42,6 +42,7 @@ import { seed as seedNumberingBlocks } from '../seed/numbering-blocks'
 import { seed as seedOps } from '../seed/ops'
 import { seed as seedOptions } from '../seed/options'
 import { seed as seedOutbox } from '../seed/outbox'
+import { seed as seedPacking } from '../seed/packing'
 import { seed as seedParties } from '../seed/parties'
 import { seed as seedPay } from '../seed/pay'
 import { seed as seedPlanning } from '../seed/planning'
@@ -438,6 +439,11 @@ beforeAll(async () => {
   // alteration one opened and a worksheet: the plain ones a copy may repeat.
   await seedMtmOffice({ db: factory, namespace: 'iso-a' })
   await seedMtmOffice({ db: factory, namespace: 'iso-b' })
+  // The packing and shipments schema of W2b-6 (wave 46/57): packaging types and defaults (the first switched off), SH-0002's
+  // carton typed, numbered and marked with its contents (the first row: a DRAFT shipment's), mark templates (the first switched
+  // off), SH-0002's holds (both released) and cut-offs per carrier: the plain ones a copy may repeat.
+  await seedPacking({ db: factory, namespace: 'iso-a' })
+  await seedPacking({ db: factory, namespace: 'iso-b' })
   // Every seed of both tenants: under a full parallel run this takes more than a minute.
 }, 120_000)
 
@@ -485,6 +491,7 @@ it('covers every classified table and every runtime role', () => {
     'Capa',
     'CapaAction',
     'CapaSource',
+    'CarrierCutOff',
     'CauseCode',
     'Certificate',
     'CertificateCoverage',
@@ -695,7 +702,10 @@ it('covers every classified table and every runtime role', () => {
     'OvertimeAgreement',
     'OvertimeEntry',
     'OvertimeRequest',
+    'PackagingDefault',
+    'PackagingType',
     'Parcel',
+    'ParcelLine',
     'PartnerEmailPreference',
     'PartnerNoticeAck',
     'PartnerTask',
@@ -878,7 +888,9 @@ it('covers every classified table and every runtime role', () => {
     'ShipNoticeHide',
     'ShipNoticeLine',
     'Shipment',
+    'ShipmentHold',
     'ShipmentLine',
+    'ShippingMarkTemplate',
     'ShippingSettings',
     'Site',
     'Size',
@@ -988,6 +1000,9 @@ describe.each(classified)('$model.name', ({ model, ownership }) => {
     const privileges = new Set(access?.privileges ?? [])
     const hidden = new Set(access?.hiddenColumns ?? [])
     const visible = model.columns.filter((column) => !hidden.has(column))
+    // B-W2b-363: a write-only column is written (insert, update) but never read back.
+    const writeOnly = new Set(access?.writeOnlyColumns ?? [])
+    const readable = visible.filter((column) => !writeOnly.has(column))
     // The platform role has no tenant: its policies see every row.
     const keys: PolicyKeyName[] = role === PLATFORM_ROLE ? [] : [...WALL, ...((access?.scopedBy ?? []) as PolicyKeyName[])]
     // The values exist only once the seed ran, so they are read inside the tests.
@@ -1061,14 +1076,14 @@ describe.each(classified)('$model.name', ({ model, ownership }) => {
         if (filter.length === 0 && only.length === 0) expect(new Set(seen.map((row) => row.id)).size).toBe((await admin(`SELECT 1 FROM ${table}`)).length)
       })
 
-      if (hidden.size > 0) {
-        it(`cannot read its hidden columns (${[...hidden].join(', ')})`, async () => {
-          for (const column of hidden) await expect(query(role, `SELECT ${q(column)} FROM ${table} LIMIT 1`)).rejects.toThrow(DENIED)
+      if (hidden.size > 0 || writeOnly.size > 0) {
+        it(`cannot read its hidden or write-only columns (${[...hidden, ...writeOnly].join(', ')})`, async () => {
+          for (const column of [...hidden, ...writeOnly]) await expect(query(role, `SELECT ${q(column)} FROM ${table} LIMIT 1`)).rejects.toThrow(DENIED)
           const delegate = (client: FactoryClient) =>
             (client as unknown as Record<string, { findMany: (args?: unknown) => Promise<unknown[]> }>)[model.name[0]!.toLowerCase() + model.name.slice(1)]!
           // Prisma's default select names every column, so a forgotten `select` fails loudly.
           await expect(as(role, (client) => delegate(client).findMany())).rejects.toThrow(DENIED)
-          const rows = await as(role, (client) => delegate(client).findMany({ select: Object.fromEntries(visible.map((column) => [column, true])) }))
+          const rows = await as(role, (client) => delegate(client).findMany({ select: Object.fromEntries(readable.map((column) => [column, true])) }))
           expect(rows.length).toBeGreaterThan(0)
         })
       }
@@ -1094,7 +1109,7 @@ describe.each(classified)('$model.name', ({ model, ownership }) => {
 
     if (privileges.has('update')) {
       it('updates no row outside its scope and cannot move a row out of it', async () => {
-        const column = q(visible.find((name) => name !== pk && !Object.values(keyColumns).includes(name)) ?? pk)
+        const column = q(readable.find((name) => name !== pk && !Object.values(keyColumns).includes(name)) ?? pk)
         const touch = (id: unknown) => execute(role, `UPDATE ${table} SET ${column} = ${column} WHERE ${q(pk)} = $1::uuid`, id)
         const own = await rowOf(inside)
         expect(await touch(own[pk])).toBe(1)

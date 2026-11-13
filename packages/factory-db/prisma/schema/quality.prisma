@@ -394,6 +394,13 @@ model GarmentSerial {
   /// lots, for a recall): a whole-garment bundle of its cell, set when the serial is given and never changed; null: not
   /// known (a serial given before its bundle was).
   bundleId        String?             @db.Uuid
+  /// W2b-6 (schema wave 46/57, B-W2b-364; LOG-003, LOG-007): the carton it was scanned into (a parcel of its shipment
+  /// line's shipment), when, and by whom (the office user or floor worker; null: not recorded); the carton and its time
+  /// both or neither, only with a shipment line. Set and moved while it is RELEASED and the shipment is a DRAFT (with its
+  /// time and packer); cleared with its line (the database clears them when the line is); fixed once SHIPPED.
+  parcelId        String?             @db.Uuid
+  packedAt        DateTime?           @db.Timestamptz(3)
+  packedById      String?             @db.Uuid
   /// VOID: when and why (set exactly then).
   voidedAt        DateTime?           @db.Timestamptz(3)
   voidReason      String?
@@ -408,6 +415,8 @@ model GarmentSerial {
   release       QualityRelease? @relation(fields: [tenantId, siteId, workOrderSizeId, releaseId], references: [tenantId, siteId, workOrderSizeId, id], onDelete: Restrict, onUpdate: Restrict)
   shipmentLine  ShipmentLine?   @relation(fields: [tenantId, siteId, workOrderSizeId, shipmentLineId], references: [tenantId, siteId, workOrderSizeId, id], onDelete: Restrict, onUpdate: Restrict)
   bundle        Bundle?         @relation(fields: [tenantId, siteId, workOrderId, bundleId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b-6 (wave 46/57): the carton it lies in (Restrict, as above).
+  parcel        Parcel?         @relation(fields: [tenantId, siteId, parcelId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   // W2b leather.prisma (wave 12/16): the protector lots it holds.
   protectorLots GarmentProtectorLot[]
   // W2b-5 returns.prisma, service.prisma (wave 43/44): the return lines, repairs, service cases and safety reports of it.
@@ -423,6 +432,8 @@ model GarmentSerial {
   @@index([tenantId, releaseId])
   @@index([tenantId, shipmentLineId])
   @@index([tenantId, bundleId])
+  // W2b-6: a carton's serials.
+  @@index([tenantId, parcelId])
 }
 
 /// MADE → RELEASED → SHIPPED; VOID from MADE; RELEASED → MADE | VOID through a release reversal. VOID is final; SHIPPED

@@ -17,7 +17,8 @@ import { sizeSplitByLevel } from '../lot-sizing/plan-level'
  *   kind         MAKE, or SUBCONTRACT when the revision's routing sends steps to a workshop (RoutingOperation.supplierId,
  *                W2a PRD-120; PLN-069): the first such step's workshop with every step it does (the steps of another
  *                workshop stay its own subcontract orders, made after the release). A workshop that is no ACTIVE
- *                subcontractor is not proposed: the order is MAKE and says why.
+ *                subcontractor is not proposed: the order is MAKE and says why. B-W2b-365: only the steps one of its cells
+ *                is for count (a step only for some sizes, colourways or options; product/routing-depth `stepIsFor`).
  *   life         one row lives across runs (B-W2b-286): a run moves a row of the same key on (the new run, its sizes,
  *                demand and dates), adds the new ones and removes a plain PLANNED one nothing needs any more. A firm
  *                row is never changed by a run (it only moves on to the new run) and its demand counts as covered;
@@ -178,8 +179,11 @@ export function proposeWork(input: {
   readonly groups: readonly (readonly string[])[]
   /** The style's size range (the order of a size run). */
   readonly sizesOf: (styleId: string) => readonly string[]
-  /** The revision's outside work (null: everything in-house). */
-  readonly outsideOf: (revisionId: string) => OutsideWork | null
+  /**
+   * The revision's outside work (null: everything in-house). B-W2b-365: for the cells a planned order makes (a step only for
+   * some sizes, colourways or options goes out only when one of them is one of its cells).
+   */
+  readonly outsideOf: (revisionId: string, cells: readonly OpenCell[]) => OutsideWork | null
 }): Proposal[] {
   const groups = new Map<string, OpenCell[]>()
   for (const cell of input.cells) {
@@ -197,13 +201,14 @@ export function proposeWork(input: {
       return at < 0 ? Number.MAX_SAFE_INTEGER : at
     }
     const sizes = [...new Set(cells.map((cell) => cell.size))].sort((a, b) => order(a) - order(b) || (a < b ? -1 : a > b ? 1 : 0))
-    const outside = input.outsideOf(first.line.revisionId!)
-    const subcontract = outside !== null && outside.usable
     // B-W2b-318 (PLN-008): the finished garments' plan level splits the sizes (../lot-sizing/plan-level); none: the site's rule.
     for (const { codes, words } of sizeSplitByLevel(first.line.planLevel, sizes) ?? sizeGroupsOf(sizes, input.rule, input.groups)) {
       const mine = cells.filter((cell) => codes.includes(cell.size))
       const sizeRun = codes.map((size) => ({ size, quantity: mine.filter((cell) => cell.size === size).reduce((sum, cell) => sum + cell.pieces, 0) })).filter((row) => row.quantity > 0)
       if (sizeRun.length === 0) continue
+      // B-W2b-365: the outside work of the steps these cells get.
+      const outside = input.outsideOf(first.line.revisionId!, mine)
+      const subcontract = outside !== null && outside.usable
       const sizeGroup = words
       const demand = [...mine]
         .sort((a, b) => (a.line.orderNumber < b.line.orderNumber ? -1 : a.line.orderNumber > b.line.orderNumber ? 1 : a.line.lineSeq - b.line.lineSeq || a.sizeIndex - b.sizeIndex))

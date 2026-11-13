@@ -127,6 +127,11 @@ beforeAll(async () => {
     [A.P2, seed.production.operationIds.sew],
   )
   await admin(`ALTER TABLE "RoutingOperation" ENABLE TRIGGER "RoutingOperation_revision_guard"`)
+  // B-W2b-365: an order made by hand goes to a workshop approved for the work: P2 approved for sewing in company A (written as
+  // the owner with the guards off: a decided qualification needs evidence files this test does not upload).
+  await db.admin.query(
+    `SET session_replication_role = replica; INSERT INTO "SupplierQualification" (id, "tenantId", "companyId", "partyId", "workCentreKinds", status, "validFrom", evidence, "decidedAt", "createdAt", "updatedAt") VALUES ('${newId()}', '${A.tenant}', '${A.companyA}', '${A.P2}', '{SEWING}'::"WorkCentreKind"[], 'APPROVED', DATE '2026-01-01', '[{"recordType": "StoredFile", "recordId": "${newId()}"}]'::jsonb, now() - interval '1 hour', now(), now()); SET session_replication_role = origin;`,
+  )
   // Two made-up whole-garment bundles of the work order's first two cells (the seed's bundles carry sleeves only).
   const cells = await admin<{ id: string }>(`SELECT id FROM "WorkOrderSize" WHERE "workOrderId" = $1 ORDER BY id LIMIT 2`, [seed.production.workOrderId])
   for (const [index, cell] of cells.entries()) {
