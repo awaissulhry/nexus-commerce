@@ -1,0 +1,715 @@
+{
+  "common": {
+    "dismiss": "Dismiss",
+    "cancel": "Cancel",
+    "retry": "Try again",
+    "clearFilters": "Clear filters",
+    "working": "Working…",
+    "reading": "Reading…",
+    "you": "You",
+    "nobody": "Nobody",
+    "colleague": "A colleague",
+    "name": "{name}",
+    "atMost": "At most {count} characters.",
+    "copied": "{number} copied",
+    "copyNumber": "Copy number"
+  },
+  "problem": {
+    "signedOut": "You were signed out. Sign in again.",
+    "forbidden": "Your role may not do this.",
+    "stepUp": "Confirm it's you first.",
+    "notFound": "Not found: it may have been removed.",
+    "refused": "The factory refused it as it stands now.",
+    "invalid": "Something in it does not read: check the fields.",
+    "rateLimited": "Too many tries: wait a minute and try again.",
+    "contract": "The answer did not read as expected. Try again.",
+    "unavailable": "The factory did not answer. Check the connection and try again.",
+    "internal": "Something went wrong on our side. Try again.",
+    "stale": "Someone changed this case meanwhile: it was read again. Check it and try once more.",
+    "held": "It cannot be done now:",
+    "fields": "Check these fields:",
+    "duplicate": "That record is linked to this case already."
+  },
+  "held": {
+    "right": "Your role may not do this ({right}).",
+    "offline": "Offline: it waits until the connection is back.",
+    "NO_PERMISSION": "Your role may not do this.",
+    "CLOSED": "The case is closed: it changes no more (open a new case).",
+    "ALREADY_CLOSED": "The case is closed already.",
+    "NOT_NEW": "The case is new: open it first.",
+    "ALREADY": "The case is there already.",
+    "NOT_FROM_HERE": "The case cannot move there from where it is.",
+    "NOT_RESOLVED": "The case is not resolved.",
+    "COVER_UNDECIDED": "A warranty claim is resolved only once its cover is decided (the remedy follows from it).",
+    "NO_CUSTOMER": "The case names no customer of ours: name the customer first.",
+    "NO_CONTACT_EMAIL": "The case names no contact with an e-mail: the status mails go to the customer's contact."
+  },
+  "right": {
+    "sales": {
+      "service": {
+        "manage": "change service cases",
+        "decide": "decide a claim's cover"
+      },
+      "repairs": {
+        "manage": "make repairs"
+      },
+      "returns": {
+        "manage": "make returns"
+      }
+    },
+    "parties": {
+      "view": "see customers"
+    },
+    "threads": {
+      "read": "read a record's conversation"
+    }
+  },
+  "status": {
+    "NEW": "New",
+    "OPEN": "Open",
+    "WAITING_CUSTOMER": "Waiting for the customer",
+    "WAITING_PART": "Waiting for a part",
+    "RESOLVED": "Resolved",
+    "CLOSED": "Closed"
+  },
+  "kind": {
+    "WARRANTY": "Warranty claim",
+    "COMPLAINT": "Complaint",
+    "REPAIR": "Repair request",
+    "QUESTION": "Question",
+    "SAFETY": "Safety"
+  },
+  "channel": {
+    "OFFICE": "At the office",
+    "MAIL": "By mail",
+    "PHONE": "By phone",
+    "PORTAL": "From the portal",
+    "LINK": "From a link"
+  },
+  "wish": {
+    "none": "Not said",
+    "REPAIR": "A repair",
+    "REPLACE": "A replacement",
+    "CREDIT": "A credit",
+    "ANSWER": "An answer"
+  },
+  "priority": {
+    "LOW": "Low",
+    "NORMAL": "Normal",
+    "HIGH": "High",
+    "URGENT": "Urgent"
+  },
+  "cover": {
+    "LEGAL_GUARANTEE": "Legal guarantee",
+    "FACTORY_GUARANTEE": "Factory guarantee",
+    "OUT_OF_COVER": "Out of cover",
+    "UNKNOWN": "To check",
+    "suggested": "Suggested by the check",
+    "noDelivery": "No delivery day yet"
+  },
+  "coverName": {
+    "LEGAL_GUARANTEE": "Under the legal guarantee",
+    "FACTORY_GUARANTEE": "Under the factory guarantee",
+    "NONE": "Out of cover"
+  },
+  "decision": {
+    "COVERED": "Covered",
+    "PARTLY": "Partly covered",
+    "NOT_COVERED": "Not covered"
+  },
+  "view": {
+    "open": "Open",
+    "new": "New",
+    "waitingCustomer": "Waiting for the customer",
+    "waitingPart": "Waiting for a part",
+    "waiting": "Waiting",
+    "mine": "Mine",
+    "closed": "Closed",
+    "all": "All"
+  },
+  "tile": {
+    "new": "New",
+    "waitingCustomer": "Waiting for the customer",
+    "waitingPart": "Waiting for a part",
+    "failed": "Couldn't count",
+    "hint": {
+      "new": "Cases nobody has opened yet",
+      "waitingCustomer": "We wait for the customer's answer or goods",
+      "waitingPart": "We wait for a part to repair"
+    }
+  },
+  "chip": {
+    "label": "Filters",
+    "view": "Rows: {view}",
+    "kind": "Kind: {kind}",
+    "cover": "Cover: {cover}",
+    "serial": "Garment: {serial}",
+    "q": "Search: {q}",
+    "clear": "Remove the filter {what}",
+    "clearAll": "Clear all"
+  },
+  "notice": {
+    "label": "Notices",
+    "more_one": "{count} more notice",
+    "more_other": "{count} more notices",
+    "fewer": "Show one notice",
+    "unknownCover_one": "{count} open case has no delivery day: its cover cannot be told until the day is typed.",
+    "unknownCover_other": "{count} open cases have no delivery day: their cover cannot be told until the day is typed.",
+    "unknownCoverLink": "Show them",
+    "undecided_one": "{count} warranty claim waits for its cover decision: it is resolved only once the cover is decided.",
+    "undecided_other": "{count} warranty claims wait for their cover decision: they are resolved only once the cover is decided.",
+    "undecidedLink": "Show warranty claims",
+    "noCustomer_one": "{count} open case names no customer of ours: a repair or a return needs one.",
+    "noCustomer_other": "{count} open cases name no customer of ours: a repair or a return needs one.",
+    "partial": "These notices count the first {count} cases read: Show more reads the rest."
+  },
+  "list": {
+    "intro": "Warranty claims and service cases by garment or batch: which guarantee applies, said in words, and what the case opened.",
+    "new": "New case",
+    "more": "More",
+    "termsLater": "Warranty terms",
+    "termsLaterHint": "Comes later: the warranty terms per product family.",
+    "failed": "Couldn't load service cases",
+    "noMatch": "No rows match these filters",
+    "noMatchBody": "Clear a filter, or all of them.",
+    "empty": "No service cases yet",
+    "emptyBody": "No cases: a call, a mail or a visit about a garment becomes a case with New case.",
+    "rows": "Rows",
+    "kindLabel": "Kind",
+    "allKinds": "Every kind",
+    "coverLabel": "Cover",
+    "allCovers": "Every cover",
+    "tableLabel": "Service cases",
+    "count_one": "{count} case",
+    "count_other": "{count} cases",
+    "countMore": "The first {count} cases",
+    "countReading": "Reading…",
+    "search": "Number, serial, batch or customer",
+    "copyMany_one": "Copy {count} number",
+    "copyMany_other": "Copy {count} numbers",
+    "copied_one": "{count} number copied",
+    "copied_other": "{count} numbers copied",
+    "showMore": "Show more",
+    "foot": "No amount on a case: a repair's cost and a credit's value are on their own records. Cause codes and the SLA come later."
+  },
+  "noAccess": {
+    "title": "You don't have access to service cases",
+    "body": "Seeing service cases needs the right “See warranty and service cases”: the sales, quality, production and finance roles have it; an administrator can give it in Admin › Roles & permissions."
+  },
+  "col": {
+    "case": "Case",
+    "customer": "Customer or rider",
+    "serial": "Garment serial",
+    "style": "Style",
+    "cover": "Cover",
+    "status": "Status",
+    "opened": "Opened",
+    "owner": "Owner",
+    "kind": "Kind",
+    "more": "Actions"
+  },
+  "row": {
+    "rider": "A rider (no customer of ours)",
+    "riderHint": "Named in the case's words",
+    "batch": "Batch {batch}",
+    "ours": "Ours",
+    "notOurs": "Not ours (as typed)",
+    "noGarment": "No garment named",
+    "size": "size {size}",
+    "menu": "Actions for {number}",
+    "open": "Open",
+    "openNewTab": "Open in a new tab",
+    "makeReturn": "Make RMA…",
+    "makeRepair": "Make repair…",
+    "close": "Close…",
+    "copy": "Copy number"
+  },
+  "keys": {
+    "new": "New case"
+  },
+  "new": {
+    "title": "New case",
+    "subtitle": "A call, a mail or a visit about a garment or a batch.",
+    "go": "Create case",
+    "party": "Customer or rider",
+    "partyHint": "A rider who is no customer of ours: leave it and name them in the words.",
+    "rider": "A rider (no customer of ours)",
+    "customersFailed": "Couldn't read the customers: the case can still be made for a rider.",
+    "contact": "Contact",
+    "contactHint": "Who wrote or called: the status mails go to them.",
+    "noContact": "No contact",
+    "channel": "How it came",
+    "serial": "Serial (scan or type)",
+    "serialHint": "A serial of ours fills the style, size and delivery day.",
+    "scan": "Scan",
+    "batch": "Batch",
+    "batchHint": "When no serial is known: the work order's batch.",
+    "problem": "Problem",
+    "problemHint": "In the customer's words.",
+    "kind": "Kind",
+    "wish": "What the customer wants",
+    "priority": "Priority",
+    "owner": "Owner",
+    "ownersFailed": "Couldn't read who may own it: you own it.",
+    "size": "Size",
+    "previewTitle": "What we know",
+    "previewReading": "Reading what the serial gives…",
+    "previewFailed": "Couldn't read what the serial gives: the case can still be made.",
+    "previewEmpty": "Type or scan a serial, a batch or pick the customer: what we know about the garment and its guarantee shows here.",
+    "notOurs": "{serial} is not a serial of ours: it is kept as typed.",
+    "batchFound_one": "Batch {batch}: made in {workOrder}, {count} delivery to the customer.",
+    "batchFound_other": "Batch {batch}: made in {workOrder}, {count} deliveries to the customer.",
+    "leftFor": "This garment left for {customer}.",
+    "useCustomer": "Name them as the customer",
+    "others_one": "{count} other case is open for this garment: a duplicate?",
+    "others_other": "{count} other cases are open for this garment: a duplicate?"
+  },
+  "suggested": {
+    "LEGAL_GUARANTEE": "The check points to the legal guarantee.",
+    "FACTORY_GUARANTEE": "The check points to the factory guarantee.",
+    "NONE": "The check points to out of cover.",
+    "unknown": "The check cannot tell yet: the delivery day is not known."
+  },
+  "scan": {
+    "title": "Scan the label",
+    "intro": "Hold the garment's label in front of the camera: the serial fills the field.",
+    "video": "The camera",
+    "starting": "Starting the camera…",
+    "noCamera": "No camera here, or it is not allowed: type the serial instead."
+  },
+  "garment": {
+    "title": "The garment",
+    "serial": "Serial",
+    "style": "Style",
+    "colourway": "Colourway",
+    "madeOn": "Made on",
+    "workOrder": "Work order",
+    "batch": "Batch",
+    "shipment": "Shipped",
+    "shippedOn": "{number} on {date}",
+    "notShipped": "Not shipped yet",
+    "deliveries": "Deliveries",
+    "noDeliveries": "None to this customer",
+    "notOurs": "{label} is not a garment or batch of ours.",
+    "none": "No garment named: type its serial or batch on the form.",
+    "photos": "Photos: post them on the case's conversation (Activity)."
+  },
+  "form": {
+    "title": "Case",
+    "readOnly": "Read-only: {why}",
+    "viewOnly": "You can view, not change.",
+    "closedNoteOnly": "The case is closed: only the internal note can still change.",
+    "partyLinked": "Records of this customer are linked: unlink them to change the customer.",
+    "contactNeedsParty": "Name the customer first.",
+    "serialHint": "A new serial of ours fills the style, size and delivery day again.",
+    "deliveredOn": "Delivered on",
+    "deliveredOnHint": "Left empty: from our records (the shipment).",
+    "deliveredSuggested": "Our records say {date}.",
+    "legalEnds": "Legal guarantee ends",
+    "legalEndsHint": "Left empty for a consumer: 2 years from delivery.",
+    "factoryEnds": "Factory guarantee ends",
+    "factoryEndsHint": "From the terms the customer was given.",
+    "notify": "Tell the customer",
+    "notifyLabel": "Send a mail at each status change",
+    "notifyHint": "To {to}, in their language (a test provider until the mail service is connected).",
+    "notifyNeedsEmail": "Needs a contact with an e-mail.",
+    "notifyOn": "Yes, by mail",
+    "notifyOff": "No",
+    "internalNote": "Internal note",
+    "internalNoteHint": "Staff only: never in a mail to the customer.",
+    "resolution": "Resolution",
+    "resolvedOn": "Resolved on {date}",
+    "offlineKept": "Offline: your changes are kept on this page.",
+    "saved": "Case saved.",
+    "problem": {
+      "problemNeeded": "Say what is wrong, in the customer's words.",
+      "oneLine": "One line of at most {count} characters.",
+      "deliveredFuture": "The garment was delivered today or earlier.",
+      "endBeforeDelivery": "A guarantee ends on or after the delivery day.",
+      "notifyNeedsEmail": "The status mails need a contact with an e-mail."
+    }
+  },
+  "check": {
+    "delivery": "Delivery",
+    "deliveredOn": "Delivered on {date}: the guarantees run from that day.",
+    "noDelivery": "The delivery day is not known.",
+    "noDeliveryFix": "Type the delivery day on the Case tab: the guarantees run from it.",
+    "buyer": "The customer",
+    "legal": "Legal guarantee",
+    "presumption": "First year",
+    "factory": "Factory guarantee",
+    "daysLeft_one": "{count} day left",
+    "daysLeft_other": "{count} days left",
+    "lastDay": "today is its last day"
+  },
+  "checkState": {
+    "pass": "Applies",
+    "fail": "No longer",
+    "skipped": "Does not apply",
+    "unknown": "Not known",
+    "warning": "Check"
+  },
+  "buyer": {
+    "CONSUMER": "A consumer we sold to: the legal guarantee of conformity is ours to give.",
+    "BUSINESS": "A business customer: the consumer's legal guarantee is not ours toward them; the contract and the Civil Code's warranty for defects apply.",
+    "NOT_NAMED": "No customer of ours is named: a rider's legal guarantee is owed by the seller who sold them the garment."
+  },
+  "legal": {
+    "RUNS": "Runs until {date}, 2 years from delivery (Directive (EU) 2019/771 art. 10; Codice del Consumo art. 133).",
+    "ENDED": "Ended on {date}.",
+    "UNKNOWN": "A consumer: it runs 2 years from delivery; the delivery day is not known yet.",
+    "NONE_BUSINESS": "Not ours toward a business: the contract and art. 1490-1495 c.c.; a dealer who sold to a consumer may turn to us (right of redress, art. 18).",
+    "NONE_NOT_NAMED": "Owed by the seller who sold the garment, not by us."
+  },
+  "presumption": {
+    "applies": "Within 1 year of delivery (until {date}): the defect is presumed to have existed at delivery; the customer need not prove it (art. 11; Codice del Consumo art. 135).",
+    "past": "More than 1 year after delivery (since {date}): the customer shows the defect existed at delivery.",
+    "unknown": "Within the first year after delivery a defect is presumed to have existed at delivery: the delivery day is not known yet."
+  },
+  "factory": {
+    "RUNS": "Runs until {date}, on the factory's own terms, on top of any legal guarantee (art. 17).",
+    "ENDED": "Ended on {date}.",
+    "NONE": "No factory guarantee is recorded for this garment.",
+    "NONE_FIX": "Type its last day on the Case tab, from the terms the customer was given."
+  },
+  "remedies": {
+    "LEGAL_GUARANTEE": "Under the legal guarantee: a repair or a replacement free of charge, in a reasonable time; when neither is possible or it fails, a price reduction or the end of the contract (art. 13).",
+    "FACTORY_GUARANTEE": "Under the factory guarantee: what its terms give (a repair, a replacement or a credit), on top of any legal guarantee and never in its place.",
+    "NONE": "Out of cover: a repair or a replacement is a paid service or a courtesy; say why in the decision.",
+    "unknown": "The remedies follow the cover: not known until the delivery day is."
+  },
+  "liable": {
+    "CONSUMER": "We sold to this consumer: we answer to them as the seller, for the legal guarantee and for our own.",
+    "BUSINESS": "The seller answers to the consumer; our duty to this business is the contract's (and our own guarantee, when it runs).",
+    "NOT_NAMED": "The seller who sold the garment answers to the rider; we answer for our own guarantee."
+  },
+  "warranty": {
+    "title": "Warranty check",
+    "intro": "Which guarantee applies, and why: the remedies and who answers differ.",
+    "facts": "Dates and what follows",
+    "shipDate": "Ship date",
+    "suggested": "The check points to",
+    "cannotTell": "Cannot tell yet (no delivery day)",
+    "remedies": "Remedies",
+    "liable": "Who answers",
+    "lawyer": "The legal wording is the lawyer's to confirm.",
+    "decision": "Decision",
+    "notDecided": "Not decided.",
+    "notDecidedClaim": "Not decided yet: decide the cover before the claim is resolved.",
+    "resolveNeedsCover": "A warranty claim is resolved only once its cover is decided.",
+    "decidedBy": "Decided by {name}, {when}",
+    "decide": "Decide…",
+    "decideAgain": "Decide again…"
+  },
+  "decide": {
+    "title": "Decide the cover of {number}",
+    "subtitle": "Covered, partly or not covered, under which guarantee, and why: one decision; deciding again replaces it.",
+    "go": "Decide",
+    "cover": "Cover",
+    "coverHint": {
+      "LEGAL_GUARANTEE": "Needs the legal guarantee's last day (a consumer we sold to).",
+      "FACTORY_GUARANTEE": "Needs the factory guarantee's last day.",
+      "NONE": "Not covered: a paid service or a courtesy."
+    },
+    "decision": "Decision",
+    "note": "Why",
+    "noteHint": "In words the customer can check (misuse, wear, a cause after delivery…).",
+    "warnings": "Before you decide",
+    "done": "Cover decided: {decision}.",
+    "problem": {
+      "coveredNeedsGuarantee": "Covered or partly covered: under the legal or the factory guarantee.",
+      "notCoveredIsNone": "Not covered: the cover is out of cover.",
+      "noLegalEnd": "The legal guarantee's last day is not known: type the delivery day (or the last day) on the Case tab first.",
+      "noFactoryEnd": "The factory guarantee's last day is not known: type it on the Case tab first.",
+      "noteNeeded": "Say why, in words."
+    },
+    "warn": {
+      "legalEnded": "The legal guarantee ended on {date}.",
+      "notConsumer": "The customer of this case is not a consumer we sold to: the legal guarantee is the seller's toward the consumer (a dealer's redress).",
+      "factoryEnded": "The factory guarantee ended on {date}.",
+      "refuseWhileLegal": "The legal guarantee runs until {date}: a refusal under it needs a reason the customer can check."
+    }
+  },
+  "linked": {
+    "chain": "The garment's chain",
+    "garment": "Garment",
+    "madeIn": "made in",
+    "batch": "batch {batch}",
+    "order": "The order",
+    "batchOnly": "Batch {batch}, made in {workOrder}.",
+    "noGarment": "No garment of ours named.",
+    "title_one": "{count} linked record",
+    "title_other": "{count} linked records",
+    "link": "Link a record…",
+    "empty": "Nothing linked yet",
+    "emptyBody": "Link an order, a shipment, a return, a repair, an invoice, a complaint or a work order, or open one from Actions.",
+    "hidden": "{type} you may not open",
+    "when": "Linked {when}",
+    "noteWhen": "{note} · {when}",
+    "unlink": "Unlink",
+    "unlinkOne": "Unlink {what}",
+    "via": {
+      "REPAIR": "Repair opened from the case",
+      "RETURN": "Return opened from the case: the goods come back",
+      "REMAKE": "Return opened from the case for a remake",
+      "CREDIT": "Return opened from the case for a credit"
+    }
+  },
+  "linkType": {
+    "SalesOrder": "Order",
+    "Shipment": "Shipment",
+    "ReturnAuthorisation": "Return",
+    "RepairOrder": "Repair",
+    "Invoice": "Invoice or credit note",
+    "Complaint": "Complaint",
+    "WorkOrder": "Work order",
+    "other": "Record"
+  },
+  "link": {
+    "title": "Link a record to {number}",
+    "subtitle": "A record of the case's company and customer that you may see.",
+    "go": "Link",
+    "type": "Record",
+    "number": "Number",
+    "numberHint": "Type part of its number and press Enter.",
+    "find": "Find",
+    "none": "Nothing found with that number.",
+    "found_one": "{count} found",
+    "found_other": "{count} found",
+    "note": "Note (optional)",
+    "noteHint": "One line: why it belongs to the case.",
+    "done": "{number} linked.",
+    "held": {
+      "pick": "Pick the record first.",
+      "already": "Linked to this case already."
+    }
+  },
+  "unlink": {
+    "title": "Unlink {what}?",
+    "body": "{what} stays as it is; only its link to {number} goes.",
+    "go": "Unlink",
+    "done": "Unlinked."
+  },
+  "actions": {
+    "intro": "What the case opens for {customer} and the garment {garment}: each record links back here.",
+    "introNoCustomer": "A repair or a return needs a customer of ours: name the customer on the Case tab first.",
+    "noGarment": "(none named)",
+    "later": "An exchange and a visit come later.",
+    "repair": {
+      "title": "Repair",
+      "creates": "Opens a repair of the garment, with the case's problem: it waits for the goods, or starts now when the customer brought them.",
+      "button": "Make repair…"
+    },
+    "RETURN": {
+      "title": "Return the goods",
+      "creates": "Opens an authorised return (RMA) of the garment: the dock receives it, then each line is decided.",
+      "button": "Make RMA…"
+    },
+    "REMAKE": {
+      "title": "Remake",
+      "creates": "Opens a return with the remake asked: the garment is made again once the line is decided Remake.",
+      "button": "Ask for a remake…"
+    },
+    "CREDIT": {
+      "title": "Credit",
+      "creates": "Opens a return for a credit: credited without the goods (a yes may be asked) or once they arrive.",
+      "button": "Open for a credit…"
+    }
+  },
+  "repair": {
+    "title": "Make a repair from {number}",
+    "go": "Make repair",
+    "kind": "Kind",
+    "kindREPAIR": "Repair",
+    "kindALTERATION": "Alteration",
+    "problem": "Problem",
+    "problemHint": "The case's words; a repair holds 2000 characters.",
+    "work": "Work wanted",
+    "received": "The customer brought the garment now",
+    "done": "Repair {number} opened and linked.",
+    "open": "Open {number}",
+    "held": {
+      "problem": "Say what is wrong."
+    }
+  },
+  "return": {
+    "purpose": "What for",
+    "title": {
+      "RETURN": "Make an RMA from {number}",
+      "REMAKE": "Ask for a remake from {number}",
+      "CREDIT": "Open a return for a credit from {number}"
+    },
+    "go": {
+      "RETURN": "Make RMA",
+      "REMAKE": "Ask for the remake",
+      "CREDIT": "Open for a credit"
+    },
+    "done": {
+      "RETURN": "Return {number} opened and linked.",
+      "REMAKE": "Return {number} opened with the remake asked, and linked.",
+      "CREDIT": "Return {number} opened for a credit, and linked."
+    },
+    "next": {
+      "RETURN": "Next: the dock receives the goods, then the office decides each line.",
+      "REMAKE": "Next: the garment is made again once the line is decided Remake.",
+      "CREDIT": "Next: credit it on the return, without the goods or once they arrive."
+    },
+    "line": "One piece: the garment {serial}, as it left on {number}.",
+    "reason": "Return reason",
+    "pickReason": "Pick a reason",
+    "reasonsFailed": "Couldn't read the return reasons.",
+    "fit": "What is wrong with the fit",
+    "fitHint": "The remake follows these words.",
+    "customerRef": "Customer's reference",
+    "goodsDueBy": "Goods due by",
+    "open": "Open {number}",
+    "held": {
+      "noShipment": "The garment did not leave on a shipment we know: open the return from Returns & repairs with its lines.",
+      "reason": "Pick the return reason.",
+      "fit": "Say what is wrong with the fit."
+    }
+  },
+  "move": {
+    "subtitle": "{from} → {to}",
+    "title": {
+      "open": "Open {number}",
+      "waitCustomer": "{number}: wait for the customer",
+      "waitPart": "{number}: wait for a part",
+      "resume": "Resume {number}",
+      "resolve": "Resolve {number}",
+      "reopen": "Reopen {number}",
+      "close": "Close {number}"
+    },
+    "go": {
+      "open": "Open the case",
+      "waitCustomer": "Wait for the customer",
+      "waitPart": "Wait for a part",
+      "resume": "Resume",
+      "resolve": "Resolve",
+      "reopen": "Reopen",
+      "close": "Close the case"
+    },
+    "resolution": "What was done",
+    "resolutionHint": "In words: the remedy given.",
+    "reason": "Why it closes",
+    "reasonHint": "Closed without a resolution: say why.",
+    "reasonOptional": "Optional: resolved cases close without a reason.",
+    "mailGoes": "A status mail goes to {to}, in their language.",
+    "mailNoContact": "This case tells the customer, but its contact has no e-mail: no mail goes.",
+    "mailWhat": "It says the case number and where the case is now; never the problem, the resolution, the reasons or an amount.",
+    "message": "Words for the customer (optional)",
+    "messageHint": "Added to this status mail.",
+    "notTold": "The customer is not told: status mails are off for this case (Case tab).",
+    "closeLinks_one": "{count} record is linked: it stays as it is.",
+    "closeLinks_other": "{count} records are linked: they stay as they are.",
+    "done": "{number} is now {status}.",
+    "mailSent": "The customer was told: a mail to {to}.",
+    "mailNotSent": {
+      "NO_CONTACT_EMAIL": "No mail went: the case's contact has no e-mail.",
+      "NOT_SENT": "No mail went: the address is blocked or there is no sending address."
+    },
+    "held": {
+      "resolution": "Say what was done.",
+      "reason": "Say why the case closes."
+    }
+  },
+  "band": {
+    "back": "Warranty & service",
+    "more": "More actions",
+    "owner": "Owner: {name}",
+    "opened": "Opened {date}",
+    "tellsCustomer": "Tells the customer",
+    "decide": "Decide the cover…",
+    "move": {
+      "open": "Open the case",
+      "waitCustomer": "Wait for the customer",
+      "waitPart": "Wait for a part",
+      "resume": "Resume",
+      "resolve": "Resolve…",
+      "reopen": "Reopen…",
+      "close": "Close…"
+    }
+  },
+  "tab": {
+    "case": "Case",
+    "warranty": "Warranty check",
+    "linked": "Linked records",
+    "actions": "Actions",
+    "activity": "Activity"
+  },
+  "record": {
+    "offline": "Offline: the last copy, with its time. Changes wait.",
+    "stale": "This case changed at {time} while you were working on it.",
+    "reload": "Read it again",
+    "closedBanner": "Closed on {date} by {name}."
+  },
+  "mails": {
+    "title": "Status-change mails sent to the customer",
+    "on": "This case tells the customer at each status change: mails to {to}.",
+    "onNoContact": "This case tells the customer, but its contact has no e-mail.",
+    "off": "This case does not tell the customer (Case tab › Tell the customer).",
+    "none": "No mail sent yet",
+    "to": "To {to} · {when}"
+  },
+  "mailStatus": {
+    "QUEUED": "Waiting to go",
+    "SENDING": "Sending",
+    "SENT": "Sent",
+    "DELIVERED": "Delivered",
+    "BOUNCED": "Bounced",
+    "COMPLAINED": "Marked as spam",
+    "FAILED": "Failed",
+    "other": "Unknown"
+  },
+  "activity": {
+    "noThread": "The conversation is not shown"
+  },
+  "field": {
+    "companyId": "The company",
+    "kind": "The kind",
+    "channel": "How it came",
+    "partyId": "The customer",
+    "contactId": "The contact (an active contact of this customer)",
+    "serial": "The serial",
+    "batchNumber": "The batch",
+    "size": "The size",
+    "problem": "The problem",
+    "customerWants": "What the customer wants",
+    "priority": "The priority",
+    "ownerId": "The owner (someone whose role follows up these cases)",
+    "deliveredOn": "The delivery day",
+    "legalGuaranteeEndsOn": "The legal guarantee's last day",
+    "factoryGuaranteeEndsOn": "The factory guarantee's last day",
+    "notifyCustomer": "Tell the customer (needs a contact with an e-mail)",
+    "internalNote": "The internal note",
+    "cover": "The cover",
+    "decision": "The decision",
+    "note": "Why",
+    "to": "The status",
+    "resolution": "What was done",
+    "reason": "Why it closes",
+    "message": "The words for the customer",
+    "recordType": "The record",
+    "recordId": "The record (of this company and customer)",
+    "lines": "The lines that come back (the garment did not leave on a shipment we know)",
+    "reasonCode": "The return reason",
+    "fit": "What is wrong with the fit",
+    "siteId": "The site",
+    "workWanted": "The work wanted",
+    "goodsDueBy": "The goods due day",
+    "customerRef": "The customer's reference"
+  },
+  "warning": {
+    "cover": "Check the cover: a guarantee ended, or the customer is not a consumer we sold to.",
+    "decision": "A refusal while the legal guarantee runs needs a reason the customer can check.",
+    "deliveredOn": "Check the delivery day: our records give none, or the batch went out on several days.",
+    "serial": "Check the serial: it was made for another customer, or another case is open for it.",
+    "batchNumber": "Check the batch.",
+    "to": "Linked repairs or returns are still open.",
+    "notifyCustomer": "The status mail did not go.",
+    "lines": "Check the lines that come back.",
+    "contactId": "Check the contact.",
+    "partyId": "Check the customer.",
+    "other": "The factory added a note: check the case."
+  }
+}

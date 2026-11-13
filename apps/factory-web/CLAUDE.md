@@ -311,6 +311,16 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   the record panels; Make quote, Assign, Ask for more information, Decline with an optional message through the thread, Mark as lost), New
   inquiry (`c`) and "Make an inquiry" from a mail (`?mail=`: Mail to sort can link there). Row verbs are held before the click with
   factory-domain's own refusals (model.ts). `RECORD_PAGES.Inquiry` opens the full page; search type `Inquiry`.
+- `src/areas/sales/service/` — Sales › After-sales › Warranty & service (B-W2b-353 on B-W2b-345's API; SCR-217
+  `/sales/service?view=&kind=&cover=&serial=&q=&new=1`, SCR-413 the case `/sales/service/<id>?tab=case|warranty|linked|actions|activity&do=`;
+  catalogue `sales-service`, CSS prefix `fw-svc-`): tiles = the API's `view` (a tile's chip in the filter row; "—" when not counted), the
+  notices from the rows read (no delivery day, a cover to decide, no customer; dismissed by value), the list frame (colIds = the export
+  source's columns; Copy N numbers + Export N), New case (`c`: the serial scanned by the camera — `camera.ts`, the Office's own ZXing lines —
+  or typed, the preview read while typing, the customer the garment left for offered, never set). The case: the band's ONE primary per status
+  (`primaryOf`: open, decide a warranty claim's cover, resolve, resume, close), Case = EditModeBar, Warranty check = the check said in our
+  words from its states and dates (`warrantyLines`, never the API's English) + Decide, Linked records (the garment's chain + links; Link… by
+  number through the order/return/repair lists or the global search), Actions (repair, return, remake, credit: ONE command each), Activity =
+  the record panels + the status mails. `RECORD_PAGES.ServiceCase` opens the case; search type `ServiceCase`.
 - `src/areas/sales/orders/` — Sales › Orders (SCR-038 list + board by state, SCR-039 the order studio): `api.ts` (every
   call: orders, the deposit's page and payment, an invoice's SDI state and send, the settlement, the order's work
   orders), `model.ts` (saved rows ⇄ address = the API's own filters `?late=true` `?deposit=OPEN` `?status=` `?rows=all`,
