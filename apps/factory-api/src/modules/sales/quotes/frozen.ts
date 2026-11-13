@@ -1,6 +1,7 @@
 import type { FactoryClient, Prisma } from '@nexus/factory-db'
 import { businessDate } from '@nexus/factory-domain/core/time'
 import type { DocumentLanguage } from '@nexus/factory-domain/documents/model'
+import type { PrintedOption } from '@nexus/factory-domain/documents/options-block'
 import { priceBasisOf, priceText, discountOf, type DepositKind, type QuoteStatus, type QuoteVersionStatus } from '@nexus/factory-domain/sales/quotes/quotes'
 import type { CustomerLine, CustomerQuote, CustomerVat } from '@nexus/factory-domain/sales/quotes/document'
 import type { BillToSnapshot, ShipToSnapshot } from '@nexus/factory-domain/sales/quotes/send'
@@ -132,6 +133,8 @@ export interface CustomerQuoteInput {
   readonly depositDueDays?: number | undefined
   /** B-W2b-325 (SAL-170): false when the version's price list shows only net prices (no list price, no discount); default true. */
   readonly showDiscount?: boolean | undefined
+  /** B-W2b-374 (XF3:03): the lines' options as printed, by line id (configurator/printed.ts quoteLinesPrinted). */
+  readonly options?: ReadonlyMap<string, readonly PrintedOption[]> | undefined
 }
 
 /**
@@ -161,6 +164,8 @@ export function customerQuoteOf(input: CustomerQuoteInput): CustomerQuote {
       vatRatePct: line.vatRatePct.toFixed(2),
       vatNature: line.vatNature,
       sizes,
+      // B-W2b-374: left out when the line has none (the PDF and the link page print them).
+      ...(input.options?.get(line.id)?.length ? { options: input.options.get(line.id)! } : {}),
     }
   })
   const first = input.lines[0]

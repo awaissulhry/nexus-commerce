@@ -320,6 +320,7 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   drawer's section `options` (order 20, `QuoteLineOptions`, one entry in lines-depth/drawer-sections.tsx); the order's Lines: an "Options"
   button per colour line (`orders/record/configurator/OrderLineOptions.tsx`, a Modal, through OrderRecordModel `lineOptions`); Products ›
   Options & rules: "Test a combination" (`products/options/upkeep/`, SCR-426, through OptionsViewModel `bench`).
+- B-W2b-374 options follow-ups (catalogue `options-followups`, words `src/lib/options-followups/words.tsx`): SCR-432 what a value takes (`areas/products/options/takes/`, the group record's `takes` slot), SCR-433 a typed line's Options (`areas/sales/_shared/options-entry/NewLineOptions`, LinesEditor's `newLineOptions` slot on New order and Amend), the order line's artwork Show / Take out of the portal (`_shared/options-entry/PortalShare` in the configurator), SCR-434 the portal's Options and artwork (`portal/customer/orders/options/`, OrderRecordViewModel's `options` slot); the paste's Options column; the quote link page's `optionsText`.
 - `src/areas/sales/service/` — Sales › After-sales › Warranty & service (B-W2b-353 on B-W2b-345's API; SCR-217
   `/sales/service?view=&kind=&cover=&serial=&q=&new=1`, SCR-413 the case `/sales/service/<id>?tab=case|warranty|linked|actions|activity&do=`;
   catalogue `sales-service`, CSS prefix `fw-svc-`): tiles = the API's `view` (a tile's chip in the filter row; "—" when not counted), the

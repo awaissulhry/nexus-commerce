@@ -26,7 +26,7 @@ import { orderLineProblems } from '../line-checks/documents'
 import { decideTreatment, type SheetCache } from '../quotes/pricing'
 import { quoteRulesFor } from '../quotes/rules'
 import { partySnapshotsOf } from '../quotes/send'
-import { quotePartyOf, type QuoteParty } from '../quotes/store'
+import { quotePartyOf, storedVat, type QuoteParty } from '../quotes/store'
 import { withCompanyTerms } from '../../parties/company-terms/in-force'
 import { assertOrderMayBeTaken } from '../../parties/holds/stops'
 import { termsForParty } from '../terms/terms'
@@ -45,6 +45,8 @@ import { askOrderApproval, planOrderApproval } from '../orders-depth/approval'
 import { assertOpenSeason } from '../seasons/store'
 // B-W2b-360 (SAL-353): a remake order's made-to-measure units wait for the factory review like any unit.
 import { mtmOrderPlan } from '../mtm/order-gate'
+// B-W2b-374 (XF3:02): a typed line's options.
+import { assertMayTakeOptions, entryOptionsAudit, planEntryOptions, writeEntryOptions, type EntryOptions } from './lines/options-entry'
 
 /** B-W2b-360: a line of a manual order made as a made-to-measure unit (the remake order of a return, modules/sales/fittings). */
 export interface ManualUnit {
@@ -113,6 +115,8 @@ export interface ManualPlan {
   readonly requestedDate: BusinessDate | null
   readonly promiseDate: BusinessDate | null
   readonly internalNote: string | null
+  /** B-W2b-374 (XF3:02): the options of each line by its seq (already in its price), written when the order is made. */
+  readonly options?: ReadonlyMap<number, EntryOptions>
 }
 
 /** The order as it would be made, or the problems in words (by path). A party that cannot be quoted is a 409. */
@@ -172,10 +176,21 @@ export async function planManualOrder(db: Reader, body: ManualOrderBody, now: Da
   const chain = await chainForQuote(db, { companyId: company.id }, { currency: company.currency, priceListVersionId: null }, party, now, [...new Set(body.lines.map((line) => line.styleId))])
   const cache: SheetCache = new Map()
   const drafts: LineDraft[] = []
+  // B-W2b-374 (XF3:02): a line's options, checked and added to its price (written when the order is made).
+  const options = new Map<number, EntryOptions>()
+  const optionsCtx = { companyId: company.id, currency: company.currency, basis: priceBasisOf(taxMode), vatRatePct: storedVat(treatment).vatNature === null ? storedVat(treatment).vatRatePct : null }
   for (const [index, line] of body.lines.slice(0, MAX_QUOTE_LINES).entries()) {
     const draft = await newLineDraft(db, { companyId: company.id, taxMode, party, chain, cache, now }, line, (index + 1) * 10, `body/lines/${index}`)
-    if (isIssueList(draft)) issues.push(...draft)
-    else drafts.push(draft)
+    if (isIssueList(draft)) {
+      issues.push(...draft)
+      continue
+    }
+    const entry = await planEntryOptions(db, optionsCtx, draft, line.options, `body/lines/${index}/options`)
+    if (isIssueList(entry)) issues.push(...entry)
+    else {
+      drafts.push(entry.draft)
+      if (entry.options) options.set(entry.draft.seq, entry.options)
+    }
   }
   // B-W2b-325 (SAL-178): an office order below a BLOCK minimum order quantity (sales/line-checks) is refused in words (said
   // beside the other problems once every line reads).
@@ -206,6 +221,7 @@ export async function planManualOrder(db: Reader, body: ManualOrderBody, now: Da
     requestedDate: body.requestedDate ?? null,
     promiseDate: body.promiseDate ?? null,
     internalNote: blankToNull(body.internalNote),
+    options,
   }
 }
 
@@ -227,7 +243,7 @@ export async function nextOrderNumber(caller: CommandCaller, companyId: string):
   return caller.withClient(async (client) => ({ number: await nextNumberOf(client, companyId, businessDate(serverClock.now())) }))
 }
 
-const linesView = (priced: PricedLines) =>
+const linesView = (priced: PricedLines, options?: ReadonlyMap<number, EntryOptions>) =>
   priced.lines.map((line) => ({
     seq: line.seq,
     styleId: line.styleId,
@@ -242,6 +258,8 @@ const linesView = (priced: PricedLines) =>
     vatRatePct: line.vatRatePct,
     vatNature: line.vatNature,
     costAmount: asMoney('cost', line.costAmount),
+    // B-W2b-374: what the line's options add a piece (net; already in its price), null: none.
+    optionsAdd: asMoney('price', options?.get(line.seq)?.addsNet ?? null),
   }))
 
 /**
@@ -278,7 +296,7 @@ export async function previewManualOrder(caller: CommandCaller, body: ManualOrde
         vatAmount: asMoney('price', plan.priced.vatAmount),
         grossAmount: asMoney('price', plan.priced.grossAmount),
         costAmount: asMoney('cost', plan.priced.costAmount),
-        lines: linesView(plan.priced),
+        lines: linesView(plan.priced, plan.options),
         schedule: schedule.map((step) => ({ seq: step.seq, kind: step.kind, sharePct: step.sharePct, amount: asMoney('price', step.amount), dueDate: step.kind === 'DEPOSIT' ? null : step.dueDate })),
       },
     }
@@ -327,6 +345,9 @@ export async function makeManualOrderInCommand(tools: CommandTools, body: Manual
     ? await planOrderApproval(tools, { ...(options.requesterId !== undefined ? { requesterId: options.requesterId } : {}), companyId: body.companyId, shape: { currency: plan.currency, netAmount: plan.priced.netAmount, customerCode: plan.party.row.code, priorityLevel: priority.priorityLevel, fromQuote: false, lines: plan.priced.lines.map((line) => ({ kind: 'SIZE_GRID', quantity: line.quantity, unitPrice: line.unitPrice, priceSteps: null })) } })
     : null
   if (approval?.waits) status = 'PENDING_APPROVAL'
+  // B-W2b-374 (XF3:02): options only on an order made CONFIRMED (the database's states), else refused in words.
+  const lineOptions = plan.options ?? new Map<number, EntryOptions>()
+  assertMayTakeOptions(status, lineOptions.size)
   // B-W2b-360 (SAL-353): a line named in `options.units` is a made-to-measure unit on its revision (one piece of its base size, no
   // size row); its order waits (PENDING_APPROVAL) while a unit's measures wait for the factory review (B-W2b-358's rule).
   const unitOf = (index: number): ManualUnit | null => options.units?.[index] ?? null
@@ -367,8 +388,10 @@ export async function makeManualOrderInCommand(tools: CommandTools, body: Manual
     },
     select: { id: true },
   })
+  const optionsWritten: { lineId: string; options: EntryOptions }[] = []
   for (const [index, line] of plan.priced.lines.entries()) {
     const lineId = newId()
+    if (lineOptions.has(line.seq)) optionsWritten.push({ lineId, options: lineOptions.get(line.seq)! })
     await tx.salesOrderLine.create({
       data: {
         id: lineId,
@@ -398,6 +421,8 @@ export async function makeManualOrderInCommand(tools: CommandTools, body: Manual
     // B-W2b-360: a made-to-measure unit has no size rows (the database's size guard).
     if (!unitOf(index)) await tx.salesOrderLineSize.createMany({ data: line.sizes.map((size) => ({ id: newId(), lineId, partyId: plan.party.row.id, size: size.size, quantity: size.quantity, unitPrice: size.unitPrice, ...stamp })) })
   }
+  // B-W2b-374 (XF3:02): the lines' options, as the order line's configurator would keep them.
+  const optionLineIds = await writeEntryOptions(tools, plan.party.row.id, optionsWritten)
   // The deposit (B-W1-24's rules: its legal kind and fiscal decision), named on the order: no quote version.
   let deposit: { id: string; amount: number; dueDate: Date; depositPct: Prisma.Decimal | null } | null = null
   let depositFiscal: 'TD02' | 'NONE' | null = null
@@ -461,8 +486,11 @@ export async function makeManualOrderInCommand(tools: CommandTools, body: Manual
       netAmount: markMoney('price', plan.priced.netAmount),
       grossAmount: markMoney('price', plan.priced.grossAmount),
       costAmount: markMoney('cost', plan.priced.costAmount),
+      // B-W2b-374
+      ...(optionsWritten.length > 0 ? { options: entryOptionsAudit(optionsWritten) } : {}),
     },
   })
+  if (optionLineIds.length > 0) tools.emit({ type: 'sales_order.options_changed', subject: id, companyId: body.companyId, payload: { orderId: id, number: number.formatted, lineIds: optionLineIds, change: 'CHOSEN' } })
   tools.emit({ type: 'sales_order.created', subject: id, companyId: body.companyId, payload: { orderId: id, number: number.formatted, quoteId: null, versionId: null, partyId: plan.party.row.id, depositRequestIds: deposit ? [deposit.id] : [] } })
   // B-W2b-16: the typed order's deposit gets its own event (the quote's deposit_request.created needs a quote version).
   if (deposit) {

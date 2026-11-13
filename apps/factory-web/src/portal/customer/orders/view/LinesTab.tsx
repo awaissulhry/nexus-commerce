@@ -116,6 +116,7 @@ export function LinesTab({ model, record, actions }: { model: OrderRecordViewMod
           </Disclosure>
         ))}
       </section>
+      {model.options /* B-W2b-374: the lines' options and artwork */}
       {totals ? (
         <Card header={t('totals.title')} headingLevel={2}>
           <SummaryTable

@@ -1,6 +1,8 @@
 import { z } from 'zod'
 import type { ApiClient } from '../../../lib/api/client'
 import { newIdempotencyKey } from '../../../lib/api/client'
+// B-W2b-374: a typed line's options.
+import type { PickBody } from '../quotes/record/configurator/api'
 
 /**
  * Every call of the sales order screens (SCR-038 list and board, SCR-039 the order studio), with the answer's shape
@@ -415,6 +417,8 @@ export interface NewLineInput {
   colourwayId: string
   sizes: SizeInput[]
   unitPrice?: string | null
+  /** B-W2b-374 (XF3:02): the options chosen with the line (their surcharges join its price). */
+  options?: PickBody[]
 }
 
 export interface ManualOrderBody {
@@ -447,6 +451,8 @@ const previewLineSchema = z.object({
   vatRatePct: z.string(),
   vatNature: z.string().nullable(),
   costAmount: z.number().nullable().optional(),
+  /** B-W2b-374: what the line's options add a piece (net; already in its unit price); null: none. */
+  optionsAdd: z.string().nullable().optional(),
 })
 export type PreviewLine = z.infer<typeof previewLineSchema>
 

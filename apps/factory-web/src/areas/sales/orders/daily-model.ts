@@ -16,6 +16,8 @@ import type {
   PathIssue,
 } from './api'
 import { isFinal, type OrderAbilities, type Phrase, type Tone } from './model'
+// B-W2b-374: a new line's options.
+import type { PickBody } from '../quotes/record/configurator/api'
 
 /**
  * The order studio every day (B-W2a-50; screens on the API of B-W2a-30), pure: the band's daily verbs and why each
@@ -136,6 +138,8 @@ export interface DraftLine {
   price: string
   /** Closed short or made to measure: kept as it is (shown, never edited). */
   locked: boolean
+  /** B-W2b-374 (XF3:02): a new line's options, chosen in its Options dialog (sent with the line). */
+  options?: PickBody[]
 }
 
 export const newKey = (styleId: string, colourwayId: string): string => `new:${styleId}:${colourwayId}`
@@ -261,7 +265,7 @@ export function amendPairs(lines: readonly DraftLine[], order: Pick<Order, 'line
     }
     if (piecesOf(line) === 0) continue
     const price = parsePrice(line.price)
-    out.push({ draft: line, input: { styleId: line.styleId, colourwayId: line.colourwayId, sizes: sizeInputs(line), ...(price !== null ? { unitPrice: price } : {}) } })
+    out.push({ draft: line, input: { styleId: line.styleId, colourwayId: line.colourwayId, sizes: sizeInputs(line), ...(price !== null ? { unitPrice: price } : {}), ...(line.options?.length ? { options: line.options } : {}) } })
   }
   return out
 }
@@ -275,7 +279,7 @@ export function manualLines(lines: readonly DraftLine[]): NewLineInput[] {
     .filter((line) => piecesOf(line) > 0)
     .map((line) => {
       const price = parsePrice(line.price)
-      return { styleId: line.styleId, colourwayId: line.colourwayId, sizes: sizeInputs(line), ...(price !== null ? { unitPrice: price } : {}) }
+      return { styleId: line.styleId, colourwayId: line.colourwayId, sizes: sizeInputs(line), ...(price !== null ? { unitPrice: price } : {}), ...(line.options?.length ? { options: line.options } : {}) }
     })
 }
 
@@ -306,7 +310,7 @@ export function reviewHeld(lines: readonly DraftLine[], order: Pick<Order, 'line
 
 // ---- the API's refusals, by their place, in this app's words ---------------------------------------------------------------
 
-const LINE_FIELDS: Record<string, string> = { sizes: 'sizes', quantity: 'sizes', unitPrice: 'price', colourwayId: 'catalogue', styleId: 'catalogue', id: 'moved', description: 'text', note: 'text' }
+const LINE_FIELDS: Record<string, string> = { sizes: 'sizes', quantity: 'sizes', unitPrice: 'price', colourwayId: 'catalogue', styleId: 'catalogue', id: 'moved', description: 'text', note: 'text', /* B-W2b-374 */ options: 'options' }
 const HEADER_FIELDS: Record<string, string> = {
   reason: 'reason',
   partyId: 'party',

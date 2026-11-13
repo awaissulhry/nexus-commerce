@@ -2,6 +2,7 @@ import type { CurrencyCode, MinorUnits } from '../../core/money'
 import type { BusinessDate } from '../../core/time'
 import { currencySign, formatDate, formatDateTime, formatUnitPrice } from '../../documents/format'
 import type { DocumentInput, DocumentLanguage, DocumentLine } from '../../documents/model'
+import type { PrintedOption } from '../../documents/options-block'
 import type { PartyTaxMode } from '../../parties/tax'
 import { decimalText, roundTo } from '../../product/units/units'
 import type { PriceBasis } from '../../tax/vat-summary'
@@ -43,6 +44,8 @@ export interface CustomerLine {
   readonly vatRatePct: string
   readonly vatNature: string | null
   readonly sizes: readonly CustomerSize[]
+  /** B-W2b-374 (XF3:03): the options chosen on the line, as printed; left out when none (the link page shows them too). */
+  readonly options?: readonly PrintedOption[]
 }
 
 export interface CustomerVat {
@@ -103,6 +106,8 @@ export function quoteDocument(quote: CustomerQuote): Omit<DocumentInput, 'compan
     unitPrice: line.unitPrice,
     discountPercent: line.discountPct === null ? null : decimalText(roundTo(line.discountPct, { scale: 2, rounding: 'HALF_UP' })),
     amountMinor: lineAmountOf(line, quote.priceBasis),
+    // B-W2b-374: printed after the description (layout QUOTE/2).
+    options: line.options ?? null,
   }))
   return {
     type: 'QUOTE',

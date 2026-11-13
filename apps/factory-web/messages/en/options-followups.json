@@ -1,0 +1,103 @@
+{
+  "common": {
+    "loading": "Loading…",
+    "retry": "Try again",
+    "offline": "You are offline: this waits until the connection is back.",
+    "unknown": "Something went wrong. Try again."
+  },
+  "takes": {
+    "title": "What a chosen value takes",
+    "hint": "Decides which picker the configurator offers with a value of this group.",
+    "label": "A value of this group takes",
+    "none": "A colour or a material",
+    "noneHint": "Both pickers are offered (as before).",
+    "colour": "A colour of the colour library",
+    "colourHint": "A panel's colour: only the colour picker is offered.",
+    "material": "A material and its colour",
+    "materialHint": "Leather by article and colour: only the material picker is offered.",
+    "picking": "Chosen on quotes and orders: {colours} with a library colour, {materials} with a material.",
+    "save": "Save",
+    "discard": "Discard",
+    "saved": "Saved: the configurator now offers what the group takes.",
+    "held": {
+      "unchanged": "Nothing changed yet.",
+      "busy": "Saving…",
+      "offline": "You are offline: try again once the connection is back.",
+      "materials": "{count} chosen options pick a material: change them first.",
+      "colours": "{count} chosen options pick a library colour: change them first."
+    },
+    "problem": {
+      "load": "The group could not be read.",
+      "stale": "Someone changed this group meanwhile: read it again, then save.",
+      "refused": "Not saved: chosen options still pick the other kind. Change them first."
+    }
+  },
+  "entry": {
+    "button": "Options",
+    "buttonCount": "Options · {count}",
+    "title": "Options of {style} · {colour}",
+    "hint": "Chosen now, taken by the line when the order is confirmed: what they add joins the line's price.",
+    "empty": "This style offers no options.",
+    "picks": "Takes {picks}",
+    "text": "Text for {value}",
+    "textHint": "Up to {max} characters.",
+    "colour": "Panel colour",
+    "material": "Material",
+    "materialColour": "Material colour",
+    "none": "None",
+    "default": "Default",
+    "outside": "Outside the certificate",
+    "use": "Use these options",
+    "cancel": "Cancel",
+    "clear": "No options",
+    "check": {
+      "checking": "Checking the combination…",
+      "ok": "Allowed: the style's rules are kept.",
+      "blocks": "Not allowed",
+      "warnings": "Read before selling",
+      "failed": "The combination could not be checked: try again."
+    },
+    "held": {
+      "checking": "The combination is being checked.",
+      "refused": "This combination is not allowed: change it first.",
+      "text": "Type the text the chosen value asks.",
+      "offline": "You are offline: the combination is checked once the connection is back."
+    },
+    "problem": {
+      "load": "This style's options could not be read.",
+      "hidden": "You may not read this style's options."
+    }
+  },
+  "share": {
+    "shown": "In the portal",
+    "show": "Show in the portal",
+    "hide": "Take out of the portal",
+    "held": "Only the people who manage this order show its artwork in the portal."
+  },
+  "portal": {
+    "title": "Options and artwork",
+    "line": "Line {seq}",
+    "options": "Options",
+    "artwork": "Artwork",
+    "noArtwork": "No artwork shown for this line.",
+    "open": "Open",
+    "download": "Download",
+    "picture": "Picture",
+    "document": "PDF",
+    "empty": "No line of this order has options or artwork.",
+    "loading": "Loading the options…",
+    "problem": "The options could not be read.",
+    "openProblem": "The file could not be opened. Try again.",
+    "preview": "Office preview: opening a file is the customer's."
+  },
+  "pasteOptions": {
+    "column": "The Options column is read: each new line takes the values it names (GROUP:VALUE, a text after =).",
+    "left": {
+      "option": "Row {row}: an option it names is not one the style offers.",
+      "ambiguous": "Row {row}: an option is in more than one group: write it as GROUP:VALUE.",
+      "twice": "Row {row}: an option is written twice.",
+      "refused": "Row {row}: the options were left out (the style's rules refuse them): choose them in the line's Options.",
+      "kept": "Row {row}: a line already on the quote keeps its options: change them in its Options."
+    }
+  }
+}

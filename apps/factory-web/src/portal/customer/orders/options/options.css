@@ -1,0 +1,72 @@
+/*
+ * The options and artwork of the customer's order (SCR-434; B-W2b-374). Layout only, semantic --nds-* tokens; the parts are
+ * the design system's (Card, Banner, Button). No max-width: the lines fill the tab; two cards side by side on a wide screen.
+ */
+.fw-popt {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-popt-h2 {
+  margin: 0;
+  font-size: var(--nds-font-size-lg);
+}
+
+.fw-popt-h3 {
+  margin: 0 0 var(--nds-space-4);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+
+.fw-popt-hint {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-popt-lines {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  gap: var(--nds-space-12);
+}
+
+.fw-popt-line {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+}
+
+.fw-popt-list,
+.fw-popt-files {
+  margin: 0;
+  padding-left: var(--nds-space-16);
+}
+
+.fw-popt-files {
+  list-style: none;
+  padding-left: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-popt-file {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-popt-name {
+  overflow-wrap: anywhere;
+  font-weight: var(--nds-font-weight-medium, 500);
+}
+
+.fw-popt-actions {
+  display: inline-flex;
+  gap: var(--nds-space-4);
+  margin-left: auto;
+}

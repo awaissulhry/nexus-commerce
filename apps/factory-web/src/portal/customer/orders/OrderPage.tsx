@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createElement, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { failureWords } from '@nexus/factory-domain/payments/online/rules'
 import { newIdempotencyKey } from '../../../lib/api/client'
@@ -72,6 +72,8 @@ import {
 import { Closed } from './OrdersPage'
 import { OrderRecordView, type OrderDialog, type OrderRecordViewModel } from './view/OrderRecordView'
 import { useOrderWords } from './words'
+// B-W2b-374: the lines' options and artwork.
+import { PortalLineOptions } from './options/PortalLineOptions'
 
 /**
  * `/p/<party>/orders/<id>?tab=status|lines|shipments|documents|messages&line=` for a customer (B-W2b-191; design
@@ -663,6 +665,8 @@ function OrderContainer({ id }: { id: string }) {
         shipments,
         documents,
         fileHeld,
+        // B-W2b-374 (XF3:04): the lines' options and the artwork the office shows here.
+        options: record ? createElement(PortalLineOptions, { api, orderId: id, fileHeld, refreshKey: loadedAt ?? '' }) : null,
         openLine,
         copied,
         // B-W2b-170

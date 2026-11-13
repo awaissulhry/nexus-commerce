@@ -33,6 +33,8 @@ export type OrderDialog =
   | { kind: 'preview'; model: PreviewModel }
 
 export interface OrderRecordViewModel {
+  /** B-W2b-374 (XF3:04): the lines' options and artwork (OrderPage mounts PortalLineOptions), drawn on the Lines tab. */
+  options?: ReactNode
   state: 'loading' | 'error' | 'missing' | 'ready'
   record: OrderRecord | null
   tab: RecordTab

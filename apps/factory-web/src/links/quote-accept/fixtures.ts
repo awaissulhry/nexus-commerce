@@ -47,7 +47,7 @@ function linkQuote(overrides: Omit<Partial<LinkQuote>, 'quote'> & { quote?: Part
       billTo: { legalName: 'Squadra Corse Fittizia S.r.l.', address: { line1: 'Via Esempio 1', postalCode: '20100', city: 'Milano', province: 'MI', country: 'IT' } },
       shipTo: { name: 'Magazzino', line1: 'Via Fittizia 22', postalCode: '20900', city: 'Monza', province: 'MB', country: 'IT' },
       lines: [
-        { seq: 10, code: 'DEMO-JKT-01-BLK', description: 'DEMO-JKT-01 Giacca pelle demo — Nero', note: null, quantity: 8, unitPrice: '450', discountPct: null, netAmount: 360000, vatAmount: 79200, vatRatePct: '22.00', vatNature: null, sizesText: '50×2 · 52×4 · 54×2' },
+        { seq: 10, code: 'DEMO-JKT-01-BLK', description: 'DEMO-JKT-01 Giacca pelle demo — Nero', note: null, quantity: 8, unitPrice: '450', discountPct: null, netAmount: 360000, vatAmount: 79200, vatRatePct: '22.00', vatNature: null, sizesText: '50×2 · 52×4 · 54×2', optionsText: 'Opzioni: Imbottitura termica: Imbottitura removibile; Nome sul petto: Nome ricamato «ROSSI»' },
         { seq: 20, code: 'DEMO-JKT-01-RED', description: 'DEMO-JKT-01 Giacca pelle demo — Rosso', note: 'Logo ricamato sul petto', quantity: 6, unitPrice: '440', discountPct: null, netAmount: 264000, vatAmount: 58080, vatRatePct: '22.00', vatNature: null, sizesText: '50×1 · 52×3 · 54×2' },
       ],
       totals: { net: 624000, vat: [{ rate: '22.00', nature: null, taxable: 624000, vat: 137280 }], gross: 761280 },
