@@ -187,6 +187,10 @@ describe('refusals in words, addresses, the CSV, the new work order', () => {
     expect(writeProblem(booked('scheduleSlots/WORKING/s1', 'scheduleSlots/WORKING/s2'))).toEqual({ key: 'error.scheduled', params: { count: 2 } })
     expect(writeProblem(booked('scheduleSlots/WORKING/s1', 'scheduleSlots/PUBLISHED/s2'))).toEqual({ key: 'error.scheduledPublished' })
     expect(releaseRefusalCodes(booked('scheduleSlots/WORKING/s1'))).toEqual([])
+    // B-W2b-F36: the board's record names one (alone, or beside a bar that books it): no Send back to the tray helps.
+    expect(writeProblem(booked('scheduleChanges/c1'))).toEqual({ key: 'error.scheduledRecorded' })
+    expect(writeProblem(booked('scheduleSlots/WORKING/s1', 'scheduleChanges/c1'))).toEqual({ key: 'error.scheduledRecorded' })
+    expect(releaseRefusalCodes(booked('scheduleChanges/c1'))).toEqual([])
   })
   it("the list's address: its own view, or the API list's query (Today's See all)", () => {
     const params = (query: string) => new URLSearchParams(query)
