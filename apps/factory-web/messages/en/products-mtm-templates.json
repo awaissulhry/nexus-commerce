@@ -1,0 +1,340 @@
+{
+  "common": {
+    "back": "Back",
+    "dismiss": "Dismiss",
+    "retry": "Try again"
+  },
+  "col": {
+    "code": "Garment type",
+    "type": "Product type",
+    "points": "Points",
+    "used": "Used by styles and rider profiles",
+    "mtm": "Made-to-measure",
+    "status": "Status",
+    "more": "Actions"
+  },
+  "csv": {
+    "code": "Garment type",
+    "name": "Name",
+    "type": "Product type",
+    "points": "Points",
+    "mtm": "Made-to-measure",
+    "status": "Status"
+  },
+  "type": {
+    "JACKET": "Jacket",
+    "TROUSERS": "Trousers",
+    "SUIT": "Suit",
+    "GLOVES": "Gloves",
+    "VEST": "Vest",
+    "OTHER": "Other"
+  },
+  "status": {
+    "ACTIVE": "Active",
+    "ARCHIVED": "Archived"
+  },
+  "view": {
+    "open": "Active",
+    "archived": "Archived",
+    "all": "All"
+  },
+  "unit": {
+    "CM": "cm",
+    "MM": "mm"
+  },
+  "tab": {
+    "points": "Points",
+    "mtm": "Made-to-measure",
+    "whereused": "Where used"
+  },
+  "kind": {
+    "ORDER": "Order of two points",
+    "RATIO": "Ratio of two points",
+    "RANGE": "Range of one point"
+  },
+  "severity": {
+    "BLOCK": "Blocks",
+    "WARN": "Warns"
+  },
+  "mtm": {
+    "on": "On",
+    "off": "Off",
+    "title": "Made-to-measure for {code}",
+    "start": "Start made-to-measure",
+    "stop": "Stop made-to-measure",
+    "offBody": "Off: nothing of this template is checked, no made-to-measure unit of {code} is quoted or ordered and no fitting is booked for it. The riders' measures are still kept.",
+    "onBody": "On: the measures of {code} are checked against the rules below while they are typed and sent; made-to-measure units and fittings may be made.",
+    "offOwner": "Made-to-measure is built switched off per template: you start it here when the first made-to-measure order of this garment type comes.",
+    "offOthers": "Made-to-measure is built switched off per template: only the Owner starts it (the right to start made-to-measure). Ask the Owner when the first made-to-measure order of this garment type comes.",
+    "reading": "Reading the made-to-measure rules…",
+    "failed": "Could not read the made-to-measure rules",
+    "rulesTitle": "What it checks once started",
+    "noRules": "No rule yet: once started only the plausible ranges of the points are asked again.",
+    "rulesCount_one": "{count} rule in force ({blocking} blocking)",
+    "rulesCount_other": "{count} rules in force ({blocking} blocking)",
+    "archivedRule": "Not checked",
+    "twoPoints": "{point} and {other}",
+    "editLater": "The rules are shown here as they stand; changing them on this page is not available yet.",
+    "factsTitle": "Base size and limits",
+    "baseSize": "Base size suggested from",
+    "baseSizeFrom": "{points} (a tie takes the larger size)",
+    "baseSizeFromSmaller": "{points} (a tie takes the smaller size)",
+    "noBaseSize": "No base size rule: the base size is typed",
+    "limits": "Alteration limits",
+    "limitsCount_one": "On {count} point",
+    "limitsCount_other": "On {count} points",
+    "tolerances": "Inspection tolerances",
+    "tolerancesCount_one": "On {count} point",
+    "tolerancesCount_other": "On {count} points",
+    "styles": "Styles",
+    "done": {
+      "on": "Made-to-measure started for {code}.",
+      "off": "Made-to-measure stopped for {code}: nothing of it is checked now."
+    }
+  },
+  "switch": {
+    "titleOn": "Start made-to-measure for {code}?",
+    "titleOff": "Stop made-to-measure for {code}?",
+    "on1": "The measures of {code} are checked against its rules from now on (the rider's link and the office's form).",
+    "on2": "Made-to-measure units of styles measured with {code} may be quoted and ordered, and fittings booked.",
+    "on3": "It can be stopped again here; what was made meanwhile stays.",
+    "off1": "Nothing of {code} is checked any more: no rule, no base size suggestion, no alteration limit.",
+    "off2": "No new made-to-measure unit of {code} is quoted or ordered and no fitting is booked; a booked one may still be cancelled.",
+    "off3": "The riders' measures and the units already made stay as they are.",
+    "reason": "Why (kept in the history)",
+    "reasonHint": "For example: the first made-to-measure order of this garment type."
+  },
+  "held": {
+    "noManage": "Changing measurement templates needs the right to keep the style library (product library).",
+    "noSwitch": "Only the Owner starts or stops made-to-measure (the right to start made-to-measure).",
+    "archivedOn": "An archived template is not started: restore it first.",
+    "archived": "The template is archived: restore it to change it.",
+    "notEditable": "This template cannot be changed by you: it belongs to another company.",
+    "alreadyArchived": "The template is archived already.",
+    "alreadyActive": "The template is active already.",
+    "rulesOn": "Its made-to-measure is on: the Owner stops it first.",
+    "stylesUse_one": "{count} style is measured with it: give it another template first.",
+    "stylesUse_other": "{count} styles are measured with it: give them another template first.",
+    "busy": "Working…"
+  },
+  "list": {
+    "intro": "Which body measures are taken per garment type for made-to-measure, in measuring order. Made-to-measure is started per template.",
+    "new": "New template",
+    "keyNew": "New template",
+    "tableLabel": "Measurement templates",
+    "search": "Search code or name",
+    "viewFilter": "Saved view",
+    "activeFilters": "Filters in use",
+    "removeFilter": "Remove filter",
+    "chipSearch": "Search: {q}",
+    "clearAll": "Clear all",
+    "count_one": "{count} template",
+    "count_other": "{count} templates",
+    "countMore_one": "First {count} template",
+    "countMore_other": "First {count} templates",
+    "more": "Show more",
+    "moreHint": "The first 200 templates are shown: narrow the search to find the others.",
+    "points_one": "{count} point",
+    "points_other": "{count} points",
+    "required_one": "{count} required",
+    "required_other": "{count} required",
+    "styles_one": "{count} style, {mtm} made to measure",
+    "styles_other": "{count} styles, {mtm} made to measure",
+    "profiles_one": "{count} rider profile revision",
+    "profiles_other": "{count} rider profile revisions",
+    "factsFailed": "Could not read how it is used",
+    "mtmOnHint": "Its measures are checked",
+    "mtmOffHint": "Nothing is checked; started per template",
+    "export_one": "Export {count}",
+    "export_other": "Export {count}",
+    "open": "Open",
+    "openNewTab": "Open in a new tab",
+    "openMtm": "Made-to-measure",
+    "openUsed": "Where used",
+    "openRiders": "Riders measured for it",
+    "copyCode": "Copy code",
+    "rowMenu": "Actions for {code}",
+    "failed": "Could not load the measurement templates",
+    "noMatch": {
+      "title": "No templates match these filters",
+      "body": "Remove a filter or clear them all."
+    },
+    "empty": {
+      "title": "No measurement templates yet",
+      "body": "A template names the body measures a fitter takes for one garment type. Create the first one.",
+      "bodyView": "A template names the body measures a fitter takes for one garment type. The product library's keepers create them."
+    },
+    "forbidden": {
+      "title": "You don't have access to measurement templates",
+      "body": "Reading them needs the right to see the style library (product developers, sales, the production manager)."
+    }
+  },
+  "new": {
+    "title": "New measurement template",
+    "intro": "One template per garment type: the points a fitter measures, in order. Made-to-measure starts switched off on it.",
+    "company": "Kept by",
+    "companyHint": "Every company's, or one company's own.",
+    "everyCompany": "Every company",
+    "code": "Garment type code",
+    "codeHint": "Capital letters, digits, _ and - (\"JACKET\", \"RACE_SUIT\"). It stays once a rider is measured for it.",
+    "name": "Name",
+    "type": "Product type",
+    "typeHint": "The kind of garment its styles are.",
+    "typePick": "Pick a type",
+    "start": "Its points start",
+    "startBlank": "Blank",
+    "startCopy": "A copy of a template",
+    "copyFrom": "Copy the points of",
+    "copyPick": "Pick a template",
+    "copyHint": "Its active points are copied: codes, names, units, ranges, how to measure.",
+    "copyCount_one": "{count} point will be copied",
+    "copyCount_other": "{count} points will be copied",
+    "firstCode": "First point's code",
+    "firstCodeHint": "Letters, digits, _ . and - (\"chest\", \"back_length\").",
+    "firstName": "First point's name",
+    "create": "Create",
+    "after": "The template opens next: add its points there.",
+    "refused": "Refused: check this field.",
+    "held": {
+      "code": "Type the garment type code: capital letters, digits, _ and -.",
+      "taken": "{code} is a template already: pick another code.",
+      "name": "Type its name.",
+      "type": "Pick its product type.",
+      "copyFrom": "Pick the template to copy.",
+      "copyFailed": "Could not read that template's points: pick it again.",
+      "copyReading": "Reading that template's points…",
+      "copyEmpty": "That template has no active point to copy.",
+      "firstCode": "Type the first point's code: letters, digits, _ . and -.",
+      "firstName": "Type the first point's name."
+    }
+  },
+  "point": {
+    "unit": "Unit",
+    "problem": {
+      "code": "Letters, digits, _ . and -, no spaces.",
+      "twice": "{code} is in the list twice: each point once.",
+      "name": "Type its name.",
+      "tooLong": "At most {max} characters.",
+      "number": "A number of 0 or more with at most 2 decimals.",
+      "order": "The lowest is not above the highest.",
+      "refused": "Refused: check this point."
+    }
+  },
+  "points": {
+    "title": "Points",
+    "intro_one": "{count} point in measuring order, {required} required.",
+    "intro_other": "{count} points in measuring order, {required} required.",
+    "empty": "Add the first point.",
+    "noWords": "No words per language",
+    "col": {
+      "order": "#",
+      "code": "Code",
+      "name": "Name",
+      "unit": "Unit",
+      "range": "Plausible min–max",
+      "required": "Required",
+      "howTo": "How to measure"
+    },
+    "requiredYes": "Required",
+    "requiredNo": "Optional",
+    "requiredLabel": "Measured on every revision",
+    "archived_one": "{count} archived point (kept, no longer measured): {codes}",
+    "archived_other": "{count} archived points (kept, no longer measured): {codes}",
+    "preview": "Preview as the fitter's form",
+    "previewHeld": "The template has no point to preview.",
+    "edit": "Edit points",
+    "editIntro": "The list is saved whole in its order. A point taken out is archived (kept, no longer measured), never deleted; a kept point keeps its code.",
+    "newPoint": "New point",
+    "new": "New",
+    "codeHint": "Letters, digits, _ . and -.",
+    "codeKept": "A kept point keeps its code.",
+    "name": "Name",
+    "nameIt": "Name in Italian",
+    "nameEn": "Name in English",
+    "min": "Plausible min",
+    "max": "Plausible max",
+    "up": "Move {code} up",
+    "down": "Move {code} down",
+    "remove": "Take {code} out",
+    "first": "It is the first.",
+    "last": "It is the last.",
+    "drop": "Remove",
+    "archive": "Archive",
+    "add": "Add a point",
+    "putBack": "Put {code} back",
+    "leaving_one": "Saving archives {count} point: {codes} (kept, no longer measured).",
+    "leaving_other": "Saving archives {count} points: {codes} (kept, no longer measured).",
+    "save": "Save points",
+    "done": "Points saved."
+  },
+  "edit": {
+    "held": {
+      "none": "A template keeps at least one point.",
+      "tooMany": "At most {max} points.",
+      "problems_one": "{count} point needs a fix first.",
+      "problems_other": "{count} points need a fix first.",
+      "unchanged": "Nothing changed yet."
+    }
+  },
+  "preview": {
+    "title": "{code} as the fitter sees it",
+    "subtitle": "Type values to try it: nothing is saved.",
+    "clear": "Clear",
+    "close": "Close"
+  },
+  "record": {
+    "back": "Measurement templates",
+    "more": "More actions",
+    "rename": "Rename…",
+    "archive": "Archive",
+    "restore": "Restore",
+    "ownCompany": "One company's",
+    "everyCompany": "Every company's",
+    "changed": "Someone changed this template meanwhile.",
+    "reload": "Reload",
+    "archivedBanner": "Archived: kept with its riders' measures, not offered for new styles."
+  },
+  "rename": {
+    "title": "Rename {code}",
+    "hint": "The code stays; only the name changes.",
+    "save": "Save name",
+    "done": "Name saved."
+  },
+  "move": {
+    "archiveTitle": "Archive {code}?",
+    "restoreTitle": "Restore {code}?",
+    "archive1": "It is kept with its points; {profiles} rider profile revisions measured for it stay readable.",
+    "archive2": "It is no longer offered for new styles; restore it to use it again.",
+    "restore1": "It is offered for styles again; made-to-measure stays off until the Owner starts it.",
+    "archived": "Template archived.",
+    "restored": "Template restored."
+  },
+  "used": {
+    "title": "Where used",
+    "empty": "Not used yet",
+    "emptyBody": "No style is measured with {code} and no rider was measured for it.",
+    "styles": "Styles measured with it",
+    "stylesValue_one": "{count} style, {mtm} made to measure",
+    "stylesValue_other": "{count} styles, {mtm} made to measure",
+    "profiles": "Rider profiles",
+    "profilesValue_one": "{count} revision measured for it",
+    "profilesValue_other": "{count} revisions measured for it",
+    "kept": "A style names its template on its record; a rider's profile keeps the garment type it was measured for.",
+    "openRiders": "Riders measured for {code} in Sales › Made-to-measure"
+  },
+  "problem": {
+    "unavailable": "The factory server did not answer: try again in a moment.",
+    "forbidden": "Your role does not open this.",
+    "forbiddenWrite": "Your role does not allow this change.",
+    "notFound": "This template is not here any more.",
+    "rateLimited": "Too many tries: wait a moment.",
+    "contract": "The answer was not what this page expects: reload the page.",
+    "internal": "Something went wrong on our side: try again.",
+    "invalid": "The change was refused as it is: check it.",
+    "fields": "Some fields were refused: they are marked.",
+    "moved": "Someone changed it meanwhile: it was read again, check and repeat your change.",
+    "codeTaken": "That code is a template already: pick another one.",
+    "state": "It cannot change in the state it is in now: it was read again.",
+    "rulesNeedPoints": "Its made-to-measure rules still need these points as they are: change the rules first."
+  }
+}

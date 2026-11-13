@@ -17,7 +17,8 @@ import { SizesDepthView } from './view/SizesDepthView'
  * keeps the view, its filters (`?status=&q=&kind=&scale=`), the open rule (`?open=<id>`) and New (`?new=1`). The size
  * scales (no `view`, or `?view=open|archived|all`) stay SizesPage's own container.
  */
-export function SizesDepth({ library }: { library: Exclude<Library, 'scales'> }) {
+// B-W2b-362: the templates view has its own container (../templates/TemplatesList.tsx).
+export function SizesDepth({ library }: { library: Exclude<Library, 'scales' | 'templates'> }) {
   return (
     <WithMessages namespaces={['products-sizes-depth']}>
       <Container library={library} />
@@ -25,7 +26,7 @@ export function SizesDepth({ library }: { library: Exclude<Library, 'scales'> })
   )
 }
 
-function Container({ library }: { library: Exclude<Library, 'scales'> }) {
+function Container({ library }: { library: Exclude<Library, 'scales' | /* B-W2b-362 */ 'templates'> }) {
   const t = useT('products-sizes-depth')
   const api = useOfficeApi()
   const session = useOfficeSession()

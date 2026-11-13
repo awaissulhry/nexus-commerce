@@ -141,6 +141,10 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/sales/orders/new',
   // B-W2b-323: the order confirmation PDF (a new tab, no navigation row).
   '/sales/orders/[id]/confirmation',
+  // B-W2b-362: Sales › Special orders › Made-to-measure (SCR-036), a rider profile (SCR-036-record), its worksheet PDF (SCR-431, a new tab).
+  '/sales/made-to-measure',
+  '/sales/made-to-measure/[id]',
+  '/sales/made-to-measure/[id]/worksheet',
   // B-W2a-49: Sales › Pricing › Price lists & contracts (SCR-106) and a price list.
   '/sales/price-lists',
   '/sales/price-lists/[listId]',
@@ -214,6 +218,8 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/products/operations/[id]',
   '/products/sizes',
   '/products/sizes/[id]',
+  // B-W2b-362: Products › Sizes & measurements › a measurement template (SCR-049-template; the list is the page's `?view=templates`).
+  '/products/sizes/templates/[id]',
   // B-W2b-247: Products › Libraries › Colours & artwork (SCR-118), the colour library and the brands' branding sets.
   '/products/colours',
   // B-W2b-242: Products › Libraries › Options & rules (SCR-114) and an option group (SCR-114-record).

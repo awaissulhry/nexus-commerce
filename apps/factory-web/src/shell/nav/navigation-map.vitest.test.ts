@@ -75,7 +75,8 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
     const early = OFFICE.flatMap((area) => area.groups.flatMap((group) => group.pages.filter((page) => page.early).map((page) => page.id)))
     expect(early).toEqual(['plant.settings', 'admin.overview'])
     const deferred = OFFICE.flatMap((area) => area.groups.flatMap((group) => group.pages.filter((page) => page.deferred).map((page) => page.id)))
-    expect(deferred).toEqual(['sales.mtm'])
+    // B-W2b-362: Sales › Made-to-measure is built (Owner 11-10 Q1 = A): no page is deferred any more.
+    expect(deferred).toEqual([])
   })
 
   it('every row\'s page is built and opens (OFFICE_PAGES); every built page has its one place in the map', () => {
@@ -112,6 +113,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/sales/inquiries': 'sales.inquiries.view', // GET /sales/inquiries (B-W2b-322)
       '/sales/quotes': 'quotes.view', // GET /sales/quotes
       '/sales/orders': 'orders.view', // GET /sales/orders
+      '/sales/made-to-measure': 'sales.measurements.view', // GET /sales/mtm/profiles (B-W2b-358; B-W2b-362)
       '/sales/price-lists': 'pricelists.view', // GET /sales/price-lists (B-W2a-49)
       '/sales/returns': 'sales.returns.view', // GET /sales/returns (+ GET /sales/repairs with sales.repairs.view) (B-W2a-77)
       '/sales/service': 'sales.service.view', // GET /sales/service/cases (B-W2b-353)
@@ -295,6 +297,8 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/sales/inquiries',
       '/sales/quotes',
       '/sales/orders',
+      // B-W2b-362: Sales › Special orders › Made-to-measure (sales.measurements.view).
+      '/sales/made-to-measure',
       '/sales/returns',
       // B-W2b-353: Sales › After-sales › Warranty & service.
       '/sales/service',
@@ -343,20 +347,21 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
   // Approvals, automation & AI (the approval rules), each row behind its page's own read (the role templates as they stand; a
   // template change that adds or removes one of these reads changes this table on purpose).
   it('the W2b-5 rows per role: Sales, Planning, Purchasing, Warehouse, Home › Approvals, Admin › Approval rules', () => {
-    const allSales = ['customers', 'inquiries', 'quotes', 'orders', 'returns', 'service', 'price-lists', 'reports', 'settings']
+    // B-W2b-362: Special orders › Made-to-measure after Orders (sales.measurements.view: owner, sales, production manager, admin).
+    const allSales = ['customers', 'inquiries', 'quotes', 'orders', /* B-W2b-362 */ 'made-to-measure', 'returns', 'service', 'price-lists', 'reports', 'settings']
     const allPlanning = ['mrp', 'leather', 'board', 'capacity', 'allocation', 'exceptions', 'promise', 'milestones', 'demand', 'mps', 'reports', 'settings']
     const allPurchasing = ['suppliers', 'requests', 'orders', 'subcontracting', 'sourcing', 'claims', 'reports', 'settings']
     const allWarehouse = ['stock', 'hides', 'lots', 'moves', 'receipts', 'picking', 'transfers', 'counts', 'shipments', 'reports', 'locations', 'shipping', 'settings']
     const without = (all: string[], ...gone: string[]) => all.filter((page) => !gone.includes(page))
     const expected: Record<string, { sales: string[]; planning: string[]; purchasing: string[]; warehouse: string[]; approvals: boolean; rules: boolean }> = {
       owner: { sales: allSales, planning: allPlanning, purchasing: allPurchasing, warehouse: allWarehouse, approvals: true, rules: true },
-      read_only: { sales: allSales, planning: allPlanning, purchasing: allPurchasing, warehouse: allWarehouse, approvals: true, rules: false },
+      read_only: { sales: without(allSales, /* B-W2b-362: body data, not the reader's */ 'made-to-measure'), planning: allPlanning, purchasing: allPurchasing, warehouse: allWarehouse, approvals: true, rules: false },
       sales: { sales: allSales, planning: ['promise'], purchasing: ['suppliers', 'requests'], warehouse: ['shipments'], approvals: true, rules: false },
       planner: { sales: ['orders'], planning: allPlanning, purchasing: without(allPurchasing, 'suppliers'), warehouse: without(allWarehouse, 'counts', 'shipping'), approvals: true, rules: false },
       buyer: { sales: ['customers'], planning: without(allPlanning, 'promise'), purchasing: allPurchasing, warehouse: without(allWarehouse, 'counts', 'shipments', 'shipping'), approvals: true, rules: false },
       warehouse: { sales: ['customers', 'orders', 'returns'], planning: [], purchasing: allPurchasing, warehouse: allWarehouse, approvals: true, rules: false },
-      finance: { sales: without(allSales, 'inquiries'), planning: [], purchasing: ['suppliers', 'requests', 'reports'], warehouse: without(allWarehouse, 'shipping'), approvals: true, rules: false },
-      production_manager: { sales: ['customers', 'orders', 'returns', 'service', 'reports'], planning: allPlanning, purchasing: ['suppliers', 'requests', 'reports'], warehouse: without(allWarehouse, 'counts', 'shipping'), approvals: true, rules: true },
+      finance: { sales: without(allSales, 'inquiries', /* B-W2b-362 */ 'made-to-measure'), planning: [], purchasing: ['suppliers', 'requests', 'reports'], warehouse: without(allWarehouse, 'shipping'), approvals: true, rules: false },
+      production_manager: { sales: ['customers', 'orders', /* B-W2b-362: the factory review */ 'made-to-measure', 'returns', 'service', 'reports'], planning: allPlanning, purchasing: ['suppliers', 'requests', 'reports'], warehouse: without(allWarehouse, 'counts', 'shipping'), approvals: true, rules: true },
       quality_inspector: { sales: ['customers', 'returns', 'service'], planning: [], purchasing: ['suppliers', 'requests'], warehouse: without(allWarehouse, 'counts', 'reports', 'shipping'), approvals: true, rules: false },
       floor_supervisor: { sales: [], planning: [], purchasing: ['requests'], warehouse: ['stock', 'hides', 'lots', 'moves', 'receipts', 'picking', 'transfers', 'locations', 'settings'], approvals: true, rules: false },
     }

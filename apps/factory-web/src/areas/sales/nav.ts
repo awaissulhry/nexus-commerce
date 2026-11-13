@@ -2,6 +2,8 @@ import { ClipboardList, Contact, FileText, Handshake, Inbox, LifeBuoy, Settings,
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 // B-W2b-348: the Reports section's icon.
 import { BarChart3 } from 'lucide-react'
+// B-W2b-362: the Special orders section's icon.
+import { Ruler } from 'lucide-react'
 
 /**
  * Sales (design 01 area 2 "Sales / Vendite", group Main with no label). Labels are message keys (`shell:` =
@@ -32,6 +34,13 @@ export const officeArea: OfficeAreaNav = {
           // SCR-038 / SCR-039 (B-W1-25): orders from accepted quotes, the board by state, the order studio with the deposit.
           { id: 'sales-orders', label: 'shell:nav.sales.orders', href: '/sales/orders', icon: ClipboardList, permission: 'orders.view' },
         ],
+      },
+      // B-W2b-362: Special orders › Made-to-measure (SCR-036, a rider profile SCR-036-record): rider measurement profiles, the
+      // factory review, fittings, proofs, the worksheet (B-W1-18, deferred on 10-28; built switched off per template, GATE-MTM).
+      {
+        id: 'sales-special',
+        label: 'shell:nav.sales.specialOrders',
+        items: [{ id: 'sales-mtm', label: 'shell:nav.sales.mtm', href: '/sales/made-to-measure', icon: Ruler, permission: 'sales.measurements.view' }],
       },
       // SCR-111 / SCR-112 (B-W2a-77): After-sales › Returns & repairs — customer returns (RMAs) and repairs in one grid.
       {

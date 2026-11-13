@@ -14,6 +14,8 @@ import { SizesListView, type NewScaleModel, type SizesListViewModel } from './vi
 import { depthSearch, libraryOf, NO_DEPTH_FILTERS } from './depth/model'
 import { SizesDepth } from './depth/SizesDepth'
 import { useLibraryImport } from './depth/use-library-import'
+// B-W2b-362: Measurement templates (B-W1-17), the second view.
+import { TemplatesList } from './templates/TemplatesList'
 
 const filtersOf = (params: URLSearchParams | null): ScaleFilters => ({ view: viewOf(params?.get('view')), q: params?.get('q') ?? '' })
 
@@ -33,6 +35,8 @@ function searchOf(filters: ScaleFilters): string {
 export function SizesPage() {
   // B-W2b-240: `?view=poms|rules` shows Points of measure or Grade rules (SCR-345); anything else, the size scales.
   const library = libraryOf(useSearchParams()?.get('view'))
+  // B-W2b-362: `?view=templates` shows the measurement templates.
+  if (library === 'templates') return <TemplatesList />
   return <WithMessages namespaces={['library']}>{library === 'scales' ? <Container /> : <SizesDepth library={library} />}</WithMessages>
 }
 

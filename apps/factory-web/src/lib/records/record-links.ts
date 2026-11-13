@@ -28,6 +28,10 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   Item: '/products/materials/[id]',
   Operation: '/products/operations/[id]',
   SizeScale: '/products/sizes/[id]',
+  // B-W2b-362: a measurement template (SCR-049-template: points, made-to-measure, where used); a rider profile revision
+  // (SCR-036-record: measurements, photos, fittings, proofs, orders, activity).
+  MeasurementTemplate: '/products/sizes/templates/[id]',
+  MeasurementProfile: '/sales/made-to-measure/[id]',
   // B-W2b-240: a point of measure opens in its dialog on Sizes › Points of measure, a grade rule in its pop-up on Grade rules.
   PointOfMeasure: '/products/sizes?view=poms&open=[id]',
   GradeRule: '/products/sizes?view=rules&open=[id]',

@@ -2,6 +2,7 @@
   "switch": {
     "label": "Libraries of Sizes & measurements",
     "scales": "Size scales",
+    "templates": "Measurement templates",
     "poms": "Points of measure",
     "rules": "Grade rules",
     "key": "Key {key}"

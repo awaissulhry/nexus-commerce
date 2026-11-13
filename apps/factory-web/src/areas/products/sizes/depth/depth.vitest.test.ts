@@ -44,8 +44,10 @@ describe('the view switch and its address', () => {
   it('?view=poms|rules is a library; anything else (the scales\' own open|archived|all) is the scales', () => {
     expect(libraryOf('poms')).toBe('poms')
     expect(libraryOf('rules')).toBe('rules')
-    for (const value of [null, '', 'open', 'archived', 'all', 'templates']) expect(libraryOf(value)).toBe('scales')
-    expect([1, 2, 3, 4].map((key) => libraryOfKey(String(key)))).toEqual(['scales', 'poms', 'rules', null])
+    // B-W2b-362: the templates view (B-W1-17) is built now: `?view=templates` and key 2 open it.
+    expect(libraryOf('templates')).toBe('templates')
+    for (const value of [null, '', 'open', 'archived', 'all']) expect(libraryOf(value)).toBe('scales')
+    expect([1, 2, 3, 4, 5].map((key) => libraryOfKey(String(key)))).toEqual(['scales', 'templates', 'poms', 'rules', null])
   })
 
   it('keeps the filters, the open rule and New in the address, and reads them back', () => {

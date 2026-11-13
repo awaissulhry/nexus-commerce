@@ -1,0 +1,340 @@
+{
+  "common": {
+    "back": "Indietro",
+    "dismiss": "Chiudi",
+    "retry": "Riprova"
+  },
+  "col": {
+    "code": "Tipo di capo",
+    "type": "Tipo di prodotto",
+    "points": "Punti",
+    "used": "Usato da modelli e profili pilota",
+    "mtm": "Su misura",
+    "status": "Stato",
+    "more": "Azioni"
+  },
+  "csv": {
+    "code": "Tipo di capo",
+    "name": "Nome",
+    "type": "Tipo di prodotto",
+    "points": "Punti",
+    "mtm": "Su misura",
+    "status": "Stato"
+  },
+  "type": {
+    "JACKET": "Giacca",
+    "TROUSERS": "Pantaloni",
+    "SUIT": "Tuta",
+    "GLOVES": "Guanti",
+    "VEST": "Gilet",
+    "OTHER": "Altro"
+  },
+  "status": {
+    "ACTIVE": "Attivo",
+    "ARCHIVED": "Archiviato"
+  },
+  "view": {
+    "open": "Attivi",
+    "archived": "Archiviati",
+    "all": "Tutti"
+  },
+  "unit": {
+    "CM": "cm",
+    "MM": "mm"
+  },
+  "tab": {
+    "points": "Punti",
+    "mtm": "Su misura",
+    "whereused": "Dove è usato"
+  },
+  "kind": {
+    "ORDER": "Ordine tra due punti",
+    "RATIO": "Rapporto tra due punti",
+    "RANGE": "Intervallo di un punto"
+  },
+  "severity": {
+    "BLOCK": "Blocca",
+    "WARN": "Avvisa"
+  },
+  "mtm": {
+    "on": "Attivo",
+    "off": "Spento",
+    "title": "Su misura per {code}",
+    "start": "Avvia il su misura",
+    "stop": "Ferma il su misura",
+    "offBody": "Spento: nulla di questo modello viene controllato, nessuna unità su misura di {code} va in preventivo o in ordine e nessuna prova viene fissata. Le misure dei piloti restano conservate.",
+    "onBody": "Attivo: le misure di {code} vengono controllate con le regole qui sotto mentre si scrivono e si inviano; si possono fare unità su misura e prove.",
+    "offOwner": "Il su misura è costruito spento per ogni modello: lo avvii qui quando arriva il primo ordine su misura di questo tipo di capo.",
+    "offOthers": "Il su misura è costruito spento per ogni modello: solo il titolare lo avvia (il permesso di avviare il su misura). Chiedi al titolare quando arriva il primo ordine su misura di questo tipo di capo.",
+    "reading": "Lettura delle regole su misura…",
+    "failed": "Non è stato possibile leggere le regole su misura",
+    "rulesTitle": "Cosa controlla una volta avviato",
+    "noRules": "Ancora nessuna regola: una volta avviato si richiedono solo gli intervalli plausibili dei punti.",
+    "rulesCount_one": "{count} regola in vigore ({blocking} bloccanti)",
+    "rulesCount_other": "{count} regole in vigore ({blocking} bloccanti)",
+    "archivedRule": "Non controllata",
+    "twoPoints": "{point} e {other}",
+    "editLater": "Le regole sono mostrate qui come sono; per ora non si modificano da questa pagina.",
+    "factsTitle": "Taglia base e limiti",
+    "baseSize": "Taglia base suggerita da",
+    "baseSizeFrom": "{points} (a pari merito la taglia più grande)",
+    "baseSizeFromSmaller": "{points} (a pari merito la taglia più piccola)",
+    "noBaseSize": "Nessuna regola della taglia base: la taglia base si scrive",
+    "limits": "Limiti di modifica",
+    "limitsCount_one": "Su {count} punto",
+    "limitsCount_other": "Su {count} punti",
+    "tolerances": "Tolleranze di collaudo",
+    "tolerancesCount_one": "Su {count} punto",
+    "tolerancesCount_other": "Su {count} punti",
+    "styles": "Modelli",
+    "done": {
+      "on": "Su misura avviato per {code}.",
+      "off": "Su misura fermato per {code}: ora non si controlla nulla."
+    }
+  },
+  "switch": {
+    "titleOn": "Avviare il su misura per {code}?",
+    "titleOff": "Fermare il su misura per {code}?",
+    "on1": "Da ora le misure di {code} si controllano con le sue regole (il link del pilota e il modulo dell'ufficio).",
+    "on2": "Le unità su misura dei modelli misurati con {code} si possono mettere in preventivo e in ordine, e si fissano le prove.",
+    "on3": "Si può fermare di nuovo qui; ciò che è stato fatto nel frattempo resta.",
+    "off1": "Nulla di {code} viene più controllato: nessuna regola, nessun suggerimento di taglia base, nessun limite di modifica.",
+    "off2": "Nessuna nuova unità su misura di {code} va in preventivo o in ordine e non si fissano prove; una prova fissata si può ancora annullare.",
+    "off3": "Le misure dei piloti e le unità già fatte restano come sono.",
+    "reason": "Perché (resta nella cronologia)",
+    "reasonHint": "Per esempio: il primo ordine su misura di questo tipo di capo."
+  },
+  "held": {
+    "noManage": "Modificare i modelli di misure richiede il permesso di gestire la libreria dei modelli (libreria prodotti).",
+    "noSwitch": "Solo il titolare avvia o ferma il su misura (il permesso di avviare il su misura).",
+    "archivedOn": "Un modello archiviato non si avvia: prima ripristinalo.",
+    "archived": "Il modello è archiviato: ripristinalo per modificarlo.",
+    "notEditable": "Non puoi modificare questo modello: appartiene a un'altra azienda.",
+    "alreadyArchived": "Il modello è già archiviato.",
+    "alreadyActive": "Il modello è già attivo.",
+    "rulesOn": "Il suo su misura è attivo: prima il titolare lo ferma.",
+    "stylesUse_one": "{count} modello si misura con questo: prima assegnagli un altro modello di misure.",
+    "stylesUse_other": "{count} modelli si misurano con questo: prima assegna loro un altro modello di misure.",
+    "busy": "In corso…"
+  },
+  "list": {
+    "intro": "Quali misure del corpo si prendono per ogni tipo di capo per il su misura, in ordine di misurazione. Il su misura si avvia per ogni modello.",
+    "new": "Nuovo modello",
+    "keyNew": "Nuovo modello",
+    "tableLabel": "Modelli di misure",
+    "search": "Cerca codice o nome",
+    "viewFilter": "Vista salvata",
+    "activeFilters": "Filtri in uso",
+    "removeFilter": "Togli il filtro",
+    "chipSearch": "Ricerca: {q}",
+    "clearAll": "Togli tutti",
+    "count_one": "{count} modello",
+    "count_other": "{count} modelli",
+    "countMore_one": "Primo {count} modello",
+    "countMore_other": "Primi {count} modelli",
+    "more": "Mostra altri",
+    "moreHint": "Sono mostrati i primi 200 modelli: restringi la ricerca per trovare gli altri.",
+    "points_one": "{count} punto",
+    "points_other": "{count} punti",
+    "required_one": "{count} obbligatorio",
+    "required_other": "{count} obbligatori",
+    "styles_one": "{count} modello, {mtm} su misura",
+    "styles_other": "{count} modelli, {mtm} su misura",
+    "profiles_one": "{count} revisione di profilo pilota",
+    "profiles_other": "{count} revisioni di profilo pilota",
+    "factsFailed": "Non è stato possibile leggere dove è usato",
+    "mtmOnHint": "Le sue misure vengono controllate",
+    "mtmOffHint": "Nulla viene controllato; si avvia per ogni modello",
+    "export_one": "Esporta {count}",
+    "export_other": "Esporta {count}",
+    "open": "Apri",
+    "openNewTab": "Apri in una nuova scheda",
+    "openMtm": "Su misura",
+    "openUsed": "Dove è usato",
+    "openRiders": "Piloti misurati con questo",
+    "copyCode": "Copia il codice",
+    "rowMenu": "Azioni per {code}",
+    "failed": "Non è stato possibile caricare i modelli di misure",
+    "noMatch": {
+      "title": "Nessun modello corrisponde a questi filtri",
+      "body": "Togli un filtro o toglili tutti."
+    },
+    "empty": {
+      "title": "Ancora nessun modello di misure",
+      "body": "Un modello indica le misure del corpo che il sarto prende per un tipo di capo. Crea il primo.",
+      "bodyView": "Un modello indica le misure del corpo che il sarto prende per un tipo di capo. Li creano i responsabili della libreria prodotti."
+    },
+    "forbidden": {
+      "title": "Non hai accesso ai modelli di misure",
+      "body": "Per leggerli serve il permesso di vedere la libreria dei modelli (sviluppo prodotto, vendite, responsabile di produzione)."
+    }
+  },
+  "new": {
+    "title": "Nuovo modello di misure",
+    "intro": "Un modello per tipo di capo: i punti che il sarto misura, in ordine. Il su misura parte spento.",
+    "company": "Tenuto da",
+    "companyHint": "Di tutte le aziende, o di una sola azienda.",
+    "everyCompany": "Tutte le aziende",
+    "code": "Codice del tipo di capo",
+    "codeHint": "Lettere maiuscole, cifre, _ e - (\"JACKET\", \"RACE_SUIT\"). Resta fisso quando un pilota viene misurato con questo.",
+    "name": "Nome",
+    "type": "Tipo di prodotto",
+    "typeHint": "Il tipo di capo dei suoi modelli.",
+    "typePick": "Scegli un tipo",
+    "start": "I suoi punti partono",
+    "startBlank": "Da zero",
+    "startCopy": "Da una copia di un modello",
+    "copyFrom": "Copia i punti di",
+    "copyPick": "Scegli un modello",
+    "copyHint": "Si copiano i suoi punti attivi: codici, nomi, unità, intervalli, come misurare.",
+    "copyCount_one": "Verrà copiato {count} punto",
+    "copyCount_other": "Verranno copiati {count} punti",
+    "firstCode": "Codice del primo punto",
+    "firstCodeHint": "Lettere, cifre, _ . e - (\"chest\", \"back_length\").",
+    "firstName": "Nome del primo punto",
+    "create": "Crea",
+    "after": "Poi si apre il modello: lì aggiungi i suoi punti.",
+    "refused": "Rifiutato: controlla questo campo.",
+    "held": {
+      "code": "Scrivi il codice del tipo di capo: lettere maiuscole, cifre, _ e -.",
+      "taken": "{code} è già un modello: scegli un altro codice.",
+      "name": "Scrivi il nome.",
+      "type": "Scegli il tipo di prodotto.",
+      "copyFrom": "Scegli il modello da copiare.",
+      "copyFailed": "Non è stato possibile leggere i punti di quel modello: sceglilo di nuovo.",
+      "copyReading": "Lettura dei punti di quel modello…",
+      "copyEmpty": "Quel modello non ha punti attivi da copiare.",
+      "firstCode": "Scrivi il codice del primo punto: lettere, cifre, _ . e -.",
+      "firstName": "Scrivi il nome del primo punto."
+    }
+  },
+  "point": {
+    "unit": "Unità",
+    "problem": {
+      "code": "Lettere, cifre, _ . e -, senza spazi.",
+      "twice": "{code} è due volte nell'elenco: ogni punto una volta.",
+      "name": "Scrivi il nome.",
+      "tooLong": "Al massimo {max} caratteri.",
+      "number": "Un numero da 0 in su con al massimo 2 decimali.",
+      "order": "Il minimo non supera il massimo.",
+      "refused": "Rifiutato: controlla questo punto."
+    }
+  },
+  "points": {
+    "title": "Punti",
+    "intro_one": "{count} punto in ordine di misurazione, {required} obbligatori.",
+    "intro_other": "{count} punti in ordine di misurazione, {required} obbligatori.",
+    "empty": "Aggiungi il primo punto.",
+    "noWords": "Nessun nome per lingua",
+    "col": {
+      "order": "#",
+      "code": "Codice",
+      "name": "Nome",
+      "unit": "Unità",
+      "range": "Min–max plausibile",
+      "required": "Obbligatorio",
+      "howTo": "Come misurare"
+    },
+    "requiredYes": "Obbligatorio",
+    "requiredNo": "Facoltativo",
+    "requiredLabel": "Misurato in ogni revisione",
+    "archived_one": "{count} punto archiviato (conservato, non più misurato): {codes}",
+    "archived_other": "{count} punti archiviati (conservati, non più misurati): {codes}",
+    "preview": "Anteprima del modulo del sarto",
+    "previewHeld": "Il modello non ha punti da mostrare.",
+    "edit": "Modifica i punti",
+    "editIntro": "L'elenco si salva intero nel suo ordine. Un punto tolto viene archiviato (conservato, non più misurato), mai cancellato; un punto che resta tiene il suo codice.",
+    "newPoint": "Nuovo punto",
+    "new": "Nuovo",
+    "codeHint": "Lettere, cifre, _ . e -.",
+    "codeKept": "Un punto che resta tiene il suo codice.",
+    "name": "Nome",
+    "nameIt": "Nome in italiano",
+    "nameEn": "Nome in inglese",
+    "min": "Minimo plausibile",
+    "max": "Massimo plausibile",
+    "up": "Sposta su {code}",
+    "down": "Sposta giù {code}",
+    "remove": "Togli {code}",
+    "first": "È il primo.",
+    "last": "È l'ultimo.",
+    "drop": "Togli",
+    "archive": "Archivia",
+    "add": "Aggiungi un punto",
+    "putBack": "Rimetti {code}",
+    "leaving_one": "Il salvataggio archivia {count} punto: {codes} (conservato, non più misurato).",
+    "leaving_other": "Il salvataggio archivia {count} punti: {codes} (conservati, non più misurati).",
+    "save": "Salva i punti",
+    "done": "Punti salvati."
+  },
+  "edit": {
+    "held": {
+      "none": "Un modello tiene almeno un punto.",
+      "tooMany": "Al massimo {max} punti.",
+      "problems_one": "Prima va sistemato {count} punto.",
+      "problems_other": "Prima vanno sistemati {count} punti.",
+      "unchanged": "Ancora nessuna modifica."
+    }
+  },
+  "preview": {
+    "title": "{code} come lo vede il sarto",
+    "subtitle": "Scrivi dei valori per provarlo: non si salva nulla.",
+    "clear": "Svuota",
+    "close": "Chiudi"
+  },
+  "record": {
+    "back": "Modelli di misure",
+    "more": "Altre azioni",
+    "rename": "Rinomina…",
+    "archive": "Archivia",
+    "restore": "Ripristina",
+    "ownCompany": "Di un'azienda",
+    "everyCompany": "Di tutte le aziende",
+    "changed": "Qualcuno ha modificato questo modello nel frattempo.",
+    "reload": "Ricarica",
+    "archivedBanner": "Archiviato: conservato con le misure dei piloti, non proposto per nuovi modelli."
+  },
+  "rename": {
+    "title": "Rinomina {code}",
+    "hint": "Il codice resta; cambia solo il nome.",
+    "save": "Salva il nome",
+    "done": "Nome salvato."
+  },
+  "move": {
+    "archiveTitle": "Archiviare {code}?",
+    "restoreTitle": "Ripristinare {code}?",
+    "archive1": "Resta conservato con i suoi punti; le {profiles} revisioni di profilo pilota misurate con questo restano leggibili.",
+    "archive2": "Non viene più proposto per nuovi modelli; ripristinalo per usarlo di nuovo.",
+    "restore1": "Torna proponibile per i modelli; il su misura resta spento finché il titolare non lo avvia.",
+    "archived": "Modello archiviato.",
+    "restored": "Modello ripristinato."
+  },
+  "used": {
+    "title": "Dove è usato",
+    "empty": "Non ancora usato",
+    "emptyBody": "Nessun modello si misura con {code} e nessun pilota è stato misurato con questo.",
+    "styles": "Modelli misurati con questo",
+    "stylesValue_one": "{count} modello, {mtm} su misura",
+    "stylesValue_other": "{count} modelli, {mtm} su misura",
+    "profiles": "Profili pilota",
+    "profilesValue_one": "{count} revisione misurata con questo",
+    "profilesValue_other": "{count} revisioni misurate con questo",
+    "kept": "Un modello indica il suo modello di misure nella sua scheda; il profilo di un pilota tiene il tipo di capo per cui è stato misurato.",
+    "openRiders": "Piloti misurati per {code} in Vendite › Su misura"
+  },
+  "problem": {
+    "unavailable": "Il server della fabbrica non ha risposto: riprova tra un momento.",
+    "forbidden": "Il tuo ruolo non apre questa pagina.",
+    "forbiddenWrite": "Il tuo ruolo non consente questa modifica.",
+    "notFound": "Questo modello non c'è più.",
+    "rateLimited": "Troppi tentativi: aspetta un momento.",
+    "contract": "La risposta non è quella che questa pagina si aspetta: ricarica la pagina.",
+    "internal": "Qualcosa non è andato da parte nostra: riprova.",
+    "invalid": "La modifica è stata rifiutata così com'è: controllala.",
+    "fields": "Alcuni campi sono stati rifiutati: sono segnati.",
+    "moved": "Qualcuno l'ha modificato nel frattempo: è stato riletto, controlla e ripeti la modifica.",
+    "codeTaken": "Quel codice è già un modello: scegline un altro.",
+    "state": "Nello stato in cui è ora non può cambiare: è stato riletto.",
+    "rulesNeedPoints": "Le sue regole su misura hanno ancora bisogno di questi punti così come sono: prima cambia le regole."
+  }
+}
