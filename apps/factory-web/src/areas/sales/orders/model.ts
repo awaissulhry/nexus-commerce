@@ -91,6 +91,7 @@ export const STATUS_TONE: Record<OrderStatus, Tone> = {
   CLOSED: 'neutral',
   CANCELLED: 'danger',
   PENDING_APPROVAL: 'warning',
+  DELIVERED: 'success',
 }
 
 /** The deposit's state as the list shows it: the tone, and "overdue" once its due day passed while open. */

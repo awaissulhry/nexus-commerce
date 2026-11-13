@@ -1,0 +1,188 @@
+// Delivery, returns and customs (W2b-6, schema wave 51/57, B-W2b-372; features LOG-061, LOG-063, LOG-065, LOG-067,
+// LOG-086, LOG-087, LOG-088, LOG-089, LOG-095, LOG-097, LOG-112; design warehouse.shipments "Tracking & delivery", "Export",
+// returns "Shipments" › "Return label or link"): what happens after a parcel leaves. Rule 1: deliveries are checked every
+// day; rule 2: the proof of exit of a zero-rated export (art. 8 c.1 lett. a DPR 633/1972) is a legal duty kept on paper
+// today. Carriers, brokers and customs stay on FAKE providers; anything that would send by itself waits behind a switch of
+// the shipment's site, OFF by default (Owner, 11-13).
+//
+//   TrackingException   a problem with a parcel on its way (LOG-063): the shipment, what kind (DELAYED, ADDRESS_PROBLEM,
+//                       FAILED_DELIVERY, or NO_SCAN: no carrier news for days), when it was raised, the task a person works
+//                       it in (collab.prisma Task) and when it was resolved. One open problem per shipment and kind; kept,
+//                       never deleted.
+//   ReturnLabel         a carrier label for goods coming back on a return (LOG-112): made at once from the shipment with the
+//                       addresses swapped (BOOKED: the carrier's booking reference and the label PDF), or offered by a link
+//                       the customer uses to book the carrier only when the goods go (OFFERED: a one-off link of purpose
+//                       RETURN_LABEL; unused labels cost nothing); USED once the carrier has the parcel; CANCELLED. Kept,
+//                       never deleted.
+//   CustomsDeclaration  the export declaration of a shipment leaving the EU (LOG-088, LOG-089): the pack sent to the broker
+//                       (a party; none: the shipment's carrier files it), the MRN once filed, the exit confirmed (when, and
+//                       the proof as a file) against the invoice, and after how many days a missing proof raises an alert.
+//                       PACK_SENT → FILED → EXITED; removed only while PACK_SENT (sent by mistake).
+//
+// Beside them (each file's own lines): a shipment's proof of delivery, who signed, when and its image (shipping.prisma
+// Shipment, LOG-065); an order DELIVERED with its time (sales.prisma SalesOrder, LOG-067); a site's customer-notice and
+// broker-pack switches (shipping.prisma ShippingSettings, LOG-061, LOG-097); each company's EORI (_core.prisma Company,
+// LOG-095); the link purposes BROKER_PACK and RETURN_LABEL (links.prisma); the generated documents COMMERCIAL_INVOICE, CN22
+// and CN23 of a shipment (gendocs.prisma; LOG-086, LOG-087).
+//
+// apps/factory-api's modules/shipping and modules/sales write these tables (B-W2b-398 delivery and return labels, B-W2b-409
+// export and customs), always through command(); the hand-written …_delivery_customs_w2b_guards migration holds their rules
+// for every login, the owner included.
+//
+// Who sees what (ownership/customs.json): the office reads and writes. The floor reads none of them. A portal or link
+// session reads its own party's return labels (the customer prints its label; a RETURN_LABEL link shows the offer), never a
+// tracking problem or a customs declaration (a broker's link answers through the API).
+
+/// What went wrong with a parcel on its way (LOG-063).
+enum TrackingExceptionKind {
+  /// Late: the carrier reports a delay, or the expected day passed.
+  DELAYED
+  /// The carrier cannot deliver to the address as given.
+  ADDRESS_PROBLEM
+  /// The carrier tried and failed (nobody there, refused).
+  FAILED_DELIVERY
+  /// No news from the carrier for days.
+  NO_SCAN
+}
+
+/// Where a return label stands (LOG-112).
+enum ReturnLabelStatus {
+  /// Offered by a link (RETURN_LABEL): no carrier booked yet; the customer books it by using the link.
+  OFFERED
+  /// The carrier is booked: the label exists (its booking reference and PDF).
+  BOOKED
+  /// The carrier has the parcel. Final.
+  USED
+  /// Withdrawn before it was used. Final.
+  CANCELLED
+}
+
+/// Where an export declaration stands (LOG-088, LOG-089).
+enum CustomsDeclarationStatus {
+  /// The data pack went to the broker (or the carrier) who files the declaration.
+  PACK_SENT
+  /// Filed: the declaration has its MRN.
+  FILED
+  /// The customs office of exit confirmed the goods left the EU (the proof of exit, art. 8 DPR 633/1972). Final.
+  EXITED
+}
+
+/// A problem with a shipment on its way (LOG-063; B-W2b-398): what kind, when it was raised (not in the future), the task a
+/// person works it in (named once) and when it was resolved (once, not before it was raised; then frozen). Raised only on a
+/// shipment that left; an open one only while the goods travel (SHIPPED), one open per shipment and kind. Never deleted.
+model TrackingException {
+  id          String                @id @db.Uuid
+  tenantId    String                @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The shipment's site and party (the reference's key). Never change.
+  siteId      String                @db.Uuid
+  partyId     String                @db.Uuid
+  shipmentId  String                @db.Uuid
+  kind        TrackingExceptionKind
+  /// When it was raised (the carrier's news, or the daily check that found no news).
+  raisedAt    DateTime              @db.Timestamptz(3)
+  /// The task a person works it in (collab.prisma Task of the shipment; no reference: a task has no tenant-safe target),
+  /// named once.
+  taskId      String?               @db.Uuid
+  /// When it was resolved: set once, then the row is frozen.
+  resolvedAt  DateTime?             @db.Timestamptz(3)
+  version     Int                   @default(1)
+  createdAt   DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime              @default(now()) @updatedAt @db.Timestamptz(3)
+  /// Who raised it (null: the system, the daily check or a carrier's news).
+  createdById String?               @db.Uuid
+
+  shipment Shipment @relation(fields: [tenantId, siteId, partyId, shipmentId], references: [tenantId, siteId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // A shipment's problems (its Tracking tab); the open ones by kind are one each (a partial unique index of the guards).
+  @@index([tenantId, shipmentId, kind])
+  // The open problems of the day (the daily check, the dispatch desk's list).
+  @@index([tenantId, resolvedAt])
+}
+
+/// A carrier label for goods coming back on a return (LOG-112; B-W2b-398): of an RMA the customer may send back (AUTHORISED
+/// or RECEIVED when it is made), for a carrier; BOOKED at once (its booking reference and its label, a file of the RMA) or
+/// OFFERED by a one-off link of purpose RETURN_LABEL of the RMA (the carrier booked only when the customer uses it), then
+/// USED (when) or CANCELLED. What it is for never changes; never deleted.
+model ReturnLabel {
+  id               String            @id @db.Uuid
+  tenantId         String            @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The RMA's company, site and customer (the partner role's key). Never change.
+  companyId        String            @db.Uuid
+  siteId           String            @db.Uuid
+  partyId          String            @db.Uuid
+  returnId         String            @db.Uuid
+  /// The carrier ("brt"), as Shipment.carrierCode names it: 1 to 40 characters, no spaces. Never changes.
+  carrierCode      String
+  /// OFFERED → BOOKED | CANCELLED; BOOKED → USED | CANCELLED; USED and CANCELLED are final.
+  status           ReturnLabelStatus
+  /// The carrier's (or Sendcloud's) reference of the booking (its tracking number), 1 to 100 characters on one line, and
+  /// the label PDF (a file of the RMA): both from BOOKED on, set once.
+  bookingReference String?
+  labelFileId      String?           @db.Uuid
+  /// The link that offers it (purpose RETURN_LABEL, of the RMA): exactly on a label offered by link, never changed.
+  linkId           String?           @db.Uuid
+  /// When the carrier had the parcel (not in the future): exactly when USED.
+  usedAt           DateTime?         @db.Timestamptz(3)
+  version          Int               @default(1)
+  createdAt        DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime          @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById      String?           @db.Uuid
+
+  site       Site                @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  returnAuth ReturnAuthorisation @relation(fields: [tenantId, siteId, partyId, returnId], references: [tenantId, siteId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and partyId.
+  labelFile  StoredFile?         @relation("ReturnLabelFile", fields: [tenantId, labelFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  link       OneOffLink?         @relation("ReturnLabelLink", fields: [tenantId, partyId, linkId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // An RMA's labels (its Shipments tab).
+  @@index([tenantId, returnId])
+  // The labels still waiting for the carrier (the daily check).
+  @@index([tenantId, status])
+}
+
+/// The export declaration of a shipment leaving the EU (LOG-088, LOG-089; B-W2b-409): the data pack sent to the broker (a
+/// party; null: the shipment's carrier files it), the MRN once filed (set once), the exit confirmed with when and the proof
+/// (a file of the declaration), against the invoice (named once; required to be EXITED), and after how many days without
+/// the proof an alert is raised. PACK_SENT → FILED → EXITED (frozen); removed only while PACK_SENT.
+model CustomsDeclaration {
+  id              String                   @id @db.Uuid
+  tenantId        String                   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The shipment's company, site and customer (the references' key). Never change.
+  companyId       String                   @db.Uuid
+  siteId          String                   @db.Uuid
+  partyId         String                   @db.Uuid
+  shipmentId      String                   @db.Uuid
+  /// The invoice it is proven against (of the company and the shipment's customer; the export's non-taxable invoice), named
+  /// once; required once EXITED.
+  invoiceId       String?                  @db.Uuid
+  /// The customs broker (or the forwarder) who files it, a party of the tenant; null: the shipment's carrier files it (its
+  /// paperless trade). Never changes.
+  brokerPartyId   String?                  @db.Uuid
+  status          CustomsDeclarationStatus @default(PACK_SENT)
+  /// The Movement Reference Number customs gave the declaration (18 characters: two digits of the year, the country's two
+  /// capitals, 14 capitals or digits): exactly from FILED on, set once.
+  mrn             String?
+  /// When the exit was confirmed (not in the future) and its proof (a file of the declaration): exactly when EXITED.
+  exitConfirmedAt DateTime?                @db.Timestamptz(3)
+  exitFileId      String?                  @db.Uuid
+  /// After how many days from the goods leaving a missing proof of exit raises an alert (1 to 365; a reminder, not the
+  /// law's deadline: the accountant may set another).
+  alertAfterDays  Int                      @default(30)
+  version         Int                      @default(1)
+  createdAt       DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime                 @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById     String?                  @db.Uuid
+
+  site        Site       @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  shipment    Shipment   @relation(fields: [tenantId, siteId, partyId, shipmentId], references: [tenantId, siteId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, companyId and partyId.
+  invoice     Invoice?    @relation(fields: [tenantId, companyId, partyId, invoiceId], references: [tenantId, companyId, buyerPartyId, id], onDelete: Restrict, onUpdate: Restrict)
+  brokerParty Party?      @relation("CustomsDeclarationBroker", fields: [tenantId, brokerPartyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  exitFile    StoredFile? @relation("CustomsDeclarationExitFile", fields: [tenantId, exitFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // A shipment's declarations (its Export tab).
+  @@index([tenantId, shipmentId])
+  // The proofs still missing (the daily alert).
+  @@index([tenantId, status])
+  @@index([tenantId, invoiceId])
+}

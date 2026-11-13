@@ -248,7 +248,7 @@ const actionsFor = (status: OrderStatus, settled: boolean): Order['actions'] => 
   return actions
 }
 
-const STAGE: Record<OrderStatus, Stage> = { CONFIRMED: 'new', IN_PRODUCTION: 'production', READY: 'production', PARTLY_SHIPPED: 'partly', SHIPPED: 'shipped', CLOSED: 'shipped', CANCELLED: 'new', PENDING_APPROVAL: 'new' }
+const STAGE: Record<OrderStatus, Stage> = { CONFIRMED: 'new', IN_PRODUCTION: 'production', READY: 'production', PARTLY_SHIPPED: 'partly', SHIPPED: 'shipped', CLOSED: 'shipped', CANCELLED: 'new', PENDING_APPROVAL: 'new', DELIVERED: 'shipped' }
 
 /** SO-2026-0088 for Moto Demo S.r.l. at a state, with the parts of its chain that state has. */
 export function order(status: OrderStatus = 'CONFIRMED', over: Partial<Order> & { settled?: boolean } = {}): Order {

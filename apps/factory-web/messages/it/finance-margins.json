@@ -95,7 +95,8 @@
     "SHIPPED": "Spedito",
     "CLOSED": "Chiuso",
     "CANCELLED": "Annullato",
-    "PENDING_APPROVAL": "In attesa di approvazione"
+    "PENDING_APPROVAL": "In attesa di approvazione",
+    "DELIVERED": "Consegnato"
   },
   "filter": {
     "customer": "Cliente",
