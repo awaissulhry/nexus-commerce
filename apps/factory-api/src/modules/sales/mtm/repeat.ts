@@ -51,7 +51,7 @@ export async function repeatFacts(caller: CommandCaller, profileId: string) {
     const old = isOld(takenOn, today)
     const months = monthsBetween(takenOn, today)
     return {
-      repeat: {
+      repeatFacts: {
         latest: { id: latest.id, revision: latest.revision, takenAt: toUtcIso(latest.takenAt), takenOn, months, old, review: latest.reviewStatus as ReviewStatus },
         reMeasure: old ? reMeasureWords(takenOn, months) : null,
         earlier: await unitsOf(db, chain.map((revision) => revision.id)),

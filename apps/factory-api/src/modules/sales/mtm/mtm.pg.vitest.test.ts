@@ -312,7 +312,7 @@ describe('the order waits for the factory review (SAL-292)', { timeout: SLOW_TES
 
 describe('a repeat order from the saved profile (SAL-300) and the worksheet (SAL-303)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
   it('repeats the newest unit on the newest revision; measures older than 12 months are asked again first', async () => {
-    const facts = (await ok('sales', 'GET', `/sales/mtm/profiles/${rev1}/repeat`)).repeat
+    const facts = (await ok('sales', 'GET', `/sales/mtm/profiles/${rev1}/repeat`)).repeatFacts
     expect(facts).toMatchObject({ latest: { id: rev2, revision: 2, old: false, review: 'CONFIRMED' }, reMeasure: null })
     expect(facts.earlier.map((unit: Json) => unit.kind)).toEqual(expect.arrayContaining(['QUOTE', 'ORDER']))
     const draft = await newQuote()
@@ -321,7 +321,7 @@ describe('a repeat order from the saved profile (SAL-300) and the worksheet (SAL
     // An old rider: measured 400 days ago, one unit already.
     const old = await ok('sales', 'POST', '/sales/mtm/profiles', { partyId: S.r1, riderName: OLD_RIDER, garmentType: 'JACKET', measurements: values, takenAt: ago(400), takenBy: 'Made-up dealer fitter', privacyNoticeRef: 'Made-up notice v1', privacyNoticeAt: ago(401) }, 201)
     await ok('sales', 'POST', `/sales/quotes/${draft.id}/lines/made-to-measure`, { version: await quoteVersion(draft.id), styleId: S.jkt01, colourwayId: S.blk, measurementProfileId: old.profile.id }, 201)
-    expect((await ok('sales', 'GET', `/sales/mtm/profiles/${old.profile.id}/repeat`)).repeat).toMatchObject({ latest: { old: true, months: 13 }, reMeasure: expect.stringContaining('ask for a new measure first') })
+    expect((await ok('sales', 'GET', `/sales/mtm/profiles/${old.profile.id}/repeat`)).repeatFacts).toMatchObject({ latest: { old: true, months: 13 }, reMeasure: expect.stringContaining('ask for a new measure first') })
     expect(paths(await no('sales', 'POST', `/sales/mtm/profiles/${old.profile.id}/repeat`, { quoteId: draft.id, version: await quoteVersion(draft.id) }, 409))).toEqual(['body/measuredOk'])
     await ok('sales', 'POST', `/sales/mtm/profiles/${old.profile.id}/repeat`, { quoteId: draft.id, version: await quoteVersion(draft.id), measuredOk: true }, 201)
     expect((await ok('sales', 'GET', `/sales/mtm/profiles?partyId=${S.r1}&old=true`)).rows.map((row: Json) => row.riderName)).toEqual([OLD_RIDER])
