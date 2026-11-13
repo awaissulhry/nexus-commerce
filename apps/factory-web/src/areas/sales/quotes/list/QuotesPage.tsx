@@ -14,6 +14,8 @@ import type { NewQuoteModel, QuotesListViewModel } from './list-model'
 import { QuotesListView } from './view/QuotesListView'
 // B-W2b-316: New quote › Start from Template / Inquiry.
 import { useNewFrom } from '../new-from/use-new-from'
+// B-W2b-348: Quote speed under the list (design sales.quotes sec quotes.speed).
+import { QuoteSpeed } from '../speed/QuoteSpeed'
 
 const TILE_READS: Record<QuoteTile, { status: QuoteStatus; mine?: boolean }> = {
   myDrafts: { status: 'DRAFT', mine: true },
@@ -290,6 +292,8 @@ function QuotesContainer() {
   }
 
   return (
+    // B-W2b-348: the list, then Quote speed (SCR-428).
+    <div className="fw-qsp-page">
     <QuotesListView
       model={model}
       actions={{
@@ -333,6 +337,8 @@ function QuotesContainer() {
         onPastOpen: (quoteId) => router.push(`${prefix}/sales/quotes/${quoteId}?tab=lines`),
       }}
     />
+    <QuoteSpeed />
+    </div>
   )
 }
 

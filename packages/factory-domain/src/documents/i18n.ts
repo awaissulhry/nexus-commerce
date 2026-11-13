@@ -52,6 +52,8 @@ export interface DocumentWords {
     readonly paymentTerms: string
     readonly deliveryTerms: string
     readonly deliveryDate: string
+    // B-W2b-303: the delivery date an order confirmation promises.
+    readonly promiseDate: string
     readonly reference: Readonly<Record<ReferenceKind, string>>
     readonly referenceDated: (number: string, date: string) => string
     readonly reason: string
@@ -88,14 +90,14 @@ export interface DocumentWords {
 }
 
 const IT: DocumentWords = {
-  title: { QUOTE: 'Offerta', PURCHASE_ORDER: 'Ordine di acquisto', DDT: 'Documento di trasporto (DDT)', INVOICE_COPY: 'Fattura - copia di cortesia', PACKING_LIST: 'Distinta colli' },
+  title: { QUOTE: 'Offerta', PURCHASE_ORDER: 'Ordine di acquisto', DDT: 'Documento di trasporto (DDT)', INVOICE_COPY: 'Fattura - copia di cortesia', PACKING_LIST: 'Distinta colli', ORDER_CONFIRMATION: "Conferma d'ordine" /* B-W2b-303 */ },
   number: 'Numero',
   date: 'Data',
   page: 'Pagina {page} di {pages}',
   continued: 'segue',
   headings: {
-    issuer: { QUOTE: 'Emittente', PURCHASE_ORDER: 'Committente', DDT: 'Mittente (cedente)', INVOICE_COPY: 'Cedente / prestatore', PACKING_LIST: 'Mittente' },
-    party: { QUOTE: 'Cliente', PURCHASE_ORDER: 'Fornitore', DDT: 'Destinatario (cessionario)', INVOICE_COPY: 'Cessionario / committente', PACKING_LIST: 'Destinatario' },
+    issuer: { QUOTE: 'Emittente', PURCHASE_ORDER: 'Committente', DDT: 'Mittente (cedente)', INVOICE_COPY: 'Cedente / prestatore', PACKING_LIST: 'Mittente', ORDER_CONFIRMATION: 'Emittente' /* B-W2b-303 */ },
+    party: { QUOTE: 'Cliente', PURCHASE_ORDER: 'Fornitore', DDT: 'Destinatario (cessionario)', INVOICE_COPY: 'Cessionario / committente', PACKING_LIST: 'Destinatario', ORDER_CONFIRMATION: 'Cliente' /* B-W2b-303 */ },
     ddtPartyNotSold: 'Destinatario',
     destination: 'Luogo di destinazione',
     deliverTo: 'Consegnare a',
@@ -131,6 +133,7 @@ const IT: DocumentWords = {
     paymentTerms: 'Pagamento',
     deliveryTerms: 'Resa',
     deliveryDate: 'Data di consegna richiesta',
+    promiseDate: 'Consegna prevista', // B-W2b-303
     reference: {
       CUSTOMER_ORDER: 'Vs. ordine',
       QUOTE: 'Ns. offerta',
@@ -181,7 +184,7 @@ const IT: DocumentWords = {
     net: 'Imponibile',
     vat: (rate) => `IVA ${rate}`,
     vatExempt: (nature) => `Senza IVA (${nature})`,
-    gross: { QUOTE: 'Totale offerta', PURCHASE_ORDER: 'Totale ordine', DDT: 'Totale', INVOICE_COPY: 'Totale documento', PACKING_LIST: 'Totale' },
+    gross: { QUOTE: 'Totale offerta', PURCHASE_ORDER: 'Totale ordine', DDT: 'Totale', INVOICE_COPY: 'Totale documento', PACKING_LIST: 'Totale', ORDER_CONFIRMATION: 'Totale ordine' /* B-W2b-303 */ },
     deposit: 'Acconto già fatturato',
     due: 'Netto a pagare',
   },
@@ -197,14 +200,14 @@ const IT: DocumentWords = {
 }
 
 const EN: DocumentWords = {
-  title: { QUOTE: 'Quotation', PURCHASE_ORDER: 'Purchase order', DDT: 'Transport document (DDT)', INVOICE_COPY: 'Invoice - courtesy copy', PACKING_LIST: 'Packing list' },
+  title: { QUOTE: 'Quotation', PURCHASE_ORDER: 'Purchase order', DDT: 'Transport document (DDT)', INVOICE_COPY: 'Invoice - courtesy copy', PACKING_LIST: 'Packing list', ORDER_CONFIRMATION: 'Order confirmation' /* B-W2b-303 */ },
   number: 'Number',
   date: 'Date',
   page: 'Page {page} of {pages}',
   continued: 'continued',
   headings: {
-    issuer: { QUOTE: 'Issued by', PURCHASE_ORDER: 'Buyer', DDT: 'Sender (consignor)', INVOICE_COPY: 'Seller', PACKING_LIST: 'Sender' },
-    party: { QUOTE: 'Customer', PURCHASE_ORDER: 'Supplier', DDT: 'Recipient (consignee)', INVOICE_COPY: 'Buyer', PACKING_LIST: 'Recipient' },
+    issuer: { QUOTE: 'Issued by', PURCHASE_ORDER: 'Buyer', DDT: 'Sender (consignor)', INVOICE_COPY: 'Seller', PACKING_LIST: 'Sender', ORDER_CONFIRMATION: 'Issued by' /* B-W2b-303 */ },
+    party: { QUOTE: 'Customer', PURCHASE_ORDER: 'Supplier', DDT: 'Recipient (consignee)', INVOICE_COPY: 'Buyer', PACKING_LIST: 'Recipient', ORDER_CONFIRMATION: 'Customer' /* B-W2b-303 */ },
     ddtPartyNotSold: 'Recipient',
     destination: 'Place of delivery',
     deliverTo: 'Deliver to',
@@ -240,6 +243,7 @@ const EN: DocumentWords = {
     paymentTerms: 'Payment',
     deliveryTerms: 'Delivery terms',
     deliveryDate: 'Requested delivery date',
+    promiseDate: 'Delivery planned for', // B-W2b-303
     reference: {
       CUSTOMER_ORDER: 'Your order',
       QUOTE: 'Our quotation',
@@ -290,7 +294,7 @@ const EN: DocumentWords = {
     net: 'Net amount',
     vat: (rate) => `VAT ${rate}`,
     vatExempt: (nature) => `No VAT (${nature})`,
-    gross: { QUOTE: 'Quotation total', PURCHASE_ORDER: 'Order total', DDT: 'Total', INVOICE_COPY: 'Document total', PACKING_LIST: 'Total' },
+    gross: { QUOTE: 'Quotation total', PURCHASE_ORDER: 'Order total', DDT: 'Total', INVOICE_COPY: 'Document total', PACKING_LIST: 'Total', ORDER_CONFIRMATION: 'Order total' /* B-W2b-303 */ },
     deposit: 'Deposit already invoiced',
     due: 'Amount due',
   },

@@ -4,6 +4,8 @@ import { openingTemplate } from '@nexus/factory-domain/inventory/opening/importe
 import { openingStockImporter } from '@nexus/factory-domain/inventory/opening/importer'
 // B-W2b-190: the customer portal's order sheet (its own made-up rows, shared with the portal's template).
 import { ORDER_TEMPLATE_EXAMPLES } from '@nexus/factory-domain/sales/portal-ordering/upload'
+// B-W2b-303: sales orders typed in a sheet (made-up customers, styles and PO numbers).
+import { ORDER_IMPORT_EXAMPLES } from '@nexus/factory-domain/sales/order-import/importer'
 // B-W2b-209: a made-up Nexus Commerce product export (one family, its own row and four SKUs).
 import { COMMERCE_TEMPLATE_EXAMPLES } from '@nexus/factory-domain/product/commerce-import/sample'
 
@@ -56,6 +58,8 @@ export const TEMPLATE_EXAMPLES: Readonly<Record<string, readonly TemplateExample
   ],
   // B-W2b-190
   'sales.portalOrderLines': ORDER_TEMPLATE_EXAMPLES,
+  // B-W2b-303
+  'sales.orders': ORDER_IMPORT_EXAMPLES,
   // B-W2b-182: a tannery's packing list on a sent ship notice (made-up numbers).
   'purchasing.packingList': [
     { notice: 'ASN-2026-0001', hideNumber: '2231-001', area: '21.40', unit: 'FT2', line: '10', grade: 'A', thicknessMm: '1.20', dyeBatch: '2231' },

@@ -1,0 +1,47 @@
+/*
+ * Sales › Quotes › Quote speed (SCR-428, a section of the Quotes page) LAYOUT: its head, the tile skeletons and the strip. The
+ * tiles are the design system's MetricStrip; this file only places them, with semantic tokens. No max-width (Owner rule
+ * 2026-10-29): the strip fills the page's width.
+ */
+.fw-qsp {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+.fw-qsp-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-qsp-h2 {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: 600;
+}
+
+.fw-qsp-hint {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.fw-qsp-shape {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+/* The Quotes page with its speed section under the list (B-W2b-348). */
+.fw-qsp-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}

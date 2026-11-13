@@ -44,7 +44,9 @@
       "returns": "Returns & repairs",
       "service": "Warranty & service",
       "settings": "Settings",
-      "salesSettings": "Sales settings"
+      "salesSettings": "Sales settings",
+      "reportsGroup": "Reports",
+      "reports": "Sales reports"
     },
     "purchasing": {
       "area": "Purchasing",

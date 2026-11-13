@@ -163,6 +163,9 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/purchasing/requests',
   // B-W2b-347: RFQs & sourcing (SCR-222): the sample and development orders.
   '/purchasing/sourcing',
+  // B-W2b-348: Sales reports (SCR-250) and their print view (SCR-427, a new tab).
+  '/sales/reports',
+  '/sales/reports/print',
   // B-W2b-350: Purchasing reports (SCR-255) and their print view (SCR-372, a new tab).
   '/purchasing/reports',
   '/purchasing/reports/print',
@@ -266,6 +269,10 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   // B-W2b-271: a recall or withdrawal (SCR-328, the Builder in page mode) and an authority notice's PDF (SCR-329, a new tab).
   '/compliance/register/recall/[id]',
   '/compliance/register/notice',
+  // B-W2b-357: the accident log (SCR-422), the product-safety reports (SCR-421) and a report (SCR-421-record).
+  '/compliance/register/accidents',
+  '/compliance/register/accidents/reports',
+  '/compliance/register/accidents/reports/[id]',
   '/compliance/evidence/[kind]/[subject]',
   // B-W2b-266: Compliance › Status board (SCR-119) and its print window (SCR-314, a new tab).
   '/compliance/status',

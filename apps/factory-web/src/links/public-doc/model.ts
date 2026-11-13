@@ -3,6 +3,8 @@ import type { CareLine, PublicDocFile, PublicDocPage } from '@nexus/factory-doma
 import { brandingTokensOf } from '../../lib/api/branding'
 import { issuePath, type ApiError } from '../../lib/api/errors'
 import type { LinkSender } from '../../shell/links/view/LinkFrameView'
+// B-W2b-357 (links.doc › sec:report): the public safety report's section and dialog.
+import type { PublicReportActions, PublicReportModel } from './report/model'
 
 /**
  * SCR-102 — the public DoC page (design links.doc; B-W2b-166), pure: what the page shows from the API's page, the reader's
@@ -55,6 +57,8 @@ export interface PublicDocViewModel {
   readonly timeZone?: string
   /** B-W2b-236: design cases only — the picture's address drawn from made-up data (the page uses the API's stripped copy). */
   readonly pictureSrc?: string
+  /** B-W2b-357: Report a problem (the public safety report); absent: the section is not drawn. */
+  readonly report?: PublicReportModel
 }
 
 export interface PublicDocActions {
@@ -65,6 +69,8 @@ export interface PublicDocActions {
   onLookupSubmit?(): void
   /** Another record under the same code (rare): open match `n`. */
   onPick?(n: number): void
+  /** B-W2b-357: Report a problem. */
+  report?: PublicReportActions
 }
 
 export const EMPTY_LOOKUP: LookupModel = { text: '', problem: null, wait: null, busy: false, checking: false }

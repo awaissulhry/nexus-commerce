@@ -116,6 +116,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/sales/returns': 'sales.returns.view', // GET /sales/returns (+ GET /sales/repairs with sales.repairs.view) (B-W2a-77)
       '/sales/service': 'sales.service.view', // GET /sales/service/cases (B-W2b-353)
       '/sales/settings': 'quotes.view', // GET /sales/settings (B-W2a-77)
+      '/sales/reports': 'sales.reports.view', // GET /sales/reports/headline (B-W2b-348)
       '/products/styles': 'product.styles.view', // GET /product/styles
       '/products/materials': 'product.materials.view', // GET /product/materials
       '/products/operations': 'product.routing.view', // GET /product/operations
@@ -297,6 +298,8 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       // B-W2b-353: Sales › After-sales › Warranty & service.
       '/sales/service',
       '/sales/price-lists',
+      // B-W2b-348: Sales › Reports › Sales reports.
+      '/sales/reports',
       '/sales/settings',
     ])
     // A role's rows keep the full map's order.

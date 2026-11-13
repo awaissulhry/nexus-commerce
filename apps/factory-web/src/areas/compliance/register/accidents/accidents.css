@@ -1,0 +1,91 @@
+/*
+ * Product-safety reports and the accident log in the office (B-W2b-357) — LAYOUT only: cells of two lines, the record's
+ * cards in two columns on a wide screen, the dialogs' columns. Semantic --nds-* tokens only; no page max-width.
+ */
+.fw-acc-cell {
+  display: inline-flex;
+  flex-direction: column;
+  gap: var(--nds-space-1);
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.fw-acc-hint {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  overflow-wrap: anywhere;
+}
+
+.fw-acc-mono {
+  font-family: var(--nds-font-mono);
+  overflow-wrap: anywhere;
+}
+
+.fw-acc-words {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.fw-acc-law {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-acc-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-acc-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-acc-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-acc-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8) var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-acc-row > * {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.fw-acc-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-acc-photo-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (min-width: 1100px) {
+  .fw-acc-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}

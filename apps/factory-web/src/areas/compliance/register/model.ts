@@ -1,6 +1,8 @@
 import { csvLine } from '../../quality/_shared/hooks'
 import type { LiveState, Notice, QualityCan, Read } from '../../quality/_shared/model'
 import { REGISTER_KINDS, type Entry, type EntryDetail, type EntryQuery, type PartyOption, type RegisterKind, type RegisterRisk, type ReversedRelease, type StyleOption, type Trace } from './api'
+// B-W2b-357: the register header's ⋯ › Accident log.
+import type { AccidentLogLink } from '../../../lib/safety-reports/words'
 
 /**
  * The PPE register's rules without React or the API (SCR-113; design compliance.register; Reg. (EU) 2016/425 art. 8(4),
@@ -321,6 +323,8 @@ export interface RegisterListModel {
   readonly focusRow?: number
   readonly dialog?: ListDialog | null
   readonly newEntry?: NewEntryModel
+  /** B-W2b-357 (design page.h "Accident log (W2b)"): the ⋯ item to the accident log; absent: not drawn. */
+  readonly accidentLog?: AccidentLogLink
 }
 
 export type ListDialog = { kind: 'new' } | { kind: 'shortcuts' }

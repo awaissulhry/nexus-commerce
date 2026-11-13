@@ -136,8 +136,13 @@ export async function planCosts(db: Reader, workOrder: CostedWorkOrder, scope: P
       (await db.stockValuation.findMany({ where: { moveId: { in: all.map((move) => move.id) } }, select: { moveId: true, valueAmount: true, unitCost: true, currency: true } })).map((row) => [row.moveId, row]),
     )
     const standards = await frozenStandards(db, [workOrder.companyId], unique(all.map((move) => move.itemId)))
+    // B-W2b-309 (SAL-306): a customer's own lot is never costed on a work order (nothing was bought: no value, no wait).
+    const lotIds = unique(all.map((move) => move.lotId))
+    const owned = new Set((lotIds.length === 0 ? [] : await db.lot.findMany({ where: { id: { in: lotIds }, ownerPartyId: { not: null } }, select: { id: true } })).map((row) => row.id))
     for (const move of all.filter((row) => row.reversalOfId === null)) {
       if (byKey.has(entryKeys.move(move.id))) continue
+      // B-W2b-309
+      if (move.lotId && owned.has(move.lotId)) continue
       const value = values.get(move.id)
       if (!value) {
         wait('NOT_VALUED', 'StockMove', move.id, `The ${move.reason.toLowerCase().replace('_', ' ')} move of ${move.baseQuantity.toString()} has no value yet: its cost posts once the stock ledger values it.`)
@@ -159,6 +164,8 @@ export async function planCosts(db: Reader, workOrder: CostedWorkOrder, scope: P
     for (const move of all.filter((row) => row.reversalOfId !== null)) {
       const key = entryKeys.move(move.id)
       if (byKey.has(key)) continue
+      // B-W2b-309
+      if (move.lotId && owned.has(move.lotId)) continue
       const original = byKey.get(entryKeys.move(move.reversalOfId!))
       if (!original) {
         if (!values.has(move.reversalOfId!)) wait('NOT_VALUED', 'StockMove', move.id, 'This reversal waits for the move it reverses, which has no value yet.')

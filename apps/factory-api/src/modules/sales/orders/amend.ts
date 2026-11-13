@@ -18,6 +18,12 @@ import { newLineDraft, priceLines, scaledCost, snapshotLine, type LineDraft, typ
 import { lockStepRequests, remakeScheduleInCommand } from './schedule'
 import { asDay, dayOrNull, lockOrder, readOrder, readOrderFacts, type LineRecord, type OrderFacts, type OrderRow, type Reader } from './store'
 import type { OrderView } from './views'
+// B-W2b-303 (SO1:02): the line rules on an amendment's lines.
+import { amendedLineProblems } from '../orders-depth/line-rules'
+// B-W2b-309 (SAL-218, SAL-219, SAL-221, SAL-190, SAL-306): the freeze rules, the priced change, its extra deposit, the new yes.
+import type { PricedInput } from '@nexus/factory-domain/sales/order-changes/priced'
+import { afterAmendment, amendmentExtras, beforeAmendmentWrites, type ChangeOptions } from '../order-changes/apply'
+import { previewFrozenProblems } from '../order-changes/freeze'
 
 /**
  * Order amendments (B-W2a-30; SAL-209, SAL-217; the design's "Amend order" → "Review amendment" → Changes tab). A
@@ -217,6 +223,8 @@ export async function planAmendment(db: Reader, order: OrderRow, status: OrderRo
       changed: !sameSizes || priceText(unitPrice) !== priceText(line.unitPrice.toString()) || description !== line.description || note !== line.note,
     })
   }
+  // B-W2b-303 (SO1:02): a new or changed line outside the released scope, or another customer's private-label style, is refused.
+  if (issues.length === 0) issues.push(...(await amendedLineProblems(db, order, drafts.filter((draft) => draft.changed))))
   if (issues.length > 0) return issues
   drafts.sort((a, b) => a.seq - b.seq)
   const priced = priceLines(priceBasisOf(order.taxMode), order.currency, treatmentOfStored(lines[0]!), drafts)
@@ -280,6 +288,9 @@ export async function previewAmendment(caller: CommandCaller, orderId: string, b
       if (plan.length === 1 && plan[0]!.path === 'body') throw new InvalidStateError(plan[0]!.message)
       return { ok: false, revision, version: order.version, problems: plan, diff: null }
     }
+    // B-W2b-309 (SAL-218): what the company's freeze rules hold at the stage production reached, said before Apply.
+    const frozen = await previewFrozenProblems(client, order, plan.diff, false)
+    if (frozen.length > 0) return { ok: false, revision, version: order.version, problems: frozen, diff: diffView(plan.diff) }
     return { ok: true, revision, version: order.version, problems: [] as Issue[], diff: diffView(plan.diff) }
   })
 }
@@ -303,7 +314,7 @@ export async function applyAmendment(caller: CommandCaller, orderId: string, bod
  * own command amends, and B-W2b-183's accepted change request (modules/sales/change-requests) in the same command that
  * answers the request. The caller checked orders.manage over `order`.
  */
-export async function amendInCommand(tools: CommandTools, tenantId: string, order: OrderRow, body: AmendBody): Promise<{ amendmentId: string }> {
+export async function amendInCommand(tools: CommandTools, tenantId: string, order: OrderRow, body: AmendBody, options: { readonly reacceptance?: boolean; /* B-W2b-309 */ readonly priced?: PricedInput; readonly putBack?: boolean } = {} /* B-W2b-303: a split asks no re-acceptance */): Promise<{ amendmentId: string }> {
   const { tx, now } = tools
   const lineIds = (await tx.salesOrderLine.findMany({ where: { orderId: order.id }, select: { id: true } })).map((line) => line.id)
   await lockOrderLines(tx, tenantId, lineIds)
@@ -318,6 +329,9 @@ export async function amendInCommand(tools: CommandTools, tenantId: string, orde
     if (plan.length === 1 && plan[0]!.path === 'body') throw new InvalidStateError(plan[0]!.message)
     throw invalid(plan)
   }
+  // B-W2b-309: one change at a time, the freeze rules, the customer's materials of removed lines (before any write).
+  const changeOptions: ChangeOptions = { split: options.reacceptance === false, priced: options.priced ?? null, putBack: options.putBack === true }
+  const before309 = await beforeAmendmentWrites(tools, fresh, plan, changeOptions)
   const actorId = actorIdOf(tools)
   // Removed lines (nothing refers to them: planAmendment checked).
   for (const lineId of plan.removed) {
@@ -373,7 +387,9 @@ export async function amendInCommand(tools: CommandTools, tenantId: string, orde
   // The snapshot after names the new lines by the ids they got.
   const newIds = new Map(plan.priced.lines.flatMap((line, index) => (line.id === null ? [[placeholderId(index), finalIds[index]!] as const] : [])))
   const after: OrderSnapshot = { header: plan.after.header, lines: plan.after.lines.map((line) => (newIds.has(line.id) ? { ...line, id: newIds.get(line.id)! } : line)) }
-  const reacceptanceNeeded = plan.diff.reacceptanceNeeded
+  // B-W2b-303: a split moves lines to new orders of the same customer and quote: the customer accepts nothing again.
+  // B-W2b-309: a priced change always asks the customer (its price is new); a put-back restores what was accepted.
+  const reacceptanceNeeded = options.reacceptance === false || options.putBack === true ? false : plan.diff.reacceptanceNeeded || options.priced !== undefined
   await tx.salesOrder.update({
     where: { id: order.id },
     data: {
@@ -391,6 +407,8 @@ export async function amendInCommand(tools: CommandTools, tenantId: string, orde
   })
   const revision = nextRevision((await tx.salesOrderAmendment.findMany({ where: { orderId: order.id }, select: { revision: true } })).map((row) => row.revision))
   const amendmentId = newId()
+  // B-W2b-309: the priced parts and fee, the extra deposit and the new yes the row names (append-only: named at insert).
+  const extras = await amendmentExtras(tools, fresh, { amendmentId, revision, reason: body.reason!.trim(), before: plan.before, after, stage: before309.stage }, changeOptions)
   await tx.salesOrderAmendment.create({
     data: {
       id: amendmentId,
@@ -406,6 +424,11 @@ export async function amendInCommand(tools: CommandTools, tenantId: string, orde
       grossAmountBefore: plan.diff.grossBefore,
       grossAmountAfter: plan.diff.grossAfter,
       reacceptanceNeeded,
+      // B-W2b-309
+      ...(extras.priceDeltaLines !== undefined ? { priceDeltaLines: extras.priceDeltaLines } : {}),
+      feeAmount: extras.feeAmount,
+      depositRequestId: extras.depositRequestId,
+      reapprovalTaskId: extras.reapprovalTaskId,
       requestId: tools.context.requestId,
       createdAt: now,
       createdById: actorId,
@@ -433,6 +456,8 @@ export async function amendInCommand(tools: CommandTools, tenantId: string, orde
     reason: body.reason!.trim(),
   })
   tools.emit({ type: 'sales_order.amended', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, amendmentId, revision, reacceptanceNeeded, lineIds: changedLineIds } })
+  // B-W2b-309: sales_order.change_priced; the customer's materials of the changed lines follow their sizes.
+  await afterAmendment(tools, fresh, { amendmentId, revision, changedLineIds, extras })
   return { amendmentId }
 }
 

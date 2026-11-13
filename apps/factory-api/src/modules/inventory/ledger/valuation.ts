@@ -50,7 +50,9 @@ export async function valueMove(caller: CommandCaller, moveId: string, causation
       const valued = await valueMovesInCommand(tools, [{ ...move, baseQuantity: move.baseQuantity.toString() }], [{ cost }])
       if (!valued.has(move.id)) {
         // Nothing gives it a cost: recorded, so the attempt is audited and a repeat answers from the receipt.
-        tools.audit({ action: 'inventory.value', recordType: 'StockMove', recordId: move.id, companyId: move.companyId, siteId: move.siteId, after: { valued: false }, reason: 'No cost basis: the lot has no value and the item no standard cost.' })
+        // B-W2b-309 (SAL-306): a customer's own lot is never valued (not a missing cost).
+        const owned = move.lotId ? ((await tools.tx.lot.findUnique({ where: { id: move.lotId }, select: { ownerPartyId: true } }))?.ownerPartyId ?? null) : null
+        tools.audit({ action: 'inventory.value', recordType: 'StockMove', recordId: move.id, companyId: move.companyId, siteId: move.siteId, after: { valued: false }, reason: owned ? "The customer's own material: never valued." : 'No cost basis: the lot has no value and the item no standard cost.' })
       }
       return { valued: valued.has(move.id) }
     },

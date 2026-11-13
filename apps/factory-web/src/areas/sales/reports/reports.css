@@ -1,0 +1,244 @@
+/*
+ * Sales › Reports (SCR-250) and its print view (SCR-427) LAYOUT: the band, the scope row, the panels' heads, the skeletons, the
+ * charts and the buckets below them, the cells that open the records behind them, the drill, the keys and the print notes. The
+ * controls are the design system's; this file only places them, with semantic tokens (no colours of its own). No page max-width
+ * (Owner rule 2026-10-29): the page fills the shell's main area and every panel starts full width.
+ */
+.fw-slr {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-slr-band,
+.fw-slr-scope,
+.fw-slr-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-slr-scope {
+  justify-content: flex-start;
+}
+
+.fw-slr-company {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.fw-slr-head {
+  align-items: flex-start;
+  margin-bottom: var(--nds-space-10);
+}
+
+.fw-slr-head-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  flex: 1 1 18rem;
+}
+
+.fw-slr-head-controls,
+.fw-slr-status,
+.fw-slr-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-slr-h2 {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: 600;
+}
+
+.fw-slr-h3 {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.fw-slr-hint,
+.fw-slr-muted {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.fw-slr-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+  scroll-margin-top: var(--nds-space-16);
+}
+
+.fw-slr-sections {
+  min-width: 0;
+}
+
+.fw-slr-shape {
+  display: grid;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+.fw-slr-chart {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  min-width: 0;
+}
+
+/* The weeks or months under a chart: each opens the records behind its bar (Enter on a focused one). */
+.fw-slr-buckets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.fw-slr-bucket {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-2);
+  padding: var(--nds-space-4) var(--nds-space-8);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
+  color: var(--nds-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.fw-slr-bucket-quiet {
+  cursor: default;
+  border-style: dashed;
+}
+
+.fw-slr-bucket:focus-visible,
+.fw-slr-cell-link:focus-visible {
+  outline: 2px solid var(--nds-focus-ring);
+  outline-offset: 2px;
+}
+
+.fw-slr-bucket-label {
+  font-weight: 600;
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-slr-cell {
+  display: inline-flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.fw-slr-link {
+  color: var(--nds-primary);
+  text-decoration: underline;
+  overflow-wrap: anywhere;
+}
+
+/* A table cell opens the work orders behind it: a text button that reads as a link. */
+.fw-slr-cell-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--nds-primary);
+  text-align: left;
+  text-decoration: underline;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.fw-slr-drill,
+.fw-slr-drill-part {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-slr-drill-part {
+  gap: var(--nds-space-8);
+}
+
+.fw-slr-keymap {
+  display: grid;
+  gap: var(--nds-space-6);
+  margin: 0;
+}
+
+.fw-slr-keymap > div {
+  display: flex;
+  gap: var(--nds-space-10);
+  align-items: baseline;
+}
+
+.fw-slr-keymap dd {
+  margin: 0;
+}
+
+.fw-slr-print-note {
+  margin: var(--nds-space-6) 0 0;
+  font-size: var(--nds-font-size-sm);
+}
+
+/* The headline's tile skeletons (design: "loading: Tile skeletons"). */
+.fw-slr-tiles-shape {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+/* A backlog week holding late pieces. */
+.fw-slr-bucket-late {
+  border-color: var(--nds-danger);
+}
+
+.fw-slr-late {
+  color: var(--nds-danger);
+  font-weight: 600;
+}
+
+/* The returns panel's two bar lists side by side; one under the other on a narrow panel. */
+.fw-slr-pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-slr-part {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+/* The heatmap scrolls inside its own frame when it has more sizes than the panel is wide. */
+.fw-slr-heat {
+  overflow-x: auto;
+  min-width: 0;
+}

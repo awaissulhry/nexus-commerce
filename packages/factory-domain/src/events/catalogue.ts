@@ -159,6 +159,8 @@ import { events as subcontractDepth } from '../subcontract-depth/events'
 import { events as salesPricing } from '../sales-pricing/events'
 // B-W2b-294: quotes in depth (a quote template changed, a sent quote expired, its customer reminded before the end).
 import { events as quotesDepth } from '../quotes-depth/events'
+// B-W2b-303: orders in depth (priority, season, split, confirmation; a quote's season; a company's seasons).
+import { events as ordersDepth } from '../orders-depth/events'
 // B-W2b-342: repairs and alterations in depth (a request from outside, an estimate sent, answered or withdrawn).
 import { events as repairsDepth } from '../repairs-depth/events'
 // B-W2b-345: warranty and service cases.
@@ -167,6 +169,8 @@ import { events as serviceCases } from '../service-cases/events'
 import { events as safetyReports } from '../safety-reports/events'
 // B-W2b-302: quote speed-ups (a size curve changed).
 import { events as quoteSpeedups } from '../quote-speedups/events'
+// B-W2b-309: order changes (freeze rules, a priced change, the new yes decided, customer-supplied materials).
+import { events as orderChanges } from '../order-changes/events'
 // B-W2b-238: materials in depth (a material's approval decided).
 import { events as materialsDepth } from '../materials-depth/events'
 // B-W2b-230: the tech pack (a new PDF version of a revision's tech pack kept).
@@ -558,6 +562,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...inventorySubstitutions,
   // B-W2b-294
   ...quotesDepth,
+  // B-W2b-303
+  ...ordersDepth,
   // B-W2b-342
   ...repairsDepth,
   // B-W2b-306
@@ -570,6 +576,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...safetyReports,
   // B-W2b-302
   ...quoteSpeedups,
+  // B-W2b-309
+  ...orderChanges,
 ] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
