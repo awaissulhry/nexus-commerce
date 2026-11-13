@@ -10,6 +10,9 @@ import { formatDate, formatDateTime } from '../../../../lib/i18n/format'
 import type { PlanningException } from '../api'
 import { ackHeld, fixesOf, impactOf, kindTone, neighboursOf, resolveHeld, sentenceOf, snoozeHeld, statusTone, statusWords, titleOf, whatOf, type Words } from '../model'
 import type { ExceptionsActions, ExceptionsModel } from '../view-model'
+// B-W2b-336: a supply too late shows its four fixes (chase, move, buy elsewhere, re-promise) read fresh.
+import { OFFICE_PAGES } from '../../../../shell/nav/office-nav'
+import { SupplyLateFixes } from '../supply-late/view/SupplyLateFixes'
 
 /**
  * The exception's detail (design planning.exceptions pop:detail, "SO-1043 will be 6 days late"; a DetailModal opened by
@@ -101,12 +104,12 @@ export function ExceptionDetail({ model, actions, order, words }: { model: Excep
         </>
       }
     >
-      {row && <DetailBody row={row} model={model} words={words} />}
+      {row && <DetailBody row={row} model={model} actions={actions} words={words} />}
     </DetailModal>
   )
 }
 
-function DetailBody({ row, model, words }: { row: PlanningException; model: ExceptionsModel; words: Words }) {
+function DetailBody({ row, model, actions, words }: { row: PlanningException; model: ExceptionsModel; actions?: ExceptionsActions; words: Words }) {
   const { t, locale } = words
   const place = { locale, timeZone: model.timeZone }
   const fixes = fixesOf(row, { prefix: model.prefix, siteId: model.siteId })
@@ -141,6 +144,9 @@ function DetailBody({ row, model, words }: { row: PlanningException; model: Exce
         />
         <p className="fw-px-hint">{t('detail.chainLater')}</p>
       </div>
+      {row.kind === 'SUPPLY_LATE' && model.supplyLate ? (
+        <SupplyLateFixes slot={model.supplyLate} actions={actions?.supplyLate} place={{ prefix: model.prefix, siteId: model.siteId, built: OFFICE_PAGES }} row={row} timeZone={model.timeZone} />
+      ) : (
       <section className="fw-px-section" aria-labelledby="fw-px-fixes">
         <h3 id="fw-px-fixes" className="fw-px-h3">
           {t('detail.fixes')}
@@ -162,6 +168,7 @@ function DetailBody({ row, model, words }: { row: PlanningException; model: Exce
         )}
         <p className="fw-px-hint">{t('detail.fixHint')}</p>
       </section>
+      )}
     </div>
   )
 }

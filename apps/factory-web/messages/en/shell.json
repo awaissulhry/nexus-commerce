@@ -197,6 +197,7 @@
       "exceptions": "Exceptions",
       "dates": "Dates",
       "milestones": "Time & action",
+      "promise": "Promise dates",
       "longRange": "Long range",
       "demand": "Demand & forecast",
       "mps": "Master schedule & S&OP",
