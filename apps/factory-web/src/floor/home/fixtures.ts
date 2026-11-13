@@ -46,7 +46,8 @@ export const designScreen = defineDesignScreen<HomeViewModel>({
       id: 'warehouse',
       label: 'Warehouse device (no station)',
       model: home('warehouse', { frame: signedInFrame('home.title', { showHome: false, station: { name: null, site: 'Stabilimento Demo Nord' } }) }),
-      note: 'A device with no station is a warehouse device: Receive (inventory.receive, the operator\'s since B-W1-33) and Pick & issue open. B-W2b-308: My work (the task inbox) first, Move & put away after Receive; a lot, hide, roll or remnant label scanned here opens Move & put away, a traveller Pick & issue.',
+      // B-W2b-F37: page one is My work, Receive, Pick & issue (the tree's order; Owner 2026-11-13); Move & put away after Pick & issue.
+      note: 'A device with no station is a warehouse device: Receive (inventory.receive, the operator\'s since B-W1-33) and Pick & issue open. B-W2b-308: My work (the task inbox) first. B-W2b-F37: Pick & issue after Receive, Move & put away after Pick & issue (on the More page when the first is full); a lot, hide, roll or remnant label scanned here opens Move & put away, a traveller Pick & issue.',
     },
     {
       id: 'notice-blocks',

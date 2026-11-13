@@ -158,8 +158,8 @@ describe('the home tiles: mode AND permission, fail closed, only built pages ope
   })
 
   it('drops a tile whose permission the person lacks (Receive needs an office permission)', () => {
-    // B-W2b-308: My work (the task inbox) and Move & put away at the warehouse.
-    expect(homeTiles('warehouse', OPERATOR, false).map((tile) => tile.key)).toEqual(['mywork', 'move', 'pick', 'clock', 'training', 'help', 'incident', 'scan'])
+    // B-W2b-308: My work (the task inbox) and Move & put away at the warehouse. B-W2b-F37: Pick & issue before Move & put away.
+    expect(homeTiles('warehouse', OPERATOR, false).map((tile) => tile.key)).toEqual(['mywork', /* B-W2b-F37 */ 'pick', 'move', 'clock', 'training', 'help', 'incident', 'scan'])
     expect(homeTiles('packing', ['floor.work', 'print.labels'], false).map((tile) => tile.key)).toEqual(['mywork', 'clock', 'training', 'help', 'incident', 'scan'])
     expect(homeTiles('packing', ['floor.work', 'production.serials'], false).map((tile) => tile.key)).toEqual(['mywork', 'labels', 'clock', 'training', 'help', 'incident', 'scan'])
     // A subcontract station: Scan only.
@@ -182,13 +182,13 @@ describe('the home tiles: mode AND permission, fail closed, only built pages ope
   })
 
   it('the floor tasks are built: receive (SCR-092) and garment labels (SCR-096) too', () => {
-    expect(TILE_RULES.filter((rule) => rule.built).map((rule) => rule.key)).toEqual(['mywork', 'operation', 'cut', /* B-W2b-121 */ 'fabriccut', 'bundles', 'receive', /* B-W2b-308 */ 'move', 'pick', /* B-W2b-310 */ 'count', /* B-W2a-76 */ 'returnsin', 'kits', 'labels', 'pack', /* B-W2b-115 */ 'incoming', 'final', /* B-W2b-105 */ 'inline', 'machine', 'clock', /* B-W2b-68 */ 'myday', /* B-W2b-145 */ 'training', /* B-W2b-232 */ 'instructions', /* B-W2b-70 */ 'help', /* B-W2b-137 */ 'incident', 'lineview', 'scan'])
+    expect(TILE_RULES.filter((rule) => rule.built).map((rule) => rule.key)).toEqual(['mywork', 'operation', 'cut', /* B-W2b-121 */ 'fabriccut', 'bundles', 'receive', /* B-W2b-F37 */ 'pick', /* B-W2b-308 */ 'move', /* B-W2b-310 */ 'count', /* B-W2a-76 */ 'returnsin', 'kits', 'labels', 'pack', /* B-W2b-115 */ 'incoming', 'final', /* B-W2b-105 */ 'inline', 'machine', 'clock', /* B-W2b-68 */ 'myday', /* B-W2b-145 */ 'training', /* B-W2b-232 */ 'instructions', /* B-W2b-70 */ 'help', /* B-W2b-137 */ 'incident', 'lineview', 'scan'])
   })
 
   it('B-W2a-73: Machine problem at every station mode for whoever may report (plant.report), never held by the worker notice', () => {
     const reporter = [...OPERATOR, 'plant.report']
     expect(homeTiles('sewing', reporter, false).map((tile) => tile.key)).toEqual(['mywork', 'operation', 'machine', 'clock', 'myday', 'training', /* B-W2b-232 */ 'instructions', 'help', 'incident', 'scan'])
-    expect(homeTiles('warehouse', reporter, false).map((tile) => tile.key)).toEqual([/* B-W2b-308 */ 'mywork', 'move', 'pick', 'machine', 'clock', 'training', 'help', 'incident', 'scan'])
+    expect(homeTiles('warehouse', reporter, false).map((tile) => tile.key)).toEqual([/* B-W2b-308 */ 'mywork', /* B-W2b-F37 */ 'pick', 'move', 'machine', 'clock', 'training', 'help', 'incident', 'scan'])
     // A safety report never waits for the privacy notice (the station is named instead of the worker).
     expect(homeTiles('cutting', reporter, true).find((tile) => tile.key === 'machine')).toEqual({ key: 'machine', held: null })
     // A subcontract station (no floor mode): Scan only; without plant.report: no tile.
