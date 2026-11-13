@@ -262,8 +262,9 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/warehouse/moves',
       '/warehouse/receipts',
       '/warehouse/picking',
-      '/warehouse/counts',
+      // B-W2b-361: Transfers before Counts (the tree's order).
       '/warehouse/transfers',
+      '/warehouse/counts',
       '/warehouse/shipments',
       '/warehouse/reports',
       '/warehouse/locations',
@@ -335,6 +336,39 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       expect(hrefs.filter((href) => href.startsWith('/compliance/')), role).toEqual(want.compliance)
       expect(hrefs.includes('/production/instructions'), role).toBe(want.instructions)
       expect(hrefs.includes('/planning/milestones'), role).toBe(want.milestones)
+    }
+  })
+
+  // B-W2b-361 (the W2b-5 sweep): Sales, Planning, Purchasing and Warehouse per role template, Home › Approvals and Admin ›
+  // Approvals, automation & AI (the approval rules), each row behind its page's own read (the role templates as they stand; a
+  // template change that adds or removes one of these reads changes this table on purpose).
+  it('the W2b-5 rows per role: Sales, Planning, Purchasing, Warehouse, Home › Approvals, Admin › Approval rules', () => {
+    const allSales = ['customers', 'inquiries', 'quotes', 'orders', 'returns', 'service', 'price-lists', 'reports', 'settings']
+    const allPlanning = ['mrp', 'leather', 'board', 'capacity', 'allocation', 'exceptions', 'promise', 'milestones', 'demand', 'mps', 'reports', 'settings']
+    const allPurchasing = ['suppliers', 'requests', 'orders', 'subcontracting', 'sourcing', 'claims', 'reports', 'settings']
+    const allWarehouse = ['stock', 'hides', 'lots', 'moves', 'receipts', 'picking', 'transfers', 'counts', 'shipments', 'reports', 'locations', 'shipping', 'settings']
+    const without = (all: string[], ...gone: string[]) => all.filter((page) => !gone.includes(page))
+    const expected: Record<string, { sales: string[]; planning: string[]; purchasing: string[]; warehouse: string[]; approvals: boolean; rules: boolean }> = {
+      owner: { sales: allSales, planning: allPlanning, purchasing: allPurchasing, warehouse: allWarehouse, approvals: true, rules: true },
+      read_only: { sales: allSales, planning: allPlanning, purchasing: allPurchasing, warehouse: allWarehouse, approvals: true, rules: false },
+      sales: { sales: allSales, planning: ['promise'], purchasing: ['suppliers', 'requests'], warehouse: ['shipments'], approvals: true, rules: false },
+      planner: { sales: ['orders'], planning: allPlanning, purchasing: without(allPurchasing, 'suppliers'), warehouse: without(allWarehouse, 'counts', 'shipping'), approvals: true, rules: false },
+      buyer: { sales: ['customers'], planning: without(allPlanning, 'promise'), purchasing: allPurchasing, warehouse: without(allWarehouse, 'counts', 'shipments', 'shipping'), approvals: true, rules: false },
+      warehouse: { sales: ['customers', 'orders', 'returns'], planning: [], purchasing: allPurchasing, warehouse: allWarehouse, approvals: true, rules: false },
+      finance: { sales: without(allSales, 'inquiries'), planning: [], purchasing: ['suppliers', 'requests', 'reports'], warehouse: without(allWarehouse, 'shipping'), approvals: true, rules: false },
+      production_manager: { sales: ['customers', 'orders', 'returns', 'service', 'reports'], planning: allPlanning, purchasing: ['suppliers', 'requests', 'reports'], warehouse: without(allWarehouse, 'counts', 'shipping'), approvals: true, rules: true },
+      quality_inspector: { sales: ['customers', 'returns', 'service'], planning: [], purchasing: ['suppliers', 'requests'], warehouse: without(allWarehouse, 'counts', 'reports', 'shipping'), approvals: true, rules: false },
+      floor_supervisor: { sales: [], planning: [], purchasing: ['requests'], warehouse: ['stock', 'hides', 'lots', 'moves', 'receipts', 'picking', 'transfers', 'locations', 'settings'], approvals: true, rules: false },
+    }
+    for (const [role, want] of Object.entries(expected)) {
+      const hrefs = rows(officeNavFor(permissionCheck(templateOf(role)!.permissions))).map((row) => row.href)
+      const of = (area: string) => hrefs.filter((href) => href.startsWith(`/${area}/`)).map((href) => href.split('/')[2])
+      expect(of('sales'), `${role} sales`).toEqual(want.sales)
+      expect(of('planning'), `${role} planning`).toEqual(want.planning)
+      expect(of('purchasing'), `${role} purchasing`).toEqual(want.purchasing)
+      expect(of('warehouse'), `${role} warehouse`).toEqual(want.warehouse)
+      expect(hrefs.includes('/home/approvals'), `${role} approvals`).toBe(want.approvals)
+      expect(hrefs.includes('/admin/automation'), `${role} rules`).toBe(want.rules)
     }
   })
 })

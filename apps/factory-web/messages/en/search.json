@@ -98,6 +98,7 @@
     "GradeRule": "Grade rule",
     "Inquiry": "Inquiry",
     "ServiceCase": "Service case",
+    "ProductSafetyReport": "Product-safety report",
     "other": "Record"
   },
   "chip": {
@@ -146,6 +147,7 @@
     "GradeRule": "Grade rules",
     "Inquiry": "Inquiries",
     "ServiceCase": "Service cases",
+    "ProductSafetyReport": "Product-safety reports",
     "other": "Other records"
   },
   "status": {
@@ -243,6 +245,7 @@
     "LOST": "Lost",
     "WAITING_CUSTOMER": "Waiting for the customer",
     "WAITING_PART": "Waiting for a part",
-    "RESOLVED": "Resolved"
+    "RESOLVED": "Resolved",
+    "ASSESSING": "Being assessed"
   }
 }
