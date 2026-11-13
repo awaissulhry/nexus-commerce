@@ -61,6 +61,11 @@
 // and the signature; the day's sheet of its carrier names it once it is handed over (carriers.prisma DispatchManifest).
 // A parcel carries its declared and insured values (prices: never on the floor). Carrier contracts and pickups are
 // carriers.prisma's.
+//
+// W2b-6 (schema wave 51/57, B-W2b-372; LOG-061, LOG-065, LOG-097): a site's settings switch the shipping notice to the
+// customer and the broker pack link on (both OFF by default: nothing is sent by itself until the Owner says so). A
+// delivered shipment keeps the carrier's proof of delivery: who signed, when, and its image (a file of the shipment).
+// Tracking problems, return labels and customs declarations are customs.prisma's.
 
 /// Who carries the goods (trasporto a cura del; DPR 472/1996), as factory-domain documents DDT_TRANSPORT_BY.
 enum TransportBy {
@@ -117,6 +122,10 @@ model ShippingSettings {
   /// units, 0 or more); null: never by rule.
   /// @grain price
   insureAbove            Int?
+  /// W2b-6 (schema wave 51/57, B-W2b-372; LOG-061, LOG-097): the shipping notice e-mailed to the customer when a label is
+  /// printed, and the broker pack sent by link (BROKER_PACK); both OFF by default (the Owner's rule of 11-13).
+  customerNoticeOn       Boolean      @default(false)
+  brokerPackOn           Boolean      @default(false)
   version                Int          @default(1)
   createdAt              DateTime     @default(now()) @db.Timestamptz(3)
   updatedAt              DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
@@ -282,6 +291,12 @@ model Shipment {
   /// W2b-6 (LOG-049): the day's sheet of its carrier and site it was handed over on (carriers.prisma DispatchManifest);
   /// put on and taken off while the sheet is open, then fixed with it; a carrier shipment that is PACKED or left.
   manifestId                 String?                 @db.Uuid
+  /// W2b-6 (schema wave 51/57, B-W2b-372; LOG-065): the carrier's proof of delivery of a DELIVERED shipment: who signed (1 to
+  /// 200 characters on one line), when (not in the future, not before it left) and the image (a file of the shipment);
+  /// each set once.
+  podSignedBy                String?
+  podAt                      DateTime?               @db.Timestamptz(3)
+  podFileId                  String?                 @db.Uuid
   version              Int            @default(1)
   createdAt            DateTime       @default(now()) @db.Timestamptz(3)
   updatedAt            DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
@@ -306,6 +321,11 @@ model Shipment {
   // SetNull default: that would also clear tenantId and siteId).
   collectionSignature StoredFile?      @relation("ShipmentCollectionSignature", fields: [tenantId, collectionSignatureFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   manifest            DispatchManifest? @relation(fields: [tenantId, siteId, manifestId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b-6 (wave 51/57): the proof of delivery's image (Restrict, not Prisma's SetNull default: that would also clear
+  // tenantId); customs.prisma: its tracking problems and export declarations.
+  podFile             StoredFile?      @relation("ShipmentPodFile", fields: [tenantId, podFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  trackingExceptions  TrackingException[]
+  customsDeclarations CustomsDeclaration[]
 
   @@unique([tenantId, companyId, number])
   // The target of the references from its lines, parcels, DDTs and tracking events: the same site and party.

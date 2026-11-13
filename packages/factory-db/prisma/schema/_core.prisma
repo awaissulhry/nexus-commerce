@@ -89,6 +89,9 @@ model Company {
   /// The company as the labour consultant's payroll software knows it (codice ditta; GATE-PAYROLL), 20 characters at
   /// most; null: not given. Office only. B-W2b-54 keeps it in a layout's `definition.companyCode` until B-W2b-89 moves it.
   payrollCode          String?
+  /// W2b-6 (schema wave 51/57, B-W2b-372; LOG-095): the company's EORI for customs documents (the country's two capitals,
+  /// then 1 to 15 capitals or digits); null: none yet. Office only.
+  eori                 String?
   status               MasterStatus @default(ACTIVE)
   version              Int          @default(1)
   createdAt            DateTime     @default(now()) @db.Timestamptz(3)
@@ -403,6 +406,9 @@ model Site {
   carrierAccounts   CarrierAccount[]
   pickupRequests    PickupRequest[]
   dispatchManifests DispatchManifest[]
+  // W2b-6 customs.prisma (wave 51/57): the return labels of its RMAs and the export declarations of its shipments.
+  returnLabels        ReturnLabel[]
+  customsDeclarations CustomsDeclaration[]
   // sales.prisma: the sales order lines it makes.
   salesOrderLines SalesOrderLine[]
   // supply.prisma: the purchase orders delivered to it and its planning runs.

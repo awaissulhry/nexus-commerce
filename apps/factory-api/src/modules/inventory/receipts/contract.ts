@@ -145,6 +145,8 @@ const lineView = output({
   note: z.string().nullable(),
   /** B-W2a-31: what came in the supplier's unit and its factor (base units per unit), or null. */
   received: output({ quantity: decimal, uom, factor: z.string() }).nullable(),
+  /** B-W2b-377: since when it waits for a yes (beyond its delivery tolerance); null when it is not held. */
+  heldForApprovalAt: instant().nullable(),
   /** The order line: ordered, expected (confirmed), received by every posted receipt, still open. */
   orderLine: output({
     seq: z.number().int(),
@@ -225,6 +227,15 @@ export const receiptView = output({
   value,
 })
 
+const recordAnswer = output({
+  receipt: receiptView,
+  /** What differs from the order, in words (never blocking). */
+  notes: z.array(output({ code: z.enum(RECEIPT_NOTE_CODES), seq: z.number().int().nullable(), message: z.string() })),
+  moves: z.array(moveView),
+  /** B-W2b-377: the lines waiting for a yes, each with its request (Home › Approvals `?open=<taskId>`); empty when posted. */
+  held: z.array(output({ lineId: id(), seq: z.number().int(), taskId: id() })),
+})
+
 export const recordReceiptContract = defineContract({
   body: input({
     purchaseOrderId: id(),
@@ -241,14 +252,16 @@ export const recordReceiptContract = defineContract({
     shipNoticeId: id().optional(),
   }),
   response: {
-    201: output({
-      receipt: receiptView,
-      /** What differs from the order, in words (never blocking). */
-      notes: z.array(output({ code: z.enum(RECEIPT_NOTE_CODES), seq: z.number().int().nullable(), message: z.string() })),
-      moves: z.array(moveView),
-    }),
+    201: recordAnswer,
+    /** B-W2b-377: lines beyond a tolerance that needs a yes: the receipt waits OPEN (no move), `held` names each request. */
+    202: recordAnswer,
   },
 })
+
+// B-W2b-377 (SCM-061): the receipt that waited for its yes, posted as it was sent (201), or cancelled.
+const heldReceiptParams = input({ receiptId: id() })
+export const postHeldReceiptContract = defineContract({ params: heldReceiptParams, response: { 201: recordAnswer } })
+export const cancelHeldReceiptContract = defineContract({ params: heldReceiptParams, body: input({ reason: z.string().trim().min(1).max(1000) }), response: { 200: output({ receipt: receiptView }) } })
 
 // ---- reads --------------------------------------------------------------------------------------------------------------------
 

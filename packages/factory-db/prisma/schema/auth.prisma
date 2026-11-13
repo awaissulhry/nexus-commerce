@@ -180,7 +180,8 @@ enum UserStatus {
 /// One signed-in browser (a `__Host-` cookie holds the token). Valid until revoked, 8 hours without use or 7 days
 /// after sign-in, whichever comes first; the user must still be ACTIVE. W2b (B-W2b-152): a PARTNER session is the portal
 /// session of one party: its person's party, or, for an office preview, the party previewed; 30 minutes without use and
-/// 12 hours after sign-in at most (A1 §3.10; the guards hold both).
+/// 12 hours after sign-in at most (A1 §3.10; the guards hold both). W2b (B-W2b-373; PLT-068): the tenant's
+/// SecuritySettings (security.prisma) may set other lengths, a portal session's never beyond these.
 model Session {
   id                String            @id @db.Uuid
   tenantId          String            @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
@@ -202,6 +203,13 @@ model Session {
   /// HMAC of the shortened client address (/24, /64), never the address.
   ipHash            String?
   userAgent         String?
+  /// W2b (B-W2b-373; PLT-064, design "Where I'm signed in"): the device and the browser as the API read them from the user
+  /// agent at sign-in ("Mac", "Chrome 130"), and the place of the client address (ISO country, city) when it could tell;
+  /// each set once, never changed. lastSeenAt is the last use. Personal data (purpose: the account's security, GDPR art. 32).
+  deviceLabel       String?
+  browser           String?
+  ipCountry         String?
+  ipCity            String?
   revokedAt         DateTime?         @db.Timestamptz(3)
   revokedReason     SessionEndReason?
   /// W2b (B-W2b-152): OFFICE (the Office cookie) or PARTNER (a portal session of one party). Never changes.
@@ -235,6 +243,10 @@ enum SessionEndReason {
   DEACTIVATED
   /// A new password was set, or an administrator required one.
   PASSWORD_CHANGED
+  /// W2b (B-W2b-373; PLT-064): the person ended it from another browser ("Where I'm signed in": end one, or every other).
+  ENDED_BY_USER
+  /// W2b (B-W2b-373; PLT-064): an administrator ended the person's sessions.
+  ENDED_BY_ADMIN
 }
 
 /// An invitation to join the tenant's Office by email (PLT-015): a single-use link that expires. The invited user row

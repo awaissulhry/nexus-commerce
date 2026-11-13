@@ -5,6 +5,7 @@
     "alerts.HOLD_TOO_LONG": "{label} è bloccato da {hours} ore (la regola dice {threshold} h).",
     "alerts.MATERIAL_SHORT": "Il materiale {item} manca per l'ordine di lavoro rilasciato {label}.",
     "alerts.APPROVAL_OVERDUE": "Il preventivo {label} aspetta la sua approvazione da {hours} ore.",
+    "alerts.APPROVAL_OVERDUE.TASK": "La richiesta {label} aspetta la sua approvazione da {hours} ore.",
     "alerts.PO_NOT_CONFIRMED": "L'ordine di acquisto {label} non è confermato {days} giorni dopo l'invio.",
     "alerts.CERTIFICATE_EXPIRING": "Il certificato {label} scade il {dueDate} (mancano {days} giorni).",
     "alerts.INVOICE_DEADLINE": "La merce del DDT {label} va fatturata entro il {dueDate} (mancano {days} giorni).",

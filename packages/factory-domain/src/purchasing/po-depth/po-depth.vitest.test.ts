@@ -166,7 +166,7 @@ describe('delivery tolerances (SCM-061)', () => {
     expect(orderStatusAfter({ status: 'CONFIRMED', confirmed: true }, [{ expected: '100', received: '96', tolerancePct: '0' }])).toBe('PARTLY_RECEIVED')
     const tolerance = receiptToleranceOf({ areaTolerancePct: null }, rules[2]!)
     expect(beyondToleranceRefusal('Line 10: 12 received of 10.', tolerance, '10 pcs')).toBe('Line 10: 12 received of 10. Beyond the delivery tolerance (+0 %) the extra is refused: receive at most 10 pcs in all; the rest goes back to the supplier.')
-    expect(beyondToleranceRefusal('W.', receiptToleranceOf({ areaTolerancePct: null }, rules[0]!), '110 m')).toMatch(/needs a person's yes, and a yes for a receipt is not built yet/)
+    expect(beyondToleranceRefusal('W.', receiptToleranceOf({ areaTolerancePct: null }, rules[0]!), '110 m')).toMatch(/needs a person's yes: the office records this receipt to ask it, or receive at most 110 m in all here/)
     expect(beyondToleranceRefusal('W.', receiptToleranceOf({ areaTolerancePct: '5' }, rules[0]!), '105 m')).toBeNull()
   })
 

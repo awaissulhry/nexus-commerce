@@ -339,6 +339,36 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    nothing is written off); it calls suppliers' `factory_supplier_iban_ok`, `factory_supplier_list_ok`,
    `factory_supplier_office_person_ok`, recall's three helpers and money's `factory_money_lock`, `factory_money_rome_day`,
    `factory_invoice_credited`):
+   `…_delivery_customs_w2b_guards` (W2b-6 schema wave 51/57, B-W2b-372, delivery, returns and customs: tracking problems raised
+   on a shipment that left (one open per shipment and kind: a partial unique; an open one only while SHIPPED), their task named
+   once, resolved once then frozen; return labels made OFFERED (a RETURN_LABEL link of the RMA) or BOOKED while the RMA is
+   AUTHORISED or RECEIVED, OFFERED → BOOKED | CANCELLED, BOOKED → USED | CANCELLED, the booking reference and the label (a file
+   of the RMA) together from BOOKED on, each set once; customs declarations made PACK_SENT, PACK_SENT → FILED → EXITED, the MRN
+   from FILED on (set once), the exit (when and its proof, a file of the declaration) exactly when EXITED against an issued
+   invoice once the goods left, removed only while PACK_SENT; the proof of delivery only on a DELIVERED shipment, each part set
+   once (`Shipment_pod_check`); an order's deliveredAt exactly in the move SHIPPED → DELIVERED with a delivered shipment and
+   none travelling (`SalesOrder_delivered_check`); the EORI's shape (`Company_eori_check`); a BROKER_PACK link of a declaration
+   of its company and broker while PACK_SENT and the site's broker pack switched on, a RETURN_LABEL link of an open RMA of its
+   company and party (`OneOffLink_delivery_customs_check`); it redefines 367's `factory_shipment_guard` (the proof of delivery
+   still changes once the goods left) and `factory_generated_document_check` (COMMERCIAL_INVOICE, CN22, CN23 of a Shipment),
+   wave 39's `factory_sales_order_guard` (DELIVERED only from SHIPPED, then only CLOSED) and wave 19's
+   `factory_link_file_guard` (a BROKER_PACK link carries files), each word for word but for that; it calls recall's
+   `factory_recall_words_ok`, `factory_recall_not_future` and carriers' `factory_carriers_code_ok`):
+   `…_security_audit_w2b_guards` (W2b-6 schema wave 52/57, B-W2b-373, security and audit in depth: the tenant's security
+   settings (office idle 15 minutes to 24 hours and longest 1 hour to 30 days; portal idle 5 to 30 minutes and longest 1 to 12
+   hours, never beyond what `Session_audience_guard` holds; step-up locks after 3 to 10 failures for 5 minutes to 24 hours;
+   the actions switched off by their keys, each once; never deleted); a custom role archived by someone (both or neither),
+   only while nobody holds it, frozen until restored on its own, never given while archived (`RoleAssignment_role_archived`,
+   `WorkerRole_role_archived`: the role FOR SHARE), never deleted (`Role_custom_never_deleted`; a system role is never
+   archived and may still go with its template); a session's device, browser, country and city set once
+   (`Session_device_check`); step-up tries append-only, the fingerprint of the code that worked exactly on SUCCESS (once per
+   person: the unique key), the lock counted per person under a transaction advisory lock (the tenant's failures in a row
+   since the last SUCCESS within its lock time; LOCKED exactly while locked); security events append-only (the site exactly
+   on FLOOR, a party only on PORTAL or LINK, API_KEY_USED only on API, nobody known only for SIGN_IN_FAILED and API_KEY_USED,
+   the address as a 64-hex keyed hash, details as codes without `@`); reads of sensitive records append-only, only the
+   record types of `factory_read_log_record_type_ok`, only an office person's (OFFICE, API or SYSTEM); its own triggers on
+   Role, RoleAssignment, WorkerRole and Session, no earlier function redefined; it calls recall's `factory_recall_words_ok`,
+   `factory_recall_not_future` and `factory_recall_model_name_ok`):
    triggers, partial unique indexes and deferred
    constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new

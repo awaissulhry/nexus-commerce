@@ -105,6 +105,8 @@ model ReturnAuthorisation {
   policy           ReturnPolicy?  @relation(fields: [tenantId, companyId, policyId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
   lines            ReturnLine[]
   receipts         ReturnReceipt[]
+  // W2b-6 customs.prisma (wave 51/57): its return labels and links.
+  returnLabels     ReturnLabel[]
   // complaints.prisma: the complaints that came with or led to it.
   complaints       Complaint[]
 

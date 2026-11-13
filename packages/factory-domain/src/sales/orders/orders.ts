@@ -18,6 +18,10 @@ import { priceBasisOf, type SalesFeeKind, type SalesLineKind } from '../quotes/q
  * (PENDING_APPROVAL → CONFIRMED with the yes, CANCELLED with a no: the …_sales_orders_depth_w2b_guards trigger); B-W2b-303
  * writes those moves through the approval engine.
  *
+ * W2b-6 (schema wave 51/57, B-W2b-372; LOG-067): DELIVERED, every shipment of a SHIPPED order that left was delivered (the
+ * …_delivery_customs_w2b_guards trigger: from SHIPPED only, with deliveredAt, then only CLOSED). B-W2b-398 writes the move
+ * from the carrier's delivery; until then nothing moves an order into it.
+ *
  * One writer per move (SAL-204; the design's board: cards never drag, each state changes only through its own action):
  *
  *   IN_PRODUCTION    the system, when the first work order of its lines is released (workorder.released)
@@ -38,7 +42,7 @@ import { priceBasisOf, type SalesFeeKind, type SalesLineKind } from '../quotes/q
  * shipped are `closedShort`, never "to ship".
  */
 
-export const SALES_ORDER_STATUSES = ['CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED', 'SHIPPED', 'CLOSED', 'CANCELLED', 'PENDING_APPROVAL'] as const
+export const SALES_ORDER_STATUSES = ['CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED', 'SHIPPED', 'CLOSED', 'CANCELLED', 'PENDING_APPROVAL', 'DELIVERED'] as const
 export type SalesOrderStatus = (typeof SALES_ORDER_STATUSES)[number]
 
 export const STATUS_WORDS: Readonly<Record<SalesOrderStatus, string>> = Object.freeze({
@@ -50,6 +54,7 @@ export const STATUS_WORDS: Readonly<Record<SalesOrderStatus, string>> = Object.f
   CLOSED: 'Closed',
   CANCELLED: 'Cancelled',
   PENDING_APPROVAL: 'Waiting for a yes',
+  DELIVERED: 'Delivered',
 })
 
 /** The board's lanes (SAL-214): the open states, then shipped; closed and cancelled are counted beside them. */
@@ -117,6 +122,8 @@ export const salesOrderMachine = defineMachine<SalesOrderStatus, SalesOrderFacts
     PARTLY_SHIPPED: ['SHIPPED'],
     SHIPPED: ['PARTLY_SHIPPED', 'CLOSED'],
     PENDING_APPROVAL: ['CONFIRMED', 'CANCELLED'],
+    // W2b-6 (B-W2b-372): a delivered order is closed (the close command's guard); B-W2b-398 brings SHIPPED → DELIVERED.
+    DELIVERED: ['CLOSED'],
   },
   guards: {
     IN_PRODUCTION: (facts) => ((facts.releasedWorkOrders ?? 0) > 0 ? [] : ['a released work order of its lines']),

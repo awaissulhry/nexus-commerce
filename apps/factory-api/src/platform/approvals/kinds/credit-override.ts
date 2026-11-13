@@ -133,4 +133,12 @@ export const CREDIT_OVERRIDE_KIND: ApprovalKindDefinition = Object.freeze({
   async onApproved(tools: CommandTools, task: TaskRef) {
     await overrideInCommand(tools, task)
   },
+  // B-W2b-377 (B-W2b-361's gap): the held order, quote, work order or shipment opens, not the check's panels.
+  async parent(client: Reader, recordId: string) {
+    const check = await client.creditCheck.findUnique({ where: { id: recordId }, select: { recordType: true, recordId: true } })
+    if (!check) return null
+    if (check.recordType !== 'QuoteVersion') return { type: check.recordType, id: check.recordId }
+    const version = await client.quoteVersion.findUnique({ where: { id: check.recordId }, select: { quoteId: true } })
+    return version ? { type: 'Quote', id: version.quoteId } : null
+  },
 })

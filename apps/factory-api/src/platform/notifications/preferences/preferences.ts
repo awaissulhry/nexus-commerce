@@ -122,7 +122,8 @@ export async function resetPreferences(caller: CommandCaller, idempotencyKey?: s
 export async function readRoleDefaults(caller: CommandCaller, roleId?: string) {
   officeOf(caller)
   return caller.withClient(async (client) => {
-    const roles = await client.role.findMany({ where: { audience: 'OFFICE' }, orderBy: [{ name: 'asc' }, { id: 'asc' }], take: 200, select: { id: true, name: true, key: true, system: true } })
+    // B-W2b-373: an archived custom role is held by nobody: no defaults to set.
+    const roles = await client.role.findMany({ where: { audience: 'OFFICE', archivedAt: null }, orderBy: [{ name: 'asc' }, { id: 'asc' }], take: 200, select: { id: true, name: true, key: true, system: true } })
     const chosen = roleId ?? roles[0]?.id ?? null
     if (chosen !== null && !roles.some((role) => role.id === chosen)) throw new NotFoundError('Office role not found.')
     const rows = chosen ? await client.roleNotificationDefault.findMany({ where: { roleId: chosen }, select: { event: true, channel: true, cadence: true, updatedAt: true } }) : []
@@ -146,9 +147,9 @@ export async function saveRoleDefault(caller: CommandCaller, body: { readonly ro
   const key = roleDefaultKey(body.roleId, body.event, body.channel)
   await command(caller, { name: 'notifications.saveRoleDefault', idempotencyKey, input: body }, async (tools) => {
     const { tx, now } = tools
-    const role = await tx.role.findFirst({ where: { id: body.roleId, audience: 'OFFICE' }, select: { id: true, name: true } })
+    const role = await tx.role.findFirst({ where: { id: body.roleId, audience: 'OFFICE', archivedAt: null }, select: { id: true, name: true } })
     if (!role) {
-      const message = 'Choose an office role: floor and partner roles get no office notifications.'
+      const message = 'Choose an office role in use: floor and partner roles get no office notifications, and an archived role is held by nobody.'
       throw new ValidationError(message, [{ path: 'body/roleId', message }])
     }
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${key}::text))`

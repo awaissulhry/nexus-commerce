@@ -13,6 +13,7 @@ import { serverClock } from '../../../core/time'
 import { activeTenants, systemContext } from '../../../platform/outbox/system'
 import { officeContextOf, readOrder } from '../store'
 import { remindInCommand, SYSTEM_SENDER } from './remind'
+import { cadenceState, timingOf, type Timing } from './chase'
 
 /**
  * The daily confirmation reminders (B-W2a-52; SCM-087 "Confirmation reminders are daily running"; W2a plan §2 "Owner
@@ -32,22 +33,30 @@ import { remindInCommand, SYSTEM_SENDER } from './remind'
  *              the owner turns it with PUT /purchasing/reminders/settings/switch (./settings.ts).
  */
 
-/** The Owner's switch per company for one tenant's run: every PurchasingSettings row read once (the tenant's system context). */
-async function switchesOf(caller: CommandCaller): Promise<(companyId: string) => boolean> {
-  const rows = await caller.withClient((client) => client.purchasingSettings.findMany({ select: { companyId: true, confirmationRemindersEnabled: true } }))
-  return switchOf(rows)
-}
+/**
+ * The Owner's switch per company for one tenant's run: every PurchasingSettings row read once (the tenant's system context);
+ * B-W2b-377: the rows also give each company's reminder cadence (./chase.ts timingOf).
+ */
+const settingsOf = (caller: CommandCaller) => caller.withClient((client) => client.purchasingSettings.findMany({ select: { companyId: true, confirmationRemindersEnabled: true, confirmByHours: true, reminderCadenceDays: true } }))
 
-/** The SENT orders past their confirm-by time that this reader reaches (at most `take`, the oldest deadline first). */
-async function overdueOrders(client: Prisma.TransactionClient, where: Prisma.PurchaseOrderWhereInput, now: Date, take: number) {
+/**
+ * The SENT orders past their confirm-by time that this reader reaches (at most `take`, the oldest deadline first). B-W2b-377:
+ * only CONFIRMATION reminders count (a chase is a reminder of its own kind), spaced by the company's cadence.
+ */
+async function overdueOrders(client: Prisma.TransactionClient, where: Prisma.PurchaseOrderWhereInput, now: Date, take: number, timing: (companyId: string) => Timing) {
   const orders = await client.purchaseOrder.findMany({
     where: { AND: [where, { status: 'SENT', confirmBy: { lte: now } }] },
     orderBy: [{ confirmBy: 'asc' }, { id: 'asc' }],
     take,
     select: { id: true, number: true, companyId: true, siteId: true, partyId: true, status: true, revision: true, confirmBy: true, sentAt: true, sentById: true, version: true },
   })
-  const reminders = orders.length === 0 ? [] : await client.purchaseOrderReminder.findMany({ where: { purchaseOrderId: { in: orders.map((order) => order.id) } }, select: { purchaseOrderId: true, revision: true, sentAt: true } })
-  return orders.map((order) => ({ order, state: reminderState({ status: order.status, revision: order.revision, confirmBy: order.confirmBy, reminders: reminders.filter((row) => row.purchaseOrderId === order.id && row.revision === order.revision) }, now) }))
+  const reminders = orders.length === 0 ? [] : await client.purchaseOrderReminder.findMany({ where: { purchaseOrderId: { in: orders.map((order) => order.id) }, kind: 'CONFIRMATION' }, select: { purchaseOrderId: true, revision: true, sentAt: true } })
+  return orders.map((order) => {
+    const mine = reminders.filter((row) => row.purchaseOrderId === order.id && row.revision === order.revision)
+    const state = reminderState({ status: order.status, revision: order.revision, confirmBy: order.confirmBy, reminders: mine }, now)
+    const spaced = cadenceState(mine, order.confirmBy, timing(order.companyId).cadenceDays, now)
+    return { order, state: { ...state, due: state.overdue && spaced.due, nextAt: spaced.nextAt } }
+  })
 }
 
 /** GET /purchasing/reminders/due (purchasing.view). */
@@ -56,9 +65,10 @@ export async function dueReminders(caller: CommandCaller, query: { readonly comp
   const scope = scopeWhere(actorOf(context), PURCHASING_VIEW, { company: 'companyId', site: 'siteId', party: 'partyId' }) as Prisma.PurchaseOrderWhereInput
   const where: Prisma.PurchaseOrderWhereInput = { AND: [scope, query.companyId ? { companyId: query.companyId } : {}, query.siteId ? { siteId: query.siteId } : {}, query.partyId ? { partyId: query.partyId } : {}] }
   const now = serverClock.now()
-  const automaticOn = await switchesOf(caller)
+  const settings = await settingsOf(caller)
+  const automaticOn = switchOf(settings)
   return caller.withClient(async (client) => {
-    const rows = await overdueOrders(client as unknown as Prisma.TransactionClient, where, now, query.limit + 1)
+    const rows = await overdueOrders(client as unknown as Prisma.TransactionClient, where, now, query.limit + 1, timingOf(settings))
     const page = rows.slice(0, query.limit)
     const parties = new Map((await client.party.findMany({ where: { id: { in: [...new Set(page.map((row) => row.order.partyId))] } }, select: { id: true, legalName: true } })).map((party) => [party.id, party.legalName]))
     return {
@@ -112,9 +122,10 @@ export async function runConfirmationReminders(options: ReminderRunOptions): Pro
   const tenants = await activeTenants(options.database)
   for (const tenantId of tenants) {
     const caller = callerFor(options.database, systemContext(tenantId, requestId))
-    const switchOn = options.switchOn ?? (await switchesOf(caller))
+    const rows = await settingsOf(caller)
+    const switchOn = options.switchOn ?? switchOf(rows)
     const now = clock.now()
-    const due = (await caller.withClient((client) => overdueOrders(client as unknown as Prisma.TransactionClient, {}, now, RUN_LIMIT))).filter((row) => row.state.due)
+    const due = (await caller.withClient((client) => overdueOrders(client as unknown as Prisma.TransactionClient, {}, now, RUN_LIMIT, timingOf(rows)))).filter((row) => row.state.due)
     for (const { order, state } of due) {
       totals.due++
       if (!switchOn(order.companyId)) {

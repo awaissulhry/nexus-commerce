@@ -545,7 +545,9 @@
           "CREDIT_OVERRIDE": "deroga al fido",
           "CREDIT_WITHOUT_RETURN": "nota di credito senza reso",
           "SUPPLIER_BANK_CHANGE": "modifica delle coordinate bancarie di un fornitore",
-          "PURCHASE_REQUEST": "richiesta d'acquisto"
+          "PURCHASE_REQUEST": "richiesta d'acquisto",
+          "PURCHASE_ORDER_COMPLIANCE": "invio senza un documento valido",
+          "RECEIPT_OVER_TOLERANCE": "ricevimento oltre la tolleranza"
         }
       },
       "TASK_DUE.TODAY": "La tua attività \"{title}\" scade oggi.",
@@ -565,6 +567,7 @@
       "alerts.HOLD_TOO_LONG": "{label} è bloccato da {hours} ore (la regola dice {threshold} h).",
       "alerts.MATERIAL_SHORT": "Il materiale {item} manca per l'ordine di lavoro rilasciato {label}.",
       "alerts.APPROVAL_OVERDUE": "Il preventivo {label} aspetta la sua approvazione da {hours} ore.",
+      "alerts.APPROVAL_OVERDUE.TASK": "La richiesta {label} aspetta la sua approvazione da {hours} ore.",
       "alerts.PO_NOT_CONFIRMED": "L'ordine di acquisto {label} non è confermato {days} giorni dopo l'invio.",
       "alerts.CERTIFICATE_EXPIRING": "Il certificato {label} scade il {dueDate} (mancano {days} giorni).",
       "alerts.INVOICE_DEADLINE": "La merce del DDT {label} va fatturata entro il {dueDate} (mancano {days} giorni).",

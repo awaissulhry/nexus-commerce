@@ -115,11 +115,11 @@
     },
     "beyondHint": {
       "BLOCK": "Il ricevimento accetta al massimo il limite; il resto torna al fornitore.",
-      "APPROVAL": "Il sì per un ricevimento non è ancora costruito: finché non c’è, l’eccedenza è rifiutata allo stesso modo."
+      "APPROVAL": "Il ricevimento aspetta un sì dell’ufficio acquisti prima di essere registrato (in ufficio; il tablet del ricevimento rifiuta l’eccedenza)."
     },
     "beyondShort": {
       "BLOCK": "eccedenza rifiutata",
-      "APPROVAL": "l’eccedenza chiede un sì (rifiutata finché non c’è)"
+      "APPROVAL": "l’eccedenza chiede un sì"
     },
     "figures": "+{over} / −{under}",
     "applies": "Cosa vale:",

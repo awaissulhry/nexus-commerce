@@ -149,6 +149,7 @@
     "QUOTE_APPROVAL": "Preventivo"
   },
   "row": {
+    "task": "{kind}: {label}",
     "openRecord": "Apri il record",
     "ownPage": "Si decide sulla sua pagina"
   },

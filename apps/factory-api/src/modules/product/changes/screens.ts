@@ -90,7 +90,8 @@ export async function approverOptions(caller: CommandCaller, changeOrderId: stri
   const { context, row } = await readOrderFor(caller, changeOrderId, PRODUCT_CHANGES_MANAGE)
   const now = serverClock.now()
   return caller.withClient(async (db) => {
-    const users = await db.user.findMany({ where: { status: 'ACTIVE', id: { not: row.authorId } }, select: { id: true, displayName: true }, orderBy: { id: 'asc' }, take: MAX_PEOPLE })
+    // B-W2b-377 (XF5:01): never the author, nor the person naming them (naming oneself is refused SELF_NAMED).
+    const users = await db.user.findMany({ where: { status: 'ACTIVE', id: { notIn: [row.authorId, context.actorId] } }, select: { id: true, displayName: true }, orderBy: { id: 'asc' }, take: MAX_PEOPLE })
     const people: { id: string; name: string }[] = []
     for (const user of users) {
       if (await personMay(db, context.tenantId, user.id, PRODUCT_CHANGES_APPROVE, row.companyId, now)) people.push({ id: user.id, name: user.displayName })

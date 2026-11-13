@@ -181,7 +181,9 @@ export const taskRow = output({
   kindLabel: words,
   status: z.enum(APPROVAL_TASK_STATUSES),
   summary: z.string(),
-  record: output({ type: z.string(), id: id() }),
+  // B-W2b-377 (B-W2b-361's gaps): the record in words as its kind reads it now (no money; null: gone or unknown kind), and the
+  // page its subject belongs to when the subject has none of its own (a credit check's order, a bank account's supplier …).
+  record: output({ type: z.string(), id: id(), label: z.string().nullable(), parent: output({ type: z.string(), id: id() }).nullable() }),
   companyId: id(),
   siteId: id().nullable(),
   requester,

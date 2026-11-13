@@ -5,7 +5,7 @@ import { newId } from '@nexus/factory-domain/core/ids'
 import { can, scopeWhere, type Actor } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { LINKS_MANAGE, LINKS_VIEW } from '@nexus/factory-domain/links/permissions'
-import { linkState, linkTerms, PURPOSE_RULES, type LinkPurpose } from '@nexus/factory-domain/links/purposes'
+import { isLinkPurpose, linkState, linkTerms, PURPOSE_RULES, type LinkPurpose } from '@nexus/factory-domain/links/purposes'
 import { mintLinkToken, linkTokenHash } from '@nexus/factory-domain/links/token'
 import type { CommandTx } from '../../core/command'
 import { actorOf, requireContext, type OfficeContext } from '../../core/context'
@@ -63,10 +63,17 @@ const SELECT = {
 } as const satisfies Prisma.OneOffLinkSelect
 
 type LinkRow = Prisma.OneOffLinkGetPayload<{ select: typeof SELECT }>
+/**
+ * A link of a purpose these routes serve (factory-domain's LINK_PURPOSES). The schema holds BROKER_PACK and RETURN_LABEL since
+ * B-W2b-372 (wave 51/57); until B-W2b-409 and B-W2b-398 bring them to factory-domain, the generic routes neither list nor
+ * read back such a link (fail closed), as the link authenticator and renewal already refuse to open one.
+ */
+type ServedLinkRow = LinkRow & { readonly purpose: LinkPurpose }
+const served = (row: LinkRow): row is ServedLinkRow => isLinkPurpose(row.purpose)
 
 const iso = (date: Date | null): string | null => (date === null ? null : toUtcIso(date))
 
-export function linkViewOf(row: LinkRow, now: Date): LinkView {
+export function linkViewOf(row: ServedLinkRow, now: Date): LinkView {
   return {
     id: row.id,
     companyId: row.companyId,
@@ -101,9 +108,9 @@ export function linkViewOf(row: LinkRow, now: Date): LinkView {
   }
 }
 
-export const loadLink = async (client: CommandTx | FactoryClient, id: string): Promise<LinkRow> => {
+export const loadLink = async (client: CommandTx | FactoryClient, id: string): Promise<ServedLinkRow> => {
   const row = await client.oneOffLink.findUnique({ where: { id }, select: SELECT })
-  if (!row) throw new NotFoundError('Link not found.')
+  if (!row || !served(row)) throw new NotFoundError('Link not found.')
   return row
 }
 
@@ -194,7 +201,7 @@ export async function listLinks(client: FactoryClient, actor: Actor, filter: { r
     take: 200,
     select: SELECT,
   })
-  return rows.map((row) => linkViewOf(row, now))
+  return rows.filter(served).map((row) => linkViewOf(row, now))
 }
 
 /** links.revoke: the link opens nothing from now on. Final; its evidence stays. */

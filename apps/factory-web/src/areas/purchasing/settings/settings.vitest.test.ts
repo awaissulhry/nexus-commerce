@@ -317,8 +317,9 @@ describe('honest states (Owner answers 11-10)', () => {
     expect(html('buyer')).toContain('Only the Owner switches automatic reminders')
     expect(html('switch-on')).toContain('mails real suppliers')
   })
-  it('APPROVAL beyond a tolerance says it is refused until a yes for a receipt exists', () => {
-    expect(html('owner')).toContain('A yes for a receipt is not built yet: until it is, the extra is refused the same way.')
+  // B-W2b-377: the receipt beyond the tolerance waits for the buyer's yes (RECEIPT_OVER_TOLERANCE).
+  it('APPROVAL beyond a tolerance says the receipt waits for a yes before it is posted', () => {
+    expect(html('owner')).toContain('The receipt waits for a yes from the buyer before it is posted')
   })
   it('no money anywhere on the page', () => {
     for (const item of designScreen.cases) expect(render(item.model, 'en'), item.id).not.toMatch(/€|EUR\b/)

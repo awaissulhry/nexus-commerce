@@ -58,8 +58,8 @@ export function useScopeWords() {
  * (e.g. ±5% footage)"; the API of B-W2b-296): the default of this company (or of every company) — every supplier, every
  * material — as a form with its EditModeBar (⌘S), fields empty with a hint each until one is kept; then the exceptions per
  * supplier or per material in the ONE list frame (Active · Archived · All; Archive N · Reactivate N; a row opens its dialog,
- * `?tolerance=<id>`; New exception, `c`). Beyond the tolerance the extra is refused, or needs a yes — and a yes for a receipt
- * is not built yet, so the extra is refused the same way: said where it is chosen. No money.
+ * `?tolerance=<id>`; New exception, `c`). Beyond the tolerance the extra is refused, or needs a yes — the receipt waits for
+ * the buyer's yes before it is posted (B-W2b-377): said where it is chosen. No money.
  */
 export function ToleranceCard({ model, actions, shortcut }: { model: PurchasingSettingsModel; actions?: PurchasingSettingsActions; shortcut: boolean }) {
   const t = useT(NS)

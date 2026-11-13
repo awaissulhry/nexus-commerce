@@ -260,7 +260,8 @@
     "SHIPPED": "Shipped",
     "CLOSED": "Closed",
     "CANCELLED": "Cancelled",
-    "PENDING_APPROVAL": "Waiting for a yes"
+    "PENDING_APPROVAL": "Waiting for a yes",
+    "DELIVERED": "Delivered"
   },
   "poStatus": {
     "DRAFT": "Draft",
