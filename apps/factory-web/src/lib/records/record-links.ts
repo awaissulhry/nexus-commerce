@@ -394,9 +394,6 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/sales/inquiries': '/sales/inquiries',
   // B-W2b-353: the service cases (SCR-217) read `?view=`, `?kind=`, `?cover=`, `?serial=`, `?q=`.
   '/sales/service/cases': '/sales/service',
-  // B-W2b-357: the product-safety reports (SCR-421) read `?view=`, `?source=`, `?q=`; the accident log (SCR-422) `?told=`, `?outcome=`, `?from=`, `?to=`.
-  '/sales/safety-reports': '/compliance/register/accidents/reports',
-  '/sales/safety-reports/accident-log': '/compliance/register/accidents',
   // B-W2b-261: the sample rounds (SCR-110) read `?tile=`, `?kind=`, `?party=`, `?internal=1`, `?style=`, `?q=`.
   '/sales/samples/rounds': '/products/samples',
   // B-W2b-244: the changes (SCR-117) read `?tile=` (B-W2b-226's request and order tiles are its saved rows), `?style=` or
