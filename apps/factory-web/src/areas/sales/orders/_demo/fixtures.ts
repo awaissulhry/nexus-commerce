@@ -129,6 +129,7 @@ export const BOARD: OrderBoard = {
     { key: 'waitingForDeposit', count: 2, filter: { deposit: 'OPEN' } },
     { key: 'inProduction', count: 2, filter: { status: 'IN_PRODUCTION' } },
     { key: 'readyToShip', count: 1, filter: { status: 'READY' } },
+    { key: 'waitingForCustomer', count: 1, filter: { reaccept: 'true' } }, // B-W2b-323
   ],
   asOf: at(29, 9, 42),
 }

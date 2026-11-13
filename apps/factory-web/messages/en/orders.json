@@ -86,6 +86,7 @@
     "open": "Open",
     "late": "Late",
     "deposit": "Waiting for deposit",
+    "reaccept": "Waiting for the customer to accept a change",
     "CONFIRMED": "Confirmed",
     "IN_PRODUCTION": "In production",
     "READY": "Ready to ship",
@@ -101,11 +102,13 @@
     "waitingForDeposit": "Waiting for deposit",
     "inProduction": "In production",
     "readyToShip": "Ready to ship",
+    "waitingForCustomer": "Waiting for the customer to accept a change",
     "unknown": "Couldn't count"
   },
   "layout": {
     "list": "List",
-    "board": "Board"
+    "board": "Board",
+    "week": "By promise week"
   },
   "list": {
     "tableLabel": "Sales orders",

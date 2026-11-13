@@ -197,6 +197,8 @@ export const listOrdersContract = defineContract({
     late: flag.optional(),
     /** The order needs a deposit and a request of it is still OPEN. */
     deposit: z.enum(['OPEN']).optional(),
+    /** B-W2b-323: a change waits for the customer to accept it (reapprovalNeededAt set), the order not closed or cancelled. */
+    reaccept: flag.optional(),
     ...filterFields,
     cursor: id().optional(),
     limit: z.coerce.number().int().min(1).max(200).default(50),
@@ -242,7 +244,8 @@ export const boardContract = defineContract({
       /** The board's lanes, in order (closed and cancelled are counted in byStatus). */
       lanes: z.array(status),
       /** Each tile's count is the list's total under its filter (the same query parameters). */
-      tiles: z.array(output({ key: z.enum(['late', 'waitingForDeposit', 'inProduction', 'readyToShip']), count: z.number().int(), filter: z.record(z.string(), z.string()) })),
+      // B-W2b-323: + waitingForCustomer (design sec:orders.tiles "Waiting for the customer to accept a change").
+      tiles: z.array(output({ key: z.enum(['late', 'waitingForDeposit', 'inProduction', 'readyToShip', 'waitingForCustomer']), count: z.number().int(), filter: z.record(z.string(), z.string()) })),
       asOf: instant(),
     }),
   },

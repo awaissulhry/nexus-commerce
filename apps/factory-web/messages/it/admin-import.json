@@ -251,6 +251,10 @@
       "purchasing_supplierPrices": {
         "name": "Listini fornitori",
         "fills": "Le fonti approvate di un fornitore: materiale, colore, unità d’acquisto, prezzo (costo), minimo, tempo di consegna e principale o di riserva, per codice fornitore, materiale e colore."
+      },
+      "sales_orders": {
+        "name": "Ordini di vendita",
+        "fills": "Ordini raccolti fuori da Nexus: un ordine per riferimento, le righe per modello, colore e taglia, con quantità, prezzo, PO del cliente, date, stagione e priorità."
       }
     },
     "keys": {

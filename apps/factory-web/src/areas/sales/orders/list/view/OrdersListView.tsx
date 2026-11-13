@@ -19,6 +19,11 @@ import type { OrdersListActions, OrdersListModel } from '../list-model'
 import { NewOrderDialog } from './NewOrderDialog'
 import { marginColumn } from '../margin/MarginColumn'
 import { OrdersBoard } from './OrdersBoard'
+// ---- B-W2b-323 (orders in depth on screen) ----
+import { depthColumns, printVerb, SetPriorityButton, SetPriorityDialog } from '../../list-depth/view/ListDepth'
+import { WeekBoard } from '../../week/view/WeekBoard'
+import { OrdersImportView } from '../../import/view/OrdersImportView'
+import { NAMESPACE as DEPTH } from '../../depth/model'
 import '../../orders.css'
 
 export type { OrdersListActions, OrdersListModel } from '../list-model'
@@ -34,7 +39,7 @@ export type { OrdersListActions, OrdersListModel } from '../list-model'
  */
 export function OrdersListView({ model, actions }: { model: OrdersListModel; actions?: OrdersListActions }) {
   return (
-    <WithMessages namespaces={['orders', 'lists']}>
+    <WithMessages namespaces={['orders', 'lists', DEPTH /* B-W2b-323 */]}>
       <OrdersList model={model} actions={actions} />
     </WithMessages>
   )
@@ -43,6 +48,7 @@ export function OrdersListView({ model, actions }: { model: OrdersListModel; act
 function OrdersList({ model, actions }: { model: OrdersListModel; actions?: OrdersListActions }) {
   const t = useT('orders')
   const lists = useT('lists')
+  const d = useT(DEPTH) // B-W2b-323
   const locale = useLocale()
   const [query, setQuery] = useState(model.q)
   useEffect(() => setQuery(model.q), [model.q])
@@ -189,6 +195,8 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
             { id: 'tab', label: t('list.openNewTab'), href: href(data), target: '_blank' },
             { id: 'deposit', label: t('tab.money'), href: `${href(data)}?tab=money` },
             ...(data.status === 'CONFIRMED' && model.can.makeWorkOrders ? [{ id: 'make', label: t('step.makeWorkOrders'), href: `${model.prefix}/production/work-orders?new=1&order=${encodeURIComponent(data.number)}` }] : []),
+            // B-W2b-323: Print confirmation (the confirmation PDF in a new tab; held while it waits for a yes or was cancelled).
+            ...(model.depth ? [printVerb(data, model.prefix, d)] : []),
           ]}
         />
       ) : null
@@ -204,10 +212,12 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
       ...(model.can.price ? [{ colId: 'net', headerName: t('col.net'), field: 'netAmount' as const, minWidth: 106, flex: 0.7, type: 'rightAligned', cellRenderer: NetCell }] : []),
       // B-W2a-72: Margin % as estimated now (costing.view + the margin grain; Owner answer S2).
       ...(model.margins ? [marginColumn(model.margins, t('col.margin'), t('col.marginHint'), locale)] : []),
+      // B-W2b-323: Priority (inline, CellSaveMark) and Season.
+      ...(model.depth ? depthColumns(model.depth, actions?.depth, d) : []),
       { colId: 'quote', headerName: t('col.quote'), minWidth: 112, flex: 0.7, cellRenderer: QuoteCell },
       { colId: 'more', headerName: t('col.more'), minWidth: 72, maxWidth: 72, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
     ]
-  }, [t, locale, model.prefix, model.today, model.can.price, model.can.makeWorkOrders, model.margins])
+  }, [t, d, locale, model.prefix, model.today, model.can.price, model.can.makeWorkOrders, model.margins, model.depth, actions?.depth])
 
   const narrowed = model.q.trim() !== '' || (model.rows !== 'open' && model.rows !== 'all')
   const clearFilters = () => {
@@ -263,6 +273,8 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
             options={[
               { value: 'list', label: t('layout.list') },
               { value: 'board', label: t('layout.board') },
+              // B-W2b-323: By promise week.
+              ...(model.week !== undefined ? [{ value: 'week', label: t('layout.week') }] : []),
             ]}
           />
           <Button size="sm" variant="quiet" asChild>
@@ -273,6 +285,18 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
           <Button size="sm" variant="primary" heldReason={model.can.manage ? null : t('held.noManage')} onClick={() => actions?.onNewOrder?.(true)} aria-keyshortcuts="c">
             <Plus size={14} aria-hidden /> {t('list.new')}
           </Button>
+          {/* B-W2b-323: the band's ⋯ — Import orders (dry run first), Keyboard shortcuts. */}
+          {model.importer !== undefined && (
+            <Menu
+              label={<MoreHorizontal size={16} aria-hidden />}
+              align="right"
+              triggerProps={{ 'aria-label': d('list.more') }}
+              items={[
+                { id: 'import', label: d('import.action'), disabled: !!model.importer?.held, description: model.importer?.held ? d(model.importer.held) : d('import.hint'), onSelect: () => actions?.onImport?.() },
+                { id: 'keys', label: d('list.keys'), onSelect: () => setHelp(true) },
+              ]}
+            />
+          )}
         </span>
       </div>
 
@@ -303,7 +327,10 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
         })}
       />
 
-      {model.layout === 'board' ? (
+      {model.layout === 'week' && model.week ? (
+        // B-W2b-323: By promise week (the search narrows it; the rows view does not apply: every open line).
+        <WeekBoard model={model.week} prefix={model.prefix} search={searchField} onSite={actions?.onWeekSite} onRetry={actions?.onWeekRetry} />
+      ) : model.layout === 'board' ? (
         <OrdersBoard model={model} actions={actions} search={searchField} rowsSelect={rowsSelect} onHelp={() => setHelp(true)} />
       ) : (
         <ListFrame<OrderRow>
@@ -318,9 +345,13 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
             selected,
             onChange: setSelected,
             actions: (
-              <Button size="sm" variant="primary" aria-label={t('bulk.export', { count: picked.length })} onClick={() => actions?.onExport?.(picked.map((row) => row.id))}>
-                <Download size={13} aria-hidden /> <SelectionLabel>{t('bulk.export', { count: picked.length })}</SelectionLabel>
-              </Button>
+              <>
+                {/* B-W2b-323: Set priority for N (one command over the selection). */}
+                {model.depth && <SetPriorityButton count={picked.length} model={model.depth} onClick={() => actions?.depth?.onSetPriority?.(picked.map((row) => row.id))} />}
+                <Button size="sm" variant="primary" aria-label={t('bulk.export', { count: picked.length })} onClick={() => actions?.onExport?.(picked.map((row) => row.id))}>
+                  <Download size={13} aria-hidden /> <SelectionLabel>{t('bulk.export', { count: picked.length })}</SelectionLabel>
+                </Button>
+              </>
             ),
           }}
           updates={model.updates > 0 ? { count: model.updates, onShow: () => actions?.onShowUpdates?.() } : null}
@@ -332,9 +363,12 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
           focusRow={model.focusRow}
         />
       )}
-      {model.rows !== 'open' && <p className="fw-so-hint">{t('list.viewing', { view: t(`rows.${model.rows}`) })}</p>}
+      {model.rows !== 'open' && model.layout !== 'week' && <p className="fw-so-hint">{t('list.viewing', { view: t(`rows.${model.rows}`) })}</p>}
 
       {model.newOrder && <NewOrderDialog model={model.newOrder} actions={actions} />}
+      {/* B-W2b-323: Set priority, Import orders. */}
+      {model.depth && <SetPriorityDialog model={model.depth} actions={actions?.depth} />}
+      {model.importer && <OrdersImportView model={model.importer} actions={actions?.importActions} />}
 
       {help && (
         <Modal open onClose={() => setHelp(false)} title={t('list.keysTitle')} size="sm">

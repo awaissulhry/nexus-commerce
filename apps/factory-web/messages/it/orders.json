@@ -86,6 +86,7 @@
     "open": "Aperti",
     "late": "In ritardo",
     "deposit": "In attesa di acconto",
+    "reaccept": "In attesa che il cliente accetti una modifica",
     "CONFIRMED": "Confermati",
     "IN_PRODUCTION": "In produzione",
     "READY": "Pronti da spedire",
@@ -101,11 +102,13 @@
     "waitingForDeposit": "In attesa di acconto",
     "inProduction": "In produzione",
     "readyToShip": "Pronti da spedire",
+    "waitingForCustomer": "In attesa che il cliente accetti una modifica",
     "unknown": "Conteggio non riuscito"
   },
   "layout": {
     "list": "Elenco",
-    "board": "Bacheca"
+    "board": "Bacheca",
+    "week": "Per settimana promessa"
   },
   "list": {
     "tableLabel": "Ordini di vendita",

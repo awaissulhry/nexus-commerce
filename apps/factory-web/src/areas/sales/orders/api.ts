@@ -54,7 +54,8 @@ export type MilestoneStatus = (typeof MILESTONE_STATUSES)[number]
 /** An amendment's line changes (factory-domain sales/amendments LINE_CHANGES). */
 export const LINE_CHANGES = ['ADDED', 'REMOVED', 'CHANGED'] as const
 export type LineChange = (typeof LINE_CHANGES)[number]
-export const TILE_KEYS = ['late', 'waitingForDeposit', 'inProduction', 'readyToShip'] as const
+// B-W2b-323: + waitingForCustomer (a change the customer must accept: the order's reapprovalNeededAt).
+export const TILE_KEYS = ['late', 'waitingForDeposit', 'inProduction', 'readyToShip', 'waitingForCustomer'] as const
 export type TileKey = (typeof TILE_KEYS)[number]
 export const SDI_STATE_CODES = ['DRAFT', 'NOT_SENT', 'SENDING', 'AT_SDI', 'DELIVERED', 'NOT_DELIVERED', 'REJECTED', 'ERROR'] as const
 export type SdiStateCode = (typeof SDI_STATE_CODES)[number]
@@ -106,6 +107,8 @@ export interface OrderQuery {
   open?: boolean
   late?: boolean
   deposit?: 'OPEN' | null
+  /** B-W2b-323: only orders whose change waits for the customer to accept it. */
+  reaccept?: boolean
   q?: string
   cursor?: string | null
   limit?: number
@@ -118,6 +121,7 @@ export function listOrders(api: ApiClient, query: OrderQuery, signal?: AbortSign
       open: query.open ? 'true' : undefined,
       late: query.late ? 'true' : undefined,
       deposit: query.deposit ?? undefined,
+      reaccept: query.reaccept ? 'true' : undefined, // B-W2b-323
       q: query.q?.trim() || undefined,
       cursor: query.cursor ?? undefined,
       limit: query.limit ?? 50,

@@ -19,6 +19,10 @@ import { amendHeld, changeCount, minimumsOf, reviewHeld } from '../../daily-mode
 import { dayInstant, depositGate, gridOf, SIZE_LAYERS, stillToPay, styleGroups, type Phrase } from '../../model'
 import type { AmendState, OrderRecordActions, OrderRecordModel } from '../record-model'
 import { LinesEditor } from './LinesEditor'
+// ---- B-W2b-323 (orders in depth on screen) ----
+import { FrozenSizes, frozenIssues } from '../../depth/view/LinesDepth'
+import { MaterialsCard } from '../../materials/view/MaterialsCard'
+import { NAMESPACE as DEPTH } from '../../depth/model'
 
 /**
  * Lines (design `order.lines.cards` + `order.lines.summary`): one card per style — the colourways × sizes in the DS size
@@ -98,11 +102,15 @@ export function LinesTab({ order, model, actions }: { order: Order; model: Order
                 <div className="fw-so-gridbox">
                   <SizeGridView colours={grid.colours} sizes={grid.sizes} value={grid.value} caption={t('lines.gridCaption', { style: group.code, layer: t(`layer.${model.sizeLayer}`) })} locale={INTL_LOCALE[locale]} copy={copy} />
                 </div>
+                {/* B-W2b-323: the size cells already cut, locked with their reason. */}
+                <FrozenSizes model={model.depth} lines={group.lines} />
                 <SummaryTable label={t('lines.pricesOf', { style: group.code })} columns={columns} rows={rows} density="roomy" stackOnPhone align={columns.map((_, index) => (index === 0 ? 'left' : 'right'))} />
               </Card>
             )
           })}
           {model.sizeLayer === 'inWorkOrders' && <p className="fw-so-hint">{t('lines.madeHint')}</p>}
+          {/* B-W2b-323: Customer-supplied materials (order.lines.owned). */}
+          <MaterialsCard order={order} model={model.depth} actions={actions?.depth} prefix={model.prefix} />
         </div>
       }
       aside={<SummaryRail order={order} model={model} />}
@@ -117,6 +125,7 @@ export function LinesTab({ order, model, actions }: { order: Order; model: Order
  */
 function AmendLines({ order, amend, model, actions }: { order: Order; amend: AmendState; model: OrderRecordModel; actions?: OrderRecordActions }) {
   const t = useT('orders')
+  const d = useT(DEPTH) // B-W2b-323
   const locale = useLocale()
   const minimums = minimumsOf(order)
   const headerChanged = (amend.customerRef.trim() || null) !== (order.customerRef ?? null) || (amend.requestedDate || null) !== (order.requestedDate ?? null)
@@ -173,7 +182,7 @@ function AmendLines({ order, amend, model, actions }: { order: Order; amend: Ame
             </div>
           </Card>
           <LinesEditor
-            model={{ mode: 'amend', lines: amend.lines, order, styles: amend.styles, composer: amend.composer, price: model.can.price, currency: order.currency, priceBasis: order.priceBasis, minimums, busy: model.busy }}
+            model={{ mode: 'amend', lines: amend.lines, order, styles: amend.styles, composer: amend.composer, price: model.can.price, currency: order.currency, priceBasis: order.priceBasis, minimums, busy: model.busy, frozen: frozenIssues(model.depth, d) /* B-W2b-323 */ }}
             actions={{ onCells: actions?.onAmendCells, onPrice: actions?.onAmendPrice, onComposerQuery: actions?.onComposerQuery, onComposerPick: actions?.onComposerPick, onComposerToggle: actions?.onComposerToggle, onComposerAdd: actions?.onComposerAdd }}
           />
         </div>
