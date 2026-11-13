@@ -336,6 +336,11 @@ export async function seed(context: SeedContext): Promise<PlanningDepthSeed> {
       const draftSew = await tx.scheduleSlot.findUnique({ where: { id: slot.draftSew }, select: { workOrderOperationId: true } })
       const ops = production.operationIds
       const change = { siteId: siteA, planVersionId: schedule.workingPlanId, changedById: actorId, createdById: actorId }
+      // B-W2b-F39: a change keeps a copy of the operation it names (its seq and name now; the database checks it).
+      const named = new Map(
+        (await tx.workOrderOperation.findMany({ where: { id: { in: [ops.sew, ops.pack, ...(draftSew?.workOrderOperationId ? [draftSew.workOrderOperationId] : [])] } }, select: { id: true, seq: true, name: true } })).map((op) => [op.id, op]),
+      )
+      const copyOf = (operationId: string | null) => ({ workOrderOperationId: operationId, operationSeq: operationId ? (named.get(operationId)?.seq ?? null) : null, operationName: operationId ? (named.get(operationId)?.name ?? null) : null })
       await tx.scheduleChange.createMany({
         data: [
           { id: C.publish, ...change, kind: ScheduleChangeKind.PUBLISH, publishedVersionId: schedule.publishedPlanId, changedAt: T.published, createdAt: T.published },
@@ -345,7 +350,7 @@ export async function seed(context: SeedContext): Promise<PlanningDepthSeed> {
             kind: ScheduleChangeKind.MOVE,
             slotId: slot.sew,
             workOrderId: production.workOrderId,
-            workOrderOperationId: ops.sew,
+            ...copyOf(ops.sew), // B-W2b-F39
             fromLineId: lineL1,
             fromStartAt: at(17, 8),
             fromEndAt: at(17, 16),
@@ -362,15 +367,15 @@ export async function seed(context: SeedContext): Promise<PlanningDepthSeed> {
             kind: ScheduleChangeKind.PLACE,
             slotId: slot.draftSew,
             workOrderId: production.draftWorkOrderId,
-            workOrderOperationId: draftSew?.workOrderOperationId ?? null,
+            ...copyOf(draftSew?.workOrderOperationId ?? null), // B-W2b-F39
             toLineId: lineL1,
             toStartAt: at(19, 8),
             toEndAt: at(19, 10),
             changedAt: T.placed,
             createdAt: T.placed,
           },
-          { id: C.pin, ...change, kind: ScheduleChangeKind.PIN, slotId: slot.pack, workOrderId: production.workOrderId, workOrderOperationId: ops.pack, changedAt: T.pinned, createdAt: T.pinned },
-          { id: C.unpin, ...change, kind: ScheduleChangeKind.UNPIN, slotId: slot.pack, workOrderId: production.workOrderId, workOrderOperationId: ops.pack, changedAt: T.unpinned, createdAt: T.unpinned },
+          { id: C.pin, ...change, kind: ScheduleChangeKind.PIN, slotId: slot.pack, workOrderId: production.workOrderId, ...copyOf(ops.pack), changedAt: T.pinned, createdAt: T.pinned }, // B-W2b-F39: copyOf
+          { id: C.unpin, ...change, kind: ScheduleChangeKind.UNPIN, slotId: slot.pack, workOrderId: production.workOrderId, ...copyOf(ops.pack), changedAt: T.unpinned, createdAt: T.unpinned },
         ],
       })
       const scenario = { companyId: companyA, siteId: siteA, ownerId: actorId, basePlanVersionId: schedule.workingPlanId, basedAt: T.whatIf, createdAt: T.whatIf, updatedAt: T.whatIf, createdById: actorId }

@@ -126,6 +126,8 @@
     "undoOne": "Annulla: {what}",
     "what": "Op {seq} {operation} di {order}",
     "whatPart": "parte di {order}",
+    "whatGone": "Op {seq} {operation} di {order} (non più nell'ordine di lavoro)",
+    "whatGoneUnnamed": "una fase di {order} (non più nell'ordine di lavoro)",
     "kind": {
       "PLACE": "{what} collocata su {lane}",
       "MOVE": "{what} spostata",
@@ -160,6 +162,7 @@
       "ALREADY_UNDONE": "Questa modifica è già annullata.",
       "ALREADY_UNDONE_BY": "Già annullata da {name}, {time}.",
       "CHANGED_SINCE": "La barra è cambiata nel frattempo: si annulla solo l'ultima modifica di una barra, finché è dove quella modifica l'ha lasciata.",
+      "OPERATION_GONE": "La sua fase non è più nell'ordine di lavoro: il registro conserva questa modifica, ma non si annulla.",
       "NO_PERMISSION": "Annullare questa modifica richiede il permesso con cui è stata fatta (un fissaggio: il permesso di fissare; uno spostamento: di pianificare)."
     }
   },
@@ -429,7 +432,8 @@
     "WHAT_IF_CLOSED": "Questa simulazione è già applicata o scartata.",
     "NOT_UNDOABLE": "Questa modifica non si annulla (una pubblicazione, un annullamento o una parte tolta).",
     "ALREADY_UNDONE": "Questa modifica è già annullata.",
-    "CHANGED_SINCE": "La barra è cambiata nel frattempo: si annulla solo la sua ultima modifica."
+    "CHANGED_SINCE": "La barra è cambiata nel frattempo: si annulla solo la sua ultima modifica.",
+    "OPERATION_GONE": "La sua fase non è più nell'ordine di lavoro: questa modifica resta, non si annulla."
   },
   "error": {
     "forbidden": "Non hai il permesso di vederlo.",

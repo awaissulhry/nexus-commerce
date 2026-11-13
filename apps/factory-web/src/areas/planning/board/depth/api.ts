@@ -185,7 +185,8 @@ export const changeEntry = z.object({
   slotId: z.string().nullable(),
   onBoard: z.boolean(),
   workOrder: z.object({ id: z.string(), number: z.string() }).nullable(),
-  operation: z.object({ id: z.string(), seq: z.number(), code: z.string(), name: z.string() }).nullable(),
+  // B-W2b-F39: `onWorkOrder` false: the operation left its work order since; seq and name are the record's copy (null before it kept one).
+  operation: z.object({ id: z.string(), seq: z.number().nullable(), code: z.string().nullable(), name: z.string().nullable(), onWorkOrder: z.boolean() }).nullable(),
   from: changePlace.nullable(),
   to: changePlace.nullable(),
   reason: z.string().nullable(),

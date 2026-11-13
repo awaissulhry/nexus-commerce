@@ -26,8 +26,12 @@ export type ChangeKind = (typeof CHANGE_KINDS)[number]
 export const UNDOABLE_KINDS = ['PLACE', 'MOVE', 'REMOVE', 'PIN', 'UNPIN'] as const
 export type UndoableKind = (typeof UNDOABLE_KINDS)[number]
 
-/** Why a change cannot be undone now (the feed's `undo.code`, the undo's 409 `refusal/<CODE>`). */
-export const UNDO_HOLDS = ['NOT_UNDOABLE', 'ALREADY_UNDONE', 'CHANGED_SINCE', 'NO_PERMISSION'] as const
+/**
+ * Why a change cannot be undone now (the feed's `undo.code`, the undo's 409 `refusal/<CODE>`). B-W2b-F39: OPERATION_GONE,
+ * the change names an operation that left its work order since (a draft's release, revision or a repair's steps, once its
+ * bar went back to the tray): the record keeps the change with its copy of the operation, nothing is put back.
+ */
+export const UNDO_HOLDS = ['NOT_UNDOABLE', 'ALREADY_UNDONE', 'CHANGED_SINCE', 'NO_PERMISSION', 'OPERATION_GONE'] as const
 export type UndoHoldCode = (typeof UNDO_HOLDS)[number]
 
 export const CHANGE_LOG_LIMITS = Object.freeze({ page: 50, maxPage: 200, reason: 500 })
@@ -98,12 +102,15 @@ export interface UndoFacts {
   readonly slot: SlotNow | null
   /** The person holds the undo's permission at the site. */
   readonly may: boolean
+  /** B-W2b-F39: the change names an operation that is no longer on its work order. */
+  readonly operationGone: boolean
 }
 
 /** Why the change cannot be undone now, first reason first; null: it may be. */
 export function undoHoldOf(change: ChangeFacts, facts: UndoFacts): UndoHoldCode | null {
   if (!isUndoable(change.kind) || (change.kind === 'REMOVE' && change.operationId === null)) return 'NOT_UNDOABLE'
   if (facts.undone) return 'ALREADY_UNDONE'
+  if (facts.operationGone) return 'OPERATION_GONE' // B-W2b-F39
   if (facts.latestOfSlot !== change.id || !resultHolds(change, facts.slot)) return 'CHANGED_SINCE'
   if (!facts.may) return 'NO_PERMISSION'
   return null
@@ -137,7 +144,10 @@ export function placeWords(place: ChangePlace, laneName: string, timeZone: strin
 
 export interface ChangeWordsFacts {
   readonly kind: ChangeKind
-  /** "Op 20 Sew of SEED-WO-0001" / "SEED-WO-0001's part of the order". */
+  /**
+   * "Op 20 Sew of SEED-WO-0001" / "SEED-WO-0001's part of the order"; B-W2b-F39: "Op 25 Sew of SEED-WO-0002 (no longer on
+   * the work order)" (changeWhat).
+   */
   readonly what: string
   readonly from: { readonly place: ChangePlace; readonly laneName: string } | null
   readonly to: { readonly place: ChangePlace; readonly laneName: string } | null
@@ -209,5 +219,28 @@ export function undoHoldWords(code: UndoHoldCode, facts: UndoHoldWordsFacts): st
       return `${facts.what} changed since${facts.later ? `: ${facts.later}` : ': it is not where this change left it'}. Only the latest change of a bar is undone.`
     case 'NO_PERMISSION':
       return `Undoing it needs ${facts.permission} at this site.`
+    case 'OPERATION_GONE': // B-W2b-F39
+      return `${facts.what}: the record keeps this change, but it is not undone.`
   }
 }
+
+// ---- B-W2b-F39: the operation a change names, live or by the record's copy -----------------------------------------------
+
+/** The operation a change names: on its work order now, or gone (the record's copy; a change written before B-W2b-F39 has none). */
+export interface ChangeOperation {
+  readonly seq: number | null
+  readonly name: string | null
+  readonly onWorkOrder: boolean
+}
+
+/**
+ * "Op 20 Sew of SEED-WO-0001"; gone: "Op 25 Sew of SEED-WO-0002 (no longer on the work order)", or "SEED-WO-0002's operation
+ * (no longer on the work order)" without a copy; no operation: "SEED-WO-0001's part of the order".
+ */
+export function changeWhat(workOrderNumber: string | null, operation: ChangeOperation | null): string {
+  if (!operation) return `${workOrderNumber ?? 'The work order'}'s part of the order`
+  if (operation.onWorkOrder) return `Op ${operation.seq} ${operation.name} of ${workOrderNumber ?? 'the work order'}`
+  const named = operation.seq !== null && operation.name !== null ? `Op ${operation.seq} ${operation.name} of ${workOrderNumber ?? 'the work order'}` : `${workOrderNumber ?? 'The work order'}'s operation`
+  return `${named} (no longer on the work order)`
+}
+// ---- end B-W2b-F39 -----------------------------------------------------------------------------------------------------
