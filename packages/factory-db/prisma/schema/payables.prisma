@@ -256,6 +256,11 @@ model SupplierInvoiceLine {
   // cost-ledger.prisma: the work-order cost entries a subcontract line's actual cost posted.
   /// @not-money a relation: the ledger rows carry the grain
   costEntries       WorkOrderCostEntry[]
+  // W2b-6 cost-actuals.prisma (wave 54/57): a goods line's purchase price variance at invoice, a charge line's landed cost.
+  /// @not-money a relation: the variance rows carry the grain
+  purchasePriceVariances PurchasePriceVariance[]
+  /// @not-money a relation: the allocations carry the grain
+  landedCostAllocations  LandedCostAllocation[]
 
   @@unique([tenantId, invoiceId, seq])
   // The targets of the matches' reference (the same supplier) and of the cost ledger's.

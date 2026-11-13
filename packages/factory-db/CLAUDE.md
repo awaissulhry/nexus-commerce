@@ -369,6 +369,26 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    record types of `factory_read_log_record_type_ok`, only an office person's (OFFICE, API or SYSTEM); its own triggers on
    Role, RoleAssignment, WorkerRole and Session, no earlier function redefined; it calls recall's `factory_recall_words_ok`,
    `factory_recall_not_future` and `factory_recall_model_name_ok`):
+   `…_cost_actuals_w2b_guards` (W2b-6 schema wave 54/57, B-W2b-376, actual cost to the end: the settings (a close tolerance of 0
+   to 100, where the purchase price variance is taken, the company's switch for the accountant's figures GATE-ACCOUNTANT: only on a
+   company's row, on with when and by whom; never deleted); work-order closes (the reason code exactly beyond the tolerance in force
+   on garments, material cost, minutes or scrap; a live close only of a COMPLETED work order with no other live close, under the
+   work order's costing lock; undone once: the Undo within 60 seconds by the person who closed it, a reopen later with why; an undone
+   close frozen; written undone as history; at commit a live close's work order CLOSED at its time and an undone one's not
+   (`WorkOrderClose_settled`, deferred); never deleted); the variance split append-only (a live close, the switch on, a material only
+   for material price, usage and scrap); its own trigger `WorkOrderCostEntry_close_check` beside the W2a check (a CLOSED or settled
+   work order takes no cost entry but a reversal; a VARIANCE entry is the opposite of its variance, before the CLOSE entry; the CLOSE
+   entry leaves the work order's entries at 0; both dated at the close and only while the switch is on; reversed only once their
+   close is undone) and `WorkOrder_close_reopen_check` (CLOSED → COMPLETED only with its close undone and the close's entries
+   reversed); purchase price variances append-only (at the company's place, RECEIPT of a POSTED receipt line of ours for its whole
+   base quantity or INVOICE of a GOODS line, the difference = quantity × (paid − standard) within one minor unit, reversed once);
+   cost of goods sold append-only (one source: a shipment line of a shipment that left, for its garments, or a GOODS line of an
+   issued invoice; the categories adding up; reversed once); landed cost DRAFT → POSTED (the shares adding up, the switch on, one
+   POSTED per charge line: a partial unique) → REVERSED with why, of a CHARGE line for its net amount, only a DRAFT deleted, shares
+   (`share:<allocation>:<lot>`) only while DRAFT on our received lots; every posting outside a HARD-locked period; it redefines W2b
+   F40's `factory_work_order_guard` (CLOSED → COMPLETED, changing only the status, the closing time and the note), the rest word for
+   word; it calls recall's `factory_recall_words_ok`, `factory_recall_not_future` and money's `factory_money_rome_day`,
+   `factory_period_refuse_locked`):
    triggers, partial unique indexes and deferred
    constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new

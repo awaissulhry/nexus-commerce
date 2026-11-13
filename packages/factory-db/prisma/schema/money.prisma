@@ -319,6 +319,9 @@ model InvoiceLine {
   ddt            Ddt?            @relation(fields: [tenantId, buyerPartyId, ddtId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   // returns.prisma: the return lines of what it billed.
   returnLines    ReturnLine[]    @relation("ReturnLineInvoiceLine")
+  // W2b-6 cost-actuals.prisma (wave 54/57): the cost of goods sold of a line invoiced on its own.
+  /// @not-money the relation to cost of goods sold (the rows carry the grain)
+  costOfSalesEntries CostOfSalesEntry[]
   // W2a wave 7/7: the return line a credit note's line credits, and the payment-schedule step a line bills.
   returnLine     ReturnLine?          @relation("InvoiceLineReturnLine", fields: [tenantId, buyerPartyId, returnLineId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   milestone      SalesOrderMilestone? @relation("InvoiceLineMilestone", fields: [tenantId, buyerPartyId, milestoneId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)

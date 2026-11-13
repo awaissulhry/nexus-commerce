@@ -229,6 +229,8 @@ model WorkOrder {
   // W2a cost-ledger.prisma (wave 7/7): its cost ledger (material, labour, subcontract, overhead, completion).
   /// @not-money the relation to the cost ledger (the rows carry the grain)
   costEntries   WorkOrderCostEntry[]
+  // W2b-6 cost-actuals.prisma (wave 54/57): its closes (each with its variance split), undone ones kept.
+  closes        WorkOrderClose[]
   // W2a reservations.prisma, planning.prisma: the stock held for it, and the planning runs' pegging of its material.
   reservations  Reservation[]
   peggings      RequirementPegging[]
