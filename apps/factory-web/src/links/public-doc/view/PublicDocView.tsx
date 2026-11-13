@@ -2,7 +2,7 @@
 
 import type { FormEvent, ReactNode } from 'react'
 import { Award, Download, ExternalLink, FileCheck2, Info, QrCode as QrIcon, SearchX, ShieldAlert, ShieldCheck, Shirt } from 'lucide-react'
-import { Banner, Card, Disclosure, EmptyState, Field, FileRow, KeyValue, Listbox } from '@nexus/ui/components'
+import { Banner, Card, Disclosure, EmptyState, Field, FileRow, KeyValue } from '@nexus/ui/components'
 import { PdfViewer } from '@nexus/ui/components/PdfViewer/index'
 import { Button, Input, Pill, Skeleton, Spinner } from '@nexus/ui/primitives'
 import { formatDate } from '../../../lib/i18n/format'
@@ -21,6 +21,7 @@ import { publicDocPictureUrl } from '../picture/model'
 import { PublicDocNotices } from '../notice/view/PublicDocNotice'
 // B-W2b-357 (links.doc › sec:report): Report a problem, the public channel for safety reports (after the earlier versions, as designed).
 import { PublicReportSection } from '../report/view/PublicReportSection'
+import { Listbox } from '../../../lib/i18n/ds-parts' // B-W2b-F41: the DS parts in the page's language
 
 export type { PublicDocActions, PublicDocViewModel } from '../model'
 

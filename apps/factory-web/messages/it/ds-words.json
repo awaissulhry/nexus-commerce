@@ -1185,5 +1185,106 @@
     "marksZone": "Zona",
     "marksValue": "Valore",
     "marked": "{zone}: {words}"
+  },
+  "workspaceSubheader": {
+    "expand": "Apri {navigation}",
+    "collapse": "Comprimi {navigation}",
+    "close": "Chiudi {navigation}",
+    "rowsNoun": "voci",
+    "showRows": "Mostra {noun} di {label}",
+    "hideRows": "Nascondi {noun} di {label}",
+    "rows": "{noun} di {label}",
+    "currentInside": "(la pagina aperta è in {label})"
+  },
+  "appRail": {
+    "navigation": "Navigazione principale",
+    "withCount": "{label}, {count} in attesa",
+    "count": "{count} in attesa",
+    "newTab": "{name} (si apre in una nuova scheda)",
+    "expand": "Espandi {label}",
+    "collapse": "Comprimi {label}",
+    "expandMarkets": "Mostra i mercati di {label}",
+    "collapseMarkets": "Nascondi i mercati di {label}",
+    "seeAllMarkets": "Vedi tutti i {count} mercati",
+    "connect": "Collega"
+  },
+  "changeValue": {
+    "removed": "rimosso",
+    "unchanged": "invariato",
+    "noValue": "nessun valore",
+    "more": "+{count} altre",
+    "changes_one": "{count} modifica",
+    "changes_other": "{count} modifiche",
+    "saidChanged": "{head}da {from} a {to}",
+    "saidAdded": "{head}nuovo valore {to}",
+    "saidRemoved": "{head}{from} rimosso",
+    "saidUnchanged": "{head}invariato, {to}",
+    "saidEmpty": "{head}nessun valore",
+    "saidMore_one": "{count} altra modifica",
+    "saidMore_other": "altre {count} modifiche",
+    "saidAndMore": "{lines}; e {more}",
+    "saidNone": "Nessuna modifica"
+  },
+  "multiSelect": {
+    "search": "Cerca…",
+    "searchOptions": "Cerca tra le opzioni",
+    "selectAll": "Seleziona tutto",
+    "noMatches": "Nessun risultato",
+    "atLeast_one": "Almeno {count} deve restare selezionata",
+    "atLeast_other": "Almeno {count} devono restare selezionate",
+    "all": "Tutti",
+    "selected_one": "{count} selezionato",
+    "selected_other": "{count} selezionati"
+  },
+  "listbox": {
+    "select": "Scegli…",
+    "search": "Cerca…",
+    "searchOptions": "Cerca tra le opzioni",
+    "noMatches": "Nessun risultato",
+    "useTyped": "Usa «{text}»",
+    "actions": "Azioni"
+  },
+  "orderedList": {
+    "moveUp": "Sposta {item} su",
+    "moveDown": "Sposta {item} giù",
+    "reorder": "Riordina {item}; usa le frecce",
+    "position": "{item}, posizione {place} di {total}",
+    "moving": "{item}, verso la posizione {place} di {total}"
+  },
+  "tagInput": {
+    "add": "Aggiungi un valore…",
+    "remove": "Togli {tag}"
+  },
+  "lightbox": {
+    "title": "Foto {place} di {total}",
+    "counter": "{place} di {total}",
+    "previous": "Foto precedente",
+    "next": "Foto successiva",
+    "only": "È l'unica foto.",
+    "first": "È la prima foto.",
+    "last": "È l'ultima foto.",
+    "photos": "Foto",
+    "thumb": "Foto {place} di {total}",
+    "thumbCurrent": "Foto {place} di {total}, mostrata ora",
+    "move": "sposta",
+    "close": "chiudi"
+  },
+  "replyComposer": {
+    "title": "Risposta",
+    "label": "Risposta",
+    "placeholder": "Scrivi una risposta, scegli un modello o fai scrivere una bozza all'IA",
+    "templates": "Modelli",
+    "draft": "Bozza con l'IA",
+    "drafting": "Scrivo una bozza… ci vogliono alcuni secondi.",
+    "sending": "Ci vogliono alcuni secondi.",
+    "sent": "Inviata",
+    "text": "Testo della risposta",
+    "englishOnly": "In inglese, solo per te",
+    "sentHeld": "Questa risposta è stata inviata. Una risposta inviata non si può inviare di nuovo.",
+    "emptyHeld": "Scrivi prima una risposta.",
+    "over_one": "Togli {n} carattere per inviarla (il limite è {limit}).",
+    "over_other": "Togli {n} caratteri per inviarla (il limite è {limit}).",
+    "length_one": "{n} carattere",
+    "length_other": "{n} caratteri"
   }
 }

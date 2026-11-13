@@ -8,6 +8,11 @@ import {
 import { DetailModal, EditModeBar, PageHeader, PreferencesModal, ReviewChangesModal, StepUpModal, type PreferencesValue } from '@nexus/ui/patterns'
 import { Button, ColorSwatchPicker, IconPicker, Textarea } from '@nexus/ui/primitives'
 import { CellSaveMark, GridDensityToggle } from '@nexus/ui/grid'
+// B-W2b-F41: the parts that spoke English only.
+import { Listbox, MultiSelect, OrderedList } from '@nexus/ui/components'
+import { Lightbox, ReplyComposer, WorkspaceSubheader } from '@nexus/ui/patterns'
+import { TagInput } from '@nexus/ui/primitives'
+import { ChangeValue } from '@nexus/ui/grid'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { useDsLabels } from '../../ds-labels'
 import { useT } from '../../provider'
@@ -19,6 +24,7 @@ import './ds-words-lab.css'
  * browser every part works for real (pick a date, type the phrase, drop a wrong file, tick, Save). Made-up data only.
  */
 export type DsWordsDialog = 'review' | 'review-done' | 'review-reading' | 'detail' | 'step-up' | 'step-up-refused' | 'confirm' | 'preferences' | 'modal'
+  | 'lightbox' | 'navigation' // B-W2b-F41
 
 export interface DsWordsLabModel {
   /** The dialog open at the start (the page's buttons open the others). */
@@ -29,6 +35,10 @@ const READ_AT = '2026-10-31T08:40:00Z'
 const REPLY_DUE = '2027-01-15T09:00:00Z'
 const DETAIL_IDS = ['DEMO-1', 'DEMO-2', 'DEMO-3', 'DEMO-4']
 const COLUMN_KEYS = Array.from({ length: 14 }, (_, i) => `c${i + 1}`)
+// B-W2b-F41: two made-up photos for the Lightbox (a jacket's front and back, drawn here).
+const photo = (shade: string) =>
+  `data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="480" height="360" viewBox="0 0 480 360"><rect width="480" height="360" fill="${shade}"/><path d="M190 70h100l50 50-30 34-20-16v152H190V138l-20 16-30-34z" fill="#8a8580"/></svg>`)}`
+const PHOTOS = [photo('#e4e1dc'), photo('#d2cec7')]
 
 export function DsWordsLab({ model }: { model: DsWordsLabModel }) {
   return (
@@ -73,6 +83,13 @@ function Lab({ model }: { model: DsWordsLabModel }) {
   const [density, setDensity] = useState<'compact' | 'cozy' | 'spacious'>('cozy')
   const [startedAt] = useState(() => Date.now())
   const [current, setCurrent] = useState(DETAIL_IDS[0]!)
+  // B-W2b-F41: the parts that spoke English only.
+  const [languages, setLanguages] = useState<string[]>(['it'])
+  const [reason, setReason] = useState<string | undefined>(undefined)
+  const [steps, setSteps] = useState(['cut', 'sew', 'check'])
+  const [sizes, setSizes] = useState(['48', '50'])
+  const [reply, setReply] = useState('')
+  const [photoAt, setPhotoAt] = useState(0)
   const changed = [due, ends, customer, note].filter(Boolean).length
 
   const columns = COLUMN_KEYS.map((key, i) => ({ key, label: t('prefs.column', { n: i + 1 }), group: i < 7 ? t('prefs.identity') : t('prefs.money'), ...(i === 0 ? { locked: true } : {}) }))
@@ -142,6 +159,45 @@ function Lab({ model }: { model: DsWordsLabModel }) {
         </Part>
       </Section>
 
+      {/* B-W2b-F41: the parts that spoke English only — the area navigation (open it: its close button, the row's
+          chevron and list), before → after, the pickers (open them, type to find nothing), the ordered list, the tags
+          and the reply box; the photos open from the dialogs' buttons. */}
+      <Section title={t('f41.section')}>
+        <Part label={t('f41.navigation')}>
+          <WorkspaceSubheader navigationLabel={t('f41.navLabel')} labels={ds.workspaceSubheader}
+            navigationOpen={open === 'navigation'} onNavigationOpenChange={(next) => setOpen(next ? 'navigation' : null)}
+            onNavigate={(event) => event.preventDefault()}
+            header={<span className="fw-dsw-note">{t('f41.navHere')}</span>}
+            groups={[{ id: 'goods', label: t('f41.navGroup'), items: [
+              { id: 'stock', label: t('f41.navStock'), href: '#stock', children: [{ id: 'hides', label: t('f41.navHides'), href: '#hides', active: true }, { id: 'trims', label: t('f41.navTrims'), href: '#trims' }] },
+              { id: 'moves', label: t('f41.navMoves'), href: '#moves' },
+            ] }]} />
+        </Part>
+        <Part label={t('f41.change')}>
+          <ChangeValue labels={ds.changeValue} more={1} changes={[
+            { label: t('f41.changeHours'), from: '8', to: '7,5' }, { label: t('f41.changeShift'), from: 'A', to: 'A' }, { label: t('f41.changeNote'), from: t('f41.changeOld'), to: null },
+          ]} />
+        </Part>
+        <Part label={t('f41.multi')}>
+          <MultiSelect labels={ds.multiSelect} searchable value={languages} onChange={setLanguages} ariaLabel={t('f41.multi')}
+            options={[{ value: 'it', label: t('f41.langIt') }, { value: 'en', label: t('f41.langEn') }, { value: 'de', label: t('f41.langDe') }]} />
+        </Part>
+        <Part label={t('f41.listbox')}>
+          <Listbox labels={ds.listbox} searchable value={reason} onChange={setReason} ariaLabel={t('f41.listbox')}
+            options={[{ value: 'late', label: t('f41.reasonLate') }, { value: 'hide', label: t('f41.reasonHide') }]} />
+        </Part>
+        <Part label={t('f41.ordered')}>
+          <OrderedList labels={ds.orderedList} label={t('f41.ordered')} items={steps} onChange={setSteps} itemLabel={(id) => t(`f41.step.${id}`)} renderItem={(id) => t(`f41.step.${id}`)} />
+        </Part>
+        <Part label={t('f41.tags')}>
+          <TagInput labels={ds.tagInput} value={sizes} onChange={setSizes} aria-label={t('f41.tags')} maxTags={8} />
+        </Part>
+        <Part label={t('f41.reply')}>
+          <ReplyComposer labels={ds.replyComposer} value={reply} onChange={setReply} limit={500} ruleLine={t('f41.replyRule')}
+            primary={{ label: t('f41.replySend'), onClick: () => setReply('') }} />
+        </Part>
+      </Section>
+
       <Section title={t('section.dialogs')}>
         <div className="fw-dsw-buttons">
           <Button onClick={() => setOpen('review')}>{t('open.review')}</Button>
@@ -150,6 +206,7 @@ function Lab({ model }: { model: DsWordsLabModel }) {
           <Button onClick={() => setOpen('confirm')}>{t('open.confirm')}</Button>
           <Button onClick={() => setOpen('preferences')}>{t('open.preferences')}</Button>
           <Button onClick={() => setOpen('modal')}>{t('open.modal')}</Button>
+          <Button onClick={() => setOpen('lightbox')}>{t('f41.openPhotos')}</Button>{/* B-W2b-F41 */}
         </div>
       </Section>
 
@@ -186,6 +243,10 @@ function Lab({ model }: { model: DsWordsLabModel }) {
       <Modal open={open === 'modal'} onClose={close} title={t('modal.title')} labels={ds.modal}>
         <p>{t('modal.body')}</p>
       </Modal>
+
+      {/* B-W2b-F41: the photos, one at a time (no title passed: the part's own "Foto 1 di 2"). */}
+      <Lightbox open={open === 'lightbox'} onClose={close} labels={ds.lightbox} index={photoAt} onIndex={setPhotoAt}
+        items={[{ url: PHOTOS[0]!, alt: t('f41.photoFront') }, { url: PHOTOS[1]!, alt: t('f41.photoBack') }]} caption={t('f41.photoCaption')} />
     </main>
   )
 }

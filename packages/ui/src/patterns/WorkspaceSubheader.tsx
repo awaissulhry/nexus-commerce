@@ -7,11 +7,13 @@ import { Menu, type MenuItemDef } from '../components/Menu'
 import { ToolbarButton } from '../primitives/ToolbarButton'
 import { Tag } from '../primitives/Tag'
 import { TooltipPortalProvider } from '../primitives/Tooltip'
+import { mergeLabels } from '../lib/labels'
 import {
   currentPageInChildren, flattenNavItems, holdsCurrentPage, isNavParent, isNavParentOpen, mergeRemembered,
   navChildrenGroupLabel, navCurrentInsideText, navStorage, navToggleLabel, openOnArrival, readNavOpenChoices,
   writeNavOpenChoice,
 } from './secondaryNavTree'
+import { WORKSPACE_SUBHEADER_LABELS, type WorkspaceSubheaderLabels } from './WorkspaceSubheaderLabels'
 
 export interface WorkspaceNavItem {
   id: string
@@ -83,6 +85,8 @@ export interface WorkspaceSubheaderProps {
   onNavigationOpenChange?: (open: boolean) => void
   /** The drawer's id, so an outside opener can name it in `aria-controls`. */
   navigationId?: string
+  /** B-W2b-F41: the subheader's own words in the person's language; a word left out stays English. */
+  labels?: Partial<WorkspaceSubheaderLabels>
 }
 
 interface SecondaryNavRowProps {
@@ -93,6 +97,8 @@ interface SecondaryNavRowProps {
   open: boolean
   onToggle: (item: WorkspaceNavItem, open: boolean) => void
   onNavigate: (event: MouseEvent<HTMLAnchorElement>, item: WorkspaceNavItem) => void
+  /** The parent row's words (B-W2b-F41); English by default. */
+  words?: WorkspaceSubheaderLabels
 }
 
 function SecondaryNavLink({ item, onNavigate, children }: Pick<SecondaryNavRowProps, 'item' | 'onNavigate'> & { children?: ReactNode }) {
@@ -123,7 +129,7 @@ function SecondaryNavLink({ item, onNavigate, children }: Pick<SecondaryNavRowPr
  * hides the rows under it; closed while one of them is the current page, the row is bold with a dot. The open state is
  * WorkspaceSubheader's (secondaryNavTree.ts); exported for its tests only.
  */
-export function SecondaryNavRow({ item, listId, open, onToggle, onNavigate }: SecondaryNavRowProps) {
+export function SecondaryNavRow({ item, listId, open, onToggle, onNavigate, words = WORKSPACE_SUBHEADER_LABELS }: SecondaryNavRowProps) {
   if (!isNavParent(item)) return <SecondaryNavLink item={item} onNavigate={onNavigate} />
   const hasCurrent = !open && holdsCurrentPage(item)
   return (
@@ -132,7 +138,7 @@ export function SecondaryNavRow({ item, listId, open, onToggle, onNavigate }: Se
         <SecondaryNavLink item={item} onNavigate={onNavigate}>
           {hasCurrent && <>
             <span className="nds-secondary-nav-current-dot" aria-hidden />
-            <span className="nds-vh">{navCurrentInsideText(item)}</span>
+            <span className="nds-vh">{navCurrentInsideText(item, words)}</span>
           </>}
         </SecondaryNavLink>
         <button
@@ -140,11 +146,11 @@ export function SecondaryNavRow({ item, listId, open, onToggle, onNavigate }: Se
           className="nds-secondary-nav-toggle"
           aria-expanded={open}
           aria-controls={listId}
-          aria-label={navToggleLabel(item, open)}
+          aria-label={navToggleLabel(item, open, words)}
           onClick={() => onToggle(item, open)}
         ><ChevronRight size={16} aria-hidden /></button>
       </div>
-      <div id={listId} role="group" aria-label={navChildrenGroupLabel(item)} className="nds-secondary-nav-children" hidden={!open}>
+      <div id={listId} role="group" aria-label={navChildrenGroupLabel(item, words)} className="nds-secondary-nav-children" hidden={!open}>
         {item.children!.map(child => <SecondaryNavLink key={child.id} item={child} onNavigate={onNavigate} />)}
       </div>
     </>
@@ -168,8 +174,9 @@ const wideOnServer = () => true
  */
 export function WorkspaceSubheader({
   header, tabs, navigationLabel, groups, views, onNavigate, chrome,
-  pinned = false, title, subtitle, navigationOpen, onNavigationOpenChange, navigationId,
+  pinned = false, title, subtitle, navigationOpen, onNavigationOpenChange, navigationId, labels,
 }: WorkspaceSubheaderProps) {
+  const words = mergeLabels(WORKSPACE_SUBHEADER_LABELS, labels)
   const id = useId()
   const panelId = navigationId ?? `${id}-navigation`
   const pinnedBodyId = `${id}-pinned-navigation`
@@ -307,6 +314,7 @@ export function WorkspaceSubheader({
                   open={isNavParentOpen(item, openParents)}
                   onToggle={toggleParent}
                   onNavigate={navigate}
+                  words={words}
                 />
               ))}
             </div>
@@ -315,11 +323,12 @@ export function WorkspaceSubheader({
       })}
     </nav>
   )
-  const lowerLabel = navigationLabel.toLowerCase()
   // A pinned subheader's drawer (below 1024 px) opens from a page button and closes away: "Close Reviews navigation".
   // "Collapse …" belongs to the column, which folds to its strip, and to the plain subheader's drawer, which its own
-  // "Expand …" strip opened.
-  const drawerCloseLabel = pinned ? `Close ${navigationLabel}` : `Collapse ${lowerLabel}`
+  // "Expand …" strip opened. The words are `labels`' (B-W2b-F41), English by default.
+  const expandLabel = words.expand(navigationLabel)
+  const collapseLabel = words.collapse(navigationLabel)
+  const drawerCloseLabel = pinned ? words.close(navigationLabel) : collapseLabel
   const drawer = (
     <Drawer
       id={panelId}
@@ -356,7 +365,7 @@ export function WorkspaceSubheader({
             <ToolbarButton
               data-nds-pin-toggle=""
               icon={<PanelLeftOpen size={18} aria-hidden />}
-              label={`Expand ${lowerLabel}`}
+              label={expandLabel}
               aria-expanded={false}
               onClick={() => toggleColumn(false)}
             />
@@ -371,7 +380,7 @@ export function WorkspaceSubheader({
               <ToolbarButton
                 data-nds-pin-toggle=""
                 icon={<PanelLeftClose size={18} aria-hidden />}
-                label={`Collapse ${lowerLabel}`}
+                label={collapseLabel}
                 aria-expanded
                 aria-controls={pinnedBodyId}
                 onClick={() => toggleColumn(true)}
@@ -393,7 +402,7 @@ export function WorkspaceSubheader({
       <div className="nds-workspace-subheader-toggle">
         <ToolbarButton
           icon={<PanelLeftOpen size={18} aria-hidden />}
-          label={`Expand ${lowerLabel}`}
+          label={expandLabel}
           aria-expanded={open}
           aria-controls={panelId}
           onClick={event => {

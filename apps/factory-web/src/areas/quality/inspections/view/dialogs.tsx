@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useId, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { X } from 'lucide-react'
-import { Banner, Field, Listbox } from '@nexus/ui/components'
+import { Banner, Field } from '@nexus/ui/components'
 import { Button, Checkbox, Input, Kbd, RadioCard, Select, Tag } from '@nexus/ui/primitives'
 import { DateTimeField, Modal, Textarea } from '../../../../lib/i18n/ds-parts'
 import { REVERSAL_REASONS } from '@nexus/factory-domain/quality/release/rules'
@@ -43,6 +43,7 @@ import {
   type ReverseDraft,
   type RuleDraft,
 } from '../model'
+import { Listbox } from '../../../../lib/i18n/ds-parts' // B-W2b-F41: the DS parts in the page's language
 
 /** ⌘↵ submits a dialog's form (when its primary is not held). */
 function useSubmitKey(open: boolean, onSubmit: () => void) {

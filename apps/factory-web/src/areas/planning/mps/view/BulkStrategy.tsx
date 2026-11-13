@@ -1,11 +1,12 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { Field, Listbox } from '@nexus/ui/components'
+import { Field } from '@nexus/ui/components'
 import { ReviewChangesModal, Textarea } from '../../../../lib/i18n/ds-parts'
 import type { Translate } from '../../../../lib/i18n/messages'
 import { bulkLines, itemWords, reasonProblem, REASON_MAX, STRATEGIES } from '../model'
 import type { BulkState, MpsActions } from '../view-model'
+import { Listbox } from '../../../../lib/i18n/ds-parts' // B-W2b-F41: the DS parts in the page's language
 
 /**
  * Change strategy for N (design planning.mps sec:strategy "Bulk change with ReviewChangesModal"): the ticked items read again

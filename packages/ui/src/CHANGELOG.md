@@ -1,3 +1,34 @@
+## DS words for the parts that spoke English only — a `labels` prop on 11 parts (B-W2b-F41) — 2026-11-13
+
+Additive only: every new prop is optional and defaults to today's English, so a page that passes none renders exactly what
+it rendered before (checked by rendering 252 cases of the touched parts and rules with default props from main's source and
+from this one: the same static markup and the same strings; React's hydration markup differs in one place only — AppRail's
+"See all N markets" is now one text node, the same text). The B-W2b-04 rule: `labels?: Partial<XLabels>`, English `X_LABELS`
+in a `*Labels.ts` beside the part, one `mergeLabels`; the word props that existed (`placeholder`, `searchPlaceholder`,
+`emptyLabel`, `actionsLabel`, `title`, `label`) still win. Asked by the factory (Owner answer 2026-11-13: Italian for every
+string); Commerce passes no `labels`.
+- **Words:** `WorkspaceSubheader` (Expand / Collapse / Close + the navigation, a parent row's Show / Hide, its list's name,
+  "the current page is in …", the default rows noun; `SecondaryNavRow` takes the same words), `AppRail` (the landmark name,
+  "N pending", "(opens in a new tab)", Expand / Collapse, the markets' chevrons, "See all N markets", Connect), `ChangeValue`
+  / `ChangeCell` (removed, unchanged, no value, "+N more", "N changes" and the screen reader's sentence), `MultiSelect` +
+  `OptionList` (All, "N selected", Select all, No matches, the search box's name and text, "At least N must stay selected"),
+  `Listbox` + `ListboxPanel` (Select…, Search…, the search box's name, No matches, `Use "…"`, Actions), `OrderedList` (Move up /
+  down, the grip's name, the positions said while moving), `TagInput` (Add value…, Remove …), `Lightbox` (title, counter,
+  Previous / Next and why they are held, the strip, the thumbnails' names, the keys line, and its dialog's close button),
+  `ReplyComposer` (its headings and placeholder defaults, Templates, Draft with AI, the waits, Sent, the field's name, the
+  English-line note, the held reasons, the counter, and its text field's words).
+- **Rules that write words** take them as an optional last argument, English by default: `navToggleLabel`,
+  `navChildrenGroupLabel`, `navCurrentInsideText`, `childrenNoun` (secondaryNavTree), `changeAccessibleText` (changeValue;
+  `changeLineText`, `changeLineArrowText`, the tooltip and CSV text keep their signatures and their English),
+  `lightboxCounter`, `lightboxHeld`, `lightboxThumbLabel`, `replyHeldReason`, `replyLengthWords`.
+- Barrels: components (`OPTION_LIST_LABELS`, `MULTI_SELECT_LABELS`, `LISTBOX_LABELS`, `ORDERED_LIST_LABELS`), patterns
+  (`WORKSPACE_SUBHEADER_LABELS`, `LIGHTBOX_LABELS`, `REPLY_COMPOSER_LABELS`; `APP_RAIL_LABELS` via `patterns/shell`), grid
+  (`CHANGE_VALUE_LABELS`), primitives (`TAG_INPUT_LABELS`), with their types. Test `lib/englishOnlyPartsLabels.vitest.test.ts`.
+- Not changed: `Spinner`'s "Loading" and `Banner`'s "Dismiss" (no prop yet: hundreds of call sites), `SectionLayout`'s width
+  words, `Builder`'s overlay Close, `Thumbnail`'s "No image" (its `alt` names it), the grid's own words (AG's locale text,
+  the column menu, the set filter's `OptionList`, the select editors' `ListboxPanel`, `ChangeValue`'s tooltip and CSV text)
+  and `photoAlt`.
+
 ## Product parts — VersionCompare, RuleBuilder, SizeColumns (with SizeFill), GarmentZoneMap (B-W2b-207) — 2026-11-09
 
 Additive only: four new parts in new folders, each its own entry point with its stylesheet imported by the part (none in a

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Trash2 } from 'lucide-react'
-import { Banner, Listbox } from '@nexus/ui/components'
+import { Banner } from '@nexus/ui/components'
 import { Button, Pill } from '@nexus/ui/primitives'
 import { useT } from '../../../../lib/i18n/provider'
 import { useWords } from '../../kit/parts'
@@ -11,6 +11,7 @@ import { adminHref, type Loaded } from '../../shared/model'
 import { BulkConfirm } from '../../shared/view/BulkConfirm'
 import { ListState } from '../../shared/view/parts'
 import { endonymOf, floorHasWords, floorPlanOf, localesAfter, type FloorDialog, type FloorProblem, type FloorSite } from '../model'
+import { Listbox } from '../../../../lib/i18n/ds-parts' // B-W2b-F41: the DS parts in the page's language
 
 export interface FloorLanguagesProps {
   prefix: string

@@ -195,6 +195,14 @@ describe('the promise calculator (PLN-169, PLN-171, PLN-179)', { timeout: 120_00
   })
 
   it('a certificate that ends before the day does not promise the size', async () => {
+    // B-W2b-F42 (begin): "made after today" is this test's premise, so it is set here, on any day. It rested on the supply
+    // seed's fixed day for SEED-PO-0001 (13 Nov 2026): from that day on, the leather counts as there today (the purchase
+    // order's own day, then overdue: from today), the 2 garments fit today's free minutes (base 0 + queue 0 days), and the
+    // size is ready TODAY, a day the certificate still covers: rightly promised, so this test failed on every working day
+    // (a closed day moved the make to the next open one). Now A1's leather rule adds a day of incoming inspection
+    // (ItemPlanning.delayDays): the leather can be used tomorrow at the earliest, whatever the day, the load or the calendar.
+    const leatherRule = (await admin<{ id: string; delayDays: number | null }>(`SELECT p.id, p."delayDays" FROM "ItemPlanning" p JOIN "Item" i ON i.id = p."itemId" WHERE p."siteId" = $1 AND i.code = 'SEED-LEA-100' AND p."itemColourId" IS NULL`, [A.site]))[0]!
+    // B-W2b-F42 (end)
     // SEED-CERT-0003 suspended; a made-up certificate covers 50 and 52 until today only.
     const seeded = await one(`SELECT "certificateId" AS id FROM "CertificateCoverage" WHERE "styleId" = $1 LIMIT 1`, [A.jkt02])
     const short = newId()
@@ -202,12 +210,16 @@ describe('the promise calculator (PLN-169, PLN-171, PLN-179)', { timeout: 120_00
     await admin(`INSERT INTO "CertificateCoverage" SELECT (jsonb_populate_record(NULL::"CertificateCoverage", to_jsonb(v) || jsonb_build_object('id', $1::text, 'certificateId', $2::text))).* FROM "CertificateCoverage" v WHERE v."certificateId" = $3 AND v."styleId" = $4`, [newId(), short, seeded, A.jkt02])
     await admin(`UPDATE "Certificate" SET status = 'SUSPENDED', "statusChangedAt" = now() WHERE id = $1`, [seeded])
     try {
+      await admin(`UPDATE "ItemPlanning" SET "delayDays" = 1 WHERE id = $1`, [leatherRule.id]) // B-W2b-F42
       const { answer } = await ok('planner', 'POST', '/planning/promise/calculate', { siteId: A.site, styleId: A.jkt02, colourwayId: A.blk, sizes: [{ size: '50', quantity: 2 }] })
       const s50 = sizeOf(answer, '50')
+      // B-W2b-F42: the premise, read from the answer: the leather is there after today, so nothing is made today.
+      expect(s50.material.date > today, JSON.stringify(s50.material)).toBe(true)
       // Covered today (nothing refused at first), but made after today: the certificate does not reach its day.
       expect(s50.readyDate > today).toBe(true)
-      expect(s50).toMatchObject({ state: 'NOT_CERTIFIED', date: null, certificate: { state: 'MISSING' } })
+      expect(s50).toMatchObject({ state: 'NOT_CERTIFIED', date: null, toMake: 2, certificate: { state: 'MISSING' } })
     } finally {
+      await admin(`UPDATE "ItemPlanning" SET "delayDays" = $2 WHERE id = $1`, [leatherRule.id, leatherRule.delayDays]) // B-W2b-F42
       await admin(`UPDATE "Certificate" SET status = 'VALID', "statusChangedAt" = now() WHERE id = $1`, [seeded])
       await admin(`UPDATE "Certificate" SET status = 'WITHDRAWN', "statusChangedAt" = now() WHERE id = $1`, [short])
     }

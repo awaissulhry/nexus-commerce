@@ -3,7 +3,6 @@
 import { useId } from 'react'
 import { CalendarX2, Repeat } from 'lucide-react'
 import { Banner, Field } from '@nexus/ui/components'
-import { Lightbox } from '@nexus/ui/patterns'
 import { Button, Checkbox, Kbd, Select, Spinner } from '@nexus/ui/primitives'
 import { DateField, Modal, Textarea } from '../../../../../lib/i18n/ds-parts'
 import { INTL_LOCALE } from '../../../../../lib/i18n/locales'
@@ -11,6 +10,7 @@ import type { ProfileRecord } from '../../api'
 import { deleteDayHeld, repeatHeld } from '../../model'
 import { NoticeLine, useSubmitKey, useWords } from '../../parts'
 import type { ProfileRecordActions, ProfileRecordModel } from '../view-model'
+import { Lightbox } from '../../../../../lib/i18n/ds-parts' // B-W2b-F41: the DS parts in the page's language
 
 /**
  * Repeat order from the latest profile (design rider.orders.list#1, SAL-300: a unit like an earlier one — style, colourway, base

@@ -244,14 +244,46 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    a group takes one only while none of its options picks the other); PRICE_LIST of a PriceListVersion; quote and timesheet
    approvals never by the person who asked or the person's own office account (Q3 = A, own triggers `QuoteApproval_not_own`,
    `TimesheetApproval_not_own`); a receipt line held for a yes, never POSTED while held; the confirm-by 1-720 hours and the
-   reminder cadence 1-30 days; a CHASE only while the order waits for goods, of its current revision; one open IBAN per party
-   (the partial unique `SupplierBankAccount_open_iban_key`; the partner's `iban` is write-only: ownership `writeOnlyColumns`,
-   which db-kit's policySql leaves out of the SELECT grant only); a FEE line credited against another order of its company and
+   reminder cadence 1-30 days; a CHASE only while the order waits for goods, of its current revision; the partner's `iban` is
+   write-only (ownership `writeOnlyColumns`, which db-kit's policySql leaves out of the SELECT grant only; one open IBAN per
+   party stays an API rule: a partial unique broke the isolation copy); a FEE line credited against another order of its company and
    customer with goods lines, not cancelled, whatever its own order's state, fixed once credited; a reason group's words; it
    redefines the portal follow-ups' `factory_return_request_check`, wave 18's `factory_stored_file_guard` (`deleteAfter`
    among a superseded version's moves), wave 44's `factory_generated_document_check` and wave 39's
    `factory_sales_order_line_guard` (the fee credit changes in any state); it calls recall's `factory_recall_words_ok` and
    `factory_recall_not_future`):
+   `…_packing_w2b_guards` (W2b-6 schema wave 46/57, B-W2b-364, packing and the shipment queue: packaging types (name,
+   inner size all or none, tare below the maximum weight, a pallet kind exactly on a PALLET, the cost with its currency;
+   company and kind fixed) and defaults per style or size run (one live per company, kind, style and run: a partial unique);
+   carton contents (ParcelLine) written only while the shipment is a DRAFT, the size the line's, no cap while DRAFT but at
+   DRAFT → PACKED each line with contents counted exactly; mark templates (1 to 16 fields each once, an ISO 639-1 language,
+   one live per company and customer or default: a partial unique); holds on a shipment placed only while DRAFT or PACKED
+   (the shipment FOR NO KEY UPDATE), never edited, released once with why, one in force per shipment and reason (a partial
+   unique); while one is in force nothing goes into the shipment's cartons or parcels, no carrier label, no move to PACKED or
+   SHIPPED (`factory_packing_refuse_held`, the shipment FOR SHARE); cut-offs per site, carrier and weekday (HH:MM); its own
+   triggers on Shipment (the split from a DRAFT or PACKED shipment of the same order, given once; the PACKED checks of
+   contents, serials per carton and "n of N"), Parcel (its packaging a CARTON, BOX or PALLET of the shipment's company,
+   ACTIVE; "n of N"; not removed with contents), ShipmentLine (not removed with contents, its size not changed under them)
+   and GarmentSerial (the carton of its line's shipment, set while RELEASED and DRAFT; `GarmentSerial_unpack_carton`, a
+   BEFORE trigger that fires after the guard, clears the carton when the line is cleared); no earlier function redefined;
+   it calls recall's `factory_recall_words_ok` and `factory_recall_not_future`):
+   `…_notify_depth_w2b_guards` (W2b-6 schema wave 47/57, B-W2b-366, notifications, My work and mail in depth: an office
+   person's notification preferences and an office role's defaults (person or role, kind, channel and key fixed, the key
+   beginning `pref:`/`default:` with them: one row each; the daily digest only on EMAIL); push subscriptions (the endpoint
+   https and fixed, a live one with its keys sealed as a SecretValue of purpose `notifications.push`, the keys going only
+   once it is turned off, turned off once and then frozen, one live per endpoint: a partial unique; never deleted); view
+   follows (the key `view:<view>:<person>`, an ONLY_ME view followed only by its owner, the last count all three or none
+   and only forward; removed with their view: ON DELETE CASCADE); reminders (born waiting, AT_TIME with a time after
+   `since`, a new time or kind only with a later `since`, came back once and cleared only by a put-off, done then frozen
+   but for Undo, a message of the record's own thread); team inboxes (the local part, not `r-`/`c-`, members office people
+   each once; never deleted); capture addresses (a base32 token, the default inbox switched on, turned off once then
+   frozen, one live per company: a partial unique; never deleted); InboundEmail's team-inbox columns (its own triggers
+   `InboundEmail_team_inbox_check` and `InboundEmail_follow_up_ends`: a later MATCHED mail on the thread clears the earlier
+   mails' follow-ups); EmailOutbound.bounceKind written PERMANENT with bouncedAt by its own BEFORE trigger
+   `EmailOutbound_bounce_kind` (and filled for the rows that bounced before); SalesSettings.inquiryAddresses checked by its
+   own trigger; it redefines W0's `factory_inbound_email_guard` (a MATCHED mail's team-inbox columns still move), the rest
+   word for word; it calls recall's `factory_recall_words_ok`, `factory_recall_not_future` and
+   `factory_recall_model_name_ok`):
    triggers, partial unique indexes and deferred
    constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new

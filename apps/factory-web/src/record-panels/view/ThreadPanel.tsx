@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AtSign, Lock, Mail, MailOpen, Paperclip, Send, Tablet, X } from 'lucide-react'
 import { Banner, Disclosure, EmptyState, Field } from '@nexus/ui/components'
-import { ReplyComposer } from '@nexus/ui/patterns'
 import { Button, Checkbox, Input, SegmentedControl, Spinner, Tag } from '@nexus/ui/primitives'
 import { formatDateTime } from '../../lib/i18n/format'
 import { useLocale, useT } from '../../lib/i18n/provider'
@@ -26,6 +25,7 @@ import {
   type RecordPanelsViewModel,
 } from '../model'
 import type { RecordPanelsActions } from './actions'
+import { ReplyComposer } from '../../lib/i18n/ds-parts' // B-W2b-F41: the DS parts in the page's language
 
 const EMAIL_TONE: Readonly<Record<EmailStatus, 'neutral' | 'info' | 'success' | 'danger'>> = {
   QUEUED: 'info',

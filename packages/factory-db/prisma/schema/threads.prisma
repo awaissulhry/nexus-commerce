@@ -123,6 +123,8 @@ model Message {
   sharedThread Thread? @relation("ThreadSharedMessages", fields: [tenantId, threadId, partyId], references: [tenantId, id, partyId], onDelete: Restrict, onUpdate: Restrict)
   // collab.prisma: one row per office user the note mentions.
   mentions     MessageMention[]
+  // W2b notify-depth.prisma (wave 47/57): the reminders about it.
+  reminders    Reminder[]
 
   @@unique([tenantId, emailMessageId])
   // The target of the mentions' tenant-safe reference.

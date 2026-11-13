@@ -3,7 +3,7 @@
 import { useId } from 'react'
 import Link from 'next/link'
 import { ExternalLink, FileText, Pencil, RefreshCw, Send, Share2 } from 'lucide-react'
-import { Banner, Field, KeyValue, Listbox } from '@nexus/ui/components'
+import { Banner, Field, KeyValue } from '@nexus/ui/components'
 import { PdfViewer } from '@nexus/ui/components/PdfViewer/index'
 import { Button, Checkbox, Input, SegmentedControl, Spinner, Tag } from '@nexus/ui/primitives'
 import { templateName } from '@nexus/factory-domain/quality/complaints/answer'
@@ -16,6 +16,7 @@ import { ANSWER_TEMPLATES, answerLetterHref, type AnswerCheck, type ComplaintAct
 import { answerChanged, answerDraftOf, answerSaveHeld, capaWords, checkProblemKey, investigationChanged, investigationSaveHeld, personName, sendHeldKey, type SendDraft } from '../../model'
 import { say, useWords } from '../../view/parts'
 import { IDLE_ANSWER, type ComplaintRecordActions, type ComplaintRecordModel } from '../view-model'
+import { Listbox } from '../../../../../lib/i18n/ds-parts' // B-W2b-F41: the DS parts in the page's language
 
 /**
  * B-W2b-113 (QHS-116; design quality.complaints record tabs "Investigation" and "Answer", the new tab "Answer letter (PDF)"):
