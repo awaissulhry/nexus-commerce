@@ -141,6 +141,11 @@ model EmailOutbound {
   sentAt         DateTime?           @db.Timestamptz(3)
   deliveredAt    DateTime?           @db.Timestamptz(3)
   bouncedAt      DateTime?           @db.Timestamptz(3)
+  /// W2b (schema wave 47/57, B-W2b-366; COL-031: each message shows sent, delivered or bounced): the kind of the last
+  /// bounce SES reported. PERMANENT exactly when bouncedAt is set (the database writes it with bouncedAt,
+  /// …_notify_depth_w2b_guards); TRANSIENT or UNDETERMINED (a full mailbox, a greylist) only noted, the mail not BOUNCED.
+  /// Once set, never cleared; PERMANENT never changes.
+  bounceKind     EmailBounceKind?
   complainedAt   DateTime?           @db.Timestamptz(3)
   failedAt       DateTime?           @db.Timestamptz(3)
   version        Int                 @default(1)
@@ -170,6 +175,13 @@ enum EmailOutboundStatus {
   BOUNCED
   COMPLAINED
   FAILED
+}
+
+/// W2b (wave 47/57): SES's bounce type (bounceType Permanent, Transient, Undetermined).
+enum EmailBounceKind {
+  PERMANENT
+  TRANSIENT
+  UNDETERMINED
 }
 
 /// An address no mail goes to (PLT-149): it bounced for good, its owner complained, or a person stopped it. Tenant-wide.
