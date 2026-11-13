@@ -19,6 +19,9 @@ import { assertMay, dayValue, grainsOf, quotePartyOf, readCurrentVersion, readQu
 import { forCaller, type QuoteDetail } from '../quotes/views'
 import { usableTerms } from '../terms/store'
 import { officeTemplate, readTemplate, sizesOf, TEMPLATE_LINE_COLUMNS } from './store'
+// B-W2b-302: a template's fee lines on the quote, by B-W2b-330's fee rules.
+import { feeDescription, FEE_LIMITS, stepPrice } from '@nexus/factory-domain/sales/price-waterfall/rules'
+import { feeTarget } from '../price-waterfall/fees'
 
 /**
  * A quote started from a template (B-W2b-294; SAL-144 "Templates speed daily quoting"; design sales.quotes quotes.new "Start
@@ -33,8 +36,9 @@ import { officeTemplate, readTemplate, sizesOf, TEMPLATE_LINE_COLUMNS } from './
  *   the lines      each template line in its section, as W1's add-line would write it: the colourway and pieces the template
  *                  names or the person picks, the sizes the colourway offers, the template's price (net quotes) or the
  *                  customer's list price, costed from today's sheets. Left out in words: a line without a colourway or pieces,
- *                  a size no longer offered, an archived style, a fee line (fees come with the waterfall), and a line the
- *                  customer and product rules refuse (another customer's private-label style, a cell not released)
+ *                  a size no longer offered, an archived style, and a line the customer and product rules refuse (another
+ *                  customer's private-label style, a cell not released). B-W2b-302: a fee line becomes a FEE quote line after
+ *                  the goods lines (B-W2b-330's fee rules), left out on a VAT-included quote (the template's price is net)
  */
 
 const blank = (value: string | null | undefined): string | null => (value === undefined || value === null || value.trim() === '' ? null : value.trim())
@@ -196,6 +200,55 @@ export async function startFromTemplate(caller: CommandCaller, templateId: strin
         select: { id: true },
       })
       await tx.quoteLineSize.createMany({ data: grid.map((row) => ({ id: newId(), lineId, partyId: party.row.id, size: row.size, quantity: row.quantity, unitPrice: row.unitPrice, createdById: actorId })) })
+    }
+    // B-W2b-302 (lead note 11-12, after B-W2b-330): the template's fee lines as FEE quote lines, by B-W2b-330's fee rules (the
+    // style of the company, not archived; the colourway the template's, picked, a goods line's of the style, else its first
+    // active one; once, at the template's price; no sizes) and the line rules above. A template's price is net: a VAT-included
+    // quote leaves them out.
+    for (const fee of plan.fees) {
+      if (!net) {
+        leftOut.push({ seq: fee.seq, size: null, reason: "The template's fee is net; this customer buys with VAT included: add the fee on the quote with its price." })
+        continue
+      }
+      let target: Awaited<ReturnType<typeof feeTarget>>
+      try {
+        target = await feeTarget(tx, company.id, versionId, fee.styleId, fee.colourwayId)
+      } catch (error) {
+        if (!(error instanceof ValidationError)) throw error
+        leftOut.push({ seq: fee.seq, size: null, reason: error.message })
+        continue
+      }
+      // The rules a line write refuses (another customer's private-label style, a colourway not released) leave a fee out too.
+      try {
+        await refuseLineRules(tx, { kind: 'QUOTE', companyId: company.id, partyId: party.row.id, currency: company.currency, line: { id: null, seq: fee.seq, styleId: target.style.id, colourwayId: target.colourwayId, styleRevisionId: null, quantity: 1, optionItemIds: [], sizes: [] } })
+      } catch (error) {
+        if (!(error instanceof DomainError)) throw error
+        leftOut.push({ seq: fee.seq, size: null, reason: error.message })
+        continue
+      }
+      seq += 10
+      await tx.quoteLine.create({
+        data: {
+          id: newId(),
+          versionId,
+          partyId: party.row.id,
+          seq,
+          section: fee.section,
+          kind: 'FEE',
+          feeKind: fee.feeKind,
+          styleId: target.style.id,
+          colourwayId: target.colourwayId,
+          description: (fee.description ?? feeDescription(fee.feeKind, target.style)).slice(0, FEE_LIMITS.description),
+          note: fee.note === null ? null : fee.note.slice(0, FEE_LIMITS.note),
+          quantity: 1,
+          unitPrice: stepPrice(fee.unitPrice),
+          netAmount: 0,
+          vatRatePct: '0',
+          vatAmount: 0,
+          createdById: actorId,
+        },
+        select: { id: true },
+      })
     }
     await refreshVersion(tools, quote, await readCurrentVersion(tx, quote), 'all')
     tools.audit({

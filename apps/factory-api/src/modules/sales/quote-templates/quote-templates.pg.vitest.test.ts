@@ -189,14 +189,16 @@ describe('a quote started from a template', () => {
     const started = await ok('sales', 'POST', `/sales/quote-templates/${season}/quote`, { companyId: companyA, partyId: P1, customerRef: 'RFQ-KIT-1' }, 201)
     const today = businessDate(new Date())
     expect(started.quote).toMatchObject({ partyId: P1, customerRef: 'RFQ-KIT-1', status: 'DRAFT', current: { validUntil: addDays(today, 45), depositPct: '30', depositKind: 'ACCONTO' } })
-    expect(started.quote.lines.map((line: Json) => [line.seq, line.colourwayId, line.quantity])).toEqual([[10, JKT01_BLK, 8]])
-    // Line 20 has no colourway and no pieces yet; line 30 is a fee (fees come with the waterfall).
-    expect(started.leftOut.map((entry: Json) => entry.seq)).toEqual([20, 30])
-    expect(started.leftOut[1].reason).toContain('A fee line is not added')
-    const row = await one(`SELECT q."templateId", v.incoterm, v."incotermPlace", v."shipComplete", v."acceptanceMode"::text AS mode, l.section FROM "Quote" q JOIN "QuoteVersion" v ON v."quoteId" = q.id JOIN "QuoteLine" l ON l."versionId" = v.id WHERE q.id = $1`, [started.quote.id])
+    // B-W2b-302: line 30, the template's 500.00 DEVELOPMENT fee, is a FEE line of the quote (B-W2b-330's fees), after the goods.
+    expect(started.quote.lines.map((line: Json) => [line.seq, line.kind, line.colourwayId, line.quantity])).toEqual([[10, 'SIZE_GRID', JKT01_BLK, 8], [20, 'FEE', expect.any(String), 1]])
+    // Line 20 has no colourway and no pieces yet.
+    expect(started.leftOut.map((entry: Json) => entry.seq)).toEqual([20])
+    const fee = await one(`SELECT "feeKind"::text AS kind, section, "unitPrice"::text AS price FROM "QuoteLine" WHERE "versionId" = $1 AND kind = 'FEE'`, [started.quote.current.id])
+    expect([fee.kind, fee.section, Number(fee.price)]).toEqual(['DEVELOPMENT', 'Fees', 500])
+    const row = await one(`SELECT q."templateId", v.incoterm, v."incotermPlace", v."shipComplete", v."acceptanceMode"::text AS mode, l.section FROM "Quote" q JOIN "QuoteVersion" v ON v."quoteId" = q.id JOIN "QuoteLine" l ON l."versionId" = v.id WHERE q.id = $1 AND l.kind = 'SIZE_GRID'`, [started.quote.id])
     expect(row).toEqual({ templateId: season, incoterm: 'EXW', incotermPlace: 'Seedville', shipComplete: true, mode: 'SIGN_AND_PAY', section: 'Jackets' })
     const audit = await one(`SELECT after FROM "AuditLog" WHERE action = 'quotes.fromTemplate' AND "recordId" = $1`, [started.quote.id])
-    expect(audit.after).toMatchObject({ templateId: season, lines: 1 })
+    expect(audit.after).toMatchObject({ templateId: season, lines: 2 })
     expect((await ok('sales', 'GET', `/sales/quote-templates/${season}`)).template.used).toBe(template.used + 1)
     // A colourway and pieces picked for the open line: it becomes a line too (the template's own price when it has one).
     const picked = await ok('sales', 'POST', `/sales/quote-templates/${made.id}/quote`, { companyId: companyA, partyId: P1, lines: [{ templateLineId: made.lines[1].id, colourwayId: JKT01_RED, sizes: { '54': 2 } }] }, 201)
