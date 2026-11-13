@@ -811,7 +811,8 @@
         "SHIPPED": "Spedito",
         "CLOSED": "Chiuso",
         "CANCELLED": "Annullato",
-        "PENDING_APPROVAL": "In attesa (controllo della fabbrica o approvazione)"
+        "PENDING_APPROVAL": "In attesa (controllo della fabbrica o approvazione)",
+        "DELIVERED": "Consegnato"
       }
     }
   },

@@ -316,6 +316,21 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    TD16-TD19 leaving DRAFT; its own triggers on Invoice (language, rate, run, declaration, debit note TD05), InvoiceLine and
    PaymentTerms; it redefines W2a's `factory_invoice_check_issue` (the SELF_INVOICE series for TD16-TD19), the rest word for
    word; it calls recall's `factory_recall_words_ok`, `factory_recall_not_future` and money's `factory_money_rome_day`):
+   `…_delivery_customs_w2b_guards` (W2b-6 schema wave 51/57, B-W2b-372, delivery, returns and customs: tracking problems raised
+   on a shipment that left (one open per shipment and kind: a partial unique; an open one only while SHIPPED), their task named
+   once, resolved once then frozen; return labels made OFFERED (a RETURN_LABEL link of the RMA) or BOOKED while the RMA is
+   AUTHORISED or RECEIVED, OFFERED → BOOKED | CANCELLED, BOOKED → USED | CANCELLED, the booking reference and the label (a file
+   of the RMA) together from BOOKED on, each set once; customs declarations made PACK_SENT, PACK_SENT → FILED → EXITED, the MRN
+   from FILED on (set once), the exit (when and its proof, a file of the declaration) exactly when EXITED against an issued
+   invoice once the goods left, removed only while PACK_SENT; the proof of delivery only on a DELIVERED shipment, each part set
+   once (`Shipment_pod_check`); an order's deliveredAt exactly in the move SHIPPED → DELIVERED with a delivered shipment and
+   none travelling (`SalesOrder_delivered_check`); the EORI's shape (`Company_eori_check`); a BROKER_PACK link of a declaration
+   of its company and broker while PACK_SENT and the site's broker pack switched on, a RETURN_LABEL link of an open RMA of its
+   company and party (`OneOffLink_delivery_customs_check`); it redefines 367's `factory_shipment_guard` (the proof of delivery
+   still changes once the goods left) and `factory_generated_document_check` (COMMERCIAL_INVOICE, CN22, CN23 of a Shipment),
+   wave 39's `factory_sales_order_guard` (DELIVERED only from SHIPPED, then only CLOSED) and wave 19's
+   `factory_link_file_guard` (a BROKER_PACK link carries files), each word for word but for that; it calls recall's
+   `factory_recall_words_ok`, `factory_recall_not_future` and carriers' `factory_carriers_code_ok`):
    triggers, partial unique indexes and deferred
    constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new

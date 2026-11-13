@@ -16,6 +16,7 @@ import { seed as seedCollab } from '../seed/collab'
 import { seed as seedCompliance } from '../seed/compliance'
 import { seed as seedComplianceRules } from '../seed/compliance-rules'
 import { seed as seedCosting } from '../seed/costing'
+import { seed as seedCustoms } from '../seed/customs'
 import { seed as seedCutting } from '../seed/cutting'
 import { seed as seedEmail } from '../seed/email'
 import { seed as seedEmailIn } from '../seed/email-in'
@@ -463,6 +464,11 @@ beforeAll(async () => {
   // first switched off) and exchange rates (the first an ECB rate): the plain ones a copy may repeat.
   await seedTax({ db: factory, namespace: 'iso-a' })
   await seedTax({ db: factory, namespace: 'iso-b' })
+  // The delivery, returns and customs schema of W2b-6 (wave 51/57): tracking problems (the first resolved), return labels (the
+  // first offered by link on the waiting RMA) and customs declarations (the first with its pack merely sent): the plain ones a
+  // copy may repeat.
+  await seedCustoms({ db: factory, namespace: 'iso-a' })
+  await seedCustoms({ db: factory, namespace: 'iso-b' })
   // Every seed of both tenants: under a full parallel run this takes more than a minute.
 }, 120_000)
 
@@ -542,6 +548,7 @@ it('covers every classified table and every runtime role', () => {
     'Currency',
     'CustomerMaterial',
     'CustomerRequirement',
+    'CustomsDeclaration',
     'CutConsumption',
     'CutIssue',
     'CutIssueLine',
@@ -863,6 +870,7 @@ it('covers every classified table and every runtime role', () => {
     'RestrictedSubstance',
     'ReturnAuthorisation',
     'ReturnFeeRule',
+    'ReturnLabel',
     'ReturnLine',
     'ReturnPolicy',
     'ReturnReceipt',
@@ -993,6 +1001,7 @@ it('covers every classified table and every runtime role', () => {
     'TimesheetApproval',
     'TodayLayout',
     'TrackingEvent',
+    'TrackingException',
     'TrainingAttendance',
     'TrainingRecord',
     'TrainingRequirement',

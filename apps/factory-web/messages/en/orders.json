@@ -19,7 +19,8 @@
     "SHIPPED": "Shipped",
     "CLOSED": "Closed",
     "CANCELLED": "Cancelled",
-    "PENDING_APPROVAL": "Waiting for a yes"
+    "PENDING_APPROVAL": "Waiting for a yes",
+    "DELIVERED": "Delivered"
   },
   "deposit": {
     "NOT_NEEDED": "Not needed",
@@ -95,6 +96,7 @@
     "CLOSED": "Closed",
     "CANCELLED": "Cancelled",
     "PENDING_APPROVAL": "Waiting for a yes",
+    "DELIVERED": "Delivered",
     "all": "All orders"
   },
   "tile": {

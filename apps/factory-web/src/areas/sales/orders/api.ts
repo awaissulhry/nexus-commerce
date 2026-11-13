@@ -12,7 +12,8 @@ import { newIdempotencyKey } from '../../../lib/api/client'
  */
 
 // W2b-5 (B-W2b-281): PENDING_APPROVAL, an order waiting for a yes before it goes on (the domain's list, in its order).
-export const ORDER_STATUSES = ['CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED', 'SHIPPED', 'CLOSED', 'CANCELLED', 'PENDING_APPROVAL'] as const
+// W2b-6 (B-W2b-372): DELIVERED, every shipment that left was delivered.
+export const ORDER_STATUSES = ['CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED', 'SHIPPED', 'CLOSED', 'CANCELLED', 'PENDING_APPROVAL', 'DELIVERED'] as const
 export type OrderStatus = (typeof ORDER_STATUSES)[number]
 /** The board's lanes (closed and cancelled are counted beside them). */
 export const BOARD_LANES = ['CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED', 'SHIPPED'] as const satisfies readonly OrderStatus[]

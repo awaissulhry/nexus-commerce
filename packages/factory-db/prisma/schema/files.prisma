@@ -163,6 +163,11 @@ model StoredFile {
   // W2b-6 shipping.prisma, carriers.prisma (wave 48/57): the shipments whose collection it signs, the day sheets it closes.
   shipmentCollectionSignatures Shipment[]         @relation("ShipmentCollectionSignature")
   dispatchManifests            DispatchManifest[] @relation("DispatchManifestFile")
+  // W2b-6 shipping.prisma, customs.prisma (wave 51/57): the shipments whose proof of delivery it is, the return labels and
+  // the proofs of exit it is.
+  shipmentPods                 Shipment[]           @relation("ShipmentPodFile")
+  returnLabelFiles             ReturnLabel[]        @relation("ReturnLabelFile")
+  customsExitProofs            CustomsDeclaration[] @relation("CustomsDeclarationExitFile")
   // W2b-5 suppliers-depth.prisma (wave 42/44): the subcontract agreements whose signed terms it is.
   subcontractAgreementTerms SubcontractAgreement[] @relation("SubcontractAgreementTerms")
   // W2b-4 recall.prisma (wave 33/33): the authority notices it is the sent copy of.

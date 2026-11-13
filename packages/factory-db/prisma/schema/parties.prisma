@@ -121,6 +121,8 @@ model Party {
   // W2b-6 carriers (wave 48/57): the sealed account number its carrier bills (Restrict, not Prisma's SetNull default for an
   // optional relation: that would also clear tenantId).
   carrierAccountSecret SecretValue?        @relation("PartyCarrierAccount", fields: [tenantId, carrierAccountSecretId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b-6 customs.prisma (wave 51/57): the export declarations it files as the broker.
+  customsDeclarationsFiled CustomsDeclaration[] @relation("CustomsDeclarationBroker")
   addresses           PartyAddress[]
   contacts            PartyContact[]
   taxIdentities       PartyTaxIdentity[]

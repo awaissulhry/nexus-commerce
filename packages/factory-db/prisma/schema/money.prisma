@@ -176,6 +176,8 @@ model Invoice {
   allocations    PaymentAllocation[]
   // W2b portal-sales.prisma (wave 21/22): its card and SEPA payments at the provider.
   paymentIntents PaymentIntent[]
+  // W2b-6 customs.prisma (wave 51/57): the export declarations whose proof of exit it waits on.
+  customsDeclarations CustomsDeclaration[]
   // W2b-6 tax.prisma (wave 49/57): the run that previewed it, the declaration of intent it rests on, the invoice a debit
   // note adds to and the debit notes of this one, the self-invoice it is the document of (one: SelfInvoice's key).
   invoiceRun          InvoiceRun?          @relation(fields: [tenantId, companyId, invoiceRunId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)

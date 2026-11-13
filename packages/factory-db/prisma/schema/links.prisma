@@ -99,6 +99,8 @@ model OneOffLink {
   questionnaireResponses     SupplierQuestionnaireResponse[]
   // W2b-4 substances.prisma (wave 31/33): the declaration requests asked through it.
   supplierDeclarationRequests SupplierDeclarationRequest[]
+  // W2b-6 customs.prisma (wave 51/57): the return labels it offers (RETURN_LABEL).
+  returnLabels                ReturnLabel[] @relation("ReturnLabelLink")
 
   // The target of the evidence rows' reference: an evidence row names its link's party.
   @@unique([tenantId, partyId, id])
@@ -136,6 +138,13 @@ enum LinkPurpose {
   RECORD_INVITE
   /// Download a set of files (LinkFile), with an optional password sent apart and the receipt "I received these files".
   SECURE_FILE
+  /// W2b-6 (schema wave 51/57, B-W2b-372; LOG-097): the broker's pack of one customs declaration (customs.prisma
+  /// CustomsDeclaration): its papers as a set of files (LinkFile), and the MRN sent back; only while the shipment's site
+  /// switched the broker pack on (ShippingSettings.brokerPackOn).
+  BROKER_PACK
+  /// W2b-6 (LOG-112): the return label of one return (ReturnAuthorisation): the customer books the carrier by using it
+  /// (customs.prisma ReturnLabel OFFERED → BOOKED); an unused one costs nothing.
+  RETURN_LABEL
 }
 
 /// The evidence of one open or answer of a link (ported from the old app's acceptance evidence, EPQ.5: typed name,

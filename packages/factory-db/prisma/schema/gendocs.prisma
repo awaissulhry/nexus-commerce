@@ -37,7 +37,8 @@ model GeneratedDocument {
   /// (PRICE_LIST; of its list's company, or of any company of the tenant for a tenant-wide list; no site). W2b-6 (wave
   /// 48/57): Shipment (SHIPPING_MARKS, SHIPMENT_PACK), DispatchManifest (MANIFEST), and Shipment, SampleShipment or
   /// DepositRequest (PROFORMA: for customs, samples or a prepayment request; with the number its record took from the
-  /// company's PROFORMA series; a sample shipment's or deposit request's has no site).
+  /// company's PROFORMA series; a sample shipment's or deposit request's has no site). W2b-6 (wave 51/57): Shipment
+  /// (COMMERCIAL_INVOICE, CN22, CN23).
   recordType  String
   recordId    String                @db.Uuid
   kind        GeneratedDocumentKind
@@ -128,4 +129,11 @@ enum GeneratedDocumentKind {
   SHIPPING_MARKS
   /// W2b-6 (LOG-031): a Shipment's papers in one PDF: carrier labels, packing list, DDT and commercial invoice.
   SHIPMENT_PACK
+  /// W2b-6 (schema wave 51/57, B-W2b-372; LOG-086): a Shipment's commercial (customs) invoice: HS codes, origin, values,
+  /// Incoterm, the company's EORI, weights and currency, in the language chosen.
+  COMMERCIAL_INVOICE
+  /// W2b-6 (LOG-087): a Shipment's customs declaration for a postal parcel outside the EU, CN22 (low value and weight) or CN23,
+  /// one form per parcel.
+  CN22
+  CN23
 }
