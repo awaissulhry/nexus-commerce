@@ -1,4 +1,7 @@
+import type { ReactNode } from 'react'
 import type { LiveState } from '../../../quality/_shared/model'
+// B-W2b-371: the office's and the fittings' photos, the rider's thread.
+import type { OfficePhotosActions, OfficePhotosModel } from '../photos/use-photos'
 import type { Appointment, FittingResult, FittingsTab, MtmCheck, Person, ProfileRecord, RepeatFacts, Sent, StyleDetail, StyleOption } from '../api'
 import type { BookDraft, MtmCan, Notice, Phrase, ProofLine, RecordTab, ResultDraft, ReviewDraft } from '../model'
 import type { LinkDialogActions, LinkDialogModel, MeasurementsDialogActions, MeasurementsDialogModel, QuoteDialogActions, QuoteDialogModel, Read } from '../view-model'
@@ -67,6 +70,10 @@ export interface ProfileRecordModel {
   /** A result just recorded or altered: its words stay on the Fittings tab until the next read. */
   readonly lastResult?: FittingResult | null
   readonly copied?: boolean
+  /** B-W2b-371 (XF2:01): the office's and the fittings' photos with their delete dates (null: not read here). */
+  readonly photos?: OfficePhotosModel | null
+  /** B-W2b-371 (XF2:02): the rider's thread on the Activity tab (the record panels; null: the person reads no threads). */
+  readonly thread?: ReactNode
 }
 
 export interface ProfileRecordActions {
@@ -116,6 +123,8 @@ export interface ProfileRecordActions {
   measurements?: MeasurementsDialogActions
   link?: LinkDialogActions
   quote?: QuoteDialogActions
+  /** B-W2b-371 (XF2:01). */
+  photos?: OfficePhotosActions
 }
 
 export type { Phrase }

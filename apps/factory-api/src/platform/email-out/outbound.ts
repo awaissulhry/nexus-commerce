@@ -51,6 +51,8 @@ import {
 } from '../threads/threads'
 import type { EmailView } from './contract'
 import { processEmail, type EmailRuntime } from './service'
+// B-W2b-371: a record type's thread gate (a rider's profile: sales.measurements.view).
+import { mayOnThread } from '../threads/records'
 
 /**
  * Mail out on record threads (plan A1 §3.3 `email-out`, §3.7; features PLT-139, PLT-149, COL-024):
@@ -305,7 +307,7 @@ export async function sendFromThread(caller: CommandCaller, record: RecordRef, b
   if (context.audience !== 'office') throw new ForbiddenError()
   const actor = actorOf(context)
   const { scope } = await caller.withClient((client) => officeRecord(client, record))
-  if (!can(actor, THREADS_READ, scope)) throw new NotFoundError('Record not found.')
+  if (!mayOnThread(actor, THREADS_READ, record.type, scope)) throw new NotFoundError('Record not found.')
   if (!can(actor, EMAIL_SEND, scope)) throw new ForbiddenError()
 
   const { result } = await command(caller, { name: 'email.send', idempotencyKey, input: { recordType: record.type, recordId: record.id, ...body } }, async (tools) => {
@@ -325,7 +327,7 @@ export async function listThreadEmails(caller: CommandCaller, record: RecordRef,
   const cursor = cursorOf(page.cursor)
   return caller.withClient(async (client) => {
     const { thread, scope } = await officeRecord(client, record)
-    if (!can(actorOf(context), THREADS_READ, scope)) throw new NotFoundError('Record not found.')
+    if (!mayOnThread(actorOf(context), THREADS_READ, record.type, scope)) throw new NotFoundError('Record not found.')
     if (!thread) return { emails: [], nextCursor: null }
     const rows = await client.emailOutbound.findMany({
       where: { AND: [{ threadId: thread.id }, afterCursor(cursor, 'queuedAt') as Prisma.EmailOutboundWhereInput] },
