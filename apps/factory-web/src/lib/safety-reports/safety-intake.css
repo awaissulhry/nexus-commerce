@@ -1,0 +1,161 @@
+/*
+ * The product-safety report form every door shares (B-W2b-357: the public DoC page, the portal, the office) — LAYOUT only:
+ * the groups of the form, a row of fields that wraps on a phone, the consent block, the photos after the send. Semantic
+ * --nds-* tokens only.
+ */
+.fw-sri {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-sri-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.fw-sri-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  margin: 0 0 var(--nds-space-2);
+  padding: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-sri-label {
+  font-weight: var(--nds-font-weight-medium);
+  color: var(--nds-text-strong);
+}
+
+.fw-sri-hint {
+  margin: 0;
+  color: var(--nds-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.fw-sri-error {
+  margin: 0;
+  color: var(--nds-danger-text);
+}
+
+.fw-sri-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--nds-space-8) var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-sri-row > * {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.fw-sri-row > .fw-sri-scan {
+  flex: 0 0 auto;
+}
+
+.fw-sri-size {
+  max-width: 120px;
+}
+
+.fw-sri-mono {
+  font-family: var(--nds-font-mono);
+  overflow-wrap: anywhere;
+}
+
+.fw-sri-words {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.fw-sri-choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+}
+
+.fw-sri-consent {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+}
+
+.fw-sri-photos {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-8);
+  width: 100%;
+  min-width: 0;
+}
+
+.fw-sri-photos-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  width: 100%;
+}
+
+.fw-sri-photo-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-sri-photo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-6) var(--nds-space-8);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  min-width: 0;
+}
+
+.fw-sri-photo-failed {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-sri-video video {
+  width: 100%;
+  max-height: 320px;
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+}
+
+@media (min-width: 900px) {
+  .fw-sri-choices {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nds-space-4) var(--nds-space-12);
+  }
+
+  .fw-sri-choices > .fw-sri-label {
+    flex-basis: 100%;
+  }
+}

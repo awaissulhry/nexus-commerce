@@ -20,6 +20,8 @@ import { useReturnWords } from './words'
 // B-W2b-346 (SAL-298, RX2:02): the remake's body and route.
 import { requestRemake } from './remake/api'
 import { remakeBodyOf } from './remake/model'
+// B-W2b-357 (SAL-414, GP2:02): Report a safety incident (the band's ⋯ and the start's card).
+import { usePortalSafety } from './safety/use-safety'
 
 /**
  * `/p/<party>/returns` for a customer (B-W2b-197; design portal.customer.returns, SCR-187): reads the cases (GET
@@ -31,7 +33,7 @@ import { remakeBodyOf } from './remake/model'
  */
 export function CustomerReturnsPage() {
   return (
-    <WithMessages namespaces={[NS, REPAIR_NS, 'ds-words', 'lists', 'returns-remake']}>
+    <WithMessages namespaces={[NS, REPAIR_NS, 'ds-words', 'lists', 'returns-remake', /* B-W2b-357 */ 'safety-reports']}>
       <Suspense fallback={null}>
         <ReturnsRoute />
       </Suspense>
@@ -84,6 +86,8 @@ function ListContainer() {
   // B-W2b-342: the customer's repairs (their own section, read beside the cases).
   const [repairs, setRepairs] = useState<RepairsSectionModel>({ state: 'loading', read: null })
   const [loadedAt, setLoadedAt] = useState<string | null>(null)
+  // B-W2b-357: the safety report's door, openers and dialog.
+  const safety = usePortalSafety({ api, offline, preview: frame.me.preview, keeper: null })
   const reading = useRef<AbortController | null>(null)
   const writeKey = useRef<{ body: string; key: string } | null>(null)
   const keyFor = (body: unknown) => {
@@ -182,6 +186,7 @@ function ListContainer() {
 
   const dirty = start !== null && !start.sent && startDirty(start.draft)
   usePortalUnsaved('returns-start', { dirty, what: t('unsaved.start') })
+  usePortalUnsaved('returns-safety', { dirty: safety.dirty, what: safety.label })
 
   const patchDraft = (patch: Partial<StartDraft>) => setStart((current) => (current ? { ...current, problem: null, discard: false, draft: { ...current.draft, ...patch } } : current))
 
@@ -237,7 +242,7 @@ function ListContainer() {
 
   const go = (nextChip: CaseChip | null, nextQ: string) => router.replace(`${pathname}${listQuery(nextChip, nextQ)}`, { scroll: false })
   const startHeldKey = startHeld(who)
-  usePortalBand(state === 'forbidden' ? { title: t('list.title') } : listBandOf({ words, asOf: read?.asOf ?? null, startHeld: startHeldKey ? t(startHeldKey) : null, onStart: () => openStart() }))
+  usePortalBand(state === 'forbidden' ? { title: t('list.title') } : listBandOf({ words, asOf: read?.asOf ?? null, startHeld: startHeldKey ? t(startHeldKey) : null, onStart: () => openStart(), safety: { label: safety.label, held: safety.heldText, onOpen: safety.open } }))
 
   if (state === 'forbidden') return <NotInAccess admins={(frame.access?.admins ?? []).map((admin) => admin.displayName)} homeHref={frame.prefix} />
 
@@ -252,10 +257,12 @@ function ListContainer() {
         problem: start.problem,
         discard: start.discard,
         sent: start.sent,
+        safety: { held: safety.heldText },
       }
     : null
 
   return (
+    <>
     <ReturnsListView
       model={{
         state: state === 'loading' && !read ? 'loading' : state === 'error' ? 'error' : 'ready',
@@ -320,8 +327,14 @@ function ListContainer() {
           onDiscard: () => setStart(null),
           onStay: () => setStart((current) => (current ? { ...current, discard: false } : current)),
           onRetry: () => void loadReturnable(start?.order ?? null),
+          onSafety: () => {
+            setStart(null)
+            safety.open()
+          },
         },
       }}
     />
+    {safety.dialog}
+    </>
   )
 }

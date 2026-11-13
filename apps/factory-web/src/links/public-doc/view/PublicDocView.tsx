@@ -19,6 +19,8 @@ import { PublicDocPicture } from '../picture/view/PublicDocPicture'
 import { publicDocPictureUrl } from '../picture/model'
 // B-W2b-271 (links.doc › sec:recall): a recall's or withdrawal's safety notice comes first on the page.
 import { PublicDocNotices } from '../notice/view/PublicDocNotice'
+// B-W2b-357 (links.doc › sec:report): Report a problem, the public channel for safety reports (after the earlier versions, as designed).
+import { PublicReportSection } from '../report/view/PublicReportSection'
 
 export type { PublicDocActions, PublicDocViewModel } from '../model'
 
@@ -30,7 +32,7 @@ export type { PublicDocActions, PublicDocViewModel } from '../model'
  * the reader's language (the PDF read in the page, every published language one choice away, Download, the PDF in a new
  * tab), the certificate summary, the instructions and safety information of the same revision, the earlier versions with
  * the batches they cover, and Type the code when the QR is damaged. No price, no person. B-W2b-271: a recall's or withdrawal's
- * safety notice comes first; Report a problem (W2b-5) joins later.
+ * safety notice comes first; B-W2b-357: Report a problem before Type the code.
  */
 export function PublicDocView({ model, actions }: { model: PublicDocViewModel; actions?: PublicDocActions }) {
   return (
@@ -115,6 +117,8 @@ function FoundBody({ page, model, actions }: { page: PublicDocPage; model: Publi
       {page.ppe.category !== 'NOT_PPE' && <CertificateSection page={page} />}
       <InstructionsSection page={page} model={model} />
       {page.ppe.category !== 'NOT_PPE' && <VersionsSection page={page} model={model} />}
+      {/* B-W2b-357: Report a problem (absent: not drawn). */}
+      {model.report && <PublicReportSection model={model.report} actions={actions?.report} />}
       <LookupCard model={model} actions={actions} />
       <div className="fw-pd-foot">
         <p className="fw-pd-hint fw-pd-code">

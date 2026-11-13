@@ -10,6 +10,8 @@ import { useLocale } from '../../lib/i18n/provider'
 import { lookupPublicDoc, publicDocFileBytes } from './api'
 import { chooseLanguage, codeProblem, EMPTY_LOOKUP, fileIn, frameSender, lookupRefusal, readerLanguages, waitParts, type LookupModel, type PublicDocViewModel } from './model'
 import { PublicDocView } from './view/PublicDocView'
+// B-W2b-357 (links.doc › sec:report): the public safety report's container.
+import { usePublicReport } from './report/use-report'
 
 const SLOW_MS = 1_000
 
@@ -128,12 +130,16 @@ export function PublicDoc({ code }: { code: string | null }) {
     return () => clearInterval(timer)
   }, [waitUntil])
 
+  // B-W2b-357: Report a problem, once a page is found.
+  const report = usePublicReport(api, model.kind === 'found' ? model.page : null)
+
   const setLookup = (change: Partial<LookupModel>) => setModel((current) => ({ ...current, lookup: { ...current.lookup, ...change } }))
 
   return (
     <PublicDocView
-      model={model}
+      model={{ ...model, report: report.model }}
       actions={{
+        report: report.actions,
         onLanguage: (language) => {
           const page = latest.current.page
           setModel((current) => ({ ...current, language }))

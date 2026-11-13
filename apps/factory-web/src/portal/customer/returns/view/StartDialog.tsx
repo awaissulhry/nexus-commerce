@@ -16,7 +16,7 @@ import { useReturnWords } from '../words'
 
 /**
  * SCR-187 › "Start a return or claim" (design portal.customer.returns h.act, primary; the same forms as links.claim, by
- * the portal): three steps — what you need (a return, a quality complaint or — B-W2b-346 — a remake; repair and safety come with W2b-5),
+ * the portal): three steps — what you need (a return, a quality complaint, a remake, a repair — and B-W2b-357's safety incident, which opens its own dialog),
  * the details (for a return: the items we delivered that may come back, each with its pieces and reason, what you would
  * like, your reference and a note; for a complaint: the item, its serial or batch and what happened), check and send.
  * The end says the case number and when we answer (DS EndState); photos are added on the case's Request tab. ← → move
@@ -37,6 +37,8 @@ export interface StartDialogModel {
   /** Close was asked with typed work. */
   discard: boolean
   sent: { type: StartType; number: string; answerBy: string | null; href: string } | null
+  /** B-W2b-357 (design pop:safety-report "'Safety incident' in step 2"): the card, held with why while its door is closed; absent: not drawn. */
+  safety?: { held: string | null } | null
 }
 
 export interface StartDialogActions {
@@ -50,6 +52,8 @@ export interface StartDialogActions {
   onDiscard?: () => void
   onStay?: () => void
   onRetry?: () => void
+  /** B-W2b-357: "Safety incident" chosen: the safety report's own dialog opens instead. */
+  onSafety?: () => void
 }
 
 const STEPS: readonly StartStep[] = ['type', 'details', 'review']
@@ -160,7 +164,7 @@ export function StartDialog({ model, actions }: { model: StartDialogModel; actio
           </Banner>
         ) : null}
         {model.problem ? <Banner tone="danger" title={scoped(model.problem)} /> : null}
-        {draft.step === 'type' ? <TypeStep draft={draft} error={problem('type')} onType={actions?.onType} /> : null}
+        {draft.step === 'type' ? <TypeStep draft={draft} error={problem('type')} onType={actions?.onType} safety={model.safety} onSafety={actions?.onSafety} /> : null}
         {draft.step === 'details' ? (
           model.state === 'loading' ? (
             <div className="fw-pret-loading" role="status" aria-busy="true" aria-label={t('state.loading')}>
@@ -186,10 +190,11 @@ export function StartDialog({ model, actions }: { model: StartDialogModel; actio
   )
 }
 
-function TypeStep({ draft, error, onType }: { draft: StartDraft; error?: string; onType?: (type: StartType) => void }) {
+function TypeStep({ draft, error, onType, safety, onSafety }: { draft: StartDraft; error?: string; onType?: (type: StartType) => void; safety?: { held: string | null } | null; onSafety?: () => void }) {
   const { t } = useReturnWords()
   const tr = useT('returns-remake')
   const r = useT('returns-repair')
+  const sr = useT('safety-reports')
   return (
     <fieldset className="fw-pret-choices" aria-describedby={error ? 'fw-pret-type-error' : undefined}>
       <legend className="fw-pret-h3">{t('start.what')}</legend>
@@ -200,6 +205,8 @@ function TypeStep({ draft, error, onType }: { draft: StartDraft; error?: string;
       <RadioCard name="fw-pret-type" value="REMAKE" checked={draft.type === 'REMAKE'} selected={draft.type === 'REMAKE'} onChange={() => onType?.('REMAKE')} title={tr('portal.type')} description={tr('portal.typeBody')} />
       {/* B-W2b-342: a repair or an alteration (./repair). */}
       <RadioCard name="fw-pret-type" value="REPAIR" checked={draft.type === 'REPAIR'} selected={draft.type === 'REPAIR'} onChange={() => onType?.('REPAIR')} title={r('link.type.title')} description={r('portal.start.typeBody')} />
+      {/* B-W2b-357 (SAL-414, GP2:02): a safety incident opens its own dialog (held with why while its door is closed). */}
+      {safety ? <RadioCard name="fw-pret-type" value="SAFETY" checked={false} disabled={safety.held !== null} onChange={() => onSafety?.()} title={sr('portal.type')} description={safety.held ?? sr('portal.typeBody')} /> : null}
       {error ? (
         <p id="fw-pret-type-error" className="fw-pret-error">
           {error}
