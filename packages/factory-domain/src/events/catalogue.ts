@@ -266,6 +266,8 @@ import { events as inventorySubstitutions } from '../inventory-substitutions/eve
 import { events as inventoryReceiving } from '../inventory-receiving/events'
 // B-W2b-371: made-to-measure office photos (measurement_photo.added, .dated, .deleted).
 import { events as mtmPhotos } from '../mtm-photos/events'
+// B-W2b-384: packing in depth (shipping.carton_packed).
+import { events as shippingCartons } from '../shipping-cartons/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -598,6 +600,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...mtmPhotos,
   // B-W2b-377
   ...buyingFollowups,
+  // B-W2b-384
+  ...shippingCartons,
 ] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */

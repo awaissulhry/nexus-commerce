@@ -17,6 +17,8 @@ import { databaseBankRefusal } from '@nexus/factory-domain/payments/bank-refusal
 // B-W2b-373 (W2b-6 schema wave 52/57): a role write or a new holder that reached the database's archived-role rules is a 409 in
 // words.
 import { databaseRoleRefusal } from '@nexus/factory-domain/auth/roles/refusals'
+// B-W2b-384 (W2b-6 schema wave 46/57's packing rules): a packing, shipment or carton write that reached them is a 409 in words.
+import { databasePackingRefusal } from '@nexus/factory-domain/shipping/cartons/refusals'
 import { askedLineRefusal } from '@nexus/factory-domain/purchasing/ask-to-buy/ask-to-buy'
 import type { ErrorBody } from '@nexus/factory-domain/core/contracts'
 import { reportError } from '../observability/tracker'
@@ -225,6 +227,19 @@ function roleRefusal(error: unknown): MappedError | null {
   return words ? { status: STATUS_OF.conflict, code: 'conflict', message: words.message, issues: [{ path: words.path, message: words.message }], unexpected: false } : null
 }
 
+/**
+ * B-W2b-384 (W2b-6 schema wave 46/57, B-W2b-364's …_packing_w2b_guards): the database's own refusal by the packing rules (a
+ * held shipment, carton contents that do not add up at PACKED, a serial of a line with contents in no carton, cartons whose
+ * "n of N" is out of date, a parcel or line removed with its contents), when a write reached it without its command's check
+ * (W1's packing and shipment routes, a race): a 409 in words (factory-domain shipping/cartons/refusals), never a 500.
+ */
+function packingRefusal(error: unknown): MappedError | null {
+  const cause = (error as { meta?: { driverAdapterError?: { cause?: { originalCode?: unknown; originalMessage?: unknown } } } } | null)?.meta?.driverAdapterError?.cause
+  if (cause?.originalCode !== '23514' || typeof cause.originalMessage !== 'string') return null
+  const words = databasePackingRefusal(cause.originalMessage)
+  return words ? { status: STATUS_OF.conflict, code: 'conflict', message: words.message, issues: [{ path: words.path, message: words.message }], unexpected: false } : null
+}
+
 // B-W2b-309 (SAL-306) ----------------------------------------------------------------------------------------------------
 /**
  * The database's own refusal to issue or hold a customer's own lot for another customer's work (…_sales_orders_depth_w2b_guards
@@ -269,6 +284,9 @@ export function mapError(error: unknown): MappedError {
   // B-W2b-373
   const role = roleRefusal(error)
   if (role) return role
+  // B-W2b-384
+  const packing = packingRefusal(error)
+  if (packing) return packing
   // B-W2b-309
   const owned = customerOwnedRefusal(error)
   if (owned) return owned

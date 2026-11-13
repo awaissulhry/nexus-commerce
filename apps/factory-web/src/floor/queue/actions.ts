@@ -96,6 +96,8 @@ export const WHAT_KEY = {
   // B-W2b-298: an issue from the pick list by bin and an approved substitute's issue (the pick screen is B-W2b-310's).
   'inventory.pick.issue': 'pickIssue',
   'inventory.substitute.issue': 'substituteIssue',
+  // B-W2b-384: a garment scanned into a carton at the packing bench (the Pack screen in depth is B-W2b-387's).
+  'shipping.carton.scan': 'cartonScan',
 } as const
 
 export type WhatKey = (typeof WHAT_KEY)[keyof typeof WHAT_KEY]
