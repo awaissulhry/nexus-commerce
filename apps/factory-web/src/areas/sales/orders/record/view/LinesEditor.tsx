@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Plus, Search } from 'lucide-react'
 import { Banner, Card, EmptyState, Field, SummaryTable } from '@nexus/ui/components'
 import { SizeGridEditor, type SizeGridIssue } from '@nexus/ui/grid/size-grid/index'
@@ -33,6 +33,8 @@ export interface LinesEditorModel {
   busy: boolean
   /** B-W2b-323: the size cells a freeze rule locked, marked with their reason ("Cutting started — size frozen"). */
   frozen?: readonly SizeGridIssue[]
+  /** B-W2b-374 (XF3:02): a new line's Options (its container, mounted by the page). */
+  newLineOptions?: (line: DraftLine) => ReactNode
 }
 
 /**
@@ -205,6 +207,8 @@ function StyleCard({ styleId, lines, model, actions }: { styleId: string; lines:
       cells: [
         <span key="c" className="fw-so-cell">
           {names.colour}
+          {/* B-W2b-374 (XF3:02): a new line takes its options when it is made. */}
+          {!line.lineId && model.newLineOptions?.(line)}
         </span>,
         String(piecesOf(line)),
         ...(model.price

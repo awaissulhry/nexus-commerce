@@ -13,6 +13,9 @@ import { assertMay, officeContextOf } from './access'
 import { readBasics } from './facts'
 import { readWorkOrder, type Header, type Reader } from './store'
 import { workOrderView } from './views'
+// B-W2b-374: the options to make on the traveller.
+import { groupCellsByOptions } from '@nexus/factory-domain/documents/options-block'
+import { cellsPrinted } from '../../sales/configurator/printed'
 
 /**
  * The work order traveller (B-W2b-51; MES-014 "Printable traveller (paper fallback)"; design production.workorders tab
@@ -52,6 +55,14 @@ async function paperOf(db: Reader, row: Header, language: DocumentLanguage, now:
   const view = await workOrderView(db, row, businessDate(now), basics)
   const site = await db.site.findUniqueOrThrow({ where: { id: row.siteId }, select: { timezone: true } })
   const colourway = (code: string, name: string) => (name && name !== code ? `${code} · ${name}` : code)
+  // B-W2b-374 (XF3:03): the options each cell is made with (its order line's, else the values it names), grouped by colour.
+  const cells = await db.workOrderSize.findMany({ where: { workOrderId: row.id }, select: { id: true, colourwayId: true, size: true, quantity: true, salesOrderLineId: true, optionValueIds: true } })
+  const printed = await cellsPrinted(db, cells, language)
+  const colourwayNames = new Map(view.cells.map((cell) => [cell.colourwayId, colourway(cell.colourwayCode, cell.colourwayName)]))
+  const options = groupCellsByOptions(
+    cells.map((cell) => ({ colourway: colourwayNames.get(cell.colourwayId) ?? '?', size: cell.size, quantity: cell.quantity, options: printed.get(cell.id) ?? [] })),
+    view.style.sizes,
+  )
   return travellerPaper(
     {
       number: view.number,
@@ -76,6 +87,7 @@ async function paperOf(db: Reader, row: Header, language: DocumentLanguage, now:
       materials: view.spec.materials.map((material) => ({ code: material.itemCode, name: material.itemName, colour: material.colourCode, planned: material.planned, uom: material.baseUom })),
       printedAt: now,
       timeZone: site.timezone,
+      options,
     },
     language,
   )

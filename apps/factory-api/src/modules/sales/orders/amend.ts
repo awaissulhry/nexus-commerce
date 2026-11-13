@@ -11,7 +11,7 @@ import { serverClock } from '../../../core/time'
 import { lockOrderLines } from '../../production/work-orders/store'
 import { chainForQuote } from '../quotes/list-price'
 import type { SheetCache } from '../quotes/pricing'
-import { quotePartyOf, treatmentOfStored } from '../quotes/store'
+import { quotePartyOf, storedVat, treatmentOfStored } from '../quotes/store'
 import { officeContextOf } from './access'
 import { officeOrder, recordAfter } from './moves'
 import { newLineDraft, priceLines, scaledCost, snapshotLine, type LineDraft, type PricedLines } from './pricing'
@@ -24,6 +24,8 @@ import { amendedLineProblems } from '../orders-depth/line-rules'
 import type { PricedInput } from '@nexus/factory-domain/sales/order-changes/priced'
 import { afterAmendment, amendmentExtras, beforeAmendmentWrites, type ChangeOptions } from '../order-changes/apply'
 import { previewFrozenProblems } from '../order-changes/freeze'
+// B-W2b-374 (XF3:02): a new line's options.
+import { entryOptionsAudit, planEntryOptions, writeEntryOptions, type EntryOptions } from './lines/options-entry'
 
 /**
  * Order amendments (B-W2a-30; SAL-209, SAL-217; the design's "Amend order" → "Review amendment" → Changes tab). A
@@ -125,6 +127,8 @@ export interface AmendmentPlan {
   /** The lines left out (removed), and the new lines' drafts in `priced` have id null. */
   readonly removed: readonly string[]
   readonly header: { readonly customerRef: string | null; readonly requestedDate: BusinessDate | null }
+  /** B-W2b-374 (XF3:02): the new lines' options by seq (already in their price), written with the lines. */
+  readonly options?: ReadonlyMap<number, EntryOptions>
 }
 
 /**
@@ -167,13 +171,29 @@ export async function planAmendment(db: Reader, order: OrderRow, status: OrderRo
   const byId = new Map(lines.map((line) => [line.id, line]))
   let nextSeq = Math.max(0, ...lines.map((line) => line.seq)) + 10
   const drafts: LineDraft[] = []
+  // B-W2b-374 (XF3:02): a new line's options, checked and added to its price (written with the line).
+  const options = new Map<number, EntryOptions>()
+  const vat = lines[0] ? storedVat(treatmentOfStored(lines[0])) : null
+  const optionsCtx = { companyId: order.companyId, currency: order.currency, basis: priceBasisOf(order.taxMode), vatRatePct: vat && vat.vatNature === null ? vat.vatRatePct : null }
   for (const [index, input] of body.lines.entries()) {
     const at = `body/lines/${index}`
     if (input.id === undefined) {
       const draft = await newLineDraft(db, { companyId: order.companyId, taxMode: order.taxMode, party, chain, cache, now }, { styleId: input.styleId!, colourwayId: input.colourwayId!, sizes: input.sizes ?? [], unitPrice: input.unitPrice, description: input.description, note: input.note }, nextSeq, at)
       nextSeq += 10
-      if (isIssueList(draft)) issues.push(...draft)
-      else drafts.push(draft)
+      if (isIssueList(draft)) {
+        issues.push(...draft)
+        continue
+      }
+      const entry = await planEntryOptions(db, optionsCtx, draft, input.options, `${at}/options`)
+      if (isIssueList(entry)) issues.push(...entry)
+      else {
+        drafts.push(entry.draft)
+        if (entry.options) options.set(entry.draft.seq, entry.options)
+      }
+      continue
+    }
+    if (input.options !== undefined && input.options.length > 0) {
+      issues.push({ path: `${at}/options`, message: `Line ${byId.get(input.id)!.seq} keeps its options here: change them in its Options.` })
       continue
     }
     const line = byId.get(input.id)!
@@ -240,7 +260,7 @@ export async function planAmendment(db: Reader, order: OrderRow, status: OrderRo
   )
   const diff = amendmentDiff(before, after)
   if (diff.empty) return [{ path: 'body/lines', message: 'Nothing changes: the order already looks like this.' }]
-  return { before, after, diff, priced, removed, header }
+  return { before, after, diff, priced, removed, header, options }
 }
 
 /** The diff as answered: pieces and sizes for everyone with orders.view, prices only with the price grain. */
@@ -339,6 +359,7 @@ export async function amendInCommand(tools: CommandTools, tenantId: string, orde
     await tx.salesOrderLine.delete({ where: { id: lineId }, select: { id: true } })
   }
   const finalIds: string[] = []
+  const optionsWritten: { lineId: string; options: EntryOptions }[] = []
   for (const [index, line] of plan.priced.lines.entries()) {
     const sizesOf = (lineId: string) => line.sizes.map((size) => ({ id: newId(), lineId, partyId: order.partyId, size: size.size, quantity: size.quantity, unitPrice: size.unitPrice, createdAt: now, updatedAt: now, createdById: actorId }))
     if (line.id !== null) {
@@ -355,6 +376,7 @@ export async function amendInCommand(tools: CommandTools, tenantId: string, orde
     }
     const id = newId()
     finalIds[index] = id
+    if (plan.options?.has(line.seq)) optionsWritten.push({ lineId: id, options: plan.options.get(line.seq)! })
     await tx.salesOrderLine.create({
       data: {
         id,
@@ -384,6 +406,8 @@ export async function amendInCommand(tools: CommandTools, tenantId: string, orde
     })
     await tx.salesOrderLineSize.createMany({ data: sizesOf(id) })
   }
+  // B-W2b-374 (XF3:02): the new lines' options (the order is CONFIRMED, IN_PRODUCTION or READY: amendStateProblem).
+  const optionLineIds = await writeEntryOptions(tools, order.partyId, optionsWritten)
   // The snapshot after names the new lines by the ids they got.
   const newIds = new Map(plan.priced.lines.flatMap((line, index) => (line.id === null ? [[placeholderId(index), finalIds[index]!] as const] : [])))
   const after: OrderSnapshot = { header: plan.after.header, lines: plan.after.lines.map((line) => (newIds.has(line.id) ? { ...line, id: newIds.get(line.id)! } : line)) }
@@ -452,9 +476,12 @@ export async function amendInCommand(tools: CommandTools, tenantId: string, orde
       grossAmount: markMoney('price', plan.diff.grossAfter),
       reacceptanceNeeded,
       scheduleRemade: schedule.inserted.length > 0 || schedule.cancelled.length > 0,
+      // B-W2b-374
+      ...(optionsWritten.length > 0 ? { options: entryOptionsAudit(optionsWritten) } : {}),
     },
     reason: body.reason!.trim(),
   })
+  if (optionLineIds.length > 0) tools.emit({ type: 'sales_order.options_changed', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, lineIds: optionLineIds, change: 'CHOSEN' } })
   tools.emit({ type: 'sales_order.amended', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, amendmentId, revision, reacceptanceNeeded, lineIds: changedLineIds } })
   // B-W2b-309: sales_order.change_priced; the customer's materials of the changed lines follow their sizes.
   await afterAmendment(tools, fresh, { amendmentId, revision, changedLineIds, extras })

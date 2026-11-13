@@ -589,7 +589,8 @@ model SalesOrder {
   /// The party's purchase order number.
   customerRef         String?
   /// CONFIRMED → IN_PRODUCTION → READY → PARTLY_SHIPPED → SHIPPED → CLOSED; CANCELLED (with a reason) before anything
-  /// shipped. CLOSED and CANCELLED are final.
+  /// shipped. CLOSED and CANCELLED are final. W2b-6 (schema wave 51/57, B-W2b-372; LOG-067): SHIPPED → DELIVERED (every
+  /// shipment that left was delivered) → CLOSED.
   status              SalesOrderStatus @default(CONFIRMED)
   /// The order's date as printed.
   orderDate           DateTime         @db.Date
@@ -656,6 +657,9 @@ model SalesOrder {
   cancelReason        String?
   /// When it was closed or cancelled.
   closedAt            DateTime?        @db.Timestamptz(3)
+  /// W2b-6 (schema wave 51/57, B-W2b-372; LOG-067): when it was delivered (not in the future): set with the move to
+  /// DELIVERED, kept when it is closed, never changed; invoicing and terms that run from delivery read it.
+  deliveredAt         DateTime?        @db.Timestamptz(3)
   /// For the office only: the partner role can neither read nor write it.
   /// @internal
   internalNote        String?
@@ -717,6 +721,9 @@ enum SalesOrderStatus {
   /// credit hold): only at its making, then CONFIRMED with the yes or CANCELLED with a no; its lines change meanwhile, nothing
   /// is made or shipped for it, no confirmation is sent.
   PENDING_APPROVAL
+  /// W2b-6 (schema wave 51/57, B-W2b-372; LOG-067): every shipment of it that left was delivered (from SHIPPED, with
+  /// deliveredAt); then only CLOSED.
+  DELIVERED
 }
 
 /// W2b-5 (schema wave 39/44, B-W2b-281; SAL-207): how urgent an order is in the office's daily priorities.

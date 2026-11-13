@@ -28,6 +28,10 @@ import { manifest } from './manifest'
 import { offerGroup, readStyleOptions, withdrawOffer } from './offers'
 import { setRules } from './rule-set'
 import { addValue, moveValue, updateValue } from './values'
+// B-W2b-374 (XF3:05): OptionGroup.takes.
+import { defineContract } from '@nexus/factory-domain/core/contracts'
+import { takesBody, takesParams, takesView } from '@nexus/factory-domain/product/options/takes'
+import { readTakes, setTakes } from './takes'
 
 /**
  * Options and configuration rules (B-W2b-229; PRD-081, PRD-206, PRD-207, PRD-208, PRD-211; design products.options SCR-114,
@@ -78,4 +82,7 @@ export default defineRoutes('product.options', manifest, async (app) => {
   app.put('/product/styles/:styleId/revisions/:revisionId/bom/lines/:lineId/option', { schema: lineOptionContract }, async (request) =>
     setLineOption(request, request.params.styleId, request.params.revisionId, request.params.lineId, request.body, key(request)),
   )
+  // B-W2b-374 (XF3:05)
+  app.get('/product/option-groups/:groupId/takes', { schema: defineContract({ params: takesParams, response: { 200: takesView } }) }, async (request) => readTakes(request, request.params.groupId))
+  app.put('/product/option-groups/:groupId/takes', { schema: defineContract({ params: takesParams, body: takesBody, response: { 200: takesView } }) }, async (request) => setTakes(request, request.params.groupId, request.body, key(request)))
 })

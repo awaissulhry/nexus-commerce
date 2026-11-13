@@ -102,7 +102,7 @@ describe('the order confirmation (SAL-208)', () => {
     const company: CompanyLegal = { legalName: 'Pelletteria Esempio S.r.l.', address: { line1: 'Via Esempio 1', postalCode: '50100', city: 'Firenze', province: 'FI', country: 'IT' }, vatNumber: 'IT00000000001', fiscalCode: '00000000001', reaOffice: 'FI', reaNumber: '000000', shareCapital: '10000.00', currency: 'EUR' }
     const composed = composeDocument({ ...document, company, sample: false })
     expect(composed.title).toBe('Order confirmation')
-    expect(composed.layout).toBe('ORDER_CONFIRMATION/1')
+    expect(composed.layout).toBe('ORDER_CONFIRMATION/2')
   })
 
   it('the fingerprint ignores the day and the version; anything printed changes it', () => {

@@ -85,7 +85,7 @@ export const pasteLinesContract = defineContract({
     text: z.string().max(PASTE_LIMITS.text).optional(),
     /** Or the rows already split. */
     rows: z
-      .array(input({ style: z.string().trim().min(1).max(60), colourway: z.string().trim().min(1).max(120), sizes: z.record(z.string(), z.number().int().min(0).max(MAX_SIZE_QUANTITY)), unitPrice: money.price(unitPrice().nullish()) }))
+      .array(input({ style: z.string().trim().min(1).max(60), colourway: z.string().trim().min(1).max(120), sizes: z.record(z.string(), z.number().int().min(0).max(MAX_SIZE_QUANTITY)), unitPrice: money.price(unitPrice().nullish()), /** B-W2b-374: a new line's options ("LINER:YES, NAME:NAME=BIANCHI"). */ options: z.string().trim().max(1000).nullish() }))
       .min(1)
       .max(PASTE_LIMITS.rows)
       .optional(),
@@ -107,6 +107,8 @@ export const pasteLinesContract = defineContract({
           after: pieces.nullable(),
           /** A new line's price: TYPED, LIST (the customer's list), NONE (0 until priced); KEPT on a line already there. */
           priceFrom: notMoney(z.enum(['TYPED', 'LIST', 'NONE', 'KEPT']).nullable()),
+          /** B-W2b-374 (XF3:01): the options a new line takes from the Options column (what could not be read is in leftOut). */
+          options: z.number().int(),
           leftOut: z.array(output({ size: z.string().nullable(), message: z.string() })),
           words: z.string(),
         }),

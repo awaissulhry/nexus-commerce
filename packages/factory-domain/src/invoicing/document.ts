@@ -3,6 +3,7 @@ import type { Issue } from '../core/errors'
 import { fromMinorUnits, type MinorUnits } from '../core/money'
 import type { BusinessDate } from '../core/time'
 import type { DocumentInput, DocumentLanguage, DocumentLine, DocumentReference, PostalAddress } from '../documents/model'
+import type { PrintedOption } from '../documents/options-block'
 import type { TaxIdentityFields } from '../parties/tax'
 import { NO_SDI_CODE, splitEuVatNumber } from '../parties/tax'
 import type { PriceBasis } from '../tax/vat-summary'
@@ -183,6 +184,8 @@ export interface StoredLine extends StoredVat {
   readonly ddtNumber?: string | null
   /** DEPOSIT_DEDUCTION: the TD02 deducted, as issued. */
   readonly deposit?: { readonly number: string; readonly issueDate: BusinessDate } | null
+  /** B-W2b-374 (XF3:03): the options of the order line it bills, printed on the copy only (the XML's Descrizione is the line's). */
+  readonly options?: readonly PrintedOption[] | null
 }
 
 /** An invoice as issued: what both documents print. */
@@ -322,6 +325,8 @@ export function invoiceCopyOf(invoice: IssuedInvoice, language: DocumentLanguage
     amountMinor: line.netAmount,
     vatRate: line.vatRatePct,
     vatNature: line.vatNature,
+    // B-W2b-374: printed after the description (layout INVOICE_COPY/2).
+    options: line.options ?? null,
   }))
   const references: DocumentReference[] = [
     ...invoice.purchaseOrders.map((order) => ({ kind: 'CUSTOMER_ORDER' as const, number: order.number, date: order.date ?? null })),

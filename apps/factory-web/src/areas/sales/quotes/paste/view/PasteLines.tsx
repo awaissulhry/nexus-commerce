@@ -9,6 +9,9 @@ import { DEPTH_NS, reviewStateOf, sizesText, type DepthReviewState } from '../..
 import { useDepthWords } from '../../record/lines-depth/words'
 import type { PasteAnswer } from '../api'
 import { leftOutWords, pasteColumns, pasteParts, PASTE_SAMPLE } from '../model'
+// B-W2b-374: the paste's Options column.
+import { pasteOptionWords } from '../../../_shared/options-entry/model'
+import { FOLLOWUPS_NS, useFollowupsWords } from '../../../../../lib/options-followups/words'
 import '../../record/lines-depth/depth.css'
 
 export interface PasteLinesModel {
@@ -34,7 +37,7 @@ export interface PasteLinesActions {
  */
 export function PasteLines({ model, actions }: { model: PasteLinesModel; actions?: PasteLinesActions }) {
   return (
-    <WithMessages namespaces={['sales', DEPTH_NS]}>
+    <WithMessages namespaces={['sales', DEPTH_NS, FOLLOWUPS_NS /* B-W2b-374 */]}>
       <Paste model={model} actions={actions} />
     </WithMessages>
   )
@@ -42,6 +45,12 @@ export function PasteLines({ model, actions }: { model: PasteLinesModel; actions
 
 function Paste({ model, actions }: { model: PasteLinesModel; actions?: PasteLinesActions }) {
   const { t, say } = useDepthWords()
+  // B-W2b-374 (XF3:01): the Options column's words.
+  const followups = useFollowupsWords()
+  const leftWords = (entry: { size: string | null; message: string }, row: number) => {
+    const option = pasteOptionWords(entry, row)
+    return option ? followups.say(option) : say(leftOutWords(entry, row))
+  }
   const columns = pasteColumns(model.text)
   const { landing, skipped } = pasteParts(model.preview)
   const leftCells = landing.flatMap((row) => row.leftOut.map((entry) => ({ row: row.row, entry })))
@@ -51,7 +60,7 @@ function Paste({ model, actions }: { model: PasteLinesModel; actions?: PasteLine
     what: t(row.action === 'ADD' ? 'paste.what.add' : 'paste.what.change'),
     now: row.before ? sizesText(row.before) || '—' : t('paste.notThere'),
     next: sizesText(row.after ?? row.sizes) || '—',
-    note: [row.priceFrom ? t(`paste.price.${row.priceFrom}`) : null, ...row.leftOut.map((entry) => say(leftOutWords(entry, row.row)))].filter(Boolean).join(' · '),
+    note: [row.priceFrom ? t(`paste.price.${row.priceFrom}`) : null, ...row.leftOut.map((entry) => leftWords(entry, row.row))].filter(Boolean).join(' · '),
   }))
   const counts = model.preview?.counts ?? null
   const leadHeld = model.text.trim() === '' ? t('paste.held.empty') : columns?.problem ? say(columns.problem) : null
@@ -65,7 +74,7 @@ function Paste({ model, actions }: { model: PasteLinesModel; actions?: PasteLine
           <Banner tone="warning" title={say(columns.problem)} />
         ) : (
           <p className="fw-q-hint" role="status">
-            {t('paste.columns', { sizes: columns.sizes.join(' · '), rows: columns.rows })} {columns.price ? t('paste.columnsPrice') : ''}
+            {t('paste.columns', { sizes: columns.sizes.join(' · '), rows: columns.rows })} {columns.price ? t('paste.columnsPrice') : ''} {columns.options ? followups.t('pasteOptions.column') : ''}
           </p>
         ))}
       {counts && (
@@ -77,9 +86,9 @@ function Paste({ model, actions }: { model: PasteLinesModel; actions?: PasteLine
       {(skipped.length > 0 || leftCells.length > 0) && (
         <Banner tone="warning" title={t('paste.leftTitle', { count: skipped.length + leftCells.length })}>
           <ul className="fw-q-list">
-            {skipped.flatMap((row) => row.leftOut.map((entry, index) => <li key={`s-${row.row}-${index}`}>{say(leftOutWords(entry, row.row))}</li>))}
+            {skipped.flatMap((row) => row.leftOut.map((entry, index) => <li key={`s-${row.row}-${index}`}>{leftWords(entry, row.row)}</li>))}
             {leftCells.map(({ row, entry }, index) => (
-              <li key={`c-${row}-${index}`}>{say(leftOutWords(entry, row))}</li>
+              <li key={`c-${row}-${index}`}>{leftWords(entry, row)}</li>
             ))}
           </ul>
         </Banner>

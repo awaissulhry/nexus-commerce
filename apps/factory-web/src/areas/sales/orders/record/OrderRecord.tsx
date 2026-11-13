@@ -44,7 +44,7 @@ import {
   type Settlement,
 } from '../api'
 import { isStepUpCancelled, useCoalesced, useLive, useStepUp, useThreadDock } from '../hooks'
-import { amendLines, draftOf, newKey, withCells } from '../daily-model'
+import { amendLines, draftOf, namesOf, newKey, withCells } from '../daily-model'
 import { abilitiesOf, knownIds, liveTouches, readProblem, romeToday, tabOf, writeProblem, type SizeLayer } from '../model'
 import { COMPOSER_EMPTY, PART_LOADING, type AmendState, type Loaded, type OrderRecordModel, type Part, type RecordDialog } from './record-model'
 import { OrderRecordView } from './view/OrderRecordView'
@@ -61,6 +61,8 @@ import { OrderLineOptions } from './configurator/OrderLineOptions'
 import { useReviewBanner } from './review-banner/use-review-banner'
 import { ReviewBanner } from './review-banner/view/ReviewBanner'
 import { createElement } from 'react'
+// B-W2b-374: an amendment's new line's options.
+import { NewLineOptions } from '../../_shared/options-entry/NewLineOptions'
 
 /**
  * `/w/<company>/sales/orders/<id>` (SCR-039): loads the order (orders.view; the API checks its company and customer),
@@ -409,6 +411,17 @@ function RecordContainer({ orderId }: { orderId: string }) {
     portal,
     // B-W2b-340
     lineOptions: order.status === 'ready' ? (line) => createElement(OrderLineOptions, { key: line.id, api, order: order.value, line, permissions: session.permissions, onReload: () => void load() }) : undefined,
+    // B-W2b-374 (XF3:02): an amendment's new line takes its options when it is made.
+    newLineOptions: (line) =>
+      createElement(NewLineOptions, {
+        key: line.key,
+        api,
+        styleId: line.styleId,
+        colourwayId: line.colourwayId,
+        line: (({ style, colour }) => ({ style, colour }))(namesOf(line, order.status === 'ready' ? order.value : null, amend?.styles[line.styleId])),
+        picks: line.options ?? [],
+        onChange: (picks) => setAmend((known) => (known ? { ...known, lines: known.lines.map((entry) => (entry.key === line.key ? { ...entry, options: picks } : entry)) } : known)),
+      }),
   }
 
   const value = order.status === 'ready' ? order.value : null

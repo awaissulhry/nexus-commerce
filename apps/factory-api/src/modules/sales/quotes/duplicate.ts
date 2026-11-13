@@ -18,6 +18,8 @@ import { assertMay, decimal, dayValue, grainsOf, officeContextOf, officeQuote, q
 import { forCaller, type QuoteDetail } from './views'
 // B-W2b-303 (SAL-277): the season a copy keeps.
 import { seasonOfCopySource } from '../seasons/store'
+// B-W2b-374 (XF3:01): the line options travel with the copy.
+import { carryOptionsToCopies, type LineCopy } from './copy-options'
 
 /**
  * Duplicate a quote (B-W2a-30; SAL-155 "copying quotes speeds daily work"; the design's row verb "Duplicate", the cancel
@@ -61,6 +63,8 @@ interface SourceLine {
   readonly unitPrice: string
   readonly listUnitPrice: string | null
   readonly sizes: readonly SizeRow[]
+  /** B-W2b-374 (XF3:01): the source line, whose options the copy takes (Source.optionsFrom says of which kind). */
+  readonly lineId?: string | undefined
 }
 
 /** What a copy is made from (B-W2b-190: also a portal order request the office accepts as a quote; B-W2b-295: an inquiry). */
@@ -85,6 +89,8 @@ export interface Source {
   readonly depositPct: string | null
   readonly depositKind: DepositKind | null
   readonly lines: readonly SourceLine[]
+  /** B-W2b-374 (XF3:01): the source lines are a quote's or an order's: their options travel (none: a request, an inquiry). */
+  readonly optionsFrom?: 'QUOTE' | 'ORDER' | undefined
 }
 
 const blankToNull = (value: string | null | undefined): string | null => (value === undefined || value === null || value.trim() === '' ? null : value.trim())
@@ -174,6 +180,8 @@ export async function duplicateInto(tools: CommandTools, source: Source, body: D
 
   const dropped: Dropped[] = []
   const warnings: string[] = []
+  // B-W2b-374: the lines copied and the lines they came from (their options travel once every line is written).
+  const copies: LineCopy[] = []
   if (source.basis !== priceBasisOf(taxMode)) warnings.push(`The source was priced ${source.basis === 'NET' ? 'without VAT' : 'with VAT included'}; this customer buys ${priceBasisOf(taxMode) === 'NET' ? 'without VAT' : 'with VAT included'}: check the prices kept as typed.`)
   let seq = 0
   for (const line of [...source.lines].sort((a, b) => a.seq - b.seq)) {
@@ -232,7 +240,11 @@ export async function duplicateInto(tools: CommandTools, source: Source, body: D
       select: { id: true },
     })
     await tx.quoteLineSize.createMany({ data: sizes.map((size) => ({ id: newId(), lineId, partyId: party.row.id, size: size.size, quantity: size.quantity, unitPrice: size.unitPrice, createdById: actorId })) })
+    if (source.optionsFrom && line.lineId) copies.push({ from: { kind: source.optionsFrom, lineId: line.lineId }, toLineId: lineId, seq: line.seq })
   }
+  // B-W2b-374 (XF3:01): the options of the source lines, checked and priced again on the copy (what no longer passes is said).
+  const carried = await carryOptionsToCopies(tools, id, copies)
+  dropped.push(...carried.leftOut.map((entry) => ({ seq: entry.seq, size: null, reason: entry.reason })))
   if (seq === 0 && !source.emptyAllowed) throw new ValidationError('Nothing could be copied: every line was left out.', dropped.map((entry) => ({ path: 'body', message: `Line ${entry.seq}${entry.size ? ` size ${entry.size}` : ''}: ${entry.reason}` })))
   await refreshVersion(tools, quote, await readCurrentVersion(tx, quote), 'all')
   tools.audit({
@@ -240,7 +252,7 @@ export async function duplicateInto(tools: CommandTools, source: Source, body: D
     recordType: 'Quote',
     recordId: id,
     companyId: company.id,
-    after: { number: issued.formatted, partyId: party.row.id, status: 'DRAFT', revision: 1, from: source.from, sameCustomer: same, lines: seq / 10, dropped, contactId, billToAddressId, shipToAddressId, depositPct, paymentTermsId: useSource ? source.paymentTermsId : defaults.paymentTermsId, listVersionId: chain.keptVersionId },
+    after: { number: issued.formatted, partyId: party.row.id, status: 'DRAFT', revision: 1, from: source.from, sameCustomer: same, lines: seq / 10, options: carried.options, dropped, contactId, billToAddressId, shipToAddressId, depositPct, paymentTermsId: useSource ? source.paymentTermsId : defaults.paymentTermsId, listVersionId: chain.keptVersionId },
   })
   tools.emit({ type: 'quote.created', subject: id, companyId: company.id, payload: { quoteId: id, versionId, number: issued.formatted, partyId: party.row.id } })
   return { quoteId: id, dropped, warnings }
@@ -280,7 +292,10 @@ export async function duplicateQuote(caller: CommandCaller, quoteId: string, bod
         termsVersion: row.termsVersion,
         depositPct: decimal(row.depositPct),
         depositKind: row.depositKind,
+        // B-W2b-374
+        optionsFrom: 'QUOTE',
         lines: lines.map((line) => ({
+          lineId: line.id,
           seq: line.seq,
           kind: line.kind,
           styleId: line.styleId,
@@ -332,7 +347,10 @@ export async function copyOrderAsQuote(caller: CommandCaller, order: { readonly 
         termsVersion: version?.termsVersion ?? null,
         depositPct: null,
         depositKind: null,
+        // B-W2b-374
+        optionsFrom: 'ORDER',
         lines: lines.map((line) => ({
+          lineId: line.id,
           seq: line.seq,
           kind: line.kind,
           styleId: line.styleId,

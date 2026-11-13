@@ -1,0 +1,103 @@
+{
+  "common": {
+    "loading": "Caricamento…",
+    "retry": "Riprova",
+    "offline": "Sei offline: si riprova quando torna la connessione.",
+    "unknown": "Qualcosa non ha funzionato. Riprova."
+  },
+  "takes": {
+    "title": "Cosa prende un valore scelto",
+    "hint": "Decide quale scelta offre il configuratore con un valore di questo gruppo.",
+    "label": "Un valore di questo gruppo prende",
+    "none": "Un colore o un materiale",
+    "noneHint": "Si offrono entrambe le scelte (come prima).",
+    "colour": "Un colore della libreria colori",
+    "colourHint": "Il colore di un pannello: si offre solo la scelta del colore.",
+    "material": "Un materiale e il suo colore",
+    "materialHint": "La pelle per articolo e colore: si offre solo la scelta del materiale.",
+    "picking": "Scelti su preventivi e ordini: {colours} con un colore della libreria, {materials} con un materiale.",
+    "save": "Salva",
+    "discard": "Annulla",
+    "saved": "Salvato: il configuratore offre ora ciò che il gruppo prende.",
+    "held": {
+      "unchanged": "Non è cambiato ancora nulla.",
+      "busy": "Salvataggio…",
+      "offline": "Sei offline: riprova quando torna la connessione.",
+      "materials": "{count} opzioni scelte hanno un materiale: cambiale prima.",
+      "colours": "{count} opzioni scelte hanno un colore della libreria: cambiale prima."
+    },
+    "problem": {
+      "load": "Non è stato possibile leggere il gruppo.",
+      "stale": "Qualcuno ha cambiato questo gruppo nel frattempo: rileggilo, poi salva.",
+      "refused": "Non salvato: alcune opzioni scelte hanno ancora l'altro tipo. Cambiale prima."
+    }
+  },
+  "entry": {
+    "button": "Opzioni",
+    "buttonCount": "Opzioni · {count}",
+    "title": "Opzioni di {style} · {colour}",
+    "hint": "Scelte ora, la riga le prende quando l'ordine è confermato: ciò che aggiungono entra nel prezzo della riga.",
+    "empty": "Questo modello non offre opzioni.",
+    "picks": "Prende {picks}",
+    "text": "Testo per {value}",
+    "textHint": "Fino a {max} caratteri.",
+    "colour": "Colore del pannello",
+    "material": "Materiale",
+    "materialColour": "Colore del materiale",
+    "none": "Nessuno",
+    "default": "Predefinita",
+    "outside": "Fuori dal certificato",
+    "use": "Usa queste opzioni",
+    "cancel": "Annulla",
+    "clear": "Nessuna opzione",
+    "check": {
+      "checking": "Controllo della combinazione…",
+      "ok": "Ammessa: le regole del modello sono rispettate.",
+      "blocks": "Non ammessa",
+      "warnings": "Da leggere prima di vendere",
+      "failed": "Non è stato possibile controllare la combinazione: riprova."
+    },
+    "held": {
+      "checking": "La combinazione è in controllo.",
+      "refused": "Questa combinazione non è ammessa: cambiala prima.",
+      "text": "Scrivi il testo che il valore scelto chiede.",
+      "offline": "Sei offline: la combinazione si controlla quando torna la connessione."
+    },
+    "problem": {
+      "load": "Non è stato possibile leggere le opzioni di questo modello.",
+      "hidden": "Non puoi leggere le opzioni di questo modello."
+    }
+  },
+  "share": {
+    "shown": "Nel portale",
+    "show": "Mostra nel portale",
+    "hide": "Togli dal portale",
+    "held": "Solo chi gestisce questo ordine mostra la sua grafica nel portale."
+  },
+  "portal": {
+    "title": "Opzioni e grafica",
+    "line": "Riga {seq}",
+    "options": "Opzioni",
+    "artwork": "Grafica",
+    "noArtwork": "Nessuna grafica mostrata per questa riga.",
+    "open": "Apri",
+    "download": "Scarica",
+    "picture": "Immagine",
+    "document": "PDF",
+    "empty": "Nessuna riga di questo ordine ha opzioni o grafica.",
+    "loading": "Caricamento delle opzioni…",
+    "problem": "Non è stato possibile leggere le opzioni.",
+    "openProblem": "Non è stato possibile aprire il file. Riprova.",
+    "preview": "Anteprima dell'ufficio: aprire un file spetta al cliente."
+  },
+  "pasteOptions": {
+    "column": "Si legge la colonna Opzioni: ogni nuova riga prende i valori che nomina (GRUPPO:VALORE, un testo dopo =).",
+    "left": {
+      "option": "Riga {row}: un'opzione nominata non è tra quelle offerte dal modello.",
+      "ambiguous": "Riga {row}: un'opzione è in più di un gruppo: scrivila come GRUPPO:VALORE.",
+      "twice": "Riga {row}: un'opzione è scritta due volte.",
+      "refused": "Riga {row}: le opzioni sono state lasciate fuori (le regole del modello le rifiutano): sceglile nelle Opzioni della riga.",
+      "kept": "Riga {row}: una riga già nel preventivo tiene le sue opzioni: cambiale nelle sue Opzioni."
+    }
+  }
+}

@@ -14,6 +14,7 @@ import { storedVat, type QuoteParty } from '../quotes/store'
 import type { PriceChain } from '../pricelists/store'
 import type { Reader } from './store'
 import { unitPiece } from './amendments/mtm'
+import type { LinePick } from '@nexus/factory-domain/sales/configurator/rules'
 
 /**
  * The money of an order's lines when the office types them (B-W2a-30): a manual order (manual.ts) and an amendment
@@ -90,6 +91,8 @@ export interface NewLineInput {
   readonly discountPct?: string | null | undefined
   readonly description?: string | null | undefined
   readonly note?: string | null | undefined
+  /** B-W2b-374 (XF3:02): the options chosen when the line is typed (orders/lines/options-entry.ts). */
+  readonly options?: readonly LinePick[] | undefined
 }
 
 const blankToNull = (value: string | null | undefined): string | null => (value === undefined || value === null || value.trim() === '' ? null : value.trim())

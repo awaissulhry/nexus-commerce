@@ -1,6 +1,8 @@
 import { z } from 'zod'
 import type { ApiClient } from '../../../lib/api/client'
 import { newIdempotencyKey } from '../../../lib/api/client'
+// B-W2b-374: a typed line's options.
+import type { PickBody } from '../quotes/record/configurator/api'
 
 /**
  * Every call of the sales order screens (SCR-038 list and board, SCR-039 the order studio), with the answer's shape
@@ -12,7 +14,8 @@ import { newIdempotencyKey } from '../../../lib/api/client'
  */
 
 // W2b-5 (B-W2b-281): PENDING_APPROVAL, an order waiting for a yes before it goes on (the domain's list, in its order).
-export const ORDER_STATUSES = ['CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED', 'SHIPPED', 'CLOSED', 'CANCELLED', 'PENDING_APPROVAL'] as const
+// W2b-6 (B-W2b-372): DELIVERED, every shipment that left was delivered.
+export const ORDER_STATUSES = ['CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED', 'SHIPPED', 'CLOSED', 'CANCELLED', 'PENDING_APPROVAL', 'DELIVERED'] as const
 export type OrderStatus = (typeof ORDER_STATUSES)[number]
 /** The board's lanes (closed and cancelled are counted beside them). */
 export const BOARD_LANES = ['CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED', 'SHIPPED'] as const satisfies readonly OrderStatus[]
@@ -414,6 +417,8 @@ export interface NewLineInput {
   colourwayId: string
   sizes: SizeInput[]
   unitPrice?: string | null
+  /** B-W2b-374 (XF3:02): the options chosen with the line (their surcharges join its price). */
+  options?: PickBody[]
 }
 
 export interface ManualOrderBody {
@@ -446,6 +451,8 @@ const previewLineSchema = z.object({
   vatRatePct: z.string(),
   vatNature: z.string().nullable(),
   costAmount: z.number().nullable().optional(),
+  /** B-W2b-374: what the line's options add a piece (net; already in its unit price); null: none. */
+  optionsAdd: z.string().nullable().optional(),
 })
 export type PreviewLine = z.infer<typeof previewLineSchema>
 

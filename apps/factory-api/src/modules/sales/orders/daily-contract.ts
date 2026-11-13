@@ -8,6 +8,8 @@ import { MAX_REASON, SALES_ORDER_STATUSES } from '@nexus/factory-domain/sales/or
 import { MILESTONE_KINDS, MILESTONE_STATUSES } from '@nexus/factory-domain/sales/orders/schedule'
 import { DEPOSIT_KINDS, MAX_QUOTE_LINES, MAX_SIZE_QUANTITY, MAX_TEXT } from '@nexus/factory-domain/sales/quotes/quotes'
 import { orderView } from './contract'
+// B-W2b-374: the options of a typed line.
+import { picksBody } from '@nexus/factory-domain/sales/configurator/contracts'
 // B-W2b-303: the season and the priority of a typed order.
 import { ORDERS_DEPTH_LIMITS, SALES_ORDER_PRIORITY_LEVELS } from '@nexus/factory-domain/sales/orders-depth/rules'
 
@@ -42,6 +44,8 @@ const newLineInput = input({
   discountPct: pct.nullish(),
   description: text(MAX_TEXT.description).nullish(),
   note: text(MAX_TEXT.note).nullish(),
+  /** B-W2b-374 (XF3:02): the options chosen when the line is typed (their surcharges join the line's price). */
+  options: picksBody().optional(),
 })
 
 // ---- manual entry --------------------------------------------------------------------------------------------------------
@@ -88,6 +92,8 @@ const previewLine = output({
   vatRatePct: z.string(),
   vatNature: z.string().nullable(),
   costAmount: money.cost(z.number().int().nullable()),
+  /** B-W2b-374: what the line's options add a piece (net; already in its unit price); null: none. */
+  optionsAdd: money.price(z.string().nullable()),
 })
 
 export const previewManualContract = defineContract({
@@ -134,6 +140,8 @@ const amendLine = input({
   unitPrice: money.price(unitPrice().nullish()),
   description: text(MAX_TEXT.description).nullish(),
   note: text(MAX_TEXT.note).nullish(),
+  /** B-W2b-374 (XF3:02): a NEW line's options (an existing line's change in its Options dialog). */
+  options: picksBody().optional(),
 })
 
 const amendFields = {

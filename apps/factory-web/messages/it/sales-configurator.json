@@ -80,9 +80,14 @@
     "problem": {
       "type": "La grafica è un PDF o un'immagine (JPEG, PNG, WebP).",
       "size": "Un file è al massimo di 25 MB.",
-      "failed": "Il file non è stato inviato: riprova."
+      "failed": "Il file non è stato inviato: riprova.",
+      "share": "La condivisione nel portale non è cambiata: riprova."
     },
-    "done": "{name} è sulla riga."
+    "done": "{name} è sulla riga.",
+    "portal": {
+      "shown": "La grafica è visibile nel portale del cliente.",
+      "hidden": "La grafica non è più visibile nel portale."
+    }
   },
   "save": {
     "save": "Salva le opzioni",

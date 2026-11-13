@@ -46,6 +46,8 @@ export const linkQuoteSchema = z.object({
         vatRatePct: z.string(),
         vatNature: z.string().nullable(),
         sizesText: z.string(),
+        /** B-W2b-374 (XF3:03): the options as the PDF prints them; null: none. */
+        optionsText: z.string().nullable().optional(),
       }),
     ),
     totals: z.object({ net: z.number(), vat: z.array(z.object({ rate: z.string().nullable(), nature: z.string().nullable(), taxable: z.number(), vat: z.number() })), gross: z.number() }).optional(),

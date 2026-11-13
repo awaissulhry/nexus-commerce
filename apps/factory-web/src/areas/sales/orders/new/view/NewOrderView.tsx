@@ -170,7 +170,7 @@ function NewOrder({ model, actions }: { model: NewOrderModel; actions?: NewOrder
               </Field>
             </Card>
             <LinesEditor
-              model={{ mode: 'new', lines: model.draft.lines, order: null, styles: model.styles, composer: model.composer, price: model.can.price, currency, priceBasis: priced?.priceBasis ?? 'NET', minimums: {}, nets: model.can.price ? nets : undefined, listPrices: prices, busy: model.busy }}
+              model={{ mode: 'new', lines: model.draft.lines, order: null, styles: model.styles, composer: model.composer, price: model.can.price, currency, priceBasis: priced?.priceBasis ?? 'NET', minimums: {}, nets: model.can.price ? nets : undefined, listPrices: prices, busy: model.busy, newLineOptions: model.newLineOptions /* B-W2b-374 */ }}
               actions={{ onCells: actions?.onCells, onPrice: actions?.onPrice, onComposerQuery: actions?.onComposerQuery, onComposerPick: actions?.onComposerPick, onComposerToggle: actions?.onComposerToggle, onComposerAdd: actions?.onComposerAdd }}
             />
           </div>

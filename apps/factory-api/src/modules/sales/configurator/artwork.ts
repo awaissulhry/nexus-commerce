@@ -50,7 +50,7 @@ export async function artworkOf(db: Reader, target: Target) {
       status: { in: [...LIVE] },
       OR: [{ recordType: own.recordType, recordId: { in: own.ids } }, ...(upstream.length > 0 ? [{ recordType: 'QuoteLine', recordId: { in: upstream } }] : [])],
     },
-    select: { id: true, recordType: true, recordId: true, originalName: true, contentType: true, sizeBytes: true, status: true, createdAt: true },
+    select: { id: true, recordType: true, recordId: true, originalName: true, contentType: true, sizeBytes: true, status: true, createdAt: true, visibility: true },
     orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
     take: CONFIGURATOR_LIMITS.artwork * 3,
   })
@@ -62,6 +62,8 @@ export async function artworkOf(db: Reader, target: Target) {
     status: file.status,
     createdAt: toUtcIso(file.createdAt),
     from: file.recordType === own.recordType && own.ids.includes(file.recordId) ? ('LINE' as const) : ('QUOTE_LINE' as const),
+    // B-W2b-374 (XF3:04): shown in the customer's portal.
+    portal: file.visibility.includes('PARTNER'),
   }))
 }
 

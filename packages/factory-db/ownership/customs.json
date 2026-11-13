@@ -1,0 +1,30 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/customs.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office records a shipment's tracking problems, makes and offers return labels and keeps the export declarations through apps/factory-api's modules/shipping and modules/sales (B-W2b-398, -409), always through command(); the carriers' news, the daily checks and a link's answer (the customer booking its return label, the broker sending the MRN back) are written by the API in the tenant's system scope. The floor reads none of them. A portal or link session (factory_partner_runtime) reads its own party's return labels only. Nobody deletes a tracking problem (resolved) or a return label (cancelled); a customs declaration is removed only while its pack is merely sent; the …_delivery_customs_w2b_guards triggers refuse the rest. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "TrackingException": {
+      "about": "The office (and the API's daily check and carrier news, in the tenant's system scope) raises a problem with a shipment on its way (LOG-063): delayed, an address problem, a failed delivery or no scan for days, with the task a person works it in, and resolves it once. The floor and portal sessions never see it.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "ReturnLabel": {
+      "about": "The office makes a return label for an RMA (LOG-112): booked at once with its booking reference and PDF, or offered by a RETURN_LABEL link the customer uses to book the carrier; then used or cancelled. A portal or link session reads its own party's labels (to print its label, to see the offer), never who made them.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["createdById"] }
+      }
+    },
+    "CustomsDeclaration": {
+      "about": "The office keeps the export declaration of a shipment leaving the EU (LOG-088, LOG-089): the pack sent to the broker, the MRN once filed, the exit confirmed with its proof against the invoice, the days before a missing proof raises an alert; it removes one only while its pack is merely sent. The floor and portal sessions never see it (the broker's link answers through the API).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    }
+  }
+}

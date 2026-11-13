@@ -17,6 +17,7 @@ import { seed as seedCollab } from '../seed/collab'
 import { seed as seedCompliance } from '../seed/compliance'
 import { seed as seedComplianceRules } from '../seed/compliance-rules'
 import { seed as seedCosting } from '../seed/costing'
+import { seed as seedCustoms } from '../seed/customs'
 import { seed as seedCutting } from '../seed/cutting'
 import { seed as seedEmail } from '../seed/email'
 import { seed as seedEmailIn } from '../seed/email-in'
@@ -472,6 +473,11 @@ beforeAll(async () => {
   // copy may repeat.
   await seedBank({ db: factory, namespace: 'iso-a' })
   await seedBank({ db: factory, namespace: 'iso-b' })
+  // The delivery, returns and customs schema of W2b-6 (wave 51/57): tracking problems (the first resolved), return labels (the
+  // first offered by link on the waiting RMA) and customs declarations (the first with its pack merely sent): the plain ones a
+  // copy may repeat.
+  await seedCustoms({ db: factory, namespace: 'iso-a' })
+  await seedCustoms({ db: factory, namespace: 'iso-b' })
   // The security and audit schema of W2b-6 (wave 52/57): the security settings, an archived custom role, sessions with their
   // device and place, step-up tries (the first a plain wrong code), security events (the first a failed sign-in of nobody
   // known; the floor's at A1 and B1, P1's portal) and reads of sensitive records: the plain ones a copy may repeat.
@@ -563,6 +569,7 @@ it('covers every classified table and every runtime role', () => {
     'CustomerMaterial',
     'CustomerRequirement',
     'CustomerStatementFigures',
+    'CustomsDeclaration',
     'CutConsumption',
     'CutIssue',
     'CutIssueLine',
@@ -891,6 +898,7 @@ it('covers every classified table and every runtime role', () => {
     'RestrictedSubstance',
     'ReturnAuthorisation',
     'ReturnFeeRule',
+    'ReturnLabel',
     'ReturnLine',
     'ReturnPolicy',
     'ReturnReceipt',
@@ -1026,6 +1034,7 @@ it('covers every classified table and every runtime role', () => {
     'TimesheetApproval',
     'TodayLayout',
     'TrackingEvent',
+    'TrackingException',
     'TrainingAttendance',
     'TrainingRecord',
     'TrainingRequirement',
