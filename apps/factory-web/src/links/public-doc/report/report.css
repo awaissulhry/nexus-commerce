@@ -1,0 +1,45 @@
+/*
+ * links.doc › Report a problem (B-W2b-357) LAYOUT only: the card's head and body on the public DoC page, the dialog's column.
+ * Semantic --nds-* tokens only; the card itself is the page's (.fw-pd-card).
+ */
+.fw-pdr-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  margin-bottom: var(--nds-space-10);
+}
+
+.fw-pdr-h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  margin: 0;
+  font-size: var(--nds-font-size-lg);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-pdr-hint {
+  margin: 0;
+  color: var(--nds-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.fw-pdr-lead {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-pdr-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+.fw-pdr-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
