@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { businessDate, defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
+import { notMoney } from '@nexus/factory-domain/money/marked'
 import {
   ACCIDENT_OUTCOMES,
   HELD_CODES,
@@ -246,7 +247,8 @@ export const logContract = defineContract({
   response: {
     200: output({
       entries: z.array(revision.extend({ reportId: id(), companyId: id(), number: z.string(), reportStatus: z.enum(REPORT_STATUSES), style: style.nullable(), revisions: z.number().int(), mustTell: z.boolean(), words: z.string() })),
-      total: z.number().int(),
+      /** The log's entries the filters keep (a count, never money). */
+      total: notMoney(z.number().int()),
       tiles: output({ entries: z.number().int(), toTell: z.number().int(), told: z.number().int() }),
       law: z.string(),
       q37: z.string(),
