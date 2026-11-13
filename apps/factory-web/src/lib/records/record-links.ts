@@ -82,6 +82,8 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   PpeRegisterEntry: '/compliance/register/[id]',
   // B-W2b-271: a recall or withdrawal of a register entry (SCR-328).
   RecallAction: '/compliance/register/recall/[id]',
+  // B-W2b-357: a product-safety report (SCR-421-record; B-W2b-351's reports, opened from the accident log, a SAFETY case, a thread).
+  ProductSafetyReport: '/compliance/register/accidents/reports/[id]',
   // Finance › Invoices (SCR-081: invoices, deposit invoices, credit notes) and Payments (SCR-082: a payment's placements).
   Invoice: '/finance/invoices/[id]',
   Payment: '/finance/payments/[id]',

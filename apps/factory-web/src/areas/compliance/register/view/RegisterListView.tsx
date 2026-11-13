@@ -15,6 +15,8 @@ import { REGISTER_KINDS, REGISTER_RISKS, type Entry, type RegisterKind, type Reg
 import { concernSummary, isFiltered, LIST_MAX, PAGE, sourceKey, TILES, type ListDialog, type RegisterFilters, type RegisterListModel, type RegisterView, type TileId } from '../model'
 import { NewEntryModal, type NewEntryActions } from './NewEntryModal'
 import { codesText, DayText, RegisterMessages, RiskTag, ShortcutsModal, StatusPill } from './parts'
+// B-W2b-357 (design page.h "Accident log (W2b)"): the ⋯ item to the accident log, in the safety reports' words.
+import { useSafetyWords } from '../../../../lib/safety-reports/words'
 
 export interface RegisterListActions extends NewEntryActions {
   onQuery?: (query: string) => void
@@ -56,6 +58,7 @@ function RegisterList({ model, actions }: { model: RegisterListModel; actions?: 
   // B-W2b-271: the words of the two W2b tiles and views (catalogue compliance-register-depth).
   const d = useT('compliance-register-depth')
   const viewWord = (view: RegisterView) => (view === 'notices' || view === 'recalls' ? d(`view.${view}`) : t(`view.${view}`))
+  const sr = useSafetyWords()
   const locale = useLocale()
   const can = model.can
   const dialog = model.dialog ?? null
@@ -218,6 +221,10 @@ function RegisterList({ model, actions }: { model: RegisterListModel; actions?: 
       disabled: rows.length === 0,
       description: rows.length === 0 ? t('list.exportNothing') : t('list.exportViewHint', { count: rows.length }),
     },
+    // B-W2b-357: ⋯ › Accident log (held with why without sales.safety.view).
+    ...(model.accidentLog
+      ? [model.accidentLog.held ? ({ id: 'accidents', label: sr('register.accidentLog'), disabled: true, description: sr('register.accidentLogHeld') } as MenuItemDef) : ({ id: 'accidents', label: sr('register.accidentLog'), description: sr('register.accidentLogHint'), href: model.accidentLog.href } as MenuItemDef)]
+      : []),
     { id: 'sep', separator: true } as MenuItemDef,
     { id: 'keys', label: t('keys.title'), onSelect: () => open({ kind: 'shortcuts' }) },
   ]
