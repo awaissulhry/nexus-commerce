@@ -22,6 +22,10 @@ import { OtherDialogs } from './OtherDialogs'
 import { PhotosTab } from './PhotosTab'
 import { ProofsTab } from './ProofsTab'
 import { ReviewDialogs } from './ReviewDialogs'
+// B-W2b-371: the photos' pop-ups and their count (XF2:01).
+import { photoCount } from '../../photos/model'
+import { PhotoDialogs } from '../../photos/view/PhotoDialogs'
+import { ExtrasMessages } from '../../photos/words'
 
 export type { ProfileRecordActions, ProfileRecordModel } from '../view-model'
 
@@ -111,7 +115,7 @@ function Body({ model, actions }: { model: ProfileRecordModel; actions?: Profile
   const tabs = RECORD_TABS.map((tab) => ({
     id: tab,
     label: t(`tab.${tab}`),
-    count: tab === 'measurements' ? record.revisions.length : tab === 'orders' ? record.units.length : tab === 'fittings' ? (model.fittings.items ? model.fittings.items.appointments.length : null) : tab === 'photos' ? (model.sent.items ? model.sent.items.revisions.reduce((sum, revision) => sum + revision.photos.length, 0) : null) : tab === 'proofs' ? (model.proofs.items ? model.proofs.items.length : null) : null,
+    count: tab === 'measurements' ? record.revisions.length : tab === 'orders' ? record.units.length : tab === 'fittings' ? (model.fittings.items ? model.fittings.items.appointments.length : null) : tab === 'photos' ? (model.sent.items ? model.sent.items.revisions.reduce((sum, revision) => sum + revision.photos.length, 0) + (photoCount(model.photos?.photos ?? null) ?? 0) : null) : tab === 'proofs' ? (model.proofs.items ? model.proofs.items.length : null) : null,
   }))
 
   return (
@@ -162,11 +166,16 @@ function Body({ model, actions }: { model: ProfileRecordModel; actions?: Profile
         {model.tab === 'fittings' && <FittingsTab model={model} record={record} actions={actions} />}
         {model.tab === 'proofs' && <ProofsTab model={model} record={record} />}
         {model.tab === 'orders' && <OrdersTab model={model} record={record} actions={actions} />}
-        {model.tab === 'activity' && <ActivityTab record={record} />}
+        {model.tab === 'activity' && <ActivityTab record={record} thread={model.thread} />}
       </RecordFrame>
       <ReviewDialogs model={model} record={record} actions={actions} />
       <FittingDialogs model={model} record={record} actions={actions} />
       <OtherDialogs model={model} record={record} actions={actions} />
+      {model.photos && (
+        <ExtrasMessages>
+          <PhotoDialogs model={model.photos} actions={actions?.photos} riderName={record.riderName} />
+        </ExtrasMessages>
+      )}
       {model.measurements && <MeasurementsDialog model={model.measurements} actions={actions?.measurements} />}
       {model.link && <LinkDialog model={model.link} can={model.can} actions={actions?.link} />}
       {model.quote && <QuoteDialog model={model.quote} can={model.can} companyId={model.companyId} actions={actions?.quote} />}

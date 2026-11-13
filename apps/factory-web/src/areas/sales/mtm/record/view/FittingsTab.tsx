@@ -9,6 +9,9 @@ import type { FittingResult, ProfileRecord } from '../../api'
 import { appointmentTone, fittingsHeld, nextOf, promiseMove, recordHref, repairHref, rightHeld, templatesHref, type Phrase } from '../../model'
 import { useWords } from '../../parts'
 import type { ProfileRecordActions, ProfileRecordModel } from '../view-model'
+// B-W2b-371 (XF2:01): a fitting's photos on its card.
+import { FittingPhotos, PhotoNotice } from '../../photos/view/OfficePhotos'
+import { ExtrasMessages } from '../../photos/words'
 
 /**
  * The rider profile's Fittings tab (design rider.fittings, SAL-054, SAL-297; B-W2b-360's API): the fittings and visits booked for
@@ -87,6 +90,11 @@ export function FittingsTab({ model, record, actions }: { model: ProfileRecordMo
           />
         )}
       </Section>
+      {model.photos && (
+        <ExtrasMessages>
+          <PhotoNotice model={model.photos} actions={actions?.photos} />
+        </ExtrasMessages>
+      )}
       <Section id="fit-results" title={t('fit.results')}>
         {results.length === 0 ? (
           <EmptyState title={t('fit.noResults')} description={t('fit.noResultsBody')} />
@@ -168,6 +176,11 @@ function ResultCard({ result, model, record, actions }: { result: FittingResult;
           )}
         </p>
         {next && <p className="fw-mtm-hint">{say(next)}</p>}
+        {model.photos && (
+          <ExtrasMessages>
+            <FittingPhotos model={model.photos} actions={actions?.photos} resultId={result.id} />
+          </ExtrasMessages>
+        )}
       </div>
     </Card>
   )

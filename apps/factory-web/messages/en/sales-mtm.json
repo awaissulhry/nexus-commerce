@@ -105,14 +105,18 @@
     "waiting": "Waiting for review",
     "needMore": "Need more",
     "confirmed": "Confirmed",
-    "old": "Older than 12 months"
+    "old": "Older than 12 months",
+    "outside": "Outside the certified range",
+    "fittings": "Fittings this week"
   },
   "chip": {
     "label": "Filters",
     "clear": "Remove the filter {what}",
     "clearAll": "Clear all",
     "garment": "Garment type {garment}",
-    "search": "Search “{q}”"
+    "search": "Search “{q}”",
+    "customer": "Customer {customer}",
+    "customerUnnamed": "One customer"
   },
   "tile": {
     "waiting": "Waiting for factory review",
@@ -123,8 +127,8 @@
     "hint": {
       "waiting": "Newest revisions the factory has not reviewed",
       "needMore": "The factory asked the rider or dealer for more",
-      "outside": "Checked per style on each profile (Certified range check)",
-      "fittings": "Fittings booked or done this week; each row shows its next fitting",
+      "outside": "Riders whose newest measures make a unit outside its style's certified range (— while made-to-measure has not started)",
+      "fittings": "Riders with a fitting booked or done this week",
       "old": "Measured more than 12 months ago: measure again before a repeat order"
     },
     "failed": "Couldn’t count"
@@ -149,7 +153,6 @@
     "byOffice": "Measured by us",
     "old": "Re-measure",
     "revisionValue": "Rev. {revision}",
-    "rangeHint": "Checked per style on the profile",
     "menu": "Actions for {rider}",
     "open": "Open",
     "openNewTab": "Open in new tab",
@@ -425,8 +428,6 @@
   },
   "photos": {
     "intro": "Front, side and back photos sent with the measurement link, for the pattern maker. Personal data: office only.",
-    "upload": "Upload",
-    "uploadHeld": "Photos come with the measurement link: uploading from the office is not available yet.",
     "askByLink": "Ask for photos by link",
     "failed": "Couldn’t load the photos",
     "none": "No photos",
@@ -865,7 +866,7 @@
     "quoteUnit": "Quote {number}: a unit on revision {revision}",
     "orderUnit": "Order {number}: a unit on revision {revision}",
     "style": "{style} · {colourway}",
-    "noThread": "Body measures are personal data: this profile has no message thread. Talk about the unit on its quote or order; every change is in the audit log."
+    "noThread": "Your roles do not read record threads: the rider's notes and messages are not shown here."
   },
   "sheet": {
     "noRight": "You cannot see this worksheet",

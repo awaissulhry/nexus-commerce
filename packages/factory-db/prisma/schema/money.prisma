@@ -51,6 +51,13 @@
 // came back), and a line may bill a step of the order's payment schedule (sales.prisma SalesOrderMilestone). Refunds of
 // what a credit note credits on a paid invoice, or of a payment's unplaced part, are receivables.prisma Refund rows.
 //
+// W2b-6 (schema wave 49/57, B-W2b-369; FIN-063, FIN-068, FIN-071, FIN-095, FIN-100): an invoice keeps its language and,
+// in a foreign currency, the rate, its day and the total in euro; it names the monthly invoice run that previewed it
+// (tax.prisma InvoiceRun), the customer's declaration of intent its N3.5 lines rest on (tax.prisma DeclarationOfIntent),
+// and a debit note (TD05) the invoice it adds charges to. The types TD16 to TD19 are the self-invoices (tax.prisma
+// SelfInvoice), numbered from the SELF_INVOICE series; a STAMP_DUTY charge line charges the stamp duty to the customer
+// (Owner 11-13; behind the company's stamp duty switch, GATE-ACCOUNTANT). The …_tax_currency_w2b_guards triggers hold them.
+//
 // Who sees what (ownership/money.json): the office reads and writes (the API keeps money to the price grain and staff
 // to their companies); the floor reads nothing here; a portal or link session (DOCUMENT_VIEW) reads only its OWN party's
 // issued invoices (a draft has no partner key), their lines, sends and notifications, its payments and their
@@ -125,6 +132,25 @@ model Invoice {
   /// For the office only: the partner role can neither read nor write it.
   /// @internal
   internalNote     String?
+  /// W2b-6 (wave 49/57; FIN-063): the language it is written in (ISO 639-1, "de": the customer contact's); null: the
+  /// company's. In a currency other than euro: the rate (units of the invoice's currency per euro, as the ECB quotes it:
+  /// 1 EUR = 1.0850 USD), its day (not after the invoice's date) and the gross total in euro minor units at that rate, all
+  /// three or none (none in euro). Like every column, frozen from the issue on.
+  language              String?
+  exchangeRate          Decimal?           @db.Decimal(18, 8)
+  rateDate              DateTime?          @db.Date
+  /// @grain price
+  totalEur              Int?
+  /// W2b-6 (FIN-068): the monthly invoice run (tax.prisma InvoiceRun) of its company that previewed it: named only while
+  /// the run is a PREVIEW, for a customer the run picked.
+  invoiceRunId          String?            @db.Uuid
+  /// W2b-6 (FIN-100): the buyer's declaration of intent (tax.prisma) its N3.5 lines rest on: not revoked, and only while
+  /// the company's declarations switch is on; at the issue checked on the tax agency's site, of the invoice's year, dated
+  /// on or before it, with an N3.5 entry in the VAT summary.
+  declarationOfIntentId String?            @db.Uuid
+  /// W2b-6 (FIN-071): TD05 only, and required there: the issued invoice (TD01 or TD24) of the company and buyer it adds
+  /// charges to (DatiFattureCollegate), dated on or before it.
+  debitOfId             String?            @db.Uuid
   version          Int                @default(1)
   createdAt        DateTime           @default(now()) @db.Timestamptz(3)
   updatedAt        DateTime           @default(now()) @updatedAt @db.Timestamptz(3)
@@ -153,6 +179,13 @@ model Invoice {
   reminderStops  ReminderStop[]
   // W2b portal-sales.prisma (wave 21/22): its card and SEPA payments at the provider.
   paymentIntents PaymentIntent[]
+  // W2b-6 tax.prisma (wave 49/57): the run that previewed it, the declaration of intent it rests on, the invoice a debit
+  // note adds to and the debit notes of this one, the self-invoice it is the document of (one: SelfInvoice's key).
+  invoiceRun          InvoiceRun?          @relation(fields: [tenantId, companyId, invoiceRunId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  declarationOfIntent DeclarationOfIntent? @relation(fields: [tenantId, companyId, buyerPartyId, declarationOfIntentId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  debitOf             Invoice?             @relation("InvoiceDebit", fields: [tenantId, companyId, buyerPartyId, debitOfId], references: [tenantId, companyId, buyerPartyId, id], onDelete: Restrict, onUpdate: Restrict)
+  debits              Invoice[]            @relation("InvoiceDebit")
+  selfInvoices        SelfInvoice[]        @relation("SelfInvoiceDocument")
 
   // Never the same number twice in a series period (a draft has none).
   @@unique([tenantId, numberSeriesId, number])
@@ -166,6 +199,10 @@ model Invoice {
   @@index([tenantId, salesOrderId])
   @@index([tenantId, depositRequestId])
   @@index([tenantId, creditOfId])
+  // W2b-6 (wave 49/57): a run's invoices, a declaration's, a debited invoice's.
+  @@index([tenantId, invoiceRunId])
+  @@index([tenantId, declarationOfIntentId])
+  @@index([tenantId, debitOfId])
 }
 
 /// FatturaPA TipoDocumento of the documents the factory issues (factory-domain FatturaPaDocumentType). Additive.
@@ -178,6 +215,16 @@ enum InvoiceDocType {
   TD04
   /// Deferred invoice of goods shipped with DDTs, art. 21 c.4 lett. a.
   TD24
+  /// W2b-6 (wave 49/57; FIN-071): debit note (nota di debito): charges added after the invoice it names (debitOfId).
+  TD05
+  /// W2b-6 (FIN-095): the self-invoices (tax.prisma SelfInvoice), numbered from the SELF_INVOICE series and issued only
+  /// while the company's self-invoice switch is on (GATE-ACCOUNTANT): TD16 internal reverse charge integration, TD17
+  /// services from abroad, TD18 goods from another EU state, TD19 goods already in Italy (art. 17 c.2). The buyer is the
+  /// supplier whose invoice it integrates.
+  TD16
+  TD17
+  TD18
+  TD19
 }
 
 /// Where an invoice is (A1 §2.5 "Invoice"); the moves are in the header of this file.
@@ -308,6 +355,10 @@ enum InvoiceChargeKind {
   FEE
   /// Anything else, said in the line's description.
   OTHER
+  /// W2b-6 (wave 49/57; FIN-101, Owner 11-13): the stamp duty charged to the customer (escluso art. 15: Natura N1, rate 0,
+  /// one unit), at most one per invoice, equal to the invoice's stamp duty, in euro, and only while the company's stamp
+  /// duty switch is on (GATE-ACCOUNTANT).
+  STAMP_DUTY
 }
 
 /// One send of an issued invoice to SDI through the company's SDI provider (FIN-084; B-W1-50): the file name (unique:
@@ -357,6 +408,8 @@ model SdiSubmission {
   integrationAccount IntegrationAccount @relation(fields: [tenantId, integrationAccountId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   xmlFile            StoredFile         @relation(fields: [tenantId, xmlFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   notifications      SdiNotification[]
+  // W2b-6 tax.prisma (wave 49/57): our own copy of its XML and receipts.
+  archiveCopies      SdiArchiveCopy[]
 
   @@unique([tenantId, invoiceId, attempt])
   @@unique([tenantId, fileName])

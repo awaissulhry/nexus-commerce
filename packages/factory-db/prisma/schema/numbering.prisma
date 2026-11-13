@@ -177,6 +177,9 @@ enum NumberKind {
   /// record (a Shipment, SampleShipment or DepositRequest). An office document kind: the API numbers it when the first
   /// proforma of the record is made; its later versions keep it.
   PROFORMA
+  /// W2b-6 wave 49/57: a self-invoice's number (AF-…; money.prisma Invoice of type TD16-TD19, tax.prisma SelfInvoice), a
+  /// fiscal series of its own per company (sezionale), next to INVOICE. An office document kind.
+  SELF_INVOICE
 }
 
 enum NumberReset {

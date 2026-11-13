@@ -1,0 +1,47 @@
+/* B-W2b-371: the made-to-measure office extras' own layout (CSS prefix fw-mtx-); semantic DS tokens only. */
+
+/* A label read by assistive technology only (the customer filter's name). */
+.fw-mtx-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.fw-mtx-customer {
+  min-width: 220px;
+}
+
+/* The rule editor: one row per rule, its fields wrapping on a narrow screen. */
+.fw-mtx-rule {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--nds-space-8);
+  align-items: end;
+  padding-block: var(--nds-space-12);
+  border-block-end: 1px solid var(--nds-border-subtle);
+}
+
+.fw-mtx-rule-words {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--nds-space-8);
+}
+
+.fw-mtx-rule-foot {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+  justify-content: space-between;
+  align-items: center;
+}
+
+.fw-mtx-limits {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: var(--nds-space-8);
+}

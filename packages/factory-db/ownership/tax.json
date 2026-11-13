@@ -1,0 +1,69 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/tax.prisma (rules: src/ownership.ts; roles: src/roles.ts). Office only (W2b schema wave 49/57, B-W2b-369): apps/factory-api's modules/invoicing (B-W2b-392 tax rules as data, B-W2b-396 invoicing in depth, B-W2b-401 e-invoicing in depth) writes them through command(), the worker in the tenant's system context (the SDI copy, the self-invoice deadlines); the API keeps staff to the companies their grants reach and the money to the price grain. The floor and portal or link sessions read and write nothing here (a customer reads its own invoices, money.json). GATE-ACCOUNTANT: the tax switches of CompanyEInvoiceSettings are OFF by default and the …_tax_currency_w2b_guards triggers refuse, while a switch is off, an invoice naming a declaration of intent, a STAMP_DUTY charge line and a self-invoice leaving DRAFT. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "TaxCode": {
+      "about": "Finance keeps a company's tax codes as data (rate or Natura, the law, the account mapping key, valid from and to), records the accountant's confirmation of an UNVERIFIED one, ends a version and makes the next, archives one made by mistake, and deletes only a version not yet in force; invoicing reads them while the company's tax codes switch is on.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "DeclarationOfIntent": {
+      "about": "Finance records a customer's declaration of intent (protocol, date, year, amount), the check on the tax agency's site with its receipt, and a revocation; the invoice issue moves what is used of it. Never deleted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "StampDutyQuarter": {
+      "about": "Finance (or the issue, in the tenant's system context) counts a quarter's invoices with stamp duty and their total, and marks the quarter paid; then it is frozen. Never deleted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "SelfInvoice": {
+      "about": "Finance (or the payables registration, in the tenant's system context) lists the self-invoice a foreign supplier's invoice asks for with its deadline, names its draft invoice, marks it issued (the company's self-invoice switch on) or cancels it with why. Never deleted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "CompanyEInvoiceSettings": {
+      "about": "Finance keeps a company's e-invoice test mode (going live after a step-up, the simulated answer) and the switches of its tax duties (OFF until the accountant confirms); the SDI send and the invoice screens read them. Changed, never deleted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "SdiArchiveCopy": {
+      "about": "The SDI send (the worker, in the tenant's system context) records our own copy of each send's XML and adds SDI's receipts as they come, with the intermediary that held them; finance reads it when the intermediary changes. Never deleted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "InvoiceRun": {
+      "about": "Finance starts a month's invoice run with the customers picked, previews its draft invoices, issues them in one session and marks the run issued; a preview with no invoice left may be deleted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "DepositCancellationRule": {
+      "about": "Finance keeps what happens to a deposit when an order is cancelled (kept share, refund, the document that follows), per deposit kind, who cancels and order type; the cancellation reads the active rule. Archived, never deleted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    }
+  }
+}

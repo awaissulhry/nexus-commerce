@@ -64,6 +64,11 @@
         "name": "Card payments (Stripe)",
         "for": "Lets customers pay deposits and invoices by card or SEPA debit; the card is typed in Stripe's own fields, never in Nexus.",
         "how": "One per company: each company receives its own payments. Not running yet: it waits for the Owner's yes with its exact fees; bank transfer stays the default."
+      },
+      "ECB": {
+        "name": "Exchange rates (ECB)",
+        "for": "Reads the European Central Bank's daily euro reference rates, so documents in another currency keep the day's rate.",
+        "how": "One for every company. A free public file: nothing to buy."
       }
     },
     "laterService": {

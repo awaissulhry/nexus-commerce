@@ -62,7 +62,7 @@ const can = mtmCan(Object.values(MTM_PERMISSIONS))
 describe('the list address, tiles and chips', () => {
   it('reads and writes the address (view, garment type, search, New, link) and ignores what is not one', () => {
     const address = addressOf(new URLSearchParams('view=needMore&garment=JACKET&q=Uno&new=1'))
-    expect(address).toEqual({ view: 'needMore', garment: 'JACKET', q: 'Uno', isNew: true, link: false })
+    expect(address).toEqual({ view: 'needMore', garment: 'JACKET', q: 'Uno', isNew: true, link: false, customer: null })
     expect(addressText(address)).toBe('?view=needMore&garment=JACKET&q=Uno&new=1')
     expect(addressOf(new URLSearchParams('view=nonsense&garment=jacket wear'))).toEqual(HOME_ADDRESS)
     expect(addressText(HOME_ADDRESS)).toBe('')
@@ -74,11 +74,11 @@ describe('the list address, tiles and chips', () => {
     expect(queryOf({ ...HOME_ADDRESS, view: 'confirmed', garment: 'SUIT' })).toMatchObject({ review: 'CONFIRMED', garmentType: 'SUIT' })
   })
 
-  it('a tile shows its count, "—" when unknown; the two the list cannot filter press nothing', () => {
+  it('a tile shows its count, "—" when unknown; B-W2b-371: every tile presses its saved row', () => {
     expect(TILES.map((tile) => tileValue(TILES_DATA, tile))).toEqual([2, 1, null, 3, 1])
     expect(TILES.map((tile) => tileValue(null, tile))).toEqual([null, null, null, null, null])
-    expect(TILE_VIEW.outside).toBeNull()
-    expect(TILE_VIEW.fittings).toBeNull()
+    expect(TILE_VIEW.outside).toBe('outside')
+    expect(TILE_VIEW.fittings).toBe('fittings')
     expect(chipsOf({ ...HOME_ADDRESS, view: 'old', garment: 'JACKET', q: 'x' }).map((chip) => chip.id)).toEqual(['view', 'garment', 'q'])
   })
 

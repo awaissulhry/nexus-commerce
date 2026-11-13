@@ -1,0 +1,247 @@
+{
+  "view": {
+    "FRONT": "Fronte",
+    "SIDE": "Fianco",
+    "BACK": "Schiena",
+    "DETAIL": "Dettaglio"
+  },
+  "verdict": {
+    "OK": "Calza",
+    "ALTER": "Serve una modifica",
+    "REMAKE": "Rifatto"
+  },
+  "review": {
+    "WAITING": "in attesa della revisione",
+    "CONFIRMED": "confermate",
+    "NEED_MORE": "chiesto altro"
+  },
+  "status": {
+    "PENDING_APPROVAL": "In attesa",
+    "CONFIRMED": "Confermato",
+    "IN_PRODUCTION": "In produzione",
+    "READY": "Pronto",
+    "PARTLY_SHIPPED": "Spedito in parte"
+  },
+  "lifecycle": {
+    "CONCEPT": "Idea",
+    "DEVELOPMENT": "Sviluppo",
+    "SAMPLING": "Campionatura",
+    "APPROVED": "Approvato",
+    "IN_PRODUCTION": "In produzione",
+    "PHASE_OUT": "In uscita",
+    "DISCONTINUED": "Fuori produzione"
+  },
+  "photo": {
+    "add": "Aggiungi una foto",
+    "addFitting": "Aggiungi una foto della prova",
+    "office": "Foto scattate in ufficio",
+    "officeSub": "Le foto dell'ufficio del pilota con un intimo tecnico, per revisione, ognuna con la sua data di cancellazione. Dati personali: solo ufficio, mai condivise.",
+    "failed": "Impossibile leggere le foto dell'ufficio",
+    "offBody": "Il su misura non è avviato per {garment}: nessuna foto si aggiunge finché non parte.",
+    "offWhere": "Dove si avvia",
+    "none": "Nessuna foto scattata in ufficio",
+    "noneBody": "Aggiungi fronte, fianco e schiena con un intimo tecnico per il modellista; ogni foto si cancella alla sua data.",
+    "revision": "Revisione {revision}",
+    "consent": "Informativa privacy data: {notice} il {date}",
+    "fittings": "Foto delle prove",
+    "fittingsSub": "Scattate a una prova, tenute con il suo esito; ognuna con la sua data di cancellazione.",
+    "fittingOf": "Prova del {date} · revisione {revision}",
+    "fittingNone": "Nessuna foto di questa prova",
+    "fittingCount_one": "{count} foto di questa prova",
+    "fittingCount_other": "{count} foto di questa prova",
+    "dismiss": "Chiudi",
+    "pending": "Non arrivata",
+    "notAvailable": "Questa foto non è arrivata o è in controllo",
+    "addedBy": "Aggiunta da {name} il {when}",
+    "added": "Aggiunta il {when}",
+    "open": "Apri",
+    "openAria": "Apri la foto: {view}",
+    "dateButton": "Data di cancellazione",
+    "dateAria": "Cambia la data di cancellazione della foto: {view}",
+    "working": "In corso…",
+    "cancel": "Annulla",
+    "opening": "Apro la foto senza i dati di posizione…",
+    "alt": "{view} di {rider}",
+    "stripped": "Mostrata senza dati di posizione; l'apertura è registrata.",
+    "held": {
+      "reading": "Sto leggendo le foto.",
+      "off": "Il su misura non è avviato per {garment}: nessuna foto si aggiunge finché non parte (Prodotti › Taglie e misure › Schede di misura).",
+      "rightRecord": "I tuoi ruoli non lo permettono: serve il diritto di registrare le misure.",
+      "rightFittings": "I tuoi ruoli non lo permettono: serve il diritto di gestire le prove.",
+      "rightDate": "I tuoi ruoli non permettono di cambiare la data di cancellazione di questa foto.",
+      "offline": "Offline: riprova quando torna la connessione.",
+      "checked": "In controllo"
+    },
+    "upload": {
+      "title": "Aggiungi una foto del pilota",
+      "titleFitting": "Aggiungi una foto della prova",
+      "sub": "{rider} · solo ufficio, mai condivisa",
+      "privacy": "Una foto del pilota con un intimo tecnico è un dato personale: resta in ufficio e si cancella alla sua data. Il nome del file non si conserva.",
+      "view": "Quale vista",
+      "hint": "JPEG o PNG, al massimo 15 MB.",
+      "picked": "Foto scelta ({size} KB)",
+      "deleteOn": "Cancella il",
+      "deleteOnHint": "Lasciala vuota: si cancella 90 giorni dopo la spedizione del capo.",
+      "save": "Aggiungi la foto",
+      "done": "La foto è stata aggiunta.",
+      "noFile": "Scegli prima una foto.",
+      "type": "Una foto JPEG o PNG (sul telefono scegli \"Più compatibile\").",
+      "size": "Al massimo 15 MB.",
+      "full": "Al massimo 12 foto qui: prima porta a oggi la data di cancellazione di una, o scattale sulla prossima revisione.",
+      "store": "La foto non è arrivata all'archivio dei file: riprova.",
+      "off": "Il su misura non è avviato per questo tipo di capo: nessuna foto si aggiunge finché non parte."
+    },
+    "delete": {
+      "afterShipping": "Si cancella 90 giorni dopo la spedizione del capo",
+      "withinHour": "Si cancella entro un'ora",
+      "on": "Si cancella il {date}"
+    },
+    "date": {
+      "title": "Data di cancellazione della foto: {view}",
+      "now": "Ora: {line}.",
+      "day": "Cancella il",
+      "dayHint": "Da oggi in poi: oggi cancella la foto entro un'ora.",
+      "today": "Cancella oggi",
+      "why": "Perché (registrato)",
+      "save": "Salva la data",
+      "saveToday": "Cancella oggi",
+      "done": "La foto si cancella il {date}.",
+      "doneToday": "La foto sarà cancellata entro un'ora.",
+      "problem": {
+        "day": "Scrivi il giorno.",
+        "past": "Un giorno da oggi in poi.",
+        "tooLate": "Al massimo due anni da oggi.",
+        "reason": "Scrivi il perché (al massimo 500 caratteri): viene registrato.",
+        "deleted": "Questa foto è già cancellata: la sua data resta com'è.",
+        "same": "La foto si cancella già in quel giorno.",
+        "stale": "Questa foto è cambiata nel frattempo: è stata riletta.",
+        "retained": "Questa foto si conserva almeno fino a un giorno successivo: non si cancella prima."
+      }
+    },
+    "problem": {
+      "failed": "Non è riuscito: riprova.",
+      "forbidden": "I tuoi ruoli non lo permettono.",
+      "notFound": "La foto o la scheda non c'è più.",
+      "unavailable": "Il server dell'ufficio non risponde: riprova.",
+      "open": "La foto non si è aperta: forse è cancellata o ancora in controllo."
+    }
+  },
+  "list": {
+    "range": {
+      "hint": "Le misure più recenti del pilota rispetto al campo certificato del modello di ogni capo aperto",
+      "unknown": "Non verificato",
+      "inside": "Dentro",
+      "outside": "Fuori",
+      "outsidePoints": "Fuori: {points}"
+    },
+    "customer": {
+      "label": "Cliente",
+      "all": "Tutti i clienti",
+      "placeholder": "Cliente…"
+    }
+  },
+  "rules": {
+    "edit": "Modifica le regole",
+    "title": "Le regole, come le scrivi",
+    "intro": "Ogni regola controlla le misure mentre si scrivono e si inviano, una volta avviato il su misura. Blocca: non si accetta così; Avvisa: si segnala e si tiene.",
+    "add": "Aggiungi una regola",
+    "none": "Nessuna regola: si richiede solo l'intervallo plausibile di ogni punto.",
+    "code": "Codice",
+    "newCode": "nuova regola",
+    "rowLabel": "Regola {n}: {code}",
+    "kind": "Cosa controlla",
+    "point": "Punto",
+    "pick": "Scegli un punto",
+    "otherOrder": "Mai sopra",
+    "otherRatio": "Diviso per",
+    "minFactor": "Fattore minimo",
+    "maxFactor": "Fattore massimo",
+    "minValue": "Minimo ({unit})",
+    "maxValue": "Massimo ({unit})",
+    "severity": "Quando non torna",
+    "wordsIt": "Parole in italiano",
+    "wordsEn": "Parole in inglese",
+    "archived": "Non controllata (tenuta)",
+    "remove": "Togli",
+    "removeAria": "Togli la regola {code}",
+    "archivedPoint": "archiviato",
+    "means": {
+      "ORDER": "Il punto non è mai sopra l'altro punto (entrambi nella stessa unità).",
+      "RATIO": "Il punto diviso per l'altro punto resta tra i fattori.",
+      "RANGE": "La misura del punto resta tra i valori, nella sua unità."
+    },
+    "base": {
+      "title": "Taglia base",
+      "intro": "I punti da cui si suggerisce la taglia base, nell'ordine della scheda (decide prima il primo spuntato). Nessuno: la taglia base si scrive.",
+      "points": "Punti da cui si legge la taglia base",
+      "tie": "Quando due taglie vanno bene uguale"
+    },
+    "tie": {
+      "LARGER": "Prendi la più grande",
+      "SMALLER": "Prendi la più piccola"
+    },
+    "limits": {
+      "title": "Tolleranze e limiti di modifica",
+      "intro": "Per punto: la tolleranza di collaudo di un capo su misura, e di quanto un capo può scendere o salire rispetto alla misura della taglia base prima che lo riveda un modellista. Vuoto: non impostato.",
+      "tolerance": "Tolleranza ± ({unit})",
+      "alterationMinus": "Sotto, al massimo ({unit})",
+      "alterationPlus": "Sopra, al massimo ({unit})"
+    },
+    "noChange": "Ancora nessuna modifica",
+    "changes_one": "{count} modifica da salvare",
+    "changes_other": "{count} modifiche da salvare",
+    "cancel": "Annulla",
+    "save": "Salva le regole",
+    "done": "Le regole sono salvate.",
+    "held": {
+      "right": "I tuoi ruoli non lo permettono: serve il diritto di gestire i modelli e le loro schede.",
+      "archived": "Questa scheda è archiviata: prima ripristinala.",
+      "notEditable": "Questa scheda non è tenuta dalla tua azienda: le sue regole si cambiano dove è tenuta.",
+      "busy": "Salvataggio…",
+      "offline": "Offline: riprova quando torna la connessione.",
+      "full": "Al massimo 60 regole per scheda.",
+      "fix_one": "Prima correggi {count} campo",
+      "fix_other": "Prima correggi {count} campi",
+      "nothing": "Ancora nessuna modifica."
+    },
+    "problem": {
+      "code": "Un codice da 1 a 60 lettere, cifre, punti, trattini o trattini bassi, ogni regola una volta.",
+      "words": "Almeno le parole in italiano (al massimo 500 caratteri ciascuna).",
+      "point": "Un punto di questa scheda (un punto archiviato solo su una regola non controllata).",
+      "other": "Un altro punto di questa scheda (per una regola d'ordine, nella stessa unità).",
+      "factor": "Fattori sopra 0 con al massimo 4 decimali, il minimo non sopra il massimo; almeno uno.",
+      "value": "Valori con al massimo 2 decimali, il minimo non sopra il massimo; almeno uno.",
+      "kind": "Questo tipo di regola vuole altri campi: controllali.",
+      "base": "Da 1 a 10 punti di questa scheda.",
+      "limit": "0 o più, nell'unità del punto, al massimo 2 decimali.",
+      "tooMany": "Al massimo {max} regole per scheda.",
+      "failed": "Le regole non si sono salvate: riprova.",
+      "stale": "Qualcuno ha cambiato la scheda nel frattempo: le regole sono state rilette, controllale e salva di nuovo."
+    }
+  },
+  "whereUsed": {
+    "reading": "Sto leggendo dove è usata…",
+    "failed": "Impossibile leggere dove è usata",
+    "retry": "Riprova",
+    "styles": "Modelli misurati con {code}",
+    "noStyles": "Nessun modello è ancora misurato con {code}.",
+    "orders": "Ordini aperti che serve",
+    "ordersHeld": "I tuoi ruoli non leggono gli ordini: gli ordini aperti non sono mostrati.",
+    "noOrders": "Nessun ordine aperto ha un capo su misura di {code}.",
+    "moreOrders": "Sono elencati solo i 100 ordini aperti più recenti.",
+    "mtmYes": "Su misura",
+    "mtmNo": "Solo a taglie",
+    "unit": "Riga {seq} · {style} {colourway} · taglia base {size} · revisione {revision}, {review}",
+    "col": {
+      "style": "Modello",
+      "name": "Nome",
+      "season": "Stagione",
+      "state": "Stato",
+      "mtm": "Su misura",
+      "order": "Ordine",
+      "customer": "Cliente",
+      "status": "Stato",
+      "units": "Capi su misura"
+    }
+  }
+}

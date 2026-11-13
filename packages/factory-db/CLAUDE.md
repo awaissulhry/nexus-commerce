@@ -301,6 +301,21 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    left) and wave 45's `factory_generated_document_check` (PROFORMA of a Shipment, SampleShipment or DepositRequest with its
    record's PROFORMA NumberAllocation; MANIFEST of a DispatchManifest; SHIPPING_MARKS and SHIPMENT_PACK of a Shipment); it calls
    recall's `factory_recall_words_ok` and `factory_recall_not_future`):
+   `…_tax_currency_w2b_guards` (W2b-6 schema wave 49/57, B-W2b-369, invoicing, tax and currency: tax codes as data (a rate or a
+   Natura with its law, ACTIVE versions of a code that never overlap: a transaction advisory lock per code; a version in force
+   never edited, ended from yesterday on and a new one made; VERIFIED never back, the accountant's confirmation once; deleted
+   only before its first day); declarations of intent (the tax agency's protocol, used up to the amount, the check with its
+   receipt once, one live per protocol: a partial unique; revoked then frozen; never deleted); stamp duty quarters (paid after
+   the quarter, then frozen); self-invoices PENDING → ISSUED | CANCELLED (one live per supplier invoice: a partial unique; its
+   invoice of its type, issued); e-invoice test mode (live with when and who, fixed while live); our own copy of an SDI send
+   (keyed `sdi:<send>`, receipts only added); invoice runs PREVIEW → ISSUED with no draft left; deposit rules on cancellation
+   (one ACTIVE per company, kind, side and order type: a partial unique); currencies (the base one never off; one active per
+   code: a partial unique) and exchange rates (keyed `<base>:<quote>:<day>:<source>`, an ECB one EUR-based and never changed,
+   only a MANUAL one removed); the payment terms' skipped months; GATE-ACCOUNTANT: CompanyEInvoiceSettings' switches, OFF by
+   default, hold an invoice naming a declaration of intent, a STAMP_DUTY charge line (one per invoice: a partial unique) and a
+   TD16-TD19 leaving DRAFT; its own triggers on Invoice (language, rate, run, declaration, debit note TD05), InvoiceLine and
+   PaymentTerms; it redefines W2a's `factory_invoice_check_issue` (the SELF_INVOICE series for TD16-TD19), the rest word for
+   word; it calls recall's `factory_recall_words_ok`, `factory_recall_not_future` and money's `factory_money_rome_day`):
    `…_bank_bridge_w2b_guards` (W2b-6 schema wave 50/57, B-W2b-370, bank, receivables, payables and the accountant's bridge:
    a company's own bank accounts (the IBAN's check digits; company, IBAN and currency fixed; one live per company and IBAN: a
    partial unique; switched off, never deleted; the migration's data copy fills each company's first one from its Company

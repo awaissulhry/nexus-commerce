@@ -134,6 +134,8 @@ model SupplierInvoice {
   sdiFile    SupplierInvoiceFile? @relation(fields: [tenantId, companyId, partyId, sdiFileId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   claim      SupplierClaim?       @relation(fields: [tenantId, claimSiteId, partyId, claimId], references: [tenantId, siteId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   inboxItems SdiInboxItem[]
+  // W2b-6 tax.prisma (wave 49/57): the self-invoices (TD17-TD19) a foreign supplier's invoice asks for.
+  selfInvoices SelfInvoice[]
   // W2b-6 bank.prisma (schema wave 50/57): the bank lines matched to it, the payment proposal lines that pay it.
   bankMatches          BankMatch[]
   paymentProposalLines PaymentProposalLine[]

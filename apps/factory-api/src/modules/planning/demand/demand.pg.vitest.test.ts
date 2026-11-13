@@ -70,6 +70,21 @@ const rows = (query = '', browser: Browser = planner) => as(browser, 'GET', `/pl
 const tileOf = (world: Json, layer: string): Json => world.tiles.find((tile: Json) => tile.layer === layer)
 const rowOf = (world: Json, style: string, colourway: string | null): Json => world.rows.find((row: Json) => row.style.code === style && (row.colourway?.code ?? null) === colourway)
 const today = () => businessDate(serverClock.now(), 'Europe/Rome')
+// ---- B-W2b-F43: SEED-Q-0004 is valid until 20 Dec 2026 (seed/sales-pricing.ts q4ValidUntil). Its two sides are asked with the
+// server's Date pinned to 09:00 UTC of its last valid day and of the day after (the harness's sign-in clock is apart), so both are
+// checked whatever the real day is (they were checked by `today() <= '2026-12-20'`, one side a day).
+const Q4_VALID_UNTIL = '2026-12-20'
+const Q4_ENDED = '2026-12-21'
+async function onDay<T>(day: string, read: () => Promise<T>): Promise<T> {
+  vi.useFakeTimers({ toFake: ['Date'], now: new Date(`${day}T09:00:00.000Z`) })
+  try {
+    expect(today(), "the server's business day is the pinned one").toBe(day)
+    return await read()
+  } finally {
+    vi.useRealTimers()
+  }
+}
+// ---- end B-W2b-F43
 
 let ids: { styles: Record<string, string>; colourways: Record<string, Record<string, string>>; items: Record<string, string>; orders: Record<string, string> }
 
@@ -142,8 +157,10 @@ describe('one demand view: the tiles and the time-phased rows (PLN-017, PLN-040,
     // SEED-SO-0004 size 50: one on the 15 Jan delivery, the other on no day (its line, its order: no date).
     expect(tileOf(world, 'ORDERS').undated).toBe(1)
     // The quote is likely to win while it is valid (20 Dec), and is never bought for.
-    const quoteValid = today() <= '2026-12-20'
-    expect(tileOf(world, 'QUOTES')).toMatchObject({ pieces: quoteValid ? 3 : 0, unplanned: quoteValid ? 3 : 0 })
+    // ---- B-W2b-F43: on its last valid day and on the day after, whatever the real day.
+    expect(tileOf(await onDay(Q4_VALID_UNTIL, () => demand()), 'QUOTES')).toMatchObject({ pieces: 3, unplanned: 3 })
+    expect(tileOf(await onDay(Q4_ENDED, () => demand()), 'QUOTES')).toMatchObject({ pieces: 0, unplanned: 0 })
+    // ---- end B-W2b-F43
     expect(tileOf(world, 'MTM')).toMatchObject({ pieces: 0, sources: 0 })
     expect(tileOf(world, 'SAMPLES')).toMatchObject({ pieces: 1, sources: 1, unplanned: 1 })
     expect(tileOf(world, 'REMAKES')).toMatchObject({ pieces: 2, sources: 2, unplanned: 2 })
@@ -162,7 +179,11 @@ describe('one demand view: the tiles and the time-phased rows (PLN-017, PLN-040,
     ])
     expect(jkt02Blk.strategy).toBe('MAKE_TO_STOCK')
     const jkt01Red = rowOf(world, 'SEED-JKT-01', 'RED')
-    expect(jkt01Red.totals).toMatchObject({ ORDERS: 4, QUOTES: today() <= '2026-12-20' ? 3 : 0, firm: 4 })
+    // ---- B-W2b-F43: its quote on its last valid day and on the day after (never in the firm total), whatever the real day.
+    expect(jkt01Red.totals).toMatchObject({ ORDERS: 4, firm: 4 })
+    expect(rowOf(await onDay(Q4_VALID_UNTIL, () => demand()), 'SEED-JKT-01', 'RED').totals).toMatchObject({ ORDERS: 4, QUOTES: 3, firm: 4 })
+    expect(rowOf(await onDay(Q4_ENDED, () => demand()), 'SEED-JKT-01', 'RED').totals).toMatchObject({ ORDERS: 4, QUOTES: 0, firm: 4 })
+    // ---- end B-W2b-F43
     expect(jkt01Red.strategy).toBe('MAKE_TO_ORDER')
     const jkt01Blk = rowOf(world, 'SEED-JKT-01', 'BLK')
     expect(jkt01Blk.totals).toMatchObject({ ORDERS: 8, SAMPLES: 1, firm: 9 })
@@ -214,11 +235,12 @@ describe('one demand view: the rows with their source, and what makes a number',
       ['50', null, 1, true],
     ])
     expect(list.rows.some((row: Json) => row.source.number === 'SEED-SO-W39-01')).toBe(false)
-    const quote = list.rows.find((row: Json) => row.kind === 'QUOTE_LINE')
-    if (today() <= '2026-12-20') {
-      // The planner holds no quotes.view: the row says it cannot be opened from here.
-      expect(quote).toMatchObject({ layer: 'QUOTES', source: { recordType: 'Quote', number: 'SEED-Q-0004', line: 10, mayOpen: false }, validUntil: '2026-12-20', size: '52', pieces: 3, date: null, planned: false })
-    } else expect(quote).toBeUndefined()
+    // ---- B-W2b-F43: the quote's row on its last valid day and on the day after, whatever the real day.
+    const quoteOn = async (day: string) => (await onDay(day, () => rows())).rows.find((row: Json) => row.kind === 'QUOTE_LINE')
+    // The planner holds no quotes.view: the row says it cannot be opened from here.
+    expect(await quoteOn(Q4_VALID_UNTIL)).toMatchObject({ layer: 'QUOTES', source: { recordType: 'Quote', number: 'SEED-Q-0004', line: 10, mayOpen: false }, validUntil: Q4_VALID_UNTIL, size: '52', pieces: 3, date: null, planned: false })
+    expect(await quoteOn(Q4_ENDED)).toBeUndefined()
+    // ---- end B-W2b-F43
     // Never money: no price, cost or amount in any row.
     expect(JSON.stringify(list.rows)).not.toMatch(/price|cost|amount|margin/i)
   })

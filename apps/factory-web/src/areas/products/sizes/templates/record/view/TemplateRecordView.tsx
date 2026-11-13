@@ -13,6 +13,9 @@ import { MtmTab } from './MtmTab'
 import { PointsTab } from './PointsTab'
 import { PreviewDialog } from './PreviewDialog'
 import { WhereUsedTab } from './WhereUsedTab'
+// B-W2b-371: the rule editor (XF2:05), the styles and open orders a template serves (XF2:04).
+import type { WhereUsedView } from '@nexus/factory-domain/sales/mtm/where-used'
+import type { RulesEditActions, RulesEditModel } from '../../rules/use-rules'
 
 export type TemplateLoad = { status: 'loading' } | { status: 'ready'; value: TemplateView } | { status: 'error'; problem: string } | { status: 'notFound' } | { status: 'forbidden' }
 
@@ -37,6 +40,10 @@ export interface TemplateRecordModel {
   readonly busy: boolean
   /** Design only: the preview open with these values. */
   readonly preview?: { readonly values: Record<string, string>; readonly confirmed: string[] } | null
+  /** B-W2b-371 (XF2:05): the rule editor (its draft while open). */
+  readonly rulesEdit?: RulesEditModel | null
+  /** B-W2b-371 (XF2:04): the styles and open orders the template serves (read while Where used is open). */
+  readonly whereUsed?: { readonly value: WhereUsedView | null; readonly problem: string | null } | null
 }
 
 export interface TemplateRecordActions {
@@ -51,6 +58,10 @@ export interface TemplateRecordActions {
   onMove?: (to: 'archive' | 'restore') => void
   onRename?: () => void
   onDismissNotice?: () => void
+  /** B-W2b-371 (XF2:05). */
+  rulesEdit?: RulesEditActions
+  /** B-W2b-371 (XF2:04): read Where used again. */
+  onRetryWhereUsed?: () => void
 }
 
 /**
@@ -123,7 +134,7 @@ function Body({ model, actions }: { model: TemplateRecordModel; actions?: Templa
         <NoticeLine notice={model.notice} onDismiss={actions?.onDismissNotice} />
         {model.tab === 'points' && <PointsTab model={model} template={template} actions={actions} onPreview={() => setPreview(true)} />}
         {model.tab === 'mtm' && <MtmTab model={model} template={template} actions={actions} />}
-        {model.tab === 'whereused' && <WhereUsedTab prefix={model.prefix} template={template} />}
+        {model.tab === 'whereused' && <WhereUsedTab prefix={model.prefix} template={template} whereUsed={model.whereUsed ?? null} onRetry={actions?.onRetryWhereUsed} />}
       </RecordFrame>
       {preview && <PreviewDialog template={template} initial={model.preview ?? null} onClose={() => setPreview(false)} />}
       <Dialogs model={model} template={template} actions={actions} />

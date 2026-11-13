@@ -1,0 +1,21 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/currency.prisma (rules: src/ownership.ts; roles: src/roles.ts). Office only (W2b schema wave 49/57, B-W2b-369): apps/factory-api's currencies module (B-W2b-389) writes them through command(), the daily ECB job in the tenant's system context (through the gateway, IntegrationProvider ECB). The floor and portal or link sessions read and write nothing here: a document carries its own rate. The …_tax_currency_w2b_guards triggers hold the rules. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "Currency": {
+      "about": "Finance switches the currencies a company's documents may be in on and off (the base currency stays on); every money screen reads them. Switched off, never deleted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "ExchangeRate": {
+      "about": "The daily ECB job records the reference rates of a day (never changed); finance types a manual override of a day, corrects it, or removes it to fall back to the ECB's. Documents copy the rate they use.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    }
+  }
+}

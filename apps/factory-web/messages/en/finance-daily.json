@@ -52,7 +52,8 @@
       "FREIGHT": "Freight",
       "OTHER": "Other charge",
       "PACKAGING": "Packaging",
-      "SAMPLES": "Samples"
+      "SAMPLES": "Samples",
+      "STAMP_DUTY": "Stamp duty"
     },
     "kindLabel": "What it bills",
     "lineSub": "Charge: {kind}",
@@ -78,7 +79,8 @@
       "FREIGHT": "Spese di trasporto",
       "OTHER": "Altre spese",
       "PACKAGING": "Spese di imballaggio",
-      "SAMPLES": "Campionatura"
+      "SAMPLES": "Campionatura",
+      "STAMP_DUTY": "Imposta di bollo"
     }
   },
   "costing": {

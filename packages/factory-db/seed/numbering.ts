@@ -144,6 +144,9 @@ export async function seed({ db, namespace }: SeedContext): Promise<void> {
       // W2b-6 wave 48/57: proforma invoices (non-fiscal) are numbered from it when a record's first proforma is made
       // (B-W2b-391): without it, no proforma can be made. Eight f's as above.
       { id: `ffffffff${id(`series:${company}:PROFORMA:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'PROFORMA', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'PF-{YYYY}-{N:4}', fiscal: false, createdById: actorId },
+      // W2b-6 wave 49/57: self-invoices (TD16-TD19) are numbered from it, a fiscal series of their own (B-W2b-401), while the
+      // company's self-invoice switch is on (GATE-ACCOUNTANT). Eight f's as above.
+      { id: `ffffffff${id(`series:${company}:SELF_INVOICE:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'SELF_INVOICE', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'AF-{YYYY}-{N:4}', fiscal: true, createdById: actorId },
     )
     if (company === 'A') {
       allocations.push({
