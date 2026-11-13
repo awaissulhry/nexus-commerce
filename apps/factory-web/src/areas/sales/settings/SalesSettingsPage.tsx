@@ -10,6 +10,9 @@ import { problemKey } from '../../quality/_shared/model'
 import { getReturnPolicy, getSalesSettings, listSeries, saveReturnPolicy, saveSalesSettings, type PolicyAnswer, type SalesSettings, type Series } from './api'
 import { LIVE_TYPES, policyBody, policyDraftOf, policyProblems, quoteBody, quoteDraftOf, quoteProblems, refusalOf, settingsCan, type Scope } from './model'
 import { SalesSettingsView, type Read, type SalesSettingsModel } from './view/SalesSettingsView'
+// B-W2b-316: Sales settings › Quote templates and Size curves.
+import { SizeCurvesSection } from './curves/CurvesSection'
+import { QuoteTemplatesSection } from './templates/TemplatesSection'
 
 /**
  * `/w/<company>/sales/settings` (SCR-235): reads the sales settings and the return policy of the scope (this company, or
@@ -145,6 +148,7 @@ export function SalesSettingsPage() {
     <SalesSettingsView
       model={model}
       reasons={can.reasonsView ? <ReasonListsEditor lists={REASON_LIST_GROUPS.sales} /> : undefined}
+      depth={{ templates: <QuoteTemplatesSection />, curves: <SizeCurvesSection /> }}
       actions={{
         onScope: setScope,
         onEdit: (card) => {
