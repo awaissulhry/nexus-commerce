@@ -92,6 +92,7 @@
     "REQUEST_PENDING": "C’è una richiesta aperta: chi decide risponde in Home › Approvazioni.",
     "NO_REQUEST": "Non è stato ancora chiesto a nessuno: chiedi l’approvazione.",
     "CREDIT_HOLD": "Il fido del cliente blocca l’ordine: decide l’Amministrazione.",
+    "MEASUREMENTS": "Il controllo della fabbrica delle misure di un capo su misura: l’ordine prosegue appena sono confermate.",
     "asked": "Chiesta il {date}",
     "askedOf": "Chiesta a {who} il {date}",
     "mine": "l’hai chiesta tu",

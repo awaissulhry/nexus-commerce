@@ -306,6 +306,8 @@ function ReadyRecord({ order, model, actions, panels }: { order: Order; model: O
       )}
       {/* B-W2b-323: the yes the order waits for, the depth's notice. */}
       {model.depth && <WaitingBanner model={model.depth} actions={actions?.depth} prefix={model.prefix} />}
+      {/* B-W2b-368: the made-to-measure units the order waits for, each with its factory review. */}
+      {model.reviewBanner}
       {model.depth && <DepthNotice model={model.depth} actions={actions?.depth} />}
       {order.status === 'CANCELLED' && <Banner tone="danger" title={t('record.cancelled', { reason: order.cancelReason ?? '—' })} />}
       {order.status === 'CLOSED' && <Banner tone="info" title={order.closedAt ? t('record.closed', { date: formatDate(order.closedAt, { locale }) }) : t('record.closedNoDate')} />}

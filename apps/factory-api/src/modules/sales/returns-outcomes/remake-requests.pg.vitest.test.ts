@@ -161,7 +161,9 @@ describe('the portal’s new return offers Remake (SAL-298, RX2:02)', { timeout:
     expect(record).toMatchObject({ status: 'REQUESTED', yourRef: 'CL-REMAKE-1', request: { via: 'PORTAL', note: FIT } })
     expect(sent.body.sent.words.en).toMatch(new RegExp(`^Remake request ${record.number} opened\\.`))
     expect(sent.body.sent.words.it).toMatch(new RegExp(`^Richiesta di rifacimento ${record.number} aperta\\.`))
-    expect(await one('SELECT status::text, channel::text, "outcomeWanted"::text AS "outcomeWanted", "customerNote", "createdById" FROM "ReturnAuthorisation" WHERE id = $1', [record.id])).toEqual({ status: 'REQUESTED', channel: 'PORTAL', outcomeWanted: null, customerNote: FIT, createdById: userIds.buyer })
+    expect(await one('SELECT status::text, channel::text, "outcomeWanted"::text AS "outcomeWanted", "customerNote", "createdById" FROM "ReturnAuthorisation" WHERE id = $1', [record.id])).toEqual({ status: 'REQUESTED', channel: 'PORTAL', /* B-W2b-368: the wish REMAKE */ outcomeWanted: 'REMAKE', customerNote: FIT, createdById: userIds.buyer })
+    // B-W2b-368 (XF1:03): the portal's record shows the recorded wish (RECORDED_OUTCOMES_WANTED) in words.
+    expect(record.request.outcomeWanted).toMatchObject({ code: 'REMAKE' })
     const lineId = record.request.lines[0].id
     expect(await one('SELECT "reasonCode", "reasonNote", quantity FROM "ReturnLine" WHERE id = $1', [lineId])).toEqual({ reasonCode: 'WRONG_SIZE', reasonNote: FIT, quantity: 1 })
     expect(await one('SELECT "actorId", after FROM "AuditLog" WHERE "recordType" = $1 AND "recordId" = $2 AND action = $3', ['ReturnAuthorisation', record.id, 'returnsOutcomes.remakeAsked'])).toEqual({ actorId: userIds.buyer, after: { lineIds: [lineId], via: 'PORTAL', fit: FIT } })

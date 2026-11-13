@@ -13,6 +13,7 @@ import { defaultLineDescription, lineTarget } from '../quotes/lines'
 import { storedVat, type QuoteParty } from '../quotes/store'
 import type { PriceChain } from '../pricelists/store'
 import type { Reader } from './store'
+import { unitPiece } from './amendments/mtm'
 
 /**
  * The money of an order's lines when the office types them (B-W2a-30): a manual order (manual.ts) and an amendment
@@ -63,7 +64,8 @@ export interface PricedLines {
 
 /** Every line priced on the basis with the treatment, and the totals (the cost only when every line has one). */
 export function priceLines(basis: PriceBasis, currency: string, treatment: VatTreatment, lines: readonly LineDraft[]): PricedLines {
-  const priced = priceVersion({ basis, currency, treatment, lines: lines.map((line) => ({ seq: line.seq, unitPrice: line.unitPrice, listUnitPrice: null, sizes: line.sizes, costAmount: line.costAmount })), depositPct: null, rules: QUOTE_RULE_DEFAULTS })
+  // B-W2b-368: a made-to-measure unit (no size rows) is its one piece (./amendments/mtm).
+  const priced = priceVersion({ basis, currency, treatment, lines: lines.map((line) => ({ seq: line.seq, unitPrice: line.unitPrice, listUnitPrice: null, sizes: line.sizes, costAmount: line.costAmount, ...unitPiece(line) })), depositPct: null, rules: QUOTE_RULE_DEFAULTS })
   const vat = storedVat(treatment)
   return {
     lines: lines.map((line, index) => ({ ...line, quantity: priced.lines[index]!.quantity, netAmount: priced.lines[index]!.netAmount, vatAmount: priced.lines[index]!.vatAmount, vatRatePct: vat.vatRatePct, vatNature: vat.vatNature })),

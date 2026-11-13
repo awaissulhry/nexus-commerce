@@ -300,7 +300,8 @@
   "outcome": {
     "REPLACE": "Una sostituzione",
     "REPAIR": "Una riparazione",
-    "CREDIT": "Una nota di credito"
+    "CREDIT": "Una nota di credito",
+    "REMAKE": "Un rifacimento"
   },
   "cancel": {
     "title": "Annullare questa richiesta?",

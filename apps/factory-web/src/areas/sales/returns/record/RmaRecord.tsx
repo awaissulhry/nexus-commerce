@@ -59,6 +59,8 @@ import { ReturnsMessages, useWords } from '../view/parts'
 import { finishReturn } from '../depth/api'
 import { finishOptionsOf } from '../depth/model'
 import { useRmaDepth } from '../depth/use-rma-depth'
+// B-W2b-368 (XF1:03): a remake as a return outcome (the unit, its revision, Make the remake order).
+import { useRemakeOutcome } from '../outcome-remake/use-remake-outcome'
 import { RmaRecordView } from './view/RmaRecordView'
 
 /**
@@ -262,6 +264,9 @@ function Container({ returnId }: { returnId: string }) {
     onDone: (words, tone = 'success') => setReceipt({ tone, words }),
   })
   depthReload.current = depth.reload
+  // B-W2b-368: the remake part, read while a line is decided or drafted Remake.
+  const remakeLines = rma ? rma.lines.filter((line) => (line.disposition ?? decisions[line.id]?.disposition) === 'REMAKE').length : 0
+  const remake = useRemakeOutcome({ api, returnId, version: rma?.version ?? null, remakeLines, permissions: session.permissions, offline, prefix, reload: () => void load() })
 
   // The DDT preview of unchanged goods going back (debounced).
   const ddtKey = dialog?.kind === 'ddt' ? JSON.stringify(dialog.draft) : ''
@@ -512,6 +517,7 @@ function Container({ returnId }: { returnId: string }) {
     addLines,
     dockOpen,
     depth: depth.model,
+    remakeLine: remake.lineOf, // B-W2b-368
   }
 
   return (
