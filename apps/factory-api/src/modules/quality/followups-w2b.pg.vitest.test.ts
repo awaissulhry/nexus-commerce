@@ -146,7 +146,9 @@ describe('hold numbers and who releases a hold (Z5:01)', () => {
     hold = (await as(qa, 'POST', '/quality/holds', { subjectType: 'Lot', subjectIds: [lot.id], reasonCode: 'SUPPLIER_CHECK', reasonNote: 'A supplier warned of a dye batch' }, 201)).hold
     expect(hold.number).toMatch(/^HLD-\d{4}-\d{4}$/)
     expect(await admin('SELECT "recordType", kind::text AS kind FROM "NumberAllocation" WHERE "recordId" = $1', [hold.id])).toEqual([{ recordType: 'QualityHold', kind: 'HOLD' }])
-    const found = await ok('viewer', 'GET', `/quality/holds?q=${encodeURIComponent(hold.number.slice(-4))}`)
+    // B-W2b-F45: part of the number, the year with the sequence ("2026-0002"): the series starts again each year, so the
+    // sequence alone also finds the seed's HLD-2026-0001 once this hold is a new year's first (HLD-2027-0001).
+    const found = await ok('viewer', 'GET', `/quality/holds?q=${encodeURIComponent(hold.number.slice('HLD-'.length))}`)
     expect(found.holds.map((row: Json) => row.id)).toEqual([hold.id])
     expect((await ok('viewer', 'GET', '/quality/holds?q=NO-SUCH-HOLD')).holds).toEqual([])
     // B-W2b-F1: a new hold comes numbered (the seeded one too), so a hold placed before numbering is written past the

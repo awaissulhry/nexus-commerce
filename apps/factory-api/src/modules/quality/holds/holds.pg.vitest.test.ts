@@ -7,6 +7,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { FactoryDatabase } from '@nexus/factory-db'
 import { newId } from '@nexus/factory-domain/core/ids'
 import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
+// B-W2b-F45: today's business day for the overdue tile.
+import { businessDate } from '@nexus/factory-domain/core/time'
 import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
 import { buildApp } from '../../../core/app'
 import { callerFor, command } from '../../../core/command'
@@ -283,7 +285,12 @@ describe('the list, the tiles and the record', () => {
     expect(((await ok('viewer', 'GET', '/quality/holds?status=ALL&subjectType=WorkOrder')).holds as Json[]).length).toBeGreaterThanOrEqual(3)
     expect(((await ok('viewer', 'GET', '/quality/holds?quarantine=ASKED')).holds as Json[]).map((hold) => hold.subjectType).sort()).toEqual(['Hide', 'Lot'])
     const counts = (await ok('viewer', 'GET', '/quality/holds/counts')).counts
-    expect(counts).toMatchObject({ open: active.length, waitingQuarantine: 2, overdue: 0 })
+    // B-W2b-F45: overdue = the ACTIVE holds whose expected release is before today, read from the database (the seed's NCR
+    // hold expects its release on a fixed day, 2026-11-28: overdue after it; the holds placed here expect none or 2099).
+    const [late] = await admin<{ n: number }>(`SELECT count(*)::int AS n FROM "QualityHold" WHERE "tenantId" = $1 AND status = 'ACTIVE' AND "expectedReleaseOn" < $2::date`, [A.tenant, businessDate(new Date())])
+    expect(counts).toMatchObject({ open: active.length, waitingQuarantine: 2, overdue: late!.n })
+    expect(active.filter((hold) => hold.overdue).length).toBe(late!.n)
+    // B-W2b-F45 end
     expect((await as(qa1, 'GET', '/quality/holds/counts')).counts.mine).toBe(1)
     expect(((await ok('companyB', 'GET', '/quality/holds')).holds as Json[])).toEqual([])
     expect((await refused('companyB', 'GET', `/quality/holds/${hide[0]!.id}`, undefined, 404)).code).toBe('not_found')

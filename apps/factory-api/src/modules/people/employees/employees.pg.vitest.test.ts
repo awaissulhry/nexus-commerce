@@ -4,6 +4,9 @@ import type { FastifyInstance } from 'fastify'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { newId } from '@nexus/factory-domain/core/ids'
 import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
+// B-W2b-F45: a start ahead of today, not a fixed day that passes.
+import { businessDate } from '@nexus/factory-domain/core/time'
+import { plusCalendarDays } from '@nexus/factory-domain/timers/rules'
 import { SHEET_TYPES } from '@nexus/factory-domain/imports/job'
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedCore } from '../../../../../../packages/factory-db/seed/_core'
@@ -170,7 +173,8 @@ describe('the HR register (SCR-084)', () => {
 describe('one person, one record (MES-208, MES-211)', () => {
   let made: Json
   it('makes a record at a site; a repeat answers from its receipt; the code and the floor name are checked', async () => {
-    const body = { siteId: T.siteA1, firstName: ' Made ', lastName: 'Up  Person', employeeCode: 'T-100', startDate: '2027-01-11', homeLineId: T.lineA1, jobRole: 'Sample maker', contract: 'PART_TIME', weeklyMinutes: 1200 }
+    // B-W2b-F45: the start two months ahead of today (it was the fixed 2027-01-11): STARTING, but not within 14 days.
+    const body = { siteId: T.siteA1, firstName: ' Made ', lastName: 'Up  Person', employeeCode: 'T-100', startDate: plusCalendarDays(businessDate(new Date()), 59), homeLineId: T.lineA1, jobRole: 'Sample maker', contract: 'PART_TIME', weeklyMinutes: 1200 }
     const key = freshKey()
     made = (await ok('hr', 'POST', '/people/employees', body, 201, key)).employee
     expect(made).toMatchObject({ firstName: 'Made', lastName: 'Up Person', displayName: 'Made U.', employeeCode: 'T-100', companyId: T.companyA, homeLine: { id: T.lineA1 }, lifecycle: 'STARTING', kind: 'EMPLOYEE', version: 1 })
@@ -196,7 +200,7 @@ describe('one person, one record (MES-208, MES-211)', () => {
     const inDays = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10)
     const agency = (await ok('hr', 'POST', '/people/employees', { siteId: T.siteA1, firstName: 'Made', lastName: 'Temp', kind: 'AGENCY', agencyPartyId: T.agency, startDate: inDays(5), endDate: inDays(23) }, 201)).employee
     expect(agency).toMatchObject({ kind: 'AGENCY', agency: { id: T.agency }, endDate: inDays(23), lifecycle: 'STARTING' })
-    // It starts within 14 days (T-100 in January does not).
+    // It starts within 14 days (B-W2b-F45: T-100, two months ahead, does not).
     expect((await ok('hr', 'GET', '/people/employees/counts')).tiles.STARTING).toBe(1)
     // Away from AGENCY the agency goes with it.
     const external = (await ok('hr', 'PATCH', `/people/employees/${agency.id}`, { version: 1, kind: 'EXTERNAL' })).employee

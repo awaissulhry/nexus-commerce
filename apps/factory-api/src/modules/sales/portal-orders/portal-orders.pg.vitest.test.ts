@@ -155,7 +155,9 @@ describe('the order: status, promise, lines (SAL-075, SAL-081)', { timeout: SLOW
     // The system follows the facts: WO-0001 released → in production; SH-0001 left with 2 of 7 → partly shipped.
     expect((await followOrder(callerFor(h.database, systemContext(T, newId())), so2, { what: 'test' })).moved).toEqual(['IN_PRODUCTION', 'PARTLY_SHIPPED'])
     const current = await one<{ version: number; promise: string }>('SELECT version, "promiseDate"::text AS promise FROM "SalesOrder" WHERE id = $1', [so2])
-    const moved = addDays(current.promise, 7)
+    // B-W2b-F45: a week after the seed's promise, or after today once that promise has passed (a new promise is a day from
+    // today on).
+    const moved = addDays(current.promise > TODAY ? current.promise : TODAY, 7)
     await changePromise(office(), so2, { version: current.version, promiseDate: moved, reason: 'MATERIAL_LATE: the tannery batch 12 is late, chase Marco' })
     const line = await one<{ id: string; seq: number }>('SELECT id, seq FROM "SalesOrderLine" WHERE "orderId" = $1 ORDER BY seq LIMIT 1', [so1])
     const so1Version = (await one<{ version: number }>('SELECT version FROM "SalesOrder" WHERE id = $1', [so1])).version

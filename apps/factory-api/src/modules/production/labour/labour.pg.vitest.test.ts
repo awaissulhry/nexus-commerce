@@ -5,6 +5,9 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { hashPin } from '@nexus/factory-domain/auth/floor/pin'
 import { newId } from '@nexus/factory-domain/core/ids'
 import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
+// B-W2b-F45: the day after today, for a day that has not come yet.
+import { businessDate } from '@nexus/factory-domain/core/time'
+import { plusCalendarDays } from '@nexus/factory-domain/timers/rules'
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedCore } from '../../../../../../packages/factory-db/seed/_core'
 import { seed as seedLabour, type LabourSeed } from '../../../../../../packages/factory-db/seed/labour'
@@ -224,7 +227,8 @@ describe("closing a line's day (MES-203)", () => {
     expect(closed).toMatchObject({ state: 'CLOSED', closedBy: { id: actors.supervisor }, note: 'Line day checked.', canClose: false, history: [expect.objectContaining({ change: 'CLOSED' })] })
     expect((await outbox('labour_day.closed', closed.labourDayId))[0]!.payload).toEqual({ labourDayId: closed.labourDayId, siteId: siteA1, lineId: lineL1, workDate: '2026-10-28' })
     expect(refusalOf(await no('supervisor', 'POST', `/production/labour/days/${lineL1}/2026-10-28/close`, {}, 409))).toBe('refusal/ALREADY_CLOSED')
-    expect(refusalOf(await no('supervisor', 'POST', `/production/labour/days/${lineL1}/2027-01-04/close`, {}, 409))).toBe('refusal/NOT_YET')
+    // B-W2b-F45: a day that has not come yet is tomorrow at the site (Europe/Rome), not a fixed day that passes.
+    expect(refusalOf(await no('supervisor', 'POST', `/production/labour/days/${lineL1}/${plusCalendarDays(businessDate(new Date()), 1)}/close`, {}, 409))).toBe('refusal/NOT_YET')
     // Nothing of the closed day's blocks changes now (off-standard's own refusal, the same rule).
     expect(refusalOf(await no('manager', 'POST', `/production/offstandard/blocks/${typed.id}/reopen`, { version: typed.version + 1, reason: 'Check it again.' }, 409))).toBe('refusal/DAY_CLOSED')
   })

@@ -184,7 +184,13 @@ describe('a scheduled bin counted by scan, recounted by another person, approved
     scheduleId = schedule.id
     expect(schedule).toMatchObject({ due: 'OVERDUE', overdueDays: 2, everyDays: 30, active: true, location: { id: stock.bin }, scope: { en: expect.stringContaining('everything inside it') } })
     const due = await ok(call('clerk', 'GET', `/inventory/count-schedules/due?siteId=${A.siteA1}`))
-    expect(due.rows[0]).toMatchObject({ id: scheduleId, due: 'OVERDUE' })
+    // B-W2b-F45: most overdue first. The seed's schedules keep their fixed days: once those are as old as this one's
+    // (two days ago), they come first; every row before this one is due on its day or earlier.
+    const ours = due.rows.findIndex((row: Json) => row.id === scheduleId)
+    expect(ours).toBeGreaterThanOrEqual(0)
+    expect(due.rows[ours]).toMatchObject({ id: scheduleId, due: 'OVERDUE', nextDueOn: schedule.nextDueOn })
+    expect(due.rows.slice(0, ours).every((row: Json) => row.due === 'OVERDUE' && row.nextDueOn <= schedule.nextDueOn)).toBe(true)
+    // B-W2b-F45 end
     expect(due.tiles.overdue).toBeGreaterThanOrEqual(1)
     expect(due.tiles.dueThisWeek).toBeGreaterThanOrEqual(due.tiles.overdue)
     const log = { info: () => undefined, warn: () => undefined, error: () => undefined }
