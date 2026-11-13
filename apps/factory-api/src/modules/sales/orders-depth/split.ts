@@ -242,6 +242,7 @@ export async function splitOrder(caller: CommandCaller, orderId: string, body: S
 
     // 3. the order keeps the rest (W2a's amendment, no re-acceptance).
     const remaining = (plan as SplitPlan).remaining
+    const touched = new Set((plan as SplitPlan).parts.flatMap((part) => part.map((entry) => entry.lineId)))
     const amendment = await amendInCommand(
       tools,
       context.tenantId,
@@ -249,7 +250,8 @@ export async function splitOrder(caller: CommandCaller, orderId: string, body: S
       {
         version: locked.version,
         reason: reason ?? `Split: parts moved to ${made.map((entry) => entry.number).join(', ')}.`,
-        lines: lines.filter((line) => remaining.has(line.id)).map((line) => (line.kind === 'SIZE_GRID' ? { id: line.id, sizes: remaining.get(line.id)!.map((size) => ({ size: size.size, quantity: size.quantity })) } : { id: line.id })),
+        // A line no part names stays as it is; a line some sizes left keeps the rest.
+        lines: lines.filter((line) => remaining.has(line.id)).map((line) => (touched.has(line.id) ? { id: line.id, sizes: remaining.get(line.id)!.map((size) => ({ size: size.size, quantity: size.quantity })) } : { id: line.id })),
       },
       { reacceptance: false },
     )
