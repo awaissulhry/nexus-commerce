@@ -535,8 +535,9 @@ export interface DecisionDraft {
 export const EMPTY_DECISION: DecisionDraft = Object.freeze({ disposition: '', outcome: '', credit: '' })
 
 /**
- * The dispositions an office person picks from (REMAKE is refused in W2a: the made-to-measure office decides it later).
- * B-W2b-352: SIZE_EXCHANGE (B-W2b-346), the same garment in another size on the replacement order.
+ * The dispositions an office person picks from. B-W2b-352: SIZE_EXCHANGE (B-W2b-346), the same garment in another size on the
+ * replacement order. B-W2b-368: REMAKE's outcomes are scrapped or quarantined (factory-domain OUTCOMES_BY_DISPOSITION); a line that
+ * is no made-to-measure unit says so beside it (./outcome-remake), and the preview offers it only for a unit's line.
  */
 export const PICKABLE_DISPOSITIONS: readonly ReturnDisposition[] = ['REPAIR', 'REPLACE', 'SIZE_EXCHANGE', 'CREDIT_ONLY', 'RETURN_UNCHANGED', 'SCRAP',
   // B-W2b-360 (SAL-353): REMAKE of a made-to-measure unit (the API refuses it in words for any other line; its goods scrapped).

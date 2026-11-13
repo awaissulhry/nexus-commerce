@@ -1,5 +1,5 @@
 import type { Prisma } from '@nexus/factory-db'
-import { ConflictError, InvalidStateError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
+import { InvalidStateError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { can, scopeWhere, type Permission } from '@nexus/factory-domain/core/permissions'
 import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
@@ -11,7 +11,6 @@ import {
   clashProblems,
   duplicateRequests,
   lineProblems,
-  MADE_TO_MEASURE_LATER,
   MAX_CELL_PIECES,
   MAX_CELLS,
   openSizes,
@@ -49,6 +48,8 @@ import {
 import { progressTotalsOf, workOrderView, type WorkOrderView } from './views'
 // B-W2b-340 (CF1:03): a cell made from an order line names the option values chosen on it.
 import { optionValueIdsOf } from '../../sales/configurator/copy'
+// B-W2b-368 (XF1:01): a made-to-measure unit is made on its own work order (W1 refused it: MADE_TO_MEASURE_LATER).
+import { assertUnitCells, assertUnitStarted, unitCellProfile, unitOfRequest } from './mtm-cells'
 
 /**
  * The office's work orders (B-W1-38; MES-001, MES-002, MES-007, MES-305; A2 SCR-069, SCR-070): the list, the record,
@@ -270,7 +271,7 @@ export async function numberPreview(db: Reader, companyId: string): Promise<stri
 
 // ---- the lines a request names --------------------------------------------------------------------------------------
 
-/** The named lines, each one the caller may see (else 404); a made-to-measure one is refused (409, deferred). */
+/** The named lines, each one the caller may see (else 404). B-W2b-368: a made-to-measure unit is checked by the caller (./mtm-cells). */
 async function linesFor(caller: CommandCaller, lineIds: readonly string[]): Promise<Map<string, LineRow>> {
   const context = officeContextOf(caller)
   const lines = await caller.withClient((client) => readOrderLines(client, lineIds))
@@ -278,7 +279,6 @@ async function linesFor(caller: CommandCaller, lineIds: readonly string[]): Prom
     const line = lines.get(lineId)
     if (!line || !can(actorOf(context), WORKORDERS_VIEW, { companyId: line.companyId })) throw new NotFoundError('Sales order line not found.')
   }
-  if ([...lines.values()].some((line) => line.kind === 'MADE_TO_MEASURE')) throw new ConflictError(MADE_TO_MEASURE_LATER)
   return lines
 }
 
@@ -382,6 +382,10 @@ export async function createWorkOrder(caller: CommandCaller, body: CreateInput, 
   })
   const lines = await linesFor(caller, lineIds)
   const first = lines.get(lineIds[0]!)!
+  // B-W2b-368 (XF1:01): a unit alone, its revision on its one cell; made-to-measure on for its template (GATE-MTM).
+  const unit = unitOfRequest(lines, lineIds, sample !== undefined)
+  if (unit) await caller.withClient((client) => assertUnitStarted(client, unit))
+  const kind = sample ? 'SAMPLE' : unit ? 'MADE_TO_MEASURE' : 'SIZE_GRID'
 
   const plan = await caller.withClient(async (client) => {
     const style = await client.style.findUniqueOrThrow({ where: { id: first.styleId }, select: STYLE_COLUMNS })
@@ -448,7 +452,7 @@ export async function createWorkOrder(caller: CommandCaller, body: CreateInput, 
         companyId: site.companyId,
         siteId: site.id,
         number: number.formatted,
-        kind: sample ? 'SAMPLE' : 'SIZE_GRID',
+        kind, // B-W2b-368
         ...(sample ? { sampleRoundId: sample.roundId } : {}),
         styleId: style.id,
         styleRevisionId: revisionId,
@@ -463,7 +467,7 @@ export async function createWorkOrder(caller: CommandCaller, body: CreateInput, 
     const optionValues = await optionValueIdsOf(tx, cells.map((cell) => cell.salesOrderLineId)) // B-W2b-340
     const rows = cells.map((cell) => {
       const line = current.get(cell.salesOrderLineId)!
-      return { id: newId(), siteId: site.id, workOrderId: id, styleId: style.id, colourwayId: line.colourwayId, size: cell.size, quantity: cell.quantity, salesOrderLineId: line.id, partyId: line.partyId, /* B-W2b-340 */ optionValueIds: optionValues.get(line.id) ?? [], createdById: actorIdOf(tools) }
+      return { id: newId(), siteId: site.id, workOrderId: id, styleId: style.id, colourwayId: line.colourwayId, size: cell.size, quantity: cell.quantity, salesOrderLineId: line.id, partyId: line.partyId, /* B-W2b-340 */ optionValueIds: optionValues.get(line.id) ?? [], /* B-W2b-368 */ ...unitCellProfile(line), createdById: actorIdOf(tools) }
     })
     await tx.workOrderSize.createMany({ data: rows })
     const salesOrderIds = [...new Set(cells.map((cell) => current.get(cell.salesOrderLineId)!.orderId))]
@@ -476,14 +480,14 @@ export async function createWorkOrder(caller: CommandCaller, body: CreateInput, 
       after: {
         number: number.formatted,
         status: 'DRAFT',
-        kind: sample ? 'SAMPLE' : 'SIZE_GRID',
+        kind, // B-W2b-368
         ...(sample ? { sampleRoundId: sample.roundId } : {}),
         styleId: style.id,
         styleRevisionId: revisionId,
         dueDate,
         priority,
         rush: body.rush ?? false,
-        cells: rows.map((row) => ({ id: row.id, salesOrderLineId: row.salesOrderLineId, colourwayId: row.colourwayId, size: row.size, quantity: row.quantity })),
+        cells: rows.map((row) => ({ id: row.id, salesOrderLineId: row.salesOrderLineId, colourwayId: row.colourwayId, size: row.size, quantity: row.quantity, /* B-W2b-368 */ ...(row.measurementProfileId ? { measurementProfileId: row.measurementProfileId } : {}) })),
       },
     })
     createdEvent(tools, { workOrderId: id, number: number.formatted, companyId: site.companyId, siteId: site.id, styleId: style.id, salesOrderIds, cells: rows.length, pieces })
@@ -659,7 +663,8 @@ export async function setCells(caller: CommandCaller, workOrderId: string, body:
     throw new InvalidStateError(`Work order ${workOrder.number} makes the samples of its sample round for no order line: its cells are the round's. Change the round's cells, cancel this work order and make a new one from the round.`)
   }
   const lineIds = [...new Set(body.cells.map((cell) => cell.salesOrderLineId))]
-  await linesFor(caller, lineIds)
+  // B-W2b-368 (XF1:01): a unit's draft keeps its one cell; a size run takes no unit.
+  assertUnitCells(workOrder, await linesFor(caller, lineIds), body.cells)
   const requests = body.cells.map((cell, index) => ({ ...cell, index }))
   const duplicates = duplicateRequests(requests, 'body/cells')
   if (duplicates.length > 0) throw new ValidationError('A cell is named twice.', duplicates)

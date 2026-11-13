@@ -17,6 +17,7 @@ import { downloadFile, putGeneratedFile, recordGeneratedFile, systemCallerOf, ty
 import { processFiles, type FilesRuntime } from '../../../platform/files/service'
 import { renderEightD } from '../../quality/capa/report-pdf'
 import { assertMayProfile, measurementsOf, namesOf, officeOf, PROFILE_RECORD, profileNotFound, profileOf, templateOfGarment, unitsOf, type ProfileRow, type Reader } from './store'
+import { oncePerRevision } from './fingerprint'
 
 /**
  * The made-to-measure worksheet and order form (B-W2b-358; SAL-303; design sales.mtm row verb "Print worksheet", new tab
@@ -166,7 +167,8 @@ async function keepInCommand(tools: CommandTools, row: ProfileRow, companyId: st
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(concat_ws('|', 'factory.mtm-worksheet', ${row.id}::uuid), 0))`
   const last = await tx.generatedDocument.findFirst({ where: { recordType: PROFILE_RECORD, recordId: row.id, kind: WORKSHEET_KIND }, select: VERSION_COLUMNS, orderBy: { version: 'desc' } })
   if (last && last.fingerprint === prepared.fingerprint && last.language === prepared.language && last.companyId === companyId) {
-    // Another person kept the same version meanwhile: that version is the answer (the PDF just put in the store gets no row).
+    // Another process kept the same version meanwhile: that version is the answer (the PDF just put in the store gets no row; in
+    // one process the keeps share one preparation: B-W2b-368's oncePerRevision).
     tools.audit({ action: 'mtm.worksheet', recordType: PROFILE_RECORD, recordId: row.id, companyId, after: { generatedDocumentId: last.id, version: last.version, unchanged: true } })
     return { id: last.id, version: last.version, fileId: last.fileId, made: false }
   }
@@ -189,9 +191,12 @@ export async function makeWorksheet(caller: CommandCaller, profileId: string, bo
   if (!company) throw new ValidationError('Not a company of yours.', [{ path: 'body/companyId', message: 'Not a company of yours.' }])
   assertMayProfile(context, row.partyId, SALES_MTM_RECORD)
   if (!can(actorOf(context), SALES_MTM_RECORD, { partyId: row.partyId, companyId: company.id })) throw new ValidationError('Your roles do not print for this company.', [{ path: 'body/companyId', message: 'Your roles do not print for this company.' }])
-  const prepared = await prepare(processFiles(), caller, row, company.id, body.language)
-  // The newest version shows the revision as it is: nothing is written, the newest is the answer.
-  const result = prepared.current ? { ...prepared.current, made: false } : (await command(caller, { name: 'mtm.worksheet', idempotencyKey, input: { profileId, ...body } }, (tools) => keepInCommand(tools, row, company.id, prepared))).result
+  // B-W2b-368 (XF1:05): the PDF of a revision is painted once: two keeps at once share one preparation and its command.
+  const result = await oncePerRevision(`${context.tenantId}|${row.id}|${company.id}|${body.language ?? ''}`, async () => {
+    const prepared = await prepare(processFiles(), caller, row, company.id, body.language)
+    // The newest version shows the revision as it is: nothing is written, the newest is the answer.
+    return prepared.current ? { ...prepared.current, made: false } : (await command(caller, { name: 'mtm.worksheet', idempotencyKey, input: { profileId, ...body } }, (tools) => keepInCommand(tools, row, company.id, prepared))).result
+  })
   return caller.withClient(async (db) => {
     const versions = await versionsOf(db, row.id)
     return { worksheet: { id: result.id, version: result.version, fileId: result.fileId, made: result.made }, worksheets: await viewOf(db, row, versions) }

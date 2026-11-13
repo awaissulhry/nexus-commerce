@@ -318,7 +318,7 @@
     "sdiNotNow": "Ora non si può inviare: vedi il suo stato",
     "amending": "Le righe sono in modifica: prima rivedi o scarta la modifica",
     "amendShipped": "Le righe sono fisse appena parte qualcosa: un cambio successivo è un reso",
-    "amendMtm": "L'ordine ha un capo su misura: qui non si modifica ancora",
+    "amendFee": "L'ordine ha una riga di costo: un costo si modifica sulla sua riga, quindi l'ordine non si modifica qui",
     "amendState": "Ora l'ordine non accetta modifiche",
     "closeLinesState": "Chiude righe solo un ordine non ancora spedito per intero",
     "closeLinesNone": "Non resta nulla da chiudere: ogni riga è spedita per intero o già chiusa",

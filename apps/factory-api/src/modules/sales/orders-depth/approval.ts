@@ -139,7 +139,9 @@ async function waitOf(db: Reader, orderId: string) {
   })
   const pending = tasks.find((task) => task.status === 'PENDING') ?? null
   const hold = await creditHoldOf(db, orderId)
-  const reasons: WaitReason[] = [...(pending ? (['REQUEST_PENDING'] as const) : []), ...(hold ? (['CREDIT_HOLD'] as const) : [])]
+  // B-W2b-368 (XF1:02): a made-to-measure unit's measures not yet confirmed by the factory review (B-W2b-358's waitsForMeasures).
+  const measures = await waitsForMeasures(db, orderId)
+  const reasons: WaitReason[] = [...(pending ? (['REQUEST_PENDING'] as const) : []), ...(hold ? (['CREDIT_HOLD'] as const) : []), ...(measures ? (['MEASUREMENTS'] as const) : [])]
   return { tasks, pending, hold, reasons }
 }
 

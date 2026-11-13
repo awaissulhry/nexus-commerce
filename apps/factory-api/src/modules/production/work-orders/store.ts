@@ -9,6 +9,8 @@ import type { PlannedOperation } from '@nexus/factory-domain/production/work-ord
 import { isGoodsLine } from '@nexus/factory-domain/sales/quotes/quotes'
 import { Dec, ZERO, type Decimal } from '@nexus/factory-domain/tax/decimal'
 import type { CommandTx } from '../../../core/command'
+// B-W2b-368 (XF1:01): a made-to-measure unit reads as one piece of its base size.
+import { unitSizes } from './mtm-cells'
 
 /**
  * The work orders' reads (factory-db `WorkOrder`, `WorkOrderSize`, `WorkOrderOperation`, `WorkOrderMaterial`, and what
@@ -181,6 +183,8 @@ export async function readOrders(db: Reader, orderIds: Iterable<string>): Promis
 export interface LineRow extends OrderLineFacts {
   readonly colourwayCode: string
   readonly measurementProfileId: string | null
+  /** B-W2b-368: a made-to-measure unit's base size (its `sizes` are one piece of it: ./mtm-cells unitSizes). */
+  readonly baseSize: string | null
   readonly requestedDate: Date | null
   readonly promiseDate: Date | null
   readonly priority: number | null
@@ -208,6 +212,7 @@ export async function readOrderLines(db: Reader, lineIds: readonly string[], exc
       styleRevisionId: true,
       colourwayId: true,
       measurementProfileId: true,
+      baseSize: true, // B-W2b-368
       siteId: true,
       requestedDate: true,
       promiseDate: true,
@@ -237,7 +242,8 @@ export async function readOrderLines(db: Reader, lineIds: readonly string[], exc
           orderNumber: orderOf.get(line.orderId)?.number ?? '',
           orderStatus: orderOf.get(line.orderId)?.status ?? '',
           colourwayCode: colourwayOf.get(line.colourwayId) ?? '',
-          sizes: sizes.filter((size) => size.lineId === line.id).map((size) => ({ size: size.size, quantity: size.quantity })),
+          // B-W2b-368 (XF1:01): a made-to-measure unit has no size rows: one piece of its base size.
+          sizes: line.kind === 'MADE_TO_MEASURE' ? unitSizes(line) : sizes.filter((size) => size.lineId === line.id).map((size) => ({ size: size.size, quantity: size.quantity })),
           onWorkOrders,
         },
       ]

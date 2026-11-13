@@ -125,13 +125,19 @@ export function selectionOutcome(answer: PrioritiesAnswer): Phrase[] {
 
 // ---- the yes an order waits for (SALES_ORDER) ----------------------------------------------------------------------------------
 
-export const WAIT_TONE: Readonly<Record<WaitReason, Tone>> = Object.freeze({ REQUEST_PENDING: 'warning', NO_REQUEST: 'danger', CREDIT_HOLD: 'danger' })
+export const WAIT_TONE: Readonly<Record<WaitReason, Tone>> = Object.freeze({ REQUEST_PENDING: 'warning', NO_REQUEST: 'danger', CREDIT_HOLD: 'danger', /* B-W2b-368 */ MEASUREMENTS: 'warning' })
 
-/** Why the order waits, in words, the most pressing first (nobody asked; the customer's credit; a request open). */
+/** Why the order waits, in words, the most pressing first (nobody asked; the customer's credit; a request open; B-W2b-368: the factory review). */
 export function waitPhrases(approval: Pick<Approval, 'reasons'>): Phrase[] {
-  const order: WaitReason[] = ['NO_REQUEST', 'CREDIT_HOLD', 'REQUEST_PENDING']
+  const order: WaitReason[] = ['NO_REQUEST', 'CREDIT_HOLD', 'REQUEST_PENDING', 'MEASUREMENTS']
   return order.filter((reason) => approval.reasons.some((entry) => entry.reason === reason)).map((reason) => phrase(`wait.${reason}`))
 }
+
+/**
+ * B-W2b-368 (XF1:02): an order that waits ONLY for the factory review of a made-to-measure unit: no yes is asked of anyone, so the
+ * yes banner stays away and the order record's review banner (orders/record/review-banner) says why it waits, with the review.
+ */
+export const onlyMeasurements = (approval: Pick<Approval, 'reasons'>): boolean => approval.reasons.length > 0 && approval.reasons.every((entry) => entry.reason === 'MEASUREMENTS')
 
 /** The open request (the newest PENDING), or null. */
 export const openRequest = (approval: Pick<Approval, 'requests'>) => approval.requests.find((request) => request.status === 'PENDING') ?? null

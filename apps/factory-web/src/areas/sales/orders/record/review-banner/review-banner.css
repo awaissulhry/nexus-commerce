@@ -1,0 +1,52 @@
+/*
+ * B-W2b-368 — "Waits for the factory review" on the order record (SCR-039) and the made-to-measure follow-ups' parts: LAYOUT only.
+ * Semantic tokens, no colours of its own, no page max-width (Owner rule 2026-10-29): every part fills its column.
+ */
+.fw-mtf-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-mtf-units {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-mtf-unit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-6) var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-mtf-unit-words {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-mtf-strong {
+  color: var(--nds-text-strong);
+  font-weight: 600;
+}
+
+.fw-mtf-hint,
+.fw-mtf-reading {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-mtf-reading {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  margin: 0;
+}

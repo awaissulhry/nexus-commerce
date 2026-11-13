@@ -100,7 +100,7 @@ export interface NewWorkOrderActions {
 
 export const NO_NEW_ORDER: NewWorkOrderModel = { query: '', orders: null, ordersProblem: null, chosen: null, lines: null, linesProblem: null, styleId: null, picked: [], grid: {}, dueDate: '', busy: false, problem: null }
 
-/** The lines of the chosen style that a work order may take (made-to-measure lines come later; nothing open: nothing to take). */
+/** The lines of the chosen style that a work order may take (nothing open: nothing to take; B-W2b-368: a made-to-measure unit alone). */
 export function linesOfStyle(lines: OpenLines | null, styleId: string | null): OpenLines['lines'] {
   if (!lines || !styleId) return []
   return lines.lines.filter((line) => line.styleId === styleId)
@@ -112,10 +112,23 @@ export function stylesOf(lines: OpenLines | null): Array<{ id: string; code: str
   const styles = new Map<string, { id: string; code: string; name: string; open: number }>()
   for (const line of lines.lines) {
     const style = styles.get(line.styleId) ?? { id: line.styleId, code: line.styleCode, name: line.styleName, open: 0 }
-    style.open += line.madeToMeasure ? 0 : line.sizes.reduce((sum, size) => sum + size.open, 0)
+    // B-W2b-368 (XF1:01): a made-to-measure unit is one open piece of its base size, made on its own work order.
+    style.open += line.sizes.reduce((sum, size) => sum + size.open, 0)
     styles.set(line.styleId, style)
   }
   return [...styles.values()]
+}
+
+/**
+ * B-W2b-368 (XF1:01): the lines picked after one is ticked or unticked — a made-to-measure unit is made on its own work order (one
+ * garment for one rider), so ticking it leaves it alone, and ticking a size-grid line leaves out a unit picked before.
+ */
+export function pickedAfter(lines: OpenLines['lines'], picked: readonly string[], lineId: string, on: boolean): string[] {
+  if (!on) return picked.filter((id) => id !== lineId)
+  const unit = lines.find((line) => line.id === lineId)?.madeToMeasure === true
+  if (unit) return [lineId]
+  const units = new Set(lines.filter((line) => line.madeToMeasure).map((line) => line.id))
+  return [...new Set([...picked.filter((id) => !units.has(id)), lineId])]
 }
 
 /** Every open size of a line, as the grid's default. */

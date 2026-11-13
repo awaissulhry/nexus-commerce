@@ -17,7 +17,8 @@ export const PRIORITY_LEVELS = ['LOW', 'NORMAL', 'HIGH', 'URGENT'] as const
 export type PriorityLevel = (typeof PRIORITY_LEVELS)[number]
 export const SEASON_STATUSES = ['OPEN', 'CLOSED'] as const
 export const SEASON_STATES = ['OPEN', 'BOOK_CLOSED', 'ENDED', 'CLOSED'] as const
-export const WAIT_REASONS = ['REQUEST_PENDING', 'NO_REQUEST', 'CREDIT_HOLD'] as const
+// B-W2b-368 (XF1:02): MEASUREMENTS, the factory review of a made-to-measure unit's measures (the order record's review banner).
+export const WAIT_REASONS = ['REQUEST_PENDING', 'NO_REQUEST', 'CREDIT_HOLD', 'MEASUREMENTS'] as const
 export type WaitReason = (typeof WAIT_REASONS)[number]
 export const FREEZE_FIELDS = ['SIZE_QUANTITY', 'COLOURWAY', 'OPTION', 'DELIVERY_DATE', 'SHIP_TO', 'PRICE'] as const
 export type FreezeField = (typeof FREEZE_FIELDS)[number]

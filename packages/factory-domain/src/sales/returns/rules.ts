@@ -2,6 +2,7 @@ import type { Issue } from '../../core/errors'
 import { minorPlaces, toMinorUnits, type CurrencyCode, type MinorUnits } from '../../core/money'
 import type { BusinessDate } from '../../core/time'
 import { Dec, parseDecimal } from '../../tax/decimal'
+import { REMAKE_OUTCOMES } from '../fittings/rules'
 
 /**
  * Customer returns (B-W2a-43; SAL-333 the RMA, SAL-335 its lines from the invoiced order, SAL-340 reason codes, SAL-341
@@ -236,7 +237,8 @@ export function restockHeldWords(line: GradedLine): string | null {
 /** Where the goods may go for each disposition, the usual one first. */
 export const OUTCOMES_BY_DISPOSITION: Readonly<Record<ReturnDisposition, readonly GoodsOutcome[]>> = Object.freeze({
   REPAIR: ['REPAIR'],
-  REMAKE: [],
+  // B-W2b-368 (XF1:03): a remade unit was made to a body: scrapped (the usual) or held in quarantine (B-W2b-360's REMAKE_OUTCOMES).
+  REMAKE: [...REMAKE_OUTCOMES],
   REPLACE: ['RESTOCK', 'SECOND_QUALITY', 'QUARANTINE', 'REPAIR', 'SCRAP'],
   CREDIT_ONLY: ['RESTOCK', 'SECOND_QUALITY', 'QUARANTINE', 'REPAIR', 'SCRAP'],
   RETURN_UNCHANGED: ['BACK_TO_CUSTOMER'],
@@ -281,7 +283,8 @@ export function decisionProblems(draft: DecisionDraft, facts: DecisionFacts): Is
   const problems: Issue[] = []
   if (facts.received <= 0) return [{ path: 'disposition', message: 'Nothing of this line arrived yet: receive it first.' }]
   if (!facts.grade) return [{ path: 'disposition', message: 'Grade the line first (new to unusable).' }]
-  if (draft.disposition === 'REMAKE') return [{ path: 'disposition', message: 'A remake is for made-to-measure garments, which come later: replace it instead.' }]
+  // B-W2b-368 (XF1:03): REMAKE is decided like the others (its outcomes above); that the line is a made-to-measure unit whose
+  // made-to-measure is on is the API's check (sales/fittings/remake.ts remakeDecisionFor).
   const allowed = OUTCOMES_BY_DISPOSITION[draft.disposition]
   if (!allowed.includes(draft.goodsOutcome)) problems.push({ path: 'goodsOutcome', message: `${dispositionWords(draft.disposition)}: the goods ${allowed.map(outcomeWords).join(', or ')}.` })
   const line: GradedLine = { grade: facts.grade, cause: facts.cause ?? null, ppe: facts.ppe ?? false, reasonCode: facts.reasonCode ?? '' }

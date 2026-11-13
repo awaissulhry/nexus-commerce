@@ -2,6 +2,8 @@ import type { Translate } from '../../../../lib/i18n/messages'
 import type { SendCheckItem } from '../../../_shared/document-send/model'
 import type { SendCheck } from '../api'
 import type { QuoteTab } from '../model'
+// B-W2b-368 (XF1:04): the MTM_* line checks in words of their unit, fixed in the rider profile.
+import { isMtmCode, mtmFixItem, type FixUnit } from '../../../_shared/document-send/fix-tab/mtm/model'
 
 /**
  * The quote's send checks as the shared send dialog shows them (SCR-037; design `quotes.send` "Checks"): what fails,
@@ -58,8 +60,17 @@ export const PASSING_CHECKS: ReadonlyArray<{ id: string; codes: readonly string[
   { id: 'letterhead', codes: ['COMPANY_LEGAL'] },
 ]
 
-export function sendItems(check: Pick<SendCheck, 'checks'>, t: Translate, tabHref: (tab: QuoteTab) => string): SendCheckItem[] {
+/** B-W2b-368: what the MTM fix reads — the quote's units (null: not read), its catalogue's words, the office prefix, the right to see measurements. */
+export interface MtmFix {
+  readonly units: readonly FixUnit[] | null
+  readonly t: Translate
+  readonly prefix: string
+  readonly mayOpen: boolean
+}
+
+export function sendItems(check: Pick<SendCheck, 'checks'>, t: Translate, tabHref: (tab: QuoteTab) => string, mtm?: MtmFix): SendCheckItem[] {
   const failing: SendCheckItem[] = check.checks.map((item, index) => {
+    if (mtm && isMtmCode(item.code)) return mtmFixItem(item, index, mtm.units, mtm.t, mtm.prefix, mtm.mayOpen) // B-W2b-368
     const tab = FIX_TAB[item.code]
     return {
       id: `${item.code}-${index}`,

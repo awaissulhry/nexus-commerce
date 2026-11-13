@@ -504,6 +504,8 @@ function InspectionLine({ line, model, actions, decideHeld }: { line: ReturnLine
         )}
         {!decided && draft.disposition === 'REPAIR' && <p className="fw-q-hint">{t('decide.repairNext')}</p>}
         {model.depth && <LineDepth lineId={line.id} model={model} depthModel={model.depth} actions={actions} />}
+        {/* B-W2b-368: a Remake decided or drafted — the unit, its revision, Make the remake order. */}
+        {model.remakeLine?.(line.id, line.disposition ?? draft.disposition)}
       </div>
     </Section>
   )
