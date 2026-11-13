@@ -105,6 +105,11 @@ model Party {
   /// W2b-5 (schema wave 37/44, SAL-021): a rider (a PERSON party) under the team or dealer it rides for (an ORGANISATION
   /// party with the CUSTOMER or BRAND role, not archived, of the rider's company or tenant-wide); null: on its own.
   teamPartyId          String?            @db.Uuid
+  /// W2b-6 (schema wave 50/57, B-W2b-370; FIN-113): the highest level of the reminder ladder (1 to 10) whose reminders to
+  /// this customer may go without a person's approval, behind the company's reminder switch (OFF by default); null: every
+  /// reminder waits for a person. For the office only: the partner role can neither read nor write it.
+  /// @internal
+  reminderTrustedLevel Int?
   /// For the office only: the partner role can neither read nor write it.
   /// @internal
   internalNote String?
@@ -215,6 +220,8 @@ model Party {
   // money.prisma: the invoices it is the buyer of and the payments it made.
   invoices             Invoice[]
   payments             Payment[]
+  // W2b-6 tax.prisma (wave 49/57): as a customer, the declarations of intent it sent.
+  declarationsOfIntent DeclarationOfIntent[]
   // W2a receivables.prisma, payables.prisma (wave 7/7): the refunds paid to it, the reminders it was sent, and as a
   // supplier or subcontractor the invoices it sent.
   refunds              Refund[]
@@ -222,6 +229,9 @@ model Party {
   supplierInvoices     SupplierInvoice[]
   // W2b payables.prisma (schema wave 2/7): the files of several invoices it sent.
   supplierInvoiceFiles SupplierInvoiceFile[]
+  // W2b-6 bank.prisma (schema wave 50/57): the bank lines matched to it, its own statement figures.
+  bankMatches              BankMatch[]
+  customerStatementFigures CustomerStatementFigures[]
   // W2b safety.prisma (wave 15/16): the safety roles it holds as an outside contact, the training sessions it gave as the
   // provider, the PPE items it supplies.
   safetyAppointments       SafetyAppointment[] @relation("SafetyAppointmentOutsideParty")

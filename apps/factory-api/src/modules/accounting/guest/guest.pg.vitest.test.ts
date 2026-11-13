@@ -2,6 +2,8 @@ import { createHash } from 'node:crypto'
 import { inflateRawSync } from 'node:zlib'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { newId } from '@nexus/factory-domain/core/ids'
+// B-W2b-F45: the year an export is numbered in.
+import { businessDate } from '@nexus/factory-domain/core/time'
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedAccounting } from '../../../../../../packages/factory-db/seed/accounting'
 import { seed as seedCore } from '../../../../../../packages/factory-db/seed/_core'
@@ -53,6 +55,8 @@ const office = <R>(work: (client: any) => Promise<R>): Promise<R> => h.database.
 const MONEY = /cost|margin|price|amount|total|wage|vat|net/i
 const keysOf = (value: unknown): string[] => (Array.isArray(value) ? value.flatMap(keysOf) : value && typeof value === 'object' ? Object.entries(value).flatMap(([name, item]) => [name, ...keysOf(item)]) : [])
 const inAYear = () => new Date(h.clock.now().getTime() + 30 * 86_400_000).toISOString()
+// B-W2b-F45: October's batch number, read from the seed's numbered batches when finance exports it.
+let octoberNumber = ''
 
 async function asFinance(method: 'POST' | 'PATCH', url: string, body: Json): Promise<{ status: number; body: any }> {
   await stepUp(h, finance, financeSecret)
@@ -197,16 +201,24 @@ describe('the accountant’s room (SCR-268)', { timeout: SLOW_TEST_TIMEOUT_MS },
     const month = await ok(finance.get(`/accounting/periods/2026-10?companyId=${companyA}`))
     const packages = ['SALES_JOURNAL', 'PURCHASES_JOURNAL', 'PAYMENTS', 'INTRASTAT']
     const explanations = (month.checks as Json[]).filter((check) => !check.passed).map((check) => ({ code: check.code, explanation: 'Made-up explanation for the test.' }))
+    // B-W2b-F45: the batch takes the next number of the company's ACCOUNTING_EXPORT series in the year it is made (yearly):
+    // after the seed's EXP-2026-0001, EXP-2026-0002 in 2026 and EXP-2027-0001 in 2027 — read from the batches numbered so far.
+    const year = businessDate(new Date()).slice(0, 4)
+    const [numbered] = await admin<{ n: number }>(`SELECT count(*)::int AS n FROM "AccountingExport" WHERE "companyId" = $1 AND number LIKE $2`, [companyA, `EXP-${year}-%`])
+    octoberNumber = `EXP-${year}-${String(numbered!.n + 1).padStart(4, '0')}`
+    expect(month.nextNumber).toBe(octoberNumber)
+    // B-W2b-F45 end
     const exported = await ok(finance.post('/accounting/exports', { companyId: companyA, month: '2026-10', packages, explanations }), 201)
-    expect(exported.export.number).toBe('EXP-2026-0002')
+    expect(exported.export.number).toBe(octoberNumber)
 
     const overview = await ok(accountant.get('/portal/accounting'))
     expect(overview.months.map((entry: Json) => entry.month)).toEqual(['2026-10', '2026-09'])
     expect(overview.latest).toBe('2026-10')
     const october = await ok(accountant.get('/portal/accounting/periods/2026-10'))
     expect(october.period).toMatchObject({ key: '2026-10', kind: 'MONTH', months: [{ month: '2026-10', shared: true, lock: null }] })
-    expect(october.exports.map((batch: Json) => [batch.number, batch.files.map((file: Json) => file.package)])).toEqual([['EXP-2026-0002', ['SALES_JOURNAL', 'PURCHASES_JOURNAL', 'PAYMENTS']]])
-    expect(october.registers.map((row: Json) => [row.package, row.exportNumber, row.current])).toEqual([['INTRASTAT', 'EXP-2026-0002', true]])
+    // B-W2b-F45: October's number, read above.
+    expect(october.exports.map((batch: Json) => [batch.number, batch.files.map((file: Json) => file.package)])).toEqual([[octoberNumber, ['SALES_JOURNAL', 'PURCHASES_JOURNAL', 'PAYMENTS']]])
+    expect(october.registers.map((row: Json) => [row.package, row.exportNumber, row.current])).toEqual([['INTRASTAT', octoberNumber, true]])
     expect(october.invoices.map((row: Json) => [row.side, row.kind, row.number, row.state, row.xml !== null, row.pdf])).toEqual([
       ['SALES', 'INVOICE', 'FT-2026-00001', 'DELIVERED', true, null],
       ['SALES', 'DEPOSIT', 'FT-2026-00003', 'DELIVERED', true, null],
@@ -231,7 +243,7 @@ describe('the accountant’s room (SCR-268)', { timeout: SLOW_TEST_TIMEOUT_MS },
     expect(bytes.statusCode).toBe(200)
     expect(createHash('sha256').update(bytes.rawPayload).digest('hex')).toBe(sales.file.sha256)
     const rows = await admin(`SELECT "actorId", audience, "companyId", after FROM "AuditLog" WHERE action = 'portal.accountingDownload' AND "recordId" = $1`, [sales.file.id])
-    expect(rows).toEqual([{ actorId: accountantId, audience: 'PARTNER', companyId: companyA, after: expect.objectContaining({ period: '2026-10', what: 'SALES_JOURNAL', number: 'EXP-2026-0002' }) }])
+    expect(rows).toEqual([{ actorId: accountantId, audience: 'PARTNER', companyId: companyA, after: expect.objectContaining({ period: '2026-10', what: 'SALES_JOURNAL', number: /* B-W2b-F45 */ octoberNumber }) }])
   })
 
   it('refuses another period’s file, a file of no period, a period not handed over (PERIOD, FILE refusals)', async () => {

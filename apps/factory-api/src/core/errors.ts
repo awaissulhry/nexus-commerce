@@ -11,6 +11,9 @@ import { databasePartyRefusal } from '@nexus/factory-domain/parties/refusals'
 // B-W2b-332: a draft line that a request to buy was converted into is not removed (the database keeps it): a 409 in words.
 // B-W2b-367 (W2b-6 schema wave 48/57): a shipment write that reached the database's carrier rules is a 409 in words.
 import { databaseCarrierRefusal } from '@nexus/factory-domain/shipping/carrier-refusals'
+// B-W2b-370 (W2b-6 schema wave 50/57): a payment, refund, reminder or export write that reached the database's write-off, stop or
+// handed-over rules is a 409 in words.
+import { databaseBankRefusal } from '@nexus/factory-domain/payments/bank-refusals'
 import { askedLineRefusal } from '@nexus/factory-domain/purchasing/ask-to-buy/ask-to-buy'
 import type { ErrorBody } from '@nexus/factory-domain/core/contracts'
 import { reportError } from '../observability/tracker'
@@ -193,6 +196,19 @@ function carrierRefusal(error: unknown): MappedError | null {
   return words ? { status: STATUS_OF.conflict, code: 'conflict', message: words.message, issues: [{ path: words.path, message: words.message }], unexpected: false } : null
 }
 
+/**
+ * B-W2b-370 (W2b-6 schema wave 50/57): the database's own refusal by the bank and bridge rules (…_bank_bridge_w2b_guards: a
+ * small difference written off counts in a payment and an invoice, an allocation or payment with a standing write-off, a reminder
+ * stopped, a document handed over twice), when a write reached it without its command's check (W1's payments, W2a's refunds,
+ * reminders and exports): a 409 in words (factory-domain payments/bank-refusals), never a 500.
+ */
+function bankRefusal(error: unknown): MappedError | null {
+  const cause = (error as { meta?: { driverAdapterError?: { cause?: { originalCode?: unknown; originalMessage?: unknown } } } } | null)?.meta?.driverAdapterError?.cause
+  if (cause?.originalCode !== '23514' || typeof cause.originalMessage !== 'string') return null
+  const words = databaseBankRefusal(cause.originalMessage)
+  return words ? { status: STATUS_OF.conflict, code: 'conflict', message: words.message, issues: [{ path: words.path, message: words.message }], unexpected: false } : null
+}
+
 // B-W2b-309 (SAL-306) ----------------------------------------------------------------------------------------------------
 /**
  * The database's own refusal to issue or hold a customer's own lot for another customer's work (…_sales_orders_depth_w2b_guards
@@ -231,6 +247,9 @@ export function mapError(error: unknown): MappedError {
   // B-W2b-367
   const carrier = carrierRefusal(error)
   if (carrier) return carrier
+  // B-W2b-370
+  const bank = bankRefusal(error)
+  if (bank) return bank
   // B-W2b-309
   const owned = customerOwnedRefusal(error)
   if (owned) return owned

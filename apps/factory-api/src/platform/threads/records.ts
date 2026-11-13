@@ -1,4 +1,5 @@
 import type { FactoryClient } from '@nexus/factory-db'
+import { can, type Actor, type Permission, type ScopedRecord } from '@nexus/factory-domain/core/permissions'
 import type { CommandTx } from '../../core/command'
 
 /**
@@ -273,7 +274,29 @@ export const THREAD_RECORDS: Readonly<Record<string, RecordResolver>> = Object.f
     const report = await client.productSafetyReport.findUnique({ where: { id }, select: { companyId: true, partyId: true } })
     return report ? { companyId: report.companyId, siteId: null, partyId: report.partyId } : null
   },
+  // B-W2b-371 (XF2:02; design rider.activity): ONE thread per rider and garment type, on the chain's first revision (a later
+  // revision has none: the conversation does not split per revision); no company (a profile has none) and the customer. Body data:
+  // THREAD_GATES below asks sales.measurements.view beside threads.read / threads.post.
+  MeasurementProfile: async (client, id) => {
+    const profile = await client.measurementProfile.findUnique({ where: { id }, select: { partyId: true, supersedesId: true } })
+    return profile && profile.supersedesId === null ? { companyId: null, siteId: null, partyId: profile.partyId } : null
+  },
 })
+
+/**
+ * B-W2b-371: record types whose thread asks one more permission over its scope beside threads.read, threads.post and
+ * threads.manage (Team's note above: a thread is read with threads.read over its company and site). A rider's measurement profile
+ * is body data: a role that reads threads but not measurements (finance, the warehouse, read only …) neither reads, writes,
+ * follows, is mentioned in nor is notified of its thread.
+ */
+export const THREAD_GATES: Readonly<Record<string, Permission>> = Object.freeze({ MeasurementProfile: 'sales.measurements.view' })
+
+/** The permission on the record's thread AND the record type's gate (when it has one), over the thread's scope. */
+export function mayOnThread(actor: Actor, permission: Permission, recordType: string | null | undefined, scope: ScopedRecord): boolean {
+  if (!can(actor, permission, scope)) return false
+  const gate = recordType && Object.hasOwn(THREAD_GATES, recordType) ? THREAD_GATES[recordType] : undefined
+  return gate === undefined || can(actor, gate, scope)
+}
 
 let extra: Readonly<Record<string, RecordResolver>> = {}
 

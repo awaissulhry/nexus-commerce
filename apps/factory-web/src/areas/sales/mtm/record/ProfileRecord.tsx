@@ -67,6 +67,9 @@ import { useMeasurementsDialog } from '../use-measurements'
 import type { Read } from '../view-model'
 import type { Loaded, ProfileRecordModel, RangeModel, RecordDialog } from './view-model'
 import { ProfileRecordView } from './view/ProfileRecordView'
+// B-W2b-371: the office's and the fittings' photos (XF2:01), the rider's thread (XF2:02).
+import { RecordPanels } from '../../../../record-panels/RecordPanels'
+import { useOfficePhotos } from '../photos/use-photos'
 
 /**
  * `/w/<company>/sales/made-to-measure/<profileId>` (SCR-036-record; `?tab=`, `&do=revision|review|fitting|link|quote|repeat|compare`
@@ -242,6 +245,14 @@ function Container({ profileId }: { profileId: string }) {
     },
   )
   const offline = live === 'offline'
+
+  // B-W2b-371: the office's and the fittings' photos when the Photos or the Fittings tab is on screen.
+  const photos = useOfficePhotos({ api, profileId: record?.latestId ?? null, partyId: record?.partyId ?? null, shown: !!record && (tab === 'photos' || tab === 'fittings'), can, offline, today })
+  const firstId = record?.revisions.at(-1)?.id ?? null
+  const thread =
+    record && firstId && tab === 'activity' && session.permissions.includes('threads.read') ? (
+      <RecordPanels record={{ type: 'MeasurementProfile', id: firstId, companyId: null, siteId: null }} title={`${record.riderName} · ${record.garmentType}`} party={{ id: record.partyId, name: record.customer.name, emails: [] }} />
+    ) : null
 
   // ---- the shared dialogs (New revision, Send a measurement link, Use in a new quote) -----------------------------------------
   const measurements = useMeasurementsDialog({
@@ -529,6 +540,8 @@ function Container({ profileId }: { profileId: string }) {
     link: link.model,
     quote: quote.model,
     lastResult,
+    photos: photos.model,
+    thread,
   }
 
   return (
@@ -589,6 +602,7 @@ function Container({ profileId }: { profileId: string }) {
         measurements: measurements.actions,
         link: link.actions,
         quote: quote.actions,
+        photos: photos.actions,
       }}
     />
   )

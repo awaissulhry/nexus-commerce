@@ -183,6 +183,8 @@ model SupplierBankAccount {
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and partyId.
   replaces        SupplierBankAccount?  @relation("SupplierBankAccountReplaces", fields: [tenantId, partyId, replacesId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   replacedBy      SupplierBankAccount[] @relation("SupplierBankAccountReplaces")
+  // W2b-6 bank.prisma (schema wave 50/57): the payment proposal lines that pay to it.
+  paymentProposalLines PaymentProposalLine[]
   callBackContact PartyContact?         @relation("SupplierBankAccountCallBackContact", fields: [tenantId, partyId, callBackContactId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   callBackAddress PartyAddress?         @relation("SupplierBankAccountCallBackAddress", fields: [tenantId, partyId, callBackAddressId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
 

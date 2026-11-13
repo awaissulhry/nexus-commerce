@@ -68,7 +68,11 @@ export const MODULE_OWNED_FILES: Readonly<Record<string, ModuleOwnedFiles>> = Ob
   QuoteVersion: { route: 'POST /sales/quotes/:quoteId/proofs (or …/proofs/:fileId/versions), then POST …/proofs/:fileId/complete' },
   // B-W2b-171 (SAL-286): a rider's body photos (front, side, back) sent with measurements by link (modules/sales/measure-link):
   // PHOTO files only, after the privacy notice, kept until their retention ends (GDPR: body photos are personal data).
-  MeasurementProfile: { kinds: ['PHOTO'], route: 'POST /link/measure/photos, then POST /link/measure/photos/:fileId/complete (the rider\'s MEASUREMENTS link)' },
+  // B-W2b-371 (XF2:01): the office's own photos of a revision (MTM_PHOTO, modules/sales/mtm/photos); every kind now (a profile keeps
+  // no other file: its reads go through the module, so a generic upload could never be read back).
+  MeasurementProfile: { route: 'POST /link/measure/photos (the rider\'s MEASUREMENTS link), or POST /sales/mtm/profiles/:profileId/photos (the office), then POST …/:fileId/complete' },
+  // B-W2b-371 (XF2:01): a fitting's photos (FITTING_PHOTO, modules/sales/mtm/photos): every kind, office only, each with its delete date.
+  FittingResult: { route: 'POST /sales/fittings/results/:resultId/photos, then POST …/photos/:fileId/complete' },
   // B-W2b-224 (PRD-062): a point of measure's how-to picture (modules/product/measures): PHOTO files only; the database takes
   // only an AVAILABLE PHOTO of the point as its picture, set by the completion.
   PointOfMeasure: { kinds: ['PHOTO'], route: 'POST /product/points-of-measure/:pomId/picture, then POST …/picture/:fileId/complete' },
@@ -105,7 +109,10 @@ export const MODULE_READ_FILES: Readonly<Record<string, string>> = Object.freeze
   FitnessJudgement: 'POST /safety/health/judgements/:judgementId/copy/:fileId/open',
   HealthVisit: 'none: a visit keeps no file',
   // B-W2b-171: a rider's body photos (sales.measurements.view, each opening recorded); files.read never reaches them.
-  MeasurementProfile: 'POST /sales/measurement-profiles/:profileId/photos/:fileId/open',
+  // B-W2b-371: the office's photos of a revision too (POST /sales/mtm/photos/:fileId/open).
+  MeasurementProfile: 'POST /sales/measurement-profiles/:profileId/photos/:fileId/open, or POST /sales/mtm/photos/:fileId/open',
+  // B-W2b-371: a fitting's photos (sales.measurements.view over its company and customer, each opening recorded on the profile).
+  FittingResult: 'POST /sales/mtm/photos/:fileId/open',
   // B-W2b-351: a product-safety report's photos (sales.safety.view, each opening recorded on the report); files.read never reaches them.
   ProductSafetyReport: 'POST /sales/safety-reports/:reportId/photos/:fileId/open',
 })

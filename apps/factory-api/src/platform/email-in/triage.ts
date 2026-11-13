@@ -18,6 +18,8 @@ import type { InboundDetailView, InboundSummaryView } from './contract'
 import { putPart, type StoredPart } from './files'
 import type { EmailInRuntime } from './service'
 import { attachmentsOf, emitSorted, joinThread, keptOf, MAIL_SORT, type MailRow } from './sort'
+// B-W2b-371: a record type's thread gate (a rider's profile: sales.measurements.view).
+import { mayOnThread } from '../threads/records'
 
 /**
  * "Mail to sort" (A2 SCR-019; plan A1 §3.7; features COL-022, COL-023, COL-025): the office's side of email in. Every
@@ -269,8 +271,8 @@ export async function assignInbound(runtime: EmailInRuntime, caller: CommandCall
   if (mail.status !== 'TRIAGE' && mail.status !== 'HELD') throw new InvalidStateError(`This mail is ${mail.status}; only mail that waits (TRIAGE, HELD) is assigned.`)
   const record: RecordRef = { type: input.recordType, id: input.recordId }
   const { scope } = await caller.withClient((client) => officeRecord(client, record))
-  if (!can(actor, THREADS_READ, scope)) throw new NotFoundError('Record not found.')
-  if (!can(actor, THREADS_POST, scope)) throw new ForbiddenError()
+  if (!mayOnThread(actor, THREADS_READ, record.type, scope)) throw new NotFoundError('Record not found.')
+  if (!mayOnThread(actor, THREADS_POST, record.type, scope)) throw new ForbiddenError()
   if (!scope.partyId) throw new ConflictError('This record has no customer or supplier to share the mail with.')
   const copies = await copyFiles(runtime, caller, mail, scope.companyId ?? null)
   const { result } = await command(
@@ -295,7 +297,7 @@ export async function releaseInbound(runtime: EmailInRuntime, caller: CommandCal
   let copies: StoredPart[] = []
   if (thread) {
     const scope: ScopedRecord = scopeOfThread(thread)
-    if (!can(actor, THREADS_READ, scope) || !can(actor, THREADS_POST, scope)) throw new ForbiddenError()
+    if (!mayOnThread(actor, THREADS_READ, thread.recordType, scope) || !mayOnThread(actor, THREADS_POST, thread.recordType, scope)) throw new ForbiddenError()
     if (thread.partyId === null) throw new ConflictError('The thread this mail names has no customer or supplier to share it with; assign it to a record.')
     copies = await copyFiles(runtime, caller, mail, thread.companyId)
   }

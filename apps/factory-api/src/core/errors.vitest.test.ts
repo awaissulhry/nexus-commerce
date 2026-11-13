@@ -119,6 +119,20 @@ describe('mapError()', () => {
     expect(mapError(other).status).toBe(500)
   })
 
+  it("B-W2b-370: answers the database's write-off, reminder stop and handed-over refusals as a 409 in words, never a 500", () => {
+    const refusal = prismaError('P2010', 'Raw query failed.', {
+      driverAdapterError: { cause: { originalCode: '23514', originalMessage: 'payments: payment x has a write-off still standing; reverse the write-off before the payment is voided' } },
+    })
+    const words = 'A small difference of this payment was written off: reverse the write-off first, then void the payment.'
+    expect(mapError(refusal)).toEqual({ status: 409, code: 'conflict', message: words, issues: [{ path: 'payments/WRITE_OFF_STANDING', message: words }], unexpected: false })
+    const stopped = prismaError('P2010', 'Raw query failed.', {
+      driverAdapterError: { cause: { originalCode: '23514', originalMessage: 'receivables: reminder x covers invoice y, whose reminders are stopped (DISPUTE); it is not approved or sent while the stop holds' } },
+    })
+    expect(mapError(stopped)).toMatchObject({ status: 409, code: 'conflict', issues: [{ path: 'receivables/REMINDER_STOPPED' }] })
+    const other = prismaError('P2010', 'Raw query failed.', { driverAdapterError: { cause: { originalCode: '23514', originalMessage: 'bank: statement x is what the bank said; it never changes' } } })
+    expect(mapError(other).status).toBe(500)
+  })
+
   it("B-W2b-279: answers the database's refusal of an erased contact's new data as a 409 in words, never a 500", () => {
     const refusal = prismaError('P2010', 'Raw query failed.', {
       driverAdapterError: { cause: { originalCode: '23514', originalMessage: 'parties: contact x was erased; its name, e-mail and phone stay blank and it stays archived (a new contact is made for new data)' } },

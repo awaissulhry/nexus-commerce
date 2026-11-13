@@ -301,6 +301,44 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    left) and wave 45's `factory_generated_document_check` (PROFORMA of a Shipment, SampleShipment or DepositRequest with its
    record's PROFORMA NumberAllocation; MANIFEST of a DispatchManifest; SHIPPING_MARKS and SHIPMENT_PACK of a Shipment); it calls
    recall's `factory_recall_words_ok` and `factory_recall_not_future`):
+   `…_tax_currency_w2b_guards` (W2b-6 schema wave 49/57, B-W2b-369, invoicing, tax and currency: tax codes as data (a rate or a
+   Natura with its law, ACTIVE versions of a code that never overlap: a transaction advisory lock per code; a version in force
+   never edited, ended from yesterday on and a new one made; VERIFIED never back, the accountant's confirmation once; deleted
+   only before its first day); declarations of intent (the tax agency's protocol, used up to the amount, the check with its
+   receipt once, one live per protocol: a partial unique; revoked then frozen; never deleted); stamp duty quarters (paid after
+   the quarter, then frozen); self-invoices PENDING → ISSUED | CANCELLED (one live per supplier invoice: a partial unique; its
+   invoice of its type, issued); e-invoice test mode (live with when and who, fixed while live); our own copy of an SDI send
+   (keyed `sdi:<send>`, receipts only added); invoice runs PREVIEW → ISSUED with no draft left; deposit rules on cancellation
+   (one ACTIVE per company, kind, side and order type: a partial unique); currencies (the base one never off; one active per
+   code: a partial unique) and exchange rates (keyed `<base>:<quote>:<day>:<source>`, an ECB one EUR-based and never changed,
+   only a MANUAL one removed); the payment terms' skipped months; GATE-ACCOUNTANT: CompanyEInvoiceSettings' switches, OFF by
+   default, hold an invoice naming a declaration of intent, a STAMP_DUTY charge line (one per invoice: a partial unique) and a
+   TD16-TD19 leaving DRAFT; its own triggers on Invoice (language, rate, run, declaration, debit note TD05), InvoiceLine and
+   PaymentTerms; it redefines W2a's `factory_invoice_check_issue` (the SELF_INVOICE series for TD16-TD19), the rest word for
+   word; it calls recall's `factory_recall_words_ok`, `factory_recall_not_future` and money's `factory_money_rome_day`):
+   `…_bank_bridge_w2b_guards` (W2b-6 schema wave 50/57, B-W2b-370, bank, receivables, payables and the accountant's bridge:
+   a company's own bank accounts (the IBAN's check digits; company, IBAN and currency fixed; one live per company and IBAN: a
+   partial unique; switched off, never deleted; the migration's data copy fills each company's first one from its Company
+   bank columns, which stay), statement files and their lines never changed (a live account, the period not after today, the
+   file of the company; a line inside its statement's days in the account's currency, its fingerprint unique per account),
+   matches (money in: issued TD01 / TD24 invoices and deposit requests of the party, or a payment typed by hand; money out:
+   one supplier invoice; accepted once with the payment it recorded, RECEIVED for the line's amount; reversed once after
+   that payment is VOIDED; one live acceptance per line and per payment: partial uniques; only a suggestion deleted),
+   write-offs append-only (an UNDERPAYMENT on an allocation to an invoice, an OVERPAYMENT of the payment; within the
+   company's tolerance in force; the caps under the money locks; a reversal once), Ri.Ba. batches DRAFT → ISSUED (only while
+   the company's `ribaOn`, with its file, each instalment once and in no other issued batch) | CANCELLED and their items
+   (an instalment of the invoice's payment terms inside the window, added and removed while DRAFT, then PAID | UNPAID with
+   the bank's fee, once), reminder stops (a promise names its day; lifted once; never deleted), a customer's own figures
+   (their shape), payment proposals DRAFT → APPROVED (never by the person who made it, Q3 = A; each invoice APPROVED, once,
+   in no other live proposal, paid to the supplier's ACTIVE account) → PAID (every invoice PAID) | CANCELLED and their lines
+   (only while DRAFT), account mappings (fixed from their first day), the bridge settings, exported documents (written while
+   the export is a DRAFT, flagged once after it), integrity check runs append-only; its own triggers `Payment_write_offs_check`,
+   `PaymentReminder_stopped`, `AccountingExport_documents_once` (a document once per export, NEW in no other exported one,
+   CHANGED only after one), `ReceivablesSettings_bank_check`, `Party_reminder_trusted_check`; it redefines the followups'
+   `factory_payment_allocation_check` and `factory_refund_guard` (the write-offs counted; their messages unchanged while
+   nothing is written off); it calls suppliers' `factory_supplier_iban_ok`, `factory_supplier_list_ok`,
+   `factory_supplier_office_person_ok`, recall's three helpers and money's `factory_money_lock`, `factory_money_rome_day`,
+   `factory_invoice_credited`):
    triggers, partial unique indexes and deferred
    constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new

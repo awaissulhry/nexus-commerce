@@ -49,6 +49,13 @@ model PaymentTerms {
   /// within that many days of the invoice's date; both or neither.
   earlyPaymentDiscountPct Decimal?     @db.Decimal(7, 4)
   earlyPaymentDays        Int?
+  /// W2b-6 (schema wave 49/57, B-W2b-369; FIN-076): the Italian due-date conventions. `fromEndOfMonth`: the days of an
+  /// INVOICE or DELIVERY instalment count from the end of its event's month ("30 gg f.m.d.f."), not from the event's day.
+  /// `skipMonths`: months (1-12, each once, at most 11) agreed with the customer in which nothing falls due ("escluso
+  /// agosto": [8]); a due date in one moves to the first month not skipped (the API's rule, UNVERIFIED until the
+  /// accountant confirms). Empty: none.
+  fromEndOfMonth          Boolean      @default(false)
+  skipMonths              Int[]        @default([])
   status                  MasterStatus @default(ACTIVE)
   version                 Int          @default(1)
   createdAt               DateTime     @default(now()) @db.Timestamptz(3)

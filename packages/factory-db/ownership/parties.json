@@ -7,7 +7,7 @@
       "keyColumns": { "tenant": "tenantId", "party": "id" },
       "access": {
         "factory_runtime": { "privileges": ["select", "insert", "update"] },
-        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["internalNote", "supplierStatusReason", "supplierStatusChangedById", "createdById", "carrierAccountSecretId"] }
+        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["internalNote", "supplierStatusReason", "supplierStatusChangedById", "createdById", "carrierAccountSecretId", "reminderTrustedLevel"] }
       }
     },
     "PartyAddress": {

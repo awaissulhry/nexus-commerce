@@ -6,7 +6,7 @@ import { useLocale } from '../../../lib/i18n/provider'
 import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
 import { companyPrefix } from '../../../lib/session/session'
 import { liveMatches, useLive } from '../../quality/_shared/hooks'
-import { listProfiles, listTemplates, PAGE_SIZE, type ProfileRow, type TemplateOption, type Tiles } from './api'
+import { findCustomers, listProfiles, listTemplates, PAGE_SIZE, type PartyOption, type ProfileRow, type TemplateOption, type Tiles } from './api'
 import { addressOf, addressText, HOME_ADDRESS, mtmCan, queryOf, quoteHref, readProblem, recordHref, type ListAddress, type Notice } from './model'
 import { MtmMessages } from './parts'
 import { useMeasurementsDialog } from './use-measurements'
@@ -52,6 +52,8 @@ function Container() {
   const [asOf, setAsOf] = useState<string | null>(null)
   const [updates, setUpdates] = useState(0)
   const [notice, setNotice] = useState<Notice | null>(null)
+  // B-W2b-371 (XF2:03): the customers for "By customer" (read once, with parties.view).
+  const [customers, setCustomers] = useState<readonly PartyOption[] | null>(null)
   const offset = useRef(0)
   const readId = useRef(0)
   const queryKey = JSON.stringify(queryOf(address))
@@ -81,6 +83,13 @@ function Container() {
     setRows({ items: null, more: false, problem: null, matching: null })
     void load()
   }, [load])
+
+  useEffect(() => {
+    if (!can.parties) return
+    findCustomers(api, '', companyId)
+      .then(setCustomers)
+      .catch(() => setCustomers(null))
+  }, [api, can.parties, companyId])
 
   useEffect(() => {
     if (!can.styles) return
@@ -156,6 +165,7 @@ function Container() {
     measurements: measurements.model,
     link: link.model,
     quote: quote.model,
+    customers,
   }
 
   const openQuote = (row: ProfileRow) => quote.open({ profileId: row.id, riderName: row.riderName, customer: row.customer.name, partyId: row.partyId, contactId: row.contactId, revision: row.revision })

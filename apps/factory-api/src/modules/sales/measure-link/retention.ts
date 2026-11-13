@@ -9,6 +9,8 @@ import { serverClock, type Clock } from '../../../core/time'
 import { processFiles, type FilesRuntime } from '../../../platform/files/service'
 import { activeTenants, systemContext } from '../../../platform/outbox/system'
 import { photosOf, PROFILE_RECORD, type Reader } from './store'
+// B-W2b-371: the office's and the fittings' made-to-measure photos, their own delete dates (a fourth pass).
+import { lookAfterMtmPhotos } from '../mtm/photos/retention'
 
 /**
  * The body photos' retention (B-W2b-171; SAL-286; Owner question 3 of W2b-3, the recommended answer: the photos are deleted
@@ -150,6 +152,11 @@ export async function runPhotoRetention(options: PhotoRetentionOptions): Promise
         await removeObjects(files, caller, leftovers, now)
         totals.leftovers += leftovers.length
       }
+
+      // 4. B-W2b-371: the office's and the fittings' made-to-measure photos (StoredFile.deleteAfter)
+      const office = await lookAfterMtmPhotos(caller, files, now)
+      totals.scheduled += office.scheduled
+      totals.deleted += office.deleted
     } catch (error) {
       options.log.error({ err: error, tenantId }, 'the body photos of a tenant could not be looked after')
     }

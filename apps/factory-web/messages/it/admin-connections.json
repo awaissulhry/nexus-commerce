@@ -64,6 +64,11 @@
         "name": "Pagamenti con carta (Stripe)",
         "for": "Permette ai clienti di pagare acconti e fatture con carta o addebito SEPA; la carta si digita nei campi di Stripe, mai in Nexus.",
         "how": "Uno per società: ogni società incassa i propri pagamenti. Non è ancora attivo: aspetta il sì del titolare con le commissioni esatte; il bonifico resta il modo predefinito."
+      },
+      "ECB": {
+        "name": "Tassi di cambio (BCE)",
+        "for": "Legge i tassi di riferimento giornalieri dell'euro della Banca centrale europea, così i documenti in un'altra valuta tengono il tasso del giorno.",
+        "how": "Uno per tutte le società. Un file pubblico gratuito: nulla da acquistare."
       }
     },
     "laterService": {

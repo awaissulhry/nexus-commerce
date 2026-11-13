@@ -223,8 +223,8 @@ export interface DocumentReference {
   readonly date?: BusinessDate | null
 }
 
-/** The FatturaPA document kinds an invoice copy names (TipoDocumento). */
-export const INVOICE_KINDS = ['TD01', 'TD02', 'TD04', 'TD05', 'TD24'] as const
+/** The FatturaPA document kinds an invoice copy names (TipoDocumento); TD16-TD19, the self-invoices, since W2b-6 (wave 49/57). */
+export const INVOICE_KINDS = ['TD01', 'TD02', 'TD04', 'TD05', 'TD24', 'TD16', 'TD17', 'TD18', 'TD19'] as const
 export type InvoiceKind = (typeof INVOICE_KINDS)[number]
 
 /** A document to compose. */

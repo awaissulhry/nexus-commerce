@@ -527,7 +527,12 @@
     "TD01": "Invoice (TD01)",
     "TD02": "Deposit invoice (TD02)",
     "TD04": "Credit note (TD04)",
-    "TD24": "Deferred invoice (TD24)"
+    "TD24": "Deferred invoice (TD24)",
+    "TD05": "Debit note (TD05)",
+    "TD16": "Reverse-charge integration (TD16)",
+    "TD17": "Self-invoice, services from abroad (TD17)",
+    "TD18": "Self-invoice, goods from the EU (TD18)",
+    "TD19": "Self-invoice, goods in Italy (TD19)"
   },
   "invoiceStatus": {
     "DRAFT": "Draft",

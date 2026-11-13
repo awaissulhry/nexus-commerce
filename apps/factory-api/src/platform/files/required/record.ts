@@ -9,7 +9,7 @@ import { isCurrentVersion } from '@nexus/factory-domain/files/versions/rules'
 import { command, type CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { contextOf, mayWrite, readOffice } from '../files'
-import { assertGenericPath } from '../owned'
+import { assertGenericPath, readsThroughModule } from '../owned'
 import { activeRulesOf, documentsOf, recordFactsOf, type DocumentRow } from './check'
 import type { documentView } from './contract'
 import type { z } from 'zod'
@@ -51,12 +51,15 @@ export async function recordDocuments(caller: CommandCaller, query: { readonly r
   return caller.withClient(async (client) => {
     const facts = await recordFactsOf(client, query.recordType, query.recordId)
     // Every current file of the record (tagged or not: the panel offers to tag it), plus the party's tagged documents.
-    const own = await client.storedFile.findMany({
-      where: { recordType: query.recordType, recordId: query.recordId, status: 'AVAILABLE', supersededAt: null },
-      select: UNTAGGED_SELECT,
-      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-      take: 500,
-    })
+    // B-W2b-371: none of a record whose files only its module reads (a rider's photos, an incident's): as listFiles.
+    const own = readsThroughModule(query.recordType)
+      ? []
+      : await client.storedFile.findMany({
+          where: { recordType: query.recordType, recordId: query.recordId, status: 'AVAILABLE', supersededAt: null },
+          select: UNTAGGED_SELECT,
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+          take: 500,
+        })
     const companyId = facts?.companyId ?? own[0]?.companyId ?? null
     if (!can(actor, FILES_READ, { companyId })) throw new NotFoundError('Record not found.')
     const tagged = facts ? await documentsOf(client, query.recordType, query.recordId, facts.partyId) : []

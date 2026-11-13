@@ -79,12 +79,15 @@ export interface ProfilesQuery {
   partyId?: string | null
   review?: ReviewStatus | null
   old?: boolean | null
+  // B-W2b-371 (XF2:03): outside the certified range, a fitting this week.
+  range?: 'outside' | null
+  fittings?: 'week' | null
   offset?: number
 }
 
 export function listProfiles(api: ApiClient, query: ProfilesQuery, signal?: AbortSignal): Promise<ProfilesView> {
   return api.get(PROFILES, {
-    query: clean({ q: query.q?.trim() || undefined, garmentType: query.garmentType ?? undefined, partyId: query.partyId ?? undefined, review: query.review ?? undefined, old: query.old === null || query.old === undefined ? undefined : String(query.old), limit: PAGE_SIZE, offset: query.offset ?? 0 }),
+    query: clean({ q: query.q?.trim() || undefined, garmentType: query.garmentType ?? undefined, partyId: query.partyId ?? undefined, review: query.review ?? undefined, old: query.old === null || query.old === undefined ? undefined : String(query.old), range: query.range ?? undefined, fittings: query.fittings ?? undefined, limit: PAGE_SIZE, offset: query.offset ?? 0 }),
     schema: profilesView,
     signal,
   })

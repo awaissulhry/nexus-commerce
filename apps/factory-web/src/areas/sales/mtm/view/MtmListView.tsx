@@ -13,6 +13,10 @@ import type { ProfileRow } from '../api'
 import { chipsOf, HOME_ADDRESS, isFiltered, recordHref, ROW_VIEWS, rowVerbHeld, templatesHref, TILE_VIEW, tileValue, TILES, worksheetHref, type RowVerb, type RowView } from '../model'
 import { isPageKey, MtmMessages, NoticeLine, ReviewPill, useWords } from '../parts'
 import type { MtmListActions, MtmListModel } from '../view-model'
+// B-W2b-371 (XF2:03): the certified range of a row, the customer filter.
+import { customerName } from '../list-filters/model'
+import { CustomerFilter, RangeCell as RangeTag } from '../list-filters/view/ListFilterParts'
+import { ExtrasMessages } from '../photos/words'
 import { LinkDialog } from './LinkDialog'
 import { MeasurementsDialog } from './MeasurementsDialog'
 import { QuoteDialog } from './QuoteDialog'
@@ -24,8 +28,8 @@ export type { MtmListActions, MtmListModel } from '../view-model'
  * B-W2b-362 with its W2b parts): the band (one sentence, freshness and live state, ⋯ Send a measurement link · Measurement
  * templates, New measurements `c`), the off state of made-to-measure (Owner 11-10: switched off per template — said in words
  * with the way to start it), the tiles (Waiting for factory review · Need more from the rider · Outside the certified range ·
- * Fittings this week · Older than 12 months; a tile presses its saved row; "Outside" is per style and "Fittings" names the
- * booked fittings: neither filters the list, said in their hints), Rows ▾ / Garment type ▾ / search with chips, then the shared
+ * Fittings this week · Older than 12 months; a tile presses its saved row — B-W2b-371: "Outside" and "Fittings" filter the list
+ * too), Rows ▾ / Garment type ▾ / Customer (B-W2b-371) / search with chips, Export ▾ and Export N (B-W2b-371), then the shared
  * list frame: Rider (a real link), Customer, Garment type, Revision, Taken on, Taken by, Base size, Inside certified range,
  * Review, Open orders, Next fitting, Privacy notice given and ⋯ (Open · Open in new tab · New revision · Use in a new quote ·
  * Print worksheet), each verb held with why.
@@ -107,7 +111,12 @@ function List({ model, actions }: { model: MtmListModel; actions?: MtmListAction
           <ReviewPill status={data.review.status} />
         </span>
       ) : null
-    const RangeCell = ({ data }: ICellRendererParams<ProfileRow>) => (data ? <span title={t('row.rangeHint')}>—</span> : null)
+    const RangeCell = ({ data }: ICellRendererParams<ProfileRow>) =>
+      data ? (
+        <ExtrasMessages>
+          <RangeTag range={data.range} />
+        </ExtrasMessages>
+      ) : null
     const MoreCell = ({ data }: ICellRendererParams<ProfileRow>) =>
       data ? (
         <Menu
@@ -131,7 +140,7 @@ function List({ model, actions }: { model: MtmListModel; actions?: MtmListAction
       { colId: 'takenOn', headerName: t('col.takenOn'), minWidth: 130, flex: 0.6, valueGetter: (params) => (params.data ? day(params.data.takenAt) : ''), cellRenderer: TakenOnCell },
       { colId: 'takenBy', headerName: t('col.takenBy'), minWidth: 140, flex: 0.8, valueGetter: (params) => params.data?.takenBy ?? '', cellRenderer: TakenCell },
       { colId: 'baseSize', headerName: t('col.baseSize'), minWidth: 90, flex: 0.4, valueGetter: (params) => params.data?.baseSize ?? '—' },
-      { colId: 'range', headerName: t('col.range'), minWidth: 120, flex: 0.5, sortable: false, valueGetter: () => '—', cellRenderer: RangeCell },
+      { colId: 'range', headerName: t('col.range'), minWidth: 150, flex: 0.7, sortable: false, valueGetter: (params) => params.data?.range.points.join(', ') ?? '', cellRenderer: RangeCell },
       { colId: 'review', headerName: t('col.review'), minWidth: 130, flex: 0.6, valueGetter: (params) => (params.data ? t(`review.${params.data.review.status}`) : ''), cellRenderer: ReviewCell },
       { colId: 'openUnits', headerName: t('col.openUnits'), minWidth: 100, flex: 0.4, type: 'numericColumn', valueGetter: (params) => params.data?.openUnits ?? 0 },
       { colId: 'nextFitting', headerName: t('col.nextFitting'), minWidth: 140, flex: 0.6, valueGetter: (params) => (params.data?.nextFittingAt ? when(params.data.nextFittingAt) : '—') },
@@ -183,7 +192,7 @@ function List({ model, actions }: { model: MtmListModel; actions?: MtmListAction
     )
   ) : undefined
 
-  const chips = chipsOf(model.address)
+  const chips = chipsOf(model.address, customerName(model.customers, rows, model.address.customer))
   const linkHeld = !model.can.link ? say({ key: 'held.right', params: { right: 'right.link' } }) : offline ? t('held.offline') : !rows || rows.length === 0 ? t('link.held.noRiders') : null
   const ownKeys: ListKey[] = [{ keys: ['c'], does: t('keys.new') }]
   const tools = (
@@ -203,6 +212,9 @@ function List({ model, actions }: { model: MtmListModel; actions?: MtmListAction
           </option>
         ))}
       </Select>
+      <ExtrasMessages>
+        <CustomerFilter customers={model.customers ?? null} value={model.address.customer} onChange={(customer) => actions?.onAddress?.({ customer })} />
+      </ExtrasMessages>
     </>
   )
 
@@ -245,7 +257,8 @@ function List({ model, actions }: { model: MtmListModel; actions?: MtmListAction
           const view = TILE_VIEW[tile]
           return {
             label: t(`tile.${tile}`),
-            value: tileValue(model.tiles, tile),
+            // B-W2b-371: an unknown count says "—", never an empty tile or 0 (design mtm.tiles).
+            value: tileValue(model.tiles, tile) ?? '—',
             hint: model.tilesFailed ? t('tile.failed') : t(`tile.hint.${tile}`),
             ...(view ? { onClick: () => actions?.onAddress?.({ view: model.address.view === view ? HOME_ADDRESS.view : view }), active: model.address.view === view } : {}),
           }
@@ -288,6 +301,8 @@ function List({ model, actions }: { model: MtmListModel; actions?: MtmListAction
         selection={{
           selected,
           onChange: setSelected,
+          // B-W2b-371 (XF2:03): "Export N" of the selected riders through the list's export.
+          exportSelected: true,
           actions: (
             <Button size="sm" aria-label={t('list.copyMany', { count: selected.length })} onClick={() => actions?.onCopy?.((rows ?? []).filter((row) => selected.includes(row.id)).map((row) => `${row.riderName}\t${row.customer.name}\t${row.garmentType}\t${t('row.revisionValue', { revision: row.revision })}`))}>
               <Copy size={13} aria-hidden /> <SelectionLabel>{t('list.copyMany', { count: selected.length })}</SelectionLabel>

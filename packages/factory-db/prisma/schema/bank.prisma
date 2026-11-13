@@ -1,0 +1,693 @@
+// Bank, receivables, payables and the accountant's bridge (W2b-6, schema wave 50/57, B-W2b-370; features FIN-112, FIN-113,
+// FIN-117, FIN-119, FIN-126, FIN-128, FIN-130, FIN-132, FIN-135, FIN-140, FIN-142, FIN-152, FIN-154, FIN-157; design
+// finance.bank "Match bank lines", "Their figures vs ours", "Import a bank statement"; finance.payments "Ri.Ba. batch",
+// "small difference → write-off within tolerance"; finance.receivables "Held (W2b stop rules)", "Trusted levels";
+// finance.payables "Payment proposal — week 46"; finance.accounting "Account mapping (W2b)", "documents changed since",
+// "2 · Checks"): the money that comes and goes beyond W2a. Rule 1: payments arrive and go every day; matching them is typed
+// by hand today. Payments, allocations, reminders and numbered exports exist since W1/W2a (money.prisma,
+// receivables.prisma, payables.prisma, accounting.prisma); this adds their depth.
+//
+//   BankAccount        a company's own bank account (holder, IBAN, BIC, bank, currency), switched off, never deleted; the
+//                      migration fills each company's first one from its Company bank columns, which stay (they are what
+//                      the deposit page and the invoice print, FatturaPA MP05). One live account per company and IBAN.
+//   BankStatement      a statement file the company downloaded from its bank and imported (Owner 11-13: CAMT.053, CSV,
+//                      Excel or OFX files; no paid bank feed): the account, the file, its format, the period, who imported
+//                      it. What the bank said never changes.
+//   BankLine           one movement of a statement: the day, the signed amount (money in above 0, out below 0), the
+//                      bank's reference, the reference text, the other side's name and IBAN, and its fingerprint: one per
+//                      account (a line imported twice is refused: the unique key). Never changed.
+//   BankMatch          what a bank line is for: suggested by the matcher with how sure (HIGH, MEDIUM, LOW) and why (codes:
+//                      amount equal, the invoice number in the reference, the IBAN known …), or chosen by a person;
+//                      accepted once by a person (money in: the payment it became, or the payment already typed by hand
+//                      it is; money out: the supplier invoice it paid); a wrong acceptance is reversed with why. One live
+//                      acceptance per line and per payment.
+//   PaymentWriteOff    a small difference written off within the company's tolerance (the accountant's): an
+//                      UNDERPAYMENT closes what an allocation left open on its invoice, an OVERPAYMENT keeps what a payment
+//                      left unplaced. Append-only; a wrong one is reversed by a new row. The allocation and refund checks
+//                      count them (their bodies are redefined).
+//   RibaBatch          a Ri.Ba. collection batch (the CBI file for the bank's site) of a company's bank account for the
+//                      instalments due in a window: DRAFT → ISSUED (the file, behind the company's Ri.Ba. switch, OFF by
+//                      default: GATE-ACCOUNTANT) | CANCELLED.
+//   RibaItem           one invoice instalment collected by a batch: ISSUED → PAID | UNPAID (an unpaid return, with the
+//                      bank's fee).
+//   ReminderStop       why an invoice gets no reminder for now (payment being processed, a dispute, a promise to pay, a
+//                      credit note pending), until a day or until lifted; a reminder is not approved or sent while one
+//                      holds. Beside it: Party.reminderTrustedLevel (parties.prisma) and the receivables switches.
+//   CustomerStatementFigures  a B2B customer's own figures (per order, per payment, the balance) as of a day, typed from
+//                      the statement it sent (its file), for "Their figures vs ours".
+//   PaymentProposal    what to pay suppliers in a week (DRAFT → APPROVED → PAID | CANCELLED), approved by someone who did
+//                      not make it (Owner answer Q3 = A); its lines: a supplier invoice, the amount, the early-payment
+//                      discount, and the supplier's ACTIVE (verified) bank account it goes to; no account: the line is
+//                      held, and the proposal is not approved.
+//   AccountMapping     the accountant's chart per company: an item group, tax code, cost category, payment method or party
+//                      group to an account code, from a day (GATE-ACCOUNTANT: made-up values until the accountant's).
+//   AccountingSettings the accountant's bridge switch per company: journals with mapped accounts go to the accountant only
+//                      while it is on (OFF by default).
+//   ExportedDocument   a document an accounting export handed over, with its fingerprint at the export; a later change is
+//                      flagged on it; a re-export carries only the changes and never a document twice.
+//   IntegrityCheckRun  one run of a named check (totals equal their rows, allocations never pass payments …): when, the
+//                      result and the failures. Append-only.
+//
+// Beside them (each file's own lines): ReceivablesSettings.ribaOn, .paymentNoticeToCustomerOn and .writeOffToleranceAmount
+// (receivables.prisma), PayablesSettings.remittanceMailOn (payables.prisma), Party.reminderTrustedLevel (parties.prisma);
+// each switch OFF by default (the Owner's rule of 11-13: nothing reaches a bank, a customer or a supplier by itself).
+//
+// apps/factory-api's modules/payments (B-W2b-393 bank statements, matching, write-offs), modules/receivables (B-W2b-402
+// Ri.Ba., stops, notices), modules/payables (B-W2b-403 payment proposals), modules/accounting (B-W2b-408 the accountant's
+// bridge) and Finance › Bank (B-W2b-406) write and read these tables, always through command(); the hand-written
+// …_bank_bridge_w2b_guards migration holds their rules for every login, the owner included.
+//
+// Money (A1 §2.1, §2.6): amounts are Int minor units; a bank line, a write-off, a Ri.Ba. item and a customer's figures are
+// grain price (what customers pay; the design's Bank page needs money.price), a payment proposal grain cost (what the company
+// pays a supplier).
+//
+// Who sees what (ownership/bank.json): the office reads and writes; the floor, portal and link sessions read none of it.
+
+/// A statement file's format (FIN-130; Owner 11-13: files the company downloads from its bank, no bank feed).
+enum BankStatementFormat {
+  /// ISO 20022 camt.053 (the bank-to-customer statement XML).
+  CAMT053
+  /// A CSV export, read with a column mapping.
+  CSV
+  /// An Excel export, read with a column mapping.
+  XLSX
+  /// Open Financial Exchange.
+  OFX
+}
+
+/// How sure the matcher is of a suggestion (FIN-132; design finance.bank "High · Medium · Low").
+enum BankMatchConfidence {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+/// Why a bank line matches (FIN-132; the words come from these codes: "amount equal", "invoice number in the reference",
+/// "IBAN known").
+enum BankMatchReason {
+  /// The line's amount equals what is open on the items (or the payment, or the supplier invoice).
+  AMOUNT_EQUAL
+  /// The difference is within the company's write-off tolerance.
+  AMOUNT_WITHIN_TOLERANCE
+  /// The item's number is in the line's reference text.
+  NUMBER_IN_REFERENCE
+  /// The other side's IBAN is one we know for the party.
+  IBAN_KNOWN
+  /// The other side's name is the party's.
+  NAME_MATCHES
+  /// A person chose it (no suggestion).
+  CHOSEN_BY_PERSON
+}
+
+/// Which side of a small difference is written off (FIN-119).
+enum WriteOffKind {
+  /// The customer paid a little less: what the allocation left open on its invoice is closed.
+  UNDERPAYMENT
+  /// The customer paid a little more: what the payment left unplaced is kept.
+  OVERPAYMENT
+}
+
+/// Why a difference is written off (FIN-119).
+enum WriteOffReason {
+  /// Cents lost to rounding.
+  ROUNDING
+  /// The bank's charges taken from the transfer.
+  BANK_CHARGES
+  /// Another reason, in the note.
+  OTHER
+}
+
+enum RibaBatchStatus {
+  /// Instalments are chosen; nothing has left.
+  DRAFT
+  /// The CBI file was made for the bank's site; frozen.
+  ISSUED
+  /// Abandoned while a draft; final.
+  CANCELLED
+}
+
+enum RibaItemStatus {
+  /// In the batch (presented to the bank once the batch is issued).
+  ISSUED
+  /// Paid by the customer at its due date; final.
+  PAID
+  /// Returned unpaid by the bank (an insoluto), with the bank's fee; final. The invoice stays open.
+  UNPAID
+}
+
+/// Why an invoice gets no reminder (FIN-112; design finance.receivables "Held (W2b stop rules)").
+enum ReminderStopReason {
+  /// A payment is recorded or the customer says it is on its way.
+  PAYMENT_PROCESSING
+  /// A dispute is open about the invoice.
+  DISPUTE
+  /// The customer promised to pay by a day (the stop's until).
+  PROMISE_TO_PAY
+  /// A credit note is pending.
+  CREDIT_PENDING
+}
+
+enum PaymentProposalStatus {
+  /// Lines are added, changed and removed.
+  DRAFT
+  /// Approved by someone who did not make it; frozen.
+  APPROVED
+  /// The transfers are made: every line's supplier invoice is PAID; final.
+  PAID
+  /// Abandoned; final.
+  CANCELLED
+}
+
+/// What an account mapping maps (FIN-152).
+enum AccountMappingKind {
+  ITEM_GROUP
+  TAX_CODE
+  COST_CATEGORY
+  PAYMENT_METHOD
+  PARTY_GROUP
+}
+
+/// Whether an exported document is handed over for the first time or again because it changed (FIN-154).
+enum ExportedDocumentChange {
+  NEW
+  CHANGED
+}
+
+enum IntegrityCheckResult {
+  PASSED
+  FAILED
+  /// The check could not run (the error in words).
+  ERROR
+}
+
+/// A company's own bank account (FIN-130; design finance.bank): where its statements come from and where Ri.Ba. batches
+/// are collected. Its company, IBAN and currency never change (another IBAN is another account); switched off, never
+/// deleted. One live account per company and IBAN.
+model BankAccount {
+  id          String   @id @db.Uuid
+  tenantId    String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company whose account it is. Never changes.
+  companyId   String   @db.Uuid
+  /// The account holder as the bank knows it (1 to 140 characters, one line).
+  holder      String
+  /// The IBAN: a country, two check digits (ISO 7064 mod 97-10) and 11 to 30 letters or digits, upper case, no spaces.
+  /// Never changes.
+  iban        String
+  /// The bank's BIC (8 or 11 letters and digits), when given; the bank's name (1 to 140 characters), when given.
+  bic         String?
+  bankName    String?
+  /// ISO 4217. Never changes.
+  currency    String   @default("EUR")
+  /// False: switched off (no statement is imported into it, no Ri.Ba. batch is issued from it).
+  active      Boolean  @default(true)
+  version     Int      @default(1)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?  @db.Uuid
+
+  company     Company         @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  statements  BankStatement[]
+  ribaBatches RibaBatch[]
+
+  // The target of the references from its statements and Ri.Ba. batches (the same company). One live account per
+  // company and IBAN is a partial unique index of the guards migration.
+  @@unique([tenantId, companyId, id])
+  @@index([tenantId, companyId, active])
+}
+
+/// A statement file imported into a bank account (FIN-130; design finance.bank "Import a bank statement"): the file as
+/// downloaded from the bank, its format, the days it covers and who imported it. What the bank said never changes; never
+/// deleted.
+model BankStatement {
+  id            String              @id @db.Uuid
+  tenantId      String              @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The account's company, and the account (live when it is imported).
+  companyId     String              @db.Uuid
+  bankAccountId String              @db.Uuid
+  /// The file as imported: a StoredFile of the company with record type BankStatement.
+  fileId        String              @db.Uuid
+  format        BankStatementFormat
+  /// The days it covers (the first and the last booking day), not after today.
+  periodStart   DateTime            @db.Date
+  periodEnd     DateTime            @db.Date
+  /// Who imported it, and when.
+  importedById  String              @db.Uuid
+  importedAt    DateTime            @default(now()) @db.Timestamptz(3)
+
+  bankAccount BankAccount @relation(fields: [tenantId, companyId, bankAccountId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  file        StoredFile  @relation("BankStatementFile", fields: [tenantId, fileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  lines       BankLine[]
+
+  // The target of its lines' reference (the same company and account).
+  @@unique([tenantId, companyId, bankAccountId, id])
+  @@index([tenantId, bankAccountId, periodEnd])
+}
+
+/// One movement of a bank statement (FIN-130; design finance.bank "Line: date, amount, reference text, payer"): money in
+/// (above 0) or out (below 0), as the bank booked it. Never changed or deleted; a line imported twice into the same account
+/// is refused by its fingerprint.
+model BankLine {
+  id                String   @id @db.Uuid
+  tenantId          String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The statement's company and account.
+  companyId         String   @db.Uuid
+  bankAccountId     String   @db.Uuid
+  statementId       String   @db.Uuid
+  /// The booking day (inside the statement's period) and the value day, when the bank gives one.
+  bookedOn          DateTime @db.Date
+  valueOn           DateTime? @db.Date
+  /// Minor units of the account's currency: above 0 money in, below 0 money out, never 0.
+  /// @grain price
+  amount            Int
+  /// ISO 4217: the account's.
+  currency          String   @default("EUR")
+  /// The bank's own reference of the movement (camt.053 AcctSvcrRef, OFX FITID; the CRO / TRN a payment records), when
+  /// given: 1 to 100 characters, one line.
+  bankReference     String?
+  /// The reference text (the causale; camt.053 Ustrd), as the bank wrote it: at most 1000 characters.
+  referenceText     String?
+  /// The other side: who paid (money in) or who was paid (money out), its name (at most 140 characters, one line) and
+  /// IBAN (upper case, no spaces), when the bank gives them.
+  counterpartyName  String?
+  counterpartyIban  String?
+  /// What makes the line itself (the domain's hash of the account, the days, the amount, the bank's reference and the
+  /// text): 1 to 200 characters without spaces; one per account.
+  fingerprint       String
+  createdAt         DateTime @default(now()) @db.Timestamptz(3)
+  createdById       String?  @db.Uuid
+
+  statement BankStatement @relation(fields: [tenantId, companyId, bankAccountId, statementId], references: [tenantId, companyId, bankAccountId, id], onDelete: Restrict, onUpdate: Restrict)
+  matches   BankMatch[]
+
+  // A duplicate is refused: a line is imported once per account.
+  @@unique([tenantId, bankAccountId, fingerprint])
+  // The target of the matches' reference (the same company).
+  @@unique([tenantId, companyId, id])
+  @@index([tenantId, statementId])
+  @@index([tenantId, companyId, bookedOn])
+}
+
+/// What a bank line is for (FIN-132, FIN-117; design finance.bank "Match bank lines"): a suggestion with how sure and why,
+/// or a person's own choice; accepted once by a person; reversed once with why. Money in: open items of one customer
+/// (issued invoices and deposit requests; the payment the acceptance records), or a payment already recorded by hand;
+/// money out: one supplier invoice. What it suggests never changes; a suggestion is deleted (never an accepted one).
+model BankMatch {
+  id                String                @id @db.Uuid
+  tenantId          String                @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The line's company, the line, and the party it is about (the customer, or the supplier).
+  companyId         String                @db.Uuid
+  bankLineId        String                @db.Uuid
+  partyId           String                @db.Uuid
+  /// Money in: the customer's issued TD01 / TD24 invoices and its deposit requests the line pays (each once; no
+  /// reference: lists, checked by the guard). Empty for money out.
+  invoiceIds        String[]              @default([]) @db.Uuid
+  depositRequestIds String[]              @default([]) @db.Uuid
+  /// Money in: the payment recorded for it (set at acceptance), or a payment already recorded by hand the line is (set at
+  /// once, with no items). Its amount is the line's.
+  paymentId         String?               @db.Uuid
+  /// Money out: the supplier invoice the line paid.
+  supplierInvoiceId String?               @db.Uuid
+  confidence        BankMatchConfidence
+  /// Why, each once, at least one (the words come from the codes).
+  reasons           BankMatchReason[]
+  /// Set once by a person: the acceptance, when and by whom.
+  acceptedAt        DateTime?             @db.Timestamptz(3)
+  acceptedById      String?               @db.Uuid
+  /// Set once after the acceptance: a wrong acceptance reversed, when, by whom and why (the payment it recorded is voided
+  /// first).
+  reversedAt        DateTime?             @db.Timestamptz(3)
+  reversedById      String?               @db.Uuid
+  reverseReason     String?
+  version           Int                   @default(1)
+  createdAt         DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime              @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById       String?               @db.Uuid
+
+  bankLine        BankLine         @relation(fields: [tenantId, companyId, bankLineId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  party           Party            @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, companyId and partyId.
+  payment         Payment?         @relation(fields: [tenantId, companyId, partyId, paymentId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  supplierInvoice SupplierInvoice? @relation(fields: [tenantId, companyId, partyId, supplierInvoiceId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // One live acceptance per line and per payment: partial unique indexes of the guards migration.
+  @@index([tenantId, bankLineId])
+  @@index([tenantId, paymentId])
+  @@index([tenantId, supplierInvoiceId])
+}
+
+/// A small difference written off within the company's tolerance (FIN-119; design finance.payments "small difference →
+/// write-off within tolerance"): an UNDERPAYMENT closes what an allocation left open on its invoice, an OVERPAYMENT keeps
+/// what a payment left unplaced. Never changed or removed; a wrong one is taken back by a reversal row (the opposite
+/// amount, once).
+/// @append-only
+model PaymentWriteOff {
+  id              String         @id @db.Uuid
+  tenantId        String         @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The payment's company and party, and the payment.
+  companyId       String         @db.Uuid
+  partyId         String         @db.Uuid
+  paymentId       String         @db.Uuid
+  /// UNDERPAYMENT: the allocation of the payment whose invoice is short-paid (required); OVERPAYMENT: none.
+  allocationId    String?        @db.Uuid
+  kind            WriteOffKind
+  /// Minor units of the payment's currency: above 0, at most the tolerance; a reversal the opposite of the one it takes back.
+  /// @grain price
+  amount          Int
+  reason          WriteOffReason
+  /// Words (1 to 500 characters): required for OTHER and on a reversal.
+  note            String?
+  /// The company's write-off tolerance in force when it was written (ReceivablesSettings.writeOffToleranceAmount, the
+  /// company's row, else the tenant-wide one).
+  /// @grain price
+  toleranceAmount Int
+  /// A reversal: the write-off of the same payment it takes back.
+  reversalOfId    String?        @db.Uuid
+  /// Who wrote it off, and when.
+  writtenOffById  String         @db.Uuid
+  createdAt       DateTime       @default(now()) @db.Timestamptz(3)
+
+  payment    Payment            @relation(fields: [tenantId, companyId, partyId, paymentId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and paymentId.
+  allocation PaymentAllocation? @relation(fields: [tenantId, paymentId, allocationId], references: [tenantId, paymentId, id], onDelete: Restrict, onUpdate: Restrict)
+  reversalOf PaymentWriteOff?   @relation("PaymentWriteOffReversal", fields: [tenantId, paymentId, reversalOfId], references: [tenantId, paymentId, id], onDelete: Restrict, onUpdate: Restrict)
+  reversals  PaymentWriteOff[]  @relation("PaymentWriteOffReversal")
+
+  // The target of the reversals' reference: a write-off of the same payment.
+  @@unique([tenantId, paymentId, id])
+  @@index([tenantId, allocationId])
+}
+
+/// A Ri.Ba. collection batch (FIN-126; design finance.payments "Ri.Ba. batch": "Invoices due in the window; total; CBI
+/// file"): the instalments due in a window, collected through a company's bank account. DRAFT → ISSUED (the CBI file made,
+/// only while the company's Ri.Ba. switch is on) | CANCELLED. Never deleted.
+model RibaBatch {
+  id            String          @id @db.Uuid
+  tenantId      String          @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company, and its bank account that collects. Never change.
+  companyId     String          @db.Uuid
+  bankAccountId String          @db.Uuid
+  /// The due window: the instalments due from the first day to the last (at most 366 days).
+  dueFrom       DateTime        @db.Date
+  dueTo         DateTime        @db.Date
+  status        RibaBatchStatus @default(DRAFT)
+  /// Set exactly from ISSUED on: the CBI file (a StoredFile of the company with record type RibaBatch), when and by whom.
+  fileId        String?         @db.Uuid
+  issuedAt      DateTime?       @db.Timestamptz(3)
+  issuedById    String?         @db.Uuid
+  /// Set exactly when CANCELLED, and why.
+  cancelledAt   DateTime?       @db.Timestamptz(3)
+  cancelReason  String?
+  note          String?
+  version       Int             @default(1)
+  createdAt     DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime        @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById   String?         @db.Uuid
+
+  bankAccount BankAccount @relation(fields: [tenantId, companyId, bankAccountId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  file        StoredFile? @relation("RibaBatchFile", fields: [tenantId, fileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  items       RibaItem[]
+
+  // The target of its items' reference (the same company).
+  @@unique([tenantId, companyId, id])
+  @@index([tenantId, companyId, status])
+}
+
+/// One invoice instalment a Ri.Ba. batch collects (FIN-126): the invoice's payment-terms instalment, its due day and the
+/// amount. Added and removed while the batch is a DRAFT; once it is issued: ISSUED → PAID (the day) | UNPAID (the day it
+/// came back and the bank's fee). PAID and UNPAID are final.
+model RibaItem {
+  id          String         @id @db.Uuid
+  tenantId    String         @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The batch's company, the batch, the customer and its issued TD01 / TD24 invoice. Never change.
+  companyId   String         @db.Uuid
+  batchId     String         @db.Uuid
+  partyId     String         @db.Uuid
+  invoiceId   String         @db.Uuid
+  /// Which instalment of the invoice's payment terms (1, 2 …), its due day (inside the batch's window) and the amount
+  /// collected (above 0, at most the instalment's). Never change.
+  instalment  Int
+  dueDate     DateTime       @db.Date
+  /// @grain price
+  amount      Int
+  status      RibaItemStatus @default(ISSUED)
+  /// Set exactly when PAID or UNPAID: the day it was paid or came back (not before the due day, not after today).
+  settledOn   DateTime?      @db.Date
+  /// UNPAID only (required there, 0 or more): the fee the bank charged for the unpaid return, in minor units.
+  /// @grain price
+  unpaidFee   Int?
+  version     Int            @default(1)
+  createdAt   DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?        @db.Uuid
+
+  batch   RibaBatch @relation(fields: [tenantId, companyId, batchId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  invoice Invoice   @relation(fields: [tenantId, companyId, partyId, invoiceId], references: [tenantId, companyId, buyerPartyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, batchId])
+  @@index([tenantId, invoiceId])
+}
+
+/// Why an issued invoice gets no reminder for now (FIN-112; design finance.receivables "Held (W2b stop rules)"): until a day
+/// (null: until it is lifted) or lifted earlier by a person. While one holds, no reminder covering the invoice is approved
+/// or sent (PaymentReminder_stopped). Never deleted.
+model ReminderStop {
+  id           String             @id @db.Uuid
+  tenantId     String             @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The invoice's company and customer, and the invoice. Never change.
+  companyId    String             @db.Uuid
+  partyId      String             @db.Uuid
+  invoiceId    String             @db.Uuid
+  /// Never changes.
+  reason       ReminderStopReason
+  /// The last day it holds (a PROMISE_TO_PAY: the day promised, required); null: until it is lifted.
+  until        DateTime?          @db.Date
+  /// Words (1 to 2000 characters).
+  note         String?
+  /// Set once: lifted early, when, by whom and, when given, why.
+  liftedAt     DateTime?          @db.Timestamptz(3)
+  liftedById   String?            @db.Uuid
+  liftReason   String?
+  version      Int                @default(1)
+  createdAt    DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime           @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById  String?            @db.Uuid
+
+  invoice Invoice @relation(fields: [tenantId, companyId, partyId, invoiceId], references: [tenantId, companyId, buyerPartyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, invoiceId])
+  @@index([tenantId, companyId, partyId])
+}
+
+/// A B2B customer's own figures as of a day (FIN-135; design finance.bank "Their figures vs ours"), typed from the statement
+/// it sent (the file, when kept): its amounts per order and per payment and its balance, compared with ours on read.
+/// Corrected in place, never deleted.
+model CustomerStatementFigures {
+  id          String   @id @db.Uuid
+  tenantId    String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company and the customer. Never change.
+  companyId   String   @db.Uuid
+  partyId     String   @db.Uuid
+  /// The day the customer's figures are as of (not after today).
+  asOf        DateTime @db.Date
+  /// ISO 4217.
+  currency    String   @default("EUR")
+  /// What the customer says, minor units: { "orders": [{ "reference": "…", "amount": 120000 }], "payments": [{ "reference":
+  /// "…", "date": "2026-11-02", "amount": 36000 }], "balance": 84000 } (references 1 to 100 characters, at most 500 entries
+  /// each).
+  /// @grain price
+  figures     Json
+  /// The statement as received (a StoredFile of the company with record type CustomerStatementFigures), when kept.
+  fileId      String?  @db.Uuid
+  note        String?
+  version     Int      @default(1)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?  @db.Uuid
+
+  company Company     @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  party   Party       @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  file    StoredFile? @relation("CustomerStatementFiguresFile", fields: [tenantId, fileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, partyId, asOf])
+}
+
+/// What to pay suppliers in one week (FIN-140, FIN-142; design finance.payables "Payment proposal — week 46": "Invoices by
+/// due date and discount; total; IBAN checks (usable)", "Approver ≠ the person who entered"): DRAFT → APPROVED (by someone
+/// who did not make it) → PAID (every line's invoice paid); APPROVED → DRAFT (sent back); DRAFT | APPROVED → CANCELLED.
+/// Never deleted.
+model PaymentProposal {
+  id           String                @id @db.Uuid
+  tenantId     String                @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The paying company. Never changes.
+  companyId    String                @db.Uuid
+  /// The week it pays: its Monday (ISO week). Never changes.
+  weekStart    DateTime              @db.Date
+  /// ISO 4217: every line's invoice is in it. Never changes.
+  currency     String                @default("EUR")
+  status       PaymentProposalStatus @default(DRAFT)
+  /// Set exactly while APPROVED or PAID: who approved it (never the person who made it, the Owner included: Owner answer
+  /// Q3 = A) and when.
+  approvedAt   DateTime?             @db.Timestamptz(3)
+  approvedById String?               @db.Uuid
+  /// Set exactly when PAID: when the transfers were made.
+  paidAt       DateTime?             @db.Timestamptz(3)
+  /// Set exactly when CANCELLED, and why.
+  cancelledAt  DateTime?             @db.Timestamptz(3)
+  cancelReason String?
+  note         String?
+  version      Int                   @default(1)
+  createdAt    DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime              @default(now()) @updatedAt @db.Timestamptz(3)
+  /// The person who made it (required: the approver is someone else).
+  createdById  String                @db.Uuid
+
+  company Company               @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  lines   PaymentProposalLine[]
+
+  // The target of its lines' reference (the same company).
+  @@unique([tenantId, companyId, id])
+  @@index([tenantId, companyId, weekStart])
+}
+
+/// One supplier invoice in a payment proposal (FIN-140): the amount paid, the early-payment discount taken, and the
+/// supplier's ACTIVE (verified) bank account it goes to (none: held; the proposal is not approved while a line is held).
+/// Written only while the proposal is a DRAFT.
+model PaymentProposalLine {
+  id                    String   @id @db.Uuid
+  tenantId              String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The proposal's company, the proposal, the supplier and its invoice. Never change.
+  companyId             String   @db.Uuid
+  proposalId            String   @db.Uuid
+  partyId               String   @db.Uuid
+  supplierInvoiceId     String   @db.Uuid
+  /// Minor units of the invoice's currency: what is paid (above 0) and the early-payment discount taken (0 or more);
+  /// together at most the invoice's total less its withholding.
+  /// @grain cost
+  amount                Int
+  /// @grain cost
+  discountAmount        Int      @default(0)
+  /// The supplier's bank account it goes to: ACTIVE (verified), in the invoice's currency; null: held.
+  supplierBankAccountId String?  @db.Uuid
+  version               Int      @default(1)
+  createdAt             DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById           String?  @db.Uuid
+
+  proposal            PaymentProposal      @relation(fields: [tenantId, companyId, proposalId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  supplierInvoice     SupplierInvoice      @relation(fields: [tenantId, companyId, partyId, supplierInvoiceId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and partyId.
+  supplierBankAccount SupplierBankAccount? @relation(fields: [tenantId, partyId, supplierBankAccountId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, proposalId])
+  @@index([tenantId, supplierInvoiceId])
+}
+
+/// One line of the accountant's chart for a company (FIN-152; design finance.accounting "Account mapping (W2b)"): an item
+/// group, tax code, cost category, payment method or party group (its key) to an account code, from a day. Before its day
+/// it is changed or removed; from its day it is fixed (a change is a row from a later day). GATE-ACCOUNTANT: made-up values
+/// until the accountant's.
+model AccountMapping {
+  id          String             @id @db.Uuid
+  tenantId    String             @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company. Never changes.
+  companyId   String             @db.Uuid
+  kind        AccountMappingKind
+  /// What is mapped: the item group, the tax code, the cost category, the payment method or the party group (1 to 80
+  /// characters, one line, no space at either end). Never changes.
+  key         String
+  /// The account in the accountant's chart (1 to 40 letters, digits and . _ / -, starting with a letter or digit).
+  accountCode String
+  /// The first day it applies. Never changes.
+  validFrom   DateTime           @db.Date
+  note        String?
+  version     Int                @default(1)
+  createdAt   DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime           @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?            @db.Uuid
+
+  company Company @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // One account per company, kind and key from a day.
+  @@unique([tenantId, companyId, kind, key, validFrom])
+}
+
+/// The accountant's bridge settings of a company, or the tenant-wide ones (FIN-151, FIN-152; GATE-ACCOUNTANT): the row's id
+/// is the company's id, or the tenant's own id for the tenant-wide row (as ReceivablesSettings); the company's row wins. No
+/// row: off. Changed, never deleted.
+model AccountingSettings {
+  /// The company's id; the tenant's id for the tenant-wide row (companyId null).
+  id          String   @id @db.Uuid
+  tenantId    String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// null: the tenant-wide settings. Never changes.
+  companyId   String?  @db.Uuid
+  /// The company's switch (OFF by default, until the accountant confirms the mapping): journals with mapped accounts
+  /// (sales, purchases, payments, cost of goods sold and variances) go into its exports only while true.
+  journalsOn  Boolean  @default(false)
+  version     Int      @default(1)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?  @db.Uuid
+
+  company Company? @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, companyId])
+}
+
+/// A document an accounting export hands over (FIN-154; design finance.accounting "Exports": "documents changed since
+/// (flag)", "Re-export (only the changes are marked)"): its record, number and fingerprint at the export, NEW or CHANGED
+/// (a re-export carries only the changes). Written while the export is a DRAFT; then only the flag moves: a later change of
+/// the document, found by the check, is set once with what the fingerprint became.
+model ExportedDocument {
+  id                 String                 @id @db.Uuid
+  tenantId           String                 @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The export's company, and the export. Never change.
+  companyId          String                 @db.Uuid
+  exportId           String                 @db.Uuid
+  /// The document: a model name ("Invoice", "SupplierInvoice", "Payment", "Refund" …) and its id, and its number as
+  /// exported, when it has one. Never change.
+  recordType         String
+  recordId           String                 @db.Uuid
+  number             String?
+  /// The domain's fingerprint of what was handed over (1 to 200 characters without spaces). Never changes.
+  fingerprint        String
+  change             ExportedDocumentChange @default(NEW)
+  /// Set once, after the export: when a later change of the document was found, and what its fingerprint became.
+  changedAt          DateTime?              @db.Timestamptz(3)
+  changedFingerprint String?
+  createdAt          DateTime               @default(now()) @db.Timestamptz(3)
+  createdById        String?                @db.Uuid
+
+  export AccountingExport @relation(fields: [tenantId, companyId, exportId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, exportId])
+  @@index([tenantId, companyId, recordType, recordId])
+}
+
+/// One run of a named integrity check of a company (FIN-157; design finance.accounting "2 · Checks": "totals equal row sums",
+/// "placements never exceed payments"): run nightly by the scheduler or now by a person. Never changed or removed.
+/// @append-only
+model IntegrityCheckRun {
+  id           String               @id @db.Uuid
+  tenantId     String               @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId    String               @db.Uuid
+  /// The check's code, as the domain names it (INVOICE_TOTALS_EQUAL_LINES, ALLOCATIONS_WITHIN_PAYMENTS …): capitals, digits
+  /// and _, 2 to 64.
+  checkCode    String
+  /// When it ran (not in the future).
+  ranAt        DateTime             @db.Timestamptz(3)
+  result       IntegrityCheckResult
+  /// FAILED: how many records failed (at least 1) and up to 100 of them, [{ "recordType": "Invoice", "recordId": "…",
+  /// "code": "…" }]; PASSED: 0 and none; ERROR: 0 and none, with the error in words.
+  failureCount Int                  @default(0)
+  failures     Json                 @default("[]")
+  errorWords   String?
+  createdAt    DateTime             @default(now()) @db.Timestamptz(3)
+  /// The person who ran it now; null: the nightly run.
+  createdById  String?              @db.Uuid
+
+  company Company @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, companyId, checkCode, ranAt])
+}
