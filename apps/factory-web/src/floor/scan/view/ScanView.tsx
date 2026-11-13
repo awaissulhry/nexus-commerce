@@ -10,6 +10,8 @@ import { FloorFrameView, type FrameAction, type FrameModel } from '../../frame/v
 import { FloorFacts, type FloorFact } from '../../frame/view/FloorFacts'
 import { FloorState } from '../../frame/view/FloorState'
 import type { CardType, HideCard, LabelType, LocationCard, MachineCard, ScanResult, WorkOrderCard } from '../scan-model'
+import { opensAtBench } from '../../tasks/scan/result/carton/model'
+import { CartonResult } from '../../tasks/scan/result/carton/view/CartonResult'
 
 /**
  * SCR-024 — scan anything (design floor.scan; PLT-126, PLT-155, PLT-243, SCM-273, MES-016, MES-074): one big field for
@@ -41,9 +43,11 @@ export interface ScanViewModel {
   canCut?: boolean
   /** The person may report a machine problem (SCR-179, plant.report): a machine's card opens it with the tag. */
   canReport?: boolean
+  /** B-W2b-387: the person packs (shipping.pack): a carton's card opens its shipment at the packing bench (SCR-098). */
+  canPack?: boolean
 }
 
-export type ScanAction = { type: 'scan'; code: string } | { type: 'clear' } | { type: 'home' } | { type: 'cut'; code: string } | { type: 'report'; code: string }
+export type ScanAction = { type: 'scan'; code: string } | { type: 'clear' } | { type: 'home' } | { type: 'cut'; code: string } | { type: 'report'; code: string } | { type: 'pack'; code: string }
 
 export interface ScanViewProps {
   model: ScanViewModel
@@ -77,6 +81,7 @@ export function statusWord(t: Translate, group: string, value: string): string {
 
 export function ScanView({ model, onAction, onFrame, camera }: ScanViewProps) {
   const t = useT('floor')
+  const d = useT('floor-pack-depth')
   const locale = useLocale()
   const send = (action: ScanAction) => onAction?.(action)
   const { result } = model
@@ -93,6 +98,8 @@ export function ScanView({ model, onAction, onFrame, camera }: ScanViewProps) {
     // B-W2a-73: a machine's card opens the machine problem with its tag (SCR-179); a retired one reports nothing.
     else if (result.kind === 'machine')
       actions = model.canReport ? [scanAnother, { label: t('scan.action.report'), icon: <Wrench />, onPress: () => send({ type: 'report', code: result.code }), heldReason: result.status === 'RETIRED' ? t('scan.machine.retired') : null }] : [scanAnother]
+    // B-W2b-387: a carton's card opens its shipment at the packing bench while it is still there.
+    else if (result.kind === 'carton') actions = model.canPack ? [scanAnother, { label: d('scanCard.openInPack'), icon: <Package />, onPress: () => send({ type: 'pack', code: result.code }), heldReason: opensAtBench(result) ? null : d('scanCard.shipped') }] : [scanAnother]
     else actions = [{ label: t('frame.home'), icon: <House />, onPress: () => send({ type: 'home' }) }, scanAnother]
   }
 
@@ -152,6 +159,8 @@ function ResultCard({ result, t, locale, timeZone }: { result: ScanResult; t: Tr
       return <LocationFacts card={result} t={t} />
     case 'machine':
       return <MachineFacts card={result} t={t} locale={locale} timeZone={timeZone} />
+    case 'carton':
+      return <CartonResult card={result} locale={locale} />
     case 'notOnFloor':
       return (
         <FloorState tone="info" icon={LABEL_ICON[result.type]} title={t('scan.notOnFloor.title', { type: t(`label.${result.type}`) })} text={t('scan.notOnFloor.body')}>

@@ -5,9 +5,10 @@ import { pickerReasons } from '../../../../_shared/reasons/api'
 
 /**
  * What a supplier's document is (B-W2b-382 on B-W2b-377's route; SCM-020): the tenant's SUPPLIER_DOCUMENT_TYPE codes
- * (`GET /reasons?list=SUPPLIER_DOCUMENT_TYPE`, their own words in Italian and English), the file's version as read now
- * (`GET /files/:id`), and the type (`PUT /purchasing/suppliers/:partyId/documents/:fileId/type {version, documentTypeCode |
- * null}`, files.upload over the file's company + parties.view: a code of the list, a current vault file).
+ * (`GET /reasons?list=SUPPLIER_DOCUMENT_TYPE`, their own words in Italian and English), the file's version read again after
+ * a refusal (`GET /files/:id`; the vault answers it on opening, B-W2b-383), and the type (`PUT /purchasing/suppliers/
+ * :partyId/documents/:fileId/type {version, documentTypeCode | null}`, files.upload over the file's company + parties.view:
+ * a code of the list, a current vault file).
  */
 
 export const documentTypes = (api: ApiClient, signal?: AbortSignal) => pickerReasons(api, ['SUPPLIER_DOCUMENT_TYPE'], signal)

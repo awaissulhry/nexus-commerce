@@ -102,7 +102,14 @@ describe('what is asked, with the person\'s permissions (fail closed)', () => {
     expect(planScan(free, OPERATOR)).toEqual({ kind: 'ask', lookups: ['hide', 'workOrder', 'location'], denied: ['machine'] })
     expect(planScan(free, ['floor.work', 'inventory.locations.view'])).toEqual({ kind: 'ask', lookups: ['location'], denied: ['hide', 'workOrder', 'machine'] })
     // B-W2a-73: a sewing operator (plant.report only) finds a machine's tag at once.
-    expect(planScan(readScan('DEMO-SEW-21', TAG), ['floor.work', 'production.scan', 'plant.report'])).toEqual({ kind: 'ask', lookups: ['machine'], denied: ['hide', 'workOrder', 'location'] })
+    // (Its shape is a carton's marks' too: B-W2b-387's carton lookup, which this operator may not run.)
+    expect(planScan(readScan('DEMO-SEW-21', TAG), ['floor.work', 'production.scan', 'plant.report'])).toEqual({ kind: 'ask', lookups: ['machine'], denied: ['hide', 'workOrder', 'location', 'carton'] })
+  })
+
+  it("B-W2b-387: a code shaped like a carton's marks (`<shipment>-<n>`) is also asked as a carton, last, by a packer", () => {
+    expect(planScan(readScan('SH-00012-2', TAG), ['floor.work', 'shipping.pack'])).toEqual({ kind: 'ask', lookups: ['carton'], denied: ['hide', 'workOrder', 'location', 'machine'] })
+    expect(planScan(readScan('SH-00012-2', TAG), [...OPERATOR, 'plant.report', 'shipping.pack'])).toEqual({ kind: 'ask', lookups: ['hide', 'workOrder', 'location', 'machine', 'carton'], denied: [] })
+    expect(planScan(readScan('SH-00012', TAG), ['floor.work', 'shipping.pack'])).toEqual({ kind: 'ask', lookups: [], denied: ['hide', 'workOrder', 'location', 'machine'] })
   })
 
   it('refuses another factory\'s label and a misread one without asking; a badge switches person', () => {

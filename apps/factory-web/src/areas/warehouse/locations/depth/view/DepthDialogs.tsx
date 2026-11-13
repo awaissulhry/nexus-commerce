@@ -154,7 +154,7 @@ export function PrintDialog({ model, can, actions }: { model: PrintDialogModel; 
         open
         onClose={() => actions?.onClose?.()}
         size="md"
-        title={t('wd.loc.print.doneTitle', { count: model.done.jobs.length })}
+        title={model.done.pdfLeftOut ? t('wd.loc.print.pdfDoneTitle') : t('wd.loc.print.doneTitle', { count: model.done.jobs.length })}
         footer={
           <Button variant="primary" onClick={() => actions?.onClose?.()}>
             {s('common.close')}
@@ -163,6 +163,11 @@ export function PrintDialog({ model, can, actions }: { model: PrintDialogModel; 
       >
         <div className="fw-stk-form">
           {model.done.jobs.length > 0 && <Banner tone="success" title={t('wd.loc.print.done', { count: model.done.jobs.length })}>{t('wd.loc.print.doneBody')}</Banner>}
+          {!!model.done.pdfLeftOut && (
+            <Banner tone="warning" title={t('wd.loc.print.pdfLeftOut', { count: model.done.pdfLeftOut })}>
+              {t('wd.loc.print.pdfLeftOutBody')}
+            </Banner>
+          )}
           {model.done.refused.length > 0 && (
             <Banner tone="warning" title={t('wd.loc.print.refusedTitle', { count: model.done.refused.length })}>
               <ul className="fw-wd-list">

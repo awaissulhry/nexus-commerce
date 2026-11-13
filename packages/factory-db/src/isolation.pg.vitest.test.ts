@@ -65,6 +65,7 @@ import { seed as seedPeople } from '../seed/people'
 import { seed as seedPricing } from '../seed/pricing'
 import { seed as seedPrint } from '../seed/print'
 import { seed as seedPrivacy } from '../seed/privacy'
+import { seed as seedPrivacyOps } from '../seed/privacy-ops'
 import { seed as seedProduct } from '../seed/product'
 import { seed as seedProduction } from '../seed/production'
 import { seed as seedQuality } from '../seed/quality'
@@ -484,6 +485,11 @@ beforeAll(async () => {
   // known; the floor's at A1 and B1, P1's portal) and reads of sensitive records: the plain ones a copy may repeat.
   await seedSecurity({ db: factory, namespace: 'iso-a' })
   await seedSecurity({ db: factory, namespace: 'iso-b' })
+  // The privacy and integration schema of W2b-6 (wave 53/57): data requests (the first one RECEIVED), the erasure of P3's former
+  // contact (the first row: of a request in progress), retention rules (the first one only reports) and REPORT sweeps, the
+  // error queue (the first item an OPEN refused call) and job runs (the first a succeeded tick): the plain ones a copy may repeat.
+  await seedPrivacyOps({ db: factory, namespace: 'iso-a' })
+  await seedPrivacyOps({ db: factory, namespace: 'iso-b' })
   // The actual cost schema of W2b-6 (wave 54/57): company A's settings with its figures for the accountant switched on, a work
   // order closed twice (the first close undone, its entries reversed), its variance split, a purchase price variance, cost of
   // goods sold (one reversed) and landed cost (one reversed, the first a DRAFT with its share): the plain ones a copy may repeat.
@@ -573,6 +579,7 @@ it('covers every classified table and every runtime role', () => {
     'CreditCheck',
     'CrewMember',
     'CrewSession',
+    'CronRun',
     'Currency',
     'CustomerMaterial',
     'CustomerRequirement',
@@ -587,6 +594,7 @@ it('covers every classified table and every runtime role', () => {
     'CutOrderLine',
     'CutReconciliation',
     'CutTicket',
+    'DataRequest',
     'Ddt',
     'DdtCancellation',
     'DeclarationOfIntent',
@@ -608,6 +616,7 @@ it('covers every classified table and every runtime role', () => {
     'EmailOutbound',
     'Employee',
     'EmployeeSkill',
+    'ErasureRecord',
     'EvidencePack',
     'ExchangeRate',
     'ExportJob',
@@ -674,6 +683,7 @@ it('covers every classified table and every runtime role', () => {
     'InstructionRecord',
     'IntegrationAccount',
     'IntegrationCall',
+    'IntegrationErrorItem',
     'IntegrityCheckRun',
     'InterestReferenceRate',
     'InventorySettings',
@@ -907,6 +917,8 @@ it('covers every classified table and every runtime role', () => {
     'Reservation',
     'RestoreDrill',
     'RestrictedSubstance',
+    'RetentionRule',
+    'RetentionSweep',
     'ReturnAuthorisation',
     'ReturnFeeRule',
     'ReturnLabel',

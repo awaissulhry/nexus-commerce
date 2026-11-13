@@ -99,6 +99,7 @@
     "Inquiry": "Richiesta",
     "ServiceCase": "Caso di assistenza",
     "ProductSafetyReport": "Segnalazione di sicurezza prodotto",
+    "TransferOrder": "Trasferimento",
     "other": "Record"
   },
   "chip": {
@@ -148,6 +149,7 @@
     "Inquiry": "Richieste",
     "ServiceCase": "Casi di assistenza",
     "ProductSafetyReport": "Segnalazioni di sicurezza prodotto",
+    "TransferOrder": "Trasferimenti",
     "other": "Altri record"
   },
   "status": {

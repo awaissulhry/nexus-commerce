@@ -943,6 +943,11 @@ model SalesSettings {
   /// updates and cancellations a person sends do not depend on them.
   quoteRemindersEnabled   Boolean @default(false)
   fittingRemindersEnabled Boolean @default(false)
+  /// W2b-6 (schema wave 53/57, B-W2b-375; B-W2b-351, -357; GATE-PRIVACY): the outside doors of safety reports (the public
+  /// form on the DoC page and the portal's), a company's switch, OFF by default; it replaces the environment variable
+  /// FACTORY_SAFETY_REPORTS_OUTSIDE. Only on a company's own row, and switched on only while the company's SAFETY_REPORT
+  /// privacy notice is published.
+  safetyReportFormOn      Boolean @default(false)
   version             Int      @default(1)
   createdAt           DateTime @default(now()) @db.Timestamptz(3)
   updatedAt           DateTime @default(now()) @updatedAt @db.Timestamptz(3)

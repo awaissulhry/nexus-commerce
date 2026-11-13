@@ -1,0 +1,388 @@
+// Privacy duties and what fails at the edges (W2b-6, schema wave 53/57, B-W2b-375; features PLT-201, PLT-202, PLT-203,
+// PLT-204, PLT-221; design admin.privacy "Data requests", "Retention rules", the "Anonymise …?" confirm; admin.connections
+// "Error queue" with its error item; admin.security "Is everything working?", "Jobs and integrations", "Run … now?"). Rule 2:
+// GDPR arts. 15, 17 and 5(1)(e) are duties of a data controller met by hand today, and a failed SDI send waits in a log
+// nobody reads. Beside it: PrivacyNoticeKind SAFETY_REPORT (privacy.prisma), SalesSettings.safetyReportFormOn (sales.prisma)
+// and ProtectedRecordType PRODUCT_SAFETY_INJURY (health.prisma).
+//
+//   DataRequest           a person's request to see (art. 15), erase (art. 17) or correct (art. 16) their data, with its
+//                         30-day clock (art. 12(3): one month, extended once by up to two more with the reason), the
+//                         identity check (art. 12(6)), the decision and, for an access request, the package handed over.
+//   RetentionRule         how long a record type is kept and what happens then (delete, anonymise, archive), with the
+//                         legal reason (art. 5(1)(e); c.c. art. 2220). GATE-PRIVACY: the periods wait for the Owner's
+//                         privacy consultant, so a rule only REPORTS until a person switches it on (applyOn, OFF by default).
+//   RetentionSweep        one pass of the sweep over one rule: what was due, applied, held and failed. A REPORT sweep
+//                         changes nothing; an APPLY sweep only runs on a rule that is switched on.
+//   ErasureRecord         what was erased or anonymised of one record, and what stays and why (art. 17(3); c.c. art.
+//                         2220; DPR 633/72 art. 39): column names and the law, never the values. Append-only.
+//   IntegrationErrorItem  one failed message in or out (a dead outbox event or one whose job failed, a failed webhook, a
+//                         failed or refused call), with the reason, the tries, a retry or a dismissal with its reason.
+//   CronRun               one run of a scheduled job for a tenant: when it was due and ran, on which replica, its result
+//                         and error; one row per tick (the unique key), so a missed tick shows as a gap.
+//
+// Office only (ownership/privacy-ops.json): the API asks the privacy and admin permissions (B-W2b-405, B-W2b-415). The
+// …_privacy_integration_w2b_guards triggers hold the rules for every login.
+
+/// A data subject's request (PLT-202, PLT-203; GDPR arts. 12, 15, 16, 17; design admin.privacy "Data requests"): who (the
+/// person's record, by its model and id), what they ask, when it came in and when it is due (30 days later; extended once,
+/// by up to two more months, with the reason), the identity check, the state and the decision. RECEIVED → IN_PROGRESS →
+/// DONE | REFUSED (with the reason) | WITHDRAWN; then frozen. An access request is DONE with its package (a file of the
+/// request); an erasure request with at least one ErasureRecord. Personal data (the request itself is the record of what
+/// was asked): never deleted.
+model DataRequest {
+  id                  String              @id @db.Uuid
+  tenantId            String              @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The data controller. Never changes.
+  companyId           String              @db.Uuid
+  /// Who the person is to us. Never changes.
+  personKind          DataSubjectKind
+  /// The person's record: WORKER a Worker or an Employee, USER a User, CONTACT a PartyContact, PROSPECT an Inquiry (its
+  /// prospect), REPORTER a ProductSafetyReport (its reporter). Never changes.
+  personRecordType    String
+  personRecordId      String              @db.Uuid
+  kind                DataRequestKind
+  /// When it came in (not in the future). Never changes.
+  receivedAt          DateTime            @db.Timestamptz(3)
+  /// receivedAt plus 30 days of 24 hours (art. 12(3)). Never changes.
+  dueAt               DateTime            @db.Timestamptz(3)
+  /// Extended once (art. 12(3): by up to two further months, the person told why): the new due time, after dueAt and at
+  /// most 90 days after receipt, with the reason (3 to 1000 characters). Both or neither; set once.
+  extendedDueAt       DateTime?           @db.Timestamptz(3)
+  extensionReason     String?
+  /// What the person asked, in their words or a summary (for a correction, what is wrong); up to 2000 characters.
+  note                String?
+  /// The person's identity was checked (art. 12(6)): when and by whom, both or neither; set once. Needed for DONE.
+  identityCheckedAt   DateTime?           @db.Timestamptz(3)
+  identityCheckedById String?             @db.Uuid
+  status              DataRequestStatus   @default(RECEIVED)
+  /// DONE, REFUSED or WITHDRAWN: when and by whom it was closed (the decision), set exactly then.
+  decidedAt           DateTime?           @db.Timestamptz(3)
+  decidedById         String?             @db.Uuid
+  /// REFUSED only: why (art. 12(4)), 3 to 2000 characters.
+  refusalReason       String?
+  /// ACCESS only: the package handed over (a StoredFile of this request, AVAILABLE), set while open.
+  packageFileId       String?             @db.Uuid
+  version             Int                 @default(1)
+  createdAt           DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime            @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById         String?             @db.Uuid
+
+  company        Company         @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  packageFile    StoredFile?     @relation("DataRequestPackage", fields: [tenantId, packageFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  erasureRecords ErasureRecord[]
+
+  // The target of the erasure records' tenant-safe reference.
+  @@unique([tenantId, id])
+  // The list with its clock (open first, by due time).
+  @@index([tenantId, companyId, status, dueAt])
+  // A person's requests.
+  @@index([tenantId, personRecordType, personRecordId])
+}
+
+/// Who a data subject is to the company.
+enum DataSubjectKind {
+  /// A worker or employee (Worker, Employee).
+  WORKER
+  /// A person with an account (User): office staff or a partner user.
+  USER
+  /// A contact of a customer, supplier or workshop (PartyContact).
+  CONTACT
+  /// Someone who asked for a quote and is not a party yet (Inquiry's prospect).
+  PROSPECT
+  /// Someone who reported a safety problem (ProductSafetyReport's reporter).
+  REPORTER
+}
+
+/// What a data subject asks.
+enum DataRequestKind {
+  /// A copy of their data (art. 15; with art. 20, in a package).
+  ACCESS
+  /// Erase or anonymise their data, but what the law keeps (art. 17).
+  ERASURE
+  /// Correct their data (art. 16).
+  CORRECTION
+}
+
+enum DataRequestStatus {
+  RECEIVED
+  IN_PROGRESS
+  DONE
+  REFUSED
+  /// The person withdrew it.
+  WITHDRAWN
+}
+
+/// A retention rule (PLT-204; GDPR art. 5(1)(e); design admin.privacy "Retention rules"): a record type is kept so many
+/// months, then deleted, anonymised or archived, for a legal reason. A company's own rule wins over the tenant-wide one
+/// (companyId null); each record type once per company and once tenant-wide (the key). GATE-PRIVACY: the periods are the
+/// Owner's privacy consultant's; until a person switches a rule on (applyOn, with when and by whom) its sweep only reports.
+/// Switched off (active false) or changed, never deleted. Shortening a period asks the Owner's fresh code (the API).
+model RetentionRule {
+  id           String            @id @db.Uuid
+  tenantId     String            @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// null: every company of the tenant (a company's own rule wins). Never changes.
+  companyId    String?           @db.Uuid
+  /// `retention:<recordType>:<companyId | all>`: each record type once per company and once tenant-wide. Never changes.
+  key          String
+  /// The model the rule is for (a table of the database: `ReportRun`, `InboundEmail`). Never changes.
+  recordType   String
+  /// How long a record is kept, in months (1 to 1200), counted from the date the API's record-type list names.
+  keepMonths   Int
+  /// What happens then.
+  thenAction   RetentionAction
+  /// Why so long, in words (c.c. art. 2220: ten years for accounting records), 3 to 1000 characters.
+  legalReason  String
+  /// A switched-off rule is not swept.
+  active       Boolean           @default(true)
+  /// GATE-PRIVACY: the sweep applies the rule (deletes, anonymises, archives) only while a person switched it on; OFF by
+  /// default, so it only reports. Only on an active rule; when and by whom, set exactly while on.
+  applyOn      Boolean           @default(false)
+  applyOnAt    DateTime?         @db.Timestamptz(3)
+  applyOnById  String?           @db.Uuid
+  version      Int               @default(1)
+  createdAt    DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime          @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById  String?           @db.Uuid
+
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  company Company?         @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  sweeps  RetentionSweep[]
+
+  @@unique([tenantId, key])
+  // The target of the sweeps' tenant-safe reference.
+  @@unique([tenantId, id])
+  @@index([tenantId, recordType])
+}
+
+/// What happens to a record when its retention period is over.
+enum RetentionAction {
+  /// The row is removed.
+  DELETE
+  /// Its personal data is blanked or replaced; the business record stays.
+  ANONYMISE
+  /// Moved out of the working lists, kept as it is.
+  ARCHIVE
+}
+
+/// One pass of the retention sweep over one rule (PLT-204; the nightly job, or a person's "Sweep now"): the rule as it
+/// stood (its months and action, the cut-off they give), whether it only reported or applied the rule, what was due,
+/// applied, held (a record the law or an open matter keeps) and failed, and the failures as codes. RUNNING → DONE |
+/// FAILED once, then frozen; an APPLY sweep only on a rule switched on. Never deleted.
+model RetentionSweep {
+  id            String               @id @db.Uuid
+  tenantId      String               @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  ruleId        String               @db.Uuid
+  mode          RetentionSweepMode
+  /// The rule's months and action when it started (the rule may change later), and the cut-off they give: the business
+  /// day (Europe/Rome) it started on less keepMonths months, a month end clamped (31 March less a month: 28 February); a
+  /// record dated before that day was due.
+  keepMonths    Int
+  thenAction    RetentionAction
+  cutoffOn      DateTime             @db.Date
+  status        RetentionSweepStatus @default(RUNNING)
+  startedAt     DateTime             @db.Timestamptz(3)
+  /// Set exactly once it is DONE or FAILED.
+  finishedAt    DateTime?            @db.Timestamptz(3)
+  /// Records past their period; of them, applied (APPLY only), held and failed. Never go down.
+  dueCount      Int                  @default(0)
+  appliedCount  Int                  @default(0)
+  heldCount     Int                  @default(0)
+  failedCount   Int                  @default(0)
+  /// Up to 100 failures as codes: [{ "code": "ROW_LOCKED", "recordId"?: <uuid> }]; never a value of the record. A FAILED
+  /// sweep has at least one.
+  failures      Json                 @default("[]")
+  /// The person who asked for it ("Sweep now"); null: the nightly job.
+  requestedById String?              @db.Uuid
+
+  rule           RetentionRule   @relation(fields: [tenantId, ruleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  erasureRecords ErasureRecord[]
+
+  // The target of the erasure records' tenant-safe reference.
+  @@unique([tenantId, id])
+  // A rule's sweeps, the last first (the "last sweep" column).
+  @@index([tenantId, ruleId, startedAt])
+}
+
+/// Whether a sweep changes anything.
+enum RetentionSweepMode {
+  /// It counts what is due and changes nothing (GATE-PRIVACY: every sweep until a rule is switched on).
+  REPORT
+  /// It applies the rule's action to what is due.
+  APPLY
+}
+
+enum RetentionSweepStatus {
+  RUNNING
+  DONE
+  FAILED
+}
+
+/// What was erased of one record (PLT-203; GDPR art. 17(3); design admin.privacy "Anonymise …?": "what is erased, what stays
+/// because the law requires it, the decision is logged"), for an erasure request or an APPLY sweep: the record (its model
+/// and id), how (anonymised, deleted, or kept as it is because the law keeps it), the columns erased and the columns kept
+/// with why. Column names and the law only, never the values. Never changed or removed.
+/// @append-only
+model ErasureRecord {
+  id            String        @id @db.Uuid
+  tenantId      String        @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId     String        @db.Uuid
+  /// Exactly one: the erasure request (an ERASURE request of the company, IN_PROGRESS) or the APPLY sweep (RUNNING, its
+  /// rule an ANONYMISE or DELETE rule of the record type) it was done for.
+  dataRequestId String?       @db.Uuid
+  sweepId       String?       @db.Uuid
+  /// The record (a table of the database and a row id).
+  recordType    String
+  recordId      String        @db.Uuid
+  method        ErasureMethod
+  /// The columns erased (ANONYMISED: at least one), each once; none for a DELETED or KEPT record.
+  erasedFields  String[]      @default([])
+  /// The personal columns kept, each once, never also erased; DELETED keeps none.
+  keptFields    String[]      @default([])
+  /// Why they stay (the law: c.c. art. 2220, DPR 633/72 art. 39), 3 to 1000 characters: exactly when something is kept
+  /// (a kept column, or a KEPT record).
+  keptWhy       String?
+  /// Server time.
+  erasedAt      DateTime      @default(now()) @db.Timestamptz(3)
+  /// The office person (required for an erasure request); null: the sweep.
+  erasedById    String?       @db.Uuid
+
+  company     Company         @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  dataRequest DataRequest?    @relation(fields: [tenantId, dataRequestId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  sweep       RetentionSweep? @relation(fields: [tenantId, sweepId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, dataRequestId])
+  @@index([tenantId, sweepId])
+  @@index([tenantId, recordType, recordId])
+}
+
+/// How a record was erased.
+enum ErasureMethod {
+  /// Its personal columns blanked or replaced; the row stays (an invoice keeps its business data).
+  ANONYMISED
+  /// The row removed.
+  DELETED
+  /// Nothing erased: the law keeps the record as it is (keptWhy).
+  KEPT
+}
+
+/// One failed message in or out (PLT-201; design admin.connections "Error queue", its error item): the source row (a dead
+/// outbox event or one whose job failed, a failed or rejected webhook, a failed, timed-out or refused call; one item per
+/// source row: the key), the service, what we were doing (a code) and about which record, the reason (our code and the
+/// provider's own message, never a secret), how many times it failed. OPEN → RETRIED (a person or the system sent it again;
+/// back to OPEN with one more try when that failed too) → DISMISSED with a reason (final). An open item is never deleted;
+/// a closed one only 30 days after it closed (the retention sweep).
+model IntegrationErrorItem {
+  id            String                    @id @db.Uuid
+  tenantId      String                    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company the message was for, when known (the source's, when it has one). Never changes.
+  companyId     String?                   @db.Uuid
+  /// `<outbox | webhook | call>:<sourceId>`: one item per source row. Never changes.
+  key           String
+  source        IntegrationErrorSource
+  /// The OutboxEvent, InboundWebhook or IntegrationCall (by id: those tables keep what was true; no foreign key). Never
+  /// changes.
+  sourceId      String                    @db.Uuid
+  /// The service (a webhook's or a call's provider); null for an outbox event. Never changes.
+  provider      IntegrationProvider?
+  /// What we were doing, as a code: the call's operation (`sdi.send_invoice`), the event type, `webhook.process`. Never
+  /// changes.
+  operation     String
+  /// The business record it is about (a model name and its id: the Invoice), both or neither. Never changes.
+  recordType    String?
+  recordId      String?                   @db.Uuid
+  /// Why it failed: our code or the provider's (`timeout`, `account_paused`, SDI's `00404`), 1 to 80 characters.
+  reasonCode    String
+  /// The provider's own message as received, up to 2000 characters (the gateway removes secrets first).
+  reasonText    String?
+  /// How many times it failed (1 when it is born); never goes down.
+  tries         Int                       @default(1)
+  /// The first failure (never changes) and the latest.
+  firstFailedAt DateTime                  @db.Timestamptz(3)
+  lastFailedAt  DateTime                  @db.Timestamptz(3)
+  state         IntegrationErrorState     @default(OPEN)
+  /// The latest retry: when and by whom (a person, or the system's actor), both or neither; set by RETRIED, kept after.
+  retriedAt     DateTime?                 @db.Timestamptz(3)
+  retriedById   String?                   @db.Uuid
+  /// DISMISSED only: when, by whom and why (3 to 500 characters), set exactly then.
+  dismissedAt   DateTime?                 @db.Timestamptz(3)
+  dismissedById String?                   @db.Uuid
+  dismissReason String?
+  version       Int                       @default(1)
+  createdAt     DateTime                  @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime                  @default(now()) @updatedAt @db.Timestamptz(3)
+
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  company Company? @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, key])
+  // The queue: open first, the newest failure first.
+  @@index([tenantId, state, lastFailedAt])
+  @@index([tenantId, source, sourceId])
+}
+
+/// Where a failed message came from.
+enum IntegrationErrorSource {
+  /// A transactional outbox event that went DEAD, or whose job failed after it was published.
+  OUTBOX
+  /// A webhook delivery that failed in processing or was rejected.
+  WEBHOOK
+  /// A gateway call that failed, timed out or was refused.
+  CALL
+}
+
+enum IntegrationErrorState {
+  OPEN
+  /// Sent again: by a person (Retry, Edit and retry) or by the system; back to OPEN with one more try if it fails again.
+  RETRIED
+  /// A person decided nothing more is done, with the reason.
+  DISMISSED
+}
+
+/// One run of a scheduled job for a tenant (PLT-221; design admin.security "Jobs and integrations", "Is everything
+/// working?"): the job (its cron name), why it ran (its tick, or a person's "Run now"), when it was due, started and
+/// finished, on which replica, the result and the error. One row per tick and tenant (the key), so a missed tick shows as a
+/// gap and a second replica cannot record the same tick. RUNNING → SUCCEEDED | FAILED once, then frozen; deleted only 7 days
+/// after it finished (the retention sweep: the jobs page counts the failures of 7 days).
+model CronRun {
+  id            String        @id @db.Uuid
+  tenantId      String        @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The job's cron name (`<area>.<job>`, apps/factory-api core/cron.ts). Never changes.
+  jobKey        String
+  trigger       CronTrigger
+  /// SCHEDULE: `<jobKey>@<the tick's epoch seconds>`; RUN_NOW: `<jobKey>@now:<request>`. Unique per tenant. Never changes.
+  key           String
+  /// The tick it was due at (SCHEDULE), or when a person asked (RUN_NOW). Never changes.
+  scheduledAt   DateTime      @db.Timestamptz(3)
+  /// RUN_NOW only: who asked. Never changes.
+  requestedById String?       @db.Uuid
+  startedAt     DateTime      @db.Timestamptz(3)
+  /// Set exactly once it is SUCCEEDED or FAILED.
+  finishedAt    DateTime?     @db.Timestamptz(3)
+  status        CronRunStatus @default(RUNNING)
+  /// FAILED only: the error in one message (no secret, no personal data), up to 4000 characters.
+  error         String?
+  /// The replica that ran it (its host name and process), 1 to 200 characters. Never changes.
+  ranOn         String
+  createdAt     DateTime      @default(now()) @db.Timestamptz(3)
+
+  @@unique([tenantId, key])
+  // A job's runs, the last first (last run, next run, failures in 7 days, missed ticks).
+  @@index([tenantId, jobKey, scheduledAt])
+  @@index([tenantId, status, startedAt])
+}
+
+/// Why a job ran.
+enum CronTrigger {
+  /// Its schedule's tick (once in the cluster: the Redis claim).
+  SCHEDULE
+  /// A person's "Run now" (confirm; once in the cluster).
+  RUN_NOW
+}
+
+enum CronRunStatus {
+  RUNNING
+  SUCCEEDED
+  FAILED
+}

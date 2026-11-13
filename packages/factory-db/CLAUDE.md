@@ -369,6 +369,27 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    record types of `factory_read_log_record_type_ok`, only an office person's (OFFICE, API or SYSTEM); its own triggers on
    Role, RoleAssignment, WorkerRole and Session, no earlier function redefined; it calls recall's `factory_recall_words_ok`,
    `factory_recall_not_future` and `factory_recall_model_name_ok`):
+   `…_privacy_integration_w2b_guards` (W2b-6 schema wave 53/57, B-W2b-375, privacy duties and the error queue: data requests
+   born RECEIVED for a person's record of their kind (WORKER a Worker or an Employee, USER a User, CONTACT a PartyContact,
+   PROSPECT an Inquiry, REPORTER a ProductSafetyReport) of the request's company, due exactly 720 hours after receipt,
+   extended once (at most 2160 hours after receipt) with the reason, the identity check once, RECEIVED → IN_PROGRESS → DONE
+   (the identity checked; ACCESS with its package, an AVAILABLE file of the request; ERASURE with an ErasureRecord) | REFUSED
+   (with the reason) | WITHDRAWN, then frozen, never deleted; erasure records append-only, for exactly one ERASURE request
+   IN_PROGRESS (FOR SHARE) or one APPLY sweep RUNNING whose rule's action they follow, naming real columns of the record's
+   table (pg_attribute; never id or tenantId), what stays with why; retention rules (a table of the database, the key
+   `retention:<type>:<company | all>`, 1-1200 months, the legal reason; GATE-PRIVACY: `applyOn` with when and by whom, only
+   while active, OFF by default) and sweeps (an APPLY sweep only of a rule switched on, FOR SHARE; the rule's period as it
+   stood, the cut-off the business day (`factory_money_rome_day`) less its months; counts that never go down; finished once;
+   never deleted); failed messages born OPEN of a source row that failed (a DEAD or PUBLISHED outbox event, a FAILED or
+   REJECTED webhook, a FAILED, TIMED_OUT or REFUSED call; its provider, a call's operation, its company), the key
+   `<outbox | webhook | call>:<source>`, RETRIED → OPEN only with one more try after the retry, DISMISSED with a reason and
+   frozen, deleted only closed 720 hours after; job runs one per tick and tenant (the key `<job>@<epoch seconds>`, or
+   `<job>@now:<request>` with who asked), finished once, the error exactly when FAILED, deleted only 168 hours after they
+   finished; its own trigger `SalesSettings_safety_report_form_check` (the outside doors of safety reports switched on only on
+   a company's own row while its SAFETY_REPORT notice is published); it redefines wave 16's `factory_protected_view_check`
+   (PRODUCT_SAFETY_INJURY: the ProductSafetyInjury, no employee) and wave 52's `factory_read_log_record_type_ok`
+   (DataRequest), each word for word but for that; it calls recall's `factory_recall_words_ok`, `factory_recall_not_future`,
+   `factory_recall_model_name_ok` and money's `factory_money_rome_day`):
    `…_cost_actuals_w2b_guards` (W2b-6 schema wave 54/57, B-W2b-376, actual cost to the end: the settings (a close tolerance of 0
    to 100, where the purchase price variance is taken, the company's switch for the accountant's figures GATE-ACCOUNTANT: only on a
    company's row, on with when and by whom; never deleted); work-order closes (the reason code exactly beyond the tolerance in force

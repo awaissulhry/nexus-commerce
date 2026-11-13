@@ -5,8 +5,9 @@ import type { FloorMode } from '../model'
 /**
  * Which floor actions queue and which wait for the network, as the tablet needs it (factory-domain floor-sync kinds:
  * the one list the API applies too). Queued: operation scans (report, undo, ask a correction), cut log entries and
- * remnants, making a bundle (its ticket numbered from the tablet's own BUNDLE block). Held while offline: goods receipts
- * and their lots, inspections, releases, garment serials (their numbers come from the office at once).
+ * remnants, making a bundle (its ticket numbered from the tablet's own BUNDLE block), garments scanned into cartons
+ * (B-W2b-387). Held while offline: goods receipts and their lots, inspections, releases, garment serials (their numbers
+ * come from the office at once), closing a carton and Packed.
  */
 
 /** The label kinds this person's tablet numbers offline: a queued kind that prints a label, under a permission they hold. */
@@ -20,15 +21,19 @@ export function numberKindsOf(permissions: readonly string[]): ScanIdKind[] {
   return [...kinds]
 }
 
-/** What waits for the network at a station of this mode (Home says it while offline), or null when all its work queues. */
-export function heldWorkOf(mode: FloorMode | null): 'receive' | 'inspect' | 'serials' | null {
+/**
+ * What waits for the network at a station of this mode (Home says it while offline), or null when all its work queues.
+ * B-W2b-387: at packing, scans into cartons queue (`shipping.carton.scan`); closing a carton, Packed, printing and garment
+ * serials wait.
+ */
+export function heldWorkOf(mode: FloorMode | null): 'receive' | 'inspect' | 'pack' | null {
   switch (mode) {
     case 'warehouse':
       return 'receive'
     case 'inspection':
       return 'inspect'
     case 'packing':
-      return 'serials'
+      return 'pack'
     default:
       return null
   }

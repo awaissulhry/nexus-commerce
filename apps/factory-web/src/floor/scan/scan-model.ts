@@ -1,5 +1,6 @@
 import { parseScanId, type ScanType } from '@nexus/factory-domain/numbering/scan-id'
 import { isBadgeCode } from '../model'
+import { isCartonMarks, type CartonScanCard } from '../tasks/scan/result/carton/model'
 
 /**
  * Scan anything (SCR-024; PLT-126, PLT-155, PLT-243; design floor.scan): one field for every label of the factory. A
@@ -11,13 +12,15 @@ import { isBadgeCode } from '../model'
  *   location     GET /inventory/locations?siteId=             inventory.locations.view the location card (by its code)
  *   machine      GET /plant/floor/machines?code=               plant.report            the machine card (B-W2a-73: its QR
  *                                                                                      tag holds the asset number)
+ *   carton       GET /shipping/cartons/scan?code=              shipping.pack           the carton card (B-W2b-387: its marks
+ *                                                                                      carry `<shipment number>-<n>`)
  *   bundle, lot, batch, serial, carton                                                  named, "not on this tablet yet"
  *   cut ticket   (B-W2b-112's number: Fabric cutting opens it at the cutting table)      named, where it is used
  *   trolley      (B-W2b-117's label "T-3": the line confirms receipt with it, B-W2b-F17)   named, where it is used
  *
  * A code that is no label code (an office number such as a work order's, a tag printed before label codes, a location
- * code, a machine's asset number) is looked up in that order by what it is: hide tag, work order number, location code,
- * machine tag. A badge's code switches
+ * code, a machine's asset number, a carton's marks) is looked up in that order by what it is: hide tag, work order number,
+ * location code, machine tag, and a carton's marks when it is shaped like them. A badge's code switches
  * the person instead (floor.signin "Switch person on a busy station"). Pure: the screen asks, this decides.
  */
 
@@ -100,6 +103,8 @@ export const LOOKUPS = {
   workOrder: 'production.cut',
   location: 'inventory.locations.view',
   machine: 'plant.report',
+  // B-W2b-387: a carton by its marks' code.
+  carton: 'shipping.pack',
 } as const
 export type Lookup = keyof typeof LOOKUPS
 
@@ -136,7 +141,7 @@ export function planScan(read: ScanRead, permissions: readonly string[]): ScanPl
     case 'free': {
       if (read.cutTicket) return { kind: 'cutTicket' }
       if (read.trolley) return { kind: 'trolley' }
-      const all: Lookup[] = ['hide', 'workOrder', 'location', 'machine']
+      const all: Lookup[] = ['hide', 'workOrder', 'location', 'machine', ...(isCartonMarks(read.code) ? (['carton'] as const) : [])]
       return { kind: 'ask', lookups: all.filter(may), denied: all.filter((lookup) => !may(lookup)) }
     }
   }
@@ -207,6 +212,8 @@ export type ScanResult =
   | WorkOrderCard
   | LocationCard
   | MachineCard
+  /** B-W2b-387: a carton, by its marks' code. */
+  | CartonScanCard
   /** A label the floor names but cannot open yet. */
   | { readonly kind: 'notOnFloor'; readonly type: LabelType; readonly code: string }
   | { readonly kind: 'noPermission'; readonly type: LabelType; readonly code: string }
@@ -239,6 +246,7 @@ export function resultType(result: ScanResult): CardType | null {
     case 'workOrder':
     case 'location':
     case 'machine':
+    case 'carton':
     case 'cutTicket':
     case 'trolley':
       return result.kind
