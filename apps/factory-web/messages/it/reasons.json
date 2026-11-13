@@ -20,6 +20,7 @@
     "DOWNGRADE": "Declassamenti",
     "APPROVAL_REJECT": "Rifiuti di approvazione",
     "PRICE_ADJUSTMENT": "Rettifiche di prezzo",
+    "SUPPLIER_DOCUMENT_TYPE": "Tipi di documento fornitore",
     "SCRAP": "Scarti",
     "REWORK": "Rilavorazioni"
   },
@@ -37,6 +38,7 @@
     "DOWNGRADE": "Perché la merce è passata a una qualità inferiore.",
     "APPROVAL_REJECT": "Perché chi approva ha detto no a una richiesta: ogni rifiuto ne indica uno, con le parole.",
     "PRICE_ADJUSTMENT": "Perché il prezzo di una riga è stato cambiato a mano: ogni modifica manuale su una riga di offerta o ordine ne indica una.",
+    "SUPPLIER_DOCUMENT_TYPE": "Che cos'è un documento di un fornitore (un DURC, un audit LWG, un certificato ISO 9001): ogni documento dell'archivio di un fornitore può indicarne uno.",
     "SCRAP": "Perché un capo va perso a un'operazione: i riquadri di scarto della schermata operazione.",
     "REWORK": "Perché un capo torna indietro per essere rifatto: i riquadri di rilavorazione della schermata operazione."
   },
