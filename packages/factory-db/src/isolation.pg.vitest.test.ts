@@ -7,6 +7,7 @@ import { seed as seedAndon } from '../seed/andon'
 import { seed as seedApprovals } from '../seed/approvals'
 import { seed as seedAudit } from '../seed/audit'
 import { seed as seedAuth } from '../seed/auth'
+import { seed as seedBank } from '../seed/bank'
 import { seed as seedBuyingDepth } from '../seed/buying-depth'
 import { seed as seedCalendar } from '../seed/calendar'
 import { seed as seedCapa } from '../seed/capa'
@@ -463,6 +464,13 @@ beforeAll(async () => {
   // first switched off) and exchange rates (the first an ECB rate): the plain ones a copy may repeat.
   await seedTax({ db: factory, namespace: 'iso-a' })
   await seedTax({ db: factory, namespace: 'iso-b' })
+  // The bank, receivables, payables and accountant's bridge schema of W2b-6 (wave 50/57): bank accounts (the first switched off),
+  // a statement and its lines (the first unplaced), matches (the first a suggestion), a write-off with room left in its payment,
+  // a draft Ri.Ba. batch and its item, reminder stops (the first a promise that is over), a customer's figures, a draft payment
+  // proposal and its line, account mappings, the bridge settings, documents of a draft export and check runs: the plain ones a
+  // copy may repeat.
+  await seedBank({ db: factory, namespace: 'iso-a' })
+  await seedBank({ db: factory, namespace: 'iso-b' })
   // Every seed of both tenants: under a full parallel run this takes more than a minute.
 }, 120_000)
 
@@ -476,8 +484,10 @@ it('covers every classified table and every runtime role', () => {
     'AbsenceCode',
     'AbsenceEntry',
     'AccidentLogEntry',
+    'AccountMapping',
     'AccountingExport',
     'AccountingExportFile',
+    'AccountingSettings',
     'Alert',
     'AlertEvent',
     'AlertRule',
@@ -498,6 +508,10 @@ it('covers every classified table and every runtime role', () => {
     'AuthorityNotice',
     'AuthorityRequest',
     'Badge',
+    'BankAccount',
+    'BankLine',
+    'BankMatch',
+    'BankStatement',
     'BomLine',
     'BomLineAlternate',
     'BomLineColour',
@@ -542,6 +556,7 @@ it('covers every classified table and every runtime role', () => {
     'Currency',
     'CustomerMaterial',
     'CustomerRequirement',
+    'CustomerStatementFigures',
     'CutConsumption',
     'CutIssue',
     'CutIssueLine',
@@ -575,6 +590,7 @@ it('covers every classified table and every runtime role', () => {
     'EvidencePack',
     'ExchangeRate',
     'ExportJob',
+    'ExportedDocument',
     'FabricRoll',
     'FileMarkup',
     'FileUploadSession',
@@ -637,6 +653,7 @@ it('covers every classified table and every runtime role', () => {
     'InstructionRecord',
     'IntegrationAccount',
     'IntegrationCall',
+    'IntegrityCheckRun',
     'InterestReferenceRate',
     'InventorySettings',
     'Invitation',
@@ -753,8 +770,11 @@ it('covers every classified table and every runtime role', () => {
     'Payment',
     'PaymentAllocation',
     'PaymentIntent',
+    'PaymentProposal',
+    'PaymentProposalLine',
     'PaymentReminder',
     'PaymentTerms',
+    'PaymentWriteOff',
     'PayrollCodeMapping',
     'PayrollExport',
     'PayrollExportFile',
@@ -847,6 +867,7 @@ it('covers every classified table and every runtime role', () => {
     'Refund',
     'RegulationOrStandard',
     'Reminder',
+    'ReminderStop',
     'Remnant',
     'RepairEstimate',
     'RepairEstimateLine',
@@ -867,6 +888,8 @@ it('covers every classified table and every runtime role', () => {
     'ReturnPolicy',
     'ReturnReceipt',
     'ReworkOrder',
+    'RibaBatch',
+    'RibaItem',
     'RiskAssessment',
     'RiskAssessmentSignature',
     'RiskAssessmentVersion',

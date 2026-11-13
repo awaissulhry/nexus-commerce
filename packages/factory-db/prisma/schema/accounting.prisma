@@ -68,6 +68,8 @@ model AccountingExport {
   amendedBy    AccountingExport[]     @relation("AccountingExportAmends")
   files        AccountingExportFile[]
   locks        PeriodLock[]
+  // W2b-6 bank.prisma (schema wave 50/57): the documents it handed over.
+  documents    ExportedDocument[]
 
   @@unique([tenantId, companyId, number])
   // The targets of the references from its files, its re-exports and the period locks.
