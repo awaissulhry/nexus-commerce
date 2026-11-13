@@ -43,6 +43,8 @@ export interface ListFilters {
   readonly late?: 'true' | 'false' | undefined
   /** The order needs a deposit and a request of it is still OPEN. */
   readonly deposit?: 'OPEN' | undefined
+  /** B-W2b-323: a change waits for the customer to accept it. */
+  readonly reaccept?: 'true' | 'false' | undefined
   readonly promiseFrom?: BusinessDate | undefined
   readonly promiseTo?: BusinessDate | undefined
   /** Number or customer reference, case-insensitive. */
@@ -57,6 +59,8 @@ export interface ListQuery extends ListFilters {
 const lateWhere = (today: BusinessDate): Prisma.SalesOrderWhereInput => ({ status: { in: [...OPEN_STATUSES] }, promiseDate: { lt: asDay(today) } })
 // B-W2a-F2: the deposit's requests only (a before-shipping step's own request is the balance, not the deposit).
 const depositOpenWhere: Prisma.SalesOrderWhereInput = { depositRequired: true, depositRequests: { some: { status: 'OPEN', ...ORDER_DEPOSIT_ONLY } } }
+// B-W2b-323: the customer must accept a change (W2a's amendment flag, a priced change of B-W2b-309), the order still running.
+const reacceptWhere: Prisma.SalesOrderWhereInput = { reapprovalNeededAt: { not: null }, status: { notIn: ['CLOSED', 'CANCELLED'] } }
 
 function whereOf(context: OfficeContext, filters: ListFilters, today: BusinessDate): Prisma.SalesOrderWhereInput {
   return {
@@ -68,6 +72,7 @@ function whereOf(context: OfficeContext, filters: ListFilters, today: BusinessDa
       filters.partyId ? { partyId: filters.partyId } : {},
       filters.late === 'true' ? lateWhere(today) : {},
       filters.deposit === 'OPEN' ? depositOpenWhere : {},
+      filters.reaccept === 'true' ? reacceptWhere : {}, // B-W2b-323
       filters.promiseFrom ? { promiseDate: { gte: asDay(filters.promiseFrom) } } : {},
       filters.promiseTo ? { promiseDate: { lte: asDay(filters.promiseTo) } } : {},
       filters.q ? { OR: [{ number: { contains: filters.q, mode: 'insensitive' } }, { customerRef: { contains: filters.q, mode: 'insensitive' } }] } : {},
@@ -143,7 +148,8 @@ export async function listOrders(caller: CommandCaller, query: ListQuery) {
 }
 
 /** The tiles (the design's saved-filter tiles): each count is the list's total under its filter. */
-const TILES = ['late', 'waitingForDeposit', 'inProduction', 'readyToShip'] as const
+// B-W2b-323: + waitingForCustomer.
+const TILES = ['late', 'waitingForDeposit', 'inProduction', 'readyToShip', 'waitingForCustomer'] as const
 
 /**
  * The board (SAL-214; W1: the state counts as tiles and lanes, the drag-free board view is W2a): the count of every
@@ -159,11 +165,13 @@ export async function orderBoard(caller: CommandCaller, filters: Pick<ListFilter
     const countOf = (status: SalesOrderStatus) => grouped.find((row) => row.status === status)?._count._all ?? 0
     const late = await client.salesOrder.count({ where: { AND: [base, lateWhere(today)] } })
     const deposit = await client.salesOrder.count({ where: { AND: [base, depositOpenWhere] } })
+    const reaccept = await client.salesOrder.count({ where: { AND: [base, reacceptWhere] } }) // B-W2b-323
     const counts: Record<(typeof TILES)[number], { count: number; filter: Record<string, string> }> = {
       late: { count: late, filter: { late: 'true' } },
       waitingForDeposit: { count: deposit, filter: { deposit: 'OPEN' } },
       inProduction: { count: countOf('IN_PRODUCTION'), filter: { status: 'IN_PRODUCTION' } },
       readyToShip: { count: countOf('READY'), filter: { status: 'READY' } },
+      waitingForCustomer: { count: reaccept, filter: { reaccept: 'true' } }, // B-W2b-323
     }
     return {
       byStatus: SALES_ORDER_STATUSES.map((status) => ({ status, count: countOf(status) })),

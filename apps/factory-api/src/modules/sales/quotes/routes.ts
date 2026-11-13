@@ -44,6 +44,9 @@ import { getSalesSettings, saveSalesSettings } from './settings'
 import { listVersions } from './versions'
 import { listQuoteApprovals, nextQuoteNumber } from './approvals'
 import { inlineDisposition, previewQuotePdf } from './preview'
+// B-W2b-358 (MM1:01, SAL-276): a quote's made-to-measure units.
+import { mtmLineContract, mtmLineEditContract, outOfChartContract, quoteUnitsContract } from '../mtm/contract'
+import { addMadeToMeasureLine, editMadeToMeasureLine, outOfChart, quoteUnits } from './mtm-line'
 
 /**
  * Quotes, part 1 (B-W1-21): the list and the record, a new quote, its header and terms, its size-grid lines (each costed
@@ -70,6 +73,11 @@ export default defineRoutes('sales.quotes', manifest, async (app) => {
   app.patch('/sales/quotes/:quoteId/lines/:lineId', { schema: editLineContract }, async (request) => editLine(request, request.params.quoteId, request.params.lineId, request.body, idempotencyKeyFrom(request)))
 
   app.delete('/sales/quotes/:quoteId/lines/:lineId', { schema: removeLineContract }, async (request) => removeLine(request, request.params.quoteId, request.params.lineId, request.query, idempotencyKeyFrom(request)))
+  // B-W2b-358 (MM1:01, SAL-276): made-to-measure units (./mtm-line.ts).
+  app.post('/sales/quotes/:quoteId/lines/made-to-measure', { schema: mtmLineContract }, async (request, reply) => reply.code(201).send(await addMadeToMeasureLine(request, request.params.quoteId, request.body, idempotencyKeyFrom(request))))
+  app.patch('/sales/quotes/:quoteId/lines/:lineId/made-to-measure', { schema: mtmLineEditContract }, async (request) => editMadeToMeasureLine(request, request.params.quoteId, request.params.lineId, request.body, idempotencyKeyFrom(request)))
+  app.post('/sales/quotes/:quoteId/lines/:lineId/out-of-chart', { schema: outOfChartContract }, async (request, reply) => reply.code(201).send(await outOfChart(request, request.params.quoteId, request.params.lineId, request.body, idempotencyKeyFrom(request))))
+  app.get('/sales/quotes/:quoteId/made-to-measure', { schema: quoteUnitsContract }, async (request) => quoteUnits(request, request.params.quoteId))
 
   app.post('/sales/quotes/:quoteId/recompute', { schema: recomputeContract }, async (request) => recompute(request, request.params.quoteId, request.body, idempotencyKeyFrom(request)))
 

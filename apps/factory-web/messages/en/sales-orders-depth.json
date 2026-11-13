@@ -1,0 +1,541 @@
+{
+  "common": {
+    "cancel": "Cancel",
+    "dismiss": "Dismiss",
+    "done": "Done",
+    "retry": "Try again",
+    "working": "Working…"
+  },
+  "action": {
+    "priority": "Set priority…",
+    "season": "Set season…"
+  },
+  "held": {
+    "busy": "Wait: something is being saved",
+    "noManage": "Changing an order needs the sales right to manage orders",
+    "final": "The order is closed or cancelled: nothing changes any more",
+    "prioritySame": "The order already has this priority",
+    "seasonSame": "The order already has this season",
+    "reading": "Still reading…",
+    "noneSelected": "Select at least one order",
+    "tooMany": "At most {max} orders at once",
+    "notWaiting": "The order does not wait for a yes",
+    "askStanding": "A request is open already, or the customer’s credit holds the order",
+    "withdrawNotYours": "Only the person who asked can take the request back",
+    "putBackNot": "This change can no longer be put back",
+    "confirmationWaiting": "The order waits for a yes: the confirmation comes after it",
+    "confirmationCancelled": "The order was cancelled: no confirmation",
+    "confirmationNot": "A confirmation cannot be made for this order now"
+  },
+  "priority": {
+    "level": {
+      "LOW": "Low",
+      "NORMAL": "Normal",
+      "HIGH": "High",
+      "URGENT": "Urgent"
+    },
+    "means": {
+      "LOW": "Served after the others when capacity is short.",
+      "NORMAL": "The usual place in the backlog.",
+      "HIGH": "Planned before normal orders.",
+      "URGENT": "Planned first; say why in one line."
+    },
+    "title": "Priority of {number}",
+    "titleOne": "Urgent: why?",
+    "legend": "Priority",
+    "go": "Set priority",
+    "reason": "Why it is urgent",
+    "reasonHint": "One line, at most {max} characters; the planner and the board see it.",
+    "problem": {
+      "reason": "Say why it is urgent (one line).",
+      "long": "The reason is too long (500 characters at most).",
+      "oneLine": "The reason is one line."
+    }
+  },
+  "selection": {
+    "title": "Set priority for {count} orders",
+    "go_one": "Set for {count} order",
+    "go_other": "Set for {count} orders",
+    "done": "Priority {level}",
+    "changed_one": "{count} order changed",
+    "changed_other": "{count} orders changed",
+    "unchanged_one": "{count} order had it already",
+    "unchanged_other": "{count} orders had it already",
+    "skipped_one": "{count} order left out (closed, cancelled or not yours): {numbers}",
+    "skipped_other": "{count} orders left out (closed, cancelled or not yours): {numbers}",
+    "unknown_one": "{count} order was not found",
+    "unknown_other": "{count} orders were not found",
+    "nothing": "Nothing changed."
+  },
+  "season": {
+    "tag": "Season {code}",
+    "title": "Season of {number}",
+    "go": "Set season",
+    "label": "Season",
+    "hint": "The company’s open seasons; a closed season takes no order.",
+    "none": "The company has no open season.",
+    "noSeason": "No season",
+    "reading": "Reading the seasons…",
+    "runs": "Runs",
+    "runsValue": "{from} – {to}",
+    "book": "Order book closes",
+    "state": "State",
+    "stateValue": {
+      "OPEN": "Open",
+      "BOOK_CLOSED": "Order book closed",
+      "ENDED": "Ended",
+      "CLOSED": "Closed"
+    }
+  },
+  "wait": {
+    "title": "Waiting for a yes",
+    "REQUEST_PENDING": "A request is open: the person who decides answers in Home › Approvals.",
+    "NO_REQUEST": "Nobody has been asked yet: ask for a yes.",
+    "CREDIT_HOLD": "The customer’s credit holds the order: Finance decides.",
+    "asked": "Asked on {date}",
+    "askedOf": "Asked of {who} on {date}",
+    "mine": "you asked",
+    "ask": "Ask for a yes",
+    "withdraw": "Take the request back",
+    "openApprovals": "Open Approvals",
+    "failed": "Couldn’t read why the order waits",
+    "askTitle": "Ask for a yes on {number}",
+    "askBody": "The company’s rules name who decides. Nobody decides their own request.",
+    "note": "A note for who decides",
+    "noteHint": "Optional.",
+    "withdrawTitle": "Take back the request on {number}?",
+    "withdrawBody": "The order keeps waiting; another request can be asked later."
+  },
+  "notice": {
+    "priority": "Priority set.",
+    "season": "Season set.",
+    "seasonCleared": "Season removed.",
+    "asked": "A yes was asked.",
+    "withdrawn": "The request was taken back.",
+    "confirmationSame": "Nothing changed since version {version}: it is still the confirmation.",
+    "planned": "Planned from the BOM: {made} new, {changed} changed, {removed} removed.",
+    "putBack": "The order is back as it was.",
+    "putBackDeposit": "Revision {revision} put back; its open extra deposit was cancelled.",
+    "priced": "Priced change {revision} recorded: the customer accepts it on the link we send.",
+    "pricedWaiting": "Priced change {revision} recorded; it waits for a yes in Home › Approvals."
+  },
+  "problem": {
+    "read": {
+      "signed_out": "You were signed out: sign in again.",
+      "forbidden": "You don’t have access to this.",
+      "not_found": "Not found: it may have been removed.",
+      "unavailable": "The server did not answer: try again in a moment.",
+      "rate_limited": "Too many tries: wait a moment.",
+      "internal": "Something went wrong on our side."
+    },
+    "write": {
+      "signed_out": "You were signed out: sign in again.",
+      "forbidden": "You may not do this.",
+      "not_found": "The order was not found.",
+      "unavailable": "The server did not answer: nothing was saved; try again.",
+      "rate_limited": "Too many tries: wait a moment.",
+      "step_up": "Confirm with a fresh authenticator code.",
+      "internal": "Something went wrong on our side: nothing was saved.",
+      "invalid": "The request was refused as it is: check the fields.",
+      "moved": "Someone changed the order meanwhile: it was read again; try once more.",
+      "state": "The order’s state does not allow this now.",
+      "season": "That season is closed or belongs to another company.",
+      "noRecipient": "The customer has no orders contact with an e-mail: add one first.",
+      "letterhead": "The confirmation cannot be made: the company’s letterhead is incomplete (legal name, address, VAT number, codice fiscale, REA). Complete it in Admin › Companies & sites."
+    }
+  },
+  "stage": {
+    "RELEASED": "Released to production",
+    "CUT": "Cutting started",
+    "SEWING": "Sewing started",
+    "FINISHED": "Pieces finished",
+    "SHIPPED": "Shipped",
+    "none": "Not in production yet"
+  },
+  "field": {
+    "SIZE_QUANTITY": "Sizes and quantities",
+    "COLOURWAY": "Colourway",
+    "OPTION": "Options",
+    "DELIVERY_DATE": "Delivery date",
+    "SHIP_TO": "Delivery address",
+    "PRICE": "Prices"
+  },
+  "frozenField": {
+    "SIZE_QUANTITY": "size frozen"
+  },
+  "frozen": {
+    "cell": "{stage} — {field}",
+    "blocked": "{stage} — {field} for good",
+    "how": "A change is a priced change the customer accepts.",
+    "blockedHow": "It cannot change any more.",
+    "label": "Sizes locked by the production stage"
+  },
+  "freeze": {
+    "title": "What is frozen",
+    "open": "Still open",
+    "priced": "From “{stage}”: a priced change the customer accepts",
+    "blocked": "From “{stage}”: it cannot change any more",
+    "stage": "The order reached “{stage}” on {date}.",
+    "notStarted": "Not in production yet: everything is still open.",
+    "noRules": "The company keeps no freeze rule: every field stays open.",
+    "failed": "Couldn’t read what is frozen",
+    "reading": "Reading what is frozen…"
+  },
+  "offer": {
+    "priced": "Frozen by the production stage: send it as a priced change the customer accepts.",
+    "blocked": "Frozen for good: this change cannot be made any more.",
+    "go": "Send as a priced change",
+    "line": "{line}: {field}",
+    "order": "The order: {field}"
+  },
+  "priced": {
+    "title": "Priced change {revision} of {number}",
+    "how": "The change is written now; the customer then accepts its price on the link we send.",
+    "stage": "The order reached “{stage}”.",
+    "reading": "Pricing the change…",
+    "problems": "The change is refused as it is ({count})",
+    "tableLabel": "What changes and its price",
+    "col": {
+      "line": "Line",
+      "words": "Words for the customer",
+      "price": "Price change"
+    },
+    "labelOf": "Words for the customer: {line}",
+    "labelPlaceholder": "e.g. One more jacket in 52, cut on its own",
+    "lineKind": {
+      "ADDED": "Line added",
+      "REMOVED": "Line removed",
+      "CHANGED": "New price"
+    },
+    "fee": "Change fee (net)",
+    "feeHint": "Optional, in {currency}.",
+    "change": "Change in value (net)",
+    "feeValue": "Fee",
+    "noPrice": "Prices are not shown to you: the change is priced by the office.",
+    "deposit": "Extra deposit",
+    "depositMode": {
+      "default": "The order’s own percent",
+      "none": "None",
+      "pct": "A percent",
+      "amount": "An amount"
+    },
+    "pct": "Percent of the growth",
+    "amount": "Amount ({currency})",
+    "kind": "Kind",
+    "kindHint": "How the deposit counts if the order is cancelled.",
+    "dueDate": "Due",
+    "dueHint": "Optional: else the order’s terms.",
+    "depositValue": "Extra deposit {amount} ({pct} % of the growth).",
+    "depositNone": "No extra deposit: the order does not grow.",
+    "yes": {
+      "WOULD_ASK": "This change will wait for a yes (Home › Approvals).",
+      "NOBODY_TO_ASK": "A rule asks for a yes but nobody else may decide: another office person asks for it."
+    },
+    "customer": "The customer accepts or refuses it afterwards; a refusal is put back by a person.",
+    "reason": "Why (kept with the change)",
+    "reasonHint": "The customer’s words or the office’s, one or two lines.",
+    "go": "Record the priced change",
+    "held": {
+      "reading": "Wait: the change is being priced",
+      "failed": "The change could not be priced: try again",
+      "problems": "The change is refused as it is"
+    },
+    "problem": {
+      "fee": "A fee above 0, with at most 2 decimals.",
+      "pct": "A percent above 0 and at most 100.",
+      "amount": "An amount above 0, with at most 2 decimals; at most what the order grew by.",
+      "dueDate": "A due day today or later.",
+      "label": "The words for the customer are one line of at most 200 characters.",
+      "reason": "Say why (kept with the change).",
+      "reasonLong": "The reason is too long (500 characters at most).",
+      "deposit": "The extra deposit is refused as it is (its kind may be off, or it is more than the growth).",
+      "frozenLine": "{line}: {field} cannot change any more",
+      "frozenOrder": "The order’s {field} cannot change any more",
+      "lines": "A line is refused as it is: check the amendment",
+      "other": "The change is refused as it is"
+    }
+  },
+  "depositKind": {
+    "ACCONTO": "Acconto (counts against the price)",
+    "CAPARRA": "Caparra confirmatoria",
+    "CAPARRA_PENITENZIALE": "Caparra penitenziale",
+    "off": "{kind} — off",
+    "offWhy": "The caparra penitenziale is off until the accountant confirms it."
+  },
+  "depositStatus": {
+    "OPEN": "open",
+    "PAID": "paid",
+    "WAIVED": "waived",
+    "CANCELLED": "cancelled"
+  },
+  "pricedList": {
+    "title": "Priced change requests",
+    "subtitle": "A change after production started is priced and needs the customer’s yes.",
+    "col": {
+      "change": "Change",
+      "money": "Extra cost and price",
+      "decision": "Customer decision",
+      "actions": "Next"
+    },
+    "revision": "Revision {revision}",
+    "count": {
+      "changed_one": "{count} line changed",
+      "changed_other": "{count} lines changed",
+      "added_one": "{count} line added",
+      "added_other": "{count} lines added",
+      "removed_one": "{count} line removed",
+      "removed_other": "{count} lines removed"
+    },
+    "pieces": "pieces {before} → {after}",
+    "feeOnly": "A fee only",
+    "fee": "fee {amount}",
+    "deposit": "extra deposit {amount} ({kind}, {status})",
+    "empty": "No priced change yet",
+    "emptyBody": "A change the freeze rules hold after production started becomes a priced change from Amend order.",
+    "failed": "Couldn’t read the changes",
+    "reading": "Reading the changes…"
+  },
+  "decision": {
+    "NOT_NEEDED": "The customer need not accept it",
+    "NOT_ASKED": "Not sent to the customer yet",
+    "WAITING": "Waiting for the customer",
+    "ACCEPTED": "Accepted by the customer",
+    "REFUSED": "Refused by the customer",
+    "EXPIRED": "The customer did not answer in time",
+    "WITHDRAWN": "The request to the customer was taken back",
+    "answered": "Answered on {date}"
+  },
+  "changeYes": {
+    "state": {
+      "NOT_ASKED": "No yes needed",
+      "WAITING": "Waiting for a yes",
+      "APPROVED": "Approved",
+      "TURNED_DOWN": "Turned down",
+      "STALE": "The order changed since: ask again",
+      "WITHDRAWN": "Taken back"
+    },
+    "because": "Because: {reason}",
+    "waiting": "A change waits for a yes since {date}",
+    "waitingBody": "No other change of the order is taken until it is decided."
+  },
+  "putBack": {
+    "title": "Put back revision {revision} of {number}?",
+    "body": "The order goes back to how it was before revision {revision}, as a new revision; nothing is deleted.",
+    "deposit": "Its extra deposit still open is cancelled with it.",
+    "reason": "Why",
+    "reasonHint": "Optional.",
+    "go": "Put back",
+    "of": "Put back revision {revision}"
+  },
+  "materials": {
+    "title": "Customer-supplied materials",
+    "plan": "Plan from the BOM",
+    "col": {
+      "material": "Material",
+      "colour": "Colour",
+      "expected": "Expected",
+      "received": "Received",
+      "used": "Used",
+      "left": "Left"
+    },
+    "lot": "Lot {code}",
+    "moreLots_one": "+{count} lot",
+    "moreLots_other": "+{count} lots",
+    "short": "More used than received",
+    "count_one": "{count} material",
+    "count_other": "{count} materials",
+    "empty": "The customer supplies nothing for this order",
+    "emptyBody": "When the brand sends leather, trims or labels, Plan from the BOM lists what each line needs.",
+    "failed": "Couldn’t load customer materials",
+    "reading": "Reading the customer’s materials…",
+    "notPlanned_one": "The BOM asks {count} material the order does not keep yet: Plan from the BOM adds it",
+    "notPlanned_other": "The BOM asks {count} materials the order does not keep yet: Plan from the BOM adds them",
+    "notPlannedRow": "{item}: {expected}",
+    "problems_one": "{count} line’s BOM could not be read as released: ask product development",
+    "problems_other": "{count} lines’ BOMs could not be read as released: ask product development",
+    "never": "The customer’s own material is never valued."
+  },
+  "confirmation": {
+    "title": "Order confirmation",
+    "newTab": "Open in new tab",
+    "failed": "Couldn’t read the confirmation",
+    "reading": "Reading the confirmation…",
+    "make": "Make confirmation",
+    "makeNew": "Make version {version}",
+    "send": "Send…",
+    "none": "Not made yet",
+    "noneBody": "The confirmation prints the lines with sizes, prices, dates, terms and each style’s certificate class.",
+    "outdated": "The order changed since version {version}: make a new version before sending it.",
+    "pdfTitle": "Confirmation {number} v{version}",
+    "pdfFailed": "Couldn’t open the PDF",
+    "pdfReading": "Opening the PDF…",
+    "noFiles": "Reading files needs the files right.",
+    "version": "Version",
+    "versionValue": "Version {version}",
+    "made": "Made",
+    "state": "State",
+    "stateValue": {
+      "none": "Not made yet",
+      "upToDate": "Prints the order as it is",
+      "outdated": "The order changed since",
+      "notYet": "Not possible yet"
+    },
+    "sent": "Sent to the customer",
+    "sentValue": "Version {version} on {date}",
+    "sentWhere": "The mail is on the order’s thread (Activity).",
+    "notSent": "Not sent yet",
+    "versions": "Versions made",
+    "sentTag": "Confirmation v{version} sent"
+  },
+  "send": {
+    "title": "Send the confirmation of {number}",
+    "document": "Order confirmation {number} v{version}",
+    "documentNew": "Order confirmation {number} (a new version)",
+    "freeze": "Version {version} goes as it is; a later change of the order makes a new version.",
+    "freezeNew": "A new version is made of the order as it is now, then sent.",
+    "can": "Read the confirmation and answer on the order’s thread.",
+    "check": {
+      "confirmed": "The order is confirmed",
+      "recipient": "It goes to {email}",
+      "noRecipient": "The customer has no orders contact with an e-mail",
+      "newVersion": "A new version will be made of the order as it is",
+      "upToDate": "Version {version} prints the order as it is"
+    }
+  },
+  "tab": {
+    "title": "Confirmation of {number}",
+    "made": "Made {when}",
+    "print": "Print",
+    "printHeld": "Wait for the PDF",
+    "noRight": {
+      "title": "No access to orders",
+      "body": "Reading an order confirmation needs the orders right."
+    }
+  },
+  "pack": {
+    "title": "Brand tech pack in force",
+    "from": "From inquiry {number}",
+    "failed": "Couldn’t read the tech pack",
+    "reading": "Reading the tech pack…",
+    "noInquiry": "The order did not come from an inquiry with a tech pack.",
+    "none": "The inquiry names no tech pack file.",
+    "version": "The brand’s version: {version}",
+    "inForce": "Version {version}, in force",
+    "newer": "Version {named} named; version {current} is in force now",
+    "gone": "No version is available any more",
+    "open": "Open"
+  },
+  "forecast": {
+    "col": "Production finish forecast",
+    "noRight": "—",
+    "reading": "…",
+    "failed": "—",
+    "none": "Not planned",
+    "unknown": "Not known yet",
+    "spare_one": "{count} day to spare",
+    "spare_other": "{count} days to spare",
+    "short_one": "{count} day short",
+    "short_other": "{count} days short",
+    "failedTitle": "Couldn’t read the finish forecast"
+  },
+  "finish": {
+    "STOCK": "From stock",
+    "BOARD": "The planning board",
+    "WORK_ORDER_DUE": "A work order’s due day",
+    "PLANNED_ORDER": "A planned order",
+    "CAPABLE": "The earliest the plant can make it",
+    "NONE": "Nothing says when yet"
+  },
+  "risk": {
+    "LATE": "Late",
+    "AT_RISK": "At risk",
+    "NOT_PROMISED": "Not promised",
+    "ON_TIME": "On time"
+  },
+  "milestone": {
+    "title": "Milestones",
+    "late_one": "{count} late",
+    "late_other": "{count} late",
+    "lateBy_one": "{count} day late",
+    "lateBy_other": "{count} days late",
+    "failed": "Couldn’t read the milestones",
+    "reading": "Reading the milestones…",
+    "none": "No milestone for this order.",
+    "target": "target {date}",
+    "state": {
+      "STARTED_BEFORE": "Started before the gate"
+    },
+    "kind": {
+      "GATE": "Gate",
+      "START": "Production start",
+      "SHIP": "Shipping"
+    }
+  },
+  "gate": {
+    "SAMPLE_APPROVED": "Sample approved",
+    "LEATHER_APPROVED": "Leather approved",
+    "TRIMS_IN": "Trims in",
+    "PP_SAMPLE": "Pre-production sample",
+    "LAB_PASSED": "Lab test passed",
+    "OTHER": "Gate"
+  },
+  "list": {
+    "col": {
+      "priority": "Priority",
+      "season": "Season"
+    },
+    "priorityOf": "Priority of {number}",
+    "saved": "Saved",
+    "refused": "Not saved",
+    "print": "Print confirmation",
+    "setPriority_one": "Set priority for {count}",
+    "setPriority_other": "Set priority for {count}",
+    "more": "More actions",
+    "keys": "Keyboard shortcuts"
+  },
+  "import": {
+    "action": "Import orders…",
+    "hint": "From a sheet: a dry run first, nothing written until Apply.",
+    "held": {
+      "manage": "Importing orders needs the right to change orders",
+      "run": "Importing needs the right to run imports and upload files"
+    }
+  },
+  "week": {
+    "label": "By promise week",
+    "site": "Site",
+    "asOf": "As of {time}",
+    "forbidden": {
+      "title": "Promise dates are not yours to read",
+      "body": "By promise week needs the promises right."
+    },
+    "noSite": {
+      "title": "No site to read",
+      "body": "Your roles reach no site of this company."
+    },
+    "failed": "Couldn’t read the promises",
+    "empty": {
+      "title": "Nothing open to finish",
+      "body": "Every open order line of this site has shipped, or none matches the search."
+    },
+    "incomplete": "More open lines than one read covers: the earliest promises are shown.",
+    "how": "Cards never drag: Change promise date… opens the order’s Dates tab.",
+    "earlier": "Late",
+    "later": "Later",
+    "none": "No promise",
+    "week": "Week {week}",
+    "thisWeek": "This week",
+    "late": "Promise passed",
+    "units_one": "{count} piece",
+    "units_other": "{count} pieces",
+    "range": "{from} – {to}",
+    "nothing": "Nothing to finish this week.",
+    "cardMenu": "Actions for {number}",
+    "open": "Open",
+    "changePromise": "Change promise date…",
+    "cardUnits_one": "{count} piece",
+    "cardUnits_other": "{count} pieces",
+    "cardLines_one": "{count} line",
+    "cardLines_other": "{count} lines"
+  }
+}

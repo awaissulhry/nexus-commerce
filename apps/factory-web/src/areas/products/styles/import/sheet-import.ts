@@ -37,8 +37,8 @@ export interface SheetImportOptions {
   /** The company the rows belong to, or EVERY_COMPANY (an import writes one company's records, or every company's). */
   companyId: string
   companies: ReadonlyArray<{ id: string; name: string }>
-  /** The words for "every company" in the page's language. */
-  everyCompany: string
+  /** The words for "every company" in the page's language. B-W2b-323: null — an importer of one company's records only (orders). */
+  everyCompany: string | null
   rights: ImportRights
   locale: NumberFormat
   /** After a job applied something (the screen reads its records again). */
@@ -81,7 +81,8 @@ function startProblem(error: unknown): string {
 
 export function useSheetImport(api: ApiClient, options: SheetImportOptions): { model: SheetImport | null; open: () => void; actions: WizardActions } {
   const { importerKey, companyId, rights, locale, onApplied } = options
-  const companies = [{ id: EVERY_COMPANY, name: options.everyCompany }, ...options.companies]
+  // B-W2b-323: no "every company" choice for an importer whose rows always belong to one company (sales orders).
+  const companies = options.everyCompany === null ? [...options.companies] : [{ id: EVERY_COMPANY, name: options.everyCompany }, ...options.companies]
   const [wizard, setWizard] = useState<WizardModel | null>(null)
   const [importers, setImporters] = useState<Importer[]>([standInImporter(importerKey)])
   const file = useRef<File | null>(null)

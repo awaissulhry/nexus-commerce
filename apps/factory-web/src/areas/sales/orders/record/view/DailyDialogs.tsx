@@ -32,6 +32,9 @@ import {
 import { dayInstant, type Phrase } from '../../model'
 import type { OrderRecordActions, OrderRecordModel } from '../record-model'
 import { DialogProblem, Frame } from './Dialogs'
+// ---- B-W2b-323: a frozen change is offered as a priced change ----
+import { FrozenOffer } from '../../changes-depth/view/ChangesDepth'
+import { frozenProblemsOf } from '../../depth/model'
 
 /**
  * The order studio's daily dialogs (B-W2a-50; the DS ReviewChangesModal, ActionConfirm and ConfirmPhraseField spoke
@@ -75,7 +78,9 @@ export function AmendReviewDialog({ order, model, actions }: { order: Order; mod
     return `${names.style} · ${names.colour}`
   }
   const preview = review?.preview ?? null
-  const problems = preview && !preview.ok ? issuePhrases(preview.problems, label) : []
+  // B-W2b-323: the freeze rules' refusals are said apart (with the priced change's offer), the others by place as before.
+  const frozenPaths = new Set(preview && !preview.ok ? preview.problems.filter((issue) => frozenProblemsOf([issue]).length > 0).map((issue) => issue.path) : [])
+  const problems = preview && !preview.ok ? issuePhrases(preview.problems.filter((issue) => !frozenPaths.has(issue.path)), label) : []
   const diff = preview?.diff ?? null
   const change = diff ? moneyChange(diff) : null
   const held = model.busy
@@ -84,7 +89,7 @@ export function AmendReviewDialog({ order, model, actions }: { order: Order; mod
       ? t('amend.held.reading')
       : review.phase === 'failed'
         ? t('amend.held.failed')
-        : problems.length > 0
+        : problems.length > 0 || frozenPaths.size > 0 /* B-W2b-323 */
           ? t('amend.held.problems')
           : reason.trim() === ''
             ? t('amend.held.reason')
@@ -134,6 +139,8 @@ export function AmendReviewDialog({ order, model, actions }: { order: Order; mod
         />
       ) : (
         <>
+          {/* B-W2b-323: frozen by the production stage — "Send as a priced change" (or it cannot change any more). */}
+          {preview && !preview.ok && <FrozenOffer order={order} problems={preview.problems} model={model.depth} onPriced={actions?.onPricedOffer} />}
           {problems.length > 0 && (
             <>
               <Banner tone="danger" title={t('amend.problems', { count: problems.length })} />

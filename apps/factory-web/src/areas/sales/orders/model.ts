@@ -111,9 +111,11 @@ export const dayInstant = (day: string): string => `${day}T12:00:00Z`
 
 // ---- the saved rows, the address, the API query (one filter model) -------------------------------------------------------
 
-export const ROW_VIEWS = ['open', 'late', 'deposit', ...ORDER_STATUSES, 'all'] as const
+// B-W2b-323: + reaccept (a change waits for the customer to accept it: `?reaccept=true`).
+export const ROW_VIEWS = ['open', 'late', 'deposit', 'reaccept', ...ORDER_STATUSES, 'all'] as const
 export type RowView = (typeof ROW_VIEWS)[number]
-export type Layout = 'list' | 'board'
+// B-W2b-323: + week (By promise week, `?view=week`).
+export type Layout = 'list' | 'board' | 'week'
 
 const isStatus = (value: string | null | undefined): value is OrderStatus => !!value && (ORDER_STATUSES as readonly string[]).includes(value)
 
@@ -125,21 +127,24 @@ export function rowsFromAddress(params: { get(name: string): string | null } | n
   if (!params) return 'open'
   if (params.get('late') === 'true') return 'late'
   if (params.get('deposit') === 'OPEN') return 'deposit'
+  if (params.get('reaccept') === 'true') return 'reaccept' // B-W2b-323
   const status = params.get('status')
   if (isStatus(status)) return status
   if (params.get('rows') === 'all') return 'all'
   return 'open'
 }
 
-export const layoutFromAddress = (params: { get(name: string): string | null } | null): Layout => (params?.get('view') === 'board' ? 'board' : 'list')
+export const layoutFromAddress = (params: { get(name: string): string | null } | null): Layout => (params?.get('view') === 'board' ? 'board' : params?.get('view') === 'week' ? 'week' /* B-W2b-323 */ : 'list')
 
 /** The page's address for a saved rows view, a search and a layout (the defaults leave the address clean). */
 export function listAddress(path: string, next: { rows: RowView; q: string; layout: Layout }): string {
   const query = new URLSearchParams()
   if (next.layout === 'board') query.set('view', 'board')
+  if (next.layout === 'week') query.set('view', 'week') // B-W2b-323
   if (next.rows === 'all') query.set('rows', 'all')
   else if (next.rows === 'late') query.set('late', 'true')
   else if (next.rows === 'deposit') query.set('deposit', 'OPEN')
+  else if (next.rows === 'reaccept') query.set('reaccept', 'true') // B-W2b-323
   else if (isStatus(next.rows)) query.set('status', next.rows)
   if (next.q.trim()) query.set('q', next.q.trim())
   const qs = query.toString()
@@ -152,6 +157,7 @@ export function rowsQuery(rows: RowView, q: string, cursor?: string | null): Ord
   if (rows === 'open') return { ...base, open: true }
   if (rows === 'late') return { ...base, late: true }
   if (rows === 'deposit') return { ...base, deposit: 'OPEN' }
+  if (rows === 'reaccept') return { ...base, reaccept: true } // B-W2b-323
   if (isStatus(rows)) return { ...base, status: rows }
   return base
 }
@@ -162,6 +168,8 @@ export const TILES: ReadonlyArray<{ key: TileKey; rows: RowView }> = Object.free
   { key: 'waitingForDeposit', rows: 'deposit' },
   { key: 'inProduction', rows: 'IN_PRODUCTION' },
   { key: 'readyToShip', rows: 'READY' },
+  // B-W2b-323: Waiting for the customer to accept a change (design sec:orders.tiles#1).
+  { key: 'waitingForCustomer', rows: 'reaccept' },
 ])
 
 /** A tile's count, or null when the board was not read (the tile says "—", never 0). */
@@ -179,7 +187,7 @@ export function boardLanes(rows: RowView): BoardLane[] {
 
 /** The API query of one lane: its state, with the saved rows' other filter (late, deposit) and the search. */
 export function laneQuery(lane: BoardLane, rows: RowView, q: string): OrderQuery {
-  return { status: lane, late: rows === 'late', deposit: rows === 'deposit' ? 'OPEN' : null, q, limit: 50 }
+  return { status: lane, late: rows === 'late', deposit: rows === 'deposit' ? 'OPEN' : null, reaccept: rows === 'reaccept' /* B-W2b-323 */, q, limit: 50 }
 }
 
 export interface Lane {

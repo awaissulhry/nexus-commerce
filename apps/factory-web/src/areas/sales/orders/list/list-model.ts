@@ -3,6 +3,11 @@ import type { PartyDetail, PartyRow } from '../../quotes/api'
 import type { OrderBoard, OrderRow } from '../api'
 import type { LiveState } from '../hooks'
 import type { Lane, Layout, OrderAbilities, Phrase, RowView } from '../model'
+// ---- B-W2b-323 (orders in depth on screen) ----
+import type { WizardActions } from '../../../admin/import/view/ImportWizard'
+import type { ListDepthActions, ListDepthModel } from '../list-depth/use-list-depth'
+import type { OrdersImportModel } from '../import/view/OrdersImportView'
+import type { WeekModel } from '../week/use-promise-week'
 
 /** SCR-038 — the orders list's view model (OrdersListView draws it and fetches nothing). */
 
@@ -46,6 +51,13 @@ export interface OrdersListModel {
   newOrder?: NewOrderDialogModel | null
   /** B-W2a-72: each order's margin % as estimated now (undefined: still reading; null: not known); null: the column is not drawn. */
   margins?: ReadonlyMap<string, string | null> | null
+  // ---- B-W2b-323 (orders in depth on screen) ----
+  /** The Priority and Season columns, the inline priority, Set priority on a selection; null/absent: not drawn. */
+  depth?: ListDepthModel | null
+  /** By promise week (`?view=week`); null/absent: not read. */
+  week?: WeekModel | null
+  /** Import orders (band ⋯): why it is held, and the wizard while open. */
+  importer?: (OrdersImportModel & { held: string | null }) | null
   /** Design cases: the starting selection, the focused row, the keys panel. */
   selected?: string[]
   focusRow?: number
@@ -69,4 +81,10 @@ export interface OrdersListActions {
   onNewPick?: (partyId: string | null) => void
   onNewField?: (field: 'contactId' | 'customerRef', value: string) => void
   onNewCreate?: () => void
+  // ---- B-W2b-323 (orders in depth on screen) ----
+  depth?: ListDepthActions
+  onImport?: () => void
+  importActions?: WizardActions
+  onWeekSite?: (siteId: string) => void
+  onWeekRetry?: () => void
 }

@@ -85,6 +85,11 @@
     "STYLE_PHASE_OUT": "A style is being phased out or discontinued: check it can still be made before it is promised.",
     "NOT_SOLD_IN_MARKET": "A style is not sold in the market the goods go to: its labels, declaration and certificates may not cover it.",
     "BLOCKED_MATERIAL": "A material of a line is blocked: it may not be used until it is approved again or replaced.",
+    "MTM_NOT_STARTED": "A made-to-measure unit's style is not made to measure, or made-to-measure has not started for its measurement template.",
+    "MTM_OUTSIDE_RANGE": "A made-to-measure unit is outside the certified range of the basic model: a pattern maker reviews it.",
+    "MTM_NOT_CONFIRMED": "The factory has not confirmed a rider's measures yet: the order waits for the review.",
+    "MTM_NOT_LATEST": "A made-to-measure unit is made to an older revision: the rider has newer measures.",
+    "MTM_OLD_MEASURES": "A rider's measures are older than 12 months: ask for a new measure.",
     "pass": {
       "approval": "Approval done or not needed",
       "validity": "Validity set",

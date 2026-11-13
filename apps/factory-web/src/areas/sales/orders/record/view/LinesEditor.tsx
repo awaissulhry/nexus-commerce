@@ -31,6 +31,8 @@ export interface LinesEditorModel {
   nets?: Record<string, number | undefined>
   listPrices?: Record<string, string | undefined>
   busy: boolean
+  /** B-W2b-323: the size cells a freeze rule locked, marked with their reason ("Cutting started — size frozen"). */
+  frozen?: readonly SizeGridIssue[]
 }
 
 /**
@@ -185,7 +187,11 @@ function StyleCard({ styleId, lines, model, actions }: { styleId: string; lines:
   const first = namesOf(lines[0]!, model.order, style)
   const name = style?.name ?? model.order?.lines.find((line) => line.styleId === styleId)?.style?.name ?? ''
   const under = underWorkOrders(lines, model.minimums)
-  const issues: SizeGridIssue[] = under.map((cell) => ({ colour: cell.key, size: cell.size, tone: 'error', message: t('editor.underWorkOrders', { size: cell.size, made: cell.made }) }))
+  const issues: SizeGridIssue[] = [
+    ...under.map((cell) => ({ colour: cell.key, size: cell.size, tone: 'error' as const, message: t('editor.underWorkOrders', { size: cell.size, made: cell.made }) })),
+    // B-W2b-323: the locked cells of this style's lines (a warning: the value stands; a change goes as a priced change).
+    ...(model.frozen ?? []).filter((issue) => lines.some((line) => line.key === issue.colour)),
+  ]
   const locked = lines.filter((line) => line.locked)
   const editable = lines.filter((line) => !line.locked)
   const columns = [t('lines.col.colour'), t('lines.col.pieces'), ...(model.price ? [t(model.priceBasis === 'GROSS' ? 'lines.col.unitGross' : 'lines.col.unitNet'), ...(model.nets ? [t('lines.col.net')] : [])] : []), t('editor.col.change')]

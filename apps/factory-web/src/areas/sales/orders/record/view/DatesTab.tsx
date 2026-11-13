@@ -8,6 +8,9 @@ import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import type { Order } from '../../api'
 import { dayInstant, daysUntil, isFinal, nextStep, promiseHeld } from '../../model'
 import type { OrderRecordActions, OrderRecordModel } from '../record-model'
+// ---- B-W2b-323 (orders in depth on screen) ----
+import { ForecastCell, ForecastNote, MilestonesCard } from '../../depth/view/DatesDepth'
+import { NAMESPACE as DEPTH } from '../../depth/model'
 
 /**
  * Dates & promise (design `order.dates.lines` + `order.dates.history`): the order's dates (ordered, requested, promised,
@@ -17,6 +20,7 @@ import type { OrderRecordActions, OrderRecordModel } from '../record-model'
  */
 export function DatesTab({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
   const t = useT('orders')
+  const d = useT(DEPTH) // B-W2b-323
   const locale = useLocale()
   const day = (value: string | null) => (value ? formatDate(dayInstant(value), { locale }) : '—')
   const held = promiseHeld(order, model.can)
@@ -62,9 +66,11 @@ export function DatesTab({ order, model, actions }: { order: Order; model: Order
             { label: t('dates.firstPromised'), value: day(order.originalPromiseDate) },
           ]}
         />
+        {/* B-W2b-323: the forecast's read failed (said once). */}
+        <ForecastNote model={model.depth} actions={actions?.depth} />
         <SummaryTable
           label={t('dates.linesLabel')}
-          columns={[t('dates.col.line'), t('dates.col.requested'), t('dates.col.promised'), t('dates.col.state')]}
+          columns={[t('dates.col.line'), t('dates.col.requested'), t('dates.col.promised'), t('dates.col.state'), ...(model.depth ? [d('forecast.col')] : []) /* B-W2b-323 */]}
           rows={lines.map((line) => ({
             id: line.id,
             cells: [
@@ -72,13 +78,17 @@ export function DatesTab({ order, model, actions }: { order: Order; model: Order
               day(line.requestedDate ?? order.requestedDate),
               line.promiseDate ? day(line.promiseDate) : t('dates.asOrder', { date: day(order.promiseDate) }),
               lateness(line.promiseDate ?? order.promiseDate) ?? '—',
+              // B-W2b-323: Production finish forecast (from the plan).
+              ...(model.depth ? [<ForecastCell key="f" model={model.depth} lineId={line.id} />] : []),
             ],
           }))}
           density="roomy"
           stackOnPhone
-          align={['left', 'right', 'right', 'right']}
+          align={['left', 'right', 'right', 'right', ...(model.depth ? (['right'] as const) : [])]}
         />
       </Card>
+      {/* B-W2b-323 (follow-up SO3:01): the order's milestones. */}
+      <MilestonesCard model={model.depth} actions={actions?.depth} />
       <Card padded>
         <h2 className="fw-so-h2">{t('dates.historyTitle')}</h2>
         {order.promiseHistory.length === 0 ? (
