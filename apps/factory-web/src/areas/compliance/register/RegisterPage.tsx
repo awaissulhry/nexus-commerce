@@ -33,6 +33,8 @@ import { RegisterMessages } from './view/parts'
 // B-W2b-271: the tiles "Authority notices due or sent" and "Recalls in progress" (B-W2b-260's reads).
 import { activeRecalls, noticeTiles, type NoticeTiles, type RecallTiles } from './depth/api'
 import { RegisterListView } from './view/RegisterListView'
+// B-W2b-357: the header's ⋯ › Accident log.
+import { accidentLogLink } from '../../../lib/safety-reports/words'
 
 /**
  * The PPE register's list container (`/w/<company>/compliance/register`, SCR-113): reads the view (`GET
@@ -285,6 +287,7 @@ function RegisterContainer() {
       model={{
         prefix,
         can,
+        accidentLog: accidentLogLink(prefix, session.permissions),
         rows,
         view,
         filters,

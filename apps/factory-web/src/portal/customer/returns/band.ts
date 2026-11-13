@@ -10,14 +10,23 @@ import type { ReturnWords } from './words'
  * them with "Ask a question"); the record's link tabs.
  */
 
-export function listBandOf(input: { words: ReturnWords; asOf: string | null; startHeld: string | null; onStart?: () => void }): PortalBand {
+export function listBandOf(input: {
+  words: ReturnWords
+  asOf: string | null
+  startHeld: string | null
+  onStart?: () => void
+  /** B-W2b-357 (design h.more "Report a safety incident"): its words, why it waits (closed until the privacy notice), the dialog. */
+  safety?: { label: string; held: string | null; onOpen: () => void } | null
+}): PortalBand {
   const { t, time } = input.words
   const start: PortalBandAction = { id: 'start', label: t('band.start'), variant: 'primary', heldReason: input.startHeld, onClick: () => input.onStart?.() }
+  // B-W2b-357: ⋯ › Report a safety incident (held with why while its door is closed).
+  const safety = input.safety ? [{ id: 'safety', label: input.safety.label, disabled: input.safety.held !== null, ...(input.safety.held ? { description: input.safety.held } : {}), onSelect: () => input.safety?.onOpen() } as MenuItemDef] : []
   return {
     title: t('list.title'),
     status: input.asOf ? { label: t('band.updated', { time: time(input.asOf) }), tone: 'neutral' } : null,
     actions: [start],
-    more: [],
+    more: [...safety],
     keys: [
       { keys: ['/'], words: t('keys.search') },
       { keys: ['↵'], words: t('keys.open') },
