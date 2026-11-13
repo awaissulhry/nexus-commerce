@@ -6,6 +6,8 @@ import { Banner, EmptyState, Menu } from '@nexus/ui/components'
 import type { ColDef, ICellRendererParams } from '@nexus/ui/grid'
 import { Button, Input, Pill, Select, Spinner, Tag } from '@nexus/ui/primitives'
 import { ListFrame } from '../../../../../list-frame/ListFrame'
+// B-W2b-320: frozen lines and the places the count blocks (SCM-226; conn "Locations (blocked during a count)").
+import { FrozenNote, useCountsLinesWords } from '../../depth/view/CountDepthParts'
 import type { ListKey } from '../../../../../list-frame/model'
 import { formatDateTime } from '../../../../../lib/i18n/format'
 import { useLocale } from '../../../../../lib/i18n/provider'
@@ -122,6 +124,7 @@ export function lineWords(t: Words, line: CountLine): { place: string; material:
 
 export function LinesTab({ value, model, actions }: { value: CountRecord; model: CountRecordModel; actions?: CountRecordActions }) {
   const t = useWords()
+  const td = useCountsLinesWords()
   const locale = useLocale()
   const place = { locale, timeZone: model.timeZone }
   const [query, setQuery] = useState(model.lines.q)
@@ -198,6 +201,9 @@ export function LinesTab({ value, model, actions }: { value: CountRecord; model:
               : data.movedSinceSnapshot
                 ? t('line.moved')
                 : null
+      // B-W2b-320 (cn-lines W2b): a frozen line holds the moves of its item at its place; the units scanned so far.
+      const frozen = data.frozen ? td('cd.lines.frozen') : null
+      const scans = data.scans ? td('cd.lines.scans', { count: data.scans }) : null
       return (
         <span className="fw-st-cell">
           <span>
@@ -208,6 +214,7 @@ export function LinesTab({ value, model, actions }: { value: CountRecord; model:
               {sub}
             </span>
           )}
+          {(frozen || scans) && <span className="fw-st-sub">{[frozen, scans].filter(Boolean).join(' · ')}</span>}
         </span>
       )
     }
@@ -240,7 +247,7 @@ export function LinesTab({ value, model, actions }: { value: CountRecord; model:
       { colId: 'state', headerName: t('line.col.state'), minWidth: 160, flex: 1, cellRenderer: StateCell },
       { colId: 'more', headerName: t('col.actions'), minWidth: 64, maxWidth: 64, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
     ]
-  }, [t, locale, model.timeZone, value.countTeam, editable])
+  }, [t, td, locale, model.timeZone, value.countTeam, editable])
 
   // B-W2b-15: every place of the count with its line counts (the API's), else the places of the lines read so far.
   const seenPlaces = usePlaces(model.lines.items)
@@ -296,6 +303,7 @@ export function LinesTab({ value, model, actions }: { value: CountRecord; model:
 
   return (
     <div className="fw-cn-stack">
+      <FrozenNote value={value} lines={lines.items} blocked={model.blocked ?? null} prefix={model.prefix} />
       {editable ? (
         <p className="fw-cn-hint">{t('lines.howTo')}</p>
       ) : (

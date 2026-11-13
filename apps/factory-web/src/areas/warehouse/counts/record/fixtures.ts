@@ -2,6 +2,8 @@ import { createElement } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import { designScreen as panelsScreen } from '../../../../record-panels/fixtures'
 import type { RecordPanelsViewModel } from '../../../../record-panels/model'
+// B-W2b-320: the places running counts block (made-up).
+import { BLOCKED } from '../depth/demo/fixtures'
 import {
   CANCELLED,
   COUNTING,
@@ -128,5 +130,13 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'error', label: "The count couldn't be read", model: recordCase('warehouse', COUNTING, { record: { status: 'error', problem: 'problem.offline' } }) },
     { id: 'not-found', label: 'Not found (or another company)', model: recordCase('warehouse', COUNTING, { record: { status: 'not_found' } }) },
     { id: 'sales', label: 'Sales: no inventory.counts.view (the page says so)', model: recordCase('sales', COUNTING, { record: { status: 'forbidden' } }) },
+    // ---- B-W2b-320: a count that freezes its lines' moves, the frozen lines, the places it blocks ---------------------------
+    {
+      id: 'w2b-frozen',
+      label: 'B-W2b-320 — A frozen count while counting: frozen lines, units scanned, the two places it blocks',
+      model: recordCase('warehouse', { ...COUNTING, freezeMoves: true }, { lines: lines(LINES.map((line, index) => ({ ...line, frozen: line.status !== 'COUNTED', scans: index % 3 === 0 ? 2 : 0 }))), blocked: BLOCKED.filter((place) => place.block?.countNumber === COUNTING.number) }),
+    },
+    { id: 'w2b-frozen-draft', label: 'B-W2b-320 — A draft that will freeze once counting starts', model: recordCase('warehouse', { ...CYCLE_DRAFT, freezeMoves: true }, { lines: lines([]) }) },
+    { id: 'w2b-blocked-only', label: 'B-W2b-320 — Not frozen: the places it blocks only', model: recordCase('owner', COUNTING, { blocked: BLOCKED.filter((place) => place.block?.countNumber === COUNTING.number) }) },
   ],
 })

@@ -16,6 +16,9 @@ import { KeysModal, KitPill, NoPickingAccess, PickingMessages, ReadinessButton, 
 import type { PickingListActions, PickingListModel } from '../../view-model'
 import { CreateDialog } from './CreateDialog'
 import { PickListDialog } from './PickListDialog'
+// B-W2b-320: the tile "Substitutes waiting for approval", the substitutes list and Use a substitute.
+import { SubstituteDialog, useSubWords } from '../../substitute/view/SubstituteDialog'
+import { SubstitutesSection } from '../../substitute/view/SubstitutesSection'
 
 export type { PickingListActions, PickingListModel } from '../../view-model'
 
@@ -38,6 +41,7 @@ export function PickingListView({ model, actions }: { model: PickingListModel; a
 
 function PickingList({ model, actions }: { model: PickingListModel; actions?: PickingListActions }) {
   const t = useWords()
+  const { t: ts } = useSubWords()
   const locale = useLocale()
   const place = { locale, timeZone: model.timeZone }
   const [query, setQuery] = useState(model.address.q)
@@ -320,14 +324,29 @@ function PickingList({ model, actions }: { model: PickingListModel; actions?: Pi
       )}
 
       <MetricStrip
-        metrics={TILES.map((tile) => ({
-          label: t(`tile.${tile.id}`),
-          value: model.tiles ? String(tile.count(model.tiles)) : '—',
-          hint: t(`tileHint.${tile.id}`),
-          onClick: () => actions?.onView?.(model.address.view === tile.view ? 'all' : tile.view),
-          active: tileView === tile.view,
-        }))}
+        metrics={[
+          ...TILES.map((tile) => ({
+            label: t(`tile.${tile.id}`),
+            value: model.tiles ? String(tile.count(model.tiles)) : '—',
+            hint: t(`tileHint.${tile.id}`),
+            onClick: () => actions?.onView?.(model.address.view === tile.view ? 'all' : tile.view),
+            active: tileView === tile.view,
+          })),
+          // B-W2b-320 (pk-metrics "Substitutes waiting for approval (W2b)"): opens the substitutes below the tiles.
+          ...(model.subs
+            ? [
+                {
+                  label: ts('sb.tile'),
+                  value: model.subs.waiting === null ? '—' : String(model.subs.waiting),
+                  hint: ts('sb.tileHint'),
+                  onClick: () => actions?.onSubs?.(!model.subs!.open),
+                  active: model.subs.open,
+                },
+              ]
+            : []),
+        ]}
       />
+      {model.subs?.open && model.subCan && <SubstitutesSection model={model.subs.model} can={model.subCan} prefix={model.prefix} timeZone={model.timeZone} actions={actions?.subs} />}
 
       <ListFrame<PickRow>
         label={t('list.tableLabel')}
@@ -355,7 +374,8 @@ function PickingList({ model, actions }: { model: PickingListModel; actions?: Pi
       />
       <p className="fw-pk-hint">{t('list.foot')}</p>
 
-      {model.sheet && <PickListDialog model={model.sheet} ids={ids} prefix={model.prefix} can={model.can} timeZone={model.timeZone} actions={actions} />}
+      {model.sheet && !model.substitute && <PickListDialog model={model.sheet} ids={ids} prefix={model.prefix} can={model.can} subCan={model.subCan} timeZone={model.timeZone} actions={actions} />}
+      {model.substitute && model.subCan && <SubstituteDialog model={model.substitute} can={model.subCan} prefix={model.prefix} timeZone={model.timeZone} actions={actions?.substitute} />}
       {model.create && <CreateDialog model={model.create} timeZone={model.timeZone} actions={actions} />}
       {help && <KeysModal own={ownKeys} onClose={() => setHelp(false)} />}
     </div>
