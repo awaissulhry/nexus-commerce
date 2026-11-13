@@ -195,14 +195,135 @@ export interface PriceLineInput {
 }
 
 /** A PRICE_ADJUSTMENT code checked: ACTIVE, and one that needs detail with its words (400 in words). */
-async function assertReason(tools: CommandTools, code: string | null | undefined, note: string | null, at: string): Promise<void> {
+// B-W2b-302: takes a reader (goal-seek's preview checks the reason outside a command).
+async function assertReason(db: Reader, code: string | null | undefined, note: string | null, at: string): Promise<void> {
   if (code === undefined || code === null) return
-  const reason = await reasonFor(tools.tx, 'PRICE_ADJUSTMENT', code)
+  const reason = await reasonFor(db as Prisma.TransactionClient, 'PRICE_ADJUSTMENT', code)
   if (!reason || !reason.active) throw new ValidationError(`"${code}" is not an active reason for a price change: choose one of the price adjustment reasons (Sales settings › Reasons).`, [{ path: `${at}/reasonCode`, message: 'Not an active PRICE_ADJUSTMENT reason.' }])
   if (reason.needsDetail && note === null) throw new ValidationError(`The reason "${reason.labelEn}" needs a few words: add a note.`, [{ path: `${at}/note`, message: 'This reason needs a note.' }])
 }
 
 const sizeAudit = (sizes: readonly { size: string; unitPrice: string | null }[]) => sizes.map((row) => ({ size: row.size, unitPrice: row.unitPrice }))
+
+// ---- B-W2b-302: the price of a line in two parts, plan (no write) and write, so that goal-seek (SAL-150) shows a waterfall
+// before it writes it and writes many lines in one command with the same rules: PUT …/price stays the one price writer. ----
+
+/** B-W2b-302: the reads a line's price is planned from, once per version (goal-seek plans many lines with the same). */
+export interface PriceContext {
+  readonly listed: Awaited<ReturnType<typeof linePricesOf>>
+  readonly floor: Awaited<ReturnType<typeof floorOfVersion>>
+  readonly extras: Awaited<ReturnType<typeof lineExtrasOf>>
+  readonly options: Map<string, OptionCharge[]>
+}
+
+/** B-W2b-302: see PriceContext. */
+export async function priceContextOf(db: Reader, current: QuoteRow, version: VersionRow, lines: readonly LineRecord[], now: Date): Promise<PriceContext> {
+  return {
+    listed: await linePricesOf(db, current, version, now),
+    floor: await floorOfVersion(db, current, version, now),
+    extras: await lineExtrasOf(db, version.id),
+    options: await optionChargesOf(db, lines.map((line) => line.id)),
+  }
+}
+
+/** B-W2b-302: a line's planned price: the waterfall, the net, the list price kept, each size's own price after. */
+export interface LinePricePlan {
+  readonly steps: WaterfallStep[]
+  readonly unitPrice: string
+  readonly listUnitPrice: string | null
+  readonly adjustmentReason: string | null
+  readonly sizesAfter: { size: string; unitPrice: string | null }[]
+}
+
+/**
+ * B-W2b-302: the waterfall PUT …/price would write for a DRAFT goods line (no write), refused in words as the route refuses it:
+ * a fee, a made-to-measure line, a missing price or reason, an inactive reason, no list for a LIST start, no cost for SUGGESTED.
+ */
+export async function planLinePrice(db: Reader, ctx: PriceContext, version: VersionRow, line: LineRecord, body: PriceLineInput): Promise<LinePricePlan> {
+  if (!isGoodsLine(line)) throw new DomainError('conflict', 'A fee is priced on its own: change it with PATCH …/fees/:lineId.', [{ path: 'lineId', message: 'A FEE line has no waterfall.' }])
+  if (line.kind !== 'SIZE_GRID') throw new DomainError('conflict', 'Made-to-measure comes later: only a size-grid line is priced here.', [{ path: 'lineId', message: 'Not a size-grid line.' }])
+
+  const startNote = blankToNull(body.startNote)
+  const discountNote = blankToNull(body.discount?.note)
+  const netNote = blankToNull(body.net?.note)
+  if (body.discount && !body.discount.pct) throw new ValidationError('A discount says its percent.', [{ path: 'body/discount/pct', message: 'Send the percent.' }])
+  if (body.net && !body.net.unitPrice) throw new ValidationError('A manual net says the net unit price.', [{ path: 'body/net/unitPrice', message: 'Send the net unit price.' }])
+  if (body.start === 'MANUAL') {
+    if (!body.startPrice) throw new ValidationError('A typed starting price is sent with it.', [{ path: 'body/startPrice', message: 'Send the starting price.' }])
+    if (!body.startReasonCode) throw new ValidationError('A typed starting price names its reason (SAL-175).', [{ path: 'body/startReasonCode', message: 'Send the reason code.' }])
+  }
+  await assertReason(db, body.start === 'MANUAL' ? body.startReasonCode : null, startNote, 'body/start')
+  await assertReason(db, body.discount?.reasonCode, discountNote, 'body/discount')
+  await assertReason(db, body.net?.reasonCode, netNote, 'body/net')
+
+  const { listed, floor } = ctx
+  const fromList = listed.lines.find((row) => row.line.id === line.id)
+  const listPrice = fromList?.priced.listPrice ?? null
+
+  let start: Parameters<typeof buildWaterfall>[0]['start']
+  if (body.start === 'LIST') {
+    if (listPrice === null || !fromList?.entry) throw new DomainError('conflict', "No price list prices this style and colourway on the quote's day: start from the price its cost suggests, or type one with its reason.", [{ path: 'body/start', message: 'No list price.' }])
+    start = { kind: 'LIST', unitPrice: listPrice, source: { type: 'PriceListEntry', id: fromList.entry.id }, label: fromList.priced.steps[0]?.label || 'List price' }
+  } else if (body.start === 'SUGGESTED') {
+    if (line.styleRevisionId === null) throw new DomainError('conflict', 'The style has no revision to cost the line from: no price can be suggested.', [{ path: 'body/start', message: 'No revision.' }])
+    const suggested = suggestedPriceOf({ unitCost: line.costAmount === null ? null : decimal(line.unitCost), marginPct: body.marginPct ?? floor.marginFloorPct, currency: version.currency, onBasis: listed.onBasis })
+    if ('problem' in suggested) throw new DomainError('conflict', suggested.problem, [{ path: body.marginPct ? 'body/marginPct' : 'body/start', message: suggested.problem }])
+    start = { kind: 'SUGGESTED', unitPrice: suggested.unitPrice, source: { type: 'StyleRevision', id: line.styleRevisionId }, label: 'From the cost and the margin to earn' }
+  } else {
+    start = { kind: 'MANUAL', unitPrice: body.startPrice!, reasonCode: body.startReasonCode!, ...(startNote ? { note: startNote } : {}) }
+  }
+  const built = buildWaterfall({
+    start,
+    breakStep: body.start === 'LIST' && fromList ? breakOf(fromList.priced.steps) : null,
+    options: body.options === false ? [] : (ctx.options.get(line.id) ?? []),
+    discount: body.discount ? { pct: body.discount.pct!, reasonCode: body.discount.reasonCode ?? null } : null,
+    net: body.net ? { unitPrice: body.net.unitPrice!, reasonCode: body.net.reasonCode, note: netNote } : null,
+    // The list's size surcharges belong to a list price (a price from the cost or typed carries its own).
+    sizeCharges: body.start === 'LIST' && fromList ? fromList.priced.sizeSurcharges.map((row) => ({ surchargeId: row.surchargeId, size: row.size, added: row.onBasis })) : [],
+    onBasis: listed.onBasis,
+    toNet: toNetOf(listed.rate, listed.basis),
+    currency: version.currency,
+  })
+  if (Array.isArray(built)) throw new ValidationError(built.length === 1 ? built[0]!.message : 'The price cannot be built.', built as Issue[])
+  // A note on the discount goes on its step.
+  const steps = discountNote ? built.steps.map((step) => (step.kind === 'DISCOUNT' ? { ...step, note: discountNote.slice(0, 500) } : step)) : built.steps
+  return {
+    steps: steps as WaterfallStep[],
+    unitPrice: built.unitPrice,
+    listUnitPrice: listPrice ?? decimal(line.listUnitPrice),
+    adjustmentReason: built.adjustmentReason,
+    sizesAfter: line.sizes.map((row) => ({ size: row.size, unitPrice: built.sizePrices[row.size] ?? null })),
+  }
+}
+
+/**
+ * B-W2b-302: a planned price written: ONE update of the line (the price, the list price, the waterfall and the reason
+ * together: the database checks the steps add up to the price; a LIST start is the list price), then each size's own price,
+ * audited (quotes.priceLine) and emitted. The caller refreshes the version's money once (W1 refreshVersion).
+ */
+export async function writeLinePrice(tools: CommandTools, current: QuoteRow, version: VersionRow, ctx: PriceContext, line: LineRecord, plan: LinePricePlan, start: StartKind): Promise<void> {
+  const { tx } = tools
+  const extras = ctx.extras.get(line.id)
+  await tx.quoteLine.update({
+    where: { id: line.id },
+    data: { unitPrice: plan.unitPrice, listUnitPrice: plan.listUnitPrice, priceSteps: plan.steps as unknown as Prisma.InputJsonValue, adjustmentReason: plan.adjustmentReason, version: { increment: 1 } },
+    select: { id: true },
+  })
+  for (const row of plan.sizesAfter) {
+    const was = line.sizes.find((entry) => entry.size === row.size)?.unitPrice ?? null
+    if ((was === null ? null : stepPrice(was)) === row.unitPrice) continue
+    await tx.quoteLineSize.updateMany({ where: { lineId: line.id, size: row.size }, data: { unitPrice: row.unitPrice, version: { increment: 1 } } })
+  }
+  tools.audit({
+    action: 'quotes.priceLine',
+    recordType: 'Quote',
+    recordId: current.id,
+    companyId: current.companyId,
+    before: { lineId: line.id, unitPrice: markMoney('price', decimal(line.unitPrice)), listUnitPrice: markMoney('price', decimal(line.listUnitPrice)), priceSteps: markMoney('price', extras?.priceSteps ?? null), adjustmentReason: extras?.adjustmentReason ?? null, sizes: markMoney('price', sizeAudit(line.sizes)) },
+    after: { lineId: line.id, start, unitPrice: markMoney('price', plan.unitPrice), listUnitPrice: markMoney('price', plan.listUnitPrice), priceSteps: markMoney('price', plan.steps), adjustmentReason: plan.adjustmentReason, sizes: markMoney('price', plan.sizesAfter) },
+  })
+  tools.emit({ type: 'quote.lines_changed', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId: version.id, change: 'changed', lineId: line.id } })
+}
 
 /** PUT /sales/quotes/:quoteId/lines/:lineId/price (quotes.manage): see the module comment. */
 export async function priceLine(caller: CommandCaller, quoteId: string, lineId: string, body: PriceLineInput, idempotencyKey?: string): Promise<{ quote: QuoteDetail; line: ReturnType<typeof lineAnswer> }> {
@@ -210,84 +331,16 @@ export async function priceLine(caller: CommandCaller, quoteId: string, lineId: 
   return onQuote(caller, quote, { name: 'quotes.priceLine', idempotencyKey, input: { quoteId, lineId, ...body }, version: body.version }, async (tools, current, version) => {
     const { tx, now } = tools
     assertDraft(version)
-    const line = (await readLineRecords(tx, version.id)).find((entry) => entry.id === lineId)
+    const lines = await readLineRecords(tx, version.id)
+    const line = lines.find((entry) => entry.id === lineId)
     if (!line) throw new NotFoundError('Quote line not found.')
-    if (!isGoodsLine(line)) throw new DomainError('conflict', 'A fee is priced on its own: change it with PATCH …/fees/:lineId.', [{ path: 'lineId', message: 'A FEE line has no waterfall.' }])
-    if (line.kind !== 'SIZE_GRID') throw new DomainError('conflict', 'Made-to-measure comes later: only a size-grid line is priced here.', [{ path: 'lineId', message: 'Not a size-grid line.' }])
-
-    const startNote = blankToNull(body.startNote)
-    const discountNote = blankToNull(body.discount?.note)
-    const netNote = blankToNull(body.net?.note)
-    if (body.discount && !body.discount.pct) throw new ValidationError('A discount says its percent.', [{ path: 'body/discount/pct', message: 'Send the percent.' }])
-    if (body.net && !body.net.unitPrice) throw new ValidationError('A manual net says the net unit price.', [{ path: 'body/net/unitPrice', message: 'Send the net unit price.' }])
-    if (body.start === 'MANUAL') {
-      if (!body.startPrice) throw new ValidationError('A typed starting price is sent with it.', [{ path: 'body/startPrice', message: 'Send the starting price.' }])
-      if (!body.startReasonCode) throw new ValidationError('A typed starting price names its reason (SAL-175).', [{ path: 'body/startReasonCode', message: 'Send the reason code.' }])
-    }
-    await assertReason(tools, body.start === 'MANUAL' ? body.startReasonCode : null, startNote, 'body/start')
-    await assertReason(tools, body.discount?.reasonCode, discountNote, 'body/discount')
-    await assertReason(tools, body.net?.reasonCode, netNote, 'body/net')
-
-    const listed = await linePricesOf(tx, current, version, now)
-    const fromList = listed.lines.find((row) => row.line.id === line.id)
-    const listPrice = fromList?.priced.listPrice ?? null
-    const floor = await floorOfVersion(tx, current, version, now)
-    const extras = (await lineExtrasOf(tx, version.id)).get(line.id)
-
-    let start: Parameters<typeof buildWaterfall>[0]['start']
-    if (body.start === 'LIST') {
-      if (listPrice === null || !fromList?.entry) throw new DomainError('conflict', "No price list prices this style and colourway on the quote's day: start from the price its cost suggests, or type one with its reason.", [{ path: 'body/start', message: 'No list price.' }])
-      start = { kind: 'LIST', unitPrice: listPrice, source: { type: 'PriceListEntry', id: fromList.entry.id }, label: fromList.priced.steps[0]?.label || 'List price' }
-    } else if (body.start === 'SUGGESTED') {
-      if (line.styleRevisionId === null) throw new DomainError('conflict', 'The style has no revision to cost the line from: no price can be suggested.', [{ path: 'body/start', message: 'No revision.' }])
-      const suggested = suggestedPriceOf({ unitCost: line.costAmount === null ? null : decimal(line.unitCost), marginPct: body.marginPct ?? floor.marginFloorPct, currency: version.currency, onBasis: listed.onBasis })
-      if ('problem' in suggested) throw new DomainError('conflict', suggested.problem, [{ path: body.marginPct ? 'body/marginPct' : 'body/start', message: suggested.problem }])
-      start = { kind: 'SUGGESTED', unitPrice: suggested.unitPrice, source: { type: 'StyleRevision', id: line.styleRevisionId }, label: 'From the cost and the margin to earn' }
-    } else {
-      start = { kind: 'MANUAL', unitPrice: body.startPrice!, reasonCode: body.startReasonCode!, ...(startNote ? { note: startNote } : {}) }
-    }
-    const built = buildWaterfall({
-      start,
-      breakStep: body.start === 'LIST' && fromList ? breakOf(fromList.priced.steps) : null,
-      options: body.options === false ? [] : ((await optionChargesOf(tx, [line.id])).get(line.id) ?? []),
-      discount: body.discount ? { pct: body.discount.pct!, reasonCode: body.discount.reasonCode ?? null } : null,
-      net: body.net ? { unitPrice: body.net.unitPrice!, reasonCode: body.net.reasonCode, note: netNote } : null,
-      // The list's size surcharges belong to a list price (a price from the cost or typed carries its own).
-      sizeCharges: body.start === 'LIST' && fromList ? fromList.priced.sizeSurcharges.map((row) => ({ surchargeId: row.surchargeId, size: row.size, added: row.onBasis })) : [],
-      onBasis: listed.onBasis,
-      toNet: toNetOf(listed.rate, listed.basis),
-      currency: version.currency,
-    })
-    if (Array.isArray(built)) throw new ValidationError(built.length === 1 ? built[0]!.message : 'The price cannot be built.', built as Issue[])
-    // A note on the discount goes on its step.
-    const steps = discountNote ? built.steps.map((step) => (step.kind === 'DISCOUNT' ? { ...step, note: discountNote.slice(0, 500) } : step)) : built.steps
-
-    // ONE update of the line: the price, the list price, the waterfall and the reason together (the database checks the
-    // steps add up to the price; a LIST start is the list price).
-    const listUnitPrice = listPrice ?? decimal(line.listUnitPrice)
-    await tx.quoteLine.update({
-      where: { id: line.id },
-      data: { unitPrice: built.unitPrice, listUnitPrice, priceSteps: steps as unknown as Prisma.InputJsonValue, adjustmentReason: built.adjustmentReason, version: { increment: 1 } },
-      select: { id: true },
-    })
-    const sizesAfter = line.sizes.map((row) => ({ size: row.size, unitPrice: built.sizePrices[row.size] ?? null }))
-    for (const row of sizesAfter) {
-      const was = line.sizes.find((entry) => entry.size === row.size)?.unitPrice ?? null
-      if ((was === null ? null : stepPrice(was)) === row.unitPrice) continue
-      await tx.quoteLineSize.updateMany({ where: { lineId: line.id, size: row.size }, data: { unitPrice: row.unitPrice, version: { increment: 1 } } })
-    }
+    // B-W2b-302: planned, then written (the same two parts goal-seek uses).
+    const ctx = await priceContextOf(tx, current, version, [line], now)
+    const plan = await planLinePrice(tx, ctx, version, line, body)
+    await writeLinePrice(tools, current, version, ctx, line, plan, body.start)
     await refreshVersion(tools, current, version, new Set())
-    tools.audit({
-      action: 'quotes.priceLine',
-      recordType: 'Quote',
-      recordId: current.id,
-      companyId: current.companyId,
-      before: { lineId: line.id, unitPrice: markMoney('price', decimal(line.unitPrice)), listUnitPrice: markMoney('price', decimal(line.listUnitPrice)), priceSteps: markMoney('price', extras?.priceSteps ?? null), adjustmentReason: extras?.adjustmentReason ?? null, sizes: markMoney('price', sizeAudit(line.sizes)) },
-      after: { lineId: line.id, start: body.start, unitPrice: markMoney('price', built.unitPrice), listUnitPrice: markMoney('price', listUnitPrice), priceSteps: markMoney('price', steps), adjustmentReason: built.adjustmentReason, sizes: markMoney('price', sizesAfter) },
-    })
-    tools.emit({ type: 'quote.lines_changed', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId: version.id, change: 'changed', lineId: line.id } })
     const label = await priceReasonLabels(tx)
-    return { ...(await detailInCommand(tools, current.id)), line: lineAnswer(line.id, built.unitPrice, listUnitPrice, steps as WaterfallStep[], built.adjustmentReason, version.currency, label) }
+    return { ...(await detailInCommand(tools, current.id)), line: lineAnswer(line.id, plan.unitPrice, plan.listUnitPrice, plan.steps, plan.adjustmentReason, version.currency, label) }
   })
 }
 

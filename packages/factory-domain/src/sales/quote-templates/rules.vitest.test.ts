@@ -59,9 +59,12 @@ describe('quote templates (SAL-144, SAL-252)', () => {
     expect(plan.lines[0]).toMatchObject({ section: 'Jackets', colourwayId: 'c1', sizes: { '50': 2, '52': 4 } })
     expect(plan.leftOut.map((entry) => [entry.seq, entry.reason.split(':')[0]])).toEqual([
       [20, 'Its colourway is chosen when the quote is made'],
-      [30, 'A fee line is not added to a quote yet'],
       [40, 'Left out when the quote was made.'],
     ])
+    // B-W2b-302: a fee line becomes a FEE quote line (B-W2b-330's fees) at the template's price; one without a price is left out.
+    expect(plan.fees).toEqual([{ templateLineId: 't30', seq: 30, section: 'Jackets', feeKind: 'DEVELOPMENT', styleId: 's1', colourwayId: 'c1', unitPrice: '500', description: null, note: null }])
+    const unpriced = planStart([{ ...line({ seq: 30, kind: 'FEE', feeKind: 'SAMPLE', sizes: null, unitPrice: null }), id: 't30' }], [])
+    expect([unpriced.fees, unpriced.leftOut.map((entry) => entry.reason.split(':')[0])]).toEqual([[], ['A fee without a price on the template is not added']])
     const picked = planStart(lines, [{ templateLineId: 't20', colourwayId: 'c2', sizes: { '54': 3 } }])
     expect(picked.lines.find((entry) => entry.seq === 20)).toMatchObject({ colourwayId: 'c2', sizes: { '54': 3 } })
   })
