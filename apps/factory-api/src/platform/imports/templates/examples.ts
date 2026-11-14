@@ -96,6 +96,9 @@ export const TEMPLATE_EXAMPLES: Readonly<Record<string, readonly TemplateExample
     { list: 'PL-CLIENTE', style: 'JK-210', colourway: '*', validFrom: '-', validTo: '2027-01-31', unitPrice: '435', breaks: '10=425; 50=415' },
     { list: 'PL-CLIENTE', style: 'JK-210', colourway: '*', validFrom: '2027-02-01', validTo: '-', unitPrice: '449.50', breaks: '100=3%' },
     { list: 'PL-CLIENTE', style: 'JK-210', colourway: 'RED', validFrom: '-', unitPrice: '455' },
+    // B-W2b-380 (XF6:04): the version's own row (every price's discount, every style's surcharge) and a style's surcharges alone.
+    { list: 'PL-CLIENTE', style: '*', colourway: '*', validFrom: '-', breaks: '200=5%', sizeSurcharges: '56=20' },
+    { list: 'PL-CLIENTE', style: 'TR-110', colourway: '*', validFrom: '-', sizeSurcharges: '54=4%; 56=6%' },
   ],
 })
 

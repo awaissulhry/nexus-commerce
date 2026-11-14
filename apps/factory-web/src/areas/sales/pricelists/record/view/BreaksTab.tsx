@@ -5,7 +5,7 @@ import { Archive, ArchiveRestore, Plus, Trash2 } from 'lucide-react'
 import { Banner, Card, EmptyState } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { sizeColumns } from '@nexus/ui/grid/size-columns/index'
-import { Button, Input, Pill, SegmentedControl, Tag } from '@nexus/ui/primitives'
+import { Button, Input, SegmentedControl } from '@nexus/ui/primitives'
 import { useDsWords } from '../../../../../lib/i18n/ds-parts'
 import { INTL_LOCALE } from '../../../../../lib/i18n/locales'
 import { useLocale } from '../../../../../lib/i18n/provider'
@@ -17,6 +17,8 @@ import { movableMinimums, sortedBreaks, surchargeGrid, surchargeSizes, type Surc
 import { PartState, say, useDay, useDepthWords, useWords } from '../../parts'
 import type { BreaksDepthActions, BreaksDepthModel } from '../record-model'
 import '../../depth/depth.css'
+// B-W2b-380 (XF6:03): the minimums edited in place.
+import { MinimumsNotice, useMinimumColumns } from '../../minimums/view/MinimumColumns'
 
 /**
  * Breaks & surcharges (design sales.pricelists record tab pricelist.breaks, W2b; SAL-166, SAL-170, SAL-178, SAL-180): the
@@ -26,6 +28,9 @@ import '../../depth/depth.css'
  * minimum order quantities (warn, block or a small-run surcharge) and whether its documents show the discount. A version
  * in force keeps its rules (read only, said why). It fetches nothing.
  */
+/** B-W2b-380: no in-place edit in flight (a model without the part, e.g. an older fixture). */
+const NO_EDIT = { cells: {}, notice: null } as const
+
 export function BreaksTab({ list, model, actions }: { list: PriceListDetail; model: BreaksDepthModel; actions?: BreaksDepthActions }) {
   const t = useDepthWords()
   const w = useWords()
@@ -135,30 +140,7 @@ export function BreaksTab({ list, model, actions }: { list: PriceListDetail; mod
     ]
   }, [t, sizes, locale, ds.sizeColumns, currency])
 
-  const minimumColumns = useMemo<ColDef<Minimum>[]>(() => {
-    const SubjectCell = ({ data }: ICellRendererParams<Minimum>) =>
-      data ? (
-        <span className="fw-pld-cell">
-          <strong>{data.subject === 'STYLE' ? (data.style ? `${data.style.code} · ${data.style.name}` : '—') : data.subject === 'PRODUCT_TYPE' ? t(`minimums.type.${data.productType ?? 'OTHER'}`) : data.item ? `${data.item.code} · ${data.item.name}` : '—'}</strong>
-          <span className="fw-pld-sub">{t(`minimums.subject.${data.subject}`)}</span>
-        </span>
-      ) : null
-    const ActionCell = ({ data }: ICellRendererParams<Minimum>) =>
-      data ? (
-        <span className="fw-pld-inline">
-          <Tag tone={data.action === 'BLOCK' ? 'danger' : data.action === 'WARN' ? 'warning' : 'info'}>{t(`minimums.action.${data.action}`)}</Tag>
-          {data.action === 'SURCHARGE' && model.can.price ? <span>{data.surchargeAmount ? t('minimums.surchargeAmount', { amount: unitPrice(data.surchargeAmount, data.currency ?? currency, locale) }) : data.surchargePct ? t('minimums.surchargePct', { pct: percent(data.surchargePct, locale) }) : ''}</span> : null}
-        </span>
-      ) : null
-    const StatusCell = ({ data }: ICellRendererParams<Minimum>) => (data ? <Pill tone={data.status === 'ACTIVE' ? 'success' : 'neutral'}>{t(`minimums.status.${data.status}`)}</Pill> : null)
-    return [
-      { colId: 'subject', headerName: t('minimums.col.subject'), minWidth: 220, flex: 1.6, cellRenderer: SubjectCell, valueGetter: (params) => params.data?.style?.code ?? params.data?.productType ?? params.data?.item?.code ?? '' },
-      { colId: 'minimum', headerName: t('minimums.col.minimum'), minWidth: 180, flex: 1, valueGetter: (params) => (params.data ? t(`minimums.per.${params.data.per}`, { count: params.data.minQuantity }) : '') },
-      { colId: 'action', headerName: t('minimums.col.action'), minWidth: 220, flex: 1.3, cellRenderer: ActionCell, valueGetter: (params) => params.data?.action ?? '' },
-      { colId: 'note', headerName: t('minimums.col.note'), minWidth: 160, flex: 1, valueGetter: (params) => params.data?.note ?? '' },
-      { colId: 'status', headerName: t('minimums.col.status'), minWidth: 120, flex: 0.6, cellRenderer: StatusCell, valueGetter: (params) => params.data?.status ?? '' },
-    ]
-  }, [t, locale, currency, model.can.price])
+  const minimumColumns = useMinimumColumns({ depth: t, currency, can: model.can, listArchived: list.status === 'ARCHIVED', edit: model.minimumEdit ?? NO_EDIT, onCell: actions?.onMinimumCell })
 
   const heldWords = model.held ? t(model.held.key, model.held.params) : null
   const breaksPicked = (breaks ?? []).filter((row) => model.selectedBreaks.includes(row.id))
@@ -287,6 +269,8 @@ export function BreaksTab({ list, model, actions }: { list: PriceListDetail; mod
         model.minimums.status !== 'ready' ? (
           <PartState problem={model.minimums.status === 'error' ? model.minimums.problem : null} loading={model.minimums.status === 'loading'} label={t('minimums.title')} onRetry={actions?.onRetry} />
         ) : (
+          <>
+          <MinimumsNotice edit={model.minimumEdit ?? NO_EDIT} onDismiss={actions?.onMinimumNoticeDismiss} />
           <ListFrame<Minimum>
             label={t('minimums.title')}
             listKey={null}
@@ -311,6 +295,7 @@ export function BreaksTab({ list, model, actions }: { list: PriceListDetail; mod
             }}
             state={minimums && minimums.length === 0 ? <EmptyState title={t('minimums.empty')} description={t('minimums.emptyBody')} /> : undefined}
           />
+          </>
         ),
       )}
     </div>

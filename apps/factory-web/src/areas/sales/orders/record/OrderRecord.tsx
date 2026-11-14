@@ -65,6 +65,9 @@ import { ReviewBanner } from './review-banner/view/ReviewBanner'
 import { createElement } from 'react'
 // B-W2b-374: an amendment's new line's options.
 import { NewLineOptions } from '../../_shared/options-entry/NewLineOptions'
+// B-W2b-380 (XF6:02): cost changed since priced, on the order's lines.
+import { useCostChanged } from '../../_shared/cost-changed/use-cost-changed'
+import { CostChangedMark } from '../../_shared/cost-changed/view/CostChangedMark'
 
 /**
  * `/w/<company>/sales/orders/<id>` (SCR-039): loads the order (orders.view; the API checks its company and customer),
@@ -77,6 +80,9 @@ import { NewLineOptions } from '../../_shared/options-entry/NewLineOptions'
  * read for its sizes and colourways; Review asks the API's preview, Apply sends the version as read); close and reopen
  * lines; the cancel's impact check when its dialog opens, then the cancel with the typed number; copy as a new quote.
  */
+/** B-W2b-380: no lines yet (the order is read). */
+const NO_LINES: readonly never[] = []
+
 export function OrderRecord({ orderId }: { orderId: string }) {
   return (
     <WithMessages namespaces={['orders', 'sales', 'lists', 'records', DEPTH /* B-W2b-323 */]}>
@@ -351,6 +357,8 @@ function RecordContainer({ orderId }: { orderId: string }) {
     stepUp: { ensureFresh, guard },
   })
   const margin = useOrderMargin(api, orderId, tab === 'margin', session.permissions, order.status === 'ready' ? order.value.version : null)
+  // B-W2b-380 (XF6:02): the lines' cost sheets (once per revision) while the Lines tab shows them, with the cost grain.
+  const costChanges = useCostChanged({ api, companyId: order.status === 'ready' ? order.value.companyId : null, lines: order.status === 'ready' ? order.value.lines : NO_LINES, enabled: order.status === 'ready' && can.cost && tab === 'lines' })
   // B-W2b-180: "See it in the customer's portal" — the office person's preview of the customer's portal at this order.
   const [portalOpening, setPortalOpening] = useState(false)
   const portal = session.permissions.includes('partners.preview') ? { held: null, opening: portalOpening } : { held: { key: 'held.portalRight' }, opening: false }
@@ -413,6 +421,8 @@ function RecordContainer({ orderId }: { orderId: string }) {
     portal,
     // B-W2b-340
     lineOptions: order.status === 'ready' ? (line) => createElement(OrderLineOptions, { key: line.id, api, order: order.value, line, permissions: session.permissions, onReload: () => void load() }) : undefined,
+    // B-W2b-380 (XF6:02)
+    lineCost: order.status === 'ready' ? (line) => createElement(CostChangedMark, { key: `cost-${line.id}`, change: costChanges.get(line.id), currency: order.value.currency }) : undefined,
     // B-W2b-374 (XF3:02): an amendment's new line takes its options when it is made.
     newLineOptions: (line) =>
       createElement(NewLineOptions, {

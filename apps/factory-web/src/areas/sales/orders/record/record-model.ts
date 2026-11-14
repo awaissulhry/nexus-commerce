@@ -123,6 +123,8 @@ export interface OrderRecordModel {
   depth?: OrderDepthModel
   /** B-W2b-340: a colour line's "Options" (the configurator of the order line, its own container); absent: not drawn. */
   lineOptions?: (line: Order['lines'][number]) => ReactNode
+  /** B-W2b-380 (XF6:02): the line's "cost changed since priced" mark (the cost grain; nothing when it did not move). */
+  lineCost?: (line: Order['lines'][number]) => ReactNode
   /** B-W2b-374 (XF3:02): an amendment's new line's Options (OrderRecord mounts NewLineOptions). */
   newLineOptions?: (line: DraftLine) => ReactNode
   /** B-W2b-368 (XF1:02): "Waits for the factory review" (./review-banner), drawn by the container; absent: nothing to say. */

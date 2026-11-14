@@ -180,6 +180,8 @@ const REASONS = {
   DEFECT: { it: 'Difetto', en: 'Defect' },
   DAMAGED_IN_TRANSIT: { it: 'Danneggiato nel trasporto', en: 'Damaged in transit' },
 } as const
+/** B-W2b-380: the reasons' groups (ReasonCode.group, the tenant's own words; made up). */
+const REASON_GROUP: Record<keyof typeof REASONS, string | null> = { WRONG_SIZE: 'Taglia', DEFECT: 'Qualità', DAMAGED_IN_TRANSIT: null }
 const rl = (n: number, rma: number, customer: typeof C1, style: typeof S1 | null, size: string | null, reason: keyof typeof REASONS, pieces: number, credited: number | null, requestedOn: string): ReturnLineRow => ({
   returnId: uid('3487', rma),
   number: `DEMO-RMA-00${rma}`,
@@ -211,7 +213,9 @@ const groupBy = (rows: ReturnLineRow[], keyOf: (row: ReturnLineRow) => string, l
     return { key, ...label(own[0]!), figures: returnFigures(own) }
   }).sort((a, b) => b.figures.pieces - a.figures.pieces)
 function returnsOf(rows: ReturnLineRow[] = RETURN_LINES): Returns {
-  const reasons = groupBy(rows, (row) => row.reason, () => ({ code: null, name: null })).map((group) => ({ key: group.key, words: REASONS[group.key as keyof typeof REASONS] ?? null, figures: group.figures }))
+  const reasons = groupBy(rows, (row) => row.reason, () => ({ code: null, name: null })).map((group) => ({ key: group.key, words: REASONS[group.key as keyof typeof REASONS] ?? null, group: REASON_GROUP[group.key as keyof typeof REASONS] ?? null, figures: group.figures }))
+  const groupOf = (row: ReturnLineRow) => REASON_GROUP[row.reason as keyof typeof REASONS] ?? 'none'
+  const reasonGroups = groupBy(rows, groupOf, () => ({ code: null, name: null })).map((group) => ({ key: group.key, reasons: [...new Set(rows.filter((row) => groupOf(row) === group.key).map((row) => row.reason))].sort(), figures: group.figures }))
   const styles = groupBy(rows, (row) => row.style?.id ?? 'none', (row) => ({ code: row.style?.code ?? null, name: row.style?.name ?? null }))
   const heatStyles = styles.filter((group) => group.key !== 'none')
   const sizes = ['48', '50', '52', '54']
@@ -223,6 +227,7 @@ function returnsOf(rows: ReturnLineRow[] = RETURN_LINES): Returns {
     shipped: 1_120,
     returnRatePct: ((rows.reduce((sum, row) => sum + row.pieces, 0) / 1_120) * 100).toFixed(1),
     reasons,
+    reasonGroups,
     styles,
     colours: groupBy(rows, (row) => (row.style ? `${row.style.id}|NER` : 'none'), (row) => ({ code: row.colour?.code ?? null, name: row.colour ? `${row.style?.code} ${row.colour.name}` : null })),
     sizes: groupBy(rows, (row) => row.size ?? 'none', (row) => ({ code: row.size, name: null })),
@@ -310,6 +315,9 @@ export const designScreen = defineDesignScreen<ReportsModel>({
     { id: 'drill-week', label: 'Open sizes of a late week', model: model({ drill: { section: 'backlog', week: '2026-W45', group: null, horizon: null } }) },
     { id: 'drill-cell', label: 'One customer’s late sizes', model: model({ drill: { section: 'backlog', week: null, group: C1.id, horizon: 'late' } }) },
     { id: 'drill-reason', label: 'Return lines of one reason', model: model({ drill: { section: 'returns', by: 'reason', key: 'WRONG_SIZE' } }) },
+    // B-W2b-380 (XF6:06): the reasons by their group.
+    { id: 'returns-group', label: 'Returns also by reason group (the tenant’s groups; a reason without one under No group)', model: model({}, SALES, 'also=group') },
+    { id: 'drill-reason-group', label: 'Return lines of one reason group', model: model({ drill: { section: 'returns', by: 'group', key: 'Qualità' } }) },
     { id: 'drill-heat', label: 'Return lines of a heatmap cell', model: model({ drill: { section: 'returns', by: 'style', key: S1.id, size: '52' } }) },
     { id: 'no-price', label: 'Production manager (no price grain: pieces only)', model: model({ headline: ready(noPrice(HEADLINE)), intake: ready(noPrice(INTAKE)), backlog: ready(noPrice(BACKLOG)), returns: ready(noPrice(RETURNS)) }, MANAGER) },
     { id: 'outside', label: 'Orders and returns not in the role', model: model({ headline: ready(blind), intake: ready({ ...INTAKE, sight: blind.sight }), backlog: ready({ ...BACKLOG, sight: blind.sight }), returns: ready({ ...RETURNS, sight: blind.sight }) }), note: 'Each tile and panel says the records are not in the role; never 0.' },

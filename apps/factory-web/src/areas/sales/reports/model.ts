@@ -59,8 +59,8 @@ export function reportsCan(permissions: readonly string[]): ReportsCan {
 
 // ---- the address -------------------------------------------------------------------------------------------------------------
 
-/** The returns panel's second view ("also by"): every grouping but the reasons (always shown). */
-export const ALSO_BY = ['style', 'size', 'colour', 'customer'] as const
+/** The returns panel's second view ("also by"): every grouping but the reasons (always shown); B-W2b-380: the reason group. */
+export const ALSO_BY = ['style', 'size', 'colour', 'customer', 'group'] as const
 export type AlsoBy = (typeof ALSO_BY)[number]
 
 export interface ReportsAddress {
@@ -239,7 +239,7 @@ export function backlogChartRows(answer: Backlog, words: { earlier: string; late
 export type DrillTarget =
   | { readonly section: 'intake'; readonly bucket: string | null; readonly group: string | null }
   | { readonly section: 'backlog'; readonly week: string | null; readonly group: string | null; readonly horizon: BacklogHorizon | null }
-  | { readonly section: 'returns'; readonly by: ReturnGroup | null; readonly key: string | null; readonly size?: string | null }
+  | { readonly section: 'returns'; readonly by: ReturnGroup | 'group' | null; readonly key: string | null; readonly size?: string | null }
 
 export const drillKey = (target: DrillTarget): string =>
   target.section === 'intake' ? `i|${target.bucket ?? '*'}|${target.group ?? '*'}` : target.section === 'backlog' ? `b|${target.week ?? '*'}|${target.group ?? '*'}|${target.horizon ?? '*'}` : `r|${target.by ?? '*'}|${target.key ?? '*'}|${target.size ?? '*'}`
@@ -266,8 +266,10 @@ export function backlogRowsOf(answer: Backlog, target: Extract<DrillTarget, { se
 }
 
 /** The return line's key in one grouping (the API's: a colour is its style and colourway). */
-function returnKeyOf(line: ReturnLineRow, by: ReturnGroup, colours: ReadonlyMap<string, string>): string {
+function returnKeyOf(line: ReturnLineRow, by: ReturnGroup | 'group', colours: ReadonlyMap<string, string>, groups: ReadonlyMap<string, string>): string {
   if (by === 'reason') return line.reason
+  // B-W2b-380: the group of the line's reason (none when the reason has no group).
+  if (by === 'group') return groups.get(line.reason) ?? NO_KEY
   if (by === 'style') return line.style?.id ?? NO_KEY
   if (by === 'size') return line.size ?? NO_KEY
   if (by === 'customer') return line.customer.id
@@ -277,8 +279,9 @@ function returnKeyOf(line: ReturnLineRow, by: ReturnGroup, colours: ReadonlyMap<
 /** The return lines behind a reason, a style, size, colour or customer, a heatmap cell. */
 export function returnRowsOf(answer: Returns, target: Extract<DrillTarget, { section: 'returns' }>): ReturnLineRow[] {
   const colours = new Map(answer.colours.map((group) => [`${group.key.split('|')[0]}|${group.code ?? ''}`, group.key]))
+  const groups = new Map(answer.reasonGroups.flatMap((group) => group.reasons.map((reason) => [reason, group.key] as const)))
   return answer.lines.filter((line) => {
-    if (target.by !== null && target.key !== null && returnKeyOf(line, target.by, colours) !== target.key) return false
+    if (target.by !== null && target.key !== null && returnKeyOf(line, target.by, colours, groups) !== target.key) return false
     if (target.size !== undefined && target.size !== null && (line.size ?? NO_KEY) !== target.size) return false
     return true
   })

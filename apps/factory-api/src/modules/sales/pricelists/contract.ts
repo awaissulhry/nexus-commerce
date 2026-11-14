@@ -1,6 +1,8 @@
 import { z } from 'zod'
 import { businessDate, currency, defineContract, id, input, instant, output, unitPrice } from '@nexus/factory-domain/core/contracts'
 import { money, notMoney } from '@nexus/factory-domain/money/marked'
+// B-W2b-380 (XF6:01): the kept PDF's language.
+import { DOCUMENT_LANGUAGES } from '@nexus/factory-domain/documents/model'
 import { ENTRY_CHANGES, PRICE_LIST_KINDS, PRICE_LIST_LIMITS, PRICE_LIST_STATES, PRICE_VERSION_STATUSES } from '@nexus/factory-domain/sales/pricelists/pricelists'
 
 /**
@@ -168,4 +170,31 @@ export const compareContract = defineContract({
       ),
     }),
   },
+})
+
+// ---- B-W2b-380 (XF6:01): the price list PDF kept for mail ---------------------------------------------------------------
+
+const keptPdfState = output({
+  listId: id(),
+  versionId: id(),
+  revision: z.number().int(),
+  /** The newest still shows the version as it is (null: none kept). */
+  upToDate: z.boolean().nullable(),
+  /** A list of every company names the company whose letterhead it carries. */
+  needsCompany: z.boolean(),
+  pdfs: z.array(output({ id: id(), version: z.number().int(), number: z.string().nullable(), language: z.string(), companyId: id(), fileId: id(), createdAt: instant(), createdBy: z.string().nullable() })),
+})
+const mailAddress = z.string().trim().email().max(254)
+
+export const priceListPdfsContract = defineContract({ params: versionParams, response: { 200: output({ pdf: keptPdfState }) } })
+export const keepPriceListPdfContract = defineContract({
+  params: versionParams,
+  body: input({ language: z.enum(DOCUMENT_LANGUAGES).optional(), companyId: id().nullish() }),
+  response: { 200: output({ made: z.boolean(), version: z.number().int(), fileId: id(), pdf: keptPdfState }) },
+})
+export const sendPriceListPdfContract = defineContract({
+  params: versionParams,
+  body: input({ partyId: id(), to: z.array(mailAddress).max(10).optional(), cc: z.array(mailAddress).max(10).optional(), subject: z.string().max(200).nullable().optional(), message: z.string().max(10_000).nullable().optional(), language: z.enum(DOCUMENT_LANGUAGES).optional() }),
+  /** `fileId`: the kept PDF; `copyId`: its copy on the customer, the mail's attachment (sourceFileId = fileId). */
+  response: { 201: output({ version: z.number().int(), made: z.boolean(), fileId: id(), copyId: id(), outboundId: id(), threadId: id(), pdf: keptPdfState }) },
 })
