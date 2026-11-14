@@ -159,6 +159,11 @@ export interface DdtFacts {
   readonly parcels: readonly { readonly seq: number; readonly grossWeightKg: string | null }[]
   readonly goods: readonly DdtGoods[]
   readonly language: DocumentLanguage
+  /**
+   * B-W2b-386 (LQ1:02): the customer's requirements on the shipping checklist, as remarks (shipping/queue/ddt-remarks): the
+   * DDT's remarks when the office does not type its own (null: none applies).
+   */
+  readonly requirementRemarks?: string | null
 }
 
 /** What the office says when it issues (or previews) a DDT; everything else comes from the shipment. */
@@ -411,7 +416,8 @@ export function draftDdt(facts: DdtFacts, request: DdtRequest, now: Date): { rea
       destination,
       lines,
       documentRefs,
-      remarks: trimmed(request.remarks),
+      // B-W2b-386 (LQ1:02): not given → the customer's requirements; given (null or blank: none) → as typed.
+      remarks: request.remarks === undefined ? (facts.requirementRemarks ?? null) : trimmed(request.remarks),
     },
     problems,
   }

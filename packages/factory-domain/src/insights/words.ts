@@ -185,6 +185,11 @@ export const EN_TEMPLATES: Readonly<Record<string, string>> = Object.freeze({
   'INQUIRY_WAITING.ASSIGNED': 'Inquiry {number} from {from} has waited more than a working day for your answer.',
   'INQUIRY_WAITING.NEW': 'Inquiry {number} from {from} has waited more than a working day, and nobody has it yet.',
   'INQUIRY_WAITING.blocks': 'The customer waits for an answer.',
+  'SHIPMENT_AT_RISK.LATE': 'Shipment {number} for {customer} was due to leave on {shipByDate} and has not left.',
+  'SHIPMENT_AT_RISK.HELD': 'Shipment {number} for {customer} is due to leave by {shipByDate} and is on hold.',
+  'SHIPMENT_AT_RISK.MISSED_CUT_OFF': "Shipment {number} for {customer} is due to leave today and missed its carrier's cut-off.",
+  'SHIPMENT_AT_RISK.AT_RISK': "Shipment {number} for {customer} is due to leave today and is not packed, with the carrier's cut-off near.",
+  'SHIPMENT_AT_RISK.blocks': 'The customer gets the goods later than promised.',
 
   'why.ORDER_PROMISE.orders_manage': "You manage this customer's orders and their promise dates.",
   'why.WORK_ORDER_HELD.workorders_release': 'You release work orders at this site.',
@@ -217,6 +222,7 @@ export const EN_TEMPLATES: Readonly<Record<string, string>> = Object.freeze({
   'why.APPROVAL_TASK.approvals_decide': 'Its approval rule names you or your role here, and someone else asked for it.',
   'why.INQUIRY_WAITING.sales_inquiries_manage': "You answer this company's inquiries.",
   'why.INQUIRY_WAITING.assigned': 'It was given to you.',
+  'why.SHIPMENT_AT_RISK.shipping_manage': "You plan and ship this site's shipments.",
 })
 
 /** At most five values, then "and N more". */
@@ -440,6 +446,11 @@ export function approvalTaskWords(facts: { readonly kind: string; readonly summa
 }
 
 /** B-W2b-385 (NT1:02): an inquiry waiting for us over a working day, the assignee's or nobody's yet. */
+/** B-W2b-386: a shipment at risk of missing its promise (LATE, HELD, MISSED_CUT_OFF or AT_RISK). */
+export function shipmentAtRiskWords(facts: { readonly risk: 'LATE' | 'HELD' | 'MISSED_CUT_OFF' | 'AT_RISK'; readonly number: string; readonly customer: string; readonly shipBy: BusinessDate }): RowWords {
+  return { sentence: phrase(`SHIPMENT_AT_RISK.${facts.risk}`, { number: facts.number, customer: facts.customer, shipByDate: facts.shipBy }), blocks: phrase('SHIPMENT_AT_RISK.blocks') }
+}
+
 export function inquiryWaitingWords(facts: { readonly number: string; readonly from: string; readonly assigned: boolean }): RowWords {
   return { sentence: phrase(facts.assigned ? 'INQUIRY_WAITING.ASSIGNED' : 'INQUIRY_WAITING.NEW', { number: facts.number, from: facts.from }), blocks: phrase('INQUIRY_WAITING.blocks') }
 }
