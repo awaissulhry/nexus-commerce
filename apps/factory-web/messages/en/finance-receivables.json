@@ -202,7 +202,13 @@
     "CHANGED": "Paid or credited since it was prepared: cancel it, the ladder prepares it again.",
     "NO_CONTACT": "No active contact of the customer receives invoices with an e-mail address.",
     "SWITCHED_OFF": "Reminders are switched off for the company: it can be approved, not sent.",
-    "DEPOSIT_TO_CARRY": "Deposit to carry: a deposit paid without a deposit invoice is not placed on one of its invoices yet. Carry it in Payments first; the customer may owe less than this asks."
+    "DEPOSIT_TO_CARRY": "Deposit to carry: a deposit paid without a deposit invoice is not placed on one of its invoices yet. Carry it in Payments first; the customer may owe less than this asks.",
+    "STOP_PAYMENT_PROCESSING": "Stopped: the customer says a payment is on its way for one of its invoices.",
+    "STOP_DISPUTE": "Stopped: a dispute is open about one of its invoices.",
+    "STOP_PROMISE_TO_PAY": "Stopped: the customer promised to pay by a day that has not passed.",
+    "STOP_CREDIT_PENDING": "Stopped: a credit note is coming for one of its invoices.",
+    "RIBA_IN_COLLECTION": "Ri.Ba. collecting: the bank presents one of its instalments on its due day.",
+    "PAYMENT_PROCESSING": "Payment in progress: a card or SEPA payment, or a bank line that pays it, is being processed."
   },
   "reminder": {
     "byHand": "Prepared by hand",
