@@ -91,8 +91,6 @@
     },
     "accountant": "The accountant chose {method} for this company",
     "afterChoose": "Asks for a fresh code. The method locks with the first cost posted under it.",
-    "calculator": "Cost-per-minute calculator",
-    "calculatorLater": "Comes in a later version.",
     "choose": "Method",
     "entries": "Cost entries",
     "entriesValue_one": "{count} entry",

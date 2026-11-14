@@ -23,7 +23,6 @@
     "margin": "Margin saved",
     "marginAfter": "Margin with these options",
     "noPrice": "Prices and margins are not shown to your role.",
-    "costNote": "The options' own cost is not counted in the margin yet.",
     "manualKept": "The manual change of the price stays the same amount.",
     "notHeld": "The saved price does not hold the saved options: save them again to price the line with them.",
     "held": {

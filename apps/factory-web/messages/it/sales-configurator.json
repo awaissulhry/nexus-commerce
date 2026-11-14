@@ -23,7 +23,6 @@
     "margin": "Margine salvato",
     "marginAfter": "Margine con queste opzioni",
     "noPrice": "Prezzi e margini non sono visibili al tuo ruolo.",
-    "costNote": "Il costo proprio delle opzioni non è ancora contato nel margine.",
     "manualKept": "La modifica manuale del prezzo resta dello stesso importo.",
     "notHeld": "Il prezzo salvato non comprende le opzioni salvate: salvale di nuovo per prezzare la riga con loro.",
     "held": {
