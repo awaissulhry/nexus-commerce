@@ -1952,6 +1952,8 @@
     "security_view": "See whether every part works, the sign-in rules, backups and restore drills",
     "security_drills_record": "Record a restore drill",
     "security_events_view": "See the security events: sign-ins, lockouts, two-factor changes, refusals, role changes, exports",
+    "security_settings_manage": "Change how long sessions last and which risky actions ask for a fresh code (longer or off asks a fresh code)",
+    "users_sessions_manage": "See where a person is signed in and end all their sessions",
     "sales_returns_view": "See customer returns",
     "sales_returns_manage": "Open and change customer returns",
     "sales_returns_receive": "Receive returned goods at the dock",

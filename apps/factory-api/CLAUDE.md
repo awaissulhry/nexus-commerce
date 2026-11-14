@@ -210,6 +210,30 @@ B-W2b-124 `modules/plant/statutory` (QHS-205; D.Lgs. 81/2008 art. 71: results ke
 - PostgreSQL tests: the harness's `addTenant` gives a tenant its system roles; `addUser({ role: 'owner' })` and
   `addRole(h, tenant, userId, key)` give a system role over every company.
 
+## Security in depth (`src/platform/auth/{sessions,office/step-up-*,roles/custom}/`; B-W2b-404; PLT-031, PLT-063, PLT-064, PLT-068)
+- Settings: ONE SecuritySettings row per tenant (id = tenant; `sessions/rules.ts securityRulesIn`, no row = factory-domain
+  `auth/sessions/lengths` SECURITY_DEFAULTS), read on every office and portal request: `liveUntil` shortens a session's stored
+  ends by the tenant's lengths NOW (shorter applies at the next request, longer to new sessions and the next slide). `GET
+  /auth/security-settings` (security.view; the floor's per-site FloorSettings shown, not changed), `PUT …/sessions` and `PUT
+  …/step-up` (security.settings.manage; version 0 = no row yet; a wider change asks `requireStepUp`; event
+  `security.settings_changed`). A new office/portal session: tenant lengths, `deviceLabel`/`browser` from the user agent,
+  `ipCountry`/`ipCity` only via `sessions/place.ts` (FACTORY_PLACE_HEADERS=cloudflare and a trusted proxy; else none).
+- Step-up: `office/step-up-actions.ts` (ONE LINE PER ACTION; the unit test holds every office stepUp permission to one action;
+  fixed ACCESS | SIGNATURE | LEGAL | RULE | SECURITY never switch off). `requireStepUp` skips a request whose route's manifest
+  permission belongs to an action the tenant switched off (`OfficeSession.security.stepUpOff`). `POST /auth/office/step-up` =
+  `step-up-policy.ts proveStepUp`: every try a StepUpAttempt in its own command under the DB's advisory lock (WRONG_CODE,
+  REUSED_CODE, LOCKED, SUCCESS with `secrets.stepUpFingerprint`); the try reaching the lock writes `auth.stepUpFailed` with
+  `stepUpLockedUntil` → STEP_UP_LOCKED (ledgers.ts). Wrong step-up codes no longer touch User.failedAttempts. `GET
+  /auth/office/me` session.stepUpLockedUntil / stepUpFailuresLeft. Ledger times: `databaseNow`.
+- Sessions: `GET /auth/sessions`, `POST /auth/sessions/:sessionId/end`, `POST /auth/sessions/end-others` (any office session;
+  ENDED_BY_USER; never the current one); `GET /auth/users/:userId/sessions`, `POST …/sessions/end` (users.sessions.manage;
+  ENDED_BY_ADMIN; never one's own). The portal's end-others writes ENDED_BY_USER too.
+- Custom roles: `POST /auth/roles/:roleId/archive` (version, reason; ends the live assignments in the same command, then ONE
+  update archivedAt/archivedById/version; a fresh code when it ends any), `…/restore`, `…/review` (adds, removes, grains,
+  holders, raises, asksFreshCode, refusals; no write). Create/edit: never more than the maker holds (an edit: its additions),
+  never the owner's every() (the owner template is not copyable; `GET /auth/roles/templates` gives `copyable`); PATCH asks a
+  fresh code only when it raises rights or changes two-factor. Event `security.role_archive_changed`.
+
 ## Floor sign-in (`src/platform/auth/floor/`, plan A1 §3.8, §3.10 "Floor")
 - Tables (floor-auth.prisma): Device, DeviceEnrolment, Worker (+ PIN hash and lockout), Badge, WorkerRole (a worker's
   FLOOR roles), FloorSession, FloorSettings (per site, its id = the site's id). Everything a tablet does runs in the

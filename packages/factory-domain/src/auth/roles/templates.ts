@@ -162,6 +162,8 @@ import { MAIL_DEPTH_ADDS } from '../../mail-depth/permissions'
 import { DEPOSIT_RULES_ADDS } from '../../invoicing/cancellation/permissions'
 // B-W2b-407: the actual-cost figures (finance lands charges and keeps the accountant's switch).
 import { COST_ACTUALS_ADDS } from '../../costing/landed/permissions'
+// B-W2b-404: security in depth (the administrator keeps the session lengths and step-up rules, and ends a person's sessions).
+import { SECURITY_DEPTH_ADDS } from '../sessions/permissions'
 
 /**
  * The system role templates (plan A1 §3.11 "Role"; feature PLT-030): ready roles every tenant gets as system roles
@@ -1080,7 +1082,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-396
   ...(audience === 'office' ? (DEPOSIT_RULES_ADDS[key] ?? []) : []),
   // B-W2b-407
-  ...(audience === 'office' ? (COST_ACTUALS_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (COST_ACTUALS_ADDS[key] ?? []) : []),
+  // B-W2b-404
+  ...(audience === 'office' ? (SECURITY_DEPTH_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the

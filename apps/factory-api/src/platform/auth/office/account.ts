@@ -12,16 +12,18 @@ import { heldRoles, type HeldAssignment } from '../roles/access'
 import { mfaRequired, mfaSatisfied } from '../sessions/grants'
 import type { OfficeAuth } from '../sessions/office-auth'
 import { endSessions, STEP_UP_VALID_MS } from '../sessions/session-store'
-import { checkSecondFactor, claimOf, markSession, newRecoveryCodes, newTotpSecret, otpauthUri, recordWrongSecret } from './second-factor'
+import { checkSecondFactor, markSession, newRecoveryCodes, newTotpSecret, otpauthUri, recordWrongSecret } from './second-factor'
+import { stepUpStateOf, stepUpSwitchedOff } from './step-up-policy'
 
 /**
  * The signed-in person's own account (features PLT-048, PLT-063, PLT-070, PLT-127): who am I, two-factor set-up,
  * confirm and switch-off, the step-up, a new password, and the interface language.
  *
  * Step-up (A1 §3.10): bank details, issuing invoices, and user and role changes need a fresh code from the
- * authenticator app on this session, at most 5 minutes old (`requireStepUp`). Each code works once (the TOTP step
- * is claimed), a wrong one counts towards the lockout like a wrong password, and while the account is locked no code
- * is accepted. Recovery codes do not step up: they are for signing in without the phone.
+ * authenticator app on this session, at most 5 minutes old (`requireStepUp`). B-W2b-404 (PLT-063): the code is proved by
+ * office/step-up-policy.ts (every try recorded, each code once, repeated wrong codes lock step-up, never the sign-in),
+ * and the company may switch an action off (office/step-up-actions.ts). While the account is locked no code is
+ * accepted. Recovery codes do not step up: they are for signing in without the phone.
  */
 
 const officeContextOf = (request: FastifyRequest): OfficeContext => requireContext(request) as OfficeContext
@@ -39,7 +41,10 @@ export function stepUpUntil(session: Pick<OfficeSession, 'stepUpAt'>): Date | nu
 }
 
 export function requireStepUp(auth: OfficeAuth, request: FastifyRequest): void {
-  const until = stepUpUntil(officeSessionOf(request))
+  const session = officeSessionOf(request)
+  // B-W2b-404 (PLT-063): the company switched this action off (Admin › Security; a fixed action always asks).
+  if (stepUpSwitchedOff(request, session)) return
+  const until = stepUpUntil(session)
   if (until === null || until.getTime() <= auth.clock.now().getTime()) throw new StepUpRequiredError()
 }
 
@@ -78,7 +83,7 @@ async function sitesOf(client: FactoryClient, held: readonly HeldAssignment[], c
 export async function me(auth: OfficeAuth, request: FastifyRequest) {
   const context = officeContextOf(request)
   const session = officeSessionOf(request)
-  const { tenant, company, companies, place, user, staffNotice } = await request.withClient(async (client) => {
+  const { tenant, company, companies, place, user, staffNotice, stepUp } = await request.withClient(async (client) => {
     const held = await heldRoles(client, context.actorId, auth.clock.now())
     return {
       tenant: await client.tenant.findUniqueOrThrow({ where: { id: context.tenantId }, select: { id: true, slug: true, name: true } }),
@@ -89,6 +94,8 @@ export async function me(auth: OfficeAuth, request: FastifyRequest) {
       user: await client.user.findUniqueOrThrow({ where: { id: context.actorId }, select: { recoveryCodeHashes: true } }),
       // The screen's company's staff notice in force (B-W1-36): the web shows it once per version (GET /privacy/staff-notice).
       staffNotice: await staffNoticeState(client, context.companyId, context.actorId),
+      // B-W2b-404: whether step-up is locked and how many wrong codes in a row lock it (the StepUpModal says so).
+      stepUp: await stepUpStateOf(client, context.tenantId, context.actorId),
     }
   })
   const until = stepUpUntil(session)
@@ -105,6 +112,8 @@ export async function me(auth: OfficeAuth, request: FastifyRequest) {
       idleExpiresAt: toUtcIso(session.idleExpiresAt),
       absoluteExpiresAt: toUtcIso(session.absoluteExpiresAt),
       stepUpUntil: until ? toUtcIso(until) : null,
+      stepUpLockedUntil: stepUp.lockedUntil,
+      stepUpFailuresLeft: stepUp.failuresLeft,
     },
     mfa: {
       enabled: session.user.totpEnabled,
@@ -118,30 +127,6 @@ export async function me(auth: OfficeAuth, request: FastifyRequest) {
 }
 
 const TOTP_STATE = { totpSecretEnc: true, totpPendingSecretEnc: true, totpConfirmedAt: true, totpLastStep: true, recoveryCodeHashes: true, lockedUntil: true, passwordHash: true } as const
-
-export async function stepUp(auth: OfficeAuth, request: FastifyRequest, code: string): Promise<{ stepUpUntil: string }> {
-  const context = officeContextOf(request)
-  const session = officeSessionOf(request)
-  const now = auth.clock.now()
-  const user = await request.withClient((client) => client.user.findUniqueOrThrow({ where: { id: context.actorId }, select: TOTP_STATE }))
-  if (user.totpConfirmedAt === null) throw new InvalidStateError('Set up two-factor first: a step-up needs a code from the authenticator app.')
-  if (isLocked(user, now)) throw new ForbiddenError('Too many wrong codes. Wait a few minutes, then try again.')
-  const result = checkSecondFactor(auth.secrets, user, code, now, { recovery: false })
-  if (!result.ok) {
-    await recordWrongSecret(auth, context, 'auth.stepUpFailed', 'code')
-    const message = result.failure === 'replayed' ? 'This code was already used. Wait for the next one.' : 'The code is wrong.'
-    throw new ValidationError(message, [{ path: 'code', message }])
-  }
-  const claim = claimOf(result.proof)
-  await auth.command(context, { name: 'auth.stepUp', input: null }, async ({ tx, now: at, audit }) => {
-    const { count } = await tx.user.updateMany({ where: { id: context.actorId, ...claim.where }, data: { ...claim.data, failedAttempts: 0, lockedUntil: null } })
-    if (count !== 1) throw new ValidationError('This code was already used. Wait for the next one.', [{ path: 'code', message: 'Already used.' }])
-    await markSession(tx, session.id, { stepUpAt: at })
-    audit({ recordType: 'Session', recordId: session.id, after: { stepUpAt: toUtcIso(at) } })
-    return null
-  })
-  return { stepUpUntil: toUtcIso(new Date(now.getTime() + STEP_UP_VALID_MS)) }
-}
 
 export async function startTotpSetup(auth: OfficeAuth, request: FastifyRequest): Promise<{ secret: string; otpauthUri: string }> {
   const context = officeContextOf(request)

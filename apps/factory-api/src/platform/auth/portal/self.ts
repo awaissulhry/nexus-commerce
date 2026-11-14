@@ -15,7 +15,7 @@ import { portalOf } from './service'
  *   GET  /portal/sessions               the person's own live portal sessions: when each started, when it was last used,
  *                                       the browser it said it was (the User-Agent kept at sign-in), which one is this one.
  *                                       Never the network: the stored address is a hash of a shortened address.
- *   POST /portal/sessions/end-others    signs out every other live portal session of the person (reason SIGNED_OUT), at
+ *   POST /portal/sessions/end-others    signs out every other live portal session of the person (reason ENDED_BY_USER, B-W2b-404), at
  *                                       once: their next request answers 401. This one stays.
  *   GET  /portal/company                what the factory holds for invoicing the person's organisation, read-only: the legal
  *                                       and trade name, the tax identity in force today (VAT number, tax code, SDI
@@ -93,8 +93,8 @@ export async function endOtherSessions(app: FastifyInstance, request: FastifyReq
   const { result } = await p.auth.command(contextOf(app, request), { name: 'portal.endOtherSessions', idempotencyKey, input: { sessionId: session.id } }, async ({ tx, now, audit }) => {
     const others = await tx.session.findMany({ where: { ...liveOf(session.userId, session.partyId, now), id: { not: session.id } }, select: { id: true } })
     const ids = others.map((row) => row.id)
-    const { count } = ids.length === 0 ? { count: 0 } : await tx.session.updateMany({ where: { id: { in: ids }, revokedAt: null }, data: { revokedAt: now, revokedReason: 'SIGNED_OUT' } })
-    audit({ recordType: 'User', recordId: session.userId, companyId: session.company.id, after: { sessionsEnded: count, sessionIds: ids, kept: session.id } })
+    const { count } = ids.length === 0 ? { count: 0 } : await tx.session.updateMany({ where: { id: { in: ids }, revokedAt: null }, data: { revokedAt: now, revokedReason: 'ENDED_BY_USER' } })
+    audit({ recordType: 'User', recordId: session.userId, companyId: session.company.id, after: { revokedReason: 'ENDED_BY_USER', sessionsEnded: count, sessionIds: ids, kept: session.id } })
     return { ended: count }
   })
   return result

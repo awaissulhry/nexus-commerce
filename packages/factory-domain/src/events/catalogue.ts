@@ -287,6 +287,8 @@ import { events as mailDepth } from '../mail-depth/events'
 import { events as shippingDelivery } from '../shipping-delivery/events'
 // B-W2b-396: invoicing in depth (invoice_run.changed, deposit_cancellation_rule.changed, deposit_cancellation.decided, fee_credit.changed).
 import { events as invoicingDepth } from '../invoicing-depth/events'
+// B-W2b-404: security in depth (session lengths and step-up rules changed, a custom role archived or restored).
+import { events as securityDepth } from '../security-depth/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -639,6 +641,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...shippingDelivery,
   // B-W2b-396
   ...invoicingDepth,
+  // B-W2b-404
+  ...securityDepth,
 ] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */

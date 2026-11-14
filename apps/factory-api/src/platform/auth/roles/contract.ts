@@ -18,7 +18,12 @@ const content = output({
   grains: z.array(grain),
 })
 
-export const templateView = content.extend({ key: z.string(), audience: z.enum(ROLE_AUDIENCES) })
+export const templateView = content.extend({
+  key: z.string(),
+  audience: z.enum(ROLE_AUDIENCES),
+  /** B-W2b-404: the caller may copy it into a custom role (an office template, not the owner's, nothing the caller lacks). */
+  copyable: z.boolean(),
+})
 
 export const roleView = content.extend({
   id: id(),
@@ -29,6 +34,8 @@ export const roleView = content.extend({
   /** B-W2b-24: since when it asks for two-factor (UTC); null when it does not ask, or asked from before the time was kept. */
   requireMfaSince: instant().nullable(),
   version: z.number().int(),
+  /** B-W2b-404: when a custom role was archived (UTC): it changes no more and is given to nobody until restored. */
+  archivedAt: instant().nullable(),
   /** People holding it now. */
   holders: z.number().int(),
   /** A system role that differs from its template (a sync brings it up to date). */

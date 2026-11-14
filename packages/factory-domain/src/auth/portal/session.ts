@@ -18,14 +18,17 @@ export const PORTAL_SESSION = Object.freeze({
   stepUpValidMs: 5 * 60_000,
 })
 
-/** The idle end after a request at `now`, never later than the absolute end. */
-export function portalIdleExpiryAt(now: Date, absoluteExpiresAt: Date): Date {
-  return new Date(Math.min(now.getTime() + PORTAL_SESSION.idleMs, absoluteExpiresAt.getTime()))
+/**
+ * The idle end after a request at `now`, never later than the absolute end. B-W2b-404 (PLT-068): `idleMs` is the tenant's
+ * portal idle time (SecuritySettings, at most these 30 minutes; factory-domain auth/sessions/lengths); default A1's.
+ */
+export function portalIdleExpiryAt(now: Date, absoluteExpiresAt: Date, idleMs: number = PORTAL_SESSION.idleMs): Date {
+  return new Date(Math.min(now.getTime() + idleMs, absoluteExpiresAt.getTime()))
 }
 
-/** The end of a session started at `now`. */
-export function portalAbsoluteExpiryAt(now: Date): Date {
-  return new Date(now.getTime() + PORTAL_SESSION.absoluteMs)
+/** The end of a session started at `now`; `absoluteMs` the tenant's longest portal session (at most these 12 hours). */
+export function portalAbsoluteExpiryAt(now: Date, absoluteMs: number = PORTAL_SESSION.absoluteMs): Date {
+  return new Date(now.getTime() + absoluteMs)
 }
 
 /** Until when the last step-up of a session holds (null: none, or none any more). */

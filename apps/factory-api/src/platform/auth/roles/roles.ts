@@ -10,7 +10,11 @@ import {
   normalizeContent,
   roleProblems,
   templateAdds,
+  widens,
 } from '@nexus/factory-domain/auth/roles/roles'
+import { beyondMaker, CUSTOM_ROLE_REFUSALS, customContentRefusals, OWNER_TEMPLATE } from '@nexus/factory-domain/auth/roles/custom'
+import { ROLE_REFUSAL_ISSUES } from '@nexus/factory-domain/auth/roles/refusals'
+import type { RoleContent } from '@nexus/factory-domain/auth/roles/templates'
 import { ROLE_TEMPLATES, templateOf } from '@nexus/factory-domain/auth/roles/templates'
 import { ConflictError, DomainError, ForbiddenError, InvalidStateError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { newId } from '@nexus/factory-domain/core/ids'
@@ -30,19 +34,23 @@ import { isOutdated, systemRoleChanges } from './system-roles'
 
 /**
  * Roles and assignments (plan A1 §3.11; features PLT-029, PLT-030, PLT-032). Every change is ONE command with its
- * audit rows, needs a step-up (A1 §3.10: user and role changes), and:
+ * audit rows, needs a step-up (A1 §3.10: user and role changes; B-W2b-404: a custom role's edit only when it raises
+ * rights or changes the two-factor rule), and:
  *   - a system role is never edited (copy it into a custom role); a custom role's edit says what it adds and removes;
  *   - a person gives and ends roles only within their own roles.assign scope (companies, sites, parties);
  *   - nobody gives themselves a role, ends their own, or edits a role they hold (separation of duties): another
  *     administrator does it;
  *   - the tenant keeps an administrator (a person with roles.assign over every company): the last one's assignment is
- *     not ended, and roles.assign is not taken away from the role that makes the last one.
+ *     not ended, and roles.assign is not taken away from the role that makes the last one;
+ *   - B-W2b-404 (PLT-031): a custom role never holds more than the person who makes it (an edit adds only what the
+ *     editor holds), never the owner's every() (the owner role is not copied), and is archived, never deleted
+ *     (roles/custom: archive, restore, the review of a change).
  */
 
 const officeContextOf = (request: FastifyRequest): OfficeContext => requireContext(request) as OfficeContext
 const isUniqueViolation = (error: unknown): boolean => (error as { code?: unknown } | null)?.code === 'P2002'
 
-const ROLE_SELECT = {
+export const ROLE_SELECT = {
   id: true,
   key: true,
   name: true,
@@ -55,9 +63,10 @@ const ROLE_SELECT = {
   grains: true,
   version: true,
   audience: true,
+  archivedAt: true,
 } as const
 
-type RoleRow = { id: string; key: string; name: string; description: string | null; system: boolean; basedOn: string | null; requireMfa: boolean; requireMfaSince: Date | null; permissions: string[]; grains: string[]; version: number; audience: 'OFFICE' | 'FLOOR' }
+type RoleRow = { id: string; key: string; name: string; description: string | null; system: boolean; basedOn: string | null; requireMfa: boolean; requireMfaSince: Date | null; permissions: string[]; grains: string[]; version: number; audience: 'OFFICE' | 'FLOOR'; archivedAt: Date | null }
 
 /**
  * W2b (B-W2b-152): RoleAudience has PARTNER too. These routes keep office and floor roles; a partner role (given to
@@ -87,19 +96,31 @@ function roleViewOf(row: RoleRow, holders: number) {
     permissions: row.permissions,
     grains,
     version: row.version,
+    archivedAt: row.archivedAt ? toUtcIso(row.archivedAt) : null,
     holders,
     outdated: row.system && isOutdated(row),
     templateAdds: row.system ? { permissionsAdded: [], grainsAdded: [] } : mutable(templateAdds({ basedOn: row.basedOn, permissions: row.permissions as Permission[], grains })),
   }
 }
 
-async function roleWithHolders(client: FactoryClient | CommandTx, roleId: string, now: Date) {
+export async function roleWithHolders(client: FactoryClient | CommandTx, roleId: string, now: Date) {
   const row = staffRole(await client.role.findUnique({ where: { id: roleId }, select: { ...ROLE_SELECT, _count: { select: { assignments: { where: liveAssignment(now) } } } } }))
   if (!row) throw new NotFoundError('Role not found.')
   return roleViewOf(row, row._count.assignments)
 }
 
-export function listTemplates() {
+/**
+ * B-W2b-404: a template the caller may copy into a custom role (New role): an office one, not the owner's, and nothing in
+ * it the caller does not hold.
+ */
+function copyable(template: (typeof ROLE_TEMPLATES)[number], grants: OfficeContext['grants']): boolean {
+  if (template.audience !== 'office' || template.key === OWNER_TEMPLATE) return false
+  const beyond = beyondMaker(template, grants)
+  return beyond.permissions.length === 0 && beyond.grains.length === 0
+}
+
+export function listTemplates(request: FastifyRequest) {
+  const context = officeContextOf(request)
   return {
     templates: ROLE_TEMPLATES.map((template) => ({
       key: template.key,
@@ -109,6 +130,7 @@ export function listTemplates() {
       requireMfa: template.requireMfa,
       permissions: [...template.permissions],
       grains: [...template.grains],
+      copyable: copyable(template, context.grants),
     })),
     permissions: FACTORY_PERMISSIONS.assignable.map(({ name, area, description, risk }) => ({ name, area, description, risk })),
     grains: GRAINS.map((grain) => ({ grain, description: GRAIN_DESCRIPTIONS[grain] })),
@@ -146,12 +168,14 @@ export async function createRole(auth: OfficeAuth, request: FastifyRequest, body
   const source = body.basedOn === undefined ? undefined : templateOf(body.basedOn)
   if (body.basedOn !== undefined && !source) throw new ValidationError('No template has this key.', [{ path: 'basedOn', message: 'Expected a template key.' }])
   if (source && source.audience !== 'office') throw new ValidationError('Custom roles are office roles; a floor template cannot be copied.', [{ path: 'basedOn', message: 'Expected an office template.' }])
+  if (source?.key === OWNER_TEMPLATE) throw new ValidationError(CUSTOM_ROLE_REFUSALS.ownerCopy, [{ path: 'body/basedOn/ownerCopy', message: CUSTOM_ROLE_REFUSALS.ownerCopy }])
   const content = checkedContent({
     name: body.name,
     requireMfa: body.requireMfa ?? source?.requireMfa ?? false,
     permissions: body.permissions ?? source?.permissions ?? [],
     grains: body.grains ?? source?.grains ?? [],
   })
+  assertWithinMaker(null, content, context)
   const id = newId()
   const key = customKey(body.key)
   try {
@@ -187,9 +211,27 @@ async function assertTwoFactorChange(tx: CommandTx, before: RoleRow, after: { re
   }
 }
 
+/**
+ * B-W2b-404 (PLT-031): a custom role never holds more than its maker (an edit: what it adds), never the owner's every().
+ * 403 for what the person does not hold (`body/permissions/<permission>/beyondYou`), 400 for the owner's every().
+ */
+function assertWithinMaker(before: Pick<RoleContent, 'permissions' | 'grains'> | null, after: Pick<RoleContent, 'permissions' | 'grains'>, context: OfficeContext): void {
+  const refusals = customContentRefusals(before, after, context.grants)
+  if (refusals.length === 0) return
+  if (refusals.some((issue) => issue.path.endsWith('/beyondYou'))) throw new DomainError('forbidden', CUSTOM_ROLE_REFUSALS.beyondYou, refusals)
+  throw new ValidationError(CUSTOM_ROLE_REFUSALS.ownerEvery, refusals)
+}
+
+/**
+ * B-W2b-404 (design admin.roles "Raising rights asks for a fresh code"): saving a custom role asks for a fresh code when it
+ * gives something the role did not (a permission, a grain, two-factor no longer asked) or changes its two-factor rule at all
+ * (B-W2a-36: both ways, as Security & health asks); a lower or equal role is saved without one.
+ */
+export const asksFreshCode = (before: Pick<RoleContent, 'permissions' | 'grains' | 'requireMfa'>, after: Pick<RoleContent, 'permissions' | 'grains' | 'requireMfa'>): boolean =>
+  widens(before, after) || before.requireMfa !== after.requireMfa
+
 export async function editRole(auth: OfficeAuth, request: FastifyRequest, roleId: string, body: EditRoleBody) {
   const context = officeContextOf(request)
-  requireStepUp(auth, request)
   const { result } = await auth.command(
     context,
     { name: 'roles.edit', input: body, record: { type: 'Role', id: roleId, expectedVersion: body.version } },
@@ -197,6 +239,8 @@ export async function editRole(auth: OfficeAuth, request: FastifyRequest, roleId
       const before = staffRole(await tx.role.findUnique({ where: { id: roleId }, select: ROLE_SELECT }))
       if (!before) throw new NotFoundError('Role not found.')
       if (before.system) throw new InvalidStateError('A system role follows its template and cannot be edited; copy it into a custom role.')
+      // B-W2b-404: in words before anything else (the database refuses it too: 409 roles/ROLE_ARCHIVED).
+      if (before.archivedAt !== null) throw new DomainError('conflict', CUSTOM_ROLE_REFUSALS.archived, [{ path: ROLE_REFUSAL_ISSUES.archived, message: CUSTOM_ROLE_REFUSALS.archived }])
       const held = await heldRoles(tx, context.actorId, now)
       if (held.some((entry) => entry.roleId === roleId)) throw new ForbiddenError('You hold this role: ask another administrator to edit it.')
       const after = checkedContent({
@@ -206,6 +250,9 @@ export async function editRole(auth: OfficeAuth, request: FastifyRequest, roleId
         grains: body.grains ?? before.grains,
       })
       const description = body.description === undefined ? before.description : body.description
+      const beforeContent = { permissions: before.permissions as Permission[], grains: before.grains.filter(isGrain), requireMfa: before.requireMfa }
+      assertWithinMaker(beforeContent, after, context)
+      if (asksFreshCode(beforeContent, after)) requireStepUp(auth, request)
       if (before.permissions.includes(ADMIN_PERMISSION) && !after.permissions.includes(ADMIN_PERMISSION)) {
         const others = await activeAdmins(tx, now, { roleId })
         const through = await activeAdmins(tx, now)

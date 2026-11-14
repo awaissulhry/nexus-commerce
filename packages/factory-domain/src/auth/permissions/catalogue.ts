@@ -379,6 +379,8 @@ import { MAIL_DEPTH_DEFINITIONS, MAIL_DEPTH_PERMISSIONS } from '../../mail-depth
 import { DEPOSIT_RULES_DEFINITIONS, DEPOSIT_RULES_PERMISSIONS } from '../../invoicing/cancellation/permissions'
 // B-W2b-407: the actual-cost figures (costing.landed.manage, costing.actuals.manage).
 import { COST_ACTUALS_DEFINITIONS, COST_ACTUALS_PERMISSIONS } from '../../costing/landed/permissions'
+// B-W2b-404: security in depth (security.settings.manage, users.sessions.manage).
+import { SECURITY_SETTINGS_DEFINITIONS, USER_SESSIONS_DEFINITIONS } from '../sessions/permissions'
 
 /**
  * Every permission of the factory, assembled (feature PLT-029). A module that adds routes declares its permissions
@@ -1067,6 +1069,9 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   DEPOSIT_RULES_DEFINITIONS,
   // B-W2b-407: purchase price variance, cost of goods sold, landed cost (area `costing`).
   COST_ACTUALS_DEFINITIONS,
+  // B-W2b-404: session lengths and step-up rules, a person's sessions (areas `security`, `users`).
+  SECURITY_SETTINGS_DEFINITIONS,
+  USER_SESSIONS_DEFINITIONS,
 ])
 
 /** The area of the permissions only floor roles hold (and floor roles hold no other, but FLOOR_SHARED_PERMISSIONS). */
