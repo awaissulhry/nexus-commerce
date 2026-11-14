@@ -1811,6 +1811,8 @@
     "costing_standards_manage": "Prepare and freeze standard costs",
     "costing_ledger_manage": "Post and reverse work-order cost entries",
     "costing_method_manage": "Choose the costing method (accountant)",
+    "costing_landed_manage": "Spread freight and other charges over the received lots",
+    "costing_actuals_manage": "Switch the actual cost figures on or off (accountant)",
     "production_settings_view": "See each site's floor rules",
     "production_settings_manage": "Change a site's floor rules",
     "production_cut": "Cut hides for a work order",
