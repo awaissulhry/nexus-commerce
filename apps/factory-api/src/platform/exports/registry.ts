@@ -2,6 +2,8 @@ import type { ExportFormat } from '@nexus/factory-domain/views/exports'
 import { ExportSourceError, formatsOf, type AnyExportSource } from './source'
 import { EXPORT_SOURCES } from './sources'
 import { reportSourceOf } from './sources/reports'
+// B-W2b-421: the custom fields of a list that takes them (platform/fields/records.ts): its custom columns and `cf` filter.
+import { withCustomFields } from '../fields/exports'
 
 /**
  * The registry of export sources (./source.ts says what a source is; ./sources/index.ts lists the lists'). W2b
@@ -36,7 +38,8 @@ export function processExportSources(): ReadonlyMap<string, AnyExportSource> {
 
 /** The source of a list key: a fixed one, else a dynamic one (a report), else undefined (the list has no export). */
 export function exportSourceOf(listKey: string): AnyExportSource | undefined {
-  return processExportSources().get(listKey) ?? reportSourceOf(listKey)
+  const fixed = processExportSources().get(listKey)
+  return fixed ? withCustomFields(fixed) : reportSourceOf(listKey)
 }
 
 /** The formats a list exports to (empty: the list has no export). */

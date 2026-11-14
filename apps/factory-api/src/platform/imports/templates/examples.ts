@@ -8,6 +8,9 @@ import { ORDER_TEMPLATE_EXAMPLES } from '@nexus/factory-domain/sales/portal-orde
 import { ORDER_IMPORT_EXAMPLES } from '@nexus/factory-domain/sales/order-import/importer'
 // B-W2b-209: a made-up Nexus Commerce product export (one family, its own row and four SKUs).
 import { COMMERCE_TEMPLATE_EXAMPLES } from '@nexus/factory-domain/product/commerce-import/sample'
+// B-W2b-421: the custom values of a record type (made-up records and field codes), the same rows for every record type.
+import { CUSTOM_VALUE_EXAMPLES } from '@nexus/factory-domain/fields/importer'
+import { CUSTOM_RECORDS } from '../../fields/records'
 
 /**
  * The made-up example rows of each importer's template (B-W2a-41; PLT-177): one or two rows a person can copy, never
@@ -60,6 +63,8 @@ export const TEMPLATE_EXAMPLES: Readonly<Record<string, readonly TemplateExample
   'sales.portalOrderLines': ORDER_TEMPLATE_EXAMPLES,
   // B-W2b-303
   'sales.orders': ORDER_IMPORT_EXAMPLES,
+  // B-W2b-421
+  ...Object.fromEntries(CUSTOM_RECORDS.map((record) => [record.importer, CUSTOM_VALUE_EXAMPLES])),
   // B-W2b-182: a tannery's packing list on a sent ship notice (made-up numbers).
   'purchasing.packingList': [
     { notice: 'ASN-2026-0001', hideNumber: '2231-001', area: '21.40', unit: 'FT2', line: '10', grade: 'A', thicknessMm: '1.20', dyeBatch: '2231' },

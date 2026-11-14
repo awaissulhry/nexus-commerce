@@ -48,7 +48,9 @@ describe('the permission registry', () => {
       // B-W2b-282: one approval engine (declared after the grains).
       'approvals',
       // B-W2b-389: currencies and exchange rates.
-      'currencies'])
+      'currencies',
+      // B-W2b-421: custom fields and picklists.
+      'fields'])
   })
 
   it('refuses a name declared twice, a bad area, a bad risk, an empty description', () => {

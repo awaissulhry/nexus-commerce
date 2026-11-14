@@ -305,6 +305,8 @@ import { events as receivablesCollections } from '../receivables-collections/eve
 import { events as costDepth } from '../cost-depth/events'
 // B-W2b-403: payables in depth (the payment proposal, the first of two approvals).
 import { events as payablesDepth } from '../payables-depth/events'
+// B-W2b-421: custom fields and picklists (custom_field.changed, picklist.changed, custom_value.changed).
+import { events as fields } from '../fields/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -675,6 +677,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...costDepth,
   // B-W2b-403
   ...payablesDepth,
+  // B-W2b-421
+  ...fields,
 ] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
