@@ -13,7 +13,8 @@
       "mailToSort": "Mail to sort",
       "insights": "Insights",
       "reports": "Reports",
-      "alerts": "Alerts"
+      "alerts": "Alerts",
+      "kpis": "KPI library"
     },
     "products": {
       "area": "Products",
