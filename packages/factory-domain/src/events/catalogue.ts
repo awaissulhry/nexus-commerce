@@ -274,6 +274,9 @@ import { events as shippingQueue } from '../shipping-queue/events'
 import { events as currencyEvents } from '../currency/events'
 // B-W2b-390: carriers in depth (shipping.test_mode_changed).
 import { events as shippingCarriers } from '../shipping-carriers/events'
+// B-W2b-398: delivery and return labels (shipment.customer_notice_sent, .tracking_problem_raised, .tracking_problem_resolved,
+// .pod_recorded, return_label.changed).
+import { events as shippingDelivery } from '../shipping-delivery/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -614,6 +617,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...currencyEvents,
   // B-W2b-390
   ...shippingCarriers,
+  // B-W2b-398
+  ...shippingDelivery,
 ] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */

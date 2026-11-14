@@ -33,4 +33,6 @@ export const manifest = defineManifest({
   'POST /sales/orders/:orderId/schedule/:milestoneId/waive': { audiences: ['office'], permission: 'orders.waive', scope: 'record' },
   'POST /sales/orders/:orderId/deposit-requests/:requestId/waive': { audiences: ['office'], permission: 'orders.waive', scope: 'record' },
   'POST /sales/orders/:orderId/copy-as-quote': { audiences: ['office'], permission: 'quotes.manage', scope: 'record' },
+  // B-W2b-398 (LOG-067): the order's deliveries (each shipment's arrival and proof, the terms from delivery).
+  'GET /sales/orders/:orderId/deliveries': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
 })

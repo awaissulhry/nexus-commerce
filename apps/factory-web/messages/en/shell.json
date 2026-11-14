@@ -380,7 +380,8 @@
       "JOB_ACCEPT": "accept or decline the job, or propose another date",
       "APPROVAL": "approve or refuse what we asked you to check",
       "RECORD_INVITE": "follow the record shared with you, and write or add files when allowed",
-      "SECURE_FILE": "download the files sent to you and confirm you received them"
+      "SECURE_FILE": "download the files sent to you and confirm you received them",
+      "RETURN_LABEL": "book the carrier for your return and print its label"
     },
     "usesLeft_one": "{count} use",
     "usesLeft_other": "{count} uses",

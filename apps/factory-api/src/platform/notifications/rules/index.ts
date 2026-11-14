@@ -31,6 +31,8 @@ import { SMV_CHANGE_NOTICES } from '../../../modules/insights/sources/smv-change
 // B-W2b-385: following in depth (a followed saved view changed, a followed record's status moved) and the follow-ups NT1:01-03.
 import { FOLLOWING_RULES } from '../view-follow/rules'
 import { FOLLOW_UP_RULES } from './follow-ups'
+// B-W2b-398: a tracking problem raised on a shipment on its way (ALERT to the dispatch desk of its site).
+import { TRACKING_PROBLEM_RULES } from '../../../modules/shipping/exceptions/notices'
 
 /**
  * The fan-out's rules, one file per source (B-W2a-20: mentions and followed records, assignments, approvals). A step that
@@ -66,4 +68,6 @@ export const FAN_OUT_RULES: readonly FanOutRule[] = Object.freeze([...THREAD_RUL
   // B-W2b-385: notification.view_changed and the records' status moves (FOLLOWING to their followers); a request to buy answered
   // (to who asked), an inquiry given to a person, a product-safety report (ALERT to who assesses them).
   ...FOLLOWING_RULES,
-  ...FOLLOW_UP_RULES])
+  ...FOLLOW_UP_RULES,
+  // B-W2b-398: shipment.tracking_problem_raised (ALERT to who manages shipments at its site).
+  ...TRACKING_PROBLEM_RULES])

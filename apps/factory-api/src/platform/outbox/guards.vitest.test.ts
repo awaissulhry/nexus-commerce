@@ -66,7 +66,9 @@ describe('check-event-contract', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
     // B-W2b-390: one event (shipping.test_mode_changed) and six literal emits (going live: a label voided, packing changed, the
     // switch; the own transport: details changed, a typed status recorded, its move): 841 → 842, 1314 → 1320.
     // B-W2b-389 + B-W2b-390 together: 841 + 2 + 1 = 844 declared event versions, 1314 + 6 + 6 = 1326 literal emits.
-    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(844 declared event version\(s\), 1326 literal emit/) })
+    // B-W2b-398: five events (shipment.customer_notice_sent, .tracking_problem_raised, .tracking_problem_resolved, .pod_recorded,
+    // return_label.changed), every one emitted through eventFor (no literal emit): 844 → 849.
+    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(849 declared event version\(s\), 1326 literal emit/) })
   })
 
   it.each<[string, Plants, RegExp]>([

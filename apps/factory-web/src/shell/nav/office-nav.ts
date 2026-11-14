@@ -542,7 +542,9 @@ export const WINDOW_PAGES: ReadonlySet<string> = new Set(['/planning/board', /* 
   /* B-W2b-271 */ '/compliance/register/notice',
   /* B-W2b-269 */ '/compliance/techfiles/pack', '/compliance/techfiles/pack/link',
   // B-W2b-361: the W2b-5 report print views open in a new tab (design tab:print), drawn as window pages like the W2b-2…4 ones.
-  '/sales/reports/print', '/planning/reports/print', '/purchasing/reports/print', '/warehouse/reports/print'])
+  '/sales/reports/print', '/planning/reports/print', '/purchasing/reports/print', '/warehouse/reports/print',
+  // B-W2b-398: the Return label PDF window (design sales.returns tab:returns.label).
+  '/sales/returns/label'])
 
 /** Whether a company-free address (with or without its terms) is a window page. */
 export const isWindowPage = (address: string): boolean => WINDOW_PAGES.has(address.split('?')[0]!.replace(/\/+$/, '') || '/')
