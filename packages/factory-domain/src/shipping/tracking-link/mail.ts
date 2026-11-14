@@ -59,6 +59,29 @@ const TEXT = {
   },
 } as const
 
+/**
+ * B-W2b-422 (PLT-232): the values of the e-mail template `shipping.tracking_link` (factory-domain templates/mail.ts), so a
+ * company's template in use says what this code says: the order (the customer's reference first), the shipment, where it is
+ * (or the renewal's words), the carrier and expected delivery lines, the link (`url` null: the words that stand for it, as
+ * the stored copy says). Without a template in use the mail is trackingLinkMail's.
+ */
+export function trackingLinkMailValues(input: TrackingLinkMail, url: string | null): Readonly<Record<string, string>> {
+  const words = TEXT[input.locale]
+  const order = input.customerRef ?? input.orderNumber ?? input.shipmentNumber
+  const expected = input.expectedDeliveryAt ? day(input.expectedDeliveryAt, input.locale) : ''
+  const facts = [input.carrierName ? words.carrier(input.carrierName) : null, expected ? words.eta(expected) : null].filter((line): line is string => line !== null)
+  return {
+    'order.number': order,
+    'shipment.number': input.shipmentNumber,
+    'shipment.where': input.renewal ? words.renewal(order, input.shipmentNumber) : words.where(input.status, order, input.shipmentNumber),
+    'shipment.facts': facts.join('\n'),
+    'carrier.name': input.carrierName ?? '',
+    'delivery.expected': expected,
+    trackingUrl: url ?? `[${words.kept}]`,
+    'company.name': input.companyName,
+  }
+}
+
 /** The subject and text; `url` null gives the text without the link (never stored with it). */
 export function trackingLinkMail(input: TrackingLinkMail, url: string | null): { readonly subject: string; readonly body: string } {
   const words = TEXT[input.locale]

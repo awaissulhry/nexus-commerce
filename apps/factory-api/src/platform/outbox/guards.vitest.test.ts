@@ -101,7 +101,9 @@ describe('check-event-contract', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
     // B-W2b-402: six events (riba_batch.changed, riba_item.settled, reminder_stop.changed, reminder_trust.changed,
     // collections_settings.changed, payment.receipt_sent) and thirteen literal emits: with B-W2b-408 (main c2caff5161) the
     // guard counts 901 and 1438 on this tree; with the planted event and emit: 902, 1439.
-    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(904 declared event version\(s\), 1442 literal emit/) })
+    // B-W2b-422: three events (document_template.changed, email_template.changed, saved_reply.changed; emitted through eventFor,
+    // no literal emit): the guard counts 906 and 1441 on this tree; with the planted event and emit: 907, 1442.
+    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(907 declared event version\(s\), 1442 literal emit/) })
   })
 
   it.each<[string, Plants, RegExp]>([
