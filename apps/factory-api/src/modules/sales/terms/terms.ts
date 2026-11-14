@@ -4,6 +4,8 @@ import { newId } from '@nexus/factory-domain/core/ids'
 import { scopeWhere } from '@nexus/factory-domain/core/permissions'
 import { PAYMENT_TERMS_MANAGE, PAYMENT_TERMS_VIEW } from '@nexus/factory-domain/sales/terms/permissions'
 import { checkPaymentTerms, type InstalmentInput, type PaymentTermsFields } from '@nexus/factory-domain/sales/terms/terms'
+// B-W2b-396 (FIN-076): the Italian due-date conventions (count from the end of the month, skipped months).
+import { normalSkipMonths, skipMonthsProblems } from '@nexus/factory-domain/money/terms/due-dates'
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { officeContextOf } from '../quotes/store'
@@ -33,7 +35,15 @@ async function viewInCommand(tools: CommandTools, id: string): Promise<{ terms: 
   return { terms: termsViewOf(row, (await customersOf(tools.tx, [id])).get(id) ?? 0) }
 }
 
-const auditOf = (fields: PaymentTermsFields | ReturnType<typeof termsFactsOf>) => ({
+/** B-W2b-396 (FIN-076): the conventions as given, checked (400 in words), months in calendar order. */
+function conventionsInput(fromEndOfMonth: boolean | undefined, skipMonths: readonly number[] | undefined, before: { fromEndOfMonth: boolean; skipMonths: number[] }) {
+  const months = skipMonths === undefined ? before.skipMonths : normalSkipMonths(skipMonths)
+  const issues = skipMonths === undefined ? [] : skipMonthsProblems(skipMonths, 'skipMonths')
+  if (issues.length > 0) throw invalid(issues)
+  return { fromEndOfMonth: fromEndOfMonth ?? before.fromEndOfMonth, skipMonths: months }
+}
+
+const auditOf = (fields: (PaymentTermsFields | ReturnType<typeof termsFactsOf>) & { fromEndOfMonth?: boolean; skipMonths?: readonly number[] }) => ({
   code: fields.code,
   name: fields.name,
   nameI18n: (fields.nameI18n ?? null) as Prisma.InputJsonValue | null,
@@ -41,6 +51,8 @@ const auditOf = (fields: PaymentTermsFields | ReturnType<typeof termsFactsOf>) =
   instalments: fields.instalments.map((item) => ({ ...item })),
   earlyPaymentDiscountPct: fields.earlyPaymentDiscountPct,
   earlyPaymentDays: fields.earlyPaymentDays,
+  fromEndOfMonth: fields.fromEndOfMonth ?? false,
+  skipMonths: [...(fields.skipMonths ?? [])],
 })
 
 // ---- reads --------------------------------------------------------------------------------------------------------------
@@ -89,6 +101,8 @@ export interface TermsBody {
   readonly instalments: readonly InstalmentInput[]
   readonly earlyPaymentDiscountPct?: string | null | undefined
   readonly earlyPaymentDays?: number | null | undefined
+  readonly fromEndOfMonth?: boolean | undefined
+  readonly skipMonths?: readonly number[] | undefined
 }
 
 /** POST /sales/payment-terms (paymentterms.manage over the company, or every company for terms of every company). */
@@ -98,7 +112,7 @@ export async function createTerms(caller: CommandCaller, body: TermsBody & { com
   assertMayChangeTerms(context, PAYMENT_TERMS_MANAGE, companyId)
   const checked = checkPaymentTerms(body)
   if (!checked.ok) throw invalid(checked.issues)
-  const fields = checked.terms
+  const fields = { ...checked.terms, ...conventionsInput(body.fromEndOfMonth, body.skipMonths, { fromEndOfMonth: false, skipMonths: [] }) }
   const { result } = await command(caller, { name: 'paymentTerms.create', idempotencyKey, input: body }, async (tools) => {
     const { tx, now } = tools
     if (companyId !== null && !(await tx.company.findUnique({ where: { id: companyId }, select: { id: true } }))) throw new ValidationError('No such company.', [{ path: 'body/companyId', message: 'No such company.' }])
@@ -115,6 +129,8 @@ export async function createTerms(caller: CommandCaller, body: TermsBody & { com
         instalments: fields.instalments.map((item) => ({ ...item })) as Prisma.InputJsonValue,
         earlyPaymentDiscountPct: fields.earlyPaymentDiscountPct,
         earlyPaymentDays: fields.earlyPaymentDays,
+        fromEndOfMonth: fields.fromEndOfMonth,
+        skipMonths: fields.skipMonths,
         createdAt: now,
         updatedAt: now,
         createdById: context.actorId,
@@ -131,9 +147,9 @@ export async function createTerms(caller: CommandCaller, body: TermsBody & { com
   return result
 }
 
-const FIELDS = ['code', 'name', 'nameI18n', 'method', 'instalments', 'earlyPaymentDiscountPct', 'earlyPaymentDays'] as const
+const FIELDS = ['code', 'name', 'nameI18n', 'method', 'instalments', 'earlyPaymentDiscountPct', 'earlyPaymentDays', 'fromEndOfMonth', 'skipMonths'] as const
 /** The fields that decide what is due when: fixed once a quote version or an order names the terms. */
-const RULE_FIELDS: readonly string[] = ['method', 'instalments', 'earlyPaymentDiscountPct', 'earlyPaymentDays']
+const RULE_FIELDS: readonly string[] = ['method', 'instalments', 'earlyPaymentDiscountPct', 'earlyPaymentDays', 'fromEndOfMonth', 'skipMonths']
 
 /**
  * PATCH /sales/payment-terms/:termsId: the fields sent (with the entry's version). Archived terms are reactivated
@@ -160,7 +176,7 @@ export async function updateTerms(caller: CommandCaller, termsId: string, body: 
       earlyPaymentDays: body.earlyPaymentDays === undefined ? before.earlyPaymentDays : body.earlyPaymentDays,
     })
     if (!checked.ok) throw invalid(checked.issues)
-    const next = checked.terms
+    const next = { ...checked.terms, ...conventionsInput(body.fromEndOfMonth, body.skipMonths, before) }
     const changed = FIELDS.filter((field) => JSON.stringify(auditOf(before)[field]) !== JSON.stringify(auditOf(next)[field]))
     // Terms in use keep their rules: quotes sent with them, the deposit requests and payment schedules made from them,
     // and the invoices' due dates follow them. Their names may still change (each document keeps its printed copy).
@@ -185,6 +201,8 @@ export async function updateTerms(caller: CommandCaller, termsId: string, body: 
           instalments: next.instalments.map((item) => ({ ...item })) as Prisma.InputJsonValue,
           earlyPaymentDiscountPct: next.earlyPaymentDiscountPct,
           earlyPaymentDays: next.earlyPaymentDays,
+          fromEndOfMonth: next.fromEndOfMonth,
+          skipMonths: next.skipMonths,
           updatedAt: now,
         },
         select: { id: true },

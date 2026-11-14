@@ -7,6 +7,8 @@ import { decimalText } from '@nexus/factory-domain/product/units/units'
 import { PAYMENT_TERMS_VIEW } from '@nexus/factory-domain/sales/terms/permissions'
 import { DEPOSIT_DUE_DAYS } from '@nexus/factory-domain/sales/quotes/terms'
 import { depositDueDaysOf, depositOf, instalmentsOf, termsSummary, type Instalment } from '@nexus/factory-domain/sales/terms/terms'
+// B-W2b-396 (FIN-076): the Italian due-date conventions of a terms entry.
+import { conventionsOf, conventionWords } from '@nexus/factory-domain/money/terms/due-dates'
 import type { CommandCaller } from '../../../core/command'
 import { actorOf, type OfficeContext } from '../../../core/context'
 import { mayWrite } from '../../product/materials/store'
@@ -29,6 +31,9 @@ export const TERMS_COLUMNS = {
   instalments: true,
   earlyPaymentDiscountPct: true,
   earlyPaymentDays: true,
+  // B-W2b-396 (FIN-076)
+  fromEndOfMonth: true,
+  skipMonths: true,
   status: true,
   version: true,
   createdAt: true,
@@ -66,6 +71,9 @@ export interface TermsFacts {
   readonly instalments: Instalment[]
   readonly earlyPaymentDiscountPct: string | null
   readonly earlyPaymentDays: number | null
+  /** B-W2b-396 (FIN-076): count from the end of the event's month; months skipped. */
+  readonly fromEndOfMonth: boolean
+  readonly skipMonths: number[]
   readonly status: 'ACTIVE' | 'ARCHIVED'
 }
 
@@ -79,6 +87,7 @@ export const termsFactsOf = (row: TermsRow): TermsFacts => ({
   instalments: instalmentsOf(row.instalments),
   earlyPaymentDiscountPct: row.earlyPaymentDiscountPct === null ? null : decimalText(row.earlyPaymentDiscountPct.toString()),
   earlyPaymentDays: row.earlyPaymentDays,
+  ...((conventions) => ({ fromEndOfMonth: conventions.fromEndOfMonth, skipMonths: [...conventions.skipMonths] }))(conventionsOf(row)),
   status: row.status as 'ACTIVE' | 'ARCHIVED',
 })
 
@@ -96,9 +105,11 @@ export function termsViewOf(row: TermsRow, customers: number) {
     instalments: facts.instalments.map((item) => ({ sharePct: decimalText(item.sharePct), from: item.from, days: item.days, endOfMonth: item.endOfMonth })),
     earlyPaymentDiscountPct: facts.earlyPaymentDiscountPct,
     earlyPaymentDays: facts.earlyPaymentDays,
+    fromEndOfMonth: facts.fromEndOfMonth,
+    skipMonths: facts.skipMonths,
     /** The deposit the terms ask on the order (its share and due days after acceptance); null: none. */
     deposit: depositOf(facts.instalments),
-    summary: { it: termsSummary(facts, 'it'), en: termsSummary(facts, 'en') },
+    summary: { it: [termsSummary(facts, 'it'), conventionWords(facts, 'it')].filter(Boolean).join(' · '), en: [termsSummary(facts, 'en'), conventionWords(facts, 'en')].filter(Boolean).join(' · ') },
     status: facts.status,
     /** How many customers have them as their default terms. */
     customers,

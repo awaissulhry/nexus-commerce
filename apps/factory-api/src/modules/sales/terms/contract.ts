@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
 import { INSTALMENT_EVENTS, PAYMENT_METHOD_CODES, TERMS_LIMITS } from '@nexus/factory-domain/sales/terms/terms'
+import { SKIP_MONTHS_MAX } from '@nexus/factory-domain/money/terms/due-dates'
 
 /**
  * The payment terms library's contracts (B-W2a-19; FIN-075; design finance.settings "Payment terms"). No money: shares
@@ -33,6 +34,10 @@ const fields = {
   instalments: z.array(instalmentInput).min(1).max(TERMS_LIMITS.instalments),
   earlyPaymentDiscountPct: pct.nullish(),
   earlyPaymentDays: days.nullish(),
+  /** B-W2b-396 (FIN-076): the days count from the end of the event's month ("30 gg f.m."). */
+  fromEndOfMonth: z.boolean().optional(),
+  /** B-W2b-396 (FIN-076): months no instalment falls due in (1–12, each once; "escluso agosto"). */
+  skipMonths: z.array(z.number().int().min(1).max(12)).max(SKIP_MONTHS_MAX).optional(),
 }
 
 export const termsView = output({
@@ -45,6 +50,9 @@ export const termsView = output({
   instalments: z.array(output({ sharePct: z.string(), from: z.enum(INSTALMENT_EVENTS), days: z.number().int(), endOfMonth: z.boolean() })),
   earlyPaymentDiscountPct: z.string().nullable(),
   earlyPaymentDays: z.number().int().nullable(),
+  /** B-W2b-396 (FIN-076): the Italian due-date conventions agreed with the customer. */
+  fromEndOfMonth: z.boolean(),
+  skipMonths: z.array(z.number().int()),
   deposit: output({ sharePct: z.string(), days: z.number().int() }).nullable(),
   summary: output({ it: z.string(), en: z.string() }),
   status: z.enum(['ACTIVE', 'ARCHIVED']),

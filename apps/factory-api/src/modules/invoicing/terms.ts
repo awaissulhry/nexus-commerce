@@ -1,7 +1,9 @@
 import type { Prisma } from '@nexus/factory-db'
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import type { BusinessDate } from '@nexus/factory-domain/core/time'
-import { DEPOSIT_PAYMENT_CONDITION, instalmentsOf, invoiceDueOf } from '@nexus/factory-domain/sales/terms/terms'
+import { DEPOSIT_PAYMENT_CONDITION, instalmentsOf } from '@nexus/factory-domain/sales/terms/terms'
+// B-W2b-396 (FIN-076): the Italian due-date conventions agreed with the customer (end of month, skipped months).
+import { conventionsOf, invoiceDueUnder } from '@nexus/factory-domain/money/terms/due-dates'
 import { decimalText } from '@nexus/factory-domain/product/units/units'
 import type { PaymentInput } from './drafts'
 import { paymentTermsOf } from './facts'
@@ -16,7 +18,8 @@ import type { Reader } from './store'
  *             and IBAN as typed. A stored W1 row without a source reads as this.
  *   TERMS     a payment terms entry of the library: the order's (SalesOrder.paymentTermsId, kept as sold) when the
  *             invoice bills one order, else the customer's (Party.paymentTermsId): factory-domain sales/terms
- *             invoiceDueOf — the instalments counted from the invoice's date, their shares among themselves (TP01 for
+ *             invoiceDueOf — the instalments counted from the invoice's date (B-W2b-396: under the terms' conventions,
+ *             money/terms/due-dates: from the end of the month, skipped months moved to the next), their shares among themselves (TP01 for
  *             several, TP02 for one; terms that ask everything before the invoice leave one instalment due on its day),
  *             the company's IBAN on a bank transfer (MP05), and the early-payment discount as the terms state it (kept
  *             in the JSON only: FatturaPA ScontoPagamentoAnticipato is an amount, and its base is the accountant's).
@@ -71,10 +74,10 @@ export async function termsJsonOf(db: Reader, companyId: string, source: TermsSo
   if (source.kind === 'ADVANCE') {
     return { condition: DEPOSIT_PAYMENT_CONDITION, installments: gross > 0 ? [{ method: source.method, amount: gross, dueDate: source.paidOn }] : [], source }
   }
-  const row = await db.paymentTerms.findUnique({ where: { id: source.termsId }, select: { code: true, method: true, instalments: true, earlyPaymentDiscountPct: true, earlyPaymentDays: true } })
+  const row = await db.paymentTerms.findUnique({ where: { id: source.termsId }, select: { code: true, method: true, instalments: true, earlyPaymentDiscountPct: true, earlyPaymentDays: true, fromEndOfMonth: true, skipMonths: true } })
   if (!row) return null
-  const due = invoiceDueOf(
-    { method: row.method, instalments: instalmentsOf(row.instalments), earlyPaymentDiscountPct: row.earlyPaymentDiscountPct === null ? null : decimalText(row.earlyPaymentDiscountPct.toString()), earlyPaymentDays: row.earlyPaymentDays },
+  const due = invoiceDueUnder(
+    { method: row.method, instalments: instalmentsOf(row.instalments), earlyPaymentDiscountPct: row.earlyPaymentDiscountPct === null ? null : decimalText(row.earlyPaymentDiscountPct.toString()), earlyPaymentDays: row.earlyPaymentDays, ...conventionsOf(row) },
     day,
     Math.max(0, gross),
   )
