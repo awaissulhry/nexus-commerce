@@ -261,5 +261,6 @@ describe('My numbers on Today (ANA-001)', () => {
     const late = (owner.lenses as Json[])[0]!.numbers.find((number: Json) => number.key === 'orders.late')
     expect(late).toMatchObject({ target: { value: 0, direction: 'AT_MOST' }, list: { api: '/sales/orders', query: { late: 'true' } }, report: { key: 'sales.late-orders' } })
     expect(late.targetWord).toBe(late.value === 0 ? 'ON_TARGET' : 'ABOVE_TARGET')
-  })
+    // B-W2b-428: the rebuild above reads 62 days of every company's records (more than the 5 s default on a loaded machine).
+  }, 120_000)
 })
