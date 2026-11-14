@@ -291,6 +291,8 @@ import { events as invoicingDepth } from '../invoicing-depth/events'
 import { events as costRates } from '../cost-rates/events'
 // B-W2b-401: e-invoicing in depth (e_invoicing.settings_changed, self_invoice.changed, sdi_archive_copy.changed).
 import { events as eInvoicing } from '../e-invoicing/events'
+// B-W2b-418: the cost sheet's components (cost_sheet.components_written, leather_cost_basis.changed, cost_uplift.changed).
+import { events as costSheets } from '../cost-sheets/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -647,6 +649,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...costRates,
   // B-W2b-401
   ...eInvoicing,
+  // B-W2b-418
+  ...costSheets,
 ] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */

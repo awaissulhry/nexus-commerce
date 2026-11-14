@@ -383,6 +383,8 @@ import { COST_ACTUALS_DEFINITIONS, COST_ACTUALS_PERMISSIONS } from '../../costin
 import { HOME_KPIS_DEFINITIONS, HOME_KPIS_PERMISSIONS } from '../../insights/kpis/permissions'
 // B-W2b-401: e-invoicing in depth (invoices.testMode.manage).
 import { TEST_MODE_DEFINITIONS, TEST_MODE_PERMISSIONS } from '../../invoicing/test-mode/permissions'
+// B-W2b-418: the cost sheet's components (costing.sheets.manage).
+import { COST_SHEET_COMPONENTS_DEFINITIONS, COST_SHEET_COMPONENTS_PERMISSIONS } from '../../costing/sheet-components/permissions'
 
 /**
  * Every permission of the factory, assembled (feature PLT-029). A module that adds routes declares its permissions
@@ -1075,6 +1077,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   HOME_KPIS_DEFINITIONS,
   // B-W2b-401: e-invoicing in depth (area `invoices`).
   TEST_MODE_DEFINITIONS,
+  // B-W2b-418: the cost sheet's components (area `costing`).
+  COST_SHEET_COMPONENTS_DEFINITIONS,
 ])
 
 /** The area of the permissions only floor roles hold (and floor roles hold no other, but FLOOR_SHARED_PERMISSIONS). */
@@ -1461,6 +1465,8 @@ for (const name of COST_ACTUALS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared
 for (const name of HOME_KPIS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-401: e-invoicing in depth.
 for (const name of TEST_MODE_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-418: the cost sheet's components.
+for (const name of COST_SHEET_COMPONENTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }
