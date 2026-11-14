@@ -61,7 +61,9 @@ describe('check-event-contract', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
     // B-W2b-385: one event (notification.view_changed, emitted through eventFor, not a literal): 836 → 837.
     // B-W2b-386: four events (shipment.hold_placed, .hold_released, shipment.split, shipping.cut_offs_saved) and eight literal
     // emits (a hold placed, released and carried over; a split's created, split and packing_changed ×2; the cut-offs): 837 → 841, 1306 → 1314.
-    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(841 declared event version\(s\), 1314 literal emit/) })
+    // B-W2b-389: two events (currency.changed, currency.rates_changed) and six literal emits (a currency added and switched, a
+    // manual rate kept and removed, the daily ECB switch, an ECB file read): 841 → 843, 1314 → 1320.
+    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(843 declared event version\(s\), 1320 literal emit/) })
   })
 
   it.each<[string, Plants, RegExp]>([

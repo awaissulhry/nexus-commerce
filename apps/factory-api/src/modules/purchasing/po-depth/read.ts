@@ -7,6 +7,9 @@ import type { CommandCaller } from '../../../core/command'
 import { receiptTolerancesOf } from '../receiving'
 import { dayOf, officeOrder, quantityText, readLines, readOrder, type Reader } from '../store'
 import { asAddress, orderTakesRate, readDepthFacts } from './store'
+// B-W2b-389 (CY1:02): the rates beside the rate at order.
+import { rateWords as dayRateWords } from '@nexus/factory-domain/money/currency/rates'
+import { ratesBeside } from './beside'
 
 /**
  * GET /purchasing/orders/:purchaseOrderId/depth (purchasing.view; B-W2b-296): what the record's W2b tabs read — the
@@ -45,6 +48,9 @@ export async function depthOf(db: Reader, orderId: string) {
       rateAtOrder: rate,
       rateWords: rate === null ? null : rateWords(rate, order.currency, depth.companyCurrency),
       companyNetAmount: asMoney('cost', depth.order.companyNetAmount),
+      // B-W2b-389 (CY1:01, CY1:02): the day's rate the send takes; the day's rates of its receipts and supplier invoices.
+      dayRate: depth.dayRate ? { rate: depth.dayRate.rate, rateDate: depth.dayRate.rateDate, source: depth.dayRate.source, words: dayRateWords(depth.dayRate) } : null,
+      beside: orderTakesRate(depth) ? await ratesBeside(db, order.id, depth.companyCurrency, order.currency) : [],
     },
     shipTo: shipTo
       ? {

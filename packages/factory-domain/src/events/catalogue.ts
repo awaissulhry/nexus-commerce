@@ -270,6 +270,8 @@ import { events as mtmPhotos } from '../mtm-photos/events'
 import { events as shippingCartons } from '../shipping-cartons/events'
 // B-W2b-386: the shipment queue in depth (shipment.hold_placed, .hold_released, shipment.split, shipping.cut_offs_saved).
 import { events as shippingQueue } from '../shipping-queue/events'
+// B-W2b-389: currencies and exchange rates (currency.changed, currency.rates_changed).
+import { events as currencyEvents } from '../currency/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -606,6 +608,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...shippingCartons,
   // B-W2b-386
   ...shippingQueue,
+  // B-W2b-389
+  ...currencyEvents,
 ] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
