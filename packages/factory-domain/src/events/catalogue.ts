@@ -285,6 +285,8 @@ import { events as mailDepth } from '../mail-depth/events'
 // B-W2b-398: delivery and return labels (shipment.customer_notice_sent, .tracking_problem_raised, .tracking_problem_resolved,
 // .pod_recorded, return_label.changed).
 import { events as shippingDelivery } from '../shipping-delivery/events'
+// B-W2b-419: cost rates (cost_per_minute.changed, overhead_rule.changed).
+import { events as costRates } from '../cost-rates/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -635,6 +637,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...mailDepth,
   // B-W2b-398
   ...shippingDelivery,
+  // B-W2b-419
+  ...costRates,
 ] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
