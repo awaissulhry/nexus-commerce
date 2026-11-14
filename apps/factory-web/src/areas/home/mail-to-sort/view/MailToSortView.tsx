@@ -92,6 +92,7 @@ function MailToSort({ model, actions }: { model: MailToSortViewModel; actions?: 
         {model.capture && <CopyCaptureAddress state={model.capture} prefix={model.prefix ?? ''} />}
       </div>
       {model.inboxes && <TeamInboxTiles model={model.inboxes} toSort={{ count: items?.length ?? null, more }} onInbox={actions?.inboxes?.onInbox} />}
+      {model.inboxes?.queue && <SortNotice model={model} actions={actions} />}
       {model.inboxes?.queue ? (
         <TeamInboxQueue model={model.inboxes} actions={{ ...actions?.inboxes, onOpenMail: actions?.onOpen }} />
       ) : (
@@ -99,6 +100,19 @@ function MailToSort({ model, actions }: { model: MailToSortViewModel; actions?: 
       )}
       <MailDetailModal model={model} actions={actions} />
     </div>
+  )
+}
+
+/** The receipt or refusal of an answer given in the mail's review (assign, release, reject), over whichever list is open. */
+function SortNotice({ model, actions }: { model: MailToSortViewModel; actions?: MailToSortActions }) {
+  const t = useT('home')
+  if (!model.notice) return null
+  return (
+    <Banner
+      tone={model.notice.tone}
+      title={t(model.notice.key)}
+      action={actions?.onDismissNotice ? <Button size="sm" variant="quiet" onClick={actions.onDismissNotice}>{t('mailToSort.dismiss')}</Button> : undefined}
+    />
   )
 }
 
@@ -125,13 +139,7 @@ function ToSortList({ model, actions }: { model: MailToSortViewModel; actions?: 
         )}
       </div>
 
-      {model.notice && (
-        <Banner
-          tone={model.notice.tone}
-          title={t(model.notice.key)}
-          action={actions?.onDismissNotice ? <Button size="sm" variant="quiet" onClick={actions.onDismissNotice}>{t('mailToSort.dismiss')}</Button> : undefined}
-        />
-      )}
+      <SortNotice model={model} actions={actions} />
 
       {problem ? (
         <Banner tone="danger" title={t(problem)} action={<Button size="sm" onClick={() => actions?.onRetry?.()}>{t('mailToSort.retry')}</Button>} />
