@@ -35,6 +35,18 @@ import { addLine, createInvoice, disputeInvoice, getInvoice, invoiceCounts, list
 import { manifest } from './manifest'
 import { pickUpNow, sdiStatus } from './sdi'
 import { getPayablesSettings, putPayablesSettings } from './settings'
+// B-W2b-403: payables in depth (the leather area check, the subcontract match, the weekly proposal, dual approval, controls).
+import { requireStepUp } from '../../platform/auth/office/account'
+import { officeAuthOf } from '../../platform/auth/sessions/office-auth'
+import { invoiceDualApproval } from './approve'
+import { areaCheckContract, areaClaimContract } from './area-check/contract'
+import { invoiceAreaCheck, openAreaClaim } from './area-check/check'
+import { approveProposalContract, candidatesContract as proposalCandidatesContract, createProposalContract, getProposalContract, getRemittanceContract, invoiceDualContract, listProposalsContract, moneyControlsContract, paidProposalContract, putLinesContract, putRemittanceContract, reasonProposalContract } from './proposal/contract'
+import { moneyControls } from './proposal/controls'
+import { approveProposal, cancelProposal, createProposal, getProposal, listProposals, proposalCandidates, putProposalLines, recordProposalPaid, sendBackProposal } from './proposal/proposals'
+import { getRemittanceSettings, putRemittanceSettings } from './proposal/remittance'
+import { bookFeeContract, subcontractMatchContract } from './subcontract-match/contract'
+import { bookInvoiceFee, invoiceSubcontractMatch } from './subcontract-match/match'
 
 /**
  * Payables (B-W2a-62; FIN-136, FIN-137; design finance.payables, SCR-153 "Supplier invoices"): supplier and
@@ -79,4 +91,23 @@ export default defineRoutes('payables', manifest, async (app) => {
   app.get('/payables/sdi/inbox', { schema: listInboxContract }, async (request) => listInbox(request, request.query))
   app.post('/payables/sdi/inbox/:itemId/dismiss', { schema: dismissInboxContract }, async (request) => dismissInboxItem(request, request.params.itemId, request.body, idempotencyKeyFrom(request)))
   app.post('/payables/sdi/inbox/:itemId/reopen', { schema: reopenInboxContract }, async (request) => reopenInboxItem(request, request.params.itemId, request.body, idempotencyKeyFrom(request)))
+
+  // B-W2b-403 (SCM-132, FIN-138, FIN-140, FIN-142, FIN-167; PQ1:01-03). The literal /payables/proposals/candidates before /:proposalId.
+  app.get('/payables/invoices/:invoiceId/area-check', { schema: areaCheckContract }, async (request) => invoiceAreaCheck(request, request.params.invoiceId))
+  app.post('/payables/invoices/:invoiceId/area-check/:lineId/claim', { schema: areaClaimContract }, async (request, reply) => reply.code(201).send(await openAreaClaim(request, request.params.invoiceId, request.params.lineId, request.body, idempotencyKeyFrom(request))))
+  app.get('/payables/invoices/:invoiceId/subcontract-match', { schema: subcontractMatchContract }, async (request) => invoiceSubcontractMatch(request, request.params.invoiceId))
+  app.post('/payables/invoices/:invoiceId/subcontract-match/:lineId/fee', { schema: bookFeeContract }, async (request, reply) => reply.code(201).send(await bookInvoiceFee(request, request.params.invoiceId, request.params.lineId, request.body, idempotencyKeyFrom(request))))
+  app.get('/payables/invoices/:invoiceId/dual-approval', { schema: invoiceDualContract }, async (request) => invoiceDualApproval(request, request.params.invoiceId))
+  app.get('/payables/proposals', { schema: listProposalsContract }, async (request) => listProposals(request, request.query))
+  app.get('/payables/proposals/candidates', { schema: proposalCandidatesContract }, async (request) => proposalCandidates(request, request.query))
+  app.post('/payables/proposals', { schema: createProposalContract }, async (request, reply) => reply.code(201).send(await createProposal(request, request.body, idempotencyKeyFrom(request))))
+  app.get('/payables/proposals/:proposalId', { schema: getProposalContract }, async (request) => getProposal(request, request.params.proposalId))
+  app.put('/payables/proposals/:proposalId/lines', { schema: putLinesContract }, async (request) => putProposalLines(request, request.params.proposalId, request.body, idempotencyKeyFrom(request)))
+  app.post('/payables/proposals/:proposalId/approve', { schema: approveProposalContract }, async (request) => approveProposal(request, request.params.proposalId, request.body, () => requireStepUp(officeAuthOf(app), request), idempotencyKeyFrom(request)))
+  app.post('/payables/proposals/:proposalId/send-back', { schema: reasonProposalContract }, async (request) => sendBackProposal(request, request.params.proposalId, request.body, idempotencyKeyFrom(request)))
+  app.post('/payables/proposals/:proposalId/cancel', { schema: reasonProposalContract }, async (request) => cancelProposal(request, request.params.proposalId, request.body, idempotencyKeyFrom(request)))
+  app.post('/payables/proposals/:proposalId/paid', { schema: paidProposalContract }, async (request) => recordProposalPaid(request, request.params.proposalId, request.body, idempotencyKeyFrom(request)))
+  app.get('/payables/remittance/settings', { schema: getRemittanceContract }, async (request) => getRemittanceSettings(request, request.query))
+  app.put('/payables/remittance/settings', { schema: putRemittanceContract }, async (request) => putRemittanceSettings(request, request.body, () => requireStepUp(officeAuthOf(app), request), idempotencyKeyFrom(request)))
+  app.get('/payables/money-controls', { schema: moneyControlsContract }, async (request) => moneyControls(request, request.query))
 })

@@ -273,6 +273,11 @@
         "received": "Payment received from {record}{figure}",
         "depositPaid": "Deposit paid on order {record}: production may start"
       },
+      "money": {
+        "sdiRejected": "Invoice {record} was rejected by SDI: fix it and send it again with the same number and date",
+        "overdue": "{record}: {count} overdue invoices, a reminder waits for a yes",
+        "reconciliationDifference": "Payments do not reconcile at {record}: {count} payment checks failed"
+      },
       "changes": {
         "requestRaised": "New change request {record}: {title}",
         "requestAccepted": "{actor} accepted your change request {record}",

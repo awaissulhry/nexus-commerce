@@ -21,6 +21,8 @@ import { rematchInCommand } from './matching'
 // B-W2b-299 (SCM-293): the receiver of the goods never approves their invoice nor accepts its differences.
 import { receiverRefusals } from './matching'
 import { sdiRuleRefusals } from './settings'
+// B-W2b-403 (FIN-142): above the amount, two people approve.
+import { dualApprovalInCommand, type DualOutcome } from './approve'
 import { invoiceInCommand, officeInvoice, officeOf, preparationOf, readLines, readMatches, RECORD, type InvoiceRow } from './store'
 import type { DetailView } from './views'
 
@@ -58,18 +60,21 @@ async function approvalFacts(tools: Pick<CommandTools, 'tx'>, invoice: InvoiceRo
 }
 
 /** payables.approve: approved for payment, once matched and every difference accepted, never by who prepared it. */
-export async function approveInvoice(caller: CommandCaller, invoiceId: string, input: { readonly version: number; readonly note?: string | null | undefined }, idempotencyKey?: string): Promise<{ invoice: DetailView }> {
+export async function approveInvoice(caller: CommandCaller, invoiceId: string, input: { readonly version: number; readonly note?: string | null | undefined }, idempotencyKey?: string): Promise<{ invoice: DetailView; dualApproval: DualOutcome }> {
   const { context } = await officeInvoice(caller, invoiceId, PAYABLES_APPROVE)
   const { result } = await command(caller, { name: 'payables.approve', idempotencyKey, input: { invoiceId, ...input }, record: { type: 'SupplierInvoice', id: invoiceId, expectedVersion: input.version } }, async (tools) => {
     const invoice = await invoiceInCommand(tools.tx, invoiceId)
     // B-W2b-21 (Z8:03): the payables settings' rule for what SDI delivered (LISTED approvers, not the buyer) after the four eyes.
     const problems = [...approvalProblems(await approvalFacts(tools, invoice), context.actorId), ...(await sdiRuleRefusals(tools.tx, invoice, context.actorId)), ...(await receiverRefusals(tools.tx, invoice, context.actorId, 'APPROVE'))]
     if (problems.length > 0) throw new RefusedError(problems)
+    // B-W2b-403 (FIN-142): the first of two yeses leaves the invoice to approve (approve.ts); the second approves it.
+    const dualApproval = await dualApprovalInCommand(tools, invoice, context.actorId)
+    if (dualApproval.step === 'FIRST') return { invoice: await detailInCommand(tools, invoiceId), dualApproval }
     const note = input.note?.trim() || null
     await tools.tx.supplierInvoice.update({ where: { id: invoiceId }, data: { status: 'APPROVED', approvedAt: tools.now, approvedById: context.actorId, approvalNote: note }, select: { id: true } })
     tools.audit({ action: 'payables.approve', recordType: RECORD, recordId: invoiceId, companyId: invoice.companyId, before: { status: invoice.status }, after: { status: 'APPROVED', matchStatus: invoice.matchStatus, note } })
     tools.emit({ type: 'supplier_invoice.approved', subject: invoiceId, companyId: invoice.companyId, payload: { supplierInvoiceId: invoiceId, partyId: invoice.partyId, status: 'APPROVED', matchStatus: invoice.matchStatus } })
-    return { invoice: await detailInCommand(tools, invoiceId) }
+    return { invoice: await detailInCommand(tools, invoiceId), dualApproval }
   })
   return result
 }
@@ -83,8 +88,10 @@ export async function approveMany(caller: CommandCaller, input: { readonly items
   const results: { id: string; approved: boolean; status: InvoiceStatus | null; version: number | null; refusals: { code: string; message: string }[] }[] = []
   for (const [index, item] of input.items.entries()) {
     try {
-      const { invoice } = await approveInvoice(caller, item.id, { version: item.version, note: input.note }, idempotencyKey ? `${idempotencyKey}:${index}` : undefined)
-      results.push({ id: item.id, approved: true, status: invoice.status, version: invoice.version, refusals: [] })
+      const { invoice, dualApproval } = await approveInvoice(caller, item.id, { version: item.version, note: input.note }, idempotencyKey ? `${idempotencyKey}:${index}` : undefined)
+      // B-W2b-403: a first yes of two is not approved yet: it says so, the row keeps its new version.
+      if (dualApproval.step === 'FIRST') results.push({ id: item.id, approved: false, status: invoice.status, version: invoice.version, refusals: [{ code: 'SECOND_APPROVAL', message: 'Approved once: a second person approves totals above the amount.' }] })
+      else results.push({ id: item.id, approved: true, status: invoice.status, version: invoice.version, refusals: [] })
     } catch (error) {
       if (!isDomainError(error)) throw error
       const refusals = error instanceof RefusedError ? error.issues.map((issue) => ({ code: issue.path.replace(/^refusal\//, ''), message: issue.message })) : [{ code: error.code.toUpperCase(), message: error.message }]

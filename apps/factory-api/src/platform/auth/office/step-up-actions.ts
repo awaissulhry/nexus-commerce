@@ -44,7 +44,10 @@ export const STEP_UP_ACTIONS: readonly StepUpAction[] = Object.freeze([
   action('invoices.issue', ['invoices.issue']),
   action('money.settings', ['costing.method.manage', 'costing.actuals.manage', 'invoices.tax.switch', 'accounting.unlock', 'orders.waive', 'accounting.close', 'accounting.journals.switch', 'costing.massUpdate.apply']),
   // B-W2b-402: the Owner's collections switches (Ri.Ba., the payment notice to customers) and a customer's trusted reminder level.
-  action('reminders.switch', ['receivables.reminders.switch', 'purchasing.reminders.switch', 'receivables.collections.switch', 'receivables.reminders.trust']),
+  // B-W2b-403: the remittance advice to suppliers is one of the Owner's mail switches.
+  action('reminders.switch', ['receivables.reminders.switch', 'purchasing.reminders.switch', 'receivables.collections.switch', 'receivables.reminders.trust', 'payables.remittance.switch']),
+  // B-W2b-403: approving the week's payment proposal (the money that leaves the company).
+  action('payments.approve', ['payables.proposals.approve']),
   action('email.identities', ['email.manage']),
   action('branding.change', ['documents.branding.manage']),
   action('signatures.sign', ['quality.amendments.sign', 'safety.risk.sign', 'compliance.techfiles.sign', 'compliance.claims.approve', 'compliance.ppeTexts.manage', 'purchasing.compliance.override'], 'SIGNATURE'),

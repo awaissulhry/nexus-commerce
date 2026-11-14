@@ -134,6 +134,10 @@ export const MESSAGE_TEMPLATES = {
   // production at the company ({record}: the order).
   'notifications.payments.received': { en: 'Payment received from {record}{figure}', it: 'Pagamento ricevuto da {record}{figure}' },
   'notifications.payments.depositPaid': { en: 'Deposit paid on order {record}: production may start', it: 'Acconto pagato sull’ordine {record}: la produzione può partire' },
+  // B-W2b-403 (FIN-169): money notifications.
+  'notifications.money.sdiRejected': { en: 'Invoice {record} was rejected by SDI: fix it and send it again with the same number and date', it: 'La fattura {record} è stata scartata dallo SDI: correggila e inviala di nuovo con lo stesso numero e la stessa data' },
+  'notifications.money.overdue': { en: '{record}: {count} overdue invoices, a reminder waits for a yes', it: '{record}: {count} fatture scadute, un sollecito attende un sì' },
+  'notifications.money.reconciliationDifference': { en: 'Payments do not reconcile at {record}: {count} payment checks failed', it: 'I pagamenti non quadrano in {record}: {count} controlli sui pagamenti non superati' },
 } as const satisfies Record<string, { readonly en: string; readonly it: string }>
 export type MessageKey = keyof typeof MESSAGE_TEMPLATES
 export const MESSAGE_KEYS = Object.freeze(Object.keys(MESSAGE_TEMPLATES)) as readonly MessageKey[]
