@@ -52,6 +52,8 @@ export interface ReportsActions {
   onDrill?: (target: DrillTarget | null) => void
   onDrillRetry?: () => void
   onSelected?: (ids: string[]) => void
+  /** B-W2b-434 (follow-up DB1:01): pin this page's panels to a Home dashboard (saved for me on the server). */
+  onSaveAsDashboard?: () => void
 }
 
 /** A cover row's id in the grid (a material and its colour). */

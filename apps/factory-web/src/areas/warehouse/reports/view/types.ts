@@ -41,4 +41,6 @@ export interface ReportsActions {
   onExport?: (panel: ReportSection, words: CsvWords) => void
   onSeries?: (series: AgeingSeries) => void
   onMeasure?: (measure: LeatherMeasure) => void
+  /** B-W2b-434 (follow-up DB1:01): pin this page's panels to a Home dashboard (saved for me on the server). */
+  onSaveAsDashboard?: () => void
 }

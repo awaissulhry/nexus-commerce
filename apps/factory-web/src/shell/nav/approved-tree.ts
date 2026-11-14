@@ -66,6 +66,8 @@ export const OFFICE: readonly TreeArea[] = [
         labelIt: 'Analisi',
         hideLabel: false,
         pages: [
+          // W2b: B-W2b-434 Dashboards (SCR-031, SCR-103).
+          { id: 'home.dashboards', title: 'Dashboards', titleIt: 'Cruscotti', wave: 'W2b', href: '/home/dashboards' },
           { id: 'home.reports', title: 'Reports', titleIt: 'Report', wave: 'W2a', href: '/home/reports' },
           // W2b: B-W2b-433 the KPI library (SCR-249).
           { id: 'home.kpis', title: 'KPI library', titleIt: 'Indicatori', wave: 'W2b', href: '/home/kpis' },

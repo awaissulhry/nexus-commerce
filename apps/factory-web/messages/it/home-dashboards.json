@@ -1,0 +1,250 @@
+{
+  "title": "Cruscotti",
+  "noAccess": {
+    "title": "I cruscotti non sono nel tuo ruolo",
+    "body": "I cruscotti sono fatti con i numeri dell'archivio indicatori: chiedi a un amministratore l'archivio indicatori (consultazione)."
+  },
+  "band": {
+    "label": "Cruscotto, periodo e ambito",
+    "board": "Quale cruscotto",
+    "mine": "il tuo ruolo",
+    "period": "Periodo",
+    "company": "Società",
+    "site": "Sede",
+    "noBoard": "Scegli prima un cruscotto",
+    "arrange": "Disponi",
+    "present": "Presenta",
+    "more": "Altre azioni",
+    "keys": "Scorciatoie da tastiera",
+    "read": "Letto"
+  },
+  "period": {
+    "WEEK": "Settimana",
+    "MONTH": "Mese",
+    "QUARTER": "Trimestre"
+  },
+  "periodWord": {
+    "WEEK": "questa settimana e le 11 precedenti",
+    "MONTH": "questo mese e gli 11 precedenti",
+    "QUARTER": "questo trimestre e gli 11 precedenti"
+  },
+  "scope": {
+    "allCompanies": "Tutte le società",
+    "allSites": "Tutte le sedi"
+  },
+  "board": {
+    "owner-group": "Gruppo (titolare)",
+    "plant-manager": "Direttore di stabilimento",
+    "sales": "Vendite",
+    "planner": "Pianificazione",
+    "buyer": "Acquisti",
+    "quality": "Qualità",
+    "finance": "Amministrazione",
+    "line-leader": "Capolinea"
+  },
+  "boards": {
+    "failed": "Non è stato possibile leggere i cruscotti",
+    "none": "Nessun cruscotto da mostrare",
+    "noneBody": "Nessun cruscotto ha un numero che il tuo ruolo può leggere."
+  },
+  "panel": {
+    "numbers": "Numeri",
+    "needs-action": "Da gestire",
+    "trends": "Spediamo in tempo?",
+    "wip": "Il lavoro si accumula?",
+    "by-company": "Per società e sede",
+    "loading": "Caricamento",
+    "stillLoading": "Ancora in caricamento…",
+    "failed": "Non è stato possibile leggere questo pannello",
+    "retry": "Riprova"
+  },
+  "error": {
+    "read": "Qualcosa non ha funzionato nella lettura. Riprova.",
+    "forbidden": "Il tuo ruolo non comprende ciò che questo pannello legge.",
+    "notFound": "La società o la sede scelta non è tra quelle che raggiungi.",
+    "offline": "La connessione si è interrotta. Riprova quando sei di nuovo in linea.",
+    "save": "Non è stato possibile salvare la disposizione. Riprova.",
+    "stale": "La tua disposizione è stata cambiata in un'altra finestra: è stata riletta, applica di nuovo.",
+    "gone": "Non c'è nulla di salvato da ripristinare: il cruscotto mostra già il suo ordine.",
+    "invalid": "Questa disposizione non è valida per questo cruscotto."
+  },
+  "numbers": {
+    "title": "Numeri",
+    "hint": "Ogni numero su {period}; la linea mostra ogni periodo, dal più vecchio.",
+    "none": "Nessun numero che puoi leggere",
+    "noneBody": "Ogni numero di questo cruscotto legge un elenco o un importo fuori dal tuo ruolo.",
+    "spark": "{name}, {count} periodi",
+    "sparkEmpty": "Ancora nessun dato",
+    "noRebuild": "Non ancora ricalcolato",
+    "from": "fonte: {sources}",
+    "stale": "Dati vecchi di oltre 3 ore",
+    "live": "Contato ora sui tuoi record",
+    "wholeCompany": "Per tutta la società: questo numero è tenuto per società",
+    "standsFor": "Al posto di {name} (fuori dal tuo ruolo)",
+    "records": "Apri i record"
+  },
+  "source": {
+    "ORDERS": "ordini",
+    "SHIPMENTS": "spedizioni",
+    "PRODUCTION": "dichiarazioni di reparto",
+    "WIP": "registro dei costi",
+    "RECEIPTS": "entrate merci",
+    "DELIVERY": "righe d'ordine e spedizioni",
+    "LEAD_TIMES": "preventivi, ordini e spedizioni",
+    "WORK_ORDERS": "ordini di lavoro",
+    "LEATHER": "registro di taglio",
+    "MARGIN": "costo del venduto",
+    "SUPPLY": "ordini d'acquisto ed entrate"
+  },
+  "explain": {
+    "open": "Come si calcola {name}",
+    "title": "Come si calcola {name}",
+    "from": "Calcolato da",
+    "period": "Periodo",
+    "unit": "Unità",
+    "grain": "richiede i diritti {grain}",
+    "standsFor": "Mostrato al posto di {name}, che legge ciò che il tuo ruolo non comprende.",
+    "library": "Apri nell'archivio indicatori"
+  },
+  "needs": {
+    "title": "Da gestire",
+    "hint": "Le eccezioni del tuo Oggi in questo ambito, le più gravi per prime.",
+    "row": "{count} · {kind}",
+    "seeAll_one": "Vedi tutte ({count})",
+    "seeAll_other": "Vedi tutte ({count})",
+    "openToday": "Apri su Oggi",
+    "none": "Nulla da gestire.",
+    "oldest_one": "la più vecchia da {count} giorno",
+    "oldest_other": "la più vecchia da {count} giorni",
+    "atLeast": "almeno: altre non sono state lette"
+  },
+  "trends": {
+    "title": "Spediamo in tempo?",
+    "hint": "Spedizioni partite entro la data promessa, settimana per settimana; l'obiettivo è {target} %.",
+    "open": "Apri le spedizioni",
+    "notEnough": "Dati ancora insufficienti: {count} settimane su {of}.",
+    "notEnoughBody": "La linea compare da due settimane con spedizioni.",
+    "target": "Obiettivo",
+    "caption": "{count} settimane su {of} con spedizioni",
+    "byCompany": "Puntualità per società",
+    "lineOf": "Puntualità di {company}, 12 settimane"
+  },
+  "wip": {
+    "title": "Il lavoro si accumula?",
+    "hint": "{waiting} capi in attesa in {workOrders} ordini di lavoro, per fase, ora.",
+    "open": "Apri il lavoro in corso",
+    "none": "Nessun capo in attesa in alcuna fase.",
+    "flowLabel": "Capi in attesa in ogni fase, nell'ordine del ciclo",
+    "waiting_one": "{count} capo in attesa",
+    "waiting_other": "{count} capi in attesa",
+    "workOrders_one": "in {count} ordine di lavoro",
+    "workOrders_other": "in {count} ordini di lavoro",
+    "bandsLabel": "Da quanto aspettano in {stage}",
+    "band": {
+      "D0_2": "0–2 giorni: {count}",
+      "D3_5": "3–5 giorni: {count}",
+      "D6_10": "6–10 giorni: {count}",
+      "D11_PLUS": "11+ giorni: {count}"
+    },
+    "bandName": {
+      "D0_2": "0–2 giorni",
+      "D3_5": "3–5 giorni",
+      "D6_10": "6–10 giorni",
+      "D11_PLUS": "oltre 10 giorni"
+    },
+    "oldest": "Alcuni aspettano da {band}"
+  },
+  "byCompany": {
+    "title": "Per società e sede",
+    "hint": "Gli stessi numeri per {period}, per società e, dove un numero è tenuto per sede, per sede.",
+    "none": "Nessuna società da mostrare",
+    "noneBody": "Il tuo ruolo non raggiunge alcuna società con l'archivio indicatori.",
+    "place": "Società › sede",
+    "perCompany": "solo per società",
+    "partial": "{read} sedi su {of}",
+    "opensIn": "Si apre in {company}"
+  },
+  "pinned": {
+    "fromPack": "Fissato dall'archivio report",
+    "fromArea": "Fissato da {area} › Report",
+    "open": "Apri il report",
+    "reportBody": "Un report dell'archivio: si apre con i suoi filtri e legge i suoi record.",
+    "panelBody": "Un pannello dei report dell'area: si apre su quella pagina, nel suo periodo.",
+    "area": {
+      "sales": "Vendite",
+      "planning": "Pianificazione",
+      "purchasing": "Acquisti",
+      "warehouse": "Magazzino"
+    },
+    "sales": {
+      "strip": "Sintesi vendite",
+      "intake": "Ordini acquisiti",
+      "backlog": "Portafoglio per settimana promessa",
+      "returns": "Motivi di reso"
+    },
+    "planning": {
+      "adherence": "Rispetto del piano",
+      "utilisation": "Utilizzo delle linee",
+      "cover": "Copertura dei materiali"
+    },
+    "purchasing": {
+      "spend": "Spesa",
+      "late": "Righe d'acquisto in ritardo"
+    },
+    "warehouse": {
+      "ageing": "Anzianità delle scorte",
+      "leather": "Scorte di pelle"
+    }
+  },
+  "arrange": {
+    "title": "Disponi il cruscotto",
+    "list": "Pannelli visibili",
+    "hint": "Spunta un pannello per mostrarlo, trascina per cambiare l'ordine. I numeri sono sempre visibili.",
+    "apply": "Applica",
+    "refused": "Non salvato",
+    "widths": "Larghezze",
+    "widthOf": "Larghezza di {panel}",
+    "width": {
+      "half": "Metà",
+      "two-thirds": "Due terzi",
+      "full": "Riga intera"
+    },
+    "server": "Salvato per te sul server: la stessa disposizione su ogni dispositivo.",
+    "reset": "Torna all'ordine del cruscotto",
+    "resetHeld": "Non hai disposto questo cruscotto: mostra il suo ordine",
+    "saving": "Salvataggio…"
+  },
+  "present": {
+    "refresh": "Si aggiorna da solo ogni 5 minuti"
+  },
+  "foot": {
+    "fresh": "I numeri sono ricalcolati ogni ora; un numero più vecchio di 3 ore lo dice."
+  },
+  "keys": {
+    "title": "Scorciatoie da tastiera",
+    "number": "Apri i record del numero da 1 a 5",
+    "arrange": "Disponi il cruscotto",
+    "present": "Presenta in una nuova finestra",
+    "help": "Questo elenco"
+  },
+  "pin": {
+    "title": "Salva nel cruscotto",
+    "intro": "Fissa pannelli di {area} › Report in uno dei tuoi cruscotti della Home. Vengono aggiunti in fondo; Disponi li sposta.",
+    "board": "Cruscotto",
+    "chooseBoard": "Scegli un cruscotto",
+    "panels": "Pannelli da fissare",
+    "choosePanel": "Spunta almeno un pannello",
+    "noBoards": "I cruscotti sono ancora in lettura",
+    "busy": "Salvataggio…",
+    "cancel": "Annulla",
+    "close": "Chiudi",
+    "confirm_one": "Fissa {count} pannello",
+    "confirm_other": "Fissa {count} pannelli",
+    "boardsFailed": "Non è stato possibile leggere i cruscotti",
+    "done_one": "{count} pannello fissato",
+    "done_other": "{count} pannelli fissati",
+    "openDashboard": "Apri il cruscotto {board}",
+    "refused": "Non fissato",
+    "menu": "Salva nel cruscotto (Home)"
+  }
+}

@@ -34,7 +34,7 @@ export type { DrillState, Read, ReportsActions, ReportsModel } from './types'
  */
 export function ReportsView({ model, actions }: { model: ReportsModel; actions?: ReportsActions }) {
   return (
-    <WithMessages namespaces={[NAMESPACE, 'quality-reports', 'warehouse-reports', 'stock']}>
+    <WithMessages namespaces={[NAMESPACE, 'quality-reports', 'warehouse-reports', 'stock', 'home-dashboards']}>
       <Reports model={model} actions={actions} />
     </WithMessages>
   )
@@ -51,6 +51,8 @@ function isPageKey(event: KeyboardEvent): boolean {
 
 function Reports({ model, actions }: { model: ReportsModel; actions?: ReportsActions | undefined }) {
   const t = useT(NAMESPACE)
+  // B-W2b-434 (follow-up DB1:01): Save as dashboard is said by the dashboards' catalogue.
+  const td = useT('home-dashboards')
   const wr = useT('warehouse-reports')
   const locale = useLocale()
   const [keys, setKeys] = useState(model.keysOpen ?? false)
@@ -145,6 +147,7 @@ function Reports({ model, actions }: { model: ReportsModel; actions?: ReportsAct
             items={[
               { id: 'monthly', label: t('band.monthly'), disabled: true, description: t('band.monthlyHeld') },
               ...REPORT_SECTIONS.map((panel) => ({ id: `csv-${panel}`, label: t(`band.csv.${panel}`), onSelect: exports[panel], ...(ready[panel] ? {} : { disabled: true, description: t('band.csvHeld') }) })),
+              { id: 'dashboard', label: td('pin.menu'), onSelect: () => actions?.onSaveAsDashboard?.() },
               { id: 'keys', label: t('band.keys'), onSelect: () => setKeys(true) },
             ]}
           />
