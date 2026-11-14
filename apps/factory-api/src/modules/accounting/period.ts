@@ -16,6 +16,11 @@ import { checksOf, documentsOf, readPeriodFacts, type PeriodFacts } from './fact
 import { planFiles } from './files'
 import { lockViews } from './locks'
 import { accountingClock, companyFor, companyRef, dateOf, dayOf, grainsOf, lockOfPeriod, officeOf, periodExports, type CompanyRow, type Reader } from './store'
+// B-W2b-408: the cost of goods sold and variances, the VAT registers, the journals switch and the integrity checks' last run.
+import { COST_REGISTER_WORDS, costTotals } from '@nexus/factory-domain/accounting/journals/cost-of-sales'
+import { VAT_REGISTERS_WORDS, vatTotals } from '@nexus/factory-domain/accounting/vat-registers/registers'
+import { waitsOf } from '../costing/ppv/settings'
+import { latestRuns } from './integrity/service'
 
 /**
  * The months of the accounting export wizard (B-W2a-39; design finance.accounting "1 · Period", "2 · Checks", "3 ·
@@ -101,17 +106,31 @@ function totalsOf(pkg: AccountingPackage, facts: PeriodFacts) {
       for (const row of facts.yearEnd?.valuation ?? []) by.set(row.currency, (by.get(row.currency) ?? 0) + row.value)
       return { priceTotals: [], costTotals: [...by.entries()].map(([currency, value]) => cost('VALUE', currency, value)) }
     }
-    default:
-      return { priceTotals: [], costTotals: [] }
+    // B-W2b-408: per kind (COST_OF_SALES, VARIANCE, PPV) and currency; the VAT registers' VAT of sales, of purchases and due.
+    case 'COST_OF_SALES':
+      return { priceTotals: [], costTotals: costTotals(facts.bridge.costFigures ?? []).map((sum) => cost(sum.kind, sum.currency, sum.amount)) }
+    case 'VAT_REGISTERS': {
+      const totals = vatTotals(facts.sales, facts.purchases ?? [])
+      const currencies = [...new Set(totals.map((row) => row.currency))]
+      return {
+        priceTotals: currencies.flatMap((currency) => [
+          price('SALES_VAT', currency, totals.filter((row) => row.currency === currency && row.side === 'SALES').reduce((sum, row) => sum + row.vat, 0)),
+          price('VAT_DUE', currency, totals.find((row) => row.currency === currency && row.side === 'DUE')?.vat ?? 0),
+        ]),
+        costTotals: currencies.map((currency) => cost('PURCHASES_VAT', currency, totals.filter((row) => row.currency === currency && row.side === 'PURCHASES').reduce((sum, row) => sum + row.vat, 0))),
+      }
+    }
   }
 }
 
-const PACKAGE_WORDS: Partial<Record<AccountingPackage, string>> = {
+const PACKAGE_WORDS: Readonly<Record<AccountingPackage, string>> = {
   SALES_JOURNAL: 'The invoices issued in the month, one row per VAT rate (an invoice rejected by SDI counts as never issued).',
   PURCHASES_JOURNAL: 'The supplier invoices received in the month (by the day they arrived), one row per VAT rate.',
   PAYMENTS: 'The payments received in the month, what each pays and what is not placed; the refunds paid in the month.',
   INTRASTAT: INTRASTAT_WORDS,
   YEAR_END_STOCK: YEAR_END_WORDS,
+  COST_OF_SALES: COST_REGISTER_WORDS,
+  VAT_REGISTERS: VAT_REGISTERS_WORDS,
 }
 
 /** GET /accounting/periods/:month: the wizard's month — lock, batches, checks, contents, Intrastat, review, next number. */
@@ -125,13 +144,16 @@ export async function periodWorkspace(caller: CommandCaller, month: string, quer
   const today = businessDate(accountingClock().now())
   return caller.withClient(async (db) => {
     const state = periodState(await periodExports(db, company.id, period))
-    const readable = asked.filter((pkg) => PACKAGE_RULES[pkg].wave === 'W2a' && (pkg !== 'YEAR_END_STOCK' || yearEnd))
+    const readable = asked.filter((pkg) => pkg !== 'YEAR_END_STOCK' || yearEnd)
     const facts = await readPeriodFacts(db, company, period, readable)
     const checks = checksOf(facts, asked, today)
     const documents = documentsOf(facts, company, readable)
     const difference = differenceOf(state.held, documents.documents, readable)
     const plan = planFiles({ company, period, packages: readable, facts, documents, reExport: state.latest ? { entries: difference.entries, packages: difference.packages, earlier: state.exported.map((row) => row.number!) } : null, language: 'en' })
     const lockRow = await lockOfPeriod(db, company.id, period)
+    // B-W2b-408: the cost bridge's figures wait for the company's switch (B-W2b-407): the words say so while it is off.
+    const costWaits = asked.includes('COST_OF_SALES') ? await waitsOf(db, company.id) : null
+    const runs = await latestRuns(db, company.id)
     const contents = asked.map((pkg) => {
       const problem = packageProblems([pkg], { yearEndPeriod: yearEnd, grains })[0] ?? null
       const tally = difference.packages.find((entry) => entry.package === pkg) ?? { package: pkg, documents: 0, new: 0, changed: 0, removed: 0, same: 0 }
@@ -146,7 +168,7 @@ export async function periodWorkspace(caller: CommandCaller, month: string, quer
         documents: tally,
         rows,
         ...totalsOf(pkg, facts),
-        words: PACKAGE_WORDS[pkg] ?? `${PACKAGE_RULES[pkg].words.en} comes in a later wave (W2b).`,
+        words: [PACKAGE_WORDS[pkg], pkg === 'COST_OF_SALES' ? costWaits : null].filter(Boolean).join(' '),
       }
     })
     const intrastat = facts.intrastat ? intrastatSummary(facts.intrastat) : null
@@ -169,6 +191,17 @@ export async function periodWorkspace(caller: CommandCaller, month: string, quer
       intrastat: intrastat ? { rows: intrastat.rows, fileRows: intrastat.fileRows, blocking: intrastat.blocking, warnings: intrastat.warnings } : null,
       changes: difference.changes,
       layout: DEFAULT_LAYOUT,
+      journals: {
+        on: facts.bridge.journalsOn,
+        words: facts.bridge.journalsOn
+          ? 'The journals carry their entries with the mapped accounts (the account mapping in force on each document\'s day).'
+          : 'Waits for the accountant: the journals go without mapped entries until a person switches them on (GATE-ACCOUNTANT).',
+      },
+      integrity: {
+        lastRunAt: [...runs.values()].map((rows) => toUtcIso(rows[0]!.ranAt)).sort().at(-1) ?? null,
+        failing: [...runs.values()].filter((rows) => rows[0]!.result !== 'PASSED').length,
+        checks: [...runs.entries()].map(([code, rows]) => ({ code, result: rows[0]!.result as 'PASSED' | 'FAILED' | 'ERROR', failureCount: rows[0]!.failureCount, ranAt: toUtcIso(rows[0]!.ranAt) })),
+      },
       words: `${monthLabel(period.month)}. ${state.latest ? `Exported as ${state.exported.map((row) => row.number).join(', ')}: the next batch is a re-export of what changed (${difference.changes} document(s)).` : 'Not exported yet: the next batch is its first export.'} ${LAYOUT_WORDS}`,
     }
   })

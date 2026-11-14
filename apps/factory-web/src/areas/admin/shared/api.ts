@@ -220,6 +220,8 @@ export const roleSchema = z.object({
   basedOn: z.string().nullable(),
   audience: z.enum(ROLE_AUDIENCES),
   version: z.number(),
+  /** B-W2b-404/413: when a custom role was archived (UTC): it changes no more and is given to nobody until restored. */
+  archivedAt: z.string().nullable().default(null),
   holders: z.number(),
   outdated: z.boolean(),
   templateAdds: z.object({ permissionsAdded: z.array(z.string()), grainsAdded: z.array(grain) }),

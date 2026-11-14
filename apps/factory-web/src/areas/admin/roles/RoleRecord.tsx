@@ -13,12 +13,14 @@ import { changeTwoFactor, previewTwoFactor, twoFactorRoles, type TwoFactorRole }
 import { LOADING, NO_DIALOG, type Dialog, type Read } from '../security/model'
 import { AdminMessages, StepUp } from '../shared/view/parts'
 import { ROLE_TABS } from './model'
+import { editHeld } from './save-role/model'
+import { useSaveRole } from './save-role/use-save-role'
 import { RoleRecordView } from './view/RoleRecordView'
 
 /**
  * `/w/<company>/admin/roles/<id>` (SCR-012 Role record): the role from `GET /auth/roles` (no read of one role exists),
  * the catalogue for its permissions in words, and its holders from `GET /auth/users` (users.view; without it the Users
- * tab says so).
+ * tab says so). B-W2b-413: Change role, Archive and Restore (save-role/use-save-role.ts).
  */
 export function RoleRecord({ roleId }: { roleId: string }) {
   const api = useOfficeApi()
@@ -38,6 +40,8 @@ export function RoleRecord({ roleId }: { roleId: string }) {
   const [canChange, setCanChange] = useState(false)
   const [dialog, setDialog] = useState<Dialog>(NO_DIALOG)
   const { stepUp, guard, submitStepUp, cancelStepUp } = useStepUp(api)
+  // B-W2b-413: Change role (a custom role's ticks, reviewed, then saved), Archive and Restore.
+  const changing = useSaveRole(api, role, () => void load())
   const loadTwoFactor = useCallback(() => {
     if (!held.has('roles.view')) return
     twoFactorRoles(api).then(
@@ -90,10 +94,31 @@ export function RoleRecord({ roleId }: { roleId: string }) {
     }
   }
 
+  // A custom role is changed by roles.manage, not archived, and not held by the person (the review says the rest).
+  const heldByMe = twoFactor.state === 'ok' && twoFactor.value.heldByMe
+  const editHeldReason = role && !role.system ? editHeld(role, { manage: held.has('roles.manage'), heldByMe }) : null
+  const editable = !!role && !!catalogue && !role.system && editHeldReason === null && role.audience === 'office'
+  const archiveHeld = !held.has('roles.manage') ? 'saveRole.held.right' : heldByMe ? 'saveRole.held.mine' : null
+
   return (
     <>
     <RoleRecordView
-      model={{ prefix, tab, role, problem: role ? null : problem, catalogue, holders, companies, dockOpen, twoFactor: { role: twoFactor, canChange, dialog } }}
+      model={{
+        prefix,
+        tab,
+        role,
+        problem: role ? null : problem,
+        catalogue,
+        holders,
+        companies,
+        dockOpen,
+        twoFactor: { role: twoFactor, canChange, dialog },
+        editor: editable && changing.draft ? { role: role!, catalogue: catalogue!, draft: changing.draft, review: changing.review } : null,
+        editHeld: editHeldReason,
+        archive: role && !role.system ? { held: archiveHeld, dialog: changing.archive } : null,
+        notice: changing.notice,
+        freshCode: changing.stepUp,
+      }}
       panels={role ? <RecordPanels record={{ type: 'Role', id: role.id, companyId: null }} title={role.name} /> : null}
       actions={{
         onOpen: (path) => router.push(path),
@@ -117,6 +142,11 @@ export function RoleRecord({ roleId }: { roleId: string }) {
           onTwoFactorSave: () => void saveTwoFactor(),
           onDialogClose: () => setDialog(NO_DIALOG),
         },
+        editor: changing.actions,
+        archive: { onArchive: changing.actions.onArchive, onRestore: changing.actions.onRestore, onConfirm: changing.actions.onArchiveConfirm, onClose: changing.actions.onArchiveClose },
+        onDismissNotice: changing.actions.onDismissNotice,
+        onFreshSubmit: changing.actions.onStepUpSubmit,
+        onFreshClose: changing.actions.onStepUpClose,
       }}
     />
     <AdminMessages>

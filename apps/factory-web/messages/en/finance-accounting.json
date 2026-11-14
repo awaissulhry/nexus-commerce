@@ -306,6 +306,24 @@
       "fail_one": "{count} stock move up to the year end has no value yet.",
       "fail_other": "{count} stock moves up to the year end have no value yet."
     },
+    "WORK_ORDERS_CLOSED": {
+      "title": "Work orders closed",
+      "pass": "Every work order completed by the end of {month} has its cost close.",
+      "fail_one": "{count} work order completed by the end of {month} is not closed: its variances reach the accountant once it is.",
+      "fail_other": "{count} work orders completed by the end of {month} are not closed: their variances reach the accountant once they are."
+    },
+    "MAPPING_COMPLETE": {
+      "title": "Every account mapped",
+      "pass": "Every key the entries of {month} post has an account.",
+      "fail_one": "{count} key the entries of {month} post has no account: its lines go blank.",
+      "fail_other": "{count} keys the entries of {month} post have no account: their lines go blank."
+    },
+    "ENTRIES_BALANCE": {
+      "title": "Journal entries balance",
+      "pass": "Every entry of {month} balances.",
+      "fail_one": "{count} entry of {month} does not balance: its totals are not the sums of its lines.",
+      "fail_other": "{count} entries of {month} do not balance: their totals are not the sums of their lines."
+    },
     "fixesLabel": "Where to fix \"{check}\"",
     "moreFixes_one": "and {count} more",
     "moreFixes_other": "and {count} more",
@@ -549,6 +567,7 @@
   "stepUp": {
     "title": "Confirm it is you",
     "lift": "Lifting a final close asks a fresh code from your authenticator app.",
+    "close": "Closing a month for good asks a fresh code from your authenticator app.",
     "confirm": "Confirm"
   },
   "aside": {

@@ -1,0 +1,266 @@
+{
+  "common": {
+    "cancel": "Cancel",
+    "retry": "Try again",
+    "dismiss": "Dismiss"
+  },
+  "figure": {
+    "label": "Planned against actual",
+    "col": {
+      "figure": "Figure",
+      "planned": "Planned",
+      "actual": "Actual",
+      "tolerance": "Tolerance ±{tolerance} %"
+    },
+    "row": {
+      "quantity": "Garments made",
+      "material": "Material cost",
+      "minutes": "Standard minutes",
+      "scrap": "Garments scrapped"
+    },
+    "garments_one": "{count} garment",
+    "garments_other": "{count} garments",
+    "minutes": "{minutes} min",
+    "needsCost": "Needs the cost grain",
+    "within": "Within",
+    "beyond": "Beyond"
+  },
+  "dialog": {
+    "title": "Close {number}",
+    "go": "Close",
+    "reading": "Reading planned against actual…",
+    "failed": "Couldn't read planned against actual",
+    "body": "Closing makes the work order final. Planned against actual below: a figure beyond the tolerance needs a reason.",
+    "toleranceHint": "Each figure may differ from the planned one by ±{tolerance} %; scrap counts against the planned garments (no scrap allowance is kept yet).",
+    "noCost": "Material cost needs the cost grain (money.cost): whether it is beyond the tolerance still shows.",
+    "reason": "Reason",
+    "reasonHint": "Why the work order ended outside the tolerance.",
+    "reasonPick": "Choose a reason",
+    "noReason": "Within the ±{tolerance} % tolerance: no reason is needed.",
+    "note": "Note (optional)",
+    "noteNeeded": "Say the reason in words",
+    "noteHint": "Up to {max} characters.",
+    "undoHint": "After the close, Undo stays on screen for a few seconds."
+  },
+  "settle": {
+    "title": "Closing settles its cost",
+    "body": "The variance split and the closing entry are written now; after them the work order's cost takes only reversals.",
+    "toPost_one": "{count} cost entry not posted yet is posted first.",
+    "toPost_other": "{count} cost entries not posted yet are posted first.",
+    "waitingTitle": "The close waits for what is not costed yet"
+  },
+  "waits": {
+    "title": "Waits for the accountant",
+    "close": "The close is a status today: its variance split and closing entry are written only once the company's figures for the accountant are on. A work order closed now is settled by reopening it and closing it again then.",
+    "preview": "Closing now writes no split: this is what the close would write once the company's figures for the accountant are on.",
+    "closed": "It was closed as a status while the company's figures for the accountant were off: nothing was split. To settle it, reopen it and close it again once they are on.",
+    "ppv": "Purchase price variance is posted only once the company's figures for the accountant are on: receipts and invoices of this period wait until then."
+  },
+  "reason": {
+    "SHORT_PRODUCED": "Fewer garments made than planned",
+    "OVER_PRODUCED": "More garments made than planned",
+    "LEATHER_YIELD": "The hides gave a different yield",
+    "MATERIAL_PRICE": "The material cost more or less than its standard",
+    "SCRAP_ABOVE_ALLOWANCE": "More garments scrapped than allowed",
+    "REWORK": "Rework took extra material or time",
+    "METHOD_CHANGED": "The garment was made another way",
+    "STANDARD_OUT_OF_DATE": "The standard is out of date",
+    "NO_STANDARD": "No standard to compare with yet",
+    "OTHER": "Another reason (in words)",
+    "unknown": "Another reason"
+  },
+  "held": {
+    "busy": "Working…",
+    "reading": "Reading the work order's figures…",
+    "notCompleted": "Only a completed work order is closed.",
+    "noManage": "Closing a work order needs the permission {permission}.",
+    "costsWaiting_one": "{count} event still waits to be costed: the close settles the cost, so it waits for it.",
+    "costsWaiting_other": "{count} events still wait to be costed: the close settles the cost, so it waits for them.",
+    "reasonNeeded": "A figure is beyond the ±{tolerance} % tolerance: choose a reason.",
+    "noteNeeded": "Say the reason in words.",
+    "noteLong": "The note is longer than {max} characters.",
+    "noRecord": "Closed before the close was recorded: it is not reopened.",
+    "noReopen": "Reopening a work order needs the permission {permission}."
+  },
+  "reopen": {
+    "open": "Reopen…",
+    "title": "Reopen {number}",
+    "go": "Reopen",
+    "body": "Reopening takes the close back: the work order is completed again, and its cost takes entries again. Close it again when it is right.",
+    "bodySettled": "Reopening takes the close back: its variance and closing entries are reversed (dated today) and the work order is completed again. Close it again when it is right.",
+    "reason": "Why it is reopened",
+    "reasonHint": "Kept with the close; up to {max} characters.",
+    "reasonShort": "Say why in at least {min} characters.",
+    "reasonLong": "The reason is longer than {max} characters."
+  },
+  "undo": {
+    "closed": "{number} is closed.",
+    "settled": "{number} is closed and its cost settled.",
+    "body": "Closed by mistake? Undo puts it back to completed.",
+    "go": "Undo"
+  },
+  "closed": {
+    "reading": "Closed: reading who closed it…",
+    "failed": "Closed: who closed it could not be read.",
+    "noRecord": "Closed before the close was recorded.",
+    "settled": "Closed on {date} at {time} by {name}; its cost settled.",
+    "status": "Closed on {date} at {time} by {name}; closed as a status (its cost waits for the accountant).",
+    "reason": "Reason: {reason}.",
+    "note": "Note: {note}",
+    "final": "A closed work order is final: to change it, reopen it with a reason."
+  },
+  "refusal": {
+    "NOT_COMPLETED": "Refused: only a completed work order is closed.",
+    "REASON_NEEDED": "Refused: a figure is beyond the tolerance, so a reason is needed.",
+    "REASON_NOT_NEEDED": "Refused: the figures are within the tolerance now, so no reason is taken. Read again and close.",
+    "NOTE_NEEDED": "Refused: say the reason in words.",
+    "COSTS_WAITING": "Refused: something still waits to be costed, and the close settles the cost.",
+    "LOCKED": "Refused: today is in a locked period, so the cost cannot be settled today.",
+    "NOT_CLOSED": "Refused: the work order is not closed.",
+    "NO_CLOSE_RECORD": "Refused: it was closed before the close was recorded, so it is not reopened.",
+    "UNDO_TOO_LATE": "Too late to undo: reopen it with a reason instead.",
+    "NOT_THE_CLOSER": "Only the person who closed it may undo it: reopen it with a reason instead.",
+    "DATABASE": "Refused by the cost checks: the cost could not be settled as it stands.",
+    "other": "Refused: the work order's state does not allow it."
+  },
+  "problem": {
+    "changed": "Someone changed the work order meanwhile: it was read again. Check and try again.",
+    "signed_out": "You are signed out. Sign in again.",
+    "forbidden": "Your role may not do this here.",
+    "not_found": "Not found, or it belongs to another company.",
+    "unavailable": "The server cannot be reached. Try again in a moment.",
+    "rate_limited": "Too many requests: wait a moment, then try again.",
+    "invalid": "The request was refused as not valid.",
+    "conflict": "Refused: the work order changed meanwhile.",
+    "internal": "Something went wrong on the server."
+  },
+  "notice": {
+    "closed": "{number} is closed.",
+    "closedSettled": "{number} is closed and its cost settled.",
+    "undone": "The close is taken back: {number} is completed again.",
+    "reopened": "{number} is reopened: it is completed again."
+  },
+  "variance": {
+    "title": "Variance at close",
+    "notYet": "The variance is taken at the close: once every garment is done and the work order is completed, closing it splits what is left on its cost.",
+    "loading": "Reading the variance at close…",
+    "failed": "Couldn't load the variance at close",
+    "tag": {
+      "preview": "Preview: not closed yet",
+      "settled": "Settled at the close",
+      "statusOnly": "Closed as a status"
+    },
+    "previewBody": "What the close would write if it were closed now, against the standard of the garments made.",
+    "noLines": "Nothing to split: the work order's cost matches the standard of the garments made.",
+    "noBasis": "No frozen standard for every garment and no complete estimate at release: nothing is split, and the closing entry takes off everything left.",
+    "balance": "Left on the work order: {amount}",
+    "explained": "Explained by the lines: {amount}",
+    "closing": "Closing entry (what the lines leave): {amount}",
+    "entries_one": "{count} entry written to the cost ledger.",
+    "entries_other": "{count} entries written to the cost ledger.",
+    "unverified": "The categories and what the closing entry takes are the build's reading until the accountant confirms them.",
+    "closedAt": "Closed on {date} at {time} by {name}.",
+    "linesLabel": "Variance by category",
+    "col": {
+      "category": "Category",
+      "material": "Material",
+      "standard": "Standard",
+      "actual": "Actual",
+      "amount": "Variance"
+    },
+    "noMaterial": "Whole work order",
+    "atCost": "at {cost}",
+    "over": "Over",
+    "under": "Under"
+  },
+  "category": {
+    "MATERIAL_PRICE": "Material price",
+    "MATERIAL_USAGE": "Material usage (yield)",
+    "LABOUR_EFFICIENCY": "Labour efficiency",
+    "LABOUR_RATE": "Labour rate",
+    "SCRAP": "Scrap",
+    "REWORK": "Rework",
+    "SUBCONTRACT_PRICE": "Subcontract price",
+    "LOT_SIZE": "Lot size",
+    "OVERHEAD": "Overhead"
+  },
+  "notSplit": {
+    "NOT_ON_LEDGER": "Rework is not split: rework time is not costed on the work order (its labour comes from the floor's scans).",
+    "NO_SET_UP": "Lot size is not split: neither the standard nor the work order carries a set-up time to spread over a lot.",
+    "NO_BASIS": "Nothing is split: no frozen standard for every garment and no complete estimate at release."
+  },
+  "history": {
+    "title": "Closes taken back",
+    "col": {
+      "closed": "Closed",
+      "takenBack": "Taken back",
+      "why": "Why"
+    },
+    "by": "{when} by {name}",
+    "undone": "Undone {when} by {name}",
+    "reopened": "Reopened {when} by {name}",
+    "undoneWhy": "Undone within a few seconds of the close"
+  },
+  "costState": {
+    "closed": "Closed"
+  },
+  "ppv": {
+    "title": "Purchase price variance",
+    "hint": "Purchase price against standard at the receipt or the invoice, posted {from} – {to}.",
+    "total_one": "Total {amount} ({count} line)",
+    "total_other": "Total {amount} ({count} lines)",
+    "count_one": "{count} variance",
+    "count_other": "{count} variances",
+    "slow": "Still loading…",
+    "failed": "Couldn't load purchase price variance",
+    "empty": {
+      "title": "No receipts in this period",
+      "body": "No purchase price variance was posted in {month}: a variance appears when a material is received or invoiced at a price other than its standard."
+    },
+    "more": "Show more",
+    "noCost": "Standard, paid and difference are shown only to roles with the cost grain (money.cost).",
+    "export_one": "Export {count} (CSV)",
+    "export_other": "Export {count} (CSV)",
+    "line": "{number} · line {seq}",
+    "at": {
+      "RECEIPT": "At the receipt",
+      "INVOICE": "At the invoice"
+    },
+    "above": "Paid above",
+    "below": "Paid below",
+    "state": {
+      "standing": "Posted",
+      "reversal": "Reversal",
+      "reversed": "Reversed on {day}"
+    },
+    "col": {
+      "material": "Material",
+      "supplier": "Supplier",
+      "document": "Receipt or invoice",
+      "quantity": "Quantity",
+      "standard": "Standard",
+      "paid": "Paid",
+      "difference": "Difference",
+      "state": "State"
+    },
+    "csv": {
+      "file": "purchase-price-variance-{month}",
+      "material": "Material",
+      "supplier": "Supplier",
+      "document": "Document / line",
+      "at": "Taken at",
+      "day": "Day",
+      "quantity": "Quantity",
+      "unit": "Unit",
+      "standard": "Standard per unit",
+      "paid": "Paid per unit",
+      "difference": "Difference",
+      "currency": "Currency",
+      "state": "State"
+    },
+    "keys": {
+      "title": "Keys",
+      "open": "Open the receipt or invoice"
+    }
+  }
+}

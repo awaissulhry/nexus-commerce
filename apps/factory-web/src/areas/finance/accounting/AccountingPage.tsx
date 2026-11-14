@@ -320,14 +320,18 @@ export function AccountingPage() {
     const target = panel.month
     set((state) => ({ ...state, busy: true, problem: null }))
     const note = panel.note.trim()
-    lockMonth(api, { companyId, month: target, level: panel.level, ...(panel.level === 'HARD' ? { phrase: panel.phrase } : {}), ...(note ? { note } : {}), ...(current ? { version: current.version } : {}) })
+    const key = newIdempotencyKey()
+    const work = () => lockMonth(api, { companyId, month: target, level: panel.level, ...(panel.level === 'HARD' ? { phrase: panel.phrase } : {}), ...(note ? { note } : {}), ...(current ? { version: current.version } : {}) }, key)
+    // B-W2b-408: closing a month for good asks a fresh code, last of all (after the phrase and the month's checks).
+    const run = panel.level === 'HARD' ? stepUpApi.guard('stepUp.close', work) : work()
+    run
       .then((answer) => {
         set((state) => ({ ...state, busy: false, current: answer.lock, done: { lock: answer.lock, warnings: answer.warnings.map((warning) => warning.code) } }))
         setLocks((rows) => (rows ? [answer.lock, ...rows.filter((row) => row.id !== answer.lock.id)] : rows))
         void loadYear(Number(target.slice(0, 4)))
         if (monthRef.current === target) void showPeriod(target)
       })
-      .catch((error: unknown) => set((state) => ({ ...state, busy: false, problem: writeProblem(error) })))
+      .catch((error: unknown) => set((state) => ({ ...state, busy: false, problem: isStepUpCancelled(error) ? null : writeProblem(error) })))
   }
 
   const liftWith = (panel: LockPanelModel, set: (update: (current: LockPanelModel) => LockPanelModel) => void) => {

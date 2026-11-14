@@ -1,0 +1,88 @@
+/*
+ * Roles in depth (B-W2b-413): New role's cards and the editable permissions of a custom role. Layout only, with semantic
+ * design-system tokens; the cards, toggles, ticks and tables are the DS's own.
+ */
+.fw-rol-new {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+}
+
+.fw-rol-new-from {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.fw-rol-new-legend {
+  margin-bottom: var(--nds-space-8);
+  padding: 0;
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-rol-new-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--nds-space-8);
+}
+
+.fw-rol-new-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+
+.fw-rol-held,
+.fw-rol-error {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-rol-error {
+  color: var(--nds-danger-text);
+}
+
+.fw-rol-edit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-rol-edit-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-rol-sub {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-rol-grains {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--nds-space-12);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-rol-grain {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+.fw-rol-grain-head {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+}

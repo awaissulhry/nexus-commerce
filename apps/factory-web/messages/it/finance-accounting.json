@@ -306,6 +306,24 @@
       "fail_one": "{count} movimento di magazzino fino a fine anno non ha ancora un valore.",
       "fail_other": "{count} movimenti di magazzino fino a fine anno non hanno ancora un valore."
     },
+    "WORK_ORDERS_CLOSED": {
+      "title": "Ordini di produzione chiusi",
+      "pass": "Ogni ordine di produzione completato entro la fine di {month} ha la sua chiusura dei costi.",
+      "fail_one": "{count} ordine di produzione completato entro la fine di {month} non è chiuso: i suoi scostamenti arrivano al commercialista quando lo è.",
+      "fail_other": "{count} ordini di produzione completati entro la fine di {month} non sono chiusi: i loro scostamenti arrivano al commercialista quando lo sono."
+    },
+    "MAPPING_COMPLETE": {
+      "title": "Ogni conto mappato",
+      "pass": "Ogni chiave delle scritture di {month} ha un conto.",
+      "fail_one": "{count} chiave delle scritture di {month} non ha un conto: le sue righe restano vuote.",
+      "fail_other": "{count} chiavi delle scritture di {month} non hanno un conto: le loro righe restano vuote."
+    },
+    "ENTRIES_BALANCE": {
+      "title": "Le scritture quadrano",
+      "pass": "Ogni scrittura di {month} quadra.",
+      "fail_one": "{count} scrittura di {month} non quadra: i suoi totali non sono la somma delle righe.",
+      "fail_other": "{count} scritture di {month} non quadrano: i loro totali non sono la somma delle righe."
+    },
     "fixesLabel": "Dove correggere \"{check}\"",
     "moreFixes_one": "e altri {count}",
     "moreFixes_other": "e altri {count}",
@@ -549,6 +567,7 @@
   "stepUp": {
     "title": "Conferma che sei tu",
     "lift": "Togliere una chiusura definitiva chiede un codice nuovo dell'app di autenticazione.",
+    "close": "Chiudere definitivamente un mese chiede un codice nuovo dell'app di autenticazione.",
     "confirm": "Conferma"
   },
   "aside": {

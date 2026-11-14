@@ -88,6 +88,8 @@ import { liftCatchUpCron, moveLiftsAll } from './platform/email-out/delivery/lif
 import { firstLoadCatchUpCron, writeStepsAll } from './platform/imports/guided/catch-up'
 // B-W2b-22: the cost ledger's nightly catch-up (what waited for a value or a rate).
 import { costCatchUpCron } from './modules/costing/actual/catch-up'
+// B-W2b-408: the nightly integrity checks (FIN-157).
+import { integrityNightlyCron } from './modules/accounting/integrity/jobs'
 // B-W2b-11: the report pack, so the worker can export a report (platform/exports/sources/reports.ts).
 import { loadReports } from './modules/insights/reports/registry'
 // B-W2b-120: the safety calendar's sources, so the worker can export the calendar (platform/exports/sources/safety-calendar.ts).
@@ -398,6 +400,8 @@ if (mode === 'worker') {
   // B-W2b-24: the W2b data catch-ups again each night (idle passes write nothing).
   crons.push(twoFactorSinceCron({ database, log }), liftCatchUpCron({ database, log }), firstLoadCatchUpCron({ database, log }))
   crons.push(costCatchUpCron({ database, log }))
+  // B-W2b-408: daily at 04:10, every active company's named integrity checks run and are kept; changed exported documents flagged.
+  crons.push(integrityNightlyCron({ database, log }))
   // B-W2b-41: every 15 minutes the stuck bundles (MES-168); hourly the scan-pattern checks about bundles (MES-075).
   crons.push(stuckBundlesCron({ database, log }), scanFindingsCron({ database, log }))
   // B-W2b-96: every minute, the routed machine requests nobody acknowledged in time escalate (QHS-179).

@@ -15,6 +15,10 @@ import { useKeysHelp } from '../../kit/list'
 import { FrameState } from '../../shared/view/parts'
 import { AdminPageMessages } from '../../kit/messages'
 import { AUDIT_SURFACES, type AuditEntry } from '../api'
+import { countryName } from '../../../me/sessions/model'
+import { WhoLookedCard, type WhoLookedActions } from '../reads/view/WhoLookedCard'
+import { lastWeek } from '../search/model'
+import { IpField, RangeField } from '../search/view/SearchFilters'
 import {
   ACTION_AREAS,
   AUDIT_PERIODS,
@@ -56,6 +60,8 @@ export interface AuditActions {
   onOpen?: (id: string | null) => void
   onOlder?: () => void
   onRetry?: () => void
+  /** B-W2b-413: Who looked. */
+  reads?: WhoLookedActions
 }
 
 /** The field the `/` key focuses. */
@@ -160,11 +166,14 @@ function Audit({ model, actions }: { model: AuditViewModel; actions?: AuditActio
             {model.asOf ? <time dateTime={model.asOf}>{ta('list.updated', { time: formatTime(model.asOf, { locale }) })}</time> : ta('list.notYet')}
           </span>
         </div>
-        <div className="fw-adm-actions">
-          <Button size="sm" heldReason={t('audit.held.export')}>
-            {t('audit.export')}
-          </Button>
-        </div>
+        {/* B-W2b-413: the export is the table's Export ▾ (this view's filters as CSV or Excel): the Story opens the table. */}
+        {model.mode === 'story' && (
+          <div className="fw-adm-actions">
+            <Button size="sm" title={t('audit.exportInTable')} onClick={() => actions?.onMode?.('table')}>
+              {t('audit.export')}
+            </Button>
+          </div>
+        )}
       </div>
 
       <MetricStrip
@@ -217,6 +226,7 @@ function Audit({ model, actions }: { model: AuditViewModel; actions?: AuditActio
         </>
       )}
       {items && items.length > 0 && !model.nextBefore && !model.older?.problem && <p className="fw-adm-hint">{t('audit.end')}</p>}
+      {model.reads && <WhoLookedCard model={model.reads} actions={actions?.reads} />}
       <p className="fw-adm-hint">{t('audit.later')}</p>
 
       <EntryModal model={model} entries={shown} actions={actions} />
@@ -292,13 +302,21 @@ function Filters({ model, actions, compact = false }: { model: AuditViewModel; a
           ))}
         </FilterSelect>
       )}
-      <FilterSelect compact={compact} label={t('audit.filter.period')} value={filters.period} onChange={(value) => set({ period: value as AuditFilters['period'] })}>
+      <FilterSelect
+        compact={compact}
+        label={t('audit.filter.period')}
+        value={filters.period}
+        onChange={(value) => set(value === 'range' ? { period: 'range', ...(filters.from && filters.to ? {} : lastWeek(new Date())) } : { period: value as AuditFilters['period'], from: null, to: null })}
+      >
         {AUDIT_PERIODS.map((period) => (
           <option key={period} value={period}>
             {t(`audit.period.${period}`)}
           </option>
         ))}
       </FilterSelect>
+      {/* B-W2b-413: between two days, and an address typed (matched through the sessions signed in from it). */}
+      {filters.period === 'range' && <RangeField from={filters.from} to={filters.to} onChange={(range) => set({ period: 'range', ...range })} />}
+      <IpField value={filters.ip} onApply={(ip) => set({ ip })} />
       {filterCount(filters) > 0 && (
         <Button size="sm" variant="quiet" onClick={() => actions?.onFilters?.(NO_FILTERS)}>
           {ta('list.clearFilters')}
@@ -734,7 +752,8 @@ export function EntryDetail({ model, entry }: { model: AuditViewModel; entry: Au
             { label: t('audit.ctx.key'), value: entry.idempotencyKey ? <code className="fw-adm-code">{entry.idempotencyKey}</code> : '—', hint: t('audit.ctx.keyHint') },
           ]}
         />
-        <p className="fw-adm-hint">{t('audit.ctx.ip')}</p>
+        {/* B-W2b-413 ("IP in the table"): the country of the session it was written in, never the address. */}
+        <p className="fw-adm-hint">{open?.country === undefined ? ta('list.loading') : open.country ? t('audit.ctx.ipCountry', { country: countryName(open.country, locale) }) : t('audit.ctx.ip')}</p>
       </section>
       <section aria-labelledby="fw-adm-audit-same">
         <h3 id="fw-adm-audit-same" className="fw-adm-audit-heading">

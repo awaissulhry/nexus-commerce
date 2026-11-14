@@ -66,7 +66,7 @@
     "idle": "Ends if unused",
     "idleHint": "Each use moves it later.",
     "absolute": "Ends at the latest",
-    "others": "The list of your other devices comes later. To sign out everywhere else now, change your password.",
+    "others": "Your other sessions are under Where I'm signed in. A new password also signs out every other session.",
     "signOut": "Sign out on this device"
   },
   "qr": {

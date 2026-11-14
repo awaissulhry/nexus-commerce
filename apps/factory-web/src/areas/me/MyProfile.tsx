@@ -15,6 +15,7 @@ import { changePassword, confirmTotp, disableTotp, setLocale, signOutHere, start
 import { authenticatorAtRest, profileModel, type AuthenticatorCard, type MeProblem, type MyProfileViewModel, type PasswordCard } from './me-model'
 import { MyProfileView, type MeAction } from './view/MyProfileView'
 import { StartPageCard } from '../../shell/scope/start/StartPageCard'
+import { MySessions } from './sessions/MySessions'
 
 /**
  * The live SCR-007: the person from `GET /auth/office/me` (loaded by the page), drawn by `MyProfileView`. The cards
@@ -112,7 +113,7 @@ function Profile({ me }: { me: OfficeMe }) {
     }
   }
 
-  return <MyProfileView model={model} onAction={(action) => void onAction(action)} whereIWork={<StartPageCard />} />
+  return <MyProfileView model={model} onAction={(action) => void onAction(action)} whereIWork={<StartPageCard />} signedIn={<MySessions />} />
 }
 
 /** The person could not be read (the API went away between the office's check and this page). */

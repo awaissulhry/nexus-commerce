@@ -1,0 +1,266 @@
+{
+  "common": {
+    "cancel": "Annulla",
+    "retry": "Riprova",
+    "dismiss": "Chiudi avviso"
+  },
+  "figure": {
+    "label": "Previsto contro effettivo",
+    "col": {
+      "figure": "Voce",
+      "planned": "Previsto",
+      "actual": "Effettivo",
+      "tolerance": "Tolleranza ±{tolerance} %"
+    },
+    "row": {
+      "quantity": "Capi prodotti",
+      "material": "Costo materiali",
+      "minutes": "Minuti standard",
+      "scrap": "Capi scartati"
+    },
+    "garments_one": "{count} capo",
+    "garments_other": "{count} capi",
+    "minutes": "{minutes} min",
+    "needsCost": "Richiede la visibilità dei costi",
+    "within": "Entro",
+    "beyond": "Oltre"
+  },
+  "dialog": {
+    "title": "Chiudi {number}",
+    "go": "Chiudi",
+    "reading": "Lettura di previsto contro effettivo…",
+    "failed": "Impossibile leggere previsto contro effettivo",
+    "body": "La chiusura rende l'ordine definitivo. Sotto, previsto contro effettivo: una voce oltre la tolleranza richiede un motivo.",
+    "toleranceHint": "Ogni voce può scostarsi dal previsto di ±{tolerance} %; lo scarto si confronta con i capi previsti (non è ancora tenuta una franchigia di scarto).",
+    "noCost": "Il costo dei materiali richiede la visibilità dei costi (money.cost): resta visibile se è oltre la tolleranza.",
+    "reason": "Motivo",
+    "reasonHint": "Perché l'ordine si è chiuso fuori tolleranza.",
+    "reasonPick": "Scegli un motivo",
+    "noReason": "Entro la tolleranza di ±{tolerance} %: nessun motivo richiesto.",
+    "note": "Nota (facoltativa)",
+    "noteNeeded": "Scrivi il motivo a parole",
+    "noteHint": "Fino a {max} caratteri.",
+    "undoHint": "Dopo la chiusura, Annulla chiusura resta sullo schermo per qualche secondo."
+  },
+  "settle": {
+    "title": "La chiusura salda il costo",
+    "body": "Ora si scrivono la scomposizione degli scostamenti e la scrittura di chiusura; dopo, il costo dell'ordine accetta solo storni.",
+    "toPost_one": "Prima si registra {count} scrittura di costo non ancora registrata.",
+    "toPost_other": "Prima si registrano {count} scritture di costo non ancora registrate.",
+    "waitingTitle": "La chiusura attende ciò che non è ancora valorizzato"
+  },
+  "waits": {
+    "title": "In attesa del commercialista",
+    "close": "Oggi la chiusura è solo uno stato: la scomposizione degli scostamenti e la scrittura di chiusura si scrivono solo quando i dati dell'azienda per il commercialista sono attivi. Un ordine chiuso ora si salda riaprendolo e chiudendolo di nuovo allora.",
+    "preview": "Chiudere ora non scrive alcuna scomposizione: ecco cosa scriverebbe la chiusura quando i dati dell'azienda per il commercialista saranno attivi.",
+    "closed": "È stato chiuso come solo stato mentre i dati dell'azienda per il commercialista erano spenti: non è stato scomposto nulla. Per saldarlo, riaprilo e chiudilo di nuovo quando saranno attivi.",
+    "ppv": "Lo scostamento prezzo d'acquisto si registra solo quando i dati dell'azienda per il commercialista sono attivi: ricevimenti e fatture di questo periodo attendono fino ad allora."
+  },
+  "reason": {
+    "SHORT_PRODUCED": "Prodotti meno capi del previsto",
+    "OVER_PRODUCED": "Prodotti più capi del previsto",
+    "LEATHER_YIELD": "Le pelli hanno reso diversamente",
+    "MATERIAL_PRICE": "Il materiale è costato più o meno dello standard",
+    "SCRAP_ABOVE_ALLOWANCE": "Scartati più capi del consentito",
+    "REWORK": "La rilavorazione ha richiesto materiale o tempo in più",
+    "METHOD_CHANGED": "Il capo è stato fatto in un altro modo",
+    "STANDARD_OUT_OF_DATE": "Lo standard non è aggiornato",
+    "NO_STANDARD": "Ancora nessuno standard con cui confrontare",
+    "OTHER": "Un altro motivo (a parole)",
+    "unknown": "Un altro motivo"
+  },
+  "held": {
+    "busy": "In corso…",
+    "reading": "Lettura dei dati dell'ordine…",
+    "notCompleted": "Si chiude solo un ordine completato.",
+    "noManage": "Chiudere un ordine richiede il permesso {permission}.",
+    "costsWaiting_one": "{count} evento attende ancora la valorizzazione: la chiusura salda il costo, quindi lo attende.",
+    "costsWaiting_other": "{count} eventi attendono ancora la valorizzazione: la chiusura salda il costo, quindi li attende.",
+    "reasonNeeded": "Una voce è oltre la tolleranza di ±{tolerance} %: scegli un motivo.",
+    "noteNeeded": "Scrivi il motivo a parole.",
+    "noteLong": "La nota supera {max} caratteri.",
+    "noRecord": "Chiuso prima che la chiusura venisse registrata: non si riapre.",
+    "noReopen": "Riaprire un ordine richiede il permesso {permission}."
+  },
+  "reopen": {
+    "open": "Riapri…",
+    "title": "Riapri {number}",
+    "go": "Riapri",
+    "body": "Riaprire annulla la chiusura: l'ordine torna completato e il suo costo accetta di nuovo scritture. Chiudilo di nuovo quando è a posto.",
+    "bodySettled": "Riaprire annulla la chiusura: le sue scritture di scostamento e di chiusura vengono stornate (con data di oggi) e l'ordine torna completato. Chiudilo di nuovo quando è a posto.",
+    "reason": "Perché si riapre",
+    "reasonHint": "Resta con la chiusura; fino a {max} caratteri.",
+    "reasonShort": "Scrivi il perché in almeno {min} caratteri.",
+    "reasonLong": "Il motivo supera {max} caratteri."
+  },
+  "undo": {
+    "closed": "{number} è chiuso.",
+    "settled": "{number} è chiuso e il suo costo saldato.",
+    "body": "Chiuso per errore? Annulla chiusura lo riporta a completato.",
+    "go": "Annulla chiusura"
+  },
+  "closed": {
+    "reading": "Chiuso: lettura di chi l'ha chiuso…",
+    "failed": "Chiuso: impossibile leggere chi l'ha chiuso.",
+    "noRecord": "Chiuso prima che la chiusura venisse registrata.",
+    "settled": "Chiuso il {date} alle {time} da {name}; il costo è saldato.",
+    "status": "Chiuso il {date} alle {time} da {name}; chiuso come solo stato (il costo attende il commercialista).",
+    "reason": "Motivo: {reason}.",
+    "note": "Nota: {note}",
+    "final": "Un ordine chiuso è definitivo: per cambiarlo, riaprilo con un motivo."
+  },
+  "refusal": {
+    "NOT_COMPLETED": "Rifiutato: si chiude solo un ordine completato.",
+    "REASON_NEEDED": "Rifiutato: una voce è oltre la tolleranza, quindi serve un motivo.",
+    "REASON_NOT_NEEDED": "Rifiutato: ora le voci sono entro la tolleranza, quindi non si prende un motivo. Rileggi e chiudi.",
+    "NOTE_NEEDED": "Rifiutato: scrivi il motivo a parole.",
+    "COSTS_WAITING": "Rifiutato: qualcosa attende ancora la valorizzazione e la chiusura salda il costo.",
+    "LOCKED": "Rifiutato: oggi è in un periodo bloccato, quindi oggi il costo non si può saldare.",
+    "NOT_CLOSED": "Rifiutato: l'ordine non è chiuso.",
+    "NO_CLOSE_RECORD": "Rifiutato: è stato chiuso prima che la chiusura venisse registrata, quindi non si riapre.",
+    "UNDO_TOO_LATE": "Troppo tardi per annullare: riaprilo invece con un motivo.",
+    "NOT_THE_CLOSER": "Solo chi l'ha chiuso può annullare: riaprilo invece con un motivo.",
+    "DATABASE": "Rifiutato dai controlli di costo: il costo non si può saldare così com'è.",
+    "other": "Rifiutato: lo stato dell'ordine non lo consente."
+  },
+  "problem": {
+    "changed": "Qualcuno ha modificato l'ordine nel frattempo: è stato riletto. Controlla e riprova.",
+    "signed_out": "Sessione scaduta. Accedi di nuovo.",
+    "forbidden": "Il tuo ruolo non può farlo qui.",
+    "not_found": "Non trovato, o appartiene a un'altra azienda.",
+    "unavailable": "Il server non risponde. Riprova tra un momento.",
+    "rate_limited": "Troppe richieste: attendi un momento, poi riprova.",
+    "invalid": "La richiesta è stata rifiutata come non valida.",
+    "conflict": "Rifiutato: l'ordine è cambiato nel frattempo.",
+    "internal": "Qualcosa è andato storto sul server."
+  },
+  "notice": {
+    "closed": "{number} è chiuso.",
+    "closedSettled": "{number} è chiuso e il suo costo saldato.",
+    "undone": "Chiusura annullata: {number} è di nuovo completato.",
+    "reopened": "{number} è riaperto: è di nuovo completato."
+  },
+  "variance": {
+    "title": "Scostamento alla chiusura",
+    "notYet": "Lo scostamento si calcola alla chiusura: quando ogni capo è fatto e l'ordine è completato, chiuderlo scompone ciò che resta sul suo costo.",
+    "loading": "Lettura dello scostamento alla chiusura…",
+    "failed": "Impossibile caricare lo scostamento alla chiusura",
+    "tag": {
+      "preview": "Anteprima: non ancora chiuso",
+      "settled": "Saldato alla chiusura",
+      "statusOnly": "Chiuso come solo stato"
+    },
+    "previewBody": "Ciò che la chiusura scriverebbe se l'ordine fosse chiuso ora, contro lo standard dei capi prodotti.",
+    "noLines": "Nulla da scomporre: il costo dell'ordine corrisponde allo standard dei capi prodotti.",
+    "noBasis": "Nessuno standard congelato per ogni capo e nessuna stima completa al rilascio: non si scompone nulla e la scrittura di chiusura toglie tutto ciò che resta.",
+    "balance": "Resta sull'ordine: {amount}",
+    "explained": "Spiegato dalle righe: {amount}",
+    "closing": "Scrittura di chiusura (ciò che le righe lasciano): {amount}",
+    "entries_one": "{count} scrittura nel registro dei costi.",
+    "entries_other": "{count} scritture nel registro dei costi.",
+    "unverified": "Le categorie e ciò che toglie la scrittura di chiusura sono la lettura del sistema finché il commercialista non le conferma.",
+    "closedAt": "Chiuso il {date} alle {time} da {name}.",
+    "linesLabel": "Scostamento per categoria",
+    "col": {
+      "category": "Categoria",
+      "material": "Materiale",
+      "standard": "Standard",
+      "actual": "Effettivo",
+      "amount": "Scostamento"
+    },
+    "noMaterial": "Intero ordine",
+    "atCost": "a {cost}",
+    "over": "Sopra",
+    "under": "Sotto"
+  },
+  "category": {
+    "MATERIAL_PRICE": "Prezzo materiali",
+    "MATERIAL_USAGE": "Consumo materiali (resa)",
+    "LABOUR_EFFICIENCY": "Efficienza manodopera",
+    "LABOUR_RATE": "Costo orario manodopera",
+    "SCRAP": "Scarto",
+    "REWORK": "Rilavorazione",
+    "SUBCONTRACT_PRICE": "Prezzo terzisti",
+    "LOT_SIZE": "Dimensione lotto",
+    "OVERHEAD": "Costi generali"
+  },
+  "notSplit": {
+    "NOT_ON_LEDGER": "La rilavorazione non si scompone: il suo tempo non è valorizzato sull'ordine (la manodopera viene dalle scansioni del reparto).",
+    "NO_SET_UP": "La dimensione lotto non si scompone: né lo standard né l'ordine hanno un tempo di attrezzaggio da ripartire su un lotto.",
+    "NO_BASIS": "Non si scompone nulla: nessuno standard congelato per ogni capo e nessuna stima completa al rilascio."
+  },
+  "history": {
+    "title": "Chiusure annullate",
+    "col": {
+      "closed": "Chiuso",
+      "takenBack": "Annullato",
+      "why": "Perché"
+    },
+    "by": "{when} da {name}",
+    "undone": "Annullato {when} da {name}",
+    "reopened": "Riaperto {when} da {name}",
+    "undoneWhy": "Annullato pochi secondi dopo la chiusura"
+  },
+  "costState": {
+    "closed": "Chiuso"
+  },
+  "ppv": {
+    "title": "Scostamento prezzo d'acquisto",
+    "hint": "Prezzo d'acquisto contro standard al ricevimento o alla fattura, registrato {from} – {to}.",
+    "total_one": "Totale {amount} ({count} riga)",
+    "total_other": "Totale {amount} ({count} righe)",
+    "count_one": "{count} scostamento",
+    "count_other": "{count} scostamenti",
+    "slow": "Ancora in caricamento…",
+    "failed": "Impossibile caricare lo scostamento prezzo d'acquisto",
+    "empty": {
+      "title": "Nessun ricevimento in questo periodo",
+      "body": "Nessuno scostamento prezzo d'acquisto registrato a {month}: uno scostamento compare quando un materiale è ricevuto o fatturato a un prezzo diverso dal suo standard."
+    },
+    "more": "Mostra altri",
+    "noCost": "Standard, pagato e differenza sono visibili solo ai ruoli con la visibilità dei costi (money.cost).",
+    "export_one": "Esporta {count} (CSV)",
+    "export_other": "Esporta {count} (CSV)",
+    "line": "{number} · riga {seq}",
+    "at": {
+      "RECEIPT": "Al ricevimento",
+      "INVOICE": "Alla fattura"
+    },
+    "above": "Pagato di più",
+    "below": "Pagato di meno",
+    "state": {
+      "standing": "Registrato",
+      "reversal": "Storno",
+      "reversed": "Stornato il {day}"
+    },
+    "col": {
+      "material": "Materiale",
+      "supplier": "Fornitore",
+      "document": "Ricevimento o fattura",
+      "quantity": "Quantità",
+      "standard": "Standard",
+      "paid": "Pagato",
+      "difference": "Differenza",
+      "state": "Stato"
+    },
+    "csv": {
+      "file": "scostamento-prezzo-acquisto-{month}",
+      "material": "Materiale",
+      "supplier": "Fornitore",
+      "document": "Documento / riga",
+      "at": "Rilevato",
+      "day": "Giorno",
+      "quantity": "Quantità",
+      "unit": "Unità",
+      "standard": "Standard per unità",
+      "paid": "Pagato per unità",
+      "difference": "Differenza",
+      "currency": "Valuta",
+      "state": "Stato"
+    },
+    "keys": {
+      "title": "Tasti",
+      "open": "Apri il ricevimento o la fattura"
+    }
+  }
+}

@@ -42,7 +42,7 @@ export const STEP_UP_ACTIONS: readonly StepUpAction[] = Object.freeze([
   action('workers.credentials', ['workers.credentials']),
   // The other risky actions.
   action('invoices.issue', ['invoices.issue']),
-  action('money.settings', ['costing.method.manage', 'costing.actuals.manage', 'invoices.tax.switch', 'accounting.unlock', 'orders.waive']),
+  action('money.settings', ['costing.method.manage', 'costing.actuals.manage', 'invoices.tax.switch', 'accounting.unlock', 'orders.waive', 'accounting.close', 'accounting.journals.switch']),
   // B-W2b-402: the Owner's collections switches (Ri.Ba., the payment notice to customers) and a customer's trusted reminder level.
   action('reminders.switch', ['receivables.reminders.switch', 'purchasing.reminders.switch', 'receivables.collections.switch', 'receivables.reminders.trust']),
   action('email.identities', ['email.manage']),

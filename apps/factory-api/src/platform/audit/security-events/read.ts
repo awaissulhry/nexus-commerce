@@ -126,13 +126,26 @@ export async function listSecurityEvents(caller: CommandCaller, query: SecurityE
   })
 }
 
-/** GET /audit/security-events/:eventId */
-export async function oneSecurityEvent(caller: CommandCaller, eventId: string): Promise<{ event: SecurityEventView }> {
+/** How far either side of an event its related events are looked for (B-W2b-413). */
+const RELATED_WINDOW_MS = 24 * 3_600_000
+const RELATED_LIMIT = 20
+
+/** GET /audit/security-events/:eventId — the event and (B-W2b-413) the other events from the same address around it. */
+export async function oneSecurityEvent(caller: CommandCaller, eventId: string): Promise<{ event: SecurityEventView; related: SecurityEventView[] }> {
   assertEverywhere(contextOf(caller), SECURITY_EVENTS_VIEW, WORDS)
   return caller.withClient(async (client) => {
-    const row = await client.securityEvent.findUnique({ where: { id: eventId }, select: EVENT_SELECT })
+    const row = await client.securityEvent.findUnique({ where: { id: eventId }, select: { ...EVENT_SELECT, ipHash: true } })
     if (!row) throw new NotFoundError('No such security event.')
-    const [event] = await eventViewsOf(client, [row])
-    return { event: event! }
+    const { ipHash, ...shown } = row
+    const near = ipHash
+      ? await client.securityEvent.findMany({
+          where: { ipHash, id: { not: row.id }, at: { gte: new Date(row.at.getTime() - RELATED_WINDOW_MS), lte: new Date(row.at.getTime() + RELATED_WINDOW_MS) } },
+          orderBy: [{ at: 'desc' }, { id: 'desc' }],
+          take: RELATED_LIMIT,
+          select: EVENT_SELECT,
+        })
+      : []
+    const [event, ...related] = await eventViewsOf(client, [shown, ...near])
+    return { event: event!, related }
   })
 }

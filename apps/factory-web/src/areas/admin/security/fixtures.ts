@@ -7,6 +7,11 @@ import { inShell, PREFIX } from '../shared/fixtures'
 import type { Drill, DrillStatus, FingerprintAnswer, SecurityFacts, TwoFactorList, TwoFactorPreview, TwoFactorRole } from './api'
 import { emptyDrillForm, LOADING, NO_DIALOG, type Dialog, type Read, type SecurityViewModel } from './model'
 import { SecurityView } from './view/SecurityView'
+import { DEMO_EVENTS, DEMO_SETTINGS } from './sessions/fixtures'
+import type { SecurityDepthModel } from './sessions/view/SecurityDepth'
+import type { LengthsDraft } from './sessions/model'
+import type { CardState } from './sessions/use-security-settings'
+import type { SecurityEventsModel } from './events/view/SecurityEventsCard'
 
 /**
  * SCR-166 Security & health with made-up data: invented people ("Anna Esempio" …), invented roles' holders, checksums
@@ -123,6 +128,16 @@ const ROLES: TwoFactorRole[] = [
 const TWO_FACTOR: TwoFactorList = { roles: ROLES, canChange: true }
 
 const ok = <T>(value: T): Read<T> => ({ state: 'ok', value })
+// B-W2b-413: Session lengths, Actions that ask for a fresh code, Security events (made-up, sessions/fixtures.ts).
+const IDLE_CARD: CardState<never> = { draft: null, busy: false, problem: null, fields: {}, notice: null }
+const EVENTS: SecurityEventsModel = { filters: { view: null, surface: null, ip: null }, events: DEMO_EVENTS, problem: null, nextBefore: DEMO_EVENTS[9]!.id, older: { loading: false, problem: null }, open: null }
+const depth = (over: Partial<SecurityDepthModel> = {}): SecurityDepthModel => ({
+  lengths: { prefix: PREFIX, read: ok(DEMO_SETTINGS), card: IDLE_CARD },
+  stepUp: { read: ok(DEMO_SETTINGS), card: IDLE_CARD },
+  events: EVENTS,
+  freshCode: STEP_UP_CLOSED,
+  ...over,
+})
 const model = (over: Partial<SecurityViewModel> = {}): SecurityViewModel => ({
   prefix: PREFIX,
   facts: ok(facts(DUE_SOON, [PASSED_AUG, PASSED_MAY])),
@@ -130,8 +145,13 @@ const model = (over: Partial<SecurityViewModel> = {}): SecurityViewModel => ({
   fingerprint: null,
   dialog: NO_DIALOG,
   notice: null,
+  depth: depth(),
   ...over,
 })
+const lengthsCard = (card: Partial<CardState<LengthsDraft>>, extra: Partial<SecurityDepthModel> = {}) =>
+  model({ depth: depth({ lengths: { prefix: PREFIX, read: ok(DEMO_SETTINGS), card: { ...IDLE_CARD, ...card } }, ...extra }) })
+const WIDER = { officeIdleMinutes: 600, officeLongestHours: 168, portalIdleMinutes: 30, portalLongestHours: 12 }
+const RELATED = DEMO_EVENTS.slice(0, 3)
 
 const ASK_PREVIEW: TwoFactorPreview = { affected: [people.marco, people.paolo], openSessions: 1, refusals: [] }
 const twoFactorDialog = (requireMfa: boolean, preview: Read<TwoFactorPreview>, roleIds: string[]): Dialog => ({
@@ -202,6 +222,33 @@ export const designScreen = defineDesignScreen<Case>({
     { id: 'drill-dialog-fail', label: 'Record a drill: a key differs', model: { model: model({ dialog: drillDialog({ ...filled, restored: fingerprintLine(OTHER) }) }) } },
     { id: 'drill-dialog-refused', label: 'Record a drill: over production refused', model: { model: model({ dialog: drillDialog({ ...filled, environment: 'server di produzione', restored: 'orders=1' }, { tried: true }) }) } },
     { id: 'fingerprint', label: "This database's fingerprint, to copy", model: { model: model({ fingerprint: ok({ ...SOURCE, asOf: NOW }) }) } },
+    { id: 'w2b-413-lengths-wider', label: 'Session lengths: longer, not saved', model: { model: lengthsCard({ draft: WIDER }) }, note: 'Longer = wider: the bar says a fresh code is asked first.' },
+    { id: 'w2b-413-lengths-problem', label: 'Session lengths: idle longer than the longest', model: { model: lengthsCard({ draft: { ...WIDER, officeIdleMinutes: 1440, officeLongestHours: 12 } }) }, note: 'Save held until fixed.' },
+    { id: 'w2b-413-lengths-fresh', label: 'Session lengths: the fresh code first', model: { model: lengthsCard({ draft: WIDER, busy: true }, { freshCode: { open: true, busy: false, sentence: 'lengths.freshSentence', problem: null } }) } },
+    { id: 'w2b-413-lengths-saved', label: 'Session lengths: saved shorter', model: { model: lengthsCard({ notice: { key: 'lengths.done.shorter', tone: 'success' } }) } },
+    { id: 'w2b-413-lengths-stale', label: 'Session lengths: changed meanwhile', model: { model: lengthsCard({ problem: 'settings.problem.stale' }) } },
+    {
+      id: 'w2b-413-settings-read-only',
+      label: 'Settings: read only (no right to change)',
+      model: { model: model({ depth: depth({ lengths: { prefix: PREFIX, read: ok({ ...DEMO_SETTINGS, canChange: false }), card: IDLE_CARD }, stepUp: { read: ok({ ...DEMO_SETTINGS, canChange: false }), card: IDLE_CARD } }) }) },
+      note: 'Lengths as words; each action Asks / Does not ask; no toggles.',
+    },
+    {
+      id: 'w2b-413-fresh-off',
+      label: 'Actions: bank details switched off, not saved',
+      model: { model: model({ depth: depth({ stepUp: { read: ok(DEMO_SETTINGS), card: { ...IDLE_CARD, draft: { off: ['invoices.issue', 'bankDetails.change'], maxFailures: 5, lockMinutes: 15 } } } }) }) },
+      note: 'Wider: a fresh code first. Fixed actions say why they always ask.',
+    },
+    { id: 'w2b-413-settings-loading', label: 'Settings: loading', model: { model: model({ depth: depth({ lengths: { prefix: PREFIX, read: LOADING, card: IDLE_CARD }, stepUp: { read: LOADING, card: IDLE_CARD } }) }) } },
+    { id: 'w2b-413-settings-error', label: 'Settings: not available', model: { model: model({ depth: depth({ lengths: { prefix: PREFIX, read: { state: 'failed', problem: 'problem.unavailable' }, card: IDLE_CARD }, stepUp: { read: { state: 'failed', problem: 'problem.unavailable' }, card: IDLE_CARD } }) }) } },
+    { id: 'w2b-413-events-failed', label: 'Security events: Failed sign-ins', model: { model: model({ depth: depth({ events: { ...EVENTS, filters: { view: 'failed-sign-ins', surface: null, ip: null }, events: DEMO_EVENTS.filter((item) => ['SIGN_IN_FAILED', 'LOCKOUT', 'STEP_UP_LOCKED'].includes(item.kind)), nextBefore: null } }) }) } },
+    { id: 'w2b-413-event', label: 'Failed sign-in (one event)', model: { model: model({ depth: depth({ events: { ...EVENTS, open: { id: DEMO_EVENTS[1]!.id, event: DEMO_EVENTS[1]!, related: RELATED.filter((item) => item.id !== DEMO_EVENTS[1]!.id), problem: null } } }) }) }, note: 'The full event; other events from the same address (never the address). J / K move.' },
+    { id: 'w2b-413-event-worker', label: 'A floor worker’s failed PIN', model: { model: model({ depth: depth({ events: { ...EVENTS, open: { id: DEMO_EVENTS[7]!.id, event: DEMO_EVENTS[7]!, related: [], problem: null } } }) }) }, note: 'Never named: "A floor worker".' },
+    { id: 'w2b-413-events-ip', label: 'Security events: one address typed, nothing', model: { model: model({ depth: depth({ events: { ...EVENTS, filters: { view: null, surface: null, ip: '192.0.2.10' }, events: [], nextBefore: null } }) }) } },
+    { id: 'w2b-413-events-empty', label: 'Security events: none yet', model: { model: model({ depth: depth({ events: { ...EVENTS, events: [], nextBefore: null } }) }) } },
+    { id: 'w2b-413-events-loading', label: 'Security events: loading', model: { model: model({ depth: depth({ events: { ...EVENTS, events: null } }) }) } },
+    { id: 'w2b-413-events-error', label: 'Security events: refused (one company only)', model: { model: model({ depth: depth({ events: { ...EVENTS, events: [], problem: 'problem.forbidden' } }) }) } },
+    { id: 'w2b-413-events-no-right', label: 'Security events: no right (absent)', model: { model: model({ depth: depth({ events: null }) }) } },
     { id: 'notice', label: 'After a drill that passed', model: { model: model({ facts: ok(facts(OK, [drill(4, { drilledOn: '2026-10-30', result: 'PASSED' }), PASSED_AUG])), notice: { key: 'sec.notice.drillPassed', tone: 'success' } }) } },
   ],
 })

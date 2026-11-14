@@ -7,7 +7,7 @@
     "cancel": "Cancel",
     "open": "Open",
     "stillLoading": "Still loading…",
-    "later": "Coming later: jobs and integrations with their runs, session lengths, the actions that ask for a fresh code, security events, and sign-in with Microsoft or Google.",
+    "later": "Coming later: jobs and integrations with their runs, and sign-in with Microsoft or Google.",
     "noAccess": {
       "title": "Not yours to open",
       "body": "Security & health needs the right to see it (security.view). Ask an administrator of your company."
@@ -110,6 +110,8 @@
       "title": "Sign-in rules",
       "hint": "Passwords, lockout and two-factor.",
       "fixed": "Fixed for every office user.",
+      "sessionsSet": "Set per audience in Session lengths below.",
+      "stepUpSet": "Which actions ask for it: Actions that ask for a fresh code, below.",
       "password": "Passwords",
       "passwordRule": "{min} to {max} characters, not a common one, not your name or email",
       "lockout": "Lockout",

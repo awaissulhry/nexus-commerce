@@ -4,8 +4,8 @@
     "intro": "Ogni modifica fatta in fabbrica: chi, dove, com'era prima e dopo, e perché. Nessuno può modificare o cancellare una voce.",
     "noAccess": "Per leggere il registro serve il permesso \"Leggere la cronologia di un record\". Chiedilo a un amministratore.",
     "export": "Esporta questa vista",
+    "exportInTable": "Apre la tabella: il suo Esporta ▾ crea il file di questa vista (CSV o Excel).",
     "held": {
-      "export": "L'esportazione del registro arriverà in un passaggio successivo.",
       "loading": "Lettura delle voci più vecchie…",
       "noPage": "Per «{type}» non c'è ancora una pagina dedicata."
     },
@@ -51,7 +51,8 @@
       "24h": "Ultime 24 ore",
       "7d": "Ultimi 7 giorni",
       "30d": "Ultimi 30 giorni",
-      "90d": "Ultimi 90 giorni"
+      "90d": "Ultimi 90 giorni",
+      "range": "Tra due giorni"
     },
     "surface": {
       "OFFICE": "Ufficio",
@@ -73,7 +74,7 @@
     },
     "older": "Mostra le più vecchie",
     "end": "Questa è la prima voce: non c'è nulla di più vecchio.",
-    "later": "Chi ha consultato i record riservati, l'esportazione del registro e la durata di conservazione arriveranno in passaggi successivi.",
+    "later": "La durata di conservazione del registro arriverà in un passaggio successivo.",
     "count": "{shown} voci mostrate su {total} lette",
     "why": "motivo: {reason}",
     "deviceTime": "(tablet {time})",
@@ -134,7 +135,8 @@
       "request": "Id della richiesta",
       "key": "Chiave contro i doppi invii",
       "keyHint": "La stessa modifica inviata due volte viene fatta una volta sola.",
-      "ip": "Il paese dell'indirizzo di accesso non è ancora registrato."
+      "ip": "Nessun paese è noto per la sessione in cui è stata scritta.",
+      "ipCountry": "Scritta in una sessione con accesso da {country}."
     },
     "who": {
       "person": "{name}",
@@ -146,6 +148,15 @@
       "system": "Nexus, in automatico"
     },
     "did": {
+      "audit_searchReadsOfPerson": "ha consultato ciò che una persona ha visto",
+      "auth_endOtherSessions": "è uscito da tutte le altre sessioni",
+      "auth_endSession": "ha terminato una sessione",
+      "auth_stepUpFailed": "ha inserito un codice nuovo sbagliato",
+      "security_setSessionLengths": "ha cambiato la durata delle sessioni",
+      "security_setStepUpRules": "ha cambiato le azioni che chiedono un codice nuovo",
+      "users_endSessions": "ha terminato tutte le sessioni di",
+      "roles_archive": "ha archiviato",
+      "roles_restore": "ha ripristinato",
       "other": "ha modificato",
       "org_createCompany": "ha creato",
       "org_editCompany": "ha modificato",

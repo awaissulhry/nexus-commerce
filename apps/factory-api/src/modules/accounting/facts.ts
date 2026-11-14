@@ -1,7 +1,9 @@
 import type { Prisma } from '@nexus/factory-db'
 import {
   checksFor,
+  entriesBalanceCheck,
   intrastatCheck,
+  mappingCompleteCheck,
   paymentsPlacedCheck,
   periodEndedCheck,
   placementsCheck,
@@ -9,6 +11,7 @@ import {
   shipmentsInvoicedCheck,
   stockValuedCheck,
   totalsCheck,
+  workOrdersClosedCheck,
   yearEndCheck,
   type CheckResult,
   type TotalsFacts,
@@ -32,11 +35,16 @@ import type { ExportDocument } from '@nexus/factory-domain/accounting/manifest'
 import type { AccountingPackage } from '@nexus/factory-domain/accounting/packages'
 import type { Period } from '@nexus/factory-domain/accounting/periods'
 import { yearEndDocuments, type ValuationRowFacts, type YearEndCountFacts } from '@nexus/factory-domain/accounting/year-end'
+import { costRegisterDocument } from '@nexus/factory-domain/accounting/journals/cost-of-sales'
+import { purchasesRegisterDocument, salesRegisterDocument } from '@nexus/factory-domain/accounting/vat-registers/registers'
 import { businessDayStart, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { notInvoiced } from '@nexus/factory-domain/invoicing/from-shipment/shipped'
 import { endOfDay, valueStockAsOf } from '../costing/valuation/valuation'
 import { invoicedOf, readDdts, shippedOf } from '../invoicing/from-shipment/store'
 import { dateOf, dayOf, type CompanyRow, type Reader } from './store'
+// B-W2b-408: the accountant's bridge (the journals switch and entries, cost of goods sold and variances, VAT registers).
+import { readBridgeFacts, type BridgeFacts } from './journals/facts'
+import { entryDocumentsOf, journalEntriesOf, unbalancedOf, unmappedKeysOf } from './journals/entries'
 
 /**
  * What a company's month holds for its accounting export (B-W2a-39), read in one place so the preview, the export and
@@ -62,6 +70,8 @@ export interface PeriodFacts {
   readonly purchases: readonly SupplierInvoiceFacts[] | null
   readonly intrastat: readonly IntrastatRow[] | null
   readonly yearEnd: YearEndFacts | null
+  /** B-W2b-408: the journals switch, the entries' lines and mapping, the cost of goods sold and variances. */
+  readonly bridge: BridgeFacts
 }
 
 export interface YearEndFacts {
@@ -75,8 +85,9 @@ export interface YearEndFacts {
 
 const inPeriod = (period: Period) => ({ gte: dateOf(period.start), lte: dateOf(period.end) })
 
-/** Everything the packages asked for need of the month (the base journals and checks always). */
-export async function readPeriodFacts(db: Reader, company: CompanyRow, period: Period, packages: readonly AccountingPackage[]): Promise<PeriodFacts> {
+/** Everything the packages asked for need of the month (the base journals and checks always). B-W2b-408: `options.entries`
+ * reads the journal entries' facts whatever the company's switch (the integrity checks). */
+export async function readPeriodFacts(db: Reader, company: CompanyRow, period: Period, packages: readonly AccountingPackage[], options: { readonly entries?: boolean } = {}): Promise<PeriodFacts> {
   const wanted = new Set(packages)
   const invoices = await db.invoice.findMany({
     where: { companyId: company.id, issueDate: inPeriod(period), status: { not: 'DRAFT' }, docType: { in: [...ISSUED_TYPES] } },
@@ -187,10 +198,16 @@ export async function readPeriodFacts(db: Reader, company: CompanyRow, period: P
     customerName: refund.party.legalName,
   }))
 
-  const purchases = wanted.has('PURCHASES_JOURNAL') ? await readPurchases(db, company, period) : null
+  // B-W2b-408: the VAT registers' purchases register reads the month's supplier invoices too.
+  const purchases = wanted.has('PURCHASES_JOURNAL') || wanted.has('VAT_REGISTERS') ? await readPurchases(db, company, period) : null
   const intrastat = wanted.has('INTRASTAT') ? await readIntrastat(db, issued) : null
   const yearEnd = wanted.has('YEAR_END_STOCK') ? await readYearEnd(db, company, period) : null
-  return { period, sales, totals, rejected, openDdts, payments, refunds, purchases, intrastat, yearEnd }
+  const bridge = await readBridgeFacts(db, company, period, packages, {
+    invoiceIds: sales.map((invoice) => invoice.id),
+    supplierInvoiceIds: (purchases ?? []).map((invoice) => invoice.id),
+    partyCodes: [...payments.map((row) => row.customerCode), ...refunds.map((row) => row.customerCode), ...(purchases ?? []).map((row) => row.supplierCode)],
+  }, options)
+  return { period, sales, totals, rejected, openDdts, payments, refunds, purchases, intrastat, yearEnd, bridge }
 }
 
 async function readPurchases(db: Reader, company: CompanyRow, period: Period): Promise<SupplierInvoiceFacts[]> {
@@ -347,6 +364,8 @@ export interface PackageDocuments {
   readonly documents: readonly ExportDocument[]
   /** The journals' rows per document (DOCUMENTS packages). */
   readonly journals: ReadonlyMap<AccountingPackage, readonly DocumentRows[]>
+  /** B-W2b-408: the entries with mapped accounts per journal package (journals on), each document of its package. */
+  readonly entries: ReadonlyMap<AccountingPackage, readonly DocumentRows[]>
 }
 
 export function documentsOf(facts: PeriodFacts, company: CompanyRow, packages: readonly AccountingPackage[]): PackageDocuments {
@@ -355,10 +374,13 @@ export function documentsOf(facts: PeriodFacts, company: CompanyRow, packages: r
   if (wanted.has('SALES_JOURNAL')) journals.set('SALES_JOURNAL', facts.sales.map(salesJournalDocument))
   if (wanted.has('PURCHASES_JOURNAL') && facts.purchases) journals.set('PURCHASES_JOURNAL', facts.purchases.map(purchasesJournalDocument))
   if (wanted.has('PAYMENTS')) journals.set('PAYMENTS', [...facts.payments.map(paymentDocument), ...facts.refunds.map(refundDocument)])
+  // B-W2b-408: the cost of goods sold and variances register (a DOCUMENTS package: its entries are posted).
+  if (wanted.has('COST_OF_SALES')) journals.set('COST_OF_SALES', (facts.bridge.costFigures ?? []).map(costRegisterDocument))
   const documents: ExportDocument[] = [...journals.values()].flatMap((rows) => rows.map((row) => row.document))
+  if (wanted.has('VAT_REGISTERS')) documents.push(...facts.sales.map((invoice) => salesRegisterDocument(invoice).document), ...(facts.purchases ?? []).map((invoice) => purchasesRegisterDocument(invoice).document))
   if (wanted.has('INTRASTAT') && facts.intrastat) documents.push(...intrastatDocuments(facts.intrastat, new Map(facts.sales.map((invoice) => [invoice.id, invoice.version]))))
   if (wanted.has('YEAR_END_STOCK') && facts.yearEnd) documents.push(...yearEndDocuments({ companyId: company.id, yearEndDay: facts.yearEnd.day, counts: facts.yearEnd.counts, valuation: facts.yearEnd.valuation }))
-  return { documents, journals }
+  return { documents, journals, entries: entryDocumentsOf(journalEntriesOf(facts, packages), facts) }
 }
 
 /** The named checks of an export of these packages, as the month stands. */
@@ -373,8 +395,12 @@ export function checksOf(facts: PeriodFacts, packages: readonly AccountingPackag
     INTRASTAT_COMPLETE: () => intrastatCheck(facts.intrastat ?? []),
     YEAR_END_SIGNED_OFF: () => yearEndCheck({ counts: facts.yearEnd?.counts ?? [], sitesWithStock: facts.yearEnd?.sitesWithStock ?? [] }),
     STOCK_VALUED: () => stockValuedCheck(facts.yearEnd?.unvaluedMoves ?? 0),
+    // B-W2b-408
+    WORK_ORDERS_CLOSED: () => workOrdersClosedCheck(facts.bridge.openWorkOrders ?? []),
+    MAPPING_COMPLETE: () => mappingCompleteCheck(unmappedKeysOf(journalEntriesOf(facts, packages), facts)),
+    ENTRIES_BALANCE: () => entriesBalanceCheck(unbalancedOf(journalEntriesOf(facts, packages))),
   }
-  return checksFor(packages).map((code) => all[code]!())
+  return checksFor(packages, facts.bridge.journalsOn).map((code) => all[code]!())
 }
 
 /** Stock moves dated in the month that change stock and have no value yet (a hard lock waits for them). */

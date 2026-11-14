@@ -1,14 +1,15 @@
 import { businessDate } from '@nexus/factory-domain/core/time'
 import { compareFingerprints, DRILL_KEYS, drillProblems, drillResultOf, parseFingerprint, type DrillCheck, type Fingerprint } from '@nexus/factory-domain/ops/drills'
 import type { Drill, DrillStatus, FingerprintAnswer, SecurityFacts, StatusLine, TwoFactorChange, TwoFactorList, TwoFactorPreview, TwoFactorRole } from './api'
+import type { SecurityDepthModel } from './sessions/view/SecurityDepth'
 
 /**
  * Admin › Access › Security & health (SCR-166; design admin.security; B-W2a-36, PLT-045, PLT-214): pure rules of the
  * page. It reads one answer (`GET /admin/security`) and, for a reader with roles.view, the roles' two-factor rules. Its
  * sections, in the design's order: Is everything working? (W0), Sign-in rules (W2a: passwords and lockout fixed and
  * shown, two-factor per role in the list frame), Backups and restore drills (W2a: the proof the data can come back),
- * Protection in place (W0: facts, not settings). Jobs, session lengths, step-up actions, security events and SSO are
- * later waves (one line says so).
+ * Protection in place (W0: facts, not settings). B-W2b-413: Session lengths, Actions that ask for a fresh code and Security
+ * events (`depth`). Jobs and SSO are later waves (one line says so).
  */
 
 /** A read: still loading, done, failed (a message key), or not this person's to read (the section is absent). */
@@ -34,6 +35,8 @@ export interface SecurityViewModel {
   selected?: readonly string[]
   /** The live stream's state, in words. */
   live?: 'connecting' | 'live' | 'offline'
+  /** B-W2b-413: the W2b sections (sessions/view/SecurityDepth). */
+  depth?: SecurityDepthModel
 }
 
 // ---- Is everything working? ------------------------------------------------------------------------------------------

@@ -714,10 +714,6 @@
     "complete": {
       "title": "Completa {number}",
       "body": "Ogni capo è finito all'ultima fase. Completare chiude le scansioni del reparto; controllo, etichette e rilascio proseguono."
-    },
-    "close": {
-      "title": "Chiudi {number}",
-      "body": "Un ordine chiuso è definitivo: dopo cambia solo la nota."
     }
   },
   "cancel": {
@@ -733,7 +729,6 @@
     "released": "Rilasciato · lotto {batch}",
     "start": "Avviato.",
     "complete": "Completato.",
-    "close": "Chiuso.",
     "cancelled": "Annullato.",
     "saved": "Salvato.",
     "sizesSaved": "Taglie salvate.",
