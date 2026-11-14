@@ -174,8 +174,12 @@ model QuoteTemplateLine {
   style     Style         @relation("QuoteTemplateLineStyle", fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and styleId.
   colourway Colourway?    @relation("QuoteTemplateLineColourway", fields: [tenantId, styleId, colourwayId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b-6 config.prisma (wave 56/57, B-W2b-379): the options it starts with.
+  options   QuoteTemplateLineOption[]
 
   @@unique([tenantId, templateId, seq])
+  // B-W2b-379: the target of its options' tenant-safe reference.
+  @@unique([tenantId, id])
   @@index([tenantId, styleId])
 }
 

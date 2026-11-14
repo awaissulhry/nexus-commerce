@@ -390,6 +390,23 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    (PRODUCT_SAFETY_INJURY: the ProductSafetyInjury, no employee) and wave 52's `factory_read_log_record_type_ok`
    (DataRequest), each word for word but for that; it calls recall's `factory_recall_words_ok`, `factory_recall_not_future`,
    `factory_recall_model_name_ok` and money's `factory_money_rome_day`):
+   `…_config_templates_w2b_guards` (W2b-6 schema wave 56/57, B-W2b-379, configuration without code: custom fields on a record
+   type that is a table of the tenant (the code once per record type: the key `field:<recordType>:<code>`; a unit only on NUMBER;
+   the grain exactly with the MONEY audience, a MONEY field always MONEY; the portal only for INTERNAL or a price; a list exactly on
+   SELECT/MULTI_SELECT, of its company or every company's, active when made or restored; a linked record type exactly on LINK;
+   company, record type, code, type, list and link fixed; archived, never deleted); their values (a record of the field's type that
+   exists, of the field's company when it has one; one per field and record: the key `value:<fieldId>:<recordId>`; the value in the
+   shape of the field's type: a list's code active when newly written, an office person, a record of the linked type, an available
+   file of the record; changed forward; an archived field's values neither written nor removed); picklists and their values (keys
+   `picklist:<code>`, `option:<picklistId>:<code>`; swatch, icon, place; added to an active list; a list archived only while no
+   active field picks from it; deactivated, never deleted); document and e-mail template versions (born DRAFT, DRAFT → ACTIVE (once,
+   with when and by whom) → RETIRED, words frozen once published, RETIRED frozen whole, only a DRAFT removed; placeholders only as
+   `{{name}}`; one ACTIVE per company, kind and language, or per event, company or every company, and language: the partial uniques
+   `DocumentTemplate_one_active`, `EmailTemplate_one_active`); saved replies (an office person's own or shared; a record type of the
+   tenant); a quote template line's options (B-W2b-374's need: the rules of a quote line's option; its own triggers
+   `QuoteTemplateLine_options_check` (a line with options keeps its style and becomes no fee) and `OptionGroup_template_takes_check`
+   (words `options: …` for the takes route); no earlier function redefined; it calls recall's `factory_recall_words_ok`,
+   `factory_recall_not_future`, `factory_recall_model_name_ok` and the privacy step's `factory_privacy_ops_key_ok`):
    triggers, partial unique indexes and deferred
    constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new

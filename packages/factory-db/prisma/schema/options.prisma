@@ -141,6 +141,8 @@ model OptionGroup {
   // W2b-5 sales-pricing.prisma (wave 38/44): the options of it chosen on quote and order lines.
   quoteLineOptions      QuoteLineOption[]      @relation("QuoteLineOptionGroup")
   salesOrderLineOptions SalesOrderLineOption[] @relation("SalesOrderLineOptionGroup")
+  // W2b-6 config.prisma (wave 56/57): the options of it quote template lines start with.
+  quoteTemplateLineOptions QuoteTemplateLineOption[] @relation("QuoteTemplateLineOptionGroup")
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from its values, rules and the styles that offer it.
@@ -184,6 +186,8 @@ model OptionValue {
   // W2b-5 sales-pricing.prisma (wave 38/44): the quote and order lines it was chosen on.
   quoteLineOptions      QuoteLineOption[]      @relation("QuoteLineOptionValue")
   salesOrderLineOptions SalesOrderLineOption[] @relation("SalesOrderLineOptionValue")
+  // W2b-6 config.prisma (wave 56/57): the quote template lines that start with it.
+  quoteTemplateLineOptions QuoteTemplateLineOption[] @relation("QuoteTemplateLineOptionValue")
   // product.prisma: the BOM lines only for it.
   bomLines      BomLine[]
 

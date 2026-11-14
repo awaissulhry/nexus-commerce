@@ -1,0 +1,406 @@
+// Configuration without code (W2b-6, schema wave 56/57, B-W2b-379; features PLT-111, PLT-115, PLT-231, PLT-232, COL-016;
+// design admin.fields "Custom fields", "Picklists", its popup "Add field to …"; admin.documents "Document templates",
+// "E-mail templates", its builder page "Template: …"; the send panel's saved replies). Rule 1 (rare): every business has a
+// field the plan did not name, and the words of every paper and mail are code today. Set once, read every day.
+//
+//   CustomField               a field added to a record type without code: its key, type (text, number with unit, money
+//                             with its grain, date, select, multi-select, person, link to a record, file, yes/no), labels
+//                             IT/EN, section and order, required, who sees it, shown in the portal; archived, never deleted.
+//   CustomFieldValue          one record's value of one custom field, typed by the field, with who changed it and when.
+//   Picklist, PicklistValue   the lists a select field picks from: values with labels IT/EN, colour, icon, order and
+//                             description; a value no longer offered is deactivated and stays on the records that have it.
+//   DocumentTemplate          the words of a document per company, kind and language (header, terms, footer, the fields
+//                             shown), in versions: DRAFT → ACTIVE (one in use per company, kind and language) → RETIRED.
+//                             Without an active one the code's layout prints, as in W1.
+//   EmailTemplate             the subject and body of a mail per event and language (a company's own or every company's),
+//                             with placeholders, in versions like a document template.
+//   MessageTemplate           a saved reply per language, with placeholders from the record: a person's own or shared.
+//   QuoteTemplateLineOption   the options a quote template's line starts with (B-W2b-374, -378's schema need): the shape of
+//                             QuoteLineOption without a surcharge (priced when a quote is made from the template).
+//
+// Office only (ownership/config.json): the API's fields, templates and quote template routes (B-W2b-421, B-W2b-422) write
+// through command(); the portal, the document renderer and the mail worker read in the tenant's system scope. The
+// …_config_templates_w2b_guards triggers hold the rules for every login.
+
+/// A custom field (PLT-111; design admin.fields "Custom fields", "Add field to …"): a field added to one record type
+/// without code, for one company or every company of the tenant. Its code is unique per record type in the tenant (the
+/// key); its type, list or linked record type never change once made. A MONEY field carries the grain of the money it
+/// holds and is seen only by people with that grain (the API strips it, like a built-in money field); a field shown in
+/// the portal is one every office person sees, or a price. Archived (its values kept, no new value), never deleted.
+model CustomField {
+  id            String              @id @db.Uuid
+  tenantId      String              @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// null: every company of the tenant. Never changes.
+  companyId     String?             @db.Uuid
+  /// The record type it is added to: the model's name (`Party`, `Quote`, `SalesOrder`, `Style`, `Item`, `PurchaseOrder`,
+  /// `Lot`, `WorkOrder`), a table of the tenant; the API's registry (platform/fields/records.ts) says which take fields.
+  /// Never changes.
+  recordType    String
+  /// The field's key in the API, exports and imports: lower-case letters, digits and underscores, from a letter, up to
+  /// 40 characters (`heat_number`). Never changes.
+  code          String
+  /// `field:<recordType>:<code>`: each code once per record type in the tenant. Never changes.
+  key           String
+  /// Never changes.
+  type          CustomFieldType
+  /// The label in Italian and in English: one line each, 1 to 80 characters.
+  labelIt       String
+  labelEn       String
+  /// The form section it shows in: the record form's section key (`custom`: the custom-fields section every record panel
+  /// has); lower-case letters, digits and underscores, up to 40 characters.
+  section       String              @default("custom")
+  /// Its place in the section (0 to 9999, lower first).
+  sortOrder     Int                 @default(0)
+  /// The record's form asks for it (the API's rule; old records may lack it).
+  required      Boolean             @default(false)
+  /// NUMBER only: the unit shown after the number (`mm`, `kg`), one line of 1 to 20 characters; null: none.
+  unit          String?
+  /// Who sees it (the API's rule; the database keeps it consistent).
+  audience      CustomFieldAudience @default(INTERNAL)
+  /// The money grain (price, cost, margin, wages, pay: factory-domain auth/grains), exactly when the audience is MONEY. A
+  /// MONEY field always has the MONEY audience.
+  grain         String?
+  /// Shown to the record's party in the portal: only a field every office person sees (INTERNAL) or a price (MONEY with
+  /// the price grain), never personal data, a cost or pay.
+  shownInPortal Boolean             @default(false)
+  /// SELECT and MULTI_SELECT, exactly then: the list it picks from (of its company or every company's; a field of every
+  /// company: every company's). Never changes.
+  picklistId    String?             @db.Uuid
+  /// LINK, exactly then: the record type it links to, a table of the tenant (`Style`, `Party`). Never changes.
+  linkTo        String?
+  /// ARCHIVED: kept with its values, takes no new value; restored by setting it ACTIVE (its list active).
+  status        MasterStatus        @default(ACTIVE)
+  version       Int                 @default(1)
+  createdAt     DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime            @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById   String?             @db.Uuid
+
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  company  Company?           @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  picklist Picklist?          @relation(fields: [tenantId, picklistId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  values   CustomFieldValue[]
+
+  @@unique([tenantId, key])
+  // The target of the values' tenant-safe reference.
+  @@unique([tenantId, id])
+  // A record type's fields (the registry reads them on every form, grid, filter, export and import).
+  @@index([tenantId, recordType, status])
+}
+
+/// A custom field's type (PLT-111) and the shape of its value (CustomFieldValue.value).
+enum CustomFieldType {
+  /// A string of 1 to 4000 characters.
+  TEXT
+  /// A number (with the field's unit).
+  NUMBER
+  /// `{ "amount": <whole minor units>, "currency": "<ISO 4217>" }`, of the field's grain.
+  MONEY
+  /// A day, `YYYY-MM-DD`.
+  DATE
+  /// A value code of the field's list.
+  SELECT
+  /// A list of 1 to 100 value codes of the field's list, each once.
+  MULTI_SELECT
+  /// An office person: a User's id.
+  PERSON
+  /// A record of the field's linkTo type: its id.
+  LINK
+  /// A file of the record: a StoredFile's id.
+  FILE
+  /// true or false.
+  YES_NO
+}
+
+/// Who sees a custom field ("visible to").
+enum CustomFieldAudience {
+  /// Every office person who reads the record.
+  INTERNAL
+  /// Only people with the field's grain (a MONEY field always).
+  MONEY
+  /// Only people who may read personal data; never in the portal.
+  PERSONAL
+}
+
+/// One record's value of one custom field (PLT-111): the record by its type (the field's) and id, the value in the shape of
+/// the field's type, and who changed it last and when (the audit log keeps every change: command()). A SELECT or
+/// MULTI_SELECT value is a code of the field's list, active when it is written (a deactivated value stays where it is); a
+/// PERSON an office person; a LINK a record of the field's linked type; a FILE a file of the record. Removed to clear it;
+/// an archived field's values change no more.
+model CustomFieldValue {
+  id          String   @id @db.Uuid
+  tenantId    String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// Never changes.
+  fieldId     String   @db.Uuid
+  /// The field's record type and the record's id (a row of the tenant; of the field's company when the record has one).
+  /// Never change.
+  recordType  String
+  recordId    String   @db.Uuid
+  /// `value:<fieldId>:<recordId>`: one value per field and record. Never changes.
+  key         String
+  /// The value, in the shape of the field's type (CustomFieldType); never JSON null (a value is cleared by removing it).
+  value       Json
+  /// Who wrote the value last and when (not in the future; it moves forward with the value).
+  changedAt   DateTime @db.Timestamptz(3)
+  changedById String   @db.Uuid
+  version     Int      @default(1)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?  @db.Uuid
+
+  field CustomField @relation(fields: [tenantId, fieldId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, key])
+  // A record's custom values (its form, grid row, export line).
+  @@index([tenantId, recordType, recordId])
+  // A field's values (a filter, an archive check).
+  @@index([tenantId, fieldId])
+}
+
+/// A picklist (PLT-115; design admin.fields "Picklists"): a list of values a select field picks from, for one company or
+/// every company. Its code is unique in the tenant (the key). Archived only while no active field picks from it; never
+/// deleted (records keep its codes).
+model Picklist {
+  id          String       @id @db.Uuid
+  tenantId    String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// null: every company of the tenant. Never changes.
+  companyId   String?      @db.Uuid
+  /// Lower-case letters, digits and underscores, from a letter, up to 40 characters (`lining_type`). Never changes.
+  code        String
+  /// `picklist:<code>`: each code once in the tenant. Never changes.
+  key         String
+  /// Its name in Italian and in English: one line each, 1 to 80 characters.
+  labelIt     String
+  labelEn     String
+  status      MasterStatus @default(ACTIVE)
+  version     Int          @default(1)
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?      @db.Uuid
+
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  company Company?        @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  values  PicklistValue[]
+  fields  CustomField[]
+
+  @@unique([tenantId, key])
+  // The target of the tenant-safe references from its values and the fields that pick from it.
+  @@unique([tenantId, id])
+}
+
+/// One value of a picklist (PLT-115): its code (what a record keeps), labels IT/EN, the design system's colour swatch and
+/// tag icon, its place and a description. Added to an active list only; deactivated, never deleted: a record that has it
+/// keeps it and still shows it.
+model PicklistValue {
+  id          String   @id @db.Uuid
+  tenantId    String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// Never changes.
+  picklistId  String   @db.Uuid
+  /// Upper-case letters, digits and underscores, up to 40 characters (`FULL_GRAIN`): what a record keeps. Never changes.
+  code        String
+  /// `option:<picklistId>:<code>`: each code once per list. Never changes.
+  key         String
+  /// One line each, 1 to 80 characters.
+  labelIt     String
+  labelEn     String
+  /// A swatch of the design system's ColorSwatchPicker (`#rrggbb`); null: none.
+  colour      String?
+  /// The design system's tag icon (IconPicker id); null: the plain dot.
+  icon        String?
+  /// Its place in the list (0 to 9999, lower first).
+  sortOrder   Int      @default(0)
+  /// What it means, up to 500 characters; null: none.
+  description String?
+  /// A deactivated value is no longer offered and stays on the records that have it.
+  active      Boolean  @default(true)
+  version     Int      @default(1)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?  @db.Uuid
+
+  picklist Picklist @relation(fields: [tenantId, picklistId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, key])
+  // A list's values in their order.
+  @@index([tenantId, picklistId, sortOrder])
+}
+
+/// The state of a document or e-mail template version.
+enum TemplateStatus {
+  /// Being written; removed when given up.
+  DRAFT
+  /// In use: one per company (or every company), kind or event, and language. Its words never change.
+  ACTIVE
+  /// Replaced by a newer version, or no longer used: kept, never changed (a document printed with it names it).
+  RETIRED
+}
+
+/// What a document template is for: the documents of factory-domain documents/model.ts DOCUMENT_TYPES, value for value.
+enum DocumentTemplateKind {
+  QUOTE
+  ORDER_CONFIRMATION
+  PURCHASE_ORDER
+  DDT
+  INVOICE_COPY
+  PACKING_LIST
+}
+
+/// One version of a document template (PLT-231; design admin.documents "Document templates", the builder page "Template:
+/// …"): a company's words for one kind of document in one language: the header, the terms and the footer (placeholders
+/// `{{name}}` from the document), and the fields of its layout it shows. Versions 1, 2, 3 … per company, kind and language
+/// (the key); DRAFT → ACTIVE (published: when and by whom; the version in use before is RETIRED first) → RETIRED. Its
+/// words never change once published; a DRAFT is removed when given up, a published version never. The mandatory company
+/// data (c.c. art. 2250) is the layout's and cannot be left out (the API); without an ACTIVE version the code's layout
+/// prints.
+model DocumentTemplate {
+  id            String               @id @db.Uuid
+  tenantId      String               @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// Never changes.
+  companyId     String               @db.Uuid
+  /// Never changes.
+  kind          DocumentTemplateKind
+  /// ISO 639-1, two lower-case letters. Never changes.
+  language      String
+  /// Its version number in the series of its company, kind and language (1, 2, 3 …). Never changes.
+  revision      Int
+  /// `doc:<kind>:<companyId>:<language>:<revision>`: each version once. Never changes.
+  key           String
+  status        TemplateStatus       @default(DRAFT)
+  /// Printed above the lines, up to 2000 characters; null: none.
+  header        String?
+  /// The terms printed after the totals, up to 20000 characters; null: none.
+  terms         String?
+  /// Printed at the foot of every page, up to 2000 characters; null: the company's documentFooter.
+  footer        String?
+  /// The optional fields and columns of the layout it shows (`unitPrice`, `discount`, `delivery`), each once, up to 60;
+  /// the API checks them against the layout.
+  fieldsShown   String[]             @default([])
+  /// When and by whom it was published (DRAFT → ACTIVE), set once.
+  publishedAt   DateTime?            @db.Timestamptz(3)
+  publishedById String?              @db.Uuid
+  /// When it was retired, exactly when RETIRED.
+  retiredAt     DateTime?            @db.Timestamptz(3)
+  version       Int                  @default(1)
+  createdAt     DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime             @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById   String?              @db.Uuid
+
+  company Company @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, key])
+  // The versions of a company's template of a kind and language (the one in use: ACTIVE).
+  @@index([tenantId, companyId, kind, language, status])
+}
+
+/// One version of an e-mail template (PLT-232; design admin.documents "E-mail templates"): the subject and body of the
+/// mail of one event (EmailOutbound.templateKey: `quote.sent`, `auth.invitation`) in one language, with placeholders
+/// `{{name}}` the event offers; a company's own wins over every company's (companyId null). Versions per event, company
+/// and language (the key); DRAFT → ACTIVE → RETIRED, as a document template. Without an ACTIVE version the code's words
+/// are sent.
+model EmailTemplate {
+  id            String         @id @db.Uuid
+  tenantId      String         @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// null: every company of the tenant (a company's own wins). Never changes.
+  companyId     String?        @db.Uuid
+  /// The mail's template key: lower-case words joined by dots (`quote.sent`, `auth.password_reset`), up to 100
+  /// characters. Never changes.
+  event         String
+  /// ISO 639-1, two lower-case letters. Never changes.
+  language      String
+  /// Its version number in the series of its event, company and language (1, 2, 3 …). Never changes.
+  revision      Int
+  /// `mail:<event>:<companyId | all>:<language>:<revision>`: each version once. Never changes.
+  key           String
+  status        TemplateStatus @default(DRAFT)
+  /// One line, 1 to 200 characters, with placeholders.
+  subject       String
+  /// 1 to 20000 characters, with placeholders.
+  body          String
+  /// When and by whom it was published (DRAFT → ACTIVE), set once.
+  publishedAt   DateTime?      @db.Timestamptz(3)
+  publishedById String?        @db.Uuid
+  /// When it was retired, exactly when RETIRED.
+  retiredAt     DateTime?      @db.Timestamptz(3)
+  version       Int            @default(1)
+  createdAt     DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById   String?        @db.Uuid
+
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  company Company? @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, key])
+  // The versions of an event's mail (the one in use: ACTIVE, the company's own first).
+  @@index([tenantId, event, language, status])
+}
+
+/// A saved reply (COL-016; the send panel's message template): its name, language and body with placeholders `{{name}}`
+/// from the record, for one record type or any, for one company or every company; a person's own (ownerId, an office
+/// person) or shared with the office (ownerId null). Who may share one is the API's. Removed when no longer wanted
+/// (a message sent with it is its own copy).
+model MessageTemplate {
+  id          String   @id @db.Uuid
+  tenantId    String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// null: every company of the tenant.
+  companyId   String?  @db.Uuid
+  /// One line, 1 to 120 characters ("Delay notice", "Sample request").
+  name        String
+  /// ISO 639-1, two lower-case letters.
+  language    String
+  /// 1 to 10000 characters, with placeholders.
+  body        String
+  /// The record type it is for (a table of the tenant: `SalesOrder`, `PurchaseOrder`); null: any record.
+  recordType  String?
+  /// A person's own saved reply (an office person); null: shared with the office.
+  ownerId     String?  @db.Uuid
+  version     Int      @default(1)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?  @db.Uuid
+
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  company Company? @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  owner   User?    @relation(fields: [tenantId, ownerId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // The send panel's replies: by language and record type.
+  @@index([tenantId, language, recordType])
+  // A person's own replies.
+  @@index([tenantId, ownerId])
+}
+
+/// One option a quote template's line starts with (B-W2b-374's and B-W2b-378's schema need; SAL-133): a value of an option
+/// group the line's style offers, the customer's free text when the value takes one, the library colour or the material
+/// and its colour picked with it (what the group takes). No surcharge: a quote made from the template prices the options
+/// as it prices a new line's. Not on a FEE line; a part of its line, removed with it.
+model QuoteTemplateLineOption {
+  id           String   @id @db.Uuid
+  tenantId     String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// Never changes.
+  lineId       String   @db.Uuid
+  /// Never changes.
+  groupId      String   @db.Uuid
+  /// A value of the group. Never changes.
+  valueId      String   @db.Uuid
+  /// The customer's text, exactly when the value takes one (OptionValue.freeText: its length and pattern).
+  freeText     String?
+  /// A colour of the library picked with the value (a panel's colour); null: none. Not with a group that takes a material.
+  colourId     String?  @db.Uuid
+  /// A material picked with the value (leather by article), and its colour; the colour only with the material. Not with a
+  /// group that takes a library colour.
+  itemId       String?  @db.Uuid
+  itemColourId String?  @db.Uuid
+  version      Int      @default(1)
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById  String?  @db.Uuid
+
+  line       QuoteTemplateLine @relation(fields: [tenantId, lineId], references: [tenantId, id], onDelete: Cascade, onUpdate: Restrict)
+  group      OptionGroup       @relation("QuoteTemplateLineOptionGroup", fields: [tenantId, groupId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  value      OptionValue       @relation("QuoteTemplateLineOptionValue", fields: [tenantId, groupId, valueId], references: [tenantId, groupId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId (and itemId).
+  colour     Colour?           @relation("QuoteTemplateLineOptionColour", fields: [tenantId, colourId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  item       Item?             @relation("QuoteTemplateLineOptionItem", fields: [tenantId, itemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  itemColour ItemColour?       @relation("QuoteTemplateLineOptionItemColour", fields: [tenantId, itemId, itemColourId], references: [tenantId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, lineId])
+  @@index([tenantId, valueId])
+}

@@ -98,6 +98,7 @@ import { seed as seedTechfiles } from '../seed/techfiles'
 import { seed as seedThreads } from '../seed/threads'
 import { seed as seedTime } from '../seed/time'
 import { seed as seedViews } from '../seed/views'
+import { seed as seedConfig } from '../seed/w2b6-config'
 import { seed as seedWarehouseDepth } from '../seed/warehouse-depth'
 import { seed as seedFollowupsPlatformW2b } from '../seed/w2b-followups-platform'
 import { openFactoryDatabase, type FactoryClient, type FactoryDatabase, type FactoryScope } from './client'
@@ -489,6 +490,11 @@ beforeAll(async () => {
   // error queue (the first item an OPEN refused call) and job runs (the first a succeeded tick): the plain ones a copy may repeat.
   await seedPrivacyOps({ db: factory, namespace: 'iso-a' })
   await seedPrivacyOps({ db: factory, namespace: 'iso-b' })
+  // The configuration and templates schema of W2b-6 (wave 56/57): picklists (the first value of an active list), custom fields
+  // (the first a plain TEXT field) and their values (the first a text), document and e-mail template versions (the first ones
+  // DRAFTs), saved replies and a quote template line's options: the plain ones a copy may repeat.
+  await seedConfig({ db: factory, namespace: 'iso-a' })
+  await seedConfig({ db: factory, namespace: 'iso-b' })
   // Every seed of both tenants: under a full parallel run this takes more than a minute.
 }, 120_000)
 
@@ -573,6 +579,8 @@ it('covers every classified table and every runtime role', () => {
     'CrewSession',
     'CronRun',
     'Currency',
+    'CustomField',
+    'CustomFieldValue',
     'CustomerMaterial',
     'CustomerRequirement',
     'CustomerStatementFigures',
@@ -601,11 +609,13 @@ it('covers every classified table and every runtime role', () => {
     'DispatchManifest',
     'DispositionCode',
     'DistributorNotice',
+    'DocumentTemplate',
     'DueTimer',
     'EarningsEntry',
     'EconomicOperatorRole',
     'EmailIdentity',
     'EmailOutbound',
+    'EmailTemplate',
     'Employee',
     'EmployeeSkill',
     'ErasureRecord',
@@ -732,6 +742,7 @@ it('covers every classified table and every runtime role', () => {
     'MeasurementTemplate',
     'Message',
     'MessageMention',
+    'MessageTemplate',
     'MoqRule',
     'MrpActionMessage',
     'NcrConcession',
@@ -807,6 +818,8 @@ it('covers every classified table and every runtime role', () => {
     'PeriodLock',
     'Phrase',
     'PhraseTranslation',
+    'Picklist',
+    'PicklistValue',
     'PickupRequest',
     'PiecePaySwitch',
     'PieceRateEntry',
@@ -877,6 +890,7 @@ it('covers every classified table and every runtime role', () => {
     'QuoteLineSize',
     'QuoteTemplate',
     'QuoteTemplateLine',
+    'QuoteTemplateLineOption',
     'QuoteVersion',
     'RateAcknowledgement',
     'RatePublication',
