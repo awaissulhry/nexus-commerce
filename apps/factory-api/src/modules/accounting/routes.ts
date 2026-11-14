@@ -23,6 +23,11 @@ import { intrastatRows, periodWorkspace, yearOfPeriods } from './period'
 import { accountantsContract, changeAccountantContract, endAccountantContract, guestDownloadContract, guestOverviewContract, guestPeriodContract, guestZipContract, inviteAccountantContract } from './guest/contract'
 import { accountants, changeAccountant, endAccountant, inviteAccountant } from './guest/office'
 import { guestDownload, guestOverview, guestPeriod, guestZip } from './guest/portal'
+// B-W2b-408: the accountant's bridge (the account mapping, the journals switch, the integrity checks).
+import { addMappingContract, changeMappingContract, mappingContract, removeMappingContract, saveSettingsContract, settingsContract } from './mapping/contract'
+import { addMapping, changeMapping, journalsSettings, mappingOf, removeMapping, saveJournalsSettings } from './mapping/service'
+import { integrityContract, runIntegrityContract } from './integrity/contract'
+import { integrityOf, runIntegrityNow } from './integrity/service'
 
 /**
  * Numbered accounting exports, Intrastat data and file, the year-end stock pack and the period lock (B-W2a-39; FIN-046,
@@ -40,6 +45,15 @@ import { guestDownload, guestOverview, guestPeriod, guestZip } from './guest/por
  *   POST  /accounting/locks                                 a month locked SOFT or HARD (typed phrase), or locked again
  *   POST  /accounting/locks/:id/lift                        a lock lifted with a reason (a hard one: accounting.unlock,
  *                                                           step-up)
+ * B-W2b-408 (the accountant's bridge; FIN-151, FIN-152, FIN-157; GATE-ACCOUNTANT):
+ *   GET   /accounting/mapping?companyId&kind                the account mapping, key by key (mapping/service.ts)
+ *   POST  /accounting/mapping                               a key mapped to an account from a day
+ *   PATCH /accounting/mapping/:mappingId                    its account or note, before its first day
+ *   DELETE /accounting/mapping/:mappingId?version           removed, before its first day
+ *   GET   /accounting/settings?companyId                    the journals switch in force
+ *   PUT   /accounting/settings                              switched on or off (accounting.journals.switch, a fresh code)
+ *   GET   /accounting/integrity?companyId                   the integrity checks as their last run left them
+ *   POST  /accounting/integrity/run                         the checks run now (accounting.export)
  * Formats are Nexus's DEFAULT layout until the accountant names theirs (Q7, Q30): nothing is sent or filed anywhere.
  */
 export default defineRoutes('accounting', manifest, async (app) => {
@@ -67,7 +81,7 @@ export default defineRoutes('accounting', manifest, async (app) => {
 
   app.get('/accounting/locks', { schema: listLocksContract }, async (request) => listLocks(request, request.query))
 
-  app.post('/accounting/locks', { schema: lockContract }, async (request) => lockMonth(request, request.body, idempotencyKeyFrom(request)))
+  app.post('/accounting/locks', { schema: lockContract }, async (request) => lockMonth(request, request.body, () => requireStepUp(officeAuthOf(app), request), idempotencyKeyFrom(request)))
 
   app.post('/accounting/locks/:lockId/lift', { schema: liftContract }, async (request) => ({
     lock: await liftLock(request, request.params.lockId, request.body, () => requireStepUp(officeAuthOf(app), request), idempotencyKeyFrom(request)),
@@ -83,4 +97,17 @@ export default defineRoutes('accounting', manifest, async (app) => {
   app.post('/accounting/accountants', { schema: inviteAccountantContract }, async (request, reply) => reply.code(201).send(await inviteAccountant(app, request, request.body, idempotencyKeyFrom(request))))
   app.patch('/accounting/accountants/:userId', { schema: changeAccountantContract }, async (request) => changeAccountant(app, request, request.params.userId, request.body, idempotencyKeyFrom(request)))
   app.post('/accounting/accountants/:userId/end', { schema: endAccountantContract }, async (request) => endAccountant(app, request, request.params.userId, request.body, idempotencyKeyFrom(request)))
+
+  // B-W2b-408: the accountant's bridge.
+  app.get('/accounting/mapping', { schema: mappingContract }, async (request) => mappingOf(request, request.query))
+  app.post('/accounting/mapping', { schema: addMappingContract }, async (request, reply) => reply.code(201).send({ row: await addMapping(request, request.body, idempotencyKeyFrom(request)) }))
+  app.patch('/accounting/mapping/:mappingId', { schema: changeMappingContract }, async (request) => ({ row: await changeMapping(request, request.params.mappingId, request.body, idempotencyKeyFrom(request)) }))
+  app.delete('/accounting/mapping/:mappingId', { schema: removeMappingContract }, async (request) => removeMapping(request, request.params.mappingId, request.query.version, idempotencyKeyFrom(request)))
+  app.get('/accounting/settings', { schema: settingsContract }, async (request) => ({ settings: await journalsSettings(request, request.query.companyId) }))
+  app.put('/accounting/settings', { schema: saveSettingsContract }, async (request) => {
+    requireStepUp(officeAuthOf(app), request)
+    return { settings: await saveJournalsSettings(request, request.body, idempotencyKeyFrom(request)) }
+  })
+  app.get('/accounting/integrity', { schema: integrityContract }, async (request) => integrityOf(request, request.query.companyId))
+  app.post('/accounting/integrity/run', { schema: runIntegrityContract }, async (request, reply) => reply.code(201).send(await runIntegrityNow(request, request.body.companyId, idempotencyKeyFrom(request))))
 })

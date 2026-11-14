@@ -258,7 +258,8 @@ export async function releaseWorkOrder(api: ApiClient, id: string, body: { versi
   return (await api.post(`/production/work-orders/${encodeURIComponent(id)}/release`, { body, schema: oneWorkOrder, idempotencyKey: newIdempotencyKey() })).workOrder
 }
 
-export type WorkOrderMove = 'start' | 'complete' | 'close'
+// B-W2b-424: the close is work-orders/close/api.ts (planned against actual, a reason beyond the tolerance, Undo).
+export type WorkOrderMove = 'start' | 'complete'
 
 export async function moveWorkOrder(api: ApiClient, id: string, move: WorkOrderMove, version: number): Promise<WorkOrder> {
   return (await api.post(`/production/work-orders/${encodeURIComponent(id)}/${move}`, { body: { version }, schema: oneWorkOrder, idempotencyKey: newIdempotencyKey() })).workOrder

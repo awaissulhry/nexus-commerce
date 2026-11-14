@@ -7,7 +7,10 @@ import { formatDate, formatDateTime } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
 import type { CostTiles, MethodView, WorkOrderCostRow } from '../../api'
-import { basisPhrase, COSTING_NAMESPACE, methodPhrase, moneyText, pctText, signedMoney, statePhrase, type CostingAddress, type CostingCan } from '../../model'
+import { basisPhrase, COSTING_NAMESPACE, methodPhrase, moneyText, pctText, signedMoney, type CostingAddress, type CostingCan } from '../../model'
+// B-W2b-424: the Status with the close (open · final · closed).
+import { CLOSE_NS } from '../../../../production/work-orders/close/model'
+import { useCostStateWords } from '../../closed/view/CostState'
 import '../../costing.css'
 
 /** SCR-154-print — the variance report on paper: one view model, nothing fetched. */
@@ -33,7 +36,7 @@ export interface CostingPrintModel {
  */
 export function CostingPrintView({ model }: { model: CostingPrintModel }) {
   return (
-    <WithMessages namespaces={[COSTING_NAMESPACE]}>
+    <WithMessages namespaces={[COSTING_NAMESPACE, CLOSE_NS]}>
       <CostingPrint model={model} />
     </WithMessages>
   )
@@ -41,6 +44,7 @@ export function CostingPrintView({ model }: { model: CostingPrintModel }) {
 
 function CostingPrint({ model }: { model: CostingPrintModel }) {
   const t = useT(COSTING_NAMESPACE)
+  const stateWords = useCostStateWords()
   const locale = useLocale()
   const monthText = new Intl.DateTimeFormat(locale === 'it' ? 'it-IT' : 'en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${model.period.month}-15T12:00:00Z`))
   if (!model.can.view) {
@@ -102,7 +106,7 @@ function CostingPrint({ model }: { model: CostingPrintModel }) {
                       ]
                     : []),
                   row.biggestReason ? t(`reason.${row.biggestReason}`) : t('reason.none'),
-                  t(statePhrase(row).key),
+                  stateWords(row),
                 ],
               })),
               ...(cost && totalVariance !== null

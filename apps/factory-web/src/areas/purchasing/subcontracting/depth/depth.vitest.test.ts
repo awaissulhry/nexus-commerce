@@ -38,6 +38,7 @@ import {
   entryWords,
   flagWords,
   ledgerWords,
+  lockReasonHeld,
   movesOf,
   noCostYet,
   openByOrder,
@@ -48,6 +49,7 @@ import {
   typedPrice,
   typedQuantity,
   workshopAgeing,
+  softLocked,
 } from './model'
 
 /**
@@ -132,7 +134,7 @@ describe('the material balance (SCM-143, SCM-144)', () => {
   })
 
   it('adjusts with signed changes and a reason, the line before and after, within what was sent', () => {
-    const draft = { kitLineId: lining.kitLineId, used: '+2,2', returned: '', scrapped: '0.5', reason: 'ritagli' }
+    const draft = { kitLineId: lining.kitLineId, used: '+2,2', returned: '', scrapped: '0.5', reason: 'ritagli', lockReason: null }
     expect(adjustAfter(draft, lining)).toEqual({ used: '38.1000', returned: '3.4000', scrapped: '1.1000', open: '0.0000' })
     expect(adjustHeldDraft(draft, lining)).toBeNull()
     expect(adjustBody(draft, 9)).toEqual({ version: 9, kitLineId: lining.kitLineId, used: '2.2', scrapped: '0.5', reason: 'ritagli' })
@@ -143,12 +145,30 @@ describe('the material balance (SCM-143, SCM-144)', () => {
     expect(movesOf(lining, { used: '-0.1', returned: '0', scrapped: '0.1' }, 'WO-1').map((entry) => entry.key)).toEqual(['balance.move.giveBack', 'balance.move.scrap'])
   })
 
+  it('B-W2b-408 (GL1:01): once the month is soft-locked the declaration and the adjustment go with the reason, 3 to 500 characters', () => {
+    const draft = declareDraftOf(BALANCE_PARTLY)
+    expect(draft.lockReason).toBeNull()
+    expect(declareBody(draft, 7)).not.toHaveProperty('periodLockOverride')
+    expect(declareHeldDraft({ ...draft, lockReason: '' }, BALANCE_PARTLY)?.key).toBe('balance.held.lockReason')
+    expect(declareHeldDraft({ ...draft, lockReason: 'x'.repeat(501) }, BALANCE_PARTLY)?.key).toBe('balance.held.lockReasonLong')
+    expect(declareBody({ ...draft, lockReason: ' Bolla arrivata tardi ' }, 7)).toMatchObject({ version: 7, periodLockOverride: { reason: 'Bolla arrivata tardi' } })
+    const adjust = { kitLineId: lining.kitLineId, used: '', returned: '', scrapped: '0.5', reason: 'ritagli', lockReason: '' }
+    expect(lockReasonHeld(adjust.lockReason)?.key).toBe('balance.held.lockReason')
+    expect(adjustHeldDraft(adjust, lining)?.key).toBe('balance.held.lockReason')
+    expect(adjustBody({ ...adjust, lockReason: 'Inventario di ottobre' }, 9)).toEqual({ version: 9, kitLineId: lining.kitLineId, scrapped: '0.5', reason: 'ritagli', periodLockOverride: { reason: 'Inventario di ottobre' } })
+  })
+
   it('says a refusal by the field it names, and the booking in words', () => {
     expect(balanceRefusal(invalid('body/lines/0/used', 'Only 2.7 m is still open')).key).toBe('balance.refused.open')
     expect(balanceRefusal(invalid('body/used', 'The used quantity would go below 0')).key).toBe('balance.refused.belowZero')
     expect(balanceRefusal(invalid('body/kitLineId')).key).toBe('balance.refused.notDeclared')
     expect(balanceRefusal(invalid('body/periodLockOverride')).key).toBe('balance.refused.period')
     expect(balanceRefusal(conflict('stale')).key).toBe('problem.changed')
+    // B-W2b-408 (follow-up GL1:01): a soft-locked month asks why; a month closed for good refuses (ask the accountant).
+    const lockedConflict = (path: string) => new ApiError('conflict', 409, 'conflict', 'October 2026 is soft-locked', null, [{ path, message: 'locked' }])
+    expect(balanceRefusal(lockedConflict('period/SOFT_LOCKED')).key).toBe('balance.refused.periodSoft')
+    expect(balanceRefusal(lockedConflict('period/HARD_LOCKED')).key).toBe('balance.refused.period')
+    expect([softLocked(lockedConflict('period/SOFT_LOCKED')), softLocked(lockedConflict('period/HARD_LOCKED'))]).toEqual([true, false])
     expect(bookedWords({ rowIds: ['r'], moveIds: ['a', 'b'], ledger: { posted: 1, waiting: [] } }, buyer)).toEqual({ key: 'balance.booked', params: { count: 2 } })
     expect(bookedWords({ rowIds: ['r'], moveIds: [], ledger: { posted: 0, waiting: ['currency'] } }, buyer).key).toBe('balance.bookedWaiting')
   })

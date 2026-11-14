@@ -32,4 +32,13 @@ export const manifest = defineManifest({
   'POST /accounting/accountants': { audiences: ['office'], permission: 'accounting.accountants.manage', scope: 'record' },
   'PATCH /accounting/accountants/:userId': { audiences: ['office'], permission: 'accounting.accountants.manage', scope: 'record' },
   'POST /accounting/accountants/:userId/end': { audiences: ['office'], permission: 'accounting.accountants.manage', scope: 'record' },
+  // B-W2b-408: the accountant's bridge — the account mapping, the journals switch (a fresh code: the route), the integrity checks.
+  'GET /accounting/mapping': view,
+  'POST /accounting/mapping': { audiences: ['office'], permission: 'accounting.mapping.manage', scope: 'record' },
+  'PATCH /accounting/mapping/:mappingId': { audiences: ['office'], permission: 'accounting.mapping.manage', scope: 'record' },
+  'DELETE /accounting/mapping/:mappingId': { audiences: ['office'], permission: 'accounting.mapping.manage', scope: 'record' },
+  'GET /accounting/settings': view,
+  'PUT /accounting/settings': { audiences: ['office'], permission: 'accounting.journals.switch', scope: 'record' },
+  'GET /accounting/integrity': view,
+  'POST /accounting/integrity/run': { audiences: ['office'], permission: 'accounting.export', scope: 'record' },
 })

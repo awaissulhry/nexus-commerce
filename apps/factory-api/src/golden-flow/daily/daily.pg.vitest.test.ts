@@ -2774,6 +2774,8 @@ describe('the W2a golden flow: a factory day through the HTTP routes', { timeout
       expect((refused.error.issues as Json[]).map((issue) => issue.path)).toEqual(['problem/YEAR_END_COUNT_MISSING'])
       return
     }
+    // B-W2b-408 (FIN-155): closing a month for good asks a fresh code, last of all (after the phrase and the month's checks).
+    await stepped(w, P.finance)
     const closed = await ok(P.finance, 'POST', '/accounting/locks', hard)
     expect(closed.warnings).toEqual([])
     expect(closed.lock).toMatchObject({ id: G.lock.id, level: 'HARD', status: 'LOCKED', period: expect.objectContaining({ month }), lockedBy: expect.objectContaining({ id: P.finance.id }), words: expect.stringMatching(/^Closed for good/) })
