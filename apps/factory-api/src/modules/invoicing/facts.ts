@@ -17,6 +17,8 @@ import type { InvoiceRow, LineRow, Reader } from './store'
 import { printedDeclarationOf } from './intent/declarations'
 import { taxRuleProblems } from './tax-codes/apply'
 
+// B-W2b-396 (FIN-063): the euro equivalent in the file's Causale.
+import { checkedCausaleOf } from './language-currency/store'
 /**
  * What the invoice core reads besides the invoice (B-W1-28; B-W1-07's party rules): the seller from the company's row,
  * the buyer as it stands at the invoice date (the tax identity in force, its registered office, the VIES proof, the
@@ -154,6 +156,8 @@ export async function reviewIssue(db: Reader, invoice: InvoiceRow, lines: readon
   let fatturaPa: readonly { path: string; code: string; message: string }[] = []
   if (seller.seller && buyer.billTo && computed) {
     const refs = await issueReferences(db, invoice, lines)
+    // B-W2b-396 (FIN-063): in another currency the file states its euro equivalent in the Causale (the rate the issue takes).
+    const causale = await checkedCausaleOf(db, invoice, computed, date)
     try {
       fatturaPa = checkFatturaPaInput(
         fatturaPaInputOf({
@@ -177,7 +181,7 @@ export async function reviewIssue(db: Reader, invoice: InvoiceRow, lines: readon
           grossTotal: computed.grossTotal,
           vatSummary: computed.vatSummary,
           stampDutyAmount: computed.stampDutyAmount,
-          causale: invoice.causale,
+          causale,
           purchaseOrders: purchaseOrdersOf(invoice.documentRefs),
           ddts: refs.ddts,
           credits: refs.credits,

@@ -29,6 +29,8 @@ import { feesBilledTwice } from '../sales/price-waterfall/fee-invoicing'
 import { invoiceRateOf, type InvoiceRate } from '../../platform/currency/service'
 // B-W2b-392: tax rules as data at the issue.
 import { taxDutiesAtIssue } from './tax-codes/apply'
+// B-W2b-396: a change fee or a sample round's charge invoiced once; a fee credited against the bulk order when its credit note is issued.
+import { chargesBilledTwice, feeCreditsAtIssue } from './from-shipment/fees'
 
 /**
  * Issuing an invoice (B-W1-28 invoice core; A2 SCR-081 "Check and issue"; FIN-057, FIN-061, FIN-085; DPR 633/1972
@@ -88,7 +90,7 @@ export async function issueInCommand(tools: CommandTools, invoiceId: string, per
   const lines = await readLines(tx, invoice.id)
   await lockInvoicing(tx, context, 'ddt', lines.flatMap((line) => (line.ddtId ? [line.ddtId] : [])))
   // B-W2b-330 (SAL-181): the fees it bills (their locks after the DDTs'): one another issued invoice bills is refused.
-  const feeProblems = invoice.docType === 'TD01' || invoice.docType === 'TD24' ? await feesBilledTwice(tx, context, invoice.id, lines) : []
+  const feeProblems = invoice.docType === 'TD01' || invoice.docType === 'TD24' ? [...(await feesBilledTwice(tx, context, invoice.id, lines)), ...(await chargesBilledTwice(tx, context, invoice, lines))] : []
   if (invoice.docType === 'TD02' && invoice.depositRequestId) await lockMoney(tx, context, 'deposit', invoice.depositRequestId)
   if (invoice.docType === 'TD04' && invoice.creditOfId) await lockMoney(tx, context, 'invoice', invoice.creditOfId)
   await lockAll(tx, context, 'invoice', lines.flatMap((line) => (line.depositInvoiceId ? [line.depositInvoiceId] : [])))
@@ -157,6 +159,8 @@ export async function issueInCommand(tools: CommandTools, invoiceId: string, per
     payload: { invoiceId: invoice.id, docType: invoice.docType, number: number.formatted, issueDate: number.documentDate, partyId: invoice.buyerPartyId, depositRequestId: invoice.depositRequestId },
   })
   if (credited && refundDue > 0) tools.emit({ type: 'invoice.refund_due', subject: invoice.id, companyId: invoice.companyId, payload: { invoiceId: invoice.id, creditOfId: credited.id, partyId: invoice.buyerPartyId } })
+  // B-W2b-396 (VI1:02): a credit note of fees named against a bulk order gives their credit now.
+  await feeCreditsAtIssue(tools, invoice, lines)
   // B-W1-51: the orders it is about (a new invoice or a credit note unsettles a settled one), announced at the end.
   await settleOrders(tools, await ordersOfInvoices(tx, [invoice.id]))
   return { invoiceId: invoice.id, number: number.formatted, issueDate: number.documentDate }
