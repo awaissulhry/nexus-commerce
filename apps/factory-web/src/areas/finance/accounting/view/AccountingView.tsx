@@ -8,9 +8,11 @@ import { Button, Pill, Tag } from '@nexus/ui/primitives'
 import { StepUpModal, Textarea } from '../../../../lib/i18n/ds-parts'
 import { isListKey } from '../../../../list-frame/model'
 import { formatTime } from '../../../../lib/i18n/format'
-import { useLocale, useT } from '../../../../lib/i18n/provider'
+import { useLocale } from '../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { DialogFrame } from '../../_shared/parts'
+import { ACCOUNTING_NAMESPACES, useAccountingWords } from '../checks/words'
+import { mappingHref } from '../mapping/model'
 import { accountingHref, cancelHeld, LOCK_TONE, monthWords, wizardHref } from '../model'
 import type { AccountingActions, AccountingModel } from '../view-model'
 import { HistoryList } from './HistoryList'
@@ -24,21 +26,21 @@ export type { AccountingActions, AccountingModel } from '../view-model'
 /**
  * SCR-156 — Finance › Close › Accounting export (design finance.accounting; FIN-046, LOG-098, LOG-100, FIN-106, FIN-151):
  * the band (the period lock of this month and the two before, as of, live; New export; ⋯ Lock a period, Account mapping
- * (W2b)), then either the Exports (every numbered batch, what it carried, its files, the documents changed since) or the
+ * (B-W2b-426: its own page)), then either the Exports (every numbered batch, what it carried, its files, the documents changed since) or the
  * export wizard (`?new=1`, `?month=&step=`: period, checks, contents, Intrastat rows, review, export and lock). Nexus's
  * default layout until the accountant names theirs (to confirm with the accountant); nothing is sent to the accountant
  * or to any authority: a person hands the files over. No money in the history; the wizard's sums by their grain.
  */
 export function AccountingView({ model, actions }: { model: AccountingModel; actions?: AccountingActions }) {
   return (
-    <WithMessages namespaces={['finance-accounting', 'finance', 'lists']}>
+    <WithMessages namespaces={ACCOUNTING_NAMESPACES}>
       <Accounting model={model} actions={actions} />
     </WithMessages>
   )
 }
 
 function Accounting({ model, actions }: { model: AccountingModel; actions?: AccountingActions }) {
-  const t = useT('finance-accounting')
+  const t = useAccountingWords()
   const locale = useLocale()
   const wizard = model.wizard
 
@@ -108,7 +110,7 @@ function Accounting({ model, actions }: { model: AccountingModel; actions?: Acco
             triggerProps={{ 'aria-label': t('band.more') }}
             items={[
               { id: 'lock', label: t('band.lockPeriod'), onSelect: () => actions?.onOpenLock?.(null) },
-              { id: 'mapping', label: t('band.mapping'), disabled: true, description: t('band.mappingHeld') },
+              { id: 'mapping', label: t('band.mapping'), href: mappingHref(model.prefix) },
             ]}
           />
         </span>
