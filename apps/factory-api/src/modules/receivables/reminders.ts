@@ -10,10 +10,13 @@ import { RECEIVABLES_REMINDERS_APPROVE, RECEIVABLES_REMINDERS_MANAGE, RECEIVABLE
 import { claimLinesOf, claimNow, claimOffsetOf, HELD_REASONS, reminderByHand, type HeldReason, type OpenInvoice, type PlannedReminder } from '@nexus/factory-domain/receivables/reminders'
 import { reminderLanguageOf, reminderText } from '@nexus/factory-domain/receivables/wording'
 import type { CommandCaller, CommandTools } from '../../core/command'
-import { actorOf, type OfficeContext, type RequestContext } from '../../core/context'
+import { actorOf, SYSTEM_ACTOR_ID, type OfficeContext, type RequestContext } from '../../core/context'
 import { sendEmail } from '../../platform/email-out/outbound'
 import { recordGeneratedFile, type PreparedGeneratedFile } from '../../platform/files/files'
 import { cancelReminderRow, insertReminder, ladderPassInCommand } from './ladder'
+// B-W2b-402: the stop rules and the trusted levels shown on each reminder.
+import { trustedFor } from '@nexus/factory-domain/receivables/notices/notices'
+import { reminderHoldsOf } from './stops/holds'
 import { letterPdf } from './pdf'
 import {
   assertMay,
@@ -83,6 +86,10 @@ interface ViewContext {
   readonly contacts: Set<string>
   readonly emails: Map<string, { id: string; status: string; to: string[] }>
   readonly letters: Map<string, string>
+  /** B-W2b-402: what holds each invoice's reminders (stops in force, a Ri.Ba. collecting, a payment in progress). */
+  readonly holds: Map<string, HeldReason[]>
+  /** B-W2b-402: each customer's trusted reminder level (null: none). */
+  readonly trusted: Map<string, number | null>
 }
 
 const key = (companyId: string, partyId: string) => `${companyId}|${partyId}`
@@ -115,7 +122,9 @@ async function viewContext(db: Reader, context: RequestContext, rows: readonly R
   const files = reminderIds.length === 0 ? [] : await db.storedFile.findMany({ where: { recordType: 'PaymentReminder', recordId: { in: reminderIds }, status: 'AVAILABLE' }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], select: { id: true, recordId: true } })
   const letters = new Map<string, string>()
   for (const file of files) if (!letters.has(file.recordId)) letters.set(file.recordId, file.id)
-  return { context, companies, parties, invoices, open, settings, people, unplaced, creditDrafts, contacts, emails, letters }
+  const holds = await reminderHoldsOf(db, invoiceIds, today())
+  const trusted = new Map((await db.party.findMany({ where: { id: { in: partyIds } }, select: { id: true, reminderTrustedLevel: true } })).map((row) => [row.id, row.reminderTrustedLevel]))
+  return { context, companies, parties, invoices, open, settings, people, unplaced, creditDrafts, contacts, emails, letters, holds, trusted }
 }
 
 const stepOf = (settings: EffectiveSettings | undefined, level: number): LadderStep | null => settings?.ladder.find((step) => step.level === level) ?? null
@@ -132,6 +141,8 @@ function heldOf(row: ReminderRow, view: ViewContext): HeldReason[] {
   if (claimNow(knownReminderOf(row), view.open, settings?.ladder ?? []) !== row.amountDue) held.push('CHANGED')
   if (row.action === 'EMAIL' && !view.contacts.has(row.partyId)) held.push('NO_CONTACT')
   if (!settings?.remindersEnabled) held.push('SWITCHED_OFF')
+  // B-W2b-402 (FIN-112): the stops and what the factory knows by itself (../stops/holds.ts).
+  for (const id of row.invoiceIds) for (const reason of view.holds.get(id) ?? []) if (!held.includes(reason)) held.push(reason)
   return held
 }
 
@@ -144,6 +155,8 @@ function reminderViewOf(row: ReminderRow, view: ViewContext) {
   const may = (permission: typeof RECEIVABLES_REMINDERS_MANAGE | typeof RECEIVABLES_REMINDERS_APPROVE) => office !== null && mayOn(office, permission, row)
   const person = (id: string | null) => (id ? { id, name: view.people.get(id) ?? null } : null)
   const price = holdsPrice(view.context)
+  const held = heldOf(row, view)
+  const trustedLevel = view.trusted.get(row.partyId) ?? null
   return {
     id: row.id,
     company: { id: row.companyId, code: company?.code ?? '', name: company?.legalName ?? '' },
@@ -166,7 +179,7 @@ function reminderViewOf(row: ReminderRow, view: ViewContext) {
     oldestDueDate: day(row.oldestDueDate)!,
     language: row.language,
     text: asMoney('price', price ? { subject: row.subject, body: row.body } : { subject: null, body: null }),
-    held: heldOf(row, view).map((code) => ({ code, words: HELD_REASONS[code] })),
+    held: held.map((code) => ({ code, words: HELD_REASONS[code] })),
     preparedAt: toUtcIso(row.createdAt),
     preparedBy: person(row.createdById),
     approvedAt: row.approvedAt ? toUtcIso(row.approvedAt) : null,
@@ -186,6 +199,12 @@ function reminderViewOf(row: ReminderRow, view: ViewContext) {
       send: row.status === 'APPROVED' && may(RECEIVABLES_REMINDERS_APPROVE) && settings?.remindersEnabled === true,
       skip: row.status === 'PREPARED' && may(RECEIVABLES_REMINDERS_MANAGE),
       cancel: (row.status === 'PREPARED' || row.status === 'APPROVED') && may(RECEIVABLES_REMINDERS_MANAGE),
+    },
+    // B-W2b-402 (FIN-113; ./reminders/approval.ts): goes by itself when trusted, the company's reminders on and nothing holds it.
+    trusted: {
+      level: trustedLevel,
+      goesByItself: row.status === 'PREPARED' && trustedFor(trustedLevel, { level: row.level, action: row.action, byHand: row.createdById !== null }) && held.length === 0,
+      approvedByLevel: row.approvedById === SYSTEM_ACTOR_ID,
     },
     version: row.version,
   }

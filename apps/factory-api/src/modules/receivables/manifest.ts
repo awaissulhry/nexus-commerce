@@ -30,4 +30,23 @@ export const manifest = defineManifest({
   'GET /receivables/interest-rates': { audiences: ['office'], permission: 'receivables.view', scope: 'record' },
   'POST /receivables/interest-rates': { audiences: ['office'], permission: 'receivables.settings.manage', scope: 'record' },
   'PATCH /receivables/interest-rates/:rateId': { audiences: ['office'], permission: 'receivables.settings.manage', scope: 'record' },
+  // B-W2b-402 (FIN-112, FIN-113, FIN-126, FIN-128): collections. Settling a Ri.Ba. item paid also needs payments.record (it
+  // records the payment); a trusted level and turning a collections switch ON also ask a fresh step-up.
+  'GET /receivables/riba/candidates': { audiences: ['office'], permission: 'receivables.view', scope: 'record' },
+  'GET /receivables/riba/batches': { audiences: ['office'], permission: 'receivables.view', scope: 'record' },
+  'POST /receivables/riba/batches': { audiences: ['office'], permission: 'receivables.riba.manage', scope: 'record' },
+  'GET /receivables/riba/batches/:batchId': { audiences: ['office'], permission: 'receivables.view', scope: 'record' },
+  'PUT /receivables/riba/batches/:batchId/items': { audiences: ['office'], permission: 'receivables.riba.manage', scope: 'record' },
+  'POST /receivables/riba/batches/:batchId/issue': { audiences: ['office'], permission: 'receivables.riba.manage', scope: 'record' },
+  'POST /receivables/riba/batches/:batchId/cancel': { audiences: ['office'], permission: 'receivables.riba.manage', scope: 'record' },
+  'POST /receivables/riba/batches/:batchId/settle': { audiences: ['office'], permission: 'receivables.riba.manage', scope: 'record' },
+  'GET /receivables/riba/unpaid': { audiences: ['office'], permission: 'receivables.view', scope: 'record' },
+  'GET /receivables/stops': { audiences: ['office'], permission: 'receivables.view', scope: 'record' },
+  'POST /receivables/stops': { audiences: ['office'], permission: 'receivables.reminders.manage', scope: 'record' },
+  'PATCH /receivables/stops/:stopId': { audiences: ['office'], permission: 'receivables.reminders.manage', scope: 'record' },
+  'POST /receivables/stops/:stopId/lift': { audiences: ['office'], permission: 'receivables.reminders.manage', scope: 'record' },
+  'GET /receivables/customers/:partyId/trust': { audiences: ['office'], permission: 'receivables.view', scope: 'record' },
+  'PUT /receivables/customers/:partyId/trust': { audiences: ['office'], permission: 'receivables.reminders.trust', scope: 'record' },
+  'GET /receivables/collections/settings': { audiences: ['office'], permission: 'receivables.view', scope: 'record' },
+  'PUT /receivables/collections/settings': { audiences: ['office'], permission: 'receivables.collections.switch', scope: 'record' },
 })

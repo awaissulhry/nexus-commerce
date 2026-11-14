@@ -35,6 +35,8 @@ import { FOLLOW_UP_RULES } from './follow-ups'
 import { TEAM_INBOX_RULES } from '../../email-in/team-inbox/notify'
 // B-W2b-398: a tracking problem raised on a shipment on its way (ALERT to the dispatch desk of its site).
 import { TRACKING_PROBLEM_RULES } from '../../../modules/shipping/exceptions/notices'
+// B-W2b-402: a payment received (to who follows the customer and whose orders it pays), a deposit paid (production may start).
+import { PAYMENT_NOTICE_RULES } from '../../../modules/receivables/notices/rules'
 
 /**
  * The fan-out's rules, one file per source (B-W2a-20: mentions and followed records, assignments, approvals). A step that
@@ -74,4 +76,6 @@ export const FAN_OUT_RULES: readonly FanOutRule[] = Object.freeze([...THREAD_RUL
   // B-W2b-394: a team-inbox mail given to a member (ASSIGNMENT, notifications.mail.assigned), its follow-up due (to its assignee or the members).
   ...TEAM_INBOX_RULES,
   // B-W2b-398: shipment.tracking_problem_raised (ALERT to who manages shipments at its site).
-  ...TRACKING_PROBLEM_RULES])
+  ...TRACKING_PROBLEM_RULES,
+  // B-W2b-402: payment.recorded (SYSTEM to the customer's followers and the makers of the orders it pays), payment.deposit_paid (SYSTEM to the order's maker and who releases work orders).
+  ...PAYMENT_NOTICE_RULES])

@@ -174,6 +174,8 @@ import { SECURITY_DEPTH_ADDS } from '../sessions/permissions'
 import { WORK_ORDER_CLOSE_ADDS } from '../../costing/close/permissions'
 // B-W2b-420: cost sheet versions (finance, the costing owner, approves versions and takes an approved one back).
 import { COST_SHEET_VERSIONS_ADDS } from '../../costing/sheet-versions/permissions'
+// B-W2b-402: collections (finance works the Ri.Ba. batches; the switches and trusted levels are the Owner's, through every()).
+import { COLLECTIONS_ADDS } from '../../receivables/riba/permissions'
 
 /**
  * The system role templates (plan A1 §3.11 "Role"; feature PLT-030): ready roles every tenant gets as system roles
@@ -1104,7 +1106,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-411
   ...(audience === 'office' ? (WORK_ORDER_CLOSE_ADDS[key] ?? []) : []),
   // B-W2b-420
-  ...(audience === 'office' ? (COST_SHEET_VERSIONS_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (COST_SHEET_VERSIONS_ADDS[key] ?? []) : []),
+  // B-W2b-402
+  ...(audience === 'office' ? (COLLECTIONS_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the

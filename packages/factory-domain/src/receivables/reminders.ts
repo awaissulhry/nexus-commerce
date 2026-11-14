@@ -373,6 +373,14 @@ export const HELD_REASONS = {
   NO_CONTACT: 'No active contact of the customer receives invoices with an e-mail address.',
   SWITCHED_OFF: "Reminders are switched off for the company (the Owner's switch): it can be approved, not sent.",
   DEPOSIT_TO_CARRY: 'A deposit paid without a deposit invoice (an EU business, no TD02) is not placed on one of its invoices yet: carry it onto the invoice in Payments first, the customer may owe less than this asks.',
+  // B-W2b-402 (FIN-112; receivables/stops): a stop a person recorded on one of its invoices (it is not approved or sent while
+  // the stop holds: the database refuses it too), and what the factory knows by itself.
+  STOP_PAYMENT_PROCESSING: 'Reminders of one of its invoices are stopped: the customer says a payment is on its way.',
+  STOP_DISPUTE: 'Reminders of one of its invoices are stopped: a dispute is open about it.',
+  STOP_PROMISE_TO_PAY: 'Reminders of one of its invoices are stopped: the customer promised to pay by a day that has not passed.',
+  STOP_CREDIT_PENDING: 'Reminders of one of its invoices are stopped: a credit note is coming for it.',
+  RIBA_IN_COLLECTION: 'One of its instalments is being collected by Ri.Ba.: the bank presents it on its due day.',
+  PAYMENT_PROCESSING: 'A payment of one of its invoices is being processed (a card or SEPA payment, or a bank line that surely pays it waits to be accepted).',
 } as const
 export type HeldReason = keyof typeof HELD_REASONS
 
