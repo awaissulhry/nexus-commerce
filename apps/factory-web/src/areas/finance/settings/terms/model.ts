@@ -3,6 +3,8 @@ import { isApiError, issuePath } from '../../../../lib/api/errors'
 import type { Locale } from '../../../../lib/i18n/locales'
 import type { Phrase } from '../../_shared/model'
 import type { InstalmentEvent, PaymentTerms, TermsFields } from './api'
+// B-W2b-417: skipped months and days from the end of the month (B-W2b-396's FIN-076).
+import { conventionsText, skipProblem } from '../terms-skip/model'
 
 /**
  * The payment terms library's rules, pure (B-W2a-80; design finance.settings sec:terms): who may (paymentterms.view reads,
@@ -47,9 +49,12 @@ export interface TermsDraft {
   instalments: InstalmentDraft[]
   discountPct: string
   discountDays: string
+  /** B-W2b-417. */
+  fromEndOfMonth: boolean
+  skipMonths: number[]
 }
 
-export const emptyTerms = (): TermsDraft => ({ code: '', name: '', nameEn: '', method: 'MP05', instalments: [{ sharePct: '100', from: 'INVOICE', days: '30', endOfMonth: true }], discountPct: '', discountDays: '' })
+export const emptyTerms = (): TermsDraft => ({ code: '', name: '', nameEn: '', method: 'MP05', instalments: [{ sharePct: '100', from: 'INVOICE', days: '30', endOfMonth: true }], discountPct: '', discountDays: '', fromEndOfMonth: false, skipMonths: [] })
 
 const pctText = (value: string, locale: Locale) => (locale === 'it' ? value.replace('.', ',') : value)
 
@@ -63,6 +68,8 @@ export function draftOf(terms: PaymentTerms, locale: Locale, copy = false): Term
     instalments: terms.instalments.map((item) => ({ sharePct: pctText(item.sharePct, locale), from: item.from, days: String(item.days), endOfMonth: item.endOfMonth })),
     discountPct: terms.earlyPaymentDiscountPct ? pctText(terms.earlyPaymentDiscountPct, locale) : '',
     discountDays: terms.earlyPaymentDays === null ? '' : String(terms.earlyPaymentDays),
+    fromEndOfMonth: terms.fromEndOfMonth,
+    skipMonths: [...terms.skipMonths],
   }
 }
 
@@ -81,6 +88,8 @@ export function fieldsOf(draft: TermsDraft): TermsFields {
     instalments: draft.instalments.map((item) => ({ sharePct: decimalOf(item.sharePct), from: item.from, days: daysOf(item.days), endOfMonth: item.endOfMonth })),
     earlyPaymentDiscountPct: discount === '' ? null : discount,
     earlyPaymentDays: days,
+    fromEndOfMonth: draft.fromEndOfMonth,
+    skipMonths: [...draft.skipMonths],
   }
 }
 
@@ -92,6 +101,8 @@ export interface TermsProblems {
   instalments?: string
   lines: Record<number, string>
   discount?: string
+  /** B-W2b-417: a key of `finance-invoices-depth` (the skipped months' part says it). */
+  skip?: string
 }
 
 /**
@@ -101,6 +112,8 @@ export interface TermsProblems {
  */
 export function termsProblems(draft: TermsDraft): TermsProblems {
   const problems: TermsProblems = { lines: {} }
+  const skip = skipProblem(draft.skipMonths)
+  if (skip) problems.skip = skip
   const fields = fieldsOf(draft)
   const checked = checkPaymentTerms({ ...fields, instalments: fields.instalments.map((item) => ({ ...item, days: Number.isNaN(item.days) ? -1 : item.days })), earlyPaymentDays: fields.earlyPaymentDays === null ? null : Number.isNaN(fields.earlyPaymentDays) ? -1 : fields.earlyPaymentDays })
   if (checked.ok) return problems
@@ -122,7 +135,7 @@ export function termsProblems(draft: TermsDraft): TermsProblems {
   return problems
 }
 
-export const hasProblems = (problems: TermsProblems): boolean => Object.keys(problems.lines).length > 0 || !!(problems.code ?? problems.name ?? problems.nameEn ?? problems.method ?? problems.instalments ?? problems.discount)
+export const hasProblems = (problems: TermsProblems): boolean => Object.keys(problems.lines).length > 0 || !!(problems.code ?? problems.name ?? problems.nameEn ?? problems.method ?? problems.instalments ?? problems.discount ?? problems.skip)
 
 /** The shares typed so far, totalled (the dialog's "Total 100 %" line). */
 export function shareTotal(draft: TermsDraft): number {
@@ -134,7 +147,10 @@ export function previewOf(draft: TermsDraft, locale: Locale): string | null {
   const fields = fieldsOf(draft)
   if (fields.instalments.some((item) => Number.isNaN(item.days)) || (fields.earlyPaymentDays !== null && Number.isNaN(fields.earlyPaymentDays))) return null
   const checked = checkPaymentTerms(fields)
-  return checked.ok ? termsSummary(checked.terms, locale) : null
+  if (!checked.ok) return null
+  // B-W2b-417: the conventions as the documents print them after the instalments.
+  const conventions = skipProblem(draft.skipMonths) ? null : conventionsText(draft, locale)
+  return conventions ? `${termsSummary(checked.terms, locale)} · ${conventions}` : termsSummary(checked.terms, locale)
 }
 
 /** Whether the rules (method, instalments, discount) differ from the stored terms (names may always change). */
@@ -144,6 +160,8 @@ export function rulesChanged(terms: PaymentTerms, draft: TermsDraft): boolean {
   if (fields.method !== terms.method) return true
   if (!same(fields.earlyPaymentDiscountPct, terms.earlyPaymentDiscountPct) || fields.earlyPaymentDays !== terms.earlyPaymentDays) return true
   if (fields.instalments.length !== terms.instalments.length) return true
+  // B-W2b-417: the conventions are rules too.
+  if (fields.fromEndOfMonth !== terms.fromEndOfMonth || fields.skipMonths.join(',') !== [...terms.skipMonths].sort((a, b) => a - b).join(',')) return true
   return fields.instalments.some((item, index) => {
     const stored = terms.instalments[index]!
     return !same(item.sharePct, stored.sharePct) || item.from !== stored.from || item.days !== stored.days || item.endOfMonth !== stored.endOfMonth
@@ -154,7 +172,7 @@ export function rulesChanged(terms: PaymentTerms, draft: TermsDraft): boolean {
 export function patchOf(terms: PaymentTerms, draft: TermsDraft): Partial<TermsFields> {
   const fields = fieldsOf(draft)
   const patch: Partial<TermsFields> = { name: fields.name, nameI18n: fields.nameI18n }
-  if (rulesChanged(terms, draft)) Object.assign(patch, { method: fields.method, instalments: fields.instalments, earlyPaymentDiscountPct: fields.earlyPaymentDiscountPct, earlyPaymentDays: fields.earlyPaymentDays })
+  if (rulesChanged(terms, draft)) Object.assign(patch, { method: fields.method, instalments: fields.instalments, earlyPaymentDiscountPct: fields.earlyPaymentDiscountPct, earlyPaymentDays: fields.earlyPaymentDays, fromEndOfMonth: fields.fromEndOfMonth, skipMonths: fields.skipMonths })
   return patch
 }
 

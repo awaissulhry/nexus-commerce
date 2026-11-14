@@ -1,0 +1,15 @@
+/* Invoices › the debit note's lines (B-W2b-417): one line per row on a wide dialog, stacked on a phone — layout only. */
+@media (min-width: 720px) {
+  .fw-fin-row.is-debit {
+    grid-template-columns: minmax(150px, 0.9fr) minmax(200px, 2fr) minmax(80px, 0.5fr) minmax(110px, 0.7fr);
+    align-items: start;
+  }
+}
+
+.fw-fin-row.is-debit > .fw-fin-row-end {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}

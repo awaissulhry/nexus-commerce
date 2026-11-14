@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { CheckCheck, CloudDownload, FilePlus2, MoreHorizontal, Search, X } from 'lucide-react'
 import { Banner, EmptyState, Menu, MetricStrip, type Metric } from '@nexus/ui/components'
@@ -98,15 +98,15 @@ export interface PayablesListActions {
  * answer says which were approved and why the others were not). A row's number is a real link to the record (⌘-click: a
  * new tab). No person is counted or totalled.
  */
-export function PayablesListView({ model, actions }: { model: PayablesListModel; actions?: PayablesListActions }) {
+export function PayablesListView({ model, actions, selfInvoices }: { model: PayablesListModel; actions?: PayablesListActions; /** B-W2b-417: the Self-invoices section (its container, or a design case's view). */ selfInvoices?: ReactNode }) {
   return (
     <WithMessages namespaces={[PAYABLES_NAMESPACE, 'lists']}>
-      <ListPage model={model} actions={actions} />
+      <ListPage model={model} actions={actions} selfInvoices={selfInvoices} />
     </WithMessages>
   )
 }
 
-function ListPage({ model, actions }: { model: PayablesListModel; actions?: PayablesListActions }) {
+function ListPage({ model, actions, selfInvoices }: { model: PayablesListModel; actions?: PayablesListActions; selfInvoices?: ReactNode }) {
   const t = useT(PAYABLES_NAMESPACE)
   const lists = useT('lists')
   const locale = useLocale()
@@ -288,7 +288,10 @@ function ListPage({ model, actions }: { model: PayablesListModel; actions?: Paya
             label={<MoreHorizontal size={16} aria-hidden />}
             align="right"
             triggerProps={{ 'aria-label': t('band.more') }}
-            items={[{ id: 'self', label: t('band.selfInvoices'), disabled: true, description: t('held.selfInvoicesLater') }]}
+            items={[
+              // B-W2b-417: Self-invoices TD17/18/19 (design page.h ⋯) — the section below.
+              { id: 'self', label: t('band.selfInvoices'), onSelect: () => document.getElementById('fw-selfinv')?.scrollIntoView({ block: 'start', behavior: 'smooth' }) },
+            ]}
           />
         </span>
       </div>
@@ -421,6 +424,9 @@ function ListPage({ model, actions }: { model: PayablesListModel; actions?: Paya
           keysOpen={model.keysOpen}
         />
       </section>
+
+      {/* B-W2b-417: Self-invoices (design sec:selfinv). */}
+      {selfInvoices}
 
       {model.foreign && <ForeignDialog model={model.foreign} today={model.today} actions={actions?.foreign} />}
 
