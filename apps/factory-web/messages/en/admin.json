@@ -1557,6 +1557,7 @@
     }
   },
   "area": {
+    "fields": "Custom fields and picklists",
     "companies": "Companies",
     "sites": "Sites",
     "users": "People",
@@ -1614,6 +1615,9 @@
     "currencies": "Currencies and exchange rates"
   },
   "perm": {
+    "fields_view": "See the custom fields of every record type and the picklists, archived ones included",
+    "fields_manage": "Add and change custom fields and keep the picklists: values, colours, icons and order",
+    "fields_personal_view": "See custom fields marked personal on the records you can see",
     "companies_view": "See the companies and whether they can invoice",
     "companies_manage": "Add companies and change their legal, e-invoicing and default data",
     "sites_view": "See the sites with their lines, work centres and stations",

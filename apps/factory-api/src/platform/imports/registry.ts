@@ -35,6 +35,8 @@ import { supplierPricesImportAdapter } from '../../modules/purchasing/suppliers-
 import { priceListImportAdapter } from '../../modules/sales/pricing-depth/importer'
 // W2b (B-W2b-303): sales orders typed in a sheet (Sales › Orders › Import orders), one order per order reference.
 import { orderImportAdapter } from '../../modules/sales/order-import/importer'
+// W2b (B-W2b-421): the custom values of each record type that takes custom fields (one row per record and field).
+import { CUSTOM_VALUE_IMPORT_ADAPTERS } from '../fields/importer'
 
 /**
  * The importers this process runs (plan A1 W0-22; feature PLT-176): each is an importer of factory-domain (its columns,
@@ -147,6 +149,8 @@ export const IMPORTERS: readonly ImportAdapter[] = Object.freeze([
   priceListImportAdapter,
   // B-W2b-303
   orderImportAdapter,
+  // B-W2b-421
+  ...CUSTOM_VALUE_IMPORT_ADAPTERS,
 ])
 
 let configured: ImporterRegistry<ImportAdapter> | undefined

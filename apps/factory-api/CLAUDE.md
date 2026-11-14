@@ -761,6 +761,18 @@ B-W2b-124 `modules/plant/statutory` (QHS-205; D.Lgs. 81/2008 art. 71: results ke
 - Templates (`templates/`, B-W2a-41; PLT-177): `GET /imports/importers/:key/template?format=csv|xlsx&numberFormat=it|en` for any importer the caller may use (its view or write permission): the columns in the importer's order, made-up examples (`templates/examples.ts`, one list per importer key; opening stock keeps its own; the unit test reads every example through its importer in both number formats), a Columns sheet in Excel; money columns only with their grain (factory-domain imports/templates). A new importer adds its examples there.
 - Guided first load (`guided/`, B-W2a-41; PLT-185): `GET /imports/first-load?companyId=` (imports.view) and `POST /imports/first-load/:step/done` {companyId, jobId?, nothing?, reason?} (imports.apply + the importer's permission): customers → suppliers → materials → openingStock → openOrders (factory-domain imports/first-load), each step's latest APPLIED import of its importer (the company's or tenant-wide) reconciled against the records now (opening stock: posted lines by their line reference, quantities per unit, the value only with the cost grain); "Done" refused out of order, without an import or with a difference, kept as an audit row `imports.firstLoadStepDone` (no table yet); open orders: "nothing to load" only.
 
+## Custom fields and picklists (`src/platform/fields/`; B-W2b-421; PLT-111, PLT-115)
+- ONE registry (`registry.ts`) for every reader: `fieldsOfModel` → `fieldsSeen(actor, fields, companyId)` (factory-domain
+  fields/access: money only with its grain, PERSONAL only with fields.personal.view, a partner only `shownInPortal` ones,
+  the floor none) → `valuesOfRecords` / `referenceWords`; `customFilter(client, model, cf, actor)` for a list's `cf` term;
+  `writeValuesInCommand(tools, record, facts, entries, actor, actorId)` is the only write of values (checked, audited with
+  money marked, one `custom_value.changed`). The record types are lines in `records.ts` (key, model, the record's OWN
+  view/edit permissions, list key, importer); a new one is a line there.
+- Exports: `exports/registry.ts exportSourceOf` wraps every list of `records.ts` (`fields/exports.ts`): columns
+  `cf:<code>` / `cf:<grain>:<code>` (the grain in the id is what the engine strips by) and the `cf` filter. Imports: one
+  importer per record type (`fields.<name>`, one row per record and field; money in its grain's column; pay never).
+- Database refusals `fields: …` (…_config_templates_w2b_guards) are said as 409 by `saidInWords` in the module itself.
+
 ## Modules
 - Product › materials (`src/modules/product/materials/`, B-W1-09): office routes `/product/materials…` (product.materials.view | manage | cost; the standard cost has its own PUT route, money.cost to send or see it), the `product.materials` importer in IMPORTERS; the rules and unit conversions are factory-domain `product/{materials,units}`; every read names its columns (`store.ts`); no floor route (the floor reads materials through its work orders).
 - Product › BOM (`src/modules/product/bom/`, B-W1-13): office routes `/product/styles/:styleId/revisions/:revisionId/bom…`, `…/copy`, `…/release`, `…/obsolete`, `PATCH …/revisions/:revisionId` and `/product/styles/:styleId/bom/compare` (product.bom.view | manage | release); every write sends the revision's `version`: lock the style row, check the revision is a DRAFT (409 first), compare-and-set the revision, then the parts (`store.ts lockDraft`); rules and math in factory-domain `product/bom` (`planLine`, `bomIssues`, `requirements`); release obsoletes the old RELEASED revision first and makes a DRAFT style ACTIVE.
