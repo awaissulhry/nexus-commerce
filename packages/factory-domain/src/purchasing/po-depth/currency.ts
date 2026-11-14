@@ -8,7 +8,8 @@ import type { DepthCheck } from './codes'
  *
  *   rate      an order in a currency other than its company's carries the rate at order: how many units of the order's
  *             currency one unit of the company's buys, as the ECB quotes it (1 EUR = 1.0850 USD), above 0 with at most
- *             eight decimals. Typed by the buyer while the order is a DRAFT (the rate table of W2b-6 will fill it later).
+ *             eight decimals. Typed by the buyer while the order is a DRAFT; with none typed the send takes the day's rate of
+ *             the rates table (B-W2b-389, CY1:01: the typed rate stays the override).
  *             An order in the company's own currency has none.
  *   value     the order's net amount in the company's currency at that rate (net ÷ rate, rounded half up to the company
  *             currency's minor unit: one rounding), kept current while the order is a draft and frozen with the send.
@@ -43,5 +44,5 @@ export const rateWords = (rate: string, orderCurrency: string, companyCurrency: 
 /** The send's check of the order's currency (no rate: the send stops). */
 export function currencyChecks(order: { readonly currency: string; readonly rateAtOrder: string | null }, companyCurrency: string): DepthCheck[] {
   if (!takesRate(order.currency, companyCurrency) || order.rateAtOrder !== null) return []
-  return [{ code: 'NO_RATE_AT_ORDER', severity: 'BLOCKS', path: 'rateAtOrder', message: `The order is in ${order.currency} and the company keeps its books in ${companyCurrency}: type the rate at order (1 ${companyCurrency} = … ${order.currency}).` }]
+  return [{ code: 'NO_RATE_AT_ORDER', severity: 'BLOCKS', path: 'rateAtOrder', message: `The order is in ${order.currency} and the company keeps its books in ${companyCurrency}, and no rate of the day is kept: type the rate at order (1 ${companyCurrency} = … ${order.currency}), or keep the day's rate in Finance › Settings › Currencies & rates (B-W2b-389: the day's rate is taken by default).` }]
 }

@@ -242,6 +242,12 @@ model Company {
   packagingTypes        PackagingType[]
   packagingDefaults     PackagingDefault[]
   shippingMarkTemplates ShippingMarkTemplate[]
+  // W2b-6 config.prisma (wave 56/57): its custom fields and picklists, its document, e-mail and message templates.
+  customFields          CustomField[]
+  picklists             Picklist[]
+  documentTemplates     DocumentTemplate[]
+  emailTemplates        EmailTemplate[]
+  messageTemplates      MessageTemplate[]
   // W2b-5 buying-depth.prisma (wave 40/44): its delivery tolerances.
   deliveryTolerances   DeliveryTolerance[]
   supplierInvoiceFiles SupplierInvoiceFile[]
@@ -343,6 +349,11 @@ model Company {
   reportSubscriptions  ReportSubscription[]
   // alerts.prisma: the alert rules that look at it.
   alertRules           AlertRule[]
+  // W2b-6 insights-depth.prisma (wave 57/57): its insights settings, the morning e-mails about it, its daily and hourly facts.
+  insightsSettings     InsightsSettings[]
+  digestSettings       DigestSetting[]
+  factsDaily           FactDaily[]
+  factsHourly          FactHourly[]
   // W2b-5 approvals.prisma (wave 35/44): its approval rules, the requests for a yes about its records, their history.
   approvalRules        ApprovalRule[]
   approvalTasks        ApprovalTask[]
@@ -527,6 +538,9 @@ model Site {
   workCalendars       WorkCalendar[]
   reportSubscriptions ReportSubscription[]
   alertRules          AlertRule[]
+  // W2b-6 insights-depth.prisma (wave 57/57): its daily and hourly facts.
+  factsDaily          FactDaily[]
+  factsHourly         FactHourly[]
   // W2b-5 approvals.prisma (wave 35/44): the requests for a yes about its records.
   approvalTasks       ApprovalTask[]
   // W2b inspection-plans.prisma (wave 10/16): its incoming inspections and in-process checks.
@@ -628,6 +642,9 @@ model Line {
   inProcessChecks InProcessCheck[]
   // W2a planning.prisma: its planned efficiency and people (one row, the line's id).
   capacity LineCapacity[]
+  // W2b-6 insights-depth.prisma (wave 57/57): its daily and hourly facts.
+  factsDaily  FactDaily[]
+  factsHourly FactHourly[]
   // W2b-5 planning-depth.prisma (wave 41/44): the planned work orders planned on it.
   plannedWorkOrders PlannedWorkOrder[]
   // W2b pay.prisma (schema wave 6/7): its piece-rate tables, the rate publications made on it, its incentive schemes.

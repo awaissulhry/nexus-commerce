@@ -1,6 +1,11 @@
 import type { Prisma } from '@nexus/factory-db'
 import type { DepthCheck } from '@nexus/factory-domain/purchasing/po-depth/codes'
 import { currencyChecks, takesRate } from '@nexus/factory-domain/purchasing/po-depth/currency'
+// B-W2b-389 (CY1:01): the day's rate of the rates table.
+import { businessDate } from '@nexus/factory-domain/core/time'
+import type { DayRate } from '@nexus/factory-domain/money/currency/rates'
+import { serverClock } from '../../../core/time'
+import { dayRate } from '../../../platform/currency/service'
 import { scheduleChecks } from '@nexus/factory-domain/purchasing/po-depth/schedule'
 import { shipToChecks, workshopPlaceOf, type ShipToAddress, type ShipToParty, type ShipToPlace } from '@nexus/factory-domain/purchasing/po-depth/ship-to'
 import type { PartyRole, PartyStatus } from '@nexus/factory-domain/parties/rules'
@@ -46,6 +51,8 @@ export interface ShipToFacts {
 export interface DepthFacts {
   readonly order: DepthOrderRow
   readonly companyCurrency: string
+  /** B-W2b-389 (CY1:01): an order in another currency with no rate typed: the day's rate the send takes, or null. */
+  readonly dayRate: DayRate | null
   /** Each line's deliveries by day (an empty list: one delivery on the line's need date). */
   readonly deliveries: ReadonlyMap<string, readonly DeliveryRow[]>
   readonly shipTo: ShipToFacts | null
@@ -79,7 +86,10 @@ export async function readShipTo(db: Reader, order: Pick<DepthOrderRow, 'siteId'
 export async function readDepthFacts(db: Reader, order: Pick<OrderRow, 'id' | 'companyId'>, lines: readonly Pick<LineRow, 'id'>[]): Promise<DepthFacts> {
   const row = await db.purchaseOrder.findUniqueOrThrow({ where: { id: order.id }, select: DEPTH_ORDER_COLUMNS })
   const company = await db.company.findUniqueOrThrow({ where: { id: order.companyId }, select: { currency: true } })
-  return { order: row, companyCurrency: company.currency, deliveries: await readDeliveries(db, lines.map((line) => line.id)), shipTo: await readShipTo(db, row) }
+  // B-W2b-389 (CY1:01): no rate typed on an order in another currency → the day's rate of the table (the send keeps it).
+  const today = businessDate(serverClock.now())
+  const rate = row.rateAtOrder === null && takesRate(row.currency, company.currency) ? await dayRate(db, company.currency, row.currency, today) : null
+  return { order: row, companyCurrency: company.currency, dayRate: rate, deliveries: await readDeliveries(db, lines.map((line) => line.id)), shipTo: await readShipTo(db, row) }
 }
 
 const asAddress = (row: ShipToAddressRow): ShipToAddress => ({ id: row.id, partyId: row.partyId, kinds: row.kinds, status: row.status, approvalStatus: row.approvalStatus, isDefaultShipTo: row.isDefaultShipTo })
@@ -102,7 +112,8 @@ export function depthChecks(depth: DepthFacts, lines: readonly LineRow[], items:
   const shipTo = depth.shipTo ? { party: depth.shipTo.party, address: depth.shipTo.address ? asAddress(depth.shipTo.address) : null, hasPlace: depth.shipTo.place !== null || !depth.shipTo.party.roles.includes('SUBCONTRACTOR') } : null
   return [
     ...scheduleChecks(schedules, today),
-    ...currencyChecks({ currency: depth.order.currency, rateAtOrder: depth.order.rateAtOrder === null ? null : depth.order.rateAtOrder.toString() }, depth.companyCurrency),
+    // B-W2b-389 (CY1:01): the day's rate counts as the rate at order (the send keeps it); a typed rate stays the override.
+    ...currencyChecks({ currency: depth.order.currency, rateAtOrder: depth.order.rateAtOrder === null ? (depth.dayRate?.rate ?? null) : depth.order.rateAtOrder.toString() }, depth.companyCurrency),
     ...shipToChecks(shipTo, depth.order.partyId),
   ]
 }

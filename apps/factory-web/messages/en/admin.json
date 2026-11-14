@@ -1611,7 +1611,8 @@
     "safety": "Safety at work",
     "partners": "Partner portals",
     "portal": "Portal (partners)",
-    "approvals": "Approvals"
+    "approvals": "Approvals",
+    "currencies": "Currencies and exchange rates"
   },
   "perm": {
     "companies_view": "See the companies and whether they can invoice",
@@ -1882,6 +1883,8 @@
     "paymentterms_manage": "Add and change payment terms",
     "pricelists_view": "See price lists, their dated versions and prices, quantity breaks, size surcharges and minimum order quantities, and the customers priced from them",
     "pricelists_manage": "Keep price lists: versions, dated prices, quantity breaks, size surcharges, minimum order quantities, showing the discount, imports, and the customers they price",
+    "currencies_view": "See the company's currencies and the exchange rates of each day",
+    "currencies_manage": "Add or switch off a document currency; keep a rate of a day by hand; switch the daily ECB rates on or off",
     "quality_defects_view": "See the defect library and the disposition codes",
     "quality_defects_manage": "Keep the defect library and the disposition codes",
     "quality_holds_view": "See what is on hold",

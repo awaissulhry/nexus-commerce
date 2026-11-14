@@ -71,6 +71,8 @@ model Colour {
   // W2b-5 sales-pricing.prisma (wave 38/44): the options chosen with this colour on quote and order lines.
   quoteLineOptions      QuoteLineOption[]      @relation("QuoteLineOptionColour")
   salesOrderLineOptions SalesOrderLineOption[] @relation("SalesOrderLineOptionColour")
+  // W2b-6 config.prisma (wave 56/57): the quote template line options picked with this colour.
+  quoteTemplateLineOptions QuoteTemplateLineOption[] @relation("QuoteTemplateLineOptionColour")
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from material colours and colourways.
@@ -201,6 +203,8 @@ model Item {
   // W2b-5 sales-pricing.prisma (wave 38/44): the options chosen with it on quote and order lines, its minimum order rules.
   quoteLineOptions      QuoteLineOption[]      @relation("QuoteLineOptionItem")
   salesOrderLineOptions SalesOrderLineOption[] @relation("SalesOrderLineOptionItem")
+  // W2b-6 config.prisma (wave 56/57): the quote template line options picked with it.
+  quoteTemplateLineOptions QuoteTemplateLineOption[] @relation("QuoteTemplateLineOptionItem")
   moqRules              MoqRule[]              @relation("MoqRuleItem")
   // W2b-4 samples.prisma (wave 29/33): the swatches of it sent to brands.
   sampleSwatches  SampleSwatch[]
@@ -400,6 +404,8 @@ model ItemColour {
   // W2b-5 sales-pricing.prisma (wave 38/44): the options chosen with this colour on quote and order lines.
   quoteLineOptions      QuoteLineOption[]      @relation("QuoteLineOptionItemColour")
   salesOrderLineOptions SalesOrderLineOption[] @relation("SalesOrderLineOptionItemColour")
+  // W2b-6 config.prisma (wave 56/57): the quote template line options picked with this colour.
+  quoteTemplateLineOptions QuoteTemplateLineOption[] @relation("QuoteTemplateLineOptionItemColour")
   supplierClaimLines   SupplierClaimLine[]
   subcontractKitLines  SubcontractKitLine[]
 

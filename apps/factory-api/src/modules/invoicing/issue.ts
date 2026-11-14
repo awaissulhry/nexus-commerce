@@ -25,6 +25,8 @@ import { invoiceDetail, officeInvoice, readInvoice, readLines, type InvoiceDetai
 import { storedSourceOf, termsJsonOf } from './terms'
 // B-W2b-330 (SAL-181): a fee is invoiced once.
 import { feesBilledTwice } from '../sales/price-waterfall/fee-invoicing'
+// B-W2b-389: the euro rate an invoice in another currency keeps (the rates table).
+import { invoiceRateOf, type InvoiceRate } from '../../platform/currency/service'
 
 /**
  * Issuing an invoice (B-W1-28 invoice core; A2 SCR-081 "Check and issue"; FIN-057, FIN-061, FIN-085; DPR 633/1972
@@ -63,6 +65,9 @@ export function refusal(problems: readonly IssueProblem[]): DomainError {
   return new DomainError('conflict', problems.length === 1 ? first.message : `This invoice cannot be issued yet: ${problems.length} things to fix. ${first.message}`, problems.map((problem) => ({ path: problem.path, message: problem.message })))
 }
 
+/** B-W2b-389: the missing rate of an invoice in another currency, as an issue problem (none in euro, none when a rate is kept). */
+const rateProblems = (rate: InvoiceRate | null): IssueProblem[] => (rate && !rate.ok ? [{ code: rate.code, path: rate.path, message: rate.message }] : [])
+
 const yearOf = (date: BusinessDate): number => Number.parseInt(date.slice(0, 4), 10)
 const dateValue = (date: BusinessDate): Date => new Date(`${date}T00:00:00.000Z`)
 
@@ -92,7 +97,9 @@ export async function issueInCommand(tools: CommandTools, invoiceId: string, per
   // B-W2a-F1: today inside a HARD period lock of the company is a problem of the issue (409 in words, no number taken),
   // before the database's Invoice_period_lock refuses it.
   const locked = await hardLockOn(tx, context, [{ companyId: invoice.companyId, day: date, refused: `the invoice is not issued today (${dayWords(date)})`, path: 'issueDate' }])
-  const problems = [...review.problems, ...feeProblems, ...(kind === null ? [noSeries(invoice.docType)] : []), ...(locked ? [{ code: 'PERIOD_LOCKED', path: 'issueDate', message: locked.words }] : [])]
+  // B-W2b-389: an invoice in another currency keeps its rate, the rate's day and its total in euro, or waits for a rate.
+  const rate = await invoiceRateOf(tx, invoice, date)
+  const problems = [...review.problems, ...feeProblems, ...(kind === null ? [noSeries(invoice.docType)] : []), ...(locked ? [{ code: 'PERIOD_LOCKED', path: 'issueDate', message: locked.words }] : []), ...rateProblems(rate)]
   if (problems.length > 0 || kind === null || !review.seller || !review.billTo) throw refusal(problems)
   // B-W2a-F8: today inside a SOFT period lock needs the override reason (409 period/SOFT_LOCKED without it; audited with it).
   await honourPeriodLocks(tools, [{ companyId: invoice.companyId, day: date, refused: `the invoice is not issued today (${dayWords(date)})`, path: 'issueDate', record: { type: 'Invoice', id: invoice.id } }], periodLockOverride)
@@ -118,6 +125,8 @@ export async function issueInCommand(tools: CommandTools, invoiceId: string, per
       billTo: review.billTo as unknown as Prisma.InputJsonValue,
       partyId: invoice.buyerPartyId,
       ...(terms === null ? {} : { paymentTerms: terms }),
+      // B-W2b-389: the rate trio of an invoice in another currency (all three; none in euro).
+      ...(rate?.ok ? { exchangeRate: rate.exchangeRate, rateDate: dateValue(rate.rateDate), totalEur: rate.totalEur } : {}),
     },
     select: { id: true },
   })
@@ -164,7 +173,7 @@ export async function issueChecks(caller: CommandCaller, invoiceId: string): Pro
     const review = await reviewIssue(client, invoice, lines, date, now)
     const kind = await seriesKindFor(client, invoice.companyId, invoice.docType)
     const periodLock = await periodLockPreview(client, { companyId: invoice.companyId, day: date, refused: `the invoice is not issued today (${dayWords(date)})` })
-    const problems = [...review.problems, ...(kind === null ? [noSeries(invoice.docType)] : []), ...(periodLock?.level === 'HARD' ? [{ code: 'PERIOD_LOCKED', path: 'issueDate', message: periodLock.words }] : [])]
+    const problems = [...review.problems, ...(kind === null ? [noSeries(invoice.docType)] : []), ...(periodLock?.level === 'HARD' ? [{ code: 'PERIOD_LOCKED', path: 'issueDate', message: periodLock.words }] : []), ...rateProblems(await invoiceRateOf(client, invoice, date))]
     return { ready: problems.length === 0, problems, numberPreview: kind ? await numberPreview(client, invoice.companyId, kind, date) : null, issueDate: date, periodLock }
   })
 }
@@ -210,7 +219,7 @@ export async function issueInvoice(files: FilesRuntime, caller: CommandCaller, i
       const lines = await readLines(client, invoice.id)
       const checked = await reviewIssue(client, invoice, lines, businessDate(now), now)
       const kind = await seriesKindFor(client, invoice.companyId, invoice.docType)
-      return [...checked.problems, ...(kind === null ? [noSeries(invoice.docType)] : [])]
+      return [...checked.problems, ...(kind === null ? [noSeries(invoice.docType)] : []), ...rateProblems(await invoiceRateOf(client, invoice, businessDate(now)))]
     })
     if (review.length > 0) throw refusal(review)
   }

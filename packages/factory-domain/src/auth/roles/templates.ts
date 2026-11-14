@@ -150,6 +150,8 @@ import { SHIPPING_HOLDS_ADDS } from '../../shipping/holds/permissions'
 import { SHIPPING_PROFORMA_ADDS } from '../../shipping/proforma/permissions'
 // B-W2b-385: the notification defaults of each office role (the administrator sets them).
 import { NOTIFICATION_DEFAULTS_ADDS } from '../../notifications/preferences/permissions'
+// B-W2b-389: currencies and exchange rates (finance and the administrator keep them; buyers and sales read them).
+import { CURRENCY_ADDS } from '../../money/currency/permissions'
 
 /**
  * The system role templates (plan A1 §3.11 "Role"; feature PLT-030): ready roles every tenant gets as system roles
@@ -1047,7 +1049,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-391
   ...(audience === 'office' ? (SHIPPING_PROFORMA_ADDS[key] ?? []) : []),
   // B-W2b-385
-  ...(audience === 'office' ? (NOTIFICATION_DEFAULTS_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (NOTIFICATION_DEFAULTS_ADDS[key] ?? []) : []),
+  // B-W2b-389
+  ...(audience === 'office' ? (CURRENCY_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the

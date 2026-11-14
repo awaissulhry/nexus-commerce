@@ -1,0 +1,383 @@
+// The metric layer (W2b-6, schema wave 57/57, B-W2b-381; features ANA-002, ANA-012, ANA-032, ANA-041, ANA-069, ANA-070;
+// design home.kpis "Every KPI" with the KPI record (Definition, Where used, History), home.dashboards popup arrange,
+// home.reports "Owner daily digest", home.alerts "Rules" (goes to the role and place)). Rule 1: reports exist since W2a, but
+// their numbers are computed at read time and cannot say where else they are used; this is the one layer they all read.
+//
+//   KpiDefinition     one version of one KPI: its key (the same in every version), its name and plain definition in Italian
+//                     and English, the formula in words, the records and the facts it is computed from, the office role
+//                     that owns it, its unit and the money grain its value needs. DRAFT → ACTIVE → SUPERSEDED | RETIRED; a
+//                     version in force is never edited, a change is a new version, so an old number can be explained.
+//   KpiUse            where a KPI is read: a dashboard, a report, an alert rule or a portal page, by their keys.
+//   DashboardLayout   one person's arrangement of one dashboard (panels, order, widths), saved on the server.
+//   DigestSetting     one person's morning e-mail: on (off until turned on), the time and its zone, the weekdays, the
+//                     language, the sections, the company it looks at (or every company the person sees).
+//   InsightsSettings  a company's switch for the morning e-mail (OFF by default: the Owner's rule of 11-13): no digest of
+//                     the company goes out until a person switches it on.
+//   AlertRoute        who an alert rule tells at one place: a company, a site, a line or a customer, and an office role (its
+//                     holders) or one office person.
+//   FactDaily         one number of one measure for one business day of a company, a site of it or a line of the site,
+//                     rebuilt from the ledgers (B-W2b-428); a count or pieces, or an amount in the company's currency with
+//                     its grain.
+//   FactHourly        the same per hour (a whole hour of the site's clock).
+//
+// A KPI, a measure, a dashboard and a report are named by their keys (factory-domain's registries), so no table here waits
+// for a module. The facts hold no personal data and no per-person figure: they are kept per company, site and line only
+// (Statuto dei Lavoratori art. 4; Owner answer W1), and a KPI's grain is never wages or pay. Office only
+// (ownership/insights-depth.json). The …_insights_depth_w2b_guards triggers hold the rules Prisma does not model.
+
+/// One version of one KPI (ANA-012, ANA-070; design home.kpis › a KPI: Definition, History). The key stays the same in every
+/// version; versions are numbered 1, 2, 3 … per key, one ACTIVE per key at a time (a partial unique index). DRAFT: written
+/// and changed freely, deleted; ACTIVE: in force, frozen but for its end; SUPERSEDED (a newer version took over) or RETIRED
+/// (the KPI is withdrawn): frozen. A version in force or past is never deleted.
+model KpiDefinition {
+  id            String    @id @db.Uuid
+  tenantId      String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The KPI's key (`delivery.otif`): dashboards, reports, alerts and the portal name a KPI by it. Never changes.
+  kpiKey        String
+  /// 1, 2, 3 … per key (`version` is the row's compare-and-set counter). Never changes.
+  kpiVersion    Int
+  /// The version this one was made from (same key, a lower number); with it, what changed is said. Never changes.
+  basedOnId     String?   @db.Uuid
+  /// What changed from the version it was made from (1 to 2000 characters): required with basedOnId.
+  changeNote    String?
+  state         KpiState  @default(DRAFT)
+  /// Its name, in Italian and English (1 to 120 characters, one line each).
+  nameIt        String
+  nameEn        String
+  /// What it means and what it does not (its exclusions), in plain words, Italian and English (1 to 2000 characters each).
+  definitionIt  String
+  definitionEn  String
+  /// The formula in words and symbols, Italian and English (1 to 1000 characters each).
+  formulaIt     String
+  formulaEn     String
+  /// The records it is computed from: model names (`SalesOrderLine`, `Shipment`), 1 to 20, each a table, each once.
+  sourceRecords String[]
+  /// The facts it reads (FactDaily / FactHourly measure keys, `orders.lines_shipped`), up to 30, each once.
+  measureKeys   String[]  @default([])
+  /// The office role that owns the definition (the KPI library's "Owner").
+  ownerRoleId   String    @db.Uuid
+  unit          KpiUnit
+  /// The money grain its value needs (PRICE, COST, MARGIN); null: no money. Never wages or pay: a KPI never measures a person.
+  grain         KpiGrain?
+  /// ACTIVE from: when and by whom, set exactly from ACTIVE on.
+  activatedAt   DateTime? @db.Timestamptz(3)
+  activatedById String?   @db.Uuid
+  /// SUPERSEDED or RETIRED: when and by whom, set exactly then.
+  endedAt       DateTime? @db.Timestamptz(3)
+  endedById     String?   @db.Uuid
+  version       Int       @default(1)
+  createdAt     DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById   String?   @db.Uuid
+
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  basedOn       KpiDefinition?  @relation("KpiDefinitionBasedOn", fields: [tenantId, basedOnId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  versionsAfter KpiDefinition[] @relation("KpiDefinitionBasedOn")
+  ownerRole     Role            @relation(fields: [tenantId, ownerRoleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, kpiKey, kpiVersion])
+  // The target of basedOn's tenant-safe reference.
+  @@unique([tenantId, id])
+  // The library: the versions in force.
+  @@index([tenantId, state])
+}
+
+enum KpiState {
+  /// Written, not in force; changed freely and deleted.
+  DRAFT
+  /// In force: every reader reads this version. Frozen but for its end.
+  ACTIVE
+  /// A newer version took over.
+  SUPERSEDED
+  /// The KPI is withdrawn.
+  RETIRED
+}
+
+/// What a KPI's value counts in.
+enum KpiUnit {
+  PERCENT
+  /// A number of records (orders, lines, lots).
+  COUNT
+  /// A number of garments or parts.
+  PIECES
+  /// An amount in the company's currency (with its grain).
+  MONEY
+  DAYS
+  HOURS
+  MINUTES
+  /// One quantity over another (a leather yield in m² per m², days of cover).
+  RATIO
+}
+
+/// The money grain a KPI's value needs to be shown (factory-domain money/marked): a margin KPI is listed for everyone, its
+/// value shows only with the margin grain. No wages or pay grain: a KPI never measures one person.
+enum KpiGrain {
+  PRICE
+  COST
+  MARGIN
+}
+
+/// Where a KPI is read (ANA-070; design home.kpis › a KPI › Where used). Added when a reader starts reading it, removed when
+/// it stops; never changed.
+model KpiUse {
+  id          String     @id @db.Uuid
+  tenantId    String     @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The KPI's key (an ACTIVE version of it exists when the use is added). Never changes.
+  kpiKey      String
+  usedIn      KpiUseKind
+  /// The reader's key: a dashboard (`owner-group`), a report (`production.daily`), an alert rule kind (`ORDER_LATE_RISK`)
+  /// or a portal page (`portal.orders`). Never changes.
+  useKey      String
+  /// `kpiuse:<kpiKey>:<usedIn>:<useKey>`: each reader once per KPI. Never changes.
+  key         String
+  createdAt   DateTime   @default(now()) @db.Timestamptz(3)
+  createdById String?    @db.Uuid
+
+  @@unique([tenantId, key])
+  // A KPI's "Where used".
+  @@index([tenantId, kpiKey])
+  // What one reader reads.
+  @@index([tenantId, usedIn, useKey])
+}
+
+enum KpiUseKind {
+  DASHBOARD
+  REPORT
+  ALERT
+  PORTAL
+}
+
+/// One person's arrangement of one dashboard (ANA-002; design home.dashboards popup arrange: "Panels, order, widths;
+/// server-saved per person"). Removed to go back to the dashboard's own order.
+model DashboardLayout {
+  id           String   @id @db.Uuid
+  tenantId     String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The office user whose arrangement it is. Never changes.
+  userId       String   @db.Uuid
+  /// The dashboard (`owner-group`, `plant-manager`, `sales`, `planner`, `buyer`, `quality`, `finance`, `line-leader`).
+  /// Never changes.
+  dashboardKey String
+  /// `dashboard:<userId>:<dashboardKey>`: one per person and dashboard. Never changes.
+  key          String
+  /// The panels in order: [{ id, hidden, width: HALF | TWO_THIRDS | FULL }], 1 to 40, each id once (a pinned report panel
+  /// is one more panel, its id the dashboard's).
+  panels       Json
+  version      Int      @default(1)
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById  String?  @db.Uuid
+
+  user User @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, key])
+  @@index([tenantId, userId])
+}
+
+/// One office person's morning e-mail (ANA-032; design home.reports "Owner daily digest": yesterday's shipped and late
+/// orders, new orders, WIP stuck, alerts, approvals waiting; time, recipients, language). Off until a person turns it on;
+/// it goes out only while the switch of its company (InsightsSettings) is on too. Removed to turn it off for good.
+model DigestSetting {
+  id          String          @id @db.Uuid
+  tenantId    String          @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The office user it is sent to. Never changes.
+  userId      String          @db.Uuid
+  /// `digest:<userId>`: one per person. Never changes.
+  key         String
+  /// On (OFF by default); when and by whom it was turned on, set exactly while on.
+  enabled     Boolean         @default(false)
+  enabledAt   DateTime?       @db.Timestamptz(3)
+  enabledById String?         @db.Uuid
+  /// The company it looks at; null: every company the person sees (the Owner's group digest).
+  companyId   String?         @db.Uuid
+  /// When: the time of day (HH:MM) on the clock of `timeZone` (IANA, the site's: "07:30 site time"), on the ISO weekdays
+  /// (1 Monday … 7 Sunday, ascending, each once).
+  sendTime    String          @default("07:30")
+  timeZone    String          @default("Europe/Rome")
+  weekdays    Int[]           @default([1, 2, 3, 4, 5])
+  /// The language it is written in: `it` or `en`.
+  locale      String          @default("it")
+  /// What it lists, each once, at least one.
+  sections    DigestSection[] @default([SHIPPED, LATE, NEW_ORDERS, WIP_STUCK, ALERTS, APPROVALS])
+  /// The last time it went out: only forward, and only while it is on and its company's switch is on.
+  lastSentAt  DateTime?       @db.Timestamptz(3)
+  version     Int             @default(1)
+  createdAt   DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime        @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?         @db.Uuid
+
+  user    User     @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  company Company? @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, key])
+  // The scheduler's pass over the ones that are on.
+  @@index([tenantId, enabled])
+  @@index([tenantId, userId])
+}
+
+/// The sections of the morning e-mail (design home.reports › Owner daily digest).
+enum DigestSection {
+  /// Yesterday's shipped orders.
+  SHIPPED
+  /// Orders late against their promise.
+  LATE
+  /// New orders since the last e-mail.
+  NEW_ORDERS
+  /// Work in progress waiting too long in a stage.
+  WIP_STUCK
+  /// Open alerts.
+  ALERTS
+  /// Approvals waiting.
+  APPROVALS
+}
+
+/// A company's insights settings: its switch for the morning e-mail (ANA-032; the Owner's rule of 11-13: anything that would
+/// send by itself is OFF by default). One per company. Never deleted.
+model InsightsSettings {
+  id               String    @id @db.Uuid
+  tenantId         String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// Never changes.
+  companyId        String    @db.Uuid
+  /// `insights:<companyId>`: one per company. Never changes.
+  key              String
+  /// The morning e-mail of this company goes out only while true (OFF by default); when and by whom it was switched on,
+  /// set exactly while on.
+  digestMailOn     Boolean   @default(false)
+  digestMailOnAt   DateTime? @db.Timestamptz(3)
+  digestMailOnById String?   @db.Uuid
+  version          Int       @default(1)
+  createdAt        DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById      String?   @db.Uuid
+
+  company Company @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, key])
+  @@index([tenantId, companyId])
+}
+
+/// Who an alert rule tells at one place (ANA-041; design home.alerts › Rules "goes to (role and place: 'Quality at Plant
+/// 1')"): the holders of an office role, or one office person, for the rule's alerts about a company, a site, a line or a
+/// customer. A route never widens its rule's place. Added and removed, never changed.
+model AlertRoute {
+  id          String          @id @db.Uuid
+  tenantId    String          @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// Never changes.
+  ruleId      String          @db.Uuid
+  scope       AlertRouteScope
+  /// The company, site, line or customer (a Party with the CUSTOMER or BRAND role). Never changes.
+  scopeId     String          @db.Uuid
+  /// Whom: the holders of an office role there, or one office person; exactly one. Never changes.
+  roleId      String?         @db.Uuid
+  userId      String?         @db.Uuid
+  /// `route:<ruleId>:<scope>:<scopeId>:role:<roleId>` or `…:user:<userId>`: each recipient once per rule and place. Never
+  /// changes.
+  key         String
+  createdAt   DateTime        @default(now()) @db.Timestamptz(3)
+  createdById String?         @db.Uuid
+
+  rule AlertRule @relation(fields: [tenantId, ruleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  role Role?     @relation(fields: [tenantId, roleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  user User?     @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, key])
+  // A rule's routes.
+  @@index([tenantId, ruleId])
+  // The routes of a place.
+  @@index([tenantId, scope, scopeId])
+}
+
+/// The places an alert routes by (the same scopes as permissions).
+enum AlertRouteScope {
+  COMPANY
+  SITE
+  LINE
+  CUSTOMER
+}
+
+/// One number of one measure for one business day (ANA-069; B-W2b-428 rebuilds them from the ledgers): of a company (no
+/// site), a site of it, or a line of the site. Exactly one of value, priceAmount, costAmount, marginAmount. Rebuilt in place
+/// or deleted and written again; no personal data, no per-person figure.
+model FactDaily {
+  id           String   @id @db.Uuid
+  tenantId     String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// Never changes.
+  companyId    String   @db.Uuid
+  /// A site of the company, and a line of the site (only with its site); null: the whole company, the whole site. Never
+  /// change.
+  siteId       String?  @db.Uuid
+  lineId       String?  @db.Uuid
+  /// The business day on the site's clock (else the company's): today at the latest. Never changes.
+  day          DateTime @db.Date
+  /// The measure (factory-domain's measure registry: `orders.lines_in`, `production.output_pieces`, `wip.cost`). Never
+  /// changes.
+  measureKey   String
+  /// `fact:<companyId>:<siteId | all>:<lineId | all>:<YYYY-MM-DD>:<measureKey>`: one per place, day and measure. Never
+  /// changes.
+  key          String
+  /// A count, pieces, minutes or another quantity.
+  value        Decimal? @db.Decimal(18, 4)
+  /// An amount in minor units of `currency` (the company's), with its grain.
+  /// @grain price
+  priceAmount  Int?
+  /// @grain cost
+  costAmount   Int?
+  /// @grain margin
+  marginAmount Int?
+  /// ISO 4217, the company's currency: exactly with an amount.
+  currency     String?
+  /// When it was last rebuilt from the ledgers (only forward).
+  rebuiltAt    DateTime @db.Timestamptz(3)
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+
+  company Company @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and companyId.
+  site    Site?   @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  line    Line?   @relation(fields: [tenantId, siteId, lineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, key])
+  // A KPI's read: a measure over a period.
+  @@index([tenantId, measureKey, day])
+  // A rebuild: a company's days.
+  @@index([tenantId, companyId, day])
+}
+
+/// The same per hour (ANA-069): one number of one measure for one whole hour of the site's clock (else the company's), of a
+/// company, a site or a line. Exactly one of value, priceAmount, costAmount, marginAmount.
+model FactHourly {
+  id           String   @id @db.Uuid
+  tenantId     String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// Never changes.
+  companyId    String   @db.Uuid
+  /// As FactDaily. Never change.
+  siteId       String?  @db.Uuid
+  lineId       String?  @db.Uuid
+  /// The start of the hour: a whole hour on the site's clock (else the company's), not in the future. Never changes.
+  hourStart    DateTime @db.Timestamptz(3)
+  /// The business day that hour belongs to on that clock (shifts across midnight group by it). Never changes.
+  day          DateTime @db.Date
+  /// Never changes.
+  measureKey   String
+  /// `facth:<companyId>:<siteId | all>:<lineId | all>:<hourStart as YYYY-MM-DDTHH:MMZ>:<measureKey>`. Never changes.
+  key          String
+  value        Decimal? @db.Decimal(18, 4)
+  /// @grain price
+  priceAmount  Int?
+  /// @grain cost
+  costAmount   Int?
+  /// @grain margin
+  marginAmount Int?
+  currency     String?
+  rebuiltAt    DateTime @db.Timestamptz(3)
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+
+  company Company @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and companyId.
+  site    Site?   @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  line    Line?   @relation(fields: [tenantId, siteId, lineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, key])
+  @@index([tenantId, measureKey, hourStart])
+  @@index([tenantId, companyId, hourStart])
+}

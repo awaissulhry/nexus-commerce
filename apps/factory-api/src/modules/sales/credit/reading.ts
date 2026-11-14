@@ -6,6 +6,9 @@ import type { CommandTx } from '../../../core/command'
 import { holdsInForce } from '../../parties/holds/holds'
 import { companyTermsRow } from '../../parties/company-terms/in-force'
 import { openInvoices } from '../../receivables/store'
+// B-W2b-389 (CY1:04): other currencies at the day's rate.
+import { convertMinor, sumPerCurrency } from '@nexus/factory-domain/money/currency/convert'
+import { dayRate } from '../../../platform/currency/service'
 
 /**
  * What a customer's credit with a company stands at (B-W2b-304; SAL-237): the reading a check writes and the screens show.
@@ -23,8 +26,8 @@ import { openInvoices } from '../../receivables/store'
  *                  their due date (receivables/ledger addToAgeing)
  *   on hold        a CREDIT PartyHold in force for the company (B-W2b-290; of the company or of every company)
  *
- * Amounts in another currency than the limit's are left out (a customer billed in two currencies is checked in its
- * limit's): a named gap.
+ * B-W2b-389 (CY1:04): amounts in another currency than the limit's count at the day's rate (the rates table: the ECB's rate of
+ * the day or before, a manual rate of that day winning); a currency with no rate kept near the day is left out, as before.
  */
 
 export type Reader = FactoryClient | CommandTx
@@ -48,11 +51,15 @@ export async function creditHoldInForce(db: Reader, partyId: string, companyId: 
   return (await holdsInForce(db, partyId, companyId)).some((hold) => hold.reason === 'CREDIT')
 }
 
-/** What is not invoiced yet of the customer's open orders with the company, in the currency (orders left out: `exclude`). */
-export async function openOrdersAmount(db: Reader, input: { readonly partyId: string; readonly companyId: string; readonly currency: string; readonly exclude?: readonly string[] }): Promise<number> {
+/**
+ * What is not invoiced yet of the customer's open orders with the company, in the currency (orders left out: `exclude`).
+ * B-W2b-389 (CY1:04): an order in another currency counts at the day's rate of `asOf` (the rates table); one with no rate
+ * kept near that day is left out, as before.
+ */
+export async function openOrdersAmount(db: Reader, input: { readonly partyId: string; readonly companyId: string; readonly currency: string; readonly exclude?: readonly string[]; readonly asOf: string }): Promise<number> {
   const exclude = [...(input.exclude ?? [])]
-  const rows = await db.$queryRaw<{ id: string; gross: number; invoiced: bigint | null; deposits: bigint | null }[]>`
-    SELECT o.id, o."grossAmount" AS gross,
+  const rows = await db.$queryRaw<{ id: string; currency: string; gross: number; invoiced: bigint | null; deposits: bigint | null }[]>`
+    SELECT o.id, o.currency, o."grossAmount" AS gross,
            (SELECT sum(coalesce(l."grossAmount", round(l."netAmount" * (1 + l."vatRatePct" / 100))::int))
               FROM "InvoiceLine" l
               JOIN "Invoice" i ON i."tenantId" = l."tenantId" AND i.id = l."invoiceId"
@@ -60,19 +67,42 @@ export async function openOrdersAmount(db: Reader, input: { readonly partyId: st
              WHERE sl."orderId" = o.id AND i."docType" IN ('TD01', 'TD24') AND i.status <> 'DRAFT') AS invoiced,
            (SELECT sum(d.amount) FROM "DepositRequest" d WHERE d."tenantId" = o."tenantId" AND d."orderId" = o.id AND d.status = 'PAID') AS deposits
       FROM "SalesOrder" o
-     WHERE o."partyId" = ${input.partyId}::uuid AND o."companyId" = ${input.companyId}::uuid AND o.currency = ${input.currency}
+     WHERE o."partyId" = ${input.partyId}::uuid AND o."companyId" = ${input.companyId}::uuid
        AND o.status::text = ANY(${[...OPEN_ORDER_STATUSES]}::text[])
        AND NOT (o.id = ANY(${exclude}::uuid[]))
      ORDER BY o.id`
-  return rows.reduce((sum, row) => sum + Math.max(0, row.gross - Number(row.invoiced ?? 0n) - Number(row.deposits ?? 0n)), 0)
+  return inLimitCurrency(db, rows.map((row) => ({ currency: row.currency, amount: Math.max(0, row.gross - Number(row.invoiced ?? 0n) - Number(row.deposits ?? 0n)) })), input.currency, input.asOf)
 }
 
-/** The customer's invoices not yet paid with the company, in the currency, and their overdue part, as of a day. */
+/** B-W2b-389 (CY1:04): amounts of several currencies in the limit's: each other currency at the day's rate, or left out. */
+async function inLimitCurrency(db: Reader, values: readonly { readonly currency: string; readonly amount: number }[], currency: string, asOf: string): Promise<number> {
+  let total = 0
+  for (const part of sumPerCurrency(values)) {
+    if (part.currency === currency) total += part.amount
+    else {
+      const rate = await dayRate(db, currency, part.currency, asOf)
+      if (rate) total += convertMinor(part.amount, part.currency, currency, rate)
+    }
+  }
+  return total
+}
+
+/**
+ * The customer's invoices not yet paid with the company, in the currency, and their overdue part, as of a day. B-W2b-389
+ * (CY1:04): invoices in another currency count at the day's rate of `asOf`; one with no rate kept is left out, as before.
+ */
 export async function openInvoicesAmount(db: Reader, input: { readonly partyId: string; readonly companyId: string; readonly currency: string; readonly asOf: string }): Promise<{ open: number; overdue: number }> {
-  const rows = (await openInvoices(db, { companyId: input.companyId, partyId: input.partyId, asOf: input.asOf })).filter((row) => row.currency === input.currency)
-  const totals = emptyAgeing()
-  for (const row of rows) addToAgeing(totals, row.instalments, input.asOf)
-  return { open: totals.open, overdue: Math.min(totals.overdue, totals.open) }
+  const rows = await openInvoices(db, { companyId: input.companyId, partyId: input.partyId, asOf: input.asOf })
+  const byCurrency = new Map<string, ReturnType<typeof emptyAgeing>>()
+  for (const row of rows) {
+    const totals = byCurrency.get(row.currency) ?? emptyAgeing()
+    addToAgeing(totals, row.instalments, input.asOf)
+    byCurrency.set(row.currency, totals)
+  }
+  const ageings = [...byCurrency.entries()]
+  const open = await inLimitCurrency(db, ageings.map(([currency, totals]) => ({ currency, amount: totals.open })), input.currency, input.asOf)
+  const overdue = await inLimitCurrency(db, ageings.map(([currency, totals]) => ({ currency, amount: Math.min(totals.overdue, totals.open) })), input.currency, input.asOf)
+  return { open, overdue: Math.min(overdue, open) }
 }
 
 export interface ReadingInput {
@@ -88,7 +118,7 @@ export interface ReadingInput {
 /** The amounts of a customer's credit with a company in one currency, with the limit given (null: none). */
 export async function readAmounts(db: Reader, input: ReadingInput & { readonly currency: string; readonly limit: number | null }): Promise<CreditReading> {
   const asOf = businessDate(input.now)
-  const orders = await openOrdersAmount(db, { partyId: input.partyId, companyId: input.companyId, currency: input.currency, exclude: input.exclude ?? [] })
+  const orders = await openOrdersAmount(db, { partyId: input.partyId, companyId: input.companyId, currency: input.currency, exclude: input.exclude ?? [], asOf })
   const invoices = await openInvoicesAmount(db, { partyId: input.partyId, companyId: input.companyId, currency: input.currency, asOf })
   const onHold = await creditHoldInForce(db, input.partyId, input.companyId)
   return { currency: input.currency, openOrders: orders, openInvoices: invoices.open, overdue: invoices.overdue, subject: Math.max(0, input.subject ?? 0), limit: input.limit, onHold }
