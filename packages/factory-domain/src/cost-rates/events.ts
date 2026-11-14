@@ -15,11 +15,9 @@ import { WORK_CENTRE_KINDS } from '../product/routing/operations'
 
 /** What happened to a cost-per-minute calculation. */
 export const CALC_CHANGES = ['created', 'updated', 'removed', 'applied'] as const
-export type CalcChange = (typeof CALC_CHANGES)[number]
 
 /** What happened to an overhead rule. */
 export const OVERHEAD_RULE_CHANGES = ['created', 'updated', 'ended', 'archived'] as const
-export type OverheadRuleChange = (typeof OVERHEAD_RULE_CHANGES)[number]
 
 const kind = z.enum(WORK_CENTRE_KINDS)
 

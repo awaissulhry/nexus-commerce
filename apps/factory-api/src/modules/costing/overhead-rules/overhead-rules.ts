@@ -86,7 +86,7 @@ const tenantOf = (context: RequestContext): string => {
   return context.tenantId
 }
 
-export const factsOf = (row: RuleRow): OverheadRuleFacts => ({
+const factsOf = (row: RuleRow): OverheadRuleFacts => ({
   id: row.id,
   companyId: row.companyId,
   basis: row.basis,

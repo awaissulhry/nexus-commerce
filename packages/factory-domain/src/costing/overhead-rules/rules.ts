@@ -34,14 +34,6 @@ export const overheadRuleMachine = defineMachine({ name: 'overheadRule', states:
 /** `overhead:<companyId | all>:<basis>:<kind | all>` (the database's key). */
 export const overheadKey = (companyId: string | null, basis: OverheadBasis, kind: WorkCentreKind | null): string => `overhead:${companyId ?? 'all'}:${basis}:${kind ?? 'all'}`
 
-/** What each basis measures, in words (a screen shows them from the code). */
-export const BASIS_WORDS: Readonly<Record<OverheadBasis, string>> = Object.freeze({
-  PERCENT_OF_LABOUR: 'A percent of the labour cost.',
-  PER_MINUTE: 'A cost per standard minute.',
-  PER_UNIT: 'A cost per garment.',
-  PER_MACHINE_HOUR: 'A cost per machine hour.',
-})
-
 /** The highest percent of labour (the database's). */
 export const MAX_LABOUR_PCT = '1000'
 
