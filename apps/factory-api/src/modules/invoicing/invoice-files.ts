@@ -22,6 +22,8 @@ import { invoiceDetail, officeInvoice, readInvoice, readLines, type InvoiceDetai
 import { printedDeclarationOf } from './intent/declarations'
 // B-W2b-396 (FIN-063): the invoice's own language and, in another currency, its euro equivalent in the Causale.
 import { languageAndRateOf, printedCausale } from './language-currency/store'
+// B-W2b-401: the invoice a debit note adds to, the supplier's invoice a self-invoice integrates (DatiFattureCollegate).
+import { depthRelatedOf } from './self-invoices/hooks'
 
 /**
  * The files of an issued invoice (B-W1-28 steps b and c; FIN-057: the XML is the invoice, the PDF a courtesy copy; DM
@@ -78,7 +80,7 @@ export async function issuedInvoiceOf(db: Reader, invoiceId: string): Promise<{ 
     causale: printedCausale(invoice.causale, invoice, printed.exchangeRate && printed.rateDate ? { exchangeRate: printed.exchangeRate, rateDate: printed.rateDate } : null, printed.language),
     purchaseOrders: purchaseOrdersOf(invoice.documentRefs),
     ddts: ddts.map((ddt) => ({ number: ddt.number, date: day(ddt.documentDate) })),
-    credits: credits && credits.number && credits.issueDate ? { number: credits.number, issueDate: day(credits.issueDate) } : null,
+    credits: credits && credits.number && credits.issueDate ? { number: credits.number, issueDate: day(credits.issueDate) } : await depthRelatedOf(db, invoice),
     salesOrder: order ? { number: order.number, date: day(order.orderDate) } : null,
     paymentTerms: paymentTermsOf(invoice.paymentTerms),
     // B-W2b-392: the declaration of intent printed on its N3.5 lines.

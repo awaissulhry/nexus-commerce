@@ -162,6 +162,10 @@ import { MAIL_DEPTH_ADDS } from '../../mail-depth/permissions'
 import { DEPOSIT_RULES_ADDS } from '../../invoicing/cancellation/permissions'
 // B-W2b-407: the actual-cost figures (finance lands charges and keeps the accountant's switch).
 import { COST_ACTUALS_ADDS } from '../../costing/landed/permissions'
+// B-W2b-428: the KPI library (home.kpis.view) to every office template that works with business numbers.
+import { HOME_KPIS_ADDS } from '../../insights/kpis/permissions'
+// B-W2b-401: e-invoicing in depth (finance leaves or re-enters a company's e-invoice test mode and picks its simulated answer).
+import { TEST_MODE_ADDS } from '../../invoicing/test-mode/permissions'
 // B-W2b-418: the cost sheet's components (finance writes draft sheets' lines and keeps their inputs).
 import { COST_SHEET_COMPONENTS_ADDS } from '../../costing/sheet-components/permissions'
 
@@ -1083,6 +1087,10 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (DEPOSIT_RULES_ADDS[key] ?? []) : []),
   // B-W2b-407
   ...(audience === 'office' ? (COST_ACTUALS_ADDS[key] ?? []) : []),
+  // B-W2b-428
+  ...(audience === 'office' ? (HOME_KPIS_ADDS[key] ?? []) : []),
+  // B-W2b-401
+  ...(audience === 'office' ? (TEST_MODE_ADDS[key] ?? []) : []),
   // B-W2b-418
   ...(audience === 'office' ? (COST_SHEET_COMPONENTS_ADDS[key] ?? []) : [])]
 /**

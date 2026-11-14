@@ -31,6 +31,8 @@ import { invoiceRateOf, type InvoiceRate } from '../../platform/currency/service
 import { taxDutiesAtIssue } from './tax-codes/apply'
 // B-W2b-396: a change fee or a sample round's charge invoiced once; a fee credited against the bulk order when its credit note is issued.
 import { chargesBilledTwice, feeCreditsAtIssue } from './from-shipment/fees'
+// B-W2b-401: a debit note's and a self-invoice's switch under its lock; the self-invoice issued with its invoice.
+import { depthAtIssue, selfInvoiceAtIssue } from './self-invoices/hooks'
 
 /**
  * Issuing an invoice (B-W1-28 invoice core; A2 SCR-081 "Check and issue"; FIN-057, FIN-061, FIN-085; DPR 633/1972
@@ -109,6 +111,8 @@ export async function issueInCommand(tools: CommandTools, invoiceId: string, per
   await honourPeriodLocks(tools, [{ companyId: invoice.companyId, day: date, refused: `the invoice is not issued today (${dayWords(date)})`, path: 'issueDate', record: { type: 'Invoice', id: invoice.id } }], periodLockOverride)
   // B-W2b-392: the tax rules again under the company's switches (FOR SHARE), the declaration of intent used, the stamp duty quarter.
   await taxDutiesAtIssue(tools, invoice, lines, date)
+  // B-W2b-401: a debit note or a self-invoice waits for the company's switch (GATE-ACCOUNTANT), read again under its lock.
+  await depthAtIssue(tools, invoice)
 
   // B-W1-51: a credit note on what is paid leaves a refund due (W2b), recorded on the audit row and by invoice.refund_due.
   const credited = invoice.docType === 'TD04' && invoice.creditOfId ? await creditedInvoiceOf(tx, invoice.creditOfId, invoice.id) : null
@@ -158,6 +162,8 @@ export async function issueInCommand(tools: CommandTools, invoiceId: string, per
     companyId: invoice.companyId,
     payload: { invoiceId: invoice.id, docType: invoice.docType, number: number.formatted, issueDate: number.documentDate, partyId: invoice.buyerPartyId, depositRequestId: invoice.depositRequestId },
   })
+  // B-W2b-401 (FIN-095): the self-invoice that names it is issued with it.
+  await selfInvoiceAtIssue(tools, invoice)
   if (credited && refundDue > 0) tools.emit({ type: 'invoice.refund_due', subject: invoice.id, companyId: invoice.companyId, payload: { invoiceId: invoice.id, creditOfId: credited.id, partyId: invoice.buyerPartyId } })
   // B-W2b-396 (VI1:02): a credit note of fees named against a bulk order gives their credit now.
   await feeCreditsAtIssue(tools, invoice, lines)

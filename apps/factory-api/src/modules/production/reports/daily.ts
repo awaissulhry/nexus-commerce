@@ -5,7 +5,7 @@ import { ForbiddenError, NotFoundError, UnauthenticatedError } from '@nexus/fact
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import { can, scopeWhere, type Actor, type Permission } from '@nexus/factory-domain/core/permissions'
 import { businessDate, businessDayRange, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
-import { dailyReport, laneKey, missingRoots, type DailyExtra, type DailyReport, type DailyScan, type LaneRef } from '@nexus/factory-domain/production/reports/daily'
+import { dailyReport, laneKey, missingRoots, type DailyExtra, type DailyFacts, type DailyReport, type DailyScan, type LaneRef } from '@nexus/factory-domain/production/reports/daily'
 import { PRODUCTION_REPORTS_VIEW } from '@nexus/factory-domain/production/reports/permissions'
 import { countKindOf, SCAN_KINDS } from '@nexus/factory-domain/production/scans/rules'
 import type { CommandCaller } from '../../../core/command'
@@ -130,6 +130,26 @@ export interface DailyRead {
 
 /** The report of one site and day, with the names the answers need. */
 export async function readDaily(db: Reader, site: ReportSite, day: BusinessDate): Promise<DailyRead> {
+  const built = await dailyFactsOf(db, site, day)
+  return { report: dailyReport(built.facts, built.laneOrder), lanes: built.lanes, styles: built.styles, people: built.people, scans: built.facts.scans, stationLanes: built.facts.stationLanes }
+}
+
+/** B-W2b-428: what the day's report is counted from (the reads above), for the report and the metric layer's facts alike. */
+export interface DailyBuilt {
+  readonly facts: DailyFacts
+  /** The lanes in the report's order: lines, then work centres. */
+  readonly laneOrder: readonly string[]
+  readonly lanes: ReadonlyMap<string, LaneName>
+  readonly styles: ReadonlyMap<string, { readonly id: string; readonly code: string; readonly name: string }>
+  readonly people: ReadonlyMap<string, { readonly people: number; readonly workingMinutes: number }>
+}
+
+/**
+ * B-W2b-428: the inputs of one site's day for factory-domain's dailyReport — the one calculation of the floor's output and
+ * scrap, read by the daily report (readDaily) and by the metric layer (modules/insights/facts/sources/production.ts, which
+ * also counts each hour of the day with it). Each extra carries when it happened (its hour).
+ */
+export async function dailyFactsOf(db: Reader, site: ReportSite, day: BusinessDate): Promise<DailyBuilt> {
   const range = businessDayRange(day, site.timezone)
   const scans = await scansOfDay(db, site.id, range)
   const reworks = await db.reworkOrder.findMany({
@@ -169,8 +189,8 @@ export async function readDaily(db: Reader, site: ReportSite, day: BusinessDate)
   }
   const inDay = (instant: Date | null) => instant !== null && instant >= range.start && instant < range.end
   const extras: DailyExtra[] = reworks.flatMap((rework) => [
-    ...(rework.sourceScanId === null && rework.status !== 'CANCELLED' && inDay(rework.createdAt) ? [{ lane: laneOfRework(rework), workOrderId: rework.workOrderId, workOrderSizeId: rework.workOrderSizeId, scrap: 0, rework: rework.quantity }] : []),
-    ...(rework.status === 'DONE' && inDay(rework.doneAt) ? [{ lane: laneOfRework(rework), workOrderId: rework.workOrderId, workOrderSizeId: rework.workOrderSizeId, scrap: rework.scrapQuantity, rework: 0 }] : []),
+    ...(rework.sourceScanId === null && rework.status !== 'CANCELLED' && inDay(rework.createdAt) ? [{ lane: laneOfRework(rework), workOrderId: rework.workOrderId, workOrderSizeId: rework.workOrderSizeId, scrap: 0, rework: rework.quantity, at: rework.createdAt }] : []),
+    ...(rework.status === 'DONE' && inDay(rework.doneAt) ? [{ lane: laneOfRework(rework), workOrderId: rework.workOrderId, workOrderSizeId: rework.workOrderSizeId, scrap: rework.scrapQuantity, rework: 0, at: rework.doneAt! }] : []),
   ])
 
   // Each active line's people (a headcount, never who) and working minutes that day.
@@ -185,27 +205,25 @@ export async function readDaily(db: Reader, site: ReportSite, day: BusinessDate)
     people.set(line.id, { people: lane ? effectiveOf(lane, settings).people : 0, workingMinutes: calendar ? (workingTimeOf(calendar.calendar, day, day).minutes ?? 0) : 0 })
   }
 
-  const report = dailyReport(
-    {
-      day,
-      timeZone: site.timezone,
-      scans,
-      bundles: new Map(bundles.map((bundle) => [bundle.id, { part: bundle.part, status: bundle.status, workOrderSizeId: bundle.workOrderSizeId }])),
-      operations: new Map(operations.map((operation) => [operation.id, { workOrderId: operation.workOrderId, seq: operation.seq, scanRequired: operation.scanRequired, workCentreId: operation.workCentreId, standardMinutes: operation.standardMinutes.toString() }])),
-      workOrders: new Map(workOrders.map((row) => [row.id, { styleId: row.styleId }])),
-      sizes: new Map(cells.map((cell) => [cell.id, cell.size])),
-      stationLanes,
-      laneCentres,
-      extras,
-      available: people,
-    },
-    [...lines.map((line) => laneKey({ kind: 'LINE', id: line.id })), ...centres.map((centre) => laneKey({ kind: 'WORK_CENTRE', id: centre.id }))],
-  )
+  const facts: DailyFacts = {
+    day,
+    timeZone: site.timezone,
+    scans,
+    bundles: new Map(bundles.map((bundle) => [bundle.id, { part: bundle.part, status: bundle.status, workOrderSizeId: bundle.workOrderSizeId }])),
+    operations: new Map(operations.map((operation) => [operation.id, { workOrderId: operation.workOrderId, seq: operation.seq, scanRequired: operation.scanRequired, workCentreId: operation.workCentreId, standardMinutes: operation.standardMinutes.toString() }])),
+    workOrders: new Map(workOrders.map((row) => [row.id, { styleId: row.styleId }])),
+    sizes: new Map(cells.map((cell) => [cell.id, cell.size])),
+    stationLanes,
+    laneCentres,
+    extras,
+    available: people,
+  }
+  const laneOrder = [...lines.map((line) => laneKey({ kind: 'LINE', id: line.id })), ...centres.map((centre) => laneKey({ kind: 'WORK_CENTRE', id: centre.id }))]
   const names = new Map<string, LaneName>([
     ...lines.map((line) => [laneKey({ kind: 'LINE', id: line.id }), { code: line.code, name: line.name }] as const),
     ...centres.map((centre) => [laneKey({ kind: 'WORK_CENTRE', id: centre.id }), { code: centre.code, name: centre.name }] as const),
   ])
-  return { report, lanes: names, styles: new Map(styles.map((row) => [row.id, row])), people, scans, stationLanes }
+  return { facts, laneOrder, lanes: names, styles: new Map(styles.map((row) => [row.id, row])), people }
 }
 
 /** The report as the answers carry it: names on the lanes, rows by style code then size. */
