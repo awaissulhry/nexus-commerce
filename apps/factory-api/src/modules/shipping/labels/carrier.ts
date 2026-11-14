@@ -8,6 +8,7 @@ import type { CommandCaller } from '../../../core/command'
 import { loadFactoryEnv } from '../../../env'
 import { gatewayAccount, GatewayCallFailed, GatewayRefusal, ProviderError, type Gateway } from '../../../platform/gateway/gateway'
 import { processGateway } from '../../../platform/gateway/service'
+import { testCarrier, type TestCarrier } from '../test-mode/label'
 
 /**
  * The carrier behind the gateway (B-W1-48; plan A1 §4; Commerce hard rule 4 for the factory). Each carrier operation is
@@ -24,6 +25,11 @@ export interface CarrierRuntime {
   readonly environment: LabelEnvironment
   /** The FAKE of this process (local and test), or null. */
   readonly fake: FakeSendcloud | null
+  /**
+   * B-W2b-390 (LOG-035): the TEST carrier of a site in test mode: in the process, no gateway call, no account, nothing sent or
+   * charged; its labels are marked TEST (test-mode/label.ts). Every environment has it (training costs nothing).
+   */
+  readonly test: TestCarrier
   createLabel(caller: CommandCaller, accountId: string, request: CarrierLabelRequest): Promise<CarrierLabel>
   labelDocument(caller: CommandCaller, accountId: string, providerId: string, format: LabelFormat): Promise<LabelDocument>
   voidLabel(caller: CommandCaller, accountId: string, providerId: string): Promise<VoidOutcome>
@@ -49,6 +55,8 @@ export function createCarrierRuntime(options: CarrierRuntimeOptions): CarrierRun
   return Object.freeze({
     environment: options.environment,
     fake: options.fake,
+    // B-W2b-390 (LOG-035)
+    test: testCarrier,
     createLabel: (caller, accountId, request) =>
       options.gateway.call(
         gatewayAccount(caller, accountId),
