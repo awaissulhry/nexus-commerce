@@ -132,7 +132,9 @@ export interface Actual {
   readonly total: number
   /** COMPLETION: the value moved to finished goods (0 or less). */
   readonly movedToStock: number
-  /** What is still on the work order: total + movedToStock. */
+  /** B-W2b-411: what a close took off (its VARIANCE and CLOSE entries, net of an undone close's reversals). */
+  readonly settled: number
+  /** What is still on the work order: total + movedToStock + settled (0 once a settled close stands). */
   readonly onWorkOrder: number
   /** The leather of scrapped garments at the issue's value (a part of `material`). */
   readonly scrapLost: number
@@ -157,6 +159,7 @@ export function actualOf(entries: readonly EntryFacts[], currency: string): Actu
   const adjustment = sumOf(entries, ['ADJUSTMENT'])
   const total = material + labour + subcontract + overhead + adjustment
   const movedToStock = sumOf(entries, ['COMPLETION'])
+  const settled = sumOf(entries, ['VARIANCE', 'CLOSE'])
   const records = entries.filter((entry) => entry.kind === 'SCRAP' && entry.scrapRecord)
   return {
     material,
@@ -166,7 +169,8 @@ export function actualOf(entries: readonly EntryFacts[], currency: string): Actu
     adjustment,
     total,
     movedToStock,
-    onWorkOrder: total + movedToStock,
+    settled,
+    onWorkOrder: total + movedToStock + settled,
     scrapLost: toMinorUnits(valueAt(records, (entry) => entry.unitCost).toFixed(), currency),
     scrapFromStock: entries.filter((entry) => entry.kind === 'SCRAP' && !entry.scrapRecord).reduce((sum, entry) => sum + entry.amount, 0),
   }

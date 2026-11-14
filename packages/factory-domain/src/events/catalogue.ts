@@ -293,6 +293,8 @@ import { events as costRates } from '../cost-rates/events'
 import { events as eInvoicing } from '../e-invoicing/events'
 // B-W2b-418: the cost sheet's components (cost_sheet.components_written, leather_cost_basis.changed, cost_uplift.changed).
 import { events as costSheets } from '../cost-sheets/events'
+// B-W2b-411: the work order close (work_order_close.changed).
+import { events as workOrderClose } from '../work-order-close/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -651,6 +653,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...eInvoicing,
   // B-W2b-418
   ...costSheets,
+  // B-W2b-411
+  ...workOrderClose,
 ] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
