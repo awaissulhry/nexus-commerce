@@ -127,6 +127,10 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/home/reports/[key]/print',
   // B-W2a-78: Home › Insights › Alerts (SCR-234).
   '/home/alerts',
+  // B-W2b-433: Home › Insights › KPI library (SCR-249), a KPI (SCR-470) and the records behind it (SCR-471).
+  '/home/kpis',
+  '/home/kpis/[key]',
+  '/home/kpis/[key]/records',
   '/records/[type]/[id]',
   '/sales/customers',
   '/sales/customers/[partyId]',

@@ -123,6 +123,8 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   Task: '/home/tasks?open=[id]',
   // Home › Insights › Reports (SCR-104, B-W2a-79): a report of the standard pack by its key (`sales.late-orders`).
   Report: '/home/reports/[id]',
+  // B-W2b-433: Home › Insights › KPI library (SCR-249): a KPI by its key (`delivery.otif`; SCR-470).
+  Kpi: '/home/kpis/[id]',
   // Home › Alerts (SCR-234, B-W2a-78): an exception rule's alert opens in its DetailModal on the list (Today's RULE_ALERT
   // row and the bell's `alert:` anchor follow).
   Alert: '/home/alerts?open=[id]',
@@ -259,6 +261,8 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/sales/orders': '/sales/orders',
   // B-W2a-79: the report library (SCR-104).
   '/reports': '/home/reports',
+  // B-W2b-433: the KPI library (SCR-249) reads `?q=` and `?area=`.
+  '/insights/kpis': '/home/kpis',
   '/product/styles': '/products/styles',
   '/product/materials': '/products/materials',
   '/product/operations': '/products/operations',

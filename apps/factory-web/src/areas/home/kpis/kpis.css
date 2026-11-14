@@ -1,0 +1,227 @@
+/*
+ * Home › Insights › KPI library (SCR-249, the KPI record SCR-470, the records behind a KPI SCR-471) LAYOUT: the library,
+ * a KPI's band and tabs, Definition (in words beside Now), Where used, History (versions beside the comparison), the
+ * owner's version form and the records page. The controls are the design system's; this file only places them, with
+ * semantic tokens (no colours of its own). No page max-width (Owner rule 2026-10-29): every page fills the shell's main
+ * area; on a wide screen two columns share it.
+ */
+.fw-kpi,
+.fw-kpi-stack,
+.fw-kpi-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-kpi-section {
+  gap: var(--nds-space-10, var(--nds-space-8));
+}
+
+.fw-kpi-band,
+.fw-kpi-meta,
+.fw-kpi-actions,
+.fw-kpi-chips,
+.fw-kpi-row,
+.fw-kpi-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-kpi-tags {
+  gap: var(--nds-space-4) var(--nds-space-6);
+}
+
+.fw-kpi-row--between {
+  justify-content: space-between;
+}
+
+.fw-kpi-recband {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-kpi-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-kpi-h {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  font-size: var(--nds-font-size-lg);
+  font-weight: 600;
+}
+
+.fw-kpi-h3 {
+  margin: 0;
+  font-size: var(--nds-font-size-md, var(--nds-font-size-sm));
+  font-weight: 600;
+}
+
+.fw-kpi-muted {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+}
+
+p.fw-kpi-muted[role='status'],
+span.fw-kpi-muted[role='status'] {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-kpi-link {
+  color: var(--nds-text-link);
+}
+
+/* The library's KPI cell: the name (a real link: ⌘-click opens a new tab) over its plain definition, two lines at most. */
+.fw-kpi-cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2, 2px);
+  padding-block: var(--nds-space-6);
+  min-width: 0;
+  line-height: 1.35;
+}
+
+.fw-kpi-sub {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.fw-kpi-value {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2, 2px);
+  padding-block: var(--nds-space-6);
+  line-height: 1.3;
+  min-width: 0;
+}
+
+.fw-kpi-value strong {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Two columns that share the main area on a wide screen (Definition: words · Now; History: versions · comparison). */
+.fw-kpi-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-14);
+  align-items: start;
+  min-width: 0;
+}
+
+@media (min-width: 1100px) {
+  .fw-kpi-split {
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  }
+}
+
+.fw-kpi-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-kpi-text {
+  margin: 0;
+  white-space: pre-line;
+  line-height: 1.5;
+}
+
+.fw-kpi-formula {
+  margin: 0;
+  font-family: var(--nds-font-mono, ui-monospace, monospace);
+  font-size: var(--nds-font-size-sm);
+  white-space: pre-line;
+  line-height: 1.5;
+}
+
+.fw-kpi-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+.fw-kpi-spark {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+  color: var(--nds-primary);
+}
+
+.fw-kpi-uses {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-kpi-use-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+/* The owner's version form: Italian beside English on a wide screen. */
+.fw-kpi-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-12) var(--nds-space-14);
+  min-width: 0;
+}
+
+@media (min-width: 760px) {
+  .fw-kpi-form {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+.fw-kpi-form .fw-kpi-wide {
+  grid-column: 1 / -1;
+}
+
+.fw-kpi-foot {
+  margin-top: var(--nds-space-4);
+}
+
+.fw-kpi-code {
+  font-family: var(--nds-font-mono, ui-monospace, monospace);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-kpi-groups {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+@media (min-width: 1100px) {
+  .fw-kpi-groups {
+    grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  }
+}
