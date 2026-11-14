@@ -21,6 +21,11 @@ export type FatturaPaDocumentType =
   | 'TD04'
   /** Deferred invoice from DDTs, DPR 633/1972 art. 21 c.4 terzo periodo lett. a). */
   | 'TD24'
+  /** B-W2b-401 (td-extra.ts): the debit note TD05 and the self-invoices TD17, TD18, TD19. */
+  | 'TD05'
+  | 'TD17'
+  | 'TD18'
+  | 'TD19'
 
 /** A calendar date, "YYYY-MM-DD". */
 export type LocalDate = string

@@ -7,6 +7,8 @@ import { asMoney } from '@nexus/factory-domain/money/marked'
 import type { CommandCaller } from '../../core/command'
 import { actorOf } from '../../core/context'
 import { paymentTermsOf } from './facts'
+// B-W2b-401 (FIN-095): self-invoices hold purchase amounts: listed only for a person who sees costs.
+import { SELF_INVOICE_DOC_TYPES } from '@nexus/factory-domain/invoicing/self-invoices/self-invoices'
 import { balanceOf, filesPending, invoiceDetail, officeContextOf, officeInvoice, type InvoiceDetail } from './store'
 
 /**
@@ -36,6 +38,10 @@ export interface ListInvoicesQuery {
 
 const day = (value: string): Date => new Date(`${value}T00:00:00.000Z`)
 
+/** B-W2b-401: the self-invoices (purchase amounts) only where the caller sees costs; every other type as before. */
+const costsSeen = (costs: Prisma.InvoiceWhereInput): Prisma.InvoiceWhereInput =>
+  Object.keys(costs).length === 0 ? {} : { OR: [{ docType: { notIn: [...SELF_INVOICE_DOC_TYPES] } }, costs] }
+
 export async function listInvoices(caller: CommandCaller, query: ListInvoicesQuery) {
   const context = officeContextOf(caller)
   const where: Prisma.InvoiceWhereInput = {
@@ -49,6 +55,8 @@ export async function listInvoices(caller: CommandCaller, query: ListInvoicesQue
       query.from ? { issueDate: { gte: day(query.from) } } : {},
       query.to ? { issueDate: { lte: day(query.to) } } : {},
       query.cursor ? { id: { lt: query.cursor } } : {},
+      // B-W2b-401: a self-invoice's amounts are a purchase's (money.cost).
+      costsSeen(scopeWhere(actorOf(context), 'money.cost', { company: 'companyId', party: 'buyerPartyId' }) as Prisma.InvoiceWhereInput),
     ],
   }
   const rows = await caller.withClient((client) =>

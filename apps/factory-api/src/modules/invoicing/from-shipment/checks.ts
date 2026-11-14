@@ -6,6 +6,8 @@ import { ddtInvoiceProblems, type DdtFacts } from '@nexus/factory-domain/invoici
 import type { InvoiceRow, LineRow, Reader } from '../store'
 import { creditedInvoiceOf, depositInvoicesOf, freightBilledOf, freightOf, invoicedOf, readDdts, shippedOf } from './store'
 import { returnCreditIssueProblems } from '../credit-note/checks'
+// B-W2b-401: the invoice a debit note adds to, the supplier's invoice a self-invoice integrates (DatiFattureCollegate).
+import { depthRelatedOf } from '../self-invoices/hooks'
 
 /**
  * The checks of B-W1-51 that the issue adds to the invoice core's (facts.ts reviewIssue: the "Before you issue" panel,
@@ -45,7 +47,7 @@ export async function issueReferences(db: Reader, invoice: InvoiceRow, lines: re
   return {
     ddts: ddts.map((ddt) => ({ number: ddt.number, date: ddt.date })),
     ddtNumbers,
-    credits: credited && credited.number && credited.issueDate ? { number: credited.number, issueDate: credited.issueDate.toISOString().slice(0, 10) } : null,
+    credits: credited && credited.number && credited.issueDate ? { number: credited.number, issueDate: credited.issueDate.toISOString().slice(0, 10) } : await depthRelatedOf(db, invoice),
     deposits: new Map(deposits.flatMap((row) => (row.number && row.issueDate ? [[row.id, { number: row.number, issueDate: row.issueDate.toISOString().slice(0, 10) }] as const] : []))),
   }
 }

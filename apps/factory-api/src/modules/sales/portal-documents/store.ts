@@ -1,5 +1,7 @@
 import type { FactoryClient, Prisma } from '@nexus/factory-db'
 import { SHOWN_INVOICE_STATUSES } from '@nexus/factory-domain/sales/portal-documents/library'
+// B-W2b-401: never a self-invoice in the portal.
+import { SELF_INVOICE_DOC_TYPES } from '@nexus/factory-domain/invoicing/self-invoices/self-invoices'
 import { STYLE_SELECT } from '../../product/compliance/read'
 
 /**
@@ -73,7 +75,8 @@ export type InvoiceRow = Prisma.InvoiceGetPayload<{ select: typeof INVOICE_SELEC
 /** The party's issued invoices and credit notes of the portal's company (never a draft, never one SDI rejected). */
 export const readInvoices = (db: Reader, companyId: string): Promise<InvoiceRow[]> =>
   db.invoice.findMany({
-    where: { companyId, status: { in: [...SHOWN_INVOICE_STATUSES] } },
+    // B-W2b-401: a self-invoice (TD16-TD19) names the supplier as its buyer but is the company's own VAT document: never shown.
+    where: { companyId, status: { in: [...SHOWN_INVOICE_STATUSES] }, docType: { notIn: [...SELF_INVOICE_DOC_TYPES] } },
     select: INVOICE_SELECT,
     orderBy: [{ issuedAt: 'desc' }, { id: 'desc' }],
     take: INVOICES_MAX,

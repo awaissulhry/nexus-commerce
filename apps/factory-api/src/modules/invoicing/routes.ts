@@ -58,6 +58,15 @@ import { archiveRuleContract, createRuleContract, decideOrderContract, listRules
 import { archiveRule, createRule, listRules, updateRule } from './cancellation/rules'
 import { decideOrder, orderOutcome } from './cancellation/orders'
 import { creditFee, feeCreditContract, invoiceOrderFees, invoiceSampleRound, orderFeesInvoiceContract, sampleRoundInvoiceContract } from './from-shipment/fees'
+// B-W2b-401: e-invoicing in depth.
+import { eInvoicingSettingsContract, putDepthRulesContract, putTestModeContract } from './test-mode/contract'
+import { eInvoicingSettings, putDepthRules, putTestMode } from './test-mode/settings'
+import { companyCopiesContract, invoiceCopiesContract, makeCopiesContract } from './archive-copy/contract'
+import { companyCopies, invoiceCopies, makeCopies } from './archive-copy/copies'
+import { cancelSelfInvoiceContract, createSelfInvoiceContract, getSelfInvoiceContract, listSelfInvoicesContract, selfInvoiceCandidatesContract } from './self-invoices/contract'
+import { cancelSelfInvoice, createSelfInvoice, getSelfInvoice, listSelfInvoices, selfInvoiceCandidates } from './self-invoices/self-invoices'
+import { createDebitNoteContract, debitNotesContract, vatTimeLimitContract } from './debit-notes/contract'
+import { createDebitNote, debitNotesOf, vatTimeLimit } from './debit-notes/debit-notes'
 
 /**
  * Invoices (B-W1-28 invoice core and the deposit invoice; A2 SCR-080, SCR-081): the list and the record, drafts (generic
@@ -181,4 +190,26 @@ export default defineRoutes('invoicing', manifest, async (app) => {
   app.post('/invoicing/orders/:orderId/fees/invoice', { schema: orderFeesInvoiceContract }, async (request, reply) => reply.code(201).send(await invoiceOrderFees(request, request.params.orderId, idempotencyKeyFrom(request))))
   app.post('/invoicing/invoices/from-sample-round', { schema: sampleRoundInvoiceContract }, async (request, reply) => reply.code(201).send(await invoiceSampleRound(request, request.body, idempotencyKeyFrom(request))))
   app.post('/invoicing/fee-lines/:lineId/credit', { schema: feeCreditContract }, async (request) => creditFee(request, request.params.lineId, request.body, idempotencyKeyFrom(request)))
+
+  // B-W2b-401: e-invoicing in depth (handlers in ./test-mode, ./archive-copy, ./self-invoices, ./debit-notes): a company's test
+  // mode, simulated answer and switch, our own copies and the readiness to swap the intermediary, self-invoices TD17-TD19, the
+  // debit note TD05 and the time limit on VAT decreases.
+  app.get('/invoicing/e-invoicing/settings', { schema: eInvoicingSettingsContract }, async (request) => eInvoicingSettings(processSdi(), request))
+  app.put('/invoicing/e-invoicing/settings/:companyId', { schema: putTestModeContract }, async (request) =>
+    putTestMode(processSdi(), request, request.params.companyId, request.body, idempotencyKeyFrom(request), () => requireStepUp(officeAuthOf(app), request)),
+  )
+  app.put('/invoicing/e-invoicing/settings/:companyId/rules', { schema: putDepthRulesContract }, async (request) =>
+    putDepthRules(processSdi(), request, request.params.companyId, request.body, idempotencyKeyFrom(request), () => requireStepUp(officeAuthOf(app), request)),
+  )
+  app.get('/invoicing/e-invoicing/copies', { schema: companyCopiesContract }, async (request) => companyCopies(request, request.query))
+  app.post('/invoicing/e-invoicing/copies/:companyId/make', { schema: makeCopiesContract }, async (request) => makeCopies(processFiles(), request, request.params.companyId))
+  app.get('/invoicing/invoices/:invoiceId/copies', { schema: invoiceCopiesContract }, async (request) => invoiceCopies(request, request.params.invoiceId))
+  app.get('/invoicing/self-invoices', { schema: listSelfInvoicesContract }, async (request) => listSelfInvoices(request, request.query))
+  app.get('/invoicing/self-invoices/candidates', { schema: selfInvoiceCandidatesContract }, async (request) => selfInvoiceCandidates(request, request.query))
+  app.get('/invoicing/self-invoices/:selfInvoiceId', { schema: getSelfInvoiceContract }, async (request) => getSelfInvoice(request, request.params.selfInvoiceId))
+  app.post('/invoicing/self-invoices', { schema: createSelfInvoiceContract }, async (request, reply) => reply.code(201).send(await createSelfInvoice(request, request.body, idempotencyKeyFrom(request))))
+  app.post('/invoicing/self-invoices/:selfInvoiceId/cancel', { schema: cancelSelfInvoiceContract }, async (request) => cancelSelfInvoice(request, request.params.selfInvoiceId, request.body, idempotencyKeyFrom(request)))
+  app.post('/invoicing/invoices/:invoiceId/debit-note', { schema: createDebitNoteContract }, async (request, reply) => reply.code(201).send(await createDebitNote(request, request.params.invoiceId, request.body, idempotencyKeyFrom(request))))
+  app.get('/invoicing/invoices/:invoiceId/debit-notes', { schema: debitNotesContract }, async (request) => debitNotesOf(request, request.params.invoiceId))
+  app.get('/invoicing/invoices/:invoiceId/vat-time-limit', { schema: vatTimeLimitContract }, async (request) => vatTimeLimit(request, request.params.invoiceId, request.query))
 })

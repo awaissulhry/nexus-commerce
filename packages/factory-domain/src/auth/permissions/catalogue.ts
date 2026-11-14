@@ -381,6 +381,10 @@ import { DEPOSIT_RULES_DEFINITIONS, DEPOSIT_RULES_PERMISSIONS } from '../../invo
 import { COST_ACTUALS_DEFINITIONS, COST_ACTUALS_PERMISSIONS } from '../../costing/landed/permissions'
 // B-W2b-428: the metric layer (home.kpis.view, home.kpis.manage: the KPI library, its versions, the facts).
 import { HOME_KPIS_DEFINITIONS, HOME_KPIS_PERMISSIONS } from '../../insights/kpis/permissions'
+// B-W2b-401: e-invoicing in depth (invoices.testMode.manage).
+import { TEST_MODE_DEFINITIONS, TEST_MODE_PERMISSIONS } from '../../invoicing/test-mode/permissions'
+// B-W2b-418: the cost sheet's components (costing.sheets.manage).
+import { COST_SHEET_COMPONENTS_DEFINITIONS, COST_SHEET_COMPONENTS_PERMISSIONS } from '../../costing/sheet-components/permissions'
 // B-W2b-404: security in depth (security.settings.manage, users.sessions.manage).
 import { SECURITY_SETTINGS_DEFINITIONS, USER_SESSIONS_DEFINITIONS } from '../sessions/permissions'
 
@@ -1073,6 +1077,10 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   COST_ACTUALS_DEFINITIONS,
   // B-W2b-428: the metric layer (area `home`).
   HOME_KPIS_DEFINITIONS,
+  // B-W2b-401: e-invoicing in depth (area `invoices`).
+  TEST_MODE_DEFINITIONS,
+  // B-W2b-418: the cost sheet's components (area `costing`).
+  COST_SHEET_COMPONENTS_DEFINITIONS,
   // B-W2b-404: session lengths and step-up rules, a person's sessions (areas `security`, `users`).
   SECURITY_SETTINGS_DEFINITIONS,
   USER_SESSIONS_DEFINITIONS,
@@ -1460,6 +1468,10 @@ for (const name of DEPOSIT_RULES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclare
 for (const name of COST_ACTUALS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-428: the metric layer.
 for (const name of HOME_KPIS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-401: e-invoicing in depth.
+for (const name of TEST_MODE_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-418: the cost sheet's components.
+for (const name of COST_SHEET_COMPONENTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

@@ -47,6 +47,6 @@ export const STEP_UP_ACTIONS: readonly StepUpAction[] = Object.freeze([
   action('email.identities', ['email.manage']),
   action('branding.change', ['documents.branding.manage']),
   action('signatures.sign', ['quality.amendments.sign', 'safety.risk.sign', 'compliance.techfiles.sign', 'compliance.claims.approve', 'compliance.ppeTexts.manage', 'purchasing.compliance.override'], 'SIGNATURE'),
-  action('legal.outward', ['compliance.techfiles.share', 'compliance.recall.send', 'people.privacy.manage', 'people.piecerates.switch'], 'LEGAL'),
+  action('legal.outward', ['compliance.techfiles.share', 'compliance.recall.send', 'people.privacy.manage', 'people.piecerates.switch', 'invoices.testMode.manage'], 'LEGAL'),
   action('security.settings', ['security.settings.manage'], 'SECURITY'),
 ])
