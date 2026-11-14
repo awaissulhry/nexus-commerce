@@ -381,6 +381,9 @@ model ShipmentLine {
   serials        GarmentSerial[]
   // W2b inventory.prisma (B-W2b-01): the SHIPMENT moves that took its garments out of finished goods.
   stockMoves     StockMove[]
+  // W2b-6 cost-actuals.prisma (wave 54/57): the cost of its goods sold.
+  /// @not-money the relation to cost of goods sold (the rows carry the grain)
+  costOfSalesEntries CostOfSalesEntry[]
   // W2b-6 packing.prisma (wave 46/57): the cartons its garments lie in.
   parcelLines    ParcelLine[]
 
