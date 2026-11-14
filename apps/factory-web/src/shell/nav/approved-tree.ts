@@ -67,6 +67,8 @@ export const OFFICE: readonly TreeArea[] = [
         hideLabel: false,
         pages: [
           { id: 'home.reports', title: 'Reports', titleIt: 'Report', wave: 'W2a', href: '/home/reports' },
+          // W2b: B-W2b-433 the KPI library (SCR-249).
+          { id: 'home.kpis', title: 'KPI library', titleIt: 'Indicatori', wave: 'W2b', href: '/home/kpis' },
           { id: 'home.alerts', title: 'Alerts', titleIt: 'Avvisi', wave: 'W2a', href: '/home/alerts' },
         ],
       },
