@@ -10,6 +10,10 @@ import { CARRIER_RETURN_STATES } from '@nexus/factory-domain/shipping/shipments/
 import { TRANSPORT_MODES } from '@nexus/factory-domain/shipping/shipments/transport'
 import { periodLockOverride } from '@nexus/factory-domain/accounting/contracts'
 import { freightSchema, oneShipment, statusSchema, transportBySchema } from '../views'
+// B-W2b-386: the ready list's ship-by day, cut-off and risk.
+import { businessDate as businessDateSchema } from '@nexus/factory-domain/core/contracts'
+import { AT_RISK_MINUTES_RANGE, QUEUE_RISKS } from '@nexus/factory-domain/shipping/queue/risk'
+import { queueCutOffSchema } from '../queue/contract'
 
 /**
  * The office's shipments (LOG-001, LOG-002, LOG-039; A2 SCR-066, SCR-067): what is released and not yet shipped, the
@@ -29,11 +33,17 @@ export const readyContract = defineContract({
     /** B-W2a-48: a page of orders at a time (by number); the cursor is the last order of the page before. */
     cursor: id().optional(),
     limit: z.coerce.number().int().min(1).max(200).default(100),
+    // B-W2b-386: minutes before the cut-off from which garments due today and on no shipment are at risk (default 120).
+    warnMinutes: z.coerce.number().int().min(AT_RISK_MINUTES_RANGE.min).max(AT_RISK_MINUTES_RANGE.max).optional(),
   }),
   response: {
     200: output({
       orders: z.array(
         output({
+          // B-W2b-386 (LOG-018, LOG-110): the earliest ship-by day of its released garments, at the site of those garments,
+          // with that site's cut-off today; its risk against them (released garments due and on no shipment yet).
+          shipBy: output({ day: businessDateSchema(), siteId: id(), cutOff: queueCutOffSchema.nullable() }).nullable(),
+          risk: z.enum(QUEUE_RISKS),
           salesOrderId: id(),
           number: z.string(),
           customerRef: z.string().nullable(),
@@ -66,6 +76,8 @@ export const readyContract = defineContract({
               /** B-W2a-48: of those, garments its work order has in finished goods (they leave from stock). */
               inStock: z.number().int(),
               serialTracked: z.boolean(),
+              /** B-W2b-386: the current promise of its line and size (null: none known). */
+              shipBy: businessDateSchema().nullable(),
             }),
           ),
         }),

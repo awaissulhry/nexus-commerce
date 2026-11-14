@@ -1755,6 +1755,8 @@
     "shipping_freight_manage": "Set the freight charged to customers",
     "shipping_evidence_manage": "Keep the intra-EU transport evidence",
     "shipping_packaging_manage": "Keep packaging types and carton marks",
+    "shipping_holds_manage": "Put shipments on hold and release them",
+    "shipping_holds_release": "Release money and system holds on shipments",
     "parties_view": "See customers and suppliers",
     "parties_manage": "Add and edit customers and suppliers",
     "parties_block": "Block and unblock a customer or supplier",

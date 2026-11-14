@@ -110,7 +110,8 @@
       "SMV_CHANGE": "SMV changes to approve",
       "PLAN_VERSION": "Inspection plan versions to approve",
       "APPROVAL_TASK": "Requests waiting for your yes",
-      "INQUIRY_WAITING": "Inquiries waiting over a working day"
+      "INQUIRY_WAITING": "Inquiries waiting over a working day",
+      "SHIPMENT_AT_RISK": "Shipments at risk of missing their promise"
     },
     "severity": {
       "HIGH": "Urgent",
@@ -594,7 +595,13 @@
       "INQUIRY_WAITING.NEW": "Inquiry {number} from {from} has waited more than a working day, and nobody has it yet.",
       "INQUIRY_WAITING.blocks": "The customer waits for an answer.",
       "why.INQUIRY_WAITING.sales_inquiries_manage": "You answer this company's inquiries.",
-      "why.INQUIRY_WAITING.assigned": "It was given to you."
+      "why.INQUIRY_WAITING.assigned": "It was given to you.",
+      "SHIPMENT_AT_RISK.LATE": "Shipment {number} for {customer} was due to leave on {shipByDate} and has not left.",
+      "SHIPMENT_AT_RISK.HELD": "Shipment {number} for {customer} is due to leave by {shipByDate} and is on hold.",
+      "SHIPMENT_AT_RISK.MISSED_CUT_OFF": "Shipment {number} for {customer} is due to leave today and missed its carrier's cut-off.",
+      "SHIPMENT_AT_RISK.AT_RISK": "Shipment {number} for {customer} is due to leave today and is not packed, with the carrier's cut-off near.",
+      "SHIPMENT_AT_RISK.blocks": "The customer gets the goods later than promised.",
+      "why.SHIPMENT_AT_RISK.shipping_manage": "You plan and ship this site's shipments."
     },
     "actions": {
       "menu": "Actions on {record}",

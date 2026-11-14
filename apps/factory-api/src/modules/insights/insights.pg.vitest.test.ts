@@ -319,7 +319,8 @@ describe('the owner: everything that waits, from every area and company, ranked'
     // B-W2b-F13b: + DELIVERY_ADDRESS.
     // B-W2b-307: + CHANGE_ORDER, SMV_CHANGE, PLAN_VERSION, APPROVAL_TASK.
     // B-W2b-385: + INQUIRY_WAITING (inquiries waiting for us over a working day).
-    expect(answer.counts.byKind.map((entry: Json) => entry.kind)).toHaveLength(25)
+    // B-W2b-386: + SHIPMENT_AT_RISK (shipments at risk of missing their promise).
+    expect(answer.counts.byKind.map((entry: Json) => entry.kind)).toHaveLength(26)
     for (const entry of answer.counts.byKind as Json[]) {
       const pressed = await ok('owner', `/home/today?limit=200&kind=${entry.kind}`)
       expect(pressed.total, entry.kind).toBe(entry.count)

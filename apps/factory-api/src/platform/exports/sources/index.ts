@@ -75,6 +75,8 @@ import { mtmProfiles } from '../../../modules/sales/mtm/list-filters/export-sour
 // B-W2b-383: Warehouse › Transfers and Planning › Master schedule & S&OP's production strategy (W2b-5 lists without one).
 import { transfers } from './transfers'
 import { mps } from './mps'
+// B-W2b-386: Warehouse › Shipments › Search and history (the page's second list).
+import { shipmentsHistory } from './shipments-history'
 
 /**
  * Every list with an export (B-W2a-23; PLT-179), one file per list beside this one. A step that gives its list an export
@@ -162,4 +164,6 @@ export const EXPORT_SOURCES: readonly AnyExportSource[] = Object.freeze([
   // B-W2b-383: Warehouse › In the warehouse › Transfers; Planning › Long range › Master schedule & S&OP (strategy per item).
   transfers,
   mps,
+  // B-W2b-386: Warehouse › Shipments › Search and history.
+  shipmentsHistory,
 ])

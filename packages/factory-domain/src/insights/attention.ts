@@ -28,6 +28,8 @@ import { ORDERS_MANAGE, ORDERS_VIEW } from '../sales/orders/permissions'
 import { QUOTES_APPROVE, QUOTES_VIEW } from '../sales/quotes/permissions'
 // B-W2b-385 (NT1:02): an inquiry waiting for us over a working day.
 import { SALES_INQUIRIES_MANAGE, SALES_INQUIRIES_VIEW } from '../sales/inquiries/permissions'
+// B-W2b-386: shipments at risk of missing their promise.
+import { SHIPPING_MANAGE, SHIPPING_VIEW } from '../shipping/permissions'
 import { SUPPLIER_CHANGES_DECIDE, SUPPLIER_DOCUMENTS_REVIEW } from '../purchasing/portal-profile/permissions'
 import { Dec } from '../tax/decimal'
 import { TASKS_MANAGE } from '../tasks/permissions'
@@ -107,6 +109,10 @@ export const ATTENTION_KINDS = [
   // (the inquiries list's WAITING_US tile), for whoever has it, or — nobody has it yet — whoever answers the company's
   // inquiries; opened on the inquiry.
   'INQUIRY_WAITING',
+  // B-W2b-386 (LOG-110 "At-risk shipment queue"; design warehouse.shipments "At risk of missing the promise"): open shipments
+  // that will miss their promise (late, held, past their carrier's cut-off) or may (not packed with the cut-off near), for
+  // whoever works the dispatch desk; opened on the shipment.
+  'SHIPMENT_AT_RISK',
 ] as const
 export type AttentionKind = (typeof ATTENTION_KINDS)[number]
 
@@ -437,6 +443,17 @@ export const KIND_RULES: Readonly<Record<AttentionKind, KindRule>> = Object.free
     act: [SALES_INQUIRIES_MANAGE],
     decide: 'OPEN',
     live: ['inquiry.received', 'inquiry.changed', 'inquiry.closed'],
+  }),
+  // B-W2b-386: shipments that will miss their promise or may (modules/insights/sources/shipments-at-risk.ts), for the dispatch
+  // desk of their site.
+  SHIPMENT_AT_RISK: rule({
+    kind: 'SHIPMENT_AT_RISK',
+    category: 'ALERT',
+    label: 'Shipments at risk of missing their promise date',
+    view: SHIPPING_VIEW,
+    act: [SHIPPING_MANAGE],
+    decide: 'OPEN',
+    live: ['shipment.created', 'shipment.status_changed', 'shipment.packing_changed', 'shipment.hold_placed', 'shipment.hold_released', 'shipment.split', 'sales_order.promise_changed'],
   }),
   RULE_ALERT: rule({
     kind: 'RULE_ALERT',

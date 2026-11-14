@@ -7,6 +7,12 @@ import { mayOn, officeContextOf } from '../access'
 import { cellCounts } from '../cells'
 import { looseScope } from './backorder'
 import { finishedInStockByCell } from './stock'
+// B-W2b-386 (LOG-018, LOG-110): each cell's ship-by day, each order's site cut-off today and its risk.
+import { earliestDay, riskOf, type QueueRisk } from '@nexus/factory-domain/shipping/queue/risk'
+import { serverClock } from '../../../core/time'
+import { toUtcIso } from '@nexus/factory-domain/core/time'
+import { shipByLookup } from '../queue/promise'
+import { cutOffToday, siteDaysOf } from '../queue/site-day'
 
 /**
  * What is ready to ship (SCR-066; LOG-001, LOG-002, GAP-002): per sales order, each work order cell that quality
@@ -26,6 +32,8 @@ export interface ReadyQuery {
   readonly partyId?: string | undefined
   readonly cursor?: string | undefined
   readonly limit?: number | undefined
+  /** B-W2b-386: minutes before the cut-off from which garments due today and on no shipment are at risk. */
+  readonly warnMinutes?: number | undefined
 }
 
 export const READY_PAGE = 100
@@ -103,10 +111,25 @@ export async function readyToShip(caller: CommandCaller, query: ReadyQuery) {
       visible.map((cell) => ({ cellId: cell.id, workOrderId: cell.workOrder.id, styleId: cell.workOrder.styleId, colourwayId: cell.colourwayId, size: cell.size })),
     )
     const groups = readyBySalesOrder(visible.map((cell) => ({ ...cell, workOrderSizeId: cell.id, salesOrderId: cell.salesOrderLine.order.id, ...counts.get(cell.id)! })))
+    // B-W2b-386: the ship-by day of each cell (the current promise of its line and size) and, per order, its earliest one
+    // against the cut-off today of that cell's site (its default carrier's, else the site's): released garments due and on
+    // no shipment yet are not packed by the cut-off.
+    const now = serverClock.now()
+    const shipBy = await shipByLookup(client, visible.map((cell) => ({ salesOrderLineId: cell.salesOrderLineId, size: cell.size })))
+    const days = await siteDaysOf(client, [...new Set(visible.map((cell) => cell.siteId))], now)
+    const dueOf = (cells: readonly { readonly salesOrderLineId: string; readonly size: string; readonly siteId: string }[]) => {
+      const day = earliestDay(cells.map((cell) => shipBy(cell.salesOrderLineId, cell.size)))
+      const site = day === null ? null : days.get(cells.find((cell) => shipBy(cell.salesOrderLineId, cell.size) === day)!.siteId)
+      if (day === null || !site) return { shipBy: null, risk: 'NO_DATE' as QueueRisk }
+      const cutOff = cutOffToday(site, site.defaultCarrierCode ?? 'none', now)
+      const risk = riskOf({ shipBy: day, today: site.today, now, status: null, held: false, siteOpen: site.open, cutOffAt: cutOff?.at ?? null, dayEnd: site.dayEnd, warnMinutes: query.warnMinutes })
+      return { shipBy: { day, siteId: site.siteId, cutOff: cutOff ? { time: cutOff.time, at: toUtcIso(cutOff.at), source: cutOff.source, minutesLeft: cutOff.minutesLeft, passed: cutOff.passed } : null }, risk }
+    }
     return {
       orders: groups.map((group) => {
         const order = group.cells[0]!.salesOrderLine.order
         return {
+          ...dueOf(group.cells),
           salesOrderId: order.id,
           number: order.number,
           customerRef: order.customerRef,
@@ -134,6 +157,8 @@ export async function readyToShip(caller: CommandCaller, query: ReadyQuery) {
             shippable: cell.shippable,
             inStock: Math.min(inStock.get(cell.id) ?? 0, cell.shippable),
             serialTracked: cell.workOrder.style.garmentTracking === 'SERIAL',
+            // B-W2b-386: the current promise of the cell's line and size.
+            shipBy: shipBy(cell.salesOrderLineId, cell.size),
           })),
         }
       }),
