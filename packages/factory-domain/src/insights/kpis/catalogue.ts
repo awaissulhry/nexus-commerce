@@ -63,6 +63,9 @@ export type KpiDrill =
   | { readonly kind: 'LIST'; readonly api: string; readonly query: Readonly<Record<string, string>> }
 export const KPI_DRILL_KINDS = ['REPORT', 'LIST'] as const
 
+/** The units a RATIO may count in (B-W2b-429: an average of days, hours or minutes too). */
+export const RATIO_UNITS = ['PERCENT', 'RATIO', 'DAYS', 'HOURS', 'MINUTES'] as const satisfies readonly KpiUnit[]
+
 /** A KPI's key: lower-case dotted words (`delivery.otif`), up to 100 characters (the database's rule). */
 export const KPI_KEY = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/
 
@@ -75,7 +78,8 @@ export function kpiFileProblems(file: KpiFile): string[] {
   const known = measures.flatMap(({ measure }) => (measure ? [measure] : []))
   if (file.calc.kind === 'SUM' && known.some((measure) => measure.kind !== 'FLOW')) problems.push(`${file.key}: SUM reads FLOW measures only`)
   if (file.calc.kind === 'BALANCE' && known.some((measure) => measure.kind !== 'BALANCE')) problems.push(`${file.key}: BALANCE reads a BALANCE measure`)
-  if (file.calc.kind === 'RATIO' && file.unit !== 'PERCENT' && file.unit !== 'RATIO') problems.push(`${file.key}: a RATIO is a PERCENT or a RATIO`)
+  // B-W2b-429: an average (Σ days ÷ Σ orders, Σ pieces × days ÷ Σ pieces) is a RATIO in DAYS, HOURS or MINUTES, scaled by 1.
+  if (file.calc.kind === 'RATIO' && !(RATIO_UNITS as readonly string[]).includes(file.unit)) problems.push(`${file.key}: a RATIO is a PERCENT, a RATIO or an average in DAYS, HOURS or MINUTES`)
   if (file.calc.kind === 'RATIO' && (file.calc.scale === 100) !== (file.unit === 'PERCENT')) problems.push(`${file.key}: a percent scales by 100, a ratio by 1`)
   if (file.calc.kind === 'RATIO' && (!Number.isSafeInteger(file.calc.decimals) || file.calc.decimals < 0 || file.calc.decimals > 4)) problems.push(`${file.key}: 0 to 4 decimals`)
   if (file.unit === 'MONEY' && !file.grain) problems.push(`${file.key}: a MONEY KPI names its grain`)
