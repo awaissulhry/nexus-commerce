@@ -7,9 +7,10 @@ import type { IssueProblem } from '../checks'
  * run": customers with deferred invoicing, a preview per customer, a CheckList per invoice, "Issue and send n invoices"),
  * pure. The deferred invoices of a month are one session (DPR 633/1972 art. 21 c.4 lett. a: by the 15th of the next month):
  *
- *   PREVIEW   the office picks the customers of a company and a month; the run makes each customer's deferred invoice
- *             (TD24 of every DDT of the month still to invoice) as a draft that names the run. Picking again adds the
- *             new customers' drafts and deletes the drafts of the ones no longer picked (nothing issued yet).
+ *   PREVIEW   the office picks the customers of a company and a month; the run takes in each customer's loose TD24
+ *             drafts of the month and makes its deferred invoice (TD24 of every DDT of the month still to invoice) as a
+ *             draft that names the run. Picking again adds the new customers' drafts and lets go (keeps as drafts) those
+ *             of the ones no longer picked; deleting a preview lets go every draft.
  *   ISSUED    the office issues the run (step-up): every draft whose checks pass gets its number, its files and its send
  *             to SDI (test mode while the company is in it), one after the other; a draft that does not pass is let go
  *             from the run, stays a draft with its problems, and is named in the answer. The run is then ISSUED and frozen

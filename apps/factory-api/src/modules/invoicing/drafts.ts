@@ -540,10 +540,20 @@ export async function updateDraft(caller: CommandCaller, invoiceId: string, body
   })
 }
 
+/**
+ * B-W2b-396 (found in its live check): a draft a customs declaration proves an export against is not deleted (the database's
+ * reference would answer a 500): 409 in words. Also used by the monthly run's own deletes.
+ */
+export async function refuseNamedDraft(tx: CommandTx, invoiceId: string): Promise<void> {
+  const customs = await tx.customsDeclaration.findFirst({ where: { invoiceId }, select: { mrn: true, shipment: { select: { number: true } } } })
+  if (customs) throw new ConflictError(`The customs declaration of shipment ${customs.shipment.number}${customs.mrn ? ` (MRN ${customs.mrn})` : ''} names this draft invoice: change the declaration first.`)
+}
+
 /** invoices.manage: deletes a draft and its lines (it has no number: no gap). An issued invoice is never deleted. */
 export async function deleteDraft(caller: CommandCaller, invoiceId: string, query: { version?: number | undefined }, idempotencyKey?: string): Promise<{ deleted: true; id: string }> {
   const invoice = await officeInvoice(caller, invoiceId, INVOICES_MANAGE)
   return onDraft(caller, invoice, { name: 'invoices.deleteDraft', idempotencyKey, input: { invoiceId, ...query }, version: query.version }, async (tools, current) => {
+    await refuseNamedDraft(tools.tx, current.id)
     await tools.tx.invoiceLine.deleteMany({ where: { invoiceId: current.id } })
     await tools.tx.invoice.delete({ where: { id: current.id }, select: { id: true } })
     tools.audit({ recordType: 'Invoice', recordId: current.id, companyId: current.companyId, before: { docType: current.docType, status: 'DRAFT', buyerPartyId: current.buyerPartyId, ...auditedTotals(current) } })

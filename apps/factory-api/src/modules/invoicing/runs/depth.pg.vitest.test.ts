@@ -264,11 +264,13 @@ describe('the monthly invoice run (FIN-068): pick customers, preview, issue and 
     expect(list.runs.find((run: Json) => run.id === S.run.id)).toMatchObject({ status: 'ISSUED', invoices: 1 })
   })
 
-  it('a change fee issued once is never invoiced again; a preview with nothing issued is deleted with its drafts', async () => {
+  it('a change fee issued once is never invoiced again; a preview with nothing issued is deleted', async () => {
     const answer = await as('POST', `/invoicing/orders/${moneyA.shipping.quality.serialSalesOrderId}/fees/invoice`, {}, 409)
     expect(answer.error.message).toMatch(/is on invoice FT-/)
     const october = await as('POST', '/invoicing/runs', { companyId: A.companyA, month: '2026-10', partyIds: [A.other] }, 201)
     expect(october.run.counts.drafts).toBe(0)
+    await stepUp(h, finance, secret)
+    expect((await refused('POST', `/invoicing/runs/${october.run.id}/issue`, {}, 409)).message).toBe('The run of 2026-10 holds no invoice to issue: pick customers with DDTs to invoice, or delete the preview.')
     expect((await as('DELETE', `/invoicing/runs/${october.run.id}?version=${october.run.version}`)).deleted).toBe(true)
   })
 })

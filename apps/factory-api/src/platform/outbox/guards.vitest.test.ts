@@ -80,10 +80,10 @@ describe('check-event-contract', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
     // /sales/inquiries/addresses): 844 → 849, 1326 → 1327.
     // B-W2b-391 + 392 + 393 + 394 together: 858 + 5 = 863 declared event versions, 1359 + 1 = 1360 literal emits.
     // B-W2b-396: four events (invoice_run.changed, deposit_cancellation_rule.changed, deposit_cancellation.decided,
-    // fee_credit.changed) and twelve literal emits (a run made, re-picked, issued, deleted and its drafts deleted; a rule made,
-    // changed, archived; a cancelled order's deposits decided; a fee credited ×2; a draft's language and rate): on origin/main
-    // e16fdc27fc the guard counts 867 and 1359 → 871 declared event versions, 1371 literal emits.
-    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(871 declared event version\(s\), 1371 literal emit/) })
+    // fee_credit.changed) and eleven literal emits (a run made or re-picked, issued, deleted; a rule made, changed, archived; a
+    // cancelled order's deposits decided; a fee credited ×2; a draft's language and rate): on origin/main e16fdc27fc the guard
+    // counts 867 and 1359 → 871 declared event versions, 1370 literal emits.
+    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(871 declared event version\(s\), 1370 literal emit/) })
   })
 
   it.each<[string, Plants, RegExp]>([

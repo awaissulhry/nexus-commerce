@@ -125,5 +125,6 @@ export const issueRunContract = defineContract({
 export const deleteRunContract = defineContract({
   params: runParams,
   querystring: input({ version: z.coerce.number().int().min(1).optional() }),
-  response: { 200: output({ deleted: z.literal(true), id: id(), drafts: z.number().int() }) },
+  /** draftsLetGo: the run's drafts, kept as drafts outside any run. */
+  response: { 200: output({ deleted: z.literal(true), id: id(), draftsLetGo: z.number().int() }) },
 })

@@ -28,19 +28,21 @@ import { refusingInWords } from '../tax-codes/store'
  *   GET    /invoicing/runs/candidates            a company's customers whose DDTs of the month take a deferred invoice
  *                                                (W2a's deferred list: monthly customers, or several DDTs / past 12 days)
  *   POST   /invoicing/runs                       a PREVIEW run of a company and month with the customers picked: the run,
- *                                                then each customer's TD24 of the month's DDTs still to invoice (W2a's
+ *                                                then each customer's loose TD24 drafts of the month taken in and the TD24
+ *                                                of the month's DDTs still to invoice made (W2a's
  *                                                deferred draft: goods, freight, fees, deposits, terms) naming the run, one
  *                                                command per customer (a customer with nothing to invoice is answered with
  *                                                why, and stays picked)
  *   GET    /invoicing/runs/:runId                the run: each customer's draft with its checks (the CheckList)
- *   PUT    /invoicing/runs/:runId/customers      pick again: the drafts of customers left out are deleted, new ones made
+ *   PUT    /invoicing/runs/:runId/customers      pick again: the drafts of customers left out are let go (they stay
+ *                                                drafts), the new customers' made
  *   POST   /invoicing/runs/:runId/issue          (invoices.issue, step-up) every draft whose checks pass is issued, its
  *                                                files made and sent to SDI (test mode while the company is in it); a
  *                                                draft that does not pass is let go from the run (it stays a draft); then
  *                                                the run is ISSUED (frozen). Each invoice is its own command (a refusal or a
  *                                                failed send never undoes the others); issuing again finishes a run left
  *                                                half done
- *   DELETE /invoicing/runs/:runId                a PREVIEW with nothing issued: its drafts and the run
+ *   DELETE /invoicing/runs/:runId                a PREVIEW with nothing issued: its drafts let go (kept as drafts), the run
  * The customers' and the run's commands guard the run's version (one writer at a time); the database holds the rest (a
  * run picks 1–1000 parties, a draft names only a PREVIEW run that picks its customer, ISSUED only with no draft left, an
  * issued run is never changed or deleted). A customer is in one live preview of a month at a time.
@@ -217,30 +219,47 @@ const monthRange = (month: string): { gte: Date; lt: Date } => {
 }
 
 /**
- * One customer's deferred invoice of the month in the run (its own command, on the run: its version bump keeps the run a
- * PREVIEW that picks the customer while the draft is made). Returns why when none is made.
+ * One customer's deferred invoice of the month in the run, each step its own command on the run (its version bump keeps the
+ * run a PREVIEW that picks the customer): first the customer's loose TD24 drafts of the month's DDTs (made by hand, in no
+ * run) are taken into the run as they are; then the TD24 of what is left is made (W2a's deferred draft). Returns why when
+ * the run holds no invoice of the customer after both.
  */
 async function draftForCustomer(caller: CommandCaller, run: { readonly id: string; readonly companyId: string; readonly month: string }, partyId: string): Promise<string | null> {
   const where = { companyId: run.companyId, partyId, documentDate: monthRange(run.month), cancellations: { none: {} }, shipment: { status: { in: ['SHIPPED' as const, 'DELIVERED' as const] } } }
   const ddts = await caller.withClient((client) => readDdts(client, where, 500))
   if (ddts.length === 0) return `No DDT of ${run.month} of this customer waits for an invoice (shipped, not cancelled).`
   const scope = { companyId: run.companyId, partyId }
-  try {
-    const plan = await draftPlanOf(caller, scope)
-    const ids = ddts.map((ddt) => ddt.id)
-    await refusingInWords(() =>
-      command(caller, { name: 'invoices.runDraft', input: { runId: run.id, partyId }, record: { type: 'InvoiceRun', id: run.id } }, async (tools) => {
+  const ids = ddts.map((ddt) => ddt.id)
+  const onRun = (name: `invoices.${string}`, work: (tools: CommandTools) => Promise<number>) =>
+    refusingInWords(() =>
+      command(caller, { name, input: { runId: run.id, partyId }, record: { type: 'InvoiceRun', id: run.id } }, async (tools) => {
         const current = (await tools.tx.invoiceRun.findUnique({ where: { id: run.id }, select: { status: true, partyIds: true } }))!
         if (current.status !== 'PREVIEW' || !current.partyIds.includes(partyId)) throw new ConflictError('The run changed meanwhile: read it again.')
-        const answer = await draftFromDdtsInCommand(tools, scope, ids, { ddtIds: ids, docType: 'TD24' }, plan, 'invoices.runDraft')
-        await tools.tx.invoice.update({ where: { id: answer.invoice.id }, data: { invoiceRunId: run.id }, select: { id: true } })
-        tools.audit({ action: 'invoices.runDraft', recordType: 'InvoiceRun', recordId: run.id, companyId: run.companyId, after: { partyId, invoiceId: answer.invoice.id, ddts: ids.length } })
-        return { invoiceId: answer.invoice.id }
+        return { taken: await work(tools) }
       }),
     )
+  const loose = await caller.withClient((client) => client.invoice.findMany({ where: { companyId: run.companyId, buyerPartyId: partyId, docType: 'TD24', status: 'DRAFT', invoiceRunId: null, lines: { some: { ddtId: { in: ids } } } }, select: { id: true } }))
+  let adopted = 0
+  if (loose.length > 0) {
+    adopted = (
+      await onRun('invoices.runAdopt', async (tools) => {
+        const { count } = await tools.tx.invoice.updateMany({ where: { id: { in: loose.map((row) => row.id) }, status: 'DRAFT', invoiceRunId: null }, data: { invoiceRunId: run.id } })
+        tools.audit({ action: 'invoices.runAdopt', recordType: 'InvoiceRun', recordId: run.id, companyId: run.companyId, after: { partyId, invoiceIds: loose.map((row) => row.id), taken: count } })
+        return count
+      })
+    ).result.taken
+  }
+  try {
+    const plan = await draftPlanOf(caller, scope)
+    await onRun('invoices.runDraft', async (tools) => {
+      const answer = await draftFromDdtsInCommand(tools, scope, ids, { ddtIds: ids, docType: 'TD24' }, plan, 'invoices.runDraft')
+      await tools.tx.invoice.update({ where: { id: answer.invoice.id }, data: { invoiceRunId: run.id }, select: { id: true } })
+      tools.audit({ action: 'invoices.runDraft', recordType: 'InvoiceRun', recordId: run.id, companyId: run.companyId, after: { partyId, invoiceId: answer.invoice.id, ddts: ids.length } })
+      return 1
+    })
     return null
   } catch (error) {
-    if (error instanceof DomainError && error.code !== 'forbidden' && error.code !== 'unauthenticated') return error.message
+    if (error instanceof DomainError && error.code !== 'forbidden' && error.code !== 'unauthenticated') return adopted > 0 ? null : error.message
     throw error
   }
 }
@@ -290,16 +309,14 @@ async function announce(caller: CommandCaller, run: RunRow, action: 'CREATED' | 
   })
 }
 
-/** Deletes a run's drafts of these customers (or every draft), inside a command on the run. Returns how many. */
-async function deleteDrafts(tools: CommandTools, runId: string, partyIds: readonly string[] | null): Promise<number> {
-  const drafts = await tools.tx.invoice.findMany({ where: { invoiceRunId: runId, status: 'DRAFT', ...(partyIds ? { buyerPartyId: { in: [...partyIds] } } : {}) }, select: { id: true, docType: true, companyId: true, buyerPartyId: true } })
-  for (const draft of drafts) {
-    await tools.tx.invoiceLine.deleteMany({ where: { invoiceId: draft.id } })
-    await tools.tx.invoice.delete({ where: { id: draft.id }, select: { id: true } })
-    tools.audit({ action: 'invoices.deleteDraft', recordType: 'Invoice', recordId: draft.id, companyId: draft.companyId, before: { docType: draft.docType, status: 'DRAFT', buyerPartyId: draft.buyerPartyId, invoiceRunId: runId } })
-    tools.emit({ type: 'invoice.draft_deleted', subject: draft.id, companyId: draft.companyId, payload: { invoiceId: draft.id, docType: draft.docType } })
-  }
-  return drafts.length
+/**
+ * Lets a run's drafts of these customers (or every draft) go, inside a command on the run: they stay drafts the office may
+ * issue or delete (a draft made by hand and taken in is never lost), and a later run takes them in again. Returns them.
+ */
+async function letGoDrafts(tools: CommandTools, runId: string, partyIds: readonly string[] | null): Promise<string[]> {
+  const drafts = await tools.tx.invoice.findMany({ where: { invoiceRunId: runId, status: 'DRAFT', ...(partyIds ? { buyerPartyId: { in: [...partyIds] } } : {}) }, select: { id: true } })
+  if (drafts.length > 0) await tools.tx.invoice.updateMany({ where: { id: { in: drafts.map((draft) => draft.id) }, status: 'DRAFT' }, data: { invoiceRunId: null } })
+  return drafts.map((draft) => draft.id)
 }
 
 /** PUT /invoicing/runs/:runId/customers (invoices.manage): pick again. */
@@ -319,10 +336,10 @@ export async function pickRun(caller: CommandCaller, runId: string, body: { vers
       if (current.status !== 'PREVIEW') throw new InvalidStateError('The run is issued: it changes no more.')
       const issued = removed.length > 0 ? await tools.tx.invoice.count({ where: { invoiceRunId: run.id, status: { not: 'DRAFT' }, buyerPartyId: { in: removed } } }) : 0
       if (issued > 0) throw new ConflictError('A customer taken out has an invoice issued in this run already: it stays in the run.')
-      const deleted = await deleteDrafts(tools, run.id, removed)
+      const letGo = await letGoDrafts(tools, run.id, removed)
       await tools.tx.invoiceRun.update({ where: { id: run.id }, data: { partyIds: body.partyIds, updatedAt: tools.now }, select: { id: true } })
-      tools.audit({ action: 'invoices.pickRun', recordType: 'InvoiceRun', recordId: run.id, companyId: run.companyId, before: { partyIds: run.partyIds }, after: { partyIds: body.partyIds, removed, draftsDeleted: deleted } })
-      return { deleted }
+      tools.audit({ action: 'invoices.pickRun', recordType: 'InvoiceRun', recordId: run.id, companyId: run.companyId, before: { partyIds: run.partyIds }, after: { partyIds: body.partyIds, removed, draftsLetGo: letGo } })
+      return { letGo: letGo.length }
     }),
   )
   const added = body.partyIds.filter((partyId) => !run.partyIds.includes(partyId))
@@ -339,6 +356,9 @@ export async function issueRun(files: FilesRuntime, sdi: () => SdiRuntime, calle
   if (run.status !== 'PREVIEW') throw new InvalidStateError(`The run of ${monthOf(run)} is issued already.`)
   if (body.version !== undefined && body.version !== run.version) throw new DomainError('conflict', `This invoice run changed since it was read (version ${body.version}); it is now at version ${run.version}. Reload it and issue it again.`, [{ path: 'version', message: `The current version is ${run.version}.` }])
   const drafts = await caller.withClient((client) => client.invoice.findMany({ where: { invoiceRunId: run.id, status: 'DRAFT' }, select: { id: true, buyerPartyId: true, status: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] }))
+  if (drafts.length === 0 && (await caller.withClient((client) => client.invoice.count({ where: { invoiceRunId: run.id } }))) === 0) {
+    throw new ConflictError(`The run of ${monthOf(run)} holds no invoice to issue: pick customers with DDTs to invoice, or delete the preview.`)
+  }
   drafts.forEach((draft) => {
     if (!mayOn(context, INVOICES_ISSUE, { companyId: run.companyId, partyId: draft.buyerPartyId })) throw new DomainError('forbidden', 'The run holds an invoice of a customer you may not issue invoices to.')
   })
@@ -383,7 +403,7 @@ export async function issueRun(files: FilesRuntime, sdi: () => SdiRuntime, calle
   return { run: await runViewOf(caller, context, fresh), issued, held: held.map((entry) => ({ invoiceId: entry.invoiceId, partyId: entry.partyId, problems: [...entry.problems] })) }
 }
 
-/** DELETE /invoicing/runs/:runId (invoices.manage): a preview with nothing issued, with its drafts. */
+/** DELETE /invoicing/runs/:runId (invoices.manage): a preview with nothing issued; its drafts are let go (they stay drafts). */
 export async function deleteRun(caller: CommandCaller, runId: string, query: { version?: number | undefined }, idempotencyKey?: string) {
   const { context, run } = await officeRun(caller, runId, INVOICES_MANAGE)
   if (run.status !== 'PREVIEW') throw new InvalidStateError(`The run of ${monthOf(run)} is issued: it is kept.`)
@@ -395,12 +415,12 @@ export async function deleteRun(caller: CommandCaller, runId: string, query: { v
     command(caller, { name: 'invoices.deleteRun', idempotencyKey, input: { runId, ...query }, record: { type: 'InvoiceRun', id: run.id, ...(query.version === undefined ? {} : { expectedVersion: query.version }) } }, async (tools) => {
       const issued = await tools.tx.invoice.count({ where: { invoiceRunId: run.id, status: { not: 'DRAFT' } } })
       if (issued > 0) throw new ConflictError(`The run issued ${issued} invoice${issued === 1 ? '' : 's'} already: issue it to finish it instead.`)
-      const drafts = await deleteDrafts(tools, run.id, null)
+      const letGo = await letGoDrafts(tools, run.id, null)
       await tools.tx.invoiceRun.delete({ where: { id: run.id }, select: { id: true } })
-      tools.audit({ action: 'invoices.deleteRun', recordType: 'InvoiceRun', recordId: run.id, companyId: run.companyId, before: { month: monthOf(run), partyIds: run.partyIds, status: 'PREVIEW' }, after: { draftsDeleted: drafts } })
+      tools.audit({ action: 'invoices.deleteRun', recordType: 'InvoiceRun', recordId: run.id, companyId: run.companyId, before: { month: monthOf(run), partyIds: run.partyIds, status: 'PREVIEW' }, after: { draftsLetGo: letGo } })
       tools.emit({ type: 'invoice_run.changed', subject: run.id, companyId: run.companyId, payload: { invoiceRunId: run.id, companyId: run.companyId, month: monthOf(run), action: 'DELETED', invoices: 0 } })
-      return { drafts }
+      return { draftsLetGo: letGo.length }
     }),
   )
-  return { deleted: true as const, id: run.id, drafts: result.drafts }
+  return { deleted: true as const, id: run.id, draftsLetGo: result.draftsLetGo }
 }
