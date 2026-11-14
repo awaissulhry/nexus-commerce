@@ -280,6 +280,8 @@ import { events as shippingDocuments } from '../shipping-documents/events'
 import { events as taxRules } from '../tax-rules/events'
 // B-W2b-393: bank statements, matching and write-offs (bank_statement.imported, bank_line.suggestions_changed, bank_match.accepted, .reversed, payment.written_off, .write_off_reversed, write_off_tolerance.changed).
 import { events as paymentsBank } from '../payments-bank/events'
+// B-W2b-394: mail in depth (team inboxes, the capture address, soft bounces, the FAKE mail account's webhook secret).
+import { events as mailDepth } from '../mail-depth/events'
 // B-W2b-398: delivery and return labels (shipment.customer_notice_sent, .tracking_problem_raised, .tracking_problem_resolved,
 // .pod_recorded, return_label.changed).
 import { events as shippingDelivery } from '../shipping-delivery/events'
@@ -629,6 +631,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...taxRules,
   // B-W2b-393
   ...paymentsBank,
+  // B-W2b-394
+  ...mailDepth,
   // B-W2b-398
   ...shippingDelivery,
 ] as const satisfies readonly EventDefinition[]
