@@ -2,7 +2,7 @@ import type { Prisma } from '@nexus/factory-db'
 import { daysFrom, plusDays } from '@nexus/factory-domain/calendars/dates'
 import { ValidationError } from '@nexus/factory-domain/core/errors'
 import { newId } from '@nexus/factory-domain/core/ids'
-import { isBusinessDate, type BusinessDate } from '@nexus/factory-domain/core/time'
+import { businessDate, isBusinessDate, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { MEASURE_SOURCES, measuresOfSource, type MeasureSource } from '@nexus/factory-domain/insights/kpis/measures'
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
 import { serverClock } from '../../../core/time'
@@ -70,7 +70,13 @@ async function writeFacts(tools: CommandTools, parts: readonly { company: FactCo
   const days = { gte: atMidnight(request.from), lte: atMidnight(request.to) }
   const out: { companyId: string; daily: number; hourly: number }[] = []
   const tenantId = 'tenantId' in tools.context ? tools.context.tenantId : ''
-  for (const { company, collected } of parts) {
+  // The database refuses a fact of a day that has not begun on its own clock (each place's zone). When the app's clock runs
+  // ahead of it (a test world moved on, a clock drift), those days wait for a later rebuild instead of failing the command.
+  const [{ now: databaseNow }] = await tools.tx.$queryRaw<{ now: Date }[]>`SELECT now() AS now`
+  for (const { company, collected: read } of parts) {
+    const zoneOf = (siteId: string | null) => company.sites.find((site) => site.id === siteId)?.timezone ?? company.timezone
+    const begun = (fact: { day: BusinessDate; siteId: string | null }) => fact.day <= businessDate(databaseNow, zoneOf(fact.siteId))
+    const collected: Collected = { daily: read.daily.filter(begun), hourly: read.hourly.filter((fact) => begun(fact) && fact.hourStart <= databaseNow) }
     await tools.tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(concat_ws('|', 'factory.facts', ${tenantId}::text, ${company.id}::text), 0))`
     await tools.tx.factDaily.deleteMany({ where: { companyId: company.id, day: days, measureKey: { in: measureKeys } } })
     await tools.tx.factHourly.deleteMany({ where: { companyId: company.id, day: days, measureKey: { in: measureKeys } } })
