@@ -118,7 +118,7 @@ afterAll(async () => {
 describe('the facts, rebuilt from the records (ANA-069)', () => {
   it('rebuilds 60 days of every company; again the same rows, stamped later; a range out of bounds is refused in words', async () => {
     const first = await ok('owner', 'POST', '/insights/facts/rebuild', { from: FROM(), to: today() })
-    expect(first.sources).toEqual(['ORDERS', 'SHIPMENTS', 'PRODUCTION', 'WIP', 'RECEIPTS'])
+    expect(first.sources).toEqual(['ORDERS', 'SHIPMENTS', 'PRODUCTION', 'WIP', 'RECEIPTS', 'DELIVERY', 'LEAD_TIMES', 'WORK_ORDERS', 'LEATHER', 'MARGIN', 'SUPPLY'])
     expect(first.companies.length).toBeGreaterThanOrEqual(2)
     const rows = await admin<{ key: string; n: string; v: string | null; p: number | null; c: number | null; at: Date }>(`SELECT key, value::text AS v, "priceAmount" AS p, "costAmount" AS c, "rebuiltAt" AS at FROM "FactDaily" WHERE "tenantId" = $1 ORDER BY key`, [T])
     const again = await ok('owner', 'POST', '/insights/facts/rebuild', { from: FROM(), to: today() })
@@ -234,8 +234,8 @@ describe('the KPI library and its versions (ANA-012)', () => {
     const library = await ok('owner', 'GET', '/insights/kpis')
     const keyOf = (key: string) => (library.kpis as Json[]).find((kpi) => kpi.key === key)
     for (const file of KPI_CATALOGUE) expect(keyOf(file.key)?.calculation?.measures, file.key).toBeTruthy()
-    // Seeded: on-time in full v2 in force and v3 drafted, no calculation in this step's catalogue.
-    expect(keyOf('delivery.otif')).toMatchObject({ calculation: null, inForce: { kpiVersion: 2 }, drafts: 1, uses: 3, value: { problem: 'NO_CALCULATION' } })
+    // Seeded: on-time in full v2 in force and v3 drafted; B-W2b-429 gave it its calculation (the versions name its facts).
+    expect(keyOf('delivery.otif')).toMatchObject({ calculation: { measures: ['orders.lines_shipped_on_time', 'orders.lines_due'] }, inForce: { kpiVersion: 2 }, drafts: 1, uses: 3, measuresDiffer: false })
     // Seeded order margin names other facts than its calculation reads (made before the calculation).
     expect(keyOf('sales.order_margin')).toMatchObject({ measuresDiffer: true, inForce: { kpiVersion: 1 } })
     expect(keyOf('production.scrap_rate')).toMatchObject({ measuresDiffer: false })
@@ -247,7 +247,22 @@ describe('the KPI library and its versions (ANA-012)', () => {
   it('installs the standard KPIs and where they are used; a second sync changes nothing; manage only', async () => {
     expect((await call('planner', 'POST', '/insights/kpis/sync')).status).toBe(403)
     const first = await ok('owner', 'POST', '/insights/kpis/sync')
-    expect(first.installed).toEqual(['delivery.shipped_on_time', 'production.output', 'purchasing.receipt_lines', 'sales.order_lines_in', 'sales.orders_in'])
+    expect(first.installed).toEqual([
+      'delivery.order_to_ship_days',
+      'delivery.otif_current',
+      'delivery.shipped_on_time',
+      'production.leather_yield',
+      'production.order_to_start_days',
+      'production.output',
+      'production.wip_age_days',
+      'production.wip_pieces',
+      'purchasing.receipt_lines',
+      'sales.margin_actual',
+      'sales.margin_quoted',
+      'sales.order_lines_in',
+      'sales.orders_in',
+      'sales.quote_to_order_days',
+    ])
     expect(first.usesAdded.map((use: Json) => `${use.kpiKey}:${use.usedIn}:${use.useKey}`)).toEqual(['delivery.shipped_on_time:DASHBOARD:today', 'production.output:DASHBOARD:today', 'sales.orders_in:DASHBOARD:today'])
     expect(first.usesRemoved).toEqual([])
     const second = await ok('owner', 'POST', '/insights/kpis/sync')
@@ -291,8 +306,8 @@ describe('the KPI library and its versions (ANA-012)', () => {
     expect(await no('owner', 'POST', '/insights/kpis/production.scrap_rate/versions', { basedOnId: scrap.id, changeNote: 'x', measureKeys: ['production.nope'] }, 400)).toEqual(['body/measureKeys'])
     expect(await no('owner', 'POST', '/insights/kpis/production.scrap_rate/versions', { basedOnId: scrap.id, changeNote: 'x', ownerRoleId: newId() }, 400)).toEqual(['body/ownerRoleId'])
     const otif = (await ok('owner', 'GET', '/insights/kpis/delivery.otif')).versions.find((version: Json) => version.state === 'DRAFT')
-    // The seeded draft reads facts this step does not build yet (B-W2b-429 brings them).
-    expect(await no('owner', 'POST', `/insights/kpis/versions/${otif.id}/activate`, { version: otif.version }, 409)).toEqual(['refusal/UNKNOWN_MEASURE'])
+    // The seeded draft reads the facts B-W2b-429 builds: it can be put in force now (an unknown measure: the unit test).
+    expect(await ok('owner', 'POST', `/insights/kpis/versions/${otif.id}/activate`, { version: otif.version })).toMatchObject({ kpiVersion: 3 })
     expect((await call('planner', 'POST', '/insights/kpis/production.scrap_rate/versions', { basedOnId: scrap.id, changeNote: 'x' })).status).toBe(403)
   })
 

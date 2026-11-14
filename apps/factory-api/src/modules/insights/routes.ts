@@ -39,6 +39,14 @@ import { activateContract, deleteContract, draftContract, editContract, libraryC
 import { kpiLibrary, kpiRecord, kpiValueAnswer } from './kpis/library'
 import { syncKpis } from './kpis/sync'
 import { activateVersion, deleteDraft, draftVersion, editDraft, retireKpi } from './kpis/versions'
+// B-W2b-429: the ready KPIs' drills (kpis/drills/).
+import { leadDrillContract, leatherDrillContract, marginDrillContract, otifDrillContract, supplyDrillContract, wipDrillContract } from './kpis/drills/contract'
+import { leadDrill } from './kpis/drills/lead-times'
+import { leatherDrill } from './kpis/drills/leather-yield'
+import { marginDrill } from './kpis/drills/margin'
+import { otifDrill } from './kpis/drills/otif'
+import { supplyDrill } from './kpis/drills/supply'
+import { wipDrill } from './kpis/drills/wip'
 
 /**
  * Home › Today (B-W1-52; ANA-037; A2 SCR-029 "Today", SCR-031 W1 "Overview"): the needs-attention list computed from the
@@ -93,6 +101,14 @@ export default defineRoutes('insights', manifest, async (app) => {
   // B-W2b-428 (ANA-012, ANA-028, ANA-069, ANA-070): the KPI library (read: home.kpis.view; write: home.kpis.manage), each value
   // also its measures' list permissions and grains; the facts and measures (the measure's permission and grain).
   app.get('/insights/kpis', { schema: kpiLibraryContract }, async (request) => kpiLibrary(request, request.query))
+  // B-W2b-429 (ANA-013, ANA-014, ANA-015, ANA-020, ANA-021, ANA-023; follow-up KP2:01): each ready KPI's records with the
+  // filters it needs (home.kpis.view; each drill also its KPI's measures' list permissions and grains). Before /:key.
+  app.get('/insights/kpis/drills/otif', { schema: otifDrillContract }, async (request) => otifDrill(request, request.query))
+  app.get('/insights/kpis/drills/lead-times', { schema: leadDrillContract }, async (request) => leadDrill(request, request.query))
+  app.get('/insights/kpis/drills/wip', { schema: wipDrillContract }, async (request) => wipDrill(request, request.query))
+  app.get('/insights/kpis/drills/leather-yield', { schema: leatherDrillContract }, async (request) => leatherDrill(request, request.query))
+  app.get('/insights/kpis/drills/margin', { schema: marginDrillContract }, async (request) => marginDrill(request, request.query))
+  app.get('/insights/kpis/drills/supply', { schema: supplyDrillContract }, async (request) => supplyDrill(request, request.query))
   app.post('/insights/kpis/sync', { schema: syncContract }, async (request) => syncKpis(request, idempotencyKeyFrom(request)))
   app.get('/insights/kpis/:key', { schema: recordContract }, async (request) => kpiRecord(request, request.params.key, request.query))
   app.get('/insights/kpis/:key/value', { schema: valueContract }, async (request) => kpiValueAnswer(request, request.params.key, request.query))
