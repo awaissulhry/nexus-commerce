@@ -3,7 +3,7 @@ import { fitsDecimal, isCurrencyCode, isMinorUnits, type MinorUnits } from '../c
 import { BUSINESS_TIME_ZONE, businessDayStart, isBusinessDate, parseInstant, toUtcIso } from '../core/time'
 import { parseDecimal } from '../tax/decimal'
 import { formatDate, formatDateTime, formatDecimal, formatMoney, formatPercent, formatQuantity, formatUnitPrice } from './format'
-import { DOCUMENT_WORDS, ddtPartyHeading, type DocumentWords } from './i18n'
+import { countryName, DOCUMENT_WORDS, ddtPartyHeading, type DocumentWords } from './i18n'
 import { DOCUMENT_LAYOUTS, type ColumnKey, type LayoutColumn } from './layouts'
 import { withOptions } from './options-block'
 import { addressLine, legalFooter, legalLines, legalName, legalProblems } from './legal'
@@ -12,6 +12,8 @@ import {
   DDT_REASONS,
   DDT_TRANSPORT_BY,
   INVOICE_KINDS,
+  // B-W2b-391
+  PROFORMA_PURPOSES,
   isDocumentLanguage,
   isDocumentType,
   REFERENCE_KINDS,
@@ -39,6 +41,8 @@ import {
  *   INVOICE_COPY   the buyer's address and each line's VAT rate; it always carries the courtesy-copy notice (the
  *                  legal invoice is the FatturaPA XML sent through SDI)
  *   PACKING_LIST   the number of parcels and, per line, the parcel it is packed in (no prices)
+ *   PROFORMA       (B-W2b-391) the party's address, why it is made; it always carries the notice that it is no tax
+ *                  document, and the purpose's notice (values for customs, samples of no commercial value, a payment request)
  */
 
 export interface ComposedFact {
@@ -176,6 +180,24 @@ function packingListProblems(input: DocumentInput): Issue[] {
   return problems
 }
 
+/** B-W2b-391: a proforma's facts (why it is made; a due day, parcels, weights and origin when given). */
+function proformaProblems(input: DocumentInput): Issue[] {
+  const proforma = input.proforma
+  const at = 'document/proforma'
+  if (!proforma || !(PROFORMA_PURPOSES as readonly string[]).includes(proforma.purpose)) return [{ path: `${at}/purpose`, message: 'Say why the proforma is made: customs, samples or a prepayment request.' }]
+  const problems: Issue[] = []
+  if (proforma.dueDate !== null && proforma.dueDate !== undefined && !isBusinessDate(proforma.dueDate)) problems.push({ path: `${at}/dueDate`, message: 'Expected YYYY-MM-DD.' })
+  if (proforma.packages !== null && proforma.packages !== undefined && (!Number.isSafeInteger(proforma.packages) || proforma.packages < 1)) problems.push({ path: `${at}/packages`, message: 'Give the number of parcels (at least 1).' })
+  for (const key of ['grossWeightKg', 'netWeightKg'] as const) {
+    const value = proforma[key]
+    if (value === null || value === undefined) continue
+    const weight = fitsDecimal(value, 18, 4) ? parseDecimal(value) : null
+    if (weight === null || !weight.greaterThan(0)) problems.push({ path: `${at}/${key}`, message: 'Expected a weight in kilograms.' })
+  }
+  for (const [index, code] of (proforma.origin ?? []).entries()) if (!/^[A-Z]{2}$/.test(code)) problems.push({ path: `${at}/origin/${index}`, message: 'Expected a country code (ISO 3166-1 alpha-2).' })
+  return problems
+}
+
 /** Every reason the document cannot be printed as it stands (empty when it can). */
 export function documentProblems(input: DocumentInput): Issue[] {
   if (!isDocumentType(input?.type)) return [{ path: 'document/type', message: 'Unknown document type.' }]
@@ -189,6 +211,8 @@ export function documentProblems(input: DocumentInput): Issue[] {
   if (input.type === 'DDT' || input.type === 'INVOICE_COPY') {
     problems.push(...addressProblems(input.party?.address, 'document/party/address', input.type === 'DDT' ? 'The recipient\'s address is printed on a DDT (DPR 472/1996).' : 'The buyer\'s address is printed on the invoice.'))
   }
+  // B-W2b-391: a proforma names its party in full and says why it is made.
+  if (input.type === 'PROFORMA') problems.push(...addressProblems(input.party?.address, 'document/party/address', "The customer's address is printed on a proforma."), ...proformaProblems(input))
   for (const [index, reference] of (input.references ?? []).entries()) {
     if (!(REFERENCE_KINDS as readonly string[]).includes(reference.kind) || !filled(reference.number)) problems.push({ path: `document/references/${index}`, message: 'A reference has a kind and a number.' })
     if (reference.date !== null && reference.date !== undefined && !isBusinessDate(reference.date)) problems.push({ path: `document/references/${index}/date`, message: 'Expected YYYY-MM-DD.' })
@@ -317,6 +341,21 @@ function facts(input: DocumentInput, words: DocumentWords): ComposedFact[] {
         ...(packing.grossWeightKg ? [{ label: words.facts.grossWeight, value: formatDecimal(packing.grossWeightKg, language, 0, 3) }] : []),
       ]
     }
+    // B-W2b-391: why it is made, what it refers to, the payment, the parcels, the weights and the origin.
+    case 'PROFORMA': {
+      const proforma = input.proforma!
+      return [
+        { label: words.proforma.purpose, value: words.proforma.purposes[proforma.purpose] },
+        ...referenceFacts(input, words),
+        ...fact(words.facts.paymentTerms, input.paymentTerms),
+        ...date(words.facts.dueDate, proforma.dueDate),
+        ...fact(words.facts.deliveryTerms, input.deliveryTerms),
+        ...(proforma.packages ? [{ label: words.facts.packages, value: String(proforma.packages) }] : []),
+        ...(proforma.grossWeightKg ? [{ label: words.facts.grossWeight, value: formatDecimal(proforma.grossWeightKg, language, 0, 3) }] : []),
+        ...(proforma.netWeightKg ? [{ label: words.facts.netWeight, value: formatDecimal(proforma.netWeightKg, language, 0, 3) }] : []),
+        ...((proforma.origin ?? []).length > 0 ? [{ label: words.proforma.origin, value: proforma.origin!.map((code) => countryName(code, language)).join(', ') }] : []),
+      ]
+    }
   }
 }
 
@@ -325,7 +364,7 @@ function blocks(input: DocumentInput, words: DocumentWords): ComposedBlock[] {
   // W2b (B-W2b-19): a DDT's party is the "cessionario" only when the goods are sold to it (i18n ddtPartyHeading).
   const heading = input.type === 'DDT' ? ddtPartyHeading(words, input.transport!.reason) : words.headings.party[input.type]
   const result: ComposedBlock[] = [{ heading, lines: partyLines(input.party, input.type, words, language) }]
-  if ((input.type === 'PURCHASE_ORDER' || input.type === 'ORDER_CONFIRMATION') /* B-W2b-303 */ && input.deliverTo) result.push({ heading: words.headings.deliverTo, lines: namedAddress(input.deliverTo, language) })
+  if ((input.type === 'PURCHASE_ORDER' || input.type === 'ORDER_CONFIRMATION' /* B-W2b-303 */ || input.type === 'PROFORMA' /* B-W2b-391 */) && input.deliverTo) result.push({ heading: words.headings.deliverTo, lines: namedAddress(input.deliverTo, language) })
   if (input.type === 'DDT') {
     const transport = input.transport!
     if (transport.destination) result.push({ heading: words.headings.destination, lines: namedAddress(transport.destination, language) })
@@ -356,6 +395,13 @@ function totals(input: DocumentInput, words: DocumentWords): ComposedTotal[] {
   return rows
 }
 
+/** B-W2b-391: a proforma is never a tax document; then what its purpose says (values for customs, no commercial value, a payment request). */
+function proformaNotices(input: DocumentInput, words: DocumentWords): string[] {
+  const proforma = input.proforma!
+  const purpose = proforma.purpose === 'PREPAYMENT' ? words.proforma.prepayment : proforma.noCommercialValue === true ? words.proforma.noCommercialValue : words.proforma.customs
+  return [words.proforma.notice, purpose]
+}
+
 /** The document's fixed layout with every word and number in place. Throws a ValidationError listing every problem. */
 export function composeDocument(input: DocumentInput): ComposedDocument {
   const problems = documentProblems(input)
@@ -366,7 +412,7 @@ export function composeDocument(input: DocumentInput): ComposedDocument {
   const name = legalName(input.company, language)
   const columns = layout.columns.filter((entry) => layout.priced || !PRICED_ONLY.includes(entry.key)).map((entry) => ({ ...entry, label: words.columns[entry.key] }))
   const title = words.title[input.type]
-  const notices = [...(input.type === 'INVOICE_COPY' ? [words.notices.courtesyCopy] : []), ...(input.type === 'PURCHASE_ORDER' ? [words.notices.purchaseOrder] : [])]
+  const notices = [...(input.type === 'INVOICE_COPY' ? [words.notices.courtesyCopy] : []), ...(input.type === 'PURCHASE_ORDER' ? [words.notices.purchaseOrder] : []), ...(input.type === 'PROFORMA' ? proformaNotices(input, words) : [])]
   return {
     type: input.type,
     language,

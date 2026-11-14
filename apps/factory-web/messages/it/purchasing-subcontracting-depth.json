@@ -220,7 +220,7 @@
     "ledger": {
       "holds_one": "Il costo di {workOrder} contiene {amount} di questo ordine ({count} registrazione).",
       "holds_other": "Il costo di {workOrder} contiene {amount} di questo ordine ({count} registrazioni).",
-      "currency": "L’ordine {order} è in {currency}; {workOrder} tiene il costo in {woCurrency} (nessun cambio): per ora lì non si registra nulla."
+      "currency": "L’ordine {order} è in {currency}; {workOrder} tiene il costo in {woCurrency} e non c’è un cambio del giorno dell’ordine: per ora lì non si registra nulla (tienine uno in Amministrazione › Impostazioni › Valute e cambi)."
     },
     "op": {
       "title": "Per lavorazione",

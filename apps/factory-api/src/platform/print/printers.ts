@@ -12,6 +12,8 @@ import { ApiError } from '../../core/errors'
 import type { PrinterView } from './contract'
 import { printerMachine, printerProblems, type PrinterKind, type PrinterStatus } from './rules'
 import { processPrintRelays } from './service'
+// B-W2b-391
+import { modeProblem } from './direct/rules'
 
 /**
  * The printers of each site (plan A1 §3.9; GAP-007): listed by every audience that prints (a floor device sees its own
@@ -31,6 +33,8 @@ const COMMON = {
   labelWidthMm: true,
   labelHeightMm: true,
   status: true,
+  // B-W2b-391: how its jobs reach it.
+  mode: true,
   version: true,
   createdAt: true,
   updatedAt: true,
@@ -62,6 +66,7 @@ export function printerView(row: PrinterRow): PrinterView {
     labelWidthMm: row.labelWidthMm,
     labelHeightMm: row.labelHeightMm,
     status: row.status,
+    mode: row.mode, // B-W2b-391
     version: row.version,
     createdAt: toUtcIso(row.createdAt),
     updatedAt: toUtcIso(row.updatedAt),
@@ -175,6 +180,9 @@ export async function updatePrinter(caller: CommandCaller, printerId: string, in
   }
   const problems = printerProblems({ ...before, ...changes })
   if (problems.length > 0) throw new ValidationError('The printer is not valid.', problems)
+  // B-W2b-391: a printer the station prints to straight keeps an address its browser reaches.
+  const direct = before.mode === 'DIRECT' ? modeProblem({ kind: before.kind, relayTarget: changes.relayTarget ?? before.relayTarget }, 'DIRECT') : null
+  if (direct) throw new ConflictError(direct)
   const { result } = await command(
     caller,
     { name: 'print.updatePrinter', idempotencyKey, input: { printerId, ...input }, record: { type: 'Printer', id: printerId, expectedVersion: input.version } },

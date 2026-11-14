@@ -7,6 +7,10 @@ import type { CommandTx } from '../../../core/command'
 import { heldGoodByOperation } from './held'
 // B-W2b-331 (SCM-146): the workshop's own cost entries of the orders, and the pieces their FEE entries book.
 import { bookedFeePieces, workshopEntryPlan } from '../subcontract-depth/cost-source'
+// B-W2b-389 (CY1:03): the fee of an order in another currency posted in the work order's currency.
+import { convertMinor, convertUnit } from '@nexus/factory-domain/money/currency/convert'
+import { rateWords } from '@nexus/factory-domain/money/currency/rates'
+import { orderRateOf, type OrderRate } from '../subcontract-depth/rate'
 
 /**
  * The subcontract source of the work order's cost ledger (B-W2a-25; FIN-026; cost-ledger.prisma WorkOrderCostEntry kind
@@ -19,7 +23,9 @@ import { bookedFeePieces, workshopEntryPlan } from '../subcontract-depth/cost-so
  *                   operation's SUBCONTRACT entries (sourceType SubcontractOperation, sourceId its id); a difference posts
  *                   one entry of that amount (negative when a count went down), key `subcontract:<operationId>:<n>` (n =
  *                   its entries so far + 1), dated when the counts last changed (the operation's updatedAt).
- *   currency        an order in another currency than the work order's cost waits, in words (no exchange rates).
+ *   currency        B-W2b-389 (CY1:03): an order in another currency than the work order's cost posts in the work
+ *                   order's currency at the day's rate of its issue day (subcontract-depth/rate.ts); with no rate of that
+ *                   day it waits, in words.
  *   held            B-W2b-111 (QHS-036, held.ts): the good pieces of a receipt whose incoming inspection is OPEN are left out
  *                   of piecesBackGood until it is decided (the decision's command posts again: a rejected bundle's pieces
  *                   are defective by then, so they never earn).
@@ -48,7 +54,7 @@ export async function subcontractCostPlan(
 ): Promise<{ drafts: EntryDraft[]; waiting: WaitingView[] }> {
   const orders = await db.subcontractOrder.findMany({
     where: { workOrderId: workOrder.id, status: { notIn: ['DRAFT', 'CANCELLED'] }, ...(orderIds ? { id: { in: [...orderIds] } } : {}) },
-    select: { id: true, number: true, currency: true },
+    select: { id: true, number: true, currency: true, issuedAt: true, orderDate: true },
     orderBy: { id: 'asc' },
   })
   if (orders.length === 0) return { drafts: [], waiting: [] }
@@ -63,19 +69,25 @@ export async function subcontractCostPlan(
   const booked = await bookedFeePieces(db, orders.map((order) => order.id))
   const drafts: EntryDraft[] = []
   const waiting: WaitingView[] = []
+  // B-W2b-389 (CY1:03): an order in another currency converts at the day's rate of its issue day (one rate per order).
+  const rates = new Map<string, OrderRate>()
+  for (const order of orders) if (order.currency !== workOrder.currency) rates.set(order.id, await orderRateOf(db, order, workOrder.currency))
   for (const operation of operations) {
     const order = orderOf.get(operation.subcontractOrderId)!
     const posted = existing.filter((entry) => entry.kind === 'SUBCONTRACT' && entry.sourceType === 'SubcontractOperation' && entry.sourceId === operation.id)
     const sum = posted.reduce((total, entry) => total + entry.amount, 0)
     const fee = operation.pricePerPiece.toFixed(6)
     const good = Math.max(0, operation.piecesBackGood - (held.get(operation.id) ?? 0) - (booked.get(operation.id) ?? 0))
-    if (order.currency !== workOrder.currency) {
+    const converted = rates.get(order.id)
+    if (converted && converted.rate === null) {
       if (good > 0 && sum === 0) {
-        waiting.push({ code: 'CURRENCY', sourceType: 'SubcontractOrder', sourceId: order.id, words: `Subcontract order ${order.number} is in ${order.currency}; the work order's cost is kept in ${workOrder.currency} (no exchange rates).` })
+        waiting.push({ code: 'CURRENCY', sourceType: 'SubcontractOrder', sourceId: order.id, words: `Subcontract order ${order.number} is in ${order.currency}; the work order's cost is kept in ${workOrder.currency}. ${converted.words}` })
       }
       continue
     }
-    const amount = earnedAmount(good, fee, order.currency) - sum
+    const rate = converted?.rate ?? null
+    const earned = earnedAmount(good, fee, order.currency)
+    const amount = (rate ? convertMinor(earned, order.currency, workOrder.currency, rate) : earned) - sum
     if (amount === 0) continue
     const key = subcontractKey(operation.id, posted.length + 1)
     if (existing.some((entry) => entry.idempotencyKey === key)) continue
@@ -86,7 +98,7 @@ export async function subcontractCostPlan(
       itemId: null,
       quantity: null,
       minutes: null,
-      unitCost: fee,
+      unitCost: rate ? convertUnit(fee, order.currency, workOrder.currency, rate) : fee,
       standardUnitCost: null,
       standardCostId: null,
       amount,
@@ -97,11 +109,11 @@ export async function subcontractCostPlan(
       sourceType: 'SubcontractOperation',
       sourceId: operation.id,
       reversalOfId: null,
-      reason: `Workshop fee of ${order.number}, operation ${operation.seq}: ${good} piece(s) back good in all${(held.get(operation.id) ?? 0) > 0 ? ` (${held.get(operation.id)} waiting for incoming inspection)` : ''}${(booked.get(operation.id) ?? 0) > 0 ? ` (${booked.get(operation.id)} booked at the workshop's price)` : ''}`,
+      reason: `Workshop fee of ${order.number}, operation ${operation.seq}: ${good} piece(s) back good in all${(held.get(operation.id) ?? 0) > 0 ? ` (${held.get(operation.id)} waiting for incoming inspection)` : ''}${(booked.get(operation.id) ?? 0) > 0 ? ` (${booked.get(operation.id)} booked at the workshop's price)` : ''}${rate ? `; in ${workOrder.currency} at ${rateWords(rate)} of ${rate.rateDate}` : ''}`,
       idempotencyKey: key,
     })
   }
-  // B-W2b-331: each of the orders' own cost entries, once, onto the work order.
-  const workshop = await workshopEntryPlan(db, workOrder, orders, existing, ids)
+  // B-W2b-331: each of the orders' own cost entries, once, onto the work order (B-W2b-389: converted at the same rate).
+  const workshop = await workshopEntryPlan(db, workOrder, orders, existing, ids, rates)
   return { drafts: [...drafts, ...workshop.drafts], waiting: [...waiting, ...workshop.waiting] }
 }

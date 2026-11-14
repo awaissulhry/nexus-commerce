@@ -1,0 +1,165 @@
+{
+  "title": "Currencies & rates",
+  "explain": "The company's own currency, the currencies its documents may be in, and the exchange rate of each day: the ECB's daily reference rate, or a rate typed for the day, which wins. A document keeps the rate it used; a later rate never changes it. Revaluation stays with your accountant.",
+  "noRight": "You do not have the right to see currencies and exchange rates (currencies.view).",
+  "failed": "Couldn't load currencies & rates",
+  "base": {
+    "label": "Company currency",
+    "explain": "Its books and totals are kept in it; a total never adds two currencies: other currencies count at a named rate, or the total says it cannot. It is changed in Admin › Companies & sites."
+  },
+  "currencies": {
+    "title": "Document currencies",
+    "col": {
+      "code": "Currency",
+      "today": "Rate documents of today take",
+      "action": "Action"
+    },
+    "base": "Company currency",
+    "isBase": "Its own currency: no rate",
+    "off": "Switched off: new documents cannot use it",
+    "waits": "Waits for a rate",
+    "waitsExplain": "A document in a currency that waits for a rate (an invoice, a purchase order, a credit check, a work order's cost) waits until a rate of its day is kept: switch on the daily ECB rates, or set a rate for the day.",
+    "alwaysOn": "Always on",
+    "switchOff": "Switch off",
+    "switchOn": "Switch on",
+    "switchOffOf": "Switch off {code}",
+    "switchOnOf": "Switch on {code}",
+    "addLabel": "Currency to add",
+    "add": "Add currency"
+  },
+  "source": {
+    "ECB": "ECB",
+    "MANUAL": "Typed for the day"
+  },
+  "feed": {
+    "title": "Daily ECB rates",
+    "explain": "The ECB publishes its euro reference rates every working day at about 16:00. While on, they are read at 16:30 and 18:30, Monday to Friday. Off until you switch them on.",
+    "fake": "Test mode",
+    "fakeExplain": "Test mode: the rates read are made up, nothing is fetched from the ECB.",
+    "status": {
+      "NONE": "Off",
+      "ACTIVE": "On",
+      "PAUSED": "Off",
+      "DISABLED": "Off"
+    },
+    "lastDay": "Newest ECB day kept",
+    "lastOk": "Last read",
+    "lastError": "Last failed read",
+    "mode": "Mode",
+    "modeValue": {
+      "LIVE": "The ECB's public file",
+      "SANDBOX": "The ECB's public file (test account)",
+      "FAKE": "Made-up rates (test mode)"
+    },
+    "never": "Never",
+    "switchOn": "Switch on daily ECB rates",
+    "switchOff": "Switch off daily ECB rates",
+    "readNow": "Read today's rates"
+  },
+  "rates": {
+    "title": "Rates per day",
+    "explain": "Each day's ECB rate and the rate typed for that day side by side; documents of the day take the typed one when there is one. A day without a rate takes the last one of the 7 days before (weekends and bank holidays have none).",
+    "set": "Set a rate for a day",
+    "setForDay": "Set a rate for this day",
+    "correct": "Correct the typed rate",
+    "remove": "Remove the typed rate",
+    "keySet": "Set a rate for a day",
+    "rowMenu": "Actions for {pair} on {day}",
+    "pair": "{base} → {quote}",
+    "far": "More than 5% from the ECB's",
+    "notManual": "Only a day with a typed rate can be picked: the ECB's rate is kept as published",
+    "quoteLabel": "Currency",
+    "allQuotes": "Every currency",
+    "periodLabel": "Days",
+    "period_one": "Last {count} day",
+    "period_other": "Last {count} days",
+    "count_one": "{count} day and currency",
+    "count_other": "{count} days and currencies",
+    "bulkRemove_one": "Remove {count} typed rate",
+    "bulkRemove_other": "Remove {count} typed rates",
+    "truncated": "More rates than one page shows: choose a currency or fewer days.",
+    "failed": "Couldn't load the rates",
+    "empty": {
+      "title": "No rates yet",
+      "body": "Switch on the daily ECB rates, or set a rate for a day.",
+      "bodyOn": "The daily ECB rates are on: the next working day's arrive after 16:30. You can also read today's now, or set a rate for a day."
+    },
+    "col": {
+      "day": "Day",
+      "pair": "Currencies",
+      "ecb": "ECB rate",
+      "manual": "Typed rate",
+      "used": "Rate documents take"
+    },
+    "problem": {
+      "same": "Choose another currency than the company's own.",
+      "quote": "Choose a currency.",
+      "day": "Type a day (DD/MM/YYYY).",
+      "future": "A rate is kept for today or a day before: the future has no rate yet.",
+      "rateEmpty": "Type the rate.",
+      "rate": "A rate is a number above 0 with at most eight decimals (1.0850).",
+      "fix": "Fix what the fields say first."
+    }
+  },
+  "dialog": {
+    "setTitle": "Set a rate for a day",
+    "correctTitle": "Correct the typed rate of {pair} on {day}",
+    "explain": "How many units of the currency one {base} buys, as the ECB quotes it. It wins over the ECB's rate of that day.",
+    "quote": "Currency",
+    "day": "Day",
+    "dayHint": "Today or a day before",
+    "rate": "1 {base} = … {quote}",
+    "rateHint": "A comma or a dot, at most eight decimals",
+    "reads": "Reads as: {words}",
+    "readsNone": "Type a rate to see how it reads.",
+    "ecb": "The ECB's rate of that day: {rate}",
+    "far": "This rate is more than 5% away from the ECB's of the same day: check it is not a typing slip.",
+    "everyCompany": "Rates serve every company of the group.",
+    "save": "Save rate"
+  },
+  "remove": {
+    "title_one": "Remove {count} typed rate?",
+    "title_other": "Remove {count} typed rates?",
+    "body": "Those days go back to the ECB's rate. Documents that already kept a rate keep it.",
+    "row": "{day}: {words}",
+    "go_one": "Remove {count} rate",
+    "go_other": "Remove {count} rates"
+  },
+  "held": {
+    "noManage": "You need currencies.manage for this company",
+    "noRates": "Rates serve every company: you need currencies.manage over every company",
+    "busy": "Wait: the last change is still being saved",
+    "base": "{code} is the company's own currency: it is always on",
+    "feedOff": "Switch on the daily ECB rates first",
+    "noneLeft": "Every currency offered is on already"
+  },
+  "notice": {
+    "added": "{code} added: documents may be in it now.",
+    "on": "{code} switched on again.",
+    "off": "{code} switched off: new documents cannot use it.",
+    "feedOn": "Daily ECB rates switched on.",
+    "feedOff": "Daily ECB rates switched off: the rates kept stay.",
+    "read_one": "The ECB's rates of {count} day kept.",
+    "read_other": "The ECB's rates of {count} days kept.",
+    "readNothing": "Nothing new: the ECB's latest rates are kept already.",
+    "rateSaved": "Rate of {quote} for {day} saved.",
+    "removed_one": "{count} typed rate removed: that day takes the ECB's again.",
+    "removed_other": "{count} typed rates removed: those days take the ECB's again."
+  },
+  "problem": {
+    "currencyOn": "That currency is one of the company's currencies already.",
+    "baseOff": "The company's own currency is never switched off.",
+    "manualKept": "A typed rate is kept for that day already: correct that one instead.",
+    "manualGone": "That typed rate is not kept any more: the rates were read again.",
+    "ecbRow": "The ECB's rate is kept as published: type a rate for the day instead.",
+    "feedOff": "The daily ECB rates are off: switch them on first.",
+    "unreadable": "The ECB file could not be read now. The rates kept stay as they are; try again later.",
+    "database": "The change was refused: it clashes with the rates kept. The rates were read again.",
+    "moved": "Someone changed this meanwhile: it was read again; apply your change once more.",
+    "state": "This cannot be done as things are now: it was read again.",
+    "invalid": "Something typed is not accepted: check the fields.",
+    "forbidden": "You do not have the right to do this.",
+    "unavailable": "The server is not answering: try again in a moment.",
+    "write": "The change could not be saved."
+  }
+}

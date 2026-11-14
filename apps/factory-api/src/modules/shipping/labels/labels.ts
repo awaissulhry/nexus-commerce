@@ -32,6 +32,8 @@ import { carrierProblem, isCarrierRefusal, type CarrierRuntime } from './carrier
 import { labelFilesOf, labelsView, latestStatuses, readLabelFacts, readLabelParcels, readTracking, shipmentAccountId, statusMap, type LabelsView } from './store'
 import { collectedProblems, voidAllPlan, voidAllProblems, voidOutcomeWords } from '@nexus/factory-domain/shipping/shipments/void'
 import { expectedDeliveryOf, shipmentEtaOf, trackingPageOf } from '@nexus/factory-domain/shipping/labels/tracking'
+import { isTestLabel } from '@nexus/factory-domain/shipping/test-mode/rules'
+import { assertCarrierRules } from '../validate/validate'
 
 /**
  * Carrier labels (B-W1-48; LOG-025, LOG-032, LOG-059; A2 SCR-067 in the office, SCR-098 on the floor).
@@ -104,7 +106,11 @@ export async function buyLabels(runtime: { carrier: CarrierRuntime; files: Files
   const todo = parcelsToLabel(read.parcels).filter((parcel) => body.parcelIds === undefined || body.parcelIds.includes(parcel.id))
   const fields = buyFieldProblems(read.facts, todo)
   if (fields.length > 0) throw new ValidationError(fields.length === 1 ? fields[0]!.message : 'The labels cannot be bought as the shipment stands.', fields)
-  const accountId = read.accountId!
+  // B-W2b-390 (LOG-045): every parcel checked against its carrier's rules before anything is bought (409 in words).
+  assertCarrierRules(read.facts, todo)
+  // B-W2b-390 (LOG-035): a site in test mode has its labels made by the TEST carrier: no account, nothing sent or charged.
+  const testMode = read.facts.testMode === true
+  const accountId = testMode ? null : read.accountId!
   if (todo.length === 0) {
     return { created: false, answer: { ...(await caller.withClient((client) => labelsView(client, shipment, serverClock.now()))), outcomes: [], problem: null } }
   }
@@ -115,10 +121,11 @@ export async function buyLabels(runtime: { carrier: CarrierRuntime; files: Files
   const bought: Bought[] = []
   for (const parcel of todo) {
     try {
-      const label = await carrier.createLabel(caller, accountId, labelRequestOf(read.facts, parcel))
+      const request = labelRequestOf(read.facts, parcel)
+      const label = accountId === null ? carrier.test.createLabel(request) : await carrier.createLabel(caller, accountId, request)
       const prepared: PreparedGeneratedFile[] = []
       for (const format of formats) {
-        const document = await carrier.labelDocument(caller, accountId, label.providerId, format)
+        const document = accountId === null ? await carrier.test.labelDocument(request, label, format) : await carrier.labelDocument(caller, accountId, label.providerId, format)
         if (prepared.some((file) => file.contentType === LABEL_CONTENT_TYPES[document.format])) continue
         prepared.push(
           await putGeneratedFile(files, caller, {
@@ -159,6 +166,9 @@ export async function buyLabels(runtime: { carrier: CarrierRuntime; files: Files
       { name: 'shipping.buyLabels', idempotencyKey, input: { shipmentId, ...body }, record: { type: 'Shipment', id: shipment.id, expectedVersion: body.version } },
       async (tools) => {
         const current = await lockedStatus(tools, shipment.id, ['PACKED'], 'carrier labels are recorded')
+        // B-W2b-390: TEST labels are recorded only while the site is still in test mode (read under a share lock: a switch
+        // to live labels waits for this command, or this command reads the switch and records nothing).
+        if (testMode) await assertStillInTestMode(tools, current.siteId)
         const recorded = await recordBought(tools, current, accountId, bought)
         surplus = recorded.surplus
         return { recorded: recorded.parcels }
@@ -169,17 +179,27 @@ export async function buyLabels(runtime: { carrier: CarrierRuntime; files: Files
     // pays for unused labels, and its parcels take new references (a re-buy must not get a cancelled label back).
     // Any other failure keeps them at the carrier: the next buy sends the same references and gets them back.
     if (!(error instanceof InvalidStateError)) throw error
-    await voidQuietly(carrier, caller, accountId, bought.map((entry) => entry.label), onError)
+    // B-W2b-390: a TEST label was never sent anywhere: nothing to void.
+    if (accountId !== null) await voidQuietly(carrier, caller, accountId, bought.map((entry) => entry.label), onError)
     await retireReferences(caller, shipment.id, bought.map((entry) => entry.parcel.id)).catch((retire) => onError?.(retire))
-    throw new InvalidStateError(`${error.message} The labels just bought were voided at Sendcloud.`)
+    throw new InvalidStateError(accountId === null ? `${error.message} The TEST labels just made were dropped.` : `${error.message} The labels just bought were voided at Sendcloud.`)
   }
-  if (surplus.length > 0) await voidQuietly(carrier, caller, accountId, surplus, onError)
+  if (surplus.length > 0 && accountId !== null) await voidQuietly(carrier, caller, accountId, surplus, onError)
   const after = await caller.withClient(async (client) => labelsView(client, (await readShipment(client, shipment.id))!, serverClock.now()))
   return { created: true, answer: { ...after, outcomes, problem } }
 }
 
-/** Inside the buy's command: each bought label on its parcel, with its files; the shipment's carrier and account. */
-async function recordBought(tools: CommandTools, shipment: ShipmentHeader, accountId: string, bought: readonly Bought[]): Promise<{ parcels: string[]; surplus: CarrierLabel[] }> {
+/**
+ * B-W2b-390 (LOG-035): the site is still in test mode, read under a share lock on its settings (a switch to live labels
+ * bumps that row: it waits for this command, or this command waits for it and then reads it live).
+ */
+async function assertStillInTestMode(tools: CommandTools, siteId: string): Promise<void> {
+  const rows = await tools.tx.$queryRaw<{ testMode: boolean }[]>`SELECT "testMode" FROM "ShippingSettings" WHERE "id" = ${siteId}::uuid FOR SHARE`
+  if (rows[0]?.testMode === false) throw new InvalidStateError('The site switched to live labels while the TEST labels were made: buy the labels again (live now).')
+}
+
+/** Inside the buy's command: each bought label on its parcel, with its files; the shipment's carrier and account (none for TEST labels). */
+async function recordBought(tools: CommandTools, shipment: ShipmentHeader, accountId: string | null, bought: readonly Bought[]): Promise<{ parcels: string[]; surplus: CarrierLabel[] }> {
   const parcels: string[] = []
   const surplus: CarrierLabel[] = []
   for (const entry of bought) {
@@ -205,7 +225,7 @@ async function recordBought(tools: CommandTools, shipment: ShipmentHeader, accou
       companyId: shipment.companyId,
       siteId: shipment.siteId,
       before: { trackingNumber: null },
-      after: { shipmentId: shipment.id, seq: entry.parcel.seq, trackingNumber: entry.label.trackingNumber, providerId: entry.label.providerId, carrierCode: entry.label.carrierCode, serviceCode: shipment.serviceCode, accountId, fileIds, trackingUrl, expectedDeliveryAt: entry.label.expectedDeliveryAt ?? null },
+      after: { shipmentId: shipment.id, seq: entry.parcel.seq, trackingNumber: entry.label.trackingNumber, providerId: entry.label.providerId, carrierCode: entry.label.carrierCode, serviceCode: shipment.serviceCode, accountId, fileIds, trackingUrl, expectedDeliveryAt: entry.label.expectedDeliveryAt ?? null, ...(isTestLabel(entry.label.providerId) ? { test: true } : {}) },
     })
     parcels.push(row.id)
   }
@@ -216,7 +236,7 @@ async function recordBought(tools: CommandTools, shipment: ShipmentHeader, accou
   const recordedEtas = bought.filter((entry) => parcels.includes(entry.parcel.id)).map((entry) => expectedDeliveryOf(entry.label.expectedDeliveryAt))
   const eta = recordedEtas.some((value) => value !== null) ? shipmentEtaOf([current.expectedDeliveryAt, ...recordedEtas]) : current.expectedDeliveryAt
   const etaMoved = (eta?.getTime() ?? null) !== (current.expectedDeliveryAt?.getTime() ?? null)
-  if (parcels.length > 0 && (current.integrationAccountId === null || (shipment.carrierName === null && carrierName !== null) || etaMoved)) {
+  if (parcels.length > 0 && ((current.integrationAccountId === null && accountId !== null) || (shipment.carrierName === null && carrierName !== null) || etaMoved)) {
     await tools.tx.shipment.update({
       where: { id: shipment.id },
       data: { integrationAccountId: current.integrationAccountId ?? accountId, ...(shipment.carrierName === null && carrierName !== null ? { carrierName } : {}), ...(etaMoved ? { expectedDeliveryAt: eta } : {}) },
@@ -275,7 +295,8 @@ export async function voidLabel(carrier: CarrierRuntime, caller: CommandCaller, 
   if (collected.length > 0) throw new InvalidStateError(collected.join(' '))
 
   let outcome: 'CANCELLED' | 'QUEUED' | 'NOT_SENT' = 'NOT_SENT'
-  if (parcel.carrierParcelId !== null) {
+  // B-W2b-390 (LOG-035): a TEST label was never sent to a carrier: cleared here (NOT_SENT).
+  if (parcel.carrierParcelId !== null && !isTestLabel(parcel.carrierParcelId)) {
     if (!shipment.integrationAccountId) throw new InvalidStateError('The shipment names no Sendcloud connection: its label cannot be voided from here.')
     try {
       outcome = await carrier.voidLabel(caller, shipment.integrationAccountId, parcel.carrierParcelId)
@@ -338,7 +359,8 @@ export async function voidAllLabels(carrier: CarrierRuntime, caller: CommandCall
   for (const parcel of plan.toVoid) {
     const row = rowOf.get(parcel.parcelId)!
     let outcome: 'CANCELLED' | 'QUEUED' | 'NOT_SENT' = 'NOT_SENT'
-    if (row.carrierParcelId !== null) {
+    // B-W2b-390 (LOG-035): a TEST label was never sent to a carrier: cleared here (NOT_SENT).
+    if (row.carrierParcelId !== null && !isTestLabel(row.carrierParcelId)) {
       if (!shipment.integrationAccountId) {
         outcomes.push({ parcelId: row.id, seq: row.seq, ok: false, carrier: null, problem: 'The shipment names no Sendcloud connection: its label cannot be voided from here.' })
         continue

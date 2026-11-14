@@ -1,4 +1,4 @@
-import type { DdtFreight, DdtReason, DdtTransportBy, DocumentLanguage, DocumentType, InvoiceKind, ReferenceKind } from './model'
+import type { DdtFreight, DdtReason, DdtTransportBy, DocumentLanguage, DocumentType, InvoiceKind, ProformaPurpose, ReferenceKind } from './model'
 
 /**
  * The words of the fixed layouts, in Italian and English (GAP-008). One table per language with the same keys, so a
@@ -87,17 +87,27 @@ export interface DocumentWords {
     readonly sample: string
   }
   readonly signatures: { readonly driver: string; readonly carrier: string; readonly recipient: string }
+  /** B-W2b-391 (LOG-058): the proforma's facts and its fixed notices (never a tax document). */
+  readonly proforma: {
+    readonly purpose: string
+    readonly purposes: Readonly<Record<ProformaPurpose, string>>
+    readonly origin: string
+    readonly notice: string
+    readonly customs: string
+    readonly noCommercialValue: string
+    readonly prepayment: string
+  }
 }
 
 const IT: DocumentWords = {
-  title: { QUOTE: 'Offerta', PURCHASE_ORDER: 'Ordine di acquisto', DDT: 'Documento di trasporto (DDT)', INVOICE_COPY: 'Fattura - copia di cortesia', PACKING_LIST: 'Distinta colli', ORDER_CONFIRMATION: "Conferma d'ordine" /* B-W2b-303 */ },
+  title: { QUOTE: 'Offerta', PURCHASE_ORDER: 'Ordine di acquisto', DDT: 'Documento di trasporto (DDT)', INVOICE_COPY: 'Fattura - copia di cortesia', PACKING_LIST: 'Distinta colli', ORDER_CONFIRMATION: "Conferma d'ordine" /* B-W2b-303 */, PROFORMA: 'Fattura proforma' /* B-W2b-391 */ },
   number: 'Numero',
   date: 'Data',
   page: 'Pagina {page} di {pages}',
   continued: 'segue',
   headings: {
-    issuer: { QUOTE: 'Emittente', PURCHASE_ORDER: 'Committente', DDT: 'Mittente (cedente)', INVOICE_COPY: 'Cedente / prestatore', PACKING_LIST: 'Mittente', ORDER_CONFIRMATION: 'Emittente' /* B-W2b-303 */ },
-    party: { QUOTE: 'Cliente', PURCHASE_ORDER: 'Fornitore', DDT: 'Destinatario (cessionario)', INVOICE_COPY: 'Cessionario / committente', PACKING_LIST: 'Destinatario', ORDER_CONFIRMATION: 'Cliente' /* B-W2b-303 */ },
+    issuer: { QUOTE: 'Emittente', PURCHASE_ORDER: 'Committente', DDT: 'Mittente (cedente)', INVOICE_COPY: 'Cedente / prestatore', PACKING_LIST: 'Mittente', ORDER_CONFIRMATION: 'Emittente' /* B-W2b-303 */, PROFORMA: 'Emittente' /* B-W2b-391 */ },
+    party: { QUOTE: 'Cliente', PURCHASE_ORDER: 'Fornitore', DDT: 'Destinatario (cessionario)', INVOICE_COPY: 'Cessionario / committente', PACKING_LIST: 'Destinatario', ORDER_CONFIRMATION: 'Cliente' /* B-W2b-303 */, PROFORMA: 'Cliente / destinatario' /* B-W2b-391 */ },
     ddtPartyNotSold: 'Destinatario',
     destination: 'Luogo di destinazione',
     deliverTo: 'Consegnare a',
@@ -146,6 +156,9 @@ const IT: DocumentWords = {
       SUPPLIER_CLAIM: 'Reclamo al fornitore',
       REPAIR_ORDER: 'Riparazione',
       RETURN_AUTHORISATION: 'Autorizzazione al reso (RMA)',
+      // B-W2b-391
+      SHIPMENT: 'Spedizione',
+      SAMPLE_ROUND: 'Campionatura',
     },
     referenceDated: (number, date) => `${number} del ${date}`,
     reason: 'Causale del trasporto',
@@ -188,7 +201,7 @@ const IT: DocumentWords = {
     net: 'Imponibile',
     vat: (rate) => `IVA ${rate}`,
     vatExempt: (nature) => `Senza IVA (${nature})`,
-    gross: { QUOTE: 'Totale offerta', PURCHASE_ORDER: 'Totale ordine', DDT: 'Totale', INVOICE_COPY: 'Totale documento', PACKING_LIST: 'Totale', ORDER_CONFIRMATION: 'Totale ordine' /* B-W2b-303 */ },
+    gross: { QUOTE: 'Totale offerta', PURCHASE_ORDER: 'Totale ordine', DDT: 'Totale', INVOICE_COPY: 'Totale documento', PACKING_LIST: 'Totale', ORDER_CONFIRMATION: 'Totale ordine' /* B-W2b-303 */, PROFORMA: 'Totale proforma' /* B-W2b-391 */ },
     deposit: 'Acconto già fatturato',
     due: 'Netto a pagare',
   },
@@ -201,17 +214,29 @@ const IT: DocumentWords = {
     sample: 'ESEMPIO - documento non valido',
   },
   signatures: { driver: 'Firma del conducente', carrier: 'Firma del vettore', recipient: 'Firma del destinatario' },
+  // B-W2b-391 (LOG-058)
+  proforma: {
+    purpose: 'Scopo',
+    purposes: { CUSTOMS: 'Dogana (esportazione)', SAMPLES: 'Campionatura', PREPAYMENT: 'Richiesta di pagamento anticipato' },
+    origin: 'Origine delle merci',
+    notice:
+      "Fattura proforma: documento privo di valore fiscale, non costituisce fattura ai sensi dell'art. 21 del DPR 633/1972. " +
+      'La fattura sarà emessa alla consegna o al pagamento.',
+    customs: 'Valori indicati ai fini doganali.',
+    noCommercialValue: 'Campioni senza valore commerciale: valore indicato ai soli fini doganali.',
+    prepayment: "Richiesta di pagamento: la fattura d'acconto sarà emessa al ricevimento del pagamento.",
+  },
 }
 
 const EN: DocumentWords = {
-  title: { QUOTE: 'Quotation', PURCHASE_ORDER: 'Purchase order', DDT: 'Transport document (DDT)', INVOICE_COPY: 'Invoice - courtesy copy', PACKING_LIST: 'Packing list', ORDER_CONFIRMATION: 'Order confirmation' /* B-W2b-303 */ },
+  title: { QUOTE: 'Quotation', PURCHASE_ORDER: 'Purchase order', DDT: 'Transport document (DDT)', INVOICE_COPY: 'Invoice - courtesy copy', PACKING_LIST: 'Packing list', ORDER_CONFIRMATION: 'Order confirmation' /* B-W2b-303 */, PROFORMA: 'Proforma invoice' /* B-W2b-391 */ },
   number: 'Number',
   date: 'Date',
   page: 'Page {page} of {pages}',
   continued: 'continued',
   headings: {
-    issuer: { QUOTE: 'Issued by', PURCHASE_ORDER: 'Buyer', DDT: 'Sender (consignor)', INVOICE_COPY: 'Seller', PACKING_LIST: 'Sender', ORDER_CONFIRMATION: 'Issued by' /* B-W2b-303 */ },
-    party: { QUOTE: 'Customer', PURCHASE_ORDER: 'Supplier', DDT: 'Recipient (consignee)', INVOICE_COPY: 'Buyer', PACKING_LIST: 'Recipient', ORDER_CONFIRMATION: 'Customer' /* B-W2b-303 */ },
+    issuer: { QUOTE: 'Issued by', PURCHASE_ORDER: 'Buyer', DDT: 'Sender (consignor)', INVOICE_COPY: 'Seller', PACKING_LIST: 'Sender', ORDER_CONFIRMATION: 'Issued by' /* B-W2b-303 */, PROFORMA: 'Issued by' /* B-W2b-391 */ },
+    party: { QUOTE: 'Customer', PURCHASE_ORDER: 'Supplier', DDT: 'Recipient (consignee)', INVOICE_COPY: 'Buyer', PACKING_LIST: 'Recipient', ORDER_CONFIRMATION: 'Customer' /* B-W2b-303 */, PROFORMA: 'Customer / consignee' /* B-W2b-391 */ },
     ddtPartyNotSold: 'Recipient',
     destination: 'Place of delivery',
     deliverTo: 'Deliver to',
@@ -260,6 +285,9 @@ const EN: DocumentWords = {
       SUPPLIER_CLAIM: 'Supplier claim',
       REPAIR_ORDER: 'Repair',
       RETURN_AUTHORISATION: 'Return authorisation (RMA)',
+      // B-W2b-391
+      SHIPMENT: 'Shipment',
+      SAMPLE_ROUND: 'Sample round',
     },
     referenceDated: (number, date) => `${number} of ${date}`,
     reason: 'Reason for transport',
@@ -302,7 +330,7 @@ const EN: DocumentWords = {
     net: 'Net amount',
     vat: (rate) => `VAT ${rate}`,
     vatExempt: (nature) => `No VAT (${nature})`,
-    gross: { QUOTE: 'Quotation total', PURCHASE_ORDER: 'Order total', DDT: 'Total', INVOICE_COPY: 'Document total', PACKING_LIST: 'Total', ORDER_CONFIRMATION: 'Order total' /* B-W2b-303 */ },
+    gross: { QUOTE: 'Quotation total', PURCHASE_ORDER: 'Order total', DDT: 'Total', INVOICE_COPY: 'Document total', PACKING_LIST: 'Total', ORDER_CONFIRMATION: 'Order total' /* B-W2b-303 */, PROFORMA: 'Proforma total' /* B-W2b-391 */ },
     deposit: 'Deposit already invoiced',
     due: 'Amount due',
   },
@@ -315,6 +343,16 @@ const EN: DocumentWords = {
     sample: 'SAMPLE - not a valid document',
   },
   signatures: { driver: "Driver's signature", carrier: "Carrier's signature", recipient: "Recipient's signature" },
+  // B-W2b-391 (LOG-058)
+  proforma: {
+    purpose: 'Purpose',
+    purposes: { CUSTOMS: 'Customs (export)', SAMPLES: 'Samples', PREPAYMENT: 'Prepayment request' },
+    origin: 'Country of origin',
+    notice: 'Proforma invoice: a document with no fiscal value; it is not an invoice under art. 21 of DPR 633/1972. The invoice is issued on delivery or on payment.',
+    customs: 'Values stated for customs purposes.',
+    noCommercialValue: 'Samples of no commercial value: value stated for customs purposes only.',
+    prepayment: 'Payment request: the advance invoice is issued when the payment is received.',
+  },
 }
 
 export const DOCUMENT_WORDS: Readonly<Record<DocumentLanguage, DocumentWords>> = Object.freeze({ it: IT, en: EN })

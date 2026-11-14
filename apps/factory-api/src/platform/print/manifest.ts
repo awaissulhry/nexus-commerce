@@ -23,4 +23,9 @@ export const manifest = defineManifest({
   'GET /print/jobs/:jobId': { audiences: ['office', 'floor'], permission: 'print.view', scope: 'record' },
   'POST /print/jobs/:jobId/retry': { audiences: ['office', 'floor'], permission: 'print.view', scope: 'record' },
   'POST /print/labels/pdf': { audiences: ['office', 'floor'], permission: 'print.labels', scope: 'tenant' },
+  // B-W2b-391 (LOG-026): a printer's mode (DIRECT | RELAY | PDF); a station's DIRECT jobs: its queue, take one, say how it went.
+  'PUT /print/printers/:printerId/mode': { audiences: ['office'], permission: 'print.manage', scope: 'record' },
+  'GET /print/direct/jobs': { audiences: ['office', 'floor'], permission: 'print.labels', scope: 'record' },
+  'POST /print/direct/jobs/:jobId/take': { audiences: ['office', 'floor'], permission: 'print.labels', scope: 'record' },
+  'POST /print/direct/jobs/:jobId/report': { audiences: ['office', 'floor'], permission: 'print.labels', scope: 'record' },
 })

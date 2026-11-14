@@ -53,6 +53,9 @@ const fingerprintOf = (contents: Contents): string =>
     )
     .digest('hex')
 
+/** B-W2b-391: the fingerprint of the contents now, for the shipment's one PDF (is its newest packing list still current?). */
+export const packingListFingerprint = fingerprintOf
+
 interface VersionRow extends PackingListVersion {
   readonly id: string
   readonly number: string
@@ -93,8 +96,10 @@ export async function currentPackingListFile(db: CommandTx, shipmentId: string):
     const file = await db.storedFile.findFirst({ where: { id: newest.fileId, status: 'AVAILABLE' }, select: { id: true } })
     if (file) return { id: file.id, printedAt: newest.createdAt }
   }
+  // B-W2b-391: never another generated document of the shipment (its one PDF, shared with the floor too, may hold TEST labels).
+  const others = await db.generatedDocument.findMany({ where: { recordType: 'Shipment', recordId: shipmentId, kind: { not: 'PACKING_LIST' } }, select: { fileId: true } })
   const older = await db.storedFile.findFirst({
-    where: { recordType: 'Shipment', recordId: shipmentId, kind: 'DOCUMENT', status: 'AVAILABLE', contentType: 'application/pdf', visibility: { has: 'FLOOR' } },
+    where: { recordType: 'Shipment', recordId: shipmentId, kind: 'DOCUMENT', status: 'AVAILABLE', contentType: 'application/pdf', visibility: { has: 'FLOOR' }, id: { notIn: others.map((row) => row.fileId) } },
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     select: { id: true, createdAt: true },
   })

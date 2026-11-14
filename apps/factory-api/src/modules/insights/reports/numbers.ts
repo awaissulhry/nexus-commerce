@@ -7,6 +7,10 @@ import { CUT_OFF, numbersFor, TARGET_SET_BY, targetWordOf, type NumberRule } fro
 import { lastWeeks, pctText, periodRange, weekStart, type DayRange } from '@nexus/factory-domain/insights/reports/results'
 import { INVOICES_VIEW } from '@nexus/factory-domain/invoicing/permissions'
 import { markMoney } from '@nexus/factory-domain/money/marked'
+// B-W2b-389 (PLT-132): totals in several currencies counted in the euro at the day's rates.
+import { convertMinor, totalIn } from '@nexus/factory-domain/money/currency/convert'
+import { EURO } from '@nexus/factory-domain/money/currency/currencies'
+import { loadRateBook } from '../../../platform/currency/service'
 import { PLANNING_VIEW } from '@nexus/factory-domain/planning/permissions'
 import { PRODUCTION_REPORTS_VIEW } from '@nexus/factory-domain/production/reports/permissions'
 import { QUALITY_LOTS_VIEW } from '@nexus/factory-domain/quality/lab/permissions'
@@ -45,6 +49,8 @@ interface Reading {
   readonly spark?: readonly (number | null)[] | null
   readonly complete?: boolean
   readonly problem?: NumberProblem | null
+  /** B-W2b-389 (PLT-132): amounts of other currencies counted in `currency` at the day's rate of the rates table. */
+  readonly converted?: { readonly to: string; readonly from: readonly string[] } | null
 }
 
 interface Context {
@@ -58,12 +64,28 @@ const day = (value: BusinessDate) => new Date(`${value}T00:00:00Z`)
 const ordersScope = (actor: Actor) => scopeWhere(actor, ORDERS_VIEW, { company: 'companyId', party: 'partyId' })
 const decimal = (value: string | null | undefined) => (value === null || value === undefined ? null : Number.parseFloat(value))
 
-/** Sums per week of (day, amount, currency) rows; one currency only (else the value is not summed). */
-function weeklySums(rows: readonly { day: BusinessDate; amount: number; currency: string }[], weeks: readonly DayRange[], current: DayRange): Reading {
+/**
+ * Sums per week of (day, amount, currency) rows. B-W2b-389 (PLT-132): a total never adds two currencies — rows in several
+ * currencies count in the euro, each at its day's rate of the rates table (`converted` names them); a row with no rate near
+ * its day leaves the number unsummed (MIXED_CURRENCIES), as before.
+ */
+async function weeklySums(caller: CommandCaller, rows: readonly { day: BusinessDate; amount: number; currency: string }[], weeks: readonly DayRange[], current: DayRange): Promise<Reading> {
   const currencies = new Set(rows.map((row) => row.currency))
-  if (currencies.size > 1) return { value: null, problem: 'MIXED_CURRENCIES', spark: null }
-  const sum = (range: DayRange) => rows.filter((row) => row.day >= range.from && row.day <= range.to).reduce((total, row) => total + row.amount, 0)
-  return { value: sum(current), currency: [...currencies][0] ?? null, spark: weeks.map(sum) }
+  let counted = rows
+  let converted: Reading['converted'] = null
+  if (currencies.size > 1) {
+    const days = rows.map((row) => row.day).sort()
+    const book = await caller.withClient((db) => loadRateBook(db, days[0]!, days.at(-1)!))
+    const inEuro = rows.map((row) => {
+      const rate = book.rate(EURO, row.currency, row.day)
+      return rate ? { ...row, amount: convertMinor(row.amount, row.currency, EURO, rate), currency: EURO } : null
+    })
+    if (inEuro.some((row) => row === null)) return { value: null, problem: 'MIXED_CURRENCIES', spark: null }
+    counted = inEuro as { day: BusinessDate; amount: number; currency: string }[]
+    converted = { to: EURO, from: [...currencies].filter((code) => code !== EURO).sort() }
+  }
+  const sum = (range: DayRange) => counted.filter((row) => row.day >= range.from && row.day <= range.to).reduce((total, row) => total + row.amount, 0)
+  return { value: sum(current), currency: converted ? EURO : ([...currencies][0] ?? null), spark: weeks.map(sum), converted }
 }
 
 const READERS: Readonly<Record<string, (context: Context) => Promise<Reading>>> = Object.freeze({
@@ -75,7 +97,7 @@ const READERS: Readonly<Record<string, (context: Context) => Promise<Reading>>> 
         select: { orderDate: true, netAmount: true, currency: true },
       }),
     )
-    return weeklySums(found.map((row) => ({ day: businessDate(row.orderDate, 'UTC'), amount: row.netAmount, currency: row.currency })), weeks, periodRange('THIS_WEEK', today))
+    return weeklySums(caller, found.map((row) => ({ day: businessDate(row.orderDate, 'UTC'), amount: row.netAmount, currency: row.currency })), weeks, periodRange('THIS_WEEK', today))
   },
 
   async 'orders.late'({ caller, actor, today }) {
@@ -176,9 +198,16 @@ const READERS: Readonly<Record<string, (context: Context) => Promise<Reading>>> 
     return { value: answer.tiles.THIS_WEEK.orders, complete: answer.complete }
   },
 
-  async 'finance.overdue'({ caller }) {
+  async 'finance.overdue'({ caller, today }) {
     const tiles = (await ageing(caller, { limit: 1 })).tiles as readonly { currency: string; overdue: unknown }[]
-    if (tiles.length > 1) return { value: null, problem: 'MIXED_CURRENCIES' }
+    // B-W2b-389 (PLT-132): several currencies count in the euro at today's rate of the rates table, or the number says it cannot.
+    if (tiles.length > 1) {
+      const total = await caller.withClient(async (db) => {
+        const book = await loadRateBook(db, today, today)
+        return totalIn(tiles.map((tile) => ({ amount: Number(tile.overdue), currency: tile.currency })), EURO, (from) => book.rate(EURO, from, today))
+      })
+      return total.amount === null ? { value: null, problem: 'MIXED_CURRENCIES' } : { value: total.amount, currency: EURO, converted: { to: EURO, from: total.converted.map((part) => part.currency) } }
+    }
     const tile = tiles[0]
     return tile ? { value: Number(tile.overdue), currency: tile.currency } : { value: 0, currency: null }
   },
@@ -205,6 +234,7 @@ const READERS: Readonly<Record<string, (context: Context) => Promise<Reading>>> 
       }),
     )
     return weeklySums(
+      caller,
       found.filter((row) => row.issueDate).map((row) => ({ day: businessDate(row.issueDate!, 'UTC'), amount: row.docType === 'TD04' ? -row.netTotal : row.netTotal, currency: row.currency })),
       weeks,
       periodRange('THIS_WEEK', today),
@@ -266,6 +296,8 @@ async function readNumber(rule: NumberRule, context: Context) {
     spark: rule.history && reading.spark ? marked(rule, [...reading.spark]) : null,
     complete: reading.complete ?? true,
     problem: reading.problem ?? null,
+    // B-W2b-389: the currencies counted in this number's currency at the day's rates (null: one currency only).
+    converted: reading.converted ? { to: reading.converted.to, from: [...reading.converted.from] } : null,
     list: rule.list ? { api: rule.list.api, query: { ...rule.list.query } } : null,
     report: rule.report ? { key: rule.report.key, filters: { ...rule.report.filters } } : null,
     explain: { definition: rule.definition, formula: rule.formula, sources: rule.sources, period: rule.period, cutOff: CUT_OFF, setBy: rule.target ? TARGET_SET_BY : null },

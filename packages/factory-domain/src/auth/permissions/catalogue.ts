@@ -362,8 +362,12 @@ import { SALES_FITTINGS_DEFINITIONS, SALES_FITTINGS_PERMISSIONS } from '../../sa
 import { SHIPPING_PACKAGING_DEFINITIONS, SHIPPING_PACKAGING_PERMISSIONS } from '../../shipping/packaging/permissions'
 // B-W2b-386: the shipment queue in depth (shipping.holds.manage, shipping.holds.release).
 import { SHIPPING_HOLDS_DEFINITIONS, SHIPPING_HOLDS_PERMISSIONS } from '../../shipping/holds/permissions'
+// B-W2b-391: labels and documents (shipping.proforma.issue).
+import { SHIPPING_PROFORMA_DEFINITIONS, SHIPPING_PROFORMA_PERMISSIONS } from '../../shipping/proforma/permissions'
 // B-W2b-385: notifications in depth (home.notifications.manage: the notification defaults of each office role).
 import { NOTIFICATION_DEFAULTS_DEFINITIONS, NOTIFICATION_DEFAULTS_PERMISSIONS } from '../../notifications/preferences/permissions'
+// B-W2b-389: currencies and exchange rates (currencies.view | manage).
+import { CURRENCY_DEFINITIONS, CURRENCY_PERMISSIONS } from '../../money/currency/permissions'
 // B-W2b-393: bank statements, matching and write-offs (payments.bank.view | import | match, payments.writeOff).
 import { PAYMENTS_BANK_DEFINITIONS, PAYMENTS_BANK_PERMISSIONS } from '../../payments/bank/permissions'
 import { WRITE_OFF_DEFINITIONS, WRITE_OFF_PERMISSIONS } from '../../payments/write-offs/permissions'
@@ -1019,8 +1023,12 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   SHIPPING_PACKAGING_DEFINITIONS,
   // B-W2b-386: the shipment queue in depth (area `shipping`).
   SHIPPING_HOLDS_DEFINITIONS,
+  // B-W2b-391: labels and documents (area `shipping`).
+  SHIPPING_PROFORMA_DEFINITIONS,
   // B-W2b-385: the notification defaults of each office role (area `home`).
   NOTIFICATION_DEFAULTS_DEFINITIONS,
+  // B-W2b-389: currencies and exchange rates (area `currencies`).
+  CURRENCY_DEFINITIONS,
   // B-W2b-393: bank statements, matching and write-offs (area `payments`).
   PAYMENTS_BANK_DEFINITIONS,
   WRITE_OFF_DEFINITIONS,
@@ -1390,8 +1398,12 @@ for (const name of SALES_FITTINGS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclar
 for (const name of SHIPPING_PACKAGING_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-386: the shipment queue in depth.
 for (const name of SHIPPING_HOLDS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-391: labels and documents.
+for (const name of SHIPPING_PROFORMA_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-385: the notification defaults of each office role.
 for (const name of NOTIFICATION_DEFAULTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-389: currencies and exchange rates.
+for (const name of CURRENCY_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-393: bank statements, matching and write-offs.
 for (const name of [...PAYMENTS_BANK_PERMISSIONS, ...WRITE_OFF_PERMISSIONS]) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {

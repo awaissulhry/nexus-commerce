@@ -278,16 +278,21 @@ export async function listJobs(
 }
 
 /** print.retry: a FAILED job queued again (its tries counted from 0), with the permission that queued it. */
-export async function retryJob(caller: CommandCaller, jobId: string, input: { version: number }, idempotencyKey?: string): Promise<PrintJobView> {
+export async function retryJob(caller: CommandCaller, jobId: string, input: { version: number }, idempotencyKey?: string, system?: (tenantId: string) => CommandCaller): Promise<PrintJobView> {
   const before = await readJob(caller, jobId, COMMON)
   if (!can(actorOf(contextOf(caller)), permissionFor(before.payloadKind), scopeOfJob(before))) throw new ForbiddenError()
   await printerFor(caller, before.printerId, permissionFor(before.payloadKind))
+  // B-W2b-391: a floor device holds no update grant on print jobs (a station sends a failed DIRECT job again): after the
+  // checks above, its retry runs as its tenant's system caller, the device on the audit row.
+  const context = contextOf(caller)
+  const floorDevice = context.audience === 'floor' ? context.deviceId : null
+  const writer = context.audience === 'floor' && system ? system(context.tenantId) : caller
   const { result } = await command(
-    caller,
+    writer,
     { name: 'print.retry', idempotencyKey, input: { jobId, ...input }, record: { type: 'PrintJob', id: jobId, expectedVersion: input.version, transition: { machine: printJobMachine, to: 'QUEUED' } } },
     async ({ tx, audit, emit }) => {
       const row = await tx.printJob.update({ where: { id: jobId }, data: { attempts: 0, lastError: null, failedAt: null }, select: COMMON })
-      audit({ recordType: 'PrintJob', recordId: jobId, companyId: row.companyId, siteId: row.siteId, before: { status: before.status, attempts: before.attempts, lastError: before.lastError }, after: { status: row.status, attempts: 0 } })
+      audit({ recordType: 'PrintJob', recordId: jobId, companyId: row.companyId, siteId: row.siteId, before: { status: before.status, attempts: before.attempts, lastError: before.lastError }, after: { status: row.status, attempts: 0, ...(floorDevice ? { deviceId: floorDevice } : {}) } })
       emit({ type: 'print.job_queued', subject: jobId, companyId: row.companyId, siteId: row.siteId, payload: { jobId, printerId: row.printerId, payloadKind: row.payloadKind } })
       return jobView(row)
     },
@@ -352,15 +357,18 @@ export async function dispatchJob(tools: DispatchTools, caller: CommandCaller, j
   const context = contextOf(caller)
   if (context.audience !== 'system' && context.audience !== 'office') throw new ForbiddenError()
   const job = (await caller.withClient((client) =>
-    client.printJob.findUnique({ where: { id: jobId }, select: { ...ONE, printer: { select: { id: true, code: true, kind: true, relay: true, relayTarget: true, status: true } } } }),
-  )) as (JobRow & { printer: { id: string; code: string; kind: 'LABEL_ZPL' | 'A4_PDF'; relay: PrintRelayKind; relayTarget: string; status: string } }) | null
+    client.printJob.findUnique({ where: { id: jobId }, select: { ...ONE, printer: { select: { id: true, code: true, kind: true, relay: true, relayTarget: true, status: true, mode: true } } } }),
+  )) as (JobRow & { printer: { id: string; code: string; kind: 'LABEL_ZPL' | 'A4_PDF'; relay: PrintRelayKind; relayTarget: string; status: string; mode: 'DIRECT' | 'RELAY' | 'PDF' } }) | null
   if (!job || job.status !== 'QUEUED') return 'skipped'
+  // B-W2b-391 (LOG-026): a DIRECT printer's job waits for its station (platform/print/direct); a PDF printer takes no job.
+  if (job.printer.mode === 'DIRECT') return 'skipped'
 
   const relay = tools.relays.relayFor(job.printer.relay)
   const fail = async (error: string): Promise<DispatchOutcome> => {
     await recordDispatch(caller, job, { status: 'FAILED', error }, tools.causationId)
     return 'failed'
   }
+  if (job.printer.mode === 'PDF') return fail('This printer prints from the browser as a PDF: print the PDF there.')
   if (!relay) return fail('No print relay serves this printer here.')
   try {
     if (job.printer.status !== 'ACTIVE') throw new PrintRetryError(`The printer is ${job.printer.status.toLowerCase()}.`)

@@ -15,7 +15,12 @@ import { seedUuid, type SeedContext } from '../../src/seeding'
  *                base seed's whole November story would have to move back to drop this (see the golden-gaps notes).
  *                The INVOICE series needs nothing: the seeded deposit invoice is dated on the day its quote was accepted.
  *   Sendcloud    company A's carrier account, FAKE (no network): no route makes an integration account yet.
+ *   live labels  B-W2b-390: site A1 buys its labels through that account (every site starts in test mode, LOG-035; the first
+ *                real order leaves with a carrier's label): as the Owner's "Switch to live labels" would, a minute before the run.
  *   rate limits  the tenant's accounts take a whole flow's calls in a minute (the defaults are 60, burst 10).
+ *   ticket printer  B-W2b-391: the cutting table's tickets go through the site's relay (the FAKE relay records them): A1's
+ *                label printer, seeded as the packing station's DIRECT printer (B-W2b-367), whose jobs a station's browser
+ *                would take instead, is the relay's again for the run.
  *
  * Written in the tenant's office scope, as the base seeds write. Made up and harmless; a second run changes nothing.
  */
@@ -44,6 +49,9 @@ export async function seed({ db, namespace }: SeedContext): Promise<void> {
       const sendcloud = { companyId: companyA, provider: 'SENDCLOUD' as const, code: 'sendcloud-a', label: 'Sendcloud company A (fake)', mode: 'FAKE' as const, createdById: actorId }
       await tx.integrationAccount.upsert({ where: { id: id('integration:account:sendcloud') }, create: { id: id('integration:account:sendcloud'), ...sendcloud }, update: {}, select: { id: true } })
       await tx.integrationAccount.updateMany({ data: { rateLimitPerMinute: 6000, rateLimitBurst: 1000 } })
+      await tx.shippingSettings.updateMany({ where: { id: id('site:A1'), testMode: true }, data: { testMode: false, liveSince: new Date(Date.now() - 60_000), liveSetById: actorId } })
+      // B-W2b-391
+      await tx.printer.updateMany({ where: { id: id('print:printer:A1:LBL'), mode: 'DIRECT' }, data: { mode: 'RELAY', version: { increment: 1 } } })
     }),
   )
 }

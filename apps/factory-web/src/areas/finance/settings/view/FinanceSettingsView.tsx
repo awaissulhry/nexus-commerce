@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { ShieldOff } from 'lucide-react'
 import { Banner, Card, EmptyState, Field, KeyValue, SummaryTable } from '@nexus/ui/components'
@@ -48,15 +48,15 @@ const ACCOUNTANT_POINTS = ['foreignConsumer', 'resendDays', 'progressive'] as co
  * rules and the points that wait for the accountant — said as open, never as settled. One readable column of cards on a
  * narrow screen, two on a wide one. W1: the VAT rules and their wording are the code's (W2b brings tax settings).
  */
-export function FinanceSettingsView({ model, actions }: { model: FinanceSettingsModel; actions?: FinanceSettingsActions }) {
+export function FinanceSettingsView({ model, actions, currencies }: { model: FinanceSettingsModel; actions?: FinanceSettingsActions; /** B-W2b-389: the Currencies & rates section (its container, or a design case's view). */ currencies?: ReactNode }) {
   return (
     <WithMessages namespaces={['finance', 'finance-daily', 'finance-costing', 'lists']}>
-      <Settings model={model} actions={actions} />
+      <Settings model={model} actions={actions} currencies={currencies} />
     </WithMessages>
   )
 }
 
-function Settings({ model, actions }: { model: FinanceSettingsModel; actions?: FinanceSettingsActions }) {
+function Settings({ model, actions, currencies }: { model: FinanceSettingsModel; actions?: FinanceSettingsActions; currencies?: ReactNode }) {
   const t = useT('finance')
   const loaded = model.settings
   if (loaded.status !== 'ready') {
@@ -151,6 +151,8 @@ function Settings({ model, actions }: { model: FinanceSettingsModel; actions?: F
         <AccountantCard />
         {model.costing && <CostingCard model={model.costing} actions={actions?.costing} />}
       </div>
+      {/* B-W2b-389: Currencies & rates (sec:currencies). */}
+      {currencies}
       <StepUpModal
         open={model.stepUp.open}
         title={t('stepUp.title')}

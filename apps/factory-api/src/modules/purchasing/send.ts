@@ -27,6 +27,8 @@ import { TAX_COLUMNS, taxFieldsOf } from '../parties/store'
 import { confirmLinkTerms, insertConfirmLink, mintConfirmLink, revokeConfirmLinks, type ConfirmLinkTerms, type MintedLink } from './confirm-links'
 import { deliverLinkMail, queueLinkMail } from './mail'
 import { detailInCommand, refreshTotal } from './orders'
+// B-W2b-389 (CY1:01): the day's rate when no rate is typed.
+import { takeDayRate } from './po-depth/value'
 import { draftChangesOf } from './revisions/read'
 import { writeRevisionInCommand } from './revisions/state'
 import { openConfirmTask } from './portal-orders/tasks'
@@ -375,6 +377,8 @@ export async function sendAs(host: SendHost, orderId: string, body: SendBody, id
         throw new DomainError('conflict', "The supplier's details changed while the order was being sent: send it again.", [{ path: 'partyId', message: 'Changed since the document was made.' }])
       }
       const file = await recordGeneratedFile(tools, plan.file, { details: { documentType: 'PURCHASE_ORDER', number: plan.documentNumber, layout: plan.layout, language: plan.language } })
+      // B-W2b-389 (CY1:01): no rate typed on an order in another currency → the day's rate, kept with the send.
+      await takeDayRate(tools, current.id)
       const netAmount = await refreshTotal(tools, current.id)
       // B-W2a-52 (SCM-087): the deadline for the supplier's answer, after the send time (the trigger checks it).
       const confirmBy = plan.confirmBy ?? (await defaultConfirmByFor(tx, context.tenantId, current.companyId, tools.now, defaultConfirmBy(tools.now, businessDate(tools.now), plan.arrivalDay)))
