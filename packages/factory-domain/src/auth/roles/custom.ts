@@ -36,7 +36,6 @@ export const CUSTOM_ROLE_REFUSALS = Object.freeze({
   held: 'You hold this role: ask another administrator.',
   notArchived: 'This role is not archived.',
   alreadyArchived: 'This role is archived already.',
-  outsideScope: 'Archiving ends assignments your own scope does not reach: ask an administrator over every company.',
   lastAdmin: 'Archiving would leave the tenant without an administrator.',
 })
 export type CustomRoleRefusal = keyof typeof CUSTOM_ROLE_REFUSALS
