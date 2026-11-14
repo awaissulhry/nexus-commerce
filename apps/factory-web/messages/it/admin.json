@@ -1665,6 +1665,7 @@
     "email_triage": "Smistare la posta ricevuta",
     "email_delivery_view": "Vedere il registro di consegna della posta e gli indirizzi bloccati",
     "email_delivery_unblock": "Sbloccare un indirizzo a cui la posta è rifiutata",
+    "email_inboxes_manage": "Impostare le caselle condivise e l’indirizzo di acquisizione della posta inoltrata",
     "integrations_view": "Vedere i servizi esterni e le loro chiamate",
     "integrations_manage": "Sospendere e riattivare i servizi esterni",
     "compliance_certificates_view": "Vedere i certificati di esame UE del tipo",

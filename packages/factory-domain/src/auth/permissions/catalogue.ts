@@ -373,6 +373,8 @@ import { TAX_RULES_DEFINITIONS, TAX_RULES_PERMISSIONS } from '../../invoicing/ta
 // B-W2b-393: bank statements, matching and write-offs (payments.bank.view | import | match, payments.writeOff).
 import { PAYMENTS_BANK_DEFINITIONS, PAYMENTS_BANK_PERMISSIONS } from '../../payments/bank/permissions'
 import { WRITE_OFF_DEFINITIONS, WRITE_OFF_PERMISSIONS } from '../../payments/write-offs/permissions'
+// B-W2b-394: mail in depth (email.inboxes.manage: team inboxes and the capture address).
+import { MAIL_DEPTH_DEFINITIONS, MAIL_DEPTH_PERMISSIONS } from '../../mail-depth/permissions'
 
 /**
  * Every permission of the factory, assembled (feature PLT-029). A module that adds routes declares its permissions
@@ -1052,6 +1054,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   // B-W2b-393: bank statements, matching and write-offs (area `payments`).
   PAYMENTS_BANK_DEFINITIONS,
   WRITE_OFF_DEFINITIONS,
+  // B-W2b-394: team inboxes and the capture address (area `email`, declared above).
+  MAIL_DEPTH_DEFINITIONS,
   // B-W2b-399: who looked and the security events (areas `audit`, `security`).
   AUDIT_DEPTH_PERMISSIONS,
   SECURITY_EVENTS_PERMISSIONS,
@@ -1431,6 +1435,8 @@ for (const name of CURRENCY_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(nam
 for (const name of TAX_RULES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-393: bank statements, matching and write-offs.
 for (const name of [...PAYMENTS_BANK_PERMISSIONS, ...WRITE_OFF_PERMISSIONS]) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-394: team inboxes and the capture address.
+for (const name of MAIL_DEPTH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

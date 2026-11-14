@@ -10,6 +10,11 @@ import { processEmail } from './service'
 // B-W2a-41: the delivery log and the blocked addresses (delivery/).
 import { listBlockedContract, listDeliveryContract, unblockContract } from './delivery/contract'
 import { listBlocked, listDelivery, unblockAddress } from './delivery/log'
+// B-W2b-394 (COL-031, ML1:01): the delivery status of a thread's mail; the FAKE mail account's webhook secret.
+import { deliveryStatusContract, webhookSecretContract } from './delivery-status/contract'
+import { threadDeliveryStatus } from './delivery-status/status'
+import { setWebhookSecret } from './delivery-status/webhook-secret'
+import { processSecrets } from '../secrets/service'
 
 /**
  * Email out (platform part; plan A1 §3.7; features PLT-139, PLT-230, COL-024): send a mail from a record's thread as
@@ -50,4 +55,11 @@ export default defineRoutes('email-out', manifest, async (app) => {
   app.post('/email/blocked/:suppressionId/unblock', { schema: unblockContract }, async (request) => ({
     address: await unblockAddress(request, request.params.suppressionId, request.body, idempotencyKeyFrom(request)),
   }))
+
+  // B-W2b-394 (COL-031): where each mail of a record's thread is; (ML1:01) a FAKE mail account's webhook secret, with a fresh code.
+  app.get('/email/delivery-status', { schema: deliveryStatusContract }, async (request) => threadDeliveryStatus(request, { type: request.query.recordType, id: request.query.recordId }))
+  app.put('/email/ses-accounts/:accountId/webhook-secret', { schema: webhookSecretContract }, async (request) => {
+    requireStepUp(officeAuthOf(app), request)
+    return setWebhookSecret(processSecrets(), request, request.params.accountId, request.body, idempotencyKeyFrom(request))
+  })
 })

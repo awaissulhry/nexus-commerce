@@ -26,4 +26,8 @@ export const manifest = defineManifest({
   'POST /sales/inquiries/:inquiryId/decline': manage,
   'POST /sales/inquiries/:inquiryId/lost': manage,
   'POST /sales/inquiries/:inquiryId/quote': manage,
+  // B-W2b-394 (ML1:02): the inquiry addresses — read with the inquiries, changed as sales settings (sales.settings.manage, a
+  // company's own or, over every company, the tenant's).
+  'GET /sales/inquiries/addresses': view,
+  'PUT /sales/inquiries/addresses': { audiences: ['office'], permission: 'sales.settings.manage', scope: 'record' },
 })

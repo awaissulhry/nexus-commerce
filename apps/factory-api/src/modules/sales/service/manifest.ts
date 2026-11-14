@@ -23,4 +23,6 @@ export const manifest = defineManifest({
   'DELETE /sales/service/cases/:caseId/links/:linkId': manage,
   'POST /sales/service/cases/:caseId/repair': manage,
   'POST /sales/service/cases/:caseId/return': manage,
+  // B-W2b-394 (ML1:03): a case from a mail in one step (the handler also checks email.triage over the mail).
+  'POST /sales/service/cases/from-mail/:inboundEmailId': manage,
 })
