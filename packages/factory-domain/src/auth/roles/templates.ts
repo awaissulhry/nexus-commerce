@@ -180,6 +180,8 @@ import { ACCOUNTING_BRIDGE_ADDS } from '../../accounting/mapping/permissions'
 import { COLLECTIONS_ADDS } from '../../receivables/riba/permissions'
 // B-W2b-423: cost in depth (finance applies a mass cost update).
 import { COST_DEPTH_ADDS } from '../../costing/mass-update/permissions'
+// B-W2b-403
+import { PAYABLES_DEPTH_ADDS } from '../../payables/proposal/permissions'
 // B-W2b-422: templates (the administrator keeps the document and e-mail templates and the shared replies).
 import { TEMPLATES_ADDS } from '../../templates/permissions'
 
@@ -1119,6 +1121,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (COLLECTIONS_ADDS[key] ?? []) : []),
   // B-W2b-423
   ...(audience === 'office' ? (COST_DEPTH_ADDS[key] ?? []) : []),
+  // B-W2b-403
+  ...(audience === 'office' ? (PAYABLES_DEPTH_ADDS[key] ?? []) : []),
   // B-W2b-422
   ...(audience === 'office' ? (TEMPLATES_ADDS[key] ?? []) : [])]
 /**
