@@ -178,7 +178,17 @@ export async function listInbound(caller: CommandCaller, query: { readonly statu
   )
   const shown = rows.slice(0, query.limit)
   const last = shown.at(-1)
-  return { mails: shown.map(summaryOf), nextCursor: rows.length > query.limit && last ? encodeCursor({ at: last.receivedAt, id: last.id }) : null }
+  // B-W2b-394 (ML1:02): a mail to sort that was made into an inquiry waits there (its inquiry is answered), not here; a page
+  // may then hold fewer mails than asked, its cursor still goes on.
+  const made = query.status && !TO_SORT.includes(query.status) ? new Set<string>() : await madeIntoInquiry(caller, shown.map((row) => row.id))
+  return { mails: shown.filter((row) => !made.has(row.id)).map(summaryOf), nextCursor: rows.length > query.limit && last ? encodeCursor({ at: last.receivedAt, id: last.id }) : null }
+}
+
+/** B-W2b-394 (ML1:02): which of some mails an inquiry was made from (Inquiry.sourceEmailId, one per mail). */
+async function madeIntoInquiry(caller: CommandCaller, ids: readonly string[]): Promise<Set<string>> {
+  if (ids.length === 0) return new Set()
+  const rows = await caller.withClient((client) => client.inquiry.findMany({ where: { sourceEmailId: { in: [...ids] } }, select: { sourceEmailId: true } }))
+  return new Set(rows.flatMap((row) => (row.sourceEmailId ? [row.sourceEmailId] : [])))
 }
 
 /** GET /email/inbound/:id. */

@@ -278,6 +278,10 @@
       },
       "inquiries": {
         "assigned": "{actor} ti ha affidato la richiesta {record}"
+      },
+      "mail": {
+        "assigned": "{actor} ti ha affidato una mail di {title}: {record}",
+        "followUpDue": "Ancora nessuna risposta a {record} ({title}): è di nuovo nella tua coda"
       }
     },
     "fallback": "Novità su {record}",
