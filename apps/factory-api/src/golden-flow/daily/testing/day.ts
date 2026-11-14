@@ -50,6 +50,11 @@ import { supplyLateHandler } from '../../../modules/planning/exceptions/supply-l
 // B-W2b-386: the system's shipment holds.
 import { systemHoldsHandler } from '../../../modules/shipping/holds/system'
 import { suggestionHandlers } from '../../../modules/payments/matching/suggest'
+// B-W2b-398: the customer notice, tracking problems, the carrier's proof of delivery, used return labels.
+import { customerNoticeHandler } from '../../../modules/shipping/notices/handler'
+import { trackingProblemsHandler } from '../../../modules/shipping/exceptions/check'
+import { carrierPodHandler } from '../../../modules/shipping/pod/handler'
+import { returnLabelsUsedHandler } from '../../../modules/shipping/return-labels/used'
 // B-W2b-294: the schedule of an order confirmed by its yes.
 import { orderScheduleHandler } from '../../../modules/sales/quote-terms/carry'
 // B-W2b-340: the options of an order confirmed by its yes.
@@ -127,6 +132,8 @@ const W2A_LISTS: ReadonlyArray<readonly [string, readonly string[]]> = [
   ['W2B_386_HANDLERS', ['systemHoldsHandler']],
   // B-W2b-393: the bank lines' suggested matches looked at again after payments, invoices and deposit requests change.
   ['W2B_393_HANDLERS', ['suggestionHandlers']],
+  // B-W2b-398: the customer notice (its site switch), tracking problems, the carrier's proof of delivery, used return labels.
+  ['W2B_398_HANDLERS', ['customerNoticeHandler', 'trackingProblemsHandler', 'carrierPodHandler', 'returnLabelsUsedHandler']],
 ]
 
 /** The search indexers the worker loads from the registry folder (background.ts SEARCH_INDEXERS). */
@@ -136,7 +143,7 @@ export async function searchIndexers(): Promise<readonly SearchIndexer[]> {
 
 /** Every handler the worker runs: W1's HANDLERS, then the W2a lists, as background.ts hands them to startEventWorkers. */
 export function everyHandler(indexers: readonly SearchIndexer[]): readonly EventHandler[] {
-  return [...workerHandlers(), notificationsHandler(), ...searchHandlers(indexers), alertsRecheckHandler(), ...ladderHandlers(), ...creditNoteHandlers(), ...payablesHandlers(), releaseOnWorkOrderDoneHandler(), pauseAtClockOutHandler(), ...attendanceHandlers(), ...overtimeHandlers(), ...earningsHandlers(), ...inspectionTriggerHandlers(), alertRulesHandler(), ...incidentHandlers(), ...healthHandlers(), stripPicturesHandler(), partnerNotificationsHandler({ cookieSecret: () => LOCAL_COOKIE_SECRET }), ...onlinePaymentHandlers(), trackingLinkHandler(), sharesNotifyHandler(), ...routingCheckpointHandlers(), ...buildPackHandlers(), ...distributorHandlers(), ...declarationHandlers(), ...reevaluateHandlers(), ...gateHandlers(), lotLifecycleHandler(), ...warehouseTaskHandlers(), approvedSendHandler(), ...creditHandlers(), supplyLateHandler(), orderScheduleHandler(), /* B-W2b-340 */ orderOptionsHandler(), /* B-W2b-377 */ releasedReceiptHandler(), /* B-W2b-386 */ systemHoldsHandler(), /* B-W2b-393 */ ...suggestionHandlers()]
+  return [...workerHandlers(), notificationsHandler(), ...searchHandlers(indexers), alertsRecheckHandler(), ...ladderHandlers(), ...creditNoteHandlers(), ...payablesHandlers(), releaseOnWorkOrderDoneHandler(), pauseAtClockOutHandler(), ...attendanceHandlers(), ...overtimeHandlers(), ...earningsHandlers(), ...inspectionTriggerHandlers(), alertRulesHandler(), ...incidentHandlers(), ...healthHandlers(), stripPicturesHandler(), partnerNotificationsHandler({ cookieSecret: () => LOCAL_COOKIE_SECRET }), ...onlinePaymentHandlers(), trackingLinkHandler(), sharesNotifyHandler(), ...routingCheckpointHandlers(), ...buildPackHandlers(), ...distributorHandlers(), ...declarationHandlers(), ...reevaluateHandlers(), ...gateHandlers(), lotLifecycleHandler(), ...warehouseTaskHandlers(), approvedSendHandler(), ...creditHandlers(), supplyLateHandler(), orderScheduleHandler(), /* B-W2b-340 */ orderOptionsHandler(), /* B-W2b-377 */ releasedReceiptHandler(), /* B-W2b-386 */ systemHoldsHandler(), /* B-W2b-393 */ ...suggestionHandlers(), /* B-W2b-398 */ customerNoticeHandler(), trackingProblemsHandler(), carrierPodHandler(), returnLabelsUsedHandler()]
 }
 
 /** background.ts starts exactly W1's HANDLERS and the W2a lists above: a list or factory a step adds fails the day until it runs here too. */
