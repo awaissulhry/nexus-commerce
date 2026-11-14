@@ -250,6 +250,13 @@ model Item {
   stockValuations      StockValuation[]
   // W2b-5 sales-orders-depth.prisma (wave 39/44): the customers' materials of it expected for their orders.
   customerMaterials    CustomerMaterial[]
+  // W2b-6 cost-sheets.prisma (wave 55/57): the cost sheet lines that name it, its leather cost bases and cost uplifts.
+  /// @not-money the relation to the cost sheet lines (the rows carry the grain)
+  costSheetLines       CostSheetLine[]
+  /// @not-money the relation to its leather cost bases
+  leatherCostBases     LeatherCostBasis[]
+  /// @not-money the relation to its material cost uplifts
+  materialCostUplifts  MaterialCostUplift[]
   // W2a sourcing.prisma, claims.prisma, subcontract.prisma: its approved sources, claim lines and kit lines.
   supplierItems        SupplierItem[]
   supplierClaimLines   SupplierClaimLine[]
@@ -614,6 +621,12 @@ model Style {
   accidentLogEntries  AccidentLogEntry[]    @relation("AccidentLogEntryStyle")
   // W2a compliance.prisma: the changes to its approved type under review.
   typeChangeReviews   TypeChangeReview[]
+  // W2b-6 cost-sheets.prisma (wave 55/57): its cost sheets, its own leather cost bases and its size weights.
+  /// @not-money the relation to its cost sheets
+  costSheets          CostSheet[]
+  /// @not-money the relation to its own leather cost bases
+  leatherCostBases    LeatherCostBasis[]
+  sizeWeights         SizeWeight[]
   // W2b-4 changes.prisma and samples.prisma (wave 29/33): its change requests and orders, sample rounds and swatches.
   changeRequests      ChangeRequest[]
   changeOrders        ChangeOrder[]
@@ -826,6 +839,9 @@ model StyleRevision {
   salesOrderLines SalesOrderLine[]
   // production.prisma: the work orders released with it as their frozen specification.
   workOrders      WorkOrder[]
+  // W2b-6 cost-sheets.prisma (wave 55/57): the cost sheets of it.
+  /// @not-money the relation to its cost sheets
+  costSheets      CostSheet[]
   // W2b-5 planning-depth.prisma (wave 41/44): the planned work orders whose demand names it.
   plannedWorkOrders PlannedWorkOrder[]
   // W2b-2 cutting.prisma (wave 13/16): its pattern pieces (frozen with it).

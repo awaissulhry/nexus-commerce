@@ -17,6 +17,7 @@ import { seed as seedCollab } from '../seed/collab'
 import { seed as seedCompliance } from '../seed/compliance'
 import { seed as seedComplianceRules } from '../seed/compliance-rules'
 import { seed as seedCostActuals } from '../seed/cost-actuals'
+import { seed as seedCostSheets } from '../seed/cost-sheets'
 import { seed as seedCosting } from '../seed/costing'
 import { seed as seedCustoms } from '../seed/customs'
 import { seed as seedCutting } from '../seed/cutting'
@@ -495,6 +496,11 @@ beforeAll(async () => {
   // goods sold (one reversed) and landed cost (one reversed, the first a DRAFT with its share): the plain ones a copy may repeat.
   await seedCostActuals({ db: factory, namespace: 'iso-a' })
   await seedCostActuals({ db: factory, namespace: 'iso-b' })
+  // The cost sheets schema of W2b-6 (wave 55/57): sheet versions (the first company B's DRAFT, the first line a draft's lining), leather bases,
+  // overhead rules (the first open-ended), cost-per-minute calculations (none applied), uplifts and size weights: the plain
+  // ones a copy may repeat.
+  await seedCostSheets({ db: factory, namespace: 'iso-a' })
+  await seedCostSheets({ db: factory, namespace: 'iso-b' })
   // Every seed of both tenants: under a full parallel run this takes more than a minute.
 }, 120_000)
 
@@ -574,6 +580,9 @@ it('covers every classified table and every runtime role', () => {
     'ComplianceDocumentBatch',
     'ComplianceRequirement',
     'CostOfSalesEntry',
+    'CostPerMinuteCalc',
+    'CostSheet',
+    'CostSheetLine',
     'CostingSettings',
     'CountSchedule',
     'CreditCheck',
@@ -707,6 +716,7 @@ it('covers every classified table and every runtime role', () => {
     'LandedCostShare',
     'Lay',
     'LayRoll',
+    'LeatherCostBasis',
     'LeatherGrade',
     'LeaverCase',
     'LeaverStep',
@@ -732,6 +742,7 @@ it('covers every classified table and every runtime role', () => {
     'MaintenanceRequest',
     'MarketProfile',
     'MaterialComplianceProfile',
+    'MaterialCostUplift',
     'MaterialRequirement',
     'MaterialSubstitution',
     'MeasurementPoint',
@@ -778,6 +789,7 @@ it('covers every classified table and every runtime role', () => {
     'OrderGate',
     'OrgArea',
     'OutboxEvent',
+    'OverheadRule',
     'OvertimeAgreement',
     'OvertimeEntry',
     'OvertimeRequest',
@@ -995,6 +1007,7 @@ it('covers every classified table and every runtime role', () => {
     'SizeCurve',
     'SizeScale',
     'SizeSurcharge',
+    'SizeWeight',
     'Skill',
     'StaffNoticeAck',
     'StampDutyQuarter',

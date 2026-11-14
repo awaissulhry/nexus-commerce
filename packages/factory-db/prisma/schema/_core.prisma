@@ -274,6 +274,17 @@ model Company {
   // W2b people.prisma, skills.prisma (wave 4/7): its people settings and its own skills (tenant-wide ones have none).
   peopleSettings       PeopleSettings[]
   skills               Skill[]
+  // W2b-6 cost-sheets.prisma (wave 55/57): its cost sheets, leather cost bases, overhead rules, cost-per-minute calculations
+  // and material cost uplifts (tenant-wide rows have none).
+  /// @not-money the relation to its cost sheets
+  costSheets           CostSheet[]
+  /// @not-money the relation to its leather cost bases
+  leatherCostBases     LeatherCostBasis[]
+  overheadRules        OverheadRule[]
+  /// @not-money the relation to its cost-per-minute calculations
+  costPerMinuteCalcs   CostPerMinuteCalc[]
+  /// @not-money the relation to its material cost uplifts
+  materialCostUplifts  MaterialCostUplift[]
   // W2b safety.prisma (wave 15/16): its safety appointments, typed legal deadlines, own safety courses and PPE catalogue.
   safetyAppointments   SafetyAppointment[]
   safetyDeadlines      SafetyDeadline[]
@@ -676,6 +687,9 @@ model WorkCentre {
   secondaryProcesses  SecondaryProcess[]
   // W2a plant.prisma: its machines.
   machines            Machine[]
+  // W2b-6 cost-sheets.prisma (wave 55/57): its cost-per-minute calculations.
+  /// @not-money the relation to its cost-per-minute calculations
+  costPerMinuteCalcs  CostPerMinuteCalc[]
   // calendar.prisma: its calendar (a workshop's).
   workCalendars       WorkCalendar[]
   // W2a schedule.prisma: its slots on the planning board.

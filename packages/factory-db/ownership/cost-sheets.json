@@ -1,0 +1,61 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/cost-sheets.prisma (rules: src/ownership.ts; roles: src/roles.ts). W2b-6, schema wave 55/57 (B-W2b-378): cost sheets in depth. The office (factory_runtime) reads and writes through apps/factory-api's modules/costing, always with command() (B-W2b-418 components, B-W2b-419 rates, B-W2b-420 versions, B-W2b-423 option cost); the API keeps staff to the companies their grants reach, and the cost grain to send or see a figure (the target price: the price grain; the target margin: the margin grain). The floor, portal and link sessions read none of it: every table here carries costs (A1 §2.6), and no floor or portal screen needs one. The row wall is the tenant: a calculation's site (of the one work centre it is for) and an uplift's party (the workshop it is for) are key columns by name only, and no floor or partner role reads them. No personal data: the cost-per-minute calculator keeps a department's totals, never one person's figure and no headcount (Statuto dei Lavoratori art. 4). A cost sheet is deleted only while it is a DRAFT (with its lines; a sheet another version was copied from stays), its lines only while their sheet is a DRAFT, a calculation only while it is not applied, a size weight freely; leather bases, overhead rules and uplifts are archived, never deleted (the …_cost_sheets_w2b_guards triggers). After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "CostSheet": {
+      "about": "The office makes a cost sheet version of a style revision for a company and a season from the live computation, edits it while DRAFT, approves it (never its maker) and freezes it when a newer version takes over, its season closes or it is withdrawn; it deletes only a DRAFT. The Cost tab's versions, compare and target price read them.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "CostSheetLine": {
+      "about": "The office writes a draft sheet's lines (category, source, material or kind of work centre, size, quantity, unit cost, cost) and removes them; never once the sheet is approved. The sheet, its compare and the cost split to the margin read them.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "LeatherCostBasis": {
+      "about": "The office keeps how a leather article is costed (the unit of area, the expected yield for every style or one style, the grade mix), tenant-wide or per company, from a day; it archives a basis, never deletes it. The sheet's leather lines read them.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "OverheadRule": {
+      "about": "The office keeps the overhead absorption rules per company (or every company) and period: a percent of labour, a cost per minute, per unit or per machine hour; it archives a rule, never deletes it. The sheet's overhead lines read them.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "CostPerMinuteCalc": {
+      "about": "The office works out a department's cost per minute for whole months (direct labour cost over available minutes, plus indirect labour and overhead per minute) and applies it once as a labour rate; it deletes a calculation only while it is not applied. Finance settings' calculator reads them.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "MaterialCostUplift": {
+      "about": "The office keeps the freight, duty and insurance percents of a material or a kind of material (typed or from landed cost) and a workshop's transport per piece, tenant-wide or per company, from a day; it archives an uplift, never deletes it. The sheet's freight, duty and subcontract lines read them.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "SizeWeight": {
+      "about": "The office keeps a style's typical size mix (a weight per size, per season or for every season) and removes and writes it again. The weighted cost reads them.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    }
+  }
+}

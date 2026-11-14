@@ -1,0 +1,486 @@
+// Cost sheets in depth (W2b-6, schema wave 55/57, B-W2b-378; features FIN-003, FIN-005, FIN-006, FIN-007, FIN-008, FIN-009,
+// FIN-013, FIN-014, FIN-015, FIN-016, FIN-018, FIN-020; design products.styles › Cost "Cost sheet versions and approval",
+// "Target price", "Cost by size", the Cost sheet's Subcontract, Packaging, Freight and duties and Commissions steps;
+// finance.settings › Costing "Cost-per-minute calculator"). Rule 1 (seasonal): every season's prices start from a cost
+// sheet. Until this wave the sheet was computed on request and never kept (costing.prisma: B-W1-16's live computation stays
+// the source of a draft); this wave keeps its versions, approves and locks them, and stores the inputs a sheet needs.
+// Beside it: CostingSettings.pieceRateLabour (costing.prisma; GATE-PIECE-PAY), OptionValue.materialDelta and minutesDelta
+// (options.prisma; FIN-018) and ApprovalTaskKind COST_SHEET (approvals.prisma; B-W2b-420's approval of a sheet).
+//
+//   CostSheet            one version of a style revision's cost for a company and a season (or none): DRAFT (written from
+//                        the live computation and edited) → APPROVED (locked: prices are released from it; never by the
+//                        person who made it) → FROZEN (replaced by a newer version, the season closed, or withdrawn). An
+//                        approved sheet is never edited: a change is a new version. At most one APPROVED per style,
+//                        company and season (a partial unique index of the guards migration).
+//   CostSheetLine        one line of a sheet, kept split by category from the sheet through actuals to the margin (FIN-020):
+//                        what it is, where it came from, for every size or one size, quantity × unit cost = its cost.
+//                        Written only while its sheet is a DRAFT.
+//   LeatherCostBasis     how a leather article is costed (FIN-003): the unit of area it is priced in (ft² or dm²), the
+//                        expected cutting yield (for every style, or one style's own) and the grade mix of what is bought,
+//                        so the sheet shows the cost of the area bought, not only of the area used.
+//   OverheadRule         an overhead absorption rule (FIN-007): a percent of labour, a cost per standard minute, per unit or
+//                        per machine hour, per company (or every company) and period, for one kind of work centre or all.
+//   CostPerMinuteCalc    the cost-per-minute calculator (FIN-005): a department's (or a work centre's) direct labour cost
+//                        of a period over its available minutes, plus indirect labour and overhead per minute; the result
+//                        becomes a LabourRate once applied. Never a figure per person (Statuto dei Lavoratori art. 4): totals
+//                        of a department only, and no headcount.
+//   MaterialCostUplift   what lands on top of a material's price (FIN-009): freight, duty and insurance percents for one
+//                        material or a kind of material, typed or read from actual landed cost; and the transport out and
+//                        back per piece of a workshop's outside operations (FIN-008).
+//   SizeWeight           a style's typical size mix (FIN-016), per season or for every season: the weight of each size in
+//                        the weighted cost. Without one, the sheet names the size curve it weighted by (CostSheet.sizeCurveId).
+//
+// Money (A1 §2.6): every cost here is `@grain cost` (the target price `@grain price`, the target margin `@grain margin`);
+// office only: the floor, portal and link sessions read none of it (ownership/cost-sheets.json). apps/factory-api's
+// modules/costing writes these tables through command() (B-W2b-418 components, B-W2b-419 rates, B-W2b-420 versions,
+// B-W2b-423 option cost and the mass update); the hand-written …_cost_sheets_w2b_guards migration holds their rules for
+// every login, the owner included. Unit costs and per-minute figures are Decimal(18,6) in the row's currency; quantities
+// Decimal(18,4); percents Decimal(7,4).
+
+/// DRAFT → APPROVED → FROZEN (FIN-014, FIN-015).
+enum CostSheetState {
+  /// Written from the live computation and edited; its lines change; deleted while nobody built on it.
+  DRAFT
+  /// Approved by someone other than its maker and locked: prices are released from it; never edited again.
+  APPROVED
+  /// No longer the one in force (kept to compare): replaced by a newer version, its season closed, or withdrawn.
+  FROZEN
+}
+
+/// Why an approved sheet was frozen.
+enum CostSheetFreezeReason {
+  /// A newer version of the same style, company and season is approved in its place.
+  SUPERSEDED
+  /// Its season is over.
+  SEASON_CLOSED
+  /// Taken back (a mistake found): a new version follows.
+  WITHDRAWN
+}
+
+/// The category a line's cost is kept under, from the sheet through actuals to the margin (FIN-020). Insurance on materials
+/// counts as FREIGHT (FIN-009's freight, duty and insurance; the plan's nine categories).
+enum CostCategory {
+  MATERIAL
+  /// Leather, apart from the other materials (bought area with its yield and grade mix: FIN-003).
+  LEATHER
+  LABOUR
+  OVERHEAD
+  /// Outside operations at a workshop, with their transport out and back (FIN-008).
+  SUBCONTRACT
+  FREIGHT
+  DUTY
+  /// Polybag, hanger, box and the share of the export carton (FIN-011).
+  PACKAGING
+  /// An agent's commission, a royalty or a payment fee (FIN-012).
+  COMMISSION
+}
+
+/// Where a line's figures came from.
+enum CostLineSource {
+  /// A BOM line of the sheet's revision (sourceRecordType BomLine).
+  BOM_LINE
+  /// A routing step of the sheet's revision (sourceRecordType RoutingOperation): its minutes, or its workshop's fee.
+  ROUTING
+  /// A piece rate per operation (FIN-006): only while the company's costing settings switch piece-rate labour on
+  /// (GATE-PIECE-PAY).
+  PIECE_RATE
+  /// An overhead absorption rule (sourceRecordType OverheadRule).
+  OVERHEAD_RULE
+  /// The overhead percent of the costing settings (W1's rule; sourceRecordType CostingSettings).
+  COSTING_SETTINGS
+  /// A material cost uplift (sourceRecordType MaterialCostUplift): freight, duty, insurance, a workshop's transport.
+  UPLIFT
+  /// Actual landed cost of earlier receipts.
+  LANDED_COST
+  /// The packaging master (a packaging type or a packaging material).
+  PACKAGING
+  /// Typed by a person: no source record.
+  TYPED
+}
+
+/// One version of a style revision's cost (FIN-014, FIN-015; design style.cost.versions): for a company (its currency) and a
+/// season of that company, or none. The version number counts per style, company and season (the key). DRAFT → APPROVED
+/// (approved by someone other than its maker, never edited again) → FROZEN. A change after approval is a new version
+/// (basedOnId: the version it was copied from). Only a DRAFT is deleted, with its lines.
+model CostSheet {
+  id              String                 @id @db.Uuid
+  tenantId        String                 @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company whose cost it is: the style's own, or any company of the tenant for a tenant-wide style. Never changes.
+  companyId       String                 @db.Uuid
+  /// The style and its revision costed. Never change.
+  styleId         String                 @db.Uuid
+  revisionId      String                 @db.Uuid
+  /// A season of the company, OPEN when the sheet is made; null: no season (a sample, a one-off). Never changes.
+  seasonId        String?                @db.Uuid
+  /// The series it belongs to: `costsheet:<styleId>:<companyId>:<seasonId | none>`. Never changes.
+  key             String
+  /// Its number in the series, from 1 (the sheet's version; `version` is the row's compare-and-set counter). Never changes.
+  sheetVersion    Int
+  /// The version of the same series it was copied from (a lower number); null: a first sheet. Never changes.
+  basedOnId       String?                @db.Uuid
+  state           CostSheetState         @default(DRAFT)
+  /// ISO 4217: the company's currency when the sheet is made; every line's unit cost is in it. Never changes.
+  currency        String
+  /// The size its headline cost reads (a size of the style's range when the sheet is made). Never changes.
+  baseSize        String
+  /// The target price per garment (FIN-013), in `currency`, above 0; null: none.
+  /// @grain price
+  targetPrice     Decimal?               @db.Decimal(18, 6)
+  /// The target margin on the price, percent, below 100 (and above -1000); null: none.
+  /// @grain margin
+  targetMarginPct Decimal?               @db.Decimal(7, 4)
+  /// The size curve the weighted cost weighted by when the style has no size weights of its own (FIN-016): a SizeCurve of
+  /// the style's scale, of the company or every company; null: none.
+  sizeCurveId     String?                @db.Uuid
+  /// The weights the weighted cost used, as they stood: { "50": "30.0000", "52": "45.0000" } (sizes of the style's range,
+  /// decimals above 0); null: none.
+  sizeWeights     Json?
+  /// What the sheet was computed from, as it stood (rates, the overhead rule, uplifts, the leather basis, prices): an
+  /// object of at most 256 KiB, for "how is this made?".
+  /// @grain cost
+  inputs          Json?
+  /// Words for the office (up to 2000 characters).
+  note            String?
+  /// The approval engine's request for its yes (ApprovalTask, kind COST_SHEET, of this sheet), when a rule asked one; a
+  /// plain id (approvals.prisma names records by type + id). Null: approved directly.
+  approvalTaskId  String?                @db.Uuid
+  /// APPROVED and after: when and by whom (never its maker; with a task, the person who decided it). Set once.
+  approvedAt      DateTime?              @db.Timestamptz(3)
+  approvedById    String?                @db.Uuid
+  /// FROZEN: when, by whom (null: the system, at the season's close) and why. Set once.
+  frozenAt        DateTime?              @db.Timestamptz(3)
+  frozenById      String?                @db.Uuid
+  frozenReason    CostSheetFreezeReason?
+  version         Int                    @default(1)
+  createdAt       DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime               @default(now()) @updatedAt @db.Timestamptz(3)
+  /// Who made it (an approver is never them).
+  createdById     String?                @db.Uuid
+
+  company  Company       @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  style    Style         @relation(fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  revision StyleRevision @relation(fields: [tenantId, styleId, revisionId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
+  // A season of the sheet's own company. Restrict, not Prisma's SetNull default: that would also clear tenantId and companyId.
+  season   Season?       @relation(fields: [tenantId, companyId, seasonId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  basedOn  CostSheet?    @relation("CostSheetBasedOn", fields: [tenantId, basedOnId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  copies   CostSheet[]   @relation("CostSheetBasedOn")
+  lines    CostSheetLine[]
+
+  // A series' versions are numbered once each.
+  @@unique([tenantId, key, sheetVersion])
+  // The target of the references from its lines and its copies.
+  @@unique([tenantId, id])
+  // A style's sheets (the Cost tab's versions), a revision's, a season's.
+  @@index([tenantId, styleId, state])
+  @@index([tenantId, revisionId])
+  @@index([tenantId, companyId, seasonId])
+}
+
+/// One line of a cost sheet (FIN-020; the sheet's Disclosure rows): its category, where it came from, what it names (a
+/// material, a kind of work centre), for every size or one size (null: every size; a size's cost is its lines for every
+/// size plus its own), quantity × unit cost = cost (rounded once, half up, to 6 places). A percent line (overhead on
+/// labour, freight on material, a commission) keeps its percent, with quantity 1 and the cost as its unit cost. Written
+/// only while its sheet is a DRAFT; removed with it.
+model CostSheetLine {
+  id               String          @id @db.Uuid
+  tenantId         String          @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// Its sheet; never changes.
+  /// @not-money the sheet it belongs to, not an amount
+  costSheetId      String          @db.Uuid
+  /// Its place: 1, 2, 3 … (10, 20, 30 …), unique in the sheet.
+  seq              Int
+  category         CostCategory
+  source           CostLineSource
+  /// The record it came from (a model name and an id of this tenant): BOM_LINE a BomLine and ROUTING a RoutingOperation of
+  /// the sheet's revision, OVERHEAD_RULE an OverheadRule, COSTING_SETTINGS a CostingSettings, UPLIFT a MaterialCostUplift;
+  /// both or neither, never on a TYPED line.
+  sourceRecordType String?
+  sourceRecordId   String?         @db.Uuid
+  /// The material: required on a LEATHER line (an article of kind LEATHER) and on a MATERIAL line that is not typed.
+  itemId           String?         @db.Uuid
+  /// The kind of work centre: required on a LABOUR line (cutting, sewing, finishing apart); null: none.
+  workCentreKind   WorkCentreKind?
+  /// What the line names, as it stood (a material's code and name, an operation), one line up to 200 characters.
+  label            String?
+  /// A size of the style's range; null: every size.
+  size             String?
+  /// 0 or more: in `uom` for a material, leather or packaging line; minutes on a LABOUR line (uom null); 1 on a percent line.
+  quantity         Decimal         @db.Decimal(18, 4)
+  uom              Uom?
+  /// The cost of one, in the sheet's currency, 0 or more.
+  /// @grain cost
+  unitCost         Decimal         @db.Decimal(18, 6)
+  /// quantity × unitCost, rounded once, half up, to 6 places.
+  /// @grain cost
+  cost             Decimal         @db.Decimal(18, 6)
+  /// The percent the line is of its base (overhead on labour, freight or duty on material, a commission on the price):
+  /// above 0, at most 1000; only on an OVERHEAD, FREIGHT, DUTY or COMMISSION line; null: not a percent line.
+  pct              Decimal?        @db.Decimal(7, 4)
+  /// Words for the office (up to 1000 characters).
+  note             String?
+  version          Int             @default(1)
+  createdAt        DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime        @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById      String?         @db.Uuid
+
+  /// @not-money the sheet it belongs to, not an amount
+  costSheet CostSheet @relation(fields: [tenantId, costSheetId], references: [tenantId, id], onDelete: Cascade, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  item      Item?     @relation(fields: [tenantId, itemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, costSheetId, seq])
+  // Where a material is costed (the mass cost update, FIN-022).
+  @@index([tenantId, itemId])
+}
+
+/// How a leather article is costed (FIN-003; design style.bom.leather, products.materials "Grades and usable area"): the
+/// unit of area it is priced in (FT2 or DM2), the expected cutting yield (the share of the usable area that ends up in cut
+/// pieces), and the grade mix of what is bought ({ "A": "60.0000", "B": "30.0000", "C": "10.0000" }: codes of the tenant's
+/// grades, shares above 0 totalling exactly 100; each grade's usable share is the article's grade rule, else the grade's).
+/// For every style or one style's own; tenant-wide or one company's (a company's own wins; a style's own wins). A new
+/// basis is a new row from a day (validFrom); archived, never deleted.
+model LeatherCostBasis {
+  id               String       @id @db.Uuid
+  tenantId         String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company it belongs to; null: every company of the tenant. Never changes.
+  companyId        String?      @db.Uuid
+  /// A material of kind LEATHER, of the company or tenant-wide. Never changes.
+  itemId           String       @db.Uuid
+  /// One style's own basis (of the company or tenant-wide); null: every style. Never changes.
+  styleId          String?      @db.Uuid
+  /// `leather:<itemId>:<styleId | all>:<companyId | all>`. Never changes.
+  key              String
+  /// The unit of area the article is priced and costed in: FT2 or DM2.
+  areaUnit         Uom
+  /// The share of the usable area that ends up in cut pieces, percent: above 0, at most 100.
+  expectedYieldPct Decimal      @db.Decimal(7, 4)
+  gradeMix         Json
+  /// The first day (Europe/Rome) it is in force. Never changes.
+  validFrom        DateTime     @db.Date
+  status           MasterStatus @default(ACTIVE)
+  /// Where the figures come from (a cutting test, the tannery's sorting), up to 1000 characters.
+  note             String?
+  version          Int          @default(1)
+  createdAt        DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById      String?      @db.Uuid
+
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  company Company? @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  item    Item     @relation(fields: [tenantId, itemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  style   Style?   @relation(fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // One basis per article, style and company from a day.
+  @@unique([tenantId, key, validFrom])
+  @@index([tenantId, itemId])
+}
+
+/// How overhead is absorbed (FIN-007).
+enum OverheadBasis {
+  /// A percent of the labour cost.
+  PERCENT_OF_LABOUR
+  /// A cost per standard minute.
+  PER_MINUTE
+  /// A cost per garment.
+  PER_UNIT
+  /// A cost per machine hour.
+  PER_MACHINE_HOUR
+}
+
+/// An overhead absorption rule (FIN-007; design finance.settings › Costing): a basis and its value, for one kind of work
+/// centre or all, per company (or every company) and period (whole months: from the first day of a month to the last day
+/// of a month, or open-ended). Rules of different bases add up; the rules of one key (company, basis, kind) never overlap
+/// in time. While a company has none in force, the sheet keeps W1's overhead percent (CostingSettings.overheadPct).
+/// Archived, never deleted.
+model OverheadRule {
+  id             String          @id @db.Uuid
+  tenantId       String          @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company it belongs to; null: every company of the tenant. Never changes.
+  companyId      String?         @db.Uuid
+  /// `overhead:<companyId | all>:<basis>:<workCentreKind | all>`. Never changes.
+  key            String
+  basis          OverheadBasis
+  /// The kind of work centre it applies to; null: every kind. Never changes.
+  workCentreKind WorkCentreKind?
+  /// PERCENT_OF_LABOUR: the percent (above 0, at most 1000); the other bases: the cost per minute, garment or machine hour
+  /// in `currency`, above 0.
+  /// @grain cost
+  value          Decimal         @db.Decimal(18, 6)
+  /// ISO 4217, exactly for the amount bases (PER_MINUTE, PER_UNIT, PER_MACHINE_HOUR).
+  currency       String?
+  /// The first day of a month (never changes), and the last day of a month (not before it); null: until a later rule.
+  periodStart    DateTime        @db.Date
+  periodEnd      DateTime?       @db.Date
+  status         MasterStatus    @default(ACTIVE)
+  /// Where the figure comes from (the accountant's sheet, a budget), up to 1000 characters.
+  note           String?
+  version        Int             @default(1)
+  createdAt      DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime        @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById    String?         @db.Uuid
+
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  company Company? @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, key, periodStart])
+  @@index([tenantId, companyId, periodStart])
+}
+
+/// The cost-per-minute calculator (FIN-005; design finance.settings › Costing "Cost-per-minute calculator"): for a company's
+/// department (a kind of work centre), or one work centre of it, and whole months, the direct labour cost over the available
+/// minutes, plus indirect labour and overhead per minute, gives the cost per minute (rounded once, half up, to 6 places).
+/// Totals of a department only, never a figure per person (Statuto dei Lavoratori art. 4; no headcount). Applied once: the
+/// result becomes a LabourRate of the company and kind (labourRateId), then frozen. Deleted only while not applied.
+model CostPerMinuteCalc {
+  id                String         @id @db.Uuid
+  tenantId          String         @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company. Never changes.
+  companyId         String         @db.Uuid
+  /// The department. Never changes.
+  workCentreKind    WorkCentreKind
+  /// One work centre of the company of that kind (both or neither); null: the whole department. Never change.
+  siteId            String?        @db.Uuid
+  workCentreId      String?        @db.Uuid
+  /// `cpm:<companyId>:<workCentreKind>:<workCentreId | all>`. Never changes.
+  key               String
+  /// Whole months: the first day of a month to the last day of a month (not before it).
+  periodStart       DateTime       @db.Date
+  periodEnd         DateTime       @db.Date
+  /// ISO 4217: the currency of every figure.
+  currency          String
+  /// The period's direct labour cost of the department (the payroll total, never one person's), 0 or more.
+  /// @grain cost
+  directLabourCost  Decimal        @db.Decimal(18, 6)
+  /// The minutes the department was available in the period (calendars and attendance), above 0.
+  availableMinutes  Decimal        @db.Decimal(18, 4)
+  /// Indirect labour (supervision, maintenance) and overhead per minute, 0 or more.
+  /// @grain cost
+  indirectPerMinute Decimal        @db.Decimal(18, 6)
+  /// @grain cost
+  overheadPerMinute Decimal        @db.Decimal(18, 6)
+  /// directLabourCost ÷ availableMinutes + indirectPerMinute + overheadPerMinute, rounded once, half up, to 6 places.
+  /// @grain cost
+  costPerMinute     Decimal        @db.Decimal(18, 6)
+  /// How the minutes were counted (the calendar, the days, the shifts, attendance), as an object of at most 64 KiB; never
+  /// a figure per person.
+  minutesBasis      Json?
+  /// Words for the office (up to 1000 characters).
+  note              String?
+  /// Applied: the LabourRate written from it (of the company and kind, its cost per minute and currency), when and by whom;
+  /// all three or none, set once, then the row is frozen. A plain id (LabourRate has no tenant-safe target key).
+  labourRateId      String?        @db.Uuid
+  appliedAt         DateTime?      @db.Timestamptz(3)
+  appliedById       String?        @db.Uuid
+  version           Int            @default(1)
+  createdAt         DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById       String?        @db.Uuid
+
+  company    Company     @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  workCentre WorkCentre? @relation(fields: [tenantId, siteId, workCentreId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // A department's calculations of a period (one applied per key and period: a partial unique index).
+  @@index([tenantId, companyId, periodStart])
+}
+
+/// What a material cost uplift is for.
+enum UpliftTarget {
+  /// One material (itemId).
+  MATERIAL
+  /// Every material of a kind (itemKind).
+  CATEGORY
+  /// A workshop's outside operations (partyId): the transport out and back per piece.
+  WORKSHOP
+}
+
+/// Where an uplift's percents come from (FIN-009).
+enum UpliftSource {
+  /// Typed by a person.
+  TYPED
+  /// Read from the actual landed cost of the receipts between landedFrom and landedTo.
+  LANDED_COST
+}
+
+/// What lands on top of a price (FIN-008, FIN-009; design style.cost.sheet "Freight and duties on materials", "Subcontract"):
+/// for one material or every material of a kind, the freight, duty and insurance percents on its price (typed, or read from
+/// actual landed cost); for a workshop, the transport out and back per piece of its outside operations. Tenant-wide or one
+/// company's (a company's own wins; a material's own before its kind's). A new uplift is a new row from a day (validFrom);
+/// archived, never deleted.
+model MaterialCostUplift {
+  id                    String       @id @db.Uuid
+  tenantId              String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company it belongs to; null: every company of the tenant. Never changes.
+  companyId             String?      @db.Uuid
+  /// Exactly its target's column: MATERIAL itemId, CATEGORY itemKind, WORKSHOP partyId (a SUBCONTRACTOR). Never change.
+  target                UpliftTarget
+  itemId                String?      @db.Uuid
+  itemKind              ItemKind?
+  partyId               String?      @db.Uuid
+  /// `uplift:<companyId | all>:item:<itemId>` | `…:kind:<itemKind>` | `…:workshop:<partyId>`. Never changes.
+  key                   String
+  /// TYPED or LANDED_COST (a material or a kind only).
+  source                UpliftSource @default(TYPED)
+  /// A material or a kind: the percents on its price, each 0 to 100 (at least one given); a workshop: none.
+  freightPct            Decimal?     @db.Decimal(7, 4)
+  dutyPct               Decimal?     @db.Decimal(7, 4)
+  insurancePct          Decimal?     @db.Decimal(7, 4)
+  /// A workshop: the transport per piece there and back, in `currency`, 0 or more (at least one given); a material or a
+  /// kind: none.
+  /// @grain cost
+  transportOutPerPiece  Decimal?     @db.Decimal(18, 6)
+  /// @grain cost
+  transportBackPerPiece Decimal?     @db.Decimal(18, 6)
+  /// ISO 4217, exactly with a transport figure.
+  currency              String?
+  /// LANDED_COST: the first and last receipt day read (not after the day it applies from); both or neither, only then.
+  landedFrom            DateTime?    @db.Date
+  landedTo              DateTime?    @db.Date
+  /// The first day (Europe/Rome) it is in force. Never changes.
+  validFrom             DateTime     @db.Date
+  status                MasterStatus @default(ACTIVE)
+  /// Where the figures come from (a forwarder's quote, the customs tariff), up to 1000 characters.
+  note                  String?
+  version               Int          @default(1)
+  createdAt             DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById           String?      @db.Uuid
+
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  company Company? @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  item    Item?    @relation(fields: [tenantId, itemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  party   Party?   @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // One uplift per target and company from a day.
+  @@unique([tenantId, key, validFrom])
+  @@index([tenantId, itemId])
+}
+
+/// One size's weight in a style's typical size mix (FIN-016; design style.cost.strip "Weighted cost for a typical size mix"):
+/// for one season of the style's company (or any company for a tenant-wide style), or for every season. The weighted cost is
+/// Σ weight × the size's cost ÷ Σ weight over the sizes with a weight. Removed and written again by the office.
+model SizeWeight {
+  id          String    @id @db.Uuid
+  tenantId    String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The style. Never changes.
+  styleId     String    @db.Uuid
+  /// A season (of the style's company when it has one); null: every season. Never changes.
+  seasonId    String?   @db.Uuid
+  /// `sizeweight:<styleId>:<seasonId | all>:<size>`. Never changes.
+  key         String
+  /// A size of the style's range when written. Never changes.
+  size        String
+  /// Above 0 (relative: the weights need not total 100).
+  weight      Decimal   @db.Decimal(9, 4)
+  version     Int       @default(1)
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?   @db.Uuid
+
+  style  Style   @relation(fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  season Season? @relation(fields: [tenantId, seasonId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, key])
+  @@index([tenantId, styleId])
+}
