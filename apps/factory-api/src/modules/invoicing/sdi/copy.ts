@@ -6,6 +6,8 @@ import { normaliseVisibility } from '../../../platform/files/rules'
 import { defineHandler, type EventHandler } from '../../../platform/outbox/dispatch'
 import { readInvoice, type Reader } from '../store'
 import { readSend } from './store'
+// B-W2b-401 (FIN-096): no courtesy copy reaches a customer for a send simulated in test mode.
+import { isTestRef } from '@nexus/factory-domain/invoicing/test-mode/test-mode'
 
 /**
  * The courtesy copy of an invoice SDI could not deliver (FIN-088; Provv. AdE 89757/2018: the seller tells the customer
@@ -87,7 +89,9 @@ export async function sendCourtesyCopy(caller: CommandCaller, invoiceId: string,
   if (!facts) return 'missing'
   const { invoice } = facts
   let problem: string | null =
-    facts.contacts.length === 0
+    isTestRef(facts.send?.providerRef)
+      ? 'Test mode: the send was simulated and never reached SDI, so no courtesy copy is e-mailed to the customer.'
+      : facts.contacts.length === 0
       ? 'The customer has no active contact for invoices with an e-mail address.'
       : facts.sender === null
         ? 'Nobody to send it as: the person who sent the invoice to SDI is not an active user.'

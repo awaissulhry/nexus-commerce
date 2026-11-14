@@ -381,6 +381,8 @@ import { DEPOSIT_RULES_DEFINITIONS, DEPOSIT_RULES_PERMISSIONS } from '../../invo
 import { COST_ACTUALS_DEFINITIONS, COST_ACTUALS_PERMISSIONS } from '../../costing/landed/permissions'
 // B-W2b-428: the metric layer (home.kpis.view, home.kpis.manage: the KPI library, its versions, the facts).
 import { HOME_KPIS_DEFINITIONS, HOME_KPIS_PERMISSIONS } from '../../insights/kpis/permissions'
+// B-W2b-401: e-invoicing in depth (invoices.testMode.manage).
+import { TEST_MODE_DEFINITIONS, TEST_MODE_PERMISSIONS } from '../../invoicing/test-mode/permissions'
 
 /**
  * Every permission of the factory, assembled (feature PLT-029). A module that adds routes declares its permissions
@@ -1071,6 +1073,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   COST_ACTUALS_DEFINITIONS,
   // B-W2b-428: the metric layer (area `home`).
   HOME_KPIS_DEFINITIONS,
+  // B-W2b-401: e-invoicing in depth (area `invoices`).
+  TEST_MODE_DEFINITIONS,
 ])
 
 /** The area of the permissions only floor roles hold (and floor roles hold no other, but FLOOR_SHARED_PERMISSIONS). */
@@ -1455,6 +1459,8 @@ for (const name of DEPOSIT_RULES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclare
 for (const name of COST_ACTUALS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-428: the metric layer.
 for (const name of HOME_KPIS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-401: e-invoicing in depth.
+for (const name of TEST_MODE_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

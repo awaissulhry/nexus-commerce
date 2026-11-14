@@ -1898,6 +1898,7 @@
     "invoices_tax_manage": "Tenere i codici IVA della società, le dichiarazioni d'intento dei clienti e l'imposta di bollo di ogni trimestre",
     "invoices_tax_switch": "Accendere o spegnere gli obblighi fiscali della società e registrare la conferma del commercialista su un codice IVA",
     "invoices_depositRules_manage": "Tenere le regole della società sull'acconto o la caparra quando un ordine è annullato: cosa si trattiene o si restituisce e il documento che segue",
+    "invoices_testMode_manage": "Uscire dalla modalità di prova della fatturazione elettronica di una società (da lì le fatture vanno allo SDI davvero) o tornarci, e scegliere la risposta che la prova simula",
     "quality_defects_view": "Vedere la libreria dei difetti e le destinazioni",
     "quality_defects_manage": "Gestire la libreria dei difetti e le destinazioni",
     "quality_holds_view": "Vedere cosa è bloccato",

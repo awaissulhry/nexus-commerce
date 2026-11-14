@@ -11,6 +11,8 @@ import {
   normalizeTaxId,
 } from '../../tax/tax-ids'
 import { isItalianVatRate } from '../../tax/vat-rates'
+// B-W2b-401: the debit note and the self-invoices.
+import { EXTRA_DOCUMENT_TYPES, extraTypeIssues } from './td-extra'
 import type { PriceBasis } from '../../tax/vat-summary'
 import { vatOn } from '../../tax/vat-summary'
 import { treatmentKey, type VatTreatment } from '../../tax/vat-treatment'
@@ -116,7 +118,8 @@ export interface NormalizedInvoice {
 
 // ── Checks ─────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-const DOCUMENT_TYPES: readonly FatturaPaDocumentType[] = ['TD01', 'TD02', 'TD04', 'TD24']
+// B-W2b-401: the debit note TD05 and the self-invoices TD17-TD19 (their own checks: td-extra.ts).
+const DOCUMENT_TYPES: readonly FatturaPaDocumentType[] = ['TD01', 'TD02', 'TD04', 'TD24', ...EXTRA_DOCUMENT_TYPES]
 const REGIMES: readonly string[] = [
   'RF01', 'RF02', 'RF04', 'RF05', 'RF06', 'RF07', 'RF08', 'RF09', 'RF10', 'RF11',
   'RF12', 'RF13', 'RF14', 'RF15', 'RF16', 'RF17', 'RF18', 'RF19', 'RF20',
@@ -498,7 +501,7 @@ export function validateFatturaPaInput(input: FatturaPaInvoiceInput): {
 
   // Document.
   const documentType = DOCUMENT_TYPES.includes(input.documentType) ? input.documentType : null
-  if (documentType === null) issues.add('documentType', 'DOCUMENT_TYPE_INVALID', 'must be TD01, TD02, TD04 or TD24')
+  if (documentType === null) issues.add('documentType', 'DOCUMENT_TYPE_INVALID', 'must be TD01, TD02, TD04, TD24, TD05, TD17, TD18 or TD19')
   const number = documentNumber(issues, 'number', input.number)
   const invoiceDate = date(issues, 'date', input.date)
   // B-W2b-396 (FIN-063): any ISO 4217 currency with at most two decimals (FatturaPA amounts carry two).
@@ -697,6 +700,8 @@ export function validateFatturaPaInput(input: FatturaPaInvoiceInput): {
   if (documentType === 'TD04' && (input.relatedInvoices ?? []).length === 0) {
     issues.add('relatedInvoices', 'TD04_NEEDS_INVOICE', 'a credit note names the invoice it corrects (DPR 633/1972 art. 26)')
   }
+  // B-W2b-401: TD05 and TD17-TD19 (the invoice they name, no deposit deducted, a self-invoice's foreign supplier).
+  if (documentType !== null) extraTypeIssues(input, (path, code, message) => issues.add(path, code, message))
 
   // Deposits deducted.
   const deductions: NormalizedLine[] = []

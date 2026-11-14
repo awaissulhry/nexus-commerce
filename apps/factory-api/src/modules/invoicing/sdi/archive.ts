@@ -2,6 +2,8 @@ import { command, type CommandCaller } from '../../../core/command'
 import { defineHandler, type EventHandler } from '../../../platform/outbox/dispatch'
 import { processSdi, type SdiRuntime } from './runtime'
 import { lockInvoice, readArchive, readSends, writeArchive } from './store'
+// B-W2b-401 (FIN-096): a send simulated in test mode never reached SDI: nothing is archived for legal keeping.
+import { isTestRef } from '@nexus/factory-domain/invoicing/test-mode/test-mode'
 
 /**
  * Legal archiving (conservazione; FIN-092; DM 17.6.2014, c.c. art. 2220: ten years), rented from the SDI intermediary
@@ -22,7 +24,7 @@ export async function archiveInvoice(sdi: SdiRuntime, caller: CommandCaller, inv
   if (!found) return 'nothing'
   if (found.archive) return 'already'
   const send = found.sends.find((row) => row.status === 'DELIVERED') ?? found.sends.find((row) => row.status === 'NOT_DELIVERABLE')
-  if (!send) return 'nothing'
+  if (!send || isTestRef(send.providerRef)) return 'nothing'
   if (!send.providerRef) throw new Error(`Send ${send.id} has no provider id yet; it is archived once the poll names it.`)
   const receipt = await sdi.archive(caller, send.integrationAccountId, { providerRef: send.providerRef, fileName: send.fileName })
   const { result } = await command(caller, { name: 'invoices.sdiArchive', idempotencyKey: `sdi-archive.${send.id}`, input: { invoiceId, submissionId: send.id }, ...(causationId ? { causationId } : {}) }, async (tools) => {

@@ -11,6 +11,8 @@ import {
 } from './types'
 import { validateFatturaPaInput, type NormalizedAddress, type NormalizedInvoice, type NormalizedLine, type NormalizedParty } from './validate'
 import { el, optional, serializeXml, type XmlElement } from './xml'
+// B-W2b-401: a self-invoice's header (the supplier as cedente, the company as cessionario).
+import { isSelfInvoiceDocument, selfInvoiceHeader } from './td-extra'
 
 /**
  * Builds the FatturaPA XML (FPR12, schema VFPR12 v1.2.3) of one document from a typed, decimal-based input.
@@ -115,7 +117,7 @@ export function buildFatturaPa(input: FatturaPaInvoiceInput): FatturaPaDocument 
 
   const root = el(
     'p:FatturaElettronica',
-    [header(invoice), body(invoice, lines, vat, stampDuty)],
+    [isSelfInvoiceDocument(invoice.documentType) ? selfInvoiceHeader(invoice) : header(invoice), body(invoice, lines, vat, stampDuty)],
     [
       ['versione', 'FPR12'],
       ['xmlns:ds', 'http://www.w3.org/2000/09/xmldsig#'],

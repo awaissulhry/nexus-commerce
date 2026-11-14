@@ -289,6 +289,8 @@ import { events as shippingDelivery } from '../shipping-delivery/events'
 import { events as invoicingDepth } from '../invoicing-depth/events'
 // B-W2b-419: cost rates (cost_per_minute.changed, overhead_rule.changed).
 import { events as costRates } from '../cost-rates/events'
+// B-W2b-401: e-invoicing in depth (e_invoicing.settings_changed, self_invoice.changed, sdi_archive_copy.changed).
+import { events as eInvoicing } from '../e-invoicing/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -643,6 +645,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...invoicingDepth,
   // B-W2b-419
   ...costRates,
+  // B-W2b-401
+  ...eInvoicing,
 ] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
