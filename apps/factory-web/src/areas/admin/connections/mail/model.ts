@@ -1,6 +1,8 @@
 import { domainOf, isAddress } from '@nexus/factory-domain/email/rules'
 import type { Loaded, Notice } from '../../shared/model'
 import type { DisplayNamePolicy, IdentityKind, IntegrationAccount, SendingIdentity, VerificationStatus } from '../api'
+// B-W2b-397: the capture address card.
+import type { CaptureCardModel } from '../mail-domain/capture/model'
 
 /**
  * SCR-015 Your mail domain (design 02 admin.connections `mail-domain`; PLT-230, COL-020, COL-022): the companies' sending
@@ -112,4 +114,6 @@ export interface MailDomainModel {
   busy?: boolean
   dialogProblem?: string | null
   notice?: Notice | null
+  /** B-W2b-397: the company's capture address (mail-domain/capture); absent without it. */
+  capture?: CaptureCardModel | null
 }

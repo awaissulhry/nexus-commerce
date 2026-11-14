@@ -160,6 +160,8 @@ import { PAYMENTS_BANK_ADDS } from '../../payments/write-offs/permissions'
 import { MAIL_DEPTH_ADDS } from '../../mail-depth/permissions'
 // B-W2b-396: invoicing in depth (finance keeps the rules for the deposit of a cancelled order).
 import { DEPOSIT_RULES_ADDS } from '../../invoicing/cancellation/permissions'
+// B-W2b-407: the actual-cost figures (finance lands charges and keeps the accountant's switch).
+import { COST_ACTUALS_ADDS } from '../../costing/landed/permissions'
 // B-W2b-401: e-invoicing in depth (finance leaves or re-enters a company's e-invoice test mode and picks its simulated answer).
 import { TEST_MODE_ADDS } from '../../invoicing/test-mode/permissions'
 
@@ -1079,6 +1081,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (AUDIT_DEPTH_ADDS[key] ?? []) : []),
   // B-W2b-396
   ...(audience === 'office' ? (DEPOSIT_RULES_ADDS[key] ?? []) : []),
+  // B-W2b-407
+  ...(audience === 'office' ? (COST_ACTUALS_ADDS[key] ?? []) : []),
   // B-W2b-401
   ...(audience === 'office' ? (TEST_MODE_ADDS[key] ?? []) : [])]
 /**

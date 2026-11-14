@@ -21,4 +21,6 @@ export const manifest = defineManifest({
   // account's webhook secret (email.manage over its company, step-up).
   'GET /email/delivery-status': { audiences: ['office'], permission: 'threads.read', scope: 'record' },
   'PUT /email/ses-accounts/:accountId/webhook-secret': { audiences: ['office'], permission: 'email.manage', scope: 'record' },
+  // B-W2b-397 (COL-004): the mis-send guard: email.send over the record (can() in the handler), read only.
+  'POST /threads/:recordType/:recordId/emails/check': { audiences: ['office'], permission: 'email.send', scope: 'record' },
 })
