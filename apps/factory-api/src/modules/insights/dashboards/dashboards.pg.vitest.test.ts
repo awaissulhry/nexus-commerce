@@ -187,7 +187,7 @@ describe('by company and site (ANA-002)', () => {
     const siteRows = (answer.rows as Json[]).filter((row) => row.company.id === companyA && row.site !== null)
     expect(siteRows.length).toBeGreaterThan(0)
     // Orders are kept per company: a site's cell says so instead of repeating the company's figure.
-    expect(siteRows[0].cells[0]).toMatchObject({ perCompanyOnly: true, value: null })
+    expect(siteRows[0]!.cells[0]).toMatchObject({ perCompanyOnly: true, value: null })
     expect((await call('owner', 'GET', '/insights/dashboards/sales/by-company')).status).toBe(404)
   })
 })

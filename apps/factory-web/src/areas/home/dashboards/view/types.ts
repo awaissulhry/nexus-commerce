@@ -41,7 +41,8 @@ export interface DashboardsActions {
   onRetry?: (panel: 'boards' | 'numbers' | 'needs' | 'trends' | 'wip' | 'byCompany') => void
   onOpen?: (href: string) => void
   onArrange?: (open: boolean) => void
-  onArranged?: (value: SectionLayoutValue) => void
+  /** Saves the arrangement; resolves with null when saved, else the refusal's message key (the dialog stays open). */
+  onArranged?: (value: SectionLayoutValue) => Promise<string | null> | void
   onReset?: () => void
   onKeys?: (open: boolean) => void
 }

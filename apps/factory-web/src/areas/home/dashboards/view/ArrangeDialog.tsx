@@ -31,7 +31,7 @@ export function ArrangeDialog({
   saved: boolean
   busy: boolean
   problem: string | null
-  onApply: (next: SectionLayoutValue) => void
+  onApply: (next: SectionLayoutValue) => Promise<string | null> | void
   onReset: () => void
   onClose: () => void
 }) {
@@ -44,7 +44,11 @@ export function ArrangeDialog({
       open
       onClose={onClose}
       value={value}
-      onConfirm={(next) => onApply({ order: next.visibleColumns, widths })}
+      onConfirm={async (next) => {
+        // The dialog closes only when the server saved it; a refusal keeps it open with its words.
+        const refused = await onApply({ order: next.visibleColumns, widths })
+        if (refused) throw new Error(t('arrange.refused'))
+      }}
       allColumns={columns}
       defaultVisible={specs.filter((spec) => !spec.defaultHidden).map((spec) => spec.id)}
       pageSizeChoices={[]}

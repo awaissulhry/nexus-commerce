@@ -118,19 +118,21 @@ export function DashboardsPage({ mode = 'page' }: { mode?: 'page' | 'present' })
   const serverPanels = layout.status === 'ready' ? layout.value.panels : board ? defaultLayout(boardOf(board.key)!) : []
   const version = layout.status === 'ready' ? layout.value.version : 0
 
-  const onArranged = (value: SectionLayoutValue) => {
-    if (!board) return
+  const onArranged = async (value: SectionLayoutValue): Promise<string | null> => {
+    if (!board) return null
     setArrange({ busy: true, problem: null })
-    saveLayout(api, board.key, { panels: layoutFrom(value, serverPanels), version })
-      .then((saved) => {
-        setLayout({ status: 'ready', value: saved })
-        setArrange({ busy: false, problem: null })
-        setArranging(false)
-      })
-      .catch((error: unknown) => {
-        setArrange({ busy: false, problem: writeProblem(error) })
-        void loadLayout()
-      })
+    try {
+      const saved = await saveLayout(api, board.key, { panels: layoutFrom(value, serverPanels), version })
+      setLayout({ status: 'ready', value: saved })
+      setArrange({ busy: false, problem: null })
+      setArranging(false)
+      return null
+    } catch (error) {
+      const problem = writeProblem(error)
+      setArrange({ busy: false, problem })
+      void loadLayout()
+      return problem
+    }
   }
 
   const onReset = () => {
