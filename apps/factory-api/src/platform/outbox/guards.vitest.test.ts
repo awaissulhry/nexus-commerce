@@ -96,7 +96,9 @@ describe('check-event-contract', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
     // B-W2b-404: + 2 declared (security.settings_changed, security.role_archive_changed), + 3 literal emits.
     // B-W2b-411: one event (work_order_close.changed) and six literal emits (the close: the status, the close, its entries;
     // the undo or reopen: the same three): with B-W2b-404, the count the guard reports after the merge.
-    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(893 declared event version\(s\), 1421 literal emit/) })
+    // B-W2b-423: two events (option_value.delta_changed, mass_update.applied) and three literal emits (a value's typed delta; a
+    // mass update applied, its materials' material.standard_cost_changed): 893 → 895, 1421 → 1424.
+    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(895 declared event version\(s\), 1424 literal emit/) })
   })
 
   it.each<[string, Plants, RegExp]>([

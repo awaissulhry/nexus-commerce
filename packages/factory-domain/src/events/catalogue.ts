@@ -299,6 +299,8 @@ import { events as securityDepth } from '../security-depth/events'
 import { events as workOrderClose } from '../work-order-close/events'
 // B-W2b-420: cost sheet versions (cost_sheet.version_changed, cost_sheet.approved, size_weights.changed).
 import { events as costSheetVersions } from '../cost-sheet-versions/events'
+// B-W2b-423: cost in depth (an option value's typed cost delta, the mass cost update).
+import { events as costDepth } from '../cost-depth/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -663,6 +665,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...workOrderClose,
   // B-W2b-420
   ...costSheetVersions,
+  // B-W2b-423
+  ...costDepth,
 ] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */

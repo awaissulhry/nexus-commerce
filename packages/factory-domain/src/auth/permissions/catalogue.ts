@@ -391,6 +391,8 @@ import { SECURITY_SETTINGS_DEFINITIONS, USER_SESSIONS_DEFINITIONS } from '../ses
 import { WORK_ORDER_CLOSE_DEFINITIONS, WORK_ORDER_CLOSE_PERMISSIONS } from '../../costing/close/permissions'
 // B-W2b-420: cost sheet versions (costing.sheets.approve).
 import { COST_SHEET_VERSIONS_DEFINITIONS, COST_SHEET_VERSIONS_PERMISSIONS } from '../../costing/sheet-versions/permissions'
+// B-W2b-423: cost in depth (costing.massUpdate.apply).
+import { COST_DEPTH_DEFINITIONS, COST_DEPTH_PERMISSIONS } from '../../costing/mass-update/permissions'
 
 /**
  * Every permission of the factory, assembled (feature PLT-029). A module that adds routes declares its permissions
@@ -1092,6 +1094,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   WORK_ORDER_CLOSE_DEFINITIONS,
   // B-W2b-420: cost sheet versions (area `costing`).
   COST_SHEET_VERSIONS_DEFINITIONS,
+  // B-W2b-423: cost in depth (area `costing`).
+  COST_DEPTH_DEFINITIONS,
 ])
 
 /** The area of the permissions only floor roles hold (and floor roles hold no other, but FLOOR_SHARED_PERMISSIONS). */
@@ -1484,6 +1488,8 @@ for (const name of COST_SHEET_COMPONENTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.i
 for (const name of WORK_ORDER_CLOSE_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-420: cost sheet versions.
 for (const name of COST_SHEET_VERSIONS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-423: cost in depth.
+for (const name of COST_DEPTH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

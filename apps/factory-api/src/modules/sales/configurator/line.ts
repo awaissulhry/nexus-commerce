@@ -366,7 +366,8 @@ export async function saveQuoteOptions(caller: CommandCaller, quoteId: string, l
     assertDraft(version)
     const line = await quoteLineOf(tx, version, lineId)
     const { before, rows, check, repriced } = await applyQuoteLinePicks(tools, current, version, line, body.picks)
-    await refreshVersion(tools, current, version, new Set())
+    // B-W2b-423 (KS4:01): the line costed again, its options' own cost with it.
+    await refreshVersion(tools, current, version, new Set([line.id]))
     tools.audit({
       action: 'quotes.configureLine',
       recordType: 'Quote',
