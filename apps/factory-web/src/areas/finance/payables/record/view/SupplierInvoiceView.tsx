@@ -15,7 +15,7 @@ import type { SupplierInvoice } from '../../api'
 import { actionHeld, MATCH_TONE, PAYABLES_NAMESPACE, RECORD_TABS, STATUS_TONE, xmlHref, type Phrase, type RecordTab } from '../../model'
 import type { SupplierInvoiceActions, SupplierInvoiceModel } from '../record-model'
 import { RecordDialogs } from './Dialogs'
-import { approveHeldOf, ApprovalTab, LinesTab, MatchTab, PaymentTab } from './RecordTabs'
+import { approveHeldOf, ApprovalTab, LinesTab, MatchTab, PaymentTab, type SupplierInvoiceDepth } from './RecordTabs'
 import '../../payables.css'
 import '../../../_shared/finance.css'
 
@@ -30,15 +30,15 @@ export type { SupplierInvoiceActions, SupplierInvoiceModel } from '../record-mod
  * Copy number). Tabs: Lines (mapped to PO lines, autosave per cell), Match (MatchPanel), Approval, Payment, Activity (the
  * record panels; beside any tab on a wide screen with ⌘J). Keys: a approves (held when you entered it), ⌘J the thread.
  */
-export function SupplierInvoiceView({ model, actions, panels }: { model: SupplierInvoiceModel; actions?: SupplierInvoiceActions; panels?: ReactNode }) {
+export function SupplierInvoiceView({ model, actions, panels, depth }: { model: SupplierInvoiceModel; actions?: SupplierInvoiceActions; panels?: ReactNode; /** B-W2b-425: the area check, dual approval and the payment batch. */ depth?: SupplierInvoiceDepth }) {
   return (
     <WithMessages namespaces={[PAYABLES_NAMESPACE, 'lists', 'records']}>
-      <Record model={model} actions={actions} panels={panels} />
+      <Record model={model} actions={actions} panels={panels} depth={depth} />
     </WithMessages>
   )
 }
 
-function Record({ model, actions, panels }: { model: SupplierInvoiceModel; actions?: SupplierInvoiceActions; panels?: ReactNode }) {
+function Record({ model, actions, panels, depth }: { model: SupplierInvoiceModel; actions?: SupplierInvoiceActions; panels?: ReactNode; depth?: SupplierInvoiceDepth }) {
   const t = useT(PAYABLES_NAMESPACE)
   const listHref = `${model.prefix}/finance/payables`
   if (!model.can.view) {
@@ -89,10 +89,10 @@ function Record({ model, actions, panels }: { model: SupplierInvoiceModel; actio
       </div>
     )
   }
-  return <Ready invoice={loaded.value} model={model} actions={actions} panels={panels} />
+  return <Ready invoice={loaded.value} model={model} actions={actions} panels={panels} depth={depth} />
 }
 
-function Ready({ invoice, model, actions, panels }: { invoice: SupplierInvoice; model: SupplierInvoiceModel; actions?: SupplierInvoiceActions; panels?: ReactNode }) {
+function Ready({ invoice, model, actions, panels, depth }: { invoice: SupplierInvoice; model: SupplierInvoiceModel; actions?: SupplierInvoiceActions; panels?: ReactNode; depth?: SupplierInvoiceDepth }) {
   const t = useT(PAYABLES_NAMESPACE)
   const locale = useLocale()
   const recordHref = `${model.prefix}/finance/payables/${invoice.id}`
@@ -272,9 +272,9 @@ function Ready({ invoice, model, actions, panels }: { invoice: SupplierInvoice; 
       <div className={showDock ? 'fw-fin-body has-dock' : 'fw-fin-body'}>
         <div className="fw-fin-main">
           {model.tab === 'lines' && <LinesTab invoice={invoice} model={model} actions={actions} />}
-          {model.tab === 'match' && <MatchTab invoice={invoice} model={model} actions={actions} />}
-          {model.tab === 'approval' && <ApprovalTab invoice={invoice} model={model} actions={actions} />}
-          {model.tab === 'payment' && <PaymentTab invoice={invoice} model={model} actions={actions} />}
+          {model.tab === 'match' && <MatchTab invoice={invoice} model={model} actions={actions} depth={depth} />}
+          {model.tab === 'approval' && <ApprovalTab invoice={invoice} model={model} actions={actions} depth={depth} />}
+          {model.tab === 'payment' && <PaymentTab invoice={invoice} model={model} actions={actions} depth={depth} />}
           {model.tab === 'activity' && (activity ?? <p className="fw-fpy-muted">{t('record.noPanels')}</p>)}
         </div>
         {showDock && (

@@ -38,6 +38,8 @@ import {
 import { PayablesListView, type BulkAnswer, type ForeignModel, type PayablesListModel, type Part } from './view/PayablesListView'
 // B-W2b-417: Self-invoices TD17/18/19 (design sec:selfinv).
 import { SelfInvoices } from './self-invoices/SelfInvoices'
+// B-W2b-425: the band's Payment proposal and its pop-up.
+import { PaymentProposal } from './proposal/PaymentProposal'
 
 const SLOW_MS = 1000
 const SEARCH_MS = 300
@@ -253,6 +255,7 @@ export function PayablesPage() {
     <PayablesListView
       model={model}
       selfInvoices={<SelfInvoices />}
+      proposal={<PaymentProposal prefix={prefix} />}
       actions={{
         onAddress: go,
         onSearch: (text) => {

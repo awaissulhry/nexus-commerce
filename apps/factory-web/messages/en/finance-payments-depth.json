@@ -1,0 +1,1016 @@
+{
+  "approvals": {
+    "action": {
+      "CREDIT_NOTE": {
+        "name": "Credit note",
+        "rule": "A credit note without the goods coming back."
+      },
+      "MANUAL_PAYMENT": {
+        "name": "Manual payment",
+        "rule": "A payment recorded by hand on one invoice, outside the proposal."
+      },
+      "PAYMENT_PROPOSAL": {
+        "name": "Payment proposal",
+        "rule": "Approved by someone who did not make it; payments go only to verified accounts."
+      },
+      "PRICE_OVERRIDE": {
+        "name": "Price override",
+        "rule": "A price changed by hand on a sale."
+      },
+      "SUPPLIER_INVOICE": {
+        "name": "Supplier invoice",
+        "rule": "Whoever entered it never approves it."
+      },
+      "WRITE_OFF": {
+        "name": "Write-off",
+        "rule": "Always within the company's write-off tolerance; refused above it."
+      }
+    },
+    "actionsTitle": "Money actions that need approval",
+    "amountsFixed": "The amounts and the people told have no setting yet: they are shown here, not edited.",
+    "audience": {
+      "BANK_MATCHERS": "Who matches the company's bank lines",
+      "CUSTOMER_FOLLOWERS_AND_ORDER_MAKERS": "The customer's followers and who made its orders",
+      "CUSTOMER_FOLLOWERS_AND_REMINDER_APPROVERS": "The customer's followers and who approves reminders",
+      "ISSUER_AND_FOLLOWERS": "Who issued the invoice and its followers",
+      "ORDER_MAKER_AND_RELEASERS": "Who made the order and who releases production"
+    },
+    "code": {
+      "none": "—",
+      "off": "Switched off",
+      "on": "Asked"
+    },
+    "col": {
+      "action": "Action",
+      "code": "Fresh code",
+      "dual": "Two people",
+      "notification": "Notification",
+      "told": "Who is told",
+      "yes": "What asks a yes"
+    },
+    "dual": {
+      "above": "Above {amount}",
+      "abovePlain": "Above the amount",
+      "aboveUndecided": "Above {amount} (not yet decided by the Owner)",
+      "none": "—"
+    },
+    "failed": "Couldn't load approvals & notifications",
+    "held": {
+      "owner": "Only the Owner turns this mail on or off.",
+      "unread": "Still reading…"
+    },
+    "intro": "Money actions that need approval, and who hears about what. Rules are made in Admin › Approvals, automation & AI; fresh codes are switched in Admin › Security & health.",
+    "mailsIntro": "These reach a customer or a supplier. They stay off until the Owner turns them on; turning one on asks a fresh code.",
+    "mailsTitle": "Mails to people outside",
+    "noRight": "Approvals of money are seen with the right to see payables.",
+    "notice": {
+      "notice": {
+        "off": "Customers' payment-received notice is off.",
+        "on": "Customers' payment-received notice is on."
+      },
+      "remittance": {
+        "off": "Remittance mail to suppliers is off.",
+        "on": "Remittance mail to suppliers is on."
+      }
+    },
+    "notification": {
+      "DEPOSIT_RECEIVED": "Deposit received",
+      "OVERDUE": "Invoice overdue",
+      "PAYMENT_RECEIVED": "Payment received",
+      "RECONCILIATION_DIFFERENCE": "Difference in the bank reconciliation",
+      "SDI_REJECTED": "E-invoice rejected by SDI"
+    },
+    "notificationsTitle": "Who hears about what",
+    "source": {
+      "COMPANY": "This company's own setting.",
+      "NONE": "Never set: off.",
+      "TENANT": "The setting of every company."
+    },
+    "switch": {
+      "notice": {
+        "body": "A customer who paid by bank transfer gets one mail when the payment is recorded.",
+        "title": "Payment-received notice to customers"
+      },
+      "off": "Off",
+      "on": "On",
+      "remittance": {
+        "body": "Once a payment proposal is recorded paid, each supplier gets one mail with the invoices, the day and the bank reference — never an amount or an IBAN.",
+        "title": "Remittance mail to suppliers"
+      },
+      "turnOff": "Turn off",
+      "turnOn": "Turn on…"
+    },
+    "title": "Approvals & notifications",
+    "yes": {
+      "NOT_REGISTERED": "No yes asked yet: no module asks it",
+      "NO_KIND": "No yes asked yet: no approval kind for it",
+      "NO_RULE": "No rule active until you set one",
+      "RULES_one": "{count} rule on",
+      "RULES_other": "{count} rules on",
+      "SEPARATION": "Never the person who made it; above the amount, a second person too"
+    }
+  },
+  "area": {
+    "claim": "Open area claim",
+    "difference": "Difference",
+    "differenceValue": "{area} ({percent} %)",
+    "existing_one": "{count} claim of this order and supplier:",
+    "existing_other": "{count} claims of this order and supplier:",
+    "explain": "What the supplier bills against the area measured on the hides received. Short beyond the tolerance: open an area claim.",
+    "failed": "Couldn't load the leather area check",
+    "held": {
+      "noArea": "The line names no area: its quantity is not in an area unit.",
+      "notReceived": "No hide was received on this order line yet.",
+      "nothing": "Nothing to claim: the area measured is within the tolerance or above what was invoiced.",
+      "right": "Opening a claim needs the right to manage claims over this supplier at the order's site."
+    },
+    "hides": "Hides measured",
+    "hidesAll_one": "{count} hide, measured",
+    "hidesAll_other": "All {count} hides measured",
+    "hidesSome": "{measured} of {all} measured; the others count with the area they came with",
+    "invoiced": "Invoiced",
+    "invoicedWithOthers": "{line} here; {total} with the supplier's other invoices of the line",
+    "line": "Line {seq}",
+    "lineLabel": "Area check of line {seq}",
+    "measured": "Measured",
+    "noAreaBody": "This line is not in an area unit, so its area cannot be checked.",
+    "none": "No leather line on this invoice: nothing to check.",
+    "openClaim": "Open the claim",
+    "opened": "Area claim {number} opened as a draft",
+    "openedBody": "Purchasing sends it to the supplier.",
+    "order": "{number} line {line}",
+    "outcome": {
+      "NOT_RECEIVED": "Nothing received",
+      "NO_AREA": "No area",
+      "OVER": "More than invoiced",
+      "SHORT": "Short",
+      "WITHIN": "Within tolerance"
+    },
+    "shortfall": "To claim",
+    "title": "Leather area check",
+    "tolerance": "Tolerance",
+    "toleranceFrom": {
+      "COMPANY": "{percent} % (the company's leather setting)",
+      "DEFAULT": "{percent} % (the default)",
+      "ORDER_LINE": "{percent} % (the order line's)",
+      "TENANT": "{percent} % (the leather setting of every company)"
+    },
+    "value": "{value} {unit}"
+  },
+  "band": {
+    "keys": "Keyboard shortcuts",
+    "more": "More actions",
+    "riba": "Ri.Ba. batch",
+    "ribaHeld": "Ri.Ba. batches need the right to see receivables."
+  },
+  "bankLine": {
+    "accepted": "Matched by the suggestion and accepted on {date} by {name}",
+    "bank": "Bank and account",
+    "booked": "Booked",
+    "bookedValue": "{booked} (value day {value})",
+    "byHand": "Typed by hand: this payment came from no bank statement line.",
+    "chosen": "Chosen by {name} on {date}",
+    "confidence": "How sure the match was",
+    "failed": "Couldn't load the bank line: {reason}",
+    "level": {
+      "HIGH": "High",
+      "LOW": "Low",
+      "MEDIUM": "Medium"
+    },
+    "noRight": "It came from a bank line; seeing the line needs the right to see the bank.",
+    "notAccepted": "Not accepted yet.",
+    "openStatement": "Open the statement",
+    "payer": "Paid by",
+    "reading": "Reading the bank line…",
+    "reason": {
+      "AMOUNT_EQUAL": "Amount equal",
+      "AMOUNT_WITHIN_TOLERANCE": "Amount within the write-off tolerance",
+      "CHOSEN_BY_PERSON": "Chosen by a person",
+      "IBAN_KNOWN": "Payer's IBAN known",
+      "NAME_MATCHES": "Name matches",
+      "NUMBER_IN_REFERENCE": "Invoice number in the reference"
+    },
+    "reasons": "Why",
+    "reference": "Reference text",
+    "reversed": "The match was taken back on {date}.",
+    "statementLater": "The statement opens from the Bank page once it is built.",
+    "title": "Bank line"
+  },
+  "batch": {
+    "amount": "To pay",
+    "amountDiscount": "{amount} (less {discount} discount)",
+    "failed": "Couldn't load payment",
+    "held": "Held in the batch",
+    "heldAccount": "No usable bank account for the supplier: the payment waits until its account is verified.",
+    "iban": "IBAN used",
+    "inBatch": "In batch",
+    "noAccount": "No bank account",
+    "none": "Not in a payment batch yet",
+    "noneBody": "The weekly payment proposal (Payment proposal on Supplier invoices) gathers the approved invoices that are due.",
+    "noneOlder": "Not in the latest proposals; older ones were not looked at.",
+    "notUsable": "Not usable",
+    "title": "Payment batch",
+    "usable": "Usable",
+    "week": "Week {week} ({from} – {to})"
+  },
+  "dual": {
+    "amount": "Two people above",
+    "body": {
+      "both": "The total is above {amount}: a first person approves, then a second, different person.",
+      "lapsed": "{name}'s first approval lapsed because the invoice changed after it: the next yes is a first again.",
+      "second": "Approved once by {name}: the total is above {amount}, so a second person approves it now.",
+      "secondMine": "You gave the first approval: the total is above {amount}, so someone else gives the second.",
+      "under": "The total is not above {amount}: one person approves it (never the one who entered it)."
+    },
+    "bodyPlain": {
+      "both": "Above the amount: a first person approves, then a second, different person.",
+      "lapsed": "{name}'s first approval lapsed because the invoice changed after it: the next yes is a first again.",
+      "second": "Approved once by {name}: a second person approves it now.",
+      "secondMine": "You gave the first approval: someone else gives the second.",
+      "under": "Under the amount: one person approves it (never the one who entered it)."
+    },
+    "failed": "Couldn't load approval",
+    "first": "First approval",
+    "firstBy": "{name} · {date}",
+    "firstLapsed": "{name} · {date} — lapsed: the invoice changed after it",
+    "firstNone": "Not yet",
+    "state": {
+      "both": "Two people approve",
+      "lapsed": "First approval lapsed",
+      "second": "Waits for a second person",
+      "secondMine": "Someone else approves now",
+      "under": "One person approves"
+    },
+    "title": "Dual approval",
+    "undecided": "The amount is the design's figure, not yet decided by the Owner: no setting holds it yet."
+  },
+  "notPlaced": {
+    "bankLine": "Bank line of {date}",
+    "byHand": "Typed by hand",
+    "col": {
+      "bank": "From",
+      "waiting": "Waiting",
+      "writeOff": "Write-off"
+    },
+    "countMore_one": "{count} payment shown, more to load",
+    "countMore_other": "{count} payments shown, more to load",
+    "count_one": "{count} payment",
+    "count_other": "{count} payments",
+    "csv": {
+      "no": "no",
+      "openItems": "Open items of the customer",
+      "unplaced": "Not placed",
+      "waiting": "Days waiting",
+      "withinTolerance": "Write-off within tolerance",
+      "yes": "yes"
+    },
+    "empty": {
+      "body": "Every payment received is placed on its invoices.",
+      "title": "Everything is placed"
+    },
+    "failed": "Couldn't load what is not placed",
+    "noOpenItems": "Nothing open for the customer",
+    "openItems_one": "{count} open item of the customer",
+    "openItems_other": "{count} open items of the customer",
+    "rowMenu": "Actions for {reference}",
+    "title": "Not placed on an invoice",
+    "waiting_one": "{count} day",
+    "waiting_other": "{count} days",
+    "withinTolerance": "Within tolerance"
+  },
+  "proposal": {
+    "account": {
+      "check": "Check the account",
+      "held": "No bank account",
+      "notUsable": "{account} · not usable yet",
+      "ok": "Usable",
+      "usable": "{account} · usable"
+    },
+    "approval": "Approval",
+    "approve": "Approve proposal",
+    "approvedBy": "Approved by",
+    "band": "Payment proposal",
+    "body": "Approved supplier invoices due by the end of the week, overdue first, by due date and discount. Nothing is paid from here: the transfers are made in the bank's site, then recorded.",
+    "byOn": "{name} · {date}",
+    "cancel": "Cancel",
+    "cancelled": "Cancelled on {date}: {reason}",
+    "candidates": {
+      "all_one": "All free ({count})",
+      "all_other": "All free ({count})",
+      "failed": "Couldn't load the invoices",
+      "legend": "Invoices to pay in week {week}",
+      "none": {
+        "body": "Only approved invoices due by the end of the week are proposed. Invoices still waiting for approval are listed apart.",
+        "title": "Nothing to pay in week {week}"
+      },
+      "reading": "Reading the invoices…"
+    },
+    "changeLines": "Change the lines",
+    "col": {
+      "account": "Bank account",
+      "amount": "To pay",
+      "discount": "Discount",
+      "invoice": "Invoice",
+      "lines": "Invoices",
+      "state": "State",
+      "supplier": "Supplier",
+      "total": "Total"
+    },
+    "create_one": "Make the proposal ({count})",
+    "create_other": "Make the proposal ({count})",
+    "discount": "Early-payment discount on {number}",
+    "discountHint": "Optional, as the supplier grants it, for example 43,01",
+    "dual": {
+      "first": "Approved once by {name}: a second person approves now.",
+      "needed": "Above {amount}: two people approve.",
+      "neededPlain": "Above the amount: two people approve.",
+      "notNeeded": "Up to {amount}: one person approves.",
+      "notNeededPlain": "Under the amount: one person approves.",
+      "undecided": "The amount is the design's figure, not yet decided by the Owner."
+    },
+    "due": {
+      "LATER": "Due {date}",
+      "NO_DUE_DATE": "No due date",
+      "OVERDUE": "Overdue since {date}",
+      "THIS_WEEK": "Due {date}"
+    },
+    "dueShort": {
+      "LATER": "Later",
+      "NO_DUE_DATE": "No date",
+      "OVERDUE": "Overdue",
+      "THIS_WEEK": "This week"
+    },
+    "existing_one": "Week {week} has {count} proposal already: open it rather than making another.",
+    "existing_other": "Week {week} has {count} proposals already: open one rather than making another.",
+    "failed": "Couldn't load the proposal",
+    "fourEyes": "Approver ≠ the person who made it: someone else approves this proposal.",
+    "held": {
+      "company": "Choose a company first.",
+      "discount": "The discount on {number} is not an amount above zero, or it is more than the invoice.",
+      "failed": "The proposal could not be read.",
+      "manage": "Making a proposal needs the right to manage payment proposals.",
+      "nonePicked": "Pick at least one invoice.",
+      "reading": "Still reading…",
+      "right": "You do not have the right for this.",
+      "tooMany": "A proposal holds at most {max} invoices.",
+      "view": "Payment proposals need the right to see payables."
+    },
+    "heldLines_one": "{count} line is held",
+    "heldLines_other": "{count} lines are held",
+    "lessDiscount": "less {amount} discount",
+    "lines": "Invoices in the proposal",
+    "linesCount_one": "{count} invoice of {suppliers} supplier(s)",
+    "linesCount_other": "{count} invoices of {suppliers} supplier(s)",
+    "madeBy": "Made by",
+    "noDueDate": "No due date",
+    "notice": {
+      "approved": {
+        "FIRST": "Approved once: the total is above the amount, so a second person approves it now.",
+        "SECOND": "Second approval given: the proposal is approved.",
+        "SINGLE": "Proposal approved."
+      },
+      "cancelled": "Proposal cancelled.",
+      "created": "Proposal of week {week} made.",
+      "lines_one": "The proposal now holds {count} invoice.",
+      "lines_other": "The proposal now holds {count} invoices.",
+      "paid": "{count} invoices recorded paid; remittance mails sent {sent}, not sent {held}.",
+      "paidNoMail_one": "{count} invoice recorded paid. The remittance mail is switched off: no supplier was written to.",
+      "paidNoMail_other": "{count} invoices recorded paid. The remittance mail is switched off: no supplier was written to.",
+      "sentBack": "Proposal sent back to draft."
+    },
+    "openExisting_one": "Open ({state}, {count} invoice)",
+    "openExisting_other": "Open ({state}, {count} invoices)",
+    "paid": {
+      "body": "Record the day the transfers left the bank and the bank's reference: every invoice of the proposal is marked paid.",
+      "day": "Give the day the transfers left the bank.",
+      "future": "The day is still to come.",
+      "go_one": "Record paid ({count})",
+      "go_other": "Record paid ({count})",
+      "on": "Paid on",
+      "ref": "Bank's reference",
+      "refHint": "The CRO, TRN or the batch reference of the bank",
+      "reference": "Give the bank's reference.",
+      "referenceLong": "The reference is at most {max} characters.",
+      "title": "Record week {week} paid"
+    },
+    "paidAt": "Paid",
+    "paidDone_one": "Paid: {count} invoice recorded paid.",
+    "paidDone_other": "Paid: {count} invoices recorded paid.",
+    "payInBank": "Make the transfers in the bank's site, then record them paid here.",
+    "payable": "to pay {amount}",
+    "reading": "Reading the proposal…",
+    "reason": {
+      "cancelBody": "The proposal is cancelled; its invoices are free for another one.",
+      "cancelGo": "Cancel the proposal",
+      "cancelTitle": "Cancel the proposal",
+      "label": "Why",
+      "sendBackBody": "The approval is taken back and the proposal is a draft again.",
+      "sendBackGo": "Send back",
+      "sendBackTitle": "Send the proposal back",
+      "short": "Say why in a few words first."
+    },
+    "recordPaid": "Record paid…",
+    "remittance": {
+      "off": "Remittance mail to suppliers: off (the Owner's switch in Finance › Finance settings).",
+      "on": "Remittance mail to suppliers: on — each supplier is told once the proposal is recorded paid."
+    },
+    "saveLines_one": "Save the lines ({count})",
+    "saveLines_other": "Save the lines ({count})",
+    "sendBack": "Send back",
+    "status": {
+      "APPROVED": "Approved",
+      "CANCELLED": "Cancelled",
+      "DRAFT": "Draft",
+      "PAID": "Paid"
+    },
+    "stepUpSaid": "Approving asks a fresh authenticator code.",
+    "title": "Payment proposal",
+    "titleWeek": "Payment proposal — week {week}",
+    "totalPlain_one": "{count} invoice",
+    "totalPlain_other": "{count} invoices",
+    "total_one": "{count} invoice · {amount}",
+    "total_other": "{count} invoices · {amount}",
+    "waiting": {
+      "disputed": "disputed with the supplier",
+      "received": "waiting for approval",
+      "title": "Due but still to approve"
+    },
+    "week": "Week",
+    "weekOption": "Week {week} (from {from})",
+    "weekRange": "{from} – {to}"
+  },
+  "refusal": {
+    "area": {
+      "NOTHING_TO_CLAIM": "There is nothing to claim: the area measured is within the tolerance or above what was invoiced."
+    },
+    "proposal": {
+      "CURRENCY": "A proposal pays in one currency.",
+      "EMPTY": "The proposal holds no invoice.",
+      "HELD": "No usable bank account for a supplier: payments to it are held until its account is verified.",
+      "INVOICE_NOT_APPROVED": "An invoice is no longer approved.",
+      "INVOICE_PAID": "An invoice is paid already.",
+      "IN_ANOTHER_PROPOSAL": "An invoice is in another proposal already.",
+      "NOT_APPROVED": "The proposal is not approved yet.",
+      "NOT_A_SUPPLIER_INVOICE": "A credit note is not paid in a proposal.",
+      "NOT_DRAFT": "The proposal is no longer a draft.",
+      "NOT_PAID_YET": "Not paid yet.",
+      "OTHER_COMPANY": "An invoice belongs to another company.",
+      "OWN_PROPOSAL": "You made this proposal: someone else approves it.",
+      "SECOND_APPROVER": "You gave the first approval: someone else gives the second.",
+      "TOO_MUCH": "A discount is more than what the invoice leaves to pay."
+    },
+    "riba": {
+      "ACCOUNT_NOT_ITALIAN": "Ri.Ba. needs an Italian collecting account.",
+      "ACCOUNT_OFF": "The collecting account is no longer active.",
+      "BEFORE_DUE": "A day before the due date cannot be the bank's day.",
+      "CURRENCY": "Ri.Ba. collects euro only.",
+      "DEBTOR_NOT_ITALIAN": "The customer's bank is not Italian.",
+      "FEE_NEEDED": "Give the bank's fee (0 if none).",
+      "FEE_ON_PAID": "A paid instalment has no unpaid fee.",
+      "FILE_DATA": "The file lacks a datum of the company or a customer (name, address, VAT number): complete it and try again.",
+      "FUTURE_DAY": "The day is still to come.",
+      "IN_ANOTHER_BATCH": "Already in another batch",
+      "NOT_DRAFT": "The batch is no longer a draft: it was read again.",
+      "NOT_IN_BATCH": "That instalment is not in this batch.",
+      "NOT_ISSUED": "Only a batch with its file made is settled.",
+      "NOT_OPEN": "That instalment is no longer open.",
+      "NOT_RIBA": "That instalment is not paid by Ri.Ba.",
+      "NO_ACCOUNT": "The company has no active bank account to collect on.",
+      "NO_DEBTOR_BANK": "The customer's bank is not known: type ABI and CAB.",
+      "NO_ITEMS": "The batch holds no instalment.",
+      "OUTSIDE_WINDOW": "That instalment is due outside the window.",
+      "SETTLED": "That instalment is settled already.",
+      "SWITCHED_OFF": "Ri.Ba. is switched off for this company: the Owner turns it on first."
+    },
+    "stop": {
+      "LIFTED": "The stop was lifted meanwhile.",
+      "NOT_AN_INVOICE": "A stop holds an issued invoice only.",
+      "OVER": "The stop is over: its last day passed.",
+      "SAME_STOP": "The invoice has a stop for that reason already."
+    },
+    "writeOff": {
+      "A_REVERSAL": "A taking-back is not taken back again.",
+      "NOTE_NEEDED": "Say the reason in the note.",
+      "NOTHING_LEFT": "Nothing is left to write off.",
+      "NOT_AN_INVOICE_ALLOCATION": "That placement is not on an invoice.",
+      "NOT_RECEIVED": "Only a received payment is written off.",
+      "NO_TOLERANCE": "No write-off tolerance is set: set it in Finance › Finance settings first.",
+      "OVER_TOLERANCE": "The difference is above the write-off tolerance: place it, refund it, or ask the customer.",
+      "REVERSED_ALREADY": "That write-off is taken back already.",
+      "SHORT_ON_DEPOSIT": "A deposit is not written off: the customer pays it in full.",
+      "SHORT_ON_SEVERAL": "The payment is short on several invoices: place it by hand first."
+    }
+  },
+  "refusalItem": {
+    "riba": {
+      "ACCOUNT_NOT_ITALIAN": "{invoice} ({customer}): ri.Ba. needs an Italian collecting account.",
+      "ACCOUNT_OFF": "{invoice} ({customer}): the collecting account is no longer active.",
+      "BEFORE_DUE": "{invoice} ({customer}): a day before the due date cannot be the bank's day.",
+      "CURRENCY": "{invoice} ({customer}): ri.Ba. collects euro only.",
+      "DEBTOR_NOT_ITALIAN": "{invoice} ({customer}): the customer's bank is not Italian.",
+      "FEE_NEEDED": "{invoice} ({customer}): give the bank's fee (0 if none).",
+      "FEE_ON_PAID": "{invoice} ({customer}): a paid instalment has no unpaid fee.",
+      "FILE_DATA": "{invoice} ({customer}): the file lacks a datum of the company or a customer (name, address, VAT number): complete it and try again.",
+      "FUTURE_DAY": "{invoice} ({customer}): the day is still to come.",
+      "IN_ANOTHER_BATCH": "{invoice} ({customer}): already in another batch",
+      "NOT_DRAFT": "{invoice} ({customer}): the batch is no longer a draft: it was read again.",
+      "NOT_IN_BATCH": "{invoice} ({customer}): that instalment is not in this batch.",
+      "NOT_ISSUED": "{invoice} ({customer}): only a batch with its file made is settled.",
+      "NOT_OPEN": "{invoice} ({customer}): that instalment is no longer open.",
+      "NOT_RIBA": "{invoice} ({customer}): that instalment is not paid by Ri.Ba.",
+      "NO_ACCOUNT": "{invoice} ({customer}): the company has no active bank account to collect on.",
+      "NO_DEBTOR_BANK": "{invoice} ({customer}): the customer's bank is not known: type ABI and CAB.",
+      "NO_ITEMS": "{invoice} ({customer}): the batch holds no instalment.",
+      "OUTSIDE_WINDOW": "{invoice} ({customer}): that instalment is due outside the window.",
+      "SETTLED": "{invoice} ({customer}): that instalment is settled already.",
+      "SWITCHED_OFF": "{invoice} ({customer}): ri.Ba. is switched off for this company: the Owner turns it on first."
+    }
+  },
+  "riba": {
+    "account": "Collecting account",
+    "back": "Back",
+    "bank": {
+      "abi": "ABI (bank code)",
+      "cab": "CAB (branch code)",
+      "give": "Bank not known: type ABI and CAB",
+      "invalid": "ABI and CAB of {customer} are five digits each.",
+      "known": "ABI {abi} · CAB {cab}",
+      "legend": "The customer's bank, for each customer the file needs",
+      "needed": "The file needs the bank of {customer}: type ABI and CAB.",
+      "source": {
+        "BANK_LINE": "ABI {abi} · CAB {cab} (from a payment of the customer)",
+        "GIVEN": "ABI {abi} · CAB {cab} (typed for this file)",
+        "INVOICE": "ABI {abi} · CAB {cab} (from the invoice)"
+      },
+      "unknown": "Bank not known yet"
+    },
+    "batch": {
+      "failed": "Couldn't load the batch",
+      "reading": "Reading the batch…"
+    },
+    "batchState": {
+      "CANCELLED": "Cancelled",
+      "DRAFT": "Draft",
+      "ISSUED": "File made",
+      "waiting_one": "File made · {count} waiting for the bank",
+      "waiting_other": "File made · {count} waiting for the bank"
+    },
+    "batches": {
+      "continue": "Continue",
+      "failed": "Couldn't load the recent batches: {reason}",
+      "settle": "Open",
+      "title": "Recent batches"
+    },
+    "body": "Instalments the customers pay by Ri.Ba., due in the window. The file is made for the bank: you upload it in the bank's own site — nothing is sent from here.",
+    "cancel": "Cancel the draft",
+    "cancelBody_one": "The draft with {count} instalment is cancelled; its instalment is free for another batch.",
+    "cancelBody_other": "The draft with {count} instalments is cancelled; its instalments are free for another batch.",
+    "cancelGo": "Cancel the draft",
+    "cancelReason": {
+      "label": "Why",
+      "short": "Say why in a few words first."
+    },
+    "cancelTitle": "Cancel the Ri.Ba. draft",
+    "cancelled": "Cancelled on {date}: {reason}",
+    "candidates": {
+      "all_one": "All free ({count})",
+      "all_other": "All free ({count})",
+      "due": "Due {date}",
+      "failed": "Couldn't load the instalments",
+      "invoice": "{number} · instalment {instalment}",
+      "legend": "Instalments due from {from} to {to}",
+      "none": {
+        "body": "Only issued invoices with Ri.Ba. instalments (MP12) still open are listed. Widen the window or check the invoices' payment terms.",
+        "title": "Nothing due by Ri.Ba. from {from} to {to}"
+      },
+      "reading": "Reading the instalments…"
+    },
+    "changed": "The batch changed meanwhile: it was read again.",
+    "col": {
+      "amount": "Amount",
+      "bank": "Customer's bank",
+      "customer": "Customer",
+      "due": "Due",
+      "invoice": "Invoice",
+      "open": "Open",
+      "receipts": "Receipts",
+      "state": "State",
+      "total": "Total",
+      "window": "Window"
+    },
+    "create_one": "Create draft ({count})",
+    "create_other": "Create draft ({count})",
+    "fee": "Bank fee {amount}",
+    "file": {
+      "download": "Download the file",
+      "openTab": "Open the file in a new tab"
+    },
+    "held": {
+      "allSettled": "Every instalment is settled already.",
+      "failed": "The batch could not be read.",
+      "manage": "Making a Ri.Ba. batch needs the right to manage Ri.Ba..",
+      "nonePicked": "Pick at least one instalment.",
+      "reading": "Still reading…",
+      "record": "An instalment settled as paid records a payment: that needs the right to record payments.",
+      "switchOff": "Ri.Ba. is switched off for this company: the Owner turns it on first."
+    },
+    "issue": "Create file (download)",
+    "issueBody": "Creating the file keeps it on the batch for ten years and downloads it. Upload it in the bank's site.",
+    "issuedAt": "File made",
+    "issuedBy": "{date} by {name}",
+    "itemState": {
+      "ISSUED": "With the bank",
+      "PAID": "Paid",
+      "UNPAID": "Back unpaid"
+    },
+    "items": "Instalments in the batch",
+    "notice": {
+      "created_one": "Draft made with {count} instalment.",
+      "created_other": "Draft made with {count} instalments.",
+      "issued": "File {name} made and downloaded.",
+      "picked_one": "The draft now holds {count} instalment.",
+      "picked_other": "The draft now holds {count} instalments.",
+      "settled": "Bank report recorded: {paid} paid, {unpaid} back unpaid.",
+      "switchedOn": "Ri.Ba. is on for this company."
+    },
+    "repick": "Pick again",
+    "rule": "The file follows the CBI layout; the bank and the accountant confirm it before the first upload.",
+    "savePicks_one": "Save the pick ({count})",
+    "savePicks_other": "Save the pick ({count})",
+    "settle": {
+      "PAID": "Paid",
+      "UNPAID": "Back unpaid",
+      "WAIT": "Still with the bank",
+      "backOn": "Back on",
+      "body": "Record what the bank reported, all at once: a paid instalment records the payment on its invoice; an unpaid one opens the invoice again with the bank's fee.",
+      "day": "Give the day as the bank reports it.",
+      "done": "Settled: {paid} paid, {unpaid} back unpaid.",
+      "fee": "Bank's fee",
+      "feeHint": "As on the bank's report, for example 3,50",
+      "go_one": "Record the bank report ({count})",
+      "go_other": "Record the bank report ({count})",
+      "legend": "The bank's report",
+      "nothing": "Mark at least one instalment paid or back unpaid.",
+      "outcome": "Outcome",
+      "paidOn": "Paid on"
+    },
+    "settledOn": "Settled {date}",
+    "sia": {
+      "hint": "The company's five-character creditor code at the bank; remembered on this device.",
+      "invalid": "The SIA code is five letters or digits.",
+      "label": "SIA code"
+    },
+    "someone": "someone",
+    "switch": {
+      "after": "Afterwards finance makes the files; turning it off again is always possible.",
+      "body": "Turning Ri.Ba. on lets finance make CBI files for the bank. Check the layout with the bank and the accountant before the first upload.",
+      "go": "Turn on (fresh code)",
+      "held": "Only the Owner turns Ri.Ba. on.",
+      "off": "Ri.Ba. is switched off",
+      "offBody": "A draft can be prepared; the file is made once the Owner turns Ri.Ba. on.",
+      "on": "Ri.Ba. is on for this company.",
+      "tick": "The bank and the accountant confirmed the file layout",
+      "tickFirst": "Tick that the bank and the accountant confirmed the layout first.",
+      "title": "Turn Ri.Ba. on",
+      "turnOn": "Turn on…"
+    },
+    "title": "Ri.Ba. batch",
+    "titleCancelled": "Ri.Ba. batch — cancelled",
+    "titleDraft": "Ri.Ba. batch — draft",
+    "titleIssued": "Ri.Ba. batch — file made",
+    "titleRepick": "Ri.Ba. batch — pick the instalments again",
+    "totalPlain_one": "{count} instalment",
+    "totalPlain_other": "{count} instalments",
+    "total_one": "{count} instalment · {amount}",
+    "total_other": "{count} instalments · {amount}",
+    "window": {
+      "from": "Due from",
+      "long": "The window is at most {days} days.",
+      "missing": "Give both days of the window.",
+      "order": "The window ends after it starts.",
+      "range": "{from} – {to}",
+      "to": "Due to"
+    }
+  },
+  "ribaFile": {
+    "back": "Payments",
+    "bytes_one": "{count} byte",
+    "bytes_other": "{count} bytes",
+    "cancelled": {
+      "body": "The batch was cancelled before its file was made.",
+      "title": "A cancelled batch has no file"
+    },
+    "download": "Download",
+    "draft": {
+      "body": "The batch is a draft: make its file from the Ri.Ba. batch on Payments.",
+      "title": "No file yet"
+    },
+    "howTo": "Download the file and upload it in the bank's site: nothing is sent from here. The link lives a minute.",
+    "loading": "Reading the batch…",
+    "reading": "Reading the file…",
+    "records": "The file, record by record",
+    "recordsCount": "{count} records of 120 characters, {receipts} receipts",
+    "size": "Size",
+    "state": {
+      "error": {
+        "body": "Try again in a moment.",
+        "title": "Couldn't load the batch"
+      },
+      "forbidden": {
+        "body": "Ri.Ba. batches need the right to see receivables.",
+        "title": "No permission"
+      },
+      "not_found": {
+        "body": "The address names no Ri.Ba. batch of this company.",
+        "title": "No such batch"
+      }
+    },
+    "title": "Ri.Ba. file",
+    "type": {
+      "14": "Receipt: amount and due date",
+      "20": "Creditor",
+      "30": "Debtor",
+      "40": "Debtor's address",
+      "50": "Reference",
+      "51": "Receipt number",
+      "70": "Closing of the receipt",
+      "EF": "Footer: count and total",
+      "IB": "Header",
+      "other": "Other record"
+    },
+    "unreadable": "The file cannot be read back in this browser; Download still works.",
+    "what": "Which batch"
+  },
+  "ribaUnpaid": {
+    "col": {
+      "back": "Back on",
+      "fee": "Bank fee",
+      "open": "Still open"
+    },
+    "count_one": "{count} instalment",
+    "count_other": "{count} instalments",
+    "csv": {
+      "amount": "Amount",
+      "back": "Back on",
+      "customer": "Customer",
+      "due": "Due",
+      "fee": "Bank fee",
+      "instalment": "Instalment",
+      "invoice": "Invoice",
+      "open": "Still open"
+    },
+    "daysSince_one": "{count} day ago",
+    "daysSince_other": "{count} days ago",
+    "empty": {
+      "body": "Instalments the bank returns unpaid are listed here until they are paid or presented again.",
+      "title": "Nothing came back unpaid"
+    },
+    "failed": "Couldn't load the unpaid instalments",
+    "fee": "To charge the bank's fee to the customer, make a debit note on the invoice: its VAT is the accountant's call.",
+    "openBatch": "Open its batch",
+    "openInvoice": "Open the invoice",
+    "rowMenu": "Actions for {invoice}",
+    "title": "Ri.Ba. unpaid"
+  },
+  "rows": {
+    "notPlaced": "Not placed on an invoice",
+    "ribaUnpaid": "Ri.Ba. unpaid"
+  },
+  "stepUp": {
+    "notice": "Turning on the customers' payment-received notice asks a fresh code.",
+    "proposal": "Approving a payment proposal asks a fresh code.",
+    "remittance": "Turning on the remittance mail to suppliers asks a fresh code.",
+    "riba": "Turning Ri.Ba. on asks a fresh code.",
+    "trust": "Setting a customer's trusted level asks a fresh code."
+  },
+  "stops": {
+    "add": {
+      "after": "The reminder is then held: it is not approved or sent while the stop is in force.",
+      "go": "Stop reminders",
+      "note": "Note (optional)",
+      "promiseDay": "Promised for",
+      "promiseHint": "The stop holds until this day.",
+      "title": "Stop reminders of an invoice",
+      "until": "Until (optional)",
+      "untilHint": "Empty: until it is lifted."
+    },
+    "body": "A stop holds the reminders of one invoice while a payment is being processed, a dispute is open, the customer promised to pay (until that day) or a credit note is pending. A held reminder is not approved or sent. Stops are recorded inside a reminder.",
+    "change": "Change…",
+    "changeGo": "Save",
+    "changeTitle": "Change the stop on {invoice}",
+    "col": {
+      "action": "Action",
+      "by": "Recorded by",
+      "customer": "Customer",
+      "invoice": "Invoice",
+      "reason": "Why",
+      "state": "State",
+      "until": "Until"
+    },
+    "count_one": "{count} stop",
+    "count_other": "{count} stops",
+    "csv": {
+      "customer": "Customer",
+      "invoice": "Invoice",
+      "note": "Note",
+      "reason": "Why",
+      "state": "State",
+      "until": "Until"
+    },
+    "empty": {
+      "all": {
+        "body": "Stop the reminders of an invoice from inside a reminder.",
+        "title": "No stop yet"
+      },
+      "holding": {
+        "body": "Every reminder can go ahead. Stop one from inside a reminder.",
+        "title": "No stop in force"
+      },
+      "lifted": {
+        "body": "Stops lifted by a person are listed here.",
+        "title": "No stop lifted"
+      },
+      "over": {
+        "body": "Stops whose last day passed are listed here.",
+        "title": "No stop is over"
+      }
+    },
+    "failed": "Couldn't load the stops: {reason}",
+    "failedTitle": "Couldn't load the reminder stops",
+    "held": {
+      "dayPast": "The day is today or later.",
+      "invoice": "Choose the invoice.",
+      "noteLong": "The note is at most {max} characters.",
+      "promiseDay": "A promise to pay names the day promised.",
+      "reasonLong": "The reason is at most {max} characters.",
+      "right": "Stops need the right to manage reminders."
+    },
+    "holds_one": "Holds {count} reminder now",
+    "holds_other": "Holds {count} reminders now",
+    "inReminder": {
+      "none": "No stop holds the invoices of this reminder.",
+      "title": "Stops on its invoices"
+    },
+    "lift": "Lift",
+    "liftBody_one": "{reason}: lifting it lets {count} reminder go ahead again.",
+    "liftBody_other": "{reason}: lifting it lets {count} reminders go ahead again.",
+    "liftGo": "Lift the stop",
+    "liftMenu": "Lift…",
+    "liftReason": "Why (optional)",
+    "liftReasonHint": "For example: dispute settled",
+    "liftTitle": "Lift the stop on {invoice}",
+    "liftedOn": "Lifted {date}",
+    "notice": {
+      "added": "Reminders of the invoice stopped.",
+      "changed": "Stop changed.",
+      "lifted": "Stop lifted."
+    },
+    "reading": "Reading the stops…",
+    "reason": {
+      "CREDIT_PENDING": "Credit note pending",
+      "DISPUTE": "Dispute open",
+      "PAYMENT_PROCESSING": "Payment being processed",
+      "PROMISE_TO_PAY": "Promise to pay"
+    },
+    "rowMenu": "Actions for the stop on {invoice}",
+    "rows": {
+      "all": "All",
+      "holding": "In force",
+      "lifted": "Lifted",
+      "over": "Over"
+    },
+    "rowsLabel": "Rows",
+    "state": {
+      "holding": "In force",
+      "lifted": "Lifted",
+      "over": "Over"
+    },
+    "title": "Reminder stops",
+    "untilLifted": "Until lifted"
+  },
+  "tile": {
+    "notPlaced": "Not placed on an invoice",
+    "notPlacedCount_one": "{count} payment with money to place",
+    "notPlacedCount_other": "{count} payments with money to place",
+    "notPlacedOthers": "{count} payments; {others} other currencies not in the total",
+    "ribaUnpaid": "Ri.Ba. unpaid",
+    "ribaUnpaidCount_one": "{count} instalment back unpaid",
+    "ribaUnpaidCount_other": "{count} instalments back unpaid",
+    "unknown": "Could not be read"
+  },
+  "trust": {
+    "always": "A letter, a call or a reminder made by hand always waits for a person.",
+    "approvedByLevel": "Approved by its trusted level.",
+    "byPerson": "Approved by a person.",
+    "clear": "Clear the level",
+    "company": {
+      "noSteps": "{company}: no e-mail step on the ladder.",
+      "off": "{company}: reminders are switched off — steps {steps} would go by themselves once they are on.",
+      "on": "{company}: e-mail steps {steps} go by themselves."
+    },
+    "failed": "Couldn't load the trusted level: {reason}",
+    "goesByItself": "Goes by itself: trusted level {level}.",
+    "held": {
+      "reading": "Still reading…",
+      "right": "Only the Owner sets a trusted level.",
+      "same": "That is the level already."
+    },
+    "level": "{customer}: e-mail reminders up to step {level} go without a person.",
+    "noLevel": "No level (a person approves each)",
+    "none": "{customer} has no trusted level: every reminder waits for a person.",
+    "notice": {
+      "cleared": "Trusted level cleared.",
+      "set": "Trusted level {level} set."
+    },
+    "pick": "Level",
+    "pickHint": "E-mail reminders up to this step of the ladder go by themselves while reminders are switched on. Asks a fresh code.",
+    "reading": "Reading the trusted level…",
+    "save": "Save the level",
+    "tag": {
+      "approved": "approved by its trusted level",
+      "itself": "goes by itself"
+    },
+    "title": "Trusted level",
+    "upTo": "Up to step {level}",
+    "waitsForPerson": "Waits for a person: made by hand, or reminders are off (trusted level {level}).",
+    "waitsNoLevel": "Waits for a person: the customer has no trusted level."
+  },
+  "unlock": {
+    "done": "Deposit paid in full: production of {order} is unlocked.",
+    "donePlain": "Deposit paid in full: the order's production is unlocked.",
+    "note": "A deposit paid in full unlocks the production of {order} at once; the planners are told.",
+    "notePlain": "A deposit paid in full unlocks the order's production at once; the planners are told.",
+    "openWorkOrders": "Open its work orders"
+  },
+  "writeOff": {
+    "col": {
+      "action": "Action",
+      "amount": "Amount",
+      "difference": "Difference",
+      "what": "Written off",
+      "when": "When"
+    },
+    "dialog": {
+      "after": "The whole difference is written off; the ledger keeps it, and it can be taken back with a note.",
+      "body": {
+        "OVERPAYMENT": "The customer paid a little more: the surplus left on the payment is written off.",
+        "UNDERPAYMENT": "The customer paid a little less than {number}: the rest of the invoice is closed by the write-off."
+      },
+      "go": "Write off {amount}",
+      "goPlain": "Write off",
+      "note": "Note",
+      "noteNeeded": "Needed with \"Another reason\": say which.",
+      "noteOptional": "Optional",
+      "reason": "Why",
+      "title": "Write off the difference"
+    },
+    "failed": "Couldn't load the write-offs: {reason}",
+    "go": "Write off…",
+    "held": {
+      "right": "Writing off needs the right to write off payments."
+    },
+    "kind": {
+      "OVERPAYMENT": "Paid a little more",
+      "UNDERPAYMENT": "Paid a little less"
+    },
+    "made": "Write-offs made",
+    "noNote": "No note",
+    "noteLong": "The note is at most {max} characters.",
+    "notice": {
+      "done": "Difference written off.",
+      "takenBack": "Write-off taken back."
+    },
+    "onInvoice": "On {number}",
+    "onPayment": "Left on the payment",
+    "over": "Above the tolerance",
+    "possible": "Differences the payment leaves",
+    "reading": "Reading the write-offs…",
+    "reason": {
+      "BANK_CHARGES": "The bank's charges",
+      "OTHER": "Another reason",
+      "ROUNDING": "Rounding"
+    },
+    "reversal": "Taken back: {note}",
+    "reversed": "Taken back since",
+    "state": {
+      "reversal": "Taking back",
+      "reversed": "Taken back"
+    },
+    "takeBack": "Take back…",
+    "takeBackBody": {
+      "OVERPAYMENT": "The surplus is on the payment again, to place or refund.",
+      "UNDERPAYMENT": "The invoice is open again for the difference."
+    },
+    "takeBackGo": "Take back",
+    "takeBackTitle": "Take the write-off back",
+    "title": "Small differences",
+    "tolerance": {
+      "COMPANY": "Tolerance {amount}, the company's",
+      "COMPANYPlain": "The company's write-off tolerance applies.",
+      "TENANT": "Tolerance {amount}, for every company",
+      "TENANTPlain": "The write-off tolerance of every company applies.",
+      "none": "No write-off tolerance is set: a difference is never written off (set it in Finance › Finance settings)."
+    },
+    "within": "Within the tolerance"
+  }
+}

@@ -35,6 +35,8 @@ import {
 import { AgeBar, dayText } from './parts'
 // B-W2b-304: the credit limit used, the same meter as Credit limits.
 import { UsedMeter } from '../credit/view/UsedMeter'
+// B-W2b-425: the trusted level's words in the reminders list.
+import { PAY_DEPTH } from '../../payments/riba/depth'
 import { ReminderDialog, type ReminderDialogState } from './ReminderDialog'
 import { StatementDialog, type StatementState } from './StatementDialog'
 import '../receivables.css'
@@ -122,18 +124,25 @@ export interface ReceivablesActions {
  * reminders' text only with the price grain. B-W2b-304: By customer's "credit limit used" and the Credit limits section
  * (`credit`, its own container: areas/finance/receivables/credit).
  */
-export function ReceivablesView({ model, actions, credit }: { model: ReceivablesModel; actions?: ReceivablesActions; credit?: ReactNode }) {
+/** B-W2b-425: the reminder stops (a section under Reminders) and, inside a reminder, its stops and the trusted level — each its own container, or a design case's view. */
+export interface ReceivablesDepth {
+  stops?: ReactNode
+  reminder?: ReactNode
+}
+
+export function ReceivablesView({ model, actions, credit, depth }: { model: ReceivablesModel; actions?: ReceivablesActions; credit?: ReactNode; depth?: ReceivablesDepth }) {
   return (
-    <WithMessages namespaces={[RECEIVABLES_NAMESPACE, 'lists']}>
-      <ReceivablesPageView model={model} actions={actions} credit={credit} />
+    <WithMessages namespaces={[RECEIVABLES_NAMESPACE, PAY_DEPTH, 'lists']}>
+      <ReceivablesPageView model={model} actions={actions} credit={credit} depth={depth} />
     </WithMessages>
   )
 }
 
 const REMINDER_VIEW_ORDER: readonly ReminderView[] = ['toApprove', 'waiting', 'sent', 'closed', 'all']
 
-function ReceivablesPageView({ model, actions, credit }: { model: ReceivablesModel; actions?: ReceivablesActions; credit?: ReactNode }) {
+function ReceivablesPageView({ model, actions, credit, depth }: { model: ReceivablesModel; actions?: ReceivablesActions; credit?: ReactNode; depth?: ReceivablesDepth }) {
   const t = useT(RECEIVABLES_NAMESPACE)
+  const p = useT(PAY_DEPTH)
   const lists = useT('lists')
   const locale = useLocale()
   const [selectedOwn, setSelected] = useState<string[]>([])
@@ -362,6 +371,8 @@ function ReceivablesPageView({ model, actions, credit }: { model: ReceivablesMod
               {t('reminder.warnings', { count: data.held.length })}
             </span>
           )}
+          {/* B-W2b-425: a reminder its trusted level approved, or one that goes by itself (sec:reminders#2). */}
+          {data.trusted?.approvedByLevel ? <span className="fw-frv-cell-sub">{p('trust.tag.approved')}</span> : data.trusted?.goesByItself ? <span className="fw-frv-cell-sub">{p('trust.tag.itself')}</span> : null}
         </span>
       ) : null
     return [
@@ -794,6 +805,9 @@ function ReceivablesPageView({ model, actions, credit }: { model: ReceivablesMod
         />
       </section>
 
+      {/* B-W2b-425: Reminder stops (sec:reminders#1), its own container (areas/finance/receivables/reminder-stops). */}
+      {depth?.stops}
+
       {/* B-W2b-304: Credit limits (sec:credit), its own container (areas/finance/receivables/credit). */}
       {credit}
 
@@ -844,6 +858,7 @@ function ReceivablesPageView({ model, actions, credit }: { model: ReceivablesMod
           onEdit={(reminder, input) => actions?.onEdit?.(reminder, input) ?? Promise.resolve(false)}
           onSkip={(reminder, reason) => actions?.onSkip?.(reminder, reason) ?? Promise.resolve(false)}
           onCancel={(reminder, reason) => actions?.onCancel?.(reminder, reason) ?? Promise.resolve(false)}
+          depth={depth?.reminder}
         />
       )}
 

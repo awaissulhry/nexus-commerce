@@ -17,6 +17,8 @@ import type { BankInput, FinanceSettingsModel } from './settings-model'
 import { createTerms, listTerms, moveTerms, updateTerms, type PaymentTerms } from './terms/api'
 import { fieldsOf, patchOf, rulesChanged, termsAbilitiesOf, termsStatusOf, termsTouched, termsWriteProblem, type TermsDraft, type TermsRows } from './terms/model'
 import type { TermsSectionModel } from './terms/view/TermsSection'
+// B-W2b-425: Approvals & notifications.
+import { MoneyApprovals } from './approvals/MoneyApprovals'
 import { FinanceSettingsView } from './view/FinanceSettingsView'
 // B-W2b-389: Currencies & rates.
 import { CurrenciesContainer } from './currencies/CurrenciesContainer'
@@ -242,7 +244,7 @@ function SettingsContainer() {
       // B-W2b-389: Currencies & rates of the company shown.
       currencies={companyId ? <CurrenciesContainer companyId={companyId} /> : null}
       // B-W2b-417: the in-depth cards of the company shown.
-      depth={companyId ? { banner: <TestModeBanner companyId={companyId} />, tax: <TaxSetUp companyId={companyId} />, eInvoicing: <EInvoicing companyId={companyId} />, depositRules: <DepositRules companyId={companyId} />, calculator: <CostPerMinute companyId={companyId} /> /* B-W2b-430 */ } : undefined}
+      depth={companyId ? { banner: <TestModeBanner companyId={companyId} />, tax: <TaxSetUp companyId={companyId} />, eInvoicing: <EInvoicing companyId={companyId} />, depositRules: <DepositRules companyId={companyId} />, calculator: <CostPerMinute companyId={companyId} /> /* B-W2b-430 */, approvals: <MoneyApprovals companyId={companyId} /> /* B-W2b-425 */ } : undefined}
       actions={{
         onRetry: () => void load(),
         onRetryBank: () => void readBank(),

@@ -617,12 +617,7 @@
   "payTile": {
     "month": "Received this month",
     "monthCount_one": "{count} payment",
-    "monthCount_other": "{count} payments",
-    "notPlaced": "Not placed yet",
-    "notPlacedCapped_one": "{count} payment among the latest 200",
-    "notPlacedCapped_other": "{count} payments among the latest 200",
-    "notPlacedCount_one": "{count} payment with money to place",
-    "notPlacedCount_other": "{count} payments with money to place"
+    "monthCount_other": "{count} payments"
   },
   "payment": {
     "back": "Payments",
