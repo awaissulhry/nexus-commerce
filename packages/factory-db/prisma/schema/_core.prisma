@@ -258,6 +258,9 @@ model Company {
   accountMappings          AccountMapping[]
   accountingSettings       AccountingSettings[]
   integrityCheckRuns       IntegrityCheckRun[]
+  // W2b-6 cost-actuals.prisma (schema wave 54/57): its close tolerance and its switch for the accountant's figures.
+  /// @not-money the relation to its actual-cost settings (a tolerance and a switch, no amount)
+  actualCostSettings       ActualCostSettings[]
   // costing.prisma: its own labour rates and costing settings (tenant-wide rows have none).
   labourRates          LabourRate[]
   /// @not-money the relation to its costing settings rows (an overhead percentage, no amount)

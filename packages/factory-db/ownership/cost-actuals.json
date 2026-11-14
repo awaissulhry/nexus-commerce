@@ -1,0 +1,61 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/cost-actuals.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office (and the worker, in the tenant's system context: the handlers that post the cost of goods sold of a shipment) closes work orders with their planned and actual figures, writes the variance split, the purchase price variances, cost of goods sold and landed cost, and keeps the close tolerance and the company's switch for the accountant's figures, through apps/factory-api's modules/costing (B-W2b-411, B-W2b-407), always through command(); the API keeps staff to the companies their grants reach and every figure to the cost grain (A1 §2.6). The floor reads nothing here: no money on the floor, and minutes are work-order totals, never a person's (Statuto dei Lavoratori art. 4). No portal or link session reads a cost: no partner grant. WorkOrderVariance, PurchasePriceVariance and CostOfSalesEntry are append-only (`@append-only`; the …_cost_actuals_w2b_guards triggers refuse UPDATE, DELETE and TRUNCATE for every login): a wrong one is reversed by a new row. Nobody deletes a close or the settings; the office deletes only a DRAFT landed cost and its shares. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "ActualCostSettings": {
+      "about": "Finance keeps a company's (or the tenant's) close tolerance and switches the company's accountant's figures on or off (GATE-ACCOUNTANT, OFF by default); never deleted. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "WorkOrderClose": {
+      "about": "A production manager closes a COMPLETED work order with its planned and actual garments, material cost, minutes and scrap and a reason beyond the tolerance (MES-012), undoes it within seconds or reopens it with a reason (MES-013); never deleted. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "WorkOrderVariance": {
+      "about": "The close writes its variance split by category (FIN-029, FIN-030), only while the company's switch is on; nobody changes or removes one. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] }
+      }
+    },
+    "PurchasePriceVariance": {
+      "about": "The office or the worker records a purchase's price against its standard at the receipt or the invoice (FIN-031), only while the company's switch is on, and reverses a wrong one with a new row. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] }
+      }
+    },
+    "CostOfSalesEntry": {
+      "about": "The office or the worker posts the cost of the goods a shipment line (or an invoice line) sold (FIN-043), only while the company's switch is on, and reverses a wrong one with a new row. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] }
+      }
+    },
+    "LandedCostAllocation": {
+      "about": "Finance spreads a supplier invoice charge line over the lots it brought (FIN-044): prepares it, posts it (only while the company's switch is on), reverses it with a reason; deletes only a DRAFT. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "LandedCostShare": {
+      "about": "Finance writes, changes and removes the lots' shares of a DRAFT landed cost (FIN-044). Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    }
+  }
+}

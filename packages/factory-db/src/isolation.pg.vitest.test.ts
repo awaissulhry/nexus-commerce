@@ -16,6 +16,7 @@ import { seed as seedChanges } from '../seed/changes'
 import { seed as seedCollab } from '../seed/collab'
 import { seed as seedCompliance } from '../seed/compliance'
 import { seed as seedComplianceRules } from '../seed/compliance-rules'
+import { seed as seedCostActuals } from '../seed/cost-actuals'
 import { seed as seedCostSheets } from '../seed/cost-sheets'
 import { seed as seedCosting } from '../seed/costing'
 import { seed as seedCustoms } from '../seed/customs'
@@ -490,6 +491,11 @@ beforeAll(async () => {
   // error queue (the first item an OPEN refused call) and job runs (the first a succeeded tick): the plain ones a copy may repeat.
   await seedPrivacyOps({ db: factory, namespace: 'iso-a' })
   await seedPrivacyOps({ db: factory, namespace: 'iso-b' })
+  // The actual cost schema of W2b-6 (wave 54/57): company A's settings with its figures for the accountant switched on, a work
+  // order closed twice (the first close undone, its entries reversed), its variance split, a purchase price variance, cost of
+  // goods sold (one reversed) and landed cost (one reversed, the first a DRAFT with its share): the plain ones a copy may repeat.
+  await seedCostActuals({ db: factory, namespace: 'iso-a' })
+  await seedCostActuals({ db: factory, namespace: 'iso-b' })
   // The cost sheets schema of W2b-6 (wave 55/57): sheet versions (the first company B's DRAFT, the first line a draft's lining), leather bases,
   // overhead rules (the first open-ended), cost-per-minute calculations (none applied), uplifts and size weights: the plain
   // ones a copy may repeat.
@@ -512,6 +518,7 @@ it('covers every classified table and every runtime role', () => {
     'AccountingExport',
     'AccountingExportFile',
     'AccountingSettings',
+    'ActualCostSettings',
     'Alert',
     'AlertEvent',
     'AlertRule',
@@ -572,6 +579,7 @@ it('covers every classified table and every runtime role', () => {
     'ComplianceDocument',
     'ComplianceDocumentBatch',
     'ComplianceRequirement',
+    'CostOfSalesEntry',
     'CostPerMinuteCalc',
     'CostSheet',
     'CostSheetLine',
@@ -704,6 +712,8 @@ it('covers every classified table and every runtime role', () => {
     'LabourDispute',
     'LabourEdit',
     'LabourRate',
+    'LandedCostAllocation',
+    'LandedCostShare',
     'Lay',
     'LayRoll',
     'LeatherCostBasis',
@@ -871,6 +881,7 @@ it('covers every classified table and every runtime role', () => {
     'PurchaseOrderLineDelivery',
     'PurchaseOrderReminder',
     'PurchaseOrderRevision',
+    'PurchasePriceVariance',
     'PurchaseRequest',
     'PurchasingSettings',
     'PushSubscription',
@@ -1081,11 +1092,13 @@ it('covers every classified table and every runtime role', () => {
     'WorkInstructionStep',
     'WorkInstructionVersion',
     'WorkOrder',
+    'WorkOrderClose',
     'WorkOrderCostEntry',
     'WorkOrderKit',
     'WorkOrderMaterial',
     'WorkOrderOperation',
     'WorkOrderSize',
+    'WorkOrderVariance',
     'Worker',
     'WorkerNoticeAck',
     'WorkerRole',

@@ -70,6 +70,9 @@ model StandardCost {
   item    Item                 @relation(fields: [tenantId, itemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   /// @not-money a relation: the ledger rows carry the grain
   costEntries WorkOrderCostEntry[]
+  // W2b-6 cost-actuals.prisma (wave 54/57): the purchase price variances measured against it.
+  /// @not-money a relation: the variance rows carry the grain
+  purchasePriceVariances PurchasePriceVariance[]
 
   // One standard per company, item and first day (frozen ones never overlap: the …_money_w2a_guards trigger).
   @@unique([tenantId, companyId, itemId, validFrom])
@@ -120,6 +123,13 @@ enum WorkOrderCostKind {
   COMPLETION
   /// A correction in words (a reason).
   ADJUSTMENT
+  /// W2b-6 (schema wave 54/57, B-W2b-376; FIN-034): the closing entry of a work order's close (sourceType WorkOrderClose):
+  /// what is left on the work order after its variances, taken off, so its entries add up to 0. One per close; reversed
+  /// when the close is undone (cost-actuals.prisma).
+  CLOSE
+  /// W2b-6 (B-W2b-376; FIN-029, FIN-030): one line of a close's variance split taken off the work order (sourceType
+  /// WorkOrderVariance: the opposite of its amount), before the CLOSE entry; reversed when the close is undone.
+  VARIANCE
 }
 
 /// One valuation event of a work order (FIN-026, FIN-027, FIN-033, FIN-038; design finance.costing "Cost ledger"):
