@@ -714,10 +714,6 @@
     "complete": {
       "title": "Complete {number}",
       "body": "Every garment is finished at the final operation. Completing ends the floor’s scans on it; inspection, labels and release go on."
-    },
-    "close": {
-      "title": "Close {number}",
-      "body": "A closed work order is final: only its note changes after."
     }
   },
   "cancel": {
@@ -733,7 +729,6 @@
     "released": "Released · batch {batch}",
     "start": "Started.",
     "complete": "Completed.",
-    "close": "Closed.",
     "cancelled": "Cancelled.",
     "saved": "Saved.",
     "sizesSaved": "Sizes saved.",

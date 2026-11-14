@@ -1,5 +1,6 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import Link from 'next/link'
 import { Card, EmptyState } from '@nexus/ui/components'
 import { Button, Spinner } from '@nexus/ui/primitives'
@@ -21,21 +22,22 @@ import '../../../../finance/costing/costing.css'
  * without it the tab says why and shows no figure; without costing.view it says which permission. Never wages, never a
  * person. Before the release a work order has no cost yet. B-W2b-59: the Minutes section above it (no money, no grain).
  * B-W2b-81: the off-standard minutes below the Minutes (no money, no grain, never per person).
+ * B-W2b-424: the variance at close at the end of the cost section (`variance`, labour/variance).
  */
-export function LabourTab({ labour, prefix, workOrderId, draft, onRetry, minutes, labourHref = null }: { labour: LabourModel | undefined; prefix: string; workOrderId: string; draft: boolean; onRetry?: () => void; minutes?: Minutes; labourHref?: string | null }) {
+export function LabourTab({ labour, prefix, workOrderId, draft, onRetry, minutes, labourHref = null, variance = null }: { labour: LabourModel | undefined; prefix: string; workOrderId: string; draft: boolean; onRetry?: () => void; minutes?: Minutes; labourHref?: string | null; variance?: ReactNode }) {
   return (
     <WithMessages namespaces={[COSTING_NAMESPACE]}>
       {/* B-W2b-59 (wo-minutes): standard minutes, no money: open to whoever reads the work order, above the cost and its grain. */}
       <div className="fw-pr-stack">
         {minutes && <MinutesCard minutes={minutes} />}
         {labour?.offStandard && <OffStandardCard part={labour.offStandard} labourHref={labourHref} onRetry={onRetry} />}
-        <Labour labour={labour} prefix={prefix} workOrderId={workOrderId} draft={draft} onRetry={onRetry} />
+        <Labour labour={labour} prefix={prefix} workOrderId={workOrderId} draft={draft} onRetry={onRetry} variance={variance} />
       </div>
     </WithMessages>
   )
 }
 
-function Labour({ labour, prefix, workOrderId, draft, onRetry }: { labour: LabourModel | undefined; prefix: string; workOrderId: string; draft: boolean; onRetry?: () => void }) {
+function Labour({ labour, prefix, workOrderId, draft, onRetry, variance }: { labour: LabourModel | undefined; prefix: string; workOrderId: string; draft: boolean; onRetry?: () => void; variance: ReactNode }) {
   const t = useT(COSTING_NAMESPACE)
   const can = labour?.can
   if (!can?.view) {
@@ -112,6 +114,8 @@ function Labour({ labour, prefix, workOrderId, draft, onRetry }: { labour: Labou
         <p className="fw-fco-muted">{t('labourTab.wagesNever')}</p>
       </Card>
       <CostScrapAndWaiting detail={detail} can={can} />
+      {/* B-W2b-424 (wo-cost "W2b variance at close"): inside the cost section, with its grain. */}
+      {variance}
     </div>
   )
 }
