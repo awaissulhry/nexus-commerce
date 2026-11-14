@@ -1,12 +1,16 @@
 import type { PermissionCatalogue, Role, User } from '../shared/api'
 import { matches, type Loaded, type ScopeOption } from '../shared/model'
 import type { RoleTwoFactorModel } from '../security/view/RoleTwoFactor'
+import type { StepUpModel } from '../shared/model'
+import type { NewRoleModel } from './new-role/view/NewRoleDialog'
+import type { ArchiveDialogModel } from './save-role/view/ArchiveDialog'
+import type { RoleEditorModel } from './save-role/view/RoleEditor'
 
 /**
  * SCR-012 Roles & permissions (design 02 admin.roles; PLT-029, PLT-030, PLT-034): the ready-made roles (kept equal to
  * their templates) and the tenant's custom copies, each said in plain words first — what it does, what money it sees —
- * then as a ticked list of actions. A role record: Permissions, Scope rules, Users, Activity. Creating and editing a
- * custom role comes in W2b (design: new-role, save-role); W0 reads and compares.
+ * then as a ticked list of actions. A role record: Permissions, Scope rules, Users, Activity. B-W2b-413: New role (a copy of a
+ * ready-made role, new-role/) and Change role (a custom role's ticks, reviewed then saved, save-role/).
  */
 
 export const ROLE_TABS = ['permissions', 'rules', 'users', 'activity'] as const
@@ -25,6 +29,8 @@ export interface RolesViewModel {
   selected?: readonly string[]
   /** The compare dialog is open at first, with these roles (design fixtures). */
   compare?: readonly string[] | null
+  /** B-W2b-413: New role (new-role/): the band's button (held without roles.manage), its dialog and its fresh code. */
+  newRole?: { canCreate: boolean; dialog: NewRoleModel | null; stepUp?: StepUpModel }
 }
 
 /** Compare puts two or three roles side by side: the ticked rows are the pick, held with its reason otherwise. */
@@ -60,6 +66,14 @@ export interface RoleRecordModel {
   dockOpen?: boolean
   /** B-W2a-36: Scope rules › Two-factor (the switch, with who it affects); absent: the W0 read-only words. */
   twoFactor?: RoleTwoFactorModel
+  /** B-W2b-413 (save-role/): a custom role's editable permissions; absent: read-only. */
+  editor?: RoleEditorModel | null
+  /** Why a custom role cannot be changed here (a message key of `admin-security-depth`), shown above the matrix. */
+  editHeld?: string | null
+  /** Archive / Restore of a custom role: held with why, and the archive dialog. */
+  archive?: { held: string | null; dialog: ArchiveDialogModel | null } | null
+  notice?: { key: string; tone: 'success' | 'warning' } | null
+  freshCode?: StepUpModel
 }
 
 /** The rules every role keeps whatever it holds (A1 §2.3, §3.11; PLT-033, PLT-035): message keys, read-only. */

@@ -5,8 +5,8 @@ import { auditHistoryContract, auditListContract } from './contract'
 import { manifest } from './manifest'
 import { listAudit, readAuditHistory } from './read'
 // B-W2b-399: audit in depth (the autoloader does not look inside a folder that has a routes file).
-import { personReadsContract, recordReadsContract } from './reads/contract'
-import { personReads, recordReads } from './reads/read'
+import { personReadsContract, readLogStatusContract, recordReadsContract } from './reads/contract'
+import { personReads, readLogStatus, recordReads } from './reads/read'
 import { entryContract, searchContract } from './search/contract'
 import { auditEntry, searchAudit } from './search/search'
 import { listSecurityEventsContract, oneSecurityEventContract } from './security-events/contract'
@@ -33,6 +33,8 @@ export default defineRoutes('audit', manifest, async (app) => {
   // B-W2b-399 (PLT-074): who looked.
   app.get('/audit/reads', { schema: recordReadsContract }, async (request) => recordReads(request, request.query))
   app.post('/audit/reads/person', { schema: personReadsContract }, async (request) => personReads(request, request.body, idempotencyKeyFrom(request)))
+  // B-W2b-413: whether the read log is on (GATE-PRIVACY), so the screen says so when it is off.
+  app.get('/audit/reads/status', { schema: readLogStatusContract }, async (request) => readLogStatus(request))
   // B-W2b-399 (PLT-075): the security events.
   app.get('/audit/security-events', { schema: listSecurityEventsContract }, async (request) => listSecurityEvents(request, request.query))
   app.get('/audit/security-events/:eventId', { schema: oneSecurityEventContract }, async (request) => oneSecurityEvent(request, request.params.eventId))

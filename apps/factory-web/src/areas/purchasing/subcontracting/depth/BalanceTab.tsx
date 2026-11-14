@@ -8,7 +8,7 @@ import type { SubcontractOrder } from '../api'
 import type { Words } from '../model'
 import type { Loaded } from '../record/record-model'
 import { adjustBalance, declareBalance, orderBalance, type BalanceBooked, type OrderBalance } from './api'
-import { adjustBody, adjustHeldDraft, balanceRefusal, bookedWords, declareBody, declareHeldDraft, readProblem, type BalanceDialog, type BalanceModel, type DepthCan } from './model'
+import { adjustBody, adjustHeldDraft, balanceRefusal, bookedWords, declareBody, declareHeldDraft, readProblem, softLocked, type BalanceDialog, type BalanceModel, type DepthCan } from './model'
 import { BalanceTabView } from './view/BalanceTabView'
 
 /**
@@ -87,6 +87,13 @@ export function BalanceTab({ order, can, timeZone, onChanged }: { order: Pick<Su
         onChanged?.()
       } catch (error) {
         setProblem(balanceRefusal(error))
+        // B-W2b-408 (follow-up GL1:01): a soft-locked month takes it with a reason: the dialog asks for one (a hard lock never).
+        const open = dialogRef.current
+        if (softLocked(error) && open && open.draft.lockReason === null) {
+          const next = { ...open, draft: { ...open.draft, lockReason: '' } } as BalanceDialog
+          dialogRef.current = next
+          setDialogState(next)
+        }
         if (isApiError(error) && error.kind === 'conflict') {
           // A new key for the next try: the same key would replay the refused booking.
           key.current = newIdempotencyKey()

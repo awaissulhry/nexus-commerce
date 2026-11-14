@@ -7,6 +7,10 @@ import type { TwoFactorRole } from '../security/api'
 import type { RoleTwoFactorModel } from '../security/view/RoleTwoFactor'
 import { RoleRecordView } from './view/RoleRecordView'
 import { RolesView } from './view/RolesView'
+import type { RoleTemplate } from './new-role/api'
+import type { NewRoleModel } from './new-role/view/NewRoleDialog'
+import { draftOf, toggled, type RoleReview } from './save-role/model'
+import type { SaveReview } from './save-role/view/RoleEditor'
 
 /** SCR-012 Roles & permissions with the ready-made roles and one made-up custom copy; a short made-up catalogue. */
 
@@ -42,6 +46,41 @@ const twoFactorOf = (index: number, over: Partial<TwoFactorRole> = {}): TwoFacto
   }
 }
 const tf = (role: TwoFactorRole, over: Partial<RoleTwoFactorModel> = {}): RoleTwoFactorModel => ({ role: { state: 'ok', value: role }, canChange: true, dialog: { kind: 'none' }, ...over })
+
+// B-W2b-413: New role's ready-made roles (the owner's is never copied; Finance holds money the made-up admin lacks).
+const TEMPLATES: RoleTemplate[] = ROLES.filter((item) => item.system).map((item) => ({
+  key: item.key,
+  name: item.name,
+  description: item.description,
+  audience: item.audience,
+  requireMfa: item.requireMfa,
+  permissions: item.permissions,
+  grains: item.grains,
+  copyable: item.audience === 'office' && item.key !== 'owner' && item.key !== 'finance',
+}))
+const newRole = (over: Partial<NewRoleModel> = {}, extra: Partial<NonNullable<RolesViewModel['newRole']>> = {}): Partial<RolesViewModel> => ({
+  newRole: { canCreate: true, dialog: { templates: TEMPLATES, readProblem: null, draft: { basedOn: null, name: '' }, named: false, tried: false, busy: false, problem: null, ...over }, ...extra },
+})
+const PICKED: Partial<NewRoleModel> = { draft: { basedOn: 'planner', name: 'Planner (copy)' } }
+
+// B-W2b-413: Change role on the made-up custom copy (index 5): two rights added, one removed, the cost grain added.
+const COPY = ROLES[5]!
+const EDITED = { ...toggled(toggled(toggled(draftOf(COPY), 'invoices.view', true), 'quotes.manage', false), 'workorders.view', true), grains: [...COPY.grains, 'cost' as const] }
+const REVIEW: RoleReview = {
+  version: COPY.version,
+  permissionsAdded: ['invoices.view', 'workorders.view'],
+  permissionsRemoved: ['quotes.manage'],
+  grainsAdded: ['cost'],
+  grainsRemoved: [],
+  requireMfa: { before: true, after: true },
+  raises: true,
+  asksFreshCode: true,
+  holders: 4,
+  refusals: [],
+}
+const edit = (review: SaveReview | null, over: Partial<RoleRecordModel> = {}): Case =>
+  role(5, { editor: { role: COPY, catalogue: CATALOGUE, draft: EDITED, review }, archive: { held: null, dialog: null }, ...over })
+const STEP_UP_OPEN = { open: true, busy: false, sentence: 'saveRole.freshSentence', problem: null }
 
 function RolesDesign({ model }: { model: Case }) {
   if (model.page === 'list') return inShell('/admin/roles', createElement(RolesView, { model: model.model }))
@@ -89,6 +128,38 @@ export const designScreen = defineDesignScreen<Case>({
     { id: 'role-floor', label: 'Role: a floor role', model: role(9, { tab: 'users' }) },
     { id: 'role-activity', label: 'Role: activity', model: role(4, { tab: 'activity' }) },
     { id: 'role-dock', label: 'Role: history beside the permissions (≥ 1280 px)', model: role(3, {}, true) },
+    { id: 'w2b-413-new-role-button', label: 'New role in the band', model: list({ newRole: { canCreate: true, dialog: null } }), note: 'B-W2b-413: a copy of a ready-made role.' },
+    { id: 'w2b-413-new-role-held', label: 'New role held: no right', model: list({ newRole: { canCreate: false, dialog: null } }), note: 'Held with why (roles.manage), never a dead button.' },
+    { id: 'w2b-413-new-role', label: 'New role: start from a ready-made role', model: list(newRole()), note: "Cards with their plain line and money; the owner's and Finance (holds more than you) held with why." },
+    { id: 'w2b-413-new-role-picked', label: 'New role: Planner picked, named', model: list(newRole(PICKED)), note: 'The name follows the pick until typed. Create copy (⌘Enter) asks a fresh code first.' },
+    { id: 'w2b-413-new-role-tried', label: 'New role: nothing picked', model: list(newRole({ tried: true })) },
+    { id: 'w2b-413-new-role-step-up', label: 'New role: the fresh code first', model: list(newRole({ ...PICKED, busy: true }, { stepUp: { ...STEP_UP_OPEN, sentence: 'newRole.freshSentence' } })) },
+    { id: 'w2b-413-new-role-refused', label: 'New role: refused (more than you hold)', model: list(newRole({ ...PICKED, problem: 'newRole.problem.beyond' })) },
+    { id: 'w2b-413-new-role-loading', label: 'New role: reading the ready-made roles', model: list(newRole({ templates: null })) },
+    { id: 'w2b-413-role-edit', label: 'Change role: ticks and money, not saved', model: edit(null), note: 'Custom copy: Adding / Removing marks; EditModeBar → Review and save.' },
+    { id: 'w2b-413-role-review', label: "Change role 'Sales lead (copy)'?", model: edit({ phase: 'ready', review: REVIEW, problem: null, paths: [] }), note: 'Adds · removes · grains · 4 people at their next request; a raise needs the tick and a fresh code.' },
+    { id: 'w2b-413-role-review-reading', label: 'Change role: reading the review', model: edit({ phase: 'reading' }) },
+    {
+      id: 'w2b-413-role-review-refused',
+      label: 'Change role: refused (you do not hold it)',
+      model: edit({ phase: 'ready', review: { ...REVIEW, refusals: [{ path: 'body/permissions/invoices.view/beyondYou', message: 'x' }] }, problem: null, paths: [] }),
+      note: 'Save held: the reasons in words.',
+    },
+    {
+      id: 'w2b-413-role-review-lower',
+      label: 'Change role: only lowers, no fresh code',
+      model: edit({ phase: 'ready', review: { ...REVIEW, permissionsAdded: [], grainsAdded: [], raises: false, asksFreshCode: false }, problem: null, paths: [] }),
+    },
+    { id: 'w2b-413-role-step-up', label: 'Change role: the fresh code first', model: edit({ phase: 'saving', review: REVIEW }, { freshCode: STEP_UP_OPEN }) },
+    { id: 'w2b-413-role-saved', label: 'Change role: saved', model: edit({ phase: 'done', review: REVIEW }) },
+    { id: 'w2b-413-role-held-mine', label: 'Change role held: you hold it', model: role(5, { editHeld: 'saveRole.held.mine', archive: { held: 'saveRole.held.mine', dialog: null } }), note: 'Read-only matrix with why; Archive held too.' },
+    {
+      id: 'w2b-413-role-archived',
+      label: 'An archived custom role',
+      model: role(5, { role: { ...COPY, archivedAt: '2026-11-10T09:00:00.000Z' }, editHeld: 'saveRole.held.archived', archive: { held: null, dialog: null }, notice: { key: 'archive.done', tone: 'success' } }),
+      note: 'Changes no more; Restore in the band.',
+    },
+    { id: 'w2b-413-role-archive', label: "Archive role 'Sales lead (copy)'?", model: role(5, { archive: { held: null, dialog: { name: COPY.name, holders: COPY.holders, busy: false, problem: null } } }), note: 'Who loses it now; a reason; a fresh code first when people hold it.' },
     { id: 'role-not-found', label: 'Role: not found', model: { page: 'role', model: { prefix: PREFIX, tab: 'permissions', role: null, problem: 'problem.notFound', catalogue: null, holders: loading(), companies } } },
   ],
 })

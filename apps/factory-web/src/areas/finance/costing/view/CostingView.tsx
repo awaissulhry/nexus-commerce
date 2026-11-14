@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { Download, MoreHorizontal, Search, Undo2 } from 'lucide-react'
 import { Banner, EmptyState, Menu, MetricStrip, type Metric, type MetricLinkComponent } from '@nexus/ui/components'
@@ -25,7 +25,6 @@ import {
   reverseHeld,
   ROW_VIEWS,
   signedMoney,
-  statePhrase,
   stylesHref,
   unitCostText,
   varianceTone,
@@ -37,6 +36,10 @@ import {
   type RowView,
 } from '../model'
 import { ReverseDialog, WorkOrderCostDialog, type DetailState, type ReverseState } from './CostDialogs'
+// B-W2b-424: the Status with the close (open · final · closed W2b).
+import { CLOSE_NS } from '../../../production/work-orders/close/model'
+import { costStateOf } from '../closed/model'
+import { COST_STATE_TONE, useCostStateWords } from '../closed/view/CostState'
 import '../costing.css'
 
 export type LiveState = 'connecting' | 'live' | 'offline'
@@ -119,16 +122,17 @@ const LinkTile: MetricLinkComponent = ({ href, className, children }) => (
  * Reverse entry with a reason — a mistake is reversed, never edited). Amounts only with the cost grain: without it the
  * columns and tiles are not drawn (never a '—'). Labour per work order and operation only: never a person.
  */
-export function CostingView({ model, actions }: { model: CostingModel; actions?: CostingActions }) {
+export function CostingView({ model, actions, ppv = null }: { model: CostingModel; actions?: CostingActions; ppv?: ReactNode }) {
   return (
-    <WithMessages namespaces={[COSTING_NAMESPACE, 'lists']}>
-      <Costing model={model} actions={actions} />
+    <WithMessages namespaces={[COSTING_NAMESPACE, 'lists', /* B-W2b-424 */ CLOSE_NS]}>
+      <Costing model={model} actions={actions} ppv={ppv} />
     </WithMessages>
   )
 }
 
-function Costing({ model, actions }: { model: CostingModel; actions?: CostingActions }) {
+function Costing({ model, actions, ppv }: { model: CostingModel; actions?: CostingActions; ppv: ReactNode }) {
   const t = useT(COSTING_NAMESPACE)
+  const stateWords = useCostStateWords()
   const lists = useT('lists')
   const locale = useLocale()
   const [selectedOwn, setSelected] = useState<string[]>([])
@@ -189,10 +193,9 @@ function Costing({ model, actions }: { model: CostingModel; actions?: CostingAct
     const ReasonCell = ({ data }: ICellRendererParams<WorkOrderCostRow>) => (data ? <span className="fw-fco-ellipsis">{data.biggestReason ? t(`reason.${data.biggestReason}`) : t('reason.none')}</span> : null)
     const StateCell = ({ data }: ICellRendererParams<WorkOrderCostRow>) => {
       if (!data) return null
-      const state = statePhrase(data)
       return (
         <span className="fw-fco-inline">
-          <Tag tone={data.final ? 'success' : 'info'}>{t(state.key)}</Tag>
+          <Tag tone={COST_STATE_TONE[costStateOf(data)]}>{stateWords(data)}</Tag>
           {data.over && <Pill tone="danger">{t('row.over')}</Pill>}
         </span>
       )
@@ -212,7 +215,7 @@ function Costing({ model, actions }: { model: CostingModel; actions?: CostingAct
       { colId: 'reason', headerName: t('col.reason'), minWidth: 150, flex: 0.9, cellRenderer: ReasonCell },
       { colId: 'state', headerName: t('col.state'), minWidth: 170, flex: 0.9, cellRenderer: StateCell },
     ]
-  }, [t, locale, model.prefix, can, actions])
+  }, [t, locale, model.prefix, can, actions, stateWords])
 
   const standardColumns = useMemo<ColDef<StandardCost>[]>(() => {
     const ItemCell = ({ data }: ICellRendererParams<StandardCost>) =>
@@ -328,7 +331,7 @@ function Costing({ model, actions }: { model: CostingModel; actions?: CostingAct
     header: (column) => t(`csv.${column}`),
     basis: (row) => t(basisPhrase(row).key),
     reason: (reason) => (reason ? t(`reason.${reason}`) : t('reason.none')),
-    state: (row) => t(statePhrase(row).key),
+    state: (row) => stateWords(row),
   }
   const fileName = `${t('csv.file', { month: model.period.month })}.csv`
   const ownKeys: ListKey[] = [{ keys: ['/'], does: t('keys.search') }, { keys: ['Enter'], does: t('keys.open') }]
@@ -601,6 +604,9 @@ function Costing({ model, actions }: { model: CostingModel; actions?: CostingAct
         />
         <p className="fw-fco-muted">{t('ledger.never')}</p>
       </section>
+
+      {/* B-W2b-424 (sec:ppv) */}
+      {ppv}
 
       {model.detail && <WorkOrderCostDialog state={model.detail} ids={detailIds} can={can} prefix={model.prefix} onGo={(id) => actions?.onOpen?.(id)} onClose={() => actions?.onOpen?.(null)} onRetry={() => actions?.onRetry?.('detail')} />}
       {model.reverse && <ReverseDialog state={model.reverse} can={can} draft={model.draft?.reason} onSubmit={(reason) => actions?.onReverseSubmit?.(reason)} onClose={() => actions?.onReverse?.(null)} />}

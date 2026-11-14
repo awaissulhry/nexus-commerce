@@ -1,0 +1,66 @@
+/*
+ * Admin › Security in depth (B-W2b-413): Session lengths, Actions that ask for a fresh code, Security events. Layout only,
+ * with semantic design-system tokens; every control is the DS's own. The cards fill the page's width (no max-width): two
+ * columns from 960 px, one on a phone.
+ */
+.fw-sec-depth-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-sec-depth-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-sec-depth-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-24);
+}
+
+@media (min-width: 960px) {
+  .fw-sec-depth-pair {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.fw-sec-depth-numbers {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--nds-space-16);
+}
+
+.fw-sec-depth-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-sec-depth-perms {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  overflow-wrap: anywhere;
+}
+
+.fw-sec-depth-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-sec-depth-tools {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}

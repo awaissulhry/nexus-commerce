@@ -54,7 +54,7 @@ describe('the address holds the filters, the mode and the open entry', () => {
   it('reads what it knows and drops what is malformed', () => {
     const state = stateFromParams(new URLSearchParams(`view=roles&who=${ID}&surface=FLOOR&type=NumberSeries&record=${ID}&area=numbering&company=${ID}&period=7d&mode=table&open=${ID}`))
     expect(state).toEqual({
-      filters: { view: 'roles', actorId: ID, audience: 'FLOOR', recordType: 'NumberSeries', recordId: ID, area: 'numbering', companyId: ID, period: '7d' },
+      filters: { view: 'roles', actorId: ID, audience: 'FLOOR', recordType: 'NumberSeries', recordId: ID, area: 'numbering', companyId: ID, period: '7d', ip: null, from: null, to: null },
       mode: 'table',
       open: ID,
     })
@@ -78,6 +78,19 @@ describe('the address holds the filters, the mode and the open entry', () => {
     expect(periodFrom('30d', now)).toBe('2026-09-29T09:42:00.000Z')
     expect(filterCount(NO_FILTERS)).toBe(0)
     expect(filterCount({ ...NO_FILTERS, recordType: 'Company', recordId: ID, period: '7d' })).toBe(2)
+  })
+
+  it('B-W2b-413: an address typed and a window between two days, in the address and the API query', () => {
+    const from = '2026-10-26T23:00:00.000Z'
+    const to = '2026-10-29T23:00:00.000Z'
+    const state = stateFromParams(new URLSearchParams(`period=range&from=${from}&to=${to}&ip=192.0.2.10`))
+    expect(state.filters).toMatchObject({ period: 'range', from, to, ip: '192.0.2.10' })
+    expect(paramsOf(state.filters, 'table')).toBe(`period=range&ip=192.0.2.10&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&mode=table`)
+    expect(queryOf(state.filters, new Date('2026-10-30T00:00:00.000Z'))).toMatchObject({ from, to, ip: '192.0.2.10' })
+    // A window only with "between two days"; a malformed address or time is left out.
+    expect(stateFromParams(new URLSearchParams(`period=7d&from=${from}&ip=not-an-address`)).filters).toMatchObject({ from: null, to: null, ip: null })
+    expect(stateFromParams(new URLSearchParams('period=range&from=yesterday')).filters.from).toBeNull()
+    expect(filterCount({ ...NO_FILTERS, ip: '192.0.2.10' })).toBe(1)
   })
 })
 
@@ -307,8 +320,9 @@ describe('every SCR-018 design case draws in both languages with no key left on 
     expect(html).not.toContain('Role changes')
   })
 
-  it('export is held with its reason', () => {
-    expect(render(designScreen.cases.find((item) => item.id === 'table')!.model, 'en')).toContain('Exporting the log comes in a later step.')
+  it('B-W2b-413: the export is the table’s Export ▾; the Story’s button opens the table', () => {
+    expect(render(designScreen.cases.find((item) => item.id === 'story')!.model, 'en')).toContain('Opens the table: its Export ▾ makes this view')
+    expect(render(designScreen.cases.find((item) => item.id === 'table')!.model, 'en')).not.toContain('Export this view')
   })
 
   it('the Table is the list frame: find = its search, Story / Table and the filters = its tools, Show older in its footer, keys in its icon', () => {

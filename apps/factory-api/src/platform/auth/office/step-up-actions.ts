@@ -42,7 +42,7 @@ export const STEP_UP_ACTIONS: readonly StepUpAction[] = Object.freeze([
   action('workers.credentials', ['workers.credentials']),
   // The other risky actions.
   action('invoices.issue', ['invoices.issue']),
-  action('money.settings', ['costing.method.manage', 'costing.actuals.manage', 'invoices.tax.switch', 'accounting.unlock', 'orders.waive', 'costing.massUpdate.apply']),
+  action('money.settings', ['costing.method.manage', 'costing.actuals.manage', 'invoices.tax.switch', 'accounting.unlock', 'orders.waive', 'accounting.close', 'accounting.journals.switch', 'costing.massUpdate.apply']),
   action('reminders.switch', ['receivables.reminders.switch', 'purchasing.reminders.switch']),
   action('email.identities', ['email.manage']),
   action('branding.change', ['documents.branding.manage']),

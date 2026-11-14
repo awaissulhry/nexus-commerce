@@ -51,6 +51,9 @@ import { getCutLogW2b, hidePhotoAddress } from '../cutting/api'
 import { getWorkOrderLeather, type WorkOrderLeather } from './leather/api'
 // B-W2b-320: Materials › Substitute… opens Warehouse › Picking's "Use a substitute" (B-W2b-298's API).
 import { useSubstitute } from '../../../warehouse/picking/substitute/use-substitute'
+// B-W2b-424: Close work order (planned against actual, a reason, Undo; Reopen) and the variance at close.
+import { useClose } from '../close/use-close'
+import { useVarianceAtClose } from '../labour/variance/use-variance'
 
 /**
  * `/w/<company>/production/work-orders/<id>` (SCR-070 … SCR-072): loads the work order (workorders.view; the API checks
@@ -341,6 +344,14 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
     void load()
   })
 
+  // B-W2b-424: the close (the check of a completed or closed work order, Close, Undo, Reopen); each write answers the work order.
+  const close = useClose(api, workOrder.status === 'ready' ? workOrder.value : null, session.permissions, (next, words) => {
+    setValue(next)
+    setNotice(words ? { tone: 'success', words } : null)
+    void load()
+  })
+  const variance = useVarianceAtClose(api, workOrderId, tab === 'labour', session.permissions, workOrder.status === 'ready' ? { status: workOrder.value.status, version: workOrder.value.version } : null, close.model)
+
   // B-W2b-245: once released, the spec against the master (read while the Overview shows); the pop-ups read their own parts.
   const spec = useWorkOrderSpec({ api, workOrder: workOrder.status === 'ready' ? workOrder.value : null, permissions: session.permissions, enabled: tab === 'overview' })
 
@@ -378,6 +389,9 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
     spec: spec.model,
     // B-W2b-320
     substitute: workOrder.status === 'ready' ? { can: substitute.can, status: workOrder.value.status, dialog: substitute.model } : undefined,
+    // B-W2b-424
+    close: close.model,
+    variance: variance.model,
   }
 
   const value = workOrder.status === 'ready' ? workOrder.value : null
@@ -396,6 +410,12 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
         spec: spec.actions,
         // B-W2b-320
         substitute: { onOpen: () => value && substitute.open({ workOrderId: value.id, number: value.number }), dialog: substitute.actions },
+        // B-W2b-424
+        close: close.actions,
+        onRetryVariance: () => {
+          variance.retry()
+          close.actions.onRetry?.()
+        },
         onRetryPart: () => value && void loadParts(value),
         onReload: () => void load(),
         onDock: toggleDock,

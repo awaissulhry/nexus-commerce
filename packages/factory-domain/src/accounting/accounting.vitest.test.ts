@@ -77,10 +77,12 @@ describe('periods (whole months, Europe/Rome days)', () => {
 
 describe('what a batch may carry', () => {
   const all = new Set(['price', 'cost', 'margin', 'wages'] as const)
-  it('refuses the W2b packages, the year-end pack outside the year end and a package of a grain not held', () => {
+  it('refuses the year-end pack outside the year end and a package of a grain not held (B-W2b-408: the cost of goods sold and the VAT registers go)', () => {
     expect(packageProblems(['SALES_JOURNAL', 'INTRASTAT'], { yearEndPeriod: false, grains: all })).toEqual([])
-    expect(packageProblems(['VAT_REGISTERS', 'YEAR_END_STOCK'], { yearEndPeriod: false, grains: all }).map((problem) => problem.code)).toEqual(['PACKAGE_W2B', 'YEAR_END_NOT_THIS_PERIOD'])
+    expect(packageProblems(['COST_OF_SALES', 'VAT_REGISTERS', 'YEAR_END_STOCK'], { yearEndPeriod: false, grains: all }).map((problem) => problem.code)).toEqual(['YEAR_END_NOT_THIS_PERIOD'])
     expect(packageProblems(['YEAR_END_STOCK'], { yearEndPeriod: true, grains: new Set(['price'] as const) }).map((problem) => problem.code)).toEqual(['PACKAGE_GRAIN'])
+    // The VAT registers carry the supplier invoices' costs too: they need both grains.
+    expect(packageProblems(['VAT_REGISTERS'], { yearEndPeriod: false, grains: new Set(['price'] as const) })).toEqual([{ code: 'PACKAGE_GRAIN', package: 'VAT_REGISTERS', message: 'VAT registers carries costs: it needs the cost grain.' }])
   })
 })
 

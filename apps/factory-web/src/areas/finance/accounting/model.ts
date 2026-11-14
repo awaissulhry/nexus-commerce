@@ -167,12 +167,18 @@ export function defaultPackages(answer: Pick<PeriodAnswer, 'yearEnd' | 'intrasta
 export const togglePackage = (chosen: readonly AccountingPackage[], pkg: AccountingPackage): AccountingPackage[] =>
   ACCOUNTING_PACKAGES.filter((entry) => (entry === pkg ? !chosen.includes(pkg) : chosen.includes(entry)))
 
+/** The packages whose documents become journal entries with mapped accounts (factory-domain accounting/checks ENTRY_PACKAGES). */
+const ENTRY_PACKAGES: readonly AccountingPackage[] = ['SALES_JOURNAL', 'PURCHASES_JOURNAL', 'PAYMENTS', 'COST_OF_SALES']
+
 /** The checks an export of these packages carries (factory-domain accounting/checks checksFor), in order. */
-export function checksFor(packages: readonly AccountingPackage[]): CheckCode[] {
+export function checksFor(packages: readonly AccountingPackage[], journalsOn = false): CheckCode[] {
   const wanted = new Set(packages)
   return CHECK_CODES.filter((code) => {
     if (code === 'INTRASTAT_COMPLETE') return wanted.has('INTRASTAT')
     if (code === 'YEAR_END_SIGNED_OFF' || code === 'STOCK_VALUED') return wanted.has('YEAR_END_STOCK')
+    // B-W2b-408
+    if (code === 'WORK_ORDERS_CLOSED') return wanted.has('COST_OF_SALES')
+    if (code === 'MAPPING_COMPLETE' || code === 'ENTRIES_BALANCE') return journalsOn && ENTRY_PACKAGES.some((pkg) => wanted.has(pkg))
     return true
   })
 }
