@@ -37,4 +37,32 @@ export const manifest = defineManifest({
   'GET /privacy/floor/notice': { audiences: ['floor'], permission: 'floor.work', scope: 'site' },
   'POST /privacy/floor/notice/acknowledge': { audiences: ['floor'], permission: 'floor.work', scope: 'site' },
   'GET /privacy/public/:companyId': { audiences: PUBLIC, permission: PUBLIC, scope: 'none' },
+
+  // B-W2b-405: data requests with their clock, the person's package, the erasure (requests/, erasure/); download my data; the
+  // retention rules and their sweeps (retention/); the safety-report form's switch. Scoped by record: each handler checks the
+  // request's or the rule's company (a rule of the whole group: the permission over every company).
+  'GET /privacy/requests': { audiences: ['office'], permission: 'privacy.requests.view', scope: 'record' },
+  'GET /privacy/requests/:requestId': { audiences: ['office'], permission: 'privacy.requests.view', scope: 'record' },
+  'POST /privacy/requests': { audiences: ['office'], permission: 'privacy.requests.manage', scope: 'record' },
+  'POST /privacy/requests/:requestId/identity': { audiences: ['office'], permission: 'privacy.requests.manage', scope: 'record' },
+  'POST /privacy/requests/:requestId/extend': { audiences: ['office'], permission: 'privacy.requests.manage', scope: 'record' },
+  'POST /privacy/requests/:requestId/collect': { audiences: ['office'], permission: 'privacy.requests.manage', scope: 'record' },
+  'GET /privacy/requests/:requestId/package': { audiences: ['office'], permission: 'privacy.requests.manage', scope: 'record' },
+  'POST /privacy/requests/:requestId/done': { audiences: ['office'], permission: 'privacy.requests.manage', scope: 'record' },
+  'POST /privacy/requests/:requestId/refuse': { audiences: ['office'], permission: 'privacy.requests.manage', scope: 'record' },
+  'POST /privacy/requests/:requestId/withdraw': { audiences: ['office'], permission: 'privacy.requests.manage', scope: 'record' },
+  'GET /privacy/requests/:requestId/erasure': { audiences: ['office'], permission: 'privacy.requests.view', scope: 'record' },
+  'POST /privacy/requests/:requestId/erase': { audiences: ['office'], permission: 'privacy.erase', scope: 'record' },
+  'GET /privacy/my-data': { audiences: ['office'], permission: SIGNED_IN, scope: 'tenant' },
+  'POST /privacy/my-data': { audiences: ['office'], permission: SIGNED_IN, scope: 'tenant' },
+  'GET /privacy/my-data/:requestId/package': { audiences: ['office'], permission: SIGNED_IN, scope: 'tenant' },
+  'GET /privacy/retention': { audiences: ['office'], permission: 'privacy.view', scope: 'record' },
+  'GET /privacy/retention/rules/:ruleId/sweeps': { audiences: ['office'], permission: 'privacy.view', scope: 'record' },
+  'POST /privacy/retention/rules': { audiences: ['office'], permission: 'privacy.retention.manage', scope: 'record' },
+  'PATCH /privacy/retention/rules/:ruleId': { audiences: ['office'], permission: 'privacy.retention.manage', scope: 'record' },
+  'POST /privacy/retention/rules/:ruleId/active': { audiences: ['office'], permission: 'privacy.retention.manage', scope: 'record' },
+  'POST /privacy/retention/rules/:ruleId/apply': { audiences: ['office'], permission: 'privacy.retention.manage', scope: 'record' },
+  'POST /privacy/retention/rules/:ruleId/sweep': { audiences: ['office'], permission: 'privacy.retention.manage', scope: 'record' },
+  'GET /privacy/safety-report-form': { audiences: ['office'], permission: 'privacy.view', scope: 'record' },
+  'PUT /privacy/safety-report-form': { audiences: ['office'], permission: 'privacy.manage', scope: 'record' },
 })
