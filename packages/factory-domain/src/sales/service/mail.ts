@@ -63,6 +63,23 @@ export interface StatusMailInput {
   readonly companyName: string
 }
 
+/**
+ * B-W2b-422 (TM1:01): the values of the e-mail template `service.status_changed` (factory-domain templates/mail.ts), so a
+ * company's template in use says what this code says: the case's number and where it is now, the sentence of the move, the
+ * contact (else "customer"), the office's own words, the company. Without a template in use the mail is statusMailOf's.
+ */
+export function statusMailValuesOf(input: StatusMailInput): Readonly<Record<string, string>> {
+  const words = WORDS[input.language]
+  return {
+    'case.number': input.number,
+    'case.status': STATUS[input.language][input.to],
+    'case.sentence': SENTENCE[input.language][input.from === 'RESOLVED' && input.to === 'OPEN' ? 'REOPENED' : input.to],
+    'contact.name': (input.contactName ?? '').trim() || words.customer,
+    message: (input.message ?? '').trim(),
+    'company.name': input.companyName,
+  }
+}
+
 /** The subject and the text of the mail a move sends. */
 export function statusMailOf(input: StatusMailInput): { subject: string; body: string } {
   const words = WORDS[input.language]

@@ -353,6 +353,8 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/admin/security',
   // B-W2a-78: Approvals, automation & AI (SCR-167, W2a part: Reminders & timers).
   '/admin/automation',
+  // B-W2b-431: Fields & lists (SCR-164).
+  '/admin/fields',
   // B-W0-28 Admin: Documents & numbering, Languages & formats, Connections & API (and a connection), Import & export,
   // Audit log.
   '/admin/documents',

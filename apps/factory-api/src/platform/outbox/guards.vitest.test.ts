@@ -106,8 +106,8 @@ describe('check-event-contract', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
     // B-W2b-421: three events (custom_field.changed, picklist.changed, custom_value.changed) and three literal emits: with
     // B-W2b-403, 906 → 909 and 1446 → 1449.
     // B-W2b-405: six events (privacy.request_changed, .request_collect_asked, .person_erased, .retention_rule_changed,
-    // .retention_swept, .safety_report_form_switched) and ten literal emits: 909 → 915, 1449 → 1459.
-    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(915 declared event version\(s\), 1459 literal emit/) })
+    // .retention_swept, .safety_report_form_switched) and ten literal emits: with B-W2b-422 (main 912, 1449) 912 → 918, 1449 → 1459.
+    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(918 declared event version\(s\), 1459 literal emit/) })
   })
 
   it.each<[string, Plants, RegExp]>([

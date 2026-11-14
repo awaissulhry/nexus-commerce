@@ -184,6 +184,8 @@ import { COST_DEPTH_ADDS } from '../../costing/mass-update/permissions'
 import { PAYABLES_DEPTH_ADDS } from '../../payables/proposal/permissions'
 // B-W2b-421: custom fields and picklists (the administrator keeps them; sales and buyer see contacts' personal custom fields).
 import { FIELDS_ADDS } from '../../fields/permissions'
+// B-W2b-422: templates (the administrator keeps the document and e-mail templates and the shared replies).
+import { TEMPLATES_ADDS } from '../../templates/permissions'
 // B-W2b-405: data protection in depth (the administrator keeps the data requests, erasures and retention rules).
 import { PRIVACY_DEPTH_ADDS } from '../../privacy/retention/permissions'
 
@@ -1127,6 +1129,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (PAYABLES_DEPTH_ADDS[key] ?? []) : []),
   // B-W2b-421
   ...(audience === 'office' ? (FIELDS_ADDS[key] ?? []) : []),
+  // B-W2b-422
+  ...(audience === 'office' ? (TEMPLATES_ADDS[key] ?? []) : []),
   // B-W2b-405
   ...(audience === 'office' ? (PRIVACY_DEPTH_ADDS[key] ?? []) : [])]
 /**

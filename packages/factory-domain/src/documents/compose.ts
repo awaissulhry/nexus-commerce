@@ -4,7 +4,10 @@ import { BUSINESS_TIME_ZONE, businessDayStart, isBusinessDate, parseInstant, toU
 import { parseDecimal } from '../tax/decimal'
 import { formatDate, formatDateTime, formatDecimal, formatMoney, formatPercent, formatQuantity, formatUnitPrice } from './format'
 import { countryName, DOCUMENT_WORDS, ddtPartyHeading, type DocumentWords } from './i18n'
-import { DOCUMENT_LAYOUTS, type ColumnKey, type LayoutColumn } from './layouts'
+// B-W2b-422 (PLT-231): layoutFor, layoutTemplateOf: the company's document template in use is read first; its words fill their placeholders.
+import { DOCUMENT_LAYOUTS, layoutFor, layoutTemplateOf, type ColumnKey, type LayoutColumn } from './layouts'
+import { documentPlaceholderValues } from '../templates/documents'
+import { fillPlaceholders } from '../templates/placeholders'
 import { withOptions } from './options-block'
 import { addressLine, legalFooter, legalLines, legalName, legalProblems } from './legal'
 import {
@@ -81,6 +84,10 @@ export interface ComposedDocument {
   readonly table: { readonly columns: readonly ComposedColumn[]; readonly rows: readonly (readonly string[])[] }
   readonly totals: readonly ComposedTotal[]
   readonly notes: ComposedFact | null
+  /** B-W2b-422: the template's words printed above the lines, placeholders filled; absent or null: none (the code's layout). */
+  readonly intro?: string | null
+  /** B-W2b-422: the template's terms, printed after the totals, placeholders filled; absent or null: none. */
+  readonly terms?: string | null
   /** Fixed notices of the type, printed boxed above the footer (the invoice copy's courtesy-copy notice). */
   readonly notices: readonly string[]
   /** Signature boxes' captions (DDT). */
@@ -407,7 +414,12 @@ export function composeDocument(input: DocumentInput): ComposedDocument {
   const problems = documentProblems(input)
   if (problems.length > 0) throw new ValidationError('The document cannot be printed as it stands.', problems)
   const words = DOCUMENT_WORDS[input.language]
-  const layout = DOCUMENT_LAYOUTS[input.type]
+  // B-W2b-422: the template in use of the company for this type and language first, else the fixed layout.
+  const template = layoutTemplateOf(input.company, input.type, input.language)
+  const layout = layoutFor(input.type, template)
+  const values = template ? documentPlaceholderValues(input) : {}
+  const templateWords = (value: string | null | undefined): string | null => (filled(value) ? fillPlaceholders(value, values) || null : null)
+  const footerText = template && filled(template.footer) ? templateWords(template.footer) : filled(input.company.documentFooter) ? input.company.documentFooter.trim() : null
   const language = input.language
   const name = legalName(input.company, language)
   const columns = layout.columns.filter((entry) => layout.priced || !PRICED_ONLY.includes(entry.key)).map((entry) => ({ ...entry, label: words.columns[entry.key] }))
@@ -430,11 +442,13 @@ export function composeDocument(input: DocumentInput): ComposedDocument {
     table: { columns, rows: input.lines.map((line) => columns.map((entry) => cell(entry.key, line, input.currency, language, layout.printsOptions === true))) },
     totals: totals(input, words),
     notes: filled(input.notes) ? { label: words.notes, value: input.notes.trim() } : null,
+    ...(template ? { intro: templateWords(template.header), terms: templateWords(template.terms) } : {}),
     notices,
     signatures: layout.signatures ? [words.signatures.driver, words.signatures.carrier, words.signatures.recipient] : [],
     footer: {
       legal: legalFooter(input.company, language),
-      text: filled(input.company.documentFooter) ? input.company.documentFooter.trim() : null,
+      // B-W2b-422: the template's footer text, else the company's own.
+      text: footerText,
       page: words.page,
       continued: words.continued,
     },

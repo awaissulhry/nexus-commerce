@@ -1,5 +1,9 @@
 import { InvalidStateError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { mailLanguageOf, statusMailOf } from '@nexus/factory-domain/sales/service/mail'
+// B-W2b-422 (TM1:01): the words come from the company's e-mail template in use, else every company's, else the code's.
+import { statusMailValuesOf } from '@nexus/factory-domain/sales/service/mail'
+import { companyValues } from '@nexus/factory-domain/templates/mail'
+import { mailWordsOf } from '../../../platform/templates/active'
 import { SERVICE_CASE_RECORD, type CaseStatus, type MoveTarget } from '@nexus/factory-domain/sales/service/rules'
 import type { CommandTools } from '../../../core/command'
 import { sendEmail } from '../../../platform/email-out/outbound'
@@ -29,7 +33,15 @@ export async function tellCustomerInCommand(tools: CommandTools, row: CaseRow, m
   const party = row.partyId ? await tx.party.findUnique({ where: { id: row.partyId }, select: { language: true } }) : null
   const company = await tx.company.findUniqueOrThrow({ where: { id: row.companyId }, select: { legalName: true, tradeName: true } })
   const language = mailLanguageOf(contact.language, party?.language)
-  const mail = statusMailOf({ language, number: row.number, from: move.from, to: move.to, contactName: contact.name, message: move.message, companyName: company.tradeName ?? company.legalName })
+  const input = { language, number: row.number, from: move.from, to: move.to, contactName: contact.name, message: move.message, companyName: company.tradeName ?? company.legalName }
+  // B-W2b-422: an e-mail template in use (service.status_changed) says it in the company's own words; else the code's.
+  const templated = await mailWordsOf(tx, context, {
+    companyId: row.companyId,
+    event: 'service.status_changed',
+    language,
+    values: { ...statusMailValuesOf(input), ...companyValues(company), 'company.name': input.companyName },
+  })
+  const mail = templated ?? statusMailOf(input)
   try {
     const queued = await sendEmail(tools, {
       record: { type: SERVICE_CASE_RECORD, id: row.id },
