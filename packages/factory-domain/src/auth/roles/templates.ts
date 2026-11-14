@@ -162,6 +162,8 @@ import { MAIL_DEPTH_ADDS } from '../../mail-depth/permissions'
 import { DEPOSIT_RULES_ADDS } from '../../invoicing/cancellation/permissions'
 // B-W2b-407: the actual-cost figures (finance lands charges and keeps the accountant's switch).
 import { COST_ACTUALS_ADDS } from '../../costing/landed/permissions'
+// B-W2b-428: the KPI library (home.kpis.view) to every office template that works with business numbers.
+import { HOME_KPIS_ADDS } from '../../insights/kpis/permissions'
 // B-W2b-404: security in depth (the administrator keeps the session lengths and step-up rules, and ends a person's sessions).
 import { SECURITY_DEPTH_ADDS } from '../sessions/permissions'
 
@@ -1083,6 +1085,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (DEPOSIT_RULES_ADDS[key] ?? []) : []),
   // B-W2b-407
   ...(audience === 'office' ? (COST_ACTUALS_ADDS[key] ?? []) : []),
+  // B-W2b-428
+  ...(audience === 'office' ? (HOME_KPIS_ADDS[key] ?? []) : []),
   // B-W2b-404
   ...(audience === 'office' ? (SECURITY_DEPTH_ADDS[key] ?? []) : [])]
 /**

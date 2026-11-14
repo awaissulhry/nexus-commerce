@@ -25,6 +25,8 @@ import { databaseNotificationRefusal } from '@nexus/factory-domain/notifications
 // B-W2b-376 (W2b-6 schema wave 54/57): a cost entry of a closed (or settled) work order, or a reversal of a close's entry, that
 // reached the database's actual-cost rules is a 409 in words.
 import { databaseActualCostRefusal } from '@nexus/factory-domain/costing/actuals-refusals'
+// B-W2b-428: a KPI version or a fact that reached the metric layer's rules (…_insights_depth_w2b_guards) is a 409 in words.
+import { databaseKpiRefusal } from '@nexus/factory-domain/insights/kpis/refusals'
 import type { ErrorBody } from '@nexus/factory-domain/core/contracts'
 import { reportError } from '../observability/tracker'
 
@@ -271,6 +273,19 @@ function actualCostRefusal(error: unknown): MappedError | null {
   return words ? { status: STATUS_OF.conflict, code: 'conflict', message: words.message, issues: [{ path: words.path, message: words.message }], unexpected: false } : null
 }
 
+/**
+ * B-W2b-428 (B-W2b-381's …_insights_depth_w2b_guards): the database's own refusal by the metric layer's rules (a version in force
+ * edited, a past version changed or deleted, a state skipped, a use of a KPI not in force, an owner role archived, a fact of a
+ * day that has not begun), when a write reached it without its command's check (two people at once): a 409 in words
+ * (factory-domain insights/kpis/refusals), never a 500.
+ */
+function kpiRefusal(error: unknown): MappedError | null {
+  const cause = (error as { meta?: { driverAdapterError?: { cause?: { originalCode?: unknown; originalMessage?: unknown } } } } | null)?.meta?.driverAdapterError?.cause
+  if (cause?.originalCode !== '23514' || typeof cause.originalMessage !== 'string') return null
+  const words = databaseKpiRefusal(cause.originalMessage)
+  return words ? { status: STATUS_OF.conflict, code: 'conflict', message: words.message, issues: [{ path: words.path, message: words.message }], unexpected: false } : null
+}
+
 // B-W2b-309 (SAL-306) ----------------------------------------------------------------------------------------------------
 /**
  * The database's own refusal to issue or hold a customer's own lot for another customer's work (…_sales_orders_depth_w2b_guards
@@ -327,6 +342,9 @@ export function mapError(error: unknown): MappedError {
   // B-W2b-376
   const actualCost = actualCostRefusal(error)
   if (actualCost) return actualCost
+  // B-W2b-428
+  const kpi = kpiRefusal(error)
+  if (kpi) return kpi
   // B-W2b-332
   const askedLine = askedLineRefusal(error)
   if (askedLine) return { status: STATUS_OF.conflict, code: 'conflict', message: askedLine.message, issues: [askedLine], unexpected: false }

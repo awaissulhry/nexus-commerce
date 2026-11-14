@@ -68,6 +68,8 @@ export interface DailyExtra {
   readonly workOrderSizeId: string
   readonly scrap: number
   readonly rework: number
+  /** B-W2b-428: when it happened (the rework opened, the rework done): the metric layer's hourly facts put it in its hour. */
+  readonly at?: Date
 }
 
 export interface DailyFacts {
