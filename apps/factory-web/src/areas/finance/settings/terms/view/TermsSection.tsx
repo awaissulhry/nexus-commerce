@@ -14,6 +14,7 @@ import { decimal, type Phrase } from '../../../_shared/model'
 import { DialogFrame } from '../../../_shared/parts'
 import { INSTALMENT_EVENTS, type PaymentTerms } from '../api'
 import '../terms.css'
+import { SkipMonthsField } from '../../terms-skip/view/SkipMonthsField'
 import { archiveHeld, draftOf, emptyTerms, hasProblems, METHOD_CHOICES, previewOf, shareTotal, TERMS_ROWS, termsName, termsProblems, termsWords, type TermsAbilities, type TermsDraft, type TermsRows } from '../model'
 
 /** The terms dialog: add, edit (names always; rules while unused), or copy as new terms. */
@@ -332,10 +333,11 @@ function TermsDialog({ model, dialog, actions }: { model: TermsSectionModel; dia
           <Input inputMode="numeric" value={draft.discountDays} readOnly={readOnly} onChange={(event) => set({ discountDays: event.target.value })} autoComplete="off" />
         </Field>
       </div>
+      {/* B-W2b-417: days from the end of the month and skipped months (design sec:terms "skip August", W2b). */}
+      <SkipMonthsField model={{ fromEndOfMonth: draft.fromEndOfMonth, skipMonths: draft.skipMonths, readOnly }} onChange={set} />
       <p className="fw-fin-hint" role="status">
         {preview ? d('terms.preview', { words: preview }) : d('terms.previewNone')}
       </p>
-      <p className="fw-fin-hint">{d('terms.skipAugust')}</p>
     </DialogFrame>
   )
 }

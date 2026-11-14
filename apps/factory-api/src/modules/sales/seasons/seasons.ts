@@ -15,6 +15,7 @@ import { officeOrder } from '../orders/moves'
 import { assertDraft } from '../quotes/quotes'
 import { officeQuote, readCurrentVersion, readQuote } from '../quotes/store'
 import { assertOpenSeason, SEASON_COLUMNS, seasonOr404, type Reader } from './store'
+import { freezeSeasonSheets } from '../../costing/sheet-versions/approval'
 
 /**
  * Seasons per company (B-W2b-303; SAL-277 "season on every order"; follow-up SO1:01 "Set season on a style picks from the
@@ -200,6 +201,8 @@ export async function moveSeason(caller: CommandCaller, seasonId: string, to: Se
   return onSeason(caller, seasonId, body.version, to === 'CLOSED' ? 'seasons.close' : 'seasons.reopen', { seasonId, to, ...body }, idempotencyKey, async (tools, row) => {
     if (row.status === to) throw new InvalidStateError(to === 'CLOSED' ? `Season ${row.code} is closed already.` : `Season ${row.code} is open already.`)
     const actor = tools.context.audience === 'office' ? tools.context.actorId : null
+    // B-W2b-420: the season's approved cost sheet versions frozen (SEASON_CLOSED), its drafts' requests for a yes sent back.
+    if (to === 'CLOSED') await freezeSeasonSheets(tools, row.id)
     await tools.tx.season.update({ where: { id: row.id }, data: to === 'CLOSED' ? { status: 'CLOSED', closedAt: tools.now, closedById: actor, updatedAt: tools.now } : { status: 'OPEN', closedAt: null, closedById: null, updatedAt: tools.now }, select: { id: true } })
     tools.audit({ action: to === 'CLOSED' ? 'seasons.close' : 'seasons.reopen', recordType: 'Season', recordId: row.id, companyId: row.companyId, before: { status: row.status }, after: { status: to } })
     tools.emit({ type: 'season.changed', subject: row.id, companyId: row.companyId, payload: { seasonId: row.id, companyId: row.companyId, code: row.code, change: to === 'CLOSED' ? 'CLOSED' : 'REOPENED' } })

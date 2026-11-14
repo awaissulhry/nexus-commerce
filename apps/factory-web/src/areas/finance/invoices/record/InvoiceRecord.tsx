@@ -32,8 +32,17 @@ import { isStepUpCancelled, useCoalesced, useLive, useStepUp, useThreadDock } fr
 import { abilitiesOf, lineInputsOf, readProblem, recordTouched, romeToday, writeProblem } from '../../_shared/model'
 import { releaseOverpayment } from '../daily/api'
 import { withCharge, withoutLine } from '../daily/model'
-import { PART_LOADING, tabOf, type InvoiceRecordModel, type Loaded, type Part, type RecordDialog } from './record-model'
+import { PART_LOADING, tabOf, type InvoiceDepthSlots, type InvoiceRecordModel, type Loaded, type Part, type RecordDialog } from './record-model'
 import { InvoiceRecordView } from './view/InvoiceRecordView'
+// B-W2b-417: invoices in depth — the test-mode banner, stamp duty decided, the balance before shipping, the VAT time limit, the debit note.
+import { useT } from '../../../../lib/i18n/provider'
+import { BalanceBeforeShipping } from '../balance/BalanceBeforeShipping'
+import { DebitNote } from '../debit-note/DebitNote'
+import { VatTimeLimit } from '../debit-note/VatTimeLimit'
+import { StampDutyCheck } from '../stamp-duty/StampDutyCheck'
+import { DEPTH } from '../test-mode/depth'
+import { TestModeBanner } from '../test-mode/TestModeBanner'
+import { DepthWord } from '../test-mode/view/DepthWord'
 
 /**
  * `/w/<company>/finance/invoices/<id>` (SCR-081): loads the invoice (invoices.view; the API checks its company and
@@ -46,7 +55,7 @@ import { InvoiceRecordView } from './view/InvoiceRecordView'
  */
 export function InvoiceRecord({ invoiceId }: { invoiceId: string }) {
   return (
-    <WithMessages namespaces={['finance', 'finance-daily', 'lists', 'records']}>
+    <WithMessages namespaces={['finance', 'finance-daily', DEPTH, 'lists', 'records']}>
       <RecordContainer invoiceId={invoiceId} />
     </WithMessages>
   )
@@ -82,6 +91,8 @@ function RecordContainer({ invoiceId }: { invoiceId: string }) {
   const [changed, setChanged] = useState<{ at: string } | null>(null)
   const { dockOpen, toggleDock } = useThreadDock('Invoice')
   const { stepUp, guard, ensureFresh, submitStepUp, cancelStepUp } = useStepUp(api)
+  const w = useT(DEPTH)
+  const [debitOpen, setDebitOpen] = useState(false)
 
   const loadParts = useCallback(
     (value: Invoice) => {
@@ -194,10 +205,32 @@ function RecordContainer({ invoiceId }: { invoiceId: string }) {
 
   const model: InvoiceRecordModel = { prefix, can, today: romeToday(), tab, invoice, checks, related, sdi, pdf, live, dockOpen, changed, notice, busy, dialog, dialogProblem, resendProblems, stepUp }
   const value = invoice.status === 'ready' ? invoice.value : null
+  // B-W2b-417: the in-depth parts, each its own container.
+  const debitWait = !can.manageInvoices ? w('held.noManage') : value?.status === 'REJECTED' ? w('debit.refusal.REJECTED') : null
+  const depth: InvoiceDepthSlots | undefined = value
+    ? {
+        banner: <TestModeBanner companyId={value.companyId} />,
+        precheck:
+          value.status === 'DRAFT' ? (
+            <StampDutyCheck
+              invoice={value}
+              onChanged={(next) => {
+                setValue(next)
+                loadParts(next)
+              }}
+            />
+          ) : null,
+        balance: <BalanceBeforeShipping invoice={value} related={related.value} prefix={prefix} />,
+        creditWarning: (reason) => <VatTimeLimit invoiceId={value.id} reason={reason} />,
+        more: (value.docType === 'TD01' || value.docType === 'TD24') && value.status !== 'DRAFT' ? [{ id: 'debit', label: <DepthWord k="debit.menu" />, disabled: !!debitWait, description: debitWait ?? undefined, onSelect: () => setDebitOpen(true) }] : [],
+        dialogs: debitOpen ? <DebitNote kind="debit" fixed={{ id: value.id, number: value.number, partyName: value.party.legalName }} onClose={() => setDebitOpen(false)} /> : null,
+      }
+    : undefined
 
   return (
     <InvoiceRecordView
       model={model}
+      depth={depth}
       panels={value ? <RecordPanels record={{ type: 'Invoice', id: value.id, companyId: value.companyId, siteId: null }} title={`${value.number ?? value.docType} · ${value.party.legalName}`} party={{ id: value.buyerPartyId, name: value.party.legalName, emails: [] }} /> : null}
       actions={{
         onRetry: () => void load(),

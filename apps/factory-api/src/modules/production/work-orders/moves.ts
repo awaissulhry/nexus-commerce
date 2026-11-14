@@ -12,8 +12,8 @@ import { officeWorkOrder, onWorkOrder, todayOfCommand } from './work-orders'
 
 /**
  * The office's moves after the release (B-W1-38; MES-007): start (RELEASED → IN_PROGRESS; the floor's first issue, cut
- * or scan will start it by itself in B-W1-39/40/42), complete (IN_PROGRESS → COMPLETED), close (COMPLETED → CLOSED; the
- * close with planned vs actual and a tolerance reason is W2b, MES-012) and cancel (from DRAFT, RELEASED or IN_PROGRESS,
+ * or scan will start it by itself in B-W1-39/40/42), complete (IN_PROGRESS → COMPLETED), close (COMPLETED → CLOSED; since
+ * B-W2b-411 the route closes through ./close.ts: planned vs actual, a tolerance reason, the cost close) and cancel (from DRAFT, RELEASED or IN_PROGRESS,
  * with a reason). One command each on the work order (its version bump locks the row): the machine's check, then the
  * status with its time in one row update (the trigger refuses a status without its time). A cancelled work order gives
  * its pieces back to its order lines; what was issued to it stays on it in the ledger until it is returned (the record
@@ -29,8 +29,8 @@ import { officeWorkOrder, onWorkOrder, todayOfCommand } from './work-orders'
 /** The moves after which nothing more is issued to the work order. */
 const ENDS_ISSUING: readonly ManualMove[] = Object.freeze(['COMPLETED', 'CLOSED', 'CANCELLED'])
 
-/** command()'s record guard, by hand (after the issue lock): the version the caller read, then compare-and-set. */
-async function bumpVersion(tx: CommandTx, workOrderId: string, expected: number | undefined): Promise<void> {
+/** command()'s record guard, by hand (after the issue lock): the version the caller read, then compare-and-set. B-W2b-411: the close (./close.ts) takes it too. */
+export async function bumpVersion(tx: CommandTx, workOrderId: string, expected: number | undefined): Promise<void> {
   const row = await tx.workOrder.findUnique({ where: { id: workOrderId }, select: { version: true } })
   if (!row) throw new NotFoundError('WorkOrder not found.')
   if (expected !== undefined && expected !== row.version) throw new StaleVersionError('WorkOrder', workOrderId, row.version, expected)

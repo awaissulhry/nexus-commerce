@@ -15,6 +15,8 @@ import { quoteRulesFor } from '../quotes/rules'
 import { decimal, officeQuote, readCurrentVersion, readLineRecords, type LineRecord, type QuoteRow, type Reader, type VersionRow } from '../quotes/store'
 import { readFacts, type QuoteDetail } from '../quotes/views'
 import { personFloor, versionPersonOf } from './floors'
+// B-W2b-420 (follow-up KS3:01): the approved cost sheet's target price before the revision's cost.
+import { releasedTargetsFor, suggestedFromTarget, type ReleasedTarget } from '../../costing/sheet-versions/released'
 
 /**
  * The price of a quote line (B-W2b-330; SAL-173, SAL-174, SAL-175, SAL-189; design quote › Price & margin "Pricing by
@@ -113,6 +115,7 @@ export async function quotePricing(caller: CommandCaller, quoteId: string) {
     const floor = await floorOfVersion(client, quote, version, now)
     const pricedBySeq = new Map(facts.priced.lines.map((line) => [line.seq, line]))
     const toNet = toNetOf(listed.rate, listed.basis)
+    const targets = await releasedTargetsFor(client, { companyId: quote.companyId, versionId: version.id, lines })
     return {
       quoteId: quote.id,
       versionId: version.id,
@@ -141,7 +144,11 @@ export async function quotePricing(caller: CommandCaller, quoteId: string) {
                 currency: version.currency,
               })
             : null
-        const suggested = goods ? suggestedPriceOf({ unitCost: line.costAmount === null ? null : decimal(line.unitCost), marginPct: floor.marginFloorPct, currency: version.currency, onBasis: listed.onBasis }) : null
+        // B-W2b-420: the approved cost sheet's target price where one exists, else the revision's cost and the floor's margin.
+        const target = goods ? targets.get(line.id) : undefined
+        const fromSheet = target ? suggestedFromTarget(target, { currency: version.currency, unitCost: line.costAmount === null ? null : decimal(line.unitCost), onBasis: listed.onBasis }) : null
+        const suggested = goods ? (fromSheet ?? suggestedPriceOf({ unitCost: line.costAmount === null ? null : decimal(line.unitCost), marginPct: floor.marginFloorPct, currency: version.currency, onBasis: listed.onBasis })) : null
+        const costSheet = fromSheet && target ? { id: target.sheetId, sheetVersion: target.sheetVersion } : null
         return {
           lineId: line.id,
           seq: line.seq,
@@ -161,8 +168,8 @@ export async function quotePricing(caller: CommandCaller, quoteId: string) {
             suggested === null
               ? null
               : 'problem' in suggested
-                ? { unitPrice: asMoney('price', null), marginPct: asMoney('margin', null), basedOn: costBasisOf(line), problem: suggested.problem }
-                : { unitPrice: asMoney('price', suggested.unitPrice), marginPct: asMoney('margin', suggested.marginPct), basedOn: costBasisOf(line), problem: null },
+                ? { unitPrice: asMoney('price', null), marginPct: asMoney('margin', null), basedOn: costBasisOf(line), costSheet, problem: suggested.problem }
+                : { unitPrice: asMoney('price', suggested.unitPrice), marginPct: asMoney('margin', suggested.marginPct), basedOn: costBasisOf(line), costSheet, problem: null },
           marginPct: asMoney('margin', money?.marginPct ?? null),
           belowFloor: asMoney('margin', money?.belowFloor ?? false),
           fee: line.kind === 'FEE' ? { creditAgainstBulk: { enabled: FEE_CREDIT_AGAINST_BULK.enabled, words: FEE_CREDIT_AGAINST_BULK.words } } : null,
@@ -214,6 +221,8 @@ export interface PriceContext {
   readonly floor: Awaited<ReturnType<typeof floorOfVersion>>
   readonly extras: Awaited<ReturnType<typeof lineExtrasOf>>
   readonly options: Map<string, OptionCharge[]>
+  /** B-W2b-420: each line's approved cost sheet target price (KS3:01). */
+  readonly targets: Map<string, ReleasedTarget>
 }
 
 /** B-W2b-302: see PriceContext. */
@@ -223,6 +232,7 @@ export async function priceContextOf(db: Reader, current: QuoteRow, version: Ver
     floor: await floorOfVersion(db, current, version, now),
     extras: await lineExtrasOf(db, version.id),
     options: await optionChargesOf(db, lines.map((line) => line.id)),
+    targets: await releasedTargetsFor(db, { companyId: current.companyId, versionId: version.id, lines }),
   }
 }
 
@@ -266,9 +276,16 @@ export async function planLinePrice(db: Reader, ctx: PriceContext, version: Vers
     start = { kind: 'LIST', unitPrice: listPrice, source: { type: 'PriceListEntry', id: fromList.entry.id }, label: fromList.priced.steps[0]?.label || 'List price' }
   } else if (body.start === 'SUGGESTED') {
     if (line.styleRevisionId === null) throw new DomainError('conflict', 'The style has no revision to cost the line from: no price can be suggested.', [{ path: 'body/start', message: 'No revision.' }])
-    const suggested = suggestedPriceOf({ unitCost: line.costAmount === null ? null : decimal(line.unitCost), marginPct: body.marginPct ?? floor.marginFloorPct, currency: version.currency, onBasis: listed.onBasis })
-    if ('problem' in suggested) throw new DomainError('conflict', suggested.problem, [{ path: body.marginPct ? 'body/marginPct' : 'body/start', message: suggested.problem }])
-    start = { kind: 'SUGGESTED', unitPrice: suggested.unitPrice, source: { type: 'StyleRevision', id: line.styleRevisionId }, label: 'From the cost and the margin to earn' }
+    // B-W2b-420 (KS3:01): no margin asked → the approved cost sheet's target price where one exists.
+    const target = body.marginPct === undefined ? ctx.targets.get(line.id) : undefined
+    const fromSheet = target ? suggestedFromTarget(target, { currency: version.currency, unitCost: line.costAmount === null ? null : decimal(line.unitCost), onBasis: listed.onBasis }) : null
+    if (fromSheet && target) {
+      start = { kind: 'SUGGESTED', unitPrice: fromSheet.unitPrice, source: { type: 'CostSheet', id: target.sheetId }, label: `The target price of cost sheet version ${target.sheetVersion}` }
+    } else {
+      const suggested = suggestedPriceOf({ unitCost: line.costAmount === null ? null : decimal(line.unitCost), marginPct: body.marginPct ?? floor.marginFloorPct, currency: version.currency, onBasis: listed.onBasis })
+      if ('problem' in suggested) throw new DomainError('conflict', suggested.problem, [{ path: body.marginPct ? 'body/marginPct' : 'body/start', message: suggested.problem }])
+      start = { kind: 'SUGGESTED', unitPrice: suggested.unitPrice, source: { type: 'StyleRevision', id: line.styleRevisionId }, label: 'From the cost and the margin to earn' }
+    }
   } else {
     start = { kind: 'MANUAL', unitPrice: body.startPrice!, reasonCode: body.startReasonCode!, ...(startNote ? { note: startNote } : {}) }
   }

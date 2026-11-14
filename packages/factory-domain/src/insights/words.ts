@@ -60,6 +60,8 @@ export const CODE_WORDS: Readonly<Record<string, Readonly<Record<string, string>
     // B-W2b-377
     PURCHASE_ORDER_COMPLIANCE: 'send without a valid document',
     RECEIPT_OVER_TOLERANCE: 'receipt beyond its tolerance',
+    // B-W2b-420
+    COST_SHEET: 'cost sheet',
   },
 })
 

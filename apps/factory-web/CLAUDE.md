@@ -370,6 +370,14 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   `finance/reports/` Reports › Finance reports (SCR-239 `/finance/reports?asOf=&site=&category=&q=&group=`: the stock
   valuation, "How this lot is valued" in the value cell; `print/` SCR-239-print); catalogues `finance-accounting`,
   `finance-reports`. Words of the accountant's open questions ("to confirm with the accountant") are said on screen.
+  B-W2b-417 (invoices in depth, catalogue `finance-invoices-depth`; SCR-440 … SCR-449): each part a container + `view/`, slotted
+  through a `depth` prop — `invoices/test-mode/` (the test-mode banner on every invoice page; `depth.ts` the step's refusal words,
+  `view/DepthStepUp.tsx`), `invoices/monthly-run/` (the ⋯ Monthly invoice run: pick → preview with each draft's CheckList → the
+  month typed → step-up → issued and sent), `invoices/stamp-duty/` (the ⋯ Stamp duty this quarter; "stamp duty decided" in Before
+  you issue), `invoices/debit-note/` (New ▾; the TD05 dialog, also from the record's ⋯; the credit note's VAT time limit),
+  `invoices/balance/` (Balance before shipping on Deposits & payments), `payables/self-invoices/` (the TD17/18/19 section),
+  `settings/{tax,sdi-test,terms-skip,deposit-cancel}/` (tax set-up with the accountant's switches and codes; test mode, Leave test
+  mode? and Swap intermediary; skipped months in the terms dialog; refund on cancellation).
 - `src/areas/production/` — Production (SCR-069 … SCR-073): `work-orders/` the list (list frame; Export N, Release N) and
   New work order (`?new=1`), `work-orders/record/` the work order studio (`?tab=overview|materials|cutting|bundles|
   operations|quality|activity`, `?at=<seq>`; tabs in `cutting/`, `bundles/`, `progress/`), `wip/` Floor now

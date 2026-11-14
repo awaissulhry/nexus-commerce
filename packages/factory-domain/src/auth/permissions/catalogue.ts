@@ -387,6 +387,10 @@ import { TEST_MODE_DEFINITIONS, TEST_MODE_PERMISSIONS } from '../../invoicing/te
 import { COST_SHEET_COMPONENTS_DEFINITIONS, COST_SHEET_COMPONENTS_PERMISSIONS } from '../../costing/sheet-components/permissions'
 // B-W2b-404: security in depth (security.settings.manage, users.sessions.manage).
 import { SECURITY_SETTINGS_DEFINITIONS, USER_SESSIONS_DEFINITIONS } from '../sessions/permissions'
+// B-W2b-411: the work order close (workorders.reopen).
+import { WORK_ORDER_CLOSE_DEFINITIONS, WORK_ORDER_CLOSE_PERMISSIONS } from '../../costing/close/permissions'
+// B-W2b-420: cost sheet versions (costing.sheets.approve).
+import { COST_SHEET_VERSIONS_DEFINITIONS, COST_SHEET_VERSIONS_PERMISSIONS } from '../../costing/sheet-versions/permissions'
 
 /**
  * Every permission of the factory, assembled (feature PLT-029). A module that adds routes declares its permissions
@@ -1084,6 +1088,10 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   // B-W2b-404: session lengths and step-up rules, a person's sessions (areas `security`, `users`).
   SECURITY_SETTINGS_DEFINITIONS,
   USER_SESSIONS_DEFINITIONS,
+  // B-W2b-411: the work order close (area `workorders`).
+  WORK_ORDER_CLOSE_DEFINITIONS,
+  // B-W2b-420: cost sheet versions (area `costing`).
+  COST_SHEET_VERSIONS_DEFINITIONS,
 ])
 
 /** The area of the permissions only floor roles hold (and floor roles hold no other, but FLOOR_SHARED_PERMISSIONS). */
@@ -1472,6 +1480,10 @@ for (const name of HOME_KPIS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(na
 for (const name of TEST_MODE_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-418: the cost sheet's components.
 for (const name of COST_SHEET_COMPONENTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-411: the work order close.
+for (const name of WORK_ORDER_CLOSE_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-420: cost sheet versions.
+for (const name of COST_SHEET_VERSIONS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

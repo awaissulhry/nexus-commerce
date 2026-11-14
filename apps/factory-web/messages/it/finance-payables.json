@@ -40,7 +40,6 @@
     "noIntermediary": "Non è ancora scelto un intermediario SDI: non si può ritirare nulla.",
     "noneApprovable": "Nessuna delle fatture scelte attende l'approvazione.",
     "proposalLater": "Le proposte di pagamento arrivano più avanti (W2b): per ora segna ogni fattura pagata nella sua scheda Pagamento.",
-    "selfInvoicesLater": "Le autofatture per gli acquisti dall'estero arrivano più avanti (W2b).",
     "lastLine": "Una fattura tiene almeno una riga.",
     "edit": "Si corregge solo una fattura digitata, ricevuta o contestata.",
     "editSdi": "È arrivata dallo SDI: ciò che dice non cambia mai (la corregge la nota di credito del fornitore).",

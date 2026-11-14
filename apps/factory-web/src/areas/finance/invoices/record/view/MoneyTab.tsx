@@ -9,7 +9,7 @@ import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import type { Invoice } from '../../../_shared/api'
 import { dayInstant, daysBetween, decimal, dueDateOf, money, PAYABLE, STATUS_TONE } from '../../../_shared/model'
 import { PartState } from '../../../_shared/parts'
-import type { InvoiceRecordActions, InvoiceRecordModel } from '../record-model'
+import type { InvoiceDepthSlots, InvoiceRecordActions, InvoiceRecordModel } from '../record-model'
 
 const REQUEST_TONE: Record<string, 'neutral' | 'warning' | 'success'> = { OPEN: 'warning', PAID: 'success', WAIVED: 'neutral', CANCELLED: 'neutral' }
 
@@ -20,7 +20,7 @@ const REQUEST_TONE: Record<string, 'neutral' | 'warning' | 'success'> = { OPEN: 
  * invoice deducts — and every payment placed on it (the payment record by link; a reversal said as one). Record payment
  * opens Payments with this invoice chosen. Money by grain.
  */
-export function MoneyTab({ invoice, model, actions }: { invoice: Invoice; model: InvoiceRecordModel; actions?: InvoiceRecordActions }) {
+export function MoneyTab({ invoice, model, actions, depth }: { invoice: Invoice; model: InvoiceRecordModel; actions?: InvoiceRecordActions; /** B-W2b-417. */ depth?: InvoiceDepthSlots }) {
   const t = useT('finance')
   const locale = useLocale()
   const related = model.related.value
@@ -166,6 +166,8 @@ export function MoneyTab({ invoice, model, actions }: { invoice: Invoice; model:
           )}
         </Card>
       </div>
+      {/* B-W2b-417: Balance before shipping (design deposits/payments, W2b). */}
+      {depth?.balance}
     </div>
   )
 }

@@ -295,6 +295,10 @@ import { events as eInvoicing } from '../e-invoicing/events'
 import { events as costSheets } from '../cost-sheets/events'
 // B-W2b-404: security in depth (session lengths and step-up rules changed, a custom role archived or restored).
 import { events as securityDepth } from '../security-depth/events'
+// B-W2b-411: the work order close (work_order_close.changed).
+import { events as workOrderClose } from '../work-order-close/events'
+// B-W2b-420: cost sheet versions (cost_sheet.version_changed, cost_sheet.approved, size_weights.changed).
+import { events as costSheetVersions } from '../cost-sheet-versions/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -655,6 +659,10 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...costSheets,
   // B-W2b-404
   ...securityDepth,
+  // B-W2b-411
+  ...workOrderClose,
+  // B-W2b-420
+  ...costSheetVersions,
 ] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
