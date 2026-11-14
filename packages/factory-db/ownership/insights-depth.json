@@ -1,0 +1,69 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/insights-depth.prisma (rules: src/ownership.ts; roles: src/roles.ts). Office only (W2b schema wave 57/57, B-W2b-381): apps/factory-api's metric layer (B-W2b-428: KPI definitions and their uses, the facts rebuilt from the ledgers by the worker and the scheduler in the tenant's system context), the dashboards (B-W2b-434: a person's arrangement) and the digest and alert routing (B-W2b-435: a person's morning e-mail, a company's switch, the routes of an alert rule) write them through command(); the API keeps each person to their own layout and digest and checks the insights and alerts permissions. The floor and portal or link sessions read and write nothing here (a portal page reads a KPI through the API). No personal data beyond a person's own choices (their layout and digest; purpose: the office account), and no per-person figure: the facts are kept per company, site and line, and a KPI's grain is never wages or pay (Statuto dei Lavoratori art. 4; Owner answer W1). Money: the facts' price, cost and margin amounts carry their grain. A KPI version in force or past and a company's settings are never deleted; the …_insights_depth_w2b_guards triggers hold the rest (keys, the versions' life, office users and roles, a route's place, the facts' clock and numbers, the morning e-mail's switch, OFF by default). After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "KpiDefinition": {
+      "about": "One version of one KPI (ANA-012, ANA-070): the office writes a DRAFT, activates it (the old version superseded in the same command), retires a KPI, and deletes a DRAFT; the KPI library, dashboards, reports, alerts and the digest read the ACTIVE version, the History tab every version.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "KpiUse": {
+      "about": "Where a KPI is read (a dashboard, a report, an alert rule, a portal page): the API adds a use when a reader starts reading the KPI and removes it when it stops; the KPI record's Where used tab reads them. Never changed.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "delete"] }
+      }
+    },
+    "DashboardLayout": {
+      "about": "One person's arrangement of one dashboard (ANA-002): the office saves and reads the signed-in person's own, and removes it to go back to the dashboard's own order.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "DigestSetting": {
+      "about": "One person's morning e-mail (ANA-032): the office turns it on and off and sets its time, zone, weekdays, language, sections and company; the scheduler reads the ones that are on and marks when it went out (only while the company's switch is on). Removed to turn it off for good.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "InsightsSettings": {
+      "about": "A company's switch for the morning e-mail (OFF by default; the Owner's rule of 11-13): the office switches it on and off; the scheduler reads it before any digest of the company goes out. Never deleted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "AlertRoute": {
+      "about": "Who an alert rule tells at a company, site, line or customer (ANA-041): the office adds and removes routes of a rule; the scheduler reads them when it raises an alert. Never changed.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "delete"] }
+      }
+    },
+    "FactDaily": {
+      "about": "One number of one measure for one business day of a company, site or line (ANA-069): the rebuild (worker and scheduler, the tenant's system context) writes, rebuilds in place and deletes them from the ledgers; the KPIs, dashboards, reports and the digest read them. No personal data.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "FactHourly": {
+      "about": "The same per hour of the site's clock (ANA-069): written, rebuilt and deleted by the rebuild; read by the KPIs and the dashboards. No personal data.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    }
+  }
+}

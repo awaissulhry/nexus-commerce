@@ -32,6 +32,7 @@ import { seed as seedHealth } from '../seed/health'
 import { seed as seedHolds } from '../seed/holds'
 import { seed as seedImports } from '../seed/imports'
 import { seed as seedInsights } from '../seed/insights'
+import { seed as seedInsightsDepth } from '../seed/insights-depth'
 import { seed as seedInspectionPlans } from '../seed/inspection-plans'
 import { seed as seedInstructions } from '../seed/instructions'
 import { seed as seedIntegration } from '../seed/integration'
@@ -507,6 +508,11 @@ beforeAll(async () => {
   // DRAFTs), saved replies and a quote template line's options: the plain ones a copy may repeat.
   await seedConfig({ db: factory, namespace: 'iso-a' })
   await seedConfig({ db: factory, namespace: 'iso-b' })
+  // The metric layer schema of W2b-6 (wave 57/57): KPI versions (the first a DRAFT made from nothing) and where they are read,
+  // dashboard layouts, the morning e-mail (the first digest off; every company's switch off), alert routes (the first to
+  // Quality at plant A1), daily and hourly facts (the first a company's orders in): the plain ones a copy may repeat.
+  await seedInsightsDepth({ db: factory, namespace: 'iso-a' })
+  await seedInsightsDepth({ db: factory, namespace: 'iso-b' })
   // Every seed of both tenants: under a full parallel run this takes more than a minute.
 }, 120_000)
 
@@ -527,6 +533,7 @@ it('covers every classified table and every runtime role', () => {
     'ActualCostSettings',
     'Alert',
     'AlertEvent',
+    'AlertRoute',
     'AlertRule',
     'Appointment',
     'ApprovalEvent',
@@ -611,6 +618,7 @@ it('covers every classified table and every runtime role', () => {
     'CutOrderLine',
     'CutReconciliation',
     'CutTicket',
+    'DashboardLayout',
     'DataRequest',
     'Ddt',
     'DdtCancellation',
@@ -622,6 +630,7 @@ it('covers every classified table and every runtime role', () => {
     'DepositRequest',
     'Device',
     'DeviceEnrolment',
+    'DigestSetting',
     'DispatchAssignment',
     'DispatchManifest',
     'DispositionCode',
@@ -641,6 +650,8 @@ it('covers every classified table and every runtime role', () => {
     'ExportJob',
     'ExportedDocument',
     'FabricRoll',
+    'FactDaily',
+    'FactHourly',
     'FileMarkup',
     'FileUploadSession',
     'FirstLoadStep',
@@ -689,6 +700,7 @@ it('covers every classified table and every runtime role', () => {
     'IncomingRollResult',
     'Inquiry',
     'InquiryLine',
+    'InsightsSettings',
     'Inspection',
     'InspectionAmendment',
     'InspectionCheckResult',
@@ -715,6 +727,8 @@ it('covers every classified table and every runtime role', () => {
     'ItemGradeRule',
     'ItemPlanning',
     'ItemVariant',
+    'KpiDefinition',
+    'KpiUse',
     'LabResult',
     'LabelArtworkVersion',
     'LabelTemplate',
