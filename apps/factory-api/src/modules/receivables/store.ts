@@ -159,8 +159,8 @@ const ibanOf = (terms: unknown): string | null => {
 }
 
 /**
- * The issued TD01/TD24 invoices that still ask money as of a day (gross − issued credit notes − allocations, the same
- * sums as payments' open items), oldest first, each with its instalments and what is open on them. Row-level security
+ * The issued TD01/TD24 invoices that still ask money as of a day (gross − issued credit notes − allocations − B-W2b-393's
+ * UNDERPAYMENT write-offs, the same sums as payments' open items), oldest first, each with its instalments and what is open on them. Row-level security
  * keeps them the tenant's; the caller filters by its grants (can()).
  *
  * B-W2b-21 (B-W2a-61's note): `depositToCarry` marks an invoice of an order (its own salesOrderId, or the order of one of
@@ -173,27 +173,30 @@ export async function openInvoices(db: Reader, filter: OpenFilter): Promise<Open
   const end = businessDayRange(asOf).end
   const ids = filter.invoiceIds && filter.invoiceIds.length > 0 ? [...filter.invoiceIds] : null
   const rows = await db.$queryRaw<
-    { id: string; companyId: string; partyId: string; number: string | null; docType: string; issueDate: Date; currency: string; grossTotal: number; paymentTerms: unknown; salesOrderId: string | null; lineOrderIds: string[] | null; credited: bigint | null; allocated: bigint | null }[]
+    { id: string; companyId: string; partyId: string; number: string | null; docType: string; issueDate: Date; currency: string; grossTotal: number; paymentTerms: unknown; salesOrderId: string | null; lineOrderIds: string[] | null; credited: bigint | null; allocated: bigint | null; written: bigint | null }[]
   >`
     SELECT i.id, i."companyId", i."buyerPartyId" AS "partyId", i.number, i."docType"::text AS "docType", i."issueDate", i.currency, i."grossTotal", i."paymentTerms", i."salesOrderId",
            ARRAY(SELECT DISTINCT o."orderId" FROM "InvoiceLine" l JOIN "SalesOrderLine" o ON o."tenantId" = l."tenantId" AND o.id = l."salesOrderLineId" WHERE l."invoiceId" = i.id) AS "lineOrderIds",
-           c.credited, a.allocated
+           c.credited, a.allocated, w.written
       FROM "Invoice" i
       LEFT JOIN LATERAL (SELECT sum(cn."grossTotal") AS credited FROM "Invoice" cn
                           WHERE cn."creditOfId" = i.id AND cn."docType" = 'TD04' AND cn.status <> 'DRAFT' AND cn."issueDate" <= ${asOf}::date) c ON true
       LEFT JOIN LATERAL (SELECT sum(pa.amount) AS allocated FROM "PaymentAllocation" pa
                           WHERE pa."invoiceId" = i.id AND pa."createdAt" < ${end}) a ON true
+      -- B-W2b-393: a small difference written off on the invoice's allocations (UNDERPAYMENT) is settled too.
+      LEFT JOIN LATERAL (SELECT sum(wo.amount) AS written FROM "PaymentWriteOff" wo JOIN "PaymentAllocation" wa ON wa."tenantId" = wo."tenantId" AND wa.id = wo."allocationId"
+                          WHERE wa."invoiceId" = i.id AND wo.kind = 'UNDERPAYMENT' AND wo."createdAt" < ${end}) w ON true
      WHERE i."docType" IN ('TD01', 'TD24') AND i.status <> 'DRAFT' AND i."issueDate" <= ${asOf}::date
        AND (${filter.companyId ?? null}::uuid IS NULL OR i."companyId" = ${filter.companyId ?? null}::uuid)
        AND (${filter.partyId ?? null}::uuid IS NULL OR i."buyerPartyId" = ${filter.partyId ?? null}::uuid)
        AND (${filter.salesOrderId ?? null}::uuid IS NULL OR i."salesOrderId" = ${filter.salesOrderId ?? null}::uuid)
        AND (${ids}::uuid[] IS NULL OR i.id = ANY(${ids}::uuid[]))
-       AND i."grossTotal" - coalesce(c.credited, 0) - coalesce(a.allocated, 0) > 0
+       AND i."grossTotal" - coalesce(c.credited, 0) - coalesce(a.allocated, 0) - coalesce(w.written, 0) > 0
      ORDER BY i."issueDate", i.number, i.id`
   const carrying = await ordersWithDepositToCarry(db, rows.flatMap((row) => [...(row.salesOrderId ? [row.salesOrderId] : []), ...(row.lineOrderIds ?? [])]))
   return rows.map((row) => {
     const issueDate = businessDate(row.issueDate, 'UTC')
-    const settled = Number(row.credited ?? 0n) + Number(row.allocated ?? 0n)
+    const settled = Number(row.credited ?? 0n) + Number(row.allocated ?? 0n) + Number(row.written ?? 0n)
     const { instalments, dueDateKnown } = instalmentsOf(row.paymentTerms, row.grossTotal, issueDate)
     return {
       id: row.id,

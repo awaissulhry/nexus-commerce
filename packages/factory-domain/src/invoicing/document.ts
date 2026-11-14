@@ -18,6 +18,8 @@ import type {
   RegimeFiscale,
 } from './fatturapa/types'
 import { treatmentOf, type InvoiceDocType, type InvoiceLineKind, type StoredVat } from './invoices'
+// B-W2b-392: the declaration of intent printed on its N3.5 lines.
+import { INTENT_NATURA, intentOtherData } from './intent/intent'
 
 /**
  * From the factory's records to the two documents of an issued invoice (B-W1-28; FIN-057, FIN-085), pure:
@@ -214,6 +216,8 @@ export interface IssuedInvoice {
   /** The sales order it bills, for the copy. */
   readonly salesOrder?: { readonly number: string; readonly date: BusinessDate | null } | null
   readonly paymentTerms?: { readonly condition: 'TP01' | 'TP02' | 'TP03'; readonly installments: readonly { readonly method: string; readonly amount: MinorUnits; readonly dueDate?: string | null; readonly iban?: string | null }[] } | null
+  /** B-W2b-392 (FIN-100): the declaration of intent its N3.5 lines rest on, printed on each of them (AltriDatiGestionali INTENTO). */
+  readonly declarationOfIntent?: { readonly protocolNumber: string; readonly protocolDate: BusinessDate } | null
 }
 
 /**
@@ -244,6 +248,8 @@ export function fatturaPaInputOf(invoice: IssuedInvoice): FatturaPaInvoiceInput 
       ...(line.discountPct ? { discountPercent: line.discountPct } : {}),
       ...(line.itemCode ? { itemCode: { type: 'SKU', value: line.itemCode } } : {}),
       ...(line.ddtNumber && invoice.ddts.length > 1 ? { ddtNumber: line.ddtNumber } : {}),
+      // B-W2b-392 (FIN-100): the declaration of intent on each line it makes VAT-free.
+      ...(invoice.declarationOfIntent && vat.kind === 'NON_TAXABLE' && vat.natura === INTENT_NATURA ? { otherData: [intentOtherData(invoice.declarationOfIntent)] } : {}),
     }
   })
   const byDeposit = new Map<string, StoredLine[]>()

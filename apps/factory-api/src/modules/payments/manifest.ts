@@ -47,4 +47,29 @@ export const manifest = defineManifest({
   'POST /portal/payments/intents': { audiences: ['partner'], permission: 'portal.payments.pay', scope: 'party' },
   'GET /portal/payments/intents/:intentId': { audiences: ['partner'], permission: 'portal.payments.view', scope: 'party' },
   'POST /payment-fake/confirm': { audiences: PUBLIC, permission: PUBLIC, scope: 'none' },
+  // B-W2b-393 (./bank, ./matching, ./write-offs; FIN-130, FIN-132, FIN-117, FIN-119): bank statements imported from the files
+  // the company downloads from its bank, their lines matched with how sure and why (a person accepts every match), the
+  // payments not placed on an invoice, small differences written off within the tolerance. Each handler checks the
+  // company (and the party) with can().
+  'GET /payments/bank/accounts': { audiences: ['office'], permission: 'payments.bank.view', scope: 'record' },
+  'GET /payments/bank/statements': { audiences: ['office'], permission: 'payments.bank.view', scope: 'record' },
+  'GET /payments/bank/statements/:statementId': { audiences: ['office'], permission: 'payments.bank.view', scope: 'record' },
+  'POST /payments/bank/statements/uploads': { audiences: ['office'], permission: 'payments.bank.import', scope: 'record' },
+  'POST /payments/bank/statements/dry-run': { audiences: ['office'], permission: 'payments.bank.import', scope: 'record' },
+  'POST /payments/bank/statements': { audiences: ['office'], permission: 'payments.bank.import', scope: 'record' },
+  'GET /payments/bank/lines': { audiences: ['office'], permission: 'payments.bank.view', scope: 'record' },
+  'GET /payments/bank/lines/counts': { audiences: ['office'], permission: 'payments.bank.view', scope: 'record' },
+  'GET /payments/bank/lines/:lineId': { audiences: ['office'], permission: 'payments.bank.view', scope: 'record' },
+  'POST /payments/bank/lines/:lineId/match': { audiences: ['office'], permission: 'payments.bank.match', scope: 'record' },
+  'POST /payments/bank/matches/accept': { audiences: ['office'], permission: 'payments.bank.match', scope: 'record' },
+  'POST /payments/bank/matches/:matchId/accept': { audiences: ['office'], permission: 'payments.bank.match', scope: 'record' },
+  'POST /payments/bank/matches/:matchId/reverse': { audiences: ['office'], permission: 'payments.bank.match', scope: 'record' },
+  'POST /payments/bank/suggestions/refresh': { audiences: ['office'], permission: 'payments.bank.match', scope: 'record' },
+  'GET /payments/unapplied': { audiences: ['office'], permission: 'payments.view', scope: 'record' },
+  'GET /payments/:paymentId/bank-line': { audiences: ['office'], permission: 'payments.view', scope: 'record' },
+  'GET /payments/:paymentId/write-offs': { audiences: ['office'], permission: 'payments.view', scope: 'record' },
+  'POST /payments/:paymentId/write-offs': { audiences: ['office'], permission: 'payments.writeOff', scope: 'record' },
+  'POST /payments/:paymentId/write-offs/:writeOffId/reverse': { audiences: ['office'], permission: 'payments.writeOff', scope: 'record' },
+  'GET /payments/write-offs/tolerance': { audiences: ['office'], permission: 'receivables.view', scope: 'record' },
+  'PUT /payments/write-offs/tolerance': { audiences: ['office'], permission: 'receivables.settings.manage', scope: 'record' },
 })

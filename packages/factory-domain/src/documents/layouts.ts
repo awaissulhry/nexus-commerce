@@ -109,6 +109,21 @@ export const DOCUMENT_LAYOUTS: Readonly<Record<DocumentType, DocumentLayout>> = 
     signatures: false,
     columns: [column('parcel', 100), column('code', 150), column('goods', 530), column('quantity', 120, 'right'), column('uom', 100)],
   },
+  // B-W2b-391 (LOG-058): the proforma invoice (customs, samples, a prepayment request): priced, VAT per line, no signatures.
+  PROFORMA: {
+    id: 'PROFORMA/1',
+    priced: true,
+    signatures: false,
+    columns: [
+      column('code', 110),
+      column('description', 390),
+      column('quantity', 80, 'right'),
+      column('uom', 60),
+      column('unitPrice', 120, 'right'),
+      column('vat', 70, 'right'),
+      column('amount', 170, 'right'),
+    ],
+  },
 })
 
 for (const [type, layout] of Object.entries(DOCUMENT_LAYOUTS)) {

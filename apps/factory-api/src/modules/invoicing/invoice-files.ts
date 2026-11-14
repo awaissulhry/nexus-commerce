@@ -18,6 +18,8 @@ import { putGeneratedFile, recordGeneratedFile, type PreparedGeneratedFile } fro
 import { processFiles, type FilesRuntime } from '../../platform/files/service'
 import { paymentTermsOf, purchaseOrdersOf, storedLineOf } from './facts'
 import { invoiceDetail, officeInvoice, readInvoice, readLines, type InvoiceDetail, type Reader } from './store'
+// B-W2b-392: the declaration of intent on the XML.
+import { printedDeclarationOf } from './intent/declarations'
 
 /**
  * The files of an issued invoice (B-W1-28 steps b and c; FIN-057: the XML is the invoice, the PDF a courtesy copy; DM
@@ -76,6 +78,8 @@ export async function issuedInvoiceOf(db: Reader, invoiceId: string): Promise<{ 
     credits: credits && credits.number && credits.issueDate ? { number: credits.number, issueDate: day(credits.issueDate) } : null,
     salesOrder: order ? { number: order.number, date: day(order.orderDate) } : null,
     paymentTerms: paymentTermsOf(invoice.paymentTerms),
+    // B-W2b-392: the declaration of intent printed on its N3.5 lines.
+    declarationOfIntent: await printedDeclarationOf(db, invoice.id),
   }
   return { issued, companyId: invoice.companyId, language: party?.language ?? 'it', xmlFileId: invoice.xmlFileId, pdfFileId: invoice.pdfFileId }
 }

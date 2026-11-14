@@ -57,6 +57,8 @@ import { confirmationRemindersCron } from './modules/purchasing/reminders/daily'
 import { releasedReceiptHandler } from './modules/inventory/receiving/tolerance-hold'
 // B-W2b-386: the system's shipment holds (the balance before shipping, the account on hold, over the credit limit).
 import { systemHoldsCron, systemHoldsHandler } from './modules/shipping/holds/system'
+// B-W2b-393: the suggested matches of the bank lines, looked at again when payments, invoices or deposit requests change.
+import { suggestionHandlers } from './modules/payments/matching/suggest'
 import { chaseRemindersCron } from './modules/purchasing/reminders/chase'
 // B-W2a-55: the payment reminder ladder (prepares reminders on its timers; a person approves and sends each one).
 import { ladderCron, ladderHandlers } from './modules/receivables/ladder'
@@ -262,6 +264,8 @@ const W2B_340_HANDLERS: readonly EventHandler[] = [orderOptionsHandler()]
 const W2B_377_HANDLERS: readonly EventHandler[] = [releasedReceiptHandler()]
 // B-W2b-386: a shipment made, an order's payment schedule changed, an account hold placed or released, a credit check or limit → the system's shipment holds placed or lifted.
 const W2B_386_HANDLERS: readonly EventHandler[] = [systemHoldsHandler()]
+// B-W2b-393: a payment recorded, placed, taken back or voided, an invoice issued, a deposit request made or waived → the company's bank line suggestions.
+const W2B_393_HANDLERS: readonly EventHandler[] = suggestionHandlers()
 // B-W2b-398
 const W2B_398_HANDLERS: readonly EventHandler[] = [customerNoticeHandler(), trackingProblemsHandler(), carrierPodHandler(), returnLabelsUsedHandler()]
 // B-W2b-11: the reports (one file each in modules/insights/reports/defs/), read by an export of a report.
@@ -332,7 +336,7 @@ if (mode === 'worker') {
   await moveLiftsAll({ database, log }).catch((error) => log.error({ err: error }, 'the unblocked addresses could not be moved at start'))
   await writeStepsAll({ database, log }).catch((error) => log.error({ err: error }, 'the first-load steps could not be written at start'))
   const relay = startRelay({ database, publish: queuePublisher(kit), log })
-  const workers = startEventWorkers({ kit, handlers: [...HANDLERS, ...W2A_20_HANDLERS, ...W2A_32_HANDLERS, ...W2A_33_HANDLERS, ...W2A_55_HANDLERS, ...W2A_61_HANDLERS, ...W2A_62_HANDLERS, ...W2B_15_HANDLERS, ...W2B_40_HANDLERS, ...W2B_37_HANDLERS, ...W2B_42_HANDLERS, ...W2B_43_HANDLERS, ...W2B_101_HANDLERS, ...W2B_118_HANDLERS, ...W2B_125_HANDLERS, ...W2B_135_HANDLERS, ...W2B_160_HANDLERS, ...W2B_167_HANDLERS, ...W2B_185_HANDLERS, ...W2B_170_HANDLERS, ...W2B_200_HANDLERS, ...W2B_225_HANDLERS, ...W2B_251_HANDLERS, ...W2B_260_HANDLERS, ...W2B_256_HANDLERS, ...W2B_263_HANDLERS, ...W2B_313_HANDLERS, ...W2B_292_HANDLERS, ...W2B_305_HANDLERS, ...W2B_304_HANDLERS, ...W2B_317_HANDLERS, ...W2B_294_HANDLERS, ...W2B_340_HANDLERS, ...W2B_377_HANDLERS, ...W2B_386_HANDLERS, ...W2B_398_HANDLERS], database, live: redis, log })
+  const workers = startEventWorkers({ kit, handlers: [...HANDLERS, ...W2A_20_HANDLERS, ...W2A_32_HANDLERS, ...W2A_33_HANDLERS, ...W2A_55_HANDLERS, ...W2A_61_HANDLERS, ...W2A_62_HANDLERS, ...W2B_15_HANDLERS, ...W2B_40_HANDLERS, ...W2B_37_HANDLERS, ...W2B_42_HANDLERS, ...W2B_43_HANDLERS, ...W2B_101_HANDLERS, ...W2B_118_HANDLERS, ...W2B_125_HANDLERS, ...W2B_135_HANDLERS, ...W2B_160_HANDLERS, ...W2B_167_HANDLERS, ...W2B_185_HANDLERS, ...W2B_170_HANDLERS, ...W2B_200_HANDLERS, ...W2B_225_HANDLERS, ...W2B_251_HANDLERS, ...W2B_260_HANDLERS, ...W2B_256_HANDLERS, ...W2B_263_HANDLERS, ...W2B_313_HANDLERS, ...W2B_292_HANDLERS, ...W2B_305_HANDLERS, ...W2B_304_HANDLERS, ...W2B_317_HANDLERS, ...W2B_294_HANDLERS, ...W2B_340_HANDLERS, ...W2B_377_HANDLERS, ...W2B_386_HANDLERS, ...W2B_393_HANDLERS, ...W2B_398_HANDLERS], database, live: redis, log })
   stops.push(() => relay.stop(), () => workers.close())
 } else {
   const crons: CronJob[] = [outboxLagCron({ database, kit, log }), rolesSyncCron({ database, log }), certificateExpiryCron({ database, log }), sdiPollCron({ database, log }), trackingPollCron({ database, log }), nightlyPlanCron({ database, log }), exportExpiryCron({ database, log })]

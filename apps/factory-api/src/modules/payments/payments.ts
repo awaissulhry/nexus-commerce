@@ -16,6 +16,7 @@ import type { PeriodLockOverride } from '@nexus/factory-domain/accounting/contra
 import { markDepositPaid } from '../sales/deposits/deposits'
 import { lockAll, lockMoney } from './locks'
 import { refundedOf } from './refunds'
+import { overpaymentsWrittenOff, overpaymentWrittenOff, underpaymentWrittenOff } from './write-offs/sums'
 import { allocatedOf, assertMay, officeContextOf, officePayment, paymentDetail, placedOn, readPayment, targetLabels, type PaymentDetail, type PaymentRow, type Reader } from './store'
 
 /**
@@ -103,12 +104,14 @@ export async function allocateInCommand(tools: CommandTools, payment: Pick<Payme
     else {
       const credited = (await tx.invoice.aggregate({ where: { creditOfId: invoice.id, docType: 'TD04', status: { not: 'DRAFT' } }, _sum: { grossTotal: true } }))._sum.grossTotal ?? 0
       const allocated = (await tx.paymentAllocation.aggregate({ where: { invoiceId: invoice.id }, _sum: { amount: true } }))._sum.amount ?? 0
-      planned.push({ target: 'INVOICE', targetId: invoice.id, open: openOnInvoice(invoice.grossTotal, credited, allocated), amount: ask.amount, path: at, label })
+      // B-W2b-393: a small difference written off on the invoice (UNDERPAYMENT) is closed, as the database's cap counts it.
+      planned.push({ target: 'INVOICE', targetId: invoice.id, open: openOnInvoice(invoice.grossTotal, credited, allocated + (await underpaymentWrittenOff(tx, invoice.id))), amount: ask.amount, path: at, label })
     }
   }
   if (issues.length > 0) throw new DomainError('conflict', issues.length === 1 ? issues[0]!.message : 'These allocations cannot be made.', issues)
   // B-W2a-61: a live refund of the payment's unplaced part (its credit balance) holds that money too.
-  const unallocated = payment.amount - (await allocatedOf(tx, payment.id)) - (await refundedOf(tx, payment.id))
+  // B-W2b-393: and what an OVERPAYMENT write-off keeps.
+  const unallocated = payment.amount - (await allocatedOf(tx, payment.id)) - (await refundedOf(tx, payment.id)) - (await overpaymentWrittenOff(tx, payment.id))
   const plan = planAllocations(unallocated, planned, payment.currency)
   if (plan.issues.length > 0) throw new DomainError('conflict', plan.issues.length === 1 ? plan.issues[0]!.message : 'These allocations cannot be made.', plan.issues)
 
@@ -302,6 +305,8 @@ export async function listPayments(caller: CommandCaller, query: ListPaymentsQue
   const labels = await caller.withClient((client) => targetLabels(client, page.flatMap((row) => row.allocations)))
   // B-W2a-61: what live refunds take of each payment's unplaced part.
   const refunds = page.length === 0 ? [] : await caller.withClient((client) => client.refund.groupBy({ by: ['paymentId'], where: { paymentId: { in: page.map((row) => row.id) }, status: { in: ['DUE', 'PAID'] } }, _sum: { amount: true } }))
+  // B-W2b-393: what OVERPAYMENT write-offs keep of each payment's unplaced part.
+  const writtenOff = await caller.withClient((client) => overpaymentsWrittenOff(client, page.map((row) => row.id)))
   return {
     payments: page.map((row) => {
       const allocated = row.allocations.reduce((sum, allocation) => sum + allocation.amount, 0)
@@ -314,7 +319,7 @@ export async function listPayments(caller: CommandCaller, query: ListPaymentsQue
         method: row.method,
         amount: asMoney('price', row.amount),
         allocated: asMoney('price', allocated),
-        unallocated: asMoney('price', row.status === 'VOIDED' ? 0 : row.amount - allocated - refunded),
+        unallocated: asMoney('price', row.status === 'VOIDED' ? 0 : row.amount - allocated - refunded - (writtenOff.get(row.id) ?? 0)),
         refunded: asMoney('price', refunded),
         currency: row.currency,
         receivedOn: row.receivedOn.toISOString().slice(0, 10),

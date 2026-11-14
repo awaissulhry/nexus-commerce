@@ -236,6 +236,8 @@ function dettaglioLinee(line: NormalizedLine, computed: FatturaPaLine): XmlEleme
     el('PrezzoTotale', formatAmount(computed.total)),
     el('AliquotaIVA', rateText(line)),
     line.vat.kind === 'NON_TAXABLE' && el('Natura', line.vat.natura),
+    // B-W2b-392: AltriDatiGestionali (a declaration of intent: TipoDato INTENTO, its protocol and date).
+    ...line.otherData.map((data) => el('AltriDatiGestionali', [el('TipoDato', data.type), optional('RiferimentoTesto', data.text), optional('RiferimentoData', data.date)])),
   ])
 }
 

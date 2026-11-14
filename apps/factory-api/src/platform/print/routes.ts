@@ -22,6 +22,11 @@ import { createPrinter, listPrinters, updatePrinter } from './printers'
 import { printRemnantTag, printRemnantTagContract } from './layouts/remnant'
 import { printRollTag, printRollTagContract } from './layouts/roll'
 import { listStationPrinters, setStationPrinter } from './stations'
+// B-W2b-391 (LOG-026): direct thermal printing from the station's browser (direct/; registered here: the route loader reads
+// no folder under one that has its own routes file).
+import { directQueueContract, reportDirectJobContract, setPrinterModeContract, takeDirectJobContract } from './direct/contract'
+import { listDirectJobs, reportDirectJob, setPrinterMode, takeDirectJob } from './direct/direct'
+import { systemCallerOf } from '../files/files'
 
 /**
  * Printing (platform part; plan A1 §3.9, GAP-007): the printers of each site, print jobs for labels (ZPL) and
@@ -68,8 +73,22 @@ export default defineRoutes('print', manifest, async (app) => {
   app.get('/print/jobs/:jobId', { schema: getJobContract }, async (request) => ({ job: await getJob(request, request.params.jobId) }))
 
   app.post('/print/jobs/:jobId/retry', { schema: retryJobContract }, async (request) => ({
-    job: await retryJob(request, request.params.jobId, request.body, idempotencyKeyFrom(request)),
+    // B-W2b-391: a floor device's retry runs as its tenant's system caller (no update grant on print jobs).
+    job: await retryJob(request, request.params.jobId, request.body, idempotencyKeyFrom(request), systemCallerOf(request)),
   }))
+
+  // B-W2b-391 (LOG-026): a printer's mode, and the station's own queue of a DIRECT printer (take, then report).
+  app.put('/print/printers/:printerId/mode', { schema: setPrinterModeContract }, async (request) => setPrinterMode(request, request.params.printerId, request.body, idempotencyKeyFrom(request)))
+
+  app.get('/print/direct/jobs', { schema: directQueueContract }, async (request) => listDirectJobs(request, request.query))
+
+  app.post('/print/direct/jobs/:jobId/take', { schema: takeDirectJobContract }, async (request) =>
+    takeDirectJob({ caller: request, system: systemCallerOf(request) }, request.params.jobId, idempotencyKeyFrom(request)),
+  )
+
+  app.post('/print/direct/jobs/:jobId/report', { schema: reportDirectJobContract }, async (request) =>
+    reportDirectJob({ caller: request, system: systemCallerOf(request) }, request.params.jobId, request.body, idempotencyKeyFrom(request)),
+  )
 
   app.post('/print/labels/pdf', { schema: labelPdfContract }, async (request, reply) => {
     const { pdf, fileName } = await labelPdf(request, request.body)
