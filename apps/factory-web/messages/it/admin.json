@@ -1757,6 +1757,7 @@
     "shipping_packaging_manage": "Gestire imballi e marcature dei colli",
     "shipping_holds_manage": "Bloccare le spedizioni e sbloccarle",
     "shipping_holds_release": "Sbloccare le spedizioni bloccate per denaro o dal sistema",
+    "shipping_proforma_issue": "Emettere fatture proforma (dogana, campioni, pagamento anticipato)",
     "parties_view": "Vedere clienti e fornitori",
     "parties_manage": "Aggiungere e modificare clienti e fornitori",
     "parties_block": "Bloccare e sbloccare un cliente o fornitore",

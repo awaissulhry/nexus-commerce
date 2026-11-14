@@ -53,6 +53,9 @@ const fingerprintOf = (contents: Contents): string =>
     )
     .digest('hex')
 
+/** B-W2b-391: the fingerprint of the contents now, for the shipment's one PDF (is its newest packing list still current?). */
+export const packingListFingerprint = fingerprintOf
+
 interface VersionRow extends PackingListVersion {
   readonly id: string
   readonly number: string
