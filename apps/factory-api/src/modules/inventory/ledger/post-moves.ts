@@ -16,10 +16,14 @@ import {
   type Shortfall,
 } from '@nexus/factory-domain/inventory/ledger/moves'
 import { baseQuantityOf } from '@nexus/factory-domain/inventory/ledger/units'
-import { costBasis, lotUnitCost, valuationKey, valueOfMove, type CostBasis, type ValuationMethod } from '@nexus/factory-domain/inventory/ledger/valuation'
+import { costBasis, valuationKey, valueOfMove, type CostBasis, type ValuationMethod } from '@nexus/factory-domain/inventory/ledger/valuation'
+// B-W2b-407 (FIN-044): a lot's cost with the landed cost posted on it.
+import { lotUnitCostWithLanded } from '@nexus/factory-domain/costing/landed/rules'
 import { markMoney } from '@nexus/factory-domain/money/marked'
 import { Dec, ZERO, type Decimal } from '@nexus/factory-domain/tax/decimal'
 import type { CommandTools, CommandTx } from '../../../core/command'
+// B-W2b-407
+import { landedForLotCost } from '../../costing/landed/lot-cost'
 import { honourPeriodLocks, lockDayOf } from '../../accounting/period-guard'
 import type { PeriodLockOverride } from '@nexus/factory-domain/accounting/contracts'
 // B-W2b-22: the one valuation of a finished garment (its company's frozen standard in force on the day).
@@ -661,6 +665,8 @@ export async function valueMovesInCommand(
     list.push({ quantity: row.quantity.toString(), unitCost: row.unitCost.toString() })
     lotValuations.set(`${row.siteId}|${row.lotId}`, list)
   }
+  // B-W2b-407 (FIN-044): the landed cost standing on each lot (costing/landed/lot-cost.ts).
+  const landedOn = await landedForLotCost(tx, lotIds)
 
   const value = (move: ValuedMove, basis: CostBasis) => {
     const item = items.get(move.itemId)!
@@ -712,7 +718,7 @@ export async function valueMovesInCommand(
     costBasis({
       explicit,
       reversed: reversed ?? null,
-      lotCost: move.lotId ? lotUnitCost(lotValuations.get(`${move.siteId}|${move.lotId}`) ?? []) : null,
+      lotCost: move.lotId ? lotUnitCostWithLanded(lotValuations.get(`${move.siteId}|${move.lotId}`) ?? [], landedOn(move.siteId, move.lotId, items.get(move.itemId)?.currency ?? '')) : null,
       standardCost: items.get(move.itemId)?.standardCost?.toString() ?? (move.occurredAt ? (frozen.get(frozenKey(move)) ?? null) : null),
     })
 

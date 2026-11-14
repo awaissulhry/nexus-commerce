@@ -525,8 +525,7 @@
       "title": "How replies find their record",
       "reply": "Each order, request for quote and purchase order gets a hidden reply address on your reply domain; a reply lands in that record’s thread.",
       "checks": "A mail joins a thread only when it passes SPF, DKIM and DMARC and the sender is known; otherwise it waits in Mail to sort.",
-      "toSort": "Open Mail to sort",
-      "capture": "A capture address (forward or copy any mail to it) comes later."
+      "toSort": "Open Mail to sort"
     },
     "kind": {
       "CONVERSATION": "Conversations",

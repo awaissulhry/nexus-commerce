@@ -303,7 +303,7 @@ describe('development and sample fees (SAL-181)', () => {
     expect(quotes.seller.current.netAmount).toBe(before + 50_000)
     expect(quotes.seller.issues.filter((issue: Json) => issue.lineId === fee.id)).toEqual([])
     const pricing = (await ok('seller', 'GET', `${q(quotes.seller.id)}/pricing`)).lines.find((line: Json) => line.kind === 'FEE')
-    expect(pricing).toMatchObject({ feeKind: 'DEVELOPMENT', steps: null, suggested: null, fee: { creditAgainstBulk: { enabled: false } } })
+    expect(pricing).toMatchObject({ feeKind: 'DEVELOPMENT', steps: null, suggested: null, fee: { creditAgainstBulk: { enabled: true } } })
     quotes.seller = (await ok('seller', 'PATCH', `${q(quotes.seller.id)}/fees/${fee.id}`, { version: quotes.seller.version, unitPrice: '450', quantity: 2, feeKind: 'SAMPLE' })).quote
     expect(quotes.seller.lines.find((line: Json) => line.id === fee.id)).toMatchObject({ quantity: 2, unitPrice: '450', netAmount: 90_000 })
     expect(quotes.seller.current.netAmount).toBe(before + 90_000)
@@ -331,7 +331,7 @@ describe('development and sample fees (SAL-181)', () => {
       ['FEE', null],
     ])
     expect(pricing.lines[0].why.sentence).toContain('Manual change (Loyalty) + 10.00 = 470.00')
-    expect(pricing.lines[1].fee).toMatchObject({ invoices: [], invoiced: false, creditAgainstBulk: { enabled: false } })
+    expect(pricing.lines[1].fee).toMatchObject({ invoices: [], invoiced: false, creditAgainstBulk: { enabled: true } })
     // The order's progress: nothing of the fee to ship; the totals are the goods'.
     const view = (await ok('seller', 'GET', `/sales/orders/${order.orderId}`)).order
     expect(view.lines.find((line: Json) => line.id === feeLineId).sizes[0].progress).toMatchObject({ ordered: 1, toShip: 0 })

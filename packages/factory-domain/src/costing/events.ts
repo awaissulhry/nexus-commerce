@@ -4,6 +4,9 @@ import { WORK_CENTRE_KINDS } from '../product/routing/operations'
 import { COST_ENTRY_KINDS, COSTING_METHODS } from './ledger/entries'
 import { LABOUR_RATE_STATUSES } from './rates'
 import { STANDARD_COST_CHANGES, STANDARD_COST_STATUSES } from './standards/rules'
+// B-W2b-407
+import { LANDED_STATUSES } from './landed/rules'
+import { PPV_AT } from './ppv/rules'
 
 /**
  * Costing's events (plan A1 §3.4, §3.5; B-W1-16). apps/factory-api's modules/costing emits them in the command that
@@ -83,5 +86,40 @@ export const events = [
     description: "A person reversed a work order's cost entry with a reason (the entry stays; its opposite is posted).",
     payload: z.strictObject({ workOrderId: z.uuid(), number: z.string(), entryId: z.uuid(), reversalIds: z.array(z.uuid()) }),
     live: { permission: 'costing.view', fields: ['workOrderId', 'number', 'entryId'] },
+  }),
+  // B-W2b-407 (FIN-031, FIN-043, FIN-044; GATE-ACCOUNTANT): the actual-cost figures. Ids, kinds and states only.
+  defineEvent({
+    type: 'actual_cost_settings.changed',
+    context: 'costing',
+    description: "A company's figures for the accountant were switched on or off, or where it takes its purchase price variance changed.",
+    payload: z.strictObject({ settingsId: z.uuid(), companyId: z.uuid(), fields: z.array(z.enum(['ppvAt', 'postingsOn'])), postingsOn: z.boolean() }),
+    live: { permission: 'costing.view', fields: ['settingsId', 'companyId', 'fields', 'postingsOn'] },
+  }),
+  defineEvent({
+    type: 'purchase_price_variance.posted',
+    context: 'costing',
+    description: "A goods receipt's or a supplier invoice's purchase price variances were posted, or taken back.",
+    payload: z.strictObject({ at: z.enum(PPV_AT), documentId: z.uuid(), varianceIds: z.array(z.uuid()), reversals: z.number().int().min(0) }),
+    live: { permission: 'costing.view', fields: ['at', 'documentId'] },
+  }),
+  defineEvent({
+    type: 'cost_of_sales.posted',
+    context: 'costing',
+    description: "A shipment's cost of goods sold was posted when it left, or taken back.",
+    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), entryIds: z.array(z.uuid()), reversals: z.number().int().min(0) }),
+    live: { permission: 'costing.view', fields: ['shipmentId', 'number'] },
+  }),
+  defineEvent({
+    type: 'landed_cost.changed',
+    context: 'costing',
+    description: "A supplier invoice's charge line was prepared as a landed cost over lots, changed, posted (the lots' cost moved), reversed or its draft removed.",
+    payload: z.strictObject({
+      allocationId: z.uuid(),
+      supplierInvoiceLineId: z.uuid(),
+      status: z.enum(LANDED_STATUSES),
+      change: z.enum(['prepared', 'changed', 'posted', 'reversed', 'removed']),
+      lotIds: z.array(z.uuid()),
+    }),
+    live: { permission: 'costing.view', fields: ['allocationId', 'supplierInvoiceLineId', 'status', 'change'] },
   }),
 ] as const

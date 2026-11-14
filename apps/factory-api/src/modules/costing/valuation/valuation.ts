@@ -28,6 +28,9 @@ import { actorOf } from '../../../core/context'
 import { officeContextOf } from '../../inventory/ledger/access'
 import { unique, type Reader } from '../actual/store'
 import { methodInForce } from '../method/method'
+// B-W2b-407: a customer's own lots marked (FIN-045); posted landed cost in its lots' value (FIN-044).
+import { withLanded } from '../landed/lot-cost'
+import { markCustomerOwned } from './customer-owned'
 
 /**
  * Stock valuation at any date (B-W2a-29; FIN-039; design finance.reports "Stock valuation"): value on hand by category,
@@ -125,7 +128,9 @@ const CATEGORY_ORDER = new Map(VALUATION_CATEGORIES.map((category, index) => [ca
  */
 export async function valueStockAsOf(db: Reader, filters: StockValuationFilters, at: Date | null): Promise<Omit<ValuationAnswer, 'truncated'> & { readonly rows: ValuationRowView[] }> {
   const wanted = new Set(filters.categories && filters.categories.length > 0 ? filters.categories : VALUATION_CATEGORIES)
-  const { rows: stockRows, residues } = valuationRows(await keyBalances(db, filters, at))
+  // B-W2b-407
+  const landed = await withLanded(db, await keyBalances(db, filters, at), at)
+  const { rows: stockRows, residues } = valuationRows(landed.balances)
   const items = new Map(
     (await db.item.findMany({ where: { id: { in: unique([...stockRows, ...residues].map((row) => row.itemId)) } }, select: { id: true, code: true, name: true, kind: true, baseUom: true, tracking: true } })).map((row) => [row.id, row]),
   )
@@ -185,6 +190,7 @@ export async function valueStockAsOf(db: Reader, filters: StockValuationFilters,
       valued: row.valued,
       unvaluedMoves: row.unvaluedMoves,
       dependsOnMethod: depends,
+      customerOwned: null,
       words: `${basisWords(row.methods, row.valued, row.unvaluedMoves)}${depends ? ' It depends on the costing method.' : ''}`,
     })
   }
@@ -212,6 +218,7 @@ export async function valueStockAsOf(db: Reader, filters: StockValuationFilters,
       valued: 'FULL',
       unvaluedMoves: 0,
       dependsOnMethod: dependsOnMethod(methodOf(source.companyId), []),
+      customerOwned: null,
       words: done
         ? `${workOrder.number} is done: what is left on its cost ledger (${group.entries} entries) is its variance, written off when it is closed (W2b). It depends on the costing method.`
         : `Work in progress: what ${workOrder.number} took on (material issued, labour earned, overhead) less what moved to finished goods, as its cost ledger records it (${group.entries} entries). It depends on the costing method.`,
@@ -226,6 +233,9 @@ export async function valueStockAsOf(db: Reader, filters: StockValuationFilters,
       (a.lot?.code ?? '').localeCompare(b.lot?.code ?? ''),
   )
 
+  // B-W2b-407 (FIN-045): a customer's own lots keep their quantity, no value and no "move without a cost".
+  const marked = await markCustomerOwned(db, rows)
+  rows.splice(0, rows.length, ...marked.rows)
   const valueOf = (row: ValuationRowView) => ({ value: row.value as number, currency: row.currency })
   const categories = VALUATION_CATEGORIES.filter((category) => wanted.has(category)).map((category) => {
     const mine = rows.filter((row) => row.category === category)
@@ -241,6 +251,9 @@ export async function valueStockAsOf(db: Reader, filters: StockValuationFilters,
     at === null ? 'The stock as the ledgers hold it now.' : `The stock at the end of ${businessDate(at)} (Europe/Rome): every move up to then.`,
     'Each value is the stock ledger\'s: the sum of what its moves were valued at (receipts at their purchase order price, issues at their lot\'s average cost, opening stock, untracked items and finished garments at the standard cost), never recomputed; work in progress is the work orders\' cost ledger.',
     unvaluedMoves > 0 ? `${unvaluedMoves} move(s) have no cost yet: their stock is counted but not valued.` : null,
+    // B-W2b-407
+    landed.lots > 0 ? `The value of ${landed.lots} lot(s) includes the landed cost (freight, duty, a broker's fee) posted on them.` : null,
+    marked.owned > 0 ? `${marked.owned} row(s) are customers' own material (cut-make-trim): counted, never valued in our stock.` : null,
     residue.value ? 'The residue is value left on stock that is gone (the rounding of lot costs): the rows and the residue add up to the ledger.' : null,
     ...new Set(methodViews.map((row) => row.words)),
     total.words,

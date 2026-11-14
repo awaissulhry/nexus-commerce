@@ -274,7 +274,8 @@ export function fatturaPaInputOf(invoice: IssuedInvoice): FatturaPaInvoiceInput 
     documentType: invoice.docType as FatturaPaDocumentType,
     number: invoice.number,
     date: invoice.issueDate,
-    currency: 'EUR',
+    // B-W2b-396 (FIN-063): the invoice's own currency (its euro equivalent is in its Causale).
+    currency: invoice.currency,
     transmission: { progressive: progressiveOf(invoice.id) },
     seller: invoice.seller,
     buyer: buyerOfBillTo(invoice.billTo),

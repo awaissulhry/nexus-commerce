@@ -62,4 +62,27 @@ export const manifest = defineManifest({
   'GET /invoicing/stamp-duty/quarters': { audiences: ['office'], permission: 'invoices.view', scope: 'record' },
   'POST /invoicing/stamp-duty/quarters/recount': { audiences: ['office'], permission: 'invoices.tax.manage', scope: 'record' },
   'POST /invoicing/stamp-duty/quarters/:quarterId/paid': { audiences: ['office'], permission: 'invoices.tax.manage', scope: 'record' },
+  // B-W2b-396 (FIN-063, FIN-068, FIN-080; VI1:01-03; handlers in ./language-currency, ./runs, ./cancellation,
+  // ./from-shipment/fees.ts): reads are invoices.view; drafts, a draft's language and rate, the runs' previews, a fee's
+  // credit and a cancelled order's credit notes invoices.manage; a run's issue invoices.issue (step-up); the company's
+  // deposit rules invoices.depositRules.manage. can() on the company (and the customer of each invoice or order).
+  'GET /invoicing/invoices/:invoiceId/language-currency': { audiences: ['office'], permission: 'invoices.view', scope: 'record' },
+  'PUT /invoicing/invoices/:invoiceId/language': { audiences: ['office'], permission: 'invoices.manage', scope: 'record' },
+  'PUT /invoicing/invoices/:invoiceId/rate': { audiences: ['office'], permission: 'invoices.manage', scope: 'record' },
+  'GET /invoicing/runs': { audiences: ['office'], permission: 'invoices.view', scope: 'record' },
+  'GET /invoicing/runs/candidates': { audiences: ['office'], permission: 'invoices.view', scope: 'record' },
+  'GET /invoicing/runs/:runId': { audiences: ['office'], permission: 'invoices.view', scope: 'record' },
+  'POST /invoicing/runs': { audiences: ['office'], permission: 'invoices.manage', scope: 'record' },
+  'PUT /invoicing/runs/:runId/customers': { audiences: ['office'], permission: 'invoices.manage', scope: 'record' },
+  'POST /invoicing/runs/:runId/issue': { audiences: ['office'], permission: 'invoices.issue', scope: 'record' },
+  'DELETE /invoicing/runs/:runId': { audiences: ['office'], permission: 'invoices.manage', scope: 'record' },
+  'GET /invoicing/deposit-rules': { audiences: ['office'], permission: 'invoices.view', scope: 'record' },
+  'POST /invoicing/deposit-rules': { audiences: ['office'], permission: 'invoices.depositRules.manage', scope: 'record' },
+  'PATCH /invoicing/deposit-rules/:ruleId': { audiences: ['office'], permission: 'invoices.depositRules.manage', scope: 'record' },
+  'POST /invoicing/deposit-rules/:ruleId/archive': { audiences: ['office'], permission: 'invoices.depositRules.manage', scope: 'record' },
+  'GET /invoicing/orders/:orderId/deposit-cancellation': { audiences: ['office'], permission: 'invoices.view', scope: 'record' },
+  'POST /invoicing/orders/:orderId/deposit-cancellation': { audiences: ['office'], permission: 'invoices.manage', scope: 'record' },
+  'POST /invoicing/orders/:orderId/fees/invoice': { audiences: ['office'], permission: 'invoices.manage', scope: 'record' },
+  'POST /invoicing/invoices/from-sample-round': { audiences: ['office'], permission: 'invoices.manage', scope: 'record' },
+  'POST /invoicing/fee-lines/:lineId/credit': { audiences: ['office'], permission: 'invoices.manage', scope: 'record' },
 })
