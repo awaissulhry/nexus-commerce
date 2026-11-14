@@ -10,6 +10,8 @@ import { isStepUpCancelled, useStepUp } from '../shared/step-up'
 import { changeTwoFactor, previewTwoFactor, readFingerprint, recordDrill, securityFacts, twoFactorRoles, type FingerprintAnswer, type SecurityFacts, type TwoFactorList } from './api'
 import { changesFor, drillFormErrors, emptyDrillForm, LOADING, NO_DIALOG, securityCan, type Dialog, type DrillForm, type Read, type SecurityViewModel } from './model'
 import { SecurityView } from './view/SecurityView'
+import { useSecuritySettings } from './sessions/use-security-settings'
+import { useSecurityEvents } from './events/use-security-events'
 
 const LIVE_TYPES = new Set(['security.drill_recorded', 'security.two_factor_changed'])
 
@@ -25,7 +27,7 @@ function writeProblem(error: unknown): string {
  * `/w/<company>/admin/security` (SCR-166): reads the page (`GET /admin/security`, security.view) and, with roles.view, the
  * roles' two-factor rules; reads them again on "Check again", when the tab comes back and on the live events
  * security.drill_recorded and security.two_factor_changed. Writes: a restore drill (its evidence first), the two-factor
- * rule of the ticked roles (preview first, then a fresh code).
+ * rule of the ticked roles (preview first, then a fresh code). B-W2b-413: the settings and the security events (their hooks).
  */
 export function SecurityPage() {
   const api = useOfficeApi()
@@ -40,6 +42,9 @@ export function SecurityPage() {
   const [notice, setNotice] = useState<SecurityViewModel['notice']>(null)
   const evidence = useRef<File | null>(null)
   const { stepUp, guard, submitStepUp, cancelStepUp } = useStepUp(api)
+  // B-W2b-413: Session lengths and Actions that ask for a fresh code (one read), Security events (security.events.view).
+  const settings = useSecuritySettings(api, can.view)
+  const events = useSecurityEvents(api, held.has('security.events.view'))
 
   const load = useCallback(async () => {
     if (can.view) {
@@ -65,7 +70,8 @@ export function SecurityPage() {
     return () => document.removeEventListener('visibilitychange', onVisible)
   }, [load])
   const reload = useCoalesced(() => void load())
-  const live = useLive((change) => (LIVE_TYPES.has(change.type) ? reload() : undefined), reload, can.view || can.roles)
+  // B-W2b-413: a settings change elsewhere reads the settings again (a draft being typed stays).
+  const live = useLive((change) => (LIVE_TYPES.has(change.type) ? reload() : change.type === 'security.settings_changed' ? settings.refresh() : undefined), reload, can.view || can.roles)
 
   // The drill dialog: this database's fingerprint at the backup's time, read again whenever that time changes.
   const backupAt = dialog.kind === 'drill' ? dialog.form.backupAt : null
@@ -140,7 +146,16 @@ export function SecurityPage() {
 
   return (
     <SecurityView
-      model={{ prefix, facts, twoFactor, fingerprint, dialog, notice, live }}
+      model={{
+        prefix,
+        facts,
+        twoFactor,
+        fingerprint,
+        dialog,
+        notice,
+        live,
+        depth: { lengths: { prefix, read: settings.read, card: settings.lengths }, stepUp: { read: settings.read, card: settings.rules }, events: events.model, freshCode: settings.stepUp },
+      }}
       stepUp={stepUp}
       actions={{
         onRecheck: () => void load(),
@@ -177,6 +192,13 @@ export function SecurityPage() {
         },
         onStepUpSubmit: (code) => void submitStepUp(code),
         onStepUpClose: cancelStepUp,
+        depth: {
+          lengths: { onRetry: settings.actions.onRetry, ...settings.actions.lengths },
+          stepUp: { onRetry: settings.actions.onRetry, ...settings.actions.rules },
+          events: events.actions,
+          onFreshSubmit: settings.actions.onStepUpSubmit,
+          onFreshClose: settings.actions.onStepUpClose,
+        },
       }}
     />
   )

@@ -145,6 +145,9 @@ describe('reading the events: administrators and the Owner only', () => {
     const one = await adminBrowser.get(`/audit/security-events/${signIn.id}`)
     expect(one.status).toBe(200)
     expect(one.body.event).toEqual(signIn)
+    // B-W2b-413: the other events from the same address around it (every event here came from one address), never itself.
+    expect((one.body.related as Event[]).length).toBe(Math.min(events.length - 1, 20))
+    expect((one.body.related as Event[]).some((event) => event.id === signIn.id)).toBe(false)
     expect((await adminBrowser.get(`/audit/security-events/${newId()}`)).status).toBe(404)
     // Rows, never a figure.
     expect(Object.keys(all.body).sort()).toEqual(['events', 'nextBefore'])

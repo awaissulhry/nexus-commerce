@@ -9,6 +9,9 @@ import { failed, loaded, loading, problemKey, type Loaded } from '../shared/mode
 import { listAudit, type AuditCounts, type AuditEntry } from './api'
 import { hiddenGrains, paramsOf, periodFrom, queryOf, recordLabel, stateFromParams, TILE_PERIOD, withQuery, type AuditFilters, type AuditMode, type AuditViewModel } from './model'
 import { AuditView } from './view/AuditView'
+import { AUDIT_READS_VIEW } from '@nexus/factory-domain/auth/permissions/catalogue'
+import { useWhoLooked } from './reads/use-who-looked'
+import { entryCountry, readAudit } from './search/api'
 
 /** Rows a page reads (Owner L3: 50). */
 export const AUDIT_PAGE_SIZE = 50
@@ -62,7 +65,7 @@ export function AuditPage() {
     setEntries(loading())
     setOlder({ loading: false, problem: null })
     try {
-      const page = await listAudit(api, { ...queryOf(stateFromParams(new URLSearchParams(filterKey)).filters, now), limit: AUDIT_PAGE_SIZE })
+      const page = await readAudit(api, { ...queryOf(stateFromParams(new URLSearchParams(filterKey)).filters, now), limit: AUDIT_PAGE_SIZE })
       if (mine !== seq.current) return
       setEntries(loaded(page.entries))
       setNextBefore(page.nextBefore)
@@ -107,7 +110,7 @@ export function AuditPage() {
     const mine = seq.current
     setOlder({ loading: true, problem: null })
     try {
-      const page = await listAudit(api, { ...queryOf(filters, new Date()), before: nextBefore, limit: AUDIT_PAGE_SIZE })
+      const page = await readAudit(api, { ...queryOf(filters, new Date()), before: nextBefore, limit: AUDIT_PAGE_SIZE })
       if (mine !== seq.current) return
       setEntries((current) => loaded([...(current.items ?? []), ...page.entries]))
       setNextBefore(page.nextBefore)
@@ -128,6 +131,22 @@ export function AuditPage() {
     )
   }, [api, requestId])
 
+  // B-W2b-413 ("IP in the table"): the open entry's session country (GET /audit/entries/:id).
+  const [country, setCountry] = useState<{ id: string; country: string | null } | null>(null)
+  useEffect(() => {
+    if (!openId) return
+    let stale = false
+    entryCountry(api, openId).then(
+      (value) => !stale && setCountry({ id: openId, country: value }),
+      () => !stale && setCountry({ id: openId, country: null }),
+    )
+    return () => {
+      stale = true
+    }
+  }, [api, openId])
+  // B-W2b-413: Who looked (audit.reads.view), people from the Who filter's list.
+  const reads = useWhoLooked(api, held.has(AUDIT_READS_VIEW), people)
+
   const named = filters.recordId ? (entries.items?.find((entry) => entry.recordId === filters.recordId) ?? null) : null
   const model: AuditViewModel = {
     prefix,
@@ -143,8 +162,9 @@ export function AuditPage() {
     canRead,
     hiddenGrains: hiddenGrains(session.permissions),
     find,
-    open: openId ? { id: openId, entry: openEntry, siblings: siblings && requestId === siblings.requestId ? siblings.rows : loading() } : null,
+    open: openId ? { id: openId, entry: openEntry, siblings: siblings && requestId === siblings.requestId ? siblings.rows : loading(), country: country?.id === openId ? country.country : undefined } : null,
     recordWords: named ? recordLabel(named) : null,
+    reads: reads.model,
   }
 
   return (
@@ -157,6 +177,7 @@ export function AuditPage() {
         onOpen: (id) => go(filters, mode, id, 'replace'),
         onOlder: () => void showOlder(),
         onRetry: () => void load(),
+        reads: reads.actions,
       }}
     />
   )

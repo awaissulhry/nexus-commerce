@@ -24,6 +24,12 @@ import type { YearEndCountFacts } from './year-end'
  *   INTRASTAT_COMPLETE          (Intrastat) every EU sale row has what the file needs
  *   YEAR_END_SIGNED_OFF         (year-end pack) every site's year-end inventory is signed off, none open
  *   STOCK_VALUED                (year-end pack) every stock move up to the year end has its value
+ * B-W2b-408 (the accountant's bridge):
+ *   WORK_ORDERS_CLOSED          (cost of goods sold and variances) every work order completed by the month's end has its
+ *                               cost close (its variances are in the package only once it is closed)
+ *   MAPPING_COMPLETE            (journals switched on) every key the month's entries post has an account in force on the
+ *                               document's day (an entry line with no account reaches the accountant blank)
+ *   ENTRIES_BALANCE             (journals switched on) every entry's debits equal its credits
  */
 
 export const CHECK_CODES = [
@@ -36,6 +42,10 @@ export const CHECK_CODES = [
   'INTRASTAT_COMPLETE',
   'YEAR_END_SIGNED_OFF',
   'STOCK_VALUED',
+  // B-W2b-408
+  'WORK_ORDERS_CLOSED',
+  'MAPPING_COMPLETE',
+  'ENTRIES_BALANCE',
 ] as const
 export type CheckCode = (typeof CHECK_CODES)[number]
 
@@ -49,6 +59,10 @@ export const CHECK_TITLES: Readonly<Record<CheckCode, { readonly en: string; rea
   INTRASTAT_COMPLETE: { en: 'Intrastat data complete', it: 'Dati Intrastat completi' },
   YEAR_END_SIGNED_OFF: { en: 'Year-end inventory signed off', it: 'Inventario di fine anno firmato' },
   STOCK_VALUED: { en: 'Every stock move valued', it: 'Ogni movimento di magazzino valorizzato' },
+  // B-W2b-408
+  WORK_ORDERS_CLOSED: { en: 'Work orders closed', it: 'Ordini di produzione chiusi' },
+  MAPPING_COMPLETE: { en: 'Every account mapped', it: 'Ogni conto mappato' },
+  ENTRIES_BALANCE: { en: 'Journal entries balance', it: 'Le scritture quadrano' },
 })
 
 /** A record a failing check names (to open and fix). */
@@ -69,12 +83,17 @@ export interface CheckResult {
 export const FIX_LIMIT = 20
 export const MAX_EXPLANATION = 2000
 
-/** The checks an export of these packages carries, in order. */
-export function checksFor(packages: readonly AccountingPackage[]): CheckCode[] {
+/** The packages whose documents become journal entries with mapped accounts (B-W2b-408). */
+export const ENTRY_PACKAGES: readonly AccountingPackage[] = ['SALES_JOURNAL', 'PURCHASES_JOURNAL', 'PAYMENTS', 'COST_OF_SALES']
+
+/** The checks an export of these packages carries, in order (the mapping's two only while the journals are on). */
+export function checksFor(packages: readonly AccountingPackage[], journalsOn = false): CheckCode[] {
   const wanted = new Set(packages)
   return CHECK_CODES.filter((code) => {
     if (code === 'INTRASTAT_COMPLETE') return wanted.has('INTRASTAT')
     if (code === 'YEAR_END_SIGNED_OFF' || code === 'STOCK_VALUED') return wanted.has('YEAR_END_STOCK')
+    if (code === 'WORK_ORDERS_CLOSED') return wanted.has('COST_OF_SALES')
+    if (code === 'MAPPING_COMPLETE' || code === 'ENTRIES_BALANCE') return journalsOn && ENTRY_PACKAGES.some((pkg) => wanted.has(pkg))
     return true
   })
 }
@@ -204,6 +223,42 @@ export function stockValuedCheck(unvaluedMoves: number): CheckResult {
   return unvaluedMoves === 0
     ? { code: 'STOCK_VALUED', passed: true, count: 0, words: 'Every stock move up to the year end has its value.', fixes: [] }
     : { code: 'STOCK_VALUED', passed: false, count: unvaluedMoves, words: `${unvaluedMoves} stock move(s) up to the year end have no value yet: their stock is counted but not valued.`, fixes: [] }
+}
+
+// ---- B-W2b-408: the accountant's bridge --------------------------------------------------------------------------------
+
+export function workOrdersClosedCheck(open: readonly { readonly id: string; readonly number: string }[]): CheckResult {
+  return result(
+    'WORK_ORDERS_CLOSED',
+    open.map((order) => ({ recordType: 'WorkOrder', recordId: order.id, number: order.number, field: null })),
+    'Every work order completed by the end of the month has its cost close.',
+    (count, names) => `${count} work order(s) completed by the end of the month are not closed: their variances reach the accountant only once they are (${names}).`,
+  )
+}
+
+/** A key the entries post with no account in force on a document's day, and how many documents need it. */
+export interface UnmappedKey {
+  readonly kind: string
+  readonly key: string
+  readonly documents: number
+}
+
+export function mappingCompleteCheck(unmapped: readonly UnmappedKey[]): CheckResult {
+  return result(
+    'MAPPING_COMPLETE',
+    unmapped.map((entry) => ({ recordType: 'AccountMapping', recordId: `${entry.kind}/${entry.key}`, number: entry.key, field: entry.kind })),
+    'Every key the entries post has an account in force on its day.',
+    (count, names) => `${count} key(s) the entries post have no account in force on their day (their lines go blank): ${names}. Map them in the account mapping.`,
+  )
+}
+
+export function entriesBalanceCheck(unbalanced: readonly { readonly recordType: string; readonly recordId: string; readonly number: string | null }[]): CheckResult {
+  return result(
+    'ENTRIES_BALANCE',
+    unbalanced.map((entry) => ({ recordType: entry.recordType, recordId: entry.recordId, number: entry.number, field: null })),
+    "Every entry's debits equal its credits.",
+    (count, names) => `${count} entry(ies) do not balance (their totals are not the sums of their lines): ${names}.`,
+  )
 }
 
 export interface Explanation {

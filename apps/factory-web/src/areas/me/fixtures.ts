@@ -7,6 +7,8 @@ import { officeNavFor } from '../../shell/nav/office-nav'
 import { OfficeShellView, type OfficeShellViewModel } from '../../shell/office/view/OfficeShellView'
 import type { MyProfileViewModel } from './me-model'
 import { MyProfileView } from './view/MyProfileView'
+import { DEMO_SESSIONS } from './sessions/fixtures'
+import { MySessionsCard, type MySessionsModel } from './sessions/view/MySessionsCard'
 
 /**
  * SCR-007's cases with made-up data: the demo person (example.com), a made-up company group, a made-up TOTP secret and
@@ -25,11 +27,16 @@ const SHELL: OfficeShellViewModel = {
 /** Two-factor required and not proved: the roles give nothing yet, so the rail is empty. */
 const SHELL_NO_AREAS: OfficeShellViewModel = { ...SHELL, nav: officeNavFor(permissionCheck([])) }
 
+/** B-W2b-413: a case may set Where I'm signed in (else every live session shows, made-up). */
+type MeCase = MyProfileViewModel & { signedIn?: MySessionsModel }
+const SIGNED_IN: MySessionsModel = { read: { state: 'ok', sessions: DEMO_SESSIONS }, confirm: null, ending: null, notice: null }
+
 /** The page in the office shell, as the person menu opens it; the page's language follows the frame's. */
-function MyProfileDesign({ model }: { model: MyProfileViewModel }) {
+function MyProfileDesign({ model }: { model: MeCase }) {
   const locale = useLocale()
   const locked = model.authenticator.state === 'off' && model.authenticator.required
-  return createElement(OfficeShellView, { model: locked ? SHELL_NO_AREAS : SHELL }, createElement(MyProfileView, { model: { ...model, locale } }))
+  const { signedIn = SIGNED_IN, ...profile } = model
+  return createElement(OfficeShellView, { model: locked ? SHELL_NO_AREAS : SHELL }, createElement(MyProfileView, { model: { ...profile, locale }, signedIn: createElement(MySessionsCard, { model: signedIn }) }))
 }
 
 // A made-up base32 secret and its otpauth address (as the API's `otpauthUri` builds it).
@@ -37,7 +44,7 @@ const SECRET = 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP'
 const OTPAUTH = `otpauth://totp/Nexus%20Factory:${encodeURIComponent(DEMO_USER.email)}?secret=${SECRET}&issuer=Nexus%20Factory&algorithm=SHA1&digits=6&period=30`
 const CODES = ['ABCDE-23456', 'FGHJK-78923', 'MNPQR-34567', 'STUVW-89234', 'XYZAB-45678', 'CDEFG-92345', 'HJKMN-56789', 'PQRST-23478', 'UVWXY-67892', 'ZABCD-34589']
 
-const base: MyProfileViewModel = {
+const base: MeCase = {
   person: { displayName: DEMO_USER.displayName, email: DEMO_USER.email },
   tenant: 'Officina Demo',
   locale: 'en',
@@ -48,7 +55,7 @@ const base: MyProfileViewModel = {
   session: { createdAt: '2026-10-28T07:12:00.000Z', idleExpiresAt: '2026-10-28T17:40:00.000Z', absoluteExpiresAt: '2026-11-04T07:12:00.000Z' },
 }
 
-export const designScreen = defineDesignScreen<MyProfileViewModel>({
+export const designScreen = defineDesignScreen<MeCase>({
   screen: 'SCR-007',
   title: 'My profile & security',
   view: MyProfileDesign,
@@ -101,5 +108,12 @@ export const designScreen = defineDesignScreen<MyProfileViewModel>({
     { id: 'language-saving', label: 'Language: saving', model: { ...base, language: { busy: true } } },
     { id: 'language-failed', label: 'Language: API not answering', model: { ...base, language: { problem: 'unavailable' } } },
     { id: 'signing-out', label: 'Signing out', model: { ...base, signOut: { busy: true } } },
+    // B-W2b-413: Where I'm signed in (PLT-064).
+    { id: 'w2b-413-signed-in', label: "Where I'm signed in: four sessions", model: base, note: 'This browser first; a phone with only the country; a PC with no place known (no edge proxy); a portal preview. End one; Sign out everywhere else.' },
+    { id: 'w2b-413-only-this', label: "Where I'm signed in: only this browser", model: { ...base, signedIn: { ...SIGNED_IN, read: { state: 'ok', sessions: DEMO_SESSIONS.slice(0, 1) } } }, note: '"Only this browser."; Sign out everywhere else held with why.' },
+    { id: 'w2b-413-end-others', label: 'Sign out everywhere else?', model: { ...base, signedIn: { ...SIGNED_IN, confirm: { busy: false, problem: null } } }, note: 'ActionConfirm: 3 other sessions end now (Enter · Esc).' },
+    { id: 'w2b-413-ended', label: 'Sessions ended', model: { ...base, signedIn: { ...SIGNED_IN, read: { state: 'ok', sessions: DEMO_SESSIONS.slice(0, 1) }, notice: { key: 'me.done.others', tone: 'success', params: { count: 3 } } } } },
+    { id: 'w2b-413-signed-in-loading', label: "Where I'm signed in: loading", model: { ...base, signedIn: { ...SIGNED_IN, read: { state: 'loading' } } } },
+    { id: 'w2b-413-signed-in-error', label: "Where I'm signed in: not available", model: { ...base, signedIn: { ...SIGNED_IN, read: { state: 'failed', problem: 'session.problem.unavailable' } } }, note: 'The other cards keep working.' },
   ],
 })

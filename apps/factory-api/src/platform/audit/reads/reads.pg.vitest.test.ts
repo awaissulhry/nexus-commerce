@@ -147,6 +147,11 @@ describe('who looked: administrators and the Owner only, rows never a figure', (
     // Only the record types of the list; a record is always named.
     expect((await call('admin', 'GET', `/audit/reads?recordType=Invoice&recordId=${certificateId}`)).statusCode).toBe(400)
     expect((await call('admin', 'GET', '/audit/reads?recordType=Certificate')).statusCode).toBe(400)
+    // B-W2b-413: the switch as the screen says it, for the same people only.
+    expect((await call('admin', 'GET', '/audit/reads/status')).json()).toEqual({ on: true })
+    useReadLog(false)
+    expect((await call('admin', 'GET', '/audit/reads/status')).json()).toEqual({ on: false })
+    expect((await call('clerk', 'GET', '/audit/reads/status')).statusCode).toBe(403)
   })
 
   it('one person’s reads only with a reason, written first as an audit row on the person', async () => {

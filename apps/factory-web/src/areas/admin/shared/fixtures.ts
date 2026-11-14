@@ -198,6 +198,7 @@ const role = (n: number, key: string, name: string, extra: Partial<Role>): Role 
   basedOn: null,
   audience: 'office',
   version: 1,
+  archivedAt: null,
   holders: 0,
   outdated: false,
   templateAdds: { permissionsAdded: [], grainsAdded: [] },

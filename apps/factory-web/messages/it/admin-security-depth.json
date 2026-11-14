@@ -1,0 +1,574 @@
+{
+  "session": {
+    "col": {
+      "device": "Dispositivo e browser",
+      "place": "Luogo",
+      "lastUsed": "Ultimo uso",
+      "started": "Accesso",
+      "do": "Termina"
+    },
+    "device": {
+      "MAC": "Mac",
+      "WINDOWS": "PC Windows",
+      "LINUX": "PC Linux",
+      "CHROMEBOOK": "Chromebook",
+      "IPHONE": "iPhone",
+      "IPAD": "iPad",
+      "ANDROID_PHONE": "Telefono Android",
+      "ANDROID_TABLET": "Tablet Android",
+      "unknown": "Dispositivo sconosciuto"
+    },
+    "deviceBrowser": "{device} · {browser}",
+    "surface": {
+      "OFFICE": "Ufficio",
+      "PORTAL": "Portale",
+      "PREVIEW": "Anteprima del portale"
+    },
+    "place": {
+      "unknown": "Luogo sconosciuto",
+      "cityCountry": "{city}, {country}"
+    },
+    "thisBrowser": "Questo browser",
+    "startedAt": "Accesso {time}",
+    "stillLoading": "Ancora in caricamento…",
+    "retry": "Riprova",
+    "failed": {
+      "title": "Le sessioni non si sono potute leggere"
+    },
+    "problem": {
+      "current": "È il browser che stai usando: esci qui con Esci da questo dispositivo.",
+      "self": "Sono le tue sessioni: terminale nel tuo profilo.",
+      "gone": "Quella sessione era già terminata.",
+      "forbidden": "Qui non puoi farlo. Chiedi il permesso a un amministratore.",
+      "signedOut": "La sessione è terminata. Accedi di nuovo per continuare.",
+      "unavailable": "Il server della fabbrica non ha risposto. Riprova tra poco.",
+      "failed": "Qualcosa è andato storto. Riprova; se succede ancora, avvisa l'amministratore."
+    }
+  },
+  "me": {
+    "title": "Dove ho effettuato l'accesso",
+    "description": "Ogni browser in cui hai effettuato l'accesso ora. Termina quello che non riconosci, oppure esci da tutti gli altri.",
+    "empty": "Solo questo browser.",
+    "here": "Sei qui",
+    "end": "Termina",
+    "endOne": "Termina la sessione su {device}",
+    "held": {
+      "reading": "Lettura delle tue sessioni…",
+      "onlyThis": "L'accesso è attivo solo su questo browser.",
+      "ending": "Chiusura…"
+    },
+    "endOthers": {
+      "button": "Esci da tutti gli altri",
+      "title": "Uscire da tutti gli altri?",
+      "what_one": "1 altra sessione termina ora. Il lavoro non salvato lì va perso.",
+      "what_other": "{count} altre sessioni terminano ora. Il lavoro non salvato lì va perso.",
+      "stay": "Questo browser resta connesso.",
+      "back": "Lì puoi accedere di nuovo in qualsiasi momento.",
+      "confirm_one": "Chiudi 1 sessione",
+      "confirm_other": "Chiudi {count} sessioni",
+      "busy": "Uscita in corso…"
+    },
+    "done": {
+      "one": "Quella sessione è terminata: il browser lì è disconnesso.",
+      "others_one": "1 sessione terminata: l'accesso resta solo su questo browser.",
+      "others_other": "{count} sessioni terminate: l'accesso resta solo su questo browser."
+    }
+  },
+  "person": {
+    "title": "Connesso ora",
+    "description": "Dove questa persona ha effettuato l'accesso: dispositivo, luogo, quando è iniziata la sessione e quando è stata usata l'ultima volta.",
+    "empty": "Non è connessa da nessuna parte.",
+    "emptyHint": "Il suo prossimo accesso compare qui.",
+    "endAll": "Termina tutte le sessioni",
+    "held": {
+      "self": "Sono le tue sessioni: terminale nel tuo profilo.",
+      "reading": "Lettura delle sessioni…",
+      "none": "Non è connessa da nessuna parte: non c'è nulla da terminare."
+    },
+    "confirm": {
+      "title": "Terminare tutte le sessioni di {name}?",
+      "what_one": "1 sessione termina ora: {name} viene disconnessa ovunque. Il lavoro non salvato lì va perso.",
+      "what_other": "{count} sessioni terminano ora: {name} viene disconnessa ovunque. Il lavoro non salvato lì va perso.",
+      "again": "Può accedere di nuovo subito. Per tenerla fuori, sospendi la persona.",
+      "button_one": "Termina 1 sessione",
+      "button_other": "Termina {count} sessioni"
+    },
+    "done_one": "1 sessione di {name} terminata.",
+    "done_other": "{count} sessioni di {name} terminate.",
+    "historyLater": "Lo storico degli accessi (ora, paese, dispositivo, metodo, esito per 90 giorni) arriverà in un'ondata successiva.",
+    "selfTitle": "Le tue sessioni",
+    "toProfile": "Apri il mio profilo"
+  },
+  "dur": {
+    "minutes_one": "1 minuto",
+    "minutes_other": "{count} minuti",
+    "hours_one": "1 ora",
+    "hours_other": "{count} ore",
+    "days_one": "1 giorno",
+    "days_other": "{count} giorni",
+    "hoursMinutes": "{hours} h {minutes} min"
+  },
+  "settings": {
+    "failed": {
+      "title": "Le impostazioni non si sono potute leggere",
+      "body": "Le altre sezioni continuano a funzionare. Riprova tra poco."
+    },
+    "problem": {
+      "invalid": "Un valore è fuori da quanto consentito: controlla i valori segnati.",
+      "stale": "Qualcuno ha cambiato le impostazioni nel frattempo. Sono state rilette: controllale e salva di nuovo.",
+      "forbidden": "Per cambiarle serve il permesso di cambiare le impostazioni di sicurezza.",
+      "unavailable": "Il server della fabbrica non ha risposto. Riprova tra poco.",
+      "failed": "La modifica non è stata salvata. Riprova; se succede ancora, avvisa l'amministratore."
+    }
+  },
+  "lengths": {
+    "title": "Durata delle sessioni",
+    "hint": "Per pubblico: quanto dura una sessione inutilizzata, e al massimo. Una durata più breve vale per ogni sessione aperta alla sua prossima richiesta; una più lunga per le nuove sessioni.",
+    "audience": {
+      "office": "Ufficio",
+      "portal": "Portale (clienti, fornitori, terzisti)",
+      "floor": "Reparto"
+    },
+    "field": {
+      "officeIdleMinutes": "Termina se inutilizzata per",
+      "officeLongestHours": "Termina al massimo dopo",
+      "portalIdleMinutes": "Termina se inutilizzata per",
+      "portalLongestHours": "Termina al massimo dopo"
+    },
+    "fieldHint": "Ora: {now}. Da {min} a {max}.",
+    "unit": {
+      "minutes": "min",
+      "hours": "h"
+    },
+    "less": "Meno",
+    "more": "Più",
+    "error": {
+      "range": "Fuori da quanto consentito.",
+      "idleLongest": "Non può superare la durata massima della sessione."
+    },
+    "floor": {
+      "site": "Sede",
+      "idle": "Esce se inutilizzata per",
+      "ends": "Termina",
+      "shiftEnds": "A fine turno ({times})",
+      "noShiftEnd": "Nessuna fine turno impostata",
+      "none": "Nessuna sede attiva ha ancora impostazioni di reparto.",
+      "where": "I tempi del reparto sono un'impostazione di ogni sede.",
+      "toDevices": "Cambiali in Dispositivi"
+    },
+    "wider": "Più lunga è più ampia: il salvataggio chiede un codice nuovo dall'app di autenticazione.",
+    "save": "Salva durate",
+    "saveWider": "Salva con un codice nuovo",
+    "held": {
+      "fix": "Prima correggi i valori segnati."
+    },
+    "rule": "Più breve vale subito; più lunga chiede un codice nuovo.",
+    "viewOnly": "Puoi leggerle. Per cambiarle serve il permesso di cambiare le impostazioni di sicurezza.",
+    "freshSentence": "Sessioni più lunghe richiedono un codice nuovo dall'app di autenticazione.",
+    "done": {
+      "shorter": "Salvato: ogni sessione aperta segue le nuove durate alla sua prossima richiesta.",
+      "wider": "Salvato: le nuove sessioni durano di più."
+    }
+  },
+  "fresh": {
+    "title": "Azioni che chiedono un codice nuovo",
+    "hint": "Le azioni rischiose chiedono un codice dall'app di autenticazione, anche con l'accesso attivo. Sono elencati i permessi dietro ciascuna; alcune lo chiedono sempre.",
+    "col": {
+      "action": "Azione",
+      "permissions": "Permessi dietro",
+      "asks": "Chiede un codice nuovo"
+    },
+    "action": {
+      "bankDetails_change": "Cambiare le coordinate bancarie",
+      "access_change": "Dare diritti di amministratore e cambiare gli accessi",
+      "approvals_aboveLimit": "Approvare oltre un limite",
+      "records_erase": "Cancellare i dati personali di un contatto",
+      "workers_credentials": "Reimpostare il PIN e i badge degli operatori",
+      "invoices_issue": "Emettere una fattura",
+      "money_settings": "Impostazioni economiche",
+      "reminders_switch": "Attivare i solleciti di pagamento",
+      "email_identities": "Identità di invio e-mail",
+      "branding_change": "Grafica dei documenti",
+      "signatures_sign": "Firmare come responsabile",
+      "legal_outward": "Atti legali inviati all'esterno",
+      "security_settings": "Queste impostazioni di sicurezza"
+    },
+    "fixed": {
+      "ACCESS": "Sempre: una sessione rubata non deve mai concedere diritti.",
+      "SIGNATURE": "Sempre: il codice nuovo è la prova della firma.",
+      "LEGAL": "Sempre: arriva davvero a un'autorità o a un cliente.",
+      "RULE": "Chiesto per regola di approvazione: si imposta sulla regola stessa.",
+      "SECURITY": "Sempre: queste impostazioni proteggono tutto il resto."
+    },
+    "always": "Sempre",
+    "on": "Lo chiede",
+    "off": "Non lo chiede",
+    "toggle": "{action}: chiede un codice nuovo",
+    "lock": {
+      "title": "Codici sbagliati",
+      "failures": "Codici sbagliati di fila prima di un blocco",
+      "failuresHint": "Da {min} a {max}.",
+      "minutes": "Il blocco dura",
+      "minutesHint": "Ora: {now}. Da {min} a {max}. Nessuno può toglierlo prima; non blocca mai l'accesso."
+    },
+    "valid": "Un codice nuovo apre le azioni rischiose per {minutes} minuti.",
+    "wider": "Disattivare un'azione, più codici sbagliati o un blocco più breve è più ampio: il salvataggio chiede un codice nuovo.",
+    "save": "Salva",
+    "saveWider": "Salva con un codice nuovo",
+    "rule": "Attivare un'azione vale subito; disattivarla chiede un codice nuovo.",
+    "freshSentence": "Chiedere meno codici nuovi richiede un codice nuovo dall'app di autenticazione.",
+    "done": {
+      "stricter": "Salvato: la modifica vale dalla prossima richiesta.",
+      "wider": "Salvato: quelle azioni non chiedono più un codice nuovo."
+    }
+  },
+  "events": {
+    "title": "Eventi di sicurezza",
+    "hint": "Accessi falliti, blocchi, modifiche all'autenticazione a due fattori, rifiuti, modifiche ai ruoli ed esportazioni, dai più recenti. Per gli amministratori e il titolare.",
+    "count_one": "1 evento",
+    "count_other": "{count} eventi",
+    "col": {
+      "time": "Ora",
+      "event": "Evento",
+      "who": "Chi",
+      "surface": "Da",
+      "country": "Paese",
+      "result": "Esito"
+    },
+    "kind": {
+      "SIGN_IN": "Accesso",
+      "SIGN_IN_FAILED": "Accesso fallito",
+      "LOCKOUT": "Bloccato",
+      "MFA_CHANGED": "Due fattori modificato",
+      "PERMISSION_DENIED": "Rifiutato: nessun permesso",
+      "ROLE_CHANGED": "Ruolo modificato",
+      "API_KEY_USED": "Chiave API usata",
+      "EXPORT": "Esportazione",
+      "STEP_UP_LOCKED": "Codice nuovo bloccato"
+    },
+    "surface": {
+      "label": "Da",
+      "any": "Ovunque",
+      "OFFICE": "Ufficio",
+      "PORTAL": "Portale",
+      "FLOOR": "Reparto",
+      "LINK": "Link monouso",
+      "API": "API",
+      "SYSTEM": "Sistema"
+    },
+    "result": {
+      "SUCCEEDED": "Riuscito",
+      "REFUSED": "Rifiutato",
+      "LOCKED": "Bloccato",
+      "DONE": "Fatto"
+    },
+    "who": {
+      "person": "Una persona non più elencata",
+      "WORKER": "Un operatore di reparto",
+      "LINK": "Un link monouso",
+      "SYSTEM": "Il sistema",
+      "NOBODY": "Sconosciuto"
+    },
+    "country": {
+      "unknown": "Non noto"
+    },
+    "view": {
+      "label": "Filtri salvati",
+      "all": "Tutti",
+      "failed-sign-ins": "Accessi falliti",
+      "exports": "Esportazioni"
+    },
+    "ip": {
+      "label": "Indirizzo IP",
+      "placeholder": "Indirizzo IP",
+      "bad": "Scrivi un indirizzo IPv4 o IPv6 completo."
+    },
+    "clear": "Azzera i filtri",
+    "older": "Mostra i più vecchi",
+    "held": {
+      "older": "Lettura degli eventi più vecchi…"
+    },
+    "empty": {
+      "title": "Ancora nessun evento di sicurezza",
+      "body": "Accessi, rifiuti, modifiche ai ruoli ed esportazioni compaiono qui man mano che accadono."
+    },
+    "rows": "Solo righe: mai un conteggio o un totale per persona. Un operatore di reparto non viene mai nominato qui.",
+    "detail": {
+      "reason": "Perché",
+      "what": "Cosa è stato bloccato",
+      "change": "Modifica",
+      "secondFactor": "Secondo fattore",
+      "method": "Metodo",
+      "failedAttempts": "Tentativi sbagliati di fila",
+      "failures": "Codici sbagliati di fila",
+      "tries": "Tentativi",
+      "lockMinutes": "Blocco (minuti)",
+      "permission": "Permesso chiesto",
+      "route": "Richiesta",
+      "listKey": "Elenco",
+      "format": "Formato",
+      "result": "Codice",
+      "lockedUntil": "Bloccato fino a",
+      "action": "Azione",
+      "after": "Dopo"
+    },
+    "reason": {
+      "UNKNOWN_ACCOUNT": "Nessun account con questo accesso",
+      "NO_PASSWORD": "Nessuna password impostata",
+      "LOCKED": "Account bloccato",
+      "SUSPENDED": "Account sospeso",
+      "INACTIVE": "Account non attivo",
+      "WRONG_PASSWORD": "Password sbagliata",
+      "WRONG_CODE": "Codice sbagliato",
+      "WRONG_PIN": "PIN sbagliato",
+      "UNKNOWN_BADGE": "Badge sconosciuto",
+      "UNKNOWN_WORKER": "Operatore sconosciuto",
+      "NO_PIN": "Nessun PIN impostato",
+      "NO_CODE": "Nessun codice di accesso chiesto"
+    },
+    "what": {
+      "ACCOUNT": "L'account",
+      "PIN": "Il PIN",
+      "CODE": "Il codice via e-mail"
+    },
+    "change": {
+      "SET_UP": "Attivato",
+      "SWITCHED_OFF": "Disattivato",
+      "roles_create": "Ruolo creato",
+      "roles_update": "Ruolo modificato",
+      "roles_assign": "Ruolo assegnato",
+      "roles_unassign": "Ruolo terminato",
+      "roles_archive": "Ruolo archiviato",
+      "roles_restore": "Ruolo ripristinato",
+      "workers_setRoles": "Ruoli di reparto modificati",
+      "security_setRoleTwoFactor": "Regola dei due fattori di un ruolo modificata"
+    },
+    "secondFactor": {
+      "NONE": "Nessuno",
+      "TOTP": "App di autenticazione",
+      "RECOVERY": "Codice di recupero"
+    },
+    "tryResult": {
+      "WRONG_CODE": "Codice sbagliato",
+      "REUSED_CODE": "Un codice già usato"
+    },
+    "one": {
+      "title": "Evento di sicurezza",
+      "noun": "evento",
+      "utc": "{time} (UTC)",
+      "workerHint": "Gli operatori di reparto non vengono mai nominati negli eventi di sicurezza.",
+      "countryHint": "Dal paese dell'indirizzo; l'indirizzo stesso non viene mai conservato.",
+      "record": "Record",
+      "related": "Dallo stesso indirizzo",
+      "relatedHint": "Altri eventi dallo stesso indirizzo, entro un giorno prima o dopo.",
+      "relatedNone": "Nessun altro evento da questo indirizzo in quel periodo."
+    }
+  },
+  "newRole": {
+    "button": "Nuovo ruolo",
+    "title": "Nuovo ruolo",
+    "hint": "Parti da un ruolo pronto, poi dai un nome alla copia. I suoi permessi si cambiano nella scheda Permessi.",
+    "name": "Nome",
+    "nameHint": "Come il ruolo compare negli elenchi e alle persone che lo hanno.",
+    "copy": "copia",
+    "from": "Parti da",
+    "create": "Crea copia",
+    "after": "La creazione chiede un codice nuovo. La copia contiene solo ciò che hai tu.",
+    "readFailed": "I ruoli pronti non si sono potuti leggere",
+    "held": {
+      "right": "Per creare un ruolo serve il permesso di creare e modificare ruoli personalizzati.",
+      "busy": "Creazione…",
+      "reading": "Lettura dei ruoli pronti…",
+      "fix": "Prima scegli un ruolo pronto e dai un nome alla copia.",
+      "owner": "Il ruolo del titolare non si copia mai: un ruolo personalizzato non ha mai tutto.",
+      "beyond": "Non offerto: contiene diritti che tu non hai."
+    },
+    "error": {
+      "basedOn": "Scegli il ruolo pronto da cui partire.",
+      "name": "Scrivi un nome.",
+      "nameLong": "Al massimo 100 caratteri."
+    },
+    "problem": {
+      "beyond": "La copia conterrebbe diritti che tu non hai.",
+      "owner": "Un ruolo personalizzato non ha mai tutti i diritti d'ufficio: quello è il ruolo del titolare.",
+      "taken": "Esiste già un ruolo con questo nome: scegline un altro.",
+      "forbidden": "Per creare un ruolo serve il permesso di creare e modificare ruoli personalizzati.",
+      "invalid": "Qualcosa non è valido: controlla il nome e riprova.",
+      "failed": "Il ruolo non è stato creato. Riprova; se succede ancora, avvisa l'amministratore."
+    },
+    "freshSentence": "Per creare un ruolo serve un codice nuovo dall'app di autenticazione."
+  },
+  "saveRole": {
+    "hint": "Spunta e togli la spunta, poi Salva: la revisione mostra cosa cambia e quante persone lo ricevono.",
+    "money": "Importi che vede",
+    "sees": "Vede {grain}",
+    "grainToggle": "Vede {grain}",
+    "mfaWhy": "Un ruolo che vede costi o margini chiede sempre i due fattori: il salvataggio li attiva.",
+    "allowed": "Consentito",
+    "adding": "Da aggiungere",
+    "removing": "Da togliere",
+    "tick": "{permission}: consentito",
+    "reviewSave": "Rivedi e salva",
+    "atRest": "Ancora nessuna modifica: spunta o togli la spunta a ciò che il ruolo può fare.",
+    "title": "Modificare il ruolo «{name}»?",
+    "holders_one": "1 persona lo riceve alla sua prossima richiesta.",
+    "holders_other": "{count} persone lo ricevono alla loro prossima richiesta.",
+    "asksCode": "Aumentare i diritti chiede un codice nuovo.",
+    "noCode": "Riduce soltanto i diritti: nessun codice nuovo.",
+    "save": "Salva ruolo",
+    "saved": "Salvato",
+    "yes": "Consentito",
+    "no": "Non consentito",
+    "seen": "Visibile",
+    "notSeen": "Nascosto",
+    "asked": "Chiesto",
+    "notAsked": "Non chiesto",
+    "twoFactor": "Due fattori",
+    "risky": "Chiede di per sé un codice nuovo.",
+    "gives": "Dà più diritti.",
+    "ack": "Ho capito: le persone che lo hanno ricevono più diritti alla loro prossima richiesta.",
+    "freshSentence": "Aumentare i diritti di un ruolo richiede un codice nuovo dall'app di autenticazione.",
+    "held": {
+      "readyMade": "Un ruolo pronto segue il suo modello: fanne una copia per cambiarlo.",
+      "archived": "Archiviato: non cambia più e non viene dato a nessuno finché non è ripristinato.",
+      "right": "Per cambiare un ruolo serve il permesso di creare e modificare ruoli personalizzati.",
+      "mine": "Hai questo ruolo: chiedi a un altro amministratore di cambiarlo."
+    },
+    "refusal": {
+      "beyondPermission": "Tu non hai «{permission}»: un ruolo non dà mai più di quanto ha chi lo crea.",
+      "beyondGrain": "Tu non vedi {grain}: un ruolo non dà mai più di quanto ha chi lo crea.",
+      "readyMade": "Un ruolo pronto non si può cambiare: fanne una copia.",
+      "archived": "Questo ruolo è archiviato: prima ripristinalo.",
+      "held": "Hai questo ruolo: chiedi a un altro amministratore.",
+      "lastAdmin": "Dopo nessun altro potrebbe gestire persone e ruoli.",
+      "ownerEvery": "Un ruolo personalizzato non ha mai tutti i diritti d'ufficio: quello è il ruolo del titolare.",
+      "mfaNeeded": "Un ruolo che vede costi o margini deve chiedere i due fattori.",
+      "mfaRule": "La regola dei due fattori non può cambiare così: vedi Regole di ambito.",
+      "name": "Il nome non è valido.",
+      "content": "Un diritto qui non può essere dato da un ruolo d'ufficio.",
+      "other": "Così com'è non si può salvare."
+    },
+    "problem": {
+      "refused": "È stato rifiutato: vedi i motivi.",
+      "stale": "Qualcuno ha cambiato questo ruolo nel frattempo. È stato riletto: rivedilo di nuovo.",
+      "forbidden": "Per cambiare un ruolo serve il permesso di creare e modificare ruoli personalizzati.",
+      "failed": "La modifica non è stata salvata. Riprova; se succede ancora, avvisa l'amministratore."
+    }
+  },
+  "archive": {
+    "button": "Archivia…",
+    "restore": "Ripristina",
+    "title": "Archiviare il ruolo «{name}»?",
+    "ends_one": "1 persona lo perde ora: la sua assegnazione termina.",
+    "ends_other": "{count} persone lo perdono ora: le loro assegnazioni terminano.",
+    "nobody": "Ora non lo ha nessuno.",
+    "frozen": "Un ruolo archiviato non cambia più e non viene dato a nessuno finché non è ripristinato. Ripristinarlo non restituisce nulla a nessuno.",
+    "reason": "Perché",
+    "reasonNeeded": "Spiega perché, in almeno 3 caratteri.",
+    "confirm": "Archivia ruolo",
+    "busy": "Archiviazione…",
+    "freshSentence": "Archiviare un ruolo che delle persone hanno richiede un codice nuovo dall'app di autenticazione.",
+    "refused": "È stato rifiutato: potresti averlo tu, oppure fa gli ultimi amministratori.",
+    "done": "Archiviato: non viene dato a nessuno finché non è ripristinato.",
+    "restored": "Ripristinato: si può di nuovo assegnare e cambiare."
+  },
+  "reads": {
+    "title": "Chi ha consultato",
+    "hint": "Visualizzazioni, download ed esportazioni dei record riservati. Solo per gli amministratori e il titolare; mai usato per giudicare il lavoro di qualcuno.",
+    "off": {
+      "title": "Qui visualizzazioni e download non vengono registrati",
+      "body": "Il registro delle consultazioni resta spento finché l'informativa privacy per il personale non ne riporta la riga. Le righe di prima restano visibili."
+    },
+    "mode": {
+      "label": "Cerca per",
+      "record": "Un record",
+      "person": "Una persona"
+    },
+    "record": {
+      "find": "Trova il record",
+      "findHint": "Scrivi il numero o il nome: schede costo, dipendenti, certificati, esportazioni e gli altri record riservati.",
+      "hits": "Record trovati",
+      "none": "Nessun record riservato corrisponde.",
+      "searchFailed": "La ricerca non ha risposto. Riprova tra poco.",
+      "showing": "Chi ha consultato",
+      "other": "Un altro record"
+    },
+    "person": {
+      "who": "Persona",
+      "pick": "Scegli una persona",
+      "reason": "Perché consulti",
+      "reasonHint": "Resta nello storico della persona prima che venga mostrato qualcosa.",
+      "show": "Mostra le sue consultazioni",
+      "pickFirst": "Prima scegli una persona.",
+      "held": "Cercare per persona richiede il permesso di vedere le persone.",
+      "showing": "Cosa ha consultato {name}, dal più recente."
+    },
+    "error": {
+      "reason": "Spiega perché, in almeno 3 caratteri.",
+      "reasonLong": "Al massimo 500 caratteri."
+    },
+    "start": {
+      "record": "Trova un record per vedere chi l'ha consultato.",
+      "person": "Scegli una persona e spiega perché per vedere cosa ha consultato."
+    },
+    "col": {
+      "when": "Quando",
+      "who": "Chi",
+      "what": "Record",
+      "how": "Come",
+      "where": "Dove"
+    },
+    "action": {
+      "VIEW": "Visualizzato",
+      "DOWNLOAD": "Scaricato",
+      "EXPORT": "Esportato"
+    },
+    "surface": {
+      "OFFICE": "Ufficio",
+      "API": "API",
+      "SYSTEM": "Sistema"
+    },
+    "who": {
+      "gone": "Una persona non più elencata"
+    },
+    "type": {
+      "CostSheet": "Scheda costo",
+      "Employee": "Dipendente",
+      "Worker": "Operatore di reparto",
+      "User": "Persona",
+      "PartyContact": "Contatto",
+      "MeasurementProfile": "Profilo misure",
+      "LeaverCase": "Uscita",
+      "AbsenceEntry": "Assenza",
+      "AttendanceDay": "Giorno di presenza",
+      "EarningsEntry": "Compensi",
+      "WorkerStatement": "Prospetto dell'operatore",
+      "DataRequest": "Richiesta dati",
+      "Certificate": "Certificato",
+      "TrainingRecord": "Registro formazione",
+      "ExportJob": "Esportazione",
+      "AccountingExport": "Esportazione contabile",
+      "PayrollExport": "Esportazione paghe"
+    },
+    "count_one": "1 riga",
+    "count_other": "{count} righe",
+    "older": "Mostra i più vecchi",
+    "held": {
+      "reading": "Lettura…"
+    },
+    "empty": {
+      "title": "Nessuno ha consultato",
+      "body": "Nessuna visualizzazione, download o esportazione registrata per questo.",
+      "off": "Nulla viene registrato mentre il registro delle consultazioni è spento."
+    },
+    "rowsOnly": "Solo righe: mai un conteggio, un totale o un raggruppamento per persona."
+  },
+  "search": {
+    "ip": {
+      "label": "Indirizzo IP",
+      "placeholder": "Indirizzo IP",
+      "hint": "Le modifiche fatte nelle sessioni con accesso da questo indirizzo.",
+      "bad": "Scrivi un indirizzo IPv4 o IPv6 completo."
+    }
+  }
+}

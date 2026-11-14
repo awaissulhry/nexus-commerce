@@ -42,15 +42,15 @@ export interface UserRecordActions {
  * each after a fresh code) and Activity.
  * The last administrator is held before the click. Fetches nothing (UserRecord.tsx reads the API).
  */
-export function UserRecordView({ model, actions, panels, partner }: { model: UserRecordModel; actions?: UserRecordActions; panels?: ReactNode; partner?: ReactNode }) {
+export function UserRecordView({ model, actions, panels, partner, sessions }: { model: UserRecordModel; actions?: UserRecordActions; panels?: ReactNode; partner?: ReactNode; sessions?: ReactNode }) {
   return (
     <AdminMessages>
-      <UserRecord model={model} actions={actions} panels={panels} partner={partner} />
+      <UserRecord model={model} actions={actions} panels={panels} partner={partner} sessions={sessions} />
     </AdminMessages>
   )
 }
 
-function UserRecord({ model, actions, panels, partner }: { model: UserRecordModel; actions?: UserRecordActions; panels?: ReactNode; partner?: ReactNode }) {
+function UserRecord({ model, actions, panels, partner, sessions }: { model: UserRecordModel; actions?: UserRecordActions; panels?: ReactNode; partner?: ReactNode; sessions?: ReactNode }) {
   const t = useT('admin')
   const href = (path: string) => adminHref(model.prefix, path)
   const back = { href: href('/users'), label: t('nav.users') }
@@ -94,6 +94,8 @@ function UserRecord({ model, actions, panels, partner }: { model: UserRecordMode
   const tabs: Array<{ id: UserTab; label: string; count?: number | null }> = [
     { id: 'profile', label: t('user.tab.profile') },
     ...(isPartner ? (partner ? [{ id: 'partner' as const, label: t('user.tab.partner') }] : []) : [{ id: 'roles' as const, label: t('user.tab.roles'), count: model.assignments.items ? live.length : null }]),
+    // B-W2b-413: Sessions & sign-ins, for users.sessions.manage only (absent otherwise, never a locked tab).
+    ...(sessions ? [{ id: 'sessions' as const, label: t('user.tab.sessions') }] : []),
     { id: 'activity', label: t('user.tab.activity') },
   ]
   const tab: UserTab = tabs.some((entry) => entry.id === model.tab) ? model.tab : 'profile'
@@ -127,6 +129,7 @@ function UserRecord({ model, actions, panels, partner }: { model: UserRecordMode
         {tab === 'profile' && <ProfileTab model={model} open={open} />}
         {tab === 'roles' && <RolesTab model={model} open={open} selected={selected} onSelect={setSelected} actions={actions} />}
         {tab === 'partner' && partner}
+        {tab === 'sessions' && sessions}
         {tab === 'activity' && panels}
       </RecordFrame>
       <GiveRoleModal model={model} open={dialog === 'give-role'} onClose={() => open(null)} actions={actions} />
@@ -239,7 +242,6 @@ function RolesTab({ model, open, selected, onSelect, actions }: { model: UserRec
         onHelp={() => setHelp(true)}
         state={model.assignments.problem ? <FrameState problem={model.assignments.problem} onRetry={actions?.onRetry} /> : items && items.length === 0 ? <FrameState empty={{ title: t('user.noRole') }} /> : undefined}
       />
-      <p className="fw-adm-hint">{t('user.sessionsLater')}</p>
       <ListKeysHelp open={help} onClose={() => setHelp(false)} keys={[]} selection />
     </div>
   )

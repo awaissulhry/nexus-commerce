@@ -54,6 +54,8 @@ export interface AuditQuery {
   view?: AuditViewName | null
   from?: string | null
   to?: string | null
+  /** B-W2b-413: an address typed: the search (GET /audit/search) is asked instead (search/api.ts). */
+  ip?: string | null
   before?: string | null
   limit?: number
   withCounts?: boolean

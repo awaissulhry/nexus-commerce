@@ -6,12 +6,13 @@ import type { RevealModel } from '../../shared/view/OneTimeReveal'
 /**
  * SCR-011 a person's record (design 02 admin.users "Record: User"; PLT-019, PLT-032, PLT-070): an office person —
  * Profile, Roles & scope (role × where × when; what they can do in plain words with their money sight), Activity — and
- * a floor worker — Profile, Badge & PIN (badges, the PIN's state and reset, floor roles), Activity. Sessions and the
- * partner organisation come in W2b. Pure: the last-administrator rule, the give-role summary, the worker's form.
+ * a floor worker — Profile, Badge & PIN (badges, the PIN's state and reset, floor roles), Activity. B-W2b-180 adds the
+ * partner organisation, B-W2b-413 Sessions & sign-ins (where they are signed in now). Pure: the last-administrator rule, the give-role summary, the worker's form.
  */
 
 // B-W2b-180: 'partner' = Partner organisation (a person of a partner organisation: areas/admin/users/partners/organisation).
-export const USER_TABS = ['profile', 'roles', 'partner', 'activity'] as const
+// B-W2b-413: 'sessions' = Sessions & sign-ins (users.sessions.manage: record/sessions).
+export const USER_TABS = ['profile', 'roles', 'partner', 'sessions', 'activity'] as const
 export type UserTab = (typeof USER_TABS)[number]
 export const WORKER_TABS = ['profile', 'badge', 'activity'] as const
 export type WorkerTab = (typeof WORKER_TABS)[number]

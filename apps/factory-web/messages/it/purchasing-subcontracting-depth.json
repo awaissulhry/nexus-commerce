@@ -125,7 +125,9 @@
       "nothingOpen": "Nulla è aperto: tutto il materiale inviato è dichiarato.",
       "notDeclared": "Il terzista non ha ancora dichiarato questo materiale: registra prima la sua dichiarazione.",
       "server": "Lo stato dell’ordine ora non lo consente: rileggilo.",
-      "reasonLong": "Al massimo 2000 caratteri."
+      "reasonLong": "Al massimo 2000 caratteri.",
+      "lockReason": "Di’ perché va nel mese bloccato (almeno 3 caratteri).",
+      "lockReasonLong": "Di’ perché in al massimo 500 caratteri."
     },
     "declare": {
       "open": "Registra la dichiarazione del terzista",
@@ -189,12 +191,17 @@
       "notDeclared": "Il terzista non ha ancora dichiarato questo materiale: registra prima la sua dichiarazione.",
       "reason": "Di’ perché, al massimo 2000 caratteri.",
       "belowZero": "Una quantità andrebbe sotto 0: rileggi la riga.",
-      "open": "Più di quanto è ancora aperto: rileggi la riga."
+      "open": "Più di quanto è ancora aperto: rileggi la riga.",
+      "periodSoft": "Il giorno della comunicazione cade in un mese contabile bloccato: di’ perché va registrata comunque, poi registrala di nuovo."
     },
     "booked_one": "Registrato: il magazzino segue con {count} movimento.",
     "booked_other": "Registrato: il magazzino segue con {count} movimenti.",
     "bookedWaiting_one": "Registrato: il magazzino segue con {count} movimento; il costo dell’ordine di produzione attende (altra valuta).",
-    "bookedWaiting_other": "Registrato: il magazzino segue con {count} movimenti; il costo dell’ordine di produzione attende (altra valuta)."
+    "bookedWaiting_other": "Registrato: il magazzino segue con {count} movimenti; il costo dell’ordine di produzione attende (altra valuta).",
+    "lock": {
+      "label": "Perché va nel mese bloccato",
+      "hint": "L’amministrazione ha bloccato questo mese contabile: la registrazione entra solo con un motivo, conservato con essa nel registro delle attività. Un mese chiuso definitivamente non accetta nulla."
+    }
   },
   "cost": {
     "intro": "Il compenso per i capi più materiale e trasporto, imputati a {workOrder}.",

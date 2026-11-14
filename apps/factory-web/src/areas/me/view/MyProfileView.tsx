@@ -17,8 +17,8 @@ import '../me.css'
  * SCR-007 — my profile & security (PLT-127, PLT-134, PLT-135, PLT-048, PLT-070; A2 §2.1), reached from the person's
  * menu in the top bar (not a sidebar row). Four cards: language and display (the language is the person's, the theme
  * this device's), password, the authenticator app (set-up with a QR code, the recovery codes shown ONCE, switch-off
- * when the role allows it), and this session. The API lists no other session yet (PLT-064 is a later wave): the card
- * says so, and that a new password signs out every other device. Design-system parts only.
+ * when the role allows it), and this session; B-W2b-413: Where I'm signed in (every session, End one, Sign out everywhere
+ * else) as the `signedIn` slot. Design-system parts only.
  */
 
 export type MeAction =
@@ -41,11 +41,13 @@ export interface MyProfileViewProps {
   onAction?: (action: MeAction) => void
   /** B-W2b-05: the shell's "Where I work" card (shell/scope StartPageCard), after Display. */
   whereIWork?: ReactNode
+  /** B-W2b-413: Where I'm signed in (areas/me/sessions), after this session. */
+  signedIn?: ReactNode
 }
 
 type Translate = ReturnType<typeof useT>
 
-export function MyProfileView({ model, onAction, whereIWork }: MyProfileViewProps) {
+export function MyProfileView({ model, onAction, whereIWork, signedIn }: MyProfileViewProps) {
   const t = useT('me')
   return (
     <div className="fw-me">
@@ -56,6 +58,7 @@ export function MyProfileView({ model, onAction, whereIWork }: MyProfileViewProp
         <AuthenticatorCardView model={model} onAction={onAction} />
         <PasswordCardView model={model} onAction={onAction} />
         <SessionCard model={model} onAction={onAction} />
+        {signedIn}
       </div>
     </div>
   )

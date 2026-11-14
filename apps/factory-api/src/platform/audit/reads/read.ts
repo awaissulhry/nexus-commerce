@@ -6,6 +6,7 @@ import { command, type CommandCaller } from '../../../core/command'
 import type { PersonReadView, RecordReadView } from './contract'
 import { assertEverywhere } from './everywhere'
 import type { ReadLogRecordType } from './registry'
+import { readLogOn } from './switch'
 
 /**
  * Who looked (B-W2b-399; PLT-074; Owner answer W2b-6 question 3 = A): reads of the read log (contract.ts). Rows only: this
@@ -39,6 +40,12 @@ async function pageOf(client: FactoryClient, where: Prisma.ReadLogWhereInput, pa
   const more = rows.length > page.limit
   const shown = more ? rows.slice(0, page.limit) : rows
   return { shown, nextBefore: more ? shown[shown.length - 1]!.id : null }
+}
+
+/** GET /audit/reads/status (B-W2b-413): whether views and downloads are logged now (the switch), for who may read them. */
+export function readLogStatus(caller: CommandCaller): { on: boolean } {
+  assertEverywhere(contextOf(caller), AUDIT_READS_VIEW, WORDS)
+  return { on: readLogOn() }
 }
 
 /** GET /audit/reads: the reads of one record. */

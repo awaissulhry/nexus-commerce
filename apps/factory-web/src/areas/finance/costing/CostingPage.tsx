@@ -11,6 +11,10 @@ import { getLedger, getMethod, getStandards, getWorkOrderCost, getWorkOrderCosts
 import { addressOf, closedIn, costingCanOf, costingHref, liveTouches, periodOf, readProblem, recentMonths, romeToday, rowsQuery, workOrdersCsv, type CostingAddress } from './model'
 import { CostingView, type CostingModel, type CostingPart, type ListPart } from './view/CostingView'
 import type { DetailState, ReverseState } from './view/CostDialogs'
+// B-W2b-424: Purchase price variance (sec:ppv) and the closed status's live update (page.live "finance.cost.closed → Status").
+import { closedTouches } from './closed/model'
+import { usePpv } from './ppv/use-ppv'
+import { PpvSection } from './ppv/view/PpvSection'
 
 /** The "Still loading…" note after about a second (design: GridSheetNote slow). */
 const SLOW_MS = 1000
@@ -148,8 +152,14 @@ export function CostingPage() {
     void readStandards()
   }, [readWorkOrders, readLedger, readStandards])
   const rereadLedger = useCoalesced(() => void readLedger(), 900)
+  const rereadWorkOrders = useCoalesced(() => void readWorkOrders(), 900)
   const live = useLive(
     (change) => {
+      // B-W2b-424: a close, an undo or a reopen changes the Status in place.
+      if (closedTouches(change)) {
+        rereadWorkOrders()
+        return
+      }
       if (!liveTouches(change)) return
       setUpdates((count) => count + 1)
       if (change.type.startsWith('work_order_cost.')) rereadLedger()
@@ -212,6 +222,9 @@ export function CostingPage() {
       })
   }
 
+  // B-W2b-424
+  const ppv = usePpv(api, can.view, can.cost, companyId, period, locale, prefix, (href) => router.push(href))
+
   const model: CostingModel = {
     prefix,
     can,
@@ -235,6 +248,7 @@ export function CostingPage() {
   return (
     <CostingView
       model={model}
+      ppv={can.view ? <PpvSection model={ppv.model} prefix={prefix} actions={ppv.actions} /> : null}
       actions={{
         onSite: (site) => go({ site }),
         onRows: (rows) => go({ rows }),
