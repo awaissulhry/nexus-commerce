@@ -1860,6 +1860,8 @@
     "quality_garments_reverse": "Take released garments back before they ship",
     "home_view": "See Today",
     "home_reports_view": "Run the standard reports (each shows only what your other rights reach)",
+    "home_kpis_view": "See the KPI library: what each KPI means, its versions, where it is used and its value over the records your other rights reach (figures per company, site and line, never per person)",
+    "home_kpis_manage": "Write and put in force new versions of a KPI, withdraw a KPI, install the standard KPIs and rebuild the daily and hourly figures from the records",
     "home_notifications_manage": "Set what each office role hears by default (in the app, by e-mail, on the phone)",
     "tasks_manage": "Make tasks on records and assign them",
     "floorsync_view": "See refused actions from floor tablets",

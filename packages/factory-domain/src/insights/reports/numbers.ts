@@ -61,6 +61,11 @@ export interface NumberRule {
   readonly formula: string
   readonly sources: string
   readonly period: string
+  /**
+   * B-W2b-428 (ANA-070): the KPI of the metric layer the number reads — its value comes from that KPI's one calculation over
+   * the facts (apps/factory-api modules/insights/kpis/value.ts), and Today's key numbers are listed where the KPI is used.
+   */
+  readonly kpi?: string
 }
 
 /** Who set the targets (the design's "target and who set it"): the standard pack, until the KPI library (W2b) edits them. */
@@ -91,6 +96,7 @@ export const NUMBER_RULES: readonly NumberRule[] = Object.freeze([
     formula: 'Sum of the net amount (before VAT) of every order with an order date this week, cancelled orders left out.',
     sources: 'Sales orders',
     period: 'This week, Monday to today; the line shows the last 8 weeks.',
+    kpi: 'sales.orders_in',
   }),
   rule({
     key: 'orders.late',
@@ -139,6 +145,7 @@ export const NUMBER_RULES: readonly NumberRule[] = Object.freeze([
     formula: 'Shipments shipped in the last 4 weeks that left on or before their order’s promise date, divided by every shipment shipped in those weeks.',
     sources: 'Shipments and their sales orders',
     period: 'The last 4 weeks; the line shows each of the last 8 weeks.',
+    kpi: 'delivery.shipped_on_time',
   }),
   rule({
     key: 'orders.marginThisMonth',
@@ -220,6 +227,7 @@ export const NUMBER_RULES: readonly NumberRule[] = Object.freeze([
     formula: 'Good garments through each line’s last operation, summed over the lines and work centres of your sites.',
     sources: 'Floor scans, work orders and the site calendars',
     period: 'The last working day of each site’s calendar.',
+    kpi: 'production.output',
   }),
   // ---- Purchase orders (buyer) ---------------------------------------------------------------------------------------
   rule({

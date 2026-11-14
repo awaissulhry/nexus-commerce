@@ -234,6 +234,12 @@ describe('the run’s pipeline: grains through the real filter, groups of fewer 
 
 describe('My numbers on Today (ANA-001)', () => {
   it('per lens the person has, three to five numbers, money only with its grain, none failing', async () => {
+    // B-W2b-428 (ANA-070): orders in, shipped on time and yesterday's good pieces read the metric layer's facts: rebuilt first,
+    // as the hour's job does (insights.factsHourly), over the 8 weeks the lines show.
+    const today = new Date().toISOString().slice(0, 10)
+    const from = new Date(Date.now() - 62 * 86_400_000).toISOString().slice(0, 10)
+    const rebuilt = await app.inject({ method: 'POST', url: '/insights/facts/rebuild', headers: { 'x-test-session': 'owner' }, payload: { from, to: today } })
+    expect(rebuilt.statusCode, rebuilt.body.slice(0, 400)).toBe(200)
     const owner = await ok('owner', '/home/numbers')
     expect((owner.lenses as Json[]).map((lens) => lens.lens)).toEqual(['ORDERS', 'WORK_ORDERS', 'PURCHASE_ORDERS', 'INVOICES', 'LOTS'])
     for (const lens of owner.lenses as Json[]) {
@@ -243,6 +249,9 @@ describe('My numbers on Today (ANA-001)', () => {
     }
     const inThisWeek = (owner.lenses as Json[])[0]!.numbers.find((number: Json) => number.key === 'orders.inThisWeek')
     expect(inThisWeek.spark).toHaveLength(8)
+    // One calculation: the number is the KPI's value (sales.orders_in over the same 8 weeks).
+    const kpi = await ok('owner', '/insights/kpis/sales.orders_in/value?period=WEEK&periods=8')
+    expect(inThisWeek.value).toBe(kpi.value === null ? null : Number(kpi.value))
     const planner = await ok('planner', '/home/numbers')
     const plannerNumbers = (planner.lenses as Json[]).flatMap((lens) => lens.numbers as Json[])
     expect(plannerNumbers.some((number) => number.unit === 'MONEY' || number.grain !== null)).toBe(false)

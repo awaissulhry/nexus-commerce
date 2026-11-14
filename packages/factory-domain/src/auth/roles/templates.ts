@@ -158,6 +158,8 @@ import { TAX_RULES_ADDS } from '../../invoicing/tax-codes/permissions'
 import { PAYMENTS_BANK_ADDS } from '../../payments/write-offs/permissions'
 // B-W2b-394: team inboxes and the capture address (email.inboxes.manage) to the administrators.
 import { MAIL_DEPTH_ADDS } from '../../mail-depth/permissions'
+// B-W2b-428: the KPI library (home.kpis.view) to every office template that works with business numbers.
+import { HOME_KPIS_ADDS } from '../../insights/kpis/permissions'
 
 /**
  * The system role templates (plan A1 §3.11 "Role"; feature PLT-030): ready roles every tenant gets as system roles
@@ -1072,7 +1074,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-394
   ...(audience === 'office' ? (MAIL_DEPTH_ADDS[key] ?? []) : []),
   // B-W2b-399
-  ...(audience === 'office' ? (AUDIT_DEPTH_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (AUDIT_DEPTH_ADDS[key] ?? []) : []),
+  // B-W2b-428
+  ...(audience === 'office' ? (HOME_KPIS_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the
