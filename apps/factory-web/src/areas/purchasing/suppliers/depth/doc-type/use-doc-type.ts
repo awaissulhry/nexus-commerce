@@ -18,7 +18,7 @@ export interface DocTypeModel {
 }
 
 export interface DocTypeActions {
-  onOpenType?: (doc: Pick<VaultDocument, 'fileId' | 'name' | 'documentTypeCode'>) => void
+  onOpenType?: (doc: Pick<VaultDocument, 'fileId' | 'name' | 'documentTypeCode' | 'version'>) => void
   onChooseType?: (code: string) => void
   onSaveType?: () => void
   onCloseType?: () => void
@@ -27,8 +27,9 @@ export interface DocTypeActions {
 
 /**
  * The container of the document-type picker (B-W2b-382): reads the SUPPLIER_DOCUMENT_TYPE list once, opens a document's
- * picker with its file's version as read now, saves the type with ONE Idempotency-Key per dialog; a refusal is said in
- * words and the vault read again when the file moved (`onTyped`). The live `supplier_document.typed` reads the vault too.
+ * picker with its file's version as the vault answered it (B-W2b-383: no read of the file first), saves the type with ONE
+ * Idempotency-Key per dialog; a refusal is said in words and the vault read again when the file moved (`onTyped`), the
+ * file's version too. The live `supplier_document.typed` reads the vault too.
  */
 export function useDocType(input: { readonly api: ApiClient; readonly partyId: string; readonly mayType: boolean; readonly offline: boolean; readonly onTyped: () => void }): { model: DocTypeModel; actions: DocTypeActions } {
   const { api, partyId, mayType, offline, onTyped } = input
@@ -46,15 +47,12 @@ export function useDocType(input: { readonly api: ApiClient; readonly partyId: s
   }, [api])
 
   const open = useCallback(
-    (doc: Pick<VaultDocument, 'fileId' | 'name' | 'documentTypeCode'>) => {
+    (doc: Pick<VaultDocument, 'fileId' | 'name' | 'documentTypeCode' | 'version'>) => {
       key.current = newIdempotencyKey()
       setDone(null)
-      setDialog({ fileId: doc.fileId, name: doc.name, current: doc.documentTypeCode ?? null, chosen: doc.documentTypeCode ?? '', version: null, busy: false, problem: null })
-      fileVersion(api, doc.fileId)
-        .then((version) => setDialog((current) => (current?.fileId === doc.fileId ? { ...current, version } : current)))
-        .catch((error: unknown) => setDialog((current) => (current?.fileId === doc.fileId ? { ...current, problem: docTypeProblem(error).key } : current)))
+      setDialog({ fileId: doc.fileId, name: doc.name, current: doc.documentTypeCode ?? null, chosen: doc.documentTypeCode ?? '', version: doc.version, busy: false, problem: null })
     },
-    [api],
+    [],
   )
 
   const save = useCallback(async () => {
@@ -69,13 +67,14 @@ export function useDocType(input: { readonly api: ApiClient; readonly partyId: s
     } catch (error) {
       const said = docTypeProblem(error)
       key.current = newIdempotencyKey()
-      setDialog({ ...dialog, busy: false, problem: said.key })
+      // B-W2b-383: a file that moved holds Save ("reading") until its new version is in.
+      setDialog({ ...dialog, busy: false, problem: said.key, ...(said.reload ? { version: null } : {}) })
       if (said.reload) {
         onTyped()
         // The file moved: its version is read again, so a second Save writes over what is there now, knowingly.
         fileVersion(api, dialog.fileId)
           .then((version) => setDialog((current) => (current?.fileId === dialog.fileId ? { ...current, version } : current)))
-          .catch(() => undefined)
+          .catch((cause: unknown) => setDialog((current) => (current?.fileId === dialog.fileId ? { ...current, problem: docTypeProblem(cause).key } : current)))
       }
     }
   }, [api, dialog, mayType, offline, onTyped, partyId])

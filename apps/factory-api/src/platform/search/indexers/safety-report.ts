@@ -6,11 +6,12 @@ import { bySubjectIn, defineIndexer, idWhere, partyName } from '../indexer'
  * and customer (a report from the public DoC page names none: every customer grant of the company). Never what happened (the
  * reporter's words), never the reporter, never anything of an injury (the database refuses a ProductSafetyInjury entry:
  * SearchEntry_not_injury). A customer renamed re-indexes its reports. (The web's RECORD_PAGES and search words for
- * ProductSafetyReport come with the screens, B-W2b-357.)
+ * ProductSafetyReport come with the screens, B-W2b-357.) B-W2b-383 (B-W2b-382's gap): its area is Compliance, where its page
+ * is (Compliance › PPE register & recalls › Accidents), no longer Sales.
  */
 export default defineIndexer({
   recordType: 'ProductSafetyReport',
-  area: 'sales',
+  area: 'compliance',
   viewPermission: 'sales.safety.view',
   on: {
     'safety_report.received': 'subject',

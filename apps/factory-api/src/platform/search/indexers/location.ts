@@ -5,6 +5,8 @@ import { bySubjectIn, defineIndexer, idWhere, partyName } from '../indexer'
  * code on its label), name, the location it sits in, and a workshop's stock location by its workshop's name and code.
  * Scope as the locations list: company and site. Made, renamed, moved and archived re-read it
  * (`inventory.location_changed`, B-W2b-23, also from a sheet's import); a workshop renamed re-indexes its locations.
+ * B-W2b-383 (XF8:06, B-W2b-289's gap): also by its bin label code (Location.labelCode, the code a scan reads), re-read when
+ * the code is given, changed or cleared (`inventory.location_label_changed`).
  */
 export default defineIndexer({
   recordType: 'Location',
@@ -12,6 +14,7 @@ export default defineIndexer({
   viewPermission: 'inventory.locations.view',
   on: {
     'inventory.location_changed': 'subject',
+    'inventory.location_label_changed': 'subject',
     'party.updated': bySubjectIn((tx, partyId, take) => tx.location.findMany({ where: { partyId }, select: { id: true }, orderBy: { id: 'asc' }, take })),
   },
   async read(tx, filter, take) {
@@ -26,6 +29,7 @@ export default defineIndexer({
         code: true,
         name: true,
         status: true,
+        labelCode: true,
         parent: { select: { code: true } },
         party: { select: { code: true, legalName: true, tradeName: true } },
       },
@@ -40,7 +44,7 @@ export default defineIndexer({
       // Inside which location, or whose workshop it is.
       subtitle: row.parent?.code ?? partyName(row.party),
       status: row.status,
-      words: [partyName(row.party), row.party?.code, row.party?.legalName],
+      words: [row.labelCode, partyName(row.party), row.party?.code, row.party?.legalName],
     }))
   },
 })

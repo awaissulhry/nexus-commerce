@@ -35,7 +35,7 @@ export interface HomeViewModel {
   /** A badge scanned here did not open this tablet (the person on it stays). */
   badgeRefused?: boolean
   /** Offline: what waits for the network at this station (null: all its work is saved on the tablet). */
-  offline?: { held: 'receive' | 'inspect' | 'serials' | null } | null
+  offline?: { held: 'receive' | 'inspect' | 'pack' | null } | null
   /** Label kinds this tablet is running low on, with the numbers left (said while offline: online it tops up itself). */
   lowNumbers?: readonly { kind: ScanIdKind; left: number }[]
   /** Unfinished on this tablet (design floor.home "resume"); hidden when nothing is open. `asOf`: read earlier, offline now. */

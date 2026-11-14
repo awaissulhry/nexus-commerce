@@ -409,6 +409,10 @@
         "doneBody": "Each place's Labels tab shows where its job stands.",
         "refusedTitle_one": "{count} not printed",
         "refusedTitle_other": "{count} not printed",
+        "pdfDoneTitle": "The PDF is open",
+        "pdfLeftOut_one": "{count} place got no label",
+        "pdfLeftOut_other": "{count} places got no label",
+        "pdfLeftOutBody": "The PDF holds the others. They changed since this page read them (archived, or now of a kind that carries no label): the places are read again when you close this.",
         "noRightPdf": "Your role prints labels as a PDF only (a label printer needs the print permission).",
         "held": {
           "none": "None of these places carries a label.",

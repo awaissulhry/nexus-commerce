@@ -361,6 +361,8 @@ describe('the doors from outside: OFF until the privacy notice is published (GAT
     const report = await one<{ id: string }>('SELECT id FROM "ProductSafetyReport" WHERE "tenantId" = $1 AND source = $2', [T, 'PORTAL'])
     const read = await callerFor(h.database, systemContext(T, newId())).withClient((client) => indexer.read(client as never, { ids: [report.id] } as never, 5))
     expect(read[0]).toMatchObject({ recordId: report.id, subtitle: 'SEED-SN-0001' })
+    // B-W2b-383 (B-W2b-382's gap): the result opens under Compliance, where the report's page is.
+    expect(indexer.area).toBe('compliance')
     expect(JSON.stringify(read)).not.toContain('pocket')
   })
 })

@@ -78,6 +78,8 @@ const documentView = (doc: VaultFile, today: BusinessDate) => ({
   uploadId: doc.uploadId,
   articleCodes: [...doc.articleCodes],
   addedAt: toUtcIso(doc.addedAt),
+  // B-W2b-383 (B-W2b-382's gap): the version "say what it is" sends, so the page needs no read of the file first.
+  version: doc.version,
 })
 
 /** GET /purchasing/suppliers/:partyId/documents. */
@@ -200,10 +202,10 @@ export async function vaultSummary(caller: CommandCaller, query: { readonly comp
       take: 2000,
     })
     const seen = parties.filter((row) => hasSupplierRole(row.roles) && can(actor, PARTIES_VIEW, { companyId: row.companyId, partyId: row.id }))
-    const files = seen.length === 0 ? [] : await client.storedFile.findMany({ where: { recordType: 'Party', recordId: { in: seen.map((row) => row.id) }, status: 'AVAILABLE', supersededAt: null, category: { in: [...VAULT_CATEGORIES] } }, select: { id: true, recordId: true, category: true, expiresOn: true, documentTypeCode: true } })
+    const files = seen.length === 0 ? [] : await client.storedFile.findMany({ where: { recordType: 'Party', recordId: { in: seen.map((row) => row.id) }, status: 'AVAILABLE', supersededAt: null, category: { in: [...VAULT_CATEGORIES] } }, select: { id: true, recordId: true, category: true, expiresOn: true, documentTypeCode: true, version: true } })
     const byParty = new Map<string, VaultFile[]>()
     for (const file of files) {
-      const doc = { fileId: file.id, category: file.category as VaultFile['category'], documentTypeCode: file.documentTypeCode, expiresOn: file.expiresOn ? dayOf(file.expiresOn) : null, articleCodes: [], name: '', addedAt: new Date(0), issuer: null, number: null, issuedOn: null, source: 'OFFICE' as const, uploadId: null, seriesId: file.id }
+      const doc = { fileId: file.id, category: file.category as VaultFile['category'], documentTypeCode: file.documentTypeCode, expiresOn: file.expiresOn ? dayOf(file.expiresOn) : null, articleCodes: [], name: '', addedAt: new Date(0), issuer: null, number: null, issuedOn: null, source: 'OFFICE' as const, uploadId: null, seriesId: file.id, version: file.version }
       byParty.set(file.recordId, [...(byParty.get(file.recordId) ?? []), doc])
     }
     const suppliers = seen.map((row) => ({ partyId: row.id, code: row.code, ...countsOf(row, byParty.get(row.id) ?? [], today) }))

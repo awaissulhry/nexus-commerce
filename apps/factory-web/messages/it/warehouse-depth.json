@@ -409,6 +409,10 @@
         "doneBody": "La scheda Etichette di ogni ubicazione mostra a che punto è la sua stampa.",
         "refusedTitle_one": "{count} non stampata",
         "refusedTitle_other": "{count} non stampate",
+        "pdfDoneTitle": "Il PDF è aperto",
+        "pdfLeftOut_one": "{count} ubicazione senza etichetta",
+        "pdfLeftOut_other": "{count} ubicazioni senza etichetta",
+        "pdfLeftOutBody": "Il PDF contiene le altre. Sono cambiate da quando questa pagina le ha lette (archiviate, o ora di un tipo senza etichetta): le ubicazioni si rileggono alla chiusura.",
         "noRightPdf": "Il tuo ruolo stampa le etichette solo come PDF (per una stampante di etichette serve il permesso di stampa).",
         "held": {
           "none": "Nessuna di queste ubicazioni ha un'etichetta.",

@@ -1,5 +1,6 @@
 import { kindProfiles } from '@nexus/factory-domain/inventory/locations-depth/kinds'
 import { idempotencyKeyFrom } from '../../../core/command'
+import { LABELS_REFUSED_HEADER } from '../../../core/cors-expose'
 import { defineRoutes } from '../../../core/manifest'
 import { attachmentDisposition } from '../../../platform/files/rules'
 import { blockedLocations, blockLocation, unblockLocation } from './blocks'
@@ -47,7 +48,7 @@ export default defineRoutes('inventory.locations-depth', manifest, async (app) =
 
   app.post('/inventory/locations/labels/pdf', { schema: labelsPdfContract }, async (request, reply) => {
     const { pdf, fileName, refused } = await labelsPdf(request, request.body, idempotencyKeyFrom(request))
-    return reply.type('application/pdf').header('content-disposition', attachmentDisposition(fileName)).header('cache-control', 'no-store').header('x-labels-refused', String(refused)).send(pdf)
+    return reply.type('application/pdf').header('content-disposition', attachmentDisposition(fileName)).header('cache-control', 'no-store').header(LABELS_REFUSED_HEADER, String(refused)).send(pdf)
   })
 
   app.get('/inventory/locations/scan', { schema: scanContract }, async (request) => scanLocation(request, request.query))

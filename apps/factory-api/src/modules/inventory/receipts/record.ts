@@ -370,7 +370,9 @@ export async function recordReceiptInCommand(tools: CommandTools, body: ReceiptB
         baseQuantity: line.baseQuantity,
         hideCount: line.item.tracking === 'HIDE' ? line.lots.reduce((sum, lot) => sum + lot.hides.length, 0) : null,
         ...(line.received ? { receivedQuantity: line.received.quantity, receivedUom: line.received.uom, receivedFactor: line.received.factor } : {}),
-        note: [blank(line.body.note), reason ? `Difference from the order: ${reason}` : null].filter(Boolean).join(' · ') || null,
+        // B-W2b-383 (B-W2b-382's gap): the people's words only (the note, then the reason the difference is taken); the line's
+        // `difference` (kind OVER or UNDER, how much) is the code the screens say in their language beside it.
+        note: [blank(line.body.note), reason].filter(Boolean).join(' · ') || null,
         // B-W2b-377: beyond a tolerance that needs a yes: held from now until it.
         ...(heldLines.has(line.index) ? { heldForApprovalAt: now } : {}),
         createdAt: now,

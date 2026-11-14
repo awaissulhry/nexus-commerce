@@ -1,6 +1,7 @@
 import { formatScanId, tenantTag } from '@nexus/factory-domain/numbering/scan-id'
 import { defineDesignScreen } from '../../lib/design/design-screen'
 import { onFloor, signedInFrame } from '../frame/fixtures'
+import type { CartonScanCard } from '../tasks/scan/result/carton/model'
 import type { HideCard, MachineCard, WorkOrderCard } from './scan-model'
 import { ScanView, type RecentScan, type ScanViewModel } from './view/ScanView'
 
@@ -43,6 +44,28 @@ const workOrder: WorkOrderCard = {
   sizesLeft: ['NERO 48', 'NERO 50', 'NERO 52'],
   colourways: ['NERO', 'MARRONE'],
 }
+/** B-W2b-387: a made-up carton of the Demo plant's shipment, closed "2 of 3" with its marks printed. */
+const carton: CartonScanCard = {
+  kind: 'carton',
+  code: 'SH-DEMO-0012-2',
+  shipmentNumber: 'SH-DEMO-0012',
+  shipmentStatus: 'DRAFT',
+  hold: null,
+  seq: 2,
+  numbered: { n: 2, of: 3 },
+  cartons: 3,
+  state: 'closed',
+  packaging: { name: 'Cartone 60×40×40', kind: 'CARTON' },
+  grossKg: '6.1000',
+  netKg: '5.3000',
+  garments: 6,
+  contents: [
+    { label: 'GIA-01 NERO 50', quantity: 2, batch: 'BT-DM-26-041', serials: 0 },
+    { label: 'GIA-01 NERO 52', quantity: 3, batch: 'BT-DM-26-041', serials: 0 },
+    { label: 'TUT-02 ROSSO 52', quantity: 1, batch: 'BT-DM-26-055', serials: 1 },
+  ],
+}
+
 /** B-W2a-73: a made-up sewing machine of the Demo plant (its tag holds the asset number). */
 const machine: MachineCard = {
   kind: 'machine',
@@ -83,6 +106,11 @@ export const designScreen = defineDesignScreen<ScanViewModel>({
     { id: 'machine-locked', label: 'A machine locked as unsafe', model: scan({ ...machine, status: 'DO_NOT_USE', locked: true, openJob: { number: 'MJ-DEMO-0041', status: 'IN_PROGRESS' } }, { canReport: true }) },
     { id: 'machine-running', label: 'A running machine with nothing open', model: scan({ ...machine, status: 'RUNNING', openJob: null, openRequests: 0 }, { canReport: true }) },
     { id: 'machine-retired', label: 'A retired machine: Report held with the reason', model: scan({ ...machine, status: 'RETIRED', openJob: null, openRequests: 0 }, { canReport: true }) },
+    // B-W2b-387 (design floor.scan "Carton (W2b)"): a carton by the code its marks carry.
+    { id: 'carton', label: 'A carton (B-W2b-387): n of N, contents by size, its marks; Open in Pack', model: scan(carton, { canPack: true }), note: 'A free code shaped like a carton\'s marks is also asked as a carton (shipping.pack). Never a customer, an address, a serial or money. "Open its shipment in Pack" opens the bench with it.' },
+    { id: 'carton-open', label: 'An open carton, its shipment on hold', model: scan({ ...carton, hold: 'CREDIT', numbered: null, state: 'open', seq: 3, packaging: null, grossKg: null, netKg: null, garments: 2, contents: [{ label: 'GIA-01 NERO 54', quantity: 2, batch: 'BT-DM-26-041', serials: 0 }] }, { canPack: true }) },
+    { id: 'carton-shipped', label: 'A carton of a shipment that has left: Open in Pack held with the reason', model: scan({ ...carton, shipmentStatus: 'SHIPPED', state: 'labelled' }, { canPack: true }) },
+    { id: 'carton-no-pack', label: 'A carton scanned by a worker who does not pack', model: scan({ kind: 'unknown', code: 'SH-DEMO-0012-2', reason: 'notFound' }), note: 'Fail closed: without shipping.pack the carton lookup is never asked; the code is tried as the free code it is.' },
     { id: 'location', label: 'A location', model: scan({ kind: 'location', code: 'A1-STORE-01', name: 'Magazzino pelli', locationKind: 'BIN', path: ['A1-STORE', 'A1-STORE-01'] }) },
     { id: 'bundle', label: 'A bundle (not on the tablet yet)', model: scan({ kind: 'notOnFloor', type: 'bundle', code: BUNDLE }), note: 'The bundles step adds its card; until then the label is named, nothing pretends.' },
     { id: 'lot', label: 'A lot (not on the tablet yet)', model: scan({ kind: 'notOnFloor', type: 'lot', code: LOT }) },

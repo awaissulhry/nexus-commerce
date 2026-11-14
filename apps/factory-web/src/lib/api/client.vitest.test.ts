@@ -67,6 +67,18 @@ describe('the API client', () => {
     await expect(client(new Response(broken, { status: 201 })).api.post('/x', { body: {} })).rejects.toMatchObject({ kind: 'unavailable', code: 'network' })
   })
 
+  // B-W2b-383 (XF8:05): a file's answer headers reach the caller (the bin labels PDF's count of places without a label).
+  it('hands a file’s own answer headers to the caller beside its bytes, on a good answer only', async () => {
+    const seen: (string | null)[] = []
+    const pdf = new Response(new Uint8Array([37, 80, 68, 70]), { status: 200, headers: { 'content-type': 'application/pdf', 'x-labels-refused': '2' } })
+    const bytes = await client(pdf).api.bytes('/inventory/locations/labels/pdf', { method: 'POST', body: { locationIds: [] }, onHeaders: (headers) => seen.push(headers.get('x-labels-refused')) })
+    expect([...bytes]).toEqual([37, 80, 68, 70])
+    expect(seen).toEqual(['2'])
+    const refused = client(json(400, { error: { code: 'validation_failed', message: 'm' } })).api.bytes('/x', { onHeaders: (headers) => seen.push(headers.get('x-labels-refused')) })
+    await expect(refused).rejects.toMatchObject({ kind: 'invalid' })
+    expect(seen).toEqual(['2'])
+  })
+
   it('tells a step-up request from a plain refusal', () => {
     // The API's shape: `{ path: 'stepUp' }` (apps/factory-api office/account.ts StepUpRequiredError); a list is read too.
     expect(errorKindFor(403, [{ path: 'stepUp', message: 'Required.' }])).toBe('step_up')

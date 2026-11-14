@@ -1,0 +1,269 @@
+{
+  "gate": {
+    "held": "On hold ({reason}): scanning stops until the office releases the shipment.",
+    "reason": {
+      "CREDIT": "credit",
+      "DEPOSIT": "the deposit is not paid",
+      "BALANCE_UNPAID": "the balance is not paid",
+      "QUALITY": "quality",
+      "CUSTOMER_REQUEST": "the customer asked to wait",
+      "OTHER": "another reason"
+    }
+  },
+  "scan": {
+    "label": "Scan a garment into the carton",
+    "into": "It goes into carton {seq}.",
+    "new": "The first scan starts a new carton.",
+    "out": "The next garment scanned comes out of carton {seq}.",
+    "held": "Scanning stops while the shipment is on hold."
+  },
+  "flash": {
+    "in": "{cell} in carton {seq} · {packed} of {ordered}",
+    "inNew": "{cell} in carton {seq}, a new carton · {packed} of {ordered}",
+    "out": "{cell} out of carton {seq}",
+    "outReopened": "{cell} out of carton {seq}: the carton is open again",
+    "kept": "Saved on this tablet: it goes into the open carton when the network is back.",
+    "chooseSize": "This batch label names no size: tap the size on the grid.",
+    "chooseNone": "This batch label names no size, and nothing of its batch is left to pack.",
+    "cartonLabel": "That is the marks of carton {seq}: scan the garments themselves.",
+    "needsNetwork": "Taking a garment out needs the network: wait until it is back."
+  },
+  "refusal": {
+    "UNKNOWN_CODE": "Not a garment label of this factory. Check the label.",
+    "WRONG_BATCH": "This batch is not on this shipment. Put the garment aside.",
+    "WRONG_STYLE": "Wrong style: it is not on this shipment. Put it aside.",
+    "WRONG_COLOUR": "Wrong colour: this colour is not on this shipment. Put it aside.",
+    "WRONG_SIZE": "Wrong size: this size is not on this shipment. Put it aside.",
+    "EXTRA_PIECE": "Extra piece: every garment of this size is in a carton already. Put it aside.",
+    "SERIAL_NEEDED": "This style is traced by serial: scan the garment's serial label.",
+    "SIZE_NEEDED": "This batch label names no size: tap the size on the grid.",
+    "NOT_RELEASED": "Not released by quality yet: it stays out of the carton.",
+    "NOT_FOR_ORDER": "A sample made for no order: it does not ship on an order's shipment.",
+    "OTHER_SHIPMENT": "Packed in another shipment already.",
+    "ALREADY_PACKED": "Already in a carton of this shipment.",
+    "NOT_IN_CARTON": "This garment is not in this carton.",
+    "ON_HOLD": "The shipment is on hold: nothing goes into its cartons until the office releases it.",
+    "QUALITY_HOLD": "On a quality hold: it stays out of the carton.",
+    "NOT_DRAFT": "The shipment is packed: unpack it to change the cartons.",
+    "CARTON_CLOSED": "This carton is closed: scan into an open carton, or take a garment out to open it again.",
+    "CARTON_LABELLED": "This carton has a carrier label: its garments stay until the office voids the label.",
+    "TOO_MANY_CARTONS": "A shipment has at most 99 cartons.",
+    "EMPTY_CARTON": "This carton is empty: scan its garments first.",
+    "NOT_SCANNED": "Garments in this carton are not scanned: scan them, or take them out.",
+    "PACKAGING_NEEDED": "Choose what the carton is packed in.",
+    "PACKAGING_NOT_PARCEL": "A carton is packed in a carton, a box or a pallet.",
+    "PACKAGING_OFF": "That packaging is switched off: choose another.",
+    "other": "The office refused it."
+  },
+  "grid": {
+    "title": "Packed {packed} of {ordered}",
+    "caption": "Garments per style, colour and size: packed of ordered",
+    "style": "Style · colour",
+    "cell": "{packed}/{ordered}",
+    "cellName": "{cell}: {packed} of {ordered} packed",
+    "choose": "{cell}: choose this size ({packed} of {ordered} packed)",
+    "serials": "by serial"
+  },
+  "carton": {
+    "type": "Carton",
+    "current": "Scans go here",
+    "numbered": "Carton {n} of {of}",
+    "open": "Carton {seq} · open",
+    "garments": "garments",
+    "state": {
+      "open": "Open",
+      "closed": "Closed",
+      "labelled": "Carrier label on it",
+      "marksDue": "Marks to print again"
+    },
+    "line": "{cell} × {count}",
+    "lineBatch": "{cell} × {count} · batch {batch}",
+    "serials_one": "{count} serial",
+    "serials_other": "{count} serials",
+    "empty": "Empty",
+    "packaging": "Packed in",
+    "noPackaging": "Not chosen yet",
+    "weight": "Weight",
+    "kg": "{weight} kg",
+    "grossNet": "{gross} kg gross · {net} kg net",
+    "notWeighed": "Not weighed",
+    "close": "Close carton {seq}",
+    "weigh": "Weigh carton {seq}",
+    "takeOut": "Take a garment out",
+    "takeOutStop": "Stop taking out",
+    "remove": "Remove empty carton",
+    "none": "No carton open: the next scan starts one.",
+    "list_one": "{count} carton",
+    "list_other": "{count} cartons",
+    "listEmpty": "No carton yet."
+  },
+  "kind": {
+    "CARTON": "Carton",
+    "BOX": "Box",
+    "PALLET": "Pallet",
+    "POLYBAG": "Polybag",
+    "HANGER": "Hanger"
+  },
+  "left": {
+    "title": "Still to do",
+    "noLines": "No garments on this shipment: the office adds them.",
+    "toScan_one": "{count} garment still to scan",
+    "toScan_other": "{count} garments still to scan",
+    "serials": "Serials scanned before their carton: scan those serials again into their carton.",
+    "open": "Close carton {cartons}",
+    "unweighed": "Weigh carton {cartons}",
+    "empty": "Carton {cartons} is empty: remove it",
+    "marks": "Print the marks of carton {cartons} again: the carton count changed",
+    "none": "Every garment is scanned and every carton closed and weighed: the shipment can be packed."
+  },
+  "main": {
+    "close": "Close carton {seq}",
+    "marks": "Print the marks again",
+    "packed": "Packed",
+    "held": {
+      "scan": "Scan a garment first",
+      "left": "Not everything is packed yet: see Still to do",
+      "hold": "The shipment is on hold"
+    }
+  },
+  "close": {
+    "title": "Close carton {seq}",
+    "lead": "Choose what it is packed in, type its weight: closing stores its contents and prints its marks.",
+    "packaging": "Packed in",
+    "suggested": "Suggested",
+    "inner": "{l} × {w} × {h} cm",
+    "upTo": "up to {weight} kg",
+    "weight": "Weight of carton {seq}",
+    "unit": "kg",
+    "separator": "Decimal point",
+    "empty": "Type the weight",
+    "range": "From 0.01 kg",
+    "confirm": "Close carton and print its marks",
+    "cancel": "Back to the carton",
+    "overweight": "Heavier than this packaging takes (up to {weight} kg): check the weight, or choose a bigger one.",
+    "held": {
+      "noPackaging": "No packaging is set up: the office adds the cartons in Shipping settings.",
+      "packaging": "Choose what it is packed in",
+      "weight": "Type its weight"
+    }
+  },
+  "marks": {
+    "closed": "Carton {n} of {of} closed · marks sent to the printer",
+    "closedNot": "Carton {n} of {of} closed · its marks did not print",
+    "overweight": "Heavier than its packaging takes: check the carton.",
+    "printed": "Marks of carton {cartons} sent to the printer",
+    "problem": {
+      "validation_failed": "The station's label printer cannot take the marks (none is set, or its labels are too small). Print them as a PDF here.",
+      "invalid_state": "The label printer takes no jobs now. Print the marks as a PDF here, or again later.",
+      "forbidden": "Your role does not print labels here. Ask your team leader.",
+      "conflict": "A carton changed while its marks were made: print them again.",
+      "other": "The marks did not print. Print them again, or as a PDF here."
+    },
+    "again": "Print the marks again",
+    "pdf": "Marks as PDF",
+    "pdfTitle": "Marks of shipment {number}",
+    "pdfPrint": "Print from this tablet",
+    "pdfClose": "Close the PDF",
+    "pdfLoading": "Making the marks…",
+    "preview": "Marks of carton {n} of {of}",
+    "previewNote": "The marks also print the address and the customer's order: this tablet does not show them.",
+    "label": {
+      "carton": "Carton {n} of {of}",
+      "style": "Style",
+      "sizes": "Sizes",
+      "garments": "Garments",
+      "batch": "Batch"
+    },
+    "barcode": "Barcode {code}",
+    "job": {
+      "QUEUED": "Queued",
+      "SENT": "Sent to the printer",
+      "PRINTED": "Printed",
+      "FAILED": "Not printed"
+    },
+    "retry": "Print again"
+  },
+  "kept": {
+    "title_one": "{count} scan saved on this tablet",
+    "title_other": "{count} scans saved on this tablet",
+    "lead": "They go into the open carton when the network is back; the grid counts them then.",
+    "refusedTitle_one": "{count} scan refused when it was sent",
+    "refusedTitle_other": "{count} scans refused when they were sent",
+    "refused": "{code}: {words}",
+    "refusedLead": "Those garments are not in a carton. Waiting to send lists them."
+  },
+  "done": {
+    "title": "Shipment {number} packed",
+    "line_one": "{count} carton · {labels}",
+    "line_other": "{count} cartons · {labels}",
+    "labels": {
+      "printed": "labels printed",
+      "printing": "labels sent to the printer",
+      "failed": "a label did not print",
+      "ready": "labels not printed yet",
+      "office": "the office buys the labels",
+      "noPrinter": "the office prints the labels",
+      "noRight": "your role does not print the labels",
+      "notNeeded": "no carrier labels"
+    },
+    "facts": {
+      "cartons": "Cartons",
+      "marks": "Carton marks",
+      "labels": "Carrier labels",
+      "documents": "DDT and packing list"
+    },
+    "marks": {
+      "printed_one": "Printed on the carton",
+      "printed_other": "Printed on all {count} cartons",
+      "due": "To print again: open the shipment"
+    },
+    "labelsState": {
+      "printed": "Printed",
+      "printing": "Sent to the printer",
+      "failed": "Not printed: Retry is on the documents",
+      "ready": "Not printed yet",
+      "office": "The office buys them",
+      "noPrinter": "The office prints them (no label printer here)",
+      "noRight": "Your role does not print them"
+    },
+    "transport": {
+      "SENDER": "Our own van: no carrier label",
+      "RECIPIENT": "The customer collects: no carrier label",
+      "CARRIER": "No carrier label needed"
+    },
+    "documentsState": {
+      "printed": "Printed",
+      "printing": "Sent to the printer",
+      "failed": "Not printed: Retry is on the documents",
+      "ready": "Not printed yet",
+      "office": "The office issues the DDT",
+      "noPrinter": "The office prints them (no document printer here)",
+      "pdfMissing": "The office prints the DDT again"
+    },
+    "next": "Next shipment"
+  },
+  "offline": "No network: scans are saved on this tablet. Closing a carton, taking a garment out, printing and Packed wait for the network.",
+  "pad": {
+    "minus": "Less",
+    "plus": "More",
+    "clear": "Clear",
+    "back": "Delete a digit"
+  },
+  "scanCard": {
+    "hold": "On hold ({reason}): nothing goes into its cartons until the office releases the shipment.",
+    "shipment": "Shipment",
+    "carton": "Carton",
+    "open": "Carton {seq} · open ({count} cartons now)",
+    "garments": "Garments",
+    "contents": "In it",
+    "marks": "Marks",
+    "marksState": {
+      "open": "Not yet: they print when the carton is closed",
+      "closed": "Printed, current",
+      "marksDue": "To print again: the carton count changed",
+      "labelled": "Printed; a carrier label is on it"
+    },
+    "openInPack": "Open its shipment in Pack",
+    "shipped": "This shipment has left the bench."
+  }
+}
