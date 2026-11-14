@@ -77,6 +77,9 @@ async function sendFacts(db: Reader, submissionId: string): Promise<SendFacts | 
 /** Whether a send needs a copy at all: the intermediary took it, and it was not simulated in test mode. */
 const needsCopy = (send: Pick<SendFacts, 'status' | 'providerRef'>): boolean => !isTestRef(send.providerRef) && (send.providerRef !== null || (send.status !== 'SENDING' && send.status !== 'FAILED'))
 
+/** Thrown inside the copy's command when a racing run already kept every receipt: the command writes nothing (and so has no audit row) and the send's copy is complete. */
+class AlreadyCopied extends Error {}
+
 /** Makes or completes one send's copy. Returns what changed. */
 export async function copySend(files: FilesRuntime, caller: CommandCaller, submissionId: string, causationId?: string): Promise<'made' | 'receipts' | 'complete' | 'nothing'> {
   const facts = await caller.withClient((client) => sendFacts(client, submissionId))
@@ -90,32 +93,39 @@ export async function copySend(files: FilesRuntime, caller: CommandCaller, submi
     const file = await putGeneratedFile(files, caller, { companyId: facts.companyId, recordType: 'SdiNotification', recordId: row.id, kind: 'FISCAL_ARCHIVE', originalName: receiptFileName(facts.fileName, row.type, ordinal), contentType: 'application/xml', body: Buffer.from(body, 'utf8') })
     prepared.push({ notificationId: row.id, file })
   }
-  const { result } = await command(caller, { name: 'invoices.sdiArchiveCopy', input: { submissionId, receipts: prepared.length }, ...(causationId ? { causationId } : {}) }, async (tools) => {
-    await lockInvoice(tools.tx, facts.invoiceId)
-    const now = (await sendFacts(tools.tx, submissionId))!
-    const fresh = prepared.filter((entry) => !now.kept.has(entry.notificationId))
-    const named: string[] = []
-    for (const entry of fresh) named.push((await recordGeneratedFile(tools, entry.file, { details: { file: 'SDI notification (our copy)', submissionId } })).id)
-    let copyId: string
-    let action: 'MADE' | 'RECEIPTS_ADDED'
-    if (now.copy === null) {
-      copyId = newId()
-      action = 'MADE'
-      await tools.tx.sdiArchiveCopy.create({
-        data: { id: copyId, companyId: now.companyId, partyId: now.partyId, invoiceId: now.invoiceId, submissionId, key: copyKeyOf(submissionId), providerName: now.provider, xmlFileId: now.xmlFileId, receiptFileIds: named, copiedAt: tools.now, createdById: tools.context.audience === 'office' ? tools.context.actorId : null },
-        select: { id: true },
-      })
-    } else {
-      if (named.length === 0) return { changed: 'complete' as const }
-      copyId = now.copy.id
-      action = 'RECEIPTS_ADDED'
-      await tools.tx.sdiArchiveCopy.update({ where: { id: copyId }, data: { receiptFileIds: [...now.copy.receiptFileIds, ...named], copiedAt: tools.now, version: { increment: 1 } }, select: { id: true } })
-    }
-    const receipts = (now.copy?.receiptFileIds.length ?? 0) + named.length
-    tools.audit({ action: 'invoices.sdiArchiveCopy', recordType: 'SdiArchiveCopy', recordId: copyId, companyId: now.companyId, after: { submissionId, provider: now.provider, xmlFileId: now.xmlFileId, receiptsAdded: named.length, receipts } })
-    tools.emit({ type: 'sdi_archive_copy.changed', subject: copyId, companyId: now.companyId, payload: { copyId, invoiceId: now.invoiceId, submissionId, action, receipts } })
-    return { changed: action === 'MADE' ? ('made' as const) : ('receipts' as const) }
-  })
+  let result: { changed: 'made' | 'receipts' }
+  try {
+    ;({ result } = await command(caller, { name: 'invoices.sdiArchiveCopy', input: { submissionId, receipts: prepared.length }, ...(causationId ? { causationId } : {}) }, async (tools) => {
+      await lockInvoice(tools.tx, facts.invoiceId)
+      const now = (await sendFacts(tools.tx, submissionId))!
+      const fresh = prepared.filter((entry) => !now.kept.has(entry.notificationId))
+      const named: string[] = []
+      for (const entry of fresh) named.push((await recordGeneratedFile(tools, entry.file, { details: { file: 'SDI notification (our copy)', submissionId } })).id)
+      let copyId: string
+      let action: 'MADE' | 'RECEIPTS_ADDED'
+      if (now.copy === null) {
+        copyId = newId()
+        action = 'MADE'
+        await tools.tx.sdiArchiveCopy.create({
+          data: { id: copyId, companyId: now.companyId, partyId: now.partyId, invoiceId: now.invoiceId, submissionId, key: copyKeyOf(submissionId), providerName: now.provider, xmlFileId: now.xmlFileId, receiptFileIds: named, copiedAt: tools.now, createdById: tools.context.audience === 'office' ? tools.context.actorId : null },
+          select: { id: true },
+        })
+      } else {
+        // Two events can race (a status change and a notification): the first run kept the receipts, this one has none.
+        if (named.length === 0) throw new AlreadyCopied()
+        copyId = now.copy.id
+        action = 'RECEIPTS_ADDED'
+        await tools.tx.sdiArchiveCopy.update({ where: { id: copyId }, data: { receiptFileIds: [...now.copy.receiptFileIds, ...named], copiedAt: tools.now, version: { increment: 1 } }, select: { id: true } })
+      }
+      const receipts = (now.copy?.receiptFileIds.length ?? 0) + named.length
+      tools.audit({ action: 'invoices.sdiArchiveCopy', recordType: 'SdiArchiveCopy', recordId: copyId, companyId: now.companyId, after: { submissionId, provider: now.provider, xmlFileId: now.xmlFileId, receiptsAdded: named.length, receipts } })
+      tools.emit({ type: 'sdi_archive_copy.changed', subject: copyId, companyId: now.companyId, payload: { copyId, invoiceId: now.invoiceId, submissionId, action, receipts } })
+      return { changed: action === 'MADE' ? ('made' as const) : ('receipts' as const) }
+    }))
+  } catch (error) {
+    if (error instanceof AlreadyCopied) return 'complete'
+    throw error
+  }
   return result.changed
 }
 
