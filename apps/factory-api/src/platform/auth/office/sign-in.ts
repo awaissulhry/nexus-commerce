@@ -8,7 +8,8 @@ import { assertCsrf, clearSessionCookies, sessionCookieOf, setSessionCookies } f
 import { mfaRequired, requiresMfa } from '../sessions/grants'
 import { PRE_SESSION_ACTOR_ID, type OfficeAuth } from '../sessions/office-auth'
 import { mintToken, parseToken, tokenHash } from '../sessions/secrets'
-import { createSession, mintSessionSecrets, SESSION_LIFETIME, withSessionSecrets, type StartedSession } from '../sessions/session-store'
+import { sessionPlaceOf } from '../sessions/place'
+import { createSession, mintSessionSecrets, withSessionSecrets, type StartedSession } from '../sessions/session-store'
 import { normalizeEmail } from '../users/email'
 import type { SignedInBody, SignInBody } from './contract'
 import { createPasswordReset, REQUIRED_RESET_TTL_MS } from './password-reset'
@@ -60,8 +61,9 @@ export interface SignedInUser {
 }
 
 /** The answer of a started session (sign-in, accepted invitation); the cookies are set here. */
-export function signedIn(reply: FastifyReply, session: StartedSession, user: SignedInUser, mfaProved: boolean): SignedInBody {
-  setSessionCookies(reply, session.token, session.csrfToken, SESSION_LIFETIME.absoluteMs)
+export function signedIn(reply: FastifyReply, session: StartedSession, user: SignedInUser, mfaProved: boolean, now: Date): SignedInBody {
+  // B-W2b-404: the cookies live as long as the session may (the tenant's longest office session).
+  setSessionCookies(reply, session.token, session.csrfToken, new Date(session.absoluteExpiresAt).getTime() - now.getTime())
   const required = mfaRequired(user)
   return {
     status: 'signed_in',
@@ -157,13 +159,14 @@ export async function signIn(auth: OfficeAuth, request: FastifyRequest, reply: F
       mfaProved: proof !== null,
       ipHash: auth.secrets.ipHash(request.ip),
       userAgent: request.headers['user-agent'],
+      place: sessionPlaceOf(request),
       tokenHash: sessionHash,
     })
     audit({ recordType: 'Session', recordId: session.id, after: { userId: user.id, secondFactor: proof?.kind ?? null, companyId: session.companyId } })
     return session
   })
   const requireMfa = await auth.inTenant(tenant.id, user.id, (client) => requiresMfa(client, user, auth.clock.now()))
-  return signedIn(reply, withSessionSecrets(result, secrets), { ...user, requireMfa }, proof !== null)
+  return signedIn(reply, withSessionSecrets(result, secrets), { ...user, requireMfa }, proof !== null, auth.clock.now())
 }
 
 /** Ends the session of the cookie, if it is live, and clears the cookies whatever it was. */

@@ -1959,6 +1959,8 @@
     "security_view": "Vedere se ogni parte funziona, le regole di accesso, backup e prove di ripristino",
     "security_drills_record": "Registrare una prova di ripristino",
     "security_events_view": "Vedere gli eventi di sicurezza: accessi, blocchi, verifica in due passaggi, rifiuti, ruoli, esportazioni",
+    "security_settings_manage": "Cambiare quanto durano le sessioni e quali azioni a rischio chiedono un codice nuovo (più lunghe o spente chiedono un codice nuovo)",
+    "users_sessions_manage": "Vedere dove una persona ha fatto l'accesso e chiudere tutte le sue sessioni",
     "sales_returns_view": "Vedere i resi dei clienti",
     "sales_returns_manage": "Aprire e modificare i resi dei clienti",
     "sales_returns_receive": "Ricevere la merce resa al magazzino",

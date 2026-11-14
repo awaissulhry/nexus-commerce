@@ -285,7 +285,7 @@ export class Browser {
     return this.cookies.get(CSRF_COOKIE)
   }
 
-  async send(method: 'GET' | 'POST', url: string, body?: unknown, options: { csrf?: boolean; headers?: Record<string, string> } = {}): Promise<Answer> {
+  async send(method: 'GET' | 'POST' | 'PUT', url: string, body?: unknown, options: { csrf?: boolean; headers?: Record<string, string> } = {}): Promise<Answer> {
     const headers: Record<string, string> = { ...options.headers }
     if (this.cookies.size > 0) headers.cookie = [...this.cookies].map(([name, value]) => `${name}=${value}`).join('; ')
     if (method !== 'GET' && options.csrf !== false && this.csrfToken) headers[CSRF_HEADER] = this.csrfToken
@@ -306,6 +306,7 @@ export class Browser {
 
   get = (url: string, options?: { headers?: Record<string, string> }) => this.send('GET', url, undefined, options)
   post = (url: string, body?: unknown, options?: { csrf?: boolean; headers?: Record<string, string> }) => this.send('POST', url, body ?? {}, options)
+  put = (url: string, body?: unknown, options?: { csrf?: boolean; headers?: Record<string, string> }) => this.send('PUT', url, body ?? {}, options)
 
   /** Gets a CSRF token, then signs in. */
   async signIn(tenant: string, email: string, password: string, code?: string): Promise<Answer> {

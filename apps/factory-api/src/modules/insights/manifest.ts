@@ -52,4 +52,12 @@ export const manifest = defineManifest({
   'GET /insights/measures': { audiences: ['office'], permission: 'home.kpis.view', scope: 'record' },
   'GET /insights/facts': { audiences: ['office'], permission: 'home.kpis.view', scope: 'record' },
   'POST /insights/facts/rebuild': { audiences: ['office'], permission: 'home.kpis.manage', scope: 'record' },
+  // B-W2b-429 (kpis/drills/): the ready KPIs' records, office only, read only: home.kpis.view, and each drill its KPI's measures'
+  // list permissions and grains over the records' company, site and customer or supplier (`record`).
+  'GET /insights/kpis/drills/otif': { audiences: ['office'], permission: 'home.kpis.view', scope: 'record' },
+  'GET /insights/kpis/drills/lead-times': { audiences: ['office'], permission: 'home.kpis.view', scope: 'record' },
+  'GET /insights/kpis/drills/wip': { audiences: ['office'], permission: 'home.kpis.view', scope: 'record' },
+  'GET /insights/kpis/drills/leather-yield': { audiences: ['office'], permission: 'home.kpis.view', scope: 'record' },
+  'GET /insights/kpis/drills/margin': { audiences: ['office'], permission: 'home.kpis.view', scope: 'record' },
+  'GET /insights/kpis/drills/supply': { audiences: ['office'], permission: 'home.kpis.view', scope: 'record' },
 })

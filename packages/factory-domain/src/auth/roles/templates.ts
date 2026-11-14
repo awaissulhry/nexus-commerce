@@ -168,6 +168,8 @@ import { HOME_KPIS_ADDS } from '../../insights/kpis/permissions'
 import { TEST_MODE_ADDS } from '../../invoicing/test-mode/permissions'
 // B-W2b-418: the cost sheet's components (finance writes draft sheets' lines and keeps their inputs).
 import { COST_SHEET_COMPONENTS_ADDS } from '../../costing/sheet-components/permissions'
+// B-W2b-404: security in depth (the administrator keeps the session lengths and step-up rules, and ends a person's sessions).
+import { SECURITY_DEPTH_ADDS } from '../sessions/permissions'
 // B-W2b-420: cost sheet versions (finance, the costing owner, approves versions and takes an approved one back).
 import { COST_SHEET_VERSIONS_ADDS } from '../../costing/sheet-versions/permissions'
 
@@ -1095,6 +1097,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (TEST_MODE_ADDS[key] ?? []) : []),
   // B-W2b-418
   ...(audience === 'office' ? (COST_SHEET_COMPONENTS_ADDS[key] ?? []) : []),
+  // B-W2b-404
+  ...(audience === 'office' ? (SECURITY_DEPTH_ADDS[key] ?? []) : []),
   // B-W2b-420
   ...(audience === 'office' ? (COST_SHEET_VERSIONS_ADDS[key] ?? []) : [])]
 /**

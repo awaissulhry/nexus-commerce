@@ -2,6 +2,7 @@ import type { FastifyRequest } from 'fastify'
 import type { FactoryDatabase } from '@nexus/factory-db'
 import { partnerGrants, portalAccessProblem } from '@nexus/factory-domain/auth/portal/access'
 import { PORTAL_SESSION, portalIdleExpiryAt } from '@nexus/factory-domain/auth/portal/session'
+import { isLiveAt, liveUntil, sessionLengthsMs } from '@nexus/factory-domain/auth/sessions/lengths'
 import { matchesPortalToken, parsePortalToken, portalTokenHash, type PortalToken } from '@nexus/factory-domain/auth/portal/token'
 import { ForbiddenError, UnauthenticatedError } from '@nexus/factory-domain/core/errors'
 import type { Authenticator, SessionContext } from '../../../core/context'
@@ -9,6 +10,7 @@ import type { RouteManifestEntry } from '../../../core/manifest'
 import type { Clock } from '../../../core/time'
 import { isFloorRequest } from '../floor/authenticator'
 import { assertCsrf, isUnsafeMethod, sessionCookieOf } from '../sessions/cookies'
+import { securityRulesIn } from '../sessions/rules'
 import { portalCookieOf } from './cookies'
 // B-W2b-162: an office preview reads what the party's people could read (no write, no money).
 import { previewGrants } from '../partners/preview-grants'
@@ -47,6 +49,8 @@ export interface PortalSession {
   readonly createdAt: Date
   readonly idleExpiresAt: Date
   readonly absoluteExpiresAt: Date
+  /** B-W2b-404 (PLT-068): the tenant's portal idle time now (SecuritySettings; 30 minutes at most). */
+  readonly idleMs: number
   readonly stepUpAt: Date | null
   /** An office person previewing the party's portal (read-only; B-W2b-162). */
   readonly preview: boolean
@@ -118,20 +122,24 @@ export function portalAuthenticator(core: { readonly database: FactoryDatabase; 
 
     const office = { audience: 'office', tenantId: token.tenantId, actorId: token.userId } as const
     const found = await core.database.withScope(office, async (client) => {
+      // B-W2b-404 (PLT-068): the tenant's portal lengths now; a shorter one ends an open session at its next request.
+      const lengths = sessionLengthsMs((await securityRulesIn(client, token.tenantId)).rules).portal
+      const ends = liveUntil(row, lengths)
+      if (!isLiveAt(ends, now)) return null
       const company = await companyById(client, companyId)
       const party = await partyOf(client, token.scopeId)
       if (!company || !party) return null
       if (preview) {
         const viewer = await client.user.findUnique({ where: { id: token.userId }, select: { email: true, displayName: true, locale: true, status: true, audience: true } })
         if (!viewer || viewer.audience !== 'OFFICE' || viewer.status !== 'ACTIVE' || row.previewById !== token.userId) return null
-        return { company, party, person: { ...viewer, partnerKind: null, accessUntil: null }, terms: null, roles: [], previewGrants: await previewGrants(client, { companyId, partyId: party.id }) }
+        return { company, party, person: { ...viewer, partnerKind: null, accessUntil: null }, terms: null, roles: [], previewGrants: await previewGrants(client, { companyId, partyId: party.id }), ends, lengths }
       }
       const person = await partnerById(client, token.userId)
       if (!person || person.partyId !== token.scopeId) return null
       const terms = await termsState(client, companyId, person.id)
       const problem = portalAccessProblem({ user: person, party, portalOn: await portalOn(client, party.id), termsInForce: terms !== null }, now)
       if (problem !== null) return null
-      return { company, party, person, terms, roles: await partnerRoles(client, person.id, now), previewGrants: [] }
+      return { company, party, person, terms, roles: await partnerRoles(client, person.id, now), previewGrants: [], ends, lengths }
     })
     if (!found) return null
 
@@ -140,9 +148,9 @@ export function portalAuthenticator(core: { readonly database: FactoryDatabase; 
       if (preview && !PREVIEW_WRITES.has(request.routeOptions.url ?? '')) throw new ForbiddenError('This is a preview of the portal: it is read-only.')
     }
 
-    let idleExpiresAt = row.idleExpiresAt
+    let idleExpiresAt = found.ends.idleExpiresAt
     if (now.getTime() - row.lastSeenAt.getTime() >= PORTAL_SESSION.slideEveryMs) {
-      idleExpiresAt = portalIdleExpiryAt(now, row.absoluteExpiresAt)
+      idleExpiresAt = portalIdleExpiryAt(now, found.ends.absoluteExpiresAt, found.lengths.idleMs)
       await core.database.withScope(office, (client) => client.session.updateMany({ where: { id: row.id, revokedAt: null }, data: { lastSeenAt: now, idleExpiresAt } }))
     }
 
@@ -154,7 +162,8 @@ export function portalAuthenticator(core: { readonly database: FactoryDatabase; 
       company: found.company,
       createdAt: row.createdAt,
       idleExpiresAt,
-      absoluteExpiresAt: row.absoluteExpiresAt,
+      absoluteExpiresAt: found.ends.absoluteExpiresAt,
+      idleMs: found.lengths.idleMs,
       stepUpAt: row.stepUpAt,
       preview,
       person: {

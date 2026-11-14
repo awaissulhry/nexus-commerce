@@ -62,7 +62,15 @@ export const meContract = defineContract({
       sites: z.array(output({ id: id(), code: z.string(), name: z.string() })),
       /** The person reaches every site of the screen's company (a role that reaches it has no site limit). */
       allSites: z.boolean(),
-      session: sessionTimes.extend({ id: id(), createdAt: instant(), stepUpUntil: instant().nullable() }),
+      session: sessionTimes.extend({
+        id: id(),
+        createdAt: instant(),
+        stepUpUntil: instant().nullable(),
+        /** B-W2b-404: step-up is locked until then after too many wrong codes in a row (null: not locked). */
+        stepUpLockedUntil: instant().nullable(),
+        /** B-W2b-404: how many wrong codes in a row from now lock step-up (0 while locked). */
+        stepUpFailuresLeft: z.number().int(),
+      }),
       mfa: mfaView.extend({ recoveryCodesLeft: z.number().int() }),
       /** The screen's company's staff privacy notice in force and whether this person acknowledged it (B-W1-36); null: none. */
       staffNotice: output({ noticeId: id(), label: z.string(), acknowledged: z.boolean() }).nullable(),

@@ -385,6 +385,8 @@ import { HOME_KPIS_DEFINITIONS, HOME_KPIS_PERMISSIONS } from '../../insights/kpi
 import { TEST_MODE_DEFINITIONS, TEST_MODE_PERMISSIONS } from '../../invoicing/test-mode/permissions'
 // B-W2b-418: the cost sheet's components (costing.sheets.manage).
 import { COST_SHEET_COMPONENTS_DEFINITIONS, COST_SHEET_COMPONENTS_PERMISSIONS } from '../../costing/sheet-components/permissions'
+// B-W2b-404: security in depth (security.settings.manage, users.sessions.manage).
+import { SECURITY_SETTINGS_DEFINITIONS, USER_SESSIONS_DEFINITIONS } from '../sessions/permissions'
 // B-W2b-420: cost sheet versions (costing.sheets.approve).
 import { COST_SHEET_VERSIONS_DEFINITIONS, COST_SHEET_VERSIONS_PERMISSIONS } from '../../costing/sheet-versions/permissions'
 
@@ -1081,6 +1083,9 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   TEST_MODE_DEFINITIONS,
   // B-W2b-418: the cost sheet's components (area `costing`).
   COST_SHEET_COMPONENTS_DEFINITIONS,
+  // B-W2b-404: session lengths and step-up rules, a person's sessions (areas `security`, `users`).
+  SECURITY_SETTINGS_DEFINITIONS,
+  USER_SESSIONS_DEFINITIONS,
   // B-W2b-420: cost sheet versions (area `costing`).
   COST_SHEET_VERSIONS_DEFINITIONS,
 ])

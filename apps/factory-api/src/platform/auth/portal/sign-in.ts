@@ -11,12 +11,12 @@ import {
   portalTriesLeft,
   type PortalCodeState,
 } from '@nexus/factory-domain/auth/portal/codes'
-import { PORTAL_SESSION } from '@nexus/factory-domain/auth/portal/session'
 import { matchesPortalToken, mintPortalToken, parsePortalToken, portalTokenHash, type PortalToken } from '@nexus/factory-domain/auth/portal/token'
 import { DomainError, ForbiddenError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { newId } from '@nexus/factory-domain/core/ids'
 import { businessDate, toUtcIso } from '@nexus/factory-domain/core/time'
 import { isAddress } from '@nexus/factory-domain/email/rules'
+import { sessionPlaceOf } from '../sessions/place'
 import { assertCsrf, csrfCookieOf, newCsrfToken } from '../sessions/cookies'
 import { PRE_SESSION_ACTOR_ID } from '../sessions/office-auth'
 import { normalizeEmail } from '../users/email'
@@ -284,14 +284,15 @@ async function openSession(p: PortalServices, request: FastifyRequest, reply: Fa
         audit({ recordType: 'User', recordId: person.id, companyId: company.id, before: { status: 'INVITED' }, after: { status: 'ACTIVE', accessUntil: invitation.accessUntil ? toUtcIso(invitation.accessUntil) : null } })
       }
       await tx.user.update({ where: { id: person.id }, data: { lastSignInAt: now }, select: { id: true } })
-      const session = await createPortalSession(tx, { userId: person.id, partyId: person.partyId, companyId: company.id, tokenHash, now, ipHash: p.auth.secrets.ipHash(request.ip), userAgent: request.headers['user-agent'] })
+      const session = await createPortalSession(tx, { tenantId, userId: person.id, partyId: person.partyId, companyId: company.id, tokenHash, now, ipHash: p.auth.secrets.ipHash(request.ip), userAgent: request.headers['user-agent'], place: sessionPlaceOf(request) })
       audit({ action: 'portal.signIn', recordType: 'Session', recordId: session.id, companyId: company.id, after: { userId: person.id, partyId: person.partyId, method, invitationAccepted: accepted !== null } })
       // B-W2b-180: the office's Portal access tab says "… signed in" live (and the person turns Active there).
       emit({ type: 'partner_user.signed_in', subject: person.id, companyId: company.id, payload: { userId: person.id, partyId: person.partyId, firstSignIn: accepted !== null } })
       return session
     },
   )
-  setPortalCookies(reply, token.value, csrfToken, PORTAL_SESSION.absoluteMs)
+  // B-W2b-404: the cookies live as long as the session may (the tenant's longest portal session).
+  setPortalCookies(reply, token.value, csrfToken, new Date(result.absoluteExpiresAt).getTime() - p.auth.clock.now().getTime())
   const facts = await p.auth.inTenant(tenantId, person.id, async (client) => ({ person: await partnerById(client, person.id), terms: await termsState(client, company.id, person.id) }))
   return {
     status: 'signed_in',
