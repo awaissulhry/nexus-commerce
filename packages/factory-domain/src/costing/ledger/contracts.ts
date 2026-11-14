@@ -17,7 +17,7 @@ import { BRIDGE_REASONS, COST_PARTS } from './variance'
 
 
 /** What an entry records, in the ledger's words (receipt, issue, WIP move, completion, scrap…). */
-export const ENTRY_EVENTS = ['ISSUE', 'RETURN', 'STOCK_SCRAP', 'LABOUR', 'SCAN_SCRAP', 'REWORK_SCRAP', 'COMPLETION', 'OVERHEAD', 'SUBCONTRACT', 'ADJUSTMENT', 'REVERSAL'] as const
+export const ENTRY_EVENTS = ['ISSUE', 'RETURN', 'STOCK_SCRAP', 'LABOUR', 'SCAN_SCRAP', 'REWORK_SCRAP', 'COMPLETION', 'OVERHEAD', 'SUBCONTRACT', 'ADJUSTMENT', 'VARIANCE', 'CLOSE', 'REVERSAL'] as const
 export type EntryEvent = (typeof ENTRY_EVENTS)[number]
 
 /** Why a source event has no entry yet (or cannot have one), in words beside the code. */

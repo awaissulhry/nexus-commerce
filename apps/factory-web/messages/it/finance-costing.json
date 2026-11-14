@@ -146,7 +146,9 @@
     "SUBCONTRACT": "Lavorazione esterna",
     "OVERHEAD": "Costi generali",
     "COMPLETION": "A prodotti finiti",
-    "ADJUSTMENT": "Rettifica"
+    "ADJUSTMENT": "Rettifica",
+    "VARIANCE": "Scostamento alla chiusura",
+    "CLOSE": "Scrittura di chiusura"
   },
   "event": {
     "ISSUE": "Prelievo per l'ordine di lavoro",
@@ -159,6 +161,8 @@
     "OVERHEAD": "Costi generali",
     "SUBCONTRACT": "Compenso lavorazione esterna",
     "ADJUSTMENT": "Rettifica",
+    "VARIANCE": "Scostamento stornato alla chiusura",
+    "CLOSE": "Ordine chiuso: stornato il residuo",
     "REVERSAL": "Storno"
   },
   "detail": {

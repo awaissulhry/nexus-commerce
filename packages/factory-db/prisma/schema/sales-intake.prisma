@@ -386,6 +386,10 @@ model Season {
   // sales.prisma: the quote versions and sales orders of the season.
   quoteVersions QuoteVersion[]
   salesOrders   SalesOrder[]
+  // W2b-6 cost-sheets.prisma (wave 55/57): its cost sheets and the size weights of its styles.
+  /// @not-money the relation to its cost sheets
+  costSheets    CostSheet[]
+  sizeWeights   SizeWeight[]
 
   @@unique([tenantId, companyId, code])
   // The target of the references from quote versions (tenant, id) and sales orders (tenant, company, id: the order's own

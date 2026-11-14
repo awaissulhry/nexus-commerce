@@ -19,11 +19,13 @@ import { COST_SCALE, decimalOf, decimalText, QUANTITY_SCALE, roundTo } from '../
  *   OVERHEAD     applied with a MATERIAL, stock SCRAP or LABOUR entry at the company's overhead % (when above 0)
  *   SUBCONTRACT  posted by the subcontracting steps (B-W2a-25, B-W2a-62) through the same writer
  *   ADJUSTMENT   a correction in words (not posted here)
+ *   VARIANCE     (B-W2b-376) one line of a close's variance split taken off the work order (not posted here: B-W2b-411)
+ *   CLOSE        (B-W2b-376) the closing entry of a close: what is left after its variances (not posted here: B-W2b-411)
  * A mistake, a stock move reversed, a scan undone or corrected: a reversal (the same kind, the opposite amount and
  * quantity, a reason), never an edit. Amounts are minor units of the company's currency, one rounding each.
  */
 
-export const COST_ENTRY_KINDS = ['MATERIAL', 'SCRAP', 'LABOUR', 'SUBCONTRACT', 'OVERHEAD', 'COMPLETION', 'ADJUSTMENT'] as const
+export const COST_ENTRY_KINDS = ['MATERIAL', 'SCRAP', 'LABOUR', 'SUBCONTRACT', 'OVERHEAD', 'COMPLETION', 'ADJUSTMENT', 'VARIANCE', 'CLOSE'] as const
 export type CostEntryKind = (typeof COST_ENTRY_KINDS)[number]
 
 /** The costing method of a company (c.c. art. 2426): the accountant's choice; UNDECIDED until it is given. */

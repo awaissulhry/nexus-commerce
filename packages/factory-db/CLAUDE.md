@@ -390,6 +390,46 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    (PRODUCT_SAFETY_INJURY: the ProductSafetyInjury, no employee) and wave 52's `factory_read_log_record_type_ok`
    (DataRequest), each word for word but for that; it calls recall's `factory_recall_words_ok`, `factory_recall_not_future`,
    `factory_recall_model_name_ok` and money's `factory_money_rome_day`):
+   `…_cost_actuals_w2b_guards` (W2b-6 schema wave 54/57, B-W2b-376, actual cost to the end: the settings (a close tolerance of 0
+   to 100, where the purchase price variance is taken, the company's switch for the accountant's figures GATE-ACCOUNTANT: only on a
+   company's row, on with when and by whom; never deleted); work-order closes (the reason code exactly beyond the tolerance in force
+   on garments, material cost, minutes or scrap; a live close only of a COMPLETED work order with no other live close, under the
+   work order's costing lock; undone once: the Undo within 60 seconds by the person who closed it, a reopen later with why; an undone
+   close frozen; written undone as history; at commit a live close's work order CLOSED at its time and an undone one's not
+   (`WorkOrderClose_settled`, deferred); never deleted); the variance split append-only (a live close, the switch on, a material only
+   for material price, usage and scrap); its own trigger `WorkOrderCostEntry_close_check` beside the W2a check (a CLOSED or settled
+   work order takes no cost entry but a reversal; a VARIANCE entry is the opposite of its variance, before the CLOSE entry; the CLOSE
+   entry leaves the work order's entries at 0; both dated at the close and only while the switch is on; reversed only once their
+   close is undone) and `WorkOrder_close_reopen_check` (CLOSED → COMPLETED only with its close undone and the close's entries
+   reversed); purchase price variances append-only (at the company's place, RECEIPT of a POSTED receipt line of ours for its whole
+   base quantity or INVOICE of a GOODS line, the difference = quantity × (paid − standard) within one minor unit, reversed once);
+   cost of goods sold append-only (one source: a shipment line of a shipment that left, for its garments, or a GOODS line of an
+   issued invoice; the categories adding up; reversed once); landed cost DRAFT → POSTED (the shares adding up, the switch on, one
+   POSTED per charge line: a partial unique) → REVERSED with why, of a CHARGE line for its net amount, only a DRAFT deleted, shares
+   (`share:<allocation>:<lot>`) only while DRAFT on our received lots; every posting outside a HARD-locked period; it redefines W2b
+   F40's `factory_work_order_guard` (CLOSED → COMPLETED, changing only the status, the closing time and the note), the rest word for
+   word; it calls recall's `factory_recall_words_ok`, `factory_recall_not_future` and money's `factory_money_rome_day`,
+   `factory_period_refuse_locked`):
+   `…_cost_sheets_w2b_guards` (W2b-6 schema wave 55/57, B-W2b-378, cost sheets in depth: cost sheet versions per style,
+   company and season (the key `costsheet:<style>:<company>:<season | none>`) born DRAFT (a style of the company or
+   tenant-wide, an OPEN season, the company's currency, a base size of the range, a copy of a lower version of the same
+   series), DRAFT → APPROVED (at least one line, never by its maker (Q3 = A), with a COST_SHEET approval task of the sheet on
+   its yes by the person who decided it) → FROZEN (with why), an approved sheet never edited (only frozen), a frozen one
+   frozen, one APPROVED per series (a partial unique), only a DRAFT deleted; lines written only while the sheet is a DRAFT
+   (the sheet FOR SHARE), cost = quantity × unit cost rounded once to 6 places, a percent line only for overhead, freight,
+   duty or a commission, a size of the range, a source record of the revision (BomLine, RoutingOperation) or of its named
+   table, the source fitting the category, a LEATHER line a leather article, a LABOUR line its kind of work centre in minutes,
+   a PIECE_RATE line only while the company's costing settings switch piece-rate labour on; leather bases (FT2 or DM2, the
+   yield, a grade mix of active grade codes totalling 100), overhead rules (whole months, a percent or an amount with its
+   currency, the active rules of a key never overlapping: a transaction advisory lock per key), cost-per-minute calculations
+   (whole months, cost per minute = direct ÷ minutes + indirect + overhead, applied once as a LabourRate of its company,
+   kind, figure and currency, then frozen; one applied per key and period: a partial unique), material uplifts (exactly one
+   target: a material, a kind or a SUBCONTRACTOR workshop; percents or a transport per piece; LANDED_COST with its receipt
+   days) archived, never deleted, size weights of the style's range; its own triggers `CostingSettings_piece_rate_check`
+   (GATE-PIECE-PAY: switched on only on a company's own row while a site of the company has piece pay ON) and
+   `OptionValue_cost_delta_check` (a material cost delta with its currency, minutes, never 0); no earlier function
+   redefined; it calls recall's `factory_recall_words_ok`, `factory_recall_not_future`, `factory_recall_model_name_ok` and
+   styles' `factory_styles_decimal_ok`):
    `…_config_templates_w2b_guards` (W2b-6 schema wave 56/57, B-W2b-379, configuration without code: custom fields on a record
    type that is a table of the tenant (the code once per record type: the key `field:<recordType>:<code>`; a unit only on NUMBER;
    the grain exactly with the MONEY audience, a MONEY field always MONEY; the portal only for INTERNAL or a price; a list exactly on

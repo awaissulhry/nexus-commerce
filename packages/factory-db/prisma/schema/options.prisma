@@ -170,6 +170,14 @@ model OptionValue {
   freeText          Boolean      @default(false)
   freeTextMaxLength Int?
   freeTextPattern   String?
+  /// W2b-6 (schema wave 55/57, B-W2b-378; FIN-018; design option.effects "Cost delta (cost)"): what choosing the value adds
+  /// to (above 0) or takes off (below 0) a garment's material cost, in materialDeltaCurrency (ISO 4217, exactly with it), and
+  /// the standard minutes it adds or takes off (priced at the labour rate); never 0; null: none. The floor never reads the
+  /// cost (ownership/options.json); the minutes it may.
+  /// @grain cost
+  materialDelta         Decimal?     @db.Decimal(18, 6)
+  materialDeltaCurrency String?
+  minutesDelta          Decimal?     @db.Decimal(10, 3)
   status            MasterStatus @default(ACTIVE)
   version           Int          @default(1)
   createdAt         DateTime     @default(now()) @db.Timestamptz(3)
