@@ -15,6 +15,9 @@ import { deliveryStatusContract, webhookSecretContract } from './delivery-status
 import { threadDeliveryStatus } from './delivery-status/status'
 import { setWebhookSecret } from './delivery-status/webhook-secret'
 import { processSecrets } from '../secrets/service'
+// B-W2b-397 (COL-004): the mis-send guard, before a message to a party goes.
+import { checkMisSend } from './mis-send/check'
+import { misSendContract } from './mis-send/contract'
 
 /**
  * Email out (platform part; plan A1 §3.7; features PLT-139, PLT-230, COL-024): send a mail from a record's thread as
@@ -62,4 +65,7 @@ export default defineRoutes('email-out', manifest, async (app) => {
     requireStepUp(officeAuthOf(app), request)
     return setWebhookSecret(processSecrets(), request, request.params.accountId, request.body, idempotencyKeyFrom(request))
   })
+
+  // B-W2b-397 (COL-004): what a message to the record's party is about to say and to whom, checked before it is sent.
+  app.post('/threads/:recordType/:recordId/emails/check', { schema: misSendContract }, async (request) => checkMisSend(request, { type: request.params.recordType, id: request.params.recordId }, request.body))
 })

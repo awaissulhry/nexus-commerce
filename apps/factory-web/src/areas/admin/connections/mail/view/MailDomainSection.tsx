@@ -10,6 +10,8 @@ import { formatDateTime } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { DISPLAY_NAME_POLICIES, IDENTITY_KINDS, type SendingIdentity } from '../../api'
 import { ConnNotice, CopyButton, CopyField } from '../../view/parts'
+// B-W2b-397: the capture address card.
+import { CaptureCard, type CaptureCardActions } from '../../mail-domain/capture/view/CaptureCard'
 import { dnsRows, draftProblems, emptyDraft, fromAddressOf, IDENTITY_TONE, identityState, RECORD_TONE, recordsText, type AddDomainDraft, type MailDomainModel } from '../model'
 
 export type { MailDomainModel } from '../model'
@@ -20,6 +22,8 @@ export interface MailDomainActions {
   onCheck?: (identity: SendingIdentity) => void
   onRetry?: () => void
   onDismissNotice?: () => void
+  /** B-W2b-397: the capture address card's actions. */
+  capture?: CaptureCardActions
 }
 
 /**
@@ -99,6 +103,7 @@ export function MailDomainSection({ model, actions, prefix }: { model: MailDomai
           ))}
         </div>
       )}
+      {model.capture && <CaptureCard model={model.capture} actions={actions?.capture} />}
       <Card header={t('mail.rule.title')} headingLevel={3} padded>
         <div className="fw-adm-stack">
           <p className="fw-adm-intro">{t('mail.rule.reply')}</p>
@@ -106,7 +111,6 @@ export function MailDomainSection({ model, actions, prefix }: { model: MailDomai
           <p className="fw-adm-hint">
             <Link href={`${prefix}/home/mail-to-sort`}>{t('mail.rule.toSort')}</Link>
           </p>
-          <p className="fw-adm-hint">{t('mail.rule.capture')}</p>
         </div>
       </Card>
       <AddDomainModal model={model} actions={actions} />

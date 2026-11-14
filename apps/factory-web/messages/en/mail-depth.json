@@ -1,0 +1,377 @@
+{
+  "misSend": {
+    "title": "Send to {party}?",
+    "titlePlain": "Send this message?",
+    "send": "Send message",
+    "back": "Back to edit",
+    "retry": "Try again",
+    "checking": "Checking who receives it and what it says…",
+    "clean": "Nothing to look at: the recipients are known and the text names no one else.",
+    "warnings_one": "{count} thing to check",
+    "warnings_other": "{count} things to check",
+    "recipients_one": "{count} recipient",
+    "recipients_other": "{count} recipients",
+    "attachments_one": "{count} attachment",
+    "attachments_other": "{count} attachments",
+    "acknowledge": "I checked the warnings: send it as it is",
+    "subject": "Subject: {subject}",
+    "subjectNone": "No subject typed: an answer takes the thread's subject.",
+    "noUndo": "A mail cannot be taken back once it is sent.",
+    "theParty": "the record's organisation",
+    "file": {
+      "party": "Shared with {party}",
+      "office": "Office only: it cannot be sent"
+    },
+    "warning": {
+      "OTHER_ORGANISATION": {
+        "title": "Goes to another organisation:",
+        "body": "These addresses belong to another customer or supplier, not to {party}."
+      },
+      "UNKNOWN_RECIPIENT": {
+        "title": "Unknown address:",
+        "body": "No contact, portal person or colleague has it: make sure it is {party}'s."
+      },
+      "MENTIONS_COST": {
+        "title": "Mentions cost:",
+        "body": "Cost, margin and purchase prices stay inside the company."
+      },
+      "NAMES_OTHER_CUSTOMER": {
+        "title": "Names another customer:",
+        "body": "{party} would read another customer's name."
+      },
+      "INTERNAL_MENTION": {
+        "title": "@mentions a colleague:",
+        "body": "An @mention belongs in an internal note: {party} reads this message."
+      },
+      "OFFICE_FILE": {
+        "title": "Office-only attachment:",
+        "body": "Take it off, or share it with {party} in Files first."
+      }
+    },
+    "recipient": {
+      "party": "{name}",
+      "partyDomain": "{name} (by its domain)",
+      "other": "Another organisation: {name}",
+      "otherDomain": "Another organisation (by its domain): {name}",
+      "ours": {
+        "colleague": "Our colleague",
+        "domain": "Our company"
+      },
+      "unknown": "Unknown"
+    },
+    "held": {
+      "sending": "Sending…",
+      "checking": "The message is checked first",
+      "failed": "The check did not run: try again",
+      "refused": "This message cannot be checked: go back",
+      "officeFile": "Take off the office-only attachment first",
+      "acknowledge": "Tick that you checked the warnings first"
+    },
+    "problem": {
+      "forbidden": "You may not send mail for this record.",
+      "notFound": "This record is no longer there.",
+      "invalid": "The message cannot be checked as it is: check the addresses.",
+      "signedOut": "You were signed out.",
+      "rateLimited": "Too many checks: wait a moment.",
+      "unavailable": "Nexus cannot be reached right now.",
+      "failed": "The check did not run.",
+      "body": "Nothing was sent. Go back to edit, or try again."
+    }
+  },
+  "tiles": {
+    "title": "Mail",
+    "toSort": "Mail to sort",
+    "toSortHint": "No record found, held or not read",
+    "count_one": "{count} mail",
+    "count_other": "{count} mails",
+    "countMore": "{count}+ mails",
+    "open_one": "{count} open",
+    "open_other": "{count} open",
+    "inboxHint": "{unassigned} with nobody · {mine} mine",
+    "inboxes": "Team inboxes",
+    "none": "None yet",
+    "noneHint": "An administrator makes the team inboxes (orders@, quotes@)."
+  },
+  "inbox": {
+    "unknownSender": "Unknown sender",
+    "noSubject": "(no subject)",
+    "attachments_one": "{count} attachment",
+    "attachments_other": "{count} attachments",
+    "checksFailed": "Checks failed",
+    "inquiryMade": "Inquiry {number}",
+    "noRecord": "No record yet",
+    "state": {
+      "OPEN": "Open",
+      "SNOOZED": "Snoozed",
+      "SNOOZEDAt": "Snoozed until {time}",
+      "CLOSED": "Closed",
+      "CLOSEDAt": "Closed {time}"
+    },
+    "followUpBy": "Follow-up by {time}",
+    "assignee": {
+      "you": "You",
+      "nobody": "Nobody"
+    },
+    "unknownInbox": "Team inbox",
+    "address": "Mail to {address}",
+    "noAddress": "No address yet: the company's mail domain comes first",
+    "members": "Members: {names}",
+    "viewLabel": "Which mail",
+    "view": {
+      "OPEN": "Open",
+      "MINE": "Mine",
+      "UNASSIGNED": "Nobody's",
+      "SNOOZED": "Snoozed",
+      "FOLLOW_UP": "Follow-up",
+      "CLOSED": "Closed",
+      "ALL": "All"
+    },
+    "dismiss": "Dismiss",
+    "retry": "Try again",
+    "table": "{name}: mail",
+    "count_one": "{count} mail",
+    "count_other": "{count} mails",
+    "countMore": "{count}+ mails",
+    "more": "Show more",
+    "moreLoading": "Loading…",
+    "error": {
+      "title": "Couldn't load this team inbox"
+    },
+    "empty": {
+      "OPEN": {
+        "title": "Nothing open",
+        "body": "Every mail of this inbox is closed, snoozed or waiting for its follow-up."
+      },
+      "MINE": {
+        "title": "Nothing with you",
+        "body": "Take a mail from Open or Nobody's and it shows here."
+      },
+      "UNASSIGNED": {
+        "title": "Everything has someone",
+        "body": "Every open mail of this inbox is with a person."
+      },
+      "SNOOZED": {
+        "title": "Nothing snoozed",
+        "body": "A snoozed mail comes back to Open at its time."
+      },
+      "FOLLOW_UP": {
+        "title": "No follow-up waiting",
+        "body": "A follow-up brings a mail back unless the customer answers in its thread first."
+      },
+      "CLOSED": {
+        "title": "Nothing closed",
+        "body": "Close a mail when it is done: it leaves the queue for everyone."
+      },
+      "ALL": {
+        "title": "No mail yet",
+        "body": "Mail sent to this inbox's address lands here."
+      }
+    },
+    "held": {
+      "busy": "Working…",
+      "rejected": "This mail was thrown away",
+      "yoursAlready": "It is yours already",
+      "nobody": "Nobody has it",
+      "closedAlready": "Closed already",
+      "openAlready": "It is open",
+      "reopenFirst": "It is closed: reopen it first",
+      "notSnoozed": "It is not snoozed",
+      "noThread": "Attach it to a record first: a follow-up waits for the answer in its thread",
+      "noFollowUp": "No follow-up is asked",
+      "noOtherInbox": "No other team inbox you work",
+      "noneToTake": "Every selected mail is yours already",
+      "noneSelected": "Select mail first",
+      "noneToClose": "Every selected mail is closed already"
+    },
+    "notice": {
+      "moved": "This mail changed meanwhile: it was read again.",
+      "cannot": "This mail cannot change that way now: it was read again.",
+      "notFound": "This mail is no longer in reach: the list was read again.",
+      "forbidden": "You may not do this.",
+      "invalid": "Not accepted as it is.",
+      "signedOut": "You were signed out.",
+      "unavailable": "Nexus cannot be reached right now.",
+      "failed": "That did not work.",
+      "partial": "{done} of {count} done; the rest changed meanwhile."
+    },
+    "problem": {
+      "read": "Couldn't read the team inboxes.",
+      "forbidden": "You may not see this team inbox.",
+      "notFound": "This team inbox is no longer there.",
+      "unavailable": "Nexus cannot be reached right now."
+    },
+    "done": {
+      "take_one": "Taken: {count} mail is yours.",
+      "take_other": "Taken: {count} mails are yours.",
+      "assign_one": "Assigned: {count} mail.",
+      "assign_other": "Assigned: {count} mails.",
+      "giveBack_one": "Back in the queue: {count} mail.",
+      "giveBack_other": "Back in the queue: {count} mails.",
+      "close_one": "Closed: {count} mail.",
+      "close_other": "Closed: {count} mails.",
+      "reopen_one": "Reopened: {count} mail.",
+      "reopen_other": "Reopened: {count} mails.",
+      "snooze_one": "Snoozed: {count} mail.",
+      "snooze_other": "Snoozed: {count} mails.",
+      "wake_one": "Back now: {count} mail.",
+      "wake_other": "Back now: {count} mails.",
+      "followUp_one": "Follow-up set: {count} mail.",
+      "followUp_other": "Follow-up set: {count} mails.",
+      "clearFollowUp_one": "Follow-up cleared: {count} mail.",
+      "clearFollowUp_other": "Follow-up cleared: {count} mails.",
+      "move_one": "Moved: {count} mail.",
+      "move_other": "Moved: {count} mails."
+    }
+  },
+  "verb": {
+    "open": "Open the mail",
+    "take": "Take it",
+    "assign": "Assign to…",
+    "giveBack": "Give back to the queue",
+    "close": "Close (done)",
+    "reopen": "Reopen",
+    "snooze": "Snooze…",
+    "wake": "Wake now",
+    "followUp": "Follow up…",
+    "clearFollowUp": "Clear the follow-up",
+    "move": "Move to…",
+    "openInquiry": "Open inquiry {number}",
+    "createInquiry": "Create an inquiry",
+    "openRecord": "Open the record",
+    "menu": "Actions for {subject}"
+  },
+  "col": {
+    "from": "From",
+    "subject": "Subject",
+    "received": "Received",
+    "record": "Record",
+    "state": "State",
+    "assignee": "Assignee",
+    "more": "Actions"
+  },
+  "keys": {
+    "take": "Take the mail",
+    "close": "Close the mail"
+  },
+  "bulk": {
+    "take": "Take {count}",
+    "assign": "Assign {count}…",
+    "close": "Close {count}"
+  },
+  "assign": {
+    "title_one": "Assign the mail",
+    "title_other": "Assign {count} mails",
+    "held": "Choose a person first",
+    "go": "Assign",
+    "body": "Members of {name}",
+    "me": "{name} (you)",
+    "nobody": "Nobody",
+    "nobodyHint": "Back to the queue for anyone",
+    "noMembers": "This inbox has no members yet."
+  },
+  "move": {
+    "title": "Move to another team inbox",
+    "held": "Choose an inbox first",
+    "go": "Move",
+    "body": "Its assignee stays only if they are a member there."
+  },
+  "followUp": {
+    "title": "Follow up: {what}",
+    "body": "The mail comes back to Open then, unless the customer answers in the record's thread first.",
+    "go": "Set the follow-up",
+    "choice": {
+      "LATER_TODAY": "Later today",
+      "TOMORROW": "Tomorrow morning",
+      "MONDAY": "Monday morning",
+      "PICK": "Pick a time"
+    },
+    "pickLabel": "Time",
+    "pickHint": "From 5 minutes to 90 days from now",
+    "cancels": "An answer in the thread cancels it by itself.",
+    "pickFirst": "Pick a time first",
+    "tooSoon": "At least 5 minutes from now",
+    "tooFar": "Within 90 days"
+  },
+  "dialog": {
+    "cancel": "Cancel"
+  },
+  "inquiry": {
+    "held": {
+      "noRight": "Needs the right to manage inquiries",
+      "made": "An inquiry was made of this mail already",
+      "failed": "This mail could not be read",
+      "notWaiting": "Only a mail waiting here or in a thread"
+    }
+  },
+  "capture": {
+    "copy": "Copy capture address",
+    "copied": "Copied",
+    "copiedSaid": "Copied: {address}",
+    "copyFailed": "Could not copy: Admin › Connections & API shows the address.",
+    "setUp": "Set it up",
+    "held": {
+      "reading": "Reading the capture address…",
+      "noDomain": "The company has no mail domain yet (Admin › Connections & API)",
+      "none": "No capture address yet: Admin › Connections & API makes one"
+    },
+    "problem": {
+      "forbidden": "You may not see the capture address.",
+      "unavailable": "Nexus cannot be reached right now.",
+      "read": "Couldn't read the capture address."
+    }
+  },
+  "captureAdmin": {
+    "title": "Capture address",
+    "intro": "Forward or BCC any mail to it: it joins the record its subject names (an order, a quote, an inquiry…), else the customer's or supplier's conversation; what it cannot place waits in Mail to sort. Only a colleague's own mail that passes DMARC is matched.",
+    "reading": "Reading the capture address…",
+    "failed": "Couldn't read the capture address",
+    "noDomain": {
+      "title": "Add your mail domain first",
+      "body": "The capture address lives at the domain that receives replies (above)."
+    },
+    "none": {
+      "title": "No capture address yet",
+      "body": "Make one, then forward or BCC any mail to it."
+    },
+    "make": "Make a capture address",
+    "made": "Made",
+    "lands": "Mail it cannot place goes to",
+    "landsToSort": "Mail to sort",
+    "defaultLabel": "Mail it cannot place",
+    "defaultHint": "A team inbox, or Mail to sort",
+    "noAddress": "No address: the company receives no mail at a domain now.",
+    "replace": "Replace…",
+    "turnOff": "Turn off…",
+    "toMail": "Open Home › Mail to sort",
+    "held": {
+      "noRight": "Needs the right to manage team inboxes",
+      "noDomain": "Add the mail domain first",
+      "busy": "Working…"
+    },
+    "confirm": {
+      "replace": {
+        "title": "Replace the capture address?",
+        "body": "A new address is made and the old one stops at once: mail sent to it is no longer matched and waits in Mail to sort as any other mail. Tell your colleagues the new one.",
+        "go": "Replace"
+      },
+      "turnOff": {
+        "title": "Turn off the capture address?",
+        "body": "No mail is matched through it any more: forwarded mail waits in Mail to sort. You can make a new address later.",
+        "go": "Turn off"
+      }
+    },
+    "notice": {
+      "changed": "The capture address changed meanwhile: it was read again.",
+      "forbidden": "You may not change the capture address.",
+      "invalid": "Not accepted as it is: it was read again.",
+      "unavailable": "Nexus cannot be reached right now.",
+      "failed": "That did not work."
+    },
+    "done": {
+      "made": "The capture address is ready: copy it and forward mail to it.",
+      "replaced": "Replaced: the old address no longer works.",
+      "turnedOff": "Turned off: no mail is matched through it any more.",
+      "pointed": "Saved: mail it cannot place goes there now."
+    }
+  }
+}

@@ -267,6 +267,13 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
 - `src/record-panels/` — SCR-006, the panels every record page mounts: `<RecordPanels record={{ type, id, companyId,
   siteId }} title party />` (thread, files, history; live refresh from `/live`). A screen with its own catalogue wraps its
   view in `WithMessages` (record-panels/i18n.tsx): the layouts load `shell` only.
+- B-W2b-397 (catalogue `mail-depth`): `src/shell/panels/mis-send/` = "Send to <party>?" (SCR-437, COL-004): RecordPanels' email
+  send goes through `useMisSend` (`POST /threads/:type/:id/emails/check`, then the panel's own send; Send held while checking, on
+  an office-only file and until the warnings are ticked). `src/areas/home/mail/{team-inbox,create-inquiry,capture}/` = Home › Mail
+  to sort's parts (SCR-438): the team inbox tiles and queue (`?inbox=<id>&view=OPEN`, the list frame; take, assign, give back,
+  close, reopen, snooze, wake, follow up, move, each with the mail's version), "Create an inquiry" (a link to
+  `/sales/inquiries?mail=<id>`), "Copy capture address". `src/areas/admin/connections/mail-domain/capture/` = the capture
+  address card in Your mail domain (SCR-439, `#capture`).
 - `src/areas/quality/` (Inspections SCR-075, the record SCR-076 with its release, reversal and quality-rules dialogs, the
   evidence trail `/compliance/evidence/<batch|serial>/<subject>`) and `src/areas/compliance/` (Tests & substances SCR-054:
   lots, Cr VI results, the lot release; PPE register SCR-113): their shared parts are `areas/quality/_shared/` (record
