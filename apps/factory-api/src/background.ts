@@ -159,6 +159,8 @@ import { orderScheduleHandler } from './modules/sales/quote-terms/carry'
 import { fittingRemindersCron } from './modules/sales/fittings/reminders'
 // B-W2b-340: an order that waited for a yes takes its quote lines' options once it is CONFIRMED.
 import { orderOptionsHandler } from './modules/sales/configurator/copy'
+// B-W2b-389: the daily ECB reference rates (16:30 and 18:30 Europe/Rome, Monday to Friday; only where switched on; FAKE locally).
+import { ecbDailyCron } from './platform/currency/feed'
 
 /**
  * The factory's background processes (plan A1 §3.1), one codebase with the API, two Railway services:
@@ -396,6 +398,8 @@ if (mode === 'worker') {
   crons.push(fittingRemindersCron({ database, log }))
   // B-W2b-385: every 15 minutes, the followed saved views counted as their people; a change tells them (notification.view_changed).
   crons.push(viewFollowCron({ database, log, memory: redisIdMemory(redis, prefix) }))
+  // B-W2b-389
+  crons.push(ecbDailyCron({ database, log }))
   const scheduler = startCrons(crons, { redis, prefix, log })
   stops.push(() => scheduler.stop())
 }

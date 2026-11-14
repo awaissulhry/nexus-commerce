@@ -3,6 +3,10 @@ import type { WaitingView } from '@nexus/factory-domain/costing/ledger/contracts
 import type { EntryDraft } from '@nexus/factory-domain/costing/ledger/entries'
 import { bookedPiecesOf, costKindWords, type CostKind } from '@nexus/factory-domain/purchasing/subcontract-depth/cost'
 import type { CommandTx } from '../../../core/command'
+// B-W2b-389 (CY1:03): the workshop's charges of an order in another currency converted.
+import { convertMinor, convertUnit } from '@nexus/factory-domain/money/currency/convert'
+import { rateWords } from '@nexus/factory-domain/money/currency/rates'
+import type { OrderRate } from './rate'
 
 /**
  * The workshop's own cost entries as a source of the work order's cost ledger (B-W2b-331; SCM-146; FIN-026;
@@ -16,7 +20,9 @@ import type { CommandTx } from '../../../core/command'
  *                 posts its own (negative) entry, so the work order's cost follows the order's ledger line by line
  *   FEE pieces    the pieces a FEE entry books are paid there at the workshop's price: W2a's earned fee leaves them out
  *                 (`bookedFeePieces`), so a piece is never paid twice
- *   currency      an order in another currency than the work order's cost waits, in words (no exchange rates), as W2a's
+ *   currency      B-W2b-389 (CY1:03): an order in another currency than the work order's cost posts each entry in the work
+ *                 order's currency at the order's rate (./rate.ts, one per order, the same as W2a's fee); none kept: it
+ *                 waits, in words
  *
  * The entries' words name the order, the kind and the operation, never a price or an amount (the ledger's reason shows to
  * people without the cost grain).
@@ -44,6 +50,8 @@ export async function workshopEntryPlan(
   orders: readonly { readonly id: string; readonly number: string; readonly currency: string }[],
   existing: readonly { readonly idempotencyKey: string }[],
   ids: () => string,
+  /** B-W2b-389 (CY1:03): the rate of each order in another currency than the work order's (orderRateOf). */
+  rates: ReadonlyMap<string, OrderRate> = new Map(),
 ): Promise<{ drafts: EntryDraft[]; waiting: WaitingView[] }> {
   if (orders.length === 0) return { drafts: [], waiting: [] }
   const entries = await db.subcontractCostEntry.findMany({
@@ -64,10 +72,12 @@ export async function workshopEntryPlan(
     const key = workshopEntryKey(entry.id)
     if (keys.has(key)) continue
     const order = orderOf.get(entry.subcontractOrderId)!
-    if (order.currency !== workOrder.currency) {
+    const converted = order.currency !== workOrder.currency ? rates.get(order.id) : undefined
+    const rate = converted?.rate ?? null
+    if (order.currency !== workOrder.currency && !rate) {
       if (!waits.has(order.id)) {
         waits.add(order.id)
-        waiting.push({ code: 'CURRENCY', sourceType: 'SubcontractOrder', sourceId: order.id, words: `The workshop's charges on subcontract order ${order.number} are in ${order.currency}; the work order's cost is kept in ${workOrder.currency} (no exchange rates).` })
+        waiting.push({ code: 'CURRENCY', sourceType: 'SubcontractOrder', sourceId: order.id, words: `The workshop's charges on subcontract order ${order.number} are in ${order.currency}; the work order's cost is kept in ${workOrder.currency}. ${converted?.words ?? ''}`.trim() })
       }
       continue
     }
@@ -79,10 +89,10 @@ export async function workshopEntryPlan(
       itemId: null,
       quantity: null,
       minutes: null,
-      unitCost: entry.unitPrice.toFixed(6),
+      unitCost: rate ? convertUnit(entry.unitPrice.toFixed(6), order.currency, workOrder.currency, rate) : entry.unitPrice.toFixed(6),
       standardUnitCost: null,
       standardCostId: null,
-      amount: entry.amount,
+      amount: rate ? convertMinor(entry.amount, order.currency, workOrder.currency, rate) : entry.amount,
       stockMoveId: null,
       operationScanId: null,
       subcontractOrderId: order.id,
@@ -90,7 +100,7 @@ export async function workshopEntryPlan(
       sourceType: 'SubcontractCostEntry',
       sourceId: entry.id,
       reversalOfId: null,
-      reason: `Workshop ${costKindWords(entry.kind as CostKind)} of ${order.number}${seq !== undefined ? `, operation ${seq}` : ''}${entry.reversalOfId ? ': taken back' : ''}`,
+      reason: `Workshop ${costKindWords(entry.kind as CostKind)} of ${order.number}${seq !== undefined ? `, operation ${seq}` : ''}${entry.reversalOfId ? ': taken back' : ''}${rate ? `; in ${workOrder.currency} at ${rateWords(rate)} of ${rate.rateDate}` : ''}`,
       idempotencyKey: key,
     })
   }

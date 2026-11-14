@@ -29,6 +29,8 @@ import { heldGoodByOperation } from '../subcontracting/held'
 import { officeOrder, readOperations, readOrder, type OrderRow } from '../subcontracting/store'
 import { workshopEntryKey } from './cost-source'
 import { inWords } from './guarded'
+// B-W2b-389 (CY1:03): the order's rate when it is in another currency than the work order's.
+import { orderRateOf } from './rate'
 
 /**
  * The workshop's cost on the work order (B-W2b-331; SCM-146; design purchasing.subcontracting record tab "Cost": the bridge
@@ -122,7 +124,9 @@ export async function costView(db: Reader, context: OfficeContext, order: OrderR
     entries.map((entry) => ({ kind: entry.kind as CostKind, amount: entry.amount })),
   )
   const posted = ledger.reduce((sum, row) => sum + row.amount, 0)
-  const currencyWait = workOrder && workOrder.currency !== order.currency ? `Subcontract order ${order.number} is in ${order.currency}; the work order's cost is kept in ${workOrder.currency} (no exchange rates): nothing posts there yet.` : null
+  // B-W2b-389 (CY1:03): another currency posts at the order's rate; it waits only while no rate of its day is kept.
+  const converted = workOrder && workOrder.currency !== order.currency ? await orderRateOf(db, order, workOrder.currency) : null
+  const currencyWait = workOrder && converted?.words ? `Subcontract order ${order.number} is in ${order.currency}; the work order's cost is kept in ${workOrder.currency}: nothing posts there yet. ${converted.words}` : null
   const seesInvoices = can(actorOf(context), PAYABLES_VIEW, { companyId: order.companyId, partyId: order.partyId })
   const lines = seesInvoices
     ? await db.supplierInvoiceLine.findMany({ where: { subcontractOrderId: order.id }, select: { id: true, invoiceId: true, seq: true, description: true, netAmount: true }, orderBy: [{ invoiceId: 'asc' }, { seq: 'asc' }] })

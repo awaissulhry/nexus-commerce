@@ -1,6 +1,10 @@
 import { ConflictError } from '@nexus/factory-domain/core/errors'
-import { companyValueOf } from '@nexus/factory-domain/purchasing/po-depth/currency'
+import { companyValueOf, takesRate } from '@nexus/factory-domain/purchasing/po-depth/currency'
 import type { CommandTools } from '../../../core/command'
+// B-W2b-389 (CY1:01): the day's rate of the rates table.
+import { businessDate } from '@nexus/factory-domain/core/time'
+import { rateWords } from '@nexus/factory-domain/money/currency/rates'
+import { dayRate } from '../../../platform/currency/service'
 
 /**
  * B-W2b-296 (SCM-065): the value in the company's currency of a DRAFT order in another currency, at its rate at order:
@@ -20,4 +24,21 @@ export async function refreshCompanyValue(tools: Pick<CommandTools, 'tx'>, order
   }
   if (value !== row.companyNetAmount) await tools.tx.purchaseOrder.update({ where: { id: orderId }, data: { companyNetAmount: value }, select: { id: true } })
   return value
+}
+
+/**
+ * B-W2b-389 (CY1:01): a DRAFT order in another currency with no rate typed takes the day's rate of the rates table as its
+ * rate at order, in the send's own command (before its total and value are written and frozen): 1 <company currency> =
+ * rate <order currency> of the send's day (or the last day before it with a rate), recorded on an audit row with where it
+ * came from. A typed rate stays (it is the override). None kept: nothing is written (the send's checks refused it already).
+ */
+export async function takeDayRate(tools: Pick<CommandTools, 'tx' | 'now' | 'audit'>, orderId: string): Promise<void> {
+  const row = await tools.tx.purchaseOrder.findUnique({ where: { id: orderId }, select: { status: true, currency: true, companyId: true, siteId: true, rateAtOrder: true } })
+  if (!row || row.status !== 'DRAFT' || row.rateAtOrder !== null) return
+  const company = await tools.tx.company.findUniqueOrThrow({ where: { id: row.companyId }, select: { currency: true } })
+  if (!takesRate(row.currency, company.currency)) return
+  const rate = await dayRate(tools.tx, company.currency, row.currency, businessDate(tools.now))
+  if (!rate) return
+  await tools.tx.purchaseOrder.update({ where: { id: orderId }, data: { rateAtOrder: rate.rate, companyNetAmount: 0 }, select: { id: true } })
+  tools.audit({ action: 'purchasing.rate', recordType: 'PurchaseOrder', recordId: orderId, companyId: row.companyId, siteId: row.siteId, before: { rateAtOrder: null }, after: { rateAtOrder: rate.rate, rate: rateWords(rate), rateDate: rate.rateDate, source: rate.source, taken: 'DAY_RATE' } })
 }

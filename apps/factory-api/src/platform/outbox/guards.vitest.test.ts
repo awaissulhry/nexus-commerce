@@ -59,7 +59,9 @@ describe('check-event-contract', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
     // and one literal emit (purchasing_settings.changed by PUT /purchasing/reminders/settings/timing): 831 → 835, 1299 → 1300.
     // B-W2b-384: one event (shipping.carton_packed) and six literal emits (the carton scan, take-out, close ×2, marks, marks print job): 835 → 836, 1300 → 1306.
     // B-W2b-385: one event (notification.view_changed, emitted through eventFor, not a literal): 836 → 837.
-    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(837 declared event version\(s\), 1306 literal emit/) })
+    // B-W2b-389: two events (currency.changed, currency.rates_changed) and six literal emits (a currency added and switched, a
+    // manual rate kept and removed, the daily ECB switch, an ECB file read): 837 → 839, 1306 → 1312.
+    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(839 declared event version\(s\), 1312 literal emit/) })
   })
 
   it.each<[string, Plants, RegExp]>([

@@ -1611,7 +1611,8 @@
     "safety": "Sicurezza sul lavoro",
     "partners": "Portali dei partner",
     "portal": "Portale (partner)",
-    "approvals": "Approvazioni"
+    "approvals": "Approvazioni",
+    "currencies": "Valute e cambi"
   },
   "perm": {
     "companies_view": "Vedere le società e se possono fatturare",
@@ -1879,6 +1880,8 @@
     "paymentterms_manage": "Aggiungere e cambiare condizioni di pagamento",
     "pricelists_view": "Vedere i listini, le loro versioni datate e i prezzi, gli scaglioni di quantità, le maggiorazioni per taglia e i minimi d’ordine, e i clienti che li usano",
     "pricelists_manage": "Gestire i listini: versioni, prezzi datati, scaglioni di quantità, maggiorazioni per taglia, minimi d’ordine, lo sconto mostrato, le importazioni e i clienti a cui si applicano",
+    "currencies_view": "Vedere le valute della società e i cambi di ogni giorno",
+    "currencies_manage": "Aggiungere o spegnere una valuta dei documenti; tenere a mano il cambio di un giorno; accendere o spegnere i cambi BCE giornalieri",
     "quality_defects_view": "Vedere la libreria dei difetti e le destinazioni",
     "quality_defects_manage": "Gestire la libreria dei difetti e le destinazioni",
     "quality_holds_view": "Vedere cosa è bloccato",

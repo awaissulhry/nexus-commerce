@@ -220,7 +220,7 @@
     "ledger": {
       "holds_one": "{workOrder}’s cost holds {amount} of this order ({count} entry).",
       "holds_other": "{workOrder}’s cost holds {amount} of this order ({count} entries).",
-      "currency": "Order {order} is in {currency}; {workOrder} keeps its cost in {woCurrency} (no exchange rates): nothing posts there yet."
+      "currency": "Order {order} is in {currency}; {workOrder} keeps its cost in {woCurrency} and no exchange rate of the order’s day is kept: nothing posts there yet (keep one in Finance › Settings › Currencies & rates)."
     },
     "op": {
       "title": "Per operation",

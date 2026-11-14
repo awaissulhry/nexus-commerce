@@ -18,6 +18,8 @@ import { createTerms, listTerms, moveTerms, updateTerms, type PaymentTerms } fro
 import { fieldsOf, patchOf, rulesChanged, termsAbilitiesOf, termsStatusOf, termsTouched, termsWriteProblem, type TermsDraft, type TermsRows } from './terms/model'
 import type { TermsSectionModel } from './terms/view/TermsSection'
 import { FinanceSettingsView } from './view/FinanceSettingsView'
+// B-W2b-389: Currencies & rates.
+import { CurrenciesContainer } from './currencies/CurrenciesContainer'
 
 /**
  * `/w/<company>/finance/settings` (SCR-083): reads what invoicing reads per company (GET /invoicing/settings:
@@ -230,6 +232,8 @@ function SettingsContainer() {
     <FinanceSettingsView
       key={`${companyId ?? ''}-${bank?.value?.version ?? 0}-${editingBank ? 'edit' : 'read'}`}
       model={model}
+      // B-W2b-389: Currencies & rates of the company shown.
+      currencies={companyId ? <CurrenciesContainer companyId={companyId} /> : null}
       actions={{
         onRetry: () => void load(),
         onRetryBank: () => void readBank(),
