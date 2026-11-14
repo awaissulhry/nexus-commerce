@@ -1,6 +1,9 @@
 import { Decimal } from 'decimal.js'
 import type { BusinessDate } from '../../core/time'
 import type { BomLineData } from '../../product/bom/rules'
+// B-W2b-423 (FIN-019): a sub-assembly line costed at its own roll-up.
+import { lineNeed, netQuantity } from '../../product/bom/requirements'
+import type { RolledLine } from '../rollup/rules'
 import type { ItemKind } from '../../product/materials/rules'
 import type { WorkCentreKind } from '../../product/routing/operations'
 import { baseFactor, decimalOf, decimalText, type Uom } from '../../product/units/units'
@@ -134,6 +137,8 @@ export interface ComponentFacts {
   }
   /** How many garments an export carton holds (no column keeps it: the person says it). */
   readonly piecesPerCarton: number | null
+  /** B-W2b-423 (FIN-019, KS4:02): the sub-assembly lines, by BOM line id, costed at their own roll-up (costing/rollup). */
+  readonly rolledUp?: ReadonlyMap<string, RolledLine> | undefined
 }
 
 /** One line, as a cost sheet keeps it (seq given when it is written). */
@@ -194,6 +199,8 @@ interface Draft {
   readonly unitCost: string
   readonly pct: string | null
   readonly note: string | null
+  /** B-W2b-423: a sub-assembly rolled up (its own overhead and uplifts are in it: never counted on it again). */
+  readonly rolled?: true
 }
 
 /** The order lines are listed in: leather, materials, the BOM's packaging, labour, outside operations, freight, duty, the packaging master, overhead. */
@@ -218,13 +225,15 @@ export function componentsOf(facts: ComponentFacts): Components {
   }
 
   // W1's material math (factory-domain costing/sheet): the prices, the units and each size's parts, never its labour.
+  // B-W2b-423: a sub-assembly line rolled up is costed below at its own cost, never at the component's standard price.
+  const rolledUp = facts.rolledUp ?? new Map<string, RolledLine>()
   const prepared = prepareSheet({
     currency: facts.currency,
     companyId: facts.companyId,
     on: facts.on,
     sizes: facts.sizes,
     colourwayIds: [facts.colourwayId],
-    lines: facts.lines,
+    lines: facts.lines.filter((line) => !rolledUp.has(line.id)),
     materials: facts.materials,
     steps: [],
     rates: [],
@@ -232,6 +241,7 @@ export function componentsOf(facts: ComponentFacts): Components {
   })
   for (const entry of prepared.missing.values()) {
     if (!W1_MATERIAL_CODES.has(entry.code)) continue
+    if (entry.code === 'NO_BOM' && facts.lines.length > 0) continue // B-W2b-423: every line is a sub-assembly
     miss({ key: entry.key, code: entry.code as ComponentMissing, itemId: entry.itemId, recordType: entry.lineId ? 'BomLine' : null, recordId: entry.lineId, size: entry.size, message: entry.message })
   }
 
@@ -297,6 +307,44 @@ export function componentsOf(facts: ComponentFacts): Components {
         note,
       })
       materialCosts.push({ itemId: material.id, kind: material.kind, cost: decimalOf(lineCost(quantity, unitCost)) })
+    }
+
+    // ---- B-W2b-423 (FIN-019): sub-assembly lines at their own roll-up, as MATERIAL lines of the component ----
+    for (const line of [...facts.lines].sort((a, b) => a.seq - b.seq)) {
+      const rolled = rolledUp.get(line.id)
+      if (!rolled) continue
+      if (line.colourwayId !== null && line.colourwayId !== facts.colourwayId) continue
+      const material = facts.materials.get(line.itemId)
+      if (!material) continue
+      const net = netQuantity(line, size)
+      if (net !== null && net.isZero()) continue
+      const need = net === null ? null : lineNeed(line, size, material.units)
+      if (need === null) {
+        miss({ key: `${net === null ? 'BOM_QUANTITY' : 'MATERIAL_UNIT'}:${line.id}${net === null ? `:${size}` : ''}`, code: net === null ? 'BOM_QUANTITY' : 'MATERIAL_UNIT', itemId: material.id, recordType: 'BomLine', recordId: line.id, size: net === null ? size : null, message: net === null ? `BOM line ${line.seq} (${material.code}) has no quantity for size ${size}.` : `BOM line ${line.seq} is in ${line.uom}, which ${material.code} does not convert to its base unit ${material.units.baseUom}.` })
+        continue
+      }
+      const at = rolled.bySize.get(size)
+      if (!at || !at.ok) {
+        miss({ key: `SUB_ASSEMBLY_COST:${line.id}:${size}`, code: 'SUB_ASSEMBLY_COST', itemId: material.id, recordType: 'BomLine', recordId: line.id, size, message: at && !at.ok ? at.message : `BOM line ${line.seq} (${material.code}): its sub-assembly is not costed for size ${size}.` })
+        continue
+      }
+      drafts.push({
+        key: `bom:${line.id}`,
+        rank: RANK.MATERIAL,
+        category: 'MATERIAL',
+        source: 'BOM_LINE',
+        sourceRecordType: 'BomLine',
+        sourceRecordId: line.id,
+        itemId: material.id,
+        workCentreKind: null,
+        label: `${material.code} ${material.name}`.slice(0, 200),
+        quantity: four(need.base),
+        uom: material.units.baseUom,
+        unitCost: at.perBaseUnit,
+        pct: null,
+        note: rolled.note.slice(0, 1000),
+        rolled: true,
+      })
     }
 
     // ---- labour: piece rate where it holds in every size, else minutes ----
@@ -491,7 +539,7 @@ export function componentsOf(facts: ComponentFacts): Components {
     }
     const settings = facts.settingsOverhead
     if (!ruled && settings !== null && new Decimal(settings.overheadPct).gt(0)) {
-      const base = drafts.filter((draft) => draft.category === 'MATERIAL' || draft.category === 'LEATHER' || draft.category === 'LABOUR' || (draft.category === 'PACKAGING' && draft.source === 'BOM_LINE')).reduce((sum, draft) => sum.plus(lineCost(draft.quantity, draft.unitCost)), ZERO)
+      const base = drafts.filter((draft) => !draft.rolled && (draft.category === 'MATERIAL' || draft.category === 'LEATHER' || draft.category === 'LABOUR' || (draft.category === 'PACKAGING' && draft.source === 'BOM_LINE'))).reduce((sum, draft) => sum.plus(lineCost(draft.quantity, draft.unitCost)), ZERO)
       drafts.push({ key: `settings:${settings.id}`, rank: RANK.OVERHEAD, category: 'OVERHEAD', source: 'COSTING_SETTINGS', sourceRecordType: 'CostingSettings', sourceRecordId: settings.id, itemId: null, workCentreKind: null, label: 'Overhead on material and labour', quantity: '1', uom: null, unitCost: six(base.times(settings.overheadPct).div(100)), pct: decimalText(settings.overheadPct), note: 'No overhead rule is in force: the costing settings’ percent on material and labour.' })
     }
     bySize.set(size, drafts)

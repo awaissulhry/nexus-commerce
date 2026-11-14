@@ -268,6 +268,8 @@ export const COMPONENT_MISSING = [
   'PACKAGING_PRICE',
   'CARTON_PIECES',
   'OVERHEAD_FIGURE',
+  // B-W2b-423 (FIN-019): a sub-assembly that cannot be rolled up for a size (costing/rollup).
+  'SUB_ASSEMBLY_COST',
 ] as const
 export type ComponentMissing = (typeof COMPONENT_MISSING)[number]
 

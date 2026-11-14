@@ -16,6 +16,8 @@ import { withPersonFloor } from '../price-waterfall/floors'
 import { mtmCostTarget } from './mtm-line'
 import { decimal, moneyLineOf, quotePartyOf, readLineRecords, storedVat, treatmentFor, VERSION_COLUMNS, type LineRecord, type QuoteParty, type QuoteRow, type Reader, type VersionRow } from './store'
 import { unitFingerprint } from '../mtm/fingerprint'
+// B-W2b-423 (KS4:01): an option's own cost joins the line's cost and margin.
+import { lineOptionsCost, quoteLineValues } from '../../costing/option-cost/line'
 
 /**
  * A quote version's money, written (B-W1-21): the cost of a line from its style's cost sheet (costing, B-W1-16: the
@@ -32,6 +34,8 @@ export interface CostTarget {
   readonly styleRevisionId: string | null
   readonly colourwayId: string
   readonly sizes: readonly SizeRow[]
+  /** B-W2b-423 (KS4:01): the option values chosen on the line (their own cost joins the line's). */
+  readonly optionValueIds?: readonly string[] | undefined
 }
 
 export interface CostedLine {
@@ -64,8 +68,16 @@ export async function costLine(tx: CommandTx | Reader, cache: SheetCache, target
   if (target.styleRevisionId === null) return { cost: { complete: false, unitCost: null, amount: null }, snapshot: null }
   const { sheet, revision } = await sheetOf(tx, cache, target, company, now)
   const cells = target.sizes.map((row) => exactCell(sheet, target.colourwayId, row.size))
+  // B-W2b-423 (KS4:01): the options chosen on the line join its cost, size by size (one not known: the line's cost is not complete).
+  const options =
+    target.optionValueIds && target.optionValueIds.length > 0 && company.id !== null
+      ? await lineOptionsCost(tx, { styleId: target.styleId, revisionId: revision.id, companyId: company.id, currency: company.currency, colourwayId: target.colourwayId, sizes: target.sizes.map((row) => row.size), valueIds: target.optionValueIds, on: sheet.facts.on })
+      : null
   const cost = lineCostOf(
-    cells.map((cell, index) => ({ quantity: target.sizes[index]!.quantity, complete: cell.missing.length === 0, knownTotal: cell.knownTotal })),
+    cells.map((cell, index) => {
+      const extra = options === null ? undefined : (options.bySize.get(cell.size) ?? null)
+      return { quantity: target.sizes[index]!.quantity, complete: cell.missing.length === 0 && extra !== null, knownTotal: extra ? cell.knownTotal.plus(extra) : cell.knownTotal }
+    }),
     company.currency,
   )
   const snapshot = {
@@ -79,6 +91,7 @@ export async function costLine(tx: CommandTx | Reader, cache: SheetCache, target
     complete: cost.complete,
     cells: cells.map((cell, index) => ({ quantity: target.sizes[index]!.quantity, ...cellView(cell) })),
     missing: missingView(sheet, cells),
+    ...(options === null ? {} : { options: options.snapshot }),
   }
   return { cost, snapshot: snapshot as unknown as Prisma.InputJsonValue }
 }
@@ -132,7 +145,8 @@ export async function refreshVersion(tools: CommandTools, quote: QuoteRow, versi
     if (recost !== 'all' && !recost.has(line.id)) continue
     // B-W2b-330 (SAL-181): a fee has no cost sheet: its cost is 0, its margin all of its net.
     // B-W2b-358: a made-to-measure unit is costed as one piece of its base size (./mtm-line.ts mtmCostTarget).
-    const result: CostedLine = line.kind === 'FEE' ? { cost: { complete: true, unitCost: '0', amount: 0 }, snapshot: null } : await costLine(tx, cache, mtmCostTarget(line), company, now)
+    // B-W2b-423 (KS4:01): with the options chosen on it.
+    const result: CostedLine = line.kind === 'FEE' ? { cost: { complete: true, unitCost: '0', amount: 0 }, snapshot: null } : await costLine(tx, cache, { ...mtmCostTarget(line), optionValueIds: await quoteLineValues(tx, line.id) }, company, now)
     costed.set(line.id, result)
     await tx.quoteLine.update({
       where: { id: line.id },
