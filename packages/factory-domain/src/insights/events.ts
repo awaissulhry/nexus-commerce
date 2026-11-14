@@ -13,6 +13,9 @@ import { defineEvent } from '../events/define'
  *   attention.snoozed        (W2a) a row was snoozed until a time, or until its condition changes: it leaves Today
  *   attention.nudged         (W2a) a person reminded the people they wait on (Waiting on others › Nudge): the
  *                            notification centre tells those who may decide; once a day at most
+ *   kpi.changed              (B-W2b-428) a KPI version drafted, edited, deleted, put in force or the KPI withdrawn
+ *   kpi.uses_changed         (B-W2b-428) where KPIs are used kept in step with the readers' registries
+ *   facts.rebuilt            (B-W2b-428) a company's daily and hourly facts of some days rebuilt from the records
  */
 
 const row = {
@@ -73,5 +76,46 @@ export const events = [
       byId: z.uuid(),
     }),
     live,
+  }),
+  // B-W2b-428 (ANA-012, ANA-069, ANA-070): the metric layer. A KPI version written, changed, deleted, put in force or
+  // withdrawn; where KPIs are used kept in step with the readers' registries; a company's facts rebuilt from the records
+  // (the KPI library and every number on it read again). Live to the people who read the KPI library.
+  defineEvent({
+    type: 'kpi.changed',
+    context: 'insights',
+    description: 'A version of a KPI was written, changed or deleted as a draft, put in force (the one before it superseded), or the KPI was withdrawn.',
+    payload: z.strictObject({
+      kpiKey: z.string(),
+      kpiVersion: z.number().int().min(1),
+      /** The version's row (KpiDefinition). */
+      definitionId: z.uuid(),
+      action: z.enum(['DRAFTED', 'EDITED', 'DELETED', 'ACTIVATED', 'RETIRED', 'INSTALLED']),
+      /** ACTIVATED: the version it superseded, if one was in force. */
+      supersededId: z.uuid().nullable(),
+    }),
+    live: { permission: 'home.kpis.view', fields: ['kpiKey', 'kpiVersion', 'action'] },
+  }),
+  defineEvent({
+    type: 'kpi.uses_changed',
+    context: 'insights',
+    description: 'Where KPIs are used was kept in step with the readers that read them (uses added and removed).',
+    payload: z.strictObject({ added: z.number().int().min(0), removed: z.number().int().min(0), kpiKeys: z.array(z.string()) }),
+    live: { permission: 'home.kpis.view', fields: ['kpiKeys'] },
+  }),
+  defineEvent({
+    type: 'facts.rebuilt',
+    context: 'insights',
+    description: "A company's daily and hourly facts of some days were rebuilt from the records (by the hour, after an event, or by a person).",
+    payload: z.strictObject({
+      companyId: z.uuid(),
+      from: z.string(),
+      to: z.string(),
+      /** The sources rebuilt (factory-domain insights/kpis/measures MEASURE_SOURCES). */
+      sources: z.array(z.string()),
+      daily: z.number().int().min(0),
+      hourly: z.number().int().min(0),
+      trigger: z.enum(['HOURLY', 'NIGHTLY', 'EVENT', 'PERSON']),
+    }),
+    live: { permission: 'home.kpis.view', fields: ['companyId', 'from', 'to', 'sources'] },
   }),
 ] as const

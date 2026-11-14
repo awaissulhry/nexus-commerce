@@ -37,4 +37,19 @@ export const manifest = defineManifest({
   'GET /sales/reports/backlog': { audiences: ['office'], permission: 'sales.reports.view', scope: 'record' },
   'GET /sales/reports/returns': { audiences: ['office'], permission: 'sales.reports.view', scope: 'record' },
   'GET /sales/reports/quote-speed': { audiences: ['office'], permission: 'quotes.view', scope: 'record' },
+  // B-W2b-428 (kpis/, facts/): the metric layer, office only. The KPI library with home.kpis.view, its versions, the standard
+  // KPIs, their uses and a rebuild of the facts with home.kpis.manage; every value also asks its measures' list permissions and
+  // grains, a rebuild the companies of the person's grant (`record`).
+  'GET /insights/kpis': { audiences: ['office'], permission: 'home.kpis.view', scope: 'record' },
+  'POST /insights/kpis/sync': { audiences: ['office'], permission: 'home.kpis.manage', scope: 'record' },
+  'GET /insights/kpis/:key': { audiences: ['office'], permission: 'home.kpis.view', scope: 'record' },
+  'GET /insights/kpis/:key/value': { audiences: ['office'], permission: 'home.kpis.view', scope: 'record' },
+  'POST /insights/kpis/:key/versions': { audiences: ['office'], permission: 'home.kpis.manage', scope: 'record' },
+  'POST /insights/kpis/:key/retire': { audiences: ['office'], permission: 'home.kpis.manage', scope: 'record' },
+  'PATCH /insights/kpis/versions/:id': { audiences: ['office'], permission: 'home.kpis.manage', scope: 'record' },
+  'POST /insights/kpis/versions/:id/activate': { audiences: ['office'], permission: 'home.kpis.manage', scope: 'record' },
+  'DELETE /insights/kpis/versions/:id': { audiences: ['office'], permission: 'home.kpis.manage', scope: 'record' },
+  'GET /insights/measures': { audiences: ['office'], permission: 'home.kpis.view', scope: 'record' },
+  'GET /insights/facts': { audiences: ['office'], permission: 'home.kpis.view', scope: 'record' },
+  'POST /insights/facts/rebuild': { audiences: ['office'], permission: 'home.kpis.manage', scope: 'record' },
 })
