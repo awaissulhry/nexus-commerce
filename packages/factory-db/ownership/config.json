@@ -1,0 +1,69 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/config.prisma (rules: src/ownership.ts; roles: src/roles.ts). Office only: apps/factory-api's fields routes (B-W2b-421: custom fields, their values, picklists), its templates routes (B-W2b-422: document, e-mail and message templates) and its quote template routes (the options a template line starts with) write through command(); who may read and change them is the API's permission. The portal reads the custom fields shown in it, the document renderer the document templates and the mail worker the e-mail templates in the tenant's system scope (office role factory_runtime, RLS forced), as CompanyBranding is read. No floor or partner grant: a custom value is one Json column whose field may hold a cost or personal data, so no column grant could hide it (a later floor or portal read goes through the API in the system scope). The …_config_templates_w2b_guards triggers keep custom fields, picklists and their values (deactivated or archived, never deleted), a template version's words once published, and refuse TRUNCATE for every login. Nothing here is a money column: a MONEY custom value carries its field's grain, and the API strips it like a built-in money field. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "CustomField": {
+      "about": "A field added to a record type without code (PLT-111): the office adds, labels, orders, archives and restores it (Admin › Fields & lists › Custom fields); every form, grid, filter, export and import reads it through the API's registry. Archived, never deleted. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "CustomFieldValue": {
+      "about": "One record's value of one custom field (PLT-111): written with the record's form, grid cell or import through command() (audited), removed to clear it; read with the record. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "Picklist": {
+      "about": "A list a select field picks from (PLT-115): the office keeps it (Admin › Fields & lists › Picklists) and archives it once no active field picks from it. Never deleted. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "PicklistValue": {
+      "about": "One value of a picklist with its labels, colour, icon, order and description (PLT-115): the office adds, orders and deactivates it; records keep its code. Never deleted. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "DocumentTemplate": {
+      "about": "A version of a company's words for one kind of document in one language (PLT-231): the office drafts, previews and publishes it (Admin › Documents & numbering › Document templates); the document renderer reads the version in use. Only a draft is removed. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "EmailTemplate": {
+      "about": "A version of the subject and body of one event's mail in one language (PLT-232): the office drafts, previews and publishes it (Admin › Documents & numbering › E-mail templates); the mail worker reads the version in use. Only a draft is removed. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "MessageTemplate": {
+      "about": "A saved reply per language with placeholders from the record (COL-016): an office person keeps their own and, with the permission, the shared ones; the send panel offers them. Removed when no longer wanted. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "QuoteTemplateLineOption": {
+      "about": "The options a quote template's line starts with (SAL-133; B-W2b-374's schema need): the office writes them with the template's lines and removes them (removed with the line); a quote made from the template copies them and prices them. No surcharge kept. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    }
+  }
+}

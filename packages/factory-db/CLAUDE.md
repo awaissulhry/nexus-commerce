@@ -430,6 +430,36 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    `OptionValue_cost_delta_check` (a material cost delta with its currency, minutes, never 0); no earlier function
    redefined; it calls recall's `factory_recall_words_ok`, `factory_recall_not_future`, `factory_recall_model_name_ok` and
    styles' `factory_styles_decimal_ok`):
+   `…_config_templates_w2b_guards` (W2b-6 schema wave 56/57, B-W2b-379, configuration without code: custom fields on a record
+   type that is a table of the tenant (the code once per record type: the key `field:<recordType>:<code>`; a unit only on NUMBER;
+   the grain exactly with the MONEY audience, a MONEY field always MONEY; the portal only for INTERNAL or a price; a list exactly on
+   SELECT/MULTI_SELECT, of its company or every company's, active when made or restored; a linked record type exactly on LINK;
+   company, record type, code, type, list and link fixed; archived, never deleted); their values (a record of the field's type that
+   exists, of the field's company when it has one; one per field and record: the key `value:<fieldId>:<recordId>`; the value in the
+   shape of the field's type: a list's code active when newly written, an office person, a record of the linked type, an available
+   file of the record; changed forward; an archived field's values neither written nor removed); picklists and their values (keys
+   `picklist:<code>`, `option:<picklistId>:<code>`; swatch, icon, place; added to an active list; a list archived only while no
+   active field picks from it; deactivated, never deleted); document and e-mail template versions (born DRAFT, DRAFT → ACTIVE (once,
+   with when and by whom) → RETIRED, words frozen once published, RETIRED frozen whole, only a DRAFT removed; placeholders only as
+   `{{name}}`; one ACTIVE per company, kind and language, or per event, company or every company, and language: the partial uniques
+   `DocumentTemplate_one_active`, `EmailTemplate_one_active`); saved replies (an office person's own or shared; a record type of the
+   tenant); a quote template line's options (B-W2b-374's need: the rules of a quote line's option; its own triggers
+   `QuoteTemplateLine_options_check` (a line with options keeps its style and becomes no fee) and `OptionGroup_template_takes_check`
+   (words `options: …` for the takes route); no earlier function redefined; it calls recall's `factory_recall_words_ok`,
+   `factory_recall_not_future`, `factory_recall_model_name_ok` and the privacy step's `factory_privacy_ops_key_ok`):
+   `…_insights_depth_w2b_guards` (W2b-6 schema wave 57/57, B-W2b-381, the metric layer: KPI versions born DRAFT, made from a
+   lower version of the same key with what changed, DRAFT → ACTIVE → SUPERSEDED | RETIRED (one ACTIVE per key: a partial unique),
+   an ACTIVE one changed only by its end, a past one frozen, only a DRAFT deleted; names, definitions and formulas in Italian and
+   English, source records that are tables, measure keys, an office owner role, a MONEY unit with its grain (PRICE, COST, MARGIN:
+   never wages or pay); KPI uses of a KPI in force, never changed; a person's dashboard layout (panels, widths, each id once); a
+   company's switch for the morning e-mail (OFF by default, on with when and by whom, never deleted) and a person's digest (on with
+   when and by whom, HH:MM in a known time zone, ISO weekdays, it | en, sections; marked sent only forward, only while it is on and
+   its company's switch is on, read FOR SHARE); alert routes (one office role that is not archived or one invited or active office
+   person; a company, site, line or customer that exists; never wider than the rule's place; never changed); daily and hourly facts
+   (a line with its site, exactly one number, the company's currency with an amount, today at the latest on the site's clock, an
+   hour a whole hour of that clock with its day, rebuilt only forward; keys `fact:…` / `facth:…`); its own triggers only, no
+   earlier function redefined; it calls recall's `factory_recall_words_ok`, `factory_recall_not_future`, styles'
+   `factory_styles_distinct` and privacy's `factory_privacy_ops_table_ok`, `factory_privacy_ops_code_ok`):
    triggers, partial unique indexes and deferred
    constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new

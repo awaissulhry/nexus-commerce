@@ -57,6 +57,8 @@ model AlertRule {
   recipientRole Role?      @relation(fields: [tenantId, recipientRoleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   alerts        Alert[]
   timers        DueTimer[]
+  // W2b-6 insights-depth.prisma (wave 57/57): whom it tells at each place.
+  routes        AlertRoute[]
 
   // The target of the alerts' and timers' tenant-safe references.
   @@unique([tenantId, id])
