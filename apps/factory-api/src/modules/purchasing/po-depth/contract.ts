@@ -80,6 +80,10 @@ export const depthView = output({
     rateWords: z.string().nullable(),
     /** The order's net in the company's currency at the rate at order (minor units): frozen with the send. */
     companyNetAmount: money.cost(z.number().int().nullable()),
+    /** B-W2b-389 (CY1:01): with no rate typed, the day's rate the send takes (null: none kept, or a rate is typed). */
+    dayRate: output({ rate: z.string(), rateDate: z.string(), source: z.enum(['ECB', 'MANUAL']), words: z.string() }).nullable(),
+    /** B-W2b-389 (CY1:02): beside the rate at order, the day's rate of each receipt and of each supplier invoice of the order. */
+    beside: z.array(output({ at: z.enum(['RECEIPT', 'INVOICE']), id: id(), number: z.string(), day: z.string(), rate: z.string().nullable(), source: z.enum(['ECB', 'MANUAL']).nullable(), words: z.string().nullable() })),
   }),
   shipTo: output({
     partyId: id(),

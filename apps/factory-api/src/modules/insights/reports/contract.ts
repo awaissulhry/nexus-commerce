@@ -173,6 +173,8 @@ export const numbersContract = defineContract({
               spark: grainedJson(),
               complete: z.boolean(),
               problem: z.enum(NUMBER_PROBLEMS).nullable(),
+              /** B-W2b-389 (PLT-132): the other currencies counted in `currency` at the day's rates of the rates table; null: one currency. */
+              converted: output({ to: z.string(), from: z.array(z.string()) }).nullable(),
               list: output({ api: z.string(), query: z.record(z.string(), z.string()) }).nullable(),
               report: output({ key: z.string(), filters: z.record(z.string(), z.string()) }).nullable(),
               explain: output({ definition: z.string(), formula: z.string(), sources: z.string(), period: z.string(), cutOff: z.string(), setBy: z.string().nullable() }),

@@ -1,0 +1,165 @@
+{
+  "title": "Valute e cambi",
+  "explain": "La valuta della società, le valute in cui possono essere i suoi documenti e il cambio di ogni giorno: il cambio di riferimento giornaliero della BCE, oppure un cambio scritto per quel giorno, che prevale. Un documento tiene il cambio che ha usato; un cambio successivo non lo cambia mai. Le rivalutazioni restano al tuo commercialista.",
+  "noRight": "Non hai il permesso di vedere valute e cambi (currencies.view).",
+  "failed": "Impossibile caricare valute e cambi",
+  "base": {
+    "label": "Valuta della società",
+    "explain": "La contabilità e i totali sono tenuti in questa valuta; un totale non somma mai due valute: le altre valute contano a un cambio indicato, oppure il totale dice che non si può. Si cambia in Sistema › Società e stabilimenti."
+  },
+  "currencies": {
+    "title": "Valute dei documenti",
+    "col": {
+      "code": "Valuta",
+      "today": "Cambio per i documenti di oggi",
+      "action": "Azione"
+    },
+    "base": "Valuta della società",
+    "isBase": "È la sua valuta: nessun cambio",
+    "off": "Spenta: i nuovi documenti non possono usarla",
+    "waits": "In attesa di un cambio",
+    "waitsExplain": "Un documento in una valuta in attesa di un cambio (una fattura, un ordine d’acquisto, una verifica del fido, il costo di un ordine di lavoro) aspetta finché c’è un cambio del suo giorno: accendi i cambi BCE giornalieri, oppure scrivi un cambio per quel giorno.",
+    "alwaysOn": "Sempre accesa",
+    "switchOff": "Spegni",
+    "switchOn": "Accendi",
+    "switchOffOf": "Spegni {code}",
+    "switchOnOf": "Accendi {code}",
+    "addLabel": "Valuta da aggiungere",
+    "add": "Aggiungi valuta"
+  },
+  "source": {
+    "ECB": "BCE",
+    "MANUAL": "Scritto per il giorno"
+  },
+  "feed": {
+    "title": "Cambi BCE giornalieri",
+    "explain": "La BCE pubblica i suoi cambi di riferimento dell’euro ogni giorno lavorativo verso le 16:00. Quando sono accesi, si leggono alle 16:30 e alle 18:30, dal lunedì al venerdì. Spenti finché non li accendi.",
+    "fake": "Modalità di prova",
+    "fakeExplain": "Modalità di prova: i cambi letti sono inventati, dalla BCE non si scarica nulla.",
+    "status": {
+      "NONE": "Spenti",
+      "ACTIVE": "Accesi",
+      "PAUSED": "Spenti",
+      "DISABLED": "Spenti"
+    },
+    "lastDay": "Giorno BCE più recente",
+    "lastOk": "Ultima lettura",
+    "lastError": "Ultima lettura non riuscita",
+    "mode": "Modalità",
+    "modeValue": {
+      "LIVE": "Il file pubblico della BCE",
+      "SANDBOX": "Il file pubblico della BCE (account di prova)",
+      "FAKE": "Cambi inventati (modalità di prova)"
+    },
+    "never": "Mai",
+    "switchOn": "Accendi i cambi BCE giornalieri",
+    "switchOff": "Spegni i cambi BCE giornalieri",
+    "readNow": "Leggi i cambi di oggi"
+  },
+  "rates": {
+    "title": "Cambi per giorno",
+    "explain": "Per ogni giorno il cambio BCE e quello scritto per quel giorno, uno accanto all’altro; i documenti del giorno prendono quello scritto, se c’è. Un giorno senza cambio prende l’ultimo dei 7 giorni prima (fine settimana e festivi non ne hanno).",
+    "set": "Scrivi un cambio per un giorno",
+    "setForDay": "Scrivi un cambio per questo giorno",
+    "correct": "Correggi il cambio scritto",
+    "remove": "Togli il cambio scritto",
+    "keySet": "Scrivi un cambio per un giorno",
+    "rowMenu": "Azioni per {pair} del {day}",
+    "pair": "{base} → {quote}",
+    "far": "Oltre il 5% dal cambio BCE",
+    "notManual": "Si sceglie solo un giorno con un cambio scritto: il cambio BCE resta come pubblicato",
+    "quoteLabel": "Valuta",
+    "allQuotes": "Tutte le valute",
+    "periodLabel": "Giorni",
+    "period_one": "Ultimo {count} giorno",
+    "period_other": "Ultimi {count} giorni",
+    "count_one": "{count} giorno e valuta",
+    "count_other": "{count} giorni e valute",
+    "bulkRemove_one": "Togli {count} cambio scritto",
+    "bulkRemove_other": "Togli {count} cambi scritti",
+    "truncated": "Ci sono più cambi di quanti ne mostri una pagina: scegli una valuta o meno giorni.",
+    "failed": "Impossibile caricare i cambi",
+    "empty": {
+      "title": "Ancora nessun cambio",
+      "body": "Accendi i cambi BCE giornalieri, oppure scrivi un cambio per un giorno.",
+      "bodyOn": "I cambi BCE giornalieri sono accesi: quelli del prossimo giorno lavorativo arrivano dopo le 16:30. Puoi anche leggere subito quelli di oggi, oppure scrivere un cambio per un giorno."
+    },
+    "col": {
+      "day": "Giorno",
+      "pair": "Valute",
+      "ecb": "Cambio BCE",
+      "manual": "Cambio scritto",
+      "used": "Cambio per i documenti"
+    },
+    "problem": {
+      "same": "Scegli una valuta diversa da quella della società.",
+      "quote": "Scegli una valuta.",
+      "day": "Scrivi un giorno (GG/MM/AAAA).",
+      "future": "Un cambio si tiene per oggi o un giorno prima: il futuro non ha ancora un cambio.",
+      "rateEmpty": "Scrivi il cambio.",
+      "rate": "Un cambio è un numero sopra 0 con al massimo otto decimali (1,0850).",
+      "fix": "Prima correggi ciò che dicono i campi."
+    }
+  },
+  "dialog": {
+    "setTitle": "Scrivi un cambio per un giorno",
+    "correctTitle": "Correggi il cambio scritto di {pair} del {day}",
+    "explain": "Quante unità della valuta compra un {base}, come le quota la BCE. Prevale sul cambio BCE di quel giorno.",
+    "quote": "Valuta",
+    "day": "Giorno",
+    "dayHint": "Oggi o un giorno prima",
+    "rate": "1 {base} = … {quote}",
+    "rateHint": "Una virgola o un punto, al massimo otto decimali",
+    "reads": "Si legge: {words}",
+    "readsNone": "Scrivi un cambio per vedere come si legge.",
+    "ecb": "Il cambio BCE di quel giorno: {rate}",
+    "far": "Questo cambio è oltre il 5% da quello BCE dello stesso giorno: controlla che non sia un errore di battitura.",
+    "everyCompany": "I cambi valgono per tutte le società del gruppo.",
+    "save": "Salva il cambio"
+  },
+  "remove": {
+    "title_one": "Togliere {count} cambio scritto?",
+    "title_other": "Togliere {count} cambi scritti?",
+    "body": "Quei giorni tornano al cambio BCE. I documenti che hanno già tenuto un cambio lo tengono.",
+    "row": "{day}: {words}",
+    "go_one": "Togli {count} cambio",
+    "go_other": "Togli {count} cambi"
+  },
+  "held": {
+    "noManage": "Ti serve currencies.manage per questa società",
+    "noRates": "I cambi valgono per tutte le società: ti serve currencies.manage su tutte le società",
+    "busy": "Attendi: l’ultima modifica si sta ancora salvando",
+    "base": "{code} è la valuta della società: è sempre accesa",
+    "feedOff": "Prima accendi i cambi BCE giornalieri",
+    "noneLeft": "Tutte le valute proposte sono già accese"
+  },
+  "notice": {
+    "added": "{code} aggiunta: ora i documenti possono essere in questa valuta.",
+    "on": "{code} di nuovo accesa.",
+    "off": "{code} spenta: i nuovi documenti non possono usarla.",
+    "feedOn": "Cambi BCE giornalieri accesi.",
+    "feedOff": "Cambi BCE giornalieri spenti: i cambi tenuti restano.",
+    "read_one": "Tenuti i cambi BCE di {count} giorno.",
+    "read_other": "Tenuti i cambi BCE di {count} giorni.",
+    "readNothing": "Niente di nuovo: gli ultimi cambi BCE sono già tenuti.",
+    "rateSaved": "Cambio di {quote} del {day} salvato.",
+    "removed_one": "Tolto {count} cambio scritto: quel giorno prende di nuovo il cambio BCE.",
+    "removed_other": "Tolti {count} cambi scritti: quei giorni prendono di nuovo il cambio BCE."
+  },
+  "problem": {
+    "currencyOn": "Quella valuta è già una delle valute della società.",
+    "baseOff": "La valuta della società non si spegne mai.",
+    "manualKept": "Per quel giorno c’è già un cambio scritto: correggi quello.",
+    "manualGone": "Quel cambio scritto non c’è più: i cambi sono stati letti di nuovo.",
+    "ecbRow": "Il cambio BCE resta come pubblicato: scrivi invece un cambio per quel giorno.",
+    "feedOff": "I cambi BCE giornalieri sono spenti: prima accendili.",
+    "unreadable": "Ora non è stato possibile leggere il file della BCE. I cambi tenuti restano come sono; riprova più tardi.",
+    "database": "La modifica è stata rifiutata: contrasta con i cambi tenuti. I cambi sono stati letti di nuovo.",
+    "moved": "Nel frattempo qualcuno l’ha cambiato: è stato letto di nuovo; applica ancora la tua modifica.",
+    "state": "Così com’è ora non si può fare: è stato letto di nuovo.",
+    "invalid": "Qualcosa di scritto non è accettato: controlla i campi.",
+    "forbidden": "Non hai il permesso di farlo.",
+    "unavailable": "Il server non risponde: riprova fra un momento.",
+    "write": "Non è stato possibile salvare la modifica."
+  }
+}
