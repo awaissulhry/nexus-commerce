@@ -5,6 +5,8 @@ import { MAX_LABEL_COPIES, MAX_LABEL_MM, MIN_LABEL_HEIGHT_MM, MIN_LABEL_WIDTH_MM
 import { PRINT_RELAY_KINDS } from '../../adapters/print-relay/port'
 import { RECORD_TYPE } from '../files/rules'
 import { MODULE_LABEL_KINDS, PAYLOAD_KINDS, PRINT_JOB_STATUSES, PRINTER_CODE, PRINTER_KINDS, PRINTER_STATUSES } from './rules'
+// B-W2b-391: how a printer's jobs reach it.
+import { PRINTER_MODES } from './direct/rules'
 
 /**
  * The print routes' contracts (plan A1 §3.9; GAP-007). A floor device's view of a printer leaves out where the relay
@@ -24,6 +26,8 @@ export const printerView = output({
   labelWidthMm: z.number().int().nullable(),
   labelHeightMm: z.number().int().nullable(),
   status: z.enum(PRINTER_STATUSES),
+  /** B-W2b-391 (LOG-026): RELAY (the site's relay), DIRECT (straight from the station's browser), PDF (the browser prints a PDF). */
+  mode: z.enum(PRINTER_MODES),
   version: z.number().int(),
   createdAt: instant(),
   updatedAt: instant(),

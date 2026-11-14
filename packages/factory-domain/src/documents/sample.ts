@@ -41,6 +41,9 @@ export function sampleDocument(type: DocumentType, language: DocumentLanguage, c
       return { ...base, totals, deliveryDate: date, paymentTerms: '30 days', deliveryTerms: 'EXW' }
     case 'INVOICE_COPY':
       return { ...base, totals, invoice: { kind: 'TD01' } }
+    // B-W2b-391: a proforma for customs, as a shipment abroad prints it.
+    case 'PROFORMA':
+      return { ...base, totals, deliveryTerms: 'EXW', proforma: { purpose: 'CUSTOMS', packages: 2, grossWeightKg: '12.5', origin: ['IT'] } }
     case 'PACKING_LIST':
       return {
         ...base,

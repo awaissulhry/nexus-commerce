@@ -42,6 +42,16 @@ import { inlineDisposition } from '../receivables/pdf'
 import { linkIntent, linkPayPage, linkStart } from './online/link'
 import { officeIntents, sendPayLink } from './online/office'
 import { portalIntent, portalOpenItems, portalStart, portalStatement, portalStatementPdf } from './online/portal'
+// B-W2b-393: bank statements, matching, the unapplied cash queue, write-offs (./bank, ./matching, ./write-offs).
+import { announceStatementContract, dryRunStatementContract, getLineContract, getStatementContract, importStatementContract, lineCountsContract, listAccountsContract, listLinesContract, listStatementsContract, paymentBankLineContract } from './bank/contract'
+import { getLine, getStatement, lineCounts, listAccounts, listLines, listStatements, paymentBankLine } from './bank/reads'
+import { announceStatement, dryRunStatement, importStatement } from './bank/statements'
+import { acceptMany, acceptMatch, chooseMatch, reverseMatch } from './matching/accept'
+import { acceptManyContract, acceptMatchContract, chooseMatchContract, refreshSuggestionsContract, reverseMatchContract, unappliedContract } from './matching/contract'
+import { refreshRoute } from './matching/suggest'
+import { unappliedQueue } from './matching/unapplied'
+import { getToleranceContract, listWriteOffsContract, putToleranceContract, reverseWriteOffContract, writeOffContract } from './write-offs/contract'
+import { getTolerance, listWriteOffs, putTolerance, reverseWriteOff, writeOffPayment } from './write-offs/write-offs'
 
 /**
  * Payments received (B-W1-28; FIN-121, FIN-066; Q12; A2 SCR-082): bank transfers typed by the office, what they pay
@@ -130,4 +140,49 @@ export default defineRoutes('payments', manifest, async (app) => {
 
   // The FAKE provider's own fields (local and test only: 404 elsewhere).
   app.post('/payment-fake/confirm', { schema: fakeConfirmContract }, async (request) => fakeConfirm(request, request.body))
+
+  // ---- B-W2b-393: bank statements, matching, the unapplied cash queue, write-offs (FIN-130, FIN-132, FIN-117, FIN-119) ----
+  app.get('/payments/bank/accounts', { schema: listAccountsContract }, async (request) => listAccounts(request, request.query))
+
+  app.get('/payments/bank/statements', { schema: listStatementsContract }, async (request) => listStatements(request, request.query))
+
+  app.get('/payments/bank/statements/:statementId', { schema: getStatementContract }, async (request) => getStatement(request, request.params.statementId))
+
+  app.post('/payments/bank/statements/uploads', { schema: announceStatementContract }, async (request, reply) => reply.code(201).send(await announceStatement(request, request.body, idempotencyKeyFrom(request))))
+
+  app.post('/payments/bank/statements/dry-run', { schema: dryRunStatementContract }, async (request) => dryRunStatement(request, request.body))
+
+  app.post('/payments/bank/statements', { schema: importStatementContract }, async (request, reply) => reply.code(201).send(await importStatement(request, request.body, idempotencyKeyFrom(request))))
+
+  app.get('/payments/bank/lines', { schema: listLinesContract }, async (request) => listLines(request, request.query))
+
+  app.get('/payments/bank/lines/counts', { schema: lineCountsContract }, async (request) => lineCounts(request, request.query))
+
+  app.get('/payments/bank/lines/:lineId', { schema: getLineContract }, async (request) => getLine(request, request.params.lineId))
+
+  app.post('/payments/bank/lines/:lineId/match', { schema: chooseMatchContract }, async (request, reply) => reply.code(201).send(await chooseMatch(request, request.params.lineId, request.body, idempotencyKeyFrom(request))))
+
+  app.post('/payments/bank/matches/accept', { schema: acceptManyContract }, async (request) => acceptMany(request, request.body, idempotencyKeyFrom(request)))
+
+  app.post('/payments/bank/matches/:matchId/accept', { schema: acceptMatchContract }, async (request) => acceptMatch(request, request.params.matchId, request.body, idempotencyKeyFrom(request)))
+
+  app.post('/payments/bank/matches/:matchId/reverse', { schema: reverseMatchContract }, async (request) => reverseMatch(request, request.params.matchId, request.body, idempotencyKeyFrom(request)))
+
+  app.post('/payments/bank/suggestions/refresh', { schema: refreshSuggestionsContract }, async (request) => refreshRoute(request, request.body, idempotencyKeyFrom(request)))
+
+  app.get('/payments/unapplied', { schema: unappliedContract }, async (request) => unappliedQueue(request, request.query))
+
+  app.get('/payments/:paymentId/bank-line', { schema: paymentBankLineContract }, async (request) => paymentBankLine(request, request.params.paymentId))
+
+  app.get('/payments/:paymentId/write-offs', { schema: listWriteOffsContract }, async (request) => listWriteOffs(request, request.params.paymentId))
+
+  app.post('/payments/:paymentId/write-offs', { schema: writeOffContract }, async (request, reply) => reply.code(201).send(await writeOffPayment(request, request.params.paymentId, request.body, idempotencyKeyFrom(request))))
+
+  app.post('/payments/:paymentId/write-offs/:writeOffId/reverse', { schema: reverseWriteOffContract }, async (request) =>
+    reverseWriteOff(request, request.params.paymentId, request.params.writeOffId, request.body, idempotencyKeyFrom(request)),
+  )
+
+  app.get('/payments/write-offs/tolerance', { schema: getToleranceContract }, async (request) => getTolerance(request, request.query))
+
+  app.put('/payments/write-offs/tolerance', { schema: putToleranceContract }, async (request) => putTolerance(request, request.body, idempotencyKeyFrom(request)))
 })

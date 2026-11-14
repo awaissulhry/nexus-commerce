@@ -16,6 +16,7 @@ import type { PeriodLockOverride } from '@nexus/factory-domain/accounting/contra
 import { ordersOfInvoices, settleOrders } from '../invoicing/from-shipment/settlement'
 import { lockAll, lockMoney } from './locks'
 import { allocatedOf, assertMay, officeContextOf, type Reader } from './store'
+import { overpaymentWrittenOff } from './write-offs/sums'
 
 /**
  * Refunds to customers (B-W2a-61; FIN-127; receivables.prisma Refund; design finance.payments "Refund" pop-up — "Credit
@@ -123,7 +124,8 @@ export async function paymentRefundable(db: Reader, paymentId: string, except: s
   if (!payment) return null
   const allocated = await allocatedOf(db, payment.id)
   const refunded = await refundedOf(db, payment.id, except)
-  return { payment, allocated, refunded, refundable: unplacedOf({ status: payment.status, amount: payment.amount, allocated, refunded }) }
+  // B-W2b-393: what an OVERPAYMENT write-off keeps is not refunded (the database's refund cap counts it too).
+  return { payment, allocated, refunded, refundable: unplacedOf({ status: payment.status, amount: payment.amount, allocated, refunded: refunded + (await overpaymentWrittenOff(db, payment.id)) }) }
 }
 
 const noteWords = (note: { number: string | null }) => `credit note ${note.number ?? '(draft)'}`

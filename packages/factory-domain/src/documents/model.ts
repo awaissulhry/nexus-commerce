@@ -26,7 +26,8 @@ import type { PrintedOption } from './options-block'
  * packing list (B-W1-46, LOG-039) says which garments are in which parcel of a shipment: no prices, not a fiscal document.
  */
 // B-W2b-303 (SAL-208): ORDER_CONFIRMATION, the confirmation of a sales order (one version per change, sent on its thread).
-export const DOCUMENT_TYPES = ['QUOTE', 'PURCHASE_ORDER', 'DDT', 'INVOICE_COPY', 'PACKING_LIST', 'ORDER_CONFIRMATION'] as const
+// B-W2b-391 (LOG-058): PROFORMA, the non-fiscal proforma invoice of a shipment (customs), a sample shipment or a deposit request.
+export const DOCUMENT_TYPES = ['QUOTE', 'PURCHASE_ORDER', 'DDT', 'INVOICE_COPY', 'PACKING_LIST', 'ORDER_CONFIRMATION', 'PROFORMA'] as const
 export type DocumentType = (typeof DOCUMENT_TYPES)[number]
 
 /** The languages every layout is printed in. */
@@ -213,7 +214,8 @@ export interface PackingFacts {
  * reason names its own record: the subcontract order (ordine di lavorazione) its kit travels with, the supplier claim,
  * the repair or the return authorisation (RMA) whose goods go back.
  */
-export const REFERENCE_KINDS = ['CUSTOMER_ORDER', 'QUOTE', 'SALES_ORDER', 'PURCHASE_ORDER', 'SUPPLIER_QUOTE', 'DDT', 'INVOICE', 'SUBCONTRACT_ORDER', 'SUPPLIER_CLAIM', 'REPAIR_ORDER', 'RETURN_AUTHORISATION'] as const
+// B-W2b-391: a proforma names its shipment or its sample round.
+export const REFERENCE_KINDS = ['CUSTOMER_ORDER', 'QUOTE', 'SALES_ORDER', 'PURCHASE_ORDER', 'SUPPLIER_QUOTE', 'DDT', 'INVOICE', 'SUBCONTRACT_ORDER', 'SUPPLIER_CLAIM', 'REPAIR_ORDER', 'RETURN_AUTHORISATION', 'SHIPMENT', 'SAMPLE_ROUND'] as const
 export type ReferenceKind = (typeof REFERENCE_KINDS)[number]
 
 export interface DocumentReference {
@@ -226,6 +228,29 @@ export interface DocumentReference {
 /** The FatturaPA document kinds an invoice copy names (TipoDocumento); TD16-TD19, the self-invoices, since W2b-6 (wave 49/57). */
 export const INVOICE_KINDS = ['TD01', 'TD02', 'TD04', 'TD05', 'TD24', 'TD16', 'TD17', 'TD18', 'TD19'] as const
 export type InvoiceKind = (typeof INVOICE_KINDS)[number]
+
+/**
+ * B-W2b-391 (LOG-058): why a proforma is made. CUSTOMS: the goods of a shipment going abroad, priced as sold; SAMPLES: a
+ * sample shipment (no commercial value unless its round is charged); PREPAYMENT: the payment a deposit request asks before
+ * the goods are made or leave. A proforma is never a tax document (the invoice follows on delivery or payment).
+ */
+export const PROFORMA_PURPOSES = ['CUSTOMS', 'SAMPLES', 'PREPAYMENT'] as const
+export type ProformaPurpose = (typeof PROFORMA_PURPOSES)[number]
+
+/** B-W2b-391: what a proforma says beside its lines. */
+export interface ProformaFacts {
+  readonly purpose: ProformaPurpose
+  /** SAMPLES whose round is not charged: the values are for customs only (the notice says so). */
+  readonly noCommercialValue?: boolean | null
+  /** PREPAYMENT: the day the payment is asked by. */
+  readonly dueDate?: BusinessDate | null
+  /** CUSTOMS: the number of parcels (at least 1), their gross weight and the goods' net weight in kilograms (Decimal(18,4)). */
+  readonly packages?: number | null
+  readonly grossWeightKg?: DecimalString | null
+  readonly netWeightKg?: DecimalString | null
+  /** The goods' countries of origin (ISO 3166-1 alpha-2), each once. */
+  readonly origin?: readonly string[] | null
+}
 
 /** A document to compose. */
 export interface DocumentInput {
@@ -257,6 +282,8 @@ export interface DocumentInput {
   readonly packing?: PackingFacts | null
   /** INVOICE_COPY: the FatturaPA document kind (default TD01), the SDI file id once known, the due date. */
   readonly invoice?: { readonly kind?: InvoiceKind | null; readonly sdiId?: string | null; readonly dueDate?: BusinessDate | null } | null
+  /** B-W2b-391: PROFORMA only, required there: why it is made, the payment's day, the parcels, weights and origin. */
+  readonly proforma?: ProformaFacts | null
   readonly notes?: string | null
   /** A preview: printed with a "sample, not a valid document" banner, never stored. */
   readonly sample?: boolean

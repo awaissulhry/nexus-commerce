@@ -17,6 +17,8 @@ import { serverClock } from '../../core/time'
 import { billToFrom, depositInvoicedGross, partyFacts } from './facts'
 import { orderTermsSource, sourceOfPayment, storedSourceOf, termsJsonOf, type TermsSource } from './terms'
 import { assertMay, invoiceDetail, officeContextOf, officeInvoice, readInvoice, type InvoiceDetail, type InvoiceRow } from './store'
+// B-W2b-392: tax rules as data on every draft.
+import { taxedLines } from './tax-codes/apply'
 
 /**
  * Draft invoices (B-W1-28 invoice core; FIN-054, FIN-061, FIN-098, FIN-099): create one (generic TD01/TD24, or a TD02
@@ -277,6 +279,8 @@ export async function insertDraft(
   draft: { id: string; companyId: string; buyerPartyId: string; docType: InvoiceDocType; priceBasis: PriceBasis; currency: string; salesOrderId: string | null; depositRequestId: string | null; creditOfId?: string | null; causale: string | null; documentRefs: Prisma.InputJsonValue | null; payment: PaymentInput | null; termsSource?: TermsSource | null; internalNote: string | null },
   lines: readonly PreparedLine[],
 ): Promise<InvoiceTotals> {
+  // B-W2b-392: the company's tax rules (the stamp duty line decided again; the tax codes' law), GATE-ACCOUNTANT switch by switch.
+  lines = await taxedLines(tools.tx, draft, lines, draft.priceBasis, businessDate(tools.now))
   const totals = computeInvoiceTotals(lines.map((line) => line.core), draft.priceBasis, draft.currency)
   refuseNegative(totals)
   const facts = await partyFacts(tools.tx, draft.buyerPartyId, businessDate(tools.now), tools.now)
@@ -457,6 +461,8 @@ export async function onDraft<Result>(caller: CommandCaller, invoice: InvoiceRow
  * from (./terms.ts; storedSourceOf the draft's own to keep them).
  */
 export async function refreshDraft(tools: CommandTools, current: InvoiceRow, lines: readonly PreparedLine[], basis: PriceBasis, source: TermsSource | null): Promise<InvoiceTotals> {
+  // B-W2b-392: the company's tax rules (the stamp duty line decided again; the tax codes' law), GATE-ACCOUNTANT switch by switch.
+  lines = await taxedLines(tools.tx, current, lines, basis, businessDate(tools.now))
   const totals = computeInvoiceTotals(lines.map((line) => line.core), basis, current.currency)
   refuseNegative(totals)
   const facts = await partyFacts(tools.tx, current.buyerPartyId, businessDate(tools.now), tools.now)

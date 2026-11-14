@@ -146,10 +146,16 @@ import { SALES_FITTINGS_ADDS } from '../../sales/fittings/permissions'
 import { SHIPPING_PACKAGING_ADDS } from '../../shipping/packaging/permissions'
 // B-W2b-386: shipment holds (the warehouse places and releases its own kinds, finance every kind).
 import { SHIPPING_HOLDS_ADDS } from '../../shipping/holds/permissions'
+// B-W2b-391: labels and documents (the proforma).
+import { SHIPPING_PROFORMA_ADDS } from '../../shipping/proforma/permissions'
 // B-W2b-385: the notification defaults of each office role (the administrator sets them).
 import { NOTIFICATION_DEFAULTS_ADDS } from '../../notifications/preferences/permissions'
 // B-W2b-389: currencies and exchange rates (finance and the administrator keep them; buyers and sales read them).
 import { CURRENCY_ADDS } from '../../money/currency/permissions'
+// B-W2b-392: tax rules as data (finance keeps the tax codes, declarations and stamp duty quarters, and switches them).
+import { TAX_RULES_ADDS } from '../../invoicing/tax-codes/permissions'
+// B-W2b-393: bank statements, matching and write-offs (finance).
+import { PAYMENTS_BANK_ADDS } from '../../payments/write-offs/permissions'
 // B-W2b-394: team inboxes and the capture address (email.inboxes.manage) to the administrators.
 import { MAIL_DEPTH_ADDS } from '../../mail-depth/permissions'
 
@@ -1046,10 +1052,16 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (SHIPPING_PACKAGING_ADDS[key] ?? []) : []),
   // B-W2b-386
   ...(audience === 'office' ? (SHIPPING_HOLDS_ADDS[key] ?? []) : []),
+  // B-W2b-391
+  ...(audience === 'office' ? (SHIPPING_PROFORMA_ADDS[key] ?? []) : []),
   // B-W2b-385
   ...(audience === 'office' ? (NOTIFICATION_DEFAULTS_ADDS[key] ?? []) : []),
   // B-W2b-389
   ...(audience === 'office' ? (CURRENCY_ADDS[key] ?? []) : []),
+  // B-W2b-392
+  ...(audience === 'office' ? (TAX_RULES_ADDS[key] ?? []) : []),
+  // B-W2b-393
+  ...(audience === 'office' ? (PAYMENTS_BANK_ADDS[key] ?? []) : []),
   // B-W2b-394
   ...(audience === 'office' ? (MAIL_DEPTH_ADDS[key] ?? []) : [])]
 /**

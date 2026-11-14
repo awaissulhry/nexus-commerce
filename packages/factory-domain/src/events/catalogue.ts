@@ -274,6 +274,12 @@ import { events as shippingQueue } from '../shipping-queue/events'
 import { events as currencyEvents } from '../currency/events'
 // B-W2b-390: carriers in depth (shipping.test_mode_changed).
 import { events as shippingCarriers } from '../shipping-carriers/events'
+// B-W2b-391: labels and documents (shipping.label_reprinted, shipping.pack_made, shipping.proforma_made).
+import { events as shippingDocuments } from '../shipping-documents/events'
+// B-W2b-392: tax rules as data (tax_code.changed, tax_settings.changed, declaration_of_intent.changed, stamp_duty_quarter.changed).
+import { events as taxRules } from '../tax-rules/events'
+// B-W2b-393: bank statements, matching and write-offs (bank_statement.imported, bank_line.suggestions_changed, bank_match.accepted, .reversed, payment.written_off, .write_off_reversed, write_off_tolerance.changed).
+import { events as paymentsBank } from '../payments-bank/events'
 // B-W2b-394: mail in depth (team inboxes, the capture address, soft bounces, the FAKE mail account's webhook secret).
 import { events as mailDepth } from '../mail-depth/events'
 import type { EventDefinition } from './define'
@@ -616,6 +622,12 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...currencyEvents,
   // B-W2b-390
   ...shippingCarriers,
+  // B-W2b-391
+  ...shippingDocuments,
+  // B-W2b-392
+  ...taxRules,
+  // B-W2b-393
+  ...paymentsBank,
   // B-W2b-394
   ...mailDepth,
 ] as const satisfies readonly EventDefinition[]
