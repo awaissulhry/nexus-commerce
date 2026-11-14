@@ -621,7 +621,8 @@ describe('the moves after the release (MES-007)', () => {
     expect((await refused('planner', 'POST', `${url}/cancel`, { reason: ' ' }, 400)).code).toBe('validation_failed')
     expect((await ok('planner', 'POST', `${url}/complete`, {})).workOrder).toMatchObject({ status: 'COMPLETED', completedAt: expect.any(String), daysLate: null })
     expect((await refused('planner', 'POST', `${url}/cancel`, { reason: 'Too late' }, 409)).message).toMatch(/cannot move to CANCELLED/)
-    expect((await ok('planner', 'POST', `${url}/close`, {})).workOrder).toMatchObject({ status: 'CLOSED', closedAt: expect.any(String), nextActions: [] })
+    // B-W2b-411: the close judges planned against actual: no garment made of 1 planned needs a reason.
+    expect((await ok('planner', 'POST', `${url}/close`, { reasonCode: 'SHORT_PRODUCED' })).workOrder).toMatchObject({ status: 'CLOSED', closedAt: expect.any(String), nextActions: [] })
     expect((await refused('planner', 'PATCH', url, { priority: 9 }, 409)).message).toBe(`Work order ${workOrder.number} is CLOSED; only its note changes.`)
     expect((await ok('planner', 'PATCH', url, { note: 'Closed after the fair' })).workOrder.note).toBe('Closed after the fair')
     const events = await admin(`SELECT payload->>'to' AS "to" FROM "OutboxEvent" WHERE type = 'workorder.status_changed' AND subject = $1 ORDER BY "occurredAt", id`, [workOrder.id])

@@ -20,6 +20,11 @@ import type { TermsSectionModel } from './terms/view/TermsSection'
 import { FinanceSettingsView } from './view/FinanceSettingsView'
 // B-W2b-389: Currencies & rates.
 import { CurrenciesContainer } from './currencies/CurrenciesContainer'
+// B-W2b-417: the tax set-up, e-invoicing test mode and the swap, the refund rule on cancellation, the test-mode banner.
+import { TestModeBanner } from '../invoices/test-mode/TestModeBanner'
+import { DepositRules } from './deposit-cancel/DepositRules'
+import { EInvoicing } from './sdi-test/EInvoicing'
+import { TaxSetUp } from './tax/TaxSetUp'
 
 /**
  * `/w/<company>/finance/settings` (SCR-083): reads what invoicing reads per company (GET /invoicing/settings:
@@ -234,6 +239,8 @@ function SettingsContainer() {
       model={model}
       // B-W2b-389: Currencies & rates of the company shown.
       currencies={companyId ? <CurrenciesContainer companyId={companyId} /> : null}
+      // B-W2b-417: the in-depth cards of the company shown.
+      depth={companyId ? { banner: <TestModeBanner companyId={companyId} />, tax: <TaxSetUp companyId={companyId} />, eInvoicing: <EInvoicing companyId={companyId} />, depositRules: <DepositRules companyId={companyId} /> } : undefined}
       actions={{
         onRetry: () => void load(),
         onRetryBank: () => void readBank(),

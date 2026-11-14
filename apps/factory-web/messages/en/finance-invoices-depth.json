@@ -1,0 +1,907 @@
+{
+  "common": {
+    "close": "Close"
+  },
+  "held": {
+    "busy": "Wait: the last change is still being saved.",
+    "noIssue": "Issuing and sending invoices needs the right to issue invoices.",
+    "noManage": "Making drafts needs the right to manage invoices.",
+    "noRecord": "Recording payments needs the right to record payments.",
+    "noRules": "Changing these rules needs the right to manage deposit rules.",
+    "noTaxManage": "Changing tax codes and stamp duty quarters needs the right to manage the tax set-up.",
+    "noTaxSwitch": "The accountant's switches and confirmations need the right to switch tax rules.",
+    "noTestMode": "Going live or back to test mode needs the right to manage e-invoice test mode.",
+    "noneMissing": "Every send has our copy already."
+  },
+  "refusal": {
+    "DATABASE": "Someone changed this at the same moment: it was read again, try once more.",
+    "SWITCH_OFF": "This waits for the accountant: its switch is off (Finance settings › Tax set-up).",
+    "IN_FORCE": "A code in force is never edited: make a new version from a later day.",
+    "OVERLAP": "Another version of this code covers some of these days: change its days first.",
+    "NOT_PLANNED": "Only a version not yet in force can be deleted: end it or archive it.",
+    "NEXT_VERSION": "The new version must start after the current one started, from today or later.",
+    "CONFIRMED": "The accountant confirmed this version already.",
+    "ARCHIVED": "This version is archived: it changes no more.",
+    "QUARTER_OPEN": "The quarter is still running: its payment is recorded after it ends.",
+    "QUARTER_PAID": "The quarter is paid: it is not counted again.",
+    "SELF_INVOICE": "This supplier invoice cannot take that self-invoice (it has one already, its kind differs, or its supplier is not abroad).",
+    "SELF_INVOICE_ISSUED": "The self-invoice is issued: it cannot be cancelled (a correction goes through its own credit note).",
+    "NO_RATE": "The supplier invoice is in another currency and no exchange rate of its day is kept: add the rate in Finance settings › Currencies & rates.",
+    "DEBIT_NOTE": "This invoice cannot take a debit note: only an issued, not rejected TD01 or TD24 can.",
+    "NOT_IN_FORCE": "The shipment is no longer held for this.",
+    "MAY_NOT_RELEASE": "Letting this shipment go needs the right to release money holds.",
+    "GO_LIVE": "The company cannot go live yet: see what holds it on the card.",
+    "COPY_FILES": "Some files of the sends could not be copied: try again later."
+  },
+  "new": {
+    "label": "New",
+    "aria": "New: credit note, debit note or deposit invoice",
+    "credit": "Credit note…",
+    "debit": "Debit note…",
+    "deposit": "Deposit invoice",
+    "depositHint": "It follows a deposit's payment: record the payment in Payments."
+  },
+  "more": {
+    "aria": "More on invoices",
+    "run": "Monthly invoice run…",
+    "stamp": "Stamp duty this quarter…",
+    "settings": "Finance settings",
+    "keys": "Keyboard shortcuts"
+  },
+  "testMode": {
+    "banner": "E-invoice test mode — nothing goes to SDI",
+    "companyLine": "{company}: {words}",
+    "answer": {
+      "SIMULATED": {
+        "DELIVERED": "Sends are answered here, never by the intermediary: each one is delivered.",
+        "REJECTED": "Sends are answered here, never by the intermediary: the first send of each invoice is rejected, so the correction can be practised.",
+        "NOT_DELIVERABLE": "Sends are answered here, never by the intermediary: SDI cannot deliver them, so the copy to the customer can be practised."
+      },
+      "FAKE": "The connection is the FAKE intermediary (local and test only): it answers, and nothing leaves the system.",
+      "NONE": "No single SDI connection is set up yet: sends wait for one."
+    }
+  },
+  "goLive": {
+    "problem": {
+      "ALREADY_LIVE": "The company is live already.",
+      "NO_CONNECTION": "The company has no SDI connection: an admin connects the intermediary first (Admin › Connections & API).",
+      "SEVERAL_CONNECTIONS": "The company has more than one SDI connection: an admin disables the ones not in use first.",
+      "CONNECTION_PAUSED": "The SDI connection is paused: an admin switches it on again first.",
+      "PROVIDER_NOT_CHOSEN": "No SDI intermediary is chosen yet: live sending waits for it, so the company stays in test mode."
+    }
+  },
+  "live": {
+    "title": "Leave e-invoice test mode?",
+    "go": "Go live",
+    "forReal": "From now on invoices go to SDI for real and cannot be taken back.",
+    "noTestSends": "No invoice was sent in test mode.",
+    "testSends_one": "{count} invoice was sent in test mode: it never reached SDI and keeps its number. Ask your accountant what to do with it before going live.",
+    "testSends_other": "{count} invoices were sent in test mode: they never reached SDI and keep their numbers. Ask your accountant what to do with them before going live.",
+    "reversal": "Back to test mode",
+    "acknowledge": "I understand: from now on the invoices of {company} reach SDI and their customers for real."
+  },
+  "run": {
+    "title": "Monthly invoice run",
+    "month": "Month of the DDTs",
+    "reading": "Reading the run…",
+    "stepUp": "Issue the run and send its invoices to SDI: type the code from your authenticator app.",
+    "pick": {
+      "explain": "Customers whose DDTs of {month} take a deferred invoice (TD24). Each customer picked gets one draft with its checks; nothing is issued until you confirm.",
+      "reading": "Reading the customers…",
+      "failed": "Couldn't read the customers of the month",
+      "none": {
+        "title": "No deferred invoice is waiting for {month}",
+        "body": "Every DDT of the month is invoiced, or none of its customers is invoiced monthly."
+      },
+      "customers": "Customers",
+      "all_one": "All ({count})",
+      "all_other": "All ({count})",
+      "ddts_one": "{count} DDT",
+      "ddts_other": "{count} DDTs",
+      "drafts_one": "a draft holds some already (taken in)",
+      "drafts_other": "{count} drafts hold some already (taken in)",
+      "inOtherRun": "in another preview of this month",
+      "issuedRun_one": "A run of {month} was issued already: {count} invoice.",
+      "issuedRun_other": "A run of {month} was issued already: {count} invoices.",
+      "after": "A draft already made by hand for the month is taken into the run, never deleted."
+    },
+    "create_one": "Create preview ({count} customer)",
+    "create_other": "Create preview ({count} customers)",
+    "usePicked_one": "Use {count} customer",
+    "usePicked_other": "Use {count} customers",
+    "backToPreview": "Back to the preview",
+    "held": {
+      "reading": "Wait: the customers are being read.",
+      "pickOne": "Pick at least one customer.",
+      "tooMany": "At most {max} customers in one run.",
+      "issued": "This run is issued already.",
+      "noneReady": "No draft of the run passes its checks yet: fix them first.",
+      "cannot": "This run cannot be issued now: read it again.",
+      "cannotPick": "This run cannot change its customers now.",
+      "cannotDelete": "This run cannot be deleted now: something in it is issued.",
+      "typePhrase": "Type {phrase} first."
+    },
+    "preview": {
+      "title": "Customers of the run",
+      "explain": "The preview of {month}: one draft per customer with what it bills and its checks. Fix a held draft from its record, then come back.",
+      "totals": "net {net}, total {gross}",
+      "checks": "Checks of {customer}",
+      "none": "No invoice made: nothing of this month is left to invoice for this customer.",
+      "skipped_one": "{count} customer had nothing left to invoice and was left out.",
+      "skipped_other": "{count} customers had nothing left to invoice and were left out."
+    },
+    "count": {
+      "customers": "Customers",
+      "drafts": "Drafts",
+      "ready": "Ready to issue",
+      "issued": "Issued"
+    },
+    "state": {
+      "ISSUED": "Issued {number}",
+      "READY": "Ready to issue",
+      "HELD_one": "Held: {count} check to fix",
+      "HELD_other": "Held: {count} checks to fix",
+      "NONE": "No invoice"
+    },
+    "openDraft": "Open the draft",
+    "openInvoice": "Open the invoice",
+    "repick": "Change customers",
+    "delete": "Delete preview",
+    "deleted_one": "The preview was deleted: its draft stays a draft.",
+    "deleted_other": "The preview was deleted: its {count} drafts stay drafts.",
+    "issue_one": "Issue and send {count} invoice",
+    "issue_other": "Issue and send {count} invoices",
+    "issueOnly_one": "Issue {count} invoice",
+    "issueOnly_other": "Issue {count} invoices",
+    "back": "Back",
+    "confirm": {
+      "explain": "You are about to issue the run of {month}.",
+      "numbers_one": "{count} invoice gets its number and today’s date.",
+      "numbers_other": "{count} invoices get their numbers and today’s date.",
+      "send": "Each one is sent to SDI at once (in test mode nothing goes to SDI).",
+      "noSend": "They are not sent now: send each one from its record.",
+      "held_one": "{count} draft does not pass its checks: it stays a draft outside the run.",
+      "held_other": "{count} drafts do not pass their checks: they stay drafts outside the run.",
+      "never": "An issued invoice never changes: a correction is a credit or a debit note.",
+      "sendNow": "Send each invoice to SDI at once",
+      "type": "Type {phrase} to issue the run",
+      "stepUp": "A fresh authenticator code is asked next."
+    },
+    "done": {
+      "issued_one": "{count} invoice issued.",
+      "issued_other": "{count} invoices issued.",
+      "sent_one": "{count} sent to SDI.",
+      "sent_other": "{count} sent to SDI.",
+      "notSent_one": "{count} not sent: send it from its record.",
+      "notSent_other": "{count} not sent: send them from their records.",
+      "held_one": "{count} draft stayed back with its checks.",
+      "held_other": "{count} drafts stayed back with their checks.",
+      "issuedTitle": "Issued",
+      "heldTitle": "Stayed back",
+      "rowSent": "Sent to SDI",
+      "rowNotSent": "Not sent: send it from the invoice",
+      "rowFilesPending": "Not sent: its files are still being made",
+      "heldNoWords": "Its checks did not pass"
+    },
+    "col": {
+      "invoice": "Invoice",
+      "sdi": "SDI",
+      "customer": "Customer",
+      "why": "Why"
+    },
+    "problem": {
+      "otherRun": "Some of these customers are in another preview of this month: issue or change that run first.",
+      "state": "The run cannot do this now (it changed meanwhile): it was read again."
+    }
+  },
+  "stamp": {
+    "title": "Stamp duty this quarter",
+    "explain": "The stamp duty the issued invoices carry, quarter by quarter: what is due, by when and with which F24 code.",
+    "year": "Year",
+    "reading": "Reading the quarters…",
+    "failed": "Couldn't read the stamp duty quarters",
+    "waits": "Waits for the accountant: stamp duty is printed on the e-invoice when due, but it is not charged to the customer and the quarters are not counted (Finance settings › Tax set-up). The figures below are what the issued invoices carry.",
+    "quarter": "Q{n} {year}",
+    "tableLabel": "Stamp duty quarters of {year}",
+    "col": {
+      "quarter": "Quarter",
+      "invoices": "Invoices",
+      "total": "Stamp duty",
+      "due": "Due by",
+      "f24": "F24 code",
+      "state": "State",
+      "actions": "Do"
+    },
+    "f24": "F24 code {code}",
+    "deferred": "moved to a later due day: a small first half",
+    "state": {
+      "OPEN": "Running",
+      "TO_PAY": "To pay",
+      "LATE": "Late",
+      "PAID": "Paid"
+    },
+    "paidOn": "Paid on {date}",
+    "stale_one": "Counted {count} invoice: recount",
+    "stale_other": "Counted {count} invoices: recount",
+    "recount": "Recount",
+    "recounted_one": "Q{n} {year} counted again: {count} invoice.",
+    "recounted_other": "Q{n} {year} counted again: {count} invoices.",
+    "pay": "Record the payment…",
+    "payTitle": "Payment of {quarter}",
+    "payExplain": "The day the F24 (code {code}) was paid: after the quarter ended, not in the future. The quarter is then frozen.",
+    "paidOnLabel": "Paid on",
+    "payConfirm": "Record the payment",
+    "paidSaved": "The payment of Q{n} {year} is recorded.",
+    "payProblem": {
+      "day": "Pick the day it was paid.",
+      "beforeEnd": "The day is after the quarter ended.",
+      "future": "The day is today or earlier."
+    },
+    "held": {
+      "switchOff": "Waits for the accountant: the stamp duty switch is off.",
+      "paid": "This quarter is paid.",
+      "running": "The quarter is still running: its payment is recorded after it ends.",
+      "neverCounted": "The quarter was never counted: recount it first."
+    },
+    "rule": "The due days and the F24 codes wait for the accountant’s confirmation.",
+    "check": {
+      "label": "Stamp duty",
+      "reading": "Deciding the stamp duty…",
+      "failed": "The stamp duty could not be read now ({why}).",
+      "DUE": "Stamp duty decided: {amount} due, charged to the customer as a line.",
+      "DUE_NO_PRICE": "Stamp duty decided: due, charged to the customer as a line.",
+      "NOT_DUE": "Stamp duty decided: not due (VAT is charged, or the amount without VAT is 77.47 EUR or less).",
+      "SWITCH_OFF": "Stamp duty: waits for the accountant — the e-invoice records it when due, the customer is not charged (Finance settings › Tax set-up).",
+      "NOT_CHARGED_ON_TYPE": "Stamp duty decided: not charged on this kind of document (the e-invoice still records it when due).",
+      "NOT_EURO": "Stamp duty: the invoice is not in euro — decided by hand.",
+      "mismatch": "The draft's stamp duty line does not match the rule's decision (its lines changed): decide it again.",
+      "again": "Decide again"
+    }
+  },
+  "debit": {
+    "title": "New debit note",
+    "creditTitle": "New credit note",
+    "explain": "A debit note (TD05) adds to an issued invoice: an extra charge, a price raised, something forgotten. It goes to the same customer, in the same currency.",
+    "creditExplain": "A credit note takes back from an issued invoice. Pick the invoice: its own credit note dialog opens next (the whole invoice, some lines or an amount).",
+    "of": "Debit note of {number} · {customer}",
+    "invoice": "Invoice",
+    "invoiceHint": "An issued TD01 or TD24, not rejected.",
+    "creditInvoiceHint": "An issued invoice or deposit invoice, not rejected.",
+    "pickInvoice": "Pick the invoice…",
+    "pickReading": "Reading the issued invoices…",
+    "pickFailed": "Couldn't read the issued invoices",
+    "pickNone": "No issued invoice can take a debit note",
+    "creditPickNone": "No issued invoice can take a credit note",
+    "pickNoneBody": "Issue the invoice first; a rejected one is fixed and sent again instead.",
+    "infoReading": "Reading the invoice’s debit notes…",
+    "infoFailed": "The invoice’s debit notes could not be read now ({why}).",
+    "waits": "Waits for the accountant: the debit note is drafted now, but its issue waits until the accountant switches debit notes on (Finance settings › Tax set-up).",
+    "earlier": "Debit notes of this invoice so far",
+    "col": {
+      "number": "Number",
+      "status": "State",
+      "total": "Total"
+    },
+    "lines": "What is added",
+    "kind": "Line {n}",
+    "lineKind": {
+      "SERVICE": "A service",
+      "GOODS": "Goods",
+      "CHARGE": "A charge"
+    },
+    "chargeKind": "Kind of charge",
+    "chargeKinds": {
+      "FREIGHT": "Freight",
+      "PACKAGING": "Packaging",
+      "SAMPLES": "Samples",
+      "FEE": "A fee",
+      "OTHER": "Another charge"
+    },
+    "description": "Description",
+    "quantity": "Quantity",
+    "unitPrice": "Unit price",
+    "addLine": "Add a line",
+    "remove": "Remove",
+    "removeLine": "Remove line {n}",
+    "causale": "Text on the debit note",
+    "causaleHint": "Optional: why it is added. The debited invoice is named by itself.",
+    "vat": "The VAT follows the rules of the debited invoice and its customer; the draft shows it before you issue.",
+    "creditNext": "The invoice’s credit note dialog opens next.",
+    "go": "Create draft debit note",
+    "creditGo": "Open the credit note",
+    "menu": "Debit note…",
+    "held": {
+      "reading": "Wait: the invoice is being read.",
+      "noPrice": "A debit note’s prices need the price grain.",
+      "fix": "Fix the lines first."
+    },
+    "problem": {
+      "invoice": "Pick the invoice first.",
+      "description": "Say what is added.",
+      "descriptionLong": "At most 1000 characters.",
+      "quantity": "A quantity above 0.",
+      "unitPrice": "A price above 0."
+    },
+    "refusal": {
+      "NOT_DEBITABLE": "Only a TD01 or a TD24 takes a debit note.",
+      "NOT_ISSUED": "The invoice is not issued yet: change the draft instead.",
+      "REJECTED": "SDI rejected this invoice: fix and send it again instead."
+    }
+  },
+  "vatLimit": {
+    "title": "Time limit on lowering the VAT",
+    "reading": "Checking the time limit on the VAT…",
+    "failed": "The time limit on the VAT could not be checked now ({why}).",
+    "WITHIN": "This decrease may still lower the VAT: until {until}, one year after the operation of {operation} (art. 26 c.3 DPR 633/1972).",
+    "BEYOND": "More than a year since the operation of {operation} (the limit was {until}): this credit note may not lower the VAT, which stays due. Ask your accountant before you issue it.",
+    "NO_LIMIT": "No time limit for this reason: the credit note lowers the VAT.",
+    "ASK": "For “other” reasons ask your accountant whether this credit note may lower the VAT.",
+    "WAITS": "Waits for the accountant: the time limit on lowering the VAT is not checked while its switch is off (Finance settings › Tax set-up)."
+  },
+  "balance": {
+    "title": "Balance before shipping",
+    "explain": "Orders whose terms ask the balance before the goods leave: the system holds their shipments until it is paid, and lets them go by itself once it is.",
+    "reading": "Reading the balance before shipping…",
+    "failed": "The balance before shipping could not be read now ({why}).",
+    "record": "Record a payment",
+    "order": "Order {number}",
+    "open": "Balance before shipping still open: {amount}.",
+    "openNoPrice": "Balance before shipping still open.",
+    "paidHeld": "The balance is paid; the hold below was placed by a person and stays until someone lets it go.",
+    "heldLabel": "Shipments of order {number} held",
+    "heldShipment": "Shipment {number} is held until the balance is paid",
+    "since": "since {date}",
+    "byPerson": "placed by a person",
+    "release": "Let it go…",
+    "held": {
+      "noRelease": "Letting a shipment go needs the right to release money holds."
+    },
+    "noShipmentYet": "No shipment of this order is waiting yet: the first one will be held until the balance is paid.",
+    "holdsUnknown": "The shipments of this order are held until the balance is paid (the holds themselves need the right to see shipments).",
+    "releaseTitle": "Let shipment {number} go?",
+    "releaseExplain": "The balance before shipping of order {order} is not paid. Once let go, the system does not hold this shipment again for that balance.",
+    "releaseWords": "Why it may leave unpaid",
+    "releaseHint": "Kept on the shipment’s hold history (3 to 2000 characters).",
+    "releaseGo": "Let it go",
+    "released": "Shipment {number} may leave now.",
+    "releaseProblem": {
+      "short": "Say why, in a few words.",
+      "long": "At most 2000 characters."
+    }
+  },
+  "self": {
+    "title": "Self-invoices",
+    "explain": "Self-invoices we must send to SDI for purchases from abroad, by the 15th of the month after the supplier invoice arrived.",
+    "waits": "Waits for the accountant: self-invoices are drafted, but their issue waits until the accountant switches them on (Finance settings › Tax set-up).",
+    "createVerb": "Create from the supplier invoice",
+    "keyCreate": "Create from the supplier invoice",
+    "count_one": "{count} self-invoice",
+    "count_other": "{count} self-invoices",
+    "rowsLabel": "Which self-invoices",
+    "rows": {
+      "open": "To do",
+      "issued": "Issued",
+      "cancelled": "Cancelled",
+      "all": "All"
+    },
+    "col": {
+      "purchase": "Purchase",
+      "kind": "Kind",
+      "deadline": "Deadline",
+      "status": "Status"
+    },
+    "supplierInvoice": "Invoice {number}",
+    "received": "received {date}",
+    "kind": {
+      "TD17": "Services from abroad",
+      "TD18": "Goods from the EU",
+      "TD19": "Goods already in Italy"
+    },
+    "kindWhen": {
+      "TD17": "A service bought from a supplier abroad (EU or not).",
+      "TD18": "Goods bought from a supplier in another EU country.",
+      "TD19": "Goods already in Italy bought from a supplier abroad."
+    },
+    "deadline": {
+      "left_one": "{count} day left",
+      "left_other": "{count} days left",
+      "today": "Due today",
+      "late_one": "Late by {count} day",
+      "late_other": "Late by {count} days",
+      "done": "Done"
+    },
+    "status": {
+      "PENDING": "To send",
+      "ISSUED": "Issued",
+      "CANCELLED": "Cancelled"
+    },
+    "stage": {
+      "toDraft": "No draft yet",
+      "draft": "Its draft waits to be issued",
+      "issued": "Issued as {number}",
+      "cancelled": "Cancelled"
+    },
+    "rowMenu": "Self-invoice of {number}",
+    "openInvoice": "Open its invoice",
+    "openSupplierInvoice": "Open the supplier invoice",
+    "makeDraft": "Make its draft",
+    "cancel": "Cancel…",
+    "bulkDraft_one": "Make {count} draft",
+    "bulkDraft_other": "Make {count} drafts",
+    "drafted_one": "{count} draft made.",
+    "drafted_other": "{count} drafts made.",
+    "draftedSome": "{made} made, {refused} refused: open each one for why.",
+    "cancelled": "The self-invoice of {number} is cancelled.",
+    "failed": "Couldn't load self-invoices",
+    "empty": {
+      "title": "No foreign purchases need a self-invoice",
+      "body": "A supplier invoice from abroad shows here once it is recorded in Payables."
+    },
+    "emptyRows": {
+      "title": "None here"
+    },
+    "noRight": {
+      "title": "Self-invoices need the right to see invoices",
+      "body": "Ask an admin for it; the supplier invoices above stay as they are."
+    },
+    "held": {
+      "noManage": "Making or cancelling a self-invoice needs the right to manage invoices.",
+      "noCost": "A self-invoice carries the purchase’s amounts: it needs the cost grain and the right to see payables.",
+      "notPending": "Only a self-invoice still to send takes a draft.",
+      "hasDraft": "It has its draft already.",
+      "cannot": "This self-invoice cannot do that now.",
+      "issued": "An issued self-invoice is never cancelled.",
+      "cancelled": "It is cancelled already.",
+      "noneToDraft": "None of the rows chosen takes a draft."
+    },
+    "create": {
+      "title": "Create a self-invoice",
+      "explain": "Pick the supplier invoice from abroad; its draft in euro follows (the purchase’s lines with the Italian VAT), ready to issue to SDI.",
+      "reading": "Reading the supplier invoices from abroad…",
+      "failed": "Couldn't read the supplier invoices from abroad",
+      "none": {
+        "title": "No supplier invoice from abroad needs one",
+        "body": "Every supplier invoice from abroad has its self-invoice."
+      },
+      "purchase": "Supplier invoice",
+      "pick": "Pick the supplier invoice…",
+      "deadline": "Send by {date}",
+      "currency": "in {currency}: converted at the rate of its day",
+      "kind": "Kind",
+      "suggested": "Suggested by the purchase’s lines.",
+      "mixed": "Its lines mix goods and services: pick the kind.",
+      "rate": "Italian VAT rate",
+      "rateHint": "22 % unless the goods or services take a reduced rate.",
+      "after": "The rules (deadline, kind, rate) wait for the accountant’s confirmation.",
+      "go": "Create and open the draft",
+      "held": {
+        "pick": "Pick the supplier invoice.",
+        "kind": "Pick the kind."
+      }
+    },
+    "cancelTitle": "Cancel the self-invoice of {number}?",
+    "cancelExplain": "The self-invoice for the purchase from {supplier} is cancelled; it can be made again later.",
+    "cancelExplainDraft": "The self-invoice for the purchase from {supplier} is cancelled and its draft deleted with it.",
+    "cancelReason": "Why",
+    "cancelGo": "Cancel the self-invoice",
+    "cancelProblem": {
+      "short": "Say why, in a few words.",
+      "long": "At most 500 characters."
+    }
+  },
+  "tax": {
+    "title": "Tax set-up",
+    "explain": "The company's VAT codes as data — rates, reasons without VAT with their law, the days each is in force — and the duties the accountant switches on. Until a switch is on, invoices follow the built-in rules.",
+    "switches": "The accountant's switches",
+    "switchesFailed": "The switches could not be read now ({why}).",
+    "switch": {
+      "on": "On",
+      "off": "Off",
+      "taxCodesOn": {
+        "title": "Tax codes on invoices",
+        "on": "Invoices use these tax codes: every line's VAT is a code in force on the issue day, and a line without VAT prints the code's law.",
+        "off": "Waits for the accountant: invoices use the built-in VAT rules; these codes are kept but reach no invoice yet."
+      },
+      "stampDutyOn": {
+        "title": "Stamp duty charged to the customer",
+        "on": "Stamp duty is charged to the customer as an invoice line, and each quarter is counted for payment.",
+        "off": "Waits for the accountant: stamp duty is printed on the e-invoice when due, but not charged to the customer, and the quarters are not counted."
+      },
+      "declarationsOfIntentOn": {
+        "title": "Declarations of intent",
+        "on": "Invoices rest on the customers' declarations of intent: lines without VAT (N3.5) name a checked declaration of the year with enough left.",
+        "off": "Waits for the accountant: declarations are recorded and checked, but no invoice names one yet."
+      },
+      "selfInvoicesOn": {
+        "title": "Self-invoices, debit notes and the VAT time limit",
+        "on": "Self-invoices (TD17–TD19) and debit notes (TD05) are issued, and a credit note says whether it may still lower the VAT.",
+        "off": "Waits for the accountant: self-invoices and debit notes are drafted but not issued, and the time limit on lowering the VAT is not checked."
+      }
+    },
+    "switched": {
+      "taxCodesOn": {
+        "on": "Tax codes on invoices: switched on.",
+        "off": "Tax codes on invoices: switched off."
+      },
+      "stampDutyOn": {
+        "on": "Stamp duty charged to the customer: switched on.",
+        "off": "Stamp duty charged to the customer: switched off."
+      },
+      "declarationsOfIntentOn": {
+        "on": "Declarations of intent: switched on.",
+        "off": "Declarations of intent: switched off."
+      },
+      "selfInvoicesOn": {
+        "on": "Self-invoices, debit notes and the VAT time limit: switched on.",
+        "off": "Self-invoices, debit notes and the VAT time limit: switched off."
+      }
+    },
+    "switchOnVerb": "Switch on…",
+    "switchOff": "Switch off…",
+    "switchTitleOn": "Switch on: {name}?",
+    "switchTitleOff": "Switch off: {name}?",
+    "tickSwitch": "Your accountant confirmed this for {company}.",
+    "tickConfirm": "Your accountant confirmed these codes: rate or reason, law and account key.",
+    "switchOffNote": "Invoices already issued stay as they are; new ones follow the built-in rules again.",
+    "stepUpNote": "A fresh authenticator code is asked next.",
+    "held": {
+      "tick": "Tick the accountant's confirmation first.",
+      "fix": "Fix the fields first."
+    },
+    "stepUp": {
+      "switch": "Change one of the accountant's switches: type the code from your authenticator app.",
+      "confirm": "Record the accountant's confirmation of a tax code: type the code from your authenticator app."
+    },
+    "codes": "Tax codes",
+    "new": "New code",
+    "keyNew": "New tax code",
+    "count_one": "{count} version",
+    "count_other": "{count} versions",
+    "rowsLabel": "Which versions",
+    "rows": {
+      "current": "In force and planned",
+      "all": "All, ended and archived too"
+    },
+    "col": {
+      "code": "Code",
+      "treatment": "VAT",
+      "period": "In force",
+      "state": "State"
+    },
+    "rate": "{rate} %",
+    "natura": "No VAT · {natura}",
+    "account": "Account {key}",
+    "period": "{from} – {to}",
+    "periodOpen": "from {from}",
+    "noRule": "No rule named",
+    "state": {
+      "PLANNED": "Planned",
+      "IN_FORCE": "In force",
+      "ENDED": "Ended",
+      "ARCHIVED": "Archived"
+    },
+    "verified": "Confirmed by the accountant on {date}",
+    "verifiedBuiltIn": "Confirmed",
+    "unverified": "Waits for the accountant",
+    "rowMenu": "Code {code}",
+    "verb": {
+      "edit": "Edit…",
+      "relabel": "Change the label…",
+      "end": "End it…",
+      "version": "New version from a later day…",
+      "archive": "Archive…",
+      "delete": "Delete…",
+      "confirm": "Accountant's confirmation…"
+    },
+    "notSelectable": "Nothing to confirm or archive here.",
+    "bulkConfirm_one": "Confirm {count}",
+    "bulkConfirm_other": "Confirm {count}",
+    "bulkArchive_one": "Archive {count}",
+    "bulkArchive_other": "Archive {count}",
+    "failed": "Couldn't load the tax codes",
+    "empty": {
+      "title": "No tax codes yet",
+      "body": "Add the rates and the reasons without VAT the company uses, each with the day it starts."
+    },
+    "rules": "Rules the codes follow",
+    "rule": {
+      "col": {
+        "rule": "Rule",
+        "catalogue": "Built in",
+        "company": "For this company",
+        "codes": "Codes in force"
+      },
+      "VERIFIED": "Confirmed",
+      "UNVERIFIED": "Waits for the accountant"
+    },
+    "form": {
+      "new": "New tax code",
+      "edit": "Edit {code}",
+      "explain": {
+        "edit": "This version is not in force yet: every value may change.",
+        "relabel": "Only the label changes: what the code does stays as it is (a new version changes it).",
+        "end": "The last day the code is in force. Invoices after it need another code.",
+        "version": "The current version ends the day before the new one starts. A code in force is never edited.",
+        "new": "A rate, or a reason without VAT (Natura) with the law printed on the invoice, from the day it starts."
+      },
+      "go": {
+        "edit": "Save",
+        "relabel": "Save the label",
+        "end": "End it",
+        "version": "Make the version",
+        "new": "Add the code"
+      },
+      "relabel": "Change the label of {code}",
+      "end": "End {code}",
+      "version": "New version of {code}",
+      "unverified": "A new code or version waits for the accountant’s confirmation."
+    },
+    "field": {
+      "code": "Code",
+      "codeHint": "Capitals, digits, dot or hyphen: 22, N3.2, N3.5-DI.",
+      "country": "Country",
+      "label": "Label",
+      "labelHint": "What it is for, in one line.",
+      "rate": "VAT rate (%)",
+      "rateHint": "An Italian rate (22, 10, 5, 4) or 0 with its reason.",
+      "natura": "Reason without VAT (Natura)",
+      "naturaHint": "Why no VAT is charged: the code SDI reads.",
+      "naturaRate": "Only a rate of 0 takes a reason.",
+      "noNatura": "None",
+      "legalRef": "Law printed on the invoice",
+      "legalRefHint": "For example: Art. 8 c.1 lett. a) DPR 633/1972.",
+      "account": "Account key",
+      "accountHint": "Optional: the accountant's account for this code.",
+      "rule": "Rule it follows",
+      "validFrom": "In force from",
+      "versionFrom": "New version from",
+      "validTo": "Last day",
+      "validToHint": "Optional: empty while it has no end.",
+      "endHint": "From today or later."
+    },
+    "problem": {
+      "country": "Two capitals: IT for Italian VAT.",
+      "code": "1 to 20 capitals, digits, dot, underscore or hyphen.",
+      "label": "Say what the code is for, in one line.",
+      "ratePct": "An Italian rate (22, 10, 5, 4) or 0 with its reason.",
+      "natura": "A rate of 0 takes its reason; a rate above 0 takes none.",
+      "legalRef": "A reason without VAT cites its law, in one line.",
+      "accountCodeKey": "Letters, digits, dot, colon, slash or hyphen, up to 60.",
+      "ruleId": "A rule of the list.",
+      "validFrom": "Pick the first day.",
+      "validTo": "The last day is on or after the first.",
+      "versionFrom": "The new version starts after the current one started, from tomorrow on.",
+      "endDay": "Pick the last day."
+    },
+    "verbTitle": {
+      "archive_one": "Archive this code?",
+      "archive_other": "Archive {count} codes?",
+      "delete_one": "Delete this code?",
+      "delete_other": "Delete {count} codes?",
+      "confirm_one": "Record the accountant's confirmation?",
+      "confirm_other": "Record the accountant's confirmation of {count} codes?"
+    },
+    "verbGo": {
+      "archive_one": "Archive",
+      "archive_other": "Archive {count}",
+      "delete_one": "Delete",
+      "delete_other": "Delete {count}",
+      "confirm_one": "Confirm",
+      "confirm_other": "Confirm {count}"
+    },
+    "verbExplain": {
+      "archive": "An archived version reaches no invoice and changes no more; issued invoices keep it.",
+      "delete": "A version not in force yet is deleted for good.",
+      "confirm": "The version becomes confirmed with who and when; it is said once and stays."
+    },
+    "done": {
+      "archive_one": "Code archived.",
+      "archive_other": "{count} codes archived.",
+      "delete_one": "Code deleted.",
+      "delete_other": "{count} codes deleted.",
+      "confirm_one": "Code confirmed.",
+      "confirm_other": "{count} codes confirmed."
+    },
+    "saved": {
+      "new": "Code {code} added: it waits for the accountant’s confirmation.",
+      "version": "A new version of {code} is made.",
+      "edit": "Code {code} saved.",
+      "relabel": "The label of {code} is saved.",
+      "end": "Code {code} ends on the day set."
+    }
+  },
+  "sdi": {
+    "title": "E-invoice test mode",
+    "explain": "Before going live, sends are answered without reaching SDI, so the office can practise issuing, rejections and corrections. The banner shows on every invoice page while it is on.",
+    "failed": "Couldn't load e-invoicing (SDI)",
+    "stateTest": "Test mode on",
+    "stateLive": "Live since {date}",
+    "who": "Who answers the sends",
+    "liveReal": "SDI, through the intermediary: invoices reach their customers for real.",
+    "liveFake": "The FAKE intermediary (local and test only): nothing leaves the system.",
+    "testSent": "Sent in test mode",
+    "testSentValue_one": "{count} invoice",
+    "testSentValue_other": "{count} invoices",
+    "connection": "SDI connection",
+    "noConnection": "None yet",
+    "simulate": "Simulated answer",
+    "simulateHint": "What SDI's simulated answer says to each send.",
+    "simulateFake": "With the FAKE intermediary the fake answers; the simulated answer applies to a live or sandbox connection.",
+    "outcome": {
+      "DELIVERED": "Delivered",
+      "REJECTED": "Rejected on the first send (practise the correction)",
+      "NOT_DELIVERABLE": "Not deliverable (practise the copy to the customer)"
+    },
+    "simulated": {
+      "DELIVERED": "Sends are now answered as delivered.",
+      "REJECTED": "The first send of each invoice is now answered as rejected.",
+      "NOT_DELIVERABLE": "Sends are now answered as not deliverable."
+    },
+    "goLiveHeld": "What holds going live",
+    "goLive": "Go live…",
+    "backToTest": "Back to test mode…",
+    "backTitle": "Back to e-invoice test mode?",
+    "backExplain": "From now on sends are answered without reaching SDI. Invoices sent while live stay as they are.",
+    "backGo": "Back to test mode",
+    "stepUpNote": "A fresh authenticator code is asked next.",
+    "stepUp": "Change how the company sends its e-invoices: type the code from your authenticator app.",
+    "wentLive": "The company is live: invoices now go to SDI for real.",
+    "backInTest": "The company is back in test mode: nothing goes to SDI."
+  },
+  "swap": {
+    "title": "Swap intermediary",
+    "explain": "We keep our own copy of every XML we send and of every receipt, so the company can change intermediary without losing anything.",
+    "failed": "Couldn't read our copies",
+    "readyPill": "Ready to swap",
+    "notReadyPill": "Not ready",
+    "copied": "Copies complete",
+    "missingLabel": "Copies missing",
+    "openLabel": "Waiting for SDI",
+    "ready_one": "Every send has our complete copy ({count}): the intermediary can be changed.",
+    "ready_other": "Every send has our complete copy ({count}): the intermediary can be changed.",
+    "missing_one": "{count} send lacks our complete copy: make the copies first.",
+    "missing_other": "{count} sends lack our complete copy: make the copies first.",
+    "open_one": "{count} send still waits for SDI's answer at the intermediary.",
+    "open_other": "{count} sends still wait for SDI's answer at the intermediary.",
+    "nothing": "Nothing was sent yet.",
+    "providers": "Copies made from: {names}.",
+    "make": "Make the copies",
+    "made": "{made} copies made, {completed} completed, {remaining} still to make.",
+    "recent": "Newest sends",
+    "col": {
+      "file": "File sent",
+      "copy": "Our copy",
+      "receipts": "Receipts"
+    },
+    "copiedAt": "copied {when}",
+    "attempt_one": "send {count}",
+    "attempt_other": "send {count}",
+    "state": {
+      "NOT_SENT": "Not sent",
+      "SIMULATED": "Test mode: never reached SDI",
+      "MISSING": "Missing",
+      "RECEIPTS_MISSING": "Receipts missing",
+      "COMPLETE": "Complete"
+    },
+    "ourRecord": "A receipt here is our record of SDI's notification as the intermediary handed it, not SDI's signed receipt."
+  },
+  "skip": {
+    "legend": "Due dates",
+    "fromEndOfMonth": "Count the days from the end of the month (“30 days e.o.m.”)",
+    "monthsLabel": "Months no instalment falls due in",
+    "problem": "At most 11 months: one month at least stays to pay in.",
+    "printed": "Printed as: {words}.",
+    "none": "No convention: the days count from the event, every month may hold a due day.",
+    "rule": "A due day in a skipped month moves to the same day of the next month not skipped (the end of the month when it was one). Your accountant confirms the convention agreed with the customer."
+  },
+  "rule": {
+    "title": "Refund on cancellation",
+    "explain": "What is kept or paid back of a deposit when an order is cancelled, and which document follows. Without a rule everything is paid back.",
+    "accountant": "The rules wait for the accountant’s word: the document for a kept caparra and for the extra half paid back.",
+    "add": "Add rule",
+    "keyAdd": "Add a rule",
+    "count_one": "{count} rule",
+    "count_other": "{count} rules",
+    "rowsLabel": "Which rules",
+    "rows": {
+      "active": "Active",
+      "archived": "Archived",
+      "all": "All"
+    },
+    "col": {
+      "deposit": "Deposit",
+      "by": "Who cancels",
+      "what": "What happens",
+      "state": "State"
+    },
+    "kind": {
+      "ACCONTO": "Advance (acconto)",
+      "CAPARRA": "Confirmatory deposit (caparra)",
+      "CAPARRA_PENITENZIALE": "Penalty deposit (caparra penitenziale)"
+    },
+    "by": {
+      "CUSTOMER": "The customer",
+      "COMPANY": "We cancel"
+    },
+    "orders": {
+      "any": "Any order",
+      "made": "Made-to-measure orders",
+      "stock": "Other orders"
+    },
+    "refund": {
+      "REFUND_ALL": "Pay it all back",
+      "KEEP_PERCENT": "Keep a percent",
+      "REFUND_DOUBLE": "Pay back twice the deposit"
+    },
+    "document": {
+      "CREDIT_NOTE": "A credit note of the deposit invoice",
+      "NONE": "No document"
+    },
+    "words": {
+      "REFUND_ALL": {
+        "CREDIT_NOTE": "All paid back; a credit note of the deposit invoice follows.",
+        "NONE": "All paid back; no document follows."
+      },
+      "KEEP_PERCENT": {
+        "CREDIT_NOTE": "{pct} % kept, the rest paid back; a credit note of what is paid back follows.",
+        "NONE": "{pct} % kept, the rest paid back; no document follows."
+      },
+      "REFUND_DOUBLE": {
+        "CREDIT_NOTE": "Twice the deposit paid back; a credit note of the deposit invoice follows, the extra half paid in Payments.",
+        "NONE": "Twice the deposit paid back; no document follows."
+      }
+    },
+    "status": {
+      "ACTIVE": "Active",
+      "ARCHIVED": "Archived"
+    },
+    "rowMenu": "Rule for {kind}",
+    "edit": "Change…",
+    "archive": "Archive…",
+    "bulkArchive_one": "Archive {count}",
+    "bulkArchive_other": "Archive {count}",
+    "failed": "Couldn't load the refund rules",
+    "empty": {
+      "title": "No rule yet: everything is paid back",
+      "body": "Add a rule for each deposit the company keeps or pays back differently."
+    },
+    "emptyArchived": "No archived rule",
+    "held": {
+      "archived": "An archived rule changes no more.",
+      "noneActive": "Pick active rules.",
+      "fix": "Fix the fields first."
+    },
+    "addTitle": "New refund rule",
+    "editTitle": "Change the refund rule",
+    "create": "Add the rule",
+    "save": "Save",
+    "field": {
+      "kind": "Deposit",
+      "by": "Who cancels",
+      "orders": "Orders",
+      "fixed": "Fixed once the rule exists: archive it and add another.",
+      "refund": "What happens to the deposit",
+      "keep": "Percent kept",
+      "document": "Document that follows",
+      "note": "Note",
+      "noteHint": "Optional: the clause on the quote, for example."
+    },
+    "preview": "It reads: {words}",
+    "problem": {
+      "keepPct": "Above 0 and up to 100 percent, at most 4 decimals.",
+      "refundRule": "Twice back only for a caparra, when we cancel (c.c. artt. 1385, 1386).",
+      "documentKind": "All of it is kept: nothing is paid back, so no document follows.",
+      "note": "A note of 1 to 500 characters, or none.",
+      "oneActive": "The company has an active rule for this deposit, side and kind of order already: change that one, or archive it first."
+    },
+    "saved": "The rule is saved.",
+    "created": "The rule is added.",
+    "archived_one": "Rule archived.",
+    "archived_other": "{count} rules archived.",
+    "archiveTitle_one": "Archive this rule?",
+    "archiveTitle_other": "Archive {count} rules?",
+    "archiveGo_one": "Archive",
+    "archiveGo_other": "Archive {count}",
+    "archiveExplain": "An archived rule decides no cancellation; without another active rule everything is paid back."
+  }
+}

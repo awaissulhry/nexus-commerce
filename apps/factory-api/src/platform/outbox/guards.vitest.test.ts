@@ -94,9 +94,11 @@ describe('check-event-contract', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
     // switched, costing_settings.changed): the guard counts 886 and 1408 on this tree (883 and 1400 on origin/main with B-W2b-401);
     // with the planted event and emit: 887, 1409.
     // B-W2b-404: + 2 declared (security.settings_changed, security.role_archive_changed), + 3 literal emits.
+    // B-W2b-411: one event (work_order_close.changed) and six literal emits (the close: the status, the close, its entries;
+    // the undo or reopen: the same three): with B-W2b-404, the count the guard reports after the merge.
     // B-W2b-408: + 3 declared (account_mapping.changed, accounting_settings.changed, integrity_checks.ran), + 5 literal emits
     // (a mapping row added, changed, removed; the journals switched; the integrity checks run).
-    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(892 declared event version\(s\), 1417 literal emit/) })
+    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(896 declared event version\(s\), 1426 literal emit/) })
   })
 
   it.each<[string, Plants, RegExp]>([

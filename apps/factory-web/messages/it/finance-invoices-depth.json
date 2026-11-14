@@ -1,0 +1,907 @@
+{
+  "common": {
+    "close": "Chiudi"
+  },
+  "held": {
+    "busy": "Attendi: l'ultima modifica è ancora in salvataggio.",
+    "noIssue": "Emettere e inviare fatture richiede il permesso di emettere fatture.",
+    "noManage": "Preparare bozze richiede il permesso di gestire le fatture.",
+    "noRecord": "Registrare incassi richiede il permesso di registrare pagamenti.",
+    "noRules": "Cambiare queste regole richiede il permesso di gestire le regole sugli acconti.",
+    "noTaxManage": "Cambiare i codici IVA e i trimestri dell'imposta di bollo richiede il permesso di gestire l'impostazione fiscale.",
+    "noTaxSwitch": "Gli interruttori e le conferme del commercialista richiedono il permesso di attivare le regole fiscali.",
+    "noTestMode": "Passare in produzione o tornare in prova richiede il permesso di gestire la modalità di prova della fattura elettronica.",
+    "noneMissing": "Ogni invio ha già la nostra copia."
+  },
+  "refusal": {
+    "DATABASE": "Qualcuno l'ha cambiato nello stesso momento: è stato riletto, riprova.",
+    "SWITCH_OFF": "Attende il commercialista: il suo interruttore è spento (Impostazioni amministrazione › Impostazione fiscale).",
+    "IN_FORCE": "Un codice in vigore non si modifica mai: crea una nuova versione da un giorno successivo.",
+    "OVERLAP": "Un'altra versione di questo codice copre alcuni di questi giorni: cambia prima i suoi giorni.",
+    "NOT_PLANNED": "Si elimina solo una versione non ancora in vigore: terminala o archiviala.",
+    "NEXT_VERSION": "La nuova versione inizia dopo l'inizio di quella attuale, da oggi in poi.",
+    "CONFIRMED": "Il commercialista ha già confermato questa versione.",
+    "ARCHIVED": "Questa versione è archiviata: non cambia più.",
+    "QUARTER_OPEN": "Il trimestre è ancora in corso: il pagamento si registra dopo la sua fine.",
+    "QUARTER_PAID": "Il trimestre è pagato: non si ricalcola.",
+    "SELF_INVOICE": "Questa fattura del fornitore non può avere quell'autofattura (ne ha già una, il tipo è diverso o il fornitore non è estero).",
+    "SELF_INVOICE_ISSUED": "L'autofattura è emessa: non si annulla (una correzione passa dalla sua nota di credito).",
+    "NO_RATE": "La fattura del fornitore è in altra valuta e non c’è un cambio del suo giorno: aggiungilo in Impostazioni amministrazione › Valute e cambi.",
+    "DEBIT_NOTE": "Questa fattura non può avere una nota di debito: solo una TD01 o TD24 emessa e non scartata.",
+    "NOT_IN_FORCE": "La spedizione non è più bloccata per questo.",
+    "MAY_NOT_RELEASE": "Sbloccare questa spedizione richiede il permesso di sbloccare i blocchi per pagamento.",
+    "GO_LIVE": "La società non può ancora passare in produzione: vedi sulla scheda cosa lo impedisce.",
+    "COPY_FILES": "Alcuni file degli invii non si sono potuti copiare: riprova più tardi."
+  },
+  "new": {
+    "label": "Nuovo",
+    "aria": "Nuovo: nota di credito, nota di debito o fattura di acconto",
+    "credit": "Nota di credito…",
+    "debit": "Nota di debito…",
+    "deposit": "Fattura di acconto",
+    "depositHint": "Segue l'incasso di un acconto: registra l'incasso in Incassi."
+  },
+  "more": {
+    "aria": "Altro sulle fatture",
+    "run": "Fatturazione mensile…",
+    "stamp": "Imposta di bollo del trimestre…",
+    "settings": "Impostazioni amministrazione",
+    "keys": "Scorciatoie da tastiera"
+  },
+  "testMode": {
+    "banner": "Fattura elettronica in prova — nulla va allo SDI",
+    "companyLine": "{company}: {words}",
+    "answer": {
+      "SIMULATED": {
+        "DELIVERED": "Agli invii si risponde qui, mai l'intermediario: ognuno risulta consegnato.",
+        "REJECTED": "Agli invii si risponde qui, mai l'intermediario: il primo invio di ogni fattura viene scartato, per provare la correzione.",
+        "NOT_DELIVERABLE": "Agli invii si risponde qui, mai l'intermediario: lo SDI non riesce a recapitarli, per provare la copia al cliente."
+      },
+      "FAKE": "La connessione è l'intermediario FAKE (solo in locale e in prova): risponde lui e nulla esce dal sistema.",
+      "NONE": "Non c'è ancora un'unica connessione SDI: gli invii la aspettano."
+    }
+  },
+  "goLive": {
+    "problem": {
+      "ALREADY_LIVE": "La società è già in produzione.",
+      "NO_CONNECTION": "La società non ha una connessione SDI: un amministratore collega prima l'intermediario (Sistema › Connessioni e API).",
+      "SEVERAL_CONNECTIONS": "La società ha più di una connessione SDI: un amministratore disattiva prima quelle non usate.",
+      "CONNECTION_PAUSED": "La connessione SDI è in pausa: un amministratore la riattiva prima.",
+      "PROVIDER_NOT_CHOSEN": "Nessun intermediario SDI è ancora scelto: l'invio reale lo attende, quindi la società resta in prova."
+    }
+  },
+  "live": {
+    "title": "Uscire dalla prova della fattura elettronica?",
+    "go": "Passa in produzione",
+    "forReal": "Da ora le fatture vanno davvero allo SDI e non si possono ritirare.",
+    "noTestSends": "Nessuna fattura è stata inviata in prova.",
+    "testSends_one": "{count} fattura è stata inviata in prova: non è mai arrivata allo SDI e tiene il suo numero. Chiedi al commercialista cosa farne prima di passare in produzione.",
+    "testSends_other": "{count} fatture sono state inviate in prova: non sono mai arrivate allo SDI e tengono i loro numeri. Chiedi al commercialista cosa farne prima di passare in produzione.",
+    "reversal": "Torna in prova",
+    "acknowledge": "Ho capito: da ora le fatture di {company} arrivano davvero allo SDI e ai clienti."
+  },
+  "run": {
+    "title": "Fatturazione mensile",
+    "month": "Mese dei DDT",
+    "reading": "Lettura della fatturazione…",
+    "stepUp": "Emettere la fatturazione e inviarne le fatture allo SDI: scrivi il codice della tua app di autenticazione.",
+    "pick": {
+      "explain": "Clienti i cui DDT di {month} vanno in fattura differita (TD24). Ogni cliente scelto ha una bozza con i suoi controlli; nulla viene emesso finché non confermi.",
+      "reading": "Lettura dei clienti…",
+      "failed": "Impossibile leggere i clienti del mese",
+      "none": {
+        "title": "Nessuna fattura differita in attesa per {month}",
+        "body": "Ogni DDT del mese è fatturato, oppure nessuno dei suoi clienti è fatturato a fine mese."
+      },
+      "customers": "Clienti",
+      "all_one": "Tutti ({count})",
+      "all_other": "Tutti ({count})",
+      "ddts_one": "{count} DDT",
+      "ddts_other": "{count} DDT",
+      "drafts_one": "una bozza ne contiene già una parte (viene inclusa)",
+      "drafts_other": "{count} bozze ne contengono già una parte (vengono incluse)",
+      "inOtherRun": "in un'altra anteprima di questo mese",
+      "issuedRun_one": "Una fatturazione di {month} è già stata emessa: {count} fattura.",
+      "issuedRun_other": "Una fatturazione di {month} è già stata emessa: {count} fatture.",
+      "after": "Una bozza del mese già fatta a mano entra nella fatturazione, non viene mai eliminata."
+    },
+    "create_one": "Crea anteprima ({count} cliente)",
+    "create_other": "Crea anteprima ({count} clienti)",
+    "usePicked_one": "Usa {count} cliente",
+    "usePicked_other": "Usa {count} clienti",
+    "backToPreview": "Torna all'anteprima",
+    "held": {
+      "reading": "Attendi: i clienti sono in lettura.",
+      "pickOne": "Scegli almeno un cliente.",
+      "tooMany": "Al massimo {max} clienti in una fatturazione.",
+      "issued": "Questa fatturazione è già emessa.",
+      "noneReady": "Nessuna bozza della fatturazione supera ancora i controlli: sistemali prima.",
+      "cannot": "Questa fatturazione non si può emettere ora: rileggila.",
+      "cannotPick": "Questa fatturazione non può cambiare i clienti ora.",
+      "cannotDelete": "Questa fatturazione non si può eliminare ora: qualcosa è già emesso.",
+      "typePhrase": "Scrivi prima {phrase}."
+    },
+    "preview": {
+      "title": "Clienti della fatturazione",
+      "explain": "L'anteprima di {month}: una bozza per cliente con cosa fattura e i suoi controlli. Sistema una bozza bloccata dalla sua scheda, poi torna qui.",
+      "totals": "imponibile {net}, totale {gross}",
+      "checks": "Controlli di {customer}",
+      "none": "Nessuna fattura: per questo cliente non resta nulla da fatturare del mese.",
+      "skipped_one": "{count} cliente non aveva nulla da fatturare ed è stato escluso.",
+      "skipped_other": "{count} clienti non avevano nulla da fatturare e sono stati esclusi."
+    },
+    "count": {
+      "customers": "Clienti",
+      "drafts": "Bozze",
+      "ready": "Pronte da emettere",
+      "issued": "Emesse"
+    },
+    "state": {
+      "ISSUED": "Emessa {number}",
+      "READY": "Pronta da emettere",
+      "HELD_one": "Bloccata: {count} controllo da sistemare",
+      "HELD_other": "Bloccata: {count} controlli da sistemare",
+      "NONE": "Nessuna fattura"
+    },
+    "openDraft": "Apri la bozza",
+    "openInvoice": "Apri la fattura",
+    "repick": "Cambia clienti",
+    "delete": "Elimina anteprima",
+    "deleted_one": "L'anteprima è stata eliminata: la sua bozza resta bozza.",
+    "deleted_other": "L'anteprima è stata eliminata: le sue {count} bozze restano bozze.",
+    "issue_one": "Emetti e invia {count} fattura",
+    "issue_other": "Emetti e invia {count} fatture",
+    "issueOnly_one": "Emetti {count} fattura",
+    "issueOnly_other": "Emetti {count} fatture",
+    "back": "Indietro",
+    "confirm": {
+      "explain": "Stai per emettere la fatturazione di {month}.",
+      "numbers_one": "{count} fattura prende il suo numero e la data di oggi.",
+      "numbers_other": "{count} fatture prendono i loro numeri e la data di oggi.",
+      "send": "Ognuna è inviata subito allo SDI (in prova nulla va allo SDI).",
+      "noSend": "Non vengono inviate ora: inviale una per una dalla loro scheda.",
+      "held_one": "{count} bozza non supera i controlli: resta bozza fuori dalla fatturazione.",
+      "held_other": "{count} bozze non superano i controlli: restano bozze fuori dalla fatturazione.",
+      "never": "Una fattura emessa non cambia mai: una correzione è una nota di credito o di debito.",
+      "sendNow": "Invia subito ogni fattura allo SDI",
+      "type": "Scrivi {phrase} per emettere la fatturazione",
+      "stepUp": "Subito dopo viene chiesto un codice nuovo dell’autenticatore."
+    },
+    "done": {
+      "issued_one": "{count} fattura emessa.",
+      "issued_other": "{count} fatture emesse.",
+      "sent_one": "{count} inviata allo SDI.",
+      "sent_other": "{count} inviate allo SDI.",
+      "notSent_one": "{count} non inviata: inviala dalla sua scheda.",
+      "notSent_other": "{count} non inviate: inviale dalle loro schede.",
+      "held_one": "{count} bozza è rimasta indietro con i suoi controlli.",
+      "held_other": "{count} bozze sono rimaste indietro con i loro controlli.",
+      "issuedTitle": "Emesse",
+      "heldTitle": "Rimaste indietro",
+      "rowSent": "Inviata allo SDI",
+      "rowNotSent": "Non inviata: inviala dalla fattura",
+      "rowFilesPending": "Non inviata: i suoi file sono ancora in preparazione",
+      "heldNoWords": "I suoi controlli non sono passati"
+    },
+    "col": {
+      "invoice": "Fattura",
+      "sdi": "SDI",
+      "customer": "Cliente",
+      "why": "Perché"
+    },
+    "problem": {
+      "otherRun": "Alcuni di questi clienti sono in un'altra anteprima di questo mese: emetti o cambia prima quella fatturazione.",
+      "state": "La fatturazione non può farlo ora (è cambiata nel frattempo): è stata riletta."
+    }
+  },
+  "stamp": {
+    "title": "Imposta di bollo del trimestre",
+    "explain": "L'imposta di bollo delle fatture emesse, trimestre per trimestre: quanto è dovuto, entro quando e con quale codice tributo F24.",
+    "year": "Anno",
+    "reading": "Lettura dei trimestri…",
+    "failed": "Impossibile leggere i trimestri dell'imposta di bollo",
+    "waits": "Attende il commercialista: l'imposta di bollo è indicata sulla fattura elettronica quando dovuta, ma non è addebitata al cliente e i trimestri non vengono contati (Impostazioni amministrazione › Impostazione fiscale). Le cifre qui sotto sono quelle delle fatture emesse.",
+    "quarter": "T{n} {year}",
+    "tableLabel": "Trimestri dell'imposta di bollo del {year}",
+    "col": {
+      "quarter": "Trimestre",
+      "invoices": "Fatture",
+      "total": "Imposta di bollo",
+      "due": "Scadenza",
+      "f24": "Codice F24",
+      "state": "Stato",
+      "actions": "Azioni"
+    },
+    "f24": "Codice F24 {code}",
+    "deferred": "spostata a una scadenza successiva: primo semestre di importo ridotto",
+    "state": {
+      "OPEN": "In corso",
+      "TO_PAY": "Da pagare",
+      "LATE": "In ritardo",
+      "PAID": "Pagato"
+    },
+    "paidOn": "Pagato il {date}",
+    "stale_one": "Contata {count} fattura: ricalcola",
+    "stale_other": "Contate {count} fatture: ricalcola",
+    "recount": "Ricalcola",
+    "recounted_one": "T{n} {year} ricalcolato: {count} fattura.",
+    "recounted_other": "T{n} {year} ricalcolato: {count} fatture.",
+    "pay": "Registra il pagamento…",
+    "payTitle": "Pagamento di {quarter}",
+    "payExplain": "Il giorno in cui è stato pagato l'F24 (codice {code}): dopo la fine del trimestre, non nel futuro. Il trimestre poi resta fermo.",
+    "paidOnLabel": "Pagato il",
+    "payConfirm": "Registra il pagamento",
+    "paidSaved": "Il pagamento del T{n} {year} è registrato.",
+    "payProblem": {
+      "day": "Scegli il giorno del pagamento.",
+      "beforeEnd": "Il giorno è dopo la fine del trimestre.",
+      "future": "Il giorno è oggi o prima."
+    },
+    "held": {
+      "switchOff": "Attende il commercialista: l'interruttore dell'imposta di bollo è spento.",
+      "paid": "Questo trimestre è pagato.",
+      "running": "Il trimestre è ancora in corso: il pagamento si registra dopo la sua fine.",
+      "neverCounted": "Il trimestre non è mai stato contato: ricalcolalo prima."
+    },
+    "rule": "Le scadenze e i codici F24 attendono la conferma del commercialista.",
+    "check": {
+      "label": "Imposta di bollo",
+      "reading": "Decisione dell'imposta di bollo…",
+      "failed": "Impossibile leggere ora l'imposta di bollo ({why}).",
+      "DUE": "Imposta di bollo decisa: {amount} dovuti, addebitati al cliente con una riga.",
+      "DUE_NO_PRICE": "Imposta di bollo decisa: dovuta, addebitata al cliente con una riga.",
+      "NOT_DUE": "Imposta di bollo decisa: non dovuta (c'è l'IVA, oppure l'importo senza IVA è di 77,47 EUR o meno).",
+      "SWITCH_OFF": "Imposta di bollo: attende il commercialista — la fattura elettronica la indica quando dovuta, il cliente non paga (Impostazioni amministrazione › Impostazione fiscale).",
+      "NOT_CHARGED_ON_TYPE": "Imposta di bollo decisa: non addebitata su questo tipo di documento (la fattura elettronica la indica comunque quando dovuta).",
+      "NOT_EURO": "Imposta di bollo: la fattura non è in euro — si decide a mano.",
+      "mismatch": "La riga dell'imposta di bollo della bozza non corrisponde alla decisione della regola (le righe sono cambiate): decidila di nuovo.",
+      "again": "Decidi di nuovo"
+    }
+  },
+  "debit": {
+    "title": "Nuova nota di debito",
+    "creditTitle": "Nuova nota di credito",
+    "explain": "Una nota di debito (TD05) si aggiunge a una fattura emessa: un addebito in più, un prezzo aumentato, qualcosa dimenticato. Va allo stesso cliente, nella stessa valuta.",
+    "creditExplain": "Una nota di credito storna da una fattura emessa. Scegli la fattura: subito dopo si apre la sua nota di credito (tutta la fattura, alcune righe o un importo).",
+    "of": "Nota di debito di {number} · {customer}",
+    "invoice": "Fattura",
+    "invoiceHint": "Una TD01 o TD24 emessa, non scartata.",
+    "creditInvoiceHint": "Una fattura o fattura di acconto emessa, non scartata.",
+    "pickInvoice": "Scegli la fattura…",
+    "pickReading": "Lettura delle fatture emesse…",
+    "pickFailed": "Impossibile leggere le fatture emesse",
+    "pickNone": "Nessuna fattura emessa può avere una nota di debito",
+    "creditPickNone": "Nessuna fattura emessa può avere una nota di credito",
+    "pickNoneBody": "Emetti prima la fattura; una scartata si corregge e si reinvia.",
+    "infoReading": "Lettura delle note di debito della fattura…",
+    "infoFailed": "Impossibile leggere ora le note di debito della fattura ({why}).",
+    "waits": "Attende il commercialista: la nota di debito si prepara ora, ma l'emissione aspetta che il commercialista attivi le note di debito (Impostazioni amministrazione › Impostazione fiscale).",
+    "earlier": "Note di debito di questa fattura finora",
+    "col": {
+      "number": "Numero",
+      "status": "Stato",
+      "total": "Totale"
+    },
+    "lines": "Cosa si aggiunge",
+    "kind": "Riga {n}",
+    "lineKind": {
+      "SERVICE": "Un servizio",
+      "GOODS": "Merce",
+      "CHARGE": "Un addebito"
+    },
+    "chargeKind": "Tipo di addebito",
+    "chargeKinds": {
+      "FREIGHT": "Trasporto",
+      "PACKAGING": "Imballo",
+      "SAMPLES": "Campioni",
+      "FEE": "Un compenso",
+      "OTHER": "Altro addebito"
+    },
+    "description": "Descrizione",
+    "quantity": "Quantità",
+    "unitPrice": "Prezzo unitario",
+    "addLine": "Aggiungi una riga",
+    "remove": "Togli",
+    "removeLine": "Togli la riga {n}",
+    "causale": "Testo sulla nota di debito",
+    "causaleHint": "Facoltativo: perché si aggiunge. La fattura integrata è indicata da sola.",
+    "vat": "L'IVA segue le regole della fattura integrata e del suo cliente; la bozza la mostra prima dell'emissione.",
+    "creditNext": "Subito dopo si apre la nota di credito della fattura.",
+    "go": "Crea la bozza della nota di debito",
+    "creditGo": "Apri la nota di credito",
+    "menu": "Nota di debito…",
+    "held": {
+      "reading": "Attendi: la fattura è in lettura.",
+      "noPrice": "I prezzi di una nota di debito richiedono la visibilità dei prezzi.",
+      "fix": "Sistema prima le righe."
+    },
+    "problem": {
+      "invoice": "Scegli prima la fattura.",
+      "description": "Scrivi cosa si aggiunge.",
+      "descriptionLong": "Al massimo 1000 caratteri.",
+      "quantity": "Una quantità sopra 0.",
+      "unitPrice": "Un prezzo sopra 0."
+    },
+    "refusal": {
+      "NOT_DEBITABLE": "Solo una TD01 o una TD24 può avere una nota di debito.",
+      "NOT_ISSUED": "La fattura non è ancora emessa: cambia invece la bozza.",
+      "REJECTED": "Lo SDI ha scartato questa fattura: correggila e reinviala invece."
+    }
+  },
+  "vatLimit": {
+    "title": "Termine per ridurre l'IVA",
+    "reading": "Verifica del termine per l'IVA…",
+    "failed": "Impossibile verificare ora il termine per l'IVA ({why}).",
+    "WITHIN": "Questa variazione può ancora ridurre l'IVA: fino al {until}, un anno dopo l'operazione del {operation} (art. 26 c.3 DPR 633/1972).",
+    "BEYOND": "È passato più di un anno dall'operazione del {operation} (il termine era il {until}): questa nota di credito non può ridurre l'IVA, che resta dovuta. Chiedi al commercialista prima di emetterla.",
+    "NO_LIMIT": "Nessun termine per questo motivo: la nota di credito riduce l'IVA.",
+    "ASK": "Per i motivi «altro» chiedi al commercialista se questa nota di credito può ridurre l'IVA.",
+    "WAITS": "Attende il commercialista: il termine per ridurre l'IVA non si verifica finché il suo interruttore è spento (Impostazioni amministrazione › Impostazione fiscale)."
+  },
+  "balance": {
+    "title": "Saldo prima della spedizione",
+    "explain": "Ordini i cui termini chiedono il saldo prima che la merce parta: il sistema blocca le loro spedizioni finché non è pagato, e le sblocca da solo appena lo è.",
+    "reading": "Lettura del saldo prima della spedizione…",
+    "failed": "Impossibile leggere ora il saldo prima della spedizione ({why}).",
+    "record": "Registra un incasso",
+    "order": "Ordine {number}",
+    "open": "Saldo prima della spedizione ancora aperto: {amount}.",
+    "openNoPrice": "Saldo prima della spedizione ancora aperto.",
+    "paidHeld": "Il saldo è pagato; il blocco qui sotto è stato messo da una persona e resta finché qualcuno non lo toglie.",
+    "heldLabel": "Spedizioni bloccate dell'ordine {number}",
+    "heldShipment": "La spedizione {number} è bloccata finché il saldo non è pagato",
+    "since": "dal {date}",
+    "byPerson": "messo da una persona",
+    "release": "Sblocca…",
+    "held": {
+      "noRelease": "Sbloccare una spedizione richiede il permesso di sbloccare i blocchi per pagamento."
+    },
+    "noShipmentYet": "Nessuna spedizione di questo ordine è ancora in attesa: la prima sarà bloccata finché il saldo non è pagato.",
+    "holdsUnknown": "Le spedizioni di questo ordine sono bloccate finché il saldo non è pagato (i blocchi richiedono il permesso di vedere le spedizioni).",
+    "releaseTitle": "Sbloccare la spedizione {number}?",
+    "releaseExplain": "Il saldo prima della spedizione dell'ordine {order} non è pagato. Una volta sbloccata, il sistema non la blocca più per quel saldo.",
+    "releaseWords": "Perché può partire senza pagamento",
+    "releaseHint": "Resta nella storia dei blocchi della spedizione (da 3 a 2000 caratteri).",
+    "releaseGo": "Sblocca",
+    "released": "La spedizione {number} ora può partire.",
+    "releaseProblem": {
+      "short": "Scrivi il perché, in poche parole.",
+      "long": "Al massimo 2000 caratteri."
+    }
+  },
+  "self": {
+    "title": "Autofatture",
+    "explain": "Le autofatture da inviare allo SDI per gli acquisti dall’estero, entro il 15 del mese dopo l’arrivo della fattura del fornitore.",
+    "waits": "Attende il commercialista: le autofatture si preparano, ma l'emissione aspetta che il commercialista le attivi (Impostazioni amministrazione › Impostazione fiscale).",
+    "createVerb": "Crea dalla fattura del fornitore",
+    "keyCreate": "Crea dalla fattura del fornitore",
+    "count_one": "{count} autofattura",
+    "count_other": "{count} autofatture",
+    "rowsLabel": "Quali autofatture",
+    "rows": {
+      "open": "Da fare",
+      "issued": "Emesse",
+      "cancelled": "Annullate",
+      "all": "Tutte"
+    },
+    "col": {
+      "purchase": "Acquisto",
+      "kind": "Tipo",
+      "deadline": "Scadenza",
+      "status": "Stato"
+    },
+    "supplierInvoice": "Fattura {number}",
+    "received": "ricevuta il {date}",
+    "kind": {
+      "TD17": "Servizi dall’estero",
+      "TD18": "Beni intra-UE",
+      "TD19": "Beni già in Italia"
+    },
+    "kindWhen": {
+      "TD17": "Un servizio acquistato da un fornitore estero (UE o no).",
+      "TD18": "Beni acquistati da un fornitore di un altro Paese UE.",
+      "TD19": "Beni già in Italia acquistati da un fornitore estero."
+    },
+    "deadline": {
+      "left_one": "manca {count} giorno",
+      "left_other": "mancano {count} giorni",
+      "today": "Scade oggi",
+      "late_one": "In ritardo di {count} giorno",
+      "late_other": "In ritardo di {count} giorni",
+      "done": "Fatta"
+    },
+    "status": {
+      "PENDING": "Da inviare",
+      "ISSUED": "Emessa",
+      "CANCELLED": "Annullata"
+    },
+    "stage": {
+      "toDraft": "Ancora senza bozza",
+      "draft": "La bozza attende l’emissione",
+      "issued": "Emessa come {number}",
+      "cancelled": "Annullata"
+    },
+    "rowMenu": "Autofattura di {number}",
+    "openInvoice": "Apri la sua fattura",
+    "openSupplierInvoice": "Apri la fattura del fornitore",
+    "makeDraft": "Prepara la bozza",
+    "cancel": "Annulla…",
+    "bulkDraft_one": "Prepara {count} bozza",
+    "bulkDraft_other": "Prepara {count} bozze",
+    "drafted_one": "{count} bozza preparata.",
+    "drafted_other": "{count} bozze preparate.",
+    "draftedSome": "{made} preparate, {refused} rifiutate: apri ognuna per il motivo.",
+    "cancelled": "L'autofattura di {number} è annullata.",
+    "failed": "Impossibile caricare le autofatture",
+    "empty": {
+      "title": "Nessun acquisto dall’estero richiede un’autofattura",
+      "body": "Una fattura di un fornitore estero compare qui appena è registrata tra le fatture fornitori."
+    },
+    "emptyRows": {
+      "title": "Nessuna qui"
+    },
+    "noRight": {
+      "title": "Le autofatture richiedono il permesso di vedere le fatture",
+      "body": "Chiedilo a un amministratore; le fatture fornitori qui sopra restano come sono."
+    },
+    "held": {
+      "noManage": "Preparare o annullare un’autofattura richiede il permesso di gestire le fatture.",
+      "noCost": "Un’autofattura porta gli importi dell’acquisto: richiede la visibilità dei costi e il permesso di vedere le fatture fornitori.",
+      "notPending": "Solo un’autofattura ancora da inviare prende una bozza.",
+      "hasDraft": "Ha già la sua bozza.",
+      "cannot": "Questa autofattura non può farlo ora.",
+      "issued": "Un’autofattura emessa non si annulla mai.",
+      "cancelled": "È già annullata.",
+      "noneToDraft": "Nessuna delle righe scelte prende una bozza."
+    },
+    "create": {
+      "title": "Crea un’autofattura",
+      "explain": "Scegli la fattura del fornitore estero; segue la sua bozza in euro (le righe dell’acquisto con l’IVA italiana), pronta da emettere allo SDI.",
+      "reading": "Lettura delle fatture dei fornitori esteri…",
+      "failed": "Impossibile leggere le fatture dei fornitori esteri",
+      "none": {
+        "title": "Nessuna fattura di fornitore estero ne richiede una",
+        "body": "Ogni fattura di fornitore estero ha la sua autofattura."
+      },
+      "purchase": "Fattura del fornitore",
+      "pick": "Scegli la fattura del fornitore…",
+      "deadline": "Invia entro il {date}",
+      "currency": "in {currency}: convertita al cambio del suo giorno",
+      "kind": "Tipo",
+      "suggested": "Suggerito dalle righe dell’acquisto.",
+      "mixed": "Le righe mescolano beni e servizi: scegli il tipo.",
+      "rate": "Aliquota IVA italiana",
+      "rateHint": "22 % salvo che beni o servizi abbiano un’aliquota ridotta.",
+      "after": "Le regole (scadenza, tipo, aliquota) attendono la conferma del commercialista.",
+      "go": "Crea e apri la bozza",
+      "held": {
+        "pick": "Scegli la fattura del fornitore.",
+        "kind": "Scegli il tipo."
+      }
+    },
+    "cancelTitle": "Annullare l’autofattura di {number}?",
+    "cancelExplain": "L'autofattura per l'acquisto da {supplier} viene annullata; si può rifare più avanti.",
+    "cancelExplainDraft": "L'autofattura per l'acquisto da {supplier} viene annullata e la sua bozza eliminata con lei.",
+    "cancelReason": "Perché",
+    "cancelGo": "Annulla l’autofattura",
+    "cancelProblem": {
+      "short": "Scrivi il perché, in poche parole.",
+      "long": "Al massimo 500 caratteri."
+    }
+  },
+  "tax": {
+    "title": "Impostazione fiscale",
+    "explain": "I codici IVA della società come dati — aliquote, motivi senza IVA con la loro norma, i giorni di validità — e gli obblighi che il commercialista attiva. Finché un interruttore è spento, le fatture seguono le regole interne.",
+    "switches": "Gli interruttori del commercialista",
+    "switchesFailed": "Impossibile leggere ora gli interruttori ({why}).",
+    "switch": {
+      "on": "Acceso",
+      "off": "Spento",
+      "taxCodesOn": {
+        "title": "Codici IVA sulle fatture",
+        "on": "Le fatture usano questi codici IVA: l'IVA di ogni riga è un codice in vigore il giorno di emissione, e una riga senza IVA stampa la norma del codice.",
+        "off": "Attende il commercialista: le fatture usano le regole IVA interne; questi codici sono conservati ma non arrivano ancora su nessuna fattura."
+      },
+      "stampDutyOn": {
+        "title": "Imposta di bollo addebitata al cliente",
+        "on": "L'imposta di bollo è addebitata al cliente con una riga della fattura, e ogni trimestre è contato per il pagamento.",
+        "off": "Attende il commercialista: l'imposta di bollo è indicata sulla fattura elettronica quando dovuta, ma non è addebitata al cliente e i trimestri non vengono contati."
+      },
+      "declarationsOfIntentOn": {
+        "title": "Dichiarazioni d'intento",
+        "on": "Le fatture si basano sulle dichiarazioni d'intento dei clienti: le righe senza IVA (N3.5) indicano una dichiarazione verificata dell'anno con disponibilità sufficiente.",
+        "off": "Attende il commercialista: le dichiarazioni si registrano e si verificano, ma nessuna fattura ne indica ancora una."
+      },
+      "selfInvoicesOn": {
+        "title": "Autofatture, note di debito e termine IVA",
+        "on": "Autofatture (TD17–TD19) e note di debito (TD05) si emettono, e una nota di credito dice se può ancora ridurre l'IVA.",
+        "off": "Attende il commercialista: autofatture e note di debito si preparano ma non si emettono, e il termine per ridurre l'IVA non si verifica."
+      }
+    },
+    "switched": {
+      "taxCodesOn": {
+        "on": "Codici IVA sulle fatture: acceso.",
+        "off": "Codici IVA sulle fatture: spento."
+      },
+      "stampDutyOn": {
+        "on": "Imposta di bollo addebitata al cliente: acceso.",
+        "off": "Imposta di bollo addebitata al cliente: spento."
+      },
+      "declarationsOfIntentOn": {
+        "on": "Dichiarazioni d'intento: acceso.",
+        "off": "Dichiarazioni d'intento: spento."
+      },
+      "selfInvoicesOn": {
+        "on": "Autofatture, note di debito e termine IVA: acceso.",
+        "off": "Autofatture, note di debito e termine IVA: spento."
+      }
+    },
+    "switchOnVerb": "Accendi…",
+    "switchOff": "Spegni…",
+    "switchTitleOn": "Accendere: {name}?",
+    "switchTitleOff": "Spegnere: {name}?",
+    "tickSwitch": "Il commercialista lo ha confermato per {company}.",
+    "tickConfirm": "Il commercialista ha confermato questi codici: aliquota o motivo, norma e conto.",
+    "switchOffNote": "Le fatture già emesse restano come sono; le nuove seguono di nuovo le regole interne.",
+    "stepUpNote": "Subito dopo viene chiesto un codice nuovo dell’autenticatore.",
+    "held": {
+      "tick": "Spunta prima la conferma del commercialista.",
+      "fix": "Sistema prima i campi."
+    },
+    "stepUp": {
+      "switch": "Cambiare uno degli interruttori del commercialista: scrivi il codice della tua app di autenticazione.",
+      "confirm": "Registrare la conferma del commercialista di un codice IVA: scrivi il codice della tua app di autenticazione."
+    },
+    "codes": "Codici IVA",
+    "new": "Nuovo codice",
+    "keyNew": "Nuovo codice IVA",
+    "count_one": "{count} versione",
+    "count_other": "{count} versioni",
+    "rowsLabel": "Quali versioni",
+    "rows": {
+      "current": "In vigore e programmate",
+      "all": "Tutte, anche terminate e archiviate"
+    },
+    "col": {
+      "code": "Codice",
+      "treatment": "IVA",
+      "period": "In vigore",
+      "state": "Stato"
+    },
+    "rate": "{rate} %",
+    "natura": "Senza IVA · {natura}",
+    "account": "Conto {key}",
+    "period": "{from} – {to}",
+    "periodOpen": "dal {from}",
+    "noRule": "Nessuna regola indicata",
+    "state": {
+      "PLANNED": "Programmata",
+      "IN_FORCE": "In vigore",
+      "ENDED": "Terminata",
+      "ARCHIVED": "Archiviata"
+    },
+    "verified": "Confermata dal commercialista il {date}",
+    "verifiedBuiltIn": "Confermata",
+    "unverified": "Attende il commercialista",
+    "rowMenu": "Codice {code}",
+    "verb": {
+      "edit": "Modifica…",
+      "relabel": "Cambia l'etichetta…",
+      "end": "Termina…",
+      "version": "Nuova versione da un giorno successivo…",
+      "archive": "Archivia…",
+      "delete": "Elimina…",
+      "confirm": "Conferma del commercialista…"
+    },
+    "notSelectable": "Qui non c’è nulla da confermare o archiviare.",
+    "bulkConfirm_one": "Conferma {count}",
+    "bulkConfirm_other": "Conferma {count}",
+    "bulkArchive_one": "Archivia {count}",
+    "bulkArchive_other": "Archivia {count}",
+    "failed": "Impossibile caricare i codici IVA",
+    "empty": {
+      "title": "Ancora nessun codice IVA",
+      "body": "Aggiungi le aliquote e i motivi senza IVA che la società usa, ognuno con il giorno di inizio."
+    },
+    "rules": "Regole seguite dai codici",
+    "rule": {
+      "col": {
+        "rule": "Regola",
+        "catalogue": "Interna",
+        "company": "Per questa società",
+        "codes": "Codici in vigore"
+      },
+      "VERIFIED": "Confermata",
+      "UNVERIFIED": "Attende il commercialista"
+    },
+    "form": {
+      "new": "Nuovo codice IVA",
+      "edit": "Modifica {code}",
+      "explain": {
+        "edit": "Questa versione non è ancora in vigore: ogni valore si può cambiare.",
+        "relabel": "Cambia solo l'etichetta: ciò che fa il codice resta com'è (una nuova versione lo cambia).",
+        "end": "L'ultimo giorno in cui il codice è in vigore. Le fatture successive richiedono un altro codice.",
+        "version": "La versione attuale termina il giorno prima che inizi la nuova. Un codice in vigore non si modifica mai.",
+        "new": "Un'aliquota, oppure un motivo senza IVA (Natura) con la norma stampata in fattura, dal giorno in cui inizia."
+      },
+      "go": {
+        "edit": "Salva",
+        "relabel": "Salva l'etichetta",
+        "end": "Termina",
+        "version": "Crea la versione",
+        "new": "Aggiungi il codice"
+      },
+      "relabel": "Cambia l'etichetta di {code}",
+      "end": "Termina {code}",
+      "version": "Nuova versione di {code}",
+      "unverified": "Un nuovo codice o una nuova versione attende la conferma del commercialista."
+    },
+    "field": {
+      "code": "Codice",
+      "codeHint": "Maiuscole, cifre, punto o trattino: 22, N3.2, N3.5-DI.",
+      "country": "Paese",
+      "label": "Etichetta",
+      "labelHint": "A cosa serve, in una riga.",
+      "rate": "Aliquota IVA (%)",
+      "rateHint": "Un'aliquota italiana (22, 10, 5, 4) oppure 0 con il suo motivo.",
+      "natura": "Motivo senza IVA (Natura)",
+      "naturaHint": "Perché non si applica l'IVA: il codice che legge lo SDI.",
+      "naturaRate": "Solo un'aliquota 0 ha un motivo.",
+      "noNatura": "Nessuno",
+      "legalRef": "Norma stampata in fattura",
+      "legalRefHint": "Per esempio: Art. 8 c.1 lett. a) DPR 633/1972.",
+      "account": "Chiave del conto",
+      "accountHint": "Facoltativa: il conto del commercialista per questo codice.",
+      "rule": "Regola seguita",
+      "validFrom": "In vigore dal",
+      "versionFrom": "Nuova versione dal",
+      "validTo": "Ultimo giorno",
+      "validToHint": "Facoltativo: vuoto finché non ha una fine.",
+      "endHint": "Da oggi in poi."
+    },
+    "problem": {
+      "country": "Due maiuscole: IT per l’IVA italiana.",
+      "code": "Da 1 a 20 tra maiuscole, cifre, punto, trattino basso o trattino.",
+      "label": "Scrivi a cosa serve il codice, in una riga.",
+      "ratePct": "Un'aliquota italiana (22, 10, 5, 4) oppure 0 con il suo motivo.",
+      "natura": "Un'aliquota 0 ha il suo motivo; un'aliquota sopra 0 non ne ha.",
+      "legalRef": "Un motivo senza IVA cita la sua norma, in una riga.",
+      "accountCodeKey": "Lettere, cifre, punto, due punti, barra o trattino, fino a 60.",
+      "ruleId": "Una regola della lista.",
+      "validFrom": "Scegli il primo giorno.",
+      "validTo": "L'ultimo giorno è uguale o successivo al primo.",
+      "versionFrom": "La nuova versione inizia dopo l'inizio di quella attuale, da domani in poi.",
+      "endDay": "Scegli l'ultimo giorno."
+    },
+    "verbTitle": {
+      "archive_one": "Archiviare questo codice?",
+      "archive_other": "Archiviare {count} codici?",
+      "delete_one": "Eliminare questo codice?",
+      "delete_other": "Eliminare {count} codici?",
+      "confirm_one": "Registrare la conferma del commercialista?",
+      "confirm_other": "Registrare la conferma del commercialista di {count} codici?"
+    },
+    "verbGo": {
+      "archive_one": "Archivia",
+      "archive_other": "Archivia {count}",
+      "delete_one": "Elimina",
+      "delete_other": "Elimina {count}",
+      "confirm_one": "Conferma",
+      "confirm_other": "Conferma {count}"
+    },
+    "verbExplain": {
+      "archive": "Una versione archiviata non arriva su nessuna fattura e non cambia più; le fatture emesse la conservano.",
+      "delete": "Una versione non ancora in vigore viene eliminata per sempre.",
+      "confirm": "La versione risulta confermata con chi e quando; si dice una volta e resta."
+    },
+    "done": {
+      "archive_one": "Codice archiviato.",
+      "archive_other": "{count} codici archiviati.",
+      "delete_one": "Codice eliminato.",
+      "delete_other": "{count} codici eliminati.",
+      "confirm_one": "Codice confermato.",
+      "confirm_other": "{count} codici confermati."
+    },
+    "saved": {
+      "new": "Codice {code} aggiunto: attende la conferma del commercialista.",
+      "version": "È stata creata una nuova versione di {code}.",
+      "edit": "Codice {code} salvato.",
+      "relabel": "L'etichetta di {code} è salvata.",
+      "end": "Il codice {code} termina il giorno indicato."
+    }
+  },
+  "sdi": {
+    "title": "Fattura elettronica in prova",
+    "explain": "Prima di passare in produzione, agli invii si risponde senza arrivare allo SDI: l'ufficio prova emissioni, scarti e correzioni. Il banner compare su ogni pagina delle fatture finché è attiva.",
+    "failed": "Impossibile caricare la fatturazione elettronica (SDI)",
+    "stateTest": "Prova attiva",
+    "stateLive": "In produzione dal {date}",
+    "who": "Chi risponde agli invii",
+    "liveReal": "Lo SDI, tramite l'intermediario: le fatture arrivano davvero ai clienti.",
+    "liveFake": "L'intermediario FAKE (solo in locale e in prova): nulla esce dal sistema.",
+    "testSent": "Inviate in prova",
+    "testSentValue_one": "{count} fattura",
+    "testSentValue_other": "{count} fatture",
+    "connection": "Connessione SDI",
+    "noConnection": "Ancora nessuna",
+    "simulate": "Risposta simulata",
+    "simulateHint": "Cosa risponde lo SDI simulato a ogni invio.",
+    "simulateFake": "Con l'intermediario FAKE risponde il FAKE; la risposta simulata vale per una connessione reale o di sandbox.",
+    "outcome": {
+      "DELIVERED": "Consegnata",
+      "REJECTED": "Scartata al primo invio (prova la correzione)",
+      "NOT_DELIVERABLE": "Non recapitabile (prova la copia al cliente)"
+    },
+    "simulated": {
+      "DELIVERED": "Ora agli invii si risponde: consegnata.",
+      "REJECTED": "Ora il primo invio di ogni fattura risulta scartato.",
+      "NOT_DELIVERABLE": "Ora agli invii si risponde: non recapitabile."
+    },
+    "goLiveHeld": "Cosa impedisce di passare in produzione",
+    "goLive": "Passa in produzione…",
+    "backToTest": "Torna in prova…",
+    "backTitle": "Tornare alla prova della fattura elettronica?",
+    "backExplain": "Da ora agli invii si risponde senza arrivare allo SDI. Le fatture inviate in produzione restano come sono.",
+    "backGo": "Torna in prova",
+    "stepUpNote": "Subito dopo viene chiesto un codice nuovo dell’autenticatore.",
+    "stepUp": "Cambiare come la società invia le fatture elettroniche: scrivi il codice della tua app di autenticazione.",
+    "wentLive": "La società è in produzione: ora le fatture vanno davvero allo SDI.",
+    "backInTest": "La società è tornata in prova: nulla va allo SDI."
+  },
+  "swap": {
+    "title": "Cambio dell'intermediario",
+    "explain": "Teniamo una nostra copia di ogni XML inviato e di ogni ricevuta, così la società può cambiare intermediario senza perdere nulla.",
+    "failed": "Impossibile leggere le nostre copie",
+    "readyPill": "Pronta al cambio",
+    "notReadyPill": "Non pronta",
+    "copied": "Copie complete",
+    "missingLabel": "Copie mancanti",
+    "openLabel": "In attesa dello SDI",
+    "ready_one": "Ogni invio ha la nostra copia completa ({count}): l'intermediario si può cambiare.",
+    "ready_other": "Ogni invio ha la nostra copia completa ({count}): l'intermediario si può cambiare.",
+    "missing_one": "{count} invio non ha la nostra copia completa: crea prima le copie.",
+    "missing_other": "{count} invii non hanno la nostra copia completa: crea prima le copie.",
+    "open_one": "{count} invio attende ancora la risposta dello SDI presso l'intermediario.",
+    "open_other": "{count} invii attendono ancora la risposta dello SDI presso l'intermediario.",
+    "nothing": "Ancora nessun invio.",
+    "providers": "Copie fatte da: {names}.",
+    "make": "Crea le copie",
+    "made": "{made} copie create, {completed} completate, {remaining} ancora da fare.",
+    "recent": "Invii più recenti",
+    "col": {
+      "file": "File inviato",
+      "copy": "Nostra copia",
+      "receipts": "Ricevute"
+    },
+    "copiedAt": "copiato il {when}",
+    "attempt_one": "invio {count}",
+    "attempt_other": "invio {count}",
+    "state": {
+      "NOT_SENT": "Non inviata",
+      "SIMULATED": "Prova: mai arrivata allo SDI",
+      "MISSING": "Mancante",
+      "RECEIPTS_MISSING": "Ricevute mancanti",
+      "COMPLETE": "Completa"
+    },
+    "ourRecord": "Una ricevuta qui è la nostra registrazione della notifica dello SDI come l'ha passata l'intermediario, non la ricevuta firmata dello SDI."
+  },
+  "skip": {
+    "legend": "Scadenze",
+    "fromEndOfMonth": "Conta i giorni dalla fine del mese («30 gg f.m.»)",
+    "monthsLabel": "Mesi in cui non cade nessuna scadenza",
+    "problem": "Al massimo 11 mesi: almeno un mese resta per pagare.",
+    "printed": "Stampato come: {words}.",
+    "none": "Nessuna convenzione: i giorni si contano dall'evento, ogni mese può avere una scadenza.",
+    "rule": "Una scadenza in un mese escluso passa allo stesso giorno del primo mese non escluso (la fine del mese quando lo era). Il commercialista conferma la convenzione concordata con il cliente."
+  },
+  "rule": {
+    "title": "Rimborso all'annullamento",
+    "explain": "Cosa si trattiene o si rimborsa di un acconto quando un ordine viene annullato, e quale documento segue. Senza una regola si rimborsa tutto.",
+    "accountant": "Le regole attendono il parere del commercialista: il documento per una caparra trattenuta e per la metà in più rimborsata.",
+    "add": "Aggiungi regola",
+    "keyAdd": "Aggiungi una regola",
+    "count_one": "{count} regola",
+    "count_other": "{count} regole",
+    "rowsLabel": "Quali regole",
+    "rows": {
+      "active": "Attive",
+      "archived": "Archiviate",
+      "all": "Tutte"
+    },
+    "col": {
+      "deposit": "Acconto",
+      "by": "Chi annulla",
+      "what": "Cosa succede",
+      "state": "Stato"
+    },
+    "kind": {
+      "ACCONTO": "Acconto",
+      "CAPARRA": "Caparra confirmatoria",
+      "CAPARRA_PENITENZIALE": "Caparra penitenziale"
+    },
+    "by": {
+      "CUSTOMER": "Il cliente",
+      "COMPANY": "Annulliamo noi"
+    },
+    "orders": {
+      "any": "Qualsiasi ordine",
+      "made": "Ordini su misura",
+      "stock": "Altri ordini"
+    },
+    "refund": {
+      "REFUND_ALL": "Rimborsa tutto",
+      "KEEP_PERCENT": "Trattieni una percentuale",
+      "REFUND_DOUBLE": "Rimborsa il doppio della caparra"
+    },
+    "document": {
+      "CREDIT_NOTE": "Una nota di credito della fattura di acconto",
+      "NONE": "Nessun documento"
+    },
+    "words": {
+      "REFUND_ALL": {
+        "CREDIT_NOTE": "Tutto rimborsato; segue una nota di credito della fattura di acconto.",
+        "NONE": "Tutto rimborsato; non segue nessun documento."
+      },
+      "KEEP_PERCENT": {
+        "CREDIT_NOTE": "{pct} % trattenuto, il resto rimborsato; segue una nota di credito di quanto rimborsato.",
+        "NONE": "{pct} % trattenuto, il resto rimborsato; non segue nessun documento."
+      },
+      "REFUND_DOUBLE": {
+        "CREDIT_NOTE": "Rimborsato il doppio della caparra; segue una nota di credito della fattura di acconto, la metà in più si paga in Incassi.",
+        "NONE": "Rimborsato il doppio della caparra; non segue nessun documento."
+      }
+    },
+    "status": {
+      "ACTIVE": "Attiva",
+      "ARCHIVED": "Archiviata"
+    },
+    "rowMenu": "Regola per {kind}",
+    "edit": "Cambia…",
+    "archive": "Archivia…",
+    "bulkArchive_one": "Archivia {count}",
+    "bulkArchive_other": "Archivia {count}",
+    "failed": "Impossibile caricare le regole di rimborso",
+    "empty": {
+      "title": "Ancora nessuna regola: si rimborsa tutto",
+      "body": "Aggiungi una regola per ogni acconto che la società trattiene o rimborsa in modo diverso."
+    },
+    "emptyArchived": "Nessuna regola archiviata",
+    "held": {
+      "archived": "Una regola archiviata non cambia più.",
+      "noneActive": "Scegli regole attive.",
+      "fix": "Sistema prima i campi."
+    },
+    "addTitle": "Nuova regola di rimborso",
+    "editTitle": "Cambia la regola di rimborso",
+    "create": "Aggiungi la regola",
+    "save": "Salva",
+    "field": {
+      "kind": "Acconto",
+      "by": "Chi annulla",
+      "orders": "Ordini",
+      "fixed": "Fisso una volta creata la regola: archiviala e aggiungine un'altra.",
+      "refund": "Cosa succede all'acconto",
+      "keep": "Percentuale trattenuta",
+      "document": "Documento che segue",
+      "note": "Nota",
+      "noteHint": "Facoltativa: per esempio la clausola del preventivo."
+    },
+    "preview": "Si legge: {words}",
+    "problem": {
+      "keepPct": "Sopra 0 e fino a 100 per cento, al massimo 4 decimali.",
+      "refundRule": "Il doppio si rimborsa solo per una caparra, quando annulliamo noi (c.c. artt. 1385, 1386).",
+      "documentKind": "Si trattiene tutto: non si rimborsa nulla, quindi non segue nessun documento.",
+      "note": "Una nota da 1 a 500 caratteri, oppure nessuna.",
+      "oneActive": "La società ha già una regola attiva per questo acconto, chi annulla e tipo di ordine: cambia quella, o archiviala prima."
+    },
+    "saved": "La regola è salvata.",
+    "created": "La regola è aggiunta.",
+    "archived_one": "Regola archiviata.",
+    "archived_other": "{count} regole archiviate.",
+    "archiveTitle_one": "Archiviare questa regola?",
+    "archiveTitle_other": "Archiviare {count} regole?",
+    "archiveGo_one": "Archivia",
+    "archiveGo_other": "Archivia {count}",
+    "archiveExplain": "Una regola archiviata non decide nessun annullamento; senza un'altra regola attiva si rimborsa tutto."
+  }
+}

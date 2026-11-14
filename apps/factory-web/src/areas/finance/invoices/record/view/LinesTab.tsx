@@ -12,7 +12,7 @@ import type { Invoice, InvoiceLine } from '../../../_shared/api'
 import { checkOf, creditHeld, dayInstant, decimal, dueDateOf, money, unitPrice, vatOf, type CheckFix } from '../../../_shared/model'
 import { Bridge, CheckList, PartState } from '../../../_shared/parts'
 import { carryHeld, chargeHeld, refundHref, termsSourceOf } from '../../daily/model'
-import type { InvoiceRecordActions, InvoiceRecordModel } from '../record-model'
+import type { InvoiceDepthSlots, InvoiceRecordActions, InvoiceRecordModel } from '../record-model'
 
 /**
  * Lines & VAT (design invoice tab "lines"): a draft's checks before issue (each failed check in words with where to fix
@@ -21,7 +21,7 @@ import type { InvoiceRecordActions, InvoiceRecordModel } from '../record-model'
  * price, discount, net and the VAT in words ("Why no VAT?" on a 0 % line); the deposit deductions (a draft may remove
  * one); and the totals as a bridge from the goods to what the customer still has to pay, with the VAT summary.
  */
-export function LinesTab({ invoice, model, actions }: { invoice: Invoice; model: InvoiceRecordModel; actions?: InvoiceRecordActions }) {
+export function LinesTab({ invoice, model, actions, depth }: { invoice: Invoice; model: InvoiceRecordModel; actions?: InvoiceRecordActions; /** B-W2b-417. */ depth?: InvoiceDepthSlots }) {
   const t = useT('finance')
   const locale = useLocale()
   const draft = invoice.status === 'DRAFT'
@@ -29,7 +29,7 @@ export function LinesTab({ invoice, model, actions }: { invoice: Invoice; model:
   const creditWait = creditHeld(invoice, model.can)
   return (
     <div className="fw-fin-stack">
-      {draft && <ChecksCard invoice={invoice} model={model} actions={actions} />}
+      {draft && <ChecksCard invoice={invoice} model={model} actions={actions} precheck={depth?.precheck} />}
       {!draft && invoice.status !== 'REJECTED' && (
         <Banner
           tone="info"
@@ -62,7 +62,7 @@ export function LinesTab({ invoice, model, actions }: { invoice: Invoice; model:
   )
 }
 
-function ChecksCard({ invoice, model, actions }: { invoice: Invoice; model: InvoiceRecordModel; actions?: InvoiceRecordActions }) {
+function ChecksCard({ invoice, model, actions, precheck }: { invoice: Invoice; model: InvoiceRecordModel; actions?: InvoiceRecordActions; precheck?: InvoiceDepthSlots['precheck'] }) {
   const t = useT('finance')
   const part = model.checks
   if (!part || !part.value) return <PartState problem={part?.problem ?? null} label={t('checks.title')} onRetry={() => actions?.onRetryPart?.('checks')} />
@@ -119,6 +119,8 @@ function ChecksCard({ invoice, model, actions }: { invoice: Invoice; model: Invo
       </div>
       <p className="fw-fin-hint">{t('checks.explain')}</p>
       <CheckList items={items} label={t('checks.title')} />
+      {/* B-W2b-417: stamp duty decided (design lines/precheck, W2b). */}
+      {precheck}
       {!checks.ready && <p className="fw-fin-hint">{t('checks.failCount', { count: checks.problems.length })}</p>}
     </Card>
   )

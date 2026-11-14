@@ -48,15 +48,23 @@ const ACCOUNTANT_POINTS = ['foreignConsumer', 'resendDays', 'progressive'] as co
  * rules and the points that wait for the accountant — said as open, never as settled. One readable column of cards on a
  * narrow screen, two on a wide one. W1: the VAT rules and their wording are the code's (W2b brings tax settings).
  */
-export function FinanceSettingsView({ model, actions, currencies }: { model: FinanceSettingsModel; actions?: FinanceSettingsActions; /** B-W2b-389: the Currencies & rates section (its container, or a design case's view). */ currencies?: ReactNode }) {
+/** B-W2b-417: the in-depth cards (each its own container, or a design case's view): the test-mode banner, the tax set-up, e-invoicing test mode and the swap, the refund rule on cancellation. */
+export interface FinanceSettingsDepth {
+  banner?: ReactNode
+  tax?: ReactNode
+  eInvoicing?: ReactNode
+  depositRules?: ReactNode
+}
+
+export function FinanceSettingsView({ model, actions, currencies, depth }: { model: FinanceSettingsModel; actions?: FinanceSettingsActions; /** B-W2b-389: the Currencies & rates section (its container, or a design case's view). */ currencies?: ReactNode; /** B-W2b-417. */ depth?: FinanceSettingsDepth }) {
   return (
     <WithMessages namespaces={['finance', 'finance-daily', 'finance-costing', 'lists']}>
-      <Settings model={model} actions={actions} currencies={currencies} />
+      <Settings model={model} actions={actions} currencies={currencies} depth={depth} />
     </WithMessages>
   )
 }
 
-function Settings({ model, actions, currencies }: { model: FinanceSettingsModel; actions?: FinanceSettingsActions; currencies?: ReactNode }) {
+function Settings({ model, actions, currencies, depth }: { model: FinanceSettingsModel; actions?: FinanceSettingsActions; currencies?: ReactNode; depth?: FinanceSettingsDepth }) {
   const t = useT('finance')
   const loaded = model.settings
   if (loaded.status !== 'ready') {
@@ -135,7 +143,8 @@ function Settings({ model, actions, currencies }: { model: FinanceSettingsModel;
           }
         />
       )}
-      {company.sdi.accounts.some((account) => account.mode === 'FAKE') && <Banner tone="warning" title={t('settings.testMode')} />}
+      {/* B-W2b-417: the e-invoice test-mode banner (in place of W1's FAKE-connection one). */}
+      {depth?.banner ?? (company.sdi.accounts.some((account) => account.mode === 'FAKE') && <Banner tone="warning" title={t('settings.testMode')} />)}
       <div className="fw-fin-cards">
         <CompanyCard company={company} model={model} />
         <BankCard model={model} actions={actions} />
@@ -144,6 +153,9 @@ function Settings({ model, actions, currencies }: { model: FinanceSettingsModel;
         <SeriesCard company={company} model={model} />
         {model.terms ? null : <PaymentCard />}
       </div>
+      {/* B-W2b-417: the tax set-up (sec:company), e-invoicing test mode and the swap (sec:sdi). */}
+      {depth?.tax}
+      {depth?.eInvoicing && <div className="fw-fin-cards fw-fin-cards--two">{depth.eInvoicing}</div>}
       {model.terms && <TermsSection model={model.terms} actions={actions?.terms} />}
       <WordingCard />
       <div className="fw-fin-cards fw-fin-cards--two">
@@ -151,6 +163,8 @@ function Settings({ model, actions, currencies }: { model: FinanceSettingsModel;
         <AccountantCard />
         {model.costing && <CostingCard model={model.costing} actions={actions?.costing} />}
       </div>
+      {/* B-W2b-417: the refund rule on cancellation (sec:deposits). */}
+      {depth?.depositRules}
       {/* B-W2b-389: Currencies & rates (sec:currencies). */}
       {currencies}
       <StepUpModal

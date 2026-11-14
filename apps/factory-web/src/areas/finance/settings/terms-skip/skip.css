@@ -1,0 +1,7 @@
+/* Finance settings › Payment terms › skipped months (B-W2b-417): the twelve months as a grid of ticks — layout only. */
+.fw-skip-months {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: var(--nds-space-6) var(--nds-space-12);
+  min-width: 0;
+}

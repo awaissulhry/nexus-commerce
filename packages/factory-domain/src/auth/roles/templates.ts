@@ -170,6 +170,10 @@ import { TEST_MODE_ADDS } from '../../invoicing/test-mode/permissions'
 import { COST_SHEET_COMPONENTS_ADDS } from '../../costing/sheet-components/permissions'
 // B-W2b-404: security in depth (the administrator keeps the session lengths and step-up rules, and ends a person's sessions).
 import { SECURITY_DEPTH_ADDS } from '../sessions/permissions'
+// B-W2b-411: the work order close (the production manager reopens a closed work order with a reason).
+import { WORK_ORDER_CLOSE_ADDS } from '../../costing/close/permissions'
+// B-W2b-420: cost sheet versions (finance, the costing owner, approves versions and takes an approved one back).
+import { COST_SHEET_VERSIONS_ADDS } from '../../costing/sheet-versions/permissions'
 // B-W2b-408: the accountant's bridge (finance keeps the mapping, switches the journals and closes a month for good).
 import { ACCOUNTING_BRIDGE_ADDS } from '../../accounting/mapping/permissions'
 
@@ -1099,6 +1103,10 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (COST_SHEET_COMPONENTS_ADDS[key] ?? []) : []),
   // B-W2b-404
   ...(audience === 'office' ? (SECURITY_DEPTH_ADDS[key] ?? []) : []),
+  // B-W2b-411
+  ...(audience === 'office' ? (WORK_ORDER_CLOSE_ADDS[key] ?? []) : []),
+  // B-W2b-420
+  ...(audience === 'office' ? (COST_SHEET_VERSIONS_ADDS[key] ?? []) : []),
   // B-W2b-408
   ...(audience === 'office' ? (ACCOUNTING_BRIDGE_ADDS[key] ?? []) : [])]
 /**

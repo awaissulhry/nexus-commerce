@@ -31,7 +31,7 @@ import {
 } from '../../../_shared/model'
 import { CheckList, DialogFrame } from '../../../_shared/parts'
 import { CarryDialog, ChargeDialog } from '../../daily/view/DailyDialogs'
-import type { InvoiceRecordActions, InvoiceRecordModel } from '../record-model'
+import type { InvoiceDepthSlots, InvoiceRecordActions, InvoiceRecordModel } from '../record-model'
 
 /**
  * The invoice record's dialogs: Check and issue (Owner P1: a confirm dialog once the checks pass — the number it will
@@ -41,7 +41,7 @@ import type { InvoiceRecordActions, InvoiceRecordModel } from '../record-model'
  * positive amounts), a draft's lines and text, Delete draft. Esc closes; the focus returns to the opener (DS Modal); ⌘↵
  * confirms. A refused write is said inside its dialog, what was typed stays.
  */
-export function InvoiceDialogs({ invoice, model, actions }: { invoice: Invoice; model: InvoiceRecordModel; actions?: InvoiceRecordActions }) {
+export function InvoiceDialogs({ invoice, model, actions, depth }: { invoice: Invoice; model: InvoiceRecordModel; actions?: InvoiceRecordActions; /** B-W2b-417. */ depth?: InvoiceDepthSlots }) {
   const dialog = model.dialog
   if (!dialog) return null
   switch (dialog.kind) {
@@ -52,7 +52,7 @@ export function InvoiceDialogs({ invoice, model, actions }: { invoice: Invoice; 
     case 'fix':
       return <FixDialog invoice={invoice} model={model} actions={actions} />
     case 'credit':
-      return <CreditDialog invoice={invoice} model={model} actions={actions} />
+      return <CreditDialog invoice={invoice} model={model} actions={actions} creditWarning={depth?.creditWarning} />
     case 'lines':
       return <LinesDialog invoice={invoice} model={model} actions={actions} />
     case 'details':
@@ -234,7 +234,7 @@ function FixDialog({ invoice, model, actions }: { invoice: Invoice; model: Invoi
   )
 }
 
-function CreditDialog({ invoice, model, actions }: { invoice: Invoice; model: InvoiceRecordModel; actions?: InvoiceRecordActions }) {
+function CreditDialog({ invoice, model, actions, creditWarning }: { invoice: Invoice; model: InvoiceRecordModel; actions?: InvoiceRecordActions; creditWarning?: InvoiceDepthSlots['creditWarning'] }) {
   const t = useT('finance')
   const locale = useLocale()
   const creditedBefore = invoice.creditedAmount ?? 0
@@ -335,6 +335,8 @@ function CreditDialog({ invoice, model, actions }: { invoice: Invoice; model: In
           <Input value={text} maxLength={500} onChange={(event) => setText(event.target.value)} />
         </Field>
       </div>
+      {/* B-W2b-417: the VAT time-limit warning for the reason picked (design pop:credit-note, W2b). */}
+      {creditWarning?.(reason || null)}
       <p className="fw-fin-hint">{t('credit.after')}</p>
     </DialogFrame>
   )

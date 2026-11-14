@@ -36,10 +36,11 @@ import {
 import { DialogFrame } from '../../../_shared/parts'
 import { bulkWords, ddtDeadline, deferredDdtIds, deferredHeld, deferredTile, freightWords, groupOf, monthWords, SHIPPED_VIEWS, xmlHref, type ShippedView } from '../../daily/model'
 import { DeferredDialog, ReturnCreditDialog } from '../../daily/view/DailyDialogs'
-import type { InvoicesListActions, InvoicesListModel } from '../list-model'
+import type { InvoicesDepthSlots, InvoicesListActions, InvoicesListModel } from '../list-model'
+import { DEPTH } from '../../test-mode/depth'
 import '../../../_shared/finance.css'
 
-export type { InvoicesListActions, InvoicesListModel } from '../list-model'
+export type { InvoicesDepthSlots, InvoicesListActions, InvoicesListModel } from '../list-model'
 
 /** One DDT row of "Shipped, not invoiced", with its customer (the rows are grouped by customer: sorted, named). */
 interface ShippedRow extends QueueDdt {
@@ -56,10 +57,10 @@ interface ShippedRow extends QueueDdt {
  * payment state. Both lists are the shared list frame (select-all, shift range, x; bulk actions while rows are
  * selected; keys only in the footer's info icon). Money only with the price grain: the columns are absent, never zero.
  */
-export function InvoicesListView({ model, actions }: { model: InvoicesListModel; actions?: InvoicesListActions }) {
+export function InvoicesListView({ model, actions, depth }: { model: InvoicesListModel; actions?: InvoicesListActions; /** B-W2b-417. */ depth?: InvoicesDepthSlots }) {
   return (
-    <WithMessages namespaces={['finance', 'finance-daily', 'lists']}>
-      <InvoicesList model={model} actions={actions} />
+    <WithMessages namespaces={['finance', 'finance-daily', DEPTH, 'lists']}>
+      <InvoicesList model={model} actions={actions} depth={depth} />
     </WithMessages>
   )
 }
@@ -75,9 +76,10 @@ const shippedRowsOf = (model: InvoicesListModel): ShippedRow[] | null => {
   return rows.filter((row) => ids.has(row.ddtId))
 }
 
-function InvoicesList({ model, actions }: { model: InvoicesListModel; actions?: InvoicesListActions }) {
+function InvoicesList({ model, actions, depth }: { model: InvoicesListModel; actions?: InvoicesListActions; depth?: InvoicesDepthSlots }) {
   const t = useT('finance')
   const d = useT('finance-daily')
+  const w = useT(DEPTH)
   const lists = useT('lists')
   const locale = useLocale()
   const [selected, setSelected] = useState<readonly string[]>(model.selected ?? [])
@@ -396,11 +398,26 @@ function InvoicesList({ model, actions }: { model: InvoicesListModel; actions?: 
           {t(`live.${model.live}`)}
         </span>
         <span className="fw-fin-actions">
+          {/* B-W2b-417: New ▾ (credit note · debit note · deposit invoice). */}
+          {depth?.newMenu}
           <Button size="sm" variant="primary" heldReason={!model.can.manageInvoices ? t('held.noManage') : shipped && shipped.length === 0 ? t('held.nothingShipped') : null} onClick={() => actions?.onDialog?.({ kind: 'fromDdts', ddtIds: [], partyId: null })} aria-keyshortcuts="c">
             <FilePlus2 size={14} aria-hidden /> {t('step.invoiceShipped')}
           </Button>
+          {/* B-W2b-417: the band's ⋯ (design page.h more: Monthly invoice run, Stamp duty this quarter, Finance settings, Keyboard shortcuts). */}
+          <Menu
+            label={<MoreHorizontal size={16} aria-hidden />}
+            align="right"
+            triggerProps={{ 'aria-label': w('more.aria') }}
+            items={[
+              ...(depth?.more ?? []),
+              ...(OFFICE_PAGES.has('/finance/settings') ? [{ id: 'settings', label: w('more.settings'), href: `${model.prefix}/finance/settings` }] : []),
+              { id: 'keys', label: w('more.keys'), onSelect: () => setHelp(true) },
+            ]}
+          />
         </span>
       </div>
+      {/* B-W2b-417: the test-mode banner. */}
+      {depth?.banner}
 
       {model.notice && (
         <Banner
@@ -549,6 +566,9 @@ function InvoicesList({ model, actions }: { model: InvoicesListModel; actions?: 
           onClose={() => actions?.onDialog?.(null)}
         />
       )}
+
+      {/* B-W2b-417: Monthly invoice run, Stamp duty this quarter, the debit note. */}
+      {depth?.dialogs}
 
       {help && (
         <Modal open onClose={() => setHelp(false)} title={t('list.keysTitle')} size="sm">

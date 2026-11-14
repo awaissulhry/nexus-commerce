@@ -20,6 +20,9 @@ function terms(n: number, over: Pick<PaymentTerms, 'code' | 'name' | 'method' | 
     nameI18n: null,
     earlyPaymentDiscountPct: null,
     earlyPaymentDays: null,
+    // B-W2b-417: no due-date convention unless a case gives one.
+    fromEndOfMonth: false,
+    skipMonths: [],
     deposit: order ? { sharePct: order.sharePct, days: order.days } : null,
     summary: { it: termsSummary(facts, 'it'), en: termsSummary(facts, 'en') },
     status: 'ACTIVE',
