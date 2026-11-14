@@ -170,6 +170,8 @@ import { TEST_MODE_ADDS } from '../../invoicing/test-mode/permissions'
 import { COST_SHEET_COMPONENTS_ADDS } from '../../costing/sheet-components/permissions'
 // B-W2b-404: security in depth (the administrator keeps the session lengths and step-up rules, and ends a person's sessions).
 import { SECURITY_DEPTH_ADDS } from '../sessions/permissions'
+// B-W2b-411: the work order close (the production manager reopens a closed work order with a reason).
+import { WORK_ORDER_CLOSE_ADDS } from '../../costing/close/permissions'
 
 /**
  * The system role templates (plan A1 §3.11 "Role"; feature PLT-030): ready roles every tenant gets as system roles
@@ -1096,7 +1098,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-418
   ...(audience === 'office' ? (COST_SHEET_COMPONENTS_ADDS[key] ?? []) : []),
   // B-W2b-404
-  ...(audience === 'office' ? (SECURITY_DEPTH_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (SECURITY_DEPTH_ADDS[key] ?? []) : []),
+  // B-W2b-411
+  ...(audience === 'office' ? (WORK_ORDER_CLOSE_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the
