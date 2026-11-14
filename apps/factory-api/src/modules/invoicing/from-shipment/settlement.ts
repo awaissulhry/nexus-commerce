@@ -36,13 +36,15 @@ export async function settlementOf(db: Reader, orderId: string): Promise<OrderSe
   if (!isUuid(orderId)) return null
   const order = await db.salesOrder.findUnique({
     where: { id: orderId },
-    select: { id: true, number: true, status: true, currency: true, companyId: true, partyId: true, lines: { select: { id: true, seq: true, kind: true, quantity: true, description: true, closedShortQuantity: true, sizes: { select: { size: true, quantity: true } } } } },
+    select: { id: true, number: true, status: true, currency: true, companyId: true, partyId: true, lines: { select: { id: true, seq: true, kind: true, quantity: true, description: true, closedShortQuantity: true, feeCreditedAt: true, sizes: { select: { size: true, quantity: true } } } } },
   })
   if (!order) return null
   const lineIds = order.lines.map((line) => line.id)
+  // B-W2b-396 (VI1:02): a fee credited against the customer's bulk order is settled there: this order never waits for it.
+  const lines = order.lines.filter((line) => !(line.kind === 'FEE' && line.feeCreditedAt !== null))
   // B-W2b-330 (SAL-181): a fee line is never shipped: it counts as delivered in full, and is billed by the SERVICE line
   // that names it (modules/sales/price-waterfall/fee-invoicing), once.
-  const fees = order.lines.filter((line) => line.kind === 'FEE')
+  const fees = lines.filter((line) => line.kind === 'FEE')
   const shipped = [
     ...(await db.shipmentLine.findMany({ where: { salesOrderLineId: { in: lineIds }, shipment: { status: { in: [...SHIPPED] } } }, select: { salesOrderLineId: true, size: true, quantity: true } })),
     // (a fee closed short is dropped: it owes nothing)
@@ -77,7 +79,7 @@ export async function settlementOf(db: Reader, orderId: string): Promise<OrderSe
 
   const facts: SettlementFacts = {
     order: { id: order.id, number: order.number, status: order.status, currency: order.currency },
-    lines: order.lines.map((line) => ({
+    lines: lines.map((line) => ({
       salesOrderLineId: line.id,
       seq: line.seq,
       description: line.description ?? `line ${line.seq}`,

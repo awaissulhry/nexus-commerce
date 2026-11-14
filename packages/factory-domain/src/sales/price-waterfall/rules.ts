@@ -481,9 +481,14 @@ export function feeProblems(input: FeeInput, at = 'body'): Issue[] {
 export const feeDescription = (feeKind: SalesFeeKind, style: { readonly code: string; readonly name: string }): string => `${FEE_WORDS[feeKind]} - ${style.code} ${style.name}`.slice(0, FEE_LIMITS.description)
 
 /**
- * GATE-ACCOUNTANT (B-W2b-330): a fee is invoiced once, on the first invoice of its order's shipped goods, taxed as those
- * goods; crediting a development fee against the bulk order that follows is NOT built: it waits for the accountant's
- * word on the document (a credit note, or a deduction line on the bulk invoice) and for the link between the two orders
- * (a schema need). This switch says so wherever the question is asked.
+ * GATE-ACCOUNTANT (B-W2b-330): a fee is invoiced once, on the first invoice of its order's shipped goods (or on an invoice of
+ * the order's fees, B-W2b-396), taxed as those goods. B-W2b-396 (VI1:02): a person credits it against the customer's bulk
+ * order (SalesOrderLine.feeCreditOrderId) with a credit note of its invoice, credited when that credit note is issued; a
+ * fee never invoiced is credited at once and never invoiced. The document (a credit note of the fee's invoice) is
+ * UNVERIFIED until the accountant confirms. This says so wherever the question is asked.
  */
-export const FEE_CREDIT_AGAINST_BULK = { enabled: false, gate: 'GATE-ACCOUNTANT', words: 'Crediting a fee against the bulk order waits for the accountant (GATE-ACCOUNTANT): the fee is invoiced once and stays on that invoice.' } as const
+export const FEE_CREDIT_AGAINST_BULK = {
+  enabled: true,
+  gate: 'GATE-ACCOUNTANT',
+  words: "A fee is credited against the customer's bulk order by a credit note of the invoice that billed it (a fee never invoiced is credited and not invoiced); your accountant confirms the document (UNVERIFIED).",
+} as const

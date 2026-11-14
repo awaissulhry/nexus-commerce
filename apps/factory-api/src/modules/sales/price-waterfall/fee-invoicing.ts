@@ -60,7 +60,8 @@ export interface FeeLine {
 export async function feeLinesFor(tx: CommandTx, context: RequestContext, orderIds: readonly string[], vatOf: (line: OrderLinePrice) => VatTreatment | Issue): Promise<{ lines: FeeLine[]; left: { salesOrderLineId: string; reason: string }[]; problems: Issue[] }> {
   if (orderIds.length === 0) return { lines: [], left: [], problems: [] }
   const fees = await tx.salesOrderLine.findMany({
-    where: { orderId: { in: [...orderIds] }, kind: 'FEE', closedShortQuantity: null },
+    // B-W2b-396 (VI1:02): a fee credited against the bulk order before any invoice billed it is never invoiced.
+    where: { orderId: { in: [...orderIds] }, kind: 'FEE', closedShortQuantity: null, feeCreditedAt: null },
     select: { id: true, orderId: true, seq: true, feeKind: true, quantity: true, unitPrice: true, vatRatePct: true, description: true, order: { select: { number: true } } },
     orderBy: [{ orderId: 'asc' }, { seq: 'asc' }],
   })

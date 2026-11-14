@@ -49,6 +49,15 @@ import { checkDeclaration, createDeclaration, getDeclaration, listDeclarations, 
 import { nameDeclaration } from './intent/on-invoice'
 import { listQuartersContract, payQuarterContract, recountQuarterContract } from './stamp-duty/contract'
 import { listQuarters, payQuarter, recountQuarter } from './stamp-duty/quarters'
+// B-W2b-396: invoicing in depth.
+import { languageCurrencyContract, putLanguageContract, putRateContract } from './language-currency/contract'
+import { languageCurrency, putLanguage, putRate } from './language-currency/language-currency'
+import { createRunContract, deleteRunContract, getRunContract, issueRunContract, listRunsContract, pickRunContract, runCandidatesContract } from './runs/contract'
+import { createRun, deleteRun, getRun, issueRun, listRuns, pickRun, runCandidates } from './runs/runs'
+import { archiveRuleContract, createRuleContract, decideOrderContract, listRulesContract, orderOutcomeContract, updateRuleContract } from './cancellation/contract'
+import { archiveRule, createRule, listRules, updateRule } from './cancellation/rules'
+import { decideOrder, orderOutcome } from './cancellation/orders'
+import { creditFee, feeCreditContract, invoiceOrderFees, invoiceSampleRound, orderFeesInvoiceContract, sampleRoundInvoiceContract } from './from-shipment/fees'
 
 /**
  * Invoices (B-W1-28 invoice core and the deposit invoice; A2 SCR-080, SCR-081): the list and the record, drafts (generic
@@ -147,4 +156,29 @@ export default defineRoutes('invoicing', manifest, async (app) => {
   app.get('/invoicing/stamp-duty/quarters', { schema: listQuartersContract }, async (request) => listQuarters(request, request.query))
   app.post('/invoicing/stamp-duty/quarters/recount', { schema: recountQuarterContract }, async (request) => recountQuarter(request, request.body, idempotencyKeyFrom(request)))
   app.post('/invoicing/stamp-duty/quarters/:quarterId/paid', { schema: payQuarterContract }, async (request) => payQuarter(request, request.params.quarterId, request.body, idempotencyKeyFrom(request)))
+
+  // B-W2b-396: invoicing in depth (handlers in ./language-currency, ./runs, ./cancellation, ./from-shipment/fees.ts): an
+  // invoice's language and currency, the monthly invoice run, the deposit rules and a cancelled order's credit notes, fees
+  // and a sample round's charge invoiced once, a fee credited against the bulk order.
+  app.get('/invoicing/invoices/:invoiceId/language-currency', { schema: languageCurrencyContract }, async (request) => languageCurrency(request, request.params.invoiceId))
+  app.put('/invoicing/invoices/:invoiceId/language', { schema: putLanguageContract }, async (request) => putLanguage(request, request.params.invoiceId, request.body, idempotencyKeyFrom(request)))
+  app.put('/invoicing/invoices/:invoiceId/rate', { schema: putRateContract }, async (request) => putRate(request, request.params.invoiceId, request.body, idempotencyKeyFrom(request)))
+  app.get('/invoicing/runs', { schema: listRunsContract }, async (request) => listRuns(request, request.query))
+  app.get('/invoicing/runs/candidates', { schema: runCandidatesContract }, async (request) => runCandidates(request, request.query))
+  app.get('/invoicing/runs/:runId', { schema: getRunContract }, async (request) => getRun(request, request.params.runId))
+  app.post('/invoicing/runs', { schema: createRunContract }, async (request, reply) => reply.code(201).send(await createRun(request, request.body, idempotencyKeyFrom(request))))
+  app.put('/invoicing/runs/:runId/customers', { schema: pickRunContract }, async (request) => pickRun(request, request.params.runId, request.body, idempotencyKeyFrom(request)))
+  app.post('/invoicing/runs/:runId/issue', { schema: issueRunContract }, async (request) =>
+    issueRun(processFiles(), processSdi, request, request.params.runId, request.body, () => requireStepUp(officeAuthOf(app), request)),
+  )
+  app.delete('/invoicing/runs/:runId', { schema: deleteRunContract }, async (request) => deleteRun(request, request.params.runId, request.query, idempotencyKeyFrom(request)))
+  app.get('/invoicing/deposit-rules', { schema: listRulesContract }, async (request) => listRules(request, request.query))
+  app.post('/invoicing/deposit-rules', { schema: createRuleContract }, async (request, reply) => reply.code(201).send(await createRule(request, request.body, idempotencyKeyFrom(request))))
+  app.patch('/invoicing/deposit-rules/:ruleId', { schema: updateRuleContract }, async (request) => updateRule(request, request.params.ruleId, request.body, idempotencyKeyFrom(request)))
+  app.post('/invoicing/deposit-rules/:ruleId/archive', { schema: archiveRuleContract }, async (request) => archiveRule(request, request.params.ruleId, request.body, idempotencyKeyFrom(request)))
+  app.get('/invoicing/orders/:orderId/deposit-cancellation', { schema: orderOutcomeContract }, async (request) => orderOutcome(request, request.params.orderId, request.query))
+  app.post('/invoicing/orders/:orderId/deposit-cancellation', { schema: decideOrderContract }, async (request) => decideOrder(request, request.params.orderId, request.body, idempotencyKeyFrom(request)))
+  app.post('/invoicing/orders/:orderId/fees/invoice', { schema: orderFeesInvoiceContract }, async (request, reply) => reply.code(201).send(await invoiceOrderFees(request, request.params.orderId, idempotencyKeyFrom(request))))
+  app.post('/invoicing/invoices/from-sample-round', { schema: sampleRoundInvoiceContract }, async (request, reply) => reply.code(201).send(await invoiceSampleRound(request, request.body, idempotencyKeyFrom(request))))
+  app.post('/invoicing/fee-lines/:lineId/credit', { schema: feeCreditContract }, async (request) => creditFee(request, request.params.lineId, request.body, idempotencyKeyFrom(request)))
 })
