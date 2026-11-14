@@ -23,6 +23,8 @@ import { SALES_ORDER_CHANGE_KIND } from './sales-order-change'
 // B-W2b-377: a purchase order sent without a valid document; a receipt line beyond its delivery tolerance.
 import { PURCHASE_ORDER_COMPLIANCE_KIND } from '../../../modules/purchasing/compliance-override/kind'
 import { RECEIPT_OVER_TOLERANCE_KIND } from './receipt-over-tolerance'
+// B-W2b-420: a cost sheet version, approved and locked before prices are released from it.
+import { COST_SHEET_APPROVAL_KIND } from '../../../modules/costing/sheet-versions/kind'
 
 /**
  * The approval kinds the engine knows (B-W2b-282): one file per kind (./kind.ts says what it gives). A later step adds its
@@ -42,6 +44,7 @@ import { RECEIPT_OVER_TOLERANCE_KIND } from './receipt-over-tolerance'
  *   SALES_ORDER_CHANGE  a confirmed order changed, asking its yes again; the change stays written, a no is put back by a person (B-W2b-309)
  *   PURCHASE_ORDER_COMPLIANCE  a purchase order sent without a valid document it needs (B-W2b-377; asked even with no rule)
  *   RECEIPT_OVER_TOLERANCE     a receipt line beyond its delivery tolerance, held until the yes (B-W2b-377; asked even with no rule)
+ *   COST_SHEET       a cost sheet version, APPROVED and locked on the yes, the one in force frozen (B-W2b-420; asked of the costing owner with no rule)
  */
 const KINDS: readonly ApprovalKindDefinition[] = Object.freeze([
   PURCHASE_ORDER_KIND,
@@ -66,6 +69,8 @@ const KINDS: readonly ApprovalKindDefinition[] = Object.freeze([
   // B-W2b-377
   PURCHASE_ORDER_COMPLIANCE_KIND,
   RECEIPT_OVER_TOLERANCE_KIND,
+  // B-W2b-420
+  COST_SHEET_APPROVAL_KIND,
 ])
 
 function registry(kinds: readonly ApprovalKindDefinition[]): Map<ApprovalTaskKind, ApprovalKindDefinition> {

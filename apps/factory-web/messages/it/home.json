@@ -548,7 +548,8 @@
           "SUPPLIER_BANK_CHANGE": "modifica delle coordinate bancarie di un fornitore",
           "PURCHASE_REQUEST": "richiesta d'acquisto",
           "PURCHASE_ORDER_COMPLIANCE": "invio senza un documento valido",
-          "RECEIPT_OVER_TOLERANCE": "ricevimento oltre la tolleranza"
+          "RECEIPT_OVER_TOLERANCE": "ricevimento oltre la tolleranza",
+          "COST_SHEET": "scheda costo"
         }
       },
       "TASK_DUE.TODAY": "La tua attività \"{title}\" scade oggi.",

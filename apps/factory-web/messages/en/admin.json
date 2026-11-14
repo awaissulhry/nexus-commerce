@@ -1814,6 +1814,7 @@
     "costing_landed_manage": "Spread freight and other charges over the received lots",
     "costing_actuals_manage": "Switch the actual cost figures on or off (accountant)",
     "costing_sheets_manage": "Write draft cost sheets from their components and keep leather bases, freight, duty and transport",
+    "costing_sheets_approve": "Approve cost sheet versions before prices are released, and take an approved one back",
     "production_settings_view": "See each site's floor rules",
     "production_settings_manage": "Change a site's floor rules",
     "production_cut": "Cut hides for a work order",

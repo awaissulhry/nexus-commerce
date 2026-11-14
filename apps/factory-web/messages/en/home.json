@@ -548,7 +548,8 @@
           "SUPPLIER_BANK_CHANGE": "supplier's bank details change",
           "PURCHASE_REQUEST": "purchase request",
           "PURCHASE_ORDER_COMPLIANCE": "send without a valid document",
-          "RECEIPT_OVER_TOLERANCE": "receipt beyond its tolerance"
+          "RECEIPT_OVER_TOLERANCE": "receipt beyond its tolerance",
+          "COST_SHEET": "cost sheet"
         }
       },
       "TASK_DUE.TODAY": "Your task \"{title}\" is due today.",

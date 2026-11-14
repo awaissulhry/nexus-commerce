@@ -36,6 +36,8 @@ export const APPROVAL_TASK_KINDS = [
   // B-W2b-377 (B-W2b-363's database values): a purchase order sent without a valid document; a receipt line beyond its tolerance.
   'PURCHASE_ORDER_COMPLIANCE',
   'RECEIPT_OVER_TOLERANCE',
+  // B-W2b-420 (B-W2b-378's database value): a cost sheet version, approved and locked before prices are released from it.
+  'COST_SHEET',
 ] as const
 export type ApprovalTaskKind = (typeof APPROVAL_TASK_KINDS)[number]
 export const isApprovalTaskKind = (value: unknown): value is ApprovalTaskKind => typeof value === 'string' && (APPROVAL_TASK_KINDS as readonly string[]).includes(value)
@@ -59,6 +61,7 @@ export const APPROVAL_KIND_WORDS: Readonly<Record<ApprovalTaskKind, Words>> = Ob
   PURCHASE_REQUEST: { en: 'Purchase request', it: "Richiesta d'acquisto" },
   PURCHASE_ORDER_COMPLIANCE: { en: 'Send without a valid document', it: 'Invio senza un documento valido' },
   RECEIPT_OVER_TOLERANCE: { en: 'Receipt beyond its tolerance', it: 'Ricevimento oltre la tolleranza' },
+  COST_SHEET: { en: 'Cost sheet', it: 'Scheda costo' },
 })
 
 /** What a signature means (PLT-105). */
