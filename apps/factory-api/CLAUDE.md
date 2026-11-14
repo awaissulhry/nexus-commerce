@@ -941,6 +941,11 @@ B-W2b-124 `modules/plant/statutory` (QHS-205; D.Lgs. 81/2008 art. 71: results ke
   the thread WAITING|SENT|DELIVERED|SOFT_BOUNCE|BOUNCED|COMPLAINED|FAILED by message, its task); `PUT
   /email/ses-accounts/:accountId/webhook-secret` {version, value} (email.manage + step-up; FAKE SES accounts only; sealed, the old
   SecretValue deleted, answers `endsIn`; event email.webhook_secret_changed).
+- Mis-send guard (`mis-send/`, B-W2b-397; COL-004): `POST /threads/:recordType/:recordId/emails/check` (email.send over the record,
+  its thread readable; read only, nothing written): each address's organisation (PARTY | OTHER_PARTY | OURS | UNKNOWN: a contact, a
+  portal person, a colleague, our own domain, a company domain one party's contacts use), the warnings OTHER_ORGANISATION ·
+  UNKNOWN_RECIPIENT · MENTIONS_COST · NAMES_OTHER_CUSTOMER · INTERNAL_MENTION · OFFICE_FILE with what was found (`rules.ts`, pure)
+  and each attachment's audience. It refuses no send: the web holds Send until the person ticks the warnings.
 - Adapters: `adapters/ses/ses.ts` (SESv2 client; LIVE and SANDBOX; credentials sealed on the account, else the
   environment's), `fake.ts` (FAKE: in-memory mailbox, local and test only; never a table or a file), `sns.ts` (the SNS
   envelope parser and verifier), `testing.ts` (FakeSesTransport: the real client on a scripted transport;

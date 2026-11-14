@@ -1,0 +1,377 @@
+{
+  "misSend": {
+    "title": "Inviare a {party}?",
+    "titlePlain": "Inviare questo messaggio?",
+    "send": "Invia messaggio",
+    "back": "Torna a modificare",
+    "retry": "Riprova",
+    "checking": "Controllo di chi lo riceve e di cosa dice…",
+    "clean": "Niente da controllare: i destinatari sono noti e il testo non nomina nessun altro.",
+    "warnings_one": "{count} cosa da controllare",
+    "warnings_other": "{count} cose da controllare",
+    "recipients_one": "{count} destinatario",
+    "recipients_other": "{count} destinatari",
+    "attachments_one": "{count} allegato",
+    "attachments_other": "{count} allegati",
+    "acknowledge": "Ho controllato gli avvisi: invia così",
+    "subject": "Oggetto: {subject}",
+    "subjectNone": "Nessun oggetto scritto: una risposta prende l'oggetto della conversazione.",
+    "noUndo": "Una mail inviata non si può riprendere.",
+    "theParty": "l'organizzazione del record",
+    "file": {
+      "party": "Condiviso con {party}",
+      "office": "Solo ufficio: non si può inviare"
+    },
+    "warning": {
+      "OTHER_ORGANISATION": {
+        "title": "Va a un'altra organizzazione:",
+        "body": "Questi indirizzi sono di un altro cliente o fornitore, non di {party}."
+      },
+      "UNKNOWN_RECIPIENT": {
+        "title": "Indirizzo sconosciuto:",
+        "body": "Nessun contatto, utente del portale o collega lo ha: verifica che sia di {party}."
+      },
+      "MENTIONS_COST": {
+        "title": "Parla di costi:",
+        "body": "Costi, margini e prezzi d'acquisto restano in azienda."
+      },
+      "NAMES_OTHER_CUSTOMER": {
+        "title": "Nomina un altro cliente:",
+        "body": "{party} leggerebbe il nome di un altro cliente."
+      },
+      "INTERNAL_MENTION": {
+        "title": "@menziona un collega:",
+        "body": "Una @menzione va in una nota interna: {party} legge questo messaggio."
+      },
+      "OFFICE_FILE": {
+        "title": "Allegato solo ufficio:",
+        "body": "Toglilo, oppure prima condividilo con {party} in File."
+      }
+    },
+    "recipient": {
+      "party": "{name}",
+      "partyDomain": "{name} (dal dominio)",
+      "other": "Altra organizzazione: {name}",
+      "otherDomain": "Altra organizzazione (dal dominio): {name}",
+      "ours": {
+        "colleague": "Un collega",
+        "domain": "La nostra azienda"
+      },
+      "unknown": "Sconosciuto"
+    },
+    "held": {
+      "sending": "Invio in corso…",
+      "checking": "Prima si controlla il messaggio",
+      "failed": "Il controllo non è riuscito: riprova",
+      "refused": "Questo messaggio non si può controllare: torna indietro",
+      "officeFile": "Prima togli l'allegato solo ufficio",
+      "acknowledge": "Prima spunta che hai controllato gli avvisi"
+    },
+    "problem": {
+      "forbidden": "Non puoi inviare mail per questo record.",
+      "notFound": "Questo record non c'è più.",
+      "invalid": "Il messaggio così non si può controllare: verifica gli indirizzi.",
+      "signedOut": "La sessione è terminata.",
+      "rateLimited": "Troppi controlli: attendi un momento.",
+      "unavailable": "Nexus non è raggiungibile ora.",
+      "failed": "Il controllo non è riuscito.",
+      "body": "Non è stato inviato nulla. Torna a modificare, oppure riprova."
+    }
+  },
+  "tiles": {
+    "title": "Posta",
+    "toSort": "Posta da smistare",
+    "toSortHint": "Nessun record trovato, trattenuta o non letta",
+    "count_one": "{count} mail",
+    "count_other": "{count} mail",
+    "countMore": "{count}+ mail",
+    "open_one": "{count} aperta",
+    "open_other": "{count} aperte",
+    "inboxHint": "{unassigned} senza nessuno · {mine} mie",
+    "inboxes": "Caselle condivise",
+    "none": "Nessuna per ora",
+    "noneHint": "Le caselle condivise (ordini@, offerte@) le crea un amministratore."
+  },
+  "inbox": {
+    "unknownSender": "Mittente sconosciuto",
+    "noSubject": "(senza oggetto)",
+    "attachments_one": "{count} allegato",
+    "attachments_other": "{count} allegati",
+    "checksFailed": "Controlli non superati",
+    "inquiryMade": "Richiesta {number}",
+    "noRecord": "Ancora nessun record",
+    "state": {
+      "OPEN": "Aperta",
+      "SNOOZED": "Posticipata",
+      "SNOOZEDAt": "Posticipata fino a {time}",
+      "CLOSED": "Chiusa",
+      "CLOSEDAt": "Chiusa {time}"
+    },
+    "followUpBy": "Sollecito entro {time}",
+    "assignee": {
+      "you": "Tu",
+      "nobody": "Nessuno"
+    },
+    "unknownInbox": "Casella condivisa",
+    "address": "Posta a {address}",
+    "noAddress": "Ancora nessun indirizzo: prima serve il dominio di posta dell'azienda",
+    "members": "Membri: {names}",
+    "viewLabel": "Quale posta",
+    "view": {
+      "OPEN": "Aperte",
+      "MINE": "Mie",
+      "UNASSIGNED": "Di nessuno",
+      "SNOOZED": "Posticipate",
+      "FOLLOW_UP": "Solleciti",
+      "CLOSED": "Chiuse",
+      "ALL": "Tutte"
+    },
+    "dismiss": "Chiudi",
+    "retry": "Riprova",
+    "table": "{name}: posta",
+    "count_one": "{count} mail",
+    "count_other": "{count} mail",
+    "countMore": "{count}+ mail",
+    "more": "Mostra altre",
+    "moreLoading": "Caricamento…",
+    "error": {
+      "title": "Impossibile caricare questa casella"
+    },
+    "empty": {
+      "OPEN": {
+        "title": "Niente di aperto",
+        "body": "Ogni mail di questa casella è chiusa, posticipata o in attesa del sollecito."
+      },
+      "MINE": {
+        "title": "Niente a te",
+        "body": "Prendi una mail da Aperte o Di nessuno e compare qui."
+      },
+      "UNASSIGNED": {
+        "title": "Tutto ha qualcuno",
+        "body": "Ogni mail aperta di questa casella è assegnata a una persona."
+      },
+      "SNOOZED": {
+        "title": "Niente di posticipato",
+        "body": "Una mail posticipata torna tra le Aperte alla sua ora."
+      },
+      "FOLLOW_UP": {
+        "title": "Nessun sollecito in attesa",
+        "body": "Un sollecito riporta la mail, a meno che il cliente risponda prima nella sua conversazione."
+      },
+      "CLOSED": {
+        "title": "Niente di chiuso",
+        "body": "Chiudi una mail quando è fatta: esce dalla coda per tutti."
+      },
+      "ALL": {
+        "title": "Ancora nessuna mail",
+        "body": "La posta inviata all'indirizzo di questa casella arriva qui."
+      }
+    },
+    "held": {
+      "busy": "In corso…",
+      "rejected": "Questa mail è stata scartata",
+      "yoursAlready": "È già tua",
+      "nobody": "Non ce l'ha nessuno",
+      "closedAlready": "Già chiusa",
+      "openAlready": "È aperta",
+      "reopenFirst": "È chiusa: prima riaprila",
+      "notSnoozed": "Non è posticipata",
+      "noThread": "Prima collegala a un record: un sollecito attende la risposta nella sua conversazione",
+      "noFollowUp": "Nessun sollecito impostato",
+      "noOtherInbox": "Nessun'altra casella condivisa in cui lavori",
+      "noneToTake": "Ogni mail selezionata è già tua",
+      "noneSelected": "Prima seleziona della posta",
+      "noneToClose": "Ogni mail selezionata è già chiusa"
+    },
+    "notice": {
+      "moved": "Questa mail è cambiata nel frattempo: è stata riletta.",
+      "cannot": "Questa mail ora non può cambiare così: è stata riletta.",
+      "notFound": "Questa mail non è più raggiungibile: l'elenco è stato riletto.",
+      "forbidden": "Non puoi farlo.",
+      "invalid": "Non accettato così.",
+      "signedOut": "La sessione è terminata.",
+      "unavailable": "Nexus non è raggiungibile ora.",
+      "failed": "Non è riuscito.",
+      "partial": "{done} su {count} fatte; le altre sono cambiate nel frattempo."
+    },
+    "problem": {
+      "read": "Impossibile leggere le caselle condivise.",
+      "forbidden": "Non puoi vedere questa casella condivisa.",
+      "notFound": "Questa casella condivisa non c'è più.",
+      "unavailable": "Nexus non è raggiungibile ora."
+    },
+    "done": {
+      "take_one": "Presa: {count} mail è tua.",
+      "take_other": "Prese: {count} mail sono tue.",
+      "assign_one": "Assegnata: {count} mail.",
+      "assign_other": "Assegnate: {count} mail.",
+      "giveBack_one": "Di nuovo in coda: {count} mail.",
+      "giveBack_other": "Di nuovo in coda: {count} mail.",
+      "close_one": "Chiusa: {count} mail.",
+      "close_other": "Chiuse: {count} mail.",
+      "reopen_one": "Riaperta: {count} mail.",
+      "reopen_other": "Riaperte: {count} mail.",
+      "snooze_one": "Posticipata: {count} mail.",
+      "snooze_other": "Posticipate: {count} mail.",
+      "wake_one": "Di nuovo ora: {count} mail.",
+      "wake_other": "Di nuovo ora: {count} mail.",
+      "followUp_one": "Sollecito impostato: {count} mail.",
+      "followUp_other": "Sollecito impostato: {count} mail.",
+      "clearFollowUp_one": "Sollecito tolto: {count} mail.",
+      "clearFollowUp_other": "Sollecito tolto: {count} mail.",
+      "move_one": "Spostata: {count} mail.",
+      "move_other": "Spostate: {count} mail."
+    }
+  },
+  "verb": {
+    "open": "Apri la mail",
+    "take": "Prendila",
+    "assign": "Assegna a…",
+    "giveBack": "Rimetti in coda",
+    "close": "Chiudi (fatta)",
+    "reopen": "Riapri",
+    "snooze": "Posticipa…",
+    "wake": "Riporta ora",
+    "followUp": "Sollecita…",
+    "clearFollowUp": "Togli il sollecito",
+    "move": "Sposta in…",
+    "openInquiry": "Apri la richiesta {number}",
+    "createInquiry": "Crea una richiesta",
+    "openRecord": "Apri il record",
+    "menu": "Azioni per {subject}"
+  },
+  "col": {
+    "from": "Da",
+    "subject": "Oggetto",
+    "received": "Ricevuta",
+    "record": "Record",
+    "state": "Stato",
+    "assignee": "Assegnata a",
+    "more": "Azioni"
+  },
+  "keys": {
+    "take": "Prendi la mail",
+    "close": "Chiudi la mail"
+  },
+  "bulk": {
+    "take": "Prendi {count}",
+    "assign": "Assegna {count}…",
+    "close": "Chiudi {count}"
+  },
+  "assign": {
+    "title_one": "Assegna la mail",
+    "title_other": "Assegna {count} mail",
+    "held": "Prima scegli una persona",
+    "go": "Assegna",
+    "body": "Membri di {name}",
+    "me": "{name} (tu)",
+    "nobody": "Nessuno",
+    "nobodyHint": "Di nuovo in coda per chiunque",
+    "noMembers": "Questa casella non ha ancora membri."
+  },
+  "move": {
+    "title": "Sposta in un'altra casella condivisa",
+    "held": "Prima scegli una casella",
+    "go": "Sposta",
+    "body": "Resta assegnata solo se la persona è membro anche lì."
+  },
+  "followUp": {
+    "title": "Sollecito: {what}",
+    "body": "La mail torna tra le Aperte a quell'ora, a meno che il cliente risponda prima nella conversazione del record.",
+    "go": "Imposta il sollecito",
+    "choice": {
+      "LATER_TODAY": "Più tardi oggi",
+      "TOMORROW": "Domattina",
+      "MONDAY": "Lunedì mattina",
+      "PICK": "Scegli un'ora"
+    },
+    "pickLabel": "Ora",
+    "pickHint": "Da 5 minuti a 90 giorni da ora",
+    "cancels": "Una risposta nella conversazione lo annulla da sola.",
+    "pickFirst": "Prima scegli un'ora",
+    "tooSoon": "Almeno 5 minuti da ora",
+    "tooFar": "Entro 90 giorni"
+  },
+  "dialog": {
+    "cancel": "Annulla"
+  },
+  "inquiry": {
+    "held": {
+      "noRight": "Serve il permesso di gestire le richieste",
+      "made": "Da questa mail è già stata creata una richiesta",
+      "failed": "Questa mail non si è potuta leggere",
+      "notWaiting": "Solo una mail in attesa qui o in una conversazione"
+    }
+  },
+  "capture": {
+    "copy": "Copia l'indirizzo di cattura",
+    "copied": "Copiato",
+    "copiedSaid": "Copiato: {address}",
+    "copyFailed": "Impossibile copiare: l'indirizzo è in Sistema › Connessioni e API.",
+    "setUp": "Configuralo",
+    "held": {
+      "reading": "Lettura dell'indirizzo di cattura…",
+      "noDomain": "L'azienda non ha ancora un dominio di posta (Sistema › Connessioni e API)",
+      "none": "Ancora nessun indirizzo di cattura: lo crea Sistema › Connessioni e API"
+    },
+    "problem": {
+      "forbidden": "Non puoi vedere l'indirizzo di cattura.",
+      "unavailable": "Nexus non è raggiungibile ora.",
+      "read": "Impossibile leggere l'indirizzo di cattura."
+    }
+  },
+  "captureAdmin": {
+    "title": "Indirizzo di cattura",
+    "intro": "Inoltra o metti in Ccn qualsiasi mail a questo indirizzo: si unisce al record che l'oggetto nomina (un ordine, un'offerta, una richiesta…), altrimenti alla conversazione del cliente o fornitore; ciò che non può collocare aspetta in Posta da smistare. Si abbinano solo le mail di un collega dal suo indirizzo che superano DMARC.",
+    "reading": "Lettura dell'indirizzo di cattura…",
+    "failed": "Impossibile leggere l'indirizzo di cattura",
+    "noDomain": {
+      "title": "Prima aggiungi il tuo dominio di posta",
+      "body": "L'indirizzo di cattura sta sul dominio che riceve le risposte (sopra)."
+    },
+    "none": {
+      "title": "Ancora nessun indirizzo di cattura",
+      "body": "Creane uno, poi inoltra o metti in Ccn qualsiasi mail."
+    },
+    "make": "Crea un indirizzo di cattura",
+    "made": "Creato",
+    "lands": "La posta che non può collocare va in",
+    "landsToSort": "Posta da smistare",
+    "defaultLabel": "Posta che non può collocare",
+    "defaultHint": "Una casella condivisa, o Posta da smistare",
+    "noAddress": "Nessun indirizzo: ora l'azienda non riceve posta su un dominio.",
+    "replace": "Sostituisci…",
+    "turnOff": "Disattiva…",
+    "toMail": "Apri Home › Posta da smistare",
+    "held": {
+      "noRight": "Serve il permesso di gestire le caselle condivise",
+      "noDomain": "Prima aggiungi il dominio di posta",
+      "busy": "In corso…"
+    },
+    "confirm": {
+      "replace": {
+        "title": "Sostituire l'indirizzo di cattura?",
+        "body": "Si crea un nuovo indirizzo e il vecchio smette subito: la posta inviata lì non viene più abbinata e aspetta in Posta da smistare come le altre. Comunica il nuovo ai colleghi.",
+        "go": "Sostituisci"
+      },
+      "turnOff": {
+        "title": "Disattivare l'indirizzo di cattura?",
+        "body": "Nessuna mail viene più abbinata tramite questo indirizzo: la posta inoltrata aspetta in Posta da smistare. Potrai crearne uno nuovo più avanti.",
+        "go": "Disattiva"
+      }
+    },
+    "notice": {
+      "changed": "L'indirizzo di cattura è cambiato nel frattempo: è stato riletto.",
+      "forbidden": "Non puoi cambiare l'indirizzo di cattura.",
+      "invalid": "Non accettato così: è stato riletto.",
+      "unavailable": "Nexus non è raggiungibile ora.",
+      "failed": "Non è riuscito."
+    },
+    "done": {
+      "made": "L'indirizzo di cattura è pronto: copialo e inoltra la posta lì.",
+      "replaced": "Sostituito: il vecchio indirizzo non funziona più.",
+      "turnedOff": "Disattivato: nessuna mail viene più abbinata tramite questo indirizzo.",
+      "pointed": "Salvato: ora la posta che non può collocare va lì."
+    }
+  }
+}

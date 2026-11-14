@@ -28,6 +28,11 @@ import {
   type RecordCandidate,
 } from '../model'
 import '../mail-to-sort.css'
+// B-W2b-397: team inboxes, the capture address and Create an inquiry.
+import { CopyCaptureAddress } from '../../mail/capture/view/CopyCaptureAddress'
+import { CreateInquiryButton } from '../../mail/create-inquiry/view/CreateInquiryButton'
+import { TeamInboxQueue, type TeamInboxActions } from '../../mail/team-inbox/view/TeamInboxQueue'
+import { TeamInboxTiles } from '../../mail/team-inbox/view/TeamInboxTiles'
 
 export type { MailToSortViewModel } from '../model'
 
@@ -49,6 +54,8 @@ export interface MailToSortActions {
   onDownload?: (fileId: string) => void
   onShowPictures?: (show: boolean) => void
   onDismissNotice?: () => void
+  /** B-W2b-397: the team inboxes' tiles and queue (use-team-inbox.ts). */
+  inboxes?: TeamInboxActions
 }
 
 const STATUS_ICON = { TRIAGE: Inbox, HELD: ShieldAlert, FAILED: AlertTriangle } as const
@@ -68,7 +75,7 @@ const reasonHeld = (text: string): boolean => {
  */
 export function MailToSortView({ model, actions }: { model: MailToSortViewModel; actions?: MailToSortActions }) {
   return (
-    <WithMessages namespaces={['home']}>
+    <WithMessages namespaces={['home', 'mail-depth', 'search']}>
       <MailToSort model={model} actions={actions} />
     </WithMessages>
   )
@@ -76,12 +83,32 @@ export function MailToSortView({ model, actions }: { model: MailToSortViewModel;
 
 function MailToSort({ model, actions }: { model: MailToSortViewModel; actions?: MailToSortActions }) {
   const t = useT('home')
-  const locale = useLocale()
-  const { items, more, problem } = model.mails
+  const { items, more } = model.mails
 
   return (
     <div className="fw-mts">
-      <p className="fw-mts-intro">{t('mailToSort.intro')}</p>
+      <div className="fw-cap-head">
+        <p className="fw-mts-intro">{t('mailToSort.intro')}</p>
+        {model.capture && <CopyCaptureAddress state={model.capture} prefix={model.prefix ?? ''} />}
+      </div>
+      {model.inboxes && <TeamInboxTiles model={model.inboxes} toSort={{ count: items?.length ?? null, more }} onInbox={actions?.inboxes?.onInbox} />}
+      {model.inboxes?.queue ? (
+        <TeamInboxQueue model={model.inboxes} actions={{ ...actions?.inboxes, onOpenMail: actions?.onOpen }} />
+      ) : (
+        <ToSortList model={model} actions={actions} />
+      )}
+      <MailDetailModal model={model} actions={actions} />
+    </div>
+  )
+}
+
+/** W0's list: the mail no record took, held mail and mail that could not be read (the "Mail to sort" tile). */
+function ToSortList({ model, actions }: { model: MailToSortViewModel; actions?: MailToSortActions }) {
+  const t = useT('home')
+  const locale = useLocale()
+  const { items, more, problem } = model.mails
+  return (
+    <>
       <div className="fw-mts-toolbar">
         <SegmentedControl
           ariaLabel={t('mailToSort.filterLabel')}
@@ -160,9 +187,7 @@ function MailToSort({ model, actions }: { model: MailToSortViewModel; actions?: 
           </Button>
         </div>
       )}
-
-      <MailDetailModal model={model} actions={actions} />
-    </div>
+    </>
   )
 }
 
@@ -197,6 +222,7 @@ function MailDetailModal({ model, actions }: { model: MailToSortViewModel; actio
         actions={
           detail ? (
             <>
+              {model.canInquiry !== undefined && <CreateInquiryButton prefix={model.prefix ?? ''} mail={detail} mayManage={model.canInquiry} />}
               {mailActions(detail, model.canWrite).map(({ action, held }) => (
                 <Button
                   key={action}

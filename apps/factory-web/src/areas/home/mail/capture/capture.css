@@ -1,0 +1,24 @@
+/*
+ * Home › Mail's "Copy capture address" (B-W2b-397) LAYOUT: the design system's button and, beside it, the link to set the
+ * address up. Semantic tokens only.
+ */
+.fw-cap {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-cap-link {
+  color: var(--nds-text-link);
+  font-size: var(--nds-font-size-sm);
+}
+
+/* The page's head on Home › Mail: the intro and, at the right end, Copy capture address. */
+.fw-cap-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+}

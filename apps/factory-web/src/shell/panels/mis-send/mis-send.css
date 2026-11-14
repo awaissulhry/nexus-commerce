@@ -1,0 +1,95 @@
+/*
+ * "Send to <party>?" (SCR-437, B-W2b-397) LAYOUT: the warnings, the recipients and the attachments as short lists inside the
+ * design system's Modal. The controls are the design system's; this file places them with semantic tokens only.
+ */
+.fw-mis {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-mis-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+
+.fw-mis-h {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  font-weight: 600;
+  color: var(--nds-text);
+}
+
+.fw-mis-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-mis-warning,
+.fw-mis-recipient {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+}
+
+.fw-mis-warning > svg,
+.fw-mis-recipient > svg {
+  flex: none;
+  margin-top: var(--nds-space-2);
+  color: var(--nds-text-2);
+}
+
+.fw-mis-warning.is-danger > svg {
+  color: var(--nds-danger-text);
+}
+
+.fw-mis-warning.is-warning > svg {
+  color: var(--nds-warning-text);
+}
+
+.fw-mis-recipient {
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.fw-mis-address {
+  flex: 1 1 14rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-mis-code {
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-xs);
+}
+
+.fw-mis-muted {
+  margin: 0;
+  color: var(--nds-text-2);
+}
+
+.fw-mis-muted > svg {
+  vertical-align: -2px;
+}
+
+.fw-mis-small {
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-mis-block {
+  display: block;
+}
+
+.fw-mis-ack {
+  padding-top: var(--nds-space-4);
+  border-top: 1px solid var(--nds-border);
+}
