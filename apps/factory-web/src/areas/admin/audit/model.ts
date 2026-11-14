@@ -1,10 +1,12 @@
 import { GRAINS, type Loaded } from '../shared/model'
 import { AUDIT_SURFACES, AUDIT_VIEWS, type AuditCounts, type AuditEntry, type AuditQuery, type AuditSurface, type AuditViewName } from './api'
+import { looksLikeAddress } from '../security/events/model'
+import type { WhoLookedModel } from './reads/view/WhoLookedCard'
 
 /**
  * SCR-018 Audit log (design 02 admin.audit; PLT-072, PLT-073, PLT-077, PLT-084): every audited write the person may
  * read, newest first, as sentences for the Owner (Story) or one row per write (Table); saved views as tiles; filters
- * kept in the address (`?view=&who=&surface=&type=&record=&area=&company=&period=&mode=&open=`); one entry in a
+ * kept in the address (`?view=&who=&surface=&type=&record=&area=&company=&period=&ip=&from=&to=&mode=&open=`); one entry in a
  * centred DetailModal (`?open=<id>`, J / K) with every field before → after, its context and the other rows of the same
  * request. Pure: the container (AuditPage.tsx) reads, the view draws, the tests hold every rule.
  *
@@ -18,9 +20,10 @@ export const AUDIT_MODES = ['story', 'table'] as const
 export type AuditMode = (typeof AUDIT_MODES)[number]
 
 /** The time windows offered (rolling, from now). */
-export const AUDIT_PERIODS = ['any', '24h', '7d', '30d', '90d'] as const
+/** The time windows offered (rolling, from now); B-W2b-413: `range` = between two days (`from`, `to`). */
+export const AUDIT_PERIODS = ['any', '24h', '7d', '30d', '90d', 'range'] as const
 export type AuditPeriod = (typeof AUDIT_PERIODS)[number]
-const PERIOD_MS: Readonly<Record<Exclude<AuditPeriod, 'any'>, number>> = { '24h': 864e5, '7d': 7 * 864e5, '30d': 30 * 864e5, '90d': 90 * 864e5 }
+const PERIOD_MS: Readonly<Record<Exclude<AuditPeriod, 'any' | 'range'>, number>> = { '24h': 864e5, '7d': 7 * 864e5, '30d': 30 * 864e5, '90d': 90 * 864e5 }
 
 /** The tiles count the last 30 days (the same window for every tile, so the tiles and the list agree when chosen). */
 export const TILE_PERIOD: AuditPeriod = '30d'
@@ -101,12 +104,18 @@ export interface AuditFilters {
   area: ActionArea | null
   companyId: string | null
   period: AuditPeriod
+  /** B-W2b-413: an address typed (matched through the sessions signed in from it: GET /audit/search `ip`). */
+  ip: string | null
+  /** B-W2b-413: with `period` 'range', the window's start and (exclusive) end, as instants. */
+  from: string | null
+  to: string | null
 }
 
-export const NO_FILTERS: AuditFilters = { view: null, actorId: null, audience: null, recordType: null, recordId: null, area: null, companyId: null, period: 'any' }
+export const NO_FILTERS: AuditFilters = { view: null, actorId: null, audience: null, recordType: null, recordId: null, area: null, companyId: null, period: 'any', ip: null, from: null, to: null }
 
 const isOne = <T extends string>(list: readonly T[], value: string | null | undefined): value is T => typeof value === 'string' && (list as readonly string[]).includes(value)
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?(Z|[+-]\d{2}:\d{2})$/
 const TYPE = /^[A-Z][A-Za-z0-9]{0,63}$/
 
 /** The filters, the mode and the open entry as the address holds them; anything malformed is left out. */
@@ -122,6 +131,12 @@ export function stateFromParams(params: { get(name: string): string | null } | n
   const period = get('period')
   const mode = get('mode')
   const type = get('type')
+  const ip = get('ip')
+  const instant = (name: string) => {
+    const value = get(name)
+    return value && INSTANT.test(value) && !Number.isNaN(Date.parse(value)) ? value : null
+  }
+  const ranged = period === 'range'
   return {
     filters: {
       view: isOne(AUDIT_VIEWS, view) ? view : null,
@@ -132,6 +147,9 @@ export function stateFromParams(params: { get(name: string): string | null } | n
       area: isOne(ACTION_AREAS, area) ? area : null,
       companyId: id('company'),
       period: isOne(AUDIT_PERIODS, period) ? period : 'any',
+      ip: ip && looksLikeAddress(ip) ? ip.trim() : null,
+      from: ranged ? instant('from') : null,
+      to: ranged ? instant('to') : null,
     },
     mode: isOne(AUDIT_MODES, mode) ? mode : 'story',
     open: id('open'),
@@ -149,6 +167,9 @@ export function paramsOf(filters: AuditFilters, mode: AuditMode, open: string | 
   if (filters.area) out.set('area', filters.area)
   if (filters.companyId) out.set('company', filters.companyId)
   if (filters.period !== 'any') out.set('period', filters.period)
+  if (filters.ip) out.set('ip', filters.ip)
+  if (filters.period === 'range' && filters.from) out.set('from', filters.from)
+  if (filters.period === 'range' && filters.to) out.set('to', filters.to)
   if (mode !== 'story') out.set('mode', mode)
   if (open) out.set('open', open)
   return out.toString()
@@ -159,7 +180,7 @@ export const withQuery = (path: string, query: string) => (query ? `${path}?${qu
 
 /** Where a window starts, from now (null: any time). */
 export function periodFrom(period: AuditPeriod, now: Date): string | null {
-  return period === 'any' ? null : new Date(now.getTime() - PERIOD_MS[period]).toISOString()
+  return period === 'any' || period === 'range' ? null : new Date(now.getTime() - PERIOD_MS[period]).toISOString()
 }
 
 /** The API query for the filters. */
@@ -172,13 +193,15 @@ export function queryOf(filters: AuditFilters, now: Date): AuditQuery {
     recordId: filters.recordId,
     action: filters.area ? `${filters.area}.` : null,
     companyId: filters.companyId,
-    from: periodFrom(filters.period, now),
+    from: filters.period === 'range' ? filters.from : periodFrom(filters.period, now),
+    to: filters.period === 'range' ? filters.to : null,
+    ip: filters.ip,
   }
 }
 
 /** How many filters narrow the log (the saved view counts as one). */
 export function filterCount(filters: AuditFilters): number {
-  return [filters.view, filters.actorId, filters.audience, filters.recordType ?? filters.recordId, filters.area, filters.companyId, filters.period === 'any' ? null : filters.period].filter((value) => value !== null).length
+  return [filters.view, filters.actorId, filters.audience, filters.recordType ?? filters.recordId, filters.area, filters.companyId, filters.period === 'any' ? null : filters.period, filters.ip].filter((value) => value !== null).length
 }
 
 // ---- words --------------------------------------------------------------------------------------------------------------
@@ -354,6 +377,8 @@ export interface AuditOpen {
   entry: AuditEntry | null
   /** The other rows the same request wrote. */
   siblings: Loaded<AuditEntry>
+  /** B-W2b-413 ("IP in the table"): the country of the session it was written in; null none known; undefined still reading. */
+  country?: string | null
 }
 
 export interface AuditViewModel {
@@ -381,6 +406,8 @@ export interface AuditViewModel {
   open: AuditOpen | null
   /** The record the filters name, in words, when known (the "Record's history" chip). */
   recordWords?: string | null
+  /** B-W2b-413: Who looked (audit.reads.view; reads/), absent without the right. */
+  reads?: WhoLookedModel | null
 }
 
 /** The address of one entry on this page (filters kept). */

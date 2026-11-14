@@ -7,7 +7,7 @@
     "cancel": "Annulla",
     "open": "Apri",
     "stillLoading": "Ancora in caricamento…",
-    "later": "In arrivo: processi e integrazioni con le loro esecuzioni, durata delle sessioni, le azioni che chiedono un codice nuovo, eventi di sicurezza e accesso con Microsoft o Google.",
+    "later": "In arrivo: processi e integrazioni con le loro esecuzioni, e accesso con Microsoft o Google.",
     "noAccess": {
       "title": "Non puoi aprirla",
       "body": "Sicurezza e stato del sistema richiede il permesso di vederla (security.view). Chiedi a un amministratore della tua società."
@@ -110,6 +110,8 @@
       "title": "Regole di accesso",
       "hint": "Password, blocco e doppio fattore.",
       "fixed": "Uguale per ogni utente d'ufficio.",
+      "sessionsSet": "Impostata per pubblico in Durata delle sessioni, qui sotto.",
+      "stepUpSet": "Quali azioni lo chiedono: Azioni che chiedono un codice nuovo, qui sotto.",
       "password": "Password",
       "passwordRule": "Da {min} a {max} caratteri, non una comune, non il tuo nome o la tua email",
       "lockout": "Blocco",

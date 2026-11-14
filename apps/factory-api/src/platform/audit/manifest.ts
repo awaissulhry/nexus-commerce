@@ -10,6 +10,8 @@ export const manifest = defineManifest({
   'GET /audit/entries/:entryId': { audiences: ['office'], permission: 'audit.read', scope: 'record' },
   'GET /audit/reads': { audiences: ['office'], permission: 'audit.reads.view', scope: 'tenant' },
   'POST /audit/reads/person': { audiences: ['office'], permission: 'audit.reads.view', scope: 'tenant' },
+  // B-W2b-413: the read log's switch, said on the screen (GATE-PRIVACY).
+  'GET /audit/reads/status': { audiences: ['office'], permission: 'audit.reads.view', scope: 'tenant' },
   'GET /audit/security-events': { audiences: ['office'], permission: 'security.events.view', scope: 'tenant' },
   'GET /audit/security-events/:eventId': { audiences: ['office'], permission: 'security.events.view', scope: 'tenant' },
 })

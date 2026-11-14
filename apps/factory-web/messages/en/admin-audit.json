@@ -4,8 +4,8 @@
     "intro": "Every change made in the factory: who, where, what it was before and after, and why. Nobody can edit or delete an entry.",
     "noAccess": "Reading the audit log needs the right \"Read the history of a record\". Ask an administrator.",
     "export": "Export this view",
+    "exportInTable": "Opens the table: its Export ▾ makes this view's file (CSV or Excel).",
     "held": {
-      "export": "Exporting the log comes in a later step.",
       "loading": "Reading older entries…",
       "noPage": "A {type} has no page of its own yet."
     },
@@ -51,7 +51,8 @@
       "24h": "Last 24 hours",
       "7d": "Last 7 days",
       "30d": "Last 30 days",
-      "90d": "Last 90 days"
+      "90d": "Last 90 days",
+      "range": "Between two days"
     },
     "surface": {
       "OFFICE": "Office",
@@ -73,7 +74,7 @@
     },
     "older": "Show older",
     "end": "That is the first entry: there is nothing older.",
-    "later": "Who looked at sensitive records, the log export and how long it is kept come in later steps.",
+    "later": "How long the log is kept comes in a later step.",
     "count": "{shown} entries shown of {total} read",
     "why": "why: {reason}",
     "deviceTime": "(tablet {time})",
@@ -134,7 +135,8 @@
       "request": "Request id",
       "key": "Repeat-safety key",
       "keyHint": "The same change sent twice is made once.",
-      "ip": "The country of the sign-in address is not recorded yet."
+      "ip": "No country is known for the session it was written in.",
+      "ipCountry": "Written in a session signed in from {country}."
     },
     "who": {
       "person": "{name}",
@@ -146,6 +148,15 @@
       "system": "Nexus, on its own"
     },
     "did": {
+      "audit_searchReadsOfPerson": "looked up what a person viewed",
+      "auth_endOtherSessions": "signed out everywhere else",
+      "auth_endSession": "ended a session",
+      "auth_stepUpFailed": "typed a wrong fresh code",
+      "security_setSessionLengths": "changed the session lengths",
+      "security_setStepUpRules": "changed the actions that ask for a fresh code",
+      "users_endSessions": "ended all sessions of",
+      "roles_archive": "archived",
+      "roles_restore": "restored",
       "other": "changed",
       "org_createCompany": "created",
       "org_editCompany": "changed",

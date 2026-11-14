@@ -71,5 +71,12 @@ export const listSecurityEventsContract = defineContract({
 
 export const oneSecurityEventContract = defineContract({
   params: input({ eventId: id() }),
-  response: { 200: output({ event: securityEventView }) },
+  response: {
+    200: output({
+      event: securityEventView,
+      /** B-W2b-413 (design admin.security pop:event "related events from the same IP"): the other events from the same
+       *  address (its keyed hash, never the address) within a day either side, newest first, at most 20. Rows only. */
+      related: z.array(securityEventView),
+    }),
+  },
 })

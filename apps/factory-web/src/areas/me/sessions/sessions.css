@@ -1,0 +1,38 @@
+/*
+ * Live sessions (B-W2b-413): My profile › Where I'm signed in and Admin › Users › a person › Sessions & sign-ins. Layout
+ * only, with semantic design-system tokens; the table, tags and buttons are the DS's own.
+ */
+.fw-ses-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-ses-device {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-ses-device > svg {
+  flex: none;
+  margin-top: var(--nds-space-2);
+  color: var(--nds-text-2);
+}
+
+.fw-ses-device-text {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-ses-hint {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}

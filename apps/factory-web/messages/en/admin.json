@@ -895,6 +895,7 @@
       "profile": "Profile",
       "roles": "Roles & scope",
       "partner": "Partner organisation",
+      "sessions": "Sessions & sign-ins",
       "activity": "Activity"
     },
     "giveRole": "Give role",
@@ -961,7 +962,6 @@
     "live": "Live",
     "ended": "Ended",
     "end": "End",
-    "sessionsLater": "Sessions and sign-in history come in W2b.",
     "give": {
       "title": "Give {name} a role",
       "role": "Role",
@@ -1101,6 +1101,7 @@
     },
     "kind": {
       "system": "Ready-made",
+      "archived": "Archived",
       "custom": "Custom"
     },
     "readyMade": "Ready-made role",
@@ -1115,7 +1116,6 @@
       "title": "No roles yet",
       "body": "The ready-made roles appear after the first sync."
     },
-    "later": "Making a custom copy of a ready-made role and changing it comes in W2b.",
     "compareTitle": "Compare roles",
     "compareHint": "What each can do, by area, with the differences marked.",
     "system": {
@@ -1218,7 +1218,6 @@
     },
     "copyOf": "Custom copy of {key}",
     "readOnlySystem": "Ready-made role: read-only. It stays equal to its template.",
-    "readOnlyCustom": "Changing a custom role comes in W2b; it is read-only here for now.",
     "plain": "What this role can do",
     "areaLine": "{area}: {count} of {total} actions",
     "mfaRequired": "Asks for two-factor before it gives anything",
