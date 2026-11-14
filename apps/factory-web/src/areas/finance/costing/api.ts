@@ -12,13 +12,13 @@ import { newIdempotencyKey, type ApiClient } from '../../../lib/api/client'
  * operation: Statuto dei Lavoratori art. 4).
  */
 
-export const COST_ENTRY_KINDS = ['MATERIAL', 'SCRAP', 'LABOUR', 'SUBCONTRACT', 'OVERHEAD', 'COMPLETION', 'ADJUSTMENT'] as const
+export const COST_ENTRY_KINDS = ['MATERIAL', 'SCRAP', 'LABOUR', 'SUBCONTRACT', 'OVERHEAD', 'COMPLETION', 'ADJUSTMENT', 'VARIANCE', 'CLOSE'] as const
 export type CostEntryKind = (typeof COST_ENTRY_KINDS)[number]
 /** The company's costing method (the accountant's; UNDECIDED until chosen). */
 export const COSTING_METHODS = ['UNDECIDED', 'STANDARD', 'MOVING_AVERAGE', 'FIFO'] as const
 export type CostingMethod = (typeof COSTING_METHODS)[number]
 /** What a ledger entry records (issue, return, scrap, labour, completion …). */
-export const ENTRY_EVENTS = ['ISSUE', 'RETURN', 'STOCK_SCRAP', 'LABOUR', 'SCAN_SCRAP', 'REWORK_SCRAP', 'COMPLETION', 'OVERHEAD', 'SUBCONTRACT', 'ADJUSTMENT', 'REVERSAL'] as const
+export const ENTRY_EVENTS = ['ISSUE', 'RETURN', 'STOCK_SCRAP', 'LABOUR', 'SCAN_SCRAP', 'REWORK_SCRAP', 'COMPLETION', 'OVERHEAD', 'SUBCONTRACT', 'ADJUSTMENT', 'VARIANCE', 'CLOSE', 'REVERSAL'] as const
 export type EntryEvent = (typeof ENTRY_EVENTS)[number]
 /** Why a source event has no entry yet. */
 // B-W2b-53: SCRAP_APPROVAL (scrap above a site's limit waits for the team leader).

@@ -22,6 +22,9 @@ import { databasePackingRefusal } from '@nexus/factory-domain/shipping/cartons/r
 import { askedLineRefusal } from '@nexus/factory-domain/purchasing/ask-to-buy/ask-to-buy'
 // B-W2b-385: a notification preference, push device or view follow write that reached the database's rules is a 409 in words.
 import { databaseNotificationRefusal } from '@nexus/factory-domain/notifications/preferences/refusals'
+// B-W2b-376 (W2b-6 schema wave 54/57): a cost entry of a closed (or settled) work order, or a reversal of a close's entry, that
+// reached the database's actual-cost rules is a 409 in words.
+import { databaseActualCostRefusal } from '@nexus/factory-domain/costing/actuals-refusals'
 import type { ErrorBody } from '@nexus/factory-domain/core/contracts'
 import { reportError } from '../observability/tracker'
 
@@ -255,6 +258,19 @@ function packingRefusal(error: unknown): MappedError | null {
   return words ? { status: STATUS_OF.conflict, code: 'conflict', message: words.message, issues: [{ path: words.path, message: words.message }], unexpected: false } : null
 }
 
+/**
+ * B-W2b-376 (W2b-6 schema wave 54/57): the database's own refusal by the actual-cost rules (…_cost_actuals_w2b_guards: a CLOSED or
+ * settled work order takes no cost entry but a reversal; a close's entry is reversed only by undoing the close), when a write
+ * reached it without its command's check (the cost ledger's catch-up and reversal routes, the standard's freeze): a 409 in words
+ * (factory-domain costing/actuals-refusals), never a 500.
+ */
+function actualCostRefusal(error: unknown): MappedError | null {
+  const cause = (error as { meta?: { driverAdapterError?: { cause?: { originalCode?: unknown; originalMessage?: unknown } } } } | null)?.meta?.driverAdapterError?.cause
+  if (cause?.originalCode !== '23514' || typeof cause.originalMessage !== 'string') return null
+  const words = databaseActualCostRefusal(cause.originalMessage)
+  return words ? { status: STATUS_OF.conflict, code: 'conflict', message: words.message, issues: [{ path: words.path, message: words.message }], unexpected: false } : null
+}
+
 // B-W2b-309 (SAL-306) ----------------------------------------------------------------------------------------------------
 /**
  * The database's own refusal to issue or hold a customer's own lot for another customer's work (…_sales_orders_depth_w2b_guards
@@ -308,6 +324,9 @@ export function mapError(error: unknown): MappedError {
   // B-W2b-385
   const notification = notificationRefusal(error)
   if (notification) return notification
+  // B-W2b-376
+  const actualCost = actualCostRefusal(error)
+  if (actualCost) return actualCost
   // B-W2b-332
   const askedLine = askedLineRefusal(error)
   if (askedLine) return { status: STATUS_OF.conflict, code: 'conflict', message: askedLine.message, issues: [askedLine], unexpected: false }

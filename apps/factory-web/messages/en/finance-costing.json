@@ -146,7 +146,9 @@
     "SUBCONTRACT": "Subcontract",
     "OVERHEAD": "Overhead",
     "COMPLETION": "To finished goods",
-    "ADJUSTMENT": "Adjustment"
+    "ADJUSTMENT": "Adjustment",
+    "VARIANCE": "Variance at close",
+    "CLOSE": "Closing entry"
   },
   "event": {
     "ISSUE": "Issue to the work order",
@@ -159,6 +161,8 @@
     "OVERHEAD": "Overhead",
     "SUBCONTRACT": "Subcontract fee",
     "ADJUSTMENT": "Adjustment",
+    "VARIANCE": "Variance taken off at the close",
+    "CLOSE": "Work order closed: what is left taken off",
     "REVERSAL": "Reversal"
   },
   "detail": {

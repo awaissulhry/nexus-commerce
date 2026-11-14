@@ -145,6 +145,20 @@ describe('mapError()', () => {
     expect(mapError(other).status).toBe(500)
   })
 
+  it("B-W2b-376: answers the database's closed-work-order refusals as a 409 in words, never a 500", () => {
+    const closed = prismaError('P2010', 'Raw query failed.', {
+      driverAdapterError: { cause: { originalCode: '23514', originalMessage: 'cost: work order w is CLOSED; it takes no cost entry but a reversal (entry e, LABOUR): reopen it first' } },
+    })
+    const words = 'This work order is closed: it takes no cost entry but a reversal. Reopen it first.'
+    expect(mapError(closed)).toEqual({ status: 409, code: 'conflict', message: words, issues: [{ path: 'costing/WORK_ORDER_CLOSED', message: words }], unexpected: false })
+    const stands = prismaError('P2010', 'Raw query failed.', {
+      driverAdapterError: { cause: { originalCode: '23514', originalMessage: 'cost: VARIANCE entry e belongs to close c, which stands; it is reversed only once the close is undone (MES-013)' } },
+    })
+    expect(mapError(stands)).toMatchObject({ status: 409, code: 'conflict', issues: [{ path: 'costing/CLOSE_STANDS' }] })
+    const other = prismaError('P2010', 'Raw query failed.', { driverAdapterError: { cause: { originalCode: '23514', originalMessage: 'cost: close c is judged against the company close tolerance in force (5 %), not 10 %' } } })
+    expect(mapError(other).status).toBe(500)
+  })
+
   it("B-W2b-373: answers the database's archived-role refusals as a 409 in words, never a 500", () => {
     const refusal = prismaError('P2010', 'Raw query failed.', {
       driverAdapterError: { cause: { originalCode: '23514', originalMessage: 'roles: role x is archived: it is given to nobody (assignment y)' } },

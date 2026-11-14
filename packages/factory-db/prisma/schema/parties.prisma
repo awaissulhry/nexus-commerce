@@ -204,6 +204,9 @@ model Party {
   // inventory.prisma: as a supplier, the goods received from it and its lots.
   goodsReceipts        GoodsReceipt[]
   lots                 Lot[]
+  // W2b-6 cost-actuals.prisma (wave 54/57): as a supplier, the purchase price variances of its goods.
+  /// @not-money the relation to the purchase price variances (the rows carry the grain)
+  purchasePriceVariances PurchasePriceVariance[] @relation("PurchasePriceVarianceSupplier")
   // quality.prisma: the PPE register's entries it reported.
   ppeRegisterEntries   PpeRegisterEntry[]
   // W2b-4 recall.prisma (wave 33/33): as a customer or distributor, its progress in recalls and the notices it was sent.
@@ -290,6 +293,9 @@ model Party {
   bankAccounts            SupplierBankAccount[]
   supplierQualifications  SupplierQualification[]
   subcontractAgreements   SubcontractAgreement[]
+  // W2b-6 cost-sheets.prisma (wave 55/57): as a workshop, the transport per piece of its outside operations.
+  /// @not-money the relation to its transport uplifts (the rows carry the grain)
+  materialCostUplifts     MaterialCostUplift[]
   // W2b-5 mtm-office.prisma (wave 44/44): its fittings, showroom visits and measuring sessions, and the fittings' results.
   appointments            Appointment[]
   fittingResults          FittingResult[]

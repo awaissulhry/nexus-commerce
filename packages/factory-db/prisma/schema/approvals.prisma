@@ -67,6 +67,9 @@ enum ApprovalTaskKind {
   /// W2b-6 (B-W2b-363; SCM-061, B-W2b-296): a receipt line beyond its delivery tolerance, held until the yes
   /// (GoodsReceiptLine.heldForApprovalAt), of a GoodsReceiptLine.
   RECEIPT_OVER_TOLERANCE
+  /// W2b-6 (schema wave 55/57, B-W2b-378; FIN-015, B-W2b-420): a cost sheet before prices are released from it, of a
+  /// CostSheet (CostSheet.approvalTaskId).
+  COST_SHEET
 }
 
 /// What a signature means (PLT-105; 21 CFR 11.50 style): the yes is signed with it, and shown with it in the history.
