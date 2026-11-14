@@ -54,6 +54,8 @@ export interface FinanceSettingsDepth {
   tax?: ReactNode
   eInvoicing?: ReactNode
   depositRules?: ReactNode
+  /** B-W2b-430: Costing's cost per minute and overhead — the cost-per-minute calculator and the overhead rules in force. */
+  calculator?: ReactNode
 }
 
 export function FinanceSettingsView({ model, actions, currencies, depth }: { model: FinanceSettingsModel; actions?: FinanceSettingsActions; /** B-W2b-389: the Currencies & rates section (its container, or a design case's view). */ currencies?: ReactNode; /** B-W2b-417. */ depth?: FinanceSettingsDepth }) {
@@ -163,6 +165,8 @@ function Settings({ model, actions, currencies, depth }: { model: FinanceSetting
         <AccountantCard />
         {model.costing && <CostingCard model={model.costing} actions={actions?.costing} />}
       </div>
+      {/* B-W2b-430: the cost per minute and overhead (sec:costing, W2b), the whole width under the costing method. */}
+      {depth?.calculator}
       {/* B-W2b-417: the refund rule on cancellation (sec:deposits). */}
       {depth?.depositRules}
       {/* B-W2b-389: Currencies & rates (sec:currencies). */}

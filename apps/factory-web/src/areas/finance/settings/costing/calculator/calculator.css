@@ -1,0 +1,33 @@
+/* B-W2b-430 — Finance › Settings › Costing: the cost-per-minute calculator (layout only; semantic tokens). */
+
+.fw-cpm-cell {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.fw-cpm-actions {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.fw-cpm-h3 {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  margin: var(--nds-space-6) 0 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: 600;
+  color: var(--nds-text-strong);
+}
+
+.fw-cpm-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--nds-space-12) var(--nds-space-16);
+  align-items: start;
+}
+
+.fw-cpm-grid > * {
+  min-width: 0;
+}

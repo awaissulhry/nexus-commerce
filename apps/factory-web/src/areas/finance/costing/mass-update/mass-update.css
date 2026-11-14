@@ -1,0 +1,48 @@
+/* B-W2b-430 — Finance › Costing › Mass cost update (layout only; semantic tokens). */
+
+.fw-mcu,
+.fw-mcu-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-mcu-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6);
+  margin: 0;
+}
+
+.fw-mcu-hint {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-mcu-h3 {
+  margin: var(--nds-space-6) 0 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: 600;
+  color: var(--nds-text-strong);
+}
+
+.fw-mcu-search {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--nds-space-8);
+}
+
+.fw-mcu-search > :first-child {
+  flex: 1 1 280px;
+  min-width: 0;
+  max-width: 480px;
+}
+
+.fw-mcu-cell {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}

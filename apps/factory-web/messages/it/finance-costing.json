@@ -7,8 +7,6 @@
     "label": "Ambito e azioni",
     "readAt": "Letto alle {time}",
     "reading": "Lettura…",
-    "mass": "Aggiornamento costi in massa",
-    "massHeld": "Arriva in una versione successiva (W2b): un nuovo prezzo materiale con le schede costo e i margini che cambia.",
     "more": "Altre azioni",
     "export": "Esporta questa vista (CSV)",
     "exportHeld": "Niente da esportare in questa vista.",
