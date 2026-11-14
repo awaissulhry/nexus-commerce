@@ -18,6 +18,7 @@ import type { StepUpModel } from '../../shared/model'
 import type { Drill, FingerprintAnswer, SecurityFacts, StatusLine, TwoFactorList, TwoFactorRole } from '../api'
 import { bulkHeld, drillWords, grouped, matchedOf, overallOf, rowHeld, STATUS_LINKS, STATUS_TONE, statusWords, withoutTwoFactor, type Read, type SecurityViewModel } from '../model'
 import { DayTimeField, DrillDialog, TwoFactorDialog, type DrillActions, type TwoFactorActions } from './SecurityDialogs'
+import { SecurityDepth, type SecurityDepthActions } from '../sessions/view/SecurityDepth'
 import '../security.css'
 
 export type { SecurityViewModel } from '../model'
@@ -34,6 +35,8 @@ export interface SecurityActions extends DrillActions, TwoFactorActions {
   onDismissNotice?: () => void
   onStepUpSubmit?: (code: string) => void
   onStepUpClose?: () => void
+  /** B-W2b-413: Session lengths, Actions that ask for a fresh code, Security events. */
+  depth?: SecurityDepthActions
 }
 
 /** The words of the page: the shared Admin text and the page's own (`admin-security.json`, prefix `sec.`). */
@@ -94,6 +97,7 @@ function Security({ model, actions, stepUp }: { model: SecurityViewModel; action
         <ProtectionCard facts={facts} />
       </div>
       <SignInCard model={model} actions={actions} />
+      {model.depth && <SecurityDepth model={model.depth} actions={actions?.depth} />}
       <BackupsCard model={model} actions={actions} />
       <p className="fw-adm-hint">{t('sec.later')}</p>
       {model.dialog.kind === 'drill' && <DrillDialog dialog={model.dialog} actions={actions} />}
@@ -317,8 +321,8 @@ function SignInCard({ model, actions }: { model: SecurityViewModel; actions?: Se
               items={[
                 { label: t('sec.signIn.password'), value: t('sec.signIn.passwordRule', { min: facts.password.minLength, max: facts.password.maxLength }), hint: t('sec.signIn.fixed') },
                 { label: t('sec.signIn.lockout'), value: t('sec.signIn.lockoutRule', { count: facts.lockout.afterFailures, first: facts.lockout.firstLockMinutes, max: facts.lockout.maxLockMinutes }), hint: t('sec.signIn.fixed') },
-                { label: t('sec.signIn.sessions'), value: t('sec.signIn.sessionsRule', { idle: facts.sessions.idleHours, days: facts.sessions.absoluteDays }), hint: t('sec.signIn.fixed') },
-                { label: t('sec.signIn.stepUp'), value: t('sec.signIn.stepUpRule', { minutes: facts.sessions.stepUpMinutes }), hint: t('sec.signIn.fixed') },
+                { label: t('sec.signIn.sessions'), value: t('sec.signIn.sessionsRule', { idle: facts.sessions.idleHours, days: facts.sessions.absoluteDays }), hint: t('sec.signIn.sessionsSet') },
+                { label: t('sec.signIn.stepUp'), value: t('sec.signIn.stepUpRule', { minutes: facts.sessions.stepUpMinutes }), hint: t('sec.signIn.stepUpSet') },
                 ...(facts.twoFactor
                   ? [{ label: t('sec.signIn.twoFactor'), value: t('sec.signIn.twoFactorRule', { asking: facts.twoFactor.asking, total: facts.twoFactor.officeRoles }), hint: facts.twoFactor.holdersWithout > 0 ? t('sec.signIn.twoFactorWithout', { count: facts.twoFactor.holdersWithout }) : t('sec.signIn.twoFactorAll') }]
                   : []),

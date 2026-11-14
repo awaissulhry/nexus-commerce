@@ -14,6 +14,10 @@ import { RecordFrame } from '../../shared/view/RecordFrame'
 import { ALWAYS_RULES, heldAreas, holdersOf, templateGap, type Holder, type RoleRecordModel, type RoleTab } from '../model'
 import { holderColumns, RoleMarks } from './columns'
 import { RoleTwoFactor, type RoleTwoFactorActions } from '../../security/view/RoleTwoFactor'
+import { FreshCode } from '../../security/step-up/view/FreshCode'
+import { WithMessages } from '../../../../record-panels/i18n'
+import { ArchiveDialog } from '../save-role/view/ArchiveDialog'
+import { ArchiveButtons, DepthNotice, EditHeld, RoleEditor, type RoleEditorActions } from '../save-role/view/RoleEditor'
 
 export type { RoleRecordModel } from '../model'
 
@@ -24,13 +28,20 @@ export interface RoleRecordActions {
   onRetry?: () => void
   /** B-W2a-36: the Two-factor card's save, dialog and step-up. */
   twoFactor?: RoleTwoFactorActions
+  /** B-W2b-413: Change role, Archive and Restore, their fresh code. */
+  editor?: RoleEditorActions
+  archive?: { onArchive?: () => void; onRestore?: () => void; onConfirm?: (reason: string) => void; onClose?: () => void }
+  onDismissNotice?: () => void
+  onFreshSubmit?: (code: string) => void
+  onFreshClose?: () => void
 }
 
 /**
  * SCR-012 — a Role record (design 02 admin.roles "Record: Role"): Permissions (what it can do in sentences first, its
  * money sight with what disappears without each grain, then every permission by area with its risk mark), Scope rules
  * (what always applies, read-only), Users (who holds it, where, until when) and Activity. Ready-made roles are read-only;
- * changing a custom copy comes in W2b. Fetches nothing (RoleRecord.tsx reads the API).
+ * B-W2b-413: a custom role's permissions and money sight are ticked and saved through the review (save-role/), and it is
+ * archived or restored from the band. Fetches nothing (RoleRecord.tsx reads the API).
  */
 export function RoleRecordView({ model, actions, panels }: { model: RoleRecordModel; actions?: RoleRecordActions; panels?: ReactNode }) {
   return (
@@ -87,6 +98,7 @@ function RoleRecord({ model, actions, panels }: { model: RoleRecordModel; action
             <RoleMarks role={role} t={t} />
           </span>
         }
+        actions={model.archive ? <ArchiveButtons role={role} held={model.archive.held} onArchive={actions?.archive?.onArchive} onRestore={actions?.archive?.onRestore} /> : undefined}
         tabs={tabs}
         active={model.tab}
         tabHref={(tab) => `${href(`/roles/${role.id}`)}?tab=${tab}`}
@@ -94,23 +106,30 @@ function RoleRecord({ model, actions, panels }: { model: RoleRecordModel; action
         dockOpen={model.dockOpen}
         onDock={actions?.onDock}
       >
-        <Banner tone="info" title={t(role.system ? 'role.readOnlySystem' : 'role.readOnlyCustom')} />
+        {role.system && <Banner tone="info" title={t('role.readOnlySystem')} />}
+        {/* B-W2b-413: a custom role is changed on its Permissions tab; when it cannot be, why. */}
+        {!role.system && model.editHeld && <EditHeld reason={model.editHeld} />}
+        {model.notice && <DepthNotice notice={model.notice} onDismiss={actions?.onDismissNotice} />}
         {gap?.kind === 'adds' && (
           <Banner tone="warning" title={t('roles.gap.adds', { count: gap.count })}>
             {role.templateAdds.permissionsAdded.map((name) => t(`perm.${name.replace(/\./g, '_')}`)).join(' · ')}
           </Banner>
         )}
         {gap?.kind === 'outdated' && <Banner tone="warning" title={t('roles.gap.outdated')} />}
-        {model.tab === 'permissions' && <PermissionsTab model={model} />}
+        {model.tab === 'permissions' && <PermissionsTab model={model} actions={actions} />}
         {model.tab === 'rules' && <RulesTab model={model} actions={actions} />}
         {model.tab === 'users' && <UsersTab model={model} actions={actions} />}
         {model.tab === 'activity' && panels}
       </RecordFrame>
+      {model.archive?.dialog && <ArchiveDialog model={model.archive.dialog} onConfirm={actions?.archive?.onConfirm} onClose={actions?.archive?.onClose} />}
+      <WithMessages namespaces={['admin-security-depth']}>
+        <FreshCode model={model.freshCode} onSubmit={actions?.onFreshSubmit} onClose={actions?.onFreshClose} />
+      </WithMessages>
     </div>
   )
 }
 
-function PermissionsTab({ model }: { model: RoleRecordModel }) {
+function PermissionsTab({ model, actions }: { model: RoleRecordModel; actions?: RoleRecordActions }) {
   const t = useT('admin')
   const role = model.role!
   const areas = heldAreas(role, model.catalogue)
@@ -141,9 +160,13 @@ function PermissionsTab({ model }: { model: RoleRecordModel }) {
         )}
         {role.requireMfa && <Tag tone="info">{t('role.mfaRequired')}</Tag>}
       </Card>
-      <Card header={t('role.every')} description={t('role.everyHint')} headingLevel={2} padded>
-        {!model.catalogue ? <ListState loading /> : <PermissionMatrix permissions={model.catalogue.permissions.filter((permission) => (role.audience === 'floor' ? true : permission.area !== 'floor'))} columns={[{ id: role.id, name: words.name(role), permissions: role.permissions }]} />}
-      </Card>
+      {model.editor ? (
+        <RoleEditor model={model.editor} actions={actions?.editor} />
+      ) : (
+        <Card header={t('role.every')} description={t('role.everyHint')} headingLevel={2} padded>
+          {!model.catalogue ? <ListState loading /> : <PermissionMatrix permissions={model.catalogue.permissions.filter((permission) => (role.audience === 'floor' ? true : permission.area !== 'floor'))} columns={[{ id: role.id, name: words.name(role), permissions: role.permissions }]} />}
+        </Card>
+      )}
     </div>
   )
 }

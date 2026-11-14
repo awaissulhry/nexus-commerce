@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation'
 import { companyPrefix } from '../../../lib/session/session'
 import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
 import { listRoles, roleCatalogue, type PermissionCatalogue, type Role } from '../shared/api'
-import { failed, loaded, loading, problemKey, type Loaded } from '../shared/model'
+import { adminHref, failed, loaded, loading, problemKey, type Loaded } from '../shared/model'
+import { useNewRole } from './new-role/use-new-role'
 import type { RolesViewModel } from './model'
 import { RolesView } from './view/RolesView'
 
@@ -26,6 +27,8 @@ export function RolesPage() {
   const [query, setQuery] = useState('')
   const [audience, setAudience] = useState<RolesViewModel['audience']>('all')
   const [pages, setPages] = useState(1)
+  // B-W2b-413: New role (roles.manage): the copy opens on its Permissions tab.
+  const newRole = useNewRole(api, { takenKeys: roles.items?.map((role) => role.key) ?? [], onCreated: (roleId) => router.push(`${adminHref(prefix, `/roles/${roleId}`)}?tab=permissions`) })
 
   const load = useCallback(async () => {
     try {
@@ -42,7 +45,7 @@ export function RolesPage() {
 
   return (
     <RolesView
-      model={{ prefix, roles, catalogue, asOf, query, audience, pages }}
+      model={{ prefix, roles, catalogue, asOf, query, audience, pages, newRole: { canCreate: session.permissions.includes('roles.manage'), dialog: newRole.model, stepUp: newRole.stepUp } }}
       actions={{
         onQuery: (next) => {
           setQuery(next)
@@ -58,6 +61,7 @@ export function RolesPage() {
           setRoles(loading())
           void load()
         },
+        newRole: newRole.actions,
       }}
     />
   )

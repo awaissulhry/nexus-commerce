@@ -6,6 +6,7 @@ import { failed, loaded, loading, type Loaded } from '../shared/model'
 import type { AuditEntry } from './api'
 import { NO_FILTERS, type AuditFilters, type AuditViewModel } from './model'
 import { AuditView } from './view/AuditView'
+import type { WhoLookedModel } from './reads/view/WhoLookedCard'
 
 /**
  * SCR-018 Audit log with made-up entries (Demo companies and sites, example.com people, invented codes): the Story and
@@ -128,6 +129,32 @@ const MONEY_ENTRY = entry(5, 'product.materials.setStandardCost', {
 const companies = COMPANIES.map((company) => ({ id: company.id, name: company.legalName, sites: company.sites.map((site) => ({ id: site.id, name: site.name })) }))
 const people = USERS.map((user) => ({ id: user.id, name: user.displayName }))
 
+// B-W2b-413: Who looked (made-up reads of a made-up certificate and a made-up person's reads).
+const CERT = { type: 'Certificate', id: '0190f0e2-cccc-7000-8000-000000000001', title: 'Certificato CE esempio', number: 'CE-DEMO-0001' }
+const readAt = (minute: number) => `2026-10-29T09:${String(minute).padStart(2, '0')}:00.000Z`
+const RECORD_READS = [
+  { id: uid(901), at: readAt(40), action: 'DOWNLOAD' as const, surface: 'OFFICE' as const, reader: { id: USERS[2]!.id, name: USERS[2]!.displayName } },
+  { id: uid(902), at: readAt(12), action: 'VIEW' as const, surface: 'OFFICE' as const, reader: { id: USERS[1]!.id, name: USERS[1]!.displayName } },
+  { id: uid(903), at: readAt(2), action: 'VIEW' as const, surface: 'API' as const, reader: { id: USERS[3]!.id, name: null } },
+]
+const PERSON_READS = [
+  { id: uid(911), at: readAt(40), action: 'DOWNLOAD' as const, surface: 'OFFICE' as const, record: { type: 'Certificate' as const, id: CERT.id } },
+  { id: uid(912), at: readAt(30), action: 'EXPORT' as const, surface: 'OFFICE' as const, record: { type: 'ExportJob' as const, id: '0190f0e2-eeee-7000-8000-000000000002' } },
+]
+const READS: WhoLookedModel = {
+  logging: true,
+  mode: 'record',
+  record: null,
+  search: { query: '', state: 'idle', hits: [] },
+  people: USERS.map((user) => ({ id: user.id, name: user.displayName })),
+  person: { userId: '', reason: '', tried: false },
+  rows: null,
+  loading: false,
+  problem: null,
+  nextBefore: null,
+}
+const reads = (over: Partial<WhoLookedModel>) => ({ reads: { ...READS, ...over } })
+
 const model = (over: Partial<AuditViewModel> = {}, filters: Partial<AuditFilters> = {}): AuditViewModel => ({
   prefix: PREFIX,
   mode: 'story',
@@ -143,11 +170,12 @@ const model = (over: Partial<AuditViewModel> = {}, filters: Partial<AuditFilters
   hiddenGrains: [],
   find: '',
   open: null,
+  reads: READS,
   ...over,
 })
 
 const open = (index: number, siblings: Loaded<AuditEntry> = loaded(ENTRIES.filter((item) => item.requestId === ENTRIES[index]!.requestId))): Pick<AuditViewModel, 'open'> => ({
-  open: { id: ENTRIES[index]!.id, entry: ENTRIES[index]!, siblings },
+  open: { id: ENTRIES[index]!.id, entry: ENTRIES[index]!, siblings, country: null },
 })
 
 const ADMIN_PERMISSIONS = OWNER_PERMISSIONS.filter((permission) => permission !== 'audit.read')
@@ -208,6 +236,18 @@ export const designScreen = defineDesignScreen<Case>({
     { id: 'table-find-none', label: 'Table: find on the page, no match', model: { model: model({ mode: 'table', find: 'fattura 2025' }) } },
     { id: 'table-empty-filtered', label: 'Table: no change matches the filters', model: { model: model({ mode: 'table', entries: loaded([]), nextBefore: null }, { audience: 'LINK', period: '24h' }) } },
     { id: 'table-loading', label: 'Table: loading', model: { model: model({ mode: 'table', entries: loading(), counts: null, asOf: null, nextBefore: null }) } },
+    // B-W2b-413: IP in the table, between two days, the session's country, Who looked.
+    { id: 'w2b-413-ip', label: 'Table: an address typed', model: { model: model({ mode: 'table', entries: loaded(ENTRIES.slice(0, 3)), nextBefore: null }, { ip: '192.0.2.10' }) }, note: 'The changes made in sessions signed in from it (GET /audit/search); Export ▾ takes the same address.' },
+    { id: 'w2b-413-range', label: 'Table: between two days', model: { model: model({ mode: 'table' }, { period: 'range', from: '2026-10-26T23:00:00.000Z', to: '2026-10-29T23:00:00.000Z' }) } },
+    { id: 'w2b-413-entry-country', label: 'An entry: written in a session from Italy', model: { model: model({ open: { ...open(0).open!, country: 'IT' } }) }, note: 'The session\'s country, never the address.' },
+    { id: 'w2b-413-reads', label: 'Who looked: find a record', model: { model: model(reads({ search: { query: 'CE-DEMO', state: 'ready', hits: [CERT] } })) }, note: 'Only the kinds the read log keeps; rows only, never a count per person.' },
+    { id: 'w2b-413-reads-record', label: 'Who looked at a certificate', model: { model: model(reads({ record: CERT, rows: { kind: 'record', reads: RECORD_READS } })) } },
+    { id: 'w2b-413-reads-person', label: 'Who looked: one person, with a reason', model: { model: model(reads({ mode: 'person', person: { userId: USERS[2]!.id, reason: 'Richiesta di verifica (esempio)', tried: true }, rows: { kind: 'person', name: USERS[2]!.displayName, reads: PERSON_READS } })) }, note: 'The reason is written first in the person\'s history.' },
+    { id: 'w2b-413-reads-reason', label: 'Who looked: a person without a reason', model: { model: model(reads({ mode: 'person', person: { userId: USERS[2]!.id, reason: '', tried: true } })) } },
+    { id: 'w2b-413-reads-off', label: 'Who looked: the read log is off', model: { model: model(reads({ logging: false, record: CERT, rows: { kind: 'record', reads: [] } })) }, note: 'GATE-PRIVACY: off on staging and production until the staff notice carries its line.' },
+    { id: 'w2b-413-reads-no-people', label: 'Who looked: no right to see people', model: { model: model(reads({ mode: 'person', people: null })) } },
+    { id: 'w2b-413-reads-error', label: 'Who looked: refused (one company only)', model: { model: model(reads({ record: CERT, problem: 'problem.forbidden' })) } },
+    { id: 'w2b-413-reads-no-right', label: 'Who looked: no right (absent)', model: { model: model({ reads: null }) } },
     { id: 'table-error', label: 'Table: the API did not answer', model: { model: model({ mode: 'table', entries: failed('problem.unavailable'), counts: null, asOf: null, nextBefore: null }) } },
   ],
 })

@@ -1,0 +1,42 @@
+/*
+ * Admin › Audit › Who looked (B-W2b-413). Layout only, with semantic design-system tokens; every control is the DS's own.
+ * The card fills the page's width; the person's form keeps a readable width on wide screens (inner parts may).
+ */
+.fw-reads-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-reads-pick,
+.fw-reads-person {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  max-width: 720px;
+}
+
+.fw-reads-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  margin: 0;
+}
+
+.fw-reads-hits {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-reads-hits > li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}

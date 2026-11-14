@@ -53,3 +53,9 @@ export const personReadsContract = defineContract({
   }),
   response: { 200: output({ person: output({ id: id(), name: z.string() }), reads: z.array(personReadView), nextBefore: id().nullable() }) },
 })
+
+/**
+ * B-W2b-413: whether the read log is on (THE SWITCH, switch.ts; GATE-PRIVACY): off on staging and production until the staff
+ * notice carries its line, so "Who looked" says so instead of showing an empty log as if nobody looked.
+ */
+export const readLogStatusContract = defineContract({ response: { 200: output({ on: z.boolean() }) } })

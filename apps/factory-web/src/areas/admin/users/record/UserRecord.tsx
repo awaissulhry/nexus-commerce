@@ -6,6 +6,7 @@ import { companyPrefix } from '../../../../lib/session/session'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { RecordPanels } from '../../../../record-panels/RecordPanels'
 import { PartnerOrganisation } from '../partners/organisation/PartnerOrganisation'
+import { UserSessions } from './sessions/UserSessions'
 import { changeUser, endAssignment, giveRole, listAssignments, listCompanies, listRoles, listUsers, type Assignment, type Role, type User } from '../../shared/api'
 import { runBulk } from '../../shared/bulk'
 import { bulkNotice } from '../../shared/reach'
@@ -113,6 +114,8 @@ export function UserRecord({ userId }: { userId: string }) {
       // B-W2b-180: a partner's organisation (partners.view), read and changed through the partner routes.
       // (an element mounts only when its tab draws it).
       partner={user?.audience === 'PARTNER' && user.partyId && held.has('partners.view') ? <PartnerOrganisation userId={user.id} partyId={user.partyId} onChanged={() => void load()} /> : null}
+      // B-W2b-413: where the person is signed in now (users.sessions.manage).
+      sessions={user && held.has('users.sessions.manage') ? <UserSessions prefix={prefix} userId={user.id} name={user.displayName} self={user.id === session.user.id} /> : null}
       actions={{
         onDialog: (next) => {
           setDialog(next)

@@ -895,6 +895,7 @@
       "profile": "Profilo",
       "roles": "Ruoli e ambito",
       "partner": "Organizzazione partner",
+      "sessions": "Sessioni e accessi",
       "activity": "Attività"
     },
     "giveRole": "Dai un ruolo",
@@ -961,7 +962,6 @@
     "live": "In vigore",
     "ended": "Chiuso",
     "end": "Chiudi",
-    "sessionsLater": "Sessioni e storico degli accessi arrivano in W2b.",
     "give": {
       "title": "Dai un ruolo a {name}",
       "role": "Ruolo",
@@ -1101,6 +1101,7 @@
     },
     "kind": {
       "system": "Pronto",
+      "archived": "Archiviato",
       "custom": "Personalizzato"
     },
     "readyMade": "Ruolo pronto",
@@ -1115,7 +1116,6 @@
       "title": "Ancora nessun ruolo",
       "body": "I ruoli pronti compaiono dopo la prima sincronizzazione."
     },
-    "later": "Creare una copia personalizzata di un ruolo pronto e modificarla arriva in W2b.",
     "compareTitle": "Confronta ruoli",
     "compareHint": "Cosa può fare ognuno, per area, con le differenze segnate.",
     "system": {
@@ -1218,7 +1218,6 @@
     },
     "copyOf": "Copia personalizzata di {key}",
     "readOnlySystem": "Ruolo pronto: sola lettura. Resta uguale al suo modello.",
-    "readOnlyCustom": "Modificare un ruolo personalizzato arriva in W2b; per ora qui è in sola lettura.",
     "plain": "Cosa può fare questo ruolo",
     "areaLine": "{area}: azioni {count} su {total}",
     "mfaRequired": "Chiede il doppio fattore prima di dare qualsiasi cosa",

@@ -1,0 +1,574 @@
+{
+  "session": {
+    "col": {
+      "device": "Device and browser",
+      "place": "Place",
+      "lastUsed": "Last used",
+      "started": "Signed in",
+      "do": "End"
+    },
+    "device": {
+      "MAC": "Mac",
+      "WINDOWS": "Windows PC",
+      "LINUX": "Linux PC",
+      "CHROMEBOOK": "Chromebook",
+      "IPHONE": "iPhone",
+      "IPAD": "iPad",
+      "ANDROID_PHONE": "Android phone",
+      "ANDROID_TABLET": "Android tablet",
+      "unknown": "Unknown device"
+    },
+    "deviceBrowser": "{device} · {browser}",
+    "surface": {
+      "OFFICE": "Office",
+      "PORTAL": "Portal",
+      "PREVIEW": "Portal preview"
+    },
+    "place": {
+      "unknown": "Unknown place",
+      "cityCountry": "{city}, {country}"
+    },
+    "thisBrowser": "This browser",
+    "startedAt": "Signed in {time}",
+    "stillLoading": "Still loading…",
+    "retry": "Try again",
+    "failed": {
+      "title": "The sessions could not be read"
+    },
+    "problem": {
+      "current": "This is the browser you are using: sign out here with Sign out on this device.",
+      "self": "These are your own sessions: end them on My profile.",
+      "gone": "That session had already ended.",
+      "forbidden": "You may not do this here. Ask an administrator for the right.",
+      "signedOut": "Your session ended. Sign in again to go on.",
+      "unavailable": "The factory server did not answer. Try again in a moment.",
+      "failed": "Something went wrong. Try again; if it happens again, tell the administrator."
+    }
+  },
+  "me": {
+    "title": "Where I'm signed in",
+    "description": "Every browser where you are signed in now. End one you do not know, or sign out everywhere else.",
+    "empty": "Only this browser.",
+    "here": "You are here",
+    "end": "End",
+    "endOne": "End the session on {device}",
+    "held": {
+      "reading": "Reading your sessions…",
+      "onlyThis": "Only this browser is signed in.",
+      "ending": "Ending…"
+    },
+    "endOthers": {
+      "button": "Sign out everywhere else",
+      "title": "Sign out everywhere else?",
+      "what_one": "1 other session ends now. Unsaved work there is lost.",
+      "what_other": "{count} other sessions end now. Unsaved work there is lost.",
+      "stay": "This browser stays signed in.",
+      "back": "You can sign in again there at any time.",
+      "confirm_one": "Sign out 1 session",
+      "confirm_other": "Sign out {count} sessions",
+      "busy": "Signing out…"
+    },
+    "done": {
+      "one": "That session ended: the browser there is signed out.",
+      "others_one": "1 session ended: only this browser is signed in.",
+      "others_other": "{count} sessions ended: only this browser is signed in."
+    }
+  },
+  "person": {
+    "title": "Signed in now",
+    "description": "Where this person is signed in: device, place, when the session started and when it was last used.",
+    "empty": "Not signed in anywhere.",
+    "emptyHint": "Their next sign-in shows here.",
+    "endAll": "End all sessions",
+    "held": {
+      "self": "These are your own sessions: end them on My profile.",
+      "reading": "Reading the sessions…",
+      "none": "Not signed in anywhere: there is nothing to end."
+    },
+    "confirm": {
+      "title": "End all of {name}'s sessions?",
+      "what_one": "1 session ends now: {name} is signed out everywhere. Unsaved work there is lost.",
+      "what_other": "{count} sessions end now: {name} is signed out everywhere. Unsaved work there is lost.",
+      "again": "They can sign in again at once. To keep them out, suspend the person.",
+      "button_one": "End 1 session",
+      "button_other": "End {count} sessions"
+    },
+    "done_one": "1 session of {name} ended.",
+    "done_other": "{count} sessions of {name} ended.",
+    "historyLater": "Sign-in history (time, country, device, method, result over 90 days) comes in a later wave.",
+    "selfTitle": "Your own sessions",
+    "toProfile": "Open My profile"
+  },
+  "dur": {
+    "minutes_one": "1 minute",
+    "minutes_other": "{count} minutes",
+    "hours_one": "1 hour",
+    "hours_other": "{count} hours",
+    "days_one": "1 day",
+    "days_other": "{count} days",
+    "hoursMinutes": "{hours} h {minutes} min"
+  },
+  "settings": {
+    "failed": {
+      "title": "The settings could not be read",
+      "body": "The other sections keep working. Try again in a moment."
+    },
+    "problem": {
+      "invalid": "Something is outside what is allowed: check the marked values.",
+      "stale": "Someone changed the settings meanwhile. They were read again: check them and save once more.",
+      "forbidden": "Changing these needs the right to change the security settings.",
+      "unavailable": "The factory server did not answer. Try again in a moment.",
+      "failed": "The change was not saved. Try again; if it happens again, tell the administrator."
+    }
+  },
+  "lengths": {
+    "title": "Session lengths",
+    "hint": "Per audience: how long a session lasts unused, and at the latest. A shorter length applies to every open session at its next request; a longer one to new sessions.",
+    "audience": {
+      "office": "Office",
+      "portal": "Portal (customers, suppliers, workshops)",
+      "floor": "Floor"
+    },
+    "field": {
+      "officeIdleMinutes": "Ends when unused for",
+      "officeLongestHours": "Ends at the latest after",
+      "portalIdleMinutes": "Ends when unused for",
+      "portalLongestHours": "Ends at the latest after"
+    },
+    "fieldHint": "Now: {now}. From {min} to {max}.",
+    "unit": {
+      "minutes": "min",
+      "hours": "h"
+    },
+    "less": "Less",
+    "more": "More",
+    "error": {
+      "range": "Outside what is allowed.",
+      "idleLongest": "Cannot be longer than the longest session."
+    },
+    "floor": {
+      "site": "Site",
+      "idle": "Signs out when unused for",
+      "ends": "Ends",
+      "shiftEnds": "At shift end ({times})",
+      "noShiftEnd": "No shift end set",
+      "none": "No active site has floor settings yet.",
+      "where": "The floor's times are each site's own setting.",
+      "toDevices": "Change them in Devices"
+    },
+    "wider": "Longer is wider: saving asks for a fresh code from your authenticator app.",
+    "save": "Save lengths",
+    "saveWider": "Save with a fresh code",
+    "held": {
+      "fix": "Fix the marked values first."
+    },
+    "rule": "Shorter takes effect at once; longer asks for a fresh code.",
+    "viewOnly": "You can read these. Changing them needs the right to change the security settings.",
+    "freshSentence": "Longer sessions need a fresh code from your authenticator app.",
+    "done": {
+      "shorter": "Saved: every open session follows the new lengths at its next request.",
+      "wider": "Saved: new sessions last longer."
+    }
+  },
+  "fresh": {
+    "title": "Actions that ask for a fresh code",
+    "hint": "Risky actions ask for a code from the authenticator app, even when signed in. The permissions behind each are listed; some always ask.",
+    "col": {
+      "action": "Action",
+      "permissions": "Permissions behind it",
+      "asks": "Asks for a fresh code"
+    },
+    "action": {
+      "bankDetails_change": "Change bank details",
+      "access_change": "Give admin and change access",
+      "approvals_aboveLimit": "Approve above a limit",
+      "records_erase": "Erase a contact's personal data",
+      "workers_credentials": "Worker PIN reset and badges",
+      "invoices_issue": "Issue an invoice",
+      "money_settings": "Money settings",
+      "reminders_switch": "Switch payment reminders",
+      "email_identities": "Sending e-mail identities",
+      "branding_change": "Document branding",
+      "signatures_sign": "Sign as the responsible person",
+      "legal_outward": "Legal acts sent outside",
+      "security_settings": "These security settings"
+    },
+    "fixed": {
+      "ACCESS": "Always: a stolen session must never hand out rights.",
+      "SIGNATURE": "Always: the fresh code is the signature's evidence.",
+      "LEGAL": "Always: it reaches an authority or a customer for real.",
+      "RULE": "Asked per approval rule: set on the rule itself.",
+      "SECURITY": "Always: these settings guard everything else."
+    },
+    "always": "Always",
+    "on": "Asks",
+    "off": "Does not ask",
+    "toggle": "{action}: asks for a fresh code",
+    "lock": {
+      "title": "Wrong codes",
+      "failures": "Wrong codes in a row before a lock",
+      "failuresHint": "From {min} to {max}.",
+      "minutes": "The lock lasts",
+      "minutesHint": "Now: {now}. From {min} to {max}. Nobody can lift it earlier; signing in is never locked by it."
+    },
+    "valid": "A fresh code opens the risky actions for {minutes} minutes.",
+    "wider": "Switching an action off, more wrong codes or a shorter lock is wider: saving asks for a fresh code.",
+    "save": "Save",
+    "saveWider": "Save with a fresh code",
+    "rule": "Switching an action on takes effect at once; switching one off asks for a fresh code.",
+    "freshSentence": "Asking for fewer fresh codes needs a fresh code from your authenticator app.",
+    "done": {
+      "stricter": "Saved: the change applies at the next request.",
+      "wider": "Saved: those actions no longer ask for a fresh code."
+    }
+  },
+  "events": {
+    "title": "Security events",
+    "hint": "Failed sign-ins, lockouts, two-factor changes, refusals, role changes and exports, newest first. For administrators and the Owner.",
+    "count_one": "1 event",
+    "count_other": "{count} events",
+    "col": {
+      "time": "Time",
+      "event": "Event",
+      "who": "Who",
+      "surface": "From",
+      "country": "Country",
+      "result": "Result"
+    },
+    "kind": {
+      "SIGN_IN": "Signed in",
+      "SIGN_IN_FAILED": "Failed sign-in",
+      "LOCKOUT": "Locked out",
+      "MFA_CHANGED": "Two-factor changed",
+      "PERMISSION_DENIED": "Refused: no right",
+      "ROLE_CHANGED": "Role changed",
+      "API_KEY_USED": "API key used",
+      "EXPORT": "Export",
+      "STEP_UP_LOCKED": "Fresh code locked"
+    },
+    "surface": {
+      "label": "From",
+      "any": "Anywhere",
+      "OFFICE": "Office",
+      "PORTAL": "Portal",
+      "FLOOR": "Floor",
+      "LINK": "One-off link",
+      "API": "API",
+      "SYSTEM": "System"
+    },
+    "result": {
+      "SUCCEEDED": "Succeeded",
+      "REFUSED": "Refused",
+      "LOCKED": "Locked",
+      "DONE": "Done"
+    },
+    "who": {
+      "person": "A person no longer listed",
+      "WORKER": "A floor worker",
+      "LINK": "A one-off link",
+      "SYSTEM": "The system",
+      "NOBODY": "Unknown"
+    },
+    "country": {
+      "unknown": "Not known"
+    },
+    "view": {
+      "label": "Saved filters",
+      "all": "All",
+      "failed-sign-ins": "Failed sign-ins",
+      "exports": "Exports"
+    },
+    "ip": {
+      "label": "IP address",
+      "placeholder": "IP address",
+      "bad": "Type a whole IPv4 or IPv6 address."
+    },
+    "clear": "Clear filters",
+    "older": "Show older",
+    "held": {
+      "older": "Reading older events…"
+    },
+    "empty": {
+      "title": "No security events yet",
+      "body": "Sign-ins, refusals, role changes and exports show here as they happen."
+    },
+    "rows": "Rows only: never a count or a total per person. A floor worker is never named here.",
+    "detail": {
+      "reason": "Why",
+      "what": "What was locked",
+      "change": "Change",
+      "secondFactor": "Second factor",
+      "method": "Method",
+      "failedAttempts": "Wrong tries in a row",
+      "failures": "Wrong codes in a row",
+      "tries": "Tries",
+      "lockMinutes": "Lock (minutes)",
+      "permission": "Right asked",
+      "route": "Request",
+      "listKey": "List",
+      "format": "Format",
+      "result": "Code",
+      "lockedUntil": "Locked until",
+      "action": "Action",
+      "after": "After"
+    },
+    "reason": {
+      "UNKNOWN_ACCOUNT": "No account with this sign-in",
+      "NO_PASSWORD": "No password set yet",
+      "LOCKED": "Account locked",
+      "SUSPENDED": "Account suspended",
+      "INACTIVE": "Account not active",
+      "WRONG_PASSWORD": "Wrong password",
+      "WRONG_CODE": "Wrong code",
+      "WRONG_PIN": "Wrong PIN",
+      "UNKNOWN_BADGE": "Unknown badge",
+      "UNKNOWN_WORKER": "Unknown worker",
+      "NO_PIN": "No PIN set yet",
+      "NO_CODE": "No sign-in code asked"
+    },
+    "what": {
+      "ACCOUNT": "The account",
+      "PIN": "The PIN",
+      "CODE": "The e-mail code"
+    },
+    "change": {
+      "SET_UP": "Set up",
+      "SWITCHED_OFF": "Switched off",
+      "roles_create": "Role made",
+      "roles_update": "Role changed",
+      "roles_assign": "Role given",
+      "roles_unassign": "Role ended",
+      "roles_archive": "Role archived",
+      "roles_restore": "Role restored",
+      "workers_setRoles": "Floor roles changed",
+      "security_setRoleTwoFactor": "Two-factor rule of a role changed"
+    },
+    "secondFactor": {
+      "NONE": "None",
+      "TOTP": "Authenticator app",
+      "RECOVERY": "Recovery code"
+    },
+    "tryResult": {
+      "WRONG_CODE": "Wrong code",
+      "REUSED_CODE": "A code already used"
+    },
+    "one": {
+      "title": "Security event",
+      "noun": "event",
+      "utc": "{time} (UTC)",
+      "workerHint": "Floor workers are never named in the security events.",
+      "countryHint": "From the address's country; the address itself is never kept.",
+      "record": "Record",
+      "related": "From the same address",
+      "relatedHint": "Other events from the same address, within a day either side.",
+      "relatedNone": "No other event from this address around then."
+    }
+  },
+  "newRole": {
+    "button": "New role",
+    "title": "New role",
+    "hint": "Start from a ready-made role, then name the copy. You change its permissions on its Permissions tab.",
+    "name": "Name",
+    "nameHint": "How the role shows in lists and to the people who hold it.",
+    "copy": "copy",
+    "from": "Start from",
+    "create": "Create copy",
+    "after": "Creating asks for a fresh code. The copy holds only what you hold yourself.",
+    "readFailed": "The ready-made roles could not be read",
+    "held": {
+      "right": "Making a role needs the right to create and edit custom roles.",
+      "busy": "Creating…",
+      "reading": "Reading the ready-made roles…",
+      "fix": "Pick a ready-made role and name the copy first.",
+      "owner": "The owner's role is never copied: a custom role never holds everything.",
+      "beyond": "Not offered: it holds rights you do not hold yourself."
+    },
+    "error": {
+      "basedOn": "Pick the ready-made role to start from.",
+      "name": "Type a name.",
+      "nameLong": "At most 100 characters."
+    },
+    "problem": {
+      "beyond": "The copy would hold rights you do not hold yourself.",
+      "owner": "A custom role never holds every office right: that is the owner's role.",
+      "taken": "A role with this name exists already: pick another name.",
+      "forbidden": "Making a role needs the right to create and edit custom roles.",
+      "invalid": "Something in it is not valid: check the name and try again.",
+      "failed": "The role was not made. Try again; if it happens again, tell the administrator."
+    },
+    "freshSentence": "Making a role needs a fresh code from your authenticator app."
+  },
+  "saveRole": {
+    "hint": "Tick and untick, then Save: the review shows what changes and how many people get it.",
+    "money": "Money it sees",
+    "sees": "Sees {grain}",
+    "grainToggle": "Sees {grain}",
+    "mfaWhy": "A role that sees costs or margins always asks for two-factor: saving switches it on.",
+    "allowed": "Allowed",
+    "adding": "Adding",
+    "removing": "Removing",
+    "tick": "{permission}: allowed",
+    "reviewSave": "Review and save",
+    "atRest": "No change yet: tick or untick what the role may do.",
+    "title": "Change role '{name}'?",
+    "holders_one": "1 person gets this at their next request.",
+    "holders_other": "{count} people get this at their next request.",
+    "asksCode": "Raising rights asks for a fresh code.",
+    "noCode": "It only lowers rights: no fresh code is asked.",
+    "save": "Save role",
+    "saved": "Saved",
+    "yes": "Allowed",
+    "no": "Not allowed",
+    "seen": "Seen",
+    "notSeen": "Hidden",
+    "asked": "Asked",
+    "notAsked": "Not asked",
+    "twoFactor": "Two-factor",
+    "risky": "It asks for a fresh code itself.",
+    "gives": "It gives more rights.",
+    "ack": "I understand: the people who hold it get more rights at their next request.",
+    "freshSentence": "Raising a role's rights needs a fresh code from your authenticator app.",
+    "held": {
+      "readyMade": "A ready-made role follows its template: make a copy to change it.",
+      "archived": "Archived: it changes no more and is given to nobody until it is restored.",
+      "right": "Changing a role needs the right to create and edit custom roles.",
+      "mine": "You hold this role: ask another administrator to change it."
+    },
+    "refusal": {
+      "beyondPermission": "You do not hold “{permission}” yourself: a role never gives more than its maker holds.",
+      "beyondGrain": "You do not see {grain} yourself: a role never gives more than its maker holds.",
+      "readyMade": "A ready-made role cannot be changed: make a copy.",
+      "archived": "This role is archived: restore it first.",
+      "held": "You hold this role: ask another administrator.",
+      "lastAdmin": "Nobody else could manage people and roles afterwards.",
+      "ownerEvery": "A custom role never holds every office right: that is the owner's role.",
+      "mfaNeeded": "A role that sees costs or margins must ask for two-factor.",
+      "mfaRule": "The two-factor rule cannot change this way: see Scope rules.",
+      "name": "The name is not valid.",
+      "content": "A right in it cannot be given by an office role.",
+      "other": "It cannot be saved as it is."
+    },
+    "problem": {
+      "refused": "It was refused: see the reasons.",
+      "stale": "Someone changed this role meanwhile. It was read again: review it once more.",
+      "forbidden": "Changing a role needs the right to create and edit custom roles.",
+      "failed": "The change was not saved. Try again; if it happens again, tell the administrator."
+    }
+  },
+  "archive": {
+    "button": "Archive…",
+    "restore": "Restore",
+    "title": "Archive role '{name}'?",
+    "ends_one": "1 person loses it now: their assignment ends.",
+    "ends_other": "{count} people lose it now: their assignments end.",
+    "nobody": "Nobody holds it now.",
+    "frozen": "An archived role changes no more and is given to nobody until it is restored. Restoring gives nobody anything back.",
+    "reason": "Why",
+    "reasonNeeded": "Say why, in at least 3 characters.",
+    "confirm": "Archive role",
+    "busy": "Archiving…",
+    "freshSentence": "Archiving a role that people hold needs a fresh code from your authenticator app.",
+    "refused": "It was refused: you may hold it, or it makes the last administrators.",
+    "done": "Archived: it is given to nobody until it is restored.",
+    "restored": "Restored: it can be given and changed again."
+  },
+  "reads": {
+    "title": "Who looked",
+    "hint": "Views, downloads and exports of sensitive records. For administrators and the Owner only; never used to judge anyone's work.",
+    "off": {
+      "title": "Views and downloads are not being logged here",
+      "body": "The read log stays off until the staff privacy notice carries its line about it. Rows from before still show."
+    },
+    "mode": {
+      "label": "Look by",
+      "record": "A record",
+      "person": "A person"
+    },
+    "record": {
+      "find": "Find the record",
+      "findHint": "Type its number or name: cost sheets, employees, certificates, exports and the other sensitive records.",
+      "hits": "Records found",
+      "none": "No sensitive record matches.",
+      "searchFailed": "The search did not answer. Try again in a moment.",
+      "showing": "Showing who looked at",
+      "other": "Another record"
+    },
+    "person": {
+      "who": "Person",
+      "pick": "Pick a person",
+      "reason": "Why you look",
+      "reasonHint": "Kept in the person's history before anything is shown.",
+      "show": "Show their reads",
+      "pickFirst": "Pick a person first.",
+      "held": "Looking by person needs the right to see the people.",
+      "showing": "What {name} looked at, newest first."
+    },
+    "error": {
+      "reason": "Say why, in at least 3 characters.",
+      "reasonLong": "At most 500 characters."
+    },
+    "start": {
+      "record": "Find a record to see who looked at it.",
+      "person": "Pick a person and say why to see what they looked at."
+    },
+    "col": {
+      "when": "When",
+      "who": "Who",
+      "what": "Record",
+      "how": "How",
+      "where": "Where"
+    },
+    "action": {
+      "VIEW": "Viewed",
+      "DOWNLOAD": "Downloaded",
+      "EXPORT": "Exported"
+    },
+    "surface": {
+      "OFFICE": "Office",
+      "API": "API",
+      "SYSTEM": "System"
+    },
+    "who": {
+      "gone": "A person no longer listed"
+    },
+    "type": {
+      "CostSheet": "Cost sheet",
+      "Employee": "Employee",
+      "Worker": "Floor worker",
+      "User": "Person",
+      "PartyContact": "Contact",
+      "MeasurementProfile": "Measurement profile",
+      "LeaverCase": "Leaver",
+      "AbsenceEntry": "Absence",
+      "AttendanceDay": "Attendance day",
+      "EarningsEntry": "Earnings",
+      "WorkerStatement": "Worker statement",
+      "DataRequest": "Data request",
+      "Certificate": "Certificate",
+      "TrainingRecord": "Training record",
+      "ExportJob": "Export",
+      "AccountingExport": "Accounting export",
+      "PayrollExport": "Payroll export"
+    },
+    "count_one": "1 row",
+    "count_other": "{count} rows",
+    "older": "Show older",
+    "held": {
+      "reading": "Reading…"
+    },
+    "empty": {
+      "title": "Nobody looked",
+      "body": "No view, download or export is logged for this.",
+      "off": "Nothing is logged while the read log is off."
+    },
+    "rowsOnly": "Rows only: never a count, a total or a group per person."
+  },
+  "search": {
+    "ip": {
+      "label": "IP address",
+      "placeholder": "IP address",
+      "hint": "The changes made in sessions signed in from this address.",
+      "bad": "Type a whole IPv4 or IPv6 address."
+    }
+  }
+}

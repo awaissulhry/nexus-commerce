@@ -12,6 +12,7 @@ import { AdminMessages, BulkButton, FrameState, GrainChips, heldText, ListKeysHe
 import { PermissionMatrix } from '../../shared/view/PermissionMatrix'
 import { compareHeld, roleRows, type RolesViewModel } from '../model'
 import { roleColumns } from './columns'
+import { NewRoleButton, NewRoleDialog, type NewRoleActions } from '../new-role/view/NewRoleDialog'
 
 export type { RolesViewModel } from '../model'
 
@@ -23,13 +24,16 @@ export interface RolesActions {
   onRetry?: () => void
   /** Enter on a row: open the Role record. */
   onOpen?: (href: string) => void
+  /** B-W2b-413: New role. */
+  newRole?: NewRoleActions & { onOpen?: () => void }
 }
 
 /**
  * SCR-012 — Admin › Roles & permissions (design 02 admin.roles): one row per role in the Office list frame, said in plain
  * words first (what it does, what money it sees, whether it asks for two-factor), with what a custom copy lacks of its
  * ready-made template. Tick two or three roles and "Compare N" puts them side by side by area, differences marked (the
- * ticks are the pick). New role and Save role come in W2b. Fetches nothing (RolesPage.tsx reads the API).
+ * ticks are the pick). B-W2b-413: New role in the band (a copy of a ready-made role). Fetches nothing (RolesPage.tsx reads the
+ * API).
  */
 export function RolesView({ model, actions }: { model: RolesViewModel; actions?: RolesActions }) {
   return (
@@ -62,7 +66,7 @@ function Roles({ model, actions }: { model: RolesViewModel; actions?: RolesActio
   ) : undefined
   return (
     <div className="fw-adm">
-      <PageHead intro={t('roles.intro')} asOf={model.asOf} />
+      <PageHead intro={t('roles.intro')} asOf={model.asOf} actions={model.newRole ? <NewRoleButton canCreate={model.newRole.canCreate} onOpen={actions?.newRole?.onOpen} /> : undefined} />
       <ListFrame<Role>
         label={t('roles.tableLabel')}
         rows={items === null ? null : shown.rows}
@@ -100,8 +104,8 @@ function Roles({ model, actions }: { model: RolesViewModel; actions?: RolesActio
         onOpen={(role) => actions?.onOpen?.(adminHref(model.prefix, `/roles/${role.id}`))}
         state={state}
       />
-      <p className="fw-adm-hint">{t('roles.later')}</p>
       <CompareModal model={model} picked={compare} onClose={() => setCompare(null)} />
+      {model.newRole?.dialog && <NewRoleDialog model={model.newRole.dialog} actions={actions?.newRole} stepUp={model.newRole.stepUp} />}
       <ListKeysHelp open={help} onClose={() => setHelp(false)} keys={[]} selection />
     </div>
   )

@@ -42,7 +42,7 @@ export interface MyProfileViewModel {
   language?: { busy?: boolean; problem?: MeProblem | null }
   password: PasswordCard
   authenticator: AuthenticatorCard
-  /** This browser's session (the API lists no other yet: PLT-064 is a later wave). */
+  /** This browser's session (every live one: B-W2b-413's Where I'm signed in, areas/me/sessions). */
   session: { createdAt: string; idleExpiresAt: string; absoluteExpiresAt: string }
   signOut?: { busy?: boolean; problem?: MeProblem | null }
   /** Put the focus in a form's first field when it opens (the live page; not the design frames). */

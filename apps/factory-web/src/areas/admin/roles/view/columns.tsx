@@ -26,6 +26,8 @@ export function RoleMarks({ role, t }: { role: Role; t: Translate }) {
     <>
       <Tag tone={role.system ? 'neutral' : 'info'}>{t(role.system ? 'roles.kind.system' : 'roles.kind.custom')}</Tag>
       <Tag>{t(`roles.audience.${role.audience}`)}</Tag>
+      {/* B-W2b-413: an archived custom role changes no more and is given to nobody until restored. */}
+      {role.archivedAt && <Tag tone="warning">{t('roles.kind.archived')}</Tag>}
     </>
   )
 }
