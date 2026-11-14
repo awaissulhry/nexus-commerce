@@ -80,13 +80,14 @@ export function claimOf(proof: Proof | null): { readonly where: Prisma.UserWhere
 }
 
 /**
- * Counts a wrong secret (password, sign-in code, step-up code) against the user, in its own command (the request
- * itself fails): the count goes up atomically and sets the lock of factory-domain's auth/lockout.
+ * Counts a wrong secret (password, sign-in code) against the user, in its own command (the request itself fails): the
+ * count goes up atomically and sets the lock of factory-domain's auth/lockout. B-W2b-404: a wrong step-up code no longer
+ * counts here; it is a StepUpAttempt and locks step-up only (office/step-up-policy.ts).
  */
 export async function recordWrongSecret(
   auth: OfficeAuth,
   context: OfficeContext,
-  action: 'auth.signInFailed' | 'auth.stepUpFailed' | 'auth.passwordCheckFailed',
+  action: 'auth.signInFailed' | 'auth.passwordCheckFailed',
   what: 'password' | 'code',
 ): Promise<void> {
   await auth.command(context, { name: action, input: { what } }, async ({ tx, now, audit }) => {

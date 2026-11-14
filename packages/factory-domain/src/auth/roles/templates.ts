@@ -168,6 +168,8 @@ import { HOME_KPIS_ADDS } from '../../insights/kpis/permissions'
 import { TEST_MODE_ADDS } from '../../invoicing/test-mode/permissions'
 // B-W2b-418: the cost sheet's components (finance writes draft sheets' lines and keeps their inputs).
 import { COST_SHEET_COMPONENTS_ADDS } from '../../costing/sheet-components/permissions'
+// B-W2b-404: security in depth (the administrator keeps the session lengths and step-up rules, and ends a person's sessions).
+import { SECURITY_DEPTH_ADDS } from '../sessions/permissions'
 
 /**
  * The system role templates (plan A1 §3.11 "Role"; feature PLT-030): ready roles every tenant gets as system roles
@@ -1092,7 +1094,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-401
   ...(audience === 'office' ? (TEST_MODE_ADDS[key] ?? []) : []),
   // B-W2b-418
-  ...(audience === 'office' ? (COST_SHEET_COMPONENTS_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (COST_SHEET_COMPONENTS_ADDS[key] ?? []) : []),
+  // B-W2b-404
+  ...(audience === 'office' ? (SECURITY_DEPTH_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the

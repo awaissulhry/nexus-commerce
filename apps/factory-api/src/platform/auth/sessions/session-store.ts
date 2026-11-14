@@ -1,30 +1,33 @@
 import type { SessionEndReason } from '@nexus/factory-db'
+import { deviceOf, type SessionPlace } from '@nexus/factory-domain/auth/sessions/device'
+import { idleEndAfter, SECURITY_DEFAULTS, sessionLengthsMs } from '@nexus/factory-domain/auth/sessions/lengths'
 import { newId } from '@nexus/factory-domain/core/ids'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import type { CommandTx } from '../../../core/command'
 import { newCsrfToken } from './cookies'
+import { securityRulesIn } from './rules'
 import { mintToken, tokenHash, type AuthToken } from './secrets'
 
 /**
  * Office session rows (plan A1 §2.3 Session, §3.10; ported from Commerce's apps/api/src/lib/auth/session.ts): server
- * side, so a revocation takes effect on the next request. A session lives until it is revoked, until 8 hours pass
- * without a request (the idle expiry slides forward with use, at most one write a minute, never past the absolute
- * expiry) or until 7 days after sign-in. Always written inside a command's transaction.
+ * side, so a revocation takes effect on the next request. A session lives until it is revoked, until its idle time
+ * passes without a request (the idle expiry slides forward with use, at most one write a minute, never past the absolute
+ * expiry) or until its longest time after sign-in. B-W2b-404 (PLT-068): both are the tenant's office lengths
+ * (SecuritySettings; by default 8 hours and 7 days), read when the session starts and again on every request (a shorter
+ * one ends open sessions at their next request). The session keeps where it runs (device, browser, place), set once at
+ * the start. Always written inside a command's transaction.
  */
 
+/** The W0 lengths (the tenant's defaults, SECURITY_DEFAULTS) and how often the idle end slides. */
 export const SESSION_LIFETIME = Object.freeze({
-  idleMs: 8 * 60 * 60_000,
-  absoluteMs: 7 * 24 * 60 * 60_000,
+  idleMs: sessionLengthsMs(SECURITY_DEFAULTS).office.idleMs,
+  absoluteMs: sessionLengthsMs(SECURITY_DEFAULTS).office.longestMs,
   /** The idle expiry is moved at most this often (one write a minute per session, not one per request). */
   slideEveryMs: 60_000,
 })
 
 /** A step-up (a fresh code) opens the risky actions for this long. */
 export const STEP_UP_VALID_MS = 5 * 60_000
-
-/** The idle expiry after a request at `now`, never later than the absolute one. */
-export const idleExpiryAt = (now: Date, absoluteExpiresAt: Date): Date =>
-  new Date(Math.min(now.getTime() + SESSION_LIFETIME.idleMs, absoluteExpiresAt.getTime()))
 
 export interface StartSessionInput {
   readonly tenantId: string
@@ -34,6 +37,8 @@ export interface StartSessionInput {
   readonly mfaProved: boolean
   readonly ipHash: string | null
   readonly userAgent: string | undefined
+  /** B-W2b-404: the place an edge proxy we trust gave (sessions/place.ts `sessionPlaceOf`); none without one. */
+  readonly place?: SessionPlace
 }
 
 /** A session made from the hash of its token alone (`createSession`): the token itself never enters the command. */
@@ -83,9 +88,11 @@ async function startingCompany(tx: CommandTx): Promise<string | null> {
  */
 export async function createSession(tx: CommandTx, input: CreateSessionInput): Promise<StoredSession> {
   const id = newId()
-  const absoluteExpiresAt = new Date(input.now.getTime() + SESSION_LIFETIME.absoluteMs)
-  const idleExpiresAt = idleExpiryAt(input.now, absoluteExpiresAt)
+  const { office } = sessionLengthsMs((await securityRulesIn(tx, input.tenantId)).rules)
+  const absoluteExpiresAt = new Date(input.now.getTime() + office.longestMs)
+  const idleExpiresAt = idleEndAfter(input.now, absoluteExpiresAt, office.idleMs)
   const companyId = await startingCompany(tx)
+  const device = deviceOf(input.userAgent)
   await tx.session.create({
     data: {
       id,
@@ -99,6 +106,10 @@ export async function createSession(tx: CommandTx, input: CreateSessionInput): P
       mfaAt: input.mfaProved ? input.now : null,
       ipHash: input.ipHash,
       userAgent: input.userAgent?.slice(0, 256) ?? null,
+      deviceLabel: device.deviceLabel,
+      browser: device.browser,
+      ipCountry: input.place?.ipCountry ?? null,
+      ipCity: input.place?.ipCity ?? null,
     },
   })
   return { id, companyId, idleExpiresAt: toUtcIso(idleExpiresAt), absoluteExpiresAt: toUtcIso(absoluteExpiresAt) }

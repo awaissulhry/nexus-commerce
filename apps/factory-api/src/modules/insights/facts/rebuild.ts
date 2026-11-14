@@ -72,7 +72,8 @@ async function writeFacts(tools: CommandTools, parts: readonly { company: FactCo
   const tenantId = 'tenantId' in tools.context ? tools.context.tenantId : ''
   // The database refuses a fact of a day that has not begun on its own clock (each place's zone). When the app's clock runs
   // ahead of it (a test world moved on, a clock drift), those days wait for a later rebuild instead of failing the command.
-  const [{ now: databaseNow }] = await tools.tx.$queryRaw<{ now: Date }[]>`SELECT now() AS now`
+  const clock = await tools.tx.$queryRaw<{ now: Date }[]>`SELECT now() AS now`
+  const databaseNow = clock[0]?.now ?? tools.now
   for (const { company, collected: read } of parts) {
     const zoneOf = (siteId: string | null) => company.sites.find((site) => site.id === siteId)?.timezone ?? company.timezone
     const begun = (fact: { day: BusinessDate; siteId: string | null }) => fact.day <= businessDate(databaseNow, zoneOf(fact.siteId))
