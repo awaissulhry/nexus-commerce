@@ -23,7 +23,7 @@ import { officeContextOf } from '../../viewer'
  */
 
 export const DRILL_ROW_LIMIT = 500
-export const DRILL_MAX_DAYS = 366
+const DRILL_MAX_DAYS = 366
 
 /** The person, if they may open the records of these KPIs (each one's measures' permissions and grains). */
 export function drillActor(caller: CommandCaller, kpiKeys: readonly string[]): Actor {
@@ -108,7 +108,6 @@ export async function namesOf(db: Reader, ids: { parties?: readonly (string | nu
   }
 }
 
-export type Names = Awaited<ReturnType<typeof namesOf>>
 
 /** A reference for an answer (null when the record is unknown). */
 export const refOf = <T extends { id: string; code: string; name: string }>(map: ReadonlyMap<string, T>, id: string | null | undefined): { id: string; code: string; name: string } | null => {

@@ -62,7 +62,7 @@ export async function leatherDrill(caller: CommandCaller, query: LeatherDrillQue
       kpiKey,
       period: span,
       asOf: asOf(),
-      totals: figuresOf(cuts),
+      overall: figuresOf(cuts),
       byGrade: worstFirst([...groupBy(cuts, (cut) => hides.get(cut.entry.hideId)?.grade ?? 'NONE')].map(([grade, mine]) => ({ grade: grade === 'NONE' ? null : grade, ...figuresOf(mine) }))),
       byLot: worstFirst([...groupBy(cuts, (cut) => cut.entry.lotId)].map(([lotId, mine]) => ({ lot: lotView(lotId), supplier: refOf(names.party, lots.get(lotId)?.supplierId), ...figuresOf(mine) }))),
       byStyle: worstFirst([...groupBy(cuts, (cut) => orders.get(cut.entry.workOrderId)?.styleId ?? 'NONE')].map(([styleId, mine]) => ({ style: refOf(names.style, styleId), ...figuresOf(mine) }))),

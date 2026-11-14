@@ -21,7 +21,7 @@ import { Dec, type Decimal } from '../../tax/decimal'
 /** A share of a line's amount for some of its garments, in minor units, half up. */
 export function shareOf(amount: number, garments: number, ordered: number): number {
   if (ordered <= 0) return 0
-  return new Dec(amount).times(garments).div(ordered).toDecimalPlaces(0, Dec.ROUND_HALF_UP).toNumber()
+  return Number.parseInt(new Dec(amount).times(garments).div(ordered).toDecimalPlaces(0, Dec.ROUND_HALF_UP).toFixed(0), 10)
 }
 
 export interface MarginFigures {

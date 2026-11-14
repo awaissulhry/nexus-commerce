@@ -67,7 +67,7 @@ export async function otifDrill(caller: CommandCaller, query: OtifDrillQuery) {
       promise,
       period: span,
       asOf: asOf(),
-      totals: { ...totals, late: totals.due - totals.onTime },
+      overall: { ...totals, late: totals.due - totals.onTime },
       byCustomer: [...groupBy(all, (row) => row.line.row.partyId)].map(([partyId, mine]) => ({ customer: refOf(names.party, partyId), ...rateOf(mine) })).sort((a, b) => b.due - a.due || (a.customer?.code ?? '').localeCompare(b.customer?.code ?? '')),
       bySite: [...groupBy(all, (row) => row.line.row.siteId ?? 'none')].map(([siteId, mine]) => ({ site: siteId === 'none' ? null : refOf(names.site, siteId), ...rateOf(mine) })).sort((a, b) => (a.site?.code ?? '~').localeCompare(b.site?.code ?? '~')),
       byMonth: [...groupBy(all, (row) => row.result.promise.slice(0, 7))].map(([month, mine]) => ({ month, ...rateOf(mine) })).sort((a, b) => a.month.localeCompare(b.month)),

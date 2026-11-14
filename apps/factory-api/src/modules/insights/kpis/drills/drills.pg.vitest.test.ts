@@ -155,11 +155,11 @@ describe('on-time in full (ANA-013)', () => {
       ['SEED-SO-0002', 20, day(4), 'LATE', 1, 1, day(3)],
       ['SEED-SO-0003', 10, day(1), 'LATE', 1, 4, null],
     ])
-    expect(drill.totals.due).toBe((drill.rows as Json[]).length)
-    expect(drill.byMonth.reduce((total: number, row: Json) => total + row.due, 0)).toBe(drill.totals.due)
-    expect(drill.byCustomer.reduce((total: number, row: Json) => total + row.due, 0)).toBe(drill.totals.due)
-    expect(drill.bySite.reduce((total: number, row: Json) => total + row.due, 0)).toBe(drill.totals.due)
-    await sameAsKpi('owner', 'delivery.otif', '/insights/kpis/drills/otif', '', (answer) => answer.totals.pct)
+    expect(drill.overall.due).toBe((drill.rows as Json[]).length)
+    expect(drill.byMonth.reduce((total: number, row: Json) => total + row.due, 0)).toBe(drill.overall.due)
+    expect(drill.byCustomer.reduce((total: number, row: Json) => total + row.due, 0)).toBe(drill.overall.due)
+    expect(drill.bySite.reduce((total: number, row: Json) => total + row.due, 0)).toBe(drill.overall.due)
+    await sameAsKpi('owner', 'delivery.otif', '/insights/kpis/drills/otif', '', (answer) => answer.overall.pct)
   })
 
   it('on the promise of now the re-promised lines are on time; filters by outcome, customer and priority', async () => {
@@ -178,7 +178,7 @@ describe('on-time in full (ANA-013)', () => {
     expect((one.rows as Json[]).every((row) => row.customer.id === customer)).toBe(true)
     const priority = mine[0]!.priority
     expect(((await ok('owner', `/insights/kpis/drills/otif?${span(20)}&priority=${priority}`)).rows as Json[]).every((row) => row.priority === priority)).toBe(true)
-    await sameAsKpi('owner', 'delivery.otif_current', '/insights/kpis/drills/otif', '&promise=CURRENT', (answer) => answer.totals.pct)
+    await sameAsKpi('owner', 'delivery.otif_current', '/insights/kpis/drills/otif', '&promise=CURRENT', (answer) => answer.overall.pct)
   })
 
   it('a person limited to another customer sees none of these lines; the KPI is computed on their own records', async () => {
@@ -196,7 +196,7 @@ describe('lead times (ANA-014)', () => {
     const quote = await ok('owner', `/insights/kpis/drills/lead-times?${span(20)}&kind=QUOTE_TO_ORDER`)
     expect((quote.rows as Json[]).find((row) => row.order.number === 'SEED-SO-0001')).toMatchObject({ fromDay: day(12), toDay: day(5), days: 7 })
     const start = await ok('owner', `/insights/kpis/drills/lead-times?${span(20)}&kind=ORDER_TO_START`)
-    const so2 = (start.rows as Json[]).find((row) => row.order.number === 'SEED-SO-0002')
+    const so2 = (start.rows as Json[]).find((row) => row.order.number === 'SEED-SO-0002')!
     expect(so2).toMatchObject({ fromDay: day(10), toDay: day(7), days: 3 })
     expect(start.families.reduce((total: number, row: Json) => total + row.orders, 0)).toBe(start.overall.orders)
     const family = start.families.find((row: Json) => row.family === so2.family)
@@ -217,15 +217,15 @@ describe('work in progress with ageing (ANA-015)', () => {
     expect((drill.rows as Json[]).find((row) => row.workOrder.number === 'SEED-WO-0001')).toMatchObject({ ageDays: 6, releasedOn: day(6) })
     expect((drill.rows as Json[]).find((row) => row.workOrder.number === 'SEED-WO-0003')).toMatchObject({ ageDays: 2, waitedDays: 2, band: 'D0_2' })
     const pieces = await ok('owner', '/insights/kpis/production.wip_pieces/value?periods=1&period=DAY')
-    expect(String(drill.totals.pieces)).toBe(String(pieces.value))
+    expect(String(drill.overall.pieces)).toBe(String(pieces.value))
     const age = await ok('owner', '/insights/kpis/production.wip_age_days/value?periods=1&period=DAY')
     const rows = drill.rows as Json[]
     const weighted = rows.reduce((total, row) => total + row.pieces * row.ageDays, 0) / rows.reduce((total, row) => total + row.pieces, 0)
     expect(age.value).toBe((Math.round(weighted * 10) / 10).toFixed(1))
     // The owner holds the cost grain: values at cost; the planner neither costing nor grain: no value.
-    expect(drill.totals.currency).toBe('EUR')
+    expect(drill.overall.currency).toBe('EUR')
     const planner = await ok('planner', '/insights/kpis/drills/wip')
-    expect(planner.totals.value).toBeUndefined()
+    expect(planner.overall.value).toBeUndefined()
     expect((planner.rows as Json[]).every((row) => row.value === undefined)).toBe(true)
     // Filters: released in a week, waited at least N days, on no line.
     const week = rows.find((row) => row.workOrder.number === 'SEED-WO-0003')!.week
@@ -238,10 +238,10 @@ describe('work in progress with ageing (ANA-015)', () => {
 describe('leather yield (ANA-020)', () => {
   it('lists the hides cut by grade, supplier lot and style; the totals are the KPI', async () => {
     const drill = await ok('owner', `/insights/kpis/drills/leather-yield?${span(20)}`)
-    expect(drill.totals.hides).toBe(new Set((drill.rows as Json[]).map((row) => row.hide.id)).size)
-    expect(drill.byGrade.reduce((total: number, row: Json) => total + Number(row.cutM2), 0)).toBeCloseTo(Number(drill.totals.cutM2), 3)
-    expect(drill.byLot.reduce((total: number, row: Json) => total + Number(row.cutM2), 0)).toBeCloseTo(Number(drill.totals.cutM2), 3)
-    await sameAsKpi('owner', 'production.leather_yield', '/insights/kpis/drills/leather-yield', '', (answer) => answer.totals.yieldPct)
+    expect(drill.overall.hides).toBe(new Set((drill.rows as Json[]).map((row) => row.hide.id)).size)
+    expect(drill.byGrade.reduce((total: number, row: Json) => total + Number(row.cutM2), 0)).toBeCloseTo(Number(drill.overall.cutM2), 3)
+    expect(drill.byLot.reduce((total: number, row: Json) => total + Number(row.cutM2), 0)).toBeCloseTo(Number(drill.overall.cutM2), 3)
+    await sameAsKpi('owner', 'production.leather_yield', '/insights/kpis/drills/leather-yield', '', (answer) => answer.overall.yieldPct)
     expect((await call('sales', `/insights/kpis/drills/leather-yield?${span(20)}`)).status).toBe(403)
   })
 })
@@ -260,8 +260,8 @@ describe('margin quoted against actual (ANA-021)', () => {
     expect(so2.actualPct).toBe((Math.round(((80000 - Number(live)) / 80000) * 1000) / 10).toFixed(1))
     expect(drill.byCustomer.length).toBeGreaterThan(0)
     expect(drill.byStyle.length).toBeGreaterThan(0)
-    await sameAsKpi('finance', 'sales.margin_actual', '/insights/kpis/drills/margin', '', (answer) => answer.totals.actualPct)
-    await sameAsKpi('finance', 'sales.margin_quoted', '/insights/kpis/drills/margin', '', (answer) => answer.totals.quotedPct)
+    await sameAsKpi('finance', 'sales.margin_actual', '/insights/kpis/drills/margin', '', (answer) => answer.overall.actualPct)
+    await sameAsKpi('finance', 'sales.margin_quoted', '/insights/kpis/drills/margin', '', (answer) => answer.overall.quotedPct)
     // Sales: margin and price, no cost: percents, no cost, no margin amount (with the price it would give the cost).
     const sales = (await ok('sales', `/insights/kpis/drills/margin?${span(20)}`)).rows.find((row: Json) => row.order.number === 'SEED-SO-0002')
     expect(sales).toMatchObject({ value: 80000, quotedPct: '37.5', quotedMargin: null, actualMargin: null })
@@ -280,10 +280,10 @@ describe('supplier on-time, shortages and cover (ANA-023)', () => {
       ['SEED-GR-0001', day(2), day(2), true, 0],
       ['SEED-GR-0002', day(2), day(1), false, 1],
     ])
-    expect(drill.bySupplier.reduce((total: number, row: Json) => total + row.received, 0)).toBe(drill.totals.received)
+    expect(drill.bySupplier.reduce((total: number, row: Json) => total + row.received, 0)).toBe(drill.overall.received)
     expect(drill.shortages).not.toBeNull()
     expect(drill.cover).toMatchObject({ windowDays: 30 })
-    await sameAsKpi('buyer', 'purchasing.supplier_on_time', '/insights/kpis/drills/supply', '', (answer) => answer.totals.pct)
+    await sameAsKpi('buyer', 'purchasing.supplier_on_time', '/insights/kpis/drills/supply', '', (answer) => answer.overall.pct)
     const category = mine[0]!.category
     expect(((await ok('buyer', `/insights/kpis/drills/supply?${span(20)}&category=${category}`)).rows as Json[]).every((row) => row.category === category)).toBe(true)
     const supplier = mine[0]!.supplier.id

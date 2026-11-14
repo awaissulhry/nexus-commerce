@@ -99,7 +99,7 @@ export async function wipDrill(caller: CommandCaller, query: WipDrillQuery) {
     return {
       kpiKey,
       asOf: asOf(),
-      totals: {
+      overall: {
         workOrders: rowsAll.length,
         pieces: rowsAll.reduce((total, row) => total + row.pieces, 0),
         waiting: rowsAll.reduce((total, row) => total + row.stages.reduce((sum, stage) => sum + stage.waiting, 0), 0),

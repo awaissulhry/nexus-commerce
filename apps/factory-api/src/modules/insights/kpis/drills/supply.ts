@@ -134,7 +134,7 @@ export async function supplyDrill(caller: CommandCaller, query: SupplyDrillQuery
       kpiKey,
       period: span,
       asOf: asOf(),
-      totals: { ...totals, late: totals.received - totals.onTime },
+      overall: { ...totals, late: totals.received - totals.onTime },
       bySupplier: [...groupBy(lines, (line) => line.supplierId)]
         .map(([supplierId, mine]) => ({ supplier: refOf(names.party, supplierId), ...rateOf(mine), worstLateDays: Math.max(0, ...mine.map((line) => line.lateDays)) }))
         .sort((a, b) => (a.pct === null ? 1 : b.pct === null ? -1 : Number(a.pct) - Number(b.pct)) || (a.supplier?.code ?? '').localeCompare(b.supplier?.code ?? '')),
@@ -156,7 +156,7 @@ export async function supplyDrill(caller: CommandCaller, query: SupplyDrillQuery
       shortages: short
         ? {
             workOrders: short.slice(0, DRILL_ROW_LIMIT).map((row) => ({ record: row.record, workOrder: row.workOrder, site: refOf(names.site, row.siteId), style: row.style, shortages: row.materials.length, materials: row.materials, neededBy: row.neededBy })),
-            total: short.reduce((total, row) => total + row.materials.length, 0),
+            materials: short.reduce((total, row) => total + row.materials.length, 0),
             more: Math.max(0, short.length - DRILL_ROW_LIMIT),
           }
         : null,

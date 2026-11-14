@@ -18,7 +18,7 @@ const CHUNK = 1000
 const dayOf = (value: Date): BusinessDate => value.toISOString().slice(0, 10)
 const span = (from: BusinessDate, to: BusinessDate) => ({ gte: new Date(`${from}T00:00:00.000Z`), lte: new Date(`${to}T00:00:00.000Z`) })
 
-export const OTIF_LINE_SELECT = {
+const OTIF_LINE_SELECT = {
   id: true,
   seq: true,
   kind: true,

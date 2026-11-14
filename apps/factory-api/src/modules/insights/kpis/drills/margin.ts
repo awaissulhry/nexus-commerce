@@ -91,7 +91,7 @@ export async function marginDrill(caller: CommandCaller, query: MarginDrillQuery
       currency,
       converted: currencies.length > 1 ? currencies.filter((code) => code !== EURO) : [],
       unconverted,
-      totals: { ...view(counted), garments: garmentsOf(counted), orders: byOrder.length },
+      overall: { ...view(counted), garments: garmentsOf(counted), orders: byOrder.length },
       byCustomer: [...groupBy(counted, (row) => row.partyId)]
         .map(([partyId, mine]) => ({ customer: refOf(names.party, partyId), orders: new Set(mine.map((row) => row.orderId)).size, garments: garmentsOf(mine), ...view(mine) }))
         .sort((a, b) => Number(b.value) - Number(a.value)),

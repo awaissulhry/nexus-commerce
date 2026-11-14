@@ -44,7 +44,7 @@ export const otifDrillContract = defineContract({
       promise: z.enum(OTIF_PROMISES),
       period,
       asOf: instant(),
-      totals: output({ ...rate, late: z.number().int() }),
+      overall: output({ ...rate, late: z.number().int() }),
       byCustomer: z.array(output({ customer: ref.nullable(), ...rate })),
       bySite: z.array(output({ site: ref.nullable(), ...rate })),
       byMonth: z.array(output({ month: z.string(), ...rate })),
@@ -142,7 +142,7 @@ export const wipDrillContract = defineContract({
     200: output({
       kpiKey: z.string(),
       asOf: instant(),
-      totals: output({ workOrders: z.number().int(), pieces: z.number().int(), waiting: z.number().int(), value: money.cost(z.number().int().nullable()), currency: z.string().nullable() }),
+      overall: output({ workOrders: z.number().int(), pieces: z.number().int(), waiting: z.number().int(), value: money.cost(z.number().int().nullable()), currency: z.string().nullable() }),
       stages: z.array(output({ line: ref.nullable(), operation: output({ code: z.string(), name: z.string() }), workOrders: z.number().int(), waiting: z.number().int(), ageing })),
       rows: z.array(
         output({
@@ -178,7 +178,7 @@ export const leatherDrillContract = defineContract({
       kpiKey: z.string(),
       period,
       asOf: instant(),
-      totals: output(areas),
+      overall: output(areas),
       byGrade: z.array(output({ grade: z.string().nullable(), ...areas })),
       byLot: z.array(output({ lot: output({ id: id(), code: z.string(), supplierLotRef: z.string().nullable() }), supplier: ref.nullable(), ...areas })),
       byStyle: z.array(output({ style: ref.nullable(), ...areas })),
@@ -228,7 +228,7 @@ export const marginDrillContract = defineContract({
       converted: z.array(z.string()),
       /** Garments left out for want of a rate of their day. */
       unconverted: z.number().int(),
-      totals: output({ ...figures, garments: z.number().int(), orders: z.number().int() }),
+      overall: output({ ...figures, garments: z.number().int(), orders: z.number().int() }),
       byCustomer: z.array(output({ customer: ref.nullable(), orders: z.number().int(), garments: z.number().int(), ...figures })),
       byStyle: z.array(output({ style: ref.nullable(), garments: z.number().int(), ...figures })),
       rows: z.array(output({ record, order: output({ id: id(), number: z.string() }), customer: ref.nullable(), season: ref.nullable(), lastShippedOn: businessDate(), garments: z.number().int(), ...figures })),
@@ -254,7 +254,7 @@ export const supplyDrillContract = defineContract({
       kpiKey: z.string(),
       period,
       asOf: instant(),
-      totals: output({ received: z.number().int(), onTime: z.number().int(), late: z.number().int(), pct: z.string().nullable() }),
+      overall: output({ received: z.number().int(), onTime: z.number().int(), late: z.number().int(), pct: z.string().nullable() }),
       bySupplier: z.array(output({ supplier: ref.nullable(), received: z.number().int(), onTime: z.number().int(), pct: z.string().nullable(), worstLateDays: z.number().int() })),
       rows: z.array(
         output({
@@ -276,7 +276,7 @@ export const supplyDrillContract = defineContract({
       /** Open shortages per work order, from the latest plan of each site I plan (null: I plan no site). */
       shortages: output({
         workOrders: z.array(output({ record, workOrder: output({ id: id(), number: z.string(), status: z.string() }), site: ref.nullable(), style: ref.nullable(), shortages: z.number().int(), materials: z.array(z.string()), neededBy: businessDate() })),
-        total: z.number().int(),
+        materials: z.number().int(),
         more: z.number().int(),
       }).nullable(),
       /** Days of cover of the leathers open work orders still need (null: I may not see stock). */
