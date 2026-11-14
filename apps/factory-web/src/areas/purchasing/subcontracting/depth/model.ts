@@ -1,4 +1,5 @@
 import { Dec, type Decimal } from '@nexus/factory-domain/tax/decimal'
+import { PERIOD_LOCK_ISSUES, PERIOD_LOCK_OVERRIDE_REASON } from '@nexus/factory-domain/accounting/periods'
 import { isApiError, issuePath } from '../../../../lib/api/errors'
 import { words, type SubcontractCan, type Words } from '../model'
 import type { Loaded } from '../record/record-model'
@@ -105,7 +106,8 @@ const pathsOf = (error: unknown): string[] => (isApiError(error) ? error.issues.
 const has = (paths: readonly string[], part: string) => paths.some((path) => path.includes(part))
 /** The sentence of a refusal is read only to classify it (never drawn). */
 const sentence = (error: unknown): string => (isApiError(error) ? error.message.toLowerCase() : '')
-const periodLocked = (error: unknown, paths: readonly string[]) => has(paths, 'periodLock') || /period/.test(sentence(error))
+// B-W2b-408: a month lock's own issue paths (period/SOFT_LOCKED, period/HARD_LOCKED) are a period refusal too.
+const periodLocked = (error: unknown, paths: readonly string[]) => has(paths, 'periodLock') || has(paths, 'period/') || /period/.test(sentence(error))
 
 // ---- the written terms (SCM-049) ---------------------------------------------------------------------------------------------
 
@@ -216,6 +218,8 @@ export interface DeclareDraft {
   receiptId: string
   lines: DeclareLineDraft[]
   note: string
+  /** B-W2b-408 (follow-up GL1:01): why it goes into a soft-locked month; null until the API says the month is soft-locked. */
+  lockReason: string | null
 }
 
 /** A fresh declaration: every open line, prefilled with what the balance expects now; the newest receipt named. */
@@ -225,6 +229,7 @@ export function declareDraftOf(balance: OrderBalance): DeclareDraft {
     receiptId: receipt?.id ?? '',
     lines: balance.lines.filter(isOpen).map((line) => ({ kitLineId: line.kitLineId, used: plain(line.suggestion.used), returned: plain(line.suggestion.returned), scrapped: plain(line.suggestion.scrapped) })),
     note: '',
+    lockReason: null,
   }
 }
 
@@ -243,15 +248,27 @@ export function declareHeldDraft(draft: DeclareDraft, balance: OrderBalance): Wo
   }
   if (!any) return words('balance.declare.held.nothing')
   if (draft.note.trim().length > 2000) return words('balance.held.reasonLong')
+  return lockReasonHeld(draft.lockReason)
+}
+
+/** B-W2b-408 (follow-up GL1:01): a soft-locked month takes the booking only with the override reason (3 to 500 characters). */
+export function lockReasonHeld(lockReason: string | null): Words | null {
+  if (lockReason === null) return null
+  const length = lockReason.trim().length
+  if (length < PERIOD_LOCK_OVERRIDE_REASON.min) return words('balance.held.lockReason')
+  if (length > PERIOD_LOCK_OVERRIDE_REASON.max) return words('balance.held.lockReasonLong')
   return null
 }
+
+/** The override the body carries when the person said why it goes into the soft-locked month. */
+const overrideOf = (lockReason: string | null) => (lockReason !== null && lockReason.trim() !== '' ? { periodLockOverride: { reason: lockReason.trim() } } : {})
 
 export function declareBody(draft: DeclareDraft, version: number) {
   const lines = draft.lines
     .map((entry) => ({ kitLineId: entry.kitLineId, used: typedQuantity(entry.used.trim() || '0') ?? '0', returned: typedQuantity(entry.returned.trim() || '0') ?? '0', scrapped: typedQuantity(entry.scrapped.trim() || '0') ?? '0' }))
     .filter((entry) => decimal(entry.used).plus(decimal(entry.returned)).plus(decimal(entry.scrapped)).greaterThan(0))
     .map((entry) => (draft.note.trim() ? { ...entry, reason: draft.note.trim() } : entry))
-  return { version, ...(draft.receiptId ? { receiptId: draft.receiptId } : {}), lines }
+  return { version, ...(draft.receiptId ? { receiptId: draft.receiptId } : {}), lines, ...overrideOf(draft.lockReason) }
 }
 
 /** What a declaration moves, line by line (the ActionConfirm's lines). */
@@ -287,9 +304,11 @@ export interface AdjustDraft {
   returned: string
   scrapped: string
   reason: string
+  /** B-W2b-408 (follow-up GL1:01): why it goes into a soft-locked month; null until the API says the month is soft-locked. */
+  lockReason: string | null
 }
 
-export const adjustDraftOf = (kitLineId: string): AdjustDraft => ({ kitLineId, used: '', returned: '', scrapped: '', reason: '' })
+export const adjustDraftOf = (kitLineId: string): AdjustDraft => ({ kitLineId, used: '', returned: '', scrapped: '', reason: '', lockReason: null })
 
 /** The line's sums after the change (null: a change is not a number). */
 export function adjustAfter(draft: AdjustDraft, line: BalanceLine): { used: string; returned: string; scrapped: string; open: string } | null {
@@ -311,7 +330,7 @@ export function adjustHeldDraft(draft: AdjustDraft, line: BalanceLine): Words | 
   if (decimal(after.open).lessThan(0)) return words('balance.adjust.held.moreThanSent', { sent: plain(line.sent), uom: `@uom.${line.uom}` })
   if (draft.reason.trim() === '') return words('balance.adjust.held.reason')
   if (draft.reason.trim().length > 2000) return words('balance.held.reasonLong')
-  return null
+  return lockReasonHeld(draft.lockReason)
 }
 
 export function adjustBody(draft: AdjustDraft, version: number) {
@@ -322,12 +341,16 @@ export function adjustBody(draft: AdjustDraft, version: number) {
   const used = signed(draft.used)
   const returned = signed(draft.returned)
   const scrapped = signed(draft.scrapped)
-  return { version, kitLineId: draft.kitLineId, ...(used ? { used } : {}), ...(returned ? { returned } : {}), ...(scrapped ? { scrapped } : {}), reason: draft.reason.trim() }
+  return { version, kitLineId: draft.kitLineId, ...(used ? { used } : {}), ...(returned ? { returned } : {}), ...(scrapped ? { scrapped } : {}), reason: draft.reason.trim(), ...overrideOf(draft.lockReason) }
 }
+
+/** B-W2b-408 (follow-up GL1:01): the refusal of a soft-locked month (a reason lets it in; a hard lock never does). */
+export const softLocked = (error: unknown): boolean => pathsOf(error).includes(PERIOD_LOCK_ISSUES.soft)
 
 /** A refused declaration or adjustment, by the field it names. */
 export function balanceRefusal(error: unknown): Words {
   const paths = pathsOf(error)
+  if (softLocked(error)) return words('balance.refused.periodSoft')
   if (periodLocked(error, paths)) return words('balance.refused.period')
   if (has(paths, 'reportedAt')) return words('balance.refused.reportedAt')
   if (has(paths, 'receiptId')) return words('balance.refused.receipt')

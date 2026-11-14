@@ -190,8 +190,12 @@ export const exportRecordView = exportRowView.extend({
       number: z.string().nullable(),
       version: z.number().int().nullable(),
       change: z.enum(MANIFEST_CHANGES),
+      /** B-W2b-408 (FIN-154): when a later change of the document was found (the nightly check flags it once), or null. */
+      changedAt: instant().nullable(),
     }),
   ),
+  /** B-W2b-408 (FIN-154): the documents it handed over (each once, whatever the packages) and how many changed since. */
+  handedOver: output({ documents: z.number().int(), flagged: z.number().int() }),
   lock: output({ id: id(), level: z.enum(LOCK_LEVELS), status: z.enum(LOCK_STATUSES) }).nullable(),
   actions: output({ reExport: held, cancel: held, lock: held, download: held }),
   words: z.string(),
@@ -275,6 +279,14 @@ export const periodAnswer = output({
   intrastat: output({ rows: z.number().int(), fileRows: z.number().int(), blocking: z.number().int(), warnings: z.number().int() }).nullable(),
   changes: z.number().int(),
   layout: z.string(),
+  /** B-W2b-408 (FIN-151): whether the journal packages carry their entries with mapped accounts (the company's switch). */
+  journals: output({ on: z.boolean(), words: z.string() }),
+  /** B-W2b-408 (FIN-157): the company's integrity checks as their last run left them (the export reads the last run). */
+  integrity: output({
+    lastRunAt: instant().nullable(),
+    failing: z.number().int(),
+    checks: z.array(output({ code: z.string(), result: z.enum(['PASSED', 'FAILED', 'ERROR']), failureCount: z.number().int(), ranAt: instant() })),
+  }),
   words: z.string(),
 })
 export type PeriodAnswer = z.infer<typeof periodAnswer>

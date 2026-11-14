@@ -33,6 +33,10 @@ export const CHECK_CODES = [
   'INTRASTAT_COMPLETE',
   'YEAR_END_SIGNED_OFF',
   'STOCK_VALUED',
+  // B-W2b-408: the accountant's bridge's checks (the wizard draws them with B-W2b-426).
+  'WORK_ORDERS_CLOSED',
+  'MAPPING_COMPLETE',
+  'ENTRIES_BALANCE',
 ] as const
 export type CheckCode = (typeof CHECK_CODES)[number]
 export const INTRASTAT_FLAG_CODES = ['NOT_EUR', 'NO_STYLE', 'CN_CODE_MISSING', 'CN_CODE_SHORT', 'ORIGIN_MISSING', 'NET_MASS_MISSING', 'VAT_ID_MISSING', 'DELIVERY_TERMS_MISSING', 'DESTINATION_FROM_BILL_TO'] as const
@@ -41,12 +45,16 @@ export const MANIFEST_CHANGES = ['NEW', 'CHANGED', 'REMOVED'] as const
 /** A failing check's explanation, at most (factory-domain accounting/checks MAX_EXPLANATION). */
 export const MAX_EXPLANATION = 2000
 
-/** What each package is (factory-domain accounting/packages PACKAGE_RULES): its wave, the grain of its amounts, a re-export's reach. */
+/**
+ * What each package is (factory-domain accounting/packages PACKAGE_RULES): the grain of its amounts, a re-export's reach;
+ * and the wave this wizard offers it in (B-W2b-408's API takes the cost of goods sold and the VAT registers; this wizard
+ * offers them with B-W2b-426's screens).
+ */
 export const PACKAGE_RULES: Readonly<Record<AccountingPackage, { readonly wave: 'W2a' | 'W2b'; readonly grain: 'price' | 'cost'; readonly scope: 'DOCUMENTS' | 'WHOLE' }>> = Object.freeze({
   SALES_JOURNAL: { wave: 'W2a', grain: 'price', scope: 'DOCUMENTS' },
   PURCHASES_JOURNAL: { wave: 'W2a', grain: 'cost', scope: 'DOCUMENTS' },
   PAYMENTS: { wave: 'W2a', grain: 'price', scope: 'DOCUMENTS' },
-  COST_OF_SALES: { wave: 'W2b', grain: 'cost', scope: 'WHOLE' },
+  COST_OF_SALES: { wave: 'W2b', grain: 'cost', scope: 'DOCUMENTS' },
   VAT_REGISTERS: { wave: 'W2b', grain: 'price', scope: 'WHOLE' },
   INTRASTAT: { wave: 'W2a', grain: 'price', scope: 'WHOLE' },
   YEAR_END_STOCK: { wave: 'W2a', grain: 'cost', scope: 'WHOLE' },

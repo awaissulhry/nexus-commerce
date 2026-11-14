@@ -12,6 +12,7 @@ import { say, type Words } from '../../model'
 import type { BalanceLine, ConsumptionRow, OrderBalance } from '../api'
 import {
   adjustAfter,
+  adjustDraftOf,
   adjustHeld,
   adjustHeldDraft,
   balanceRungs,
@@ -172,7 +173,7 @@ function LineCard({ line, balance, model, actions }: { line: BalanceLine; balanc
           <h3 className="fw-by-h3">
             {t('balance.line', { line: line.seq })} <span className="fw-by-code">{line.item.code}</span> {line.item.name}
           </h3>
-          <Button size="sm" variant="secondary" heldReason={model.busy ? t('held.busy') : held ? sayWords(held) : null} onClick={() => actions?.onDialog?.({ kind: 'adjust', draft: { kitLineId: line.kitLineId, used: '', returned: '', scrapped: '', reason: '' } })}>
+          <Button size="sm" variant="secondary" heldReason={model.busy ? t('held.busy') : held ? sayWords(held) : null} onClick={() => actions?.onDialog?.({ kind: 'adjust', draft: adjustDraftOf(line.kitLineId) })}>
             {t('balance.adjust.open')}
           </Button>
         </div>
@@ -240,6 +241,16 @@ function Rows({ line, model }: { line: BalanceLine; model: BalanceModel }) {
   )
 }
 
+/** B-W2b-408 (follow-up GL1:01): why the booking goes into a soft-locked month (asked once the API said so; kept in the audit). */
+function LockReasonField({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const t = useT(DEPTH)
+  return (
+    <Field label={t('balance.lock.label')} required hint={t('balance.lock.hint')}>
+      <Textarea rows={2} maxLength={500} value={value} onChange={(event) => onChange(event.target.value)} />
+    </Field>
+  )
+}
+
 function DeclareDialog({ draft, balance, model, actions }: { draft: DeclareDraft; balance: OrderBalance; model: BalanceModel; actions?: BalanceActions }) {
   const t = useT(DEPTH)
   const sayWords = useSay()
@@ -291,6 +302,7 @@ function DeclareDialog({ draft, balance, model, actions }: { draft: DeclareDraft
         <Field label={t('balance.declare.note')} hint={t('balance.declare.noteHint')}>
           <Textarea rows={2} maxLength={2000} value={draft.note} onChange={(event) => set({ note: event.target.value })} />
         </Field>
+        {draft.lockReason !== null && <LockReasonField value={draft.lockReason} onChange={(lockReason) => set({ lockReason })} />}
         {model.problem && <Banner tone="danger" title={sayWords(model.problem)} />}
         {model.busy && (
           <p className="fw-by-hint" role="status">
@@ -352,6 +364,7 @@ function AdjustDialog({ draft, balance, model, actions }: { draft: AdjustDraft; 
         <Field label={t('balance.adjust.reason')} required hint={t('balance.adjust.reasonHint')}>
           <Textarea rows={2} maxLength={2000} value={draft.reason} onChange={(event) => set({ reason: event.target.value })} />
         </Field>
+        {draft.lockReason !== null && <LockReasonField value={draft.lockReason} onChange={(lockReason) => set({ lockReason })} />}
         {model.problem && <Banner tone="danger" title={sayWords(model.problem)} />}
         {model.busy && (
           <p className="fw-by-hint" role="status">

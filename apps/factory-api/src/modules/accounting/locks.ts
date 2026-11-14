@@ -11,6 +11,8 @@ import { actorOf } from '../../core/context'
 import { AccountingRefusedError, periodOfRow, periodView, refuse } from './exports'
 import { unvaluedMovesIn } from './facts'
 import { accountingCommand, companyFor, dateOf, latestExported, LOCK_SELECT, lockOfPeriod, officeOf, peopleNames, periodExports, type LockRow, type Reader } from './store'
+// B-W2b-408 (FIN-155): the hard lock asks accounting.close and a fresh code.
+import { assertMayClose } from './locks/hard'
 
 /**
  * Period locks (B-W2a-39; design finance.accounting "5 · Export and lock": "soft (finance may override with a reason) or
@@ -87,10 +89,14 @@ async function closeProblems(db: Reader, companyId: string, period: Period, fisc
   return problems
 }
 
-/** POST /accounting/locks: a month locked SOFT or HARD (a soft lock made hard; a lifted lock locked again). */
-export async function lockMonth(caller: CommandCaller, body: LockBody, idempotencyKey?: string): Promise<{ lock: LockView; warnings: { code: string; message: string }[] }> {
+/**
+ * POST /accounting/locks: a month locked SOFT or HARD (a soft lock made hard; a lifted lock locked again). B-W2b-408: HARD
+ * needs accounting.close and, last of all, a fresh code (`stepUp`, the route's check): locks/hard.ts.
+ */
+export async function lockMonth(caller: CommandCaller, body: LockBody, stepUp: () => void, idempotencyKey?: string): Promise<{ lock: LockView; warnings: { code: string; message: string }[] }> {
   const context = officeOf(caller)
   const company = await companyFor(caller, body.companyId, ACCOUNTING_LOCK)
+  if (body.level === 'HARD') assertMayClose(context, company.id)
   const period = periodOfMonth(body.month)
   const label = monthLabel(period.month)
   if (body.level === 'HARD' && !phraseMatches(period.month, body.phrase)) {
@@ -108,6 +114,7 @@ export async function lockMonth(caller: CommandCaller, body: LockBody, idempoten
     if (existing.status === 'LOCKED' && existing.level === 'HARD') throw refuse(`${label} is closed for good.`, 'HARD_LOCKED', 'A hard lock is lifted first (accounting.unlock, with a reason), never made soft.')
   }
   if (body.level === 'HARD' && problems.length > 0) throw new AccountingRefusedError(`${label} cannot be closed for good yet.`, problems)
+  if (body.level === 'HARD') stepUp()
   const warnings = body.level === 'SOFT' ? problems : []
   const lockId = existing?.id ?? newId()
   await accountingCommand(

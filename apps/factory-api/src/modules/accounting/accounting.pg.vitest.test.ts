@@ -19,7 +19,9 @@ import { seed as seedReasons } from '../../../../../packages/factory-db/seed/rea
 import { seedUuid } from '../../../../../packages/factory-db/src/seeding'
 import { localFileStore } from '../../adapters/local-files/local'
 import { buildApp } from '../../core/app'
-import { testAuthenticator, type SessionContext } from '../../core/context'
+import { completeContext, testAuthenticator, type SessionContext } from '../../core/context'
+import { callerFor } from '../../core/command'
+import { lockMonth } from './locks'
 import { LOCAL_COOKIE_SECRET } from '../../env'
 import { createFilesRuntime, useFiles } from '../../platform/files/service'
 import { createGateway } from '../../platform/gateway/gateway'
@@ -46,11 +48,12 @@ afterAll(() => vi.useRealTimers())
  *
  *   - the wizard's month: checks with their fixes, contents counted and summed (by grain), the next number;
  *   - Intrastat: the EU sale row flagged until its style has a CN code, origin and mass; the file sums it;
- *   - the first export: refused while a failing check is not explained, a W2b package, the year-end pack in October, a
- *     package of a grain not held; then EXP-2026-0002 with its four CSV files (DOCUMENT, ten years), the October draft
+ *   - the first export: refused while a failing check is not explained, the year-end pack in October, a package of a
+ *     grain not held (the VAT registers need the cost grain too, B-W2b-408); then EXP-2026-0002 with its four CSV files (DOCUMENT, ten years), the October draft
  *     replaced, a repeat answering from its receipt, a second first export refused;
  *   - the re-export: nothing changed is refused; a payment added → EXP-2026-0003 carrying only that payment;
- *   - the locks: soft with warnings, hard only with the phrase, then the database refuses a payment dated in October;
+ *   - the locks: soft with warnings, hard only with the phrase (and a fresh code, B-W2b-408), then the database refuses a
+ *     payment dated in October;
  *     a soft lock lifted with a reason and locked again; a hard lock not lifted without accounting.unlock;
  *   - the year-end pack: December's export carries the signed-off inventory's valued list (PDF and sheet copied, the
  *     same bytes) and the stock valuation at 31 December.
@@ -245,10 +248,11 @@ describe('the months and the wizard (design finance.accounting 1 · Period … 4
 })
 
 describe('the first export of a month (FIN-046 numbered batch)', () => {
-  it('is refused while a failing check is not explained, for a W2b package, the year-end pack in October and a grain not held', async () => {
+  it('is refused while a failing check is not explained, the year-end pack in October and a grain not held', async () => {
     const body = { companyId: ids.companyA, month: '2026-10', packages: OCTOBER }
     expect(await problemOf(call('finance', 'POST', '/accounting/exports', body), 400)).toEqual(['body/explanations/PERIOD_ENDED', 'body/explanations/SHIPMENTS_INVOICED'])
-    expect(await problemOf(call('finance', 'POST', '/accounting/exports', { ...body, packages: ['VAT_REGISTERS'] }), 409)).toEqual(['problem/PACKAGE_W2B'])
+    // B-W2b-408: the VAT registers go now; they carry the supplier invoices' costs, so the price grain alone is not enough.
+    expect((await call('pricesOnly', 'POST', '/accounting/exports', { ...body, packages: ['VAT_REGISTERS'] })).statusCode).toBe(403)
     expect(await problemOf(call('finance', 'POST', '/accounting/exports', { ...body, packages: ['YEAR_END_STOCK'] }), 409)).toEqual(['problem/YEAR_END_NOT_THIS_PERIOD'])
     expect((await call('pricesOnly', 'POST', '/accounting/exports', body)).statusCode).toBe(403)
     expect((await call('viewer', 'POST', '/accounting/exports', body)).statusCode).toBe(403)
@@ -343,7 +347,12 @@ describe('the period locks (5 · Export and lock)', () => {
     lock = soft.lock
     expect(await problemOf(call('finance', 'POST', '/accounting/locks', { companyId: ids.companyA, month: '2026-10', level: 'HARD', phrase: 'close it', version: lock.version }), 400)).toEqual(['body/phrase'])
     expect(await problemOf(call('finance', 'POST', '/accounting/locks', { companyId: ids.companyA, month: '2026-10', level: 'SOFT', version: lock.version }), 409)).toEqual(['problem/ALREADY_LOCKED'])
-    const hard = await ok(call('finance', 'POST', '/accounting/locks', { companyId: ids.companyA, month: '2026-10', level: 'HARD', phrase: 'Chiudi ottobre 2026', version: lock.version }))
+    // B-W2b-408 (FIN-155): the close asks accounting.close and, last, a fresh code, which this app cannot ask (it has no
+    // office sign-in, only test sessions: 503, nothing written); locks/hard.pg.vitest.test.ts closes a month through the
+    // route with a real step-up. Here the module's close runs as the route runs it once the fresh code is given.
+    expect((await call('finance', 'POST', '/accounting/locks', { companyId: ids.companyA, month: '2026-10', level: 'HARD', phrase: 'Chiudi ottobre 2026', version: lock.version })).statusCode).toBe(503)
+    expect((await admin<{ level: string }>(`SELECT level FROM "PeriodLock" WHERE id = $1`, [lock.id]))[0]!.level).toBe('SOFT')
+    const hard = await lockMonth(callerFor(database, completeContext(SESSIONS.finance!, newId())), { companyId: ids.companyA, month: '2026-10', level: 'HARD', phrase: 'Chiudi ottobre 2026', version: lock.version }, () => {}, idem())
     expect(hard.lock).toMatchObject({ id: lock.id, level: 'HARD', status: 'LOCKED', words: expect.stringContaining('Closed for good') })
     lock = hard.lock
     expect((await events('period_lock.locked')).map((event) => event.level)).toEqual(['SOFT', 'HARD'])

@@ -547,6 +547,8 @@ describe('the W2b-0 golden flow: the W2a follow-ups through the HTTP routes', { 
       // ---- end B-W2b-F43
       return
     }
+    // B-W2b-408 (FIN-155): closing a month for good asks a fresh code.
+    await stepped(w, P.finance)
     const closed = await ok(P.finance, 'POST', '/accounting/locks', { companyId: companyA(), month, level: 'HARD', phrase: lockPhrases(month).en, version: G.lock.version })
     expect(closed.lock).toMatchObject({ id: G.lock.id, level: 'HARD', status: 'LOCKED' })
     const checks = await ok(P.finance, 'GET', `/invoicing/invoices/${G.lockDraft.id}/checks`)
