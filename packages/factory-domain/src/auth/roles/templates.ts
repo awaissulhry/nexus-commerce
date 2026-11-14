@@ -813,6 +813,13 @@ const SUPPLIER_REVIEW_ADDS: Readonly<Record<string, readonly Permission[]>> = Ob
   buyer: ['purchasing.supplierDocuments.review', 'purchasing.supplierChanges.decide'],
   quality_inspector: ['purchasing.supplierDocuments.review'],
 })
+/**
+ * B-W2b-399 (PLT-074, PLT-075; Owner answer W2b-6 question 3 = A): who looked at sensitive records and the security events,
+ * the administrator's (the owner through every(); never read_only: both carry the write risk; never a floor role). One line.
+ */
+const AUDIT_DEPTH_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  admin: ['audit.reads.view', 'security.events.view'],
+})
 const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? []), ...(SHIPPING_DAILY_ADDS[key] ?? []), ...(audience === 'office' ? (NCR_ADDS[key] ?? []) : []),
   // B-W2a-55
   ...(audience === 'office' ? (RECEIVABLES_ADDS[key] ?? []) : []),
@@ -1051,7 +1058,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-385
   ...(audience === 'office' ? (NOTIFICATION_DEFAULTS_ADDS[key] ?? []) : []),
   // B-W2b-389
-  ...(audience === 'office' ? (CURRENCY_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (CURRENCY_ADDS[key] ?? []) : []),
+  // B-W2b-399
+  ...(audience === 'office' ? (AUDIT_DEPTH_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the

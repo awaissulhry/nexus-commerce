@@ -77,6 +77,9 @@ import { transfers } from './transfers'
 import { mps } from './mps'
 // B-W2b-386: Warehouse › Shipments › Search and history (the page's second list).
 import { shipmentsHistory } from './shipments-history'
+// B-W2b-399: the audit search and the security events.
+import { auditSearchExport } from '../../audit/search/export-source'
+import { securityEventsExport } from '../../audit/security-events/export-source'
 
 /**
  * Every list with an export (B-W2a-23; PLT-179), one file per list beside this one. A step that gives its list an export
@@ -166,4 +169,7 @@ export const EXPORT_SOURCES: readonly AnyExportSource[] = Object.freeze([
   mps,
   // B-W2b-386: Warehouse › Shipments › Search and history.
   shipmentsHistory,
+  // B-W2b-399: Admin › Data › Audit log (the search) and Admin › Access › Security & health (the security events).
+  auditSearchExport,
+  securityEventsExport,
 ])
