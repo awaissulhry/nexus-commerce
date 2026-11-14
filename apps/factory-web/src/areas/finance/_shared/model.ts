@@ -391,6 +391,24 @@ export const CHECK_CODES = [
   'CREDIT_OF',
   'CREDIT_OVER',
   'SERIES',
+  // B-W2b-417: the checks of B-W2b-392 (tax codes, stamp duty, declarations of intent), -396 (a charge billed twice) and
+  // -401 (the debit note, self-invoices), each with this app's words.
+  'TAX_CODE',
+  'STAMP_DUTY',
+  'INTENT_MISSING',
+  'INTENT_OFF',
+  'INTENT_REVOKED',
+  'INTENT_UNCHECKED',
+  'INTENT_YEAR',
+  'INTENT_DATE',
+  'INTENT_USED_UP',
+  'INTENT_NO_LINES',
+  'CHARGE_INVOICED',
+  'DEBIT_NOTE_OFF',
+  'DEBIT_NOTE_TARGET',
+  'SELF_INVOICE_OFF',
+  'SELF_INVOICE_KIND',
+  'SELF_INVOICE_MISSING',
 ] as const
 
 /** A failed check as words and where to fix it (never the API's English). */
@@ -399,6 +417,9 @@ export function checkOf(problem: { code: string; path: string }): { key: string;
   const path = problem.path
   let fix: CheckFix = 'none'
   if (code === 'SERIES') fix = 'series'
+  // B-W2b-417: a code not in force and the accountant's switches are fixed in Finance settings; the stamp duty line by "Decide again".
+  else if (code === 'TAX_CODE' || code === 'DEBIT_NOTE_OFF' || code === 'SELF_INVOICE_OFF') fix = 'company'
+  else if (code === 'STAMP_DUTY' || code.startsWith('INTENT_') || code.startsWith('SELF_INVOICE_') || code === 'DEBIT_NOTE_TARGET') fix = 'none'
   else if (code.startsWith('DEDUCTION_') || code.startsWith('DEPOSIT_')) fix = 'deduction'
   else if (code.startsWith('PARTY_') || code === 'NO_VIES_PROOF' || code === 'BUYER' || /^(party|buyer|billTo)/.test(path)) fix = 'party'
   else if (code === 'SELLER' || /^(company|seller)/.test(path)) fix = 'company'

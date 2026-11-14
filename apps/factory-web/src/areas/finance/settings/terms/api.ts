@@ -22,6 +22,9 @@ export const termsSchema = z.object({
   instalments: z.array(z.object({ sharePct: z.string(), from: z.enum(INSTALMENT_EVENTS), days: z.number(), endOfMonth: z.boolean() })),
   earlyPaymentDiscountPct: z.string().nullable(),
   earlyPaymentDays: z.number().nullable(),
+  // B-W2b-417 (B-W2b-396's FIN-076): days from the end of the event's month, months skipped.
+  fromEndOfMonth: z.boolean().default(false),
+  skipMonths: z.array(z.number()).default([]),
   deposit: z.object({ sharePct: z.string(), days: z.number() }).nullable(),
   summary: z.object({ it: z.string(), en: z.string() }),
   status: z.enum(['ACTIVE', 'ARCHIVED']),
@@ -46,6 +49,9 @@ export interface TermsFields {
   instalments: Array<{ sharePct: string; from: InstalmentEvent; days: number; endOfMonth: boolean }>
   earlyPaymentDiscountPct: string | null
   earlyPaymentDays: number | null
+  /** B-W2b-417: the Italian due-date conventions (B-W2b-396). */
+  fromEndOfMonth: boolean
+  skipMonths: number[]
 }
 
 /** New terms of this company (paymentterms.manage). */

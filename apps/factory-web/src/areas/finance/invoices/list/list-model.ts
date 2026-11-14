@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react'
+import type { MenuItemDef } from '@nexus/ui/components'
 import type { InvoiceQuery, InvoiceRow, Queue } from '../../_shared/api'
 import type { Deferred, DeferredGroup, ReturnCredit } from '../daily/api'
 import type { ShippedView } from '../daily/model'
@@ -61,4 +63,12 @@ export interface InvoicesListActions {
   onRetryReturnCredit?: () => void
   onCreateReturnCredit?: (lineIds: string[] | null) => void
   onDismissNotice?: () => void
+}
+
+/** B-W2b-417: the in-depth parts the page hands the view (each its own container): the test-mode banner, New ▾, the ⋯ items (Monthly invoice run, Stamp duty this quarter) and their dialogs. */
+export interface InvoicesDepthSlots {
+  banner?: ReactNode
+  newMenu?: ReactNode
+  more?: MenuItemDef[]
+  dialogs?: ReactNode
 }

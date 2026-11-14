@@ -17,7 +17,8 @@ import type { Invoice } from '../../../_shared/api'
 import { creditHeld, dayInstant, journeyOf, nextStepOf, PAY_TONE, payStateOf, SDI_TONE, sdiCodeOf, STATUS_TONE, dueDateOf, type JourneyStep } from '../../../_shared/model'
 import { JourneyStrip } from '../../../_shared/parts'
 import { refundHref, xmlHref } from '../../daily/model'
-import { RECORD_TABS, type InvoiceRecordActions, type InvoiceRecordModel, type RecordTab } from '../record-model'
+import { RECORD_TABS, type InvoiceDepthSlots, type InvoiceRecordActions, type InvoiceRecordModel, type RecordTab } from '../record-model'
+import { DEPTH } from '../../test-mode/depth'
 import { InvoiceDialogs } from './Dialogs'
 import { DocumentsTab } from './DocumentsTab'
 import { LinesTab } from './LinesTab'
@@ -25,7 +26,7 @@ import { MoneyTab } from './MoneyTab'
 import { SdiTab } from './SdiTab'
 import '../../../_shared/finance.css'
 
-export type { InvoiceRecordActions, InvoiceRecordModel } from '../record-model'
+export type { InvoiceDepthSlots, InvoiceRecordActions, InvoiceRecordModel } from '../record-model'
 
 /**
  * SCR-081 — the invoice record (design finance.invoices "Record: Invoice"; 00 §2.2; Owner L1: the tabs always in view).
@@ -37,15 +38,15 @@ export type { InvoiceRecordActions, InvoiceRecordModel } from '../record-model'
  * payments, SDI status (the timeline in words, the rejection and its fix), Documents (the legal XML, the courtesy PDF,
  * the DDTs), Activity (the record panels; beside any tab on a wide screen with ⌘J). An issued invoice never changes.
  */
-export function InvoiceRecordView({ model, actions, panels }: { model: InvoiceRecordModel; actions?: InvoiceRecordActions; panels?: ReactNode }) {
+export function InvoiceRecordView({ model, actions, panels, depth }: { model: InvoiceRecordModel; actions?: InvoiceRecordActions; panels?: ReactNode; /** B-W2b-417. */ depth?: InvoiceDepthSlots }) {
   return (
-    <WithMessages namespaces={['finance', 'finance-daily', 'lists', 'records']}>
-      <InvoiceRecord model={model} actions={actions} panels={panels} />
+    <WithMessages namespaces={['finance', 'finance-daily', DEPTH, 'lists', 'records']}>
+      <InvoiceRecord model={model} actions={actions} panels={panels} depth={depth} />
     </WithMessages>
   )
 }
 
-function InvoiceRecord({ model, actions, panels }: { model: InvoiceRecordModel; actions?: InvoiceRecordActions; panels?: ReactNode }) {
+function InvoiceRecord({ model, actions, panels, depth }: { model: InvoiceRecordModel; actions?: InvoiceRecordActions; panels?: ReactNode; depth?: InvoiceDepthSlots }) {
   const t = useT('finance')
   const listHref = `${model.prefix}/finance/invoices`
   const loaded = model.invoice
@@ -89,10 +90,10 @@ function InvoiceRecord({ model, actions, panels }: { model: InvoiceRecordModel; 
       </div>
     )
   }
-  return <ReadyRecord invoice={loaded.value} model={model} actions={actions} panels={panels} />
+  return <ReadyRecord invoice={loaded.value} model={model} actions={actions} panels={panels} depth={depth} />
 }
 
-function ReadyRecord({ invoice, model, actions, panels }: { invoice: Invoice; model: InvoiceRecordModel; actions?: InvoiceRecordActions; panels?: ReactNode }) {
+function ReadyRecord({ invoice, model, actions, panels, depth }: { invoice: Invoice; model: InvoiceRecordModel; actions?: InvoiceRecordActions; panels?: ReactNode; depth?: InvoiceDepthSlots }) {
   const t = useT('finance')
   const d = useT('finance-daily')
   const locale = useLocale()
@@ -174,6 +175,8 @@ function ReadyRecord({ invoice, model, actions, panels }: { invoice: Invoice; mo
     ...(invoice.pdfFileId ? [{ id: 'pdf', label: t('action.downloadPdf'), onSelect: () => actions?.onDownload?.(invoice.pdfFileId!) }] : []),
     ...(invoice.filesPending && model.can.issueInvoices ? [{ id: 'files', label: t('action.makeFiles'), onSelect: () => actions?.onMakeFiles?.() }] : []),
     ...(!draft && invoice.docType !== 'TD04' ? [{ id: 'credit', label: t('action.creditNote'), disabled: !!creditWait, description: creditWait ? t(creditWait.key) : undefined, onSelect: () => actions?.onDialog?.({ kind: 'credit' }) }] : []),
+    // B-W2b-417: Debit note (an issued TD01/TD24).
+    ...(depth?.more ?? []),
     ...(draft ? [{ id: 'delete', label: t('action.deleteDraft'), tone: 'danger' as const, disabled: !model.can.manageInvoices, description: model.can.manageInvoices ? undefined : t('held.noManage'), onSelect: () => actions?.onDialog?.({ kind: 'delete' }) }] : []),
     ...(invoice.number
       ? [
@@ -280,6 +283,8 @@ function ReadyRecord({ invoice, model, actions, panels }: { invoice: Invoice; mo
         <Tabs ariaLabel={t('record.tabsLabel')} tabs={tabs} active={model.tab} size="sm" overflow="scroll" />
       </div>
 
+      {/* B-W2b-417: the test-mode banner. */}
+      {depth?.banner}
       {model.changed && (
         <Banner
           tone="info"
@@ -308,8 +313,8 @@ function ReadyRecord({ invoice, model, actions, panels }: { invoice: Invoice; mo
 
       <div className={showDock ? 'fw-fin-body has-dock' : 'fw-fin-body'}>
         <div className="fw-fin-main">
-          {model.tab === 'lines' && <LinesTab invoice={invoice} model={model} actions={actions} />}
-          {model.tab === 'money' && <MoneyTab invoice={invoice} model={model} actions={actions} />}
+          {model.tab === 'lines' && <LinesTab invoice={invoice} model={model} actions={actions} depth={depth} />}
+          {model.tab === 'money' && <MoneyTab invoice={invoice} model={model} actions={actions} depth={depth} />}
           {model.tab === 'sdi' && <SdiTab invoice={invoice} model={model} actions={actions} />}
           {model.tab === 'documents' && <DocumentsTab invoice={invoice} model={model} actions={actions} />}
           {model.tab === 'activity' && (activity ?? <p className="fw-fin-hint">{t('record.noPanels')}</p>)}
@@ -321,7 +326,8 @@ function ReadyRecord({ invoice, model, actions, panels }: { invoice: Invoice; mo
         )}
       </div>
 
-      <InvoiceDialogs invoice={invoice} model={model} actions={actions} />
+      <InvoiceDialogs invoice={invoice} model={model} actions={actions} depth={depth} />
+      {depth?.dialogs}
       <StepUpModal
         open={model.stepUp.open}
         title={t('stepUp.title')}

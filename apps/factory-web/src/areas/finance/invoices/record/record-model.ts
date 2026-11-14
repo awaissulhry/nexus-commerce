@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react'
+import type { MenuItemDef } from '@nexus/ui/components'
 import type { RecordPanelsViewModel } from '../../../../record-panels/model'
 import type { Checks, CreditAsk, CreditReason, Invoice, Related, Sdi } from '../../_shared/api'
 import type { LiveState, StepUpState } from '../../_shared/hooks'
@@ -96,4 +98,18 @@ export interface InvoiceRecordActions {
   onViewPdf?: () => void
   onStepUpSubmit?: (code: string) => void
   onStepUpCancel?: () => void
+}
+
+/**
+ * B-W2b-417: the in-depth parts the page hands the view (each its own container): the test-mode banner, the pre-check's
+ * stamp duty line, the balance before shipping, the credit note's VAT time-limit warning for the reason picked, the ⋯'s
+ * Debit note and its dialog.
+ */
+export interface InvoiceDepthSlots {
+  banner?: ReactNode
+  precheck?: ReactNode
+  balance?: ReactNode
+  creditWarning?: (reason: CreditReason | null) => ReactNode
+  more?: MenuItemDef[]
+  dialogs?: ReactNode
 }
