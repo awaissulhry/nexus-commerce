@@ -57,7 +57,6 @@ export const varianceRowView = output({
   live: z.boolean(),
   note: z.string().nullable(),
 })
-export type VarianceRowView = z.infer<typeof varianceRowView>
 
 export const variancesAnswer = output({
   rows: z.array(varianceRowView),

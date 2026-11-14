@@ -53,9 +53,6 @@ export const NOTE_NEEDED: ReadonlySet<CloseReason> = new Set<CloseReason>(['OTHE
 /** The database's outer limit of an Undo: the person who closed it, within this many seconds of the close. */
 export const UNDO_SECONDS = 60
 
-/** The default close tolerance (percent) when no settings row says one. */
-export const DEFAULT_TOLERANCE_PCT = '5'
-
 /** Why a close, an undo or a reopen is refused, as the issue path `refusal/<code>`. */
 export const CLOSE_REFUSALS = [
   'NOT_COMPLETED',
