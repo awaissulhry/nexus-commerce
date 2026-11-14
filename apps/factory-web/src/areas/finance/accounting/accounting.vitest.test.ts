@@ -80,7 +80,8 @@ import {
 describe('the lists mirror factory-domain', () => {
   it('packages and their rules, statuses, lock levels, checks, Intrastat flags, manifest changes', () => {
     expect(ACCOUNTING_PACKAGES).toEqual(DOMAIN_PACKAGES)
-    for (const pkg of ACCOUNTING_PACKAGES) expect(PACKAGE_RULES[pkg], pkg).toEqual({ wave: DOMAIN_RULES[pkg].wave, grain: DOMAIN_RULES[pkg].grain, scope: DOMAIN_RULES[pkg].scope })
+    // B-W2b-408: the domain has no wave any more (every package is built); the wizard keeps its own until B-W2b-426.
+    for (const pkg of ACCOUNTING_PACKAGES) expect({ grain: PACKAGE_RULES[pkg].grain, scope: PACKAGE_RULES[pkg].scope }, pkg).toEqual({ grain: DOMAIN_RULES[pkg].grain, scope: DOMAIN_RULES[pkg].scope })
     expect(EXPORT_STATUSES).toEqual(DOMAIN_STATUSES)
     expect(LOCK_LEVELS).toEqual(DOMAIN_LEVELS)
     expect(LOCK_STATUSES).toEqual(DOMAIN_LOCK_STATUSES)
@@ -91,7 +92,11 @@ describe('the lists mirror factory-domain', () => {
   })
 
   it('the checks a set of packages carries are the domain\'s', () => {
-    for (const set of [[], ['SALES_JOURNAL'], ['INTRASTAT'], ['YEAR_END_STOCK', 'PAYMENTS'], [...ACCOUNTING_PACKAGES]] as const) expect(checksFor(set), set.join(',')).toEqual(domainChecksFor(set))
+    for (const set of [[], ['SALES_JOURNAL'], ['INTRASTAT'], ['YEAR_END_STOCK', 'PAYMENTS'], [...ACCOUNTING_PACKAGES]] as const) {
+      expect(checksFor(set), set.join(',')).toEqual(domainChecksFor(set))
+      // B-W2b-408: with the journals switched on.
+      expect(checksFor(set, true), `${set.join(',')} on`).toEqual(domainChecksFor(set, true))
+    }
   })
 })
 

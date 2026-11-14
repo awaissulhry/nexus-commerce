@@ -7,6 +7,10 @@ import { VALUATION_HEADINGS, valuationCells } from '@nexus/factory-domain/accoun
 import { cellText, csvText, type ExportLocale } from '@nexus/factory-domain/views/exports'
 import type { PackageDocuments, PeriodFacts } from './facts'
 import type { CompanyRow } from './store'
+// B-W2b-408: the entries with mapped accounts, the cost of goods sold and variances register, the VAT registers.
+import { ENTRY_HEADINGS, ENTRY_NUMBER_COLUMN } from '@nexus/factory-domain/accounting/journals/entries'
+import { COST_REGISTER_HEADINGS, COST_REGISTER_NUMBER_COLUMN } from '@nexus/factory-domain/accounting/journals/cost-of-sales'
+import { vatRegisterSheets } from './vat-registers/files'
 
 /**
  * The files of an accounting export (B-W2a-39), in Nexus's DEFAULT layout (Q7: to confirm with the accountant): CSV
@@ -84,6 +88,12 @@ export function planFiles(input: PlanInput): FilePlan {
     const journal = (headings: readonly string[], numberColumn: number) => {
       const rows = fileRows(input.documents.journals.get(pkg) ?? [], entries, headings.length - 1, numberColumn)
       files.push({ package: pkg, format: 'CSV', rowCount: rows.length, name: fileName(company, period, pkg, reExport !== null, 'csv'), contentType: CSV, body: csv(language, headings, rows, note(pkg)), copyOf: null })
+      // B-W2b-408 (FIN-151): with the journals switched on, the same documents' entries with the mapped accounts.
+      if (facts.bridge.journalsOn) {
+        const lines = fileRows(input.documents.entries.get(pkg) ?? [], entries, ENTRY_HEADINGS[language].length - 1, ENTRY_NUMBER_COLUMN)
+        const words = language === 'it' ? 'scritture con i conti mappati (mappatura da confermare con il commercialista)' : 'entries with the mapped accounts (mapping to confirm with the accountant)'
+        files.push({ package: pkg, format: 'CSV', rowCount: lines.length, name: fileName(company, period, pkg, reExport !== null, 'csv', '_entries'), contentType: CSV, body: csv(language, ENTRY_HEADINGS[language], lines, `${note(pkg)} · ${words}`), copyOf: null })
+      }
     }
     switch (pkg) {
       case 'SALES_JOURNAL':
@@ -94,6 +104,14 @@ export function planFiles(input: PlanInput): FilePlan {
         break
       case 'PAYMENTS':
         journal(PAYMENTS_HEADINGS[language], 2)
+        break
+      case 'COST_OF_SALES':
+        journal(COST_REGISTER_HEADINGS[language], COST_REGISTER_NUMBER_COLUMN)
+        break
+      case 'VAT_REGISTERS':
+        for (const sheet of vatRegisterSheets(facts, language)) {
+          files.push({ package: pkg, format: 'CSV', rowCount: sheet.rows.length, name: fileName(company, period, pkg, reExport !== null, 'csv', sheet.suffix), contentType: CSV, body: csv(language, sheet.headings, sheet.rows, `${note(pkg)} · ${sheet.note}`), copyOf: null })
+        }
         break
       case 'INTRASTAT': {
         const rows = intrastatFileRows(facts.intrastat ?? []).map(intrastatCells)
@@ -111,9 +129,6 @@ export function planFiles(input: PlanInput): FilePlan {
         files.push({ package: pkg, format: 'CSV', rowCount: rows.length, name: fileName(company, period, pkg, reExport !== null, 'csv', '_valuation'), contentType: CSV, body: csv(language, VALUATION_HEADINGS[language], rows, `${note(pkg)} · ${language === 'it' ? `valori al ${yearEnd.day}, metodo di valutazione da confermare` : `values at the end of ${yearEnd.day}, costing method to confirm`}`), copyOf: null })
         break
       }
-      default:
-        // W2b packages are refused before a plan is made.
-        throw new Error(`planFiles(): ${pkg} has no file in W2a.`)
     }
   }
   return { files, packages: carried }

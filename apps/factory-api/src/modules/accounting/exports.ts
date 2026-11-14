@@ -2,7 +2,7 @@ import type { Prisma } from '@nexus/factory-db'
 import { CHECK_TITLES, explanationProblems, parseStoredChecks, storedChecks, type CheckResult } from '@nexus/factory-domain/accounting/checks'
 import type { CancelExportBody, CreateExportBody, ExportRecordView, ExportRowView, ExportsQuery } from '@nexus/factory-domain/accounting/contracts'
 import { canonicalJson, differenceOf, heldDocuments, parseManifest, type Difference, type ManifestEntry } from '@nexus/factory-domain/accounting/manifest'
-import { DEFAULT_LAYOUT, LAYOUT_WORDS, PACKAGE_RULES, packageProblems, sortPackages, type AccountingPackage } from '@nexus/factory-domain/accounting/packages'
+import { DEFAULT_LAYOUT, LAYOUT_WORDS, PACKAGE_RULES, packageGrains, packageProblems, sortPackages, type AccountingPackage } from '@nexus/factory-domain/accounting/packages'
 import { ACCOUNTING_EXPORT, ACCOUNTING_LOCK, ACCOUNTING_VIEW } from '@nexus/factory-domain/accounting/permissions'
 import { isYearEndPeriod, monthLabel, periodOfDays, periodOfMonth, type Period } from '@nexus/factory-domain/accounting/periods'
 import { ConflictError, ForbiddenError, InvalidStateError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
@@ -37,6 +37,8 @@ import {
   type ExportRow,
   type Reader,
 } from './store'
+// B-W2b-408 (FIN-154): the documents a batch hands over, marked once each.
+import { writeHandedOver } from './journals/handed-over'
 
 /**
  * Numbered accounting exports (B-W2a-39; FIN-046, LOG-098, LOG-100; design finance.accounting "Exports", "5 · Export
@@ -93,7 +95,7 @@ export function periodState(rows: readonly ExportRow[]): PeriodState {
 /** The documents changed since the period's latest batch, for the packages its batches carried. */
 async function changedSince(db: Reader, company: CompanyRow, period: Period, state: PeriodState): Promise<Difference | null> {
   if (!state.latest) return null
-  const packages = sortPackages([...new Set(state.exported.flatMap((row) => row.packages as AccountingPackage[]))].filter((pkg) => PACKAGE_RULES[pkg].wave === 'W2a'))
+  const packages = sortPackages([...new Set(state.exported.flatMap((row) => row.packages as AccountingPackage[]))])
   if (packages.length === 0) return null
   const facts = await readPeriodFacts(db, company, period, packages)
   return differenceOf(state.held, documentsOf(facts, company, packages).documents, packages)
@@ -201,7 +203,10 @@ export async function exportRecord(caller: CommandCaller, exportId: string): Pro
     const period = periodOfRow(row)
     const locks = await liveLocksOver(db, row.companyId, period)
     const lock = locks.find((entry) => entry.exportId === row.id) ?? locks[0] ?? null
-    const lacking = (row.packages as AccountingPackage[]).filter((pkg) => !grains.has(PACKAGE_RULES[pkg].grain))
+    const lacking = (row.packages as AccountingPackage[]).filter((pkg) => packageGrains(pkg).some((grain) => !grains.has(grain)))
+    // B-W2b-408 (FIN-154): the documents it handed over, and the later changes the nightly check flagged on them.
+    const handed = await db.exportedDocument.findMany({ where: { exportId: row.id }, select: { recordType: true, recordId: true, changedAt: true } })
+    const flags = new Map(handed.filter((entry) => entry.changedAt !== null).map((entry) => [`${entry.recordType}|${entry.recordId}`, toUtcIso(entry.changedAt!)]))
     const mayExport = can(actor, ACCOUNTING_EXPORT, { companyId: row.companyId })
     const latest = view!.supersededBy === null && row.status === 'EXPORTED'
     const checks = parseStoredChecks(row.checks).map((check) => ({
@@ -216,7 +221,8 @@ export async function exportRecord(caller: CommandCaller, exportId: string): Pro
     return {
       ...view!,
       checks,
-      manifest: manifestOf(row).map((entry) => ({ package: entry.package, recordType: entry.recordType, recordId: entry.recordId, number: entry.number, version: entry.version, change: entry.change })),
+      manifest: manifestOf(row).map((entry) => ({ package: entry.package, recordType: entry.recordType, recordId: entry.recordId, number: entry.number, version: entry.version, change: entry.change, changedAt: flags.get(`${entry.recordType}|${entry.recordId}`) ?? null })),
+      handedOver: { documents: handed.length, flagged: flags.size },
       lock: lock ? { id: lock.id, level: lock.level, status: lock.status } : null,
       actions: {
         reExport: held(mayExport && latest && (view!.changedSince?.count ?? 0) > 0, !mayExport ? 'Re-exporting needs accounting.export.' : !latest ? 'Only the latest exported batch of the month is re-exported.' : 'Nothing changed since this batch.'),
@@ -350,11 +356,17 @@ export async function createExport(caller: CommandCaller, body: CreateExportBody
       },
       select: { id: true },
     })
+    // B-W2b-408 (FIN-154): each document it carries, marked once (NEW, or CHANGED when an earlier batch handed it over).
+    const handed = await writeHandedOver(tools, { companyId: company.id, exportId: draftId, reExport: prepared.supersedes !== null, manifest: prepared.manifest })
+    if (handed.elsewhere.length > 0) {
+      const names = handed.elsewhere.slice(0, 5).map((entry) => `${entry.number ?? 'a document'} (${entry.batch ?? 'an earlier batch'})`).join(', ')
+      throw refuse(`${monthLabel(period.month)} would hand over again what another month's batch handed over.`, 'HANDED_OVER_ELSEWHERE', `${names}${handed.elsewhere.length > 5 ? ', …' : ''}: its date moved into this month after that batch. A re-export of that month marks it removed; ask the accountant how to carry it.`)
+    }
     tools.audit({
       recordType: 'AccountingExport',
       recordId: draftId,
       companyId: company.id,
-      after: { status: 'DRAFT', periodStart: period.start, periodEnd: period.end, packages: [...prepared.packages], layout: DEFAULT_LAYOUT, supersedesId: prepared.supersedes?.id ?? null, documents: prepared.manifest.length, failedChecks: checks.filter((check) => !check.passed).map((check) => check.code) },
+      after: { status: 'DRAFT', periodStart: period.start, periodEnd: period.end, packages: [...prepared.packages], layout: DEFAULT_LAYOUT, supersedesId: prepared.supersedes?.id ?? null, documents: prepared.manifest.length, handedOver: handed.written, failedChecks: checks.filter((check) => !check.passed).map((check) => check.code) },
     })
     return { exportId: draftId }
   })
@@ -453,7 +465,8 @@ export async function downloadExportFile(request: FastifyRequest, exportId: stri
   const file = row.files.find((entry) => entry.id === fileId || entry.file.id === fileId)
   if (!file) throw new NotFoundError('This batch has no such file.')
   const rule = PACKAGE_RULES[file.package as AccountingPackage]
-  if (!grainsOf(context).has(rule.grain)) throw new ForbiddenError(`${rule.words.en} carries ${rule.grain === 'cost' ? 'costs' : 'prices'}: downloading it needs the ${rule.grain} grain.`)
+  const missing = packageGrains(file.package as AccountingPackage).filter((grain) => !grainsOf(context).has(grain))
+  if (missing.length > 0) throw new ForbiddenError(`${rule.words.en} carries ${missing.map((grain) => (grain === 'cost' ? 'costs' : 'prices')).join(' and ')}: downloading it needs the ${missing.join(' and the ')} grain.`)
   return { download: await downloadFile(processFiles(), { caller: request, system: systemCallerOf(request) }, file.file.id) }
 }
 

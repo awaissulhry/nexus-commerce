@@ -125,7 +125,9 @@
       "nothingOpen": "Nothing is open: every part of the material sent is declared.",
       "notDeclared": "The workshop has not declared this material yet: book its declaration first.",
       "server": "The order’s state does not allow it now: read it again.",
-      "reasonLong": "The words are at most 2000 characters."
+      "reasonLong": "The words are at most 2000 characters.",
+      "lockReason": "Say why it goes into the locked month (at least 3 characters).",
+      "lockReasonLong": "Say why in at most 500 characters."
     },
     "declare": {
       "open": "Book the workshop’s declaration",
@@ -189,12 +191,17 @@
       "notDeclared": "The workshop has not declared this material yet: book its declaration first.",
       "reason": "Say why, in at most 2000 characters.",
       "belowZero": "A quantity would go below 0: read the line again.",
-      "open": "More than is still open: read the line again."
+      "open": "More than is still open: read the line again.",
+      "periodSoft": "The day it was reported falls in a soft-locked accounting month: say why it goes in anyway, then book it again."
     },
     "booked_one": "Booked: the stock followed with {count} move.",
     "booked_other": "Booked: the stock followed with {count} moves.",
     "bookedWaiting_one": "Booked: the stock followed with {count} move; the work order’s cost waits (another currency).",
-    "bookedWaiting_other": "Booked: the stock followed with {count} moves; the work order’s cost waits (another currency)."
+    "bookedWaiting_other": "Booked: the stock followed with {count} moves; the work order’s cost waits (another currency).",
+    "lock": {
+      "label": "Why it goes into the locked month",
+      "hint": "Finance soft-locked this accounting month: the booking goes in only with a reason, kept with it in the audit trail. A month closed for good takes nothing."
+    }
   },
   "cost": {
     "intro": "The fee for the pieces plus material and transport, booked to {workOrder}.",
