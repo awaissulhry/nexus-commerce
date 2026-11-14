@@ -6,7 +6,7 @@ import { can } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { marksCurrent } from '@nexus/factory-domain/shipping/cartons/rules'
 import { SHIPPING_PACK } from '@nexus/factory-domain/shipping/permissions'
-import { labelJobKind, reprintReasonOf, reprintRefusal, type LabelJobKind } from '@nexus/factory-domain/shipping/reprint/rules'
+import { isTestLabelJob, labelJobKind, reprintReasonOf, reprintRefusal, type LabelJobKind } from '@nexus/factory-domain/shipping/reprint/rules'
 import type { ShipmentStatus } from '@nexus/factory-domain/shipping/shipments'
 import { command, type CommandCaller, type CommandTx } from '../../../core/command'
 import { actorOf } from '../../../core/context'
@@ -34,7 +34,8 @@ import { readShipment, type ShipmentHeader } from '../store'
  * Nothing is bought again and nothing is laid out again. Refusals are 409 in words with the issue path `refusal/<CODE>`.
  */
 
-const PARCEL = { id: true, seq: true, trackingNumber: true, labelledAt: true, cartonNumber: true, cartonCount: true, marksPrintedAt: true } as const satisfies Prisma.ParcelSelect
+// B-W2b-391 + B-W2b-390: carrierParcelId says a TEST label of test mode (`test:`).
+const PARCEL = { id: true, seq: true, trackingNumber: true, carrierParcelId: true, labelledAt: true, cartonNumber: true, cartonCount: true, marksPrintedAt: true } as const satisfies Prisma.ParcelSelect
 type ParcelRow = Prisma.ParcelGetPayload<{ select: typeof PARCEL }>
 
 const JOB = {
@@ -90,7 +91,7 @@ function refusalOf(shipment: Pick<ShipmentHeader, 'number' | 'status'>, parcel: 
       marksCurrent: marksCurrent({ id: parcel.id, seq: parcel.seq, cartonNumber: parcel.cartonNumber, cartonCount: parcel.cartonCount, marksPrinted: parcel.marksPrintedAt !== null }, count),
     },
   })
-  return { kind, refusal }
+  return { kind, refusal, test: isTestLabelJob(kind, job, { trackingNumber: parcel.trackingNumber, providerId: parcel.carrierParcelId }) }
 }
 
 /** GET /shipping/shipments/:shipmentId/label-jobs. */
@@ -127,11 +128,12 @@ export async function labelJobs(caller: CommandCaller, shipmentId: string) {
         jobs: jobs
           .filter((job) => job.recordId === parcel.id)
           .map((job) => {
-            const { kind, refusal } = refusalOf(shipment, parcel, parcels.length, job)
+            const { kind, refusal, test } = refusalOf(shipment, parcel, parcels.length, job)
             const printer = printers.get(job.printerId)
             return {
               jobId: job.id,
               kind,
+              test,
               scanId: job.scanId,
               status: job.status,
               printer: { id: job.printerId, code: printer?.code ?? '', name: printer?.name ?? '' },
@@ -210,12 +212,12 @@ export async function reprintLabels(caller: CommandCaller, shipmentId: string, b
         : inside.audience === 'office'
           ? { requestedById: inside.actorId, deviceId: null, createdById: inside.actorId }
           : { requestedById: null, deviceId: null, createdById: null }
-    const made: { jobId: string; reprintOfId: string; parcelId: string; seq: number; kind: LabelJobKind; printerId: string; status: 'QUEUED' }[] = []
+    const made: { jobId: string; reprintOfId: string; parcelId: string; seq: number; kind: LabelJobKind; test: boolean; printerId: string; status: 'QUEUED' }[] = []
     for (const step of plan) {
       const parcel = now_.parcels.find((row) => row.id === step.parcel.id)
       const job = now_.jobs.find((row) => row.id === step.job.id)
       if (!parcel || !job) throw new ConflictError('The shipment changed while the labels were being printed again: look again.')
-      const { refusal } = refusalOf(current, parcel, now_.parcels.length, job)
+      const { refusal, test } = refusalOf(current, parcel, now_.parcels.length, job)
       if (refusal) throw refused(refusal.code, refusal.message)
       const printer = await tx.printer.findUnique({ where: { id: step.printer.id }, select: { status: true } })
       if (printer?.status !== 'ACTIVE') throw refused('PRINTER', `The printer ${step.printer.code} takes no jobs now.`)
@@ -248,10 +250,10 @@ export async function reprintLabels(caller: CommandCaller, shipmentId: string, b
         recordId: id,
         companyId: step.printer.companyId,
         siteId: step.printer.siteId,
-        after: { printerId: step.printer.id, recordType: 'Parcel', recordId: parcel.id, payloadKind: 'ZPL', labelKind: job.labelKind, scanId: job.scanId, copies, reprintOfId: job.id, reprintReason: reason.reason, shipmentId: shipment.id },
+        after: { printerId: step.printer.id, recordType: 'Parcel', recordId: parcel.id, payloadKind: 'ZPL', labelKind: job.labelKind, scanId: job.scanId, copies, reprintOfId: job.id, reprintReason: reason.reason, shipmentId: shipment.id, test },
       })
       emit({ type: 'print.job_queued', subject: id, companyId: step.printer.companyId, siteId: step.printer.siteId, payload: { jobId: id, printerId: step.printer.id, payloadKind: 'ZPL' } })
-      made.push({ jobId: id, reprintOfId: job.id, parcelId: parcel.id, seq: parcel.seq, kind: step.kind, printerId: step.printer.id, status: 'QUEUED' })
+      made.push({ jobId: id, reprintOfId: job.id, parcelId: parcel.id, seq: parcel.seq, kind: step.kind, test, printerId: step.printer.id, status: 'QUEUED' })
     }
     // The shipment's own record of it (its timeline): which labels, why.
     audit({
@@ -260,7 +262,7 @@ export async function reprintLabels(caller: CommandCaller, shipmentId: string, b
       recordId: shipment.id,
       companyId: shipment.companyId,
       siteId: shipment.siteId,
-      after: { reason: reason.reason, jobs: made.map((entry) => ({ jobId: entry.jobId, reprintOfId: entry.reprintOfId, parcelSeq: entry.seq, kind: entry.kind })), ...(inside.audience === 'floor' ? { deviceId: inside.deviceId } : {}) },
+      after: { reason: reason.reason, jobs: made.map((entry) => ({ jobId: entry.jobId, reprintOfId: entry.reprintOfId, parcelSeq: entry.seq, kind: entry.kind, test: entry.test })), ...(inside.audience === 'floor' ? { deviceId: inside.deviceId } : {}) },
     })
     emit({ type: 'shipping.label_reprinted', subject: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, payload: { shipmentId: shipment.id, number: current.number, jobs: made.length } })
     return { shipmentId: shipment.id, number: current.number, reason: reason.reason, jobs: made }

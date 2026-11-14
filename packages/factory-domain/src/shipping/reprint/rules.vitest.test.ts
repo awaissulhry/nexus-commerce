@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { labelJobKind, marksCode, reprintReasonOf, reprintRefusal, type ReprintFacts } from './rules'
+import { isTestLabelJob, labelJobKind, marksCode, reprintReasonOf, reprintRefusal, type ReprintFacts } from './rules'
 
 const T0 = new Date('2026-11-14T08:00:00Z')
 const LATER = new Date('2026-11-14T09:00:00Z')
@@ -38,6 +38,13 @@ describe('reprint a label with a reason (LOG-027)', () => {
     expect(reprintRefusal(marks)).toBeNull()
     expect(reprintRefusal({ ...marks, parcel: { ...marks.parcel, marksCurrent: false } })?.code).toBe('MARKS_CHANGED')
     expect(reprintRefusal({ ...marks, job: { ...marks.job, createdAt: new Date('2026-11-14T07:00:00Z') } })?.code).toBe('MARKS_CHANGED')
+  })
+
+  it("says a TEST label of test mode is TEST (B-W2b-390), the current one by its provider id, an older one by its number", () => {
+    expect(isTestLabelJob('CARRIER', { scanId: 'TEST-0A1B2C3D4E-1' }, { trackingNumber: 'TEST-0A1B2C3D4E-1', providerId: 'test:abc.v1' })).toBe(true)
+    expect(isTestLabelJob('CARRIER', { scanId: 'TRACK-0001' }, { trackingNumber: 'TRACK-0001', providerId: '123:456' })).toBe(false)
+    expect(isTestLabelJob('CARRIER', { scanId: 'TEST-0A1B2C3D4E-1' }, { trackingNumber: 'TRACK-0002', providerId: '123:457' })).toBe(true)
+    expect(isTestLabelJob('MARKS', { scanId: 'SH-00001-1' }, { trackingNumber: null, providerId: null })).toBe(false)
   })
 
   it('prints no document, and nothing once the goods are delivered, back or the shipment cancelled', () => {

@@ -31,6 +31,7 @@ import { localKeyProvider } from '../../../platform/secrets/local'
 import { SECRET_PURPOSES, storeSecret } from '../../../platform/secrets/store'
 import { fileTravelDocuments, TRAVEL_DOCUMENT_PERMISSIONS } from '../documents/testing/compliance'
 import { createCarrierRuntime, useCarrier } from '../labels/carrier'
+import { pdfText } from '../../../platform/documents/testing/pdf-text'
 import { pdfPages } from './pdf-merge'
 
 /**
@@ -41,7 +42,8 @@ import { pdfPages } from './pdf-merge'
  * local file store, sessions from the test authenticator. Every name and number is made up. Run with
  * `node scripts/factory/run-pg-tests.mjs modules/shipping/shipment-pack`.
  *
- *   setup      SH-0002 packed into two weighed parcels, its DDT issued, its two labels bought (PDF and ZPL) and printed (W1)
+ *   setup      SH-0002 packed into two weighed parcels, its DDT issued, its two labels bought (PDF and ZPL) and printed (W1);
+ *              site A1 stays in test mode (B-W2b-390): the labels are TEST labels, and every path here says TEST
  *   reprint    a packer prints a label again with a reason: a new job copying the ZPL and naming the original; a reason too
  *              short refused in words; who (the office reads the device, never a worker behind a closed gate), when, why
  *   pack       the floor's one PDF holds the labels and the DDT (the packing list waits for the office), page for page; the
@@ -202,7 +204,9 @@ describe('reprint a label with a reason (LOG-027)', () => {
   it("lists each parcel's label jobs: the carrier label, printable again, asked by a tablet (the office reads the device)", async () => {
     const listed = await ok('warehouse', 'GET', url())
     const first = listed.parcels.find((parcel: Json) => parcel.parcelId === S.p1)
-    expect(first.jobs).toEqual([expect.objectContaining({ jobId: S.job1, kind: 'CARRIER', status: 'QUEUED', reprintable: true, refusal: null, reprintOfId: null, reason: null, printer: expect.objectContaining({ code: 'LBL-391' }) })])
+    // Test mode (B-W2b-390): a TEST label, said so.
+    expect(first.jobs).toEqual([expect.objectContaining({ jobId: S.job1, kind: 'CARRIER', test: true, status: 'QUEUED', reprintable: true, refusal: null, reprintOfId: null, reason: null, printer: expect.objectContaining({ code: 'LBL-391' }) })])
+    expect(first.jobs[0].scanId).toMatch(/^TEST-/)
     expect(first.jobs[0].requestedBy).toMatchObject({ by: 'FLOOR', name: null })
     // A floor reader learns no name.
     expect((await ok('packerA1', 'GET', url())).parcels[0].jobs[0].requestedBy).toEqual({ by: 'FLOOR', name: null, device: null, hidden: true })
@@ -217,10 +221,11 @@ describe('reprint a label with a reason (LOG-027)', () => {
   it('prints it again: a new job copying the ZPL, naming the original and why; logged on the shipment; nothing bought', async () => {
     const before = fake.requests.length
     const answer = await ok('packerA1', 'POST', `${url()}/reprint`, { jobIds: [S.job1], reason: '  Torn at the dock ' }, 201)
-    expect(answer).toMatchObject({ reason: 'Torn at the dock', jobs: [{ reprintOfId: S.job1, parcelId: S.p1, seq: 1, kind: 'CARRIER', printerId: LABEL_PRINTER, status: 'QUEUED' }] })
+    expect(answer).toMatchObject({ reason: 'Torn at the dock', jobs: [{ reprintOfId: S.job1, parcelId: S.p1, seq: 1, kind: 'CARRIER', test: true, printerId: LABEL_PRINTER, status: 'QUEUED' }] })
     S.reprint = answer.jobs[0].jobId
-    const [copy] = await admin(`SELECT r.zpl = o.zpl AS same, r."reprintOfId", r."reprintReason", r."scanId" = o."scanId" AS "sameCode", r."deviceId" IS NOT NULL AS "byDevice" FROM "PrintJob" r JOIN "PrintJob" o ON o.id = r."reprintOfId" WHERE r.id = $1`, [S.reprint])
-    expect(copy).toEqual({ same: true, reprintOfId: S.job1, reprintReason: 'Torn at the dock', sameCode: true, byDevice: true })
+    const [copy] = await admin(`SELECT r.zpl = o.zpl AS same, r.zpl LIKE '%TEST LABEL%' AS "saysTest", r."reprintOfId", r."reprintReason", r."scanId" = o."scanId" AS "sameCode", r."deviceId" IS NOT NULL AS "byDevice" FROM "PrintJob" r JOIN "PrintJob" o ON o.id = r."reprintOfId" WHERE r.id = $1`, [S.reprint])
+    // The TEST label printed again says TEST LABEL as the original does.
+    expect(copy).toEqual({ same: true, saysTest: true, reprintOfId: S.job1, reprintReason: 'Torn at the dock', sameCode: true, byDevice: true })
     const [logged] = await admin(`SELECT after FROM "AuditLog" WHERE "recordType" = 'Shipment' AND "recordId" = $1 AND action = 'shipping.reprintLabels'`, [sh2()])
     expect(logged!.after).toMatchObject({ reason: 'Torn at the dock', jobs: [{ jobId: S.reprint, reprintOfId: S.job1, parcelSeq: 1, kind: 'CARRIER' }] })
     expect((await outbox('shipping.label_reprinted', sh2()))[0]!.n).toBe(1)
@@ -238,25 +243,31 @@ describe('one PDF per shipment (LOG-031)', () => {
 
   it("says what the floor's pack holds: the labels and the DDT; the packing list waits for the office; no priced paper", async () => {
     const state = await ok('packerA1', 'GET', url())
-    expect(state.parts.map((part: Json) => [part.kind, part.state, part.files])).toEqual([
-      ['LABELS', 'READY', 2],
-      ['PACKING_LIST', 'MISSING', 0],
-      ['DDT', 'READY', 1],
-      ['COMMERCIAL_INVOICE', 'NONE', 0],
-      ['PROFORMA', 'NONE', 0],
+    expect(state.parts.map((part: Json) => [part.kind, part.state, part.files, part.test])).toEqual([
+      ['LABELS', 'READY', 2, true],
+      ['PACKING_LIST', 'MISSING', 0, false],
+      ['DDT', 'READY', 1, false],
+      ['COMMERCIAL_INVOICE', 'NONE', 0, false],
+      ['PROFORMA', 'NONE', 0, false],
     ])
+    // Test mode: the pack says it holds TEST labels.
+    expect(state.test).toBe(true)
+    expect(state.parts[0].words).toMatch(/^TEST labels of test mode: marked TEST LABEL - NOT FOR SHIPPING/)
     expect(state.latest).toBeNull()
     expect(state.printer).toBeNull()
   })
 
   it('makes it at the station: one PDF of every page, kept as version 1; the same papers give it back', async () => {
     const made = await ok('packerA1', 'POST', url(), {})
-    expect(made).toMatchObject({ pack: { version: 1, made: true }, job: null, problem: null })
+    expect(made).toMatchObject({ pack: { version: 1, made: true }, test: true, job: null, problem: null })
     expect(made.pack.pages).toBeGreaterThanOrEqual(3)
     const pdf = await call('packerA1', 'GET', `${url()}/pdf`)
     expect(pdf.statusCode, pdf.body).toBe(200)
     expect(pdf.headers['content-type']).toBe('application/pdf')
     expect(pdfPages(pdf.rawPayload)).toBe(made.pack.pages)
+    // Its label pages are the TEST labels' own (TEST LABEL - NOT FOR SHIPPING), its title says TEST.
+    expect(pdfText(pdf.rawPayload)).toContain('TEST LABEL - NOT FOR SHIPPING')
+    expect(pdf.rawPayload.toString('latin1')).toContain('/Title (SEED-SH-0002 documents - TEST labels, not for shipping)')
     expect((await ok('packerA1', 'POST', url(), {})).pack).toMatchObject({ version: 1, made: false })
     const [row] = await admin(`SELECT g.kind::text, g.version, g.number, f.visibility::text[] AS visibility, f."floorSiteId" FROM "GeneratedDocument" g JOIN "StoredFile" f ON f.id = g."fileId" WHERE g."recordId" = $1 AND g.kind = 'SHIPMENT_PACK'`, [sh2()])
     expect(row).toMatchObject({ kind: 'SHIPMENT_PACK', version: 1, number: 'SEED-SH-0002', visibility: expect.arrayContaining(['FLOOR']), floorSiteId: A.siteA1 })
@@ -331,6 +342,7 @@ describe('a voided label (LOG-027)', () => {
     const error = await refused('packerA1', 'POST', `/shipping/shipments/${sh2()}/label-jobs/reprint`, { jobIds: [S.reprint], reason: 'Torn again' }, 409)
     expect(error.issues).toEqual([{ path: 'refusal/LABEL_VOIDED', message: expect.stringContaining('Parcel 1: this carrier label was voided or replaced') }])
     const labels = (await ok('packerA1', 'GET', `/shipping/shipments/${sh2()}/pack`)).parts.find((part: Json) => part.kind === 'LABELS')
-    expect(labels).toMatchObject({ state: 'READY', files: 1, words: 'Parcel 1 has no carrier label yet.' })
+    // Parcel 2 keeps its TEST label (test mode): said first.
+    expect(labels).toMatchObject({ state: 'READY', files: 1, test: true, words: 'TEST labels of test mode: marked TEST LABEL - NOT FOR SHIPPING; nothing was sent to a carrier. Parcel 1 has no carrier label yet.' })
   })
 })

@@ -58,6 +58,12 @@ export const PACK_MAX_PAGES = 400
 /** The parts the caller gets: priced parts only for one who sees prices. */
 export const mayHave = (kind: PackPart, seesPrices: boolean): boolean => seesPrices || !PRICED_PARTS.includes(kind)
 
+/**
+ * B-W2b-390 (test mode): the labels part holds TEST labels (each says TEST LABEL - NOT FOR SHIPPING, no barcode); the pack says
+ * so, its title too, and it is never shared with a customer (no pack is).
+ */
+export const TEST_PACK_WORDS = 'TEST labels of test mode: marked TEST LABEL - NOT FOR SHIPPING; nothing was sent to a carrier.'
+
 /** The words of a part not shown to the caller. */
 export const NOT_SHOWN_WORDS = 'It shows prices: it is printed by someone who sees prices.'
 

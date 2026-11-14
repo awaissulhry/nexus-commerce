@@ -18,6 +18,8 @@ const requester = output({
 const labelJob = output({
   jobId: id(),
   kind: z.enum(LABEL_JOB_KINDS),
+  /** A TEST label of test mode (B-W2b-390): it says TEST LABEL - NOT FOR SHIPPING; a reprint of it stays TEST. */
+  test: z.boolean(),
   scanId: z.string().nullable(),
   status: z.enum(['QUEUED', 'SENT', 'PRINTED', 'FAILED']),
   printer: output({ id: id(), code: z.string(), name: z.string() }),
@@ -62,7 +64,7 @@ export const reprintContract = defineContract({
       shipmentId: id(),
       number: z.string(),
       reason: z.string(),
-      jobs: z.array(output({ jobId: id(), reprintOfId: id(), parcelId: id(), seq: z.number().int(), kind: z.enum(LABEL_JOB_KINDS), printerId: id(), status: z.literal('QUEUED') })),
+      jobs: z.array(output({ jobId: id(), reprintOfId: id(), parcelId: id(), seq: z.number().int(), kind: z.enum(LABEL_JOB_KINDS), test: z.boolean(), printerId: id(), status: z.literal('QUEUED') })),
     }),
   },
 })

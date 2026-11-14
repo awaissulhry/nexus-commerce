@@ -13,6 +13,8 @@ const part = output({
   words: z.string().nullable(),
   /** How many files it adds (one per labelled parcel for the labels). */
   files: z.number().int(),
+  /** B-W2b-390: the labels are TEST labels of test mode (never for shipping). */
+  test: z.boolean(),
 })
 
 const version = output({
@@ -32,6 +34,8 @@ export const packStateContract = defineContract({
       number: z.string(),
       status: z.string(),
       parts: z.array(part),
+      /** B-W2b-390: the pack holds TEST labels of test mode. */
+      test: z.boolean(),
       latest: version.nullable(),
       /** The site's document printer (A4) the office's pack goes to; null: none (the browser prints the PDF). */
       printer: output({ id: id(), code: z.string(), name: z.string() }).nullable(),
@@ -55,6 +59,8 @@ export const makePackContract = defineContract({
       /** made false: the newest version already holds these papers. */
       pack: output({ documentId: id(), version: z.number().int(), pages: z.number().int().nullable(), made: z.boolean(), createdAt: instant() }),
       parts: z.array(part),
+      /** B-W2b-390: the pack holds TEST labels of test mode. */
+      test: z.boolean(),
       /** The one print job (office), or null. */
       job: output({ jobId: id(), printerId: id(), status: z.literal('QUEUED') }).nullable(),
       /** Why it was not printed (no document printer, a printer that prints from the browser), or null. */

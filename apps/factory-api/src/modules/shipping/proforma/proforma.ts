@@ -31,7 +31,8 @@ import { proformaFactsOf, type ProformaFacts, type SampleValue } from './facts'
  *                                                  customer), the GeneratedDocument PROFORMA (the number as allocated: the
  *                                                  database checks it), audit on the record, shipping.proforma_made (201)
  *
- * A proforma is not a tax document (the PDF says so) and changes nothing on its record. Refusals are 409 in words.
+ * A proforma is not a tax document (the PDF says so) and changes nothing on its record. It names no carrier label and no
+ * tracking number, so a TEST label of test mode (B-W2b-390) never reaches the customer through it. Refusals are 409 in words.
  */
 
 function officeOf(caller: CommandCaller): OfficeContext {

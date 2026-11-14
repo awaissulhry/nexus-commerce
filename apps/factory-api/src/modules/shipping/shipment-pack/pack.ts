@@ -13,6 +13,7 @@ import {
   PACK_KIND,
   PACK_MAX_BYTES,
   PACK_MAX_PAGES,
+  TEST_PACK_WORDS,
   packFingerprint,
   packProblems,
   type PackPart,
@@ -28,6 +29,8 @@ import { tenantOf } from '../cells'
 import { liveDdtOf, pdfFileIdOf } from '../ddt/store'
 import { labelFilesOf, readLabelParcels } from '../labels/store'
 import { packingList, packingListFingerprint } from '../shipments/packing-list'
+// B-W2b-390: a TEST label of test mode.
+import { isTestLabel } from '@nexus/factory-domain/shipping/test-mode/rules'
 import { readContents, readShipment, type ShipmentHeader } from '../store'
 import { mergePdfs, PdfMergeError } from './pdf-merge'
 
@@ -58,6 +61,8 @@ type FileRow = Prisma.StoredFileGetPayload<{ select: typeof FILE }>
 
 interface Part extends PackPartFacts {
   readonly rows: readonly FileRow[]
+  /** B-W2b-391 + B-W2b-390: the labels hold a TEST label of test mode (never for shipping). */
+  readonly test: boolean
 }
 
 async function packerShipment(caller: CommandCaller, shipmentId: string): Promise<{ context: ShippingContext; shipment: ShipmentHeader }> {
@@ -72,15 +77,16 @@ const storeCallerOf = (callers: Callers, context: ShippingContext): CommandCalle
 
 const seesPricesOf = (context: ShippingContext): boolean => context.audience === 'office' && holds(actorOf(context), 'money.price')
 
-const ready = (kind: PackPart, rows: readonly FileRow[], number: string | null, words: string | null = null): Part => ({
+const ready = (kind: PackPart, rows: readonly FileRow[], number: string | null, words: string | null = null, test = false): Part => ({
   kind,
   state: 'READY',
   number,
   words,
   files: rows.map((row): PartFile => ({ fileId: row.id, sha256: row.sha256 })),
   rows,
+  test,
 })
-const notReady = (kind: PackPart, state: 'MISSING' | 'NONE' | 'NOT_SHOWN', words: string | null = null): Part => ({ kind, state, number: null, words, files: [], rows: [] })
+const notReady = (kind: PackPart, state: 'MISSING' | 'NONE' | 'NOT_SHOWN', words: string | null = null): Part => ({ kind, state, number: null, words, files: [], rows: [], test: false })
 
 async function availableFiles(db: CommandTx, ids: readonly string[]): Promise<Map<string, FileRow>> {
   if (ids.length === 0) return new Map()
@@ -111,13 +117,18 @@ async function readParts(db: CommandTx, shipment: ShipmentHeader, seesPrices: bo
     const files = await availableFiles(db, pdfIds)
     const rows: FileRow[] = []
     const notes: string[] = []
+    let test = false
     for (const parcel of parcels) {
       const pdf = labelFiles.get(parcel.id)?.find((file) => file.format === 'PDF' && files.has(file.fileId))
-      if (pdf) rows.push(files.get(pdf.fileId)!)
-      else if (parcel.labelledAt === null) notes.push(`Parcel ${parcel.seq} has no carrier label yet.`)
+      if (pdf) {
+        rows.push(files.get(pdf.fileId)!)
+        // B-W2b-390: a TEST label of test mode (its PDF says TEST LABEL - NOT FOR SHIPPING, no barcode).
+        if (isTestLabel(parcel.carrierParcelId)) test = true
+      } else if (parcel.labelledAt === null) notes.push(`Parcel ${parcel.seq} has no carrier label yet.`)
       else notes.push(`Parcel ${parcel.seq}: its label is kept as ZPL only: print it on the label printer.`)
     }
-    parts.push(rows.length > 0 ? ready('LABELS', rows, null, notes.length > 0 ? notes.join(' ') : null) : notReady('LABELS', 'MISSING', parcels.length === 0 ? 'Pack the parcels and buy their carrier labels first.' : notes.join(' ') || 'Buy the carrier labels first.'))
+    if (test) notes.unshift(TEST_PACK_WORDS)
+    parts.push(rows.length > 0 ? ready('LABELS', rows, null, notes.length > 0 ? notes.join(' ') : null, test) : notReady('LABELS', 'MISSING', parcels.length === 0 ? 'Pack the parcels and buy their carrier labels first.' : notes.join(' ') || 'Buy the carrier labels first.'))
   }
 
   // The packing list: the newest version, while it matches the parcels.
@@ -146,7 +157,10 @@ async function readParts(db: CommandTx, shipment: ShipmentHeader, seesPrices: bo
   return inPackOrder(parts)
 }
 
-const partView = (part: Part) => ({ kind: part.kind, state: part.state, number: part.number, words: part.words, files: part.files.length })
+const partView = (part: Part) => ({ kind: part.kind, state: part.state, number: part.number, words: part.words, files: part.files.length, test: part.test })
+
+/** B-W2b-390: the pack holds TEST labels (a ready part says so). */
+const testOf = (parts: readonly Part[]): boolean => parts.some((part) => part.state === 'READY' && part.test)
 
 async function versionsOf(db: CommandTx, shipmentId: string) {
   return db.generatedDocument.findMany({ where: { recordType: 'Shipment', recordId: shipmentId, kind: PACK_KIND }, select: { id: true, version: true, fingerprint: true, fileId: true, createdAt: true }, orderBy: { version: 'desc' } })
@@ -181,6 +195,7 @@ export async function packState(callers: Callers, shipmentId: string) {
       number: shipment.number,
       status: shipment.status,
       parts: parts.map(partView),
+      test: testOf(parts),
       latest: newest ? { documentId: newest.id, version: newest.version, pages: await pagesOf(db, shipment.id, newest.id), createdAt: toUtcIso(newest.createdAt), current: newest.fingerprint === packFingerprint(parts) } : null,
       printer: printer ? { id: printer.id, code: printer.code, name: printer.name } : null,
     }
@@ -270,7 +285,7 @@ export async function makePack(files: FilesRuntime, callers: Callers, shipmentId
     const bytes = readyParts.flatMap((part) => part.rows.map((row) => bytesOf.get(row.id)!))
     let merged
     try {
-      merged = mergePdfs(bytes, { title: `${shipment.number} documents`, maxPages: PACK_MAX_PAGES })
+      merged = mergePdfs(bytes, { title: `${shipment.number} documents${testOf(parts) ? ' - TEST labels, not for shipping' : ''}`, maxPages: PACK_MAX_PAGES })
     } catch (error) {
       if (error instanceof PdfMergeError) throw refused(`The papers cannot be merged: ${error.message}`)
       throw error
@@ -302,6 +317,7 @@ export async function makePack(files: FilesRuntime, callers: Callers, shipmentId
       number: shipment.number,
       pack: { documentId: same.id, version: same.version, pages: await store.withClient((db) => pagesOf(db, shipment.id, same.id)), made: false, createdAt: toUtcIso(same.createdAt) },
       parts: parts.map(partView),
+      test: testOf(parts),
       job: null,
       problem,
     }
@@ -332,7 +348,7 @@ export async function makePack(files: FilesRuntime, callers: Callers, shipmentId
         recordId: shipment.id,
         companyId: shipment.companyId,
         siteId: shipment.siteId,
-        after: { documentId: id, version, fileId: file.id, fingerprint, pages, parts: pagesPerPart, priced, ...(context.audience === 'floor' ? { deviceId: context.deviceId, workerId: context.actorId } : {}) },
+        after: { documentId: id, version, fileId: file.id, fingerprint, pages, parts: pagesPerPart, priced, test: testOf(parts), ...(context.audience === 'floor' ? { deviceId: context.deviceId, workerId: context.actorId } : {}) },
       })
       emit({ type: 'shipping.pack_made', subject: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, payload: { shipmentId: shipment.id, number: shipment.number, documentId: id, version, pages: pages ?? 1 } })
       document = { id, version, fileId: file.id, createdAt: toUtcIso(now), made: true }
@@ -372,6 +388,7 @@ export async function makePack(files: FilesRuntime, callers: Callers, shipmentId
     number: shipment.number,
     pack: { documentId: result.document.id, version: result.document.version, pages: shownPages, made: result.document.made, createdAt: result.document.createdAt },
     parts: parts.map(partView),
+    test: testOf(parts),
     job: result.job,
     problem,
   }

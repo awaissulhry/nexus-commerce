@@ -1,4 +1,5 @@
 import type { ShipmentStatus } from '../shipments'
+import { isTestLabel } from '../test-mode/rules'
 
 /**
  * Reprint a label with a reason (B-W2b-391; LOG-027 "Audited reprint; W1 downloads the label PDF again"; plan: "Reprint any
@@ -17,6 +18,9 @@ import type { ShipmentStatus } from '../shipments'
  *   OTHER     any other label job of the parcel (an SSCC once LOG-021/022 keeps them): printed again as it was
  *
  * Not once the goods were delivered or came back, nor for a cancelled shipment: the label would be stuck on nothing.
+ *
+ * A TEST label of test mode (B-W2b-390: "TEST LABEL - NOT FOR SHIPPING", no barcode) printed again stays TEST: its ZPL is
+ * copied as it is and the job is said to be TEST; going live clears the open shipments' TEST labels, so they are refused.
  */
 
 export const REPRINT_REASON_MIN = 3
@@ -54,6 +58,15 @@ export function labelJobKind(job: { readonly scanId: string | null; readonly lab
   if (scanId !== null && scanId.startsWith(`${shipmentNumber}-`) && /^\d{1,3}$/.test(scanId.slice(shipmentNumber.length + 1))) return 'MARKS'
   if (scanId !== null && job.labelKind === 'CARTON') return 'CARRIER'
   return 'OTHER'
+}
+
+/** The TEST tracking number's prefix (B-W2b-390 testTrackingNumberOf). */
+const TEST_TRACKING = 'TEST-'
+
+/** A carrier label job of test mode: the parcel's current TEST label (its provider id), or an older TEST label it carried. */
+export function isTestLabelJob(kind: LabelJobKind, job: { readonly scanId: string | null }, parcel: { readonly trackingNumber: string | null; readonly providerId: string | null }): boolean {
+  if (kind !== 'CARRIER' || job.scanId === null) return false
+  return job.scanId === parcel.trackingNumber ? isTestLabel(parcel.providerId) : job.scanId.startsWith(TEST_TRACKING)
 }
 
 export interface ReprintFacts {
