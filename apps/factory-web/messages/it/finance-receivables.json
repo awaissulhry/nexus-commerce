@@ -202,7 +202,13 @@
     "CHANGED": "Pagato o stornato dopo la preparazione: annullalo, la scala lo prepara di nuovo.",
     "NO_CONTACT": "Nessun contatto attivo del cliente riceve le fatture con un indirizzo e-mail.",
     "SWITCHED_OFF": "I solleciti sono spenti per l'azienda: si può approvare, non inviare.",
-    "DEPOSIT_TO_CARRY": "Acconto da riportare: un acconto pagato senza fattura d'acconto non è ancora imputato a una sua fattura. Riportalo prima in Pagamenti; il cliente potrebbe dovere meno di quanto chiede il sollecito."
+    "DEPOSIT_TO_CARRY": "Acconto da riportare: un acconto pagato senza fattura d'acconto non è ancora imputato a una sua fattura. Riportalo prima in Pagamenti; il cliente potrebbe dovere meno di quanto chiede il sollecito.",
+    "STOP_PAYMENT_PROCESSING": "Fermato: il cliente dice che un pagamento di una sua fattura è in arrivo.",
+    "STOP_DISPUTE": "Fermato: è aperta una contestazione su una sua fattura.",
+    "STOP_PROMISE_TO_PAY": "Fermato: il cliente ha promesso di pagare entro un giorno non ancora passato.",
+    "STOP_CREDIT_PENDING": "Fermato: è in arrivo una nota di credito per una sua fattura.",
+    "RIBA_IN_COLLECTION": "Ri.Ba. all'incasso: la banca presenta una sua rata alla scadenza.",
+    "PAYMENT_PROCESSING": "Pagamento in corso: un pagamento con carta o SEPA, o una riga di banca che la paga, è in lavorazione."
   },
   "reminder": {
     "byHand": "Preparato a mano",
