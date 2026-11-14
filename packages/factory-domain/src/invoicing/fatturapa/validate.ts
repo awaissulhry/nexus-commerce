@@ -61,6 +61,8 @@ export interface NormalizedLine {
   readonly vat: VatTreatment
   readonly itemCode: { readonly type: string; readonly value: string } | null
   readonly ddtNumber: string | null
+  /** B-W2b-392: AltriDatiGestionali, in order. */
+  readonly otherData: readonly { readonly type: string; readonly text: string | null; readonly date: string | null }[]
   /** Deposit deducted: amounts taken as they are (negative). */
   readonly fixed: { readonly net: Decimal; readonly gross: Decimal } | null
 }
@@ -592,6 +594,19 @@ export function validateFatturaPaInput(input: FatturaPaInvoiceInput): {
         ddtNumber = null
       }
     }
+    // B-W2b-392: AltriDatiGestionali (a declaration of intent on an N3.5 line).
+    const otherData: { type: string; text: string | null; date: string | null }[] = []
+    if (line?.otherData !== undefined) {
+      if (!Array.isArray(line.otherData) || line.otherData.length > 5) issues.add(`${path}.otherData`, 'OTHER_DATA_INVALID', 'is a list of at most 5 blocks')
+      else {
+        line.otherData.forEach((entry, at) => {
+          const type = text(issues, `${path}.otherData[${at}].type`, entry?.type, 10, { charset: 'ASCII' })
+          const reference = text(issues, `${path}.otherData[${at}].text`, entry?.text, 60, { required: false })
+          const day = date(issues, `${path}.otherData[${at}].date`, entry?.date, false)
+          if (type !== null) otherData.push({ type, text: reference, date: day })
+        })
+      }
+    }
     if (description !== null && quantity !== null && unitPrice !== null && vat !== null) {
       goods.push({
         kind: 'GOODS',
@@ -603,6 +618,7 @@ export function validateFatturaPaInput(input: FatturaPaInvoiceInput): {
         vat,
         itemCode,
         ddtNumber,
+        otherData,
         fixed: null,
       })
     }
@@ -730,6 +746,7 @@ export function validateFatturaPaInput(input: FatturaPaInvoiceInput): {
         vat,
         itemCode: null,
         ddtNumber: null,
+        otherData: [],
         fixed: { net: taxableAmount.negated(), gross: taxableAmount.plus(vatAmount).negated() },
       })
     })

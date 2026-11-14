@@ -13,6 +13,9 @@ import type { CustomerTaxProfile } from '@nexus/factory-domain/tax/vat-treatment
 import { ADDRESS_COLUMNS, CONTACT_COLUMNS, dateText, TAX_COLUMNS, taxFieldsOf, VIES_COLUMNS, viesFactsOf } from '../parties/store'
 import { issueReferences, shippedAndMoneyProblems } from './from-shipment/checks'
 import type { InvoiceRow, LineRow, Reader } from './store'
+// B-W2b-392: tax rules as data before the issue.
+import { printedDeclarationOf } from './intent/declarations'
+import { taxRuleProblems } from './tax-codes/apply'
 
 /**
  * What the invoice core reads besides the invoice (B-W1-28; B-W1-07's party rules): the seller from the company's row,
@@ -179,6 +182,8 @@ export async function reviewIssue(db: Reader, invoice: InvoiceRow, lines: readon
           ddts: refs.ddts,
           credits: refs.credits,
           paymentTerms: paymentTermsOf(invoice.paymentTerms),
+          // B-W2b-392: the declaration of intent printed on its N3.5 lines.
+          declarationOfIntent: await printedDeclarationOf(db, invoice.id),
         }),
       )
     } catch (error) {
@@ -199,7 +204,9 @@ export async function reviewIssue(db: Reader, invoice: InvoiceRow, lines: readon
     dataIssues: [...seller.issues, ...buyer.issues],
     fatturaPa,
     deposit,
-  }), ...(await shippedAndMoneyProblems(db, invoice, lines))]
+  }), ...(await shippedAndMoneyProblems(db, invoice, lines)),
+  // B-W2b-392: the tax codes, the stamp duty and the declaration of intent (GATE-ACCOUNTANT switch by switch).
+  ...(await taxRuleProblems(db, invoice, lines, date))]
   return { problems, seller: seller.seller, billTo: buyer.billTo, party }
 }
 
