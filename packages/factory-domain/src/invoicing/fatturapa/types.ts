@@ -136,6 +136,15 @@ export interface FatturaPaLineInput {
   readonly itemCode?: { readonly type: string; readonly value: string }
   /** TD24 with several DDTs: the number of the DDT this line shipped on. */
   readonly ddtNumber?: string
+  /** B-W2b-392: AltriDatiGestionali, at most 5: a declaration of intent on an N3.5 line (TipoDato INTENTO, its protocol and date). */
+  readonly otherData?: readonly OtherDataInput[]
+}
+
+/** B-W2b-392: one AltriDatiGestionali block of a line: TipoDato (1-10), RiferimentoTesto (1-60), RiferimentoData. */
+export interface OtherDataInput {
+  readonly type: string
+  readonly text?: string
+  readonly date?: LocalDate
 }
 
 /** A DDT (documento di trasporto) the invoice covers. */

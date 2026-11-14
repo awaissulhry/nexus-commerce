@@ -7,6 +7,7 @@ import { asMoney } from '@nexus/factory-domain/money/marked'
 import { PAYMENTS_VIEW } from '@nexus/factory-domain/payments/permissions'
 import type { CommandCaller, CommandTx } from '../../core/command'
 import { actorOf, type OfficeContext } from '../../core/context'
+import { overpaymentWrittenOff } from './write-offs/sums'
 
 /**
  * The payments module's reads (factory-db money.prisma Payment, PaymentAllocation; sales' DepositRequest): the columns,
@@ -142,6 +143,8 @@ export async function paymentDetail(db: Reader, payment: PaymentRow) {
   // B-W2a-61: the refunds of its unplaced part (receivables.prisma Refund); DUE and PAID hold their money.
   const refunds = await db.refund.findMany({ where: { paymentId: payment.id }, select: { id: true, status: true, amount: true, dueDate: true, paidOn: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })
   const refunded = refunds.filter((row) => row.status === 'DUE' || row.status === 'PAID').reduce((sum, row) => sum + row.amount, 0)
+  // B-W2b-393: what an OVERPAYMENT write-off keeps is not unplaced (write-offs/sums.ts).
+  const writtenOff = await overpaymentWrittenOff(db, payment.id)
   const labels = await targetLabels(db, allocations)
   const peopleIds = [...new Set([payment.createdById, ...allocations.map((row) => row.createdById)].filter((id): id is string => id !== null))]
   const people = peopleIds.length === 0 ? [] : await db.user.findMany({ where: { id: { in: peopleIds } }, select: { id: true, displayName: true }, orderBy: { id: 'asc' } })
@@ -162,7 +165,7 @@ export async function paymentDetail(db: Reader, payment: PaymentRow) {
     internalNote: payment.internalNote,
     allocated: asMoney('price', allocated),
     /** What pays nothing: the customer's credit balance on this payment (amount − allocations − live refunds). */
-    unallocated: asMoney('price', payment.status === 'VOIDED' ? 0 : payment.amount - allocated - refunded),
+    unallocated: asMoney('price', payment.status === 'VOIDED' ? 0 : payment.amount - allocated - refunded - writtenOff),
     refunded: asMoney('price', refunded),
     refunds: refunds.map((row) => ({ id: row.id, status: row.status, amount: asMoney('price', row.amount), dueDate: row.dueDate ? row.dueDate.toISOString().slice(0, 10) : null, paidOn: row.paidOn ? row.paidOn.toISOString().slice(0, 10) : null })),
     allocations: allocations.map((row) => ({ ...allocationView(row), reversed: reversed.has(row.id), label: labels.get((row.invoiceId ?? row.depositRequestId)!) ?? null })),

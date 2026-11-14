@@ -40,4 +40,26 @@ export const manifest = defineManifest({
   // its decided lines (issued by the routes above, invoices.issue + step-up). No permission of their own.
   'GET /invoicing/returns/:returnId/credit-notes': { audiences: ['office'], permission: 'invoices.view', scope: 'record' },
   'POST /invoicing/returns/:returnId/credit-notes': { audiences: ['office'], permission: 'invoices.manage', scope: 'record' },
+  // B-W2b-392 (FIN-100, FIN-101, FIN-107; handlers in ./tax-codes, ./intent, ./stamp-duty): reads are invoices.view; the codes,
+  // declarations and quarters invoices.tax.manage; a switch and the accountant's confirmation invoices.tax.switch (step-up);
+  // naming a declaration on a draft invoices.manage. can() on the company (a declaration and an invoice also on the customer).
+  'GET /invoicing/tax-codes': { audiences: ['office'], permission: 'invoices.view', scope: 'record' },
+  'POST /invoicing/tax-codes': { audiences: ['office'], permission: 'invoices.tax.manage', scope: 'record' },
+  'PATCH /invoicing/tax-codes/:taxCodeId': { audiences: ['office'], permission: 'invoices.tax.manage', scope: 'record' },
+  'POST /invoicing/tax-codes/:taxCodeId/versions': { audiences: ['office'], permission: 'invoices.tax.manage', scope: 'record' },
+  'POST /invoicing/tax-codes/:taxCodeId/archive': { audiences: ['office'], permission: 'invoices.tax.manage', scope: 'record' },
+  'DELETE /invoicing/tax-codes/:taxCodeId': { audiences: ['office'], permission: 'invoices.tax.manage', scope: 'record' },
+  'POST /invoicing/tax-codes/:taxCodeId/confirm': { audiences: ['office'], permission: 'invoices.tax.switch', scope: 'record' },
+  'GET /invoicing/tax/settings': { audiences: ['office'], permission: 'invoices.view', scope: 'record' },
+  'PUT /invoicing/tax/settings/:companyId': { audiences: ['office'], permission: 'invoices.tax.switch', scope: 'record' },
+  'GET /invoicing/invoices/:invoiceId/tax': { audiences: ['office'], permission: 'invoices.view', scope: 'record' },
+  'PUT /invoicing/invoices/:invoiceId/declaration-of-intent': { audiences: ['office'], permission: 'invoices.manage', scope: 'record' },
+  'GET /invoicing/declarations-of-intent': { audiences: ['office'], permission: 'invoices.view', scope: 'record' },
+  'GET /invoicing/declarations-of-intent/:declarationId': { audiences: ['office'], permission: 'invoices.view', scope: 'record' },
+  'POST /invoicing/declarations-of-intent': { audiences: ['office'], permission: 'invoices.tax.manage', scope: 'record' },
+  'POST /invoicing/declarations-of-intent/:declarationId/check': { audiences: ['office'], permission: 'invoices.tax.manage', scope: 'record' },
+  'POST /invoicing/declarations-of-intent/:declarationId/revoke': { audiences: ['office'], permission: 'invoices.tax.manage', scope: 'record' },
+  'GET /invoicing/stamp-duty/quarters': { audiences: ['office'], permission: 'invoices.view', scope: 'record' },
+  'POST /invoicing/stamp-duty/quarters/recount': { audiences: ['office'], permission: 'invoices.tax.manage', scope: 'record' },
+  'POST /invoicing/stamp-duty/quarters/:quarterId/paid': { audiences: ['office'], permission: 'invoices.tax.manage', scope: 'record' },
 })

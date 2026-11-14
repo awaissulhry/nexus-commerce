@@ -27,6 +27,8 @@ import { storedSourceOf, termsJsonOf } from './terms'
 import { feesBilledTwice } from '../sales/price-waterfall/fee-invoicing'
 // B-W2b-389: the euro rate an invoice in another currency keeps (the rates table).
 import { invoiceRateOf, type InvoiceRate } from '../../platform/currency/service'
+// B-W2b-392: tax rules as data at the issue.
+import { taxDutiesAtIssue } from './tax-codes/apply'
 
 /**
  * Issuing an invoice (B-W1-28 invoice core; A2 SCR-081 "Check and issue"; FIN-057, FIN-061, FIN-085; DPR 633/1972
@@ -103,6 +105,8 @@ export async function issueInCommand(tools: CommandTools, invoiceId: string, per
   if (problems.length > 0 || kind === null || !review.seller || !review.billTo) throw refusal(problems)
   // B-W2a-F8: today inside a SOFT period lock needs the override reason (409 period/SOFT_LOCKED without it; audited with it).
   await honourPeriodLocks(tools, [{ companyId: invoice.companyId, day: date, refused: `the invoice is not issued today (${dayWords(date)})`, path: 'issueDate', record: { type: 'Invoice', id: invoice.id } }], periodLockOverride)
+  // B-W2b-392: the tax rules again under the company's switches (FOR SHARE), the declaration of intent used, the stamp duty quarter.
+  await taxDutiesAtIssue(tools, invoice, lines, date)
 
   // B-W1-51: a credit note on what is paid leaves a refund due (W2b), recorded on the audit row and by invoice.refund_due.
   const credited = invoice.docType === 'TD04' && invoice.creditOfId ? await creditedInvoiceOf(tx, invoice.creditOfId, invoice.id) : null
