@@ -370,6 +370,14 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   `finance/reports/` Reports › Finance reports (SCR-239 `/finance/reports?asOf=&site=&category=&q=&group=`: the stock
   valuation, "How this lot is valued" in the value cell; `print/` SCR-239-print); catalogues `finance-accounting`,
   `finance-reports`. Words of the accountant's open questions ("to confirm with the accountant") are said on screen.
+  B-W2b-426 (the accountant's bridge, catalogue `finance-accounting-depth` read through `checks/words.ts useAccountingWords`: the
+  export's catalogue first, then the bridge's — their keys never meet; SCR-480 … SCR-482): `accounting/mapping/` Account mapping
+  (`/finance/accounting/mapping?kind=&view=all|unmapped|upcoming|other&q=&open=KIND/KEY|<row id>`, the export's ⋯; a key's
+  dialog, Map N keys, Export N / the whole mapping as CSV, the journals switch behind a fresh code; `RECORD_PAGES.AccountMapping`
+  and `.AccountingSettings`), `accounting/hard-lock/` "Close <month> for good?" (the lock panel's Hard opens it in step 5 and in
+  ⋯ Lock a period; the typed phrase, the month's problems, the fresh code last), `accounting/checks/` the nightly integrity checks
+  on 2 · Checks (`use-integrity.ts`), the bridge's fix links and the journals' line on 3 · Contents. The cost of goods sold and the
+  VAT registers are offered in 3 · Contents (not ticked by default; the VAT registers need both grains).
   B-W2b-417 (invoices in depth, catalogue `finance-invoices-depth`; SCR-440 … SCR-449): each part a container + `view/`, slotted
   through a `depth` prop — `invoices/test-mode/` (the test-mode banner on every invoice page; `depth.ts` the step's refusal words,
   `view/DepthStepUp.tsx`), `invoices/monthly-run/` (the ⋯ Monthly invoice run: pick → preview with each draft's CheckList → the

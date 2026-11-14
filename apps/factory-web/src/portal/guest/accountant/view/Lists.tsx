@@ -22,7 +22,6 @@ export interface ListsModel {
   exports: readonly ExportFileRow[] | null
   invoices: readonly InvoiceRow[] | null
   registers: readonly RegisterRow[] | null
-  later: readonly string[]
   selected: Readonly<Record<ListSection, readonly string[]>>
   /** The download running: a file id or `zip:<what>`. */
   busy: string | null
@@ -277,11 +276,6 @@ export function RegistersList({ model, actions }: { model: ListsModel; actions?:
         state={state}
         cards={{}}
       />
-      {model.later.length > 0 ? (
-        <p className="fw-pacc-later">
-          {t('registers.later', { items: model.later.map((item) => t(`registers.laterItem.${item}`)).join(t('registers.join')) })}
-        </p>
-      ) : null}
     </section>
   )
 }

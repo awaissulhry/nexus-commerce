@@ -58,6 +58,9 @@ import {
   type WizardStep,
 } from './model'
 import { AccountingView } from './view/AccountingView'
+// B-W2b-426: the integrity checks on 2 · Checks; the month's problems of a refused final close.
+import { useIntegrity } from './checks/use-integrity'
+import { closeProblemCodes } from './hard-lock/model'
 // B-W2b-201: Accountant access (the accountant's guest portal, given from here).
 import { AccountantAccess } from './guest/AccountantAccess'
 import type { AccountingActions, AccountingModel, CancelDialogModel, ExportingState, LockActions, LockDialogModel, LockPanelModel, Part } from './view-model'
@@ -79,6 +82,8 @@ const lockPanel = (month: string | null, current: PeriodLock | null | undefined)
   liftBusy: false,
   liftProblem: null,
   lifted: null,
+  hardOpen: false,
+  closeProblems: [],
 })
 
 const EXPORT_IDLE: ExportingState = { busy: false, startedAt: null, problem: null, done: null }
@@ -311,6 +316,7 @@ export function AccountingPage() {
   const [cancelDialog, setCancelDialog] = useState<CancelDialogModel | null>(null)
 
   const stepUpApi = useStepUp(api)
+  const integrity = useIntegrity(api, companyId, address.wizard && address.step === 'checks' && can.view)
 
   // ---- writes ----
   const lockWith = (panel: LockPanelModel, set: (update: (current: LockPanelModel) => LockPanelModel) => void) => {
@@ -318,7 +324,7 @@ export function AccountingPage() {
     const current = panel.current ?? null
     if (lockHeld({ month: panel.month, level: panel.level, phrase: panel.phrase, current, can, busy: panel.busy })) return
     const target = panel.month
-    set((state) => ({ ...state, busy: true, problem: null }))
+    set((state) => ({ ...state, busy: true, problem: null, closeProblems: [] }))
     const note = panel.note.trim()
     const key = newIdempotencyKey()
     const work = () => lockMonth(api, { companyId, month: target, level: panel.level, ...(panel.level === 'HARD' ? { phrase: panel.phrase } : {}), ...(note ? { note } : {}), ...(current ? { version: current.version } : {}) }, key)
@@ -326,12 +332,12 @@ export function AccountingPage() {
     const run = panel.level === 'HARD' ? stepUpApi.guard('stepUp.close', work) : work()
     run
       .then((answer) => {
-        set((state) => ({ ...state, busy: false, current: answer.lock, done: { lock: answer.lock, warnings: answer.warnings.map((warning) => warning.code) } }))
+        set((state) => ({ ...state, busy: false, hardOpen: false, current: answer.lock, done: { lock: answer.lock, warnings: answer.warnings.map((warning) => warning.code) } }))
         setLocks((rows) => (rows ? [answer.lock, ...rows.filter((row) => row.id !== answer.lock.id)] : rows))
         void loadYear(Number(target.slice(0, 4)))
         if (monthRef.current === target) void showPeriod(target)
       })
-      .catch((error: unknown) => set((state) => ({ ...state, busy: false, problem: isStepUpCancelled(error) ? null : writeProblem(error) })))
+      .catch((error: unknown) => set((state) => ({ ...state, busy: false, problem: isStepUpCancelled(error) ? null : writeProblem(error), closeProblems: panel.level === 'HARD' ? closeProblemCodes(error) : [] })))
   }
 
   const liftWith = (panel: LockPanelModel, set: (update: (current: LockPanelModel) => LockPanelModel) => void) => {
@@ -353,11 +359,13 @@ export function AccountingPage() {
 
   const lockActions = (panel: LockPanelModel | null, set: (update: (current: LockPanelModel) => LockPanelModel) => void): LockActions => ({
     onLockLevel: (level: LockLevel) => set((state) => ({ ...state, level, problem: null })),
-    onLockPhrase: (text) => set((state) => ({ ...state, phrase: text, problem: null })),
+    onLockPhrase: (text) => set((state) => ({ ...state, phrase: text, problem: null, closeProblems: [] })),
     onLockNote: (text) => set((state) => ({ ...state, note: text })),
     onLiftReason: (text) => set((state) => ({ ...state, liftReason: text, liftProblem: null })),
     onLock: () => panel && lockWith(panel, set),
     onLift: () => panel && liftWith(panel, set),
+    onHardOpen: () => set((state) => ({ ...state, level: 'HARD', hardOpen: true, phrase: '', problem: null, closeProblems: [] })),
+    onHardClose: () => set((state) => (state.busy ? state : { ...state, hardOpen: false, problem: null, closeProblems: [] })),
   })
 
   const setDialogPanel = (update: (current: LockPanelModel) => LockPanelModel) => setLockDialog((current) => (current ? { ...current, ...update(current) } : current))
@@ -468,6 +476,7 @@ export function AccountingPage() {
     },
     onStepUpSubmit: (code) => void stepUpApi.submitStepUp(code),
     onStepUpCancel: () => stepUpApi.cancelStepUp(),
+    integrity: integrity.actions,
   }
 
   const recent = years[thisYear]?.value || years[thisYear - 1]?.value ? recentMonths(today, [years[thisYear]?.value ?? null, years[thisYear - 1]?.value ?? null]) : null
@@ -497,6 +506,7 @@ export function AccountingPage() {
           exporting,
           lock: stepLock,
           heldNote,
+          integrity: integrity.model,
         }
       : null,
     lockDialog: lockDialog ? { ...lockDialog, months: lockDialog.months.length > 0 ? lockDialog.months : lockMonths() } : null,

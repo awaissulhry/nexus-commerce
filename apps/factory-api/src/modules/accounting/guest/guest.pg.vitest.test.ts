@@ -194,7 +194,8 @@ describe('the accountant’s room (SCR-268)', { timeout: SLOW_TEST_TIMEOUT_MS },
     const september = await ok(accountant.get('/portal/accounting/periods/2026-09'))
     expect(september.exports.map((batch: Json) => [batch.number, batch.amendedBy, batch.files.map((file: Json) => file.package)])).toEqual([['EXP-2026-0001', null, ['SALES_JOURNAL', 'PURCHASES_JOURNAL', 'PAYMENTS']]])
     expect(september.invoices).toEqual([])
-    expect(september.later).toEqual(['VAT_REGISTERS', 'VAT_SUMMARY'])
+    // B-W2b-426: the VAT registers are made (an export carries them): nothing is said to come later.
+    expect(september.later).toBeUndefined()
   })
 
   it('reads October once finance exported it: journals, both sales e-invoices, the Intrastat file — files only, no amount', async () => {

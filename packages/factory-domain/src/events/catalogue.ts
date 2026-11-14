@@ -303,6 +303,8 @@ import { events as costSheetVersions } from '../cost-sheet-versions/events'
 import { events as receivablesCollections } from '../receivables-collections/events'
 // B-W2b-423: cost in depth (an option value's typed cost delta, the mass cost update).
 import { events as costDepth } from '../cost-depth/events'
+// B-W2b-403: payables in depth (the payment proposal, the first of two approvals).
+import { events as payablesDepth } from '../payables-depth/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -671,6 +673,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...receivablesCollections,
   // B-W2b-423
   ...costDepth,
+  // B-W2b-403
+  ...payablesDepth,
 ] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */

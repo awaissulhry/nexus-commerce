@@ -15,7 +15,7 @@ import '../accountant.css'
  * SCR-268 — the accountant's room (design portal.guest.accountant; FIN-158, PLT-022): Your access said at rest (whose books,
  * who gave it, until when, every download recorded; the time left once it ends soon), the Period (month, quarter or year;
  * the months not handed over yet and the locked ones marked), the Accounting exports, the E-invoices, VAT and registers
- * (what the exports hold; the VAT registers come later, said so), and Ask finance (the frame's conversation, given as
+ * (what the exports hold besides the journals: the VAT registers, Intrastat, the year-end stock pack), and Ask finance (the frame's conversation, given as
  * `children`). Read-only: the band's primary is "Download period (zip)". No amount on screen.
  */
 

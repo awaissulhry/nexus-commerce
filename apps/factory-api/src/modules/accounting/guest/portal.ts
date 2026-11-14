@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import type { GuestExportView, GuestFileView, GuestInvoiceView, GuestOverviewAnswer, GuestPeriodAnswer, GuestRegisterView, GuestZipBody } from '@nexus/factory-domain/accounting/guest/contracts'
-import { batchStanding, GUEST_ZIP, isJournal, purchaseKindOf, REGISTER_PACKAGES, REGISTERS_LATER, registerStanding, salesKindOf, zipNameOf, zipPaths, zipProblem, type ZipFolder } from '@nexus/factory-domain/accounting/guest/files'
+import { batchStanding, GUEST_ZIP, isJournal, purchaseKindOf, REGISTER_PACKAGES, registerStanding, salesKindOf, zipNameOf, zipPaths, zipProblem, type ZipFolder } from '@nexus/factory-domain/accounting/guest/files'
 import { dayShared, handedOverMonths, latestHandedOver, periodChoices } from '@nexus/factory-domain/accounting/guest/periods'
 import { monthOfDay } from '@nexus/factory-domain/accounting/periods'
 import { accessEndsSoon } from '@nexus/factory-domain/auth/partners/rules'
@@ -148,7 +148,6 @@ export async function guestPeriod(app: FastifyInstance, request: FastifyRequest,
     exports: material.exports,
     invoices: material.invoices,
     registers: material.registers,
-    later: [...REGISTERS_LATER],
     counts: { files: listed.filter((entry) => entry.inPeriodZip).length, xml: listed.filter((entry) => entry.xml).length, sizeBytes: listed.filter((entry) => entry.inPeriodZip).reduce((sum, entry) => sum + entry.row.sizeBytes, 0) },
     asOf: toUtcIso(reader.clock.now()),
   }

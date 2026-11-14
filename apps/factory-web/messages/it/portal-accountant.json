@@ -54,17 +54,11 @@
   },
   "registers": {
     "title": "IVA e registri",
-    "hint": "Ciò che le esportazioni contengono oltre ai registri: il file Intrastat e l'inventario di fine anno. Un'esportazione successiva sostituisce l'intero file.",
+    "hint": "Ciò che le esportazioni contengono oltre ai registri contabili: i registri IVA (vendite, acquisti e i loro totali), il file Intrastat e l'inventario di fine anno. Un'esportazione successiva sostituisce l'intero file.",
     "empty": "Nessun file di registro in questo periodo",
-    "emptyBody": "Il file Intrastat arriva con l'esportazione del mese, l'inventario con la chiusura dell'anno.",
+    "emptyBody": "I registri IVA e il file Intrastat arrivano con l'esportazione del mese, l'inventario con la chiusura dell'anno.",
     "current": "In vigore",
-    "replacedBy": "Sostituito da {number}",
-    "later": "{items} non sono ancora prodotti dal sistema: chiedili all'amministrazione.",
-    "laterItem": {
-      "VAT_REGISTERS": "I registri IVA",
-      "VAT_SUMMARY": "il prospetto della liquidazione IVA"
-    },
-    "join": " e "
+    "replacedBy": "Sostituito da {number}"
   },
   "ask": {
     "title": "Chiedi all'amministrazione"
