@@ -31,6 +31,10 @@ import '../../../_shared/production.css'
 // B-W2b-245: Spec differences and Change request (design pop:wo-diff, pop:wo-change).
 import { SpecDialogs } from '../../spec/view/SpecParts'
 import { requestHeld, SPEC_NS } from '../../spec/model'
+// B-W2b-424: Close work order (design pop:wo-close), its Undo, a closed work order's close and Reopen; the variance at close.
+import { CLOSE_NS } from '../../close/model'
+import { CloseBanners, CloseParts } from '../../close/view/CloseParts'
+import { VarianceAtClose } from '../../labour/variance/view/VarianceAtClose'
 
 export type { WorkOrderRecordActions, WorkOrderRecordModel } from '../record-model'
 
@@ -44,7 +48,7 @@ export type { WorkOrderRecordActions, WorkOrderRecordModel } from '../record-mod
  */
 export function WorkOrderRecordView({ model, actions, panels }: { model: WorkOrderRecordModel; actions?: WorkOrderRecordActions; panels?: ReactNode }) {
   return (
-    <WithMessages namespaces={['production', DAILY_NAMESPACE, SHIFT_NAMESPACE, 'lists', 'records', /* B-W2b-245 */ SPEC_NS]}>
+    <WithMessages namespaces={['production', DAILY_NAMESPACE, SHIFT_NAMESPACE, 'lists', 'records', /* B-W2b-245 */ SPEC_NS, /* B-W2b-424 */ CLOSE_NS]}>
       <WorkOrderRecord model={model} actions={actions} panels={panels} />
     </WithMessages>
   )
@@ -104,6 +108,12 @@ function ReadyRecord({ workOrder, model, actions, panels }: { workOrder: WorkOrd
   const recordHref = `${model.prefix}/production/work-orders/${workOrder.id}`
   const step = nextStep(workOrder, model.can, model.check.value, model.wip.value)
   const stepHeld = step.held ? t(step.held.key, step.held.params) : model.busy ? t('held.busy') : null
+  // B-W2b-424: Close opens Close work order (planned against actual, a reason beyond the tolerance); the others their confirm.
+  const openStep = () => {
+    if (step.kind === 'release') actions?.onDialog?.({ kind: 'release' })
+    else if (step.kind === 'close') actions?.close?.onOpen?.()
+    else if (step.kind) actions?.onDialog?.({ kind: 'move', move: step.kind })
+  }
 
   // Keys: ⌘J the thread; ⌘↵ the next step's dialog (never while typing or inside a dialog).
   useEffect(() => {
@@ -115,10 +125,10 @@ function ReadyRecord({ workOrder, model, actions, panels }: { workOrder: WorkOrd
         actions?.onDock?.()
         return
       }
-      if (target?.closest('[role="dialog"]') || model.dialog) return
+      if (target?.closest('[role="dialog"]') || model.dialog || model.close?.dialog) return
       if ((event.metaKey || event.ctrlKey) && event.key === 'Enter' && !typing && step.kind && !stepHeld) {
         event.preventDefault()
-        actions?.onDialog?.(step.kind === 'release' ? { kind: 'release' } : { kind: 'move', move: step.kind })
+        openStep()
       }
     }
     window.addEventListener('keydown', onKey)
@@ -156,7 +166,7 @@ function ReadyRecord({ workOrder, model, actions, panels }: { workOrder: WorkOrd
       size="sm"
       variant="primary"
       heldReason={stepHeld}
-      onClick={() => actions?.onDialog?.(step.kind === 'release' ? { kind: 'release' } : { kind: 'move', move: step.kind as 'start' | 'complete' | 'close' })}
+      onClick={openStep}
       aria-keyshortcuts="Meta+Enter Control+Enter"
     >
       {step.kind === 'release' && checksOpen > 0 ? t('step.releaseOpen', { count: checksOpen }) : t(`step.${step.kind}`)}
@@ -299,7 +309,8 @@ function ReadyRecord({ workOrder, model, actions, panels }: { workOrder: WorkOrd
           {tw('holds.floorRefuses')}
         </Banner>
       )}
-      {workOrder.status === 'CLOSED' && <Banner tone="info" title={t('record.closed')} />}
+      {/* B-W2b-424: the Undo after a close; a closed work order's close (who, when, why) with Reopen…. */}
+      {model.close ? <CloseBanners workOrder={workOrder} model={model.close} actions={actions?.close} /> : workOrder.status === 'CLOSED' && <Banner tone="info" title={t('record.closed')} />}
       {!model.can.manage && !model.can.release && <Banner tone="info" title={t('record.readOnly')} />}
 
       <div className={showDock ? 'fw-pr-body has-dock' : 'fw-pr-body'}>
@@ -310,7 +321,18 @@ function ReadyRecord({ workOrder, model, actions, panels }: { workOrder: WorkOrd
           {model.tab === 'bundles' && <BundlesTab workOrder={workOrder} model={model} actions={actions} />}
           {model.tab === 'operations' && <OperationsTab workOrder={workOrder} model={model} actions={actions} />}
           {model.tab === 'quality' && <QualityTab workOrder={workOrder} model={model} actions={actions} />}
-          {model.tab === 'labour' && <LabourTab labour={model.labour} prefix={model.prefix} workOrderId={workOrder.id} draft={workOrder.status === 'DRAFT'} onRetry={actions?.onRetryLabour} minutes={minutesOf(workOrder, model.wip.value)} labourHref={model.can.labour ? `${model.prefix}/production/labour` : null} />}
+          {model.tab === 'labour' && (
+            <LabourTab
+              labour={model.labour}
+              prefix={model.prefix}
+              workOrderId={workOrder.id}
+              draft={workOrder.status === 'DRAFT'}
+              onRetry={actions?.onRetryLabour}
+              minutes={minutesOf(workOrder, model.wip.value)}
+              labourHref={model.can.labour ? `${model.prefix}/production/labour` : null}
+              variance={model.variance ? <VarianceAtClose model={model.variance} onRetry={actions?.onRetryVariance} /> : null}
+            />
+          )}
           {model.tab === 'documents' && <DocumentsTab workOrder={workOrder} prefix={model.prefix} bundles={activeBundles} />}
           {model.tab === 'activity' && (activity ?? <p className="fw-pr-hint">{t('record.noPanels')}</p>)}
         </div>
@@ -326,6 +348,8 @@ function ReadyRecord({ workOrder, model, actions, panels }: { workOrder: WorkOrd
       {daily && <DailyDialogs workOrder={workOrder} daily={daily} actions={actions?.daily} pick={model.pick?.value ?? null} bundles={model.bundles.value} />}
       {/* B-W2b-245 */}
       {model.spec && <SpecDialogs workOrder={workOrder} model={model.spec} prefix={model.prefix} actions={actions?.spec} />}
+      {/* B-W2b-424 */}
+      {model.close && <CloseParts workOrder={workOrder} model={model.close} actions={actions?.close} />}
     </div>
   )
 }

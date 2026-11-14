@@ -17,7 +17,7 @@ const reasonLength = (text: string, min: number, max: number) => {
 
 /**
  * The work order studio's dialogs: Release (design wo-release-confirm; a short material only with the planner's reason),
- * Start / Complete / Close (a confirm with what it does), Cancel (a reason; what was issued or cut goes back by hand),
+ * Start / Complete (a confirm with what it does; B-W2b-424: Close is work-orders/close), Cancel (a reason; what was issued or cut goes back by hand),
  * Correct a cut entry (a reason; the mirror entry; a closing cut opens its hide again) and Reprint N tickets (the reason,
  * the label printer; a new code each). Esc closes; the focus returns to the opener (DS Modal).
  */
@@ -103,7 +103,7 @@ function ReleaseDialog({ workOrder, model, actions }: { workOrder: WorkOrder; mo
   )
 }
 
-function MoveDialog({ workOrder, move, model, actions }: { workOrder: WorkOrder; move: 'start' | 'complete' | 'close'; model: WorkOrderRecordModel; actions?: WorkOrderRecordActions }) {
+function MoveDialog({ workOrder, move, model, actions }: { workOrder: WorkOrder; move: 'start' | 'complete'; model: WorkOrderRecordModel; actions?: WorkOrderRecordActions }) {
   const t = useT('production')
   return (
     <Modal

@@ -12,6 +12,9 @@ import type { WorkOrderLeather } from './leather/api'
 import type { WorkOrderSubstituteActions, WorkOrderSubstituteModel } from '../materials/substitute/WorkOrderSubstitute'
 // B-W2b-245: the frozen spec against the master (Spec differences) and Change request.
 import type { SpecActions, SpecModel } from '../spec/model'
+// B-W2b-424: Close work order (planned against actual, a reason, Undo; Reopen) and the variance at close.
+import type { CloseActions, CloseModel } from '../close/use-close'
+import type { VarianceModel } from '../labour/variance/model'
 
 /** SCR-070 … SCR-072 — the work order studio's view model (WorkOrderRecordView draws it and fetches nothing). */
 
@@ -27,7 +30,7 @@ export const PART_LOADING = { value: null, problem: null } as const
 
 export type RecordDialog =
   | { kind: 'release' }
-  | { kind: 'move'; move: Exclude<StepKind, 'release'> }
+  | { kind: 'move'; move: Exclude<StepKind, 'release' | 'close'> }
   | { kind: 'cancel' }
   | { kind: 'correct'; entryId: string }
   | { kind: 'reprint'; bundleIds: string[] }
@@ -88,6 +91,10 @@ export interface WorkOrderRecordModel {
   spec?: SpecModel
   /** B-W2b-320: Materials › Substitute… (absent: not drawn). */
   substitute?: WorkOrderSubstituteModel
+  /** B-W2b-424: Close work order, its Undo, a closed work order's close and Reopen (absent: the W1 words only). */
+  close?: CloseModel
+  /** B-W2b-424: the variance at close on the Labour & cost tab (absent: not drawn). */
+  variance?: VarianceModel | null
   /** Design cases: what the panels show (the page mounts the live panels instead). */
   panelsPreview?: RecordPanelsViewModel
   /** Design cases: a dialog's typed reason, the overview's fields in edit, a draft's grid being edited. */
@@ -102,7 +109,7 @@ export interface WorkOrderRecordActions {
   onDismissNotice?: () => void
   onDialog?: (dialog: RecordDialog | null) => void
   onRelease?: (overrideReason: string | null) => void
-  onMove?: (move: Exclude<StepKind, 'release'>) => void
+  onMove?: (move: Exclude<StepKind, 'release' | 'close'>) => void
   onCancel?: (reason: string) => void
   onSaveDetails?: (details: { dueDate: string | null; priority: number; rush: boolean }) => void
   onSaveSizes?: (grid: Record<string, Record<string, number>>) => void
@@ -127,4 +134,8 @@ export interface WorkOrderRecordActions {
   spec?: SpecActions
   /** B-W2b-320: Materials › Substitute…. */
   substitute?: WorkOrderSubstituteActions
+  /** B-W2b-424: Close work order, Undo, Reopen. */
+  close?: CloseActions
+  /** B-W2b-424: read the variance at close again. */
+  onRetryVariance?: () => void
 }
