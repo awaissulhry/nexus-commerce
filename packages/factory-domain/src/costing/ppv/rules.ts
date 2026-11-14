@@ -36,7 +36,7 @@ export const ppvKeys = Object.freeze({
 /** quantity × (paid − standard) in minor units of `currency`, one half-up rounding; above 0 paid more than standard. */
 export function ppvDifference(quantity: DecimalInput, paidUnitCost: DecimalInput, standardUnitCost: DecimalInput, currency: string): number {
   const scale = new Dec(10).pow(minorPlaces(currency))
-  return Number(new Dec(quantity).times(new Dec(paidUnitCost).minus(new Dec(standardUnitCost))).times(scale).toDecimalPlaces(0, Dec.ROUND_HALF_UP).toFixed(0))
+  return Number.parseInt(new Dec(quantity).times(new Dec(paidUnitCost).minus(new Dec(standardUnitCost))).times(scale).toDecimalPlaces(0, Dec.ROUND_HALF_UP).toFixed(0), 10)
 }
 
 /** A unit cost to the six places the ledgers keep. */

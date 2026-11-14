@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { businessDate, id, input, instant, output } from '../../core/contracts'
-import { money } from '../../money/marked'
+import { money, notMoney } from '../../money/marked'
 import { UOMS } from '../../product/units/units'
 import { PPV_AT, PPV_SKIPS } from './rules'
 
@@ -68,8 +68,8 @@ const total = output({ currency: z.string(), differenceAmount: money.cost(z.numb
 export const ppvAnswer = output({
   rows: z.array(ppvRowView),
   nextCursor: id().nullable(),
-  /** Σ the differences of the rows of the query (every page), per currency. */
-  totals: z.array(total),
+  /** Σ the differences of the rows of the query (every page), per currency; every figure inside is money.cost. */
+  totals: notMoney(z.array(total)),
   /** The asked company's switch: the words while its figures wait for the accountant (null: on, or no company asked). */
   waits: z.string().nullable(),
   empty: z.string(),

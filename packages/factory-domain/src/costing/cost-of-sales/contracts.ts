@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { businessDate, id, input, instant, output } from '../../core/contracts'
-import { money } from '../../money/marked'
+import { money, notMoney } from '../../money/marked'
 import { COGS_WAITS } from './rules'
 
 /**
@@ -61,7 +61,8 @@ const total = output({
 export const cogsAnswer = output({
   entries: z.array(cogsEntryView),
   nextCursor: id().nullable(),
-  totals: z.array(total),
+  /** Per currency: every figure inside is money.cost. */
+  totals: notMoney(z.array(total)),
   waits: z.string().nullable(),
   empty: z.string(),
 })

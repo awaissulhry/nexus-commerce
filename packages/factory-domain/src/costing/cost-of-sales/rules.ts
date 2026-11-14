@@ -46,7 +46,7 @@ export const cogsKeys = Object.freeze({
 
 /** quantity × unit cost in minor units, one half-up rounding. */
 export function amountOf(quantity: DecimalInput, unitCost: DecimalInput, currency: string): number {
-  return Number(new Dec(quantity).times(new Dec(unitCost)).times(new Dec(10).pow(minorPlaces(currency))).toDecimalPlaces(0, Dec.ROUND_HALF_UP).toFixed(0))
+  return Number.parseInt(new Dec(quantity).times(new Dec(unitCost)).times(new Dec(10).pow(minorPlaces(currency))).toDecimalPlaces(0, Dec.ROUND_HALF_UP).toFixed(0), 10)
 }
 
 /**
