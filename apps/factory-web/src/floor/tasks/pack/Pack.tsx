@@ -75,7 +75,8 @@ const POLL_MS = 3_000
 /** While the office has not issued the DDT or bought the labels: read the shipment again now and then. */
 const WAIT_MS = 10_000
 /** The events that change the bench (their floor rules: shipping.pack, print.view, floor.work). */
-const LIVE = new Set(['shipment.packing_changed', 'shipping.carton_packed', 'shipment.status_changed', 'shipment.labels_bought', 'shipment.label_voided', 'print.job_changed', 'quality.hold_placed', 'quality.hold_released'])
+// B-W2b-386: a shipment hold placed or released, and a split, reach the bench at once (floor rule shipping.pack), not on the beat.
+const LIVE = new Set(['shipment.packing_changed', 'shipping.carton_packed', 'shipment.status_changed', 'shipment.labels_bought', 'shipment.label_voided', 'print.job_changed', 'quality.hold_placed', 'quality.hold_released', 'shipment.hold_placed', 'shipment.hold_released', 'shipment.split'])
 /** Several events of one change arrive together: one read after a short pause. */
 const LIVE_PAUSE_MS = 1_500
 /** A missed live hint: the bench reads again this often while in view. */

@@ -144,6 +144,8 @@ import { SALES_MTM_ADDS } from '../../sales/mtm/permissions'
 import { SALES_FITTINGS_ADDS } from '../../sales/fittings/permissions'
 // B-W2b-384: packing in depth (the warehouse keeps the packaging types, defaults and carton mark templates).
 import { SHIPPING_PACKAGING_ADDS } from '../../shipping/packaging/permissions'
+// B-W2b-386: shipment holds (the warehouse places and releases its own kinds, finance every kind).
+import { SHIPPING_HOLDS_ADDS } from '../../shipping/holds/permissions'
 // B-W2b-385: the notification defaults of each office role (the administrator sets them).
 import { NOTIFICATION_DEFAULTS_ADDS } from '../../notifications/preferences/permissions'
 // B-W2b-389: currencies and exchange rates (finance and the administrator keep them; buyers and sales read them).
@@ -1040,6 +1042,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (SALES_FITTINGS_ADDS[key] ?? []) : []),
   // B-W2b-384
   ...(audience === 'office' ? (SHIPPING_PACKAGING_ADDS[key] ?? []) : []),
+  // B-W2b-386
+  ...(audience === 'office' ? (SHIPPING_HOLDS_ADDS[key] ?? []) : []),
   // B-W2b-385
   ...(audience === 'office' ? (NOTIFICATION_DEFAULTS_ADDS[key] ?? []) : []),
   // B-W2b-389

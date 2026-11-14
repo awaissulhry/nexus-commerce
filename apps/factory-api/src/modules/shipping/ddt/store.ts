@@ -7,6 +7,8 @@ import { scopeKeyFor, yearOfScope } from '@nexus/factory-domain/numbering/kinds'
 import type { DdtCarrier, DdtDestination, DdtFacts, DdtGoods, DdtLine, DdtPartySnapshot, IssuedDdt, PpeMarking } from '@nexus/factory-domain/shipping/ddt'
 import type { CommandTx } from '../../../core/command'
 import type { ShipmentHeader } from '../store'
+// B-W2b-386 (LQ1:02): the customer's requirements as the DDT's remarks.
+import { ddtRequirementRemarks } from '../queue/ddt-remarks'
 
 /**
  * The DDT part's reads (every read names its columns). A reader takes the command's transaction (the issue reads its
@@ -88,7 +90,10 @@ export async function readDdtFacts(db: CommandTx, shipment: ShipmentHeader, comp
   const parcels = await db.parcel.findMany({ where: { shipmentId: shipment.id }, select: { seq: true, grossWeightKg: true }, orderBy: { seq: 'asc' } })
   const goods = await goodsOf(db, shipment.id, language)
   const live = await liveDdtOf(db, shipment.id)
+  // B-W2b-386 (LQ1:02): the customer's requirements on the shipping checklist, printed as the DDT's remarks by default.
+  const requirementRemarks = await ddtRequirementRemarks(db, shipment)
   return {
+    requirementRemarks,
     shipment: { status: shipment.status, transportBy: shipment.transportBy, carrierName: shipment.carrierName, shipTo: shipment.shipTo, shippedAt: shipment.shippedAt },
     liveDdtNumber: live?.number ?? null,
     company,
