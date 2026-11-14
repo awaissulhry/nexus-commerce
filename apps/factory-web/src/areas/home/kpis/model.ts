@@ -364,7 +364,7 @@ export function useOf(use: Pick<KpiUse, 'usedIn' | 'useKey'>, built: ReadonlySet
   switch (use.usedIn) {
     case 'DASHBOARD': {
       const known = (DASHBOARD_KEYS as readonly string[]).includes(use.useKey)
-      const href = use.useKey === 'today' ? (built.has('/home/today') ? '/home/today' : null) : built.has('/home/dashboards') ? `/home/dashboards?dashboard=${encodeURIComponent(use.useKey)}` : null
+      const href = use.useKey === 'today' ? (built.has('/home/today') ? '/home/today' : null) : built.has('/home/dashboards') ? `/home/dashboards?board=${encodeURIComponent(use.useKey)}` : null
       return { kind: use.usedIn, word: known ? { namespace: 'home-kpis', key: `use.dashboard.${use.useKey}` } : null, href }
     }
     case 'REPORT':

@@ -263,16 +263,21 @@ describe('the KPI library and its versions (ANA-012)', () => {
       'sales.orders_in',
       'sales.quote_to_order_days',
     ])
-    expect(first.usesAdded.map((use: Json) => `${use.kpiKey}:${use.usedIn}:${use.useKey}`)).toEqual(['delivery.shipped_on_time:DASHBOARD:today', 'production.output:DASHBOARD:today', 'sales.orders_in:DASHBOARD:today'])
+    const added = first.usesAdded.map((use: Json) => `${use.kpiKey}:${use.usedIn}:${use.useKey}`)
+    expect(added.filter((use: string) => use.endsWith(':today'))).toEqual(['delivery.shipped_on_time:DASHBOARD:today', 'production.output:DASHBOARD:today', 'sales.orders_in:DASHBOARD:today'])
+    // B-W2b-434: the dashboards' numbers and charts are uses too (the seeded owner-group use of OTIF was there already).
+    expect(added).toEqual(expect.arrayContaining(['sales.orders_in:DASHBOARD:owner-group', 'production.output:DASHBOARD:plant-manager', 'delivery.otif:DASHBOARD:planner']))
+    expect(added).not.toContain('delivery.otif:DASHBOARD:owner-group')
     expect(first.usesRemoved).toEqual([])
     const second = await ok('owner', 'POST', '/insights/kpis/sync')
     expect(second).toMatchObject({ installed: [], usesAdded: [], usesRemoved: [] })
     const output = await ok('owner', 'GET', '/insights/kpis/production.output')
     expect(output.versions).toHaveLength(1)
     expect(output.versions[0]).toMatchObject({ kpiVersion: 1, state: 'ACTIVE', activatedBy: 'Made-up owner', owner: { key: 'production_manager' } })
-    expect(output.usedIn).toEqual([expect.objectContaining({ usedIn: 'DASHBOARD', useKey: 'today' })])
-    // The seeded uses of readers no registry owns stay.
-    expect((await ok('owner', 'GET', '/insights/kpis/delivery.otif')).usedIn).toHaveLength(3)
+    expect(output.usedIn.map((use: Json) => use.useKey)).toEqual(['line-leader', 'owner-group', 'plant-manager', 'quality', 'today'])
+    // The seeded uses of readers no registry owns stay (a report, an alert rule kind), beside the dashboards that read it.
+    const otif = (await ok('owner', 'GET', '/insights/kpis/delivery.otif')).usedIn.map((use: Json) => `${use.usedIn}:${use.useKey}`).sort()
+    expect(otif).toEqual(['ALERT:ORDER_LATE_RISK', 'DASHBOARD:buyer', 'DASHBOARD:owner-group', 'DASHBOARD:planner', 'DASHBOARD:quality', 'DASHBOARD:sales', 'REPORT:sales.late-orders'])
   })
 
   it('drafts a new version from the one in force, changes it, puts it in force; the one before is superseded and kept', async () => {
@@ -314,7 +319,8 @@ describe('the KPI library and its versions (ANA-012)', () => {
   it('withdraws a KPI with its uses; then nothing is in force to withdraw', async () => {
     const lines = await ok('owner', 'GET', '/insights/kpis/sales.order_lines_in')
     const retired = await ok('owner', 'POST', '/insights/kpis/sales.order_lines_in/retire', { version: lines.versions[0].version })
-    expect(retired).toMatchObject({ kpiVersion: 1, usesRemoved: 0 })
+    // B-W2b-434: three dashboards read it (owner-group as a stand-in, sales, finance): their uses go with it.
+    expect(retired).toMatchObject({ kpiVersion: 1, usesRemoved: 3 })
     expect((await ok('owner', 'GET', '/insights/kpis/sales.order_lines_in')).versions[0]).toMatchObject({ state: 'RETIRED', endedBy: 'Made-up owner' })
     expect(await no('owner', 'POST', '/insights/kpis/sales.order_lines_in/retire', { version: 1 }, 409)).toEqual(['refusal/NOT_IN_FORCE'])
   })

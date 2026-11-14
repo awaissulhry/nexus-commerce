@@ -47,6 +47,12 @@ import { marginDrill } from './kpis/drills/margin'
 import { otifDrill } from './kpis/drills/otif'
 import { supplyDrill } from './kpis/drills/supply'
 import { wipDrill } from './kpis/drills/wip'
+// B-W2b-434: the dashboards (dashboards/).
+import { boardsContract, byCompanyContract, layoutContract as dashboardLayoutContract, needsActionContract, numbersContract as dashboardNumbersContract, resetLayoutContract, saveLayoutContract as saveDashboardLayoutContract, trendsContract, wipContract } from './dashboards/contract'
+import { getDashboardLayout, resetDashboardLayout, saveDashboardLayout } from './dashboards/layout'
+import { byCompanyAnswer, numbersAnswer } from './dashboards/numbers'
+import { dashboardsAnswer } from './dashboards/picker'
+import { needsActionAnswer, trendsAnswer, wipAnswer } from './dashboards/sections'
 
 /**
  * Home › Today (B-W1-52; ANA-037; A2 SCR-029 "Today", SCR-031 W1 "Overview"): the needs-attention list computed from the
@@ -120,4 +126,16 @@ export default defineRoutes('insights', manifest, async (app) => {
   app.get('/insights/measures', { schema: measuresContract }, async (request) => measuresAnswer(request))
   app.get('/insights/facts', { schema: factsContract }, async (request) => factsAnswer(request, request.query as FactsQuery))
   app.post('/insights/facts/rebuild', { schema: rebuildContract }, async (request) => rebuildAnswer(request, request.body, idempotencyKeyFrom(request)))
+
+  // B-W2b-434 (ANA-002, ANA-003, ANA-004; design home.dashboards SCR-031 / SCR-103): the dashboards, office, home.kpis.view; every
+  // number also asks its KPI's measures' list permissions and grains (kpiReading), a layout is the person's own.
+  app.get('/insights/dashboards', { schema: boardsContract }, async (request) => dashboardsAnswer(request))
+  app.get('/insights/dashboards/needs-action', { schema: needsActionContract }, async (request) => needsActionAnswer(request, request.query))
+  app.get('/insights/dashboards/trends', { schema: trendsContract }, async (request) => trendsAnswer(request, request.query))
+  app.get('/insights/dashboards/wip', { schema: wipContract }, async (request) => wipAnswer(request, request.query))
+  app.get('/insights/dashboards/:board/numbers', { schema: dashboardNumbersContract }, async (request) => numbersAnswer(request, request.params.board, request.query))
+  app.get('/insights/dashboards/:board/by-company', { schema: byCompanyContract }, async (request) => byCompanyAnswer(request, request.params.board, request.query))
+  app.get('/insights/dashboards/:board/layout', { schema: dashboardLayoutContract }, async (request) => getDashboardLayout(request, request.params.board))
+  app.put('/insights/dashboards/:board/layout', { schema: saveDashboardLayoutContract }, async (request) => saveDashboardLayout(request, request.params.board, request.body, idempotencyKeyFrom(request)))
+  app.delete('/insights/dashboards/:board/layout', { schema: resetLayoutContract }, async (request) => resetDashboardLayout(request, request.params.board, request.query.version, idempotencyKeyFrom(request)))
 })

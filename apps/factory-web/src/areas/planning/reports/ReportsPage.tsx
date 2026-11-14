@@ -11,6 +11,8 @@ import { liveMatches } from '../../quality/_shared/hooks'
 import { getAdherence, getAdherenceRows, getCover, getUtilisation, getUtilisationRows, type Adherence, type Cover, type Utilisation } from './api'
 import { csvName, csvOf, drillKey, LAYOUT_KEY, LIVE_EVERY_MS, LIVE_TYPES, pointOf, rangeShown, reportsAddressOf, reportsAddressText, reportsCan, romeToday, sectionSpecs, type DrillTarget, type ReportsAddress, type ReportSection } from './model'
 import { ReportsView, type DrillState, type Read } from './view/ReportsView'
+import { PinDialog } from '../../home/dashboards/pin/view/PinDialog'
+import { usePinToDashboard } from '../../home/dashboards/pin/usePinToDashboard'
 
 const saveCsv = (name: string, text: string) => {
   const link = document.createElement('a')
@@ -58,6 +60,7 @@ export function ReportsPage() {
   const pathname = usePathname()
   const params = useSearchParams()
   const prefix = pathname.replace(/\/planning\/reports\/?$/, '')
+  const pin = usePinToDashboard(api, 'planning', prefix)
   const can = useMemo(() => reportsCan(session.permissions), [session.permissions])
   const address = useMemo(() => reportsAddressOf(params), [params])
   const site = scope.site ?? scope.sites[0] ?? null
@@ -188,23 +191,28 @@ export function ReportsPage() {
   }
 
   return (
-    <ReportsView
-      model={{ prefix, can, address, scope, site: site ? { id: site.id, name: site.name } : null, range, today, adherence, utilisation, cover, adherenceLine, live, asOf, layout, specs, arranging, drill, selected }}
-      actions={{
-        onAddress: go,
-        onRetry: (panel) => retry[panel](),
-        onArrange: setArranging,
-        onArranged: (next) => {
-          setLayout(next)
-          writeSectionLayout(LAYOUT_KEY, next)
-          setArranging(false)
-        },
-        onExport: (panel, header, rows) => saveCsv(csvName(panel, range), csvOf(header, rows)),
-        onAdherenceLine: setAdherenceLine,
-        onDrill: (target) => (target ? void readDrill(target) : setDrill(null)),
-        onDrillRetry: () => (drill ? void readDrill(drill.target) : undefined),
-        onSelected: setSelected,
-      }}
-    />
+    <>
+      <ReportsView
+        model={{ prefix, can, address, scope, site: site ? { id: site.id, name: site.name } : null, range, today, adherence, utilisation, cover, adherenceLine, live, asOf, layout, specs, arranging, drill, selected }}
+        actions={{
+          onSaveAsDashboard: pin.open,
+          onAddress: go,
+          onRetry: (panel) => retry[panel](),
+          onArrange: setArranging,
+          onArranged: (next) => {
+            setLayout(next)
+            writeSectionLayout(LAYOUT_KEY, next)
+            setArranging(false)
+          },
+          onExport: (panel, header, rows) => saveCsv(csvName(panel, range), csvOf(header, rows)),
+          onAdherenceLine: setAdherenceLine,
+          onDrill: (target) => (target ? void readDrill(target) : setDrill(null)),
+          onDrillRetry: () => (drill ? void readDrill(drill.target) : undefined),
+          onSelected: setSelected,
+        }}
+      />
+      {/* B-W2b-434 (DB1:01): Save as dashboard — this page's panels pinned to a Home dashboard, saved for me on the server. */}
+      <PinDialog model={pin.model} actions={pin.actions} />
+    </>
   )
 }

@@ -60,4 +60,15 @@ export const manifest = defineManifest({
   'GET /insights/kpis/drills/leather-yield': { audiences: ['office'], permission: 'home.kpis.view', scope: 'record' },
   'GET /insights/kpis/drills/margin': { audiences: ['office'], permission: 'home.kpis.view', scope: 'record' },
   'GET /insights/kpis/drills/supply': { audiences: ['office'], permission: 'home.kpis.view', scope: 'record' },
+  // B-W2b-434 (dashboards/): the dashboards, office only, home.kpis.view; each number its KPI's measures' list permissions and
+  // grains over the scope asked (`record`); Needs action the person's own Today; a layout is the person's own.
+  'GET /insights/dashboards': { audiences: ['office'], permission: 'home.kpis.view', scope: 'record' },
+  'GET /insights/dashboards/needs-action': { audiences: ['office'], permission: 'home.kpis.view', scope: 'record' },
+  'GET /insights/dashboards/trends': { audiences: ['office'], permission: 'home.kpis.view', scope: 'record' },
+  'GET /insights/dashboards/wip': { audiences: ['office'], permission: 'home.kpis.view', scope: 'record' },
+  'GET /insights/dashboards/:board/numbers': { audiences: ['office'], permission: 'home.kpis.view', scope: 'record' },
+  'GET /insights/dashboards/:board/by-company': { audiences: ['office'], permission: 'home.kpis.view', scope: 'record' },
+  'GET /insights/dashboards/:board/layout': { audiences: ['office'], permission: 'home.kpis.view', scope: 'record' },
+  'PUT /insights/dashboards/:board/layout': { audiences: ['office'], permission: 'home.kpis.view', scope: 'record' },
+  'DELETE /insights/dashboards/:board/layout': { audiences: ['office'], permission: 'home.kpis.view', scope: 'record' },
 })

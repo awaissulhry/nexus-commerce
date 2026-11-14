@@ -5,6 +5,8 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { defaultSectionLayout, readSectionLayout, writeSectionLayout, type SectionLayoutValue } from '@nexus/ui/patterns'
 import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
 import { useOfficeScope } from '../../../shell/scope/scope-context'
+import { PinDialog } from '../../home/dashboards/pin/view/PinDialog'
+import { usePinToDashboard } from '../../home/dashboards/pin/usePinToDashboard'
 import { useLive } from '../../_shared/buying/hooks'
 import { readProblem } from '../../_shared/stock/model'
 import { liveMatches } from '../../quality/_shared/hooks'
@@ -58,6 +60,7 @@ export function ReportsPage() {
   const pathname = usePathname()
   const params = useSearchParams()
   const prefix = pathname.replace(/\/sales\/reports\/?$/, '')
+  const pin = usePinToDashboard(api, 'sales', prefix)
   const can = useMemo(() => reportsCan(session.permissions), [session.permissions])
   const address = useMemo(() => reportsAddressOf(params), [params])
   const enabled = can.view
@@ -178,20 +181,25 @@ export function ReportsPage() {
   }
 
   return (
-    <ReportsView
-      model={{ prefix, can, address, scope, range, today, headline, intake, backlog, returns, live, asOf, layout, specs, arranging, drill }}
-      actions={{
-        onAddress: go,
-        onRetry: (panel) => retry[panel](),
-        onArrange: setArranging,
-        onArranged: (next) => {
-          setLayout(next)
-          writeSectionLayout(LAYOUT_KEY, next)
-          setArranging(false)
-        },
-        onExport: (panel, header, rows) => saveCsv(csvName(panel, range), csvOf(header, rows)),
-        onDrill: setDrill,
-      }}
-    />
+    <>
+      <ReportsView
+        model={{ prefix, can, address, scope, range, today, headline, intake, backlog, returns, live, asOf, layout, specs, arranging, drill }}
+        actions={{
+          onAddress: go,
+          onRetry: (panel) => retry[panel](),
+          onArrange: setArranging,
+          onArranged: (next) => {
+            setLayout(next)
+            writeSectionLayout(LAYOUT_KEY, next)
+            setArranging(false)
+          },
+          onExport: (panel, header, rows) => saveCsv(csvName(panel, range), csvOf(header, rows)),
+          onDrill: setDrill,
+          onSaveAsDashboard: pin.open,
+        }}
+      />
+      {/* B-W2b-434 (DB1:01): Save as dashboard — this page's panels pinned to a Home dashboard, saved for me on the server. */}
+      <PinDialog model={pin.model} actions={pin.actions} />
+    </>
   )
 }

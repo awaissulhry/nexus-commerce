@@ -128,10 +128,10 @@ describe('a version a person writes (ANA-012)', () => {
 })
 
 describe('where KPIs are used (ANA-070)', () => {
-  it('comes from the readers’ registries: Today’s numbers that read a KPI', () => {
+  it('comes from the readers’ registries: Today’s numbers that read a KPI (and the dashboards, B-W2b-434)', () => {
     const readers = kpiReaders()
-    expect(readers.map((reader) => reader.kpiKey)).toEqual(['delivery.shipped_on_time', 'production.output', 'sales.orders_in'])
-    expect(readers.every((reader) => reader.usedIn === 'DASHBOARD' && reader.useKey === 'today')).toBe(true)
+    expect(readers.filter((reader) => reader.useKey === 'today').map((reader) => reader.kpiKey)).toEqual(['delivery.shipped_on_time', 'production.output', 'sales.orders_in'])
+    expect(readers.every((reader) => reader.usedIn === 'DASHBOARD')).toBe(true)
     for (const reader of readers) expect(kpiFileOf(reader.kpiKey), reader.kpiKey).not.toBeNull()
     expect(kpiUseKey('sales.orders_in', 'DASHBOARD', 'today')).toBe('kpiuse:sales.orders_in:DASHBOARD:today')
   })
@@ -143,7 +143,9 @@ describe('where KPIs are used (ANA-070)', () => {
       { id: 'c', kpiKey: 'sales.orders_in', usedIn: 'DASHBOARD' as const, useKey: 'today' },
     ]
     const plan = usesPlan(stored, kpiReaders(), new Set(['sales.orders_in', 'production.output']))
-    expect(plan.add.map((use) => use.kpiKey)).toEqual(['production.output'])
+    expect(plan.add.filter((use) => use.useKey === 'today').map((use) => use.kpiKey)).toEqual(['production.output'])
+    // B-W2b-434: the dashboards that read them are added too; the seeded owner-group use of OTIF is a dashboard's and stays.
+    expect(plan.add.filter((use) => use.useKey !== 'today').map((use) => `${use.kpiKey}:${use.useKey}`)).toContain('sales.orders_in:owner-group')
     expect(plan.remove.map((use) => use.id)).toEqual(['b'])
   })
 })
