@@ -290,6 +290,9 @@ model Party {
   bankAccounts            SupplierBankAccount[]
   supplierQualifications  SupplierQualification[]
   subcontractAgreements   SubcontractAgreement[]
+  // W2b-6 cost-sheets.prisma (wave 55/57): as a workshop, the transport per piece of its outside operations.
+  /// @not-money the relation to its transport uplifts (the rows carry the grain)
+  materialCostUplifts     MaterialCostUplift[]
   // W2b-5 mtm-office.prisma (wave 44/44): its fittings, showroom visits and measuring sessions, and the fittings' results.
   appointments            Appointment[]
   fittingResults          FittingResult[]

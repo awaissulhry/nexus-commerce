@@ -390,6 +390,26 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    (PRODUCT_SAFETY_INJURY: the ProductSafetyInjury, no employee) and wave 52's `factory_read_log_record_type_ok`
    (DataRequest), each word for word but for that; it calls recall's `factory_recall_words_ok`, `factory_recall_not_future`,
    `factory_recall_model_name_ok` and money's `factory_money_rome_day`):
+   `…_cost_sheets_w2b_guards` (W2b-6 schema wave 55/57, B-W2b-378, cost sheets in depth: cost sheet versions per style,
+   company and season (the key `costsheet:<style>:<company>:<season | none>`) born DRAFT (a style of the company or
+   tenant-wide, an OPEN season, the company's currency, a base size of the range, a copy of a lower version of the same
+   series), DRAFT → APPROVED (at least one line, never by its maker (Q3 = A), with a COST_SHEET approval task of the sheet on
+   its yes by the person who decided it) → FROZEN (with why), an approved sheet never edited (only frozen), a frozen one
+   frozen, one APPROVED per series (a partial unique), only a DRAFT deleted; lines written only while the sheet is a DRAFT
+   (the sheet FOR SHARE), cost = quantity × unit cost rounded once to 6 places, a percent line only for overhead, freight,
+   duty or a commission, a size of the range, a source record of the revision (BomLine, RoutingOperation) or of its named
+   table, the source fitting the category, a LEATHER line a leather article, a LABOUR line its kind of work centre in minutes,
+   a PIECE_RATE line only while the company's costing settings switch piece-rate labour on; leather bases (FT2 or DM2, the
+   yield, a grade mix of active grade codes totalling 100), overhead rules (whole months, a percent or an amount with its
+   currency, the active rules of a key never overlapping: a transaction advisory lock per key), cost-per-minute calculations
+   (whole months, cost per minute = direct ÷ minutes + indirect + overhead, applied once as a LabourRate of its company,
+   kind, figure and currency, then frozen; one applied per key and period: a partial unique), material uplifts (exactly one
+   target: a material, a kind or a SUBCONTRACTOR workshop; percents or a transport per piece; LANDED_COST with its receipt
+   days) archived, never deleted, size weights of the style's range; its own triggers `CostingSettings_piece_rate_check`
+   (GATE-PIECE-PAY: switched on only on a company's own row while a site of the company has piece pay ON) and
+   `OptionValue_cost_delta_check` (a material cost delta with its currency, minutes, never 0); no earlier function
+   redefined; it calls recall's `factory_recall_words_ok`, `factory_recall_not_future`, `factory_recall_model_name_ok` and
+   styles' `factory_styles_decimal_ok`):
    triggers, partial unique indexes and deferred
    constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new

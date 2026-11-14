@@ -70,6 +70,13 @@ model CostingSettings {
   /// company's row made to hold its costing method only: its overhead is the tenant-wide row's (overheadPct stays 0 and
   /// is not read). false: the row's own overhead (every row before W2b). The tenant-wide row is always false.
   overheadFromTenant Boolean   @default(false)
+  /// W2b-6 (schema wave 55/57, B-W2b-378; FIN-006; GATE-PIECE-PAY): labour on the cost sheet uses the piece rate per
+  /// operation instead of minutes × the rate. OFF by default; switched on only on a company's own row, and only while a site
+  /// of the company has piece pay ON (pay.prisma PiecePaySwitch), with when and by whom (both exactly while on). Off is
+  /// always allowed. A PIECE_RATE cost sheet line needs it on (cost-sheets.prisma).
+  pieceRateLabour     Boolean   @default(false)
+  pieceRateLabourAt   DateTime? @db.Timestamptz(3)
+  pieceRateLabourById String?   @db.Uuid
   version     Int      @default(1)
   createdAt   DateTime @default(now()) @db.Timestamptz(3)
   updatedAt   DateTime @default(now()) @updatedAt @db.Timestamptz(3)
