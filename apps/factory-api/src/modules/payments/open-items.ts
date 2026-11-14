@@ -11,6 +11,7 @@ import { balancesOf, unplacedPayments } from './credit-balance'
 import { depositsToCarry } from './deposit-carry'
 import { refundedOf } from './refunds'
 import { allocatedOf, assertMay, officeContextOf } from './store'
+import { overpaymentWrittenOff, underpaymentsWrittenOff } from './write-offs/sums'
 
 /**
  * A customer's open items in one company, oldest first (A2 SCR-082 "Record a payment", step 2; FIN-121): the OPEN
@@ -56,6 +57,8 @@ export async function openItems(caller: CommandCaller, query: { companyId: strin
     const paidRequests = requestIds.length === 0 ? [] : await client.paymentAllocation.groupBy({ by: ['depositRequestId'], where: { depositRequestId: { in: requestIds } }, _sum: { amount: true } })
     const paidInvoices = invoiceIds.length === 0 ? [] : await client.paymentAllocation.groupBy({ by: ['invoiceId'], where: { invoiceId: { in: invoiceIds } }, _sum: { amount: true } })
     const credited = invoiceIds.length === 0 ? [] : await client.invoice.groupBy({ by: ['creditOfId'], where: { creditOfId: { in: invoiceIds }, docType: 'TD04', status: { not: 'DRAFT' } }, _sum: { grossTotal: true } })
+    // B-W2b-393: a small difference written off on an invoice (UNDERPAYMENT) is no longer open.
+    const writtenOff = await underpaymentsWrittenOff(client, invoiceIds)
     // B-W2a-61: the step of the payment schedule each request is, and the NONE deposits paid on the invoices' orders.
     const steps = requestIds.length === 0 ? [] : await client.salesOrderMilestone.findMany({ where: { depositRequestId: { in: requestIds } }, select: { depositRequestId: true, kind: true } })
     const orderIds = [...new Set(invoices.flatMap((invoice) => (invoice.salesOrderId ? [invoice.salesOrderId] : [])))]
@@ -104,7 +107,7 @@ export async function openItems(caller: CommandCaller, query: { companyId: strin
         dueDate: paymentTermsOf(invoice.paymentTerms)?.installments.find((installment) => typeof installment.dueDate === 'string')?.dueDate ?? null,
         currency: invoice.currency,
         amount: invoice.grossTotal,
-        open: openOnInvoice(invoice.grossTotal, credited.find((entry) => entry.creditOfId === invoice.id)?._sum.grossTotal ?? 0, paidInvoices.find((entry) => entry.invoiceId === invoice.id)?._sum.amount ?? 0),
+        open: openOnInvoice(invoice.grossTotal, credited.find((entry) => entry.creditOfId === invoice.id)?._sum.grossTotal ?? 0, (paidInvoices.find((entry) => entry.invoiceId === invoice.id)?._sum.amount ?? 0) + (writtenOff.get(invoice.id) ?? 0)),
         noInvoiceDeposit: noInvoiceDepositOf(invoice.salesOrderId),
         depositToCarry: invoice.salesOrderId ? (toCarry.get(invoice.salesOrderId) ?? []) : [],
         carriedDeposit: carriedOn(invoice.id),
@@ -118,7 +121,8 @@ export async function openItems(caller: CommandCaller, query: { companyId: strin
     if (query.paymentId !== undefined) {
       const payment = isUuid(query.paymentId) ? await client.payment.findUnique({ where: { id: query.paymentId }, select: { id: true, companyId: true, partyId: true, status: true, amount: true } }) : null
       if (!payment || payment.companyId !== query.companyId || payment.partyId !== query.partyId) throw new NotFoundError("Not a payment of this customer and company.")
-      left = unplacedOf({ status: payment.status, amount: payment.amount, allocated: await allocatedOf(client, payment.id), refunded: await refundedOf(client, payment.id) })
+      // B-W2b-393: what an OVERPAYMENT write-off keeps is not left to place.
+      left = unplacedOf({ status: payment.status, amount: payment.amount, allocated: await allocatedOf(client, payment.id), refunded: (await refundedOf(client, payment.id)) + (await overpaymentWrittenOff(client, payment.id)) })
     } else if (query.amount !== undefined) left = query.amount
     const suggestion = left === null ? null : suggestOldestFirst(left, items.map((item) => ({ id: item.id, open: item.open })))
     const balances = balancesOf(await unplacedPayments(client, { companyId: query.companyId, partyId: query.partyId }))

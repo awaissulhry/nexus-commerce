@@ -154,6 +154,8 @@ import { NOTIFICATION_DEFAULTS_ADDS } from '../../notifications/preferences/perm
 import { CURRENCY_ADDS } from '../../money/currency/permissions'
 // B-W2b-392: tax rules as data (finance keeps the tax codes, declarations and stamp duty quarters, and switches them).
 import { TAX_RULES_ADDS } from '../../invoicing/tax-codes/permissions'
+// B-W2b-393: bank statements, matching and write-offs (finance).
+import { PAYMENTS_BANK_ADDS } from '../../payments/write-offs/permissions'
 
 /**
  * The system role templates (plan A1 §3.11 "Role"; feature PLT-030): ready roles every tenant gets as system roles
@@ -1055,7 +1057,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-389
   ...(audience === 'office' ? (CURRENCY_ADDS[key] ?? []) : []),
   // B-W2b-392
-  ...(audience === 'office' ? (TAX_RULES_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (TAX_RULES_ADDS[key] ?? []) : []),
+  // B-W2b-393
+  ...(audience === 'office' ? (PAYMENTS_BANK_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the

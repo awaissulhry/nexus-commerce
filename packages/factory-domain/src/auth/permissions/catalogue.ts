@@ -370,6 +370,9 @@ import { NOTIFICATION_DEFAULTS_DEFINITIONS, NOTIFICATION_DEFAULTS_PERMISSIONS } 
 import { CURRENCY_DEFINITIONS, CURRENCY_PERMISSIONS } from '../../money/currency/permissions'
 // B-W2b-392: tax rules as data (invoices.tax.manage, invoices.tax.switch).
 import { TAX_RULES_DEFINITIONS, TAX_RULES_PERMISSIONS } from '../../invoicing/tax-codes/permissions'
+// B-W2b-393: bank statements, matching and write-offs (payments.bank.view | import | match, payments.writeOff).
+import { PAYMENTS_BANK_DEFINITIONS, PAYMENTS_BANK_PERMISSIONS } from '../../payments/bank/permissions'
+import { WRITE_OFF_DEFINITIONS, WRITE_OFF_PERMISSIONS } from '../../payments/write-offs/permissions'
 
 /**
  * Every permission of the factory, assembled (feature PLT-029). A module that adds routes declares its permissions
@@ -1030,6 +1033,9 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   CURRENCY_DEFINITIONS,
   // B-W2b-392: tax rules as data (area `invoices`).
   TAX_RULES_DEFINITIONS,
+  // B-W2b-393: bank statements, matching and write-offs (area `payments`).
+  PAYMENTS_BANK_DEFINITIONS,
+  WRITE_OFF_DEFINITIONS,
 ])
 
 /** The area of the permissions only floor roles hold (and floor roles hold no other, but FLOOR_SHARED_PERMISSIONS). */
@@ -1404,6 +1410,8 @@ for (const name of NOTIFICATION_DEFAULTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.i
 for (const name of CURRENCY_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-392: tax rules as data.
 for (const name of TAX_RULES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-393: bank statements, matching and write-offs.
+for (const name of [...PAYMENTS_BANK_PERMISSIONS, ...WRITE_OFF_PERMISSIONS]) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }
