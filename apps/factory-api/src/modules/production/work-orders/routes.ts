@@ -14,6 +14,8 @@ import { listReadiness } from './release/readiness'
 import { splitContract, splitPreviewContract, travellerContract, travellersContract } from './contract'
 import { previewSplit, splitWorkOrder } from './split'
 import { inlineDisposition, travellerPdf, travellersPdf } from './traveller'
+// B-W2b-411: the work order close.
+import { closeContract, closeWorkOrder } from './close'
 
 /**
  * Work orders from sales order lines with a frozen specification (B-W1-38; MES-001, MES-002, MES-005, MES-007,
@@ -50,7 +52,8 @@ export default defineRoutes('production.work-orders', manifest, async (app) => {
 
   app.post('/production/work-orders/:workOrderId/complete', { schema: moveContract }, async (request) => moveWorkOrder(request, request.params.workOrderId, 'COMPLETED', request.body, idempotencyKeyFrom(request)))
 
-  app.post('/production/work-orders/:workOrderId/close', { schema: moveContract }, async (request) => moveWorkOrder(request, request.params.workOrderId, 'CLOSED', request.body, idempotencyKeyFrom(request)))
+  // B-W2b-411 (MES-012, FIN-034): the close with planned vs actual, a reason beyond the tolerance, and the cost close.
+  app.post('/production/work-orders/:workOrderId/close', { schema: closeContract }, async (request) => closeWorkOrder(request, request.params.workOrderId, request.body, idempotencyKeyFrom(request)))
 
   app.post('/production/work-orders/:workOrderId/cancel', { schema: cancelContract }, async (request) => moveWorkOrder(request, request.params.workOrderId, 'CANCELLED', request.body, idempotencyKeyFrom(request)))
 
