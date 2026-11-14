@@ -117,6 +117,8 @@ model User {
   savedViews          SavedView[]
   exportJobs          ExportJob[]
   reportSubscriptions ReportSubscription[]
+  // W2b-6 config.prisma (wave 56/57): their own saved replies.
+  messageTemplates    MessageTemplate[]
   // alerts.prisma: the alerts assigned to them.
   assignedAlerts      Alert[]
   // W2b-5 approvals.prisma (wave 35/44): the approval rules and the requests that name them as the approver.
