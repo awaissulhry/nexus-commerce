@@ -56,6 +56,9 @@ import { inquiryFromAddressHandler } from '../../../modules/sales/inquiries/from
 import { bounceTaskHandler } from '../../../platform/email-out/delivery-status/tasks'
 // B-W2b-398: the customer notice, tracking problems, the carrier's proof of delivery, used return labels.
 import { customerNoticeHandler } from '../../../modules/shipping/notices/handler'
+// B-W2b-407: purchase price variance and cost of goods sold (GATE-ACCOUNTANT: only while the company's switch is on).
+import { ppvHandlers } from '../../../modules/costing/ppv/handlers'
+import { costOfSalesHandlers } from '../../../modules/costing/cost-of-sales/handlers'
 import { trackingProblemsHandler } from '../../../modules/shipping/exceptions/check'
 import { carrierPodHandler } from '../../../modules/shipping/pod/handler'
 import { returnLabelsUsedHandler } from '../../../modules/shipping/return-labels/used'
@@ -140,6 +143,8 @@ const W2A_LISTS: ReadonlyArray<readonly [string, readonly string[]]> = [
   ['W2B_394_HANDLERS', ['mailRouteHandler', 'inquiryFromAddressHandler', 'bounceTaskHandler']],
   // B-W2b-398: the customer notice (its site switch), tracking problems, the carrier's proof of delivery, used return labels.
   ['W2B_398_HANDLERS', ['customerNoticeHandler', 'trackingProblemsHandler', 'carrierPodHandler', 'returnLabelsUsedHandler']],
+  // B-W2b-407: a receipt posted or reversed, a supplier invoice approved or voided → its purchase price variances; a shipment left or came back → its cost of goods sold.
+  ['W2B_407_HANDLERS', ['ppvHandlers', 'costOfSalesHandlers']],
 ]
 
 /** The search indexers the worker loads from the registry folder (background.ts SEARCH_INDEXERS). */
@@ -149,7 +154,7 @@ export async function searchIndexers(): Promise<readonly SearchIndexer[]> {
 
 /** Every handler the worker runs: W1's HANDLERS, then the W2a lists, as background.ts hands them to startEventWorkers. */
 export function everyHandler(indexers: readonly SearchIndexer[]): readonly EventHandler[] {
-  return [...workerHandlers(), notificationsHandler(), ...searchHandlers(indexers), alertsRecheckHandler(), ...ladderHandlers(), ...creditNoteHandlers(), ...payablesHandlers(), releaseOnWorkOrderDoneHandler(), pauseAtClockOutHandler(), ...attendanceHandlers(), ...overtimeHandlers(), ...earningsHandlers(), ...inspectionTriggerHandlers(), alertRulesHandler(), ...incidentHandlers(), ...healthHandlers(), stripPicturesHandler(), partnerNotificationsHandler({ cookieSecret: () => LOCAL_COOKIE_SECRET }), ...onlinePaymentHandlers(), trackingLinkHandler(), sharesNotifyHandler(), ...routingCheckpointHandlers(), ...buildPackHandlers(), ...distributorHandlers(), ...declarationHandlers(), ...reevaluateHandlers(), ...gateHandlers(), lotLifecycleHandler(), ...warehouseTaskHandlers(), approvedSendHandler(), ...creditHandlers(), supplyLateHandler(), orderScheduleHandler(), /* B-W2b-340 */ orderOptionsHandler(), /* B-W2b-377 */ releasedReceiptHandler(), /* B-W2b-386 */ systemHoldsHandler(), /* B-W2b-393 */ ...suggestionHandlers(), /* B-W2b-394 */ mailRouteHandler(), inquiryFromAddressHandler(), bounceTaskHandler(), /* B-W2b-398 */ customerNoticeHandler(), trackingProblemsHandler(), carrierPodHandler(), returnLabelsUsedHandler()]
+  return [...workerHandlers(), notificationsHandler(), ...searchHandlers(indexers), alertsRecheckHandler(), ...ladderHandlers(), ...creditNoteHandlers(), ...payablesHandlers(), releaseOnWorkOrderDoneHandler(), pauseAtClockOutHandler(), ...attendanceHandlers(), ...overtimeHandlers(), ...earningsHandlers(), ...inspectionTriggerHandlers(), alertRulesHandler(), ...incidentHandlers(), ...healthHandlers(), stripPicturesHandler(), partnerNotificationsHandler({ cookieSecret: () => LOCAL_COOKIE_SECRET }), ...onlinePaymentHandlers(), trackingLinkHandler(), sharesNotifyHandler(), ...routingCheckpointHandlers(), ...buildPackHandlers(), ...distributorHandlers(), ...declarationHandlers(), ...reevaluateHandlers(), ...gateHandlers(), lotLifecycleHandler(), ...warehouseTaskHandlers(), approvedSendHandler(), ...creditHandlers(), supplyLateHandler(), orderScheduleHandler(), /* B-W2b-340 */ orderOptionsHandler(), /* B-W2b-377 */ releasedReceiptHandler(), /* B-W2b-386 */ systemHoldsHandler(), /* B-W2b-393 */ ...suggestionHandlers(), /* B-W2b-394 */ mailRouteHandler(), inquiryFromAddressHandler(), bounceTaskHandler(), /* B-W2b-398 */ customerNoticeHandler(), trackingProblemsHandler(), carrierPodHandler(), returnLabelsUsedHandler(), /* B-W2b-407 */ ...ppvHandlers(), ...costOfSalesHandlers()]
 }
 
 /** background.ts starts exactly W1's HANDLERS and the W2a lists above: a list or factory a step adds fails the day until it runs here too. */

@@ -72,6 +72,8 @@ export const valuationRowView = output({
   unvaluedMoves: z.number().int(),
   /** The company's costing method could value it differently (always while UNDECIDED). */
   dependsOnMethod: z.boolean(),
+  /** B-W2b-407 (FIN-045): the customer whose own material the lot is (tracked by quantity, never valued), else null. */
+  customerOwned: output({ id: id(), name: z.string() }).nullable(),
   words: z.string(),
 })
 export type ValuationRowView = z.infer<typeof valuationRowView>

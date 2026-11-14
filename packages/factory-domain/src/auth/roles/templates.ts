@@ -160,6 +160,8 @@ import { PAYMENTS_BANK_ADDS } from '../../payments/write-offs/permissions'
 import { MAIL_DEPTH_ADDS } from '../../mail-depth/permissions'
 // B-W2b-396: invoicing in depth (finance keeps the rules for the deposit of a cancelled order).
 import { DEPOSIT_RULES_ADDS } from '../../invoicing/cancellation/permissions'
+// B-W2b-407: the actual-cost figures (finance lands charges and keeps the accountant's switch).
+import { COST_ACTUALS_ADDS } from '../../costing/landed/permissions'
 
 /**
  * The system role templates (plan A1 §3.11 "Role"; feature PLT-030): ready roles every tenant gets as system roles
@@ -1076,7 +1078,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-399
   ...(audience === 'office' ? (AUDIT_DEPTH_ADDS[key] ?? []) : []),
   // B-W2b-396
-  ...(audience === 'office' ? (DEPOSIT_RULES_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (DEPOSIT_RULES_ADDS[key] ?? []) : []),
+  // B-W2b-407
+  ...(audience === 'office' ? (COST_ACTUALS_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the
