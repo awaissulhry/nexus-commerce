@@ -53,15 +53,16 @@ import { RmaDialogs } from './RmaDialogs'
  * the facts; Print the return papers and Bind the return policy in ⋯; the remake asked; a line's split, size exchange and
  * fee on Inspection & decision; Credit without return and the restocking or handling fee on Replacement & credit.
  */
-export function RmaRecordView({ model, actions, panels }: { model: RmaModel; actions?: RmaActions; panels?: ReactNode }) {
+// B-W2b-398: `returnLabels` is the Shipments tab's return labels (its container reads them; the design cases need no session).
+export function RmaRecordView({ model, actions, panels, returnLabels }: { model: RmaModel; actions?: RmaActions; panels?: ReactNode; returnLabels?: ReactNode }) {
   return (
     <ReturnsMessages>
-      <RmaRecord model={model} actions={actions} panels={panels} />
+      <RmaRecord model={model} actions={actions} panels={panels} returnLabels={returnLabels} />
     </ReturnsMessages>
   )
 }
 
-function RmaRecord({ model, actions, panels }: { model: RmaModel; actions?: RmaActions; panels?: ReactNode }) {
+function RmaRecord({ model, actions, panels, returnLabels }: { model: RmaModel; actions?: RmaActions; panels?: ReactNode; returnLabels?: ReactNode }) {
   const t = useWords()
   const dayWords = useDayWords()
   const { rma, prefix, can } = model
@@ -199,7 +200,7 @@ function RmaRecord({ model, actions, panels }: { model: RmaModel; actions?: RmaA
           {tab === 'lines' && <LinesTab model={model} actions={actions} />}
           {tab === 'inspection' && <InspectionTab model={model} actions={actions} />}
           {tab === 'credit' && <CreditTab model={model} actions={actions} />}
-          {tab === 'shipments' && <ShipmentsTab model={model} actions={actions} />}
+          {tab === 'shipments' && <ShipmentsTab model={model} actions={actions} returnLabels={returnLabels} />}
           {tab === 'activity' && panels}
         </div>
       </RecordFrame>
@@ -640,7 +641,7 @@ function CreditTab({ model, actions }: { model: RmaModel; actions?: RmaActions }
 
 // ---- Shipments ------------------------------------------------------------------------------------------------------------
 
-function ShipmentsTab({ model, actions }: { model: RmaModel; actions?: RmaActions }) {
+function ShipmentsTab({ model, actions, returnLabels }: { model: RmaModel; actions?: RmaActions; returnLabels?: ReactNode }) {
   const t = useWords()
   const { rma, can, prefix } = model
   const ddtHeld = returnStep('issueReturnDdt', rma, can, model.offline)
@@ -692,7 +693,8 @@ function ShipmentsTab({ model, actions }: { model: RmaModel; actions?: RmaAction
           stackOnPhone
         />
       )}
-      <p className="fw-q-hint">{t('ship.labelLater')}</p>
+      {/* B-W2b-398 (TK1:01): the carrier labels of the goods coming back (made now, or offered by a link). */}
+      {returnLabels}
     </div>
   )
 }

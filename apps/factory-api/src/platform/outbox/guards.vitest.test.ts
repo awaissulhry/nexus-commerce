@@ -75,10 +75,15 @@ describe('check-event-contract', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
     // B-W2b-393: seven events (bank_statement.imported, bank_line.suggestions_changed, bank_match.accepted, .reversed,
     // payment.written_off, .write_off_reversed, write_off_tolerance.changed) and ten literal emits: 847 → 854, 1333 → 1343.
     // B-W2b-391 + 392 + 393 together: 851 + 7 = 858 declared event versions, 1349 + 10 = 1359 literal emits.
+    // B-W2b-394: five events (email.team_inbox_changed, email.capture_changed, email.inbound_worked, email.bounce_noted,
+    // email.webhook_secret_changed; emitted through eventFor) and one literal emit (sales_settings.changed by PUT
+    // /sales/inquiries/addresses): 844 → 849, 1326 → 1327.
+    // B-W2b-391 + 392 + 393 + 394 together: 858 + 5 = 863 declared event versions, 1359 + 1 = 1360 literal emits.
     // B-W2b-407: four events (actual_cost_settings.changed, purchase_price_variance.posted, cost_of_sales.posted,
     // landed_cost.changed) and twelve literal emits (the settings; a variance posted, reversed, a document's taken back; a
-    // shipment's cost posted, reversed, taken back; a landed cost prepared, changed, removed, posted, reversed): 858 → 862, 1359 → 1371.
-    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(862 declared event version\(s\), 1371 literal emit/) })
+    // shipment's cost posted, reversed, taken back; a landed cost prepared, changed, removed, posted, reversed), after the
+    // merge with main at 868 and 1360: 868 → 872, 1360 → 1372.
+    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(872 declared event version\(s\), 1372 literal emit/) })
   })
 
   it.each<[string, Plants, RegExp]>([

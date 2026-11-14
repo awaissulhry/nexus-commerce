@@ -871,7 +871,6 @@
     "in": "In from the customer",
     "intro": "Goods coming in with the customer’s DDT, and goods going back.",
     "issueDdt": "Issue return DDT",
-    "labelLater": "A return label or link for the customer comes later.",
     "lines_one": "{count} line",
     "lines_other": "{count} lines",
     "noCustomerDdt": "No customer DDT",

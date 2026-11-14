@@ -35,6 +35,8 @@ import {
 import { createFromMail, mailDraft } from './mail'
 import { manifest } from './manifest'
 import { inquirySource, quoteInquiry } from './quote'
+// B-W2b-394 (ML1:02): the addresses whose mail makes an inquiry by itself.
+import { inquiryAddresses, inquiryAddressesContract, saveInquiryAddresses, saveInquiryAddressesContract } from './from-mail'
 
 /**
  * Inquiries and requests for quotation (B-W2b-295): ./inquiries.ts (the list, the record, new, change, assign, ask for more
@@ -59,4 +61,7 @@ export default defineRoutes('sales.inquiries', manifest, async (app) => {
   app.post('/sales/inquiries/:inquiryId/decline', { schema: declineInquiryContract }, async (request) => declineInquiry(request, request.params.inquiryId, request.body, idempotencyKeyFrom(request)))
   app.post('/sales/inquiries/:inquiryId/lost', { schema: loseInquiryContract }, async (request) => loseInquiry(request, request.params.inquiryId, request.body, idempotencyKeyFrom(request)))
   app.post('/sales/inquiries/:inquiryId/quote', { schema: quoteInquiryContract }, async (request, reply) => reply.code(201).send(await quoteInquiry(request, request.params.inquiryId, request.body, idempotencyKeyFrom(request))))
+  // B-W2b-394 (ML1:02)
+  app.get('/sales/inquiries/addresses', { schema: inquiryAddressesContract }, async (request) => inquiryAddresses(request, request.query))
+  app.put('/sales/inquiries/addresses', { schema: saveInquiryAddressesContract }, async (request) => saveInquiryAddresses(request, request.body, idempotencyKeyFrom(request)))
 })

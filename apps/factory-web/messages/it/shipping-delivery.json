@@ -1,0 +1,224 @@
+{
+  "rl": {
+    "title": "Etichetta o link di reso",
+    "what": "L’etichetta del vettore per la merce che torna: creata ora dalla spedizione con cui è uscita (indirizzi invertiti), o un link che il cliente usa per prenotare il vettore solo quando spedisce.",
+    "loading": "Lettura delle etichette di reso…",
+    "retry": "Riprova",
+    "make": "Crea etichetta di reso",
+    "offline": "Nessuna connessione: nulla viene prenotato o inviato finché non torna la rete.",
+    "dismiss": "Chiudi",
+    "table": "Etichette di reso",
+    "col": {
+      "what": "Etichetta o link",
+      "state": "Stato",
+      "carrier": "Vettore",
+      "detail": "Dettagli",
+      "actions": "Azioni"
+    },
+    "mode": {
+      "LABEL": "Etichetta",
+      "LINK": "Link"
+    },
+    "status": {
+      "OFFERED": "Offerta con link",
+      "BOOKED": "Prenotata",
+      "USED": "Usata",
+      "CANCELLED": "Ritirata"
+    },
+    "reference": "Riferimento {reference}",
+    "linkTo": "Link a {email}",
+    "linkPassedOn": "Link passato",
+    "linkUntil": "aperto fino al {day}",
+    "linkOpened": "ultima apertura {at}",
+    "linkNotOpened": "non ancora aperto",
+    "usedAt": "merce ricevuta {at}",
+    "cancelledAt": "ritirata {at}",
+    "madeAt": "creata {at}",
+    "openPdf": "PDF etichetta di reso",
+    "cancel": "Ritira",
+    "from": "Una nuova etichetta inverte gli indirizzi della spedizione {shipment}.",
+    "empty": {
+      "title": "Nulla prenotato",
+      "body": "Crea un’etichetta di reso: prenotata ora, o un link che il cliente usa entro {days} giorni."
+    },
+    "passOn": {
+      "copied": "Link copiato: passalo al cliente. Viene mostrato solo questa volta.",
+      "shown": "Il link da passare, mostrato solo questa volta:",
+      "copy": "Copia di nuovo"
+    },
+    "done": {
+      "booked": "L’etichetta di reso è prenotata: apri il PDF per stamparla o inviarla.",
+      "cancelled": "L’etichetta di reso è stata ritirata.",
+      "offered_one": "Il link è andato a {count} contatto del cliente.",
+      "offered_other": "Il link è andato a {count} contatti del cliente."
+    },
+    "failed": {
+      "read": "Impossibile leggere le etichette di reso.",
+      "forbidden": "Non puoi creare o ritirare etichette di reso per questo reso.",
+      "refused": "L’etichetta di reso è stata rifiutata così com’è: rileggi il reso.",
+      "offline": "La fabbrica non è raggiungibile: nulla è stato prenotato.",
+      "error": "Qualcosa è andato storto: nulla è stato prenotato."
+    },
+    "held": {
+      "loading": "Lettura delle etichette di reso in corso.",
+      "right": "Per creare etichette di reso serve il permesso di gestire i resi.",
+      "offline": "Nessuna connessione: riprova quando torna la rete.",
+      "busy": "Un momento: l’ultima azione è ancora in corso.",
+      "final": "Un’etichetta usata o ritirata non cambia più.",
+      "code": {
+        "RETURN_CLOSED": "L’etichetta di reso si crea solo finché la merce può tornare: reso autorizzato, o ricevuto in parte.",
+        "NO_SHIPMENT": "Nessuna spedizione dell’ordine del reso è partita: l’etichetta inverte gli indirizzi della spedizione con cui la merce è uscita.",
+        "TEST_MODE": "Il sito del reso è in modalità test (Impostazioni spedizioni): un’etichetta TEST arriverebbe al cliente, che non ne riceve mai.",
+        "NO_CARRIER_ACCOUNT": "L’azienda non ha una connessione Sendcloud utilizzabile: non si può prenotare nulla.",
+        "NO_ADDRESS": "Il sito non ha un indirizzo di reso o di mittente nelle impostazioni spedizioni, o l’indirizzo della spedizione è incompleto.",
+        "NO_SERVICE": "Né la spedizione né il sito indicano un vettore e un servizio da prenotare.",
+        "NO_RECIPIENT": "Il cliente non ha un contatto ordini attivo con un indirizzo e-mail: passa il link invece di inviarlo.",
+        "FINAL": "Questa etichetta di reso è usata o ritirata: non cambia più.",
+        "NOT_OFFERED": "Questa etichetta è già stata prenotata o ritirata.",
+        "CARRIER": "Il vettore non ha prenotato l’etichetta: riprova tra poco."
+      }
+    },
+    "dialog": {
+      "title": "Crea un’etichetta di reso per {number}",
+      "how": "Come la riceve il cliente",
+      "label": "Prenota ora l’etichetta",
+      "labelLine": "Il vettore viene prenotato subito; stampi il PDF o lo invii al cliente.",
+      "link": "Invia un link",
+      "linkLine": "Il cliente prenota il vettore solo quando spedisce; prima non si prenota nulla. Il link resta aperto {days} giorni.",
+      "shipment": "Spedizione con cui è uscita la merce",
+      "shipmentHint": "I suoi indirizzi vengono invertiti: dal cliente di nuovo a noi.",
+      "send": "Chi riceve il link",
+      "sendMail": "Invialo ai contatti ordini del cliente",
+      "sendTo": "A: {names}",
+      "sendPass": "Copia un link da passare",
+      "sendPassLine": "Il suo indirizzo viene mostrato una volta, qui, e copiato negli appunti.",
+      "labelNote": "Prenotare un’etichetta può avere un costo presso il vettore.",
+      "linkNote": "La mail del link è nella lingua del cliente; nulla va al vettore finché il cliente non prenota.",
+      "back": "Indietro",
+      "book": "Prenota l’etichetta",
+      "mail": "Invia il link",
+      "passOn": "Copia il link"
+    },
+    "cancelDialog": {
+      "title": "Ritirare questa etichetta di reso?",
+      "offered": "Il suo link smette subito di aprirsi; nulla era prenotato.",
+      "booked": "L’etichetta {reference} viene ritirata qui. La prenotazione del vettore resta su Sendcloud: annullala lì se il cliente non la userà.",
+      "confirm": "Ritira"
+    }
+  },
+  "win": {
+    "title": "Etichetta di reso di {number}",
+    "back": "Apri il reso",
+    "loading": "Lettura del PDF dell’etichetta…",
+    "cancelled": "Questa etichetta è stata ritirata: non inviarla al cliente.",
+    "noPdf": {
+      "title": "Ancora nessun PDF",
+      "offered": "L’etichetta è offerta con un link: il PDF esiste quando il cliente prenota il vettore.",
+      "cancelled": "L’etichetta è stata ritirata prima della prenotazione: non ha PDF."
+    },
+    "problem": {
+      "notFound": "Questa etichetta di reso non esiste, o l’indirizzo è incompleto.",
+      "forbidden": "Non puoi vedere questo reso.",
+      "failed": "Impossibile leggere l’etichetta di reso.",
+      "pdf": "Impossibile leggere il PDF dell’etichetta."
+    }
+  },
+  "dv": {
+    "title": "Consegnato (dal vettore)",
+    "what": "Quando è arrivata ogni spedizione, come lo sappiamo e la prova di consegna per una contestazione. Quando tutte le spedizioni sono arrivate l’ordine è consegnato e scadono le rate che decorrono dalla consegna.",
+    "loading": "Lettura delle consegne…",
+    "failed": "Impossibile leggere le consegne.",
+    "waiting": "L’ordine è consegnato quando arriva ogni spedizione partita.",
+    "orderDelivered": "Consegnato il {day}",
+    "stepsDue": "Rate che decorrono dalla consegna: {steps}.",
+    "step": "rata {seq} in scadenza il {day}",
+    "stepsSettled": "Le rate che decorrono dalla consegna sono saldate.",
+    "noSteps": "Nessuna rata decorre dalla consegna.",
+    "empty": {
+      "title": "Ancora nulla spedito",
+      "body": "Ogni spedizione compare qui quando parte."
+    },
+    "col": {
+      "shipment": "Spedizione",
+      "arrival": "Come lo sappiamo",
+      "when": "Consegnata",
+      "signed": "Firmato da",
+      "proof": "Prova"
+    },
+    "arrival": {
+      "carrier": "Dal vettore",
+      "typed": "Inserito da una persona",
+      "travelling": "In viaggio",
+      "returned": "Rientrata"
+    },
+    "signedAt": "{name} · {at}",
+    "noSigner": "Non indicato",
+    "problems_one": "{count} problema di tracciamento",
+    "problems_other": "{count} problemi di tracciamento",
+    "download": "Scarica la prova",
+    "downloadFailed": "Impossibile scaricare la prova: riprova.",
+    "held": {
+      "noImage": "Il vettore non ha ancora dato un’immagine della prova.",
+      "right": "Per scaricare la prova serve il permesso di vedere le spedizioni.",
+      "offline": "Nessuna connessione: riprova quando torna la rete.",
+      "busy": "Un momento: un download è in corso."
+    }
+  },
+  "link": {
+    "title": "Il tuo reso {number}",
+    "loading": "Apertura del tuo reso…",
+    "offline": "Nessuna connessione: riprova quando torna la rete.",
+    "what": "Cosa rispedire",
+    "return": "Reso",
+    "yourRef": "Il tuo riferimento",
+    "dueBy": "Da spedire entro",
+    "until": "Questa pagina resta aperta fino al",
+    "lines": "Cosa rispedire",
+    "col": {
+      "what": "Articolo",
+      "size": "Taglia",
+      "pieces": "Capi"
+    },
+    "way": "Il tuo pacco",
+    "from": "Da",
+    "to": "A",
+    "carrier": "Vettore",
+    "state": "Etichetta",
+    "status": {
+      "OFFERED": "Non ancora prenotata",
+      "BOOKED": "Prenotata",
+      "USED": "Ricevuta da noi",
+      "CANCELLED": "Ritirata"
+    },
+    "reference": "Riferimento del vettore",
+    "bookHint": "Quando la merce è imballata, prenota il vettore: nulla è prenotato prima che tu prema.",
+    "printHint": "Scarica l’etichetta, stampala e applicala sul pacco.",
+    "usedHint": "Il tuo pacco ci è arrivato.",
+    "book": "Prenota il vettore",
+    "download": "Scarica l’etichetta",
+    "used": {
+      "title": "Il tuo reso ci è arrivato",
+      "body": "L’abbiamo ricevuto il {at}. Ti diremo cosa succede ora."
+    },
+    "held": {
+      "RETURN_CLOSED": "Questo reso non accetta più merce: scrivici.",
+      "NO_SHIPMENT": "Da qui non possiamo prenotare il vettore per questo reso: scrivici.",
+      "TEST_MODE": "Da qui al momento non possiamo prenotare il vettore: scrivici.",
+      "NO_CARRIER_ACCOUNT": "Da qui al momento non possiamo prenotare il vettore: scrivici.",
+      "NO_ADDRESS": "Da qui al momento non possiamo prenotare il vettore: scrivici.",
+      "NO_SERVICE": "Da qui al momento non possiamo prenotare il vettore: scrivici.",
+      "NO_RECIPIENT": "Da qui al momento non possiamo prenotare il vettore: scrivici.",
+      "FINAL": "Questa etichetta è usata o ritirata.",
+      "NOT_OFFERED": "Questa etichetta è già prenotata: scaricala qui sotto.",
+      "CARRIER": "Il vettore non ha prenotato l’etichetta: riprova tra poco.",
+      "busy": "Un momento: l’ultima richiesta è ancora in corso.",
+      "notBooked": "Prenota prima il vettore: l’etichetta esiste una volta prenotata.",
+      "offline": "Nessuna connessione: riprova quando torna la rete."
+    },
+    "problem": {
+      "read": "Impossibile aprire il tuo reso.",
+      "failed": "Qualcosa è andato storto: riprova.",
+      "gone": "Questo link non si apre più."
+    }
+  }
+}

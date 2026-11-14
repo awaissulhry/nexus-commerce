@@ -168,6 +168,17 @@ import { fittingRemindersCron } from './modules/sales/fittings/reminders'
 import { orderOptionsHandler } from './modules/sales/configurator/copy'
 // B-W2b-389: the daily ECB reference rates (16:30 and 18:30 Europe/Rome, Monday to Friday; only where switched on; FAKE locally).
 import { ecbDailyCron } from './platform/currency/feed'
+// B-W2b-394: mail in depth (the capture address's match and the team inboxes' routing, inquiries from an inquiry address, a
+// bounce's task; the team inboxes' follow-ups that came).
+import { mailRouteHandler } from './platform/email-in/team-inbox/route'
+import { followUpsCron } from './platform/email-in/team-inbox/follow-ups'
+import { inquiryFromAddressHandler } from './modules/sales/inquiries/from-mail'
+import { bounceTaskHandler } from './platform/email-out/delivery-status/tasks'
+// B-W2b-398: delivery and return labels (the customer notice, tracking problems, the carrier's proof, used return labels).
+import { customerNoticeHandler } from './modules/shipping/notices/handler'
+import { deliveryCheckCron, trackingProblemsHandler } from './modules/shipping/exceptions/check'
+import { carrierPodHandler } from './modules/shipping/pod/handler'
+import { returnLabelsUsedHandler } from './modules/shipping/return-labels/used'
 
 /**
  * The factory's background processes (plan A1 §3.1), one codebase with the API, two Railway services:
@@ -264,6 +275,10 @@ const W2B_377_HANDLERS: readonly EventHandler[] = [releasedReceiptHandler()]
 const W2B_386_HANDLERS: readonly EventHandler[] = [systemHoldsHandler()]
 // B-W2b-393: a payment recorded, placed, taken back or voided, an invoice issued, a deposit request made or waived → the company's bank line suggestions.
 const W2B_393_HANDLERS: readonly EventHandler[] = suggestionHandlers()
+// B-W2b-394: a sorted mail → the capture address's match and its team inbox; a mail to an inquiry address → its inquiry; a bounce → the sender's task.
+const W2B_394_HANDLERS: readonly EventHandler[] = [mailRouteHandler(), inquiryFromAddressHandler(), bounceTaskHandler()]
+// B-W2b-398
+const W2B_398_HANDLERS: readonly EventHandler[] = [customerNoticeHandler(), trackingProblemsHandler(), carrierPodHandler(), returnLabelsUsedHandler()]
 // B-W2b-407: a receipt posted or reversed, a supplier invoice approved or voided → its purchase price variances; a shipment left or came back from the carrier → its cost of goods sold (GATE-ACCOUNTANT: only while the company's switch is on).
 const W2B_407_HANDLERS: readonly EventHandler[] = [...ppvHandlers(), ...costOfSalesHandlers()]
 // B-W2b-11: the reports (one file each in modules/insights/reports/defs/), read by an export of a report.
@@ -334,7 +349,7 @@ if (mode === 'worker') {
   await moveLiftsAll({ database, log }).catch((error) => log.error({ err: error }, 'the unblocked addresses could not be moved at start'))
   await writeStepsAll({ database, log }).catch((error) => log.error({ err: error }, 'the first-load steps could not be written at start'))
   const relay = startRelay({ database, publish: queuePublisher(kit), log })
-  const workers = startEventWorkers({ kit, handlers: [...HANDLERS, ...W2A_20_HANDLERS, ...W2A_32_HANDLERS, ...W2A_33_HANDLERS, ...W2A_55_HANDLERS, ...W2A_61_HANDLERS, ...W2A_62_HANDLERS, ...W2B_15_HANDLERS, ...W2B_40_HANDLERS, ...W2B_37_HANDLERS, ...W2B_42_HANDLERS, ...W2B_43_HANDLERS, ...W2B_101_HANDLERS, ...W2B_118_HANDLERS, ...W2B_125_HANDLERS, ...W2B_135_HANDLERS, ...W2B_160_HANDLERS, ...W2B_167_HANDLERS, ...W2B_185_HANDLERS, ...W2B_170_HANDLERS, ...W2B_200_HANDLERS, ...W2B_225_HANDLERS, ...W2B_251_HANDLERS, ...W2B_260_HANDLERS, ...W2B_256_HANDLERS, ...W2B_263_HANDLERS, ...W2B_313_HANDLERS, ...W2B_292_HANDLERS, ...W2B_305_HANDLERS, ...W2B_304_HANDLERS, ...W2B_317_HANDLERS, ...W2B_294_HANDLERS, ...W2B_340_HANDLERS, ...W2B_377_HANDLERS, ...W2B_386_HANDLERS, ...W2B_393_HANDLERS, ...W2B_407_HANDLERS], database, live: redis, log })
+  const workers = startEventWorkers({ kit, handlers: [...HANDLERS, ...W2A_20_HANDLERS, ...W2A_32_HANDLERS, ...W2A_33_HANDLERS, ...W2A_55_HANDLERS, ...W2A_61_HANDLERS, ...W2A_62_HANDLERS, ...W2B_15_HANDLERS, ...W2B_40_HANDLERS, ...W2B_37_HANDLERS, ...W2B_42_HANDLERS, ...W2B_43_HANDLERS, ...W2B_101_HANDLERS, ...W2B_118_HANDLERS, ...W2B_125_HANDLERS, ...W2B_135_HANDLERS, ...W2B_160_HANDLERS, ...W2B_167_HANDLERS, ...W2B_185_HANDLERS, ...W2B_170_HANDLERS, ...W2B_200_HANDLERS, ...W2B_225_HANDLERS, ...W2B_251_HANDLERS, ...W2B_260_HANDLERS, ...W2B_256_HANDLERS, ...W2B_263_HANDLERS, ...W2B_313_HANDLERS, ...W2B_292_HANDLERS, ...W2B_305_HANDLERS, ...W2B_304_HANDLERS, ...W2B_317_HANDLERS, ...W2B_294_HANDLERS, ...W2B_340_HANDLERS, ...W2B_377_HANDLERS, ...W2B_386_HANDLERS, ...W2B_393_HANDLERS, ...W2B_394_HANDLERS, ...W2B_398_HANDLERS, ...W2B_407_HANDLERS], database, live: redis, log })
   stops.push(() => relay.stop(), () => workers.close())
 } else {
   const crons: CronJob[] = [outboxLagCron({ database, kit, log }), rolesSyncCron({ database, log }), certificateExpiryCron({ database, log }), sdiPollCron({ database, log }), trackingPollCron({ database, log }), nightlyPlanCron({ database, log }), exportExpiryCron({ database, log })]
@@ -415,6 +430,10 @@ if (mode === 'worker') {
   crons.push(viewFollowCron({ database, log, memory: redisIdMemory(redis, prefix) }))
   // B-W2b-389
   crons.push(ecbDailyCron({ database, log }))
+  // B-W2b-394: every 15 minutes, a team-inbox mail whose follow-up came with no answer is open again (email.inbound_worked FOLLOW_UP_DUE).
+  crons.push(followUpsCron({ database, log }))
+  // B-W2b-398: daily at 07:10, the travelling shipments checked: no carrier news for 3 days, the expected day passed (a task each).
+  crons.push(deliveryCheckCron({ database, log }))
   const scheduler = startCrons(crons, { redis, prefix, log })
   stops.push(() => scheduler.stop())
 }

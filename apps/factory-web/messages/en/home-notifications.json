@@ -263,6 +263,12 @@
         "renewAsked": "The link you sent for {record} no longer opens: its holder asks for a new one",
         "renewAskedNote": "The link you sent for {record} no longer opens: its holder asks for a new one (\"{title}\")"
       },
+      "shipping": {
+        "delayed": "Shipment {record} is late: check it with the carrier",
+        "addressProblem": "The carrier cannot deliver shipment {record} to its address: check it with the customer",
+        "failedDelivery": "The carrier failed to deliver shipment {record}: arrange a new delivery",
+        "noScan": "No carrier news on shipment {record} for days: ask the carrier"
+      },
       "changes": {
         "requestRaised": "New change request {record}: {title}",
         "requestAccepted": "{actor} accepted your change request {record}",
@@ -278,6 +284,10 @@
       },
       "inquiries": {
         "assigned": "{actor} gave you inquiry {record}"
+      },
+      "mail": {
+        "assigned": "{actor} gave you a mail of {title}: {record}",
+        "followUpDue": "No answer yet to {record} ({title}): it is back in your queue"
       }
     },
     "fallback": "News on {record}",

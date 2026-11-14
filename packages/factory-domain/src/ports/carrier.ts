@@ -24,6 +24,8 @@ export const CARRIER_OPERATIONS = Object.freeze({
   voidLabel: { name: 'carrier.void_label', idempotent: true },
   /** The carrier's tracking events of a parcel. A read. */
   tracking: { name: 'carrier.tracking', idempotent: true },
+  /** B-W2b-398 (LOG-065): the carrier's proof of delivery of a delivered parcel (who signed, when, the image). A read. */
+  proofOfDelivery: { name: 'carrier.proof_of_delivery', idempotent: true },
 } as const satisfies Record<string, OperationDescriptor>)
 
 /** What an adapter gets for one attempt of a gateway call (the API's GatewayCall has this shape). */
@@ -131,6 +133,16 @@ export interface TrackedLabel {
 }
 
 /**
+ * B-W2b-398 (LOG-065): a delivered parcel's proof as the carrier gives it: who signed (the customer's person), when (ISO
+ * 8601), and the signature or photo (PNG, JPEG or PDF); each may be missing. Null: the carrier has none (yet).
+ */
+export interface CarrierProofOfDelivery {
+  readonly signedBy: string | null
+  readonly signedAt: string | null
+  readonly image: { readonly contentType: 'image/png' | 'image/jpeg' | 'application/pdf'; readonly body: Uint8Array } | null
+}
+
+/**
  * The carrier port. Each method runs inside its gateway call (the `call`), throws the gateway's ProviderError for a
  * provider's refusal (retryable or not) and never calls the outside twice for one attempt.
  */
@@ -139,6 +151,8 @@ export interface CarrierPort {
   labelDocument(call: CarrierCall, providerId: string, format: LabelFormat): Promise<LabelDocument>
   voidLabel(call: CarrierCall, providerId: string): Promise<VoidOutcome>
   tracking(call: CarrierCall, label: TrackedLabel): Promise<readonly CarrierTrackingEvent[]>
+  /** B-W2b-398 (LOG-065) */
+  proofOfDelivery(call: CarrierCall, label: TrackedLabel): Promise<CarrierProofOfDelivery | null>
 }
 
 /**

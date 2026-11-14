@@ -2,6 +2,7 @@ import type { FastifyRequest } from 'fastify'
 import { NotFoundError } from '@nexus/factory-domain/core/errors'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { linkDocuments } from '@nexus/factory-domain/shipping/documents/documents'
+import { hasTestLabel } from '@nexus/factory-domain/shipping/exceptions/rules'
 import { trackingPageOf, type TrackingStatus } from '@nexus/factory-domain/shipping/labels/tracking'
 import {
   claimHeld,
@@ -99,7 +100,7 @@ export async function trackingPage(request: FastifyRequest) {
     const { shipment, via } = tracked
     const order = await db.salesOrder.findUnique({ where: { id: shipment.salesOrderId }, select: { number: true, customerRef: true } })
     const site = await db.site.findUnique({ where: { id: shipment.siteId }, select: { timezone: true } })
-    const parcels = await db.parcel.findMany({ where: { shipmentId: shipment.id }, select: { id: true, seq: true, trackingNumber: true, trackingUrl: true }, orderBy: { seq: 'asc' } })
+    const parcels = await db.parcel.findMany({ where: { shipmentId: shipment.id }, select: { id: true, seq: true, trackingNumber: true, trackingUrl: true, carrierParcelId: true }, orderBy: { seq: 'asc' } })
     const events = await db.trackingEvent.findMany({ where: { shipmentId: shipment.id }, select: { id: true, status: true, location: true, occurredAt: true, parcelId: true }, orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], take: 200 })
     const papers = papersShown(via) ? await papersOf(db, shipment) : []
     return { shipment, via, order, timeZone: site?.timezone ?? 'Europe/Rome', parcels, events, papers }
@@ -126,7 +127,8 @@ export async function trackingPage(request: FastifyRequest) {
     pill: tracker.pill,
     problem: tracker.problem,
     steps: tracker.steps.map((step) => ({ code: step.code, state: step.state, at: iso(step.at) })),
-    parcels: parcels.map((parcel) => ({ seq: parcel.seq, trackingNumber: parcel.trackingNumber, carrierPage: trackingPageOf(parcel.trackingUrl), status: latestOf(parcel.id) })),
+    // B-W2b-398: a TEST label's number (test mode, B-W2b-390) is never shown to a customer.
+    parcels: parcels.map((parcel) => ({ seq: parcel.seq, trackingNumber: hasTestLabel([parcel]) ? null : parcel.trackingNumber, carrierPage: hasTestLabel([parcel]) ? null : trackingPageOf(parcel.trackingUrl), status: latestOf(parcel.id) })),
     events: events.map((event) => ({ id: event.id, status: event.status, place: event.location?.trim() || null, occurredAt: toUtcIso(event.occurredAt), parcelSeq: event.parcelId ? (seqOf.get(event.parcelId) ?? null) : null })),
     delivery: deliveryPlaceOf(shipment.shipTo),
     papers: { shown: papersShown(via), files: page.papers },

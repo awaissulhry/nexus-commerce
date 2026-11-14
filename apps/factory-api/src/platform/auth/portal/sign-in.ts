@@ -25,6 +25,7 @@ import type { ProofInput } from '../../abuse/guard'
 import { clearPortalCookie, portalCookieOf, setPortalCookies } from './cookies'
 import { answerFloor, portalOf, type PortalServices } from './service'
 import { portalTermsInForce } from './terms'
+import { portalSignInRefused } from '../../audit/security-events/sign-in'
 import {
   CODE_SELECT,
   companyById,
@@ -321,6 +322,8 @@ export async function signInWithCode(app: FastifyInstance, request: FastifyReque
 
   /** No account, no code, or a used or replaced one: the guard's own count of tries for the address, the same words. */
   const unknown = async (): Promise<never> => {
+    // B-W2b-399 (PLT-075): unknown attempts too, after the answer; never the address typed.
+    portalSignInRefused(p.auth, request, body.tenant, target ? { id: target.person.id, partyId: target.person.partyId } : null)
     const { count } = await p.guard.hit('portal.signin.code', 'tries', subject, PORTAL_CODE.ttlMs)
     await p.guard.failed(request, 'portal.signin.code')
     await answerFloor(startedAt, p.answerFloorMs)

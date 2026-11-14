@@ -1,0 +1,87 @@
+/*
+ * The return labels on the RMA's Shipments tab and the Return label PDF window (B-W2b-398) LAYOUT. Controls are the design
+ * system's; semantic tokens only.
+ */
+.fw-rl,
+.fw-rl-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-rl-head,
+.fw-rl-what {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-rl-hint {
+  margin: 0;
+  color: var(--nds-text-2);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.fw-rl-code,
+.fw-rl-url {
+  font-family: var(--nds-font-mono);
+  overflow-wrap: anywhere;
+}
+
+.fw-rl-url {
+  color: var(--nds-text-strong);
+}
+
+.fw-rl-detail {
+  color: var(--nds-text-2);
+  overflow-wrap: anywhere;
+}
+
+.fw-rl-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-rl-link {
+  color: var(--nds-text-link);
+}
+
+.fw-rl-choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.fw-rl-legend {
+  margin-bottom: var(--nds-space-4);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-rl-window {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+  padding: var(--nds-space-16);
+}
+
+.fw-rl-band {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+}
+
+.fw-rl-h1 {
+  margin: 0;
+  font-size: var(--nds-font-size-lg);
+}

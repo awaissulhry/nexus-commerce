@@ -20,7 +20,7 @@ import { priceBasisOf, type SalesFeeKind, type SalesLineKind } from '../quotes/q
  *
  * W2b-6 (schema wave 51/57, B-W2b-372; LOG-067): DELIVERED, every shipment of a SHIPPED order that left was delivered (the
  * …_delivery_customs_w2b_guards trigger: from SHIPPED only, with deliveredAt, then only CLOSED). B-W2b-398 writes the move
- * from the carrier's delivery; until then nothing moves an order into it.
+ * from the carrier's delivery: the system, when every shipment that left arrived (followMoves).
  *
  * One writer per move (SAL-204; the design's board: cards never drag, each state changes only through its own action):
  *
@@ -101,6 +101,11 @@ export interface SalesOrderFacts {
   /** The reason a person gave: a cancellation, a ready by hand, a close while not settled. */
   readonly reason?: string | null
   /**
+   * B-W2b-398 (LOG-067): every shipment of the order that left has arrived: at least one DELIVERED and none still travelling
+   * (SHIPPED), as the …_delivery_customs_w2b_guards trigger asks for the move SHIPPED → DELIVERED.
+   */
+  readonly delivered?: boolean
+  /**
    * B-W2a-30: what stops a cancellation besides the reason and the drafts, in words (./daily `cancelImpact` blocks: a
    * shipment being packed, an invoice of the order).
    */
@@ -120,9 +125,10 @@ export const salesOrderMachine = defineMachine<SalesOrderStatus, SalesOrderFacts
     IN_PRODUCTION: ['READY', 'PARTLY_SHIPPED', 'SHIPPED', 'CANCELLED'],
     READY: ['PARTLY_SHIPPED', 'SHIPPED', 'CANCELLED'],
     PARTLY_SHIPPED: ['SHIPPED'],
-    SHIPPED: ['PARTLY_SHIPPED', 'CLOSED'],
+    // B-W2b-398 (LOG-067): a shipped order whose shipments all arrived is DELIVERED (the system, from the carrier's delivery).
+    SHIPPED: ['PARTLY_SHIPPED', 'CLOSED', 'DELIVERED'],
     PENDING_APPROVAL: ['CONFIRMED', 'CANCELLED'],
-    // W2b-6 (B-W2b-372): a delivered order is closed (the close command's guard); B-W2b-398 brings SHIPPED → DELIVERED.
+    // W2b-6 (B-W2b-372): a delivered order is closed (the close command's guard).
     DELIVERED: ['CLOSED'],
   },
   guards: {
@@ -130,6 +136,8 @@ export const salesOrderMachine = defineMachine<SalesOrderStatus, SalesOrderFacts
     READY: (facts) => (facts.released === true || hasReason(facts) ? [] : ['every ordered piece released by quality, or a reason (quality release is not in use yet)']),
     PARTLY_SHIPPED: (facts) => (facts.shipped === 'PARTLY' ? [] : ['part of the order shipped and part not']),
     SHIPPED: (facts) => (facts.shipped === 'ALL' ? [] : ['every ordered piece shipped']),
+    // B-W2b-398 (LOG-067)
+    DELIVERED: (facts) => (facts.shipped === 'ALL' && facts.delivered === true ? [] : ['every ordered piece shipped and every shipment that left delivered']),
     CLOSED: (facts) =>
       facts.settlement?.settled === true || hasReason(facts) ? [] : [`every line shipped, invoiced and paid (${missingWords(facts.settlement)}), or a reason to close it anyway`],
     // B-W2a-30 (SAL-211): released work orders no longer stop it; they are left behind and named by the impact check.
@@ -162,7 +170,9 @@ export function followMoves(status: SalesOrderStatus, facts: SalesOrderFacts): S
   if (current === 'IN_PRODUCTION' && facts.released === true && shipped === 'NONE') step('READY')
   if (shipped === 'ALL') step('SHIPPED')
   else if (shipped === 'PARTLY') step('PARTLY_SHIPPED')
-  if (current === 'SHIPPED' && facts.settlement?.settled === true) step('CLOSED')
+  // B-W2b-398 (LOG-067): delivered before it closes, so the delivery time (and the terms that run from it) is kept.
+  if (current === 'SHIPPED' && facts.delivered === true) step('DELIVERED')
+  if ((current === 'SHIPPED' || current === 'DELIVERED') && facts.settlement?.settled === true) step('CLOSED')
   return moves
 }
 

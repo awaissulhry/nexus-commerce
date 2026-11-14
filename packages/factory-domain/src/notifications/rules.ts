@@ -120,6 +120,15 @@ export const MESSAGE_TEMPLATES = {
   'notifications.inquiries.assigned': { en: '{actor} gave you inquiry {record}', it: '{actor} ti ha affidato la richiesta {record}' },
   'notifications.safety.productReport': { en: 'Product-safety report {record} came in: assess it', it: 'È arrivata la segnalazione di sicurezza {record}: valutala' },
   'notifications.safety.productAccident': { en: 'Product-safety report {record} came in with an accident: assess it and see whether the authority must be told', it: 'È arrivata la segnalazione di sicurezza {record} con un incidente: valutala e verifica se va informata l’autorità' },
+  // B-W2b-394 (COL-027): a team-inbox mail given to a person ({record}: its subject, {title}: the inbox), and its follow-up that came
+  // with no answer (the mail is open again in the queue). Both start notifications.mail. (the matrix's MAIL_ASSIGNED row).
+  'notifications.mail.assigned': { en: '{actor} gave you a mail of {title}: {record}', it: '{actor} ti ha affidato una mail di {title}: {record}' },
+  'notifications.mail.followUpDue': { en: 'No answer yet to {record} ({title}): it is back in your queue', it: 'Ancora nessuna risposta a {record} ({title}): è di nuovo nella tua coda' },
+  // B-W2b-398 (LOG-063): a tracking problem on a shipment on its way, to the dispatch desk of its site ({record}: the shipment).
+  'notifications.shipping.delayed': { en: 'Shipment {record} is late: check it with the carrier', it: 'La spedizione {record} è in ritardo: verificala con il vettore' },
+  'notifications.shipping.addressProblem': { en: 'The carrier cannot deliver shipment {record} to its address: check it with the customer', it: 'Il vettore non riesce a consegnare la spedizione {record} all’indirizzo: verificalo con il cliente' },
+  'notifications.shipping.failedDelivery': { en: 'The carrier failed to deliver shipment {record}: arrange a new delivery', it: 'Il vettore non è riuscito a consegnare la spedizione {record}: organizza una nuova consegna' },
+  'notifications.shipping.noScan': { en: 'No carrier news on shipment {record} for days: ask the carrier', it: 'Nessuna notizia dal vettore sulla spedizione {record} da giorni: chiedi al vettore' },
 } as const satisfies Record<string, { readonly en: string; readonly it: string }>
 export type MessageKey = keyof typeof MESSAGE_TEMPLATES
 export const MESSAGE_KEYS = Object.freeze(Object.keys(MESSAGE_TEMPLATES)) as readonly MessageKey[]
