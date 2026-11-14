@@ -103,9 +103,9 @@ describe('check-event-contract', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
     // guard counts 901 and 1438 on this tree; with the planted event and emit: 902, 1439.
     // B-W2b-403: two events (supplier_invoice.first_approved, payment_proposal.changed) and four literal emits (the first yes,
     // a proposal changed, an invoice paid by its proposal, the remittance switch's payables_settings.changed): 904 → 906, 1442 → 1446.
-    // B-W2b-422: three events (document_template.changed, email_template.changed, saved_reply.changed; emitted through eventFor,
-    // no literal emit): with B-W2b-403 (main eb7c3259f7) 906 + 3 = 909 declared event versions, 1446 literal emits.
-    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(909 declared event version\(s\), 1446 literal emit/) })
+    // B-W2b-421: three events (custom_field.changed, picklist.changed, custom_value.changed) and three literal emits: with
+    // B-W2b-403, 906 → 909 and 1446 → 1449.
+    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(912 declared event version\(s\), 1449 literal emit/) })
   })
 
   it.each<[string, Plants, RegExp]>([

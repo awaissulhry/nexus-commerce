@@ -1557,6 +1557,7 @@
     }
   },
   "area": {
+    "fields": "Campi personalizzati e liste",
     "companies": "Società",
     "sites": "Stabilimenti",
     "users": "Persone",
@@ -1614,6 +1615,9 @@
     "currencies": "Valute e cambi"
   },
   "perm": {
+    "fields_view": "Vedere i campi personalizzati di ogni tipo di record e le liste, anche quelli archiviati",
+    "fields_manage": "Aggiungere e modificare i campi personalizzati e gestire le liste: valori, colori, icone e ordine",
+    "fields_personal_view": "Vedere i campi personalizzati segnati come personali sui record che vedi",
     "companies_view": "Vedere le società e se possono fatturare",
     "companies_manage": "Aggiungere società e cambiarne i dati legali, di fatturazione e predefiniti",
     "sites_view": "Vedere gli stabilimenti con linee, centri e postazioni",
