@@ -64,7 +64,14 @@ export const quotePricingContract = defineContract({
           /** The steps a LIST start (with the line's options) would write now (NET last); null: no list prices it. */
           fromList: steps(),
           /** SAL-173: the price the line's cost suggests at the floor the version is held to (a fee: null). */
-          suggested: output({ unitPrice: money.price(z.string().nullable()), marginPct: money.margin(z.string().nullable()), basedOn: basedOn.nullable(), problem: z.string().nullable() }).nullable(),
+          suggested: output({
+            unitPrice: money.price(z.string().nullable()),
+            marginPct: money.margin(z.string().nullable()),
+            basedOn: basedOn.nullable(),
+            // B-W2b-420 (KS3:01): the approved cost sheet version whose target price it is; null: from the revision's cost.
+            costSheet: notMoney(output({ id: id(), sheetVersion: z.number().int() }).nullable()),
+            problem: z.string().nullable(),
+          }).nullable(),
           marginPct: money.margin(z.string().nullable()),
           belowFloor: money.margin(z.boolean()),
           fee: output({ creditAgainstBulk: feeCredit }).nullable(),
