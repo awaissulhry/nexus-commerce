@@ -225,7 +225,7 @@ function Fields({ model, actions }: { model: FieldsViewModel; actions?: FieldsAc
         <span className="fw-flds-cell">
           <Icon size={14} aria-hidden />
           <span>{t(`type.${data.type}`)}</span>
-          {detail && <span className="fw-flds-muted">· {detail}</span>}
+          {detail && <span className="fw-flds-muted fw-flds-words">· {detail}</span>}
         </span>
       )
     }
@@ -251,7 +251,7 @@ function Fields({ model, actions }: { model: FieldsViewModel; actions?: FieldsAc
       colId: cell,
       headerName,
       field: cell,
-      minWidth: 160,
+      minWidth: 140,
       flex: 1.4,
       ...editable(),
       cellRenderer: LabelCell(cell),
@@ -265,9 +265,9 @@ function Fields({ model, actions }: { model: FieldsViewModel; actions?: FieldsAc
       colId: cell,
       headerName,
       field: cell,
-      width: 150,
-      minWidth: 130,
-      maxWidth: 180,
+      width: 130,
+      minWidth: 110,
+      maxWidth: 170,
       cellRenderer: SwitchCell(cell),
       suppressKeyboardEvent: (params) => {
         const data = params.data
@@ -278,20 +278,20 @@ function Fields({ model, actions }: { model: FieldsViewModel; actions?: FieldsAc
     return [
       label('labelIt', t('col.labelIt')),
       label('labelEn', t('col.labelEn')),
-      { colId: 'code', headerName: t('col.code'), field: 'code', minWidth: 140, flex: 1, cellRenderer: ({ data }: ICellRendererParams<EditorField>) => (data ? <span className="fw-flds-code">{data.code}</span> : null), suppressKeyboardEvent: cellKeys() },
-      { colId: 'type', headerName: t('col.type'), field: 'type', minWidth: 170, flex: 1.2, cellRenderer: TypeCell, suppressKeyboardEvent: cellKeys() },
-      { colId: 'section', headerName: t('col.section'), field: 'section', minWidth: 130, flex: 1, valueFormatter: (params) => (typeof params.value === 'string' ? (sectionText(params.value) ?? t('section.custom')) : ''), suppressKeyboardEvent: cellKeys() },
+      { colId: 'code', headerName: t('col.code'), field: 'code', minWidth: 110, flex: 1, cellRenderer: ({ data }: ICellRendererParams<EditorField>) => (data ? <span className="fw-flds-code">{data.code}</span> : null), suppressKeyboardEvent: cellKeys() },
+      { colId: 'type', headerName: t('col.type'), field: 'type', minWidth: 140, flex: 1.2, cellRenderer: TypeCell, suppressKeyboardEvent: cellKeys() },
+      { colId: 'section', headerName: t('col.section'), field: 'section', minWidth: 110, flex: 1, valueFormatter: (params) => (typeof params.value === 'string' ? (sectionText(params.value) ?? t('section.custom')) : ''), suppressKeyboardEvent: cellKeys() },
       switchColumn('required', t('col.required')),
       {
         colId: 'audience',
         headerName: t('col.audience'),
         field: 'audience',
-        minWidth: 170,
+        minWidth: 140,
         flex: 1.1,
         cellRenderer: ({ data }: ICellRendererParams<EditorField>) =>
           data ? (
             <span className="fw-flds-cell">
-              <span>{t(`audience.${data.audience}`)}</span>
+              <span className="fw-flds-words">{t(`audience.${data.audience}`)}</span>
               {data.grain && <Tag tone="info">{t(`grain.${data.grain}`)}</Tag>}
             </span>
           ) : null,
@@ -302,13 +302,13 @@ function Fields({ model, actions }: { model: FieldsViewModel; actions?: FieldsAc
         colId: 'status',
         headerName: t('col.state'),
         field: 'status',
-        width: 130,
-        minWidth: 110,
+        width: 110,
+        minWidth: 100,
         maxWidth: 150,
         cellRenderer: ({ data }: ICellRendererParams<EditorField>) => (data ? data.status === 'ACTIVE' ? <span>{t('state.ACTIVE')}</span> : <Pill tone="neutral">{t('state.ARCHIVED')}</Pill> : null),
         suppressKeyboardEvent: cellKeys(),
       },
-      { colId: 'used', headerName: t('col.used'), field: 'valueCount', width: 130, minWidth: 110, maxWidth: 160, type: 'rightAligned', valueFormatter: (params) => t('col.usedCount', { count: Number(params.value ?? 0) }), suppressKeyboardEvent: cellKeys() },
+      { colId: 'used', headerName: t('col.used'), field: 'valueCount', width: 110, minWidth: 100, maxWidth: 160, type: 'rightAligned', valueFormatter: (params) => t('col.usedCount', { count: Number(params.value ?? 0) }), suppressKeyboardEvent: cellKeys() },
     ]
     // The marks repaint the cells; the rest is read through `latest`.
   }, [t, locale, canManage, marksKey, model.recordType])

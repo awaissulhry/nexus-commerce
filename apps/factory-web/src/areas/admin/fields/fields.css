@@ -1,6 +1,6 @@
 /*
  * Admin › Fields & lists (B-W2b-431, SCR-164) LAYOUT: the band, which record and the tabs, the fields' list frame beside
- * the form preview (stacked below 1200 px), the picklists, the dialogs' forms and the type gallery. The page fills the
+ * the form preview (stacked below 1600 px), the picklists, the dialogs' forms and the type gallery. The page fills the
  * shell's main area (no max-width: Owner rule 2026-10-29); the grid, pickers and controls are the design system's;
  * semantic tokens only.
  */
@@ -50,6 +50,10 @@
   max-width: 100%;
 }
 
+.fw-flds-cell > svg {
+  flex: none;
+}
+
 .fw-flds-pick {
   min-width: 0;
   max-width: 100%;
@@ -57,7 +61,7 @@
 
 .fw-flds-work {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
   align-items: start;
   gap: var(--nds-space-16);
   min-width: 0;
@@ -282,8 +286,8 @@
   margin: 0;
 }
 
-/* Below 1200 px the preview goes under the list, its fields side by side. */
-@media (max-width: 1199px) {
+/* Below 1600 px the preview goes under the list (the list keeps every column in view), its fields side by side. */
+@media (max-width: 1599px) {
   .fw-flds-work {
     grid-template-columns: minmax(0, 1fr);
   }

@@ -72,6 +72,9 @@ export function PicklistsPanel({ model, actions }: { model: PicklistsModel; acti
   const picked = all.filter((value) => selected.includes(value.id))
   const latest = useRef({ model, actions })
   latest.current = { model, actions }
+  // The Order column reads the ranks of this render: the grid may draw a new row before it takes new column definitions.
+  const ranks = useRef(new Map<string, number>())
+  ranks.current = new Map(all.map((value, index) => [value.id, index + 1]))
   const marksKey = JSON.stringify(model.marks)
   const can = model.canManage && list?.status === 'ACTIVE'
 
@@ -144,7 +147,7 @@ export function PicklistsPanel({ model, actions }: { model: PicklistsModel; acti
       },
     })
     return [
-      { colId: 'order', headerName: t('values.col.order'), width: 90, minWidth: 80, maxWidth: 110, type: 'rightAligned', valueGetter: (params) => (params.data ? all.findIndex((value) => value.id === params.data!.id) + 1 : null) },
+      { colId: 'order', headerName: t('values.col.order'), width: 90, minWidth: 80, maxWidth: 110, type: 'rightAligned', valueGetter: (params) => (params.data ? (ranks.current.get(params.data.id) ?? null) : null) },
       { colId: 'code', headerName: t('values.col.code'), field: 'code', minWidth: 140, flex: 1, cellRenderer: ({ data }: ICellRendererParams<ListValue>) => (data ? <span className={data.active ? 'fw-flds-code' : 'fw-flds-code off'}>{data.code}</span> : null) },
       { colId: 'look', headerName: t('values.col.look'), minWidth: 180, flex: 1.1, cellRenderer: LookCell, suppressKeyboardEvent: (params) => {
           if (params.editing || params.event.key !== 'Enter' || !can || !params.data) return editableKeys(params)
@@ -170,7 +173,7 @@ export function PicklistsPanel({ model, actions }: { model: PicklistsModel; acti
       },
     ]
     // The marks repaint the cells; the rest is read through `latest`.
-  }, [t, looks, can, marksKey, all])
+  }, [t, looks, can, marksKey])
 
   if (model.picklists.length === 0 || !list) {
     return (

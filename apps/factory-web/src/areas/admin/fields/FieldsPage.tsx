@@ -219,9 +219,10 @@ export function FieldsPage() {
     try {
       if (open.mode === 'new') {
         const field = await createField(api, newFieldBody(current.recordType, open.draft), newIdempotencyKey())
-        setNotice({ key: 'done.added', tone: 'success', params: { field: labelIn(field, locale) } })
         closeDialog()
+        // The row and the preview first, then the notice that names it.
         await read(true)
+        setNotice({ key: 'done.added', tone: 'success', params: { field: labelIn(field, locale) } })
       } else {
         const field = fieldNow(open.fieldId ?? '')
         const change = field ? fieldChangeOf(field, open.draft) : null

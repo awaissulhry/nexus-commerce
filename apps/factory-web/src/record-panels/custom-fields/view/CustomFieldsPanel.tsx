@@ -125,7 +125,7 @@ function Panel({ model, actions }: { model: CustomFieldsModel; actions?: CustomF
       {model.saveFault && <Banner tone="danger" title={t(model.saveFault)} />}
       {sections.map((section) => (
         <div key={section.section} className="fw-cf-section">
-          <h4 className="fw-cf-section-title">{sectionText(section.section) ?? t('section.custom')}</h4>
+          {(sections.length > 1 || section.section !== 'custom') && <h4 className="fw-cf-section-title">{sectionText(section.section) ?? t('section.custom')}</h4>}
           {model.editing ? (
             <div className="fw-cf-grid">
               {section.fields.map((field) => (
