@@ -86,7 +86,7 @@ describe('check-event-contract', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
     // B-W2b-419: two events (cost_per_minute.changed, overhead_rule.changed) and eight literal emits (a calculation made,
     // corrected, removed, applied; a rule added, ended, corrected, archived): the guard counts 877 and 1390 on this tree
     // (875 and 1382 on origin/main 46f8ca898c); with the planted event and emit: 878, 1391.
-    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(878 declared event version\(s\), 1391 literal emit/) })
+    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(881 declared event version\(s\), 1395 literal emit/) })
   })
 
   it.each<[string, Plants, RegExp]>([

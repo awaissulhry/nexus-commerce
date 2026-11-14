@@ -32,6 +32,13 @@ import { library, reportAbout, reportResults, reportSchedule, type ResultsQuery 
 // quote speed (Sales › Quotes).
 import { backlogContract, headlineContract, intakeContract, quoteSpeedContract, returnsContract } from './sales-reports/contract'
 import { backlogAnswer, headlineAnswer, intakeAnswer, quoteSpeedAnswer, returnsAnswer } from './sales-reports/reads'
+// B-W2b-428: the metric layer — the KPI library and its versions (kpis/), the facts and measures (facts/).
+import { factsContract, measuresContract, rebuildContract } from './facts/contract'
+import { factsAnswer, measuresAnswer, rebuildAnswer, type FactsQuery } from './facts/answers'
+import { activateContract, deleteContract, draftContract, editContract, libraryContract as kpiLibraryContract, recordContract, retireContract, syncContract, valueContract } from './kpis/contract'
+import { kpiLibrary, kpiRecord, kpiValueAnswer } from './kpis/library'
+import { syncKpis } from './kpis/sync'
+import { activateVersion, deleteDraft, draftVersion, editDraft, retireKpi } from './kpis/versions'
 
 /**
  * Home › Today (B-W1-52; ANA-037; A2 SCR-029 "Today", SCR-031 W1 "Overview"): the needs-attention list computed from the
@@ -82,4 +89,19 @@ export default defineRoutes('insights', manifest, async (app) => {
   app.get('/sales/reports/backlog', { schema: backlogContract }, async (request) => backlogAnswer(request, request.query))
   app.get('/sales/reports/returns', { schema: returnsContract }, async (request) => returnsAnswer(request, request.query))
   app.get('/sales/reports/quote-speed', { schema: quoteSpeedContract }, async (request) => quoteSpeedAnswer(request, request.query))
+
+  // B-W2b-428 (ANA-012, ANA-028, ANA-069, ANA-070): the KPI library (read: home.kpis.view; write: home.kpis.manage), each value
+  // also its measures' list permissions and grains; the facts and measures (the measure's permission and grain).
+  app.get('/insights/kpis', { schema: kpiLibraryContract }, async (request) => kpiLibrary(request, request.query))
+  app.post('/insights/kpis/sync', { schema: syncContract }, async (request) => syncKpis(request, idempotencyKeyFrom(request)))
+  app.get('/insights/kpis/:key', { schema: recordContract }, async (request) => kpiRecord(request, request.params.key, request.query))
+  app.get('/insights/kpis/:key/value', { schema: valueContract }, async (request) => kpiValueAnswer(request, request.params.key, request.query))
+  app.post('/insights/kpis/:key/versions', { schema: draftContract }, async (request, reply) => reply.code(201).send(await draftVersion(request, request.params.key, request.body, idempotencyKeyFrom(request))))
+  app.post('/insights/kpis/:key/retire', { schema: retireContract }, async (request) => retireKpi(request, request.params.key, request.body, idempotencyKeyFrom(request)))
+  app.patch('/insights/kpis/versions/:id', { schema: editContract }, async (request) => editDraft(request, request.params.id, request.body, idempotencyKeyFrom(request)))
+  app.post('/insights/kpis/versions/:id/activate', { schema: activateContract }, async (request) => activateVersion(request, request.params.id, request.body, idempotencyKeyFrom(request)))
+  app.delete('/insights/kpis/versions/:id', { schema: deleteContract }, async (request) => deleteDraft(request, request.params.id, request.query.version, idempotencyKeyFrom(request)))
+  app.get('/insights/measures', { schema: measuresContract }, async (request) => measuresAnswer(request))
+  app.get('/insights/facts', { schema: factsContract }, async (request) => factsAnswer(request, request.query as FactsQuery))
+  app.post('/insights/facts/rebuild', { schema: rebuildContract }, async (request) => rebuildAnswer(request, request.body, idempotencyKeyFrom(request)))
 })

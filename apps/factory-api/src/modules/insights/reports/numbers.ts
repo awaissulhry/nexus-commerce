@@ -23,7 +23,10 @@ import { orderMargins } from '../../costing/margins/margins'
 import { stockValuation } from '../../costing/valuation/valuation'
 import { capacity } from '../../planning/capacity/capacity'
 import { shortages } from '../../planning/readiness/readiness'
-import { dailyView, previousWorkingDayOf, readDaily, siteFor } from '../../production/reports/daily'
+import { previousWorkingDayOf, siteFor } from '../../production/reports/daily'
+// B-W2b-428: three numbers read from the metric layer's KPIs (their one calculation over the facts).
+import { kpiFileOf } from '@nexus/factory-domain/insights/kpis/registry'
+import { kpiReading } from '../kpis/value'
 import { countWorkOrders } from '../../production/work-orders/work-orders'
 import { expectedDeliveries, listOrders as listPurchaseOrders } from '../../purchasing/orders'
 import { ncrCounts } from '../../quality/ncr/reads'
@@ -89,15 +92,14 @@ async function weeklySums(caller: CommandCaller, rows: readonly { day: BusinessD
 }
 
 const READERS: Readonly<Record<string, (context: Context) => Promise<Reading>>> = Object.freeze({
+  // B-W2b-428 (ANA-070): read from the metric layer, the KPI sales.orders_in over the 8 weeks (its one calculation).
   async 'orders.inThisWeek'({ caller, actor, today }) {
     const weeks = lastWeeks(today)
-    const found = await caller.withClient((db) =>
-      db.salesOrder.findMany({
-        where: { AND: [ordersScope(actor) as Prisma.SalesOrderWhereInput, { status: { not: 'CANCELLED' }, orderDate: { gte: day(weeks[0]!.from), lte: day(today) } }] },
-        select: { orderDate: true, netAmount: true, currency: true },
-      }),
-    )
-    return weeklySums(caller, found.map((row) => ({ day: businessDate(row.orderDate, 'UTC'), amount: row.netAmount, currency: row.currency })), weeks, periodRange('THIS_WEEK', today))
+    const reading = await kpiReading(caller, actor, kpiFileOf('sales.orders_in')!, weeks)
+    if (reading.problem === 'MIXED_CURRENCIES') return { value: null, problem: 'MIXED_CURRENCIES', spark: null }
+    if (reading.problem) return { value: null, problem: 'UNAVAILABLE', spark: null }
+    const amounts = reading.values.map((value) => (value === null ? null : Number.parseInt(value, 10)))
+    return { value: amounts.at(-1) ?? null, currency: reading.currency, spark: amounts, converted: reading.converted.length > 0 && reading.currency ? { to: reading.currency, from: reading.converted } : null }
   },
 
   async 'orders.late'({ caller, actor, today }) {
@@ -113,29 +115,14 @@ const READERS: Readonly<Record<string, (context: Context) => Promise<Reading>>> 
     return { value }
   },
 
+  // B-W2b-428 (ANA-070): read from the metric layer, the KPI delivery.shipped_on_time over the last 4 weeks and each of the 8.
   async 'orders.shippedOnTime'({ caller, actor, today }) {
     const weeks = lastWeeks(today)
-    const found = await caller.withClient((db) =>
-      db.shipment.findMany({
-        where: {
-          AND: [
-            ordersScope(actor) as Prisma.ShipmentWhereInput,
-            { status: { in: ['SHIPPED', 'DELIVERED'] }, shippedAt: { gte: new Date(day(weeks[0]!.from).getTime() - 86_400_000) }, salesOrder: { promiseDate: { not: null } } },
-          ],
-        },
-        select: { shippedAt: true, salesOrder: { select: { promiseDate: true } } },
-      }),
-    )
-    const shipped = found
-      .filter((row) => row.shippedAt && row.salesOrder.promiseDate)
-      .map((row) => ({ day: businessDate(row.shippedAt!), onTime: businessDate(row.shippedAt!) <= businessDate(row.salesOrder.promiseDate!, 'UTC') }))
-    const share = (range: DayRange) => {
-      const inRange = shipped.filter((row) => row.day >= range.from && row.day <= range.to)
-      const text = pctText(inRange.filter((row) => row.onTime).length, inRange.length)
-      return text === null ? null : Number.parseFloat(text)
-    }
-    const value = share({ from: weeks[4]!.from, to: today })
-    return { value, spark: weeks.map(share), problem: value === null ? 'NO_DATA' : null }
+    const reading = await kpiReading(caller, actor, kpiFileOf('delivery.shipped_on_time')!, [{ from: weeks[4]!.from, to: today }, ...weeks])
+    if (reading.problem) return { value: null, problem: 'UNAVAILABLE', spark: null }
+    const shares = reading.values.map((value) => (value === null ? null : Number.parseFloat(value)))
+    const value = shares[0] ?? null
+    return { value, spark: shares.slice(1), problem: value === null ? 'NO_DATA' : null }
   },
 
   async 'orders.marginThisMonth'({ caller, today }) {
@@ -173,13 +160,15 @@ const READERS: Readonly<Record<string, (context: Context) => Promise<Reading>>> 
     return { value: text === null ? null : Number.parseFloat(text), problem: text === null ? 'NO_DATA' : null }
   },
 
+  // B-W2b-428 (ANA-070): read from the metric layer, the KPI production.output of each site's last working day.
   async 'production.goodLastDay'({ caller, actor, today }) {
+    const file = kpiFileOf('production.output')!
     let good = 0
     for (const reached of await sitesReached(caller, actor, PRODUCTION_REPORTS_VIEW)) {
-      good += await caller.withClient(async (db) => {
-        const site = await siteFor(db, actor, PRODUCTION_REPORTS_VIEW, reached.id)
-        return dailyView(await readDaily(db, site, await previousWorkingDayOf(db, site.id, today))).totals.good
-      })
+      const day = await caller.withClient(async (db) => previousWorkingDayOf(db, (await siteFor(db, actor, PRODUCTION_REPORTS_VIEW, reached.id)).id, today))
+      const reading = await kpiReading(caller, actor, file, [{ from: day, to: day }], { siteId: reached.id })
+      if (reading.problem || reading.values[0] === null) return { value: null, problem: 'UNAVAILABLE' }
+      good += Number.parseInt(reading.values[0]!, 10)
     }
     return { value: good }
   },
