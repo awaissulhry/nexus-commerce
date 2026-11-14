@@ -25,6 +25,8 @@ import { planVersion } from './plan-versions'
 import { approvalTask } from './approval-tasks'
 // B-W2b-385 (NT1:02): inquiries waiting for us over a working day.
 import { inquiryWaiting } from './inquiries'
+// B-W2b-386: shipments at risk of missing their promise.
+import { shipmentsAtRisk } from './shipments-at-risk'
 
 /** One source per kind of Today (factory-domain insights/attention ATTENTION_KINDS). */
 export const SOURCES: Readonly<Record<AttentionKind, Source>> = Object.freeze({
@@ -65,4 +67,6 @@ export const SOURCES: Readonly<Record<AttentionKind, Source>> = Object.freeze({
   APPROVAL_TASK: approvalTask,
   // B-W2b-385 (NT1:02): an inquiry waiting for us over a working day, the assignee's or (nobody has it) the answerers'.
   INQUIRY_WAITING: inquiryWaiting,
+  // B-W2b-386 (LOG-110): shipments at risk of missing their promise, for the dispatch desk of their site.
+  SHIPMENT_AT_RISK: shipmentsAtRisk,
 })

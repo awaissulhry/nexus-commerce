@@ -1755,6 +1755,8 @@
     "shipping_freight_manage": "Impostare il trasporto addebitato ai clienti",
     "shipping_evidence_manage": "Gestire le prove di trasporto intra-UE",
     "shipping_packaging_manage": "Gestire imballi e marcature dei colli",
+    "shipping_holds_manage": "Bloccare le spedizioni e sbloccarle",
+    "shipping_holds_release": "Sbloccare le spedizioni bloccate per denaro o dal sistema",
     "parties_view": "Vedere clienti e fornitori",
     "parties_manage": "Aggiungere e modificare clienti e fornitori",
     "parties_block": "Bloccare e sbloccare un cliente o fornitore",

@@ -72,6 +72,8 @@ import { scheduleBoard } from './schedule-board'
 import { serviceCases } from './service-cases'
 // B-W2b-371: Sales › Special orders › Made-to-measure (the rider list; the source lives with its module).
 import { mtmProfiles } from '../../../modules/sales/mtm/list-filters/export-source'
+// B-W2b-386: Warehouse › Shipments › Search and history (the page's second list).
+import { shipmentsHistory } from './shipments-history'
 
 /**
  * Every list with an export (B-W2a-23; PLT-179), one file per list beside this one. A step that gives its list an export
@@ -156,4 +158,6 @@ export const EXPORT_SOURCES: readonly AnyExportSource[] = Object.freeze([
   serviceCases,
   // B-W2b-371: Sales › Special orders › Made-to-measure.
   mtmProfiles,
+  // B-W2b-386: Warehouse › Shipments › Search and history.
+  shipmentsHistory,
 ])
