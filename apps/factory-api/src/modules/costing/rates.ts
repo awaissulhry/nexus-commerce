@@ -10,7 +10,7 @@ import { labourRateMachine, overheadProblems, rateProblems } from '@nexus/factor
 import { asMoney, markMoney } from '@nexus/factory-domain/money/marked'
 import { WORK_CENTRE_KINDS } from '@nexus/factory-domain/product/routing/operations'
 import { decimalText } from '@nexus/factory-domain/product/units/units'
-import { command, type CommandCaller, type CommandTx } from '../../core/command'
+import { command, type CommandCaller, type CommandTools, type CommandTx } from '../../core/command'
 import { actorOf, type RequestContext } from '../../core/context'
 import { serverClock } from '../../core/time'
 import { contextOf, mayWrite } from '../product/materials/store'
@@ -74,7 +74,8 @@ function rateView(row: RateRow, peers: readonly RateRow[], on: string): LabourRa
   }
 }
 
-async function rateViewIn(client: FactoryClient | CommandTx, rateId: string, on: string): Promise<LabourRateView> {
+/** A rate as answered (inForce for today, or the day given), read in the caller's client or command. */
+export async function rateViewIn(client: FactoryClient | CommandTx, rateId: string, on: string): Promise<LabourRateView> {
   const row = await client.labourRate.findUniqueOrThrow({ where: { id: rateId }, select: RATE_COLUMNS })
   const peers = await client.labourRate.findMany({ where: { AND: [companyOrTenant(row.companyId), { workCentreKind: row.workCentreKind }] }, select: RATE_COLUMNS })
   return rateView(row, peers, on)
@@ -109,7 +110,8 @@ async function readRate(caller: CommandCaller, rateId: string): Promise<RateRow>
   return row
 }
 
-const taken = (kind: string, day: string) => new ConflictError(`A ${kind} rate from ${day} exists already for this company (or tenant-wide): correct it, or choose another first day.`)
+/** The words of a rate of a kind and day that exists already. */
+export const taken = (kind: string, day: string) => new ConflictError(`A ${kind} rate from ${day} exists already for this company (or tenant-wide): correct it, or choose another first day.`)
 
 async function assertDayFree(tx: CommandTx, row: { companyId: string | null; workCentreKind: RateRow['workCentreKind']; validFrom: string }, except?: string): Promise<void> {
   const clash = await tx.labourRate.findFirst({
@@ -136,27 +138,50 @@ export async function createRate(caller: CommandCaller, body: CreateRateBody, id
   const note = body.note ?? null
 
   const { result } = await command(caller, { name: 'costing.createRate', idempotencyKey, input: body }, async (tools) => {
-    const { tx, now } = tools
-    if (companyId !== null && !(await tx.company.findUnique({ where: { id: companyId }, select: { id: true } }))) throw invalid([{ path: 'body/companyId', message: 'No such company.' }])
-    await assertDayFree(tx, { companyId, workCentreKind: body.workCentreKind, validFrom: rate.validFrom })
-    const id = newId()
-    await tx.labourRate.create({
-      data: { id, companyId, workCentreKind: body.workCentreKind, ...rate, validFrom: dateOf(rate.validFrom), note, createdAt: now, updatedAt: now, createdById: tools.context.audience === 'office' ? tools.context.actorId : null },
-      select: { id: true },
-    })
-    tools.audit({
-      recordType: 'LabourRate',
-      recordId: id,
-      companyId,
-      after: { companyId, workCentreKind: body.workCentreKind, costPerMinute: markMoney('cost', rate.costPerMinute), currency: rate.currency, plannedEfficiencyPct: rate.plannedEfficiencyPct, validFrom: rate.validFrom, note, status: 'ACTIVE' },
-    })
-    tools.emit({ type: 'labour_rate.created', subject: id, companyId, payload: { rateId: id, workCentreKind: body.workCentreKind, validFrom: rate.validFrom } })
-    return rateViewIn(tx, id, businessDate(now))
+    const id = await createRateInCommand(tools, { companyId, workCentreKind: body.workCentreKind, ...rate, note })
+    return rateViewIn(tools.tx, id, businessDate(tools.now))
   }).catch((error: unknown) => {
     if (isUniqueViolation(error)) throw taken(body.workCentreKind, rate.validFrom)
     throw error
   })
   return result
+}
+
+/** A rate to write: its figures checked already (rateProblems). */
+export interface NewRate {
+  readonly companyId: string | null
+  readonly workCentreKind: RateRow['workCentreKind']
+  readonly costPerMinute: string
+  readonly currency: string
+  readonly plannedEfficiencyPct: string
+  readonly validFrom: string
+  readonly note: string | null
+}
+
+/**
+ * The labour rate written inside a command, with its audit row and labour_rate.created: POST /costing/rates, and the
+ * cost-per-minute calculator's apply (B-W2b-419: the calculation's rate in the same command). Refused in words when the
+ * company is unknown or a rate of the kind and day exists; the caller maps a racing duplicate (P2002) with `taken`.
+ */
+export async function createRateInCommand(tools: CommandTools, rate: NewRate): Promise<string> {
+  const { tx, now } = tools
+  const { companyId, workCentreKind, note, ...figures } = rate
+  if (companyId !== null && !(await tx.company.findUnique({ where: { id: companyId }, select: { id: true } }))) throw invalid([{ path: 'body/companyId', message: 'No such company.' }])
+  await assertDayFree(tx, { companyId, workCentreKind, validFrom: figures.validFrom })
+  const id = newId()
+  await tx.labourRate.create({
+    data: { id, companyId, workCentreKind, ...figures, validFrom: dateOf(figures.validFrom), note, createdAt: now, updatedAt: now, createdById: tools.context.audience === 'office' ? tools.context.actorId : null },
+    select: { id: true },
+  })
+  tools.audit({
+    action: 'costing.createRate',
+    recordType: 'LabourRate',
+    recordId: id,
+    companyId,
+    after: { companyId, workCentreKind, costPerMinute: markMoney('cost', figures.costPerMinute), currency: figures.currency, plannedEfficiencyPct: figures.plannedEfficiencyPct, validFrom: figures.validFrom, note, status: 'ACTIVE' },
+  })
+  tools.emit({ type: 'labour_rate.created', subject: id, companyId, payload: { rateId: id, workCentreKind, validFrom: figures.validFrom } })
+  return id
 }
 
 const RATE_FIELDS = ['costPerMinute', 'currency', 'plannedEfficiencyPct', 'validFrom', 'note'] as const
