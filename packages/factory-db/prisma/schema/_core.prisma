@@ -242,6 +242,12 @@ model Company {
   packagingTypes        PackagingType[]
   packagingDefaults     PackagingDefault[]
   shippingMarkTemplates ShippingMarkTemplate[]
+  // W2b-6 config.prisma (wave 56/57): its custom fields and picklists, its document, e-mail and message templates.
+  customFields          CustomField[]
+  picklists             Picklist[]
+  documentTemplates     DocumentTemplate[]
+  emailTemplates        EmailTemplate[]
+  messageTemplates      MessageTemplate[]
   // W2b-5 buying-depth.prisma (wave 40/44): its delivery tolerances.
   deliveryTolerances   DeliveryTolerance[]
   supplierInvoiceFiles SupplierInvoiceFile[]
