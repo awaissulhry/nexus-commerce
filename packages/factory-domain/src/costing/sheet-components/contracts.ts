@@ -60,7 +60,6 @@ export const componentLineView = output({
   pct: money.cost(z.string().nullable()),
   note: z.string().nullable(),
 })
-export type ComponentLineView = z.infer<typeof componentLineView>
 
 export const missingComponentView = output({
   key: z.string(),
