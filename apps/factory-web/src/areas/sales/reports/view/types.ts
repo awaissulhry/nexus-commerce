@@ -42,4 +42,6 @@ export interface ReportsActions {
   onExport?: (panel: ReportSection | 'drill', header: string[], rows: (string | number | null)[][]) => void
   /** Open what a number counts (null: close). */
   onDrill?: (target: DrillTarget | null) => void
+  /** B-W2b-434 (follow-up DB1:01): pin this page's panels to a Home dashboard (saved for me on the server). */
+  onSaveAsDashboard?: () => void
 }

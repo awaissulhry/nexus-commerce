@@ -80,6 +80,8 @@ export interface ReportsActions {
   onDrillRetry?: () => void
   onDrillExport?: (header: string[], words: { kind: (kind: 'production' | 'samples') => string; locale: 'it' | 'en'; cost: boolean }) => void
   onChain?: (lineId: string) => void
+  /** B-W2b-434 (follow-up DB1:01): pin this page's panels to a Home dashboard (saved for me on the server). */
+  onSaveAsDashboard?: () => void
   onSelected?: (ids: string[]) => void
   onLateMore?: () => void
   /** Chase one order's late lines, or the selected lines by order (null: close). */

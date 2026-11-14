@@ -131,6 +131,9 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/home/kpis',
   '/home/kpis/[key]',
   '/home/kpis/[key]/records',
+  // B-W2b-434: Dashboards (SCR-031 / SCR-103) and Present in its own window (SCR-490).
+  '/home/dashboards',
+  '/home/dashboards/present',
   '/records/[type]/[id]',
   '/sales/customers',
   '/sales/customers/[partyId]',
@@ -550,7 +553,9 @@ export const WINDOW_PAGES: ReadonlySet<string> = new Set(['/planning/board', /* 
   // B-W2b-361: the W2b-5 report print views open in a new tab (design tab:print), drawn as window pages like the W2b-2…4 ones.
   '/sales/reports/print', '/planning/reports/print', '/purchasing/reports/print', '/warehouse/reports/print',
   // B-W2b-398: the Return label PDF window (design sales.returns tab:returns.label).
-  '/sales/returns/label'])
+  '/sales/returns/label',
+  // B-W2b-434: a dashboard's Present (design home.dashboards tab:present: the meeting view on a TV or a projector).
+  '/home/dashboards/present'])
 
 /** Whether a company-free address (with or without its terms) is a window page. */
 export const isWindowPage = (address: string): boolean => WINDOW_PAGES.has(address.split('?')[0]!.replace(/\/+$/, '') || '/')

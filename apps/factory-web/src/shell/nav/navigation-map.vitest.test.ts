@@ -110,6 +110,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/home/reports': 'home.reports.view', // GET /reports (B-W2a-79)
       '/home/alerts': 'alerts.view', // GET /alerts (B-W2a-78)
       '/home/kpis': 'home.kpis.view', // GET /insights/kpis (B-W2b-433)
+      '/home/dashboards': 'home.kpis.view', // GET /insights/dashboards (B-W2b-434)
       '/sales/customers': 'parties.view', // GET /parties
       '/sales/inquiries': 'sales.inquiries.view', // GET /sales/inquiries (B-W2b-322)
       '/sales/quotes': 'quotes.view', // GET /sales/quotes
@@ -290,7 +291,9 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/home/tasks',
       '/home/notifications',
       '/home/mail-to-sort',
-      // B-W2a-79 + B-W2a-78: Home › Insights › Reports, Alerts; B-W2b-433: the KPI library between them (home.kpis.view).
+      // B-W2a-79 + B-W2a-78: Home › Insights › Reports, Alerts; B-W2b-433: the KPI library between them (home.kpis.view);
+      // B-W2b-434: Dashboards first (home.kpis.view).
+      '/home/dashboards',
       '/home/reports',
       '/home/kpis',
       '/home/alerts',
