@@ -307,6 +307,8 @@ import { events as costDepth } from '../cost-depth/events'
 import { events as payablesDepth } from '../payables-depth/events'
 // B-W2b-421: custom fields and picklists (custom_field.changed, picklist.changed, custom_value.changed).
 import { events as fields } from '../fields/events'
+// B-W2b-422: templates (document_template.changed, email_template.changed, saved_reply.changed).
+import { events as templates } from '../templates/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -679,6 +681,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...payablesDepth,
   // B-W2b-421
   ...fields,
+  // B-W2b-422
+  ...templates,
 ] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */

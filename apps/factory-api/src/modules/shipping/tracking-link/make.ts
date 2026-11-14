@@ -5,6 +5,11 @@ import { fromLine, messageIdFor } from '@nexus/factory-domain/email/headers'
 import { localeOf, type Locale } from '@nexus/factory-domain/email/rules'
 import { linkTokenHash, mintLinkToken } from '@nexus/factory-domain/links/token'
 import { trackingLinkMail } from '@nexus/factory-domain/shipping/tracking-link/mail'
+// B-W2b-422 (PLT-232): the mail's words from the company's e-mail template in use (shipping.tracking_link), else the code's.
+import { trackingLinkMailValues } from '@nexus/factory-domain/shipping/tracking-link/mail'
+import { TEMPLATE_LANGUAGES } from '@nexus/factory-domain/templates/language'
+import { companyValues, fillMail } from '@nexus/factory-domain/templates/mail'
+import { mailTemplateOf } from '../../../platform/templates/active'
 import { expectedDeliveryOf, makeHeld, MAKE_HELD_WORDS, TRACKING_LINK, TRACKING_NOTES, type TrackingVia } from '@nexus/factory-domain/shipping/tracking-link/rules'
 import { runCommand, COMMAND_SETTINGS, type CommandCaller, type CommandTools } from '../../../core/command'
 import type { Clock } from '../../../core/time'
@@ -100,12 +105,16 @@ async function identityFor(tools: Pick<CommandTools, 'tx'>, companyId: string, s
 }
 
 /** The facts the mail says (read outside the command, in the caller's scope). */
-async function mailFactsOf(caller: CommandCaller, shipment: ShipmentHeader) {
+async function mailFactsOf(caller: CommandCaller, shipment: ShipmentHeader, to: readonly Recipient[]) {
   return caller.withClient(async (client) => {
     const order = await client.salesOrder.findUnique({ where: { id: shipment.salesOrderId }, select: { number: true, customerRef: true, language: true } })
     const company = await client.company.findUnique({ where: { id: shipment.companyId }, select: { legalName: true, tradeName: true } })
     const party = await client.party.findUnique({ where: { id: shipment.partyId }, select: { language: true } })
-    return { order, companyName: company?.tradeName ?? company?.legalName ?? '', partyLanguage: party?.language ?? null }
+    // B-W2b-422: the template in use per language (read once, filled per recipient) and the contacts' names it may say.
+    const templates = new Map(await Promise.all(TEMPLATE_LANGUAGES.map(async (language) => [language, await mailTemplateOf(client, caller.factoryContext, { companyId: shipment.companyId, event: 'shipping.tracking_link', language })] as const)))
+    const contactIds = to.flatMap((recipient) => (recipient.contactId ? [recipient.contactId] : []))
+    const contacts = [...templates.values()].some(Boolean) && contactIds.length > 0 ? await client.partyContact.findMany({ where: { id: { in: contactIds } }, select: { id: true, name: true } }) : []
+    return { order, company, companyName: company?.tradeName ?? company?.legalName ?? '', partyLanguage: party?.language ?? null, templates, contactNames: new Map(contacts.map((contact) => [contact.id, contact.name])) }
   })
 }
 
@@ -113,23 +122,26 @@ export async function makeTrackingLinks(request: MakeRequest): Promise<MakeResul
   const { caller, shipment, via } = request
   const context = caller.factoryContext!
   const tenantId = tenantOf(context)
-  const facts = await mailFactsOf(caller, shipment)
+  const facts = await mailFactsOf(caller, shipment, request.to)
   const localeFor = (recipient: Recipient | null): Locale => request.language ?? localeOf(recipient?.language ?? facts.partyLanguage ?? facts.order?.language ?? null)
-  const mailOf = (current: ShipmentHeader, recipient: Recipient, url: string | null) =>
-    trackingLinkMail(
-      {
-        locale: localeFor(recipient),
-        companyName: facts.companyName,
-        shipmentNumber: current.number,
-        orderNumber: facts.order?.number ?? null,
-        customerRef: facts.order?.customerRef ?? null,
-        status: current.status,
-        carrierName: current.carrierName,
-        expectedDeliveryAt: expectedDeliveryOf(current.status, current.expectedDeliveryAt),
-        renewal: via === 'RENEWED',
-      },
-      url,
-    )
+  const mailOf = (current: ShipmentHeader, recipient: Recipient, url: string | null) => {
+    const input = {
+      locale: localeFor(recipient),
+      companyName: facts.companyName,
+      shipmentNumber: current.number,
+      orderNumber: facts.order?.number ?? null,
+      customerRef: facts.order?.customerRef ?? null,
+      status: current.status,
+      carrierName: current.carrierName,
+      expectedDeliveryAt: expectedDeliveryOf(current.status, current.expectedDeliveryAt),
+      renewal: via === 'RENEWED',
+    }
+    // B-W2b-422: a template in use says it in the company's words (the link filled after the command, as the code's text).
+    const template = facts.templates.get(input.locale)
+    if (!template) return trackingLinkMail(input, url)
+    const contactName = recipient.contactId ? (facts.contactNames.get(recipient.contactId) ?? null) : null
+    return fillMail(template, { ...trackingLinkMailValues(input, url), ...(facts.company ? companyValues(facts.company) : {}), 'company.name': facts.companyName, 'contact.name': contactName })
+  }
 
   // One token per address, or one to pass on: minted here, only their hashes enter the transaction.
   const targets: Array<Recipient | null> = request.to.length > 0 ? [...request.to] : [null]

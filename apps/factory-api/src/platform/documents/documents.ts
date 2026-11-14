@@ -9,6 +9,9 @@ import { attachDocumentLogo, type CompanyLegal, type DocumentInput, type Documen
 import { sampleDocument } from '@nexus/factory-domain/documents/sample'
 import type { CommandCaller } from '../../core/command'
 import { documentLogoIn } from '../branding/logo'
+// B-W2b-422 (PLT-231): the company's document templates in use, read with its legal data.
+import { attachLayoutTemplates } from '@nexus/factory-domain/documents/layouts'
+import { documentTemplatesIn } from '../templates/active'
 import { actorOf } from '../../core/context'
 import { ApiError } from '../../core/errors'
 import type { FileView } from '../files/contract'
@@ -51,8 +54,10 @@ const addressSchema = z.object({
 export async function companyLegalOf(caller: CommandCaller, companyId: string): Promise<CompanyLegal> {
   if (!isUuid(companyId)) throw new NotFoundError('Company not found.')
   // B-W2b-161: and the logo of its branding (read only by an office or a system caller; the bytes when the PDF is painted).
-  const { row, logo } = await caller.withClient(async (client) => ({
+  const { row, logo, templates } = await caller.withClient(async (client) => ({
     logo: await documentLogoIn(client, caller, companyId),
+    // B-W2b-422: and its document templates in use (an office or a system caller; the layout reads the one of its type and language).
+    templates: await documentTemplatesIn(client, caller, companyId),
     row: await client.company.findUnique({
       where: { id: companyId },
       select: {
@@ -89,7 +94,7 @@ export async function companyLegalOf(caller: CommandCaller, companyId: string): 
     pec: row.pec,
     documentFooter: row.documentFooter,
   }
-  return attachDocumentLogo(legal, logo)
+  return attachLayoutTemplates(attachDocumentLogo(legal, logo), templates)
 }
 
 /** What an issuing module asks to print: its frozen document without the company, which comes from the Company row. */
