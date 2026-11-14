@@ -12,8 +12,8 @@ import { reportRecordOf, type ReportView } from './view'
 /**
  * Whether someone was hurt, and in what words (B-W2b-351; SAL-415; GDPR art. 9): the ONLY reads and writes of
  * ProductSafetyInjury after the intake, for the product-safety role (sales.safety.injury over the report). As the protected reads
- * of B-W2b-125: an opening is a command that records the view first (an audit row on the report, `safetyReports.injuryOpened`,
- * never the words: the database has no view log for these yet, a schema need), and the words are read AFTER that command
+ * of B-W2b-125: an opening is a command that records the view first (a ProtectedView PRODUCT_SAFETY_INJURY row and an audit row
+ * on the report, `safetyReports.injuryOpened`, never the words; B-W2b-399), and the words are read AFTER that command
  * commits and returned as they stand (a command's answer is kept in its receipt, so the words never enter one). No list, export,
  * mail, search entry, thread or audit row ever carries them.
  *
@@ -25,10 +25,13 @@ import { reportRecordOf, type ReportView } from './view'
 
 /** POST /sales/safety-reports/:reportId/injury/open */
 export async function openInjury(caller: CommandCaller, reportId: string, idempotencyKey?: string) {
-  const { row } = await officeReport(caller, reportId, SALES_SAFETY_INJURY, INJURY_WORDS)
+  const { context, row } = await officeReport(caller, reportId, SALES_SAFETY_INJURY, INJURY_WORDS)
   const found = await caller.withClient((client) => client.productSafetyInjury.findFirst({ where: { reportId: row.id }, select: { id: true } }))
   if (!found) throw held('NO_INJURY', row.number)
   await command(caller, { name: 'safetyReports.injuryOpened', idempotencyKey, input: { reportId: row.id } }, async (tools) => {
+    // B-W2b-399 (AU1:01): the view log of protected data (B-W2b-375's PRODUCT_SAFETY_INJURY: the injury's company, nobody of
+    // the company's own staff named), written first, in the same command as the audit row.
+    await tools.tx.protectedView.createMany({ data: [{ id: newId(), companyId: row.companyId, recordType: 'PRODUCT_SAFETY_INJURY', recordId: found.id, employeeId: null, what: 'OPEN', viewerId: context.actorId, viewedAt: tools.now }] })
     tools.audit({ action: 'safetyReports.injuryOpened', recordType: SAFETY_REPORT_RECORD, recordId: row.id, companyId: row.companyId, after: { what: 'OPEN' } })
     return { opened: true }
   })

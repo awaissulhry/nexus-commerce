@@ -15,6 +15,8 @@ import type { TimelineEntryView } from './contract'
 import { afterCursor, contextOf, cursorOf, officeRecord, type RecordRef } from './threads'
 // B-W2b-371: a record type's thread gate (a rider's profile: sales.measurements.view).
 import { mayOnThread } from './records'
+// B-W2b-399: the field lines of a change.
+import { fieldLinesOf } from './timeline/field-lines'
 
 /**
  * The record's timeline (feature COL-002; A2 SCR-006): one feed, newest first, of
@@ -121,6 +123,12 @@ export async function readTimeline(
       )
     }
 
+    // B-W2b-399: the office people who made the changes, by name ("by Marco"); a floor worker never (the gate above).
+    const officeActors = [...new Set(changes.filter((row) => row.audience === 'OFFICE').map((row) => row.actorId))]
+    const actorNames = new Map(
+      officeActors.length > 0 ? (await client.user.findMany({ where: { id: { in: officeActors } }, select: { id: true, displayName: true } })).map((user) => [user.id, user.displayName] as const) : [],
+    )
+
     if (kinds.has('change')) {
       sources.push(
         changes.map((row) => {
@@ -129,6 +137,8 @@ export async function readTimeline(
           const who = gates.at(siteOf(row))
           const author = who.author(row.actorId, row.audience === 'FLOOR')
           const values = details && (who.open || !onTheFloor(row))
+          // B-W2b-399 (PLT-076): the field lines "price 480 → 520 by Marco, 10:42" between the comments.
+          const lines = fieldLinesOf(row.before, row.after, { held, values, unheldMoney: 'omit' })
           return {
             at: row.at,
             id: row.id,
@@ -137,10 +147,11 @@ export async function readTimeline(
               id: row.id,
               at: toUtcIso(row.at),
               action: row.action,
-              actor: { audience: row.audience, id: author.id },
+              actor: { audience: row.audience, id: author.id, name: row.audience === 'OFFICE' && author.id ? (actorNames.get(author.id) ?? null) : null },
               actorHidden: author.hidden,
               status: summary.status,
               fields: summary.fields,
+              lines,
               before: values ? (row.before ?? null) : null,
               after: values ? (row.after ?? null) : null,
               reason: details ? row.reason : null,

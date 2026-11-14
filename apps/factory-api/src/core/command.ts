@@ -6,6 +6,7 @@ import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { isPermission, type Permission } from '@nexus/factory-domain/core/permissions'
 import { assertTransition, type Machine } from '@nexus/factory-domain/state/machine'
 import { outboxWriter } from '../platform/outbox/writer'
+import { writeAuditLedgers } from '../platform/audit/security-events/ledgers'
 import { SYSTEM_ACTOR_ID, withContextClient, type RequestContext } from './context'
 import { ApiError, isBusyDatabaseError } from './errors'
 import { serverClock, type Clock } from './time'
@@ -540,7 +541,10 @@ export async function runCommand<Result, State extends string = string, Facts = 
           assertJson(result)
           if (audits.length === 0) throw new ApiError('internal_error', `Command ${spec.name} recorded no audit row; every write is audited.`)
 
-          await tx.auditLog.createMany({ data: audits.map((entry) => auditRow(entry, loose, writer, key, now)) })
+          const rows = audits.map((entry) => auditRow(entry, loose, writer, key, now))
+          await tx.auditLog.createMany({ data: rows })
+          // B-W2b-399: the security events and reads these rows are (sign-ins, lockouts, role changes, exports), in this transaction.
+          await writeAuditLedgers(tx, rows, writer)
           await settings.writeEvents(
             tx,
             events.map((event) => ({

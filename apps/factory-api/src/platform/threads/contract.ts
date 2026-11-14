@@ -122,8 +122,18 @@ export const setStatusContract = defineContract({
   response: { 200: output({ thread: threadView }) },
 })
 
-/** `id` is null for a floor worker the site's PERFORMANCE gate keeps back (B-W2b-F4): `actorHidden`. */
-const actorView = output({ audience: z.enum(['OFFICE', 'FLOOR', 'PARTNER', 'LINK', 'SYSTEM']), id: id().nullable() })
+/**
+ * `id` is null for a floor worker the site's PERFORMANCE gate keeps back (B-W2b-F4): `actorHidden`. `name`: an office person's
+ * (B-W2b-399), else null (a floor worker is never named here).
+ */
+const actorView = output({ audience: z.enum(['OFFICE', 'FLOOR', 'PARTNER', 'LINK', 'SYSTEM']), id: id().nullable(), name: z.string().nullable() })
+
+/**
+ * B-W2b-399 (PLT-076): one changed field of a change, "price 480 → 520" (platform/threads/timeline/field-lines.ts): the values
+ * only for a reader who may see them (`hidden: 'VALUES'` otherwise), money only with its grain (a field of a grain the reader
+ * lacks is not listed).
+ */
+export const fieldLineView = output({ field: z.string(), from: grainedJson(), to: grainedJson(), hidden: z.enum(['GRAIN', 'VALUES']).nullable() })
 
 /** One entry of the record's timeline (COL-002): a message, a change (an audit row of the record) or a file. */
 export const timelineEntry = z.discriminatedUnion('kind', [
@@ -156,6 +166,8 @@ export const timelineEntry = z.discriminatedUnion('kind', [
     status: output({ from: z.string().nullable(), to: z.string().nullable() }).nullable(),
     /** The fields it changed; money ones only with their grain. */
     fields: z.array(z.string()),
+    /** B-W2b-399: the same fields as lines from → to. */
+    lines: z.array(fieldLineView),
     /** The values, only with audit.read over the row (and money only with its grain), and not while the gate keeps back a worker the row is about; null otherwise. */
     before: grainedJson(),
     after: grainedJson(),
