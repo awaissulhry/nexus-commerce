@@ -35,7 +35,6 @@
     },
     "csvHeld": "Wait until the panel has been read.",
     "dashboard": "Save as dashboard (Home)",
-    "dashboardHeld": "Dashboards on Home come later: the panels cannot be saved there yet.",
     "keys": "Keyboard shortcuts"
   },
   "live": {

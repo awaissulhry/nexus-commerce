@@ -1,4 +1,4 @@
-import { BarChart3, Bell, BellRing, CheckCheck, Gauge, Home, Inbox, ListTodo, Sun } from 'lucide-react'
+import { BarChart3, Bell, BellRing, CheckCheck, Gauge, Home, Inbox, LayoutDashboard, ListTodo, Sun } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -41,6 +41,9 @@ export const officeArea: OfficeAreaNav = {
         id: 'home-insights',
         label: 'shell:nav.home.insights',
         items: [
+          // B-W2b-434: Dashboards (SCR-031 / SCR-103: one per role and the Owner's group view), first of Insights as the tree orders
+          // them; made of the KPI library's KPIs, so it opens with home.kpis.view (each number asks its own rights).
+          { id: 'home-dashboards', label: 'shell:nav.home.dashboards', href: '/home/dashboards', icon: LayoutDashboard, permission: 'home.kpis.view' },
           { id: 'home-reports', label: 'shell:nav.home.reports', href: '/home/reports', icon: BarChart3, permission: 'home.reports.view' },
           // B-W2b-433: the KPI library (SCR-249: every KPI with its plain definition and its value now; a KPI's record SCR-470),
           // between Reports and Alerts as the tree orders them.

@@ -13,6 +13,8 @@ import { liveMatches } from '../../quality/_shared/hooks'
 import { getChasePreview, getLate, getSpend, getSpendLines, postChase, type Late, type LateRow, type Spend } from './api'
 import { csvName, csvOf, defaultMeasure, drillCsvRows, LAYOUT_KEY, lateCsvRows, LIVE_EVERY_MS, LIVE_TYPES, measuresFor, rangeShown, reportsAddressOf, reportsAddressText, reportsCan, romeToday, sectionSpecs, spendCsvRows, type ChaseGroup, type ReportsAddress, type ReportSection, type SpendMeasure } from './model'
 import { ReportsView, type ChaseResult, type ChaseState, type DrillState, type Read } from './view/ReportsView'
+import { PinDialog } from '../../home/dashboards/pin/view/PinDialog'
+import { usePinToDashboard } from '../../home/dashboards/pin/usePinToDashboard'
 
 const saveCsv = (name: string, text: string) => {
   const link = document.createElement('a')
@@ -70,6 +72,7 @@ export function ReportsPage() {
   const pathname = usePathname()
   const params = useSearchParams()
   const prefix = pathname.replace(/\/purchasing\/reports\/?$/, '')
+  const pin = usePinToDashboard(api, 'purchasing', prefix)
   const can = useMemo(() => reportsCan(session.permissions), [session.permissions])
   const address = useMemo(() => reportsAddressOf(params), [params])
   const enabled = can.view
@@ -228,34 +231,39 @@ export function ReportsPage() {
   }
 
   return (
-    <ReportsView
-      model={{ prefix, can, address, scope, range, today, spend, late, lateMore, lateMoreBusy, lateCursor, live, asOf, layout, specs, arranging, measure, drill, chainLine, selected, chase }}
-      actions={{
-        onAddress: go,
-        onRetry: (panel) => retry[panel](),
-        onArrange: setArranging,
-        onArranged: (next) => {
-          setLayout(next)
-          writeSectionLayout(LAYOUT_KEY, next)
-          setArranging(false)
-        },
-        onExportSpend: (words, total) => {
-          if (spend.status === 'ready') saveCsv(csvName('spend', range), csvOf(words.header, spendCsvRows(spend.value, words, total)))
-        },
-        onExportLate: (rows, header, reason) => saveCsv(csvName('late', range), csvOf(header, lateCsvRows(rows, { reason }))),
-        onMeasure: setMeasure,
-        onDrill: (key) => (key ? void readDrill(key) : setDrill(null)),
-        onDrillRetry: () => (drillKey ? void readDrill(drillKey) : undefined),
-        onDrillExport: (header, words) => {
-          if (drill?.read.status === 'ready') saveCsv(csvName('drill', range), csvOf(header, drillCsvRows(drill.read.value, words)))
-        },
-        onChain: setChainLine,
-        onSelected: setSelected,
-        onLateMore: () => void more(),
-        onChase: (groups) => void openChase(groups),
-        onChaseMessage: (text) => setChase((open) => (open ? { ...open, message: text } : open)),
-        onChaseSend: () => void sendChase(),
-      }}
-    />
+    <>
+      <ReportsView
+        model={{ prefix, can, address, scope, range, today, spend, late, lateMore, lateMoreBusy, lateCursor, live, asOf, layout, specs, arranging, measure, drill, chainLine, selected, chase }}
+        actions={{
+          onSaveAsDashboard: pin.open,
+          onAddress: go,
+          onRetry: (panel) => retry[panel](),
+          onArrange: setArranging,
+          onArranged: (next) => {
+            setLayout(next)
+            writeSectionLayout(LAYOUT_KEY, next)
+            setArranging(false)
+          },
+          onExportSpend: (words, total) => {
+            if (spend.status === 'ready') saveCsv(csvName('spend', range), csvOf(words.header, spendCsvRows(spend.value, words, total)))
+          },
+          onExportLate: (rows, header, reason) => saveCsv(csvName('late', range), csvOf(header, lateCsvRows(rows, { reason }))),
+          onMeasure: setMeasure,
+          onDrill: (key) => (key ? void readDrill(key) : setDrill(null)),
+          onDrillRetry: () => (drillKey ? void readDrill(drillKey) : undefined),
+          onDrillExport: (header, words) => {
+            if (drill?.read.status === 'ready') saveCsv(csvName('drill', range), csvOf(header, drillCsvRows(drill.read.value, words)))
+          },
+          onChain: setChainLine,
+          onSelected: setSelected,
+          onLateMore: () => void more(),
+          onChase: (groups) => void openChase(groups),
+          onChaseMessage: (text) => setChase((open) => (open ? { ...open, message: text } : open)),
+          onChaseSend: () => void sendChase(),
+        }}
+      />
+      {/* B-W2b-434 (DB1:01): Save as dashboard — this page's panels pinned to a Home dashboard, saved for me on the server. */}
+      <PinDialog model={pin.model} actions={pin.actions} />
+    </>
   )
 }

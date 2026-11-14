@@ -1,0 +1,250 @@
+{
+  "title": "Dashboards",
+  "noAccess": {
+    "title": "Dashboards are not in your role",
+    "body": "Dashboards are made of the KPI library's numbers: ask an administrator for the KPI library (view)."
+  },
+  "band": {
+    "label": "Dashboard, period and scope",
+    "board": "Which dashboard",
+    "mine": "your role",
+    "period": "Period",
+    "company": "Company",
+    "site": "Site",
+    "noBoard": "Choose a dashboard first",
+    "arrange": "Arrange",
+    "present": "Present",
+    "more": "More actions",
+    "keys": "Keyboard shortcuts",
+    "read": "Read"
+  },
+  "period": {
+    "WEEK": "Week",
+    "MONTH": "Month",
+    "QUARTER": "Quarter"
+  },
+  "periodWord": {
+    "WEEK": "this week and the 11 before it",
+    "MONTH": "this month and the 11 before it",
+    "QUARTER": "this quarter and the 11 before it"
+  },
+  "scope": {
+    "allCompanies": "All companies",
+    "allSites": "All sites"
+  },
+  "board": {
+    "owner-group": "Owner group",
+    "plant-manager": "Plant manager",
+    "sales": "Sales",
+    "planner": "Planner",
+    "buyer": "Buyer",
+    "quality": "Quality",
+    "finance": "Finance",
+    "line-leader": "Line leader"
+  },
+  "boards": {
+    "failed": "The dashboards could not be read",
+    "none": "No dashboard to show",
+    "noneBody": "None of the dashboards has a number your role may read."
+  },
+  "panel": {
+    "numbers": "Numbers",
+    "needs-action": "Needs action",
+    "trends": "Are we shipping on time?",
+    "wip": "Is work piling up?",
+    "by-company": "By company and site",
+    "loading": "Loading",
+    "stillLoading": "Still loading…",
+    "failed": "This panel could not be read",
+    "retry": "Try again"
+  },
+  "error": {
+    "read": "Something went wrong reading it. Try again.",
+    "forbidden": "Your role does not include what this panel reads.",
+    "notFound": "The company or site chosen is not one you reach.",
+    "offline": "The connection dropped. Try again when you are back online.",
+    "save": "The arrangement could not be saved. Try again.",
+    "stale": "Your arrangement was changed in another window: it was read again, apply once more.",
+    "gone": "There is nothing saved to put back: the dashboard already shows its own order.",
+    "invalid": "This arrangement is not valid for this dashboard."
+  },
+  "numbers": {
+    "title": "Numbers",
+    "hint": "Each number over {period}; the line shows every period, the oldest first.",
+    "none": "No number you may read",
+    "noneBody": "Every number of this dashboard reads a list or an amount outside your role.",
+    "spark": "{name}, {count} periods",
+    "sparkEmpty": "No figures yet",
+    "noRebuild": "Not rebuilt yet",
+    "from": "from {sources}",
+    "stale": "Data is over 3 h old",
+    "live": "Counted now from your own records",
+    "wholeCompany": "For the whole company: this number is kept per company",
+    "standsFor": "In place of {name} (outside your role)",
+    "records": "Open the records"
+  },
+  "source": {
+    "ORDERS": "orders",
+    "SHIPMENTS": "shipments",
+    "PRODUCTION": "floor reports",
+    "WIP": "the cost ledger",
+    "RECEIPTS": "goods receipts",
+    "DELIVERY": "order lines and shipments",
+    "LEAD_TIMES": "quotes, orders and shipments",
+    "WORK_ORDERS": "work orders",
+    "LEATHER": "the cutting log",
+    "MARGIN": "cost of goods sold",
+    "SUPPLY": "purchase orders and receipts"
+  },
+  "explain": {
+    "open": "How {name} is made",
+    "title": "How {name} is made",
+    "from": "Counted from",
+    "period": "Period",
+    "unit": "Unit",
+    "grain": "needs the {grain} rights",
+    "standsFor": "Shown in place of {name}, which reads what your role does not include.",
+    "library": "Open in the KPI library"
+  },
+  "needs": {
+    "title": "Needs action",
+    "hint": "The exceptions on your Today in this scope, the worst first.",
+    "row": "{count} · {kind}",
+    "seeAll_one": "See all {count}",
+    "seeAll_other": "See all {count}",
+    "openToday": "Open on Today",
+    "none": "Nothing needs action.",
+    "oldest_one": "oldest {count} day",
+    "oldest_other": "oldest {count} days",
+    "atLeast": "at least: more were not read"
+  },
+  "trends": {
+    "title": "Are we shipping on time?",
+    "hint": "Shipments that left on or before their promise, week by week; the target is {target} %.",
+    "open": "Open the shipments",
+    "notEnough": "Not enough data yet: {count} of {of} weeks.",
+    "notEnoughBody": "The line appears from two weeks with shipments.",
+    "target": "Target",
+    "caption": "{count} of {of} weeks with shipments",
+    "byCompany": "On time by company",
+    "lineOf": "On time at {company}, 12 weeks"
+  },
+  "wip": {
+    "title": "Is work piling up?",
+    "hint": "{waiting} garments waiting in {workOrders} work orders, by stage, now.",
+    "open": "Open the work in progress",
+    "none": "Nothing is waiting at any stage.",
+    "flowLabel": "Garments waiting at each stage, in the routing's order",
+    "waiting_one": "{count} garment waiting",
+    "waiting_other": "{count} garments waiting",
+    "workOrders_one": "in {count} work order",
+    "workOrders_other": "in {count} work orders",
+    "bandsLabel": "How long they have waited at {stage}",
+    "band": {
+      "D0_2": "0–2 days: {count}",
+      "D3_5": "3–5 days: {count}",
+      "D6_10": "6–10 days: {count}",
+      "D11_PLUS": "11+ days: {count}"
+    },
+    "bandName": {
+      "D0_2": "0–2 days",
+      "D3_5": "3–5 days",
+      "D6_10": "6–10 days",
+      "D11_PLUS": "over 10 days"
+    },
+    "oldest": "Some have waited {band}"
+  },
+  "byCompany": {
+    "title": "By company and site",
+    "hint": "The same numbers for {period}, per company and, where a number is kept per site, per site.",
+    "none": "No company to show",
+    "noneBody": "Your role reaches no company with the KPI library.",
+    "place": "Company › site",
+    "perCompany": "per company only",
+    "partial": "{read} of {of} sites",
+    "opensIn": "Opens in {company}"
+  },
+  "pinned": {
+    "fromPack": "Pinned from the report library",
+    "fromArea": "Pinned from {area} › Reports",
+    "open": "Open the report",
+    "reportBody": "A report of the library: it opens with its own filters and reads its own records.",
+    "panelBody": "A panel of the area's reports: it opens on that page, in its own period.",
+    "area": {
+      "sales": "Sales",
+      "planning": "Planning",
+      "purchasing": "Purchasing",
+      "warehouse": "Warehouse"
+    },
+    "sales": {
+      "strip": "Sales headline",
+      "intake": "Order intake",
+      "backlog": "Backlog by promise week",
+      "returns": "Return reasons"
+    },
+    "planning": {
+      "adherence": "Plan adherence",
+      "utilisation": "Line utilisation",
+      "cover": "Material cover"
+    },
+    "purchasing": {
+      "spend": "Spend",
+      "late": "Late purchase lines"
+    },
+    "warehouse": {
+      "ageing": "Stock ageing",
+      "leather": "Leather stock"
+    }
+  },
+  "arrange": {
+    "title": "Arrange dashboard",
+    "list": "Panels in view",
+    "hint": "Tick a panel to show it, drag to change the order. The numbers are always shown.",
+    "apply": "Apply",
+    "refused": "Not saved",
+    "widths": "Widths",
+    "widthOf": "Width of {panel}",
+    "width": {
+      "half": "Half",
+      "two-thirds": "Two thirds",
+      "full": "Whole row"
+    },
+    "server": "Saved for you on the server: the same arrangement on every device.",
+    "reset": "Back to the dashboard's order",
+    "resetHeld": "You have not arranged this dashboard: it shows its own order",
+    "saving": "Saving…"
+  },
+  "present": {
+    "refresh": "Reads itself again every 5 minutes"
+  },
+  "foot": {
+    "fresh": "The numbers are rebuilt every hour; a number older than 3 hours says so."
+  },
+  "keys": {
+    "title": "Keyboard shortcuts",
+    "number": "Open the records of number 1 to 5",
+    "arrange": "Arrange the dashboard",
+    "present": "Present in a new window",
+    "help": "This list"
+  },
+  "pin": {
+    "title": "Save as dashboard",
+    "intro": "Pin panels of {area} › Reports to one of your Home dashboards. They are added at the end; Arrange moves them.",
+    "board": "Dashboard",
+    "chooseBoard": "Choose a dashboard",
+    "panels": "Panels to pin",
+    "choosePanel": "Tick at least one panel",
+    "noBoards": "The dashboards are still being read",
+    "busy": "Pinning…",
+    "cancel": "Cancel",
+    "close": "Close",
+    "confirm_one": "Pin {count} panel",
+    "confirm_other": "Pin {count} panels",
+    "boardsFailed": "The dashboards could not be read",
+    "done_one": "{count} panel pinned",
+    "done_other": "{count} panels pinned",
+    "openDashboard": "Open the {board} dashboard",
+    "refused": "Not pinned",
+    "menu": "Save as dashboard (Home)"
+  }
+}

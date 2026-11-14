@@ -1,0 +1,343 @@
+/*
+ * Home › Insights › Dashboards (SCR-031, SCR-103) and Present (SCR-490) LAYOUT: the band (which dashboard, period, scope, as of,
+ * Arrange, Present), the panels in the DS SectionLayout, the numbers' tiles, Needs action, the on-time chart with a line per
+ * company, the work-in-progress flow strip, the view by company and site, the reports pinned here and the footer's keys. The
+ * controls are the design system's; this file only places them with semantic tokens (no colours of its own). No page max-width
+ * (Owner rule 2026-10-29): the page fills the shell's main area; Present fills its window and sets everything larger.
+ */
+.fw-dash {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-dash-band,
+.fw-dash-scope,
+.fw-dash-actions,
+.fw-dash-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-dash-band,
+.fw-dash-foot {
+  justify-content: space-between;
+}
+
+.fw-dash-scope > *,
+.fw-dash-actions > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.fw-dash-sections {
+  min-width: 0;
+}
+
+.fw-dash-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10, var(--nds-space-8));
+  min-width: 0;
+  height: 100%;
+}
+
+.fw-dash-panel-head,
+.fw-dash-panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-dash-panel-foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--nds-space-8);
+}
+
+.fw-dash-h {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  font-size: var(--nds-font-size-lg);
+  font-weight: 600;
+}
+
+.fw-dash-muted,
+.fw-dash-calm {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+}
+
+.fw-dash-calm {
+  font-size: var(--nds-font-size-base);
+}
+
+.fw-dash-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  color: var(--nds-primary);
+  font-size: var(--nds-font-size-sm);
+  text-decoration: none;
+}
+
+.fw-dash-link:hover,
+.fw-dash-link:focus-visible {
+  text-decoration: underline;
+}
+
+.fw-dash-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+/* ---- the numbers' tiles ---- */
+.fw-dash-tile-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-dash-tile-foot {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  width: 100%;
+}
+
+.fw-dash-tile-foot > svg,
+.fw-dash-tile-foot > span:first-child {
+  width: 100%;
+}
+
+.fw-dash-explain {
+  display: inline-flex;
+  align-items: center;
+  color: var(--nds-text-muted);
+}
+
+.fw-dash-pop {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  max-width: 380px;
+}
+
+.fw-dash-pop p {
+  margin: 0;
+}
+
+.fw-dash-formula {
+  font-family: var(--nds-font-mono, monospace);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-dash-facts {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--nds-space-4) var(--nds-space-10, var(--nds-space-8));
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-dash-facts dt {
+  color: var(--nds-text-muted);
+}
+
+.fw-dash-facts dd {
+  margin: 0;
+}
+
+/* ---- needs action ---- */
+.fw-dash-needs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+.fw-dash-need {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+/* ---- are we shipping on time? ---- */
+.fw-dash-figure {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-dash-series {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+
+.fw-dash-series li {
+  display: grid;
+  grid-template-columns: minmax(0, 12rem) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--nds-space-10, var(--nds-space-8));
+}
+
+.fw-dash-series-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- is work piling up? (a flow strip of stages in the routing's order) ---- */
+.fw-dash-flow {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: var(--nds-space-8);
+}
+
+.fw-dash-stage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  padding: var(--nds-space-8) var(--nds-space-10, var(--nds-space-8));
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
+  min-width: 0;
+}
+
+.fw-dash-stage-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.fw-dash-stage-count {
+  font-size: var(--nds-font-size-lg);
+}
+
+.fw-dash-bands {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4);
+}
+
+/* ---- by company and site ---- */
+.fw-dash-place {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2, 2px);
+  min-width: 0;
+}
+
+/* ---- arrange ---- */
+.fw-dash-arrange,
+.fw-dash-widths {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-dash-widths {
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.fw-dash-widths-legend {
+  padding: 0;
+  margin-bottom: var(--nds-space-4);
+  font-weight: 600;
+}
+
+.fw-dash-width {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--nds-space-8);
+  font-size: var(--nds-font-size-sm);
+}
+
+/* ---- keys ---- */
+.fw-dash-keymap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+}
+
+.fw-dash-keymap div {
+  display: grid;
+  grid-template-columns: 4rem minmax(0, 1fr);
+  gap: var(--nds-space-8);
+}
+
+.fw-dash-keymap dd {
+  margin: 0;
+}
+
+/* ---- Present: the same panels large, for a TV or a projector ---- */
+.fw-dash--present {
+  font-size: var(--nds-font-size-lg);
+}
+
+.fw-dash-present-title {
+  margin: 0;
+  font-size: var(--nds-font-size-2xl, var(--nds-font-size-xl));
+  font-weight: 700;
+}
+
+.fw-dash--present .fw-dash-h {
+  font-size: var(--nds-font-size-xl);
+}
+
+.fw-dash--present .nds-metric .val {
+  font-size: var(--nds-font-size-2xl, var(--nds-font-size-xl));
+}
+
+/* ---- phone ---- */
+@media (max-width: 640px) {
+  .fw-dash-series li {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .fw-dash-series li > svg {
+    grid-column: 1 / -1;
+  }
+
+  .fw-dash-flow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ---- Save as dashboard (a report page's dialog) ---- */
+.fw-dash-pin {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}

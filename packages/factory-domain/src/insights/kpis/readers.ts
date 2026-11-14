@@ -1,3 +1,4 @@
+import { BOARDS, kpisOfBoard } from '../dashboards/boards'
 import { NUMBER_RULES } from '../reports/numbers'
 import type { KpiUseKind } from './catalogue'
 
@@ -8,6 +9,7 @@ import type { KpiUseKind } from './catalogue'
  * registry owns (made by an earlier step or by hand) is left alone.
  *
  *   DASHBOARD today   Today's key numbers (insights/reports/numbers: a number with `kpi`), the role home dashboard (ANA-001)
+ *   DASHBOARD <board> Home › Insights › Dashboards (B-W2b-434; insights/dashboards/boards: each board's numbers and charts)
  *
  * A step that makes a reader of a KPI adds its registry here: dashboards (B-W2b-434), the morning digest and alert routes
  * (B-W2b-435), reports and portal pages that move onto the layer.
@@ -28,11 +30,13 @@ export function kpiReaders(): KpiReader[] {
   for (const rule of NUMBER_RULES) {
     if (rule.kpi) out.set(`${rule.kpi}|DASHBOARD|${TODAY_DASHBOARD}`, { usedIn: 'DASHBOARD', useKey: TODAY_DASHBOARD, kpiKey: rule.kpi })
   }
+  // B-W2b-434: every dashboard's numbers (the stand-ins too) and the KPIs of its charts.
+  for (const board of BOARDS) for (const kpiKey of kpisOfBoard(board)) out.set(`${kpiKey}|DASHBOARD|${board.key}`, { usedIn: 'DASHBOARD', useKey: board.key, kpiKey })
   return [...out.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([, reader]) => reader)
 }
 
 /** The readers the registries own (`<usedIn>:<useKey>`): only their uses are removed when no longer named. */
-export const ownedReaders = (): ReadonlySet<string> => new Set([`DASHBOARD:${TODAY_DASHBOARD}`])
+export const ownedReaders = (): ReadonlySet<string> => new Set([`DASHBOARD:${TODAY_DASHBOARD}`, ...BOARDS.map((board) => `DASHBOARD:${board.key}`)])
 
 export interface StoredUse {
   readonly id: string

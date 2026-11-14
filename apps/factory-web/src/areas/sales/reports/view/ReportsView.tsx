@@ -26,7 +26,7 @@ export type { Read, ReportsActions, ReportsModel } from './types'
 
 /**
  * SCR-250 — Sales › Reports (design sales.reports; B-W2b-348): the band (as of, live, Arrange, Print in a new tab, ⋯ Export each
- * panel's data (CSV), Save as dashboard (Home) — held with its reason —, Keyboard shortcuts), the scope (the top bar's company,
+ * panel's data (CSV), Save as dashboard (Home; B-W2b-434 pins the panels to a dashboard), Keyboard shortcuts), the scope (the top bar's company,
  * the period: this month so far by default, the monthly sales review), then the panels in the person's order and widths: the
  * Headline (the period in five numbers), Order intake (by week or month, split by customer, style or season), the Backlog by
  * promise week (now, late weeks toned, by customer or style) and Return reasons (by reason, style, size, colour, customer; the
@@ -147,7 +147,7 @@ function Reports({ model, actions }: { model: ReportsModel; actions?: ReportsAct
             triggerProps={{ 'aria-label': t('band.more') }}
             items={[
               ...(['intake', 'backlog', 'returns'] as const).map((panel) => ({ id: `csv-${panel}`, label: t(`band.csv.${panel}`), onSelect: exports[panel], ...(ready[panel] ? {} : { disabled: true, description: t('band.csvHeld') }) })),
-              { id: 'dashboard', label: t('band.dashboard'), disabled: true, description: t('band.dashboardHeld') },
+              { id: 'dashboard', label: t('band.dashboard'), onSelect: () => actions?.onSaveAsDashboard?.() },
               { id: 'keys', label: t('band.keys'), onSelect: () => setKeys(true) },
             ]}
           />
