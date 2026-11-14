@@ -56,6 +56,8 @@ export interface FinanceSettingsDepth {
   depositRules?: ReactNode
   /** B-W2b-430: Costing's cost per minute and overhead — the cost-per-minute calculator and the overhead rules in force. */
   calculator?: ReactNode
+  /** B-W2b-425: Approvals & notifications (sec:approvals). */
+  approvals?: ReactNode
 }
 
 export function FinanceSettingsView({ model, actions, currencies, depth }: { model: FinanceSettingsModel; actions?: FinanceSettingsActions; /** B-W2b-389: the Currencies & rates section (its container, or a design case's view). */ currencies?: ReactNode; /** B-W2b-417. */ depth?: FinanceSettingsDepth }) {
@@ -171,6 +173,8 @@ function Settings({ model, actions, currencies, depth }: { model: FinanceSetting
       {depth?.depositRules}
       {/* B-W2b-389: Currencies & rates (sec:currencies). */}
       {currencies}
+      {/* B-W2b-425: Approvals & notifications (sec:approvals). */}
+      {depth?.approvals}
       <StepUpModal
         open={model.stepUp.open}
         title={t('stepUp.title')}

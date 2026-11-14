@@ -617,12 +617,7 @@
   "payTile": {
     "month": "Incassato questo mese",
     "monthCount_one": "{count} incasso",
-    "monthCount_other": "{count} incassi",
-    "notPlaced": "Non ancora collocato",
-    "notPlacedCapped_one": "{count} incasso tra gli ultimi 200",
-    "notPlacedCapped_other": "{count} incassi tra gli ultimi 200",
-    "notPlacedCount_one": "{count} incasso con denaro da collocare",
-    "notPlacedCount_other": "{count} incassi con denaro da collocare"
+    "monthCount_other": "{count} incassi"
   },
   "payment": {
     "back": "Incassi",

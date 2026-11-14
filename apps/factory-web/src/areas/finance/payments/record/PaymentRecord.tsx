@@ -14,6 +14,9 @@ import { cancelRefund, listRefunds, openItemsFor, payRefund, recordRefund, voidR
 import { refundAbilitiesOf, refundAskOf, refundsTouched } from '../refunds/model'
 import { paymentTabOf, type PaymentDialog, type PaymentRecordModel } from './record-model'
 import { PaymentRecordView } from './view/PaymentRecordView'
+// B-W2b-425: the write-off within tolerance and the bank line's confidence and reasons.
+import { BankLine } from '../bank-reasons/BankLine'
+import { WriteOffs } from '../write-off/WriteOffs'
 
 /**
  * `/w/<company>/finance/payments/<id>` (SCR-082 record): loads the payment (payments.view; the API checks its company and
@@ -146,6 +149,7 @@ function RecordContainer({ paymentId }: { paymentId: string }) {
   return (
     <PaymentRecordView
       model={model}
+      depth={payment.status === 'ready' ? { writeOff: <WriteOffs payment={payment.value} prefix={prefix} onChanged={() => void load()} />, bank: <BankLine payment={payment.value} /> } : undefined}
       actions={{
         onRetry: () => void load(),
         onDismissNotice: () => setNotice(null),

@@ -189,6 +189,8 @@ export const reminderSchema = z.object({
   language: z.string(),
   text: price(z.object({ subject: z.string().nullable(), body: z.string().nullable() })),
   held: z.array(z.object({ code: z.enum(HELD_REASONS), words: z.string() })),
+  /** B-W2b-402: the customer's trusted level, whether this reminder goes by itself, whether the level approved it (B-W2b-425 shows them). */
+  trusted: z.object({ level: z.number().nullable(), goesByItself: z.boolean(), approvedByLevel: z.boolean() }).optional(),
   preparedAt: z.string(),
   preparedBy: person.nullable(),
   approvedAt: z.string().nullable(),

@@ -25,7 +25,6 @@
     "lastPickupByPerson": "Ultimo ritiro SDI {time} (chiesto da una persona)",
     "pickUp": "Ritira ora",
     "addForeign": "Aggiungi fattura estera",
-    "proposal": "Proposta di pagamento",
     "more": "Altre azioni",
     "selfInvoices": "Autofatture TD17/18/19"
   },
@@ -39,7 +38,6 @@
     "noSdiAccount": "L'azienda non ha un conto SDI per ricevere fatture: impostalo in Sistema › Connessioni e API.",
     "noIntermediary": "Non è ancora scelto un intermediario SDI: non si può ritirare nulla.",
     "noneApprovable": "Nessuna delle fatture scelte attende l'approvazione.",
-    "proposalLater": "Le proposte di pagamento arrivano più avanti (W2b): per ora segna ogni fattura pagata nella sua scheda Pagamento.",
     "lastLine": "Una fattura tiene almeno una riga.",
     "edit": "Si corregge solo una fattura digitata, ricevuta o contestata.",
     "editSdi": "È arrivata dallo SDI: ciò che dice non cambia mai (la corregge la nota di credito del fornitore).",
@@ -166,7 +164,6 @@
     "sendToBuyer": "Invia all'acquisti",
     "someUnmapped_one": "{count} riga non ha ancora un ordine: abbinala in Righe.",
     "someUnmapped_other": "{count} righe non hanno ancora un ordine: abbinale in Righe.",
-    "areaLater": "Il controllo della superficie della pelle (piedi quadri fatturati contro quelli misurati al ricevimento) e il reclamo per superficie arrivano più avanti (W2b).",
     "empty": {
       "title": "Nessun ordine collegato",
       "body": "Scegli l'ordine in Righe, oppure segnala come fattura senza ordine.",
@@ -351,8 +348,7 @@
     "disputed": "Contestata al fornitore il {date}",
     "voided": "Annullata il {date}",
     "rulesTitle": "Separazione dei compiti",
-    "rules": "Chi ha digitato una fattura non la approva; una fattura consegnata dallo SDI può approvarla chiunque approvi. Approvare non la paga: il pagamento si registra quando il bonifico è partito dalla banca.",
-    "dualLater": "Una seconda approvazione oltre un limite arriva più avanti (W2b)."
+    "rules": "Chi ha digitato una fattura non la approva; una fattura consegnata dallo SDI può approvarla chiunque approvi. Approvare non la paga: il pagamento si registra quando il bonifico è partito dalla banca."
   },
   "payment": {
     "title": "Pagamento",
@@ -361,8 +357,6 @@
     "notPaid": "Non ancora pagata",
     "ref": "Riferimento bancario",
     "amount": "Importo",
-    "batch": "Distinta di pagamento",
-    "batchLater": "Non in una distinta (le distinte arrivano più avanti, W2b)",
     "markPaid": "Segna pagata",
     "terms": "Condizioni di pagamento",
     "noTerms": "La fattura non indica condizioni di pagamento.",
@@ -373,8 +367,7 @@
       "iban": "IBAN"
     },
     "method": "Modalità {code}",
-    "condition": "Condizione {code} come dice la fattura.",
-    "ibanLater": "Se l'IBAN sia utilizzabile si verifica più avanti (W2b): confrontalo con le coordinate bancarie del fornitore prima di pagare."
+    "condition": "Condizione {code} come dice la fattura."
   },
   "dialog": {
     "note": "Nota (facoltativa)",
@@ -475,7 +468,8 @@
     "lineRemoved": "Riga tolta.",
     "lineSaved": "Riga salvata.",
     "lineAdded": "Riga aggiunta.",
-    "matched": "Abbinata di nuovo."
+    "matched": "Abbinata di nuovo.",
+    "firstApproved": "Prima approvazione data. Il totale supera l'importo che richiede due persone: ora la approva una seconda persona."
   },
   "refusal": {
     "NOT_RECEIVED": "Si approva solo una fattura ricevuta.",
@@ -504,7 +498,10 @@
     "NO_INTERMEDIARY": "Non è ancora scelto un intermediario SDI: non si può ritirare nulla.",
     "INTERMEDIARY_UNAVAILABLE": "L'intermediario SDI non ha risposto: riprova tra qualche minuto.",
     "NO_SDI_ACCOUNT": "L'azienda non ha un conto SDI attivo per ricevere fatture.",
-    "other": "La modifica è stata rifiutata così com'è."
+    "other": "La modifica è stata rifiutata così com'è.",
+    "SECOND_APPROVER": "Hai dato la prima approvazione: la seconda la dà un'altra persona.",
+    "SECOND_APPROVAL": "Approvata una volta: il totale supera l'importo che richiede due persone, quindi ora la approva una seconda persona.",
+    "OWN_ACCEPTANCE": "Hai accettato una delle sue differenze, quindi la approva un'altra persona."
   },
   "problem": {
     "read": {

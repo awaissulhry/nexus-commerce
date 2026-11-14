@@ -13,6 +13,12 @@ import { cancelRefund, listRefunds, openRefunds as readOpenRefunds, payRefund, r
 import { refundAbilitiesOf, refundAskOf, refundRowsFrom, refundRowsOf, refundsCsv, refundsTouched, settlesWords, targetOfNote, type RefundMove, type RefundRow, type RefundRows } from '../refunds/model'
 import { PAYMENT_ROWS_VIEWS, type PaymentRowsView, type PaymentsListModel, type PickedCustomer, type RecordInput } from './list-model'
 import { PaymentsListView } from './view/PaymentsListView'
+// B-W2b-425: what is not placed, what came back unpaid by Ri.Ba., the Ri.Ba. batch.
+import { csvOf, PAY_DEPTH, scoped } from '../riba/depth'
+import { RibaBatch } from '../riba/RibaBatch'
+import { ribaUnpaidTile, useRibaUnpaid } from '../riba/unpaid/use-riba-unpaid'
+import { notPlacedTile } from '../write-off/model'
+import { useNotPlaced } from '../write-off/use-not-placed'
 
 /**
  * `/w/<company>/finance/payments` (SCR-082): reads the payments (50 a page with "Show more"; `?rows=received|voided`),
@@ -23,7 +29,7 @@ import { PaymentsListView } from './view/PaymentsListView'
  */
 export function PaymentsPage() {
   return (
-    <WithMessages namespaces={['finance', 'finance-daily', 'lists']}>
+    <WithMessages namespaces={['finance', 'finance-daily', PAY_DEPTH, 'lists']}>
       <PaymentsContainer />
     </WithMessages>
   )
@@ -37,6 +43,7 @@ const REFUND_PAGE = 50
 function PaymentsContainer() {
   const t = useT('finance')
   const d = useT('finance-daily')
+  const p = useT(PAY_DEPTH)
   const locale = useLocale()
   const api = useOfficeApi()
   const session = useOfficeSession()
@@ -107,9 +114,8 @@ function PaymentsContainer() {
       const page = await listPayments(api, { status: 'RECEIVED', limit: TILE_LIMIT })
       const month = romeToday().slice(0, 7)
       const inMonth = page.payments.filter((row) => row.receivedOn.startsWith(month))
-      const notPlaced = page.payments.filter((row) => (row.unallocated ?? 0) > 0)
-      const sum = (entries: PaymentRow[], field: 'amount' | 'unallocated') => (can.price ? entries.reduce((total, row) => total + (row[field] ?? 0), 0) : null)
-      setTiles({ monthCount: inMonth.length, monthAmount: sum(inMonth, 'amount'), notPlacedCount: notPlaced.length, notPlacedAmount: sum(notPlaced, 'unallocated'), capped: page.nextCursor !== null })
+      const sum = (entries: PaymentRow[]) => (can.price ? entries.reduce((total, row) => total + (row.amount ?? 0), 0) : null)
+      setTiles({ monthCount: inMonth.length, monthAmount: sum(inMonth) })
     } catch {
       setTiles(null)
     }
@@ -118,7 +124,7 @@ function PaymentsContainer() {
   const load = useCallback(async () => {
     const id = ++readId.current
     void readTiles()
-    if (rows === 'refunds') return
+    if (rows === 'refunds' || rows === 'notPlaced' || rows === 'ribaUnpaid') return
     setList((current) => ({ ...current, problem: null }))
     try {
       const page = await listPayments(api, queryOf(rows))
@@ -157,6 +163,8 @@ function PaymentsContainer() {
   const live = useLive(
     (change) => {
       if (refundsTouched(change)) rereadRefunds()
+      // B-W2b-425 (design page.live "finance.bank.matched → New payments"): a bank line accepted records a payment.
+      if (change.type === 'bank_match.accepted') setUpdates((count) => count + 1)
       if (!paymentsTouched(change)) return
       if (change.type.startsWith('payment.')) setUpdates((count) => count + 1)
       recount()
@@ -227,7 +235,7 @@ function PaymentsContainer() {
           const body = { depositRequestId: request.id, amount: input.amount, receivedOn: input.receivedOn, externalRef: input.reference, internalNote: input.note || null, issueDepositInvoice: input.issueDepositInvoice }
           if (input.issueDepositInvoice) await ensureFresh('stepUp.sentence.td02')
           const answer = await guard('stepUp.sentence.td02', () => depositReceived(api, body, key))
-          setRecorded({ payment: answer.payment, depositInvoice: { required: answer.depositInvoice.required, number: answer.depositInvoice.invoice?.number ?? null, filesPending: answer.depositInvoice.filesPending } })
+          setRecorded({ payment: answer.payment, depositInvoice: { required: answer.depositInvoice.required, number: answer.depositInvoice.invoice?.number ?? null, filesPending: answer.depositInvoice.filesPending }, depositOrder: request.orderNumber })
         } else {
           const payment = await recordPayment(api, { companyId: input.customer.companyId, partyId: input.customer.id, amount: input.amount, receivedOn: input.receivedOn, externalRef: input.reference, internalNote: input.note || null, allocations }, key)
           setRecorded({ payment, depositInvoice: null })
@@ -274,6 +282,20 @@ function PaymentsContainer() {
       ? { prefix, can: refundCan, rows: refundRows, items: refundItems, problem: refundRows === 'open' ? openProblem : refundList.problem, more: refundRows === 'open' ? false : refundList.more }
       : null
 
+  // B-W2b-425: the tiles and rows of what is not placed and what came back unpaid; the Ri.Ba. batch (`?riba=new|<batch id>`).
+  const held = new Set(session.permissions)
+  const { notPlaced, readNotPlaced, moreNotPlaced } = useNotPlaced(api, companyId, can.viewPayments)
+  const { ribaUnpaid, readRibaUnpaid } = useRibaUnpaid(api, companyId, held.has('receivables.view'))
+  const ribaOpen = params?.get('riba') ?? null
+  const ribaHeld = !held.has('receivables.view') ? scoped('band.ribaHeld') : !companyId ? 'held.noCompany' : null
+  const setRiba = (value: string | null) => {
+    const search = new URLSearchParams(params?.toString() ?? '')
+    if (value) search.set('riba', value)
+    else search.delete('riba')
+    const text = search.toString()
+    router.replace(text ? `${pathname}?${text}` : pathname)
+  }
+
   const refundTargets = openRefunds ? openRefunds.creditNotesToRefund.map(targetOfNote) : openProblem ? [] : null
   const model: PaymentsListModel = {
     prefix,
@@ -299,6 +321,10 @@ function PaymentsContainer() {
     refunds,
     refundDialog: refundDialog ? { targets: refundTargets, targetsProblem: openProblem, start: refundDialog.start, can: refundCan, today: romeToday(), busy, problem: refundProblem } : null,
     refundMove: refundMove ? { ...refundMove, busy, problem: refundProblem } : null,
+    notPlaced: { prefix, price: can.price, items: notPlaced.items, more: notPlaced.more, problem: notPlaced.problem, tile: notPlacedTile(notPlaced.answer) },
+    ribaUnpaid: { prefix, price: can.price, items: ribaUnpaid.value?.items ?? null, problem: ribaUnpaid.problem, tile: ribaUnpaidTile(ribaUnpaid.value) },
+    ribaHeld,
+    workOrders: held.has('workorders.view'),
   }
 
   const refundWrite = async (run: () => Promise<Refund>, words: (refund: Refund) => NonNullable<PaymentsListModel['notice']>) => {
@@ -331,7 +357,30 @@ function PaymentsContainer() {
   return (
     <PaymentsListView
       model={model}
+      riba={ribaOpen && !ribaHeld ? <RibaBatch key={ribaOpen} prefix={prefix} start={ribaOpen} onClose={() => setRiba(null)} /> : null}
       actions={{
+        onRiba: () => setRiba('new'),
+        notPlaced: {
+          onRetry: () => void readNotPlaced(),
+          onMore: () => void moreNotPlaced(),
+          onOpen: (row) => router.push(`${prefix}/finance/payments/${row.id}`),
+          onExport: (ids) => {
+            const picked = (notPlaced.items ?? []).filter((row) => ids.includes(row.id))
+            const header = [t('csv.date'), t('csv.customer'), t('csv.reference'), ...(can.price ? [t('csv.amount'), p('notPlaced.csv.unplaced')] : []), p('notPlaced.csv.waiting'), p('notPlaced.csv.openItems'), p('notPlaced.csv.withinTolerance')]
+            const rowsOut = picked.map((row) => [row.receivedOn, row.party.legalName, row.externalRef, ...(can.price ? [money(row.amount, row.currency, locale), money(row.unplacedAmount, row.currency, locale)] : []), String(row.waitingDays), String(row.openItems), row.writeOffWithinTolerance ? p('notPlaced.csv.yes') : p('notPlaced.csv.no')])
+            downloadText(`not-placed-${romeToday()}.csv`, csvOf(header, rowsOut))
+          },
+        },
+        ribaUnpaid: {
+          onRetry: () => void readRibaUnpaid(),
+          onOpen: (row) => router.push(`${prefix}/finance/invoices/${row.invoice.id}`),
+          onExport: (ids) => {
+            const picked = (ribaUnpaid.value?.items ?? []).filter((row) => ids.includes(row.itemId))
+            const header = [p('ribaUnpaid.csv.customer'), p('ribaUnpaid.csv.invoice'), p('ribaUnpaid.csv.instalment'), p('ribaUnpaid.csv.due'), p('ribaUnpaid.csv.back'), ...(can.price ? [p('ribaUnpaid.csv.amount'), p('ribaUnpaid.csv.fee'), p('ribaUnpaid.csv.open')] : [])]
+            const rowsOut = picked.map((row) => [row.customer.name, row.invoice.number ?? '', String(row.instalment), row.dueDate, row.settledOn, ...(can.price ? [money(row.amount, row.currency, locale), money(row.unpaidFee, row.currency, locale), money(row.invoiceOpen, row.currency, locale)] : [])])
+            downloadText(`riba-unpaid-${romeToday()}.csv`, csvOf(header, rowsOut))
+          },
+        },
         onRows: (next) => router.replace(next === 'all' ? pathname : `${pathname}?rows=${next}`),
         onMore: () => void more(),
         onRetry: () => void load(),
