@@ -55,6 +55,9 @@ model Role {
   // views.prisma, alerts.prisma: the saved views shared with its holders, the alert rules that tell them.
   savedViews  SavedView[]
   alertRules  AlertRule[]
+  // W2b-6 insights-depth.prisma (wave 57/57): the KPIs it owns, the alert routes to its holders.
+  kpiDefinitions KpiDefinition[]
+  alertRoutes    AlertRoute[]
   // W2b-5 approvals.prisma (wave 35/44): the approval rules and the requests whose yes its holders give.
   approvalRules ApprovalRule[] @relation("ApprovalRuleApproverRole")
   approvalTasks ApprovalTask[] @relation("ApprovalTaskApproverRole")

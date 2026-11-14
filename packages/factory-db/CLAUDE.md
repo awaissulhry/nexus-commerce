@@ -390,6 +390,19 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    (PRODUCT_SAFETY_INJURY: the ProductSafetyInjury, no employee) and wave 52's `factory_read_log_record_type_ok`
    (DataRequest), each word for word but for that; it calls recall's `factory_recall_words_ok`, `factory_recall_not_future`,
    `factory_recall_model_name_ok` and money's `factory_money_rome_day`):
+   `…_insights_depth_w2b_guards` (W2b-6 schema wave 57/57, B-W2b-381, the metric layer: KPI versions born DRAFT, made from a
+   lower version of the same key with what changed, DRAFT → ACTIVE → SUPERSEDED | RETIRED (one ACTIVE per key: a partial unique),
+   an ACTIVE one changed only by its end, a past one frozen, only a DRAFT deleted; names, definitions and formulas in Italian and
+   English, source records that are tables, measure keys, an office owner role, a MONEY unit with its grain (PRICE, COST, MARGIN:
+   never wages or pay); KPI uses of a KPI in force, never changed; a person's dashboard layout (panels, widths, each id once); a
+   company's switch for the morning e-mail (OFF by default, on with when and by whom, never deleted) and a person's digest (on with
+   when and by whom, HH:MM in a known time zone, ISO weekdays, it | en, sections; marked sent only forward, only while it is on and
+   its company's switch is on, read FOR SHARE); alert routes (one office role that is not archived or one invited or active office
+   person; a company, site, line or customer that exists; never wider than the rule's place; never changed); daily and hourly facts
+   (a line with its site, exactly one number, the company's currency with an amount, today at the latest on the site's clock, an
+   hour a whole hour of that clock with its day, rebuilt only forward; keys `fact:…` / `facth:…`); its own triggers only, no
+   earlier function redefined; it calls recall's `factory_recall_words_ok`, `factory_recall_not_future`, styles'
+   `factory_styles_distinct` and privacy's `factory_privacy_ops_table_ok`, `factory_privacy_ops_code_ok`):
    triggers, partial unique indexes and deferred
    constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new
