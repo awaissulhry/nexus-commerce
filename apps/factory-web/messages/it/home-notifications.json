@@ -269,6 +269,10 @@
         "failedDelivery": "Il vettore non è riuscito a consegnare la spedizione {record}: organizza una nuova consegna",
         "noScan": "Nessuna notizia dal vettore sulla spedizione {record} da giorni: chiedi al vettore"
       },
+      "payments": {
+        "received": "Pagamento ricevuto da {record}{figure}",
+        "depositPaid": "Acconto pagato sull’ordine {record}: la produzione può partire"
+      },
       "changes": {
         "requestRaised": "Nuova richiesta di modifica {record}: {title}",
         "requestAccepted": "{actor} ha accettato la tua richiesta di modifica {record}",

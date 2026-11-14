@@ -92,7 +92,7 @@ export async function getSettings(caller: CommandCaller, query: { readonly compa
 }
 
 /** The row a change writes, locked: the company's own (made from the tenant's on its first change), or the tenant's. */
-async function rowToChange(tools: CommandTools, companyId: string | null, version: number | undefined): Promise<{ row: SettingsRecord; created: boolean }> {
+export async function rowToChange(tools: CommandTools, companyId: string | null, version: number | undefined): Promise<{ row: SettingsRecord; created: boolean }> {
   const { tx, now } = tools
   const tenantId = tenantIdOf(tools.context)
   const id = companyId ?? tenantId
@@ -108,6 +108,8 @@ async function rowToChange(tools: CommandTools, companyId: string | null, versio
   if (version !== undefined) throw new DomainError('conflict', 'These settings do not exist yet: send no version to make them.', [{ path: 'body/version', message: 'Leave it out for new settings.' }])
   // A company's first own row starts from the tenant's (the switch as it was, when it may stay on).
   const tenant = companyId !== null ? await tx.receivablesSettings.findUnique({ where: { id: tenantId }, select: SETTINGS_COLUMNS }) : null
+  // B-W2b-402: and the tenant's collections switches (Ri.Ba., the payment notice to customers), so a company keeps them.
+  const switches = companyId !== null ? await tx.receivablesSettings.findUnique({ where: { id: tenantId }, select: { ribaOn: true, paymentNoticeToCustomerOn: true } }) : null
   const created = await tx.receivablesSettings.create({
     data: {
       id,
@@ -118,6 +120,8 @@ async function rowToChange(tools: CommandTools, companyId: string | null, versio
       lateInterestAgreedPct: tenant?.lateInterestAgreedPct ?? null,
       recoveryChargeAmount: tenant?.recoveryChargeAmount ?? null,
       minimumAmount: tenant?.minimumAmount ?? null,
+      ribaOn: switches?.ribaOn ?? false,
+      paymentNoticeToCustomerOn: switches?.paymentNoticeToCustomerOn ?? false,
       createdAt: now,
       updatedAt: now,
       createdById: tools.context.audience === 'office' ? tools.context.actorId : null,

@@ -98,7 +98,10 @@ describe('check-event-contract', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
     // the undo or reopen: the same three): with B-W2b-404, the count the guard reports after the merge.
     // B-W2b-408: + 3 declared (account_mapping.changed, accounting_settings.changed, integrity_checks.ran), + 5 literal emits
     // (a mapping row added, changed, removed; the journals switched; the integrity checks run).
-    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(896 declared event version\(s\), 1426 literal emit/) })
+    // B-W2b-402: six events (riba_batch.changed, riba_item.settled, reminder_stop.changed, reminder_trust.changed,
+    // collections_settings.changed, payment.receipt_sent) and thirteen literal emits: with B-W2b-408 (main c2caff5161) the
+    // guard counts 901 and 1438 on this tree; with the planted event and emit: 902, 1439.
+    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(902 declared event version\(s\), 1439 literal emit/) })
   })
 
   it.each<[string, Plants, RegExp]>([
