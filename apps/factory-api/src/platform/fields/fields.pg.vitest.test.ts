@@ -13,7 +13,7 @@ import { testAuthenticator, type RequestContext, type SessionContext } from '../
 import { LOCAL_COOKIE_SECRET } from '../../env'
 import { seedUuid } from '../../../../../packages/factory-db/src/seeding'
 import { exportSourceOf } from '../exports/registry'
-import { processImporters } from '../imports/registry'
+import { processImporters, type CheckRow } from '../imports/registry'
 
 /**
  * Custom fields and picklists (B-W2b-421; PLT-111, PLT-115) through the app's real routes on a throwaway PostgreSQL 17
@@ -144,7 +144,7 @@ describe('fields added without code (PLT-111)', () => {
     const reversed = [...section].reverse()
     const ordered = (await ok('keeper', 'POST', '/fields/order', { recordType: 'ORDER', section: 'custom', fields: reversed.map((field) => ({ id: field.id, version: field.version })) })).fields as Json[]
     expect(ordered.map((field) => field.code)).toEqual(reversed.map((field) => field.code))
-    expect((await refused('keeper', 'POST', '/fields/order', { recordType: 'ORDER', section: 'custom', fields: [{ id: reversed[0].id, version: 1 }] }, 400)).issues.length).toBeGreaterThan(0)
+    expect((await refused('keeper', 'POST', '/fields/order', { recordType: 'ORDER', section: 'custom', fields: [{ id: reversed[0]!.id, version: 1 }] }, 400)).issues.length).toBeGreaterThan(0)
     expect((await events('custom_field.changed')).map((event) => event.change)).toEqual(expect.arrayContaining(['ARCHIVED', 'RESTORED', 'REORDERED']))
   })
 })
@@ -251,7 +251,7 @@ describe('exports and imports carry them', () => {
     const caller = callerFor(database, context('keeper'))
     const actor = { audience: 'office' as const, tenantId: A.tenant, grants: SESSIONS.keeper!.grants }
     const scope = { companyId: A.companyA }
-    const rows = [
+    const rows: CheckRow[] = [
       { rowNumber: 2, key: { record: 'SEED-SO-0004', field: 'finish_grade' }, values: { value: 'Seconda scelta' } },
       { rowNumber: 3, key: { record: 'SEED-SO-0004', field: 'agreed_discount' }, values: { priceValue: '12.50', currency: 'EUR' } },
       { rowNumber: 4, key: { record: 'SEED-SO-0004', field: 'fair_date' }, values: { number: '3' } },
