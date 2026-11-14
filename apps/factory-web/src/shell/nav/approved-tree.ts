@@ -654,7 +654,9 @@ export const OFFICE: readonly TreeArea[] = [
         pages: [
           { id: 'admin.documents', title: 'Documents & numbering', titleIt: 'Documenti e numerazioni', wave: 'W0', href: '/admin/documents' },
           { id: 'admin.languages', title: 'Languages & formats', titleIt: 'Lingue e formati', wave: 'W0', href: '/admin/languages' },
-          // W2a: B-W2a-78 Approvals, automation & AI (SCR-167, the Reminders & timers part). Fields & lists (W2b) joins before it.
+          // W2b: B-W2b-431 Fields & lists (SCR-164).
+          { id: 'admin.fields', title: 'Fields & lists', titleIt: 'Campi e liste', wave: 'W2b', href: '/admin/fields' },
+          // W2a: B-W2a-78 Approvals, automation & AI (SCR-167, the Reminders & timers part).
           { id: 'admin.automation', title: 'Approvals, automation & AI', titleIt: 'Approvazioni, automazioni e IA', wave: 'W2a', href: '/admin/automation' },
           { id: 'admin.connections', title: 'Connections & API', titleIt: 'Connessioni e API', wave: 'W0', href: '/admin/connections' },
         ],
