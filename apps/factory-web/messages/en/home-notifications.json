@@ -269,6 +269,10 @@
         "failedDelivery": "The carrier failed to deliver shipment {record}: arrange a new delivery",
         "noScan": "No carrier news on shipment {record} for days: ask the carrier"
       },
+      "payments": {
+        "received": "Payment received from {record}{figure}",
+        "depositPaid": "Deposit paid on order {record}: production may start"
+      },
       "changes": {
         "requestRaised": "New change request {record}: {title}",
         "requestAccepted": "{actor} accepted your change request {record}",

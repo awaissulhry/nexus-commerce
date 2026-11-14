@@ -129,6 +129,11 @@ export const MESSAGE_TEMPLATES = {
   'notifications.shipping.addressProblem': { en: 'The carrier cannot deliver shipment {record} to its address: check it with the customer', it: 'Il vettore non riesce a consegnare la spedizione {record} all’indirizzo: verificalo con il cliente' },
   'notifications.shipping.failedDelivery': { en: 'The carrier failed to deliver shipment {record}: arrange a new delivery', it: 'Il vettore non è riuscito a consegnare la spedizione {record}: organizza una nuova consegna' },
   'notifications.shipping.noScan': { en: 'No carrier news on shipment {record} for days: ask the carrier', it: 'Nessuna notizia dal vettore sulla spedizione {record} da giorni: chiedi al vettore' },
+  // B-W2b-402 (FIN-128; modules/receivables/notices): a payment recorded, to who follows the customer and whose orders it pays
+  // ({record}: the customer; {figure}: the amount, with the price grain); a deposit paid, to the order's maker and who releases
+  // production at the company ({record}: the order).
+  'notifications.payments.received': { en: 'Payment received from {record}{figure}', it: 'Pagamento ricevuto da {record}{figure}' },
+  'notifications.payments.depositPaid': { en: 'Deposit paid on order {record}: production may start', it: 'Acconto pagato sull’ordine {record}: la produzione può partire' },
 } as const satisfies Record<string, { readonly en: string; readonly it: string }>
 export type MessageKey = keyof typeof MESSAGE_TEMPLATES
 export const MESSAGE_KEYS = Object.freeze(Object.keys(MESSAGE_TEMPLATES)) as readonly MessageKey[]

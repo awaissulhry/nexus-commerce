@@ -308,6 +308,11 @@ export const reminderView = output({
   letterFileId: id().nullable(),
   /** What the reader may do with it now. */
   actions: output({ edit: z.boolean(), approve: z.boolean(), send: z.boolean(), skip: z.boolean(), cancel: z.boolean() }),
+  /**
+   * B-W2b-402 (FIN-113): the customer's trusted level (null: none), whether this reminder goes by itself (trusted, the
+   * company's reminders on, nothing holds it), and whether the trusted level approved it (no person).
+   */
+  trusted: output({ level: z.number().int().nullable(), goesByItself: z.boolean(), approvedByLevel: z.boolean() }),
   version: z.number().int(),
 })
 

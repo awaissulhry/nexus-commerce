@@ -1,4 +1,4 @@
-import { BarChart3, Bell, BellRing, CheckCheck, Home, Inbox, ListTodo, Sun } from 'lucide-react'
+import { BarChart3, Bell, BellRing, CheckCheck, Gauge, Home, Inbox, ListTodo, Sun } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -42,6 +42,9 @@ export const officeArea: OfficeAreaNav = {
         label: 'shell:nav.home.insights',
         items: [
           { id: 'home-reports', label: 'shell:nav.home.reports', href: '/home/reports', icon: BarChart3, permission: 'home.reports.view' },
+          // B-W2b-433: the KPI library (SCR-249: every KPI with its plain definition and its value now; a KPI's record SCR-470),
+          // between Reports and Alerts as the tree orders them.
+          { id: 'home-kpis', label: 'shell:nav.home.kpis', href: '/home/kpis', icon: Gauge, permission: 'home.kpis.view' },
           { id: 'home-alerts', label: 'shell:nav.home.alerts', href: '/home/alerts', icon: BellRing, permission: 'alerts.view' },
         ],
       },

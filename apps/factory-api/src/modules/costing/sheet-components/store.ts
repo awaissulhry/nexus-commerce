@@ -15,6 +15,10 @@ import { liveDefaults } from '../../shipping/cartons/store'
 import { companyOrTenant, dayOf, processCostingInputs } from '../inputs'
 import { activeRulesOf } from '../overhead-rules/overhead-rules'
 import { readCostingMaterials, type CostingStyleRow } from '../store'
+// B-W2b-423: the garment without options (FIN-018) and the multi-level roll-up (FIN-019, KS4:02).
+import type { OptionParts } from '@nexus/factory-domain/costing/option-cost/rules'
+import { optionPartsOf, withoutOptionParts } from '../option-cost/parts'
+import { rolledUpFor } from '../rollup/store'
 
 /**
  * What a revision's components are computed from (B-W2b-418), read with one client, one query after another (a transaction
@@ -40,12 +44,20 @@ export interface ComponentOptions {
   readonly colourwayId?: string | undefined
   readonly siteId?: string | undefined
   readonly piecesPerCarton?: number | undefined
+  /** B-W2b-423: keep the BOM lines and routing steps only for an option (an option's own cost puts them back per value). */
+  readonly withOptionParts?: boolean | undefined
+  /** B-W2b-423: the level and the revisions above, when a sub-assembly is costed for its parent's roll-up. */
+  readonly rollup?: { readonly level: number; readonly path: readonly string[] } | undefined
+  /** B-W2b-423 (FIN-022): materials' standard prices as a mass update would set them (a preview: nothing written). */
+  readonly priceOverrides?: ReadonlyMap<string, string> | undefined
 }
 
 export interface LoadedComponents {
   readonly facts: ComponentFacts
   readonly colourway: { readonly id: string; readonly code: string; readonly name: string }
   readonly pieceRate: { readonly on: boolean; readonly siteId: string | null; readonly payingSites: number }
+  /** B-W2b-423: the revision's parts only for options (left out of the facts unless withOptionParts). */
+  readonly optionParts: OptionParts
 }
 
 /** The leather bases of these articles that a sheet for the company may take (its own and every company's). */
@@ -187,9 +199,14 @@ export async function loadComponentFacts(db: Reader, style: CostingStyleRow, rev
     if (options.colourwayId !== undefined) throw new ValidationError('The colourway is not valid.', [{ path: 'colourwayId', message: 'Not an active colourway of this style.' }])
     throw new NotFoundError('The style has no active colourway to cost.')
   }
-  const lines = await withoutCustomerSupplied(db, revision.id, await readLines(db, revision.id, { sizes: style.sizes, colourwayIds: all.map((entry) => entry.id) }))
-  const materials = await readCostingMaterials(db, lines.map((line) => line.itemId))
-  const steps = await readSteps(db, revision.id)
+  const allLines = await withoutCustomerSupplied(db, revision.id, await readLines(db, revision.id, { sizes: style.sizes, colourwayIds: all.map((entry) => entry.id) }))
+  // B-W2b-423 (FIN-018): the garment without options — a line or a step only for an option is the option's own cost.
+  const optionParts = await optionPartsOf(db, revision.id)
+  const allSteps = await readSteps(db, revision.id)
+  const kept = options.withOptionParts ? { lines: allLines, steps: allSteps } : withoutOptionParts(optionParts, allLines, allSteps)
+  const lines = kept.lines
+  const steps = kept.steps
+  const materials = withPrices(await readCostingMaterials(db, lines.map((line) => line.itemId)), options.priceOverrides)
   const subcontracts = new Map([...(await readSubcontracts(db, revision.id))].map(([stepId, entry]) => [stepId, { supplierId: entry.supplierId, pricePerPiece: entry.pricePerPiece }]))
   const workshops = await workshopsOf(db, subcontracts, company.id, on)
   const inputs = processCostingInputs()
@@ -213,9 +230,12 @@ export async function loadComponentFacts(db: Reader, style: CostingStyleRow, rev
   const types = await packagingTypesOf(db, company.id)
 
   const componentSteps: ComponentStep[] = steps.map((step) => ({ id: step.id, seq: step.seq, operationId: step.operationId, code: step.code, name: step.name, workCentreKind: step.workCentreKind, standardMinutes: step.standardMinutes }))
+  // B-W2b-423 (FIN-019, KS4:02): each sub-assembly line at its own cost, every level down.
+  const rolledUp = await rolledUpFor(db, { revisionId: revision.id, lines, materials, sizes: style.sizes, colourwayCode: colourway.code, company, on, level: options.rollup?.level ?? 1, path: options.rollup?.path ?? [revision.id], priceOverrides: options.priceOverrides }, loadComponentFacts)
   return {
     colourway: { id: colourway.id, code: colourway.code, name: colourway.name },
     pieceRate: { on: pieceRateOn, siteId: site.siteId, payingSites: paying.length },
+    optionParts,
     facts: {
       currency: company.currency,
       companyId: company.id,
@@ -238,6 +258,13 @@ export async function loadComponentFacts(db: Reader, style: CostingStyleRow, rev
       pieceRate: { on: pieceRateOn, siteId: site.siteId, problem: site.problem, candidates },
       packaging: { defaults, types, sizeScaleId: scale?.sizeScaleId ?? null, sizeSeqs: new Map(sizes.map((size) => [size.code, size.seq])) },
       piecesPerCarton: options.piecesPerCarton ?? null,
+      rolledUp,
     },
   }
+}
+
+/** B-W2b-423 (FIN-022): the materials with the prices a mass update would give them (the material's own currency). */
+function withPrices<Material extends { readonly standardCost: string | null }>(materials: Map<string, Material>, overrides: ReadonlyMap<string, string> | undefined): Map<string, Material> {
+  if (!overrides || overrides.size === 0) return materials
+  return new Map([...materials].map(([id, material]) => [id, overrides.has(id) ? { ...material, standardCost: overrides.get(id)! } : material]))
 }
