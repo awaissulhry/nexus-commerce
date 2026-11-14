@@ -301,6 +301,8 @@ import { events as workOrderClose } from '../work-order-close/events'
 import { events as costSheetVersions } from '../cost-sheet-versions/events'
 // B-W2b-402: collections (riba_batch.changed, riba_item.settled, reminder_stop.changed, reminder_trust.changed, collections_settings.changed, payment.receipt_sent).
 import { events as receivablesCollections } from '../receivables-collections/events'
+// B-W2b-423: cost in depth (an option value's typed cost delta, the mass cost update).
+import { events as costDepth } from '../cost-depth/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -667,6 +669,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...costSheetVersions,
   // B-W2b-402
   ...receivablesCollections,
+  // B-W2b-423
+  ...costDepth,
 ] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */

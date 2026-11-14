@@ -14,6 +14,8 @@ import { readSteps } from '../product/routing/read'
 import { processCostingInputs } from './inputs'
 // B-W2b-228 (PRD-084): a material the customer sends has no cost.
 import { withoutCustomerSupplied } from '../product/bom-lines/store'
+// B-W2b-423 (FIN-018): the sheet is the garment without options (an option's own cost: costing/option-cost).
+import { optionPartsOf, withoutOptionParts } from './option-cost/parts'
 
 /**
  * What a cost sheet is computed from, read with one client (no relation selects: inside a transaction Prisma would send
@@ -120,9 +122,14 @@ export interface LoadedCost {
 export async function loadCostFacts(client: FactoryClient | CommandTx, style: CostingStyleRow, revision: RevisionRow, company: CostingCompany, now: Date): Promise<LoadedCost> {
   const all = await readColourways(client, style.id)
   const colourways = all.filter((colourway) => colourway.status === 'ACTIVE')
-  const lines = await withoutCustomerSupplied(client, revision.id, await readLines(client, revision.id, { sizes: style.sizes, colourwayIds: all.map((colourway) => colourway.id) }))
+  const garment = withoutOptionParts(
+    await optionPartsOf(client, revision.id),
+    await withoutCustomerSupplied(client, revision.id, await readLines(client, revision.id, { sizes: style.sizes, colourwayIds: all.map((colourway) => colourway.id) })),
+    await readSteps(client, revision.id),
+  )
+  const lines = garment.lines
   const materials = await readCostingMaterials(client, lines.map((line) => line.itemId))
-  const steps = await readSteps(client, revision.id)
+  const steps = garment.steps
   const inputs = processCostingInputs()
   const rates = await inputs.labourRates(client, company.id)
   const overheads = await inputs.overheadRules(client, company.id)

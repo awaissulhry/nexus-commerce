@@ -178,6 +178,8 @@ import { COST_SHEET_VERSIONS_ADDS } from '../../costing/sheet-versions/permissio
 import { ACCOUNTING_BRIDGE_ADDS } from '../../accounting/mapping/permissions'
 // B-W2b-402: collections (finance works the Ri.Ba. batches; the switches and trusted levels are the Owner's, through every()).
 import { COLLECTIONS_ADDS } from '../../receivables/riba/permissions'
+// B-W2b-423: cost in depth (finance applies a mass cost update).
+import { COST_DEPTH_ADDS } from '../../costing/mass-update/permissions'
 
 /**
  * The system role templates (plan A1 §3.11 "Role"; feature PLT-030): ready roles every tenant gets as system roles
@@ -1112,7 +1114,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-408
   ...(audience === 'office' ? (ACCOUNTING_BRIDGE_ADDS[key] ?? []) : []),
   // B-W2b-402
-  ...(audience === 'office' ? (COLLECTIONS_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (COLLECTIONS_ADDS[key] ?? []) : []),
+  // B-W2b-423
+  ...(audience === 'office' ? (COST_DEPTH_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the

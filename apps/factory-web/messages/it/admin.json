@@ -1814,6 +1814,7 @@
     "costing_actuals_manage": "Attivare o disattivare i costi effettivi (commercialista)",
     "costing_sheets_manage": "Scrivere le schede costo in bozza dai componenti e gestire basi pelle, trasporti, dazi e noli",
     "costing_sheets_approve": "Approvare le versioni delle schede costo prima di rilasciare i prezzi, e ritirare una versione approvata",
+    "costing_massUpdate_apply": "Applicare un aggiornamento massivo dei costi dopo l'anteprima: nuovi prezzi standard dei materiali e nuove versioni in bozza delle schede costo",
     "production_settings_view": "Vedere le regole di reparto degli stabilimenti",
     "production_settings_manage": "Cambiare le regole di reparto",
     "production_cut": "Tagliare pelli per un ordine di lavoro",
