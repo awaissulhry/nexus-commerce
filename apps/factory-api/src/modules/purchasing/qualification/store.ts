@@ -37,9 +37,11 @@ export interface VaultFile extends VaultDocument {
   readonly source: 'PORTAL' | 'QUESTIONNAIRE' | 'OFFICE'
   readonly uploadId: string | null
   readonly seriesId: string
+  /** B-W2b-383 (B-W2b-382's gap): the file's row version, the one "say what it is" (PUT …/documents/:fileId/type) sends. */
+  readonly version: number
 }
 
-const FILE_SELECT = { id: true, category: true, expiresOn: true, originalName: true, createdAt: true, seriesId: true, documentTypeCode: true } as const satisfies Prisma.StoredFileSelect
+const FILE_SELECT = { id: true, category: true, expiresOn: true, originalName: true, createdAt: true, seriesId: true, documentTypeCode: true, version: true } as const satisfies Prisma.StoredFileSelect
 
 /** The files an accepted questionnaire of the party put in force (by file id), with the question each answered. */
 export async function questionnaireFilesOf(db: Reader, partyId: string, companyId?: string | null): Promise<Map<string, { readonly responseId: string; readonly companyId: string; readonly key: string; readonly issuer: string | null; readonly number: string | null; readonly issuedOn: string | null }>> {
@@ -91,6 +93,7 @@ export async function vaultFilesOf(db: Reader, partyId: string): Promise<VaultFi
         source: upload ? 'PORTAL' : answered ? 'QUESTIONNAIRE' : 'OFFICE',
         uploadId: upload?.id ?? null,
         seriesId: file.seriesId ?? file.id,
+        version: file.version,
       },
     ]
   })

@@ -1,0 +1,421 @@
+// Actual cost to the end (W2b-6 schema wave 54/57, B-W2b-376; features MES-012, MES-013, FIN-029, FIN-030, FIN-031,
+// FIN-034, FIN-043, FIN-044; design production.workorders pop "Close work order" (wo-close) and record tab "Labour & cost"
+// › "Cost", finance.costing "Work orders: standard vs actual", "Purchase price variance", the cost DetailModal's bridge):
+// a work order closes with its planned and actual figures and a reason when they are beyond the tolerance, is undone for
+// a few seconds or reopened with a reason; the close settles its cost: the variance split by category and the closing
+// entry that clears what is left on it; purchases carry their price variance; a shipment costs its goods; and freight
+// and duty land on the lots they came with. apps/factory-api's modules/costing (B-W2b-411 close and variances, B-W2b-407
+// purchase price variance, cost of goods sold, landed cost) writes them, always through command().
+//
+//   ActualCostSettings     a company's (or the tenant's) close tolerance, and the company's switch for the accountant's
+//                          figures (GATE-ACCOUNTANT, OFF by default).
+//   WorkOrderClose         one close of a work order: planned and actual garments, material cost, minutes and scrap, the
+//                          tolerance it was judged against, the reason code when beyond it, who closed and when; undone
+//                          (an Undo within 60 seconds by the person who closed it) or reopened (later, with a reason).
+//   WorkOrderVariance      the variance split of a close: per category (and material), standard against actual, signed
+//                          (append-only).
+//   PurchasePriceVariance  what a purchase cost against its standard, at the receipt or at the supplier's invoice
+//                          (append-only; a wrong one reversed).
+//   CostOfSalesEntry       the cost of the goods a shipment line (or an invoice line) sold, from their cost layers, by
+//                          category (append-only; a wrong one reversed).
+//   LandedCostAllocation   a supplier invoice charge line (freight, duty …) spread over the lots it brought, by value,
+//                          weight or quantity: DRAFT (shares written) → POSTED → REVERSED.
+//   LandedCostShare        one lot's share of an allocation.
+//
+// The close's ledger postings are two kinds of cost-ledger.prisma WorkOrderCostEntry: VARIANCE (one per variance row:
+// its amount taken off the work order) and CLOSE (what is left after them, so the work order's entries add up to 0).
+// Once a work order is CLOSED, or its close's CLOSE entry is posted, it takes no cost entry but a reversal; undoing the
+// close reverses its VARIANCE and CLOSE entries and puts the work order back to COMPLETED (the
+// …_cost_actuals_w2b_guards triggers, for every login).
+//
+// GATE-ACCOUNTANT (lead decision 11-13): the closing entry, the variances and cost of goods sold are the accountant's
+// figures; nothing of them is written (VARIANCE and CLOSE entries, WorkOrderVariance, PurchasePriceVariance,
+// CostOfSalesEntry, a POSTED landed cost) while the company's `postingsOn` is false: the default. The close itself (the
+// production manager's planned against actual, the reason, the undo) does not wait for it.
+//
+// Money (A1 §2.1, §2.6): amounts are Int minor units of the company's currency, unit costs Decimal(18,6), quantities and
+// minutes Decimal(18,4); every money column is grain cost.
+//
+// Who sees what (ownership/cost-actuals.json): the office reads and writes (the API keeps the cost grain to finance,
+// buyers and production managers); the floor, portal and link sessions read none of it (no money on the floor: A1 §2.6).
+// Minutes are work-order totals, never a person's (Statuto dei Lavoratori art. 4). Nothing is deleted but a DRAFT landed
+// cost and its shares.
+
+/// A company's actual-cost settings, or the tenant-wide ones (MES-012; GATE-ACCOUNTANT): the row's id is the company's
+/// id, or the tenant's own id for the tenant-wide row (as AccountingSettings); the company's row wins. No row: a 5 %
+/// tolerance and the switch off. Changed, never deleted.
+model ActualCostSettings {
+  /// The company's id; the tenant's id for the tenant-wide row (companyId null).
+  id                String                  @id @db.Uuid
+  tenantId          String                  @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// null: the tenant-wide settings. Never changes.
+  companyId         String?                 @db.Uuid
+  /// A work order closed with its garments, material cost, minutes or scrap beyond this percent of the planned needs a
+  /// reason code (MES-012): 0 to 100.
+  closeTolerancePct Decimal                 @default(5) @db.Decimal(7, 4)
+  /// Where the company takes its purchase price variance (FIN-031; the accountant's choice): at the receipt (the order's
+  /// price, the default) or at the supplier's invoice. A variance is taken only where the company takes it.
+  ppvAt             PurchasePriceVarianceAt @default(RECEIPT)
+  /// The company's switch for the accountant's figures (GATE-ACCOUNTANT; OFF by default, until the accountant confirms the
+  /// rules): a close's variances and closing entry, purchase price variances, cost of goods sold and posted landed cost are
+  /// written only while true. Only on a company's own row; on exactly with when and by whom (fixed while on).
+  postingsOn        Boolean                 @default(false)
+  postingsOnAt      DateTime?               @db.Timestamptz(3)
+  postingsOnById    String?                 @db.Uuid
+  version           Int                     @default(1)
+  createdAt         DateTime                @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime                @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById       String?                 @db.Uuid
+
+  company Company? @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, companyId])
+}
+
+/// One close of a work order (MES-012, MES-013, FIN-034; design production.workorders pop "Close work order"): planned
+/// against actual (garments, material cost, standard minutes, scrap), the tolerance it was judged against, the reason
+/// code exactly when a figure is beyond it, who closed it and when. A close is undone (MES-013's Undo, within 60 seconds,
+/// by the person who closed it) or reopened (later, by someone allowed, with a reason): the work order goes back to
+/// COMPLETED and a new close is a new row. At most one live close per work order, and a live close's work order is CLOSED
+/// at its time. Never deleted.
+model WorkOrderClose {
+  id                   String    @id @db.Uuid
+  tenantId             String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The work order's company and site.
+  companyId            String    @db.Uuid
+  siteId               String    @db.Uuid
+  workOrderId          String    @db.Uuid
+  /// Garments: planned (the cells), made good, and scrapped (planned scrap: the allowance, 0 when none); 0 or more.
+  plannedQuantity      Int
+  actualQuantity       Int
+  plannedScrapQuantity Int       @default(0)
+  scrapQuantity        Int       @default(0)
+  /// Material at standard for the planned garments, and the material the work order took (its ledger); minor units, 0 or
+  /// more.
+  /// @grain cost
+  plannedMaterialCost  Int
+  /// @grain cost
+  actualMaterialCost   Int
+  /// Standard minutes planned for the garments, and the minutes recorded on the work order; work-order totals, never a
+  /// person's; 0 or more.
+  plannedMinutes       Decimal   @db.Decimal(18, 4)
+  actualMinutes        Decimal   @db.Decimal(18, 4)
+  /// ISO 4217: the company's currency.
+  currency             String    @default("EUR")
+  /// The company's close tolerance when it closed (ActualCostSettings), 0 to 100.
+  tolerancePct         Decimal   @db.Decimal(7, 4)
+  /// Why a figure is beyond the tolerance: a code of the API's close reasons (capitals, digits, underscores), exactly when
+  /// one is; and words, when the person adds them.
+  reasonCode           String?
+  reasonNote           String?
+  closedAt             DateTime  @db.Timestamptz(3)
+  closedById           String    @db.Uuid
+  /// Set once, together: when the close was taken back and by whom ("reopened by"). Within 60 seconds by the person who
+  /// closed it, an Undo needs no reason; any other time or person, a reopen says why (reopenReason).
+  undoneAt             DateTime? @db.Timestamptz(3)
+  undoneById           String?   @db.Uuid
+  reopenReason         String?
+  version              Int       @default(1)
+  createdAt            DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById          String?   @db.Uuid
+
+  workOrder WorkOrder           @relation(fields: [tenantId, siteId, workOrderId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  variances WorkOrderVariance[]
+
+  // The target of the variances' reference: a close of the same work order.
+  @@unique([tenantId, workOrderId, id])
+  @@index([tenantId, workOrderId, closedAt])
+  @@index([tenantId, companyId, closedAt])
+}
+
+/// What a variance explains (FIN-029, FIN-030; design finance.costing "biggest reason", the cost DetailModal's bridge).
+enum WorkOrderVarianceCategory {
+  /// Material bought or valued above (or below) its standard price.
+  MATERIAL_PRICE
+  /// More (or less) material used than the standard for the garments made.
+  MATERIAL_USAGE
+  /// Standard minutes earned against the minutes it took.
+  LABOUR_EFFICIENCY
+  /// The cost per minute paid against the standard rate.
+  LABOUR_RATE
+  /// What scrapped garments and material cost.
+  SCRAP
+  /// What rework cost.
+  REWORK
+  /// A workshop's fee against the standard subcontract cost.
+  SUBCONTRACT_PRICE
+  /// Fixed set-up spread over fewer (or more) garments than the standard lot.
+  LOT_SIZE
+  /// Overhead applied against the standard.
+  OVERHEAD
+}
+
+/// One line of a close's variance split (FIN-029, FIN-030, FIN-034; design production.workorders "Cost" SummaryTable
+/// planned · actual · variance, finance.costing's bridge): a category (with its material, for material price, usage and
+/// scrap), the standard and actual figures it comes from, and its amount: above 0 the work order cost more than its
+/// standard. Written while its close is live, only while the company's switch is on; its VARIANCE cost entry takes the
+/// amount off the work order. Never changed or removed (`@append-only`): an undone close keeps its split as history.
+/// @append-only
+model WorkOrderVariance {
+  id               String                    @id @db.Uuid
+  tenantId         String                    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The close's company, site and work order.
+  companyId        String                    @db.Uuid
+  siteId           String                    @db.Uuid
+  workOrderId      String                    @db.Uuid
+  closeId          String                    @db.Uuid
+  category         WorkOrderVarianceCategory
+  /// The material it is about: only for MATERIAL_PRICE, MATERIAL_USAGE and SCRAP (optional there).
+  itemId           String?                   @db.Uuid
+  /// The figures it comes from (each pair both or neither): quantities in the item's base unit (material), minutes
+  /// (labour) or garments; unit costs per base unit, minute or garment, 0 or more.
+  standardQuantity Decimal?                  @db.Decimal(18, 4)
+  actualQuantity   Decimal?                  @db.Decimal(18, 4)
+  /// @grain cost
+  standardUnitCost Decimal?                  @db.Decimal(18, 6)
+  /// @grain cost
+  actualUnitCost   Decimal?                  @db.Decimal(18, 6)
+  /// Minor units, never 0: above 0 unfavourable (actual above standard), below 0 favourable.
+  /// @grain cost
+  amount           Int
+  /// ISO 4217: the close's currency.
+  currency         String                    @default("EUR")
+  note             String?
+  createdAt        DateTime                  @default(now()) @db.Timestamptz(3)
+  createdById      String?                   @db.Uuid
+
+  close WorkOrderClose @relation(fields: [tenantId, workOrderId, closeId], references: [tenantId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  item  Item?          @relation("WorkOrderVarianceItem", fields: [tenantId, itemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, closeId])
+  @@index([tenantId, companyId, category])
+}
+
+/// Where a purchase price variance is taken (FIN-031; design finance.costing "Purchase price vs standard at receipt or
+/// invoice"): the company's choice (ActualCostSettings.ppvAt).
+enum PurchasePriceVarianceAt {
+  /// At the goods receipt, at its purchase order line's price.
+  RECEIPT
+  /// At the supplier's invoice, at the invoiced price.
+  INVOICE
+}
+
+/// What a purchase cost against its standard (FIN-031; design finance.costing "Purchase price variance": material,
+/// supplier, standard, paid, difference): one goods receipt line (at RECEIPT: a POSTED receipt of ours, never a customer's
+/// own goods) or one supplier invoice GOODS line (at INVOICE), the material, the quantity in its base unit, the standard
+/// and the price paid per base unit, and the difference (quantity × (paid − standard), in minor units; above 0 paid more).
+/// Written only while the company's switch is on. Never changed or removed (`@append-only`): a wrong one is taken back by
+/// a reversal (the opposite difference, once, with a reason), which waits for no switch.
+/// @append-only
+model PurchasePriceVariance {
+  id                    String                  @id @db.Uuid
+  tenantId              String                  @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The buyer: the receipt's or the invoice's company.
+  companyId             String                  @db.Uuid
+  /// The supplier: the receipt's purchase order's or the invoice's.
+  partyId               String                  @db.Uuid
+  at                    PurchasePriceVarianceAt
+  /// RECEIPT exactly: the receipt line (and its site).
+  siteId                String?                 @db.Uuid
+  receiptLineId         String?                 @db.Uuid
+  /// INVOICE exactly: the supplier invoice line.
+  supplierInvoiceLineId String?                 @db.Uuid
+  /// The material: the line's item.
+  itemId                String                  @db.Uuid
+  /// Above 0, in the item's base unit (signed like the difference on a reversal: the opposite of its original's).
+  quantity              Decimal                 @db.Decimal(18, 4)
+  /// The frozen standard per base unit, and the standard it comes from when there is one.
+  /// @grain cost
+  standardUnitCost      Decimal                 @db.Decimal(18, 6)
+  /// @not-money a reference
+  standardCostId        String?                 @db.Uuid
+  /// The price paid per base unit (the order's at RECEIPT, the invoice's at INVOICE), 0 or more.
+  /// @grain cost
+  paidUnitCost          Decimal                 @db.Decimal(18, 6)
+  /// Minor units: quantity × (paid − standard), rounded (within one minor unit); above 0 paid more than standard.
+  /// @grain cost
+  differenceAmount      Int
+  /// ISO 4217: the company's currency.
+  currency              String                  @default("EUR")
+  /// When it was taken: the date the period lock reads (Europe/Rome).
+  postedAt              DateTime                @db.Timestamptz(3)
+  /// A reversal: the variance it takes back (its opposite quantity and difference, once), and why.
+  reversalOfId          String?                 @db.Uuid
+  reason                String?
+  /// One variance per source event (e.g. `ppv:receipt-line:<id>`), unique in the tenant: a repeat is refused.
+  idempotencyKey        String
+  createdAt             DateTime                @default(now()) @db.Timestamptz(3)
+  createdById           String?                 @db.Uuid
+
+  supplier            Party                   @relation("PurchasePriceVarianceSupplier", fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and the keys.
+  receiptLine         GoodsReceiptLine?       @relation(fields: [tenantId, siteId, receiptLineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  supplierInvoiceLine SupplierInvoiceLine?    @relation(fields: [tenantId, partyId, supplierInvoiceLineId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  item                Item                    @relation("PurchasePriceVarianceItem", fields: [tenantId, itemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  /// @not-money a relation
+  standardCost        StandardCost?           @relation(fields: [tenantId, companyId, standardCostId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  reversalOf          PurchasePriceVariance?  @relation("PurchasePriceVarianceReversal", fields: [tenantId, reversalOfId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  reversals           PurchasePriceVariance[] @relation("PurchasePriceVarianceReversal")
+
+  @@unique([tenantId, idempotencyKey])
+  // The target of the reversals' reference.
+  @@unique([tenantId, id])
+  @@index([tenantId, companyId, postedAt])
+  @@index([tenantId, receiptLineId])
+  @@index([tenantId, supplierInvoiceLineId])
+}
+
+/// The cost of the goods sold (FIN-043; design finance.accounting "cost of goods sold and variances"): one shipment line
+/// (the garments that left) or one invoice line (goods invoiced on their own), its quantity, and the cost of its cost
+/// layers (the SHIPMENT stock move's valuation, when there is one) by category: material, labour, subcontract and
+/// overhead adding up to the amount. Written only while the company's switch is on. Never changed or removed
+/// (`@append-only`): a wrong one is taken back by a reversal (the opposite quantity and amounts, once, with a reason),
+/// which waits for no switch.
+/// @append-only
+model CostOfSalesEntry {
+  id                String   @id @db.Uuid
+  tenantId          String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The seller.
+  companyId         String   @db.Uuid
+  /// The customer: the shipment's party, or the invoice's buyer.
+  partyId           String   @db.Uuid
+  /// Exactly one source: a shipment line (with its site), or an invoice line.
+  siteId            String?  @db.Uuid
+  shipmentLineId    String?  @db.Uuid
+  invoiceLineId     String?  @db.Uuid
+  /// The SHIPMENT move that took the shipment line's garments out of finished goods (its valuation is the layer cost).
+  stockMoveId       String?  @db.Uuid
+  /// Garments or units sold: above 0 (a reversal: the opposite of its original's).
+  quantity          Decimal  @db.Decimal(18, 4)
+  /// Minor units by category, each 0 or more (a reversal: each the opposite of its original's); amount is their sum.
+  /// @grain cost
+  materialAmount    Int      @default(0)
+  /// @grain cost
+  labourAmount      Int      @default(0)
+  /// @grain cost
+  subcontractAmount Int      @default(0)
+  /// @grain cost
+  overheadAmount    Int      @default(0)
+  /// @grain cost
+  amount            Int
+  /// ISO 4217: the company's currency.
+  currency          String   @default("EUR")
+  /// When it was posted: the date the period lock reads (Europe/Rome).
+  postedAt          DateTime @db.Timestamptz(3)
+  /// A reversal: the entry it takes back (once), and why.
+  reversalOfId      String?  @db.Uuid
+  reason            String?
+  /// One entry per source event (e.g. `cogs:shipment-line:<id>`), unique in the tenant: a repeat is refused.
+  idempotencyKey    String
+  createdAt         DateTime @default(now()) @db.Timestamptz(3)
+  createdById       String?  @db.Uuid
+
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and the keys.
+  shipmentLine ShipmentLine?      @relation(fields: [tenantId, siteId, shipmentLineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  invoiceLine  InvoiceLine?       @relation(fields: [tenantId, partyId, invoiceLineId], references: [tenantId, buyerPartyId, id], onDelete: Restrict, onUpdate: Restrict)
+  stockMove    StockMove?         @relation("CostOfSalesEntryStockMove", fields: [tenantId, siteId, stockMoveId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  reversalOf   CostOfSalesEntry?  @relation("CostOfSalesEntryReversal", fields: [tenantId, reversalOfId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  reversals    CostOfSalesEntry[] @relation("CostOfSalesEntryReversal")
+
+  @@unique([tenantId, idempotencyKey])
+  // The target of the reversals' reference.
+  @@unique([tenantId, id])
+  @@index([tenantId, companyId, postedAt])
+  @@index([tenantId, shipmentLineId])
+  @@index([tenantId, invoiceLineId])
+}
+
+/// How a landed cost is spread over the lots (FIN-044).
+enum LandedCostBasis {
+  /// By the lots' purchase value.
+  VALUE
+  /// By the lots' weight.
+  WEIGHT
+  /// By the lots' quantity in their base unit.
+  QUANTITY
+}
+
+enum LandedCostStatus {
+  /// Being prepared: its shares are written, changed and removed.
+  DRAFT
+  /// Posted: its shares add up to its amount; frozen.
+  POSTED
+  /// Taken back, once, with why.
+  REVERSED
+}
+
+/// A supplier invoice charge line (freight, duty, packaging …) landed on the lots it brought (FIN-044; SCM-126's receipt
+/// extra costs feed it): its basis, its amount (the line's net amount, above 0) and the shares over the lots. Prepared as
+/// a DRAFT, POSTED once its shares add up to the amount (only while the company's switch is on), REVERSED once with a
+/// reason. One POSTED allocation per charge line. Only a DRAFT is deleted (its shares first).
+model LandedCostAllocation {
+  id                    String           @id @db.Uuid
+  tenantId              String           @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The invoice's company and supplier.
+  companyId             String           @db.Uuid
+  partyId               String           @db.Uuid
+  /// The CHARGE line of the supplier invoice.
+  supplierInvoiceLineId String           @db.Uuid
+  basis                 LandedCostBasis
+  /// Minor units: the charge line's net amount, above 0.
+  /// @grain cost
+  amount                Int
+  /// ISO 4217: the company's currency.
+  currency              String           @default("EUR")
+  status                LandedCostStatus @default(DRAFT)
+  /// Set exactly from POSTED on: when (the date the period lock reads, Europe/Rome) and by whom.
+  postedAt              DateTime?        @db.Timestamptz(3)
+  postedById            String?          @db.Uuid
+  /// Set exactly when REVERSED: when, by whom and why.
+  reversedAt            DateTime?        @db.Timestamptz(3)
+  reversedById          String?          @db.Uuid
+  reverseReason         String?
+  note                  String?
+  version               Int              @default(1)
+  createdAt             DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime         @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById           String?          @db.Uuid
+
+  supplierInvoiceLine SupplierInvoiceLine @relation(fields: [tenantId, partyId, supplierInvoiceLineId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  shares              LandedCostShare[]
+
+  // One POSTED allocation per charge line: the partial unique LandedCostAllocation_one_posted of the guards migration.
+  // The target of the shares' reference.
+  @@unique([tenantId, id])
+  @@index([tenantId, supplierInvoiceLineId])
+  @@index([tenantId, companyId, status])
+}
+
+/// One lot's share of a landed cost (FIN-044): the lot (of the allocation's company, received, ours: a customer's own lot
+/// is never valued), its figure on the allocation's basis (its value, weight or quantity, above 0) and its amount (0 or
+/// more). One per allocation and lot (`key`). Written, changed and removed only while its allocation is a DRAFT.
+model LandedCostShare {
+  id           String   @id @db.Uuid
+  tenantId     String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  allocationId String   @db.Uuid
+  /// The lot, its site and item.
+  siteId       String   @db.Uuid
+  itemId       String   @db.Uuid
+  lotId        String   @db.Uuid
+  /// `share:<allocationId>:<lotId>`, unique in the tenant: one share per allocation and lot.
+  key          String
+  /// The lot's figure on the basis: its value in minor units (VALUE), kilograms (WEIGHT) or base units (QUANTITY).
+  /// @grain cost
+  basisAmount  Decimal  @db.Decimal(18, 4)
+  /// Minor units, 0 or more; the shares of a POSTED allocation add up to its amount.
+  /// @grain cost
+  amount       Int
+  version      Int      @default(1)
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById  String?  @db.Uuid
+
+  allocation LandedCostAllocation @relation(fields: [tenantId, allocationId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  lot        Lot                  @relation("LandedCostShareLot", fields: [tenantId, siteId, itemId, lotId], references: [tenantId, siteId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, key])
+  @@index([tenantId, allocationId])
+  @@index([tenantId, lotId])
+}

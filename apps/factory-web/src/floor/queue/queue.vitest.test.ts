@@ -90,7 +90,7 @@ describe("the tablet's own label numbers (DEVICE blocks)", () => {
   it('numbers offline only the labels of actions the person may do', () => {
     expect(numberKindsOf(['floor.work', 'production.bundles'])).toEqual(['BUNDLE'])
     expect(numberKindsOf(['floor.work', 'production.scan'])).toEqual([])
-    expect([heldWorkOf('warehouse'), heldWorkOf('inspection'), heldWorkOf('packing'), heldWorkOf('cutting'), heldWorkOf('sewing')]).toEqual(['receive', 'inspect', 'serials', null, null])
+    expect([heldWorkOf('warehouse'), heldWorkOf('inspection'), heldWorkOf('packing'), heldWorkOf('cutting'), heldWorkOf('sewing')]).toEqual(['receive', 'inspect', 'pack', null, null])
   })
 })
 

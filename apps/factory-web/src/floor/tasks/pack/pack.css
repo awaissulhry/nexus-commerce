@@ -29,13 +29,6 @@
   justify-content: flex-end;
 }
 
-/* ── "Put the rest" buttons: one per size still out of a carton ──────────────────────────────────────────────────── */
-.fw-pack-rest {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--nds-space-10);
-}
-
 /* ── what packing still needs ────────────────────────────────────────────────────────────────────────────────────── */
 .fw-pack-left {
   display: flex;
@@ -47,7 +40,7 @@
   font-size: var(--nds-density-font-body);
 }
 
-/* ── the size grid: planned vs packed (stand-in for SizeGridView at floor density) ─────────────────────────────────── */
+/* ── the size grid: packed of ordered (carton/view/PackSizeGrid, a stand-in for SizeGridView at floor density) ──────── */
 .fw-pack-grid {
   width: 100%;
   border-collapse: collapse;

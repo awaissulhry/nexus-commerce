@@ -99,6 +99,7 @@
     "Inquiry": "Inquiry",
     "ServiceCase": "Service case",
     "ProductSafetyReport": "Product-safety report",
+    "TransferOrder": "Transfer",
     "other": "Record"
   },
   "chip": {
@@ -148,6 +149,7 @@
     "Inquiry": "Inquiries",
     "ServiceCase": "Service cases",
     "ProductSafetyReport": "Product-safety reports",
+    "TransferOrder": "Transfers",
     "other": "Other records"
   },
   "status": {

@@ -1,0 +1,269 @@
+{
+  "gate": {
+    "held": "In attesa ({reason}): la scansione si ferma finché l'ufficio non sblocca la spedizione.",
+    "reason": {
+      "CREDIT": "fido",
+      "DEPOSIT": "l'acconto non è pagato",
+      "BALANCE_UNPAID": "il saldo non è pagato",
+      "QUALITY": "qualità",
+      "CUSTOMER_REQUEST": "il cliente ha chiesto di aspettare",
+      "OTHER": "un altro motivo"
+    }
+  },
+  "scan": {
+    "label": "Scansiona un capo nel cartone",
+    "into": "Va nel cartone {seq}.",
+    "new": "La prima scansione apre un cartone nuovo.",
+    "out": "Il prossimo capo scansionato esce dal cartone {seq}.",
+    "held": "La scansione si ferma mentre la spedizione è in attesa."
+  },
+  "flash": {
+    "in": "{cell} nel cartone {seq} · {packed} di {ordered}",
+    "inNew": "{cell} nel cartone {seq}, un cartone nuovo · {packed} di {ordered}",
+    "out": "{cell} fuori dal cartone {seq}",
+    "outReopened": "{cell} fuori dal cartone {seq}: il cartone è di nuovo aperto",
+    "kept": "Salvato su questo tablet: va nel cartone aperto quando torna la rete.",
+    "chooseSize": "Questa etichetta di lotto non dice la taglia: tocca la taglia nella griglia.",
+    "chooseNone": "Questa etichetta di lotto non dice la taglia, e del suo lotto non resta niente da imballare.",
+    "cartonLabel": "Questa è l'etichetta del cartone {seq}: scansiona i capi.",
+    "needsNetwork": "Togliere un capo serve la rete: aspetta che torni."
+  },
+  "refusal": {
+    "UNKNOWN_CODE": "Non è un'etichetta di un capo di questa fabbrica. Controlla l'etichetta.",
+    "WRONG_BATCH": "Questo lotto non è su questa spedizione. Metti da parte il capo.",
+    "WRONG_STYLE": "Modello sbagliato: non è su questa spedizione. Mettilo da parte.",
+    "WRONG_COLOUR": "Colore sbagliato: questo colore non è su questa spedizione. Mettilo da parte.",
+    "WRONG_SIZE": "Taglia sbagliata: questa taglia non è su questa spedizione. Mettilo da parte.",
+    "EXTRA_PIECE": "Pezzo in più: tutti i capi di questa taglia sono già in un cartone. Mettilo da parte.",
+    "SERIAL_NEEDED": "Questo modello si traccia per seriale: scansiona l'etichetta seriale del capo.",
+    "SIZE_NEEDED": "Questa etichetta di lotto non dice la taglia: tocca la taglia nella griglia.",
+    "NOT_RELEASED": "Non ancora rilasciato dalla qualità: resta fuori dal cartone.",
+    "NOT_FOR_ORDER": "Un campione fatto per nessun ordine: non parte con la spedizione di un ordine.",
+    "OTHER_SHIPMENT": "Già imballato in un'altra spedizione.",
+    "ALREADY_PACKED": "Già in un cartone di questa spedizione.",
+    "NOT_IN_CARTON": "Questo capo non è in questo cartone.",
+    "ON_HOLD": "La spedizione è in attesa: niente entra nei suoi cartoni finché l'ufficio non la sblocca.",
+    "QUALITY_HOLD": "In blocco qualità: resta fuori dal cartone.",
+    "NOT_DRAFT": "La spedizione è imballata: disimballala per cambiare i cartoni.",
+    "CARTON_CLOSED": "Questo cartone è chiuso: scansiona in un cartone aperto, o togli un capo per riaprirlo.",
+    "CARTON_LABELLED": "Questo cartone ha l'etichetta del corriere: i suoi capi restano finché l'ufficio non annulla l'etichetta.",
+    "TOO_MANY_CARTONS": "Una spedizione ha al massimo 99 cartoni.",
+    "EMPTY_CARTON": "Questo cartone è vuoto: scansiona prima i suoi capi.",
+    "NOT_SCANNED": "Nel cartone ci sono capi non scansionati: scansionali, o toglili.",
+    "PACKAGING_NEEDED": "Scegli in cosa è imballato il cartone.",
+    "PACKAGING_NOT_PARCEL": "Un collo si imballa in un cartone, una scatola o un pallet.",
+    "PACKAGING_OFF": "Quell'imballo è disattivato: scegline un altro.",
+    "other": "L'ufficio l'ha rifiutato."
+  },
+  "grid": {
+    "title": "Imballati {packed} di {ordered}",
+    "caption": "Capi per modello, colore e taglia: imballati su ordinati",
+    "style": "Modello · colore",
+    "cell": "{packed}/{ordered}",
+    "cellName": "{cell}: imballati {packed} di {ordered}",
+    "choose": "{cell}: scegli questa taglia (imballati {packed} di {ordered})",
+    "serials": "per seriale"
+  },
+  "carton": {
+    "type": "Cartone",
+    "current": "Le scansioni vanno qui",
+    "numbered": "Cartone {n} di {of}",
+    "open": "Cartone {seq} · aperto",
+    "garments": "capi",
+    "state": {
+      "open": "Aperto",
+      "closed": "Chiuso",
+      "labelled": "Etichetta del corriere applicata",
+      "marksDue": "Etichetta collo da ristampare"
+    },
+    "line": "{cell} × {count}",
+    "lineBatch": "{cell} × {count} · lotto {batch}",
+    "serials_one": "{count} seriale",
+    "serials_other": "{count} seriali",
+    "empty": "Vuoto",
+    "packaging": "Imballato in",
+    "noPackaging": "Non ancora scelto",
+    "weight": "Peso",
+    "kg": "{weight} kg",
+    "grossNet": "{gross} kg lordi · {net} kg netti",
+    "notWeighed": "Non pesato",
+    "close": "Chiudi il cartone {seq}",
+    "weigh": "Pesa il cartone {seq}",
+    "takeOut": "Togli un capo",
+    "takeOutStop": "Smetti di togliere",
+    "remove": "Togli il cartone vuoto",
+    "none": "Nessun cartone aperto: la prossima scansione ne apre uno.",
+    "list_one": "{count} cartone",
+    "list_other": "{count} cartoni",
+    "listEmpty": "Ancora nessun cartone."
+  },
+  "kind": {
+    "CARTON": "Cartone",
+    "BOX": "Scatola",
+    "PALLET": "Pallet",
+    "POLYBAG": "Busta",
+    "HANGER": "Gruccia"
+  },
+  "left": {
+    "title": "Ancora da fare",
+    "noLines": "Nessun capo su questa spedizione: li aggiunge l'ufficio.",
+    "toScan_one": "{count} capo ancora da scansionare",
+    "toScan_other": "{count} capi ancora da scansionare",
+    "serials": "Seriali scansionati prima del loro cartone: scansiona di nuovo quei seriali nel loro cartone.",
+    "open": "Chiudi il cartone {cartons}",
+    "unweighed": "Pesa il cartone {cartons}",
+    "empty": "Il cartone {cartons} è vuoto: toglilo",
+    "marks": "Ristampa l'etichetta collo del cartone {cartons}: il numero dei cartoni è cambiato",
+    "none": "Ogni capo è scansionato e ogni cartone chiuso e pesato: la spedizione si può imballare."
+  },
+  "main": {
+    "close": "Chiudi il cartone {seq}",
+    "marks": "Ristampa le etichette collo",
+    "packed": "Imballata",
+    "held": {
+      "scan": "Scansiona prima un capo",
+      "left": "Non è ancora tutto imballato: vedi Ancora da fare",
+      "hold": "La spedizione è in attesa"
+    }
+  },
+  "close": {
+    "title": "Chiudi il cartone {seq}",
+    "lead": "Scegli in cosa è imballato, scrivi il peso: chiudendolo si salva il contenuto e si stampa la sua etichetta collo.",
+    "packaging": "Imballato in",
+    "suggested": "Consigliato",
+    "inner": "{l} × {w} × {h} cm",
+    "upTo": "fino a {weight} kg",
+    "weight": "Peso del cartone {seq}",
+    "unit": "kg",
+    "separator": "Virgola decimale",
+    "empty": "Scrivi il peso",
+    "range": "Da 0,01 kg",
+    "confirm": "Chiudi il cartone e stampa l'etichetta collo",
+    "cancel": "Torna al cartone",
+    "overweight": "Più pesante di quanto regge questo imballo (fino a {weight} kg): controlla il peso, o scegline uno più grande.",
+    "held": {
+      "noPackaging": "Nessun imballo impostato: l'ufficio aggiunge i cartoni nelle impostazioni di spedizione.",
+      "packaging": "Scegli in cosa è imballato",
+      "weight": "Scrivi il peso"
+    }
+  },
+  "marks": {
+    "closed": "Cartone {n} di {of} chiuso · etichetta collo inviata alla stampante",
+    "closedNot": "Cartone {n} di {of} chiuso · la sua etichetta collo non è stata stampata",
+    "overweight": "Più pesante di quanto regge il suo imballo: controlla il cartone.",
+    "printed": "Etichette collo del cartone {cartons} inviate alla stampante",
+    "problem": {
+      "validation_failed": "La stampante di etichette della postazione non può stamparla (non è impostata, o le etichette sono troppo piccole). Stampala in PDF qui.",
+      "invalid_state": "La stampante di etichette ora non prende lavori. Stampala in PDF qui, o più tardi.",
+      "forbidden": "Il tuo ruolo qui non stampa etichette. Chiedi al tuo capoturno.",
+      "conflict": "Un cartone è cambiato mentre si preparava l'etichetta: stampala di nuovo.",
+      "other": "L'etichetta collo non è stata stampata. Stampala di nuovo, o in PDF qui."
+    },
+    "again": "Ristampa l'etichetta collo",
+    "pdf": "Etichetta collo in PDF",
+    "pdfTitle": "Etichette collo della spedizione {number}",
+    "pdfPrint": "Stampa da questo tablet",
+    "pdfClose": "Chiudi il PDF",
+    "pdfLoading": "Preparo le etichette collo…",
+    "preview": "Etichetta collo del cartone {n} di {of}",
+    "previewNote": "L'etichetta stampa anche l'indirizzo e l'ordine del cliente: questo tablet non li mostra.",
+    "label": {
+      "carton": "Collo {n} di {of}",
+      "style": "Modello",
+      "sizes": "Taglie",
+      "garments": "Capi",
+      "batch": "Lotto"
+    },
+    "barcode": "Codice a barre {code}",
+    "job": {
+      "QUEUED": "In coda",
+      "SENT": "Inviata alla stampante",
+      "PRINTED": "Stampata",
+      "FAILED": "Non stampata"
+    },
+    "retry": "Stampa di nuovo"
+  },
+  "kept": {
+    "title_one": "{count} scansione salvata su questo tablet",
+    "title_other": "{count} scansioni salvate su questo tablet",
+    "lead": "Vanno nel cartone aperto quando torna la rete; la griglia le conta allora.",
+    "refusedTitle_one": "{count} scansione rifiutata all'invio",
+    "refusedTitle_other": "{count} scansioni rifiutate all'invio",
+    "refused": "{code}: {words}",
+    "refusedLead": "Quei capi non sono in un cartone. Le trovi in Da inviare."
+  },
+  "done": {
+    "title": "Spedizione {number} imballata",
+    "line_one": "{count} cartone · {labels}",
+    "line_other": "{count} cartoni · {labels}",
+    "labels": {
+      "printed": "etichette stampate",
+      "printing": "etichette inviate alla stampante",
+      "failed": "un'etichetta non è stata stampata",
+      "ready": "etichette non ancora stampate",
+      "office": "le etichette le compra l'ufficio",
+      "noPrinter": "le etichette le stampa l'ufficio",
+      "noRight": "il tuo ruolo non stampa le etichette",
+      "notNeeded": "nessuna etichetta del corriere"
+    },
+    "facts": {
+      "cartons": "Cartoni",
+      "marks": "Etichette collo",
+      "labels": "Etichette del corriere",
+      "documents": "DDT e packing list"
+    },
+    "marks": {
+      "printed_one": "Stampata sul cartone",
+      "printed_other": "Stampate su tutti i {count} cartoni",
+      "due": "Da ristampare: apri la spedizione"
+    },
+    "labelsState": {
+      "printed": "Stampate",
+      "printing": "Inviate alla stampante",
+      "failed": "Non stampate: Riprova è nei documenti",
+      "ready": "Non ancora stampate",
+      "office": "Le compra l'ufficio",
+      "noPrinter": "Le stampa l'ufficio (qui non c'è una stampante di etichette)",
+      "noRight": "Il tuo ruolo non le stampa"
+    },
+    "transport": {
+      "SENDER": "Nostro furgone: nessuna etichetta del corriere",
+      "RECIPIENT": "Ritira il cliente: nessuna etichetta del corriere",
+      "CARRIER": "Nessuna etichetta del corriere necessaria"
+    },
+    "documentsState": {
+      "printed": "Stampati",
+      "printing": "Inviati alla stampante",
+      "failed": "Non stampati: Riprova è nei documenti",
+      "ready": "Non ancora stampati",
+      "office": "Il DDT lo emette l'ufficio",
+      "noPrinter": "Li stampa l'ufficio (qui non c'è una stampante per documenti)",
+      "pdfMissing": "L'ufficio ristampa il DDT"
+    },
+    "next": "Prossima spedizione"
+  },
+  "offline": "Nessuna rete: le scansioni restano salvate sul tablet. Chiudere un cartone, togliere un capo, stampare e Imballata aspettano la rete.",
+  "pad": {
+    "minus": "Meno",
+    "plus": "Più",
+    "clear": "Cancella",
+    "back": "Togli una cifra"
+  },
+  "scanCard": {
+    "hold": "In attesa ({reason}): niente entra nei suoi cartoni finché l'ufficio non sblocca la spedizione.",
+    "shipment": "Spedizione",
+    "carton": "Cartone",
+    "open": "Cartone {seq} · aperto (ora {count} cartoni)",
+    "garments": "Capi",
+    "contents": "Contiene",
+    "marks": "Etichetta collo",
+    "marksState": {
+      "open": "Non ancora: si stampa quando il cartone si chiude",
+      "closed": "Stampata, aggiornata",
+      "marksDue": "Da ristampare: il numero dei cartoni è cambiato",
+      "labelled": "Stampata; c'è l'etichetta del corriere"
+    },
+    "openInPack": "Apri la spedizione in Imballa",
+    "shipped": "Questa spedizione ha lasciato il banco."
+  }
+}

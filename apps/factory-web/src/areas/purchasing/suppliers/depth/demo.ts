@@ -92,6 +92,7 @@ const doc = (n: number, over: Partial<Vault['documents'][number]>): Vault['docum
   uploadId: null,
   articleCodes: [],
   addedAt: at('2026-03-04'),
+  version: 1,
   ...over,
 })
 

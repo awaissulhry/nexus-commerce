@@ -50,6 +50,8 @@ import { MoveHorizontal, Scaling } from 'lucide-react'
 import { Inbox } from 'lucide-react'
 // B-W2b-353: a service case's icon (as its navigation row).
 import { LifeBuoy } from 'lucide-react'
+// B-W2b-383: a transfer's icon (as its navigation row).
+import { Route } from 'lucide-react'
 
 /** The icon of a record type in the search's rows (the palette's Records group, the All results page). */
 const ICONS: Readonly<Record<string, LucideIcon>> = Object.freeze({
@@ -109,6 +111,8 @@ const ICONS: Readonly<Record<string, LucideIcon>> = Object.freeze({
   ServiceCase: LifeBuoy,
   // B-W2b-361: as the product-safety reports list.
   ProductSafetyReport: ShieldAlert,
+  // B-W2b-383: as the transfers list.
+  TransferOrder: Route,
 })
 
 export function RecordTypeIcon({ type, size = 16 }: { type: string; size?: number }) {
