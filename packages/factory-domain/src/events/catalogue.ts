@@ -280,6 +280,8 @@ import { events as shippingDocuments } from '../shipping-documents/events'
 import { events as taxRules } from '../tax-rules/events'
 // B-W2b-393: bank statements, matching and write-offs (bank_statement.imported, bank_line.suggestions_changed, bank_match.accepted, .reversed, payment.written_off, .write_off_reversed, write_off_tolerance.changed).
 import { events as paymentsBank } from '../payments-bank/events'
+// B-W2b-396: invoicing in depth (invoice_run.changed, deposit_cancellation_rule.changed, deposit_cancellation.decided, fee_credit.changed).
+import { events as invoicingDepth } from '../invoicing-depth/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -626,6 +628,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...taxRules,
   // B-W2b-393
   ...paymentsBank,
+  // B-W2b-396
+  ...invoicingDepth,
 ] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */

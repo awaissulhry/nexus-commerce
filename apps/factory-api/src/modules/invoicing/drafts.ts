@@ -19,6 +19,8 @@ import { orderTermsSource, sourceOfPayment, storedSourceOf, termsJsonOf, type Te
 import { assertMay, invoiceDetail, officeContextOf, officeInvoice, readInvoice, type InvoiceDetail, type InvoiceRow } from './store'
 // B-W2b-392: tax rules as data on every draft.
 import { taxedLines } from './tax-codes/apply'
+// B-W2b-396 (FIN-063): a new draft is written in its customer's invoice language (PLT-131).
+import { draftLanguageFor } from './language-currency/store'
 
 /**
  * Draft invoices (B-W1-28 invoice core; FIN-054, FIN-061, FIN-098, FIN-099): create one (generic TD01/TD24, or a TD02
@@ -305,6 +307,8 @@ export async function insertDraft(
       depositRequestId: draft.depositRequestId,
       creditOfId: draft.creditOfId ?? null,
       internalNote: draft.internalNote,
+      // B-W2b-396 (FIN-063): the invoices contact's language, else the customer's.
+      language: (await draftLanguageFor(tools.tx, draft.buyerPartyId)).language,
       createdById: actorIdOf(tools),
     },
     select: { id: true },
@@ -332,12 +336,15 @@ export async function createDraft(caller: CommandCaller, body: CreateDraftInput,
     const [company, party] = [await client.company.findUnique({ where: { id: body.companyId }, select: { id: true, currency: true } }), await client.party.findUnique({ where: { id: body.buyerPartyId }, select: { id: true, companyId: true, status: true } })]
     if (!company) throw new NotFoundError('Company not found.')
     if (!party || (party.companyId !== null && party.companyId !== company.id)) throw new NotFoundError('Customer not found.')
+    // B-W2b-396 (FIN-063): an invoice of an order bills in the order's currency.
+    let currency = company.currency
     if (body.salesOrderId) {
-      const order = isUuid(body.salesOrderId) ? await client.salesOrder.findUnique({ where: { id: body.salesOrderId }, select: { companyId: true, partyId: true } }) : null
+      const order = isUuid(body.salesOrderId) ? await client.salesOrder.findUnique({ where: { id: body.salesOrderId }, select: { companyId: true, partyId: true, currency: true } }) : null
       if (!order || order.companyId !== body.companyId || order.partyId !== body.buyerPartyId) throw new ValidationError('Not an order of this customer and company.', [{ path: 'body/salesOrderId', message: 'Expected an order of this customer and company.' }])
+      currency = order.currency
     }
     const facts = await partyFacts(client, body.buyerPartyId, businessDate(serverClock.now()), serverClock.now())
-    return { currency: company.currency, profile: facts?.profile ?? null }
+    return { currency, profile: facts?.profile ?? null }
   })
   const lines = prepareLines(body.lines, plan.profile)
   const { result } = await command(caller, { name: 'invoices.createDraft', idempotencyKey, input: body }, async (tools) => {

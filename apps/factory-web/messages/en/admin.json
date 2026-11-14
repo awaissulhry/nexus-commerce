@@ -1887,6 +1887,7 @@
     "currencies_manage": "Add or switch off a document currency; keep a rate of a day by hand; switch the daily ECB rates on or off",
     "invoices_tax_manage": "Keep the company's tax codes, the customers' declarations of intent and the stamp duty of each quarter",
     "invoices_tax_switch": "Switch the company's tax duties on or off and record the accountant's confirmation of a tax code",
+    "invoices_depositRules_manage": "Keep the company's rules for the deposit when an order is cancelled: what is kept or paid back and the document that follows",
     "quality_defects_view": "See the defect library and the disposition codes",
     "quality_defects_manage": "Keep the defect library and the disposition codes",
     "quality_holds_view": "See what is on hold",

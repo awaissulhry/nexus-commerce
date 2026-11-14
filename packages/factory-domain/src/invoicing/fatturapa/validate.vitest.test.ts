@@ -148,9 +148,12 @@ describe('amounts and text', () => {
     expect(buildFatturaPa(dashed).xml).toContain('Giacca moto in pelle - rosso, taglia 52')
   })
 
-  it('refuses an invoice number without a digit (SDI 00425) and a non-EUR currency', () => {
+  it('refuses an invoice number without a digit (SDI 00425) and a currency an e-invoice cannot print (B-W2b-396: USD builds)', () => {
     expect(issuesOf({ ...TD01_IT_B2B, number: 'ABC' })).toEqual(['number NUMBER_WITHOUT_DIGIT'])
-    expect(issuesOf({ ...TD01_IT_B2B, currency: 'USD' as 'EUR' })).toEqual(['currency CURRENCY_NOT_BUILT'])
+    expect(issuesOf({ ...TD01_IT_B2B, currency: 'KWD' })).toEqual(['currency CURRENCY_NOT_BUILT'])
+    expect(issuesOf({ ...TD01_IT_B2B, currency: 'usd' })).toEqual(['currency CURRENCY_INVALID'])
+    expect(issuesOf({ ...TD01_IT_B2B, currency: 'USD' })).toEqual([])
+    expect(buildFatturaPa({ ...TD01_IT_B2B, currency: 'USD' }).xml).toContain('<Divisa>USD</Divisa>')
   })
 
   it('refuses a gross line whose derived unit price cannot multiply back within a cent (SDI 00423)', () => {

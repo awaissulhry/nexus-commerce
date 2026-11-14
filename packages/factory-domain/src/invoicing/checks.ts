@@ -4,6 +4,7 @@ import type { ViesState } from '../parties/vies'
 import type { PartyTaxMode } from '../parties/tax'
 import type { FatturaPaIssue } from './fatturapa/types'
 import { amountText, DOC_TYPE_WORDS, type InvoiceDocType, type InvoiceTotals, type StoredTotals, totalsMatch } from './invoices'
+import { documentCurrencyProblem } from './language-currency/language-currency'
 
 /**
  * The checks before an invoice is issued (A2 SCR-081 "Before you issue"; FIN-085 pre-check; FIN-098, FIN-099; art. 41
@@ -19,7 +20,8 @@ import { amountText, DOC_TYPE_WORDS, type InvoiceDocType, type InvoiceTotals, ty
  *   SELLER / BUYER                   the company's or the customer's data FatturaPA needs
  *   FATTURAPA                        what the FatturaPA builder refuses (SDI's own rules, offline)
  *   DEPOSIT_*                        a TD02's deposit request: OPEN or PAID, its currency, never invoiced beyond its amount
- *   CURRENCY                         W1 invoices in euro only
+ *   CURRENCY                         B-W2b-396 (FIN-063; W1 invoiced in euro only): a currency an e-invoice can print
+ *                                    (ISO 4217, at most two decimals); its euro rate is the issue's (NO_RATE)
  */
 
 export interface IssueProblem {
@@ -68,7 +70,8 @@ export function issueProblems(facts: IssueFacts): IssueProblem[] {
     add('NO_VIES_PROOF', 'party/vies', `A sale to a business in another EU state is zero-rated only with a current VIES proof (art. 41 DL 331/1993). ${facts.vies.message} Run the VIES check, or charge Italian VAT on the lines.`)
   }
 
-  if (facts.currency !== 'EUR') add('CURRENCY', 'currency', `Invoices are issued in euro; this one is in ${facts.currency}.`)
+  const currencyProblem = documentCurrencyProblem(facts.currency)
+  if (currencyProblem) add('CURRENCY', 'currency', currencyProblem)
   if (facts.stored.lines.length === 0) add('NO_LINES', 'lines', `The ${words} has no line: add what it bills.`)
   for (const issue of facts.lineIssues) add('LINE', issue.path, issue.message)
   if (facts.computed !== null && facts.stored.lines.length > 0 && !totalsMatch(facts.stored, facts.computed)) {

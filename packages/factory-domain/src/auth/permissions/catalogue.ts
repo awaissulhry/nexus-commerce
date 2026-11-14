@@ -373,6 +373,8 @@ import { TAX_RULES_DEFINITIONS, TAX_RULES_PERMISSIONS } from '../../invoicing/ta
 // B-W2b-393: bank statements, matching and write-offs (payments.bank.view | import | match, payments.writeOff).
 import { PAYMENTS_BANK_DEFINITIONS, PAYMENTS_BANK_PERMISSIONS } from '../../payments/bank/permissions'
 import { WRITE_OFF_DEFINITIONS, WRITE_OFF_PERMISSIONS } from '../../payments/write-offs/permissions'
+// B-W2b-396: invoicing in depth (invoices.depositRules.manage).
+import { DEPOSIT_RULES_DEFINITIONS, DEPOSIT_RULES_PERMISSIONS } from '../../invoicing/cancellation/permissions'
 
 /**
  * Every permission of the factory, assembled (feature PLT-029). A module that adds routes declares its permissions
@@ -1036,6 +1038,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   // B-W2b-393: bank statements, matching and write-offs (area `payments`).
   PAYMENTS_BANK_DEFINITIONS,
   WRITE_OFF_DEFINITIONS,
+  // B-W2b-396: invoicing in depth (area `invoices`).
+  DEPOSIT_RULES_DEFINITIONS,
 ])
 
 /** The area of the permissions only floor roles hold (and floor roles hold no other, but FLOOR_SHARED_PERMISSIONS). */
@@ -1412,6 +1416,8 @@ for (const name of CURRENCY_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(nam
 for (const name of TAX_RULES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-393: bank statements, matching and write-offs.
 for (const name of [...PAYMENTS_BANK_PERMISSIONS, ...WRITE_OFF_PERMISSIONS]) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-396: invoicing in depth.
+for (const name of DEPOSIT_RULES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

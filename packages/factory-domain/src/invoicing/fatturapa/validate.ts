@@ -1,4 +1,5 @@
 import { Dec, parseDecimal, ZERO, ONE_CENT, type Decimal } from '../../tax/decimal'
+import { minorPlaces } from '../../core/money'
 import { isEuMemberState } from '../../tax/eu'
 import { isNaturaCode, RETIRED_NATURA_CODES } from '../../tax/natura'
 import { DEFAULT_TAX_RULES_CONFIG, type TaxRulesConfig } from '../../tax/rules'
@@ -69,6 +70,8 @@ export interface NormalizedLine {
 
 export interface NormalizedInvoice {
   readonly documentType: FatturaPaDocumentType
+  /** Divisa (B-W2b-396). */
+  readonly currency: string
   readonly number: string
   readonly date: string
   readonly priceBasis: PriceBasis
@@ -498,9 +501,10 @@ export function validateFatturaPaInput(input: FatturaPaInvoiceInput): {
   if (documentType === null) issues.add('documentType', 'DOCUMENT_TYPE_INVALID', 'must be TD01, TD02, TD04 or TD24')
   const number = documentNumber(issues, 'number', input.number)
   const invoiceDate = date(issues, 'date', input.date)
-  if (input.currency !== undefined && input.currency !== 'EUR') {
-    issues.add('currency', 'CURRENCY_NOT_BUILT', 'only EUR invoices are built')
-  }
+  // B-W2b-396 (FIN-063): any ISO 4217 currency with at most two decimals (FatturaPA amounts carry two).
+  const currency = input.currency ?? 'EUR'
+  if (!/^[A-Z]{3}$/.test(currency)) issues.add('currency', 'CURRENCY_INVALID', 'must be an ISO 4217 code (EUR)')
+  else if (minorPlaces(currency) > 2) issues.add('currency', 'CURRENCY_NOT_BUILT', 'a currency with more than two decimals is not built (amounts print with two)')
   const priceBasis: PriceBasis = input.priceBasis ?? 'NET'
   if (priceBasis !== 'NET' && priceBasis !== 'GROSS') issues.add('priceBasis', 'PRICE_BASIS_INVALID', 'must be NET or GROSS')
   const stampDuty = input.stampDuty ?? 'AUTO'
@@ -838,6 +842,7 @@ export function validateFatturaPaInput(input: FatturaPaInvoiceInput): {
       buyer: buyerResult.party,
       codiceDestinatario: buyerResult.codiceDestinatario,
       pecDestinatario: buyerResult.pecDestinatario,
+      currency,
       lines: [...goods, ...deductions],
       ddts,
       purchaseOrders,

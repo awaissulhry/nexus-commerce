@@ -22,6 +22,9 @@ import { lockInvoicing } from './locks'
 import { depositInvoicesOf, freightBilledOf, freightOf, invoicedOf, orderPrices, presetsOf, readDdts, shippedOf, type DdtRow } from './store'
 // B-W2b-330 (SAL-181): the orders' fees, invoiced once.
 import { feeLinesFor } from '../../sales/price-waterfall/fee-invoicing'
+// B-W2b-396: the orders' currency (FIN-063); priced changes' fees invoiced once, fees on a DDT (VI1:01, VI1:02).
+import { invoiceCurrencyOf } from '@nexus/factory-domain/invoicing/language-currency/language-currency'
+import { changeFeeLinesFor, onFirstDdt } from './fees'
 
 /**
  * The draft invoice of shipped goods (B-W1-51; FIN-054, FIN-055, FIN-059, FIN-078, FIN-098; A2 SCR-080 "Invoice shipped
@@ -69,6 +72,8 @@ export interface FromDdtsAnswer {
   readonly freight: { readonly ddtId: string; readonly number: string; readonly reason: string }[]
   /** B-W2b-330 (SAL-181): the orders' fees not billed here (another invoice bills them), and why. */
   readonly fees?: { readonly salesOrderLineId: string; readonly reason: string }[]
+  /** B-W2b-396 (VI1:01): the priced changes' fees not billed here, and why. */
+  readonly changeFees?: { readonly amendmentId: string; readonly reason: string }[]
 }
 
 const blankToNull = (value: string | null | undefined): string | null => (value === undefined || value === null || value.trim() === '' ? null : value.trim())
@@ -166,6 +171,10 @@ export async function draftFromDdtsInCommand(tools: CommandTools, scope: DraftSc
   })
   const goods = draftGoodsLines(sources, prices, vatFor(plan.profile))
   if (goods.problems.length > 0) throw new ConflictError(words(goods.problems, 'The shipped goods cannot be priced from their orders.'))
+  // B-W2b-396 (FIN-063): the invoice bills in its orders' one currency (else the company's); several are refused in words.
+  const billing = invoiceCurrencyOf([...prices.values()].map((price) => price.currency), plan.currency)
+  if ('problem' in billing) throw new ConflictError(billing.problem)
+  const currency = billing.currency
 
   // 5. The shipments' freight, once each.
   const freightLines: PreparedLine[] = []
@@ -183,7 +192,7 @@ export async function draftFromDdtsInCommand(tools: CommandTools, scope: DraftSc
         freightLeft.push({ ddtId: ddt.id, number: ddt.number, reason: vat.message })
         continue
       }
-      const made = freightLine(freightOf(ddt), plan.currency, vat)
+      const made = freightLine(freightOf(ddt), currency, vat)
       if ('skipped' in made) freightLeft.push({ ddtId: ddt.id, number: ddt.number, reason: made.skipped })
       else freightLines.push({ core: made.line, salesOrderLineId: null, size: null, ddtId: ddt.id, chargeKind: 'FREIGHT' })
     }
@@ -194,20 +203,24 @@ export async function draftFromDdtsInCommand(tools: CommandTools, scope: DraftSc
   // B-W2b-330 (SAL-181): the orders' fees, once each, with their first invoice of shipped goods (taxed as the goods).
   const fees = await feeLinesFor(tx, tools.context, orderIds, vatFor(plan.profile))
   if (fees.problems.length > 0) throw new ConflictError(words(fees.problems, "The orders' fees cannot be invoiced now."))
-  const goodsTotals = computeInvoiceTotals(goods.lines.map((line) => line.core), 'NET', plan.currency)
+  // B-W2b-396 (VI1:01): the orders' priced changes whose fee the customer accepted, once each, taxed as the goods.
+  const changeFees = await changeFeeLinesFor(tx, tools.context, orderIds, chargeVat(goods.lines.map((line) => line.core.vat), decidedVat(plan.profile, 'GOODS', 'party/taxIdentity')), currency)
+  if (changeFees.problems.length > 0) throw new ConflictError(words(changeFees.problems, "The orders' change fees cannot be invoiced now."))
+  const goodsTotals = computeInvoiceTotals(goods.lines.map((line) => line.core), 'NET', currency)
   const goodsNet = new Map<string, number>()
   goods.lines.forEach((line, index) => {
     const key = treatmentKey(line.core.vat)
     goodsNet.set(key, (goodsNet.get(key) ?? 0) + goodsTotals.lines[index]!.netAmount)
   })
   const deposits = await depositInvoicesOf(tx, { orderIds }, { deductions: 'all', except: null })
-  const deductions = planDeductions(deposits.filter((deposit) => deposit.companyId === scope.companyId), goodsNet, plan.currency)
+  const deductions = planDeductions(deposits.filter((deposit) => deposit.companyId === scope.companyId), goodsNet, currency)
 
   // 7. The draft.
   const lines: PreparedLine[] = [
     ...goods.lines.map((line) => ({ core: line.core, salesOrderLineId: line.salesOrderLineId, size: line.size, ddtId: line.ddtId })),
     ...freightLines,
-    ...fees.lines,
+    // B-W2b-396: with several DDTs a fee or change fee names the first one (FatturaPA: each line names its DDT).
+    ...onFirstDdt([...fees.lines, ...changeFees.lines], [...billed].sort((a, b) => a.date.localeCompare(b.date) || a.number.localeCompare(b.number)).map((ddt) => ddt.id)),
     ...deductions.lines.map((line) => ({ core: line.core, salesOrderLineId: null, size: null, ddtId: null, depositInvoiceId: line.depositInvoiceId })),
   ]
   if (lines.length > MAX_INVOICE_LINES) {
@@ -225,7 +238,7 @@ export async function draftFromDdtsInCommand(tools: CommandTools, scope: DraftSc
       buyerPartyId: scope.partyId,
       docType: choice.docType,
       priceBasis: 'NET',
-      currency: plan.currency,
+      currency,
       salesOrderId,
       depositRequestId: null,
       causale: (body.causale === undefined ? defaultCausale : blankToNull(body.causale))?.slice(0, MAX_CAUSALE) ?? null,
@@ -251,12 +264,13 @@ export async function draftFromDdtsInCommand(tools: CommandTools, scope: DraftSc
       part: body.lines !== undefined,
       freight: freightLines.map((line) => line.ddtId),
       fees: fees.lines.map((line) => line.salesOrderLineId),
+      changeFees: changeFees.lines.map((line) => line.core.itemCode),
       deducted: deductions.lines.map((line) => line.depositInvoiceId),
       notDeducted: deductions.skipped.map((entry) => entry.depositInvoiceId),
     },
   })
   const { problems: _problems, ...shown } = choice
-  return { invoice: await invoiceDetail(tx, (await readInvoice(tx, id))!), choice: { ...shown, allowed: [...choice.allowed] }, deductions: [...deductions.skipped], freight: freightLeft, fees: fees.left }
+  return { invoice: await invoiceDetail(tx, (await readInvoice(tx, id))!), choice: { ...shown, allowed: [...choice.allowed] }, deductions: [...deductions.skipped], freight: freightLeft, fees: fees.left, changeFees: changeFees.left }
 }
 
 /** The DDTs of a request, read before the command, and their customer: one customer and company, else 400. */

@@ -199,8 +199,11 @@ export interface FatturaPaInvoiceInput {
   /** Invoice number (Numero): at most 20 ASCII characters with at least one digit (SDI 00425). */
   readonly number: string
   readonly date: LocalDate
-  /** Only EUR is built. */
-  readonly currency?: 'EUR'
+  /**
+   * Divisa: the ISO 4217 currency of every amount (default EUR). B-W2b-396 (FIN-063): another currency with at most two
+   * decimals (amounts print with two); its euro equivalent is the issuer's words in Causale.
+   */
+  readonly currency?: string
   readonly transmission: {
     /**
      * ProgressivoInvio, also used in the file name: 1 to 5 letters or digits, unique per transmitter. The SDI
