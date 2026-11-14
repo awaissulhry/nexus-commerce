@@ -412,7 +412,7 @@
   },
   "cf": {
     "title": "Campi personalizzati",
-    "hint": "Campi aggiunti senza codice in Amministrazione › Campi e liste.",
+    "hint": "Campi aggiunti senza codice in Sistema › Campi e liste.",
     "loading": "Lettura dei campi personalizzati…",
     "errorTitle": "Non è stato possibile leggere i campi personalizzati",
     "edit": "Modifica",
