@@ -2,6 +2,7 @@ import type { Prisma } from '@nexus/factory-db'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { cutOffOf, isLabelled, type LabelEnvironment, type LabelFacts, type LabelParcel } from '@nexus/factory-domain/shipping/labels/labels'
 import { latestByParcel, trackingPageOf, type TrackingStatus } from '@nexus/factory-domain/shipping/labels/tracking'
+import { isTestLabel } from '@nexus/factory-domain/shipping/test-mode/rules'
 import type { CommandTx } from '../../../core/command'
 import { liveDdtOf } from '../ddt/store'
 import type { ShipmentHeader } from '../store'
@@ -70,7 +71,9 @@ async function recipientOf(db: CommandTx, shipment: Pick<ShipmentHeader, 'partyI
 
 /** Everything a buy needs (the office's client or the command's transaction). */
 export async function readLabelFacts(db: CommandTx, shipment: ShipmentHeader & { integrationAccountId: string | null }, environment: LabelEnvironment) {
-  const settings = await db.shippingSettings.findUnique({ where: { id: shipment.siteId }, select: { senderAddress: true, integrationAccountId: true, labelPrinterId: true } })
+  // B-W2b-390: the site's test mode (LOG-035; no settings: test mode, the default) and a carrier booked by hand (LOG-122).
+  const settings = await db.shippingSettings.findUnique({ where: { id: shipment.siteId }, select: { senderAddress: true, integrationAccountId: true, labelPrinterId: true, testMode: true } })
+  const manual = await db.shipment.findUnique({ where: { id: shipment.id }, select: { manualTrackingNumber: true } })
   const accountId = await carrierAccountIdOf(db, shipment, settings?.integrationAccountId ?? null)
   const account = accountId ? await db.integrationAccount.findUnique({ where: { id: accountId }, select: { id: true, provider: true, companyId: true, mode: true, status: true } }) : null
   const live = await liveDdtOf(db, shipment.id)
@@ -84,6 +87,8 @@ export async function readLabelFacts(db: CommandTx, shipment: ShipmentHeader & {
     parcels,
     account,
     environment,
+    testMode: settings?.testMode ?? true,
+    manualTrackingNumber: manual?.manualTrackingNumber ?? null,
   }
   return { facts, accountId: account?.id ?? null, labelPrinter: printer, parcels }
 }
@@ -204,7 +209,7 @@ export async function labelsView(db: CommandTx, shipment: ShipmentHeader, now: D
   const rows = await readLabelParcels(db, shipment.id)
   const files = await labelFilesOf(db, rows)
   const prints = await printsOf(db, rows)
-  const settings = await db.shippingSettings.findUnique({ where: { id: shipment.siteId }, select: { cutOffTime: true, labelPrinterId: true } })
+  const settings = await db.shippingSettings.findUnique({ where: { id: shipment.siteId }, select: { cutOffTime: true, labelPrinterId: true, testMode: true } })
   const cutOff = cutOffOf(settings?.cutOffTime ?? null, now)
   const parcels = rows.map(labelParcelOf)
   const pageOf = new Map(rows.map((row) => [row.id, trackingPageOf(row.trackingUrl)]))
@@ -221,6 +226,8 @@ export async function labelsView(db: CommandTx, shipment: ShipmentHeader, now: D
       expectedDeliveryAt: shipment.expectedDeliveryAt ? toUtcIso(shipment.expectedDeliveryAt) : null,
     },
     labelPrinterId: settings?.labelPrinterId ?? null,
+    // B-W2b-390 (LOG-035): the site's test mode (the bench's TEST MODE pill; no settings: test mode, the default).
+    testMode: settings?.testMode ?? true,
     cutOff: cutOff ? { time: cutOff.time, at: toUtcIso(cutOff.at), passed: cutOff.passed } : null,
     toLabel: parcels.filter((parcel) => !isLabelled(parcel)).length,
     parcels: parcels.map((parcel) => ({
@@ -231,6 +238,8 @@ export async function labelsView(db: CommandTx, shipment: ShipmentHeader, now: D
       trackingNumber: parcel.trackingNumber,
       trackingUrl: pageOf.get(parcel.id) ?? null,
       labelledAt: parcel.labelledAt ? toUtcIso(parcel.labelledAt) : null,
+      // B-W2b-390 (LOG-035): a TEST label (test mode): never handed to a carrier.
+      test: isTestLabel(parcel.providerId),
       files: files.get(parcel.id) ?? [],
       print: prints.get(parcel.id) ?? null,
     })),

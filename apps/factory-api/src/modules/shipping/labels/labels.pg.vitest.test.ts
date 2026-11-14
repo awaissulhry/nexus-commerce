@@ -176,6 +176,8 @@ beforeAll(async () => {
     [PRINTER, A.tenant, A.companyA, A.siteA1],
   )
   await admin(`UPDATE "ShippingSettings" SET "integrationAccountId" = $1, "labelPrinterId" = $2 WHERE id = $3`, [accountId, PRINTER, A.siteA1])
+  // B-W2b-390: site A1 buys live labels through that account (every site starts in test mode, LOG-035).
+  await admin(`UPDATE "ShippingSettings" SET "testMode" = false, "liveSince" = now(), "liveSetById" = $1 WHERE id = $2`, [newId(), A.siteA1])
 
   redis = testRedis()
   connection = redis.connect()
