@@ -20,6 +20,8 @@ import { paymentTermsOf, purchaseOrdersOf, storedLineOf } from './facts'
 import { invoiceDetail, officeInvoice, readInvoice, readLines, type InvoiceDetail, type Reader } from './store'
 // B-W2b-392: the declaration of intent on the XML.
 import { printedDeclarationOf } from './intent/declarations'
+// B-W2b-396 (FIN-063): the invoice's own language and, in another currency, its euro equivalent in the Causale.
+import { languageAndRateOf, printedCausale } from './language-currency/store'
 
 /**
  * The files of an issued invoice (B-W1-28 steps b and c; FIN-057: the XML is the invoice, the PDF a courtesy copy; DM
@@ -43,10 +45,11 @@ export async function issuedInvoiceOf(db: Reader, invoiceId: string): Promise<{ 
   const deposits = depositIds.length > 0 ? await db.invoice.findMany({ where: { id: { in: depositIds } }, select: { id: true, number: true, issueDate: true } }) : []
   const order = invoice.salesOrderId ? await db.salesOrder.findUnique({ where: { id: invoice.salesOrderId }, select: { number: true, orderDate: true } }) : null
   const credits = invoice.creditOfId ? await db.invoice.findUnique({ where: { id: invoice.creditOfId }, select: { number: true, issueDate: true } }) : null
-  const party = await db.party.findUnique({ where: { id: invoice.buyerPartyId }, select: { language: true } })
+  // B-W2b-396 (FIN-063): the invoice's language (its own; an older invoice's is its customer's), its rate kept at the issue.
+  const printed = (await languageAndRateOf(db, invoice.id))!
   const day = (value: Date): string => value.toISOString().slice(0, 10)
   // B-W2b-374 (XF3:03): the options of the order lines billed, printed on the copy in its language (never in the XML).
-  const options = await orderLinesPrinted(db, lines.flatMap((line) => (line.salesOrderLineId ? [line.salesOrderLineId] : [])), party?.language === 'en' ? 'en' : 'it')
+  const options = await orderLinesPrinted(db, lines.flatMap((line) => (line.salesOrderLineId ? [line.salesOrderLineId] : [])), printed.language === 'en' ? 'en' : 'it')
   const storedLines: StoredLine[] = lines.map((line) => {
     const ddt = ddts.find((entry) => entry.id === line.ddtId)
     const deposit = deposits.find((entry) => entry.id === line.depositInvoiceId)
@@ -72,7 +75,7 @@ export async function issuedInvoiceOf(db: Reader, invoiceId: string): Promise<{ 
     grossTotal: invoice.grossTotal,
     vatSummary: invoice.vatSummary as unknown as IssuedInvoice['vatSummary'],
     stampDutyAmount: invoice.stampDutyAmount,
-    causale: invoice.causale,
+    causale: printedCausale(invoice.causale, invoice, printed.exchangeRate && printed.rateDate ? { exchangeRate: printed.exchangeRate, rateDate: printed.rateDate } : null, printed.language),
     purchaseOrders: purchaseOrdersOf(invoice.documentRefs),
     ddts: ddts.map((ddt) => ({ number: ddt.number, date: day(ddt.documentDate) })),
     credits: credits && credits.number && credits.issueDate ? { number: credits.number, issueDate: day(credits.issueDate) } : null,
@@ -81,7 +84,7 @@ export async function issuedInvoiceOf(db: Reader, invoiceId: string): Promise<{ 
     // B-W2b-392: the declaration of intent printed on its N3.5 lines.
     declarationOfIntent: await printedDeclarationOf(db, invoice.id),
   }
-  return { issued, companyId: invoice.companyId, language: party?.language ?? 'it', xmlFileId: invoice.xmlFileId, pdfFileId: invoice.pdfFileId }
+  return { issued, companyId: invoice.companyId, language: printed.language, xmlFileId: invoice.xmlFileId, pdfFileId: invoice.pdfFileId }
 }
 
 /**

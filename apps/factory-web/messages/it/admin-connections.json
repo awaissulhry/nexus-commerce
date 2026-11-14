@@ -525,8 +525,7 @@
       "title": "Come le risposte trovano il loro record",
       "reply": "Ogni ordine, richiesta d’offerta e ordine d’acquisto riceve un indirizzo di risposta nascosto sul tuo dominio di risposta; la risposta arriva nella conversazione di quel record.",
       "checks": "Una mail entra in una conversazione solo se supera SPF, DKIM e DMARC e il mittente è conosciuto; altrimenti aspetta in Posta da smistare.",
-      "toSort": "Apri Posta da smistare",
-      "capture": "Un indirizzo di raccolta (inoltra o metti in copia qualsiasi mail) arriverà più avanti."
+      "toSort": "Apri Posta da smistare"
     },
     "kind": {
       "CONVERSATION": "Conversazioni",

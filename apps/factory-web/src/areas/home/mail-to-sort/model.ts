@@ -9,6 +9,10 @@
  * match is a `contract` error, never half-read.
  */
 
+// B-W2b-397: team inboxes, the capture address and Create an inquiry on this page.
+import type { CaptureState } from '../mail/capture/model'
+import type { TeamInboxModel } from '../mail/team-inbox/model'
+
 /** email-in/rules.ts INBOUND_STATUSES. */
 export const INBOUND_STATUSES = ['RECEIVED', 'FETCHED', 'MATCHED', 'TRIAGE', 'HELD', 'REJECTED', 'FAILED'] as const
 export type InboundStatus = (typeof INBOUND_STATUSES)[number]
@@ -128,6 +132,14 @@ export interface MailToSortViewModel {
   notice?: { key: string; tone: 'success' | 'info' | 'warning' | 'danger' } | null
   /** The detail shows the mail's remote pictures (the person allowed them). */
   showPictures?: boolean
+  /** B-W2b-397: the team inboxes (their tiles, the open inbox's queue); absent without email.triage over the company. */
+  inboxes?: TeamInboxModel | null
+  /** B-W2b-397: the company's capture address ("Copy capture address"); absent without email.send. */
+  capture?: CaptureState | null
+  /** B-W2b-397: the company's address prefix (`/w/<code>`) for the links of the parts above. */
+  prefix?: string
+  /** B-W2b-397: "Create an inquiry" from a mail is offered; false: held (no sales.inquiries.manage); absent: not drawn. */
+  canInquiry?: boolean
 }
 
 export interface MailAction {

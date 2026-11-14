@@ -325,6 +325,11 @@ describe('XF5:05 — chase reminders, the confirm-by hours and the cadence', () 
     order = await sentAndConfirmed(protector, '6')
     // The line is late: its day passed (test data past the guards).
     await force(`UPDATE "PurchaseOrderLine" SET "needDate" = $2::date, "confirmedDate" = $2::date WHERE "purchaseOrderId" = $1`, [order.id, addDays(today(), -4)])
+    // Only this order is late (11-14): the other orders' passed days (the seeded PO was due 2026-11-13) move a month on, so the
+    // run's totals count this order alone whatever today is.
+    const moved = [order.id, today(), addDays(today(), 30)]
+    await force(`UPDATE "PurchaseOrderLine" SET "needDate" = CASE WHEN "needDate" < $2::date THEN $3::date ELSE "needDate" END, "confirmedDate" = CASE WHEN "confirmedDate" < $2::date THEN $3::date ELSE "confirmedDate" END WHERE "purchaseOrderId" <> $1`, moved)
+    await force(`UPDATE "PurchaseOrderLineDelivery" SET "needDate" = CASE WHEN "needDate" < $2::date THEN $3::date ELSE "needDate" END, "confirmedDate" = CASE WHEN "confirmedDate" < $2::date THEN $3::date ELSE "confirmedDate" END WHERE "purchaseOrderLineId" IN (SELECT id FROM "PurchaseOrderLine" WHERE "purchaseOrderId" <> $1)`, moved)
     const fresh = (await as('buyer', 'GET', `/purchasing/orders/${order.id}`)).order
     await as('buyer', 'POST', `/purchasing/orders/${order.id}/chase`, { version: fresh.version })
     const rows = async () => sql<Json>(`SELECT kind::text AS kind, "sentById", revision FROM "PurchaseOrderReminder" WHERE "purchaseOrderId" = $1 ORDER BY "sentAt", id`, [order.id])

@@ -62,6 +62,8 @@ import { useFileDepth } from './files/use-file-depth'
 import { useApprovals } from './approvals/use-approvals'
 // B-W2b-200: inviting a partner to this record ("Share with a partner").
 import { useShares } from './share/use-shares'
+// B-W2b-397 (COL-004): the mis-send guard before a message to the party.
+import { useMisSend } from '../shell/panels/mis-send/use-mis-send'
 
 /**
  * The record panels as a record page mounts them: `<RecordPanels record={{ type, id, companyId, siteId }} title party />`.
@@ -346,6 +348,13 @@ export function RecordPanels({ record, title, party: givenParty = null, tab }: R
       setSending(false)
     }
   }
+
+  // B-W2b-397 (COL-004): a message to the party opens "Send to <party>?" first; it is sent from there.
+  const misSend = useMisSend(api, key, {
+    partyName: party?.name || null,
+    guardOf: (draft: ComposerDraft) => ({ to: parseAddresses(draft.to).valid, subject: draft.subject, body: draft.body, attachments: draft.attachments }),
+    send,
+  })
 
   const changeStatus = async (status: ThreadStatus) => {
     if (!thread) return
@@ -639,7 +648,7 @@ export function RecordPanels({ record, title, party: givenParty = null, tab }: R
   }
 
   const actions: RecordPanelsActions = {
-    onSend: send,
+    onSend: (draft) => (draft.mode === 'email' ? misSend.ask(draft) : send(draft)),
     onThreadStatus: (status) => void changeStatus(status),
     onMoreMessages: () => void loadThread(true, messages.cursor),
     onUpload: (file, choice) => void upload(file, choice),
@@ -681,5 +690,12 @@ export function RecordPanels({ record, title, party: givenParty = null, tab }: R
     approvalHistory: approvalHistory.actions,
   }
   // B-W2b-05 (PLT-171): the record's print view draws every panel at once, read-only.
-  return printing ? <RecordPrintView model={model} actions={actions} /> : <RecordPanelsView model={model} actions={actions} />
+  return printing ? (
+    <RecordPrintView model={model} actions={actions} />
+  ) : (
+    <>
+      <RecordPanelsView model={model} actions={actions} />
+      {misSend.element}
+    </>
+  )
 }

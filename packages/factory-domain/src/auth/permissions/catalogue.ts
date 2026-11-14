@@ -375,6 +375,10 @@ import { PAYMENTS_BANK_DEFINITIONS, PAYMENTS_BANK_PERMISSIONS } from '../../paym
 import { WRITE_OFF_DEFINITIONS, WRITE_OFF_PERMISSIONS } from '../../payments/write-offs/permissions'
 // B-W2b-394: mail in depth (email.inboxes.manage: team inboxes and the capture address).
 import { MAIL_DEPTH_DEFINITIONS, MAIL_DEPTH_PERMISSIONS } from '../../mail-depth/permissions'
+// B-W2b-396: invoicing in depth (invoices.depositRules.manage).
+import { DEPOSIT_RULES_DEFINITIONS, DEPOSIT_RULES_PERMISSIONS } from '../../invoicing/cancellation/permissions'
+// B-W2b-407: the actual-cost figures (costing.landed.manage, costing.actuals.manage).
+import { COST_ACTUALS_DEFINITIONS, COST_ACTUALS_PERMISSIONS } from '../../costing/landed/permissions'
 // B-W2b-428: the metric layer (home.kpis.view, home.kpis.manage: the KPI library, its versions, the facts).
 import { HOME_KPIS_DEFINITIONS, HOME_KPIS_PERMISSIONS } from '../../insights/kpis/permissions'
 
@@ -1061,6 +1065,10 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   // B-W2b-399: who looked and the security events (areas `audit`, `security`).
   AUDIT_DEPTH_PERMISSIONS,
   SECURITY_EVENTS_PERMISSIONS,
+  // B-W2b-396: invoicing in depth (area `invoices`).
+  DEPOSIT_RULES_DEFINITIONS,
+  // B-W2b-407: purchase price variance, cost of goods sold, landed cost (area `costing`).
+  COST_ACTUALS_DEFINITIONS,
   // B-W2b-428: the metric layer (area `home`).
   HOME_KPIS_DEFINITIONS,
 ])
@@ -1441,6 +1449,10 @@ for (const name of TAX_RULES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(na
 for (const name of [...PAYMENTS_BANK_PERMISSIONS, ...WRITE_OFF_PERMISSIONS]) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-394: team inboxes and the capture address.
 for (const name of MAIL_DEPTH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-396: invoicing in depth.
+for (const name of DEPOSIT_RULES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-407: the actual-cost figures.
+for (const name of COST_ACTUALS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-428: the metric layer.
 for (const name of HOME_KPIS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {

@@ -9,6 +9,10 @@ import { storeUrl } from '../../../record-panels/store'
 import { answerProblem, assignMail, findRecords, getMail, listMail, readProblem, rejectMail, releaseMail } from './api'
 import { isMailChange, type MailDetail, type MailFilter, type MailSummary, type MailToSortViewModel, type RecordCandidate } from './model'
 import { MailToSortView } from './view/MailToSortView'
+// B-W2b-397: the team inboxes, the capture address and Create an inquiry.
+import { companyPrefix } from '../../../lib/session/session'
+import { useCaptureAddress } from '../mail/capture/use-capture'
+import { useTeamInbox } from '../mail/team-inbox/use-team-inbox'
 
 type Notice = NonNullable<MailToSortViewModel['notice']>
 
@@ -31,6 +35,12 @@ export function MailToSort() {
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<Notice | null>(null)
   const [showPictures, setShowPictures] = useState(false)
+  // B-W2b-397: the company's team inboxes (email.triage) and its capture address (email.send).
+  const companyId = session.company?.id ?? null
+  const prefix = companyPrefix(session.company?.code ?? '')
+  const canInquiry = held.has('sales.inquiries.manage')
+  const inboxes = useTeamInbox(api, { companyId, me: session.user.id, prefix, enabled: held.has('email.triage'), canInquiry })
+  const capture = useCaptureAddress(api, companyId, held.has('email.send') || held.has('email.inboxes.manage'))
   const filterRef = useRef(filter)
   filterRef.current = filter
   const openRef = useRef(open)
@@ -134,6 +144,10 @@ export function MailToSort() {
     busy,
     notice,
     showPictures,
+    inboxes: inboxes.model,
+    capture,
+    prefix,
+    canInquiry,
   }
 
   return (
@@ -182,6 +196,7 @@ export function MailToSort() {
         },
         onShowPictures: setShowPictures,
         onDismissNotice: () => setNotice(null),
+        inboxes: inboxes.actions,
       }}
     />
   )

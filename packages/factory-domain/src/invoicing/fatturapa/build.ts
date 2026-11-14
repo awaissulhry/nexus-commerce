@@ -266,7 +266,7 @@ function body(
     el('DatiGenerali', [
       el('DatiGeneraliDocumento', [
         el('TipoDocumento', invoice.documentType),
-        el('Divisa', 'EUR'),
+        el('Divisa', invoice.currency),
         el('Data', invoice.date),
         el('Numero', invoice.number),
         stampDuty.amount !== null &&
