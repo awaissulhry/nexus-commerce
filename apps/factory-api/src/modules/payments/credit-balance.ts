@@ -8,6 +8,7 @@ import { command, type CommandCaller, type CommandTools } from '../../core/comma
 import { ordersOfInvoices, settleOrders } from '../invoicing/from-shipment/settlement'
 import { lockAll, lockMoney } from './locks'
 import { assertMay, officeContextOf, type Reader } from './store'
+import { overpaymentsWrittenOff } from './write-offs/sums'
 
 /**
  * The customer's credit balance (B-W2a-61; FIN-122; design finance.payments rec allocation "Overpayment → customer credit
@@ -42,11 +43,13 @@ export async function unplacedPayments(db: Reader, scope: { companyId: string; p
   const ids = payments.map((payment) => payment.id)
   const allocated = await db.paymentAllocation.groupBy({ by: ['paymentId'], where: { paymentId: { in: ids } }, _sum: { amount: true } })
   const refunded = await db.refund.groupBy({ by: ['paymentId'], where: { paymentId: { in: ids }, status: { in: ['DUE', 'PAID'] } }, _sum: { amount: true } })
+  // B-W2b-393: what an OVERPAYMENT write-off keeps is not the customer's credit.
+  const writtenOff = await overpaymentsWrittenOff(db, ids)
   return payments
     .map((payment) => {
       const placed = allocated.find((row) => row.paymentId === payment.id)?._sum.amount ?? 0
       const back = refunded.find((row) => row.paymentId === payment.id)?._sum.amount ?? 0
-      return { ...payment, allocated: placed, refunded: back, unplaced: unplacedOf({ status: payment.status, amount: payment.amount, allocated: placed, refunded: back }) }
+      return { ...payment, allocated: placed, refunded: back, unplaced: unplacedOf({ status: payment.status, amount: payment.amount, allocated: placed, refunded: back + (writtenOff.get(payment.id) ?? 0) }) }
     })
     .filter((payment) => payment.unplaced > 0)
 }

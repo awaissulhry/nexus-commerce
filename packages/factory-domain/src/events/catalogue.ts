@@ -270,6 +270,8 @@ import { events as mtmPhotos } from '../mtm-photos/events'
 import { events as shippingCartons } from '../shipping-cartons/events'
 // B-W2b-386: the shipment queue in depth (shipment.hold_placed, .hold_released, shipment.split, shipping.cut_offs_saved).
 import { events as shippingQueue } from '../shipping-queue/events'
+// B-W2b-393: bank statements, matching and write-offs (bank_statement.imported, bank_line.suggestions_changed, bank_match.accepted, .reversed, payment.written_off, .write_off_reversed, write_off_tolerance.changed).
+import { events as paymentsBank } from '../payments-bank/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -606,6 +608,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...shippingCartons,
   // B-W2b-386
   ...shippingQueue,
+  // B-W2b-393
+  ...paymentsBank,
 ] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
