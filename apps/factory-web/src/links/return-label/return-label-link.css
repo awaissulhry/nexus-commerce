@@ -1,0 +1,36 @@
+/*
+ * The customer's return label page (B-W2b-398; SCR-436) LAYOUT inside the link frame: one task on one phone screen.
+ * Controls are the design system's; semantic tokens only.
+ */
+.fw-rll,
+.fw-rll-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-rll-h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+}
+
+.fw-rll-hint {
+  margin: 0;
+  color: var(--nds-text-2);
+  line-height: 1.5;
+}
+
+.fw-rll-code {
+  font-family: var(--nds-font-mono);
+  overflow-wrap: anywhere;
+}
+
+.fw-rll-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+}

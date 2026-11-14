@@ -871,7 +871,6 @@
     "in": "In arrivo dal cliente",
     "intro": "Merce in arrivo con il DDT del cliente, e merce che torna indietro.",
     "issueDdt": "Emetti DDT di reso",
-    "labelLater": "L’etichetta o il link di reso per il cliente arriverà più avanti.",
     "lines_one": "{count} riga",
     "lines_other": "{count} righe",
     "noCustomerDdt": "Nessun DDT del cliente",

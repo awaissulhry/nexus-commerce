@@ -22,6 +22,8 @@ import { manifest } from './manifest'
 import { openCase, previewCase } from './open'
 import { changeCase, decideCover, getCase, moveCase } from './steps'
 import { caseRecordOf } from './view'
+// B-W2b-394 (ML1:03): a case from a mail in one step.
+import { caseFromMailContract, openCaseFromMail } from './from-mail'
 
 /**
  * Warranty and service cases of B-W2b-345 (SAL-368 legal versus factory guarantee, SAL-436 the customer told at each status
@@ -36,6 +38,8 @@ export default defineRoutes('sales.service', manifest, async (app) => {
   app.get('/sales/service/cases/people', { schema: peopleContract }, async (request) => casePeople(request, request.query.companyId))
   app.post('/sales/service/cases/preview', { schema: previewContract }, async (request) => previewCase(request, request.body))
   app.post('/sales/service/cases', { schema: openContract }, async (request, reply) => reply.code(201).send(await openCase(request, request.body, idempotencyKeyFrom(request))))
+  // B-W2b-394 (ML1:03)
+  app.post('/sales/service/cases/from-mail/:inboundEmailId', { schema: caseFromMailContract }, async (request, reply) => reply.code(201).send(await openCaseFromMail(request, request.params.inboundEmailId, request.body, idempotencyKeyFrom(request))))
 
   app.get('/sales/service/cases/:caseId', { schema: getContract }, async (request) => getCase(request, request.params.caseId))
   app.patch('/sales/service/cases/:caseId', { schema: changeContract }, async (request) => changeCase(request, request.params.caseId, request.body, idempotencyKeyFrom(request)))

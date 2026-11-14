@@ -755,6 +755,8 @@ export const LINKS: ReadonlyArray<{ readonly id: string; readonly title: string;
   { id: 'links.file.payroll', title: 'Payroll file', scr: ['SCR-272'], task: 'payroll-file' },
   // W2b: B-W2b-200 Join a record (a RECORD_INVITE link's shared record).
   { id: 'links.invite', title: 'Join a record', scr: ['SCR-270'], task: 'invite' },
+  // W2b: B-W2b-398 Your return label (a RETURN_LABEL link of a return: book the carrier when the goods go, print the label).
+  { id: 'links.return-label', title: 'Your return label', scr: ['SCR-436'], task: 'return-label' },
 ]
 
 /**

@@ -17,4 +17,8 @@ export const manifest = defineManifest({
   'GET /email/delivery': { audiences: ['office'], permission: 'email.delivery.view', scope: 'record' },
   'GET /email/blocked': { audiences: ['office'], permission: 'email.delivery.view', scope: 'tenant' },
   'POST /email/blocked/:suppressionId/unblock': { audiences: ['office'], permission: 'email.delivery.unblock', scope: 'tenant' },
+  // B-W2b-394 (COL-031): a record thread's mail and where each is (threads.read over the record); (ML1:01) a FAKE mail
+  // account's webhook secret (email.manage over its company, step-up).
+  'GET /email/delivery-status': { audiences: ['office'], permission: 'threads.read', scope: 'record' },
+  'PUT /email/ses-accounts/:accountId/webhook-secret': { audiences: ['office'], permission: 'email.manage', scope: 'record' },
 })

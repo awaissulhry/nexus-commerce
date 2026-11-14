@@ -998,7 +998,8 @@ describe('the W2a golden flow: a factory day through the HTTP routes', { timeout
     expect(settlement).toMatchObject({ settled: false, fullyShipped: true, fullyInvoiced: true, invoicedAmount: ST_INV1.gross + ST_INV2.gross, paidAmount: 0, balanceDueAmount: ST_INV1.gross + ST_INV2.gross })
     expect((settlement.invoices as STJson[]).map((entry) => entry.id).sort()).toEqual([G.invoice1.id, G.invoice2.id].sort())
     G.order = (await ok(P.sales, 'GET', `/sales/orders/${G.order.id}`)).order
-    expect(G.order.status).toBe('SHIPPED')
+    // B-W2b-398 (LOG-067): every shipment of the order arrived (T08's poll), so the order is DELIVERED, not yet paid.
+    expect(G.order.status).toBe('DELIVERED')
   })
 
   // ---- T4: receivables ----------------------------------------------------------------------------------------------------
@@ -1014,8 +1015,8 @@ describe('the W2a golden flow: a factory day through the HTTP routes', { timeout
     expect(G.invoice1).toMatchObject({ status: 'DELIVERED', paidAmount: ST_PART, openAmount: ST_INV1.gross - ST_PART })
     const settlement = (await ok(P.finance, 'GET', `/invoicing/orders/${G.order.id}/settlement`)).settlement
     expect(settlement).toMatchObject({ settled: false, paidAmount: ST_PART, balanceDueAmount: ST_INV1.gross + ST_INV2.gross - ST_PART })
-    // Not settled: the order stays SHIPPED (it closes only when paid in full).
-    expect((await ok(P.sales, 'GET', `/sales/orders/${G.order.id}`)).order.status).toBe('SHIPPED')
+    // Not settled: the order stays DELIVERED (B-W2b-398; it closes only when paid in full).
+    expect((await ok(P.sales, 'GET', `/sales/orders/${G.order.id}`)).order.status).toBe('DELIVERED')
   })
 
   it('T11 finance reads P1’s ledger: the statement (both invoices, the payment, the running balance), the open items not due yet, the ageing and the PDF; sales may read receivables (B-W2a-81)', async () => {

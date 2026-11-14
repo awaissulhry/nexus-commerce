@@ -12,4 +12,23 @@ export const manifest = defineManifest({
   'POST /email/inbound/:inboundEmailId/assign': { audiences: ['office'], permission: 'email.triage', scope: 'record' },
   'POST /email/inbound/:inboundEmailId/release': { audiences: ['office'], permission: 'email.triage', scope: 'record' },
   'POST /email/inbound/:inboundEmailId/reject': { audiences: ['office'], permission: 'email.triage', scope: 'record' },
+  // B-W2b-394 (COL-021): the capture address — read by whoever writes mail (email.send), set up by email.inboxes.manage; each
+  // checked with can() over its company.
+  'GET /email/capture': { audiences: ['office'], permission: 'email.send', scope: 'record' },
+  'POST /email/capture': { audiences: ['office'], permission: 'email.inboxes.manage', scope: 'record' },
+  'PUT /email/capture/:captureAddressId': { audiences: ['office'], permission: 'email.inboxes.manage', scope: 'record' },
+  'POST /email/capture/:captureAddressId/turn-off': { audiences: ['office'], permission: 'email.inboxes.manage', scope: 'record' },
+  // B-W2b-394 (COL-027): team inboxes — worked with email.triage by their members (the handlers check membership and the
+  // mail's company), set up with email.inboxes.manage.
+  'GET /email/team-inboxes': { audiences: ['office'], permission: 'email.triage', scope: 'record' },
+  'POST /email/team-inboxes': { audiences: ['office'], permission: 'email.inboxes.manage', scope: 'record' },
+  'GET /email/team-inboxes/people': { audiences: ['office'], permission: 'email.triage', scope: 'record' },
+  'PUT /email/team-inboxes/:teamInboxId': { audiences: ['office'], permission: 'email.inboxes.manage', scope: 'record' },
+  'GET /email/team-inboxes/:teamInboxId/mail': { audiences: ['office'], permission: 'email.triage', scope: 'record' },
+  'POST /email/inbound/:inboundEmailId/assignee': { audiences: ['office'], permission: 'email.triage', scope: 'record' },
+  'POST /email/inbound/:inboundEmailId/close': { audiences: ['office'], permission: 'email.triage', scope: 'record' },
+  'POST /email/inbound/:inboundEmailId/reopen': { audiences: ['office'], permission: 'email.triage', scope: 'record' },
+  'POST /email/inbound/:inboundEmailId/snooze': { audiences: ['office'], permission: 'email.triage', scope: 'record' },
+  'POST /email/inbound/:inboundEmailId/follow-up': { audiences: ['office'], permission: 'email.triage', scope: 'record' },
+  'POST /email/inbound/:inboundEmailId/team-inbox': { audiences: ['office'], permission: 'email.triage', scope: 'record' },
 })

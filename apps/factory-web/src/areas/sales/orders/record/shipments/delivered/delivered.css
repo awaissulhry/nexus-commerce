@@ -1,0 +1,28 @@
+/*
+ * The order's "Delivered (from carrier)" card on its Shipments tab (B-W2b-398) LAYOUT. Controls are the design system's;
+ * semantic tokens only.
+ */
+.fw-dv {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-dv-head,
+.fw-dv-cell {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-dv-hint {
+  margin: 0;
+  color: var(--nds-text-2);
+  line-height: 1.5;
+}
+
+.fw-dv-link {
+  color: var(--nds-text-link);
+}

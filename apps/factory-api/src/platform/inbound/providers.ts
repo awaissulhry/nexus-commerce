@@ -16,6 +16,8 @@ import { processSecrets } from '../secrets/service'
 // B-W2b-185: the payment provider's webhooks.
 import { stripeVerifier } from '../../adapters/stripe/webhook'
 import { FAKE_PROVIDER_VERIFIER, onlinePaymentProcessor } from '../../modules/payments/online/webhook'
+// B-W2b-394 (COL-031): a soft bounce's kind, written after email out's processor.
+import { deliveryStatusProcessor } from '../email-out/delivery-status/processor'
 
 /**
  * What the inbound ledger knows of each provider (plan A1 §4): how its webhooks are verified (LIVE and SANDBOX
@@ -62,13 +64,14 @@ export type InboundProviders = Readonly<Partial<Record<IntegrationProvider, Inbo
 
 /**
  * The providers' entries. SES via SNS: a received mail ("Received", email in, platform/email-in/receive.ts), else a
- * delivery, bounce or complaint notification (email out, platform/email-out/notifications.ts). SDI: the intermediary's
+ * delivery, bounce or complaint notification (email out, platform/email-out/notifications.ts; B-W2b-394: then a soft
+ * bounce's kind, platform/email-out/delivery-status/processor.ts). SDI: the intermediary's
  * notifications about the invoices sent (modules/invoicing/sdi/inbound.ts); its LIVE verifier is the chosen provider's
  * (none until Q21: SDI_PROVIDER_VERIFIER refuses). Sendcloud: its Sendcloud-Signature header (adapters/sendcloud/
  * webhook.ts) and the parcels' tracking (modules/shipping/labels).
  */
 export const INBOUND_PROVIDERS: InboundProviders = Object.freeze({
-  SES: { verifier: snsVerifier, processor: emailInProcessor(sesNotificationProcessor) },
+  SES: { verifier: snsVerifier, processor: emailInProcessor(deliveryStatusProcessor(sesNotificationProcessor)) },
   SDI: { verifier: SDI_PROVIDER_VERIFIER, processor: sdiInboundProcessor() },
   SENDCLOUD: { verifier: sendcloudVerifier, processor: sendcloudTrackingProcessor() },
   // B-W2b-185: payment intents (Stripe's event shape, which the fake posts too). PAYMENT_FAKE exists only in FAKE mode (its

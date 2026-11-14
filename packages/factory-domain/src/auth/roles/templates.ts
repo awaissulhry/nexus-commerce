@@ -156,6 +156,8 @@ import { CURRENCY_ADDS } from '../../money/currency/permissions'
 import { TAX_RULES_ADDS } from '../../invoicing/tax-codes/permissions'
 // B-W2b-393: bank statements, matching and write-offs (finance).
 import { PAYMENTS_BANK_ADDS } from '../../payments/write-offs/permissions'
+// B-W2b-394: team inboxes and the capture address (email.inboxes.manage) to the administrators.
+import { MAIL_DEPTH_ADDS } from '../../mail-depth/permissions'
 // B-W2b-396: invoicing in depth (finance keeps the rules for the deposit of a cancelled order).
 import { DEPOSIT_RULES_ADDS } from '../../invoicing/cancellation/permissions'
 
@@ -1062,6 +1064,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (TAX_RULES_ADDS[key] ?? []) : []),
   // B-W2b-393
   ...(audience === 'office' ? (PAYMENTS_BANK_ADDS[key] ?? []) : []),
+  // B-W2b-394
+  ...(audience === 'office' ? (MAIL_DEPTH_ADDS[key] ?? []) : []),
   // B-W2b-396
   ...(audience === 'office' ? (DEPOSIT_RULES_ADDS[key] ?? []) : [])]
 /**
