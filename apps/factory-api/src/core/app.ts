@@ -15,6 +15,8 @@ import { installErrorHandling } from './errors'
 import { requestIdFor } from './ids'
 import { loggerOptions, type LoggerSettings } from './logger'
 import { installGrainFilter } from '../platform/auth/roles/grain-filter'
+import { installReadLog } from '../platform/audit/reads/hooks'
+import { installSecurityEvents } from '../platform/audit/security-events/hooks'
 import { CORE_MANIFEST, defineRoutes, installRouteManifest, isRoutesPlugin, manifestOfRoutes, RouteManifestError, undeclaredPermissions } from './manifest'
 import { BODY_LIMIT_BYTES, registerSecurity } from './security'
 import { serverClock, type Clock } from './time'
@@ -170,6 +172,9 @@ export async function buildApp(config: AppConfig, dependencies: AppDependencies 
   await app.register(cookie, { secret: config.cookieSecret })
   installRouteManifest(app, authenticate)
   installGrainFilter(app)
+  // B-W2b-399: the security events (refusals; the request's address for its commands' events) and the read log.
+  installSecurityEvents(app)
+  installReadLog(app)
   app.decorate('officeAuth', dependencies.officeAuth ?? null)
   app.decorateRequest('withClient', function withClient(work) {
     return withContextClient(database, this.factoryContext, work)

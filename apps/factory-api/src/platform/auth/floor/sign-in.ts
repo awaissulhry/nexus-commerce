@@ -24,6 +24,7 @@ import { modeRulesOf, requireDevice, shownLine, STATION_SELECT, stationRef, type
 import { floorStepUpUntil } from './step-up'
 import { badgeOnlySignIn, endSessions, floorCommand, floorContext, liveDevice, SESSION_SELECT, siteScope, siteTiming, type FloorDevice } from './store'
 import { floorHash, mintSessionToken, parseSessionToken, parseSiteToken } from './tokens'
+import { floorSignInRefused } from '../../audit/security-events/sign-in'
 
 /**
  * Signing in and out on an enrolled device (plan A1 §3.10 "Floor"; features PLT-057, PLT-058, PLT-060, PLT-062; MES-276):
@@ -129,13 +130,18 @@ export async function provedWorker(auth: OfficeAuth, request: FastifyRequest, pl
     if (!badgeOnly) throw pinRequired('Enter your PIN: this site signs in with a badge and a PIN.')
     const candidate = await candidateOf(auth, place, body)
     const worker = candidate?.worker
-    if (!candidate || !worker || worker.status !== 'ACTIVE' || worker.pinHash === null || isPinLocked(worker, now)) throw wrongCredentials()
+    if (!candidate || !worker || worker.status !== 'ACTIVE' || worker.pinHash === null || isPinLocked(worker, now)) {
+      floorSignInRefused(auth, request, place, body.badgeCode !== undefined, candidate, now)
+      throw wrongCredentials()
+    }
     return { candidate, pinHash: worker.pinHash, rehash: null, pinVerified: false }
   }
   const pin = body.pin
   const candidate = await candidateOf(auth, place, body)
   const worker = candidate?.worker
   if (!candidate || !worker || worker.status !== 'ACTIVE' || worker.pinHash === null || isPinLocked(worker, now)) {
+    // B-W2b-399 (PLT-075): unknown attempts too, after the answer.
+    floorSignInRefused(auth, request, place, body.badgeCode !== undefined, candidate, now)
     await verifyPin(pin, null, auth.pins)
     throw wrongCredentials()
   }

@@ -424,6 +424,22 @@ export const AUDIT_PERMISSIONS = definePermissions('audit', {
   read: { risk: 'read', description: 'Read the history of a record (money values only with their grain).' },
 })
 
+/**
+ * B-W2b-399 (PLT-074, PLT-075; Owner answer W2b-6 question 3 = A): who looked at sensitive records (the read log) and the
+ * security events, read by the administrators and the Owner only. Both are protected reads declared with the write risk, so
+ * the read-only role (every `read` permission) never holds them; the owner holds them through every(), the admin template by
+ * name. Never a figure about a person: rows of one record's reads, or one person's reads on a search with a reason that is
+ * itself audited.
+ */
+export const AUDIT_DEPTH_PERMISSIONS = definePermissions('audit', {
+  'reads.view': { risk: 'write', description: "See who viewed, downloaded or exported a sensitive record (cost sheets, personal data, certificates, exports): one record's reads, or one person's on a search with a reason that is itself audited." },
+})
+export const SECURITY_EVENTS_PERMISSIONS = definePermissions('security', {
+  'events.view': { risk: 'write', description: 'See the security events: sign-ins and failed ones, lockouts, two-factor changes, refusals, role changes and exports, with the address only as its country.' },
+})
+export const AUDIT_READS_VIEW = 'audit.reads.view' satisfies Permission
+export const SECURITY_EVENTS_VIEW = 'security.events.view' satisfies Permission
+
 /** Document numbering (platform/numbering; the constants live in factory-domain/src/numbering/permissions.ts). */
 export const NUMBERING_DEFINITIONS = definePermissions('numbering', {
   view: { risk: 'read', description: "See the companies' number series and their next numbers." },
@@ -1040,6 +1056,9 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   WRITE_OFF_DEFINITIONS,
   // B-W2b-394: team inboxes and the capture address (area `email`, declared above).
   MAIL_DEPTH_DEFINITIONS,
+  // B-W2b-399: who looked and the security events (areas `audit`, `security`).
+  AUDIT_DEPTH_PERMISSIONS,
+  SECURITY_EVENTS_PERMISSIONS,
 ])
 
 /** The area of the permissions only floor roles hold (and floor roles hold no other, but FLOOR_SHARED_PERMISSIONS). */

@@ -228,6 +228,9 @@ describe('a report the office types from a mail: the SAFETY case, the injury apa
     expect(opened.injury).toMatchObject({ reportId: mailed.id, injured: true, words: INJURY, erased: null })
     const views = await admin(`SELECT after FROM "AuditLog" WHERE "tenantId" = $1 AND "recordId" = $2 AND action = 'safetyReports.injuryOpened'`, [T, mailed.id])
     expect(views).toEqual([{ after: { what: 'OPEN' } }])
+    // B-W2b-399 (AU1:01): the opening is a protected view of the injury, naming no employee.
+    const injury = (await admin<{ id: string }>(`SELECT id FROM "ProductSafetyInjury" WHERE "tenantId" = $1 AND "reportId" = $2`, [T, mailed.id]))[0]!
+    expect(await admin(`SELECT "recordType", "recordId", "employeeId", what FROM "ProtectedView" WHERE "tenantId" = $1 AND "recordType" = 'PRODUCT_SAFETY_INJURY'`, [T])).toEqual([{ recordType: 'PRODUCT_SAFETY_INJURY', recordId: injury.id, employeeId: null, what: 'OPEN' }])
     await nowhereElse(INJURY)
   })
 })
