@@ -120,6 +120,10 @@ export const MESSAGE_TEMPLATES = {
   'notifications.inquiries.assigned': { en: '{actor} gave you inquiry {record}', it: '{actor} ti ha affidato la richiesta {record}' },
   'notifications.safety.productReport': { en: 'Product-safety report {record} came in: assess it', it: 'È arrivata la segnalazione di sicurezza {record}: valutala' },
   'notifications.safety.productAccident': { en: 'Product-safety report {record} came in with an accident: assess it and see whether the authority must be told', it: 'È arrivata la segnalazione di sicurezza {record} con un incidente: valutala e verifica se va informata l’autorità' },
+  // B-W2b-394 (COL-027): a team-inbox mail given to a person ({record}: its subject, {title}: the inbox), and its follow-up that came
+  // with no answer (the mail is open again in the queue). Both start notifications.mail. (the matrix's MAIL_ASSIGNED row).
+  'notifications.mail.assigned': { en: '{actor} gave you a mail of {title}: {record}', it: '{actor} ti ha affidato una mail di {title}: {record}' },
+  'notifications.mail.followUpDue': { en: 'No answer yet to {record} ({title}): it is back in your queue', it: 'Ancora nessuna risposta a {record} ({title}): è di nuovo nella tua coda' },
 } as const satisfies Record<string, { readonly en: string; readonly it: string }>
 export type MessageKey = keyof typeof MESSAGE_TEMPLATES
 export const MESSAGE_KEYS = Object.freeze(Object.keys(MESSAGE_TEMPLATES)) as readonly MessageKey[]

@@ -278,6 +278,10 @@
       },
       "inquiries": {
         "assigned": "{actor} gave you inquiry {record}"
+      },
+      "mail": {
+        "assigned": "{actor} gave you a mail of {title}: {record}",
+        "followUpDue": "No answer yet to {record} ({title}): it is back in your queue"
       }
     },
     "fallback": "News on {record}",

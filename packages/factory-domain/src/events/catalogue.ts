@@ -274,6 +274,8 @@ import { events as shippingQueue } from '../shipping-queue/events'
 import { events as currencyEvents } from '../currency/events'
 // B-W2b-390: carriers in depth (shipping.test_mode_changed).
 import { events as shippingCarriers } from '../shipping-carriers/events'
+// B-W2b-394: mail in depth (team inboxes, the capture address, soft bounces, the FAKE mail account's webhook secret).
+import { events as mailDepth } from '../mail-depth/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -614,6 +616,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...currencyEvents,
   // B-W2b-390
   ...shippingCarriers,
+  // B-W2b-394
+  ...mailDepth,
 ] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
