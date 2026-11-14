@@ -39,6 +39,16 @@ import { correctInvoice } from './sdi/correct'
 import { processSdi } from './sdi/runtime'
 import { sendToSdi } from './sdi/send'
 import { getSdiStatus } from './sdi/view'
+// B-W2b-392: tax rules as data.
+import { archiveTaxCode, confirmTaxCode, createTaxCode, deleteTaxCode, listTaxCodes, newTaxCodeVersion, updateTaxCode } from './tax-codes/codes'
+import { archiveTaxCodeContract, confirmTaxCodeContract, createTaxCodeContract, deleteTaxCodeContract, invoiceTaxContract, listTaxCodesContract, newVersionContract, putTaxSettingsContract, taxSettingsContract, updateTaxCodeContract } from './tax-codes/contract'
+import { invoiceTax } from './tax-codes/apply'
+import { putTaxSettings, taxSettings } from './tax-codes/settings'
+import { checkDeclarationContract, createDeclarationContract, getDeclarationContract, listDeclarationsContract, nameDeclarationContract, revokeDeclarationContract } from './intent/contract'
+import { checkDeclaration, createDeclaration, getDeclaration, listDeclarations, revokeDeclaration } from './intent/declarations'
+import { nameDeclaration } from './intent/on-invoice'
+import { listQuartersContract, payQuarterContract, recountQuarterContract } from './stamp-duty/contract'
+import { listQuarters, payQuarter, recountQuarter } from './stamp-duty/quarters'
 
 /**
  * Invoices (B-W1-28 invoice core and the deposit invoice; A2 SCR-080, SCR-081): the list and the record, drafts (generic
@@ -111,4 +121,30 @@ export default defineRoutes('invoicing', manifest, async (app) => {
   app.post('/invoicing/returns/:returnId/credit-notes', { schema: draftReturnCreditNotesContract }, async (request, reply) =>
     reply.code(201).send(await draftReturnCreditNotes(request, request.params.returnId, request.body, idempotencyKeyFrom(request))),
   )
+
+  // B-W2b-392: tax rules as data (handlers in ./tax-codes, ./intent, ./stamp-duty): the company's tax codes and switches, an
+  // invoice's tax view, the customers' declarations of intent and naming one on a draft, the stamp duty quarters.
+  app.get('/invoicing/tax-codes', { schema: listTaxCodesContract }, async (request) => listTaxCodes(request, request.query))
+  app.post('/invoicing/tax-codes', { schema: createTaxCodeContract }, async (request, reply) => reply.code(201).send(await createTaxCode(request, request.body, idempotencyKeyFrom(request))))
+  app.patch('/invoicing/tax-codes/:taxCodeId', { schema: updateTaxCodeContract }, async (request) => updateTaxCode(request, request.params.taxCodeId, request.body, idempotencyKeyFrom(request)))
+  app.post('/invoicing/tax-codes/:taxCodeId/versions', { schema: newVersionContract }, async (request, reply) => reply.code(201).send(await newTaxCodeVersion(request, request.params.taxCodeId, request.body, idempotencyKeyFrom(request))))
+  app.post('/invoicing/tax-codes/:taxCodeId/archive', { schema: archiveTaxCodeContract }, async (request) => archiveTaxCode(request, request.params.taxCodeId, request.body, idempotencyKeyFrom(request)))
+  app.delete('/invoicing/tax-codes/:taxCodeId', { schema: deleteTaxCodeContract }, async (request) => deleteTaxCode(request, request.params.taxCodeId, request.query, idempotencyKeyFrom(request)))
+  app.post('/invoicing/tax-codes/:taxCodeId/confirm', { schema: confirmTaxCodeContract }, async (request) =>
+    confirmTaxCode(request, request.params.taxCodeId, request.body, idempotencyKeyFrom(request), () => requireStepUp(officeAuthOf(app), request)),
+  )
+  app.get('/invoicing/tax/settings', { schema: taxSettingsContract }, async (request) => taxSettings(request))
+  app.put('/invoicing/tax/settings/:companyId', { schema: putTaxSettingsContract }, async (request) =>
+    putTaxSettings(request, request.params.companyId, request.body, idempotencyKeyFrom(request), () => requireStepUp(officeAuthOf(app), request)),
+  )
+  app.get('/invoicing/invoices/:invoiceId/tax', { schema: invoiceTaxContract }, async (request) => invoiceTax(request, request.params.invoiceId))
+  app.put('/invoicing/invoices/:invoiceId/declaration-of-intent', { schema: nameDeclarationContract }, async (request) => nameDeclaration(request, request.params.invoiceId, request.body, idempotencyKeyFrom(request)))
+  app.get('/invoicing/declarations-of-intent', { schema: listDeclarationsContract }, async (request) => listDeclarations(request, request.query))
+  app.get('/invoicing/declarations-of-intent/:declarationId', { schema: getDeclarationContract }, async (request) => getDeclaration(request, request.params.declarationId))
+  app.post('/invoicing/declarations-of-intent', { schema: createDeclarationContract }, async (request, reply) => reply.code(201).send(await createDeclaration(request, request.body, idempotencyKeyFrom(request))))
+  app.post('/invoicing/declarations-of-intent/:declarationId/check', { schema: checkDeclarationContract }, async (request) => checkDeclaration(request, request.params.declarationId, request.body, idempotencyKeyFrom(request)))
+  app.post('/invoicing/declarations-of-intent/:declarationId/revoke', { schema: revokeDeclarationContract }, async (request) => revokeDeclaration(request, request.params.declarationId, request.body, idempotencyKeyFrom(request)))
+  app.get('/invoicing/stamp-duty/quarters', { schema: listQuartersContract }, async (request) => listQuarters(request, request.query))
+  app.post('/invoicing/stamp-duty/quarters/recount', { schema: recountQuarterContract }, async (request) => recountQuarter(request, request.body, idempotencyKeyFrom(request)))
+  app.post('/invoicing/stamp-duty/quarters/:quarterId/paid', { schema: payQuarterContract }, async (request) => payQuarter(request, request.params.quarterId, request.body, idempotencyKeyFrom(request)))
 })

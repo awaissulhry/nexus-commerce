@@ -147,6 +147,18 @@ export function unverifiedTaxRules(): readonly TaxRule[] {
   return Object.values(TAX_RULES).filter((rule) => rule.status === 'UNVERIFIED')
 }
 
+/**
+ * B-W2b-392 (FIN-107): a rule's status for a company, read from its tax codes (factory-db TaxCode rows naming the rule by
+ * `ruleId`, the versions in force): a rule the catalogue leaves UNVERIFIED is settled for the company once the
+ * accountant's confirmation is recorded on every code in force that applies it (at least one). The catalogue's VERIFIED
+ * rules stay VERIFIED.
+ */
+export function ruleStatusFromCodes(ruleId: TaxRuleId, codes: readonly { readonly ruleId: string | null; readonly verification: TaxRuleStatus }[]): TaxRuleStatus {
+  if (TAX_RULES[ruleId].status === 'VERIFIED') return 'VERIFIED'
+  const applying = codes.filter((code) => code.ruleId === ruleId)
+  return applying.length > 0 && applying.every((code) => code.verification === 'VERIFIED') ? 'VERIFIED' : 'UNVERIFIED'
+}
+
 /** Settings for the rules the accountant has to confirm. DEFAULT_TAX_RULES_CONFIG holds our current reading. */
 export interface TaxRulesConfig {
   /**

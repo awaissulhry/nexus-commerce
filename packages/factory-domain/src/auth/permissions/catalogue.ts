@@ -368,6 +368,8 @@ import { SHIPPING_PROFORMA_DEFINITIONS, SHIPPING_PROFORMA_PERMISSIONS } from '..
 import { NOTIFICATION_DEFAULTS_DEFINITIONS, NOTIFICATION_DEFAULTS_PERMISSIONS } from '../../notifications/preferences/permissions'
 // B-W2b-389: currencies and exchange rates (currencies.view | manage).
 import { CURRENCY_DEFINITIONS, CURRENCY_PERMISSIONS } from '../../money/currency/permissions'
+// B-W2b-392: tax rules as data (invoices.tax.manage, invoices.tax.switch).
+import { TAX_RULES_DEFINITIONS, TAX_RULES_PERMISSIONS } from '../../invoicing/tax-codes/permissions'
 // B-W2b-393: bank statements, matching and write-offs (payments.bank.view | import | match, payments.writeOff).
 import { PAYMENTS_BANK_DEFINITIONS, PAYMENTS_BANK_PERMISSIONS } from '../../payments/bank/permissions'
 import { WRITE_OFF_DEFINITIONS, WRITE_OFF_PERMISSIONS } from '../../payments/write-offs/permissions'
@@ -1029,6 +1031,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   NOTIFICATION_DEFAULTS_DEFINITIONS,
   // B-W2b-389: currencies and exchange rates (area `currencies`).
   CURRENCY_DEFINITIONS,
+  // B-W2b-392: tax rules as data (area `invoices`).
+  TAX_RULES_DEFINITIONS,
   // B-W2b-393: bank statements, matching and write-offs (area `payments`).
   PAYMENTS_BANK_DEFINITIONS,
   WRITE_OFF_DEFINITIONS,
@@ -1404,6 +1408,8 @@ for (const name of SHIPPING_PROFORMA_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDec
 for (const name of NOTIFICATION_DEFAULTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-389: currencies and exchange rates.
 for (const name of CURRENCY_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-392: tax rules as data.
+for (const name of TAX_RULES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-393: bank statements, matching and write-offs.
 for (const name of [...PAYMENTS_BANK_PERMISSIONS, ...WRITE_OFF_PERMISSIONS]) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
