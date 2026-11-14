@@ -154,6 +154,8 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/sales/returns',
   '/sales/returns/[id]',
   '/sales/returns/repairs/[id]',
+  // B-W2b-398: the Return label PDF window (SCR-112-label-pdf, a new tab).
+  '/sales/returns/label',
   // B-W2b-353: Sales › After-sales › Warranty & service (SCR-217) and a service case (SCR-413).
   '/sales/service',
   '/sales/service/[id]',
