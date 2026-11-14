@@ -1,0 +1,324 @@
+{
+  "common": {
+    "cancel": "Annulla"
+  },
+  "mapping": {
+    "title": "Piano dei conti",
+    "band": "Stato e azioni del piano dei conti",
+    "lead": "Un solo posto per {company}: cosa registra Nexus e il conto del commercialista in cui finisce, ognuno da un giorno.",
+    "leadReading": "Lettura del piano dei conti…",
+    "more": "Altre azioni sul piano dei conti",
+    "downloadAll": "Scarica tutto il piano dei conti (CSV)",
+    "slow": "Ancora in caricamento…",
+    "failed": "Impossibile caricare il piano dei conti",
+    "noAccess": {
+      "title": "Non puoi vedere il piano dei conti",
+      "body": "Serve il permesso di contabilità (accounting.view). Chiedi al tuo amministratore."
+    },
+    "gate": {
+      "title": "Da confermare con il commercialista",
+      "body": "Chiavi e conti sono la lettura di Nexus del piano dei conti del commercialista finché lui non li conferma: scarica la mappatura e consegnala. Una riga vale dal suo primo giorno e da lì resta fissa; una modifica è una nuova riga da un giorno successivo."
+    },
+    "factsTitle": "La mappatura oggi",
+    "facts": {
+      "keys_one": "Nexus registra {count} chiave in questa azienda.",
+      "keys_other": "Nexus registra {count} chiavi in questa azienda.",
+      "unmapped_one": "{count} chiave non ha un conto oggi: le sue righe nelle scritture restano vuote.",
+      "unmapped_other": "{count} chiavi non hanno un conto oggi: le loro righe nelle scritture restano vuote.",
+      "allMapped": "Ogni chiave registrata da Nexus ha un conto oggi.",
+      "rule": "Un documento prende il conto valido nel suo giorno, così ciò che è stato consegnato mantiene il suo conto.",
+      "where": "I file delle scritture usano la mappatura solo mentre le scritture sono attive."
+    },
+    "keysTitle": "Cosa registra Nexus",
+    "keysLead": "Ogni chiave con il conto di oggi, la prossima modifica e i conti precedenti. Apri una chiave per mapparla.",
+    "otherLead": "Righe conservate per chiavi che Nexus non registra (un codice non più usato): non mappano nulla.",
+    "count_one": "{count} chiave",
+    "count_other": "{count} chiavi",
+    "search": "Cerca chiavi o conti",
+    "kindLabel": "Tipo di chiave",
+    "allKinds": "Ogni tipo",
+    "viewsLabel": "Quali chiavi",
+    "view": {
+      "all": "Tutte",
+      "unmapped": "Senza conto",
+      "upcoming": "In modifica a breve",
+      "other": "Non registrate da Nexus"
+    },
+    "kind": {
+      "ITEM_GROUP": "Gruppi di articoli",
+      "TAX_CODE": "Codici IVA",
+      "COST_CATEGORY": "Categorie di costo",
+      "PAYMENT_METHOD": "Metodi di pagamento",
+      "PARTY_GROUP": "Gruppi di clienti e fornitori"
+    },
+    "col": {
+      "key": "Cosa registra Nexus",
+      "account": "Conto oggi",
+      "next": "Prossima modifica",
+      "earlier": "Conti precedenti"
+    },
+    "notPosted": "Non registrata da Nexus",
+    "noAccount": "Nessun conto",
+    "noAccountSub": "Le sue righe restano vuote",
+    "nothingInForce": "Oggi non mappa nulla",
+    "since": "dal {day}",
+    "from": "dal {day}",
+    "moreUpcoming_one": "e {count} altra modifica",
+    "moreUpcoming_other": "e altre {count} modifiche",
+    "earlierCount_one": "{count} conto precedente",
+    "earlierCount_other": "{count} conti precedenti",
+    "lastEarlier": "ultimo {account} dal {day}",
+    "setBy": "impostato da {who} il {at}",
+    "whoAt": "{who} il {at}",
+    "noMatch": {
+      "title": "Nessuna chiave corrisponde",
+      "body": "Nessuna chiave di questo tipo e vista corrisponde alla ricerca.",
+      "other": "Ogni riga indica una chiave registrata da Nexus: nulla è tenuto a parte."
+    },
+    "clear": "Mostra tutte le chiavi",
+    "empty": {
+      "title": "Nessuna chiave da mappare",
+      "body": "Nexus non registra ancora nessuna chiave in questa azienda."
+    },
+    "otherTitle": "Nexus non registra questa chiave",
+    "otherBody": "Questa riga è conservata da prima e non mappa nulla. Resta nello storico; una riga da un giorno successivo si può ancora rimuovere.",
+    "dialog": {
+      "now": "Valido oggi",
+      "account": "Conto",
+      "accountHint": "Il codice del conto del commercialista: lettere, cifre e . _ / - (per esempio 60.01.02).",
+      "since": "Dal",
+      "fixed": "Fisso dal suo primo giorno: una modifica è una nuova riga da un giorno successivo.",
+      "note": "Nota",
+      "by": "Impostato da",
+      "noAccountBody": "Oggi non vale nessun conto: le righe delle scritture di questa chiave arrivano vuote al commercialista.",
+      "soon": "In modifica a breve",
+      "earlier": "Precedenti",
+      "change": "Modifica",
+      "remove": "Rimuovi",
+      "save": "Salva la modifica",
+      "addFirst": "Mappa questa chiave",
+      "addFirstHint": "Il primo conto di una chiave può partire prima: copre i giorni che non avevano un conto (per esempio dal 1° gennaio).",
+      "addChange": "Mappa su un altro conto da un giorno",
+      "addChangeHint": "Una modifica parte da oggi o dopo, così ciò che è stato consegnato mantiene il suo conto.",
+      "from": "Dal",
+      "go": "Mappa dal {day}",
+      "goNoDay": "Mappa da un giorno"
+    },
+    "done": {
+      "added": "{account} vale dal {day}.",
+      "changed": "La riga dal {day} ora mappa su {account}.",
+      "removed": "La riga dal {day} ({account}) è rimossa."
+    },
+    "bulk": {
+      "map_one": "Mappa {count} chiave…",
+      "map_other": "Mappa {count} chiavi…",
+      "export_one": "Esporta {count} (CSV)",
+      "export_other": "Esporta {count} (CSV)",
+      "title_one": "Mappa {count} chiave su un solo conto",
+      "title_other": "Mappa {count} chiavi su un solo conto",
+      "lead": "Ogni chiave riceve una sua riga con questo conto, da questo giorno. Una chiave rifiutata dice perché; le altre vengono create.",
+      "chosen": "Le chiavi scelte",
+      "fromHint": "Una chiave già mappata cambia da oggi o dopo.",
+      "go_one": "Mappa {count} chiave dal {day}",
+      "go_other": "Mappa {count} chiavi dal {day}",
+      "goNoDay_one": "Mappa {count} chiave da un giorno",
+      "goNoDay_other": "Mappa {count} chiavi da un giorno",
+      "running": "Mappatura: {sent} di {count}",
+      "done": "{made} mappate · {refused} rifiutate",
+      "refused": "Le chiavi rifiutate"
+    },
+    "held": {
+      "noManage": "Per modificare la mappatura serve il permesso (accounting.mapping.manage).",
+      "notPosted": "Nexus non registra questa chiave: non c'è nulla da mappare.",
+      "busy": "In corso…",
+      "running": "Si chiude quando ogni chiave è stata inviata.",
+      "reading": "La mappatura è ancora in lettura.",
+      "account": "Scrivi prima il conto.",
+      "accountShape": "Un conto ha da 1 a 40 tra lettere, cifre e . _ / -, e inizia con una lettera o una cifra.",
+      "day": "Scegli il giorno da cui vale.",
+      "backdated": "Questa chiave è già mappata: una modifica parte da oggi o dopo.",
+      "sameDay": "Questa chiave ha già una riga da quel giorno: modifica quella riga o scegli un altro giorno.",
+      "note": "Una nota ha al massimo {max} caratteri.",
+      "fixed": "Questa riga vale dal {day}: è fissa. Una modifica è una nuova riga da un giorno successivo.",
+      "nothingChanges": "Non cambia nulla: la riga è già così.",
+      "noneChosen": "Scegli prima le chiavi.",
+      "bulkNotPosted_one": "{count} chiave scelta non è registrata da Nexus: lasciala fuori.",
+      "bulkNotPosted_other": "{count} chiavi scelte non sono registrate da Nexus: lasciale fuori.",
+      "bulkBackdated_one": "{count} chiave scelta è già mappata: cambia da oggi o dopo.",
+      "bulkBackdated_other": "{count} chiavi scelte sono già mappate: cambiano da oggi o dopo.",
+      "bulkSameDay_one": "{count} chiave scelta ha già una riga da quel giorno: scegli un altro giorno.",
+      "bulkSameDay_other": "{count} chiavi scelte hanno già una riga da quel giorno: scegli un altro giorno."
+    },
+    "refusal": {
+      "FIXED": "Questa riga vale già: è fissa. Una modifica è una nuova riga da un giorno successivo.",
+      "BACKDATED": "Questa chiave è già mappata: una modifica parte da oggi o dopo.",
+      "SAME_DAY": "Questa chiave ha già una riga da quel giorno.",
+      "NOTHING_CHANGES": "Non cambia nulla: la riga è già così.",
+      "UNKNOWN_KEY": "Nexus non registra più questa chiave: la mappatura viene riletta."
+    },
+    "csv": {
+      "file": "mappatura-conti",
+      "kind": "Tipo",
+      "key": "Chiave",
+      "what": "Cosa registra Nexus",
+      "account": "Conto oggi",
+      "since": "Dal",
+      "next": "Prossimo conto",
+      "nextFrom": "Dal",
+      "note": "Nota"
+    }
+  },
+  "journals": {
+    "title": "Registri con i conti mappati",
+    "stepUp": "Per attivare o disattivare le scritture serve un nuovo codice dalla tua app di autenticazione.",
+    "on": {
+      "state": "Attive",
+      "words": "I registri portano le loro scritture con i conti mappati (vendite, acquisti, incassi, costo del venduto e scostamenti): il software del commercialista le importa.",
+      "what": "Dalla prossima esportazione ogni registro va con un file delle scritture: ogni documento come una scrittura, con i conti mappati nel suo giorno.",
+      "checks": "All'esportazione si aggiungono due controlli: \"Ogni conto mappato\" e \"Le scritture quadrano\".",
+      "unmapped_one": "{count} chiave non ha un conto oggi: le sue righe restano vuote finché non è mappata.",
+      "unmapped_other": "{count} chiavi non hanno un conto oggi: le loro righe restano vuote finché non sono mappate.",
+      "gate": "Attivale quando il commercialista ha confermato la mappatura."
+    },
+    "off": {
+      "state": "Non attive",
+      "words": "In attesa del commercialista: i registri vanno senza scritture mappate finché una persona non le attiva, dopo che il commercialista ha confermato la mappatura.",
+      "what": "Dalla prossima esportazione i registri vanno senza i file delle scritture.",
+      "handedOver": "Le esportazioni fatte prima mantengono i loro file come sono."
+    },
+    "from": {
+      "COMPANY": "Impostato per questa azienda.",
+      "TENANT": "Impostato per tutte le aziende dell'organizzazione.",
+      "DEFAULT": "Predefinito di Nexus: non attive."
+    },
+    "switchOn": "Attiva…",
+    "switchOff": "Disattiva…",
+    "dialog": {
+      "onTitle": "Attivare le scritture dei registri?",
+      "offTitle": "Disattivare le scritture dei registri?",
+      "onGo": "Attiva",
+      "offGo": "Disattiva",
+      "reason": "Perché",
+      "reasonHint": "Resta nello storico (facoltativo).",
+      "code": "Poi ti viene chiesto il codice di autenticazione."
+    },
+    "done": {
+      "on": "I registri portano le loro scritture dalla prossima esportazione.",
+      "off": "I registri vanno senza le loro scritture dalla prossima esportazione."
+    },
+    "held": {
+      "noSwitch": "Per attivare o disattivare le scritture serve il permesso (accounting.journals.switch).",
+      "running": "Si chiude quando arriva la risposta.",
+      "reason": "Un motivo ha al massimo {max} caratteri."
+    },
+    "contents": {
+      "on": "I registri vanno con le loro scritture, con i conti mappati nel giorno di ogni documento.",
+      "off": "I registri vanno senza scritture mappate: aspettano che il commercialista confermi la mappatura.",
+      "link": "Piano dei conti"
+    }
+  },
+  "hard": {
+    "title": "Chiudere {month} in modo definitivo?",
+    "lead": "Una volta chiuso, nulla con data {month} può più cambiare.",
+    "what": {
+      "nothing": "Fatture, note di credito, incassi, fatture dei fornitori, movimenti di magazzino e costi degli ordini di produzione con data {month} vengono rifiutati per tutti: li rifiuta il database stesso.",
+      "correct": "Una correzione va poi in un mese aperto: una nota di credito o una rettifica con data successiva a {month}.",
+      "lift": "Solo chi ha accounting.unlock (il titolare) può riaprirlo, con un motivo e un nuovo codice.",
+      "accountant": "Nulla viene inviato al commercialista: i file li consegni tu."
+    },
+    "go": "Chiudi {month}",
+    "problems": "{month} non si può ancora chiudere in modo definitivo:",
+    "code": "Poi ti viene chiesto il codice di autenticazione.",
+    "held": {
+      "noClose": "Per chiudere un mese in modo definitivo serve il permesso (accounting.close).",
+      "running": "Si chiude quando arriva la risposta."
+    }
+  },
+  "integrity": {
+    "title": "Controlli notturni",
+    "lead": "Ogni notte Nexus controlla i documenti dal {from} al {to} e conserva il risultato di ogni controllo; l'esportazione legge l'ultimo.",
+    "leadShort": "Ogni notte Nexus controlla i documenti di questo mese e dei dodici precedenti; l'esportazione legge l'ultimo risultato.",
+    "lastRun": "Ultimo controllo {at}",
+    "neverRun": "Non ancora eseguiti",
+    "run": "Esegui i controlli ora",
+    "reading": "Lettura dei controlli…",
+    "failed": "Impossibile caricare i controlli notturni",
+    "ranNightly": "dal controllo notturno del {at}",
+    "ranBy": "eseguito da {who} il {at}",
+    "history": "controlli precedenti: {passed} superati, {failed} no",
+    "historyAll_one": "il controllo precedente è stato superato",
+    "historyAll_other": "i {count} controlli precedenti sono stati superati",
+    "error": "Non è stato possibile eseguirlo: si riprova stanotte.",
+    "never": "Non è ancora stato eseguito.",
+    "export": "Un controllo notturno non superato non blocca l'esportazione: dice cosa troverebbe il commercialista.",
+    "failuresLabel": "Documenti che non superano {check}",
+    "held": {
+      "noRun": "Per eseguire i controlli serve il permesso di esportazione (accounting.export).",
+      "running": "I controlli sono in corso."
+    },
+    "check": {
+      "INVOICE_TOTALS_EQUAL_LINES": {
+        "title": "Totali delle fatture uguali alle righe",
+        "pass": "I totali di ogni fattura sono uguali al riepilogo IVA e alle righe.",
+        "fail_one": "{count} fattura ha totali diversi dalla somma delle righe.",
+        "fail_other": "{count} fatture hanno totali diversi dalla somma delle righe."
+      },
+      "SUPPLIER_INVOICE_TOTALS_EQUAL_LINES": {
+        "title": "Totali delle fatture fornitori uguali alle righe",
+        "pass": "I totali di ogni fattura fornitore sono uguali al riepilogo IVA e alle righe.",
+        "fail_one": "{count} fattura fornitore ha totali diversi dalla somma delle righe.",
+        "fail_other": "{count} fatture fornitori hanno totali diversi dalla somma delle righe."
+      },
+      "ALLOCATIONS_WITHIN_PAYMENTS": {
+        "title": "Abbinamenti entro gli incassi",
+        "pass": "Nessun incasso è abbinato oltre il suo importo e nessuna fattura è pagata oltre il suo totale.",
+        "fail_one": "{count} incasso o fattura è abbinato oltre il suo importo.",
+        "fail_other": "{count} incassi o fatture sono abbinati oltre il loro importo."
+      },
+      "PAYMENTS_PLACED": {
+        "title": "Incassi abbinati",
+        "pass": "Ogni incasso ricevuto è abbinato, rimborsato o stralciato.",
+        "fail_one": "{count} incasso non è abbinato del tutto.",
+        "fail_other": "{count} incassi non sono abbinati del tutto."
+      },
+      "LEDGER_BALANCES": {
+        "title": "Le scritture quadrano",
+        "pass": "In ogni scrittura il dare è uguale all'avere.",
+        "fail_one": "{count} scrittura non quadra.",
+        "fail_other": "{count} scritture non quadrano."
+      },
+      "EXPORTED_DOCUMENTS_UNCHANGED": {
+        "title": "Documenti esportati non modificati",
+        "pass": "Nessun documento consegnato in un'esportazione è cambiato da allora.",
+        "fail_one": "{count} documento è cambiato dopo la consegna: una riesportazione lo porta.",
+        "fail_other": "{count} documenti sono cambiati dopo la consegna: una riesportazione li porta."
+      }
+    },
+    "failure": {
+      "SUMMARY": "totali diversi dal riepilogo IVA",
+      "LINES": "le righe non tornano",
+      "PAYMENT": "abbinato oltre l'incasso",
+      "INVOICE": "pagata oltre la fattura",
+      "NOT_PLACED": "non abbinato",
+      "UNBALANCED": "non quadra",
+      "CHANGED_AFTER_EXPORT": "cambiato dopo l'esportazione"
+    }
+  },
+  "sum": {
+    "COST_OF_SALES": "Costo del venduto",
+    "VARIANCE": "Scostamenti",
+    "PPV": "Scostamento prezzo di acquisto",
+    "SALES_VAT": "IVA sulle vendite",
+    "VAT_DUE": "IVA dovuta",
+    "PURCHASES_VAT": "IVA sugli acquisti"
+  },
+  "fix": {
+    "WorkOrder": "Ordine di produzione {number}",
+    "AccountMapping": "Mappa {number}",
+    "SupplierInvoice": "Fattura fornitore {number}",
+    "Refund": "Rimborso {number}",
+    "CostOfSalesEntry": "Costo del venduto {number}",
+    "WorkOrderVariance": "Scostamento {number}",
+    "PurchasePriceVariance": "Scostamento prezzo di acquisto {number}"
+  }
+}

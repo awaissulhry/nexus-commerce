@@ -80,8 +80,8 @@ import {
 describe('the lists mirror factory-domain', () => {
   it('packages and their rules, statuses, lock levels, checks, Intrastat flags, manifest changes', () => {
     expect(ACCOUNTING_PACKAGES).toEqual(DOMAIN_PACKAGES)
-    // B-W2b-408: the domain has no wave any more (every package is built); the wizard keeps its own until B-W2b-426.
-    for (const pkg of ACCOUNTING_PACKAGES) expect({ grain: PACKAGE_RULES[pkg].grain, scope: PACKAGE_RULES[pkg].scope }, pkg).toEqual({ grain: DOMAIN_RULES[pkg].grain, scope: DOMAIN_RULES[pkg].scope })
+    // B-W2b-426: every package is offered (no wave); the VAT registers carry both grains.
+    for (const pkg of ACCOUNTING_PACKAGES) expect({ grain: PACKAGE_RULES[pkg].grain, alsoGrain: PACKAGE_RULES[pkg].alsoGrain, scope: PACKAGE_RULES[pkg].scope }, pkg).toEqual({ grain: DOMAIN_RULES[pkg].grain, alsoGrain: DOMAIN_RULES[pkg].alsoGrain, scope: DOMAIN_RULES[pkg].scope })
     expect(EXPORT_STATUSES).toEqual(DOMAIN_STATUSES)
     expect(LOCK_LEVELS).toEqual(DOMAIN_LEVELS)
     expect(LOCK_STATUSES).toEqual(DOMAIN_LOCK_STATUSES)
@@ -106,9 +106,12 @@ const EXPLAINED = { PERIOD_ENDED: 'a', SHIPMENTS_INVOICED: 'b', PAYMENTS_PLACED:
 
 describe('who may do what', () => {
   it('reading, exporting, locking, lifting a final close, and the grains', () => {
-    expect(accountingCanOf(['accounting.view'])).toEqual({ view: true, export: false, lock: false, unlock: false, price: false, cost: false })
+    expect(accountingCanOf(['accounting.view'])).toEqual({ view: true, export: false, lock: false, unlock: false, close: false, price: false, cost: false })
     expect(canAs('owner').unlock).toBe(true)
     expect(finance.unlock).toBe(false)
+    // B-W2b-408/426: finance closes a month for good (accounting.close), the owner too.
+    expect(finance.close).toBe(true)
+    expect(canAs('financePrice').close).toBe(false)
   })
 })
 
@@ -142,12 +145,15 @@ describe('the address', () => {
 })
 
 describe('the packages', () => {
-  it('W2b packages, the year-end pack outside the year end and a missing grain are held in words', () => {
-    expect(packageHeld('COST_OF_SALES', { yearEnd: false }, finance)).toEqual({ key: 'contents.held.w2b' })
+  it('the year-end pack outside the year end and a missing grain are held in words; B-W2b-426: the bridge’s packages are offered', () => {
+    expect(packageHeld('COST_OF_SALES', { yearEnd: false }, finance)).toBeNull()
+    expect(packageHeld('VAT_REGISTERS', { yearEnd: false }, finance)).toBeNull()
+    expect(packageHeld('VAT_REGISTERS', { yearEnd: false }, canAs('financePrice'))).toEqual({ key: 'contents.held.grain.cost' })
+    expect(packageHeld('VAT_REGISTERS', { yearEnd: false }, { price: false, cost: true })).toEqual({ key: 'contents.held.grain.price' })
     expect(packageHeld('YEAR_END_STOCK', { yearEnd: false }, finance)).toEqual({ key: 'contents.held.yearEnd' })
     expect(packageHeld('YEAR_END_STOCK', { yearEnd: true }, finance)).toBeNull()
     expect(packageHeld('PURCHASES_JOURNAL', { yearEnd: false }, canAs('financePrice'))).toEqual({ key: 'contents.held.grain.cost' })
-    expect(askablePackages(false, finance)).toEqual(['SALES_JOURNAL', 'PURCHASES_JOURNAL', 'PAYMENTS', 'INTRASTAT'])
+    expect(askablePackages(false, finance)).toEqual(['SALES_JOURNAL', 'PURCHASES_JOURNAL', 'PAYMENTS', 'COST_OF_SALES', 'VAT_REGISTERS', 'INTRASTAT'])
     expect(askablePackages(true, canAs('financePrice'))).toEqual(['SALES_JOURNAL', 'PAYMENTS', 'INTRASTAT'])
   })
 
@@ -252,9 +258,11 @@ describe('the lock', () => {
   it('locking is held: the permission, the same level again, a final close made soft, the phrase', () => {
     const base = { month: '2026-09', phrase: '', current: null, can: finance, busy: false } as const
     expect(lockHeld({ ...base, level: 'SOFT' })).toBeNull()
-    expect(lockHeld({ ...base, level: 'SOFT', can: { lock: false } })).toEqual({ key: 'lock.held.noLock' })
+    expect(lockHeld({ ...base, level: 'SOFT', can: { lock: false, close: false } })).toEqual({ key: 'lock.held.noLock' })
     expect(lockHeld({ ...base, level: 'SOFT', current: LOCK_SEPTEMBER })).toEqual({ key: 'lock.held.alreadySoft' })
     expect(lockHeld({ ...base, level: 'HARD', current: LOCK_SEPTEMBER })).toEqual({ key: 'lock.held.phrase' })
+    // B-W2b-426: closing for good needs accounting.close.
+    expect(lockHeld({ ...base, level: 'HARD', current: LOCK_SEPTEMBER, phrase: 'chiudi settembre 2026', can: { lock: true, close: false } })).toEqual({ key: 'hard.held.noClose' })
     expect(lockHeld({ ...base, level: 'HARD', current: LOCK_SEPTEMBER, phrase: 'chiudi settembre 2026' })).toBeNull()
     expect(lockHeld({ ...base, month: '2026-08', level: 'SOFT', current: LOCK_AUGUST })).toEqual({ key: 'lock.held.hardFirst' })
     expect(lockHeld({ ...base, month: '2026-08', level: 'HARD', current: LOCK_AUGUST })).toEqual({ key: 'lock.held.alreadyHard' })

@@ -142,6 +142,10 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   PayrollExport: '/people/payroll/[id]',
   // Finance › Accounting export (SCR-156, B-W2a-51): a batch opens on its files tab (its checks, explanations and files).
   AccountingExport: '/finance/accounting/files?export=[id]',
+  // B-W2b-426: a mapping row (its id) or a key a check names (`KIND/KEY`) opens its key on the account mapping; the
+  // journals switch (AccountingSettings) opens the same page.
+  AccountMapping: '/finance/accounting/mapping?open=[id]',
+  AccountingSettings: '/finance/accounting/mapping',
   // Production › Scrap & rework (SCR-140, B-W2a-60): a rework order opens in its row's detail on the list.
   ReworkOrder: '/production/scrap?open=rework:[id]',
   // B-W2b-58: a help call opens in its DetailModal on Production › Help calls (SCR-142; the bell's call alerts).

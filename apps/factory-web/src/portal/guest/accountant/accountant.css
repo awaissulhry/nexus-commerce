@@ -132,12 +132,6 @@
   padding: 0 var(--nds-space-8);
 }
 
-.fw-pacc-later {
-  margin: 0;
-  color: var(--nds-text-2);
-  font-size: var(--nds-font-size-sm);
-}
-
 .fw-pacc-ask {
   scroll-margin-top: var(--nds-space-48);
 }

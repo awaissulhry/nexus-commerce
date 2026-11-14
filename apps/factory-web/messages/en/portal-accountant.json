@@ -54,17 +54,11 @@
   },
   "registers": {
     "title": "VAT and registers",
-    "hint": "What the exports carry besides the journals: the Intrastat file and the year-end stock pack. A later export replaces the whole file.",
+    "hint": "What the exports carry besides the journals: the VAT registers (sales, purchases and their totals), the Intrastat file and the year-end stock pack. A later export replaces the whole file.",
     "empty": "No register file in this period",
-    "emptyBody": "The Intrastat file comes with a month's export, the stock pack with the year end.",
+    "emptyBody": "The VAT registers and the Intrastat file come with a month's export, the stock pack with the year end.",
     "current": "Current",
-    "replacedBy": "Replaced by {number}",
-    "later": "{items} are not made by the system yet: ask finance for them.",
-    "laterItem": {
-      "VAT_REGISTERS": "The VAT registers",
-      "VAT_SUMMARY": "the VAT settlement summary"
-    },
-    "join": " and "
+    "replacedBy": "Replaced by {number}"
   },
   "ask": {
     "title": "Ask finance"

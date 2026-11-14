@@ -1,0 +1,72 @@
+/*
+ * B-W2b-426 — Account mapping (SCR-480) LAYOUT, beside accounting.css (the page reuses its band, cells and dialogs): the
+ * journals switch and the mapping's facts side by side from 1100 px, accounts in the mono face, a key's rows in its
+ * dialog, the keys chosen for "Map N keys". The controls are the design system's; semantic tokens only. No page max-width
+ * (Owner rule 2026-10-29): the cards share the main area's width.
+ */
+.fw-fam-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+@media (min-width: 1100px) {
+  .fw-fam-top {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  }
+}
+
+.fw-fam-journals,
+.fw-fam-facts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-fam-code,
+.fw-fam-account {
+  font-family: var(--nds-font-mono, ui-monospace, monospace);
+  font-size: var(--nds-font-size-sm);
+  overflow-wrap: anywhere;
+}
+
+.fw-fam-account {
+  font-weight: 600;
+  color: var(--nds-text);
+}
+
+.fw-fam-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-fam-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-12);
+  padding: var(--nds-space-8) 0;
+  border-top: 1px solid var(--nds-border);
+  min-width: 0;
+}
+
+.fw-fam-row > .fw-fac-form {
+  flex: 1 1 100%;
+}
+
+.fw-fam-add {
+  padding-top: var(--nds-space-8);
+  border-top: 1px solid var(--nds-border);
+}
+
+.fw-fam-picked {
+  max-height: 10rem;
+  overflow-y: auto;
+}

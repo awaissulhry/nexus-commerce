@@ -27,9 +27,11 @@ export const at = (day: number, hour: number, minute = 0, month = 10) => new Dat
 // ---- roles -------------------------------------------------------------------------------------------------------------------
 
 const BASE = ['home.view', 'threads.read', 'threads.post', 'files.read', 'invoices.view', 'payments.view']
+/** B-W2b-408: finance and the owner map accounts, switch the journals and close a month for good. */
+const BRIDGE = ['accounting.mapping.manage', 'accounting.journals.switch', 'accounting.close']
 export const ROLES = {
-  owner: [...OWNER_PERMISSIONS, 'invoices.view', 'payments.view', 'inventory.stock.view', 'accounting.view', 'accounting.export', 'accounting.lock', 'accounting.unlock', 'money.price', 'money.cost', 'money.margin'],
-  finance: [...BASE, 'inventory.stock.view', 'accounting.view', 'accounting.export', 'accounting.lock', 'money.price', 'money.cost', 'money.margin'],
+  owner: [...OWNER_PERMISSIONS, 'invoices.view', 'payments.view', 'inventory.stock.view', 'accounting.view', 'accounting.export', 'accounting.lock', 'accounting.unlock', ...BRIDGE, 'money.price', 'money.cost', 'money.margin'],
+  finance: [...BASE, 'inventory.stock.view', 'accounting.view', 'accounting.export', 'accounting.lock', ...BRIDGE, 'money.price', 'money.cost', 'money.margin'],
   /** A finance person without the cost grain (a made-up custom role): the purchases journal and the year-end pack are held. */
   financePrice: [...BASE, 'accounting.view', 'accounting.export', 'accounting.lock', 'money.price'],
   /** Read only: sees the batches and the months, makes nothing. */
@@ -293,6 +295,7 @@ export const OCTOBER: PeriodAnswer = {
   intrastat: { rows: 2, fileRows: 2, blocking: 1, warnings: 1 },
   changes: 15,
   layout: 'DEFAULT',
+  journals: { on: false },
 }
 
 /** The same month once the DDTs are invoiced and the payment placed (2 checks fixed). */
