@@ -1,5 +1,6 @@
 import { events as shippingEvents } from '@nexus/factory-domain/shipping/events'
 import { InvalidStateError } from '@nexus/factory-domain/core/errors'
+import { hasTestLabel } from '@nexus/factory-domain/shipping/exceptions/rules'
 import { SYSTEM_ACTOR_ID } from '../../../core/context'
 import { serverClock, type Clock } from '../../../core/time'
 import { processEmail, type EmailRuntime } from '../../../platform/email-out/service'
@@ -33,6 +34,9 @@ export function trackingLinkHandler(runtime: { readonly email?: () => EmailRunti
       const shipment = await tools.caller.withClient((client) => readShipment(client, payload.shipmentId))
       // Delivered before the job ran: the link still goes (the page answers until 60 days after delivery).
       if (!shipment || (shipment.status !== 'SHIPPED' && shipment.status !== 'DELIVERED')) return
+      // B-W2b-398: a shipment that left with TEST labels (test mode, B-W2b-390) mails nothing: no customer gets a TEST tracking number.
+      const parcels = await tools.caller.withClient((client) => client.parcel.findMany({ where: { shipmentId: shipment.id }, select: { carrierParcelId: true, trackingNumber: true } }))
+      if (hasTestLabel(parcels)) return
       const to = (await recipientsOf(tools.caller, shipment.partyId)).map(({ email: address, contactId, language }) => ({ email: address, contactId, language }))
       if (to.length === 0) return
       const runtimeEmail = email()

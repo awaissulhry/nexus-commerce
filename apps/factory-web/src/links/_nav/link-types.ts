@@ -25,6 +25,7 @@ import { LINK_PURPOSES, PURPOSE_RULES, type LinkPurpose } from '@nexus/factory-d
  *   SUPPLIER_ONBOARD Party           onboard                 links/onboard (SCR-269; B-W2b-172)
  *   RECORD_INVITE   a shared record  invite                  links/invite (SCR-270; B-W2b-200): Style, Quote, SalesOrder, PurchaseOrder,
  *                                                            SubcontractOrder, Shipment, Complaint, ReturnAuthorisation, SupplierClaim
+ *   RETURN_LABEL    ReturnAuthorisation  return-label        links/return-label (SCR-436; B-W2b-398)
  *
  * A step that builds a link page adds ONE row here and its component to LinkLanding.
  *
@@ -57,6 +58,8 @@ export const LINK_TASKS = [
   'payroll-file',
   // B-W2b-200: a record a partner is invited to (SCR-270).
   'invite',
+  // B-W2b-398: a return label booked by the customer when the goods go (SCR-436).
+  'return-label',
 ] as const
 export type LinkTask = (typeof LINK_TASKS)[number]
 
@@ -94,6 +97,8 @@ export const LINK_TASK_RULES: readonly LinkTaskRule[] = Object.freeze([
   { purpose: 'DOCUMENT_VIEW', recordType: 'PayrollExport', task: 'payroll-file' },
   // B-W2b-200: a partner invited to one record (SCR-270): every record type a RECORD_INVITE link opens.
   ...PURPOSE_RULES.RECORD_INVITE.recordTypes.map((recordType) => ({ purpose: 'RECORD_INVITE' as const, recordType, task: 'invite' as const })),
+  // B-W2b-398: the customer books its return label (SCR-436).
+  { purpose: 'RETURN_LABEL', recordType: 'ReturnAuthorisation', task: 'return-label' },
 ])
 
 /** Every purpose × record type a link can have (the domain's own list): what the registry must decide for. */

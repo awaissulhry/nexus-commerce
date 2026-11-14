@@ -1,0 +1,224 @@
+{
+  "rl": {
+    "title": "Return label or link",
+    "what": "The carrier label of the goods coming back: made now from the shipment they went out on (the addresses swapped), or a link the customer uses to book the carrier only when the goods go.",
+    "loading": "Reading the return labels…",
+    "retry": "Try again",
+    "make": "Make return label",
+    "offline": "No connection: nothing is booked or sent until the network is back.",
+    "dismiss": "Close",
+    "table": "Return labels",
+    "col": {
+      "what": "Label or link",
+      "state": "State",
+      "carrier": "Carrier",
+      "detail": "Details",
+      "actions": "Actions"
+    },
+    "mode": {
+      "LABEL": "Label",
+      "LINK": "Link"
+    },
+    "status": {
+      "OFFERED": "Offered by link",
+      "BOOKED": "Booked",
+      "USED": "Used",
+      "CANCELLED": "Withdrawn"
+    },
+    "reference": "Reference {reference}",
+    "linkTo": "Link to {email}",
+    "linkPassedOn": "Link passed on",
+    "linkUntil": "open until {day}",
+    "linkOpened": "last opened {at}",
+    "linkNotOpened": "not opened yet",
+    "usedAt": "goods received {at}",
+    "cancelledAt": "withdrawn {at}",
+    "madeAt": "made {at}",
+    "openPdf": "Return label PDF",
+    "cancel": "Withdraw",
+    "from": "A new label swaps the addresses of shipment {shipment}.",
+    "empty": {
+      "title": "Nothing booked",
+      "body": "Make a return label: one booked now, or a link the customer uses within {days} days."
+    },
+    "passOn": {
+      "copied": "Link copied: pass it on to the customer. It is shown this once.",
+      "shown": "The link to pass on, shown this once:",
+      "copy": "Copy again"
+    },
+    "done": {
+      "booked": "The return label is booked: open its PDF to print it or send it.",
+      "cancelled": "The return label was withdrawn.",
+      "offered_one": "The link went to {count} contact of the customer.",
+      "offered_other": "The link went to {count} contacts of the customer."
+    },
+    "failed": {
+      "read": "The return labels could not be read.",
+      "forbidden": "You may not make or withdraw return labels for this return.",
+      "refused": "The return label was refused as it is: read the return again.",
+      "offline": "The factory could not be reached: nothing was booked.",
+      "error": "Something went wrong: nothing was booked."
+    },
+    "held": {
+      "loading": "Still reading the return labels.",
+      "right": "Making return labels needs the right to manage returns.",
+      "offline": "No connection: try again when the network is back.",
+      "busy": "One moment: the last action is still on its way.",
+      "final": "A used or withdrawn label never changes.",
+      "code": {
+        "RETURN_CLOSED": "A return label is made only while the goods may come back: the return authorised, or received in part.",
+        "NO_SHIPMENT": "No shipment of the return's order left us: the label swaps the addresses of the shipment the goods went out on.",
+        "TEST_MODE": "The return's site is in test mode (Shipping settings): a TEST label would reach the customer, who never gets one.",
+        "NO_CARRIER_ACCOUNT": "The company has no usable Sendcloud connection: nothing can be booked.",
+        "NO_ADDRESS": "The site has no return or sender address in its shipping settings, or the shipment's address is incomplete.",
+        "NO_SERVICE": "Neither the shipment nor the site names a carrier and a service to book.",
+        "NO_RECIPIENT": "The customer has no active orders contact with an e-mail address: pass the link on instead.",
+        "FINAL": "This return label is used or withdrawn: it never changes.",
+        "NOT_OFFERED": "This label was booked or withdrawn already.",
+        "CARRIER": "The carrier did not book the label: try again in a moment."
+      }
+    },
+    "dialog": {
+      "title": "Make a return label for {number}",
+      "how": "How the customer gets it",
+      "label": "Book the label now",
+      "labelLine": "The carrier is booked at once; you print the PDF or send it to the customer.",
+      "link": "Send a link",
+      "linkLine": "The customer books the carrier only when the goods go; nothing is booked before. The link opens for {days} days.",
+      "shipment": "Shipment the goods went out on",
+      "shipmentHint": "Its addresses are swapped: from the customer back to us.",
+      "send": "Who gets the link",
+      "sendMail": "Mail it to the customer's orders contacts",
+      "sendTo": "To: {names}",
+      "sendPass": "Copy a link to pass on",
+      "sendPassLine": "Its address is shown once, here, and copied to the clipboard.",
+      "labelNote": "Booking a label may cost money at the carrier.",
+      "linkNote": "The link mail is in the customer's language; nothing goes to the carrier until the customer books.",
+      "back": "Back",
+      "book": "Book the label",
+      "mail": "Mail the link",
+      "passOn": "Copy the link"
+    },
+    "cancelDialog": {
+      "title": "Withdraw this return label?",
+      "offered": "Its link stops opening at once; nothing was booked.",
+      "booked": "The label {reference} is withdrawn here. The carrier's booking stays in Sendcloud: cancel it there if the customer will not use it.",
+      "confirm": "Withdraw"
+    }
+  },
+  "win": {
+    "title": "Return label of {number}",
+    "back": "Open the return",
+    "loading": "Reading the label PDF…",
+    "cancelled": "This label was withdrawn: do not send it to the customer.",
+    "noPdf": {
+      "title": "No PDF yet",
+      "offered": "The label is offered by a link: its PDF exists once the customer books the carrier.",
+      "cancelled": "The label was withdrawn before it was booked: it has no PDF."
+    },
+    "problem": {
+      "notFound": "This return label does not exist, or the address is incomplete.",
+      "forbidden": "You may not see this return.",
+      "failed": "The return label could not be read.",
+      "pdf": "The label PDF could not be read."
+    }
+  },
+  "dv": {
+    "title": "Delivered (from carrier)",
+    "what": "When each shipment arrived, how we know, and its proof of delivery for a dispute. Once every shipment arrived the order is delivered and the payment steps that run from delivery fall due.",
+    "loading": "Reading the deliveries…",
+    "failed": "The deliveries could not be read.",
+    "waiting": "The order is delivered once every shipment that left arrived.",
+    "orderDelivered": "Delivered on {day}",
+    "stepsDue": "Payment steps that run from delivery: {steps}.",
+    "step": "step {seq} due {day}",
+    "stepsSettled": "The payment steps that run from delivery are settled.",
+    "noSteps": "No payment step runs from delivery.",
+    "empty": {
+      "title": "Nothing shipped yet",
+      "body": "Each shipment shows here once it leaves."
+    },
+    "col": {
+      "shipment": "Shipment",
+      "arrival": "How we know",
+      "when": "Delivered",
+      "signed": "Signed by",
+      "proof": "Proof"
+    },
+    "arrival": {
+      "carrier": "From the carrier",
+      "typed": "Typed by a person",
+      "travelling": "On its way",
+      "returned": "Came back"
+    },
+    "signedAt": "{name} · {at}",
+    "noSigner": "Not given",
+    "problems_one": "{count} tracking problem",
+    "problems_other": "{count} tracking problems",
+    "download": "Download proof",
+    "downloadFailed": "The proof could not be downloaded: try again.",
+    "held": {
+      "noImage": "The carrier gave no image of the proof yet.",
+      "right": "Downloading the proof needs the right to see shipments.",
+      "offline": "No connection: try again when the network is back.",
+      "busy": "One moment: a download is on its way."
+    }
+  },
+  "link": {
+    "title": "Your return {number}",
+    "loading": "Opening your return…",
+    "offline": "No connection: try again when the network is back.",
+    "what": "What to send back",
+    "return": "Return",
+    "yourRef": "Your reference",
+    "dueBy": "Send by",
+    "until": "This page opens until",
+    "lines": "What to send back",
+    "col": {
+      "what": "Item",
+      "size": "Size",
+      "pieces": "Pieces"
+    },
+    "way": "Your parcel",
+    "from": "From",
+    "to": "To",
+    "carrier": "Carrier",
+    "state": "Label",
+    "status": {
+      "OFFERED": "Not booked yet",
+      "BOOKED": "Booked",
+      "USED": "Received by us",
+      "CANCELLED": "Withdrawn"
+    },
+    "reference": "Carrier reference",
+    "bookHint": "When the goods are packed, book the carrier: nothing is booked before you press.",
+    "printHint": "Download the label, print it and stick it on the parcel.",
+    "usedHint": "Your parcel reached us.",
+    "book": "Book the carrier",
+    "download": "Download the label",
+    "used": {
+      "title": "Your return reached us",
+      "body": "We received it on {at}. We will tell you what happens next."
+    },
+    "held": {
+      "RETURN_CLOSED": "This return no longer takes goods back: write to us.",
+      "NO_SHIPMENT": "We cannot book the carrier for this return from here: write to us.",
+      "TEST_MODE": "We cannot book the carrier from here right now: write to us.",
+      "NO_CARRIER_ACCOUNT": "We cannot book the carrier from here right now: write to us.",
+      "NO_ADDRESS": "We cannot book the carrier from here right now: write to us.",
+      "NO_SERVICE": "We cannot book the carrier from here right now: write to us.",
+      "NO_RECIPIENT": "We cannot book the carrier from here right now: write to us.",
+      "FINAL": "This label is used or withdrawn.",
+      "NOT_OFFERED": "This label was booked already: download it below.",
+      "CARRIER": "The carrier did not book the label: try again in a moment.",
+      "busy": "One moment: the last press is still on its way.",
+      "notBooked": "Book the carrier first: the label exists once it is booked.",
+      "offline": "No connection: try again when the network is back."
+    },
+    "problem": {
+      "read": "Your return could not be opened.",
+      "failed": "Something went wrong: try again.",
+      "gone": "This link no longer opens."
+    }
+  }
+}

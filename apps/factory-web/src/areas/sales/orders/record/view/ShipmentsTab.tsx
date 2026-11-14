@@ -1,5 +1,6 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import Link from 'next/link'
 import { Card, EmptyState, SummaryTable } from '@nexus/ui/components'
 import { SizeGridView } from '@nexus/ui/grid/size-grid/index'
@@ -21,7 +22,8 @@ const SHIPMENT_TONE = { DRAFT: 'neutral', PACKED: 'info', SHIPPED: 'info', DELIV
  * quality released and what left; then every shipment of the order (its state, when it left, when it arrived), each a
  * real link to its record (Warehouse › Shipments). Create shipment opens Warehouse's New shipment with this order chosen.
  */
-export function ShipmentsTab({ order, model }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
+// B-W2b-398: `delivered` is the card "Delivered (from carrier)" (its container reads it; the design cases need no session).
+export function ShipmentsTab({ order, model, delivered }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions; delivered?: ReactNode }) {
   const t = useT('orders')
   const sales = useT('sales')
   const locale = useLocale()
@@ -85,6 +87,7 @@ export function ShipmentsTab({ order, model }: { order: Order; model: OrderRecor
           />
         )}
       </Card>
+      {delivered}
     </div>
   )
 }

@@ -4,6 +4,7 @@ import type {
   CarrierLabel,
   CarrierLabelRequest,
   CarrierPort,
+  CarrierProofOfDelivery,
   CarrierTrackingEvent,
   LabelDocument,
   LabelFormat,
@@ -80,7 +81,12 @@ const hex = (value: string): string => createHash('sha256').update(value).digest
 
 /** A tiny one-page PDF that says the label's tracking number (valid enough for any viewer; same input, same bytes). */
 function labelPdf(trackingNumber: string, request: CarrierLabelRequest): Uint8Array {
-  const text = `FAKE LABEL ${trackingNumber} ${request.shipmentNumber}/${request.seq}`.replace(/[()\\]/g, '')
+  return pdfSaying(`FAKE LABEL ${trackingNumber} ${request.shipmentNumber}/${request.seq}`)
+}
+
+/** A tiny one-page PDF with one line of text (B-W2b-398: the fake proof of delivery uses it too). */
+function pdfSaying(words: string): Uint8Array {
+  const text = words.replace(/[()\\]/g, '')
   const stream = `BT /F1 14 Tf 20 120 Td (${text}) Tj ET`
   const objects = [
     '<< /Type /Catalog /Pages 2 0 R >>',
@@ -132,6 +138,14 @@ export class FakeSendcloud implements CarrierPort {
     const found = this.find(key)
     found.eta = new Date(Date.parse(found.eta) + days * DAY_MS).toISOString()
     return found.eta
+  }
+
+  /** B-W2b-398 (LOG-065): what the next proof-of-delivery reads answer (null: the carrier has none), in order. */
+  private readonly proofs: (CarrierProofOfDelivery | null)[] = []
+
+  /** B-W2b-398: the next proof-of-delivery read answers this (null: none); otherwise a made-up signer and a small PDF. */
+  proofNext(proof: CarrierProofOfDelivery | null): void {
+    this.proofs.push(proof)
   }
 
   /** The next `count` voids are refused (the carrier collected the parcel). */
@@ -223,6 +237,27 @@ export class FakeSendcloud implements CarrierPort {
     call.answer({ httpStatus: 200, response: { fake: true, events: found.events.length } })
     // The newest event says the carrier's expected delivery as it stands now (B-W2b-F14).
     return found.events.map((event, index) => ({ ...event, ...(index === found.events.length - 1 ? { expectedDeliveryAt: found.eta } : {}) }))
+  }
+
+  /**
+   * B-W2b-398 (LOG-065): a delivered label's proof: a made-up signer ("FAKE RECIPIENT"), the delivery event's time and a
+   * one-page PDF saying so; a label not delivered has none (null). `proofNext` scripts the next answer.
+   */
+  async proofOfDelivery(call: CarrierCall, label: TrackedLabel): Promise<CarrierProofOfDelivery | null> {
+    this.guard(call)
+    const found = this.find(label.providerId)
+    if (this.proofs.length > 0) {
+      const scripted = this.proofs.shift()!
+      call.answer({ httpStatus: scripted ? 200 : 404, response: { fake: true, scripted: true } })
+      return scripted
+    }
+    const delivered = [...found.events].reverse().find((event) => event.code === FAKE_STATUSES.DELIVERED.code)
+    if (!delivered) {
+      call.answer({ httpStatus: 404, response: { fake: true, delivered: false } })
+      return null
+    }
+    call.answer({ httpStatus: 200, response: { fake: true } })
+    return { signedBy: 'FAKE RECIPIENT', signedAt: delivered.occurredAt, image: { contentType: 'application/pdf', body: pdfSaying(`FAKE PROOF OF DELIVERY ${found.label.trackingNumber} signed FAKE RECIPIENT`) } }
   }
 
   /**

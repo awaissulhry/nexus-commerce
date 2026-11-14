@@ -1,5 +1,5 @@
 import { NotFoundError } from '@nexus/factory-domain/core/errors'
-import { CARRIER_OPERATIONS, type CarrierLabel, type CarrierLabelRequest, type CarrierPort, type CarrierTrackingEvent, type LabelDocument, type LabelFormat, type TrackedLabel, type VoidOutcome } from '@nexus/factory-domain/ports/carrier'
+import { CARRIER_OPERATIONS, type CarrierLabel, type CarrierLabelRequest, type CarrierPort, type CarrierProofOfDelivery, type CarrierTrackingEvent, type LabelDocument, type LabelFormat, type TrackedLabel, type VoidOutcome } from '@nexus/factory-domain/ports/carrier'
 import type { AdapterAccount } from '@nexus/factory-domain/ports/provider'
 import type { LabelEnvironment } from '@nexus/factory-domain/shipping/labels/labels'
 import { FakeSendcloud } from '../../../adapters/sendcloud/fake'
@@ -18,7 +18,7 @@ import { testCarrier, type TestCarrier } from '../test-mode/label'
  * sendcloud.ts). Only office sessions and the system call it (the gateway refuses floor callers). Never inside a
  * command's transaction.
  *
- *   carrier.create_label    carrier.label_document    carrier.void_label    carrier.tracking
+ *   carrier.create_label    carrier.label_document    carrier.void_label    carrier.tracking    carrier.proof_of_delivery (B-W2b-398)
  */
 
 export interface CarrierRuntime {
@@ -34,6 +34,8 @@ export interface CarrierRuntime {
   labelDocument(caller: CommandCaller, accountId: string, providerId: string, format: LabelFormat): Promise<LabelDocument>
   voidLabel(caller: CommandCaller, accountId: string, providerId: string): Promise<VoidOutcome>
   tracking(caller: CommandCaller, accountId: string, label: TrackedLabel): Promise<readonly CarrierTrackingEvent[]>
+  /** B-W2b-398 (LOG-065): a delivered parcel's proof of delivery (null: the carrier has none). */
+  proofOfDelivery(caller: CommandCaller, accountId: string, label: TrackedLabel): Promise<CarrierProofOfDelivery | null>
 }
 
 export interface CarrierRuntimeOptions {
@@ -69,6 +71,9 @@ export function createCarrierRuntime(options: CarrierRuntimeOptions): CarrierRun
       options.gateway.call(gatewayAccount(caller, accountId), { ...CARRIER_OPERATIONS.voidLabel, idempotencyKey: `void:${providerId}`, request: { providerId } }, (call) => adapterFor(call.account).voidLabel(call, providerId)),
     tracking: (caller, accountId, label) =>
       options.gateway.call(gatewayAccount(caller, accountId), { ...CARRIER_OPERATIONS.tracking, request: { providerId: label.providerId } }, (call) => adapterFor(call.account).tracking(call, label)),
+    // B-W2b-398 (LOG-065)
+    proofOfDelivery: (caller, accountId, label) =>
+      options.gateway.call(gatewayAccount(caller, accountId), { ...CARRIER_OPERATIONS.proofOfDelivery, request: { providerId: label.providerId } }, (call) => adapterFor(call.account).proofOfDelivery(call, label)),
   } satisfies CarrierRuntime)
 }
 

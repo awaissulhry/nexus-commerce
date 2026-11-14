@@ -3,6 +3,7 @@ import type {
   CarrierCall,
   CarrierLabel,
   CarrierLabelRequest,
+  CarrierProofOfDelivery,
   CarrierPort,
   CarrierTrackingEvent,
   LabelDocument,
@@ -236,6 +237,13 @@ export function sendcloudAdapter(options: SendcloudOptions = {}): CarrierPort {
       const events = eventsOf(await json(response), label.trackingNumber)
       call.answer({ httpStatus: 200, response: { events: events.length } })
       return events
+    },
+
+    // B-W2b-398 (LOG-065): Sendcloud's API v3 proof of delivery is not mapped yet (a live account's answer to check first, Q20):
+    // no call is made and the carrier gives none, so the office records it by hand from the carrier's paper.
+    async proofOfDelivery(call: CarrierCall): Promise<CarrierProofOfDelivery | null> {
+      call.answer({ response: { mapped: false } })
+      return null
     },
   } satisfies CarrierPort)
 }

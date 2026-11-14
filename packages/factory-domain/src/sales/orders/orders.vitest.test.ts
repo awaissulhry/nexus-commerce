@@ -94,6 +94,18 @@ describe('the moves the system follows (workorder.released, shipments, the settl
     expect(followMoves('SHIPPED', { shipped: 'ALL', settlement: unsettled, reason: 'should not count' })).toEqual([])
     expect(followMoves('IN_PRODUCTION', { released: false, shipped: 'NONE', reason: 'should not count' })).toEqual([])
   })
+
+  // B-W2b-398 (LOG-067): a shipped order whose shipments all arrived is delivered, before it closes.
+  it('moves a shipped order to DELIVERED once every shipment that left arrived, then closes a settled one from there', () => {
+    expect(followMoves('SHIPPED', { shipped: 'ALL', delivered: true, settlement: unsettled })).toEqual(['DELIVERED'])
+    expect(followMoves('SHIPPED', { shipped: 'ALL', delivered: true, settlement: settled })).toEqual(['DELIVERED', 'CLOSED'])
+    expect(followMoves('PARTLY_SHIPPED', { shipped: 'ALL', delivered: true, settlement: unsettled })).toEqual(['SHIPPED', 'DELIVERED'])
+    expect(followMoves('DELIVERED', { shipped: 'ALL', delivered: true, settlement: settled })).toEqual(['CLOSED'])
+    expect(followMoves('SHIPPED', { shipped: 'ALL', delivered: false, settlement: unsettled })).toEqual([])
+    expect(followMoves('PARTLY_SHIPPED', { shipped: 'PARTLY', delivered: true })).toEqual([])
+    expect(canTransition(salesOrderMachine, 'SHIPPED', 'DELIVERED', { shipped: 'ALL', delivered: false })).toMatchObject({ ok: false, missing: ['every ordered piece shipped and every shipment that left delivered'] })
+    expect(canTransition(salesOrderMachine, 'DELIVERED', 'SHIPPED', { shipped: 'ALL' })).toMatchObject({ ok: false, reason: 'not_allowed' })
+  })
 })
 
 describe('per line × size progress (the design: Ordered · Made · Shipped · Left)', () => {

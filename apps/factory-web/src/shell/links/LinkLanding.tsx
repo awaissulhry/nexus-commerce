@@ -29,6 +29,8 @@ import { FileLink } from '../../links/file/FileLink'
 import { LinkRenewProvider } from './renew/LinkRenew'
 // B-W2b-200: a RECORD_INVITE link's shared record (SCR-270).
 import { InviteLink } from '../../links/invite/InviteLink'
+// B-W2b-398
+import { ReturnLabelLink } from '../../links/return-label/ReturnLabelLink'
 import { linkTaskOf, type LinkTask } from '../../links/_nav/link-types'
 import { linkStateFromError, linkStateOfOpened, type LinkState } from './link-state'
 import { LinkBrandingContext, LinkFrameView, type LinkFrameViewModel, type LinkSender } from './view/LinkFrameView'
@@ -154,6 +156,9 @@ function page(task: { task: LinkTask; api: ApiClient } | null, model: LinkFrameV
     // B-W2b-200
     case 'invite':
       return <InviteLink api={task.api} />
+    // B-W2b-398: a return label booked when the goods go (SCR-436).
+    case 'return-label':
+      return <ReturnLabelLink api={task.api} />
     default:
       return <LinkFrameView model={model} />
   }

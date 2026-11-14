@@ -29,6 +29,8 @@ import { createManualOrder, nextOrderNumber, previewManualOrder } from './manual
 import { cancelOrder, changePromise, closeOrder, markReady, officeOrder } from './moves'
 import { getOrder, listOrders, makeOrder, orderBoard } from './orders'
 import { getSchedule, requestStep, waiveDeposit } from './schedule'
+// B-W2b-398 (LOG-067): each shipment's arrival and proof, the order's delivery and the terms that run from it.
+import { deliveriesContract, getDeliveries } from './delivered'
 
 /**
  * Sales orders from the accepted quote (B-W1-25; SAL-200, SAL-203, SAL-204, SAL-206, SAL-214; A2 SCR-038, SCR-039): the
@@ -101,4 +103,7 @@ export default defineRoutes('sales.orders', manifest, async (app) => {
     const order = await officeOrder(request, request.params.orderId)
     return reply.code(201).send(await copyOrderAsQuote(request, order, request.body, idempotencyKeyFrom(request)))
   })
+
+  // B-W2b-398 (LOG-067)
+  app.get('/sales/orders/:orderId/deliveries', { schema: deliveriesContract }, async (request) => getDeliveries(request, request.params.orderId))
 })
