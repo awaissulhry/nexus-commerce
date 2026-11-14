@@ -33,6 +33,8 @@ import { FOLLOWING_RULES } from '../view-follow/rules'
 import { FOLLOW_UP_RULES } from './follow-ups'
 // B-W2b-394: a team-inbox mail given to a person; its follow-up that came with no answer.
 import { TEAM_INBOX_RULES } from '../../email-in/team-inbox/notify'
+// B-W2b-398: a tracking problem raised on a shipment on its way (ALERT to the dispatch desk of its site).
+import { TRACKING_PROBLEM_RULES } from '../../../modules/shipping/exceptions/notices'
 
 /**
  * The fan-out's rules, one file per source (B-W2a-20: mentions and followed records, assignments, approvals). A step that
@@ -70,4 +72,6 @@ export const FAN_OUT_RULES: readonly FanOutRule[] = Object.freeze([...THREAD_RUL
   ...FOLLOWING_RULES,
   ...FOLLOW_UP_RULES,
   // B-W2b-394: a team-inbox mail given to a member (ASSIGNMENT, notifications.mail.assigned), its follow-up due (to its assignee or the members).
-  ...TEAM_INBOX_RULES])
+  ...TEAM_INBOX_RULES,
+  // B-W2b-398: shipment.tracking_problem_raised (ALERT to who manages shipments at its site).
+  ...TRACKING_PROBLEM_RULES])

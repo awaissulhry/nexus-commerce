@@ -79,7 +79,7 @@ describe('check-event-contract', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
     // email.webhook_secret_changed; emitted through eventFor) and one literal emit (sales_settings.changed by PUT
     // /sales/inquiries/addresses): 844 → 849, 1326 → 1327.
     // B-W2b-391 + 392 + 393 + 394 together: 858 + 5 = 863 declared event versions, 1359 + 1 = 1360 literal emits.
-    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(863 declared event version\(s\), 1360 literal emit/) })
+    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(868 declared event version\(s\), 1360 literal emit/) })
   })
 
   it.each<[string, Plants, RegExp]>([

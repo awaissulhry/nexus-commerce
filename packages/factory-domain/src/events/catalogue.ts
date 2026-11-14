@@ -282,6 +282,9 @@ import { events as taxRules } from '../tax-rules/events'
 import { events as paymentsBank } from '../payments-bank/events'
 // B-W2b-394: mail in depth (team inboxes, the capture address, soft bounces, the FAKE mail account's webhook secret).
 import { events as mailDepth } from '../mail-depth/events'
+// B-W2b-398: delivery and return labels (shipment.customer_notice_sent, .tracking_problem_raised, .tracking_problem_resolved,
+// .pod_recorded, return_label.changed).
+import { events as shippingDelivery } from '../shipping-delivery/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -630,6 +633,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...paymentsBank,
   // B-W2b-394
   ...mailDepth,
+  // B-W2b-398
+  ...shippingDelivery,
 ] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */

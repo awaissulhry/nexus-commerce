@@ -59,6 +59,8 @@ import { ReturnsMessages, useWords } from '../view/parts'
 import { finishReturn } from '../depth/api'
 import { finishOptionsOf } from '../depth/model'
 import { useRmaDepth } from '../depth/use-rma-depth'
+// B-W2b-398: the return labels of the Shipments tab.
+import { ReturnLabels } from './return-label/ReturnLabels'
 // B-W2b-368 (XF1:03): a remake as a return outcome (the unit, its revision, Make the remake order).
 import { useRemakeOutcome } from '../outcome-remake/use-remake-outcome'
 import { RmaRecordView } from './view/RmaRecordView'
@@ -524,6 +526,7 @@ function Container({ returnId }: { returnId: string }) {
     <RmaRecordView
       model={model}
       panels={panels}
+      returnLabels={<ReturnLabels returnId={rma.id} prefix={prefix} />}
       actions={{
         onReload: () => void load(),
         ...depth.actions,

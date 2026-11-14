@@ -18,6 +18,8 @@ import { orderView, type OrderView } from './views'
 import { typedPromiseRowsInCommand } from '../../planning/promise-keep/typed'
 // B-W2b-303: a waiting order's request withdrawn when it is cancelled.
 import { withdrawPending } from '../../../platform/approvals/engine'
+// B-W2b-398 (LOG-067): a delivered order's time and its terms from delivery.
+import { deliveredMoveInCommand } from './delivered'
 
 /**
  * The sales order's moves (B-W1-25; SAL-204: one writer per move; factory-domain sales/orders salesOrderMachine), each
@@ -300,13 +302,15 @@ export async function followOrder(caller: CommandCaller, orderId: string, cause:
       let from = locked.status
       for (const to of moves) {
         assertTransition(salesOrderMachine, from, to, { ...facts, reason: null })
-        await tx.salesOrder.update({ where: { id: orderId }, data: { status: to, ...(to === 'CLOSED' ? { closedAt: now } : {}), updatedAt: now, version: { increment: 1 } }, select: { id: true } })
+        // B-W2b-398 (LOG-067): the delivery time and the terms that run from it (delivered.ts).
+        const delivered = to === 'DELIVERED' ? await deliveredMoveInCommand(tools, order) : null
+        await tx.salesOrder.update({ where: { id: orderId }, data: { status: to, ...(to === 'CLOSED' ? { closedAt: now } : {}), ...(delivered ? { deliveredAt: delivered.deliveredAt } : {}), updatedAt: now, version: { increment: 1 } }, select: { id: true } })
         tools.audit({
           recordType: 'SalesOrder',
           recordId: orderId,
           companyId: order.companyId,
           before: { status: from },
-          after: { status: to, ...(to === 'CLOSED' ? { closedAt: toUtcIso(now), settled: true, settlementSource: facts.settlement?.source ?? null } : {}) },
+          after: { status: to, ...(to === 'CLOSED' ? { closedAt: toUtcIso(now), settled: true, settlementSource: facts.settlement?.source ?? null } : {}), ...(delivered ? { deliveredAt: toUtcIso(delivered.deliveredAt) } : {}) },
           reason: `Followed: ${cause.what}.`,
         })
         statusChanged(tools, order, from, to, 'system')

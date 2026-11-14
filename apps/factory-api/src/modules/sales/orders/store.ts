@@ -239,6 +239,8 @@ export function moveFactsOf(facts: OrderFacts, settlement?: SettlementAnswer): S
     draftWorkOrders: facts.workOrders.filter((row) => row.status === 'DRAFT').map((row) => row.number),
     shipped: facts.progress.shipped,
     released: facts.progress.released,
+    // B-W2b-398 (LOG-067): every shipment that left arrived (one DELIVERED at least, none still travelling).
+    delivered: facts.shipments.some((row) => row.status === 'DELIVERED') && !facts.shipments.some((row) => row.status === 'SHIPPED'),
     ...(settlement ? { settlement } : {}),
   }
 }

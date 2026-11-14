@@ -44,15 +44,16 @@ export type { OrderRecordActions, OrderRecordModel } from '../record-model'
  * request, the bank-details page, the payment, the TD02 and its SDI state; the invoices; the balance), Documents (the
  * accepted quote and its evidence), Activity (the record panels; beside any tab on a wide screen with ⌘J).
  */
-export function OrderRecordView({ model, actions, panels }: { model: OrderRecordModel; actions?: OrderRecordActions; panels?: ReactNode }) {
+// B-W2b-398: `delivered` is the Shipments tab's card "Delivered (from carrier)".
+export function OrderRecordView({ model, actions, panels, delivered }: { model: OrderRecordModel; actions?: OrderRecordActions; panels?: ReactNode; delivered?: ReactNode }) {
   return (
     <WithMessages namespaces={['orders', 'sales', 'lists', 'records', DEPTH /* B-W2b-323 */]}>
-      <OrderRecord model={model} actions={actions} panels={panels} />
+      <OrderRecord model={model} actions={actions} panels={panels} delivered={delivered} />
     </WithMessages>
   )
 }
 
-function OrderRecord({ model, actions, panels }: { model: OrderRecordModel; actions?: OrderRecordActions; panels?: ReactNode }) {
+function OrderRecord({ model, actions, panels, delivered }: { model: OrderRecordModel; actions?: OrderRecordActions; panels?: ReactNode; delivered?: ReactNode }) {
   const t = useT('orders')
   const listHref = `${model.prefix}/sales/orders`
   const loaded = model.order
@@ -97,10 +98,10 @@ function OrderRecord({ model, actions, panels }: { model: OrderRecordModel; acti
       </div>
     )
   }
-  return <ReadyRecord order={loaded.value} model={model} actions={actions} panels={panels} />
+  return <ReadyRecord order={loaded.value} model={model} actions={actions} panels={panels} delivered={delivered} />
 }
 
-function ReadyRecord({ order, model, actions, panels }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions; panels?: ReactNode }) {
+function ReadyRecord({ order, model, actions, panels, delivered }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions; panels?: ReactNode; delivered?: ReactNode }) {
   const t = useT('orders')
   const d = useT(DEPTH) // B-W2b-323
   // B-W2b-16: the step-up (now also the owner's waive) in the person's language (B-W2b-04's DS words).
@@ -318,7 +319,7 @@ function ReadyRecord({ order, model, actions, panels }: { order: Order; model: O
           {model.tab === 'lines' && <LinesTab order={order} model={model} actions={actions} />}
           {model.tab === 'dates' && <DatesTab order={order} model={model} actions={actions} />}
           {model.tab === 'production' && <ProductionTab order={order} model={model} actions={actions} />}
-          {model.tab === 'shipments' && <ShipmentsTab order={order} model={model} actions={actions} />}
+          {model.tab === 'shipments' && <ShipmentsTab order={order} model={model} actions={actions} delivered={delivered} />}
           {model.tab === 'money' && <MoneyTab order={order} model={model} actions={actions} />}
           {model.tab === 'changes' && <ChangesTab order={order} model={model} actions={actions} />}
           {model.tab === 'documents' && <DocumentsTab order={order} model={model} actions={actions} />}

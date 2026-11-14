@@ -380,7 +380,8 @@
       "JOB_ACCEPT": "accettare o rifiutare la lavorazione, o proporre un'altra data",
       "APPROVAL": "approvare o rifiutare ciò che ti abbiamo chiesto di verificare",
       "RECORD_INVITE": "seguire il record condiviso con te, e scrivere o aggiungere file quando è permesso",
-      "SECURE_FILE": "scaricare i file che ti abbiamo inviato e confermare di averli ricevuti"
+      "SECURE_FILE": "scaricare i file che ti abbiamo inviato e confermare di averli ricevuti",
+      "RETURN_LABEL": "prenotare il vettore per il tuo reso e stamparne l’etichetta"
     },
     "usesLeft_one": "{count} uso",
     "usesLeft_other": "{count} usi",

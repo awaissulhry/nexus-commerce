@@ -48,6 +48,8 @@ import { amendLines, draftOf, namesOf, newKey, withCells } from '../daily-model'
 import { abilitiesOf, knownIds, liveTouches, readProblem, romeToday, tabOf, writeProblem, type SizeLayer } from '../model'
 import { COMPOSER_EMPTY, PART_LOADING, type AmendState, type Loaded, type OrderRecordModel, type Part, type RecordDialog } from './record-model'
 import { OrderRecordView } from './view/OrderRecordView'
+// B-W2b-398: the Shipments tab's card "Delivered (from carrier)".
+import { Deliveries } from './shipments/delivered/Deliveries'
 import { partnerProblem, portalAddress } from '../../../admin/users/partners/model'
 import { openPreview } from '../../../admin/users/partners/preview'
 import { useScheduleSteps } from './schedule/use-schedule-steps'
@@ -429,6 +431,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
   return (
     <OrderRecordView
       model={model}
+      delivered={value ? <Deliveries orderId={value.id} prefix={prefix} /> : null}
       panels={value ? <RecordPanels record={{ type: 'SalesOrder', id: value.id, companyId: value.companyId, siteId: null }} title={`${value.number} · ${value.party?.legalName ?? ''}`} party={value.party ? { id: value.partyId, name: value.party.legalName, emails: [] } : null} /> : null}
       actions={{
         onPortal: () => {

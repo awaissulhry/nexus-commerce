@@ -42,6 +42,7 @@ const FILES_READ = 'files.read' satisfies Permission
  *   APPROVAL          ApprovalRequest           approve*, refuse* (typed name)          price   14 / 60   1 / 1
  *   RECORD_INVITE     a record with a thread    post, upload                            none    30 / 180  1 / 1
  *   SECURE_FILE       StoredFile                download*, receive                      none    7 / 30    5 / 20   files, password, receipt
+ *   RETURN_LABEL      ReturnAuthorisation       confirm, download                       none    30 / 60   1 / 1    (B-W2b-398)
  *
  * (`days` and `uses`: the default and the most the office may give; `*`: the action uses one of the link's uses.) A view
  * purpose counts every open (DOCUMENT_VIEW, DEPOSIT_INFO); a purpose whose holder answers counts the answers, never the
@@ -87,6 +88,8 @@ export const LINK_PURPOSES = [
   'APPROVAL',
   'RECORD_INVITE',
   'SECURE_FILE',
+  // W2b-6 (B-W2b-398; in the schema since B-W2b-372): a return label offered by link.
+  'RETURN_LABEL',
 ] as const
 export type LinkPurpose = (typeof LINK_PURPOSES)[number]
 
@@ -360,6 +363,20 @@ export const PURPOSE_RULES: Readonly<Record<LinkPurpose, PurposeRule>> = Object.
     receipt: true,
     draft: false,
     renewal: 'files',
+  }),
+  // ---- W2b-6 (B-W2b-398; LOG-112) ----------------------------------------------------------------------------------
+  RETURN_LABEL: rule({
+    purpose: 'RETURN_LABEL',
+    description: 'The customer books the carrier for the goods of one return only when they send them, then downloads and prints the label; nothing is booked or paid before, and the label is booked once.',
+    recordTypes: ['ReturnAuthorisation'],
+    // Nothing counts: the label is booked once (the ReturnLabel moves OFFERED → BOOKED once), and the page must still open
+    // and download the label after the booking (a counted use would close the link); each is evidence.
+    actions: { open: notCounted, confirm: notCounted, download: notCounted },
+    grains: [],
+    expiryDays: { default: 30, max: 60 },
+    uses: { default: 1, max: 1 },
+    readsFiles: false,
+    ...PLAIN,
   }),
 })
 

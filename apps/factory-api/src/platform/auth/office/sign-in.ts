@@ -13,6 +13,7 @@ import { normalizeEmail } from '../users/email'
 import type { SignedInBody, SignInBody } from './contract'
 import { createPasswordReset, REQUIRED_RESET_TTL_MS } from './password-reset'
 import { checkSecondFactor, claimOf, recordWrongSecret, type Proof } from './second-factor'
+import { officeSignInRefused } from '../../audit/security-events/sign-in'
 
 /**
  * Sign-in and sign-out (plan A1 §3.10; features PLT-047, PLT-048, PLT-070), ported from Commerce's
@@ -105,6 +106,8 @@ export async function signIn(auth: OfficeAuth, request: FastifyRequest, reply: F
         )
       : null
   if (!tenant || !user || user.passwordHash === null || isLocked(user, now)) {
+    // B-W2b-399 (PLT-075): unknown attempts too, after the answer; never the address typed.
+    if (tenant?.status === 'ACTIVE') officeSignInRefused(auth, request, tenant.id, user?.id ?? null, !user ? 'UNKNOWN_ACCOUNT' : user.passwordHash === null ? 'NO_PASSWORD' : 'LOCKED')
     await verifyPassword(body.password, null)
     throw wrong()
   }
@@ -115,6 +118,7 @@ export async function signIn(auth: OfficeAuth, request: FastifyRequest, reply: F
     await recordWrongSecret(auth, context, 'auth.signInFailed', 'password')
     throw wrong()
   }
+  if (user.status !== 'ACTIVE') officeSignInRefused(auth, request, tenant.id, user.id, user.status === 'SUSPENDED' ? 'SUSPENDED' : 'INACTIVE')
   if (user.status === 'SUSPENDED') throw new ForbiddenError('This account is suspended. Ask an administrator of your company.')
   if (user.status !== 'ACTIVE') throw wrong()
 
