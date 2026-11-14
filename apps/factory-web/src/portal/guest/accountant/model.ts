@@ -196,6 +196,5 @@ export const WORD_KEYS: readonly string[] = [
   ...['INVOICE', 'DEPOSIT', 'CREDIT_NOTE'].map((kind) => `kind.${kind}`),
   ...['SALES', 'PURCHASE'].map((side) => `side.${side}`),
   ...['MONTH', 'QUARTER', 'YEAR'].map((kind) => `period.kind.${kind}`),
-  ...['VAT_REGISTERS', 'VAT_SUMMARY'].map((later) => `registers.laterItem.${later}`),
   ...[...REFUSAL_CODES, 'generic', 'network'].map((code) => `refusal.${code}`),
 ]

@@ -1,4 +1,5 @@
 import type { StepUpState } from '../_shared/hooks'
+import type { IntegrityActions, IntegrityModel } from './checks/use-integrity'
 import type { AccountingPackage, CheckCode, ExportFile, ExportRecord, ExportRow, ExportStatus, Intrastat, LockLevel, PeriodAnswer, PeriodLock, Periods } from './api'
 import type { AccountingAddress, AccountingCan, Explanations, LockState, Phrase, WizardStep, WriteProblem } from './model'
 
@@ -30,6 +31,10 @@ export interface LockPanelModel {
   readonly liftBusy: boolean
   readonly liftProblem: WriteProblem | null
   readonly lifted: PeriodLock | null
+  /** B-W2b-426: "Close <month> for good?" is open (the typed phrase, then a fresh code). */
+  readonly hardOpen: boolean
+  /** B-W2b-426: the month's problems a refused final close named (every one, as codes). */
+  readonly closeProblems: readonly string[]
 }
 
 export interface LockDialogModel extends LockPanelModel {
@@ -64,6 +69,8 @@ export interface WizardModel {
   readonly lock: LockPanelModel
   /** The reason a held Continue was pressed with (⌘↵): said in the live region. */
   readonly heldNote: Phrase | null
+  /** B-W2b-426: the integrity checks on 2 · Checks (their last run; run now). */
+  readonly integrity: IntegrityModel
 }
 
 export interface CancelDialogModel {
@@ -105,6 +112,9 @@ export interface LockActions {
   onLock?: () => void
   onLiftReason?: (text: string) => void
   onLift?: () => void
+  /** B-W2b-426: "Close <month> for good…" opens the pop-up; Cancel or Esc closes it. */
+  onHardOpen?: () => void
+  onHardClose?: () => void
 }
 
 export interface AccountingActions {
@@ -138,6 +148,8 @@ export interface AccountingActions {
   onNote?: (text: string) => void
   onExport?: () => void
   onDownload?: (exportId: string, file: ExportFile) => void
+  /** B-W2b-426: the integrity checks (read again, run now). */
+  integrity?: IntegrityActions
   /** The step 5 lock (after the batch). */
   stepLock?: LockActions
   // the lock dialog (⋯ Lock a period, a band pill)

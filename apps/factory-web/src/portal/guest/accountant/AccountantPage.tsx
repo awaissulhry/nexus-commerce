@@ -258,7 +258,6 @@ function Container() {
     lists: {
       state: period.state === 'error' ? 'error' : period.state === 'ready' ? 'ready' : 'loading',
       ...lists,
-      later: period.value?.later ?? [],
       selected,
       busy,
       held: preview ? 'held.preview' : offline ? 'held.offline' : null,

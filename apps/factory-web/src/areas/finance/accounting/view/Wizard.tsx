@@ -9,10 +9,15 @@ import { Button, CheckboxCard, Pill, RadioCard, Select, Spinner } from '@nexus/u
 import { FileRow, JobProgress, Textarea } from '../../../../lib/i18n/ds-parts'
 import { ListFrame } from '../../../../list-frame/ListFrame'
 import { formatDate } from '../../../../lib/i18n/format'
-import { useLocale, useT } from '../../../../lib/i18n/provider'
+import type { Translate } from '../../../../lib/i18n/messages'
+import { useLocale } from '../../../../lib/i18n/provider'
 import { recordAddress } from '../../../../lib/records/record-links'
 import { OFFICE_PAGES } from '../../../../shell/nav/office-nav'
 import { CheckList } from '../../_shared/parts'
+import { journalsLine } from '../checks/model'
+import { IntegrityPanel } from '../checks/view/IntegrityPanel'
+import { useAccountingWords } from '../checks/words'
+import { mappingHref } from '../mapping/model'
 import { ACCOUNTING_PACKAGES, MAX_EXPLANATION, PACKAGE_RULES, type Check, type IntrastatRow, type PackageSum, type PeriodAnswer } from '../api'
 import {
   batchPackages,
@@ -55,7 +60,7 @@ const explanationId = (code: string) => `fw-fac-explain-${code}`
  * since you opened this · Check again". Every amount by its grain; nothing is sent to the accountant or any authority.
  */
 export function Wizard({ model, wizard, actions }: { model: AccountingModel; wizard: WizardModel; actions?: AccountingActions }) {
-  const t = useT('finance-accounting')
+  const t = useAccountingWords()
   const locale = useLocale()
   const facts = factsOf(wizard, model.can)
   const steps = stepsFor(wizard.chosen)
@@ -153,7 +158,7 @@ export function Wizard({ model, wizard, actions }: { model: AccountingModel; wiz
 
 /** The month's read, on every step after the first: reading, failed (Try again), or a re-export's note. */
 function PeriodState({ wizard, actions }: { wizard: WizardModel; actions?: AccountingActions }) {
-  const t = useT('finance-accounting')
+  const t = useAccountingWords()
   if (wizard.period.problem) {
     return (
       <Card padded>
@@ -176,7 +181,7 @@ function PeriodState({ wizard, actions }: { wizard: WizardModel; actions?: Accou
 // ---- 1 · Period -------------------------------------------------------------------------------------------------------------
 
 function StepPeriod({ model, wizard, actions }: { model: AccountingModel; wizard: WizardModel; actions?: AccountingActions }) {
-  const t = useT('finance-accounting')
+  const t = useAccountingWords()
   const locale = useLocale()
   const today = model.today
   const thisYear = Number(today.slice(0, 4))
@@ -244,7 +249,7 @@ function StepPeriod({ model, wizard, actions }: { model: AccountingModel; wizard
 
 /** The chosen month in words: first export or re-export, the open draft it replaces, its lock. */
 function MonthWords({ answer }: { answer: PeriodAnswer }) {
-  const t = useT('finance-accounting')
+  const t = useAccountingWords()
   const locale = useLocale()
   const month = monthWords(answer.period.month, locale)
   const state = lockStateOf(answer.lock)
@@ -262,7 +267,7 @@ function MonthWords({ answer }: { answer: PeriodAnswer }) {
 // ---- 2 · Checks --------------------------------------------------------------------------------------------------------------
 
 function CheckRows({ checks, answer, wizard, model, actions }: { checks: readonly Check[]; answer: PeriodAnswer; wizard: WizardModel; model: AccountingModel; actions?: AccountingActions }) {
-  const t = useT('finance-accounting')
+  const t = useAccountingWords()
   const locale = useLocale()
   const end = formatDate(dayInstant(answer.period.end), { locale })
   return (
@@ -285,7 +290,8 @@ function CheckRows({ checks, answer, wizard, model, actions }: { checks: readonl
                 <ul className="fw-fac-fixes" aria-label={t('check.fixesLabel', { check: t(`check.${check.code}.title`) })}>
                   {check.fixes.map((fix) => {
                     const label = fixLabel(fix)
-                    const field = fieldLabel(fix.field)
+                    // B-W2b-426: a key of the account mapping names its kind as the field.
+                    const field = fix.recordType === 'AccountMapping' && fix.field ? { key: `mapping.kind.${fix.field}` } : fieldLabel(fix.field)
                     return (
                       <li key={`${fix.recordType}|${fix.recordId}|${fix.field ?? ''}`}>
                         <Link className="fw-fac-link" href={`${model.prefix}${recordAddress({ type: fix.recordType, id: fix.recordId, label: fix.number ?? undefined }, OFFICE_PAGES)}`} target="_blank" rel="noopener noreferrer">
@@ -317,28 +323,31 @@ function CheckRows({ checks, answer, wizard, model, actions }: { checks: readonl
 }
 
 function StepChecks({ model, wizard, answer, actions }: { model: AccountingModel; wizard: WizardModel; answer: PeriodAnswer; actions?: AccountingActions }) {
-  const t = useT('finance-accounting')
+  const t = useAccountingWords()
   const checks = checksOf(answer, wizard.chosen ?? [])
   const failing = checks.filter((check) => !check.passed).length
   const unexplained = unexplainedOf(checks, wizard.explanations).length
   return (
-    <Card padded className="fw-fac-card">
-      <div className="fw-fac-card-head">
-        <h3 className="fw-fac-h3">{t('step.checks.title')}</h3>
-        <span className="fw-fac-muted">{failing === 0 ? t('checks.allPass', { count: checks.length }) : t('checks.failing', { count: failing, unexplained })}</span>
-      </div>
-      <p className="fw-fac-muted">{t('step.checks.lead')}</p>
-      {!model.can.export && <p className="fw-fac-muted">{t('held.noExport')}</p>}
-      <CheckRows checks={checks} answer={answer} wizard={wizard} model={model} actions={actions} />
-      <p className="fw-fac-muted">{t('checks.w2b')}</p>
-    </Card>
+    <div className="fw-fac-stack">
+      <Card padded className="fw-fac-card">
+        <div className="fw-fac-card-head">
+          <h3 className="fw-fac-h3">{t('step.checks.title')}</h3>
+          <span className="fw-fac-muted">{failing === 0 ? t('checks.allPass', { count: checks.length }) : t('checks.failing', { count: failing, unexplained })}</span>
+        </div>
+        <p className="fw-fac-muted">{t('step.checks.lead')}</p>
+        {!model.can.export && <p className="fw-fac-muted">{t('held.noExport')}</p>}
+        <CheckRows checks={checks} answer={answer} wizard={wizard} model={model} actions={actions} />
+      </Card>
+      {/* B-W2b-426: the nightly integrity checks (the export reads their last run). */}
+      <IntegrityPanel model={wizard.integrity} prefix={model.prefix} actions={actions?.integrity} />
+    </div>
   )
 }
 
 // ---- 3 · Contents ------------------------------------------------------------------------------------------------------------
 
 /** A package's sums in words, by its grain (absent amounts are not drawn). */
-function sumsText(sums: readonly PackageSum[], t: ReturnType<typeof useT>, locale: ReturnType<typeof useLocale>): string {
+function sumsText(sums: readonly PackageSum[], t: Translate, locale: ReturnType<typeof useLocale>): string {
   return sums
     .filter((sum) => typeof sum.amount === 'number')
     .map((sum) => `${t(`sum.${sum.key}`)} ${moneyOf(sum.amount!, sum.currency, locale)}`)
@@ -351,13 +360,23 @@ function moneyOf(minor: number, currency: string | null, locale: string): string
 }
 
 function StepContents({ model, wizard, answer, actions }: { model: AccountingModel; wizard: WizardModel; answer: PeriodAnswer; actions?: AccountingActions }) {
-  const t = useT('finance-accounting')
+  const t = useAccountingWords()
   const locale = useLocale()
   const chosen = wizard.chosen ?? []
+  const journals = journalsLine(answer, chosen)
   return (
     <Card padded className="fw-fac-card">
       <h3 className="fw-fac-h3">{t('step.contents.title')}</h3>
       <p className="fw-fac-muted">{t('step.contents.lead')}</p>
+      {/* B-W2b-426: whether the journals go with their entries (the accounts mapped on each document's day). */}
+      {journals && (
+        <p className="fw-fac-muted">
+          {t(journals.key)}{' '}
+          <Link className="fw-fac-link" href={mappingHref(model.prefix)}>
+            {t('journals.contents.link')}
+          </Link>
+        </p>
+      )}
       <div className="fw-fac-cards fw-fac-cards--wide">
         {ACCOUNTING_PACKAGES.map((pkg) => {
           const held = packageHeld(pkg, { yearEnd: answer.yearEnd }, model.can)
@@ -393,7 +412,7 @@ function StepContents({ model, wizard, answer, actions }: { model: AccountingMod
 // ---- Intrastat rows ------------------------------------------------------------------------------------------------------------
 
 function StepIntrastat({ model, wizard, answer, actions }: { model: AccountingModel; wizard: WizardModel; answer: PeriodAnswer; actions?: AccountingActions }) {
-  const t = useT('finance-accounting')
+  const t = useAccountingWords()
   const locale = useLocale()
   const intrastat = wizard.intrastat.value
   const check = checksOf(answer, wizard.chosen ?? []).find((entry) => entry.code === 'INTRASTAT_COMPLETE') ?? null
@@ -553,7 +572,7 @@ function StepIntrastat({ model, wizard, answer, actions }: { model: AccountingMo
 // ---- 4 · Review -----------------------------------------------------------------------------------------------------------------
 
 function StepReview({ model, wizard, answer }: { model: AccountingModel; wizard: WizardModel; answer: PeriodAnswer }) {
-  const t = useT('finance-accounting')
+  const t = useAccountingWords()
   const locale = useLocale()
   const chosen = wizard.chosen ?? []
   const going = batchPackages(answer, chosen)
@@ -609,7 +628,7 @@ function StepReview({ model, wizard, answer }: { model: AccountingModel; wizard:
 // ---- 5 · Export and lock ---------------------------------------------------------------------------------------------------------
 
 function StepExport({ model, wizard, answer, actions }: { model: AccountingModel; wizard: WizardModel; answer: PeriodAnswer; actions?: AccountingActions }) {
-  const t = useT('finance-accounting')
+  const t = useAccountingWords()
   const locale = useLocale()
   const chosen = wizard.chosen ?? []
   const going = batchPackages(answer, chosen)
@@ -707,7 +726,7 @@ function StepExport({ model, wizard, answer, actions }: { model: AccountingModel
 // ---- This export (the live side column) ---------------------------------------------------------------------------------------
 
 function Aside({ model, wizard }: { model: AccountingModel; wizard: WizardModel }) {
-  const t = useT('finance-accounting')
+  const t = useAccountingWords()
   const locale = useLocale()
   const answer = wizard.period.value
   const chosen = wizard.chosen ?? []

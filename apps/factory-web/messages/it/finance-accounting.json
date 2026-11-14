@@ -9,7 +9,6 @@
     "more": "Altre azioni",
     "lockPeriod": "Blocca un periodo…",
     "mapping": "Piano dei conti",
-    "mappingHeld": "Arriva con W2b, nelle impostazioni amministrazione.",
     "readAt": "Letto alle {time}"
   },
   "layout": {
@@ -74,7 +73,7 @@
     },
     "VAT_REGISTERS": {
       "title": "Registri IVA",
-      "body": "I registri IVA del mese."
+      "body": "I registri IVA vendite e acquisti del mese, con l'IVA dovuta."
     },
     "INTRASTAT": {
       "title": "Intrastat (cessioni UE)",
@@ -87,7 +86,6 @@
   },
   "contents": {
     "held": {
-      "w2b": "Arriva con W2b: non può ancora entrare in un'esportazione.",
       "yearEnd": "Va con l'esportazione del mese che chiude l'anno (31 dicembre).",
       "grain": {
         "price": "Contiene prezzi: serve il livello prezzi (money.price).",
@@ -334,8 +332,7 @@
     "allPass_one": "{count} controllo passa",
     "allPass_other": "Tutti i {count} controlli passano",
     "failing_one": "{count} non passa · {unexplained} senza spiegazione",
-    "failing_other": "{count} non passano · {unexplained} senza spiegazione",
-    "w2b": "\"Ordini di lavoro chiusi\" arriva con W2b."
+    "failing_other": "{count} non passano · {unexplained} senza spiegazione"
   },
   "fix": {
     "Ddt": "DDT {number}",
@@ -525,7 +522,7 @@
     "hard": {
       "title": "Blocco definitivo (chiusura)",
       "body": "Nulla con data a {month} può cambiare: il database lo rifiuta. Solo il titolare lo toglie, con un motivo.",
-      "go": "Chiudi {month} in modo definitivo"
+      "go": "Chiudi {month} in modo definitivo…"
     },
     "phrase": {
       "label": "Scrivi \"{phrase}\" per chiuderlo in modo definitivo",
@@ -615,7 +612,7 @@
     "NOTHING_CHANGED": "Nulla è cambiato dall'ultima esportazione: non c'è nulla da inviare.",
     "NOT_LATEST": "Un'esportazione successiva porta ora il mese: il mese viene riletto.",
     "NOTHING_EXPORTED": "Il mese non ha un'esportazione da correggere: il mese viene riletto.",
-    "PACKAGE_W2B": "Un contenuto scelto arriva con W2b.",
+    "HANDED_OVER_ELSEWHERE": "Un documento di questa esportazione è già stato consegnato con l'esportazione di un altro mese: chiedi al commercialista come portarlo.",
     "YEAR_END_NOT_THIS_PERIOD": "L'inventario di fine anno va solo con il mese che chiude l'anno.",
     "PACKAGE_GRAIN": "Un contenuto scelto ha importi di un livello che non hai.",
     "NOT_DRAFT": "Questa esportazione non è più una bozza: l'elenco viene riletto.",

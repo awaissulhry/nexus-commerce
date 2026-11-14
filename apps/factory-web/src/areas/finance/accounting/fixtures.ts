@@ -23,6 +23,7 @@ import {
   withoutCost,
   type Role,
 } from './demo/fixtures'
+import { INTEGRITY_SHOWN } from './checks/demo/fixtures'
 import { defaultPackages, recentMonths, type WizardStep } from './model'
 import { AccountingView } from './view/AccountingView'
 import type { AccountingModel, LockDialogModel, LockPanelModel, WizardModel } from './view-model'
@@ -30,10 +31,11 @@ import type { AccountingModel, LockDialogModel, LockPanelModel, WizardModel } fr
 /**
  * SCR-156 — Accounting export (design finance.accounting) with made-up data only: the Exports (batches numbered, a
  * re-export, a draft, documents changed since, the band's lock pills), the wizard step by step — 1 · Period (the months
- * with their batches and locks), 2 · Checks (failing with fix links, explained, "2 checks fixed since you opened this"),
- * 3 · Contents (W2b packages and the year-end pack held in words; a role without the cost grain), Intrastat rows (flags
- * with where to fix them; none), 4 · Review (first export; a re-export), 5 · Export and lock (the number it will get,
- * exporting, made, the soft and hard lock with the typed phrase, a refusal, nothing changed) — the lock dialog (lift a
+ * with their batches and locks), 2 · Checks (failing with fix links, explained, "2 checks fixed since you opened this";
+ * the nightly checks under them), 3 · Contents (the year-end pack held in words; a role without the cost grain),
+ * Intrastat rows (flags with where to fix them; none), 4 · Review (first export; a re-export), 5 · Export and lock (the
+ * number it will get, exporting, made, the soft lock, Hard opening "Close … for good?" (SCR-481), a refusal, nothing
+ * changed) — the lock dialog (lift a
  * soft lock; a final close finance cannot lift), cancelling a draft, the step-up before lifting a final close, and the
  * states (loading, error, empty, offline, no permission) and roles: Finance, Owner, Read only, Sales.
  */
@@ -58,6 +60,8 @@ const lockPanel = (month: string | null, over: Partial<LockPanelModel> = {}): Lo
   liftBusy: false,
   liftProblem: null,
   lifted: null,
+  hardOpen: false,
+  closeProblems: [],
   ...over,
 })
 
@@ -99,6 +103,7 @@ const wizard = (step: WizardStep, over: Partial<WizardModel> = {}, role: Role = 
     exporting: { busy: false, startedAt: null, problem: null, done: null },
     lock: lockPanel('2026-10'),
     heldNote: null,
+    integrity: INTEGRITY_SHOWN,
     ...over,
   }
 }
@@ -158,8 +163,8 @@ export const designScreen = defineDesignScreen<Case>({
     { id: 'checks-loading', label: '2 · Checks · reading the month', model: inWizard('finance', 'checks', { period: { value: null, problem: null }, chosen: null }) },
     { id: 'checks-error', label: "2 · Checks · couldn't load, Try again", model: inWizard('finance', 'checks', { period: { value: null, problem: 'problem.read.unavailable' }, chosen: null }) },
     // ---- 3 · Contents ----
-    { id: 'contents', label: '3 · Contents · the journals and Intrastat ticked; W2b and the year-end pack held', model: inWizard('finance', 'contents', { explanations: EXPLAINED }) },
-    { id: 'contents-no-cost', label: '3 · Contents · without the cost grain: purchases and the year-end pack held', model: inWizard('financePrice', 'contents', { explanations: EXPLAINED, period: { value: withoutCost(OCTOBER), problem: null } }, {}) },
+    { id: 'contents', label: '3 · Contents · the journals and Intrastat ticked; cost of goods sold and the VAT registers offered; the year-end pack held', model: inWizard('finance', 'contents', { explanations: EXPLAINED }) },
+    { id: 'contents-no-cost', label: '3 · Contents · without the cost grain: purchases, cost of goods sold, VAT registers and the year-end pack held', model: inWizard('financePrice', 'contents', { explanations: EXPLAINED, period: { value: withoutCost(OCTOBER), problem: null } }, {}) },
     { id: 'contents-none', label: '3 · Contents · nothing ticked: Continue held', model: inWizard('finance', 'contents', { explanations: EXPLAINED, chosen: [] }) },
     // ---- Intrastat rows ----
     { id: 'intrastat', label: 'Intrastat rows · a 6-digit code (blocking) and no Incoterm (note), with where to fix', model: inWizard('finance', 'intrastat', { explanations: { ...EXPLAINED, INTRASTAT_COMPLETE: '' } }) },
@@ -176,8 +181,7 @@ export const designScreen = defineDesignScreen<Case>({
     { id: 'export-busy', label: '5 · Export · making the batch (JobProgress)', model: inWizard('finance', 'export', { explanations: EXPLAINED, exporting: { busy: true, startedAt: NOW - 4000, problem: null, done: null } }) },
     { id: 'export-refused', label: '5 · Export · refused: documents changed while it was made', model: inWizard('finance', 'export', { explanations: EXPLAINED, exporting: { busy: false, startedAt: null, problem: { key: 'problem.write.changedWhile', reload: true }, done: null } }) },
     { id: 'export-done', label: '5 · Export · EXP-2026-0004 made: files to download, then the lock', model: inWizard('finance', 'export', { explanations: EXPLAINED, exporting: { busy: false, startedAt: null, problem: null, done: EXPORT_DONE } }) },
-    { id: 'export-hard', label: '5 · Lock · hard: the phrase typed wrong, Close held', model: inWizard('finance', 'export', { explanations: EXPLAINED, exporting: { busy: false, startedAt: null, problem: null, done: EXPORT_DONE }, lock: lockPanel('2026-10', { level: 'HARD', phrase: 'chiudi ottobre' }) }) },
-    { id: 'export-hard-ok', label: '5 · Lock · hard: "close October 2026" typed, Close October 2026 for good', model: inWizard('finance', 'export', { explanations: EXPLAINED, exporting: { busy: false, startedAt: null, problem: null, done: EXPORT_DONE }, lock: lockPanel('2026-10', { level: 'HARD', phrase: 'close October 2026' }) }) },
+    { id: 'export-hard', label: '5 · Lock · hard chosen: "Close October 2026 for good…" opens the pop-up (SCR-481)', model: inWizard('finance', 'export', { explanations: EXPLAINED, exporting: { busy: false, startedAt: null, problem: null, done: EXPORT_DONE }, lock: lockPanel('2026-10', { level: 'HARD' }) }) },
     { id: 'export-soft-done', label: '5 · Lock · soft-locked, with what a final close still waits for', model: inWizard('finance', 'export', { explanations: EXPLAINED, exporting: { busy: false, startedAt: null, problem: null, done: EXPORT_DONE }, lock: lockPanel('2026-10', { done: { lock: { ...LOCK_SEPTEMBER, period: OCTOBER.period, id: 'x', export: { id: EXPORT_DONE.id, number: EXPORT_DONE.number, status: 'EXPORTED' } }, warnings: ['INVOICE_REJECTED', 'STOCK_NOT_VALUED'] } }) }) },
     { id: 'export-nothing', label: '5 · Export · August: nothing changed since EXP-2026-0001 (it is closed)', model: inWizard('finance', 'export', { month: '2026-08', period: { value: AUGUST, problem: null }, lock: lockPanel('2026-08', { current: LOCK_AUGUST, level: 'HARD' }) }) },
     { id: 'export-read-only', label: '5 · Export · Read only: Export held with the permission', model: inWizard('reader', 'export', { explanations: EXPLAINED }) },

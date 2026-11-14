@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { GUEST_REFUSALS, PURCHASE_SOURCES, REGISTERS_LATER, SALES_SDI_STATES } from '@nexus/factory-domain/accounting/guest/files'
+import { GUEST_REFUSALS, PURCHASE_SOURCES, SALES_SDI_STATES } from '@nexus/factory-domain/accounting/guest/files'
 import { ApiError } from '../../../lib/api/errors'
 import { CATALOGUE, createTranslator, messagesFor } from '../../../lib/i18n/messages'
 import { I18nProvider } from '../../../lib/i18n/provider'
@@ -141,7 +141,6 @@ describe('words', () => {
       const words = t(locale)
       for (const key of WORD_KEYS) expect(words(key), `${locale} ${key}`).not.toBe(key)
       for (const state of [...SALES_SDI_STATES, ...PURCHASE_SOURCES]) expect(words(`state.${state}`), `${locale} state.${state}`).not.toBe(`state.${state}`)
-      for (const later of REGISTERS_LATER) expect(words(`registers.laterItem.${later}`), `${locale} ${later}`).not.toBe(`registers.laterItem.${later}`)
     }
   })
 

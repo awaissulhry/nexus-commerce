@@ -2,30 +2,32 @@
 
 import { Lock, LockOpen } from 'lucide-react'
 import { Banner, Field } from '@nexus/ui/components'
-import { Button, Input, RadioCard, Select, Spinner } from '@nexus/ui/primitives'
+import { Button, RadioCard, Select, Spinner } from '@nexus/ui/primitives'
 import { Modal, Textarea } from '../../../../lib/i18n/ds-parts'
 import { formatDateTime } from '../../../../lib/i18n/format'
-import { useLocale, useT } from '../../../../lib/i18n/provider'
-import { liftHeld, lockHeld, lockStateOf, monthWords, phraseFor, phraseState, warningKey, type AccountingCan } from '../model'
+import { useLocale } from '../../../../lib/i18n/provider'
+import { useAccountingWords } from '../checks/words'
+import { hardOpenHeld } from '../hard-lock/model'
+import { HardLockDialog } from '../hard-lock/view/HardLockDialog'
+import { liftHeld, lockHeld, lockStateOf, monthWords, warningKey, type AccountingCan } from '../model'
 import type { LockActions, LockDialogModel, LockPanelModel } from '../view-model'
 
 /**
  * The period lock of one month (design finance.accounting sec:step-export "Lock period: soft (finance may override with
  * a reason) or hard (typed phrase)"; Owner answer P1: a typed phrase only for the monthly run and the final month close):
- * the month's lock now in words; Soft or Hard as two cards; for Hard the phrase typed exactly (`close October 2026` —
- * either language, as the API takes it), the button held until it matches; after a soft lock what a hard lock would
+ * the month's lock now in words; Soft or Hard as two cards; Hard opens "Close <month> for good?" (B-W2b-426, pop:hard-lock:
+ * the phrase typed — either language, as the API takes it — then a fresh code); after a soft lock what a hard lock would
  * still wait for. In the dialog, a lock in force can be lifted with a reason (a hard one by accounting.unlock, with a
- * fresh authenticator code). The DS ConfirmPhraseField's state words are English only: this field says our own.
+ * fresh authenticator code).
  */
 export function LockPanel({ model, can, actions, withLift = false }: { model: LockPanelModel; can: AccountingCan; actions?: LockActions; withLift?: boolean }) {
-  const t = useT('finance-accounting')
+  const t = useAccountingWords()
   const locale = useLocale()
   const month = model.month
   const current = model.current ?? null
   const state = lockStateOf(current)
-  const held = lockHeld({ month, level: model.level, phrase: model.phrase, current, can, busy: model.busy })
-  const typed = month ? phraseState(month, model.phrase, locale) : 'empty'
-  const wanted = month ? phraseFor(month, locale) : ''
+  // B-W2b-426: Hard opens the pop-up (its button holds until the phrase matches); Soft locks from here.
+  const held = model.level === 'HARD' ? hardOpenHeld({ month, current, can, busy: model.busy }) : lockHeld({ month, level: model.level, phrase: model.phrase, current, can, busy: model.busy })
   const label = month ? monthWords(month, locale) : ''
   const lifted = liftHeld(current, model.liftReason, can, model.liftBusy)
   const hardOnly = current?.status === 'LOCKED' && current.level === 'SOFT'
@@ -81,20 +83,17 @@ export function LockPanel({ model, can, actions, withLift = false }: { model: Lo
               onChange={() => actions?.onLockLevel?.('HARD')}
             />
           </div>
-          {model.level === 'HARD' && month && (
-            <Field label={t('lock.phrase.label', { phrase: wanted })} hint={t(`lock.phrase.${typed}`)}>
-              <Input value={model.phrase} autoComplete="off" spellCheck={false} aria-invalid={typed === 'mismatch' || undefined} placeholder={wanted} onChange={(event) => actions?.onLockPhrase?.(event.target.value)} />
+          {model.level === 'SOFT' && (
+            <Field label={t('lock.note')}>
+              <Textarea value={model.note} maxLength={1000} rows={2} onChange={(event) => actions?.onLockNote?.(event.target.value)} />
             </Field>
           )}
-          <Field label={t('lock.note')}>
-            <Textarea value={model.note} maxLength={1000} rows={2} onChange={(event) => actions?.onLockNote?.(event.target.value)} />
-          </Field>
-          {model.problem && <Banner tone="danger" title={t(model.problem.key, model.problem.params)} />}
+          {model.problem && !model.hardOpen && <Banner tone="danger" title={t(model.problem.key, model.problem.params)} />}
           <div className="fw-fac-actions">
-            <Button size="sm" variant={model.level === 'HARD' ? 'danger' : 'primary'} heldReason={held ? t(held.key, held.params) : undefined} onClick={() => actions?.onLock?.()}>
+            <Button size="sm" variant={model.level === 'HARD' ? 'danger' : 'primary'} heldReason={held ? t(held.key, held.params) : undefined} onClick={() => (model.level === 'HARD' ? actions?.onHardOpen?.() : actions?.onLock?.())}>
               <Lock size={13} aria-hidden /> {model.level === 'HARD' ? t('lock.hard.go', { month: label }) : t('lock.soft.go', { month: label })}
             </Button>
-            {model.busy && (
+            {model.busy && !model.hardOpen && (
               <span className="fw-fac-muted" role="status">
                 <Spinner size={12} /> {t('common.working')}
               </span>
@@ -102,6 +101,7 @@ export function LockPanel({ model, can, actions, withLift = false }: { model: Lo
           </div>
         </>
       )}
+      {model.hardOpen && <HardLockDialog model={model} can={can} actions={actions} />}
       {withLift && current?.status === 'LOCKED' && !model.done && (
         <div className="fw-fac-lift">
           <h3 className="fw-fac-h3">{t('lift.title')}</h3>
@@ -134,7 +134,7 @@ export function LockPanel({ model, can, actions, withLift = false }: { model: Lo
 
 /** ⋯ Lock a period (and a band pill): the month chosen, then the same lock panel, with lifting. Esc closes. */
 export function LockDialog({ model, can, actions, onClose }: { model: LockDialogModel; can: AccountingCan; actions?: LockActions; onClose?: () => void }) {
-  const t = useT('finance-accounting')
+  const t = useAccountingWords()
   const locale = useLocale()
   return (
     <Modal

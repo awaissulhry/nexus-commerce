@@ -8,9 +8,9 @@ import type { AccountingPackage } from '../packages'
  *               carries only the changes, so both are kept)
  *   e-invoices  every sales invoice issued in a handed-over month (numbered, not a draft; its SDI state shown, a rejected
  *               one too) and every supplier invoice received in one (not voided): its FatturaPA XML and PDF, when kept
- *   registers   what the batches hold today besides the journals: the Intrastat file and the year-end stock pack; each
- *               CURRENT, or REPLACED BY the batch that carried the whole file again. The VAT registers and the VAT
- *               liquidation summary are not made yet (W2b-6): the page says so, nothing pretends.
+ *   registers   what the batches hold besides the journals: the VAT registers (sales, purchases and their totals, the
+ *               month's VAT summary; B-W2b-408/426), the Intrastat file and the year-end stock pack; each CURRENT, or
+ *               REPLACED BY the batch that carried the whole file again.
  *
  * Downloads: one file (a 60-second link), or a zip the API writes on the fly (never stored): the whole period, the
  * period's XML only, or the files chosen. Each download is one audit row. No amount is ever on screen: the amounts live
@@ -21,9 +21,6 @@ import type { AccountingPackage } from '../packages'
 export const JOURNAL_PACKAGES = ['SALES_JOURNAL', 'PURCHASES_JOURNAL', 'PAYMENTS', 'COST_OF_SALES'] as const satisfies readonly AccountingPackage[]
 /** The packages listed under "VAT and registers". */
 export const REGISTER_PACKAGES = ['VAT_REGISTERS', 'INTRASTAT', 'YEAR_END_STOCK'] as const satisfies readonly AccountingPackage[]
-/** Registers the design names that nothing makes yet (W2b-6): said, never faked. */
-export const REGISTERS_LATER = ['VAT_REGISTERS', 'VAT_SUMMARY'] as const
-export type RegisterLater = (typeof REGISTERS_LATER)[number]
 
 export const isJournal = (pkg: AccountingPackage): boolean => (JOURNAL_PACKAGES as readonly string[]).includes(pkg)
 

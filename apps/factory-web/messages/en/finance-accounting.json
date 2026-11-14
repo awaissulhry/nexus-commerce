@@ -9,7 +9,6 @@
     "more": "More actions",
     "lockPeriod": "Lock a period…",
     "mapping": "Account mapping",
-    "mappingHeld": "Comes with W2b, in Finance settings.",
     "readAt": "Read at {time}"
   },
   "layout": {
@@ -74,7 +73,7 @@
     },
     "VAT_REGISTERS": {
       "title": "VAT registers",
-      "body": "The VAT registers of the month."
+      "body": "The sales and purchases VAT registers of the month, with the VAT due."
     },
     "INTRASTAT": {
       "title": "Intrastat (EU sales)",
@@ -87,7 +86,6 @@
   },
   "contents": {
     "held": {
-      "w2b": "Comes with W2b: it cannot go in an export yet.",
       "yearEnd": "Goes with the export of the month that ends the year (31 December).",
       "grain": {
         "price": "It carries prices: it needs the price grain (money.price).",
@@ -334,8 +332,7 @@
     "allPass_one": "{count} check passes",
     "allPass_other": "All {count} checks pass",
     "failing_one": "{count} fails · {unexplained} without an explanation",
-    "failing_other": "{count} fail · {unexplained} without an explanation",
-    "w2b": "\"Work orders closed\" comes with W2b."
+    "failing_other": "{count} fail · {unexplained} without an explanation"
   },
   "fix": {
     "Ddt": "DDT {number}",
@@ -525,7 +522,7 @@
     "hard": {
       "title": "Hard lock (final close)",
       "body": "Nothing dated in {month} can change: the database refuses it. Only the owner lifts it, with a reason.",
-      "go": "Close {month} for good"
+      "go": "Close {month} for good…"
     },
     "phrase": {
       "label": "Type \"{phrase}\" to close it for good",
@@ -615,7 +612,7 @@
     "NOTHING_CHANGED": "Nothing changed since the last batch: there is nothing to send.",
     "NOT_LATEST": "A later batch carries the month now: the month is read again.",
     "NOTHING_EXPORTED": "The month has no exported batch to amend: the month is read again.",
-    "PACKAGE_W2B": "A chosen package comes with W2b.",
+    "HANDED_OVER_ELSEWHERE": "A document of this batch was handed over in another month's batch already: ask the accountant how to carry it.",
     "YEAR_END_NOT_THIS_PERIOD": "The year-end stock pack goes only with the month that ends the year.",
     "PACKAGE_GRAIN": "A chosen package carries amounts of a grain you do not hold.",
     "NOT_DRAFT": "This batch is not a draft any more: the list is read again.",

@@ -209,7 +209,6 @@ export function periodOf(key: string, over: Partial<Pick<PeriodRead, 'exports' |
     exports: [...exports],
     invoices: [...invoices],
     registers: [...registers],
-    later: ['VAT_REGISTERS', 'VAT_SUMMARY'],
     counts: { files: files.length, xml: invoices.filter((row) => row.xml).length, sizeBytes: files.reduce((sum, one) => sum + one.sizeBytes, 0) },
     asOf: at(0),
   }
