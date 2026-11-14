@@ -85,4 +85,23 @@ export const manifest = defineManifest({
   'POST /invoicing/orders/:orderId/fees/invoice': { audiences: ['office'], permission: 'invoices.manage', scope: 'record' },
   'POST /invoicing/invoices/from-sample-round': { audiences: ['office'], permission: 'invoices.manage', scope: 'record' },
   'POST /invoicing/fee-lines/:lineId/credit': { audiences: ['office'], permission: 'invoices.manage', scope: 'record' },
+  // B-W2b-401 (FIN-071, FIN-073, FIN-095, FIN-096, FIN-097; handlers in ./test-mode, ./archive-copy, ./self-invoices,
+  // ./debit-notes): reads are invoices.view; leaving or re-entering test mode and the simulated answer invoices.testMode.manage
+  // (step-up); the step's switch (self-invoices, debit notes, the VAT time limit) B-W2b-392's invoices.tax.switch (step-up);
+  // making our copies invoices.issue (as "make the files"); a self-invoice (with payables.view and money.cost) and a debit note
+  // invoices.manage, both issued and sent by the invoice routes. can() on the company (and the supplier or customer).
+  'GET /invoicing/e-invoicing/settings': { audiences: ['office'], permission: 'invoices.view', scope: 'record' },
+  'PUT /invoicing/e-invoicing/settings/:companyId': { audiences: ['office'], permission: 'invoices.testMode.manage', scope: 'record' },
+  'PUT /invoicing/e-invoicing/settings/:companyId/rules': { audiences: ['office'], permission: 'invoices.tax.switch', scope: 'record' },
+  'GET /invoicing/e-invoicing/copies': { audiences: ['office'], permission: 'invoices.view', scope: 'record' },
+  'POST /invoicing/e-invoicing/copies/:companyId/make': { audiences: ['office'], permission: 'invoices.issue', scope: 'record' },
+  'GET /invoicing/invoices/:invoiceId/copies': { audiences: ['office'], permission: 'invoices.view', scope: 'record' },
+  'GET /invoicing/self-invoices': { audiences: ['office'], permission: 'invoices.view', scope: 'record' },
+  'GET /invoicing/self-invoices/candidates': { audiences: ['office'], permission: 'invoices.view', scope: 'record' },
+  'GET /invoicing/self-invoices/:selfInvoiceId': { audiences: ['office'], permission: 'invoices.view', scope: 'record' },
+  'POST /invoicing/self-invoices': { audiences: ['office'], permission: 'invoices.manage', scope: 'record' },
+  'POST /invoicing/self-invoices/:selfInvoiceId/cancel': { audiences: ['office'], permission: 'invoices.manage', scope: 'record' },
+  'POST /invoicing/invoices/:invoiceId/debit-note': { audiences: ['office'], permission: 'invoices.manage', scope: 'record' },
+  'GET /invoicing/invoices/:invoiceId/debit-notes': { audiences: ['office'], permission: 'invoices.view', scope: 'record' },
+  'GET /invoicing/invoices/:invoiceId/vat-time-limit': { audiences: ['office'], permission: 'invoices.view', scope: 'record' },
 })

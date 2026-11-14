@@ -16,6 +16,8 @@ import type { InvoiceRow, LineRow, Reader } from './store'
 // B-W2b-392: tax rules as data before the issue.
 import { printedDeclarationOf } from './intent/declarations'
 import { taxRuleProblems } from './tax-codes/apply'
+// B-W2b-401: a debit note's and a self-invoice's own checks (the company's switch, what they name).
+import { depthIssueProblems } from './self-invoices/hooks'
 
 // B-W2b-396 (FIN-063): the euro equivalent in the file's Causale.
 import { checkedCausaleOf } from './language-currency/store'
@@ -210,7 +212,9 @@ export async function reviewIssue(db: Reader, invoice: InvoiceRow, lines: readon
     deposit,
   }), ...(await shippedAndMoneyProblems(db, invoice, lines)),
   // B-W2b-392: the tax codes, the stamp duty and the declaration of intent (GATE-ACCOUNTANT switch by switch).
-  ...(await taxRuleProblems(db, invoice, lines, date))]
+  ...(await taxRuleProblems(db, invoice, lines, date)),
+  // B-W2b-401: the debit note's invoice and switch; the self-invoice's record and switch (GATE-ACCOUNTANT).
+  ...(await depthIssueProblems(db, invoice))]
   return { problems, seller: seller.seller, billTo: buyer.billTo, party }
 }
 

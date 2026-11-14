@@ -8,6 +8,9 @@ import type { CommandCaller } from '../../../core/command'
 import { loadFactoryEnv } from '../../../env'
 import { gatewayAccount, GatewayCallFailed, GatewayRefusal, ProviderError, type Gateway } from '../../../platform/gateway/gateway'
 import { processGateway } from '../../../platform/gateway/service'
+// B-W2b-401 (FIN-096): e-invoice test mode answers in-process (a simulated send never reaches the intermediary).
+import { isTestRef } from '@nexus/factory-domain/invoicing/test-mode/test-mode'
+import { simulatedOutcomeFor, simulatedReceipt, simulatedStatus } from '../test-mode/simulator'
 
 /**
  * The process's SDI runtime (plan A1 §4; B-W1-50): each operation is ONE gateway call for the company's SDI account
@@ -30,6 +33,8 @@ export interface SdiRuntime {
   webhookMessages(mode: IntegrationMode, body: string): SdiMessage[]
   /** The FAKE adapter of this process (local and test), or null. */
   readonly fake: FakeSdi | null
+  /** B-W2b-401: the chosen intermediary's adapter exists (Q21): only then may a company go live on a LIVE or SANDBOX connection. */
+  readonly liveProviderReady: boolean
 }
 
 export interface SdiRuntimeOptions {
@@ -61,7 +66,11 @@ export function createSdiRuntime(options: SdiRuntimeOptions): SdiRuntime {
   }
   return Object.freeze({
     fake: options.fake,
+    liveProviderReady: remote !== UNCHOSEN_SDI_PROVIDER,
     async send(caller: CommandCaller, accountId: string, request: SdiSendRequest): Promise<SendResult> {
+      // B-W2b-401: a company in test mode on a LIVE or SANDBOX connection: the receipt is simulated here, nothing is sent.
+      const simulated = await simulatedOutcomeFor(caller, accountId)
+      if (simulated) return { ok: true, receipt: simulatedReceipt(request, simulated) }
       try {
         const receipt = await options.gateway.call(
           gatewayAccount(caller, accountId),
@@ -76,7 +85,8 @@ export function createSdiRuntime(options: SdiRuntimeOptions): SdiRuntime {
       }
     },
     status: (caller: CommandCaller, accountId: string, request: SdiStatusRequest) =>
-      options.gateway.call(gatewayAccount(caller, accountId), { ...SDI_OPERATIONS.status, idempotencyKey: request.idempotencyKey, request: { fileName: request.fileName, byRef: request.providerRef !== null } }, (call) =>
+      // B-W2b-401: a simulated send's status is the simulation's, always (even after the company went live).
+      isTestRef(request.providerRef) ? simulatedStatus(caller, request) : options.gateway.call(gatewayAccount(caller, accountId), { ...SDI_OPERATIONS.status, idempotencyKey: request.idempotencyKey, request: { fileName: request.fileName, byRef: request.providerRef !== null } }, (call) =>
         adapterFor(call.account).status(call, request),
       ),
     archive: (caller: CommandCaller, accountId: string, request: SdiArchiveRequest) =>

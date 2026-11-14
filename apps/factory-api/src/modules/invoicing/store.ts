@@ -10,6 +10,8 @@ import { asMoney } from '@nexus/factory-domain/money/marked'
 import type { CommandCaller, CommandTx } from '../../core/command'
 import { actorOf, type OfficeContext } from '../../core/context'
 import { serverClock } from '../../core/time'
+// B-W2b-401 (FIN-095): a self-invoice holds a purchase's amounts (cost) and asks the supplier for no payment.
+import { isSelfInvoiceDocType } from '@nexus/factory-domain/invoicing/self-invoices/self-invoices'
 
 /**
  * The invoicing module's reads (factory-db money.prisma Invoice, InvoiceLine): the columns every read names, the views
@@ -120,6 +122,8 @@ export async function officeInvoice(caller: CommandCaller, invoiceId: string, pe
   const context = officeContextOf(caller)
   const invoice = await caller.withClient((client) => readInvoice(client, invoiceId))
   assertMay(context, INVOICES_VIEW, permission, invoice ? { companyId: invoice.companyId, partyId: invoice.buyerPartyId } : null)
+  // B-W2b-401: a self-invoice's amounts are a purchase's: only for a person who sees costs (money.cost).
+  if (isSelfInvoiceDocType(invoice!.docType) && !mayOn(context, 'money.cost', { companyId: invoice!.companyId, partyId: invoice!.buyerPartyId })) throw new NotFoundError('Invoice not found.')
   return invoice!
 }
 
@@ -200,7 +204,8 @@ export function headerView(invoice: InvoiceRow) {
  * back (`refunded`) is no longer paid on it.
  */
 export function balanceOf(invoice: Pick<InvoiceRow, 'docType' | 'status' | 'grossTotal'>, paid: number, credited: number, refunded = 0): { open: number; refundDue: number } {
-  if (invoice.status === 'DRAFT' || invoice.docType === 'TD04') return { open: 0, refundDue: 0 }
+  // B-W2b-401: a self-invoice (TD16-TD19) is the company's own VAT document of a purchase: nothing is paid on it.
+  if (invoice.status === 'DRAFT' || invoice.docType === 'TD04' || isSelfInvoiceDocType(invoice.docType)) return { open: 0, refundDue: 0 }
   if (invoice.docType === 'TD02') return { open: 0, refundDue: Math.max(0, credited - refunded) }
   const rest = invoice.grossTotal - credited - (paid - refunded)
   return { open: Math.max(0, rest), refundDue: Math.max(0, -rest) }

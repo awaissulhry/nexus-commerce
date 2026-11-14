@@ -21,6 +21,8 @@ import { assertMay, invoiceDetail, officeContextOf, officeInvoice, readInvoice, 
 import { taxedLines } from './tax-codes/apply'
 // B-W2b-396 (FIN-063): a new draft is written in its customer's invoice language (PLT-131).
 import { draftLanguageFor } from './language-currency/store'
+// B-W2b-401: a self-invoice's draft is deleted only by cancelling the self-invoice.
+import { refuseSelfInvoiceDraft } from './self-invoices/hooks'
 
 /**
  * Draft invoices (B-W1-28 invoice core; FIN-054, FIN-061, FIN-098, FIN-099): create one (generic TD01/TD24, or a TD02
@@ -278,7 +280,8 @@ export interface CreateDraftInput {
 /** The new draft's row and lines, inside a command (the generic route and the deposit flows). */
 export async function insertDraft(
   tools: CommandTools,
-  draft: { id: string; companyId: string; buyerPartyId: string; docType: InvoiceDocType; priceBasis: PriceBasis; currency: string; salesOrderId: string | null; depositRequestId: string | null; creditOfId?: string | null; causale: string | null; documentRefs: Prisma.InputJsonValue | null; payment: PaymentInput | null; termsSource?: TermsSource | null; internalNote: string | null },
+  // B-W2b-401: debitOfId, the invoice a debit note (TD05) adds to.
+  draft: { id: string; companyId: string; buyerPartyId: string; docType: InvoiceDocType; priceBasis: PriceBasis; currency: string; salesOrderId: string | null; depositRequestId: string | null; creditOfId?: string | null; debitOfId?: string | null; causale: string | null; documentRefs: Prisma.InputJsonValue | null; payment: PaymentInput | null; termsSource?: TermsSource | null; internalNote: string | null },
   lines: readonly PreparedLine[],
 ): Promise<InvoiceTotals> {
   // B-W2b-392: the company's tax rules (the stamp duty line decided again; the tax codes' law), GATE-ACCOUNTANT switch by switch.
@@ -306,6 +309,8 @@ export async function insertDraft(
       salesOrderId: draft.salesOrderId,
       depositRequestId: draft.depositRequestId,
       creditOfId: draft.creditOfId ?? null,
+      // B-W2b-401 (FIN-071): a debit note names the invoice it adds to.
+      ...(draft.debitOfId ? { debitOfId: draft.debitOfId } : {}),
       internalNote: draft.internalNote,
       // B-W2b-396 (FIN-063): the invoices contact's language, else the customer's.
       language: (await draftLanguageFor(tools.tx, draft.buyerPartyId)).language,
@@ -545,6 +550,8 @@ export async function updateDraft(caller: CommandCaller, invoiceId: string, body
  * reference would answer a 500): 409 in words. Also used by the monthly run's own deletes.
  */
 export async function refuseNamedDraft(tx: CommandTx, invoiceId: string): Promise<void> {
+  // B-W2b-401 (FIN-095): a self-invoice's draft is let go only by cancelling the self-invoice.
+  await refuseSelfInvoiceDraft(tx, invoiceId)
   const customs = await tx.customsDeclaration.findFirst({ where: { invoiceId }, select: { mrn: true, shipment: { select: { number: true } } } })
   if (customs) throw new ConflictError(`The customs declaration of shipment ${customs.shipment.number}${customs.mrn ? ` (MRN ${customs.mrn})` : ''} names this draft invoice: change the declaration first.`)
 }
