@@ -117,6 +117,9 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   Worker: '/admin/users/floor/[id]',
   Role: '/admin/roles/[id]',
   IntegrationAccount: '/admin/connections/[id]',
+  // B-W2b-431: a picklist opens on Admin › Fields & lists › Picklists (SCR-164); a custom field has no page of its own (its
+  // dialog opens on its record type's list of fields).
+  Picklist: '/admin/fields?tab=picklists&list=[id]',
   // Admin › Security & health (SCR-166, B-W2b-24): a restore drill (the reminder that the next one is due names the last one).
   RestoreDrill: '/admin/security?drill=[id]#backups',
   // Home › My tasks (SCR-233, B-W2a-40): a task opens in its DetailModal on the list.

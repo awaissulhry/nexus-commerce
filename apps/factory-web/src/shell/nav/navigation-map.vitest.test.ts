@@ -237,6 +237,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/admin/security': 'security.view', // GET /admin/security (B-W2a-36)
       '/admin/documents': 'numbering.view', // GET /numbering/series
       '/admin/languages': 'companies.view',
+      '/admin/fields': 'fields.view', // GET /fields/editor (B-W2b-431)
       '/admin/automation': 'alerts.rules.manage', // GET /alerts/rules/:id/timers, the rules kept (B-W2a-78)
       '/admin/connections': 'integrations.view', // GET /integrations/accounts
       '/admin/import': 'imports.view', // GET /imports
