@@ -44,9 +44,12 @@ describe('which audit rows are security events', () => {
       ['SIGN_IN_FAILED', { reason: 'WRONG_CODE', failedAttempts: 5 }],
       ['LOCKOUT', { what: 'ACCOUNT', lockedUntil: '2026-11-01T09:01:00.000Z' }],
     ])
-    // A wrong step-up code is no sign-in, but the lock it sets is a lockout.
-    expect(eventsOfRow(row('auth.stepUpFailed', { after: { wrong: 'code', failedAttempts: 4, lockedUntil: null } }))).toEqual([])
-    expect(eventsOfRow(row('auth.stepUpFailed', { after: { wrong: 'code', failedAttempts: 5, lockedUntil: '2026-11-01T09:01:00.000Z' } })).map((made) => made.kind)).toEqual(['LOCKOUT'])
+    // B-W2b-404: a wrong step-up code is no sign-in and locks no account; the try that reaches the step-up lock says so.
+    expect(eventsOfRow(row('auth.stepUpFailed', { after: { result: 'WRONG_CODE', failuresLeft: 1 } }))).toEqual([])
+    expect(eventsOfRow(row('auth.stepUpFailed', { after: { result: 'REUSED_CODE', failuresLeft: 0, stepUpLockedUntil: '2026-11-01T09:15:00.000Z' } }))).toEqual([
+      { kind: 'STEP_UP_LOCKED', details: { result: 'REUSED_CODE', lockedUntil: '2026-11-01T09:15:00.000Z' } },
+    ])
+    expect(eventsOfRow(row('auth.passwordCheckFailed', { after: { wrong: 'password', failedAttempts: 5, lockedUntil: '2026-11-01T09:01:00.000Z' } })).map((made) => made.kind)).toEqual(['LOCKOUT'])
   })
 
   it('two-factor set up or switched off; a role given, ended or edited, a worker’s floor roles, a role’s two-factor rule', () => {

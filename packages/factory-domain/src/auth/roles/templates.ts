@@ -168,6 +168,8 @@ import { HOME_KPIS_ADDS } from '../../insights/kpis/permissions'
 import { TEST_MODE_ADDS } from '../../invoicing/test-mode/permissions'
 // B-W2b-418: the cost sheet's components (finance writes draft sheets' lines and keeps their inputs).
 import { COST_SHEET_COMPONENTS_ADDS } from '../../costing/sheet-components/permissions'
+// B-W2b-404: security in depth (the administrator keeps the session lengths and step-up rules, and ends a person's sessions).
+import { SECURITY_DEPTH_ADDS } from '../sessions/permissions'
 // B-W2b-411: the work order close (the production manager reopens a closed work order with a reason).
 import { WORK_ORDER_CLOSE_ADDS } from '../../costing/close/permissions'
 
@@ -1095,6 +1097,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (TEST_MODE_ADDS[key] ?? []) : []),
   // B-W2b-418
   ...(audience === 'office' ? (COST_SHEET_COMPONENTS_ADDS[key] ?? []) : []),
+  // B-W2b-404
+  ...(audience === 'office' ? (SECURITY_DEPTH_ADDS[key] ?? []) : []),
   // B-W2b-411
   ...(audience === 'office' ? (WORK_ORDER_CLOSE_ADDS[key] ?? []) : [])]
 /**

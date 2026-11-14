@@ -5,7 +5,8 @@ import { mfaSatisfied } from './grants'
 import type { AuthMailer, AuthMessage } from './mail'
 import { createOfficeAuth } from './office-auth'
 import { authSecrets, mintToken, parseToken, sameSecret, shortenIp, tokenHash } from './secrets'
-import { idleExpiryAt, SESSION_LIFETIME } from './session-store'
+import { idleEndAfter } from '@nexus/factory-domain/auth/sessions/lengths'
+import { SESSION_LIFETIME } from './session-store'
 
 // Ported from Commerce's apps/api/src/lib/auth/auth.vitest.test.ts (opaque tokens, IP truncation, CSRF compare),
 // plus the factory's token layout, the sealed TOTP secrets and the two-factor rule of the grants.
@@ -84,6 +85,17 @@ describe('sealed secrets', () => {
     expect(() => authSecrets('short')).toThrow(/too short/)
   })
 
+  it('fingerprint a step-up code with its own key: per person and time step, never the code (B-W2b-404)', () => {
+    const user = '0193a000-0000-7000-8000-000000000001'
+    const print = secrets.stepUpFingerprint(user, 100, '123456')
+    expect(print).toMatch(/^su1\.[0-9a-f]{64}$/)
+    expect(print).not.toContain('123456')
+    expect(secrets.stepUpFingerprint(user, 100, '123456')).toBe(print)
+    expect(secrets.stepUpFingerprint(user, 101, '123456')).not.toBe(print)
+    expect(secrets.stepUpFingerprint('0193a000-0000-7000-8000-000000000002', 100, '123456')).not.toBe(print)
+    expect(authSecrets('another-secret-of-enough-length').stepUpFingerprint(user, 100, '123456')).not.toBe(print)
+  })
+
   it('hash recovery codes with their own key', () => {
     expect(secrets.recoveryCodeHash('ABCDEFGHJK')).toBe(secrets.recoveryCodeHash('ABCDEFGHJK'))
     expect(secrets.recoveryCodeHash('ABCDEFGHJK')).not.toBe(authSecrets('another-secret-of-enough-length').recoveryCodeHash('ABCDEFGHJK'))
@@ -93,8 +105,8 @@ describe('sealed secrets', () => {
 describe('session lifetime', () => {
   it('slides the idle expiry 8 hours from now, never past the absolute expiry', () => {
     const now = new Date('2026-10-28T09:00:00.000Z')
-    expect(idleExpiryAt(now, new Date('2026-11-04T09:00:00.000Z'))).toEqual(new Date('2026-10-28T17:00:00.000Z'))
-    expect(idleExpiryAt(now, new Date('2026-10-28T12:00:00.000Z'))).toEqual(new Date('2026-10-28T12:00:00.000Z'))
+    expect(idleEndAfter(now, new Date('2026-11-04T09:00:00.000Z'), SESSION_LIFETIME.idleMs)).toEqual(new Date('2026-10-28T17:00:00.000Z'))
+    expect(idleEndAfter(now, new Date('2026-10-28T12:00:00.000Z'), SESSION_LIFETIME.idleMs)).toEqual(new Date('2026-10-28T12:00:00.000Z'))
     expect(SESSION_LIFETIME).toEqual({ idleMs: 8 * 3_600_000, absoluteMs: 7 * 24 * 3_600_000, slideEveryMs: 60_000 })
   })
 })

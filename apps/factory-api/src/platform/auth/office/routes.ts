@@ -1,6 +1,6 @@
 import { defineRoutes } from '../../../core/manifest'
 import { AUTH_RATE_LIMITS, officeAuthOf, type AuthRateLimit } from '../sessions/office-auth'
-import { changePassword, confirmTotp, disableTotp, me, setLocale, startTotpSetup, stepUp } from './account'
+import { changePassword, confirmTotp, disableTotp, me, setLocale, startTotpSetup } from './account'
 import {
   localeContract,
   meContract,
@@ -17,6 +17,7 @@ import {
 import { manifest } from './manifest'
 import { confirmPasswordReset, requestPasswordReset } from './password-reset'
 import { signIn, signOut } from './sign-in'
+import { proveStepUp } from './step-up-policy'
 
 /**
  * POST /auth/office/sign-in                 email + password (+ code) → session cookies; totp_required; or a forced reset
@@ -25,7 +26,8 @@ import { signIn, signOut } from './sign-in'
  * POST /auth/office/password/reset          token + new password; every session ends
  * GET  /auth/office/me                      the person, tenant, company (and the companies they may open), session,
  *                                           two-factor state and permissions
- * POST /auth/office/step-up                 a fresh TOTP code opens risky actions for 5 minutes
+ * POST /auth/office/step-up                 a fresh TOTP code opens risky actions for 5 minutes (each try recorded, each
+ *                                           code once, repeated wrong codes lock step-up: step-up-policy.ts)
  * POST /auth/office/totp/setup|confirm|disable  two-factor on this account (recovery codes shown once at confirm)
  * POST /auth/office/password                the signed-in person's new password (the current one first); other sessions end
  * POST /auth/office/locale                  the signed-in person's interface language
@@ -48,7 +50,7 @@ export default defineRoutes('auth-office', manifest, async (app) => {
   )
 
   app.get('/auth/office/me', { schema: meContract }, (request) => me(officeAuthOf(app), request))
-  app.post('/auth/office/step-up', { schema: stepUpContract, config: limit(limits.codes) }, (request) => stepUp(officeAuthOf(app), request, request.body.code))
+  app.post('/auth/office/step-up', { schema: stepUpContract, config: limit(limits.codes) }, (request) => proveStepUp(officeAuthOf(app), request, request.body.code))
   app.post('/auth/office/totp/setup', { schema: totpSetupContract }, (request) => startTotpSetup(officeAuthOf(app), request))
   app.post('/auth/office/totp/confirm', { schema: totpConfirmContract, config: limit(limits.codes) }, (request) =>
     confirmTotp(officeAuthOf(app), request, request.body.code),

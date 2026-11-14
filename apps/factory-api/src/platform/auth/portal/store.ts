@@ -2,11 +2,14 @@ import type { FactoryClient, PortalSignInCodePurpose } from '@nexus/factory-db'
 import type { PartnerRole } from '@nexus/factory-domain/auth/portal/access'
 import { PORTAL_CODE } from '@nexus/factory-domain/auth/portal/codes'
 import { portalAbsoluteExpiryAt, portalIdleExpiryAt } from '@nexus/factory-domain/auth/portal/session'
+import { deviceOf, type SessionPlace } from '@nexus/factory-domain/auth/sessions/device'
+import { sessionLengthsMs } from '@nexus/factory-domain/auth/sessions/lengths'
 import { newId } from '@nexus/factory-domain/core/ids'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import type { CommandTx } from '../../../core/command'
 import { portalTermsInForce } from './terms'
 import { liveAssignment } from '../roles/access'
+import { securityRulesIn } from '../sessions/rules'
 
 /**
  * The portal's reads and rows (B-W2b-159), in the tenant's OFFICE scope: the code, settings, roles, notices and
@@ -186,14 +189,30 @@ export interface StoredPortalSession {
   readonly absoluteExpiresAt: string
 }
 
-/** A new PARTNER session from its token's hash (a command's work, office scope): 30 minutes idle, 12 hours at most. */
+/**
+ * A new PARTNER session from its token's hash (a command's work, office scope): the tenant's portal lengths (B-W2b-404:
+ * SecuritySettings; 30 minutes idle and 12 hours at most by default and by the database's rule), and where it runs
+ * (device, browser and place, set once).
+ */
 export async function createPortalSession(
   tx: CommandTx,
-  input: { readonly userId: string; readonly partyId: string; readonly companyId: string; readonly tokenHash: string; readonly now: Date; readonly ipHash: string | null; readonly userAgent: string | undefined },
+  input: {
+    readonly tenantId: string
+    readonly userId: string
+    readonly partyId: string
+    readonly companyId: string
+    readonly tokenHash: string
+    readonly now: Date
+    readonly ipHash: string | null
+    readonly userAgent: string | undefined
+    readonly place: SessionPlace
+  },
 ): Promise<StoredPortalSession> {
   const id = newId()
-  const absoluteExpiresAt = portalAbsoluteExpiryAt(input.now)
-  const idleExpiresAt = portalIdleExpiryAt(input.now, absoluteExpiresAt)
+  const { portal } = sessionLengthsMs((await securityRulesIn(tx, input.tenantId)).rules)
+  const absoluteExpiresAt = portalAbsoluteExpiryAt(input.now, portal.longestMs)
+  const idleExpiresAt = portalIdleExpiryAt(input.now, absoluteExpiresAt, portal.idleMs)
+  const device = deviceOf(input.userAgent)
   await tx.session.create({
     data: {
       id,
@@ -206,6 +225,10 @@ export async function createPortalSession(
       absoluteExpiresAt,
       ipHash: input.ipHash,
       userAgent: input.userAgent?.slice(0, 256) ?? null,
+      deviceLabel: device.deviceLabel,
+      browser: device.browser,
+      ipCountry: input.place.ipCountry,
+      ipCity: input.place.ipCity,
       audience: 'PARTNER',
       partyId: input.partyId,
     },

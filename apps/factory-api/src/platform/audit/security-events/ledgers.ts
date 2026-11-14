@@ -16,7 +16,8 @@ import { databaseNow, securityEventRow } from './record'
  *
  *   auth.signIn                      SIGN_IN (office), details: the second factor
  *   auth.signInFailed                SIGN_IN_FAILED (wrong password or code) and LOCKOUT ACCOUNT when the row set the lock
- *   auth.stepUpFailed, auth.passwordCheckFailed   LOCKOUT ACCOUNT when the row set the lock
+ *   auth.passwordCheckFailed         LOCKOUT ACCOUNT when the row set the lock
+ *   auth.stepUpFailed                STEP_UP_LOCKED when the wrong or reused code reached the step-up lock (B-W2b-404)
  *   auth.totpConfirm | auth.totpDisable           MFA_CHANGED SET_UP | SWITCHED_OFF
  *   floor.signIn | floor.switchOperator           SIGN_IN (floor; the worker)
  *   floor.signInFailed               SIGN_IN_FAILED WRONG_PIN (the worker) and LOCKOUT PIN when the row set the lock
@@ -89,9 +90,13 @@ export function eventsOfRow(row: AuditRow): Made[] {
       return [{ kind: 'SIGN_IN', details: { secondFactor: typeof after.secondFactor === 'string' ? after.secondFactor.toUpperCase() : 'NONE' } }]
     case 'auth.signInFailed':
       return [{ kind: 'SIGN_IN_FAILED', details: { reason: after.wrong === 'code' ? 'WRONG_CODE' : 'WRONG_PASSWORD', failedAttempts: numberOf(after.failedAttempts) } }, ...lockout(after, 'ACCOUNT')]
-    case 'auth.stepUpFailed':
     case 'auth.passwordCheckFailed':
       return lockout(after, 'ACCOUNT', { details: { what: 'ACCOUNT', lockedUntil: after.lockedUntil as string, after: row.action } })
+    case 'auth.stepUpFailed':
+      // B-W2b-404: the try that reached the step-up lock (office/step-up-policy.ts); a wrong step-up code no longer locks the account.
+      return typeof after.stepUpLockedUntil === 'string'
+        ? [{ kind: 'STEP_UP_LOCKED', details: { result: typeof after.result === 'string' ? after.result : undefined, lockedUntil: after.stepUpLockedUntil } }]
+        : []
     case 'auth.totpConfirm':
       return [{ kind: 'MFA_CHANGED', details: { change: 'SET_UP' } }]
     case 'auth.totpDisable':

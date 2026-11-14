@@ -5,9 +5,10 @@ import { holds } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import type { DrillStatus } from '@nexus/factory-domain/ops/drills'
 import { SIGN_IN_RULES } from '@nexus/factory-domain/ops/two-factor'
-import { actorOf, requireContext } from '../../../core/context'
+import { actorOf, requireContext, type OfficeContext } from '../../../core/context'
 import { liveAssignment } from '../../auth/roles/access'
-import { STEP_UP_VALID_MS, SESSION_LIFETIME } from '../../auth/sessions/session-store'
+import { securityRulesIn } from '../../auth/sessions/rules'
+import { STEP_UP_VALID_MS } from '../../auth/sessions/session-store'
 import type { OfficeAuth } from '../../auth/sessions/office-auth'
 import type { StatusLine } from './contract'
 import { drillsOf } from './drills'
@@ -78,6 +79,7 @@ export async function securityPage(auth: OfficeAuth, request: FastifyRequest) {
     const quarantined = await quarantinedSince(client, now)
     const files = filesLine(stores, quarantined)
     const sealed = await client.secretValue.count()
+    const { rules } = await securityRulesIn(client, (context as OfficeContext).tenantId)
 
     let twoFactor: { officeRoles: number; asking: number; holdersWithout: number } | null = null
     if (holds(actor, 'roles.view')) {
@@ -107,7 +109,8 @@ export async function securityPage(auth: OfficeAuth, request: FastifyRequest) {
       signIn: {
         password: { minLength: PASSWORD_MIN_LENGTH, maxLength: PASSWORD_MAX_LENGTH },
         lockout: SIGN_IN_RULES.lockout,
-        sessions: { idleHours: SESSION_LIFETIME.idleMs / 3_600_000, absoluteDays: SESSION_LIFETIME.absoluteMs / DAY_MS, stepUpMinutes: STEP_UP_VALID_MS / 60_000 },
+        // B-W2b-404 (PLT-068): the tenant's office lengths (SecuritySettings; the W0 defaults without a row).
+        sessions: { idleHours: rules.officeIdleMinutes / 60, absoluteDays: rules.officeLongestHours / 24, stepUpMinutes: STEP_UP_VALID_MS / 60_000 },
         twoFactor,
       },
       backups: { drill, drills, canRecord: holds(actor, 'security.drills.record') },

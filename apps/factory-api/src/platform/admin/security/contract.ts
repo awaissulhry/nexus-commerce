@@ -63,7 +63,8 @@ export const pageContract = defineContract({
       signIn: output({
         password: output({ minLength: z.number().int(), maxLength: z.number().int() }),
         lockout: output({ afterFailures: z.number().int(), firstLockMinutes: z.number().int(), maxLockMinutes: z.number().int() }),
-        sessions: output({ idleHours: z.number().int(), absoluteDays: z.number().int(), stepUpMinutes: z.number().int() }),
+        /** B-W2b-404: the tenant's office lengths (a part of an hour or a day when so set: 90 minutes is 1.5). */
+        sessions: output({ idleHours: z.number(), absoluteDays: z.number(), stepUpMinutes: z.number().int() }),
         /** The office roles and how many ask for two-factor; null without roles.view. */
         twoFactor: output({ officeRoles: z.number().int(), asking: z.number().int(), holdersWithout: z.number().int() }).nullable(),
       }),

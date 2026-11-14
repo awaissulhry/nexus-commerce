@@ -10,6 +10,10 @@ export const manifest = defineManifest({
   'POST /auth/roles': { audiences: ['office'], permission: 'roles.manage', scope: 'tenant' },
   'PATCH /auth/roles/:roleId': { audiences: ['office'], permission: 'roles.manage', scope: 'tenant' },
   'POST /auth/roles/sync-templates': { audiences: ['office'], permission: 'roles.manage', scope: 'tenant' },
+  // B-W2b-404 (PLT-031): a custom role archived and restored, and the review of a change (roles/custom).
+  'POST /auth/roles/:roleId/archive': { audiences: ['office'], permission: 'roles.manage', scope: 'tenant' },
+  'POST /auth/roles/:roleId/restore': { audiences: ['office'], permission: 'roles.manage', scope: 'tenant' },
+  'POST /auth/roles/:roleId/review': { audiences: ['office'], permission: 'roles.manage', scope: 'tenant' },
   'GET /auth/users/:userId/roles': { audiences: ['office'], permission: 'roles.view', scope: 'tenant' },
   'POST /auth/users/:userId/roles': { audiences: ['office'], permission: 'roles.assign', scope: 'tenant' },
   'POST /auth/role-assignments/:assignmentId/end': { audiences: ['office'], permission: 'roles.assign', scope: 'tenant' },
