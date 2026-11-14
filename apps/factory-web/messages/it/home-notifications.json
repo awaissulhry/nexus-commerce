@@ -273,6 +273,11 @@
         "received": "Pagamento ricevuto da {record}{figure}",
         "depositPaid": "Acconto pagato sull’ordine {record}: la produzione può partire"
       },
+      "money": {
+        "sdiRejected": "La fattura {record} è stata scartata dallo SDI: correggila e inviala di nuovo con lo stesso numero e la stessa data",
+        "overdue": "{record}: {count} fatture scadute, un sollecito attende un sì",
+        "reconciliationDifference": "I pagamenti non quadrano in {record}: {count} controlli sui pagamenti non superati"
+      },
       "changes": {
         "requestRaised": "Nuova richiesta di modifica {record}: {title}",
         "requestAccepted": "{actor} ha accettato la tua richiesta di modifica {record}",

@@ -234,6 +234,9 @@ span.fw-fac-muted[role='status'] {
   gap: var(--nds-space-8);
   padding-left: var(--nds-space-24, var(--nds-space-20));
   min-width: 0;
+  /* B-W2b-426: several fixes (keys of the mapping, failing records) wrap, so the check's name keeps its room. */
+  max-width: 28rem;
+  white-space: normal;
 }
 
 .fw-fac-fixes {

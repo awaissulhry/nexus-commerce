@@ -6,7 +6,7 @@ import {
   CHECK_CODES,
   EXPORT_STATUSES,
   MAX_EXPLANATION,
-  PACKAGE_RULES,
+  packageGrains,
   type AccountingPackage,
   type Check,
   type CheckCode,
@@ -45,6 +45,8 @@ export interface AccountingCan {
   readonly lock: boolean
   /** Lifting a hard lock (with a fresh step-up): the owner, by default. */
   readonly unlock: boolean
+  /** B-W2b-426: closing a month for good (a hard lock, with a fresh step-up): finance and the owner, by default. */
+  readonly close: boolean
   readonly price: boolean
   readonly cost: boolean
 }
@@ -56,6 +58,7 @@ export function accountingCanOf(permissions: readonly string[]): AccountingCan {
     export: held.has('accounting.export'),
     lock: held.has('accounting.lock'),
     unlock: held.has('accounting.unlock'),
+    close: held.has('accounting.close'),
     price: held.has('money.price'),
     cost: held.has('money.cost'),
   }
@@ -142,12 +145,11 @@ export function filesAddressOf(params: { get(name: string): string | null } | nu
 
 // ---- packages --------------------------------------------------------------------------------------------------------------
 
-/** Why a package cannot go in this export (null: it can): a later wave, not the year end, the person's grain. */
+/** Why a package cannot go in this export (null: it can): not the year end, a grain the person lacks (the VAT registers: both). */
 export function packageHeld(pkg: AccountingPackage, facts: { readonly yearEnd: boolean }, can: Pick<AccountingCan, 'price' | 'cost'>): Phrase | null {
-  const rule = PACKAGE_RULES[pkg]
-  if (rule.wave !== 'W2a') return phrase('contents.held.w2b')
   if (pkg === 'YEAR_END_STOCK' && !facts.yearEnd) return phrase('contents.held.yearEnd')
-  if (!grainHeld(rule.grain, can)) return phrase(`contents.held.grain.${rule.grain}`)
+  const missing = packageGrains(pkg).find((grain) => !grainHeld(grain, can))
+  if (missing) return phrase(`contents.held.grain.${missing}`)
   return null
 }
 
@@ -183,9 +185,9 @@ export function checksFor(packages: readonly AccountingPackage[], journalsOn = f
   })
 }
 
-/** The month's checks the chosen packages carry. */
-export const checksOf = (answer: Pick<PeriodAnswer, 'checks'>, chosen: readonly AccountingPackage[]): Check[] => {
-  const codes = new Set(checksFor(chosen))
+/** The month's checks the chosen packages carry (B-W2b-426: the mapping's two while the company's journals are on). */
+export const checksOf = (answer: Pick<PeriodAnswer, 'checks' | 'journals'>, chosen: readonly AccountingPackage[]): Check[] => {
+  const codes = new Set(checksFor(chosen, answer.journals.on))
   return answer.checks.filter((check) => codes.has(check.code))
 }
 
@@ -285,9 +287,9 @@ export function exportBody(input: { readonly companyId: string; readonly month: 
 }
 
 /** The checks that failed when the month was read and pass in a newer read ("2 checks fixed since you opened this"). */
-export function fixedSince(before: Pick<PeriodAnswer, 'checks'> | null, after: Pick<PeriodAnswer, 'checks'> | null, chosen: readonly AccountingPackage[]): CheckCode[] {
+export function fixedSince(before: Pick<PeriodAnswer, 'checks' | 'journals'> | null, after: Pick<PeriodAnswer, 'checks'> | null, chosen: readonly AccountingPackage[]): CheckCode[] {
   if (!before || !after) return []
-  const codes = new Set(checksFor(chosen))
+  const codes = new Set(checksFor(chosen, before.journals.on))
   const failing = new Set(before.checks.filter((check) => codes.has(check.code) && !check.passed).map((check) => check.code))
   return after.checks.filter((check) => failing.has(check.code) && check.passed).map((check) => check.code)
 }
@@ -309,7 +311,10 @@ export function checkPhrase(check: Pick<Check, 'code' | 'passed' | 'count'>, mon
 
 /** A record a check or a flag names, as words: `fix.<Type>` with its number. */
 export const fixLabel = (fix: { readonly recordType: string; readonly number?: string | null }): Phrase =>
-  phrase(['Ddt', 'Invoice', 'Payment', 'Style', 'Party', 'StockCount', 'Site'].includes(fix.recordType) ? `fix.${fix.recordType}` : 'fix.other', { number: fix.number ?? '' })
+  phrase(FIX_TYPES.includes(fix.recordType) ? `fix.${fix.recordType}` : 'fix.other', { number: fix.number ?? '' })
+
+/** The records a check names that have words (B-W2b-426 adds the bridge's: a work order, a key of the mapping, the entries' documents). */
+export const FIX_TYPES: readonly string[] = ['Ddt', 'Invoice', 'Payment', 'Style', 'Party', 'StockCount', 'Site', 'WorkOrder', 'AccountMapping', 'SupplierInvoice', 'Refund', 'CostOfSalesEntry', 'WorkOrderVariance', 'PurchasePriceVariance']
 
 /** The field to fill there, as words (`field.<name>`), or null. */
 export const fieldLabel = (field: string | null): Phrase | null => (field && ['hsCode', 'originCountry', 'netMassKg', 'taxIdentity', 'incoterm'].includes(field) ? phrase(`field.${field}`) : null)
@@ -345,13 +350,14 @@ export interface LockFacts {
   readonly phrase: string
   /** The month's lock now (null: never locked). */
   readonly current: Pick<PeriodLock, 'level' | 'status'> | null
-  readonly can: Pick<AccountingCan, 'lock'>
+  readonly can: Pick<AccountingCan, 'lock' | 'close'>
   readonly busy: boolean
 }
 
-/** Why locking is held (null: it may be locked). */
+/** Why locking is held (null: it may be locked); B-W2b-426: closing for good needs accounting.close. */
 export function lockHeld(facts: LockFacts): Phrase | null {
   if (!facts.can.lock) return phrase('lock.held.noLock')
+  if (facts.level === 'HARD' && !facts.can.close) return phrase('hard.held.noClose')
   if (!facts.month) return phrase('lock.held.chooseMonth')
   if (facts.busy) return phrase('held.busy')
   if (facts.current?.status === 'LOCKED' && facts.current.level === facts.level) return phrase(facts.level === 'HARD' ? 'lock.held.alreadyHard' : 'lock.held.alreadySoft')
@@ -405,8 +411,8 @@ export const rowSelectable = (row: Pick<ExportRow, 'files' | 'status'>): Phrase 
 /** Why a file of a batch cannot be downloaded by this person: its package's grain. */
 export function fileHeld(file: Pick<ExportFile, 'package'>, can: Pick<AccountingCan, 'view' | 'price' | 'cost'>): Phrase | null {
   if (!can.view) return phrase('files.held.noView')
-  const grain = PACKAGE_RULES[file.package].grain
-  return grainHeld(grain, can) ? null : phrase(`contents.held.grain.${grain}`)
+  const missing = packageGrains(file.package).find((grain) => !grainHeld(grain, can))
+  return missing ? phrase(`contents.held.grain.${missing}`) : null
 }
 
 // ---- the API in this page's words -----------------------------------------------------------------------------------------
@@ -429,7 +435,8 @@ export const REFUSAL_CODES = [
   'NOTHING_CHANGED',
   'NOT_LATEST',
   'NOTHING_EXPORTED',
-  'PACKAGE_W2B',
+  // B-W2b-408: a document another month's batch handed over already.
+  'HANDED_OVER_ELSEWHERE',
   'YEAR_END_NOT_THIS_PERIOD',
   'PACKAGE_GRAIN',
   'NOT_DRAFT',
@@ -472,4 +479,6 @@ export const historyTouches = (change: { type: string }): boolean => change.type
 /** The wizard's month: anything behind a check or a package (invoices, payments, DDTs and shipments, styles and customers, counts). */
 export const periodTouches = (change: { type: string }): boolean =>
   historyTouches(change) ||
-  ['invoice.', 'payment.', 'ddt.', 'shipment.', 'style.', 'party.', 'inventory.count_'].some((prefix) => change.type.startsWith(prefix))
+  ['invoice.', 'payment.', 'ddt.', 'shipment.', 'style.', 'party.', 'inventory.count_'].some((prefix) => change.type.startsWith(prefix)) ||
+  // B-W2b-426: the bridge's checks and packages (supplier invoices, refunds, work-order closes, cost of sales, the mapping).
+  ['supplier_invoice.', 'refund.', 'work_order_close.', 'work_order_cost.', 'cost_of_sales.', 'purchase_price_variance.', 'account_mapping.', 'accounting_settings.'].some((prefix) => change.type.startsWith(prefix))

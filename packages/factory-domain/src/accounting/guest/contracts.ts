@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { businessDate, id, input, instant, output } from '../../core/contracts'
 import { ACCOUNTING_PACKAGES, LOCK_LEVELS } from '../packages'
-import { GUEST_ZIP, GUEST_ZIP_WHAT, INVOICE_KINDS, INVOICE_SIDES, REGISTERS_LATER } from './files'
+import { GUEST_ZIP, GUEST_ZIP_WHAT, INVOICE_KINDS, INVOICE_SIDES } from './files'
 import { GUEST_PERIOD, GUEST_PERIOD_KINDS } from './periods'
 
 /**
@@ -94,8 +94,6 @@ export const guestPeriodAnswer = output({
   exports: z.array(guestExportView),
   invoices: z.array(guestInvoiceView),
   registers: z.array(guestRegisterView),
-  /** Registers the design names that nothing makes yet (W2b-6). */
-  later: z.array(z.enum(REGISTERS_LATER)),
   counts: output({ files: z.number().int(), xml: z.number().int(), sizeBytes: z.number().int() }),
   asOf: instant(),
 })

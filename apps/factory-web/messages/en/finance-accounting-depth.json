@@ -1,0 +1,324 @@
+{
+  "common": {
+    "cancel": "Cancel"
+  },
+  "mapping": {
+    "title": "Account mapping",
+    "band": "Account mapping status and actions",
+    "lead": "One place for {company}: what Nexus posts, and the accountant's account it lands in, each from a day.",
+    "leadReading": "Reading the mapping…",
+    "more": "More actions on the mapping",
+    "downloadAll": "Download the whole mapping (CSV)",
+    "slow": "Still loading…",
+    "failed": "Couldn't load the account mapping",
+    "noAccess": {
+      "title": "You cannot see the account mapping",
+      "body": "Reading it needs the accounting permission (accounting.view). Ask your administrator."
+    },
+    "gate": {
+      "title": "To confirm with the accountant",
+      "body": "The keys and the accounts are Nexus's reading of the accountant's chart until the accountant confirms them: download the mapping and hand it over. A row applies from its first day and is fixed from then on; a change is a new row from a later day."
+    },
+    "factsTitle": "The mapping now",
+    "facts": {
+      "keys_one": "Nexus posts {count} key in this company.",
+      "keys_other": "Nexus posts {count} keys in this company.",
+      "unmapped_one": "{count} key has no account today: its lines in the entries go blank.",
+      "unmapped_other": "{count} keys have no account today: their lines in the entries go blank.",
+      "allMapped": "Every key Nexus posts has an account today.",
+      "rule": "A document takes the account in force on its own day, so what was handed over keeps its account.",
+      "where": "The journals' entries files use the mapping only while the journals are switched on."
+    },
+    "keysTitle": "What Nexus posts",
+    "keysLead": "Each key with its account today, the next change and the earlier accounts. Open a key to map it.",
+    "otherLead": "Rows kept for keys Nexus does not post (a code no longer used): they map nothing.",
+    "count_one": "{count} key",
+    "count_other": "{count} keys",
+    "search": "Search keys or accounts",
+    "kindLabel": "Kind of key",
+    "allKinds": "Every kind",
+    "viewsLabel": "Which keys",
+    "view": {
+      "all": "All",
+      "unmapped": "Without an account",
+      "upcoming": "Changing soon",
+      "other": "Not posted by Nexus"
+    },
+    "kind": {
+      "ITEM_GROUP": "Item groups",
+      "TAX_CODE": "Tax codes",
+      "COST_CATEGORY": "Cost categories",
+      "PAYMENT_METHOD": "Payment methods",
+      "PARTY_GROUP": "Customer and supplier groups"
+    },
+    "col": {
+      "key": "What Nexus posts",
+      "account": "Account today",
+      "next": "Next change",
+      "earlier": "Earlier accounts"
+    },
+    "notPosted": "Not posted by Nexus",
+    "noAccount": "No account",
+    "noAccountSub": "Its lines go blank",
+    "nothingInForce": "Maps nothing today",
+    "since": "since {day}",
+    "from": "from {day}",
+    "moreUpcoming_one": "and {count} more change",
+    "moreUpcoming_other": "and {count} more changes",
+    "earlierCount_one": "{count} earlier account",
+    "earlierCount_other": "{count} earlier accounts",
+    "lastEarlier": "last {account} from {day}",
+    "setBy": "set by {who} on {at}",
+    "whoAt": "{who} on {at}",
+    "noMatch": {
+      "title": "No key matches",
+      "body": "No key of this kind and view matches the search.",
+      "other": "Every row names a key Nexus posts: nothing is kept apart."
+    },
+    "clear": "Show every key",
+    "empty": {
+      "title": "No key to map",
+      "body": "Nexus posts no key in this company yet."
+    },
+    "otherTitle": "Nexus posts no such key",
+    "otherBody": "This row is kept from before and maps nothing. It stays in the history; a row from a later day can still be removed.",
+    "dialog": {
+      "now": "In force today",
+      "account": "Account",
+      "accountHint": "The accountant's account code: letters, digits and . _ / - (for example 60.01.02).",
+      "since": "Since",
+      "fixed": "Fixed from its first day: a change is a new row from a later day.",
+      "note": "Note",
+      "by": "Set by",
+      "noAccountBody": "No account is in force today: the entries' lines of this key reach the accountant blank.",
+      "soon": "Changing soon",
+      "earlier": "Earlier",
+      "change": "Change",
+      "remove": "Remove",
+      "save": "Save the change",
+      "addFirst": "Map this key",
+      "addFirstHint": "A key's first account may start earlier: it fills the days that had no account (for example 1 January).",
+      "addChange": "Map to another account from a day",
+      "addChangeHint": "A change starts today or later, so what was handed over keeps its account.",
+      "from": "From",
+      "go": "Map from {day}",
+      "goNoDay": "Map from a day"
+    },
+    "done": {
+      "added": "{account} applies from {day}.",
+      "changed": "The row from {day} now maps to {account}.",
+      "removed": "The row from {day} ({account}) is removed."
+    },
+    "bulk": {
+      "map_one": "Map {count} key…",
+      "map_other": "Map {count} keys…",
+      "export_one": "Export {count} (CSV)",
+      "export_other": "Export {count} (CSV)",
+      "title_one": "Map {count} key to one account",
+      "title_other": "Map {count} keys to one account",
+      "lead": "Each key gets its own row with this account, from this day. A key refused says why; the others are made.",
+      "chosen": "The keys chosen",
+      "fromHint": "A key mapped already changes from today or later.",
+      "go_one": "Map {count} key from {day}",
+      "go_other": "Map {count} keys from {day}",
+      "goNoDay_one": "Map {count} key from a day",
+      "goNoDay_other": "Map {count} keys from a day",
+      "running": "Mapping: {sent} of {count}",
+      "done": "{made} mapped · {refused} refused",
+      "refused": "The keys refused"
+    },
+    "held": {
+      "noManage": "Changing the mapping needs the mapping permission (accounting.mapping.manage).",
+      "notPosted": "Nexus posts no such key: there is nothing to map.",
+      "busy": "Working on it…",
+      "running": "It closes once every key is sent.",
+      "reading": "The mapping is still being read.",
+      "account": "Type the account first.",
+      "accountShape": "An account is 1 to 40 letters, digits and . _ / -, starting with a letter or a digit.",
+      "day": "Choose the day it applies from.",
+      "backdated": "This key is mapped already: a change starts today or later.",
+      "sameDay": "This key has a row from that day already: change that row, or pick another day.",
+      "note": "A note is at most {max} characters.",
+      "fixed": "This row applies since {day}: it is fixed. A change is a new row from a later day.",
+      "nothingChanges": "Nothing changes: the row is already so.",
+      "noneChosen": "Choose the keys first.",
+      "bulkNotPosted_one": "{count} key chosen is not posted by Nexus: leave it out.",
+      "bulkNotPosted_other": "{count} keys chosen are not posted by Nexus: leave them out.",
+      "bulkBackdated_one": "{count} key chosen is mapped already: it changes from today or later.",
+      "bulkBackdated_other": "{count} keys chosen are mapped already: they change from today or later.",
+      "bulkSameDay_one": "{count} key chosen has a row from that day already: pick another day.",
+      "bulkSameDay_other": "{count} keys chosen have a row from that day already: pick another day."
+    },
+    "refusal": {
+      "FIXED": "This row applies already: it is fixed. A change is a new row from a later day.",
+      "BACKDATED": "This key is mapped already: a change starts today or later.",
+      "SAME_DAY": "This key has a row from that day already.",
+      "NOTHING_CHANGES": "Nothing changes: the row is already so.",
+      "UNKNOWN_KEY": "Nexus no longer posts this key: the mapping is read again."
+    },
+    "csv": {
+      "file": "account-mapping",
+      "kind": "Kind",
+      "key": "Key",
+      "what": "What Nexus posts",
+      "account": "Account today",
+      "since": "Since",
+      "next": "Next account",
+      "nextFrom": "From",
+      "note": "Note"
+    }
+  },
+  "journals": {
+    "title": "Journals with mapped accounts",
+    "stepUp": "Switching the journals asks a fresh code from your authenticator app.",
+    "on": {
+      "state": "On",
+      "words": "The journals carry their entries with the mapped accounts (sales, purchases, payments, cost of goods sold and variances): the accountant's software imports them.",
+      "what": "From the next export, each journal goes with an entries file: every document as one entry, the accounts mapped on its own day.",
+      "checks": "Two checks join the export: \"Every account mapped\" and \"Journal entries balance\".",
+      "unmapped_one": "{count} key has no account today: its lines go blank until it is mapped.",
+      "unmapped_other": "{count} keys have no account today: their lines go blank until they are mapped.",
+      "gate": "Switch them on once the accountant has confirmed the mapping."
+    },
+    "off": {
+      "state": "Off",
+      "words": "Waits for the accountant: the journals go without mapped entries until a person switches them on, once the accountant has confirmed the mapping.",
+      "what": "From the next export, the journals go without their entries files.",
+      "handedOver": "Batches made before keep their files as they are."
+    },
+    "from": {
+      "COMPANY": "Set for this company.",
+      "TENANT": "Set for every company of the organisation.",
+      "DEFAULT": "Nexus's default: off."
+    },
+    "switchOn": "Switch on…",
+    "switchOff": "Switch off…",
+    "dialog": {
+      "onTitle": "Switch the journals' entries on?",
+      "offTitle": "Switch the journals' entries off?",
+      "onGo": "Switch on",
+      "offGo": "Switch off",
+      "reason": "Why",
+      "reasonHint": "Kept in the history (optional).",
+      "code": "Then your authenticator code is asked."
+    },
+    "done": {
+      "on": "The journals carry their entries from the next export.",
+      "off": "The journals go without their entries from the next export."
+    },
+    "held": {
+      "noSwitch": "Switching the journals needs its permission (accounting.journals.switch).",
+      "running": "It closes once the switch is answered.",
+      "reason": "A reason is at most {max} characters."
+    },
+    "contents": {
+      "on": "The journals go with their entries, the accounts mapped on each document's day.",
+      "off": "The journals go without mapped entries: they wait for the accountant to confirm the mapping.",
+      "link": "Account mapping"
+    }
+  },
+  "hard": {
+    "title": "Close {month} for good?",
+    "lead": "Nothing dated {month} can change once it is closed.",
+    "what": {
+      "nothing": "Invoices, credit notes, payments, supplier invoices, stock moves and work-order costs dated {month} are refused for everyone: the database itself refuses them.",
+      "correct": "A correction then goes in an open month: a credit note or an adjustment dated after {month}.",
+      "lift": "Only a person with accounting.unlock (the owner) lifts it, with a reason and a fresh code.",
+      "accountant": "Nothing is sent to the accountant: you hand the files over."
+    },
+    "go": "Close {month}",
+    "problems": "{month} cannot be closed for good yet:",
+    "code": "Then your authenticator code is asked.",
+    "held": {
+      "noClose": "Closing a month for good needs its permission (accounting.close).",
+      "running": "It closes once the close is answered."
+    }
+  },
+  "integrity": {
+    "title": "Nightly checks",
+    "lead": "Every night Nexus checks the documents from {from} to {to} and keeps each check's result; the export reads the last run.",
+    "leadShort": "Every night Nexus checks the documents of this month and the twelve before; the export reads the last run.",
+    "lastRun": "Last run {at}",
+    "neverRun": "Not run yet",
+    "run": "Run the checks now",
+    "reading": "Reading the checks…",
+    "failed": "Couldn't load the nightly checks",
+    "ranNightly": "by the nightly run on {at}",
+    "ranBy": "run by {who} on {at}",
+    "history": "earlier runs: {passed} passed, {failed} not",
+    "historyAll_one": "the earlier run passed",
+    "historyAll_other": "the {count} earlier runs passed",
+    "error": "It could not run: it is tried again tonight.",
+    "never": "It has not run yet.",
+    "export": "A failing nightly check does not hold the export: it says what the accountant would find.",
+    "failuresLabel": "Records failing {check}",
+    "held": {
+      "noRun": "Running the checks needs the export permission (accounting.export).",
+      "running": "The checks are running."
+    },
+    "check": {
+      "INVOICE_TOTALS_EQUAL_LINES": {
+        "title": "Invoices' totals equal their lines",
+        "pass": "Every invoice's totals equal its VAT summary and its lines.",
+        "fail_one": "{count} invoice has totals that are not the sums of its lines.",
+        "fail_other": "{count} invoices have totals that are not the sums of their lines."
+      },
+      "SUPPLIER_INVOICE_TOTALS_EQUAL_LINES": {
+        "title": "Supplier invoices' totals equal their lines",
+        "pass": "Every supplier invoice's totals equal its VAT summary and its lines.",
+        "fail_one": "{count} supplier invoice has totals that are not the sums of its lines.",
+        "fail_other": "{count} supplier invoices have totals that are not the sums of their lines."
+      },
+      "ALLOCATIONS_WITHIN_PAYMENTS": {
+        "title": "Placements never exceed payments",
+        "pass": "No payment is placed beyond its amount and no invoice is paid beyond its total.",
+        "fail_one": "{count} payment or invoice is placed beyond its amount.",
+        "fail_other": "{count} payments or invoices are placed beyond their amounts."
+      },
+      "PAYMENTS_PLACED": {
+        "title": "Payments placed",
+        "pass": "Every payment received is placed, refunded or written off.",
+        "fail_one": "{count} payment is not wholly placed.",
+        "fail_other": "{count} payments are not wholly placed."
+      },
+      "LEDGER_BALANCES": {
+        "title": "Journal entries balance",
+        "pass": "Every journal entry's debits equal its credits.",
+        "fail_one": "{count} entry does not balance.",
+        "fail_other": "{count} entries do not balance."
+      },
+      "EXPORTED_DOCUMENTS_UNCHANGED": {
+        "title": "Exported documents unchanged",
+        "pass": "No document handed over in an export changed since.",
+        "fail_one": "{count} document changed after it was handed over: a re-export carries it.",
+        "fail_other": "{count} documents changed after they were handed over: a re-export carries them."
+      }
+    },
+    "failure": {
+      "SUMMARY": "totals differ from the VAT summary",
+      "LINES": "lines do not add up",
+      "PAYMENT": "placed beyond the payment",
+      "INVOICE": "paid beyond the invoice",
+      "NOT_PLACED": "not placed",
+      "UNBALANCED": "does not balance",
+      "CHANGED_AFTER_EXPORT": "changed after the export"
+    }
+  },
+  "sum": {
+    "COST_OF_SALES": "Cost of goods sold",
+    "VARIANCE": "Variances",
+    "PPV": "Purchase price variance",
+    "SALES_VAT": "VAT on sales",
+    "VAT_DUE": "VAT due",
+    "PURCHASES_VAT": "VAT on purchases"
+  },
+  "fix": {
+    "WorkOrder": "Work order {number}",
+    "AccountMapping": "Map {number}",
+    "SupplierInvoice": "Supplier invoice {number}",
+    "Refund": "Refund {number}",
+    "CostOfSalesEntry": "Cost of goods sold {number}",
+    "WorkOrderVariance": "Variance {number}",
+    "PurchasePriceVariance": "Purchase price variance {number}"
+  }
+}

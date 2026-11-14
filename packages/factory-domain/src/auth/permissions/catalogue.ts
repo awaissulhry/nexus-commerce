@@ -397,6 +397,8 @@ import { ACCOUNTING_BRIDGE_DEFINITIONS, ACCOUNTING_BRIDGE_PERMISSIONS } from '..
 import { COLLECTIONS_DEFINITIONS, COLLECTIONS_PERMISSIONS } from '../../receivables/riba/permissions'
 // B-W2b-423: cost in depth (costing.massUpdate.apply).
 import { COST_DEPTH_DEFINITIONS, COST_DEPTH_PERMISSIONS } from '../../costing/mass-update/permissions'
+// B-W2b-403: payables in depth (the weekly payment proposal, its approval, the remittance switch).
+import { PAYABLES_DEPTH_DEFINITIONS, PAYABLES_DEPTH_PERMISSIONS } from '../../payables/proposal/permissions'
 // B-W2b-421: custom fields and picklists (fields.view, fields.manage, fields.personal.view).
 import { FIELDS_DEFINITIONS, FIELDS_PERMISSIONS } from '../../fields/permissions'
 
@@ -1106,6 +1108,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   COLLECTIONS_DEFINITIONS,
   // B-W2b-423: cost in depth (area `costing`).
   COST_DEPTH_DEFINITIONS,
+  // B-W2b-403: payables in depth (area `payables`).
+  PAYABLES_DEPTH_DEFINITIONS,
   // B-W2b-421: custom fields and picklists (area `fields`).
   FIELDS_DEFINITIONS,
 ])
@@ -1506,6 +1510,8 @@ for (const name of ACCOUNTING_BRIDGE_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDec
 for (const name of COLLECTIONS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-423: cost in depth.
 for (const name of COST_DEPTH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-403: payables in depth.
+for (const name of PAYABLES_DEPTH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-421: custom fields and picklists.
 for (const name of FIELDS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {

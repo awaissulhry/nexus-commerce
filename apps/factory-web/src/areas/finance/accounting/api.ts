@@ -46,19 +46,25 @@ export const MANIFEST_CHANGES = ['NEW', 'CHANGED', 'REMOVED'] as const
 export const MAX_EXPLANATION = 2000
 
 /**
- * What each package is (factory-domain accounting/packages PACKAGE_RULES): the grain of its amounts, a re-export's reach;
- * and the wave this wizard offers it in (B-W2b-408's API takes the cost of goods sold and the VAT registers; this wizard
- * offers them with B-W2b-426's screens).
+ * What each package is (factory-domain accounting/packages PACKAGE_RULES): the grain of its amounts (B-W2b-426: the VAT
+ * registers also carry the supplier invoices' costs, `alsoGrain`), a re-export's reach. Every package can go in an export
+ * (B-W2b-408 built the cost of goods sold and the VAT registers; this wizard offers them since B-W2b-426).
  */
-export const PACKAGE_RULES: Readonly<Record<AccountingPackage, { readonly wave: 'W2a' | 'W2b'; readonly grain: 'price' | 'cost'; readonly scope: 'DOCUMENTS' | 'WHOLE' }>> = Object.freeze({
-  SALES_JOURNAL: { wave: 'W2a', grain: 'price', scope: 'DOCUMENTS' },
-  PURCHASES_JOURNAL: { wave: 'W2a', grain: 'cost', scope: 'DOCUMENTS' },
-  PAYMENTS: { wave: 'W2a', grain: 'price', scope: 'DOCUMENTS' },
-  COST_OF_SALES: { wave: 'W2b', grain: 'cost', scope: 'DOCUMENTS' },
-  VAT_REGISTERS: { wave: 'W2b', grain: 'price', scope: 'WHOLE' },
-  INTRASTAT: { wave: 'W2a', grain: 'price', scope: 'WHOLE' },
-  YEAR_END_STOCK: { wave: 'W2a', grain: 'cost', scope: 'WHOLE' },
+export const PACKAGE_RULES: Readonly<Record<AccountingPackage, { readonly grain: 'price' | 'cost'; readonly alsoGrain?: 'price' | 'cost'; readonly scope: 'DOCUMENTS' | 'WHOLE' }>> = Object.freeze({
+  SALES_JOURNAL: { grain: 'price', scope: 'DOCUMENTS' },
+  PURCHASES_JOURNAL: { grain: 'cost', scope: 'DOCUMENTS' },
+  PAYMENTS: { grain: 'price', scope: 'DOCUMENTS' },
+  COST_OF_SALES: { grain: 'cost', scope: 'DOCUMENTS' },
+  VAT_REGISTERS: { grain: 'price', alsoGrain: 'cost', scope: 'WHOLE' },
+  INTRASTAT: { grain: 'price', scope: 'WHOLE' },
+  YEAR_END_STOCK: { grain: 'cost', scope: 'WHOLE' },
 })
+
+/** Every grain a package's file carries (factory-domain packageGrains). */
+export const packageGrains = (pkg: AccountingPackage): Array<'price' | 'cost'> => {
+  const rule = PACKAGE_RULES[pkg]
+  return rule.alsoGrain ? [rule.grain, rule.alsoGrain] : [rule.grain]
+}
 
 const company = z.object({ id: z.string(), code: z.string(), name: z.string() })
 const person = z.object({ id: z.string(), name: z.string().nullable() })
@@ -197,6 +203,8 @@ export const periodAnswerSchema = z.object({
   intrastat: z.object({ rows: z.number(), fileRows: z.number(), blocking: z.number(), warnings: z.number() }).nullable(),
   changes: z.number(),
   layout: z.string(),
+  /** B-W2b-408: whether the journal packages carry their entries with the mapped accounts (the company's switch). */
+  journals: z.object({ on: z.boolean() }),
 })
 export type PeriodAnswer = z.infer<typeof periodAnswerSchema>
 

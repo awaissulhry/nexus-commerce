@@ -6,6 +6,8 @@ import { PRODUCTION_SCRAP_VIEW } from '@nexus/factory-domain/production/scrap/pe
 import { QUALITY_NCR_VIEW } from '@nexus/factory-domain/quality/ncr/permissions'
 import { QUALITY_PLANS_VIEW } from '@nexus/factory-domain/quality/plans/permissions'
 import { QUOTES_VIEW } from '@nexus/factory-domain/sales/quotes/permissions'
+// B-W2b-403
+import { PAYABLES_VIEW } from '@nexus/factory-domain/payables/permissions'
 import { line, SOURCE_LIMIT, versionWords, type HistoryLine, type HistorySource, type Place } from './source'
 
 /**
@@ -149,4 +151,19 @@ const WORK_INSTRUCTION: HistorySource = {
   },
 }
 
-export const DOMAIN_SOURCES: readonly HistorySource[] = Object.freeze([QUOTE, CHANGE_ORDER, OPERATION, NCR, SCAN, TIMESHEET, INSPECTION_PLAN, WORK_INSTRUCTION])
+// B-W2b-403 (FIN-142): a supplier invoice's and a payment proposal's dual approval are the engine's own lines (no table of
+// their own): the first yes a REQUESTED line, the second an APPROVED one.
+const SUPPLIER_INVOICE: HistorySource = {
+  recordType: 'SupplierInvoice',
+  place: async (db, id) => placeOf(await db.supplierInvoice.findUnique({ where: { id }, select: { companyId: true, partyId: true } })),
+  may: onPlace(PAYABLES_VIEW),
+}
+const PAYMENT_PROPOSAL: HistorySource = {
+  recordType: 'PaymentProposal',
+  place: async (db, id) => placeOf(await db.paymentProposal.findUnique({ where: { id }, select: { companyId: true } })),
+  may: onPlace(PAYABLES_VIEW),
+}
+
+export const DOMAIN_SOURCES: readonly HistorySource[] = Object.freeze([QUOTE, CHANGE_ORDER, OPERATION, NCR, SCAN, TIMESHEET, INSPECTION_PLAN, WORK_INSTRUCTION,
+  // B-W2b-403
+  SUPPLIER_INVOICE, PAYMENT_PROPOSAL])

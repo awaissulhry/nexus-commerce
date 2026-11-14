@@ -37,6 +37,8 @@ import { TEAM_INBOX_RULES } from '../../email-in/team-inbox/notify'
 import { TRACKING_PROBLEM_RULES } from '../../../modules/shipping/exceptions/notices'
 // B-W2b-402: a payment received (to who follows the customer and whose orders it pays), a deposit paid (production may start).
 import { PAYMENT_NOTICE_RULES } from '../../../modules/receivables/notices/rules'
+// B-W2b-403: money notifications (an invoice rejected by SDI, invoices overdue, a reconciliation difference).
+import { MONEY_RULES } from './money'
 
 /**
  * The fan-out's rules, one file per source (B-W2a-20: mentions and followed records, assignments, approvals). A step that
@@ -78,4 +80,7 @@ export const FAN_OUT_RULES: readonly FanOutRule[] = Object.freeze([...THREAD_RUL
   // B-W2b-398: shipment.tracking_problem_raised (ALERT to who manages shipments at its site).
   ...TRACKING_PROBLEM_RULES,
   // B-W2b-402: payment.recorded (SYSTEM to the customer's followers and the makers of the orders it pays), payment.deposit_paid (SYSTEM to the order's maker and who releases work orders).
-  ...PAYMENT_NOTICE_RULES])
+  ...PAYMENT_NOTICE_RULES,
+  // B-W2b-403: invoice.sdi_status_changed REJECTED (ALERT to its issuer and followers), payment_reminder.prepared by the ladder
+  // (SYSTEM to the customer's followers and reminder approvers), integrity_checks.ran with a payments check failed (ALERT to the bank matchers).
+  ...MONEY_RULES])

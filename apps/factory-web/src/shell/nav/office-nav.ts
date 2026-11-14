@@ -323,6 +323,8 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   // B-W2a-51: Accounting export (SCR-156) with its files tab; Finance reports › stock valuation (SCR-239) with its print tab.
   '/finance/accounting',
   '/finance/accounting/files',
+  // B-W2b-426: the account mapping (SCR-480; the export's ⋯ Account mapping).
+  '/finance/accounting/mapping',
   '/finance/reports',
   '/finance/reports/print',
   // B-W2a-72: Costing › Standard vs actual (SCR-154) with its variance report (print), and Margins (SCR-155).
