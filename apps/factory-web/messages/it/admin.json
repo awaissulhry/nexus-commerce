@@ -1824,6 +1824,7 @@
     "workorders_view": "Vedere gli ordini di lavoro",
     "workorders_manage": "Creare e cambiare ordini di lavoro in bozza",
     "workorders_release": "Rilasciare un ordine di lavoro al reparto",
+    "workorders_reopen": "Riaprire un ordine di lavoro chiuso, con un motivo",
     "quotes_view": "Vedere i preventivi",
     "quotes_manage": "Creare e modificare preventivi",
     "quotes_approve": "Approvare o respingere la richiesta di approvazione di un preventivo",

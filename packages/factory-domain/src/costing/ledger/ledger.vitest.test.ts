@@ -123,7 +123,18 @@ describe('estimated vs actual', () => {
 
   it('takes the actual from the entries, the completion moved out apart', () => {
     // Material 430.00 − 21.50 + 10.00 = 418.50; labour 96.50; total 515.00; on the work order after 300.00 moved: 215.00.
-    expect(actualOf(entries, 'EUR')).toEqual({ material: 41_850, labour: 9_650, subcontract: 0, overhead: 0, adjustment: 0, total: 51_500, movedToStock: -30_000, onWorkOrder: 21_500, scrapLost: 1_290, scrapFromStock: 1_000 })
+    expect(actualOf(entries, 'EUR')).toEqual({ material: 41_850, labour: 9_650, subcontract: 0, overhead: 0, adjustment: 0, total: 51_500, movedToStock: -30_000, settled: 0, onWorkOrder: 21_500, scrapLost: 1_290, scrapFromStock: 1_000 })
+  })
+
+  it("B-W2b-411: a settled close's variance and closing entries take what is left off the work order (0 on it)", () => {
+    // The 215.00 left: variances −200.00 and −10.00 taken off, the closing entry −5.00; the actual and the bridge keep them out.
+    const closed: EntryFacts[] = [
+      ...entries,
+      { kind: 'VARIANCE', amount: -20_000, quantity: null, unitCost: null, standardUnitCost: null, scrapRecord: false },
+      { kind: 'VARIANCE', amount: -1_000, quantity: null, unitCost: null, standardUnitCost: null, scrapRecord: false },
+      { kind: 'CLOSE', amount: -500, quantity: null, unitCost: null, standardUnitCost: null, scrapRecord: false },
+    ]
+    expect(actualOf(closed, 'EUR')).toMatchObject({ total: 51_500, movedToStock: -30_000, settled: -21_500, onWorkOrder: 0 })
   })
 
   it('splits the variance into reasons that add up to it exactly', () => {

@@ -1824,6 +1824,7 @@
     "workorders_view": "See the work orders",
     "workorders_manage": "Make and change draft work orders",
     "workorders_release": "Release a work order to the floor",
+    "workorders_reopen": "Reopen a closed work order, with a reason",
     "quotes_view": "See quotes",
     "quotes_manage": "Make and edit quotes",
     "quotes_approve": "Approve or reject a quote's approval request",
