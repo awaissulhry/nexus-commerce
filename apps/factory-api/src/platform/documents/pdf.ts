@@ -166,6 +166,18 @@ function paint(pdf: Pdf, document: ComposedDocument, logo: Buffer | null = null)
     const top = text(`${document.issuer.name} · ${document.title} ${document.identity[0]?.value ?? ''} (${document.footer.continued})`, left, MARGIN.top, { size: 8, color: MUTED, width })
     return top + 8
   }
+  // B-W2b-422 (PLT-231): a document template's words, line by line as written (the header above the lines, the terms after
+  // the totals); the code's layout has none.
+  const paragraphs = (value: string, at: number): number => {
+    let top = at
+    for (const line of value.split('\n')) {
+      const shown = line.trim() === '' ? ' ' : line
+      if (top + heightOf(shown, width, REGULAR, 8.5) > bottom()) top = newPage()
+      top = text(shown, left, top, { size: 8.5, width })
+    }
+    return top
+  }
+  if (document.intro) y = paragraphs(document.intro, y) + 8
   y = paintTableHeader(y)
   for (const row of document.table.rows) {
     const height = Math.max(...row.map((cell, index) => heightOf(cell, columns[index]!.width - 6, REGULAR, 8.5))) + 6
@@ -195,6 +207,8 @@ function paint(pdf: Pdf, document: ComposedDocument, logo: Buffer | null = null)
     }
     y += 6
   }
+
+  if (document.terms) y = paragraphs(document.terms, y) + 8
 
   if (document.notes) {
     const value = `${document.notes.label}: ${document.notes.value}`

@@ -35,7 +35,7 @@ export interface CostingCardActions {
  * Choosing asks the person to confirm the accountant chose it (GATE-ACCOUNTANT), an optional reason, and a fresh code.
  * Once the first cost entry is posted under it the method is locked: the choice is held with that reason, and "Why is it
  * locked?" (pop:method-lock) says since when entries exist and that changing it would revalue them. The cost-per-minute
- * calculator comes in a later version (W2b): shown held.
+ * calculator is its own card below (B-W2b-430, finance/settings/costing/calculator).
  */
 export function CostingCard({ model, actions }: { model: CostingCardModel; actions?: CostingCardActions }) {
   const t = useT('finance')
@@ -161,11 +161,6 @@ export function CostingCard({ model, actions }: { model: CostingCardModel; actio
           </span>
         </div>
       )}
-      <span className="fw-fin-inline">
-        <Button size="sm" variant="quiet" heldReason={d('costing.calculatorLater')}>
-          {d('costing.calculator')}
-        </Button>
-      </span>
     </Card>
   )
 }

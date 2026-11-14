@@ -54,6 +54,7 @@ export function StyleRecordView({
   panels,
   techPack,
   depth,
+  costSheets,
 }: {
   model: StyleRecordViewModel
   actions?: StyleRecordActions
@@ -62,15 +63,17 @@ export function StyleRecordView({
   techPack?: ReactNode
   /** B-W2b-237: the depth's parts (the container builds them from one model). */
   depth?: StyleDepthSlots
+  /** B-W2b-430: the Cost tab's cost sheets (W2b steps, versions and approval, target price, cost by size), after W1's sheet. */
+  costSheets?: ReactNode
 }) {
   return (
     <WithMessages namespaces={['products', 'records', 'lists', 'products-prepacks', /* B-W2b-243 */ 'products-techpack', /* B-W2b-261 */ 'products-samples', /* B-W2b-242 */ 'products-options', /* B-W2b-244 */ 'products-changes', /* B-W2b-237 */ 'products-styles-depth', /* B-W2b-245 */ 'products-versions', /* B-W2b-283 */ 'products-followups-w2b4']}>
-      <StyleRecord model={model} actions={actions} panels={panels} techPack={techPack} depth={depth} />
+      <StyleRecord model={model} actions={actions} panels={panels} techPack={techPack} depth={depth} costSheets={costSheets} />
     </WithMessages>
   )
 }
 
-function StyleRecord({ model, actions, panels, techPack, depth }: { model: StyleRecordViewModel; actions?: StyleRecordActions; panels?: ReactNode; techPack?: ReactNode; depth?: StyleDepthSlots }) {
+function StyleRecord({ model, actions, panels, techPack, depth, costSheets }: { model: StyleRecordViewModel; actions?: StyleRecordActions; panels?: ReactNode; techPack?: ReactNode; depth?: StyleDepthSlots; costSheets?: ReactNode }) {
   const t = useT('products')
   const listHref = `${model.prefix}/products/styles`
   const loaded = model.style
@@ -115,10 +118,10 @@ function StyleRecord({ model, actions, panels, techPack, depth }: { model: Style
       </div>
     )
   }
-  return <ReadyRecord style={loaded.value} model={model} actions={actions} panels={panels} techPack={techPack} depth={depth} />
+  return <ReadyRecord style={loaded.value} model={model} actions={actions} panels={panels} techPack={techPack} depth={depth} costSheets={costSheets} />
 }
 
-function ReadyRecord({ style, model, actions, panels, techPack, depth }: { style: StyleView; model: StyleRecordViewModel; actions?: StyleRecordActions; panels?: ReactNode; techPack?: ReactNode; depth?: StyleDepthSlots }) {
+function ReadyRecord({ style, model, actions, panels, techPack, depth, costSheets }: { style: StyleView; model: StyleRecordViewModel; actions?: StyleRecordActions; panels?: ReactNode; techPack?: ReactNode; depth?: StyleDepthSlots; costSheets?: ReactNode }) {
   const t = useT('products')
   // B-W2b-243: the band's ⋯ "Make tech pack PDF…" (it opens the Tech pack tab with its dialog).
   const tt = useT('products-techpack')
@@ -387,6 +390,12 @@ function ReadyRecord({ style, model, actions, panels, techPack, depth }: { style
           ) : model.tab === 'techpack' ? (
             // B-W2b-243: the Tech pack tab (SCR-305), mounted by the container.
             (techPack ?? null)
+          ) : model.tab === 'cost' && costSheets ? (
+            // B-W2b-430: the Cost tab's sections — W1's sheet, then the cost sheets of W2b (design order: steps, versions, target price, by size).
+            <div className="fw-st-stack-lg">
+              <TabBody tab={model.tab} style={style} model={model} actions={actions} />
+              {costSheets}
+            </div>
           ) : model.tab === 'activity' ? (
             (activity ?? <p className="fw-st-hint">{t('record.noPanels')}</p>)
           ) : (

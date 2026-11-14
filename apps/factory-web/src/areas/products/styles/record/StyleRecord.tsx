@@ -90,6 +90,8 @@ import { useGallery } from './gallery/use-gallery'
 import { usePatternFiles } from './files-w2b/use-pattern-files'
 // B-W2b-237: the depth (lifecycle, type, names per language, private label, completeness, where-used, GTINs).
 import { useStyleDepth } from './overview/use-style-depth'
+// B-W2b-430: the Cost tab's cost sheets (a container of its own, mounted while the tab is open).
+import { CostSheets } from '../cost/versions/CostSheets'
 import { depthSlots } from './overview/slots'
 // B-W2b-283 (FU1:01): the markets the style is sold in, on the Overview.
 import { useStyleMarkets } from './overview/markets/use-style-markets'
@@ -672,6 +674,7 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
       }
       panels={value ? <RecordPanels record={{ type: 'Style', id: value.id, companyId: value.companyId, siteId: null }} title={`${value.code} · ${value.name}`} party={value.brand ? { id: value.brand.id, name: value.brand.name, emails: [] } : null} /> : null}
       techPack={value && tab === 'techpack' ? <TechPackTab style={value} revisionId={revisionId} prefix={prefix} /> : null}
+      costSheets={value && tab === 'cost' && can.costView ? <CostSheets style={value} revisionId={revisionId} cell={costCell} /> : null /* B-W2b-430 */}
       actions={{
         // B-W2b-245
         versions: versions.actions,

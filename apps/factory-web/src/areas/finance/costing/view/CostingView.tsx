@@ -114,23 +114,23 @@ const LinkTile: MetricLinkComponent = ({ href, className, children }) => (
 
 /**
  * SCR-154 — Finance › Costing › Standard vs actual (design finance.costing; FIN-024, FIN-026, FIN-027, FIN-033, FIN-038):
- * the band (scope: site and period, read at, live; ⋯ Export this view, the cost ledger, Print; Mass cost update W2b,
- * held), the company's costing method in words (the accountant's choice, "not decided yet" while UNDECIDED: every cost
+ * the band (scope: site and period, read at, live; ⋯ Export this view, the cost ledger, Print; Mass cost update, B-W2b-430's
+ * pop-up in the `mass` slot), the company's costing method in words (the accountant's choice, "not decided yet" while UNDECIDED: every cost
  * is provisional, the screen never picks one), Cost at a glance (over standard by more than 5 %, the variance this month,
  * the stock value, WIP value later), Work orders: standard vs actual (a row opens its cost: the DetailModal with J / K),
  * Standard cost per item (the frozen standards in force at the period's end) and the Cost ledger (every valuation event;
  * Reverse entry with a reason — a mistake is reversed, never edited). Amounts only with the cost grain: without it the
  * columns and tiles are not drawn (never a '—'). Labour per work order and operation only: never a person.
  */
-export function CostingView({ model, actions, ppv = null }: { model: CostingModel; actions?: CostingActions; ppv?: ReactNode }) {
+export function CostingView({ model, actions, ppv = null, mass = null }: { model: CostingModel; actions?: CostingActions; ppv?: ReactNode; /** B-W2b-430: the band's Mass cost update (its button and pop-up). */ mass?: ReactNode }) {
   return (
     <WithMessages namespaces={[COSTING_NAMESPACE, 'lists', /* B-W2b-424 */ CLOSE_NS]}>
-      <Costing model={model} actions={actions} ppv={ppv} />
+      <Costing model={model} actions={actions} ppv={ppv} mass={mass} />
     </WithMessages>
   )
 }
 
-function Costing({ model, actions, ppv }: { model: CostingModel; actions?: CostingActions; ppv: ReactNode }) {
+function Costing({ model, actions, ppv, mass }: { model: CostingModel; actions?: CostingActions; ppv: ReactNode; mass: ReactNode }) {
   const t = useT(COSTING_NAMESPACE)
   const stateWords = useCostStateWords()
   const lists = useT('lists')
@@ -450,9 +450,7 @@ function Costing({ model, actions, ppv }: { model: CostingModel; actions?: Costi
           <Tag tone={model.live === 'live' ? 'success' : model.live === 'offline' ? 'warning' : 'neutral'}>{t(`live.${model.live}`)}</Tag>
         </span>
         <span className="fw-fco-inline">
-          <Button size="sm" heldReason={t('band.massHeld')}>
-            {t('band.mass')}
-          </Button>
+          {mass /* B-W2b-430 */}
           <Menu
             label={<MoreHorizontal size={16} aria-hidden />}
             align="right"

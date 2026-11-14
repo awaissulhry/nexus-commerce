@@ -961,6 +961,15 @@ B-W2b-124 `modules/plant/statutory` (QHS-205; D.Lgs. 81/2008 art. 71: results ke
   nothing; local and test only): which relay a site gets is the Owner's question (A1 §9 q. 5). Without a relay the
   browser prints the PDF. Tests: `usePrintRelays(printRelays({ FAKE: fakePrintRelay({ environment: 'test' }) }))`.
 - Permissions: documents.view; print.view, print.labels, print.documents, print.manage (printers).
+- Templates (`src/platform/templates/`, B-W2b-422; PLT-131, PLT-231, PLT-232, COL-016): document templates per company, kind and
+  language (header, terms, footer, optional columns; DRAFT → ACTIVE → RETIRED, one draft at a time, publish retires the one in
+  use in the same command) — `companyLegalOf` attaches the company's ACTIVE ones (`active.ts documentTemplatesIn`, office or
+  system caller only) and `composeDocument` prints with the one of its type and language (factory-domain documents/layouts.ts
+  `layoutFor`), else the code's layout; mandatory columns and the art. 2250 data never leave. E-mail templates per event and
+  language (factory-domain templates/mail.ts MAIL_EVENTS: `service.status_changed`, `shipping.tracking_link`), a company's own
+  or every company's: a mail reads them with `mailWordsOf` / `mailTemplateOf`, else the code's words. Saved replies (own with
+  email.send, shared with email.replies.share) and `POST /templates/replies/:id/fill`; the partner contact's language
+  (`GET /templates/language`, `GET /templates/languages/contacts`). Writing templates is documents.templates.manage.
 
 ## Email out (`src/platform/email-out/`, `src/adapters/ses/`, plan A1 §3.3, §3.7; PLT-139, PLT-149, PLT-230, COL-024, GAP-005)
 - Tables (email.prisma): EmailIdentity (a company's verified SES domain: kind CONVERSATION for record mail, NOTIFICATION

@@ -91,8 +91,6 @@
     },
     "accountant": "Il commercialista ha scelto {method} per questa società",
     "afterChoose": "Chiede un codice nuovo. Il metodo si blocca con il primo costo registrato.",
-    "calculator": "Calcolo del costo al minuto",
-    "calculatorLater": "Arriva in una versione successiva.",
     "choose": "Metodo",
     "entries": "Registrazioni di costo",
     "entriesValue_one": "{count} registrazione",

@@ -15,6 +15,8 @@ import type { DetailState, ReverseState } from './view/CostDialogs'
 import { closedTouches } from './closed/model'
 import { usePpv } from './ppv/use-ppv'
 import { PpvSection } from './ppv/view/PpvSection'
+// B-W2b-430: the band's Mass cost update.
+import { MassCostUpdate } from './mass-update/MassCostUpdate'
 
 /** The "Still loading…" note after about a second (design: GridSheetNote slow). */
 const SLOW_MS = 1000
@@ -249,6 +251,7 @@ export function CostingPage() {
     <CostingView
       model={model}
       ppv={can.view ? <PpvSection model={ppv.model} prefix={prefix} actions={ppv.actions} /> : null}
+      mass={can.view ? <MassCostUpdate prefix={prefix} /> : null /* B-W2b-430 */}
       actions={{
         onSite: (site) => go({ site }),
         onRows: (rows) => go({ rows }),

@@ -7,8 +7,6 @@
     "label": "Scope and actions",
     "readAt": "Read at {time}",
     "reading": "Reading…",
-    "mass": "Mass cost update",
-    "massHeld": "Comes in a later version (W2b): a new material price with the cost sheets and margins it changes.",
     "more": "More actions",
     "export": "Export this view (CSV)",
     "exportHeld": "Nothing to export in this view.",

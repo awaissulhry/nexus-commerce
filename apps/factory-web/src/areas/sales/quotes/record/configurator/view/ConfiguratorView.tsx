@@ -177,7 +177,7 @@ function PriceCard({ model, actions }: { model: ConfiguratorModel; actions?: Con
     ...(model.mode === 'QUOTE' ? [{ label: t('price.after'), value: checking ? <Spinner size={12} /> : <b>{unitPrice(summary.after, currency, locale)}</b> }] : []),
     { label: t('price.optionsAdd'), value: unitPrice(summary.optionsTotal, currency, locale) },
     ...(model.grains.margin ? [{ label: t('price.margin'), value: percent(summary.marginBefore, locale) }] : []),
-    ...(model.grains.margin && model.mode === 'QUOTE' ? [{ label: t('price.marginAfter'), value: checking ? <Spinner size={12} /> : percent(summary.marginAfter, locale), hint: t('price.costNote') }] : []),
+    ...(model.grains.margin && model.mode === 'QUOTE' ? [{ label: t('price.marginAfter'), value: checking ? <Spinner size={12} /> : percent(summary.marginAfter, locale) }] : []),
   ]
   return (
     <Card header={t('price.title')} className="fw-cfg-price">

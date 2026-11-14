@@ -1,0 +1,61 @@
+/* B-W2b-430 — the Cost tab's cost sheets (layout only; semantic tokens). The cards fill the main area: a wide screen puts
+   the target price beside the cost by size and the size mix beside the cost by category. */
+
+.fw-cs {
+  min-width: 0;
+}
+
+.fw-cs-tools {
+  align-items: flex-end;
+}
+
+.fw-cs-carton {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-cs-carton > :first-child {
+  flex: 0 1 260px;
+  min-width: 0;
+}
+
+.fw-cs-wrap {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.fw-cs-h3 {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: 600;
+  color: var(--nds-text-strong);
+}
+
+.fw-cs-parts,
+.fw-cs-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-14);
+  align-items: start;
+  min-width: 0;
+}
+
+@media (min-width: 1100px) {
+  .fw-cs-parts {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  }
+}
+
+@media (min-width: 1280px) {
+  .fw-cs-pair {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+.fw-cs-formactions {
+  align-self: end;
+  flex-wrap: wrap;
+}

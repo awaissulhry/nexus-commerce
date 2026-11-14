@@ -105,7 +105,7 @@ describe('check-event-contract', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
     // a proposal changed, an invoice paid by its proposal, the remittance switch's payables_settings.changed): 904 → 906, 1442 → 1446.
     // B-W2b-421: three events (custom_field.changed, picklist.changed, custom_value.changed) and three literal emits: with
     // B-W2b-403, 906 → 909 and 1446 → 1449.
-    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(909 declared event version\(s\), 1449 literal emit/) })
+    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(912 declared event version\(s\), 1449 literal emit/) })
   })
 
   it.each<[string, Plants, RegExp]>([

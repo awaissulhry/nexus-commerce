@@ -25,6 +25,8 @@ import { TestModeBanner } from '../invoices/test-mode/TestModeBanner'
 import { DepositRules } from './deposit-cancel/DepositRules'
 import { EInvoicing } from './sdi-test/EInvoicing'
 import { TaxSetUp } from './tax/TaxSetUp'
+// B-W2b-430: the cost-per-minute calculator and the overhead rules.
+import { CostPerMinute } from './costing/calculator/CostPerMinute'
 
 /**
  * `/w/<company>/finance/settings` (SCR-083): reads what invoicing reads per company (GET /invoicing/settings:
@@ -240,7 +242,7 @@ function SettingsContainer() {
       // B-W2b-389: Currencies & rates of the company shown.
       currencies={companyId ? <CurrenciesContainer companyId={companyId} /> : null}
       // B-W2b-417: the in-depth cards of the company shown.
-      depth={companyId ? { banner: <TestModeBanner companyId={companyId} />, tax: <TaxSetUp companyId={companyId} />, eInvoicing: <EInvoicing companyId={companyId} />, depositRules: <DepositRules companyId={companyId} /> } : undefined}
+      depth={companyId ? { banner: <TestModeBanner companyId={companyId} />, tax: <TaxSetUp companyId={companyId} />, eInvoicing: <EInvoicing companyId={companyId} />, depositRules: <DepositRules companyId={companyId} />, calculator: <CostPerMinute companyId={companyId} /> /* B-W2b-430 */ } : undefined}
       actions={{
         onRetry: () => void load(),
         onRetryBank: () => void readBank(),
