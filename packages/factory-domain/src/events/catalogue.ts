@@ -272,6 +272,8 @@ import { events as shippingCartons } from '../shipping-cartons/events'
 import { events as shippingQueue } from '../shipping-queue/events'
 // B-W2b-389: currencies and exchange rates (currency.changed, currency.rates_changed).
 import { events as currencyEvents } from '../currency/events'
+// B-W2b-390: carriers in depth (shipping.test_mode_changed).
+import { events as shippingCarriers } from '../shipping-carriers/events'
 // B-W2b-391: labels and documents (shipping.label_reprinted, shipping.pack_made, shipping.proforma_made).
 import { events as shippingDocuments } from '../shipping-documents/events'
 import type { EventDefinition } from './define'
@@ -612,6 +614,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...shippingQueue,
   // B-W2b-389
   ...currencyEvents,
+  // B-W2b-390
+  ...shippingCarriers,
   // B-W2b-391
   ...shippingDocuments,
 ] as const satisfies readonly EventDefinition[]

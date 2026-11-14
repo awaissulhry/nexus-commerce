@@ -63,9 +63,12 @@ describe('check-event-contract', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
     // emits (a hold placed, released and carried over; a split's created, split and packing_changed ×2; the cut-offs): 837 → 841, 1306 → 1314.
     // B-W2b-389: two events (currency.changed, currency.rates_changed) and six literal emits (a currency added and switched, a
     // manual rate kept and removed, the daily ECB switch, an ECB file read): 841 → 843, 1314 → 1320.
+    // B-W2b-390: one event (shipping.test_mode_changed) and six literal emits (going live: a label voided, packing changed, the
+    // switch; the own transport: details changed, a typed status recorded, its move): 841 → 842, 1314 → 1320.
+    // B-W2b-389 + B-W2b-390 together: 841 + 2 + 1 = 844 declared event versions, 1314 + 6 + 6 = 1326 literal emits.
     // B-W2b-391: three events (shipping.label_reprinted, shipping.pack_made, shipping.proforma_made) and seven literal emits (a
-    // direct job taken and reported; a reprint's jobs and its event; a pack's event and print job; a proforma's event): 843 → 846, 1320 → 1327.
-    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(846 declared event version\(s\), 1327 literal emit/) })
+    // direct job taken and reported; a reprint's jobs and its event; a pack's event and print job; a proforma's event): 844 → 847, 1326 → 1333.
+    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(847 declared event version\(s\), 1333 literal emit/) })
   })
 
   it.each<[string, Plants, RegExp]>([
