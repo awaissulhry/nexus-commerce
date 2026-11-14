@@ -183,6 +183,8 @@ beforeAll(async () => {
   secrets = createSecretsService({ providers: [localKeyProvider({ masterKey: randomBytes(32), environment: 'test' })] })
   accountId = await addAccount(A.tenant, A.companyA)
   await admin(`UPDATE "ShippingSettings" SET "integrationAccountId" = $1 WHERE id = $2`, [accountId, A.siteA1])
+  // B-W2b-390: site A1 buys live labels through that account (every site starts in test mode, LOG-035).
+  await admin(`UPDATE "ShippingSettings" SET "testMode" = false, "liveSince" = now(), "liveSetById" = $1 WHERE id = $2`, [newId(), A.siteA1])
   redis = testRedis()
   connection = redis.connect()
   localRoot = mkdtempSync(join(tmpdir(), 'factory-daily-ship-test-'))

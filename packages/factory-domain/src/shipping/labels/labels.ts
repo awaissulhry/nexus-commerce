@@ -66,6 +66,13 @@ export interface LabelFacts {
   /** The account the shipment (or else its site) names; null: none. */
   readonly account: LabelAccount | null
   readonly environment: LabelEnvironment
+  /**
+   * B-W2b-390 (LOG-035): the site is in test mode (ShippingSettings.testMode, on by default): the TEST carrier makes the
+   * labels, so no Sendcloud connection is needed. Absent: live.
+   */
+  readonly testMode?: boolean
+  /** B-W2b-390 (LOG-122): the tracking number typed for a carrier booked by hand (no label is bought for it); null: none. */
+  readonly manualTrackingNumber?: string | null
 }
 
 const filled = (value: unknown): value is string => typeof value === 'string' && value.trim() !== ''
@@ -147,7 +154,10 @@ export function buyStateProblems(facts: LabelFacts): Issue[] {
   if (facts.shipment.status !== 'PACKED') problems.push({ path: 'state', message: `The shipment is ${facts.shipment.status}; carrier labels are bought while it is PACKED (pack it first; once it left, nothing changes).` })
   if (facts.shipment.transportBy !== 'CARRIER') problems.push({ path: 'state', message: 'The goods do not travel with a carrier (own van or customer pickup): no carrier label is needed.' })
   if (facts.liveDdtNumber === null) problems.push({ path: 'state', message: 'The shipment has no live DDT: issue the DDT first (a label is bought only for goods the DDT declares).' })
-  problems.push(...accountProblems(facts.account, facts.shipment.companyId, facts.environment))
+  // B-W2b-390 (LOG-122): a carrier booked by hand takes no label (a Sendcloud label and a typed tracking number never both).
+  if (facts.manualTrackingNumber) problems.push({ path: 'state', message: 'The carrier of this shipment is booked by hand (its tracking number typed): no label is bought here. Clear the typed tracking number first.' })
+  // B-W2b-390 (LOG-035): in test mode the TEST carrier makes the labels: no Sendcloud connection is used or needed.
+  if (!facts.testMode) problems.push(...accountProblems(facts.account, facts.shipment.companyId, facts.environment))
   return problems
 }
 

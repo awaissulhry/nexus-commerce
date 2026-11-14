@@ -29,6 +29,8 @@ const labelsView = {
   }),
   /** The site's label printer (shipping settings), or null: the labels print from the browser as PDFs. */
   labelPrinterId: id().nullable(),
+  /** B-W2b-390 (LOG-035): the site is in test mode: a test carrier makes TEST labels and sends nothing (the TEST MODE pill). */
+  testMode: z.boolean(),
   /** Today's carrier cut-off of the site (Europe/Rome): after it, a parcel leaves the next working day. */
   cutOff: output({ time: z.string(), at: instant(), passed: z.boolean() }).nullable(),
   /** Parcels without a label yet. */
@@ -43,6 +45,8 @@ const labelsView = {
       /** B-W2b-F14: the carrier's tracking page (https only); null: none kept. */
       trackingUrl: z.string().nullable(),
       labelledAt: instant().nullable(),
+      /** B-W2b-390 (LOG-035): a TEST label of test mode (marked TEST, never handed to a carrier). */
+      test: z.boolean(),
       /** The current label's files: the PDF (any browser prints it) and, with a label printer, the ZPL. */
       files: z.array(output({ fileId: id(), format: z.enum(['PDF', 'ZPL']), name: z.string() })),
       /** The latest print job of the parcel's label. */
