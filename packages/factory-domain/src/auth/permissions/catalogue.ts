@@ -379,6 +379,8 @@ import { MAIL_DEPTH_DEFINITIONS, MAIL_DEPTH_PERMISSIONS } from '../../mail-depth
 import { DEPOSIT_RULES_DEFINITIONS, DEPOSIT_RULES_PERMISSIONS } from '../../invoicing/cancellation/permissions'
 // B-W2b-407: the actual-cost figures (costing.landed.manage, costing.actuals.manage).
 import { COST_ACTUALS_DEFINITIONS, COST_ACTUALS_PERMISSIONS } from '../../costing/landed/permissions'
+// B-W2b-418: the cost sheet's components (costing.sheets.manage).
+import { COST_SHEET_COMPONENTS_DEFINITIONS, COST_SHEET_COMPONENTS_PERMISSIONS } from '../../costing/sheet-components/permissions'
 
 /**
  * Every permission of the factory, assembled (feature PLT-029). A module that adds routes declares its permissions
@@ -1067,6 +1069,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   DEPOSIT_RULES_DEFINITIONS,
   // B-W2b-407: purchase price variance, cost of goods sold, landed cost (area `costing`).
   COST_ACTUALS_DEFINITIONS,
+  // B-W2b-418: the cost sheet's components (area `costing`).
+  COST_SHEET_COMPONENTS_DEFINITIONS,
 ])
 
 /** The area of the permissions only floor roles hold (and floor roles hold no other, but FLOOR_SHARED_PERMISSIONS). */
@@ -1449,6 +1453,8 @@ for (const name of MAIL_DEPTH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(n
 for (const name of DEPOSIT_RULES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-407: the actual-cost figures.
 for (const name of COST_ACTUALS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-418: the cost sheet's components.
+for (const name of COST_SHEET_COMPONENTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

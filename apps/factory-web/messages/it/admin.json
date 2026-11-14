@@ -1811,6 +1811,7 @@
     "costing_standards_manage": "Preparare e congelare i costi standard",
     "costing_ledger_manage": "Registrare e stornare i costi degli ordini di lavoro",
     "costing_method_manage": "Scegliere il metodo di valorizzazione (commercialista)",
+    "costing_sheets_manage": "Scrivere le schede costo in bozza dai componenti e gestire basi pelle, trasporti, dazi e noli",
     "production_settings_view": "Vedere le regole di reparto degli stabilimenti",
     "production_settings_manage": "Cambiare le regole di reparto",
     "production_cut": "Tagliare pelli per un ordine di lavoro",
