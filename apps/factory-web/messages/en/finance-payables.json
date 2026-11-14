@@ -40,7 +40,6 @@
     "noIntermediary": "No SDI intermediary is chosen yet: nothing can be picked up.",
     "noneApprovable": "None of the chosen invoices waits for approval.",
     "proposalLater": "Payment proposals come later (W2b): mark each invoice paid on its Payment tab for now.",
-    "selfInvoicesLater": "Self-invoices for purchases from abroad come later (W2b).",
     "lastLine": "An invoice keeps at least one line.",
     "edit": "Only a typed invoice that is received or disputed is corrected.",
     "editSdi": "It came through SDI: what it says never changes (the supplier's credit note corrects it).",

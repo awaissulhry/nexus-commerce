@@ -13,6 +13,15 @@ import { createDeferred, deferredDue, draftReturnCredit, returnCredit as readRet
 import { shippedViewOf, type ShippedView } from '../daily/model'
 import type { InvoicesListModel } from './list-model'
 import { InvoicesListView } from './view/InvoicesListView'
+// B-W2b-417: invoices in depth — the test-mode banner, New ▾ (credit note · debit note), Monthly invoice run, Stamp duty this quarter.
+import { DebitNote } from '../debit-note/DebitNote'
+import type { NewKind } from '../debit-note/model'
+import { NewMenu } from '../debit-note/view/NewMenu'
+import { MonthlyRun } from '../monthly-run/MonthlyRun'
+import { StampDutyQuarters } from '../stamp-duty/StampDutyQuarters'
+import { DEPTH } from '../test-mode/depth'
+import { TestModeBanner } from '../test-mode/TestModeBanner'
+import { DepthWord } from '../test-mode/view/DepthWord'
 
 /**
  * `/w/<company>/finance/invoices` (SCR-080): reads the invoices of the saved view or the filter the address names (the
@@ -24,7 +33,7 @@ import { InvoicesListView } from './view/InvoicesListView'
  */
 export function InvoicesPage() {
   return (
-    <WithMessages namespaces={['finance', 'finance-daily', 'lists']}>
+    <WithMessages namespaces={['finance', 'finance-daily', DEPTH, 'lists']}>
       <InvoicesContainer />
     </WithMessages>
   )
@@ -61,6 +70,8 @@ function InvoicesContainer() {
   const [returnCredit, setReturnCredit] = useState<NonNullable<InvoicesListModel['returnCredit']>>({ value: null, problem: null })
   const [dialogProblem, setDialogProblem] = useState<InvoicesListModel['dialogProblem']>(null)
   const [busy, setBusy] = useState(false)
+  // B-W2b-417: the in-depth dialog open (the monthly run, the stamp duty quarters, New ▾'s credit or debit note).
+  const [depthDialog, setDepthDialog] = useState<'run' | 'stamp' | NewKind | null>(null)
   const readId = useRef(0)
 
   const readTiles = useCallback(async () => {
@@ -234,9 +245,20 @@ function InvoicesContainer() {
 
   const model: InvoicesListModel = { prefix, can, today: romeToday(), rows, query, list, tiles, queue, deferred, shippedView, returnCredit, rejected, asOf, live, updates, notice, dialog, dialogProblem, busy }
 
+  const closeDepth = () => setDepthDialog(null)
   return (
     <InvoicesListView
       model={model}
+      depth={{
+        banner: <TestModeBanner />,
+        newMenu: <NewMenu can={can} paymentsHref={`${prefix}/finance/payments?new=1`} onNew={setDepthDialog} />,
+        more: [
+          { id: 'run', label: <DepthWord k="more.run" />, onSelect: () => setDepthDialog('run') },
+          { id: 'stamp', label: <DepthWord k="more.stamp" />, onSelect: () => setDepthDialog('stamp') },
+        ],
+        dialogs:
+          depthDialog === 'run' ? <MonthlyRun onClose={closeDepth} /> : depthDialog === 'stamp' ? <StampDutyQuarters onClose={closeDepth} /> : depthDialog ? <DebitNote kind={depthDialog} onClose={closeDepth} /> : null,
+      }}
       actions={{
         onRows: (next: RowView) => router.replace(invoicesAddress(pathname, next)),
         onMore: () => void more(),
