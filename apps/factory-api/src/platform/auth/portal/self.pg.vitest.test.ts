@@ -125,7 +125,8 @@ describe('sign-in and sessions (SAL-066)', { timeout: SLOW_TEST_TIMEOUT_MS }, ()
     const audit = await inWorld(h, world, (client) => client.auditLog.findMany({ where: { recordType: 'User', recordId: userId, action: 'portal.endOtherSessions' }, orderBy: [{ at: 'asc' }, { id: 'asc' }], select: { after: true } }))
     expect(audit.map((row) => (row.after as { sessionsEnded: number }).sessionsEnded)).toEqual([1, 0])
     const revoked = await inWorld(h, world, (client) => client.session.findMany({ where: { userId, revokedAt: { not: null } }, select: { revokedReason: true } }))
-    expect(revoked).toEqual([{ revokedReason: 'SIGNED_OUT' }])
+    // B-W2b-404: the person ended them (ENDED_BY_USER), as the office's "Sign out everywhere else".
+    expect(revoked).toEqual([{ revokedReason: 'ENDED_BY_USER' }])
   })
 })
 

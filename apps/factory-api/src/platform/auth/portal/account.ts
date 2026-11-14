@@ -102,7 +102,7 @@ export async function refresh(app: FastifyInstance, request: FastifyRequest) {
   const p = portalOf(app)
   const session = portalSessionOf(request)
   const now = p.auth.clock.now()
-  const idleExpiresAt = portalIdleExpiryAt(now, session.absoluteExpiresAt)
+  const idleExpiresAt = portalIdleExpiryAt(now, session.absoluteExpiresAt, session.idleMs)
   await p.auth.inTenant(session.tenantId, session.userId, (client) =>
     client.session.updateMany({ where: { id: session.id, revokedAt: null }, data: { lastSeenAt: now, idleExpiresAt } }),
   )

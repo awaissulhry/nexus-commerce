@@ -15,6 +15,7 @@ import { assertCsrf } from '../sessions/cookies'
 import { requiresMfa } from '../sessions/grants'
 import type { OfficeAuth } from '../sessions/office-auth'
 import { mintToken, parseToken, tokenHash } from '../sessions/secrets'
+import { sessionPlaceOf } from '../sessions/place'
 import { mintSessionSecrets, startSession, type StartedSession } from '../sessions/session-store'
 import { emailOrThrow } from '../users/email'
 import { adminFacts, userStatus } from '../users/status'
@@ -223,6 +224,7 @@ export async function acceptInvitation(auth: OfficeAuth, request: FastifyRequest
         mfaProved: false,
         ipHash: auth.secrets.ipHash(request.ip),
         userAgent: request.headers['user-agent'],
+        place: sessionPlaceOf(request),
         secrets,
       })
       audit({ recordType: 'User', recordId: token.userId, before: { status: 'INVITED' }, after: { status: 'ACTIVE', displayName } })
@@ -234,5 +236,5 @@ export async function acceptInvitation(auth: OfficeAuth, request: FastifyRequest
   )
   const started: StartedSession = { ...result, token: secrets.token.value, csrfToken: secrets.csrfToken }
   const requireMfa = await auth.inTenant(token.tenantId, token.userId, (client) => requiresMfa(client, { id: token.userId, requireMfa: invitation.user.requireMfa }, auth.clock.now()))
-  return signedIn(reply, started, { id: token.userId, email: invitation.user.email, displayName, locale: invitation.user.locale, requireMfa, totpConfirmedAt: null }, false)
+  return signedIn(reply, started, { id: token.userId, email: invitation.user.email, displayName, locale: invitation.user.locale, requireMfa, totpConfirmedAt: null }, false, auth.clock.now())
 }

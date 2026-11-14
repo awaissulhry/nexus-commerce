@@ -2,12 +2,14 @@ import type { FastifyRequest } from 'fastify'
 import type { FactoryClient, FactoryDatabase } from '@nexus/factory-db'
 import { ForbiddenError, UnauthenticatedError } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
+import { idleEndAfter, isLiveAt, liveUntil, sessionLengthsMs, type SecurityRules } from '@nexus/factory-domain/auth/sessions/lengths'
 import type { Authenticator, SessionContext } from '../../../core/context'
 import type { Clock } from '../../../core/time'
 import { assertCsrf, isUnsafeMethod, sessionCookieOf } from './cookies'
 import { sessionAccess } from './grants'
+import { securityRulesIn } from './rules'
 import { parseToken, tokenHash, type AuthToken } from './secrets'
-import { idleExpiryAt, SESSION_LIFETIME } from './session-store'
+import { SESSION_LIFETIME } from './session-store'
 
 /**
  * The real Authenticator for office cookies (plan A1 §3.2 step 1, §3.10). For every request that is not public:
@@ -15,11 +17,13 @@ import { idleExpiryAt, SESSION_LIFETIME } from './session-store'
  *   1. the `__Host-factory_session` cookie names the tenant and the user; the session is looked up by the token's
  *      hash in that tenant's office scope (factory_runtime: a cookie that names another tenant finds nothing);
  *   2. it must be live: not revoked, before its idle and absolute expiry, its user ACTIVE (a suspended or deactivated
- *      user's sessions stop at once, even one that raced the suspension) and its tenant ACTIVE;
+ *      user's sessions stop at once, even one that raced the suspension) and its tenant ACTIVE; B-W2b-404 (PLT-068): the
+ *      expiries under the tenant's office lengths NOW (SecuritySettings, read on every request): a shorter idle time or
+ *      longest session ends an open session at its next request;
  *   3. an unsafe method (POST, PUT, PATCH, DELETE) must pass the CSRF double submit (403 otherwise);
  *   4. the company: the `x-factory-company` header (a company id or code of the tenant, active), else the session's
  *      starting company; an unknown company is a 403;
- *   5. the idle expiry slides forward (at most once a minute; bookkeeping, not audited);
+ *   5. the idle expiry slides forward by the tenant's idle time (at most once a minute; bookkeeping, not audited);
  *   6. the context: office, tenant, user, company, and the grants of the person's live role assignments
  *      (sessions/grants.ts; a role that requires two-factor gives nothing until it was proved on the session).
  * No cookie, or a cookie that opens nothing: no session (401). A one-off link's token is read before this, by
@@ -39,6 +43,8 @@ export interface OfficeSession {
   readonly absoluteExpiresAt: Date
   readonly mfaAt: Date | null
   readonly stepUpAt: Date | null
+  /** B-W2b-404: the tenant's security rules as read for this request (session lengths, the actions switched off). */
+  readonly security: SecurityRules
   readonly user: {
     readonly email: string
     readonly displayName: string
@@ -110,13 +116,17 @@ export function officeAuthenticator(core: { readonly database: FactoryDatabase; 
     return core.database.withScope({ audience: 'office', tenantId: token.tenantId, actorId: token.userId }, async (client) => {
       const row = await liveSession(client, token, now)
       if (!row) return null
+      const { rules: security } = await securityRulesIn(client, token.tenantId)
+      const lengths = sessionLengthsMs(security).office
+      const ends = liveUntil(row, lengths)
+      if (!isLiveAt(ends, now)) return null
       if (isUnsafeMethod(request.method)) assertCsrf(request)
       const companyId = await companyOf(client, request, row)
       const access = await sessionAccess(client, { id: token.userId, requireMfa: row.user.requireMfa }, row, now)
 
-      let idleExpiresAt = row.idleExpiresAt
+      let idleExpiresAt = ends.idleExpiresAt
       if (now.getTime() - row.lastSeenAt.getTime() >= SESSION_LIFETIME.slideEveryMs) {
-        idleExpiresAt = idleExpiryAt(now, row.absoluteExpiresAt)
+        idleExpiresAt = idleEndAfter(now, ends.absoluteExpiresAt, lengths.idleMs)
         await client.session.updateMany({ where: { id: row.id, revokedAt: null }, data: { lastSeenAt: now, idleExpiresAt } })
       }
 
@@ -127,9 +137,10 @@ export function officeAuthenticator(core: { readonly database: FactoryDatabase; 
         companyId,
         createdAt: row.createdAt,
         idleExpiresAt,
-        absoluteExpiresAt: row.absoluteExpiresAt,
+        absoluteExpiresAt: ends.absoluteExpiresAt,
         mfaAt: row.mfaAt,
         stepUpAt: row.stepUpAt,
+        security,
         user: {
           email: row.user.email,
           displayName: row.user.displayName,

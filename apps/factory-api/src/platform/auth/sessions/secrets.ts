@@ -10,7 +10,8 @@ import { isUuid } from '@nexus/factory-domain/core/ids'
  *              the holder; only SHA-256 of the whole value is stored, so a database read gives no working token.
  *              SHA-256, not a slow hash: the secret is random, there is nothing to guess.
  *   keys       derived with HKDF-SHA-256 from FACTORY_COOKIE_SECRET, one per use (the "session pepper" of A1 §5.4):
- *              AES-256-GCM for the TOTP secrets at rest, HMAC for client addresses and recovery codes. Changing the
+ *              AES-256-GCM for the TOTP secrets at rest, HMAC for client addresses, recovery codes and the fingerprints
+ *              of step-up codes (B-W2b-404). Changing the
  *              cookie secret makes the stored TOTP secrets unreadable: the KMS step replaces this key source and
  *              re-encrypts (a sealed value names its key, `l1`).
  *   addresses  never stored: an IPv4 address is shortened to its /24, IPv6 to its /64, then HMAC-ed.
@@ -80,6 +81,11 @@ export interface AuthSecrets {
   ipHash(ip: string | undefined | null): string | null
   /** The stored form of a recovery code (its normalized form). */
   recoveryCodeHash(code: string): string
+  /**
+   * B-W2b-404 (PLT-063): the fingerprint a step-up that worked keeps of its code (StepUpAttempt.codeFingerprint, unique per
+   * person: a code counts once): `su1.` + HMAC-SHA-256 of the person, the time step and the code, hex. Never the code.
+   */
+  stepUpFingerprint(userId: string, step: number, code: string): string
 }
 
 const KEY_ID = 'l1'
@@ -91,6 +97,7 @@ export function authSecrets(cookieSecret: string): AuthSecrets {
   const sealKey = derive(cookieSecret, 'totp-secret-seal v1')
   const ipKey = derive(cookieSecret, 'client-address v1')
   const recoveryKey = derive(cookieSecret, 'recovery-code v1')
+  const stepUpKey = derive(cookieSecret, 'step-up-code v1')
   return {
     seal(plain) {
       const iv = randomBytes(12)
@@ -113,6 +120,9 @@ export function authSecrets(cookieSecret: string): AuthSecrets {
     },
     recoveryCodeHash(code) {
       return createHmac('sha256', recoveryKey).update(code).digest('hex')
+    },
+    stepUpFingerprint(userId, step, code) {
+      return `su1.${createHmac('sha256', stepUpKey).update(`${userId}|${step}|${code.trim()}`).digest('hex')}`
     },
   }
 }
