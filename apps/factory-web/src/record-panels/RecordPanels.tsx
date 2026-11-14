@@ -64,6 +64,9 @@ import { useApprovals } from './approvals/use-approvals'
 import { useShares } from './share/use-shares'
 // B-W2b-397 (COL-004): the mis-send guard before a message to the party.
 import { useMisSend } from '../shell/panels/mis-send/use-mis-send'
+// B-W2b-431: the record's custom fields, a section above the panels (absent where none applies).
+import { useCustomFields } from './custom-fields/use-custom-fields'
+import { CustomFieldsPanel } from './custom-fields/view/CustomFieldsPanel'
 
 /**
  * The record panels as a record page mounts them: `<RecordPanels record={{ type, id, companyId, siteId }} title party />`.
@@ -689,11 +692,15 @@ export function RecordPanels({ record, title, party: givenParty = null, tab }: R
     // B-W2b-307
     approvalHistory: approvalHistory.actions,
   }
+  // B-W2b-431
+  const fileChoices = useMemo(() => (can.readFiles ? (files.items?.map((file) => ({ id: file.id, name: file.originalName })) ?? null) : null), [can.readFiles, files.items])
+  const customFields = useCustomFields({ api, record: key, title, people, files: fileChoices })
   // B-W2b-05 (PLT-171): the record's print view draws every panel at once, read-only.
   return printing ? (
     <RecordPrintView model={model} actions={actions} />
   ) : (
     <>
+      {customFields.model && <CustomFieldsPanel model={customFields.model} actions={customFields.actions} />}
       <RecordPanelsView model={model} actions={actions} />
       {misSend.element}
     </>
