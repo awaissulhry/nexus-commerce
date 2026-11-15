@@ -81,8 +81,11 @@ function DocTemplates({ model, actions }: { model: DocTemplatesModel; actions?: 
         colId: 'document',
         headerName: t('tpl.list.col.document'),
         flex: 1.3,
-        // B-W2b-F60: room for the longer names (the commercial invoice's); the minimums still fit 1440 without a scroll.
+        // B-W2b-F60: room for the longer names (the commercial invoice's); the minimums still fit 1440 without a scroll. A name
+        // longer than its cell wraps to a second line (the row grows), never "…".
         minWidth: 220,
+        wrapText: true,
+        autoHeight: true,
         cellRenderer: ({ data }: ICellRendererParams<DocRow>) => {
           if (!data) return null
           const target = openTarget(data)
