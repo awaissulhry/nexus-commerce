@@ -4,7 +4,7 @@ import type { JobStatus, Labels, PackLine, PackParcel, Packing } from './api'
 import type { Bench, BenchCarton, BenchContent, BenchPackaging } from './carton/api'
 import { benchLeft, benchMain, cartonMarkCode, cartonsOf, closeChoice, closeHeld, currentCartonOf, holdReasonOf, marksFacts, overweight, packGrid, type CloseChoice, type FlashBody, type KeptScan, type MarksNote, type ScanFlash } from './carton/model'
 import { packedSummary } from './done/model'
-import { documentsState, headOf, type PackHead } from './model'
+import { documentsState, headOf, labelRows, testJob, type PackHead } from './model'
 import { PackView, type BenchStep, type DocumentsModel, type JobModel, type PackRowModel, type PackViewModel } from './view/PackView'
 
 /**
@@ -15,7 +15,8 @@ import { PackView, type BenchStep, type DocumentsModel, type JobModel, type Pack
  * with its packaging and weight, the marks sent to the printer or not printed with the PDF made here, marks to print again
  * after the count changed, everything packed); the documents with their print states and a station without printers; and
  * Packed's summary — with the roles (a packing operator, a team leader, a worker without packing, a packer without label
- * printing). Made-up shipments, styles, batches, serials and tracking numbers of a made-up "Demo" plant; no customer, no
+ * printing). B-W2b-F50: a site in test mode — TEST labels say they are a test and not charged (rows, print, reprint,
+ * waiting for the office, Packed). Made-up shipments, styles, batches, serials and tracking numbers of a made-up "Demo" plant; no customer, no
  * money, never another person.
  */
 
@@ -260,17 +261,19 @@ const labelsOf = (value: Packing, extra: Partial<Labels> = {}): Labels => ({
   labelPrinterId: 'printer-label',
   toLabel: value.parcels.filter((entry) => entry.trackingNumber === null).length,
   cutOff: { time: '17:00', at: '2026-11-13T16:00:00.000Z', passed: false },
-  parcels: value.parcels.map((entry) => ({ parcelId: entry.id, seq: entry.seq, trackingNumber: entry.trackingNumber, labelledAt: entry.labelledAt, print: null })),
+  // B-W2b-F50: a site in test mode makes TEST labels (`testMode`; each label's `test`).
+  testMode: extra.testMode ?? false,
+  parcels: value.parcels.map((entry) => ({ parcelId: entry.id, seq: entry.seq, trackingNumber: entry.trackingNumber, labelledAt: entry.labelledAt, test: extra.testMode === true && entry.trackingNumber !== null, print: null })),
   ...extra,
 })
 
 const DDT = { id: 'ddt-demo-0153', number: 'DDT-DEMO-0153', documentDate: '2026-11-13', fileId: 'file-ddt' }
 
-const docs = (value: Packing, labels: Labels | null, jobs: JobModel[] = [], printLabels = true): DocumentsModel => ({
-  ...documentsState(value, labels, { printLabels }),
-  trackingNumbers: value.parcels.map((entry) => ({ seq: entry.seq, trackingNumber: entry.trackingNumber })),
-  jobs,
-})
+const docs = (value: Packing, labels: Labels | null, jobs: JobModel[] = [], printLabels = true): DocumentsModel => {
+  // B-W2b-F50: the same rows and TEST flags as the live page (Pack.tsx documentsModel).
+  const trackingNumbers = labelRows(value, labels)
+  return { ...documentsState(value, labels, { printLabels }), trackingNumbers, jobs: jobs.map((job) => ({ ...job, test: testJob(job, trackingNumbers) })) }
+}
 const documents = (value: Packing, labels: Labels | null, jobs: JobModel[] = [], printLabels = true): PackViewModel['step'] => ({
   kind: 'documents',
   head: headOf(value),
@@ -286,6 +289,14 @@ const JOBS: JobModel[] = [
   { id: 'job-4', what: 'PACKING_LIST', seq: null, status: 'FAILED', detail: 'La stampante A4-PACK-01 non ha risposto.' },
 ]
 const PRINTED: JobModel[] = JOBS.map((job) => ({ ...job, status: 'PRINTED', detail: null }))
+// B-W2b-F50: a site in test mode: the test carrier's labels (tracking numbers start with TEST), a label that failed to print.
+const testReady = packed({ documents: { ddt: DDT, packingList: { fileId: 'file-pl', createdAt: AT } }, parcels: PARCELS.map((entry) => ({ ...entry, trackingNumber: `TEST-DM-${entry.seq}A`, labelledAt: AT })) })
+const TEST_JOBS: JobModel[] = [
+  { id: 'job-1', what: 'LABEL', seq: 1, status: 'PRINTED', detail: null },
+  { id: 'job-2', what: 'LABEL', seq: 2, status: 'FAILED', detail: 'La stampante LBL-PACK-01 non ha risposto.' },
+  { id: 'job-3', what: 'DDT', seq: null, status: 'PRINTED', detail: null },
+  { id: 'job-4', what: 'PACKING_LIST', seq: null, status: 'PRINTED', detail: null },
+]
 const done = (value: Packing, jobs: JobModel[], labels: Labels | null): PackViewModel['step'] => ({
   kind: 'done',
   summary: packedSummary({ number: value.number, cartons: value.parcels.length, marksDue: false, transportBy: value.transportBy, documents: documentsState(value, labels, { printLabels: true }), jobs }),
@@ -395,6 +406,17 @@ export const designScreen = defineDesignScreen<PackViewModel>({
     { id: 'done', label: 'Packed: 2 cartons · labels printed', model: base(done(ready, PRINTED, labelsOf(ready))), note: 'Design floor.pack "Packed": the line from what really happened, then the marks, the labels and the documents.' },
     { id: 'done-office', label: 'Packed: the office buys the labels', model: base(done(packed(), [], labelsOf(packed()))) },
     { id: 'done-own-van', label: 'Packed: our own van', model: base(done(packed({ transportBy: 'SENDER', carrierCode: null, documents: { ddt: DDT, packingList: null } }), [{ id: 'job-3', what: 'DDT', seq: null, status: 'PRINTED', detail: null }], labelsOf(packed()))) },
+    // B-W2b-F50: rule "TEST labels say TEST" (B-W2b-390, LOG-035): never "Label bought" for a TEST label.
+    {
+      id: 'test-labels',
+      label: 'Test mode: two TEST labels ready to print',
+      model: base(documents(testReady, labelsOf(testReady, { testMode: true }))),
+      note: 'Each carton says "Test label — not charged" (a warning status, never "Label bought"); one line says the labels say TEST, go to no carrier and are not charged.',
+    },
+    { id: 'test-printing', label: 'Test mode: printing, a TEST label to print again', model: base(documents(testReady, labelsOf(testReady, { testMode: true }), TEST_JOBS)), note: 'The print jobs and Retry name the test label.' },
+    { id: 'test-waiting-office', label: 'Test mode: waiting for the office (no labels yet)', model: base(documents(packed(), labelsOf(packed(), { testMode: true }))), note: 'The office makes the test labels: nothing says they are bought.' },
+    { id: 'done-test', label: 'Packed: TEST labels printed', model: base(done(testReady, PRINTED, labelsOf(testReady, { testMode: true }))), note: 'A fact says the labels are TEST: they go to no carrier and are not charged.' },
+    { id: 'done-test-office', label: 'Packed: the office makes the test labels', model: base(done(packed(), [], labelsOf(packed(), { testMode: true }))) },
     { id: 'team-leader', label: 'A team leader at the bench (packs and prints)', model: base(pack(inProgress), { frame: frame({ operator: { name: 'Teo Demo' } }) }) },
     {
       id: 'operator-no-labels',

@@ -103,10 +103,11 @@ describe('the home tiles: mode AND permission, fail closed, only built pages ope
     expect(tilePage(homeTiles('inspection', roleOf('floor_inspector'), false), 0)).toMatchObject({ pages: 3, more: 5 })
     expect(pageKeys('inspection', 'floor_inspector', 1)).toEqual(['inline', 'operation', 'machine', 'clock', 'training'])
     expect(pageKeys('inspection', 'floor_inspector', 2)).toEqual([/* B-W2b-232 */ 'instructions', 'help'])
-    // Every other station: today's order (B-W2b-151's walk), Operation second.
+    // Every other station but the packing bench (B-W2b-F50, below): today's order (B-W2b-151's walk), Operation second.
     expect(pageKeys('cutting', 'cutting_operator', 0)).toEqual(['mywork', 'operation', 'cut', 'incident', 'scan'])
     expect(pageKeys('cutting', 'cutting_operator', 1)[0]).toBe('fabriccut') // Owner answer 2: Fabric cutting stays first on page two.
-    for (const mode of ['sewing', 'packing'] as const) expect(pageKeys(mode, 'operator', 0).slice(0, 2), mode).toEqual(['mywork', 'operation'])
+    // B-W2b-F50: was `for (const mode of ['sewing', 'packing'])` (Operation second at the packing bench too); now sewing only.
+    expect(pageKeys('sewing', 'operator', 0).slice(0, 2)).toEqual(['mywork', 'operation'])
     // An operator at the bench holds no inspection tile: Operation keeps its place.
     expect(homeTiles('inspection', roleOf('operator'), false).map((tile) => tile.key).slice(0, 2)).toEqual(['mywork', 'operation'])
     // The scan router reads every tile, whatever its page: a bundle still opens Operation at the bench, a work order Final.
@@ -114,6 +115,26 @@ describe('the home tiles: mode AND permission, fail closed, only built pages ope
     const tag = tenantTag('0190f0e2-4c1d-7a3b-9e55-2f1c8d7a6b10')
     expect(taskForScan('inspection', readScan(formatScanId({ type: 'BUNDLE', tenantTag: tag, ref: 123 }), tag), bench)).toBe('operation')
     expect(taskForScan('inspection', readScan('WO-0042', tag), bench)).toBe('final')
+  })
+
+  // B-W2b-F50: the Owner's answer of 2026-11-15 to B-W2b-437's question 1 (B: the packing bench's own jobs on page one).
+  it('at the packing bench an operator\'s first page is My work, Garment labels, Pack, Report an incident, Scan + More; a team leader\'s My work, Garment labels', () => {
+    const roleOf = (key: string) => [...templateOf(key)!.permissions] as string[]
+    const pageKeys = (role: string, page: number) => tilePage(homeTiles('packing', roleOf(role), false), page).tiles.map((tile) => tile.key)
+    expect(pageKeys('operator', 0)).toEqual(['mywork', 'labels', 'pack', 'incident', 'scan'])
+    expect(tilePage(homeTiles('packing', roleOf('operator'), false), 0).more).toBeGreaterThan(0)
+    // Operation first on page two (the bench's own jobs first, as at the inspection bench).
+    expect(pageKeys('operator', 1)[0]).toBe('operation')
+    expect(pageKeys('team_leader', 0)).toEqual(['mywork', 'labels', 'incident', 'lineview', 'scan'])
+    expect(pageKeys('team_leader', 1).slice(0, 2)).toEqual(['pack', 'operation'])
+    // The scan router reads every tile, whatever its page: a bundle still opens Operation at the bench, a serial or a pack slip Pack.
+    const tag = tenantTag('0190f0e2-4c1d-7a3b-9e55-2f1c8d7a6b10')
+    for (const role of ['operator', 'team_leader']) {
+      const bench = homeTiles('packing', roleOf(role), false)
+      expect(taskForScan('packing', readScan(formatScanId({ type: 'BUNDLE', tenantTag: tag, ref: 123 }), tag), bench), role).toBe('operation')
+      expect(taskForScan('packing', readScan(formatScanId({ type: 'SERIAL', tenantTag: tag, ref: 77 }), tag), bench), role).toBe('pack')
+      expect(taskForScan('packing', readScan('SH-0012', tag), bench), role).toBe('pack')
+    }
   })
 
   it('a tile asks the permission its page\'s API needs (fail closed)', () => {
@@ -132,10 +153,11 @@ describe('the home tiles: mode AND permission, fail closed, only built pages ope
       { key: 'scan', held: null },
     ])
     // Garment labels at the packing station (SCR-096) ask production.serials, the permission of its API; Pack is built (SCR-098).
+    // B-W2b-F50: at the packing bench Operation comes after Garment labels and Pack (Owner answer 2026-11-15).
     expect(homeTiles('packing', OPERATOR, false)).toEqual([
       { key: 'mywork', held: null },
-      { key: 'operation', held: null },
       { key: 'pack', held: null },
+      { key: 'operation', held: null },
       { key: 'clock', held: null },
       { key: 'training', held: null },
       { key: 'instructions', held: null },
@@ -145,9 +167,9 @@ describe('the home tiles: mode AND permission, fail closed, only built pages ope
     ])
     expect(homeTiles('packing', [...OPERATOR, 'production.serials'], false)).toEqual([
       { key: 'mywork', held: null },
-      { key: 'operation', held: null },
       { key: 'labels', held: null },
       { key: 'pack', held: null },
+      { key: 'operation', held: null },
       { key: 'clock', held: null },
       { key: 'training', held: null },
       { key: 'instructions', held: null },

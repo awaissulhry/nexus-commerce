@@ -146,11 +146,18 @@ const KEPT_LAST: readonly TileKey[] = ['incident', 'lineview', 'scan']
 /**
  * B-W2b-203 (the Owner's answer of 2026-11-09 to B-W2b-151's question 1): at the inspection bench the bench's own jobs come
  * first — Operation after Incoming, Final and In-line inspection — so a floor inspector's first page is My work, Incoming,
- * Final, Report an incident, Scan + More (Operation on page two). Every other station keeps TILE_RULES' order. The scan router
- * reads every tile, whatever its page: a bundle scanned at the bench still opens Operation, a work order Final.
+ * Final, Report an incident, Scan + More (Operation on page two). Every other station but the packing bench (B-W2b-F50, below)
+ * keeps TILE_RULES' order. The scan router reads every tile, whatever its page: a bundle scanned at the bench still opens
+ * Operation, a work order Final.
+ * B-W2b-F50 (the Owner's answer of 2026-11-15 to B-W2b-437's question 1, B): the packing bench too — Operation after Garment
+ * labels and Pack, so an operator's first page there is My work, Garment labels, Pack, Report an incident, Scan + More (a team
+ * leader's: My work, Garment labels; Pack on page two). A bundle scanned at the bench still opens Operation, a serial or a pack
+ * slip Pack.
  */
 const MOVED_AFTER: Partial<Record<FloorMode, { readonly tile: TileKey; readonly after: readonly TileKey[] }>> = {
   inspection: { tile: 'operation', after: ['incoming', 'final', 'inline'] },
+  // B-W2b-F50
+  packing: { tile: 'operation', after: ['labels', 'pack'] },
 }
 
 /** The station's order of the tiles a person has: TILE_RULES' order, with MOVED_AFTER's tile after the last of its tiles held. */

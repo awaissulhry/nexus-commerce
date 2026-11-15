@@ -7,8 +7,8 @@ import { HomeView, type HomeViewModel } from './view/HomeView'
 /**
  * SCR-022's cases: the floor frame (operator chip, offline banner with the queue's counts, Help, operator menu, idle
  * sign-out) around the tile home, per station mode and per person's floor permissions, and the offline queue's states. Made-up people and places only. The tiles come from the
- * same rule as the live page (model.ts `homeTiles`): Scan anything and the floor tasks open; Garment labels and Pack say
- * "Coming soon".
+ * same rule as the live page (model.ts `homeTiles`): Scan anything and the floor tasks open (every tile is built: none says
+ * "Coming soon"). B-W2b-F50: at the packing bench Operation comes after Garment labels and Pack (the `packing` case).
  */
 
 // The floor role templates' permissions (factory-domain auth/roles/templates: operator, floor_inspector).
@@ -40,7 +40,13 @@ export const designScreen = defineDesignScreen<HomeViewModel>({
   cases: [
     { id: 'cutting', label: 'Cutting table (operator)', model: home('cutting'), note: 'Mode from the station\'s work centre (CUTTING): Operation (the cutting operation), Cut a hide, Bundles and Scan anything open. A hide scanned here opens Cut a hide with it, a bundle opens Bundles.' },
     { id: 'sewing', label: 'Sewing station', model: home('sewing', { frame: signedInFrame('home.title', { showHome: false, station: { name: 'SEW-04 · Linea 2 St 4', site: 'Stabilimento Demo Nord' } }) }) },
-    { id: 'packing', label: 'Packing bench', model: home('packing', { frame: signedInFrame('home.title', { showHome: false, station: { name: 'PACK-01 · Banco imballo', site: 'Stabilimento Demo Nord' } }) }) },
+    {
+      id: 'packing',
+      label: 'Packing bench',
+      model: home('packing', { frame: signedInFrame('home.title', { showHome: false, station: { name: 'PACK-01 · Banco imballo', site: 'Stabilimento Demo Nord' } }) }),
+      // B-W2b-F50 (Owner answer 2026-11-15): the bench's own jobs first, as at the inspection bench.
+      note: 'Page one: My work, Garment labels, Pack, Report an incident, Scan anything + More; Operation leads page two (a team leader: My work, Garment labels; Pack on page two). A bundle scanned here still opens Operation, a serial or a pack slip Pack.',
+    },
     { id: 'inspection', label: 'Inspection bench (inspector)', model: home('inspection', { frame: signedInFrame('home.title', { showHome: false, station: { name: 'QC-01 · Banco collaudo', site: 'Stabilimento Demo Nord' } }) }, INSPECTOR) },
     {
       id: 'warehouse',
