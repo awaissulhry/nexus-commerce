@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { loadFactoryEnv, type FactoryEnv } from '../../env'
+import { loadFactoryEnv, readFactoryVariables, type FactoryEnv } from '../../env'
 import { localFilesRootOf } from '../files/service'
 import { localMailbox, type LocalMailbox } from './mailbox'
 
@@ -39,6 +39,8 @@ export function useLocalStack(stack: LocalStack | undefined): void {
 
 export function processLocalStack(): LocalStack {
   if (configured) return configured
-  if (!fromEnv) fromEnv = localStackOf(loadFactoryEnv())
+  // FACTORY_ENV first: off local (tests, staging, production) nothing else is read, so an app built by a test without the
+  // whole configuration (no FACTORY_REDIS_URL) still builds. On local the boot has checked the whole env already.
+  if (!fromEnv) fromEnv = readFactoryVariables().FACTORY_ENV === 'local' ? localStackOf(loadFactoryEnv()) : NO_LOCAL_STACK
   return fromEnv
 }

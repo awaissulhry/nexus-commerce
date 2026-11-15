@@ -74,8 +74,12 @@ describe('the local mailbox is shared by every process (B-W2b-F58)', () => {
     const listed = await browser.get('/local/mailbox')
     expect(listed.status, JSON.stringify(listed.body)).toBe(200)
     const [newest, older] = listed.body.messages
-    expect(newest).toMatchObject({ to: [invited.email], templateKey: 'auth.password_reset', links: [reset] })
-    expect(older).toMatchObject({ to: [invited.email], templateKey: 'auth.invitation', links: [link] })
+    expect(newest).toMatchObject({ to: [invited.email], templateKey: 'auth.password_reset' })
+    expect(older).toMatchObject({ to: [invited.email], templateKey: 'auth.invitation' })
+    // The mail's own link first; then the footer's privacy-notice address.
+    expect(newest.links[0]).toBe(reset)
+    expect(older.links[0]).toBe(link)
+    expect(older.links.slice(1)).toEqual([expect.stringMatching(new RegExp(`^${WEB_ORIGIN}/privacy/`))])
     expect(older.subject.length).toBeGreaterThan(0)
     expect(older.text).toContain(link)
     expect(Object.keys(newest).sort()).toEqual(['bcc', 'cc', 'from', 'id', 'links', 'sentAt', 'subject', 'templateKey', 'text', 'to'])

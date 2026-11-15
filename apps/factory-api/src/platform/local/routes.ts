@@ -12,7 +12,7 @@ const mailboxRoutes = defineRoutes('local-mailbox', manifest, async (app) => {
     const mailbox = processLocalStack().mailbox
     if (!mailbox) throw new NotFoundError()
     const messages = await mailbox.list(context.tenantId, request.query.limit)
-    return { messages: messages.map(({ tenantId: _tenant, ...message }) => message) }
+    return { messages: messages.map(({ tenantId: _tenant, to, cc, bcc, links, ...message }) => ({ ...message, to: [...to], cc: [...cc], bcc: [...bcc], links: [...links] })) }
   })
 })
 
