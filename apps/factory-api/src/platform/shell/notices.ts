@@ -5,6 +5,7 @@ import type { CommandCaller } from '../../core/command'
 import { actorOf } from '../../core/context'
 import { companyTestModes } from '../../modules/invoicing/test-mode/settings'
 import { siteTestModes } from '../../modules/shipping/test-mode/test-mode'
+import { processLocalStack } from '../local/stack'
 
 /**
  * The office shell's notices (B-W2b-F49; design shell.frame sec:system-banners; LOG-035; Owner rule W2b-6 "a test mode shows a
@@ -15,6 +16,9 @@ import { siteTestModes } from '../../modules/shipping/test-mode/test-mode'
  *          company) in test mode — narrowed to one company when the shell names it. Names and on/off only: the reads are
  *          the settings pages' own (shipping siteTestModes, invoicing companyTestModes), so the shell and the pages agree;
  *          the settings themselves stay behind shipping.view and invoices.view.
+ *   local  B-W2b-F58 (the Owner's local test server only, platform/local/stack.ts): `bannerHidden` when
+ *          FACTORY_HIDE_TEST_MODE_BANNER=1 (the shell draws no top bar; the test modes are still named), `localMailbox` when
+ *          the local mailbox exists (the shell offers its page). Both false on every other environment.
  */
 export async function shellNotices(caller: CommandCaller, query: { companyId?: string | undefined }) {
   const context = caller.factoryContext
@@ -26,6 +30,7 @@ export async function shellNotices(caller: CommandCaller, query: { companyId?: s
   return caller.withClient(async (client) => {
     const carrier = await siteTestModes(client, sites)
     const eInvoicing = await companyTestModes(client, companies)
+    const local = processLocalStack()
     return {
       testModes: {
         // By name, as the banner lists them (the page's order is by company id).
@@ -34,7 +39,9 @@ export async function shellNotices(caller: CommandCaller, query: { companyId?: s
           .map(({ site }) => ({ siteId: site.id, name: site.name }))
           .sort((a, b) => a.name.localeCompare(b.name) || a.siteId.localeCompare(b.siteId)),
         eInvoicingCompanies: eInvoicing.filter((row) => row.testMode).map(({ company }) => ({ companyId: company.id, name: company.legalName })),
+        bannerHidden: local.hideTestModeBanner,
       },
+      localMailbox: local.mailbox !== null,
     }
   })
 }

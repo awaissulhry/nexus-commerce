@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { localFileStore, type LocalFileStore } from '../../adapters/local-files/local'
 import { r2FileStore } from '../../adapters/r2/r2'
 import { serverClock, type Clock } from '../../core/time'
-import { loadFactoryEnv } from '../../env'
+import { loadFactoryEnv, type FactoryEnv } from '../../env'
 import type { Gateway } from '../gateway/gateway'
 import { processGateway } from '../gateway/service'
 import type { FileStoreAdapter } from './port'
@@ -52,14 +52,17 @@ export function useFiles(runtime: FilesRuntime | undefined): void {
   configured = runtime
 }
 
+/** The local file store's folder (local and test): FACTORY_LOCAL_FILES_DIR, else one under the system's temporary directory. */
+// B-W2b-F58: also the parent of the local mailbox (platform/local/stack.ts).
+export function localFilesRootOf(env: Pick<FactoryEnv, 'FACTORY_LOCAL_FILES_DIR' | 'FACTORY_QUEUE_PREFIX'>): string {
+  return env.FACTORY_LOCAL_FILES_DIR ?? join(tmpdir(), 'nexus-factory-files', env.FACTORY_QUEUE_PREFIX)
+}
+
 export function processFiles(): FilesRuntime {
   if (configured) return configured
   if (!fromEnv) {
     const env = loadFactoryEnv()
-    const local =
-      env.FACTORY_ENV === 'local' || env.FACTORY_ENV === 'test'
-        ? localFileStore({ root: env.FACTORY_LOCAL_FILES_DIR ?? join(tmpdir(), 'nexus-factory-files', env.FACTORY_QUEUE_PREFIX), environment: env.FACTORY_ENV })
-        : null
+    const local = env.FACTORY_ENV === 'local' || env.FACTORY_ENV === 'test' ? localFileStore({ root: localFilesRootOf(env), environment: env.FACTORY_ENV }) : null
     fromEnv = createFilesRuntime({ gateway: processGateway(), local })
   }
   return fromEnv

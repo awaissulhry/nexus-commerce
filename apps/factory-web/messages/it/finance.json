@@ -1119,7 +1119,7 @@
       "dueValue": "Indicata su ogni fattura",
       "iban": "Conto",
       "ibanValue": "Il conto bancario dell’azienda",
-      "later": "Un elenco di termini (30/60 giorni fine mese, Ri.Ba.) arriverà con un passo successivo.",
+      "later": "L’elenco dei termini (30/60 giorni fine mese, Ri.Ba.) si apre con il permesso di vedere le condizioni di pagamento.",
       "method": "Metodo in fattura",
       "methodValue": "Bonifico bancario (MP05)",
       "title": "Termini di pagamento"

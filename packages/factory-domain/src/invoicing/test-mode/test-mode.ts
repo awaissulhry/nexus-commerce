@@ -6,7 +6,8 @@ import type { SdiMessage } from '../../ports/sdi'
  * CompanyEInvoiceSettings, no row: test mode). SDI has no sandbox, so while a company is in test mode nothing it sends leaves
  * the process: a send through its real intermediary's connection (LIVE or SANDBOX) is answered in-process with the outcome
  * the company chose to practise (`simulateOutcome`), through the same recording path as SDI's own answers. A FAKE connection
- * (local and test only) is a simulation already: its fake intermediary answers, test mode or not.
+ * (local and test only) is a simulation already: its fake intermediary answers, test mode or not — and, while the company is
+ * in test mode, with the answer the company chose (B-W2b-F58: adapters/sdi/fake.ts, so the Owner's local server practises it).
  *
  * A simulated send is marked for good by its provider id (`TEST-MODE:<outcome>:<send id>`): its status, its answer and its
  * archive are always the simulation's, even after the company goes live, and no courtesy copy is e-mailed for it. Pure: the
@@ -40,6 +41,13 @@ export const SIMULATED_OUTCOME_WORDS: Readonly<Record<SimulatedOutcome, string>>
   DELIVERED: 'Delivered: every send is answered as delivered to the customer (RC).',
   REJECTED: 'Rejected: the first send of each invoice is answered as rejected (NS 00423), so the office practises the correction under the same number and date; the corrected resend is delivered.',
   NOT_DELIVERABLE: "Not deliverable: every send is answered as not deliverable (MC): the invoice is issued and waits in the customer's tax drawer. In test mode no courtesy copy is e-mailed.",
+})
+
+/** B-W2b-F58: what the FAKE intermediary answers in test mode, by the company's chosen outcome (adapters/sdi/fake.ts). */
+const FAKE_ANSWER_WORDS: Readonly<Record<SimulatedOutcome, string>> = Object.freeze({
+  DELIVERED: 'each send as delivered (RC)',
+  REJECTED: 'the first send of each invoice as rejected (NS 00423) and the corrected resend as delivered',
+  NOT_DELIVERABLE: 'each send as not deliverable (MC)',
 })
 
 /**
@@ -103,7 +111,7 @@ export function testModeState(facts: TestModeFacts): TestModeState {
       ? 'No single SDI connection is set up yet: sends wait for one.'
       : simulated
         ? `Sends are answered here, never by the intermediary. ${SIMULATED_OUTCOME_WORDS[facts.simulateOutcome]}`
-        : 'This connection is FAKE (local and test only): the fake intermediary answers, and nothing leaves the system.'
+        : `This connection is FAKE (local and test only): the fake intermediary answers ${FAKE_ANSWER_WORDS[facts.simulateOutcome]}, and nothing leaves the system.`
   return { code: 'TEST', banner: 'E-invoice test mode — nothing goes to SDI', words: `Test mode: nothing goes to SDI. ${who}`, simulated }
 }
 

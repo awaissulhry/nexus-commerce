@@ -2,7 +2,7 @@
 
 import { forwardRef, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, Bell, LogOut, Monitor, Moon, Printer, Search, Sun, UserRound, X } from 'lucide-react'
+import { ArrowLeft, Bell, LogOut, Mail, Monitor, Moon, Printer, Search, Sun, UserRound, X } from 'lucide-react'
 import { Banner, Menu, SearchTrigger } from '@nexus/ui/components'
 import { BottomBar } from '@nexus/ui/components/BottomBar/index'
 import { DetailHeader, WorkspaceSubheader, type WorkspaceSubheaderProps } from '@nexus/ui/patterns'
@@ -21,6 +21,7 @@ import { printAddressOf, viewHref, type PrintKind } from '../../print/print-mode
 import { PrintFrameView } from '../../print/view/PrintFrameView'
 import { scopeChip, scopeOf } from '../../scope/scope-model'
 import { CompanySwitcherView, type CompanySwitcherViewModel } from '../../switcher/view/CompanySwitcherView'
+import { MFA_HINT_ID } from '../mfa-hint'
 import { areaTabHref, phoneNav, type LastPages } from '../phone-bar'
 import '../office-shell.css'
 // B-W2b-F41: the rail's and the area navigation's own words (the ds-words catalogue).
@@ -85,6 +86,8 @@ export interface OfficeShellViewModel {
   /** The signed-in tenant's label tag (the palette refuses another factory's labels). */
   tenantTag: string | null
   banners: readonly SystemBanner[]
+  /** B-W2b-F58: the API keeps a local mailbox (the Owner's local test server only): the person menu opens its page. */
+  localMailbox?: boolean
   /** Badge counts by key (`approvals.waiting`); W0 has none. */
   counts?: Readonly<Record<string, number>>
   /** Open the palette at once (design fixtures). */
@@ -321,6 +324,8 @@ export function OfficeShellView({ model, children, onNavigate, onSiteChange, onS
             onNavigate={(event, item) => item.href && follow(event, item.href)}
             items={[
               { id: 'profile', label: t('topbar.profile'), description: model.user.email, icon: <UserRound size={15} aria-hidden />, href: toHref('/me') },
+              // B-W2b-F58: the local test server's mailbox (its FAKE mail, readable), only where the API keeps one.
+              ...(model.localMailbox ? [{ id: 'local-mailbox', label: t('topbar.localMailbox'), description: t('topbar.localMailboxHint'), icon: <Mail size={15} aria-hidden />, href: toHref('/me/mailbox') }] : []),
               { id: 'sep', separator: true },
               { id: 'sign-out', label: t('topbar.signOut'), icon: <LogOut size={15} aria-hidden />, onSelect: onSignOut },
             ]}
@@ -357,7 +362,13 @@ export function OfficeShellView({ model, children, onNavigate, onSiteChange, onS
       ))}
 
       <div ref={body} className="fw-office-body">
-        <AppRail navItems={areaRailItems(nav, count).map((item) => ({ ...item, href: toHref(item.href) }))} pathname={fullPath} LinkComponent={ShellLink} labels={ds.appRail} /* B-W2b-F41 */ />
+        <AppRail
+          /* B-W2b-F58: the two-factor row (mfa-hint.ts) carries the rail's "needs you" dot. */
+          navItems={areaRailItems(nav, count).map((item, at) => ({ ...item, href: toHref(item.href), ...(nav.areas[at]?.id === MFA_HINT_ID ? { indicator: 'action' as const } : {}) }))}
+          pathname={fullPath}
+          LinkComponent={ShellLink}
+          labels={ds.appRail} /* B-W2b-F41 */
+        />
         <div className="fw-office-page">
           {area?.sections?.length ? (
             <div className="fw-office-subheader">

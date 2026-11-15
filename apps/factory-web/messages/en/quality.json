@@ -429,7 +429,7 @@
     "acceptMajor": "Accept up to (major)",
     "acceptMinor": "Accept up to (minor)",
     "acceptHint": "Garments with a defect the sample still accepts.",
-    "tablesLater": "Type the acceptance numbers from your sampling table; the ISO 2859-1 tables are worked out here in a later step.",
+    "tablesLater": "Type the acceptance numbers, or read them from the AQL calculator in Quality › Inspection plans & AQL.",
     "note": "Note",
     "numberWords": "It takes the next number of the company's inspection series when it is created.",
     "create": "Create inspection",

@@ -164,6 +164,16 @@
   padding-left: 66px;
 }
 
+/*
+ * B-W2b-F58: the two-factor row (mfa-hint.ts) is a sentence ("Set up your authenticator app to see your work"): in the opened
+ * rail its words wrap onto two lines inside the row's 46 px instead of being cut at the rail's edge.
+ */
+.fw-office-body .h10-rail:is(:hover, :has(:focus-visible), .pinned) .h10-nav a[href$='/me#authenticator'] .lbl {
+  min-width: 0;
+  white-space: normal;
+  line-height: 1.2;
+}
+
 .fw-office-page {
   height: 100%;
   min-width: 0;

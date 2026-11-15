@@ -7,7 +7,7 @@
     "cancel": "Annulla",
     "open": "Apri",
     "stillLoading": "Ancora in caricamento…",
-    "later": "In arrivo: processi e integrazioni con le loro esecuzioni, e accesso con Microsoft o Google.",
+    "later": "L’accesso con Microsoft o Google non è ancora disponibile.",
     "noAccess": {
       "title": "Non puoi aprirla",
       "body": "Sicurezza e stato del sistema richiede il permesso di vederla. Chiedi a un amministratore della tua società."
@@ -229,8 +229,8 @@
       "secondCopyValue": "Non ancora attiva",
       "secondCopyHint": "Aspetta il sì del titolare all'archivio esterno.",
       "files": "Versioni dei file",
-      "filesValue": "Arriva più avanti",
-      "filesHint": "Una seconda copia di ogni file arriva in una fase successiva.",
+      "filesValue": "Ogni file conserva le versioni precedenti",
+      "filesHint": "Una seconda copia di ogni file presso un altro fornitore non è ancora attiva.",
       "lastDrill": "Ultima prova di ripristino"
     },
     "drill": {

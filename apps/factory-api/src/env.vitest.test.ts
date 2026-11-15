@@ -222,6 +222,22 @@ describe('refusals', () => {
     expect(parseFactoryEnv(LOCAL, undefined).FACTORY_LOCAL_FILES_DIR).toBeUndefined()
   })
 
+  // B-W2b-F58: the switch that hides the TEST MODE bar is the Owner's local test server's only.
+  it('honours FACTORY_HIDE_TEST_MODE_BANNER on local only, and refuses to start with it anywhere else (test included)', () => {
+    expect(parseFactoryEnv({ ...LOCAL, FACTORY_HIDE_TEST_MODE_BANNER: '1' }, undefined).FACTORY_HIDE_TEST_MODE_BANNER).toBe('1')
+    expect(parseFactoryEnv(LOCAL, undefined).FACTORY_HIDE_TEST_MODE_BANNER).toBeUndefined()
+    expect(() => parseFactoryEnv({ ...LOCAL, FACTORY_HIDE_TEST_MODE_BANNER: 'yes' }, undefined)).toThrow(/FACTORY_HIDE_TEST_MODE_BANNER: must be 1/)
+    for (const value of ['1', '0']) {
+      expect(() => parseFactoryEnv({ ...LOCAL, FACTORY_ENV: 'test', FACTORY_HIDE_TEST_MODE_BANNER: value }, undefined)).toThrow(/FACTORY_HIDE_TEST_MODE_BANNER is for the local test server only/)
+      for (const name of ['production', 'staging']) {
+        expect(() => parseFactoryEnv({ ...RAILWAY, FACTORY_ENV: name, FACTORY_HIDE_TEST_MODE_BANNER: value }, 'production')).toThrow(/the TEST MODE bar always shows/)
+      }
+    }
+    // From the file too (the boot reads it there).
+    const file = variablesFile(`FACTORY_ENV=test\nFACTORY_DATABASE_URL=${LOCAL.FACTORY_DATABASE_URL}\nFACTORY_REDIS_URL=${LOCAL.FACTORY_REDIS_URL}\nFACTORY_QUEUE_PREFIX=w9_01\nFACTORY_HIDE_TEST_MODE_BANNER=1`)
+    expect(() => loadFactoryEnv({ file, processEnv: {} })).toThrow(/FACTORY_HIDE_TEST_MODE_BANNER is for the local test server only/)
+  })
+
   it('does not let the file pretend to be Railway', () => {
     const file = variablesFile(
       `FACTORY_ENV=production\nFACTORY_DATABASE_URL=${REMOTE_DATABASE}\nFACTORY_REDIS_URL=${REMOTE_REDIS}\nRAILWAY_ENVIRONMENT=production`,

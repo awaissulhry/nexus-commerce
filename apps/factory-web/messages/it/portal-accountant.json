@@ -172,7 +172,7 @@
     "TOO_MANY_FILES": "Uno zip contiene al massimo 400 file: scegli un periodo più breve o meno file.",
     "TOO_LARGE": "Uno zip contiene al massimo 100 MB: scegli un periodo più breve o meno file.",
     "NOTHING_TO_ZIP": "Non c'è nessun file da mettere nello zip.",
-    "FILE_UNAVAILABLE": "Ora questi file non si possono scaricare. Riprova più tardi o chiedi all'amministrazione.",
+    "FILE_UNAVAILABLE": "Nessuno di questi file è più nell'archivio dei file, quindi lo zip non si può creare. Chiedi all'amministrazione.",
     "generic": "Il download non è riuscito. Riprova.",
     "network": "La fabbrica non risponde. Riprova tra poco."
   },

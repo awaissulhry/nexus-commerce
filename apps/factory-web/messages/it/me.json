@@ -36,6 +36,7 @@
     "on": "Attiva",
     "off": "Non attiva",
     "required": "Il tuo ruolo richiede un'app di autenticazione. Finché non la configuri, puoi aprire solo questa pagina.",
+    "signInAgain": "Questa sessione è iniziata prima che l'app fosse verificata qui, quindi il tuo ruolo qui non apre ancora nulla. Esci e accedi di nuovo con il codice dell'app.",
     "requiredOn": "Il tuo ruolo la richiede, quindi non si può disattivare.",
     "setup": "Configura l'app",
     "scan": "1. Inquadra questo codice con la tua app di autenticazione, per esempio Google Authenticator, Microsoft Authenticator o 1Password. Niente fotocamera? Inserisci nell'app la chiave sotto il codice.",
@@ -95,5 +96,29 @@
     "changed": "Nel frattempo qualcosa è cambiato. Ricarica la pagina e ripeti.",
     "unavailable": "Nexus Factory non risponde. Riprova tra un momento.",
     "signedOut": "La sessione è terminata. Accedi di nuovo."
+  },
+  "mailbox": {
+    "title": "Posta locale",
+    "subtitle": "La posta inviata da questo server di prova locale, dalla più recente. Esiste solo su questo computer: non è arrivata a nessuno.",
+    "refresh": "Aggiorna",
+    "privateWindow": "Un link che fa accedere qualcuno (un invito, un ripristino della password, un codice del portale) apre la sua sessione in questo browser e chiude la tua: aprilo in una finestra privata per restare collegato qui.",
+    "count_one": "{count} messaggio",
+    "count_other": "{count} messaggi",
+    "to": "A",
+    "cc": "Cc",
+    "bcc": "Ccn",
+    "from": "Da",
+    "sentAt": "Inviato",
+    "links": "Link",
+    "text": "Testo",
+    "noSubject": "(senza oggetto)",
+    "empty": {
+      "title": "Ancora nessuna posta",
+      "body": "Invita una persona, chiedi il ripristino di una password o invia un preventivo: la posta compare qui."
+    },
+    "failed": {
+      "title": "Non è stato possibile leggere la posta",
+      "body": "Il server di prova non ha risposto (codice {code}). Aggiorna per riprovare."
+    }
   }
 }

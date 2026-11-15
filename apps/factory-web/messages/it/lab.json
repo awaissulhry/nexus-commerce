@@ -305,7 +305,7 @@
     "needsTitle": "Cosa serve a questo lotto",
     "needsPpe": "Un componente DPI certificato: il certificato o la dichiarazione DPI del fornitore per il lotto, valido oggi.",
     "needsNone": "Per questo materiale non serve alcun documento prima del rilascio.",
-    "needsLater": "I profili dei materiali con i documenti richiesti arrivano in una fase successiva."
+    "needsLater": "Cosa serve a un materiale (prove e documenti) si imposta nella sua scheda Conformità in Prodotti › Materiali e accessori."
   },
   "document": {
     "add": "Aggiungi documento…",

@@ -485,7 +485,7 @@
     "title": "Who gets it",
     "failed": "The schedule could not be read",
     "none": "Not scheduled",
-    "noneBody": "Sending this report on a schedule comes later. Print it or export it as CSV meanwhile.",
+    "noneBody": "This report cannot be e-mailed on a schedule here. Print it or export it as CSV.",
     "manage": "Change on Production reports",
     "nobody": "Nobody gets it by e-mail yet",
     "nobodyBody": "Have it e-mailed every morning from Production reports.",
@@ -534,7 +534,7 @@
     "people": "Small groups",
     "peopleHidden": "Figures about a group of fewer than 5 people are hidden.",
     "noPeople": "No figure about people: counts per order, line or document only.",
-    "kpiLater": "The KPI library, where each number’s definition and target are kept, comes later."
+    "kpiLater": "Each number’s definition and target are kept in Home › KPI library."
   },
   "print": {
     "titleLoading": "Report",
@@ -572,7 +572,7 @@
     "cutOff": "Days run from midnight to midnight at the site (Europe/Rome); weeks start on Monday.",
     "setBy": "Set by the standard report pack (targets become editable with the KPI library).",
     "openReport": "Open the report",
-    "kpiLater": "The KPI library comes later.",
+    "kpiLater": "Each number’s definition is in Home › KPI library.",
     "noData": "No data yet",
     "mixed": "Amounts in several currencies are not added up.",
     "unavailable": "Not available now"

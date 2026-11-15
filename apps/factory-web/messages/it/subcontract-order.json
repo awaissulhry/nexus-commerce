@@ -214,7 +214,7 @@
       "body": "Nessuna riga di kit: il buyer la prevede dai materiali dell’ordine, oppure partono solo i capi.",
       "bodyEdit": "Prevedilo dai materiali dell’ordine di produzione, o aggiungi le righe una a una. La pelle gestita a pelli parte tagliata, in pacchi."
     },
-    "floorLater": "Qui l’ufficio spedisce il kit con il DDT; l’invio dal tablet di magazzino (Kit terzisti) arriva con un passo successivo.",
+    "floorLater": "Qui l’ufficio spedisce il kit con il DDT; il magazzino può spedirlo anche dal tablet (Kit terzisti).",
     "ddts": {
       "title": "DDT del kit (conto lavorazione)",
       "none": "Nessun DDT ancora emesso per questo ordine.",
@@ -316,7 +316,7 @@
     },
     "pdfLoading": "Lettura del PDF…",
     "printAgain": "Ristampa",
-    "later": "Le condizioni scritte del terzista e le sue fatture arrivano con passi successivi."
+    "later": "Le condizioni scritte del terzista sono nella scheda Lavorazioni e quantità; le sue fatture sono in Amministrazione › Fatture fornitori."
   },
   "cancel": {
     "title": "Annulla {number}",

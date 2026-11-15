@@ -305,7 +305,7 @@
     "needsTitle": "What this lot needs",
     "needsPpe": "A certified PPE component: the supplier's PPE certificate or declaration for the lot, valid today.",
     "needsNone": "No document is required before release for this material.",
-    "needsLater": "Material profiles with their required documents come with a later step."
+    "needsLater": "What a material needs (its tests and documents) is set on its Compliance tab in Products › Materials & trims."
   },
   "document": {
     "add": "Add document…",
