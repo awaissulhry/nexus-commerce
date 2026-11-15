@@ -1,0 +1,44 @@
+{
+  "title": "Export papers of shipment {number}",
+  "loading": "Opening the papers…",
+  "offline": "No connection: try again when the network is back.",
+  "retry": "Try again",
+  "papers": "The papers for the export declaration",
+  "papersHint": "Download each paper for the declaration: the commercial invoice, the packing list, the papers of origin and the declarations of conformity.",
+  "noPapers": "No paper was sent with this link: ask the sender.",
+  "shipment": "Shipment",
+  "destination": "Goes to",
+  "state": "Declaration",
+  "until": "This page opens until",
+  "download": "Download",
+  "downloadOne": "Download {name}",
+  "status": {
+    "PACK_SENT": "Waiting to be filed",
+    "FILED": "Filed",
+    "EXITED": "Goods left the EU"
+  },
+  "mrn": {
+    "title": "Type the MRN back",
+    "hint": "Once you have filed the export declaration, type its MRN here: it is sent to the sender once.",
+    "label": "MRN (Movement Reference Number)",
+    "format": "18 characters: two digits of the year, the country (two letters), then 14 letters or digits.",
+    "send": "Send the MRN"
+  },
+  "filed": {
+    "title": "MRN received",
+    "body": "The sender has the declaration's MRN {mrn}. Thank you."
+  },
+  "held": {
+    "MRN_FORMAT": "An MRN has 18 characters: two digits of the year, the country (two letters), then 14 letters or digits.",
+    "FILED": "The declaration has its MRN already.",
+    "empty": "Type the MRN first.",
+    "offline": "No connection: try again when the network is back.",
+    "busy": "Wait: the last press is still going.",
+    "gone": "The sender withdrew this paper."
+  },
+  "problem": {
+    "read": "The papers could not be opened.",
+    "gone": "This link no longer opens: the sender withdrew the declaration.",
+    "failed": "That did not work: try again."
+  }
+}

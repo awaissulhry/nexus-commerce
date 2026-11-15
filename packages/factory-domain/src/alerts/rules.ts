@@ -314,6 +314,11 @@ function whenWords(kind: RuleKind, threshold: Record<string, number | boolean>, 
     // B-W2b-385 (NT1:04)
     case 'RETURN_ARRIVED_LATE':
       return it ? 'Quando la merce di un reso arriva dopo la sua scadenza' : 'When the goods of a return arrive after their deadline'
+    // B-W2b-409 (LOG-089)
+    case 'EXIT_PROOF_MISSING':
+      return it
+        ? "Quando la prova dell'uscita di un'esportazione manca ancora dopo i giorni della sua dichiarazione"
+        : "When an export's proof of exit is still missing after its declaration's days"
   }
 }
 
@@ -376,6 +381,8 @@ export const ALERT_TEMPLATES = {
   'alerts.INVOICE_DEADLINE.LATE': { en: 'The goods of DDT {label} were due to be invoiced by {dueDate}: {days} days late.', it: 'La merce del DDT {label} andava fatturata entro il {dueDate}: {days} giorni di ritardo.' },
   // B-W2b-385 (NT1:04)
   'alerts.RETURN_ARRIVED_LATE': { en: 'Return {label} arrived on {receivedDate}, {days} days after its deadline ({dueDate}).', it: 'Il reso {label} è arrivato il {receivedDate}, {days} giorni dopo la scadenza ({dueDate}).' },
+  // B-W2b-409 (LOG-089): {label} the shipment's number, {shippedDate} the day it left, {days} the declaration's days.
+  'alerts.EXIT_PROOF_MISSING': { en: 'Shipment {label} left on {shippedDate}: its proof of exit is still missing after {days} days (the export stays VAT-free only with it).', it: "La spedizione {label} è partita il {shippedDate}: la prova dell'uscita manca ancora dopo {days} giorni (senza, l'esportazione non resta non imponibile)." },
 } as const satisfies Record<string, Words>
 export type AlertTemplateKey = keyof typeof ALERT_TEMPLATES
 
@@ -428,6 +435,9 @@ export function alertPhrase(kind: string, label: string, facts: unknown): AlertP
     // B-W2b-385 (NT1:04)
     case 'RETURN_ARRIVED_LATE':
       return { key: 'alerts.RETURN_ARRIVED_LATE', params: { label, receivedDate: text('receivedDate'), dueDate: text('dueDate'), days: num('daysLate') } }
+    // B-W2b-409 (LOG-089)
+    case 'EXIT_PROOF_MISSING':
+      return { key: 'alerts.EXIT_PROOF_MISSING', params: { label, shippedDate: text('shippedDate'), days: num('days') } }
     case 'WORKING_TIME_LIMIT':
       return { key: text('limit') === 'OVERTIME_YEARLY_CAP' || text('limit') === 'DAILY_REST' || text('limit') === 'WEEKLY_AVERAGE' ? `alerts.WORKING_TIME_LIMIT.${text('limit') as 'DAILY_REST'}` : 'alerts.WORKING_TIME_LIMIT', params: { label } }
     default:

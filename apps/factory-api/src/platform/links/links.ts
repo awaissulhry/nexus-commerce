@@ -65,8 +65,9 @@ const SELECT = {
 type LinkRow = Prisma.OneOffLinkGetPayload<{ select: typeof SELECT }>
 /**
  * A link of a purpose these routes serve (factory-domain's LINK_PURPOSES). The schema holds BROKER_PACK and RETURN_LABEL since
- * B-W2b-372 (wave 51/57); B-W2b-398 brought RETURN_LABEL to factory-domain. Until B-W2b-409 brings BROKER_PACK, the generic
- * routes neither list nor read back such a link (fail closed), as the link authenticator and renewal already refuse to open one.
+ * B-W2b-372 (wave 51/57); B-W2b-398 brought RETURN_LABEL and B-W2b-409 BROKER_PACK to factory-domain, so every purpose of the
+ * schema is served now. A purpose the schema gains before factory-domain does stays unlisted and unread here (fail closed), as
+ * the link authenticator and renewal refuse to open one.
  */
 type ServedLinkRow = LinkRow & { readonly purpose: LinkPurpose }
 const served = (row: LinkRow): row is ServedLinkRow => isLinkPurpose(row.purpose)

@@ -1767,6 +1767,7 @@
     "shipping_holds_release": "Sbloccare le spedizioni bloccate per denaro o dal sistema",
     "shipping_proforma_issue": "Emettere fatture proforma (dogana, campioni, pagamento anticipato)",
     "shipping_pickups_book": "Prenotare i ritiri del corriere, confermarli, segnarli falliti o annullarli",
+    "shipping_customs_manage": "Gestire le pratiche di esportazione: fattura commerciale, CN 22 / CN 23, documenti per lo spedizioniere, MRN e prova dell'uscita",
     "parties_view": "Vedere clienti e fornitori",
     "parties_manage": "Aggiungere e modificare clienti e fornitori",
     "parties_block": "Bloccare e sbloccare un cliente o fornitore",
