@@ -1,0 +1,33 @@
+/* B-W2b-425 — the Ri.Ba. file read back (SCR-511): one record per row, the 120 characters in mono, scrolling inside the card. */
+.fw-rbf-records {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  max-height: 480px;
+  overflow: auto;
+  min-width: 0;
+}
+
+.fw-rbf-record {
+  display: grid;
+  grid-template-columns: minmax(96px, max-content) minmax(0, 1fr);
+  gap: var(--nds-space-8);
+  align-items: baseline;
+  min-width: 0;
+}
+
+.fw-rbf-type {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
+}
+
+.fw-rbf-line {
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-xs);
+  white-space: pre;
+  overflow-x: auto;
+  min-width: 0;
+}

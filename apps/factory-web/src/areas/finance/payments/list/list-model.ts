@@ -5,11 +5,18 @@ import type { OpenRefunds, Refund, ToRefund } from '../refunds/api'
 import type { RefundAbilities, RefundDraft, RefundMove, RefundRows, RefundTarget } from '../refunds/model'
 import type { RefundDialogModel } from '../refunds/view/RefundDialogs'
 import type { RefundsListModel } from '../refunds/view/RefundsList'
+// B-W2b-425: what is not placed, what came back unpaid by Ri.Ba., the Ri.Ba. batch.
+import type { RibaUnpaidListActions, RibaUnpaidListModel } from '../riba/unpaid/view/RibaUnpaidList'
+import type { NotPlacedListActions, NotPlacedListModel } from '../write-off/view/NotPlacedList'
 
 /** SCR-082 — the payments page's view model (PaymentsListView draws it and fetches nothing). */
 
-/** B-W2a-80: `refunds` (design "Rows ▾: … Refunds") shows the refunds and what is to refund in place of the payments. */
-export const PAYMENT_ROWS_VIEWS = ['all', 'received', 'voided', 'refunds'] as const
+/**
+ * B-W2a-80: `refunds` (design "Rows ▾: … Refunds") shows the refunds and what is to refund in place of the payments.
+ * B-W2b-425: `notPlaced` (design "Rows ▾: Not placed"; the tile "Not placed on an invoice") the unapplied queue, `ribaUnpaid`
+ * (the tile "Ri.Ba. unpaid") the instalments that came back.
+ */
+export const PAYMENT_ROWS_VIEWS = ['all', 'received', 'voided', 'refunds', 'notPlaced', 'ribaUnpaid'] as const
 export type PaymentRowsView = (typeof PAYMENT_ROWS_VIEWS)[number]
 
 /** The customer a payment is recorded for, in the company it is recorded in. */
@@ -32,6 +39,8 @@ export interface RecordedPayment {
   payment: Payment
   /** A deposit paid in full with its TD02 issued now (or not: why). */
   depositInvoice: { required: boolean; number: string | null; filesPending: boolean } | null
+  /** B-W2b-425: the order whose deposit it paid in full (its production unlocked). */
+  depositOrder?: string | null
 }
 
 export interface PaymentsListModel {
@@ -44,8 +53,8 @@ export interface PaymentsListModel {
   companyId: string | null
   rows: PaymentRowsView
   list: { items: PaymentRow[] | null; more: boolean; problem: string | null }
-  /** Money in this month and what is not placed yet, from the latest 200 payments; null while unread or failed. */
-  tiles: { monthCount: number; monthAmount: number | null; notPlacedCount: number; notPlacedAmount: number | null; capped: boolean } | null
+  /** Money in this month, from the latest 200 payments; null while unread or failed. */
+  tiles: { monthCount: number; monthAmount: number | null } | null
   asOf: string | null
   live: LiveState
   updates: number
@@ -57,6 +66,14 @@ export interface PaymentsListModel {
   refunds?: RefundsListModel | null
   refundDialog?: RefundDialogModel | null
   refundMove?: { refund: Refund; move: RefundMove; busy: boolean; problem: Phrase | null; start?: { reference?: string; reason?: string } } | null
+  /**
+   * B-W2b-425: the tile and rows "Not placed on an invoice" (the unapplied queue) and "Ri.Ba. unpaid"; why the band's ⋯ Ri.Ba.
+   * batch waits (a key a `finance`-scoped translator reads; null: it opens); whether the person sees work orders (a paid deposit's "Open its work orders").
+   */
+  notPlaced?: NotPlacedListModel & { tile: { count: number; amount: number | null; others: number } | null }
+  ribaUnpaid?: RibaUnpaidListModel & { tile: { count: number; open: number | null; currency: string; others: number } | null }
+  ribaHeld?: string | null
+  workOrders?: boolean
   /** Step 1's customer search. */
   customers: { q: string; items: CustomerRow[] | null; problem: string | null }
   /** Step 2's open items of the chosen customer, oldest first. */
@@ -109,4 +126,8 @@ export interface PaymentsListActions {
   onDoMove?: (input: { paidOn: string; reference: string; reason: string }) => void
   onCloseMove?: () => void
   onExportRefunds?: (ids: string[]) => void
+  /** B-W2b-425: the band's ⋯ Ri.Ba. batch; the two rows views. */
+  onRiba?: () => void
+  notPlaced?: NotPlacedListActions
+  ribaUnpaid?: RibaUnpaidListActions
 }

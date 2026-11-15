@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { FileX, MoreHorizontal, ShieldOff } from 'lucide-react'
 import { Banner, Card, EmptyState, Field, KeyValue, Menu, SummaryTable, Tabs, type MenuItemDef, type TabItem } from '@nexus/ui/components'
@@ -29,15 +29,21 @@ export type { PaymentRecordActions, PaymentRecordModel } from '../record-model'
  * W1: no bank statement is linked yet). An allocation is taken back with a reason (the ledger never changes). Money by
  * grain. A payment has no thread of its own yet (the API's thread records do not list it): its history is this ledger.
  */
-export function PaymentRecordView({ model, actions }: { model: PaymentRecordModel; actions?: PaymentRecordActions }) {
+/** B-W2b-425: the write-off within tolerance (Allocation) and the bank line's confidence and reasons (Bank line), each its own container or a design case's view. */
+export interface PaymentRecordDepth {
+  writeOff?: ReactNode
+  bank?: ReactNode
+}
+
+export function PaymentRecordView({ model, actions, depth }: { model: PaymentRecordModel; actions?: PaymentRecordActions; depth?: PaymentRecordDepth }) {
   return (
     <WithMessages namespaces={['finance', 'finance-daily', 'lists']}>
-      <PaymentRecord model={model} actions={actions} />
+      <PaymentRecord model={model} actions={actions} depth={depth} />
     </WithMessages>
   )
 }
 
-function PaymentRecord({ model, actions }: { model: PaymentRecordModel; actions?: PaymentRecordActions }) {
+function PaymentRecord({ model, actions, depth }: { model: PaymentRecordModel; actions?: PaymentRecordActions; depth?: PaymentRecordDepth }) {
   const t = useT('finance')
   const listHref = `${model.prefix}/finance/payments`
   const loaded = model.payment
@@ -76,10 +82,10 @@ function PaymentRecord({ model, actions }: { model: PaymentRecordModel; actions?
       </div>
     )
   }
-  return <ReadyPayment payment={loaded.value} model={model} actions={actions} />
+  return <ReadyPayment payment={loaded.value} model={model} actions={actions} depth={depth} />
 }
 
-function ReadyPayment({ payment, model, actions }: { payment: Payment; model: PaymentRecordModel; actions?: PaymentRecordActions }) {
+function ReadyPayment({ payment, model, actions, depth }: { payment: Payment; model: PaymentRecordModel; actions?: PaymentRecordActions; depth?: PaymentRecordDepth }) {
   const t = useT('finance')
   const d = useT('finance-daily')
   const locale = useLocale()
@@ -235,6 +241,8 @@ function ReadyPayment({ payment, model, actions }: { payment: Payment; model: Pa
       )}
 
       {model.tab === 'allocation' && model.refunds && <RefundsCard payment={payment} model={model} actions={actions} />}
+      {/* B-W2b-425: a small difference written off within the tolerance (rec:Payment allocation match#1). */}
+      {model.tab === 'allocation' && depth?.writeOff}
 
       {model.tab === 'bank' && (
         <Card padded className="fw-fin-card">
@@ -245,12 +253,15 @@ function ReadyPayment({ payment, model, actions }: { payment: Payment; model: Pa
             columns={2}
             items={[
               { label: t('payment.recordedBy'), value: t('payment.byHand', { name: nameOf(payment.createdById), date: formatDateTime(payment.createdAt, { locale }) }) },
-              { label: t('payment.bankLine'), value: t('payment.noBankLine') },
+              // B-W2b-425: the bank line has its own card below (depth.bank); without it, W1's words.
+              ...(depth?.bank ? [] : [{ label: t('payment.bankLine'), value: t('payment.noBankLine') }]),
               { label: t('recordPay.note'), value: payment.internalNote ?? '—' },
             ]}
           />
         </Card>
       )}
+      {/* B-W2b-425: the bank line, its confidence and reasons (rec:Payment bank#1). */}
+      {model.tab === 'bank' && depth?.bank}
 
       <PaymentDialogs key={model.dialog ? `${model.dialog.kind}-${model.dialog.kind === 'reverse' ? model.dialog.allocationId : ''}` : 'none'} payment={payment} model={model} actions={actions} />
     </div>

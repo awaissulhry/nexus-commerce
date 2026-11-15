@@ -1,0 +1,85 @@
+/*
+ * The custom-fields section of a record (B-W2b-431, SCR-520) LAYOUT: the head with Edit, the fields by section (read as
+ * label and value pairs, edited as a grid of controls), the money amount beside its currency, and the link picker's
+ * results. Every control is the design system's; semantic tokens only; it is as wide as the panels it sits above.
+ */
+.fw-cf-card {
+  min-width: 0;
+  margin-bottom: var(--nds-space-16);
+}
+
+.fw-cf,
+.fw-cf-section,
+.fw-cf-link,
+.fw-cf-picker,
+.fw-cf-results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-cf-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-cf-title,
+.fw-cf-section-title {
+  margin: 0;
+  color: var(--nds-text-strong);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-cf-title {
+  font-size: var(--nds-font-size-md);
+}
+
+.fw-cf-section-title {
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-cf-muted {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-cf-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--nds-space-12) var(--nds-space-16);
+  align-items: start;
+  min-width: 0;
+}
+
+.fw-cf-label,
+.fw-cf-value {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-cf-money {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 72px;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-cf-picker,
+.fw-cf-results {
+  gap: var(--nds-space-6);
+}
+
+.fw-cf-results {
+  max-height: 240px;
+  overflow-y: auto;
+}

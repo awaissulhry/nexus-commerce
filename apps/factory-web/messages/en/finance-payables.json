@@ -25,7 +25,6 @@
     "lastPickupByPerson": "Last SDI pickup {time} (asked by a person)",
     "pickUp": "Pick up now",
     "addForeign": "Add foreign invoice",
-    "proposal": "Payment proposal",
     "more": "More actions",
     "selfInvoices": "Self-invoices TD17/18/19"
   },
@@ -39,7 +38,6 @@
     "noSdiAccount": "The company has no SDI account for receiving invoices: set it up in Admin › Connections & API.",
     "noIntermediary": "No SDI intermediary is chosen yet: nothing can be picked up.",
     "noneApprovable": "None of the chosen invoices waits for approval.",
-    "proposalLater": "Payment proposals come later (W2b): mark each invoice paid on its Payment tab for now.",
     "lastLine": "An invoice keeps at least one line.",
     "edit": "Only a typed invoice that is received or disputed is corrected.",
     "editSdi": "It came through SDI: what it says never changes (the supplier's credit note corrects it).",
@@ -166,7 +164,6 @@
     "sendToBuyer": "Send to buyer",
     "someUnmapped_one": "{count} line has no order yet: map it on Lines.",
     "someUnmapped_other": "{count} lines have no order yet: map them on Lines.",
-    "areaLater": "The leather area check (invoiced square feet against those measured at receipt) and the area claim come later (W2b).",
     "empty": {
       "title": "No PO linked",
       "body": "Choose the PO on Lines, or mark it as an invoice without PO.",
@@ -351,8 +348,7 @@
     "disputed": "Disputed with the supplier on {date}",
     "voided": "Voided on {date}",
     "rulesTitle": "Separation of duties",
-    "rules": "Whoever typed an invoice does not approve it; an invoice delivered by SDI may be approved by anyone who approves. Approving does not pay it: payment is recorded once the transfer left the bank.",
-    "dualLater": "A second approval above a limit comes later (W2b)."
+    "rules": "Whoever typed an invoice does not approve it; an invoice delivered by SDI may be approved by anyone who approves. Approving does not pay it: payment is recorded once the transfer left the bank."
   },
   "payment": {
     "title": "Payment",
@@ -361,8 +357,6 @@
     "notPaid": "Not paid yet",
     "ref": "Bank reference",
     "amount": "Amount",
-    "batch": "Payment batch",
-    "batchLater": "Not in a payment batch (batches come later, W2b)",
     "markPaid": "Mark paid",
     "terms": "Payment terms",
     "noTerms": "The invoice names no payment terms.",
@@ -373,8 +367,7 @@
       "iban": "IBAN"
     },
     "method": "Method {code}",
-    "condition": "Condition {code} as the invoice says.",
-    "ibanLater": "Whether the IBAN can be used is checked later (W2b): compare it with the supplier's bank details before paying."
+    "condition": "Condition {code} as the invoice says."
   },
   "dialog": {
     "note": "Note (optional)",
@@ -475,7 +468,8 @@
     "lineRemoved": "Line removed.",
     "lineSaved": "Line saved.",
     "lineAdded": "Line added.",
-    "matched": "Matched again."
+    "matched": "Matched again.",
+    "firstApproved": "First approval given. The total is above the amount that needs two people: a second person approves it now."
   },
   "refusal": {
     "NOT_RECEIVED": "Only a received invoice is approved.",
@@ -504,7 +498,10 @@
     "NO_INTERMEDIARY": "No SDI intermediary is chosen yet: nothing can be picked up.",
     "INTERMEDIARY_UNAVAILABLE": "The SDI intermediary did not answer: try again in a few minutes.",
     "NO_SDI_ACCOUNT": "The company has no active SDI account for receiving invoices.",
-    "other": "The change was refused as it stands."
+    "other": "The change was refused as it stands.",
+    "SECOND_APPROVER": "You gave the first approval: someone else gives the second.",
+    "SECOND_APPROVAL": "Approved once: the total is above the amount that needs two people, so a second person approves it now.",
+    "OWN_ACCEPTANCE": "You accepted one of its differences, so someone else approves it."
   },
   "problem": {
     "read": {
