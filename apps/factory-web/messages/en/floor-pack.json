@@ -83,7 +83,8 @@
       "officeIssues": "The office issues the DDT: it shows here as soon as it is issued.",
       "pdfMissing": "The DDT's PDF is not stored yet: the office prints it again.",
       "noPrinter": "No document printer at this station: the office prints the DDT.",
-      "nothing": "Nothing to print yet: the office issues the DDT and buys the labels."
+      "nothing": "Nothing to print yet: the office issues the DDT and buys the labels.",
+      "nothingTest": "Nothing to print yet: the office issues the DDT and makes the test labels."
     }
   },
   "labels": {
@@ -92,12 +93,15 @@
     "tracking": "Tracking {number}",
     "noLabel": "No label yet",
     "bought": "Label bought",
+    "test": "Test label — not charged",
     "waiting": "Waiting",
     "ready_one": "{count} label ready to print",
     "ready_other": "{count} labels ready to print",
+    "testNote": "Test mode: the labels say TEST, go to no carrier and are not charged.",
     "held": {
       "notNeeded": "No carrier label needed.",
       "officeBuys": "The office buys the labels: they show here once bought.",
+      "officeTest": "The office makes the test labels: they show here once made. They are not charged.",
       "noPrinter": "No label printer at this station: the office prints the labels as PDF.",
       "noRight": "Your role does not print labels here."
     },
@@ -110,10 +114,12 @@
   "jobs": {
     "title": "Print jobs",
     "label": "Label · carton {seq}",
+    "labelTest": "Test label · carton {seq}",
     "DDT": "DDT",
     "PACKING_LIST": "Packing list",
     "retry": "Print the {what} again",
-    "retryLabel": "Print the label of carton {seq} again"
+    "retryLabel": "Print the label of carton {seq} again",
+    "retryLabelTest": "Print the test label of carton {seq} again"
   },
   "job": {
     "QUEUED": "Queued",

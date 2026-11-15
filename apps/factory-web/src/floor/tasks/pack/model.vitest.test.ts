@@ -1,8 +1,14 @@
+import { createElement, type ComponentType } from 'react'
+import { renderToString } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { formatScanId, tenantTag } from '@nexus/factory-domain/numbering/scan-id'
+import { messagesFor } from '../../../lib/i18n/messages'
+import { I18nProvider } from '../../../lib/i18n/provider'
+import { FLOOR_NAMESPACES } from '../routes'
+import { designScreen } from './fixtures'
 import { readScan } from '../../scan/scan-model'
 import type { PackLine, PackParcel, Packing, PackingRow } from './api'
-import { batchesOf, carrierOf, documentsState, headOf, readyRows, scanTarget, unpackHeld, weightText } from './model'
+import { batchesOf, carrierOf, documentsState, headOf, labelRows, labelsTest, readyRows, scanTarget, testJob, unpackHeld, weightText } from './model'
 
 /** The packing bench's rules (SCR-098): figures worked out by hand. Scan into the carton's own: carton/carton.vitest.test.ts. */
 
@@ -60,9 +66,26 @@ describe('after packing: what the station prints, and why a part waits', () => {
     settings: { cutOffTime: null, labelPrinterId: 'lp', documentPrinterId: 'dp' },
     ...extra,
   })
-  const labels = (toLabel: number, printer: string | null = 'lp') => ({ labelPrinterId: printer, toLabel, parcels: [{ parcelId: 'p1', seq: 1, trackingNumber: toLabel > 0 ? null : 'T1', labelledAt: null, print: null }] })
+  // B-W2b-F50: the labels read's testMode / test (was without them).
+  const labels = (toLabel: number, printer: string | null = 'lp', testMode = false) => ({ labelPrinterId: printer, toLabel, testMode, parcels: [{ parcelId: 'p1', seq: 1, trackingNumber: toLabel > 0 ? null : testMode ? 'TEST-1' : 'T1', labelledAt: null, test: testMode && toLabel === 0, print: null }] })
   it('everything ready prints with one tap', () => {
-    expect(documentsState(packing(), labels(0), { printLabels: true })).toMatchObject({ labels: { held: null, labelled: 1, total: 1 }, documents: { held: null, ddtNumber: 'DDT-1' }, printable: true })
+    expect(documentsState(packing(), labels(0), { printLabels: true })).toMatchObject({ labels: { held: null, labelled: 1, total: 1, test: false }, documents: { held: null, ddtNumber: 'DDT-1' }, printable: true })
+  })
+  // B-W2b-F50: rule "TEST labels say TEST" (B-W2b-390, LOG-035).
+  it('TEST labels: a TEST label, or a site in test mode with no label yet; never for our own van; each row and print job its own', () => {
+    expect(documentsState(packing(), labels(0, 'lp', true), { printLabels: true }).labels).toMatchObject({ held: null, test: true })
+    expect(documentsState(packing({ documents: { ddt: null, packingList: null } }), labels(1, 'lp', true), { printLabels: true }).labels).toMatchObject({ held: 'officeBuys', test: true })
+    expect(documentsState(packing({ transportBy: 'SENDER' }), labels(0, 'lp', true), { printLabels: true }).labels.test).toBe(false)
+    expect(documentsState(packing(), null, { printLabels: true }).labels.test).toBe(false)
+    // A live label bought before the site went back to test mode stays live; a TEST label among them says the labels are TEST.
+    const mixed = { testMode: true, parcels: [{ seq: 1, trackingNumber: 'BRT-1', test: false }, { seq: 2, trackingNumber: 'TEST-2', test: true }, { seq: 3, trackingNumber: null, test: false }] }
+    expect(labelsTest({ testMode: true, parcels: [{ ...mixed.parcels[0]! }] })).toBe(false)
+    expect(labelsTest(mixed)).toBe(true)
+    const rows = labelRows({ parcels: [] }, mixed)
+    expect(rows).toEqual([{ seq: 1, trackingNumber: 'BRT-1', test: false }, { seq: 2, trackingNumber: 'TEST-2', test: true }, { seq: 3, trackingNumber: null, test: false }])
+    expect([testJob({ what: 'LABEL', seq: 2 }, rows), testJob({ what: 'LABEL', seq: 1 }, rows), testJob({ what: 'DDT', seq: null }, rows)]).toEqual([true, false, false])
+    // No labels read: the shipment's own parcels, TEST not known for a labelled one (no word either way).
+    expect(labelRows({ parcels: [parcel(2, { trackingNumber: 'TEST-2' }), parcel(1)] }, null)).toEqual([{ seq: 1, trackingNumber: null, test: false }, { seq: 2, trackingNumber: 'TEST-2', test: null }])
   })
   it('the office issues the DDT and buys the labels; a station without its printers; a role without label printing', () => {
     expect(documentsState(packing({ documents: { ddt: null, packingList: null } }), labels(1), { printLabels: true })).toMatchObject({ labels: { held: 'officeBuys' }, documents: { held: 'officeIssues' }, printable: false })
@@ -91,5 +114,35 @@ describe('the list and the shipment', () => {
     expect(headOf(packing, 3)).toEqual({ id: 's', number: 'SH-1', status: 'DRAFT', carrier: 'POSTE ITALIANE', transportBy: 'CARRIER', cartons: 3, batches: ['BT-41', 'BT-42'] })
     expect(headOf(packing).cartons).toBe(1)
     expect([carrierOf(null), batchesOf([])]).toEqual([null, []])
+  })
+})
+
+// B-W2b-F50: rule "TEST labels say TEST" on SCR-098 (the labels step, print, reprint, waiting for the office, Packed).
+describe('a TEST label says it is a test and not charged, never bought', () => {
+  const html = (id: string, locale: 'it' | 'en') => {
+    const View = designScreen.view as ComponentType<{ model: unknown }>
+    const model = designScreen.cases.find((item) => item.id === id)!.model
+    return renderToString(createElement(I18nProvider, { locale, messages: messagesFor(locale, FLOOR_NAMESPACES) }, createElement(View, { model })))
+  }
+  it('the labels step and the print jobs', () => {
+    const labelsIt = html('test-labels', 'it')
+    expect(labelsIt).toContain('Etichetta di prova — non addebitata')
+    expect(labelsIt).toContain('le etichette dicono TEST')
+    expect(labelsIt).not.toContain('Etichetta comprata')
+    const printing = html('test-printing', 'en')
+    expect(printing).toContain('Test label · carton 1')
+    expect(printing).toContain('Print the test label of carton 2 again')
+    expect(printing).not.toContain('Label bought')
+    expect(html('test-waiting-office', 'it')).toContain('Le etichette di prova le fa l&#x27;ufficio')
+    expect(html('test-waiting-office', 'it')).not.toContain('compra')
+    // A live label keeps its words.
+    expect(html('documents-ready', 'it')).toContain('Etichetta comprata')
+    expect(html('documents-ready', 'it')).not.toContain('di prova')
+  })
+  it('Packed', () => {
+    expect(html('done-test', 'en')).toContain('TEST labels: they go to no carrier and are not charged')
+    expect(html('done-test-office', 'it')).toContain('le etichette di prova le fa l&#x27;ufficio')
+    expect(html('done-test-office', 'it')).not.toContain('compra')
+    expect(html('done', 'en')).not.toContain('TEST labels')
   })
 })

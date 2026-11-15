@@ -308,6 +308,8 @@
     "issueDdt": "Emetti DDT {number}",
     "buyLabels_one": "Compra {count} etichetta",
     "buyLabels_other": "Compra {count} etichette",
+    "buyLabelsTest_one": "Fai {count} etichetta di prova",
+    "buyLabelsTest_other": "Fai {count} etichette di prova",
     "handOver": "Segna come consegnata al vettore"
   },
   "action": {
@@ -593,6 +595,7 @@
     "cutOffToday": "{time}",
     "cutOffPassed": "{time} passato: parte il giorno lavorativo dopo",
     "account": "Le etichette si comprano con l'account Sendcloud dell'azienda; il corriere lo addebita.",
+    "accountTest": "Modalità di prova: le etichette le fa il corriere di prova, dicono TEST; nulla viene comprato né addebitato.",
     "noLabel": {
       "SENDER": "Nostro furgone: la merce parte con il DDT, senza etichetta del corriere.",
       "RECIPIENT": "Ritira il cliente: la merce parte con il DDT, senza etichetta del corriere."
@@ -611,6 +614,9 @@
       "file": "Etichetta"
     },
     "boughtAt": "Comprata il {when}",
+    "test": "TEST",
+    "testAt": "Fatta il {when}",
+    "testNote": "Etichette TEST: fatte dal corriere di prova, non vanno a nessun corriere e non sono addebitate.",
     "noLabelYet": "Ancora senza etichetta",
     "notPrinted": "Non stampata",
     "pdf": "PDF",
@@ -701,16 +707,22 @@
   },
   "buy": {
     "title": "Compra etichette",
+    "titleTest": "Fai etichette di prova",
     "go_one": "Compra {count} etichetta",
     "go_other": "Compra {count} etichette",
+    "goTest_one": "Fai {count} etichetta di prova",
+    "goTest_other": "Fai {count} etichette di prova",
     "outside": "Questo esce dall'azienda: il corriere viene prenotato e l'account Sendcloud dell'azienda addebitato.",
     "void": "Un'etichetta si annulla entro i tempi del corriere per riavere il costo.",
     "test": "Con un account di prova le etichette riportano TEST e nulla viene comprato.",
     "busy": "Richiesta al corriere…",
     "done_one": "{count} etichetta comprata.",
     "done_other": "{count} etichette comprate.",
+    "doneTest_one": "{count} etichetta di prova fatta: dice TEST, nulla è stato comprato o addebitato.",
+    "doneTest_other": "{count} etichette di prova fatte: dicono TEST, nulla è stato comprato o addebitato.",
     "partial": "Alcuni colli non hanno ancora l'etichetta.",
     "parcelOk": "Collo {seq}: comprata",
+    "parcelOkTest": "Collo {seq}: etichetta di prova, non addebitata",
     "parcelRefused": "Collo {seq}: {problem}"
   },
   "handOver": {

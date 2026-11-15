@@ -1,7 +1,7 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { ArrowLeft, Box, CircleAlert, CircleCheck, CircleMinus, CloudOff, FileText, House, Lock, Package, PackageCheck, PackageOpen, Printer, RotateCcw, ScanLine, ShieldAlert, ShieldCheck, Tag, Truck, X } from 'lucide-react'
+import { ArrowLeft, Box, CircleAlert, CircleCheck, CircleMinus, CloudOff, FileText, FlaskConical, House, Lock, Package, PackageCheck, PackageOpen, Printer, RotateCcw, ScanLine, ShieldAlert, ShieldCheck, Tag, Truck, X } from 'lucide-react'
 import { LABEL_PRINT_TONE } from '@nexus/ui/components/LabelPreview/index'
 import { PdfViewer } from '@nexus/ui/components/PdfViewer/index'
 import { FloorActionBar, FloorButton, FloorList, FloorListRow, ScanInput, type CameraScanner, type FloorAction, type FloorActions, type FloorTone } from '@nexus/ui/floor'
@@ -22,7 +22,7 @@ import { MarksResult, type MarksPreviewFacts } from '../carton/view/MarksResult'
 import { PackSizeGrid } from '../carton/view/PackSizeGrid'
 import type { PackedSummary } from '../done/model'
 import { PackedDone } from '../done/view/PackedDone'
-import type { DocumentsState, PackHead } from '../model'
+import type { DocumentsState, LabelRow, PackHead } from '../model'
 import '../pack.css'
 import '../carton/carton.css'
 
@@ -55,10 +55,13 @@ export interface JobModel {
   seq: number | null
   status: JobStatus
   detail: string | null
+  /** B-W2b-F50: a print job of a TEST label (its words say test). */
+  test?: boolean
 }
 
 export interface DocumentsModel extends DocumentsState {
-  trackingNumbers: { seq: number; trackingNumber: string | null }[]
+  /** B-W2b-F50: each carton's label with its TEST flag (was `{ seq, trackingNumber }`). */
+  trackingNumbers: LabelRow[]
   jobs: JobModel[]
 }
 
@@ -394,13 +397,14 @@ export function PackView({ model, onAction, onFrame, camera }: PackViewProps) {
       const { head, documents } = step
       const labels = documents.labels
       const docs = documents.documents
-      const printHeld = offlineHeld ?? busyHeld ?? (documents.printable ? null : t('documents.held.nothing'))
+      // B-W2b-F50: in test mode the office makes TEST labels: no word says they are bought.
+      const printHeld = offlineHeld ?? busyHeld ?? (documents.printable ? null : t(labels.test ? 'documents.held.nothingTest' : 'documents.held.nothing'))
       const printed = documents.jobs.length > 0
       body = (
         <>
           <ShipmentStrip head={head} t={t} d={d} current={null} />
           <div className="fw-task-split">
-            <section className="fw-floor-stack" aria-labelledby="fw-pack-labels">
+            <section className="fw-floor-stack fw-pack-labels" aria-labelledby="fw-pack-labels">
               <h2 id="fw-pack-labels" className="fw-floor-section-title">
                 <span className="fw-floor-inline-icon" aria-hidden="true">
                   <Tag />
@@ -415,10 +419,15 @@ export function PackView({ model, onAction, onFrame, camera }: PackViewProps) {
                 <>
                   <FloorList label={t('labels.title')}>
                     {documents.trackingNumbers.map((entry) => (
-                      <FloorListRow key={entry.seq} icon={<Tag />} tone={entry.trackingNumber ? 'success' : 'warning'} title={t('labels.carton', { seq: entry.seq })} meta={entry.trackingNumber ? t('labels.tracking', { number: entry.trackingNumber }) : t('labels.noLabel')} status={entry.trackingNumber ? t('labels.bought') : t('labels.waiting')} />
+                      <FloorListRow key={entry.seq} icon={<Tag />} tone={entry.trackingNumber && entry.test !== true ? 'success' : 'warning'} title={t('labels.carton', { seq: entry.seq })} meta={entry.trackingNumber ? t('labels.tracking', { number: entry.trackingNumber }) : t('labels.noLabel')} status={labelStatus(entry, t)} />
                     ))}
                   </FloorList>
-                  {labels.held ? <HeldLine text={t(`labels.held.${labels.held}`)} /> : <TaskLine tone="success" icon={<CircleCheck />}>{t('labels.ready', { count: labels.labelled })}</TaskLine>}
+                  {labels.held ? <HeldLine text={t(`labels.held.${labels.held === 'officeBuys' && labels.test ? 'officeTest' : labels.held}`)} /> : <TaskLine tone="success" icon={<CircleCheck />}>{t('labels.ready', { count: labels.labelled })}</TaskLine>}
+                  {labels.test ? (
+                    <TaskLine tone="warning" icon={<FlaskConical />}>
+                      {t('labels.testNote')}
+                    </TaskLine>
+                  ) : null}
                 </>
               )}
             </section>
@@ -452,7 +461,7 @@ export function PackView({ model, onAction, onFrame, camera }: PackViewProps) {
               </h2>
               <FloorList label={t('jobs.title')}>
                 {documents.jobs.map((job) => (
-                  <FloorListRow key={job.id} icon={job.what === 'LABEL' ? <Tag /> : <FileText />} tone={JOB_TONE[job.status]} title={job.what === 'LABEL' ? t('jobs.label', { seq: job.seq ?? 0 }) : t(`jobs.${job.what}`)} meta={job.detail ?? undefined} status={t(`job.${job.status}`)} />
+                  <FloorListRow key={job.id} icon={job.what === 'LABEL' ? <Tag /> : <FileText />} tone={JOB_TONE[job.status]} title={job.what === 'LABEL' ? t(job.test ? 'jobs.labelTest' : 'jobs.label', { seq: job.seq ?? 0 }) : t(`jobs.${job.what}`)} meta={job.detail ?? undefined} status={t(`job.${job.status}`)} />
                 ))}
               </FloorList>
               {documents.jobs
@@ -460,7 +469,7 @@ export function PackView({ model, onAction, onFrame, camera }: PackViewProps) {
                 .map((job) => (
                   <div key={job.id} className="fw-pack-job">
                     <FloorButton size="lg" variant="primary" icon={<RotateCcw />} heldReason={offlineHeld} onClick={() => send({ type: 'retry-job', jobId: job.id })}>
-                      {job.what === 'LABEL' ? t('jobs.retryLabel', { seq: job.seq ?? 0 }) : t('jobs.retry', { what: t(`jobs.${job.what}`) })}
+                      {job.what === 'LABEL' ? t(job.test ? 'jobs.retryLabelTest' : 'jobs.retryLabel', { seq: job.seq ?? 0 }) : t('jobs.retry', { what: t(`jobs.${job.what}`) })}
                     </FloorButton>
                   </div>
                 ))}
@@ -502,6 +511,12 @@ export function PackView({ model, onAction, onFrame, camera }: PackViewProps) {
 // ---- parts ---------------------------------------------------------------------------------------------------------------
 
 /** The shipment on top (design header status: Shipment, Carton n of N): number · state · carrier · the carton scans go into. */
+/** B-W2b-F50: a carton's label status — a TEST label says it is a test and not charged, never bought; not known: no word. */
+function labelStatus(entry: LabelRow, t: Translate): string | undefined {
+  if (!entry.trackingNumber) return t('labels.waiting')
+  return entry.test === true ? t('labels.test') : entry.test === false ? t('labels.bought') : undefined
+}
+
 function ShipmentStrip({ head, t, d, current }: { head: PackHead; t: Translate; d: Translate; current: PackCartonView | null }) {
   const parts = [
     head.number,

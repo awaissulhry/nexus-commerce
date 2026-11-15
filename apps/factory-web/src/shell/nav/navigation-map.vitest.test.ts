@@ -575,7 +575,8 @@ describe('the floor tiles and the scan router (floor/model.ts, floor/tasks/route
       // B-W2b-232: Spec & instructions at every station mode but the warehouse (tile family Work, before Call for help).
       cutting: ['mywork', 'operation', 'cut', 'fabriccut', 'bundles', 'machine', 'clock', 'training', 'instructions', 'help', 'incident', 'lineview', 'scan'],
       sewing: ['mywork', 'operation', 'machine', 'clock', 'myday', 'training', 'instructions', 'help', 'incident', 'lineview', 'scan'],
-      packing: ['mywork', 'operation', 'labels', 'pack', 'machine', 'clock', 'training', 'instructions', 'help', 'incident', 'lineview', 'scan'],
+      // B-W2b-F50: at the packing bench Operation after Garment labels and Pack (Owner answer 2026-11-15 to B-W2b-437's question 1).
+      packing: ['mywork', 'labels', 'pack', 'operation', 'machine', 'clock', 'training', 'instructions', 'help', 'incident', 'lineview', 'scan'],
       // B-W2b-115: Incoming inspection at the inspection bench (tile family Quality, before Final inspection).
       // B-W2b-203: at the bench Operation after the inspection tiles (Owner answer 2026-11-09 to B-W2b-151's question 1).
       inspection: ['mywork', 'incoming', 'final', 'inline', 'operation', 'machine', 'clock', 'training', 'instructions', 'help', 'incident', 'lineview', 'scan'],
