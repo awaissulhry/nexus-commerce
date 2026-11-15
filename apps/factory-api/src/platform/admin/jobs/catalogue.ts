@@ -89,6 +89,9 @@ export const JOB_CATALOGUE: readonly JobEntry[] = Object.freeze([
   job('insights.factsNightly', '40 2 * * *', 'check'),
   job('privacy.retentionSweep', '50 2 * * *', 'schedule'),
   job('shipping.closeDays', '50 * * * *', 'check'),
+  // B-W2b-435: the owner's morning e-mail and the report e-mails people asked for (they mail people at their time).
+  job('insights.ownerDigest', '*/15 * * * *', 'schedule'),
+  job('insights.reportMail', '*/15 * * * *', 'schedule'),
   // B-W2b-415: the error queue's collector (platform/admin/errors/collect.ts).
   job('integrations.collectErrors', '* * * * *', 'check'),
 ])

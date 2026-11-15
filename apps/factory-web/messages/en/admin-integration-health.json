@@ -251,6 +251,14 @@
         "factsNightly": {
           "name": "Facts by night",
           "what": "Every night at 02:40: the facts of the 35 days before are built again."
+        },
+        "ownerDigest": {
+          "name": "Owner digest",
+          "what": "Every 15 minutes: the morning e-mail goes to each person at their time (only where the person and the company switched it on)."
+        },
+        "reportMail": {
+          "name": "Report e-mails",
+          "what": "Every 15 minutes: the reports people asked to receive go out at their time."
         }
       },
       "integrations": {

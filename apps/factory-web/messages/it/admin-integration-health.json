@@ -251,6 +251,14 @@
         "factsNightly": {
           "name": "Dati notturni",
           "what": "Ogni notte alle 02:40: si ricostruiscono i dati dei 35 giorni precedenti."
+        },
+        "ownerDigest": {
+          "name": "Riepilogo del titolare",
+          "what": "Ogni 15 minuti: l'e-mail del mattino parte per ogni persona alla sua ora (solo dove la persona e l'azienda l'hanno attivata)."
+        },
+        "reportMail": {
+          "name": "E-mail dei report",
+          "what": "Ogni 15 minuti: i report che le persone hanno chiesto di ricevere partono alla loro ora."
         }
       },
       "integrations": {
