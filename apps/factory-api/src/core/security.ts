@@ -5,6 +5,7 @@ import { clientAddressOf } from './client-address'
 import { EXPOSED_HEADERS } from './cors-expose'
 import { ApiError, sendError } from './errors'
 import { REQUEST_ID_HEADER } from './ids'
+import { requestLimiter, type RequestLimiter, type RequestLimits } from './rate-limit'
 
 /**
  * The web security baseline (feature PLT-244, GDPR art. 32; plan A1 §3.10 "rate limits on every public route"):
@@ -15,10 +16,12 @@ import { REQUEST_ID_HEADER } from './ids'
  *   CORS         only the configured web origin (FACTORY_WEB_ORIGIN), with credentials. A preflight from any other
  *                origin is refused, and so is any state-changing request that carries another Origin (a browser
  *                always sends Origin on those): a cross-site form or script cannot write, whatever its cookies.
- *   rate limit   per client address (core/client-address.ts: the browser's, behind the trusted proxies), on every
- *                route; in Redis when the app has one (shared by every replica), in memory otherwise. Routes can set
- *                a stricter `config.rateLimit` (sign-in, links); they count by the same address unless they key by
- *                something of their own (a floor device).
+ *   rate limit   B-W2b-GF6 (core/rate-limit.ts): 300 a minute per signed-in person, the same per client address
+ *                for a request without a session, and 3000 a minute per client address over every request (the
+ *                address: core/client-address.ts, the browser's behind the trusted proxies); in Redis when the app
+ *                has one (shared by every replica), in memory otherwise. Routes can set a stricter `config.rateLimit`
+ *                (sign-in, links), counted here by @fastify/rate-limit by the same address unless they key by
+ *                something of their own (a floor device); it replaces the person's budget on that route.
  *   body size    1 MiB (files go to R2 by presigned URL, never through the API).
  */
 
@@ -45,10 +48,7 @@ const PREFLIGHT_MAX_AGE_SECONDS = '600'
 export interface SecurityOptions {
   /** The factory web's origin (scheme, host and port), or undefined: then no cross-origin caller is allowed. */
   readonly webOrigin?: string | undefined
-  readonly rateLimit: {
-    /** Requests per client address per window. */
-    readonly max: number
-    readonly timeWindowMs: number
+  readonly rateLimit: RequestLimits & {
     /** Shared counters across replicas; without it, counters live in this process. */
     readonly redis?: Redis | undefined
     /** Key prefix in Redis (one per environment). */
@@ -80,12 +80,21 @@ function applyCors(request: FastifyRequest, reply: FastifyReply, webOrigin: stri
   return undefined
 }
 
-/** Registers the baseline on the root instance. Call before any route. */
-export async function registerSecurity(app: FastifyInstance, options: SecurityOptions): Promise<void> {
+/**
+ * Registers the baseline on the root instance. Call before any route. Returns the request limiter, whose budget the access
+ * check counts once it knows the session (core/manifest.ts installRouteManifest).
+ */
+export async function registerSecurity(app: FastifyInstance, options: SecurityOptions): Promise<RequestLimiter> {
   app.addHook('onRequest', async (request, reply) => {
     void reply.header(REQUEST_ID_HEADER, String(request.id))
     const answered = applyCors(request, reply, options.webOrigin)
     if (answered) return answered
+  })
+
+  // B-W2b-GF6: the address ceiling, as a request arrives (after CORS: a refused origin or a preflight is not counted).
+  const limiter = requestLimiter({ limits: options.rateLimit, namespace: options.rateLimit.namespace, redis: options.rateLimit.redis, log: app.log })
+  app.addHook('onRequest', async (request, reply) => {
+    await limiter.ceiling(request, reply)
   })
 
   app.addHook('onSend', async (_request, reply, payload) => {
@@ -95,8 +104,10 @@ export async function registerSecurity(app: FastifyInstance, options: SecurityOp
     return payload
   })
 
+  // The routes' own limits (config.rateLimit). B-W2b-GF6: `global: false`: a route without one spends the person's budget
+  // (core/rate-limit.ts) instead of a count of this plugin.
   await app.register(rateLimit, {
-    global: true,
+    global: false,
     max: options.rateLimit.max,
     timeWindow: options.rateLimit.timeWindowMs,
     ...(options.rateLimit.redis ? { redis: options.rateLimit.redis } : {}),
@@ -107,4 +118,5 @@ export async function registerSecurity(app: FastifyInstance, options: SecurityOp
     skipOnError: true,
     errorResponseBuilder: () => new ApiError('rate_limited'),
   })
+  return limiter
 }

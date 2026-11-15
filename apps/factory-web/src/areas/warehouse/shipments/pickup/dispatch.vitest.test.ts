@@ -1,6 +1,7 @@
 import { createElement } from 'react'
 import { renderToString } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
+import { templateOf } from '@nexus/factory-domain/auth/roles/templates'
 import { DAY_SHEET_REFUSALS as DOMAIN_DAY_SHEET_REFUSALS, DAY_SHEET_LOOKBACK_DAYS } from '@nexus/factory-domain/shipping/manifest/rules'
 import { PICKUP_LIMITS, PICKUP_REFUSALS as DOMAIN_PICKUP_REFUSALS, PICKUP_STATUSES as DOMAIN_PICKUP_STATUSES, PICKUP_VIAS as DOMAIN_PICKUP_VIAS } from '@nexus/factory-domain/shipping/pickups/rules'
 import { ApiError } from '../../../../lib/api/errors'
@@ -29,7 +30,7 @@ import { designScreen as paperScreen } from '../export/window/fixtures'
 import { draftSchema } from './api'
 import { designScreen as pickupScreen } from './fixtures'
 import { bookBody, bookHeld, cardPickup, formOf, formProblems, moveHeld, PICKUP_MAX, PICKUP_REFUSALS, PICKUP_STATUSES, PICKUP_VIAS, pickupsByCarrier, viaHeld } from './model'
-import { DISPATCH_NS, wallOf } from './dispatch'
+import { dispatchAbilitiesOf, DISPATCH_NS, wallOf } from './dispatch'
 
 /** B-W2b-412 — pickups, the day's close, export and shipping settings on screen: the rules, the fixtures as API answers, every case in it and en. */
 
@@ -290,9 +291,38 @@ describe('SCR-650 … SCR-659 draw every case in both languages', () => {
   }
 })
 
-// ── B-W2b-F56 ─────────────────────────────────────────────────────────────────────────────────────────────────────────
+// ── B-W2b-F56, B-W2b-GF6 ──────────────────────────────────────────────────────────────────────────────────────────────
 // The Owner's test server: the administrator (shipping.settings.view, no shipping.view) got 403 on the packaging reads.
-describe('Packaging without shipping.view', () => {
+// The Owner's decision (11-15): the packaging reads ask shipping.settings.view, the right the page opens with.
+describe('Packaging is read with shipping.settings.view', () => {
+  const NO_VIEW = { en: 'Your role does not see the packaging types and defaults.', it: 'Il tuo ruolo non vede i tipi di imballo e i predefiniti.' } as const
+  // The lists' toolbars (the grid draws its rows in the browser only).
+  const LISTS = { en: 'Add a type', it: 'Aggiungi un tipo' } as const
+  const drawn = (can: ReturnType<typeof dispatchAbilitiesOf>, locale: (typeof LOCALES)[number]) =>
+    renderToString(createElement(I18nProvider, { locale, messages: messagesFor(locale, NAMESPACES) }, createElement(packagingScreen.view as never, { model: { ...caseOf(packagingScreen, 'types'), can } })))
+
+  it('draws the types and defaults for the administrator template (the settings right, not shipments), its writes held', () => {
+    const admin = dispatchAbilitiesOf(templateOf('admin')!.permissions)
+    expect(admin).toMatchObject({ view: false, settingsView: true, packaging: false })
+    for (const locale of LOCALES) {
+      const html = drawn(admin, locale)
+      expect(html).toContain(LISTS[locale])
+      expect(html).not.toContain(NO_VIEW[locale])
+      expect(html).toContain(locale === 'en' ? 'Your role cannot change packaging.' : 'Il tuo ruolo non può cambiare gli imballi.')
+    }
+  })
+
+  it('holds a role that sees shipments but not the shipping settings (the planner template), in words, with no list', () => {
+    const planner = dispatchAbilitiesOf(templateOf('planner')!.permissions)
+    expect(planner).toMatchObject({ view: true, settingsView: false })
+    for (const locale of LOCALES) {
+      const html = drawn(planner, locale)
+      expect(html).toContain(NO_VIEW[locale])
+      expect(html).toContain(locale === 'en' ? 'the right to see the shipping settings' : 'il diritto di vedere le impostazioni di spedizione')
+      expect(html).not.toContain(LISTS[locale])
+    }
+  })
+
   it('says in words that the role does not see packaging, and draws no list', () => {
     const item = packagingScreen.cases.find((entry) => entry.id === 'no-view')!
     for (const locale of LOCALES) {
@@ -302,4 +332,4 @@ describe('Packaging without shipping.view', () => {
     }
   })
 })
-// ── end B-W2b-F56 ─────────────────────────────────────────────────────────────────────────────────────────────────────
+// ── end B-W2b-F56, B-W2b-GF6 ──────────────────────────────────────────────────────────────────────────────────────────
