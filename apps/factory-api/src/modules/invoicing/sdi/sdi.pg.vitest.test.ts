@@ -7,6 +7,8 @@ import { newId } from '@nexus/factory-domain/core/ids'
 import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
 import { businessDate } from '@nexus/factory-domain/core/time'
 import { resendDeadline } from '@nexus/factory-domain/invoicing/sdi/deadline'
+// B-W2b-F47: the stamp duty quarter of a corrected invoice.
+import { quarterStartOf } from '@nexus/factory-domain/invoicing/stamp-duty/stamp-duty'
 import { FakeSdi } from '../../../adapters/sdi/fake'
 import { textOf } from '../../../adapters/ses/fake'
 import { buildApp } from '../../../core/app'
@@ -563,6 +565,95 @@ describe('the legal archive is recorded once, only for a file SDI handed over (â
     await expect(archive(id, { archivedAt: new Date(), archiveRef: '  ' })).rejects.toThrow(/both its time and its reference/)
     await archive(id, { archivedAt: new Date(), archiveRef: 'ARCH-4' })
     expect((await sdiOf(invoice.id)).archive).toMatchObject({ submissionId: id, archiveRef: 'ARCH-4' })
+  })
+})
+
+// B-W2b-F47: a rejected invoice corrected with new lines decides its stamp duty as every draft does (tax-codes/apply.ts).
+describe('a rejected VAT-free invoice corrected with new lines decides its stamp duty as every draft does (FIN-087, FIN-101)', () => {
+  const OUT_OF_SCOPE = { vatRatePct: '0', vatNature: 'N2.2', vatLegalRef: 'Art. 2 DPR 633/1972 (made-up case)' }
+  const vatFree = (unitPrice: string, description = 'Campionario tessuti, fuori campo IVA') => ({ description, quantity: '1', uom: 'PZ', unitPrice, ...OUT_OF_SCOPE })
+  const stampLines = (invoice: Json) => (invoice.lines as Json[]).filter((line) => line.chargeKind === 'STAMP_DUTY')
+  const stampRows = async (invoiceId: string) => (await admin<{ n: number }>(`SELECT count(*)::int AS n FROM "InvoiceLine" WHERE "invoiceId" = $1 AND "chargeKind" = 'STAMP_DUTY'`, [invoiceId]))[0]!.n
+  const stampDuty = async (on: boolean) => {
+    await stepUp(h, finance, financeSecret)
+    expect((await as(finance, 'PUT', `/invoicing/tax/settings/${c1()}`, { stampDutyOn: on })).company.switches.stampDutyOn).toBe(on)
+  }
+  /** The quarter of `day` as the list shows it: kept (counted at the issue) and live (what the invoices say now). */
+  const quarterOf = async (day: string): Promise<Json> => {
+    const year = day.slice(0, 4)
+    const list = await as(finance, 'GET', `/invoicing/stamp-duty/quarters?companyId=${c1()}&year=${year}`)
+    return list.quarters.find((quarter: Json) => quarter.quarterStart === quarterStartOf(day))
+  }
+  const counted = (quarter: Json) => ({ invoiceCount: quarter.invoiceCount, total: quarter.total, liveCount: quarter.liveCount, liveTotal: quarter.liveTotal })
+  /** Issued with the stamp duty line, sent, rejected by SDI (NS). */
+  async function rejectedVatFree(): Promise<{ invoice: Json; version: number }> {
+    const invoice = await issued({ lines: [vatFree('100.00')] })
+    expect(invoice).toMatchObject({ netTotal: 10200, vatTotal: 0, grossTotal: 10200, stampDutyAmount: 200 })
+    expect(stampLines(invoice)).toHaveLength(1)
+    fake.scriptNext({ kind: 'NS', code: '00423' })
+    await send(invoice.id)
+    sdiAnswers()
+    await webhooks()
+    const rejected = await sdiOf(invoice.id)
+    expect(rejected).toMatchObject({ invoiceStatus: 'REJECTED', resend: { ready: true, problems: [] } })
+    return { invoice, version: rejected.version }
+  }
+  const correct = async (invoiceId: string, version: number, lines: unknown[]): Promise<Json> => {
+    await stepUp(h, finance, financeSecret)
+    return as(finance, 'PUT', `/invoicing/invoices/${invoiceId}/sdi/correction`, { version, lines })
+  }
+  const resent = async (invoiceId: string): Promise<string> => {
+    const { sdi: status } = await send(invoiceId)
+    expect(status).toMatchObject({ invoiceStatus: 'SENT', sends: [{ attempt: 1, status: 'REJECTED' }, { attempt: 2, status: 'SENT' }] })
+    const [row] = await admin<{ xmlFileId: string }>('SELECT "xmlFileId" FROM "Invoice" WHERE id = $1', [invoiceId])
+    const xml = await downloaded(row!.xmlFileId)
+    expect(await xsdErrors(xml)).toEqual([])
+    return xml
+  }
+
+  beforeAll(async () => stampDuty(true))
+  afterAll(async () => stampDuty(false))
+
+  it('new lines still above 77.47 EUR: exactly one STAMP_DUTY line (N1), the file charges it, the quarter counts the invoice once', async () => {
+    const { invoice, version } = await rejectedVatFree()
+    const before = await quarterOf(invoice.issueDate)
+    const corrected = await correct(invoice.id, version, [vatFree('120.00', 'Campionario tessuti, fuori campo IVA (corretto)')])
+    expect(corrected.resend).toEqual({ ready: true, problems: [] })
+    expect(corrected.invoice).toMatchObject({ status: 'REJECTED', number: invoice.number, issueDate: invoice.issueDate, netTotal: 12200, vatTotal: 0, grossTotal: 12200, stampDutyAmount: 200 })
+    expect(corrected.invoice.lines[0]).toMatchObject({ description: 'Campionario tessuti, fuori campo IVA (corretto)', netAmount: 12000 })
+    expect(stampLines(corrected.invoice)).toEqual([expect.objectContaining({ kind: 'CHARGE', chargeKind: 'STAMP_DUTY', quantity: '1.0000', netAmount: 200, vatRatePct: '0.00', vatNature: 'N1', vatLegalRef: 'Art. 15 DPR 633/1972' })])
+    expect(await stampRows(invoice.id)).toBe(1)
+
+    const xml = await resent(invoice.id)
+    expect(xml).toContain('<ImportoBollo>2.00</ImportoBollo>')
+    expect(xml).toContain('Imposta di bollo assolta in modo virtuale')
+    expect(xml).toContain('(corretto)')
+    expect(await stampRows(invoice.id)).toBe(1)
+    // Counted at the issue, recounted by the correction with the invoice as it stands: once, not twice, nothing missed.
+    expect(counted(await quarterOf(invoice.issueDate))).toEqual({ invoiceCount: before.invoiceCount, total: before.total, liveCount: before.liveCount + 1, liveTotal: before.liveTotal + 200 })
+    expect(await quarterOf(invoice.issueDate)).toMatchObject({ stale: false })
+  })
+
+  it('new lines at or below 77.47 EUR: the STAMP_DUTY line goes, the file prints no stamp duty, the quarter no longer counts it', async () => {
+    const { invoice, version } = await rejectedVatFree()
+    const before = await quarterOf(invoice.issueDate)
+    const corrected = await correct(invoice.id, version, [vatFree('70.00', 'Campionario tessuti, fuori campo IVA (ridotto)')])
+    expect(corrected.resend).toEqual({ ready: true, problems: [] })
+    expect(corrected.invoice).toMatchObject({ status: 'REJECTED', number: invoice.number, netTotal: 7000, vatTotal: 0, grossTotal: 7000, stampDutyAmount: null })
+    expect(stampLines(corrected.invoice)).toEqual([])
+    expect(corrected.invoice.lines).toHaveLength(1)
+    expect(await stampRows(invoice.id)).toBe(0)
+    expect(counted(await quarterOf(invoice.issueDate))).toEqual({ invoiceCount: before.invoiceCount - 1, total: before.total - 200, liveCount: before.liveCount, liveTotal: before.liveTotal })
+
+    const xml = await resent(invoice.id)
+    expect(xml).not.toContain('DatiBollo')
+    expect(xml).not.toContain('Imposta di bollo')
+    expect(xml).toContain('(ridotto)')
+    const after = await quarterOf(invoice.issueDate)
+    expect(counted(after)).toEqual({ invoiceCount: before.invoiceCount - 1, total: before.total - 200, liveCount: before.liveCount, liveTotal: before.liveTotal })
+    expect(after).toMatchObject({ stale: false })
+    const [kept] = await admin<{ invoiceCount: number; total: number }>(`SELECT "invoiceCount", total FROM "StampDutyQuarter" WHERE "companyId" = $1 AND "quarterStart" = $2::date`, [c1(), quarterStartOf(invoice.issueDate)])
+    expect(kept).toEqual({ invoiceCount: after.invoiceCount, total: after.total })
   })
 })
 

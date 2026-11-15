@@ -28,6 +28,9 @@ import { codeFactsOf, dayOf, issueRefusal, lockSwitches, readCodes, readSwitches
  *   taxDutiesAtIssue   inside the issue command (issue.ts, before the number): the switches held FOR SHARE, the checks again
  *                      under them, the declaration of intent used (or given back by a credit note), the quarter recounted;
  *   invoiceTax         GET /invoicing/invoices/:invoiceId/tax: what the three say of an invoice, for the pre-check panel.
+ *
+ * B-W2b-F47: a REJECTED invoice corrected with new lines (sdi/correct.ts) takes them through `taxedLines` too (on the
+ * invoice's own date), and `stampDutyAtCorrection` counts its quarter again as the issue does.
  */
 
 const isStampLine = (line: { readonly chargeKind?: string | null }): boolean => line.chargeKind === 'STAMP_DUTY'
@@ -116,6 +119,22 @@ export async function taxDutiesAtIssue(tools: CommandTools, invoice: InvoiceRow,
   if (problems.length > 0) throw issueRefusal(problems)
   await useDeclarationAtIssue(tools, invoice, intentLines(lines), date, switches)
   if (switches.stampDutyOn && invoice.stampDutyAmount !== null) await recountInCommand(tools, invoice.companyId, quarterStartOf(date), { invoiceId: invoice.id, amount: invoice.stampDutyAmount })
+}
+
+// ---- B-W2b-F47: the correction of a REJECTED invoice (sdi/correct.ts) -------------------------------------------------
+
+/**
+ * Inside the correction's command, after its lines and totals are written (`before` and `after`: the invoice row then
+ * and now): the quarter of the invoice's own date counted again as the issue counts it, with this invoice as it stands
+ * now (its stamp duty, or none). A REJECTED file counts as never issued, so the issue's count is the one the correction
+ * keeps right: once (a recount, never an addition), and without the invoice when its new lines carry no stamp duty.
+ * Only while the stamp duty switch is on (held FOR SHARE), and only when the invoice carried or carries stamp duty.
+ */
+export async function stampDutyAtCorrection(tools: CommandTools, before: Pick<InvoiceRow, 'stampDutyAmount'>, after: Pick<InvoiceRow, 'id' | 'companyId' | 'stampDutyAmount'>, date: BusinessDate): Promise<void> {
+  if (before.stampDutyAmount === null && after.stampDutyAmount === null) return
+  const switches = await lockSwitches(tools.tx, after.companyId)
+  if (!switches.stampDutyOn) return
+  await recountInCommand(tools, after.companyId, quarterStartOf(date), after.stampDutyAmount === null ? null : { invoiceId: after.id, amount: after.stampDutyAmount })
 }
 
 /** invoices.view: what the company's tax rules say of an invoice (its stamp duty, its declaration, the checks). */
