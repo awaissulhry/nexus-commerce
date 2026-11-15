@@ -129,7 +129,9 @@ export function addressLines(shipTo: Record<string, unknown>): string[] {
 // ---- the saved rows ⇄ the address ⇄ the API query ----------------------------------------------------------------------------
 
 /** B-W2a-71: `evidence` = gone to another EU state, its transport evidence still awaited or partial (art. 41 DL 331/1993). */
-export const ROW_VIEWS = ['today', ...SHIPMENT_STATUSES, 'evidence', 'all'] as const
+// B-W2b-410 (design sh-grid "Ship today (default) · At risk of missing the promise · Open · Shipped · All", sh-metrics
+// "Exceptions"): today = due today or before (the queue's), atRisk, open = not left yet (W1's queue), exceptions.
+export const ROW_VIEWS = ['today', 'atRisk', 'open', ...SHIPMENT_STATUSES, 'evidence', 'exceptions', 'all'] as const
 export type RowView = (typeof ROW_VIEWS)[number]
 
 const isRowView = (value: string | null | undefined): value is RowView => !!value && (ROW_VIEWS as readonly string[]).includes(value)
@@ -143,17 +145,19 @@ export function rowsFromAddress(params: { get(name: string): string | null } | n
 /** The API's query of a saved rows view: today = what has not left yet (DRAFT and PACKED); a state; all. */
 export function rowsQuery(rows: RowView, q: string, cursor: string | null = null): ShipmentQuery {
   const base = { q, cursor, limit: 50 }
-  if (rows === 'today') return { ...base, open: true }
+  if (rows === 'today' || rows === 'open' || rows === 'atRisk' || rows === 'exceptions') return { ...base, open: true }
   if (rows === 'all') return base
   if (rows === 'evidence') return { ...base, evidence: 'open' }
   return { ...base, status: rows }
 }
 
-export function listAddress(path: string, next: { rows: RowView; q: string; carrier: string | null }): string {
+export function listAddress(path: string, next: { rows: RowView; q: string; carrier: string | null; site?: string | null }): string {
   const query = new URLSearchParams()
   if (next.rows !== 'today') query.set('rows', next.rows)
   if (next.q.trim()) query.set('q', next.q.trim())
   if (next.carrier && next.rows === 'today') query.set('carrier', next.carrier)
+  // B-W2b-410: the site Ship today reads.
+  if (next.site) query.set('site', next.site)
   const qs = query.toString()
   return `${path}${qs ? `?${qs}` : ''}`
 }

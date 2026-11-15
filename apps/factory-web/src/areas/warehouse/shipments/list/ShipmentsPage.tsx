@@ -30,6 +30,10 @@ import {
 } from '../model'
 import type { NewShipmentModel, PrintDdtsModel, ShipmentsListModel } from './list-model'
 import { ShipmentsListView } from './view/ShipmentsListView'
+// B-W2b-410
+import { gridOf, queueCsv } from '../queue/model'
+import { depthAbilitiesOf, DEPTH_NS } from '../queue/shared/depth'
+import { useShipmentsDepth } from '../queue/use-queue'
 
 /** The open shipments the ship-today queue reads at once (its cards, tiles and rows). */
 const QUEUE_LIMIT = 200
@@ -46,7 +50,7 @@ const QUEUE_LIMIT = 200
  */
 export function ShipmentsPage() {
   return (
-    <WithMessages namespaces={['shipments', 'lists']}>
+    <WithMessages namespaces={['shipments', 'lists', DEPTH_NS]}>
       <ShipmentsContainer />
     </WithMessages>
   )
@@ -66,7 +70,9 @@ function ShipmentsContainer() {
   const rows = rowsFromAddress(params)
   const q = params?.get('q') ?? ''
   const carrier = rows === 'today' ? (params?.get('carrier') ?? null) : null
+  const site = params?.get('site') ?? null
   const today = zonedToday()
+  const d = useT(DEPTH_NS)
 
   const [queue, setQueue] = useState<{ items: ShipmentRow[] | null; more: boolean; problem: string | null }>({ items: null, more: false, problem: null })
   const [list, setList] = useState<ShipmentsListModel['list']>({ items: null, more: false, problem: null })
@@ -82,7 +88,10 @@ function ShipmentsContainer() {
   const readId = useRef(0)
   const createKey = useRef<string | null>(null)
 
-  const go = useCallback((next: { rows?: RowView; q?: string; carrier?: string | null }) => router.replace(listAddress(pathname, { rows: next.rows ?? rows, q: next.q ?? q, carrier: next.carrier === undefined ? carrier : next.carrier })), [router, pathname, rows, q, carrier])
+  const go = useCallback(
+    (next: { rows?: RowView; q?: string; carrier?: string | null; site?: string | null }) => router.replace(listAddress(pathname, { rows: next.rows ?? rows, q: next.q ?? q, carrier: next.carrier === undefined ? carrier : next.carrier, site: next.site === undefined ? site : next.site })),
+    [router, pathname, rows, q, carrier, site],
+  )
 
   const load = useCallback(async () => {
     const id = ++readId.current
@@ -107,7 +116,12 @@ function ShipmentsContainer() {
         .catch(() => setSites([]))
     }
     try {
-      if (rows === 'today') {
+      // B-W2b-410: Ship today, At risk, Exceptions and the search are the queue's grids (useShipmentsDepth); the W1 read
+      // here keeps the tiles.
+      if (gridOf(rows, q)) {
+        await queueRead.catch(() => undefined)
+        if (id !== readId.current) return
+      } else if (rows === 'today') {
         const page = await queueRead
         if (!page) return
         setList({ items: page.shipments, more: page.nextCursor !== null, problem: null })
@@ -221,6 +235,28 @@ function ShipmentsContainer() {
     }
   }, [api, create, prefix, router])
 
+  // ---- B-W2b-410: the queue in depth ----------------------------------------------------------------------------------------
+
+  const depthCan = useMemo(() => depthAbilitiesOf(session.permissions), [session.permissions])
+  const depth = useShipmentsDepth({
+    rows,
+    q,
+    carrier,
+    site,
+    companySites: session.sites.map((entry) => entry.id),
+    prefix,
+    can: depthCan,
+    onSite: (next) => go({ site: next, carrier: null }),
+    onCarrier: (next) => go({ rows: 'today', carrier: next }),
+    onOpen: (id) => router.push(`${prefix}/warehouse/shipments/${id}`),
+    onPlan: (salesOrderId) => openCreate(salesOrderId),
+    onExport: (picked) =>
+      downloadText(
+        `shipments-queue-${today}.csv`,
+        queueCsv(picked, { header: (column) => d(`csv.${column}`), status: (status) => d(`status.${status}`), risk: (value) => d(`risk.${value}`), hold: (reason) => d(`holdReason.${reason}`) }),
+      ),
+  })
+
   // ---- the model ---------------------------------------------------------------------------------------------------------
 
   const cutOffs = useMemo(() => cutOffsBySite(sites), [sites])
@@ -242,6 +278,7 @@ function ShipmentsContainer() {
     notice,
     create,
     printDdts,
+    depth: depth.model,
   }
 
   // ---- Print N DDTs (B-W2a-71) ---------------------------------------------------------------------------------------------
@@ -322,6 +359,7 @@ function ShipmentsContainer() {
         },
         onPrintDdtsGo: () => void runPrintDdts(),
         onPrintDdtsClose: () => setPrintDdts((current) => (current?.busy ? current : null)),
+        depth: depth.actions,
       }}
     />
   )
