@@ -311,6 +311,8 @@ import { events as fields } from '../fields/events'
 import { events as templates } from '../templates/events'
 // B-W2b-388: reminders (reminder.set, reminder.came_back, reminder.changed).
 import { events as reminders } from '../reminders/events'
+// B-W2b-380: the price list PDF kept and mailed (price_list.pdf_kept, price_list.pdf_sent).
+import { events as pricesFollowups } from '../prices-followups/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -687,6 +689,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...templates,
   // B-W2b-388
   ...reminders,
+  // B-W2b-380
+  ...pricesFollowups,
 ] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */

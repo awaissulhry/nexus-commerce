@@ -1,0 +1,134 @@
+{
+  "cost": {
+    "up": "Costo +{amount} dal prezzo",
+    "down": "Costo −{amount} dal prezzo",
+    "upHint": "La scheda costi ora dà {amount} in più al pezzo rispetto al costo con cui la riga è stata prezzata: riprezzala dal costo o dal listino.",
+    "downHint": "La scheda costi ora dà {amount} in meno al pezzo rispetto al costo con cui la riga è stata prezzata."
+  },
+  "minimums": {
+    "col": {
+      "per": "Per",
+      "surcharge": "Maggiorazione piccola serie"
+    },
+    "per": {
+      "ORDER": "per ordine",
+      "COLOURWAY": "per variante",
+      "LINE": "per riga"
+    },
+    "edit": {
+      "minQuantity": "Pezzi minimi di {subject}",
+      "per": "Cosa conta il minimo di {subject}",
+      "action": "Cosa succede sotto il minimo di {subject}",
+      "surcharge": "Maggiorazione piccola serie di {subject}",
+      "note": "Nota sul minimo di {subject}"
+    },
+    "surchargeHint": "12,50 {currency} o 3%",
+    "noPrice": "Non mostrata senza i prezzi di vendita",
+    "cell": {
+      "saving": "Salvataggio…",
+      "failed": "Non salvato"
+    },
+    "dismiss": "Chiudi",
+    "saved": "Minimo salvato.",
+    "problem": {
+      "quantity": "Un minimo è un numero intero di pezzi, da 2 a 1.000.000.",
+      "per": "Scegli cosa conta il minimo: per ordine, per variante o per riga.",
+      "action": "Scegli cosa succede sotto il minimo: avviso, blocco o maggiorazione piccola serie.",
+      "surchargeFirst": "Scrivi la maggiorazione nella sua cella (un importo o una %): il minimo diventa una maggiorazione piccola serie.",
+      "surchargeNeeded": "Una maggiorazione piccola serie vuole il suo importo o la sua percentuale: scegli avviso o blocco per non averne.",
+      "surcharge": "Una maggiorazione è un importo sopra 0 (12,50) o una percentuale sopra 0 e al massimo 100 (3%).",
+      "note": "Una nota di al massimo {limit} caratteri."
+    },
+    "held": {
+      "noManage": "Per cambiare i minimi serve il permesso di gestire i listini.",
+      "listArchived": "Il listino è archiviato: riattivalo per cambiarne i minimi.",
+      "archived": "Questo minimo è archiviato: riattivalo per cambiarlo.",
+      "noPrice": "La maggiorazione è un prezzo: il tuo ruolo non vede i prezzi di vendita."
+    },
+    "refused": {
+      "moved": "Qualcun altro ha cambiato questo minimo: è stato riletto. Scrivi di nuovo la modifica.",
+      "conflict": "Non salvato: un altro minimo attivo conta già allo stesso modo per questo oggetto.",
+      "invalid": "Non salvato: il minimo così scritto non è valido.",
+      "unavailable": "Non salvato: il server non risponde. Riprova."
+    }
+  },
+  "pdf": {
+    "title": "PDF conservato per la posta",
+    "sub": "Una copia di questa versione conservata come PDF: una mail al cliente allega proprio quel file.",
+    "dismiss": "Chiudi",
+    "loading": "Lettura dei PDF conservati…",
+    "failed": "Non è stato possibile leggere i PDF conservati",
+    "retry": "Riprova",
+    "newest": "Il più recente",
+    "version": "PDF {version}",
+    "upToDateHint": "Mostra questa versione com'è adesso.",
+    "state": "Stato",
+    "upToDate": "Aggiornato",
+    "outdated": "Versione cambiata da allora",
+    "outdatedHint": "Conservalo di nuovo prima di inviarlo: la mail ne manda uno nuovo da sola.",
+    "language": "Lingua",
+    "lang": {
+      "it": "Italiano",
+      "en": "Inglese"
+    },
+    "keptBy": "Conservato da",
+    "system": "Il sistema",
+    "count": "PDF conservati",
+    "none": "Nessun PDF conservato per questa versione.",
+    "keep": "Conserva questa versione come PDF",
+    "keepAgain": "Conserva di nuovo",
+    "open": "Apri il PDF",
+    "send": "Invia…",
+    "sendHeld": {
+      "sent": "Inviato: chiudi la finestra.",
+      "bad": "Non è un indirizzo e-mail: {list}.",
+      "subject": "Un oggetto di al massimo 200 caratteri.",
+      "customer": "Scegli il cliente a cui va."
+    },
+    "sendTitle": "Invia il listino",
+    "sendNewest": "Il PDF più recente in {language} va in allegato.",
+    "sendKeepsFirst": "Prima si conserva un nuovo PDF in {language}, poi va in allegato.",
+    "close": "Chiudi",
+    "cancel": "Annulla",
+    "sendGo": "Invia",
+    "sentTo": "Inviato a {to} alle {at}.",
+    "to": "A",
+    "toHint": "Vuoto: il contatto del cliente (prima quello per gli ordini). Oppure indirizzi, separati da virgole.",
+    "cc": "Copia a",
+    "ccHint": "Facoltativo; fino a 10 indirizzi.",
+    "subject": "Oggetto",
+    "subjectHint": "Vuoto: «Listino prezzi» con codice e nome del listino.",
+    "message": "Messaggio",
+    "messageHint": "Vuoto: un breve messaggio con il listino e la sua versione.",
+    "kept": "Il PDF {version} è conservato.",
+    "keptSame": "Il PDF {version} mostra già questa versione: non ne è stato conservato uno nuovo.",
+    "sent": "Inviato con il PDF {version} in allegato.",
+    "held": {
+      "noPrice": "Il PDF contiene i prezzi: il tuo ruolo non vede i prezzi di vendita.",
+      "noManage": "Per conservare e inviare un listino serve il permesso di gestire i listini.",
+      "noVersion": "Il listino non ha ancora una versione da stampare.",
+      "loading": "Lettura del listino in corso.",
+      "busy": "Attendi: l'ultima modifica è ancora in salvataggio.",
+      "everyCompany": "Un listino di tutte le società non ha una società da cui inviare: conservane il PDF e invialo dalla posta di una società.",
+      "noCustomer": "Nessun cliente ha ancora questo listino: assegnalo prima a un cliente (scheda Clienti)."
+    },
+    "problem": {
+      "forbidden": "Il tuo ruolo non può farlo con questo listino.",
+      "conflict": "Rifiutato: i dati legali della società per la carta intestata non sono completi, o il listino è cambiato nel frattempo.",
+      "invalid": "Rifiutato: qualcosa nella richiesta non è valido.",
+      "notFound": "Il listino o la sua versione non esistono più.",
+      "unavailable": "Il server non risponde. Riprova."
+    },
+    "customer": "Cliente",
+    "customerHint": "Uno dei clienti che hanno questo listino: la mail va nella sua conversazione, con una copia del PDF conservato."
+  },
+  "design": {
+    "title": "Righe e il loro costo",
+    "sub": "Il costo con cui ogni riga è stata prezzata, e quanto si è mosso da allora.",
+    "col": {
+      "line": "Riga",
+      "pieces": "Pz",
+      "cost": "Costo unitario"
+    }
+  }
+}

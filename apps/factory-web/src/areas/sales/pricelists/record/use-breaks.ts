@@ -11,6 +11,9 @@ import type { Phrase, PriceListAbilities, RecordTab } from '../model'
 import { readProblem, writeProblem } from '../problems'
 import type { BreaksDepthActions, BreaksDepthModel, RecordDialog } from './record-model'
 import type { PriceEntry } from '../api'
+// B-W2b-380 (XF6:03): the minimums edited in place.
+import { withMinimum } from '../minimums/model'
+import { useMinimumEdit } from '../minimums/use-minimum-edit'
 
 export interface BreaksInput {
   api: ApiClient
@@ -92,6 +95,14 @@ export function useBreaks(input: BreaksInput): { model: BreaksDepthModel | undef
   useEffect(() => {
     if (tab === 'breaks' && listId) void loadMinimums()
   }, [tab, listId, tries, loadMinimums])
+
+  // B-W2b-380 (XF6:03): a minimum's cell saved alone; the answer takes the row's place.
+  const minimumEdit = useMinimumEdit({
+    api,
+    currency: list?.currency ?? 'EUR',
+    onSaved: (next) => setMinimums((state) => (state.status === 'ready' ? { status: 'ready', value: withMinimum(state.value, next) } : state)),
+    onReload: () => void loadMinimums(),
+  })
 
   // New minimum › a material: the materials matching what is typed (only while that dialog asks for one).
   const materialSeq = useRef(0)
@@ -234,6 +245,8 @@ export function useBreaks(input: BreaksInput): { model: BreaksDepthModel | undef
     onMaterialQuery: searchMaterials,
     onRetry: () => setTries((value) => value + 1),
     onDismissNotice: () => setNotice(null),
+    onMinimumCell: minimumEdit.onCell,
+    onMinimumNoticeDismiss: minimumEdit.onDismiss,
   }
 
   if (!list) return { model: undefined, actions }
@@ -253,6 +266,7 @@ export function useBreaks(input: BreaksInput): { model: BreaksDepthModel | undef
       busy,
       notice,
       materials,
+      minimumEdit: minimumEdit.edit,
     },
     actions,
   }

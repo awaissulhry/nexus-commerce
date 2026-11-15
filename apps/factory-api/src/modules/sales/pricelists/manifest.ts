@@ -22,4 +22,8 @@ export const manifest = defineManifest({
   'PUT /sales/price-lists/:listId/versions/:versionId/entries': { audiences: ['office'], permission: 'pricelists.manage', scope: 'record' },
   'POST /sales/price-lists/:listId/versions/:versionId/activate': { audiences: ['office'], permission: 'pricelists.manage', scope: 'record' },
   'GET /sales/price-lists/:listId/versions/:versionId/compare': { audiences: ['office'], permission: 'pricelists.view', scope: 'record' },
+  // B-W2b-380 (XF6:01): the price list PDF kept for mail (the price grain checked in the handler).
+  'GET /sales/price-lists/:listId/versions/:versionId/pdf': { audiences: ['office'], permission: 'pricelists.view', scope: 'record' },
+  'POST /sales/price-lists/:listId/versions/:versionId/pdf': { audiences: ['office'], permission: 'pricelists.manage', scope: 'record' },
+  'POST /sales/price-lists/:listId/versions/:versionId/pdf/send': { audiences: ['office'], permission: 'pricelists.manage', scope: 'record' },
 })

@@ -27,6 +27,8 @@ import type { CommandCaller } from '../../../core/command'
 import { headOf, placeOf } from './access'
 import type { BacklogQuery, IntakeQuery, PeriodQuery } from './contract'
 import { backlogOf, intakeOf, quoteSpeedOf as readQuoteSpeed, returnsOf, shippedPiecesOf } from './facts'
+// B-W2b-380 (XF6:06): the reasons by their group.
+import { reasonGroupOf, reasonGroupsOf } from './reason-groups'
 
 /**
  * The sales reports' answers (B-W2b-348): what facts.ts reads, folded by factory-domain insights/sales-reports/rules. Amounts are
@@ -202,6 +204,7 @@ export async function returnsAnswer(caller: CommandCaller, query: PeriodQuery) {
           return { key: group.key, code: label?.code ?? (by === 'size' && group.key !== NO_KEY ? group.key : null), name: label?.name ?? null, figures: returnView(group.figures) }
         })
     const map = returnHeatmapOf(rows)
+    const groupOf = await reasonGroupOf(db, rows.map((row) => row.reason)) // B-W2b-380
     return {
       ...headOf(place),
       sight: place.sight,
@@ -209,7 +212,8 @@ export async function returnsAnswer(caller: CommandCaller, query: PeriodQuery) {
       all: returnView(all),
       shipped,
       returnRatePct: shipped === null ? null : pctOf(all.pieces, shipped),
-      reasons: returnGroupsOf(rows, 'reason', currency).map((group) => ({ key: group.key, words: words.get(group.key) ?? null, figures: returnView(group.figures) })),
+      reasons: returnGroupsOf(rows, 'reason', currency).map((group) => ({ key: group.key, words: words.get(group.key) ?? null, group: groupOf.get(group.key) ?? null, figures: returnView(group.figures) })),
+      reasonGroups: reasonGroupsOf(rows, groupOf, currency).map((group) => ({ key: group.key, reasons: [...group.reasons], figures: returnView(group.figures) })),
       styles: named('style'),
       colours: named('colour'),
       sizes: named('size'),

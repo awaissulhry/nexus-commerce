@@ -51,6 +51,8 @@ import {
 } from '../_demo/fixtures'
 import { COMPOSER_EMPTY, type AmendState, type OrderRecordModel } from './record-model'
 import { OrderRecordView } from './view/OrderRecordView'
+// B-W2b-380 (XF6:02): cost changed since priced on the lines.
+import { CostChangedMark } from '../../_shared/cost-changed/view/CostChangedMark'
 import { MARGIN, marginAs } from './margin/fixtures'
 // ---- B-W2b-323 (orders in depth on screen) ----
 import { APPROVAL_CREDIT, APPROVAL_NOBODY, APPROVAL_PENDING, CHANGES, CHANGES_NONE, CHANGES_WAITING_YES, CONFIRMATION_NONE, CONFIRMATION_OUTDATED, CONFIRMATION_WAITING, depthModel, FREEZE_FINISHED, FREEZE_NONE, MATERIALS_EMPTY, MATERIALS_NOT_PLANNED, orderDepth, PRICED_BLOCKED, pricedOpen } from '../depth/demo/fixtures'
@@ -253,6 +255,12 @@ export const designScreen = defineDesignScreen<RecordCase>({
   cases: [
     { id: 'held-deposit', label: 'Owner · Lines: a new order; Make work orders held — production waits for the deposit', model: base('owner', confirmed), note: 'Held with its first blocking reason (hover or focus the button). The summary rail: money by every grain, cost too; the record chain.' },
     { id: 'sales-lines', label: 'Sales · Lines: prices and margin %, no cost (S2); making work orders is production’s', model: base('sales', confirmed) },
+    {
+      id: 'lines-cost-changed',
+      label: 'Owner · Lines: cost changed since priced (B-W2b-380)',
+      model: base('owner', confirmed, { lineCost: (line) => createElement(CostChangedMark, { change: line.seq === 10 ? 4.2 : line.seq === 20 ? -1.5 : 0, currency: confirmed.currency }) }),
+      note: 'The mark beside a line whose revision costs more or less today than when it was priced; nothing where it did not move or without the cost grain.',
+    },
     { id: 'lines-shipped-layer', label: 'Sales · Lines: Show = Shipped on a partly shipped order', model: base('sales', partly, { sizeLayer: 'shipped' }) },
     { id: 'lines-in-work-orders', label: 'Sales · Lines: Show = In work orders', model: base('sales', production, { sizeLayer: 'inWorkOrders' }) },
     { id: 'manager-lines', label: 'Production manager · Lines: no money; read-only', model: base('manager', paidNotSent) },
