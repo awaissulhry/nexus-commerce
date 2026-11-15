@@ -24,7 +24,7 @@
   },
   "noAccess": {
     "title": "Le impostazioni acquisti non sono nel tuo ruolo",
-    "body": "Per leggerle serve il permesso di vedere gli acquisti (purchasing.view). Lo assegna un amministratore in Sistema › Ruoli e permessi."
+    "body": "Per leggerle serve il permesso di vedere gli acquisti. Lo assegna un amministratore in Sistema › Ruoli e permessi."
   },
   "card": {
     "neverChanged": "Mai cambiato qui.",
@@ -304,16 +304,16 @@
     "offline": "Offline: le modifiche restano su questa pagina finché la connessione non torna.",
     "offlineTitle": "Offline",
     "offlineBody": "Questa è l’ultima copia letta. Non si può salvare nulla finché la connessione non torna.",
-    "noApprovalsView": "Per leggere le regole di approvazione serve il permesso di vedere le approvazioni (approvals.view).",
-    "noRulesManage": "Per scrivere regole di approvazione serve il permesso di tenerle (approvals.rules.manage): il titolare o un amministratore.",
-    "noToleranceRight": "Per tenere le tolleranze di consegna serve purchasing.tolerances.manage su questa azienda.",
+    "noApprovalsView": "Per leggere le regole di approvazione serve il permesso di vedere le approvazioni.",
+    "noRulesManage": "Per scrivere regole di approvazione serve il permesso di tenerle: il titolare o un amministratore.",
+    "noToleranceRight": "Per tenere le tolleranze di consegna serve il permesso di gestirle su questa azienda.",
     "noToleranceRightAll": "Le tolleranze di tutte le aziende le tiene solo un ruolo su tutte le aziende.",
     "noSwitch": "Solo il titolare accende o spegne i solleciti automatici ai fornitori.",
     "noSwitchAll": "I solleciti di tutte le aziende li accende solo un ruolo su tutte le aziende.",
-    "noAlertsView": "Per leggere le regole di avviso serve il permesso di vedere gli avvisi (alerts.view).",
-    "noAlertsManage": "Per scrivere regole di avviso serve alerts.rules.manage.",
-    "noPartiesView": "Per scegliere un fornitore serve il permesso di vedere i fornitori (parties.view): la regola vale per ogni fornitore.",
-    "noMaterialsView": "Per scegliere un materiale serve il permesso di vedere i materiali (product.materials.view): scegli invece un tipo.",
+    "noAlertsView": "Per leggere le regole di avviso serve il permesso di vedere gli avvisi.",
+    "noAlertsManage": "Il tuo ruolo non può scrivere regole di avviso.",
+    "noPartiesView": "Per scegliere un fornitore serve il permesso di vedere i fornitori: la regola vale per ogni fornitore.",
+    "noMaterialsView": "Per scegliere un materiale serve il permesso di vedere i materiali: scegli invece un tipo.",
     "noneActive": "Nessuna delle regole spuntate è attiva, oppure non puoi cambiarle.",
     "noneArchived": "Nessuna delle regole spuntate è archiviata, oppure non puoi cambiarle.",
     "nothingChanged": "Ancora nulla di cambiato."

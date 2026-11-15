@@ -17,6 +17,8 @@ import { ClaimTab } from './ClaimTab'
 import { CreditTab, GoodsTab } from './GoodsCreditTabs'
 import '../../../../_shared/buying/buying.css'
 import '../../claims.css'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../../../lib/i18n/rights'
 
 export type { ClaimRecordActions, ClaimRecordModel } from '../../model'
 
@@ -211,7 +213,7 @@ function Ready({ claim, model, actions, panels }: { claim: Claim; model: ClaimRe
           {claim.status === 'CLOSED' ? claim.closeNote : claim.cancelReason}
         </Banner>
       ) : (
-        !model.can.manage && <Banner tone="info" title={t('record.readOnlyRight', { permission: 'purchasing.claims.manage' })} />
+        !model.can.manage && <Banner tone="info" title={t('record.readOnlyRight', { right: rightRef('purchasing.claims.manage') })} />
       )}
 
       <div className={showDock ? 'fw-by-body has-dock' : 'fw-by-body'}>

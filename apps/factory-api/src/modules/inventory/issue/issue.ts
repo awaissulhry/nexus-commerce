@@ -229,7 +229,7 @@ export async function issueInCommand(
   const workOrder = await lockedWorkOrder(tools, workOrderId)
   const { tx } = tools
   const reason = body.overIssueReason?.trim() || null
-  if (reason && !mayOverIssue(context, workOrder)) throw new ForbiddenError('An over-issue is the office\'s, with inventory.issue.over.')
+  if (reason && !mayOverIssue(context, workOrder)) throw new ForbiddenError("An over-issue is the office's, with the right to issue more than a work order needs.")
   const stock = await resolveStock(tx, workOrder, body, path)
   const { item, itemColourId, lot, hide } = stock
   // W2a B-W2a-26 hook (modules/quality/holds/checks.ts): a lot, hide or work order on hold is refused with the hold's

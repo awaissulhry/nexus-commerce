@@ -72,7 +72,7 @@ export async function assignNcrs(caller: CommandCaller, body: AssignBody, idempo
       const lock = locked.get(entry.id)
       if (!row || !lock || !may(context, QUALITY_NCR_VIEW, row)) return void problems.push({ path: `ncrs/${index}/NOT_FOUND`, message: 'NCR not found.' })
       const label = row.number
-      if (!may(context, QUALITY_NCR_MANAGE, row)) return void problems.push({ path: `ncrs/${index}/NO_RIGHT`, message: `${label}: assigning an owner needs quality.ncr.manage at its site.` })
+      if (!may(context, QUALITY_NCR_MANAGE, row)) return void problems.push({ path: `ncrs/${index}/NO_RIGHT`, message: `${label}: assigning an owner needs the right to follow up NCRs at its site.` })
       const frozen = frozenWords(lock.stage)
       if (frozen) return void problems.push({ path: `ncrs/${index}/CLOSED`, message: `${label}: ${frozen}` })
       if (lock.version !== entry.version) problems.push({ path: `ncrs/${index}/STALE`, message: `${label} changed since it was read: read the list again.` })

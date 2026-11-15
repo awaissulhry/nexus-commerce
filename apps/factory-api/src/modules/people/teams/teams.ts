@@ -164,7 +164,7 @@ export async function teamRecord(caller: CommandCaller, teamId: string, now: Dat
 
 // ---- writes -------------------------------------------------------------------------------------------------------------
 
-const MANAGE_WORDS = 'Teams of this site are kept by a role that keeps them (people.teams.manage).'
+const MANAGE_WORDS = 'Teams of this site are kept by a role that keeps them.'
 
 /** The line a team is on: a line of its site, active. */
 async function checkLine(tx: CommandTx, siteId: string, lineId: string | null | undefined): Promise<void> {

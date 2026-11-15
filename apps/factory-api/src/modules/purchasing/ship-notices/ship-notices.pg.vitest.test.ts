@@ -401,7 +401,7 @@ describe('a packing list mailed to our dock: the imports registry\u2019s packing
     const scope = { companyId: companyA }
     expect(await office((client) => packingListImportAdapter.check!(client, [row], scope, actor(['inventory.receive'])))).toEqual([[]])
     const noRight = await office((client) => packingListImportAdapter.check!(client, [row], scope, actor(['inventory.stock.view'])))
-    expect(noRight[0]![0]!.message).toMatch(/inventory.receive/)
+    expect(noRight[0]![0]!.message).toMatch(/the right to receive goods/)
     const other = await office((client) => packingListImportAdapter.check!(client, [{ ...row, key: { notice: 'ASN-1999-0001', hideNumber: 'X' } }], scope, actor(['inventory.receive'])))
     expect(other[0]![0]!.message).toMatch(/not a notice of this company/)
     expect(packingListImportAdapter.authorize!(actor(['inventory.receive']) as never, { companyId: null }, [])).toHaveLength(1)

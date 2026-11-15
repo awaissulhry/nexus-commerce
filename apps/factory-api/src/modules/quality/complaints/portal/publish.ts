@@ -75,7 +75,7 @@ export async function publishAnswer(files: FilesRuntime, caller: CommandCaller, 
 
 export async function shareEightD(files: FilesRuntime, caller: CommandCaller, complaintId: string, body: { readonly capaId?: string | undefined }, idempotencyKey?: string) {
   const { context, complaint } = await officeComplaint(caller, complaintId, QUALITY_COMPLAINTS_MANAGE)
-  if (!can(actorOf(context), FILES_MANAGE, { companyId: complaint.companyId })) throw new ForbiddenError('Sharing a file with the customer needs files.manage over the company.')
+  if (!can(actorOf(context), FILES_MANAGE, { companyId: complaint.companyId })) throw new ForbiddenError('Sharing a file with the customer needs the right to share files over the company.')
   const facts = await caller.withClient(async (db) => {
     const capas = await db.capaSource.findMany({ where: { recordType: COMPLAINT_RECORD, recordId: complaint.id }, select: { capaId: true } })
     const wanted = body.capaId ? capas.find((source) => source.capaId === body.capaId) : null

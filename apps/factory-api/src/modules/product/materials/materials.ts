@@ -69,7 +69,7 @@ function decodeCursor(value: string | undefined): Cursor | null {
 export async function listMaterials(caller: CommandCaller, query: ListMaterialsFilters): Promise<{ materials: MaterialRow[]; nextCursor: string | null; count: number }> {
   const context = contextOf(caller)
   // Which materials lack a price is itself cost information: only for a holder of the cost grain.
-  if (query.missingCost !== undefined && !seesCost(context)) throw new ForbiddenError('Filtering by the standard cost needs the cost grain (money.cost).')
+  if (query.missingCost !== undefined && !seesCost(context)) throw new ForbiddenError('Filtering by the standard cost needs the right to see costs.')
   const search = query.q?.trim()
   const filters: Prisma.ItemWhereInput[] = [
     scopeWhere(actorOf(context), PRODUCT_MATERIALS_VIEW, MATERIAL_SCOPE) as Prisma.ItemWhereInput,

@@ -1,7 +1,7 @@
 {
   "access": {
     "title": "No access to the safety calendar",
-    "body": "This page needs the right to see safety (safety.view). Ask whoever manages roles in your company."
+    "body": "This page needs the right to see safety. Ask whoever manages roles in your company."
   },
   "common": {
     "stillLoading": "Still loading…",
@@ -213,9 +213,9 @@
     "receipt": "Receipt uploaded."
   },
   "held": {
-    "calendar": "Needs the right to keep the safety calendar (safety.calendar.manage).",
-    "organisation": "Needs the right to keep the safety organisation (safety.organisation.manage).",
-    "upload": "Needs the right to upload files (files.upload).",
+    "calendar": "Needs the right to keep the safety calendar.",
+    "organisation": "Needs the right to keep the safety organisation.",
+    "upload": "Needs the right to upload files.",
     "company": "Open a company first (the address names none).",
     "saving": "Saving…",
     "reading": "Still reading.",

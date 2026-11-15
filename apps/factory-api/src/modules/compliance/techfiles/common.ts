@@ -43,7 +43,7 @@ export function guarded<T>(work: () => Promise<T>, words: { readonly taken?: str
 
 /** The permission over the row's company, or a 403 in words. */
 export function assertMay(context: OfficeContext, permission: Permission, companyId: string, what?: string): void {
-  if (!can(actorOf(context), permission, { companyId })) throw new ForbiddenError(what ? `${what} needs ${permission} over this company.` : undefined)
+  if (!can(actorOf(context), permission, { companyId })) throw new ForbiddenError(what ? `${what} needs a right your role does not hold over this company.` : undefined)
 }
 
 export const mayOn = (actor: Actor, permission: Permission, companyId: string): boolean => can(actor, permission, { companyId })

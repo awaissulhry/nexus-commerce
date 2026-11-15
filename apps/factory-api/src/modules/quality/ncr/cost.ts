@@ -150,7 +150,7 @@ async function sheetOf(db: Reader, row: NcrRow, context: OfficeContext) {
       if (rework) computed.labels.set(line.recordId, rework.workOrder.number)
     }
   }
-  const held = costHeld(row.stage) ?? (may(context, QUALITY_NCR_MANAGE, row) ? null : "Changing the cost needs quality.ncr.manage at the NCR's site.")
+  const held = costHeld(row.stage) ?? (may(context, QUALITY_NCR_MANAGE, row) ? null : "Changing the cost needs the right to follow up the NCR at its site.")
   return {
     ncrId: row.id,
     number: row.number,

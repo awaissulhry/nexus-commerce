@@ -136,7 +136,7 @@ export async function listAlertRules(caller: CommandCaller, query: { readonly co
 
 function assertMayManage(context: OfficeContext, companyId: string | null): void {
   if (!mayWrite(actorOf(context), QUALITY_ALERTS_MANAGE, companyId)) {
-    throw new ForbiddenError(companyId === null ? 'The alert rules of every company are kept only by a role over every company.' : 'Keeping the alert rules of this company needs quality.alerts.manage for it.')
+    throw new ForbiddenError(companyId === null ? 'The alert rules of every company are kept only by a role over every company.' : 'Keeping the alert rules of this company needs the right to keep the quality alert rules for it.')
   }
 }
 
@@ -310,7 +310,7 @@ export async function testAlertRule(caller: CommandCaller, ruleId: string, idemp
   const context = officeOf(caller)
   const current = await readRule(caller, ruleId)
   assertMayManage(context, current.companyId)
-  if (!holds(actorOf(context), HOME_VIEW)) throw new ConflictError('A test reaches you through the bell of Home: you need home.view to see it.')
+  if (!holds(actorOf(context), HOME_VIEW)) throw new ConflictError('A test reaches you through the bell of Home: you need the right to see Home to see it.')
   const view = await oneView(caller, ruleId)
   await command(caller, { name: 'quality.alertRules.test', idempotencyKey, input: { ruleId } }, async (tools) => {
     tools.audit({ action: 'quality.alertTested', recordType: 'QualityAlertRule', recordId: ruleId, companyId: current.companyId, after: { event: current.event, testFor: context.actorId } })

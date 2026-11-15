@@ -225,7 +225,7 @@ export async function entryDetail(caller: CommandCaller, entryId: string) {
 async function entryForDecision(db: Client, context: OfficeContext, entryId: string): Promise<EntryRow> {
   const head = await entryHead(db, entryId)
   if (!head || !may(context, PEOPLE_ATTENDANCE_VIEW, { companyId: head.companyId, siteId: head.siteId })) throw new NotFoundError('Overtime not found.')
-  if (!may(context, PEOPLE_OVERTIME_REVIEW, { companyId: head.companyId, siteId: head.siteId })) throw new DomainError('forbidden', 'Overtime is approved or rejected by a role with people.overtime.review.')
+  if (!may(context, PEOPLE_OVERTIME_REVIEW, { companyId: head.companyId, siteId: head.siteId })) throw new DomainError('forbidden', 'Overtime is approved or rejected by a role with the right to review worked overtime.')
   await requireAttendance(db, head.siteId)
   return head
 }

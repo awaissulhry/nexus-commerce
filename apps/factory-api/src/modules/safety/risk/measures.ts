@@ -33,7 +33,7 @@ import { MEASURE_SELECT, measureViews, ownersAt, readAssessment, readMeasure, ty
  * command (an incident's "Add to improvement plan").
  */
 
-const MANAGE_WORDS = 'The improvement plan of this site is kept by a role that keeps the risk assessment (safety.risk.manage).'
+const MANAGE_WORDS = 'The improvement plan of this site is kept by a role that keeps the risk assessment.'
 
 const refuseWith = (refusal: RiskRefusal | null): void => {
   if (refusal) refuse(refusal.code, refusal.message, refusal.field)
@@ -297,8 +297,8 @@ export async function moveMeasure(caller: CommandCaller, measureId: string, body
   const { context, row: seen } = await knownMeasure(caller, measureId)
   const mayMove = (row: MeasureRow): void => {
     if (mayAt(context, SAFETY_RISK_MANAGE, row)) return
-    if (row.ownerId !== context.actorId) throw new ForbiddenError('A measure is moved by its owner, or by a role that keeps the improvement plan (safety.risk.manage).')
-    if (!OWNER_MOVES.includes(body.status)) throw new ForbiddenError('Verifying or cancelling a measure is for a role that keeps the improvement plan (safety.risk.manage).')
+    if (row.ownerId !== context.actorId) throw new ForbiddenError('A measure is moved by its owner, or by a role that keeps the improvement plan.')
+    if (!OWNER_MOVES.includes(body.status)) throw new ForbiddenError('Verifying or cancelling a measure is for a role that keeps the improvement plan.')
   }
   mayMove(seen)
   if (body.status === 'CANCELLED' && !body.reason?.trim()) throw bodyIssue('reason', 'Say why the measure is cancelled.')

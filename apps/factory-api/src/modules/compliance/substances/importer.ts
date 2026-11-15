@@ -41,7 +41,7 @@ const day = (value: Date): string => value.toISOString().slice(0, 10)
 const dateOf = (value: string): Date => new Date(`${value}T00:00:00.000Z`)
 const authorizeTenantWide = (what: string) => (actor: Parameters<NonNullable<ImportAdapter['authorize']>>[0], job: { readonly companyId: string | null }) =>
   job.companyId === null && !mayWrite(actor, SUBSTANCES_MANAGE, null)
-    ? [{ path: 'companyId', message: `An import of ${what} for every company needs compliance.substances.manage over every company; import for one company instead.` }]
+    ? [{ path: 'companyId', message: `An import of ${what} for every company needs the right to keep the restricted substance list over every company; import for one company instead.` }]
     : []
 
 // ==== substances =====================================================================================================

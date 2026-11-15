@@ -45,10 +45,10 @@ export const materialsImportAdapter = Object.freeze({
     const issues: Issue[] = []
     const reach = job.companyId === null ? 'over every company' : "for the import's company"
     if (job.companyId === null && !mayWrite(actor, PRODUCT_MATERIALS_MANAGE, null)) {
-      issues.push({ path: 'companyId', message: 'A materials import for every company needs product.materials.manage over every company; import for one company instead.' })
+      issues.push({ path: 'companyId', message: 'A materials import for every company needs the right to keep materials over every company; import for one company instead.' })
     }
     if (columns.includes('standardCost')) {
-      if (!mayWrite(actor, PRODUCT_MATERIALS_COST, job.companyId)) issues.push({ path: 'column/standardCost', message: `Importing the standard cost needs product.materials.cost ${reach}.` })
+      if (!mayWrite(actor, PRODUCT_MATERIALS_COST, job.companyId)) issues.push({ path: 'column/standardCost', message: `Importing the standard cost needs the right to set standard costs ${reach}.` })
       // Without the grain at all, the engine already says so; here, a grain held for other companies only.
       if (heldGrains(actor).has('cost') && !mayWrite(actor, 'money.cost', job.companyId)) issues.push({ path: 'column/standardCost', message: `Importing the standard cost needs the cost grain ${reach}.` })
     }

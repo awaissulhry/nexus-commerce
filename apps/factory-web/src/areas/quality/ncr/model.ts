@@ -1,6 +1,8 @@
 import { isApiError, issuePath } from '../../../lib/api/errors'
 import { csvLine } from '../_shared/hooks'
 import type { BoardLaneId, ContainmentAction, Decision, NcrCard, NcrCounts, NcrPrefill, NcrQuery, NcrRecord, NcrSettings, NcrStage, NcrSummary, Severity, StageCheck, StageCheckKey } from './api'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../lib/i18n/rights'
 
 /**
  * The pure rules of Quality › Nonconformances (B-W2a-68; SCR-144 list and board, SCR-145 the NCR record): what a person
@@ -371,7 +373,7 @@ export function decisionHeld(decision: Decision, record: NcrRecord, can: NcrCan,
           : decision.state === 'WAITING_APPROVAL'
             ? { key: 'held.decision.waiting' }
             : move && !can[MOVE_ABILITY[move]]
-              ? { key: 'held.decision.noMove', params: { permission: `inventory.${MOVE_ABILITY[move]}` } }
+              ? { key: 'held.decision.noMove', params: { right: rightRef(`inventory.${MOVE_ABILITY[move]}`) } }
               : decision.disposition?.followUp === 'REWORK_ORDER' && !can.rework
                 ? { key: 'held.decision.noRework' }
                 : decision.disposition?.followUp === 'SUPPLIER_CLAIM' && !can.claims && !move
@@ -604,7 +606,8 @@ const ASSIGN_CODES: Readonly<Record<string, string>> = { STALE: 'assign.refused.
 export function assignRefusalKey(message: string, code?: string | null): string {
   if (code && ASSIGN_CODES[code]) return ASSIGN_CODES[code]!
   if (/changed since it was read/i.test(message)) return 'assign.refused.stale'
-  if (/quality\.ncr\.manage/.test(message)) return 'assign.refused.noRight'
+  // B-W2b-F51: the API names the right in words ("assigning an owner needs the right to follow up NCRs at its site").
+  if (/assigning an owner needs/i.test(message)) return 'assign.refused.noRight'
   if (/never changes/i.test(message)) return 'assign.refused.frozen'
   if (/not found/i.test(message)) return 'assign.refused.notFound'
   return 'assign.refused.other'

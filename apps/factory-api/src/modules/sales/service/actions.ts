@@ -48,7 +48,7 @@ export interface RepairBody {
 /** POST /sales/service/cases/:caseId/repair */
 export async function openRepair(caller: CommandCaller, caseId: string, body: RepairBody, idempotencyKey?: string): Promise<{ case: CaseView; repair: { id: string; number: string }; warnings: Issue[] }> {
   const { context, row: seen } = await officeCase(caller, caseId, SALES_SERVICE_MANAGE)
-  if (seen.partyId && !mayOn(context, SALES_REPAIRS_MANAGE, seen)) throw new ForbiddenError('Opening a repair also needs the right to make repairs (sales.repairs.manage).')
+  if (seen.partyId && !mayOn(context, SALES_REPAIRS_MANAGE, seen)) throw new ForbiddenError('Opening a repair also needs the right to make repairs.')
   const { result } = await command(caller, { name: 'serviceCases.openRepair', idempotencyKey, input: { caseId, ...body } }, async (tools) => {
     const row = await lockCase(tools, seen.id, body.version)
     if (!row.partyId) throw held('NO_CUSTOMER', row.number)
@@ -98,7 +98,7 @@ const NEXT: Readonly<Record<ReturnPurpose, string>> = Object.freeze({
 /** POST /sales/service/cases/:caseId/return */
 export async function openReturn(caller: CommandCaller, caseId: string, body: ReturnBody, idempotencyKey?: string): Promise<{ case: CaseView; return: { id: string; number: string }; next: string; warnings: Issue[] }> {
   const { context, row: seen } = await officeCase(caller, caseId, SALES_SERVICE_MANAGE)
-  if (seen.partyId && !mayOn(context, SALES_RETURNS_MANAGE, seen)) throw new ForbiddenError('Opening a return also needs the right to make returns (sales.returns.manage).')
+  if (seen.partyId && !mayOn(context, SALES_RETURNS_MANAGE, seen)) throw new ForbiddenError('Opening a return also needs the right to make returns.')
   const shape: Issue[] = body.purpose === 'REMAKE' ? fitProblems(body.fit, 'body/fit') : body.fit !== undefined ? [{ path: 'body/fit', message: 'The fit goes with a remake only.' }] : []
   if (!body.lines && !body.reasonCode) shape.push({ path: 'body/reasonCode', message: "Say why the garment comes back (a return reason), or name the lines." })
   if (shape.length > 0) refuse(shape, 'The return cannot be opened like this.')

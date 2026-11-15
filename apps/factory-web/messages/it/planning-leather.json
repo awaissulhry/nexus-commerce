@@ -1,7 +1,7 @@
 {
   "noAccess": {
     "title": "Non puoi aprire il piano pelle e taglio",
-    "body": "Serve il permesso di vedere le pianificazioni (planning.view). Chiedi a un amministratore."
+    "body": "Serve il permesso di vedere le pianificazioni. Chiedi a un amministratore."
   },
   "page": {
     "asOf": "Dalla pianificazione del {time}",
@@ -47,25 +47,25 @@
     "filtering": "Mostra: {tile}."
   },
   "held": {
-    "noRun": "Pianificare richiede planning.run.",
+    "noRun": "Il tuo ruolo non può lanciare la pianificazione.",
     "running": "La pianificazione è in corso.",
     "noSite": "Scegli prima uno stabilimento.",
-    "noManage": "Cambiare la perdita di taglio richiede planning.leather.manage (il pianificatore).",
+    "noManage": "Il tuo ruolo non può cambiare la perdita di taglio (il pianificatore sì).",
     "noProposal": "Non c'è una proposta da decidere.",
     "inDraft": "Questa perdita è già nella revisione in bozza.",
     "waitsForDraft": "Accettata: aspetta una revisione in bozza del modello (la apre Prodotti).",
     "dismissedAlready": "Già scartata: torna quando cambia o arrivano altri tagli.",
     "reasonShort": "Scrivi il motivo, almeno 3 caratteri.",
     "reasonLong": "Al massimo 500 caratteri.",
-    "noReserve": "Prenotare richiede inventory.reserve.",
+    "noReserve": "Prenotare richiede il permesso di riservare merce.",
     "noProposalHides": "Nessuna pelle da proporre: rileggi il piano.",
-    "noDraftPo": "Una bozza d'ordine d'acquisto richiede purchasing.manage (l'acquisitore).",
+    "noDraftPo": "Una bozza d'ordine d'acquisto richiede il permesso di creare ordini d'acquisto (l'acquisitore).",
     "requirement": {
       "ORDERED": "Questa riga del piano è già ordinata.",
       "IGNORED": "Questa riga del piano è stata esclusa in Cosa comprare e produrre.",
       "OPEN": "Aperta."
     },
-    "noNote": "Una nota sull'ordine richiede threads.post.",
+    "noNote": "Una nota sull'ordine richiede il permesso di scrivere note interne.",
     "notMustBuy": "Solo una riga da comprare ha una bozza d'ordine.",
     "busy": "Attendi: l'ultima azione è in corso."
   },

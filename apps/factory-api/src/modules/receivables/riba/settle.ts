@@ -58,7 +58,7 @@ export async function settleItems(caller: CommandCaller, batchId: string, body: 
           continue
         }
         if (!can(actor, RECEIVABLES_RIBA_MANAGE, { companyId: item.companyId, partyId: item.partyId })) throw new ForbiddenError('This batch collects from a customer you may not act for.')
-        if (asked.status === 'PAID' && !can(actor, PAYMENTS_RECORD, { companyId: item.companyId, partyId: item.partyId })) throw new ForbiddenError('Recording an instalment paid records its payment: it needs payments.record too.')
+        if (asked.status === 'PAID' && !can(actor, PAYMENTS_RECORD, { companyId: item.companyId, partyId: item.partyId })) throw new ForbiddenError('Recording an instalment paid records its payment: it needs the right to record payments too.')
         const refusal = settleProblem({ status: item.status, dueDate: day(item.dueDate) }, asked, onDay)
         if (refusal) problems.push({ path: `${at}/${refusal}`, message: RIBA_REFUSALS[refusal] })
       }

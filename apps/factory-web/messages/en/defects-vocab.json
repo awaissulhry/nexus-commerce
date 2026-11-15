@@ -54,7 +54,7 @@
     "records_other": "{count} records"
   },
   "held": {
-    "noManage": "Changing the vocabulary needs quality.defects.manage over every company.",
+    "noManage": "Changing the vocabulary needs the right to keep the defect library over every company.",
     "busy": "Wait: the last change is still being saved.",
     "pickRows": "Tick the codes first.",
     "allActive": "Every ticked code is active already.",
@@ -184,7 +184,7 @@
     "process": "Pick the process that answers for it.",
     "language": "Those words are not valid for that language.",
     "invalid": "The change was refused as it is.",
-    "forbidden": "You may not change the vocabulary (quality.defects.manage over every company).",
+    "forbidden": "You may not change the vocabulary: it is kept over every company.",
     "gone": "This code is no longer there.",
     "offline": "No answer from the server: we do not know whether it was saved. Try again."
   }

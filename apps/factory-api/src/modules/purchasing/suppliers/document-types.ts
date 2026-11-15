@@ -56,7 +56,7 @@ export async function setDocumentType(caller: CommandCaller, partyId: string, fi
   const file = await caller.withClient((client) => client.storedFile.findUnique({ where: { id: fileId }, select: { id: true, recordType: true, recordId: true, companyId: true, category: true, status: true, supersededAt: true, documentTypeCode: true } }))
   const party = file ? await caller.withClient((client) => client.party.findUnique({ where: { id: partyId }, select: { id: true, companyId: true } })) : null
   if (!file || !party || file.recordType !== 'Party' || file.recordId !== partyId || !can(actor, PARTIES_VIEW, { companyId: party.companyId, partyId })) throw new NotFoundError('Document not found.')
-  if (!can(actor, FILES_UPLOAD, { companyId: file.companyId })) throw new DomainError('forbidden', "Saying what a supplier's document is needs files.upload over its company.")
+  if (!can(actor, FILES_UPLOAD, { companyId: file.companyId })) throw new DomainError('forbidden', "Saying what a supplier's document is needs the right to upload files over its company.")
   if (!isVaultCategory(file.category)) throw new ConflictError('Only a certificate, a test report or a declaration of the supplier says what document it is: tag its kind first.')
   if (file.status !== 'AVAILABLE' || file.supersededAt !== null) throw new ConflictError('Only the current version of a document says what it is: an earlier version is read-only.')
   const code = body.documentTypeCode === null ? null : body.documentTypeCode.trim().toUpperCase()

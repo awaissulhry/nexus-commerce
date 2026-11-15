@@ -12,7 +12,7 @@ import type { SecurityEventKindCode, SecurityEventView } from './contract'
  * Reads of the security events (B-W2b-399; PLT-075; contract.ts). Rows only, newest first; nothing counted per person.
  */
 
-const WORDS = 'The security events are read by the administrators and the Owner only (security.events.view over every company).'
+const WORDS = 'The security events are read only by the administrators and the Owner: it needs the right to see them over every company.'
 
 export interface SecurityEventsQuery {
   readonly kind?: readonly SecurityEventKindCode[] | undefined

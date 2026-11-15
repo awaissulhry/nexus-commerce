@@ -23,7 +23,7 @@
   },
   "noAccess": {
     "title": "Product settings are not in your role",
-    "body": "Reading them needs the right to see styles (product.styles.view). An administrator gives it in Admin › Roles & permissions."
+    "body": "Reading them needs the right to see styles. An administrator gives it in Admin › Roles & permissions."
   },
   "card": {
     "neverChanged": "Never changed here: it follows what is in force above.",
@@ -267,8 +267,8 @@
   },
   "held": {
     "reading": "Still reading the settings.",
-    "noRight": "Changing product settings needs the product settings right (product.settings.manage) over this company.",
-    "noRightAll": "Every company’s settings are changed only by a role over every company with product.settings.manage.",
+    "noRight": "Changing product settings needs the product settings right over this company.",
+    "noRightAll": "Every company’s settings are changed only by a role over every company that keeps product settings.",
     "offline": "Offline: your changes are kept on this page until the connection is back.",
     "offlineTitle": "Offline",
     "offlineBody": "What you see is the last copy read. Saving is held until the connection is back; your changes are kept on this page.",

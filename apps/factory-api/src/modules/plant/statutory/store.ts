@@ -324,6 +324,6 @@ export async function checkOwner(tx: CommandTx, tenantId: string, ownerId: strin
   if (!ownerId) return null
   const user = await tx.user.findFirst({ where: { id: ownerId, status: 'ACTIVE' }, select: { id: true } })
   const grants = user ? sessionGrants({ requireMfa: false }, await heldRoles(tx, ownerId, now), true) : []
-  if (!user || !can({ audience: 'office', tenantId, grants }, PLANT_VIEW, machine)) throw bodyIssue('ownerId', "Not an office person who sees this machine's plant (plant.view at its site).")
+  if (!user || !can({ audience: 'office', tenantId, grants }, PLANT_VIEW, machine)) throw bodyIssue('ownerId', "Not an office person who sees the plant of this machine's site.")
   return user.id
 }

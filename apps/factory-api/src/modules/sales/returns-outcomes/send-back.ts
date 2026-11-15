@@ -59,7 +59,7 @@ const refuse = (problems: readonly Issue[], words: string): never => {
 export async function sendBack(files: FilesRuntime, caller: CommandCaller, returnId: string, body: SendBackBody, idempotencyKey?: string, onPdfError?: (error: unknown) => void): Promise<SendBackAnswer> {
   const { context, rma: seen } = await officeReturn(caller, returnId, SALES_RETURNS_DECIDE)
   if (body.ddt && !can(actorOf(context), SHIPPING_DDT_ISSUE, { companyId: seen.companyId, siteId: seen.siteId })) {
-    throw new ForbiddenError('Issuing the return DDT needs the permission to issue DDTs (shipping.ddt.issue): ask the warehouse, or send the goods back with a DDT issued under Shipping.')
+    throw new ForbiddenError('Issuing the return DDT needs the permission to issue DDTs: ask the warehouse, or send the goods back with a DDT issued under Shipping.')
   }
   const note = (body.note ?? '').trim() || null
   if (note && note.length > 1000) refuse([{ path: 'body/note', message: 'At most 1000 characters.' }], 'The note is too long.')

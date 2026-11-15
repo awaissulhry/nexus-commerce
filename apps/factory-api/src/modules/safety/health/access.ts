@@ -57,7 +57,7 @@ export function refuse(refusal: HealthRefusal | null): void {
   if (refusal) throw new HealthRefusedError(refusal)
 }
 
-export const VIEW_WORDS = 'The health records are seen by HR and the occupational doctor (safety.health.view), each view recorded.'
-export const MANAGE_WORDS = 'Health visits and judgements are kept by HR and the occupational doctor (safety.health.manage).'
-export const PLANS_WORDS = 'The plans per role are kept by the safety officer and the occupational doctor (safety.health.plans).'
-export const VIEWS_WORDS = 'Who looked at the health records is seen by HR and the data protection officer (safety.health.views).'
+export const VIEW_WORDS = 'The health records are seen by HR and the occupational doctor, each view recorded.'
+export const MANAGE_WORDS = 'Health visits and judgements are kept by HR and the occupational doctor.'
+export const PLANS_WORDS = 'The plans per role are kept by the safety officer and the occupational doctor.'
+export const VIEWS_WORDS = 'Who looked at the health records is seen by HR and the data protection officer.'

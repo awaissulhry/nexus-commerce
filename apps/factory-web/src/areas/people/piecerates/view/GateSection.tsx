@@ -10,6 +10,8 @@ import { OFFICE_PAGES } from '../../../../shell/nav/office-nav'
 import { dayText, preconditionHref, preconditionWords, startDayFloor } from '../model'
 import type { PieceActions, PieceModel } from '../view-model'
 import { ReadBlock, said, Section, usePieceWords } from './parts'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../../lib/i18n/rights'
 
 const built = (path: string): boolean => OFFICE_PAGES.has(path)
 
@@ -41,7 +43,7 @@ export function GateSection({ model, actions }: { model: PieceModel; actions?: P
               ...(href ? { href, linkLabel: t(item.met ? 'gate.see' : 'gate.record') } : {}),
             }
           })
-          const held = view.state === 'OFF' && !view.canSwitch ? t('gate.heldRight', { permission: 'people.piecerates.switch' }) : null
+          const held = view.state === 'OFF' && !view.canSwitch ? t('gate.heldRight', { right: rightRef('people.piecerates.switch') }) : null
           return (
             <>
               <LegalGate

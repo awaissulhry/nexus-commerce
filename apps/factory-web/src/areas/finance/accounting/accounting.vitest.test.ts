@@ -358,7 +358,7 @@ describe('navigation and record links', () => {
 const LEFT_KEY =
   /\b(?:noAccess|band|layout|notice|live|common|keys|status|lockState|package|contents|sum|history|cancel|wizard|step|held|period|check|checks|fix|field|intrastat|flag|review|export|files|lock|lift|stepUp|aside|problem|refusal)\.[a-zA-Z_]+(?:\.[a-zA-Z_]+)*\b/
 const LEFT_PLACEHOLDER = /\{[a-zA-Z]+\}/
-/** Permission and grain names are said on purpose ("needs accounting.export", "the cost grain (money.cost)"). */
+/** Permission and grain names are stripped before the key check, though no screen says one since B-W2b-F51. */
 const SAID = /\b(?:accounting\.(?:view|export|lock|unlock)|money\.(?:price|cost))\b/g
 
 function render(screen: DesignScreen<unknown>, model: unknown, locale: (typeof LOCALES)[number]): string {

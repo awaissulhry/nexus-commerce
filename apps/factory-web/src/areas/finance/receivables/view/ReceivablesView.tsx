@@ -40,6 +40,8 @@ import { PAY_DEPTH } from '../../payments/riba/depth'
 import { ReminderDialog, type ReminderDialogState } from './ReminderDialog'
 import { StatementDialog, type StatementState } from './StatementDialog'
 import '../receivables.css'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../../lib/i18n/rights'
 
 export interface Notice {
   readonly tone: 'danger' | 'info' | 'success' | 'warning'
@@ -436,7 +438,7 @@ function ReceivablesPageView({ model, actions, credit, depth }: { model: Receiva
   if (!can.view) {
     return (
       <div className="fw-frv">
-        <EmptyState title={t('noAccess.title')} description={t('noAccess.body', { permission: 'receivables.view' })} />
+        <EmptyState title={t('noAccess.title')} description={t('noAccess.body', { right: rightRef('receivables.view') })} />
       </div>
     )
   }
@@ -456,7 +458,7 @@ function ReceivablesPageView({ model, actions, credit, depth }: { model: Receiva
     { keys: ['Enter'], does: t('keys.reminder') },
   ]
   const toApprove = model.counts?.toApprove ?? null
-  const printHeld = !can.price ? t('held.price', { permission: 'money.price' }) : picked.length === 0 ? t('held.pickToPrint') : picked.length > 10 ? t('held.printMax', { count: 10 }) : null
+  const printHeld = !can.price ? t('held.price', { right: rightRef('money.price') }) : picked.length === 0 ? t('held.pickToPrint') : picked.length > 10 ? t('held.printMax', { count: 10 }) : null
 
   const focusReminders = () => {
     actions?.onAddress?.({ reminders: 'toApprove' })
@@ -660,7 +662,7 @@ function ReceivablesPageView({ model, actions, credit, depth }: { model: Receiva
                 <MetricStrip metrics={tileMetrics(tile, ageing !== null && tiles.length === 0)} minTileWidth={150} />
               </div>
             ))}
-            {!can.price && <p className="fw-frv-muted">{t('tiles.noPrice', { permission: 'money.price' })}</p>}
+            {!can.price && <p className="fw-frv-muted">{t('tiles.noPrice', { right: rightRef('money.price') })}</p>}
           </div>
         )}
       </section>
@@ -769,7 +771,7 @@ function ReceivablesPageView({ model, actions, credit, depth }: { model: Receiva
                     ? t('held.busy')
                     : !can.approve
                       ? t('held.approve', {
-                          permission: 'receivables.reminders.approve',
+                          right: rightRef('receivables.reminders.approve'),
                         })
                       : pickedReminders.length > 50
                         ? t('held.bulkMax', { count: 50 })

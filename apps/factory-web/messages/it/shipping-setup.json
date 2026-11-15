@@ -9,7 +9,7 @@
     "failed": "Non è stato possibile leggere le impostazioni di spedizione",
     "forbidden": {
       "title": "Non puoi vedere le impostazioni di spedizione",
-      "body": "Serve il diritto di vedere le impostazioni di spedizione (shipping.settings.view). Chiedi a un amministratore."
+      "body": "Serve il diritto di vedere le impostazioni di spedizione. Chiedi a un amministratore."
     },
     "problem": {
       "signed_out": "Sei uscito: accedi di nuovo.",
@@ -80,7 +80,7 @@
   },
   "readOnly": {
     "title": "Puoi leggere queste impostazioni",
-    "body": "Per cambiarle serve il diritto di cambiare le impostazioni di spedizione (shipping.settings.manage)."
+    "body": "Per cambiarle serve il diritto di cambiare le impostazioni di spedizione."
   },
   "connection": {
     "title": "Collegamento corriere",

@@ -313,7 +313,7 @@ export async function moveTemplate(caller: CommandCaller, templateId: string, to
     if (!row) throw new NotFoundError('Measurement template not found.')
     if (row.status === to) throw new InvalidStateError(`Measurement template ${row.code} is ${to === 'ARCHIVED' ? 'archived' : 'active'} already.`)
     if (to === 'ARCHIVED') {
-      if (row.rulesOn) throw new ConflictError(`The made-to-measure rules of ${row.code} are on: they are turned off first (product.mtm.switch).`)
+      if (row.rulesOn) throw new ConflictError(`The made-to-measure rules of ${row.code} are on: they are turned off first (by someone who may turn them on or off).`)
       const styles = await tx.style.count({ where: { measurementTemplateId: templateId, status: { not: 'ARCHIVED' } } })
       if (styles > 0) throw new ConflictError(`${styles} style(s) are measured with ${row.code}: give them another template first.`)
     }

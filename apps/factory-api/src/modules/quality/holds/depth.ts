@@ -247,7 +247,7 @@ export async function moveIntoQuarantineInCommand(tools: CommandTools, current: 
 export async function confirmQuarantine(caller: CommandCaller, holdId: string, body: { readonly version: number; readonly placeCode: string }, idempotencyKey?: string) {
   const context = officeOf(caller)
   const row = await visibleHold(caller, holdId, QUALITY_HOLDS_VIEW)
-  if (!can(actorOf(context), INVENTORY_TRANSFER, { companyId: row.companyId, siteId: row.siteId })) throw new ForbiddenError("Confirming a quarantine move moves the stock: it needs inventory.transfer at the hold's site.")
+  if (!can(actorOf(context), INVENTORY_TRANSFER, { companyId: row.companyId, siteId: row.siteId })) throw new ForbiddenError("Confirming a quarantine move moves the stock: it needs the right to move stock at the hold's site.")
   stockOnly(row)
   askedOrRefused(row)
   const { result } = await command(caller, { name: 'quality.confirmHoldQuarantine', idempotencyKey, input: { holdId, ...body } }, async (tools) => {
@@ -304,7 +304,7 @@ export async function holdByGenealogy(caller: CommandCaller, body: GenealogyBody
     const problems: Issue[] = genealogyProblems(body, businessDate(now))
     if (problems.length > 0) refuse(problems, 'The hold by genealogy is not valid.')
     const start = await genealogyStart(tx, actor, body.type, body.id)
-    if (!can(actor, QUALITY_HOLDS_PLACE, start)) throw new ForbiddenError("A hold by genealogy needs quality.holds.place at the suspect record's site.")
+    if (!can(actor, QUALITY_HOLDS_PLACE, start)) throw new ForbiddenError("A hold by genealogy needs the right to put goods on hold at the suspect record's site.")
     // Why (the HOLD list), before anything is written.
     const reason = await reasonFor(tx, 'HOLD', body.reasonCode)
     if (!reason || !reason.active) refuse([{ path: 'body/reasonCode', message: 'Pick an active reason of the hold list.' }], 'The reason is not an active hold reason.')

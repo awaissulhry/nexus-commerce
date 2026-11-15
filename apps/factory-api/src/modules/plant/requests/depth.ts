@@ -33,16 +33,16 @@ export type ProgressMove = 'ACKNOWLEDGE' | 'ON_THE_WAY' | 'WORKS_AGAIN'
 const STEP_PERMISSION = { ACKNOWLEDGE: PLANT_JOBS_WORK, ON_THE_WAY: PLANT_JOBS_WORK, WORKS_AGAIN: PLANT_REPORT } as const
 const STEP_COMMAND = { ACKNOWLEDGE: 'plant.acknowledgeOnFloor', ON_THE_WAY: 'plant.onTheWay', WORKS_AGAIN: 'plant.confirmWorks' } as const
 const STEP_WORDS = {
-  ACKNOWLEDGE: 'Machine requests are acknowledged on the floor by a technician (plant.jobs.work).',
-  ON_THE_WAY: 'A technician says they are on the way (plant.jobs.work).',
-  WORKS_AGAIN: 'The person who reported a machine problem confirms it works again (plant.report).',
+  ACKNOWLEDGE: 'Machine requests are acknowledged on the floor by a technician.',
+  ON_THE_WAY: 'A technician says they are on the way.',
+  WORKS_AGAIN: 'The person who reported a machine problem confirms it works again.',
 } as const
 
 /** A request the caller may see for this step (else 404) and make it (else 403 in words). */
 async function knownFor(caller: CommandCaller, context: PlantContext, requestId: string, permission: typeof PLANT_JOBS_WORK | typeof PLANT_REPORT | typeof PLANT_REQUESTS_TRIAGE): Promise<RequestRow> {
   const known = isUuid(requestId) ? await caller.withClient((client) => readRequest(client, requestId)) : null
   if (!known || (!may(context, permission, known) && (context.audience === 'floor' || !may(context, PLANT_VIEW, known)))) throw new NotFoundError('Request not found.')
-  if (!may(context, permission, known)) throw new ForbiddenError(permission === PLANT_REQUESTS_TRIAGE ? 'Machine requests are merged by a role that triages them (plant.requests.triage).' : permission === PLANT_JOBS_WORK ? STEP_WORDS.ON_THE_WAY : STEP_WORDS.WORKS_AGAIN)
+  if (!may(context, permission, known)) throw new ForbiddenError(permission === PLANT_REQUESTS_TRIAGE ? 'Machine requests are merged by a role that triages them.' : permission === PLANT_JOBS_WORK ? STEP_WORDS.ON_THE_WAY : STEP_WORDS.WORKS_AGAIN)
   return known
 }
 
@@ -179,7 +179,7 @@ export async function mergeMany(caller: CommandCaller, body: MergeBody, idempote
   for (const [index, entry] of body.requests.entries()) {
     const row = isUuid(entry.id) ? await caller.withClient((client) => readRequest(client, entry.id)) : null
     if (!row || !may(context, PLANT_VIEW, row)) throw new ValidationError('A request named is not there.', [{ path: `body/requests/${index}`, message: 'Request not found.' }])
-    if (!may(context, PLANT_REQUESTS_TRIAGE, row)) throw new ValidationError('A request named is of a site you do not triage.', [{ path: `body/requests/${index}`, message: 'Merged only by a role that triages its requests (plant.requests.triage).' }])
+    if (!may(context, PLANT_REQUESTS_TRIAGE, row)) throw new ValidationError('A request named is of a site you do not triage.', [{ path: `body/requests/${index}`, message: 'Merged only by a role that triages its requests.' }])
     known.push(row)
   }
   const machineId = known[0]!.machineId

@@ -4,6 +4,7 @@ import { Check, Minus } from 'lucide-react'
 import { Disclosure, SummaryTable } from '@nexus/ui/components'
 import { Tag } from '@nexus/ui/primitives'
 import { useT } from '../../../../lib/i18n/provider'
+import { permissionKey } from '../../../../lib/i18n/rights'
 
 export interface MatrixPermission {
   name: string
@@ -19,8 +20,8 @@ export interface MatrixColumn {
   permissions: readonly string[]
 }
 
-/** The message key of a permission's words (`perm.inventory_issue_over`). */
-export const permissionKey = (name: string) => `perm.${name.replace(/\./g, '_')}`
+// B-W2b-F51: the key of a permission's words lives with the shared right-words helper (lib/i18n/rights), for every page.
+export { permissionKey }
 
 /** The areas in the catalogue's order, each with its permissions. */
 export function byArea(permissions: readonly MatrixPermission[]): Array<{ area: string; permissions: MatrixPermission[] }> {

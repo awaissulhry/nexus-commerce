@@ -1,7 +1,7 @@
 {
   "access": {
     "title": "No access to the claims register",
-    "body": "This page needs the right to see compliance (compliance.certificates.view). Ask whoever manages roles in your company."
+    "body": "This page needs the right to see compliance. Ask whoever manages roles in your company."
   },
   "common": {
     "stillLoading": "Still loading…",
@@ -43,8 +43,8 @@
   },
   "held": {
     "company": "Open a company first: a claim belongs to one company.",
-    "manage": "Only a role that keeps the claims register can do this (compliance.claims.manage).",
-    "approve": "Only a role that approves claims can approve (compliance.claims.approve).",
+    "manage": "Only a role that keeps the claims register can do this.",
+    "approve": "Only a role that approves claims can approve.",
     "busy": "Saving…",
     "notDraft": "Only a draft is approved.",
     "nothingChanged": "Nothing changed.",
@@ -57,7 +57,7 @@
     "material": "Choose the material the claim covers.",
     "validUntil": "Give the last valid day as a date.",
     "evidenceMany": "At most 50 evidence files.",
-    "upload": "Uploading a file needs the right to upload files (files.upload).",
+    "upload": "Uploading a file needs the right to upload files.",
     "reason": "Say why it is withdrawn.",
     "reasonLong": "The reason is at most 500 characters.",
     "noneWithdrawable": "Choose claims that are not withdrawn yet.",

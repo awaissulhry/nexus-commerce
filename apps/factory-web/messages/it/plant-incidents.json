@@ -1,6 +1,6 @@
 {
   "access": {
-    "body": "Gli infortuni sono aperti ai ruoli sicurezza, HR e produzione (safety.incidents.view). Chiedi all’amministratore se ti servono.",
+    "body": "Gli infortuni sono aperti ai ruoli sicurezza, HR e produzione. Chiedi all’amministratore se ti servono.",
     "title": "Nessun accesso agli infortuni"
   },
   "action": {
@@ -230,11 +230,11 @@
     },
     "filingWaiting": "Resta aperto finché una denuncia INAIL è in attesa: registrala o segnala non necessaria.",
     "noChange": "Nessuna modifica.",
-    "noManage": "Lo gestiscono i ruoli della sicurezza (safety.incidents.manage).",
-    "noManagePhoto": "Le foto le aggiungono i ruoli della sicurezza (safety.incidents.manage).",
-    "noPeople": "Solo HR e i ruoli della sicurezza (safety.incidents.people).",
-    "noPlantPicker": "Postazioni e macchine richiedono plant.view: scrivi il luogo a parole.",
-    "noReport": "Segnalare dall’ufficio richiede safety.incidents.report.",
+    "noManage": "Lo gestiscono i ruoli della sicurezza.",
+    "noManagePhoto": "Le foto le aggiungono i ruoli della sicurezza.",
+    "noPeople": "Solo HR e i ruoli della sicurezza.",
+    "noPlantPicker": "Postazioni e macchine richiedono il permesso di vedere gli impianti: scrivi il luogo a parole.",
+    "noReport": "Il tuo ruolo non può segnalare un infortunio dall’ufficio.",
     "noRows": "Nessun evento in questa pagina.",
     "noneOpen": "Scegli azioni aperte.",
     "notClosed": "Si riapre solo un evento chiuso.",

@@ -291,7 +291,7 @@
     "sharedReports_other": "{count} reports shared with others left out.",
     "noExport": "No comparison, no export, no print. Closing this window forgets the figures.",
     "noRegister": "You can't choose a person here",
-    "noRegisterBody": "Choosing needs the HR register (people.view).",
+    "noRegisterBody": "Choosing needs the HR register.",
     "who": "Person",
     "search": "Name or employee code",
     "purpose": "Purpose",

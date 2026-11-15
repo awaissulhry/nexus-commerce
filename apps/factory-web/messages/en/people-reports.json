@@ -46,7 +46,7 @@
     "holiday": "Holiday hours",
     "noGroup": "No line or team",
     "noRight": "HR only",
-    "noRightBody": "This report needs people.attendance.view.",
+    "noRightBody": "This report needs the right to see attendance.",
     "pickSite": "Choose a site in the top bar",
     "pickSiteBody": "The attendance report is one site's.",
     "gateOff": "Attendance is off at this site",

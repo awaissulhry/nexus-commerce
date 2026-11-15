@@ -225,9 +225,9 @@ export async function exportRecord(caller: CommandCaller, exportId: string): Pro
       handedOver: { documents: handed.length, flagged: flags.size },
       lock: lock ? { id: lock.id, level: lock.level, status: lock.status } : null,
       actions: {
-        reExport: held(mayExport && latest && (view!.changedSince?.count ?? 0) > 0, !mayExport ? 'Re-exporting needs accounting.export.' : !latest ? 'Only the latest exported batch of the month is re-exported.' : 'Nothing changed since this batch.'),
-        cancel: held(mayExport && row.status === 'DRAFT', !mayExport ? 'Cancelling needs accounting.export.' : `This batch is ${row.status}: only a draft is cancelled.`),
-        lock: held(can(actor, ACCOUNTING_LOCK, { companyId: row.companyId }) && row.status === 'EXPORTED' && !locks.some((entry) => entry.level === 'HARD'), row.status !== 'EXPORTED' ? 'Lock the month once its batch is exported.' : locks.some((entry) => entry.level === 'HARD') ? 'The month is closed for good (a hard lock).' : 'Locking needs accounting.lock.'),
+        reExport: held(mayExport && latest && (view!.changedSince?.count ?? 0) > 0, !mayExport ? 'Re-exporting needs the right to make accounting exports.' : !latest ? 'Only the latest exported batch of the month is re-exported.' : 'Nothing changed since this batch.'),
+        cancel: held(mayExport && row.status === 'DRAFT', !mayExport ? 'Cancelling needs the right to make accounting exports.' : `This batch is ${row.status}: only a draft is cancelled.`),
+        lock: held(can(actor, ACCOUNTING_LOCK, { companyId: row.companyId }) && row.status === 'EXPORTED' && !locks.some((entry) => entry.level === 'HARD'), row.status !== 'EXPORTED' ? 'Lock the month once its batch is exported.' : locks.some((entry) => entry.level === 'HARD') ? 'The month is closed for good (a hard lock).' : 'Locking needs the right to lock a month.'),
         download: held(lacking.length === 0 && row.files.length > 0, lacking.length > 0 ? `Its files carry amounts of a grain you do not hold (${lacking.map((pkg) => PACKAGE_RULES[pkg].words.en).join(', ')}).` : 'This batch has no file yet.'),
       },
       words: `${row.layout === DEFAULT_LAYOUT ? LAYOUT_WORDS : `Layout ${row.layout}.`}${row.status === 'DRAFT' ? ' A draft: its export did not finish; the next export of the month replaces it, or cancel it.' : ''}`,

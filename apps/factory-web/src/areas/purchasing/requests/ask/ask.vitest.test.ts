@@ -51,7 +51,7 @@ describe('ask to buy: who may ask, the draft, why Send is held', () => {
       const phrase = sendHeld(model(over))
       return phrase ? say(t, phrase) : null
     }
-    expect(held({ can: { ...can, ask: false } })).toMatch(/needs purchasing.requests.ask/)
+    expect(held({ can: { ...can, ask: false } })).toBe('Your role cannot ask the buyers to buy. Ask an administrator.')
     expect(held({ options: { status: 'loading' } })).toBe('Still reading the materials.')
     expect(held({})).toBe('Pick the material first.')
     const picked = withMaterial(model().draft, leather)
@@ -160,7 +160,7 @@ describe('the calls, as the API takes them', () => {
 
 const LEFT_KEY = /\b(?:common|band|action|options|field|shortage|then|done|held|problem|refused|status|source|mine|uom|title)\.[a-zA-Z_]+(?:\.[a-zA-Z_]+)*\b/
 const LEFT_PLACEHOLDER = /\{[a-zA-Z]+\}/
-/** Permission names are said on purpose ("needs purchasing.requests.ask"). */
+/** No permission name is said (B-W2b-F51); a stray one would not read as a key. */
 const SAID = /\b(?:purchasing\.[a-z.]+)\b/g
 
 function render(screen: DesignScreen<unknown>, value: unknown, locale: (typeof LOCALES)[number]): string {

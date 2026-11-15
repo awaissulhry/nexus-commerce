@@ -1,6 +1,6 @@
 {
   "access": {
-    "title": "Manutenzione programmata e verifiche richiede plant.view",
+    "title": "Manutenzione programmata e verifiche richiede il permesso di vedere gli impianti",
     "body": "Chiedi a un amministratore un ruolo che veda lo stabilimento (Manutenzione, Responsabile di produzione o RSPP)."
   },
   "band": {
@@ -184,7 +184,7 @@
     "keptSame": "Già conservato come versione {version} ({date}): stesso contenuto.",
     "download": "Scarica la copia conservata",
     "clock": "Orologio del server Nexus",
-    "sealNoRight": "L’impronta della copia conservata richiede files.read.",
+    "sealNoRight": "L’impronta della copia conservata richiede il permesso di vedere i file di un record.",
     "sealFailed": "Non è stato possibile leggere l’impronta della copia conservata: apri la copia.",
     "pdf": "Verbale di verifica (PDF)"
   },
@@ -369,7 +369,7 @@
     "reports_other": "{count} verbali caricati."
   },
   "held": {
-    "manage": "Richiede plant.checks.manage.",
+    "manage": "Il tuo ruolo non può gestire le verifiche obbligatorie.",
     "saving": "Salvataggio…",
     "reading": "Ancora in lettura.",
     "machine": "Scegli la macchina.",
@@ -389,9 +389,9 @@
     "performedByLong": "Chi l’ha fatta è troppo lungo.",
     "nextDue": "La prossima scadenza è dopo il giorno della verifica.",
     "correctionReason": "Scrivi perché l’esito si corregge.",
-    "jobRight": "Creare un intervento richiede plant.jobs.manage.",
-    "lockRight": "Bloccare una macchina richiede plant.report.",
-    "parties": "Scegliere un ente esterno richiede parties.view.",
+    "jobRight": "Creare un intervento richiede il permesso di pianificare gli interventi di manutenzione.",
+    "lockRight": "Bloccare una macchina richiede il permesso di segnalare problemi alle macchine.",
+    "parties": "Scegliere un ente esterno richiede il permesso di vedere clienti e fornitori.",
     "newDate": "Scegli la nuova data.",
     "reason": "Scrivi il motivo.",
     "reasonLong": "Il motivo è troppo lungo.",

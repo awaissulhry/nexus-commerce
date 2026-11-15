@@ -124,7 +124,7 @@
   },
   "noAccess": {
     "title": "Not for your role",
-    "body": "The certificate register needs the permission to view certificates (compliance.certificates.view): the compliance lead, quality or an administrator grants it."
+    "body": "The certificate register needs the permission to view certificates: the compliance lead, quality or an administrator grants it."
   },
   "view": {
     "all": "All",
@@ -156,8 +156,8 @@
   },
   "held": {
     "registerMax": "The register shows the first {max} certificates: narrow it with a view or a search.",
-    "manage": "Your role does not change certificates (compliance.certificates.manage).",
-    "upload": "Your role does not upload files (files.upload).",
+    "manage": "Your role does not change certificates.",
+    "upload": "Your role does not upload files.",
     "busy": "Working…",
     "long": "At most 500 characters.",
     "notDraft": "Only a draft is registered.",
@@ -273,7 +273,7 @@
     "otherDay": "Another day: for an audit or a complaint",
     "run": "Check",
     "held": {
-      "styles": "Your role does not read styles (product.styles.view).",
+      "styles": "Your role does not read styles.",
       "style": "Choose the style first.",
       "colourway": "Choose the colourway.",
       "size": "Choose the size.",
@@ -320,7 +320,7 @@
     "bodyMeta": "notified body {number} {name}",
     "modelMeta": "model {model}",
     "noPanels": "The thread, files and history are shown here.",
-    "panelsHeld": "The thread, files and history need the permission to read threads (threads.read)."
+    "panelsHeld": "The thread, files and history need the permission to read threads."
   },
   "tab": {
     "coverage": "Coverage",
@@ -479,7 +479,7 @@
       "already": "It is covered by this certificate already: end that coverage first to change it.",
       "colourways": "Tick at least one colourway.",
       "sizes": "Tick at least one size.",
-      "materials": "Your role does not read materials (product.materials.view).",
+      "materials": "Your role does not read materials.",
       "reason": "Say why it ends."
     },
     "endTitle": "End the coverage of {code}",
@@ -550,7 +550,7 @@
     "held": {
       "status": "A {status} certificate takes no new PDF."
     },
-    "readHeld": "Your role does not read files (files.read).",
+    "readHeld": "Your role does not read files.",
     "empty": {
       "title": "No PDF yet",
       "body": "Upload the notified body’s signed PDF."
@@ -833,7 +833,7 @@
       "beforeTold": "The answer cannot come before the notified body was told.",
       "reason": "Say why.",
       "file": "Choose the notified body's answer (PDF).",
-      "upload": "Your role does not upload files (files.upload)."
+      "upload": "Your role does not upload files."
     },
     "write": {
       "refused": "The renewal step was refused."

@@ -38,7 +38,7 @@ async function knownSite(caller: CommandCaller, context: OfficeContext, siteId: 
 }
 
 const assertManage = (context: OfficeContext, site: { readonly companyId: string; readonly id: string }) => {
-  if (!may(context, PRODUCTION_CALLS_MANAGE, { companyId: site.companyId, siteId: site.id })) throw new ForbiddenError("A site's help-call types are kept with production.calls.manage (Floor rules & codes).")
+  if (!may(context, PRODUCTION_CALLS_MANAGE, { companyId: site.companyId, siteId: site.id })) throw new ForbiddenError("A site's help-call types are kept with the right to keep them (Floor rules & codes).")
 }
 
 /** The routing fields sent, checked against the site: an ACTIVE team of the site, an ACTIVE off-standard code of its company. */

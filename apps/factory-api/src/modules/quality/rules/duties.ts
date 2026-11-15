@@ -146,7 +146,7 @@ export async function getRules(caller: CommandCaller, query: { readonly companyI
 function assertMayChange(caller: CommandCaller, companyId: string | null): OfficeContext {
   const context = officeOf(caller)
   if (!mayWrite(actorOf(context), QUALITY_SETTINGS_MANAGE, companyId)) {
-    throw new ForbiddenError(companyId === null ? 'The quality rules of every company are changed only by a role over every company.' : 'Changing the quality rules needs quality.settings.manage for the company.')
+    throw new ForbiddenError(companyId === null ? 'The quality rules of every company are changed only by a role over every company.' : 'Changing the quality rules needs the right to change the quality settings for the company.')
   }
   return context
 }

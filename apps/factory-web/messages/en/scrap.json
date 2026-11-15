@@ -2,7 +2,7 @@
   "page": {
     "noAccess": {
       "title": "You cannot open Scrap & rework",
-      "body": "This needs the permission {permission}. Ask an administrator to give it to your role."
+      "body": "This needs the right “{right}”. Ask an administrator to give it to your role."
     },
     "pareto": "Pareto by reason",
     "approve": "Approve",
@@ -164,7 +164,7 @@
     "currency": "Currency"
   },
   "held": {
-    "permission": "This needs the permission {permission}.",
+    "permission": "This needs the right “{right}”.",
     "busy": "Working…",
     "loading": "Still loading",
     "reason": "Say why in at least 3 characters.",

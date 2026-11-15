@@ -182,9 +182,9 @@ export async function recordView(client: Client, row: CountRow, context: OfficeC
   const waiting = row.status === 'SUBMITTED' && request?.status === 'PENDING' ? await waitingWords(client, request, row.number) : null
   const held = row.status !== 'SUBMITTED' ? 'NOT_SUBMITTED' : !approve || waiting ? 'NO_RIGHT' : own.length > 0 ? 'OWN_VARIANCE' : null
   const heldReason =
-    held === 'NOT_SUBMITTED' ? 'The count is approved once it is submitted.' : waiting ? waiting : held === 'NO_RIGHT' ? 'Approving needs inventory.counts.approve.' : held === 'OWN_VARIANCE' ? own[0]!.message : null
+    held === 'NOT_SUBMITTED' ? 'The count is approved once it is submitted.' : waiting ? waiting : held === 'NO_RIGHT' ? 'Approving needs the right to approve counts.' : held === 'OWN_VARIANCE' ? own[0]!.message : null
   const blocked = submitProblems(facts)
-  const noManage = 'Needs inventory.counts.manage.'
+  const noManage = 'Needs the right to keep counts.'
   const live = ['DRAFT', 'COUNTING', 'SUBMITTED', 'APPROVED'].includes(row.status)
   const start = (() => {
     if (row.status !== 'DRAFT') return no('Only a DRAFT count is started.')
@@ -198,12 +198,12 @@ export async function recordView(client: Client, row: CountRow, context: OfficeC
     if (!(row.status === 'APPROVED' || (row.status === 'SUBMITTED' && !row.approvalRequired))) {
       return no(row.status === 'SUBMITTED' ? 'The differences wait for their approval.' : 'A count is applied once it is approved.')
     }
-    return allowedTo(INVENTORY_ADJUST) ? yes : no('Posting the differences needs inventory.adjust.')
+    return allowedTo(INVENTORY_ADJUST) ? yes : no('Posting the differences needs the right to adjust stock.')
   })()
   const signOffAction = (() => {
     if (row.kind !== 'YEAR_END') return no('Only a year-end inventory is signed off.')
     if (row.status !== 'APPLIED') return no(row.status === 'SIGNED_OFF' ? 'Signed off already.' : 'It is signed off once its differences are applied.')
-    if (!allowedTo(INVENTORY_COUNTS_SIGNOFF)) return no('Signing off needs inventory.counts.signoff.')
+    if (!allowedTo(INVENTORY_COUNTS_SIGNOFF)) return no('Signing off needs the right to sign off a year-end inventory.')
     return seesCost(context) ? yes : no('The valued list is a cost document: signing it off needs the cost grain.')
   })()
   const names = await peopleNames(client, [row.createdById, row.submittedById, row.approvedById, row.rejectedById, row.appliedById, row.signedOffById])
@@ -246,7 +246,7 @@ export async function recordView(client: Client, row: CountRow, context: OfficeC
       record: row.status === 'COUNTING' ? (manage ? yes : no(noManage)) : no('Lines are counted while the count is COUNTING.'),
       submit: row.status !== 'COUNTING' ? no('Only a COUNTING count is submitted.') : !manage ? no(noManage) : blocked.length > 0 ? no(blocked.map((problem) => problem.message).join(' ')) : yes,
       approve: held === null ? yes : no(heldReason!),
-      sendBack: row.status !== 'SUBMITTED' ? no('Only a SUBMITTED count is sent back.') : approve ? yes : no('Sending back needs inventory.counts.approve.'),
+      sendBack: row.status !== 'SUBMITTED' ? no('Only a SUBMITTED count is sent back.') : approve ? yes : no('Sending back needs the right to approve counts.'),
       apply: applyAction,
       signOff: signOffAction,
       cancel: !live ? no(`A ${row.status} count is not cancelled.`) : manage ? yes : no(noManage),

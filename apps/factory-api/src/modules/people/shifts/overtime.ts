@@ -266,8 +266,8 @@ export async function checkRequest(caller: CommandCaller, body: { readonly siteI
 
 // ---- writes ------------------------------------------------------------------------------------------------------------
 
-const MANAGE_WORDS = 'Overtime of this site is planned by a role that asks people (people.overtime.manage).'
-const APPROVE_WORDS = 'Overtime of this site is approved by a role that approves it (people.overtime.approve).'
+const MANAGE_WORDS = 'Overtime of this site is planned by a role that asks people.'
+const APPROVE_WORDS = 'Overtime of this site is approved by a role that approves it.'
 
 /** The request locked (the guard's own key, then the row), read again, its version compared and the action allowed. */
 async function lockRequest(tools: CommandTools, requestId: string, version: number | null, action: OvertimeAction): Promise<{ row: RequestRow; counts: Counts }> {

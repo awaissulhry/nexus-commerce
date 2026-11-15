@@ -16,6 +16,8 @@ import type { HeldEntry, KitStatus, PickRow, ReadinessMaterial } from './api'
 import { heldPhrase, KIT_TONE, materialReason, PICKING_NAMESPACES, popoverMaterials, READINESS_TONE, readinessKey } from './model'
 import '../../_shared/stock/stock.css'
 import './picking.css'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../lib/i18n/rights'
 
 /**
  * View parts Warehouse › Picking & kits (SCR-237) shares between the page, the pick list dialog and the paper: the
@@ -159,7 +161,7 @@ export function CheckList({ items, label }: { items: readonly { id: string; ok: 
 
 export function NoPickingAccess() {
   const t = useWords()
-  return <EmptyState icon={<ShieldOff size={22} aria-hidden />} title={t('stock:problem.forbidden')} description={t('stock:problem.noPermission', { permission: 'inventory.stock.view' })} />
+  return <EmptyState icon={<ShieldOff size={22} aria-hidden />} title={t('stock:problem.forbidden')} description={t('stock:problem.noPermission', { right: rightRef('inventory.stock.view') })} />
 }
 
 export function KeysModal({ own, onClose }: { own: readonly ListKey[]; onClose: () => void }) {

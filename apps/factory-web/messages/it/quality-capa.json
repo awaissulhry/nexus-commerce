@@ -100,7 +100,7 @@
     "more": "Altro su questa pagina",
     "print": "Stampa questa vista",
     "noAccessTitle": "Non puoi vedere le azioni correttive",
-    "noAccessBody": "Questa pagina richiede quality.capa.view. Lo concede il titolare o l'amministratore dell'azienda con un ruolo (Sistema › Ruoli e permessi).",
+    "noAccessBody": "Questa pagina richiede il permesso di vedere le azioni correttive. Lo concede il titolare o l'amministratore dell'azienda con un ruolo (Sistema › Ruoli e permessi).",
     "failed": "Non è stato possibile leggere le azioni correttive",
     "noMatch": "Nessuna azione correttiva corrisponde",
     "noMatchBody": "In queste righe nulla corrisponde ai filtri.",
@@ -129,7 +129,7 @@
   },
   "board": {
     "closedLane": "Trascina qui per chiudere: i controlli e le parole di chiusura",
-    "readOnly": "Puoi vedere la bacheca; spostare una scheda richiede quality.capa.manage.",
+    "readOnly": "Puoi vedere la bacheca; spostare una scheda richiede il permesso di seguire le CAPA.",
     "oneType": "La bacheca mostra un tipo alla volta, con le sue fasi: passa da CAPA a 8D nella barra degli strumenti.",
     "moved": "{number} spostata a {stage}",
     "notMoved": "{number} non è stata spostata"
@@ -194,7 +194,7 @@
     "failed": "Non salvato"
   },
   "held": {
-    "noManage": "Serve quality.capa.manage (la qualità segue le azioni correttive).",
+    "noManage": "Serve il permesso di seguire le CAPA (la qualità segue le azioni correttive).",
     "offline": "Offline: le modifiche aspettano che torni la connessione.",
     "FINAL": "È {stage}: non cambia più.",
     "ACTION_ENDED": "L'azione è {status}: non cambia più.",
@@ -203,12 +203,12 @@
     "NO_REPORT": "Prima conserva una versione dell'8D (Conserva una versione, qui sopra).",
     "notYourAction": "Solo la qualità, o chi è responsabile dell'azione, la registra come fatta.",
     "tooManyActions": "Una CAPA ha al massimo {count} azioni.",
-    "noUpload": "Aggiungere un file richiede files.upload.",
-    "noFiles": "Aprire un file richiede files.read.",
-    "noParties": "Scegliere un cliente richiede parties.view.",
+    "noUpload": "Aggiungere un file richiede il permesso di caricare file.",
+    "noFiles": "Aprire un file richiede il permesso di vedere i file di un record.",
+    "noParties": "Scegliere un cliente richiede il permesso di vedere clienti e fornitori.",
     "cannotSee": "Un reclamo che non puoi vedere.",
     "shareOnly8D": "Al cliente si condivide solo un 8D.",
-    "noShare": "Condividere richiede quality.complaints.manage e files.manage."
+    "noShare": "Condividere richiede i permessi di seguire i reclami e di condividere file fuori dall'ufficio."
   },
   "refused": {
     "FINAL": "È chiusa o annullata: non cambia più.",
@@ -221,7 +221,7 @@
     "NCR_KEEPS_CAPA": "La NC è decisa o chiusa e resta legata alla sua CAPA.",
     "OTHER_COMPANY": "Registrazione di un'altra azienda: una CAPA prende quelle della propria azienda.",
     "TOO_MANY_REMINDERS": "Già ricordata troppe volte.",
-    "NO_PERMISSION": "Portarla a CAPA richiede quality.ncr.manage nel suo stabilimento.",
+    "NO_PERMISSION": "Portarla a CAPA richiede il permesso di gestire le NC nel suo stabilimento.",
     "NO_CAPA": "Il reclamo non nomina nessuna CAPA o 8D.",
     "NO_REPORT": "L'8D non ha ancora una versione conservata.",
     "other": "Non è possibile nel suo stato attuale."
@@ -334,7 +334,7 @@
     "dropSource": "Togli {number}",
     "findSources": "Trova una NC o un reclamo",
     "find": "Trova",
-    "noFindRight": "Trovare NC o reclami richiede quality.ncr.view o quality.complaints.view.",
+    "noFindRight": "Trovare NC o reclami richiede il permesso di vedere le NC o i reclami dei clienti.",
     "foundNone": "Nulla di aperto corrisponde a queste parole.",
     "found": "Trovati",
     "pickedAlready": "Già aggiunta.",

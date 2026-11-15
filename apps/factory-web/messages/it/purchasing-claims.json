@@ -118,7 +118,7 @@
     "matchLabel": "Credito chiesto e nota di credito abbinata",
     "matchWhere": "Fatture e note di credito dei fornitori si abbinano in Amministrazione; l’abbinamento arriva con le schermate delle fatture fornitori.",
     "matched": "Nota di credito abbinata",
-    "noCost": "Gli importi richiedono il permesso costi (money.cost): il tuo ruolo legge il reclamo senza.",
+    "noCost": "Gli importi richiedono il permesso costi: il tuo ruolo legge il reclamo senza.",
     "none": "Nessuno",
     "notMatched": "Ancora nessuna nota di credito abbinata",
     "openFinance": "Apri in Amministrazione",
@@ -312,8 +312,8 @@
       "state": "Le righe cambiano solo finché il reclamo è una bozza; questo è {status}."
     },
     "loading": "Ancora in caricamento…",
-    "permission": "Richiede {permission}: il tuo ruolo non può farlo.",
-    "permissionPlain": "Richiede {permission}: il tuo ruolo non può farlo.",
+    "permission": "Richiede il permesso «{right}»: il tuo ruolo non può farlo.",
+    "permissionPlain": "Richiede il permesso «{right}»: il tuo ruolo non può farlo.",
     "return": {
       "allGone": "Tutte le righe di questo reso sono già partite.",
       "claim": "Questo reclamo tiene la merce (credito o sostituzione): solo un reso rimanda la merce.",
@@ -435,7 +435,7 @@
     "keyReturn": "Reso al fornitore",
     "more": "Altro",
     "noAccess": {
-      "body": "Questa pagina richiede purchasing.view: chiedi a un amministratore un ruolo acquisti o magazzino.",
+      "body": "Questa pagina richiede il permesso di vedere gli ordini d'acquisto: chiedi a un amministratore un ruolo acquisti o magazzino.",
       "title": "Non puoi vedere resi e reclami"
     },
     "return": "Reso al fornitore",
@@ -466,7 +466,7 @@
       "title": "Impossibile caricare il reclamo"
     },
     "forbidden": {
-      "body": "Richiede purchasing.view sul suo fornitore e sito.",
+      "body": "Richiede il permesso di vedere gli ordini d'acquisto sul suo fornitore e sito.",
       "title": "Non puoi vedere questo reclamo"
     },
     "loading": "Caricamento del reclamo…",
@@ -480,7 +480,7 @@
     "openReceipt": "Apri il ricevimento {number}",
     "readOnlyCancelled": "Sola lettura: annullato il {time}",
     "readOnlyClosed": "Sola lettura: chiuso il {time}",
-    "readOnlyRight": "Puoi leggere questo reclamo; per modificarlo serve {permission}.",
+    "readOnlyRight": "Puoi leggere questo reclamo; per modificarlo serve il permesso «{right}».",
     "reload": "Ricarica",
     "tabsLabel": "Sezioni del reclamo",
     "title": "Reclamo al fornitore"
@@ -551,15 +551,15 @@
     "message": "Le tue parole (facoltativo)",
     "messageHint": "Nexus scrive il testo standard nella lingua del fornitore, senza prezzi; le tue parole lo sostituiscono.",
     "noContacts": "{supplier} non ha contatti attivi con un’e-mail.",
-    "noDdtRight": "Il DDT di reso richiede shipping.ddt.issue: chiedi al magazzino.",
+    "noDdtRight": "Il DDT di reso richiede il permesso di emettere DDT: chiedi al magazzino.",
     "noHideInStock": "Il lotto {lot} non ha pelli in giacenza nel suo sito.",
     "noLots": {
       "body": "Solo i lotti con giacenza nel sito possono essere resi.",
       "title": "Nessun lotto in giacenza corrisponde"
     },
     "noMail": "Senza e-mail, la merce e il suo DDT avvisano il fornitore. Puoi scrivere più tardi dal thread del reclamo.",
-    "noPartiesRight": "I contatti del fornitore richiedono parties.view.",
-    "noStockRight": "Per cercare un lotto serve inventory.stock.view.",
+    "noPartiesRight": "I contatti del fornitore richiedono il permesso di vedere clienti e fornitori.",
+    "noStockRight": "Per cercare un lotto serve il permesso di vedere le giacenze.",
     "noSupplier": "nessun fornitore registrato",
     "nothingInStock": "Il lotto {lot} non ha giacenza nel suo sito.",
     "onHand": "{quantity} {unit} in giacenza",
@@ -568,7 +568,7 @@
     "placeOnHand": "{quantity} {unit} qui",
     "quantityHint": "Quantità in {unit}; tutto il lotto è {total}. Lascia vuoto un posto per tenerne la giacenza.",
     "refused": {
-      "forbidden": "Il tuo ruolo non può rendere merce: servono purchasing.claims.manage, purchasing.claims.return e shipping.ddt.issue.",
+      "forbidden": "Il tuo ruolo non può rendere merce: servono i permessi di gestire i reclami ai fornitori, di rendere la merce e di emettere DDT.",
       "gone": "Parte di questa merce è già stata resa: è stato riletto.",
       "hideGone": "Una pelle spuntata non è più in giacenza: scegli di nuovo il lotto.",
       "mail": "Un contatto spuntato non ha più l’e-mail: spuntane un altro o invia senza e-mail.",
@@ -626,7 +626,7 @@
     "titleAgain": "Invia di nuovo il reclamo {number} a {supplier}",
     "withMail": "Invialo per e-mail",
     "letterAttached": "La lettera di reclamo (PDF, senza prezzi) parte con l’e-mail; indica {photos} foto.",
-    "letterNoFiles": "La lettera di reclamo non parte con questa e-mail: il tuo ruolo non può leggere i file (files.read). L’e-mail parte come testo.",
+    "letterNoFiles": "La lettera di reclamo non parte con questa e-mail: il tuo ruolo non può leggere i file. L’e-mail parte come testo.",
     "letterNoLetterhead": "La lettera di reclamo non parte con questa e-mail: l’intestazione della società è incompleta. L’e-mail parte come testo."
   },
   "status": {
@@ -697,7 +697,7 @@
     "subtitle": "Un reclamo per accredito o sostituzione: la merce resta a magazzino. Nasce come bozza da inviare dalla sua scheda.",
     "create": "Crea reclamo",
     "goodsTitle": "Di cosa tratta il reclamo",
-    "noStockRight": "Per cercare un lotto serve inventory.stock.view.",
+    "noStockRight": "Per cercare un lotto serve il permesso di vedere le giacenze.",
     "foundAtHint": "Vuoto: dal lotto (in quarantena: al ricevimento; rifiutato o bloccato: al controllo; altrimenti a magazzino).",
     "foundAtDefault": "Dal lotto",
     "quantityHint": "Quantità in {unit}; tutto il lotto è {total}. Il reclamo riguarda ciò che scrivi; nulla esce dal magazzino.",
@@ -707,7 +707,7 @@
       "next": "Aggiungi le foto e invialo dalla scheda del reclamo; la lettera parte con l’e-mail."
     },
     "refused": {
-      "forbidden": "Il tuo ruolo non può creare reclami (purchasing.claims.manage)."
+      "forbidden": "Il tuo ruolo non può creare reclami."
     },
     "noLotsBody": "Qui si può reclamare solo un lotto con giacenza nel sito."
   },
@@ -733,7 +733,7 @@
     "openPhoto": "Apri la foto {n} a piena grandezza",
     "photoPending": "Non ancora pronta",
     "photoFailed": "Impossibile mostrarla",
-    "noFilesRight": "Serve files.read",
+    "noFilesRight": "Serve il permesso di vedere i file di un record",
     "removePhoto": "Togli la foto {n}",
     "removeTitle": "Togliere la foto {n}?",
     "removeBody": "«{name}» viene tolta dalla bozza di reclamo (scattata per errore). La rimozione resta nell’attività.",

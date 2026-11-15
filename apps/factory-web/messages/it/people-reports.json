@@ -46,7 +46,7 @@
     "holiday": "Ore festive",
     "noGroup": "Nessuna linea o squadra",
     "noRight": "Solo risorse umane",
-    "noRightBody": "Questo report richiede people.attendance.view.",
+    "noRightBody": "Questo report richiede il permesso di vedere le presenze.",
     "pickSite": "Scegli una sede nella barra in alto",
     "pickSiteBody": "Il report presenze è di una sola sede.",
     "gateOff": "Le presenze sono spente in questa sede",

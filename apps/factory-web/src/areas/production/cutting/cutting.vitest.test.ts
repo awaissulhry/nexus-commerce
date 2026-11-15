@@ -33,6 +33,7 @@ import {
   writeProblem,
 } from './model'
 import { designScreen as recordScreen } from './record/fixtures'
+import { rightRef } from '../../../lib/i18n/rights'
 
 /**
  * Production › Cutting (SCR-238 and the Cut record; B-W2a-60): the pure rules (the address, the tiles, a cut's state,
@@ -90,7 +91,7 @@ describe('Allocate hides and Print tickets', () => {
     expect(allocateHeld(WAITING, canAs('manager'))).toBeNull()
     expect(allocateHeld(HELD, canAs('manager'))).toBeNull()
     expect(allocateHeld({ ...CUTTING, state: 'CUT' }, canAs('manager'))).toEqual({ key: 'alloc.held.cut' })
-    expect(allocateHeld(WAITING, canAs('buyer'))).toEqual({ key: 'held.permission', params: { permission: 'inventory.reserve' } })
+    expect(allocateHeld(WAITING, canAs('buyer'))).toEqual({ key: 'held.permission', params: { right: rightRef('inventory.reserve') } })
     expect(allocateHeld(null, canAs('manager'))).toEqual({ key: 'held.loading' })
     expect(AVAILABILITY.hides.some((hide) => hide.held)).toBe(true)
   })
@@ -98,7 +99,7 @@ describe('Allocate hides and Print tickets', () => {
   it('Print tickets opens the tickets of exactly one cut', () => {
     expect(ticketsHeld(1, canAs('manager'))).toBeNull()
     expect(ticketsHeld(2, canAs('manager'))).toEqual({ key: 'held.tickets.one' })
-    expect(ticketsHeld(1, canAs('buyer'))).toEqual({ key: 'held.permission', params: { permission: 'workorders.view' } })
+    expect(ticketsHeld(1, canAs('buyer'))).toEqual({ key: 'held.permission', params: { right: rightRef('workorders.view') } })
   })
 })
 
@@ -132,7 +133,7 @@ describe('the cut record', () => {
     expect(recutHeld(open, CUT_LOG, canAs('manager'), false)).toBeNull()
     expect(recutHeld(open, EMPTY_LOG, canAs('manager'), false)).toEqual({ key: 'held.recut.noEntry', params: { cell: 'NER 50', part: 'sleeve' } })
     expect(recutHeld(RECUTS[1]!, CUT_LOG, canAs('manager'), false)).toEqual({ key: 'held.recut.done' })
-    expect(recutHeld(open, CUT_LOG, canAs('supervisor'), false)).toEqual({ key: 'held.permission', params: { permission: 'production.scrap' } })
+    expect(recutHeld(open, CUT_LOG, canAs('supervisor'), false)).toEqual({ key: 'held.permission', params: { right: rightRef('production.scrap') } })
   })
 
   it('the yield per lot adds the areas first (never an average of percentages)', () => {
@@ -150,7 +151,7 @@ describe('the cut record', () => {
     expect(voidHeld(BUNDLES.bundles[0]!, can, false)).toEqual({ key: 'held.ticket.scanned', params: { count: 2 } })
     expect(voidHeld(BUNDLES.bundles[2]!, can, false)).toBeNull()
     expect(voidHeld(BUNDLES.bundles[3]!, can, false)).toEqual({ key: 'held.ticket.voided' })
-    expect(reprintHeld(BUNDLES.bundles[0]!, canAs('supervisor'), false)).toEqual({ key: 'held.permission', params: { permission: 'production.bundles' } })
+    expect(reprintHeld(BUNDLES.bundles[0]!, canAs('supervisor'), false)).toEqual({ key: 'held.permission', params: { right: rightRef('production.bundles') } })
     expect(ticketLines({ ...BUNDLES, bundles: [{ ...BUNDLES.bundles[0]!, tickets: null }] })[0]!.print).toBe('UNKNOWN')
     expect(ticketLines({ ...BUNDLES, bundles: [{ ...BUNDLES.bundles[0]!, tickets: [] }] })[0]!.print).toBe('PDF')
   })
@@ -214,7 +215,7 @@ describe('the pages in the map', () => {
 
 const LEFT_KEY = /\b(?:state|kind|view|tile|tiles|col|list|page|common|live|held|alloc|notice|problem|record|tab|part|lay|pieces|recuts|yield|tickets|hideState|bulk|csv|newOrder|shadeLot|ofWorkOrder|balance|feedback|status|plan|refusal|warning)\.[a-zA-Z_]+(?:\.[a-zA-Z_]+)*\b/
 const LEFT_PLACEHOLDER = /\{[a-zA-Z]+\}/
-/** Permission names are said on purpose ("needs inventory.reserve"). */
+/** Permission names are stripped before the key check, though no screen says one since B-W2b-F51. */
 const SAID = /\b(?:production\.[a-z.]+|inventory\.[a-z.]+|workorders\.[a-z.]+|purchasing\.[a-z.]+|money\.cost)\b/g
 
 function render(screen: DesignScreen<unknown>, model: unknown, locale: (typeof LOCALES)[number]): string {

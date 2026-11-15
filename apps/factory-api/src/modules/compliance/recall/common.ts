@@ -80,7 +80,7 @@ export async function visibleEntry(db: Reader, context: OfficeContext, entryId: 
 /** The permission over a scope, or a 403 in words. */
 export function assertMay(context: OfficeContext, permission: Permission, scope: { readonly companyId: string; readonly partyId?: string | null }, what?: string): void {
   if (!can(actorOf(context), permission, { companyId: scope.companyId, ...(scope.partyId ? { partyId: scope.partyId } : {}) })) {
-    throw new ForbiddenError(what ? `${what} needs ${permission} over this company.` : undefined)
+    throw new ForbiddenError(what ? `${what} needs a right your role does not hold over this company.` : undefined)
   }
 }
 

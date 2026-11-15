@@ -2512,7 +2512,7 @@ describe('the W2a golden flow: a factory day through the HTTP routes', { timeout
     let back = (record.decisions as Json[]).find((row) => row.disposition.code === 'RETURN_TO_SUPPLIER')!
     // Refusal in words: opening the supplier claim is purchasing's (the inspector holds no purchasing.claims.manage).
     const refused = await ok(P.inspector, 'POST', `${url}/decisions/${back.id}/carry-out`, { version: back.version, claim: { kind: 'CLAIM', reasonCode: 'QUALITY', reasonNote: 'Grain crack across the butt' } }, 403)
-    expect(refused.error.message).toBe("Opening the supplier claim needs purchasing.claims.manage at the NCR's site.")
+    expect(refused.error.message).toBe("Opening the supplier claim needs the right to keep supplier claims at the NCR's site.")
     // The buyer opens it from the lot (the rest of the hide), the inspector names it on the decision.
     const { claim } = await ok(
       P.buyer,
@@ -2797,7 +2797,7 @@ describe('the W2a golden flow: a factory day through the HTTP routes', { timeout
     const writeOff = await ok(P.warehouse, 'POST', '/inventory/write-offs', { siteId: siteA1(), reasonCode: 'DAMAGED', note: 'Found after the close', lines: [{ lotId: kx().liningLot, fromLocationId: kx().bin, quantity: '0.5' }] }, 409)
     expect((writeOff.error.issues as Json[]).map((issue) => issue.message)).toEqual(['Dated inside a month closed for good.'])
     expect(writeOff.error.message).toMatch(words)
-    expect(writeOff.error.message).toContain('is not posted. Only someone who may lift a hard lock (accounting.unlock: the owner, by default) reopens the month')
+    expect(writeOff.error.message).toContain('is not posted. Only someone who may lift a hard lock (the owner, by default) reopens the month')
     await settle()
   })
 
@@ -2808,7 +2808,7 @@ describe('the W2a golden flow: a factory day through the HTTP routes', { timeout
     const payment = await ok(P.finance, 'POST', '/payments', { companyId: companyA(), partyId: s.p1, amount: 100, receivedOn: '2026-09-30', externalRef: 'CRO-GOLDEN-CLOSED-MONTH' }, 409)
     expect(payment.error.issues).toEqual([{ path: 'body/receivedOn', message: 'Dated inside a month closed for good.' }])
     expect(payment.error.message).toMatch(words)
-    expect(payment.error.message).toContain('(bank reference CRO-GOLDEN-CLOSED-MONTH) is not recorded. Only someone who may lift a hard lock (accounting.unlock: the owner, by default) reopens the month')
+    expect(payment.error.message).toContain('(bank reference CRO-GOLDEN-CLOSED-MONTH) is not recorded. Only someone who may lift a hard lock (the owner, by default) reopens the month')
     const { payments } = await ok(P.finance, 'GET', `/payments?companyId=${companyA()}&from=2026-09-01&to=2026-09-30&limit=200`)
     expect((payments as Json[]).some((row) => row.externalRef === 'CRO-GOLDEN-CLOSED-MONTH')).toBe(false)
     expect((await ok(P.finance, 'GET', `/accounting/periods/${september}?companyId=${companyA()}`)).lock).toMatchObject({ level: 'HARD', status: 'LOCKED' })

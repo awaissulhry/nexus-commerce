@@ -275,7 +275,7 @@ describe('the kit out with its DDT for work on our behalf (SCM-140), stock at th
   it("refuses the DDT to a role that may send the kit but not issue DDTs", async () => {
     const lining = order.kitLines.find((line: Json) => line.item.id === A.lining)
     const error = await refused('kitNoDdt', 'POST', url(order.id, '/kit/send'), { version: order.version, lines: [{ lineId: lining.id, fromLocationId: bin, lotId: liningLot }], ddt: TYPED_DDT }, 403)
-    expect(error.message).toContain('shipping.ddt.issue')
+    expect(error.message).toContain('the permission to issue DDTs')
   })
 
   it('moves the lining into the workshop’s place, counts the pieces out, issues the DDT with the bundles, AT_WORKSHOP', async () => {

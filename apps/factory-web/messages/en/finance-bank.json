@@ -1,7 +1,7 @@
 {
   "noAccess": {
     "title": "You cannot see the bank",
-    "body": "The bank's statements and lines need the right to see the company's bank (payments.bank.view). Ask an administrator."
+    "body": "The bank's statements and lines need the right to see the company's bank. Ask an administrator."
   },
   "common": {
     "retry": "Try again",
@@ -252,20 +252,20 @@
   },
   "held": {
     "busy": "Wait: the last action is still running.",
-    "match": "You can see the bank, not match its lines (payments.bank.match).",
-    "record": "Accepting money in records a payment: that needs payments.record.",
-    "void": "Taking it back voids the payment it recorded: that needs payments.void.",
-    "writeOff": "Writing off needs payments.writeOff.",
+    "match": "You can see the bank, not match its lines.",
+    "record": "Accepting money in records a payment: that needs the right to record payments.",
+    "void": "Taking it back voids the payment it recorded: that needs the right to void payments.",
+    "writeOff": "Writing off needs the right to write off small differences.",
     "writeOffNote": "Say why it is written off.",
     "lockReason": "Say why it goes into the closed month.",
-    "import": "You can see the bank, not import statements (payments.bank.import).",
-    "upload": "Importing a file needs the right to upload files (files.upload).",
+    "import": "You can see the bank, not import statements.",
+    "upload": "Importing a file needs the right to upload files.",
     "matched": "This line is matched already.",
     "stale": "An item it names was paid meanwhile: look again or choose another.",
     "currency": "Payments are recorded in euro: this line is in {currency}. Record it by hand.",
     "chooseOut": "Money out is matched from its suggestion; a supplier invoice cannot be chosen by hand here yet.",
-    "parties": "Choosing a customer needs the right to see customers (parties.view).",
-    "price": "Choosing the amounts needs the price grain (money.price).",
+    "parties": "Choosing a customer needs the right to see customers.",
+    "price": "Choosing the amounts needs the price grain.",
     "leave": "A line cannot be set aside yet (bank charges, salaries): it stays to match until a step adds that.",
     "notMatched": "This line is not matched.",
     "noLine": "Open a line first.",
@@ -277,10 +277,10 @@
     "dryRunFirst": "Check the file first.",
     "skipErrors_one": "{count} line cannot be read: tick to import without it, or fix the mapping.",
     "skipErrors_other": "{count} lines cannot be read: tick to import without them, or fix the mapping.",
-    "figures": "You can see their figures, not record them (receivables.theirFigures.manage).",
-    "figuresPrice": "Their figures are prices: typing them needs the price grain (money.price).",
+    "figures": "You can see their figures, not record them.",
+    "figuresPrice": "Their figures are prices: typing them needs the price grain.",
     "figuresMany": "At most 500 rows.",
-    "filesRead": "Opening the file needs the right to read files (files.read).",
+    "filesRead": "Opening the file needs the right to read files.",
     "pasteNothing": "Paste rows first (each ending with an amount)."
   },
   "keys": {
@@ -447,7 +447,7 @@
     },
     "noAccess": {
       "title": "You cannot see customers' figures",
-      "body": "Their figures need the right to see receivables (receivables.view)."
+      "body": "Their figures need the right to see receivables."
     },
     "col": {
       "customer": "Customer",

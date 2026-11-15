@@ -1,6 +1,6 @@
 {
   "access": {
-    "body": "Health surveillance is protected: HR and the occupational doctor see it (safety.health.view); the safety officer keeps the plans per role. Ask your administrator if you need it.",
+    "body": "Health surveillance is protected: HR and the occupational doctor see it; the safety officer keeps the plans per role. Ask your administrator if you need it.",
     "title": "No access to health surveillance"
   },
   "band": {

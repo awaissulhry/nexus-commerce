@@ -26,7 +26,7 @@ export async function reviewRuleFor(db: Client, companyId: string): Promise<Revi
 
 const answerOf = (companyId: string, version: number | null, rule: ReviewRule, canManage: boolean) => ({ companyId, version, ...rule, windowDays: STANDARD_REVIEW.windowDays, canManage, words: [reviewRuleWords(rule)] })
 
-const manageWords = 'The standard review limits are set by a role with people.efficiency.review over every site of the company.'
+const manageWords = 'The standard review limits are set by a role with the right to decide the standard review over every site of the company.'
 
 /** GET /people/efficiency/review/rule. */
 export async function readReviewRule(caller: CommandCaller, query: { readonly companyId: string }) {

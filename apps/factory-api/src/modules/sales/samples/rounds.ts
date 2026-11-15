@@ -213,7 +213,7 @@ export async function createRound(caller: CommandCaller, body: CreateRoundBody, 
     return { style, revision, companyId: companyId! }
   })
   if (!may(context, SALES_SAMPLES_MANAGE, { companyId: checked.companyId, partyId: body.partyId ?? null })) {
-    throw new ForbiddenError('Your role does not ask for sample rounds for this company or customer (sales.samples.manage).')
+    throw new ForbiddenError('Your role does not ask for sample rounds for this company or customer.')
   }
   const id = newId()
   await command(caller, { name: 'sales.samples.request', idempotencyKey, input: { ...body, chargeAmountMinor: markMoney('price', amount ?? null) } }, async (tools) => {

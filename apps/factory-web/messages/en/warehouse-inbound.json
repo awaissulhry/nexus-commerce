@@ -14,11 +14,11 @@
   "noteEdit": "Change the dock note",
   "noteCard": "Note for the dock on {label}",
   "held": {
-    "noReceive": "Receiving goods needs the right to receive at this site (inventory.receive)."
+    "noReceive": "Receiving goods needs the right to receive at this site."
   },
   "forbidden": {
     "title": "You cannot see the inbound board",
-    "body": "It needs the right to see stock at the site (inventory.stock.view): ask your administrator."
+    "body": "It needs the right to see stock at the site: ask your administrator."
   },
   "failed": "The deliveries could not be read",
   "retry": "Try again",

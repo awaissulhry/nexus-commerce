@@ -13,6 +13,8 @@ import { dayAt, quantity } from '../../../../_shared/buying/model'
 import type { KitLine, SubcontractOrder } from '../../api'
 import { actHeld, say } from '../../model'
 import type { SubcontractRecordActions, SubcontractRecordModel } from '../record-model'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../../../lib/i18n/rights'
 
 const LINE_TONE = { PLANNED: 'warning', SENT: 'success', CANCELLED: 'neutral' } as const
 /** Kit lines may be planned or added while the order may still send (the API's KIT_OPEN). */
@@ -95,7 +97,7 @@ export function KitTab({ order, model, actions }: { order: SubcontractOrder; mod
             ? [
                 model.can.kit
                   ? { id: 'return', label: t('kit.takeBack'), icon: <Undo2 size={14} aria-hidden />, onSelect: () => actions?.onDialog?.({ kind: 'returnLine', lineId: data.id, reason: '' }) }
-                  : { id: 'return', label: t('kit.takeBack'), disabled: true, description: sc('held.permission', { permission: 'purchasing.subcontract.kit' }) },
+                  : { id: 'return', label: t('kit.takeBack'), disabled: true, description: sc('held.permission', { right: rightRef('purchasing.subcontract.kit') }) },
               ]
             : []
       return items.length > 0 ? <Menu label={<MoreHorizontal size={16} aria-hidden />} align="right" triggerProps={{ 'aria-label': t('kit.rowMenu', { seq: data.seq }) }} items={items} /> : null

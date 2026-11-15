@@ -81,8 +81,8 @@
     "inQueue": "You can follow it in Requests to buy."
   },
   "held": {
-    "noAsk": "Asking to buy needs purchasing.requests.ask. Ask an administrator.",
-    "noDraft": "Drafting a purchase order is for buyers (purchasing.manage): send it to the buyers instead.",
+    "noAsk": "Your role cannot ask the buyers to buy. Ask an administrator.",
+    "noDraft": "Drafting a purchase order is for buyers: send it to the buyers instead.",
     "busy": "Sending…",
     "offline": "Offline — send it when the connection is back.",
     "done": "Sent already.",
@@ -148,7 +148,7 @@
     },
     "noAccess": {
       "title": "Requests to buy are not in your role",
-      "body": "Asking to buy needs purchasing.requests.ask. Ask an administrator."
+      "body": "Your role cannot ask the buyers to buy. Ask an administrator."
     },
     "failed": "Couldn’t load your requests",
     "empty": {

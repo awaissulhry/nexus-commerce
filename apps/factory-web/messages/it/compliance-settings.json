@@ -1,9 +1,9 @@
 {
   "access": {
     "title": "Nessun accesso a Norme e mercati",
-    "body": "Questa pagina richiede la lettura conformità (compliance.certificates.view). Chiedi a chi gestisce i ruoli.",
+    "body": "Questa pagina richiede la lettura conformità. Chiedi a chi gestisce i ruoli.",
     "cr6Title": "La regola del cromo VI non è nel tuo ruolo",
-    "cr6Body": "Per leggerla serve la lettura dei lotti (quality.lots.view), come in Test e sostanze."
+    "cr6Body": "Per leggerla serve la lettura dei lotti, come in Test e sostanze."
   },
   "band": {
     "label": "Norme e mercati",
@@ -97,7 +97,7 @@
     },
     "mgKg": "{value} mg/kg",
     "materialsLink": "Apri Prodotti › Materiali e accessori (test Cr VI)",
-    "materialsNoRight": "L'elenco dei materiali non è nel tuo ruolo (product.materials.view).",
+    "materialsNoRight": "L'elenco dei materiali non è nel tuo ruolo.",
     "noOwnRow": "Questo ambito non ha una regola propria: vale quella sopra."
   },
   "loosen": {
@@ -673,11 +673,11 @@
     "busy": "In corso…",
     "offline": "Offline: le modifiche attendono il ritorno della connessione.",
     "nothingChanged": "Ancora nessuna modifica.",
-    "crViManage": "Solo il titolare cambia questa regola (quality.settings.manage).",
-    "requirementsManage": "Il tuo ruolo non può cambiare i requisiti (compliance.requirements.manage su tutte le aziende).",
-    "rulesManage": "Il tuo ruolo non può cambiare norme e mercati (compliance.rules.manage).",
-    "phrasesManage": "Il tuo ruolo non può cambiare le frasi (compliance.phrases.manage).",
-    "phrasesApprove": "Il tuo ruolo non può approvare traduzioni (compliance.phrases.approve).",
+    "crViManage": "Solo il titolare cambia questa regola.",
+    "requirementsManage": "Il tuo ruolo non può cambiare i requisiti su tutte le aziende.",
+    "rulesManage": "Il tuo ruolo non può cambiare norme e mercati.",
+    "phrasesManage": "Il tuo ruolo non può cambiare le frasi.",
+    "phrasesApprove": "Il tuo ruolo non può approvare traduzioni.",
     "ownWords": "Hai proposto tu questo testo: lo approva una seconda persona.",
     "locked": "La legge fissa questo blocco: continua a bloccare.",
     "lockedOn": "La legge fissa questo requisito a un blocco: resta acceso.",
@@ -728,8 +728,8 @@
     "validFrom": "Indica il primo giorno.",
     "validTo": "L'ultimo giorno viene dopo il primo.",
     "noneEndable": "Scegli righe valide oggi.",
-    "stylesView": "I modelli non sono nel tuo ruolo (product.styles.view).",
-    "partiesView": "Le controparti non sono nel tuo ruolo (parties.view)."
+    "stylesView": "I modelli non sono nel tuo ruolo.",
+    "partiesView": "Le controparti non sono nel tuo ruolo."
   },
   "problem": {
     "unavailable": "Il server della fabbrica non ha risposto. Riprova tra poco.",

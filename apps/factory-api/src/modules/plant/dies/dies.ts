@@ -277,7 +277,7 @@ export async function createDie(caller: CommandCaller, body: CreateBody, idempot
   assertCostGrain(context, body.purchaseCost !== undefined)
   const site = await caller.withClient((client) => client.site.findUnique({ where: { id: body.siteId }, select: { id: true, companyId: true, status: true } }))
   if (!site) throw bodyIssue('siteId', 'Not a site of the group.')
-  assertMayWrite(context, PLANT_MACHINES_MANAGE, { companyId: site.companyId, siteId: site.id }, "The dies of this site are registered by a role that keeps the plant's register (plant.machines.manage).")
+  assertMayWrite(context, PLANT_MACHINES_MANAGE, { companyId: site.companyId, siteId: site.id }, "The dies of this site are registered by a role that keeps the plant's register.")
   if (site.status !== 'ACTIVE') throw bodyIssue('siteId', 'This site is archived.')
   const code = normalDieCode(body.code)
   const id = newId()
@@ -335,7 +335,7 @@ export async function updateDie(caller: CommandCaller, dieId: string, body: Upda
   if (problems.length > 0) throw problemsError(problems, 'The change is not valid.')
   if (body.condition !== undefined && !isSettableCondition(body.condition)) refuse(dieRefusal.retiredByRetire())
   assertCostGrain(context, body.purchaseCost !== undefined)
-  await keptDie(caller, context, dieId, "Dies are changed by a role that keeps the plant's register (plant.machines.manage).")
+  await keptDie(caller, context, dieId, "Dies are changed by a role that keeps the plant's register.")
   const { result } = await command(caller, { name: 'plant.changeDie', idempotencyKey, input: { dieId, ...body } }, async (tools) => {
     const { tx, now } = tools
     const die = (await lockDie(tx, dieId))!
@@ -367,7 +367,7 @@ export async function updateDie(caller: CommandCaller, dieId: string, body: Upda
 /** POST /plant/dies/:dieId/retire: RETIRED for good, the reason in the audit row and on the note. */
 export async function retireDie(caller: CommandCaller, dieId: string, body: { readonly version: number; readonly reason: string }, idempotencyKey?: string) {
   const context = officeOf(caller)
-  await keptDie(caller, context, dieId, "Dies are retired by a role that keeps the plant's register (plant.machines.manage).")
+  await keptDie(caller, context, dieId, "Dies are retired by a role that keeps the plant's register.")
   const { result, replayed } = await command(caller, { name: 'plant.retireDie', idempotencyKey, input: { dieId, ...body } }, async (tools) => {
     const { tx, now } = tools
     const die = (await lockDie(tx, dieId))!

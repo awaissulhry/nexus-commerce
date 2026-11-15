@@ -240,7 +240,7 @@ describe('made real (PLN-067)', { timeout: 90_000 }, () => {
     expect(preview.results[0]).toMatchObject({ id: red.id, kind: 'MAKE', ok: true, problems: [], workOrder: { id: null, number: expect.any(String), revision: 1, dueDate: red.dueDate, cells: 2, pieces: 3 }, subcontractOrder: null })
     // Without workorders.manage: held, in words; nothing made.
     const missing = await convert('noWorkOrders', [red])
-    expect(missing.results[0]).toMatchObject({ ok: false, error: 'forbidden', problems: [expect.stringMatching(/workorders.manage/)] })
+    expect(missing.results[0]).toMatchObject({ ok: false, error: 'forbidden', problems: [expect.stringMatching(/the right to make work orders/)] })
     // A stale version: refused, nothing made.
     const stale = await convert('planner', [{ ...red, version: red.version - 1 }])
     expect(stale.results[0]).toMatchObject({ ok: false, error: 'conflict' })
@@ -284,7 +284,7 @@ describe('planned subcontract orders (PLN-069)', { timeout: 90_000 }, () => {
     // The planner alone may not release nor draft for a workshop: held, in words.
     const preview = await convert('planner', [red], { preview: true })
     expect(preview.results[0].ok).toBe(false)
-    expect(preview.results[0].problems.join(' ')).toMatch(/workorders.release.*purchasing.subcontract.manage/)
+    expect(preview.results[0].problems.join(' ')).toMatch(/the right to release work orders.*the right to manage subcontract orders/)
     const ready = await convert('maker', [red], { preview: true })
     expect(ready.results[0]).toMatchObject({ ok: true, subcontractOrder: { workshop: { id: A.workshop }, operations: [{ seq: 20 }] } })
 

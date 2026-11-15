@@ -30,7 +30,7 @@ import { authorisationWords, trainingOfAuthorisation } from './training'
  * /people/skills/authorisations/prerequisites. Fitness (yes / no only) comes with the health pages (B-W2b-135).
  */
 
-const MANAGE_WORDS = 'Machine authorisations are given by a role that authorises people on machines (people.authorisations.manage).'
+const MANAGE_WORDS = 'Machine authorisations are given by a role that authorises people on machines.'
 const placedOf = (row: { companyId: string; siteId: string }) => ({ companyId: row.companyId, siteId: row.siteId })
 const audited = (row: AuthorisationRow | null) => (row ? { machineClassId: row.machineClassId, authorisedOn: dayOf(row.authorisedOn), validUntil: dayOrNull(row.validUntil), revoked: row.revokedAt !== null } : null)
 

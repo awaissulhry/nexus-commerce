@@ -19,7 +19,7 @@ import { actorIdOf, assertMay, assertMayWrite, officeOf, problemsError, refuse }
  * fields that changed, never their values. Reading them is ./protected.ts (each view recorded).
  */
 
-const PEOPLE_WORDS = 'The people involved in an incident are kept by the safety roles and HR (safety.incidents.people).'
+const PEOPLE_WORDS = 'The people involved in an incident are kept by the safety roles and HR.'
 
 export interface PersonFields {
   readonly involvement: Involvement

@@ -2,6 +2,8 @@ import { isApiError } from '../../../../lib/api/errors'
 import { recordAddress } from '../../../../lib/records/record-links'
 import { OFFICE_PAGES } from '../../../../shell/nav/office-nav'
 import type { CostDocument, InvoiceDocument, OrderDocuments, PaymentDocument } from './api'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../../lib/i18n/rights'
 
 /**
  * The order profitability report's documents on SCR-155's DetailModal (B-W2b-416; FIN-053): the pure rules — where each
@@ -45,8 +47,8 @@ export const costKindKey = (row: CostDocument): string => `costKind.${row.kind}`
 /** A note's words. */
 export const noteKey = (note: string): string => `note.${note}`
 
-/** A group held for want of a permission: its words name the permission (Finance pages name it, as SCR-155 does). */
-export const heldPhrase = (held: string): { key: string; params: { permission: string } } => ({ key: 'held', params: { permission: held } })
+/** A group held for want of a permission: its words name the right in words, never its code (B-W2b-F51; as SCR-155 does). */
+export const heldPhrase = (held: string): { key: string; params: { right: string } } => ({ key: 'held', params: { right: rightRef(held) } })
 
 /** The API's error in this part's words. */
 export function documentsProblem(error: unknown): string {

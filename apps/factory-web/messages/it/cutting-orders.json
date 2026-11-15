@@ -7,7 +7,7 @@
   },
   "noAccess": {
     "title": "Non puoi aprire questa pagina",
-    "body": "Serve il permesso {permission}. Chiedi a un amministratore di darlo al tuo ruolo."
+    "body": "Serve il permesso «{right}». Chiedi a un amministratore di darlo al tuo ruolo."
   },
   "live": {
     "connecting": "Connessione agli aggiornamenti in corso",
@@ -115,7 +115,7 @@
     }
   },
   "held": {
-    "permission": "Serve il permesso {permission}.",
+    "permission": "Serve il permesso «{right}».",
     "busy": "In corso…",
     "loading": "Ancora in lettura",
     "reason": "Scrivi il motivo in almeno 3 caratteri.",
@@ -230,7 +230,7 @@
     "ratioLine": "Taglie nel piazzamento: {ratio}",
     "table": "Tavolo di taglio",
     "tableHint": "Facoltativo: il buono si stampa sulla sua stampante di etichette.",
-    "tableNoRight": "Scegliere un tavolo richiede print.view; si può lasciare vuoto.",
+    "tableNoRight": "Scegliere un tavolo richiede il permesso di vedere le stampanti; si può lasciare vuoto.",
     "noTable": "Nessun tavolo per ora",
     "due": "Consegna",
     "dueHint": "Facoltativa.",
@@ -626,7 +626,7 @@
     "lot_other": "lotto {lot}, tonalità {shade}: {count} pelli",
     "unknown": "non nota",
     "many": "Pelli di {count} lotti di tonalità",
-    "rule": "Un solo lotto di tonalità per ordine: il tavolo di taglio avvisa e un capo firma Taglia comunque; un altro lotto si riserva solo con inventory.shade.override."
+    "rule": "Un solo lotto di tonalità per ordine: il tavolo di taglio avvisa e un capo firma Taglia comunque; un altro lotto si riserva solo con il permesso di ammettere un altro lotto di tonalità."
   },
   "ofWorkOrder": {
     "title": "Ordini di taglio e materassi",

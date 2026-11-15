@@ -46,7 +46,7 @@
     },
     "ledger": "Each value is the stock ledger's, as each move was valued: receipts at their purchase order's price, issues at the lot's average cost, opening stock and finished garments at the standard cost. Work in progress is the work order's cost ledger.",
     "accountant": "To confirm with the accountant: the costing method, and whether to revalue what was posted before it is chosen.",
-    "noCost": "Values need the cost grain (money.cost): quantities, areas and hides are shown; the value columns are not drawn."
+    "noCost": "Values need the cost grain: quantities, areas and hides are shown; the value columns are not drawn."
   },
   "totals": {
     "title": "Totals by category",
@@ -207,7 +207,7 @@
   },
   "noAccess": {
     "title": "You cannot see the stock valuation",
-    "body": "It needs the stock permission (inventory.stock.view). Ask an administrator."
+    "body": "It needs the stock permission. Ask an administrator."
   },
   "common": {
     "retry": "Try again",

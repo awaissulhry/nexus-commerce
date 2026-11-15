@@ -31,7 +31,7 @@ export interface ReplacementBody {
 
 export async function makeReplacementOrder(caller: CommandCaller, returnId: string, body: ReplacementBody, idempotencyKey?: string): Promise<{ return: ReturnView; order: { id: string; number: string } }> {
   const { context, rma: seen } = await officeReturn(caller, returnId, SALES_RETURNS_DECIDE)
-  if (!mayOn(context, ORDERS_MANAGE, seen)) throw new ForbiddenError(`Making the replacement order needs ${ORDERS_MANAGE} over the customer.`)
+  if (!mayOn(context, ORDERS_MANAGE, seen)) throw new ForbiddenError('Making the replacement order needs the right to work on sales orders over the customer.')
   if ((body.customerRef ?? '').trim().length > RETURN_LIMITS.customerRef) throw new ValidationError(`At most ${RETURN_LIMITS.customerRef} characters.`, [{ path: 'body/customerRef', message: `At most ${RETURN_LIMITS.customerRef} characters.` }])
   const { result } = await command(caller, { name: 'returns.makeReplacement', idempotencyKey, input: { returnId, ...body } }, async (tools) => {
     const { tx, now } = tools

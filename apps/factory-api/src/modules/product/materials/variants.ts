@@ -258,7 +258,7 @@ export async function updateVariant(caller: CommandCaller, materialId: string, v
 export async function bomSizes(caller: CommandCaller, materialId: string) {
   const material = await readMaterial(caller, materialId)
   const actor = actorOf(contextOf(caller))
-  if (!can(actor, PRODUCT_STYLES_VIEW, {})) throw new ForbiddenError('The BOM lines of a material are read with product.styles.view.')
+  if (!can(actor, PRODUCT_STYLES_VIEW, {})) throw new ForbiddenError('The BOM lines of a material are read with the right to see styles.')
   return caller.withClient(async (db) => {
     const variants = await db.itemVariant.findMany({ where: { itemId: material.id }, select: COLUMNS, orderBy: [{ code: 'asc' }] })
     const lines = await db.bomLine.findMany({

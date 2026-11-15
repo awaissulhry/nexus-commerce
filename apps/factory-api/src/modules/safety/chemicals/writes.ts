@@ -32,7 +32,7 @@ import { CHEMICAL_SELECT, chemicalViews, mayManage, newestFirst, SHEET_SELECT, s
  * factory-db's guards hold the same rules for every login (…_protected_safety_w2b_guards); these answer first, in words.
  */
 
-const MANAGE_WORDS = 'The chemical register of this site is kept by a role that keeps it (safety.chemicals.manage).'
+const MANAGE_WORDS = 'The chemical register of this site is kept by a role that keeps it.'
 const PDF = 'application/pdf'
 
 const refuseWith = (refusal: ChemicalRefusal | null): void => {

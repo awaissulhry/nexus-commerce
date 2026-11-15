@@ -1,7 +1,7 @@
 {
   "noAccess": {
     "title": "You don't have access to costing",
-    "body": "Standard vs actual needs the permission {permission}. Ask a person who manages roles."
+    "body": "Standard vs actual needs the right “{right}”. Ask a person who manages roles."
   },
   "band": {
     "label": "Scope and actions",
@@ -52,8 +52,8 @@
   },
   "noCost": {
     "title": "Amounts need the cost permission",
-    "body": "Your role does not hold the cost grain (money.cost): minutes and quantities are shown, amounts are not.",
-    "tiles": "Values and amounts are shown only to roles with the cost grain (money.cost)."
+    "body": "Your role does not hold the cost grain: minutes and quantities are shown, amounts are not.",
+    "tiles": "Values and amounts are shown only to roles with the cost grain."
   },
   "list": {
     "title": "Work orders: standard vs actual",
@@ -310,11 +310,11 @@
     }
   },
   "held": {
-    "noReverse": "Reversing an entry needs the permission {permission}.",
+    "noReverse": "Reversing an entry needs the right “{right}”.",
     "isReversal": "This entry is a reversal: it is not reversed in turn.",
     "reversed": "This entry was reversed already: an entry is reversed once.",
     "busy": "Working…",
-    "noWorkOrders": "Opening a work order needs the permission {permission}."
+    "noWorkOrders": "Opening a work order needs the right “{right}”."
   },
   "reverse": {
     "title": "Reverse an entry of {number}",
@@ -376,11 +376,11 @@
     "title": "Labour & cost",
     "noView": {
       "title": "Cost needs the costing permission",
-      "body": "Labour & cost needs the permission {permission}. The rest of the work order stays as it is."
+      "body": "Labour & cost needs the right “{right}”. The rest of the work order stays as it is."
     },
     "noCost": {
       "title": "Cost needs the cost permission",
-      "body": "Your role does not hold the cost grain (money.cost): the whole cost section is shown only to roles with it. Wages are never shown here."
+      "body": "Your role does not hold the cost grain: the whole cost section is shown only to roles with it. Wages are never shown here."
     },
     "draft": {
       "title": "Nothing costed before the release",

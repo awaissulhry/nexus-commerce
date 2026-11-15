@@ -316,7 +316,7 @@ const NAMESPACES = ['safety-calendar', 'plant-calendar-view']
 const TOP = [...new Set(NAMESPACES.flatMap((ns) => Object.keys(CATALOGUE.en[ns] ?? {}).map((key) => key.split('.')[0]!.replace(/_(one|other)$/, ''))))]
 const LEFT_KEY = new RegExp(`\\b(?:${TOP.join('|')})\\.[a-zA-Z_-]+(?:\\.[a-zA-Z_-]+)*\\b`)
 const LEFT_PLACEHOLDER = /\{[a-zA-Z]+\}/
-/** Permission names are said on purpose ("safety.calendar.manage"); e-mail domains and file names are not keys. */
+/** Permission names are stripped before the key check, though no screen says one since B-W2b-F51; e-mail domains and file names are not keys. */
 const SAID = /\b(?:safety\.[a-zA-Z.]+|files\.upload|[a-z-]+\.example\.com|[\w -]+\.pdf)\b/g
 
 function render(screen: DesignScreen<unknown>, model: unknown, locale: (typeof LOCALES)[number]): string {

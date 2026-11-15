@@ -2,6 +2,8 @@ import { isApiError } from '../../../lib/api/errors'
 import { formatNumber } from '../../../lib/i18n/format'
 import type { Locale } from '../../../lib/i18n/locales'
 import type { BridgeReason, CostedStatus, CostingMethod, LedgerEntry, MethodView, WorkOrderCost, WorkOrderCostRow, WorkOrderCostsQuery } from './api'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../lib/i18n/rights'
 
 /**
  * Finance › Costing › Standard vs actual (SCR-154) and the work order's Labour & cost tab: the pure rules — who may see
@@ -194,7 +196,7 @@ export function bridgeSteps(detail: Pick<WorkOrderCost, 'bridge' | 'basis' | 'st
 
 /** Why "Reverse entry" is held for this entry; null when it may be reversed. */
 export function reverseHeld(entry: Pick<LedgerEntry, 'reversalOfId' | 'reversedBy'>, can: Pick<CostingCan, 'reverse'>, busy = false): Phrase | null {
-  if (!can.reverse) return { key: 'held.noReverse', params: { permission: 'costing.ledger.manage' } }
+  if (!can.reverse) return { key: 'held.noReverse', params: { right: rightRef('costing.ledger.manage') } }
   if (entry.reversalOfId) return { key: 'held.isReversal' }
   if (entry.reversedBy) return { key: 'held.reversed' }
   if (busy) return { key: 'held.busy' }

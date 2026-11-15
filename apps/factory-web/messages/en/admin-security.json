@@ -10,7 +10,7 @@
     "later": "Coming later: jobs and integrations with their runs, and sign-in with Microsoft or Google.",
     "noAccess": {
       "title": "Not yours to open",
-      "body": "Security & health needs the right to see it (security.view). Ask an administrator of your company."
+      "body": "Security & health needs the right to see it. Ask an administrator of your company."
     },
     "failed": {
       "title": "This could not be read",

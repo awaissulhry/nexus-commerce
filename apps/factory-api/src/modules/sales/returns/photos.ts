@@ -47,7 +47,7 @@ function siteUploader(request: FastifyRequest, tenantId: string, rma: FloorRmaRo
 /** The record a photo goes on and who uploads it: the office (with files.upload) or the dock (the site's system caller). */
 async function photoTarget(request: FastifyRequest, returnId: string, permission: Permission, record: { readonly type: string; readonly id: string }) {
   const { context, rma } = await dockReturn(request, returnId, permission)
-  if (context.audience === 'office' && !can(actorOf(context), FILES_UPLOAD, { companyId: rma.companyId, siteId: rma.siteId })) throw new ForbiddenError(`Adding a photo needs ${FILES_UPLOAD} over the company.`)
+  if (context.audience === 'office' && !can(actorOf(context), FILES_UPLOAD, { companyId: rma.companyId, siteId: rma.siteId })) throw new ForbiddenError('Adding a photo needs the right to upload files over the company.')
   const found = isUuid(record.id)
     ? record.type === RECEIPT_RECORD
       ? await request.withClient((client) => client.returnReceipt.findFirst({ where: { id: record.id, returnId: rma.id }, select: { id: true } }))

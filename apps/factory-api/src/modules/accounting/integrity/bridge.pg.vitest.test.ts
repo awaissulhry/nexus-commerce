@@ -201,7 +201,7 @@ describe('closing a month for good needs accounting.close (FIN-155)', () => {
   it('is refused in words to whoever only locks months, before the phrase or a code is asked', async () => {
     const answer = await call('locker', 'POST', '/accounting/locks', { companyId: ids.companyA, month: '2026-08', level: 'HARD', phrase: 'close August 2026' })
     expect(answer.statusCode).toBe(403)
-    expect(answer.json().error.message).toBe('Closing a month for good needs accounting.close: nothing dated in it can change afterwards.')
+    expect(answer.json().error.message).toBe('Closing a month for good needs the right to make the final close: nothing dated in it can change afterwards.')
     expect(await admin(`SELECT id FROM "PeriodLock" WHERE "periodStart" = '2026-08-01'`)).toEqual([])
   })
 })

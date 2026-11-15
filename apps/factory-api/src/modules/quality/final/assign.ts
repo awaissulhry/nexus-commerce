@@ -72,9 +72,9 @@ export async function assigneeProblem(db: Reader, context: OfficeContext, assign
   if (assignee.userId) {
     const user = isUuid(assignee.userId) ? await db.user.findUnique({ where: { id: assignee.userId }, select: { status: true } }) : null
     if (!user || user.status !== 'ACTIVE') return 'Not an active office user of this group.'
-    if (!can(await userActor(db, context, assignee.userId, now), QUALITY_INSPECTIONS_RECORD, scope)) return 'This person does not record inspections at this site (quality.inspections.record).'
+    if (!can(await userActor(db, context, assignee.userId, now), QUALITY_INSPECTIONS_RECORD, scope)) return 'This person does not record inspections at this site.'
   } else if (assignee.workerId) {
-    if (!can(actorOf(context), WORKERS_VIEW, scope)) return "Assigning a floor inspector needs workers.view at the site (whoever sees the site's workers)."
+    if (!can(actorOf(context), WORKERS_VIEW, scope)) return "Assigning a floor inspector needs the right to see the floor workers at the site."
     const worker = isUuid(assignee.workerId)
       ? await db.worker.findFirst({ where: { id: assignee.workerId, siteId: inspection.siteId, status: 'ACTIVE', roles: { some: { endedAt: null, role: { permissions: { has: QUALITY_INSPECTIONS_RECORD } } } } }, select: { id: true } })
       : null
@@ -96,7 +96,7 @@ export async function listInspectors(caller: CommandCaller, query: { readonly si
     const site = isUuid(query.siteId) ? await db.site.findUnique({ where: { id: query.siteId }, select: { id: true, companyId: true } }) : null
     if (!site || !can(actor, 'quality.inspections.view', { companyId: site.companyId, siteId: site.id })) throw new NotFoundError('Site not found.')
     const scope = { companyId: site.companyId, siteId: site.id }
-    if (!can(actor, QUALITY_INSPECTIONS_RECORD, scope)) throw new ForbiddenError('Assigning an inspector needs quality.inspections.record at its site.')
+    if (!can(actor, QUALITY_INSPECTIONS_RECORD, scope)) throw new ForbiddenError('Assigning an inspector needs the right to record inspections at its site.')
     const orders = ids.length ? await db.workOrder.findMany({ where: { id: { in: ids }, siteId: site.id }, select: { id: true, number: true } }) : []
     const makers = await Promise.all(orders.map(async (order) => ({ number: order.number, makers: await makersOf(db, order.id) })))
     const madeBy = async (signer: Signer): Promise<string[]> => {
@@ -160,7 +160,7 @@ export async function assignInspections(caller: CommandCaller, body: AssignBody,
       await tx.$queryRaw`SELECT "id" FROM "Inspection" WHERE "id" = ${entry.id}::uuid FOR UPDATE`
       const row = await readInspection(tx, entry.id)
       if (!row || !can(actorOf(context), 'quality.inspections.view', { companyId: row.companyId, siteId: row.siteId })) throw new NotFoundError('Inspection not found.')
-      if (!can(actorOf(context), QUALITY_INSPECTIONS_RECORD, { companyId: row.companyId, siteId: row.siteId })) throw new ForbiddenError("Assigning an inspector needs quality.inspections.record over the inspection's company and site.")
+      if (!can(actorOf(context), QUALITY_INSPECTIONS_RECORD, { companyId: row.companyId, siteId: row.siteId })) throw new ForbiddenError("Assigning an inspector needs the right to record inspections over the inspection's company and site.")
       if (row.version !== entry.version) throw new StaleVersionError('Inspection', row.id, row.version, entry.version)
       const order = await tx.workOrder.findUnique({ where: { id: row.workOrderId }, select: { number: true } })
       const label = row.number ?? order?.number ?? row.id

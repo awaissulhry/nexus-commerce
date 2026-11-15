@@ -204,7 +204,7 @@ export async function holdPeople(caller: CommandCaller, siteId: string) {
     const site = isUuid(siteId) ? await client.site.findUnique({ where: { id: siteId }, select: { id: true, companyId: true } }) : null
     if (!site || !can(actor, QUALITY_HOLDS_VIEW, { companyId: site.companyId, siteId: site.id })) throw new NotFoundError('Site not found.')
     const scope = { companyId: site.companyId, siteId: site.id }
-    if (!can(actor, QUALITY_HOLDS_PLACE, scope)) throw new ForbiddenError('Choosing a hold\'s owner needs quality.holds.place at its site.')
+    if (!can(actor, QUALITY_HOLDS_PLACE, scope)) throw new ForbiddenError("Choosing a hold's owner needs the right to put goods on hold at its site.")
     const people: { id: string; name: string; me: boolean }[] = []
     const users = await client.user.findMany({ where: { status: 'ACTIVE' }, orderBy: [{ displayName: 'asc' }, { id: 'asc' }], take: MAX_PEOPLE, select: { id: true, displayName: true } })
     for (const user of users) {

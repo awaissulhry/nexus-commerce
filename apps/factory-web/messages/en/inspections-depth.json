@@ -11,9 +11,9 @@
     "INLINE": "In-line",
     "none": "No {kind} inspection in this view.",
     "held": {
-      "final": "Final inspections need quality.inspections.view.",
-      "incoming": "Incoming inspections need quality.incoming.view.",
-      "inline": "In-line checks need quality.inprocess.view.",
+      "final": "Final inspections need the right to see them.",
+      "incoming": "Incoming inspections need the right to see them.",
+      "inline": "In-line checks need the right to see them.",
       "view": "This view is about final inspections: incoming and in-line ones join Every inspection and Open."
     }
   },
@@ -197,7 +197,7 @@
     "keptSame": "The same contents: version {version} ({language}) stands.",
     "noAccess": {
       "title": "You cannot open this report",
-      "body": "Inspection reports need quality.inspections.view. Your administrator gives it."
+      "body": "Inspection reports need the right to see final inspections. Your administrator gives it."
     },
     "held": {
       "kind": "Reports are made of final inspections.",
@@ -206,7 +206,7 @@
       "tooMany": "At most 20 reports at once.",
       "kindSome": "Only final inspections have a report: take the others out of the selection.",
       "notSignedSome": "Some picked inspections are not signed yet: their report comes after the signature.",
-      "noMake": "Keeping a report needs quality.documents.make.",
+      "noMake": "Your role cannot keep a report.",
       "reading": "The report is being made."
     }
   },
@@ -227,7 +227,7 @@
     "notShareable": "{status}: not packed yet",
     "version": "Version to share",
     "send": "and mail the link to the customer",
-    "sendHeld": "Mailing the link needs shipping.manage (the shipment's own Send link)",
+    "sendHeld": "Mailing the link needs the right to change shipments (the shipment's own Send link)",
     "go": "Share",
     "done": "Version {version} shared on {shipment}.",
     "doneSent": "Version {version} shared on {shipment}; the link was mailed.",
@@ -254,7 +254,7 @@
     },
     "held": {
       "pick": "Pick the shipment first.",
-      "noRight": "Sharing a report needs quality.documents.share.",
+      "noRight": "Your role cannot share a report.",
       "noVersion": "Keep a version first: a copy of a kept version is shared.",
       "notShareable": "This shipment is not packed yet (or cancelled): it cannot carry the report.",
       "NOT_ON_SHIPMENT": "This shipment carries no garment of this work order.",
@@ -437,7 +437,7 @@
       "which": "Profile",
       "chain": "The profile that applies now: {profile}",
       "other": "Another profile (with the reason)",
-      "otherHeld": "Another profile: needs quality.aql.view to list them",
+      "otherHeld": "Another profile: listing them needs the right to see AQL profiles",
       "profile": "Profile",
       "option": "{code} · {name} · level {level} · major {major} · minor {minor}",
       "reason": "Why another profile (required)",
@@ -447,7 +447,7 @@
       "apply": "Change profile"
     },
     "held": {
-      "noRight": "Changing the profile needs quality.inspections.record.",
+      "noRight": "Changing the profile needs the right to record inspections.",
       "fixed": "The plan samples a fixed number of units: no AQL profile applies.",
       "frozen": "The profile is frozen once counting starts.",
       "signed": "Signed: the sample stays as it was inspected.",
@@ -636,13 +636,13 @@
       "refused": "Refused: the value stays as signed."
     },
     "held": {
-      "noRight": "Asking a correction needs quality.amendments.request.",
+      "noRight": "Your role cannot ask a correction.",
       "reading": "Reading the amendments…",
       "notSigned": "Corrections are asked once the result is signed.",
       "allWaiting": "Every field a correction may take waits for its second signature.",
       "answered": "This correction is answered.",
       "mine": "You asked for this correction: another inspector or the quality manager countersigns.",
-      "noSign": "Countersigning needs quality.amendments.sign."
+      "noSign": "Your role cannot countersign a correction."
     },
     "problem": {
       "field": "Pick the field.",
@@ -756,8 +756,8 @@
       "bundleHint": "Scan or type it; a first piece names the bundle it is made from.",
       "after": "It is answered on the line tablet (In-line inspection); this opens its record.",
       "held": {
-        "noRight": "Opening in-line checks needs quality.inprocess.record.",
-        "noWorkOrders": "Picking the work order needs workorders.view."
+        "noRight": "Your role cannot open in-line checks.",
+        "noWorkOrders": "Picking the work order needs the right to see work orders."
       },
       "problem": {
         "workOrder": "Pick the work order or type a bundle.",

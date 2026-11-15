@@ -129,10 +129,10 @@ export async function exportRecordOf(db: Client, context: OfficeContext, place: 
     consultant: consultant ? { partyId: consultant.partyId, name: consultant.name, email: consultant.problem ? null : consultant.email, words: consultant.words } : null,
     words: row.correctionOfId ? CORRECTION_WORDS : 'The first file of the month.',
     actions: {
-      correct: held(mayManage && latest && (!pay || seesPay(context)), !mayManage ? 'Making a correction needs people.payroll.manage.' : !latest ? 'Only the latest exported file of the month is corrected.' : payWords),
-      cancel: held(mayManage && row.status === 'DRAFT', !mayManage ? 'Cancelling needs people.payroll.manage.' : 'Only a draft is cancelled.'),
-      send: held(mayManage && latest && byLink === null, !mayManage ? 'Sending needs people.payroll.manage.' : !latest ? 'Only the latest exported file of the month is sent.' : byLink),
-      open: held(mayOpen && row.status === 'EXPORTED' && (!pay || seesPay(context)), !mayOpen ? 'Opening the file needs people.payroll.records.' : row.status !== 'EXPORTED' ? 'Only an exported file is opened.' : payWords),
+      correct: held(mayManage && latest && (!pay || seesPay(context)), !mayManage ? 'Making a correction needs the right to keep payroll.' : !latest ? 'Only the latest exported file of the month is corrected.' : payWords),
+      cancel: held(mayManage && row.status === 'DRAFT', !mayManage ? 'Cancelling needs the right to keep payroll.' : 'Only a draft is cancelled.'),
+      send: held(mayManage && latest && byLink === null, !mayManage ? 'Sending needs the right to keep payroll.' : !latest ? 'Only the latest exported file of the month is sent.' : byLink),
+      open: held(mayOpen && row.status === 'EXPORTED' && (!pay || seesPay(context)), !mayOpen ? 'Opening the file needs the right to open payroll records.' : row.status !== 'EXPORTED' ? 'Only an exported file is opened.' : payWords),
     },
   }
 }

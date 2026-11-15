@@ -188,7 +188,7 @@
     "sendConfirm": "Segna la notifica come inviata",
     "copy": "Copia come inviata",
     "copyHint": "Il PDF o la ricevuta presentata (facoltativa; si può aggiungere dopo).",
-    "copyNoRight": "Per aggiungere la copia serve files.upload: può aggiungerla dopo chi ce l'ha.",
+    "copyNoRight": "Per aggiungere la copia serve il permesso di caricare file: può aggiungerla dopo chi ce l'ha.",
     "copyRemove": "Togli",
     "referenceTitle": "Aggiungi il riferimento o la copia",
     "referenceConfirm": "Salva il riferimento",
@@ -542,7 +542,7 @@
     "cancelled": "Annullata: questa notifica non è stata inviata.",
     "failed": "Non è stato possibile leggere la notifica",
     "noAccessTitle": "Non puoi vedere questa notifica",
-    "noAccessBody": "Per vedere le notifiche del registro serve compliance.register.view. Un amministratore può darlo."
+    "noAccessBody": "Per vedere le notifiche del registro serve il permesso di vedere il registro DPI. Un amministratore può darlo."
   },
   "dialog": {
     "saving": "Salvataggio…",
@@ -560,9 +560,9 @@
     "publish": "Scrivi il codice dell'app di autenticazione per pubblicare l'avviso di sicurezza sulla pagina pubblica."
   },
   "held": {
-    "manage": "Serve compliance.recall.manage.",
-    "send": "Serve compliance.recall.send (con un codice nuovo).",
-    "holds": "Per mettere i blocchi serve quality.holds.place.",
+    "manage": "Il tuo ruolo non può preparare richiami e comunicazioni alle autorità.",
+    "send": "Il tuo ruolo non può inviare per conto dell'azienda verso l'esterno (serve anche un codice nuovo).",
+    "holds": "Il tuo ruolo non può mettere blocchi.",
     "entryClosed": "La voce è chiusa: non cambia più.",
     "noNotice": "Nessuna notifica.",
     "notSent": "Non ancora inviata.",
@@ -573,7 +573,7 @@
     "answered": "Già evasa.",
     "noStyle": "La richiesta non indica un modello: nessun fascicolo tecnico da cui partire.",
     "evidenceNamed": "Un fascicolo di prove è già indicato.",
-    "techfiles": "Per preparare un fascicolo serve compliance.techfiles.manage.",
+    "techfiles": "Il tuo ruolo non può preparare un fascicolo: si fa con i fascicoli tecnici.",
     "recallCancelled": "Annullato: non cambia più.",
     "recallClosed": "Chiuso: non cambia più.",
     "nothingToHold": "Niente da bloccare: tutto è partito o già bloccato.",

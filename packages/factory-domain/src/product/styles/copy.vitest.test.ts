@@ -134,8 +134,8 @@ describe('W2b (B-W2b-25): the copy keeps the gender, and says its reasons and no
     expect(offerReasonWords('LABELS', offerReason('NO_LABEL', 'GT-01', { revision: 3 }))).toBe('Revision 3 has no garment label.')
     expect(offerReasonWords('LABELS', offerReason('OWN_LABEL', 'GT-01', { revision: 3, label: 'LBL-1', labelRevision: 2 }))).toBe("Label LBL-1 r2 is GT-01's own label: make one for the copy in Compliance.")
     expect(offerReasonWords('LABELS', offerReason('LABEL_RETIRED', 'GT-01', { label: 'LBL-1', labelRevision: 2 }))).toBe('Label LBL-1 r2 is retired.')
-    expect(offerReasonWords('BOM', offerReason('NEEDS_PERMISSION', 'GT-01', { permission: 'product.bom.manage', everyCompany: true }))).toBe('Copying the BOM needs product.bom.manage over every company.')
-    expect(offerReasonWords('ROUTING', offerReason('NEEDS_PERMISSION', 'GT-01', { permission: 'product.routing.manage' }))).toBe('Copying the routing needs product.routing.manage.')
+    expect(offerReasonWords('BOM', offerReason('NEEDS_PERMISSION', 'GT-01', { permission: 'product.bom.manage', everyCompany: true }))).toBe('Copying the BOM needs the right to edit the BOM over every company.')
+    expect(offerReasonWords('ROUTING', offerReason('NEEDS_PERMISSION', 'GT-01', { permission: 'product.routing.manage' }))).toBe('Copying the routing needs the right to edit the routing.')
     expect(OFFER_REASONS).toHaveLength(10)
   })
 

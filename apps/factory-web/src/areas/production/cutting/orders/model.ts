@@ -25,6 +25,8 @@ import type {
   WaitingCell,
   WaitingGroup,
 } from './api'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../../lib/i18n/rights'
 
 /**
  * Cutting in depth (B-W2b-129; design production.cutting, W2b parts): the rules without a screen for cut orders of several work
@@ -239,7 +241,7 @@ export function cellHeld(cell: Pick<WaitingCell, 'left'>): Phrase | null {
 
 /** Why Create cut order is held (else null): the right, a material, a cell, the marker, the plies and lays, each cell's garments. */
 export function newOrderHeld(draft: NewOrderDraft, group: WaitingGroup | null, can: OrdersCan, busy: boolean): Phrase | null {
-  if (!can.manage) return phrase('held.permission', { permission: 'production.cutorders.manage' })
+  if (!can.manage) return phrase('held.permission', { right: rightRef('production.cutorders.manage') })
   if (busy) return phrase('held.busy')
   if (!group) return phrase('newOrder.held.group')
   const picked = group.cells.filter((cell) => draft.picked.includes(cell.workOrderSizeId))
@@ -318,7 +320,7 @@ export const layShade = (lay: Pick<LayView, 'rolls' | 'shade'>): string | null =
 
 /** Why Release is held (else null). */
 export function releaseHeld(record: CutOrderRecord, can: OrdersCan, busy: boolean): Phrase | null {
-  if (!can.manage) return phrase('held.permission', { permission: 'production.cutorders.manage' })
+  if (!can.manage) return phrase('held.permission', { right: rightRef('production.cutorders.manage') })
   if (record.cutOrder.status !== 'PLANNED') return phrase('held.release.status', { status: record.cutOrder.status })
   if (busy) return phrase('held.busy')
   return null
@@ -326,7 +328,7 @@ export function releaseHeld(record: CutOrderRecord, can: OrdersCan, busy: boolea
 
 /** Why Back to planning is held (else null). */
 export function backHeld(record: CutOrderRecord, can: OrdersCan, busy: boolean): Phrase | null {
-  if (!can.manage) return phrase('held.permission', { permission: 'production.cutorders.manage' })
+  if (!can.manage) return phrase('held.permission', { right: rightRef('production.cutorders.manage') })
   if (record.cutOrder.status !== 'RELEASED') return phrase('held.back.status')
   if (!record.can.backToPlanning) return phrase('held.back.started')
   if (busy) return phrase('held.busy')
@@ -335,7 +337,7 @@ export function backHeld(record: CutOrderRecord, can: OrdersCan, busy: boolean):
 
 /** Why Cancel is held (else null). */
 export function cancelHeld(record: CutOrderRecord, can: OrdersCan, busy: boolean): Phrase | null {
-  if (!can.manage) return phrase('held.permission', { permission: 'production.cutorders.manage' })
+  if (!can.manage) return phrase('held.permission', { right: rightRef('production.cutorders.manage') })
   if (record.cutOrder.status !== 'PLANNED' && record.cutOrder.status !== 'RELEASED') return phrase('held.cancel.status')
   if (!record.can.cancel) return phrase('held.cancel.started')
   if (busy) return phrase('held.busy')
@@ -349,7 +351,7 @@ export const reasonOk = (value: string): boolean => value.trim().length >= 3 && 
 
 /** Why a lay takes no roll now (else null): the right, the cut order released, the lay planned. */
 export function allocateHeld(record: CutOrderRecord, lay: LayView, can: OrdersCan): Phrase | null {
-  if (!can.manage) return phrase('held.permission', { permission: 'production.cutorders.manage' })
+  if (!can.manage) return phrase('held.permission', { right: rightRef('production.cutorders.manage') })
   if (record.cutOrder.kind !== 'FABRIC') return phrase('held.rolls.leather')
   if (record.cutOrder.status !== 'RELEASED' && record.cutOrder.status !== 'IN_PROGRESS') return phrase('held.rolls.notReleased')
   if (lay.status !== 'PLANNED') return phrase('held.rolls.layAtTable', { seq: lay.seq })
@@ -443,7 +445,7 @@ export const layRollsText = (lay: Pick<LayView, 'rolls'>): string => lay.rolls.m
 
 /** Why a ticket cannot be printed (else null): a void or done ticket is never printed again. */
 export function printHeld(ticket: CutTicket, can: OrdersCan, busy: boolean): Phrase | null {
-  if (!can.manage) return phrase('held.permission', { permission: 'production.cutorders.manage' })
+  if (!can.manage) return phrase('held.permission', { right: rightRef('production.cutorders.manage') })
   if (ticket.status === 'VOID') return phrase('held.ticket.void')
   if (ticket.status === 'DONE') return phrase('held.ticket.done')
   if (busy) return phrase('held.busy')
@@ -452,7 +454,7 @@ export function printHeld(ticket: CutTicket, can: OrdersCan, busy: boolean): Phr
 
 /** Why a ticket cannot be voided (else null): a done or void ticket stays. */
 export function voidHeld(ticket: CutTicket, can: OrdersCan, busy: boolean): Phrase | null {
-  if (!can.manage) return phrase('held.permission', { permission: 'production.cutorders.manage' })
+  if (!can.manage) return phrase('held.permission', { right: rightRef('production.cutorders.manage') })
   if (ticket.status === 'VOID') return phrase('held.ticket.void')
   if (ticket.status === 'DONE') return phrase('held.ticket.done')
   if (busy) return phrase('held.busy')
@@ -485,7 +487,7 @@ export const openLines = (recon: Reconciliation) => recon.lines.filter((line) =>
 
 /** Why Reconcile is held (else null): the right, the cut order cut and its fabric confirmed, a reason per line that differs. */
 export function reconcileHeld(recon: Reconciliation | null, draft: ReconcileDraft, can: OrdersCan, busy: boolean): Phrase | null {
-  if (!can.manage) return phrase('held.permission', { permission: 'production.cutorders.manage' })
+  if (!can.manage) return phrase('held.permission', { right: rightRef('production.cutorders.manage') })
   if (!recon) return phrase('held.loading')
   if (recon.refusal) return phrase(`refusal.${recon.refusal.code}`)
   if (busy) return phrase('held.busy')
@@ -568,7 +570,7 @@ export const underPlan = (points: number | null): boolean => points !== null && 
  * (else null): the buying side's right, a supplier on the lot.
  */
 export function feedbackHeld(lot: { readonly supplier: string | null }, claims: boolean): Phrase | null {
-  if (!claims) return phrase('held.permission', { permission: 'purchasing.claims.manage' })
+  if (!claims) return phrase('held.permission', { right: rightRef('purchasing.claims.manage') })
   if (!lot.supplier) return phrase('feedback.held.noSupplier')
   return null
 }

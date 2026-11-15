@@ -44,7 +44,7 @@
     },
     "noAccess": {
       "title": "Non per il tuo ruolo",
-      "body": "Gli ordini ai terzisti richiedono purchasing.view: chiedilo a un amministratore."
+      "body": "Gli ordini ai terzisti richiedono il permesso di vedere gli ordini d'acquisto: chiedilo a un amministratore."
     },
     "changed": "Modificato alle {time} da qualcun altro · la finestra aperta resta",
     "reload": "Ricarica",
@@ -239,7 +239,7 @@
     },
     "title": "Aggiungi riga di kit",
     "confirm": "Aggiungi",
-    "noMaterials": "Scegliere un materiale richiede product.materials.view.",
+    "noMaterials": "Scegliere un materiale richiede il permesso di vedere la libreria dei materiali.",
     "material": "Materiale",
     "search": "Codice o nome",
     "noMatch": "Nessun materiale attivo corrisponde.",
@@ -309,8 +309,8 @@
     "show": "Mostra qui",
     "openPdf": "Apri PDF",
     "annul": "Annulla DDT…",
-    "noFiles": "Aprire un PDF richiede files.read.",
-    "noCancel": "Annullare un DDT richiede shipping.ddt.cancel.",
+    "noFiles": "Aprire un PDF richiede il permesso di vedere i file di un record.",
+    "noCancel": "Annullare un DDT richiede il permesso di annullare un DDT emesso.",
     "pdf": {
       "missing": "Il DDT è emesso ma il suo PDF non è stato salvato: ristampalo."
     },
@@ -440,12 +440,12 @@
     "piecesOf": "Riga {line} · {code}",
     "piecesLeft": "{left} di {total} ancora da inviare; 0: nessuno ora",
     "bundlesTitle": "Pacchi tagliati che viaggiano",
-    "bundlesNoRight": "I pacchi dell’ordine di produzione richiedono workorders.view: indica i capi sopra.",
+    "bundlesNoRight": "I pacchi dell’ordine di produzione richiedono il permesso di vedere gli ordini di lavoro: indica i capi sopra.",
     "noBundles": "L’ordine di produzione non ha pacchi attivi.",
     "bundlesHint": "Ogni pacco è elencato sul DDT; senza capi indicati sopra, i pacchi di capi interi contano come capi inviati.",
     "ddtTitle": "DDT di conto lavorazione",
     "ddtIssue": "Emetti ora il DDT",
-    "ddtNoRight": "Emettere il DDT richiede shipping.ddt.issue: il kit parte senza e il magazzino lo emette dopo.",
+    "ddtNoRight": "Emettere il DDT richiede il permesso di emettere DDT: il kit parte senza e il magazzino lo emette dopo.",
     "ddtLater": "Nessun DDT ora: emettilo prima che la merce esca.",
     "ddt": {
       "reason": "Causale del trasporto",
@@ -527,7 +527,7 @@
     "scrapped": "Scartati dal terzista",
     "reason": "Motivo",
     "removeLine": "Togli questa riga",
-    "bundlesNoRight": "I pacchi richiedono workorders.view: i capi rientrano per lavorazione.",
+    "bundlesNoRight": "I pacchi richiedono il permesso di vedere gli ordini di lavoro: i capi rientrano per lavorazione.",
     "returnsTitle": "Materiale non usato restituito",
     "noStock": "Nessun nostro materiale è presso questo terzista.",
     "col": {
@@ -540,7 +540,7 @@
     "returnOf": "Quantità di {code} che rientra",
     "toOf": "Dove va {code}",
     "pickTo": "Scegli un posto",
-    "noPlaces": "I posti richiedono inventory.locations.view.",
+    "noPlaces": "I posti richiedono il permesso di vedere le ubicazioni di uno stabilimento.",
     "note": "Nota",
     "what": "L’ordine risulta rientrato in parte o del tutto; i capi rientrati contano su ogni lavorazione.",
     "fee": "Il compenso del terzista per i capi rientrati buoni va sul costo dell’ordine di produzione.",

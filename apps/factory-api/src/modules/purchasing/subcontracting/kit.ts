@@ -85,7 +85,7 @@ async function fromLocation(tools: CommandTools, order: OrderRow, locationId: st
 export async function sendKit(files: FilesRuntime, caller: CommandCaller, orderId: string, input: SendInput, idempotencyKey?: string, onPdfError?: (error: unknown) => void): Promise<SendAnswer> {
   const { context, order: seen } = await officeOrder(caller, orderId, PURCHASING_SUBCONTRACT_KIT)
   if (input.ddt && !can(actorOf(context), SHIPPING_DDT_ISSUE, { companyId: seen.companyId, siteId: seen.siteId })) {
-    throw new ForbiddenError("Issuing the kit's DDT needs the permission to issue DDTs (shipping.ddt.issue); send without one, or ask the warehouse.")
+    throw new ForbiddenError("Issuing the kit's DDT needs the permission to issue DDTs; send without one, or ask the warehouse.")
   }
   return sendKitAs(files, { caller, printer: caller }, seen, input, idempotencyKey, onPdfError)
 }

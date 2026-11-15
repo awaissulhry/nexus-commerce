@@ -132,7 +132,7 @@ export async function leavingPreview(caller: CommandCaller, employeeId: string, 
   })
 }
 
-const MANAGE_WORDS = 'Leaver steps of this site are kept by a role that keeps them (people.leavers.manage).'
+const MANAGE_WORDS = 'Leaver steps of this site are kept by a role that keeps them.'
 
 /** POST /people/employees/:employeeId/leaving: the case OPEN with its steps; a last day already past settles at once. */
 export async function startLeaving(caller: CommandCaller, employeeId: string, body: { readonly lastWorkingDay: BusinessDate; readonly exitVisit?: boolean | undefined; readonly ppeReturn?: boolean | undefined }, idempotencyKey?: string) {

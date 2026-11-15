@@ -1,6 +1,6 @@
 {
   "access": {
-    "body": "Incidents are open to the safety, HR and production roles (safety.incidents.view). Ask your administrator if you need them.",
+    "body": "Incidents are open to the safety, HR and production roles. Ask your administrator if you need them.",
     "title": "No access to incidents"
   },
   "action": {
@@ -230,11 +230,11 @@
     },
     "filingWaiting": "It stays open while an INAIL filing waits: record it, or mark it not needed.",
     "noChange": "Nothing changed yet.",
-    "noManage": "Kept by the safety roles (safety.incidents.manage).",
-    "noManagePhoto": "Photos are added by the safety roles (safety.incidents.manage).",
-    "noPeople": "Only HR and the safety roles (safety.incidents.people).",
-    "noPlantPicker": "The stations and machines need plant.view: say the place in words.",
-    "noReport": "Reporting from the office needs safety.incidents.report.",
+    "noManage": "Kept by the safety roles.",
+    "noManagePhoto": "Photos are added by the safety roles.",
+    "noPeople": "Only HR and the safety roles.",
+    "noPlantPicker": "The stations and machines need the right to see the plant: say the place in words.",
+    "noReport": "Your role cannot report an incident from the office.",
     "noRows": "No incident on this page.",
     "noneOpen": "Choose open actions.",
     "notClosed": "Only a closed incident is reopened.",

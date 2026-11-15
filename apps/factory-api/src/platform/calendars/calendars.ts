@@ -51,14 +51,14 @@ export function reachesWholeCompany(who: Actor, permission: string, companyId: s
 /** May keep this calendar (its days, week, pattern, status): 403 in words otherwise. */
 function mayKeep(who: Actor, row: Pick<CalendarRow, 'scope' | 'companyId' | 'siteId' | 'partyId'>): void {
   if (managesSuppliers(row.scope)) {
-    if (!can(who, CALENDARS_SUPPLIERS_MANAGE, { companyId: row.companyId, partyId: row.partyId })) throw new ForbiddenError("Keeping a supplier's calendar needs calendars.suppliers.manage.")
+    if (!can(who, CALENDARS_SUPPLIERS_MANAGE, { companyId: row.companyId, partyId: row.partyId })) throw new ForbiddenError("Keeping a supplier's calendar needs the right to keep the suppliers' calendars.")
     return
   }
   if (row.scope === 'COMPANY') {
-    if (!reachesWholeCompany(who, CALENDARS_MANAGE, row.companyId)) throw new ForbiddenError("A company's calendar reaches all its sites: keeping it needs calendars.manage over every site of the company.")
+    if (!reachesWholeCompany(who, CALENDARS_MANAGE, row.companyId)) throw new ForbiddenError("A company's calendar reaches all its sites: keeping it needs the right to keep calendars over every site of the company.")
     return
   }
-  if (!can(who, CALENDARS_MANAGE, { companyId: row.companyId, siteId: row.siteId })) throw new ForbiddenError('Keeping this calendar needs calendars.manage over its site.')
+  if (!can(who, CALENDARS_MANAGE, { companyId: row.companyId, siteId: row.siteId })) throw new ForbiddenError('Keeping this calendar needs the right to keep calendars over its site.')
 }
 
 function mustBeActive(row: CalendarRow): void {

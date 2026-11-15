@@ -29,7 +29,7 @@ type RuleRow = Prisma.WorkingTimeRuleGetPayload<{ select: typeof RULE_SELECT }>
 
 const READERS = [PEOPLE_LIMITS_MANAGE, PEOPLE_ATTENDANCE_VIEW, PEOPLE_SHIFTS_VIEW] as const
 
-const WRITE_WORDS = 'The working-time limits are kept by a role with people.limits.manage.'
+const WRITE_WORDS = 'The working-time limits are kept by a role with the right to keep them.'
 const GROUP_WORDS = 'A limit of the whole group is kept by a role over every company: set it for one company instead.'
 
 const view = (row: RuleRow) => ({

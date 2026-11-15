@@ -168,7 +168,7 @@ export async function visibleTransfer(client: Reader, context: OfficeContext, tr
 /** The sending (or receiving) end's right, else 403 in words. */
 export function mustManage(context: OfficeContext, row: Ends, end: 'from' | 'to'): void {
   if (end === 'from' ? !managesFrom(context, row) : !managesTo(context, row)) {
-    throw new ForbiddenError(`This needs ${INVENTORY_TRANSFERS_MANAGE} at the ${end === 'from' ? 'sending' : 'receiving'} site.`)
+    throw new ForbiddenError(`This needs the right to keep transfers at the ${end === 'from' ? 'sending' : 'receiving'} site.`)
   }
 }
 

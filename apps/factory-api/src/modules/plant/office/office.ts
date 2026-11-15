@@ -71,7 +71,7 @@ export async function plantTechnicians(caller: CommandCaller, siteId: string) {
     const site = isUuid(siteId) ? await client.site.findUnique({ where: { id: siteId }, select: { id: true, companyId: true } }) : null
     if (!site || (context.companyId && site.companyId !== context.companyId) || !can(actor, PLANT_VIEW, { companyId: site.companyId, siteId: site.id })) throw new NotFoundError('Site not found.')
     const scope = { companyId: site.companyId, siteId: site.id }
-    if (!can(actor, PLANT_JOBS_MANAGE, scope)) throw new ForbiddenError('Giving a job to a technician needs plant.jobs.manage at its site.')
+    if (!can(actor, PLANT_JOBS_MANAGE, scope)) throw new ForbiddenError('Giving a job to a technician needs the right to plan maintenance jobs at its site.')
 
     const technicians: { kind: 'USER' | 'WORKER'; id: string; name: string; me: boolean }[] = []
     const users = await client.user.findMany({ where: { status: 'ACTIVE' }, orderBy: [{ displayName: 'asc' }, { id: 'asc' }], take: MAX_PEOPLE, select: { id: true, displayName: true } })

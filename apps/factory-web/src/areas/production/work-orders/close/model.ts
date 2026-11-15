@@ -1,5 +1,7 @@
 import { isApiError, issuePath } from '../../../../lib/api/errors'
 import { CLOSE_REASONS, CLOSE_REFUSALS, type CloseCheck, type CloseInput, type CloseReason, type CloseRecord } from './api'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../../lib/i18n/rights'
 
 /**
  * B-W2b-424 — the work order close's rules, without a screen (design production.workorders pop:wo-close; MES-012, MES-013):
@@ -66,7 +68,7 @@ export const NOTE_MAX = 1000
 export function closeHeld(check: CloseCheck | null, input: { reason: CloseReason | null; note: string }, busy: boolean): Phrase | null {
   if (!check) return phrase('held.reading')
   if (check.refusal?.code === 'NOT_COMPLETED' || check.workOrder.status !== 'COMPLETED') return phrase('held.notCompleted')
-  if (!check.closable) return phrase('held.noManage', { permission: 'workorders.manage' })
+  if (!check.closable) return phrase('held.noManage', { right: rightRef('workorders.manage') })
   if (check.settles && check.waiting.length > 0) return phrase('held.costsWaiting', { count: check.waiting.length })
   if (check.reasonNeeded && !input.reason) return phrase('held.reasonNeeded', { tolerance: check.tolerancePct })
   if (input.reason && noteNeeded(check, input.reason) && !input.note.trim()) return phrase('held.noteNeeded')
@@ -95,7 +97,7 @@ export const REOPEN_MAX = 1000
 export function reopenOpenHeld(check: CloseCheck | null, busy: boolean): Phrase | null {
   if (!check) return phrase('held.reading')
   if (!check.live) return phrase('held.noRecord')
-  if (!check.live.can.reopen) return phrase('held.noReopen', { permission: 'workorders.reopen' })
+  if (!check.live.can.reopen) return phrase('held.noReopen', { right: rightRef('workorders.reopen') })
   if (busy) return phrase('held.busy')
   return null
 }

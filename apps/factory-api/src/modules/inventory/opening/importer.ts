@@ -39,7 +39,7 @@ export const openingStockImportAdapter: ImportAdapter = Object.freeze({
     if (job.companyId === null) issues.push({ path: 'companyId', message: "Opening stock is a company's: start the import for one company." })
     const report = REPORT_COLUMNS.find((column) => columns.includes(column))
     if (report && job.companyId !== null && !can(actor, QUALITY_LOTS_TEST, { companyId: job.companyId })) {
-      issues.push({ path: `column/${report}`, message: "This sheet brings chromium VI reports: recording them needs quality.lots.test over the import's company (the lab step's permission)." })
+      issues.push({ path: `column/${report}`, message: "This sheet brings chromium VI reports: recording them needs the right to record a lot's chromium VI result over the import's company (the lab step's right)." })
     }
     return issues
   },

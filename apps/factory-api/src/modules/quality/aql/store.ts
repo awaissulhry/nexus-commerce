@@ -28,7 +28,7 @@ export const mayView = (context: OfficeContext, companyId: string): boolean => c
 export const mayManage = (context: OfficeContext, companyId: string): boolean => can(actorOf(context), QUALITY_AQL_MANAGE, { companyId })
 
 export function assertManage(context: OfficeContext, companyId: string): void {
-  if (!mayManage(context, companyId)) throw new ForbiddenError("A company's AQL profiles are kept with quality.aql.manage over that company.")
+  if (!mayManage(context, companyId)) throw new ForbiddenError("A company's AQL profiles are kept with the right to keep AQL profiles over that company.")
 }
 
 export const PROFILE_COLUMNS = {

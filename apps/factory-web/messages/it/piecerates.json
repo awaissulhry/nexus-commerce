@@ -174,7 +174,7 @@
       "plain": "I lavoratori sono informati su cosa viene registrato e perché.",
       "wrong": "L’informativa {label} non è in vigore: indica quella in vigore."
     },
-    "heldRight": "Per avviare il cottimo serve {permission}.",
+    "heldRight": "Per avviare il cottimo serve il permesso «{right}».",
     "hint": "Il cottimo parte solo quando i suoi presupposti legali sono registrati.",
     "honest": "Cosa fa Nexus qui",
     "honestBody": "Registra i presupposti del cottimo, non li giudica. Se il tuo CCNL ammette il cottimo, la comunicazione scritta delle tariffe e il sì del consulente del lavoro su integrazione e prospetto spettano a te (GATE-PIECE-PAY). Finché non sono registrati l’interruttore resta spento.",
@@ -276,7 +276,7 @@
     "hint": "Ogni scansione pagata è una voce. Una correzione è una nuova voce, mai una modifica. Non nomina nessuno: una persona si legge sul suo prospetto.",
     "minutes": "Minuti",
     "more": "Mostra altri",
-    "noRight": "Il registro si apre con people.earnings.records e money.pay.",
+    "noRight": "Il registro si apre con i permessi di aprire i guadagni e di vedere il cottimo.",
     "period": "Periodo",
     "pieces": "Pezzi",
     "rate": "Tariffa",
@@ -295,7 +295,7 @@
     "title": "Blocca il periodo di {month}"
   },
   "noAccess": {
-    "body": "Questa pagina richiede {permission}.",
+    "body": "Questa pagina richiede il permesso «{right}».",
     "title": "Nessun accesso ai cottimi"
   },
   "openReason": {
@@ -323,13 +323,13 @@
   },
   "pay": {
     "entries": "Registro",
-    "hidden": "La paga di una persona si apre con people.earnings.records e money.pay.",
+    "hidden": "La paga di una persona si apre con i permessi di aprire i guadagni e di vedere il cottimo.",
     "hiddenTitle": "Gli importi sono nascosti per il tuo ruolo",
     "none": "Ancora nessun prospetto",
     "noneBody": "Il prospetto arriva con il primo periodo di paga che paga questa persona.",
     "period": "Guadagni del periodo",
     "rates": "Tariffe pubblicate e lette",
-    "ratesHidden": "Le tariffe richiedono people.piecerates.view.",
+    "ratesHidden": "Le tariffe richiedono il permesso di vedere le tabelle di cottimo.",
     "ratesHint": "Prova che la persona ha visto le tariffe prima dell’inizio del lavoro (art. 2101 c.3 c.c.).",
     "ratesNone": "Nessuna tariffa pubblicata a questa persona.",
     "read": "Letta",
@@ -456,7 +456,7 @@
     "general": "Tariffe generali",
     "held": {
       "notProvisional": "Non provvisoria: nulla da confermare.",
-      "right": "Per confermare serve people.piecerates.manage.",
+      "right": "Il tuo ruolo non può confermare le tariffe di cottimo.",
       "trialRunning": "La sua prova dura fino al {day}."
     },
     "hidden": "Nascosto per il tuo ruolo",
@@ -597,7 +597,7 @@
     "name": "Nome",
     "new": "Nuovo schema",
     "newDraft": "Una nuova bozza: non paga nulla finché non è avviata",
-    "noRates": "Le paghe orarie richiedono money.pay: le indica un’altra persona.",
+    "noRates": "Le paghe orarie richiedono il permesso di vedere il cottimo: le indica un’altra persona.",
     "none": "Nessuno schema.",
     "notGiven": "Non ancora indicata",
     "note": "Nota",
@@ -629,8 +629,8 @@
     "emptyBody": "Pubblica prima una versione di tariffe.",
     "from": "dal {day}",
     "law": "Le tariffe si comunicano ai lavoratori prima che valgano (art. 2101 c.3 c.c.).",
-    "noRight": "Il foglio tariffe richiede money.pay",
-    "noRightBody": "Per stampare le tariffe serve {permission}.",
+    "noRight": "Il foglio tariffe richiede il permesso di vedere il cottimo",
+    "noRightBody": "Per stampare le tariffe serve il permesso «{right}».",
     "print": "Stampa",
     "printed": "Stampato il {when}",
     "signDate": "Data",
@@ -688,7 +688,7 @@
     "held": "Scansioni sospese",
     "heldOwn": "Questo prospetto attende un’altra persona: nessuno approva il proprio.",
     "heldReview": "I prospetti si approvano mentre il periodo è in revisione.",
-    "heldRight": "Il prospetto di una persona si apre con people.earnings.records e money.pay.",
+    "heldRight": "Il prospetto di una persona si apre con i permessi di aprire i guadagni e di vedere il cottimo.",
     "heldValue": "{open} aperte, {counted} contate, {notPaid} non pagate",
     "leadBody": "Solo per chi guidi, dove la base giuridica del sito copre i capi squadra: pezzi e minuti, niente importi. Il motivo viene registrato.",
     "leadDone": "Comunicato alle Risorse umane che sembra corretto.",

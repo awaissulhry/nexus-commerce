@@ -21,12 +21,12 @@
   "page": {
     "correctOnly": {
       "title": "You decide scan corrections from Today",
-      "body": "Your role decides the floor's corrections one at a time, from Today. The queue, the line days and the changes on this page take “production.labour.view”.",
+      "body": "Your role decides the floor's corrections one at a time, from Today. The queue, the line days and the changes on this page need the right to see Labour & corrections.",
       "today": "Open Today"
     },
     "noAccess": {
       "title": "Your role cannot see Labour & corrections",
-      "body": "It takes “production.labour.view”."
+      "body": "It needs the right to see Labour & corrections."
     },
     "find": "Open a person's day…",
     "payroll": "Export closed days for payroll",
@@ -166,11 +166,11 @@
   "held": {
     "busy": "One moment: the last decision is being saved.",
     "loading": "Still reading.",
-    "noApprove": "Approving a block takes “production.offstandard.approve”.",
-    "noCorrect": "Deciding a correction takes “production.scan.correct”.",
-    "noAnswer": "Answering a dispute takes “production.labour.answer”.",
-    "noClose": "Closing a day takes “production.labour.close”.",
-    "noReopen": "Reopening a closed day takes “production.labour.reopen”.",
+    "noApprove": "Your role cannot approve an off-standard block.",
+    "noCorrect": "Your role cannot decide scan corrections.",
+    "noAnswer": "Your role cannot answer a dispute.",
+    "noClose": "Your role cannot close a line's day.",
+    "noReopen": "Your role cannot reopen a closed day.",
     "noNormal": "No normal block is waiting.",
     "noNormalPicked": "No normal block is selected.",
     "noDayPicked": "No line day ready to close is selected.",
@@ -191,7 +191,7 @@
     "sheetsOff": "Per-person sheets are off on this site.",
     "noEmployee": "This person has no employee record: no sheet to open.",
     "noFigures": "One person's day is opened only by the worker, by HR and, where the site allows it, by the worker's team lead.",
-    "noPeople": "The name search takes “people.view”.",
+    "noPeople": "The name search needs the right to see employees.",
     "sheetReason": "Say why you open this person's day.",
     "pickPerson": "Pick a person first.",
     "noPayroll": "People › Payroll export is not built yet."
@@ -327,7 +327,7 @@
     "steps": "What happened to it since",
     "step": "Kind",
     "around": "The scans around it",
-    "aroundHeld": "The bundle's scans take “workorders.view”.",
+    "aroundHeld": "The bundle's scans need the right to see work orders.",
     "operation": "Operation",
     "station": "Station",
     "voided": "{kind} (voided)",
@@ -348,7 +348,7 @@
     "approvedBy": "Approved by",
     "rejectedBy": "Rejected by",
     "aPerson": "A person",
-    "blockHeld": "This block's record takes “production.offstandard.view”.",
+    "blockHeld": "This block's record needs the right to see off-standard time.",
     "unusual": "Decided on its own",
     "running": "Still running",
     "source": "Recorded",

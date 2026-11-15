@@ -106,9 +106,9 @@
     "restore_other": "Ripristina {count}"
   },
   "held": {
-    "noColours": "Gestire la libreria colori richiede il permesso product.colours.manage (ce l'ha il responsabile di produzione).",
-    "noBranding": "Gestire i kit di marca richiede il permesso product.branding.manage (ce l'hanno le vendite e il responsabile di produzione).",
-    "noUpload": "Inviare un file richiede il permesso files.upload.",
+    "noColours": "Gestire la libreria colori richiede il permesso di gestirla (ce l'ha il responsabile di produzione).",
+    "noBranding": "Gestire i kit di marca richiede il permesso di gestirli (ce l'hanno le vendite e il responsabile di produzione).",
+    "noUpload": "Inviare un file richiede il permesso di caricare file.",
     "noneActive": "Nessuno dei colori scelti è in uso.",
     "noneArchived": "Nessuno dei colori scelti è archiviato.",
     "noneActiveSets": "Nessuno dei kit scelti è in uso.",
@@ -117,7 +117,7 @@
   },
   "forbidden": {
     "title": "Non hai accesso ai colori",
-    "body": "Colori e grafiche richiede il permesso product.styles.view: ce l'ha ogni ruolo che lavora con i modelli (responsabile di produzione, vendite, qualità, pianificazione)."
+    "body": "Colori e grafiche richiede il permesso di vedere gli articoli: ce l'ha ogni ruolo che lavora con i modelli (responsabile di produzione, vendite, qualità, pianificazione)."
   },
   "empty": {
     "title": "Ancora nessun colore",
@@ -235,7 +235,7 @@
   "set": {
     "loading": "Kit di marca",
     "noun": "kit",
-    "readOnly": "Puoi leggere questo kit; gestirlo richiede il permesso product.branding.manage.",
+    "readOnly": "Puoi leggere questo kit; gestirlo richiede il permesso di gestire i kit di marca.",
     "archive": "Archivia…",
     "restore": "Ripristina…",
     "restoreHeld": "{code} è in uso per questo marchio: archivialo prima.",
@@ -275,7 +275,7 @@
     "rulePer": "Per",
     "pickPer": "Scegli…",
     "wordsOnly": "Nessuno: una regola a parole",
-    "noMaterialsRight": "Scegliere un materiale richiede il permesso product.materials.view.",
+    "noMaterialsRight": "Scegliere un materiale richiede il permesso di vedere la libreria dei materiali.",
     "ruleMaterial": "{code} × {quantity} {per}",
     "addRule": "Aggiungi una regola",
     "rulesFull": "Un kit contiene al massimo 50 regole.",

@@ -187,7 +187,7 @@ describe('Planning settings › item parameters, reorder rules, horizon, line ef
         expect(html, id).not.toMatch(/\b(pp|ps)\.[a-z]+\.[a-zA-Z]/)
         if (id === 'horizon') expect(html).toContain(locale === 'it' ? 'Orizzonte e periodi' : 'Horizon and buckets')
         if (id === 'horizon-refused') expect(html).toContain(locale === 'it' ? 'finiscono prima di quelli settimanali' : 'end before the week buckets do')
-        if (id === 'horizon-held') expect(html).toContain('planning.settings.manage')
+        if (id === 'horizon-held') expect(html).toContain(locale === 'it' ? 'Per gestire le impostazioni di pianificazione serve il relativo diritto' : 'Keeping the planning settings needs the planning settings right')
       }
     })
   }

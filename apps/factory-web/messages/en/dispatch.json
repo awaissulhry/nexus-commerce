@@ -160,7 +160,7 @@
   "held": {
     "draft": "A draft is not dispatched: release the work order first.",
     "workCentre": "{station} does not do this operation's work.",
-    "readOnly": "You can look at this board, not change it (production.dispatch.manage).",
+    "readOnly": "You can look at this board, not change it.",
     "past": "A day that is over stays as it was.",
     "offline": "Offline: nothing can be moved until the connection is back.",
     "noBundles": "This card has no bundles to pick.",

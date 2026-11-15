@@ -15,7 +15,7 @@
   },
   "noAccess": {
     "title": "You don’t have access to transfers",
-    "body": "Seeing transfers needs inventory.stock.view (the warehouse, buying, planning, read-only); changing them needs inventory.transfers.manage (the warehouse). Ask an administrator."
+    "body": "Seeing transfers needs the right to see the stock (the warehouse, buying, planning, read-only); changing them needs the right to keep transfers between sites (the warehouse). Ask an administrator."
   },
   "list": {
     "intro": "Goods moving between your sites, or to another company of the group, with their DDT. Goods in transit stay the sending site’s stock until they are received.",
@@ -181,8 +181,8 @@
     "NO_LOT_SERIES": "The receiving company has no lot series: an administrator sets it up under numbering.",
     "DDT_NOT_PRINTABLE": "The DDT cannot be printed as it stands: complete the companies’ legal data and addresses.",
     "NO_DDT": "No DDT yet: it is issued when the transfer ships.",
-    "NO_RIGHT_FROM": "Only the sending site’s warehouse does this (inventory.transfers.manage).",
-    "NO_RIGHT_TO": "Only the receiving site’s warehouse does this (inventory.transfers.manage)."
+    "NO_RIGHT_FROM": "Only the sending site’s warehouse does this.",
+    "NO_RIGHT_TO": "Only the receiving site’s warehouse does this."
   },
   "problem": {
     "invalid": "Some fields are not right: see below.",
@@ -226,7 +226,7 @@
     "expectedBeforeShip": "The expected arrival is not before the ship date.",
     "expectedPast": "The expected arrival is today or later.",
     "moreThanInTransit": "Line {seq}: more than is in transit.",
-    "noManage": "You don’t have the right to change transfers (inventory.transfers.manage).",
+    "noManage": "You don’t have the right to change transfers.",
     "nothingChanged": "Nothing changed.",
     "offline": "Offline: wait until the connection is back.",
     "packages": "Packages: a whole number from 1.",

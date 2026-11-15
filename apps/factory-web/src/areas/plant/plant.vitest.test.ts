@@ -268,7 +268,7 @@ describe('plant: the calls as the API takes them', () => {
 const LEFT_KEY =
   /\b(?:machineStatus|machineReason|requestStatus|jobStatus|jobType|jobSource|priority|priorityHint|closeReason|closeReasonHint|machineAfter|machineAfterHint|unsafe|symptom|person|age|due|live|common|list|col|keys|requestView|requestTile|requestTileHint|requests|detail|trail|makeJob|closeRequest|signSafe|merge|report|jobView|jobTile|jobTileHint|jobTab|move|jobs|cell|field|newJob|assign|record|handBack|cancelJob|machineView|machineTile|machineTileHint|machineTab|machines|machine|newMachine|retire|machineRecord|print|sheet|tags|problem|refusal|held|done|stepUp|csv|csvJob|csvMachine)\.[a-zA-Z_]+(?:\.[a-zA-Z_]+)*\b/
 const LEFT_PLACEHOLDER = /\{[a-zA-Z]+\}/
-/** Permission names are said on purpose ("needs plant.jobs.manage"); addresses, file names and domains are not keys. */
+/** Permission names are stripped before the key check, though no screen says one since B-W2b-F51; addresses, file names and domains are not keys. */
 const SAID = /\b(?:plant\.[a-zA-Z.]+|files\.upload|workers\.view|carter\.jpg|factory\.example|example\.com)\b/g
 
 function render(screen: DesignScreen<unknown>, model: unknown, locale: (typeof LOCALES)[number]): string {

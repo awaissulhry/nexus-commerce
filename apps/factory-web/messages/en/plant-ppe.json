@@ -1,7 +1,7 @@
 {
   "access": {
     "title": "No access to PPE for workers",
-    "body": "This page needs the right to see safety (safety.view). Ask whoever manages roles in your company."
+    "body": "This page needs the right to see safety. Ask whoever manages roles in your company."
   },
   "common": {
     "stillLoading": "Still loading…",
@@ -209,7 +209,7 @@
     "whenWorn": "When worn",
     "months_one": "{count} month",
     "months_other": "{count} months",
-    "costHidden": "Unit costs need the cost right (money.cost).",
+    "costHidden": "Unit costs need the cost right.",
     "instructionLater": "Instruction needed per item: later.",
     "failed": "Couldn't read the catalogue.",
     "noneFiltered": "No item matches these filters",
@@ -323,7 +323,7 @@
     "lifeHint": "Replaced after this many months; empty: when worn.",
     "supplier": "Supplier",
     "supplierHint": "Active suppliers of the company and the group.",
-    "supplierNoRight": "Choosing a supplier needs the chemical register's right (safety.chemicals.manage); the item keeps its supplier.",
+    "supplierNoRight": "Choosing a supplier needs the chemical register's right; the item keeps its supplier.",
     "noSupplier": "No supplier",
     "unitCost": "Unit cost (€)",
     "unitCostHint": "One unit, e.g. 12,50.",
@@ -395,8 +395,8 @@
   },
   "held": {
     "busy": "Saving…",
-    "issue": "Your role does not record PPE receipts (safety.ppe.issue).",
-    "manage": "Your role does not keep the PPE catalogue (safety.ppe.manage).",
+    "issue": "Your role does not record PPE receipts.",
+    "manage": "Your role does not keep the PPE catalogue.",
     "company": "Choose a company in the top bar first.",
     "person": "Choose the person.",
     "personSite": "This person works where your role does not record receipts.",
@@ -414,8 +414,8 @@
     "scanType": "The scan is a PDF or a photo (JPG, PNG).",
     "scanFile": "Choose the scan of the signed paper.",
     "scanDone": "This receipt is no longer waiting for its scan.",
-    "upload": "Your role does not upload files (files.upload): the receipt is recorded as not signed; someone who uploads files adds the scan from Issues.",
-    "readFiles": "Your role does not open stored files (files.read).",
+    "upload": "Your role does not upload files: the receipt is recorded as not signed; someone who uploads files adds the scan from Issues.",
+    "readFiles": "Your role does not open stored files.",
     "code": "Type the code: capitals, digits and . _ / - (no spaces).",
     "name": "Type the name.",
     "category": "Choose the category.",

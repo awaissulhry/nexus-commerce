@@ -27,7 +27,7 @@
   },
   "noAccess": {
     "title": "Non puoi vedere questa vista",
-    "body": "Serve il permesso di leggere la conformità (compliance.certificates.view). Lo assegna un amministratore in Sistema › Ruoli e permessi."
+    "body": "Serve il permesso di leggere la conformità. Lo assegna un amministratore in Sistema › Ruoli e permessi."
   },
   "list": {
     "removeFilter": "Togli il filtro {name}",
@@ -49,8 +49,8 @@
     "CUSTOMER_RSL": "RSL del marchio"
   },
   "held": {
-    "manage": "Richiedere e decidere le dichiarazioni dei fornitori richiede compliance.supplierDeclarations.manage (il ruolo qualità). Lo assegna un amministratore in Sistema › Ruoli e permessi.",
-    "substances": "Modificare regole delle sostanze, piani di prova e profili richiede compliance.substances.manage (il ruolo qualità).",
+    "manage": "Il tuo ruolo non può richiedere e decidere le dichiarazioni dei fornitori (il ruolo qualità sì). Lo assegna un amministratore in Sistema › Ruoli e permessi.",
+    "substances": "Il tuo ruolo non può modificare regole delle sostanze, piani di prova e profili (il ruolo qualità sì).",
     "offline": "Senza connessione: si attende che torni.",
     "remindNotWaiting": "Si può sollecitare solo una richiesta ancora in attesa di risposta.",
     "remindNoneWaiting": "Nessuna delle richieste scelte è in attesa di risposta.",
@@ -61,18 +61,18 @@
     "acceptLines_one": "{count} materiale è ancora senza risposta: scrivila prima nella scheda Risposta.",
     "acceptLines_other": "{count} materiali sono ancora senza risposta: scrivile prima nella scheda Risposta.",
     "uploadRefused": "Il documento del fornitore è stato rifiutato nei documenti del fornitore (Acquisti › Fornitori): richiedila di nuovo.",
-    "uploadReview": "Il documento del fornitore attende ancora in Acquisti: accettarlo richiede anche purchasing.supplierDocuments.review.",
+    "uploadReview": "Il documento del fornitore attende ancora in Acquisti: accettarlo richiede anche il permesso di accettare i documenti dei fornitori.",
     "askAgainAnswered": "Ha già una risposta: accettala o rifiutala prima, poi richiedi di nuovo.",
     "askedAgain": "Già richiesta di nuovo in {number}.",
     "answerNotWaiting": "La risposta è già registrata.",
-    "filesUpload": "Registrare la risposta carica il suo file: serve files.upload.",
+    "filesUpload": "Registrare la risposta carica il suo file: serve il permesso di caricare file.",
     "previewOffice": "Richiesta dall'ufficio (e-mail a mano): il fornitore non ha una pagina nel portale per questa.",
-    "preview": "Vedere il portale del fornitore richiede partners.preview (acquisti e amministratori).",
+    "preview": "Il tuo ruolo non può aprire il portale del fornitore come lo vede lui (acquisti e amministratori sì).",
     "reviewFirst": "Prima rivedi le richieste.",
     "nothingToAsk": "Niente da inviare o aggiungere: ogni fornitore e tipo è saltato.",
     "archived": "Archiviata: ripristinala prima.",
     "evaluateMax": "Al massimo {max} materiali alla volta.",
-    "imports": "Importare richiede imports.view (amministratori).",
+    "imports": "Importare richiede il permesso di vedere le importazioni (amministratori).",
     "listMax": "L'elenco mostra al massimo {max} righe: restringilo con un filtro o la ricerca."
   },
   "decl": {

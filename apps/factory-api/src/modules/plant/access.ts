@@ -63,7 +63,7 @@ export function scopeOf(context: PlantContext, permission: Permission): Record<s
 export const mayManageLists = (context: OfficeContext): boolean => mayWrite(actorOf(context), PLANT_MACHINES_MANAGE, null)
 
 export function assertManageLists(context: OfficeContext): void {
-  if (!mayManageLists(context)) throw new ForbiddenError("The machine classes and the symptoms are the whole group's: they are kept with plant.machines.manage over every company.")
+  if (!mayManageLists(context)) throw new ForbiddenError("The machine classes and the symptoms are the whole group's: they are kept with the right to keep the plant register over every company.")
 }
 
 /** A plant rule's refusal: W2a's (PLANT_REFUSALS) or the requests and jobs in depth's (B-W2b-96, DEPTH_REFUSALS). */

@@ -55,7 +55,7 @@ function mayKeep(who: Actor, companyId: string | null): boolean {
 }
 
 function keepOrRefuse(who: Actor, companyId: string | null): void {
-  if (!mayKeep(who, companyId)) throw new ForbiddenError(companyId === null ? "A field or list of every company is the whole group's: keeping it needs fields.manage over every company." : 'Keeping the fields and lists of this company needs fields.manage over it.')
+  if (!mayKeep(who, companyId)) throw new ForbiddenError(companyId === null ? "A field or list of every company is the whole group's: keeping it needs the right to keep fields and lists over every company." : 'Keeping the fields and lists of this company needs the right to keep them over it.')
 }
 
 /** Changing who sees a money or personal field needs what it protects: its grain, or the personal right. */
@@ -63,7 +63,7 @@ function visibilityRefusal(who: Actor, before: FieldFacts | null, after: FieldFa
   const grains = heldGrains(who)
   for (const facts of before ? [before, after] : [after]) {
     if (facts.audience === 'MONEY' && facts.grain && !grains.has(facts.grain)) return `Who sees a ${facts.grain} field is changed only by someone with the ${facts.grain} grain.`
-    if (facts.audience === 'PERSONAL' && !holds(who, FIELDS_PERSONAL_VIEW)) return 'Who sees a personal field is changed only by someone who may read personal data (fields.personal.view).'
+    if (facts.audience === 'PERSONAL' && !holds(who, FIELDS_PERSONAL_VIEW)) return 'Who sees a personal field is changed only by someone who may read personal data.'
   }
   return null
 }
@@ -497,13 +497,13 @@ export async function orderOptions(caller: CommandCaller, picklistId: string, bo
 export async function fieldsFor(caller: CommandCaller, query: { recordType: CustomRecordKey; companyId?: string | undefined }) {
   const who = actor(caller)
   const record = recordOf(query.recordType)
-  if (!holds(who, record.view)) throw new ForbiddenError(`Reading the custom fields of ${aRecord(record)} needs ${record.view}.`)
+  if (!holds(who, record.view)) throw new ForbiddenError(`Reading the custom fields of ${aRecord(record)} needs the right to see such records.`)
   return caller.withClient(async (client) => ({ recordType: record.key, fields: fieldsSeen(who, await fieldsOfModel(client, record.model), query.companyId).map(fieldViewOf) }))
 }
 
 /** The record (404 when it is not one the person may see) and the person's rights on it. */
 async function recordFor(client: Client, who: Actor, record: CustomRecord, recordId: string): Promise<RecordFacts> {
-  if (!holds(who, record.view)) throw new ForbiddenError(`Reading the custom fields of ${aRecord(record)} needs ${record.view}.`)
+  if (!holds(who, record.view)) throw new ForbiddenError(`Reading the custom fields of ${aRecord(record)} needs the right to see such records.`)
   const facts = (await recordFactsOf(client, record.model, [recordId])).get(recordId)
   if (!facts || !can(who, record.view, facts)) throw new NotFoundError(`${record.labelEn} not found.`)
   return facts
@@ -528,7 +528,7 @@ export async function writeValues(caller: CommandCaller, recordType: CustomRecor
   const who = actor(caller)
   const record = recordOf(recordType)
   const facts = await caller.withClient((client) => recordFor(client, who, record, recordId))
-  if (!can(who, record.edit, facts)) throw new ForbiddenError(`Changing the custom fields of ${aRecord(record)} needs ${record.edit} over it.`)
+  if (!can(who, record.edit, facts)) throw new ForbiddenError(`Changing the custom fields of ${aRecord(record)} needs the right to change it.`)
   const { result } = await command(caller, { name: 'fields.setValues', idempotencyKey, input: { recordType, recordId, values: body.values } }, async (tools) =>
     saidInWords(async () => {
       const written = await writeValuesInCommand(tools, record, facts, body.values.map((entry) => ({ code: entry.code, value: entry.value ?? null, version: entry.version })), who, actorIdOf(tools.context))
@@ -543,7 +543,7 @@ export async function writeValues(caller: CommandCaller, recordType: CustomRecor
 export async function rowValues(caller: CommandCaller, recordType: CustomRecordKey, ids: readonly string[]) {
   const who = actor(caller)
   const record = recordOf(recordType)
-  if (!holds(who, record.view)) throw new ForbiddenError(`Reading the custom fields of ${aRecord(record)} needs ${record.view}.`)
+  if (!holds(who, record.view)) throw new ForbiddenError(`Reading the custom fields of ${aRecord(record)} needs the right to see such records.`)
   return caller.withClient(async (client) => {
     const facts = [...(await recordFactsOf(client, record.model, ids)).values()].filter((row) => can(who, record.view, row))
     const fields = fieldsSeen(who, await fieldsOfModel(client, record.model))

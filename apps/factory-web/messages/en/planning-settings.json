@@ -18,7 +18,7 @@
     "sitesFailed": "Couldn't load the sites you plan at",
     "noAccess": {
       "title": "Your role may not see the planning settings",
-      "body": "Your role does not include “planning.view”. Ask an administrator if you need this page."
+      "body": "Your role cannot see the planning. Ask an administrator if you need this page."
     },
     "noSites": {
       "title": "No site to plan yet",
@@ -38,9 +38,9 @@
     },
     "held": {
       "busy": "Saving: wait for the answer.",
-      "calendars": "Keeping calendars needs the Calendars right (calendars.manage).",
-      "items": "Keeping item parameters needs the item planning right (planning.items.manage).",
-      "settings": "Keeping the planning settings needs the planning settings right (planning.settings.manage)."
+      "calendars": "Keeping calendars needs the Calendars right.",
+      "items": "Keeping item parameters needs the item planning right.",
+      "settings": "Keeping the planning settings needs the planning settings right."
     },
     "problem": {
       "read": "The factory did not answer as expected. Try again in a moment.",
@@ -87,7 +87,7 @@
     },
     "readOnly": {
       "title": "You can look, not change",
-      "body": "Keeping calendars needs the Calendars right (calendars.manage). Days still open to show what they are."
+      "body": "Keeping calendars needs the Calendars right. Days still open to show what they are."
     },
     "owner": {
       "label": "Calendar of",
@@ -316,7 +316,7 @@
       "new": "c — a new shift pattern (in Shift patterns)"
     },
     "problem": {
-      "wholeCompany": "The company's calendar and its patterns reach every site: keeping them needs Calendars (calendars.manage) over every site of the company."
+      "wholeCompany": "The company's calendar and its patterns reach every site: keeping them needs Calendars over every site of the company."
     },
     "notice": {
       "daySaved": "Saved. Capacity recalculated at once for: {lanes}.",

@@ -109,7 +109,7 @@ async function complianceView(caller: CommandCaller, order: OrderRow) {
     request: requestView(newest, answer, names, context.actorId),
     may: { ask: mayAsk, decide: mayDecide, withdraw: waiting === true && newest!.askedById === context.actorId },
     heldWhy: {
-      decide: !waiting ? OVERRIDE_REFUSALS.notWaiting : newest!.askedById === context.actorId ? OVERRIDE_REFUSALS.own : !can(actor, PURCHASING_COMPLIANCE_OVERRIDE, place) ? 'You need purchasing.compliance.override.' : notApprover ? APPROVAL_REFUSALS.NOT_APPROVER : null,
+      decide: !waiting ? OVERRIDE_REFUSALS.notWaiting : newest!.askedById === context.actorId ? OVERRIDE_REFUSALS.own : !can(actor, PURCHASING_COMPLIANCE_OVERRIDE, place) ? 'You need the right to decide a send without a valid document.' : notApprover ? APPROVAL_REFUSALS.NOT_APPROVER : null,
     },
   }
 }
@@ -169,7 +169,7 @@ export async function askOverride(caller: CommandCaller, orderId: string, body: 
 export async function decideOverride(caller: CommandCaller, orderId: string, body: { readonly decision: 'APPROVED' | 'REJECTED'; readonly words?: string | null | undefined; readonly reasonCode?: string | undefined }, stepUp: () => void, idempotencyKey?: string) {
   const context = officeContextOf(caller)
   const seen = await decidableOrder(caller, orderId)
-  if (!can(actorOf(context), PURCHASING_COMPLIANCE_OVERRIDE, { companyId: seen.companyId, siteId: seen.siteId, partyId: seen.partyId })) throw new ForbiddenError('Deciding a send without a valid document needs purchasing.compliance.override.')
+  if (!can(actorOf(context), PURCHASING_COMPLIANCE_OVERRIDE, { companyId: seen.companyId, siteId: seen.siteId, partyId: seen.partyId })) throw new ForbiddenError('Deciding a send without a valid document needs the right to decide such requests.')
   const words = decisionWordsOf(body.decision, body.words)
   if ('issue' in words) throw new ValidationError(words.issue.message, [words.issue])
   // B-W2b-377: the engine decides it (never the asker, only its approver, re-read first: what holds the order changed → STALE).

@@ -109,7 +109,7 @@ async function resolve(client: CommandTx, row: { readonly values: Readonly<Recor
   }
   if (!machine && siteRow.status !== 'ACTIVE') issues.push({ column: 'site', message: `Site ${siteRow.code} is archived.` })
   if (actor && !can(actor, PLANT_MACHINES_MANAGE, { companyId: siteRow.companyId, siteId: siteRow.id })) {
-    issues.push({ column: 'site', message: `Machines of site ${siteRow.code} are kept by a role with plant.machines.manage there.` })
+    issues.push({ column: 'site', message: `Machines of site ${siteRow.code} are kept by a role with the right to keep machines there.` })
   }
   const company = await client.company.findUnique({ where: { id: siteRow.companyId }, select: { currency: true } })
   const site = { ...siteRow, currency: currencyOf(company?.currency) }
@@ -159,7 +159,7 @@ export const machinesImportAdapter = Object.freeze({
 
   authorize(actor, job) {
     if (job.companyId === null && !mayWrite(actor, PLANT_MACHINES_MANAGE, null)) {
-      return [{ path: 'companyId', message: 'A machines import for every company needs plant.machines.manage over every company; import for one company instead.' }]
+      return [{ path: 'companyId', message: 'A machines import for every company needs the right to keep machines over every company; import for one company instead.' }]
     }
     return []
   },

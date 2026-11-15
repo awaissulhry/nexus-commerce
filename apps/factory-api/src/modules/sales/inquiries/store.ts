@@ -122,7 +122,7 @@ export async function officeInquiry(caller: CommandCaller, inquiryId: string, pe
   const context = officeOf(caller)
   const inquiry = await caller.withClient((db) => readInquiryRow(db, inquiryId))
   if (!inquiry || !may(context, SALES_INQUIRIES_VIEW, inquiry)) throw new NotFoundError('Inquiry not found.')
-  if (!may(context, permission, inquiry)) throw new ForbiddenError('Your role does not keep inquiries for this company or customer (sales.inquiries.manage).')
+  if (!may(context, permission, inquiry)) throw new ForbiddenError('Your role does not keep inquiries for this company or customer.')
   return { context, inquiry }
 }
 

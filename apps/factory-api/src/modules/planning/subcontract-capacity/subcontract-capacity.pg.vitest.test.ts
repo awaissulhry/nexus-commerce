@@ -215,7 +215,7 @@ describe('only approved workshops (PLN-162), kit timing (PLN-164), in-house or o
     // A planner without the subcontracting permission: outside, no order yet.
     const out = await ok('planner', 'POST', url('outside'), { version: operation.version, partyId: A.P2 })
     expect(out).toMatchObject({ operation: { id: qc, outsourced: true, subcontractOrderId: null }, order: null })
-    expect(out.orderWords).toMatch(/purchasing\.subcontract\.manage/)
+    expect(out.orderWords).toMatch(/the right to manage subcontract orders/)
     operation = await operationOf(qc)
     await refused('planner', 'POST', url('outside'), { version: operation.version, partyId: A.P2 }, 409)
     await refused('planner', 'POST', url('in-house'), { version: operation.version + 5, reason: 'Back in' }, 409)

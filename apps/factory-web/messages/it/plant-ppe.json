@@ -1,7 +1,7 @@
 {
   "access": {
     "title": "Nessun accesso ai DPI ai lavoratori",
-    "body": "Questa pagina richiede il diritto di vedere la sicurezza (safety.view). Chiedi a chi gestisce i ruoli nella tua azienda."
+    "body": "Questa pagina richiede il diritto di vedere la sicurezza. Chiedi a chi gestisce i ruoli nella tua azienda."
   },
   "common": {
     "stillLoading": "Ancora in caricamento…",
@@ -209,7 +209,7 @@
     "whenWorn": "Quando usurato",
     "months_one": "{count} mese",
     "months_other": "{count} mesi",
-    "costHidden": "I costi unitari richiedono il diritto sui costi (money.cost).",
+    "costHidden": "I costi unitari richiedono il diritto sui costi.",
     "instructionLater": "Formazione richiesta per DPI: più avanti.",
     "failed": "Non è stato possibile leggere il catalogo.",
     "noneFiltered": "Nessun DPI corrisponde a questi filtri",
@@ -323,7 +323,7 @@
     "lifeHint": "Sostituito dopo questi mesi; vuoto: quando usurato.",
     "supplier": "Fornitore",
     "supplierHint": "Fornitori attivi dell'azienda e del gruppo.",
-    "supplierNoRight": "Scegliere un fornitore richiede il diritto sul registro sostanze (safety.chemicals.manage); il DPI tiene il suo fornitore.",
+    "supplierNoRight": "Scegliere un fornitore richiede il diritto sul registro sostanze; il DPI tiene il suo fornitore.",
     "noSupplier": "Nessun fornitore",
     "unitCost": "Costo unitario (€)",
     "unitCostHint": "Un pezzo, per es. 12,50.",
@@ -395,8 +395,8 @@
   },
   "held": {
     "busy": "Salvataggio…",
-    "issue": "Il tuo ruolo non registra ricevute dei DPI (safety.ppe.issue).",
-    "manage": "Il tuo ruolo non tiene il catalogo dei DPI (safety.ppe.manage).",
+    "issue": "Il tuo ruolo non registra ricevute dei DPI.",
+    "manage": "Il tuo ruolo non tiene il catalogo dei DPI.",
     "company": "Scegli prima un'azienda nella barra in alto.",
     "person": "Scegli la persona.",
     "personSite": "Questa persona lavora dove il tuo ruolo non registra ricevute.",
@@ -414,8 +414,8 @@
     "scanType": "La scansione è un PDF o una foto (JPG, PNG).",
     "scanFile": "Scegli la scansione del foglio firmato.",
     "scanDone": "Questa ricevuta non attende più la scansione.",
-    "upload": "Il tuo ruolo non carica file (files.upload): la ricevuta si registra come non firmata; chi carica file aggiunge la scansione da Consegne.",
-    "readFiles": "Il tuo ruolo non apre i file archiviati (files.read).",
+    "upload": "Il tuo ruolo non carica file: la ricevuta si registra come non firmata; chi carica file aggiunge la scansione da Consegne.",
+    "readFiles": "Il tuo ruolo non apre i file archiviati.",
     "code": "Scrivi il codice: maiuscole, cifre e . _ / - (senza spazi).",
     "name": "Scrivi il nome.",
     "category": "Scegli la categoria.",

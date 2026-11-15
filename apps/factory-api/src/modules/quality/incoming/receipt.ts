@@ -46,7 +46,7 @@ async function receiptFor(caller: CommandCaller, receiptId: string, permission: 
   const receipt = isUuid(receiptId) ? await receiptAs(caller, context, receiptId) : null
   const scope = receipt ? { companyId: receipt.order.companyId, siteId: receipt.siteId } : null
   if (!receipt || !scope || !(mayOn(context, QUALITY_INCOMING_VIEW, scope) || mayOn(context, permission, scope))) throw new NotFoundError("Workshop's receipt not found.")
-  if (!mayOn(context, permission, scope)) throw new ForbiddenError(`This needs ${permission} over the receipt's company and site.`)
+  if (!mayOn(context, permission, scope)) throw new ForbiddenError("This needs a right your role does not hold over the receipt's company and site.")
   return { receipt, context }
 }
 

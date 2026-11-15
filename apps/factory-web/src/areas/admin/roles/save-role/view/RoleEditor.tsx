@@ -11,6 +11,8 @@ import { byArea, permissionKey, type MatrixPermission } from '../../../shared/vi
 import { useRoleWords } from '../../../shared/view/parts'
 import { draftDiff, editablePermissions, grainToggled, refusalWords, reviewRows, toggled, type RoleDraft, type RoleReview } from '../model'
 import '../roles-depth.css'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../../../lib/i18n/rights'
 
 /** The review pop-up (pop:save-role): reading, ready, saving, saved, or the read failed. */
 export type SaveReview =
@@ -125,7 +127,7 @@ function Editor({ model, actions }: { model: RoleEditorModel; actions?: RoleEdit
                             {was !== on && <Tag tone="info">{t(on ? 'saveRole.adding' : 'saveRole.removing')}</Tag>}
                           </span>
                         </span>,
-                        <Checkbox key="tick" checked={on} aria-label={t('saveRole.tick', { permission: name })} onChange={(event) => actions?.onDraft?.(toggled(draft, permission.name, event.target.checked))} />,
+                        <Checkbox key="tick" checked={on} aria-label={t('saveRole.tick', { right: rightRef(name) })} onChange={(event) => actions?.onDraft?.(toggled(draft, permission.name, event.target.checked))} />,
                       ],
                     }
                   })}
@@ -161,7 +163,7 @@ function Review({ model, review, roleName, actions }: { model: RoleEditorModel; 
   const refusals = review.phase === 'ready' ? [...(answer?.refusals.map((item) => item.path) ?? []), ...review.paths] : []
   const problems = [...new Set(refusals)].map((path) => {
     const words = refusalWords(path)
-    return t(words.key, { permission: words.subject?.permission ? permission(words.subject.permission) : '', grain: words.subject?.grain ? ta(`grains.short.${words.subject.grain}`) : '' })
+    return t(words.key, { right: words.subject?.permission ? rightRef(words.subject.permission) : '', grain: words.subject?.grain ? ta(`grains.short.${words.subject.grain}`) : '' })
   })
   const state =
     review.phase === 'reading'

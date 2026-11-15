@@ -34,7 +34,7 @@ import { actorIdOf, assertMayAt, assertMayWriteAt, assertVersion, dateOf, dayOf,
 
 type Client = FactoryClient | CommandTx
 
-const MANAGE_WORDS = 'The deadlines of this company are kept by a role that keeps the safety calendar (safety.calendar.manage).'
+const MANAGE_WORDS = 'The deadlines of this company are kept by a role that keeps the safety calendar.'
 
 const DEADLINE_SELECT = {
   id: true,

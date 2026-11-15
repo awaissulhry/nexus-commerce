@@ -114,7 +114,7 @@ export function offerReasonWords(part: CopyPart, reason: OfferReason): string {
     case 'LABEL_RETIRED':
       return `${label} is retired.`
     case 'NEEDS_PERMISSION':
-      return `Copying ${PART_NAME[part]} needs ${reason.permission}${reason.everyCompany ? ' over every company' : ''}.`
+      return `Copying ${PART_NAME[part]} needs the right to edit ${PART_NAME[part]}${reason.everyCompany ? ' over every company' : ''}.`
     case 'NO_PICTURES':
       return `${reason.style} has no pictures.`
   }

@@ -81,7 +81,7 @@ function languageOf(language: string | undefined): string {
 /** GET /production/instructions/typed-steps?companyId=&language=. */
 export async function typedSteps(caller: CommandCaller, query: { readonly companyId: string; readonly language?: string | undefined }) {
   const context = officeOf(caller)
-  assertMay(context, PRODUCTION_INSTRUCTIONS_MANAGE, query.companyId, 'You write work instructions only for the companies your role reaches (production.instructions.manage).')
+  assertMay(context, PRODUCTION_INSTRUCTIONS_MANAGE, query.companyId, 'You write work instructions only for the companies your role reaches.')
   const language = languageOf(query.language)
   const candidates = await caller.withClient((client) => candidatesOf(client as Db, query.companyId))
   return { rows: candidates.map((candidate) => rowOf(candidate, language)), toMake: candidates.filter((candidate) => !candidate.existing).length, made: candidates.filter((candidate) => candidate.existing).length }
@@ -107,7 +107,7 @@ async function makeOne(tools: CommandTools, companyId: string, candidate: Candid
 /** POST /production/instructions/typed-steps. */
 export async function bringTypedSteps(caller: CommandCaller, body: { readonly companyId: string; readonly language?: string | undefined }, idempotencyKey?: string) {
   const context = officeOf(caller)
-  assertMay(context, PRODUCTION_INSTRUCTIONS_MANAGE, body.companyId, 'You write work instructions only for the companies your role reaches (production.instructions.manage).')
+  assertMay(context, PRODUCTION_INSTRUCTIONS_MANAGE, body.companyId, 'You write work instructions only for the companies your role reaches.')
   const language = languageOf(body.language)
   const { result } = await inWords(() =>
     command(caller, { name: 'production.bringTypedSteps', idempotencyKey, input: { ...body, language } }, async (tools) => {

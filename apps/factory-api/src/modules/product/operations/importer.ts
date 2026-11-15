@@ -38,7 +38,7 @@ export const operationsImportAdapter = Object.freeze({
 
   authorize(actor, job) {
     if (job.companyId === null && !mayWrite(actor, PRODUCT_OPERATIONS_MANAGE, null)) {
-      return [{ path: 'companyId', message: 'An operations import for every company needs product.operations.manage over every company; import for one company instead.' }]
+      return [{ path: 'companyId', message: 'An operations import for every company needs the right to keep the operation library over every company; import for one company instead.' }]
     }
     return []
   },

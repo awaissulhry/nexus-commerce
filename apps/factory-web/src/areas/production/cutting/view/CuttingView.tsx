@@ -20,6 +20,8 @@ import { fabricTiles, ORDER_TONE, orderDate, orderHref, orderMaterial, ORDERS_NA
 import { NewCutOrderDialog, type NewOrderActions, type NewOrderModel } from '../orders/view/NewCutOrderDialog'
 import { AllocateHidesDialog, say, type AllocModel } from './CutDialogs'
 import '../cutting.css'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../../lib/i18n/rights'
 
 export interface CuttingModel {
   readonly prefix: string
@@ -118,7 +120,7 @@ function Page({ model, actions }: { model: CuttingModel; actions?: CuttingAction
     return (
       <div className="fw-ct">
         <Card padded>
-          <EmptyState icon={<ShieldOff size={24} aria-hidden />} title={t('page.noAccess.title')} description={t('page.noAccess.body', { permission: 'production.cutting.view' })} />
+          <EmptyState icon={<ShieldOff size={24} aria-hidden />} title={t('page.noAccess.title')} description={t('page.noAccess.body', { right: rightRef('production.cutting.view') })} />
         </Card>
       </div>
     )

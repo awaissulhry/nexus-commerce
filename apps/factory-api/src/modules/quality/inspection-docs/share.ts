@@ -92,7 +92,7 @@ async function shareVersion(input: ShareRequest) {
   const context = officeContextOf(request)
   const problem = attachStateProblem(shipment.status as never)
   if (problem) throw new InvalidStateError(problem)
-  if (body.send && !shipmentMay(context, SHIPPING_MANAGE, shipment)) throw new ForbiddenError('Mailing the shipment\'s documents link needs shipping.manage over the shipment.')
+  if (body.send && !shipmentMay(context, SHIPPING_MANAGE, shipment)) throw new ForbiddenError("Mailing the shipment's documents link needs the right to work on shipments over the shipment.")
   const versions = await request.withClient((db) => readVersions(db, record, kind))
   const chosen = body.version === undefined ? versions[0] : versions.find((version) => version.version === body.version)
   if (!chosen) throw body.version === undefined ? held('NO_VERSION', 'No version is kept yet: keep one first, then share it.') : held('NO_SUCH_VERSION', `Version ${body.version} is not kept.`)

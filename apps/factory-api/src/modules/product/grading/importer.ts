@@ -89,7 +89,7 @@ export const gradeRulesImportAdapter = Object.freeze({
 
   authorize(actor, job) {
     if (job.companyId === null && !mayWrite(actor, PRODUCT_STYLES_MANAGE, null)) {
-      return [{ path: 'companyId', message: 'A grade rules import for every company needs product.styles.manage over every company; import for one company instead.' }]
+      return [{ path: 'companyId', message: 'A grade rules import for every company needs the right to keep styles over every company; import for one company instead.' }]
     }
     return []
   },

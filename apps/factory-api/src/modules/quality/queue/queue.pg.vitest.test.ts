@@ -176,7 +176,7 @@ describe('the inspector queue (QHS-068)', () => {
     expect(new Set(incoming.rows.map((row: Json) => row.kind))).toEqual(new Set(['INCOMING']))
     expect(incoming.rows[0].may).toEqual({ record: false, start: false })
     const error = await refused('nobody', 'GET', '/quality/queue', undefined, 403)
-    expect(error.message).toMatch(/quality\.inspections\.view, quality\.incoming\.view or quality\.inprocess\.view/)
+    expect(error.message).toMatch(/the right to see final, incoming or in-process inspections/)
     const kind = await ok('bench', 'GET', '/quality/queue?kind=INCOMING')
     expect(kind.rows.map((row: Json) => row.kind)).toEqual(['INCOMING'])
   })

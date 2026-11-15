@@ -76,6 +76,7 @@ import {
 } from './model'
 import { designScreen as orderScreen } from './record/fixtures'
 import { designScreen as sheetScreen } from './sheet/fixtures'
+import { rightRef } from '../../../../lib/i18n/rights'
 
 /**
  * Cutting in depth (B-W2b-129): the pure rules of cut orders (the list beside the leather cuts, New cut order, the lays and
@@ -140,7 +141,7 @@ describe('New cut order', () => {
   it('holds Create with why, in the API’s order of rules', () => {
     const ok = draft({ picked: ids.slice(0, 3), ratio: { [ids[1]!]: '2' }, markerName: 'MK', markerLength: '2,4', plies: '20', lays: '2' })
     expect(newOrderHeld(ok, FABRIC, manager, false)).toBeNull()
-    expect(newOrderHeld(ok, FABRIC, supervisor, false)).toEqual({ key: 'held.permission', params: { permission: 'production.cutorders.manage' } })
+    expect(newOrderHeld(ok, FABRIC, supervisor, false)).toEqual({ key: 'held.permission', params: { right: rightRef('production.cutorders.manage') } })
     expect(newOrderHeld(ok, null, manager, false)).toEqual({ key: 'newOrder.held.group' })
     expect(newOrderHeld({ ...ok, picked: [] }, FABRIC, manager, false)).toEqual({ key: 'newOrder.held.cells' })
     expect(newOrderHeld({ ...ok, markerName: ' ' }, FABRIC, manager, false)).toEqual({ key: 'newOrder.held.markerName' })
@@ -187,7 +188,7 @@ describe('the record: lays, rolls, tickets', () => {
     expect(backHeld(RECORD_RELEASED, manager, false)).toBeNull()
     expect(backHeld(RECORD, manager, false)).toEqual({ key: 'held.back.status' })
     expect(cancelHeld(RECORD_RELEASED, manager, false)).toBeNull()
-    expect(cancelHeld(RECORD_RELEASED, supervisor, false)).toEqual({ key: 'held.permission', params: { permission: 'production.cutorders.manage' } })
+    expect(cancelHeld(RECORD_RELEASED, supervisor, false)).toEqual({ key: 'held.permission', params: { right: rightRef('production.cutorders.manage') } })
   })
 
   it('mixing shade or shrinkage groups in one lay is refused with the reason; the lay full; a roll’s own refusal', () => {
@@ -226,7 +227,7 @@ describe('the record: lays, rolls, tickets', () => {
     expect(voidHeld({ ...(open as object), status: 'VOID' } as never, manager, false)).toEqual({ key: 'held.ticket.void' })
     expect(printManyHeld([open, done], manager, false)).toEqual({ key: 'held.ticket.done' })
     expect(printManyHeld([], manager, false)).toEqual({ key: 'tickets.held.none' })
-    expect(printHeld(open, supervisor, false)).toEqual({ key: 'held.permission', params: { permission: 'production.cutorders.manage' } })
+    expect(printHeld(open, supervisor, false)).toEqual({ key: 'held.permission', params: { right: rightRef('production.cutorders.manage') } })
   })
 })
 
@@ -269,7 +270,7 @@ describe('Reconcile cut and the yield', () => {
     expect(underPlan(-1)).toBe(false)
     expect(underPlan(null)).toBe(false)
     expect(feedbackHeld({ supplier: 'Conceria Demo' }, true)).toBeNull()
-    expect(feedbackHeld({ supplier: 'Conceria Demo' }, false)).toEqual({ key: 'held.permission', params: { permission: 'purchasing.claims.manage' } })
+    expect(feedbackHeld({ supplier: 'Conceria Demo' }, false)).toEqual({ key: 'held.permission', params: { right: rightRef('purchasing.claims.manage') } })
     expect(feedbackHeld({ supplier: null }, true)).toEqual({ key: 'feedback.held.noSupplier' })
   })
 
@@ -380,7 +381,7 @@ describe('the pages in the map', () => {
 
 const LEFT_KEY = /\b(?:common|noAccess|live|kind|status|layStatus|ticketStatus|reason|warning|refusal|problem|held|plan|tile|col|list|csv|newOrder|record|tab|part|marker|lays|lines|hides|pieces|yield|material|tickets|print|language|void|back|cancel|rolls|reconcile|notice|sheet|shadeLot|ofWorkOrder|balance|feedback|state|view|alloc)\.[a-zA-Z_]+(?:\.[a-zA-Z_]+)*\b/
 const LEFT_PLACEHOLDER = /\{[a-zA-Z]+\}/
-/** Permission names are said on purpose ("needs production.cutorders.manage"). */
+/** Permission names are stripped before the key check, though no screen says one since B-W2b-F51. */
 const SAID = /\b(?:production\.[a-z.]+|inventory\.[a-z.]+|workorders\.[a-z.]+|purchasing\.[a-z.]+|print\.view|money\.cost)\b/g
 
 function render(screen: DesignScreen<unknown>, model: unknown, locale: (typeof LOCALES)[number]): string {

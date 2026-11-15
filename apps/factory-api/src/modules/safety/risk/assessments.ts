@@ -45,7 +45,7 @@ import { ASSESSMENT_SELECT, assessmentViews, organisationOf, readAssessment, rom
  * calendar reads it already (modules/safety/calendar/sources/risk-assessment.ts, DVR_REVIEW).
  */
 
-const MANAGE_WORDS = 'The risk assessments of this site are kept by a role that keeps them (safety.risk.manage).'
+const MANAGE_WORDS = 'The risk assessments of this site are kept by a role that keeps them.'
 
 const refuseWith = (refusal: RiskRefusal | null): void => {
   if (refusal) refuse(refusal.code, refusal.message, refusal.field)

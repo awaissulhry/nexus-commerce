@@ -36,7 +36,7 @@
     "printShown_other": "Stampa {count} liste di prelievo"
   },
   "held": {
-    "noReserve": "Il tuo ruolo non può impegnare giacenza (inventory.reserve).",
+    "noReserve": "Il tuo ruolo non può impegnare giacenza.",
     "nothingToPrint": "Nessuna lista di prelievo mostrata da stampare.",
     "CR_VI_PENDING": "Lotto {lot}: manca ancora l'esito del test cromo VI",
     "CR_VI_FAILED": "Lotto {lot}: non ha superato il test cromo VI",
@@ -100,8 +100,8 @@
     "placeAt": "{code} · {name}",
     "placeLabel": "Posto del kit",
     "placeHint": "Dove il materiale prelevato attende il taglio. Si salva appena scegli.",
-    "heldNoRight": "Per preparare e controllare un kit serve il permesso di prelievo per gli ordini di produzione (inventory.issue).",
-    "heldNoPlaces": "Per scegliere il posto serve il permesso di vedere le ubicazioni (inventory.locations.view).",
+    "heldNoRight": "Per preparare e controllare un kit serve il permesso di prelievo per gli ordini di produzione.",
+    "heldNoPlaces": "Per scegliere il posto serve il permesso di vedere le ubicazioni.",
     "heldNotOpen": "L'ordine di produzione non è più in prelievo: il suo kit resta com'è.",
     "heldNothing": "L'ordine di produzione non prevede materiale: non c'è un kit da controllare.",
     "heldChecked": "Il kit è già segnato come completo.",

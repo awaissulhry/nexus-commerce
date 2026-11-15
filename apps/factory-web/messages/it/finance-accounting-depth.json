@@ -13,7 +13,7 @@
     "failed": "Impossibile caricare il piano dei conti",
     "noAccess": {
       "title": "Non puoi vedere il piano dei conti",
-      "body": "Serve il permesso di contabilità (accounting.view). Chiedi al tuo amministratore."
+      "body": "Serve il permesso di contabilità. Chiedi al tuo amministratore."
     },
     "gate": {
       "title": "Da confermare con il commercialista",
@@ -128,7 +128,7 @@
       "refused": "Le chiavi rifiutate"
     },
     "held": {
-      "noManage": "Per modificare la mappatura serve il permesso (accounting.mapping.manage).",
+      "noManage": "Il tuo ruolo non può modificare la mappatura.",
       "notPosted": "Nexus non registra questa chiave: non c'è nulla da mappare.",
       "busy": "In corso…",
       "running": "Si chiude quando ogni chiave è stata inviata.",
@@ -207,7 +207,7 @@
       "off": "I registri vanno senza le loro scritture dalla prossima esportazione."
     },
     "held": {
-      "noSwitch": "Per attivare o disattivare le scritture serve il permesso (accounting.journals.switch).",
+      "noSwitch": "Il tuo ruolo non può attivare o disattivare le scritture.",
       "running": "Si chiude quando arriva la risposta.",
       "reason": "Un motivo ha al massimo {max} caratteri."
     },
@@ -223,14 +223,14 @@
     "what": {
       "nothing": "Fatture, note di credito, incassi, fatture dei fornitori, movimenti di magazzino e costi degli ordini di produzione con data {month} vengono rifiutati per tutti: li rifiuta il database stesso.",
       "correct": "Una correzione va poi in un mese aperto: una nota di credito o una rettifica con data successiva a {month}.",
-      "lift": "Solo chi ha accounting.unlock (il titolare) può riaprirlo, con un motivo e un nuovo codice.",
+      "lift": "Solo chi può togliere una chiusura definitiva (il titolare) può riaprirlo, con un motivo e un nuovo codice.",
       "accountant": "Nulla viene inviato al commercialista: i file li consegni tu."
     },
     "go": "Chiudi {month}",
     "problems": "{month} non si può ancora chiudere in modo definitivo:",
     "code": "Poi ti viene chiesto il codice di autenticazione.",
     "held": {
-      "noClose": "Per chiudere un mese in modo definitivo serve il permesso (accounting.close).",
+      "noClose": "Il tuo ruolo non può chiudere un mese in modo definitivo.",
       "running": "Si chiude quando arriva la risposta."
     }
   },
@@ -253,7 +253,7 @@
     "export": "Un controllo notturno non superato non blocca l'esportazione: dice cosa troverebbe il commercialista.",
     "failuresLabel": "Documenti che non superano {check}",
     "held": {
-      "noRun": "Per eseguire i controlli serve il permesso di esportazione (accounting.export).",
+      "noRun": "Per eseguire i controlli serve il permesso di esportazione.",
       "running": "I controlli sono in corso."
     },
     "check": {

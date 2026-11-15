@@ -408,7 +408,7 @@
     "allowed": "Allowed",
     "adding": "Adding",
     "removing": "Removing",
-    "tick": "{permission}: allowed",
+    "tick": "{right}: allowed",
     "reviewSave": "Review and save",
     "atRest": "No change yet: tick or untick what the role may do.",
     "title": "Change role '{name}'?",
@@ -436,7 +436,7 @@
       "mine": "You hold this role: ask another administrator to change it."
     },
     "refusal": {
-      "beyondPermission": "You do not hold “{permission}” yourself: a role never gives more than its maker holds.",
+      "beyondPermission": "You do not hold “{right}” yourself: a role never gives more than its maker holds.",
       "beyondGrain": "You do not see {grain} yourself: a role never gives more than its maker holds.",
       "readyMade": "A ready-made role cannot be changed: make a copy.",
       "archived": "This role is archived: restore it first.",

@@ -61,7 +61,7 @@ async function checkOrders(client: CommandTx, rows: readonly CheckRow[], company
       continue
     }
     if (!can(actor, ORDERS_MANAGE, { companyId, partyId: party.id })) {
-      all({ column: 'customer', message: `Making orders for ${party.code} needs orders.manage over it.` })
+      all({ column: 'customer', message: `Making orders for ${party.code} needs the right to work on sales orders over it.` })
       continue
     }
     const seasonCode = text(order.header.season)

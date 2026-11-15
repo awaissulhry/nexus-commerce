@@ -165,7 +165,7 @@ const backOfOrder = (order: OrderRow, operations: BalanceFacts['operations']) =>
 })
 
 function heldToBook(context: OfficeContext, order: OrderRow, facts: BalanceFacts): string | null {
-  if (!can(actorOf(context), PURCHASING_SUBCONTRACT_BALANCE, { companyId: order.companyId, siteId: order.siteId, partyId: order.partyId })) return 'Booking the material balance needs purchasing.subcontract.balance.'
+  if (!can(actorOf(context), PURCHASING_SUBCONTRACT_BALANCE, { companyId: order.companyId, siteId: order.siteId, partyId: order.partyId })) return "Booking the material balance needs the right to book workshops' material balances."
   if (facts.lines.length === 0) return 'Nothing was sent yet: the balance starts with the kit.'
   return null
 }

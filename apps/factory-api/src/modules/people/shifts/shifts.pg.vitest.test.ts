@@ -192,7 +192,7 @@ describe('the roster sheet (MES-218)', () => {
 
   it('refuses a shift after a leaver\'s last day, a person a lead does not lead, a reader, a typed window that makes no sense', async () => {
     expect(pathsOf(await no('manager', 'POST', '/people/shifts/roster/cells', { cells: [{ employeeId: people.employeeIds.e4, date: W, version: null, set: morning }] }, 409))).toEqual(['refusal/AFTER_LAST_DAY', 'body/cells/0'])
-    expect((await no('lead', 'POST', '/people/shifts/roster/cells', { cells: [{ employeeId: people.employeeIds.e4, date: W, version: null, set: { kind: 'OFF' } }] }, 403)).message).toMatch(/people\.shifts\.team/)
+    expect((await no('lead', 'POST', '/people/shifts/roster/cells', { cells: [{ employeeId: people.employeeIds.e4, date: W, version: null, set: { kind: 'OFF' } }] }, 403)).message).toMatch(/to plan it for the teams you lead/)
     expect((await call('viewer', 'POST', '/people/shifts/roster/cells', { cells: [{ employeeId: people.employeeIds.e1, date: day(2), version: null, set: { kind: 'OFF' } }] })).statusCode).toBe(403)
     expect(pathsOf(await no('manager', 'POST', '/people/shifts/roster/cells', { cells: [{ employeeId: people.employeeIds.e1, date: day(2), version: null, set: { kind: 'WORK', startMinute: 600, endMinute: 500 } }] }, 400))).toEqual(['body/cells/0/set/endMinute'])
     expect(pathsOf(await no('manager', 'POST', '/people/shifts/roster/cells', { cells: [{ employeeId: people.employeeIds.e1, date: day(2), version: null, set: { kind: 'WORK', patternId: T.pattern2T, label: 'Night' } }] }, 400))).toEqual(['body/cells/0/set/label'])

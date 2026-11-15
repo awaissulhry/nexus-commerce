@@ -15,6 +15,8 @@ import { iconOf } from '../../../lib/plant/symptom-icons'
 import type { JobStatus, MachineStatus, Priority, RequestStatus, Symptom } from './api'
 import { JOB_TONE, labelOf, MACHINE_TONE, PRIORITY_TONE, REQUEST_TONE, TIME_ZONE, type Words } from './model'
 import './plant.css'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../lib/i18n/rights'
 
 /**
  * View parts every Plant maintenance page shares (B-W2a-53): the catalogue wrapper (`plant`, the list frame's `lists`,
@@ -130,7 +132,7 @@ export function Cost({ minor }: { minor: number | null | undefined }) {
 
 export function NoPlantAccess({ permission = 'plant.view' }: { permission?: string }) {
   const t = useWords()
-  return <EmptyState icon={<ShieldOff size={22} aria-hidden />} title={t('problem.forbidden')} description={t('problem.noPermission', { permission })} />
+  return <EmptyState icon={<ShieldOff size={22} aria-hidden />} title={t('problem.forbidden')} description={t('problem.noPermission', { right: rightRef(permission) })} />
 }
 
 export interface Notice {
@@ -206,7 +208,7 @@ export function RecordFrame({ backHref, backLabel, loaded, noun, title, meta, ac
             <EmptyState
               icon={loaded.status === 'forbidden' ? <ShieldOff size={24} aria-hidden /> : <FileX size={24} aria-hidden />}
               title={t(loaded.status === 'error' ? 'record.failed' : loaded.status === 'forbidden' ? 'problem.forbidden' : 'record.notFound')}
-              description={loaded.status === 'error' ? t(loaded.problem) : loaded.status === 'forbidden' ? t('problem.noPermission', { permission }) : t('record.notFoundBody')}
+              description={loaded.status === 'error' ? t(loaded.problem) : loaded.status === 'forbidden' ? t('problem.noPermission', { right: rightRef(permission) }) : t('record.notFoundBody')}
               action={
                 loaded.status === 'error' ? (
                   <Button size="sm" onClick={onRetry}>

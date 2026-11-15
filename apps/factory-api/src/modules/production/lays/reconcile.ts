@@ -157,7 +157,7 @@ export interface ReconcileBody {
 /** POST /production/cut-orders/:cutOrderId/reconcile: each line still open reconciled, the cut order RECONCILED. */
 export async function reconcileCutOrder(caller: CommandCaller, cutOrderId: string, body: ReconcileBody, idempotencyKey?: string) {
   const { context, order } = await seenOrder(caller, cutOrderId)
-  if (!may(context, PRODUCTION_CUTORDERS_MANAGE, order)) throw new ForbiddenError('A cut order is reconciled with production.cutorders.manage at its site.')
+  if (!may(context, PRODUCTION_CUTORDERS_MANAGE, order)) throw new ForbiddenError('A cut order is reconciled with the right to plan cut orders at its site.')
   const { result } = await command(caller, { name: 'production.reconcileCutOrder', idempotencyKey, input: { cutOrderId, ...body }, record: { type: 'CutOrder', id: cutOrderId, expectedVersion: body.version } }, async (tools) => {
     const { tx, now } = tools
     const current = (await readCutOrder(tx, cutOrderId))!

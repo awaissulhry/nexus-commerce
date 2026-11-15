@@ -55,8 +55,8 @@ import { isHolder, meOf, organisationOf, personsOfMe, readAssessment, readVersio
 
 type Reader = FactoryClient | CommandTx
 
-const MANAGE_WORDS = 'The risk assessments of this site are kept by a role that keeps them (safety.risk.manage).'
-const SIGN_WORDS = 'You sign a version in the office for a safety role you hold (safety.risk.sign).'
+const MANAGE_WORDS = 'The risk assessments of this site are kept by a role that keeps them.'
+const SIGN_WORDS = 'You sign a version in the office for a safety role you hold.'
 
 const refuseWith = (refusal: RiskRefusal | null): void => {
   if (refusal) refuse(refusal.code, refusal.message, refusal.field)

@@ -162,7 +162,7 @@ export interface PaperBody {
 export async function announcePaper(files: FilesRuntime, caller: CommandCaller, shipmentId: string, body: PaperBody, idempotencyKey?: string) {
   const context = officeContextOf(caller)
   const shipment = await officeShipment(caller, shipmentId, SHIPPING_EVIDENCE_MANAGE)
-  if (!can(actorOf(context), FILES_UPLOAD, { companyId: shipment.companyId, siteId: shipment.siteId, partyId: shipment.partyId })) throw new ForbiddenError(`Filing a paper needs ${FILES_UPLOAD} over the company.`)
+  if (!can(actorOf(context), FILES_UPLOAD, { companyId: shipment.companyId, siteId: shipment.siteId, partyId: shipment.partyId })) throw new ForbiddenError('Filing a paper needs the right to upload files over the company.')
   const row = await caller.withClient((client) => evidenceRow(client, shipment.id))
   const problems = filingProblems(shipment.status, row.transportEvidence as TransportEvidenceStatus)
   if (problems.length > 0) throw new InvalidStateError(problems.join(' '))

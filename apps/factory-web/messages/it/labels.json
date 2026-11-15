@@ -84,7 +84,7 @@
   },
   "noAccess": {
     "title": "Le etichette non sono previste per il tuo ruolo",
-    "body": "Per leggere le etichette serve il permesso di vedere i certificati (compliance.certificates.view). Chiedi a un amministratore un ruolo che lo abbia."
+    "body": "Per leggere le etichette serve il permesso di vedere i certificati. Chiedi a un amministratore un ruolo che lo abbia."
   },
   "csv": {
     "code": "Codice",
@@ -126,7 +126,7 @@
     "kindShared": "Condivisa da più modelli",
     "style": "Modello",
     "styleHint": "Cerca per codice o nome; l’etichetta riporta la sua norma e la sua classe.",
-    "styleNoRight": "Per cercare i modelli serve il permesso di vederli (product.styles.view).",
+    "styleNoRight": "Per cercare i modelli serve il permesso di vederli.",
     "styleSearch": "Cerca modelli",
     "styleResults": "Modelli trovati",
     "noStyles": "Nessun modello corrisponde.",
@@ -152,7 +152,7 @@
     }
   },
   "held": {
-    "noManage": "Il tuo ruolo può leggere le etichette, non modificarle (compliance.labels.manage).",
+    "noManage": "Il tuo ruolo può leggere le etichette, non modificarle.",
     "notDraft": "Si attiva solo una bozza.",
     "unsaved": "Salva prima le modifiche: l’attivazione controlla ciò che è salvato.",
     "problems_one": "{count} cosa da sistemare prima (vedi i controlli)",
@@ -160,7 +160,7 @@
     "draftExists": "La revisione {revision} è già una bozza: modificala, oppure ritirala prima.",
     "isDraft": "Questa revisione è la bozza: modificala qui.",
     "retired": "È già ritirata.",
-    "noPrint": "Il tuo ruolo non può mandare etichette a una stampante (print.labels).",
+    "noPrint": "Il tuo ruolo non può mandare etichette a una stampante.",
     "noPrinter": "Nessuna stampante di etichette configurata: un amministratore la aggiunge in Dispositivi e stampanti.",
     "pickPrinter": "Scegli una stampante",
     "printerPaused": "Questa stampante è in pausa",

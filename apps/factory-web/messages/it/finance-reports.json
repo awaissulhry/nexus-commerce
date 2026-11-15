@@ -46,7 +46,7 @@
     },
     "ledger": "Ogni valore è quello del registro di magazzino, come è stato valorizzato ogni movimento: ricevimenti al prezzo dell'ordine d'acquisto, prelievi al costo medio del lotto, giacenza iniziale e capi finiti al costo standard. I semilavorati sono il registro costi dell'ordine di lavoro.",
     "accountant": "Da confermare con il commercialista: il metodo di costo e se rivalutare quanto registrato prima della scelta.",
-    "noCost": "I valori richiedono il livello costi (money.cost): sono mostrati quantità, superfici e pelli; le colonne dei valori non sono mostrate."
+    "noCost": "I valori richiedono il livello costi: sono mostrati quantità, superfici e pelli; le colonne dei valori non sono mostrate."
   },
   "totals": {
     "title": "Totali per categoria",
@@ -207,7 +207,7 @@
   },
   "noAccess": {
     "title": "Non puoi vedere la valorizzazione del magazzino",
-    "body": "Serve il permesso sul magazzino (inventory.stock.view). Chiedi a un amministratore."
+    "body": "Serve il permesso sul magazzino. Chiedi a un amministratore."
   },
   "common": {
     "retry": "Riprova",

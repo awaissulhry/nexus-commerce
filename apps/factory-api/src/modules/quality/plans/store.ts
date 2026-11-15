@@ -117,7 +117,7 @@ export const mayApprove = (context: OfficeContext, companyId: string): boolean =
 export const viewWhere = (context: OfficeContext) => scopeWhere(actorOf(context), QUALITY_PLANS_VIEW, PLAN_SCOPE)
 
 export function assertManage(context: OfficeContext, companyId: string): void {
-  if (!mayManage(context, companyId)) throw new ForbiddenError("You keep inspection plans only for the companies your role reaches (quality.plans.manage).")
+  if (!mayManage(context, companyId)) throw new ForbiddenError("You keep inspection plans only for the companies your role reaches.")
 }
 
 /** A refusal in words with its code (`refusal/<CODE>`), answered 409. */
@@ -375,7 +375,7 @@ export async function versionFacts(db: Db, rows: readonly VersionDbRow[], submit
 /** Why this person may not approve the draft now, in words; null when they may (content problems are told apart). */
 export function approveHeld(context: OfficeContext, plan: Pick<PlanDbRow, 'companyId'>, draft: VersionDbRow | null, editors: readonly string[]): string | null {
   if (!draft) return 'There is no draft to approve.'
-  if (!mayApprove(context, plan.companyId)) return 'Approving a plan version needs quality.plans.approve for this company.'
+  if (!mayApprove(context, plan.companyId)) return 'Approving a plan version needs the right to approve inspection plans for this company.'
   return approverRefusal({ number: draft.number, status: draft.status as VersionStatus, authorId: draft.authorId, editorIds: editors, approverId: context.actorId })?.message ?? null
 }
 

@@ -38,14 +38,14 @@ export async function changeStatus(caller: CommandCaller, machineId: string, bod
   const known = isUuid(machineId) ? await caller.withClient((client) => readMachine(client, context, machineId)) : null
   if (!known) throw new NotFoundError('Machine not found.')
   assertMay(context, PLANT_VIEW, known, 'Machine')
-  assertMayWrite(context, PLANT_MACHINES_MANAGE, known, 'The status of the machines of this site is changed by a role that keeps them (plant.machines.manage).')
+  assertMayWrite(context, PLANT_MACHINES_MANAGE, known, 'The status of the machines of this site is changed by a role that keeps them.')
   // A refused change never asks for the code (as a refused sign-safe): the rules first, on what was read.
   const lockedNow = (await caller.withClient((client) => locksOf(client, [known.id]))).has(known.id)
   const early = statusChangeRefusal({ assetNumber: known.assetNumber, status: known.status as MachineStatus, locked: lockedNow, to: body.to })
   if (early) refuse(early)
   const release = releasesDoNotUse(known.status as MachineStatus, body.to)
   if (release) {
-    if (!may(context, PLANT_SIGN_SAFE, known)) throw new ForbiddenError('Only a technician releases a machine marked do-not-use (plant.signSafe), as a sign-safe.')
+    if (!may(context, PLANT_SIGN_SAFE, known)) throw new ForbiddenError('Only a technician releases a machine marked do-not-use, as a sign-safe.')
     await stepUp()
   }
   const reason = body.reason.trim()

@@ -177,7 +177,7 @@ export async function prepareMonth(caller: CommandCaller, body: { readonly siteI
     await requireAttendance(db, found.id)
     return found
   })
-  if (!may(context, PEOPLE_TIMESHEETS_HR, { companyId: site.companyId, siteId: site.id })) throw new ForbiddenError("A month's timesheets are prepared by a role with people.timesheets.hr.")
+  if (!may(context, PEOPLE_TIMESHEETS_HR, { companyId: site.companyId, siteId: site.id })) throw new ForbiddenError("A month's timesheets are prepared by a role with the right to prepare timesheets for HR.")
   const { result } = await command(caller, { name: 'people.prepareTimesheets', idempotencyKey: key, input: body }, async (tools) => {
     const { tx } = tools
     await requireAttendance(tx, site.id)
@@ -317,7 +317,7 @@ const emitChange = (tools: CommandTools, row: Row, person: PersonRow, status: Ti
 export async function approveAsLead(caller: CommandCaller, timesheetId: string, body: { readonly version: number }, key?: string) {
   const context = officeOf(caller)
   const { person, reach } = await caller.withClient((db) => headOf(db, context, timesheetId))
-  if (!reach.asLead) throw new DomainError('forbidden', "A timesheet's first approval is the lead's: people.timesheets.team over the teams you lead, or people.timesheets.lead.")
+  if (!reach.asLead) throw new DomainError('forbidden', "A timesheet's first approval is the lead's: the right to approve, as their lead, the timesheets of the teams you lead, or any timesheet of the site.")
   await command(caller, { name: 'people.approveTimesheetAsLead', idempotencyKey: key, input: { timesheetId, ...body } }, async (tools) => {
     const { tx, now } = tools
     const actorId = assertPersonDecides(tools.context, 'TIMESHEET_APPROVAL')
@@ -335,7 +335,7 @@ export async function approveAsLead(caller: CommandCaller, timesheetId: string, 
 export async function approveAsHr(caller: CommandCaller, timesheetId: string, body: { readonly version: number }, key?: string) {
   const context = officeOf(caller)
   const { person, reach } = await caller.withClient((db) => headOf(db, context, timesheetId))
-  if (!reach.asHr) throw new DomainError('forbidden', "A timesheet's second approval is HR's: people.timesheets.hr.")
+  if (!reach.asHr) throw new DomainError('forbidden', "A timesheet's second approval is HR's: the right to approve timesheets after the lead.")
   await command(caller, { name: 'people.approveTimesheetAsHr', idempotencyKey: key, input: { timesheetId, ...body } }, async (tools) => {
     const { tx, now } = tools
     const actorId = assertPersonDecides(tools.context, 'TIMESHEET_APPROVAL')
@@ -353,7 +353,7 @@ export async function approveAsHr(caller: CommandCaller, timesheetId: string, bo
 export async function sendBack(caller: CommandCaller, timesheetId: string, body: { readonly version: number; readonly reason: string }, key?: string) {
   const context = officeOf(caller)
   const { person, reach } = await caller.withClient((db) => headOf(db, context, timesheetId))
-  if (!reach.sendBack) throw new DomainError('forbidden', 'A timesheet is sent back by a role with people.timesheets.hr or people.timesheets.lead.')
+  if (!reach.sendBack) throw new DomainError('forbidden', 'A timesheet is sent back by a role with the right to prepare timesheets for HR or to approve them as the lead.')
   const problems = overtimeReasonProblems(body.reason, 'reason')
   if (problems.length > 0) throw problemsError(problems, 'Say why it goes back.')
   await command(caller, { name: 'people.sendBackTimesheet', idempotencyKey: key, input: { timesheetId, ...body } }, async (tools) => {

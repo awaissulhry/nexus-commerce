@@ -188,7 +188,7 @@
     "sendConfirm": "Mark notice as sent",
     "copy": "Copy as sent",
     "copyHint": "The PDF or the receipt you submitted (optional; it can be added later).",
-    "copyNoRight": "Adding the copy needs files.upload: it can be added later by someone who has it.",
+    "copyNoRight": "Adding the copy needs the right to upload files: it can be added later by someone who has it.",
     "copyRemove": "Remove",
     "referenceTitle": "Add the reference or the copy",
     "referenceConfirm": "Save reference",
@@ -542,7 +542,7 @@
     "cancelled": "Cancelled: this notice was not sent.",
     "failed": "The notice could not be read",
     "noAccessTitle": "You cannot see this notice",
-    "noAccessBody": "You need compliance.register.view to see the register's notices. An administrator can give it."
+    "noAccessBody": "You need the right to see the PPE register to see the register's notices. An administrator can give it."
   },
   "dialog": {
     "saving": "Saving…",
@@ -560,9 +560,9 @@
     "publish": "Type the code from your authenticator app to publish the safety notice on the public page."
   },
   "held": {
-    "manage": "Needs compliance.recall.manage.",
-    "send": "Needs compliance.recall.send (with a fresh code).",
-    "holds": "Placing holds needs quality.holds.place.",
+    "manage": "Your role cannot draft recalls and authority notices.",
+    "send": "Your role cannot send for the company outward (that also asks a fresh code).",
+    "holds": "Your role cannot place holds.",
     "entryClosed": "The entry is closed: it no longer changes.",
     "noNotice": "No notice.",
     "notSent": "Not sent yet.",
@@ -573,7 +573,7 @@
     "answered": "Answered already.",
     "noStyle": "The request names no style: no technical file to build from.",
     "evidenceNamed": "An evidence pack is named already.",
-    "techfiles": "Building a pack needs compliance.techfiles.manage.",
+    "techfiles": "Your role cannot build a pack: that is kept with technical files.",
     "recallCancelled": "Cancelled: it no longer changes.",
     "recallClosed": "Closed: it no longer changes.",
     "nothingToHold": "Nothing left to hold: everything is gone or on hold already.",

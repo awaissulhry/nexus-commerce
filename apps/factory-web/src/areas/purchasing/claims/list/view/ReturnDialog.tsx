@@ -11,6 +11,8 @@ import { money, quantity } from '../../../../_shared/buying/model'
 import { CLAIM_FOUND_AT, type ClaimFoundAt, type LotRow } from '../../api'
 import { isHideLot, newClaimHeld, plain, returnHeld, say, type ClaimsCan, type ReturnDialogModel, type ReturnDraft } from '../../model'
 import { DdtFields } from '../../parts/DdtFields'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../../../lib/i18n/rights'
 
 const QUALITY_TONE = { QUARANTINE: 'warning', RELEASED: 'success', BLOCKED: 'danger', REJECTED: 'danger' } as const
 
@@ -83,7 +85,7 @@ export function ReturnDialog({ model, can, prefix, actions }: { model: ReturnDia
                 value: (
                   <span className="fw-by-inline">
                     {answer.ddt.number}
-                    <Button size="sm" variant="quiet" heldReason={!can.files ? t('held.permissionPlain', { permission: 'files.read' }) : answer.ddt.pdfProblem ? t('ret.done.pdfLater') : null} onClick={() => actions?.onOpenDdt?.(answer.ddt.id)}>
+                    <Button size="sm" variant="quiet" heldReason={!can.files ? t('held.permissionPlain', { right: rightRef('files.read') }) : answer.ddt.pdfProblem ? t('ret.done.pdfLater') : null} onClick={() => actions?.onOpenDdt?.(answer.ddt.id)}>
                       <ExternalLink size={13} aria-hidden /> {t('goods.openPdf')}
                     </Button>
                   </span>

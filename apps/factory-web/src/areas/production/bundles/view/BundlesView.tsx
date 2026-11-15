@@ -21,6 +21,8 @@ import { PlaceCell } from './parts'
 import { FindingsDialog, ScanPatterns } from './ScanPatterns'
 import '../../_shared/production.css'
 import '../bundles.css'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../../lib/i18n/rights'
 
 export type { BundlesActions, BundlesModel } from '../list-model'
 
@@ -121,7 +123,7 @@ function Bundles({ model, actions }: { model: BundlesModel; actions?: BundlesAct
             { id: 'open', label: t('list.open'), href: href(data) },
             { id: 'tab', label: t('list.openNewTab'), href: href(data), target: '_blank' },
             ...(model.can.workOrders ? [{ id: 'order', label: t('list.openWorkOrder'), href: `${model.prefix}/production/work-orders/${data.workOrder.id}?tab=bundles` }] : []),
-            { id: 'ticket', label: t('ticket.pdf'), ...(model.can.printLabels ? { href: `${href(data)}/ticket`, target: '_blank' as const } : { disabled: true, description: t('held.noPrint', { permission: 'print.labels' }) }) },
+            { id: 'ticket', label: t('ticket.pdf'), ...(model.can.printLabels ? { href: `${href(data)}/ticket`, target: '_blank' as const } : { disabled: true, description: t('held.noPrint', { right: rightRef('print.labels') }) }) },
           ]}
         />
       ) : null
@@ -145,7 +147,7 @@ function Bundles({ model, actions }: { model: BundlesModel; actions?: BundlesAct
   }, [t, locale, model.prefix, model.can, scope])
 
   if (!model.can.view) {
-    return <EmptyState title={t('noAccess.title')} description={t('noAccess.body', { permission: 'production.bundles.view' })} />
+    return <EmptyState title={t('noAccess.title')} description={t('noAccess.body', { right: rightRef('production.bundles.view') })} />
   }
 
   const filtered = model.q.trim() !== '' || model.view !== 'active'

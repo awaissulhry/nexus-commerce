@@ -51,7 +51,7 @@ async function holdFor(tools: CommandTools, ncr: NcrRow, input: { readonly hold?
   const context = contextOf(tools)
   if (!input.hold && !input.holdId) return null
   if (input.hold && input.holdId) refuse([{ path: 'holdId', message: 'Place a hold or name one, not both.' }], 'Place a hold or name one.')
-  if (!may(context, QUALITY_HOLDS_PLACE, ncr)) throw new ForbiddenError('Holding stock needs quality.holds.place at the NCR\'s site.')
+  if (!may(context, QUALITY_HOLDS_PLACE, ncr)) throw new ForbiddenError("Holding stock needs the right to put goods on hold at the NCR's site.")
   if (input.hold) {
     const placed = await placeHoldInCommand(tools, { ...input.hold, sourceType: 'Nonconformance', sourceId: ncr.id })
     await tx.qualityHold.update({ where: { id: placed.hold.id }, data: { ncrId: ncr.id, version: { increment: 1 }, updatedAt: now }, select: { id: true } })

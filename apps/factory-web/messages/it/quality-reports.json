@@ -5,7 +5,7 @@
   },
   "noAccess": {
     "title": "I report qualità non sono nel tuo ruolo",
-    "body": "Chiedi all'amministratore i report qualità (quality.reports.view)."
+    "body": "Chiedi all'amministratore i report qualità."
   },
   "noSite": {
     "title": "Scegli uno stabilimento",
@@ -196,8 +196,8 @@
     "noSupplier": "Nessun fornitore",
     "workshop": "Terzista",
     "daysCell": "{days} (in attesa: {waiting})",
-    "noLots": "Lotti ricevuti, respinti, Cr VI non conformi e giorni in quarantena richiedono la vista dei lotti (quality.lots.view).",
-    "noInspections": "Le ispezioni in ingresso richiedono la loro vista (quality.incoming.view).",
+    "noLots": "Lotti ricevuti, respinti, Cr VI non conformi e giorni in quarantena richiedono la vista dei lotti.",
+    "noInspections": "Le ispezioni in ingresso richiedono la loro vista.",
     "rowHint": "Un fornitore apre la sua scheda; la scheda Qualità e valutazione arriva con il passo della scheda fornitore."
   },
   "arrange": {
