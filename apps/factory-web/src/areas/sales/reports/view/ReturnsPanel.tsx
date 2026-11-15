@@ -13,12 +13,13 @@ import type { ReportsActions, ReportsModel } from './types'
 
 type Props = { model: ReportsModel; actions?: ReportsActions | undefined }
 
-const groupsOf = (answer: Returns, by: AlsoBy) => (by === 'style' ? answer.styles : by === 'size' ? answer.sizes : by === 'colour' ? answer.colours : answer.customers)
+const groupsOf = (answer: Returns, by: AlsoBy): Returns['styles'] =>
+  by === 'group' ? answer.reasonGroups.map((group) => ({ key: group.key, code: null, name: group.key, figures: group.figures })) : by === 'style' ? answer.styles : by === 'size' ? answer.sizes : by === 'colour' ? answer.colours : answer.customers
 
 /**
  * Return reasons (design sec returns, SAL-458: "Returns by reason group, model, size, colour, customer"; "Bars by reason",
  * "Heatmap model × size"; "Click → Returns filtered"): the lines of the returns asked for in the period — pieces by reason (the
- * RETURN list's words; reason groups do not exist yet, said below), then by style, size, colour or customer, and the most
+ * RETURN list's words), then by style, size, colour, customer or the reason's group (B-W2b-380: ReasonCode.group), and the most
  * returned styles by size; each bar and each cell opens the return lines behind it. The return rate is the pieces asked back ÷
  * the pieces shipped in the period; credits only with the price grain.
  */
@@ -94,7 +95,6 @@ export function ReturnsPanel({ model, actions }: Props) {
             items={answer.reasons.map((reason) => ({ id: reason.key, label: reasonWords(reason, locale), value: reason.figures.pieces, sub: t('returns.barSub', { returns: reason.figures.returns, lines: reason.figures.lines }), tone: 'danger' as const }))}
             onPick={(key) => actions?.onDrill?.({ section: 'returns', by: 'reason', key })}
           />
-          <p className="fw-slr-muted">{t('returns.noGroups')}</p>
         </div>
         <div className="fw-slr-part">
           <h3 className="fw-slr-h3">{t(`returns.alsoTitle.${also}`)}</h3>
@@ -102,7 +102,7 @@ export function ReturnsPanel({ model, actions }: Props) {
             labels={ds.barList}
             label={t(`returns.alsoTitle.${also}`)}
             format={(value) => pieces(value)}
-            items={groupsOf(answer, also).map((group) => ({ id: group.key, label: also === 'size' ? (group.key === 'none' ? t('returns.noSize') : group.key) : groupName(group, words), value: group.figures.pieces, sub: t('returns.barSub', { returns: group.figures.returns, lines: group.figures.lines }) }))}
+            items={groupsOf(answer, also).map((group) => ({ id: group.key, label: also === 'size' ? (group.key === 'none' ? t('returns.noSize') : group.key) : also === 'group' ? (group.key === 'none' ? t('returns.noGroup') : group.key) : groupName(group, words), value: group.figures.pieces, sub: t('returns.barSub', { returns: group.figures.returns, lines: group.figures.lines }) }))}
             onPick={(key) => actions?.onDrill?.({ section: 'returns', by: also, key })}
           />
         </div>

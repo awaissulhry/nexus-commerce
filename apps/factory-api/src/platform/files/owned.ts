@@ -87,6 +87,8 @@ export const MODULE_OWNED_FILES: Readonly<Record<string, ModuleOwnedFiles>> = Ob
   // B-W2b-351: a product-safety report's photos (modules/sales/safety-reports): every kind, office only (a photo may show an injury;
   // GDPR art. 9); from the office, and after the send from the public DoC page or the portal with the report's own rights.
   ProductSafetyReport: { route: 'POST /sales/safety-reports/:reportId/photos (or POST /public/safety-reports/photos, POST /portal/safety-reports/:reportId/photos), then POST …/:fileId/complete' },
+  // B-W2b-405: a person's data package (platform/privacy/requests): only ever made by the API when it is collected.
+  DataRequest: { route: 'POST /privacy/requests/:requestId/collect (made by the API, never uploaded)' },
 })
 
 /**
@@ -115,6 +117,8 @@ export const MODULE_READ_FILES: Readonly<Record<string, string>> = Object.freeze
   FittingResult: 'POST /sales/mtm/photos/:fileId/open',
   // B-W2b-351: a product-safety report's photos (sales.safety.view, each opening recorded on the report); files.read never reaches them.
   ProductSafetyReport: 'POST /sales/safety-reports/:reportId/photos/:fileId/open',
+  // B-W2b-405: a person's data package (privacy.requests.manage, or the person's own on My profile; each download in the read log).
+  DataRequest: 'GET /privacy/requests/:requestId/package, or GET /privacy/my-data/:requestId/package',
 })
 
 export const readsThroughModule = (recordType: string): boolean => Object.hasOwn(MODULE_READ_FILES, recordType)

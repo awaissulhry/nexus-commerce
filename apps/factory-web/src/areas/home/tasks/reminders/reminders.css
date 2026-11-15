@@ -1,0 +1,47 @@
+/* Home › My tasks › Reminders: a section under the tasks, the list frame filling the main area. Layout only, semantic tokens. */
+.fw-rem {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-rem-head,
+.fw-rem-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-rem-h {
+  margin: 0;
+  font-size: var(--nds-font-size-lg);
+  font-weight: 600;
+}
+
+.fw-rem-muted {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-rem-record,
+.fw-rem-when,
+.fw-rem-note {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-rem-note {
+  max-width: 100%;
+}
+
+.fw-rem-note > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

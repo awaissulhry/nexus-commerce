@@ -18,6 +18,9 @@ import {
 import { createList, getList, listLists, moveList, setCustomers, updateList } from './lists'
 import { manifest } from './manifest'
 import { activateVersion, compareVersions, deleteVersion, editVersion, getVersion, nextVersion, setPrices } from './versions'
+// B-W2b-380 (XF6:01): the price list PDF kept for mail.
+import { keepPriceListPdfContract, priceListPdfsContract, sendPriceListPdfContract } from './contract'
+import { getPriceListPdfs, keepPriceListPdf, sendPriceListPdf } from './pdf-store'
 
 /**
  * Customer price lists (B-W2a-19; SAL-165; design sales.pricelists): the lists with their state and tiles, one list with
@@ -56,4 +59,13 @@ export default defineRoutes('sales.pricelists', manifest, async (app) => {
   app.post('/sales/price-lists/:listId/versions/:versionId/activate', { schema: activateContract }, async (request) => activateVersion(request, request.params.listId, request.params.versionId, request.body, idempotencyKeyFrom(request)))
 
   app.get('/sales/price-lists/:listId/versions/:versionId/compare', { schema: compareContract }, async (request) => compareVersions(request, request.params.listId, request.params.versionId, request.query.with))
+
+  // B-W2b-380 (XF6:01)
+  app.get('/sales/price-lists/:listId/versions/:versionId/pdf', { schema: priceListPdfsContract }, async (request) => getPriceListPdfs(request, request.params.listId, request.params.versionId))
+
+  app.post('/sales/price-lists/:listId/versions/:versionId/pdf', { schema: keepPriceListPdfContract }, async (request) => keepPriceListPdf(request, request.params.listId, request.params.versionId, request.body, idempotencyKeyFrom(request)))
+
+  app.post('/sales/price-lists/:listId/versions/:versionId/pdf/send', { schema: sendPriceListPdfContract }, async (request, reply) =>
+    reply.code(201).send(await sendPriceListPdf(request, request.params.listId, request.params.versionId, request.body, idempotencyKeyFrom(request))),
+  )
 })

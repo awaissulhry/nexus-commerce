@@ -177,8 +177,9 @@ function describe(target: DrillTarget, answer: Intake | Backlog | Returns, model
     return reason ? reasonWords(reason, locale) : code
   }
   const groups = target.by === 'style' ? returns.styles : target.by === 'colour' ? returns.colours : target.by === 'size' ? returns.sizes : target.by === 'customer' ? returns.customers : []
-  const group = target.by && target.by !== 'reason' && target.key ? groups.find((entry) => entry.key === target.key) : null
-  const groupLabel = target.by === 'reason' && target.key ? reasonOf(target.key) : target.by === 'size' && target.key ? (target.key === 'none' ? t('returns.noSize') : target.key) : group ? groupName(group, { none: t('returns.unknown'), fees: t('intake.fees') }) : null
+  const group = target.by && target.by !== 'reason' && target.by !== 'group' && target.key ? groups.find((entry) => entry.key === target.key) : null
+  // B-W2b-380: a reason group is the tenant's own words (none: the reasons without a group).
+  const groupLabel = target.by === 'reason' && target.key ? reasonOf(target.key) : target.by === 'group' && target.key ? (target.key === 'none' ? t('returns.noGroup') : target.key) : target.by === 'size' && target.key ? (target.key === 'none' ? t('returns.noSize') : target.key) : group ? groupName(group, { none: t('returns.unknown'), fees: t('intake.fees') }) : null
   const name = [groupLabel, target.size ? t('drill.size', { size: target.size === 'none' ? t('returns.noSize') : target.size }) : null].filter(Boolean).join(' · ') || t('drill.wholePeriod', { from: day(returns.from), to: day(returns.to) })
   const lines = returnRowsOf(returns, target)
   const header = [t('drill.col.returnLine'), t('drill.col.requestedOn'), t('drill.col.reason'), t('drill.col.style'), t('drill.col.size'), t('drill.col.customer'), t('drill.col.pieces'), ...(price ? [t('drill.col.credited')] : [])]

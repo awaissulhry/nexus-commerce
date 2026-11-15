@@ -1,0 +1,17 @@
+/* Today › My saved views: the chips in rows that wrap, filling the section's width. Layout only, semantic tokens. */
+.fw-mywork-views {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-mywork-views > li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}

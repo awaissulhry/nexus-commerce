@@ -111,7 +111,8 @@
       "PLAN_VERSION": "Inspection plan versions to approve",
       "APPROVAL_TASK": "Requests waiting for your yes",
       "INQUIRY_WAITING": "Inquiries waiting over a working day",
-      "SHIPMENT_AT_RISK": "Shipments at risk of missing their promise"
+      "SHIPMENT_AT_RISK": "Shipments at risk of missing their promise",
+      "REMINDER": "Reminders that came back"
     },
     "severity": {
       "HIGH": "Urgent",
@@ -602,7 +603,13 @@
       "SHIPMENT_AT_RISK.MISSED_CUT_OFF": "Shipment {number} for {customer} is due to leave today and missed its carrier's cut-off.",
       "SHIPMENT_AT_RISK.AT_RISK": "Shipment {number} for {customer} is due to leave today and is not packed, with the carrier's cut-off near.",
       "SHIPMENT_AT_RISK.blocks": "The customer gets the goods later than promised.",
-      "why.SHIPMENT_AT_RISK.shipping_manage": "You plan and ship this site's shipments."
+      "why.SHIPMENT_AT_RISK.shipping_manage": "You plan and ship this site's shipments.",
+      "REMINDER.BACK": "Reminder: {record}.",
+      "REMINDER.BACK_NOTE": "Reminder: {record} — {note}",
+      "REMINDER.MESSAGE": "Reminder about a message on {record}.",
+      "REMINDER.MESSAGE_NOTE": "Reminder about a message on {record} — {note}",
+      "why.REMINDER.AT_TIME": "You asked to see it again now.",
+      "why.REMINDER.ON_CHANGE": "You asked to see it again when it changed, and it did."
     },
     "actions": {
       "menu": "Actions on {record}",
@@ -731,7 +738,8 @@
       "doneTask": "Done: {record}. It leaves Today.",
       "doneMention": "Done: the mention on {record}. It leaves Today and your notifications.",
       "snoozed": "Snoozed: {record}. It comes back at the time you chose.",
-      "snoozedUntilChange": "Snoozed: {record}. It comes back when something changes on it."
+      "snoozedUntilChange": "Snoozed: {record}. It comes back when something changes on it.",
+      "doneReminder": "Done: the reminder on {record}. It leaves Today."
     },
     "ruleAlert": {
       "handled": "An exception rule raised this alert: acknowledge, assign or resolve it in the alert itself (its own page comes with the alerts screens).",
@@ -754,6 +762,13 @@
         "DELIVERY": "Delivery due",
         "CERTIFICATE": "Certificate expiry"
       }
+    },
+    "remind": {
+      "dayBefore": "Remind me the day before: {record}",
+      "set": "Reminder set: {record} comes back the day before, at 08:00.",
+      "noRecord": "This item has no record to remind you of.",
+      "already": "Reminder set.",
+      "passed": "The day before has passed already."
     }
   },
   "mailToSort": {

@@ -113,6 +113,10 @@ export const ATTENTION_KINDS = [
   // that will miss their promise (late, held, past their carrier's cut-off) or may (not packed with the cut-off near), for
   // whoever works the dispatch desk; opened on the shipment.
   'SHIPMENT_AT_RISK',
+  // B-W2b-388 (COL-041; design home.today needs-me "reminders that came back (W2b)"): a reminder the person set on a record or
+  // one of its messages that came back (its time came, or the record changed), until they finish it or put it off; read only
+  // when Today is asked for the person's own rows (`include=TASKS`).
+  'REMINDER',
 ] as const
 export type AttentionKind = (typeof ATTENTION_KINDS)[number]
 
@@ -123,7 +127,7 @@ export const isAttentionKind = (value: unknown): value is AttentionKind => typeo
  * them only when asked (`GET /home/today?include=TASKS,MENTIONS,ALERTS`), so a screen built before them (W1) reads the
  * same answer as before.
  */
-export const PERSONAL_KINDS = ['TASK_DUE', 'MENTION', 'RULE_ALERT'] as const satisfies readonly AttentionKind[]
+export const PERSONAL_KINDS = ['TASK_DUE', 'MENTION', 'RULE_ALERT', /* B-W2b-388 */ 'REMINDER'] as const satisfies readonly AttentionKind[]
 export type PersonalKind = (typeof PERSONAL_KINDS)[number]
 export const isPersonalKind = (kind: AttentionKind): kind is PersonalKind => (PERSONAL_KINDS as readonly string[]).includes(kind)
 
@@ -454,6 +458,16 @@ export const KIND_RULES: Readonly<Record<AttentionKind, KindRule>> = Object.free
     act: [SHIPPING_MANAGE],
     decide: 'OPEN',
     live: ['shipment.created', 'shipment.status_changed', 'shipment.packing_changed', 'shipment.hold_placed', 'shipment.hold_released', 'shipment.split', 'sales_order.promise_changed'],
+  }),
+  // B-W2b-388: my reminders that came back (platform/tasks/reminders): Done or Put off from Today, opened on their record.
+  REMINDER: rule({
+    kind: 'REMINDER',
+    category: 'TASK',
+    label: 'Your reminders that came back',
+    view: HOME_VIEW,
+    act: [HOME_VIEW],
+    decide: 'OPEN',
+    live: ['reminder.set', 'reminder.came_back', 'reminder.changed'],
   }),
   RULE_ALERT: rule({
     kind: 'RULE_ALERT',

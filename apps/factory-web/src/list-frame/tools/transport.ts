@@ -172,6 +172,17 @@ export interface ListToolsTransport {
   bulkPreview(ask: BulkPreviewAsk): Promise<readonly BulkPreviewRow[]>
   /** B-W2b-13: writes the rows through each record's own command (a bulk edit, a cell, Undo). */
   bulkApply(ask: BulkApplyAsk, idempotencyKey: string): Promise<readonly BulkResult[]>
+  /** B-W2b-388: Pin to Today (absent: the menu has no such item). */
+  readonly pins?: ListPins
+}
+
+/** B-W2b-388 (PLT-163, design home.today `my-views` "Pin a view from any list with Columns ▾ › Pin to Today"): a view pinned to
+ * Today is followed (PLT-151): My saved views shows its count, and a change tells me. */
+export interface ListPins {
+  /** The views I pinned, by id. */
+  list(): Promise<readonly string[]>
+  /** Pin or unpin one: `notFollowable` when the list has no count to follow, `tooMany` at the limit. */
+  set(viewId: string, pinned: boolean): Promise<'ok' | 'notFollowable' | 'tooMany'>
 }
 
 export const ListToolsContext = createContext<ListToolsTransport | null>(null)

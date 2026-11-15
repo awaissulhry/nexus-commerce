@@ -154,7 +154,9 @@ const returnsSchema = z.object({
   all: returnFigures,
   shipped: z.number().nullable(),
   returnRatePct: z.string().nullable(),
-  reasons: z.array(z.object({ key: z.string(), words: z.object({ it: z.string(), en: z.string() }).nullable(), figures: returnFigures })),
+  reasons: z.array(z.object({ key: z.string(), words: z.object({ it: z.string(), en: z.string() }).nullable(), group: z.string().nullable().default(null), figures: returnFigures })),
+  /** B-W2b-380 (XF6:06): by reason group (ReasonCode.group, the tenant's own words; `none`: reasons without a group). */
+  reasonGroups: z.array(z.object({ key: z.string(), reasons: z.array(z.string()), figures: returnFigures })).default([]),
   styles: z.array(named),
   colours: z.array(named),
   sizes: z.array(named),

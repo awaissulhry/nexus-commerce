@@ -113,6 +113,10 @@ describe('Sales reports — what a number counts', () => {
     expect(returnRowsOf(RETURNS, { section: 'returns', by: 'style', key: style.key, size: '54' }).map((line) => line.pieces)).toEqual([5])
     const colour = RETURNS.colours.find((group) => group.key !== 'none')!
     expect(returnRowsOf(RETURNS, { section: 'returns', by: 'colour', key: colour.key }).length).toBe(colour.figures.lines)
+    // B-W2b-380 (XF6:06): a reason group opens the lines of its reasons; the reasons without a group are `none`.
+    for (const group of RETURNS.reasonGroups) expect(returnRowsOf(RETURNS, { section: 'returns', by: 'group', key: group.key }).length, group.key).toBe(group.figures.lines)
+    expect(returnRowsOf(RETURNS, { section: 'returns', by: 'group', key: 'Taglia' }).every((line) => line.reason === 'WRONG_SIZE')).toBe(true)
+    expect(RETURNS.reasonGroups.find((group) => group.key === 'none')?.reasons).toEqual(['DAMAGED_IN_TRANSIT'])
   })
 
   it('J / K step through buckets and weeks; the list a dialog opens says what it can', () => {

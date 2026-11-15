@@ -19,7 +19,6 @@ import { applySystemRoleChanges, systemRoleChanges } from '../../../platform/aut
 import { addUser, Browser, startHarness, type Harness, type TestTenant } from '../../../platform/auth/sessions/testing/harness'
 import { systemContext } from '../../../platform/outbox/system'
 import indexer from '../../../platform/search/indexers/safety-report'
-import { useSafetyReportsOutside } from './outside'
 
 /**
  * Product-safety reports and the accident log on the local stack (B-W2b-351; SAL-414, SAL-415, SAL-423), through the real app,
@@ -65,6 +64,23 @@ async function done(answer: { status: number; body: any }, status = 200): Promis
   return answer.body as Json
 }
 const today = () => h.clock.now().toISOString().slice(0, 10)
+
+/**
+ * B-W2b-405 (PV1:04): the doors from outside are company A's own switch on its sales settings, which the database allows only while
+ * its safety-report notice is published: the notice (made up) and the company's own settings row first, then the switch.
+ */
+async function safetyNotice(): Promise<void> {
+  const noticeId = newId()
+  const body = 'ESEMPIO - informativa inventata per le segnalazioni di sicurezza dei prodotti.'
+  const by = (await one<{ id: string }>(`SELECT id FROM "User" WHERE "tenantId" = $1 ORDER BY id LIMIT 1`, [T])).id
+  await admin(`INSERT INTO "PrivacyNotice" (id, "tenantId", "companyId", kind, "versionNo", label) VALUES ($1, $2, $3, 'SAFETY_REPORT', 1, '2026-11')`, [noticeId, T, companyA])
+  await admin(`INSERT INTO "PrivacyNoticeText" (id, "tenantId", "noticeId", locale, body, sha256) VALUES ($1, $2, $3, 'it', $4, $5)`, [newId(), T, noticeId, body, createHash('sha256').update(body, 'utf8').digest('hex')])
+  await admin(`UPDATE "PrivacyNotice" SET status = 'PUBLISHED', "publishedAt" = now(), "publishedById" = $2 WHERE id = $1`, [noticeId, by])
+  await admin(`INSERT INTO "SalesSettings" (id, "tenantId", "companyId", "marginFloorPct", "discountLimitPct", "defaultValidityDays") VALUES ($1, $2, $1, 0.15, 0.10, 30) ON CONFLICT (id) DO NOTHING`, [companyA, T])
+}
+const doors = async (on: boolean): Promise<void> => {
+  await admin(`UPDATE "SalesSettings" SET "safetyReportFormOn" = $2 WHERE id = $1`, [companyA, on])
+}
 const daysAgo = (days: number) => new Date(h.clock.now().getTime() - days * 86_400_000).toISOString().slice(0, 10)
 
 /** A made-up photo without location data: JFIF, a comment, then the image. */
@@ -121,11 +137,11 @@ beforeAll(async () => {
   h = await startHarness('safety_reports')
   h.clock.set(new Date())
   usePortalOptions({ answerFloorMs: 0 })
-  useSafetyReportsOutside(false)
   await seedCore({ db: h.database, namespace: NS })
   await seedService({ db: h.database, namespace: NS })
   await seedFiles({ db: h.database, namespace: NS })
   await seedPrivacy({ db: h.database, namespace: NS })
+  await safetyNotice()
   // Company A's FAKE sending address: the portal's sign-in code goes by mail.
   await seedEmail({ db: h.database, namespace: NS })
   const actorId = newId()
@@ -154,7 +170,6 @@ beforeEach(() => {
 })
 
 afterAll(async () => {
-  useSafetyReportsOutside(undefined)
   useAbuseGuard(undefined)
   usePortalOptions({})
   await h?.close()
@@ -301,7 +316,7 @@ describe('the doors from outside: OFF until the privacy notice is published (GAT
   const publicBody = (over: Json = {}) => ({ code, whatHappened: 'Made-up: the collar zip opened while riding.', injured: false, reporter: { email: 'reader.351@example.com' }, ...over })
 
   it('says so, and refuses both doors while the switch is off', async () => {
-    useSafetyReportsOutside(false)
+    await doors(false)
     expect((await anonymous('GET', '/public/safety-reports/status')).json()).toMatchObject({ open: false })
     const refused = await anonymous('POST', '/public/safety-reports', publicBody())
     expect(refused.statusCode).toBe(409)
@@ -311,7 +326,7 @@ describe('the doors from outside: OFF until the privacy notice is published (GAT
   })
 
   it('takes a report from the public DoC page once on: the batch from the QR, a SAFETY case with no customer, a repeat answers the same, photos with the ticket', async () => {
-    useSafetyReportsOutside(true)
+    await doors(true)
     expect((await anonymous('POST', '/public/safety-reports', publicBody(), null)).statusCode).toBe(400)
     expect((await anonymous('POST', '/public/safety-reports', publicBody({ code: 'ZZZZ-ZZZY' }))).statusCode).toBe(404)
     expect((await anonymous('POST', '/public/safety-reports', publicBody({ injured: true, injuryWords: 'Made-up words.', occurredOn: today(), place: 'a road' }))).json().error.issues).toContainEqual(
@@ -345,7 +360,7 @@ describe('the doors from outside: OFF until the privacy notice is published (GAT
   })
 
   it('takes a report from the portal as the person; the viewer may not send one', async () => {
-    useSafetyReportsOutside(true)
+    await doors(true)
     expect((await ok(portal.buyer, '/portal/safety-reports/status')).open).toBe(true)
     expect((await post(portal.viewer, '/portal/safety-reports', { serial: 'SEED-SN-0001', whatHappened: 'Made-up.', injured: false })).status).toBe(403)
     expect((await done(await post(portal.buyer, '/portal/safety-reports', { whatHappened: 'Made-up.', injured: false }), 400)).error.issues[0].path).toBe('body/serial')

@@ -309,6 +309,10 @@ import { events as payablesDepth } from '../payables-depth/events'
 import { events as fields } from '../fields/events'
 // B-W2b-422: templates (document_template.changed, email_template.changed, saved_reply.changed).
 import { events as templates } from '../templates/events'
+// B-W2b-388: reminders (reminder.set, reminder.came_back, reminder.changed).
+import { events as reminders } from '../reminders/events'
+// B-W2b-380: the price list PDF kept and mailed (price_list.pdf_kept, price_list.pdf_sent).
+import { events as pricesFollowups } from '../prices-followups/events'
 // B-W2b-400: carrier contracts and services (shipping.carrier_contract_changed, shipping.carrier_services_changed, shipment.services_changed, shipment.parcel_values_changed, shipping.insurance_rule_changed).
 import { events as shippingContracts } from '../shipping-contracts/events'
 import type { EventDefinition } from './define'
@@ -685,6 +689,10 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...fields,
   // B-W2b-422
   ...templates,
+  // B-W2b-388
+  ...reminders,
+  // B-W2b-380
+  ...pricesFollowups,
   // B-W2b-400
   ...shippingContracts,
 ] as const satisfies readonly EventDefinition[]
