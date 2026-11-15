@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { CheckCircle2, Download, MoreHorizontal, Plus, Search } from 'lucide-react'
+import { CheckCircle2, Download, Keyboard, Landmark, MoreHorizontal, Plus, Search } from 'lucide-react'
 import { Banner, EmptyState, Field, KeyValue, Menu, MetricStrip } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, Checkbox, Input, Pill, Select, Tag } from '@nexus/ui/primitives'
@@ -11,7 +11,7 @@ import { ListFrame } from '../../../../../list-frame/ListFrame'
 import { listKeys, type ListKey } from '../../../../../list-frame/model'
 import { formatDate, formatTime } from '../../../../../lib/i18n/format'
 import { INTL_LOCALE } from '../../../../../lib/i18n/locales'
-import { useLocale, useT } from '../../../../../lib/i18n/provider'
+import { useLocale, useScopedT, useT } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
 import type { PaymentRow } from '../../../_shared/api'
 import { allocationsOf, dayInstant, leftToPlace, money, parseAmount, paymentProblems, PLACED_TONE, placedLabel, placedStateOf, placementProblems } from '../../../_shared/model'
@@ -21,6 +21,11 @@ import { refundHeld, refundsTile } from '../../refunds/model'
 import { RefundDialog, RefundMoveDialog } from '../../refunds/view/RefundDialogs'
 import { RefundsList } from '../../refunds/view/RefundsList'
 import { PAYMENT_ROWS_VIEWS, type PaymentRowsView, type PaymentsListActions, type PaymentsListModel } from '../list-model'
+// B-W2b-425: the tiles and rows "Not placed on an invoice" and "Ri.Ba. unpaid", the ⋯ Ri.Ba. batch, a paid deposit unlocks production.
+import { DepositUnlocked, DepositUnlockNote } from '../../deposit-unlock/view/DepositUnlock'
+import { PAY_DEPTH } from '../../riba/depth'
+import { RibaUnpaidList } from '../../riba/unpaid/view/RibaUnpaidList'
+import { NotPlacedList } from '../../write-off/view/NotPlacedList'
 import '../../../_shared/finance.css'
 
 export type { PaymentsListActions, PaymentsListModel } from '../list-model'
@@ -33,17 +38,19 @@ export type { PaymentsListActions, PaymentsListModel } from '../list-model'
  * reference (step 1), then where it goes, oldest first, with what is left always in view (step 2); a deposit paid in full
  * may issue its deposit invoice (TD02) in the same step (a fresh authenticator code). Money only with the price grain.
  */
-export function PaymentsListView({ model, actions }: { model: PaymentsListModel; actions?: PaymentsListActions }) {
+export function PaymentsListView({ model, actions, riba }: { model: PaymentsListModel; actions?: PaymentsListActions; /** B-W2b-425: the Ri.Ba. batch dialog (its container, or a design case's view). */ riba?: ReactNode }) {
   return (
-    <WithMessages namespaces={['finance', 'finance-daily', 'lists']}>
-      <PaymentsList model={model} actions={actions} />
+    <WithMessages namespaces={['finance', 'finance-daily', PAY_DEPTH, 'lists']}>
+      <PaymentsList model={model} actions={actions} riba={riba} />
     </WithMessages>
   )
 }
 
-function PaymentsList({ model, actions }: { model: PaymentsListModel; actions?: PaymentsListActions }) {
+function PaymentsList({ model, actions, riba }: { model: PaymentsListModel; actions?: PaymentsListActions; riba?: ReactNode }) {
   const t = useT('finance')
   const d = useT('finance-daily')
+  const p = useT(PAY_DEPTH)
+  const s = useScopedT('finance')
   const lists = useT('lists')
   const locale = useLocale()
   const [selected, setSelected] = useState<readonly string[]>(model.selected ?? [])
@@ -158,7 +165,7 @@ function PaymentsList({ model, actions }: { model: PaymentsListModel; actions?: 
     <Select size="sm" aria-label={t('list.rowsLabel')} value={model.rows} onChange={(event) => actions?.onRows?.(event.target.value as PaymentRowsView)}>
       {PAYMENT_ROWS_VIEWS.map((view) => (
         <option key={view} value={view}>
-          {t(`payRows.${view}`)}
+          {view === 'notPlaced' || view === 'ribaUnpaid' ? p(`rows.${view}`) : t(`payRows.${view}`)}
         </option>
       ))}
     </Select>
@@ -168,6 +175,8 @@ function PaymentsList({ model, actions }: { model: PaymentsListModel; actions?: 
   const refundTile = refundsTile(model.openRefunds ?? null)
   const refundCan = model.refundCan ?? { view: model.can.viewPayments, refund: false, void: model.can.voidPayments, price: model.can.price }
   const refundWait = refundHeld(refundCan, model.live === 'offline')
+  const notPlacedTile = model.notPlaced?.tile ?? null
+  const ribaTile = model.ribaUnpaid?.tile ?? null
 
   return (
     <div className="fw-fin">
@@ -184,6 +193,16 @@ function PaymentsList({ model, actions }: { model: PaymentsListModel; actions?: 
           <Button size="sm" variant="primary" heldReason={recordHeld} onClick={() => actions?.onDialog?.({ kind: 'record', step: 1, customer: null, invoiceId: null })} aria-keyshortcuts="c">
             <Plus size={14} aria-hidden /> {t('step.recordPayment')}
           </Button>
+          {/* B-W2b-425: the band's ⋯ (design page.h more: Ri.Ba. batch, Keyboard shortcuts). */}
+          <Menu
+            label={<MoreHorizontal size={16} aria-hidden />}
+            align="right"
+            triggerProps={{ 'aria-label': p('band.more') }}
+            items={[
+              { id: 'riba', icon: <Landmark size={14} aria-hidden />, label: p('band.riba'), disabled: !!model.ribaHeld, description: model.ribaHeld ? s(model.ribaHeld) : undefined, onSelect: () => actions?.onRiba?.() },
+              { id: 'keys', icon: <Keyboard size={14} aria-hidden />, label: p('band.keys'), onSelect: () => setHelp(true) },
+            ]}
+          />
         </span>
       </div>
 
@@ -204,13 +223,28 @@ function PaymentsList({ model, actions }: { model: PaymentsListModel; actions?: 
       <MetricStrip
         metrics={[
           { label: t('payTile.month'), value: tiles ? (model.can.price ? money(tiles.monthAmount, 'EUR', locale) : String(tiles.monthCount)) : '—', hint: tiles ? t('payTile.monthCount', { count: tiles.monthCount }) : undefined },
-          { label: t('payTile.notPlaced'), value: tiles ? (model.can.price ? money(tiles.notPlacedAmount, 'EUR', locale) : String(tiles.notPlacedCount)) : '—', hint: tiles ? t(tiles.capped ? 'payTile.notPlacedCapped' : 'payTile.notPlacedCount', { count: tiles.notPlacedCount }) : undefined },
+          // B-W2b-425: "Not placed on an invoice" (B-W2b-393's unapplied queue: a saved filter, Rows ▾ Not placed).
+          {
+            label: p('tile.notPlaced'),
+            value: notPlacedTile ? (model.can.price && notPlacedTile.amount !== null ? money(notPlacedTile.amount, 'EUR', locale) : String(notPlacedTile.count)) : '—',
+            hint: notPlacedTile ? (notPlacedTile.others > 0 ? p('tile.notPlacedOthers', { count: notPlacedTile.count, others: notPlacedTile.others }) : p('tile.notPlacedCount', { count: notPlacedTile.count })) : model.notPlaced?.problem ? p('tile.unknown') : undefined,
+            onClick: () => actions?.onRows?.(model.rows === 'notPlaced' ? 'all' : 'notPlaced'),
+            active: model.rows === 'notPlaced',
+          },
           {
             label: d('refunds.tile'),
             value: refundTile.value,
             hint: refundTile.hint ? d(refundTile.hint.key, refundTile.hint.params) : undefined,
             onClick: () => actions?.onRows?.(model.rows === 'refunds' ? 'all' : 'refunds'),
             active: model.rows === 'refunds',
+          },
+          // B-W2b-425: "Ri.Ba. unpaid" (B-W2b-402: instalments that came back, invoice still open; Rows ▾ Ri.Ba. unpaid).
+          {
+            label: p('tile.ribaUnpaid'),
+            value: ribaTile ? (model.can.price && ribaTile.open !== null ? money(ribaTile.open, ribaTile.currency, locale) : String(ribaTile.count)) : '—',
+            hint: ribaTile ? p('tile.ribaUnpaidCount', { count: ribaTile.count }) : model.ribaUnpaid?.problem ? p('tile.unknown') : undefined,
+            onClick: () => actions?.onRows?.(model.rows === 'ribaUnpaid' ? 'all' : 'ribaUnpaid'),
+            active: model.rows === 'ribaUnpaid',
           },
         ]}
       />
@@ -231,7 +265,10 @@ function PaymentsList({ model, actions }: { model: PaymentsListModel; actions?: 
           }}
         />
       )}
-      {model.rows !== 'refunds' && (
+      {/* B-W2b-425: Rows ▾ Not placed / Ri.Ba. unpaid. */}
+      {model.rows === 'notPlaced' && model.notPlaced && <NotPlacedList model={model.notPlaced} actions={actions?.notPlaced} tools={rowsSelect} keys={ownKeys} onHelp={() => setHelp(true)} />}
+      {model.rows === 'ribaUnpaid' && model.ribaUnpaid && <RibaUnpaidList model={model.ribaUnpaid} actions={actions?.ribaUnpaid} tools={rowsSelect} keys={ownKeys} onHelp={() => setHelp(true)} />}
+      {model.rows !== 'refunds' && model.rows !== 'notPlaced' && model.rows !== 'ribaUnpaid' && (
       <ListFrame<PaymentRow>
         label={t('payments.title')}
         rows={state ? [] : items}
@@ -258,6 +295,7 @@ function PaymentsList({ model, actions }: { model: PaymentsListModel; actions?: 
       )}
 
       {model.dialog?.kind === 'record' && <RecordDialog model={model} actions={actions} />}
+      {riba}
       {model.refundDialog && <RefundDialog model={model.refundDialog} onRecord={(target, draft) => actions?.onRecordRefund?.(target, draft)} onRetry={() => actions?.onRetryRefunds?.()} onClose={() => actions?.onCloseRefund?.()} />}
       {model.refundMove && (
         <RefundMoveDialog
@@ -468,6 +506,8 @@ function RecordDialog({ model, actions }: { model: PaymentsListModel; actions?: 
         ) : (
           <p className="fw-fin-hint">{t('recordPay.td02ByFinance')}</p>
         ))}
+      {/* B-W2b-425: a deposit paid in full unlocks the order's production (pop:record#1). */}
+      {onlyDeposit && coversDeposit && onlyDeposit.stepKind !== 'BEFORE_SHIPPING' && <DepositUnlockNote orderNumber={onlyDeposit.orderNumber} />}
     </DialogFrame>
   )
 }
@@ -499,6 +539,8 @@ function RecordedDone({ model }: { model: PaymentsListModel }) {
         {(payment.unallocated ?? 0) > 0 && <span>{t('recordPay.leftOnAccount', { amount: money(payment.unallocated, payment.currency, locale) })}</span>}
         {recorded.depositInvoice?.number && <span>{t(recorded.depositInvoice.filesPending ? 'recordPay.td02FilesPending' : 'recordPay.td02Issued', { number: recorded.depositInvoice.number })}</span>}
         {recorded.depositInvoice && !recorded.depositInvoice.number && recorded.depositInvoice.required && <span>{t('recordPay.td02Later')}</span>}
+        {/* B-W2b-425: page.conn "Production — Deposit paid unlocks the order". */}
+        {recorded.depositInvoice && <DepositUnlocked prefix={model.prefix} orderNumber={recorded.depositOrder ?? null} workOrders={!!model.workOrders} />}
         <Link className="fw-fin-link" href={`${model.prefix}/finance/payments/${payment.id}`}>
           {t('recordPay.openPayment')}
         </Link>

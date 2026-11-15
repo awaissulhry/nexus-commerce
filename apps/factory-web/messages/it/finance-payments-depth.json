@@ -1,0 +1,1016 @@
+{
+  "approvals": {
+    "action": {
+      "CREDIT_NOTE": {
+        "name": "Nota di credito",
+        "rule": "Una nota di credito senza reso della merce."
+      },
+      "MANUAL_PAYMENT": {
+        "name": "Pagamento manuale",
+        "rule": "Un pagamento registrato a mano su una fattura, fuori dalla proposta."
+      },
+      "PAYMENT_PROPOSAL": {
+        "name": "Proposta di pagamento",
+        "rule": "La approva chi non l'ha preparata; si paga solo su conti verificati."
+      },
+      "PRICE_OVERRIDE": {
+        "name": "Modifica di prezzo",
+        "rule": "Un prezzo cambiato a mano su una vendita."
+      },
+      "SUPPLIER_INVOICE": {
+        "name": "Fattura fornitore",
+        "rule": "Chi l'ha registrata non la approva."
+      },
+      "WRITE_OFF": {
+        "name": "Storno",
+        "rule": "Sempre entro la tolleranza di storno della società; oltre viene rifiutato."
+      }
+    },
+    "actionsTitle": "Azioni sul denaro che richiedono approvazione",
+    "amountsFixed": "Gli importi e le persone avvisate non hanno ancora un'impostazione: qui si vedono, non si modificano.",
+    "audience": {
+      "BANK_MATCHERS": "Chi abbina i movimenti bancari della società",
+      "CUSTOMER_FOLLOWERS_AND_ORDER_MAKERS": "Chi segue il cliente e chi ha creato i suoi ordini",
+      "CUSTOMER_FOLLOWERS_AND_REMINDER_APPROVERS": "Chi segue il cliente e chi approva i solleciti",
+      "ISSUER_AND_FOLLOWERS": "Chi ha emesso la fattura e chi la segue",
+      "ORDER_MAKER_AND_RELEASERS": "Chi ha creato l'ordine e chi rilascia la produzione"
+    },
+    "code": {
+      "none": "—",
+      "off": "Spento",
+      "on": "Richiesto"
+    },
+    "col": {
+      "action": "Azione",
+      "code": "Nuovo codice",
+      "dual": "Due persone",
+      "notification": "Notifica",
+      "told": "Chi viene avvisato",
+      "yes": "Cosa chiede un sì"
+    },
+    "dual": {
+      "above": "Oltre {amount}",
+      "abovePlain": "Oltre l'importo",
+      "aboveUndecided": "Oltre {amount} (non ancora deciso dal titolare)",
+      "none": "—"
+    },
+    "failed": "Impossibile caricare approvazioni e notifiche",
+    "held": {
+      "owner": "Solo il titolare accende o spegne questo avviso.",
+      "unread": "Lettura in corso…"
+    },
+    "intro": "Le azioni sul denaro che richiedono approvazione, e chi viene avvisato di cosa. Le regole si creano in Sistema › Approvazioni, automazioni e IA; i nuovi codici si gestiscono in Sistema › Sicurezza e stato del sistema.",
+    "mailsIntro": "Arrivano a un cliente o a un fornitore. Restano spenti finché il titolare non li accende; accenderne uno chiede un nuovo codice.",
+    "mailsTitle": "Avvisi a persone esterne",
+    "noRight": "Le approvazioni sul denaro si vedono con il permesso di vedere i debiti.",
+    "notice": {
+      "notice": {
+        "off": "L'avviso di incasso ai clienti è spento.",
+        "on": "L'avviso di incasso ai clienti è acceso."
+      },
+      "remittance": {
+        "off": "L'avviso di pagamento ai fornitori è spento.",
+        "on": "L'avviso di pagamento ai fornitori è acceso."
+      }
+    },
+    "notification": {
+      "DEPOSIT_RECEIVED": "Acconto ricevuto",
+      "OVERDUE": "Fattura scaduta",
+      "PAYMENT_RECEIVED": "Incasso ricevuto",
+      "RECONCILIATION_DIFFERENCE": "Differenza nella riconciliazione bancaria",
+      "SDI_REJECTED": "Fattura elettronica scartata dallo SDI"
+    },
+    "notificationsTitle": "Chi viene avvisato di cosa",
+    "source": {
+      "COMPANY": "Impostazione propria di questa società.",
+      "NONE": "Mai impostato: spento.",
+      "TENANT": "Impostazione di tutte le società."
+    },
+    "switch": {
+      "notice": {
+        "body": "Un cliente che ha pagato con bonifico riceve una mail quando l'incasso viene registrato.",
+        "title": "Avviso di incasso ai clienti"
+      },
+      "off": "Spento",
+      "on": "Acceso",
+      "remittance": {
+        "body": "Quando una proposta di pagamento risulta pagata, ogni fornitore riceve una mail con le fatture, il giorno e il riferimento della banca — mai un importo o un IBAN.",
+        "title": "Avviso di pagamento ai fornitori"
+      },
+      "turnOff": "Spegni",
+      "turnOn": "Accendi…"
+    },
+    "title": "Approvazioni e notifiche",
+    "yes": {
+      "NOT_REGISTERED": "Ancora nessun sì richiesto: nessun modulo lo chiede",
+      "NO_KIND": "Ancora nessun sì richiesto: manca un tipo di approvazione",
+      "NO_RULE": "Nessuna regola attiva finché non ne imposti una",
+      "RULES_one": "{count} regola attiva",
+      "RULES_other": "{count} regole attive",
+      "SEPARATION": "Mai chi l'ha preparata; oltre l'importo, anche una seconda persona"
+    }
+  },
+  "area": {
+    "claim": "Apri reclamo d'area",
+    "difference": "Differenza",
+    "differenceValue": "{area} ({percent} %)",
+    "existing_one": "{count} reclamo di questo ordine e fornitore:",
+    "existing_other": "{count} reclami di questo ordine e fornitore:",
+    "explain": "Quanto fattura il fornitore rispetto all'area misurata sulle pelli ricevute. Mancante oltre la tolleranza: apri un reclamo d'area.",
+    "failed": "Impossibile caricare il controllo dell'area",
+    "held": {
+      "noArea": "La riga non indica un'area: la quantità non è in un'unità di superficie.",
+      "notReceived": "Nessuna pelle ricevuta ancora su questa riga d'ordine.",
+      "nothing": "Niente da contestare: l'area misurata è entro la tolleranza o supera quanto fatturato.",
+      "right": "Aprire un reclamo richiede il permesso di gestire i reclami di questo fornitore nel sito dell'ordine."
+    },
+    "hides": "Pelli misurate",
+    "hidesAll_one": "{count} pelle, misurata",
+    "hidesAll_other": "Tutte le {count} pelli misurate",
+    "hidesSome": "{measured} su {all} misurate; le altre contano con l'area con cui sono arrivate",
+    "invoiced": "Fatturata",
+    "invoicedWithOthers": "{line} qui; {total} con le altre fatture del fornitore sulla riga",
+    "line": "Riga {seq}",
+    "lineLabel": "Controllo dell'area della riga {seq}",
+    "measured": "Misurata",
+    "noAreaBody": "Questa riga non è in un'unità di superficie, quindi la sua area non si può controllare.",
+    "none": "Nessuna riga di pelle in questa fattura: niente da controllare.",
+    "openClaim": "Apri il reclamo",
+    "opened": "Reclamo d'area {number} aperto in bozza",
+    "openedBody": "Gli acquisti lo inviano al fornitore.",
+    "order": "{number} riga {line}",
+    "outcome": {
+      "NOT_RECEIVED": "Niente ricevuto",
+      "NO_AREA": "Nessuna area",
+      "OVER": "Più del fatturato",
+      "SHORT": "Mancante",
+      "WITHIN": "Entro tolleranza"
+    },
+    "shortfall": "Da contestare",
+    "title": "Controllo dell'area della pelle",
+    "tolerance": "Tolleranza",
+    "toleranceFrom": {
+      "COMPANY": "{percent} % (impostazione pelle della società)",
+      "DEFAULT": "{percent} % (predefinita)",
+      "ORDER_LINE": "{percent} % (della riga d'ordine)",
+      "TENANT": "{percent} % (impostazione pelle di tutte le società)"
+    },
+    "value": "{value} {unit}"
+  },
+  "band": {
+    "keys": "Scorciatoie da tastiera",
+    "more": "Altre azioni",
+    "riba": "Distinta Ri.Ba.",
+    "ribaHeld": "Le distinte Ri.Ba. richiedono il permesso di vedere i crediti."
+  },
+  "bankLine": {
+    "accepted": "Abbinato dal suggerimento e accettato il {date} da {name}",
+    "bank": "Banca e conto",
+    "booked": "Contabilizzato",
+    "bookedValue": "{booked} (valuta {value})",
+    "byHand": "Inserito a mano: questo incasso non viene da un movimento dell'estratto conto.",
+    "chosen": "Scelto da {name} il {date}",
+    "confidence": "Quanto era sicuro l'abbinamento",
+    "failed": "Impossibile caricare il movimento: {reason}",
+    "level": {
+      "HIGH": "Alta",
+      "LOW": "Bassa",
+      "MEDIUM": "Media"
+    },
+    "noRight": "Viene da un movimento bancario; per vederlo serve il permesso di vedere la banca.",
+    "notAccepted": "Non ancora accettato.",
+    "openStatement": "Apri l'estratto conto",
+    "payer": "Pagato da",
+    "reading": "Lettura del movimento…",
+    "reason": {
+      "AMOUNT_EQUAL": "Importo uguale",
+      "AMOUNT_WITHIN_TOLERANCE": "Importo entro la tolleranza di storno",
+      "CHOSEN_BY_PERSON": "Scelto da una persona",
+      "IBAN_KNOWN": "IBAN del pagatore noto",
+      "NAME_MATCHES": "Il nome corrisponde",
+      "NUMBER_IN_REFERENCE": "Numero fattura nella causale"
+    },
+    "reasons": "Perché",
+    "reference": "Causale",
+    "reversed": "L'abbinamento è stato ripreso il {date}.",
+    "statementLater": "L'estratto conto si aprirà dalla pagina Banca quando sarà pronta.",
+    "title": "Movimento bancario"
+  },
+  "batch": {
+    "amount": "Da pagare",
+    "amountDiscount": "{amount} (meno {discount} di sconto)",
+    "failed": "Impossibile caricare il pagamento",
+    "held": "Bloccata nella distinta",
+    "heldAccount": "Nessun conto utilizzabile per il fornitore: il pagamento aspetta che il conto sia verificato.",
+    "iban": "IBAN utilizzato",
+    "inBatch": "Nella distinta",
+    "noAccount": "Nessun conto bancario",
+    "none": "Non ancora in una distinta di pagamento",
+    "noneBody": "La proposta di pagamento settimanale (Proposta di pagamento in Fatture fornitori) raccoglie le fatture approvate in scadenza.",
+    "noneOlder": "Non è nelle proposte più recenti; quelle più vecchie non sono state controllate.",
+    "notUsable": "Non utilizzabile",
+    "title": "Distinta di pagamento",
+    "usable": "Utilizzabile",
+    "week": "Settimana {week} ({from} – {to})"
+  },
+  "dual": {
+    "amount": "Due persone oltre",
+    "body": {
+      "both": "Il totale supera {amount}: approva una prima persona, poi una seconda, diversa.",
+      "lapsed": "La prima approvazione di {name} è decaduta perché la fattura è cambiata dopo: il prossimo sì è di nuovo il primo.",
+      "second": "Approvata una volta da {name}: il totale supera {amount}, quindi ora la approva una seconda persona.",
+      "secondMine": "Hai dato la prima approvazione: il totale supera {amount}, quindi la seconda la dà un'altra persona.",
+      "under": "Il totale non supera {amount}: la approva una persona (mai chi l'ha registrata)."
+    },
+    "bodyPlain": {
+      "both": "Oltre l'importo: approva una prima persona, poi una seconda, diversa.",
+      "lapsed": "La prima approvazione di {name} è decaduta perché la fattura è cambiata dopo: il prossimo sì è di nuovo il primo.",
+      "second": "Approvata una volta da {name}: ora la approva una seconda persona.",
+      "secondMine": "Hai dato la prima approvazione: la seconda la dà un'altra persona.",
+      "under": "Sotto l'importo: la approva una persona (mai chi l'ha registrata)."
+    },
+    "failed": "Impossibile caricare l'approvazione",
+    "first": "Prima approvazione",
+    "firstBy": "{name} · {date}",
+    "firstLapsed": "{name} · {date} — decaduta: la fattura è cambiata dopo",
+    "firstNone": "Non ancora",
+    "state": {
+      "both": "Approvano due persone",
+      "lapsed": "Prima approvazione decaduta",
+      "second": "Aspetta una seconda persona",
+      "secondMine": "Ora approva un'altra persona",
+      "under": "Approva una persona"
+    },
+    "title": "Doppia approvazione",
+    "undecided": "L'importo è quello del progetto, non ancora deciso dal titolare: nessuna impostazione lo conserva ancora."
+  },
+  "notPlaced": {
+    "bankLine": "Movimento del {date}",
+    "byHand": "Inserito a mano",
+    "col": {
+      "bank": "Da",
+      "waiting": "In attesa",
+      "writeOff": "Storno"
+    },
+    "countMore_one": "{count} incasso mostrato, altri da caricare",
+    "countMore_other": "{count} incassi mostrati, altri da caricare",
+    "count_one": "{count} incasso",
+    "count_other": "{count} incassi",
+    "csv": {
+      "no": "no",
+      "openItems": "Partite aperte del cliente",
+      "unplaced": "Non collocato",
+      "waiting": "Giorni di attesa",
+      "withinTolerance": "Storno entro tolleranza",
+      "yes": "sì"
+    },
+    "empty": {
+      "body": "Ogni incasso ricevuto è collocato sulle sue fatture.",
+      "title": "Tutto è collocato"
+    },
+    "failed": "Impossibile caricare ciò che non è collocato",
+    "noOpenItems": "Nessuna partita aperta del cliente",
+    "openItems_one": "{count} partita aperta del cliente",
+    "openItems_other": "{count} partite aperte del cliente",
+    "rowMenu": "Azioni per {reference}",
+    "title": "Non collocati su una fattura",
+    "waiting_one": "{count} giorno",
+    "waiting_other": "{count} giorni",
+    "withinTolerance": "Entro tolleranza"
+  },
+  "proposal": {
+    "account": {
+      "check": "Verifica il conto",
+      "held": "Nessun conto bancario",
+      "notUsable": "{account} · non ancora utilizzabile",
+      "ok": "Utilizzabile",
+      "usable": "{account} · utilizzabile"
+    },
+    "approval": "Approvazione",
+    "approve": "Approva la proposta",
+    "approvedBy": "Approvata da",
+    "band": "Proposta di pagamento",
+    "body": "Fatture fornitori approvate in scadenza entro fine settimana, prima le scadute, per scadenza e sconto. Da qui non si paga nulla: i bonifici si fanno nel sito della banca, poi si registrano.",
+    "byOn": "{name} · {date}",
+    "cancel": "Annulla",
+    "cancelled": "Annullata il {date}: {reason}",
+    "candidates": {
+      "all_one": "Tutte le libere ({count})",
+      "all_other": "Tutte le libere ({count})",
+      "failed": "Impossibile caricare le fatture",
+      "legend": "Fatture da pagare nella settimana {week}",
+      "none": {
+        "body": "Si propongono solo fatture approvate in scadenza entro fine settimana. Quelle ancora da approvare sono elencate a parte.",
+        "title": "Niente da pagare nella settimana {week}"
+      },
+      "reading": "Lettura delle fatture…"
+    },
+    "changeLines": "Modifica le righe",
+    "col": {
+      "account": "Conto bancario",
+      "amount": "Da pagare",
+      "discount": "Sconto",
+      "invoice": "Fattura",
+      "lines": "Fatture",
+      "state": "Stato",
+      "supplier": "Fornitore",
+      "total": "Totale"
+    },
+    "create_one": "Crea la proposta ({count})",
+    "create_other": "Crea la proposta ({count})",
+    "discount": "Sconto pagamento anticipato su {number}",
+    "discountHint": "Facoltativo, come lo concede il fornitore, per esempio 43,01",
+    "dual": {
+      "first": "Approvata una volta da {name}: ora approva una seconda persona.",
+      "needed": "Oltre {amount}: approvano due persone.",
+      "neededPlain": "Oltre l'importo: approvano due persone.",
+      "notNeeded": "Fino a {amount}: approva una persona.",
+      "notNeededPlain": "Sotto l'importo: approva una persona.",
+      "undecided": "L'importo è quello del progetto, non ancora deciso dal titolare."
+    },
+    "due": {
+      "LATER": "Scade il {date}",
+      "NO_DUE_DATE": "Senza scadenza",
+      "OVERDUE": "Scaduta dal {date}",
+      "THIS_WEEK": "Scade il {date}"
+    },
+    "dueShort": {
+      "LATER": "Più avanti",
+      "NO_DUE_DATE": "Senza data",
+      "OVERDUE": "Scaduta",
+      "THIS_WEEK": "Questa settimana"
+    },
+    "existing_one": "La settimana {week} ha già {count} proposta: aprila invece di crearne un'altra.",
+    "existing_other": "La settimana {week} ha già {count} proposte: aprine una invece di crearne un'altra.",
+    "failed": "Impossibile caricare la proposta",
+    "fourEyes": "Chi approva non è chi l'ha preparata: questa proposta la approva un'altra persona.",
+    "held": {
+      "company": "Prima scegli una società.",
+      "discount": "Lo sconto su {number} non è un importo maggiore di zero, o supera la fattura.",
+      "failed": "Non è stato possibile leggere la proposta.",
+      "manage": "Preparare una proposta richiede il permesso di gestire le proposte di pagamento.",
+      "nonePicked": "Scegli almeno una fattura.",
+      "reading": "Lettura in corso…",
+      "right": "Non hai il permesso per questa azione.",
+      "tooMany": "Una proposta contiene al massimo {max} fatture.",
+      "view": "Le proposte di pagamento richiedono il permesso di vedere i debiti."
+    },
+    "heldLines_one": "{count} riga è bloccata",
+    "heldLines_other": "{count} righe sono bloccate",
+    "lessDiscount": "meno {amount} di sconto",
+    "lines": "Fatture della proposta",
+    "linesCount_one": "{count} fattura di {suppliers} fornitore/i",
+    "linesCount_other": "{count} fatture di {suppliers} fornitore/i",
+    "madeBy": "Preparata da",
+    "noDueDate": "Senza scadenza",
+    "notice": {
+      "approved": {
+        "FIRST": "Approvata una volta: il totale supera l'importo, quindi ora la approva una seconda persona.",
+        "SECOND": "Seconda approvazione data: la proposta è approvata.",
+        "SINGLE": "Proposta approvata."
+      },
+      "cancelled": "Proposta annullata.",
+      "created": "Proposta della settimana {week} creata.",
+      "lines_one": "Ora la proposta contiene {count} fattura.",
+      "lines_other": "Ora la proposta contiene {count} fatture.",
+      "paid": "{count} fatture registrate come pagate; avvisi di pagamento inviati {sent}, non inviati {held}.",
+      "paidNoMail_one": "{count} fattura registrata come pagata. L'avviso di pagamento è spento: nessun fornitore è stato avvisato.",
+      "paidNoMail_other": "{count} fatture registrate come pagate. L'avviso di pagamento è spento: nessun fornitore è stato avvisato.",
+      "sentBack": "Proposta rimandata in bozza."
+    },
+    "openExisting_one": "Apri ({state}, {count} fattura)",
+    "openExisting_other": "Apri ({state}, {count} fatture)",
+    "paid": {
+      "body": "Registra il giorno in cui i bonifici sono partiti e il riferimento della banca: ogni fattura della proposta risulta pagata.",
+      "day": "Indica il giorno in cui i bonifici sono partiti.",
+      "future": "Il giorno deve ancora arrivare.",
+      "go_one": "Registra pagata ({count})",
+      "go_other": "Registra pagate ({count})",
+      "on": "Pagata il",
+      "ref": "Riferimento della banca",
+      "refHint": "Il CRO, il TRN o il riferimento della distinta in banca",
+      "reference": "Indica il riferimento della banca.",
+      "referenceLong": "Il riferimento ha al massimo {max} caratteri.",
+      "title": "Registra pagata la settimana {week}"
+    },
+    "paidAt": "Pagata",
+    "paidDone_one": "Pagata: {count} fattura registrata come pagata.",
+    "paidDone_other": "Pagata: {count} fatture registrate come pagate.",
+    "payInBank": "Fai i bonifici nel sito della banca, poi registrali come pagati qui.",
+    "payable": "da pagare {amount}",
+    "reading": "Lettura della proposta…",
+    "reason": {
+      "cancelBody": "La proposta viene annullata; le sue fatture tornano libere per un'altra.",
+      "cancelGo": "Annulla la proposta",
+      "cancelTitle": "Annulla la proposta",
+      "label": "Motivo",
+      "sendBackBody": "L'approvazione viene ritirata e la proposta torna in bozza.",
+      "sendBackGo": "Rimanda indietro",
+      "sendBackTitle": "Rimanda indietro la proposta",
+      "short": "Prima scrivi il motivo in poche parole."
+    },
+    "recordPaid": "Registra pagata…",
+    "remittance": {
+      "off": "Avviso di pagamento ai fornitori: spento (interruttore del titolare in Amministrazione › Impostazioni amministrazione).",
+      "on": "Avviso di pagamento ai fornitori: acceso — ogni fornitore viene avvisato quando la proposta risulta pagata."
+    },
+    "saveLines_one": "Salva le righe ({count})",
+    "saveLines_other": "Salva le righe ({count})",
+    "sendBack": "Rimanda indietro",
+    "status": {
+      "APPROVED": "Approvata",
+      "CANCELLED": "Annullata",
+      "DRAFT": "Bozza",
+      "PAID": "Pagata"
+    },
+    "stepUpSaid": "L'approvazione chiede un nuovo codice dell'autenticatore.",
+    "title": "Proposta di pagamento",
+    "titleWeek": "Proposta di pagamento — settimana {week}",
+    "totalPlain_one": "{count} fattura",
+    "totalPlain_other": "{count} fatture",
+    "total_one": "{count} fattura · {amount}",
+    "total_other": "{count} fatture · {amount}",
+    "waiting": {
+      "disputed": "contestata al fornitore",
+      "received": "in attesa di approvazione",
+      "title": "In scadenza ma ancora da approvare"
+    },
+    "week": "Settimana",
+    "weekOption": "Settimana {week} (dal {from})",
+    "weekRange": "{from} – {to}"
+  },
+  "refusal": {
+    "area": {
+      "NOTHING_TO_CLAIM": "Non c'è nulla da contestare: l'area misurata è entro la tolleranza o supera quanto fatturato."
+    },
+    "proposal": {
+      "CURRENCY": "Una proposta paga in una sola valuta.",
+      "EMPTY": "La proposta non contiene fatture.",
+      "HELD": "Nessun conto utilizzabile per un fornitore: i pagamenti restano bloccati finché il conto non è verificato.",
+      "INVOICE_NOT_APPROVED": "Una fattura non è più approvata.",
+      "INVOICE_PAID": "Una fattura è già pagata.",
+      "IN_ANOTHER_PROPOSAL": "Una fattura è già in un'altra proposta.",
+      "NOT_APPROVED": "La proposta non è ancora approvata.",
+      "NOT_A_SUPPLIER_INVOICE": "Una nota di credito non si paga in una proposta.",
+      "NOT_DRAFT": "La proposta non è più una bozza.",
+      "NOT_PAID_YET": "Non ancora pagata.",
+      "OTHER_COMPANY": "Una fattura appartiene a un'altra società.",
+      "OWN_PROPOSAL": "Hai preparato tu questa proposta: la approva un'altra persona.",
+      "SECOND_APPROVER": "Hai dato la prima approvazione: la seconda la dà un'altra persona.",
+      "TOO_MUCH": "Uno sconto supera quanto resta da pagare sulla fattura."
+    },
+    "riba": {
+      "ACCOUNT_NOT_ITALIAN": "Le Ri.Ba. richiedono un conto di accredito italiano.",
+      "ACCOUNT_OFF": "Il conto di accredito non è più attivo.",
+      "BEFORE_DUE": "Un giorno prima della scadenza non può essere quello della banca.",
+      "CURRENCY": "Le Ri.Ba. incassano solo in euro.",
+      "DEBTOR_NOT_ITALIAN": "La banca del cliente non è italiana.",
+      "FEE_NEEDED": "Indica le spese della banca (0 se nessuna).",
+      "FEE_ON_PAID": "Una rata pagata non ha spese di insoluto.",
+      "FILE_DATA": "Al file manca un dato della società o di un cliente (nome, indirizzo, partita IVA): completalo e riprova.",
+      "FUTURE_DAY": "Il giorno deve ancora arrivare.",
+      "IN_ANOTHER_BATCH": "Già in un'altra distinta",
+      "NOT_DRAFT": "La distinta non è più una bozza: è stata letta di nuovo.",
+      "NOT_IN_BATCH": "Quella rata non è in questa distinta.",
+      "NOT_ISSUED": "Si esita solo una distinta con il file creato.",
+      "NOT_OPEN": "Quella rata non è più aperta.",
+      "NOT_RIBA": "Quella rata non si paga con Ri.Ba.",
+      "NO_ACCOUNT": "La società non ha un conto attivo su cui incassare.",
+      "NO_DEBTOR_BANK": "La banca del cliente non è nota: inserisci ABI e CAB.",
+      "NO_ITEMS": "La distinta non contiene rate.",
+      "OUTSIDE_WINDOW": "Quella rata scade fuori dalla finestra.",
+      "SETTLED": "Quella rata è già esitata.",
+      "SWITCHED_OFF": "Le Ri.Ba. sono spente per questa società: prima le accende il titolare."
+    },
+    "stop": {
+      "LIFTED": "Nel frattempo il blocco è stato tolto.",
+      "NOT_AN_INVOICE": "Un blocco vale solo per una fattura emessa.",
+      "OVER": "Il blocco è scaduto: l'ultimo giorno è passato.",
+      "SAME_STOP": "La fattura ha già un blocco per questo motivo."
+    },
+    "writeOff": {
+      "A_REVERSAL": "Una ripresa non si riprende di nuovo.",
+      "NOTE_NEEDED": "Indica il motivo nella nota.",
+      "NOTHING_LEFT": "Non resta nulla da stornare.",
+      "NOT_AN_INVOICE_ALLOCATION": "Quella collocazione non è su una fattura.",
+      "NOT_RECEIVED": "Si storna solo un incasso ricevuto.",
+      "NO_TOLERANCE": "Nessuna tolleranza di storno impostata: impostala prima in Amministrazione › Impostazioni amministrazione.",
+      "OVER_TOLERANCE": "La differenza supera la tolleranza di storno: collocala, rimborsala o chiedi al cliente.",
+      "REVERSED_ALREADY": "Quello storno è già stato ripreso.",
+      "SHORT_ON_DEPOSIT": "Un acconto non si storna: il cliente lo paga per intero.",
+      "SHORT_ON_SEVERAL": "L'incasso è scoperto su più fatture: collocalo prima a mano."
+    }
+  },
+  "refusalItem": {
+    "riba": {
+      "ACCOUNT_NOT_ITALIAN": "{invoice} ({customer}): le Ri.Ba. richiedono un conto di accredito italiano.",
+      "ACCOUNT_OFF": "{invoice} ({customer}): il conto di accredito non è più attivo.",
+      "BEFORE_DUE": "{invoice} ({customer}): un giorno prima della scadenza non può essere quello della banca.",
+      "CURRENCY": "{invoice} ({customer}): le Ri.Ba. incassano solo in euro.",
+      "DEBTOR_NOT_ITALIAN": "{invoice} ({customer}): la banca del cliente non è italiana.",
+      "FEE_NEEDED": "{invoice} ({customer}): indica le spese della banca (0 se nessuna).",
+      "FEE_ON_PAID": "{invoice} ({customer}): una rata pagata non ha spese di insoluto.",
+      "FILE_DATA": "{invoice} ({customer}): al file manca un dato della società o di un cliente (nome, indirizzo, partita IVA): completalo e riprova.",
+      "FUTURE_DAY": "{invoice} ({customer}): il giorno deve ancora arrivare.",
+      "IN_ANOTHER_BATCH": "{invoice} ({customer}): già in un'altra distinta",
+      "NOT_DRAFT": "{invoice} ({customer}): la distinta non è più una bozza: è stata letta di nuovo.",
+      "NOT_IN_BATCH": "{invoice} ({customer}): quella rata non è in questa distinta.",
+      "NOT_ISSUED": "{invoice} ({customer}): si esita solo una distinta con il file creato.",
+      "NOT_OPEN": "{invoice} ({customer}): quella rata non è più aperta.",
+      "NOT_RIBA": "{invoice} ({customer}): quella rata non si paga con Ri.Ba.",
+      "NO_ACCOUNT": "{invoice} ({customer}): la società non ha un conto attivo su cui incassare.",
+      "NO_DEBTOR_BANK": "{invoice} ({customer}): la banca del cliente non è nota: inserisci ABI e CAB.",
+      "NO_ITEMS": "{invoice} ({customer}): la distinta non contiene rate.",
+      "OUTSIDE_WINDOW": "{invoice} ({customer}): quella rata scade fuori dalla finestra.",
+      "SETTLED": "{invoice} ({customer}): quella rata è già esitata.",
+      "SWITCHED_OFF": "{invoice} ({customer}): le Ri.Ba. sono spente per questa società: prima le accende il titolare."
+    }
+  },
+  "riba": {
+    "account": "Conto di accredito",
+    "back": "Indietro",
+    "bank": {
+      "abi": "ABI",
+      "cab": "CAB",
+      "give": "Banca non nota: inserisci ABI e CAB",
+      "invalid": "ABI e CAB di {customer} hanno cinque cifre ciascuno.",
+      "known": "ABI {abi} · CAB {cab}",
+      "legend": "La banca del cliente, per ogni cliente che il file richiede",
+      "needed": "Il file richiede la banca di {customer}: inserisci ABI e CAB.",
+      "source": {
+        "BANK_LINE": "ABI {abi} · CAB {cab} (da un incasso del cliente)",
+        "GIVEN": "ABI {abi} · CAB {cab} (inseriti per questo file)",
+        "INVOICE": "ABI {abi} · CAB {cab} (dalla fattura)"
+      },
+      "unknown": "Banca non ancora nota"
+    },
+    "batch": {
+      "failed": "Impossibile caricare la distinta",
+      "reading": "Lettura della distinta…"
+    },
+    "batchState": {
+      "CANCELLED": "Annullata",
+      "DRAFT": "Bozza",
+      "ISSUED": "File creato",
+      "waiting_one": "File creato · {count} in attesa della banca",
+      "waiting_other": "File creato · {count} in attesa della banca"
+    },
+    "batches": {
+      "continue": "Continua",
+      "failed": "Impossibile caricare le distinte recenti: {reason}",
+      "settle": "Apri",
+      "title": "Distinte recenti"
+    },
+    "body": "Le rate che i clienti pagano con Ri.Ba., in scadenza nella finestra. Il file è per la banca: lo carichi tu nel sito della banca, da qui non parte nulla.",
+    "cancel": "Annulla la bozza",
+    "cancelBody_one": "La bozza con {count} rata viene annullata; la rata torna libera per un'altra distinta.",
+    "cancelBody_other": "La bozza con {count} rate viene annullata; le rate tornano libere per un'altra distinta.",
+    "cancelGo": "Annulla la bozza",
+    "cancelReason": {
+      "label": "Motivo",
+      "short": "Prima scrivi il motivo in poche parole."
+    },
+    "cancelTitle": "Annulla la bozza Ri.Ba.",
+    "cancelled": "Annullata il {date}: {reason}",
+    "candidates": {
+      "all_one": "Tutte le libere ({count})",
+      "all_other": "Tutte le libere ({count})",
+      "due": "Scadenza {date}",
+      "failed": "Impossibile caricare le rate",
+      "invoice": "{number} · rata {instalment}",
+      "legend": "Rate in scadenza dal {from} al {to}",
+      "none": {
+        "body": "Compaiono solo le fatture emesse con rate Ri.Ba. (MP12) ancora aperte. Allarga la finestra o controlla i termini di pagamento delle fatture.",
+        "title": "Nessuna rata Ri.Ba. in scadenza dal {from} al {to}"
+      },
+      "reading": "Lettura delle rate…"
+    },
+    "changed": "Nel frattempo la distinta è cambiata: è stata letta di nuovo.",
+    "col": {
+      "amount": "Importo",
+      "bank": "Banca del cliente",
+      "customer": "Cliente",
+      "due": "Scadenza",
+      "invoice": "Fattura",
+      "open": "Apri",
+      "receipts": "Effetti",
+      "state": "Stato",
+      "total": "Totale",
+      "window": "Finestra"
+    },
+    "create_one": "Crea bozza ({count})",
+    "create_other": "Crea bozza ({count})",
+    "fee": "Spese banca {amount}",
+    "file": {
+      "download": "Scarica il file",
+      "openTab": "Apri il file in una nuova scheda"
+    },
+    "held": {
+      "allSettled": "Tutte le rate sono già esitate.",
+      "failed": "Non è stato possibile leggere la distinta.",
+      "manage": "Preparare una distinta Ri.Ba. richiede il permesso di gestire le Ri.Ba..",
+      "nonePicked": "Scegli almeno una rata.",
+      "reading": "Lettura in corso…",
+      "record": "Una rata esitata come pagata registra un incasso: serve il permesso di registrare incassi.",
+      "switchOff": "Le Ri.Ba. sono spente per questa società: prima le accende il titolare."
+    },
+    "issue": "Crea file (scarica)",
+    "issueBody": "Creando il file, resta sulla distinta per dieci anni e viene scaricato. Caricalo nel sito della banca.",
+    "issuedAt": "File creato",
+    "issuedBy": "{date} da {name}",
+    "itemState": {
+      "ISSUED": "In banca",
+      "PAID": "Pagata",
+      "UNPAID": "Insoluta"
+    },
+    "items": "Rate della distinta",
+    "notice": {
+      "created_one": "Bozza creata con {count} rata.",
+      "created_other": "Bozza creata con {count} rate.",
+      "issued": "File {name} creato e scaricato.",
+      "picked_one": "Ora la bozza contiene {count} rata.",
+      "picked_other": "Ora la bozza contiene {count} rate.",
+      "settled": "Esito registrato: {paid} pagate, {unpaid} insolute.",
+      "switchedOn": "Le Ri.Ba. sono accese per questa società."
+    },
+    "repick": "Scegli di nuovo",
+    "rule": "Il file segue il tracciato CBI; banca e commercialista lo confermano prima del primo caricamento.",
+    "savePicks_one": "Salva la scelta ({count})",
+    "savePicks_other": "Salva la scelta ({count})",
+    "settle": {
+      "PAID": "Pagata",
+      "UNPAID": "Insoluta",
+      "WAIT": "Ancora in banca",
+      "backOn": "Rientrata il",
+      "body": "Registra l'esito della banca tutto insieme: una rata pagata registra l'incasso sulla fattura; un insoluto riapre la fattura con le spese della banca.",
+      "day": "Indica il giorno riportato dalla banca.",
+      "done": "Esitate: {paid} pagate, {unpaid} insolute.",
+      "fee": "Spese della banca",
+      "feeHint": "Come da esito della banca, per esempio 3,50",
+      "go_one": "Registra l'esito ({count})",
+      "go_other": "Registra l'esito ({count})",
+      "legend": "L'esito della banca",
+      "nothing": "Segna almeno una rata come pagata o insoluta.",
+      "outcome": "Esito",
+      "paidOn": "Pagata il"
+    },
+    "settledOn": "Esitata il {date}",
+    "sia": {
+      "hint": "Il codice creditore della società in banca (cinque caratteri); ricordato su questo dispositivo.",
+      "invalid": "Il codice SIA ha cinque lettere o cifre.",
+      "label": "Codice SIA"
+    },
+    "someone": "qualcuno",
+    "switch": {
+      "after": "Poi l'amministrazione crea i file; spegnerle di nuovo è sempre possibile.",
+      "body": "Accendere le Ri.Ba. permette all'amministrazione di creare i file CBI per la banca. Verifica il tracciato con banca e commercialista prima del primo caricamento.",
+      "go": "Accendi (nuovo codice)",
+      "held": "Solo il titolare accende le Ri.Ba.",
+      "off": "Le Ri.Ba. sono spente",
+      "offBody": "Si può preparare una bozza; il file si crea quando il titolare accende le Ri.Ba.",
+      "on": "Le Ri.Ba. sono accese per questa società.",
+      "tick": "Banca e commercialista hanno confermato il tracciato del file",
+      "tickFirst": "Prima conferma che banca e commercialista hanno verificato il tracciato.",
+      "title": "Accendi le Ri.Ba.",
+      "turnOn": "Accendi…"
+    },
+    "title": "Distinta Ri.Ba.",
+    "titleCancelled": "Distinta Ri.Ba. — annullata",
+    "titleDraft": "Distinta Ri.Ba. — bozza",
+    "titleIssued": "Distinta Ri.Ba. — file creato",
+    "titleRepick": "Distinta Ri.Ba. — scegli di nuovo le rate",
+    "totalPlain_one": "{count} rata",
+    "totalPlain_other": "{count} rate",
+    "total_one": "{count} rata · {amount}",
+    "total_other": "{count} rate · {amount}",
+    "window": {
+      "from": "Scadenza dal",
+      "long": "La finestra è al massimo di {days} giorni.",
+      "missing": "Indica entrambi i giorni della finestra.",
+      "order": "La finestra finisce dopo il suo inizio.",
+      "range": "{from} – {to}",
+      "to": "Scadenza al"
+    }
+  },
+  "ribaFile": {
+    "back": "Incassi",
+    "bytes_one": "{count} byte",
+    "bytes_other": "{count} byte",
+    "cancelled": {
+      "body": "La distinta è stata annullata prima di creare il file.",
+      "title": "Una distinta annullata non ha file"
+    },
+    "download": "Scarica",
+    "draft": {
+      "body": "La distinta è una bozza: crea il file dalla distinta Ri.Ba. in Incassi.",
+      "title": "Ancora nessun file"
+    },
+    "howTo": "Scarica il file e caricalo nel sito della banca: da qui non parte nulla. Il collegamento vale un minuto.",
+    "loading": "Lettura della distinta…",
+    "reading": "Lettura del file…",
+    "records": "Il file, record per record",
+    "recordsCount": "{count} record da 120 caratteri, {receipts} effetti",
+    "size": "Dimensione",
+    "state": {
+      "error": {
+        "body": "Riprova tra poco.",
+        "title": "Impossibile caricare la distinta"
+      },
+      "forbidden": {
+        "body": "Le distinte Ri.Ba. richiedono il permesso di vedere i crediti.",
+        "title": "Nessun permesso"
+      },
+      "not_found": {
+        "body": "L'indirizzo non indica una distinta Ri.Ba. di questa società.",
+        "title": "Distinta inesistente"
+      }
+    },
+    "title": "File Ri.Ba.",
+    "type": {
+      "14": "Effetto: importo e scadenza",
+      "20": "Creditore",
+      "30": "Debitore",
+      "40": "Indirizzo del debitore",
+      "50": "Riferimento",
+      "51": "Numero effetto",
+      "70": "Chiusura effetto",
+      "EF": "Coda: numero e totale",
+      "IB": "Testata",
+      "other": "Altro record"
+    },
+    "unreadable": "Il file non si può rileggere in questo browser; lo scaricamento funziona comunque.",
+    "what": "Quale distinta"
+  },
+  "ribaUnpaid": {
+    "col": {
+      "back": "Rientrata il",
+      "fee": "Spese banca",
+      "open": "Ancora aperto"
+    },
+    "count_one": "{count} rata",
+    "count_other": "{count} rate",
+    "csv": {
+      "amount": "Importo",
+      "back": "Rientrata il",
+      "customer": "Cliente",
+      "due": "Scadenza",
+      "fee": "Spese banca",
+      "instalment": "Rata",
+      "invoice": "Fattura",
+      "open": "Ancora aperto"
+    },
+    "daysSince_one": "{count} giorno fa",
+    "daysSince_other": "{count} giorni fa",
+    "empty": {
+      "body": "Qui compaiono le rate che la banca restituisce insolute, finché non vengono pagate o ripresentate.",
+      "title": "Nessuna rata insoluta"
+    },
+    "failed": "Impossibile caricare le rate insolute",
+    "fee": "Per addebitare le spese della banca al cliente, fai una nota di debito sulla fattura: l'IVA la decide il commercialista.",
+    "openBatch": "Apri la sua distinta",
+    "openInvoice": "Apri la fattura",
+    "rowMenu": "Azioni per {invoice}",
+    "title": "Ri.Ba. insolute"
+  },
+  "rows": {
+    "notPlaced": "Non collocati su una fattura",
+    "ribaUnpaid": "Ri.Ba. insolute"
+  },
+  "stepUp": {
+    "notice": "Accendere l'avviso di incasso ai clienti chiede un nuovo codice.",
+    "proposal": "Approvare una proposta di pagamento chiede un nuovo codice.",
+    "remittance": "Accendere l'avviso di pagamento ai fornitori chiede un nuovo codice.",
+    "riba": "Accendere le Ri.Ba. chiede un nuovo codice.",
+    "trust": "Impostare il livello di fiducia di un cliente chiede un nuovo codice."
+  },
+  "stops": {
+    "add": {
+      "after": "Il sollecito resta poi bloccato: non si approva né si invia finché il blocco è attivo.",
+      "go": "Blocca i solleciti",
+      "note": "Nota (facoltativa)",
+      "promiseDay": "Promesso per il",
+      "promiseHint": "Il blocco vale fino a questo giorno.",
+      "title": "Blocca i solleciti di una fattura",
+      "until": "Fino al (facoltativo)",
+      "untilHint": "Vuoto: finché non viene tolto."
+    },
+    "body": "Un blocco ferma i solleciti di una fattura mentre un pagamento è in corso, una contestazione è aperta, il cliente ha promesso di pagare (fino a quel giorno) o una nota di credito è in attesa. Un sollecito bloccato non si approva né si invia. I blocchi si registrano dentro un sollecito.",
+    "change": "Modifica…",
+    "changeGo": "Salva",
+    "changeTitle": "Modifica il blocco su {invoice}",
+    "col": {
+      "action": "Azione",
+      "by": "Registrato da",
+      "customer": "Cliente",
+      "invoice": "Fattura",
+      "reason": "Motivo",
+      "state": "Stato",
+      "until": "Fino al"
+    },
+    "count_one": "{count} blocco",
+    "count_other": "{count} blocchi",
+    "csv": {
+      "customer": "Cliente",
+      "invoice": "Fattura",
+      "note": "Nota",
+      "reason": "Motivo",
+      "state": "Stato",
+      "until": "Fino al"
+    },
+    "empty": {
+      "all": {
+        "body": "Blocca i solleciti di una fattura dall'interno di un sollecito.",
+        "title": "Ancora nessun blocco"
+      },
+      "holding": {
+        "body": "Ogni sollecito può procedere. Bloccane uno dall'interno di un sollecito.",
+        "title": "Nessun blocco attivo"
+      },
+      "lifted": {
+        "body": "Qui compaiono i blocchi tolti da una persona.",
+        "title": "Nessun blocco tolto"
+      },
+      "over": {
+        "body": "Qui compaiono i blocchi con l'ultimo giorno passato.",
+        "title": "Nessun blocco scaduto"
+      }
+    },
+    "failed": "Impossibile caricare i blocchi: {reason}",
+    "failedTitle": "Impossibile caricare i blocchi dei solleciti",
+    "held": {
+      "dayPast": "Il giorno è oggi o più avanti.",
+      "invoice": "Scegli la fattura.",
+      "noteLong": "La nota ha al massimo {max} caratteri.",
+      "promiseDay": "Una promessa di pagamento indica il giorno promesso.",
+      "reasonLong": "Il motivo ha al massimo {max} caratteri.",
+      "right": "I blocchi richiedono il permesso di gestire i solleciti."
+    },
+    "holds_one": "Blocca ora {count} sollecito",
+    "holds_other": "Blocca ora {count} solleciti",
+    "inReminder": {
+      "none": "Nessun blocco ferma le fatture di questo sollecito.",
+      "title": "Blocchi sulle sue fatture"
+    },
+    "lift": "Togli",
+    "liftBody_one": "{reason}: togliendolo, {count} sollecito può procedere di nuovo.",
+    "liftBody_other": "{reason}: togliendolo, {count} solleciti possono procedere di nuovo.",
+    "liftGo": "Togli il blocco",
+    "liftMenu": "Togli…",
+    "liftReason": "Motivo (facoltativo)",
+    "liftReasonHint": "Per esempio: contestazione risolta",
+    "liftTitle": "Togli il blocco su {invoice}",
+    "liftedOn": "Tolto il {date}",
+    "notice": {
+      "added": "Solleciti della fattura bloccati.",
+      "changed": "Blocco modificato.",
+      "lifted": "Blocco tolto."
+    },
+    "reading": "Lettura dei blocchi…",
+    "reason": {
+      "CREDIT_PENDING": "Nota di credito in attesa",
+      "DISPUTE": "Contestazione aperta",
+      "PAYMENT_PROCESSING": "Pagamento in corso",
+      "PROMISE_TO_PAY": "Promessa di pagamento"
+    },
+    "rowMenu": "Azioni per il blocco su {invoice}",
+    "rows": {
+      "all": "Tutti",
+      "holding": "Attivi",
+      "lifted": "Tolti",
+      "over": "Scaduti"
+    },
+    "rowsLabel": "Righe",
+    "state": {
+      "holding": "Attivo",
+      "lifted": "Tolto",
+      "over": "Scaduto"
+    },
+    "title": "Blocchi dei solleciti",
+    "untilLifted": "Finché non viene tolto"
+  },
+  "tile": {
+    "notPlaced": "Non collocati su una fattura",
+    "notPlacedCount_one": "{count} incasso con denaro da collocare",
+    "notPlacedCount_other": "{count} incassi con denaro da collocare",
+    "notPlacedOthers": "{count} incassi; {others} altre valute fuori dal totale",
+    "ribaUnpaid": "Ri.Ba. insolute",
+    "ribaUnpaidCount_one": "{count} rata insoluta",
+    "ribaUnpaidCount_other": "{count} rate insolute",
+    "unknown": "Non leggibile"
+  },
+  "trust": {
+    "always": "Una lettera, una telefonata o un sollecito fatto a mano aspettano sempre una persona.",
+    "approvedByLevel": "Approvato dal suo livello di fiducia.",
+    "byPerson": "Approvato da una persona.",
+    "clear": "Togli il livello",
+    "company": {
+      "noSteps": "{company}: nessun passo via e-mail nella scala.",
+      "off": "{company}: i solleciti sono spenti — i passi {steps} partirebbero da soli una volta accesi.",
+      "on": "{company}: i passi via e-mail {steps} partono da soli."
+    },
+    "failed": "Impossibile caricare il livello di fiducia: {reason}",
+    "goesByItself": "Parte da solo: livello di fiducia {level}.",
+    "held": {
+      "reading": "Lettura in corso…",
+      "right": "Solo il titolare imposta un livello di fiducia.",
+      "same": "Il livello è già questo."
+    },
+    "level": "{customer}: i solleciti via e-mail fino al passo {level} partono senza una persona.",
+    "noLevel": "Nessun livello (approva sempre una persona)",
+    "none": "{customer} non ha un livello di fiducia: ogni sollecito aspetta una persona.",
+    "notice": {
+      "cleared": "Livello di fiducia tolto.",
+      "set": "Livello di fiducia {level} impostato."
+    },
+    "pick": "Livello",
+    "pickHint": "I solleciti via e-mail fino a questo passo della scala partono da soli mentre i solleciti sono accesi. Chiede un nuovo codice.",
+    "reading": "Lettura del livello di fiducia…",
+    "save": "Salva il livello",
+    "tag": {
+      "approved": "approvato dal livello di fiducia",
+      "itself": "parte da solo"
+    },
+    "title": "Livello di fiducia",
+    "upTo": "Fino al passo {level}",
+    "waitsForPerson": "Aspetta una persona: fatto a mano, o i solleciti sono spenti (livello di fiducia {level}).",
+    "waitsNoLevel": "Aspetta una persona: il cliente non ha un livello di fiducia."
+  },
+  "unlock": {
+    "done": "Acconto pagato per intero: la produzione di {order} è sbloccata.",
+    "donePlain": "Acconto pagato per intero: la produzione dell'ordine è sbloccata.",
+    "note": "Un acconto pagato per intero sblocca subito la produzione di {order}; i pianificatori vengono avvisati.",
+    "notePlain": "Un acconto pagato per intero sblocca subito la produzione dell'ordine; i pianificatori vengono avvisati.",
+    "openWorkOrders": "Apri i suoi ordini di lavoro"
+  },
+  "writeOff": {
+    "col": {
+      "action": "Azione",
+      "amount": "Importo",
+      "difference": "Differenza",
+      "what": "Stornato",
+      "when": "Quando"
+    },
+    "dialog": {
+      "after": "Si storna tutta la differenza; il registro la conserva e si può riprendere con una nota.",
+      "body": {
+        "OVERPAYMENT": "Il cliente ha pagato un po' di più: lo storno chiude l'eccedenza rimasta sull'incasso.",
+        "UNDERPAYMENT": "Il cliente ha pagato un po' meno di {number}: lo storno chiude il resto della fattura."
+      },
+      "go": "Storna {amount}",
+      "goPlain": "Storna",
+      "note": "Nota",
+      "noteNeeded": "Necessaria con \"Altro motivo\": indica quale.",
+      "noteOptional": "Facoltativa",
+      "reason": "Motivo",
+      "title": "Storna la differenza"
+    },
+    "failed": "Impossibile caricare gli storni: {reason}",
+    "go": "Storna…",
+    "held": {
+      "right": "Stornare richiede il permesso di stornare incassi."
+    },
+    "kind": {
+      "OVERPAYMENT": "Pagato un po' di più",
+      "UNDERPAYMENT": "Pagato un po' meno"
+    },
+    "made": "Storni fatti",
+    "noNote": "Nessuna nota",
+    "noteLong": "La nota ha al massimo {max} caratteri.",
+    "notice": {
+      "done": "Differenza stornata.",
+      "takenBack": "Storno ripreso."
+    },
+    "onInvoice": "Su {number}",
+    "onPayment": "Rimasta sull'incasso",
+    "over": "Oltre la tolleranza",
+    "possible": "Differenze lasciate dall'incasso",
+    "reading": "Lettura degli storni…",
+    "reason": {
+      "BANK_CHARGES": "Spese bancarie",
+      "OTHER": "Altro motivo",
+      "ROUNDING": "Arrotondamento"
+    },
+    "reversal": "Ripreso: {note}",
+    "reversed": "Ripreso in seguito",
+    "state": {
+      "reversal": "Ripresa",
+      "reversed": "Ripreso"
+    },
+    "takeBack": "Riprendi…",
+    "takeBackBody": {
+      "OVERPAYMENT": "L'eccedenza torna sull'incasso, da collocare o rimborsare.",
+      "UNDERPAYMENT": "La fattura torna aperta per la differenza."
+    },
+    "takeBackGo": "Riprendi",
+    "takeBackTitle": "Riprendi lo storno",
+    "title": "Piccole differenze",
+    "tolerance": {
+      "COMPANY": "Tolleranza {amount}, della società",
+      "COMPANYPlain": "Vale la tolleranza di storno della società.",
+      "TENANT": "Tolleranza {amount}, per tutte le società",
+      "TENANTPlain": "Vale la tolleranza di storno di tutte le società.",
+      "none": "Nessuna tolleranza di storno impostata: una differenza non si storna mai (impostala in Amministrazione › Impostazioni amministrazione)."
+    },
+    "within": "Entro la tolleranza"
+  }
+}

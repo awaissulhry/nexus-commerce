@@ -10,6 +10,10 @@ import { RecordPanels } from '../../../../record-panels/RecordPanels'
 import { storeUrl } from '../../../../record-panels/store'
 import { romeToday } from '../../costing/model'
 import { useCoalesced, useLive, useThreadDock } from '../../_shared/hooks'
+// B-W2b-425: the leather area check, dual approval and the payment batch.
+import { AreaCheck } from '../area-check/AreaCheck'
+import { DualApproval } from '../dual-approval/DualApproval'
+import { PaymentBatch } from '../payment/PaymentBatch'
 import {
   acceptDifference,
   addLine,
@@ -121,7 +125,7 @@ export function SupplierInvoiceRecord({ invoiceId }: { invoiceId: string }) {
 
   /** One write; the invoice it answers replaces the page's. A refused one keeps the dialog open with its words. */
   const write = useCallback(
-    async (run: (idempotencyKey: string) => Promise<SupplierInvoice>, success: SupplierInvoiceModel['notice']) => {
+    async (run: (idempotencyKey: string) => Promise<SupplierInvoice>, success: SupplierInvoiceModel['notice'] | ((next: SupplierInvoice) => SupplierInvoiceModel['notice'])) => {
       if (busy) return
       setBusy(true)
       setNotice(null)
@@ -132,7 +136,8 @@ export function SupplierInvoiceRecord({ invoiceId }: { invoiceId: string }) {
         setValue(next)
         readCandidates(next)
         setDialog(null)
-        if (success) setNotice(success)
+        const words = typeof success === 'function' ? success(next) : success
+        if (words) setNotice(words)
       } catch (error) {
         key.current = newIdempotencyKey()
         const problem = writeProblem(error)
@@ -163,7 +168,8 @@ export function SupplierInvoiceRecord({ invoiceId }: { invoiceId: string }) {
   const confirm = (open: RecordDialog) => {
     switch (open.kind) {
       case 'approve':
-        return void write((k) => approveInvoice(api, invoiceId, version(), open.note.trim() || null, k), { tone: 'success', phrases: [{ key: 'notice.approved' }] })
+        // B-W2b-425: above the amount a first yes leaves the invoice RECEIVED: a second person approves it.
+        return void write((k) => approveInvoice(api, invoiceId, version(), open.note.trim() || null, k), (next) => ({ tone: 'success', phrases: [{ key: next.status === 'RECEIVED' ? 'notice.firstApproved' : 'notice.approved' }] }))
       case 'accept':
         return void write((k) => acceptDifference(api, invoiceId, open.matchId, version(), open.note.trim(), k), { tone: 'success', phrases: [{ key: 'notice.accepted' }] })
       case 'sendToBuyer':
@@ -209,6 +215,15 @@ export function SupplierInvoiceRecord({ invoiceId }: { invoiceId: string }) {
   return (
     <SupplierInvoiceView
       model={model}
+      depth={
+        value
+          ? {
+              area: tab === 'match' ? <AreaCheck invoiceId={value.id} prefix={prefix} version={value.version} /> : null,
+              dual: tab === 'approval' ? <DualApproval invoiceId={value.id} version={value.version} /> : null,
+              payment: tab === 'payment' ? <PaymentBatch invoiceId={value.id} companyId={value.company.id} prefix={prefix} version={value.version} /> : null,
+            }
+          : undefined
+      }
       panels={
         value && (tab === 'activity' || dockOpen) ? (
           <RecordPanels

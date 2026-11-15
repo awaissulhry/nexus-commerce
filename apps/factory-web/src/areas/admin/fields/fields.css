@@ -1,0 +1,318 @@
+/*
+ * Admin › Fields & lists (B-W2b-431, SCR-164) LAYOUT: the band, which record and the tabs, the fields' list frame beside
+ * the form preview (stacked below 1600 px), the picklists, the dialogs' forms and the type gallery. The page fills the
+ * shell's main area (no max-width: Owner rule 2026-10-29); the grid, pickers and controls are the design system's;
+ * semantic tokens only.
+ */
+.fw-flds,
+.fw-flds-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-flds {
+  gap: var(--nds-space-16);
+}
+
+.fw-flds-band,
+.fw-flds-pickbar,
+.fw-flds-listbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-flds-band {
+  align-items: center;
+}
+
+.fw-flds-actions,
+.fw-flds-tabs,
+.fw-flds-cell,
+.fw-flds-inline,
+.fw-flds-type,
+.fw-flds-fixed {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-flds-cell {
+  flex-wrap: nowrap;
+  gap: var(--nds-space-6);
+  max-width: 100%;
+}
+
+.fw-flds-cell > svg {
+  flex: none;
+}
+
+.fw-flds-pick {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.fw-flds-work {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+  align-items: start;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-flds-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-flds-muted {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-flds-danger,
+.fw-flds-refused {
+  margin: 0;
+  color: var(--nds-danger-text);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-flds-refused {
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-flds-words {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.fw-flds-words.off,
+.fw-flds-code.off {
+  color: var(--nds-text-3);
+}
+
+.fw-flds-code {
+  font-family: var(--nds-font-mono);
+  font-weight: var(--nds-font-weight-medium);
+}
+
+.fw-flds-switch {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-flds-switch > span:last-child {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+
+.fw-flds-switch.small {
+  align-items: center;
+  font-size: var(--nds-font-size-sm);
+}
+
+/* The form preview: sections as the record's form shows them. */
+.fw-flds-preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-flds-preview-section {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+}
+
+.fw-flds-preview-section > legend,
+.fw-flds-gallery > legend,
+.fw-flds-choices > legend {
+  padding: 0;
+  margin-bottom: var(--nds-space-8);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-flds-preview-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-flds-preview-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+/* The field dialog: the form beside its own preview. */
+.fw-flds-dialog {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 340px);
+  align-items: start;
+  gap: var(--nds-space-20);
+  min-width: 0;
+}
+
+.fw-flds-dialog-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-flds-dialog-preview {
+  position: sticky;
+  top: 0;
+  min-width: 0;
+}
+
+.fw-flds-gallery,
+.fw-flds-choices {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-flds-gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-flds-type-picture {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text-strong);
+  flex: none;
+}
+
+.fw-flds-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--nds-space-12) var(--nds-space-16);
+  align-items: start;
+  min-width: 0;
+}
+
+.fw-flds-choice-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-flds-fixed {
+  padding: var(--nds-space-8) var(--nds-space-12);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-md);
+}
+
+.fw-flds-fixed-value {
+  font-weight: var(--nds-font-weight-medium);
+}
+
+.fw-flds-footer-start {
+  margin-right: auto;
+}
+
+.fw-flds-pickers {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--nds-space-12) var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-flds-look {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  margin: 0;
+  font-weight: var(--nds-font-weight-medium);
+}
+
+.fw-flds-keys {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-flds-keys > div {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-12);
+}
+
+.fw-flds-keys dt {
+  display: inline-flex;
+  gap: var(--nds-space-4);
+  min-width: 96px;
+}
+
+.fw-flds-keys dd {
+  margin: 0;
+}
+
+/* Below 1600 px the preview goes under the list (the list keeps every column in view), its fields side by side. */
+@media (max-width: 1599px) {
+  .fw-flds-work {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .fw-flds-preview-grid {
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  }
+}
+
+@media (max-width: 899px) {
+  .fw-flds-dialog {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .fw-flds-dialog-preview {
+    position: static;
+  }
+}
+
+@media (max-width: 599px) {
+  .fw-flds-pick {
+    width: 100%;
+  }
+
+  .fw-flds-gallery-grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  }
+}
