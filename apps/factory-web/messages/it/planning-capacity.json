@@ -30,7 +30,7 @@
   },
   "noAccess": {
     "title": "Capacità e carico non è aperta al tuo ruolo",
-    "body": "Il tuo ruolo non può leggere la pianificazione (planning.view). Chiedi a un amministratore se ti serve."
+    "body": "Il tuo ruolo non può leggere la pianificazione. Chiedi a un amministratore se ti serve."
   },
   "keys": {
     "cell": "Apri gli ordini della linea in questa settimana",

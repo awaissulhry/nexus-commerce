@@ -25,5 +25,5 @@ export function officeOrFloorOf(caller: Pick<CommandCaller, 'factoryContext'>): 
 export const mayManage = (context: OfficeContext): boolean => mayWrite(actorOf(context), QUALITY_DEFECTS_MANAGE, null)
 
 export function assertManage(context: OfficeContext): void {
-  if (!mayManage(context)) throw new ForbiddenError('The defect library and the disposition codes are the whole group\'s: they are kept with quality.defects.manage over every company.')
+  if (!mayManage(context)) throw new ForbiddenError("The defect library and the disposition codes are the whole group's: they are kept with the right to keep them over every company.")
 }

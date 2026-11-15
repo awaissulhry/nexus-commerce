@@ -12,7 +12,7 @@ import { useT } from '../../lib/i18n/provider'
 import { useOfficeApi } from '../../lib/session/context'
 import { useTheme } from '../../lib/theme/use-theme'
 import { changePassword, confirmTotp, disableTotp, setLocale, signOutHere, startTotpSetup } from './me-api'
-import { authenticatorAtRest, profileModel, type AuthenticatorCard, type MeProblem, type MyProfileViewModel, type PasswordCard } from './me-model'
+import { authenticatorAtRest, authenticatorWaits, profileModel, type AuthenticatorCard, type MeProblem, type MyProfileViewModel, type PasswordCard } from './me-model'
 import { MyProfileView, type MeAction } from './view/MyProfileView'
 import { StartPageCard } from '../../shell/scope/start/StartPageCard'
 import { MySessions } from './sessions/MySessions'
@@ -36,6 +36,9 @@ function Profile({ me }: { me: OfficeMe }) {
   const [password, setPassword] = useState<PasswordCard>({ state: 'closed' })
   const [authenticator, setAuthenticator] = useState<AuthenticatorCard | null>(null)
   const [signOut, setSignOut] = useState<MyProfileViewModel['signOut']>()
+  // B-W2b-F58: the authenticator card comes first while the roles wait for two-factor, and stays first for this visit (after
+  // the code, router.refresh() fills the navigation; the card does not jump away while the recovery codes show).
+  const [authenticatorFirst] = useState(() => authenticatorWaits(me.mfa))
 
   // The new language is the page's once the server's pages came back in it.
   useEffect(() => {
@@ -51,6 +54,7 @@ function Profile({ me }: { me: OfficeMe }) {
     authenticator: authenticator ?? authenticatorAtRest(me.mfa),
     signOut,
     autoFocus: true,
+    authenticatorFirst,
   }
   const required = me.mfa.required
 

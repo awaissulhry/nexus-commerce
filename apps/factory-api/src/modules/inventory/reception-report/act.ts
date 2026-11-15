@@ -56,7 +56,7 @@ function noteLinesOf(report: ReceptionReport, reserved: ReadonlyMap<string, stri
 async function sendInCommand(tools: CommandTools, context: OfficeContext, report: ReceptionReport, reserved: ReadonlyMap<string, string>, note: string | null | undefined): Promise<{ messageId: string; told: boolean }> {
   const order = report.receipt.purchaseOrder!
   const { thread } = await ensureThread(tools, { type: 'PurchaseOrder', id: order.id }, context.actorId)
-  if (!can(actorOf(context), THREADS_POST, { companyId: thread.companyId, siteId: thread.siteId, partyId: thread.partyId })) throw new ForbiddenError("Sending the reception report needs threads.post over the purchase order.")
+  if (!can(actorOf(context), THREADS_POST, { companyId: thread.companyId, siteId: thread.siteId, partyId: thread.partyId })) throw new ForbiddenError("Sending the reception report needs the right to write on the purchase order's thread.")
   if (thread.status !== 'OPEN') throw new InvalidStateError(`The thread of ${order.number} is closed: reopen it to send the reception report.`)
   const buyer = report.buyer && report.buyer.id !== context.actorId && (await mentionProblems(tools.tx, context, thread, [report.buyer.id], tools.now)).length === 0 ? report.buyer : null
   const locale = (buyer ? (await tools.tx.user.findUnique({ where: { id: buyer.id }, select: { locale: true } }))?.locale : null) ?? (await tools.tx.user.findUnique({ where: { id: context.actorId }, select: { locale: true } }))?.locale ?? 'it'
@@ -123,7 +123,7 @@ export async function sendReport(caller: CommandCaller, receiptId: string, body:
     const receipt = (await tools.tx.goodsReceipt.findUnique({ where: { id: seen.id }, select: RECEIPT_COLUMNS }))!
     const report = await readReport(tools.tx, receipt)
     if (report.held) throw new InvalidStateError(report.held === 'NOT_POSTED' ? `${receipt.number} is not posted: its goods are not in stock yet.` : `${receipt.number} names no purchase order: it has no buyer to tell.`)
-    if (!reportCan(context, report).send) throw new ForbiddenError("Sending the reception report needs threads.post over the purchase order.")
+    if (!reportCan(context, report).send) throw new ForbiddenError("Sending the reception report needs the right to write on the purchase order's thread.")
     const sent = await sendInCommand(tools, context, report, new Map(), body.note)
     tools.audit({ action: 'inventory.receptionReported', recordType: 'GoodsReceipt', recordId: receipt.id, companyId: receipt.companyId, siteId: receipt.siteId, after: { reservationIds: [], messageId: sent.messageId, buyerTold: sent.told } })
     tools.emit({ type: 'inventory.reception_reported', subject: receipt.id, companyId: receipt.companyId, siteId: receipt.siteId, payload: { receiptId: receipt.id, purchaseOrderId: report.receipt.purchaseOrder!.id, reservationIds: [], messageId: sent.messageId } })

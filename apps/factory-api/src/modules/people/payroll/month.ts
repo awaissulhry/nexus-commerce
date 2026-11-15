@@ -36,7 +36,7 @@ import { correctionsNotCarried } from './pending'
 
 const held = (allowed: boolean, reason: string | null) => ({ allowed, reason: allowed ? null : reason })
 
-const rightWords = 'The values per employee code need people.payroll.records over every site of the company.'
+const rightWords = 'The values per employee code need the right to open payroll records over every site of the company.'
 
 /** The caller holds the right over the whole company (else 403: they may read the month, not its figures). */
 function requireRight(context: OfficeContext, place: Place): void {
@@ -94,8 +94,8 @@ export async function monthView(caller: CommandCaller, query: MonthQuery) {
       toConfirm: [...PAYROLL_TO_CONFIRM],
       carriesPay: read.carriesPay,
       actions: {
-        export: held(mayManage && pay && !latest && read.blocking.length === 0, !mayManage ? 'Making a payroll export needs people.payroll.manage.' : latest ? 'This month is exported: make a correction.' : !pay ? payWords : `${read.blocking.length} blocking checks stand in the way.`),
-        correct: held(mayManage && pay && latest !== null && changes.length > 0, !mayManage ? 'Making a correction needs people.payroll.manage.' : !latest ? 'This month has no export yet.' : !pay ? payWords : 'Nothing changed since the last file.'),
+        export: held(mayManage && pay && !latest && read.blocking.length === 0, !mayManage ? 'Making a payroll export needs the right to keep payroll.' : latest ? 'This month is exported: make a correction.' : !pay ? payWords : `${read.blocking.length} blocking checks stand in the way.`),
+        correct: held(mayManage && pay && latest !== null && changes.length > 0, !mayManage ? 'Making a correction needs the right to keep payroll.' : !latest ? 'This month has no export yet.' : !pay ? payWords : 'Nothing changed since the last file.'),
         preview: held(mayDo(context, place, PEOPLE_PAYROLL_RECORDS), rightWords),
       },
     }

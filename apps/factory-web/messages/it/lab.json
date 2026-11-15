@@ -43,7 +43,7 @@
   },
   "noAccess": {
     "title": "Test e sostanze non è aperto al tuo ruolo",
-    "body": "Serve il permesso di vedere la qualità dei lotti (quality.lots.view): lo hanno il controllo qualità, gli acquisti e il magazzino. Chiedi al titolare della fabbrica di aggiungerlo al tuo ruolo."
+    "body": "Serve il permesso di vedere la qualità dei lotti: lo hanno il controllo qualità, gli acquisti e il magazzino. Chiedi al titolare della fabbrica di aggiungerlo al tuo ruolo."
   },
   "view": {
     "all": "Tutti i lotti",
@@ -155,11 +155,11 @@
     "copy": "Copia codice lotto"
   },
   "held": {
-    "test": "Registrare un risultato richiede il ruolo qualità (quality.lots.test).",
-    "documents": "Allegare un documento del fornitore richiede quality.lots.documents.",
-    "release": "Rilasciare un lotto richiede il ruolo qualità (quality.lots.release).",
-    "reject": "Scartare o bloccare un lotto richiede quality.lots.reject.",
-    "rule": "Solo il titolare cambia questa regola (quality.settings.manage).",
+    "test": "Registrare un risultato richiede il ruolo qualità.",
+    "documents": "Il tuo ruolo non può allegare un documento del fornitore a un lotto.",
+    "release": "Rilasciare un lotto richiede il ruolo qualità.",
+    "reject": "Il tuo ruolo non può scartare o bloccare un lotto.",
+    "rule": "Solo il titolare cambia questa regola.",
     "noTest": "Questo materiale non richiede la prova del cromo VI.",
     "rejected": "Il lotto è scartato: è definitivo.",
     "failFinal": "Il lotto non ha superato la prova del cromo VI: è definitivo (per legge), scarta il lotto.",
@@ -187,7 +187,7 @@
       "release": "Rilascio",
       "activity": "Attività"
     },
-    "noPanels": "La discussione, i file e la cronologia richiedono il permesso di leggere le discussioni (threads.read).",
+    "noPanels": "La discussione, i file e la cronologia richiedono il permesso di leggere le discussioni.",
     "youReceived": "Hai ricevuto tu questo lotto: puoi registrarne risultati e documenti, e lo rilascia un’altra persona della qualità.",
     "facts": {
       "status": "Stato del lotto",
@@ -305,7 +305,7 @@
     "needsTitle": "Cosa serve a questo lotto",
     "needsPpe": "Un componente DPI certificato: il certificato o la dichiarazione DPI del fornitore per il lotto, valido oggi.",
     "needsNone": "Per questo materiale non serve alcun documento prima del rilascio.",
-    "needsLater": "I profili dei materiali con i documenti richiesti arrivano in una fase successiva."
+    "needsLater": "Cosa serve a un materiale (prove e documenti) si imposta nella sua scheda Conformità in Prodotti › Materiali e accessori."
   },
   "document": {
     "add": "Aggiungi documento…",

@@ -1,7 +1,7 @@
 {
   "refused": {
     "title": "Notifications are not open to you",
-    "body": "Your roles do not include Home (home.view). Ask an administrator if you need it."
+    "body": "Your roles do not include Home. Ask an administrator if you need it."
   },
   "band": {
     "label": "Notifications: status and actions",
@@ -193,7 +193,7 @@
     "kinds": "It carries",
     "lastSent": "Last sent {at}.",
     "neverSent": "Never sent yet.",
-    "later": "Each kind by app, e-mail or push, instantly or daily, comes later; until then only this digest reaches your e-mail.",
+    "later": "How each kind reaches you (app, e-mail or push, at once or daily) is chosen in Preferences.",
     "problem": {
       "time": "Choose a time of day.",
       "days": "Choose at least one day.",

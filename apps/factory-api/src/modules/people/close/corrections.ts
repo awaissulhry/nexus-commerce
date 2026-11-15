@@ -86,7 +86,7 @@ export async function correctDay(caller: CommandCaller, dayId: string, body: Cor
   if (problems.length > 0) throw problemsError(problems, 'Check the correction.')
   const head = await caller.withClient(async (db) => {
     const found = await headOf(db, context, dayId)
-    if (!may(context, PEOPLE_ATTENDANCE_CORRECT, { companyId: found.companyId, siteId: found.siteId })) throw new DomainError('forbidden', 'Correcting a closed day needs people.attendance.correct.')
+    if (!may(context, PEOPLE_ATTENDANCE_CORRECT, { companyId: found.companyId, siteId: found.siteId })) throw new DomainError('forbidden', 'Correcting a closed day needs the right to correct closed days.')
     await requireAttendance(db, found.siteId)
     return found
   })

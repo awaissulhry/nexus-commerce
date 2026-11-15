@@ -649,7 +649,7 @@ describe('the customers and suppliers import (SCM-289, PLT-176)', () => {
     const sheet = csv([HEADER, 'IMP-C1;Uno Importato S.r.l.;fornitore;IT;;;;;;;;;'])
     const everyCompany = await start('companyOne', sheet)
     expect(everyCompany.statusCode).toBe(403)
-    expect(everyCompany.json().error.issues).toEqual([{ path: 'companyId', message: 'A parties import for every company needs parties.manage over every company; import for one company instead.' }])
+    expect(everyCompany.json().error.issues).toEqual([{ path: 'companyId', message: 'A parties import for every company needs the right to keep customers and suppliers over every company; import for one company instead.' }])
     limitedTo.push(italianId)
     try {
       const limited = await start('oneCustomer', sheet, { companyId: companyA1 })

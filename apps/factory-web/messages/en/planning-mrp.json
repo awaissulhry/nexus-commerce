@@ -1,13 +1,13 @@
 {
   "held": {
     "noPurchasingRequests": "Buyers create POs: ask a buyer. The line also waits in their Requests to buy.",
-    "noPoView": "Your role cannot open purchase orders (purchasing.view).",
+    "noPoView": "Your role cannot open purchase orders.",
     "lineGone": "The line is not in the plan shown: run the plan again.",
     "lineNotOpen": "The line is in a PO already, set aside, or covered.",
     "notFirm": "This line has no firm planned order.",
-    "noFirm": "Your role cannot change firm planned orders (planning.firm).",
+    "noFirm": "Your role cannot change firm planned orders.",
     "noBuyFix": "None of the ticked rows has a line to buy.",
-    "noSend": "Your role cannot send purchase orders (purchasing.send).",
+    "noSend": "Your role cannot send purchase orders.",
     "noneReady": "No order is ready to send: fix them on their pages first."
   },
   "move": {

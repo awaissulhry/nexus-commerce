@@ -172,8 +172,8 @@
     "categoryHasDefects_one": "This category has {count} defect: delete it first, or retire the category.",
     "categoryHasDefects_other": "This category has {count} defects: delete them first, or retire the category.",
     "categoryRetired": "This category is retired: restore it first, or its new defects would not reach the pickers.",
-    "noManage": "Changing the library needs quality.defects.manage over every company: the codes are the whole group's.",
-    "noUpload": "Uploading a picture needs the permission files.upload.",
+    "noManage": "Changing the library needs the right to keep it over every company: the codes are the whole group's.",
+    "noUpload": "Uploading a picture needs the right to upload files.",
     "pickRows": "Tick the codes first.",
     "reading": "Wait: the page is still reading.",
     "used_one": "Used on {count} record: retire it instead (it stays on it).",
@@ -251,7 +251,7 @@
     "title": "Add disposition"
   },
   "noAccess": {
-    "body": "It needs the permission quality.defects.view. An administrator gives it with a role (Quality inspector, Production manager, Floor supervisor).",
+    "body": "It needs the right to see the defect library. An administrator gives it with a role (Quality inspector, Production manager, Floor supervisor).",
     "title": "You cannot open Defects & dispositions"
   },
   "outcome": {
@@ -306,7 +306,7 @@
     "conflict": "This clashes with what is stored: read the page again.",
     "failed": "Something went wrong: try again.",
     "followUp": "This outcome does not open that record.",
-    "forbidden": "You may not change the library (quality.defects.manage over every company).",
+    "forbidden": "You may not change the library: it is kept over every company.",
     "gone": "This code is no longer in the library.",
     "icon": "Pick one of the icons offered.",
     "inUse": "This code is used: retire it instead (it stays on its records).",
@@ -323,7 +323,7 @@
     "picture": "The picture is not ready: upload it again.",
     "pictureFileId": "The picture is not ready: upload it again.",
     "read": "The server did not answer as expected.",
-    "readForbidden": "You may not read this (quality.defects.view).",
+    "readForbidden": "You may not read this.",
     "reinspectUseAsIs": "Goods used as they are are not inspected again.",
     "reinspection": "Goods used as they are are not inspected again.",
     "severity": "Pick the default class: critical, major or minor.",

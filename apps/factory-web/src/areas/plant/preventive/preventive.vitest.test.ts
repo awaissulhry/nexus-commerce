@@ -340,7 +340,7 @@ describe('the page in the Office: its row, its records, its new tabs', () => {
 const GROUPS = 'access|band|tile|calendar|chip|chipKind|state|due|plans|kind|col|interval|unit|lastDone|body|owner|site|law|outcome|outcomeHint|register|report|reportLong|nextDue|list|facts|plan|result|lock|move|bulk|done|held|refusal|problem|print|keys|common'
 const LEFT_KEY = new RegExp(`\\b(?:${GROUPS})\\.[a-zA-Z_]+(?:\\.[a-zA-Z_]+)*\\b`)
 const LEFT_PLACEHOLDER = /\{[a-zA-Z]+\}/
-/** Permission names are said on purpose ("Needs plant.checks.manage"); file names, domains and the demo's law are not keys. */
+/** Permission names are stripped before the key check, though no screen says one since B-W2b-F51; file names, domains and the demo's law are not keys. */
 const SAID = /\b(?:plant\.[a-zA-Z.]+|parties\.view|files\.read|views\.export|[a-z0-9-]+\.pdf|example\.com|art\. \d+|c\. \d+)\b/g
 
 function render(screen: DesignScreen<unknown>, model: unknown, locale: (typeof LOCALES)[number]): string {

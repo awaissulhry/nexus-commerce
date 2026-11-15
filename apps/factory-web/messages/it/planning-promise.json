@@ -157,7 +157,7 @@
     "export_other": "Esporta {count} righe"
   },
   "held": {
-    "noManage": "Puoi leggere le promesse, non cambiarle (planning.promise.manage).",
+    "noManage": "Puoi leggere le promesse, non cambiarle.",
     "mayNot": "Questa riga ora non può avere una nuova data (è spedita, o non vedi il suo ordine).",
     "noSite": "Scegli prima una sede.",
     "busy": "Salvataggio…",
@@ -167,9 +167,9 @@
     "message": "Scrivi oggetto e messaggio, o usa il testo composto.",
     "notWaiting": "Questa nuova data non attende più le vendite.",
     "ownProposal": "Hai proposto tu questa data: dà il sì un’altra persona delle vendite (nessuno decide la propria richiesta).",
-    "noDecide": "Il sì è delle vendite: serve il permesso di modificare gli ordini (orders.manage).",
+    "noDecide": "Il sì è delle vendite: serve il permesso di modificare gli ordini.",
     "mayNotDecide": "Non puoi decidere su questo ordine.",
-    "noTell": "Avvisare il cliente richiede il permesso di inviare e-mail (email.send).",
+    "noTell": "Avvisare il cliente richiede il permesso di inviare e-mail.",
     "noRecipient": "Il cliente non ha un indirizzo e-mail sull’ordine o nei suoi contatti.",
     "notProposer": "Solo il pianificatore che l’ha proposta può ritirarla.",
     "declineReason": "Di’ perché la nuova data è rifiutata (lo legge il pianificatore)."
@@ -581,12 +581,12 @@
       "none": "Nessuna riga d’ordine è messa a rischio."
     },
     "held": {
-      "noCheck": "Il controllo richiede il permesso di gestire le eccezioni di pianificazione (planning.exceptions.manage).",
+      "noCheck": "Il controllo richiede il permesso di gestire le eccezioni di pianificazione.",
       "noOrder": "Nessun ordine d’acquisto da controllare.",
       "checking": "Controllo…",
-      "noPurchasing": "L’ordine d’acquisto richiede il permesso di vedere gli acquisti (purchasing.view).",
-      "noPromise": "Date promesse richiede il permesso di vedere le date promesse (planning.promise.view).",
-      "noRepromise": "Una nuova data richiede il permesso di cambiare le date promesse (planning.promise.manage).",
+      "noPurchasing": "L’ordine d’acquisto richiede il permesso di vedere gli acquisti.",
+      "noPromise": "Date promesse richiede il permesso di vedere le date promesse.",
+      "noRepromise": "Una nuova data richiede il permesso di cambiare le date promesse.",
       "mayNot": "Questa riga ora non può avere una nuova data."
     },
     "newTab": "Ogni soluzione apre il suo documento; ⌘-clic tiene aperta la coda mentre risolvi.",

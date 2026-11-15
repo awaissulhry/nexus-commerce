@@ -28,7 +28,7 @@ import { ITEM_SELECT, itemView, readItem, type ItemRow } from './store'
  * A role's kit is the role sheet's (B-W2b-128): it is read here, never written.
  */
 
-const MANAGE_WORDS = 'The PPE catalogue of this company is kept by a role that keeps it (safety.ppe.manage).'
+const MANAGE_WORDS = 'The PPE catalogue of this company is kept by a role that keeps it.'
 
 const holdsHere = (context: OfficeContext, permission: Parameters<typeof can>[1]): boolean => (context.companyId ? can(actorOf(context), permission, { companyId: context.companyId }) : holds(actorOf(context), permission))
 

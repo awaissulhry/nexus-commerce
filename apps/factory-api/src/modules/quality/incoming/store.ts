@@ -113,7 +113,7 @@ export async function lotFor(caller: CommandCaller, lotId: string, permission: P
   const context = inspectorOf(caller)
   const lot = await caller.withClient((client) => readLot(client, lotId))
   if (!lot || !(mayOn(context, QUALITY_INCOMING_VIEW, lot) || mayOn(context, permission, lot))) throw new NotFoundError('Lot not found.')
-  if (!mayOn(context, permission, lot)) throw new ForbiddenError(`This needs ${permission} over the lot's company and site.`)
+  if (!mayOn(context, permission, lot)) throw new ForbiddenError("This needs a right your role does not hold over the lot's company and site.")
   return { lot, context }
 }
 
@@ -134,7 +134,7 @@ export async function incomingFor(caller: CommandCaller, inspectionId: string, p
   const context = inspectorOf(caller)
   const row = await caller.withClient((client) => readIncoming(client, inspectionId))
   if (!row || !(row.lotId || row.subcontractReceiptId) || !(mayOn(context, QUALITY_INCOMING_VIEW, row) || mayOn(context, permission, row))) throw new NotFoundError('Incoming inspection not found.')
-  if (!mayOn(context, permission, row)) throw new ForbiddenError(`This needs ${permission} over the inspection's company and site.`)
+  if (!mayOn(context, permission, row)) throw new ForbiddenError("This needs a right your role does not hold over the inspection's company and site.")
   if (row.lotId) return { row, lot: (await caller.withClient((client) => readLot(client, row.lotId!)))!, receipt: null, context }
   const receipt = await receiptAs(caller, context, row.subcontractReceiptId!)
   if (!receipt) throw new NotFoundError('Incoming inspection not found.')

@@ -116,7 +116,7 @@ export async function createRequest(caller: CommandCaller, body: CreateRequestBo
 }
 
 function refuseForbidden(): never {
-  throw new ForbiddenError('Your role does not raise change requests for this company (product.changes.request).')
+  throw new ForbiddenError('Your role does not raise change requests for this company.')
 }
 
 /** PATCH /product/change-requests/:id */
@@ -220,7 +220,7 @@ export async function readRequest(caller: CommandCaller, changeRequestId: string
     })
     const manage = may(context, PRODUCT_CHANGES_MANAGE, row.companyId)
     const moves = TRIAGE.map((to) => {
-      const refusal = manage ? requestMoveRefusal(row, to, 'given') : { code: 'REQUEST_MOVE' as const, message: 'Your role does not triage change requests (product.changes.manage).' }
+      const refusal = manage ? requestMoveRefusal(row, to, 'given') : { code: 'REQUEST_MOVE' as const, message: 'Your role does not triage change requests.' }
       return { to, allowed: refusal === null, refusal }
     })
     const workOrderSite = row.workOrderId ? await db.workOrder.findUnique({ where: { id: row.workOrderId }, select: { companyId: true, siteId: true } }) : null

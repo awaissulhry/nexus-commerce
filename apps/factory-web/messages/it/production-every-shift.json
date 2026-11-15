@@ -118,7 +118,7 @@
   "traveller": {
     "noRight": {
       "title": "Non puoi vedere questo foglio di lavorazione",
-      "body": "Richiede {permission}."
+      "body": "Richiede il permesso «{right}»."
     },
     "none": {
       "title": "Nessun ordine di lavoro indicato",
@@ -134,7 +134,7 @@
   "offStandard": {
     "title": "Minuti fuori standard",
     "hint": "Tempo perso da questo ordine di lavoro in attese e lavoro indiretto, mai per persona.",
-    "held": "I minuti fuori standard richiedono il permesso di leggere il tempo fuori standard (production.offstandard.view).",
+    "held": "I minuti fuori standard richiedono il permesso di leggere il tempo fuori standard.",
     "failed": "Non è stato possibile leggere i minuti fuori standard",
     "retry": "Riprova",
     "loading": "Lettura dei minuti fuori standard…",

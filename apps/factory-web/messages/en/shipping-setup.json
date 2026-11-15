@@ -9,7 +9,7 @@
     "failed": "The shipping settings could not be read",
     "forbidden": {
       "title": "You cannot see the shipping settings",
-      "body": "Seeing them needs the right to see the shipping settings (shipping.settings.view). Ask an administrator."
+      "body": "Seeing them needs the right to see the shipping settings. Ask an administrator."
     },
     "problem": {
       "signed_out": "You are signed out: sign in again.",
@@ -80,7 +80,7 @@
   },
   "readOnly": {
     "title": "You can read these settings",
-    "body": "Changing them needs the right to change the shipping settings (shipping.settings.manage)."
+    "body": "Changing them needs the right to change the shipping settings."
   },
   "connection": {
     "title": "Carrier connection",

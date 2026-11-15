@@ -397,7 +397,7 @@ describe('a move dated in a month closed for good (a HARD period lock): 409 in w
       expect(response.json().error).toMatchObject({
         message:
           'January 2026 is closed for good for Pelli Inventate S.r.l. (a hard lock since 3 Feb 2026): the stock move (transfer) dated 15 Jan 2026 is not posted. ' +
-          'Only someone who may lift a hard lock (accounting.unlock: the owner, by default) reopens the month, with a reason, in Finance › Accounting; agree it with the accountant first.',
+          'Only someone who may lift a hard lock (the owner, by default) reopens the month, with a reason, in Finance › Accounting; agree it with the accountant first.',
         issues: [{ path: 'body/occurredAt', message: 'Dated inside a month closed for good.' }],
       })
       expect(await onHand(ids.store, ids.protector)).toBe(before)

@@ -91,7 +91,8 @@ export async function depositReceived(files: FilesRuntime, caller: CommandCaller
   if (issuing) {
     if (!mayOn(context, INVOICES_ISSUE, { companyId: current.companyId, partyId: current.partyId })) {
       // B-W2b-F55: without it the TD02 follows by itself right after (deposit-invoice.ts); the words say so.
-      throw new ForbiddenError('Issuing the deposit invoice now needs invoices.issue: record the payment without it (issueDepositInvoice: false) and the deposit invoice follows by itself right after.')
+      // B-W2b-F51: the right in words, never its code.
+      throw new ForbiddenError('Issuing the deposit invoice now needs the right to issue invoices: record the payment without it (issueDepositInvoice: false) and the deposit invoice follows by itself right after.')
     }
     stepUp()
   }

@@ -22,8 +22,9 @@ import { OfficeScopeProvider, type OfficeScopeValue } from '../scope/scope-conte
 import { scopeOf } from '../scope/scope-model'
 import { lastPageOf, readLastPages, writeLastPages, type LastPages } from './phone-bar'
 import { useBell } from './use-bell'
+import { navWithMfaHint } from './mfa-hint'
 import { testModeRights } from './test-mode'
-import { useTestModeBanner } from './use-test-mode'
+import { useShellNotices } from './use-test-mode'
 import { OfficeShellView, type OfficeFrame, type SystemBanner } from './view/OfficeShellView'
 
 /**
@@ -57,7 +58,8 @@ export function OfficeShell({ session, company, site: initialSite = null, childr
     if (readCookie(LOCALE_COOKIE) !== locale) writeCookie(LOCALE_COOKIE, locale)
   }, [locale])
 
-  const nav = useMemo(() => officeNavFor(permissionCheck(session.permissions)), [session.permissions])
+  // B-W2b-F58: while the person's roles wait for two-factor, one row in words opens Me › Authenticator (mfa-hint.ts).
+  const nav = useMemo(() => navWithMfaHint(officeNavFor(permissionCheck(session.permissions)), session.mfa), [session.permissions, session.mfa])
   // B-W2a-32: the palette's Records and Exact number groups (GET /search as this company).
   const recordSearch = useRecordSearch({ company, companies: session.companies })
   // B-W2a-40: the bell — unread notifications, one light read, then live (only for a person who reaches Home).
@@ -65,7 +67,8 @@ export function OfficeShell({ session, company, site: initialSite = null, childr
   // B-W2b-437: TEST MODE while the carrier (a site) or e-invoicing (a company) of this company is in test mode.
   // B-W2b-F49: for every office person (GET /shell/notices); the rights only hold the links to the settings pages.
   const testModeRightsOf = useMemo(() => testModeRights(permissionCheck(session.permissions)), [session.permissions])
-  const testMode = useTestModeBanner(company, session.company?.id ?? null, testModeRightsOf)
+  // B-W2b-F58: the same read says when the local test server hides the bar, and whether it keeps a local mailbox.
+  const { testMode, localMailbox } = useShellNotices(company, session.company?.id ?? null, testModeRightsOf)
   const banners: SystemBanner[] = testMode ? [testMode] : []
 
   // B-W2b-05 (COL-077): the tab's ONE live connection stays open while the Office is (the bell and every page share it).
@@ -114,6 +117,7 @@ export function OfficeShell({ session, company, site: initialSite = null, childr
         user: { displayName: session.user.displayName, email: session.user.email },
         tenantTag: tenantTag(session.tenant.id),
         banners,
+        localMailbox,
         paletteRecords: recordSearch.records,
         bell,
       }}

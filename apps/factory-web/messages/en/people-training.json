@@ -1,6 +1,6 @@
 {
   "access": {
-    "body": "Ask an administrator for the safety reading right (safety.view).",
+    "body": "Ask an administrator for the safety reading right.",
     "title": "Safety training is for the safety readers"
   },
   "band": {
@@ -208,7 +208,7 @@
     "overdue_one": "{count} overdue",
     "overdue_other": "{count} overdue",
     "register": "Register (PDF)",
-    "restricted": "The safety officer, HR and the supervisors read it (safety.view).",
+    "restricted": "The safety officer, HR and the supervisors read it.",
     "restrictedTitle": "Safety training is for the safety readers",
     "trainingLabel": "Courses done and due of this person",
     "trainingTitle": "Safety training"
@@ -342,10 +342,10 @@
     "date": "Choose the date",
     "dateFuture": "The date is later than today",
     "hours": "Type the hours (above 0, at most two decimals)",
-    "instruct": "The instruction register is kept by safety, HR and the supervisors (safety.instruction.record)",
+    "instruct": "The instruction register is kept by safety, HR and the supervisors",
     "instructor": "Choose or type the instructor",
     "instructorSelf": "The instructor is not the person instructed",
-    "issue": "Issuing PPE needs safety.ppe.issue",
+    "issue": "Your role cannot issue PPE",
     "language": "Choose the language",
     "lawLong": "The legal basis is too long",
     "left": "This person has left",
@@ -353,7 +353,7 @@
     "lineDays": "Days are 0 to 365, or empty for before starting",
     "lineTwice": "A course is listed twice",
     "linesMany": "At most 40 courses",
-    "manage": "Only the safety officer keeps the course catalogue (safety.training.manage)",
+    "manage": "Only the safety officer keeps the course catalogue",
     "manageClasses": "A machine type's courses are changed by a keeper over every company",
     "minutes": "Minutes are 1 to 1440",
     "name": "Type a name",
@@ -370,7 +370,7 @@
     "ppePage": "Issue PPE opens on the PPE page of Plant, not built yet",
     "providerLong": "The provider is too long",
     "reason": "Say why (3 letters at least)",
-    "record": "Recording training needs safety.training.record (safety officer, HR)",
+    "record": "Your role cannot record training (the safety officer and HR can)",
     "refresher": "The refresher is whole months, 1 to 120",
     "refresherHours": "The refresher hours are not valid",
     "session": "Choose a session",
@@ -385,7 +385,7 @@
     "trainerLong": "The trainer is too long",
     "untilBefore": "A valid-until date is before the course",
     "untilReason": "Say why a valid-until date differs from the period's",
-    "upload": "Adding a file needs files.upload",
+    "upload": "Adding a file needs the right to upload files",
     "voidedRow": "Voided already"
   },
   "impact": {
@@ -653,7 +653,7 @@
       "missing_other": "{count} kit items missing",
       "noCost": "No cost is shown here.",
       "none": "No PPE issued",
-      "restricted": "Safety and HR roles only (safety.view).",
+      "restricted": "Safety and HR roles only.",
       "title": "PPE issued"
     },
     "role": {
@@ -665,7 +665,7 @@
       "noneHint": "HR gives the person their role sheet on Job & team; its courses, PPE and visits then show here.",
       "open": "Open the role sheet",
       "ppe": "Required PPE",
-      "restricted": "Shown to the readers of the HR register (people.view).",
+      "restricted": "Shown to the readers of the HR register.",
       "risks": "Risks",
       "role": "Role",
       "since": "Since",

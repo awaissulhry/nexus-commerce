@@ -124,7 +124,7 @@ async function mailOf(db: Reader, claim: ClaimRow, language: DocumentLanguage, r
  */
 async function letterProblemsOf(caller: CommandCaller, context: OfficeContext, claim: ClaimRow): Promise<Issue[]> {
   const problems = legalProblems(await companyLegalOf(caller, claim.companyId))
-  if (!can(actorOf(context), FILES_READ, { companyId: claim.companyId })) problems.push({ path: 'letter/filesRead', message: 'The claim letter goes with the mail only for a sender who may read files (files.read): the mail goes as text.' })
+  if (!can(actorOf(context), FILES_READ, { companyId: claim.companyId })) problems.push({ path: 'letter/filesRead', message: 'The claim letter goes with the mail only for a sender who may read files: the mail goes as text.' })
   return problems
 }
 

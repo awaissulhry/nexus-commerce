@@ -12,6 +12,8 @@ import type { LiveState } from '../../../_shared/hooks'
 import type { WallAnswer } from '../api'
 import { WALL_FILTERS, wallTilesOf, type WallFilter } from '../model'
 import { useDepthWords, useSay } from '../parts'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../../../lib/i18n/rights'
 
 /**
  * StatusWall — the area part of design plant.machines sec:wall and tab:wall (QHS-167): every machine in use as a tile, one
@@ -80,7 +82,7 @@ export function StatusWall({
         </Card>
       ) : loaded.status !== 'ready' ? (
         <Card padded>
-          <EmptyState title={t('wall.failed')} description={loaded.status === 'error' ? say({ key: loaded.problem }) : loaded.status === 'forbidden' ? plant('problem.noPermission', { permission: 'plant.view' }) : t('docs.notFound')} action={loaded.status === 'error' ? <Button size="sm" onClick={() => onRetry?.()}>{t('common.retry')}</Button> : undefined} />
+          <EmptyState title={t('wall.failed')} description={loaded.status === 'error' ? say({ key: loaded.problem }) : loaded.status === 'forbidden' ? plant('problem.noPermission', { right: rightRef('plant.view') }) : t('docs.notFound')} action={loaded.status === 'error' ? <Button size="sm" onClick={() => onRetry?.()}>{t('common.retry')}</Button> : undefined} />
         </Card>
       ) : value && lines.length === 0 ? (
         <Card padded>

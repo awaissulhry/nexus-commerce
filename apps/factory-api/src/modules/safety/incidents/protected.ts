@@ -27,7 +27,7 @@ import { userNames } from './store'
  * A view is recorded for an office user only (ProtectedView.viewerId); nothing here is open to the floor or a partner.
  */
 
-const PEOPLE_WORDS = 'The people involved and the INAIL filings are seen by the safety roles and HR (safety.incidents.people), each view recorded.'
+const PEOPLE_WORDS = 'The people involved and the INAIL filings are seen by the safety roles and HR, each view recorded.'
 
 async function incidentFor(caller: CommandCaller, context: OfficeContext, incidentId: string) {
   if (!isUuid(incidentId)) throw new NotFoundError('Incident not found.')

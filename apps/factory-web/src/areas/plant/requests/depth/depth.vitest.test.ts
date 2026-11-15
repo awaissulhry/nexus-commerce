@@ -313,7 +313,7 @@ describe('the depth calls as the API takes them', () => {
 const GROUPS = 'machineStatus|machineReason|requestStatus|jobStatus|jobType|jobSource|priority|priorityHint|closeReason|closeReasonHint|machineAfter|machineAfterHint|unsafe|symptom|person|age|due|live|common|list|col|keys|requestView|requestTile|requestTileHint|requests|detail|trail|makeJob|closeRequest|signSafe|report|jobView|jobTile|jobTileHint|jobTab|move|jobs|cell|field|newJob|assign|record|handBack|cancelJob|problem|refusal|held|done|stepUp|csv|csvJob|locks|dupes|mergeMany|lockAsUnsafe|routing|progress|trail2|media|close|lead|lockPanel|depthRefusal'
 const LEFT_KEY = new RegExp(`\\b(?:${GROUPS})\\.[a-zA-Z_]+(?:\\.[a-zA-Z_]+)*\\b`)
 const LEFT_PLACEHOLDER = /\{[a-zA-Z]+\}/
-/** Permission names are said on purpose ("needs plant.jobs.manage"); file names and domains are not keys. */
+/** Permission names are stripped before the key check, though no screen says one since B-W2b-F51; file names and domains are not keys. */
 const SAID = /\b(?:plant\.[a-zA-Z.]+|files\.(?:upload|read)|workers\.view|carter\.jpg|foto-\d+\.jpg|nota-\d+\.webm|factory\.example|example\.com)\b/g
 
 function render(screen: DesignScreen<unknown>, model: unknown, locale: (typeof LOCALES)[number]): string {

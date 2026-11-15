@@ -54,7 +54,7 @@ async function materialFor(caller: CommandCaller, materialId: string): Promise<{
 const mayManage = (context: OfficeContext, material: MaterialFacts) => mayWrite(actorOf(context), PRODUCT_MATERIALS_MANAGE, material.companyId)
 
 function assertManage(context: OfficeContext, material: MaterialFacts): void {
-  if (!mayManage(context, material)) throw new ForbiddenError(material.companyId === null ? 'A material for every company is changed only by a role over every company.' : 'This needs product.materials.manage over the material\'s company.')
+  if (!mayManage(context, material)) throw new ForbiddenError(material.companyId === null ? 'A material for every company is changed only by a role over every company.' : "This needs the right to keep materials over the material's company.")
 }
 
 function assertHides(material: MaterialFacts): void {

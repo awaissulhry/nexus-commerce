@@ -61,12 +61,12 @@
   "held": {
     "noMachines": "Nessuna macchina a schermo da etichettare",
     "noneToTag": "Le macchine scelte sono dismesse: la loro targhetta non segnala nulla",
-    "noManage": "Lo cambia un ruolo che gestisce le macchine (plant.machines.manage)",
+    "noManage": "Lo cambia un ruolo che gestisce le macchine",
     "retired": "Una macchina dismessa mantiene l'ultimo stato",
     "locked": "Bloccata non sicura: la libera la firma di sicurezza della sua richiesta",
     "pickStatus": "Scegli il nuovo stato",
     "sameStatus": "È già in questo stato",
-    "technician": "Solo un tecnico sblocca una macchina da non usare (plant.signSafe)",
+    "technician": "Solo un tecnico sblocca una macchina da non usare",
     "reason": "Scrivi il motivo, in poche parole",
     "busy": "In corso…"
   },
@@ -127,7 +127,7 @@
     "releaseTitle": "Stai sbloccando una macchina da non usare",
     "releaseBody": "Un atto da tecnico: alla conferma ti viene chiesto un nuovo codice dell'autenticatore.",
     "releaseHeldTitle": "La sblocca un tecnico",
-    "releaseHeldBody": "Il tuo ruolo non può sbloccare una macchina da non usare: chiedi a un tecnico (plant.signSafe).",
+    "releaseHeldBody": "Il tuo ruolo non può sbloccare una macchina da non usare: chiedi a un tecnico.",
     "cancelled": "Nessun codice inserito: lo stato non è cambiato."
   },
   "stepUp": {
@@ -175,13 +175,13 @@
     "download": "Scarica",
     "held": {
       "notAvailable": "Non ancora disponibile (caricamento o controllo non concluso)",
-      "noManage": "Lo rimuove un ruolo che gestisce le macchine (plant.machines.manage)",
+      "noManage": "Lo rimuove un ruolo che gestisce le macchine",
       "reason": "Scrivi il motivo, in poche parole",
       "manualPdf": "Un manuale è un PDF: metti la foto in Foto.",
       "photoImage": "Una foto è un'immagine (JPEG, PNG, WebP o HEIC)."
     },
     "uploadTitle": "Carica",
-    "uploadHeld": "I documenti li aggiunge un ruolo che gestisce le macchine (plant.machines.manage).",
+    "uploadHeld": "I documenti li aggiunge un ruolo che gestisce le macchine.",
     "groupLabel": "Che cos'è",
     "tabletsLabel": "Mostra sui tablet dello stabilimento",
     "tabletsHint": "Art. 71: i manuali a disposizione dove la macchina lavora.",

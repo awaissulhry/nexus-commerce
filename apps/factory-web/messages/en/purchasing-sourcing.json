@@ -8,7 +8,7 @@
   },
   "access": {
     "title": "You cannot open RFQs & sourcing",
-    "body": "Reading sample and development orders needs the right to see purchase orders (purchasing.view). An administrator of your company can give it to you."
+    "body": "Reading sample and development orders needs the right to see purchase orders. An administrator of your company can give it to you."
   },
   "band": {
     "label": "RFQs & sourcing",
@@ -152,7 +152,7 @@
     "BOX": "boxes"
   },
   "held": {
-    "manage": "Drafting a sample order needs the right to manage purchase orders (purchasing.manage).",
+    "manage": "Drafting a sample order needs the right to manage purchase orders.",
     "company": "Choose a company first: a sample order is made by one company.",
     "choices": "Wait until the suppliers, styles and materials are read.",
     "busy": "Working on it…",

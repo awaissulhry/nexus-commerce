@@ -51,7 +51,7 @@ async function readParty(db: Reader, partyId: string): Promise<WorkshopParty | n
 function assertWorkshop(context: OfficeContext, party: WorkshopParty | null, write: boolean): asserts party is WorkshopParty {
   const actor = actorOf(context)
   if (!party || !party.roles.includes('SUBCONTRACTOR') || !can(actor, PLANNING_VIEW, scopeOf(party))) throw new NotFoundError('Workshop not found: a workshop is a party with the subcontractor role.')
-  if (write && !can(actor, PLANNING_SUBCONTRACT_CAPACITY, scopeOf(party))) throw new ForbiddenError('Keeping a workshop’s capacity needs planning.subcontract.capacity over it.')
+  if (write && !can(actor, PLANNING_SUBCONTRACT_CAPACITY, scopeOf(party))) throw new ForbiddenError('Keeping a workshop’s capacity needs the right to keep workshops’ capacity over it.')
 }
 
 export function rowView(row: CapacityDbRow, party: Pick<WorkshopParty, 'id' | 'code' | 'name'>, today: BusinessDate, may: boolean) {

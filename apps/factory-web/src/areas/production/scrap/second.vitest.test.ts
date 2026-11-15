@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { ApiError } from '../../../lib/api/errors'
 import { DOWNGRADES, OPTIONS, OPTIONS_PIECE, ROWS, ROWS_WITH_SECOND, SECOND_TOTALS, canAs } from './demo/fixtures'
 import { addressOf, addressText, downgradeBody, downgradedOf, downgradeHeld, downgradeOpenHeld, downgradeRow, emptyDowngradeDraft, filterRows, pareto, tileValue, withDowngrades, writeProblem, type DowngradeDraft } from './model'
+import { rightRef } from '../../../lib/i18n/rights'
 
 const manager = canAs('manager')
 const inspector = canAs('inspector')
@@ -40,7 +41,7 @@ describe('why Second quality… is held, and what Downgrade sends', () => {
   it('holds a rework row, no right, a cut piece, and a row sent already', () => {
     expect(downgradeOpenHeld(ROWS[0]!, ROWS_WITH_SECOND, manager)).toBeNull()
     expect(downgradeOpenHeld(ROWS[5]!, ROWS_WITH_SECOND, manager)?.key).toBe('second.held.notScrap')
-    expect(downgradeOpenHeld(ROWS[0]!, ROWS_WITH_SECOND, inspector)).toMatchObject({ key: 'held.permission', params: { permission: 'production.downgrade' } })
+    expect(downgradeOpenHeld(ROWS[0]!, ROWS_WITH_SECOND, inspector)).toMatchObject({ key: 'held.permission', params: { right: rightRef('production.downgrade') } })
     expect(downgradeOpenHeld(ROWS[1]!, ROWS_WITH_SECOND, manager)).toMatchObject({ key: 'second.held.part', params: { part: 'sleeve' } })
     // Row 4's hole went to second quality already (its one garment).
     expect(downgradedOf(ROWS[3]!, ROWS_WITH_SECOND)).toBe(1)

@@ -485,7 +485,7 @@
     "title": "Chi lo riceve",
     "failed": "Impossibile leggere la programmazione",
     "none": "Non programmato",
-    "noneBody": "L’invio programmato di questo report arriverà più avanti. Nel frattempo stampalo o esportalo in CSV.",
+    "noneBody": "Questo report non si può inviare per e-mail in modo programmato da qui. Stampalo o esportalo in CSV.",
     "manage": "Modifica in Report produzione",
     "nobody": "Ancora nessuno lo riceve per e-mail",
     "nobodyBody": "Fattelo inviare ogni mattina da Report produzione.",
@@ -534,7 +534,7 @@
     "people": "Gruppi piccoli",
     "peopleHidden": "I dati di un gruppo con meno di 5 persone sono nascosti.",
     "noPeople": "Nessun dato sulle persone: solo conteggi per ordine, linea o documento.",
-    "kpiLater": "La libreria degli indicatori, con definizione e obiettivo di ogni numero, arriverà più avanti."
+    "kpiLater": "La definizione e l’obiettivo di ogni numero sono in Home › Indicatori."
   },
   "print": {
     "titleLoading": "Report",
@@ -572,7 +572,7 @@
     "cutOff": "I giorni vanno da mezzanotte a mezzanotte nello stabilimento (Europa/Roma); le settimane iniziano il lunedì.",
     "setBy": "Fissato dal pacchetto di report standard (gli obiettivi diventeranno modificabili con la libreria degli indicatori).",
     "openReport": "Apri il report",
-    "kpiLater": "La libreria degli indicatori arriverà più avanti.",
+    "kpiLater": "La definizione di ogni numero è in Home › Indicatori.",
     "noData": "Ancora nessun dato",
     "mixed": "Gli importi in valute diverse non vengono sommati.",
     "unavailable": "Non disponibile ora"

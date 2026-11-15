@@ -32,6 +32,8 @@ import {
 } from '../../model'
 import { useSay } from '../../view/parts'
 import type { CutOrderRecordActions, CutOrderRecordModel } from './CutOrderRecordView'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../../../../lib/i18n/rights'
 
 /** A part of the record still being read, or failed with Try again. */
 function PartState({ label, part, onRetry }: { label: string; part: Part<unknown>; onRetry?: () => void }) {
@@ -153,7 +155,7 @@ export function LaysTab({ record, model, actions }: { record: CutOrderRecord; mo
             </li>
           ))}
         </ul>
-        {!model.can.workOrders && <p className="fw-ct-hint">{t('noAccess.body', { permission: 'workorders.view' })}</p>}
+        {!model.can.workOrders && <p className="fw-ct-hint">{t('noAccess.body', { right: rightRef('workorders.view') })}</p>}
       </Card>
     )
   }

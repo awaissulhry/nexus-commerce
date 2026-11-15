@@ -61,7 +61,7 @@ export async function officeNotice(caller: CommandCaller, noticeId: string, now:
     const view = noticeView(notice, lines, hides, order, check, extra?.purchaseOrder.number ?? '', today)
     const mayReceive = can(actor, INVENTORY_RECEIVE, siteOf(notice))
     const orderTakesGoods = ['SENT', 'CONFIRMED', 'PARTLY_RECEIVED'].includes(extra?.purchaseOrder.status ?? '')
-    const receiveHeld = notice.status !== 'SENT' ? NOTICE_HELD[notice.status] : !mayReceive ? 'Receiving goods at this site needs inventory.receive.' : !orderTakesGoods ? 'The purchase order no longer takes goods.' : null
+    const receiveHeld = notice.status !== 'SENT' ? NOTICE_HELD[notice.status] : !mayReceive ? 'Receiving goods at this site needs the right to receive goods.' : !orderTakesGoods ? 'The purchase order no longer takes goods.' : null
     const orders = new Map(order.map((line) => [line.id, line]))
     return {
       notice: { ...view, dockNote: extra?.internalNote ?? null, supplier: { id: notice.partyId, name: party?.legalName ?? '' } },
@@ -114,7 +114,7 @@ export async function setDockNote(caller: CommandCaller, noticeId: string, body:
   const actor = actorOf(context)
   const notice = isUuid(noticeId) ? await caller.withClient((client) => readNotice(client, noticeId)) : null
   if (!notice || notice.status === 'DRAFT' || !(can(actor, INVENTORY_STOCK_VIEW, siteOf(notice)) || can(actor, INVENTORY_RECEIVE, siteOf(notice)))) throw new NotFoundError('Ship notice not found.')
-  if (!can(actor, INVENTORY_RECEIVE, siteOf(notice))) throw new ForbiddenError('The dock note is written by who receives goods at this site (inventory.receive).')
+  if (!can(actor, INVENTORY_RECEIVE, siteOf(notice))) throw new ForbiddenError('The dock note is written by who receives goods at this site.')
   const note = blankText(body.dockNote)
   if (note && note.length > SHIP_NOTICE_LIMITS.note) throw new ValidationError(`At most ${SHIP_NOTICE_LIMITS.note} characters.`, [{ path: 'body/dockNote', message: 'Too long.' }])
   const { result } = await command(caller, { name: 'inventory.shipNoticeDockNote', idempotencyKey, input: { noticeId, ...body }, record: { type: 'ShipNotice', id: notice.id, expectedVersion: body.version } }, async (tools) => {

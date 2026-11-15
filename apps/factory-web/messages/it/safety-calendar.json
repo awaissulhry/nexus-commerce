@@ -1,7 +1,7 @@
 {
   "access": {
     "title": "Nessun accesso allo scadenzario sicurezza",
-    "body": "Questa pagina richiede il permesso di vedere la sicurezza (safety.view). Chiedi a chi gestisce i ruoli della tua società."
+    "body": "Questa pagina richiede il permesso di vedere la sicurezza. Chiedi a chi gestisce i ruoli della tua società."
   },
   "common": {
     "stillLoading": "Caricamento ancora in corso…",
@@ -213,9 +213,9 @@
     "receipt": "Ricevuta caricata."
   },
   "held": {
-    "calendar": "Serve il permesso di gestire lo scadenzario sicurezza (safety.calendar.manage).",
-    "organisation": "Serve il permesso di gestire l'organigramma della sicurezza (safety.organisation.manage).",
-    "upload": "Serve il permesso di caricare file (files.upload).",
+    "calendar": "Serve il permesso di gestire lo scadenzario sicurezza.",
+    "organisation": "Serve il permesso di gestire l'organigramma della sicurezza.",
+    "upload": "Serve il permesso di caricare file.",
     "company": "Apri prima una società (l'indirizzo non ne indica nessuna).",
     "saving": "Salvataggio in corso…",
     "reading": "Lettura ancora in corso.",

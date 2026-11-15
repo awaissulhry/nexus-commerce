@@ -588,7 +588,7 @@
     "emptyNow": "Adesso non c’è nulla in lavorazione.",
     "groupEmpty": "Niente da mostrare.",
     "needsGrain": "Questi record richiedono i diritti sui {grain}.",
-    "needsPermission": "Questi record richiedono un elenco che il tuo ruolo non comprende ({permission}).",
+    "needsPermission": "Questi record richiedono un permesso che il tuo ruolo non comprende: «{right}».",
     "span": {
       "day": "Scegli entrambi i giorni.",
       "backwards": "Il periodo finisce prima di iniziare.",

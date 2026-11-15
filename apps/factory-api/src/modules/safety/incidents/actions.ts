@@ -29,7 +29,7 @@ import { assertVersion } from '../../people/employees/access'
  * locked for the command (actions are written only while it is OPEN: the guard holds it too); its version does not move.
  */
 
-const MANAGE_WORDS = 'An incident’s actions are kept by the safety roles (safety.incidents.manage).'
+const MANAGE_WORDS = 'An incident’s actions are kept by the safety roles.'
 
 export interface MakeJob {
   readonly into: 'MAINTENANCE_JOB'
@@ -156,7 +156,7 @@ async function makeRecord(tools: CommandTools, incident: LockedIncident, action:
     const machine = isUuid(machineId!) ? await tx.machine.findFirst({ where: { id: machineId!, siteId: incident.siteId }, select: { id: true, assetNumber: true, companyId: true, siteId: true } }) : null
     if (!machine) refuse(refusalOf('WHERE_OTHER_SITE', 'make/machineId'))
     const named = make.assigneeId !== undefined || make.assigneeWorkerId !== undefined
-    if (named && !can(actorOf(context), PLANT_JOBS_MANAGE, machine!)) throw new ForbiddenError('A technician is named on a job by a role that keeps the maintenance jobs (plant.jobs.manage); make the job without one and the maintenance lead assigns it.')
+    if (named && !can(actorOf(context), PLANT_JOBS_MANAGE, machine!)) throw new ForbiddenError('A technician is named on a job by a role that keeps the maintenance jobs; make the job without one and the maintenance lead assigns it.')
     const assignee = await checkAssignee(tx, context.tenantId, machine!, { assigneeId: make.assigneeId, assigneeWorkerId: make.assigneeWorkerId }, now)
     const job = await makeJobInCommand(tools, {
       machine: machine!,

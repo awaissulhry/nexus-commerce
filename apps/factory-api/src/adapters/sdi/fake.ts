@@ -1,4 +1,5 @@
 import { randomInt, randomUUID } from 'node:crypto'
+import type { SimulatedOutcome } from '@nexus/factory-domain/invoicing/test-mode/test-mode'
 import type { Clock } from '@nexus/factory-domain/ports/clock'
 import { sdiReceivedFileSchema, sdiReceivedListSchema, type SdiReceivedFile, type SdiReceivedList, type SdiReceivedListRequest } from '@nexus/factory-domain/payables/sdi-port'
 import { sdiMessageSchema, type SdiArchiveReceipt, type SdiArchiveRequest, type SdiMessage, type SdiNotificationType, type SdiSendReceipt, type SdiSendRequest, type SdiStatusAnswer, type SdiStatusRequest } from '@nexus/factory-domain/ports/sdi'
@@ -24,10 +25,20 @@ import { fatturaPaSchemaValidator, type XmlValidator } from './xsd'
  *   1. `scriptNext(plan)`: the next new files take these plans, in order;
  *   2. a marker in the XML (e.g. in the invoice's causale): `[sdi-fake:ns]`, `[sdi-fake:ns:00305]`, `[sdi-fake:mc]`,
  *      `[sdi-fake:send_error]`, `[sdi-fake:refuse]`, `[sdi-fake:timeout]`;
- *   3. RC.
+ *   3. the company's simulated answer while it is in test mode (`choice`, B-W2b-F58);
+ *   4. RC.
  * Plans: RC, MC, NS (an error code, default 00423 with SDI's sample description), SEND_ERROR (a 503 on the first
  * `attempts` attempts, default every one: the gateway retries, then gives up), REFUSE (a 422: final), TIMEOUT (the file
  * is kept, then no answer ever comes: the gateway times out; the status poll later finds the file and its RC).
+ *
+ * Across processes (B-W2b-F58): the API sends and the worker's status poll asks, each with its own fake. So a file's
+ * outcome is written into its provider id (`fake-sdi-<rc|mc|ns<code>>-<uuid>`), SDI's answer to it is the same in every
+ * process (its message id and SDI identifier come from the provider id), and the runtime hands `status` and `archive` a
+ * `recall` that reads the send from the database (the SdiSubmission row: its provider id, file name and sent time). A fake
+ * that does not hold a file answers from what the recall returns, as the intermediary would: known, with SDI's answer
+ * once its time came. Nothing new is stored. The company's choice: while the company is in test mode, a send with no
+ * script and no marker takes the simulated answer the company picked (`choice`: DELIVERED → RC, NOT_DELIVERABLE → MC,
+ * REJECTED → NS 00423 on the first send, RC on the corrected resend), as a LIVE or SANDBOX connection's simulation does.
  *
  * The passive side (B-W2a-62): `deliver({ tenantId, accountId, xml })` puts a supplier's invoice in the account's
  * inbox, as SDI would deliver it to the company (tests, the local live check); `listReceived` pages what was delivered
@@ -91,6 +102,55 @@ export interface FakeSdiOptions {
   readonly validate?: XmlValidator
 }
 
+/** B-W2b-F58: the company's simulated answer while it is in test mode, and which send of the invoice this is. */
+export interface FakeSdiChoice {
+  readonly outcome: SimulatedOutcome
+  readonly attempt: number
+}
+
+/** B-W2b-F58: a send as the database holds it (the SdiSubmission row), for a fake of another process. */
+export interface FakeSdiKept {
+  readonly providerRef: string
+  readonly fileName: string
+  /** When the provider took the file (the send's sentAt). */
+  readonly acceptedAt: Date
+  readonly accountId: string
+}
+
+/** B-W2b-F58: reads the send a request names from the database (null: none, or not a fake send). */
+export type FakeSdiRecall = () => Promise<FakeSdiKept | null>
+
+/** SDI's outcome of a file, as its provider id carries it. */
+type FakeOutcome = { readonly type: 'RC' | 'MC' } | { readonly type: 'NS'; readonly code: string }
+
+const REF = /^fake-sdi-(rc|mc|ns(\d{5}))-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/
+
+/** The provider id of a new fake file: its outcome, then a random id (B-W2b-F58). */
+function refOf(outcome: FakeOutcome, id: string): string {
+  return `fake-sdi-${outcome.type === 'NS' ? `ns${outcome.code}` : outcome.type.toLowerCase()}-${id}`
+}
+
+/** The outcome and id a fake provider id carries, or null (not one of this fake's). */
+export function fakeRefParts(providerRef: string | null | undefined): { readonly outcome: FakeOutcome; readonly id: string } | null {
+  const match = providerRef ? REF.exec(providerRef) : null
+  if (!match) return null
+  const outcome: FakeOutcome = match[2] ? { type: 'NS', code: match[2] } : { type: match[1] === 'mc' ? 'MC' : 'RC' }
+  return { outcome, id: match[3]! }
+}
+
+/** SDI's identifier of a fake file, the same in every process (9 digits from its id). */
+const sdiIdentifierOf = (id: string): string => String(100_000_000 + (Number.parseInt(id.replace(/-/g, '').slice(0, 8), 16) % 900_000_000))
+
+/** The outcome a plan gives (TIMEOUT, SEND_ERROR: RC once the file is taken). */
+const outcomeOfPlan = (plan: FakeSdiPlan): FakeOutcome => (plan.kind === 'MC' ? { type: 'MC' } : plan.kind === 'NS' ? { type: 'NS', code: plan.code ?? '00423' } : { type: 'RC' })
+
+/** The plan of the company's simulated answer (B-W2b-F58; as factory-domain invoicing/test-mode simulatedMessages). */
+function planOfChoice(choice: FakeSdiChoice): FakeSdiPlan {
+  if (choice.outcome === 'NOT_DELIVERABLE') return { kind: 'MC' }
+  if (choice.outcome === 'REJECTED' && choice.attempt === 1) return { kind: 'NS', code: '00423' }
+  return { kind: 'RC' }
+}
+
 const MARKER = /\[sdi-fake:(rc|mc|ns|send_error|refuse|timeout)(?::(\d{5}))?\]/i
 
 function planOfMarker(xml: string): FakeSdiPlan | null {
@@ -126,6 +186,8 @@ export class FakeSdi implements SdiAdapter {
   /** B-W2a-62: the supplier invoices SDI delivered to the accounts' companies (the passive side). */
   readonly inbox: FakeReceived[] = []
   private receivedFailures = 0
+  /** B-W2b-F58: the archives of files this fake did not hold (another process sent them), by provider id. */
+  private readonly recalledArchives = new Map<string, SdiArchiveReceipt>()
   private readonly scripted: FakeSdiPlan[] = []
   private readonly plans = new Map<string, FakeSdiPlan>()
   private readonly clock: Clock
@@ -162,12 +224,12 @@ export class FakeSdi implements SdiAdapter {
     return message
   }
 
-  private message(file: FakeFile, type: SdiNotificationType, issuedAt: Date, code?: string): SdiMessage {
+  private message(file: Pick<FakeFile, 'providerRef' | 'fileName' | 'sdiIdentifier'>, type: SdiNotificationType, issuedAt: Date, code?: string, messageId?: string): SdiMessage {
     this.sequence++
     const errors = type === 'NS' ? [{ code: code ?? '00423', description: SAMPLE_ERRORS[code ?? '00423'] ?? 'Errore di esempio del SDI finto', hint: null }] : []
     return sdiMessageSchema.parse({
       type,
-      messageId: `FAKE-MSG-${String(this.sequence).padStart(6, '0')}-${randomUUID().slice(0, 8)}`,
+      messageId: messageId ?? `FAKE-MSG-${String(this.sequence).padStart(6, '0')}-${randomUUID().slice(0, 8)}`,
       sdiIdentifier: file.sdiIdentifier,
       providerRef: file.providerRef,
       fileName: file.fileName,
@@ -178,7 +240,29 @@ export class FakeSdi implements SdiAdapter {
     }) as SdiMessage
   }
 
-  async send(call: GatewayCall, request: SdiSendRequest): Promise<SdiSendReceipt> {
+  /**
+   * B-W2b-F58: SDI's answer to a file (its outcome, `answerAfterMs` after the provider took it), the same in every process:
+   * the message id and SDI identifier come from the provider id, so the poll of another process records it once.
+   */
+  private outcomeMessage(file: { readonly providerRef: string; readonly fileName: string; readonly acceptedAt: Date }): SdiMessage | null {
+    const parts = fakeRefParts(file.providerRef)
+    if (!parts) return null
+    const { outcome, id } = parts
+    const answerAt = new Date(file.acceptedAt.getTime() + this.answerAfterMs)
+    return this.message({ providerRef: file.providerRef, fileName: file.fileName, sdiIdentifier: sdiIdentifierOf(id) }, outcome.type, answerAt, outcome.type === 'NS' ? outcome.code : undefined, `FAKE-MSG-${outcome.type}-${id}`)
+  }
+
+  /** B-W2b-F58: a send of another process, from the database, when it is one of this fake's and of this account. */
+  private async recalled(call: GatewayCall, recall: FakeSdiRecall | undefined): Promise<{ kept: FakeSdiKept; messages: SdiMessage[] } | null> {
+    const kept = recall ? await recall() : null
+    if (!kept || kept.accountId !== call.account.id) return null
+    const message = this.outcomeMessage(kept)
+    if (!message) return null
+    return { kept, messages: Date.parse(message.issuedAt) <= this.clock.now().getTime() ? [message] : [] }
+  }
+
+  /** `choice` (B-W2b-F58): the company's simulated answer while it is in test mode (the runtime reads it). */
+  async send(call: GatewayCall, request: SdiSendRequest, choice?: FakeSdiChoice | null): Promise<SdiSendReceipt> {
     if (call.account.mode !== 'FAKE') throw new ProviderError('Only a FAKE account uses the fake SDI.', { retryable: false })
     this.attempts.push({ idempotencyKey: request.idempotencyKey, fileName: request.fileName, attempt: call.attempt })
     const kept = this.file({ idempotencyKey: request.idempotencyKey })
@@ -189,7 +273,7 @@ export class FakeSdi implements SdiAdapter {
     }
     let plan = this.plans.get(request.idempotencyKey)
     if (!plan) {
-      plan = this.scripted.shift() ?? planOfMarker(request.xml) ?? { kind: 'RC' }
+      plan = this.scripted.shift() ?? planOfMarker(request.xml) ?? (choice ? planOfChoice(choice) : null) ?? { kind: 'RC' }
       this.plans.set(request.idempotencyKey, plan)
     }
     if (plan.kind === 'SEND_ERROR') {
@@ -211,22 +295,22 @@ export class FakeSdi implements SdiAdapter {
       throw new ProviderError(`The file is not valid FatturaPA (the schema says: ${problems[0]!.slice(0, 200)})`, { httpStatus: 422, retryable: false })
     }
     const acceptedAt = this.clock.now()
+    // B-W2b-F58: the outcome rides in the provider id, so the fake of another process gives the same answer.
+    const id = randomUUID()
     const file: FakeFile = {
-      providerRef: `fake-sdi-${randomUUID()}`,
+      providerRef: refOf(outcomeOfPlan(plan), id),
       fileName: request.fileName,
       idempotencyKey: request.idempotencyKey,
       tenantId: call.account.tenantId,
       accountId: call.account.id,
       acceptedAt,
-      sdiIdentifier: String(randomInt(100_000_000, 999_999_999)),
+      sdiIdentifier: sdiIdentifierOf(id),
       plan,
       messages: [],
       delivered: new Set(),
       archive: null,
     }
-    const answerAt = new Date(acceptedAt.getTime() + this.answerAfterMs)
-    const outcome: SdiNotificationType = plan.kind === 'MC' ? 'MC' : plan.kind === 'NS' ? 'NS' : 'RC'
-    file.messages.push(this.message(file, outcome, answerAt, plan.kind === 'NS' ? plan.code : undefined))
+    file.messages.push(this.outcomeMessage(file)!)
     this.files.push(file)
     if (plan.kind === 'TIMEOUT') return never(call.signal)
     call.answer({ httpStatus: 201, response: { providerRef: file.providerRef } })
@@ -238,10 +322,16 @@ export class FakeSdi implements SdiAdapter {
     return file.messages.filter((message) => Date.parse(message.issuedAt) <= now)
   }
 
-  async status(call: GatewayCall, request: SdiStatusRequest): Promise<SdiStatusAnswer> {
+  /** `recall` (B-W2b-F58): the send from the database, for a file another process's fake took. */
+  async status(call: GatewayCall, request: SdiStatusRequest, recall?: FakeSdiRecall): Promise<SdiStatusAnswer> {
     if (call.account.mode !== 'FAKE') throw new ProviderError('Only a FAKE account uses the fake SDI.', { retryable: false })
     const file = this.file({ providerRef: request.providerRef, idempotencyKey: request.idempotencyKey, fileName: request.fileName })
     if (!file || file.tenantId !== call.account.tenantId) {
+      const other = file ? null : await this.recalled(call, recall)
+      if (other) {
+        call.answer({ httpStatus: 200, response: { known: true, notifications: other.messages.length } })
+        return { known: true, providerRef: other.kept.providerRef, acceptedAt: other.kept.acceptedAt.toISOString(), messages: other.messages }
+      }
       call.answer({ httpStatus: 404 })
       return { known: false, providerRef: null, acceptedAt: null, messages: [] }
     }
@@ -250,10 +340,13 @@ export class FakeSdi implements SdiAdapter {
     return { known: true, providerRef: file.providerRef, acceptedAt: file.acceptedAt.toISOString(), messages }
   }
 
-  async archive(call: GatewayCall, request: SdiArchiveRequest): Promise<SdiArchiveReceipt> {
+  /** `recall` (B-W2b-F58): the send from the database, for a file another process's fake took. */
+  async archive(call: GatewayCall, request: SdiArchiveRequest, recall?: FakeSdiRecall): Promise<SdiArchiveReceipt> {
     if (call.account.mode !== 'FAKE') throw new ProviderError('Only a FAKE account uses the fake SDI.', { retryable: false })
     const file = this.file({ providerRef: request.providerRef })
     if (!file || file.tenantId !== call.account.tenantId) {
+      const other = file ? null : await this.recalled(call, recall)
+      if (other && other.kept.providerRef === request.providerRef) return this.archiveRecalled(call, other.kept, other.messages)
       call.answer({ httpStatus: 404 })
       throw new ProviderError('The fake SDI intermediary has no such file.', { httpStatus: 404, retryable: false })
     }
@@ -267,6 +360,22 @@ export class FakeSdi implements SdiAdapter {
     }
     call.answer({ httpStatus: 200, response: { archived: true } })
     return file.archive
+  }
+
+  /** B-W2b-F58: legal archiving of a file another process's fake took (once SDI delivered it or left it in the drawer). */
+  private archiveRecalled(call: GatewayCall, kept: FakeSdiKept, messages: readonly SdiMessage[]): SdiArchiveReceipt {
+    if (!messages.some((message) => message.type !== 'NS')) {
+      call.answer({ httpStatus: 409 })
+      throw new ProviderError('Only a file SDI delivered or left in the tax drawer is archived.', { httpStatus: 409, retryable: false })
+    }
+    let archive = this.recalledArchives.get(kept.providerRef)
+    if (!archive) {
+      archive = { archiveRef: `fake-archive-${fakeRefParts(kept.providerRef)!.id}`, archivedAt: this.clock.now().toISOString() }
+      this.recalledArchives.set(kept.providerRef, archive)
+      this.archives.push({ providerRef: kept.providerRef, fileName: kept.fileName, archiveRef: archive.archiveRef })
+    }
+    call.answer({ httpStatus: 200, response: { archived: true } })
+    return archive
   }
 
   /** The webhook deliveries due and not handed out yet (each message once; take them again with `all`). */

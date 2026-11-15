@@ -1,7 +1,7 @@
 {
   "noAccess": {
     "title": "Non hai accesso ai costi",
-    "body": "Costi standard ed effettivi richiede il permesso {permission}. Chiedi a chi gestisce i ruoli."
+    "body": "Costi standard ed effettivi richiede il permesso «{right}». Chiedi a chi gestisce i ruoli."
   },
   "band": {
     "label": "Ambito e azioni",
@@ -52,8 +52,8 @@
   },
   "noCost": {
     "title": "Gli importi richiedono il permesso sui costi",
-    "body": "Il tuo ruolo non ha la visibilità sui costi (money.cost): vedi minuti e quantità, non gli importi.",
-    "tiles": "Valori e importi sono visibili solo ai ruoli con la visibilità sui costi (money.cost)."
+    "body": "Il tuo ruolo non ha la visibilità sui costi: vedi minuti e quantità, non gli importi.",
+    "tiles": "Valori e importi sono visibili solo ai ruoli con la visibilità sui costi."
   },
   "list": {
     "title": "Ordini di lavoro: standard ed effettivo",
@@ -310,11 +310,11 @@
     }
   },
   "held": {
-    "noReverse": "Stornare una registrazione richiede il permesso {permission}.",
+    "noReverse": "Stornare una registrazione richiede il permesso «{right}».",
     "isReversal": "Questa registrazione è uno storno: non si storna a sua volta.",
     "reversed": "Questa registrazione è già stata stornata: si storna una volta sola.",
     "busy": "In corso…",
-    "noWorkOrders": "Aprire un ordine di lavoro richiede il permesso {permission}."
+    "noWorkOrders": "Aprire un ordine di lavoro richiede il permesso «{right}»."
   },
   "reverse": {
     "title": "Storna una registrazione di {number}",
@@ -376,11 +376,11 @@
     "title": "Manodopera e costo",
     "noView": {
       "title": "Il costo richiede il permesso sui costi",
-      "body": "Manodopera e costo richiede il permesso {permission}. Il resto dell'ordine di lavoro resta com'è."
+      "body": "Manodopera e costo richiede il permesso «{right}». Il resto dell'ordine di lavoro resta com'è."
     },
     "noCost": {
       "title": "Il costo richiede la visibilità sui costi",
-      "body": "Il tuo ruolo non ha la visibilità sui costi (money.cost): l'intera sezione costi è visibile solo ai ruoli che la hanno. Le paghe non compaiono mai qui."
+      "body": "Il tuo ruolo non ha la visibilità sui costi: l'intera sezione costi è visibile solo ai ruoli che la hanno. Le paghe non compaiono mai qui."
     },
     "draft": {
       "title": "Niente a costo prima del rilascio",

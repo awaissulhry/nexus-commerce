@@ -112,7 +112,7 @@ export async function createAssignment(
   if (validTo && validTo.getTime() <= validFrom.getTime()) problems.push({ path: `${path}validTo`, message: 'The end must come after the start.' })
   if (problems.length > 0) throw new ValidationError('The role assignment is not valid.', problems)
   const wider = at(path, uncoveredScope(options.assignerGrants, scope, siteCompanies))
-  if (wider.length > 0) throw new DomainError('forbidden', 'You can give roles only within your own roles.assign scope.', wider)
+  if (wider.length > 0) throw new DomainError('forbidden', 'You can give roles only where your own right to give roles reaches.', wider)
 
   const row = await tx.roleAssignment.create({
     data: { id: newId(), userId: options.userId, roleId: input.roleId, ...scope, companyIds: [...scope.companyIds], siteIds: [...scope.siteIds], partyIds: [...scope.partyIds], validFrom, validTo, grantedById: options.grantedById, createdAt: options.now },
@@ -144,7 +144,7 @@ async function siteCompaniesOf(tx: CommandTx, siteIds: readonly string[]): Promi
 export async function assertWithinAssignerScope(tx: CommandTx, row: AssignmentRow, assignerGrants: readonly Grant[]): Promise<void> {
   const scope = { allCompanies: row.allCompanies, companyIds: row.companyIds, siteIds: row.siteIds, partyIds: row.partyIds }
   const wider = uncoveredScope(assignerGrants, scope, await siteCompaniesOf(tx, row.siteIds))
-  if (wider.length > 0) throw new DomainError('forbidden', 'You can end roles only within your own roles.assign scope.', wider)
+  if (wider.length > 0) throw new DomainError('forbidden', 'You can end roles only where your own right to give roles reaches.', wider)
 }
 
 /** Refuses to end the last administrator's administrator assignment (the tenant would have nobody to fix access). */

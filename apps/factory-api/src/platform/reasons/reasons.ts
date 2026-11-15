@@ -37,7 +37,7 @@ const prefixed = (issues: readonly Issue[]): Issue[] => issues.map((issue) => ({
 export const keepsReasons = (who: Actor): boolean => grantsFor(who, REASONS_MANAGE).some((grant) => grant.companies === 'all' && grant.sites === 'all')
 
 function mayKeep(who: Actor): void {
-  if (!keepsReasons(who)) throw new ForbiddenError("The reason lists are the whole group's: keeping them needs reasons.manage over every company and site.")
+  if (!keepsReasons(who)) throw new ForbiddenError("The reason lists are the whole group's: keeping them needs the right to keep the reason lists over every company and site.")
 }
 
 /** `?list=A,B` → the lists asked, once each, in the order asked; none: every list. */

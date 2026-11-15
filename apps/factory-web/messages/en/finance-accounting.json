@@ -29,7 +29,7 @@
   },
   "noAccess": {
     "title": "You cannot see the accounting exports",
-    "body": "They need the accounting permission (accounting.view). Ask an administrator."
+    "body": "They need the accounting permission. Ask an administrator."
   },
   "common": {
     "retry": "Try again",
@@ -88,8 +88,8 @@
     "held": {
       "yearEnd": "Goes with the export of the month that ends the year (31 December).",
       "grain": {
-        "price": "It carries prices: it needs the price grain (money.price).",
-        "cost": "It carries costs: it needs the cost grain (money.cost)."
+        "price": "It carries prices: it needs the price grain.",
+        "cost": "It carries costs: it needs the cost grain."
       }
     },
     "documents_one": "{count} document",
@@ -229,7 +229,7 @@
     "noPackage": "Choose at least one package.",
     "intrastat": "Fix the rows that lack data, or explain the Intrastat check.",
     "nothingChanged": "Nothing changed since {number}: there is nothing to send.",
-    "noExport": "Making a batch needs the export permission (accounting.export).",
+    "noExport": "Making a batch needs the export permission.",
     "busy": "Wait: the last action is still running.",
     "firstStep": "This is the first step."
   },
@@ -470,7 +470,7 @@
     "status_other": "{package} · {count} rows · {format}",
     "download": "Download",
     "held": {
-      "noView": "Downloading needs the accounting permission (accounting.view)."
+      "noView": "Downloading needs the accounting permission."
     },
     "title_one": "Export files of {count} batch",
     "title_other": "Export files of {count} batches",
@@ -540,7 +540,7 @@
       "warnings": "Before the final close:"
     },
     "held": {
-      "noLock": "Locking needs the lock permission (accounting.lock).",
+      "noLock": "Locking needs the lock permission.",
       "chooseMonth": "Choose a month first.",
       "alreadySoft": "The month is soft-locked already.",
       "alreadyHard": "The month is closed for good already.",
@@ -550,14 +550,14 @@
   },
   "lift": {
     "title": "Lift the lock",
-    "softBody": "Writes dated in the month are open again (accounting.lock).",
-    "hardBody": "Only someone who may lift a final close (accounting.unlock: the owner) does it, with a fresh code from the authenticator app. Agree it with the accountant first.",
+    "softBody": "Writes dated in the month are open again.",
+    "hardBody": "Only someone who may lift a final close (the owner) does it, with a fresh code from the authenticator app. Agree it with the accountant first.",
     "reason": "Why",
     "go": "Lift the lock of {month}",
     "done": "The lock of {month} is lifted.",
     "held": {
       "notLocked": "The month is not locked.",
-      "noUnlock": "Lifting a final close needs accounting.unlock (the owner, by default).",
+      "noUnlock": "Lifting a final close needs the right to lift it (the owner, by default).",
       "reason": "Say why in words first."
     }
   },

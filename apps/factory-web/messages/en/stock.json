@@ -11,7 +11,7 @@
     "invalid": "Something in it was not accepted. Check the fields and try again.",
     "slowDown": "Too many tries at once. Wait a moment and try again.",
     "retry": "Try again",
-    "noPermission": "Your role does not include “{permission}”. Ask an administrator if you need this page."
+    "noPermission": "Your role does not include the right “{right}”. Ask an administrator if you need this page."
   },
   "live": {
     "connecting": "Connecting to live updates…",

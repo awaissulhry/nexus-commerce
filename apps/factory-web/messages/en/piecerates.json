@@ -174,7 +174,7 @@
       "plain": "Workers are told what is recorded and why.",
       "wrong": "The notice {label} is not in force: name the one in force."
     },
-    "heldRight": "Starting piece pay needs {permission}.",
+    "heldRight": "Starting piece pay needs the right “{right}”.",
     "hint": "Piece pay starts only when its legal preconditions are on record.",
     "honest": "What Nexus does here",
     "honestBody": "It records what piece pay rests on; it does not judge it. Whether your CCNL allows piece work, the written notice of rates and your labour consultant’s yes on the make-up and the statement are yours (GATE-PIECE-PAY). Until they are on record the switch stays off.",
@@ -276,7 +276,7 @@
     "hint": "Every paid scan as an entry. A correction is a new entry, never an edit. It names nobody: a person is read on their statement.",
     "minutes": "Minutes",
     "more": "Show more",
-    "noRight": "The ledger opens with people.earnings.records and the pay grain.",
+    "noRight": "The ledger opens with the rights to open earnings records and to see pay.",
     "period": "Period",
     "pieces": "Pieces",
     "rate": "Rate",
@@ -295,7 +295,7 @@
     "title": "Lock {month} pay period"
   },
   "noAccess": {
-    "body": "This page needs {permission}.",
+    "body": "This page needs the right “{right}”.",
     "title": "No access to Piece rates"
   },
   "openReason": {
@@ -323,13 +323,13 @@
   },
   "pay": {
     "entries": "Ledger",
-    "hidden": "One person’s pay opens with people.earnings.records and the pay grain.",
+    "hidden": "One person’s pay opens with the rights to open earnings records and to see pay.",
     "hiddenTitle": "Pay figures are hidden for your role",
     "none": "No statement yet",
     "noneBody": "A statement comes with the first pay period that pays this person.",
     "period": "Earnings this period",
     "rates": "Rates published and read",
-    "ratesHidden": "Rates need people.piecerates.view.",
+    "ratesHidden": "Rates need the right to see the piece-rate tables.",
     "ratesHint": "Proof the person saw the rates before work started (c.c. art. 2101 c.3).",
     "ratesNone": "No rates published to this person.",
     "read": "Read",
@@ -456,7 +456,7 @@
     "general": "General rates",
     "held": {
       "notProvisional": "Not provisional: nothing to confirm.",
-      "right": "Confirming needs people.piecerates.manage.",
+      "right": "Your role cannot confirm piece rates.",
       "trialRunning": "Its trial runs until {day}."
     },
     "hidden": "Hidden for your role",
@@ -630,7 +630,7 @@
     "from": "from {day}",
     "law": "Rates are told to the workers before they apply (c.c. art. 2101 c.3).",
     "noRight": "A rate sheet needs the pay grain",
-    "noRightBody": "Printing rates needs {permission}.",
+    "noRightBody": "Printing rates needs the right “{right}”.",
     "print": "Print",
     "printed": "Printed {when}",
     "signDate": "Date",
@@ -688,7 +688,7 @@
     "held": "Held scans",
     "heldOwn": "This statement waits for another person: nobody approves their own.",
     "heldReview": "Statements are approved while the period is in review.",
-    "heldRight": "One person’s statement opens with people.earnings.records and the pay grain.",
+    "heldRight": "One person’s statement opens with the rights to open earnings records and to see pay.",
     "heldValue": "{open} open, {counted} counted, {notPaid} not paid",
     "leadBody": "Only for someone you lead, where the site’s legal basis covers leads: pieces and minutes, no money. Why is recorded.",
     "leadDone": "Told HR it looks right.",

@@ -6,7 +6,7 @@
   },
   "noAccess": {
     "title": "The PPE register is not for your role",
-    "body": "Seeing the register needs the permission compliance.register.view. The owner or an administrator grants it in Admin › Roles & permissions."
+    "body": "Seeing the register needs the right to see the PPE register. The owner or an administrator grants it in Admin › Roles & permissions."
   },
   "tile": {
     "open": "Open entries",
@@ -121,7 +121,7 @@
     "atMax": "At most {max} shown"
   },
   "held": {
-    "manage": "Your role can see the register; changing it needs compliance.register.manage.",
+    "manage": "Your role can see the register; changing it needs the right to keep the PPE register.",
     "closed": "A closed entry never changes: add a note in its thread instead.",
     "actionDone": "The corrective action is recorded as done: add a note instead of rewriting it.",
     "informed": "The distributors are already recorded as informed.",
@@ -152,7 +152,7 @@
     "kind": "Kind of event",
     "style": "Style",
     "styleHint": "The style of the garments concerned.",
-    "styleNoRight": "Your role cannot list styles (product.styles.view): ask someone who can to add the entry.",
+    "styleNoRight": "Your role cannot list styles: ask someone who can to add the entry.",
     "chooseStyle": "Choose a style",
     "styleUnavailable": "No style to choose",
     "reportedOn": "Reported on",
@@ -174,7 +174,7 @@
     "descriptionHint": "In plain words: what was found or reported, and how we learnt it.",
     "reporter": "Reported by",
     "reporterHint": "The customer or distributor who reported it, when there is one.",
-    "reporterNoRight": "Your role cannot list customers (parties.view): the reporter can be added later by someone who can.",
+    "reporterNoRight": "Your role cannot list customers: the reporter can be added later by someone who can.",
     "noReporter": "Nobody (found by us)",
     "risk": "May the PPE present a risk?",
     "actionTaken": "Action already taken",

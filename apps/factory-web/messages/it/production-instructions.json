@@ -64,7 +64,7 @@
     "failed": "Non è stato possibile leggere le istruzioni",
     "forbidden": {
       "title": "Nessun accesso alle istruzioni di lavoro",
-      "body": "Questa pagina richiede il permesso production.instructions.view. Chiedilo a un amministratore."
+      "body": "Questa pagina richiede il permesso di vedere le istruzioni di lavoro. Chiedilo a un amministratore."
     },
     "noMatch": {
       "title": "Nessuna riga corrisponde a questi filtri",
@@ -254,7 +254,7 @@
       },
       "forbidden": {
         "title": "Nessun accesso alle istruzioni di lavoro",
-        "body": "Questa pagina richiede il permesso production.instructions.view. Chiedilo a un amministratore."
+        "body": "Questa pagina richiede il permesso di vedere le istruzioni di lavoro. Chiedilo a un amministratore."
       }
     },
     "everyStyle": "Per tutti gli articoli",
@@ -295,11 +295,11 @@
     "reload": "Ricarica"
   },
   "held": {
-    "noManage": "Scrivere istruzioni richiede il permesso production.instructions.manage.",
-    "noApprove": "Approvare richiede il permesso production.instructions.approve.",
-    "noPeople": "Il registro di formazione per nome richiede il permesso production.instructions.people (Personale).",
-    "noOperations": "Scegliere un’operazione richiede il permesso product.routing.view.",
-    "noStyles": "Scegliere un articolo richiede il permesso product.styles.view.",
+    "noManage": "Il tuo ruolo non può scrivere istruzioni di lavoro.",
+    "noApprove": "Il tuo ruolo non può approvare le istruzioni di lavoro.",
+    "noPeople": "Il registro di formazione per nome richiede il permesso di vederlo per nome (Personale).",
+    "noOperations": "Scegliere un’operazione richiede il permesso di vedere i cicli.",
+    "noStyles": "Scegliere un articolo richiede il permesso di vedere gli articoli.",
     "archived": "{number} è archiviata: prima ripristinala.",
     "noVersion": "Ancora nessuna versione.",
     "noDraft": "Nessuna bozza aperta.",
@@ -491,7 +491,7 @@
   "media": {
     "intro_one": "{count} foto o video sui passi.",
     "intro_other": "{count} foto o video sui passi.",
-    "noFilesRead": "Il tuo ruolo non può aprire i file (files.read): al loro posto compaiono i nomi.",
+    "noFilesRead": "Il tuo ruolo non può aprire i file: al loro posto compaiono i nomi.",
     "noSteps": {
       "title": "Ancora nessun passo",
       "body": "Foto e video appartengono a un passo: prima scrivi i passi."
@@ -621,7 +621,7 @@
     "never": "Mai",
     "seenYes": "Vista",
     "seenNo": "Non ancora",
-    "namesHR": "I nomi sono un registro di formazione solo per il Personale (production.instructions.people).",
+    "namesHR": "I nomi sono un registro di formazione solo per il Personale.",
     "record": "Una conferma è un registro di formazione (D.Lgs. 81/2008 art. 37), mai un registro di rendimento."
   },
   "approve": {

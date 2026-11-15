@@ -261,9 +261,10 @@ describe('every design case draws in both languages with no key left on screen',
     }
   }
 
-  it('sales sees no label: the permission is named; the builder never draws a CE mark, only its stand-in', () => {
+  it('sales sees no label: the missing right is said in words, never its code; the builder never draws a CE mark, only its stand-in', () => {
     const html = render(listScreen as DesignScreen<unknown>, listScreen.cases.find((item) => item.id === 'no-permission')!.model, 'en')
-    expect(html).toContain('compliance.certificates.view')
+    expect(html).toContain('the right to view certificates')
+    expect(html).not.toContain('compliance.certificates.view')
     expect(html).not.toContain('LBL-DEMO-JKT-01')
     const builder = render(recordScreen as DesignScreen<unknown>, recordScreen.cases.find((item) => item.id === 'active')!.model, 'it')
     expect(builder).toContain('segnaposto')

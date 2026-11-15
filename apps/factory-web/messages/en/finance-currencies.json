@@ -1,7 +1,7 @@
 {
   "title": "Currencies & rates",
   "explain": "The company's own currency, the currencies its documents may be in, and the exchange rate of each day: the ECB's daily reference rate, or a rate typed for the day, which wins. A document keeps the rate it used; a later rate never changes it. Revaluation stays with your accountant.",
-  "noRight": "You do not have the right to see currencies and exchange rates (currencies.view).",
+  "noRight": "You do not have the right to see currencies and exchange rates.",
   "failed": "Couldn't load currencies & rates",
   "base": {
     "label": "Company currency",
@@ -126,8 +126,8 @@
     "go_other": "Remove {count} rates"
   },
   "held": {
-    "noManage": "You need currencies.manage for this company",
-    "noRates": "Rates serve every company: you need currencies.manage over every company",
+    "noManage": "You need the right to keep currencies for this company",
+    "noRates": "Rates serve every company: you need the right to keep currencies over every company",
     "busy": "Wait: the last change is still being saved",
     "base": "{code} is the company's own currency: it is always on",
     "feedOff": "Switch on the daily ECB rates first",

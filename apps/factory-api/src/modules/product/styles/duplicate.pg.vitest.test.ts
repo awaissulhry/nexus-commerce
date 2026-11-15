@@ -218,7 +218,7 @@ describe('copying a style (PRD-011)', () => {
       part: 'BOM',
       available: false,
       count: null,
-      reason: 'Copying the BOM needs product.bom.manage over every company.',
+      reason: 'Copying the BOM needs the right to edit the BOM over every company.',
       reasonCode: 'NEEDS_PERMISSION',
       reasonFacts: facts({ permission: 'product.bom.manage', everyCompany: true }),
     })
@@ -314,7 +314,7 @@ describe('copying a style (PRD-011)', () => {
 
   it('refuses a taken code, a part the person may not copy or the source lacks, an unknown revision, another tenant', async () => {
     expect((await refused('engineer', 'POST', `/product/styles/${jacket}/duplicate`, { code: 'SEED-JKT-01', name: 'Clash' }, 409)).message).toBe('The style code SEED-JKT-01 is taken.')
-    expect((await refused('stylesOnly', 'POST', `/product/styles/${jacket}/duplicate`, { code: 'SEED-JKT-09', name: 'X', parts: ['ROUTING'] }, 403)).message).toBe('Copying the routing needs product.routing.manage over every company.')
+    expect((await refused('stylesOnly', 'POST', `/product/styles/${jacket}/duplicate`, { code: 'SEED-JKT-09', name: 'X', parts: ['ROUTING'] }, 403)).message).toBe('Copying the routing needs the right to edit the routing over every company.')
     const label = await refused('engineer', 'POST', `/product/styles/${jacket}/duplicate`, { code: 'SEED-JKT-09', name: 'X', parts: ['LABELS'] }, 409)
     expect(label).toMatchObject({ code: 'invalid_state', issues: [{ path: 'body/parts/0', message: 'Revision 1 has no garment label.' }] })
     // B-W2b-236: PICTURES is a part now; a style without pictures refuses it at its place, as a BOM without lines.

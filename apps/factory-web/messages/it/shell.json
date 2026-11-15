@@ -3,6 +3,10 @@
     "skipToContent": "Vai al contenuto"
   },
   "nav": {
+    "mfaHint": {
+      "setup": "Configura l'app di autenticazione per vedere il tuo lavoro",
+      "signIn": "Accedi di nuovo con l'app di autenticazione per vedere il tuo lavoro"
+    },
     "home": {
       "area": "Home",
       "main": "Principali",
@@ -252,6 +256,8 @@
     },
     "userMenu": "{name}: profilo ed esci",
     "profile": "Il mio profilo",
+    "localMailbox": "Posta locale",
+    "localMailboxHint": "La posta inviata da questo server di prova (solo su questo computer)",
     "signOut": "Esci",
     "bell": {
       "label": "Notifiche",

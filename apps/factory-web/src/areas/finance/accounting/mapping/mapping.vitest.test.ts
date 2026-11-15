@@ -210,7 +210,7 @@ describe('the page and record links', () => {
 
 const LEFT_KEY = /\b(?:mapping|journals|hard|integrity|common|band|live|keys|stepUp|problem|sum|fix)\.[a-zA-Z_]+(?:\.[a-zA-Z_]+)*\b/
 const LEFT_PLACEHOLDER = /\{[a-zA-Z]+\}/
-/** Permission names are said on purpose ("needs accounting.mapping.manage"). */
+/** Permission names are stripped before the key check, though no screen says one since B-W2b-F51. */
 const SAID = /\b(?:accounting\.(?:view|export|close|unlock|mapping\.manage|journals\.switch))\b/g
 
 describe('every design case draws in both languages with no key or placeholder left on screen', () => {

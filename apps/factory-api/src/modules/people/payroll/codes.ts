@@ -68,7 +68,7 @@ export async function putCode(caller: CommandCaller, body: PutCodeBody, key?: st
   const context = officeOf(caller)
   const known = await caller.withClient(async (db) => {
     const place = await companyFor(db, context, body.companyId, [PEOPLE_PAYROLL_VIEW])
-    if (!mayDo(context, place, PEOPLE_PAYROLL_MANAGE)) throw new ForbiddenError('The code mapping needs people.payroll.manage over every site of the company.')
+    if (!mayDo(context, place, PEOPLE_PAYROLL_MANAGE)) throw new ForbiddenError('The code mapping needs the right to keep payroll over every site of the company.')
     return (await codeRows(db, place.company.id)).find((row) => row.kind === body.kind && row.ourCode === body.ourCode)
   })
   const code = known ?? refusePayroll('NOT_OUR_CODE', `${body.ourCode} is not one of our ${body.kind.toLowerCase()} codes.`, 'ourCode')

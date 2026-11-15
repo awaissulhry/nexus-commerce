@@ -9,6 +9,8 @@ import { pdfViewerLabels } from '../../../../../lib/pdf/labels'
 import { WithMessages } from '../../../../../record-panels/i18n'
 import { BUNDLES_NAMESPACE, BUNDLES_NAMESPACES } from '../../model'
 import '../../bundles.css'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../../../lib/i18n/rights'
 
 /** SCR-259-ticket — the ticket PDF tab's view model. */
 export interface TicketPdfModel {
@@ -35,7 +37,7 @@ function Page({ model, onRetry }: { model: TicketPdfModel; onRetry?: () => void 
   const t = useT(BUNDLES_NAMESPACE)
   const scoped = useScopedT(BUNDLES_NAMESPACE)
   const shell = useT('shell')
-  if (!model.allowed) return <EmptyState title={t('pdf.noRight.title')} description={t('pdf.noRight.body', { permission: 'print.labels' })} />
+  if (!model.allowed) return <EmptyState title={t('pdf.noRight.title')} description={t('pdf.noRight.body', { right: rightRef('print.labels') })} />
   const title = model.code ? t('ticket.name', { code: model.code }) : t('pdf.title')
   return (
     <div className="fw-bd-pdf">

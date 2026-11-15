@@ -2,7 +2,7 @@
   "today": {
     "refused": {
       "title": "Oggi non è aperto per te",
-      "body": "I tuoi ruoli non includono Oggi (home.view). Chiedi a un amministratore se ti serve."
+      "body": "I tuoi ruoli non includono Oggi. Chiedi a un amministratore se ti serve."
     },
     "band": {
       "label": "Stato e azioni di Oggi",

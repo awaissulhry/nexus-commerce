@@ -43,7 +43,7 @@ export interface LinkBody {
 const factOf = (type: Exclude<ComplaintLinkType, 'Nonconformance'>) => LINK_FIELDS[type]
 
 function mayChange(context: OfficeContext, row: ComplaintRow): void {
-  if (row.status !== 'NEW' && !mayOn(context, QUALITY_COMPLAINTS_MANAGE, row)) throw new ForbiddenError('Once triaged, a complaint is changed by quality (quality.complaints.manage).')
+  if (row.status !== 'NEW' && !mayOn(context, QUALITY_COMPLAINTS_MANAGE, row)) throw new ForbiddenError('Once triaged, a complaint is changed by quality.')
 }
 
 /** The NCR to link or unlink, as the caller sees it (another company's: not found). */
@@ -70,7 +70,7 @@ export async function linkToComplaint(caller: CommandCaller, complaintId: string
     return changeComplaint(caller, complaintId, { version: body.version, [field]: body.recordId }, idempotencyKey)
   }
   const ncr = await ncrFor(caller, context, complaint, body.recordId)
-  if (!can(actorOf(context), QUALITY_NCR_RAISE, { companyId: ncr.companyId, siteId: ncr.siteId })) throw new ForbiddenError(`Linking ${ncr.number} needs quality.ncr.raise at its site.`)
+  if (!can(actorOf(context), QUALITY_NCR_RAISE, { companyId: ncr.companyId, siteId: ncr.siteId })) throw new ForbiddenError(`Linking ${ncr.number} needs the right to raise NCRs at its site.`)
   const { result } = await command(caller, { name: 'complaints.linkNcr', idempotencyKey, input: { complaintId, ...body } }, async (tools) => {
     const { tx, now } = tools
     const row = await lockComplaint(tools, complaint.id, body.version)
@@ -103,7 +103,7 @@ export async function unlinkFromComplaint(caller: CommandCaller, complaintId: st
     return changeComplaint(caller, complaintId, { version: query.version, [field]: null }, idempotencyKey)
   }
   const ncr = await ncrFor(caller, context, complaint, target.recordId)
-  if (!can(actorOf(context), QUALITY_NCR_MANAGE, { companyId: ncr.companyId, siteId: ncr.siteId })) throw new ForbiddenError(`Unlinking ${ncr.number} needs quality.ncr.manage at its site.`)
+  if (!can(actorOf(context), QUALITY_NCR_MANAGE, { companyId: ncr.companyId, siteId: ncr.siteId })) throw new ForbiddenError(`Unlinking ${ncr.number} needs the right to follow up NCRs at its site.`)
   if (ncr.sourceType === COMPLAINT_RECORD && ncr.sourceId === complaint.id) throw new ConflictError(`${ncr.number} was raised from this complaint: it stays linked.`)
   const { result } = await command(caller, { name: 'complaints.unlinkNcr', idempotencyKey, input: { complaintId, ...target, ...query } }, async (tools) => {
     const { tx } = tools

@@ -588,7 +588,7 @@
     "emptyNow": "Nothing is in work now.",
     "groupEmpty": "Nothing to show.",
     "needsGrain": "These records need {grain} rights.",
-    "needsPermission": "These records need a list your role does not include ({permission}).",
+    "needsPermission": "These records need a right your role does not include: “{right}”.",
     "span": {
       "day": "Choose both days.",
       "backwards": "The period ends before it starts.",

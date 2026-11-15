@@ -32,7 +32,7 @@
     "failed": "Couldn't read planned against actual",
     "body": "Closing makes the work order final. Planned against actual below: a figure beyond the tolerance needs a reason.",
     "toleranceHint": "Each figure may differ from the planned one by ±{tolerance} %; scrap counts against the planned garments (no scrap allowance is kept yet).",
-    "noCost": "Material cost needs the cost grain (money.cost): whether it is beyond the tolerance still shows.",
+    "noCost": "Material cost needs the cost grain: whether it is beyond the tolerance still shows.",
     "reason": "Reason",
     "reasonHint": "Why the work order ended outside the tolerance.",
     "reasonPick": "Choose a reason",
@@ -73,14 +73,14 @@
     "busy": "Working…",
     "reading": "Reading the work order's figures…",
     "notCompleted": "Only a completed work order is closed.",
-    "noManage": "Closing a work order needs the permission {permission}.",
+    "noManage": "Closing a work order needs the right “{right}”.",
     "costsWaiting_one": "{count} event still waits to be costed: the close settles the cost, so it waits for it.",
     "costsWaiting_other": "{count} events still wait to be costed: the close settles the cost, so it waits for them.",
     "reasonNeeded": "A figure is beyond the ±{tolerance} % tolerance: choose a reason.",
     "noteNeeded": "Say the reason in words.",
     "noteLong": "The note is longer than {max} characters.",
     "noRecord": "Closed before the close was recorded: it is not reopened.",
-    "noReopen": "Reopening a work order needs the permission {permission}."
+    "noReopen": "Reopening a work order needs the right “{right}”."
   },
   "reopen": {
     "open": "Reopen…",
@@ -225,7 +225,7 @@
       "body": "No purchase price variance was posted in {month}: a variance appears when a material is received or invoiced at a price other than its standard."
     },
     "more": "Show more",
-    "noCost": "Standard, paid and difference are shown only to roles with the cost grain (money.cost).",
+    "noCost": "Standard, paid and difference are shown only to roles with the cost grain.",
     "export_one": "Export {count} (CSV)",
     "export_other": "Export {count} (CSV)",
     "line": "{number} · line {seq}",

@@ -10,7 +10,7 @@
     "body": "Chiedete al partner di approvare una foto, una bozza o una modifica: risponde dal link o dal portale, firmando con il suo nome."
   },
   "held": {
-    "noRight": "Per chiedere un'approvazione a un partner serve il permesso di chiedere (partners.approvals.ask).",
+    "noRight": "Per chiedere un'approvazione a un partner serve il permesso di chiedere.",
     "reading": "Aspettate che le richieste siano lette.",
     "noKind": "Su questo record non si chiede nessuna approvazione.",
     "busy": "Operazione in corso…",

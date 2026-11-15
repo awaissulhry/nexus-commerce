@@ -54,7 +54,7 @@ import { availableCourse, filesOf, fullName, INSTRUCTION_SELECT, instructionView
  *   GET  /safety/training/records/:id/pdf?language    the record as the employer's register keeps it (in memory, not stored)
  */
 
-const RECORD_WORDS = 'Training records are kept by a role that keeps them (safety.training.record).'
+const RECORD_WORDS = 'Training records are kept by a role that keeps them.'
 const LAW = { training: RECORDS_LAW, language: LANGUAGE_LAW }
 
 /** GET /safety/training/people/:employeeId. */

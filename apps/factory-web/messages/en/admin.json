@@ -131,7 +131,8 @@
     "body": "You need: {need}. Ask an administrator."
   },
   "held": {
-    "needs": "Needs the right: {right}"
+    "needs": "Needs the right: {right}",
+    "unnamedRight": "A right your role does not have"
   },
   "form": {
     "required": "Fill this in.",
@@ -595,7 +596,7 @@
     "centres": {
       "hint": "Groups of stations that do one kind of work.",
       "empty": "No work centres",
-      "capacityLater": "Capacity per work centre is set in Planning (W1).",
+      "capacityLater": "Capacity per work centre is set in Planning.",
       "count_one": "{count} work centre",
       "count_other": "{count} work centres"
     },
@@ -627,7 +628,7 @@
       "tooMany": "Too many shift ends.",
       "twice": "A time is listed twice.",
       "zoneHint": "The site's own time zone (set on the site).",
-      "holidaysLater": "Working days and holidays (Italian holidays, the August shutdown) come in W2a."
+      "holidaysLater": "Working days and holidays (Italian holidays, the August shutdown) are set in the company’s calendar, which every site inherits."
     },
     "badge": {
       "title": "Starting work on a tablet",
@@ -1285,7 +1286,7 @@
       "failedPrinters": "Printers with failed jobs"
     },
     "tileHint": {
-      "failedPrinters": "The print queue comes in W1"
+      "failedPrinters": "A list of the failed jobs is not available here yet."
     },
     "mode": {
       "label": "List",
@@ -1333,7 +1334,7 @@
       "title": "No tablets yet",
       "body": "Enrol one: it takes a minute with the QR code."
     },
-    "later": "The print queue (every label with its tries and Retry) comes in W1.",
+    "later": "A list of every label sent to a printer, with its tries and Retry, is not available here yet.",
     "step": {
       "where": "Where will it work?",
       "scan": "Scan this on the tablet",
@@ -1460,7 +1461,7 @@
       "dpi": "Pick 203, 300 or 600 dpi.",
       "dpiLabel": "Resolution",
       "statusHint": "Paused: jobs wait. Archived: for good.",
-      "testLater": "\"Print a test label\" comes with the print queue (W1)."
+      "testLater": "\"Print a test label\" is not available yet."
     },
     "done": {
       "added": "Printer added.",
@@ -2190,6 +2191,26 @@
     "purchasing_requests_ask": "Ask the buyers to buy a material (also from a work order’s shortage); see and take back your own requests",
     "inventory_tasks_manage": "Make the warehouse's floor tasks by hand (receive, put away, pick, move, count), hand them to a floor role or one worker, change and cancel them",
     "inventory_counts_scan": "Count a running stock count by scanning every unit (a hide's area, a roll's length, pieces typed), see a bin's differences after Bin done, finish the bin and recount a line someone else counted",
-    "inventory_unplanned_decide": "Name the purchase order of goods that came without one (they then post into the holding place), or send them back to the supplier with the reason"
+    "inventory_unplanned_decide": "Name the purchase order of goods that came without one (they then post into the holding place), or send them back to the supplier with the reason",
+    "money_price": "See selling prices, line amounts and document totals",
+    "money_cost": "See costs and purchase prices",
+    "money_margin": "See margins",
+    "money_wages": "See wages: piece rates and earnings",
+    "money_pay": "See piece pay: rates, earnings and guaranteed pay",
+    "portal_shipNotices_view": "See the deliveries you announced and the order lines you may ship",
+    "portal_accounting_view": "Open the accountant's room: handed-over months, their exports, e-invoices and registers (read-only)",
+    "links_open": "Open the link's record",
+    "links_accept": "Accept the quote the link opens",
+    "links_decline": "Decline the quote or purchase order the link opens",
+    "links_confirm": "Confirm the purchase order the link opens",
+    "links_download": "Download the link's files",
+    "links_receive": "Confirm the files of a secure file link were received",
+    "links_submit": "Send the link's form",
+    "links_approve": "Approve the request the link opens",
+    "links_refuse": "Refuse the request the link opens",
+    "links_pay": "Pay the deposit request or invoice the link opens",
+    "links_moveDate": "Propose another date for the subcontract job the link opens",
+    "links_post": "Post a message on the record shared with the link",
+    "links_upload": "Upload a file to the record shared with the link"
   }
 }

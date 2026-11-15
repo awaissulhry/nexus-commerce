@@ -100,7 +100,7 @@
     "more": "More on this page",
     "print": "Print this view",
     "noAccessTitle": "You cannot see corrective actions",
-    "noAccessBody": "This page needs quality.capa.view. The company's owner or administrator gives it with a role (Admin › Roles & permissions).",
+    "noAccessBody": "This page needs the right to see corrective actions. The company's owner or administrator gives it with a role (Admin › Roles & permissions).",
     "failed": "The corrective actions could not be read",
     "noMatch": "No corrective action matches",
     "noMatchBody": "Nothing in these rows matches the filters.",
@@ -129,7 +129,7 @@
   },
   "board": {
     "closedLane": "Drop here to close: the checks and the closing words",
-    "readOnly": "You can see the board; moving a card needs quality.capa.manage.",
+    "readOnly": "You can see the board; moving a card needs the right to follow up CAPAs.",
     "oneType": "The board shows one type at a time, its own stages: switch between CAPA and 8D in the toolbar.",
     "moved": "{number} moved to {stage}",
     "notMoved": "{number} did not move"
@@ -194,7 +194,7 @@
     "failed": "Not saved"
   },
   "held": {
-    "noManage": "This needs quality.capa.manage (quality follows corrective actions up).",
+    "noManage": "This needs the right to follow up CAPAs (quality follows corrective actions up).",
     "offline": "Offline: changes wait until the connection is back.",
     "FINAL": "It is {stage}: it never changes.",
     "ACTION_ENDED": "The action is {status}: it never changes.",
@@ -203,12 +203,12 @@
     "NO_REPORT": "Keep a version of the 8D first (Keep a version, above).",
     "notYourAction": "Only quality, or the person who owns the action, records it done.",
     "tooManyActions": "A CAPA has at most {count} actions.",
-    "noUpload": "Adding a file needs files.upload.",
-    "noFiles": "Opening a file needs files.read.",
-    "noParties": "Picking a customer needs parties.view.",
+    "noUpload": "Adding a file needs the right to upload files.",
+    "noFiles": "Opening a file needs the right to see a record's files.",
+    "noParties": "Picking a customer needs the right to see customers and suppliers.",
     "cannotSee": "A complaint you cannot see.",
     "shareOnly8D": "Only an 8D is shared with the customer.",
-    "noShare": "Sharing needs quality.complaints.manage and files.manage."
+    "noShare": "Sharing needs the rights to follow up complaints and to share files outside the office."
   },
   "refused": {
     "FINAL": "It is closed or cancelled: it never changes.",
@@ -221,7 +221,7 @@
     "NCR_KEEPS_CAPA": "The NCR is decided or closed and keeps its CAPA.",
     "OTHER_COMPANY": "Another company's record: a CAPA takes the records of its own company.",
     "TOO_MANY_REMINDERS": "Reminded too many times already.",
-    "NO_PERMISSION": "Escalating it needs quality.ncr.manage at its site.",
+    "NO_PERMISSION": "Escalating it needs the right to follow up NCRs at its site.",
     "NO_CAPA": "The complaint names no CAPA or 8D.",
     "NO_REPORT": "The 8D has no version kept yet.",
     "other": "Not possible in its present state."
@@ -334,7 +334,7 @@
     "dropSource": "Remove {number}",
     "findSources": "Find an NCR or a complaint",
     "find": "Find",
-    "noFindRight": "Finding NCRs or complaints needs quality.ncr.view or quality.complaints.view.",
+    "noFindRight": "Finding NCRs or complaints needs the right to see NCRs or customer complaints.",
     "foundNone": "Nothing open matches these words.",
     "found": "Found",
     "pickedAlready": "Added already.",

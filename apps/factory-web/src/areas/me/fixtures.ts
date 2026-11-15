@@ -4,6 +4,7 @@ import { useLocale } from '../../lib/i18n/provider'
 import { permissionCheck } from '../../lib/session/session'
 import { DEMO_COMPANIES, DEMO_SITES, DEMO_TAG, DEMO_USER, OWNER_PERMISSIONS } from '../../shell/design-data'
 import { officeNavFor } from '../../shell/nav/office-nav'
+import { navWithMfaHint } from '../../shell/office/mfa-hint'
 import { OfficeShellView, type OfficeShellViewModel } from '../../shell/office/view/OfficeShellView'
 import type { MyProfileViewModel } from './me-model'
 import { MyProfileView } from './view/MyProfileView'
@@ -24,8 +25,10 @@ const SHELL: OfficeShellViewModel = {
   tenantTag: DEMO_TAG,
   banners: [],
 }
-/** Two-factor required and not proved: the roles give nothing yet, so the rail is empty. */
-const SHELL_NO_AREAS: OfficeShellViewModel = { ...SHELL, nav: officeNavFor(permissionCheck([])) }
+/** Two-factor required and not proved: the roles give nothing yet, so the rail holds only the one row that opens this card (B-W2b-F58). */
+const SHELL_NO_AREAS: OfficeShellViewModel = { ...SHELL, nav: navWithMfaHint(officeNavFor(permissionCheck([])), { enabled: false, required: true, satisfied: false }) }
+/** B-W2b-F58: the app is on, but this session began before it was proved: the row says to sign in again. */
+const SHELL_SIGN_IN_AGAIN: OfficeShellViewModel = { ...SHELL, nav: navWithMfaHint(officeNavFor(permissionCheck([])), { enabled: true, required: true, satisfied: false }) }
 
 /** B-W2b-413: a case may set Where I'm signed in (else every live session shows, made-up). */
 type MeCase = MyProfileViewModel & { signedIn?: MySessionsModel }
@@ -35,8 +38,9 @@ const SIGNED_IN: MySessionsModel = { read: { state: 'ok', sessions: DEMO_SESSION
 function MyProfileDesign({ model }: { model: MeCase }) {
   const locale = useLocale()
   const locked = model.authenticator.state === 'off' && model.authenticator.required
+  const unproved = model.authenticator.state === 'on' && model.authenticator.proved === false
   const { signedIn = SIGNED_IN, ...profile } = model
-  return createElement(OfficeShellView, { model: locked ? SHELL_NO_AREAS : SHELL }, createElement(MyProfileView, { model: { ...profile, locale }, signedIn: createElement(MySessionsCard, { model: signedIn }) }))
+  return createElement(OfficeShellView, { model: locked ? SHELL_NO_AREAS : unproved ? SHELL_SIGN_IN_AGAIN : SHELL }, createElement(MyProfileView, { model: { ...profile, locale }, signedIn: createElement(MySessionsCard, { model: signedIn }) }))
 }
 
 // A made-up base32 secret and its otpauth address (as the API's `otpauthUri` builds it).
@@ -64,8 +68,14 @@ export const designScreen = defineDesignScreen<MeCase>({
     {
       id: 'required-off',
       label: 'Two-factor required, not set up',
-      model: { ...base, authenticator: { state: 'off', required: true } },
-      note: 'An owner or a role that needs two-factor: nothing but this page opens until it is set up (the sign-in lands here).',
+      model: { ...base, authenticator: { state: 'off', required: true }, authenticatorFirst: true },
+      note: 'An owner or a role that needs two-factor: nothing but this page opens until it is set up (the sign-in lands here). B-W2b-F58: the rail holds one row in words that opens this card, and the card comes first.',
+    },
+    {
+      id: 'required-on-unproved',
+      label: 'Two-factor on, not proved on this session',
+      model: { ...base, authenticator: { state: 'on', required: true, recoveryCodesLeft: 8, proved: false }, authenticatorFirst: true },
+      note: 'B-W2b-F58: the session began before the app was proved here, so the role opens nothing: the row and the card say to sign in again.',
     },
     { id: 'off', label: 'Two-factor off (optional)', model: { ...base, authenticator: { state: 'off', required: false } } },
     {

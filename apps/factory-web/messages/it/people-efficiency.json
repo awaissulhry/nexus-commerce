@@ -291,7 +291,7 @@
     "sharedReports_other": "{count} dichiarazioni condivise con altri escluse.",
     "noExport": "Nessun confronto, nessuna esportazione, nessuna stampa. Chiudendo questa finestra i dati si dimenticano.",
     "noRegister": "Qui non puoi scegliere una persona",
-    "noRegisterBody": "Per scegliere serve il registro del personale (people.view).",
+    "noRegisterBody": "Per scegliere serve il registro del personale.",
     "who": "Persona",
     "search": "Nome o matricola",
     "purpose": "Scopo",

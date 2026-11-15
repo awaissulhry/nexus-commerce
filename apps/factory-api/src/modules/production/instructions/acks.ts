@@ -186,7 +186,7 @@ export async function recordPaper(caller: CommandCaller, instructionId: string, 
   const facts = await caller.withClient(async (client) => {
     const db = client as Db
     const instruction = await readInstruction(db, context, instructionId)
-    assertMay(context, PRODUCTION_INSTRUCTIONS_PEOPLE, instruction.companyId, 'Acknowledgements are a training record: HR records them (production.instructions.people).')
+    assertMay(context, PRODUCTION_INSTRUCTIONS_PEOPLE, instruction.companyId, 'Acknowledgements are a training record: HR records them.')
     const version = await readVersion(db, instruction, versionId)
     if (statusOf(version) !== 'PUBLISHED' && statusOf(version) !== 'SUPERSEDED') refuse(notPublishedRefusal(version.number))
     const worker = isUuid(body.workerId) ? await db.worker.findUnique({ where: { id: body.workerId }, select: { id: true, siteId: true, companyId: true, employeeId: true, status: true } }) : null

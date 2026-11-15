@@ -166,7 +166,7 @@
       "calls": "Chiamate 24 h",
       "region": "Regione"
     },
-    "later": "La coda degli errori, il registro delle consegne e le chiavi API per altri sistemi arrivano nei prossimi passi.",
+    "later": "Le chiavi API per altri sistemi non sono ancora disponibili.",
     "residency": {
       "title": "Dove stanno i tuoi dati",
       "intro": "Solo ciò che dicono le impostazioni di ogni collegamento: Nexus non indovina mai una regione.",
@@ -290,7 +290,7 @@
       "count_other": "{count} messaggi mostrati",
       "verified": "Firma verificata",
       "notVerified": "Firma rifiutata",
-      "privacy": "Il contenuto di un messaggio non si vede qui. Rielaborare un messaggio non riuscito arriverà più avanti.",
+      "privacy": "Il contenuto di un messaggio non si vede qui. Un messaggio non riuscito si rielabora dalla coda degli errori in Connessioni e API.",
       "col": {
         "event": "Tipo",
         "verified": "Firma",

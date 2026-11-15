@@ -10,6 +10,8 @@ import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { MAX_REMINDER_TEXT, type Reminder } from '../api'
 import { moneyText, needsCallNote, RECEIVABLES_NAMESPACE, stepPhrase, type ReceivablesCan } from '../model'
 import { dayText } from './parts'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../../lib/i18n/rights'
 
 export interface ReminderDialogState {
   readonly id: string
@@ -92,14 +94,14 @@ export function ReminderDialog({
   }, [reminder?.id, reminder?.version])
 
   const busyHeld = busy ? t('held.busy') : null
-  const approveHeld = busyHeld ?? (!can.approve ? t('held.approve', { permission: 'receivables.reminders.approve' }) : reminder && !reminder.actions.approve ? t('held.notPrepared') : null)
-  const manageHeld = busyHeld ?? (!can.manage ? t('held.manage', { permission: 'receivables.reminders.manage' }) : null)
-  const editHeld = manageHeld ?? (!can.price ? t('held.price', { permission: 'money.price' }) : reminder && !reminder.actions.edit ? t('held.notPrepared') : null)
+  const approveHeld = busyHeld ?? (!can.approve ? t('held.approve', { right: rightRef('receivables.reminders.approve') }) : reminder && !reminder.actions.approve ? t('held.notPrepared') : null)
+  const manageHeld = busyHeld ?? (!can.manage ? t('held.manage', { right: rightRef('receivables.reminders.manage') }) : null)
+  const editHeld = manageHeld ?? (!can.price ? t('held.price', { right: rightRef('money.price') }) : reminder && !reminder.actions.edit ? t('held.notPrepared') : null)
   const skipHeld = manageHeld ?? (reminder && !reminder.actions.skip ? t('held.notPrepared') : null)
   const cancelHeld = manageHeld ?? (reminder && !reminder.actions.cancel ? t('held.notOpen') : null)
   const sendHeld =
     busyHeld ??
-    (!can.approve ? t('held.approve', { permission: 'receivables.reminders.approve' }) : !switchedOn ? t('held.switchedOff') : reminder && !reminder.actions.send ? t('held.notApproved') : null)
+    (!can.approve ? t('held.approve', { right: rightRef('receivables.reminders.approve') }) : !switchedOn ? t('held.switchedOff') : reminder && !reminder.actions.send ? t('held.notApproved') : null)
   const sending = switchedOn
   const say = (key: string, params?: Record<string, string | number>) => t(key, params)
 
@@ -292,7 +294,7 @@ export function ReminderDialog({
                 <div className="fw-frv-card">
                   <h3 className="fw-frv-h3">{t('reminder.textTitle')}</h3>
                   {!can.price ? (
-                    <p className="fw-frv-muted">{t('reminder.textNoPrice', { permission: 'money.price' })}</p>
+                    <p className="fw-frv-muted">{t('reminder.textNoPrice', { right: rightRef('money.price') })}</p>
                   ) : reminder.action === 'CALL' && !reminder.text?.body ? (
                     <p className="fw-frv-muted">{t('reminder.callText')}</p>
                   ) : (

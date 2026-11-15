@@ -69,10 +69,10 @@
   },
   "noAccess": {
     "title": "Approved sources are Purchasing’s",
-    "body": "Your role cannot read them: it needs purchasing.view. Ask an administrator."
+    "body": "Your role cannot read them: it needs the right to see purchase orders. Ask an administrator."
   },
   "held": {
-    "noManage": "Your role cannot change approved sources (purchasing.sources.manage).",
+    "noManage": "Your role cannot change approved sources.",
     "supplierArchived": "The supplier is archived: it is no approved source any more.",
     "busy": "Wait: the last change is still being saved.",
     "archived": "Archived: restore it to change it."
@@ -106,7 +106,7 @@
     "open": "Add a source",
     "title": "Add a source of {supplier}",
     "submit": "Add",
-    "noMaterials": "Finding a material needs product.materials.view: ask an administrator.",
+    "noMaterials": "Finding a material needs the right to see the material library: ask an administrator.",
     "otherMaterial": "Another material",
     "material": "Material",
     "materialHint": "Active materials only.",
@@ -178,7 +178,7 @@
   },
   "readOnly": {
     "title": "Read only",
-    "body": "Your role reads the approved sources but cannot change them: that needs purchasing.sources.manage (the buyer)."
+    "body": "Your role reads the approved sources but cannot change them: that needs the right to keep supplier prices and approved sources (the buyer)."
   },
   "noCost": "Prices are not shown: your role has no cost grain.",
   "cell": {
@@ -273,7 +273,7 @@
   "prices": {
     "title": "Supplier prices",
     "intro": "The approved suppliers of this material with their price, minimum, pack size and lead time. They are kept in Purchasing, on each supplier’s Items & prices.",
-    "noAccess": "Supplier prices are Purchasing’s: your role needs purchasing.view to read them.",
+    "noAccess": "Supplier prices are Purchasing’s: your role needs the right to see purchase orders to read them.",
     "failed": "Couldn’t load supplier prices",
     "onlyDefault": "Only the default supplier: {supplier}. No approved source yet.",
     "openSupplier": "Open the supplier",

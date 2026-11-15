@@ -81,7 +81,7 @@ export async function recordResult(caller: CommandCaller, body: ResultBody, idem
     if (body.salesOrderLineId && (!line || !can(actor, SALES_MEASUREMENTS_VIEW, { companyId: line.companyId, partyId: line.partyId }))) throw new NotFoundError('Order line not found.')
     const companyId = appointment?.companyId ?? line!.companyId
     const partyId = appointment?.partyId ?? line!.partyId
-    if (!can(actor, SALES_FITTINGS_MANAGE, { companyId, partyId })) throw new ForbiddenError('Your roles do not book or record fittings (sales.fittings.manage).')
+    if (!can(actor, SALES_FITTINGS_MANAGE, { companyId, partyId })) throw new ForbiddenError('Your roles do not book or record fittings.')
     if (appointment) {
       if (appointment.kind !== 'FITTING') issues.push({ path: 'body/appointmentId', message: 'A result is of a fitting (not of a showroom visit or a measuring session).' })
       if (appointment.status === 'MISSED' || appointment.status === 'CANCELLED') issues.push({ path: 'body/appointmentId', message: `The fitting was ${appointment.status.toLowerCase()}: nothing was fitted.` })
@@ -169,7 +169,7 @@ async function writableResult(caller: CommandCaller, id: string): Promise<{ cont
     return row ? { row, profile: (await profileOf(db, row.measurementProfileId))! } : null
   })
   if (!found || !sees(context, found.row)) throw resultNotFound()
-  if (!mayOn(context, SALES_FITTINGS_MANAGE, found.row)) throw new ForbiddenError('Your roles do not book or record fittings (sales.fittings.manage).')
+  if (!mayOn(context, SALES_FITTINGS_MANAGE, found.row)) throw new ForbiddenError('Your roles do not book or record fittings.')
   await caller.withClient((db) => assertStarted(db, found.profile.garmentType))
   return { context, ...found }
 }
@@ -188,7 +188,7 @@ export async function openAlteration(caller: CommandCaller, id: string, body: Al
   const { context, row } = await writableResult(caller, id)
   if (row.verdict !== 'ALTER') throw new ConflictError(`The fitting found ${row.verdict === 'OK' ? 'that it fits' : 'that the unit is remade'}: there is nothing to alter.`)
   if (row.alterationRepairId) throw new ConflictError('This fitting opened its alteration already.')
-  if (!mayOn(context, SALES_REPAIRS_MANAGE, row)) throw new ForbiddenError('Opening the alteration needs sales.repairs.manage over the customer (the alteration is a repair order of kind ALTERATION).')
+  if (!mayOn(context, SALES_REPAIRS_MANAGE, row)) throw new ForbiddenError('Opening the alteration needs the right to make repairs over the customer (the alteration is a repair order of kind ALTERATION).')
   const now = serverClock.now()
   const facts = await caller.withClient(async (db) => {
     const line = row.salesOrderLineId ? await db.salesOrderLine.findUnique({ where: { id: row.salesOrderLineId }, select: { id: true, styleId: true, colourwayId: true, baseSize: true, promiseDate: true, order: { select: { id: true, number: true, companyId: true, partyId: true, status: true, promiseDate: true } } } }) : null
@@ -206,7 +206,7 @@ export async function openAlteration(caller: CommandCaller, id: string, body: Al
   else if (!line) promise = { ...promise, why: 'The fitting names no order line: no date to move.' }
   else if (!row.alterationDays) promise = { ...promise, why: 'The fitting gave no days for the alteration.' }
   else if (!from) promise = { ...promise, why: `${line.order.number} has no promise date to move.` }
-  else if (!can(actorOf(context), ORDERS_MANAGE, { companyId: line.order.companyId, partyId: line.order.partyId })) promise = { ...promise, why: `Moving ${line.order.number}'s promise needs orders.manage: sales moves it to ${to}.` }
+  else if (!can(actorOf(context), ORDERS_MANAGE, { companyId: line.order.companyId, partyId: line.order.partyId })) promise = { ...promise, why: `Moving ${line.order.number}'s promise needs the right to work on sales orders: sales moves it to ${to}.` }
   else {
     const held = promiseStateProblem(line.order.status as SalesOrderStatus, true) ?? (to! < businessDate(now) ? `Moved by ${row.alterationDays} days the promise would still be past (${to}): sales sets a new date.` : null)
     promise = held ? { ...promise, why: held } : { ...promise, moved: true }

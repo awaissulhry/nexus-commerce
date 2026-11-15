@@ -29,7 +29,7 @@ const tenantWide = { companyId: null, siteId: null } as const
 const mayManage = (context: OfficeContext): boolean => mayWrite(actorOf(context), PLANT_CHECKS_MANAGE, null)
 
 function assertManage(context: OfficeContext): void {
-  if (!mayManage(context)) throw new ForbiddenError("The statutory check types are the whole group's: they are kept with plant.checks.manage over every company.")
+  if (!mayManage(context)) throw new ForbiddenError("The statutory check types are the whole group's: they are kept with the right to keep the statutory checks over every company.")
 }
 
 async function useOf(db: Pick<Reader, 'machineCheckPlan' | 'machineCheckResult'>, ids?: readonly string[]) {

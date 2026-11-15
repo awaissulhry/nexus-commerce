@@ -32,7 +32,7 @@
     "receive": "ricevere il rientro"
   },
   "held": {
-    "permission": "Il tuo ruolo non può farlo ({permission}).",
+    "permission": "Il tuo ruolo non può farlo: serve il permesso «{right}».",
     "busy": "In corso…",
     "loading": "Ancora in caricamento…",
     "issue": {
@@ -117,7 +117,7 @@
     "keyNew": "Nuovo ordine al terzista",
     "noAccess": {
       "title": "Non per il tuo ruolo",
-      "body": "Gli ordini ai terzisti richiedono purchasing.view: chiedilo a un amministratore."
+      "body": "Gli ordini ai terzisti richiedono il permesso di vedere gli ordini d'acquisto: chiedilo a un amministratore."
     },
     "switch": "Cosa mostra la pagina"
   },

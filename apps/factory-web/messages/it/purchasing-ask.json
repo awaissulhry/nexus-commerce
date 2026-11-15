@@ -81,8 +81,8 @@
     "inQueue": "Puoi seguirla in Richieste d'acquisto."
   },
   "held": {
-    "noAsk": "Per chiedere di acquistare serve purchasing.requests.ask. Chiedi a un amministratore.",
-    "noDraft": "Preparare un ordine d'acquisto spetta ai buyer (purchasing.manage): inviala ai buyer.",
+    "noAsk": "Il tuo ruolo non può chiedere agli acquisti di comprare. Chiedi a un amministratore.",
+    "noDraft": "Preparare un ordine d'acquisto spetta ai buyer: inviala ai buyer.",
     "busy": "Invio in corso…",
     "offline": "Offline: inviala quando la connessione torna.",
     "done": "Già inviata.",
@@ -148,7 +148,7 @@
     },
     "noAccess": {
       "title": "Le richieste d'acquisto non fanno parte del tuo ruolo",
-      "body": "Per chiedere di acquistare serve purchasing.requests.ask. Chiedi a un amministratore."
+      "body": "Il tuo ruolo non può chiedere agli acquisti di comprare. Chiedi a un amministratore."
     },
     "failed": "Impossibile caricare le tue richieste",
     "empty": {

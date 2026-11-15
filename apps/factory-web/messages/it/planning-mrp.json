@@ -1,13 +1,13 @@
 {
   "held": {
     "noPurchasingRequests": "Gli ordini li creano gli acquisti: chiedi a un buyer. La riga aspetta anche nelle loro Richieste d’acquisto.",
-    "noPoView": "Il tuo ruolo non può aprire gli ordini d’acquisto (purchasing.view).",
+    "noPoView": "Il tuo ruolo non può aprire gli ordini d’acquisto.",
     "lineGone": "La riga non è nella pianificazione mostrata: pianifica di nuovo.",
     "lineNotOpen": "La riga è già in un ordine, accantonata o coperta.",
     "notFirm": "Questa riga non ha un ordine pianificato fisso.",
-    "noFirm": "Il tuo ruolo non può modificare gli ordini pianificati fissi (planning.firm).",
+    "noFirm": "Il tuo ruolo non può modificare gli ordini pianificati fissi.",
     "noBuyFix": "Nessuna delle righe spuntate ha una riga da comprare.",
-    "noSend": "Il tuo ruolo non può inviare gli ordini d’acquisto (purchasing.send).",
+    "noSend": "Il tuo ruolo non può inviare gli ordini d’acquisto.",
     "noneReady": "Nessun ordine è pronto per l’invio: sistemali prima sulle loro pagine."
   },
   "move": {

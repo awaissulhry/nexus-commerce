@@ -10,6 +10,8 @@ import { money, quantity } from '../../../../_shared/buying/model'
 import type { Claim } from '../../api'
 import { answerHeld, goodsHeld, linesLeft, say, sendHeld, simpleHeld, type AnswerDraft, type ClaimDialog, type ClaimRecordActions, type ClaimRecordModel, type GoodsDraft, type SendDraft } from '../../model'
 import { DdtFields } from '../../parts/DdtFields'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../../../lib/i18n/rights'
 
 interface Props {
   claim: Claim
@@ -240,7 +242,7 @@ function ReturnedDialog({ model, actions, dialog }: Props & { dialog: Extract<Cl
               value: (
                 <span className="fw-by-inline">
                   {answer.ddt.number}
-                  <Button size="sm" variant="quiet" heldReason={!model.can.files ? t('held.permissionPlain', { permission: 'files.read' }) : answer.ddt.pdfProblem ? t('ret.done.pdfLater') : null} onClick={() => actions?.onOpenDdt?.(answer.ddt.id)}>
+                  <Button size="sm" variant="quiet" heldReason={!model.can.files ? t('held.permissionPlain', { right: rightRef('files.read') }) : answer.ddt.pdfProblem ? t('ret.done.pdfLater') : null} onClick={() => actions?.onOpenDdt?.(answer.ddt.id)}>
                     <ExternalLink size={13} aria-hidden /> {t('goods.openPdf')}
                   </Button>
                 </span>

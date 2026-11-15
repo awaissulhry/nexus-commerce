@@ -235,7 +235,7 @@ const NS = 'plant-health'
 const TOP = [...new Set(Object.keys(flat(CATALOGUE.en[NS] ?? {})).map((key) => key.split('.')[0]!))]
 const LEFT_KEY = new RegExp(`\\b(?:${TOP.join('|')})\\.[a-zA-Z_-]+(?:\\.[a-zA-Z_-]+)*\\b`)
 const LEFT_PLACEHOLDER = /\{[a-zA-Z]+\}/
-/** Permission names are said on purpose; file names and the law are not keys. */
+/** Permission names are stripped before the key check, though no screen says one since B-W2b-F51; file names and the law are not keys. */
 const SAID = /\b(?:safety\.[a-zA-Z.]+|[\w-]+\.(?:pdf|jpg|png)|D\.Lgs\.|art\.|artt\.)/g
 
 function flat(dictionary: Record<string, unknown>, prefix = ''): Record<string, string> {

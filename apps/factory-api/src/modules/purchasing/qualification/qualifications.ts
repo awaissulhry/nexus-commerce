@@ -233,7 +233,7 @@ export async function qualificationsFor(db: Reader, input: { readonly companyId:
 const refusal = (issues: readonly Issue[]): DomainError => new ValidationError(issues[0]!.message, [...issues])
 
 function assertManage(caller: CommandCaller, supplier: SupplierRow, companyId: string): void {
-  if (!can(actorOf(officeContextOf(caller)), PURCHASING_QUALIFICATION_MANAGE, { companyId, partyId: supplier.id })) throw new ForbiddenError('Qualifying a supplier needs purchasing.qualification.manage over its company.')
+  if (!can(actorOf(officeContextOf(caller)), PURCHASING_QUALIFICATION_MANAGE, { companyId, partyId: supplier.id })) throw new ForbiddenError('Qualifying a supplier needs the right to qualify suppliers over its company.')
 }
 
 /** Every evidence entry is the party's and in force: an ACCEPTED questionnaire or upload, an AVAILABLE file of it (or of the qualification). */

@@ -34,7 +34,7 @@
       "series": "Che cosa mostrano le barre",
       "seriesArea": "Superficie",
       "seriesValue": "Valore della superficie",
-      "valueHeld": "Il valore della superficie richiede l'accesso ai costi (money.cost): vedi solo le superfici.",
+      "valueHeld": "Il valore della superficie richiede l'accesso ai costi: vedi solo le superfici.",
       "empty": "Nessuna pelle a magazzino",
       "emptyBody": "Le pelli ricevute in questo stabilimento compaiono qui, per articolo e colore.",
       "hint": "Premi un articolo per vedere le sue pelli nell'elenco sotto; premilo di nuovo per vederle tutte."
@@ -74,7 +74,7 @@
       "hint": "Superficie dei pezzi tagliati rispetto alla superficie usata dai tagli. Mai per tagliatore: solo per modello e lotto del fornitore.",
       "supplierLot": "lotto del fornitore {ref}",
       "planned": "prevista {pct} %",
-      "held": "La resa richiede il diritto della sala taglio (production.cutting.view)."
+      "held": "La resa richiede il diritto della sala taglio."
     }
   },
   "find": {
@@ -96,7 +96,7 @@
     "pickWorkOrder": "Scegli un ordine di lavoro",
     "pieces_one": "{count} pezzo",
     "pieces_other": "{count} pezzi",
-    "noRightWorkOrders": "Non puoi vedere gli ordini di lavoro (workorders.view): cerca per articolo e superficie.",
+    "noRightWorkOrders": "Non puoi vedere gli ordini di lavoro: cerca per articolo e superficie.",
     "pickSite": "Scegli uno stabilimento",
     "article": "Articolo e colore",
     "articlesFailed": "Non è stato possibile leggere gli articoli.",
@@ -110,7 +110,7 @@
     "shadeGroupHint": "I gruppi dei lotti trovati compaiono dopo la prima ricerca.",
     "anyShade": "Qualsiasi tonalità",
     "minGrade": "Scelta minima",
-    "gradesHeld": "Le scelte richiedono il diritto sui materiali (product.materials.view).",
+    "gradesHeld": "Le scelte richiedono il diritto sui materiali.",
     "anyGrade": "Qualsiasi scelta",
     "find": "Trova",
     "intro": "Scegli un ordine di lavoro, oppure un articolo e la superficie necessaria, poi premi Trova.",
@@ -164,7 +164,7 @@
       "pickArticle": "Scegli prima un articolo.",
       "pickSite": "Scegli prima uno stabilimento.",
       "area": "Scrivi la superficie come numero, per esempio 44 o 44,5.",
-      "noReserve": "Non puoi prenotare la merce (inventory.reserve).",
+      "noReserve": "Non puoi prenotare la merce.",
       "busy": "Prenotazione in corso…",
       "findFirst": "Prima trova le pelli.",
       "none": "Scegli almeno una pelle.",
@@ -213,7 +213,7 @@
       "noPlace": "nessun posto la contiene"
     },
     "held": {
-      "noRight": "Non puoi spostare la merce (inventory.transfer).",
+      "noRight": "Non puoi spostare la merce.",
       "pick": "Scegli almeno una pelle.",
       "oneSite": "Scegli pelli di un solo stabilimento.",
       "busy": "Spostamento in corso…",

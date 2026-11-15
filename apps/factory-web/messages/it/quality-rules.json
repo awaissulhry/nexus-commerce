@@ -1,7 +1,7 @@
 {
   "noAccess": {
     "title": "Non puoi aprire Regole qualità",
-    "body": "Serve il permesso quality.rules.view. Lo assegna un amministratore in Sistema › Ruoli e permessi (lo hanno i ruoli ispettore qualità, responsabile di produzione e capo reparto)."
+    "body": "Serve il permesso di vedere le regole qualità. Lo assegna un amministratore in Sistema › Ruoli e permessi (lo hanno i ruoli ispettore qualità, responsabile di produzione e capo reparto)."
   },
   "head": {
     "intro": "Chi può firmare cosa, chi viene avvisato di cosa e quanto presto, come si contano i risultati. Una regola più larga chiede un codice nuovo; una più stretta mai.",
@@ -46,16 +46,16 @@
     "DEFAULT": "il valore predefinito"
   },
   "held": {
-    "noRight": "Per cambiare queste regole serve quality.settings.manage per questa azienda.",
-    "noRightAll": "Per cambiare le regole di tutte le aziende serve quality.settings.manage su tutte le aziende.",
+    "noRight": "Per cambiare queste regole serve il permesso di cambiare le impostazioni qualità per questa azienda.",
+    "noRightAll": "Per cambiare le regole di tutte le aziende serve il permesso di cambiare le impostazioni qualità su tutte le aziende.",
     "offline": "Nessuna connessione: le modifiche aspettano che la pagina torni in linea.",
     "busy": "Attendi: l’ultima modifica è ancora in salvataggio.",
     "reading": "Attendi: la pagina sta ancora leggendo.",
-    "noAlertRight": "Per tenere le regole di avviso serve quality.alerts.manage.",
+    "noAlertRight": "Il tuo ruolo non può gestire le regole di avviso della qualità.",
     "pickRows": "Spunta prima le regole.",
     "allOn": "Tutte le regole spuntate sono già attive.",
     "allOff": "Tutte le regole spuntate sono già spente.",
-    "starterAll": "Le regole suggerite valgono per tutte le aziende: serve quality.alerts.manage su tutte le aziende."
+    "starterAll": "Le regole suggerite valgono per tutte le aziende: serve il permesso di gestire le regole di avviso della qualità su tutte le aziende."
   },
   "duties": {
     "title": "Separazione dei compiti e doppio controllo",
@@ -89,7 +89,7 @@
       "none": "Nessun cliente elencato.",
       "remove": "Togli {name} dall’elenco",
       "fromAll": "Elencato per tutte le aziende",
-      "noPicker": "Per aggiungere un cliente serve parties.view.",
+      "noPicker": "Per aggiungere un cliente serve il permesso di vedere clienti e fornitori.",
       "add": "Aggiungi un cliente",
       "pick_one": "Scegli un cliente ({count})",
       "pick_other": "Scegli un cliente ({count})"
@@ -306,7 +306,7 @@
     "signedOut": "Sei uscito: accedi di nuovo.",
     "offline": "Nessuna risposta dal server: non sappiamo se è stato salvato. Riprova.",
     "read": "Il server non ha risposto come previsto.",
-    "readForbidden": "Non puoi leggerlo (quality.rules.view).",
+    "readForbidden": "Non puoi leggerlo.",
     "ruleGone": "La regola indicata dall’indirizzo non c’è più."
   },
   "done": {

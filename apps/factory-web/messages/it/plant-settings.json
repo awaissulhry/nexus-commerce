@@ -124,7 +124,7 @@
     "atBottom": "Già in fondo",
     "noManage": "Tenere i sintomi richiede il diritto di gestire le macchine su ogni società",
     "loading": "L'elenco si sta ancora caricando",
-    "noSettings": "Per cambiare l’instradamento serve plant.settings.manage in questo stabilimento",
+    "noSettings": "Per cambiare l’instradamento serve il permesso di gestire le impostazioni degli impianti in questo stabilimento",
     "noChange": "Non è cambiato ancora nulla",
     "noTeam": "Scegli la squadra a cui va",
     "noTechnician": "Scegli il tecnico a cui va",
@@ -136,7 +136,7 @@
     "allOff": "Ogni regola scelta è già spenta",
     "h1Lock": "Vale la risposta H1 del titolare: chiunque alla postazione blocca",
     "h1SignSafe": "Vale la risposta H1 del titolare: solo un tecnico firma la sicurezza",
-    "noChecks": "I tipi di verifica si gestiscono con plant.checks.manage su ogni azienda",
+    "noChecks": "I tipi di verifica li gestisce un ruolo che gestisce le verifiche obbligatorie su ogni azienda",
     "typeTaken": "Il gruppo ha già un tipo di verifica con questo codice",
     "noTypeWords": "Indica la verifica in italiano e in inglese",
     "noLaw": "Indica la norma su cui si basa",
@@ -146,7 +146,7 @@
     "retention": "Conservati almeno quanto chiede la legge, al massimo 30 anni",
     "allActive": "Ogni tipo di verifica scelto è già attivo",
     "allRetired": "Ogni tipo di verifica scelto è già dismesso",
-    "noAudit": "Per leggere il registro delle modifiche serve audit.read"
+    "noAudit": "Per leggere il registro delle modifiche serve il permesso di leggere la cronologia di un record"
   },
   "bulk": {
     "off_one": "Togli {count} dal reparto",
@@ -234,7 +234,7 @@
   },
   "noAccess": {
     "title": "Non puoi vedere le impostazioni dello stabilimento",
-    "body": "Le impostazioni dello stabilimento richiedono il diritto di vedere lo stabilimento (plant.view)."
+    "body": "Le impostazioni dello stabilimento richiedono il diritto di vedere lo stabilimento."
   },
   "page": {
     "readAt": "Letto alle {time}",
@@ -271,7 +271,7 @@
     "title": "Instradamento e solleciti delle richieste",
     "purpose": "Chi riceve una richiesta sulla macchina, e quando parte il sollecito se nessuno la prende in carico. Una richiesta segue la prima regola attiva adatta al suo tipo di macchina.",
     "forSite": "Per {site}",
-    "readOnly": "Puoi vedere, non cambiare: l’instradamento lo tiene un ruolo che gestisce le impostazioni dello stabilimento (plant.settings.manage).",
+    "readOnly": "Puoi vedere, non cambiare: l’instradamento lo tiene un ruolo che gestisce le impostazioni dello stabilimento.",
     "table": "Regole di instradamento",
     "count_one": "{count} regola · {on} attive",
     "count_other": "{count} regole · {on} attive",
@@ -376,7 +376,7 @@
     "technician": "Tecnico",
     "technicianHint": "Una persona dell’azienda.",
     "choosePerson": "Scegli una persona",
-    "pickersForbidden": "Per scegliere una squadra o una persona serve il permesso di vedere le persone (people.view): la regola tiene quella che nomina.",
+    "pickersForbidden": "Per scegliere una squadra o una persona serve il permesso di vedere le persone: la regola tiene quella che nomina.",
     "pickersLoading": "Lettura delle squadre e delle persone…",
     "nobody": "Nessuno scelto",
     "push": "Manda subito un avviso",
@@ -410,7 +410,7 @@
     "purpose": "Chi può bloccare una macchina come non sicura, e chi ne firma di nuovo la sicurezza.",
     "lawPlain": "Le attrezzature di lavoro devono essere sicure: una macchina non sicura non si usa finché non è controllata e messa a posto.",
     "defaults": "Per questo stabilimento non è ancora salvato nulla: valgono i valori predefiniti (risposta H1 del titolare).",
-    "readOnly": "Puoi vedere, non cambiare: il blocco lo tiene un ruolo che gestisce le impostazioni dello stabilimento (plant.settings.manage).",
+    "readOnly": "Puoi vedere, non cambiare: il blocco lo tiene un ruolo che gestisce le impostazioni dello stabilimento.",
     "lockBy": "Chi può bloccare una macchina come non sicura",
     "by": {
       "ANYONE_AT_STATION": "Chiunque alla postazione",
@@ -439,7 +439,7 @@
     "title": "Tipi di verifica periodica obbligatoria",
     "purpose": "Ogni tipo di verifica con la sua base normativa, l’intervallo predefinito, l’ente esterno e per quanto si conservano gli esiti. L’elenco di tutto il gruppo.",
     "retentionPlain": "Gli esiti delle verifiche si conservano almeno {years} anni.",
-    "readOnly": "Puoi vedere, non cambiare: i tipi di verifica sono di tutto il gruppo e si gestiscono con plant.checks.manage su ogni azienda.",
+    "readOnly": "Puoi vedere, non cambiare: i tipi di verifica sono di tutto il gruppo e li gestisce un ruolo che gestisce le verifiche obbligatorie su ogni azienda.",
     "table": "Tipi di verifica",
     "search": "Cerca codice, parole o norma",
     "count_one": "{count} attivo · {retired} dismessi",
@@ -542,7 +542,7 @@
     "title": "Incidenti",
     "purpose": "I tipi di segnalazione e la regola INAIL, con la loro norma.",
     "noRight": "Non puoi vedere le regole degli incidenti",
-    "noRightBody": "Serve il permesso di vedere gli incidenti (safety.incidents.view).",
+    "noRightBody": "Serve il permesso di vedere gli incidenti.",
     "kinds": "Tipi di segnalazione",
     "kind": {
       "INJURY": "Infortunio (qualcuno si è fatto male)",
@@ -586,7 +586,7 @@
     "group": "Tutto il gruppo",
     "empty": "Ancora nessuna modifica",
     "failed": "Impossibile caricare il registro delle modifiche",
-    "noRight": "Per il registro delle modifiche serve il permesso di leggerlo (audit.read).",
+    "noRight": "Per il registro delle modifiche serve il permesso di leggerlo.",
     "count_one": "{count} modifica",
     "count_other": "{count} modifiche",
     "action": {

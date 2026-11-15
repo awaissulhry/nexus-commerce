@@ -24,7 +24,7 @@
     "print": "Stampa",
     "more": "Altre azioni",
     "monday": "Inviamelo ogni lunedì",
-    "mondayHeld": "L'invio programmato dei report arriva più avanti: intanto stampalo o salva il PDF.",
+    "mondayHeld": "Questa pagina non si può ancora inviare per e-mail in modo programmato: stampala o salva il PDF.",
     "csv": {
       "ageing": "Esporta invecchiamento giacenze (CSV)",
       "leather": "Esporta uso della pelle (CSV)"

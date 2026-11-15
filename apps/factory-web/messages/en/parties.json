@@ -594,7 +594,7 @@
     "languageHint": "Its documents and mail are in this language",
     "currency": "Currency",
     "paymentTerms": "Payment terms",
-    "paymentTermsHint": "As agreed, in words; the terms library comes later",
+    "paymentTermsHint": "As agreed, in words",
     "internalNote": "Internal note",
     "internalNoteHint": "Staff only; never on a document",
     "validFrom": "Valid from",

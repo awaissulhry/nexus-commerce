@@ -8,7 +8,7 @@
   },
   "access": {
     "title": "Non puoi aprire Richieste di offerta",
-    "body": "Per leggere gli ordini di campionatura serve il permesso di vedere gli ordini di acquisto (purchasing.view). Un amministratore della tua azienda può dartelo."
+    "body": "Per leggere gli ordini di campionatura serve il permesso di vedere gli ordini di acquisto. Un amministratore della tua azienda può dartelo."
   },
   "band": {
     "label": "Richieste di offerta",
@@ -152,7 +152,7 @@
     "BOX": "scatole"
   },
   "held": {
-    "manage": "Per creare un ordine di campionatura serve il permesso di gestire gli ordini di acquisto (purchasing.manage).",
+    "manage": "Per creare un ordine di campionatura serve il permesso di gestire gli ordini di acquisto.",
     "company": "Prima scegli un'azienda: un ordine di campionatura è di un'azienda.",
     "choices": "Attendi la lettura di fornitori, modelli e materiali.",
     "busy": "In corso…",

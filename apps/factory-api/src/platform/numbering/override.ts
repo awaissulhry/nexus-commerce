@@ -101,7 +101,7 @@ export interface TypedNumber {
 export async function typedNumber(tools: Pick<CommandTools, 'tx' | 'context' | 'audit'>, series: { readonly companyId: string; readonly kind: DocumentKind }, record: { readonly type: string; readonly id: string }, typed: { readonly number: string; readonly reason: string }): Promise<TypedNumber> {
   const { tx, context, audit } = tools
   if (context.audience !== 'office') throw new ForbiddenError('A migrated document\'s number is typed in the office.')
-  if (!can(actorOf(context), NUMBERING_OVERRIDE, { companyId: series.companyId })) throw new ForbiddenError('Typing a number for a migrated document needs numbering.override.')
+  if (!can(actorOf(context), NUMBERING_OVERRIDE, { companyId: series.companyId })) throw new ForbiddenError('Typing a number for a migrated document needs the right to give a migrated document its old number.')
   const problems = typedNumberProblems({ kind: series.kind, number: typed.number, reason: typed.reason })
   if (problems.length > 0) throw new ValidationError(problems[0]!.issue.message, problems.map((problem) => ({ path: `body/typedNumber/${problem.code}`, message: problem.issue.message })))
   const code = await typedNumberRefusal(tx, { companyId: series.companyId, kind: series.kind, number: typed.number })

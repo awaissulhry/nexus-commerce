@@ -57,10 +57,10 @@ const mayAt = (office: OfficeContext, permission: Parameters<typeof can>[1], row
 /** What a row asks of its caller that it lacks, in words. */
 function permissionProblems(office: OfficeContext, row: PlannedRow): string[] {
   const out: string[] = []
-  if (!mayAt(office, WORKORDERS_MANAGE, row)) out.push('Making its work order needs workorders.manage at this site.')
+  if (!mayAt(office, WORKORDERS_MANAGE, row)) out.push('Making its work order needs the right to make work orders at this site.')
   if (row.kind === 'SUBCONTRACT') {
-    if (!mayAt(office, WORKORDERS_RELEASE, row)) out.push('Releasing its work order for the workshop needs workorders.release at this site.')
-    if (!mayAt(office, PURCHASING_SUBCONTRACT_MANAGE, { companyId: row.companyId, siteId: row.siteId })) out.push('Drafting its subcontract order needs purchasing.subcontract.manage (a buyer).')
+    if (!mayAt(office, WORKORDERS_RELEASE, row)) out.push('Releasing its work order for the workshop needs the right to release work orders at this site.')
+    if (!mayAt(office, PURCHASING_SUBCONTRACT_MANAGE, { companyId: row.companyId, siteId: row.siteId })) out.push('Drafting its subcontract order needs the right to manage subcontract orders (a buyer).')
   }
   return out
 }

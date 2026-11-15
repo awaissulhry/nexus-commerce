@@ -44,7 +44,7 @@ async function siteOf(caller: CommandCaller, siteId: string, permission: typeof 
   if (!site) throw new NotFoundError('Site not found.')
   const scope = { companyId: site.companyId, siteId: site.id }
   assertMay(context, PLANT_VIEW, scope, 'Site')
-  if (permission === PLANT_SETTINGS_MANAGE) assertMayWrite(context, PLANT_SETTINGS_MANAGE, scope, "A site's plant settings are kept by a role that does it (plant.settings.manage).")
+  if (permission === PLANT_SETTINGS_MANAGE) assertMayWrite(context, PLANT_SETTINGS_MANAGE, scope, "A site's plant settings are kept by a role that does it.")
   return site
 }
 

@@ -166,7 +166,7 @@ describe('held in our words, and the bodies the API takes', () => {
   const zip = byCode('DEMO-ZIP-04')
 
   it('Draft POs: no right, offline, nothing picked, nothing open', () => {
-    expect(say(t, draftHeld([leather], requestsCan(ROLES.planner), false)!)).toBe('Drafting purchase orders needs purchasing.manage')
+    expect(say(t, draftHeld([leather], requestsCan(ROLES.planner), false)!)).toBe('Drafting purchase orders needs the right to make purchase orders')
     expect(say(t, draftHeld([leather], buyer, true)!)).toBe('Offline: wait for the connection')
     expect(say(t, draftHeld([], buyer, false)!)).toBe('Select requests first')
     expect(draftHeld([ALL_ROWS.find((entry) => entry.status === 'CONVERTED')!], buyer, false)?.key).toBe('held.noneOpen')
@@ -257,7 +257,7 @@ describe('the calls, as the API takes them', () => {
 
 const LEFT_KEY = /\b(?:common|live|problem|noAccess|band|tile|tiles|list|view|kind|groupBy|site|col|group|source|by|quantityFrom|orderBy|supplier|supplierFrom|status|notOpen|hold|warning|row|bulk|held|keys|detail|preference|net|rounding|history|reason|draft|party|refused|reject|notice|csv|uom|poStatus)\.[a-zA-Z_]+(?:\.[a-zA-Z_]+)*\b/
 const LEFT_PLACEHOLDER = /\{[a-zA-Z]+\}/
-/** Permission names are said on purpose ("needs purchasing.manage"). */
+/** Permission names are stripped before the key check, though no screen says one since B-W2b-F51. */
 const SAID = /\b(?:purchasing\.[a-z.]+|planning\.decide|money\.cost)\b/g
 
 function render(screen: DesignScreen<unknown>, model: unknown, locale: (typeof LOCALES)[number]): string {

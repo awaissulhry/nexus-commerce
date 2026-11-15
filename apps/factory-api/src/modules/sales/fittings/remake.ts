@@ -150,7 +150,7 @@ async function remakeViewOf(db: Reader, rma: RmaRow, may: boolean) {
     lines: views,
     outcomes: [...REMAKE_OUTCOMES],
     may: { order: may && open.length > 0 },
-    why: !may ? 'Making the remake order needs sales.returns.decide on the return, and orders.manage and sales.measurements.view over its customer.' : open.length === 0 ? 'No line decided Remake waits for its remake order.' : null,
+    why: !may ? "Making the remake order needs the right to decide the return, and the rights to work on sales orders and to see the riders' measurements over its customer." : open.length === 0 ? 'No line decided Remake waits for its remake order.' : null,
   }
 }
 
@@ -166,8 +166,8 @@ export async function getRemake(caller: CommandCaller, returnId: string) {
 /** POST /sales/returns/:id/remake-order */
 export async function makeRemakeOrder(caller: CommandCaller, returnId: string, body: RemakeOrderBody, idempotencyKey?: string) {
   const { context, rma: seen } = await officeReturn(caller, returnId, SALES_RETURNS_DECIDE)
-  if (!mayOn(context, ORDERS_MANAGE, seen)) throw new ForbiddenError(`Making the remake order needs ${ORDERS_MANAGE} over the customer.`)
-  if (!can(actorOf(context), SALES_MEASUREMENTS_VIEW, { companyId: seen.companyId, partyId: seen.partyId })) throw new ForbiddenError("Making the remake order needs sales.measurements.view over the customer (the rider's measures).")
+  if (!mayOn(context, ORDERS_MANAGE, seen)) throw new ForbiddenError('Making the remake order needs the right to work on sales orders over the customer.')
+  if (!can(actorOf(context), SALES_MEASUREMENTS_VIEW, { companyId: seen.companyId, partyId: seen.partyId })) throw new ForbiddenError("Making the remake order needs the right to see the rider's measurements over the customer.")
   if (body.promiseDate && body.promiseDate < businessDate(new Date())) throw new ValidationError('The promise date is today or later.', [{ path: 'body/promiseDate', message: 'Today or later.' }])
   const { result } = await command(caller, { name: 'fittings.makeRemakeOrder', idempotencyKey, input: { returnId, ...body } }, async (tools) => {
     const { tx } = tools

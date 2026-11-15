@@ -18,7 +18,7 @@
     "sitesFailed": "Impossibile caricare gli stabilimenti che pianifichi",
     "noAccess": {
       "title": "Il tuo ruolo non può vedere le impostazioni di pianificazione",
-      "body": "Il tuo ruolo non comprende “planning.view”. Chiedi a un amministratore se ti serve questa pagina."
+      "body": "Il tuo ruolo non può vedere la pianificazione. Chiedi a un amministratore se ti serve questa pagina."
     },
     "noSites": {
       "title": "Ancora nessuno stabilimento da pianificare",
@@ -38,9 +38,9 @@
     },
     "held": {
       "busy": "Salvataggio in corso: attendi la risposta.",
-      "calendars": "Per gestire i calendari serve il diritto Calendari (calendars.manage).",
-      "items": "Per gestire i parametri articolo serve il diritto di pianificazione articoli (planning.items.manage).",
-      "settings": "Per gestire le impostazioni di pianificazione serve il relativo diritto (planning.settings.manage)."
+      "calendars": "Per gestire i calendari serve il diritto Calendari.",
+      "items": "Per gestire i parametri articolo serve il diritto di pianificazione articoli.",
+      "settings": "Per gestire le impostazioni di pianificazione serve il relativo diritto."
     },
     "problem": {
       "read": "La fabbrica non ha risposto come previsto. Riprova tra un momento.",
@@ -87,7 +87,7 @@
     },
     "readOnly": {
       "title": "Puoi guardare, non modificare",
-      "body": "Per gestire i calendari serve il diritto Calendari (calendars.manage). I giorni si aprono comunque per mostrare cosa sono."
+      "body": "Per gestire i calendari serve il diritto Calendari. I giorni si aprono comunque per mostrare cosa sono."
     },
     "owner": {
       "label": "Calendario di",
@@ -316,7 +316,7 @@
       "new": "c — un nuovo schema di turni (in Schemi di turni)"
     },
     "problem": {
-      "wholeCompany": "Il calendario della società e i suoi schemi valgono per tutti gli stabilimenti: per gestirli serve Calendari (calendars.manage) su tutti gli stabilimenti della società."
+      "wholeCompany": "Il calendario della società e i suoi schemi valgono per tutti gli stabilimenti: per gestirli serve Calendari su tutti gli stabilimenti della società."
     },
     "notice": {
       "daySaved": "Salvato. Capacità ricalcolata subito per: {lanes}.",

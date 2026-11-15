@@ -161,12 +161,12 @@ export const partiesImportAdapter = Object.freeze({
     if (job.companyId === null) {
       return grants.some((grant) => grant.companies === 'all' && grant.parties === 'all')
         ? [...authorizeTerms(actor, job, columns), ...authorizeSupplier(actor, job, columns)]
-        : [{ path: 'companyId', message: 'A parties import for every company needs parties.manage over every company; import for one company instead.' }]
+        : [{ path: 'companyId', message: 'A parties import for every company needs the right to keep customers and suppliers over every company; import for one company instead.' }]
     }
     const companyId = job.companyId
     return grants.some((grant) => (grant.companies === 'all' || grant.companies.includes(companyId)) && grant.parties === 'all')
       ? [...authorizeTerms(actor, job, columns), ...authorizeSupplier(actor, job, columns)]
-      : [{ path: 'companyId', message: "Importing parties needs parties.manage over every party of the import's company: a role limited to some customers or suppliers adds no new ones." }]
+      : [{ path: 'companyId', message: "Importing parties needs the right to keep customers and suppliers over every party of the import's company: a role limited to some customers or suppliers adds no new ones." }]
   },
 
   check: (client, rows, scope, actor) => checkTerms(client, rows, scope, actor),

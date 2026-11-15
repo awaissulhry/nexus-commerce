@@ -474,7 +474,7 @@ describe('a write dated in a month closed for good (a HARD period lock) is refus
   const saysTheLock = (message: string) => {
     expect(message.startsWith(`${monthLabel(month.month)} is closed for good for `)).toBe(true)
     expect(message).toContain(`(a hard lock since ${dayWords(today)}, by fiona finance)`)
-    expect(message).toContain('Only someone who may lift a hard lock (accounting.unlock: the owner, by default) reopens the month, with a reason')
+    expect(message).toContain('Only someone who may lift a hard lock (the owner, by default) reopens the month, with a reason')
   }
 
   it('records no payment received in it (payments.record): 409 at the value date, nothing written', async () => {

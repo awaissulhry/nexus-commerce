@@ -250,7 +250,7 @@ export async function closeOrder(caller: CommandCaller, orderId: string, body: {
     const settlement = await orderSettlement().settlementOf(tx, order)
     const reason = reasonOf(body.reason)
     assertTransition(salesOrderMachine, locked.status, 'CLOSED', { settlement, reason })
-    if (!settlement.settled && !mayClose) throw new ForbiddenError('Closing an order that is not settled needs the right to close unsettled orders (orders.close).')
+    if (!settlement.settled && !mayClose) throw new ForbiddenError('Closing an order that is not settled needs the right to close unsettled orders.')
     await tx.salesOrder.update({ where: { id: order.id }, data: { status: 'CLOSED', closedAt: now, updatedAt: now, version: { increment: 1 } }, select: { id: true } })
     tools.audit({
       recordType: 'SalesOrder',

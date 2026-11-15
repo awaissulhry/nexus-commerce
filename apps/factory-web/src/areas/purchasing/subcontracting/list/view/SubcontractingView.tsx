@@ -23,6 +23,8 @@ import { BalanceOpenSection } from './BalanceOpenSection'
 import { DEPTH, openByOrder, openText } from '../../depth/model'
 import '../../../../_shared/buying/buying.css'
 import '../../subcontracting.css'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../../../lib/i18n/rights'
 
 export type { SubcontractingActions, SubcontractingModel } from '../list-model'
 
@@ -76,7 +78,7 @@ function Page({ model, actions }: { model: SubcontractingModel; actions?: Subcon
   }
 
   const ownKeys: ListKey[] = [{ keys: ['c'], does: t('page.keyNew') }]
-  const newHeld = model.can.manage ? null : t('held.permission', { permission: 'purchasing.subcontract.manage' })
+  const newHeld = model.can.manage ? null : t('held.permission', { right: rightRef('purchasing.subcontract.manage') })
   const tileView = TILES.find((tile) => tile.view === model.view)?.view ?? null
   const more = [
     model.show === 'orders'
@@ -348,7 +350,7 @@ function OrdersSection({ model, actions, ownKeys, onHelp }: { model: Subcontract
         title={t('list.empty.title')}
         description={t('list.empty.body')}
         action={
-          <Button size="sm" variant="primary" heldReason={model.can.manage ? null : t('held.permission', { permission: 'purchasing.subcontract.manage' })} onClick={() => actions?.onNew?.(true)}>
+          <Button size="sm" variant="primary" heldReason={model.can.manage ? null : t('held.permission', { right: rightRef('purchasing.subcontract.manage') })} onClick={() => actions?.onNew?.(true)}>
             <Plus size={14} aria-hidden /> {t('page.new')}
           </Button>
         }

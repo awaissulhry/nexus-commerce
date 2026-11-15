@@ -1,7 +1,7 @@
 {
   "noAccess": {
     "title": "Non hai accesso ai crediti",
-    "body": "Crediti e fidi richiede il permesso {permission}. Chiedi a chi gestisce i ruoli."
+    "body": "Crediti e fidi richiede il permesso «{right}». Chiedi a chi gestisce i ruoli."
   },
   "band": {
     "label": "Giorno e azioni",
@@ -32,7 +32,7 @@
     "overdueHint": "Oltre la scadenza",
     "bucketHint": "Giorni oltre la scadenza",
     "priceHint": "Gli importi richiedono la visibilità prezzi",
-    "noPrice": "Gli importi non sono mostrati: richiedono il permesso {permission}. Restano i conteggi e le date.",
+    "noPrice": "Gli importi non sono mostrati: richiedono il permesso «{right}». Restano i conteggi e le date.",
     "customers_one": "{count} cliente",
     "customers_other": "{count} clienti",
     "invoices_one": "{count} fattura aperta",
@@ -240,7 +240,7 @@
     "levelLabel": "Livello",
     "actionLabel": "Azione",
     "textTitle": "Testo nella lingua del cliente",
-    "textNoPrice": "Il testo riporta importi: richiede il permesso {permission}.",
+    "textNoPrice": "Il testo riporta importi: richiede il permesso «{right}».",
     "callText": "Una telefonata: scrivi cosa è stato concordato quando la registri.",
     "history": "Chi ha fatto cosa",
     "prepared": "Preparato",
@@ -297,7 +297,7 @@
     "from": "Dal",
     "to": "Al",
     "otherCurrencies": "Anche in",
-    "noPrice": "Gli importi non sono mostrati: richiedono il permesso {permission}.",
+    "noPrice": "Gli importi non sono mostrati: richiedono il permesso «{right}».",
     "bridge": "Apertura, movimenti, chiusura",
     "opening": "Saldo iniziale al {date}",
     "invoiced": "Fatture",
@@ -349,12 +349,12 @@
     "noneBody": "Apri l'estratto conto di un cliente in Crediti e fidi e premi Stampa."
   },
   "held": {
-    "price": "Richiede la visibilità prezzi ({permission}).",
+    "price": "Richiede il permesso «{right}».",
     "pickToPrint": "Prima scegli i clienti nella tabella.",
     "printMax": "Al massimo {count} estratti conto alla volta.",
-    "approve": "Richiede il permesso {permission}.",
-    "manage": "Richiede il permesso {permission}.",
-    "sendStatements": "Richiede il permesso {permission}.",
+    "approve": "Richiede il permesso «{right}».",
+    "manage": "Richiede il permesso «{right}».",
+    "sendStatements": "Richiede il permesso «{right}».",
     "notPrepared": "Solo un sollecito in attesa di approvazione.",
     "notApproved": "Prima approvalo.",
     "switchedOff": "I solleciti sono spenti per questa azienda: resta in attesa, approvato.",

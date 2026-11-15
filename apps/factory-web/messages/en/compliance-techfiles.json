@@ -52,7 +52,7 @@
   },
   "access": {
     "title": "Technical files are not in your role",
-    "body": "Technical files need the right to see certificates (compliance.certificates.view). The owner or an administrator grants it in Admin › Roles & permissions."
+    "body": "Technical files need the right to see certificates. The owner or an administrator grants it in Admin › Roles & permissions."
   },
   "band": {
     "label": "Technical files",
@@ -201,7 +201,7 @@
     "archive_other": "Archive {count}"
   },
   "held": {
-    "manage": "Your role does not keep technical files (compliance.techfiles.manage).",
+    "manage": "Your role does not keep technical files.",
     "offline": "You are offline: this waits until the network is back.",
     "packOne": "Choose one technical file first (x), then press p.",
     "noBatch": "No batch of this style has been made yet.",
@@ -227,18 +227,18 @@
     "signed": "This revision is signed: start the next one to change it.",
     "superseded": "This revision is superseded: it stays as it was signed.",
     "draftExists": "A draft revision is open already: finish or remove it first.",
-    "sign": "Your role does not sign risk assessments (compliance.techfiles.sign).",
+    "sign": "Your role does not sign risk assessments.",
     "noDraft": "Only a draft revision is signed.",
     "noHazards": "Add at least one hazard before signing.",
     "reading": "The assessment is still being read.",
-    "share": "Your role does not send packs by link (compliance.techfiles.share).",
+    "share": "Your role does not send packs by link.",
     "notBuilt": "The pack is not built.",
     "packKept": "A built pack is kept ten years: it cannot be removed.",
     "packBuilding": "The pack is being built: it can be removed only if it is stuck for over an hour.",
     "packDraft": "Not yet: {first}",
     "rowsMax": "A point holds at most {count} rows.",
-    "filesRead": "Your role does not open files (files.read).",
-    "filesUpload": "Your role does not upload files (files.upload).",
+    "filesRead": "Your role does not open files.",
+    "filesUpload": "Your role does not upload files.",
     "chooseFile": "Choose the file to upload first.",
     "chooseEvidence": "Choose the record or file first.",
     "onlyDraft": "Only a draft revision is removed."

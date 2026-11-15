@@ -523,7 +523,7 @@ describe('payroll: the calls, as the API takes them', () => {
 const LEFT_KEY =
   /\b(?:common|noAccess|privacy|pill|band|keys|gate|month|wizard|step|period|checks|check|place|held|aside|kind|mapping|col|preview|send|format|starter|layout|confirm|columns|column|status|list|csv|show|sendDialog|link|correct|change|cancel|record|file|notice|problem|refusal)\.[a-zA-Z_]+(?:\.[a-zA-Z_]+)*\b/
 const LEFT_PLACEHOLDER = /\{[a-zA-Z]+\}/
-/** Permission names are said on purpose ("needs people.payroll.manage"); addresses, files and domains are not keys. */
+/** Permission names are stripped before the key check, though no screen says one since B-W2b-F51; addresses, files and domains are not keys. */
 const SAID = /\b(?:people\.[a-zA-Z.]+|factory\.example|example\.com|art\.\s?\d+|[\w-]+\.(?:csv|pdf|xlsx|txt))\b/g
 
 function render(screen: DesignScreen<unknown>, model: unknown, locale: (typeof LOCALES)[number]): string {

@@ -312,7 +312,7 @@ export async function startImport(runtime: FilesRuntime, caller: CommandCaller, 
   // Running it writes nothing yet, but its plan shows the records' current values: both of the importer's permissions.
   const scope = { companyId }
   if (!can(actor, IMPORTS_RUN, scope) || !can(actor, adapter.permission, scope) || !can(actor, adapter.viewPermission, scope)) throw new ForbiddenError()
-  if (mode === 'APPLY' && !can(actor, IMPORTS_APPLY, { companyId })) throw new ForbiddenError('Applying an import at once needs imports.apply.')
+  if (mode === 'APPLY' && !can(actor, IMPORTS_APPLY, { companyId })) throw new ForbiddenError('Applying an import at once needs the right to apply imports.')
   const named = Object.values(input.mapping ?? {}).filter((column): column is string => column !== null && Object.hasOwn(adapter.importer.columns, column))
   const refusals = adapterRefusals(adapter, actor, companyId, named)
   if (refusals.length > 0) throw new DomainError('forbidden', NEEDS_MORE, refusals)

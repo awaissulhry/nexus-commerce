@@ -181,7 +181,7 @@ export async function appointmentRecord(db: Reader, context: OfficeContext, row:
   const manage = mayOn(context, SALES_FITTINGS_MANAGE, row)
   const booked = row.status === 'BOOKED'
   const started = row.startsAt.getTime() <= facts.now.getTime()
-  const why = !manage ? 'Your roles do not book or record fittings (sales.fittings.manage).' : !booked ? bookedRefusal(row.status as AppointmentStatus, 'moved') : off
+  const why = !manage ? 'Your roles do not book or record fittings.' : !booked ? bookedRefusal(row.status as AppointmentStatus, 'moved') : off
   return {
     ...base!,
     closedAt: row.closedAt ? toUtcIso(row.closedAt) : null,

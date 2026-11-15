@@ -12,7 +12,7 @@
     "loading": "Ancora in caricamento.",
     "busy": "Si sta salvando una modifica: attendi un momento.",
     "offline": "Senza connessione: attende che la connessione torni.",
-    "noManage": "Il tuo ruolo non modifica i modelli (product.styles.manage).",
+    "noManage": "Il tuo ruolo non modifica i modelli.",
     "archived": "Il modello è archiviato: riattivalo prima.",
     "long": "Al massimo 500 caratteri."
   },
@@ -96,7 +96,7 @@
       "RELEASE": "Rilasciare una revisione"
     },
     "held": {
-      "noRight": "Il tuo ruolo non sposta i modelli nel loro ciclo di vita (product.styles.lifecycle).",
+      "noRight": "Il tuo ruolo non sposta i modelli nel loro ciclo di vita.",
       "archived": "Il modello è archiviato: riattivalo prima di spostarlo.",
       "noMove": "Nessun passaggio da questo stato."
     },
@@ -440,7 +440,7 @@
       "other": "{sku} non è uno SKU di questo modello."
     },
     "held": {
-      "noRight": "Il tuo ruolo non assegna GTIN (product.gtins.manage).",
+      "noRight": "Il tuo ruolo non assegna GTIN.",
       "none": "Ogni SKU attivo ha un GTIN.",
       "preview": "Prima viene l'anteprima.",
       "gate": "Non attivo qui (prima il prefisso GS1).",

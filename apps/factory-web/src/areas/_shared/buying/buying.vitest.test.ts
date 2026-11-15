@@ -218,7 +218,7 @@ describe('Receipts and receiving (SCR-061 … 063)', () => {
 })
 
 const LEFT_KEY = /\b(?:common|plan|why|po|rc|held|problem|record|decision|uom|kind|poStatus|rcStatus|lotStatus|crVi|party|live)\.[a-zA-Z_]+(?:\.[a-zA-Z_]+)*\b/
-/** Permission names are said on purpose ("needs purchasing.view"): not keys. */
+/** Permission names are stripped before the key check, though no screen says one since B-W2b-F51. */
 const PERMISSIONS = /\b(?:planning\.(?:view|run|decide)|purchasing\.(?:view|manage|send)|inventory\.(?:stock\.view|receive|reverse|locations\.view)|quality\.lots\.view|money\.cost)\b/g
 
 function render(screen: DesignScreen<unknown>, model: unknown, locale: (typeof LOCALES)[number]): string {

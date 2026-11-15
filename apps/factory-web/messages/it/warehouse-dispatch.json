@@ -179,7 +179,7 @@
     "weightTold": "Comunicato al vettore: {weight} kg.",
     "held": {
       "reading": "Lettura in corso…",
-      "noRight": "Il tuo ruolo non può prenotare ritiri (shipping.pickups.book).",
+      "noRight": "Il tuo ruolo non può prenotare ritiri.",
       "busy": "Invio in corso…",
       "problems_one": "{count} campo da correggere",
       "problems_other": "{count} campi da correggere",
@@ -279,13 +279,13 @@
     },
     "held": {
       "reading": "Lettura della giornata…",
-      "noRight": "Il tuo ruolo non può chiudere la giornata (shipping.manage).",
+      "noRight": "Il tuo ruolo non può chiudere la giornata.",
       "busy": "Chiusura in corso…",
       "allClosed": "Ogni distinta di questo giorno è già chiusa.",
       "nothing": "Nulla da chiudere in questo giorno.",
       "noneChosen": "Spunta almeno un vettore.",
       "nothingToPreview": "Ancora nulla sulla distinta di questo vettore.",
-      "noView": "Il tuo ruolo non vede le spedizioni (shipping.view)."
+      "noView": "Il tuo ruolo non vede le spedizioni."
     }
   },
   "handOver": {
@@ -314,7 +314,7 @@
       "failed": "Non si è potuta inviare: riprova."
     },
     "held": {
-      "noRight": "Il tuo ruolo non può consegnare spedizioni (shipping.manage).",
+      "noRight": "Il tuo ruolo non può consegnare spedizioni.",
       "none": "Nessuna delle spedizioni scelte è imballata e pronta da consegnare.",
       "busy": "Invio in corso…"
     }
@@ -332,7 +332,7 @@
     "notClosed": "Non ancora chiusa",
     "totals": "Contiene",
     "sign": "Stampala per l'autista: nome, firma e ora del ritiro vanno sulla carta.",
-    "noFiles": "Il tuo ruolo non apre i file (files.read): la distinta è mostrata senza PDF.",
+    "noFiles": "Il tuo ruolo non apre i file: la distinta è mostrata senza PDF.",
     "loading": "Lettura del PDF…",
     "pdfFailed": "Il PDF non si è potuto leggere."
   },
@@ -531,11 +531,11 @@
       "CUSTOMS": "Qualcuno ha cambiato la dichiarazione nel frattempo: è stata riletta."
     },
     "held": {
-      "noRight": "Il tuo ruolo non può creare documenti doganali (shipping.customs.manage).",
+      "noRight": "Il tuo ruolo non può creare documenti doganali.",
       "noPrice": "I documenti mostrano valori: serve il livello prezzi.",
       "busy": "Invio in corso…",
       "noInvoices": "Ancora nessuna fattura emessa a questo cliente.",
-      "noUpload": "Il tuo ruolo non può caricare file (files.upload).",
+      "noUpload": "Il tuo ruolo non può caricare file.",
       "openFirst": "Apri prima la dichiarazione.",
       "reading": "Lettura in corso…"
     },
@@ -583,7 +583,7 @@
       "declarationBody": "Chi la presenta: uno spedizioniere doganale (a cui va il pacchetto), oppure il vettore stesso.",
       "filedBy": "Chi la presenta",
       "brokerHint": "Un vettore o fornitore attivo dell'azienda.",
-      "noParties": "Il tuo ruolo non elenca le anagrafiche (parties.view): si può scegliere solo il vettore.",
+      "noParties": "Il tuo ruolo non elenca le anagrafiche: si può scegliere solo il vettore.",
       "brokerOption": "{code} · {name}",
       "brokersLoading": "Lettura dei vettori e fornitori dell'azienda…",
       "brokersFailed": "Gli spedizionieri non si sono potuti leggere: può comunque presentarla il vettore.",
@@ -667,7 +667,7 @@
       "NO_CARRIER_ACCOUNT": "L'azienda non ha ancora una connessione vettore utilizzabile (Admin › Connessioni e API): non si potrebbe acquistare nulla."
     },
     "held": {
-      "noRight": "Il tuo ruolo non può cambiare le impostazioni di spedizione (shipping.settings.manage).",
+      "noRight": "Il tuo ruolo non può cambiare le impostazioni di spedizione.",
       "busy": "Cambio in corso…"
     },
     "stepUp": "Un codice nuovo permette a questo sito di acquistare etichette reali.",
@@ -703,7 +703,7 @@
       "packOff": "{site} non invia più i pacchetti con un link."
     },
     "held": {
-      "noRight": "Il tuo ruolo non può cambiare le impostazioni di spedizione (shipping.settings.manage).",
+      "noRight": "Il tuo ruolo non può cambiare le impostazioni di spedizione.",
       "same": "Nulla da salvare.",
       "busy": "Salvataggio…",
       "noSettings": "Il sito non ha ancora le impostazioni di spedizione."
@@ -789,7 +789,7 @@
       "invalid": "Qualcosa nel modulo non va: controlla vettore e numero."
     },
     "held": {
-      "noRight": "Il tuo ruolo non può cambiare le impostazioni di spedizione (shipping.settings.manage).",
+      "noRight": "Il tuo ruolo non può cambiare le impostazioni di spedizione.",
       "busy": "Salvataggio…"
     },
     "stepUp": "Un codice nuovo permette di sigillare un numero di conto del vettore.",
@@ -935,7 +935,7 @@
       "runScale": "Una serie di taglie richiede la sua scala."
     },
     "held": {
-      "noRight": "Il tuo ruolo non può cambiare gli imballi (shipping.packaging.manage).",
+      "noRight": "Il tuo ruolo non può cambiare gli imballi.",
       "noView": "Il tuo ruolo non vede i tipi di imballo e i predefiniti.",
       "noViewBody": "Si leggono con il diritto di vedere le spedizioni, che questo ruolo non ha.",
       "busy": "Salvataggio…",

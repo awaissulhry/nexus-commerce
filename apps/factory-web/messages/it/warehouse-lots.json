@@ -3,7 +3,7 @@
     "loading": "Caricamento…",
     "failed": "Non è stato possibile leggerlo",
     "forbidden": "Non per il tuo ruolo",
-    "forbiddenBody": "Il tuo ruolo non comprende “inventory.stock.view”. Chiedi a un amministratore se ti serve.",
+    "forbiddenBody": "Il tuo ruolo non può vedere le giacenze. Chiedi a un amministratore se ti serve.",
     "retry": "Riprova",
     "partFailed": "{part}: non è stato possibile leggerlo",
     "partLoading": "Lettura di {part}…",
@@ -300,10 +300,10 @@
       "holdOfLot": "Un blocco sul suo lotto",
       "openDemand": "Apri {demand}",
       "held": {
-        "noReserve": "Il tuo ruolo non può riservare merce (inventory.reserve).",
+        "noReserve": "Il tuo ruolo non può riservare merce.",
         "pick": "Seleziona prima le pelli.",
         "oneSite": "Pelli di un solo stabilimento alla volta: scegli prima lo stabilimento.",
-        "noScrap": "Il tuo ruolo non può rottamare merce (inventory.scrap).",
+        "noScrap": "Il tuo ruolo non può rottamare merce.",
         "gone": "Una pelle selezionata non ha nulla in giacenza (esaurita, rottamata o presso un ordine): toglila dalla selezione.",
         "reservedAlready": "Già riservata: libera prima quella riserva."
       }
@@ -345,7 +345,7 @@
       "held": {
         "saving": "Salvataggio…",
         "readOnly": "Questa pelle è in sola lettura.",
-        "noRight": "Il tuo ruolo non corregge le pelli (inventory.hides.manage).",
+        "noRight": "Il tuo ruolo non corregge le pelli.",
         "nothing": "Ancora nessuna modifica.",
         "thickness": "Lo spessore è maggiore di 0 mm, con al massimo due decimali (1,20).",
         "defectsLong": "I difetti sono al massimo 2000 caratteri.",
@@ -443,8 +443,8 @@
         "SCRAPPED": "La pelle è stata scartata: non si misura più.",
         "RETURNED": "La pelle è tornata al fornitore: non si misura più.",
         "notWhole": "Solo una pelle intera si misura rispetto alla superficie della conceria.",
-        "noRight": "Il tuo ruolo non misura le pelli (inventory.hides.manage).",
-        "noAdjust": "Correggere la giacenza è una rettifica: il tuo ruolo ha bisogno di inventory.adjust.",
+        "noRight": "Il tuo ruolo non misura le pelli.",
+        "noAdjust": "Correggere la giacenza è una rettifica: il tuo ruolo ha bisogno del permesso di rettificare le giacenze.",
         "reading": "Lettura delle misure…",
         "saving": "Salvataggio…",
         "measured": "Scrivi la superficie misurata.",
@@ -453,7 +453,7 @@
         "noteLong": "Una nota è al massimo 500 caratteri."
       },
       "refused": {
-        "adjust": "La correzione della giacenza è stata rifiutata: serve inventory.adjust e un motivo di rettifica attivo.",
+        "adjust": "La correzione della giacenza è stata rifiutata: serve il permesso di rettificare le giacenze e un motivo di rettifica attivo.",
         "measured": "La superficie misurata non è stata accettata: maggiore di 0, al massimo quattro decimali.",
         "declared": "La superficie della conceria non è stata accettata: maggiore di 0, al massimo quattro decimali.",
         "when": "Una pelle si misura ora o prima, mai dopo.",
@@ -510,12 +510,12 @@
       "failed": "Non è stato possibile leggere le foto",
       "none": "Ancora nessuna foto",
       "noneBody": "Qui compaiono le foto scattate al tavolo di taglio; l’ufficio può aggiungerne una.",
-      "noRead": "Le foto richiedono files.read",
+      "noRead": "Le foto richiedono il permesso di vedere i file di un record",
       "noReadBody": "Il tuo ruolo non legge i file: chiedi a un amministratore se ti servono le foto.",
       "add": "Aggiungi una foto",
       "addHint": "JPEG, PNG, WebP o HEIC, fino a 15 MB. Resta sulla pelle, per l’ufficio.",
       "held": {
-        "noUpload": "Per aggiungere una foto serve files.upload."
+        "noUpload": "Per aggiungere una foto serve il permesso di caricare file."
       },
       "listLabel": "Foto di questa pelle",
       "uploadsLabel": "Foto in aggiunta",
@@ -547,7 +547,7 @@
       "tabsLabel": "Parti del lotto",
       "received": "Ricevuto il {date}",
       "toChecklist": "Lista di rilascio in Test e sostanze",
-      "noQuality": "Il tuo ruolo non comprende “quality.lots.view”: la qualità decide i lotti in Conformità › Test e sostanze.",
+      "noQuality": "Il tuo ruolo non può vedere la scheda qualità di un lotto: la qualità decide i lotti in Conformità › Test e sostanze.",
       "copyCode": "Copia il codice lotto",
       "rejected": "Respinto il {date}: definitivo, la giacenza non si usa mai."
     },
@@ -654,7 +654,7 @@
     "release": {
       "title": "Lista di rilascio",
       "label": "Controlli di rilascio",
-      "noRight": "La lista è della qualità: il tuo ruolo non comprende “quality.lots.view”.",
+      "noRight": "La lista è della qualità: il tuo ruolo non può vedere la scheda qualità di un lotto.",
       "released": "Rilasciato: giacenza utilizzabile.",
       "rejected": "Respinto: definitivo.",
       "ready": "Pronto per il rilascio: ogni controllo è superato.",
@@ -815,13 +815,13 @@
       "body": "Rimandala al fornitore (un reclamo con il suo DDT di reso e l'accredito atteso) o scaricala a perdita dove si trova.",
       "return": "Rendi al fornitore…",
       "writeOff": "Scarica a perdita in {place} ({quantity})…",
-      "noScrap": "Il tuo ruolo non può scaricare merce a perdita (inventory.scrap)."
+      "noScrap": "Il tuo ruolo non può scaricare merce a perdita."
     },
     "quality": {
       "status": "Stato e decisioni",
       "where": "Rilascio, blocco, rifiuto e il risultato Cr VI si decidono in Conformità › Test e sostanze.",
       "holdsTitle": "Blocchi e ispezioni",
-      "noRight": "Il tuo ruolo non vede i blocchi di qualità (quality.holds.view).",
+      "noRight": "Il tuo ruolo non vede i blocchi di qualità.",
       "inspections": "Le ispezioni in accettazione del lotto arriveranno in una versione successiva.",
       "noHolds": "Nessun blocco",
       "noHoldsBody": "Nessun blocco di qualità ha nominato questo lotto o le sue pelli.",
@@ -943,8 +943,8 @@
         "SERIALS_COLLAPSED_one": "{count} matricola è contata sul suo fascio e la sua taglia: traccia l'ordine di lavoro o il fascio per vederla.",
         "SERIALS_COLLAPSED_other": "{count} matricole sono contate sui loro fasci e taglie: traccia l'ordine di lavoro o un fascio per vederle una a una."
       },
-      "restricted_one": "{count} record che non puoi vedere è contato, non mostrato ({permission}).",
-      "restricted_other": "{count} record che non puoi vedere sono contati, non mostrati ({permission}).",
+      "restricted_one": "{count} record che non puoi vedere è contato, non mostrato: serve il permesso «{right}».",
+      "restricted_other": "{count} record che non puoi vedere sono contati, non mostrati: serve il permesso «{right}».",
       "affected_one": "Mostra solo i clienti coinvolti ({count} ha ricevuto)",
       "affected_other": "Mostra solo i clienti coinvolti ({count} hanno ricevuto)",
       "noAffected": "Nessun cliente ha ricevuto questa merce.",
@@ -1033,7 +1033,7 @@
         "checking": "Lettura dei controlli di rilascio…",
         "none": "Nessuno di questi lotti si può rilasciare adesso.",
         "phrase": "Scrivi prima {phrase}.",
-        "noRight": "Il tuo ruolo non può rilasciare lotti (quality.lots.release).",
+        "noRight": "Il tuo ruolo non può rilasciare lotti.",
         "pick": "Seleziona prima i lotti da rilasciare."
       },
       "result": {

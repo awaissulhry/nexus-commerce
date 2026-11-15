@@ -57,7 +57,11 @@
         "REJECTED": "Agli invii si risponde qui, mai l'intermediario: il primo invio di ogni fattura viene scartato, per provare la correzione.",
         "NOT_DELIVERABLE": "Agli invii si risponde qui, mai l'intermediario: lo SDI non riesce a recapitarli, per provare la copia al cliente."
       },
-      "FAKE": "La connessione è l'intermediario FAKE (solo in locale e in prova): risponde lui e nulla esce dal sistema.",
+      "FAKE": {
+        "DELIVERED": "La connessione è l'intermediario FAKE (solo in locale e in prova): risponde a ogni invio come consegnato e nulla esce dal sistema.",
+        "REJECTED": "La connessione è l'intermediario FAKE (solo in locale e in prova): scarta il primo invio di ogni fattura, così si prova la correzione, e nulla esce dal sistema.",
+        "NOT_DELIVERABLE": "La connessione è l'intermediario FAKE (solo in locale e in prova): lo SDI non può recapitare i suoi invii, così si prova la copia al cliente, e nulla esce dal sistema."
+      },
       "NONE": "Non c'è ancora un'unica connessione SDI: gli invii la aspettano."
     }
   },
@@ -726,7 +730,6 @@
     "noConnection": "Ancora nessuna",
     "simulate": "Risposta simulata",
     "simulateHint": "Cosa risponde lo SDI simulato a ogni invio.",
-    "simulateFake": "Con l'intermediario FAKE risponde il FAKE; la risposta simulata vale per una connessione reale o di sandbox.",
     "outcome": {
       "DELIVERED": "Consegnata",
       "REJECTED": "Scartata al primo invio (prova la correzione)",

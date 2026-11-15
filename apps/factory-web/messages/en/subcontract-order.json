@@ -44,7 +44,7 @@
     },
     "noAccess": {
       "title": "Not for your role",
-      "body": "Subcontract orders need purchasing.view: ask an administrator for it."
+      "body": "Subcontract orders need the right to see purchase orders: ask an administrator for it."
     },
     "changed": "Changed at {time} by someone else · your open dialog is kept",
     "reload": "Reload",
@@ -214,7 +214,7 @@
       "body": "No kit line yet: the buyer plans it from the work order’s materials, or the pieces go alone.",
       "bodyEdit": "Plan it from the work order’s materials, or add the lines one by one. Leather tracked by the hide goes cut, as bundles."
     },
-    "floorLater": "Here the office sends the kit with its DDT; sending it from the warehouse tablet (Subcontract kits) comes with a later step.",
+    "floorLater": "Here the office sends the kit with its DDT; the warehouse can also send it from the tablet (Subcontract kits).",
     "ddts": {
       "title": "Kit DDTs (work on our behalf)",
       "none": "No DDT issued for this order yet.",
@@ -239,7 +239,7 @@
     },
     "title": "Add kit line",
     "confirm": "Add",
-    "noMaterials": "Picking a material needs product.materials.view.",
+    "noMaterials": "Picking a material needs the right to see the material library.",
     "material": "Material",
     "search": "Code or name",
     "noMatch": "No active material matches.",
@@ -309,14 +309,14 @@
     "show": "Show here",
     "openPdf": "Open PDF",
     "annul": "Annul…",
-    "noFiles": "Opening a PDF needs files.read.",
-    "noCancel": "Annulling a DDT needs shipping.ddt.cancel.",
+    "noFiles": "Opening a PDF needs the right to see a record's files.",
+    "noCancel": "Annulling a DDT needs the right to cancel an issued DDT.",
     "pdf": {
       "missing": "The DDT is issued but its PDF was not stored: print it again."
     },
     "pdfLoading": "Reading the PDF…",
     "printAgain": "Print again",
-    "later": "The workshop’s written terms and its invoices come with later steps."
+    "later": "The workshop’s written terms are on the Operations & quantities tab; its invoices are in Finance › Supplier invoices."
   },
   "cancel": {
     "title": "Cancel {number}",
@@ -440,12 +440,12 @@
     "piecesOf": "Line {line} · {code}",
     "piecesLeft": "{left} of {total} still to send; 0: none now",
     "bundlesTitle": "Cut bundles that travel",
-    "bundlesNoRight": "The work order’s bundles need workorders.view: type the pieces above.",
+    "bundlesNoRight": "The work order’s bundles need the right to see work orders: type the pieces above.",
     "noBundles": "The work order has no active bundle.",
     "bundlesHint": "Each bundle is listed on the DDT; with no pieces typed above, the whole-garment bundles count as the pieces sent.",
     "ddtTitle": "DDT for work on our behalf",
     "ddtIssue": "Issue the DDT now",
-    "ddtNoRight": "Issuing the DDT needs shipping.ddt.issue: the kit goes without one and the warehouse issues it later.",
+    "ddtNoRight": "Issuing the DDT needs the right to issue DDTs: the kit goes without one and the warehouse issues it later.",
     "ddtLater": "No DDT now: issue it before the goods leave the building.",
     "ddt": {
       "reason": "Reason for the transport",
@@ -527,7 +527,7 @@
     "scrapped": "Scrapped there",
     "reason": "Reason",
     "removeLine": "Remove this line",
-    "bundlesNoRight": "Bundles need workorders.view: the pieces come back by operation.",
+    "bundlesNoRight": "Bundles need the right to see work orders: the pieces come back by operation.",
     "returnsTitle": "Unused material back",
     "noStock": "None of our material is at this workshop.",
     "col": {
@@ -540,7 +540,7 @@
     "returnOf": "Quantity of {code} back",
     "toOf": "Where {code} goes",
     "pickTo": "Pick a place",
-    "noPlaces": "The places need inventory.locations.view.",
+    "noPlaces": "The places need the right to see a site's locations.",
     "note": "Note",
     "what": "The order is partly back or back; the pieces back count on each operation.",
     "fee": "The workshop’s fee for the pieces back good goes on the work order’s cost.",

@@ -227,7 +227,7 @@ export const bomImportAdapter = Object.freeze({
 
   authorize(actor, job) {
     if (job.companyId === null && !mayWrite(actor, PRODUCT_BOM_MANAGE, null)) {
-      return [{ path: 'companyId', message: 'A BOM import for every company (styles made by every company) needs product.bom.manage over every company; import for one company instead.' }]
+      return [{ path: 'companyId', message: 'A BOM import for every company (styles made by every company) needs the right to edit BOMs over every company; import for one company instead.' }]
     }
     return []
   },

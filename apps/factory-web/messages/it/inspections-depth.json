@@ -11,9 +11,9 @@
     "INLINE": "In linea",
     "none": "Nessuna ispezione {kind} in questa vista.",
     "held": {
-      "final": "Le ispezioni finali richiedono quality.inspections.view.",
-      "incoming": "Le ispezioni in arrivo richiedono quality.incoming.view.",
-      "inline": "I controlli in linea richiedono quality.inprocess.view.",
+      "final": "Le ispezioni finali richiedono il permesso di vederle.",
+      "incoming": "Le ispezioni in arrivo richiedono il permesso di vederle.",
+      "inline": "I controlli in linea richiedono il permesso di vederli.",
       "view": "Questa vista riguarda le ispezioni finali: quelle in arrivo e in linea compaiono in Tutte le ispezioni e Aperte."
     }
   },
@@ -197,7 +197,7 @@
     "keptSame": "Stesso contenuto: resta la versione {version} ({language}).",
     "noAccess": {
       "title": "Non puoi aprire questo rapporto",
-      "body": "I rapporti di ispezione richiedono quality.inspections.view. Lo concede il tuo amministratore."
+      "body": "I rapporti di ispezione richiedono il permesso di vedere le ispezioni finali. Lo concede il tuo amministratore."
     },
     "held": {
       "kind": "I rapporti si fanno delle ispezioni finali.",
@@ -206,7 +206,7 @@
       "tooMany": "Al massimo 20 rapporti alla volta.",
       "kindSome": "Solo le ispezioni finali hanno un rapporto: togli le altre dalla selezione.",
       "notSignedSome": "Alcune ispezioni scelte non sono ancora firmate: il loro rapporto viene dopo la firma.",
-      "noMake": "Tenere un rapporto richiede quality.documents.make.",
+      "noMake": "Il tuo ruolo non può conservare un rapporto.",
       "reading": "Il rapporto è in preparazione."
     }
   },
@@ -227,7 +227,7 @@
     "notShareable": "{status}: non ancora imballata",
     "version": "Versione da condividere",
     "send": "e invia il link al cliente",
-    "sendHeld": "Inviare il link richiede shipping.manage (l'invio link della spedizione)",
+    "sendHeld": "Inviare il link richiede il permesso di cambiare le spedizioni (l'invio link della spedizione)",
     "go": "Condividi",
     "done": "Versione {version} condivisa su {shipment}.",
     "doneSent": "Versione {version} condivisa su {shipment}; il link è stato inviato.",
@@ -254,7 +254,7 @@
     },
     "held": {
       "pick": "Scegli prima la spedizione.",
-      "noRight": "Condividere un rapporto richiede quality.documents.share.",
+      "noRight": "Il tuo ruolo non può condividere un rapporto.",
       "noVersion": "Tieni prima una versione: si condivide la copia di una versione tenuta.",
       "notShareable": "Questa spedizione non è ancora imballata (o è annullata): non può portare il rapporto.",
       "NOT_ON_SHIPMENT": "Questa spedizione non porta capi di questo ordine di produzione.",
@@ -437,7 +437,7 @@
       "which": "Profilo",
       "chain": "Il profilo che vale ora: {profile}",
       "other": "Un altro profilo (con il motivo)",
-      "otherHeld": "Un altro profilo: per elencarli serve quality.aql.view",
+      "otherHeld": "Un altro profilo: per elencarli serve il permesso di vedere i profili AQL",
       "profile": "Profilo",
       "option": "{code} · {name} · livello {level} · maggiori {major} · minori {minor}",
       "reason": "Perché un altro profilo (obbligatorio)",
@@ -447,7 +447,7 @@
       "apply": "Cambia profilo"
     },
     "held": {
-      "noRight": "Cambiare il profilo richiede quality.inspections.record.",
+      "noRight": "Cambiare il profilo richiede il permesso di registrare le ispezioni.",
       "fixed": "Il piano controlla un numero fisso di unità: non vale alcun profilo AQL.",
       "frozen": "Il profilo si blocca quando inizia il conteggio.",
       "signed": "Firmata: il campione resta come è stato controllato.",
@@ -636,13 +636,13 @@
       "refused": "Rifiutata: il valore resta come firmato."
     },
     "held": {
-      "noRight": "Chiedere una rettifica richiede quality.amendments.request.",
+      "noRight": "Il tuo ruolo non può chiedere una rettifica.",
       "reading": "Leggo le rettifiche…",
       "notSigned": "Le rettifiche si chiedono quando l'esito è firmato.",
       "allWaiting": "Ogni campo rettificabile aspetta già la seconda firma.",
       "answered": "Questa rettifica ha già una risposta.",
       "mine": "Hai chiesto tu questa rettifica: controfirma un altro ispettore o il responsabile qualità.",
-      "noSign": "Controfirmare richiede quality.amendments.sign."
+      "noSign": "Il tuo ruolo non può controfirmare una rettifica."
     },
     "problem": {
       "field": "Scegli il campo.",
@@ -756,8 +756,8 @@
       "bundleHint": "Scansionalo o scrivilo; un primo capo nomina il fascio da cui è fatto.",
       "after": "Si compila sul tablet di linea (Ispezione in linea); qui si apre la sua scheda.",
       "held": {
-        "noRight": "Aprire controlli in linea richiede quality.inprocess.record.",
-        "noWorkOrders": "Scegliere l'ordine di produzione richiede workorders.view."
+        "noRight": "Il tuo ruolo non può aprire controlli in linea.",
+        "noWorkOrders": "Scegliere l'ordine di produzione richiede il permesso di vedere gli ordini di lavoro."
       },
       "problem": {
         "workOrder": "Scegli l'ordine di produzione o scrivi un fascio.",

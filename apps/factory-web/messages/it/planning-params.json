@@ -210,7 +210,7 @@
       "noMakeSite": "Nessuno stabilimento di produzione",
       "suppliersHint": "Il fornitore dell'articolo e le sue fonti approvate.",
       "suppliersFailed": "Non è stato possibile leggere le fonti approvate: si propone il fornitore dell'articolo.",
-      "suppliersHeld": "Per scegliere un fornitore preferito serve il diritto acquisti (purchasing.view) per leggere le fonti approvate.",
+      "suppliersHeld": "Per scegliere un fornitore preferito serve il diritto acquisti per leggere le fonti approvate.",
       "noPlants": "Nessuno stabilimento di questa società in cui produrlo."
     },
     "bulk": {

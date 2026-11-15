@@ -255,10 +255,10 @@ describe('ncr: words from the facts, never the API English', () => {
     const contained = { ...RECORD.ncr, next: { stage: 'DECIDED' as const, ready: false, words: null } }
     expect(say(laneHeld(contained, 'DECIDED', can))).toBe('28 of 40 pcs decided · 12 left: decide the rest first.')
     expect(say(laneHeld(contained, 'OPEN', can))).toBe('An NCR never goes back a stage.')
-    expect(say(laneHeld(contained, 'DECIDED', { manage: false, close: true }))).toContain('quality.ncr.manage')
+    expect(say(laneHeld(contained, 'DECIDED', { manage: false, close: true }))).toBe('Moving an NCR needs the right to follow NCRs up.')
     const decided = { ...ROWS[4]!, next: { stage: 'CLOSED' as const, ready: false, words: null } }
     expect(say(laneHeld(decided, 'CLOSED', can))).toBe('1 decision waits for its stock move or follow-up record: carry it out first.')
-    expect(say(laneHeld(decided, 'CLOSED', { manage: true, close: false }))).toContain('quality.ncr.close')
+    expect(say(laneHeld(decided, 'CLOSED', { manage: true, close: false }))).toBe('Closing an NCR needs the right to close NCRs.')
     expect(laneHeld({ ...decided, next: { stage: 'CLOSED', ready: true, words: null } }, 'CLOSED', can)).toBeNull()
   })
 
@@ -294,7 +294,7 @@ describe('ncr: words from the facts, never the API English', () => {
     expect(say(decisionHeld(waiting, RECORD, owner, waiting.decidedById!).approve)).toBe('You decided this: another person approves it (four eyes).')
     expect(decisionHeld(waiting, RECORD, owner, 'someone-else').approve).toBeNull()
     expect(say(decisionHeld(waiting, RECORD, owner, 'someone-else').carryOut)).toBe("This decision waits for another person's approval first.")
-    expect(say(decisionHeld(waiting, RECORD, ncrCan(templateOf('sales')!.permissions), 'x').approve)).toContain('quality.ncr.approve')
+    expect(say(decisionHeld(waiting, RECORD, ncrCan(templateOf('sales')!.permissions), 'x').approve)).toContain('Your role does not approve NCR decisions')
   })
 
   it('a refusal: our words; the checks of a 409; a stale version read again', () => {
@@ -400,7 +400,7 @@ describe('ncr: B-W2b-17 words (titles in parts, the containment time, refused ow
 
   it('a refused bulk owner: each NCR by its number and why, in our words', () => {
     expect(assignRefusalKey('NCR-1 changed since it was read: read the list again.')).toBe('assign.refused.stale')
-    expect(assignRefusalKey('NCR-1: assigning an owner needs quality.ncr.manage at its site.')).toBe('assign.refused.noRight')
+    expect(assignRefusalKey('NCR-1: assigning an owner needs the right to follow up NCRs at its site.')).toBe('assign.refused.noRight')
     expect(assignRefusalKey('NCR-1: The NCR is closed: it never changes.')).toBe('assign.refused.frozen')
     expect(assignRefusalKey('NCR not found.')).toBe('assign.refused.notFound')
     expect(assignRefusalKey('Something new')).toBe('assign.refused.other')
@@ -408,7 +408,7 @@ describe('ncr: B-W2b-17 words (titles in parts, the containment time, refused ow
     expect(assignRefusalKey('Something new', 'CLOSED')).toBe('assign.refused.frozen')
     const picked = [ROWS[0]!, ROWS[1]!, ROWS[2]!]
     expect(assignRefusals([{ path: 'ncrs/0/NO_RIGHT', message: 'x' }], picked)).toEqual([{ number: picked[0]!.number, key: 'assign.refused.noRight' }])
-    expect(assignRefusals([{ path: 'ncrs/1', message: 'changed since it was read' }, { path: 'ncrs/2', message: 'needs quality.ncr.manage' }, { path: 'body/ownerId', message: 'x' }], picked)).toEqual([
+    expect(assignRefusals([{ path: 'ncrs/1', message: 'changed since it was read' }, { path: 'ncrs/2', message: 'NCR-3: assigning an owner needs the right to follow up NCRs at its site.' }, { path: 'body/ownerId', message: 'x' }], picked)).toEqual([
       { number: ROWS[1]!.number, key: 'assign.refused.stale' },
       { number: ROWS[2]!.number, key: 'assign.refused.noRight' },
     ])
@@ -473,7 +473,7 @@ describe('ncr: the calls as the API takes them', () => {
 const LEFT_KEY =
   /\b(?:common|stage|severity|source|foundAt|recordType|uom|quantity|decided|due|age|check|checkName|board|held|problem|keys|close|list|view|tile|col|csv|new|zone|containmentTime|assign|discrepancyKind|escalate)\.[a-zA-Z_]+(?:\.[a-zA-Z_]+)*\b/
 const LEFT_PLACEHOLDER = /\{[a-zA-Z]+\}/
-/** Permission names are said on purpose ("needs quality.ncr.manage"); file names are not keys. */
+/** File names are not keys; nor is a permission name, which B-W2b-F51 keeps off every screen (lib/i18n/rights.vitest.test.ts). */
 const SAID = /\b(?:quality\.ncr\.[a-z]+|quality\.capa\.[a-z]+|money\.cost|quality\.defects\.view|tasks\.manage|files\.upload|production\.rework|purchasing\.claims\.manage|inventory\.[a-z]+|zip-pull\.jpg|shoulder-seam\.jpg)\b/g
 
 function render(screen: DesignScreen<unknown>, model: unknown, locale: (typeof LOCALES)[number]): string {

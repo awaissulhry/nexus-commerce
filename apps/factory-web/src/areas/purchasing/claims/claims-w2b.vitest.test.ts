@@ -4,6 +4,7 @@ import { ApiError } from '../../../lib/api/errors'
 import { createClaim, makeLetter, removeClaimPhoto } from './api'
 import { canFor, claim, CLAIM_PHOTOS, FOUND_LOTS, LEATHER_STOCK, LOT_HIDES, PAD_STOCK, REASON_LIST } from './demo/fixtures'
 import { claimsAddress, evidenceRefusal, fileOpenHeld, letterKeepHeld, newClaimBody, newClaimHeld, NO_RETURN, photoAddHeld, photoRemoveHeld, ready, returnHeld, type ReturnDraft } from './model'
+import { rightRef } from '../../../lib/i18n/rights'
 
 /**
  * Purchasing › Returns & claims, W2b (B-W2b-14; SCM-135): New claim (the Return dialog's claim mode), the claim's photos
@@ -15,7 +16,7 @@ const leather = (over: Partial<ReturnDraft> = {}) => draft({ lot: FOUND_LOTS[0]!
 
 describe('New claim (design page.h#1, W2b)', () => {
   it('needs claims.manage and the stock read, a lot, its goods and the reason — never a DDT or the return permission', () => {
-    expect(newClaimHeld(draft(), canFor('readOnly'))).toEqual({ key: 'held.permission', params: { permission: 'purchasing.claims.manage' } })
+    expect(newClaimHeld(draft(), canFor('readOnly'))).toEqual({ key: 'held.permission', params: { right: rightRef('purchasing.claims.manage') } })
     expect(newClaimHeld(draft(), canFor('buyer'))).toEqual({ key: 'ret.held.lot' })
     expect(newClaimHeld(leather(), canFor('buyer'))).toEqual({ key: 'ret.held.reason' })
     expect(newClaimHeld(leather({ reasonCode: 'QUALITY' }), canFor('buyer'))).toBeNull()
@@ -45,8 +46,8 @@ describe("the claim's photos and letter (Z1:08)", () => {
     expect(photoAddHeld(sent, canFor('buyer'))).toBeNull()
     expect(photoAddHeld({ ...sent, status: 'CLOSED' }, canFor('buyer'))).toEqual({ key: 'photos.held.settled', params: { status: '@statusIn.CLOSED' } })
     expect(photoAddHeld({ ...draftClaim, photos: Array.from({ length: 20 }, () => CLAIM_PHOTOS[0]!) }, canFor('buyer'))).toEqual({ key: 'photos.held.full', params: { max: 20 } })
-    expect(photoAddHeld(draftClaim, canFor('readOnly'))).toEqual({ key: 'held.permission', params: { permission: 'purchasing.claims.manage' } })
-    expect(photoRemoveHeld(draftClaim, canFor('buyer'))).toEqual({ key: 'held.permission', params: { permission: 'files.delete' } })
+    expect(photoAddHeld(draftClaim, canFor('readOnly'))).toEqual({ key: 'held.permission', params: { right: rightRef('purchasing.claims.manage') } })
+    expect(photoRemoveHeld(draftClaim, canFor('buyer'))).toEqual({ key: 'held.permission', params: { right: rightRef('files.delete') } })
     expect(photoRemoveHeld(draftClaim, canFor('owner'))).toBeNull()
     expect(photoRemoveHeld(sent, canFor('owner'))).toEqual({ key: 'photos.held.sent' })
     expect(letterKeepHeld(canFor('readOnly'))).not.toBeNull()

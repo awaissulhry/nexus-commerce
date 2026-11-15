@@ -78,7 +78,7 @@
     "alreadyActive": "Alcuni sono già in uso.",
     "alreadyArchived": "Alcuni sono già archiviati.",
     "busy": "Attendi: l'ultima modifica è ancora in salvataggio.",
-    "noManage": "Per cambiare le librerie serve product.styles.manage (il ruolo di chi sviluppa il prodotto).",
+    "noManage": "Per cambiare le librerie serve il permesso di modificare gli articoli (il ruolo di chi sviluppa il prodotto).",
     "none": "Scegli almeno una riga.",
     "nothing": "Non è cambiato ancora nulla."
   },
@@ -187,7 +187,7 @@
     },
     "forbidden": {
       "title": "Non hai accesso ai punti di misura",
-      "body": "Per leggerli serve product.styles.view (lo hanno sviluppo prodotto, produzione e qualità)."
+      "body": "Per leggerli serve il permesso di vedere gli articoli (lo hanno sviluppo prodotto, produzione e qualità)."
     },
     "dialog": {
       "newTitle": "Nuovo punto di misura",
@@ -250,7 +250,7 @@
     "held": {
       "archived": "Questo punto è archiviato: ripristinalo per cambiarlo."
     },
-    "readOnly": "Puoi guardare questo punto; per cambiarlo serve product.styles.manage.",
+    "readOnly": "Puoi guardare questo punto; per cambiarlo serve il permesso di modificare gli articoli.",
     "csv": {
       "code": "Codice",
       "name": "Nome",
@@ -338,7 +338,7 @@
     },
     "forbidden": {
       "title": "Non hai accesso alle regole di sviluppo",
-      "body": "Per leggerle serve product.styles.view (lo hanno sviluppo prodotto, produzione e qualità)."
+      "body": "Per leggerle serve il permesso di vedere gli articoli (lo hanno sviluppo prodotto, produzione e qualità)."
     },
     "newTitle": "Nuova regola di sviluppo",
     "newIntro": "Una regola appartiene a una scala taglie. I suoi incrementi si scrivono dopo, nella regola stessa.",
@@ -368,7 +368,7 @@
       "title": "Regola di sviluppo",
       "subtitle": "{scale} · base {base} · {format}"
     },
-    "readOnly": "Puoi guardare questa regola; per cambiarla serve product.styles.manage.",
+    "readOnly": "Puoi guardare questa regola; per cambiarla serve il permesso di modificare gli articoli.",
     "held": {
       "archived": "Questa regola è archiviata: ripristinala per cambiarla."
     },
@@ -499,10 +499,10 @@
       "frozen": "Questa revisione è congelata: la scheda cambia solo in una nuova revisione.",
       "approved": "La scheda è approvata: riaprila per cambiarla.",
       "archivedSpec": "Questa scheda è archiviata: non cambia più.",
-      "noManage": "Per cambiare la scheda serve product.bom.manage (il ruolo di chi sviluppa il prodotto).",
+      "noManage": "Per cambiare la scheda serve il permesso di modificare una distinta base in bozza (il ruolo di chi sviluppa il prodotto).",
       "rule": "La regola di modifica del modello blocca i cambi in questo stato del ciclo di vita (Impostazioni prodotto).",
       "noRange": "Il modello non ha ancora una gamma taglie: impostala prima nella Panoramica.",
-      "noRelease": "Per approvare o riaprire serve product.bom.release.",
+      "noRelease": "Per approvare o riaprire serve il permesso di rilasciare una revisione.",
       "notDraft": "Si approva solo una scheda in bozza.",
       "noPoints": "Prima aggiungi i punti.",
       "missing_one": "Manca ancora {count} valore.",
@@ -512,7 +512,7 @@
       "archived": "Il modello è archiviato: la sua scheda misure è in sola lettura.",
       "approved": "La scheda è approvata: i suoi valori sono in sola lettura. Riaprila per cambiarli.",
       "archivedSpec": "Questa scheda misure è archiviata: è in sola lettura.",
-      "noManage": "Puoi leggere la scheda; per cambiarla serve product.bom.manage.",
+      "noManage": "Puoi leggere la scheda; per cambiarla serve il permesso di modificare una distinta base in bozza.",
       "rule": "La regola di modifica del modello blocca i cambi nel suo stato del ciclo di vita: la scheda è in sola lettura (Prodotti › Impostazioni)."
     },
     "offline_one": "Offline: {count} valore aspetta su questa pagina e parte quando torna la connessione.",

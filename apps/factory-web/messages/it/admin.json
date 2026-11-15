@@ -131,7 +131,8 @@
     "body": "Ti serve: {need}. Chiedi a un amministratore."
   },
   "held": {
-    "needs": "Serve il permesso: {right}"
+    "needs": "Serve il permesso: {right}",
+    "unnamedRight": "Un permesso che il tuo ruolo non ha"
   },
   "form": {
     "required": "Compila questo campo.",
@@ -595,7 +596,7 @@
     "centres": {
       "hint": "Gruppi di postazioni che fanno un tipo di lavoro.",
       "empty": "Nessun centro di lavoro",
-      "capacityLater": "La capacità per centro di lavoro si imposta in Pianificazione (W1).",
+      "capacityLater": "La capacità per centro di lavoro si imposta in Pianificazione.",
       "count_one": "{count} centro di lavoro",
       "count_other": "{count} centri di lavoro"
     },
@@ -627,7 +628,7 @@
       "tooMany": "Troppi fine turno.",
       "twice": "Un orario è ripetuto.",
       "zoneHint": "Il fuso orario dello stabilimento (impostato sullo stabilimento).",
-      "holidaysLater": "Giorni lavorativi e festività (festività italiane, chiusura di agosto) arrivano in W2a."
+      "holidaysLater": "I giorni lavorativi e le festività (festività italiane, chiusura di agosto) si impostano nel calendario della società, che ogni sede eredita."
     },
     "badge": {
       "title": "Inizio del lavoro sul tablet",
@@ -1285,7 +1286,7 @@
       "failedPrinters": "Stampanti con lavori falliti"
     },
     "tileHint": {
-      "failedPrinters": "La coda di stampa arriva in W1"
+      "failedPrinters": "Un elenco dei lavori non riusciti non è ancora disponibile qui."
     },
     "mode": {
       "label": "Elenco",
@@ -1333,7 +1334,7 @@
       "title": "Ancora nessun tablet",
       "body": "Registrane uno: basta un minuto con il codice QR."
     },
-    "later": "La coda di stampa (ogni etichetta con i tentativi e Riprova) arriva in W1.",
+    "later": "Un elenco di ogni etichetta inviata a una stampante, con i tentativi e Riprova, non è ancora disponibile qui.",
     "step": {
       "where": "Dove lavorerà?",
       "scan": "Inquadra sul tablet",
@@ -1460,7 +1461,7 @@
       "dpi": "Scegli 203, 300 o 600 dpi.",
       "dpiLabel": "Risoluzione",
       "statusHint": "In pausa: i lavori attendono. Archiviata: per sempre.",
-      "testLater": "\"Stampa un'etichetta di prova\" arriva con la coda di stampa (W1)."
+      "testLater": "\"Stampa un'etichetta di prova\" non è ancora disponibile."
     },
     "done": {
       "added": "Stampante aggiunta.",
@@ -2190,6 +2191,26 @@
     "purchasing_requests_ask": "Chiedere ai buyer di acquistare un materiale (anche da una mancanza di un ordine di produzione); vedere e ritirare le proprie richieste",
     "inventory_tasks_manage": "Creare a mano i compiti di magazzino del reparto (ricevere, ubicare, prelevare, spostare, contare), assegnarli a un ruolo o a un addetto, cambiarli e annullarli",
     "inventory_counts_scan": "Contare un inventario in corso scansionando ogni unità (l'area di una pelle, la lunghezza di un rotolo, i pezzi digitati), vedere le differenze di un contenitore a fine conteggio, chiuderlo e ricontare una riga contata da un'altra persona",
-    "inventory_unplanned_decide": "Indicare l'ordine d'acquisto della merce arrivata senza ordine (viene poi registrata nell'area di attesa), oppure rimandarla al fornitore con il motivo"
+    "inventory_unplanned_decide": "Indicare l'ordine d'acquisto della merce arrivata senza ordine (viene poi registrata nell'area di attesa), oppure rimandarla al fornitore con il motivo",
+    "money_price": "Vedere i prezzi di vendita, gli importi di riga e i totali dei documenti",
+    "money_cost": "Vedere i costi e i prezzi d'acquisto",
+    "money_margin": "Vedere i margini",
+    "money_wages": "Vedere le paghe: tariffe a cottimo e guadagni",
+    "money_pay": "Vedere il cottimo: tariffe, guadagni e paga garantita",
+    "portal_shipNotices_view": "Vedere le consegne annunciate e le righe d'ordine che si possono spedire",
+    "portal_accounting_view": "Aprire la stanza del commercialista: mesi consegnati, esportazioni, fatture elettroniche e registri (sola lettura)",
+    "links_open": "Aprire il record del link",
+    "links_accept": "Accettare il preventivo aperto dal link",
+    "links_decline": "Rifiutare il preventivo o l'ordine d'acquisto aperto dal link",
+    "links_confirm": "Confermare l'ordine d'acquisto aperto dal link",
+    "links_download": "Scaricare i file del link",
+    "links_receive": "Confermare la ricezione dei file di un link sicuro",
+    "links_submit": "Inviare il modulo del link",
+    "links_approve": "Approvare la richiesta aperta dal link",
+    "links_refuse": "Rifiutare la richiesta aperta dal link",
+    "links_pay": "Pagare la richiesta di acconto o la fattura aperta dal link",
+    "links_moveDate": "Proporre un’altra data per il lavoro in conto lavoro aperto dal link",
+    "links_post": "Scrivere un messaggio sul record condiviso con il link",
+    "links_upload": "Caricare un file sul record condiviso con il link"
   }
 }

@@ -198,7 +198,7 @@ describe('the calls, as the API takes them', () => {
 const LEFT_KEY =
   /\b(?:title|intro|uom|unit|price|lead|preference|last|status|col|noAccess|held|list|view|add|bulk|common|readOnly|cell|field|problem|archive|restore|notice|keys|csv|prices|material|supplier|suppliers|customers|record|tab)\.[a-zA-Z_]+(?:\.[a-zA-Z_]+)*\b/
 const LEFT_PLACEHOLDER = /\{[a-zA-Z]+\}/
-/** Permission names are said on purpose ("needs purchasing.view"); example domains and addresses are not keys. */
+/** Permission names are stripped before the key check, though no screen says one since B-W2b-F51; example domains and addresses are not keys. */
 const SAID = /\b(?:purchasing\.[a-z.]+|product\.materials\.[a-z]+|money\.cost|[\w.+-]+@[\w.-]+|[a-z-]+\.example\.com)\b/g
 
 function render(screen: DesignScreen<unknown>, model: unknown, locale: (typeof LOCALES)[number]): string {
@@ -240,7 +240,7 @@ describe('every new design case draws in both languages with no key left on scre
     expect(html(supplier, 'items', 'en')).toContain('Approved sources')
     expect(html(supplier, 'items', 'it')).toContain('Fonti approvate')
     expect(html(supplier, 'items-add-duplicate', 'en')).toContain('already has an approved source')
-    expect(html(supplier, 'items-no-access', 'en')).toContain('purchasing.view')
+    expect(html(supplier, 'items-no-access', 'en')).toContain('the right to see purchase orders')
     expect(html(supplier, 'items-read-only', 'it')).toContain('Sola lettura')
     expect(html(supplier, 'items-demoted', 'en')).toContain('is now the backup')
     expect(html(material, 'supplier-prices', 'en')).toContain('Conceria Esempio Due')
@@ -248,7 +248,7 @@ describe('every new design case draws in both languages with no key left on scre
     expect(html(material, 'supplier-prices-no-cost', 'en')).not.toMatch(/€/)
     expect(html(material, 'supplier-prices-default', 'it')).toContain('Solo il fornitore predefinito')
     expect(html(material, 'supplier-prices-error', 'en')).toContain('Couldn’t load supplier prices')
-    expect(html(material, 'supplier-prices-no-access', 'en')).toContain('purchasing.view')
+    expect(html(material, 'supplier-prices-no-access', 'en')).toContain('the right to see purchase orders')
   })
 
   it('has words for every unit, preference and state in both languages', () => {

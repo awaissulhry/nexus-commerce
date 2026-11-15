@@ -36,7 +36,7 @@
     "printShown_other": "Print {count} pick lists"
   },
   "held": {
-    "noReserve": "Your role may not reserve stock (inventory.reserve).",
+    "noReserve": "Your role may not reserve stock.",
     "nothingToPrint": "No pick list is shown to print.",
     "CR_VI_PENDING": "Lot {lot}: no chromium VI test result yet",
     "CR_VI_FAILED": "Lot {lot}: failed the chromium VI test",
@@ -100,8 +100,8 @@
     "placeAt": "{code} · {name}",
     "placeLabel": "Kit place",
     "placeHint": "Where the picked material waits for the cutters. Saved as you choose.",
-    "heldNoRight": "Staging and checking a kit needs the right to pick for work orders (inventory.issue).",
-    "heldNoPlaces": "Choosing the place needs the right to see the places (inventory.locations.view).",
+    "heldNoRight": "Staging and checking a kit needs the right to pick for work orders.",
+    "heldNoPlaces": "Choosing the place needs the right to see the places.",
     "heldNotOpen": "The work order is not picked for any more: its kit stays as it is.",
     "heldNothing": "The work order plans no material: there is no kit to check.",
     "heldChecked": "The kit is checked complete already.",

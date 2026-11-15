@@ -22,6 +22,8 @@ import { FloorFlag, FloorSummary } from '../floor/view/FloorParts'
 import type { DocumentsState } from '../documents/model'
 import { DocumentsSection } from '../documents/view/DocumentsSection'
 import '../margins.css'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../../lib/i18n/rights'
 
 export type LiveState = 'connecting' | 'live' | 'offline'
 
@@ -181,7 +183,7 @@ function MarginsPageView({ model, actions }: { model: MarginsModel; actions?: Ma
   if (!can.view) {
     return (
       <div className="fw-fmg">
-        <EmptyState title={t('noAccess.title')} description={t('noAccess.body', { permission: 'costing.view' })} />
+        <EmptyState title={t('noAccess.title')} description={t('noAccess.body', { right: rightRef('costing.view') })} />
       </div>
     )
   }
@@ -473,7 +475,7 @@ export function OrderMarginDialog({
                 </Link>
               </Button>
             ) : (
-              <Button size="sm" variant="primary" heldReason={t('held.noOrders', { permission: 'orders.view' })}>
+              <Button size="sm" variant="primary" heldReason={t('held.noOrders', { right: rightRef('orders.view') })}>
                 {t('detail.open')}
               </Button>
             )}

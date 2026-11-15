@@ -129,7 +129,7 @@
       "fileFailed": "The consultant's file could not be opened. Try again."
     },
     "held": {
-      "manage": "Only the owner records or withdraws a PPE consultant's yes (compliance.ppeTexts.manage).",
+      "manage": "Only the owner records or withdraws a PPE consultant's yes.",
       "offline": "Offline: changes wait to be sent.",
       "busy": "Working…",
       "template": "Choose the template.",
@@ -141,7 +141,7 @@
       "file": "Choose the consultant's file.",
       "reason": "Say why it is withdrawn (at least 3 characters).",
       "withdrawn": "This yes is withdrawn already.",
-      "filesRead": "Opening files needs files.read.",
+      "filesRead": "Opening files needs the right to see a record's files.",
       "fileState": "The file is not available."
     },
     "problem": {

@@ -10,6 +10,8 @@ import { useLocale, useT } from '../../../../lib/i18n/provider'
 import type { Statement, StatementLine } from '../api'
 import { bucketTone, moneyText, RECEIVABLES_NAMESPACE, statementKey, type ReceivablesCan, type StatementRef } from '../model'
 import { AgeBar, dayText } from './parts'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../../lib/i18n/rights'
 
 export interface StatementState {
   readonly ref: StatementRef
@@ -62,11 +64,11 @@ export function StatementDialog({
   const [message, setMessage] = useState('')
   const statement = state.value
   const key = statementKey(state.ref)
-  const priceHeld = can.price ? null : t('held.price', { permission: 'money.price' })
+  const priceHeld = can.price ? null : t('held.price', { right: rightRef('money.price') })
   const sendHeld = busy
     ? t('held.busy')
     : !can.sendStatements
-      ? t('held.sendStatements', { permission: 'receivables.statements.send' })
+      ? t('held.sendStatements', { right: rightRef('receivables.statements.send') })
       : (priceHeld ?? (statement && statement.recipients.length === 0 ? t('held.noRecipients') : null))
   const period = {
     from: statement?.from ?? state.period.from,
@@ -244,7 +246,7 @@ export function StatementBody({
           </span>
         )}
       </div>
-      {!can.price && <Banner tone="info" title={t('statement.noPrice', { permission: 'money.price' })} />}
+      {!can.price && <Banner tone="info" title={t('statement.noPrice', { right: rightRef('money.price') })} />}
       <div className="fw-frv-pair">
         <Card padded aria-label={t('statement.bridge')}>
           <div className="fw-frv-card">

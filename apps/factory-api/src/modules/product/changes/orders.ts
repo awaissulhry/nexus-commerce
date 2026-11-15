@@ -405,7 +405,7 @@ export async function setApprovers(caller: CommandCaller, changeOrderId: string,
       refuse(selfNamedRefusal(order, actorIdOf(tools), userId))
       const user = await tx.user.findFirst({ where: { id: userId, status: 'ACTIVE' }, select: { id: true, displayName: true } })
       if (!user || !(await personMay(tx, context.tenantId, userId, PRODUCT_CHANGES_APPROVE, order.companyId, now))) {
-        refuse({ code: 'APPROVER_CANNOT', message: `${user?.displayName ?? 'This person'} cannot approve change orders of this company: name someone who holds the approval of changes (product.changes.approve).` })
+        refuse({ code: 'APPROVER_CANNOT', message: `${user?.displayName ?? 'This person'} cannot approve change orders of this company: name someone who holds the approval of changes.` })
       }
     }
     const removed = current.filter((approval) => approval.decision === null && !wanted.has(approval.approverId))

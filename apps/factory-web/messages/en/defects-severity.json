@@ -4,7 +4,7 @@
   },
   "edit": "Edit words",
   "held": {
-    "noManage": "Changing the words needs quality.defects.manage over every company.",
+    "noManage": "Changing the words needs the right to keep the defect library over every company.",
     "reading": "The words are still being read."
   },
   "col": {

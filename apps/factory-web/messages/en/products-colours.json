@@ -106,9 +106,9 @@
     "restore_other": "Restore {count}"
   },
   "held": {
-    "noColours": "Keeping the colour library needs the product.colours.manage right (the production manager has it).",
-    "noBranding": "Keeping branding sets needs the product.branding.manage right (sales and the production manager have it).",
-    "noUpload": "Sending a file needs the files.upload right.",
+    "noColours": "Keeping the colour library needs the right to keep it (the production manager has it).",
+    "noBranding": "Keeping branding sets needs the right to keep them (sales and the production manager have it).",
+    "noUpload": "Sending a file needs the right to upload files.",
     "noneActive": "None of the selected colours is in use.",
     "noneArchived": "None of the selected colours is archived.",
     "noneActiveSets": "None of the selected sets is in use.",
@@ -117,7 +117,7 @@
   },
   "forbidden": {
     "title": "You don't have access to colours",
-    "body": "Colours & artwork needs the product.styles.view right: every role that works with styles has it (production manager, sales, quality, planner)."
+    "body": "Colours & artwork needs the right to see the styles: every role that works with styles has it (production manager, sales, quality, planner)."
   },
   "empty": {
     "title": "No colours yet",
@@ -235,7 +235,7 @@
   "set": {
     "loading": "Branding set",
     "noun": "set",
-    "readOnly": "You can read this set; keeping it needs the product.branding.manage right.",
+    "readOnly": "You can read this set; keeping it needs the right to keep branding sets.",
     "archive": "Archive…",
     "restore": "Restore…",
     "restoreHeld": "{code} is in use for this brand: archive it first.",
@@ -275,7 +275,7 @@
     "rulePer": "Per",
     "pickPer": "Pick…",
     "wordsOnly": "None: a rule in words",
-    "noMaterialsRight": "Picking a material needs the product.materials.view right.",
+    "noMaterialsRight": "Picking a material needs the right to see the material library.",
     "ruleMaterial": "{code} × {quantity} {per}",
     "addRule": "Add a rule",
     "rulesFull": "A set holds at most 50 rules.",

@@ -51,7 +51,7 @@
       "nothingLeft": "Nothing left · depleted {date}",
       "behind": "The ledger says “{expected}”: a move has not been taken into account yet.",
       "check": "Check",
-      "noRight": "Checking the lifecycle needs inventory.lots.manage (warehouse, quality).",
+      "noRight": "Checking the lifecycle needs the right to keep lots (warehouse, quality).",
       "checked": "The lifecycle moved from {from} to {to}.",
       "unchanged": "The lifecycle already matches the ledger.",
       "checkFailed": "The lifecycle could not be checked. Try again.",
@@ -88,7 +88,7 @@
       "title": "Attributes",
       "edit": "Edit attributes",
       "none": "No attribute recorded yet.",
-      "noRight": "Recording attributes needs inventory.lots.manage (warehouse, quality).",
+      "noRight": "Recording attributes needs the right to keep lots (warehouse, quality).",
       "rejected": "A rejected lot is read only.",
       "dialogTitle": "Attributes of lot {code}",
       "save": "Save attributes",
@@ -279,7 +279,7 @@
       "move_one": "Move {count} hide",
       "move_other": "Move {count} hides",
       "held": {
-        "noRight": "Sorting hides into lots needs inventory.lots.manage (warehouse, quality).",
+        "noRight": "Sorting hides into lots needs the right to keep lots (warehouse, quality).",
         "notHides": "Only a lot of hides is split into shade groups.",
         "blocked": "The lot is blocked: release or reject it before its hides are sorted.",
         "rejected": "The lot is rejected: its hides go back or are scrapped, never into another lot.",
@@ -352,12 +352,12 @@
       "byAsOf": "Reached by the day asked: {exact} sure, {possible} possible.",
       "includes": "Lots split from it are in the report too: {codes}.",
       "openAgain": "Open the file again",
-      "noFiles": "Opening the file needs files.read.",
+      "noFiles": "Opening the file needs the right to see a record's files.",
       "fileFailed": "The report’s file could not be opened. Try again from the reports made.",
       "failed": "The report could not be made. Try again.",
       "offline": "No answer: check the connection and try again.",
       "held": {
-        "noRight": "A dated trace report needs inventory.trace.report (quality).",
+        "noRight": "A dated trace report needs the right to make trace reports (quality).",
         "busy": "Working…"
       },
       "problem": {
@@ -444,7 +444,7 @@
       "tileHintNone": "The count schedules due this week"
     },
     "held": {
-      "noManage": "Planning counts needs inventory.counts.manage (warehouse).",
+      "noManage": "Planning counts needs the right to run stock counts (warehouse).",
       "retired": "The schedule is retired: reactivate it first.",
       "busy": "Working…"
     },
@@ -650,7 +650,7 @@
       "openApprovals": "Open the request in Home › Approvals"
     },
     "held": {
-      "noRight": "Asking for a substitute needs inventory.issue (warehouse, production manager).",
+      "noRight": "Asking for a substitute needs the right to pick stock for work orders (warehouse, production manager).",
       "busy": "Working…",
       "pickChoice": "Pick what stands in.",
       "pickLot": "Pick the lot that stands in.",

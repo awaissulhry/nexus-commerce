@@ -33,7 +33,7 @@ import { ISSUE_SELECT, lockPerson, receiptRowsOf, receiptViews, RECORD_ISSUE, ty
  * Every issue and void of a person takes the person's advisory lock first (store.ts `lockPerson`).
  */
 
-const ISSUE_WORDS = 'PPE is handed over in the office by a role that records receipts (safety.ppe.issue).'
+const ISSUE_WORDS = 'PPE is handed over in the office by a role that records receipts.'
 
 export interface IssueQuery {
   readonly companyId?: string | undefined
@@ -196,7 +196,7 @@ export async function voidIssue(caller: CommandCaller, issueId: string, body: { 
   const row = isUuid(issueId) ? await caller.withClient((client) => client.ppeIssue.findUnique({ where: { id: issueId }, select: ISSUE_SELECT })) : null
   if (!row) throw new NotFoundError('Issue not found.')
   assertMayAt(context, SAFETY_VIEW, row, 'Issue')
-  assertMayWriteAt(context, SAFETY_PPE_ISSUE, row, 'A wrong issue is voided by a role that records receipts (safety.ppe.issue).')
+  assertMayWriteAt(context, SAFETY_PPE_ISSUE, row, 'A wrong issue is voided by a role that records receipts.')
   if (row.kind !== 'ISSUE') refuse('NOT_AN_ISSUE', PPE_REFUSALS.NOT_AN_ISSUE)
   const { result } = await command(caller, { name: 'safety.voidPpeIssue', idempotencyKey, input: { issueId, ...body } }, async (tools) => {
     const { tx, now } = tools

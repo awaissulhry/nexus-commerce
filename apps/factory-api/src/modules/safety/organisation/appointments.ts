@@ -24,7 +24,7 @@ import { APPOINTMENT_SELECT, appointeeName, appointmentViews, NOTICE_SELECT, not
  * hold the same rules for every login (…_safety_w2b_guards); these answer first, in words.
  */
 
-const MANAGE_WORDS = 'The safety organisation of this company is kept by a role that keeps it (safety.organisation.manage).'
+const MANAGE_WORDS = 'The safety organisation of this company is kept by a role that keeps it.'
 
 const refuseWith = (refusal: OrganisationRefusal | null): void => {
   if (refusal) refuse(refusal.code, refusal.message, refusal.field)

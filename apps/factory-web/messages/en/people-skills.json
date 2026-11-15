@@ -33,7 +33,7 @@
     "TRAINING_DUE_SOON": "Valid until within 60 days",
     "AUTHORISATIONS_HELD": "Held until the course is valid",
     "LANGUAGE_NOT_CHECKED": "Understanding not checked (art. 37 c.13)",
-    "noSafety": "Shown to the safety readers (safety.view)"
+    "noSafety": "Shown to the safety readers"
   },
   "list": {
     "title": "Skills matrix",

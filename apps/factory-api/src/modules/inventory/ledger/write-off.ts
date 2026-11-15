@@ -302,7 +302,7 @@ export interface PhotoUpload {
 /** May the caller add photos to this write-off: inventory.scrap at its site and files.upload over its company. */
 async function mayAddPhotos(caller: CommandCaller, writeOffId: string) {
   const { context, first } = await writeOffMoves(caller, writeOffId, INVENTORY_SCRAP)
-  if (!can(actorOf(context), FILES_UPLOAD, { companyId: first.companyId, siteId: first.siteId })) throw new ForbiddenError(`Adding a photo needs ${FILES_UPLOAD} over the company.`)
+  if (!can(actorOf(context), FILES_UPLOAD, { companyId: first.companyId, siteId: first.siteId })) throw new ForbiddenError('Adding a photo needs the right to upload files over the company.')
   return first
 }
 

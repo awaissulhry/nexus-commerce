@@ -125,7 +125,7 @@ const checkView = (check: AreaLineCheck | null) =>
 function claimHeld(context: OfficeContext, line: LeatherLine, partyId: string, companyId: string): string | null {
   if (!line.check) return 'The line names no area the check can read: its quantity is not in an area unit.'
   if (!line.check.opensClaim) return line.check.outcome === 'NOT_RECEIVED' ? 'No hide was received on this order line yet.' : 'The area measured is within the tolerance or above what was invoiced: there is nothing to claim.'
-  if (!can(actorOf(context), PURCHASING_CLAIMS_MANAGE, { companyId, siteId: line.order.siteId, partyId })) return 'Opening a claim needs purchasing.claims.manage over the supplier at this site.'
+  if (!can(actorOf(context), PURCHASING_CLAIMS_MANAGE, { companyId, siteId: line.order.siteId, partyId })) return 'Opening a claim needs the right to keep supplier claims over the supplier at this site.'
   return null
 }
 

@@ -174,13 +174,13 @@
   },
   "held": {
     "busy": "Working…",
-    "noManage": "Your role may not count (inventory.counts.manage).",
-    "noApprove": "Your role may not approve counts (inventory.counts.approve).",
-    "noAdjust": "Posting the differences needs stock corrections (inventory.adjust).",
-    "noSignOff": "Signing off needs inventory.counts.signoff (usually Finance).",
+    "noManage": "Your role may not count.",
+    "noApprove": "Your role may not approve counts.",
+    "noAdjust": "Posting the differences needs stock corrections.",
+    "noSignOff": "Signing off needs the right to sign off the year-end inventory (usually Finance).",
     "noCostSignOff": "The valued list is a cost document: signing it off needs cost access.",
     "noCostPreview": "The valued list shows costs: it needs cost access.",
-    "noFiles": "Your role may not open stored files (files.read).",
+    "noFiles": "Your role may not open stored files.",
     "notDraft": "Only a draft is started.",
     "notCounting": "Only a count that is counting is submitted.",
     "notSubmitted": "It is approved once it is submitted.",
@@ -248,7 +248,7 @@
     "draftCycle": "Start counting to freeze the expected quantities and make the lines.",
     "draftYearEnd": "It starts on {date} or after it; the expected quantities are the stock at the end of that day.",
     "noPanels": "The thread, files and history of this count open here.",
-    "noThreads": "The thread of a count needs the right to read threads (threads.read)."
+    "noThreads": "The thread of a count needs the right to read threads."
   },
   "tab": {
     "lines": "Lines",

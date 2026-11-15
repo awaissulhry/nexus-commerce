@@ -30,7 +30,7 @@
   },
   "noAccess": {
     "title": "Le richieste d’acquisto non sono nel tuo ruolo",
-    "body": "Per vedere cosa comprare serve purchasing.view. Chiedi a un amministratore se compri per lo stabilimento."
+    "body": "Per vedere cosa comprare serve il permesso di vedere gli ordini d'acquisto. Chiedi a un amministratore se compri per lo stabilimento."
   },
   "band": {
     "draft_one": "Crea ordine per {count}",
@@ -217,13 +217,13 @@
   "held": {
     "busy": "In corso…",
     "loading": "Ancora in lettura…",
-    "noManage": "Per creare ordini d’acquisto serve purchasing.manage",
-    "noDecide": "Per rifiutare serve planning.decide",
+    "noManage": "Per creare ordini d’acquisto serve il permesso di creare ordini d’acquisto",
+    "noDecide": "Per rifiutare serve il permesso di escludere righe del piano",
     "offline": "Offline: attendi la connessione",
     "selectFirst": "Seleziona prima delle richieste",
     "noneOpen": "Nessuna di queste è aperta e pronta",
     "reorderNoReject": "Un punto di riordino non si rifiuta: cambia la regola di riordino",
-    "noManageReject": "Per rifiutare una richiesta dell'ufficio serve purchasing.manage"
+    "noManageReject": "Per rifiutare una richiesta dell'ufficio serve il permesso di creare ordini d’acquisto"
   },
   "keys": {
     "draft": "Crea ordini per le richieste selezionate (nella richiesta: questa)",

@@ -270,7 +270,7 @@ describe('the kit out, partial returns by bundle (SCM-145) and the workshop’s 
     expect(order.status).toBe('AT_WORKSHOP')
     const balance = await ok('planner', 'GET', url(order.id, '/balance'))
     expect(balance).toMatchObject({ balanceOpen: false, order: { allBack: false, someBack: false } })
-    expect(balance.lines).toEqual([expect.objectContaining({ kitLineId, sent: '12.6000', used: '0.0000', open: '12.6000', flags: [], daysOut: 0, checkedByWorkshop: null, actions: { declare: expect.stringContaining('purchasing.subcontract.balance'), adjust: expect.any(String) } })])
+    expect(balance.lines).toEqual([expect.objectContaining({ kitLineId, sent: '12.6000', used: '0.0000', open: '12.6000', flags: [], daysOut: 0, checkedByWorkshop: null, actions: { declare: expect.stringContaining("the right to book workshops' material balances"), adjust: expect.any(String) } })])
     expect(await atWorkshop()).toBe('12.6000')
     const out = await ok('planner', 'GET', url(order.id, '/bundles'))
     expect(out).toMatchObject({ onRecord: true, counts: { out: 2, partlyBack: 0, back: 0 } })
@@ -404,7 +404,7 @@ describe('the workshop’s cost on the work order (SCM-146)', () => {
     const blind = await ok('warehouse', 'GET', url(order.id, '/cost'))
     expect(blind.operations[0]).not.toHaveProperty('pricePerPiece')
     expect(blind.bridge).not.toHaveProperty('orderCost')
-    expect(blind.actions.book).toContain('purchasing.subcontract.cost')
+    expect(blind.actions.book).toContain('the right to book workshop charges')
   })
 
   it('books transport and a fee at the workshop’s price onto the work order: the fee’s pieces leave the earned fee', async () => {

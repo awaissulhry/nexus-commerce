@@ -168,7 +168,7 @@
     "closedFor": "the supplier is closed ({name})",
     "nothing": "no delivery that day",
     "noClosures": "{supplier} has no closure on file: every day is shown open.",
-    "noClosuresRight": "The supplier’s closures need parties.view: the calendar shows the deliveries only.",
+    "noClosuresRight": "The supplier’s closures need the right to see customers and suppliers: the calendar shows the deliveries only.",
     "closuresFailed": "The supplier’s closures could not be read ({problem}): the calendar shows the deliveries only."
   },
   "history": {
@@ -367,7 +367,7 @@
     "held": {
       "none": "No request waits for a decision.",
       "own": "You asked: a second person decides (the Owner included).",
-      "noRight": "Deciding needs purchasing.compliance.override.",
+      "noRight": "Your role cannot decide a send without a valid document.",
       "stale": "What holds the order changed since it was asked: the person must ask again.",
       "other": "It cannot be decided now.",
       "words": "Say why not."

@@ -152,7 +152,7 @@ describe('the board: resource and order views, latest safe start (PLN-129, PLN-1
 
   it('is read-only without planning.schedule.manage; another tenant sees no site', async () => {
     const answer = await ok('viewer', 'GET', `/planning/schedule?siteId=${siteA1}`)
-    expect(answer.plan).toMatchObject({ mayChange: false, mayPublish: false, publishHeld: 'Publishing needs planning.schedule.publish at this site.' })
+    expect(answer.plan).toMatchObject({ mayChange: false, mayPublish: false, publishHeld: 'Publishing needs the right to publish the plan at this site.' })
     const slot = await workingSlot('SEED-WO-0001', 'SEED-SEW-ASM')
     expect((await call('viewer', 'PATCH', `/planning/schedule/slots/${slot.id}`, { version: slot.version, startAt: '2026-11-17T09:00:00.000Z' })).statusCode).toBe(403)
   })

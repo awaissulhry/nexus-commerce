@@ -26,7 +26,7 @@ type AreaRow = Prisma.OrgAreaGetPayload<{ select: typeof AREA_SELECT }>
 
 const areaView = (row: AreaRow) => ({ id: row.id, siteId: row.siteId, code: row.code, name: row.name, sortOrder: row.sortOrder, status: row.status as 'ACTIVE' | 'ARCHIVED', version: row.version })
 
-const WORDS = "A site's areas are kept by a role that keeps its sites and lines (sites.manage)."
+const WORDS = "A site's areas are kept by a role that keeps its sites and lines."
 
 /** GET /org/tree. */
 export async function orgTree(caller: CommandCaller, query: { readonly siteId?: string | undefined; readonly companyId?: string | undefined; readonly includeArchived?: boolean | undefined }) {

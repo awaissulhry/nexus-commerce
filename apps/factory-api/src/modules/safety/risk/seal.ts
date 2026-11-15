@@ -35,7 +35,7 @@ import { readAssessment, readVersion, RECORD_VERSION, SEAL_KIND, type VersionRow
  * consultant's PDF by its SHA-256 and never copies it: the frozen file stays the assessment's. No money.
  */
 
-const MANAGE_WORDS = 'The risk assessments of this site are kept by a role that keeps them (safety.risk.manage).'
+const MANAGE_WORDS = 'The risk assessments of this site are kept by a role that keeps them.'
 
 /** What the seal prints, read with the caller's client (its letterhead from the Company row, never a request). */
 async function sealContents(client: FactoryClient, version: VersionRow, company: CompanyLegal, language: DocumentLanguage): Promise<Omit<SealInput, 'createdAt' | 'sample'>> {

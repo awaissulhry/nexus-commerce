@@ -22,7 +22,7 @@ import { readSkill, SKILL_SELECT, skillView, type SkillRow } from './store'
  *   POST /people/skills/:skillId/restore     back again
  */
 
-const MANAGE_WORDS = 'Skills are kept by a role that keeps the skills matrix (people.skills.manage).'
+const MANAGE_WORDS = 'Skills are kept by a role that keeps the skills matrix.'
 
 /** A skill the caller may read: the group's, or of a company the permission reaches. */
 const mayRead = (context: OfficeContext, row: { companyId: string | null }) => can(actorOf(context), PEOPLE_SKILLS_VIEW, row.companyId ? { companyId: row.companyId } : {})

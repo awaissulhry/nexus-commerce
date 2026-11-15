@@ -5,7 +5,7 @@
   },
   "held": {
     "busy": "In corso…",
-    "permission": "Serve {permission}: chiedi a un amministratore."
+    "permission": "Serve il permesso «{right}»: chiedi a un amministratore."
   },
   "problem": {
     "read": "Il server non ha risposto come previsto. Riprova.",
@@ -208,7 +208,7 @@
     "loading": "Lettura del costo…",
     "slow": "Ancora in lettura del costo…",
     "failed": "Impossibile caricare il costo sull’ordine di produzione",
-    "noGrain": "Prezzi e importi richiedono il permesso sui costi (money.cost): sono mostrati i capi, non quanto costano.",
+    "noGrain": "Prezzi e importi richiedono il permesso sui costi: sono mostrati i capi, non quanto costano.",
     "empty": {
       "title": "Ancora nessun costo",
       "body": "Si registra al rientro della merce: il compenso di ogni capo rientrato buono va sull’ordine di produzione."

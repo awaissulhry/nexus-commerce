@@ -226,24 +226,24 @@
     "SECOND_PERSON": "Second person"
   },
   "held": {
-    "noRecord": "Your role does not record inspections (quality.inspections.record).",
-    "noWorkOrders": "Picking a work order needs workorders.view.",
+    "noRecord": "Your role does not record inspections.",
+    "noWorkOrders": "Picking a work order needs the right to see work orders.",
     "decided": "The result is signed: it no longer changes (a correction is an amendment, later).",
     "cancelled": "The inspection is cancelled.",
     "notYours": "Only the inspector who opened it records and signs it.",
     "maker": "You made some of these garments: another inspector signs.",
     "unanswered": "Answer every check first (pass, fail or not applicable).",
-    "noRelease": "Your role does not release garments (quality.garments.release).",
+    "noRelease": "Your role does not release garments.",
     "nothingToRelease": "Nothing of this cell is left to release from this inspection.",
     "gateOpen_one": "{count} check is open: {check}.",
     "gateOpen_other": "{count} checks are open, first: {check}.",
-    "noReverse": "Your role does not take garments back (quality.garments.reverse).",
+    "noReverse": "Your role does not take garments back.",
     "nothingToReverse": "Nothing of this release can be taken back now: what is left is on a shipment.",
-    "noSettings": "Only the owner changes the quality rules (quality.settings.manage).",
-    "noParties": "Adding customers needs parties.view.",
-    "noLots": "Lots need quality.lots.view.",
+    "noSettings": "Only the owner changes the quality rules.",
+    "noParties": "Adding customers needs the right to see customers and suppliers.",
+    "noLots": "Lots need the right to see a lot's quality record.",
     "noBatch": "The work order has no batch number yet.",
-    "noHoldPlace": "Placing a hold needs quality.holds.place (ask the quality manager).",
+    "noHoldPlace": "Placing a hold needs the right to place holds (ask the quality manager).",
     "assignedOther": "Assigned to another inspector: they record and sign it."
   },
   "list": {
@@ -309,7 +309,7 @@
     },
     "noAccess": {
       "title": "Inspections are not open to your role",
-      "body": "They need quality.inspections.view; the owner or an administrator grants it in Admin › Roles & permissions."
+      "body": "They need the right to see final inspections; the owner or an administrator grants it in Admin › Roles & permissions."
     },
     "undecided": "Not decided yet: place a hold or create an NCR",
     "decidedIn": "Holds {holds} · NCRs {ncrs}",
@@ -429,7 +429,7 @@
     "acceptMajor": "Accept up to (major)",
     "acceptMinor": "Accept up to (minor)",
     "acceptHint": "Garments with a defect the sample still accepts.",
-    "tablesLater": "Type the acceptance numbers from your sampling table; the ISO 2859-1 tables are worked out here in a later step.",
+    "tablesLater": "Type the acceptance numbers, or read them from the AQL calculator in Quality › Inspection plans & AQL.",
     "note": "Note",
     "numberWords": "It takes the next number of the company's inspection series when it is created.",
     "create": "Create inspection",
@@ -459,8 +459,8 @@
       "RETURNHint": "Garments a customer sent back: grade each one.",
       "held": {
         "inline": "In-line inspections come with a later wave (W2b).",
-        "return": "Inspecting returns needs sales.returns.view and sales.returns.inspect.",
-        "lot": "Lots need quality.lots.view."
+        "return": "Inspecting returns needs the rights to see customer returns and to grade them.",
+        "lot": "Lots need the right to see a lot's quality record."
       },
       "lotElsewhere": "Incoming lots are inspected and released in Compliance › Tests & substances.",
       "lotOpen": "Open the lots waiting there"
@@ -982,7 +982,7 @@
     },
     "noAccess": {
       "title": "The evidence trail is not open to your role",
-      "body": "It needs quality.inspections.view; the owner or an administrator grants it in Admin › Roles & permissions."
+      "body": "It needs the right to see final inspections; the owner or an administrator grants it in Admin › Roles & permissions."
     },
     "badAddress": {
       "title": "This address names no garment or batch",
@@ -1120,7 +1120,7 @@
   },
   "raiseNcr": {
     "held": {
-      "noRight": "Raising an NCR needs quality.ncr.raise (ask the quality manager)."
+      "noRight": "Raising an NCR needs the right to raise NCRs (ask the quality manager)."
     }
   },
   "assign": {
@@ -1155,7 +1155,7 @@
     "made": "Made garments of {orders}",
     "cellFor": "Inspector of {label}",
     "held": {
-      "noRight": "Assigning needs quality.inspections.record at the site.",
+      "noRight": "Assigning needs the right to record inspections at the site.",
       "notOpen": "Only an open inspection is assigned (a signed one keeps its inspector).",
       "sites": "The picked inspections are at different sites: assign one site at a time.",
       "none": "Pick the inspections first."
@@ -1186,7 +1186,7 @@
     "cleared_one": "The due time of {count} inspection is cleared.",
     "cleared_other": "The due time of {count} inspections is cleared.",
     "held": {
-      "noRight": "Setting by when an inspection is due needs quality.inspections.record.",
+      "noRight": "Setting by when an inspection is due needs the right to record inspections.",
       "notOpen": "Only an open inspection has a due time.",
       "notOpenSome": "Pick open inspections only: a decided or cancelled one has no due time.",
       "none": "Pick the inspections first.",

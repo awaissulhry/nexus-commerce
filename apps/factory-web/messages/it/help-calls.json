@@ -17,7 +17,7 @@
   "page": {
     "noAccess": {
       "title": "Il tuo ruolo non può vedere le chiamate di aiuto",
-      "body": "Il tuo ruolo non comprende “production.calls.view”. Chiedi a un amministratore se ti serve questa pagina."
+      "body": "Il tuo ruolo non può vedere le chiamate di aiuto. Chiedi a un amministratore se ti serve questa pagina."
     },
     "editRouting": "Modifica chi viene chiamato (Regole di reparto)",
     "more": "Altre azioni",
@@ -37,18 +37,18 @@
     "medianHint": "Dall'invio alla presa visione, chiamate di oggi del sito: mai un dato di una persona."
   },
   "held": {
-    "noAnswer": "Il tuo ruolo non può rispondere alle chiamate di aiuto (production.calls.answer).",
+    "noAnswer": "Il tuo ruolo non può rispondere alle chiamate di aiuto.",
     "busy": "Salvataggio…",
     "loading": "Caricamento della chiamata…",
     "ackNone": "Seleziona le chiamate aperte che nessuno ha ancora visto.",
     "ackNothing": "Nessuna delle chiamate selezionate attende la presa visione.",
     "solveNothing": "Nessuna delle chiamate selezionate è aperta.",
-    "noSettings": "Il tuo ruolo non può aprire Regole di reparto (production.settings.view).",
+    "noSettings": "Il tuo ruolo non può aprire Regole di reparto.",
     "closed": "Questa chiamata è chiusa.",
     "seenAlready": "Qualcuno ha già visto questa chiamata.",
     "comingAlready": "Qualcuno sta già arrivando.",
     "outcomeNamed": "Ciò a cui ha portato questa chiamata è già indicato.",
-    "noPlantJobs": "Per aprire un intervento di manutenzione servono plant.view e plant.jobs.manage.",
+    "noPlantJobs": "Per aprire un intervento di manutenzione servono i permessi di vedere gli impianti e di pianificare gli interventi.",
     "code": "Scegli uno dei codici proposti.",
     "noteLong": "Al massimo 500 caratteri.",
     "reason": "Indica perché la chiamata viene annullata.",

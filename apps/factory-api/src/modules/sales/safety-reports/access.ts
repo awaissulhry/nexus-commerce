@@ -40,5 +40,5 @@ export function held(code: HeldCode, number: string): DomainError {
   return new DomainError('invalid_state', words, [{ path: `held/${code}`, message: words }])
 }
 
-export const INJURY_WORDS = 'Whether someone was hurt, and in what words, is read only by the product-safety role (sales.safety.injury), each opening recorded.'
-export const LOG_WORDS = 'The accident log is kept by the product-safety role (sales.safety.log).'
+export const INJURY_WORDS = 'Whether someone was hurt, and in what words, is read only by the product-safety role, each opening recorded.'
+export const LOG_WORDS = 'The accident log is kept by the product-safety role.'

@@ -1,7 +1,7 @@
 {
   "refused": {
     "title": "Le notifiche non sono aperte per te",
-    "body": "I tuoi ruoli non includono la Home (home.view). Chiedi a un amministratore se ti serve."
+    "body": "I tuoi ruoli non includono la Home. Chiedi a un amministratore se ti serve."
   },
   "band": {
     "label": "Notifiche: stato e azioni",
@@ -193,7 +193,7 @@
     "kinds": "Contiene",
     "lastSent": "Ultimo invio {at}.",
     "neverSent": "Mai inviato finora.",
-    "later": "Ogni tipo nell’app, per e-mail o push, subito o una volta al giorno, arriva più avanti; fino ad allora solo questo riepilogo raggiunge la tua e-mail.",
+    "later": "Come ti arriva ogni tipo (nell’app, per e-mail o push, subito o una volta al giorno) si sceglie in Preferenze.",
     "problem": {
       "time": "Scegli un’ora del giorno.",
       "days": "Scegli almeno un giorno.",

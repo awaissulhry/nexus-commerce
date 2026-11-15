@@ -16,6 +16,8 @@ import { WithMessages } from '../../../record-panels/i18n'
 import type { EmployeeKind, Lifecycle, Sight } from './api'
 import { KIND_TONE, LIFECYCLE_TONE, TIME_ZONE, type Words } from './model'
 import './people.css'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../lib/i18n/rights'
 
 /**
  * View parts every People page shares (B-W2b-55): the catalogue wrapper (`people`, the list frame's `lists`, the DS
@@ -104,7 +106,7 @@ export function PeoplePrivacyNote({ sight, variant = 'pill', text, level = 'indi
 
 export function NoPeopleAccess({ permission = 'people.view' }: { permission?: string }) {
   const t = useWords()
-  return <EmptyState icon={<ShieldOff size={22} aria-hidden />} title={t('problem.forbidden')} description={t('problem.noPermission', { permission })} />
+  return <EmptyState icon={<ShieldOff size={22} aria-hidden />} title={t('problem.forbidden')} description={t('problem.noPermission', { right: rightRef(permission) })} />
 }
 
 export interface Notice {

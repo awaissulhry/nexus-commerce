@@ -113,7 +113,7 @@ async function writable(caller: CommandCaller, id: string): Promise<{ context: O
     return row ? { row, garmentType: await garmentOfAppointment(db, row) } : null
   })
   if (!found || !sees(context, found.row)) throw appointmentNotFound()
-  if (!mayOn(context, SALES_FITTINGS_MANAGE, found.row)) throw new ForbiddenError('Your roles do not book or record fittings (sales.fittings.manage).')
+  if (!mayOn(context, SALES_FITTINGS_MANAGE, found.row)) throw new ForbiddenError('Your roles do not book or record fittings.')
   return { context, ...found }
 }
 
@@ -170,7 +170,7 @@ export async function bookAppointment(caller: FastifyRequest, body: BookBody, id
   const actor = actorOf(context)
   const scope = { companyId: body.companyId, partyId: body.partyId }
   if (!can(actor, SALES_MEASUREMENTS_VIEW, scope)) throw new NotFoundError('Customer not found.')
-  if (!can(actor, SALES_FITTINGS_MANAGE, scope)) throw new ForbiddenError('Your roles do not book or record fittings (sales.fittings.manage).')
+  if (!can(actor, SALES_FITTINGS_MANAGE, scope)) throw new ForbiddenError('Your roles do not book or record fittings.')
   const now = serverClock.now()
   const plan = await caller.withClient(async (db) => {
     const company = isUuid(body.companyId) ? await db.company.findUnique({ where: { id: body.companyId }, select: { id: true } }) : null

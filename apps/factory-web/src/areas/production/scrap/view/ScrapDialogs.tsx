@@ -15,6 +15,8 @@ import type { ScrapActions, ScrapModel } from './ScrapView'
 import { Recycle as SecondIcon } from 'lucide-react'
 import { downgradeOpenHeld } from '../model'
 import { RepairSection, SecondSection } from './SecondDialogs'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../../lib/i18n/rights'
 
 export function say(t: (key: string, params?: Record<string, string | number>) => string, words: Phrase | null): string | null {
   return words ? t(words.key, words.params) : null
@@ -61,7 +63,7 @@ export function ScrapItemDialog({ model, row, ids, actions }: { model: ScrapMode
     return () => window.removeEventListener('keydown', onKey)
   })
 
-  const replaceWhy = row.kind !== 'SCRAP' ? t(row.kind === 'SECOND' ? 'second.held.isSecond' : 'replace.held.rework') : !model.can.ask ? t('held.permission', { permission: 'production.scrap' }) : leftToReplace(row) === 0 ? t('replace.held.covered') : null
+  const replaceWhy = row.kind !== 'SCRAP' ? t(row.kind === 'SECOND' ? 'second.held.isSecond' : 'replace.held.rework') : !model.can.ask ? t('held.permission', { right: rightRef('production.scrap') }) : leftToReplace(row) === 0 ? t('replace.held.covered') : null
   const secondWhy = say(t, downgradeOpenHeld(row, model.rows.items ?? [], model.can))
   return (
     <DetailModal

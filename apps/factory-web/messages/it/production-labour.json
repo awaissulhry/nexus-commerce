@@ -21,12 +21,12 @@
   "page": {
     "correctOnly": {
       "title": "Le rettifiche delle scansioni si decidono da Oggi",
-      "body": "Il tuo ruolo decide le rettifiche del reparto una alla volta, da Oggi. La coda, le giornate di linea e le modifiche di questa pagina richiedono “production.labour.view”.",
+      "body": "Il tuo ruolo decide le rettifiche del reparto una alla volta, da Oggi. La coda, le giornate di linea e le modifiche di questa pagina richiedono il permesso di vedere Manodopera e rettifiche.",
       "today": "Apri Oggi"
     },
     "noAccess": {
       "title": "Il tuo ruolo non può vedere Manodopera e rettifiche",
-      "body": "Serve “production.labour.view”."
+      "body": "Serve il permesso di vedere Manodopera e rettifiche."
     },
     "find": "Apri la giornata di una persona…",
     "payroll": "Esporta i giorni chiusi per le paghe",
@@ -166,11 +166,11 @@
   "held": {
     "busy": "Un momento: si sta salvando l'ultima decisione.",
     "loading": "Lettura in corso.",
-    "noApprove": "Per approvare un blocco serve “production.offstandard.approve”.",
-    "noCorrect": "Per decidere una rettifica serve “production.scan.correct”.",
-    "noAnswer": "Per rispondere a una contestazione serve “production.labour.answer”.",
-    "noClose": "Per chiudere un giorno serve “production.labour.close”.",
-    "noReopen": "Per riaprire un giorno chiuso serve “production.labour.reopen”.",
+    "noApprove": "Il tuo ruolo non può approvare un blocco fuori standard.",
+    "noCorrect": "Il tuo ruolo non può decidere le rettifiche delle scansioni.",
+    "noAnswer": "Il tuo ruolo non può rispondere a una contestazione.",
+    "noClose": "Il tuo ruolo non può chiudere il giorno di una linea.",
+    "noReopen": "Il tuo ruolo non può riaprire un giorno chiuso.",
     "noNormal": "Nessun blocco normale in attesa.",
     "noNormalPicked": "Nessun blocco normale selezionato.",
     "noDayPicked": "Nessun giorno di linea pronto selezionato.",
@@ -191,7 +191,7 @@
     "sheetsOff": "I fogli per persona sono disattivati in questa sede.",
     "noEmployee": "Questa persona non ha una scheda dipendente: nessun foglio da aprire.",
     "noFigures": "La giornata di una persona la aprono solo il lavoratore, le risorse umane e, dove la sede lo consente, il suo caposquadra.",
-    "noPeople": "La ricerca per nome richiede “people.view”.",
+    "noPeople": "La ricerca per nome richiede il permesso di vedere i dipendenti.",
     "sheetReason": "Indica perché apri la giornata di questa persona.",
     "pickPerson": "Scegli prima una persona.",
     "noPayroll": "Persone › Esportazione paghe non è ancora disponibile."
@@ -327,7 +327,7 @@
     "steps": "Cosa è successo dopo",
     "step": "Tipo",
     "around": "Le scansioni attorno",
-    "aroundHeld": "Le scansioni del fascio richiedono “workorders.view”.",
+    "aroundHeld": "Le scansioni del fascio richiedono il permesso di vedere gli ordini di lavoro.",
     "operation": "Operazione",
     "station": "Postazione",
     "voided": "{kind} (annullata)",
@@ -348,7 +348,7 @@
     "approvedBy": "Approvato da",
     "rejectedBy": "Rifiutato da",
     "aPerson": "Una persona",
-    "blockHeld": "Il dato di questo blocco richiede “production.offstandard.view”.",
+    "blockHeld": "Il dato di questo blocco richiede il permesso di vedere il tempo fuori standard.",
     "unusual": "Si decide da solo",
     "running": "Ancora in corso",
     "source": "Registrato",

@@ -1,7 +1,7 @@
 {
   "noAccess": {
     "title": "You can't open the leather and cut plan",
-    "body": "It needs the right to see the planning runs (planning.view). Ask an administrator."
+    "body": "It needs the right to see the planning runs. Ask an administrator."
   },
   "page": {
     "asOf": "As of the plan run of {time}",
@@ -47,25 +47,25 @@
     "filtering": "Showing: {tile}."
   },
   "held": {
-    "noRun": "Running the plan needs planning.run.",
+    "noRun": "Your role cannot run the plan.",
     "running": "The plan is running.",
     "noSite": "Choose a site first.",
-    "noManage": "Changing the cutting loss needs planning.leather.manage (the planner).",
+    "noManage": "Your role cannot change the cutting loss (the planner can).",
     "noProposal": "There is no proposal to decide.",
     "inDraft": "This loss is in the draft revision already.",
     "waitsForDraft": "Accepted: it waits for a draft revision of the style (Products starts it).",
     "dismissedAlready": "Dismissed already: it comes back when it changes or more cuts come in.",
     "reasonShort": "Say why, in at least 3 characters.",
     "reasonLong": "At most 500 characters.",
-    "noReserve": "Reserving needs inventory.reserve.",
+    "noReserve": "Reserving needs the right to reserve stock.",
     "noProposalHides": "No hides to propose: read the plan again.",
-    "noDraftPo": "A draft purchase order needs purchasing.manage (the buyer).",
+    "noDraftPo": "A draft purchase order needs the right to make purchase orders (the buyer).",
     "requirement": {
       "ORDERED": "This plan line is ordered already.",
       "IGNORED": "This plan line was set aside in What to buy & make.",
       "OPEN": "Open."
     },
-    "noNote": "A note on the order needs threads.post.",
+    "noNote": "A note on the order needs the right to write internal notes.",
     "notMustBuy": "Only a line that must buy has a draft purchase order.",
     "busy": "Wait: the last action is still going."
   },

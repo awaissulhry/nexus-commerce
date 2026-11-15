@@ -30,7 +30,7 @@ import { actorIdOf, assertMay, assertMayWrite, officeOf, refuse } from './access
  * never a type, an absence or a certificate (a command's answer is kept in its receipt).
  */
 
-const PEOPLE_WORDS = 'The INAIL filings are kept by the safety roles and HR (safety.incidents.people).'
+const PEOPLE_WORDS = 'The INAIL filings are kept by the safety roles and HR.'
 const TIMER_RECORD = 'InailFiling'
 
 async function placeOf(caller: CommandCaller, incidentId: string) {

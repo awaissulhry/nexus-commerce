@@ -243,7 +243,7 @@ async function knownRequest(caller: CommandCaller, context: PlantContext, reques
   const known = isUuid(requestId) ? await caller.withClient((client) => readRequest(client, requestId)) : null
   if (!known) throw new NotFoundError('Request not found.')
   assertMay(context, context.audience === 'floor' ? write : PLANT_VIEW, known, 'Request')
-  assertMayWrite(context, write, known, write === PLANT_SIGN_SAFE ? 'Only a technician signs a machine safe again (Owner answer H1).' : 'Machine requests are triaged by a role that does it (plant.requests.triage).')
+  assertMayWrite(context, write, known, write === PLANT_SIGN_SAFE ? 'Only a technician signs a machine safe again (Owner answer H1).' : 'Machine requests are triaged by a role that does it.')
   return known
 }
 

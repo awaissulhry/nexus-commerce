@@ -73,8 +73,8 @@ describe('who sees and keeps a view (rules)', () => {
 
   it('the owner changes their views; views.manage the shared ones; nobody another person’s own', () => {
     expect(changeRefusal(view(), reader())).toBeNull()
-    expect(changeRefusal(view({ audience: 'EVERYONE' }), reader())).toMatch(/views.manage/)
-    expect(changeRefusal(view({ audience: 'ROLE', roleId: sales, roleDefault: true }), reader())).toMatch(/views.manage/)
+    expect(changeRefusal(view({ audience: 'EVERYONE' }), reader())).toMatch(/the right to manage shared views/)
+    expect(changeRefusal(view({ audience: 'ROLE', roleId: sales, roleDefault: true }), reader())).toMatch(/the right to manage shared views/)
     expect(changeRefusal(view({ ownerId: other, audience: 'ROLE', roleId: sales }), reader())).toMatch(/Only its owner/)
     expect(changeRefusal(view({ ownerId: other, audience: 'ROLE', roleId: sales }), reader({ manage: true }))).toBeNull()
     expect(changeRefusal(view({ ownerId: other }), reader({ manage: true }))).toMatch(/not yours/)

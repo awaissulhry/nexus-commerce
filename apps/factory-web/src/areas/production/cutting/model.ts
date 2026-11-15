@@ -2,6 +2,8 @@ import type { Tone } from '@nexus/ui/primitives'
 import { isApiError, issuePath } from '../../../lib/api/errors'
 import type { BundleRow, CutEntry, CutLog, WorkOrder, WorkOrderBundles } from '../_shared/api'
 import { CUT_VIEWS, type CutRow, type CutState, type CutTiles, type CutView, type Replacement, type WorkOrderYield, type YieldFigures, type YieldHide } from './api'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../lib/i18n/rights'
 
 /**
  * Production › Cutting room › Cutting (SCR-238; design production.cutting): the rules without a screen. What a person may
@@ -186,8 +188,8 @@ export function lotLine(row: Pick<CutRow, 'lots'>): string {
 
 /** Why Allocate hides is held for a cut (else null). */
 export function allocateHeld(row: Pick<CutRow, 'state' | 'workOrder'> | null, can: CuttingCan): Phrase | null {
-  if (!can.reserve) return phrase('held.permission', { permission: 'inventory.reserve' })
-  if (!can.stock) return phrase('held.permission', { permission: 'inventory.stock.view' })
+  if (!can.reserve) return phrase('held.permission', { right: rightRef('inventory.reserve') })
+  if (!can.stock) return phrase('held.permission', { right: rightRef('inventory.stock.view') })
   if (!row) return phrase('held.loading')
   if (row.state === 'CUT') return phrase('alloc.held.cut')
   if (row.workOrder.status === 'COMPLETED') return phrase('alloc.held.cut')
@@ -196,7 +198,7 @@ export function allocateHeld(row: Pick<CutRow, 'state' | 'workOrder'> | null, ca
 
 /** Why Print tickets is held (else null): it opens one cut's tickets. */
 export function ticketsHeld(selected: number, can: CuttingCan): Phrase | null {
-  if (!can.workOrders) return phrase('held.permission', { permission: 'workorders.view' })
+  if (!can.workOrders) return phrase('held.permission', { right: rightRef('workorders.view') })
   if (selected !== 1) return phrase('held.tickets.one')
   return null
 }
@@ -340,7 +342,7 @@ export function recutEntries(log: CutLog, recut: Replacement): CutEntry[] {
 
 /** Why "Mark cut" is held for a recut (else null). */
 export function recutHeld(recut: Replacement, log: CutLog | null, can: CuttingCan, busy: boolean): Phrase | null {
-  if (!can.recut) return phrase('held.permission', { permission: 'production.scrap' })
+  if (!can.recut) return phrase('held.permission', { right: rightRef('production.scrap') })
   if (recut.status !== 'OPEN') return phrase('held.recut.done')
   if (busy) return phrase('held.busy')
   if (!log) return phrase('held.loading')
@@ -415,7 +417,7 @@ export const PRINT_TONE: Readonly<Record<TicketState, Tone>> = { QUEUED: 'info',
 
 /** Why Reprint is held (else null). */
 export function reprintHeld(bundle: BundleRow, can: CuttingCan, busy: boolean): Phrase | null {
-  if (!can.bundles) return phrase('held.permission', { permission: 'production.bundles' })
+  if (!can.bundles) return phrase('held.permission', { right: rightRef('production.bundles') })
   if (bundle.status === 'VOID') return phrase('held.ticket.voided')
   if (busy) return phrase('held.busy')
   return null
@@ -423,7 +425,7 @@ export function reprintHeld(bundle: BundleRow, can: CuttingCan, busy: boolean): 
 
 /** Why Void is held (else null): only a bundle no operation scanned yet. */
 export function voidHeld(bundle: BundleRow, can: CuttingCan, busy: boolean): Phrase | null {
-  if (!can.bundles) return phrase('held.permission', { permission: 'production.bundles' })
+  if (!can.bundles) return phrase('held.permission', { right: rightRef('production.bundles') })
   if (bundle.status === 'VOID') return phrase('held.ticket.voided')
   if (bundle.scans > 0) return phrase('held.ticket.scanned', { count: bundle.scans })
   if (busy) return phrase('held.busy')

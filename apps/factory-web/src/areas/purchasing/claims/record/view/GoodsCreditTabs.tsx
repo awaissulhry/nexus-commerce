@@ -12,6 +12,8 @@ import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { dayAt, money, quantity } from '../../../../_shared/buying/model'
 import type { Claim, ClaimLine } from '../../api'
 import type { ClaimRecordActions, ClaimRecordModel } from '../../model'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../../../lib/i18n/rights'
 
 /** The stock move reasons a line's move may carry, in our words (factory-db StockMoveReason), else "other". */
 const MOVE_REASONS = ['SUPPLIER_RETURN', 'ADJUSTMENT', 'SCRAP', 'COUNT', 'ISSUE', 'RETURN', 'TRANSFER', 'RECEIPT', 'OPENING'] as const
@@ -28,7 +30,7 @@ export function GoodsTab({ claim, model, actions }: { claim: Claim; model: Claim
   const locale = useLocale()
   const place = { locale, timeZone: model.timeZone }
   const gone = claim.lines.filter((line) => line.move !== null)
-  const pdfHeld = model.can.files ? null : t('held.permissionPlain', { permission: 'files.read' })
+  const pdfHeld = model.can.files ? null : t('held.permissionPlain', { right: rightRef('files.read') })
   const columns = useMemo<ColDef<ClaimLine>[]>(() => {
     const DdtCell = ({ data }: ICellRendererParams<ClaimLine>) => {
       if (!data) return null
@@ -131,16 +133,25 @@ export function CreditTab({ claim, model }: { claim: Claim; model: ClaimRecordMo
       </Card>
     )
   }
-  const financeHeld = t('credit.financeLater')
+  // B-W2b-F58: Finance › Supplier invoices is built (B-W2a-81): the button opens it for a person who may see supplier invoices.
+  const financeHref = model.can.payables ? `${model.prefix}/finance/payables` : null
   return (
     <div className="fw-by-stack">
       <Card padded>
         <div className="fw-by-card">
           <div className="fw-by-card-head">
             <h2 className="fw-by-h2">{t('credit.title')}</h2>
-            <Button size="sm" heldReason={financeHeld}>
-              <Landmark size={13} aria-hidden /> {t('credit.openFinance')}
-            </Button>
+            {financeHref ? (
+              <Button asChild size="sm">
+                <Link href={financeHref}>
+                  <Landmark size={13} aria-hidden /> {t('credit.openFinance')}
+                </Link>
+              </Button>
+            ) : (
+              <Button size="sm" heldReason={t('credit.financeNoRight')}>
+                <Landmark size={13} aria-hidden /> {t('credit.openFinance')}
+              </Button>
+            )}
           </div>
           {model.can.cost ? (
             <KeyValue

@@ -56,7 +56,7 @@
       "note": "Questo motivo richiede una nota.",
       "long": "La nota supera i 500 caratteri.",
       "place": "Scegli il posto di quarantena.",
-      "noRight": "Il tuo ruolo non può mettere merce in blocco (quality.holds.place).",
+      "noRight": "Il tuo ruolo non può mettere merce in blocco.",
       "pastDate": "Le giacenze a una data passata non si modificano.",
       "pickLots": "Seleziona le righe dei lotti da bloccare (righe con un lotto).",
       "noLot": "Questa riga non ha lotto: si bloccano solo lotti e pelli."
@@ -83,7 +83,7 @@
     "searching": "Ricerca degli ordini di lavoro aperti…",
     "noneFound": "Nessun ordine di lavoro aperto corrisponde.",
     "workOrdersFailed": "Non è stato possibile leggere gli ordini di lavoro. Riprova.",
-    "noRightWorkOrders": "Il tuo ruolo non vede gli ordini di lavoro (workorders.view): le riserve si fanno dall'ordine di lavoro.",
+    "noRightWorkOrders": "Il tuo ruolo non vede gli ordini di lavoro: le riserve si fanno dall'ordine di lavoro.",
     "due": "consegna {day}",
     "pieces_one": "{count} capo",
     "pieces_other": "{count} capi",
@@ -107,7 +107,7 @@
       "busy": "Riserva in corso…",
       "workOrder": "Scegli l'ordine di lavoro.",
       "none": "Nessuna delle pelli selezionate è libera da riservare.",
-      "noRight": "Il tuo ruolo non può riservare merce (inventory.reserve)."
+      "noRight": "Il tuo ruolo non può riservare merce."
     },
     "refusal": {
       "HIDE_NOT_IN_STOCK": "Una pelle non è più in giacenza in questo stabilimento. Chiudi e rileggi le pelli.",
@@ -144,7 +144,7 @@
     "photoRemove": "Togli",
     "photoLabel": "Foto della merce danneggiata",
     "photoHint": "Facoltativa: il danno e dove si trova.",
-    "photoNoRight": "Il tuo ruolo non può aggiungere file (files.upload).",
+    "photoNoRight": "Il tuo ruolo non può aggiungere file.",
     "ncr": "Apri una non conformità",
     "ncrHint": "La qualità segue la causa; la NC nasce dal lotto o dalla pelle.",
     "ncrNone": "Una non conformità richiede un lotto o una pelle: questo materiale non ha né l'uno né l'altra.",
@@ -186,7 +186,7 @@
       "reason": "Scegli il motivo.",
       "note": "Questo motivo richiede una nota: scrivi cosa è successo.",
       "long": "La nota supera i 500 caratteri.",
-      "noRight": "Il tuo ruolo non può scaricare merce a perdita (inventory.scrap).",
+      "noRight": "Il tuo ruolo non può scaricare merce a perdita.",
       "noKey": "Apri Movimenti da una cifra di giacenza (un materiale in un posto) per scaricarla qui.",
       "pastDate": "Le giacenze a una data passata non si modificano.",
       "consumed": "Una pelle esaurita o rottamata non ha più nulla da rottamare.",

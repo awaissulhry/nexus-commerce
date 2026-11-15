@@ -16,6 +16,8 @@ import {
   type ReminderView,
   type StatementQuery,
 } from './api'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../lib/i18n/rights'
 
 /**
  * Finance › Receivables & credit (SCR-151) and its statement PDF tab: the pure rules — who may see and do what (the page
@@ -256,7 +258,7 @@ export function reminderSelectable(reminder: Pick<Reminder, 'actions' | 'status'
   if (!can.approve)
     return {
       key: 'held.approve',
-      params: { permission: 'receivables.reminders.approve' },
+      params: { right: rightRef('receivables.reminders.approve') },
     }
   if (reminder.status !== 'PREPARED') return { key: 'held.notPrepared' }
   return reminder.actions.approve ? null : { key: 'held.notPrepared' }

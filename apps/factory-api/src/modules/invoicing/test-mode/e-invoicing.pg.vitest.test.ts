@@ -12,7 +12,7 @@ import { callerFor, command } from '../../../core/command'
 import { testAuthenticator, type SessionContext } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { addTenant, addUser, Browser, enrolTotp, startHarness, stepUp, type Harness, type TestTenant } from '../../../platform/auth/sessions/testing/harness'
-import { createGateway } from '../../../platform/gateway/gateway'
+import { createGateway, type Gateway } from '../../../platform/gateway/gateway'
 import type { EventHandler } from '../../../platform/outbox/dispatch'
 import { systemContext } from '../../../platform/outbox/system'
 import { readInvoices } from '../../sales/portal-documents/store'
@@ -41,6 +41,7 @@ let secret: string
 let fake: FakeSdi
 let sdi: SdiRuntime
 let liveAccount: string
+let gateway: Gateway
 
 const YEAR = businessDate(new Date()).slice(0, 4)
 const TODAY = () => businessDate(new Date())
@@ -170,7 +171,7 @@ beforeAll(async () => {
   liveAccount = await addSdiAccount(c2(), 'LIVE')
 
   fake = new FakeSdi({ answerAfterMs: 0 })
-  const gateway = createGateway({ environment: 'test', redis: h.redis, prefix: h.redisPrefix, secrets: h.secrets, sleep: async () => {}, log: { info() {}, warn() {}, error() {} } })
+  gateway = createGateway({ environment: 'test', redis: h.redis, prefix: h.redisPrefix, secrets: h.secrets, sleep: async () => {}, log: { info() {}, warn() {}, error() {} } })
   sdi = createSdiRuntime({ gateway, fake })
   useSdi(sdi)
   handlers = [sdiTestAnswerHandler(() => sdi), sdiArchiveHandler(() => sdi), sdiCourtesyCopyHandler(), sdiArchiveCopyHandler()]
@@ -317,6 +318,91 @@ describe('our own copy of every send (FIN-097): swap the intermediary without lo
     const again = await as('POST', `/invoicing/e-invoicing/copies/${c1()}/make`)
     expect(again).toMatchObject({ made: 0, completed: 0 })
     expect((await admin<{ n: string }>(`SELECT count(*)::text AS n FROM "SdiArchiveCopy" WHERE "invoiceId" = $1`, [invoice.id]))[0]!.n).toBe('1')
+  })
+})
+
+describe('the FAKE intermediary across processes (B-W2b-F58): the API sends, the worker’s poll gets SDI’s answer', () => {
+  // Another process (the worker): its own SDI runtime and a FRESH fake that never saw the API's send.
+  const otherProcess = (answerAfterMs = 0): SdiRuntime => createSdiRuntime({ gateway, fake: new FakeSdi({ answerAfterMs }) })
+  const workerOf = (runtime: SdiRuntime): EventHandler[] => [sdiTestAnswerHandler(() => runtime), sdiArchiveHandler(() => runtime), sdiCourtesyCopyHandler(), sdiArchiveCopyHandler()]
+  const sendsOf = (invoiceId: string) => admin<{ id: string; attempt: number; status: string; providerRef: string; fileName: string; archiveRef: string | null }>('SELECT id, attempt, status, "providerRef", "fileName", "archiveRef" FROM "SdiSubmission" WHERE "invoiceId" = $1 ORDER BY attempt', [invoiceId])
+  const notificationsOf = (submissionId: string) => admin<{ type: string; sdiMessageId: string }>('SELECT type::text, "sdiMessageId" FROM "SdiNotification" WHERE "submissionId" = $1 ORDER BY "recordedAt"', [submissionId])
+  async function simulate(outcome: 'DELIVERED' | 'REJECTED' | 'NOT_DELIVERABLE') {
+    await stepped()
+    await as('PUT', `/invoicing/e-invoicing/settings/${c1()}`, { simulateOutcome: outcome })
+  }
+
+  it('DELIVERED: the receipt comes through the other process’s poll, once, and that process archives it', async () => {
+    const invoice = await issuedInvoice(c1(), '161.00')
+    expect((await sendIt(invoice.id)).sdi.sends.at(-1)).toMatchObject({ status: 'SENT' })
+    const [send] = await sendsOf(invoice.id)
+    expect(send!.providerRef).toMatch(/^fake-sdi-rc-[0-9a-f-]{36}$/)
+    // The worker's own fake does not hold the file; it is not due yet for a fake answering an hour after the send.
+    const early = otherProcess(3_600_000)
+    expect(await pollSend(early, system(), send!.id)).toBe('recorded')
+    expect(early.fake!.files).toEqual([])
+    expect(await notificationsOf(send!.id)).toEqual([])
+    expect((await invoiceOf(invoice.id)).status).toBe('SENT')
+    // Its time came: the poll of another process records SDI's RC; the invoice is delivered and that process archives it.
+    const worker = otherProcess()
+    await pollSend(worker, system(), send!.id)
+    await drain(workerOf(worker))
+    expect((await invoiceOf(invoice.id)).status).toBe('DELIVERED')
+    const notes = await notificationsOf(send!.id)
+    expect(notes).toEqual([{ type: 'RC', sdiMessageId: expect.stringContaining(send!.providerRef.slice(-36)) }])
+    expect(worker.fake!.archives).toEqual([{ providerRef: send!.providerRef, fileName: send!.fileName, archiveRef: expect.stringMatching(/^fake-archive-/) }])
+    expect((await sendsOf(invoice.id))[0]!.archiveRef).toBe(worker.fake!.archives[0]!.archiveRef)
+    // The API's own fake and a third process give the same answer: recorded once.
+    await pollSend(sdi, system(), send!.id)
+    await pollSend(otherProcess(), system(), send!.id)
+    expect(await notificationsOf(send!.id)).toEqual(notes)
+  })
+
+  it('REJECTED (the company’s choice): the first send rejected through the other process’s poll, the corrected resend delivered', async () => {
+    await simulate('REJECTED')
+    try {
+      expect((await settingsOf(c1())).simulateOutcome).toBe('REJECTED')
+      const invoice = await issuedInvoice(c1(), '162.00')
+      await sendIt(invoice.id)
+      const worker = otherProcess()
+      const [first] = await sendsOf(invoice.id)
+      expect(first!.providerRef).toMatch(/^fake-sdi-ns00423-/)
+      await pollSend(worker, system(), first!.id)
+      await drain(workerOf(worker))
+      const status = (await as('GET', `/invoicing/invoices/${invoice.id}/sdi`)).sdi
+      expect(status.invoiceStatus).toBe('REJECTED')
+      expect(JSON.stringify(status.sends.at(-1).notifications)).toContain('00423')
+      await sendIt(invoice.id)
+      const [, second] = await sendsOf(invoice.id)
+      expect(second!.providerRef).toMatch(/^fake-sdi-rc-/)
+      await pollSend(worker, system(), second!.id)
+      await drain(workerOf(worker))
+      expect((await invoiceOf(invoice.id)).status).toBe('DELIVERED')
+      expect((await sendsOf(invoice.id)).map((send) => [send.attempt, send.status])).toEqual([
+        [1, 'REJECTED'],
+        [2, 'DELIVERED'],
+      ])
+    } finally {
+      await simulate('DELIVERED')
+    }
+  })
+
+  it('NOT_DELIVERABLE (the company’s choice): MC through the other process’s poll, archived there too', async () => {
+    await simulate('NOT_DELIVERABLE')
+    try {
+      expect((await settingsOf(c1())).state.words).toContain('not deliverable')
+      const invoice = await issuedInvoice(c1(), '163.00')
+      await sendIt(invoice.id)
+      const worker = otherProcess()
+      const [send] = await sendsOf(invoice.id)
+      expect(send!.providerRef).toMatch(/^fake-sdi-mc-/)
+      await pollSend(worker, system(), send!.id)
+      await drain(workerOf(worker))
+      expect((await invoiceOf(invoice.id)).status).toBe('NOT_DELIVERABLE')
+      expect(worker.fake!.archives.map((entry) => entry.providerRef)).toEqual([send!.providerRef])
+    } finally {
+      await simulate('DELIVERED')
+    }
   })
 })
 

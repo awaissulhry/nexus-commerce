@@ -13,6 +13,8 @@ import type { Minutes } from '../../every-shift/model'
 import { MinutesCard } from '../../every-shift/view/MinutesCard'
 import { OffStandardCard } from './OffStandardCard'
 import '../../../../finance/costing/costing.css'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../../../lib/i18n/rights'
 
 /**
  * Labour & cost (design production.workorders rec:labour, section wo-cost "SummaryTable: planned · actual · variance · per
@@ -43,7 +45,7 @@ function Labour({ labour, prefix, workOrderId, draft, onRetry, variance }: { lab
   if (!can?.view) {
     return (
       <Card padded>
-        <EmptyState title={t('labourTab.noView.title')} description={t('labourTab.noView.body', { permission: 'costing.view' })} />
+        <EmptyState title={t('labourTab.noView.title')} description={t('labourTab.noView.body', { right: rightRef('costing.view') })} />
       </Card>
     )
   }
