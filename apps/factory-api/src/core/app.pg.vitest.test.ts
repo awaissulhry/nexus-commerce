@@ -14,7 +14,7 @@ import { defineManifest, defineRoutes } from './manifest'
  * factory_app, audited at open) and the local Redis. Run with `node scripts/factory/run-pg-tests.mjs apps/factory-api`.
  */
 
-const CONFIG: AppConfig = { environment: 'test', webOrigin: 'http://localhost:3200', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET }
+const CONFIG: AppConfig = { environment: 'test', webOrigin: 'http://localhost:3200', cookieSecret: LOCAL_COOKIE_SECRET }
 // Loopback only, like every factory test; the stack's Redis (infra/factory/docker-compose.yml).
 const REDIS_URL = 'redis://127.0.0.1:6399'
 

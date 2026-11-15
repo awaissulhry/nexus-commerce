@@ -127,7 +127,7 @@ beforeAll(async () => {
   // Test data past its guards: SEED-JKT-01 has no brand here, so the private rider may order it (B-W2b-294's private label).
   await force(`UPDATE "Style" SET "brandPartyId" = NULL WHERE id = $1`, [S.jkt01])
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database: h.database, routesRoot: fileURLToPath(new URL('../../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
   )
   // The JACKET template measures the height too (the certificate's made-to-measure route asks it, B-W2b-358's notes).

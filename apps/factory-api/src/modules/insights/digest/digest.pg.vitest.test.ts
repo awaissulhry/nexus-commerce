@@ -108,7 +108,7 @@ beforeAll(async () => {
   await force(`UPDATE "SalesOrder" SET "promiseDate" = $2::date, status = 'CONFIRMED' WHERE "tenantId" = $1 AND number = 'SEED-SO-0002'`, [T, plusDays(today(), -3)])
   await force(`UPDATE "Shipment" SET status = 'SHIPPED', "shippedAt" = $2 WHERE "tenantId" = $1 AND number = 'SEED-SH-0001'`, [T, new Date(businessDayRange(yesterday(), ZONE).start.getTime() + 10 * 3_600_000)])
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database: h.database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
   )
   await ok('owner', 'POST', '/insights/facts/rebuild', { from: plusDays(today(), -3), to: today() })

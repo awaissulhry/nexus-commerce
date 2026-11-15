@@ -15,6 +15,7 @@ import type { SignedInBody, SignInBody } from './contract'
 import { createPasswordReset, REQUIRED_RESET_TTL_MS } from './password-reset'
 import { checkSecondFactor, claimOf, recordWrongSecret, type Proof } from './second-factor'
 import { officeSignInRefused } from '../../audit/security-events/sign-in'
+import { clientAddressOf } from '../../../core/client-address'
 
 /**
  * Sign-in and sign-out (plan A1 §3.10; features PLT-047, PLT-048, PLT-070), ported from Commerce's
@@ -157,7 +158,7 @@ export async function signIn(auth: OfficeAuth, request: FastifyRequest, reply: F
       userId: user.id,
       now: at,
       mfaProved: proof !== null,
-      ipHash: auth.secrets.ipHash(request.ip),
+      ipHash: auth.secrets.ipHash(clientAddressOf(request)),
       userAgent: request.headers['user-agent'],
       place: sessionPlaceOf(request),
       tokenHash: sessionHash,

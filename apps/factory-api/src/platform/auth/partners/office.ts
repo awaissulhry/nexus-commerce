@@ -23,6 +23,7 @@ import type { ChangeBody, InviteBody, SettingsBody, StatusBody } from './contrac
 import { partnerMailerOf } from './mail'
 import { changeInCommand, inviteInCommand, revokeInCommand, statusInCommand, STATUS_TARGET, type InvitedResult, type StatusChange } from './people'
 import { lockParty, partyById, peopleOf, personOf, settingsOf, type PartnerParty, type PartnerPerson, type PortalSettingsView } from './store'
+import { clientAddressOf } from '../../../core/client-address'
 
 /**
  * The office side of partner organisations (B-W2b-162; PLT-006, PLT-021, PLT-022; design sales.customers and
@@ -391,7 +392,7 @@ export async function preview(auth: OfficeAuth, request: FastifyRequest, reply: 
         lastSeenAt: now,
         idleExpiresAt,
         absoluteExpiresAt,
-        ipHash: auth.secrets.ipHash(request.ip),
+        ipHash: auth.secrets.ipHash(clientAddressOf(request)),
         userAgent: request.headers['user-agent']?.slice(0, 256) ?? null,
         audience: 'PARTNER',
         partyId: party.id,

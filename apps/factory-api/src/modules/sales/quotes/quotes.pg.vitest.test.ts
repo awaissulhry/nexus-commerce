@@ -144,7 +144,7 @@ beforeAll(async () => {
   await addParty(BLOCKED, 'T-BLK', 'BLOCKED', { country: 'IT', taxMode: 'IT_B2B', vatNumber: 'IT00000001016' })
   await addParty(NO_IDENTITY, 'T-NOID', 'ACTIVE', null)
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     {
       database,
       routesRoot: fileURLToPath(new URL('../../..', import.meta.url)),

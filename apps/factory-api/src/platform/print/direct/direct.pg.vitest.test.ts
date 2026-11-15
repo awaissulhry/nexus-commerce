@@ -120,7 +120,7 @@ beforeAll(async () => {
   relay = fakePrintRelay({ environment: 'test' })
   usePrintRelays(printRelays({ FAKE: relay }))
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null), logger: false },
   )
   // Made-up printers: a label printer known by a queue name only, another by its address, an A4 printer.

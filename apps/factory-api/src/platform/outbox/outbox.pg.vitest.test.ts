@@ -336,7 +336,7 @@ describe('handlers, retries and the dead-letter queue; live screens end to end',
     feed = new LiveFeed({ connect: () => redis.connect(), prefix: redis.prefix })
     useLiveFeed(feed)
     app = await buildApp(
-      { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+      { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
       {
         routesRoot: fileURLToPath(new URL('../..', import.meta.url)),
         authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null),

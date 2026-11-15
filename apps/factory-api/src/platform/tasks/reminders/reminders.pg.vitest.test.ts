@@ -67,7 +67,7 @@ beforeAll(async () => {
   // Home only: no conversation of any record is readable.
   await person(PEOPLE.viewer, 'viewer', { permissions: ['home.view' as Permission], companies: 'all', sites: 'all', parties: 'all' }, 'read_only')
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database: h.database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => sessions.get(String(request.headers['x-test-session'])) ?? null) },
   )
 }, 180_000)

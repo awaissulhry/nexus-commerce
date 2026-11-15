@@ -130,7 +130,7 @@ beforeAll(async () => {
   // The workshop may not get work at first: the plan makes everything in-house.
   await admin(`UPDATE "Party" SET status = 'BLOCKED' WHERE id = $1`, [A.workshop])
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
   )
 }, 480_000)

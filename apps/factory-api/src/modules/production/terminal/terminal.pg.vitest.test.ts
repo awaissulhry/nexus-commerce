@@ -119,7 +119,7 @@ beforeAll(async () => {
   for (const row of await admin<{ id: string; seq: number }>('SELECT id, seq FROM "WorkOrderOperation" WHERE "workOrderId" = $1', [wo1])) ops[({ 10: 'cut', 20: 'sew', 30: 'qc', 40: 'pack' } as const)[row.seq as 10]] = row.id
   for (let n = 1; n <= 6; n += 1) bundles.push(await bundle(`W2B40-BN-${n}-${run}`))
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database: h.database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
   )
 }, 600_000)

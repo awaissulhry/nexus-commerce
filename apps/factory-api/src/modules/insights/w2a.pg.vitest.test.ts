@@ -120,7 +120,7 @@ beforeAll(async () => {
   await admin(`INSERT INTO "QuoteApproval" (id, "tenantId", "versionId", "partyId", reasons, "createdById", "createdAt") VALUES ($1, $2, $3, $4, ARRAY['DISCOUNT_LIMIT']::"QuoteApprovalReason"[], $5, now() - interval '2 days')`, [ids.approval, T, version.id, version.partyId, PEOPLE.sales])
 
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database: h.database, routesRoot: fileURLToPath(new URL('../..', import.meta.url)), authenticate: testAuthenticator((request) => (String(request.headers['x-test-session']) in PEOPLE ? session(String(request.headers['x-test-session']) as Person) : null)) },
   )
 }, 300_000)

@@ -9,6 +9,7 @@ import { overrideReport } from './apply'
 import { checkContract, flagContract, flagsContract, lotCheckContract, lotGarmentsContract, overrideContract, workOrderComponentsContract } from './contract'
 import { manifest } from './manifest'
 import { checkBundle, checkLot, flagOf, listFlags, lotGarments, workOrderComponents } from './views'
+import { clientAddressOf } from '../../../core/client-address'
 
 /**
  * Checks before a scan counts (B-W2b-46; MES-070, MES-097, MES-098, MES-114; design floor.operation "Checks before it
@@ -19,7 +20,7 @@ import { checkBundle, checkLot, flagOf, listFlags, lotGarments, workOrderCompone
  */
 export default defineRoutes('production.guards', manifest, async (app) => {
   const limit = app.officeAuth?.rateLimits.floorSignIn ?? AUTH_RATE_LIMITS.floorSignIn
-  const perDevice = { rateLimit: { max: limit.max, timeWindow: limit.timeWindowMs, keyGenerator: (request: FastifyRequest) => `guard-override:${parseSiteToken(deviceCookieOf(request))?.id ?? request.ip}` } }
+  const perDevice = { rateLimit: { max: limit.max, timeWindow: limit.timeWindowMs, keyGenerator: (request: FastifyRequest) => `guard-override:${parseSiteToken(deviceCookieOf(request))?.id ?? clientAddressOf(request)}` } }
 
   app.get('/production/guards/check', { schema: checkContract }, async (request) => checkBundle(request, request.query))
 

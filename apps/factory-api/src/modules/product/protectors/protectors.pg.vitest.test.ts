@@ -79,7 +79,7 @@ beforeAll(async () => {
   // The shoulder protector's own properties, as B-W2b-206's styles seed types them (made up).
   await admin(`UPDATE "Item" SET properties = '{"standard": "EN 1621-1:2012", "type": "shoulder", "level": "2", "size": "A"}'::jsonb WHERE id = $1`, [seed.protectorIds.shoulder])
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
   )
 }, 600_000)

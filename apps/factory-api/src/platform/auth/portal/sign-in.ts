@@ -46,6 +46,7 @@ import {
   type PartnerPerson,
   type PortalCompany,
 } from './store'
+import { clientAddressOf } from '../../../core/client-address'
 
 /**
  * Portal sign-in (B-W2b-159; PLT-050, PLT-066; Owner answer C3: e-mail codes only, no password, no SMS; A1 §3.10: invite
@@ -145,7 +146,7 @@ export async function startSignIn(app: FastifyInstance, request: FastifyRequest,
     const link = mintPortalToken('link', { tenantId, scopeId: company.id, userId: person.id })
     const codeHash = portalCodeHash(p.codeKey, { purpose: 'SIGN_IN', tenantId, userId: person.id, boundTo: company.id }, code)
     const { result } = await p.auth.command(p.auth.contextFor(request, tenantId, person.id), { name: 'portal.signInCodeSent', input: { email, companyId: company.id } }, async ({ tx, now, audit }) => {
-      const issued = await issueCode(tx, { userId: person.id, purpose: 'SIGN_IN', codeHash, linkTokenHash: portalTokenHash(link.value), now, ipHash: p.auth.secrets.ipHash(request.ip) })
+      const issued = await issueCode(tx, { userId: person.id, purpose: 'SIGN_IN', codeHash, linkTokenHash: portalTokenHash(link.value), now, ipHash: p.auth.secrets.ipHash(clientAddressOf(request)) })
       audit({ recordType: 'PortalSignInCode', recordId: issued.id, companyId: company.id, after: { purpose: 'SIGN_IN', expiresAt: issued.expiresAt, replaced: issued.replaced } })
       return issued
     })
@@ -284,7 +285,7 @@ async function openSession(p: PortalServices, request: FastifyRequest, reply: Fa
         audit({ recordType: 'User', recordId: person.id, companyId: company.id, before: { status: 'INVITED' }, after: { status: 'ACTIVE', accessUntil: invitation.accessUntil ? toUtcIso(invitation.accessUntil) : null } })
       }
       await tx.user.update({ where: { id: person.id }, data: { lastSignInAt: now }, select: { id: true } })
-      const session = await createPortalSession(tx, { tenantId, userId: person.id, partyId: person.partyId, companyId: company.id, tokenHash, now, ipHash: p.auth.secrets.ipHash(request.ip), userAgent: request.headers['user-agent'], place: sessionPlaceOf(request) })
+      const session = await createPortalSession(tx, { tenantId, userId: person.id, partyId: person.partyId, companyId: company.id, tokenHash, now, ipHash: p.auth.secrets.ipHash(clientAddressOf(request)), userAgent: request.headers['user-agent'], place: sessionPlaceOf(request) })
       audit({ action: 'portal.signIn', recordType: 'Session', recordId: session.id, companyId: company.id, after: { userId: person.id, partyId: person.partyId, method, invitationAccepted: accepted !== null } })
       // B-W2b-180: the office's Portal access tab says "… signed in" live (and the person turns Active there).
       emit({ type: 'partner_user.signed_in', subject: person.id, companyId: company.id, payload: { userId: person.id, partyId: person.partyId, firstSignIn: accepted !== null } })

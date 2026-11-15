@@ -83,7 +83,7 @@ beforeAll(async () => {
   await copyDraft(draft!.id, W.cancelled, 'T-BULK-0003')
   await admin(`UPDATE "WorkOrder" SET status = 'CANCELLED', "cancelledAt" = now(), "cancelReason" = 'Made-up: not needed', version = 2 WHERE id = $1`, [W.cancelled])
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     {
       database,
       routesRoot: fileURLToPath(new URL('../../..', import.meta.url)),

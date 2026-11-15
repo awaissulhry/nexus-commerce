@@ -134,7 +134,7 @@ beforeAll(async () => {
   await force(`UPDATE "GoodsReceipt" SET status = 'POSTED', "postedAt" = $2 WHERE "tenantId" = $1 AND number = 'SEED-GR-0002'`, [T, at(1, 10 * 60)])
 
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database: h.database, routesRoot: fileURLToPath(new URL('../../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
   )
   await ok('owner', '/insights/facts/rebuild', 'POST', { from: day(30), to: today() })

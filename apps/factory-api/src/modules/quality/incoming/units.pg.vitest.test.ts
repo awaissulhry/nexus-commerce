@@ -163,7 +163,7 @@ beforeAll(async () => {
   }
   bundles = await admin(`SELECT id::text, code, quantity FROM "Bundle" WHERE "workOrderId" = $1 AND code LIKE $2 ORDER BY code`, [wo.id, `T-UN-${run}-%`])
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database: h.database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
   )
   const seedOrderId = (await admin<{ id: string }>(`SELECT id::text FROM "SubcontractOrder" WHERE "tenantId" = $1 AND number = 'SEED-SC-0001'`, [A.tenant]))[0]!.id

@@ -147,7 +147,7 @@ beforeAll(async () => {
     office: { audience: 'office', tenantId: tenant.id, actorId: newId(), grants: [{ permissions: ['links.open'], companies: 'all', sites: 'all', parties: 'all' }] },
   }
   linkApp = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database: h.database, clock: h.clock, routesRoot: fileURLToPath(new URL('../..', import.meta.url)), authenticate: testAuthenticator((request) => sessions[String(request.headers['x-test-session'])] ?? null) },
   )
 }, 180_000)

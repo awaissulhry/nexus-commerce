@@ -132,7 +132,7 @@ beforeAll(async () => {
   stitchSkip = (await admin<{ id: string }>(`SELECT id FROM "DefectCode" WHERE "tenantId" = $1 AND code = 'STITCH-SKIP'`, [A.tenant]))[0]!.id
   critical = (await admin<{ id: string }>(`SELECT id FROM "DefectCode" WHERE "tenantId" = $1 AND severity = 'CRITICAL' AND "parentId" IS NOT NULL AND active ORDER BY code LIMIT 1`, [A.tenant]))[0]!.id
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
   )
 }, 1_500_000)
