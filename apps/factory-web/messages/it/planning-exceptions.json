@@ -72,7 +72,8 @@
     "MOVE_EARLIER": "Anticipare",
     "MOVE_LATER": "Posticipare",
     "CANCEL": "Annullare",
-    "NEGATIVE_STOCK": "Giacenza negativa"
+    "NEGATIVE_STOCK": "Giacenza negativa",
+    "WORKSHOP_OVERLOADED": "Laboratorio oltre la capacità"
   },
   "view": {
     "label": "Righe",
@@ -169,7 +170,8 @@
     "you": "Tu"
   },
   "what": {
-    "orderLine": "{order} riga {seq}"
+    "orderLine": "{order} riga {seq}",
+    "sampleWorkOrder": "Ordine di lavoro campione {number}"
   },
   "words": {
     "orders_one": "{count} ordine",
@@ -189,6 +191,8 @@
     },
     "PAST_DUE_one": "{order} riga {seq} scadeva il {date} ({count} giorno fa) e serve ancora materiale.",
     "PAST_DUE_other": "{order} riga {seq} scadeva il {date} ({count} giorni fa) e serve ancora materiale.",
+    "PAST_DUE_SAMPLE_one": "L'ordine di lavoro campione {number} scadeva il {date} ({count} giorno fa) e serve ancora materiale.",
+    "PAST_DUE_SAMPLE_other": "L'ordine di lavoro campione {number} scadeva il {date} ({count} giorni fa) e serve ancora materiale.",
     "EXCESS": {
       "po": "{material}: {quantity} di {po} sono più di quanto servono gli ordini.",
       "firm": "{material}: {quantity} dell’ordine pianificato fisso sono più di quanto servono gli ordini."
@@ -203,7 +207,11 @@
     "NEGATIVE_STOCK": "{material}: sono impegnati {quantity} in più della giacenza utilizzabile (un ricevimento non registrato, o giacenza spostata nel frattempo).",
     "LANE_OVERLOADED": "{lane} è prenotata al {pct}% dal {from} al {to} ({booked} di {available} min).",
     "LANE_UNDERUSED": "{what} è sottoutilizzata.",
-    "MOVE_LATER": "{what}: la fornitura può arrivare più tardi."
+    "MOVE_LATER": "{what}: la fornitura può arrivare più tardi.",
+    "WORKSHOP_OVERLOADED": {
+      "minutes": "Il laboratorio {workshop} è prenotato al {pct}% dal {from} al {to} ({booked} di {available} min a settimana).",
+      "pieces": "Il laboratorio {workshop} è prenotato al {pct}% dal {from} al {to} ({booked} di {available} capi a settimana)."
+    }
   },
   "title": {
     "late_one": "{who} sarà in ritardo di {count} giorno",

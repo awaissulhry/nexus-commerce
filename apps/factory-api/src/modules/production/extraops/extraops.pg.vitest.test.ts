@@ -437,6 +437,29 @@ describe('two adds at once', () => {
   })
 })
 
+// B-W2b-GB29 (G215): an unplanned operation given its planned garments is loaded like a step: the board, the plan's minutes, WIP.
+describe('planned garments (B-W2b-GB29)', () => {
+  it('takes 1 up to the work order\'s garments, refused in words above; then it waits in WIP and stands on the board', async () => {
+    const garments = (await admin<{ n: number }>('SELECT sum(quantity)::int AS n FROM "WorkOrderSize" WHERE "workOrderId" = $1', [wo]))[0]!.n
+    const planned = { id: newId(), code: `GB29-PLAN-${run}` }
+    await admin(`INSERT INTO "Operation" (id, "tenantId", "companyId", code, name, "workCentreKind", "standardMinutes", status, "updatedAt") VALUES ($1, $2, $3, $4, 'Made-up planned fix', 'SEWING', 2, 'ACTIVE', now())`, [planned.id, T, companyA, planned.code])
+    const above = await no('manager', 'POST', base(), { operationId: planned.id, reasonCode: 'QUALITY_FIX', plannedQuantity: garments + 1 }, 409)
+    expect(above.message).toBe(`Plan 1 to ${garments} garments for it: work order ${(await admin<{ number: string }>('SELECT number FROM "WorkOrder" WHERE id = $1', [wo]))[0]!.number} makes ${garments}.`)
+    const added = await ok('manager', 'POST', base(), { operationId: planned.id, reasonCode: 'QUALITY_FIX', plannedQuantity: 3 }, 201)
+    expect(added).toMatchObject({ plannedQuantity: 3 })
+    expect((await admin('SELECT "plannedQuantity" FROM "WorkOrderOperation" WHERE id = $1', [added.workOrderOperationId]))[0]).toEqual({ plannedQuantity: 3 })
+    expect((await ok('manager', 'GET', base())).added.find((row: Json) => row.workOrderOperationId === added.workOrderOperationId)).toMatchObject({ plannedQuantity: 3 })
+    // WIP: nothing reported there yet, so its 3 garments wait for it.
+    const wip = await ok('manager', 'GET', `/production/scans/work-orders/${wo}/wip`)
+    expect(wip.operations.find((entry: Json) => entry.operationId === added.workOrderOperationId)).toMatchObject({ unplanned: true, arrived: 0, waiting: 3 })
+    // The board: a step of the work order now, with its 3 garments to place; an unplanned one with no number stays off it.
+    const popover = await ok('manager', 'GET', `/planning/schedule/work-orders/${wo}`)
+    const codes = popover.workOrder.operations.map((operation: Json) => operation.code)
+    expect(codes).toContain(planned.code)
+    expect(codes).not.toContain(library.fix.code)
+  })
+})
+
 describe('who approved a correction, in the office list of a work order\'s scans (asked by B-W2b-83)', () => {
   it('a team leader\'s id stays behind the PERFORMANCE gate like the worker; an office user\'s stays', async () => {
     // The pay part above opened the site's gate: closed first, so the read starts with it off.

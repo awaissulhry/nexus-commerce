@@ -45,7 +45,8 @@ export const needRowSchema = z.object({
   heldLots: z.array(z.object({ lotCode: z.string(), shadeLabel: z.string().nullable() })),
   feasibility: z.enum(FEASIBILITY),
   best: lot.nullable(),
-  split: z.array(z.object({ lotKey: z.string(), lotId: z.string(), lotCode: z.string(), shadeLabel: z.string().nullable(), sizes: z.array(z.string()), area: z.string() })).nullable(),
+  // B-W2b-GB29 (G226): `cells` — each size's share of the part and its work order cell (null: no work order yet).
+  split: z.array(z.object({ lotKey: z.string(), lotId: z.string(), lotCode: z.string(), shadeLabel: z.string().nullable(), sizes: z.array(z.string()), area: z.string(), cells: z.array(z.object({ size: z.string(), workOrderSizeId: z.string().nullable(), area: z.string() })).nullable().optional() })).nullable(),
   buy: z.object({ area: z.string(), hides: z.number().nullable(), lotCode: z.string().nullable(), shadeLabel: z.string().nullable() }).nullable(),
   proposal: z.object({ hideIds: z.array(z.string()), count: z.number(), area: z.string() }).nullable(),
   lots: z.array(lot),
@@ -127,7 +128,7 @@ export function dismissLoss(api: ApiClient, styleId: string, body: { siteId: str
 /** POST /inventory/reservations (B-W2a-10, B-W2b-100): the order's hides (one shade lot) or a lot's area per garment split. */
 export function reserveLeather(
   api: ApiClient,
-  body: { siteId: string; workOrderId?: string; salesOrderLineId?: string; note: string; lines: ({ hideId: string } | { lotId: string; quantity: string })[] },
+  body: { siteId: string; workOrderId?: string; salesOrderLineId?: string; note: string; lines: ({ hideId: string } | { lotId: string; quantity: string; workOrderSizeId?: string })[] },
 ): Promise<unknown> {
   return api.post('/inventory/reservations', { body, idempotencyKey: newIdempotencyKey() })
 }

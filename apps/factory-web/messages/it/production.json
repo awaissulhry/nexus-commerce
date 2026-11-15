@@ -811,7 +811,7 @@
     "add": "Aggiungi un'operazione fuori ciclo",
     "loading": "Lettura delle operazioni…",
     "none": "Niente aggiunte: questo ordine segue il suo ciclo.",
-    "hint": "Un'operazione fuori ciclo si può scansionare, pagare e costificare. Nulla la aspetta, e l'ordine del ciclo resta come è stato congelato.",
+    "hint": "Un'operazione fuori ciclo si può scansionare, pagare e costificare. Con i capi che la richiedono, piano, tabellone e WIP la contano per quei capi; altrimenti nulla la aspetta. L'ordine del ciclo resta come è stato congelato.",
     "listFailed": "Impossibile leggere le operazioni fuori ciclo.",
     "empty": "Tutte le operazioni della libreria sono già su questo ordine di lavoro.",
     "operation": "Operazione",
@@ -829,13 +829,15 @@
       "operation": "Scegli prima l'operazione.",
       "reason": "Scrivi perché serve.",
       "note": "Scrivi perché in poche parole.",
-      "status": "Solo un ordine rilasciato o in corso accetta un'operazione fuori ciclo."
+      "status": "Solo un ordine rilasciato o in corso accetta un'operazione fuori ciclo.",
+      "planned": "Scrivi i capi come numero intero maggiore di 0, o lascia vuoto."
     },
     "col": {
       "operation": "Operazione",
       "reason": "Perché",
       "addedOn": "Aggiunta",
-      "at": "Quando"
+      "at": "Quando",
+      "planned": "Pianificati"
     },
     "on": {
       "FLOOR": "In reparto",
@@ -854,6 +856,11 @@
       "scans": "Il reparto la sceglie a mano su qualsiasi fascio di questo ordine; solo pezzi buoni.",
       "pay": "Paga alla sua tariffa a pezzo e costa i suoi minuti standard, come ogni operazione.",
       "frozen": "Resta sull'ordine: non si può togliere e, se non usata, non cambia nessuna cifra."
-    }
+    },
+    "planned": "Capi che la richiedono",
+    "plannedHelp": "Pianificazione, tabellone e WIP la contano per questi capi. Lasciato vuoto: resta fuori dal piano.",
+    "plannedCell_one": "{count} capo",
+    "plannedCell_other": "{count} capi",
+    "offPlan": "Fuori dal piano"
   }
 }

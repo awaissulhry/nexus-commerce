@@ -124,10 +124,12 @@ const WORK_ORDER_COLUMNS = {
   style: { select: { id: true, code: true, name: true, productType: true } },
   sizes: { select: { quantity: true, partyId: true, /* B-W2b-365 */ colourwayId: true, size: true, optionValueIds: true } },
   // B-W2b-82: an unplanned operation has no target quantity, so no bar and no load: the board stays the routing's.
+  // B-W2b-GB29 (G215): one with planned garments (added since GB29) is a step of the board for what is left of them.
   operations: {
-    where: { routingSeq: { not: null } },
+    // (NOT of both null, not an OR list: this select is `as const`, and a readonly list is no Prisma where.)
+    where: { NOT: { routingSeq: null, plannedQuantity: null } },
     // B-W2b-321 (PLN-165): an operation sent outside, and the workshop of its subcontract order.
-    select: { id: true, seq: true, code: true, name: true, workCentreId: true, standardMinutes: true, styleRevisionId: true, routingSeq: true, outsourced: true, subcontractOrder: { select: { partyId: true } }, /* B-W2b-365 */ routingOperation: { select: STEP_VARIANT_COLUMNS } },
+    select: { id: true, seq: true, code: true, name: true, workCentreId: true, standardMinutes: true, styleRevisionId: true, routingSeq: true, outsourced: true, subcontractOrder: { select: { partyId: true } }, /* B-W2b-GB29 */ plannedQuantity: true, /* B-W2b-365 */ routingOperation: { select: STEP_VARIANT_COLUMNS } },
     orderBy: { seq: 'asc' as const },
   },
 } as const
@@ -180,7 +182,8 @@ async function readBoardWorkOrders(db: Reader, site: SiteRow, capacity: Capacity
         workCentreId: operation.workCentreId,
         standardMinutes: operation.standardMinutes.toString(),
         // B-W2b-365: an operation is done on the garments of the cells its routing step is for.
-        remaining: Math.max(0, garmentsOf(operation.routingOperation, row.sizes) - (done.get(operation.id) ?? 0)),
+        // B-W2b-GB29 (G215): an unplanned operation on its planned garments.
+        remaining: Math.max(0, (operation.plannedQuantity ?? garmentsOf(operation.routingOperation, row.sizes)) - (done.get(operation.id) ?? 0)),
         // B-W2b-321: an operation sent outside is worked at its subcontract order's workshop (the routing's days when it is the same).
         outside: operation.outsourced && operation.subcontractOrder ? { partyId: operation.subcontractOrder.partyId, transitDays: outside.get(operation.id)?.partyId === operation.subcontractOrder.partyId ? outside.get(operation.id)!.transitDays : null } : (outside.get(operation.id) ?? null),
       })),

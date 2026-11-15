@@ -362,6 +362,8 @@ enum PlanningExceptionKind {
   CANCEL
   /// The projected stock falls below zero in a bucket (a need before any supply, a receipt not posted).
   NEGATIVE_STOCK
+  /// B-W2b-GB29 (G219; PLN-124): a subcontract workshop is booked above its weekly capacity in a week.
+  WORKSHOP_OVERLOADED
 }
 
 /// NEW → ACKNOWLEDGED → RESOLVED, or NEW → RESOLVED. RESOLVED is final (it may come back as a new occurrence).

@@ -777,7 +777,7 @@ function BoardContainer() {
     if (value.plan.version === null) return
     setDialog({ ...dialog, busy: true, error: null })
     try {
-      const answer = await publishPlan(api, { siteId, version: value.plan.version, coversFrom: value.range.coversFrom, coversTo: value.range.coversTo })
+      const answer = await publishPlan(api, { siteId, version: value.plan.version, coversFrom: value.range.coversFrom, coversTo: value.range.coversTo, notifyLeaders: dialog.notifyLeaders !== false }) // B-W2b-GB29 (G217)
       setDialog((current) => (current?.kind === 'publish' ? { ...current, busy: false, done: answer.version } : current))
       setNotice(t('notice.published', { version: answer.version.number }))
       void load()
@@ -1143,6 +1143,8 @@ function BoardContainer() {
           onDropChoice,
           onPublishRange,
           onPublish: () => void onPublish(),
+          // B-W2b-GB29 (G217): the dialog's "Notify line leaders".
+          onPublishNotify: (notify: boolean) => setDialog((current) => (current?.kind === 'publish' ? { ...current, notifyLeaders: notify } : current)),
           onPlaceApply: (reason) => void onPlaceApply(reason),
           onSendToTray: (slotId) => void onSendToTray(slotId),
           onShowProblem: (row: ProblemRow) => showWorkOrder(row.workOrderId, null, row.laneId, row.date),

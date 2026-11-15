@@ -45,7 +45,7 @@ const admin = async <T = Json>(sql: string, values: unknown[] = []): Promise<T[]
 const one = async <T = Json>(sql: string, values: unknown[] = []): Promise<T> => (await admin<T>(sql, values))[0]!
 const system = () => callerFor(h.database, systemContext(tenant, newId()))
 
-type Method = 'GET' | 'POST' | 'PATCH'
+type Method = 'GET' | 'POST' | 'PATCH' | 'PUT' // B-W2b-GB29 (G221): + PUT (the allocation board)
 async function as(browser: Browser, method: Method, url: string, body?: unknown, status = 200): Promise<Json> {
   const answer = await browser.send(method as never, url, method === 'GET' ? undefined : (body ?? {}), { headers: method === 'GET' ? {} : { 'idempotency-key': key() } })
   expect(answer.status, JSON.stringify(answer.body)).toBe(status)
@@ -172,6 +172,13 @@ describe('Time & action: the gates and milestones of the open orders (PLN-186)',
     expect(held.error.message).toMatch(/^SEED-WO-0002 waits on 2 gates not passed/)
     const preview = await as(planner, 'POST', '/planning/schedule/place-by-due-date', { siteId: line.siteId, apply: false })
     expect(preview.skipped).toEqual(expect.arrayContaining([expect.objectContaining({ workOrderId: wo2, code: 'GATE_NOT_PASSED' })]))
+    // B-W2b-GB29 (G221): the allocation board holds it too (a line given), with the same code and gates; nothing is written.
+    const before = await one<{ version: number; lineId: string | null }>('SELECT version, "lineId" FROM "WorkOrder" WHERE id = $1', [wo2])
+    const target = (await admin<{ id: string }>('SELECT id FROM "Line" WHERE "siteId" = $1 ORDER BY code', [line.siteId])).find((row) => row.id !== before.lineId)!
+    const allocated = await as(planner, 'PUT', `/planning/allocation/work-orders/${wo2}`, { version: before.version, lineId: target.id, parts: [] }, 409)
+    expect(refusalOf(allocated)).toBe('refusal/GATE_NOT_PASSED')
+    expect(issuesOf(allocated)).toEqual(expect.arrayContaining([`gate/${samples.gateIds.other}`, `gate/${samples.gateIds.pp}`]))
+    expect(await one('SELECT version, "lineId" FROM "WorkOrder" WHERE id = $1', [wo2])).toEqual(before)
   })
 
   it("B-W2b-F22: the sample work order of the order's pre-production round is never held; its production work order still is", async () => {
@@ -312,3 +319,58 @@ describe('Time & action: the gates and milestones of the open orders (PLN-186)',
     expect((await auditsOf(gate.id)).at(-1)).toMatchObject({ action: 'planning.milestones.passGate', after: { passedBy: 'LOT', lotId: lot.lotId } })
   })
 })
+
+// ---- B-W2b-GB29 (G221, B-W2b-263's gaps): the gate's owner is told; leather bought for an order counts --------------------
+describe("the gate's owner is told, and leather bought for an order counts (B-W2b-GB29, G221)", () => {
+  const fanOutOf = async (gateId: string, change: string): Promise<number> => {
+    const { fanOut } = await import('../../../platform/notifications/fan-out')
+    const rows = await admin(`SELECT * FROM "OutboxEvent" WHERE subject = $1 AND type = 'order_gate.changed' AND payload->>'change' = $2 ORDER BY "occurredAt", id`, [gateId, change])
+    let made = 0
+    for (const row of rows) {
+      const envelope = { eventId: row.id, type: row.type, version: row.version, context: row.context, tenantId: row.tenantId, companyId: row.companyId, siteId: row.siteId, subject: row.subject, correlationId: row.correlationId, causationId: row.causationId, source: row.source, occurredAt: new Date(row.occurredAt).toISOString(), payload: row.payload }
+      made += await fanOut(system(), envelope as never)
+    }
+    return made
+  }
+  const toldOf = (gateId: string) => admin(`SELECT "userId", category::text AS category, "messageKey", "recordType", "recordLabel", "actorId" FROM "Notification" WHERE "recordType" = 'OrderGate' AND "recordId" = $1 ORDER BY "createdAt", id`, [gateId])
+
+  it('the planner who owns a gate is told when someone starts before it (ALERT) and when it is marked done (SYSTEM); never for what they did themselves', async () => {
+    const plannerId = (await one<{ id: string }>(`SELECT id FROM "User" WHERE "tenantId" = $1 AND email = 'pina.planner@seed-a.example.com'`, [tenant])).id
+    const gate = (await as(planner, 'POST', '/planning/milestones/gates', { salesOrderId: orders['SEED-SO-0001'], kind: 'TRIMS_IN', ownerId: plannerId }, 201)).gate
+    // Added: nobody is told (only a pass or a start before tells the owner).
+    expect(await fanOutOf(gate.id, 'ADDED')).toBe(0)
+    const started = (await as(manager, 'POST', `/planning/milestones/gates/${gate.id}/start-before`, { version: gate.version, reason: 'Made-up: the trims are on the truck.' })).gate
+    expect(await fanOutOf(gate.id, 'STARTED_BEFORE')).toBe(1)
+    await as(manager, 'POST', '/planning/milestones/gates/pass', { gates: [{ id: gate.id, version: started.version }] })
+    expect(await fanOutOf(gate.id, 'PASSED')).toBe(1)
+    expect(await toldOf(gate.id)).toEqual([
+      { userId: plannerId, category: 'ALERT', messageKey: 'notifications.planning.gateStartedBefore', recordType: 'OrderGate', recordLabel: 'SEED-SO-0001', actorId: managerId },
+      { userId: plannerId, category: 'SYSTEM', messageKey: 'notifications.planning.gatePassed', recordType: 'OrderGate', recordLabel: 'SEED-SO-0001', actorId: managerId },
+    ])
+    // The owner marks their own gate done: nobody is told.
+    const own = (await as(planner, 'POST', '/planning/milestones/gates', { salesOrderId: orders['SEED-SO-0001'], kind: 'OTHER', label: 'Made-up: hang tags', ownerId: plannerId }, 201)).gate
+    await as(planner, 'POST', '/planning/milestones/gates/pass', { gates: [{ id: own.id, version: own.version }] })
+    expect(await fanOutOf(own.id, 'PASSED')).toBe(0)
+  })
+
+  it("leather bought for the order and received counts at its leather gate, reserved or not; the lot's release passes it", async () => {
+    const so1 = orders['SEED-SO-0001']!
+    const lot = await one<{ lotId: string; itemId: string; purchaseOrderLineId: string }>(
+      `SELECT l.id AS "lotId", l."itemId", r."purchaseOrderLineId" FROM "Lot" l JOIN "GoodsReceiptLine" r ON r.id = l."receiptLineId" WHERE l."tenantId" = $1 AND l.code = 'SEED-LOT-LEA-01'`,
+      [tenant],
+    )
+    expect(lot.purchaseOrderLineId).toBeTruthy()
+    const line = await one<{ id: string; partyId: string }>(`SELECT id, "partyId" FROM "SalesOrderLine" WHERE "orderId" = $1 ORDER BY seq LIMIT 1`, [so1])
+    const gate = (await as(planner, 'POST', '/planning/milestones/gates', { salesOrderId: so1, kind: 'LEATHER_APPROVED' }, 201)).gate
+    expect(gate).toMatchObject({ state: 'WAITING', leather: 'NOT_RECEIVED' })
+    // The lot's purchase line was ordered for SO-0001's line alone (B-W2b-306's order-specific buy); nothing is reserved for it.
+    await admin(
+      `INSERT INTO "MaterialRequirement" SELECT (jsonb_populate_record(NULL::"MaterialRequirement", to_jsonb(m) || jsonb_build_object('id', $1::text, 'seq', 9999, 'orderSpecific', true, 'decision', 'ORDERED', 'purchaseOrderLineId', $2::text, 'reservedForLineId', $3::text, 'reservedForPartyId', $4::text, 'itemId', $5::text, 'itemColourId', (SELECT "itemColourId" FROM "PurchaseOrderLine" WHERE id = $2::uuid), 'action', 'BUY', 'decidedAt', now(), 'sources', jsonb_build_array(jsonb_build_object('orderLineId', $3::text)), 'version', 1))).* FROM "MaterialRequirement" m WHERE m."tenantId" = $6 AND m."siteId" = (SELECT "siteId" FROM "PurchaseOrderLine" WHERE id = $2::uuid) ORDER BY m."createdAt" DESC LIMIT 1`,
+      [newId(), lot.purchaseOrderLineId, line.id, line.partyId, lot.itemId, tenant],
+    )
+    expect(gateIn(await read(), gate.id)).toMatchObject({ state: 'WAITING', leather: 'PASSED' })
+    expect(await passLeatherGatesOfLot(system(), lot.lotId, lot.itemId, { key: newId() })).toEqual([gate.id])
+    expect(gateIn(await read(), gate.id)).toMatchObject({ state: 'PASSED', via: 'LOT' })
+  })
+})
+// ---- end B-W2b-GB29

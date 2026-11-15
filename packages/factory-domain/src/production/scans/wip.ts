@@ -18,8 +18,9 @@ import { finalOperationOf, previousStep, sewnOperationOf, standingKey, standingS
  *             operation (rules.ts sewnOperationOf; null when the routing sews nowhere), finished = the good of the final
  *             operation (the last scanned one).
  *   lines     per operation, the good its reports passed per line of the reporting station (F2: output per line only).
- * An unplanned operation (B-W2b-82, rules.ts) stands outside the flow: only what was reported there arrived there, nothing
- * waits for it and it is neither final nor sewn; `unplanned` says so to the screens.
+ * An unplanned operation (B-W2b-82, rules.ts) stands outside the flow: only what was reported there arrived there and it is
+ * neither final nor sewn; `unplanned` says so to the screens. B-W2b-GB29 (G215): with a planned quantity, what of it has not
+ * been reported there waits for it (`planned`, `waiting`); without one (added before GB29) nothing waits for it.
  * Garment figures count bundles of whole garments; a part bundle (sleeves on their own) travels through its operations
  * as pieces of one part, so it is counted on its own (`partBundles`), never as garments.
  *
@@ -91,6 +92,11 @@ export interface WipOperation extends Flow {
   readonly scanRequired: boolean
   /** B-W2b-82: added to the released work order, no routing step. */
   readonly unplanned: boolean
+  /**
+   * B-W2b-GB29 (G215): an unplanned operation's planned garments; its `waiting` is then what of them has not arrived there yet
+   * (planned − reported, never below 0). Null: a routing step, or an unplanned one with no plan (nothing waits for it).
+   */
+  readonly planned: number | null
   readonly final: boolean
   readonly sewn: boolean
   readonly bundles: BundleCounts
@@ -252,6 +258,9 @@ export function wipOf(input: {
       final: operation.id === final?.id,
       sewn: operation.id === sewn?.id,
       ...total,
+      // B-W2b-GB29 (G215): what of an unplanned operation's planned garments has not been reported there yet waits for it.
+      ...(operation.unplanned && typeof operation.plannedQuantity === 'number' ? { waiting: Math.max(0, operation.plannedQuantity - total.arrived) } : {}),
+      planned: operation.unplanned && typeof operation.plannedQuantity === 'number' ? operation.plannedQuantity : null,
       bundles,
       partBundles,
       cells: input.cells.map((cell) => ({ workOrderSizeId: cell.id, ...perCell.get(cell.id)! })),

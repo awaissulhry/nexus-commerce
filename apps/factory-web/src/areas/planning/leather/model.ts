@@ -276,3 +276,16 @@ export function neighbours(ids: readonly string[], current: string): { prev: str
   const at = ids.indexOf(current)
   return { prev: at > 0 ? ids[at - 1]! : null, next: at >= 0 && at < ids.length - 1 ? ids[at + 1]! : null }
 }
+
+/**
+ * B-W2b-GB29 (G226): the reserve lines of a split by garment: with one work order, one line per size and lot held for its cell
+ * (the share the API worked out), so the reservation says which sizes come from which lot; else one line per lot (the order
+ * line is reserved; the note says the sizes).
+ */
+export function splitLines(split: NonNullable<NeedRow['split']>): { lotId: string; quantity: string; workOrderSizeId?: string }[] {
+  return split.flatMap((part) => {
+    const cells = part.cells ?? null
+    if (!cells || cells.some((cell) => cell.workOrderSizeId === null)) return [{ lotId: part.lotId, quantity: part.area }]
+    return cells.filter((cell) => Number(cell.area) > 0).map((cell) => ({ lotId: part.lotId, quantity: cell.area, workOrderSizeId: cell.workOrderSizeId! }))
+  })
+}

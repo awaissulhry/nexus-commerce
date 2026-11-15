@@ -92,6 +92,8 @@ export const reserveContract = defineContract({
           quantity: quantity().optional(),
           uom: uom.optional(),
           baseQuantity: quantity().optional(),
+          /** B-W2b-GB29 (G226): held for this size (a cell) of the work order: a split by garment; only with workOrderId. */
+          workOrderSizeId: id().optional(),
         }),
       )
       .min(1)

@@ -23,6 +23,8 @@ import { readStock, readWorkOrders, type Reader, type SiteRow } from '../store'
 import { REQUIREMENT_COLUMNS, sourcesOf, type RequirementRow } from '../views'
 import type { NeedRowView, ProtectorRowView } from './contract'
 import { isLeather, isProtector, LEATHER_ITEM_COLUMNS, latestRunOf, runViewOf, siteViewOf, unitsOfItem, type LeatherItemRow } from './facts'
+// B-W2b-GB29 (G226): the accepted cutting loss for planning.
+import { planningLossOf, withPlanningLoss } from './planning-loss'
 
 /**
  * Leather need per order and certified protectors (B-W2b-132; PLN-106, PLN-108, PLN-114; design planning.leather "Leather
@@ -70,6 +72,9 @@ async function readRunFacts(db: Reader, site: SiteRow, runId: string, which: 'le
   const revisions = new Map((revisionIds.length ? await db.styleRevision.findMany({ where: { id: { in: revisionIds } }, select: { id: true, revision: true, status: true, plannedHideYieldPct: true } }) : []).map((row) => [row.id, row]))
   const bomLines = new Map<string, LineRecord[]>()
   for (const revisionId of revisionIds.sort()) bomLines.set(revisionId, await readLines(db, revisionId))
+  // B-W2b-GB29 (G226): the loss the plan carries is the accepted one when it overrides a released revision (as the run reads it).
+  const planningLoss = await planningLossOf(db, revisionIds, [...bomLines.values()].flat().map((bomLine) => bomLine.itemId))
+  for (const [revisionId, lines] of bomLines) bomLines.set(revisionId, withPlanningLoss(planningLoss, revisionId, lines))
   const colourways = new Map((lines.length ? await db.colourway.findMany({ where: { id: { in: unique(lines.map((line) => line.colourwayId)) } }, select: { id: true, code: true, name: true } }) : []).map((row) => [row.id, row]))
   const colours = new Map((mine.some((row) => row.itemColourId) ? await db.itemColour.findMany({ where: { id: { in: unique(mine.map((row) => row.itemColourId)) } }, select: { id: true, code: true, name: true } }) : []).map((row) => [row.id, row]))
   const { cells } = await readWorkOrders(db, site.id, lineIds)
@@ -215,11 +220,26 @@ async function needRowOf(input: NeedInput): Promise<NeedRowView> {
 
   // The split reserves what is left to find, no more: the sizes' areas count what the order's reservations already hold too.
   let left = toFind
+  // B-W2b-GB29 (G226): with one work order, each part's sizes are its cells: the reserve holds each size's share of the part
+  // for its cell (Reservation.workOrderSizeId), so the split by garment is data, not words. Shares by the sizes' area, the
+  // last size taking what rounding left.
+  const cellOf = answer.split && workOrders.length === 1 ? new Map((await client.workOrderSize.findMany({ where: { workOrderId: workOrders[0]!.id, salesOrderLineId: line.id }, select: { id: true, size: true }, orderBy: { id: 'asc' } })).reverse().map((cell) => [cell.size, cell.id])) : null
+  const cellsOf = (partSizes: readonly string[], take: Decimal) => {
+    if (!cellOf) return null
+    const of = partSizes.map((size) => ({ size, area: sizes.find((entry) => entry.size === size)?.area ?? ZERO }))
+    const whole = of.reduce((sum, entry) => sum.plus(entry.area), ZERO)
+    let given = ZERO
+    return of.map((entry, index) => {
+      const share = index === of.length - 1 ? take.minus(given) : whole.isZero() ? ZERO : take.times(entry.area).div(whole).toDecimalPlaces(4, Dec.ROUND_DOWN)
+      given = given.plus(share)
+      return { size: entry.size, workOrderSizeId: cellOf.get(entry.size) ?? null, area: q4(share) }
+    })
+  }
   const splitParts = answer.split
     ? answer.split.map((part) => {
         const take = Dec.min(left, new Dec(part.area))
         left = left.minus(take)
-        return { lotKey: part.lotKey, lotId: lots.find((lot) => lot.key === part.lotKey)?.lotId ?? part.lotKey, lotCode: part.lotCode, shadeLabel: part.shadeLabel, sizes: [...part.sizes], area: q4(take) }
+        return { lotKey: part.lotKey, lotId: lots.find((lot) => lot.key === part.lotKey)?.lotId ?? part.lotKey, lotCode: part.lotCode, shadeLabel: part.shadeLabel, sizes: [...part.sizes], area: q4(take), cells: cellsOf(part.sizes, take) }
       })
     : null
   const colourway = facts.colourways.get(line.colourwayId) ?? null

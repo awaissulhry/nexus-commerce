@@ -68,6 +68,8 @@ const source = output({
   issued: quantity(),
   dueDate: businessDate().nullable(),
   workOrders: z.array(z.string()),
+  /** B-W2b-GB29 (G222): a sample work order of no order line (its round in `orderId`, its number in `orderNumber`); left out: an order line. */
+  sample: output({ workOrderId: id(), workOrderNumber: z.string(), roundId: id().nullable(), roundNumber: z.string().nullable() }).optional(),
 })
 
 const orderBy = output({

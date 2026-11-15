@@ -79,3 +79,26 @@ describe('the item parameters import (B-W2b-20)', () => {
     expect(planItemParametersRow({ site: 'A1', item: 'PL-01', colour: '*', source: 'ITEM' }, { id: 'x', values: importRecordValues(stored) })).toEqual({ action: 'UNCHANGED' })
   })
 })
+
+// ---- B-W2b-GB29 (G220, B-W2b-318's and B-W2b-335's gap): the seven planning rules per item in the import ------------------
+describe('the planning rules per item in the import (B-W2b-GB29, G220)', () => {
+  it('reads the rules from the Italian headers and words', () => {
+    const header = ['Sito', 'Articolo', 'Colore', 'Dimensionamento lotto', 'Quantita lotto fisso', 'Scarto %', 'Resa %', 'Giorni prima uso', 'Livello di pianificazione']
+    const mapping = mapHeaders(itemParametersImporter.columns, header)
+    expect(mapping.issues).toEqual([])
+    const parsed = [parseRow(itemParametersImporter, mapping.columns, { rowNumber: 2, cells: ['A1', 'GIA-01', '*', 'lotto fisso', '6', '2,5', '92', 3, 'modello colore'] }, context)]
+    const [row] = planner(itemParametersImporter).plan(parsed, new Map())
+    expect(row).toMatchObject({ action: 'CREATE', after: { lotSizing: 'FIXED', fixedLotQty: '6', scrapPct: '2.5', yieldPct: '92', delayDays: 3, planLevel: 'STYLE_COLOUR' } })
+  })
+
+  it('refuses what the routes refuse, and changes only the rule cells that differ (a lot sizing change clears its lot)', () => {
+    expect(planItemParametersRow({ site: 'A1', item: 'PL-01', colour: '*', lotSizing: 'FIXED' }, null)).toEqual({ action: 'ERROR', errors: [{ column: 'fixedLotQty', message: 'FIXED lot sizing needs its lot: how much each order brings.' }] })
+    expect(planItemParametersRow({ site: 'A1', item: 'PL-01', colour: '*', yieldPct: '0' }, null)).toEqual({ action: 'ERROR', errors: [{ column: 'yieldPct', message: 'The yield is a percent above 0 and at most 100, with at most two decimals (92 or 87.5).' }] })
+    expect(planItemParametersRow({ site: 'A1', item: 'PL-01', colour: '*', lotSizing: 'PERIOD', lotPeriodDays: 14 }, null)).toMatchObject({ action: 'CREATE' })
+    const stored = { ...EMPTY_ITEM_PLANNING, lotSizing: 'FIXED' as const, fixedLotQty: '6.0000', scrapPct: '2.50' }
+    const record = { id: 'x', values: importRecordValues(stored) }
+    expect(planItemParametersRow({ site: 'A1', item: 'PL-01', colour: '*', lotSizing: 'LOT_FOR_LOT', scrapPct: '2.5' }, record)).toEqual({ action: 'UPDATE', before: { lotSizing: 'FIXED', fixedLotQty: '6.0000' }, after: { lotSizing: 'LOT_FOR_LOT' } })
+    expect(planItemParametersRow({ site: 'A1', item: 'PL-01', colour: '*', fixedLotQty: '6', scrapPct: '2.50' }, record)).toEqual({ action: 'UNCHANGED' })
+  })
+})
+// ---- end B-W2b-GB29

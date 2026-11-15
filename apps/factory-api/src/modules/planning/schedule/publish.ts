@@ -315,7 +315,8 @@ export async function publish(caller: CommandCaller, body: PublishBody, idempote
       subject: versionId,
       companyId: site.companyId,
       siteId: site.id,
-      payload: { siteId: site.id, planVersionId: versionId, number, previousId: previous?.id ?? null, coversFrom: range.coversFrom, coversTo: range.coversTo, effectiveFrom: toUtcIso(range.effectiveFrom), slots: set.length, moved: diff.moved, added: diff.added, removed: diff.removed },
+      // B-W2b-GB29 (G217): + notifyLeaders (the fan-out tells the leaders of the lines it covers; ./notices).
+      payload: { siteId: site.id, planVersionId: versionId, number, previousId: previous?.id ?? null, coversFrom: range.coversFrom, coversTo: range.coversTo, effectiveFrom: toUtcIso(range.effectiveFrom), slots: set.length, moved: diff.moved, added: diff.added, removed: diff.removed, notifyLeaders: body.notifyLeaders !== false },
     })
     return { versionId, slots: set.length, diff: { moved: diff.moved, added: diff.added, removed: diff.removed, words: diffWords(diff) } }
   })

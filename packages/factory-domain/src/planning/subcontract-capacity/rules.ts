@@ -294,3 +294,67 @@ export function kitWords(input: { readonly workshop: string; readonly shipOn: Bu
     ? { late, words: `The kit should have left on ${input.shipOn} to reach ${input.workshop} ${lead} before the work starts on ${input.start}: send it today, or start later.` }
     : { late, words: `Send the kit on ${input.shipOn}: ${lead} before the work starts at ${input.workshop} on ${input.start}.` }
 }
+
+// ---- B-W2b-GB29 (G219, B-W2b-321's gap): the plan's proposals level by the workshops' weekly capacity ----------------------
+
+/** Whether one more job fits a workshop over the job's days: every capacity line of it the job loads, booked + the job ≤ available. */
+export interface WorkshopRoom {
+  readonly partyId: string
+  /** A capacity line of the workshop is in force on the job's days for the work it does. */
+  readonly known: boolean
+  readonly fits: boolean
+  /** The fullest line's load with the job, one decimal ("112.0"); null: unknown. */
+  readonly loadPct: string | null
+}
+
+export function roomFor(rows: readonly CapacityRow[], jobs: readonly WorkshopJob[], job: WorkshopJob, closed: ReadonlySet<BusinessDate>): WorkshopRoom {
+  const days = daysBetween(job.from, job.to < job.from ? job.from : job.to)
+  let known = false
+  let fits = true
+  let fullest: Decimal | null = null
+  for (const key of keysOf(rows).filter((entry) => entry.partyId === job.partyId)) {
+    const amount = jobAmount(job, key)
+    if (!amount.gt(0)) continue
+    const available = capacityOver(rows, key, days, closed)
+    if (!available.known || !available.amount.gt(0)) continue
+    known = true
+    let booked = amount
+    for (const other of jobs) {
+      if (other.partyId !== job.partyId) continue
+      const spread = spreadJob(jobAmount(other, key), other, closed)
+      for (const day of days) booked = booked.plus(spread.get(day) ?? 0)
+    }
+    if (booked.gt(available.amount)) fits = false
+    const pct = booked.div(available.amount).times(100)
+    if (fullest === null || pct.gt(fullest)) fullest = pct
+  }
+  return { partyId: job.partyId, known, fits: known ? fits : true, loadPct: fullest === null ? null : fullest.toDecimalPlaces(1, Dec.ROUND_HALF_UP).toFixed(1) }
+}
+
+export interface LevelChoice {
+  readonly partyId: string
+  /** Another workshop than the routing's took it (the routing's had no room). */
+  readonly moved: boolean
+  /** Every workshop that may take it is over its capacity on those days: the routing's keeps it (shown, never hidden). */
+  readonly over: boolean
+  readonly words: string
+}
+
+/**
+ * Who gets a planned subcontract order (decided here): the routing's workshop while it has room on the job's days, or its
+ * capacity is not known (no capacity line: nothing to level by); else the first other workshop that may do every step sent
+ * (qualified, active, with its capacity known) and has room, by code; else the routing's workshop keeps it, over its
+ * capacity, said (the Capacity screen and the exception list show it). A plan never sends work in-house for capacity:
+ * the routing chose outside work, and the line's capacity is not checked by the run either.
+ */
+export function levelWorkshop(routing: { readonly partyId: string; readonly code: string }, others: readonly { readonly partyId: string; readonly code: string }[], room: (partyId: string) => WorkshopRoom): LevelChoice {
+  const own = room(routing.partyId)
+  if (!own.known) return { partyId: routing.partyId, moved: false, over: false, words: `${routing.code} has no weekly capacity set: not levelled.` }
+  if (own.fits) return { partyId: routing.partyId, moved: false, over: false, words: `${routing.code} has room (${own.loadPct} % with it).` }
+  for (const other of [...others].sort((a, b) => a.code.localeCompare(b.code))) {
+    if (other.partyId === routing.partyId) continue
+    const answer = room(other.partyId)
+    if (answer.known && answer.fits) return { partyId: other.partyId, moved: true, over: false, words: `${routing.code} is full on those days (${own.loadPct} % with it): sent to ${other.code} (${answer.loadPct} % with it).` }
+  }
+  return { partyId: routing.partyId, moved: false, over: true, words: `${routing.code} is over its capacity on those days (${own.loadPct} % with it) and no other approved workshop has room.` }
+}

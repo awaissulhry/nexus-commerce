@@ -49,6 +49,8 @@ const SESSIONS: Record<string, SessionContext> = {
   planner: office([grant(PLAN)]),
   // The planner who also drafts subcontract orders (a buyer's permission).
   maker: office([grant([...PLAN, 'purchasing.view', 'purchasing.subcontract.manage', 'inventory.stock.view'])]),
+  // B-W2b-GB29 (G219): the planner who runs the plan.
+  runner: office([grant([...PLAN, 'planning.run'])]),
 }
 
 type Json = Record<string, any>
@@ -262,5 +264,25 @@ describe('only approved workshops (PLN-162), kit timing (PLN-164), in-house or o
     // Made once: the garments are on an order now.
     const again = await ok('maker', 'POST', '/planning/allocation/subcontract-orders', { siteId: A.siteA1, parts: [{ slotId: slot.id }], preview: true })
     expect(again.results[0].problems[0]).toMatch(/on a subcontract order already/)
+  })
+
+  // B-W2b-GB29 (G219): a workshop booked above its weekly capacity is an exception of the plan run (WORKSHOP_OVERLOADED), cleared
+  // by the next run once it fits again.
+  it('raises WORKSHOP_OVERLOADED on a plan run while the workshop is booked above its capacity, and clears it once it fits', async () => {
+    const rowsOf = async () => (await ok('viewer', 'GET', `/planning/subcontract-capacity?siteId=${A.siteA1}`)).rows.filter((row: Json) => row.workshop.id === A.P2)
+    const before = await rowsOf()
+    for (const row of before) await ok('planner', 'PATCH', `/planning/subcontract-capacity/${row.id}`, { version: row.version, perWeek: 1 })
+    await ok('runner', 'POST', '/planning/runs', { siteId: A.siteA1 }, 201)
+    const open = await admin(`SELECT kind, "dedupeKey", "recordType", "recordId", status, facts FROM "PlanningException" WHERE "siteId" = $1 AND kind = 'WORKSHOP_OVERLOADED' AND status <> 'RESOLVED' ORDER BY "dedupeKey"`, [A.siteA1])
+    expect(open.length).toBeGreaterThan(0)
+    expect(open.every((row) => row.recordType === 'Party' && row.recordId === A.P2 && row.dedupeKey.startsWith(`WORKSHOP_OVERLOADED:${A.P2}:`))).toBe(true)
+    expect(open[0]!.facts.sentence).toMatch(/^Workshop .+ is booked \d+(\.\d+)? % in /)
+    const list = await ok('runner', 'GET', `/planning/exceptions?siteId=${A.siteA1}&kind=WORKSHOP_OVERLOADED`)
+    expect(list.exceptions.map((row: Json) => row.kind)).toContain('WORKSHOP_OVERLOADED')
+    // Room again: the next run clears it.
+    for (const row of await rowsOf()) await ok('planner', 'PATCH', `/planning/subcontract-capacity/${row.id}`, { version: row.version, perWeek: 1_000_000 })
+    await ok('runner', 'POST', '/planning/runs', { siteId: A.siteA1 }, 201)
+    const left = await admin(`SELECT id FROM "PlanningException" WHERE "siteId" = $1 AND kind = 'WORKSHOP_OVERLOADED' AND status <> 'RESOLVED'`, [A.siteA1])
+    expect(left).toEqual([])
   })
 })

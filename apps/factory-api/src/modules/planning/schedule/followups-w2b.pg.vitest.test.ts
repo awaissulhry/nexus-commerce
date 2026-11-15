@@ -102,6 +102,9 @@ const lineOf = (plan: Json, itemId: string, itemColourId: string | null): Json =
 }
 const board = (session = 'planner') => ok(session, 'GET', `/planning/schedule?siteId=${siteA1}&from=2026-11-16&to=2026-11-20`)
 /** The earliest start of a work order's bars on the working plan, as the plant's day (null: not on the board). */
+/** B-W2b-GB29 (G218): the days the work order's operations start on the working plan (a material is needed on one of them). */
+const operationDays = async (workOrder: string): Promise<string[]> =>
+  (await admin<{ start: Date }>(`SELECT min(s."startAt") AS start FROM "ScheduleSlot" s JOIN "WorkOrderOperation" o ON o.id = s."workOrderOperationId" WHERE s."tenantId" = $1 AND s."planKind" = 'WORKING' AND s."workOrderId" = $2 AND o."routingSeq" IS NOT NULL GROUP BY o.id`, [T, workOrder])).map((row) => businessDate(row.start, 'Europe/Rome'))
 const scheduledStart = async (workOrder: string): Promise<string | null> => {
   const [row] = await admin<{ start: Date | null }>(`SELECT min("startAt") AS start FROM "ScheduleSlot" WHERE "tenantId" = $1 AND "planKind" = 'WORKING' AND "workOrderId" = $2`, [T, workOrder])
   return row?.start ? businessDate(row.start, 'Europe/Rome') : null
@@ -174,23 +177,30 @@ describe('Z7:02, Z7:04 need dates from the scheduled start; readiness per materi
     expect(start! < '2026-12-04').toBe(true)
     const { readiness } = await ok('viewer', 'GET', `/planning/work-orders/${wo1}/readiness`)
     expect(readiness.materials.length).toBeGreaterThan(0)
+    // B-W2b-GB29 (G218): each material on the start of the first operation that uses it (its BOM line's step), else on the
+    // work order's start: never before the start, never on a day no operation of it starts.
+    const days = new Set([start!, ...(await operationDays(wo1))])
     for (const material of readiness.materials as Json[]) {
-      expect(material.neededOn).toBe(start)
+      expect(days.has(material.neededOn), `${material.label} needed on ${material.neededOn}`).toBe(true)
+      expect(material.neededOn >= start!).toBe(true)
       expect(Array.isArray(material.arrivals)).toBe(true)
       for (const arrival of material.arrivals as Json[]) expect(['IN_TIME', 'LATE', 'OVERDUE']).toContain(arrival.state)
     }
     const { rows } = await ok('viewer', 'GET', `/planning/shortages?siteId=${siteA1}`)
-    for (const row of (rows as Json[]).filter((entry) => entry.workOrder.id === wo1)) expect(row.neededBy).toBe(start)
+    for (const row of (rows as Json[]).filter((entry) => entry.workOrder.id === wo1)) expect(days.has(row.neededBy)).toBe(true) // B-W2b-GB29 (G218)
     await runPlan()
     const { demands } = await ok('viewer', 'GET', `/planning/pegging?siteId=${siteA1}&workOrderId=${wo1}`)
     expect(demands.length).toBeGreaterThan(0)
-    expect(new Set((demands as Json[]).filter((demand) => demand.workOrder?.id === wo1).map((demand) => demand.demandDate))).toEqual(new Set([start]))
+    // B-W2b-GB29 (G218): the pegging needs each material on one of its operations' days (the readiness's days).
+    const pegDays = new Set((demands as Json[]).filter((demand) => demand.workOrder?.id === wo1).map((demand) => demand.demandDate as string))
+    expect([...pegDays].every((day) => days.has(day))).toBe(true)
+    expect(pegDays).toEqual(new Set((readiness.materials as Json[]).map((material) => material.neededOn)))
     // The board's work order and its popover carry the same materials (per component, with arrivals).
     const answer = await board('viewer')
     const onBoard = (answer.workOrders as Json[]).find((row) => row.id === wo1)!
     expect(onBoard.readiness.materials.map((material: Json) => [material.label, material.word, material.neededOn])).toEqual(readiness.materials.map((material: Json) => [material.label, material.word, material.neededOn]))
     const popover = await ok('viewer', 'GET', `/planning/schedule/work-orders/${wo1}`)
-    expect(popover.workOrder.readiness.materials[0]).toMatchObject({ neededOn: start, arrivals: readiness.materials[0].arrivals })
+    expect(popover.workOrder.readiness.materials[0]).toMatchObject({ neededOn: readiness.materials[0].neededOn, arrivals: readiness.materials[0].arrivals })
   })
 })
 
@@ -349,3 +359,27 @@ describe('Z7:06 a lane with no calendar at all', () => {
     expect(Number((capacity.lanes as Json[]).find((lane) => lane.code === 'CUT')!.cells[0].workingMinutes)).toBeGreaterThan(0)
   })
 })
+
+// ---- B-W2b-GB29 (G220, B-W2b-318's and B-W2b-335's gap): the bulk write takes the seven planning rules per item -------------
+describe('the bulk write of item parameters takes the planning rules per item (B-W2b-GB29, G220)', () => {
+  it('sets lot sizing, the days before use, scrap and yield of several rows in one command; a broken rule refuses them all; a plan level asks the strategy right', async () => {
+    const rows = await ok('planner', 'GET', `/planning/item-parameters?siteId=${siteA1}&configured=true&limit=50`)
+    const all = (rows.items as Json[]).flatMap((entry) => entry.parameters as Json[])
+    const protector = all.find((row) => row.method === 'REORDER_POINT')!
+    const lining = all.find((row) => row.method === 'MIN_MAX')!
+    // FIXED without its lot in row 2: nothing is saved, the problem is named at its row.
+    const bad = await refused('planner', 'POST', '/planning/item-parameters/bulk', { siteId: siteA1, changes: [{ itemPlanningId: protector.id, version: protector.version, lotSizing: 'PERIOD', lotPeriodDays: 14 }, { itemPlanningId: lining.id, version: lining.version, lotSizing: 'FIXED' }] }, 400)
+    expect((bad.issues as Json[]).map((issue) => issue.path)).toEqual(['body/changes/1/fixedLotQty'])
+    const rule = async (id: string) => (await admin(`SELECT "lotSizing"::text AS "lotSizing", "lotPeriodDays", "delayDays", "scrapPct"::text AS "scrapPct", "yieldPct"::text AS "yieldPct", version FROM "ItemPlanning" WHERE id = $1`, [id]))[0]!
+    expect(await rule(protector.id)).toMatchObject({ version: protector.version })
+    const saved = await ok('planner', 'POST', '/planning/item-parameters/bulk', { siteId: siteA1, changes: [{ itemPlanningId: protector.id, version: protector.version, lotSizing: 'PERIOD', lotPeriodDays: 14, delayDays: 2 }, { itemPlanningId: lining.id, version: lining.version, scrapPct: '3', yieldPct: '95' }] })
+    expect(saved.changes.map((entry: Json) => entry.kind)).toEqual(['EDITED', 'EDITED'])
+    expect(await rule(protector.id)).toMatchObject({ lotSizing: 'PERIOD', lotPeriodDays: 14, delayDays: 2, version: protector.version + 1 })
+    expect(await rule(lining.id)).toMatchObject({ scrapPct: '3.00', yieldPct: '95.00', version: lining.version + 1 })
+    // The clock is fixed in this file: every audit row of the protector, one of them this change with its rules.
+    expect((await admin(`SELECT after FROM "AuditLog" WHERE "tenantId" = $1 AND action = 'planning.bulkItemParameters' AND "recordId" = $2`, [T, protector.id])).map((row) => row.after)).toContainEqual(expect.objectContaining({ lotSizing: 'PERIOD', lotPeriodDays: 14, delayDays: 2 }))
+    // A plan level is how a garment is planned: the strategy right too (the planner here has none), as a single change.
+    await refused('planner', 'POST', '/planning/item-parameters/bulk', { siteId: siteA1, changes: [{ itemPlanningId: protector.id, version: protector.version + 1, planLevel: 'SKU' }] }, 403)
+  })
+})
+// ---- end B-W2b-GB29

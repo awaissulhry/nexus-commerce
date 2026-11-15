@@ -15,6 +15,8 @@ export interface ExtraDraft {
   operationId: string | null
   reasonCode: ExtraReasonCode | null
   note: string
+  /** B-W2b-GB29 (G215): the planned garments as typed ('' = left out: off the plan). */
+  planned: string
 }
 
 export interface ExtraDialogModel {
@@ -49,7 +51,17 @@ export function extraHeld(dialog: ExtraDialogModel): string | null {
   if (!draft.operationId) return 'extra.held.operation'
   if (!draft.reasonCode) return 'extra.held.reason'
   const tile = choices?.reasons.find((reason) => reason.code === draft.reasonCode)
-  return tile?.needsNote && draft.note.trim().length < EXTRA_NOTE.min ? 'extra.held.note' : null
+  if (tile?.needsNote && draft.note.trim().length < EXTRA_NOTE.min) return 'extra.held.note'
+  // B-W2b-GB29 (G215): a planned number is a whole number above 0 (the API checks it against the work order's garments).
+  return draft.planned.trim() !== '' && plannedOf(draft.planned) === null ? 'extra.held.planned' : null
+}
+
+/** B-W2b-GB29 (G215): the planned garments typed, or null (empty or not a whole number above 0). */
+export function plannedOf(value: string): number | null {
+  const text = value.trim()
+  if (!/^\d{1,6}$/.test(text)) return null
+  const number = Number(text)
+  return number >= 1 ? number : null
 }
 
 /** The list on the Operations tab, and the Add pop-up: its reads when it opens, the add under the dialog's own Idempotency-Key. */
@@ -76,7 +88,7 @@ export function useExtra(api: ApiClient, workOrder: WorkOrder | null, permitted:
     onOpen: () => {
       if (!id) return
       key.current = newIdempotencyKey()
-      setDialog({ choices: null, draft: { operationId: null, reasonCode: null, note: '' }, busy: false, problem: null })
+      setDialog({ choices: null, draft: { operationId: null, reasonCode: null, note: '', planned: '' }, busy: false, problem: null })
       getExtraChoices(api, id)
         .then((choices) => setDialog((current) => (current ? { ...current, choices } : current)))
         .catch(() => setDialog((current) => (current ? { ...current, problem: phrase('extra.readFailed') } : current)))
@@ -88,7 +100,8 @@ export function useExtra(api: ApiClient, workOrder: WorkOrder | null, permitted:
       const { draft } = dialog
       const note = draft.note.trim()
       setDialog({ ...dialog, busy: true, problem: null })
-      addExtra(api, id, { operationId: draft.operationId!, reasonCode: draft.reasonCode!, ...(note.length >= EXTRA_NOTE.min ? { note } : {}) }, key.current)
+      const planned = plannedOf(draft.planned) // B-W2b-GB29 (G215)
+      addExtra(api, id, { operationId: draft.operationId!, reasonCode: draft.reasonCode!, ...(note.length >= EXTRA_NOTE.min ? { note } : {}), ...(planned !== null ? { plannedQuantity: planned } : {}) }, key.current)
         .then((answer) => {
           setDialog(null)
           onAdded(answer.pays === 'OFF_STANDARD' ? phrase('extra.addedNoRate', { seq: answer.seq ?? 0, name: answer.operation.name }) : phrase('extra.added', { seq: answer.seq ?? 0, name: answer.operation.name }))

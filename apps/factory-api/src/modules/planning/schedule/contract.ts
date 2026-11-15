@@ -463,6 +463,8 @@ export const publishContract = defineContract({
     /** The working plan's version the dialog reviewed (409 when it moved since). */
     version: z.number().int().min(1),
     note: z.string().max(PUBLISH_LIMITS.note).nullable().optional(),
+    /** B-W2b-GB29 (G217): "Notify line leaders": the leaders of the lines the version covers get it in their bell; left out: yes. */
+    notifyLeaders: z.boolean().optional(),
   }),
   response: { 201: output({ version: versionHeader, slots: z.number().int(), diff: diffView, replayed: z.boolean() }) },
 })

@@ -168,6 +168,10 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   ReworkOrder: '/production/scrap?open=rework:[id]',
   // B-W2b-58: a help call opens in its DetailModal on Production › Help calls (SCR-142; the bell's call alerts).
   HelpCall: '/production/calls?open=[id]',
+  // B-W2b-GB29 (G217): a published schedule version (the line leaders' bell) opens the dispatch list it changed.
+  PlanVersion: '/production/dispatch',
+  // B-W2b-GB29 (G221): a pre-production gate (its owner's bell) opens in its dialog on Time & action.
+  OrderGate: '/planning/milestones?open=gate:[id]',
   // B-W2b-57: a correction request, a dispute and an off-standard block open in their DetailModal on Labour & corrections.
   ScanCorrectionRequest: '/production/labour?open=CORRECTION:[id]',
   LabourDispute: '/production/labour?open=DISPUTE:[id]',

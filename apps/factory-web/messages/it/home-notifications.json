@@ -249,6 +249,11 @@
       "calls": {
         "raised": "Chiamata di aiuto dalla postazione {record}: {title}"
       },
+      "planning": {
+        "schedulePublished": "Nuovo programma {record} per la linea {title}: controlla la lista di lavoro",
+        "gatePassed": "Un gate di cui sei responsabile sull’ordine {record} è stato segnato come fatto",
+        "gateStartedBefore": "{actor} ha avviato l’ordine {record} prima di un gate di cui sei responsabile"
+      },
       "safety": {
         "incidentReported": "Nuova segnalazione {record}: {title}",
         "inailDue": "Comunicazione INAIL per {record} da inviare entro {title}",

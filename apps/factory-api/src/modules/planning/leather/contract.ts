@@ -56,7 +56,8 @@ const needRow = output({
   heldLots: z.array(output({ lotCode: z.string(), shadeLabel: z.string().nullable() })),
   feasibility: z.enum(FEASIBILITY),
   best: lotRef.nullable(),
-  split: z.array(output({ lotKey: z.string(), lotId: id(), lotCode: z.string(), shadeLabel: z.string().nullable(), sizes: z.array(z.string()), area: quantity() })).nullable(),
+  // B-W2b-GB29 (G226): `cells` — with one work order, each size's share of the part and its cell (null: no cell of that size); null: no work order yet (the order line is reserved).
+  split: z.array(output({ lotKey: z.string(), lotId: id(), lotCode: z.string(), shadeLabel: z.string().nullable(), sizes: z.array(z.string()), area: quantity(), cells: z.array(output({ size: z.string(), workOrderSizeId: id().nullable(), area: quantity() })).nullable() })).nullable(),
   buy: output({ area: quantity(), hides: z.number().int().nullable(), lotCode: z.string().nullable(), shadeLabel: z.string().nullable() }).nullable(),
   /** The hides the best lot would reserve (FITS), largest first until the need. */
   proposal: output({ hideIds: z.array(id()), count: z.number().int(), area: quantity() }).nullable(),

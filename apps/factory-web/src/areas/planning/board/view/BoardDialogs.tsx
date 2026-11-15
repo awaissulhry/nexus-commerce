@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { Banner, Field, KeyValue, SummaryTable } from '@nexus/ui/components'
-import { Button, Kbd, SegmentedControl, Skeleton, Spinner, Tag } from '@nexus/ui/primitives'
+import { Button, Kbd, SegmentedControl, Skeleton, Spinner, Tag, Toggle } from '@nexus/ui/primitives' // B-W2b-GB29 (G217): + Toggle
 import { DateField, Modal, Textarea } from '../../../../lib/i18n/ds-parts'
 import { INTL_LOCALE } from '../../../../lib/i18n/locales'
 import type { Board, PlaceByDueDate, PublishPreview } from '../api'
@@ -370,7 +370,12 @@ function PublishDialog({ dialog, board, actions, words, onClose }: { dialog: Ext
               </ul>
               <h3 className="fw-pb-h3">{t('publish.what')}</h3>
               <p>{t('publish.whatBody', { version: preview!.next, start: whenWords(preview!.range.effectiveFrom, words) })}</p>
-              <p className="fw-pb-hint">{t('publish.notify')}</p>
+              {/* B-W2b-GB29 (G217): "Notify line leaders" — the leaders of the lines the version covers get it in their bell. */}
+              <label className="fw-pb-notify">
+                <Toggle checked={dialog.notifyLeaders !== false} onChange={(next) => actions?.onPublishNotify?.(next)} aria-label={t('publish.notifyLabel')} disabled={Boolean(dialog.busy || dialog.done)} />
+                <span>{t('publish.notifyLabel')}</span>
+              </label>
+              <p className="fw-pb-hint">{t(dialog.notifyLeaders !== false ? 'publish.notify' : 'publish.notifyOff')}</p>
             </>
           )}
         </Reading>
