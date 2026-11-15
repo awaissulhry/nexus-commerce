@@ -3,7 +3,7 @@ import { placeholderSyntaxOk, placeholdersIn } from '@nexus/factory-domain/templ
 import { TEMPLATE_REFUSALS } from '@nexus/factory-domain/templates/refusals'
 import { isApiError, issuePath } from '../../../../lib/api/errors'
 import { problemKey } from '../../shared/model'
-import type { ColumnKey, DocumentKind, DocumentTemplate, DocumentTemplateKind, TemplateStatus } from '../doc-templates/api'
+import type { ColumnKey, DocumentKind, DocumentTemplate, DocumentTemplateKind, MandatoryPart, TemplateStatus } from '../doc-templates/api'
 import type { EmailTemplate } from '../mail-templates/api'
 
 /**
@@ -90,6 +90,15 @@ export function layoutColumns(kind: DocumentTemplateKind, info: Pick<DocumentKin
   const optional = new Set<string>(info?.optionalColumns ?? [])
   return order.filter((key) => mandatory.has(key) || optional.has(key)).map((key) => ({ key, mandatory: mandatory.has(key) }))
 }
+
+/**
+ * B-W2b-F60: the parts a kind prints in its own way, said in its own words (the proforma's "not a tax document", the commercial
+ * invoice's EORI, reason and destination); every other part keeps the words every kind shares.
+ */
+const PART_WHY_OF: Partial<Record<DocumentTemplateKind, readonly MandatoryPart[]>> = { PROFORMA: ['FACTS', 'NOTICES'], COMMERCIAL_INVOICE: ['FACTS', 'NOTICES'] }
+
+/** The words that say why a kind always prints a part: `tpl.partWhyOf.<kind>.<part>` when the kind has its own, else `tpl.partWhy.<part>`. */
+export const partWhyKey = (kind: DocumentTemplateKind, part: MandatoryPart): string => (PART_WHY_OF[kind]?.includes(part) ? `tpl.partWhyOf.${kind}.${part}` : `tpl.partWhy.${part}`)
 
 /** The optional columns shown after one is ticked or unticked, kept in the layout's order. */
 export function toggleColumn(kind: DocumentTemplateKind, shown: readonly string[], key: string, on: boolean): string[] {

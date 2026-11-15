@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { DOCUMENT_LAYOUTS, MANDATORY_COLUMNS, optionalColumnsOf } from '@nexus/factory-domain/documents/layouts'
-import { DOCUMENT_PLACEHOLDERS, mandatoryPartsOf } from '@nexus/factory-domain/templates/documents'
+import { DOCUMENT_PLACEHOLDERS, DOCUMENT_TEMPLATE_KINDS, mandatoryPartsOf } from '@nexus/factory-domain/templates/documents'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import { at, COMPANIES, inShell } from '../../shared/fixtures'
 import type { DocumentKind, DocumentSlot, DocumentTemplate, DocumentTemplateKind, DocumentTemplatesAnswer, TemplateLanguage } from './api'
@@ -48,15 +48,31 @@ export const QUOTE_IT_V1 = docTemplate(1, { revision: 1, status: 'RETIRED', head
 export const QUOTE_IT_V2 = docTemplate(2, { revision: 2, status: 'ACTIVE', header: QUOTE_HEADER, terms: QUOTE_TERMS, fieldsShown: ['code', 'uom', 'unitPrice'], layout: 'QUOTE/2+t2', publishedAt: at(14, 11), publishedBy: MARCO, updatedAt: at(14, 11), version: 2 })
 export const QUOTE_IT_V3 = docTemplate(3, { revision: 3, status: 'DRAFT', header: QUOTE_HEADER, terms: QUOTE_TERMS, footer: 'Officina Demo · offerta di prova', fieldsShown: ['code', 'uom', 'unitPrice', 'discount'], layout: 'QUOTE/2+t3', updatedAt: at(27, 15, 20), createdBy: LUCIA, version: 4 })
 export const PO_IT_V1 = docTemplate(4, { kind: 'PURCHASE_ORDER', revision: 1, status: 'ACTIVE', header: 'Ordine {{order.number}} — consegna entro {{order.deliveryDate}}.', fieldsShown: ['code', 'uom', 'unitPrice'], layout: 'PURCHASE_ORDER/1+t1', publishedAt: at(20, 9), publishedBy: LUCIA, updatedAt: at(20, 9), version: 2 })
-export const INVOICE_EN_V1 = docTemplate(5, { kind: 'INVOICE_COPY', language: 'en', revision: 1, status: 'DRAFT', terms: 'Courtesy copy: the invoice is the one sent through SDI. Test words.', fieldsShown: ['code', 'uom', 'discount'], layout: 'INVOICE_COPY/1+t1', updatedAt: at(28, 10), version: 1 })
+export const INVOICE_EN_V1 = docTemplate(5, { kind: 'INVOICE_COPY', language: 'en', revision: 1, status: 'DRAFT', terms: 'Courtesy copy: the invoice is the one sent through SDI. Test words.', fieldsShown: ['code', 'uom', 'discount'], layout: 'INVOICE_COPY/2+t1', updatedAt: at(28, 10), version: 1 })
 
-export const DEMO_TEMPLATES: DocumentTemplate[] = [QUOTE_IT_V3, QUOTE_IT_V2, QUOTE_IT_V1, PO_IT_V1, INVOICE_EN_V1]
+// B-W2b-F60: the proforma and the commercial invoice take words too: an export company's commercial invoice in English in use,
+// a first draft of the Italian proforma.
+export const COMMERCIAL_EN_V1 = docTemplate(6, {
+  kind: 'COMMERCIAL_INVOICE',
+  language: 'en',
+  revision: 1,
+  status: 'ACTIVE',
+  header: 'Commercial invoice {{commercialInvoice.number}}: goods for {{commercialInvoice.destination}}. Made-up words.',
+  terms: 'Delivery {{document.deliveryTerms}}. Test words, to be checked.',
+  fieldsShown: ['code', 'uom'],
+  layout: 'COMMERCIAL_INVOICE/1+t1',
+  publishedAt: at(22, 10),
+  publishedBy: MARCO,
+  updatedAt: at(22, 10),
+  version: 2,
+})
+export const PROFORMA_IT_V1 = docTemplate(7, { kind: 'PROFORMA', revision: 1, status: 'DRAFT', header: 'Fattura proforma {{proforma.number}} per {{party.name}}.', fieldsShown: ['code'], layout: 'PROFORMA/1+t1', updatedAt: at(28, 16), version: 1 })
 
-const KINDS: DocumentTemplateKind[] = ['QUOTE', 'ORDER_CONFIRMATION', 'PURCHASE_ORDER', 'DDT', 'INVOICE_COPY', 'PACKING_LIST']
+export const DEMO_TEMPLATES: DocumentTemplate[] = [QUOTE_IT_V3, QUOTE_IT_V2, QUOTE_IT_V1, PO_IT_V1, INVOICE_EN_V1, PROFORMA_IT_V1, COMMERCIAL_EN_V1]
 
 /** The slots of a set of versions, as `GET /templates/documents` answers them (kind by kind, Italian then English). */
 export function slotsOf(templates: readonly DocumentTemplate[]): DocumentSlot[] {
-  return KINDS.flatMap((kind) =>
+  return DOCUMENT_TEMPLATE_KINDS.flatMap((kind) =>
     (['it', 'en'] as TemplateLanguage[]).map((language) => {
       const series = templates.filter((template) => template.kind === kind && template.language === language)
       const active = series.find((template) => template.status === 'ACTIVE') ?? null
@@ -91,8 +107,8 @@ export const kindOf = (kind: DocumentTemplateKind): DocumentKind => ({
 /**
  * SCR-630 — Admin › Documents & numbering › Document templates (B-W2b-432; design admin.documents/sec:doc-templates,
  * PLT-231, a W2b section of a W0 page) with made-up versions of the Demo company: the quote in Italian in use (version 2)
- * with a draft (3), the purchase order in use, the invoice copy in English as a first draft, everything else on the fixed
- * layout; ticked rows with their bulk actions (each says its reach), the confirm, the notice after a partial run, a company
+ * with a draft (3), the purchase order in use, the invoice copy in English as a first draft, the commercial invoice in English
+ * in use and the Italian proforma as a first draft (B-W2b-F60), everything else on the fixed layout; ticked rows with their bulk actions (each says its reach), the confirm, the notice after a partial run, a company
  * whose legal data is incomplete, read only (documents.view without documents.templates.manage), live updates waiting,
  * reading and failed. Without documents.view the Documents and E-mails lists are absent (the page opens on Numbers).
  */

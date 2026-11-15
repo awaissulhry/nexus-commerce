@@ -3,7 +3,7 @@ import { FACTORY_PERMISSIONS } from '../auth/permissions/catalogue'
 import { SYSTEM_ROLE_TEMPLATES } from '../auth/roles/templates'
 import { composeDocument } from '../documents/compose'
 import { attachLayoutTemplates, DOCUMENT_LAYOUTS, layoutFor, layoutTemplateOf, MANDATORY_COLUMNS, optionalColumnsOf, type LayoutTemplate } from '../documents/layouts'
-import type { CompanyLegal } from '../documents/model'
+import { DOCUMENT_TYPES, type CompanyLegal } from '../documents/model'
 import { sampleDocument } from '../documents/sample'
 import { EVENT_CATALOGUE } from '../events/catalogue'
 import { statusMailOf, statusMailValuesOf } from '../sales/service/mail'
@@ -72,7 +72,9 @@ describe("the partner contact's language (PLT-131)", () => {
 
 describe('document templates (PLT-231)', () => {
   it('names the kinds of the code that take a template, and never lets a mandatory column be a choice', () => {
-    expect(DOCUMENT_TEMPLATE_KINDS).toEqual(['QUOTE', 'ORDER_CONFIRMATION', 'PURCHASE_ORDER', 'DDT', 'INVOICE_COPY', 'PACKING_LIST'])
+    // B-W2b-F60: every document the code prints, the proforma and the commercial invoice too, each once.
+    expect(DOCUMENT_TEMPLATE_KINDS).toEqual(['QUOTE', 'ORDER_CONFIRMATION', 'PURCHASE_ORDER', 'DDT', 'INVOICE_COPY', 'PACKING_LIST', 'PROFORMA', 'COMMERCIAL_INVOICE'])
+    expect([...DOCUMENT_TEMPLATE_KINDS].sort()).toEqual([...DOCUMENT_TYPES].sort())
     for (const kind of DOCUMENT_TEMPLATE_KINDS) {
       const keys = DOCUMENT_LAYOUTS[kind].columns.map((entry) => entry.key)
       for (const key of MANDATORY_COLUMNS[kind]) expect(keys, `${kind} ${key}`).toContain(key)
@@ -81,6 +83,12 @@ describe('document templates (PLT-231)', () => {
     }
     expect(mandatoryPartsOf('DDT')).toContain('SIGNATURES')
     expect(mandatoryPartsOf('DDT')).not.toContain('TOTALS')
+    // B-W2b-F60: the kinds that always print fixed notices say so.
+    expect(DOCUMENT_TEMPLATE_KINDS.filter((kind) => mandatoryPartsOf(kind).includes('NOTICES'))).toEqual(['PURCHASE_ORDER', 'INVOICE_COPY', 'PROFORMA', 'COMMERCIAL_INVOICE'])
+    for (const kind of DOCUMENT_TEMPLATE_KINDS) {
+      const plain = composeDocument(sampleDocument(kind, 'it', COMPANY, '2026-11-14'))
+      expect(mandatoryPartsOf(kind).includes('NOTICES'), kind).toBe(plain.notices.length > 0)
+    }
   })
 
   it('refuses a mandatory column, a column the layout lacks, an unknown placeholder, too long words and another language', () => {
@@ -123,11 +131,46 @@ describe('document templates (PLT-231)', () => {
     expect(composeDocument(sampleDocument('DDT', 'it', company, '2026-11-14')).layout).toBe('DDT/1')
   })
 
+  it('prints the proforma and the commercial invoice with their words, and keeps every line of their own (B-W2b-F60)', () => {
+    const words = (type: 'PROFORMA' | 'COMMERCIAL_INVOICE', language: 'it' | 'en', header: string) =>
+      template({ type, language, revision: 1, header, terms: 'Made-up terms.', footer: null, fieldsShown: [] })
+    const company = attachLayoutTemplates({ ...COMPANY }, [
+      words('PROFORMA', 'it', 'Proforma {{proforma.number}} del {{proforma.date}} per {{party.name}}.'),
+      words('COMMERCIAL_INVOICE', 'en', 'Invoice {{commercialInvoice.number}}, goods for {{commercialInvoice.destination}}.'),
+    ])
+    for (const [type, language, intro, columns] of [
+      ['PROFORMA', 'it', 'Proforma SAMPLE del 14/11/2026 per Example Customer S.r.l..', ['description', 'quantity', 'unitPrice', 'vat', 'amount']],
+      ['COMMERCIAL_INVOICE', 'en', 'Invoice SAMPLE, goods for Switzerland.', ['description', 'quantity', 'unitPrice', 'amount']],
+    ] as const) {
+      const plain = composeDocument(sampleDocument(type, language, COMPANY, '2026-11-14'))
+      const printed = composeDocument(sampleDocument(type, language, company, '2026-11-14'))
+      expect(printed.layout, type).toBe(`${plain.layout}+t1`)
+      expect(printed.intro, type).toBe(intro)
+      expect(printed.terms, type).toBe('Made-up terms.')
+      // No footer of its own: the company's.
+      expect(printed.footer, type).toEqual(plain.footer)
+      expect(printed.table.columns.map((entry) => entry.key), type).toEqual(columns)
+      // What the law or customs needs stays: the legal lines, the facts (a commercial invoice's EORI, reason and destination),
+      // the notices (a proforma is no tax document; customs values and the non-taxable export), the totals.
+      expect(printed.issuer, type).toEqual(plain.issuer)
+      expect(printed.facts, type).toEqual(plain.facts)
+      expect(printed.notices, type).toEqual(plain.notices)
+      expect(printed.notices.length, type).toBe(2)
+      expect(printed.totals, type).toEqual(plain.totals)
+    }
+    // Their other language prints the code's layout.
+    expect(composeDocument(sampleDocument('PROFORMA', 'en', company, '2026-11-14')).layout).toBe('PROFORMA/1')
+  })
+
   it("offers each kind's placeholders, and fills every one of them from a sample document", () => {
     for (const kind of DOCUMENT_TEMPLATE_KINDS) {
       const values = documentPlaceholderValues(sampleDocument(kind, 'en', COMPANY, '2026-11-14'))
       expect(Object.keys(values).sort(), kind).toEqual([...DOCUMENT_PLACEHOLDERS[kind]].sort())
     }
+    // B-W2b-F60: a prepayment proforma's due day; the commercial invoice's destination in the document's language.
+    const prepayment = { ...sampleDocument('PROFORMA', 'it', COMPANY, '2026-11-14'), proforma: { purpose: 'PREPAYMENT' as const, dueDate: '2026-11-30' } }
+    expect(documentPlaceholderValues(prepayment)).toMatchObject({ 'proforma.number': 'SAMPLE', 'proforma.date': '14/11/2026', 'proforma.dueDate': '30/11/2026' })
+    expect(documentPlaceholderValues(sampleDocument('COMMERCIAL_INVOICE', 'it', COMPANY, '2026-11-14'))['commercialInvoice.destination']).toBe('Svizzera')
   })
 })
 

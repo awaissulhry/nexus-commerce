@@ -19,7 +19,9 @@
       "PURCHASE_ORDER": "Ordine fornitore",
       "DDT": "DDT (documento di trasporto)",
       "INVOICE_COPY": "Fattura (copia di cortesia)",
-      "PACKING_LIST": "Packing list"
+      "PACKING_LIST": "Packing list",
+      "PROFORMA": "Fattura proforma",
+      "COMMERCIAL_INVOICE": "Fattura commerciale (uso doganale)"
     },
     "column": {
       "code": "Codice",
@@ -51,6 +53,16 @@
       "TOTALS": "Calcolati dalle righe; nessun modello li cambia.",
       "NOTICES": "Le parole che la legge o il documento richiedono, come l'avviso della copia di cortesia.",
       "SIGNATURES": "Gli spazi del conducente, del vettore e del destinatario."
+    },
+    "partWhyOf": {
+      "PROFORMA": {
+        "FACTS": "Perché è emessa (dogana, campionatura o richiesta di pagamento), pagamento e resa, colli, pesi e origine.",
+        "NOTICES": "Che non è un documento fiscale, e l'avviso del suo scopo: valori per la dogana, senza valore commerciale o richiesta di pagamento."
+      },
+      "COMMERCIAL_INVOICE": {
+        "FACTS": "L'EORI dell'esportatore, il motivo dell'esportazione, il paese di destinazione, colli, pesi e origine.",
+        "NOTICES": "Che i valori sono per la dogana; un'esportazione fuori dall'UE dice anche che è non imponibile (art. 8 DPR 633/1972)."
+      }
     },
     "event": {
       "service": {

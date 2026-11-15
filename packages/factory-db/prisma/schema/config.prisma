@@ -234,7 +234,8 @@ enum TemplateStatus {
   RETIRED
 }
 
-/// What a document template is for: the documents of factory-domain documents/model.ts DOCUMENT_TYPES, value for value.
+/// What a document template is for: the documents of factory-domain documents/model.ts DOCUMENT_TYPES, value for value
+/// (src/domain-mirrors.ts fails the typecheck when they part).
 enum DocumentTemplateKind {
   QUOTE
   ORDER_CONFIRMATION
@@ -242,6 +243,9 @@ enum DocumentTemplateKind {
   DDT
   INVOICE_COPY
   PACKING_LIST
+  /// B-W2b-F60: the proforma (B-W2b-391) and the commercial invoice (B-W2b-409) take a company's words too.
+  PROFORMA
+  COMMERCIAL_INVOICE
 }
 
 /// One version of a document template (PLT-231; design admin.documents "Document templates", the builder page "Template:
