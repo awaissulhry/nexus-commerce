@@ -2,6 +2,8 @@ import { isApiError } from '../../../lib/api/errors'
 import type { Locale } from '../../../lib/i18n/locales'
 import { moneyText, pctText } from '../costing/model'
 import { SALES_ORDER_STATUSES, WATERFALL_REASONS, type CustomerGroup, type MarginsQuery, type OrderMargin, type OrderMarginRow, type StyleGroup, type WaterfallReason } from './api'
+// B-W2b-416: the address's floor filter (the tile "Orders below the floor").
+import { floorFilterOf, type FloorFilter } from './floor/model'
 
 /**
  * Finance › Costing › Margins (SCR-155), the sales order's Margin tab and the orders list's Margin % column: the pure
@@ -48,6 +50,8 @@ export interface MarginsAddress {
   readonly party: string | null
   readonly style: string | null
   readonly q: string | null
+  /** B-W2b-416: only the orders below their margin floor. */
+  readonly floor: FloorFilter | null
   /** The order whose profitability is open (pop:order). */
   readonly open: string | null
 }
@@ -65,12 +69,12 @@ export function addressOf(params: { get(name: string): string | null } | null): 
     return value && UUID.test(value) ? value : null
   }
   const q = params?.get('q')?.trim() ?? ''
-  return { from: day('from'), to: day('to'), party: id('party'), style: id('style'), q: q.length > 0 ? q.slice(0, 100) : null, open: id('open') }
+  return { from: day('from'), to: day('to'), party: id('party'), style: id('style'), q: q.length > 0 ? q.slice(0, 100) : null, floor: floorFilterOf(params?.get('floor')), open: id('open') }
 }
 
 function queryString(address: MarginsAddress): string {
   const query = new URLSearchParams()
-  for (const name of ['from', 'to', 'party', 'style', 'q', 'open'] as const) if (address[name]) query.set(name, address[name]!)
+  for (const name of ['from', 'to', 'party', 'style', 'q', 'floor', 'open'] as const) if (address[name]) query.set(name, address[name]!)
   const qs = query.toString()
   return qs ? `?${qs}` : ''
 }
@@ -84,7 +88,7 @@ export const orderProfitabilityHref = (prefix: string, orderId: string): string 
 export const workOrderCostHref = (prefix: string, workOrderId: string | null): string => (workOrderId ? `${prefix}/finance/costing?open=${encodeURIComponent(workOrderId)}` : `${prefix}/finance/costing`)
 
 /** The API's query for the address (every order but CANCELLED, the API's default). */
-export const marginsQueryOf = (address: MarginsAddress, companyId: string | null, cursor: string | null = null): MarginsQuery => ({ companyId, partyId: address.party, styleId: address.style, from: address.from, to: address.to, q: address.q, cursor, limit: 50 })
+export const marginsQueryOf = (address: MarginsAddress, companyId: string | null, cursor: string | null = null): MarginsQuery => ({ companyId, partyId: address.party, styleId: address.style, from: address.from, to: address.to, q: address.q, floor: address.floor, cursor, limit: 50 })
 
 // ---- words and tones --------------------------------------------------------------------------------------------------------
 
@@ -190,6 +194,8 @@ export interface CsvWords {
   readonly header: (column: string) => string
   readonly status: (row: OrderMarginRow) => string
   readonly stage: (row: OrderMarginRow) => string
+  /** B-W2b-416: the floor flag in words (the margin grain). */
+  readonly floor?: (row: OrderMarginRow) => string
 }
 
 const plainMinor = (value: number | null | undefined, locale: Locale): string => (value === null || value === undefined ? '' : (value / 100).toFixed(2).replace('.', locale === 'it' ? ',' : '.'))
@@ -210,7 +216,7 @@ export function marginsCsv(rows: readonly OrderMarginRow[], can: Pick<MarginsCan
     'status',
     ...(can.price ? ['value'] : []),
     ...(can.cost ? ['quotedCost', 'estimateCost', 'actualCost'] : []),
-    ...(can.margin ? ['quotedMarginPct', 'estimateMarginPct', 'actualMarginPct'] : []),
+    ...(can.margin ? ['quotedMarginPct', 'estimateMarginPct', 'actualMarginPct', 'floor'] : []),
     ...(amounts ? ['marginChange'] : []),
     'currency',
     'stage',
@@ -225,7 +231,7 @@ export function marginsCsv(rows: readonly OrderMarginRow[], can: Pick<MarginsCan
         words.status(row),
         ...(can.price ? [plainMinor(row.value, locale)] : []),
         ...(can.cost ? [plainMinor(row.quotedCost, locale), plainMinor(row.estimateCost, locale), plainMinor(row.actualCost, locale)] : []),
-        ...(can.margin ? [plainDecimal(row.quotedMarginPct, locale), plainDecimal(row.estimateMarginPct, locale), plainDecimal(row.actualMarginPct, locale)] : []),
+        ...(can.margin ? [plainDecimal(row.quotedMarginPct, locale), plainDecimal(row.estimateMarginPct, locale), plainDecimal(row.actualMarginPct, locale), words.floor?.(row) ?? ''] : []),
         ...(amounts ? [plainMinor(row.marginChange, locale)] : []),
         row.currency,
         words.stage(row),

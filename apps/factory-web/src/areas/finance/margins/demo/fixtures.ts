@@ -22,10 +22,10 @@ const COMPANY = DEMO_COMPANIES[0].id
 const BASE = ['home.view', 'threads.read', 'threads.post', 'files.read']
 export const ROLES = {
   owner: [...OWNER_PERMISSIONS, 'costing.view', 'orders.view', 'workorders.view', 'money.price', 'money.cost', 'money.margin'],
-  /** Finance: price, cost and margin. */
-  finance: [...BASE, 'costing.view', 'orders.view', 'invoices.view', 'money.price', 'money.cost', 'money.margin'],
-  /** Sales: price and margin %: never a cost amount (Owner answer S2). */
-  sales: [...BASE, 'costing.view', 'orders.view', 'quotes.view', 'money.price', 'money.margin'],
+  /** Finance: price, cost and margin (B-W2b-416: + payments and shipments, the order's documents). */
+  finance: [...BASE, 'costing.view', 'orders.view', 'invoices.view', 'payments.view', 'shipping.view', 'money.price', 'money.cost', 'money.margin'],
+  /** Sales: price and margin %: never a cost amount (Owner answer S2). B-W2b-416: + invoices, payments, shipments. */
+  sales: [...BASE, 'costing.view', 'orders.view', 'quotes.view', 'invoices.view', 'payments.view', 'shipping.view', 'money.price', 'money.margin'],
   /** Buyer: costs only (no price, no margin). */
   buyer: [...BASE, 'costing.view', 'purchasing.view', 'money.cost'],
   /** Warehouse: no costing.view. */
@@ -72,6 +72,7 @@ const row = (over: Partial<OrderMarginRow> & { order: OrderMarginRow['order'] })
   started: false,
   workOrders: 0,
   belowFloor: null,
+  floor: null,
   method: 'UNDECIDED',
   provisional: true,
   ...over,
@@ -85,18 +86,22 @@ const order = (id: string, number: string, status: OrderMarginRow['order']['stat
  * SO-2026-1031 (Moto Demo, 6,400.00, shipped): 3,840.00 → 2,560.00 (40.0 %) quoted; final 4,000.00 → 2,400.00 (37.5 %): −160.00.
  * SO-2026-1050 (Club Demo, 3,000.00): a line without a cost at quote, so its margin cannot be told.
  */
+// B-W2b-416: each order's floor (made-up Sales settings: Sales 42 %, Owner 35 %, the company 40 %). SO-1043 40.2 % now
+// against Sales' 42 %: below (−1.8 points); SO-1031 final 37.5 % against the company's 40 %: below; SO-1044 40.0 % against
+// the Owner's 35 %: above; SO-1050: no cost yet, not known. Two below.
+const FLOOR = (pct: string, role: string | null, basis: 'ESTIMATE' | 'FINAL' | null) => ({ pct, from: role ? ('ROLE' as const) : ('COMPANY' as const), role, basis, quotedBelow: false })
 export const ROWS: OrderMarginRow[] = [
-  row({ order: order(SO_1050, 'SO-2026-1050', 'CONFIRMED', CLUB, '2026-10-28'), quotedValue: 300000, value: 300000 }),
-  row({ order: order(SO_1044, 'SO-2026-1044', 'CONFIRMED', PISTA, '2026-10-22', 'PO-PISTA-77'), quotedValue: 850000, value: 850000, quotedCost: 510000, quotedMargin: 340000, quotedMarginPct: '40.0000', estimateCost: 510000, estimateMargin: 340000, estimateMarginPct: '40.0000', marginChange: 0, workOrders: 1 }),
-  row({ order: order(SO_1043, 'SO-2026-1043', 'IN_PRODUCTION', MOTO, '2026-10-06', 'ORD-MOTO-311'), quotedValue: 1200000, value: 1200000, quotedCost: 684000, quotedMargin: 516000, quotedMarginPct: '43.0000', estimateCost: 718000, estimateMargin: 482000, estimateMarginPct: '40.1667', actualCost: 395000, actualMargin: 805000, actualMarginPct: '67.0833', marginChange: -34000, started: true, workOrders: 2 }),
-  row({ order: order(SO_1031, 'SO-2026-1031', 'SHIPPED', MOTO, '2026-09-15', 'ORD-MOTO-298'), quotedValue: 640000, value: 640000, quotedCost: 384000, quotedMargin: 256000, quotedMarginPct: '40.0000', estimateCost: 400000, estimateMargin: 240000, estimateMarginPct: '37.5000', actualCost: 400000, actualMargin: 240000, actualMarginPct: '37.5000', marginChange: -16000, started: true, final: true, workOrders: 1 }),
+  row({ order: order(SO_1050, 'SO-2026-1050', 'CONFIRMED', CLUB, '2026-10-28'), quotedValue: 300000, value: 300000, belowFloor: null, floor: FLOOR('40', null, null) }),
+  row({ order: order(SO_1044, 'SO-2026-1044', 'CONFIRMED', PISTA, '2026-10-22', 'PO-PISTA-77'), quotedValue: 850000, value: 850000, quotedCost: 510000, quotedMargin: 340000, quotedMarginPct: '40.0000', estimateCost: 510000, estimateMargin: 340000, estimateMarginPct: '40.0000', marginChange: 0, workOrders: 1, belowFloor: false, floor: FLOOR('35', 'Owner', 'ESTIMATE') }),
+  row({ order: order(SO_1043, 'SO-2026-1043', 'IN_PRODUCTION', MOTO, '2026-10-06', 'ORD-MOTO-311'), quotedValue: 1200000, value: 1200000, quotedCost: 684000, quotedMargin: 516000, quotedMarginPct: '43.0000', estimateCost: 718000, estimateMargin: 482000, estimateMarginPct: '40.1667', actualCost: 395000, actualMargin: 805000, actualMarginPct: '67.0833', marginChange: -34000, started: true, workOrders: 2, belowFloor: true, floor: FLOOR('42', 'Sales', 'ESTIMATE') }),
+  row({ order: order(SO_1031, 'SO-2026-1031', 'SHIPPED', MOTO, '2026-09-15', 'ORD-MOTO-298'), quotedValue: 640000, value: 640000, quotedCost: 384000, quotedMargin: 256000, quotedMarginPct: '40.0000', estimateCost: 400000, estimateMargin: 240000, estimateMarginPct: '37.5000', actualCost: 400000, actualMargin: 240000, actualMarginPct: '37.5000', marginChange: -16000, started: true, final: true, workOrders: 1, belowFloor: true, floor: FLOOR('40', null, 'FINAL') }),
 ]
 
 /** Average 10,620.00 ÷ 26,900.00 = 39.5 % over the three known; lost since the quote 340.00 + 0 + 160.00 = 500.00. */
 export const MARGINS: Margins = {
   rows: ROWS,
   nextCursor: null,
-  tiles: { averageMarginPct: '39.4796', belowFloor: null, marginLostSinceQuote: 50000, orders: 4, unknown: 1, currency: 'EUR', words: null },
+  tiles: { averageMarginPct: '39.4796', belowFloor: 2, marginLostSinceQuote: 50000, orders: 4, unknown: 1, currency: 'EUR', words: null },
   byCustomer: [
     { party: MOTO, orders: 2, value: 1840000, estimateCost: 1118000, marginPct: '39.2391' },
     { party: PISTA, orders: 1, value: 850000, estimateCost: 510000, marginPct: '40.0000' },
@@ -143,6 +148,8 @@ const MARGIN_AMOUNT = new Set(['quotedMargin', 'estimateMargin', 'actualMargin',
 /** What the API sends a person with these grains (each figure dropped without its grain; a margin amount also needs the cost grain). */
 export function asSeenBy<T extends object>(value: T, can: Pick<MarginsCan, 'price' | 'cost' | 'margin'>): T {
   const drop = (key: string, inner: unknown, parent: string | null) => {
+    // B-W2b-416: the floor and its flag (and the tile counting them) are the margin grain.
+    if (key === 'floor' || key === 'belowFloor') return !can.margin
     if (typeof inner === 'object' && inner !== null) return false
     if (parent === 'leather' && (key === 'quoted' || key === 'actual')) return !can.cost
     if (parent === 'freight' && key === 'cost') return !can.cost
