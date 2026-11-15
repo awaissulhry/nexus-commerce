@@ -25,10 +25,10 @@ import { assertEveryHandler, everyHandler, searchIndexers, settler } from '../da
  *      received and released, cut per hide, bundles, scans tracing the protectors' lot), each garment numbered by serial at the
  *      final operation, inspected and released.
  *   S  the shipment held by the system for the balance (a scan refused), split in two; the balance paid by a bank line matched
- *      to its request with its reasons (the statement imported twice: the duplicate refused), its deposit invoice issued, the
- *      holds lifted by the system; packed by scanning serials into cartons with marks, labelled in test mode, a label reprinted
- *      with a reason, a pickup booked, shipped; the site taken live, the rest shipped with the carrier's label, the day's
- *      manifest closed; delivered with proof (typed with its signer, and by the carrier): the order DELIVERED.
+ *      to its request with its reasons (the statement imported twice: the duplicate refused), its deposit invoice issued by the
+ *      worker (B-W2b-F48), the holds lifted by the system; packed by scanning serials into cartons with marks, labelled in test
+ *      mode, a label reprinted with a reason, a pickup booked, shipped; the site taken live, the rest shipped with the carrier's
+ *      label, the day's manifest closed; delivered with proof (typed with its signer, and by the carrier): the order DELIVERED.
  *   I  the month's invoice run (one TD24 of both DDTs, the balance's deposit invoice deducted) in the order's currency; a return
  *      label for one jacket back; an invoice with a declaration of intent and its stamp duty, rejected by SDI and corrected (the
  *      stamp duty kept, counted once); a self-invoice behind the accountant's switch; e-invoice test mode.
@@ -529,7 +529,7 @@ describe('the W2b-6 golden flow: a cost sheet approved, an order packed by scan 
     expect((await ok(P.warehouse, 'GET', `/shipping/shipments/${G.shipB.id}/holds`)).holds.reasons).toEqual(['BALANCE_UNPAID'])
   })
 
-  it('S03 the balance comes in: finance imports the bank statement (dry run, then import); the same lines again are refused; the line’s suggestion names the balance’s request with how sure and why; accepted: the request is paid and the system lifts both holds', async () => {
+  it('S03 the balance comes in: finance imports the bank statement (dry run, then import); the same lines again are refused; the line’s suggestion names the balance’s request with how sure and why; accepted: the request is paid, its deposit invoice made by itself, and the system lifts both holds', async () => {
     const accounts = (await ok(P.finance, 'GET', `/payments/bank/accounts?companyId=${companyA()}`)).accounts as Json[]
     G.bankAccount = accounts.find((account) => account.active !== false)!
     const schedule = await ok(P.finance, 'GET', `/sales/orders/${G.order.id}/schedule`)
@@ -559,12 +559,16 @@ describe('the W2b-6 golden flow: a cost sheet approved, an order packed by scan 
     await settle()
     const paid = (await ok(P.finance, 'GET', `/sales/orders/${G.order.id}/schedule`)).steps as Json[]
     expect(paid.find((step) => step.kind === 'BEFORE_SHIPPING')).toMatchObject({ status: 'PAID' })
-    // Paid before the goods leave (DPR 633/1972 art. 6 c.4): the balance's deposit invoice, made by finance after the match.
-    const td02 = (await ok(P.finance, 'POST', '/invoicing/invoices/deposit-draft', { depositRequestId: G.balanceStep.depositRequestId }, 201)).invoice
-    expect(td02).toMatchObject({ docType: 'TD02', status: 'DRAFT', grossTotal: amount })
-    await stepped(w, P.finance)
-    G.td02 = (await ok(P.finance, 'POST', `/invoicing/invoices/${td02.id}/issue`, { version: td02.version })).invoice
-    expect(G.td02).toMatchObject({ docType: 'TD02', status: 'ISSUED' })
+    // Paid before the goods leave (DPR 633/1972 art. 6 c.4): the balance's deposit invoice. B-W2b-F48: made by the worker after
+    // the match, as for a deposit paid online or received by the office: exactly one, for the amount received, on the order.
+    const made = (await ok(P.finance, 'GET', `/invoicing/invoices?companyId=${companyA()}&docType=TD02&depositRequestId=${G.balanceStep.depositRequestId}`)).invoices as Json[]
+    expect(made, JSON.stringify(made)).toHaveLength(1)
+    expect(made[0]).toMatchObject({ docType: 'TD02', status: 'ISSUED', grossTotal: amount, depositRequestId: G.balanceStep.depositRequestId, salesOrderId: G.order.id, filesPending: false })
+    G.td02 = (await ok(P.finance, 'GET', `/invoicing/invoices/${made[0]!.id}`)).invoice
+    expect(G.td02).toMatchObject({ docType: 'TD02', status: 'ISSUED', grossTotal: amount })
+    // REFUSAL: nothing is left for a person to invoice by hand (no second TD02 for the same money).
+    const twiceTd02 = await ok(P.finance, 'POST', '/invoicing/invoices/deposit-draft', { depositRequestId: G.balanceStep.depositRequestId }, 409)
+    expect(twiceTd02.error.message).toContain('Nothing paid on this deposit request is waiting for a deposit invoice')
     keep(G.td02.id)
     await stepped(w, P.finance)
     await ok(P.finance, 'POST', `/invoicing/invoices/${G.td02.id}/sdi/send`, {})
