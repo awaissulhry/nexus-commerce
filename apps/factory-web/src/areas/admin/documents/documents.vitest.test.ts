@@ -10,7 +10,7 @@ import { AdminPageMessages } from '../kit/messages'
 import { COMPANIES } from '../shared/fixtures'
 import { closeSeries, createSeries, listSeries, sampleHref, seriesAllocations, setSeriesStart, type Series } from './api'
 import { designScreen, SERIES } from './fixtures'
-import { NextCell, PreviewCell, SeriesCell, useSeriesColumns } from './view/DocumentsView'
+import { NextCell, SeriesCell, useSeriesColumns } from './view/DocumentsView'
 import {
   chipsPattern,
   closeReach,
@@ -26,7 +26,6 @@ import {
   patternChips,
   patternIssue,
   proofWords,
-  sampleCompany,
   seriesRows,
   skippedWords,
   startEditable,
@@ -126,8 +125,6 @@ describe('the lists', () => {
     expect(newSeriesHeld({ can: { manage: false, documents: true }, companies: model.companies })).toBe('docs.held.manage')
     expect(newSeriesHeld({ can: { manage: true, documents: true }, companies: { items: [], problem: null } })).toBe('docs.held.noCompany')
     expect(newSeriesHeld(model)).toBeNull()
-    expect(sampleCompany({ companyId: 'all', companies: model.companies })?.id).toBe(companies[0]!.id)
-    expect(sampleCompany({ companyId: companies[1]!.id, companies: model.companies })?.id).toBe(companies[1]!.id)
   })
 })
 
@@ -232,7 +229,7 @@ function render(model: unknown, locale: (typeof LOCALES)[number]): string {
 describe('SCR-014 draws every case in both languages with no key left on screen', () => {
   it('has every state: loading, error, empty, read-only, dialogs', () => {
     const ids = designScreen.cases.map((item) => item.id)
-    for (const id of ['loading', 'error', 'forbidden', 'empty', 'read-only', 'new-series', 'series-issued', 'close', 'numbers-issued', 'documents']) expect(ids).toContain(id)
+    for (const id of ['loading', 'error', 'forbidden', 'empty', 'read-only', 'new-series', 'series-issued', 'close', 'numbers-issued']) expect(ids).toContain(id)
   })
   for (const locale of LOCALES) {
     it(`in ${locale}`, () => {
@@ -258,7 +255,6 @@ describe('SCR-014 draws every case in both languages with no key left on screen'
     expect(numbers).toContain('10 series')
     expect(numbers).toContain('aria-label="Keyboard keys of this list"')
     expect(numbers).not.toContain('switch list')
-    expect(draw('documents')).toContain('5 layouts')
   })
 
   it('selected series: the bulk bar says its reach; the result notice names each refused series with the reason', () => {
@@ -300,14 +296,5 @@ describe('the lists\' cells', () => {
   it('the next number as it will print, or Closed', () => {
     expect(cell(createElement(NextCell, { series: invoice }))).toContain('FT-2026-00042')
     expect(cell(createElement(NextCell, { series: SERIES.find((row) => row.status === 'CLOSED')! }))).toContain('Closed')
-  })
-
-  it('a layout previews in a new tab through /api; held while the legal data is missing', () => {
-    const ready = model.companies.items!.find((company) => company.legalReady)!
-    const html = cell(createElement(PreviewCell, { company: ready, type: 'QUOTE' }))
-    expect(html).toContain('target="_blank"')
-    expect(html).toContain(`/api/documents/sample?companyId=${ready.id}&amp;type=QUOTE&amp;language=it`)
-    const notReady = model.companies.items!.find((company) => !company.legalReady)!
-    expect(cell(createElement(PreviewCell, { company: notReady, type: 'QUOTE' }))).toContain('Complete the company&#x27;s legal data first')
   })
 })

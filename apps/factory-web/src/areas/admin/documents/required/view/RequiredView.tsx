@@ -25,7 +25,7 @@ import '../required.css'
  */
 
 export interface RequiredActions {
-  onView?: (view: 'numbers' | 'documents' | 'branding' | 'required') => void
+  onView?: (view: 'numbers' | 'documents' | 'mail' | 'branding' | 'required') => void
   onCompany?: (companyId: string | null) => void
   onShowOff?: (show: boolean) => void
   onSelect?: (ids: string[]) => void
@@ -57,6 +57,8 @@ function useSectionKeys(model: RequiredModel, actions?: RequiredActions) {
       if (target && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) || target.closest('[role="dialog"]'))) return
       if (event.key === '1') actions?.onView?.('numbers')
       else if (event.key === '2') actions?.onView?.('documents')
+      // B-W2b-432: the e-mail templates.
+      else if (event.key === '3') actions?.onView?.('mail')
       else if (event.key === '5') actions?.onView?.('branding')
       else if (event.key === 'c' && !newHeld(model)) actions?.onNew?.(true)
       else return
@@ -134,6 +136,8 @@ function Required({ model, actions }: { model: RequiredModel; actions?: Required
   const keys: ListKey[] = [
     { keys: ['1'], does: td('docs.keys.numbers') },
     { keys: ['2'], does: td('docs.keys.documents') },
+    // B-W2b-432: the e-mail templates.
+    { keys: ['3'], does: td('docs.keys.mail') },
     { keys: ['5'], does: td('docs.keys.branding') },
     { keys: ['6'], does: td('docs.keys.required') },
     { keys: ['c'], does: t('req.keys.new') },
@@ -184,10 +188,12 @@ function Required({ model, actions }: { model: RequiredModel; actions?: Required
               ariaLabel={td('docs.views.label')}
               size="sm"
               value="required"
-              onChange={(value) => actions?.onView?.(value as 'numbers' | 'documents' | 'branding' | 'required')}
+              onChange={(value) => actions?.onView?.(value as 'numbers' | 'documents' | 'mail' | 'branding' | 'required')}
               options={[
                 { value: 'numbers', label: td('docs.views.numbers') },
                 { value: 'documents', label: td('docs.views.documents') },
+                // B-W2b-432: the e-mail templates.
+                { value: 'mail', label: td('docs.views.mail') },
                 { value: 'branding', label: td('docs.views.branding') },
                 { value: 'required', label: td('docs.views.required') },
               ]}

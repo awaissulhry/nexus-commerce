@@ -31,10 +31,11 @@ export interface LanguagesActions {
  * are written, how time is kept with the zones in use, and each site's floor languages (B-W2a-41: add or remove one,
  * the worker notice checked for each). A section the person may not read is absent. Fetches nothing (LanguagesPage.tsx reads the API).
  */
-export function LanguagesView({ model, actions }: { model: LanguagesViewModel; actions?: LanguagesActions }) {
+/** B-W2b-432: `partners` — the per-partner-contact languages (languages/partner/), placed after the documents' languages. */
+export function LanguagesView({ model, actions, partners }: { model: LanguagesViewModel; actions?: LanguagesActions; partners?: ReactNode }) {
   return (
     <AdminPageMessages namespace="admin-languages">
-      <Languages model={model} actions={actions} />
+      <Languages model={model} actions={actions} partners={partners} />
     </AdminPageMessages>
   )
 }
@@ -55,7 +56,7 @@ function Section({ id, title, intro, wide, children }: { id: string; title: stri
   )
 }
 
-function Languages({ model, actions }: { model: LanguagesViewModel; actions?: LanguagesActions }) {
+function Languages({ model, actions, partners }: { model: LanguagesViewModel; actions?: LanguagesActions; partners?: ReactNode }) {
   const t = useT('admin-languages')
   const ta = useT('admin')
   const companies = (model.companies.items ?? []).filter((company) => company.status === 'ACTIVE')
@@ -140,6 +141,9 @@ function Languages({ model, actions }: { model: LanguagesViewModel; actions?: La
           )}
           {!model.can.manage && companies.length > 0 && <p className="fw-adm-hint">{ta('held.needs', { right: ta('right.companies_manage') })}</p>}
         </Section>
+
+        {/* B-W2b-432: per partner contact (its own card across the grid). */}
+        {partners}
 
         <Section id="formats" title={t('langs.formats.title')} intro={t('langs.formats.intro')}>
           <div className="fw-adm-langs-formats">

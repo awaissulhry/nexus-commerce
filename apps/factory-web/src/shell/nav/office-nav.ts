@@ -361,6 +361,9 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   // B-W0-28 Admin: Documents & numbering, Languages & formats, Connections & API (and a connection), Import & export,
   // Audit log.
   '/admin/documents',
+  // B-W2b-432: a document template's and an e-mail template's version (the builder pages SCR-631, SCR-633).
+  '/admin/documents/templates/[templateId]',
+  '/admin/documents/mail/[templateId]',
   '/admin/languages',
   '/admin/connections',
   '/admin/connections/[accountId]',

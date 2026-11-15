@@ -6,7 +6,8 @@
     "count_other": "{count} series",
     "keys": {
       "numbers": "Show the number series",
-      "documents": "Show the document layouts",
+      "documents": "Show the document templates",
+      "mail": "Show the e-mail templates",
       "branding": "Show the branding",
       "newSeries": "New series",
       "required": "Show the required documents"
@@ -16,6 +17,7 @@
       "label": "Which list",
       "numbers": "Numbers",
       "documents": "Documents",
+      "mail": "E-mails",
       "branding": "Branding",
       "required": "Required documents"
     },
@@ -23,7 +25,7 @@
       "label": "Company",
       "all": "All companies"
     },
-    "later": "E-mail and label templates come in later steps.",
+    "later": "Label templates come in a later step.",
     "pattern": {
       "aria": "Pattern {pattern}",
       "year4": "year (2026)",
@@ -90,38 +92,6 @@
     "status": {
       "ACTIVE": "Active",
       "CLOSED": "Closed"
-    },
-    "layouts": {
-      "noRightTitle": "Document previews are not yours to open",
-      "noRight": "You need the right to preview the company's document layouts. Ask an administrator.",
-      "noCompanyTitle": "No active company",
-      "noCompany": "Add a company first: its documents carry its legal data.",
-      "with": "With the data of {name}: each preview opens as a PDF in a new tab, marked as a sample.",
-      "label": "Document layouts",
-      "notReady_one": "{name} cannot print documents yet: 1 legal fact is missing (registered office, VAT number, codice fiscale, REA office and number).",
-      "notReady_other": "{name} cannot print documents yet: {count} legal facts are missing (registered office, VAT number, codice fiscale, REA office and number).",
-      "fixLegal": "Complete the legal data",
-      "heldLegal": "Complete the company's legal data first",
-      "col": {
-        "document": "Document",
-        "layout": "Layout",
-        "preview": "Preview"
-      },
-      "fixed": "Fixed layout: editing it comes later.",
-      "previewIn": {
-        "it": "Italiano",
-        "en": "English"
-      },
-      "newTab": "(opens in a new tab)",
-      "count_one": "{count} layout",
-      "count_other": "{count} layouts"
-    },
-    "type": {
-      "QUOTE": "Quote",
-      "PURCHASE_ORDER": "Purchase order",
-      "DDT": "DDT (transport document)",
-      "INVOICE_COPY": "Invoice (courtesy copy)",
-      "PACKING_LIST": "Packing list"
     },
     "newDialog": {
       "title": "New number series",
