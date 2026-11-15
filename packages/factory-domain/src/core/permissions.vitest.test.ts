@@ -5,6 +5,7 @@ import {
   holds,
   isPermission,
   NO_ROWS,
+  reachWhere,
   scopeWhere,
   type Actor,
   type Grant,
@@ -207,5 +208,28 @@ describe('scopeWhere()', () => {
         expect(matches(where, { companyId, siteId })).toBe(can(actor, 'lots.view', { companyId, siteId }))
       }
     }
+  })
+})
+
+// B-W2b-F49: the places a person works in, whatever permission each grant holds (the shell's TEST MODE notices).
+describe('reachWhere()', () => {
+  it('ORs every grant, whatever it holds, and ANDs the scopes inside one grant', () => {
+    const actor = office(grant(['quotes.view'], { companies: [COMPANY_A], sites: [SITE_1] }), grant(['users.view'], { companies: [COMPANY_B] }))
+    expect(reachWhere(actor, LOTS)).toEqual({
+      OR: [{ AND: [{ companyId: { in: [COMPANY_A] } }, { siteId: { in: [SITE_1] } }] }, { companyId: { in: [COMPANY_B] } }],
+    })
+    expect(reachWhere(actor, { company: 'id' })).toEqual({ OR: [{ id: { in: [COMPANY_A] } }, { id: { in: [COMPANY_B] } }] })
+    expect(reachWhere(office(grant(['users.view'])), LOTS)).toEqual({})
+  })
+
+  it('reaches nothing without a grant, with empty lists, or for a session that lacks what its audience needs', () => {
+    expect(reachWhere(office(), LOTS)).toBe(NO_ROWS)
+    expect(reachWhere(office(grant(['quotes.view'], { companies: [] })), LOTS)).toBe(NO_ROWS)
+    expect(reachWhere({ audience: 'office', grants: [grant(['quotes.view'])] }, LOTS)).toBe(NO_ROWS)
+  })
+
+  it('pins a floor session to its site, as scopeWhere() does', () => {
+    const actor: Actor = { audience: 'floor', tenantId: TENANT, siteId: SITE_1, grants: [grant(['floor.work'], { companies: [COMPANY_A] })] }
+    expect(reachWhere(actor, LOTS)).toEqual(scopeWhere(actor, 'floor.work', LOTS))
   })
 })
