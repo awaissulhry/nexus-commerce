@@ -120,6 +120,10 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   // B-W2b-431: a picklist opens on Admin › Fields & lists › Picklists (SCR-164); a custom field has no page of its own (its
   // dialog opens on its record type's list of fields).
   Picklist: '/admin/fields?tab=picklists&list=[id]',
+  // B-W2b-432: Admin › Documents & numbering — a document template's version (SCR-631) and an e-mail template's (SCR-633)
+  // open their builder pages.
+  DocumentTemplate: '/admin/documents/templates/[id]',
+  EmailTemplate: '/admin/documents/mail/[id]',
   // Admin › Security & health (SCR-166, B-W2b-24): a restore drill (the reminder that the next one is due names the last one).
   RestoreDrill: '/admin/security?drill=[id]#backups',
   // B-W2b-414: a data request opens in its dialog on Admin › Privacy › Data requests (SCR-660); a retention rule on Retention

@@ -43,6 +43,7 @@ const FILES_READ = 'files.read' satisfies Permission
  *   RECORD_INVITE     a record with a thread    post, upload                            none    30 / 180  1 / 1
  *   SECURE_FILE       StoredFile                download*, receive                      none    7 / 30    5 / 20   files, password, receipt
  *   RETURN_LABEL      ReturnAuthorisation       confirm, download                       none    30 / 60   1 / 1    (B-W2b-398)
+ *   BROKER_PACK       CustomsDeclaration        download, submit* (the MRN)             none    14 / 30   1 / 1    (B-W2b-409)
  *
  * (`days` and `uses`: the default and the most the office may give; `*`: the action uses one of the link's uses.) A view
  * purpose counts every open (DOCUMENT_VIEW, DEPOSIT_INFO); a purpose whose holder answers counts the answers, never the
@@ -90,6 +91,8 @@ export const LINK_PURPOSES = [
   'SECURE_FILE',
   // W2b-6 (B-W2b-398; in the schema since B-W2b-372): a return label offered by link.
   'RETURN_LABEL',
+  // W2b-6 (B-W2b-409; in the schema since B-W2b-372): the export declaration's papers to the broker, the MRN back.
+  'BROKER_PACK',
 ] as const
 export type LinkPurpose = (typeof LINK_PURPOSES)[number]
 
@@ -374,6 +377,22 @@ export const PURPOSE_RULES: Readonly<Record<LinkPurpose, PurposeRule>> = Object.
     actions: { open: notCounted, confirm: notCounted, download: notCounted },
     grains: [],
     expiryDays: { default: 30, max: 60 },
+    uses: { default: 1, max: 1 },
+    readsFiles: false,
+    ...PLAIN,
+  }),
+  // ---- W2b-6 (B-W2b-409; LOG-097) ----------------------------------------------------------------------------------
+  BROKER_PACK: rule({
+    purpose: 'BROKER_PACK',
+    description:
+      'The customs broker downloads the papers of one export declaration (the commercial invoice, the packing list, the papers of origin, the declarations of conformity) and types back its MRN once filed; made only while the site switched it on.',
+    recordTypes: ['CustomsDeclaration'],
+    // Opening and each download are evidence; the MRN typed back is the link's one use (the broker's task is done). The papers
+    // are LinkFile rows the module serves itself (modules/shipping/broker-pack), so the generic file-set routes never see it.
+    actions: { open: notCounted, download: notCounted, submit: counted('none') },
+    // The session reads no priced column: the papers are the files the office chose to send the broker.
+    grains: [],
+    expiryDays: { default: 14, max: 30 },
     uses: { default: 1, max: 1 },
     readsFiles: false,
     ...PLAIN,

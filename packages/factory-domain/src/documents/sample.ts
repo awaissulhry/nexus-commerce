@@ -44,6 +44,17 @@ export function sampleDocument(type: DocumentType, language: DocumentLanguage, c
     // B-W2b-391: a proforma for customs, as a shipment abroad prints it.
     case 'PROFORMA':
       return { ...base, totals, deliveryTerms: 'EXW', proforma: { purpose: 'CUSTOMS', packages: 2, grossWeightKg: '12.5', origin: ['IT'] } }
+    // B-W2b-409: a commercial invoice of an export to Switzerland, with a made-up EORI.
+    case 'COMMERCIAL_INVOICE':
+      return {
+        ...base,
+        // No discount column: the second line's unit value is its price after its 10 % discount (27.00 × 10 = 270.00).
+        lines: LINES.map(({ code, description, quantity, uom, amountMinor }, index) => ({ code, description: `${description} · HS 420310 · ${language === 'it' ? 'Origine' : 'Origin'} IT`, quantity, uom, unitPrice: ['250.00', '27.00'][index]!, amountMinor })),
+        totals: { netMinor: 77000, vat: [], grossMinor: 77000 },
+        party: { ...PARTY, address: { line1: 'Musterstrasse 1', postalCode: '8001', city: 'Zürich', country: 'CH' } },
+        deliveryTerms: 'DAP',
+        customs: { exporterEori: 'IT00000000000', reason: 'SALE_OF_GOODS', destinationCountry: 'CH', packages: 2, grossWeightKg: '12.5', origin: ['IT'], nonTaxableExport: true },
+      }
     case 'PACKING_LIST':
       return {
         ...base,

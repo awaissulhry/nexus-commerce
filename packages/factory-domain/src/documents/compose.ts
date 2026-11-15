@@ -9,6 +9,8 @@ import { DOCUMENT_LAYOUTS, layoutFor, layoutTemplateOf, type ColumnKey, type Lay
 import { documentPlaceholderValues } from '../templates/documents'
 import { fillPlaceholders } from '../templates/placeholders'
 import { withOptions } from './options-block'
+// B-W2b-409: the commercial invoice's reasons and EORI.
+import { EORI_PATTERN, EXPORT_REASONS } from '../shipping/customs/rules'
 import { addressLine, legalFooter, legalLines, legalName, legalProblems } from './legal'
 import {
   DDT_FREIGHT,
@@ -46,6 +48,8 @@ import {
  *   PACKING_LIST   the number of parcels and, per line, the parcel it is packed in (no prices)
  *   PROFORMA       (B-W2b-391) the party's address, why it is made; it always carries the notice that it is no tax
  *                  document, and the purpose's notice (values for customs, samples of no commercial value, a payment request)
+ *   COMMERCIAL_INVOICE (B-W2b-409) the buyer's address, the exporter's EORI, the reason, the destination; it always says its
+ *                  values are for customs, and an export outside the EU that it is non-taxable (art. 8 DPR 633/1972)
  */
 
 export interface ComposedFact {
@@ -205,6 +209,27 @@ function proformaProblems(input: DocumentInput): Issue[] {
   return problems
 }
 
+/** B-W2b-409: a commercial invoice's facts (the exporter's EORI, the reason, the destination; parcels, weights, origin when given). */
+function customsProblems(input: DocumentInput): Issue[] {
+  const customs = input.customs
+  const at = 'document/customs'
+  if (!customs) return [{ path: at, message: "A commercial invoice says the exporter's EORI, why the goods travel and where they go." }]
+  const problems: Issue[] = []
+  if (typeof customs.exporterEori !== 'string' || !EORI_PATTERN.test(customs.exporterEori)) problems.push({ path: `${at}/exporterEori`, message: "Give the exporter's EORI." })
+  if (!(EXPORT_REASONS as readonly string[]).includes(customs.reason)) problems.push({ path: `${at}/reason`, message: 'Say why the goods travel.' })
+  if (customs.reason === 'OTHER' && !filled(customs.reasonText)) problems.push({ path: `${at}/reasonText`, message: 'Say the reason in words.' })
+  if (typeof customs.destinationCountry !== 'string' || !/^[A-Z]{2}$/.test(customs.destinationCountry)) problems.push({ path: `${at}/destinationCountry`, message: 'Expected the country of destination (ISO 3166-1 alpha-2).' })
+  if (customs.packages !== null && customs.packages !== undefined && (!Number.isSafeInteger(customs.packages) || customs.packages < 1)) problems.push({ path: `${at}/packages`, message: 'Give the number of parcels (at least 1).' })
+  for (const key of ['grossWeightKg', 'netWeightKg'] as const) {
+    const value = customs[key]
+    if (value === null || value === undefined) continue
+    const weight = fitsDecimal(value, 18, 4) ? parseDecimal(value) : null
+    if (weight === null || !weight.greaterThan(0)) problems.push({ path: `${at}/${key}`, message: 'Expected a weight in kilograms.' })
+  }
+  for (const [index, code] of (customs.origin ?? []).entries()) if (!/^[A-Z]{2}$/.test(code)) problems.push({ path: `${at}/origin/${index}`, message: 'Expected a country code (ISO 3166-1 alpha-2).' })
+  return problems
+}
+
 /** Every reason the document cannot be printed as it stands (empty when it can). */
 export function documentProblems(input: DocumentInput): Issue[] {
   if (!isDocumentType(input?.type)) return [{ path: 'document/type', message: 'Unknown document type.' }]
@@ -220,6 +245,8 @@ export function documentProblems(input: DocumentInput): Issue[] {
   }
   // B-W2b-391: a proforma names its party in full and says why it is made.
   if (input.type === 'PROFORMA') problems.push(...addressProblems(input.party?.address, 'document/party/address', "The customer's address is printed on a proforma."), ...proformaProblems(input))
+  // B-W2b-409: a commercial invoice names its buyer in full, the exporter's EORI, the reason and the destination.
+  if (input.type === 'COMMERCIAL_INVOICE') problems.push(...addressProblems(input.party?.address, 'document/party/address', "The buyer's address is printed on a commercial invoice."), ...customsProblems(input))
   for (const [index, reference] of (input.references ?? []).entries()) {
     if (!(REFERENCE_KINDS as readonly string[]).includes(reference.kind) || !filled(reference.number)) problems.push({ path: `document/references/${index}`, message: 'A reference has a kind and a number.' })
     if (reference.date !== null && reference.date !== undefined && !isBusinessDate(reference.date)) problems.push({ path: `document/references/${index}/date`, message: 'Expected YYYY-MM-DD.' })
@@ -363,6 +390,23 @@ function facts(input: DocumentInput, words: DocumentWords): ComposedFact[] {
         ...((proforma.origin ?? []).length > 0 ? [{ label: words.proforma.origin, value: proforma.origin!.map((code) => countryName(code, language)).join(', ') }] : []),
       ]
     }
+    // B-W2b-409: the exporter's EORI, the reason, the references, the terms, where it goes, the parcels, weights and origin.
+    case 'COMMERCIAL_INVOICE': {
+      const customs = input.customs!
+      const reason = customs.reason === 'OTHER' ? customs.reasonText!.trim() : words.customs.reasons[customs.reason]
+      return [
+        { label: words.customs.eori, value: customs.exporterEori },
+        { label: words.customs.reason, value: reason },
+        ...referenceFacts(input, words),
+        ...fact(words.facts.deliveryTerms, input.deliveryTerms),
+        ...fact(words.facts.paymentTerms, input.paymentTerms),
+        { label: words.customs.destination, value: countryName(customs.destinationCountry, language) },
+        ...(customs.packages ? [{ label: words.facts.packages, value: String(customs.packages) }] : []),
+        ...(customs.grossWeightKg ? [{ label: words.facts.grossWeight, value: formatDecimal(customs.grossWeightKg, language, 0, 3) }] : []),
+        ...(customs.netWeightKg ? [{ label: words.facts.netWeight, value: formatDecimal(customs.netWeightKg, language, 0, 3) }] : []),
+        ...((customs.origin ?? []).length > 0 ? [{ label: words.customs.origin, value: customs.origin!.map((code) => countryName(code, language)).join(', ') }] : []),
+      ]
+    }
   }
 }
 
@@ -371,7 +415,7 @@ function blocks(input: DocumentInput, words: DocumentWords): ComposedBlock[] {
   // W2b (B-W2b-19): a DDT's party is the "cessionario" only when the goods are sold to it (i18n ddtPartyHeading).
   const heading = input.type === 'DDT' ? ddtPartyHeading(words, input.transport!.reason) : words.headings.party[input.type]
   const result: ComposedBlock[] = [{ heading, lines: partyLines(input.party, input.type, words, language) }]
-  if ((input.type === 'PURCHASE_ORDER' || input.type === 'ORDER_CONFIRMATION' /* B-W2b-303 */ || input.type === 'PROFORMA' /* B-W2b-391 */) && input.deliverTo) result.push({ heading: words.headings.deliverTo, lines: namedAddress(input.deliverTo, language) })
+  if ((input.type === 'PURCHASE_ORDER' || input.type === 'ORDER_CONFIRMATION' /* B-W2b-303 */ || input.type === 'PROFORMA' /* B-W2b-391 */ || input.type === 'COMMERCIAL_INVOICE' /* B-W2b-409 */) && input.deliverTo) result.push({ heading: words.headings.deliverTo, lines: namedAddress(input.deliverTo, language) })
   if (input.type === 'DDT') {
     const transport = input.transport!
     if (transport.destination) result.push({ heading: words.headings.destination, lines: namedAddress(transport.destination, language) })
@@ -424,7 +468,7 @@ export function composeDocument(input: DocumentInput): ComposedDocument {
   const name = legalName(input.company, language)
   const columns = layout.columns.filter((entry) => layout.priced || !PRICED_ONLY.includes(entry.key)).map((entry) => ({ ...entry, label: words.columns[entry.key] }))
   const title = words.title[input.type]
-  const notices = [...(input.type === 'INVOICE_COPY' ? [words.notices.courtesyCopy] : []), ...(input.type === 'PURCHASE_ORDER' ? [words.notices.purchaseOrder] : []), ...(input.type === 'PROFORMA' ? proformaNotices(input, words) : [])]
+  const notices = [...(input.type === 'INVOICE_COPY' ? [words.notices.courtesyCopy] : []), ...(input.type === 'PURCHASE_ORDER' ? [words.notices.purchaseOrder] : []), ...(input.type === 'PROFORMA' ? proformaNotices(input, words) : []), ...(input.type === 'COMMERCIAL_INVOICE' /* B-W2b-409 */ ? [words.customs.customsValues, ...(input.customs!.nonTaxableExport ? [words.customs.nonTaxable] : [])] : [])]
   return {
     type: input.type,
     language,

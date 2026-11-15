@@ -49,7 +49,8 @@ describe('the kinds of rule', () => {
   it('ship a built-in rule each, whose numbers their own schema reads, and refuse numbers out of range', () => {
     // B-W2b-24: + INTEGRATION_FAILING (the design's last built-in). B-W2b-42: + WORKING_TIME_LIMIT. B-W2b-314: + LOW_STOCK.
     // B-W2b-350: + PO_CONFIRMED_LATE, SUPPLIER_STATUS_CHANGED (the supply alerts). B-W2b-385: + RETURN_ARRIVED_LATE.
-    expect(RULE_KINDS).toHaveLength(13)
+    // B-W2b-409: + EXIT_PROOF_MISSING.
+    expect(RULE_KINDS).toHaveLength(14)
     expect(kindsOf('DATE')).toEqual(['CERTIFICATE_EXPIRING', 'INVOICE_DEADLINE'])
     for (const kind of RULE_KINDS) {
       const read = readThreshold(kind, KINDS[kind].builtIn.threshold)

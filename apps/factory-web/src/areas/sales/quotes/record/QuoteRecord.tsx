@@ -14,6 +14,8 @@ import { parseCc } from '../../../_shared/document-send/model'
 // B-W2b-368 (XF1:04): the send dialog's fix for the MTM_* line checks (the rider profile).
 import { quoteUnits } from '../../../_shared/document-send/fix-tab/mtm/api'
 import { isMtmCode, MTM_FIX_NAMESPACE } from '../../../_shared/document-send/fix-tab/mtm/model'
+// B-W2b-432 (PLT-131): the send panel's language (the contact's preselected) and message template.
+import { useSendParts } from '../../../_shared/document-send/template/use-send-parts'
 import { MTM_PERMISSIONS } from '../../mtm/model'
 import { isApiError } from '../../../../lib/api/errors'
 import {
@@ -118,6 +120,37 @@ function QuoteRecordContainer({ quoteId }: { quoteId: string }) {
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
 
   const tabHref = useCallback((next: QuoteTab) => `${prefix}/sales/quotes/${quoteId}?tab=${next}`, [prefix, quoteId])
+  // B-W2b-432: the send panel's language and message template (while the send dialog is open); the preview follows the
+  // language on screen (the same version re-rendered), Send waits while it is not the quote's own.
+  const sendQuoteValue = send && quote.status === 'ready' ? quote.value : null
+  const sendParts = useSendParts(
+    api,
+    sendQuoteValue && send
+      ? { recordType: 'Quote', recordId: sendQuoteValue.id, partyId: sendQuoteValue.partyId, contactId: sendQuoteValue.contactId, companyId: sendQuoteValue.companyId, documentLanguage: send.language, message: send.fields.message, permissions: session.permissions, fix: { label: t('check.fix'), href: tabHref('terms') } }
+      : null,
+    (body) => setSend((current) => (current ? { ...current, fields: { ...current.fields, message: body } } : current)),
+  )
+  const sendShown = useRef<'it' | 'en' | null>(null)
+  useEffect(() => {
+    const current = quoteRef.current
+    const language = sendParts.language
+    if (!current || !language) {
+      sendShown.current = null
+      return
+    }
+    // The dialog opened with the quote's own language (openSend): what the preview shows first.
+    if (sendShown.current === null) sendShown.current = current.current.language === 'en' ? 'en' : 'it'
+    if (sendShown.current === language) return
+    sendShown.current = language
+    let live = true
+    setSend((model) => (model ? { ...model, preview: { ...model.preview, src: null, problem: null, openHref: previewHref(current.id, language) } } : model))
+    previewBytes(api, current.id, language)
+      .then((bytes) => live && setSend((model) => (model ? { ...model, preview: { ...model.preview, src: bytes } } : model)))
+      .catch((error: unknown) => live && setSend((model) => (model ? { ...model, preview: { ...model.preview, problem: t(isApiError(error) && error.kind === 'conflict' ? 'docs.problem.needs' : readProblem(error)) } } : model)))
+    return () => {
+      live = false
+    }
+  }, [api, sendParts.language, t])
   // B-W2a-49: Duplicate (band ⋯) and the payment terms library for Terms & delivery (paymentterms.view).
   const duplicate = useDuplicate(api, companyId, (id) => router.push(`${prefix}/sales/quotes/${id}?tab=lines`))
   const termsAllowed = session.permissions.includes('paymentterms.view')
@@ -597,6 +630,7 @@ function QuoteRecordContainer({ quoteId }: { quoteId: string }) {
           void enqueue(() => runWrite((quote) => editLine(api, quote, line.id, { unitPrice: line.listUnitPrice ?? null }), { key: 'lines.backToList', tone: 'success', params: { colour: line.colourway.code } }))
         },
       }}
+      sendParts={sendParts.parts}
       sendActions={{
         onField: (field, text) => setSend((current) => (current ? { ...current, fields: { ...current.fields, [field]: text } } : current)),
         onSend: doSend,
