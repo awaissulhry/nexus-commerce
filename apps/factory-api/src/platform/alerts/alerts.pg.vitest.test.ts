@@ -230,8 +230,8 @@ describe('the engine (scheduler and worker)', () => {
       // One per built-in rule made (B-W2b-385: + RETURN_ARRIVED_LATE; B-W2b-409: + EXIT_PROOF_MISSING).
       { type: 'alert.rule_changed', n: 10 },
     ])
-    // B-W2b-385: + the late return's built-in rule (12 → 13).
-    expect((await one(`SELECT count(*)::int AS n FROM "OutboxEvent" WHERE "tenantId" = $1`, [T])).n).toBe(before + 13)
+    // B-W2b-385: + the late return's built-in rule (12 → 13). B-W2b-409: + the missing proof of exit's (13 → 14).
+    expect((await one(`SELECT count(*)::int AS n FROM "OutboxEvent" WHERE "tenantId" = $1`, [T])).n).toBe(before + 14)
   })
 
   it('a second pass (a replay, the next tick) raises nothing twice and writes nothing at all', async () => {
