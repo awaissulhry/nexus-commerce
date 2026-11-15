@@ -1,7 +1,8 @@
 import { z } from 'zod'
 import { newIdempotencyKey, type ApiClient } from '../../../../lib/api/client'
 import { workOrderSchema, type WorkOrder } from '../../_shared/api'
-import { DOCUMENT_TYPES, WAITING_CODES } from '../../../finance/costing/api'
+// B-W2b-F46: + ENTRY_EVENTS (the event codes of the costs that arrived after the close).
+import { DOCUMENT_TYPES, ENTRY_EVENTS, WAITING_CODES } from '../../../finance/costing/api'
 
 /**
  * B-W2b-424 — the work order close on screen (design production.workorders pop:wo-close; MES-012, MES-013) on B-W2b-411's
@@ -86,6 +87,25 @@ export type CloseRecord = z.infer<typeof closeRecordSchema>
 
 const waitingSchema = z.object({ code: z.enum(WAITING_CODES), sourceType: z.enum(DOCUMENT_TYPES), sourceId: z.string() })
 
+// B-W2b-F46 — the costs that arrived after the close (a CLOSED work order; null otherwise): one line per source, said from
+// its event code; the amount (cost grain) absent for a person without money.cost. The API's words are not drawn.
+const afterCloseLineSchema = z.object({
+  sourceType: z.enum(DOCUMENT_TYPES),
+  sourceId: z.string(),
+  event: z.enum(ENTRY_EVENTS),
+  occurredAt: z.string(),
+  day: z.string(),
+  label: z.string().nullable(),
+  item: itemRef.nullable(),
+  quantity: z.string().nullable(),
+  minutes: z.string().nullable(),
+  entries: z.number(),
+  amount: cost(z.number()),
+})
+export type AfterCloseLine = z.infer<typeof afterCloseLineSchema>
+const afterCloseSchema = z.object({ count: z.number(), lines: z.array(afterCloseLineSchema) })
+export type AfterClose = z.infer<typeof afterCloseSchema>
+
 const closeCheckSchema = z.object({
   workOrder: z.object({ id: z.string(), number: z.string(), status: z.string(), version: z.number(), companyId: z.string(), siteId: z.string() }),
   closable: z.boolean(),
@@ -103,6 +123,8 @@ const closeCheckSchema = z.object({
   split: splitSchema.nullable(),
   undoSeconds: z.number(),
   live: closeRecordSchema.nullable(),
+  // B-W2b-F46 (absent from an API before it: read as none)
+  afterClose: afterCloseSchema.nullable().optional(),
 })
 export type CloseCheck = z.infer<typeof closeCheckSchema>
 
