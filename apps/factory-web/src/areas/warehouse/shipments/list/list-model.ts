@@ -4,6 +4,8 @@ import type { PrintOutcome } from '../daily-model'
 import type { CutOffCard, Phrase, RowView, ShippingAbilities, TileKey } from '../model'
 // B-W2b-410
 import type { QueueDepthActions, QueueDepthModel } from '../queue/model'
+// B-W2b-412
+import type { DispatchListActions, DispatchListModel } from '../end-of-day/list-model'
 
 /** SCR-066 — the shipments list's view model (ShipmentsListView draws it and fetches nothing). */
 export interface ShipmentsListModel {
@@ -34,6 +36,8 @@ export interface ShipmentsListModel {
   printDdts?: PrintDdtsModel | null
   /** B-W2b-410: Ship today and At risk from the queue, Exceptions, the search, Hold N (null in W1's design cases). */
   depth?: QueueDepthModel | null
+  /** B-W2b-412: pickups, End of day, Mark handed over (null in the earlier design cases). */
+  dispatch?: DispatchListModel | null
   /** Design cases: the starting selection, the focused row, the keys panel. */
   selected?: string[]
   focusRow?: number
@@ -90,4 +94,6 @@ export interface ShipmentsListActions {
   onPrintDdtsClose?: () => void
   // B-W2b-410
   depth?: QueueDepthActions
+  // B-W2b-412
+  dispatch?: DispatchListActions
 }

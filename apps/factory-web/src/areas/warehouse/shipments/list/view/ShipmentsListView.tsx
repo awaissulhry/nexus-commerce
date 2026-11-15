@@ -24,6 +24,11 @@ import { holdable } from '../../holds/model'
 import { exceptionsCount, isDepthView } from '../../queue/model'
 import { DEPTH_NS } from '../../queue/shared/depth'
 import { QueueCutOffs, QueueGrid } from '../../queue/view/QueueParts'
+// B-W2b-412
+import { destinationClassOf } from '@nexus/factory-domain/shipping/customs/rules'
+import type { DispatchPick } from '../../end-of-day/list-model'
+import { DispatchBand, DispatchDialogs, DispatchSelection, PickupCardLine, pickupsOf } from '../../end-of-day/view/DispatchParts'
+import { DISPATCH_NS } from '../../pickup/dispatch'
 import '../../shipments.css'
 
 export type { ShipmentsListActions, ShipmentsListModel } from '../list-model'
@@ -41,7 +46,7 @@ export type { ShipmentsListActions, ShipmentsListModel } from '../list-model'
  */
 export function ShipmentsListView({ model, actions }: { model: ShipmentsListModel; actions?: ShipmentsListActions }) {
   return (
-    <WithMessages namespaces={['shipments', 'lists', DEPTH_NS]}>
+    <WithMessages namespaces={['shipments', 'lists', DEPTH_NS, DISPATCH_NS]}>
       <ShipmentsList model={model} actions={actions} />
     </WithMessages>
   )
@@ -53,6 +58,10 @@ function ShipmentsList({ model, actions }: { model: ShipmentsListModel; actions?
   // B-W2b-410: the rows views and the tile this step adds are said in its own catalogue.
   const d = useT(DEPTH_NS)
   const rowsWord = (view: RowView) => (isDepthView(view) || view === 'open' ? d(`rows.${view}`) : t(`rows.${view}`))
+  // B-W2b-412: the Export column, the pickups on the cut-off cards, the selection row's Book pickup and Mark handed over.
+  const x = useT(DISPATCH_NS)
+  const pickups = pickupsOf(model.dispatch)
+  const dispatchSelection = (picked: readonly DispatchPick[]) => (model.dispatch ? <DispatchSelection model={model.dispatch} actions={actions?.dispatch} picked={picked} /> : null)
   const locale = useLocale()
   const [query, setQuery] = useState(model.q)
   useEffect(() => setQuery(model.q), [model.q])
@@ -204,6 +213,18 @@ function ShipmentsList({ model, actions }: { model: ShipmentsListModel; actions?
       const card = model.cards?.find((entry) => entry.shipments > 0 && entry.cutOff && entry.key === (data.transportBy === 'CARRIER' ? (data.carrierCode ?? 'none') : data.transportBy))
       return card?.cutOff ? <Countdown to={card.cutOff.at} label={(left) => t('cutoff.left', { left, time: card.cutOff!.time })} doneLabel={t('cutoff.passed', { time: card.cutOff.time })} /> : <span className="fw-sh-muted">{t('list.noCutOff')}</span>
     }
+    // B-W2b-412 (design sh-grid "Export (W2b)"): outside the EU the goods need export papers (the Export tab).
+    const ExportCell = ({ data }: ICellRendererParams<ShipmentRow>) => {
+      if (!data) return null
+      const where = destinationClassOf(data.shipTo.country)
+      if (where === 'EXPORT')
+        return (
+          <Link className="fw-sh-link" href={`${href(data)}?tab=export`}>
+            <Tag tone="warning">{x('list.export.EXPORT')}</Tag>
+          </Link>
+        )
+      return <span className="fw-sh-muted">{where === 'EU' ? x('list.export.EU') : '—'}</span>
+    }
     // B-W2a-71 (design sh-grid "Freight charged (price, W2a)"): the API sends no amount without the price grain.
     const FreightCell = ({ data }: ICellRendererParams<ShipmentRow>) => {
       if (!data) return null
@@ -237,10 +258,11 @@ function ShipmentsList({ model, actions }: { model: ShipmentsListModel; actions?
       { colId: 'ddt', headerName: t('col.ddt'), minWidth: 110, flex: 0.7, cellRenderer: DdtCell },
       { colId: 'tracking', headerName: t('col.tracking'), minWidth: 130, flex: 0.9, cellRenderer: TrackingCell },
       { colId: 'when', headerName: t('col.when'), minWidth: 150, flex: 0.9, cellRenderer: WhenCell },
+      { colId: 'export', headerName: x('list.export.col'), minWidth: 110, flex: 0.6, cellRenderer: ExportCell },
       ...(model.can.price ? [{ colId: 'freight', headerName: t('col.freight'), field: 'freightCharge' as const, minWidth: 150, flex: 0.8, type: 'rightAligned', cellRenderer: FreightCell }] : []),
       { colId: 'more', headerName: t('col.more'), minWidth: 72, maxWidth: 72, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
     ]
-  }, [t, locale, model.prefix, model.cards, model.can.viewOrders, model.can.price])
+  }, [t, x, locale, model.prefix, model.cards, model.can.viewOrders, model.can.price])
 
   const narrowed = model.q.trim() !== '' || model.carrier !== null || (model.rows !== 'today' && model.rows !== 'all')
   const clearFilters = () => {
@@ -270,11 +292,15 @@ function ShipmentsList({ model, actions }: { model: ShipmentsListModel; actions?
           {' · '}
           {t(`live.${model.live}`)}
         </span>
-        {model.can.manage ? (
-          <Button size="sm" variant="primary" onClick={() => actions?.onNew?.()} aria-keyshortcuts="c">
-            <PackagePlus size={14} aria-hidden /> {t('list.new')}
-          </Button>
-        ) : null}
+        <span className="fw-sh-inline">
+          {/* B-W2b-412 (design page.h "End of day (W2b manifest)", ⋯ "Book a pickup (W2b)"). */}
+          {model.dispatch && <DispatchBand model={model.dispatch} actions={actions?.dispatch} />}
+          {model.can.manage ? (
+            <Button size="sm" variant="primary" onClick={() => actions?.onNew?.()} aria-keyshortcuts="c">
+              <PackagePlus size={14} aria-hidden /> {t('list.new')}
+            </Button>
+          ) : null}
+        </span>
       </div>
 
       {model.notice && (
@@ -293,7 +319,7 @@ function ShipmentsList({ model, actions }: { model: ShipmentsListModel; actions?
         </Banner>
       )}
 
-      {model.depth ? <QueueCutOffs model={model.depth} actions={actions?.depth} /> : <CutOffStrip model={model} actions={actions} />}
+      {model.depth ? <QueueCutOffs model={model.depth} actions={actions?.depth} cardExtra={model.dispatch ? (card) => (card.carrierCode ? <PickupCardLine rows={pickups.get(card.carrierCode)} /> : null) : undefined} /> : <CutOffStrip model={model} actions={actions} />}
 
       <MetricStrip
         metrics={[
@@ -329,6 +355,7 @@ function ShipmentsList({ model, actions }: { model: ShipmentsListModel; actions?
           tools={<span className="fw-sh-inline">{rowsSelect}</span>}
           keys={ownKeys}
           onHelp={() => setHelp(true)}
+          selectionExtra={model.dispatch ? (rows) => dispatchSelection(rows.map((row) => ({ id: row.id, number: row.number, status: row.status, transportBy: row.transportBy, carrierCode: row.carrierCode, ...('siteId' in row ? { siteId: row.siteId } : { ddt: row.ddtNumber }) }))) : undefined}
         />
       ) : (
         <ListFrame<ShipmentRow>
@@ -369,6 +396,8 @@ function ShipmentsList({ model, actions }: { model: ShipmentsListModel; actions?
                     <Hand size={13} aria-hidden /> <SelectionLabel>{d('holds.bulk.button', { count: picked.filter((row) => holdable(row.status)).length })}</SelectionLabel>
                   </Button>
                 )}
+                {/* B-W2b-412 (design sh-grid selection row "Book pickup", "Mark handed over"). */}
+                {dispatchSelection(picked.map((row) => ({ id: row.id, number: row.number, status: row.status, transportBy: row.transportBy, version: row.version, ddt: row.ddt, siteId: row.siteId, carrierCode: row.carrierCode })))}
               </>
             ),
           }}
@@ -397,6 +426,7 @@ function ShipmentsList({ model, actions }: { model: ShipmentsListModel; actions?
 
       {model.create && <NewShipmentDialog model={model.create} can={model.can} actions={actions} />}
       {model.printDdts && <PrintDdtsDialog model={model.printDdts} rows={items ?? []} can={model.can} actions={actions} />}
+      {model.dispatch && <DispatchDialogs model={model.dispatch} actions={actions?.dispatch} />}
       {model.depth?.hold && <BulkHoldDialog model={model.depth.hold} actions={{ onReason: actions?.depth?.onHoldReason, onText: actions?.depth?.onHoldText, onGo: actions?.depth?.onHoldGo, onClose: actions?.depth?.onHoldClose }} />}
     </div>
   )
