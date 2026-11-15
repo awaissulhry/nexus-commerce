@@ -1656,6 +1656,7 @@
     "imports_view": "Vedere le importazioni e i loro piani",
     "imports_run": "Caricare un foglio e vederne la prova",
     "imports_apply": "Applicare il piano di un'importazione",
+    "imports_duplicates_merge": "Unire un cliente, fornitore o materiale doppione al record che resta (con il diritto di modificare entrambi)",
     "documents_view": "Vedere in anteprima i modelli dei documenti di una società",
     "documents_branding_manage": "Cambiare l'immagine di una società: logo, colore di accento, nome mittente delle e-mail, nome del portale",
     "documents_required_manage": "Indicare quali documenti un tipo di record deve avere prima di un cambio di stato e se la loro mancanza lo blocca",

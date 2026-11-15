@@ -70,6 +70,8 @@ export interface WizardProps {
   companies: ReadonlyArray<{ id: string; name: string }>
   can: ImportRights
   actions?: WizardActions
+  /** B-W2b-427: the check's and the result's possible duplicates (the page's container reads them). */
+  duplicates?: ReactNode
 }
 
 interface WizardParts {
@@ -114,7 +116,7 @@ export function ImportWizardInline(props: WizardProps) {
   )
 }
 
-function useWizardParts({ model, importers, companies, can, actions }: WizardProps): WizardParts | null {
+function useWizardParts({ model, importers, companies, can, actions, duplicates }: WizardProps): WizardParts | null {
   const t = useT('admin-import')
   const ta = useT('admin')
   const words = useImporterWords()
@@ -222,7 +224,7 @@ function useWizardParts({ model, importers, companies, can, actions }: WizardPro
         ) : phase === 'planFailed' ? (
           <PlanFailed job={job} />
         ) : phase === 'planned' ? (
-          <Checked job={job} model={model} />
+          <Checked job={job} model={model} duplicates={duplicates} />
         ) : phase === 'applying' ? (
           <>
             <JobProgress
@@ -244,14 +246,14 @@ function useWizardParts({ model, importers, companies, can, actions }: WizardPro
                 </p>
               )}
             </Banner>
-            <Checked job={job} model={model} />
+            <Checked job={job} model={model} duplicates={duplicates} />
           </>
         ) : phase === 'cancelled' ? (
           <Banner tone="neutral" title={t('imp.cancelled.title')}>
             <p className="fw-adm-imp-p">{job.appliedCount > 0 ? t('imp.cancelled.someWritten', { count: job.appliedCount }) : t('imp.cancelled.nothing')}</p>
           </Banner>
         ) : (
-          <Result job={job} model={model} />
+          <Result job={job} model={model} duplicates={duplicates} />
         )}
       </div>
     ),
@@ -414,7 +416,7 @@ function RowsState({ rows, children }: { rows: WizardModel['refused']; children:
 }
 
 /** The dry run: counts, the columns read, the refused rows with their reasons, the changes. Nothing written yet. */
-function Checked({ job, model }: { job: ImportJob; model: WizardModel }) {
+function Checked({ job, model, duplicates }: { job: ImportJob; model: WizardModel; duplicates?: ReactNode }) {
   const t = useT('admin-import')
   const layout = layoutOf(job)
   const refused = model.refused.items ?? []
@@ -525,6 +527,7 @@ function Checked({ job, model }: { job: ImportJob; model: WizardModel }) {
         </section>
       )}
       {applicable(job) === 0 && job.errorCount === 0 && <Banner tone="info" title={t('imp.checked.allSame')} />}
+      {duplicates}
     </div>
   )
 }
@@ -562,7 +565,7 @@ function PlanFailed({ job }: { job: ImportJob }) {
   )
 }
 
-function Result({ job, model }: { job: ImportJob; model: WizardModel }) {
+function Result({ job, model, duplicates }: { job: ImportJob; model: WizardModel; duplicates?: ReactNode }) {
   const t = useT('admin-import')
   const skipped = model.skipped.items ?? []
   return (
@@ -600,6 +603,7 @@ function Result({ job, model }: { job: ImportJob; model: WizardModel }) {
           </RowsState>
         </section>
       )}
+      {duplicates}
     </div>
   )
 }

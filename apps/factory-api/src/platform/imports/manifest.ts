@@ -18,4 +18,14 @@ export const manifest = defineManifest({
   'GET /imports/importers/:importerKey/template': { audiences: ['office'], permission: 'imports.view', scope: 'tenant' },
   'GET /imports/first-load': { audiences: ['office'], permission: 'imports.view', scope: 'record' },
   'POST /imports/first-load/:step/done': { audiences: ['office'], permission: 'imports.apply', scope: 'record' },
+  // B-W2b-427: likely duplicates. A check and the list need the record type's view permission; the merge preview says what
+  // a merge would do to anyone who sees both; the merge needs imports.duplicates.merge (and the record type's manage
+  // permission over both records, in the handler).
+  'GET /imports/:importId/duplicates': { audiences: ['office'], permission: 'imports.view', scope: 'record' },
+  'POST /duplicates/parties/check': { audiences: ['office'], permission: 'parties.view', scope: 'record' },
+  'POST /duplicates/materials/check': { audiences: ['office'], permission: 'product.materials.view', scope: 'record' },
+  'GET /duplicates/parties': { audiences: ['office'], permission: 'parties.view', scope: 'record' },
+  'GET /duplicates/materials': { audiences: ['office'], permission: 'product.materials.view', scope: 'record' },
+  'GET /duplicates/:recordType/merge': { audiences: ['office'], permission: 'signed-in', scope: 'record' },
+  'POST /duplicates/:recordType/merge': { audiences: ['office'], permission: 'imports.duplicates.merge', scope: 'record' },
 })

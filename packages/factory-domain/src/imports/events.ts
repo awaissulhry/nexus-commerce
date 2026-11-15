@@ -47,4 +47,12 @@ export const events = [
     payload: z.strictObject({ jobId: z.uuid(), importerKey: z.string() }),
     live,
   }),
+  // B-W2b-427 (PLT-178): a person merged a duplicate customer, supplier or material into the record that stays (the
+  // duplicate archived, its free parts moved). Ids and codes only; the records' own events refresh their screens.
+  defineEvent({
+    type: 'duplicate.merged',
+    context: 'imports',
+    description: 'A duplicate customer, supplier or material was merged into the record that stays: its free parts moved, it was archived.',
+    payload: z.strictObject({ recordType: z.enum(['PARTY', 'MATERIAL']), keptId: z.uuid(), keptCode: z.string(), mergedId: z.uuid(), mergedCode: z.string() }),
+  }),
 ] as const

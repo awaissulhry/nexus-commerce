@@ -411,6 +411,8 @@ import { PRIVACY_DEPTH_DEFINITIONS, PRIVACY_DEPTH_PERMISSIONS } from '../../priv
 import { SHIPPING_PICKUPS_DEFINITIONS, SHIPPING_PICKUPS_PERMISSIONS } from '../../shipping/pickups/permissions'
 // B-W2b-406: a customer's own figures against ours (receivables.theirFigures.manage).
 import { THEIR_FIGURES_DEFINITIONS, THEIR_FIGURES_PERMISSIONS } from '../../receivables-figures/permissions'
+// B-W2b-427: likely duplicates (imports.duplicates.merge).
+import { IMPORTS_DUPLICATES_DEFINITIONS, IMPORTS_DUPLICATES_PERMISSIONS } from '../../imports/duplicates/permissions'
 
 /**
  * Every permission of the factory, assembled (feature PLT-029). A module that adds routes declares its permissions
@@ -1133,6 +1135,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   SHIPPING_PICKUPS_DEFINITIONS,
   // B-W2b-406: a customer's own figures against ours (area `receivables`).
   THEIR_FIGURES_DEFINITIONS,
+  // B-W2b-427: likely duplicates (area `imports`).
+  IMPORTS_DUPLICATES_DEFINITIONS,
 ])
 
 /** The area of the permissions only floor roles hold (and floor roles hold no other, but FLOOR_SHARED_PERMISSIONS). */
@@ -1545,6 +1549,8 @@ for (const name of PRIVACY_DEPTH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclare
 for (const name of SHIPPING_PICKUPS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-406: a customer's own figures against ours.
 for (const name of THEIR_FIGURES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-427: likely duplicates.
+for (const name of IMPORTS_DUPLICATES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }
