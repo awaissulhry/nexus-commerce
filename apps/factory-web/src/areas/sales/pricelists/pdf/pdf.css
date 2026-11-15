@@ -1,0 +1,40 @@
+/* B-W2b-380 — the price list PDF kept for mail, on the print page (never printed): layout only. */
+
+.fw-plp-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  margin-bottom: var(--nds-space-16);
+}
+
+.fw-plp-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+.fw-plp-title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+}
+
+.fw-plp-hint {
+  margin: 0;
+  color: var(--nds-text-muted);
+}
+
+.fw-plp-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-plp-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+}

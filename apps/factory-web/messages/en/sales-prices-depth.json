@@ -392,8 +392,6 @@
       "ACTIVE": "Active",
       "ARCHIVED": "Archived"
     },
-    "surchargeAmount": "+ {amount} a piece",
-    "surchargePct": "+ {pct} of the price",
     "pick": "Choose…",
     "materialSearch": "Find a material",
     "quantity": "Minimum pieces",

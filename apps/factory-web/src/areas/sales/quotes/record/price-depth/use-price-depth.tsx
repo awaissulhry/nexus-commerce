@@ -12,6 +12,8 @@ import { lineHeld, netBody, netProblems, type NetDraft, type Tone, type Words } 
 import { priceProblem } from './problems'
 import { BlockPrices } from './view/BlockPrices'
 import { PricingByLine, type PricingByLineModel } from './view/PricingByLine'
+// B-W2b-380 (XF6:02): cost changed since priced, on the lines themselves.
+import { useCostChanged } from '../../../_shared/cost-changed/use-cost-changed'
 
 export interface PriceDepthInput {
   api: ApiClient
@@ -22,6 +24,8 @@ export interface PriceDepthInput {
   /** The record takes the quote a write answers. */
   onQuote: (next: QuoteDetail) => void
 }
+
+const NO_LINES: readonly never[] = []
 
 type Read<T> = { status: 'loading' } | { status: 'error'; problem: Words } | { status: 'ready'; value: T }
 
@@ -54,6 +58,8 @@ export function usePriceDepth(input: PriceDepthInput): Pick<QuoteDepthSlots, 'pr
   const [manual, setManual] = useState<{ draft: NetDraft; saving: boolean; problem: Words | null } | null>(null)
   const [resetKey, setResetKey] = useState(0)
   const [tries, setTries] = useState(0)
+  // B-W2b-380 (XF6:02): the lines' cost sheets, once per revision, while Price & margin shows them (the cost grain).
+  const costChanges = useCostChanged({ api, companyId: quote?.companyId ?? null, lines: quote?.lines ?? NO_LINES, enabled: !!quote && grains.cost && tab === 'price' })
 
   const key = quote ? `${quote.id}:${quote.version}:${tab}:${tries}` : ''
   useEffect(() => {
@@ -170,6 +176,7 @@ export function usePriceDepth(input: PriceDepthInput): Pick<QuoteDepthSlots, 'pr
     busy,
     notice,
     resetKey,
+    costChanges,
     manual:
       manual && manualEntry
         ? {

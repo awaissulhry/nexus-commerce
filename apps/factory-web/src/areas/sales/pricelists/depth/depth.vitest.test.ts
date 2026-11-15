@@ -200,7 +200,8 @@ describe('words', () => {
       for (const match of text.matchAll(/'((?:depth\.)?[a-z]+\.[A-Za-z0-9_.]+)'/g)) {
         const key = match[1]!.replace(/^depth\./, '')
         if (!MINE.test(key)) continue
-        for (const locale of LOCALES) if (!has(CATALOGUE[locale][DEPTH_NS], key) && !has(CATALOGUE[locale].pricelists, key)) missing.push(`${locale} ${key} (${file.split('/').slice(-2).join('/')})`)
+        // B-W2b-380: the minimums edited in place and the PDF kept for mail (and their design cases) speak `prices-followups`.
+        for (const locale of LOCALES) if (!has(CATALOGUE[locale][DEPTH_NS], key) && !has(CATALOGUE[locale].pricelists, key) && !has(CATALOGUE[locale]['prices-followups'], key)) missing.push(`${locale} ${key} (${file.split('/').slice(-2).join('/')})`)
       }
     }
     expect(missing).toEqual([])
