@@ -1,0 +1,582 @@
+{
+  "noAccess": {
+    "title": "You cannot see the bank",
+    "body": "The bank's statements and lines need the right to see the company's bank (payments.bank.view). Ask an administrator."
+  },
+  "common": {
+    "retry": "Try again",
+    "dismiss": "Dismiss",
+    "cancel": "Cancel",
+    "close": "Close",
+    "working": "Working…"
+  },
+  "live": {
+    "connecting": "Connecting",
+    "live": "Live",
+    "offline": "Offline: reload to see changes"
+  },
+  "band": {
+    "label": "Bank",
+    "lastStatement": "Last statement:",
+    "noStatement": "none imported yet",
+    "readAt": "Read at {time}",
+    "reading": "Reading…",
+    "import": "Import statement",
+    "more": "More actions",
+    "refresh": "Look again for matches",
+    "refreshed_one": "Looked again: {count} line has new suggestions.",
+    "refreshed_other": "Looked again: {count} lines have new suggestions.",
+    "export_one": "Export the {count} line in view (CSV)",
+    "export_other": "Export the {count} lines in view (CSV)",
+    "keys": "Keyboard shortcuts"
+  },
+  "tile": {
+    "title": "Bank",
+    "failed": "Couldn't load bank",
+    "TO_MATCH": "Lines to match",
+    "TO_MATCHHint": "Money in and out not matched yet",
+    "SURE": "Sure matches to accept",
+    "SUREHint": "A High suggestion waits for your yes",
+    "OLD": "Unmatched over 7 days",
+    "OLDHint": "Booked more than {days} days ago"
+  },
+  "view": {
+    "TO_MATCH": "To match",
+    "SURE": "Sure matches",
+    "OLD": "Unmatched over 7 days",
+    "MATCHED": "Matched",
+    "ALL": "All lines"
+  },
+  "match": {
+    "title": "Match bank lines",
+    "hint": "The line on the left, its suggested invoices on the right with how sure and why. Amounts are prices.",
+    "noPrice": "Amounts are not shown: your role does not see selling prices.",
+    "refusal": {
+      "items": "One of the items is no longer open for this customer: choose again.",
+      "recorded": "This bank reference is recorded already as a payment: choose that payment instead of recording it again.",
+      "together": "These matches cannot be accepted together (one changed, or two are for the same line): read them again."
+    }
+  },
+  "statement": {
+    "chip": "Statement {name} · {from} – {to}",
+    "chipReading": "Statement…",
+    "clear": "Show the lines to match instead of this statement"
+  },
+  "col": {
+    "booked": "Booked",
+    "amount": "Amount",
+    "reference": "Reference text",
+    "payer": "Payer",
+    "match": "Suggestion",
+    "age": "Age"
+  },
+  "lines": {
+    "count_one": "{count} line",
+    "count_other": "{count} lines",
+    "days_one": "{count} day",
+    "days_other": "{count} days",
+    "open": "Open beside",
+    "value": "Value {date}",
+    "direction": {
+      "IN": "Money in",
+      "OUT": "Money out"
+    },
+    "matched": "Matched",
+    "payment": "Open the payment",
+    "supplierInvoice": "Supplier invoice {number}",
+    "staleOnly": "Its suggestions were paid meanwhile",
+    "noSuggestion": "No suggestion",
+    "more_one": "+{count} more suggestion",
+    "more_other": "+{count} more suggestions",
+    "viewMenu": "Lines: {view}",
+    "viewMenuLabel": "Which lines",
+    "failed": "Couldn't load match bank lines",
+    "slow": "Still loading…",
+    "more50": "Show 50 more",
+    "empty": {
+      "title": "Every bank line is matched",
+      "body": "Import the next statement when it comes from the bank."
+    },
+    "none": {
+      "title": "No lines here",
+      "body": "No bank line is in this view now.",
+      "back": "Show the lines to match"
+    }
+  },
+  "confidence": {
+    "HIGH": "High",
+    "MEDIUM": "Medium",
+    "LOW": "Low"
+  },
+  "reason": {
+    "AMOUNT_EQUAL": "amount equal",
+    "AMOUNT_WITHIN_TOLERANCE": "amount within the write-off tolerance",
+    "NUMBER_IN_REFERENCE": "invoice number in the reference",
+    "IBAN_KNOWN": "IBAN known",
+    "NAME_MATCHES": "name matches",
+    "CHOSEN_BY_PERSON": "chosen by a person"
+  },
+  "difference": {
+    "UNDERPAYMENT": "Accepting leaves {amount} unpaid on the invoice.",
+    "OVERPAYMENT": "Accepting leaves {amount} not placed: it stays on the customer's account."
+  },
+  "writeOff": {
+    "tick": "Write off the difference of {amount}",
+    "reason": "Why it is written off",
+    "note": "Say why",
+    "reasons": {
+      "ROUNDING": "Rounding",
+      "BANK_CHARGES": "Bank charges",
+      "OTHER": "Other (say why)"
+    },
+    "refusal": {
+      "NO_TOLERANCE": "The company has no write-off tolerance set (the accountant's, in the receivables settings): nothing is written off.",
+      "OVER_TOLERANCE": "The difference is above the write-off tolerance: it is not written off.",
+      "NOTHING_LEFT": "Nothing is left to write off.",
+      "SHORT_ON_SEVERAL": "The money is short on more than one invoice: choose how much goes on each instead.",
+      "SHORT_ON_DEPOSIT": "A deposit request is short: it is not written off.",
+      "NOTE_NEEDED": "Say why it is written off.",
+      "NOT_RECEIVED": "The payment is not received (voided): nothing is written off.",
+      "NOT_AN_INVOICE_ALLOCATION": "Only a difference on an invoice is written off.",
+      "REVERSED_ALREADY": "This write-off is taken back already.",
+      "A_REVERSAL": "A taking-back is not taken back again.",
+      "other": "The difference cannot be written off."
+    }
+  },
+  "panel": {
+    "label": "The open bank line and its suggestions",
+    "title": "Line of {date}",
+    "empty": "No line open",
+    "position": "{at} of {count}",
+    "previous": "Previous line",
+    "next": "Next line",
+    "failed": "Couldn't load this bank line",
+    "reading": "Reading the line…",
+    "nothing": "No line to open in this view.",
+    "pick": "Open a line from the list to see its suggestions.",
+    "booked": "Booked",
+    "bookedValue": "{booked} (value {value})",
+    "amount": "Amount",
+    "reference": "Reference text",
+    "bankReference": "Bank reference",
+    "payer": "Payer",
+    "age": "Waiting",
+    "suggestions_one": "{count} suggestion",
+    "suggestions_other": "{count} suggestions",
+    "howSure": "How sure:",
+    "reasons": "Why it matches",
+    "invoice": "Invoice {number}",
+    "deposit": "Deposit request of order {number}",
+    "open": "open {amount}",
+    "supplierInvoice": "Supplier invoice {number}",
+    "typedPayment": "Payment typed by hand {reference}",
+    "stale": "Paid meanwhile: it cannot be accepted (the next look removes it).",
+    "noSuggestion": {
+      "title": "No suggestion for this line",
+      "bodyIn": "Choose the customer and the invoices it pays.",
+      "bodyOut": "No supplier invoice matches it yet."
+    },
+    "reversedBefore_one": "Taken back once before (from {party}: {reason}).",
+    "reversedBefore_other": "Taken back {count} times before (last from {party}: {reason}).",
+    "accept": "Accept",
+    "acceptRecord": "Accept and record the payment",
+    "choose": "Choose another or split",
+    "leave": "Leave unmatched",
+    "accepted": "Match accepted.",
+    "acceptedRecorded": "Match accepted: the payment is recorded and placed.",
+    "openPayment": "Open the payment record",
+    "acceptedAt": "Accepted on {date}",
+    "chosenAt": "Chosen by a person on {date}",
+    "reverse": "Take back"
+  },
+  "period": {
+    "soft": "This day falls in a month closed softly.",
+    "hard": "This day falls in a month closed for good: it cannot be written; ask the accountant.",
+    "softAsk": "The month is closed softly: say why this goes in, then send again.",
+    "reason": "Why it goes into the closed month"
+  },
+  "choose": {
+    "title": "Choose another or split",
+    "customer": "Customer",
+    "customerHint": "Name, code or VAT number",
+    "customers": "Customers found",
+    "searching": "Searching…",
+    "noCustomer": "No customer found.",
+    "pick": "Choose",
+    "otherCustomer": "Another customer",
+    "where": "What the line pays",
+    "rest": "{amount} stays on the customer's account.",
+    "writeOff": "Write off what is left instead (within the tolerance)",
+    "writeOffHint": "Written off only when the whole difference is within the company's tolerance.",
+    "go": "Accept and record the payment",
+    "goSplit_one": "Split over {count} item and record the payment",
+    "goSplit_other": "Split over {count} items and record the payment",
+    "held": {
+      "customer": "Choose the customer first.",
+      "items": "Tick at least one invoice or deposit request.",
+      "amounts": "Fix the amounts first: together they may not pass the line."
+    }
+  },
+  "reverse": {
+    "title": "Take back this acceptance?",
+    "payment": "Payment",
+    "body": "The line goes back to match, with its suggestions.",
+    "bodyRecorded": "The placements and any write-off are taken back, the payment it recorded is voided, and the line goes back to match.",
+    "reason": "Why it is taken back",
+    "held": "Say why it is taken back.",
+    "go": "Take back",
+    "done": "Acceptance taken back: the line is to match again."
+  },
+  "review": {
+    "open_one": "Accept all High ({count})",
+    "open_other": "Accept all High ({count})",
+    "title_one": "Accept {count} sure match",
+    "title_other": "Accept {count} sure matches",
+    "summary_one": "Nexus only: {count} payment is recorded and placed; nothing goes to the bank. All or none.",
+    "summary_other": "Nexus only: {count} payments are recorded and placed; nothing goes to the bank. All or none.",
+    "summaryMore_one": "The first {count} sure match (at most 50 at a time). Nexus only; all or none.",
+    "summaryMore_other": "The first {count} sure matches (at most 50 at a time). Nexus only; all or none.",
+    "save_one": "Accept {count} match",
+    "save_other": "Accept {count} matches",
+    "what": "Match",
+    "now": "To match",
+    "records": "records the payment",
+    "accepted": "Accepted",
+    "doneVerb": "accepted"
+  },
+  "bulk": {
+    "accept_one": "Accept {count} sure match",
+    "accept_other": "Accept {count} sure matches",
+    "export_one": "Export {count} (CSV)",
+    "export_other": "Export {count} (CSV)"
+  },
+  "held": {
+    "busy": "Wait: the last action is still running.",
+    "match": "You can see the bank, not match its lines (payments.bank.match).",
+    "record": "Accepting money in records a payment: that needs payments.record.",
+    "void": "Taking it back voids the payment it recorded: that needs payments.void.",
+    "writeOff": "Writing off needs payments.writeOff.",
+    "writeOffNote": "Say why it is written off.",
+    "lockReason": "Say why it goes into the closed month.",
+    "import": "You can see the bank, not import statements (payments.bank.import).",
+    "upload": "Importing a file needs the right to upload files (files.upload).",
+    "matched": "This line is matched already.",
+    "stale": "An item it names was paid meanwhile: look again or choose another.",
+    "currency": "Payments are recorded in euro: this line is in {currency}. Record it by hand.",
+    "chooseOut": "Money out is matched from its suggestion; a supplier invoice cannot be chosen by hand here yet.",
+    "parties": "Choosing a customer needs the right to see customers (parties.view).",
+    "price": "Choosing the amounts needs the price grain (money.price).",
+    "leave": "A line cannot be set aside yet (bank charges, salaries): it stays to match until a step adds that.",
+    "notMatched": "This line is not matched.",
+    "noLine": "Open a line first.",
+    "noPick": "Choose a suggestion first.",
+    "noSure": "No sure match to accept in this view.",
+    "noRows": "No line in this view.",
+    "first": "This is the first line.",
+    "last": "This is the last line.",
+    "dryRunFirst": "Check the file first.",
+    "skipErrors_one": "{count} line cannot be read: tick to import without it, or fix the mapping.",
+    "skipErrors_other": "{count} lines cannot be read: tick to import without them, or fix the mapping.",
+    "figures": "You can see their figures, not record them (receivables.theirFigures.manage).",
+    "figuresPrice": "Their figures are prices: typing them needs the price grain (money.price).",
+    "figuresMany": "At most 500 rows.",
+    "filesRead": "Opening the file needs the right to read files (files.read).",
+    "pasteNothing": "Paste rows first (each ending with an amount)."
+  },
+  "keys": {
+    "title": "Keyboard shortcuts",
+    "lines": "Next / previous bank line",
+    "open": "Open the line beside the list",
+    "select": "Select the line",
+    "accept": "In the panel: accept the suggestion",
+    "split": "In the panel: choose another or split",
+    "openFigures": "Open their figures vs ours"
+  },
+  "import": {
+    "title": "Import a bank statement",
+    "step": {
+      "file": "File",
+      "mapping": "Columns",
+      "review": "Check",
+      "done": "Imported"
+    },
+    "fileBody": "The statement you downloaded from the bank's site: camt.053 (XML), CSV, Excel or OFX. A line imported before is never imported again.",
+    "fileHint": "camt.053, CSV, XLSX or OFX · at most 10 MB",
+    "fileLabel": "File",
+    "format": "Format",
+    "formatFound": "From the file's name",
+    "formatPick": "Say which format the file is",
+    "formatChoose": "Choose the format",
+    "account": "Bank account",
+    "accountSheet": "A sheet names no account: choose it.",
+    "accountFile": "The file names its account; choose one only to check it.",
+    "accountChoose": "Choose the account",
+    "accountByFile": "The one the file names",
+    "accountOff": "switched off",
+    "accountsReading": "Reading the accounts…",
+    "read": "Check the file",
+    "held": {
+      "file": "Choose the file first.",
+      "format": "Say which format the file is.",
+      "account": "Choose the account this sheet is for."
+    },
+    "mappingBody": "Say which column holds what. The booking day and the amount (or money in and money out) are needed.",
+    "mappingLabel": "The sheet's columns",
+    "mapTo": "Column {header} holds",
+    "noHeader": "(no heading)",
+    "numberFormat": "Numbers are written",
+    "numbers": {
+      "it": "1.234,56 (Italian)",
+      "en": "1,234.56 (English)"
+    },
+    "sheet": "Sheet",
+    "column": {
+      "none": "Leave out",
+      "bookedOn": "Booking day",
+      "valueOn": "Value day",
+      "amount": "Amount (signed)",
+      "moneyIn": "Money in",
+      "moneyOut": "Money out",
+      "currency": "Currency",
+      "bankReference": "Bank reference (CRO / TRN)",
+      "referenceText": "Reference text",
+      "counterpartyName": "Payer or payee",
+      "counterpartyIban": "Payer's IBAN"
+    },
+    "mapping": {
+      "needDay": "Map the booking day.",
+      "needAmount": "Map the amount, or money in and money out.",
+      "twice": "A column is mapped twice.",
+      "incomplete": "Map the booking day and the amount first."
+    },
+    "period": "Period",
+    "periodValue": "{from} – {to}",
+    "moneyIn": "Money in",
+    "moneyOut": "Money out",
+    "counts": {
+      "new_one": "{count} new",
+      "new_other": "{count} new",
+      "duplicate_one": "{count} already imported",
+      "duplicate_other": "{count} already imported",
+      "error_one": "{count} cannot be read",
+      "error_other": "{count} cannot be read"
+    },
+    "duplicates": "Lines imported before are left out: never twice.",
+    "skipErrors_one": "Import without the {count} line that cannot be read",
+    "skipErrors_other": "Import without the {count} lines that cannot be read",
+    "fixMapping": "Fix the column mapping",
+    "linesLabel": "The file's lines",
+    "col": {
+      "row": "Row",
+      "verdict": "Line",
+      "booked": "Booked",
+      "amount": "Amount",
+      "text": "Payer and reference"
+    },
+    "verdict": {
+      "NEW": "New",
+      "DUPLICATE": "Imported already",
+      "ERROR": "Cannot be read"
+    },
+    "problem": {
+      "NO_DATE": "No booking day.",
+      "BAD_DATE": "The day is not a date.",
+      "FUTURE_DATE": "The booking day has not come yet.",
+      "NO_AMOUNT": "No amount.",
+      "BAD_AMOUNT": "The amount is not a number in the format chosen.",
+      "ZERO_AMOUNT": "The amount is 0.",
+      "TOO_MANY_DECIMALS": "Too many decimals for the currency.",
+      "OTHER_CURRENCY": "Another currency than the account's.",
+      "BOTH_SIDES": "An amount both in and out.",
+      "REFERENCE_TOO_LONG": "The bank reference is longer than 100 characters."
+    },
+    "first200": "The first 200 of {count} lines are shown.",
+    "go_one": "Import {count} line",
+    "go_other": "Import {count} lines",
+    "back": "Back",
+    "done": {
+      "title_one": "{count} line imported",
+      "title_other": "{count} lines imported",
+      "body": "{suggested} suggestions found; {duplicate} lines were imported before and left out.",
+      "open": "See the lines"
+    },
+    "refusal": {
+      "FORMAT_UNKNOWN": "Say which format the file is: camt.053 (XML), CSV, Excel or OFX.",
+      "FILE_NOT_READY": "The file is not ready: upload it again.",
+      "NOT_A_STATEMENT_FILE": "This file was not uploaded as a bank statement of this company.",
+      "FILE_USED": "This file is imported already.",
+      "ACCOUNT_NEEDED": "The file names no account: choose the bank account it is for.",
+      "ACCOUNT_UNKNOWN": "The file is for an account the company does not have (or has switched off).",
+      "ACCOUNT_DIFFERS": "The file is for another account than the one chosen.",
+      "ACCOUNT_OFF": "The account chosen is switched off: nothing is imported into it.",
+      "CURRENCY_DIFFERS": "The file is in another currency than the account's.",
+      "MAPPING_INCOMPLETE": "Map the booking day and the amount (or money in and money out) first.",
+      "NOTHING_NEW": "Every line of this file is imported already: nothing new.",
+      "LINES_UNREADABLE": "Some lines cannot be read: fix the mapping, or import without them.",
+      "CHANGED_SINCE_DRY_RUN": "The lines changed since the check (another import took some): check the file again.",
+      "other": "The statement cannot be imported."
+    },
+    "file": {
+      "UNREADABLE": "We could not read this file.",
+      "NOT_THIS_FORMAT": "This file is not in the format chosen.",
+      "NO_LINES": "The file has no booked movement.",
+      "TOO_MANY_LINES": "The file has too many movements (or is over 10 MB): download a shorter period.",
+      "SEVERAL_ACCOUNTS": "The file holds more than one account: download one account at a time.",
+      "sheet": "We could not read this sheet: check its format and its sheet."
+    }
+  },
+  "format": {
+    "CAMT053": "camt.053 (XML)",
+    "CSV": "CSV",
+    "XLSX": "Excel (XLSX)",
+    "OFX": "OFX"
+  },
+  "figures": {
+    "title": "Their figures vs ours",
+    "hint": "A B2B customer's own statement compared with our books as of the same day. Amounts are prices.",
+    "noPrice": "Amounts are not shown: your role does not see selling prices. Which lines differ is still said.",
+    "new": "Record their figures",
+    "count_one": "{count} statement",
+    "count_other": "{count} statements",
+    "failed": "Couldn't load their figures vs ours",
+    "openFailed": "Couldn't load these figures",
+    "reading": "Comparing with our books…",
+    "empty": {
+      "title": "No customer figures recorded",
+      "body": "When a customer sends its own statement, record its figures here to see every difference."
+    },
+    "noAccess": {
+      "title": "You cannot see customers' figures",
+      "body": "Their figures need the right to see receivables (receivables.view)."
+    },
+    "col": {
+      "customer": "Customer",
+      "asOf": "As of",
+      "balance": "Balance",
+      "theirsOurs": "Their balance → ours",
+      "difference": "Difference",
+      "state": "Agrees",
+      "listed": "They listed",
+      "file": "Their statement",
+      "theirReference": "Their reference",
+      "theirs": "They say",
+      "ours": "Ours",
+      "open": "Open with us",
+      "day": "Day",
+      "ourAmount": "Our amount"
+    },
+    "agrees": "Agrees",
+    "differs_one": "{count} difference",
+    "differs_other": "{count} differences",
+    "listed": "{orders} orders · {payments} payments",
+    "fileKept": "Kept",
+    "noFile": "Not kept",
+    "detailTitle": "Their figures vs ours — {customer}, as of {date}",
+    "recorded": "Recorded",
+    "recordedBy": "by {name} on {date}",
+    "someone": "someone",
+    "note": "Note",
+    "theirBalance": "Their balance",
+    "ourBalance": "Our balance",
+    "balanceHint": "Ours: invoices − credit notes − payments + refunds paid as of the day, small differences written off counted. The difference is theirs − ours.",
+    "orders": "Per order",
+    "payments": "Payments",
+    "noOrders": "They listed no order, and nothing is open with us.",
+    "notListed": "not on their list",
+    "order": "Order {number}",
+    "paymentsFrom": "Our payments are compared from {date}, the first payment they list.",
+    "paymentsNone": "They listed no payment: ours are not compared one by one (the balance says the whole difference).",
+    "state": {
+      "SAME": "The same",
+      "DIFFERS": "Differs",
+      "NOT_FOUND": "Not found with us",
+      "NOTHING_OPEN": "Nothing open with us",
+      "TWICE": "Listed twice",
+      "ONLY_OURS": "Only ours"
+    },
+    "foundBy": {
+      "REFERENCE": "by reference",
+      "AMOUNT_AND_DAY": "by amount and day"
+    },
+    "correct": "Correct…",
+    "newTitle": "Record their figures",
+    "correctTitle": "Correct their figures",
+    "newBody": "Type what the customer's statement says as of its day: per order, the payments it made and its balance. They are compared with our books at once.",
+    "correctBody": "Correct a typing mistake. The customer stays the same; the figures are never deleted.",
+    "asOfHint": "The day their statement is as of (not after today).",
+    "balanceTyped": "What they say they owe us (below 0: what we owe them).",
+    "addOrder": "Add an order",
+    "addPayment": "Add a payment",
+    "removeOrder": "Remove order {index}",
+    "removePayment": "Remove payment {index}",
+    "pasteOrders": "Paste orders from their spreadsheet",
+    "pasteOrdersHint": "One order per line: reference, then amount (tab or ; between them)",
+    "pastePayments": "Paste payments from their spreadsheet",
+    "pastePaymentsHint": "One payment per line: reference, day, amount (tab or ; between them)",
+    "pasteAdd_one": "Add {count} row",
+    "pasteAdd_other": "Add {count} rows",
+    "noPaymentsTyped": "No payment typed: add the ones they list.",
+    "fileHint": "The statement as they sent it (PDF, sheet…), kept with these figures.",
+    "fileDrop": "Their statement (optional)",
+    "go": "Record and compare",
+    "goCorrect": "Save the correction",
+    "recordedNotice": "Their figures are recorded and compared.",
+    "correctedNotice": "Their figures are corrected and compared again.",
+    "problem": {
+      "party": "Choose the customer.",
+      "asOfMissing": "Choose the day of their statement.",
+      "asOf": "Their figures are as of a day that has come (not after today).",
+      "amount": "Type an amount (e.g. 1.250,50 or -80).",
+      "reference": "A reference of 1 to 100 characters.",
+      "dateMissing": "Choose the payment's day.",
+      "date": "A payment they list comes after the day of their figures.",
+      "note": "A note of at most 2000 characters.",
+      "other": "Check the figures typed."
+    },
+    "refusal": {
+      "NOT_A_CUSTOMER": "This party is not a customer: only a customer's figures are compared.",
+      "AMOUNT_NEEDED": "Every order, every payment and the balance need their amount.",
+      "FILE_NOT_READY": "Their statement's file is not ready: upload it again.",
+      "NOT_A_FIGURES_FILE": "This file was not uploaded as a customer's statement of this company.",
+      "FILE_USED": "This file is kept with other figures already.",
+      "REFUSED": "These figures cannot be kept as typed: check the day, the references and the amounts."
+    }
+  },
+  "csv": {
+    "file": "bank-lines",
+    "figuresFile": "their-figures",
+    "booked": "Booked",
+    "value": "Value",
+    "amount": "Amount",
+    "currency": "Currency",
+    "reference": "Reference text",
+    "bankReference": "Bank reference",
+    "payer": "Payer",
+    "payerIban": "Payer's IBAN (masked)",
+    "state": "State",
+    "confidence": "How sure",
+    "party": "Customer or supplier"
+  },
+  "problem": {
+    "read": {
+      "signed_out": "You are signed out: sign in again.",
+      "forbidden": "You may not see this.",
+      "not_found": "It is not there any more.",
+      "unavailable": "The server does not answer now: try again in a moment.",
+      "rate_limited": "Too many requests: wait a moment and try again.",
+      "internal": "Something went wrong on our side: try again."
+    },
+    "write": {
+      "moved": "Someone changed it meanwhile: it is read again; check and send again.",
+      "state": "It cannot be done in its present state: it is read again.",
+      "invalid": "Something typed is not valid: check the fields.",
+      "signed_out": "You are signed out: sign in again.",
+      "forbidden": "You may not do this.",
+      "not_found": "It is not there any more.",
+      "rate_limited": "Too many requests: wait a moment and try again.",
+      "unavailable": "The server does not answer now: try again in a moment.",
+      "step_up": "Confirm with a fresh code first.",
+      "internal": "Something went wrong on our side: nothing was changed."
+    }
+  }
+}

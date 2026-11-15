@@ -1,0 +1,430 @@
+{
+  "tpl": {
+    "dismiss": "Dismiss",
+    "retry": "Try again",
+    "busy": "Working…",
+    "newTab": "(opens in a new tab)",
+    "language": {
+      "it": "Italiano",
+      "en": "English"
+    },
+    "status": {
+      "DRAFT": "Draft",
+      "ACTIVE": "In use",
+      "RETIRED": "Retired"
+    },
+    "kind": {
+      "QUOTE": "Quote",
+      "ORDER_CONFIRMATION": "Order confirmation",
+      "PURCHASE_ORDER": "Purchase order",
+      "DDT": "DDT (transport document)",
+      "INVOICE_COPY": "Invoice (courtesy copy)",
+      "PACKING_LIST": "Packing list"
+    },
+    "column": {
+      "code": "Code",
+      "description": "Description",
+      "goods": "Goods",
+      "quantity": "Quantity",
+      "uom": "Unit",
+      "unitPrice": "Unit price",
+      "discount": "Discount",
+      "vat": "VAT rate",
+      "delivery": "Delivery",
+      "amount": "Amount",
+      "parcel": "Parcel"
+    },
+    "part": {
+      "COMPANY_LEGAL": "The company's legal data",
+      "NUMBER_AND_DATE": "Number and date",
+      "PARTY": "Customer or supplier",
+      "FACTS": "The document's facts",
+      "TOTALS": "Totals and VAT",
+      "NOTICES": "Fixed notices",
+      "SIGNATURES": "Signature boxes"
+    },
+    "partWhy": {
+      "COMPANY_LEGAL": "On the letterhead and in the legal line of every page (c.c. art. 2250).",
+      "NUMBER_AND_DATE": "As the number series issued them.",
+      "PARTY": "Name, address and tax identity as kept on the record.",
+      "FACTS": "What the document records, such as a DDT's transport (DPR 472/1996).",
+      "TOTALS": "Computed from the lines; no template changes them.",
+      "NOTICES": "Words the law or the document needs, such as the courtesy copy's notice.",
+      "SIGNATURES": "The driver's, the carrier's and the recipient's boxes."
+    },
+    "event": {
+      "service": {
+        "status_changed": "Service case status"
+      },
+      "shipping": {
+        "tracking_link": "Shipment tracking link"
+      }
+    },
+    "eventWhen": {
+      "service": {
+        "status_changed": "When a person moves a case and its customer mail is switched on."
+      },
+      "shipping": {
+        "tracking_link": "When a shipment's tracking link is sent to the customer."
+      }
+    },
+    "inUse": {
+      "COMPANY": "This company's",
+      "ALL": "Every company's",
+      "CODE": "The standard words"
+    },
+    "source": {
+      "CONTACT": "Their own language",
+      "PARTY": "Their organisation's language",
+      "COMPANY": "The company's language"
+    },
+    "refusal": {
+      "NOT_A_DRAFT": "This version was published: its words never change. Start a new version.",
+      "NOT_IN_USE": "Only the version in use can be retired.",
+      "DRAFT_OPEN": "A draft of this template is already open: open that one, or delete it first.",
+      "ANOTHER_IN_USE": "Another version was published at the same time: the template was read again.",
+      "VERSION_TAKEN": "Another version was written at the same time: the template was read again.",
+      "NOT_OFFERED": "This template is not one Nexus reads.",
+      "DATABASE": "The template cannot be changed like this: it was read again."
+    },
+    "problem": {
+      "tooLong": "At most {limit} characters: {over} too many.",
+      "syntax": "Write each placeholder between double braces, as the list shows them, and close every one.",
+      "notOffered": "{name} is not offered here: use one of the placeholders listed.",
+      "subjectEmpty": "The subject cannot be empty.",
+      "bodyEmpty": "The message cannot be empty.",
+      "oneLine": "The subject is one line.",
+      "stale": "Someone else changed this template meanwhile: it was read again.",
+      "noRight": "You may not change templates of this company.",
+      "invalid": "The words were refused as they are: check each field."
+    },
+    "held": {
+      "noRight": "Changing templates needs the right to manage document templates.",
+      "published": "A published version never changes: start a new version.",
+      "busy": "Wait for the change in progress.",
+      "nothingChanged": "Nothing changed yet.",
+      "problems": "Fix the problems in the words first.",
+      "saveFirst": "Save the draft first (⌘S).",
+      "inUse": "This version is in use already.",
+      "retired": "A retired version is not published again: start a new version from it.",
+      "draftOpen": "Version {revision} is already a draft of this template: open it."
+    },
+    "done": {
+      "saved": "Draft version {revision} saved.",
+      "published": "Version {revision} is in use from now on.",
+      "publishedRetired": "Version {revision} is in use from now on; version {retired} is retired.",
+      "retired": "Version {revision} is retired: the fixed layout prints again.",
+      "mailRetired": "Version {revision} is retired: the next version in line is used again."
+    },
+    "editor": {
+      "sections": "Sections",
+      "loading": "Reading the template…",
+      "back": "Document templates",
+      "backMail": "E-mail templates",
+      "title": "Template: {kind} ({language})",
+      "version": "Version {revision}",
+      "publish": "Publish template",
+      "newVersion": "New version",
+      "more": "More",
+      "delete": "Delete draft",
+      "retire": "Back to the fixed layout",
+      "save": "Save draft",
+      "unsaved_one": "1 unsaved change",
+      "unsaved_other": "{count} unsaved changes",
+      "insert": "Insert placeholder",
+      "insertInto": "Insert a placeholder into {field}",
+      "changedElsewhere": "Someone else changed this template while you were editing it. Reload to see it (your unsaved words are lost).",
+      "reload": "Reload",
+      "inUseNote": "Version {revision} is in use: every document of this kind and language prints with it. It never changes; a new version starts from it.",
+      "retiredNote": "Version {revision} is retired: it is kept as it was printed.",
+      "openDraft": "Open draft version {revision}"
+    },
+    "mailEditor": {
+      "title": "E-mail template: {event} ({language})",
+      "retire": "Back to the default",
+      "inUseNote": "Version {revision} is in use: every mail of this event and language goes out with it. It never changes; a new version starts from it."
+    },
+    "section": {
+      "header": "Header",
+      "lines": "Lines",
+      "totals": "Totals and what it always prints",
+      "terms": "Terms",
+      "footer": "Footer",
+      "versions": "Versions",
+      "use": "Used for",
+      "subject": "Subject",
+      "body": "Message",
+      "code": "The standard words"
+    },
+    "field": {
+      "header": "Words above the lines",
+      "headerHint": "Printed under the customer or supplier, before the lines. Empty: nothing printed.",
+      "terms": "Terms",
+      "termsHint": "Printed after the totals, line by line as you write them. Legal texts are the company's words: have them checked.",
+      "footer": "Footer text",
+      "footerHint": "One line at the foot of each page, above the legal line. Empty: the company's own footer text.",
+      "subject": "Subject",
+      "subjectHint": "One line; placeholders are filled when the mail goes out.",
+      "body": "Message",
+      "bodyHint": "As you write it, line by line; placeholders are filled when the mail goes out."
+    },
+    "lines": {
+      "intro": "Tick the columns this document shows. The locked ones always print.",
+      "label": "Columns of the lines",
+      "always": "Always printed",
+      "shown": "Shown",
+      "left": "Left out",
+      "width": "A column left out gives its width to the description.",
+      "dropped": "{columns}: not a column of this document, so it is left out. Save the draft to keep the list right.",
+      "droppedSaved": "{columns}: not a column of this document; it does not print."
+    },
+    "parts": {
+      "intro": "Every document of this kind prints these, whatever its template says."
+    },
+    "versions": {
+      "label": "Versions of this template",
+      "col": {
+        "version": "Version",
+        "status": "State",
+        "published": "Published",
+        "changed": "Last changed"
+      },
+      "thisOne": "this one",
+      "publishedBy": "{date} by {name}"
+    },
+    "use": {
+      "company": "Company",
+      "kind": "Document",
+      "language": "Language",
+      "layout": "Prints with",
+      "event": "Event",
+      "sentWhen": "Sent",
+      "fixed": "A template belongs to one company, one document and one language. Without a version in use the fixed layout prints.",
+      "printsNow": "What prints now",
+      "companyWins": "This company's version in use wins over every company's.",
+      "allWins": "Used by every company that has no version of its own."
+    },
+    "code": {
+      "intro": "What Nexus sends when no version is in use, in this language.",
+      "none": "No standard words in this language.",
+      "start": "Start from these words"
+    },
+    "preview": {
+      "label": "The document as it prints",
+      "mailLabel": "The mail as it goes out",
+      "loading": "Making the preview…",
+      "failedTitle": "The preview cannot be made",
+      "legalMissing": "The company's legal data is incomplete, so its documents cannot print yet.",
+      "fixLegal": "Complete the legal data",
+      "saved": "The saved words, on the company's own data.",
+      "unsaved_one": "1 change is not in the preview yet: save it (⌘S).",
+      "unsaved_other": "{count} changes are not in the preview yet: save them (⌘S).",
+      "newTab": "Open in a new tab",
+      "sample": "A sample with made-up lines and the company's real legal data; marked as a sample and stored nowhere.",
+      "mailSample": "Filled with made-up values. Nothing is sent from here.",
+      "missing_one": "1 placeholder has no value in the sample:",
+      "missing_other": "{count} placeholders have no value in the sample:",
+      "test": "Send me a test",
+      "testHeld": "Sending a test is not possible yet: read the filled words here."
+    },
+    "list": {
+      "intro": "The layout of each document, per company and language. A version in use prints on every new document; without one the fixed layout prints.",
+      "label": "Document templates",
+      "count": "In use {inUse} · Drafts {drafts} · Fixed layout {fixed}",
+      "col": {
+        "document": "Document",
+        "language": "Language",
+        "inUse": "In use",
+        "draft": "Draft",
+        "versions": "Versions",
+        "layout": "Prints with",
+        "changed": "Last changed",
+        "actions": "Actions"
+      },
+      "since": "since {date}",
+      "fixed": "Fixed layout",
+      "draftOf": "Version {revision} (draft)",
+      "never": "Never",
+      "preview": "Preview",
+      "start": "Write a template",
+      "nothingToDo": "Nothing to publish or retire: it prints the fixed layout.",
+      "noCompanyTitle": "No company to show",
+      "noCompany": "Templates belong to a company: pick one.",
+      "notReady_one": "{name} cannot print documents yet: 1 legal fact is missing.",
+      "notReady_other": "{name} cannot print documents yet: {count} legal facts are missing.",
+      "fallback": "A document printed earlier keeps the layout it was printed with; a new version changes only what prints from now on."
+    },
+    "mail": {
+      "allCompanies": "Every company"
+    },
+    "mailList": {
+      "intro": "The words of the mails Nexus sends by itself, per event and language. This company's version wins over every company's; without either the standard words go out.",
+      "label": "E-mail templates",
+      "count_one": "1 mail · {inUse} with a template",
+      "count_other": "{count} mails · {inUse} with a template",
+      "col": {
+        "event": "Mail",
+        "inUse": "Goes out with",
+        "subject": "Subject",
+        "drafts": "Drafts"
+      },
+      "companyDraft": "This company: version {revision}",
+      "allDraft": "Every company: version {revision}",
+      "startCompany": "Write this company's",
+      "startAll": "Write every company's",
+      "bulkRetire_one": "Back to the default (1)",
+      "bulkRetire_other": "Back to the default ({count})",
+      "retireTitle_one": "Put 1 mail back to the default?",
+      "retireTitle_other": "Put {count} mails back to the default?",
+      "retireOne": "{name}: this company's version {revision} is retired",
+      "fallback": "Only the mails listed take a template; every other mail says Nexus's standard words."
+    },
+    "bulk": {
+      "publish_one": "Publish 1 draft",
+      "publish_other": "Publish {count} drafts",
+      "retire_one": "Back to the fixed layout (1)",
+      "retire_other": "Back to the fixed layout ({count})",
+      "delete_one": "Delete 1 draft",
+      "delete_other": "Delete {count} drafts",
+      "none": "None of the selected rows has this to do.",
+      "publishTitle_one": "Publish 1 draft?",
+      "publishTitle_other": "Publish {count} drafts?",
+      "publishOne": "{name}: version {revision} is used from now on",
+      "retireTitle_one": "Put 1 document back to the fixed layout?",
+      "retireTitle_other": "Put {count} documents back to the fixed layout?",
+      "retireOne": "{name}: version {revision} is retired",
+      "deleteTitle_one": "Delete 1 draft?",
+      "deleteTitle_other": "Delete {count} drafts?",
+      "deleteOne": "{name}: draft version {revision} is deleted",
+      "left": {
+        "noDraft_one": "1 selected row has no draft: left out.",
+        "noDraft_other": "{count} selected rows have no draft: left out.",
+        "fixed_one": "1 selected row prints the fixed layout already: left out.",
+        "fixed_other": "{count} selected rows print the fixed layout already: left out.",
+        "noOwn_one": "1 selected row has no version of this company in use: left out.",
+        "noOwn_other": "{count} selected rows have no version of this company in use: left out."
+      },
+      "done": {
+        "publish_one": "1 template published.",
+        "publish_other": "{count} templates published.",
+        "retire_one": "1 document prints the fixed layout again.",
+        "retire_other": "{count} documents print the fixed layout again.",
+        "delete_one": "1 draft deleted.",
+        "delete_other": "{count} drafts deleted.",
+        "mailRetire_one": "1 mail goes out with its default again.",
+        "mailRetire_other": "{count} mails go out with their default again."
+      },
+      "partial": "{count} done, {refused} not:",
+      "failed": "None done ({refused} refused):"
+    },
+    "confirm": {
+      "publishTitle": "Publish version {revision} of {title}?",
+      "publishUse": "Every {kind} printed from now on uses it.",
+      "publishRetires": "Version {revision}, in use now, is retired in the same step.",
+      "publishFirst": "It is the first version in use: the fixed layout stops printing.",
+      "publishFrozen": "A published version never changes; changes start a new version.",
+      "publishBack": "Publish an earlier version again as a new one, or retire this one",
+      "mailUse": "Every mail of this event and language goes out with it ({whose}).",
+      "mailFirst": "It is the first version in use for this scope.",
+      "retireTitle": "Retire version {revision} of {title}?",
+      "retireFixed": "Every {kind} printed from now on uses the fixed layout.",
+      "retireKept": "Documents and mails already sent keep their words; the version is kept.",
+      "retireBack": "Start a new version from it and publish it",
+      "mailRetireCompany": "This company's mails go out with every company's version, else the standard words.",
+      "mailRetireAll": "Companies without a version of their own go out with the standard words.",
+      "deleteTitle": "Delete draft version {revision}?",
+      "deleteGone": "The draft and its words are removed.",
+      "deleteKept": "The version in use and the earlier versions stay as they are.",
+      "deleteBack": "A deleted draft cannot be brought back",
+      "deleteAck": "I understand the draft's words cannot be brought back."
+    },
+    "partner": {
+      "title": "Per partner contact",
+      "intro": "The language each customer's and supplier's contact gets documents and mails in: their own, else their organisation's. Nexus writes Italian and English; a contact reading another language gets English.",
+      "label": "Partner contacts' languages",
+      "search": "Search contacts or organisations",
+      "count_one": "1 contact",
+      "count_other": "{count} contacts",
+      "countMore_one": "1 contact shown · more below",
+      "countMore_other": "{count} contacts shown · more below",
+      "col": {
+        "contact": "Contact",
+        "party": "Organisation",
+        "own": "Their own language",
+        "out": "Documents and mails go out in"
+      },
+      "noEmail": "No e-mail",
+      "partyLanguage": "language {language}",
+      "ownNone": "Their organisation's",
+      "ownFor": "Language of {name}",
+      "notOffered": "They read {language}: English is the nearest we write.",
+      "bulk": {
+        "it_one": "Italiano for 1",
+        "it_other": "Italiano for {count}",
+        "en_one": "English for 1",
+        "en_other": "English for {count}",
+        "party_one": "Their organisation's for 1",
+        "party_other": "Their organisation's for {count}"
+      },
+      "left": {
+        "already": "Already so",
+        "none": "The selected contacts have this language already."
+      },
+      "held": {
+        "view": "Contacts' languages need the right to see customers and suppliers: ask an administrator to give you that right.",
+        "manage": "Changing a contact's language needs the right to manage customers and suppliers."
+      },
+      "stale": "Changed by someone else meanwhile: read again, try once more.",
+      "done": {
+        "one": "Language of {name} changed.",
+        "many_one": "Language changed for 1 contact.",
+        "many_other": "Language changed for {count} contacts.",
+        "partial": "{count} changed, {refused} not:",
+        "none": "None changed ({refused} refused):"
+      },
+      "more": "Show more contacts",
+      "emptyTitle": "No partner contacts yet",
+      "empty": "Contacts are added on each customer's and supplier's record.",
+      "clear": "Clear the search"
+    },
+    "send": {
+      "noun": {
+        "Quote": "This quote"
+      },
+      "held": {
+        "language": "The document goes out in {language}, its own language: pick it to send, or change the record's language first."
+      },
+      "source": {
+        "CONTACT": "The contact's own language.",
+        "PARTY": "Their organisation's language.",
+        "COMPANY": "The company's language."
+      },
+      "language": {
+        "label": "Language",
+        "reading": "Reading the contact's language…",
+        "failed": "The contact's language could not be read: the document's language is shown.",
+        "document": "The document's language.",
+        "notOffered": "They read {language}: English is the nearest we write.",
+        "differs": "{document} is written in {language}: it goes out in {language}.",
+        "reads": "The contact reads {language}; {document} is in another language."
+      },
+      "template": {
+        "label": "Message from a template",
+        "pick": "No template",
+        "shared": "The office's",
+        "own": "My own",
+        "hint": "Templates in {language}: one picked fills the message below with this record's values.",
+        "none": "No message template in {language} yet.",
+        "loading": "Reading the message templates…",
+        "listFailed": "The message templates could not be read.",
+        "filling": "Filling the template…",
+        "missing_one": "1 value is missing: fill it in the message.",
+        "missing_other": "{count} values are missing: fill them in the message.",
+        "putBack": "Put back what I wrote",
+        "failed": "The template could not be filled: try again.",
+        "noRight": "You may not write to this record's thread.",
+        "gone": "This template is no longer there."
+      }
+    }
+  }
+}

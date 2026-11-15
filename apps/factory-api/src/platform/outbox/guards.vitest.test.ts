@@ -107,7 +107,14 @@ describe('check-event-contract', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
     // B-W2b-403, 906 → 909 and 1446 → 1449.
     // B-W2b-380: two events (price_list.pdf_kept, price_list.pdf_sent) and four literal emits (the PDF kept and mailed; the
     // import's size surcharges of a style and its version row's rules_changed): 912 → 914, 1449 → 1453.
-    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(923 declared event version\(s\), 1463 literal emit/) })
+    // B-W2b-395: two events (shipping.pickup_changed, shipping.day_sheet_closed) and five literal emits (a pickup booked, answered
+    // or moved; a day sheet closed; a collection recorded; a collection delivered: tracking recorded and status changed): with
+    // B-W2b-380, B-W2b-405 and B-W2b-388 (main 295a7832be) the guard counts 924 and 1467; with the planted event and emit: 925, 1468.
+    // B-W2b-409: three events (customs.document_made, customs.declaration_changed, customs.settings_changed; emitted through
+    // eventFor, never a literal): with B-W2b-395 and B-W2b-400 (main 0c1e2b57e2), 930 → 933 and 1468 literal emits.
+    // B-W2b-406: one event (customer_figures.changed) and two literal emits (their figures recorded, corrected): with B-W2b-409
+    // (main bf4fee0ba4) 933 → 934, 1468 → 1470.
+    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(934 declared event version\(s\), 1470 literal emit/) })
   })
 
   it.each<[string, Plants, RegExp]>([

@@ -490,7 +490,11 @@ export const OFFICE: readonly TreeArea[] = [
         label: 'Payables & bank',
         labelIt: 'Fornitori e banca',
         hideLabel: false,
-        pages: [{ id: 'finance.payables', title: 'Supplier invoices', titleIt: 'Fatture fornitori', wave: 'W2a', href: '/finance/payables' }],
+        pages: [
+          { id: 'finance.payables', title: 'Supplier invoices', titleIt: 'Fatture fornitori', wave: 'W2a', href: '/finance/payables' },
+          // W2b: B-W2b-406 Bank (SCR-152).
+          { id: 'finance.bank', title: 'Bank', titleIt: 'Banca', wave: 'W2b', href: '/finance/bank' },
+        ],
       },
       // W2a: B-W2a-72 Costing: Standard vs actual (SCR-154) and Margins (SCR-155).
       {
@@ -763,6 +767,8 @@ export const LINKS: ReadonlyArray<{ readonly id: string; readonly title: string;
   { id: 'links.invite', title: 'Join a record', scr: ['SCR-270'], task: 'invite' },
   // W2b: B-W2b-398 Your return label (a RETURN_LABEL link of a return: book the carrier when the goods go, print the label).
   { id: 'links.return-label', title: 'Your return label', scr: ['SCR-436'], task: 'return-label' },
+  // W2b: B-W2b-409 Export declaration papers (a BROKER_PACK link: the broker downloads the papers, types the MRN back).
+  { id: 'links.broker-pack', title: 'Export declaration papers', scr: ['SCR-580'], task: 'broker-pack' },
 ]
 
 /**

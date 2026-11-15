@@ -1,0 +1,430 @@
+{
+  "tpl": {
+    "dismiss": "Chiudi",
+    "retry": "Riprova",
+    "busy": "In corso…",
+    "newTab": "(si apre in una nuova scheda)",
+    "language": {
+      "it": "Italiano",
+      "en": "English"
+    },
+    "status": {
+      "DRAFT": "Bozza",
+      "ACTIVE": "In uso",
+      "RETIRED": "Ritirata"
+    },
+    "kind": {
+      "QUOTE": "Preventivo",
+      "ORDER_CONFIRMATION": "Conferma d'ordine",
+      "PURCHASE_ORDER": "Ordine fornitore",
+      "DDT": "DDT (documento di trasporto)",
+      "INVOICE_COPY": "Fattura (copia di cortesia)",
+      "PACKING_LIST": "Packing list"
+    },
+    "column": {
+      "code": "Codice",
+      "description": "Descrizione",
+      "goods": "Merce",
+      "quantity": "Quantità",
+      "uom": "Unità",
+      "unitPrice": "Prezzo unitario",
+      "discount": "Sconto",
+      "vat": "Aliquota IVA",
+      "delivery": "Consegna",
+      "amount": "Importo",
+      "parcel": "Collo"
+    },
+    "part": {
+      "COMPANY_LEGAL": "I dati legali della società",
+      "NUMBER_AND_DATE": "Numero e data",
+      "PARTY": "Cliente o fornitore",
+      "FACTS": "I dati del documento",
+      "TOTALS": "Totali e IVA",
+      "NOTICES": "Avvisi fissi",
+      "SIGNATURES": "Spazi per le firme"
+    },
+    "partWhy": {
+      "COMPANY_LEGAL": "Nell'intestazione e nella riga legale di ogni pagina (art. 2250 c.c.).",
+      "NUMBER_AND_DATE": "Come li ha emessi la serie di numerazione.",
+      "PARTY": "Nome, indirizzo e dati fiscali come sono nella scheda.",
+      "FACTS": "Ciò che il documento registra, come il trasporto di un DDT (DPR 472/1996).",
+      "TOTALS": "Calcolati dalle righe; nessun modello li cambia.",
+      "NOTICES": "Le parole che la legge o il documento richiedono, come l'avviso della copia di cortesia.",
+      "SIGNATURES": "Gli spazi del conducente, del vettore e del destinatario."
+    },
+    "event": {
+      "service": {
+        "status_changed": "Stato della pratica di assistenza"
+      },
+      "shipping": {
+        "tracking_link": "Link di tracciamento della spedizione"
+      }
+    },
+    "eventWhen": {
+      "service": {
+        "status_changed": "Quando una persona sposta una pratica e la sua e-mail al cliente è attiva."
+      },
+      "shipping": {
+        "tracking_link": "Quando il link di tracciamento di una spedizione va al cliente."
+      }
+    },
+    "inUse": {
+      "COMPANY": "Di questa società",
+      "ALL": "Di tutte le società",
+      "CODE": "Le parole standard"
+    },
+    "source": {
+      "CONTACT": "La sua lingua",
+      "PARTY": "La lingua della sua organizzazione",
+      "COMPANY": "La lingua della società"
+    },
+    "refusal": {
+      "NOT_A_DRAFT": "Questa versione è stata pubblicata: le sue parole non cambiano più. Avvia una nuova versione.",
+      "NOT_IN_USE": "Si può ritirare solo la versione in uso.",
+      "DRAFT_OPEN": "Una bozza di questo modello è già aperta: apri quella, oppure eliminala prima.",
+      "ANOTHER_IN_USE": "Nello stesso momento è stata pubblicata un'altra versione: il modello è stato riletto.",
+      "VERSION_TAKEN": "Nello stesso momento è stata scritta un'altra versione: il modello è stato riletto.",
+      "NOT_OFFERED": "Nexus non legge questo modello.",
+      "DATABASE": "Il modello non si può cambiare così: è stato riletto."
+    },
+    "problem": {
+      "tooLong": "Al massimo {limit} caratteri: {over} di troppo.",
+      "syntax": "Scrivi ogni segnaposto tra doppie graffe, come nell'elenco, e chiudi ognuno.",
+      "notOffered": "{name} qui non è disponibile: usa uno dei segnaposto elencati.",
+      "subjectEmpty": "L'oggetto non può essere vuoto.",
+      "bodyEmpty": "Il messaggio non può essere vuoto.",
+      "oneLine": "L'oggetto è una sola riga.",
+      "stale": "Nel frattempo qualcun altro ha cambiato questo modello: è stato riletto.",
+      "noRight": "Non puoi cambiare i modelli di questa società.",
+      "invalid": "Le parole sono state rifiutate così come sono: controlla ogni campo."
+    },
+    "held": {
+      "noRight": "Per cambiare i modelli serve il permesso di gestire i modelli dei documenti.",
+      "published": "Una versione pubblicata non cambia più: avvia una nuova versione.",
+      "busy": "Attendi la modifica in corso.",
+      "nothingChanged": "Non è ancora cambiato nulla.",
+      "problems": "Correggi prima i problemi nelle parole.",
+      "saveFirst": "Salva prima la bozza (⌘S).",
+      "inUse": "Questa versione è già in uso.",
+      "retired": "Una versione ritirata non si ripubblica: avvia una nuova versione da essa.",
+      "draftOpen": "La versione {revision} è già una bozza di questo modello: aprila."
+    },
+    "done": {
+      "saved": "Bozza versione {revision} salvata.",
+      "published": "Da ora è in uso la versione {revision}.",
+      "publishedRetired": "Da ora è in uso la versione {revision}; la versione {retired} è ritirata.",
+      "retired": "Versione {revision} ritirata: si stampa di nuovo il modello fisso.",
+      "mailRetired": "Versione {revision} ritirata: si usa di nuovo la versione successiva in ordine."
+    },
+    "editor": {
+      "sections": "Sezioni",
+      "loading": "Lettura del modello…",
+      "back": "Modelli dei documenti",
+      "backMail": "Modelli e-mail",
+      "title": "Modello: {kind} ({language})",
+      "version": "Versione {revision}",
+      "publish": "Pubblica modello",
+      "newVersion": "Nuova versione",
+      "more": "Altro",
+      "delete": "Elimina bozza",
+      "retire": "Torna al modello fisso",
+      "save": "Salva bozza",
+      "unsaved_one": "1 modifica non salvata",
+      "unsaved_other": "{count} modifiche non salvate",
+      "insert": "Inserisci segnaposto",
+      "insertInto": "Inserisci un segnaposto in {field}",
+      "changedElsewhere": "Qualcun altro ha cambiato questo modello mentre lo modificavi. Ricarica per vederlo (le tue parole non salvate si perdono).",
+      "reload": "Ricarica",
+      "inUseNote": "La versione {revision} è in uso: ogni documento di questo tipo e lingua si stampa con essa. Non cambia più; una nuova versione parte da essa.",
+      "retiredNote": "La versione {revision} è ritirata: resta com'era quando si stampava.",
+      "openDraft": "Apri la bozza versione {revision}"
+    },
+    "mailEditor": {
+      "title": "Modello e-mail: {event} ({language})",
+      "retire": "Torna a quello predefinito",
+      "inUseNote": "La versione {revision} è in uso: ogni e-mail di questo evento e lingua parte con essa. Non cambia più; una nuova versione parte da essa."
+    },
+    "section": {
+      "header": "Intestazione",
+      "lines": "Righe",
+      "totals": "Totali e ciò che stampa sempre",
+      "terms": "Condizioni",
+      "footer": "Piè di pagina",
+      "versions": "Versioni",
+      "use": "Usato per",
+      "subject": "Oggetto",
+      "body": "Messaggio",
+      "code": "Le parole standard"
+    },
+    "field": {
+      "header": "Parole sopra le righe",
+      "headerHint": "Stampate sotto il cliente o il fornitore, prima delle righe. Vuoto: non si stampa nulla.",
+      "terms": "Condizioni",
+      "termsHint": "Stampate dopo i totali, riga per riga come le scrivi. I testi legali sono parole della società: falli controllare.",
+      "footer": "Testo del piè di pagina",
+      "footerHint": "Una riga in fondo a ogni pagina, sopra la riga legale. Vuoto: il testo del piè di pagina della società.",
+      "subject": "Oggetto",
+      "subjectHint": "Una riga; i segnaposto si riempiono quando l'e-mail parte.",
+      "body": "Messaggio",
+      "bodyHint": "Come lo scrivi, riga per riga; i segnaposto si riempiono quando l'e-mail parte."
+    },
+    "lines": {
+      "intro": "Spunta le colonne che questo documento mostra. Quelle bloccate si stampano sempre.",
+      "label": "Colonne delle righe",
+      "always": "Sempre stampata",
+      "shown": "Mostrata",
+      "left": "Esclusa",
+      "width": "Una colonna esclusa lascia la sua larghezza alla descrizione.",
+      "dropped": "{columns}: non è una colonna di questo documento, quindi resta esclusa. Salva la bozza per tenere l'elenco giusto.",
+      "droppedSaved": "{columns}: non è una colonna di questo documento; non si stampa."
+    },
+    "parts": {
+      "intro": "Ogni documento di questo tipo stampa queste parti, qualunque cosa dica il suo modello."
+    },
+    "versions": {
+      "label": "Versioni di questo modello",
+      "col": {
+        "version": "Versione",
+        "status": "Stato",
+        "published": "Pubblicata",
+        "changed": "Ultima modifica"
+      },
+      "thisOne": "questa",
+      "publishedBy": "{date} da {name}"
+    },
+    "use": {
+      "company": "Società",
+      "kind": "Documento",
+      "language": "Lingua",
+      "layout": "Si stampa con",
+      "event": "Evento",
+      "sentWhen": "Inviata",
+      "fixed": "Un modello appartiene a una società, a un documento e a una lingua. Senza una versione in uso si stampa il modello fisso.",
+      "printsNow": "Cosa si stampa ora",
+      "companyWins": "La versione in uso di questa società prevale su quella di tutte le società.",
+      "allWins": "Usata da ogni società che non ha una versione propria."
+    },
+    "code": {
+      "intro": "Ciò che Nexus invia quando nessuna versione è in uso, in questa lingua.",
+      "none": "Nessuna parola standard in questa lingua.",
+      "start": "Parti da queste parole"
+    },
+    "preview": {
+      "label": "Il documento come si stampa",
+      "mailLabel": "L'e-mail come parte",
+      "loading": "Preparazione dell'anteprima…",
+      "failedTitle": "L'anteprima non si può fare",
+      "legalMissing": "I dati legali della società sono incompleti: i suoi documenti non si possono ancora stampare.",
+      "fixLegal": "Completa i dati legali",
+      "saved": "Le parole salvate, sui dati della società.",
+      "unsaved_one": "1 modifica non è ancora nell'anteprima: salvala (⌘S).",
+      "unsaved_other": "{count} modifiche non sono ancora nell'anteprima: salvale (⌘S).",
+      "newTab": "Apri in una nuova scheda",
+      "sample": "Un esempio con righe inventate e i veri dati legali della società; marcato come esempio e non salvato da nessuna parte.",
+      "mailSample": "Riempita con valori inventati. Da qui non parte nulla.",
+      "missing_one": "1 segnaposto non ha valore nell'esempio:",
+      "missing_other": "{count} segnaposto non hanno valore nell'esempio:",
+      "test": "Inviami una prova",
+      "testHeld": "Inviare una prova non è ancora possibile: leggi qui le parole riempite."
+    },
+    "list": {
+      "intro": "L'impaginazione di ogni documento, per società e lingua. Una versione in uso si stampa su ogni nuovo documento; senza, si stampa il modello fisso.",
+      "label": "Modelli dei documenti",
+      "count": "In uso {inUse} · Bozze {drafts} · Modello fisso {fixed}",
+      "col": {
+        "document": "Documento",
+        "language": "Lingua",
+        "inUse": "In uso",
+        "draft": "Bozza",
+        "versions": "Versioni",
+        "layout": "Si stampa con",
+        "changed": "Ultima modifica",
+        "actions": "Azioni"
+      },
+      "since": "dal {date}",
+      "fixed": "Modello fisso",
+      "draftOf": "Versione {revision} (bozza)",
+      "never": "Mai",
+      "preview": "Anteprima",
+      "start": "Scrivi un modello",
+      "nothingToDo": "Niente da pubblicare o ritirare: si stampa il modello fisso.",
+      "noCompanyTitle": "Nessuna società da mostrare",
+      "noCompany": "I modelli appartengono a una società: scegline una.",
+      "notReady_one": "{name} non può ancora stampare documenti: manca 1 dato legale.",
+      "notReady_other": "{name} non può ancora stampare documenti: mancano {count} dati legali.",
+      "fallback": "Un documento stampato prima tiene l'impaginazione con cui è stato stampato; una nuova versione cambia solo ciò che si stampa da ora."
+    },
+    "mail": {
+      "allCompanies": "Tutte le società"
+    },
+    "mailList": {
+      "intro": "Le parole delle e-mail che Nexus invia da solo, per evento e lingua. La versione di questa società prevale su quella di tutte le società; senza nessuna delle due partono le parole standard.",
+      "label": "Modelli e-mail",
+      "count_one": "1 e-mail · {inUse} con un modello",
+      "count_other": "{count} e-mail · {inUse} con un modello",
+      "col": {
+        "event": "E-mail",
+        "inUse": "Parte con",
+        "subject": "Oggetto",
+        "drafts": "Bozze"
+      },
+      "companyDraft": "Questa società: versione {revision}",
+      "allDraft": "Tutte le società: versione {revision}",
+      "startCompany": "Scrivi quello di questa società",
+      "startAll": "Scrivi quello di tutte le società",
+      "bulkRetire_one": "Torna al predefinito (1)",
+      "bulkRetire_other": "Torna al predefinito ({count})",
+      "retireTitle_one": "Riportare 1 e-mail al predefinito?",
+      "retireTitle_other": "Riportare {count} e-mail al predefinito?",
+      "retireOne": "{name}: la versione {revision} di questa società viene ritirata",
+      "fallback": "Solo le e-mail elencate prendono un modello; ogni altra e-mail usa le parole standard di Nexus."
+    },
+    "bulk": {
+      "publish_one": "Pubblica 1 bozza",
+      "publish_other": "Pubblica {count} bozze",
+      "retire_one": "Torna al modello fisso (1)",
+      "retire_other": "Torna al modello fisso ({count})",
+      "delete_one": "Elimina 1 bozza",
+      "delete_other": "Elimina {count} bozze",
+      "none": "Nessuna delle righe selezionate ha questo da fare.",
+      "publishTitle_one": "Pubblicare 1 bozza?",
+      "publishTitle_other": "Pubblicare {count} bozze?",
+      "publishOne": "{name}: da ora si usa la versione {revision}",
+      "retireTitle_one": "Riportare 1 documento al modello fisso?",
+      "retireTitle_other": "Riportare {count} documenti al modello fisso?",
+      "retireOne": "{name}: la versione {revision} viene ritirata",
+      "deleteTitle_one": "Eliminare 1 bozza?",
+      "deleteTitle_other": "Eliminare {count} bozze?",
+      "deleteOne": "{name}: la bozza versione {revision} viene eliminata",
+      "left": {
+        "noDraft_one": "1 riga selezionata non ha una bozza: esclusa.",
+        "noDraft_other": "{count} righe selezionate non hanno una bozza: escluse.",
+        "fixed_one": "1 riga selezionata stampa già il modello fisso: esclusa.",
+        "fixed_other": "{count} righe selezionate stampano già il modello fisso: escluse.",
+        "noOwn_one": "1 riga selezionata non ha una versione di questa società in uso: esclusa.",
+        "noOwn_other": "{count} righe selezionate non hanno una versione di questa società in uso: escluse."
+      },
+      "done": {
+        "publish_one": "1 modello pubblicato.",
+        "publish_other": "{count} modelli pubblicati.",
+        "retire_one": "1 documento stampa di nuovo il modello fisso.",
+        "retire_other": "{count} documenti stampano di nuovo il modello fisso.",
+        "delete_one": "1 bozza eliminata.",
+        "delete_other": "{count} bozze eliminate.",
+        "mailRetire_one": "1 e-mail parte di nuovo con il predefinito.",
+        "mailRetire_other": "{count} e-mail partono di nuovo con il predefinito."
+      },
+      "partial": "{count} fatti, {refused} no:",
+      "failed": "Nessuno fatto ({refused} rifiutati):"
+    },
+    "confirm": {
+      "publishTitle": "Pubblicare la versione {revision} di {title}?",
+      "publishUse": "Ogni {kind} stampato da ora la usa.",
+      "publishRetires": "La versione {revision}, ora in uso, viene ritirata nello stesso passo.",
+      "publishFirst": "È la prima versione in uso: il modello fisso smette di stamparsi.",
+      "publishFrozen": "Una versione pubblicata non cambia più; le modifiche avviano una nuova versione.",
+      "publishBack": "Ripubblica una versione precedente come nuova, oppure ritira questa",
+      "mailUse": "Ogni e-mail di questo evento e lingua parte con essa ({whose}).",
+      "mailFirst": "È la prima versione in uso per questo ambito.",
+      "retireTitle": "Ritirare la versione {revision} di {title}?",
+      "retireFixed": "Ogni {kind} stampato da ora usa il modello fisso.",
+      "retireKept": "Documenti ed e-mail già inviati tengono le loro parole; la versione resta conservata.",
+      "retireBack": "Avvia una nuova versione da essa e pubblicala",
+      "mailRetireCompany": "Le e-mail di questa società partono con la versione di tutte le società, altrimenti con le parole standard.",
+      "mailRetireAll": "Le società senza una versione propria inviano le parole standard.",
+      "deleteTitle": "Eliminare la bozza versione {revision}?",
+      "deleteGone": "La bozza e le sue parole vengono rimosse.",
+      "deleteKept": "La versione in uso e quelle precedenti restano come sono.",
+      "deleteBack": "Una bozza eliminata non si può recuperare",
+      "deleteAck": "Ho capito che le parole della bozza non si possono recuperare."
+    },
+    "partner": {
+      "title": "Per contatto del partner",
+      "intro": "La lingua in cui ogni contatto di clienti e fornitori riceve documenti ed e-mail: la sua, altrimenti quella della sua organizzazione. Nexus scrive in italiano e in inglese; chi legge un'altra lingua riceve l'inglese.",
+      "label": "Lingue dei contatti dei partner",
+      "search": "Cerca contatti od organizzazioni",
+      "count_one": "1 contatto",
+      "count_other": "{count} contatti",
+      "countMore_one": "1 contatto mostrato · altri sotto",
+      "countMore_other": "{count} contatti mostrati · altri sotto",
+      "col": {
+        "contact": "Contatto",
+        "party": "Organizzazione",
+        "own": "La sua lingua",
+        "out": "Documenti ed e-mail partono in"
+      },
+      "noEmail": "Nessuna e-mail",
+      "partyLanguage": "lingua {language}",
+      "ownNone": "Quella della sua organizzazione",
+      "ownFor": "Lingua di {name}",
+      "notOffered": "Legge {language}: l'inglese è la lingua più vicina che scriviamo.",
+      "bulk": {
+        "it_one": "Italiano per 1",
+        "it_other": "Italiano per {count}",
+        "en_one": "English per 1",
+        "en_other": "English per {count}",
+        "party_one": "Quella dell'organizzazione per 1",
+        "party_other": "Quella dell'organizzazione per {count}"
+      },
+      "left": {
+        "already": "Già così",
+        "none": "I contatti selezionati hanno già questa lingua."
+      },
+      "held": {
+        "view": "Le lingue dei contatti richiedono il permesso di vedere clienti e fornitori: chiedi a un amministratore di dartelo.",
+        "manage": "Per cambiare la lingua di un contatto serve il permesso di gestire clienti e fornitori."
+      },
+      "stale": "Nel frattempo l'ha cambiato qualcun altro: riletto, riprova.",
+      "done": {
+        "one": "Lingua di {name} cambiata.",
+        "many_one": "Lingua cambiata per 1 contatto.",
+        "many_other": "Lingua cambiata per {count} contatti.",
+        "partial": "{count} cambiati, {refused} no:",
+        "none": "Nessuno cambiato ({refused} rifiutati):"
+      },
+      "more": "Mostra altri contatti",
+      "emptyTitle": "Ancora nessun contatto dei partner",
+      "empty": "I contatti si aggiungono nella scheda di ogni cliente e fornitore.",
+      "clear": "Cancella la ricerca"
+    },
+    "send": {
+      "noun": {
+        "Quote": "Questo preventivo"
+      },
+      "held": {
+        "language": "Il documento parte in {language}, la sua lingua: sceglila per inviare, oppure cambia prima la lingua della scheda."
+      },
+      "source": {
+        "CONTACT": "La lingua del contatto.",
+        "PARTY": "La lingua della sua organizzazione.",
+        "COMPANY": "La lingua della società."
+      },
+      "language": {
+        "label": "Lingua",
+        "reading": "Lettura della lingua del contatto…",
+        "failed": "La lingua del contatto non si è potuta leggere: si mostra la lingua del documento.",
+        "document": "La lingua del documento.",
+        "notOffered": "Legge {language}: l'inglese è la lingua più vicina che scriviamo.",
+        "differs": "{document} è scritto in {language}: parte in {language}.",
+        "reads": "Il contatto legge {language}; {document} è in un'altra lingua."
+      },
+      "template": {
+        "label": "Messaggio da un modello",
+        "pick": "Nessun modello",
+        "shared": "Dell'ufficio",
+        "own": "I miei",
+        "hint": "Modelli in {language}: sceglierne uno riempie il messaggio qui sotto con i valori di questa scheda.",
+        "none": "Ancora nessun modello di messaggio in {language}.",
+        "loading": "Lettura dei modelli di messaggio…",
+        "listFailed": "I modelli di messaggio non si sono potuti leggere.",
+        "filling": "Riempimento del modello…",
+        "missing_one": "Manca 1 valore: completalo nel messaggio.",
+        "missing_other": "Mancano {count} valori: completali nel messaggio.",
+        "putBack": "Rimetti ciò che avevo scritto",
+        "failed": "Il modello non si è potuto riempire: riprova.",
+        "noRight": "Non puoi scrivere nel thread di questa scheda.",
+        "gone": "Questo modello non c'è più."
+      }
+    }
+  }
+}

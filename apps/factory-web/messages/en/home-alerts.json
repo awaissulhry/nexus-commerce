@@ -25,7 +25,8 @@
     "alerts.SUPPLIER_STATUS_CHANGED.BLOCKED": "Supplier {label} is blocked since {changedOn}: no new purchase order.",
     "alerts.SUPPLIER_STATUS_CHANGED.INACTIVE": "Supplier {label} is inactive since {changedOn}: no new purchase order.",
     "alerts.UNKNOWN": "Alert on {label}.",
-    "alerts.RETURN_ARRIVED_LATE": "Return {label} arrived on {receivedDate}, {days} days after its deadline ({dueDate})."
+    "alerts.RETURN_ARRIVED_LATE": "Return {label} arrived on {receivedDate}, {days} days after its deadline ({dueDate}).",
+    "alerts.EXIT_PROOF_MISSING": "Shipment {label} left on {shippedDate}: its proof of exit is still missing after {days} days (the export stays VAT-free only with it)."
   },
   "refused": {
     "title": "Not yours to open",
@@ -175,7 +176,8 @@
       "LOW_STOCK": "{record} below its minimum",
       "PO_CONFIRMED_LATE": "{record} confirmed later than needed",
       "SUPPLIER_STATUS_CHANGED": "{record}: supplier status changed",
-      "RETURN_ARRIVED_LATE": "{record} arrived after its deadline"
+      "RETURN_ARRIVED_LATE": "{record} arrived after its deadline",
+      "EXIT_PROOF_MISSING": "{record}: proof of exit missing"
     },
     "snooze": "Snooze",
     "assign": "Assign",

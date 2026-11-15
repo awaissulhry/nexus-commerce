@@ -12,6 +12,7 @@ import type {
   VoidOutcome,
 } from '@nexus/factory-domain/ports/carrier'
 import { ProviderError } from '../../platform/gateway/gateway'
+import { withServices } from './services'
 
 /**
  * Sendcloud's public API v3 for LIVE and SANDBOX accounts (B-W1-48; Owner Q20: the factory company's OWN Sendcloud
@@ -90,7 +91,8 @@ function address(value: CarrierAddress) {
 export function announceBody(request: CarrierLabelRequest, settings: unknown) {
   const contractId = record(settings).contractId
   const dimensions = request.lengthCm && request.widthCm && request.heightCm ? { dimensions: { length: request.lengthCm, width: request.widthCm, height: request.heightCm, unit: 'cm' } } : {}
-  return {
+  // B-W2b-400: the booking's services (our own contract, duties, paperless trade, insurance: services.ts).
+  return withServices({
     from_address: address(request.from),
     to_address: address(request.to),
     ship_with: { type: 'shipping_option_code', properties: { shipping_option_code: request.serviceCode, ...(typeof contractId === 'number' ? { contract_id: contractId } : {}) } },
@@ -99,7 +101,7 @@ export function announceBody(request: CarrierLabelRequest, settings: unknown) {
     reference: `${request.shipmentNumber}/${request.seq}`,
     parcels: [{ weight: { value: request.weightKg, unit: 'kg' }, ...dimensions }],
     label_details: { mime_type: 'application/pdf', dpi: 72 },
-  }
+  }, request)
 }
 
 /** The label of an announce answer (201, or 409 with the shipment the reference already made). */

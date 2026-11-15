@@ -25,7 +25,8 @@ import type { StepUpModel } from '../../shared/model'
  * screen says which, per theme, before anything is saved; the API stores the colour as given.
  */
 
-export const BRANDING_VIEWS = ['numbers', 'documents', 'branding', 'required'] as const
+// B-W2b-432: 'mail', the e-mail templates.
+export const BRANDING_VIEWS = ['numbers', 'documents', 'mail', 'branding', 'required'] as const
 export type BrandingPageView = (typeof BRANDING_VIEWS)[number]
 
 /** A logo on the form: a saved one (its public path) or one just uploaded (shown from its bytes until it is saved). */

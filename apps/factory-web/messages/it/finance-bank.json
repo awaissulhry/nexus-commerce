@@ -1,0 +1,582 @@
+{
+  "noAccess": {
+    "title": "Non puoi vedere la banca",
+    "body": "Gli estratti conto e i movimenti della banca richiedono il permesso di vedere la banca dell'azienda (payments.bank.view). Chiedi a un amministratore."
+  },
+  "common": {
+    "retry": "Riprova",
+    "dismiss": "Chiudi",
+    "cancel": "Annulla",
+    "close": "Chiudi",
+    "working": "In corso…"
+  },
+  "live": {
+    "connecting": "Connessione",
+    "live": "In diretta",
+    "offline": "Non in linea: ricarica per vedere le modifiche"
+  },
+  "band": {
+    "label": "Banca",
+    "lastStatement": "Ultimo estratto:",
+    "noStatement": "nessuno importato",
+    "readAt": "Letto alle {time}",
+    "reading": "Lettura…",
+    "import": "Importa estratto conto",
+    "more": "Altre azioni",
+    "refresh": "Cerca di nuovo gli abbinamenti",
+    "refreshed_one": "Ricerca rifatta: {count} movimento ha nuovi suggerimenti.",
+    "refreshed_other": "Ricerca rifatta: {count} movimenti hanno nuovi suggerimenti.",
+    "export_one": "Esporta {count} movimento visibile (CSV)",
+    "export_other": "Esporta i {count} movimenti visibili (CSV)",
+    "keys": "Scorciatoie da tastiera"
+  },
+  "tile": {
+    "title": "Banca",
+    "failed": "Impossibile caricare la banca",
+    "TO_MATCH": "Movimenti da abbinare",
+    "TO_MATCHHint": "Entrate e uscite non ancora abbinate",
+    "SURE": "Abbinamenti sicuri da accettare",
+    "SUREHint": "Un suggerimento Alto attende il tuo sì",
+    "OLD": "Non abbinati da oltre 7 giorni",
+    "OLDHint": "Contabilizzati da più di {days} giorni"
+  },
+  "view": {
+    "TO_MATCH": "Da abbinare",
+    "SURE": "Abbinamenti sicuri",
+    "OLD": "Non abbinati da oltre 7 giorni",
+    "MATCHED": "Abbinati",
+    "ALL": "Tutti i movimenti"
+  },
+  "match": {
+    "title": "Abbina i movimenti bancari",
+    "hint": "Il movimento a sinistra, le fatture suggerite a destra con quanto è sicuro e perché. Gli importi sono prezzi.",
+    "noPrice": "Gli importi non sono mostrati: il tuo ruolo non vede i prezzi di vendita.",
+    "refusal": {
+      "items": "Una delle voci non è più aperta per questo cliente: scegli di nuovo.",
+      "recorded": "Questo riferimento bancario è già registrato come incasso: scegli quell'incasso invece di registrarlo di nuovo.",
+      "together": "Questi abbinamenti non si possono accettare insieme (uno è cambiato, o due sono dello stesso movimento): rileggili."
+    }
+  },
+  "statement": {
+    "chip": "Estratto {name} · {from} – {to}",
+    "chipReading": "Estratto…",
+    "clear": "Mostra i movimenti da abbinare invece di questo estratto"
+  },
+  "col": {
+    "booked": "Contabile",
+    "amount": "Importo",
+    "reference": "Causale",
+    "payer": "Ordinante",
+    "match": "Suggerimento",
+    "age": "Attesa"
+  },
+  "lines": {
+    "count_one": "{count} movimento",
+    "count_other": "{count} movimenti",
+    "days_one": "{count} giorno",
+    "days_other": "{count} giorni",
+    "open": "Aperto accanto",
+    "value": "Valuta {date}",
+    "direction": {
+      "IN": "Entrata",
+      "OUT": "Uscita"
+    },
+    "matched": "Abbinato",
+    "payment": "Apri l'incasso",
+    "supplierInvoice": "Fattura fornitore {number}",
+    "staleOnly": "I suoi suggerimenti sono stati pagati nel frattempo",
+    "noSuggestion": "Nessun suggerimento",
+    "more_one": "+{count} altro suggerimento",
+    "more_other": "+{count} altri suggerimenti",
+    "viewMenu": "Movimenti: {view}",
+    "viewMenuLabel": "Quali movimenti",
+    "failed": "Impossibile caricare i movimenti da abbinare",
+    "slow": "Caricamento in corso…",
+    "more50": "Mostra altri 50",
+    "empty": {
+      "title": "Ogni movimento bancario è abbinato",
+      "body": "Importa il prossimo estratto quando arriva dalla banca."
+    },
+    "none": {
+      "title": "Nessun movimento qui",
+      "body": "In questa vista ora non c'è alcun movimento.",
+      "back": "Mostra i movimenti da abbinare"
+    }
+  },
+  "confidence": {
+    "HIGH": "Alto",
+    "MEDIUM": "Medio",
+    "LOW": "Basso"
+  },
+  "reason": {
+    "AMOUNT_EQUAL": "importo uguale",
+    "AMOUNT_WITHIN_TOLERANCE": "importo entro la tolleranza di abbuono",
+    "NUMBER_IN_REFERENCE": "numero fattura nella causale",
+    "IBAN_KNOWN": "IBAN conosciuto",
+    "NAME_MATCHES": "nome corrispondente",
+    "CHOSEN_BY_PERSON": "scelto da una persona"
+  },
+  "difference": {
+    "UNDERPAYMENT": "Accettando restano {amount} non pagati sulla fattura.",
+    "OVERPAYMENT": "Accettando restano {amount} non collocati: rimangono a credito del cliente."
+  },
+  "writeOff": {
+    "tick": "Abbuona la differenza di {amount}",
+    "reason": "Perché si abbuona",
+    "note": "Indica il motivo",
+    "reasons": {
+      "ROUNDING": "Arrotondamento",
+      "BANK_CHARGES": "Spese bancarie",
+      "OTHER": "Altro (indica il motivo)"
+    },
+    "refusal": {
+      "NO_TOLERANCE": "L'azienda non ha una tolleranza di abbuono (del commercialista, nelle impostazioni crediti): nulla viene abbuonato.",
+      "OVER_TOLERANCE": "La differenza supera la tolleranza di abbuono: non viene abbuonata.",
+      "NOTHING_LEFT": "Non resta nulla da abbuonare.",
+      "SHORT_ON_SEVERAL": "Manca denaro su più fatture: scegli invece quanto va su ciascuna.",
+      "SHORT_ON_DEPOSIT": "Manca denaro su una richiesta di acconto: non viene abbuonato.",
+      "NOTE_NEEDED": "Indica perché si abbuona.",
+      "NOT_RECEIVED": "L'incasso non è ricevuto (annullato): nulla viene abbuonato.",
+      "NOT_AN_INVOICE_ALLOCATION": "Si abbuona solo una differenza su una fattura.",
+      "REVERSED_ALREADY": "Questo abbuono è già stato ripreso.",
+      "A_REVERSAL": "Una ripresa non si riprende di nuovo.",
+      "other": "La differenza non si può abbuonare."
+    }
+  },
+  "panel": {
+    "label": "Il movimento aperto e i suoi suggerimenti",
+    "title": "Movimento del {date}",
+    "empty": "Nessun movimento aperto",
+    "position": "{at} di {count}",
+    "previous": "Movimento precedente",
+    "next": "Movimento successivo",
+    "failed": "Impossibile caricare questo movimento",
+    "reading": "Lettura del movimento…",
+    "nothing": "Nessun movimento da aprire in questa vista.",
+    "pick": "Apri un movimento dall'elenco per vedere i suoi suggerimenti.",
+    "booked": "Contabile",
+    "bookedValue": "{booked} (valuta {value})",
+    "amount": "Importo",
+    "reference": "Causale",
+    "bankReference": "Riferimento banca",
+    "payer": "Ordinante",
+    "age": "In attesa da",
+    "suggestions_one": "{count} suggerimento",
+    "suggestions_other": "{count} suggerimenti",
+    "howSure": "Quanto è sicuro:",
+    "reasons": "Perché corrisponde",
+    "invoice": "Fattura {number}",
+    "deposit": "Richiesta di acconto dell'ordine {number}",
+    "open": "aperto {amount}",
+    "supplierInvoice": "Fattura fornitore {number}",
+    "typedPayment": "Incasso inserito a mano {reference}",
+    "stale": "Pagato nel frattempo: non si può accettare (la prossima ricerca lo toglie).",
+    "noSuggestion": {
+      "title": "Nessun suggerimento per questo movimento",
+      "bodyIn": "Scegli il cliente e le fatture che paga.",
+      "bodyOut": "Nessuna fattura fornitore corrisponde ancora."
+    },
+    "reversedBefore_one": "Ripreso una volta in precedenza (da {party}: {reason}).",
+    "reversedBefore_other": "Ripreso {count} volte in precedenza (l'ultima da {party}: {reason}).",
+    "accept": "Accetta",
+    "acceptRecord": "Accetta e registra l'incasso",
+    "choose": "Scegli un altro o dividi",
+    "leave": "Lascia non abbinato",
+    "accepted": "Abbinamento accettato.",
+    "acceptedRecorded": "Abbinamento accettato: l'incasso è registrato e collocato.",
+    "openPayment": "Apri la scheda dell'incasso",
+    "acceptedAt": "Accettato il {date}",
+    "chosenAt": "Scelto da una persona il {date}",
+    "reverse": "Riprendi"
+  },
+  "period": {
+    "soft": "Questo giorno cade in un mese chiuso in modo provvisorio.",
+    "hard": "Questo giorno cade in un mese chiuso definitivamente: non si può scrivere; chiedi al commercialista.",
+    "softAsk": "Il mese è chiuso in modo provvisorio: indica perché questo entra, poi invia di nuovo.",
+    "reason": "Perché entra nel mese chiuso"
+  },
+  "choose": {
+    "title": "Scegli un altro o dividi",
+    "customer": "Cliente",
+    "customerHint": "Nome, codice o partita IVA",
+    "customers": "Clienti trovati",
+    "searching": "Ricerca…",
+    "noCustomer": "Nessun cliente trovato.",
+    "pick": "Scegli",
+    "otherCustomer": "Un altro cliente",
+    "where": "Cosa paga il movimento",
+    "rest": "{amount} restano a credito del cliente.",
+    "writeOff": "Abbuona invece quanto resta (entro la tolleranza)",
+    "writeOffHint": "Si abbuona solo quando l'intera differenza è entro la tolleranza dell'azienda.",
+    "go": "Accetta e registra l'incasso",
+    "goSplit_one": "Dividi su {count} voce e registra l'incasso",
+    "goSplit_other": "Dividi su {count} voci e registra l'incasso",
+    "held": {
+      "customer": "Prima scegli il cliente.",
+      "items": "Spunta almeno una fattura o richiesta di acconto.",
+      "amounts": "Prima correggi gli importi: insieme non possono superare il movimento."
+    }
+  },
+  "reverse": {
+    "title": "Riprendere questo abbinamento?",
+    "payment": "Incasso",
+    "body": "Il movimento torna da abbinare, con i suoi suggerimenti.",
+    "bodyRecorded": "Le collocazioni e l'eventuale abbuono vengono ripresi, l'incasso registrato viene annullato e il movimento torna da abbinare.",
+    "reason": "Perché si riprende",
+    "held": "Indica perché si riprende.",
+    "go": "Riprendi",
+    "done": "Abbinamento ripreso: il movimento è di nuovo da abbinare."
+  },
+  "review": {
+    "open_one": "Accetta tutti gli Alti ({count})",
+    "open_other": "Accetta tutti gli Alti ({count})",
+    "title_one": "Accetta {count} abbinamento sicuro",
+    "title_other": "Accetta {count} abbinamenti sicuri",
+    "summary_one": "Solo in Nexus: {count} incasso viene registrato e collocato; nulla va alla banca. Tutti o nessuno.",
+    "summary_other": "Solo in Nexus: {count} incassi vengono registrati e collocati; nulla va alla banca. Tutti o nessuno.",
+    "summaryMore_one": "Il primo {count} abbinamento sicuro (al massimo 50 alla volta). Solo in Nexus; tutti o nessuno.",
+    "summaryMore_other": "I primi {count} abbinamenti sicuri (al massimo 50 alla volta). Solo in Nexus; tutti o nessuno.",
+    "save_one": "Accetta {count} abbinamento",
+    "save_other": "Accetta {count} abbinamenti",
+    "what": "Abbinamento",
+    "now": "Da abbinare",
+    "records": "registra l'incasso",
+    "accepted": "Accettato",
+    "doneVerb": "accettati"
+  },
+  "bulk": {
+    "accept_one": "Accetta {count} abbinamento sicuro",
+    "accept_other": "Accetta {count} abbinamenti sicuri",
+    "export_one": "Esporta {count} (CSV)",
+    "export_other": "Esporta {count} (CSV)"
+  },
+  "held": {
+    "busy": "Attendi: l'ultima azione è ancora in corso.",
+    "match": "Puoi vedere la banca, non abbinarne i movimenti (payments.bank.match).",
+    "record": "Accettare un'entrata registra un incasso: serve payments.record.",
+    "void": "Riprenderlo annulla l'incasso registrato: serve payments.void.",
+    "writeOff": "Abbuonare richiede payments.writeOff.",
+    "writeOffNote": "Indica perché si abbuona.",
+    "lockReason": "Indica perché entra nel mese chiuso.",
+    "import": "Puoi vedere la banca, non importare estratti (payments.bank.import).",
+    "upload": "Importare un file richiede il permesso di caricare file (files.upload).",
+    "matched": "Questo movimento è già abbinato.",
+    "stale": "Una voce indicata è stata pagata nel frattempo: cerca di nuovo o scegline un'altra.",
+    "currency": "Gli incassi si registrano in euro: questo movimento è in {currency}. Registralo a mano.",
+    "chooseOut": "Un'uscita si abbina dal suo suggerimento; qui non si può ancora scegliere a mano una fattura fornitore.",
+    "parties": "Scegliere un cliente richiede il permesso di vedere i clienti (parties.view).",
+    "price": "Scegliere gli importi richiede la visibilità dei prezzi (money.price).",
+    "leave": "Un movimento non si può ancora mettere da parte (spese bancarie, stipendi): resta da abbinare finché un passo non lo aggiunge.",
+    "notMatched": "Questo movimento non è abbinato.",
+    "noLine": "Prima apri un movimento.",
+    "noPick": "Prima scegli un suggerimento.",
+    "noSure": "Nessun abbinamento sicuro da accettare in questa vista.",
+    "noRows": "Nessun movimento in questa vista.",
+    "first": "Questo è il primo movimento.",
+    "last": "Questo è l'ultimo movimento.",
+    "dryRunFirst": "Prima controlla il file.",
+    "skipErrors_one": "{count} movimento non si può leggere: spunta per importare senza, o correggi le colonne.",
+    "skipErrors_other": "{count} movimenti non si possono leggere: spunta per importare senza, o correggi le colonne.",
+    "figures": "Puoi vedere le loro cifre, non registrarle (receivables.theirFigures.manage).",
+    "figuresPrice": "Le loro cifre sono prezzi: inserirle richiede la visibilità dei prezzi (money.price).",
+    "figuresMany": "Al massimo 500 righe.",
+    "filesRead": "Aprire il file richiede il permesso di leggere i file (files.read).",
+    "pasteNothing": "Prima incolla le righe (ognuna termina con un importo)."
+  },
+  "keys": {
+    "title": "Scorciatoie da tastiera",
+    "lines": "Movimento successivo / precedente",
+    "open": "Apri il movimento accanto all'elenco",
+    "select": "Seleziona il movimento",
+    "accept": "Nel pannello: accetta il suggerimento",
+    "split": "Nel pannello: scegli un altro o dividi",
+    "openFigures": "Apri le loro cifre e le nostre"
+  },
+  "import": {
+    "title": "Importa un estratto conto",
+    "step": {
+      "file": "File",
+      "mapping": "Colonne",
+      "review": "Controllo",
+      "done": "Importato"
+    },
+    "fileBody": "L'estratto scaricato dal sito della banca: camt.053 (XML), CSV, Excel o OFX. Un movimento già importato non viene mai importato di nuovo.",
+    "fileHint": "camt.053, CSV, XLSX o OFX · al massimo 10 MB",
+    "fileLabel": "File",
+    "format": "Formato",
+    "formatFound": "Dal nome del file",
+    "formatPick": "Indica il formato del file",
+    "formatChoose": "Scegli il formato",
+    "account": "Conto bancario",
+    "accountSheet": "Un foglio non indica il conto: sceglilo.",
+    "accountFile": "Il file indica il suo conto; sceglilo solo per verificarlo.",
+    "accountChoose": "Scegli il conto",
+    "accountByFile": "Quello indicato dal file",
+    "accountOff": "disattivato",
+    "accountsReading": "Lettura dei conti…",
+    "read": "Controlla il file",
+    "held": {
+      "file": "Prima scegli il file.",
+      "format": "Indica il formato del file.",
+      "account": "Scegli il conto di questo foglio."
+    },
+    "mappingBody": "Indica cosa contiene ogni colonna. Servono la data contabile e l'importo (o entrate e uscite).",
+    "mappingLabel": "Le colonne del foglio",
+    "mapTo": "La colonna {header} contiene",
+    "noHeader": "(senza intestazione)",
+    "numberFormat": "I numeri sono scritti",
+    "numbers": {
+      "it": "1.234,56 (italiano)",
+      "en": "1,234.56 (inglese)"
+    },
+    "sheet": "Foglio",
+    "column": {
+      "none": "Ignora",
+      "bookedOn": "Data contabile",
+      "valueOn": "Data valuta",
+      "amount": "Importo (con segno)",
+      "moneyIn": "Entrate",
+      "moneyOut": "Uscite",
+      "currency": "Valuta",
+      "bankReference": "Riferimento banca (CRO / TRN)",
+      "referenceText": "Causale",
+      "counterpartyName": "Ordinante o beneficiario",
+      "counterpartyIban": "IBAN ordinante"
+    },
+    "mapping": {
+      "needDay": "Indica la data contabile.",
+      "needAmount": "Indica l'importo, o entrate e uscite.",
+      "twice": "Una colonna è indicata due volte.",
+      "incomplete": "Prima indica la data contabile e l'importo."
+    },
+    "period": "Periodo",
+    "periodValue": "{from} – {to}",
+    "moneyIn": "Entrate",
+    "moneyOut": "Uscite",
+    "counts": {
+      "new_one": "{count} nuovo",
+      "new_other": "{count} nuovi",
+      "duplicate_one": "{count} già importato",
+      "duplicate_other": "{count} già importati",
+      "error_one": "{count} non leggibile",
+      "error_other": "{count} non leggibili"
+    },
+    "duplicates": "I movimenti già importati sono esclusi: mai due volte.",
+    "skipErrors_one": "Importa senza {count} movimento non leggibile",
+    "skipErrors_other": "Importa senza i {count} movimenti non leggibili",
+    "fixMapping": "Correggi le colonne",
+    "linesLabel": "I movimenti del file",
+    "col": {
+      "row": "Riga",
+      "verdict": "Movimento",
+      "booked": "Contabile",
+      "amount": "Importo",
+      "text": "Ordinante e causale"
+    },
+    "verdict": {
+      "NEW": "Nuovo",
+      "DUPLICATE": "Già importato",
+      "ERROR": "Non leggibile"
+    },
+    "problem": {
+      "NO_DATE": "Manca la data contabile.",
+      "BAD_DATE": "La data non è una data.",
+      "FUTURE_DATE": "La data contabile non è ancora arrivata.",
+      "NO_AMOUNT": "Manca l'importo.",
+      "BAD_AMOUNT": "L'importo non è un numero nel formato scelto.",
+      "ZERO_AMOUNT": "L'importo è 0.",
+      "TOO_MANY_DECIMALS": "Troppi decimali per la valuta.",
+      "OTHER_CURRENCY": "Un'altra valuta rispetto al conto.",
+      "BOTH_SIDES": "Un importo sia in entrata sia in uscita.",
+      "REFERENCE_TOO_LONG": "Il riferimento banca supera i 100 caratteri."
+    },
+    "first200": "Sono mostrati i primi 200 di {count} movimenti.",
+    "go_one": "Importa {count} movimento",
+    "go_other": "Importa {count} movimenti",
+    "back": "Indietro",
+    "done": {
+      "title_one": "{count} movimento importato",
+      "title_other": "{count} movimenti importati",
+      "body": "{suggested} suggerimenti trovati; {duplicate} movimenti erano già importati e sono esclusi.",
+      "open": "Vedi i movimenti"
+    },
+    "refusal": {
+      "FORMAT_UNKNOWN": "Indica il formato del file: camt.053 (XML), CSV, Excel o OFX.",
+      "FILE_NOT_READY": "Il file non è pronto: caricalo di nuovo.",
+      "NOT_A_STATEMENT_FILE": "Questo file non è stato caricato come estratto conto di questa azienda.",
+      "FILE_USED": "Questo file è già importato.",
+      "ACCOUNT_NEEDED": "Il file non indica il conto: scegli il conto bancario.",
+      "ACCOUNT_UNKNOWN": "Il file è di un conto che l'azienda non ha (o ha disattivato).",
+      "ACCOUNT_DIFFERS": "Il file è di un conto diverso da quello scelto.",
+      "ACCOUNT_OFF": "Il conto scelto è disattivato: nulla viene importato.",
+      "CURRENCY_DIFFERS": "Il file è in una valuta diversa da quella del conto.",
+      "MAPPING_INCOMPLETE": "Prima indica la data contabile e l'importo (o entrate e uscite).",
+      "NOTHING_NEW": "Ogni movimento di questo file è già importato: nulla di nuovo.",
+      "LINES_UNREADABLE": "Alcuni movimenti non si possono leggere: correggi le colonne, o importa senza.",
+      "CHANGED_SINCE_DRY_RUN": "I movimenti sono cambiati dal controllo (un'altra importazione ne ha presi alcuni): controlla di nuovo il file.",
+      "other": "L'estratto non si può importare."
+    },
+    "file": {
+      "UNREADABLE": "Non siamo riusciti a leggere questo file.",
+      "NOT_THIS_FORMAT": "Questo file non è nel formato scelto.",
+      "NO_LINES": "Il file non ha movimenti contabilizzati.",
+      "TOO_MANY_LINES": "Il file ha troppi movimenti (o supera 10 MB): scarica un periodo più breve.",
+      "SEVERAL_ACCOUNTS": "Il file contiene più di un conto: scaricane uno alla volta.",
+      "sheet": "Non siamo riusciti a leggere questo foglio: controlla il formato e il foglio."
+    }
+  },
+  "format": {
+    "CAMT053": "camt.053 (XML)",
+    "CSV": "CSV",
+    "XLSX": "Excel (XLSX)",
+    "OFX": "OFX"
+  },
+  "figures": {
+    "title": "Le loro cifre e le nostre",
+    "hint": "L'estratto conto di un cliente B2B confrontato con la nostra contabilità alla stessa data. Gli importi sono prezzi.",
+    "noPrice": "Gli importi non sono mostrati: il tuo ruolo non vede i prezzi di vendita. Le righe che differiscono sono comunque indicate.",
+    "new": "Registra le loro cifre",
+    "count_one": "{count} estratto",
+    "count_other": "{count} estratti",
+    "failed": "Impossibile caricare le loro cifre e le nostre",
+    "openFailed": "Impossibile caricare queste cifre",
+    "reading": "Confronto con la nostra contabilità…",
+    "empty": {
+      "title": "Nessuna cifra di clienti registrata",
+      "body": "Quando un cliente invia il proprio estratto conto, registra qui le sue cifre per vedere ogni differenza."
+    },
+    "noAccess": {
+      "title": "Non puoi vedere le cifre dei clienti",
+      "body": "Le loro cifre richiedono il permesso di vedere i crediti (receivables.view)."
+    },
+    "col": {
+      "customer": "Cliente",
+      "asOf": "Alla data",
+      "balance": "Saldo",
+      "theirsOurs": "Il loro saldo → il nostro",
+      "difference": "Differenza",
+      "state": "Concorda",
+      "listed": "Hanno indicato",
+      "file": "Il loro estratto",
+      "theirReference": "Il loro riferimento",
+      "theirs": "Dicono",
+      "ours": "Nostro",
+      "open": "Aperto da noi",
+      "day": "Giorno",
+      "ourAmount": "Nostro importo"
+    },
+    "agrees": "Concorda",
+    "differs_one": "{count} differenza",
+    "differs_other": "{count} differenze",
+    "listed": "{orders} ordini · {payments} pagamenti",
+    "fileKept": "Conservato",
+    "noFile": "Non conservato",
+    "detailTitle": "Le loro cifre e le nostre — {customer}, al {date}",
+    "recorded": "Registrate",
+    "recordedBy": "da {name} il {date}",
+    "someone": "qualcuno",
+    "note": "Nota",
+    "theirBalance": "Il loro saldo",
+    "ourBalance": "Il nostro saldo",
+    "balanceHint": "Il nostro: fatture − note di credito − incassi + rimborsi pagati alla data, contati gli abbuoni. La differenza è il loro − il nostro.",
+    "orders": "Per ordine",
+    "payments": "Pagamenti",
+    "noOrders": "Non hanno indicato ordini e da noi non c'è nulla di aperto.",
+    "notListed": "non nel loro elenco",
+    "order": "Ordine {number}",
+    "paymentsFrom": "I nostri incassi sono confrontati dal {date}, il primo pagamento che indicano.",
+    "paymentsNone": "Non hanno indicato pagamenti: i nostri non sono confrontati uno per uno (il saldo dice tutta la differenza).",
+    "state": {
+      "SAME": "Uguale",
+      "DIFFERS": "Differisce",
+      "NOT_FOUND": "Non trovato da noi",
+      "NOTHING_OPEN": "Nulla di aperto da noi",
+      "TWICE": "Indicato due volte",
+      "ONLY_OURS": "Solo nostro"
+    },
+    "foundBy": {
+      "REFERENCE": "per riferimento",
+      "AMOUNT_AND_DAY": "per importo e giorno"
+    },
+    "correct": "Correggi…",
+    "newTitle": "Registra le loro cifre",
+    "correctTitle": "Correggi le loro cifre",
+    "newBody": "Inserisci cosa dice l'estratto del cliente alla sua data: per ordine, i pagamenti fatti e il saldo. Vengono subito confrontate con la nostra contabilità.",
+    "correctBody": "Correggi un errore di battitura. Il cliente resta lo stesso; le cifre non vengono mai cancellate.",
+    "asOfHint": "La data del loro estratto (non dopo oggi).",
+    "balanceTyped": "Quanto dicono di doverci (sotto 0: quanto dobbiamo noi).",
+    "addOrder": "Aggiungi un ordine",
+    "addPayment": "Aggiungi un pagamento",
+    "removeOrder": "Togli l'ordine {index}",
+    "removePayment": "Togli il pagamento {index}",
+    "pasteOrders": "Incolla gli ordini dal loro foglio",
+    "pasteOrdersHint": "Un ordine per riga: riferimento, poi importo (tab o ; tra i due)",
+    "pastePayments": "Incolla i pagamenti dal loro foglio",
+    "pastePaymentsHint": "Un pagamento per riga: riferimento, giorno, importo (tab o ; tra loro)",
+    "pasteAdd_one": "Aggiungi {count} riga",
+    "pasteAdd_other": "Aggiungi {count} righe",
+    "noPaymentsTyped": "Nessun pagamento inserito: aggiungi quelli che indicano.",
+    "fileHint": "L'estratto come l'hanno inviato (PDF, foglio…), conservato con queste cifre.",
+    "fileDrop": "Il loro estratto (facoltativo)",
+    "go": "Registra e confronta",
+    "goCorrect": "Salva la correzione",
+    "recordedNotice": "Le loro cifre sono registrate e confrontate.",
+    "correctedNotice": "Le loro cifre sono corrette e confrontate di nuovo.",
+    "problem": {
+      "party": "Scegli il cliente.",
+      "asOfMissing": "Scegli la data del loro estratto.",
+      "asOf": "Le loro cifre sono a una data già arrivata (non dopo oggi).",
+      "amount": "Inserisci un importo (es. 1.250,50 o -80).",
+      "reference": "Un riferimento da 1 a 100 caratteri.",
+      "dateMissing": "Scegli il giorno del pagamento.",
+      "date": "Un pagamento indicato è successivo alla data delle loro cifre.",
+      "note": "Una nota di al massimo 2000 caratteri.",
+      "other": "Controlla le cifre inserite."
+    },
+    "refusal": {
+      "NOT_A_CUSTOMER": "Questo soggetto non è un cliente: si confrontano solo le cifre di un cliente.",
+      "AMOUNT_NEEDED": "Ogni ordine, ogni pagamento e il saldo richiedono il loro importo.",
+      "FILE_NOT_READY": "Il file del loro estratto non è pronto: caricalo di nuovo.",
+      "NOT_A_FIGURES_FILE": "Questo file non è stato caricato come estratto di un cliente di questa azienda.",
+      "FILE_USED": "Questo file è già conservato con altre cifre.",
+      "REFUSED": "Queste cifre non si possono conservare così: controlla la data, i riferimenti e gli importi."
+    }
+  },
+  "csv": {
+    "file": "movimenti-banca",
+    "figuresFile": "loro-cifre",
+    "booked": "Contabile",
+    "value": "Valuta",
+    "amount": "Importo",
+    "currency": "Valuta",
+    "reference": "Causale",
+    "bankReference": "Riferimento banca",
+    "payer": "Ordinante",
+    "payerIban": "IBAN ordinante (mascherato)",
+    "state": "Stato",
+    "confidence": "Quanto è sicuro",
+    "party": "Cliente o fornitore"
+  },
+  "problem": {
+    "read": {
+      "signed_out": "Sei uscito: accedi di nuovo.",
+      "forbidden": "Non puoi vedere questo.",
+      "not_found": "Non c'è più.",
+      "unavailable": "Il server ora non risponde: riprova tra poco.",
+      "rate_limited": "Troppe richieste: attendi un momento e riprova.",
+      "internal": "Qualcosa è andato storto da parte nostra: riprova."
+    },
+    "write": {
+      "moved": "Qualcuno l'ha modificato nel frattempo: viene riletto; controlla e invia di nuovo.",
+      "state": "Non si può fare nello stato attuale: viene riletto.",
+      "invalid": "Qualcosa di inserito non è valido: controlla i campi.",
+      "signed_out": "Sei uscito: accedi di nuovo.",
+      "forbidden": "Non puoi farlo.",
+      "not_found": "Non c'è più.",
+      "rate_limited": "Troppe richieste: attendi un momento e riprova.",
+      "unavailable": "Il server ora non risponde: riprova tra poco.",
+      "step_up": "Prima conferma con un codice nuovo.",
+      "internal": "Qualcosa è andato storto da parte nostra: nulla è cambiato."
+    }
+  }
+}

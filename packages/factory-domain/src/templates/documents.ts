@@ -77,6 +77,8 @@ export function documentPlaceholderValues(input: DocumentInput): PlaceholderValu
     case 'PACKING_LIST':
       return { ...common, 'packingList.number': number, 'packingList.date': date, 'packingList.packages': input.packing ? String(input.packing.packages) : null }
     case 'PROFORMA':
+    // B-W2b-409: a commercial invoice has no template kind of its own: the document's own placeholders.
+    case 'COMMERCIAL_INVOICE':
       return common
   }
 }

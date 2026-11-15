@@ -102,9 +102,6 @@ export const designScreen = defineDesignScreen<DocumentsViewModel>({
   cases: [
     { id: 'numbers', label: 'Every series of every company, with the fiscal check', model: base(), note: 'Next number as it will print, the pattern as chips; the DDT series was moved past 181–188 after a restore, so the check says which numbers Nexus did not issue.' },
     { id: 'one-company', label: 'One company', model: base({ companyId: demo.id }) },
-    { id: 'documents', label: 'Documents: the fixed layouts with a preview', model: base({ view: 'documents' }), note: 'Each preview opens the company\'s sample PDF in a new tab.' },
-    { id: 'documents-not-ready', label: 'Documents of a company whose legal data is incomplete', model: base({ view: 'documents', companyId: esempio.id }), note: 'The previews are held with the reason and a link to the legal data: the server refuses a document without it.' },
-    { id: 'documents-no-right', label: 'Documents without the right to preview', model: base({ view: 'documents', can: { manage: true, documents: false } }) },
     { id: 'new-series', label: 'New series: built from chips', model: base({ dialog: { kind: 'new' } }), note: 'The first number shows as it will print, live.' },
     { id: 'new-series-lot', label: 'New series: a lot series that never starts again', model: base({ dialog: { kind: 'new', draft: { ...newDraft(demo.id, 'LOT'), code: 'B', start: '5001' } } }) },
     {

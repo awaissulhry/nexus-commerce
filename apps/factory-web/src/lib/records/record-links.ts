@@ -94,6 +94,11 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   // B-W2a-81: Finance › Supplier invoices (SCR-153): a supplier invoice's record; a payment reminder opens on Receivables (SCR-151).
   SupplierInvoice: '/finance/payables/[id]',
   PaymentReminder: '/finance/receivables?reminder=[id]',
+  // B-W2b-406: Finance › Bank (SCR-152): a statement shows its lines, a line opens beside them, a customer's figures open
+  // with their comparison.
+  BankStatement: '/finance/bank?statement=[id]',
+  BankLine: '/finance/bank?line=[id]',
+  CustomerStatementFigures: '/finance/bank?figures=[id]',
   // Compliance › Certificates (SCR-051) and Labels & marking (SCR-053).
   Certificate: '/compliance/certificates/[id]',
   LabelTemplate: '/compliance/labels/[id]',
@@ -120,8 +125,16 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   // B-W2b-431: a picklist opens on Admin › Fields & lists › Picklists (SCR-164); a custom field has no page of its own (its
   // dialog opens on its record type's list of fields).
   Picklist: '/admin/fields?tab=picklists&list=[id]',
+  // B-W2b-432: Admin › Documents & numbering — a document template's version (SCR-631) and an e-mail template's (SCR-633)
+  // open their builder pages.
+  DocumentTemplate: '/admin/documents/templates/[id]',
+  EmailTemplate: '/admin/documents/mail/[id]',
   // Admin › Security & health (SCR-166, B-W2b-24): a restore drill (the reminder that the next one is due names the last one).
   RestoreDrill: '/admin/security?drill=[id]#backups',
+  // B-W2b-414: a data request opens in its dialog on Admin › Privacy › Data requests (SCR-660); a retention rule on Retention
+  // rules (SCR-662).
+  DataRequest: '/admin/privacy?view=requests&request=[id]',
+  RetentionRule: '/admin/privacy?view=retention',
   // Home › My tasks (SCR-233, B-W2a-40): a task opens in its DetailModal on the list.
   Task: '/home/tasks?open=[id]',
   // Home › Insights › Reports (SCR-104, B-W2a-79): a report of the standard pack by its key (`sales.late-orders`).

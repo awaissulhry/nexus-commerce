@@ -148,6 +148,8 @@ import { SHIPPING_PACKAGING_ADDS } from '../../shipping/packaging/permissions'
 import { SHIPPING_HOLDS_ADDS } from '../../shipping/holds/permissions'
 // B-W2b-391: labels and documents (the proforma).
 import { SHIPPING_PROFORMA_ADDS } from '../../shipping/proforma/permissions'
+// B-W2b-409: export and customs (the warehouse files the export, sales and finance too).
+import { SHIPPING_CUSTOMS_ADDS } from '../../shipping/customs/permissions'
 // B-W2b-385: the notification defaults of each office role (the administrator sets them).
 import { NOTIFICATION_DEFAULTS_ADDS } from '../../notifications/preferences/permissions'
 // B-W2b-389: currencies and exchange rates (finance and the administrator keep them; buyers and sales read them).
@@ -188,6 +190,10 @@ import { FIELDS_ADDS } from '../../fields/permissions'
 import { TEMPLATES_ADDS } from '../../templates/permissions'
 // B-W2b-405: data protection in depth (the administrator keeps the data requests, erasures and retention rules).
 import { PRIVACY_DEPTH_ADDS } from '../../privacy/retention/permissions'
+// B-W2b-395: carrier pickups (the dispatch desk books them).
+import { SHIPPING_PICKUPS_ADDS } from '../../shipping/pickups/permissions'
+// B-W2b-406: a customer's own figures against ours (finance records and corrects them).
+import { THEIR_FIGURES_ADDS } from '../../receivables-figures/permissions'
 
 /**
  * The system role templates (plan A1 §3.11 "Role"; feature PLT-030): ready roles every tenant gets as system roles
@@ -1091,6 +1097,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (SHIPPING_HOLDS_ADDS[key] ?? []) : []),
   // B-W2b-391
   ...(audience === 'office' ? (SHIPPING_PROFORMA_ADDS[key] ?? []) : []),
+  // B-W2b-409
+  ...(audience === 'office' ? (SHIPPING_CUSTOMS_ADDS[key] ?? []) : []),
   // B-W2b-385
   ...(audience === 'office' ? (NOTIFICATION_DEFAULTS_ADDS[key] ?? []) : []),
   // B-W2b-389
@@ -1132,7 +1140,11 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-422
   ...(audience === 'office' ? (TEMPLATES_ADDS[key] ?? []) : []),
   // B-W2b-405
-  ...(audience === 'office' ? (PRIVACY_DEPTH_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (PRIVACY_DEPTH_ADDS[key] ?? []) : []),
+  // B-W2b-395
+  ...(audience === 'office' ? (SHIPPING_PICKUPS_ADDS[key] ?? []) : []),
+  // B-W2b-406
+  ...(audience === 'office' ? (THEIR_FIGURES_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the
