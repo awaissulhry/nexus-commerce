@@ -19,7 +19,9 @@
       "PURCHASE_ORDER": "Purchase order",
       "DDT": "DDT (transport document)",
       "INVOICE_COPY": "Invoice (courtesy copy)",
-      "PACKING_LIST": "Packing list"
+      "PACKING_LIST": "Packing list",
+      "PROFORMA": "Proforma invoice",
+      "COMMERCIAL_INVOICE": "Commercial invoice (for customs)"
     },
     "column": {
       "code": "Code",
@@ -51,6 +53,16 @@
       "TOTALS": "Computed from the lines; no template changes them.",
       "NOTICES": "Words the law or the document needs, such as the courtesy copy's notice.",
       "SIGNATURES": "The driver's, the carrier's and the recipient's boxes."
+    },
+    "partWhyOf": {
+      "PROFORMA": {
+        "FACTS": "Why it is made (customs, samples or a payment request), the payment and delivery terms, parcels, weights and origin.",
+        "NOTICES": "That it is not a tax document, and its purpose's notice: values for customs, no commercial value, or a payment request."
+      },
+      "COMMERCIAL_INVOICE": {
+        "FACTS": "The exporter's EORI, the reason for the export, the destination country, parcels, weights and origin.",
+        "NOTICES": "That its values are for customs; an export outside the EU also says it is non-taxable (art. 8 DPR 633/1972)."
+      }
     },
     "event": {
       "service": {

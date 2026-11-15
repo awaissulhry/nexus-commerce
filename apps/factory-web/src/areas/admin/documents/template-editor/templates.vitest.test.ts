@@ -10,7 +10,8 @@ import { LOCALES } from '../../../../lib/i18n/locales'
 import { CATALOGUE, messagesFor, placeholdersOf } from '../../../../lib/i18n/messages'
 import { I18nProvider } from '../../../../lib/i18n/provider'
 import { createDocumentTemplate, deleteDocumentTemplate, documentTemplatePreviewHref, listDocumentTemplates, printsNowHref, publishDocumentTemplate, saveDocumentTemplate } from '../doc-templates/api'
-import { answerOf, DEMO_TEMPLATES, PO_IT_V1, QUOTE_IT_V2, QUOTE_IT_V3 } from '../doc-templates/fixtures'
+import { DOCUMENT_TEMPLATE_KINDS, MANDATORY_PARTS } from '@nexus/factory-domain/templates/documents'
+import { answerOf, COMMERCIAL_EN_V1, DEMO_TEMPLATES, PO_IT_V1, PROFORMA_IT_V1, QUOTE_IT_V2, QUOTE_IT_V3 } from '../doc-templates/fixtures'
 import { designScreen as docListScreen } from '../doc-templates/fixtures'
 import { bulkReach, counts, openTarget, rowHeld, rowId, rowsOf, startHeld } from '../doc-templates/model'
 import { createEmailTemplate, previewEmailTemplate, saveEmailTemplate } from '../mail-templates/api'
@@ -29,6 +30,7 @@ import {
   layoutColumns,
   mailProblems,
   newVersionHeld,
+  partWhyKey,
   publishHeld,
   refusalOf,
   refusalReloads,
@@ -134,12 +136,32 @@ describe('the document templates list', () => {
   const row = (id: string) => rows.find((entry) => entry.id === id)!
 
   it('one row per kind and language; a row opens its draft, else its version in use, else nothing', () => {
-    expect(rows).toHaveLength(12)
+    // B-W2b-F60: eight documents in two languages, the proforma and the commercial invoice last.
+    expect(rows).toHaveLength(16)
+    expect(rows.map((entry) => entry.id).slice(-4)).toEqual([rowId('PROFORMA', 'it'), rowId('PROFORMA', 'en'), rowId('COMMERCIAL_INVOICE', 'it'), rowId('COMMERCIAL_INVOICE', 'en')])
     expect(row(rowId('QUOTE', 'it')).active?.id).toBe(QUOTE_IT_V2.id)
     expect(openTarget(row(rowId('QUOTE', 'it')))).toBe(QUOTE_IT_V3.id)
     expect(openTarget(row(rowId('PURCHASE_ORDER', 'it')))).toBe(PO_IT_V1.id)
     expect(openTarget(row(rowId('DDT', 'it')))).toBeNull()
-    expect(counts(rows)).toEqual({ inUse: 2, drafts: 2, fixed: 10 })
+    expect(openTarget(row(rowId('PROFORMA', 'it')))).toBe(PROFORMA_IT_V1.id)
+    expect(row(rowId('COMMERCIAL_INVOICE', 'en')).active?.id).toBe(COMMERCIAL_EN_V1.id)
+    expect(row(rowId('COMMERCIAL_INVOICE', 'en')).slot.layout).toBe('COMMERCIAL_INVOICE/1+t1')
+    expect(rowHeld(row(rowId('COMMERCIAL_INVOICE', 'it')), true)).toBe('tpl.list.nothingToDo')
+    expect(counts(rows)).toEqual({ inUse: 3, drafts: 3, fixed: 13 })
+  })
+
+  it('names every kind in both languages, and says in its own words what the proforma and the commercial invoice always print (B-W2b-F60)', () => {
+    for (const locale of LOCALES) {
+      const words = CATALOGUE[locale]['admin-templates'] ?? {}
+      for (const kind of DOCUMENT_TEMPLATE_KINDS) {
+        expect(words[`tpl.kind.${kind}`], `${locale} ${kind}`).toBeTruthy()
+        for (const part of MANDATORY_PARTS) expect(words[partWhyKey(kind, part)], `${locale} ${kind} ${part}`).toBeTruthy()
+      }
+    }
+    expect(partWhyKey('COMMERCIAL_INVOICE', 'FACTS')).toBe('tpl.partWhyOf.COMMERCIAL_INVOICE.FACTS')
+    expect(partWhyKey('PROFORMA', 'NOTICES')).toBe('tpl.partWhyOf.PROFORMA.NOTICES')
+    expect(partWhyKey('QUOTE', 'FACTS')).toBe('tpl.partWhy.FACTS')
+    expect(partWhyKey('COMMERCIAL_INVOICE', 'COMPANY_LEGAL')).toBe('tpl.partWhy.COMPANY_LEGAL')
   })
 
   it('a fixed-layout row without a draft cannot be ticked; bulk actions say their reach', () => {
@@ -206,7 +228,7 @@ describe('the template calls (platform/templates)', () => {
       { status: 200, body: { template: { ...QUOTE_IT_V3, status: 'ACTIVE' }, retired: { id: QUOTE_IT_V2.id, revision: 2 } } },
       { status: 200, body: { deleted: QUOTE_IT_V3.id } },
     ])
-    expect((await listDocumentTemplates(api, { companyId: 'c1' })).slots).toHaveLength(12)
+    expect((await listDocumentTemplates(api, { companyId: 'c1' })).slots).toHaveLength(16)
     await createDocumentTemplate(api, { companyId: 'c1', kind: 'QUOTE', language: 'it', from: QUOTE_IT_V2.id }, 'key-1')
     await saveDocumentTemplate(api, QUOTE_IT_V3, { footer: null })
     expect((await publishDocumentTemplate(api, QUOTE_IT_V3)).retired?.revision).toBe(2)
@@ -314,5 +336,12 @@ describe('SCR-630 to SCR-633 draw every case in both languages with no key left 
     expect(draw('draft')).toContain('The company&#x27;s legal data')
     expect(draw('problems')).toContain('{{ordine.numero}} is not offered here')
     expect(draw('in-use-draft-open')).toContain('Open draft version 3')
+    // B-W2b-F60: the commercial invoice's own lines, and the proforma's, in both languages.
+    expect(draw('commercial-invoice')).toContain('Template: Commercial invoice (for customs) (English)')
+    expect(draw('commercial-invoice')).toContain('The exporter&#x27;s EORI, the reason for the export, the destination country')
+    expect(draw('commercial-invoice', 'it')).toContain('Modello: Fattura commerciale (uso doganale) (English)')
+    expect(draw('commercial-invoice', 'it')).toContain('non imponibile (art. 8 DPR 633/1972)')
+    expect(draw('proforma-draft')).toContain('That it is not a tax document')
+    expect(draw('proforma-draft', 'it')).toContain('Che non è un documento fiscale')
   })
 })

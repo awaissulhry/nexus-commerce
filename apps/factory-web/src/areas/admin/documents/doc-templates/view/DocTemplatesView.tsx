@@ -81,7 +81,8 @@ function DocTemplates({ model, actions }: { model: DocTemplatesModel; actions?: 
         colId: 'document',
         headerName: t('tpl.list.col.document'),
         flex: 1.3,
-        minWidth: 170,
+        // B-W2b-F60: room for the longer names (the commercial invoice's); the minimums still fit 1440 without a scroll.
+        minWidth: 220,
         cellRenderer: ({ data }: ICellRendererParams<DocRow>) => {
           if (!data) return null
           const target = openTarget(data)
@@ -95,12 +96,13 @@ function DocTemplates({ model, actions }: { model: DocTemplatesModel; actions?: 
           )
         },
       },
-      { colId: 'language', headerName: t('tpl.list.col.language'), flex: 0.8, minWidth: 105, valueGetter: ({ data }) => (data ? words.language(data.language) : '') },
+      // B-W2b-F60: the language and "In use" give the document's name room (both still fit their words).
+      { colId: 'language', headerName: t('tpl.list.col.language'), flex: 0.8, minWidth: 90, valueGetter: ({ data }) => (data ? words.language(data.language) : '') },
       {
         colId: 'inUse',
         headerName: t('tpl.list.col.inUse'),
         flex: 1.2,
-        minWidth: 170,
+        minWidth: 150,
         cellRenderer: ({ data }: ICellRendererParams<DocRow>) =>
           !data ? null : data.slot.active ? (
             <span className="fw-tpl-cell">
@@ -134,7 +136,8 @@ function DocTemplates({ model, actions }: { model: DocTemplatesModel; actions?: 
         colId: 'actions',
         headerName: t('tpl.list.col.actions'),
         flex: 1.3,
-        minWidth: 230,
+        // B-W2b-F60: Preview and "Write a template" side by side need 256 px in Italian (230 cut the button at 1440).
+        minWidth: 260,
         sortable: false,
         cellRenderer: ({ data }: ICellRendererParams<DocRow>) => {
           if (!data) return null

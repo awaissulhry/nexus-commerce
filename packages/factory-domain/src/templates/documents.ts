@@ -1,5 +1,7 @@
 import type { Issue } from '../core/errors'
 import { formatDate } from '../documents/format'
+// B-W2b-F60: the destination country as the commercial invoice prints it.
+import { countryName } from '../documents/i18n'
 import { DOCUMENT_LAYOUTS, MANDATORY_COLUMNS, optionalColumnsOf, type ColumnKey } from '../documents/layouts'
 import type { DocumentInput, DocumentType } from '../documents/model'
 import { isTemplateLanguage } from './language'
@@ -14,8 +16,13 @@ import { placeholderProblems, type PlaceholderValues } from './placeholders'
  * remove: the mandatory columns (layouts.ts MANDATORY_COLUMNS) and the parts below. Pure.
  */
 
-/** What a document template is for: DocumentTemplateKind, value for value (the proforma has none: it prints the code's layout). */
-export const DOCUMENT_TEMPLATE_KINDS = ['QUOTE', 'ORDER_CONFIRMATION', 'PURCHASE_ORDER', 'DDT', 'INVOICE_COPY', 'PACKING_LIST'] as const satisfies readonly DocumentType[]
+/**
+ * What a document template is for: every document the code prints (documents/model.ts DOCUMENT_TYPES), in the order the
+ * screens list them, and the database's DocumentTemplateKind, value for value. B-W2b-F60: the proforma and the commercial
+ * invoice take a company's words too; factory-db src/domain-mirrors.ts fails the typecheck when this list, DOCUMENT_TYPES and
+ * the enum part.
+ */
+export const DOCUMENT_TEMPLATE_KINDS = ['QUOTE', 'ORDER_CONFIRMATION', 'PURCHASE_ORDER', 'DDT', 'INVOICE_COPY', 'PACKING_LIST', 'PROFORMA', 'COMMERCIAL_INVOICE'] as const satisfies readonly DocumentType[]
 export type DocumentTemplateKind = (typeof DOCUMENT_TEMPLATE_KINDS)[number]
 
 export const DOCUMENT_TEMPLATE_LIMITS = Object.freeze({ header: 2000, terms: 20000, footer: 2000, fields: 60 })
@@ -23,17 +30,21 @@ export const DOCUMENT_TEMPLATE_LIMITS = Object.freeze({ header: 2000, terms: 200
 /**
  * The parts every document of a kind prints whatever its template says (codes; the screens say them): the company's
  * legal data on the letterhead and the legal line of every page (c.c. art. 2250), the number and date, the party, the
- * kind's facts (a DDT's transport, DPR 472/1996), the totals of a priced document, its fixed notices (an invoice copy's
- * courtesy-copy notice, a purchase order's), a DDT's signature boxes.
+ * kind's facts (a DDT's transport, DPR 472/1996; a commercial invoice's EORI, reason and destination), the totals of a
+ * priced document, its fixed notices (an invoice copy's courtesy-copy notice, a purchase order's, a proforma's "no tax
+ * document" and its purpose's, a commercial invoice's customs values and non-taxable export), a DDT's signature boxes.
+ * A template only adds words (documents/compose.ts: its header above the lines, its terms after the totals, its footer
+ * text under the legal line in place of the company's own); none of these parts is a template's to remove.
  */
 export const MANDATORY_PARTS = ['COMPANY_LEGAL', 'NUMBER_AND_DATE', 'PARTY', 'FACTS', 'TOTALS', 'NOTICES', 'SIGNATURES'] as const
 export type MandatoryPart = (typeof MANDATORY_PARTS)[number]
 
+/** The kinds that always print fixed notices (documents/compose.ts composeDocument's `notices`). */
+const WITH_NOTICES: readonly DocumentTemplateKind[] = ['INVOICE_COPY', 'PURCHASE_ORDER', 'PROFORMA' /* B-W2b-F60 */, 'COMMERCIAL_INVOICE' /* B-W2b-F60 */]
+
 export function mandatoryPartsOf(kind: DocumentTemplateKind): MandatoryPart[] {
   const layout = DOCUMENT_LAYOUTS[kind]
-  return MANDATORY_PARTS.filter(
-    (part) => (part !== 'TOTALS' || layout.priced) && (part !== 'SIGNATURES' || layout.signatures) && (part !== 'NOTICES' || kind === 'INVOICE_COPY' || kind === 'PURCHASE_ORDER'),
-  )
+  return MANDATORY_PARTS.filter((part) => (part !== 'TOTALS' || layout.priced) && (part !== 'SIGNATURES' || layout.signatures) && (part !== 'NOTICES' || WITH_NOTICES.includes(kind)))
 }
 
 const COMMON = ['document.number', 'document.date', 'document.paymentTerms', 'document.deliveryTerms', 'party.name', 'company.name', 'company.legalName'] as const
@@ -46,6 +57,9 @@ export const DOCUMENT_PLACEHOLDERS: Readonly<Record<DocumentTemplateKind, readon
   DDT: [...COMMON, 'ddt.number', 'ddt.date'],
   INVOICE_COPY: [...COMMON, 'invoice.number', 'invoice.date', 'invoice.dueDate'],
   PACKING_LIST: [...COMMON, 'packingList.number', 'packingList.date', 'packingList.packages'],
+  // B-W2b-F60: a prepayment proforma's due day; a commercial invoice's destination country, in the document's language.
+  PROFORMA: [...COMMON, 'proforma.number', 'proforma.date', 'proforma.dueDate'],
+  COMMERCIAL_INVOICE: [...COMMON, 'commercialInvoice.number', 'commercialInvoice.date', 'commercialInvoice.destination'],
 })
 
 /** What a document prints for each placeholder of its kind, in its language (dates as the document prints them). */
@@ -76,10 +90,11 @@ export function documentPlaceholderValues(input: DocumentInput): PlaceholderValu
       return { ...common, 'invoice.number': number, 'invoice.date': date, 'invoice.dueDate': day(input.invoice?.dueDate) }
     case 'PACKING_LIST':
       return { ...common, 'packingList.number': number, 'packingList.date': date, 'packingList.packages': input.packing ? String(input.packing.packages) : null }
+    // B-W2b-F60: the proforma and the commercial invoice are template kinds too.
     case 'PROFORMA':
-    // B-W2b-409: a commercial invoice has no template kind of its own: the document's own placeholders.
+      return { ...common, 'proforma.number': number, 'proforma.date': date, 'proforma.dueDate': day(input.proforma?.dueDate) }
     case 'COMMERCIAL_INVOICE':
-      return common
+      return { ...common, 'commercialInvoice.number': number, 'commercialInvoice.date': date, 'commercialInvoice.destination': input.customs ? countryName(input.customs.destinationCountry, language) : null }
   }
 }
 

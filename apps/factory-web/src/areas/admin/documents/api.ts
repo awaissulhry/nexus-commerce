@@ -1,4 +1,6 @@
 import { z } from 'zod'
+// B-W2b-F60: the fixed layouts and their languages are factory-domain's own (a copy here had lost three of the eight).
+import type { DocumentLanguage, DocumentType } from '@nexus/factory-domain/documents/model'
 import { DOCUMENT_KINDS, NUMBER_RESETS } from '@nexus/factory-domain/numbering/kinds'
 import { newIdempotencyKey, type ApiClient } from '../../../lib/api/client'
 
@@ -91,12 +93,6 @@ export const closeSeries = (api: ApiClient, seriesId: string, body: { version: n
 
 export const seriesAllocations = (api: ApiClient, seriesId: string, limit = 50) => api.get(path(seriesId, '/allocations'), { query: { limit }, schema: allocationsAnswer })
 
-/** platform/documents DOCUMENT_TYPES and DOCUMENT_LANGUAGES (the fixed layouts and their languages). */
-export const DOCUMENT_TYPES = ['QUOTE', 'PURCHASE_ORDER', 'DDT', 'INVOICE_COPY', 'PACKING_LIST'] as const
-export type DocumentType = (typeof DOCUMENT_TYPES)[number]
-export const DOCUMENT_LANGUAGES = ['it', 'en'] as const
-export type DocumentLanguage = (typeof DOCUMENT_LANGUAGES)[number]
-
-/** The address of a company's sample document (a PDF; the browser opens it through this app's `/api`). */
+/** The address of a company's sample document (a PDF; the browser opens it through this app's `/api`): any of factory-domain's fixed layouts. */
 export const sampleHref = (companyId: string, type: DocumentType, language: DocumentLanguage) =>
   `/api/documents/sample?${new URLSearchParams({ companyId, type, language }).toString()}`

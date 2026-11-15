@@ -15,6 +15,12 @@
   min-width: 0;
 }
 
+/* B-W2b-F60: a long layout id (COMMERCIAL_INVOICE/1+t1) breaks inside a phone's width instead of running off it. */
+.fw-tpl-meta > code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .fw-tpl-skeleton {
   display: grid;
   grid-template-columns: minmax(0, 1fr);

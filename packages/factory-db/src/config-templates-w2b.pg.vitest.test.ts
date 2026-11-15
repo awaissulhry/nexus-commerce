@@ -55,12 +55,20 @@ const office = (): FactoryScope => ({ audience: 'office', tenantId: a.tenantId, 
 const as = <T>(scope: FactoryScope, work: (client: FactoryClient) => Promise<T>): Promise<T> => factory.withScope(scope, work)
 const run = (text: string, ...values: unknown[]) => as(office(), (client) => client.$executeRawUnsafe(text, ...values))
 const admin = async (text: string, values: unknown[] = []) => (await db.admin.query(text, values)).rows as Record<string, unknown>[]
-const insert = (table: string, row: Record<string, unknown>) => {
-  const columns = Object.keys(row)
-    .map((column) => `"${column}"`)
-    .join(', ')
-  return run(`INSERT INTO "${table}" (${columns}) SELECT ${columns} FROM jsonb_populate_record(NULL::"${table}", $1::jsonb)`, JSON.stringify(row))
+/** A row from JSON; the columns in `atNow` take the database's clock (`now()`), never this machine's. */
+const insert = (table: string, row: Record<string, unknown>, atNow: readonly string[] = []) => {
+  const names = [...Object.keys(row).filter((column) => !atNow.includes(column)), ...atNow]
+  const columns = names.map((column) => `"${column}"`).join(', ')
+  const values = names.map((column) => (atNow.includes(column) ? 'now()' : `"${column}"`)).join(', ')
+  return run(`INSERT INTO "${table}" (${columns}) SELECT ${values} FROM jsonb_populate_record(NULL::"${table}", $1::jsonb)`, JSON.stringify(row))
 }
+/**
+ * B-W2b-F60: when a custom value's new value was written, later than its last change by the database's clock alone. The guard
+ * wants it strictly later; a value written with this machine's clock (`new Date()`) and changed with the container's (`now()`)
+ * was refused whenever the container's clock ran behind by more than the milliseconds between the two statements (under
+ * load), and two statements within one millisecond round to the same `changedAt` (Timestamptz(3)).
+ */
+const LATER = `GREATEST(now(), "changedAt" + interval '1 millisecond')`
 /** Runs `work` as the owner login with every trigger off for its own transaction (fixtures of other waves only). */
 async function asReplica(work: () => Promise<unknown>): Promise<void> {
   await db.admin.query('BEGIN')
@@ -100,11 +108,11 @@ const setField = (id: string, assignments: string, ...values: unknown[]) => run(
 async function value(fieldId: string, recordType: string, recordId: string, val: unknown, extra: Record<string, unknown> = {}): Promise<string> {
   const id = randomUUID()
   expect(
-    await insert('CustomFieldValue', { id, fieldId, recordType, recordId, key: `value:${fieldId}:${recordId}`, value: val, changedAt: new Date().toISOString(), changedById: a.actorId, ...extra }),
+    await insert('CustomFieldValue', { id, fieldId, recordType, recordId, key: `value:${fieldId}:${recordId}`, value: val, changedById: a.actorId, ...extra }, 'changedAt' in extra ? [] : ['changedAt']),
   ).toBe(1)
   return id
 }
-const setValue = (id: string, val: unknown) => run(`UPDATE "CustomFieldValue" SET value = $2::jsonb, "changedAt" = now() WHERE id = $1::uuid`, id, JSON.stringify(val))
+const setValue = (id: string, val: unknown) => run(`UPDATE "CustomFieldValue" SET value = $2::jsonb, "changedAt" = ${LATER} WHERE id = $1::uuid`, id, JSON.stringify(val))
 /** A picklist of company A (unless given) with the codes given (active). */
 async function list(codes: readonly string[], extra: Record<string, unknown> = {}): Promise<string> {
   const id = randomUUID()
@@ -302,7 +310,7 @@ describe('custom values (PLT-111)', () => {
     await expect(value(text, 'Style', s.records.jkt05, 42)).rejects.toThrow(/a TEXT value is a string of 1 to 4000 characters/)
     await expect(value(text, 'Style', s.records.jkt05, '  ')).rejects.toThrow(/a TEXT value is a string/)
     const own = await value(text, 'Style', s.records.jkt05, 'Made-up text.')
-    await expect(run(`UPDATE "CustomFieldValue" SET value = 'null'::jsonb, "changedAt" = now() WHERE id = $1::uuid`, own)).rejects.toThrow(/a value is never empty/)
+    await expect(run(`UPDATE "CustomFieldValue" SET value = 'null'::jsonb, "changedAt" = ${LATER} WHERE id = $1::uuid`, own)).rejects.toThrow(/a value is never empty/)
     const number = await field('Style', { type: 'NUMBER', unit: 'kg' })
     await expect(value(number, 'Style', s.records.jkt05, '1.5')).rejects.toThrow(/a NUMBER value is a number/)
     await expect(value(number, 'Style', s.records.jkt05, 1e16)).rejects.toThrow(/a NUMBER value is below 10\^15/)
@@ -328,22 +336,28 @@ describe('custom values (PLT-111)', () => {
     await expect(value(pick, 'Style', s.records.jkt05, 'QUILTED')).rejects.toThrow(/QUILTED is deactivated: it stays on the records that have it/)
     await expect(value(pick, 'Style', s.records.jkt05, ['MESH'])).rejects.toThrow(/a SELECT value is one value code of its list/)
     const own = await value(pick, 'Style', s.records.jkt05, 'MESH')
-    // MESH is deactivated after it was chosen: the value keeps it, and may be changed to another active code.
-    expect(await run(`UPDATE "PicklistValue" SET active = false WHERE id = $1::uuid`, s.picklistValueIds.mesh)).toBe(1)
-    expect(await run(`UPDATE "CustomFieldValue" SET "changedById" = $2::uuid WHERE id = $1::uuid`, own, A.member)).toBe(1)
-    expect(await setValue(own, 'WATERPROOF')).toBe(1)
-    await expect(setValue(own, 'MESH')).rejects.toThrow(/MESH is deactivated/)
-    const many = await field('Style', { type: 'MULTI_SELECT', picklistId: s.picklistIds.lining })
-    await expect(value(many, 'Style', s.records.jkt05, [])).rejects.toThrow(/a list of 1 to 100 value codes of its list, each once/)
-    await expect(value(many, 'Style', s.records.jkt05, ['THERMAL', 'THERMAL'])).rejects.toThrow(/each once/)
-    await expect(value(many, 'Style', s.records.jkt05, 'THERMAL')).rejects.toThrow(/a MULTI_SELECT value is a list/)
-    expect(await run(`UPDATE "PicklistValue" SET active = true WHERE id = $1::uuid`, s.picklistValueIds.mesh)).toBe(1)
-    const both = await value(many, 'Style', s.records.jkt05, ['THERMAL', 'MESH'])
-    expect(await run(`UPDATE "PicklistValue" SET active = false WHERE id = $1::uuid`, s.picklistValueIds.mesh)).toBe(1)
-    // MESH it had stays; adding QUILTED (deactivated) is refused; adding WATERPROOF (active) passes.
-    await expect(setValue(both, ['THERMAL', 'MESH', 'QUILTED'])).rejects.toThrow(/QUILTED is deactivated/)
-    expect(await setValue(both, ['MESH', 'WATERPROOF'])).toBe(1)
-    expect(await run(`UPDATE "PicklistValue" SET active = true WHERE id = $1::uuid`, s.picklistValueIds.mesh)).toBe(1)
+    // The seed's MESH is deactivated and active again below: it is active again whatever happens (B-W2b-F60: no test after
+    // this one finds the seed changed).
+    try {
+      // MESH is deactivated after it was chosen: the value keeps it, and may be changed to another active code.
+      expect(await run(`UPDATE "PicklistValue" SET active = false WHERE id = $1::uuid`, s.picklistValueIds.mesh)).toBe(1)
+      expect(await run(`UPDATE "CustomFieldValue" SET "changedById" = $2::uuid WHERE id = $1::uuid`, own, A.member)).toBe(1)
+      expect(await setValue(own, 'WATERPROOF')).toBe(1)
+      await expect(setValue(own, 'MESH')).rejects.toThrow(/MESH is deactivated/)
+      const many = await field('Style', { type: 'MULTI_SELECT', picklistId: s.picklistIds.lining })
+      await expect(value(many, 'Style', s.records.jkt05, [])).rejects.toThrow(/a list of 1 to 100 value codes of its list, each once/)
+      await expect(value(many, 'Style', s.records.jkt05, ['THERMAL', 'THERMAL'])).rejects.toThrow(/each once/)
+      await expect(value(many, 'Style', s.records.jkt05, 'THERMAL')).rejects.toThrow(/a MULTI_SELECT value is a list/)
+      expect(await run(`UPDATE "PicklistValue" SET active = true WHERE id = $1::uuid`, s.picklistValueIds.mesh)).toBe(1)
+      const both = await value(many, 'Style', s.records.jkt05, ['THERMAL', 'MESH'])
+      expect(await run(`UPDATE "PicklistValue" SET active = false WHERE id = $1::uuid`, s.picklistValueIds.mesh)).toBe(1)
+      // MESH it had stays; adding QUILTED (deactivated) is refused; adding WATERPROOF (active) passes.
+      await expect(setValue(both, ['THERMAL', 'MESH', 'QUILTED'])).rejects.toThrow(/QUILTED is deactivated/)
+      expect(await setValue(both, ['MESH', 'WATERPROOF'])).toBe(1)
+    } finally {
+      await run(`UPDATE "PicklistValue" SET active = true WHERE id = $1::uuid`, s.picklistValueIds.mesh)
+    }
+    expect(await admin(`SELECT active FROM "PicklistValue" WHERE id = $1::uuid`, [s.picklistValueIds.mesh])).toEqual([{ active: true }])
   })
 
   it('name an office person, a record of the linked type or an available file of the record', async () => {
