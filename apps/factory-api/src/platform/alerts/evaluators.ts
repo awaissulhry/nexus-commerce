@@ -18,6 +18,8 @@ import { lowStockFindings } from '../../modules/inventory/low-stock/alerts'
 import { confirmedLateFindings, supplierStatusFindings } from '../../modules/purchasing/reports/supply-alerts'
 // B-W2b-385 (NT1:04): a return whose goods arrived after their deadline.
 import { lateReturnFindings } from '../../modules/sales/returns-depth/alerts'
+// B-W2b-409 (LOG-089): an export whose proof of exit is still missing after its declaration's days.
+import { exitProofFindings } from '../../modules/shipping/customs/alerts'
 // B-W2b-377: the approval engine's requests overdue (their record in words, read by their kind).
 import { kindOf } from '../approvals/kinds'
 import { kindLabelOf } from '../approvals/views'
@@ -293,6 +295,8 @@ export const FINDERS: Readonly<Partial<Record<RuleKind, Find>>> = Object.freeze(
   SUPPLIER_STATUS_CHANGED: supplierStatusFindings,
   // B-W2b-385: one per return that arrived after its deadline, until it is closed.
   RETURN_ARRIVED_LATE: lateReturnFindings,
+  // B-W2b-409: one per shipment whose export's proof of exit is missing past its declaration's days, until it is confirmed.
+  EXIT_PROOF_MISSING: exitProofFindings,
 })
 
 export const DATED: Readonly<Partial<Record<RuleKind, Dated>>> = Object.freeze({

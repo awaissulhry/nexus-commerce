@@ -1,0 +1,43 @@
+/*
+ * The broker's page (B-W2b-409; SCR-580) LAYOUT inside the link frame: one task on one phone screen.
+ * Controls are the design system's; semantic tokens only.
+ */
+.fw-bpl,
+.fw-bpl-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-bpl-h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+}
+
+.fw-bpl-hint {
+  margin: 0;
+  color: var(--nds-text-2);
+  line-height: 1.5;
+}
+
+.fw-bpl-code {
+  font-family: var(--nds-font-mono);
+  overflow-wrap: anywhere;
+}
+
+.fw-bpl-files {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-bpl-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+}

@@ -763,6 +763,8 @@ export const LINKS: ReadonlyArray<{ readonly id: string; readonly title: string;
   { id: 'links.invite', title: 'Join a record', scr: ['SCR-270'], task: 'invite' },
   // W2b: B-W2b-398 Your return label (a RETURN_LABEL link of a return: book the carrier when the goods go, print the label).
   { id: 'links.return-label', title: 'Your return label', scr: ['SCR-436'], task: 'return-label' },
+  // W2b: B-W2b-409 Export declaration papers (a BROKER_PACK link: the broker downloads the papers, types the MRN back).
+  { id: 'links.broker-pack', title: 'Export declaration papers', scr: ['SCR-580'], task: 'broker-pack' },
 ]
 
 /**

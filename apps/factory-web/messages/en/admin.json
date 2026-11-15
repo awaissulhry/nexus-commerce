@@ -1766,6 +1766,7 @@
     "shipping_holds_manage": "Put shipments on hold and release them",
     "shipping_holds_release": "Release money and system holds on shipments",
     "shipping_proforma_issue": "Make proforma invoices (customs, samples, prepayment)",
+    "shipping_customs_manage": "Do the export paperwork: commercial invoice, CN 22 / CN 23, the broker pack, MRN and proof of exit",
     "parties_view": "See customers and suppliers",
     "parties_manage": "Add and edit customers and suppliers",
     "parties_block": "Block and unblock a customer or supplier",

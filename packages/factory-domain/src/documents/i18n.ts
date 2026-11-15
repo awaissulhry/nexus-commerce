@@ -1,4 +1,6 @@
 import type { DdtFreight, DdtReason, DdtTransportBy, DocumentLanguage, DocumentType, InvoiceKind, ProformaPurpose, ReferenceKind } from './model'
+// B-W2b-409: the commercial invoice's reasons.
+import type { ExportReason } from '../shipping/customs/rules'
 
 /**
  * The words of the fixed layouts, in Italian and English (GAP-008). One table per language with the same keys, so a
@@ -97,17 +99,27 @@ export interface DocumentWords {
     readonly noCommercialValue: string
     readonly prepayment: string
   }
+  /** B-W2b-409 (LOG-086, LOG-095): the commercial invoice's facts and its fixed notices. */
+  readonly customs: {
+    readonly eori: string
+    readonly reason: string
+    readonly reasons: Readonly<Record<ExportReason, string>>
+    readonly destination: string
+    readonly origin: string
+    readonly customsValues: string
+    readonly nonTaxable: string
+  }
 }
 
 const IT: DocumentWords = {
-  title: { QUOTE: 'Offerta', PURCHASE_ORDER: 'Ordine di acquisto', DDT: 'Documento di trasporto (DDT)', INVOICE_COPY: 'Fattura - copia di cortesia', PACKING_LIST: 'Distinta colli', ORDER_CONFIRMATION: "Conferma d'ordine" /* B-W2b-303 */, PROFORMA: 'Fattura proforma' /* B-W2b-391 */ },
+  title: { QUOTE: 'Offerta', PURCHASE_ORDER: 'Ordine di acquisto', DDT: 'Documento di trasporto (DDT)', INVOICE_COPY: 'Fattura - copia di cortesia', PACKING_LIST: 'Distinta colli', ORDER_CONFIRMATION: "Conferma d'ordine" /* B-W2b-303 */, PROFORMA: 'Fattura proforma' /* B-W2b-391 */, COMMERCIAL_INVOICE: 'Fattura commerciale (uso doganale)' /* B-W2b-409 */ },
   number: 'Numero',
   date: 'Data',
   page: 'Pagina {page} di {pages}',
   continued: 'segue',
   headings: {
-    issuer: { QUOTE: 'Emittente', PURCHASE_ORDER: 'Committente', DDT: 'Mittente (cedente)', INVOICE_COPY: 'Cedente / prestatore', PACKING_LIST: 'Mittente', ORDER_CONFIRMATION: 'Emittente' /* B-W2b-303 */, PROFORMA: 'Emittente' /* B-W2b-391 */ },
-    party: { QUOTE: 'Cliente', PURCHASE_ORDER: 'Fornitore', DDT: 'Destinatario (cessionario)', INVOICE_COPY: 'Cessionario / committente', PACKING_LIST: 'Destinatario', ORDER_CONFIRMATION: 'Cliente' /* B-W2b-303 */, PROFORMA: 'Cliente / destinatario' /* B-W2b-391 */ },
+    issuer: { QUOTE: 'Emittente', PURCHASE_ORDER: 'Committente', DDT: 'Mittente (cedente)', INVOICE_COPY: 'Cedente / prestatore', PACKING_LIST: 'Mittente', ORDER_CONFIRMATION: 'Emittente' /* B-W2b-303 */, PROFORMA: 'Emittente' /* B-W2b-391 */, COMMERCIAL_INVOICE: 'Esportatore' /* B-W2b-409 */ },
+    party: { QUOTE: 'Cliente', PURCHASE_ORDER: 'Fornitore', DDT: 'Destinatario (cessionario)', INVOICE_COPY: 'Cessionario / committente', PACKING_LIST: 'Destinatario', ORDER_CONFIRMATION: 'Cliente' /* B-W2b-303 */, PROFORMA: 'Cliente / destinatario' /* B-W2b-391 */, COMMERCIAL_INVOICE: 'Acquirente / destinatario' /* B-W2b-409 */ },
     ddtPartyNotSold: 'Destinatario',
     destination: 'Luogo di destinazione',
     deliverTo: 'Consegnare a',
@@ -201,7 +213,7 @@ const IT: DocumentWords = {
     net: 'Imponibile',
     vat: (rate) => `IVA ${rate}`,
     vatExempt: (nature) => `Senza IVA (${nature})`,
-    gross: { QUOTE: 'Totale offerta', PURCHASE_ORDER: 'Totale ordine', DDT: 'Totale', INVOICE_COPY: 'Totale documento', PACKING_LIST: 'Totale', ORDER_CONFIRMATION: 'Totale ordine' /* B-W2b-303 */, PROFORMA: 'Totale proforma' /* B-W2b-391 */ },
+    gross: { QUOTE: 'Totale offerta', PURCHASE_ORDER: 'Totale ordine', DDT: 'Totale', INVOICE_COPY: 'Totale documento', PACKING_LIST: 'Totale', ORDER_CONFIRMATION: 'Totale ordine' /* B-W2b-303 */, PROFORMA: 'Totale proforma' /* B-W2b-391 */, COMMERCIAL_INVOICE: 'Valore totale' /* B-W2b-409 */ },
     deposit: 'Acconto già fatturato',
     due: 'Netto a pagare',
   },
@@ -226,17 +238,27 @@ const IT: DocumentWords = {
     noCommercialValue: 'Campioni senza valore commerciale: valore indicato ai soli fini doganali.',
     prepayment: "Richiesta di pagamento: la fattura d'acconto sarà emessa al ricevimento del pagamento.",
   },
+  // B-W2b-409 (LOG-086, LOG-095)
+  customs: {
+    eori: 'EORI esportatore',
+    reason: "Motivo dell'esportazione",
+    reasons: { SALE_OF_GOODS: 'Vendita di merci', COMMERCIAL_SAMPLE: 'Campione commerciale', RETURNED_GOODS: 'Merce resa', GIFT: 'Regalo', DOCUMENTS: 'Documenti', OTHER: 'Altro' },
+    destination: 'Paese di destinazione',
+    origin: 'Origine delle merci',
+    customsValues: 'Valori dichiarati ai fini doganali. La fattura ai fini IVA è la fattura elettronica trasmessa tramite il Sistema di Interscambio (SdI).',
+    nonTaxable: "Operazione non imponibile IVA ai sensi dell'art. 8, comma 1, lettera a) del DPR 633/1972 (cessione all'esportazione).",
+  },
 }
 
 const EN: DocumentWords = {
-  title: { QUOTE: 'Quotation', PURCHASE_ORDER: 'Purchase order', DDT: 'Transport document (DDT)', INVOICE_COPY: 'Invoice - courtesy copy', PACKING_LIST: 'Packing list', ORDER_CONFIRMATION: 'Order confirmation' /* B-W2b-303 */, PROFORMA: 'Proforma invoice' /* B-W2b-391 */ },
+  title: { QUOTE: 'Quotation', PURCHASE_ORDER: 'Purchase order', DDT: 'Transport document (DDT)', INVOICE_COPY: 'Invoice - courtesy copy', PACKING_LIST: 'Packing list', ORDER_CONFIRMATION: 'Order confirmation' /* B-W2b-303 */, PROFORMA: 'Proforma invoice' /* B-W2b-391 */, COMMERCIAL_INVOICE: 'Commercial invoice (for customs)' /* B-W2b-409 */ },
   number: 'Number',
   date: 'Date',
   page: 'Page {page} of {pages}',
   continued: 'continued',
   headings: {
-    issuer: { QUOTE: 'Issued by', PURCHASE_ORDER: 'Buyer', DDT: 'Sender (consignor)', INVOICE_COPY: 'Seller', PACKING_LIST: 'Sender', ORDER_CONFIRMATION: 'Issued by' /* B-W2b-303 */, PROFORMA: 'Issued by' /* B-W2b-391 */ },
-    party: { QUOTE: 'Customer', PURCHASE_ORDER: 'Supplier', DDT: 'Recipient (consignee)', INVOICE_COPY: 'Buyer', PACKING_LIST: 'Recipient', ORDER_CONFIRMATION: 'Customer' /* B-W2b-303 */, PROFORMA: 'Customer / consignee' /* B-W2b-391 */ },
+    issuer: { QUOTE: 'Issued by', PURCHASE_ORDER: 'Buyer', DDT: 'Sender (consignor)', INVOICE_COPY: 'Seller', PACKING_LIST: 'Sender', ORDER_CONFIRMATION: 'Issued by' /* B-W2b-303 */, PROFORMA: 'Issued by' /* B-W2b-391 */, COMMERCIAL_INVOICE: 'Exporter' /* B-W2b-409 */ },
+    party: { QUOTE: 'Customer', PURCHASE_ORDER: 'Supplier', DDT: 'Recipient (consignee)', INVOICE_COPY: 'Buyer', PACKING_LIST: 'Recipient', ORDER_CONFIRMATION: 'Customer' /* B-W2b-303 */, PROFORMA: 'Customer / consignee' /* B-W2b-391 */, COMMERCIAL_INVOICE: 'Buyer / consignee' /* B-W2b-409 */ },
     ddtPartyNotSold: 'Recipient',
     destination: 'Place of delivery',
     deliverTo: 'Deliver to',
@@ -330,7 +352,7 @@ const EN: DocumentWords = {
     net: 'Net amount',
     vat: (rate) => `VAT ${rate}`,
     vatExempt: (nature) => `No VAT (${nature})`,
-    gross: { QUOTE: 'Quotation total', PURCHASE_ORDER: 'Order total', DDT: 'Total', INVOICE_COPY: 'Document total', PACKING_LIST: 'Total', ORDER_CONFIRMATION: 'Order total' /* B-W2b-303 */, PROFORMA: 'Proforma total' /* B-W2b-391 */ },
+    gross: { QUOTE: 'Quotation total', PURCHASE_ORDER: 'Order total', DDT: 'Total', INVOICE_COPY: 'Document total', PACKING_LIST: 'Total', ORDER_CONFIRMATION: 'Order total' /* B-W2b-303 */, PROFORMA: 'Proforma total' /* B-W2b-391 */, COMMERCIAL_INVOICE: 'Total value' /* B-W2b-409 */ },
     deposit: 'Deposit already invoiced',
     due: 'Amount due',
   },
@@ -352,6 +374,16 @@ const EN: DocumentWords = {
     customs: 'Values stated for customs purposes.',
     noCommercialValue: 'Samples of no commercial value: value stated for customs purposes only.',
     prepayment: 'Payment request: the advance invoice is issued when the payment is received.',
+  },
+  // B-W2b-409 (LOG-086, LOG-095)
+  customs: {
+    eori: "Exporter's EORI",
+    reason: 'Reason for export',
+    reasons: { SALE_OF_GOODS: 'Sale of goods', COMMERCIAL_SAMPLE: 'Commercial sample', RETURNED_GOODS: 'Returned goods', GIFT: 'Gift', DOCUMENTS: 'Documents', OTHER: 'Other' },
+    destination: 'Country of destination',
+    origin: 'Country of origin',
+    customsValues: 'Values declared for customs purposes. The invoice for VAT is the electronic invoice sent through the Italian exchange system (SdI).',
+    nonTaxable: 'Non-taxable for VAT under art. 8(1)(a) of Italian DPR 633/1972 (export supply).',
   },
 }
 

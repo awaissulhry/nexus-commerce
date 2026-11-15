@@ -592,6 +592,7 @@
       "why.RULE_ALERT.recipient": "The rule \"{rule}\" tells you.",
       "alerts.UNKNOWN": "Alert on {label}.",
       "alerts.RETURN_ARRIVED_LATE": "Return {label} arrived on {receivedDate}, {days} days after its deadline ({dueDate}).",
+      "alerts.EXIT_PROOF_MISSING": "Shipment {label} left on {shippedDate}: its proof of exit is still missing after {days} days (the export stays VAT-free only with it).",
       "INQUIRY_WAITING.ASSIGNED": "Inquiry {number} from {from} has waited more than a working day for your answer.",
       "INQUIRY_WAITING.NEW": "Inquiry {number} from {from} has waited more than a working day, and nobody has it yet.",
       "INQUIRY_WAITING.blocks": "The customer waits for an answer.",

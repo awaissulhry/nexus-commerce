@@ -364,6 +364,8 @@ import { SHIPPING_PACKAGING_DEFINITIONS, SHIPPING_PACKAGING_PERMISSIONS } from '
 import { SHIPPING_HOLDS_DEFINITIONS, SHIPPING_HOLDS_PERMISSIONS } from '../../shipping/holds/permissions'
 // B-W2b-391: labels and documents (shipping.proforma.issue).
 import { SHIPPING_PROFORMA_DEFINITIONS, SHIPPING_PROFORMA_PERMISSIONS } from '../../shipping/proforma/permissions'
+// B-W2b-409: export and customs (shipping.customs.manage).
+import { SHIPPING_CUSTOMS_DEFINITIONS, SHIPPING_CUSTOMS_PERMISSIONS } from '../../shipping/customs/permissions'
 // B-W2b-385: notifications in depth (home.notifications.manage: the notification defaults of each office role).
 import { NOTIFICATION_DEFAULTS_DEFINITIONS, NOTIFICATION_DEFAULTS_PERMISSIONS } from '../../notifications/preferences/permissions'
 // B-W2b-389: currencies and exchange rates (currencies.view | manage).
@@ -1073,6 +1075,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   SHIPPING_HOLDS_DEFINITIONS,
   // B-W2b-391: labels and documents (area `shipping`).
   SHIPPING_PROFORMA_DEFINITIONS,
+  // B-W2b-409: export and customs (area `shipping`).
+  SHIPPING_CUSTOMS_DEFINITIONS,
   // B-W2b-385: the notification defaults of each office role (area `home`).
   NOTIFICATION_DEFAULTS_DEFINITIONS,
   // B-W2b-389: currencies and exchange rates (area `currencies`).
@@ -1485,6 +1489,8 @@ for (const name of SHIPPING_PACKAGING_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDe
 for (const name of SHIPPING_HOLDS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-391: labels and documents.
 for (const name of SHIPPING_PROFORMA_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-409: export and customs.
+for (const name of SHIPPING_CUSTOMS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-385: the notification defaults of each office role.
 for (const name of NOTIFICATION_DEFAULTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-389: currencies and exchange rates.

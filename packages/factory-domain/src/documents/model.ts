@@ -2,6 +2,8 @@ import type { BusinessDate } from '../core/time'
 import type { CurrencyCode, DecimalString, MinorUnits } from '../core/money'
 // B-W2b-374: a line's options as printed.
 import type { PrintedOption } from './options-block'
+// B-W2b-409: why export goods travel (the commercial invoice's reason).
+import type { ExportReason } from '../shipping/customs/rules'
 
 /**
  * The document model (plan A1 §3.9; GAP-008): what a printed company document says, before any layout. A module that
@@ -27,7 +29,8 @@ import type { PrintedOption } from './options-block'
  */
 // B-W2b-303 (SAL-208): ORDER_CONFIRMATION, the confirmation of a sales order (one version per change, sent on its thread).
 // B-W2b-391 (LOG-058): PROFORMA, the non-fiscal proforma invoice of a shipment (customs), a sample shipment or a deposit request.
-export const DOCUMENT_TYPES = ['QUOTE', 'PURCHASE_ORDER', 'DDT', 'INVOICE_COPY', 'PACKING_LIST', 'ORDER_CONFIRMATION', 'PROFORMA'] as const
+// B-W2b-409 (LOG-086): COMMERCIAL_INVOICE, the customs invoice of a shipment leaving the EU (HS codes, origin, values, EORI).
+export const DOCUMENT_TYPES = ['QUOTE', 'PURCHASE_ORDER', 'DDT', 'INVOICE_COPY', 'PACKING_LIST', 'ORDER_CONFIRMATION', 'PROFORMA', 'COMMERCIAL_INVOICE'] as const
 export type DocumentType = (typeof DOCUMENT_TYPES)[number]
 
 /** The languages every layout is printed in. */
@@ -252,6 +255,29 @@ export interface ProformaFacts {
   readonly origin?: readonly string[] | null
 }
 
+/**
+ * B-W2b-409 (LOG-086, LOG-095): what a commercial invoice says beside its lines: the exporter's EORI (the company's), why the
+ * goods travel, where they go, the parcels, weights and origin, and the issued invoice when there is one (the tax invoice is
+ * the FatturaPA XML; this paper declares the goods to customs).
+ */
+export interface CustomsFacts {
+  /** The exporting company's EORI (Company.eori), printed on every customs paper. */
+  readonly exporterEori: string
+  readonly reason: ExportReason
+  /** OTHER: the reason in words. */
+  readonly reasonText?: string | null
+  /** The country the goods go to (ISO 3166-1 alpha-2). */
+  readonly destinationCountry: string
+  /** The number of parcels (at least 1), their gross weight and the goods' net weight in kilograms (Decimal(18,4)). */
+  readonly packages?: number | null
+  readonly grossWeightKg?: DecimalString | null
+  readonly netWeightKg?: DecimalString | null
+  /** The goods' countries of origin (ISO 3166-1 alpha-2), each once. */
+  readonly origin?: readonly string[] | null
+  /** Outside the EU: the export is non-taxable (art. 8 c. 1 lett. a DPR 633/1972) and the paper says so. */
+  readonly nonTaxableExport: boolean
+}
+
 /** A document to compose. */
 export interface DocumentInput {
   readonly type: DocumentType
@@ -284,6 +310,8 @@ export interface DocumentInput {
   readonly invoice?: { readonly kind?: InvoiceKind | null; readonly sdiId?: string | null; readonly dueDate?: BusinessDate | null } | null
   /** B-W2b-391: PROFORMA only, required there: why it is made, the payment's day, the parcels, weights and origin. */
   readonly proforma?: ProformaFacts | null
+  /** B-W2b-409: COMMERCIAL_INVOICE only, required there: the EORI, the reason, the destination, parcels, weights and origin. */
+  readonly customs?: CustomsFacts | null
   readonly notes?: string | null
   /** A preview: printed with a "sample, not a valid document" banner, never stored. */
   readonly sample?: boolean

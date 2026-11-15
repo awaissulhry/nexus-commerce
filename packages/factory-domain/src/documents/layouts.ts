@@ -128,6 +128,14 @@ export const DOCUMENT_LAYOUTS: Readonly<Record<DocumentType, DocumentLayout>> = 
       column('amount', 170, 'right'),
     ],
   },
+  // B-W2b-409 (LOG-086): the commercial invoice of an export: priced in the order's currency, no VAT column (an export is
+  // non-taxable), each line's description with its HS code and origin (shipping/proforma customsDescription).
+  COMMERCIAL_INVOICE: {
+    id: 'COMMERCIAL_INVOICE/1',
+    priced: true,
+    signatures: false,
+    columns: [column('code', 110), column('description', 450), column('quantity', 80, 'right'), column('uom', 60), column('unitPrice', 120, 'right'), column('amount', 180, 'right')],
+  },
 })
 
 for (const [type, layout] of Object.entries(DOCUMENT_LAYOUTS)) {
@@ -150,6 +158,8 @@ export const MANDATORY_COLUMNS: Readonly<Record<DocumentType, readonly ColumnKey
   INVOICE_COPY: ['description', 'quantity', 'unitPrice', 'vat', 'amount'],
   PACKING_LIST: ['parcel', 'goods', 'quantity', 'uom'],
   PROFORMA: ['description', 'quantity', 'unitPrice', 'vat', 'amount'],
+  // B-W2b-409: customs reads the goods, their quantity, the unit value and the line's value.
+  COMMERCIAL_INVOICE: ['description', 'quantity', 'unitPrice', 'amount'],
 })
 
 /** B-W2b-422: the columns of a type's layout a template may show or leave out. */
