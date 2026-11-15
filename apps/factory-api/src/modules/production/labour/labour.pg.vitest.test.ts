@@ -230,7 +230,11 @@ describe("closing a line's day (MES-203)", () => {
     expect((await outbox('labour_day.closed', closed.labourDayId))[0]!.payload).toEqual({ labourDayId: closed.labourDayId, siteId: siteA1, lineId: lineL1, workDate: '2026-10-28' })
     expect(refusalOf(await no('supervisor', 'POST', `/production/labour/days/${lineL1}/2026-10-28/close`, {}, 409))).toBe('refusal/ALREADY_CLOSED')
     // B-W2b-F45: a day that has not come yet is tomorrow at the site (Europe/Rome), not a fixed day that passes.
-    expect(refusalOf(await no('supervisor', 'POST', `/production/labour/days/${lineL1}/${plusCalendarDays(businessDate(new Date()), 1)}/close`, {}, 409))).toBe('refusal/NOT_YET')
+    // B-W2b-F53: …unless tomorrow is the seeded CLOSED line day (16 Nov as written, moved on by whole weeks: on Sundays it is
+    // tomorrow), which answers ALREADY_CLOSED: then the day after.
+    const tomorrow = plusCalendarDays(businessDate(new Date()), 1)
+    const notYet = tomorrow === seedDay('2026-11-16') ? plusCalendarDays(tomorrow, 1) : tomorrow
+    expect(refusalOf(await no('supervisor', 'POST', `/production/labour/days/${lineL1}/${notYet}/close`, {}, 409))).toBe('refusal/NOT_YET')
     // Nothing of the closed day's blocks changes now (off-standard's own refusal, the same rule).
     expect(refusalOf(await no('manager', 'POST', `/production/offstandard/blocks/${typed.id}/reopen`, { version: typed.version + 1, reason: 'Check it again.' }, 409))).toBe('refusal/DAY_CLOSED')
   })
