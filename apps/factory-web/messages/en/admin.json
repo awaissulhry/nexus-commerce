@@ -595,7 +595,7 @@
     "centres": {
       "hint": "Groups of stations that do one kind of work.",
       "empty": "No work centres",
-      "capacityLater": "Capacity per work centre is set in Planning (W1).",
+      "capacityLater": "Capacity per work centre is set in Planning.",
       "count_one": "{count} work centre",
       "count_other": "{count} work centres"
     },
@@ -627,7 +627,7 @@
       "tooMany": "Too many shift ends.",
       "twice": "A time is listed twice.",
       "zoneHint": "The site's own time zone (set on the site).",
-      "holidaysLater": "Working days and holidays (Italian holidays, the August shutdown) come in W2a."
+      "holidaysLater": "Working days and holidays (Italian holidays, the August shutdown) are set in the company’s calendar, which every site inherits."
     },
     "badge": {
       "title": "Starting work on a tablet",
@@ -1285,7 +1285,7 @@
       "failedPrinters": "Printers with failed jobs"
     },
     "tileHint": {
-      "failedPrinters": "The print queue comes in W1"
+      "failedPrinters": "A list of the failed jobs is not available here yet."
     },
     "mode": {
       "label": "List",
@@ -1333,7 +1333,7 @@
       "title": "No tablets yet",
       "body": "Enrol one: it takes a minute with the QR code."
     },
-    "later": "The print queue (every label with its tries and Retry) comes in W1.",
+    "later": "A list of every label sent to a printer, with its tries and Retry, is not available here yet.",
     "step": {
       "where": "Where will it work?",
       "scan": "Scan this on the tablet",
@@ -1460,7 +1460,7 @@
       "dpi": "Pick 203, 300 or 600 dpi.",
       "dpiLabel": "Resolution",
       "statusHint": "Paused: jobs wait. Archived: for good.",
-      "testLater": "\"Print a test label\" comes with the print queue (W1)."
+      "testLater": "\"Print a test label\" is not available yet."
     },
     "done": {
       "added": "Printer added.",

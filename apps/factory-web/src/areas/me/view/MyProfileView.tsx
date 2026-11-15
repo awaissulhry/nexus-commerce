@@ -55,9 +55,11 @@ export function MyProfileView({ model, onAction, whereIWork, signedIn, myData }:
     <div className="fw-me">
       <PageHeader title={t('title')} subtitle={t('subtitle', { name: model.person.displayName, email: model.person.email, tenant: model.tenant })} actions={myData} />
       <div className="fw-me-cards">
+        {/* B-W2b-F58: first while the person's roles wait for two-factor (the navigation's one row opens it). */}
+        {model.authenticatorFirst && <AuthenticatorCardView model={model} onAction={onAction} />}
         <DisplayCard model={model} onAction={onAction} />
         {whereIWork}
-        <AuthenticatorCardView model={model} onAction={onAction} />
+        {!model.authenticatorFirst && <AuthenticatorCardView model={model} onAction={onAction} />}
         <PasswordCardView model={model} onAction={onAction} />
         <SessionCard model={model} onAction={onAction} />
         {signedIn}
@@ -275,6 +277,7 @@ function AuthenticatorBody({ model, onAction }: MyProfileViewProps) {
       return (
         <div className="fw-me-stack">
           {card.turnedOn && <Banner tone="success">{t('authenticator.turnedOn')}</Banner>}
+          {card.proved === false && <Banner tone="warning">{t('authenticator.signInAgain')}</Banner>}
           <KeyValue labelCase="sentence" items={[{ label: t('authenticator.recoveryLeft'), value: String(card.recoveryCodesLeft) }]} />
           {card.recoveryCodesLeft <= RECOVERY_LOW && !card.required && <Banner tone="warning">{t('authenticator.recoveryLow')}</Banner>}
           {card.required ? (

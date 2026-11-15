@@ -125,7 +125,8 @@ function TestModeCard({ model, company, actions }: { model: EInvoicingModel; com
           { label: w('sdi.connection'), value: company.connection.accounts.length === 0 ? w('sdi.noConnection') : company.connection.accounts.map((account) => `${account.label} · ${account.mode}`).join(', ') },
         ]}
       />
-      {testing && company.state.simulated && (
+      {/* B-W2b-F58: the FAKE intermediary (local and test only) gives the chosen answer too, so it is picked here as well. */}
+      {testing && (company.state.simulated || fake) && (
         <Field label={w('sdi.simulate')} hint={w('sdi.simulateHint')}>
           <Select value={company.simulateOutcome} disabled={!company.can.manage || model.busy} onChange={(event) => actions?.onSimulate?.(event.target.value as SimulatedOutcome)}>
             {company.simulateOptions.map((option) => (
@@ -136,7 +137,6 @@ function TestModeCard({ model, company, actions }: { model: EInvoicingModel; com
           </Select>
         </Field>
       )}
-      {testing && !company.state.simulated && <p className="fw-fin-hint">{w('sdi.simulateFake')}</p>}
       {testing && company.goLive.problems.length > 0 && (
         <ul className="fw-fin-list" aria-label={w('sdi.goLiveHeld')}>
           {goLiveProblems(company.goLive.problems).map((entry) => (

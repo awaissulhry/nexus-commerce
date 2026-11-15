@@ -24,7 +24,7 @@
     "print": "Print",
     "more": "More actions",
     "monday": "Email me this every Monday",
-    "mondayHeld": "Scheduled e-mails of a report come later: print it or save the PDF meanwhile.",
+    "mondayHeld": "This page cannot be e-mailed on a schedule yet: print it or save the PDF.",
     "csv": {
       "ageing": "Export stock ageing (CSV)",
       "leather": "Export leather use (CSV)"

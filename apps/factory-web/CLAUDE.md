@@ -50,6 +50,12 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   (`shell/office/office-entry.ts`, `OFFICE_PAGES` in shell/nav/office-nav.ts); none built: My profile. A step that
   builds an office page adds its address to `OFFICE_PAGES`; a new area adds its entry page (`office-entry.vitest.test.ts`
   holds both).
+- B-W2b-F58: the bare address `/` (`src/app/page.tsx`) sends a signed-out person to `/sign-in` and a signed-in one to their
+  company's office entry `/w/<company>` (`lib/session/office-start.ts`, the rule a new session opens). While the person's role
+  waits for two-factor on this session (`me.mfa.required && !satisfied`), the navigation holds ONE row in words that opens
+  Me › Authenticator (`shell/office/mfa-hint.ts` navWithMfaHint; the Me page puts that card first). On the Owner's local test
+  server only, `GET /shell/notices` may say `bannerHidden` (no top TEST MODE bar) and `localMailbox` (the person menu opens
+  Local mailbox, `/w/<company>/me/mailbox`, `areas/me/mailbox`, SCR-007-mailbox; a 404 wherever the API has no mailbox).
 - `src/app/(links)/` — no chrome: `/l#token=…` (a one-off link; the token is read from the fragment, removed from the
   address bar, sent only in `x-factory-link`), `/privacy/<company id>` (the privacy-notice slot, GAP-005).
   B-W2b-170: `/t?tenant=<slug>&company=<code>` — Find your order (the public tracking search, `links/tracking/TrackSearch.tsx`);

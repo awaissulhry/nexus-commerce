@@ -19,7 +19,7 @@
     "print": "Stampa",
     "more": "Altre azioni",
     "monday": "Inviamelo ogni lunedì",
-    "mondayHeld": "L'invio programmato dei report arriva più avanti: intanto stampalo o salva il PDF.",
+    "mondayHeld": "Questa pagina non si può ancora inviare per e-mail in modo programmato: stampala o salva il PDF.",
     "csv": { "spend": "Esporta la spesa (CSV)", "late": "Esporta le righe in ritardo (CSV)" },
     "csvHeld": "Attende la lettura del pannello.",
     "keys": "Scorciatoie da tastiera"

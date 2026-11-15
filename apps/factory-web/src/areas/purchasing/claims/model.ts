@@ -60,6 +60,8 @@ export interface ClaimsCan {
   /** B-W2b-14: files.upload — a photo of what is wrong; files.delete — a draft's photo removed. */
   upload: boolean
   remove: boolean
+  /** B-W2b-F58: payables.view — Finance › Supplier invoices, where the supplier's credit note is matched to the claim. */
+  payables: boolean
 }
 
 export function claimsCan(permissions: readonly string[]): ClaimsCan {
@@ -76,6 +78,7 @@ export function claimsCan(permissions: readonly string[]): ClaimsCan {
     files: held.has('files.read'),
     upload: held.has('files.upload'),
     remove: held.has('files.delete'),
+    payables: held.has('payables.view'),
   }
 }
 

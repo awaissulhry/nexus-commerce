@@ -214,7 +214,7 @@
       "body": "No kit line yet: the buyer plans it from the work order’s materials, or the pieces go alone.",
       "bodyEdit": "Plan it from the work order’s materials, or add the lines one by one. Leather tracked by the hide goes cut, as bundles."
     },
-    "floorLater": "Here the office sends the kit with its DDT; sending it from the warehouse tablet (Subcontract kits) comes with a later step.",
+    "floorLater": "Here the office sends the kit with its DDT; the warehouse can also send it from the tablet (Subcontract kits).",
     "ddts": {
       "title": "Kit DDTs (work on our behalf)",
       "none": "No DDT issued for this order yet.",
@@ -316,7 +316,7 @@
     },
     "pdfLoading": "Reading the PDF…",
     "printAgain": "Print again",
-    "later": "The workshop’s written terms and its invoices come with later steps."
+    "later": "The workshop’s written terms are on the Operations & quantities tab; its invoices are in Finance › Supplier invoices."
   },
   "cancel": {
     "title": "Cancel {number}",

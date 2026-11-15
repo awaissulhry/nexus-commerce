@@ -595,7 +595,7 @@
     "centres": {
       "hint": "Gruppi di postazioni che fanno un tipo di lavoro.",
       "empty": "Nessun centro di lavoro",
-      "capacityLater": "La capacità per centro di lavoro si imposta in Pianificazione (W1).",
+      "capacityLater": "La capacità per centro di lavoro si imposta in Pianificazione.",
       "count_one": "{count} centro di lavoro",
       "count_other": "{count} centri di lavoro"
     },
@@ -627,7 +627,7 @@
       "tooMany": "Troppi fine turno.",
       "twice": "Un orario è ripetuto.",
       "zoneHint": "Il fuso orario dello stabilimento (impostato sullo stabilimento).",
-      "holidaysLater": "Giorni lavorativi e festività (festività italiane, chiusura di agosto) arrivano in W2a."
+      "holidaysLater": "I giorni lavorativi e le festività (festività italiane, chiusura di agosto) si impostano nel calendario della società, che ogni sede eredita."
     },
     "badge": {
       "title": "Inizio del lavoro sul tablet",
@@ -1285,7 +1285,7 @@
       "failedPrinters": "Stampanti con lavori falliti"
     },
     "tileHint": {
-      "failedPrinters": "La coda di stampa arriva in W1"
+      "failedPrinters": "Un elenco dei lavori non riusciti non è ancora disponibile qui."
     },
     "mode": {
       "label": "Elenco",
@@ -1333,7 +1333,7 @@
       "title": "Ancora nessun tablet",
       "body": "Registrane uno: basta un minuto con il codice QR."
     },
-    "later": "La coda di stampa (ogni etichetta con i tentativi e Riprova) arriva in W1.",
+    "later": "Un elenco di ogni etichetta inviata a una stampante, con i tentativi e Riprova, non è ancora disponibile qui.",
     "step": {
       "where": "Dove lavorerà?",
       "scan": "Inquadra sul tablet",
@@ -1460,7 +1460,7 @@
       "dpi": "Scegli 203, 300 o 600 dpi.",
       "dpiLabel": "Risoluzione",
       "statusHint": "In pausa: i lavori attendono. Archiviata: per sempre.",
-      "testLater": "\"Stampa un'etichetta di prova\" arriva con la coda di stampa (W1)."
+      "testLater": "\"Stampa un'etichetta di prova\" non è ancora disponibile."
     },
     "done": {
       "added": "Stampante aggiunta.",

@@ -57,7 +57,11 @@
         "REJECTED": "Sends are answered here, never by the intermediary: the first send of each invoice is rejected, so the correction can be practised.",
         "NOT_DELIVERABLE": "Sends are answered here, never by the intermediary: SDI cannot deliver them, so the copy to the customer can be practised."
       },
-      "FAKE": "The connection is the FAKE intermediary (local and test only): it answers, and nothing leaves the system.",
+      "FAKE": {
+        "DELIVERED": "The connection is the FAKE intermediary (local and test only): it answers each send as delivered, and nothing leaves the system.",
+        "REJECTED": "The connection is the FAKE intermediary (local and test only): it rejects the first send of each invoice, so the correction can be practised, and nothing leaves the system.",
+        "NOT_DELIVERABLE": "The connection is the FAKE intermediary (local and test only): SDI cannot deliver its sends, so the copy to the customer can be practised, and nothing leaves the system."
+      },
       "NONE": "No single SDI connection is set up yet: sends wait for one."
     }
   },
@@ -726,7 +730,6 @@
     "noConnection": "None yet",
     "simulate": "Simulated answer",
     "simulateHint": "What SDI's simulated answer says to each send.",
-    "simulateFake": "With the FAKE intermediary the fake answers; the simulated answer applies to a live or sandbox connection.",
     "outcome": {
       "DELIVERED": "Delivered",
       "REJECTED": "Rejected on the first send (practise the correction)",

@@ -39,7 +39,8 @@ export function bannerOf(companies: readonly CompanyEInvoicing[], companyId: str
 
 /** The words of who answers (the banner's line under its title, the settings card). */
 export function answerWords(company: Pick<BannerCompany, 'answerer' | 'outcome'>): Phrase {
-  if (company.answerer === 'SIMULATED') return phrase(`testMode.answer.SIMULATED.${company.outcome}`)
+  // B-W2b-F58: the FAKE intermediary gives the company's simulated answer too (apps/factory-api adapters/sdi/fake.ts).
+  if (company.answerer === 'SIMULATED' || company.answerer === 'FAKE') return phrase(`testMode.answer.${company.answerer}.${company.outcome}`)
   return phrase(`testMode.answer.${company.answerer}`)
 }
 

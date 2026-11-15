@@ -429,7 +429,7 @@
     "acceptMajor": "Accetta fino a (maggiori)",
     "acceptMinor": "Accetta fino a (minori)",
     "acceptHint": "Capi con un difetto che il campione accetta ancora.",
-    "tablesLater": "Scrivi i numeri di accettazione dalla tua tabella di campionamento; le tabelle ISO 2859-1 verranno calcolate qui in un passo successivo.",
+    "tablesLater": "Scrivi i numeri di accettazione, oppure leggili dal calcolatore AQL in Qualità › Piani di controllo e AQL.",
     "note": "Nota",
     "numberWords": "Alla creazione prende il prossimo numero della serie ispezioni della società.",
     "create": "Crea ispezione",

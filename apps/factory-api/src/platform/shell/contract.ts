@@ -16,7 +16,14 @@ export const shellNoticesContract = defineContract({
         carrierSites: z.array(output({ siteId: id(), name: z.string() })),
         /** The ACTIVE companies whose e-invoicing is in test mode (nothing goes to SDI; B-W2b-401): their legal name, by code. */
         eInvoicingCompanies: z.array(output({ companyId: id(), name: z.string() })),
+        /**
+         * B-W2b-F58: the shell draws no top TEST MODE bar (FACTORY_HIDE_TEST_MODE_BANNER on the Owner's local test server
+         * only; false everywhere else). The test modes above are still named, and every other TEST word stays.
+         */
+        bannerHidden: z.boolean(),
       }),
+      /** B-W2b-F58: this API keeps a local mailbox (FACTORY_ENV=local only): the shell offers its page. */
+      localMailbox: z.boolean(),
     }),
   },
 })

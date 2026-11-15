@@ -123,6 +123,12 @@ describe('test mode', () => {
     expect(two.testing.map((entry) => entry.answerer)).toEqual(['FAKE', 'SIMULATED'])
     expect(bannerOf([TESTING_FAKE, TESTING_SIMULATED], TESTING_SIMULATED.companyId).testing).toHaveLength(1)
     expect(answerWords({ answerer: 'SIMULATED', outcome: 'REJECTED' })).toEqual({ key: 'testMode.answer.SIMULATED.REJECTED' })
+    // B-W2b-F58: the FAKE intermediary gives the chosen answer too; each one has words in both languages.
+    for (const outcome of ['DELIVERED', 'REJECTED', 'NOT_DELIVERABLE'] as const) {
+      expect(answerWords({ answerer: 'FAKE', outcome })).toEqual({ key: `testMode.answer.FAKE.${outcome}` })
+      for (const locale of ['it', 'en'] as const) expect(messagesFor(locale, ['finance-invoices-depth'])['finance-invoices-depth']![`testMode.answer.FAKE.${outcome}`], `${locale} ${outcome}`).toBeTruthy()
+    }
+    expect(answerWords({ answerer: 'NONE', outcome: 'DELIVERED' })).toEqual({ key: 'testMode.answer.NONE' })
   })
 
   it('holds going live with why and says what going live means', () => {

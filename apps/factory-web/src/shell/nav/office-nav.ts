@@ -114,6 +114,8 @@ export function navPermissions(nav: AreaNav = OFFICE_NAV): string[] {
  */
 export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/me',
+  // B-W2b-F58: the local test server's mailbox (from the person menu; a 404 anywhere but FACTORY_ENV=local).
+  '/me/mailbox',
   '/home/today',
   '/home/today/print',
   '/home/approvals',

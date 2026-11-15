@@ -38,12 +38,17 @@ import { describeUrlHost, isLoopbackUrl } from '@nexus/db-kit/url-guard'
  *   FACTORY_LOCAL_FILES_DIR   local and test only: the folder of the local file store (the store of a FAKE R2
  *                             account; platform/files), an absolute path; default a folder under the system's
  *                             temporary directory named after FACTORY_QUEUE_PREFIX
+ *   FACTORY_HIDE_TEST_MODE_BANNER  local only (B-W2b-F58; the Owner's answer A of 11-15): `1` hides the office shell's top
+ *                             TEST MODE bar on the Owner's local test server, while the test carrier and the fake SDI keep
+ *                             working and every other TEST word stays (GET /shell/notices says the bar is hidden); refused on
+ *                             any other environment, test included
  *   FACTORY_VAPID_PUBLIC_KEY, FACTORY_VAPID_PRIVATE_KEY, FACTORY_VAPID_SUBJECT
  *                             optional, B-W2b-385 (PLT-140): the server's Web Push keys (a P-256 pair, base64url: 65 and 32
  *                             bytes) and who runs it (mailto: or https), all three or none; without them push says it is not
  *                             available (platform/notifications/push/service.ts)
  *
  * Refusals:
+ *   - FACTORY_HIDE_TEST_MODE_BANNER on any FACTORY_ENV but local (B-W2b-F58);
  *   - FACTORY_ENV local or test: the database and Redis must be on this machine (loopback), and FACTORY_QUEUE_PREFIX
  *     must be set; no KMS or AWS variable (nothing local reaches AWS);
  *   - FACTORY_ENV staging or production: only on Railway (RAILWAY_ENVIRONMENT set by the platform, never by the file),
@@ -109,6 +114,8 @@ const schema = z.object({
   FACTORY_AWS_ACCESS_KEY_ID: z.string().min(1).optional(),
   FACTORY_AWS_SECRET_ACCESS_KEY: z.string().min(1).optional(),
   FACTORY_LOCAL_FILES_DIR: z.string().refine(isAbsolute, { message: 'must be an absolute path' }).optional(),
+  // B-W2b-F58: the Owner's local test server only (refused below on every other environment).
+  FACTORY_HIDE_TEST_MODE_BANNER: z.enum(['0', '1'], { message: 'must be 1 (hide the TEST MODE bar) or 0' }).optional(),
   // B-W2b-385: the Web Push keys (base64url) and their subject; checked as a pair by the push runtime.
   FACTORY_VAPID_PUBLIC_KEY: z.string().regex(/^[A-Za-z0-9_-]{87}$/, { message: 'must be an uncompressed P-256 public key in base64url (87 characters)' }).optional(),
   FACTORY_VAPID_PRIVATE_KEY: z.string().regex(/^[A-Za-z0-9_-]{43}$/, { message: 'must be a P-256 private key in base64url (43 characters)' }).optional(),
@@ -151,6 +158,12 @@ export function parseFactoryEnv(variables: Record<string, string>, railwayEnviro
   }
   const env = parsed.data
   const local = env.FACTORY_ENV === 'local' || env.FACTORY_ENV === 'test'
+  // B-W2b-F58: hiding the TEST MODE bar is for the Owner's local test server only; anywhere else the bar must show.
+  if (env.FACTORY_HIDE_TEST_MODE_BANNER !== undefined && env.FACTORY_ENV !== 'local') {
+    throw new FactoryEnvError(
+      `FACTORY_HIDE_TEST_MODE_BANNER is for the local test server only (FACTORY_ENV=local); with FACTORY_ENV=${env.FACTORY_ENV} the TEST MODE bar always shows while a test mode is on`,
+    )
+  }
   if (local) {
     for (const key of ['FACTORY_DATABASE_URL', 'FACTORY_REDIS_URL'] as const) {
       if (!isLoopbackUrl(env[key])) {
