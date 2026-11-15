@@ -50,14 +50,18 @@ describe('the kinds of rule', () => {
     // B-W2b-24: + INTEGRATION_FAILING (the design's last built-in). B-W2b-42: + WORKING_TIME_LIMIT. B-W2b-314: + LOW_STOCK.
     // B-W2b-350: + PO_CONFIRMED_LATE, SUPPLIER_STATUS_CHANGED (the supply alerts). B-W2b-385: + RETURN_ARRIVED_LATE.
     // B-W2b-409: + EXIT_PROOF_MISSING.
-    expect(RULE_KINDS).toHaveLength(14)
+    // B-W2b-416: + MARGIN_BELOW_FLOOR (the low-margin alert).
+    expect(RULE_KINDS).toHaveLength(15)
     expect(kindsOf('DATE')).toEqual(['CERTIFICATE_EXPIRING', 'INVOICE_DEADLINE'])
     for (const kind of RULE_KINDS) {
       const read = readThreshold(kind, KINDS[kind].builtIn.threshold)
       expect(read, kind).toEqual({ ok: true, threshold: KINDS[kind].builtIn.threshold })
       expect(templateOf(KINDS[kind].builtIn.recipientRole), kind).toBeDefined()
-      // The recipient role may see the record: an alert reaches only who can open it.
-      expect(templateOf(KINDS[kind].builtIn.recipientRole)!.permissions, kind).toContain(KINDS[kind].view)
+      // The recipient role may see the record: an alert reaches only who can open it (B-W2b-416: a grain, as `money.margin`,
+      // comes from the role's grains).
+      const view = KINDS[kind].view
+      if (view.startsWith('money.')) expect(templateOf(KINDS[kind].builtIn.recipientRole)!.grains, kind).toContain(view.slice('money.'.length))
+      else expect(templateOf(KINDS[kind].builtIn.recipientRole)!.permissions, kind).toContain(view)
       expect(Boolean(KINDS[kind].timer), kind).toBe(KINDS[kind].trigger === 'DATE')
     }
     expect(readThreshold('HOLD_TOO_LONG', { hours: 0 }).ok).toBe(false)
