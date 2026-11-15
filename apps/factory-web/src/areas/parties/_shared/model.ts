@@ -6,6 +6,8 @@ import { EU_VAT_FORMATS, normaliseTaxIdentity, splitEuVatNumber, suggestTaxMode,
 import { isEuMemberState } from '@nexus/factory-domain/tax/eu'
 import { isValidPartitaIva } from '@nexus/factory-domain/tax/tax-ids'
 import { isApiError, issuePath } from '../../../lib/api/errors'
+// B-W2b-427: the reasons a likely duplicate looks alike.
+import type { DuplicateReasonFound } from '../../admin/import/duplicates/api'
 import type {
   Address,
   AddressBody,
@@ -575,6 +577,12 @@ export function suggestCode(name: string): string {
   return code.slice(0, 24).replace(/-+$/, '')
 }
 
+/**
+ * B-W2b-427 (PLT-178): a party the new one looks like — a list row found by its number after a refused create, or a
+ * likely duplicate from the check while it is typed, with why (admin/import/duplicates).
+ */
+export type DuplicateParty = Pick<PartyRow, 'id' | 'code' | 'legalName' | 'tradeName' | 'roles' | 'status'> & { readonly reasons?: readonly DuplicateReasonFound[] }
+
 export interface NewPartyDraft {
   party: PartyDraft
   identity: IdentityDraft
@@ -823,8 +831,8 @@ export interface PartiesListModel {
   dialogProblem?: string | null
   /** Fields the API refused in the dialog (`refusedFields`). */
   refused?: readonly string[]
-  /** Parties the typed VAT number or name already finds (the duplicate warning). */
-  duplicates?: readonly PartyRow[]
+  /** Parties the typed VAT number or name already finds (the duplicate warning; B-W2b-427: with why each looks alike). */
+  duplicates?: readonly DuplicateParty[]
   /** A design case's starting form. */
   newDraft?: NewPartyDraft
   /** The companies the person works in (New asks which one a party belongs to when there are several). */

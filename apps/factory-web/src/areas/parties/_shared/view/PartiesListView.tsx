@@ -43,7 +43,7 @@ export interface PartiesListActions {
   onDialog?: (dialog: ListDialog | null) => void
   /** Enter on a row: open its record. */
   onOpen?: (row: PartyRow) => void
-  onLookup?: (q: string) => void
+  onLookup?: (draft: NewPartyDraft) => void
   onCreate?: (draft: NewPartyDraft) => Promise<boolean>
   /** Block these parties with one reason (one call each). */
   onBlock?: (partyIds: readonly string[], reason: string) => void

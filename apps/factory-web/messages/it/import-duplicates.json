@@ -1,0 +1,192 @@
+{
+  "dup": {
+    "retry": "Riprova",
+    "reason": {
+      "SAME_VAT_NUMBER": "Stessa partita IVA",
+      "SAME_FISCAL_CODE": "Stesso codice fiscale",
+      "SAME_CODE": "Stesso codice",
+      "SAME_SUPPLIER_CODE": "Stesso codice articolo del fornitore",
+      "SAME_NAME": "Stesso nome",
+      "SIMILAR_NAME": "Nome simile ({score}%)",
+      "SAME_EMAIL_DOMAIN": "Stesso dominio e-mail {detail}",
+      "SAME_WEBSITE": "Stesso sito web {detail}"
+    },
+    "status": {
+      "PROSPECT": "Potenziale",
+      "ACTIVE": "Attivo",
+      "BLOCKED": "Bloccato",
+      "ARCHIVED": "Archiviato",
+      "OTHER": "Altro stato"
+    },
+    "likelihood": {
+      "HIGH": "Molto probabile",
+      "MEDIUM": "Possibile"
+    },
+    "refusal": {
+      "SAME_RECORD": "Un record non si può unire a sé stesso.",
+      "KEPT_ARCHIVED": "{kept} è archiviato: riattivalo prima di unirvi l'altro.",
+      "DROPPED_ARCHIVED": "{dropped} è già archiviato.",
+      "DROPPED_BLOCKED": "{dropped} è bloccato: sbloccalo prima, così il blocco non va perso.",
+      "KIND_DIFFERS": "{dropped} e {kept} sono materiali di tipo diverso.",
+      "OTHER_COMPANY": "{dropped} e {kept} appartengono a società diverse.",
+      "EVERY_COMPANY": "{dropped} vale per tutte le società: si può unire solo a un altro record valido per tutte le società.",
+      "IN_USE": "{dropped} è già usato da altri record: lo tengono, quindi non si può archiviare in {kept}.",
+      "NO_RIGHT": "Per unire servono il diritto di unione e il diritto di modificare entrambi i record."
+    },
+    "use": {
+      "SALES_one": "Vendite: {count} record (offerte, ordini, resi …)",
+      "SALES_other": "Vendite: {count} record (offerte, ordini, resi …)",
+      "MONEY_one": "Amministrazione: {count} record (fatture, pagamenti …)",
+      "MONEY_other": "Amministrazione: {count} record (fatture, pagamenti …)",
+      "PURCHASING_one": "Acquisti: {count} record (ordini d'acquisto, ricevimenti …)",
+      "PURCHASING_other": "Acquisti: {count} record (ordini d'acquisto, ricevimenti …)",
+      "STOCK_one": "Magazzino: {count} record (lotti, movimenti, spedizioni …)",
+      "STOCK_other": "Magazzino: {count} record (lotti, movimenti, spedizioni …)",
+      "PRODUCTION_one": "Produzione: {count} record",
+      "PRODUCTION_other": "Produzione: {count} record",
+      "PRODUCTS_one": "Prodotti: {count} record (modelli, righe di distinta, certificati …)",
+      "PRODUCTS_other": "Prodotti: {count} record (modelli, righe di distinta, certificati …)",
+      "QUALITY_one": "Qualità e impianti: {count} record",
+      "QUALITY_other": "Qualità e impianti: {count} record",
+      "PORTAL_one": "Portale e link: {count} record (utenti, posta, record condivisi …)",
+      "PORTAL_other": "Portale e link: {count} record (utenti, posta, record condivisi …)",
+      "PEOPLE_one": "Persone: {count} record",
+      "PEOPLE_other": "Persone: {count} record",
+      "OTHER_one": "Altro: {count} record",
+      "OTHER_other": "Altro: {count} record"
+    },
+    "moves": {
+      "contacts_one": "{count} contatto",
+      "contacts_other": "{count} contatti",
+      "addresses_one": "{count} indirizzo",
+      "addresses_other": "{count} indirizzi",
+      "taxIdentities_one": "{count} identità fiscale (partita IVA, codice fiscale)",
+      "taxIdentities_other": "{count} identità fiscali (partita IVA, codice fiscale)",
+      "colours_one": "{count} colore",
+      "colours_other": "{count} colori"
+    },
+    "stays": {
+      "contacts_one": "{count} contatto (archiviato, usato altrove o con un'e-mail che l'altro ha già)",
+      "contacts_other": "{count} contatti (archiviati, usati altrove o con un'e-mail che l'altro ha già)",
+      "addresses_one": "{count} indirizzo (archiviato, rifiutato o usato altrove)",
+      "addresses_other": "{count} indirizzi (archiviati, rifiutati o usati altrove)",
+      "taxIdentities_one": "{count} identità fiscale (l'altro ha la sua, o ha controlli VIES)",
+      "taxIdentities_other": "{count} identità fiscali (l'altro ha la sua, o hanno controlli VIES)",
+      "colours_one": "{count} colore (l'altro ha il suo codice, o è usato altrove)",
+      "colours_other": "{count} colori (l'altro ha i loro codici, o sono usati altrove)"
+    },
+    "held": {
+      "noRight": "Per unire servono il diritto di unione e il diritto di modificare entrambi i record.",
+      "archived": "Uno dei due è archiviato.",
+      "blocked": "Il doppione è bloccato: sbloccalo prima.",
+      "loading": "Sto ancora leggendo cosa farebbe l'unione…",
+      "refused": "Questa unione non è possibile: vedi il motivo sopra.",
+      "busy": "Unione in corso…",
+      "reason": "Spiega perché sono lo stesso record (almeno 3 caratteri).",
+      "noneMergeable": "Nessuna delle coppie scelte si può unire."
+    },
+    "problem": {
+      "conflict": "Uno dei due record è cambiato, o non si può più unire: guarda di nuovo l'unione.",
+      "forbidden": "Il tuo ruolo non lo permette.",
+      "notFound": "Uno dei due record non c'è più, oppure non puoi vederlo.",
+      "invalid": "Qualcosa nella richiesta non va: controllala di nuovo.",
+      "busy": "Il sistema è occupato: riprova tra poco.",
+      "other": "Qualcosa è andato storto: riprova."
+    },
+    "create": {
+      "title_one": "Un record come questo potrebbe esistere già",
+      "title_other": "{count} record come questo potrebbero esistere già",
+      "taxTaken": "Questa partita IVA o questo codice fiscale appartengono già a un soggetto",
+      "listLabel": "Record simili a questo",
+      "taxTakenHint": "Un solo record per partner: apri quel soggetto e dagli il ruolo che gli manca, invece di crearne un secondo.",
+      "hintParty": "Aprilo in una nuova scheda per controllare. Se è lo stesso cliente o fornitore, usalo: un secondo record divide i suoi ordini e il suo fido. Se lo crei comunque, potrai unire i due più tardi in Sistema › Importa ed esporta.",
+      "hintMaterial": "Aprilo in una nuova scheda per controllare. Se è lo stesso materiale, usalo. Se lo crei comunque, potrai unire i due più tardi in Sistema › Importa ed esporta."
+    },
+    "merge": {
+      "title": "Unire {dropped} a {kept}?",
+      "subtitle": "Un record resta, l'altro viene archiviato. Non si cancella nulla.",
+      "cancel": "Annulla",
+      "go": "Unisci a {kept}",
+      "stays": "Resta",
+      "archived": "Viene archiviato",
+      "refusedTitle": "Questi due non si possono unire",
+      "usesLabel": "Cosa usa {dropped}",
+      "inUseHint": "Ordini, fatture e gli altri documenti tengono sempre il record per cui sono stati fatti. Continua a usare uno dei due e archivia l'altro quando non ha più nulla di aperto.",
+      "swap": "Tieni invece {dropped}",
+      "movesTitle": "Passa a {kept}",
+      "nothingMoves": "Non passa nulla: il doppione non ha nulla di suo che manchi all'altro.",
+      "staysTitle": "Resta su {dropped}, archiviato",
+      "history": "I suoi file, note, campi personalizzati e la storia restano: si apre ancora.",
+      "reason": "Perché sono lo stesso record?",
+      "reasonHint": "Da {min} a {max} caratteri, conservati nella storia di entrambi i record.",
+      "never": "Un'unione non si annulla da sola: per usare di nuovo il record archiviato, riattivalo."
+    },
+    "import": {
+      "title": "Possibili doppioni",
+      "failed": "Non è stato possibile leggere i possibili doppioni.",
+      "count_one": "Possibili doppioni: {count} riga nuova",
+      "count_other": "Possibili doppioni: {count} righe nuove",
+      "checkHint": "Queste righe nuove somigliano a record già presenti, o a una riga precedente di questo foglio. Non è stato ancora scritto nulla: per aggiornare un record invece, metti il suo codice nel foglio e importalo di nuovo; oppure applica, e uniscili dopo.",
+      "resultHint": "Questi record nuovi somigliano a record già presenti, o a un'altra riga di questo foglio. Unisci ciascuno che sai essere lo stesso: l'altro record resta.",
+      "merge": "Unisci…",
+      "notMade": "Non creato",
+      "sameSheet": "Riga {row} di questo foglio",
+      "more": "Sono state controllate solo le prime {count} righe nuove."
+    },
+    "col": {
+      "row": "Riga",
+      "sheet": "Nel foglio",
+      "looksLike": "Somiglia a",
+      "why": "Perché",
+      "action": "Azione"
+    },
+    "list": {
+      "title": "Possibili doppioni",
+      "intro": "Record che si somigliano: stessa partita IVA o codice, nome simile, stesso dominio e-mail. Il record più vecchio è il primo: di solito resta. Unire è sempre una tua decisione.",
+      "tableLabel": "Possibili doppioni",
+      "typeLabel": "Quali record",
+      "type": {
+        "PARTY": "Clienti e fornitori",
+        "MATERIAL": "Materiali"
+      },
+      "count_one": "{count} coppia · {compared} record confrontati",
+      "count_other": "{count} coppie · {compared} record confrontati",
+      "col": {
+        "kept": "Resta",
+        "duplicate": "Doppione",
+        "why": "Perché",
+        "likelihood": "Quanto probabile",
+        "actions": "Azioni"
+      },
+      "merge": "Unisci…",
+      "mergeOne": "Unisci {dropped} a {kept}",
+      "mergeMany_one": "Unisci {count}",
+      "mergeMany_other": "Unisci {count}",
+      "failed": "Non è stato possibile leggere i possibili doppioni",
+      "empty": {
+        "PARTY": "Nessun cliente o fornitore si somiglia",
+        "MATERIAL": "Nessun materiale si somiglia"
+      },
+      "emptyBody": "I record sono confrontati per partita IVA, codice, nome, dominio e-mail e sito web.",
+      "more": "Sono mostrate le {count} coppie più probabili: uniscile per vedere le altre."
+    },
+    "notice": {
+      "merged_one": "{merged} doppione unito.",
+      "merged_other": "{merged} doppioni uniti.",
+      "none": "Non è stato unito nulla: i record sono cambiati nel frattempo ({refused}). Guardali di nuovo.",
+      "partial": "{merged} uniti; {refused} non uniti perché i record sono cambiati nel frattempo."
+    },
+    "bulk": {
+      "title_one": "Unire {count} coppia?",
+      "title_other": "Unire {count} coppie?",
+      "go_one": "Unisci {count}",
+      "go_other": "Unisci {count}",
+      "body": {
+        "PARTY": "In ogni coppia resta il record più vecchio; i contatti, gli indirizzi e l'identità fiscale liberi del doppione passano a lui e il doppione viene archiviato.",
+        "MATERIAL": "In ogni coppia resta il materiale più vecchio; i colori liberi del doppione passano a lui e il doppione viene archiviato."
+      },
+      "listLabel": "Le coppie unite",
+      "line": "{dropped} in {kept}"
+    }
+  }
+}

@@ -16,6 +16,8 @@ import { applicable, blankDraft, emptyWizard, isMoving, phaseOf, POLL_MS, RECENT
 import { ImportView } from './view/ImportView'
 import { markFirstLoadDone, readFirstLoad, type FirstLoad } from './guided/api'
 import { firstLoadLoading, reasonProblem, stepNumber, type FirstLoadModel } from './guided/model'
+// B-W2b-427: the possible duplicates (the page's list, and the wizard's check and result).
+import { ImportDuplicates, PossibleDuplicates } from './duplicates/use-duplicates'
 
 const NONE: Loaded<ImportRow> = { items: [], problem: null }
 
@@ -194,6 +196,7 @@ export function ImportPage() {
 
   return (
     <ImportView
+      slots={{ duplicates: can.view ? <PossibleDuplicates /> : null, wizardDuplicates: wizard?.job ? <ImportDuplicates job={wizard.job} /> : null }}
       model={{ prefix, can, importers, jobs, companies, people, asOf, wizard, selected, cancelMany, bulkBusy, notice, firstLoad: can.view ? firstLoad : null, templatesOpen }}
       actions={{
         onTemplates: setTemplatesOpen,
