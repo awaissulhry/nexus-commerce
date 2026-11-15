@@ -403,6 +403,8 @@ import { PAYABLES_DEPTH_DEFINITIONS, PAYABLES_DEPTH_PERMISSIONS } from '../../pa
 import { FIELDS_DEFINITIONS, FIELDS_PERMISSIONS } from '../../fields/permissions'
 // B-W2b-422: templates (documents.templates.manage: document and e-mail templates; email.replies.share: the office's saved replies).
 import { DOCUMENT_TEMPLATES_DEFINITIONS, SAVED_REPLIES_DEFINITIONS, TEMPLATES_PERMISSIONS } from '../../templates/permissions'
+// B-W2b-406: a customer's own figures against ours (receivables.theirFigures.manage).
+import { THEIR_FIGURES_DEFINITIONS, THEIR_FIGURES_PERMISSIONS } from '../../receivables-figures/permissions'
 
 /**
  * Every permission of the factory, assembled (feature PLT-029). A module that adds routes declares its permissions
@@ -1117,6 +1119,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   // B-W2b-422: templates (areas `documents`, `email`).
   DOCUMENT_TEMPLATES_DEFINITIONS,
   SAVED_REPLIES_DEFINITIONS,
+  // B-W2b-406: a customer's own figures against ours (area `receivables`).
+  THEIR_FIGURES_DEFINITIONS,
 ])
 
 /** The area of the permissions only floor roles hold (and floor roles hold no other, but FLOOR_SHARED_PERMISSIONS). */
@@ -1521,6 +1525,8 @@ for (const name of PAYABLES_DEPTH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclar
 for (const name of FIELDS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-422: templates.
 for (const name of TEMPLATES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-406: a customer's own figures against ours.
+for (const name of THEIR_FIGURES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }
