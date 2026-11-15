@@ -97,7 +97,14 @@ export const enrolDeviceContract = defineContract({
   response: { 200: deviceInfo },
 })
 
-export const deviceContract = defineContract({ response: { 200: deviceInfo } })
+// ── B-W2b-F56 ─────────────────────────────────────────────────────────────────────────────────────────────────────────
+/**
+ * A browser that holds no device token at all is not a floor device yet: a normal state, answered 200 in words (the floor
+ * app opens its enrol page), never a 401 the browser logs. A token that is there but refused (revoked, forged) stays 401.
+ */
+const notEnrolledView = output({ device: z.null(), words: z.string() })
+export const deviceContract = defineContract({ response: { 200: z.union([deviceInfo, notEnrolledView]) } })
+// ── end B-W2b-F56 ─────────────────────────────────────────────────────────────────────────────────────────────────────
 
 /** B-W2b-24 (design admin.devices Status "Network"): the networks a tablet may say it is on (DeviceNetwork). */
 export const DEVICE_NETWORKS = ['WIFI', 'ETHERNET', 'CELLULAR', 'OTHER'] as const

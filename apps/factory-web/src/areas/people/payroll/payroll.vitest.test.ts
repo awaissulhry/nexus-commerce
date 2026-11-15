@@ -455,6 +455,16 @@ describe('payroll: the calls, as the API takes them', () => {
     expect(month).not.toHaveProperty('toConfirm')
   })
 
+  // B-W2b-F56: every site's ATTENDANCE gate off is the month's own answer (200), the page's gate state: no 409 on load.
+  it('the month with every gate off is told, not refused: null, the page shows the gate', async () => {
+    const { api } = mockApi([
+      { status: 200, body: { attendance: 'CLOSED', companyId: 'c1', month: '2026-10', label: 'October 2026', sites: [{ siteId: 's1', code: 'A1', name: 'Plant', gateOpen: false }], words: 'Attendance data is switched off at this site.' } },
+      { status: 200, body: { ...MONTH, attendance: 'OPEN' } },
+    ])
+    expect(await getMonth(api, { companyId: 'c1', month: '2026-10' })).toBeNull()
+    expect(await getMonth(api, { companyId: 'c1', month: '2026-10' })).toMatchObject({ month: MONTH.month, state: MONTH.state })
+  })
+
   it('a list asks by year and cursor; an amount the API left out is not an error', async () => {
     const { api, calls } = mockApi([
       { status: 200, body: { rows: EXPORTS, nextCursor: null } },

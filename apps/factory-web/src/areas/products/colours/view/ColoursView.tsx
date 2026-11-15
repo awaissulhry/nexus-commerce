@@ -24,6 +24,8 @@ import { BrandingSection } from './BrandingSection'
 import { BrandingSetModal } from './BrandingSetModal'
 import { ColourFormDialog } from './ColourFormDialog'
 import { NewSetDialog } from './NewSetDialog'
+// B-W2b-F56: a picture missing from the store shows the placeholder.
+import { LibraryPicture } from './LibraryPicture'
 import '../../library/library.css'
 import '../colours.css'
 
@@ -116,7 +118,7 @@ function Colours({ model, actions }: { model: ColoursViewModel; actions?: Colour
     const PhotoCell = ({ data }: ICellRendererParams<ColourLibraryRow>) => {
       if (!data) return null
       const src = pictureAddress(data.photo?.url)
-      return src ? <img className="fw-col-photo" src={src} alt={t('list.photoOf', { code: data.code })} loading="lazy" /> : <span className="fw-lib-hint">—</span>
+      return <LibraryPicture className="fw-col-photo" src={src} alt={t('list.photoOf', { code: data.code })} lazy fallback={<span className="fw-lib-hint">—</span>} />
     }
     const count = (value: number | null) => (value === null ? <span className="fw-lib-hint" title={t('use.notInRole')}>—</span> : value === 0 ? <span className="fw-lib-hint">0</span> : <span>{value}</span>)
     const MaterialsCell = ({ data }: ICellRendererParams<ColourLibraryRow>) => (data ? count(data.use.materialColours) : null)

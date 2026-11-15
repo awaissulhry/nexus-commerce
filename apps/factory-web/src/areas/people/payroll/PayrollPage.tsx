@@ -74,6 +74,8 @@ const EXPORT_EVENTS = ['payroll_export.']
 
 /** A failed part of the page as a message key of this catalogue. */
 const failed = (error: unknown) => ({ status: 'error' as const, problem: payrollProblem(error).key })
+/** B-W2b-F56: every site's ATTENDANCE gate is off (the month's own answer): the page's gate state, the same words as before. */
+const GATE_CLOSED = { status: 'error' as const, problem: 'problem.gate' }
 
 /**
  * `/w/<company>/people/payroll` (SCR-159): the Exports of the company (`?year=`) and the month in the band; the wizard
@@ -169,7 +171,7 @@ function Page() {
       if (!quiet) setMonth((current) => (current.status === 'ready' && (wanted === null || current.value.month === wanted) ? current : { status: 'loading' }))
       try {
         const answer = await getMonth(api, { companyId, month: wanted, layoutId })
-        if (ticket === reading.current) setMonth({ status: 'ready', value: answer })
+        if (ticket === reading.current) setMonth(answer ? { status: 'ready', value: answer } : GATE_CLOSED)
       } catch (error) {
         if (ticket === reading.current && !quiet) setMonth(failed(error))
       }

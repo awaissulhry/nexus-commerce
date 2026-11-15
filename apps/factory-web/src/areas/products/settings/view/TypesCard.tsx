@@ -196,7 +196,8 @@ export function TypesCard({ model, actions }: { model: ProductSettingsModel; act
           rows={model.types.problem ? [] : shown}
           rowId={(node) => node.type.id}
           columns={columns}
-          count={!shown ? t('common.loading') : t('types.count', { count: total })}
+          // B-W2b-F56: a list that could not be read is not "Loading…".
+          count={model.types.problem ? null : !shown ? t('common.loading') : t('types.count', { count: total })}
           tools={
             <SegmentedControl
               size="sm"
