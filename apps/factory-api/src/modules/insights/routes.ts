@@ -23,6 +23,8 @@ import { getLayout, saveLayout } from './layout'
 import { manifest } from './manifest'
 import { today } from './today'
 import { nudge, waitingOnOthers } from './waiting'
+// B-W2b-388: Changed since you looked (COL-035).
+import { following, followingContract } from './sources/following'
 // B-W2a-79: My numbers and the report pack (reports/; the definitions are loaded from reports/defs/ first).
 import { libraryContract, numbersContract, reportAboutContract, reportResultsContract, reportScheduleContract } from './reports/contract'
 import { myNumbers } from './reports/numbers'
@@ -86,6 +88,8 @@ export default defineRoutes('insights', manifest, async (app) => {
   app.post('/home/today/rows/:key/snooze', { schema: snoozeContract }, async (request) => snoozeRow(request, request.params.key, request.body, idempotencyKeyFrom(request)))
 
   app.post('/home/waiting-on-others/:key/nudge', { schema: nudgeContract }, async (request) => nudge(request, request.params.key, idempotencyKeyFrom(request)))
+  // B-W2b-388 (COL-035): what I follow that changed since I looked (my FOLLOWING news, one line per record or view).
+  app.get('/home/following', { schema: followingContract }, async (request) => following(request))
 
   app.get('/home/coming-up', { schema: comingUpContract }, async (request) => comingUp(request, request.query))
 
