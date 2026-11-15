@@ -17,9 +17,9 @@
     "noCostSheet": "Il modello non ha una scheda costi: il prezzo dal costo ne ha bisogno.",
     "noneList": "Nessuna delle righe scelte può partire da un prezzo di listino.",
     "noneCost": "Nessuna delle righe scelte ha un prezzo dal suo costo.",
-    "noPrice": "I prezzi richiedono il livello prezzo (money.price): il tuo ruolo non lo ha.",
+    "noPrice": "I prezzi richiedono il livello prezzo: il tuo ruolo non lo ha.",
     "archived": "Il listino è archiviato: riattivalo per modificarlo.",
-    "noManage": "Modificare i listini richiede pricelists.manage: il tuo ruolo li legge soltanto.",
+    "noManage": "Modificare i listini richiede il permesso di gestirli: il tuo ruolo li legge soltanto.",
     "noVersion": "Il listino non ha ancora una versione.",
     "activeVersion": "La versione {revision} è in vigore: le sue regole restano come sono. Crea la versione successiva per cambiarle.",
     "activeHasDraft": "La versione {revision} è in vigore e tiene le sue regole: cambiale nella bozza."
@@ -168,7 +168,7 @@
   },
   "drawer": {
     "title": "Composizione del costo e scala di prezzo",
-    "noPrice": "I prezzi richiedono il livello prezzo (money.price): il tuo ruolo non lo ha.",
+    "noPrice": "I prezzi richiedono il livello prezzo: il tuo ruolo non lo ha.",
     "failed": "Non è stato possibile leggere il prezzo della riga",
     "waterfall": "Come è prezzata la riga {line}",
     "mismatch": "I passaggi sommano {total}; la riga dice {given}.",
@@ -180,8 +180,8 @@
     "listDays": "Listino {code}: il prezzo di {days}.",
     "listAlways": "Listino {code}.",
     "costTitle": "Composizione del costo",
-    "noCostGrain": "Il costo richiede il livello costo (money.cost): il tuo ruolo non lo ha.",
-    "noCosting": "La scheda costi richiede costing.view: il tuo ruolo non lo ha.",
+    "noCostGrain": "Il costo richiede il livello costo: il tuo ruolo non lo ha.",
+    "noCosting": "La scheda costi richiede il permesso di vedere le schede costo: il tuo ruolo non lo ha.",
     "costNoCells": "La scheda costi non ha una cella per il colore e le taglie di questa riga.",
     "costChart": "Quanto costa oggi un pezzo della riga {line}",
     "margin": "Margine di questa riga",
@@ -431,9 +431,9 @@
     "title": "Importa prezzi",
     "everyCompany": "Ogni azienda",
     "held": {
-      "manage": "Importare prezzi richiede pricelists.manage: il tuo ruolo legge soltanto i listini.",
-      "price": "Importare prezzi richiede il livello prezzo (money.price).",
-      "run": "Eseguire un'importazione richiede imports.run e files.upload: il tuo ruolo non li ha."
+      "manage": "Importare prezzi richiede il permesso di gestire i listini: il tuo ruolo legge soltanto i listini.",
+      "price": "Importare prezzi richiede il livello prezzo.",
+      "run": "Eseguire un'importazione richiede i permessi di eseguire importazioni e di caricare file: il tuo ruolo non li ha."
     }
   },
   "print": {
@@ -458,7 +458,7 @@
   "floors": {
     "title": "Soglia di margine % per ruolo",
     "sub": "Una versione d'offerta segue la soglia più bassa dei ruoli di chi l'ha creata; un ruolo senza soglia tiene quella dell'azienda. Sotto la soglia un'offerta chiede un'approvazione.",
-    "noMargin": "Le soglie richiedono il livello margine (money.margin): il tuo ruolo non lo ha.",
+    "noMargin": "Le soglie richiedono il livello margine: il tuo ruolo non lo ha.",
     "edit": "Cambia le soglie",
     "save": "Salva le soglie",
     "discard": "Annulla",
@@ -486,7 +486,7 @@
     "refusedNoRow": "Questo ambito non ha ancora impostazioni sue: salva prima le sue regole delle offerte.",
     "refusedRoles": "Un ruolo non è più un ruolo d'ufficio di questa azienda: rileggi le soglie.",
     "held": {
-      "manage": "Cambiare le soglie richiede sales.settings.manage.",
+      "manage": "Cambiare le soglie richiede il permesso di impostare le regole dei preventivi della società.",
       "noRowCompany": "Questa azienda segue le impostazioni del gruppo: dalle prima impostazioni sue (Regole delle offerte).",
       "noRowGroup": "Il gruppo non ha ancora impostazioni: salva prima le regole delle offerte del gruppo.",
       "same": "Non è ancora cambiato nulla.",

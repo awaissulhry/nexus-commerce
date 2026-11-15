@@ -48,6 +48,7 @@ import {
   type ClaimAct,
   type ReturnDraft,
 } from './model'
+import { rightRef } from '../../../lib/i18n/rights'
 
 // The DS Modal opens only in a browser (after hydration, in a portal): here it draws in place, so every dialog's words
 // are checked too.
@@ -128,8 +129,8 @@ describe('a claim: the band’s acts, held in our words like factory-domain clai
 
   it('names the missing permission first, then the facts', () => {
     const sent = claim('RETURN', 'SENT')
-    expect(actHeld(sent, 'returnGoods', canFor('buyer'))).toEqual({ key: 'held.permission', params: { permission: 'purchasing.claims.return' } })
-    expect(actHeld(sent, 'answer', canFor('readOnly'))).toEqual({ key: 'held.permission', params: { permission: 'purchasing.claims.manage' } })
+    expect(actHeld(sent, 'returnGoods', canFor('buyer'))).toEqual({ key: 'held.permission', params: { right: rightRef('purchasing.claims.return') } })
+    expect(actHeld(sent, 'answer', canFor('readOnly'))).toEqual({ key: 'held.permission', params: { right: rightRef('purchasing.claims.manage') } })
     expect(sayIn('en', actHeld(claim('CLAIM', 'CLOSED'), 'cancel', owner))).toBe('Only a draft is cancelled; this one is closed.')
     expect(sayIn('it', actHeld(claim('CLAIM', 'SENT'), 'send', owner))).toBe('Si invia solo una bozza, o un reclamo respinto dal fornitore; questo è inviato, in attesa del fornitore.')
     expect(sayIn('en', actHeld(claim('RETURN', 'SENT', { returned: 3 }), 'returnGoods', owner))).toBe('Every line of this return went back already.')
@@ -205,7 +206,7 @@ describe('Return to supplier', () => {
   const ddt = { ...NO_DDT, grossWeightKg: '14,5' }
 
   it('is held with the first missing thing, the rights first', () => {
-    expect(returnHeld(base(), canFor('buyer'))).toEqual({ key: 'held.permission', params: { permission: 'purchasing.claims.return' } })
+    expect(returnHeld(base(), canFor('buyer'))).toEqual({ key: 'held.permission', params: { right: rightRef('purchasing.claims.return') } })
     expect(returnHeld(base(), warehouse)).toEqual({ key: 'ret.held.lot' })
     expect(returnHeld(leather(), warehouse)).toEqual({ key: 'ret.held.reason' })
     expect(returnHeld({ ...leather({ reasonCode: 'QUALITY' }), hideIds: [] }, warehouse)).toEqual({ key: 'ret.held.noHide' })
@@ -286,7 +287,7 @@ describe('the calls, as the API takes them', () => {
 
 const LEFT_KEY = /\b(?:status|statusIn|kind|kindPlural|act|held|problem|common|live|page|tiles|tile|view|list|col|bulk|csv|chip|ret|ddt|field|form|save|claimTab|fact|lines|goods|goodsBack|credit|send|answer|close|cancel|notice|record|remedy|foundAt|uom|lotQuality|moveReason|discrepancyKind|discrepancyStatus|contactRole|language|tab|newClaim|evidence|letter|photos)\.[a-zA-Z_]+(?:\.[a-zA-Z_]+)*\b/
 const LEFT_PLACEHOLDER = /\{[a-zA-Z]+\}/
-/** Permission names are said on purpose ("needs purchasing.claims.manage"); example domains are not keys. */
+/** Permission names are stripped before the key check, though no screen says one since B-W2b-F51; example domains are not keys. */
 const SAID = /\b(?:purchasing\.[a-z.]+|shipping\.ddt\.[a-z]+|inventory\.stock\.view|parties\.view|files\.(?:read|upload|delete)|money\.cost|[a-z-]+\.example\.com|example\.com)\b/g
 
 function render(screen: DesignScreen<unknown>, model: unknown, locale: (typeof LOCALES)[number]): string {

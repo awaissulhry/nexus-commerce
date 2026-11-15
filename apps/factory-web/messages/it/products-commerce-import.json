@@ -45,7 +45,7 @@
   },
   "hold": {
     "noManage": "Il tuo ruolo può vedere i modelli, non crearli.",
-    "noImport": "Per importare un file servono il permesso di avviare importazioni (imports.run) e di caricare file.",
+    "noImport": "Per importare un file servono i permessi di avviare importazioni e di caricare file.",
     "reading": "Sto leggendo da dove possono arrivare i modelli…",
     "unread": "Non è stato possibile leggere da dove possono arrivare i modelli: riprova."
   },

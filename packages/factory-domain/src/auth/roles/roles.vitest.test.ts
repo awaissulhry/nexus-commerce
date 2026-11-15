@@ -100,8 +100,8 @@ describe('custom roles', () => {
     expect(roleProblems({ name: 'Night lead', requireMfa: false, permissions: ['users.view'], grains: ['price'] })).toEqual([])
     expect(roleProblems({ name: '', requireMfa: false, permissions: ['quotes.export', 'money.price'], grains: ['salary' as never, 'cost'] })).toEqual([
       { path: 'name', message: 'Expected 1 to 100 characters.' },
-      { path: 'permissions/0', message: 'quotes.export is not a permission of the factory.' },
-      { path: 'permissions/1', message: 'money.price is a money grain: list it in grains.' },
+      { path: 'permissions/0', message: 'Not a permission of the factory.' },
+      { path: 'permissions/1', message: 'A money grain: list it in grains.' },
       { path: 'grains/0', message: 'salary is not a money grain (price, cost, margin, wages, pay).' },
       { path: 'requireMfa', message: 'A role that sees cost requires two-factor.' },
     ])
@@ -112,8 +112,8 @@ describe('custom roles', () => {
   it('refuses the permissions only a one-off link session holds (they come from the link\'s purpose)', () => {
     expect(roleProblems({ name: 'Link sender', requireMfa: false, permissions: ['links.view', 'links.manage'], grains: [] })).toEqual([])
     expect(roleProblems({ name: 'Customer', requireMfa: false, permissions: ['links.open', 'links.view', 'links.accept'], grains: ['price'] })).toEqual([
-      { path: 'permissions/0', message: 'links.open is held only by a one-off link session, from its purpose; a role cannot give it.' },
-      { path: 'permissions/2', message: 'links.accept is held only by a one-off link session, from its purpose; a role cannot give it.' },
+      { path: 'permissions/0', message: 'Held only by a one-off link session, from its purpose; a role cannot give it.' },
+      { path: 'permissions/2', message: 'Held only by a one-off link session, from its purpose; a role cannot give it.' },
     ])
   })
 

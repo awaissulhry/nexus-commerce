@@ -113,7 +113,7 @@ function rowWithCurrent(resolved: Resolved, field: FieldRow, row: Pick<CheckRow,
 /** The issues of one row for one person (see above). */
 async function rowIssues(client: Client, record: CustomRecord, resolved: Resolved, row: CheckRow, actor: Actor): Promise<RowIssue[]> {
   if (!resolved.record) return [{ column: 'record', message: `No ${record.labelEn.toLowerCase()} ${String(row.key.record)} here (or two with that code).` }]
-  if (!can(actor, record.view, resolved.record) || !can(actor, record.edit, resolved.record)) return [{ column: 'record', message: `Changing ${String(row.key.record)} needs ${record.edit} over it.` }]
+  if (!can(actor, record.view, resolved.record) || !can(actor, record.edit, resolved.record)) return [{ column: 'record', message: `Changing ${String(row.key.record)} needs the right to change it.` }]
   const field = resolved.field
   if (!field || fieldsSeen(actor, [field], resolved.record.companyId).length === 0) return [{ column: 'field', message: `No custom field ${String(row.key.field)} on this ${record.labelEn.toLowerCase()}.` }]
   if (field.type === 'FILE') return [{ column: 'field', message: 'A file field takes no import: add the file on the record.' }]

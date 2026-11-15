@@ -1,7 +1,7 @@
 {
   "title": "Valute e cambi",
   "explain": "La valuta della società, le valute in cui possono essere i suoi documenti e il cambio di ogni giorno: il cambio di riferimento giornaliero della BCE, oppure un cambio scritto per quel giorno, che prevale. Un documento tiene il cambio che ha usato; un cambio successivo non lo cambia mai. Le rivalutazioni restano al tuo commercialista.",
-  "noRight": "Non hai il permesso di vedere valute e cambi (currencies.view).",
+  "noRight": "Non hai il permesso di vedere valute e cambi.",
   "failed": "Impossibile caricare valute e cambi",
   "base": {
     "label": "Valuta della società",
@@ -126,8 +126,8 @@
     "go_other": "Togli {count} cambi"
   },
   "held": {
-    "noManage": "Ti serve currencies.manage per questa società",
-    "noRates": "I cambi valgono per tutte le società: ti serve currencies.manage su tutte le società",
+    "noManage": "Ti serve il permesso di gestire le valute per questa società",
+    "noRates": "I cambi valgono per tutte le società: ti serve il permesso di gestire le valute su tutte le società",
     "busy": "Attendi: l’ultima modifica si sta ancora salvando",
     "base": "{code} è la valuta della società: è sempre accesa",
     "feedOff": "Prima accendi i cambi BCE giornalieri",

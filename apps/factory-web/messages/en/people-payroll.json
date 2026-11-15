@@ -322,10 +322,10 @@
     "firstStep": "This is the first step.",
     "noExportYet": "This month has no file yet.",
     "noLayout": "Choose a format first.",
-    "noManage": "Making and sending a file needs people.payroll.manage.",
+    "noManage": "Your role cannot make and send a payroll file.",
     "noPay": "This file carries amounts: it asks the pay grain.",
     "noReach": "Your role does not reach every site of this company.",
-    "noRecords": "This needs people.payroll.records.",
+    "noRecords": "This needs the right to open the payroll values per employee.",
     "notClosed": "{month} is not closed · Close it in Attendance",
     "notExported": "Only an exported file is opened or sent.",
     "notRead": "The month is still being read.",
@@ -412,7 +412,7 @@
     "failed": "Couldn't read this month"
   },
   "noAccess": {
-    "body": "This page needs people.payroll.view. Ask your administrator.",
+    "body": "This page needs the right to see the payroll exports. Ask your administrator.",
     "title": "You cannot open Payroll export"
   },
   "notPayroll": "Nexus does not run payroll: it makes a file for the labour consultant, who runs it.",
@@ -464,7 +464,7 @@
     "noCode": "No code",
     "noPay": "Amounts are left out: they ask the pay grain.",
     "noRight": {
-      "title": "The numbers open with people.payroll.records"
+      "title": "The numbers open with the right to open payroll values"
     },
     "nobody": "Nobody on the file",
     "nobodyBody": "No employee has days or earnings in this month.",
@@ -479,7 +479,7 @@
     "law": "GDPR art. 5(1)(c), art. 32",
     "lawPlain": "Only the data the consultant needs travels, and it travels protected.",
     "text": "This page shows states and counts. The values open by employee code, never by name.",
-    "who": "Values and files: people with people.payroll.records over every site of the company; amounts also ask the pay grain. Each opening is recorded."
+    "who": "Values and files: people with the right to open payroll values over every site of the company; amounts also ask the right to see pay. Each opening is recorded."
   },
   "problem": {
     "conflict": "Someone changed this meanwhile: it was read again, try once more.",

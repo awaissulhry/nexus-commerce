@@ -1,7 +1,7 @@
 {
   "noAccess": {
     "title": "You cannot open Quality rules",
-    "body": "It needs the permission quality.rules.view. An administrator gives it in Admin › Roles & permissions (the quality inspector, production manager and floor supervisor roles hold it)."
+    "body": "It needs the right to see the quality rules. An administrator gives it in Admin › Roles & permissions (the quality inspector, production manager and floor supervisor roles hold it)."
   },
   "head": {
     "intro": "Who may sign what, who is told of what and how fast, and how results are counted. A looser rule asks for a fresh code; a stricter one never does.",
@@ -46,16 +46,16 @@
     "DEFAULT": "the default"
   },
   "held": {
-    "noRight": "Changing these rules needs quality.settings.manage for this company.",
-    "noRightAll": "Changing the rules of every company needs quality.settings.manage over every company.",
+    "noRight": "Changing these rules needs the right to change the quality settings for this company.",
+    "noRightAll": "Changing the rules of every company needs the right to change the quality settings over every company.",
     "offline": "No connection: changes wait until the page is back online.",
     "busy": "Wait: the last change is still being saved.",
     "reading": "Wait: the page is still reading.",
-    "noAlertRight": "Keeping alert rules needs quality.alerts.manage.",
+    "noAlertRight": "Your role cannot keep the quality alert rules.",
     "pickRows": "Tick the rules first.",
     "allOn": "Every ticked rule is on already.",
     "allOff": "Every ticked rule is off already.",
-    "starterAll": "The suggested rules are rules of every company: they need quality.alerts.manage over every company."
+    "starterAll": "The suggested rules are rules of every company: they need the right to keep quality alert rules over every company."
   },
   "duties": {
     "title": "Separation of duties and four-eyes",
@@ -89,7 +89,7 @@
       "none": "No customer listed.",
       "remove": "Take {name} off the list",
       "fromAll": "Listed for every company",
-      "noPicker": "Adding a customer needs parties.view.",
+      "noPicker": "Adding a customer needs the right to see customers and suppliers.",
       "add": "Add a customer",
       "pick_one": "Pick a customer ({count})",
       "pick_other": "Pick a customer ({count})"
@@ -306,7 +306,7 @@
     "signedOut": "You are signed out: sign in again.",
     "offline": "No answer from the server: we do not know whether it was saved. Try again.",
     "read": "The server did not answer as expected.",
-    "readForbidden": "You may not read this (quality.rules.view).",
+    "readForbidden": "You may not read this.",
     "ruleGone": "The rule the address names is no longer there."
   },
   "done": {

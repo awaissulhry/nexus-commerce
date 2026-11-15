@@ -61,7 +61,7 @@ export async function unitCost(caller: CommandCaller, body: MtmCostBody): Promis
   })
   const notStarted = notStartedProblem({ style: { code: style.code, mtmAllowed: flags.mtmAllowed }, template: flags.measurementTemplate, garmentType: check.profile?.garmentType ?? null })
   if (notStarted) throw notCosted('MTM_NOT_STARTED', notStarted)
-  if (check.consumptionHidden) throw new ForbiddenError("The unit's extra material reads the BOM: it needs product.bom.view.")
+  if (check.consumptionHidden) throw new ForbiddenError("The unit's extra material reads the BOM: it needs the right to see the BOM.")
   const revisionRef = check.style?.revision ?? null
   if (!revisionRef) throw notCosted('NO_REVISION', `${style.code} has no revision to cost.`)
   const baseSize = check.baseSize.used

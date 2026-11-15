@@ -1,7 +1,7 @@
 {
   "access": {
     "title": "No access to the chemical register",
-    "body": "This page needs the right to see safety (safety.view). Ask whoever manages roles in your company."
+    "body": "This page needs the right to see safety. Ask whoever manages roles in your company."
   },
   "common": {
     "stillLoading": "Still loading…",
@@ -331,7 +331,7 @@
   },
   "held": {
     "company": "Open a company first (the top bar): a chemical belongs to one of its sites.",
-    "manage": "The chemical register is kept by the safety officer (safety.chemicals.manage).",
+    "manage": "The chemical register is kept by the safety officer.",
     "busy": "Saving…",
     "nothingChanged": "Nothing changed.",
     "archived": "This chemical is archived: put it back in use first.",

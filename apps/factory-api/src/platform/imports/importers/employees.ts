@@ -113,7 +113,7 @@ async function resolve(client: CommandTx, key: Readonly<Record<string, CellValue
   if (!site) return { ok: false, issues: [{ column: 'site', message: siteCode ? `No site ${siteCode} in this company.` : 'A new employee needs the site.' }] }
   if (current && site.id !== current.siteId) return { ok: false, issues: [{ column: 'site', message: `Employee ${code} works at another site: move a person from their record, not by import.` }] }
   if (!current && site.status !== 'ACTIVE') return { ok: false, issues: [{ column: 'site', message: `Site ${site.code} is archived: it takes no new people.` }] }
-  if (actor !== null && !can(actor, PEOPLE_EMPLOYEES_MANAGE, { companyId: site.companyId, siteId: site.id })) return { ok: false, issues: [{ column: 'site', message: `Keeping the people of site ${site.code} needs people.employees.manage at that site.` }] }
+  if (actor !== null && !can(actor, PEOPLE_EMPLOYEES_MANAGE, { companyId: site.companyId, siteId: site.id })) return { ok: false, issues: [{ column: 'site', message: `Keeping the people of site ${site.code} needs the right to keep employees at that site.` }] }
 
   const issues: RowIssue[] = []
   let agencyPartyId = current?.agencyPartyId ?? null

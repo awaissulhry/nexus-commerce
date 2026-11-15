@@ -12,6 +12,8 @@ import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { dayAt, money, quantity } from '../../../../_shared/buying/model'
 import type { Claim, ClaimLine } from '../../api'
 import type { ClaimRecordActions, ClaimRecordModel } from '../../model'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../../../lib/i18n/rights'
 
 /** The stock move reasons a line's move may carry, in our words (factory-db StockMoveReason), else "other". */
 const MOVE_REASONS = ['SUPPLIER_RETURN', 'ADJUSTMENT', 'SCRAP', 'COUNT', 'ISSUE', 'RETURN', 'TRANSFER', 'RECEIPT', 'OPENING'] as const
@@ -28,7 +30,7 @@ export function GoodsTab({ claim, model, actions }: { claim: Claim; model: Claim
   const locale = useLocale()
   const place = { locale, timeZone: model.timeZone }
   const gone = claim.lines.filter((line) => line.move !== null)
-  const pdfHeld = model.can.files ? null : t('held.permissionPlain', { permission: 'files.read' })
+  const pdfHeld = model.can.files ? null : t('held.permissionPlain', { right: rightRef('files.read') })
   const columns = useMemo<ColDef<ClaimLine>[]>(() => {
     const DdtCell = ({ data }: ICellRendererParams<ClaimLine>) => {
       if (!data) return null

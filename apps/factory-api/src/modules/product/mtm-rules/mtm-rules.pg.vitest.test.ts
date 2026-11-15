@@ -125,7 +125,7 @@ describe('a template’s made-to-measure rules (PRD-201, PRD-202, PRD-203)', () 
     expect(rules.summary).toBe('Off (nothing is checked) · 2 rules (1 blocking) · base size from chest · alteration limits on 3 points')
     expect(rules).toMatchObject({ editable: true, refusal: null, switchable: false })
     expect((await getRules('owner')).switchable).toBe(true)
-    expect(await getRules('viewer')).toMatchObject({ editable: false, refusal: expect.stringMatching(/product\.styles\.manage/) })
+    expect(await getRules('viewer')).toMatchObject({ editable: false, refusal: expect.stringMatching(/the right to keep styles/) })
     await refused('otherTenant', 'GET', rulesUrl(), undefined, 404)
   })
 

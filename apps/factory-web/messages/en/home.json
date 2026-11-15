@@ -2,7 +2,7 @@
   "today": {
     "refused": {
       "title": "Today is not open to you",
-      "body": "Your roles do not include Today (home.view). Ask an administrator if you need it."
+      "body": "Your roles do not include Today. Ask an administrator if you need it."
     },
     "band": {
       "label": "Today's status and actions",

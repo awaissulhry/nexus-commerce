@@ -68,7 +68,7 @@ async function knownMachine(request: FastifyRequest, machineId: string, write: b
   const machine = isUuid(machineId) ? await request.withClient((client) => readMachine(client, context, machineId)) : null
   if (!machine) throw new NotFoundError('Machine not found.')
   assertMay(context, PLANT_VIEW, machine, 'Machine')
-  if (write) assertMayWrite(context, PLANT_MACHINES_MANAGE, machine, 'The documents of the machines of this site are kept by a role that keeps the machines (plant.machines.manage).')
+  if (write) assertMayWrite(context, PLANT_MACHINES_MANAGE, machine, 'The documents of the machines of this site are kept by a role that keeps the machines.')
   return { machine, tenantId: context.tenantId }
 }
 

@@ -287,7 +287,7 @@ export async function moveReport(caller: CommandCaller, reportId: string, body: 
 export async function fileReport(caller: CommandCaller, reportId: string, body: { readonly version: number; readonly registerEntryId?: string | null | undefined }, idempotencyKey?: string): Promise<{ report: ReportView; registerEntry: { id: string; reference: string; opened: boolean } }> {
   const { context, row: seen } = await officeReport(caller, reportId, SALES_SAFETY_MANAGE)
   const naming = blank(body.registerEntryId)
-  if (!naming && !mayOn(context, REGISTER_MANAGE, { companyId: seen.companyId, partyId: null })) throw new ForbiddenError('Opening a PPE register entry needs the register (compliance.register.manage); name an existing entry, or ask quality.')
+  if (!naming && !mayOn(context, REGISTER_MANAGE, { companyId: seen.companyId, partyId: null })) throw new ForbiddenError('Opening a PPE register entry needs the right to keep the PPE register; name an existing entry, or ask quality.')
   const { result } = await command(caller, { name: 'safetyReports.file', idempotencyKey, input: { reportId, ...body } }, async (tools) => {
     const row = await lockReport(tools, seen.id, body.version)
     if (row.registerEntryId) throw held('FILED', row.number)

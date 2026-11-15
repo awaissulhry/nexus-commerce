@@ -222,7 +222,7 @@ export async function closeMonth(caller: CommandCaller, body: CloseBody, key?: s
   }
   const { place, lineDaysOpen } = await caller.withClient(async (db) => {
     const found = await companyFor(db, context, body.companyId, [...VIEW, PEOPLE_ATTENDANCE_CLOSE])
-    if (!reachesCompany(context, found, [PEOPLE_ATTENDANCE_CLOSE])) throw new ForbiddenError('Closing a month needs people.attendance.close over every site of the company.')
+    if (!reachesCompany(context, found, [PEOPLE_ATTENDANCE_CLOSE])) throw new ForbiddenError('Closing a month needs the right to close attendance months over every site of the company.')
     requireSomeGate(await gatesOf(db, found))
     return { place: found, lineDaysOpen: await lineDaysLeft(db, found, period) }
   })
@@ -289,7 +289,7 @@ export async function sealMonth(caller: CommandCaller, closeId: string, key?: st
   const context = officeOf(caller)
   const { close, place } = await caller.withClient(async (db) => {
     const found = await closeHead(db, context, closeId, [...VIEW, PEOPLE_ATTENDANCE_CLOSE])
-    if (!reachesCompany(context, found.place, [PEOPLE_ATTENDANCE_CLOSE])) throw new ForbiddenError('Sealing a calendar needs people.attendance.close over every site of the company.')
+    if (!reachesCompany(context, found.place, [PEOPLE_ATTENDANCE_CLOSE])) throw new ForbiddenError('Sealing a calendar needs the right to close attendance months over every site of the company.')
     await requireGatesOfMonth(db, found.place, found.close)
     return found
   })

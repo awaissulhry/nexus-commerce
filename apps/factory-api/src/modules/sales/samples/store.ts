@@ -119,7 +119,7 @@ export async function officeRound(caller: CommandCaller, roundId: string, permis
   const context = officeOf(caller)
   const round = await caller.withClient((db) => readRoundRow(db, roundId))
   if (!round || !may(context, SALES_SAMPLES_VIEW, round)) throw new NotFoundError('Sample round not found.')
-  if (!may(context, permission, round)) throw new ForbiddenError('Your role does not keep sample rounds for this company or customer (sales.samples.manage).')
+  if (!may(context, permission, round)) throw new ForbiddenError('Your role does not keep sample rounds for this company or customer.')
   return { context, round }
 }
 

@@ -146,8 +146,8 @@ export const TRANSFER_REFUSAL_WORDS: Readonly<Record<TransferRefusal, string>> =
   NO_LOT_SERIES: 'The receiving company has no lot series: an administrator sets it up under numbering.',
   DDT_NOT_PRINTABLE: 'The DDT cannot be printed as it stands (the companies’ legal data or addresses).',
   NO_DDT: 'This transfer has no DDT yet: it gets one when it is shipped.',
-  NO_RIGHT_FROM: 'This needs inventory.transfers.manage at the sending site.',
-  NO_RIGHT_TO: 'This needs inventory.transfers.manage at the receiving site.',
+  NO_RIGHT_FROM: 'This needs the right to keep transfers at the sending site.',
+  NO_RIGHT_TO: 'This needs the right to keep transfers at the receiving site.',
 })
 
 export const problem = (code: TransferRefusal, message: string = TRANSFER_REFUSAL_WORDS[code]): TransferProblem => ({ code, message })

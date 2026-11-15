@@ -41,6 +41,8 @@ import { CLOSE_NS } from '../../../production/work-orders/close/model'
 import { costStateOf } from '../closed/model'
 import { COST_STATE_TONE, useCostStateWords } from '../closed/view/CostState'
 import '../costing.css'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../../lib/i18n/rights'
 
 export type LiveState = 'connecting' | 'live' | 'offline'
 
@@ -317,7 +319,7 @@ function Costing({ model, actions, ppv, mass }: { model: CostingModel; actions?:
   if (!can.view) {
     return (
       <div className="fw-fco">
-        <EmptyState title={t('noAccess.title')} description={t('noAccess.body', { permission: 'costing.view' })} />
+        <EmptyState title={t('noAccess.title')} description={t('noAccess.body', { right: rightRef('costing.view') })} />
       </div>
     )
   }

@@ -51,7 +51,7 @@
   },
   "noAccess": {
     "title": "You don't have access to price lists",
-    "body": "Price lists need the right to see them (pricelists.view): the Sales, Finance and Owner roles have it."
+    "body": "Price lists need the right to see them: the Sales, Finance and Owner roles have it."
   },
   "keys": {
     "title": "Keyboard shortcuts",

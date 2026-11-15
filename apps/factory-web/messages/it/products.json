@@ -1533,7 +1533,7 @@
     "atRelease": "Al rilascio la Conformità ne riceve un esame; fino alla risposta questa revisione non stampa l'etichetta con la classe.",
     "law": "La Conformità decide con l'organismo notificato; il certificato è in Conformità › Certificati.",
     "held": {
-      "task": "Il tuo ruolo non crea attività su un modello (tasks.manage e threads.post)."
+      "task": "Il tuo ruolo non crea attività su un modello."
     },
     "task": {
       "title": "Verificare con l'organismo notificato le modifiche di {code} revisione {revision}",

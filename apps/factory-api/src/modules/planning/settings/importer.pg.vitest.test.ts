@@ -237,6 +237,6 @@ describe('the item parameters import (B-W2b-20)', () => {
     expect(everyCompany.body).toContain("Item parameters belong to a company's sites: import them for one company.")
     const limited = await upload('plannerB1', sheet)
     expect(limited).toMatchObject({ status: 'PLANNED', errorCount: 1 })
-    expect((await rowsOf('plannerB1', limited.id))[0]!.errors).toEqual([{ column: 'site', message: 'Keeping the item parameters of site A1 needs planning.items.manage at that site.' }])
+    expect((await rowsOf('plannerB1', limited.id))[0]!.errors).toEqual([{ column: 'site', message: 'Keeping the item parameters of site A1 needs the right to keep the item parameters at that site.' }])
   })
 })

@@ -84,7 +84,7 @@
   },
   "noAccess": {
     "title": "Labels are not for your role",
-    "body": "Reading labels needs the right to view certificates (compliance.certificates.view). Ask an administrator for a role that has it."
+    "body": "Reading labels needs the right to view certificates. Ask an administrator for a role that has it."
   },
   "csv": {
     "code": "Code",
@@ -126,7 +126,7 @@
     "kindShared": "Shared by several styles",
     "style": "Style",
     "styleHint": "Search by code or name; the label marks its standard and class.",
-    "styleNoRight": "Finding styles needs the right to view styles (product.styles.view).",
+    "styleNoRight": "Finding styles needs the right to view styles.",
     "styleSearch": "Search styles",
     "styleResults": "Styles found",
     "noStyles": "No style matches.",
@@ -152,7 +152,7 @@
     }
   },
   "held": {
-    "noManage": "Your role may read labels, not change them (compliance.labels.manage).",
+    "noManage": "Your role may read labels, not change them.",
     "notDraft": "Only a draft is activated.",
     "unsaved": "Save your changes first: the activation checks what is saved.",
     "problems_one": "{count} thing to fix first (see the rule checks)",
@@ -160,7 +160,7 @@
     "draftExists": "Revision {revision} is a draft already: edit it, or retire it first.",
     "isDraft": "This revision is the draft: edit it here.",
     "retired": "It is retired already.",
-    "noPrint": "Your role may not send labels to a printer (print.labels).",
+    "noPrint": "Your role may not send labels to a printer.",
     "noPrinter": "No label printer is set up: an administrator adds one in Devices & printers.",
     "pickPrinter": "Choose a printer",
     "printerPaused": "This printer is paused",

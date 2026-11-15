@@ -7,7 +7,7 @@
   },
   "noAccess": {
     "title": "You cannot open this",
-    "body": "This needs the permission {permission}. Ask an administrator to give it to your role."
+    "body": "This needs the right “{right}”. Ask an administrator to give it to your role."
   },
   "live": {
     "connecting": "Connecting to live updates",
@@ -115,7 +115,7 @@
     }
   },
   "held": {
-    "permission": "This needs the permission {permission}.",
+    "permission": "This needs the right “{right}”.",
     "busy": "Working…",
     "loading": "Still loading",
     "reason": "Say why in at least 3 characters.",
@@ -230,7 +230,7 @@
     "ratioLine": "Sizes in the marker: {ratio}",
     "table": "Cutting table",
     "tableHint": "Optional: the ticket prints on its label printer.",
-    "tableNoRight": "Picking a table needs print.view; it can be left empty.",
+    "tableNoRight": "Picking a table needs the right to see printers; it can be left empty.",
     "noTable": "No table yet",
     "due": "Due",
     "dueHint": "Optional.",
@@ -626,7 +626,7 @@
     "lot_other": "lot {lot}, shade {shade}: {count} hides",
     "unknown": "not known",
     "many": "Hides of {count} shade lots",
-    "rule": "One shade lot per order: the cutting table warns and a lead signs Cut anyway; another lot is reserved only with inventory.shade.override."
+    "rule": "One shade lot per order: the cutting table warns and a lead signs Cut anyway; another lot is reserved only with the right to let another shade lot in."
   },
   "ofWorkOrder": {
     "title": "Cut orders and lays",

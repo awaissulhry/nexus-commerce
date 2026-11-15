@@ -27,10 +27,10 @@ import { loadTechPack, readTechPackStyle, type TechPackStyleRow } from './facts'
 export function notAllowedFor(actor: Actor, companyId: string | null): Partial<Record<TechPackSection, string>> {
   const scope = companyId === null ? {} : { companyId }
   const out: Partial<Record<TechPackSection, string>> = {}
-  if (!can(actor, 'product.routing.view', scope)) out.CONSTRUCTION = `The ${SECTION_WORDS.CONSTRUCTION.toLowerCase()} section shows the routing: it needs product.routing.view.`
+  if (!can(actor, 'product.routing.view', scope)) out.CONSTRUCTION = `The ${SECTION_WORDS.CONSTRUCTION.toLowerCase()} section shows the routing: it needs the right to see the routing.`
   if (!can(actor, 'compliance.certificates.view', scope)) {
-    out.PROTECTION = `The ${SECTION_WORDS.PROTECTION.toLowerCase()} section shows the certificates: it needs compliance.certificates.view.`
-    out.COMPLIANCE = `The ${SECTION_WORDS.COMPLIANCE.toLowerCase()} section shows the certificates: it needs compliance.certificates.view.`
+    out.PROTECTION = `The ${SECTION_WORDS.PROTECTION.toLowerCase()} section shows the certificates: it needs the right to see the certificates.`
+    out.COMPLIANCE = `The ${SECTION_WORDS.COMPLIANCE.toLowerCase()} section shows the certificates: it needs the right to see the certificates.`
   }
   return out
 }

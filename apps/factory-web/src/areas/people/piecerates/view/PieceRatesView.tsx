@@ -23,6 +23,8 @@ import { PieceMessages, PieceNotice, ReadBlock, Section, usePieceWords } from '.
 import { RateDialogs } from './RateDialogs'
 import { RatesSection } from './RatesSection'
 import { SchemeSection } from './SchemeSection'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../../lib/i18n/rights'
 
 /**
  * SCR-158 — People › Piece rates: the band (the switch's state, Publish rates, Run <month> pay period, ⋯), what this page shows
@@ -65,7 +67,7 @@ function Page({ model, actions }: { model: PieceModel; actions?: PieceActions | 
   const jump = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 
   if (!can.view) {
-    return <EmptyState icon={<ShieldOff size={22} aria-hidden />} title={t('noAccess.title')} description={t('noAccess.body', { permission: 'people.piecerates.view' })} />
+    return <EmptyState icon={<ShieldOff size={22} aria-hidden />} title={t('noAccess.title')} description={t('noAccess.body', { right: rightRef('people.piecerates.view') })} />
   }
 
   const more = [

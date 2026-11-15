@@ -36,7 +36,7 @@ export async function finalWorkOrder(caller: CommandCaller, workOrderId: string,
   const context = inspectorOf(caller)
   const header = await caller.withClient((client) => readHeader(client, workOrderId))
   if (!header || !(mayOn(context, QUALITY_INSPECTIONS_VIEW, header) || mayOn(context, permission, header))) throw new NotFoundError('Work order not found.')
-  if (!mayOn(context, permission, header)) throw new ForbiddenError(`This needs ${permission} over the work order's company and site.`)
+  if (!mayOn(context, permission, header)) throw new ForbiddenError("This needs a right your role does not hold over the work order's company and site.")
   return header
 }
 

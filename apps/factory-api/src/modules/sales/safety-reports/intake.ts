@@ -149,7 +149,7 @@ export async function intakeInCommand(tools: CommandTools, door: IntakeDoor, bod
   if (door.actor.kind === 'office') {
     const context = door.actor.context
     if (!mayOn(context, SALES_SERVICE_MANAGE, { companyId: door.companyId, partyId: p.partyId })) {
-      throw new ForbiddenError('A safety report opens its SAFETY service case: your roles must also follow up service cases (sales.service.manage).')
+      throw new ForbiddenError('A safety report opens its SAFETY service case: your roles must also follow up service cases.')
     }
     const opened = await openInCommand(tools, context, {
       companyId: door.companyId,

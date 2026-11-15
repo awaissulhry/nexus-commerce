@@ -61,12 +61,12 @@
   "held": {
     "noMachines": "No machine on screen to tag",
     "noneToTag": "The machines selected are retired: their tag reports nothing",
-    "noManage": "Changed by a role that keeps the machines (plant.machines.manage)",
+    "noManage": "Changed by a role that keeps the machines",
     "retired": "A retired machine keeps its last status",
     "locked": "Locked as unsafe: its request's sign-safe frees it",
     "pickStatus": "Pick the new status",
     "sameStatus": "It is in this status already",
-    "technician": "Only a technician releases a do-not-use machine (plant.signSafe)",
+    "technician": "Only a technician releases a do-not-use machine",
     "reason": "Say why, in a few words",
     "busy": "Working on it…"
   },
@@ -127,7 +127,7 @@
     "releaseTitle": "You release a do-not-use machine",
     "releaseBody": "A technician's act: a fresh authenticator code is asked when you confirm.",
     "releaseHeldTitle": "A technician releases it",
-    "releaseHeldBody": "Your role cannot release a do-not-use machine: ask a technician (plant.signSafe).",
+    "releaseHeldBody": "Your role cannot release a do-not-use machine: ask a technician.",
     "cancelled": "No code given: the status did not change."
   },
   "stepUp": {
@@ -175,13 +175,13 @@
     "download": "Download",
     "held": {
       "notAvailable": "Not available yet (the upload or the scan is not done)",
-      "noManage": "Removed by a role that keeps the machines (plant.machines.manage)",
+      "noManage": "Removed by a role that keeps the machines",
       "reason": "Say why, in a few words",
       "manualPdf": "A manual is a PDF: file a photo under Photos.",
       "photoImage": "A photo is an image (JPEG, PNG, WebP or HEIC)."
     },
     "uploadTitle": "Upload",
-    "uploadHeld": "Documents are added by a role that keeps the machines (plant.machines.manage).",
+    "uploadHeld": "Documents are added by a role that keeps the machines.",
     "groupLabel": "What it is",
     "tabletsLabel": "Show on the site's tablets",
     "tabletsHint": "Art. 71: the manuals at hand where the machine works.",

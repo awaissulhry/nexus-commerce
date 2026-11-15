@@ -93,7 +93,7 @@ export async function addSourcesInCommand(tools: CommandTools, capa: CapaRow, so
       await tx.$queryRaw`SELECT "id" FROM "Nonconformance" WHERE "id" = ${source.recordId}::uuid FOR UPDATE`
       const ncr = await tx.nonconformance.findUnique({ where: { id: source.recordId }, select: NCR_SELECT })
       if (!ncr || !can(actor, QUALITY_NCR_VIEW, { companyId: ncr.companyId, siteId: ncr.siteId })) refuse([{ path: at, message: 'Not an NCR you can see.' }], 'An NCR is not found.')
-      if (!can(actor, QUALITY_NCR_MANAGE, { companyId: ncr!.companyId, siteId: ncr!.siteId })) throw new ForbiddenError(`Escalating ${ncr!.number} needs quality.ncr.manage at its site.`)
+      if (!can(actor, QUALITY_NCR_MANAGE, { companyId: ncr!.companyId, siteId: ncr!.siteId })) throw new ForbiddenError(`Escalating ${ncr!.number} needs the right to follow up NCRs at its site.`)
       if (ncr!.companyId !== capa.companyId) throw held('OTHER_COMPANY', `${ncr!.number} is another company's: a CAPA takes the records of its own company.`)
       if (ncr!.stage === 'CANCELLED') throw held('NCR_CANCELLED', `${ncr!.number} is cancelled: it is escalated to no CAPA.`)
       if (others.length > 0) throw held('ESCALATED_ELSEWHERE', `${ncr!.number} is escalated to ${others[0]!.number} already.`)
@@ -160,7 +160,7 @@ export async function removeSource(caller: CommandCaller, capaId: string, source
       await tx.$queryRaw`SELECT "id" FROM "Nonconformance" WHERE "id" = ${source.recordId}::uuid FOR UPDATE`
       const ncr = await tx.nonconformance.findUnique({ where: { id: source.recordId }, select: NCR_SELECT })
       if (ncr && ncr.capaId === capaId) {
-        if (!can(actor, QUALITY_NCR_MANAGE, { companyId: ncr.companyId, siteId: ncr.siteId })) throw new ForbiddenError(`Taking ${ncr.number} off needs quality.ncr.manage at its site.`)
+        if (!can(actor, QUALITY_NCR_MANAGE, { companyId: ncr.companyId, siteId: ncr.siteId })) throw new ForbiddenError(`Taking ${ncr.number} off needs the right to follow up NCRs at its site.`)
         if (ncr.stage === 'DECIDED' || ncr.stage === 'CLOSED') throw held('NCR_KEEPS_CAPA', `${ncr.number} is ${ncr.stage === 'CLOSED' ? 'closed' : 'decided'}: it stays escalated to ${row.number}.`)
         await tx.nonconformance.update({ where: { id: ncr.id }, data: { capaId: null, version: { increment: 1 }, updatedAt: now }, select: { id: true } })
         tools.audit({ action: 'quality.unescalateNcr', recordType: 'Nonconformance', recordId: ncr.id, companyId: ncr.companyId, siteId: ncr.siteId, before: { capaId }, after: { capaId: null } })
@@ -211,7 +211,7 @@ export async function escalationPreview(caller: CommandCaller, query: { readonly
               : named && named.status === 'CANCELLED' && (ncr.stage === 'DECIDED' || ncr.stage === 'CLOSED')
                 ? { path: 'held/NCR_KEEPS_CAPA', message: `${ncr.number} is ${ncr.stage === 'CLOSED' ? 'closed' : 'decided'} and keeps the cancelled ${named.number}.` }
                 : !can(actor, QUALITY_NCR_MANAGE, { companyId: ncr.companyId, siteId: ncr.siteId })
-                  ? { path: 'held/NO_PERMISSION', message: `Escalating ${ncr.number} needs quality.ncr.manage at its site.` }
+                  ? { path: 'held/NO_PERMISSION', message: `Escalating ${ncr.number} needs the right to follow up NCRs at its site.` }
                   : null
         records.push({ recordType: 'Nonconformance', recordId: id, number: ncr.number, title: ncr.title, companyId: ncr.companyId, state: ncr.stage, reasons: ncrReasons({ severity: ncr.severity, source: ncr.source, repeats: await repeatsOf(client, ncr) }), escalatedTo, problem })
       } else {

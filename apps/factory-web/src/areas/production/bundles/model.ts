@@ -6,6 +6,8 @@ import { isApiError, issuePath } from '../../../lib/api/errors'
 import { reprintHold, type Phrase } from '../_shared/model'
 import type { WorkOrderStatus } from '../_shared/api'
 import type { BundleRecord, BundlesQuery, BundleTiles, ChecksState, Finding, FindingsSummary, SummaryRow, TrackedBundle } from './api'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../lib/i18n/rights'
 
 /**
  * Production › Cutting room › Bundles (B-W2b-59; SCR-259; design production.bundles), pure: what this person may do, the
@@ -203,8 +205,8 @@ type Reprintable = Pick<TrackedBundle, 'status' | 'siteId'> & { workOrder: { sta
 
 /** Why "Reprint N tickets" waits, or null: the rights first, then a selection every bundle of which may be reprinted. */
 export function reprintHeld(rows: readonly Reprintable[], can: BundlesCan): Phrase | null {
-  if (!can.act) return phrase('held.noAct', { permission: 'production.bundles' })
-  if (!can.printLabels) return phrase('held.noPrint', { permission: 'print.labels' })
+  if (!can.act) return phrase('held.noAct', { right: rightRef('production.bundles') })
+  if (!can.printLabels) return phrase('held.noPrint', { right: rightRef('print.labels') })
   if (rows.length === 0) return phrase('held.pickFirst')
   if (new Set(rows.map((row) => row.siteId)).size > 1) return phrase('held.oneSite')
   const voided = rows.filter((row) => reprintHold(row, row.workOrder.status) === 'void').length
@@ -215,7 +217,7 @@ export function reprintHeld(rows: readonly Reprintable[], can: BundlesCan): Phra
 
 /** Why "Void bundle" waits, or null: the API's own rule (ACTIVE, an open work order, no scan names it). */
 export function voidHeld(record: Pick<BundleRecord, 'bundle' | 'workOrder'>, can: BundlesCan): Phrase | null {
-  if (!can.act) return phrase('held.noAct', { permission: 'production.bundles' })
+  if (!can.act) return phrase('held.noAct', { right: rightRef('production.bundles') })
   if (record.bundle.status === 'VOID') return phrase('held.voidAlready')
   if (record.workOrder.status !== 'RELEASED' && record.workOrder.status !== 'IN_PROGRESS') return phrase('held.voidNotOpen')
   return record.bundle.scans > 0 ? phrase('held.voidScanned', { count: record.bundle.scans }) : null
@@ -262,14 +264,14 @@ export function seenWords(finding: Pick<Finding, 'kind' | 'seen'>): Phrase {
 
 /** Why a finding may not be reviewed, or null. */
 export function reviewHeld(finding: Pick<Finding, 'status'>, can: BundlesCan, busy = false): Phrase | null {
-  if (!can.findings) return phrase('held.noFindings', { permission: 'production.bundles.findings' })
+  if (!can.findings) return phrase('held.noFindings', { right: rightRef('production.bundles.findings') })
   if (finding.status !== 'OPEN') return phrase('held.findingFinal')
   return busy ? phrase('held.busy') : null
 }
 
 /** Why "Mark N reviewed" waits, or null. */
 export function reviewManyHeld(findings: readonly Pick<Finding, 'status'>[], can: BundlesCan, busy = false): Phrase | null {
-  if (!can.findings) return phrase('held.noFindings', { permission: 'production.bundles.findings' })
+  if (!can.findings) return phrase('held.noFindings', { right: rightRef('production.bundles.findings') })
   if (busy) return phrase('held.busy')
   return findings.some((finding) => finding.status !== 'OPEN') ? phrase('held.findingFinal') : null
 }
@@ -282,7 +284,7 @@ export const findingSelectable = (finding: Pick<Finding, 'status'>): Phrase | nu
  * its legal basis is on record and its PERFORMANCE purpose is on.
  */
 export function whoHeld(finding: Pick<Finding, 'siteId'>, summary: FindingsSummary | null, can: BundlesCan): Phrase | null {
-  if (!can.who) return phrase('held.noWho', { permission: 'production.bundles.who' })
+  if (!can.who) return phrase('held.noWho', { right: rightRef('production.bundles.who') })
   const site = summary?.sites.find((entry) => entry.id === finding.siteId)
   if (!site) return phrase('checks.UNKNOWN')
   return checksWords(site.checks)
@@ -300,7 +302,7 @@ export function whoProblem(error: unknown): Phrase {
   if (paths.includes('gate/PERFORMANCE')) return phrase('checks.GATE_CLOSED')
   if (paths.includes('who/STATION_SITE')) return phrase('checks.STATION_SITE')
   if (paths.includes('who/NO_BASIS')) return phrase('checks.NO_BASIS')
-  if (error.kind === 'forbidden') return phrase('held.noWho', { permission: 'production.bundles.who' })
+  if (error.kind === 'forbidden') return phrase('held.noWho', { right: rightRef('production.bundles.who') })
   return phrase(error.kind === 'not_found' ? 'who.gone' : 'who.failed')
 }
 
@@ -308,7 +310,7 @@ export function whoProblem(error: unknown): Phrase {
 export function reviewProblem(error: unknown): Phrase {
   if (!isApiError(error)) return phrase('review.failed')
   if (error.kind === 'conflict') return phrase('review.changed')
-  if (error.kind === 'forbidden') return phrase('held.noFindings', { permission: 'production.bundles.findings' })
+  if (error.kind === 'forbidden') return phrase('held.noFindings', { right: rightRef('production.bundles.findings') })
   if (error.kind === 'invalid') return phrase('review.noteNeeded')
   return phrase('review.failed')
 }

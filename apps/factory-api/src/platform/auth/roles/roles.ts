@@ -256,7 +256,7 @@ export async function editRole(auth: OfficeAuth, request: FastifyRequest, roleId
       if (before.permissions.includes(ADMIN_PERMISSION) && !after.permissions.includes(ADMIN_PERMISSION)) {
         const others = await activeAdmins(tx, now, { roleId })
         const through = await activeAdmins(tx, now)
-        if (through.size > 0 && others.size === 0) throw new InvalidStateError(`This role makes the last administrators of the tenant; it keeps ${ADMIN_PERMISSION}.`)
+        if (through.size > 0 && others.size === 0) throw new InvalidStateError('This role makes the last administrators of the tenant; it keeps the right to give roles.')
       }
       const mfaChanged = after.requireMfa !== before.requireMfa
       if (mfaChanged) await assertTwoFactorChange(tx, before, after, context.actorId, now)

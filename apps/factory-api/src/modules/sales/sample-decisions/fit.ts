@@ -203,7 +203,7 @@ export async function readFit(caller: CommandCaller, roundId: string): Promise<F
 }
 
 function assertMeasure(context: OfficeContext, round: RoundData): void {
-  if (!may(context, SALES_SAMPLES_MEASURE, round)) throw new ForbiddenError('Your role does not measure sample fits for this company or customer (sales.samples.measure).')
+  if (!may(context, SALES_SAMPLES_MEASURE, round)) throw new ForbiddenError('Your role does not measure sample fits for this company or customer.')
 }
 
 /** PUT /sales/samples/rounds/:roundId/fit: cells saved, the nominal and tolerances frozen from the spec when first written. */

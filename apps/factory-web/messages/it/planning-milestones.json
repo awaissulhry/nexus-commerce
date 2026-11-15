@@ -1,7 +1,7 @@
 {
   "noAccess": {
     "title": "Non puoi aprire il Calendario T&A",
-    "body": "Il Calendario T&A è per chi pianifica: il tuo ruolo non legge la pianificazione (planning.view). Chiedi al tuo amministratore."
+    "body": "Il Calendario T&A è per chi pianifica: il tuo ruolo non legge la pianificazione. Chiedi al tuo amministratore."
   },
   "page": {
     "today": "Oggi {day}",

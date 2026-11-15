@@ -30,7 +30,7 @@ export const HOLD_WORDS = Object.freeze({
   held: (count: number) => `${count === 1 ? 'A line waits' : `${count} lines wait`} for a yes: the receipt is posted once ${count === 1 ? 'it is' : 'they are'} approved, or cancel it and receive within the tolerance.`,
   notOpen: 'This receipt is not waiting any more: it was posted or cancelled.',
   notHeld: 'This line is not held for a yes.',
-  noDecider: 'Nobody decides a receipt beyond its tolerance: give an office role purchasing.manage and approvals.decide, or switch on an approval rule for it.',
+  noDecider: 'Nobody decides a receipt beyond its tolerance: give an office role the right to make purchase orders and the right to decide approvals, or switch on an approval rule for it.',
   noBody: 'This receipt was not held for a yes: it is posted as it is recorded.',
   refused: 'A yes was refused for a line of this receipt: cancel it and receive within the tolerance.',
 })

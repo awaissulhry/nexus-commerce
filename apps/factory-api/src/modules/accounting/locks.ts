@@ -111,7 +111,7 @@ export async function lockMonth(caller: CommandCaller, body: LockBody, stepUp: (
   if (existing) {
     if (body.version === undefined || existing.version !== body.version) throw new StaleVersionError('PeriodLock', existing.id, existing.version, body.version ?? 0)
     if (existing.status === 'LOCKED' && existing.level === body.level) throw refuse(`${label} is locked already.`, 'ALREADY_LOCKED', lockWords(existing))
-    if (existing.status === 'LOCKED' && existing.level === 'HARD') throw refuse(`${label} is closed for good.`, 'HARD_LOCKED', 'A hard lock is lifted first (accounting.unlock, with a reason), never made soft.')
+    if (existing.status === 'LOCKED' && existing.level === 'HARD') throw refuse(`${label} is closed for good.`, 'HARD_LOCKED', 'A hard lock is lifted first (by someone who may lift a final close, with a reason), never made soft.')
   }
   if (body.level === 'HARD' && problems.length > 0) throw new AccountingRefusedError(`${label} cannot be closed for good yet.`, problems)
   if (body.level === 'HARD') stepUp()
@@ -171,7 +171,7 @@ export async function liftLock(caller: CommandCaller, lockId: string, body: Lift
   if (!can(actor, ACCOUNTING_LOCK, { companyId: row.companyId })) throw new ForbiddenError()
   if (row.status !== 'LOCKED') throw refuse('This lock is lifted already.', 'NOT_LOCKED', lockWords(row))
   if (row.level === 'HARD') {
-    if (!can(actor, ACCOUNTING_UNLOCK, { companyId: row.companyId })) throw new ForbiddenError('Lifting a hard lock needs accounting.unlock: the accountant has the month.')
+    if (!can(actor, ACCOUNTING_UNLOCK, { companyId: row.companyId })) throw new ForbiddenError('Lifting a hard lock needs the right to lift a final close: the accountant has the month.')
     stepUp()
   }
   if (row.version !== body.version) throw new StaleVersionError('PeriodLock', lockId, row.version, body.version)

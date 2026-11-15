@@ -74,7 +74,7 @@ export function mayManage(context: OfficeContext, template: Pick<TemplateRow, 'c
 
 export function assertMayManage(context: OfficeContext, template: Pick<TemplateRow, 'companyId'>): void {
   if (mayManage(context, template)) return
-  throw new ForbiddenError(template.companyId === null ? 'A template of every company is kept only with quotes.templates.manage over every company.' : 'Keeping this template needs quotes.templates.manage for its company.')
+  throw new ForbiddenError(template.companyId === null ? 'A template of every company is kept only with the right to keep quote templates over every company.' : 'Keeping this template needs the right to keep quote templates for its company.')
 }
 
 export async function readTemplate(db: Reader, templateId: string): Promise<TemplateRow | null> {

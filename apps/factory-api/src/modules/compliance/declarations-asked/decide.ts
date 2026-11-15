@@ -273,7 +273,7 @@ export async function acceptRequest(app: FastifyInstance, caller: Caller, reques
     if (upload?.status === 'REFUSED') throw new InvalidStateError("The supplier's upload was refused: refuse this declaration and ask again.")
     if (upload?.status === 'WAITING') {
       if (!can(actor, SUPPLIER_DOCUMENTS_REVIEW, { companyId: first.companyId, partyId: first.partyId })) {
-        throw new ForbiddenError("The supplier's document still waits for its check: accepting it needs purchasing.supplierDocuments.review (ask a buyer to accept it in Supplier documents first).")
+        throw new ForbiddenError("The supplier's document still waits for its check: accepting it needs the right to review supplier documents (ask a buyer to accept it in Supplier documents first).")
       }
       const file = await caller.withClient((db) => db.storedFile.findUnique({ where: { id: upload.fileId }, select: { version: true } }))
       const validTo = body.validTo === undefined ? (first.validTo ? dayOf(first.validTo) : upload.expiresOn ? dayOf(upload.expiresOn) : null) : body.validTo

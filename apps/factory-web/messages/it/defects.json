@@ -172,8 +172,8 @@
     "categoryHasDefects_one": "Questa categoria ha {count} difetto: eliminalo prima, oppure ritira la categoria.",
     "categoryHasDefects_other": "Questa categoria ha {count} difetti: eliminali prima, oppure ritira la categoria.",
     "categoryRetired": "Questa categoria è ritirata: ripristinala prima, altrimenti i nuovi difetti non arriverebbero agli elenchi di scelta.",
-    "noManage": "Per modificare la libreria serve quality.defects.manage su tutte le società: i codici sono di tutto il gruppo.",
-    "noUpload": "Per caricare un'immagine serve il permesso files.upload.",
+    "noManage": "Per modificare la libreria serve il permesso di gestirla su tutte le società: i codici sono di tutto il gruppo.",
+    "noUpload": "Per caricare un'immagine serve il permesso di caricare file.",
     "pickRows": "Prima spunta i codici.",
     "reading": "Attendi: la pagina sta ancora leggendo.",
     "used_one": "Usato su {count} documento: ritiralo invece (resta su di esso).",
@@ -251,7 +251,7 @@
     "title": "Aggiungi destinazione"
   },
   "noAccess": {
-    "body": "Serve il permesso quality.defects.view. Lo assegna un amministratore con un ruolo (Ispettore qualità, Responsabile produzione, Capo reparto).",
+    "body": "Serve il permesso di vedere la libreria dei difetti. Lo assegna un amministratore con un ruolo (Ispettore qualità, Responsabile produzione, Capo reparto).",
     "title": "Non puoi aprire Difetti e destinazioni"
   },
   "outcome": {
@@ -306,7 +306,7 @@
     "conflict": "Questo è in conflitto con quanto salvato: rileggi la pagina.",
     "failed": "Qualcosa non ha funzionato: riprova.",
     "followUp": "Questo esito non apre quel documento.",
-    "forbidden": "Non puoi modificare la libreria (quality.defects.manage su tutte le società).",
+    "forbidden": "Non puoi modificare la libreria: si gestisce su tutte le società.",
     "gone": "Questo codice non è più nella libreria.",
     "icon": "Scegli una delle icone proposte.",
     "inUse": "Questo codice è usato: ritiralo invece (resta sui suoi documenti).",
@@ -323,7 +323,7 @@
     "picture": "L'immagine non è pronta: caricala di nuovo.",
     "pictureFileId": "L'immagine non è pronta: caricala di nuovo.",
     "read": "Il server non ha risposto come previsto.",
-    "readForbidden": "Non puoi leggerlo (quality.defects.view).",
+    "readForbidden": "Non puoi leggerlo.",
     "reinspectUseAsIs": "La merce usata così com'è non viene ricontrollata.",
     "reinspection": "La merce usata così com'è non viene ricontrollata.",
     "severity": "Scegli la classe predefinita: critico, maggiore o minore.",

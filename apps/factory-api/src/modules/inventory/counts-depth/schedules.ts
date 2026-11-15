@@ -158,7 +158,7 @@ async function visibleSchedule(caller: CommandCaller, scheduleId: string, permis
   const context = officeContextOf(caller)
   const row = isUuid(scheduleId) ? await caller.withClient((db) => db.countSchedule.findUnique({ where: { id: scheduleId }, select: SCHEDULE_COLUMNS })) : null
   if (!row || !can(actorOf(context), INVENTORY_COUNTS_VIEW, scheduleScope(row))) throw new NotFoundError('Count schedule not found.')
-  if (permission !== INVENTORY_COUNTS_VIEW && !can(actorOf(context), permission, scheduleScope(row))) throw new ForbiddenError(`This needs ${permission}.`)
+  if (permission !== INVENTORY_COUNTS_VIEW && !can(actorOf(context), permission, scheduleScope(row))) throw new ForbiddenError('This needs a right your role does not hold.')
   return row
 }
 

@@ -210,7 +210,7 @@
       "noMakeSite": "No make site",
       "suppliersHint": "The item's own supplier and its approved sources.",
       "suppliersFailed": "The approved sources could not be read: the item's own supplier is offered.",
-      "suppliersHeld": "Picking a preferred supplier needs the purchasing right (purchasing.view) to read the approved sources.",
+      "suppliersHeld": "Picking a preferred supplier needs the purchasing right to read the approved sources.",
       "noPlants": "No plant of this company to make it at."
     },
     "bulk": {

@@ -201,7 +201,7 @@ async function managedLay(caller: CommandCaller, cutOrderId: string, layId: stri
     return { order, lay }
   })
   if (!found.order || !may(context, PRODUCTION_CUTTING_VIEW, found.order) || !found.lay || found.lay.cutOrderId !== cutOrderId) return notFound('Lay')
-  if (!may(context, PRODUCTION_CUTORDERS_MANAGE, found.order!)) throw new ForbiddenError('Allocating rolls needs production.cutorders.manage at the site.')
+  if (!may(context, PRODUCTION_CUTORDERS_MANAGE, found.order!)) throw new ForbiddenError('Allocating rolls needs the right to plan cut orders at the site.')
   return { context, order: found.order! }
 }
 

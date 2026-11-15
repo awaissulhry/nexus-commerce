@@ -419,7 +419,7 @@ const namesOf = async (tx: Tools['tx'], ids: readonly string[]) => (await tx.use
 export async function approveVersion(caller: CommandCaller, planId: string, versionId: string, body: { readonly version: number }, idempotencyKey?: string) {
   const context = officeOf(caller)
   const plan = await caller.withClient((client) => readPlan(client as unknown as Db, context, planId))
-  if (!mayApprove(context, plan.companyId)) throw new ForbiddenError('You approve plan versions only for the companies your role reaches (quality.plans.approve).')
+  if (!mayApprove(context, plan.companyId)) throw new ForbiddenError('You approve plan versions only for the companies your role reaches.')
   const { result } = await command(caller, { name: 'quality.approvePlanVersion', idempotencyKey, input: { planId, versionId, ...body } }, async (tools) => {
     const { tx, now } = tools
     // One approval of a plan at a time: the one-APPROVED index is never met by two at once.

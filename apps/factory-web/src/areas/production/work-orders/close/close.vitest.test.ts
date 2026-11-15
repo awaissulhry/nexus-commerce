@@ -18,6 +18,7 @@ import { AFTER_CLOSE, BEYOND_CHECK, closeCheck, closeRecord, designScreen as clo
 import { FiguresTable } from './view/CloseParts'
 // B-W2b-F46: + afterClosePhrase.
 import { afterClosePhrase, checksClose, closeCanOf, closeHeld, closeInput, closeTouches, CLOSE_NS, reasonKey, reopenHeld, reopenOpenHeld, undoShownUntil, UNDO_ON_SCREEN_MS, writeProblem } from './model'
+import { rightRef } from '../../../../lib/i18n/rights'
 
 /**
  * B-W2b-424 — Close work order (SCR-460) and the variance at close (SCR-461) on B-W2b-411's API: the lists equal
@@ -50,7 +51,7 @@ describe('who may do what, and why Close is held', () => {
     const none = { reason: null, note: '' }
     expect(closeHeld(null, none, false)?.key).toBe('held.reading')
     expect(closeHeld(closeCheck({ workOrder: { ...closeCheck().workOrder, status: 'IN_PROGRESS' }, refusal: { code: 'NOT_COMPLETED' } }), none, false)?.key).toBe('held.notCompleted')
-    expect(closeHeld(closeCheck({ closable: false }), none, false)).toEqual({ key: 'held.noManage', params: { permission: 'workorders.manage' } })
+    expect(closeHeld(closeCheck({ closable: false }), none, false)).toEqual({ key: 'held.noManage', params: { right: rightRef('workorders.manage') } })
     const waiting = closeCheck({ waiting: [{ code: 'NO_RATE', sourceType: 'OperationScan', sourceId: 'x' }] })
     expect(closeHeld(waiting, none, false)).toEqual({ key: 'held.costsWaiting', params: { count: 1 } })
     // While the switch is off the close goes on and lists what waits.
@@ -80,7 +81,7 @@ describe('who may do what, and why Close is held', () => {
   it('Reopen: held without a close record, without workorders.reopen, until the reason is 3 to 1,000 characters', () => {
     const closed = (live: ReturnType<typeof closeRecord> | null) => closeCheck({ live })
     expect(reopenOpenHeld(closed(null), false)?.key).toBe('held.noRecord')
-    expect(reopenOpenHeld(closed(closeRecord({ can: { undo: false, reopen: false } })), false)).toEqual({ key: 'held.noReopen', params: { permission: 'workorders.reopen' } })
+    expect(reopenOpenHeld(closed(closeRecord({ can: { undo: false, reopen: false } })), false)).toEqual({ key: 'held.noReopen', params: { right: rightRef('workorders.reopen') } })
     expect(reopenOpenHeld(closed(closeRecord()), false)).toBeNull()
     expect(reopenHeld(closed(closeRecord()), 'no', false)?.key).toBe('reopen.reasonShort')
     expect(reopenHeld(closed(closeRecord()), 'x'.repeat(1001), false)?.key).toBe('reopen.reasonLong')
@@ -167,7 +168,7 @@ describe('the variance at close', () => {
 // B-W2b-F46: + afterClose, event (the costing catalogue's event words in the closed banner).
 const LEFT_KEY = /\b(?:common|figure|dialog|settle|waits|reason|held|reopen|undo|closed|refusal|problem|notice|variance|category|notSplit|history|costState|ppv|afterClose|event)\.[a-zA-Z_]+(?:\.[a-zA-Z_]+)*\b/
 const LEFT_PLACEHOLDER = /\{[a-zA-Z]+\}/
-/** Permission and grain names are said on purpose. */
+/** Permission and grain names are stripped before the key check, though no screen says one since B-W2b-F51. */
 const SAID = /\b(?:workorders\.manage|workorders\.reopen|workorders\.view|costing\.view|money\.cost)\b/g
 const AMOUNT = /€\s?\d|\d\s?€/
 
@@ -273,7 +274,7 @@ describe('costs that arrived after the close wait for a reopen (B-W2b-F46)', () 
     // Without workorders.reopen: Reopen held with why, the costs still said.
     const held = drawn('closed-after-close-no-reopen')
     expect(held).toContain('2 costs arrived after the close')
-    expect(held).toContain('Reopening a work order needs the permission workorders.reopen.')
+    expect(held).toContain('Reopening a work order needs the right “Reopen a closed work order, with a reason”.')
     // A closed work order with nothing after the close says nothing of it.
     expect(drawn('closed')).not.toContain('arrived after the close')
   })

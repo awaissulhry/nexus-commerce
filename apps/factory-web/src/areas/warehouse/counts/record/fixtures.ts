@@ -123,7 +123,7 @@ export const designScreen = defineDesignScreen<RecordCase>({
     {
       id: 'read-only',
       label: 'Read-only: sees the count, changes nothing (held in words)',
-      model: recordCase('readOnly', { ...COUNTING, actions: Object.fromEntries(Object.keys(COUNTING.actions).map((key) => [key, { allowed: false, reason: 'Needs inventory.counts.manage.' }])) as CountRecord['actions'] }),
+      model: recordCase('readOnly', { ...COUNTING, actions: Object.fromEntries(Object.keys(COUNTING.actions).map((key) => [key, { allowed: false, reason: 'Needs the right to run stock counts.' }])) as CountRecord['actions'] }),
     },
     { id: 'offline', label: 'Offline: live paused, a typed count not saved', model: recordCase('warehouse', COUNTING, { live: 'offline', cells: { [LINES[2]!.id]: { state: 'failed', words: { key: 'stock:problem.offline' } } } }) },
     { id: 'loading', label: 'Loading', model: recordCase('warehouse', null) },

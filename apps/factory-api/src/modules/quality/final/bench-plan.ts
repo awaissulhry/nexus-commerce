@@ -278,7 +278,7 @@ async function photoTarget(request: FastifyRequest, inspectionId: string, result
   const result = isUuid(resultId) ? await request.withClient((client) => client.inspectionCheckResult.findFirst({ where: { id: resultId, inspectionId: inspection.id }, select: { id: true, sampleIndex: true } })) : null
   if (!result) throw new NotFoundError('Result not found.')
   if (context.audience === 'floor') return { inspection, result, uploader: siteUploader(request, context.tenantId, inspection), floor: true }
-  if (!can(actorOf(context), FILES_UPLOAD, { companyId: inspection.companyId, siteId: inspection.siteId })) throw new ForbiddenError(`Adding a photo needs ${FILES_UPLOAD} over the company.`)
+  if (!can(actorOf(context), FILES_UPLOAD, { companyId: inspection.companyId, siteId: inspection.siteId })) throw new ForbiddenError('Adding a photo needs the right to upload files over the company.')
   return { inspection, result, uploader: request as CommandCaller, floor: false }
 }
 

@@ -201,7 +201,7 @@ export interface CreateBody {
   readonly defaultShiftPatternId?: string | null | undefined
 }
 
-const MANAGE_WORDS = 'Employees of this site are kept by a role that keeps them (people.employees.manage).'
+const MANAGE_WORDS = 'Employees of this site are kept by a role that keeps them.'
 
 /** POST /people/employees. */
 export async function createEmployee(caller: CommandCaller, body: CreateBody, idempotencyKey?: string) {

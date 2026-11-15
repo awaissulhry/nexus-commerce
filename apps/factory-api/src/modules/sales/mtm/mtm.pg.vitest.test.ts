@@ -191,7 +191,7 @@ describe('rider profiles: who measured and where (SAL-291)', { timeout: SLOW_TES
     await no('reader', 'GET', '/sales/mtm/profiles', undefined, 403)
     const record = (await ok('pm', 'GET', `/sales/mtm/profiles/${rev1}`)).profile
     expect(record).toMatchObject({ latestId: rev1, riderName: RIDER, template: { code: 'JACKET', rulesOn: false }, review: { may: { confirm: true, askMore: true }, why: null, mailTo: true, outside: [] } })
-    expect((await ok('sales', 'GET', `/sales/mtm/profiles/${rev1}`)).profile.review).toMatchObject({ may: { confirm: false, askMore: false }, why: expect.stringContaining('sales.mtm.review') })
+    expect((await ok('sales', 'GET', `/sales/mtm/profiles/${rev1}`)).profile.review).toMatchObject({ may: { confirm: false, askMore: false }, why: expect.stringContaining('Your roles do not review measurements') })
   })
 })
 

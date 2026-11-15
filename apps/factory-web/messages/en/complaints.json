@@ -9,7 +9,7 @@
   },
   "noAccess": {
     "title": "Not for your role",
-    "body": "You need quality.complaints.view to see customer complaints. The owner or an administrator grants it in Admin › Roles & permissions."
+    "body": "You need the right to see customer complaints. The owner or an administrator grants it in Admin › Roles & permissions."
   },
   "offline": {
     "title": "Offline – the page shows its last copy",
@@ -475,20 +475,20 @@
     "IN_REGISTER": "It is in the PPE register already",
     "NO_STYLE": "Name the garment's style first: the PPE register keeps an entry per style",
     "NO_PERMISSION": {
-      "edit": "Your role cannot change complaints (quality.complaints.log while new, quality.complaints.manage after)",
-      "triage": "Quality triages complaints (quality.complaints.manage)",
-      "startInvestigation": "Quality follows complaints up (quality.complaints.manage)",
-      "markAnswered": "Quality follows complaints up (quality.complaints.manage)",
-      "reopenInvestigation": "Quality follows complaints up (quality.complaints.manage)",
-      "close": "Quality closes complaints (quality.complaints.manage)",
-      "acknowledge": "Only the owner acknowledges a safety alert (quality.complaints.acknowledge)",
-      "register": "Adding to the PPE register needs quality.complaints.manage and compliance.register.manage",
-      "createNcr": "Raising an NCR needs quality.ncr.raise",
-      "makeRepair": "Making a repair needs sales.repairs.manage",
-      "log": "Your role cannot log complaints (quality.complaints.log)",
-      "investigate": "Quality writes the investigation (quality.complaints.manage)",
-      "writeAnswer": "Quality writes the answer letter (quality.complaints.manage)",
-      "sendAnswer": "Quality sends the answer letter (quality.complaints.manage)"
+      "edit": "Your role cannot change complaints (logging them while new, following them up after)",
+      "triage": "Quality triages complaints",
+      "startInvestigation": "Quality follows complaints up",
+      "markAnswered": "Quality follows complaints up",
+      "reopenInvestigation": "Quality follows complaints up",
+      "close": "Quality closes complaints",
+      "acknowledge": "Only the owner acknowledges a safety alert",
+      "register": "Adding to the PPE register needs the rights to follow up complaints and to keep the PPE register",
+      "createNcr": "Your role cannot raise an NCR",
+      "makeRepair": "Your role cannot make repairs",
+      "log": "Your role cannot log complaints",
+      "investigate": "Quality writes the investigation",
+      "writeAnswer": "Quality writes the answer letter",
+      "sendAnswer": "Quality sends the answer letter"
     },
     "ANSWER_SENT": "The letter went out and the complaint is answered: back to investigating to change it",
     "NO_ANSWER": "Write the letter first (its words, in Italian or English)"
@@ -630,15 +630,15 @@
       "Nonconformance": "{label} no longer names {number}. The NCR itself stays as it is."
     },
     "held": {
-      "log": "Linking records to a new complaint needs quality.complaints.log.",
-      "manage": "Once triaged, a complaint's links are changed by quality (quality.complaints.manage).",
-      "orders": "Your role does not see orders (orders.view).",
-      "shipments": "Your role does not see shipments (shipping.view).",
-      "returns": "Your role does not see returns (sales.returns.view).",
-      "garment": "Finding a garment by its serial needs quality.inspections.view or production.serials: type the serial in the complaint's facts instead.",
-      "ncrView": "Your role does not see NCRs (quality.ncr.view).",
-      "ncrRaise": "Linking an NCR needs quality.ncr.raise at its site.",
-      "ncrManage": "Unlinking an NCR needs quality.ncr.manage at its site.",
+      "log": "Linking records to a new complaint needs the right to log complaints.",
+      "manage": "Once triaged, a complaint's links are changed by quality.",
+      "orders": "Your role does not see orders.",
+      "shipments": "Your role does not see shipments.",
+      "returns": "Your role does not see returns.",
+      "garment": "Finding a garment by its serial needs the right to see final inspections or to print garment labels: type the serial in the complaint's facts instead.",
+      "ncrView": "Your role does not see NCRs.",
+      "ncrRaise": "Linking an NCR needs the right to raise NCRs at its site.",
+      "ncrManage": "Unlinking an NCR needs the right to follow up NCRs at its site.",
       "source": "This NCR was raised from this complaint: it stays linked."
     },
     "problem": {
@@ -730,14 +730,14 @@
     "textHint": "What the customer reads, as it will be printed.",
     "files": "Files with the letter ({count})",
     "filesHint": "Files of this complaint (add them on the Activity tab). Only a file shared with the customer goes with the mail.",
-    "filesNoRight": "Your role does not see files (files.read).",
+    "filesNoRight": "Your role does not see files.",
     "filesReading": "Reading the complaint's files…",
     "filesNone": "This complaint has no file yet: add one on the Activity tab.",
     "shared": "Shared with the customer",
     "notShared": "Office only",
     "share": "Share with the customer",
     "shareOf": "Share {name} with the customer",
-    "shareNoRight": "Sharing a file needs files.manage",
+    "shareNoRight": "Sharing a file needs the right to share files outside the office",
     "savedHint": "The letter as saved.",
     "discard": "Discard",
     "save": "Save the letter",
@@ -794,7 +794,7 @@
         "contactIds": "The customer has no active contact with an e-mail: add one to the customer first.",
         "letterhead": "The company's letterhead is incomplete (legal name, address, VAT number, codice fiscale, REA): complete it in Admin › Companies & sites.",
         "notShared": "A file with the letter is not shared with the customer: share it, or untick it.",
-        "filesRead": "A letter goes with files only for a sender who may read files (files.read).",
+        "filesRead": "A letter goes with files only for a sender who may read files.",
         "other": "The letter cannot go as it stands: check the letter and the customer."
       }
     }

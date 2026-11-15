@@ -164,7 +164,7 @@ describe('navigation', () => {
 
 const LEFT_KEY = /\b(?:noAccess|band|live|scope|category|method|totals|note|list|col|row|valued|basis|bulk|keys|csv|how|reason|print|common|problem)\.[a-zA-Z_]+(?:\.[a-zA-Z_]+)*\b/
 const LEFT_PLACEHOLDER = /\{[a-zA-Z]+\}/
-/** Permission and grain names are said on purpose ("needs inventory.stock.view", "the cost grain (money.cost)"). */
+/** Permission and grain names are stripped before the key check, though no screen says one since B-W2b-F51. */
 const SAID = /\b(?:inventory\.stock\.view|money\.cost)\b/g
 
 function render(screen: DesignScreen<unknown>, model: unknown, locale: (typeof LOCALES)[number]): string {

@@ -9,6 +9,8 @@ import { pdfViewerLabels } from '../../../../../../lib/pdf/labels'
 import { WithMessages } from '../../../../../../record-panels/i18n'
 import { SHIFT_NAMESPACE } from '../../model'
 import '../../every-shift.css'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../../../../lib/i18n/rights'
 
 /** SCR-070-traveller — the traveller tab's view model. */
 export interface TravellerModel {
@@ -36,7 +38,7 @@ function Page({ model, onRetry }: { model: TravellerModel; onRetry?: () => void 
   const tp = useT('production')
   const scoped = useScopedT('production')
   const shell = useT('shell')
-  if (!model.allowed) return <EmptyState title={t('traveller.noRight.title')} description={t('traveller.noRight.body', { permission: 'workorders.view' })} />
+  if (!model.allowed) return <EmptyState title={t('traveller.noRight.title')} description={t('traveller.noRight.body', { right: rightRef('workorders.view') })} />
   if (model.count === 0) return <EmptyState title={t('traveller.none.title')} description={t('traveller.none.body')} />
   const title = t('traveller.title', { count: model.count })
   return (

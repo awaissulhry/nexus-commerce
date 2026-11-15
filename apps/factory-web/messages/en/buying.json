@@ -46,14 +46,14 @@
     "covered": "Nothing is short on this line.",
     "makeLine": "A part we make is not bought: it has no purchase order.",
     "noBuyLine": "None of the selected lines is open to buy.",
-    "noDecide": "Your role may not set lines aside (planning.decide).",
-    "noManage": "Your role may not make or change purchase orders (purchasing.manage).",
-    "noPurchasing": "Buyers make purchase orders: ask a buyer (purchasing.manage).",
-    "noReceive": "Your role may not receive goods (inventory.receive).",
-    "noReverse": "Your role may not reverse a receipt (inventory.reverse).",
+    "noDecide": "Your role may not set lines aside.",
+    "noManage": "Your role may not make or change purchase orders.",
+    "noPurchasing": "Buyers make purchase orders: ask a buyer.",
+    "noReceive": "Your role may not receive goods.",
+    "noReverse": "Your role may not reverse a receipt.",
     "noRight": "Your role may not act on these lines.",
-    "noRun": "Your role may not run the plan (planning.run).",
-    "noSend": "Your role may not send purchase orders or decide on a supplier’s answer (purchasing.send).",
+    "noRun": "Your role may not run the plan.",
+    "noSend": "Your role may not send purchase orders or decide on a supplier’s answer.",
     "noSite": "Pick a site first.",
     "noneOpen": "None of the selected lines is open.",
     "nothingToBuy": "Nothing is open to buy in this plan.",
@@ -164,7 +164,7 @@
   "plan": {
     "noAccess": {
       "title": "What to buy & make is not for your role",
-      "body": "It needs planning.view (planner, buyer, production manager, read-only)."
+      "body": "It needs the right to see the planning runs (planner, buyer, production manager, read-only)."
     },
     "state": {
       "none": "No plan yet",
@@ -573,7 +573,7 @@
   "po": {
     "noAccess": {
       "title": "Purchase orders are not for your role",
-      "body": "They need purchasing.view (buyer, planner, warehouse, read-only)."
+      "body": "They need the right to see purchase orders (buyer, planner, warehouse, read-only)."
     },
     "tile": {
       "drafts": "Drafts to send",
@@ -692,7 +692,7 @@
       "title": "Purchase order",
       "loading": "Loading the purchase order…",
       "not_found": "This order does not exist or belongs to another company.",
-      "forbidden": "Your role may not see this order (purchasing.view).",
+      "forbidden": "Your role may not see this order.",
       "backToList": "Back to the list",
       "tabsLabel": "Parts of the order",
       "revision": "revision {revision}",
@@ -1074,7 +1074,7 @@
     "back": "Receipts",
     "noAccess": {
       "title": "Receipts are not for your role",
-      "body": "They need inventory.stock.view (warehouse, buyer, planner, read-only)."
+      "body": "They need the right to see the stock (warehouse, buyer, planner, read-only)."
     },
     "tile": {
       "expected": "Expected (order lines)",
@@ -1209,7 +1209,7 @@
       "title": "Receive goods",
       "noAccess": {
         "title": "Receiving is not for your role",
-        "body": "It needs inventory.receive (warehouse)."
+        "body": "It needs the right to receive goods (warehouse)."
       },
       "intro": "The order is {status}. Tick the lines that came, type what came, then post: the stock and the order follow at once.",
       "pickIntro": "Pick the purchase order the goods came with (only sent or confirmed orders take goods).",
@@ -1388,7 +1388,7 @@
       "title": "Goods receipt",
       "loading": "Loading the receipt…",
       "not_found": "This receipt does not exist or belongs to another company.",
-      "forbidden": "Your role may not see this receipt (inventory.stock.view).",
+      "forbidden": "Your role may not see this receipt.",
       "backToList": "Back to the list",
       "tabsLabel": "Parts of the receipt",
       "copyNumber": "Copy the number",

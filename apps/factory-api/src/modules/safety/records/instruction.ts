@@ -27,7 +27,7 @@ import { recordRights } from './records'
  *   POST /safety/training/instruction/:id/void    a wrong entry with the reason (signed or not); never deleted
  */
 
-const WORDS = 'The instruction register is kept by a role that keeps it (safety.instruction.record).'
+const WORDS = 'The instruction register is kept by a role that keeps it.'
 const LAW = { instruction: INSTRUCTION_LAW, language: LANGUAGE_LAW }
 
 export interface ListQuery {

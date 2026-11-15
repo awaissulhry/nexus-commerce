@@ -63,8 +63,8 @@ const userNames = async (db: Reader, ids: readonly (string | null)[]): Promise<M
 /** Why the caller may not change the current version's proofs now (a right they lack, or a frozen version); null when they may. */
 function heldFor(caller: CommandCaller, quote: QuoteRow, version: Pick<VersionRow, 'status' | 'revision'>): { readonly right: boolean; readonly message: string } | null {
   const actor = actorOf(officeContextOf(caller))
-  if (!can(actor, QUOTES_MANAGE, { companyId: quote.companyId, partyId: quote.partyId })) return { right: true, message: 'Changing proofs needs quotes.manage for this customer.' }
-  if (!can(actor, FILES_UPLOAD, { companyId: quote.companyId })) return { right: true, message: 'Adding a file needs files.upload for this company.' }
+  if (!can(actor, QUOTES_MANAGE, { companyId: quote.companyId, partyId: quote.partyId })) return { right: true, message: 'Changing proofs needs the right to make quotes for this customer.' }
+  if (!can(actor, FILES_UPLOAD, { companyId: quote.companyId })) return { right: true, message: 'Adding a file needs the right to upload files for this company.' }
   const frozen = proofsFrozenRefusal(version.status, version.revision)
   return frozen ? { right: false, message: frozen } : null
 }

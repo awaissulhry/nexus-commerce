@@ -32,7 +32,7 @@ export function drillActor(caller: CommandCaller, kpiKeys: readonly string[]): A
   for (const key of kpiKeys) {
     const file = kpiFileOf(key)!
     for (const permission of permissionsOfKpi(file)) {
-      if (!holds(actor, permission)) throw new DomainError('forbidden', `The records behind this KPI are not yours to read: it needs ${permission}.`, [{ path: `permission/${permission}`, message: 'Not held.' }])
+      if (!holds(actor, permission)) throw new DomainError('forbidden', 'The records behind this KPI are not yours to read: it needs the right to see the list they come from.', [{ path: `permission/${permission}`, message: 'Not held.' }])
     }
     for (const grain of grainsOfKpi(file)) {
       if (!grains.has(grain)) throw new DomainError('forbidden', `The records behind this KPI show amounts that need the ${grain} rights.`, [{ path: `grain/${grain}`, message: 'Not held.' }])

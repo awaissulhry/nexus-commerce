@@ -46,14 +46,14 @@
     "covered": "Su questa riga non manca nulla.",
     "makeLine": "Una parte che produciamo non si acquista: non ha un ordine d’acquisto.",
     "noBuyLine": "Nessuna riga selezionata è da acquistare.",
-    "noDecide": "Il tuo ruolo non può mettere da parte righe (planning.decide).",
-    "noManage": "Il tuo ruolo non può creare o modificare ordini d’acquisto (purchasing.manage).",
-    "noPurchasing": "Gli ordini li crea il compratore: chiedi a un compratore (purchasing.manage).",
-    "noReceive": "Il tuo ruolo non può ricevere merce (inventory.receive).",
-    "noReverse": "Il tuo ruolo non può stornare un ricevimento (inventory.reverse).",
+    "noDecide": "Il tuo ruolo non può mettere da parte righe.",
+    "noManage": "Il tuo ruolo non può creare o modificare ordini d’acquisto.",
+    "noPurchasing": "Gli ordini li crea il compratore: chiedi a un compratore.",
+    "noReceive": "Il tuo ruolo non può ricevere merce.",
+    "noReverse": "Il tuo ruolo non può stornare un ricevimento.",
     "noRight": "Il tuo ruolo non può agire su queste righe.",
-    "noRun": "Il tuo ruolo non può lanciare il piano (planning.run).",
-    "noSend": "Il tuo ruolo non può inviare ordini o decidere sulla risposta del fornitore (purchasing.send).",
+    "noRun": "Il tuo ruolo non può lanciare il piano.",
+    "noSend": "Il tuo ruolo non può inviare ordini o decidere sulla risposta del fornitore.",
     "noSite": "Scegli prima uno stabilimento.",
     "noneOpen": "Nessuna riga selezionata è aperta.",
     "nothingToBuy": "In questo piano non c’è nulla da acquistare.",
@@ -164,7 +164,7 @@
   "plan": {
     "noAccess": {
       "title": "Cosa comprare e produrre non è per il tuo ruolo",
-      "body": "Serve planning.view (pianificatore, compratore, responsabile di produzione, sola lettura)."
+      "body": "Serve il permesso di vedere le pianificazioni (pianificatore, compratore, responsabile di produzione, sola lettura)."
     },
     "state": {
       "none": "Nessun piano",
@@ -573,7 +573,7 @@
   "po": {
     "noAccess": {
       "title": "Gli ordini d’acquisto non sono per il tuo ruolo",
-      "body": "Serve purchasing.view (compratore, pianificatore, magazzino, sola lettura)."
+      "body": "Serve il permesso di vedere gli ordini d'acquisto (compratore, pianificatore, magazzino, sola lettura)."
     },
     "tile": {
       "drafts": "Bozze da inviare",
@@ -692,7 +692,7 @@
       "title": "Ordine d’acquisto",
       "loading": "Caricamento dell’ordine…",
       "not_found": "Questo ordine non esiste o appartiene a un’altra azienda.",
-      "forbidden": "Il tuo ruolo non può vedere questo ordine (purchasing.view).",
+      "forbidden": "Il tuo ruolo non può vedere questo ordine.",
       "backToList": "Torna all’elenco",
       "tabsLabel": "Parti dell’ordine",
       "revision": "revisione {revision}",
@@ -1074,7 +1074,7 @@
     "back": "Ricevimenti",
     "noAccess": {
       "title": "I ricevimenti non sono per il tuo ruolo",
-      "body": "Serve inventory.stock.view (magazzino, compratore, pianificatore, sola lettura)."
+      "body": "Serve il permesso di vedere le giacenze (magazzino, compratore, pianificatore, sola lettura)."
     },
     "tile": {
       "expected": "Attesi (righe d’ordine)",
@@ -1209,7 +1209,7 @@
       "title": "Ricevi merce",
       "noAccess": {
         "title": "Il ricevimento non è per il tuo ruolo",
-        "body": "Serve inventory.receive (magazzino)."
+        "body": "Serve il permesso di ricevere la merce (magazzino)."
       },
       "intro": "L’ordine è {status}. Spunta le righe arrivate, scrivi cosa è arrivato, poi registra: scorte e ordine si aggiornano subito.",
       "pickIntro": "Scegli l’ordine d’acquisto con cui è arrivata la merce (solo gli ordini inviati o confermati accettano merce).",
@@ -1388,7 +1388,7 @@
       "title": "Ricevimento merce",
       "loading": "Caricamento del ricevimento…",
       "not_found": "Questo ricevimento non esiste o appartiene a un’altra azienda.",
-      "forbidden": "Il tuo ruolo non può vedere questo ricevimento (inventory.stock.view).",
+      "forbidden": "Il tuo ruolo non può vedere questo ricevimento.",
       "backToList": "Torna all’elenco",
       "tabsLabel": "Parti del ricevimento",
       "copyNumber": "Copia il numero",

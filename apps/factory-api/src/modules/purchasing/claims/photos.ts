@@ -34,7 +34,7 @@ const facts = (claim: ClaimRow) => ({ number: claim.number, status: claim.status
 
 async function writableClaim(caller: CommandCaller, claimId: string, permission: typeof FILES_UPLOAD | typeof FILES_DELETE) {
   const { context, claim } = await officeClaim(caller, claimId, PURCHASING_CLAIMS_MANAGE)
-  if (!can(actorOf(context), permission, { companyId: claim.companyId, siteId: claim.siteId })) throw new ForbiddenError(`${permission === FILES_UPLOAD ? 'Adding' : 'Removing'} a photo needs ${permission} over the company.`)
+  if (!can(actorOf(context), permission, { companyId: claim.companyId, siteId: claim.siteId })) throw new ForbiddenError(permission === FILES_UPLOAD ? 'Adding a photo needs the right to upload files over the company.' : 'Removing a photo needs the right to delete files over the company.')
   return claim
 }
 

@@ -39,7 +39,7 @@ export async function reverseReceipt(caller: CommandCaller, receiptId: string, b
   const context = officeContextOf(caller)
   const found = isUuid(receiptId) ? await caller.withClient((client) => client.goodsReceipt.findUnique({ where: { id: receiptId }, select: { id: true, companyId: true, siteId: true } })) : null
   if (!found || !(mayAt(context, INVENTORY_STOCK_VIEW, found) || mayAt(context, INVENTORY_REVERSE, found))) throw new NotFoundError('Goods receipt not found.')
-  if (!mayAt(context, INVENTORY_REVERSE, found)) throw new ForbiddenError('Reversing a receipt needs inventory.reverse.')
+  if (!mayAt(context, INVENTORY_REVERSE, found)) throw new ForbiddenError('Reversing a receipt needs the right to reverse stock moves.')
   const reason = body.reason.trim()
   const key = `inventory.reverseReceipt:${idempotencyKey ?? `g-${newId()}`}`
   const { result } = await command(

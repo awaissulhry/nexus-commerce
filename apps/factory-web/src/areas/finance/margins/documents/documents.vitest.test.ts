@@ -160,7 +160,7 @@ describe('the design cases of margins in depth', () => {
     expect(sales).toContain('€5,700.00')
     for (const cost of ['€3,160.00', '€38.50', 'What the carrier charged']) expect(sales, cost).not.toContain(cost)
     const buyer = parts('w2b-documents-held')
-    expect(buyer).toContain('Needs the invoices.view permission')
+    expect(buyer).toContain('Needs the right “See invoices and credit notes” to be shown here.')
     expect(buyer).toContain('WO-2026-0221')
     expect(buyer).not.toContain('Below the floor')
     expect(parts('w2b-documents-error')).toContain('Try again')

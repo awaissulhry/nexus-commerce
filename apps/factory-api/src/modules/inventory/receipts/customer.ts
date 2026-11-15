@@ -55,7 +55,7 @@ async function siteScope(caller: CommandCaller, siteId: string) {
   const context = officeContextOf(caller)
   const site = await caller.withClient((client) => client.site.findUnique({ where: { id: siteId }, select: { id: true, companyId: true } }))
   if (!site) throw new NotFoundError('Site not found.')
-  if (!can(actorOf(context), INVENTORY_RECEIVE, { companyId: site.companyId, siteId: site.id })) throw new ForbiddenError("Recording the customer's goods at this site needs inventory.receive.")
+  if (!can(actorOf(context), INVENTORY_RECEIVE, { companyId: site.companyId, siteId: site.id })) throw new ForbiddenError("Recording the customer's goods at this site needs the right to receive goods.")
   return { context, site }
 }
 

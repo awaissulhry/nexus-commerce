@@ -47,7 +47,7 @@ type Client = FactoryClient | CommandTx
 
 const L = TRAINING_LIMITS
 const LAW = { training: TRAINING_LAW, agreement: AGREEMENT_LAW, machines: MACHINE_TRAINING_LAW }
-const CLASS_WORDS = 'The courses of a type of machine are kept by a role over every company that keeps the catalogue (safety.training.manage): machine types are the group’s.'
+const CLASS_WORDS = 'The courses of a type of machine are kept by a role over every company that keeps the catalogue: machine types are the group’s.'
 
 /** The rows of one source and course: each person once, with the source's own due day and state. */
 function sourceRows(needs: readonly PersonNeed[], kind: NeedSourceKind, id: string, courseId: string) {

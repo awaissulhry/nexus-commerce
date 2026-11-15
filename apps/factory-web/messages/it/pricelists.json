@@ -51,7 +51,7 @@
   },
   "noAccess": {
     "title": "Non hai accesso ai listini",
-    "body": "I listini richiedono il permesso di vederli (pricelists.view): lo hanno i ruoli Vendite, Amministrazione e Titolare."
+    "body": "I listini richiedono il permesso di vederli: lo hanno i ruoli Vendite, Amministrazione e Titolare."
   },
   "keys": {
     "title": "Scorciatoie da tastiera",

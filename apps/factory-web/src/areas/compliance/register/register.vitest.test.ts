@@ -175,13 +175,13 @@ describe('every design case draws in both languages with no key left on screen',
     }
   }
 
-  it('the roles: read-only and production see every action held, sales sees which permission it lacks', () => {
+  it('the roles: read-only and production see every action held, sales reads which right it lacks, in words', () => {
     const html = (screen: DesignScreen<unknown>, id: string) => render(screen, screen.cases.find((item) => item.id === id)!.model, 'en')
-    expect(html(listScreen as DesignScreen<unknown>, 'sales')).toContain('compliance.register.view')
-    expect(html(listScreen as DesignScreen<unknown>, 'production')).toContain('compliance.register.manage')
-    expect(html(entryScreen as DesignScreen<unknown>, 'production')).toContain('compliance.register.manage')
-    expect(html(listScreen as DesignScreen<unknown>, 'read-only')).toContain('compliance.register.manage')
-    expect(html(entryScreen as DesignScreen<unknown>, 'read-only')).toContain('compliance.register.manage')
+    expect(html(listScreen as DesignScreen<unknown>, 'sales')).toContain('the right to see the PPE register')
+    expect(html(listScreen as DesignScreen<unknown>, 'production')).toContain('the right to keep the PPE register')
+    expect(html(entryScreen as DesignScreen<unknown>, 'production')).toContain('the right to keep the PPE register')
+    expect(html(listScreen as DesignScreen<unknown>, 'read-only')).toContain('the right to keep the PPE register')
+    expect(html(entryScreen as DesignScreen<unknown>, 'read-only')).toContain('the right to keep the PPE register')
     expect(html(entryScreen as DesignScreen<unknown>, 'from-reversal')).toContain('REL-DEMO-2026-0031')
     expect(html(entryScreen as DesignScreen<unknown>, 'from-reversal-no-link')).not.toContain('REL-DEMO-2026-0031')
     expect(html(entryScreen as DesignScreen<unknown>, 'from-lab')).toContain('/compliance/tests/')

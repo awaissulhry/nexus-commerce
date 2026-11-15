@@ -12,7 +12,7 @@
     "loading": "Still loading.",
     "busy": "A change is being saved: wait a moment.",
     "offline": "Offline: this waits until the connection is back.",
-    "noManage": "Your role does not change styles (product.styles.manage).",
+    "noManage": "Your role does not change styles.",
     "archived": "The style is archived: reactivate it first.",
     "long": "At most 500 characters."
   },
@@ -96,7 +96,7 @@
       "RELEASE": "Release a revision"
     },
     "held": {
-      "noRight": "Your role does not move styles through their lifecycle (product.styles.lifecycle).",
+      "noRight": "Your role does not move styles through their lifecycle.",
       "archived": "The style is archived: reactivate it before moving it.",
       "noMove": "No move from this state."
     },
@@ -440,7 +440,7 @@
       "other": "{sku} is not one of this style's SKUs."
     },
     "held": {
-      "noRight": "Your role does not give GTINs (product.gtins.manage).",
+      "noRight": "Your role does not give GTINs.",
       "none": "Every SKU switched on has a GTIN.",
       "preview": "The preview comes first.",
       "gate": "Not switched on here (the GS1 prefix first).",

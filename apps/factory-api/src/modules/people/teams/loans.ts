@@ -85,7 +85,7 @@ export async function listLoans(caller: CommandCaller, query: { readonly siteId?
   })
 }
 
-const MANAGE_WORDS = 'Loans of this site are made by a role that lends people (people.loans.manage).'
+const MANAGE_WORDS = 'Loans of this site are made by a role that lends people.'
 
 export interface CreateLoanBody {
   readonly employeeId: string

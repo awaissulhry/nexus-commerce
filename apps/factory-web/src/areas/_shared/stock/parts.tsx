@@ -9,6 +9,8 @@ import { WithMessages } from '../../../record-panels/i18n'
 import type { CrViStatus, HideState, MoveReason, QualityStatus, Uom } from './api'
 import { convertArea, CR_VI_TONE, decimalValue, HIDE_TONE, isArea, otherAreaUnit, QUALITY_TONE, quantity, REASON_TONE, STOCK_NAMESPACES } from './model'
 import './stock.css'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../lib/i18n/rights'
 
 /**
  * View parts every warehouse stock screen draws the same way (Stock, Movements, Locations, Hides, Lots): the state pills
@@ -95,7 +97,7 @@ export function Dual({ hides, area, uom, both = false }: { hides: number | null;
 /** The page says which permission is missing (design R9), never an empty list. */
 export function NoAccess({ permission }: { permission: string }) {
   const t = useT('stock')
-  return <EmptyState icon={<ShieldOff size={22} aria-hidden />} title={t('problem.forbidden')} description={t('problem.noPermission', { permission })} />
+  return <EmptyState icon={<ShieldOff size={22} aria-hidden />} title={t('problem.forbidden')} description={t('problem.noPermission', { right: rightRef(permission) })} />
 }
 
 /** A failed read in words with Try again (never drawn as an empty list). */

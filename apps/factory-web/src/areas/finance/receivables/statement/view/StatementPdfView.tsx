@@ -10,6 +10,8 @@ import { WithMessages } from '../../../../../record-panels/i18n'
 import { RECEIVABLES_NAMESPACE, type ReceivablesCan, type StatementRef } from '../../model'
 import { dayText } from '../../view/parts'
 import '../../receivables.css'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../../../lib/i18n/rights'
 
 export interface StatementPdfEntry {
   readonly ref: StatementRef
@@ -44,8 +46,8 @@ function StatementPdfPage({ model, onRetry }: { model: StatementPdfModel; onRetr
   const t = useT(RECEIVABLES_NAMESPACE)
   const shell = useT('shell')
   const locale = useLocale()
-  if (!model.can.view) return <EmptyState title={t('noAccess.title')} description={t('noAccess.body', { permission: 'receivables.view' })} />
-  if (!model.can.price) return <EmptyState title={t('pdf.noPriceTitle')} description={t('held.price', { permission: 'money.price' })} />
+  if (!model.can.view) return <EmptyState title={t('noAccess.title')} description={t('noAccess.body', { right: rightRef('receivables.view') })} />
+  if (!model.can.price) return <EmptyState title={t('pdf.noPriceTitle')} description={t('held.price', { right: rightRef('money.price') })} />
   if (model.entries.length === 0) return <EmptyState title={t('pdf.noneTitle')} description={t('pdf.noneBody')} />
   return (
     <div className="fw-frv">

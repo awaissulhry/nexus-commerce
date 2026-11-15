@@ -283,7 +283,7 @@
     "conflict": "Someone changed this since you read it: it was read again, try once more.",
     "forbidden": "You do not have access to this.",
     "invalid": "Something in this is not valid: check it and try again.",
-    "noPermission": "Shifts needs the people.shifts.view permission.",
+    "noPermission": "Shifts needs the right to see the roster.",
     "notFound": "This no longer exists.",
     "rateLimited": "Too many requests: wait a moment.",
     "signedOut": "You were signed out: sign in again.",

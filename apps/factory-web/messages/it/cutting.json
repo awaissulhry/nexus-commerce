@@ -2,7 +2,7 @@
   "page": {
     "noAccess": {
       "title": "Non puoi aprire Taglio",
-      "body": "Serve il permesso {permission}. Chiedi a un amministratore di darlo al tuo ruolo."
+      "body": "Serve il permesso «{right}». Chiedi a un amministratore di darlo al tuo ruolo."
     },
     "keyNew": "Nuovo ordine di taglio",
     "new": "Nuovo ordine di taglio",
@@ -110,7 +110,7 @@
     "export_other": "Esporta {count} (CSV)"
   },
   "held": {
-    "permission": "Serve il permesso {permission}.",
+    "permission": "Serve il permesso «{right}».",
     "busy": "In corso…",
     "loading": "Ancora in caricamento",
     "reason": "Scrivi il motivo in almeno 3 caratteri.",

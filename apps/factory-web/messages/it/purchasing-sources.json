@@ -69,10 +69,10 @@
   },
   "noAccess": {
     "title": "Le fonti approvate sono degli Acquisti",
-    "body": "Il tuo ruolo non può leggerle: serve purchasing.view. Chiedi a un amministratore."
+    "body": "Il tuo ruolo non può leggerle: serve il permesso di vedere gli ordini d'acquisto. Chiedi a un amministratore."
   },
   "held": {
-    "noManage": "Il tuo ruolo non può cambiare le fonti approvate (purchasing.sources.manage).",
+    "noManage": "Il tuo ruolo non può cambiare le fonti approvate.",
     "supplierArchived": "Il fornitore è archiviato: non è più una fonte approvata.",
     "busy": "Attendi: l’ultima modifica si sta ancora salvando.",
     "archived": "Archiviata: ripristinala per cambiarla."
@@ -106,7 +106,7 @@
     "open": "Aggiungi una fonte",
     "title": "Aggiungi una fonte di {supplier}",
     "submit": "Aggiungi",
-    "noMaterials": "Per trovare un materiale serve product.materials.view: chiedi a un amministratore.",
+    "noMaterials": "Per trovare un materiale serve il permesso di vedere la libreria dei materiali: chiedi a un amministratore.",
     "otherMaterial": "Un altro materiale",
     "material": "Materiale",
     "materialHint": "Solo materiali attivi.",
@@ -178,7 +178,7 @@
   },
   "readOnly": {
     "title": "Sola lettura",
-    "body": "Il tuo ruolo legge le fonti approvate ma non può cambiarle: serve purchasing.sources.manage (l’acquirente)."
+    "body": "Il tuo ruolo legge le fonti approvate ma non può cambiarle: serve il permesso di gestire prezzi fornitore e fonti approvate (l’acquirente)."
   },
   "noCost": "I prezzi non sono mostrati: il tuo ruolo non vede i costi.",
   "cell": {
@@ -273,7 +273,7 @@
   "prices": {
     "title": "Prezzi dei fornitori",
     "intro": "I fornitori approvati di questo materiale con prezzo, minimo, confezione e tempo di consegna. Si tengono negli Acquisti, in Articoli e prezzi di ogni fornitore.",
-    "noAccess": "I prezzi dei fornitori sono degli Acquisti: il tuo ruolo ha bisogno di purchasing.view per leggerli.",
+    "noAccess": "I prezzi dei fornitori sono degli Acquisti: il tuo ruolo ha bisogno del permesso di vedere gli ordini d'acquisto per leggerli.",
     "failed": "Impossibile caricare i prezzi dei fornitori",
     "onlyDefault": "Solo il fornitore predefinito: {supplier}. Ancora nessuna fonte approvata.",
     "openSupplier": "Apri il fornitore",

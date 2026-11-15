@@ -223,7 +223,7 @@ describe('every design case draws in both languages with no key left on screen',
     it(`${screen.screen}: ${screen.cases.length} cases × it, en`, () => {
       for (const item of screen.cases) {
         for (const locale of LOCALES) {
-          // Permission names are said on purpose ("needs quality.inspections.view"): not keys.
+          // Permission names are stripped before the key check, though no screen says one since B-W2b-F51.
           const html = render(screen, item.model, locale).replace(PERMISSIONS, '')
           expect(html.length, `${screen.screen}/${item.id}`).toBeGreaterThan(200)
           expect(html.match(LEFT_KEY)?.[0] ?? null, `${screen.screen}/${item.id} (${locale})`).toBeNull()

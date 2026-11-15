@@ -68,7 +68,7 @@
     "count_other": "{count}",
     "empty": "None."
   },
-  "held": "Needs the {permission} permission to be shown here.",
+  "held": "Needs the right “{right}” to be shown here.",
   "totals": {
     "net": "Invoiced, net of credit notes",
     "netHint": "Invoiced {invoiced} less credited {credited}",

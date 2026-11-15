@@ -61,7 +61,7 @@ async function ddtReceipt(request: FastifyRequest, receiptId: string): Promise<{
     return { receipt, uploader: siteUploader(request, context.tenantId, receipt), floor: context }
   }
   const { context: office, receipt } = await visibleReceipt(request, receiptId, INVENTORY_RECEIVE)
-  if (!can(actorOf(office), FILES_UPLOAD, { companyId: receipt.companyId, siteId: receipt.siteId })) throw new ForbiddenError(`Adding a photo needs ${FILES_UPLOAD} over the company.`)
+  if (!can(actorOf(office), FILES_UPLOAD, { companyId: receipt.companyId, siteId: receipt.siteId })) throw new ForbiddenError('Adding a photo needs the right to upload files over the company.')
   return { receipt, uploader: request, floor: null }
 }
 
@@ -106,7 +106,7 @@ export async function completeDdtPhoto(request: FastifyRequest, receiptId: strin
 /** The discrepancy a photo goes on (office: inventory.discrepancies.manage at the receipt, files.upload), not CLOSED. */
 async function discrepancyFor(caller: CommandCaller, receiptId: string, discrepancyId: string) {
   const { context, receipt } = await visibleReceipt(caller, receiptId, INVENTORY_DISCREPANCIES_MANAGE)
-  if (!can(actorOf(context), FILES_UPLOAD, { companyId: receipt.companyId, siteId: receipt.siteId })) throw new ForbiddenError(`Adding a photo needs ${FILES_UPLOAD} over the company.`)
+  if (!can(actorOf(context), FILES_UPLOAD, { companyId: receipt.companyId, siteId: receipt.siteId })) throw new ForbiddenError('Adding a photo needs the right to upload files over the company.')
   const row = isUuid(discrepancyId) ? await caller.withClient((client) => client.receiptDiscrepancy.findFirst({ where: { id: discrepancyId, receiptId: receipt.id }, select: { id: true, seq: true, status: true } })) : null
   if (!row) throw new NotFoundError('Discrepancy not found.')
   return { receipt, row }

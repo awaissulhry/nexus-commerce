@@ -13,7 +13,7 @@
     "failed": "Couldn't load the account mapping",
     "noAccess": {
       "title": "You cannot see the account mapping",
-      "body": "Reading it needs the accounting permission (accounting.view). Ask your administrator."
+      "body": "Reading it needs the accounting permission. Ask your administrator."
     },
     "gate": {
       "title": "To confirm with the accountant",
@@ -128,7 +128,7 @@
       "refused": "The keys refused"
     },
     "held": {
-      "noManage": "Changing the mapping needs the mapping permission (accounting.mapping.manage).",
+      "noManage": "Changing the mapping needs the mapping permission.",
       "notPosted": "Nexus posts no such key: there is nothing to map.",
       "busy": "Working on it…",
       "running": "It closes once every key is sent.",
@@ -207,7 +207,7 @@
       "off": "The journals go without their entries from the next export."
     },
     "held": {
-      "noSwitch": "Switching the journals needs its permission (accounting.journals.switch).",
+      "noSwitch": "Your role cannot switch the journals on or off.",
       "running": "It closes once the switch is answered.",
       "reason": "A reason is at most {max} characters."
     },
@@ -223,14 +223,14 @@
     "what": {
       "nothing": "Invoices, credit notes, payments, supplier invoices, stock moves and work-order costs dated {month} are refused for everyone: the database itself refuses them.",
       "correct": "A correction then goes in an open month: a credit note or an adjustment dated after {month}.",
-      "lift": "Only a person with accounting.unlock (the owner) lifts it, with a reason and a fresh code.",
+      "lift": "Only a person who may lift a final close (the owner) lifts it, with a reason and a fresh code.",
       "accountant": "Nothing is sent to the accountant: you hand the files over."
     },
     "go": "Close {month}",
     "problems": "{month} cannot be closed for good yet:",
     "code": "Then your authenticator code is asked.",
     "held": {
-      "noClose": "Closing a month for good needs its permission (accounting.close).",
+      "noClose": "Your role cannot close a month for good.",
       "running": "It closes once the close is answered."
     }
   },
@@ -253,7 +253,7 @@
     "export": "A failing nightly check does not hold the export: it says what the accountant would find.",
     "failuresLabel": "Records failing {check}",
     "held": {
-      "noRun": "Running the checks needs the export permission (accounting.export).",
+      "noRun": "Running the checks needs the export permission.",
       "running": "The checks are running."
     },
     "check": {

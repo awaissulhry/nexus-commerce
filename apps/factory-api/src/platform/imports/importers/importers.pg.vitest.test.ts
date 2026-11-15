@@ -239,7 +239,7 @@ describe("a customer's commercial terms in the parties import (B-W2b-25)", () =>
     // The columns are known once the sheet is read: the dry run fails the job with the reason.
     const lists = await upload('noLists', 'parties.parties', csv(['Code;Price list', 'SEED-C2;TEST-PL-ALL']))
     expect(lists.status).toBe('FAILED')
-    expect(JSON.stringify(lists.issues)).toContain('pricelists.manage')
+    expect(JSON.stringify(lists.issues)).toContain('the right to keep price lists')
     // The minimum order carries the price grain: a person without it cannot map it (companyB holds no price grain).
     const noPrice = await upload('companyB', 'parties.parties', csv(['Code;Minimum order', 'NEW-B1;100']), { companyId: companyB })
     expect(noPrice.status).toBe('FAILED')

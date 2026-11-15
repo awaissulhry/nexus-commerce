@@ -5,7 +5,7 @@
   },
   "noAccess": {
     "title": "Compliance reports are not in your role",
-    "body": "Ask the administrator for compliance reports (compliance.reports.view)."
+    "body": "Ask the administrator for compliance reports."
   },
   "band": {
     "label": "Report actions",
@@ -108,7 +108,7 @@
     "failed": "The gaps could not be read",
     "hint": "Open gaps today: what is missing for a style in a market, by type, and the lots still waiting for Cr VI evidence.",
     "notInRole": "The gaps are not in your role",
-    "notInRoleBody": "They are counted from the certificates and the lots (compliance.certificates.view, quality.lots.view).",
+    "notInRoleBody": "They are counted from the certificates and the lots.",
     "empty": "No open gap",
     "emptyBody": "Every requirement is met for every style and market, and no lot waits for Cr VI evidence.",
     "chartLabel": "Open gaps by type",
@@ -144,7 +144,7 @@
     "hint": "The next 12 months.",
     "hintRange": "What stops from {from} to {to}: certificates in force and accepted supplier declarations.",
     "notInRole": "The expiries are not in your role",
-    "notInRoleBody": "They are read from the certificates (compliance.certificates.view).",
+    "notInRoleBody": "They are read from the certificates.",
     "empty": "Nothing ends in the next 12 months",
     "emptyBody": "No certificate in force and no accepted declaration stops in this window.",
     "monthsLabel": "Expiries per month",
@@ -164,7 +164,7 @@
     "failed": "The Cr VI results could not be read",
     "hint": "Chromium VI results of leather tested in the period (current results only), per supplier of the lot, against the limit (REACH Annex XVII entry 47: 3 mg/kg).",
     "notInRole": "The lots are not in your role",
-    "notInRoleBody": "Cr VI results are read from the lots (quality.lots.view).",
+    "notInRoleBody": "Cr VI results are read from the lots.",
     "empty": "No Cr VI result in the period",
     "emptyBody": "No lot's chromium VI test is dated in this period.",
     "tableLabel": "Chromium VI results per supplier",
@@ -189,7 +189,7 @@
     "failed": "The register summary could not be read",
     "hint": "The PPE register per kind (Reg. (EU) 2016/425 art. 8(4)): entries opened and closed in the period, open at its end, the median days to close.",
     "notInRole": "The register is not in your role",
-    "notInRoleBody": "Ask the administrator for the PPE register (compliance.register.view).",
+    "notInRoleBody": "Ask the administrator for the PPE register.",
     "tableLabel": "Register entries per kind",
     "kind": "Kind",
     "opened": "Opened",

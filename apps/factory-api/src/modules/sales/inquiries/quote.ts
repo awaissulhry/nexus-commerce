@@ -38,7 +38,7 @@ import { price, techPackOf } from './views'
 export async function quoteInquiry(caller: CommandCaller, inquiryId: string, body: QuoteBody, idempotencyKey?: string) {
   const { context, inquiry } = await officeInquiry(caller, inquiryId, SALES_INQUIRIES_MANAGE)
   refuse(quoteRefusal(factsOf(inquiry)))
-  if (!can(actorOf(context), QUOTES_MANAGE, { companyId: inquiry.companyId, partyId: inquiry.partyId! })) throw new ForbiddenError('Making the quote needs quotes.manage for this company and customer.')
+  if (!can(actorOf(context), QUOTES_MANAGE, { companyId: inquiry.companyId, partyId: inquiry.partyId! })) throw new ForbiddenError('Making the quote needs the right to make quotes for this company and customer.')
   const { result } = await command(caller, { name: 'sales.inquiries.quote', idempotencyKey, input: { inquiryId, ...body } }, async (tools) => {
     const { tx, now } = tools
     const row = await lockForChange(tools, context, inquiryId, body.version)

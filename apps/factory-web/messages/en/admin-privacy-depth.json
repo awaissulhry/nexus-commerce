@@ -122,8 +122,8 @@
         "showAll": "Show all"
       },
       "held": {
-        "manage": "You may read data requests but not act on them (privacy.requests.manage).",
-        "erase": "Only a person with privacy.erase may anonymise someone."
+        "manage": "You may read data requests but not act on them.",
+        "erase": "Only a person with the right to erase personal data may anonymise someone."
       }
     },
     "record": {
@@ -251,7 +251,7 @@
       "noContacts": "This customer has no contacts.",
       "reporterHint": "The list shows the report's number only: the reporter's name is shown once the request is recorded.",
       "pick": "Pick one",
-      "noLookup": "You cannot look up a {what} here: it needs {permission}. Ask someone who has it to record the request.",
+      "noLookup": "You cannot look up a {what} here: it needs the right “{right}”. Ask someone who has it to record the request.",
       "received": "Received",
       "receivedHint": "When the request came in: the 30-day clock starts here.",
       "note": "Note",
@@ -469,7 +469,7 @@
         "switchOn": "Switch on"
       },
       "held": {
-        "manage": "You may read the rules but not change them (privacy.retention.manage).",
+        "manage": "You may read the rules but not change them.",
         "SWITCHED_OFF": "The rule is switched off: switch it on again first.",
         "ACTIVE": "The rule is on already.",
         "APPLYING": "The sweep already applies this rule.",

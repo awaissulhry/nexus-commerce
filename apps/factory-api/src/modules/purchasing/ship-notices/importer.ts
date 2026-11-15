@@ -91,7 +91,7 @@ export const packingListImportAdapter: ImportAdapter = Object.freeze({
       const notice = notices.get(String(row.key.notice).toUpperCase())
       if (!notice) return [{ column: 'notice', message: `Ship notice ${String(row.key.notice)} is not a notice of this company.` }]
       if (notice.status !== 'SENT') return [{ column: 'notice', message: `Ship notice ${notice.number} is ${notice.status.toLowerCase()}: only a sent notice takes the tannery's list here.` }]
-      if (!can(actor, INVENTORY_RECEIVE, { companyId: notice.companyId, siteId: notice.siteId })) return [{ column: 'notice', message: `Receiving goods at the notice's site needs inventory.receive.` }]
+      if (!can(actor, INVENTORY_RECEIVE, { companyId: notice.companyId, siteId: notice.siteId })) return [{ column: 'notice', message: `Receiving goods at the notice's site needs the right to receive goods there.` }]
       const leather = notice.lines.filter((line) => line.leather).map((line) => ({ id: line.id, orderSeq: line.orderSeq, uom: line.uom }))
       const placed = placeHides([{ line: typeof row.values.line === 'number' ? row.values.line : null, hideNumber: String(row.key.hideNumber), area: String(row.values.area ?? '1'), unit: (row.values.unit as Uom | undefined) ?? null }], leather, 'row')
       return placed.issues.map((issue) => ({ column: issue.path.split('/').at(-1), message: issue.message }))

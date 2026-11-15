@@ -15,6 +15,8 @@ import { OrdersMessages, useSay } from '../../view/parts'
 import { PrintDialog, ReasonDialog, ReconcileDialog, RollsDialog, VoidDialog } from './dialogs'
 import { LaysTab, PiecesTab, TicketsTab, YieldTab } from './tabs'
 import '../../../cutting.css'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../../../../lib/i18n/rights'
 
 export type OrderDialog =
   | { readonly kind: 'rolls'; readonly layId: string }
@@ -108,7 +110,7 @@ function Record({ model, actions }: { model: CutOrderRecordModel; actions?: CutO
             <EmptyState
               icon={missing || loaded.status === 'forbidden' ? <ShieldOff size={24} aria-hidden /> : <FileX size={24} aria-hidden />}
               title={missing ? t('record.state.forbidden.title') : t(`record.state.${loaded.status === 'ready' ? 'missing' : loaded.status}.title`)}
-              description={missing ? t('noAccess.body', { permission: missing }) : loaded.status === 'error' ? t(loaded.problem ?? 'problem.read') : t(`record.state.${loaded.status === 'ready' ? 'missing' : loaded.status}.body`)}
+              description={missing ? t('noAccess.body', { right: rightRef(missing) }) : loaded.status === 'error' ? t(loaded.problem ?? 'problem.read') : t(`record.state.${loaded.status === 'ready' ? 'missing' : loaded.status}.body`)}
               action={
                 loaded.status === 'error' && !missing ? (
                   <Button size="sm" onClick={() => actions?.onRetry?.()}>
@@ -144,7 +146,7 @@ function Ready({ record, model, actions }: { record: CutOrderRecord; model: CutO
   }
   const tabs: TabItem[] = ORDER_TABS.map((tab) => ({ id: tab, href: tab === 'lay' ? recordHref : `${recordHref}?tab=${tab}`, label: t(`tab.${tab}`), count: count(tab) }))
   const releaseWhy = say(releaseHeld(record, model.can, model.busy))
-  const reconcileWhy = !model.can.manage ? t('held.permission', { permission: 'production.cutorders.manage' }) : order.status === 'RECONCILED' ? t('held.reconcile.done') : order.status !== 'CUT' ? t('held.reconcile.notCut') : null
+  const reconcileWhy = !model.can.manage ? t('held.permission', { right: rightRef('production.cutorders.manage') }) : order.status === 'RECONCILED' ? t('held.reconcile.done') : order.status !== 'CUT' ? t('held.reconcile.notCut') : null
   const backWhy = say(backHeld(record, model.can, model.busy))
   const cancelWhy = say(cancelHeld(record, model.can, model.busy))
   const held = record.lines.filter((line) => line.workOrder.status === 'ON_HOLD')

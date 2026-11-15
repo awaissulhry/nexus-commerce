@@ -106,9 +106,9 @@
     "release_other": "Release {count}"
   },
   "held": {
-    "noManage": "You can view work orders, not change them (workorders.manage)",
+    "noManage": "You can view work orders, not change them",
     "sampleSizes": "A sample work order of no order line makes its round's sizes: change them on the sample round",
-    "noRelease": "Releasing needs the right to release (workorders.release)",
+    "noRelease": "Releasing needs the right to release",
     "checking": "Checking…",
     "checksOpen_one": "{count} check holds the release: see Overview",
     "checksOpen_other": "{count} checks hold the release: see Overview",
@@ -125,7 +125,7 @@
     "orderHint": "Confirmed orders not shipped yet, by number or customer reference.",
     "orderSearch": "Number or customer reference",
     "noOrderFound": "No confirmed order matches.",
-    "noOrders": "Finding a sales order needs orders.view: ask an administrator.",
+    "noOrders": "Finding a sales order needs the right to see sales orders: ask an administrator.",
     "ref": "Ref. {ref}",
     "units_one": "{count} piece",
     "units_other": "{count} pieces",
@@ -166,7 +166,7 @@
       },
       "forbidden": {
         "title": "You may not see this work order",
-        "body": "Work orders need workorders.view for their company and site: ask an administrator."
+        "body": "Work orders need the right to see them for their company and site: ask an administrator."
       },
       "error": {
         "title": "Couldn't load the work order"
@@ -416,7 +416,7 @@
       "returnable": "May go back"
     },
     "pick": "the pick list",
-    "noPick": "The pick list (stock per lot and hide) needs inventory.issue.",
+    "noPick": "The pick list (stock per lot and hide) needs the right to pick stock for work orders.",
     "pickAfterRelease": "The pick list opens once the work order is released: the floor issues by scan.",
     "covered": "Issued",
     "toIssue": "{quantity} {uom} to issue",
@@ -476,7 +476,7 @@
     "hold": {
       "usedUp": "The hide is used up: only its closing cut can be corrected",
       "notOpen": "The work order is not in production",
-      "noRight": "Correcting a cut needs production.cut.correct",
+      "noRight": "Your role cannot correct a cut",
       "reversal": "A correction is not corrected again",
       "reversed": "Already reversed"
     },
@@ -569,7 +569,7 @@
       "void": "A void bundle has no ticket to reprint",
       "notOpen": "The work order is not in production"
     },
-    "noRight": "Reprinting a ticket needs production.bundles.",
+    "noRight": "Reprinting a ticket needs the right to make bundles.",
     "detailTitle": "Bundle {code}",
     "pieces_one": "{count} piece",
     "pieces_other": "{count} pieces",
@@ -609,7 +609,7 @@
     "printer": "Label printer",
     "noPrinter": "This site has no active label printer: tickets are reprinted at the floor tablet.",
     "choosePrinter": "Choose a label printer",
-    "noPrintRight": "Printing labels needs print.labels",
+    "noPrintRight": "Printing labels needs the right to print labels",
     "go_one": "Reprint {count}",
     "go_other": "Reprint {count}",
     "done": "Reprinted: new code {code}"
@@ -661,7 +661,7 @@
   },
   "quality": {
     "what": "Final inspections start",
-    "noRight": "Inspections and releases need quality.inspections.view.",
+    "noRight": "Inspections and releases need the right to see final inspections.",
     "inspections": "Final inspections",
     "none": "Not inspected yet.",
     "number": "Inspection {n}",

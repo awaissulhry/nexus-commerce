@@ -11,7 +11,7 @@
     "invalid": "Qualcosa non è stato accettato. Controlla i campi e riprova.",
     "slowDown": "Troppi tentativi insieme. Attendi un momento e riprova.",
     "retry": "Riprova",
-    "noPermission": "Il tuo ruolo non comprende “{permission}”. Chiedi a un amministratore se ti serve questa pagina."
+    "noPermission": "Il tuo ruolo non comprende il permesso «{right}». Chiedi a un amministratore se ti serve questa pagina."
   },
   "live": {
     "connecting": "Collegamento agli aggiornamenti…",

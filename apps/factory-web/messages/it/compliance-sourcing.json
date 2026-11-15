@@ -1,7 +1,7 @@
 {
   "access": {
     "title": "Nessun accesso al registro delle dichiarazioni",
-    "body": "Questa pagina richiede il diritto di vedere la conformità (compliance.certificates.view). Chiedete a chi gestisce i ruoli nella vostra azienda."
+    "body": "Questa pagina richiede il diritto di vedere la conformità. Chiedete a chi gestisce i ruoli nella vostra azienda."
   },
   "common": {
     "stillLoading": "Caricamento in corso…",
@@ -43,8 +43,8 @@
   },
   "held": {
     "company": "Aprite prima un'azienda: una dichiarazione appartiene a una sola azienda.",
-    "manage": "Solo un ruolo che tiene il registro delle dichiarazioni può farlo (compliance.claims.manage).",
-    "approve": "Solo un ruolo che approva le dichiarazioni può approvare (compliance.claims.approve).",
+    "manage": "Solo un ruolo che tiene il registro delle dichiarazioni può farlo.",
+    "approve": "Solo un ruolo che approva le dichiarazioni può approvare.",
     "busy": "Salvataggio…",
     "notDraft": "Si approva solo una bozza.",
     "nothingChanged": "Non è cambiato nulla.",
@@ -57,7 +57,7 @@
     "material": "Scegliete il materiale a cui si riferisce la dichiarazione.",
     "validUntil": "Indicate l'ultimo giorno di validità come data.",
     "evidenceMany": "Al massimo 50 file di prova.",
-    "upload": "Caricare un file richiede il diritto di caricare file (files.upload).",
+    "upload": "Caricare un file richiede il diritto di caricare file.",
     "reason": "Dite perché viene ritirata.",
     "reasonLong": "Il motivo è di massimo 500 caratteri.",
     "noneWithdrawable": "Scegliete dichiarazioni non ancora ritirate.",

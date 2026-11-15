@@ -5,7 +5,7 @@
   },
   "noAccess": {
     "title": "I report conformità non sono nel tuo ruolo",
-    "body": "Chiedi all'amministratore i report conformità (compliance.reports.view)."
+    "body": "Chiedi all'amministratore i report conformità."
   },
   "band": {
     "label": "Azioni del report",
@@ -108,7 +108,7 @@
     "failed": "Non è stato possibile leggere le lacune",
     "hint": "Lacune aperte oggi: cosa manca a un modello in un mercato, per tipo, e i lotti ancora in attesa della prova del cromo VI.",
     "notInRole": "Le lacune non sono nel tuo ruolo",
-    "notInRoleBody": "Si contano da certificati e lotti (compliance.certificates.view, quality.lots.view).",
+    "notInRoleBody": "Si contano da certificati e lotti.",
     "empty": "Nessuna lacuna aperta",
     "emptyBody": "Ogni requisito è soddisfatto per ogni modello e mercato, e nessun lotto attende la prova del cromo VI.",
     "chartLabel": "Lacune aperte per tipo",
@@ -144,7 +144,7 @@
     "hint": "I prossimi 12 mesi.",
     "hintRange": "Cosa scade dal {from} al {to}: certificati in vigore e dichiarazioni dei fornitori accettate.",
     "notInRole": "Le scadenze non sono nel tuo ruolo",
-    "notInRoleBody": "Si leggono dai certificati (compliance.certificates.view).",
+    "notInRoleBody": "Si leggono dai certificati.",
     "empty": "Niente scade nei prossimi 12 mesi",
     "emptyBody": "Nessun certificato in vigore e nessuna dichiarazione accettata scade in questo periodo.",
     "monthsLabel": "Scadenze per mese",
@@ -164,7 +164,7 @@
     "failed": "Non è stato possibile leggere i risultati del cromo VI",
     "hint": "Risultati del cromo VI delle pelli testate nel periodo (solo risultati in vigore), per fornitore del lotto, rispetto al limite (REACH allegato XVII voce 47: 3 mg/kg).",
     "notInRole": "I lotti non sono nel tuo ruolo",
-    "notInRoleBody": "I risultati del cromo VI si leggono dai lotti (quality.lots.view).",
+    "notInRoleBody": "I risultati del cromo VI si leggono dai lotti.",
     "empty": "Nessun risultato cromo VI nel periodo",
     "emptyBody": "Nessun test del cromo VI di un lotto è datato in questo periodo.",
     "tableLabel": "Risultati del cromo VI per fornitore",
@@ -189,7 +189,7 @@
     "failed": "Non è stato possibile leggere il riepilogo del registro",
     "hint": "Il registro DPI per tipo (Reg. (UE) 2016/425 art. 8(4)): voci aperte e chiuse nel periodo, aperte alla fine, la mediana dei giorni per chiudere.",
     "notInRole": "Il registro non è nel tuo ruolo",
-    "notInRoleBody": "Chiedi all'amministratore il registro DPI (compliance.register.view).",
+    "notInRoleBody": "Chiedi all'amministratore il registro DPI.",
     "tableLabel": "Voci del registro per tipo",
     "kind": "Tipo",
     "opened": "Aperte",

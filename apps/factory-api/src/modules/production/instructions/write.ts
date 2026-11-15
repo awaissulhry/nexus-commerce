@@ -199,7 +199,7 @@ const twinRefusal = (number: string, forRevision: boolean) => ({
 /** POST /production/instructions. */
 export async function createInstruction(caller: CommandCaller, body: CreateBody, idempotencyKey?: string) {
   const context = officeOf(caller)
-  assertMay(context, PRODUCTION_INSTRUCTIONS_MANAGE, body.companyId, 'You write work instructions only for the companies your role reaches (production.instructions.manage).')
+  assertMay(context, PRODUCTION_INSTRUCTIONS_MANAGE, body.companyId, 'You write work instructions only for the companies your role reaches.')
   const facts = await caller.withClient(async (client) => {
     const db = client as Db
     const company = await db.company.findUnique({ where: { id: body.companyId }, select: { id: true } })
@@ -256,7 +256,7 @@ export async function createInstruction(caller: CommandCaller, body: CreateBody,
 export async function setInstructionStatus(caller: CommandCaller, instructionId: string, to: 'ACTIVE' | 'ARCHIVED', body: { readonly version: number; readonly reason?: string | null | undefined }, idempotencyKey?: string) {
   const context = officeOf(caller)
   const before = await caller.withClient((client) => readInstruction(client as Db, context, instructionId))
-  assertMay(context, PRODUCTION_INSTRUCTIONS_MANAGE, before.companyId, 'You keep work instructions only for the companies your role reaches (production.instructions.manage).')
+  assertMay(context, PRODUCTION_INSTRUCTIONS_MANAGE, before.companyId, 'You keep work instructions only for the companies your role reaches.')
   const reason = body.reason?.trim() || null
   if (reason && reason.length > INSTRUCTION_LIMITS.reason) invalid([{ path: 'reason', message: `At most ${INSTRUCTION_LIMITS.reason} characters.` }], 'The reason is too long.')
   if (before.status === to) refuse({ code: to === 'ACTIVE' ? 'ALREADY_ACTIVE' : 'ALREADY_ARCHIVED', message: `${before.number} is ${to === 'ACTIVE' ? 'in use' : 'archived'} already.` })
@@ -290,7 +290,7 @@ export interface DraftBody {
 export async function draftVersion(caller: CommandCaller, instructionId: string, body: DraftBody, idempotencyKey?: string) {
   const context = officeOf(caller)
   const instruction = await caller.withClient((client) => readInstruction(client as Db, context, instructionId))
-  assertMay(context, PRODUCTION_INSTRUCTIONS_MANAGE, instruction.companyId, 'You write work instructions only for the companies your role reaches (production.instructions.manage).')
+  assertMay(context, PRODUCTION_INSTRUCTIONS_MANAGE, instruction.companyId, 'You write work instructions only for the companies your role reaches.')
   const note = body.changeNote?.trim() || null
   if (note && note.length > INSTRUCTION_LIMITS.changeNote) invalid([{ path: 'changeNote', message: `At most ${INSTRUCTION_LIMITS.changeNote} characters.` }], 'The change note is too long.')
   if (instruction.status !== 'ACTIVE') refuse({ code: 'ARCHIVED', message: `${instruction.number} is archived: restore it before writing a new version.` })
@@ -340,7 +340,7 @@ export async function saveVersion(caller: CommandCaller, instructionId: string, 
     }
     return { instruction, before, problems }
   })
-  assertMay(context, PRODUCTION_INSTRUCTIONS_MANAGE, instruction.companyId, 'You write work instructions only for the companies your role reaches (production.instructions.manage).')
+  assertMay(context, PRODUCTION_INSTRUCTIONS_MANAGE, instruction.companyId, 'You write work instructions only for the companies your role reaches.')
   if (statusOf(before) !== 'DRAFT') refuse(notDraftRefusal(before.number, statusOf(before)))
   if (problems.length > 0) invalid(problems, 'The version is not valid.')
   await inWords(() =>
@@ -368,7 +368,7 @@ export async function saveVersion(caller: CommandCaller, instructionId: string, 
 export async function publishVersion(caller: CommandCaller, instructionId: string, versionId: string, body: { readonly version: number }, idempotencyKey?: string) {
   const context = officeOf(caller)
   const instruction = await caller.withClient((client) => readInstruction(client as Db, context, instructionId))
-  assertMay(context, PRODUCTION_INSTRUCTIONS_APPROVE, instruction.companyId, 'You approve work instructions only for the companies your role reaches (production.instructions.approve).')
+  assertMay(context, PRODUCTION_INSTRUCTIONS_APPROVE, instruction.companyId, 'You approve work instructions only for the companies your role reaches.')
   const { result } = await inWords(() =>
     command(caller, { name: 'production.publishInstructionVersion', idempotencyKey, input: { instructionId, versionId, ...body } }, async (tools) => {
       const { tx, now } = tools
@@ -418,7 +418,7 @@ export async function publishVersion(caller: CommandCaller, instructionId: strin
 export async function discardVersion(caller: CommandCaller, instructionId: string, versionId: string, body: { readonly version: number; readonly reason: string }, idempotencyKey?: string) {
   const context = officeOf(caller)
   const instruction = await caller.withClient((client) => readInstruction(client as Db, context, instructionId))
-  assertMay(context, PRODUCTION_INSTRUCTIONS_MANAGE, instruction.companyId, 'You keep work instructions only for the companies your role reaches (production.instructions.manage).')
+  assertMay(context, PRODUCTION_INSTRUCTIONS_MANAGE, instruction.companyId, 'You keep work instructions only for the companies your role reaches.')
   const reason = body.reason.trim()
   if (reason === '') invalid([{ path: 'reason', message: 'Say why the draft is discarded.' }], 'Say why the draft is discarded.')
   if (reason.length > INSTRUCTION_LIMITS.reason) invalid([{ path: 'reason', message: `At most ${INSTRUCTION_LIMITS.reason} characters.` }], 'The reason is too long.')

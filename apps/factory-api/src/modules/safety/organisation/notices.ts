@@ -19,7 +19,7 @@ import { NOTICE_SELECT, noticeViews, type NoticeRow } from './store'
  *   POST /safety/rls-notices/:id/cancel   not needed after all (the RLS was not confirmed), with the reason
  */
 
-const MANAGE_WORDS = 'RLS notices of this company are kept by a role that keeps the safety organisation (safety.organisation.manage).'
+const MANAGE_WORDS = 'RLS notices of this company are kept by a role that keeps the safety organisation.'
 
 async function writable(caller: CommandCaller, noticeId: string): Promise<NoticeRow> {
   const context = officeOf(caller)

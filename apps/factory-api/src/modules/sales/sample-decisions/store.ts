@@ -123,7 +123,7 @@ export async function officeSwatch(caller: CommandCaller, swatchId: string): Pro
 }
 
 export function requireOn(context: OfficeContext, permission: Permission, scope: Scope, words: string): void {
-  if (!mayOn(context, permission, scope)) throw new ForbiddenError(`${words} (${permission}).`)
+  if (!mayOn(context, permission, scope)) throw new ForbiddenError(`${words}.`)
 }
 
 /** The swatches as the Approval tab and the list show them, their references read in one pass. */

@@ -42,6 +42,8 @@ import { ReplaceDialog, ScrapItemDialog, say, type ReplaceDraftModel } from './S
 import { downgradeOpenHeld, type DowngradeDraft, type SecondTotals } from '../model'
 import { DowngradeDialog, type DowngradeModel, type RepairModel } from './SecondDialogs'
 import '../scrap.css'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../../lib/i18n/rights'
 
 export interface ScrapModel {
   readonly prefix: string
@@ -135,13 +137,13 @@ function Page({ model, actions }: { model: ScrapModel; actions?: ScrapActions })
   useEffect(() => setSelected(model.selected ?? []), [model.selected])
   const picked = (shown ?? []).filter((row) => selected.includes(row.id))
   const reach = approvable(picked, model.reductions, model.can, model.me)
-  const approveHeld = !model.can.approve ? t('held.permission', { permission: 'production.scrap.approve' }) : model.busy ? t('held.busy') : reach.length === 0 ? t(picked.length === 0 ? 'held.approve.none' : 'held.approve.nothing') : null
+  const approveHeld = !model.can.approve ? t('held.permission', { right: rightRef('production.scrap.approve') }) : model.busy ? t('held.busy') : reach.length === 0 ? t(picked.length === 0 ? 'held.approve.none' : 'held.approve.nothing') : null
 
   if (!model.can.view) {
     return (
       <div className="fw-sc">
         <Card padded>
-          <EmptyState icon={<ShieldOff size={24} aria-hidden />} title={t('page.noAccess.title')} description={t('page.noAccess.body', { permission: 'production.scrap.view' })} />
+          <EmptyState icon={<ShieldOff size={24} aria-hidden />} title={t('page.noAccess.title')} description={t('page.noAccess.body', { right: rightRef('production.scrap.view') })} />
         </Card>
       </div>
     )
@@ -480,7 +482,7 @@ function ScrapList({
           onChange: onSelected,
           actions: (
             <>
-              <Button size="sm" variant="primary" heldReason={!model.can.approve ? t('held.permission', { permission: 'production.scrap.approve' }) : reach.length === 0 ? t('held.approve.nothing') : model.busy ? t('held.busy') : null} onClick={() => actions?.onApprove?.(reach)}>
+              <Button size="sm" variant="primary" heldReason={!model.can.approve ? t('held.permission', { right: rightRef('production.scrap.approve') }) : reach.length === 0 ? t('held.approve.nothing') : model.busy ? t('held.busy') : null} onClick={() => actions?.onApprove?.(reach)}>
                 <Check size={13} aria-hidden /> <SelectionLabel>{t('page.approveN', { count: reach.length })}</SelectionLabel>
               </Button>
               <Button size="sm" aria-label={t('bulk.export', { count: picked.length })} onClick={() => actions?.onExport?.(picked.map((row) => row.id))}>

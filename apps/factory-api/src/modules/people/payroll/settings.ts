@@ -95,7 +95,7 @@ interface SaveBody {
   readonly statementPrinterId: string | null
 }
 
-const manageWords = 'The payroll settings are kept by a role with people.payroll.manage over every site of the company.'
+const manageWords = 'The payroll settings are kept by a role with the right to keep payroll over every site of the company.'
 
 /** PUT /people/payroll/settings: the three, with the version read (null: the company has no People settings yet). */
 export async function savePayrollSettings(caller: CommandCaller, body: SaveBody, key?: string) {

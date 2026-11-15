@@ -5,7 +5,7 @@
   },
   "noAccess": {
     "title": "Quality reports are not in your role",
-    "body": "Ask the administrator for quality reports (quality.reports.view)."
+    "body": "Ask the administrator for quality reports."
   },
   "noSite": {
     "title": "Choose a site",
@@ -196,8 +196,8 @@
     "noSupplier": "No supplier",
     "workshop": "Workshop",
     "daysCell": "{days} (waiting: {waiting})",
-    "noLots": "Lots received, rejected, Cr VI fails and days in quarantine need the lots' view (quality.lots.view).",
-    "noInspections": "The incoming inspections need their view (quality.incoming.view).",
+    "noLots": "Lots received, rejected, Cr VI fails and days in quarantine need the lots' view.",
+    "noInspections": "The incoming inspections need their view.",
     "rowHint": "A supplier opens its record; its Quality & rating tab comes with the supplier record's own step."
   },
   "arrange": {

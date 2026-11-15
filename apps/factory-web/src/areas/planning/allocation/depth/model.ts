@@ -321,6 +321,8 @@ export type SwitchRefusal =
   | 'FAILED'
 
 const ON_ORDERS = /are on other subcontract orders already; at most (\d+) more/
+// B-W2b-F51: the API names the missing right in words ("…needs the right to manage subcontract orders"), never its code.
+const NEEDS_SUBCONTRACT_RIGHT = /needs the right to manage subcontract orders/
 const LOCATION = /stock location of this workshop|locations on the site|is archived\.$/
 
 /**
@@ -347,7 +349,7 @@ export function switchRefusalOf(error: unknown): { code: SwitchRefusal; holds: H
     if (/issued with other operations/.test(error.message)) return none('ISSUED_WITH_OTHERS')
     return none('CHANGED')
   }
-  if (error.kind === 'forbidden' || error.kind === 'step_up') return none(/purchasing\.subcontract\.manage/.test(error.message) ? 'NEEDS_SUBCONTRACT' : 'FORBIDDEN')
+  if (error.kind === 'forbidden' || error.kind === 'step_up') return none(NEEDS_SUBCONTRACT_RIGHT.test(error.message) ? 'NEEDS_SUBCONTRACT' : 'FORBIDDEN')
   if (error.kind === 'invalid') {
     const messages = [error.message, ...error.issues.map((issue) => issue.message ?? '')]
     const onOrders = messages.map((message) => ON_ORDERS.exec(message)).find((found) => found !== null)
@@ -388,7 +390,7 @@ export function outsideDoneWords(answer: OutsideAnswer, words: Words, timeZone =
     return oneStop(`${head} ${t('al.op.orderMade', { order: answer.order.number, date: dayWords(kitDay, locale), back: dayWords(answer.timing.backOn, locale) })}`)
   }
   const why = answer.orderWords ?? ''
-  const key = /purchasing\.subcontract\.manage/.test(why) ? 'al.op.noOrder.PERMISSION' : /once it is released/.test(why) ? 'al.op.noOrder.NOT_RELEASED' : 'al.op.noOrder.OTHER'
+  const key = NEEDS_SUBCONTRACT_RIGHT.test(why) ? 'al.op.noOrder.PERMISSION' : /once it is released/.test(why) ? 'al.op.noOrder.NOT_RELEASED' : 'al.op.noOrder.OTHER'
   return oneStop(`${head} ${t(key)}`)
 }
 
@@ -442,7 +444,7 @@ const PROBLEMS: ReadonlyArray<[RegExp, string]> = [
   [/^Not a part of a work order at a workshop/, 'NOT_A_PART'],
   [/on a subcontract order already/, 'ORDERED'],
   [/has no work left to send out/, 'NO_WORK'],
-  [/needs purchasing\.subcontract\.manage/, 'PERMISSION'],
+  [NEEDS_SUBCONTRACT_RIGHT, 'PERMISSION'],
   [/its order is made once it is released/, 'NOT_RELEASED'],
 ]
 const HOLD_SHAPES: ReadonlyArray<[RegExp, HoldReason['code']]> = [

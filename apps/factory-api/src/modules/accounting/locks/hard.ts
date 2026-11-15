@@ -21,6 +21,6 @@ import { actorOf, type OfficeContext } from '../../../core/context'
 /** Closing a month for good needs accounting.close (403 in words). */
 export function assertMayClose(context: OfficeContext, companyId: string): void {
   if (!can(actorOf(context), ACCOUNTING_CLOSE, { companyId })) {
-    throw new ForbiddenError('Closing a month for good needs accounting.close: nothing dated in it can change afterwards.')
+    throw new ForbiddenError('Closing a month for good needs the right to make the final close: nothing dated in it can change afterwards.')
   }
 }

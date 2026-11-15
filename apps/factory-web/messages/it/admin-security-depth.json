@@ -408,7 +408,7 @@
     "allowed": "Consentito",
     "adding": "Da aggiungere",
     "removing": "Da togliere",
-    "tick": "{permission}: consentito",
+    "tick": "{right}: consentito",
     "reviewSave": "Rivedi e salva",
     "atRest": "Ancora nessuna modifica: spunta o togli la spunta a ciò che il ruolo può fare.",
     "title": "Modificare il ruolo «{name}»?",
@@ -436,7 +436,7 @@
       "mine": "Hai questo ruolo: chiedi a un altro amministratore di cambiarlo."
     },
     "refusal": {
-      "beyondPermission": "Tu non hai «{permission}»: un ruolo non dà mai più di quanto ha chi lo crea.",
+      "beyondPermission": "Tu non hai «{right}»: un ruolo non dà mai più di quanto ha chi lo crea.",
       "beyondGrain": "Tu non vedi {grain}: un ruolo non dà mai più di quanto ha chi lo crea.",
       "readyMade": "Un ruolo pronto non si può cambiare: fanne una copia.",
       "archived": "Questo ruolo è archiviato: prima ripristinalo.",

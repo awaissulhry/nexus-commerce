@@ -1,7 +1,7 @@
 {
   "noAccess": {
     "title": "Non puoi vedere la banca",
-    "body": "Gli estratti conto e i movimenti della banca richiedono il permesso di vedere la banca dell'azienda (payments.bank.view). Chiedi a un amministratore."
+    "body": "Gli estratti conto e i movimenti della banca richiedono il permesso di vedere la banca dell'azienda. Chiedi a un amministratore."
   },
   "common": {
     "retry": "Riprova",
@@ -252,20 +252,20 @@
   },
   "held": {
     "busy": "Attendi: l'ultima azione è ancora in corso.",
-    "match": "Puoi vedere la banca, non abbinarne i movimenti (payments.bank.match).",
-    "record": "Accettare un'entrata registra un incasso: serve payments.record.",
-    "void": "Riprenderlo annulla l'incasso registrato: serve payments.void.",
-    "writeOff": "Abbuonare richiede payments.writeOff.",
+    "match": "Puoi vedere la banca, non abbinarne i movimenti.",
+    "record": "Accettare un'entrata registra un incasso: serve il permesso di registrare i pagamenti.",
+    "void": "Riprenderlo annulla l'incasso registrato: serve il permesso di annullare i pagamenti.",
+    "writeOff": "Abbuonare richiede il permesso di stornare piccole differenze.",
     "writeOffNote": "Indica perché si abbuona.",
     "lockReason": "Indica perché entra nel mese chiuso.",
-    "import": "Puoi vedere la banca, non importare estratti (payments.bank.import).",
-    "upload": "Importare un file richiede il permesso di caricare file (files.upload).",
+    "import": "Puoi vedere la banca, non importare estratti.",
+    "upload": "Importare un file richiede il permesso di caricare file.",
     "matched": "Questo movimento è già abbinato.",
     "stale": "Una voce indicata è stata pagata nel frattempo: cerca di nuovo o scegline un'altra.",
     "currency": "Gli incassi si registrano in euro: questo movimento è in {currency}. Registralo a mano.",
     "chooseOut": "Un'uscita si abbina dal suo suggerimento; qui non si può ancora scegliere a mano una fattura fornitore.",
-    "parties": "Scegliere un cliente richiede il permesso di vedere i clienti (parties.view).",
-    "price": "Scegliere gli importi richiede la visibilità dei prezzi (money.price).",
+    "parties": "Scegliere un cliente richiede il permesso di vedere i clienti.",
+    "price": "Scegliere gli importi richiede la visibilità dei prezzi.",
     "leave": "Un movimento non si può ancora mettere da parte (spese bancarie, stipendi): resta da abbinare finché un passo non lo aggiunge.",
     "notMatched": "Questo movimento non è abbinato.",
     "noLine": "Prima apri un movimento.",
@@ -277,10 +277,10 @@
     "dryRunFirst": "Prima controlla il file.",
     "skipErrors_one": "{count} movimento non si può leggere: spunta per importare senza, o correggi le colonne.",
     "skipErrors_other": "{count} movimenti non si possono leggere: spunta per importare senza, o correggi le colonne.",
-    "figures": "Puoi vedere le loro cifre, non registrarle (receivables.theirFigures.manage).",
-    "figuresPrice": "Le loro cifre sono prezzi: inserirle richiede la visibilità dei prezzi (money.price).",
+    "figures": "Puoi vedere le loro cifre, non registrarle.",
+    "figuresPrice": "Le loro cifre sono prezzi: inserirle richiede la visibilità dei prezzi.",
     "figuresMany": "Al massimo 500 righe.",
-    "filesRead": "Aprire il file richiede il permesso di leggere i file (files.read).",
+    "filesRead": "Aprire il file richiede il permesso di leggere i file.",
     "pasteNothing": "Prima incolla le righe (ognuna termina con un importo)."
   },
   "keys": {
@@ -447,7 +447,7 @@
     },
     "noAccess": {
       "title": "Non puoi vedere le cifre dei clienti",
-      "body": "Le loro cifre richiedono il permesso di vedere i crediti (receivables.view)."
+      "body": "Le loro cifre richiedono il permesso di vedere i crediti."
     },
     "col": {
       "customer": "Cliente",

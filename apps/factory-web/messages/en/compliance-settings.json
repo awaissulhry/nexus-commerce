@@ -1,9 +1,9 @@
 {
   "access": {
     "title": "No access to Rules & markets",
-    "body": "This page needs the compliance read (compliance.certificates.view). Ask the person who manages roles.",
+    "body": "This page needs the compliance read. Ask the person who manages roles.",
     "cr6Title": "The chromium VI rule is not in your role",
-    "cr6Body": "Reading it needs the lots read (quality.lots.view), as on Tests & substances."
+    "cr6Body": "Reading it needs the lots read, as on Tests & substances."
   },
   "band": {
     "label": "Rules & markets",
@@ -97,7 +97,7 @@
     },
     "mgKg": "{value} mg/kg",
     "materialsLink": "Open Products › Materials & trims (Cr VI test)",
-    "materialsNoRight": "The material list is not in your role (product.materials.view).",
+    "materialsNoRight": "The material list is not in your role.",
     "noOwnRow": "This scope keeps no rule of its own: the rule above applies."
   },
   "loosen": {
@@ -673,11 +673,11 @@
     "busy": "Working on it…",
     "offline": "Offline: changes wait until the connection is back.",
     "nothingChanged": "Nothing changed yet.",
-    "crViManage": "Only the owner changes this rule (quality.settings.manage).",
-    "requirementsManage": "Your role may not change requirements (compliance.requirements.manage over every company).",
-    "rulesManage": "Your role may not change rules and markets (compliance.rules.manage).",
-    "phrasesManage": "Your role may not change phrases (compliance.phrases.manage).",
-    "phrasesApprove": "Your role may not approve translations (compliance.phrases.approve).",
+    "crViManage": "Only the owner changes this rule.",
+    "requirementsManage": "Your role may not change requirements over every company.",
+    "rulesManage": "Your role may not change rules and markets.",
+    "phrasesManage": "Your role may not change phrases.",
+    "phrasesApprove": "Your role may not approve translations.",
     "ownWords": "You proposed these words: a second person approves them.",
     "locked": "The law locks this gate: it keeps blocking.",
     "lockedOn": "The law locks this requirement at a gate: it stays on.",
@@ -728,8 +728,8 @@
     "validFrom": "Give the first day.",
     "validTo": "The last day comes after the first.",
     "noneEndable": "Choose rows valid today.",
-    "stylesView": "The styles are not in your role (product.styles.view).",
-    "partiesView": "The parties are not in your role (parties.view)."
+    "stylesView": "The styles are not in your role.",
+    "partiesView": "The parties are not in your role."
   },
   "problem": {
     "unavailable": "The factory server did not answer. Try again in a moment.",

@@ -1,6 +1,6 @@
 {
   "access": {
-    "body": "Chiedi a un amministratore il diritto di lettura della sicurezza (safety.view).",
+    "body": "Chiedi a un amministratore il diritto di lettura della sicurezza.",
     "title": "La formazione sicurezza è per chi legge la sicurezza"
   },
   "band": {
@@ -208,7 +208,7 @@
     "overdue_one": "{count} in ritardo",
     "overdue_other": "{count} in ritardo",
     "register": "Registro (PDF)",
-    "restricted": "La leggono RSPP, HR e preposti (safety.view).",
+    "restricted": "La leggono RSPP, HR e preposti.",
     "restrictedTitle": "La formazione sicurezza è per chi legge la sicurezza",
     "trainingLabel": "Corsi svolti e da fare di questa persona",
     "trainingTitle": "Formazione sicurezza"
@@ -342,10 +342,10 @@
     "date": "Scegli la data",
     "dateFuture": "La data è successiva a oggi",
     "hours": "Inserisci le ore (più di 0, al massimo due decimali)",
-    "instruct": "Il registro addestramento lo tengono sicurezza, HR e preposti (safety.instruction.record)",
+    "instruct": "Il registro addestramento lo tengono sicurezza, HR e preposti",
     "instructor": "Scegli o scrivi l'addestratore",
     "instructorSelf": "L'addestratore non è la persona addestrata",
-    "issue": "Consegnare DPI richiede safety.ppe.issue",
+    "issue": "Il tuo ruolo non può consegnare DPI",
     "language": "Scegli la lingua",
     "lawLong": "La base normativa è troppo lunga",
     "left": "Questa persona non lavora più qui",
@@ -353,7 +353,7 @@
     "lineDays": "I giorni vanno da 0 a 365, o vuoto per prima di iniziare",
     "lineTwice": "Un corso compare due volte",
     "linesMany": "Al massimo 40 corsi",
-    "manage": "Solo l'RSPP tiene il catalogo corsi (safety.training.manage)",
+    "manage": "Solo l'RSPP tiene il catalogo corsi",
     "manageClasses": "I corsi di un tipo di macchina li modifica chi gestisce tutte le aziende",
     "minutes": "I minuti vanno da 1 a 1440",
     "name": "Inserisci un nome",
@@ -370,7 +370,7 @@
     "ppePage": "Consegna DPI si apre nella pagina DPI dello Stabilimento, non ancora disponibile",
     "providerLong": "L'ente è troppo lungo",
     "reason": "Indica il motivo (almeno 3 lettere)",
-    "record": "Registrare la formazione richiede safety.training.record (RSPP, HR)",
+    "record": "Il tuo ruolo non può registrare la formazione (RSPP e HR sì)",
     "refresher": "L'aggiornamento è in mesi interi, da 1 a 120",
     "refresherHours": "Le ore di aggiornamento non sono valide",
     "session": "Scegli una sessione",
@@ -385,7 +385,7 @@
     "trainerLong": "Il formatore è troppo lungo",
     "untilBefore": "Una data di validità è precedente al corso",
     "untilReason": "Indica perché una data di validità è diversa da quella del periodo",
-    "upload": "Aggiungere un file richiede files.upload",
+    "upload": "Aggiungere un file richiede il permesso di caricare file",
     "voidedRow": "Già annullata"
   },
   "impact": {
@@ -653,7 +653,7 @@
       "missing_other": "{count} DPI del kit mancanti",
       "noCost": "Qui non si mostra alcun costo.",
       "none": "Nessun DPI consegnato",
-      "restricted": "Solo ruoli sicurezza e HR (safety.view).",
+      "restricted": "Solo ruoli sicurezza e HR.",
       "title": "DPI consegnati"
     },
     "role": {
@@ -665,7 +665,7 @@
       "noneHint": "HR assegna la scheda mansione in Lavoro e squadra; corsi, DPI e visite compaiono poi qui.",
       "open": "Apri la scheda mansione",
       "ppe": "DPI richiesti",
-      "restricted": "Mostrata a chi legge il registro HR (people.view).",
+      "restricted": "Mostrata a chi legge il registro HR.",
       "risks": "Rischi",
       "role": "Mansione",
       "since": "Dal",

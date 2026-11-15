@@ -64,7 +64,7 @@
     "failed": "The instructions could not be read",
     "forbidden": {
       "title": "No access to work instructions",
-      "body": "This page needs the right production.instructions.view. Ask an administrator for it."
+      "body": "This page needs the right to see the work instructions. Ask an administrator for it."
     },
     "noMatch": {
       "title": "No rows match these filters",
@@ -254,7 +254,7 @@
       },
       "forbidden": {
         "title": "No access to work instructions",
-        "body": "This page needs the right production.instructions.view. Ask an administrator for it."
+        "body": "This page needs the right to see the work instructions. Ask an administrator for it."
       }
     },
     "everyStyle": "For every style",
@@ -295,11 +295,11 @@
     "reload": "Reload"
   },
   "held": {
-    "noManage": "Writing instructions needs the right production.instructions.manage.",
-    "noApprove": "Approving needs the right production.instructions.approve.",
-    "noPeople": "The training record by name needs the right production.instructions.people (HR).",
-    "noOperations": "Picking an operation needs the right product.routing.view.",
-    "noStyles": "Picking a style needs the right product.styles.view.",
+    "noManage": "Your role cannot write work instructions.",
+    "noApprove": "Your role cannot approve work instructions.",
+    "noPeople": "The training record by name needs the right to see it by name (HR).",
+    "noOperations": "Picking an operation needs the right to see routings.",
+    "noStyles": "Picking a style needs the right to see the styles.",
     "archived": "{number} is archived: restore it first.",
     "noVersion": "No version yet.",
     "noDraft": "No draft is open.",
@@ -491,7 +491,7 @@
   "media": {
     "intro_one": "{count} photo or video on the steps.",
     "intro_other": "{count} photos or videos on the steps.",
-    "noFilesRead": "Your role cannot open files (files.read): their names show instead.",
+    "noFilesRead": "Your role cannot open files: their names show instead.",
     "noSteps": {
       "title": "No step yet",
       "body": "Photos and videos belong to a step: write the steps first."
@@ -621,7 +621,7 @@
     "never": "Never",
     "seenYes": "Seen",
     "seenNo": "Not yet",
-    "namesHR": "Names are a training record for HR only (production.instructions.people).",
+    "namesHR": "Names are a training record for HR only.",
     "record": "An acknowledgement is a training record (D.Lgs. 81/2008 art. 37), never a performance record."
   },
   "approve": {

@@ -52,7 +52,7 @@
   },
   "access": {
     "title": "I fascicoli tecnici non sono nel tuo ruolo",
-    "body": "I fascicoli tecnici richiedono il permesso di vedere i certificati (compliance.certificates.view). Lo assegna il titolare o un amministratore in Sistema › Ruoli e permessi."
+    "body": "I fascicoli tecnici richiedono il permesso di vedere i certificati. Lo assegna il titolare o un amministratore in Sistema › Ruoli e permessi."
   },
   "band": {
     "label": "Fascicoli tecnici",
@@ -201,7 +201,7 @@
     "archive_other": "Archivia {count}"
   },
   "held": {
-    "manage": "Il tuo ruolo non gestisce i fascicoli tecnici (compliance.techfiles.manage).",
+    "manage": "Il tuo ruolo non gestisce i fascicoli tecnici.",
     "offline": "Sei offline: aspetta il ritorno della rete.",
     "packOne": "Prima scegli un fascicolo tecnico (x), poi premi p.",
     "noBatch": "Non è stato ancora prodotto alcun lotto di questo modello.",
@@ -227,18 +227,18 @@
     "signed": "Questa revisione è firmata: inizia la successiva per cambiarla.",
     "superseded": "Questa revisione è sostituita: resta come è stata firmata.",
     "draftExists": "C'è già una revisione in bozza: prima finiscila o eliminala.",
-    "sign": "Il tuo ruolo non firma le valutazioni dei rischi (compliance.techfiles.sign).",
+    "sign": "Il tuo ruolo non firma le valutazioni dei rischi.",
     "noDraft": "Si firma solo una revisione in bozza.",
     "noHazards": "Aggiungi almeno un pericolo prima di firmare.",
     "reading": "La valutazione è ancora in lettura.",
-    "share": "Il tuo ruolo non invia pacchetti con un link (compliance.techfiles.share).",
+    "share": "Il tuo ruolo non invia pacchetti con un link.",
     "notBuilt": "Il pacchetto non è pronto.",
     "packKept": "Un pacchetto pronto si conserva dieci anni: non si può eliminare.",
     "packBuilding": "Il pacchetto è in preparazione: si può eliminare solo se è bloccato da più di un'ora.",
     "packDraft": "Non ancora: {first}",
     "rowsMax": "Un punto ha al massimo {count} righe.",
-    "filesRead": "Il tuo ruolo non apre i file (files.read).",
-    "filesUpload": "Il tuo ruolo non carica file (files.upload).",
+    "filesRead": "Il tuo ruolo non apre i file.",
+    "filesUpload": "Il tuo ruolo non carica file.",
     "chooseFile": "Prima scegli il file da caricare.",
     "chooseEvidence": "Prima scegli il record o il file.",
     "onlyDraft": "Si elimina solo una revisione in bozza."

@@ -111,7 +111,7 @@ export async function makeTechPackPdf(caller: CommandCaller, styleId: string, re
   const { style, revision } = target
   const companyId = companyOfCopy(context, style, body.companyId, 'body')
   if (companyId === null) throw new ValidationError('The company is not valid.', [{ path: 'body/companyId', message: `Style ${style.code} is every company's: say which company keeps the copy.` }])
-  if (!can(actor, PRODUCT_TECHPACKS_MAKE, { companyId })) throw new ForbiddenError('Making a tech pack PDF needs product.techpacks.make.')
+  if (!can(actor, PRODUCT_TECHPACKS_MAKE, { companyId })) throw new ForbiddenError('Making a tech pack PDF needs the right to make tech packs.')
 
   // The sections: asked (each once, the caller's to see), else every one the caller may see.
   const notAllowed = notAllowedFor(actor, style.companyId)

@@ -11,6 +11,8 @@ import { useLocale, useT } from '../../../../lib/i18n/provider'
 import type { LedgerEntry, WorkOrderCost } from '../api'
 import { COSTING_NAMESPACE, costSheetHref, decimalText, labourHref, moneyText, quantityText, reasonHeld, signedMoney, type CostingCan, type Phrase } from '../model'
 import { CostBridge, CostFacts, CostLabour, CostMaterials, CostScrapAndWaiting, CostSummary } from './CostParts'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../../lib/i18n/rights'
 
 export interface DetailState {
   /** The work order whose cost is open. */
@@ -62,7 +64,7 @@ export function WorkOrderCostDialog({ state, ids, can, prefix, onGo, onClose, on
                 </Link>
               </Button>
             ) : (
-              <Button size="sm" variant="primary" heldReason={t('held.noWorkOrders', { permission: 'workorders.view' })}>
+              <Button size="sm" variant="primary" heldReason={t('held.noWorkOrders', { right: rightRef('workorders.view') })}>
                 {t('detail.open')}
               </Button>
             )}

@@ -284,7 +284,7 @@ describe('people: the calls as the API takes them', () => {
 const LEFT_KEY =
   /\b(?:common|list|live|privacy|lifecycle|kind|contract|badgeState|badge|noticeState|pin|loanState|caseStatus|language|tile|tileHint|rows|view|col|csv|dataProblem|cell|line|team|status|keys|held|problem|refusal|conflict|next|notKept|record|tab|profile|edit|field|floor|side|job|loans|documents|activity|leavers|step|stepStatus|new|loan|leaver|badges|teamChange|addTeam|skip|cancelLeaving|link|unlinked|teams|teamOnly|missing|notice|print|staff|sheet)\.[a-zA-Z_]+(?:\.[a-zA-Z_]+)*\b/
 const LEFT_PLACEHOLDER = /\{[a-zA-Z]+\}/
-/** Permission names are said on purpose ("needs people.employees.manage"); addresses and domains are not keys. */
+/** Permission names are stripped before the key check, though no screen says one since B-W2b-F51; addresses and domains are not keys. */
 const SAID = /\b(?:people\.[a-zA-Z.]+|workers\.(?:manage|view)|users\.view|imports\.run|parties\.view|audit\.read|factory\.example|example\.com|art\.\s?\d+)\b/g
 
 function render(screen: DesignScreen<unknown>, model: unknown, locale: (typeof LOCALES)[number]): string {

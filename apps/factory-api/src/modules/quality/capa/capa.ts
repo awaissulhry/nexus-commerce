@@ -204,7 +204,7 @@ export async function peopleProblems(tx: Reader, context: OfficeContext, scope: 
   for (const person of people) {
     if (!person.userId || person.userId === context.actorId) continue
     if (!checked.has(person.userId)) checked.set(person.userId, await seesCapa(tx, context.tenantId, person.userId, scope, now))
-    if (!checked.get(person.userId)) problems.push({ path: person.path, message: 'An active person of the office who sees this CAPA (quality.capa.view over its company).' })
+    if (!checked.get(person.userId)) problems.push({ path: person.path, message: 'An active person of the office who sees the CAPAs of its company.' })
   }
   return problems
 }
@@ -249,7 +249,7 @@ export async function openCapa(caller: CommandCaller, body: OpenBody, idempotenc
     const company = isUuid(companyId!) ? await tx.company.findUnique({ where: { id: companyId! }, select: { id: true } }) : null
     if (!company || !can(actor, QUALITY_CAPA_VIEW, { companyId: companyId! })) refuse([{ path: 'companyId', message: 'Not a company you can see.' }], 'The company is not found.')
     const scope: ScopedRecord = { companyId: companyId!, ...(body.customerId ? { partyId: body.customerId } : {}) }
-    if (!can(actor, QUALITY_CAPA_MANAGE, { companyId: companyId! })) refuse([{ path: 'companyId', message: 'You open CAPAs only for the companies your role reaches (quality.capa.manage).' }], 'Not your company.')
+    if (!can(actor, QUALITY_CAPA_MANAGE, { companyId: companyId! })) refuse([{ path: 'companyId', message: 'You open CAPAs only for the companies your role reaches.' }], 'Not your company.')
 
     const team = cleanTeam(body.team ?? [])
     const problems: Issue[] = [
