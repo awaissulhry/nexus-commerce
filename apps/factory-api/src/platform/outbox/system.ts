@@ -1,5 +1,6 @@
 import type { FactoryClient, FactoryDatabase } from '@nexus/factory-db'
 import { scopeForContext, SYSTEM_ACTOR_ID, type SystemContext } from '../../core/context'
+import { onlyTenant } from '../../core/cron-runs'
 
 /**
  * The worker's and scheduler's way into the database (plan A1 §2.2: "factory_runtime — office sessions, worker,
@@ -13,12 +14,16 @@ export function systemContext(tenantId: string, requestId: string): SystemContex
   return Object.freeze({ audience: 'system', tenantId, actorId: SYSTEM_ACTOR_ID, grants: [], requestId })
 }
 
-/** The ids of the active tenants, in id order (the platform scope reads only the Tenant table). */
+/**
+ * The ids of the active tenants, in id order (the platform scope reads only the Tenant table). Inside a Run now
+ * (core/cron-runs.ts withOnlyTenant, B-W2b-415) only the asking tenant: a person's Run now never works for another business.
+ */
 export async function activeTenants(database: FactoryDatabase): Promise<string[]> {
   const rows = await database.withScope({ audience: 'platform' }, (client) =>
     client.tenant.findMany({ where: { status: 'ACTIVE' }, select: { id: true }, orderBy: { id: 'asc' } }),
   )
-  return rows.map((row) => row.id)
+  const only = onlyTenant()
+  return rows.map((row) => row.id).filter((id) => only === null || id === only)
 }
 
 /** Runs `work` with the client of the tenant's system scope. */

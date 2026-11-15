@@ -197,6 +197,9 @@ import { retentionSweepCron } from './platform/privacy/retention/sweep'
 // B-W2b-395: pickups and the day's close (the customer's collection delivered when it leaves; the day closed by the system).
 import { collectionDeliveredHandler } from './modules/shipping/collection/delivered'
 import { closeDaysCron } from './modules/shipping/manifest/close-days'
+// B-W2b-415: every cron writes its run (and Run now, once in the cluster, for one tenant); the error queue's collector.
+import { recordedCrons } from './core/cron-runs'
+import { errorCollectorCron } from './platform/admin/errors/collect'
 
 /**
  * The factory's background processes (plan A1 §3.1), one codebase with the API, two Railway services:
@@ -473,7 +476,11 @@ if (mode === 'worker') {
   crons.push(retentionSweepCron({ database, log }))
   // B-W2b-395: hourly at minute 50, the day sheets nobody closed are closed by the system once the site's day ended (the dock closes every day).
   crons.push(closeDaysCron({ database, log }))
-  const scheduler = startCrons(crons, { redis, prefix, log })
+  // B-W2b-415: every minute, failed messages in and out (dead events, failed webhooks, failed or refused calls, background jobs
+  // out of tries) into the error queue, and items whose retry failed back to OPEN.
+  crons.push(errorCollectorCron({ database, log, kit }))
+  // B-W2b-415: every cron's tick writes its run per tenant; the Run-now poller runs a person's request once, for that tenant.
+  const scheduler = startCrons(recordedCrons(crons, { database, redis, prefix, log }), { redis, prefix, log })
   stops.push(() => scheduler.stop())
 }
 log.info({ prefix, environment: env.FACTORY_ENV }, `factory-${mode} started`)

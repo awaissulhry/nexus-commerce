@@ -11,6 +11,8 @@ import { useRecordTab, useThreadDock } from '../../shared/record-hooks'
 import { getAccount, listCalls, listInbound, setPaused, type InboundDelivery, type InboundStatus, type IntegrationAccount, type IntegrationCall } from '../api'
 import { CONNECTION_TABS, type Ledger, type PauseConfirm } from '../model'
 import { ConnectionRecordView } from './view/ConnectionRecordView'
+import { useConnectionTest } from '../errors/use-connection-test'
+import { ConnectionTest } from '../errors/view/ConnectionTest'
 
 const LOADING = { items: null, problem: null, more: null }
 
@@ -83,6 +85,14 @@ export function ConnectionRecord({ accountId }: { accountId: string }) {
     },
     [api, accountId, inboundStatus],
   )
+  // B-W2b-415: Test (one harmless call through the gateway) and Reconnect (the circuit closed first); the account read again after.
+  const tester = useConnectionTest(api, account ? { id: account.id, status: account.status, mode: account.mode, provider: account.provider } : null, {
+    canManage: held.has('integrations.manage'),
+    onDone: () => {
+      void load()
+      if (tab === 'calls') void readCalls(null)
+    },
+  })
   useEffect(() => {
     if (tab === 'calls') void readCalls(null)
   }, [tab, readCalls])
@@ -93,6 +103,8 @@ export function ConnectionRecord({ accountId }: { accountId: string }) {
   return (
     <ConnectionRecordView
       model={{ prefix, tab, account, problem: account ? null : problem, companyName, can: { manage: held.has('integrations.manage') }, calls, failedOnly, inbound, inboundStatus, confirm, busy, dialogProblem, notice, dockOpen, now }}
+      test={tester.model ? <ConnectionTest model={tester.model} actions={tester.actions} /> : undefined}
+      testCard={tester.model ? <ConnectionTest model={tester.model} actions={tester.actions} place="card" /> : undefined}
       panels={account ? <RecordPanels record={{ type: 'IntegrationAccount', id: account.id, companyId: account.companyId, siteId: null }} title={account.label} /> : null}
       actions={{
         onConfirm: (next) => {

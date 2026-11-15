@@ -51,15 +51,15 @@ export function SecurityMessages({ children }: { children?: ReactNode }) {
  * restore drills (the proof the data can come back: the drills with their checksum result, Record a restore drill, this
  * database's fingerprint), Protection in place (facts, not settings). Fetches nothing (SecurityPage.tsx reads the API).
  */
-export function SecurityView({ model, actions, stepUp }: { model: SecurityViewModel; actions?: SecurityActions; stepUp?: StepUpModel }) {
+export function SecurityView({ model, actions, stepUp, jobs }: { model: SecurityViewModel; actions?: SecurityActions; stepUp?: StepUpModel; jobs?: ReactNode }) {
   return (
     <SecurityMessages>
-      <Security model={model} actions={actions} stepUp={stepUp} />
+      <Security model={model} actions={actions} stepUp={stepUp} jobs={jobs} />
     </SecurityMessages>
   )
 }
 
-function Security({ model, actions, stepUp }: { model: SecurityViewModel; actions?: SecurityActions; stepUp?: StepUpModel }) {
+function Security({ model, actions, stepUp, jobs }: { model: SecurityViewModel; actions?: SecurityActions; stepUp?: StepUpModel; jobs?: ReactNode }) {
   const t = useT('admin-security')
   const locale = useLocale()
   const facts = model.facts
@@ -96,6 +96,8 @@ function Security({ model, actions, stepUp }: { model: SecurityViewModel; action
         <StatusCard facts={facts} prefix={model.prefix} onRetry={actions?.onRetry} />
         <ProtectionCard facts={facts} />
       </div>
+      {/* B-W2b-415: Jobs and integrations (security/jobs; absent without security.view). */}
+      {jobs}
       <SignInCard model={model} actions={actions} />
       {model.depth && <SecurityDepth model={model.depth} actions={actions?.depth} />}
       <BackupsCard model={model} actions={actions} />

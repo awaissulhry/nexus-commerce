@@ -409,6 +409,8 @@ import { DOCUMENT_TEMPLATES_DEFINITIONS, SAVED_REPLIES_DEFINITIONS, TEMPLATES_PE
 import { PRIVACY_DEPTH_DEFINITIONS, PRIVACY_DEPTH_PERMISSIONS } from '../../privacy/retention/permissions'
 // B-W2b-395: carrier pickups (shipping.pickups.book).
 import { SHIPPING_PICKUPS_DEFINITIONS, SHIPPING_PICKUPS_PERMISSIONS } from '../../shipping/pickups/permissions'
+// B-W2b-415: integration health (integrations.errors.manage: the error queue's retry and dismiss; security.jobs.run: Run now).
+import { INTEGRATION_ERRORS_DEFINITIONS, INTEGRATION_HEALTH_PERMISSIONS, JOBS_RUN_DEFINITIONS } from '../../integration-health/permissions'
 
 /**
  * Every permission of the factory, assembled (feature PLT-029). A module that adds routes declares its permissions
@@ -1129,6 +1131,9 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PRIVACY_DEPTH_DEFINITIONS,
   // B-W2b-395: carrier pickups (area `shipping`).
   SHIPPING_PICKUPS_DEFINITIONS,
+  // B-W2b-415
+  INTEGRATION_ERRORS_DEFINITIONS,
+  JOBS_RUN_DEFINITIONS,
 ])
 
 /** The area of the permissions only floor roles hold (and floor roles hold no other, but FLOOR_SHARED_PERMISSIONS). */
@@ -1539,6 +1544,8 @@ for (const name of TEMPLATES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(na
 for (const name of PRIVACY_DEPTH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-395: carrier pickups.
 for (const name of SHIPPING_PICKUPS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-415: integration health.
+for (const name of INTEGRATION_HEALTH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

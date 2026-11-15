@@ -69,6 +69,11 @@ export function statusWords(line: StatusLine, drill: DrillStatus): { key: string
       return { key: line.mode === 'LIVE' ? 'sec.status.files.live' : 'sec.status.files.test', params: { count: line.count } }
     case 'drill':
       return drillWords(drill)
+    // B-W2b-415: every cron writes its run; failing, missed or stuck jobs are counted (Jobs and integrations, #jobs).
+    case 'scheduled':
+      if (line.state === 'failing') return { key: 'sec.status.scheduled.failing', params: { count: line.count ?? 0 } }
+      if (line.state === 'warning') return { key: 'sec.status.scheduled.late', params: { count: line.count ?? 0 } }
+      return { key: `sec.status.scheduled.${line.state === 'ok' ? 'ok' : 'unknown'}`, params: {} }
     default:
       return { key: `sec.status.${line.part}.${line.state}`, params: {} }
   }
@@ -92,7 +97,7 @@ export function drillWords(drill: DrillStatus): { key: string; params: Record<st
 }
 
 /** Where each status line's detail lives (a page of the Office, or a section of this page). */
-export const STATUS_LINKS: Readonly<Partial<Record<StatusLine['part'], string>>> = { files: '/admin/connections', drill: '#backups', backups: '#backups' }
+export const STATUS_LINKS: Readonly<Partial<Record<StatusLine['part'], string>>> = { files: '/admin/connections', drill: '#backups', backups: '#backups', scheduled: '#jobs' }
 
 // ---- Sign-in rules: two-factor per role ------------------------------------------------------------------------------
 

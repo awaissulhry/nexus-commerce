@@ -1,0 +1,80 @@
+/*
+ * Integration health (B-W2b-415): the error queue on Connections & API, a connection's Test and Reconnect, and the scheduled
+ * jobs on Security & health. Layout only, with semantic design-system tokens; every control is the DS's own. The sections fill
+ * the page's width (no max-width).
+ */
+.fw-aih-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-aih-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-aih-sub {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text);
+}
+
+.fw-aih-cell {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.fw-aih-cell > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-aih-quote {
+  font-style: italic;
+  overflow-wrap: anywhere;
+}
+
+.fw-aih-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+  align-items: center;
+}
+
+.fw-aih-test {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+  align-items: center;
+}
+
+.fw-aih-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  width: min(360px, calc(100vw - 32px));
+}
+
+.fw-aih-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+  align-items: baseline;
+}
+
+.fw-aih-runs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}

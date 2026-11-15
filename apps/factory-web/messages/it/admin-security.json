@@ -54,7 +54,12 @@
         "ok": "L'API ha letto questa pagina dal database."
       },
       "scheduled": {
-        "unknown": "Nexus non tiene ancora traccia di ogni esecuzione pianificata: una saltata non compare qui (l'elenco dei processi arriva più avanti)."
+        "unknown": "Nessuna esecuzione pianificata registrata ancora: lo scheduler scrive ogni esecuzione dal prossimo turno (vedi Processi e integrazioni).",
+        "ok": "Ogni processo pianificato è partito in orario; nessuno è fallito o bloccato.",
+        "late_one": "1 processo pianificato ha saltato il suo orario o è bloccato: apri Processi e integrazioni.",
+        "late_other": "{count} processi pianificati hanno saltato il loro orario o sono bloccati: apri Processi e integrazioni.",
+        "failing_one": "1 processo pianificato è fallito all'ultima esecuzione: ciò che fa non è avvenuto.",
+        "failing_other": "{count} processi pianificati sono falliti all'ultima esecuzione: ciò che fanno non è avvenuto."
       },
       "backups": {
         "unknown": "I backup li tiene il fornitore del database; Nexus non può ancora leggerli. La seconda copia presso un altro fornitore UE aspetta il sì del titolare."

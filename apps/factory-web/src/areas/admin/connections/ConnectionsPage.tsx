@@ -16,6 +16,8 @@ import { identityState, type AddDomainDraft } from './mail/model'
 import type { BulkSwitch, CompanyChoice, ConnectionTile, PauseConfirm } from './model'
 import { ConnectionsView } from './view/ConnectionsView'
 import { useDelivery } from './delivery/use-delivery'
+import { useErrorQueue } from './errors/use-error-queue'
+import { ErrorQueueBand, ErrorQueueSection } from './errors/view/ErrorQueueSection'
 // B-W2b-397: the capture address card.
 import { useCaptureAdmin } from './mail-domain/capture/use-capture-admin'
 
@@ -54,6 +56,8 @@ export function ConnectionsPage() {
   const [checking, setChecking] = useState<string | null>(null)
   // B-W2a-41: the delivery log and blocked addresses (email.delivery.view; absent without it).
   const delivery = useDelivery(api, held.has('email.delivery.view'))
+  // B-W2b-415: the error queue (integrations.view; retry and dismiss with integrations.errors.manage).
+  const errors = useErrorQueue(api, { canView: held.has('integrations.view'), prefix })
   // B-W2b-397: the company's capture address (read with email.send; made, replaced or turned off with email.inboxes.manage).
   const capture = useCaptureAdmin(api, { companyId: session.company?.id ?? null, prefix, enabled: held.has('email.send') || held.has('email.inboxes.manage'), readsInboxes: held.has('email.triage') })
   const captureRead = capture.model?.read.status
@@ -109,6 +113,7 @@ export function ConnectionsPage() {
 
   return (
     <ConnectionsView
+      errorQueue={errors.model ? { band: <ErrorQueueBand open={errors.model.list.counts?.open ?? null} />, section: <ErrorQueueSection model={errors.model} actions={errors.actions} /> } : undefined}
       model={{
         prefix,
         accounts,

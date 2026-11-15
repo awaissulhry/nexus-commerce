@@ -13,6 +13,7 @@ import type { OfficeAuth } from '../../auth/sessions/office-auth'
 import type { StatusLine } from './contract'
 import { drillsOf } from './drills'
 import { scanningOn } from '../../files/scan/service'
+import { scheduledStatus } from '../jobs/jobs'
 
 /**
  * `GET /admin/security` (B-W2a-36; SCR-166; design admin.security): the page in one read, every line a fact the API can
@@ -75,6 +76,7 @@ export async function securityPage(auth: OfficeAuth, request: FastifyRequest) {
   return request.withClient(async (client) => {
     const { drills, status: drill } = await drillsOf(client, now, 10)
     const jobs = await jobsLine(client, now)
+    const scheduled = await scheduledStatus(client, now)
     const stores = await client.integrationAccount.findMany({ where: { provider: 'R2', status: { not: 'DISABLED' } }, select: { mode: true, status: true } })
     const quarantined = await quarantinedSince(client, now)
     const files = filesLine(stores, quarantined)
@@ -99,8 +101,8 @@ export async function securityPage(auth: OfficeAuth, request: FastifyRequest) {
         line('api', 'ok', { at: toUtcIso(now) }),
         line('database', 'ok', { at: toUtcIso(now) }),
         jobs,
-        // The scheduler's crons claim each tick in Redis and leave no record a page can read (W2b: Jobs and integrations).
-        line('scheduled', 'unknown'),
+        // B-W2b-415: every cron writes its run (core/cron-runs.ts); failing, missed or stuck jobs (Jobs and integrations).
+        line('scheduled', scheduled.state, { count: scheduled.count }),
         files,
         // The database provider's point-in-time recovery and the second EU copy (B-W0-32, GATE-SPEND) are not readable here.
         line('backups', 'unknown'),

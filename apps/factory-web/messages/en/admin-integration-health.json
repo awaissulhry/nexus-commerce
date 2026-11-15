@@ -1,0 +1,734 @@
+{
+  "aih": {
+    "action": {
+      "dismiss": "Dismiss",
+      "editRetry": "Edit and retry",
+      "fix": {
+        "customers": "Edit and retry in Customers",
+        "files": "Edit and retry in Connections",
+        "invoices": "Edit and retry in Invoices",
+        "mail": "Edit and retry in Mail delivery",
+        "rates": "Edit and retry in Finance settings",
+        "shipments": "Edit and retry in Shipments"
+      },
+      "retry": "Retry"
+    },
+    "band": {
+      "loading": "Error queue",
+      "open_one": "Error queue (1)",
+      "open_other": "Error queue ({count})"
+    },
+    "bulk": {
+      "dismiss_one": "Dismiss 1",
+      "dismiss_other": "Dismiss {count}",
+      "left": {
+        "dismiss": {
+          "DISMISSED_one": "1 left out: dismissed already.",
+          "DISMISSED_other": "{count} left out: dismissed already.",
+          "NO_RIGHT_one": "1 left out: not yours to act on.",
+          "NO_RIGHT_other": "{count} left out: not yours to act on."
+        },
+        "retry": {
+          "DISMISSED_one": "1 left out: dismissed already.",
+          "DISMISSED_other": "{count} left out: dismissed already.",
+          "FROM_RECORD_one": "1 left out: a call sent again from its record.",
+          "FROM_RECORD_other": "{count} left out: a call sent again from its record.",
+          "NO_RIGHT_one": "1 left out: not yours to act on.",
+          "NO_RIGHT_other": "{count} left out: not yours to act on.",
+          "SIGNATURE_one": "1 left out: a bad signature.",
+          "SIGNATURE_other": "{count} left out: a bad signature.",
+          "WAITING_one": "1 left out: sent again already.",
+          "WAITING_other": "{count} left out: sent again already."
+        }
+      },
+      "none": {
+        "dismiss": "None of the ticked messages can be dismissed.",
+        "retry": "None of the ticked messages can be sent again here."
+      },
+      "noneTicked": "Tick the messages first.",
+      "retry_one": "Retry 1",
+      "retry_other": "Retry {count}"
+    },
+    "col": {
+      "reason": "Reason",
+      "service": "Service",
+      "state": "State",
+      "time": "Time",
+      "tries": "Tries",
+      "what": "What failed"
+    },
+    "count_one": "1 message",
+    "count_other": "{count} messages",
+    "dismiss": {
+      "body": "Nothing more is done with it. It stays in the queue under Dismissed, with who and why.",
+      "cancel": "Cancel",
+      "go_one": "Dismiss 1",
+      "go_other": "Dismiss {count}",
+      "long": "At most 500 characters.",
+      "reason": "Why",
+      "reasonHint": "3 to {max} characters, kept with the message.",
+      "required": "Say why.",
+      "short": "At least 3 characters.",
+      "title_one": "Dismiss 1 message?",
+      "title_other": "Dismiss {count} messages?"
+    },
+    "done": {
+      "dismissedSome_one": "1 message dismissed; {refused} refused.",
+      "dismissedSome_other": "{count} messages dismissed; {refused} refused.",
+      "dismissed_one": "1 message dismissed.",
+      "dismissed_other": "{count} messages dismissed.",
+      "retriedSome_one": "1 message sent again; {refused} refused.",
+      "retriedSome_other": "{count} messages sent again; {refused} refused.",
+      "retried_one": "1 message sent again.",
+      "retried_other": "{count} messages sent again."
+    },
+    "empty": {
+      "all": {
+        "body": "Failed events, webhooks and calls come here by themselves.",
+        "title": "No failed message yet."
+      },
+      "dismissed": {
+        "body": "A dismissed message stays here with who dismissed it and why.",
+        "title": "Nothing dismissed."
+      },
+      "open": {
+        "body": "Every message in and out went through, or a person dealt with it.",
+        "title": "Nothing waiting."
+      },
+      "retried": {
+        "body": "Messages sent again wait here for their result.",
+        "title": "Nothing sent again."
+      }
+    },
+    "errors": {
+      "hint": "Failed messages in and out, with what to do.",
+      "rule": "Retry sends a message again once. A failed call is sent again from where it started. Dismiss keeps the message with who and why.",
+      "title": "Error queue"
+    },
+    "gate": {
+      "ecbFeed": "The ECB rates connection"
+    },
+    "held": {
+      "dismiss": {
+        "DISMISSED": "Dismissed already.",
+        "NO_RIGHT": "You may not retry or dismiss failed messages: an administrator can."
+      },
+      "fix": "Nothing to edit here: it has no page of its own.",
+      "loading": "Loading…",
+      "retry": {
+        "DISMISSED": "Dismissed: nothing more is done with it.",
+        "FROM_RECORD": "A failed call is sent again from where it started: use Edit and retry.",
+        "NO_RIGHT": "You may not retry or dismiss failed messages: an administrator can.",
+        "SIGNATURE": "The signature did not hold, so it is never processed: ask the service to send it again.",
+        "WAITING": "Sent again: it comes back here if it fails again."
+      },
+      "retrying": "Sending it again…",
+      "saving": "Saving…"
+    },
+    "item": {
+      "bySystem": "By Nexus: it went through on its own",
+      "code": "Code: {code}",
+      "dismissReason": "Why it was dismissed",
+      "dismissed": "Dismissed",
+      "firstFailed": "First failed",
+      "gone": "Its source is no longer kept.",
+      "lastFailed": "Last failed",
+      "noun": "message",
+      "reason": "Reason",
+      "retried": "Sent again",
+      "service": "Service",
+      "someone": "A person",
+      "sourceTitle": "What its source says",
+      "theirWords": "The service's words",
+      "theirWordsHint": "As the service said it (secrets removed).",
+      "title": "Failed message",
+      "tries_one": "1 try",
+      "tries_other": "{count} tries",
+      "what": "What failed"
+    },
+    "job": {
+      "accounting": {
+        "integrityNightly": {
+          "name": "Accounting integrity checks",
+          "what": "Every night at 04:10: the named integrity checks of each company run and are kept."
+        }
+      },
+      "alerts": {
+        "evaluate": {
+          "name": "Exception rules",
+          "what": "Every 5 minutes: the exception rules look for records that need a person."
+        }
+      },
+      "approvals": {
+        "officeMail": {
+          "name": "Approvals by e-mail",
+          "what": "Every 5 minutes: Home › Approvals goes out by e-mail to the people who asked for it."
+        }
+      },
+      "approvalsOut": {
+        "sweep": {
+          "name": "Approval requests sweep",
+          "what": "Every 10 minutes: approval requests past their time expire."
+        }
+      },
+      "compliance": {
+        "certificateExpiry": {
+          "name": "Certificate expiry check",
+          "what": "Every night: type-examination certificates that expire are flagged and warned about."
+        },
+        "claimEvidenceExpiry": {
+          "name": "Claim evidence expiry",
+          "what": "Every night: approved claims whose evidence stopped holding are flagged once."
+        },
+        "profilesNightly": {
+          "name": "Material profiles evaluated",
+          "what": "Every night at 03:50: every material profile is evaluated again."
+        },
+        "renewalStages": {
+          "name": "Certificate renewal stages",
+          "what": "Every hour: the renewal stages of certificates are kept in place."
+        },
+        "supplierDeclarations": {
+          "name": "Supplier declarations",
+          "what": "Every hour: declaration requests move overdue and suppliers are reminded."
+        }
+      },
+      "costing": {
+        "catchUp": {
+          "name": "Cost ledger catch-up",
+          "what": "Every night: work-order costs that were missed are written."
+        }
+      },
+      "currency": {
+        "ecbDaily": {
+          "name": "ECB exchange rates",
+          "what": "At 16:30 and 18:30 on working days: the ECB reference rates are read and kept."
+        }
+      },
+      "email": {
+        "liftCatchUp": {
+          "name": "Unblocked addresses catch-up",
+          "what": "Every night: unblocked addresses are kept in their own table."
+        }
+      },
+      "emailIn": {
+        "followUps": {
+          "name": "Team inbox follow-ups",
+          "what": "Every 15 minutes: mails whose follow-up came with no answer open again."
+        }
+      },
+      "exports": {
+        "expire": {
+          "name": "Old exports removed",
+          "what": "Every hour: export files past their keeping time are removed."
+        }
+      },
+      "files": {
+        "expireLargeUploads": {
+          "name": "Unfinished large uploads removed",
+          "what": "Every hour: large uploads never finished are removed."
+        },
+        "remindExpiry": {
+          "name": "Document expiry reminders",
+          "what": "Every day at 06:40: documents that expire are reminded."
+        },
+        "scanPending": {
+          "name": "Virus scan of held uploads",
+          "what": "Every 5 minutes: uploads still waiting for their virus scan are scanned."
+        }
+      },
+      "imports": {
+        "firstLoadCatchUp": {
+          "name": "First load catch-up",
+          "what": "Every night: the steps of the guided first load are kept up to date."
+        }
+      },
+      "insights": {
+        "factsHourly": {
+          "name": "Facts by the hour",
+          "what": "Every hour: the facts of today and yesterday are built again."
+        },
+        "factsNightly": {
+          "name": "Facts by night",
+          "what": "Every night at 02:40: the facts of the 35 days before are built again."
+        }
+      },
+      "integrations": {
+        "collectErrors": {
+          "name": "Error queue collector",
+          "what": "Every minute: failed messages in and out come into the error queue."
+        }
+      },
+      "inventory": {
+        "reservationsCleanup": {
+          "name": "Reservation clean-up",
+          "what": "Every night: reservations whose demand is done are released."
+        },
+        "warehouseTaskTimed": {
+          "name": "Count tasks due",
+          "what": "Every hour: count schedules that fell due get their task."
+        }
+      },
+      "invoicing": {
+        "sdiPoll": {
+          "name": "E-invoice status check",
+          "what": "Every 5 minutes: invoices sent to SDI that wait for an answer are asked about."
+        }
+      },
+      "links": {
+        "purgeDrafts": {
+          "name": "Old link drafts deleted",
+          "what": "Every hour: drafts of link forms 7 days after their link expired are deleted."
+        }
+      },
+      "notifications": {
+        "digest": {
+          "name": "Daily digests",
+          "what": "Every 15 minutes: the daily summaries people turned on are sent at their time."
+        },
+        "viewFollow": {
+          "name": "Followed views counted",
+          "what": "Every 15 minutes: followed saved views are counted and changes told."
+        }
+      },
+      "outbox": {
+        "lag": {
+          "name": "Background events check",
+          "what": "Every minute: how many events wait for the worker and whether any failed for good."
+        }
+      },
+      "partners": {
+        "accessEnding": {
+          "name": "Partner access ending",
+          "what": "Every day at 07:20: partner people whose access ends within 7 days are told once."
+        }
+      },
+      "payables": {
+        "sdiPickup": {
+          "name": "Supplier e-invoices pickup",
+          "what": "Every 15 minutes: the supplier invoices SDI delivered are picked up."
+        }
+      },
+      "people": {
+        "attendanceDays": {
+          "name": "Attendance days",
+          "what": "Every 15 minutes: attendance days are worked out as time passes."
+        },
+        "autoClockOut": {
+          "name": "Automatic clock-out",
+          "what": "Every 5 minutes: clock-ins left open past the shift end are closed."
+        },
+        "leaverSteps": {
+          "name": "Leaver steps",
+          "what": "Every hour: the automatic steps of people leaving tick on."
+        }
+      },
+      "planning": {
+        "nightlyRun": {
+          "name": "Planning run",
+          "what": "Every 5 minutes: the nightly planning run starts when its time comes."
+        }
+      },
+      "plant": {
+        "checkReminders": {
+          "name": "Statutory check reminders",
+          "what": "Every hour: statutory checks whose reminder window opened are reminded once."
+        },
+        "escalateRequests": {
+          "name": "Machine request escalation",
+          "what": "Every minute: machine requests nobody acknowledged in time escalate."
+        }
+      },
+      "portal": {
+        "purgeCodes": {
+          "name": "Old portal codes deleted",
+          "what": "Every hour: portal sign-in codes that expired a day ago are deleted."
+        }
+      },
+      "portalNotifications": {
+        "digest": {
+          "name": "Partner summaries",
+          "what": "Every 15 minutes from 08:00 on working days: partners get their summaries."
+        }
+      },
+      "portalTasks": {
+        "remind": {
+          "name": "Partner request reminders",
+          "what": "Every hour: partners are reminded of their open requests."
+        }
+      },
+      "privacy": {
+        "retentionSweep": {
+          "name": "Retention sweep",
+          "what": "Every night at 02:50: each retention rule reports what is due and applies only where switched on."
+        }
+      },
+      "product": {
+        "smvTakeEffect": {
+          "name": "Standard minutes take effect",
+          "what": "Every hour: approved SMV versions whose day came take effect."
+        }
+      },
+      "production": {
+        "dailyReport": {
+          "name": "Daily production report",
+          "what": "Every 15 minutes: the daily report goes to the people subscribed, at their time."
+        },
+        "scanFindings": {
+          "name": "Scan pattern checks",
+          "what": "Every hour: scan patterns that look wrong are flagged."
+        },
+        "stuckBundles": {
+          "name": "Stuck bundles",
+          "what": "Every 15 minutes: bundles that stopped moving are told to the people concerned."
+        }
+      },
+      "purchasing": {
+        "chaseReminders": {
+          "name": "Late line chasers",
+          "what": "Every day at 09:30: suppliers with late lines are chased (only where switched on)."
+        },
+        "confirmationReminders": {
+          "name": "Supplier confirmation reminders",
+          "what": "Every day at 09:00: suppliers who did not confirm an order are reminded (only where switched on)."
+        }
+      },
+      "quality": {
+        "alertRules": {
+          "name": "Quality alert rules",
+          "what": "Every 5 minutes: quality alert rules whose wait passed fire."
+        },
+        "capaReminders": {
+          "name": "Corrective action reminders",
+          "what": "Every 15 minutes: open corrective actions are reminded and late ones escalate."
+        }
+      },
+      "reasons": {
+        "standardForNewTenants": {
+          "name": "Standard reasons given",
+          "what": "Every night: a new business gets the standard reason lists."
+        }
+      },
+      "receivables": {
+        "ladder": {
+          "name": "Payment reminder ladder",
+          "what": "Every day at 06:00: the reminders of overdue invoices are prepared."
+        }
+      },
+      "roles": {
+        "syncTemplates": {
+          "name": "Ready-made roles kept in step",
+          "what": "Every night: the ready-made roles take the permissions of their templates."
+        },
+        "twoFactorSince": {
+          "name": "Two-factor dates catch-up",
+          "what": "Every night: two-factor dates are kept in their own column."
+        }
+      },
+      "safety": {
+        "healthDueList": {
+          "name": "Health visits due",
+          "what": "Every day: periodic health visits and return visits are planned."
+        }
+      },
+      "sales": {
+        "fittingReminders": {
+          "name": "Fitting reminders",
+          "what": "Every hour: riders with an appointment within a day are reminded once."
+        },
+        "measurementPhotos": {
+          "name": "Body photos deleted on time",
+          "what": "Every hour: body photos reach their deletion day and are deleted."
+        },
+        "quoteValidity": {
+          "name": "Quote validity",
+          "what": "Every day at 06:15: sent quotes past their last day expire and customers are reminded once."
+        }
+      },
+      "shipping": {
+        "closeDays": {
+          "name": "Day sheets closed",
+          "what": "Every hour: day sheets nobody closed are closed once the site day ended."
+        },
+        "deliveryCheck": {
+          "name": "Travelling shipments check",
+          "what": "Every day at 07:10: shipments with no carrier news or past their expected day get a task."
+        },
+        "systemHolds": {
+          "name": "System shipment holds",
+          "what": "Every 30 minutes: the system holds on shipments follow their causes."
+        },
+        "trackingPoll": {
+          "name": "Parcel tracking check",
+          "what": "Every hour: the carrier is asked where travelling parcels are."
+        }
+      },
+      "tasks": {
+        "reminders": {
+          "name": "Reminders come back",
+          "what": "Every minute: reminders whose moment came come back to their person."
+        }
+      },
+      "timers": {
+        "fire": {
+          "name": "Date timers",
+          "what": "Every minute: timers whose moment came fire."
+        }
+      },
+      "unknown": {
+        "name": "{code}",
+        "what": "A job without words yet: it is not in the jobs catalogue."
+      }
+    },
+    "jobState": {
+      "failing": "Failing",
+      "missed": "Missed a run",
+      "never": "Not run yet",
+      "ok": "Working",
+      "running": "Running",
+      "stuck": "Stuck"
+    },
+    "jobs": {
+      "allWell": "Every job ran on time.",
+      "col": {
+        "failures": "Failures 7 days",
+        "last": "Last run",
+        "name": "Job",
+        "next": "Next run",
+        "state": "State",
+        "waiting": "Waiting"
+      },
+      "count_one": "1 job",
+      "count_other": "{count} jobs",
+      "empty": {
+        "body": "The scheduler has not reported a job yet.",
+        "title": "No scheduled job."
+      },
+      "hint": "Each scheduled job: last run, next run, failures and what waits.",
+      "needs_one": "1 job needs a look (stuck, failing or late).",
+      "needs_other": "{count} jobs need a look (stuck, failing or late).",
+      "neverRan": "No run yet",
+      "outbox": "Background events: {waiting} waiting · {dead} given up (in the error queue).",
+      "rule": "Every run is recorded. Run now works only for jobs that check or catch up; a job that sends at its time or waits for a switch keeps its schedule.",
+      "title": "Jobs and integrations",
+      "waitingUnknown": "Run-now requests cannot be read right now"
+    },
+    "loading": "Still loading…",
+    "older": "Show older",
+    "op": {
+      "event": "Handing on an event ({code})",
+      "files": {
+        "delete": "Deleting a file",
+        "put": "Keeping a file",
+        "read": "Reading a file",
+        "scan": "Scanning a file for viruses"
+      },
+      "job": "A background job ({code})",
+      "mail": {
+        "create_identity": "Adding a mail domain",
+        "fetch_inbound": "Fetching received mail",
+        "get_identity": "Checking the mail domain",
+        "send": "Sending an e-mail"
+      },
+      "other": "A call ({code})",
+      "parcel": {
+        "create": "Making a shipping label",
+        "track": "Tracking a parcel"
+      },
+      "sdi": {
+        "send": "Sending an invoice to SDI",
+        "send_invoice": "Sending an invoice to SDI",
+        "status": "Asking SDI for an invoice status"
+      },
+      "vat": {
+        "check": "Checking a VAT number (VIES)"
+      },
+      "webhook": {
+        "process": "Processing a message received from the service"
+      }
+    },
+    "reason": {
+      "account_disabled": "The connection is disabled: nothing was sent.",
+      "account_paused": "The connection is paused: nothing was sent.",
+      "dispatch_failed": "The event could not be shared out to its jobs.",
+      "fake_in_production": "The connection is in fake mode, which production never calls.",
+      "job_failed": "The background job ran out of tries.",
+      "network_error": "The service could not be reached.",
+      "other": "The service answered with code {code}.",
+      "processing_failed": "What the service sent could not be processed.",
+      "provider_error": "The service refused or failed the call.",
+      "publish_failed": "The event could not be handed to the worker after every try.",
+      "signature_mismatch": "The message's signature did not hold: it was never processed.",
+      "timeout": "The service did not answer in time."
+    },
+    "reconnect": {
+      "action": "Reconnect",
+      "running": "Closing the circuit, then one harmless call…"
+    },
+    "result": {
+      "FAILED": "Failed",
+      "RUNNING": "Running",
+      "SUCCEEDED": "Done"
+    },
+    "retryMany": {
+      "go_one": "Retry 1",
+      "go_other": "Retry {count}",
+      "once": "Each is sent again once; one that fails again comes back to Waiting.",
+      "title_one": "Send 1 message again?",
+      "title_other": "Send {count} messages again?"
+    },
+    "run": {
+      "byPerson": "Run now",
+      "minutes_one": "1 minute",
+      "minutes_other": "{count} minutes",
+      "scheduled": "Scheduled",
+      "seconds_one": "1 second",
+      "seconds_other": "{count} seconds"
+    },
+    "runNow": {
+      "action": "Run now",
+      "bulk_one": "Run 1 now",
+      "bulk_other": "Run {count} now",
+      "doneSome_one": "1 job asked; {refused} refused.",
+      "doneSome_other": "{count} jobs asked; {refused} refused.",
+      "done_one": "1 job asked to run now: its run appears below.",
+      "done_other": "{count} jobs asked to run now: their runs appear below.",
+      "go_one": "Run now",
+      "go_other": "Run {count} now",
+      "held": {
+        "ASKED": "A Run now of it is waiting or running already.",
+        "NO_RIGHT": "You may not run jobs now: an administrator can.",
+        "SCHEDULE_ONLY": "It sends at its set time (or deletes under a switch): it runs only on its schedule.",
+        "SWITCHED_OFF": "It waits for a switch that is off: switch it on first.",
+        "UNKNOWN_JOB": "Not in the jobs catalogue: it runs only on its schedule."
+      },
+      "last": "Last result: {result} · {at}",
+      "lastNone": "No run recorded yet.",
+      "left": {
+        "ASKED_one": "1 left out: asked already.",
+        "ASKED_other": "{count} left out: asked already.",
+        "NO_RIGHT_one": "1 left out: not yours to run.",
+        "NO_RIGHT_other": "{count} left out: not yours to run.",
+        "SCHEDULE_ONLY_one": "1 left out: runs only on its schedule.",
+        "SCHEDULE_ONLY_other": "{count} left out: runs only on its schedule.",
+        "SWITCHED_OFF_one": "1 left out: waits for a switch.",
+        "SWITCHED_OFF_other": "{count} left out: waits for a switch.",
+        "UNKNOWN_JOB_one": "1 left out: not in the catalogue.",
+        "UNKNOWN_JOB_other": "{count} left out: not in the catalogue."
+      },
+      "noneTicked": "None of the ticked jobs may run now.",
+      "once": "It runs once in the cluster, for this business only, as the system, within about 10 seconds.",
+      "titleMany_one": "Run 1 job now?",
+      "titleMany_other": "Run {count} jobs now?",
+      "titleOne": "Run '{name}' now?"
+    },
+    "runs": {
+      "failures": "{failed} of {runs} runs failed",
+      "list": "Runs, newest first",
+      "missed": "A run due at {at} did not happen.",
+      "none": "No run recorded yet.",
+      "noun": "job",
+      "schedule": "Schedule",
+      "state": "State",
+      "switch": "Switch",
+      "switchOff": "{name}: off",
+      "switchOn": "{name}: on",
+      "title": "Runs",
+      "zone": "Time zone {zone}"
+    },
+    "service": {
+      "factory": "Nexus itself"
+    },
+    "src": {
+      "answer": "Answer",
+      "answered": "Answered · {key}",
+      "asked": "Asked · {key}",
+      "attempts": "Attempts",
+      "bytes_one": "1 byte",
+      "bytes_other": "{count} bytes",
+      "call": {
+        "FAILED": "Failed",
+        "REFUSED": "Refused before sending",
+        "SUCCEEDED": "Went through",
+        "TIMED_OUT": "No answer in time"
+      },
+      "connection": "Connection",
+      "duration": "Took",
+      "eventType": "Type",
+      "ms": "{ms} ms",
+      "noAnswer": "No answer",
+      "noBody": "The message itself is never shown.",
+      "notVerified": "Did not hold",
+      "occurred": "Happened",
+      "outbox": {
+        "DEAD": "Given up",
+        "PENDING": "Waiting for the relay",
+        "PUBLISHED": "Handed to the worker"
+      },
+      "received": "Received",
+      "sent": "Sent",
+      "signature": "Signature",
+      "size": "Size",
+      "status": "Where it is",
+      "summaryHint": "What the gateway kept of the call, without secrets or personal data.",
+      "verified": "Verified",
+      "webhook": {
+        "FAILED": "Processing failed",
+        "PROCESSED": "Processed",
+        "RECEIVED": "Waiting to be processed",
+        "REJECTED": "Rejected"
+      }
+    },
+    "state": {
+      "DISMISSED": "Dismissed",
+      "OPEN": "Waiting",
+      "RETRIED": "Sent again",
+      "wentThrough": "Went through"
+    },
+    "test": {
+      "action": "Test",
+      "at": "Tested",
+      "circuit": "Circuit",
+      "circuitClosed_one": "Closed: 1 failure in a row forgotten.",
+      "circuitClosed_other": "Closed: {count} failures in a row forgotten.",
+      "circuitWasClosed": "It was closed already.",
+      "close": "Close",
+      "failed": {
+        "other": "The call failed ({code}).",
+        "timeout": "The service did not answer in time."
+      },
+      "held": {
+        "disabled": "This connection is disabled: it is not called any more.",
+        "noProbe": "This service has no harmless test call yet: its next real call shows whether it works (last OK and last error).",
+        "paused": "This connection is paused: resume it first. Reconnect never switches a paused connection on.",
+        "right": "You may not test this connection: it needs the right to pause and resume connections.",
+        "running": "A test is running."
+      },
+      "ledger": "Call log",
+      "ledgerHint": "The test is one row of the Calls tab.",
+      "ok": "The service answered in {ms} ms: it works.",
+      "okFake": "The factory's own fake answered in {ms} ms: the gateway, its limits and the call log work. Nothing left the factory.",
+      "refused": {
+        "account_disabled": "Refused: the connection is disabled.",
+        "account_paused": "Refused: the connection is paused. Resume it first.",
+        "circuit_open": "Refused: the connection failed several calls in a row and is rested. Reconnect closes the circuit.",
+        "fake_in_production": "Refused: production never calls a fake connection.",
+        "gateway_unavailable": "Refused: the gateway cannot check its limits right now. Nothing was sent.",
+        "other": "Refused ({code}): nothing was sent.",
+        "rate_limited": "Refused: the connection's rate limit is reached. Try again in a minute."
+      },
+      "running": "One harmless call through the gateway…",
+      "theirWords": "The service's words",
+      "title": "Test connection",
+      "what": "One harmless call through the gateway; the answer in words."
+    },
+    "view": {
+      "all": "All",
+      "dismissed": "Dismissed",
+      "label": "Which messages",
+      "open": "Waiting",
+      "retried": "Sent again",
+      "withCount": "{view} · {count}"
+    }
+  }
+}
