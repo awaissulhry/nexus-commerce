@@ -171,7 +171,7 @@ beforeAll(async () => {
   SESSIONS.quotesOnly = session(grantsOf('sales', [], ['sales.reports.view']))
   SESSIONS.companyA = session(grantsOf('sales'), COMPANY_A)
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database: h.database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])]?.() ?? null) },
   )
   vi.useFakeTimers({ toFake: ['Date'], now: NOW })

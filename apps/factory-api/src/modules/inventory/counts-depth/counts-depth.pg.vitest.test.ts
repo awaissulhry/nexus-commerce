@@ -145,7 +145,7 @@ beforeAll(async () => {
     viewer: { audience: 'office', tenantId: A.tenant, actorId: newId(), grants: [grant(['inventory.stock.view', 'inventory.counts.view'])] },
   }
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null), logger: false },
   )
 }, 1_500_000)

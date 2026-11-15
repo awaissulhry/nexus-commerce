@@ -90,7 +90,7 @@ beforeAll(async () => {
   // The office person who keeps and shares (a real user: the certificate names who issued it, the link mail who sent it).
   qualityActor = (await addUser(h, TENANT, { email: 'quality.docs@example.com' })).id
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database: h.database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])]?.() ?? null) },
   )
 }, 1_500_000)

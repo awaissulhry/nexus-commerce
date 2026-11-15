@@ -150,7 +150,7 @@ beforeAll(async () => {
     leadE2: office([grant(['people.figures.view'], [A.companyA])], A.member),
   } satisfies Record<string, SessionContext>)
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     {
       database: h.database,
       clock: h.clock,

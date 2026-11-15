@@ -24,6 +24,7 @@ import { manifest } from './manifest'
 import { cutsList } from './office'
 import { announceHidePhoto, completeHidePhoto } from './photos'
 import { cutLog, cuttingView, cuttingWorkOrders, scanHide } from './views'
+import { clientAddressOf } from '../../../core/client-address'
 
 /**
  * The cutting log per hide (B-W1-40; MES-051, MES-056, MES-058, SCM-194, SCM-253; A2 SCR-094, SCR-071): the work orders
@@ -39,7 +40,7 @@ import { cutLog, cuttingView, cuttingWorkOrders, scanHide } from './views'
  */
 export default defineRoutes('production.cutting', manifest, async (app) => {
   const limit = app.officeAuth?.rateLimits.floorSignIn ?? AUTH_RATE_LIMITS.floorSignIn
-  const perDevice = { rateLimit: { max: limit.max, timeWindow: limit.timeWindowMs, keyGenerator: (request: FastifyRequest) => `cut-anyway:${parseSiteToken(deviceCookieOf(request))?.id ?? request.ip}` } }
+  const perDevice = { rateLimit: { max: limit.max, timeWindow: limit.timeWindowMs, keyGenerator: (request: FastifyRequest) => `cut-anyway:${parseSiteToken(deviceCookieOf(request))?.id ?? clientAddressOf(request)}` } }
 
   app.get('/production/cutting/work-orders', { schema: cuttingWorkOrdersContract }, async (request) => cuttingWorkOrders(request, request.query))
 

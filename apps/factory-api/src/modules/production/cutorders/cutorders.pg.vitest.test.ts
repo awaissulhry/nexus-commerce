@@ -136,7 +136,7 @@ beforeAll(async () => {
   }
   await admin(`INSERT INTO "Tenant" (id, slug, name) VALUES ($1, 'cutorders-b', 'Gruppo Nuovo')`, [tenantB])
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
   )
   WO.a = await releasedWorkOrder('A', { '50': 20, '52': 30 })

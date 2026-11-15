@@ -88,7 +88,7 @@ beforeAll(async () => {
   const station = (await admin<{ id: string }>('SELECT id FROM "Station" WHERE "tenantId" = $1 AND code = $2', [T, 'SEW-01']))[0]!.id
   await admin(`INSERT INTO "Device" (id, "tenantId", "companyId", "siteId", "stationId", name, kind, status, "enrolledAt") VALUES ($1, $2, $3, $4, $5, 'Sewing tablet 1', 'TABLET', 'ACTIVE', now())`, [deviceId, T, companyA, siteA1, station])
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     {
       database,
       routesRoot: fileURLToPath(new URL('../../..', import.meta.url)),

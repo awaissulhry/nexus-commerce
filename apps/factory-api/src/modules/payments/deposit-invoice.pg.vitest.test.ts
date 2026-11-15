@@ -149,7 +149,7 @@ beforeAll(async () => {
     )
   }
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database: h.database, routesRoot: fileURLToPath(new URL('../..', import.meta.url)), authenticate: testAuthenticator((request) => (request.headers['x-test-session'] === 'finance' ? financeSession : null)), logger: false },
   )
 }, 240_000)

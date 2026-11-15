@@ -95,7 +95,7 @@ beforeAll(async () => {
   // A made-up supplier of every company (the jacket is a style of every company).
   await admin(`INSERT INTO "Party" (id, "tenantId", "companyId", code, kind, "legalName", roles, status, country, currency, language) VALUES ($1, $2, NULL, 'BL-SUP-1', 'ORGANISATION', 'Made-up Trims Srl', '{SUPPLIER}', 'ACTIVE', 'IT', 'EUR', 'it')`, [supplier, tenant])
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null), logger: false },
   )
 }, 240_000)

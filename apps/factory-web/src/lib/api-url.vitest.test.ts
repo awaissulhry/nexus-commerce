@@ -37,22 +37,34 @@ describe('next.config.ts', () => {
     await expect(configFor(DEV)).rejects.toThrow(/FACTORY_API_URL is not set/)
   })
 
-  it('lets only `next typegen` load without it, with an address that cannot resolve', async () => {
+  it('lets only `next typegen` load without it (it reads the route shapes, it serves nothing)', async () => {
     vi.stubEnv('FACTORY_API_URL', '')
+    vi.stubEnv('FACTORY_TRUSTED_PROXIES', 'everything')
     const argv = process.argv
     process.argv = [argv[0] ?? 'node', 'next', 'typegen']
     try {
       const config = await configFor(BUILD)
-      expect(await config.rewrites?.()).toEqual([{ source: '/api/:path*', destination: 'http://typegen.invalid/:path*' }])
+      expect(config.transpilePackages).toEqual(['@nexus/ui'])
     } finally {
       process.argv = argv
     }
   })
 
-  it('proxies /api/<route> to <FACTORY_API_URL>/<route> (the API has no /api prefix of its own)', async () => {
+  // B-W2b-F57: /api/<route> is a route of the app (src/app/api/[...path]/route.ts), so the browser's address travels on.
+  it('rewrites nothing: the /api proxy is a route that says whose call it is', async () => {
     vi.stubEnv('FACTORY_API_URL', 'http://127.0.0.1:8190')
-    const config = await configFor(BUILD)
-    expect(await config.rewrites?.()).toEqual([{ source: '/api/:path*', destination: 'http://127.0.0.1:8190/:path*' }])
+    expect((await configFor(BUILD)).rewrites).toBeUndefined()
+  })
+
+  it('refuses to start with trusted proxies that are not valid, or on Railway without them', async () => {
+    vi.stubEnv('FACTORY_API_URL', 'http://127.0.0.1:8190')
+    vi.stubEnv('FACTORY_TRUSTED_PROXIES', '0.0.0.0/0')
+    await expect(configFor(DEV)).rejects.toThrow(/FACTORY_TRUSTED_PROXIES is not valid: .*never "trust everything"/)
+    vi.stubEnv('FACTORY_TRUSTED_PROXIES', '')
+    vi.stubEnv('RAILWAY_ENVIRONMENT', 'production')
+    await expect(configFor(BUILD)).rejects.toThrow(/FACTORY_TRUSTED_PROXIES is not set: on Railway/)
+    vi.stubEnv('FACTORY_TRUSTED_PROXIES', 'private')
+    expect((await configFor(BUILD)).transpilePackages).toEqual(['@nexus/ui'])
   })
 
   it('reads `page.design.tsx` as a route only under `next dev`: /design never reaches a production build', async () => {

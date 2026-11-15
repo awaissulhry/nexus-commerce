@@ -131,7 +131,7 @@ beforeAll(async () => {
   SESSIONS.viewer = office(['sales.returns.view'])
   SESSIONS.dock = { audience: 'floor', tenantId: T, actorId: newId(), siteId: siteA, deviceId: newId(), grants: [{ permissions: ['floor.work' as Permission, 'sales.returns.receive', 'sales.returns.inspect'], companies: [companyA], sites: [siteA], parties: 'all' }] } as SessionContext
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database: h.database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null), logger: false },
   )
 }, 900_000)

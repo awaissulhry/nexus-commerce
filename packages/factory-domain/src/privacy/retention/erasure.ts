@@ -9,7 +9,9 @@ import type { Issue } from '../../core/errors'
  * What one record gets, written as one ErasureRecord (column names, never values):
  *   ANONYMISED  the person's columns are blanked or replaced; the rest of the record (the business data) stays
  *   DELETED     the record is gone (a personal custom value)
- *   KEPT        the record stays as it is, with why (a legal hold, or a record the database keeps unchanged for now)
+ *   KEPT        the record stays as it is, with why (a legal hold)
+ * A record that keeps some personal columns names them with why (keptFields): a received mail keeps the envelope sender the mail
+ * server recorded (IMMUTABLE) while its sender, subject and text are blanked (B-W2b-F54).
  */
 
 export const KEPT_WHY = ['FISCAL', 'DISPUTE', 'SAFETY_REPORT', 'EMPLOYMENT', 'HEALTH', 'CUSTOMER', 'MEASUREMENTS', 'IMMUTABLE', 'ALREADY_ERASED', 'NOTICE_PROOF'] as const
@@ -24,13 +26,13 @@ export const KEPT_WHY_WORDS: Readonly<Record<KeptWhy, string>> = Object.freeze({
   HEALTH: 'Kept: health surveillance and accident records are kept 10 years after the employment ends (D.Lgs. 81/2008 art. 25; GDPR art. 17(3)(b)).',
   CUSTOMER: 'Kept: the customer record names the person and the orders and invoices refer to it (c.c. art. 2220: 10 years; GDPR art. 17(3)(b)).',
   MEASUREMENTS: 'Kept: the measurements a garment was made to, for the legal guarantee of conformity (D.Lgs. 206/2005 art. 132: 26 months; GDPR art. 17(3)(e)); their photos go on their own delete date.',
-  IMMUTABLE: 'Kept for now: the database keeps this record unchanged once written (a mail as it came, a message as it was sent, an audit row); blanking the name waits for a guarded erasure path (open schema need).',
+  IMMUTABLE: "Kept: what the mail server recorded when the mail arrived (its envelope sender) stays as it came; the database never changes it. The rest of the person's details in the mail are blanked.",
   ALREADY_ERASED: 'Already erased earlier: nothing of the person is left in this record.',
   NOTICE_PROOF: "Kept: the proof that the person was given the privacy notice (GDPR arts. 5(2), 13) names the notice's version, not the person's data.",
 })
 
 /** Why an erasure cannot run now (a 409 each, with its words); a legal hold is not one of these: it keeps a record (KEPT). */
-export const ERASURE_BLOCKED = ['PORTAL_USER', 'STILL_ACTIVE', 'ACCOUNT_OPEN', 'NOT_A_PROSPECT', 'TOO_MANY'] as const
+export const ERASURE_BLOCKED = ['PORTAL_USER', 'STILL_ACTIVE', 'ACCOUNT_OPEN', 'NOT_A_PROSPECT', 'TOO_MANY', 'MAIL_SENDING'] as const
 export type ErasureBlocked = (typeof ERASURE_BLOCKED)[number]
 
 export const ERASURE_BLOCKED_WORDS: Readonly<Record<ErasureBlocked, string>> = Object.freeze({
@@ -39,6 +41,7 @@ export const ERASURE_BLOCKED_WORDS: Readonly<Record<ErasureBlocked, string>> = O
   ACCOUNT_OPEN: 'This office account is still open: deactivate it first (Admin › Users), then erase.',
   NOT_A_PROSPECT: 'This inquiry names a contact of a customer, not a prospect: erase the contact instead.',
   TOO_MANY: 'This person has more records than one erasure writes at once: ask the administrator to split it.',
+  MAIL_SENDING: 'A mail to this person is being sent right now: try again in two minutes, once it has gone.',
 })
 
 export const ERASURE_LIMITS = Object.freeze({ reason: 1000, confirmName: 200, records: 2000 })

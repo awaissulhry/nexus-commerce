@@ -73,7 +73,7 @@ beforeAll(async () => {
   ids.other = await row('2026-11-02T10:00:00Z', 'org.editCompany', { companyId: companyTwo, recordType: 'Company', recordId: companyTwo, before: { name: 'Old' }, after: { name: 'New' } })
   ids.lucia = await row('2026-11-02T10:05:00Z', 'quotes.create', { actorId: lucia, recordType: 'Company', recordId: quote, after: { status: 'DRAFT' } })
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
   )
 }, 120_000)

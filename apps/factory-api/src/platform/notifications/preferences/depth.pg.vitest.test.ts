@@ -89,7 +89,7 @@ beforeAll(async () => {
   company = tenant.companies[0]!.id
   for (const [key, id] of Object.entries(PEOPLE)) await person(id, key, ROLE_OF[key as Person])
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database: h.database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => sessions.get(String(request.headers['x-test-session'])) ?? null) },
   )
 }, 180_000)

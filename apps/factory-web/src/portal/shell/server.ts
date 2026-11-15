@@ -1,9 +1,10 @@
 import { cache } from 'react'
-import { cookies } from 'next/headers'
+import { cookies, headers } from 'next/headers'
 import type { PublicBranding } from '@nexus/factory-domain/branding/contracts'
 import { readFactoryApiUrl } from '../../lib/api-url'
 import { readPublicBranding } from '../../lib/api/branding'
 import { CSRF_COOKIE, createApiClient, type ApiClient } from '../../lib/api/client'
+import { forwardedForOf } from '../../lib/api/forwarded'
 import { isApiError } from '../../lib/api/errors'
 import { fetchPortalMe, fetchTerms, type PortalMe, type PortalTerms } from './api'
 
@@ -24,7 +25,8 @@ async function portalServerApi(): Promise<ApiClient> {
       return value === undefined ? [] : [`${name}=${value}`]
     })
     .join('; ')
-  return createApiClient({ baseUrl: readFactoryApiUrl(process.env.FACTORY_API_URL), cookie: cookie === '' ? null : cookie })
+  // B-W2b-F57: the browser's address, not this web's (lib/api/forwarded.ts).
+  return createApiClient({ baseUrl: readFactoryApiUrl(process.env.FACTORY_API_URL), cookie: cookie === '' ? null : cookie, forwardedFor: forwardedForOf(await headers()) })
 }
 
 export type PortalLoad =

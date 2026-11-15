@@ -119,7 +119,8 @@ export interface Harness {
 
 async function appFor(database: FactoryDatabase, auth: OfficeAuth, clock: Clock): Promise<FastifyInstance> {
   return buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET, webOrigin: WEB_ORIGIN, rateLimit: GENEROUS },
+    // B-W2b-F57: the web beside the API, as locally (an inject's peer is 127.0.0.1; a NetworkBrowser's own address is not a proxy).
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET, webOrigin: WEB_ORIGIN, rateLimit: GENEROUS, trustedProxies: 'loopback' },
     { database, officeAuth: auth, clock, routesRoot: fileURLToPath(new URL('../../../..', import.meta.url)) },
   )
 }

@@ -117,7 +117,7 @@ beforeAll(async () => {
     'tablet-a1': { audience: 'floor', tenantId: a.tenantId, actorId: workerA1, siteId: siteA1, deviceId: tabletA1, grants: [floorWork] },
   }
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database, routesRoot: fileURLToPath(new URL('../..', import.meta.url)), authenticate: testAuthenticator((request) => sessions[String(request.headers['x-test-session'])] ?? null) },
   )
 }, 60_000)

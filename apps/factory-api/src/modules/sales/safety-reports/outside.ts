@@ -20,6 +20,7 @@ import { assertMayRequest, assertMayUpload, portalReader } from '../portal-retur
 import { refuse } from '../service/open'
 import { announceReportPhoto, completeReportPhoto, type PhotoBody } from './files'
 import { intakeInCommand, type IntakeBody } from './intake'
+import { clientAddressOf } from '../../../core/client-address'
 
 /**
  * The doors from outside (B-W2b-351; SAL-414; design links.doc "Report a problem", portal.customer.returns "Report a safety
@@ -156,7 +157,7 @@ export async function sendPublicReport(app: FastifyInstance, request: FastifyReq
   const early = intakeProblems({ ...facts, batchNumber: where.fixed.batchNumber ?? facts.batchNumber }, businessDate(appClock(app).now()), true)
   if (early.length > 0) refuse(early, 'The safety report cannot be sent like this.')
   // At most SAFETY_LIMITS.publicPerHour reports a network an hour (a repeat of the same report counts too).
-  const sent = await guard.hit('public.lookup', 'safety-report', networkOf(request.ip), HOUR)
+  const sent = await guard.hit('public.lookup', 'safety-report', networkOf(clientAddressOf(request)), HOUR)
   if (sent.count > SAFETY_LIMITS.publicPerHour) {
     const seconds = Math.max(1, Math.ceil(sent.resetInMs / 1000))
     void reply.header('retry-after', String(seconds))

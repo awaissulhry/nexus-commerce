@@ -23,6 +23,7 @@ const RAILWAY = {
   FACTORY_KMS_KEY_ID: 'arn:aws:kms:eu-south-1:000000000000:key/00000000-0000-0000-0000-000000000000',
   FACTORY_AWS_ACCESS_KEY_ID: 'AKIAIOSFODNN7EXAMPLE',
   FACTORY_AWS_SECRET_ACCESS_KEY: 'not-a-real-secret-access-key-for-tests',
+  FACTORY_TRUSTED_PROXIES: 'private',
 }
 /** A made-up master key (32 bytes of 0x01), never a real one. */
 const TEST_MASTER_KEY = Buffer.alloc(32, 1).toString('base64')
@@ -150,9 +151,32 @@ describe('refusals', () => {
     }
   })
 
-  it('refuses proxy hops out of range', () => {
-    expect(() => parseFactoryEnv({ ...LOCAL, FACTORY_TRUST_PROXY_HOPS: '-1' }, undefined)).toThrow(/FACTORY_TRUST_PROXY_HOPS/)
-    expect(() => parseFactoryEnv({ ...LOCAL, FACTORY_TRUST_PROXY_HOPS: 'all' }, undefined)).toThrow(/FACTORY_TRUST_PROXY_HOPS/)
+  // B-W2b-F57: the proxies whose X-Forwarded-For counts, by address; never a hop count, never "trust everything".
+  it('refuses trusted proxies that trust everything or are no addresses, in words', () => {
+    for (const list of ['*', 'all', '0.0.0.0/0', '::/0', 'localhost', 'loopback none']) {
+      expect(() => parseFactoryEnv({ ...LOCAL, FACTORY_TRUSTED_PROXIES: list }, undefined), list).toThrow(/FACTORY_TRUSTED_PROXIES: /)
+    }
+    expect(() => parseFactoryEnv({ ...LOCAL, FACTORY_TRUSTED_PROXIES: '0.0.0.0/0' }, undefined)).toThrow(/never "trust everything"/)
+  })
+
+  it('refuses the old hop count (FACTORY_TRUST_PROXY_HOPS), whatever its value', () => {
+    for (const hops of ['0', '2']) {
+      expect(() => parseFactoryEnv({ ...LOCAL, FACTORY_TRUST_PROXY_HOPS: hops }, undefined), hops).toThrow(/FACTORY_TRUST_PROXY_HOPS is gone: name the proxies .* in FACTORY_TRUSTED_PROXIES/)
+    }
+  })
+
+  it.each(['production', 'staging'])('needs FACTORY_TRUSTED_PROXIES with FACTORY_ENV=%s (none is a choice, unset is not)', (name) => {
+    const { FACTORY_TRUSTED_PROXIES: _unused, ...rest } = RAILWAY
+    expect(() => parseFactoryEnv({ ...rest, FACTORY_ENV: name }, 'production')).toThrow(/FACTORY_TRUSTED_PROXIES must be set with FACTORY_ENV=/)
+    expect(() => parseFactoryEnv({ ...rest, FACTORY_ENV: name, FACTORY_TRUSTED_PROXIES: ' ' }, 'production')).toThrow(/FACTORY_TRUSTED_PROXIES must be set/)
+    expect(parseFactoryEnv({ ...rest, FACTORY_ENV: name, FACTORY_TRUSTED_PROXIES: 'none' }, 'production').FACTORY_TRUSTED_PROXIES).toBe('none')
+  })
+
+  it('trusts loopback by default locally (the web runs beside the API), and keeps a list that is set', () => {
+    expect(parseFactoryEnv(LOCAL, undefined).FACTORY_TRUSTED_PROXIES).toBe('loopback')
+    expect(parseFactoryEnv({ ...LOCAL, FACTORY_ENV: 'test' }, undefined).FACTORY_TRUSTED_PROXIES).toBe('loopback')
+    expect(parseFactoryEnv({ ...LOCAL, FACTORY_TRUSTED_PROXIES: 'none' }, undefined).FACTORY_TRUSTED_PROXIES).toBe('none')
+    expect(parseFactoryEnv({ ...LOCAL, FACTORY_TRUSTED_PROXIES: '10.0.0.5, fd12::/16' }, undefined).FACTORY_TRUSTED_PROXIES).toBe('10.0.0.5, fd12::/16')
   })
 
   it('refuses a database client count outside 1-64, and leaves it to factory-db when unset', () => {
@@ -215,7 +239,7 @@ describe('accepted', () => {
       FACTORY_WEB_ORIGIN: 'http://localhost:3200',
       FACTORY_COOKIE_SECRET: LOCAL_COOKIE_SECRET,
       FACTORY_PIN_PEPPER: LOCAL_PIN_PEPPER,
-      FACTORY_TRUST_PROXY_HOPS: 0,
+      FACTORY_TRUSTED_PROXIES: 'loopback',
       FACTORY_AWS_REGION: 'eu-south-1',
     })
   })
@@ -223,11 +247,11 @@ describe('accepted', () => {
   it('production on Railway, with remote hosts', () => {
     const env = loadFactoryEnv({
       file: join(tmpdir(), 'factory-env-missing', 'variables'),
-      processEnv: { ...RAILWAY, FACTORY_PORT: '8080', FACTORY_TRUST_PROXY_HOPS: '2', RAILWAY_ENVIRONMENT: 'production' },
+      processEnv: { ...RAILWAY, FACTORY_PORT: '8080', RAILWAY_ENVIRONMENT: 'production' },
     })
     expect(env.FACTORY_HOST).toBe('::')
     expect(env.FACTORY_PORT).toBe(8080)
-    expect(env.FACTORY_TRUST_PROXY_HOPS).toBe(2)
+    expect(env.FACTORY_TRUSTED_PROXIES).toBe('private')
     expect(env.FACTORY_WEB_ORIGIN).toBe('https://factory.example.com')
     expect(env.FACTORY_QUEUE_PREFIX).toBe('factory')
     expect(Object.isFrozen(env)).toBe(true)

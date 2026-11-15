@@ -6,6 +6,7 @@ import { AUTH_RATE_LIMITS, officeAuthOf } from '../../../platform/auth/sessions/
 import { floorClock, floorClockState, scanClock, tabletClock } from './clock'
 import { floorClockContract, floorStateContract, scanClockContract, tabletClockContract } from './contract'
 import { manifest } from './manifest'
+import { clientAddressOf } from '../../../core/client-address'
 
 /**
  * Clock in and out (B-W2b-33; MES-223 clock in and out, MES-224 breaks, MES-239 forgot badge, MES-199 offline; design
@@ -23,7 +24,7 @@ import { manifest } from './manifest'
 export default defineRoutes('people.clock', manifest, async (app) => {
   const limits = app.officeAuth?.rateLimits ?? AUTH_RATE_LIMITS
   const perDevice = {
-    rateLimit: { max: limits.floorSignIn.max, timeWindow: limits.floorSignIn.timeWindowMs, keyGenerator: (request: FastifyRequest) => `floor-clock:${parseSiteToken(deviceCookieOf(request))?.id ?? request.ip}` },
+    rateLimit: { max: limits.floorSignIn.max, timeWindow: limits.floorSignIn.timeWindowMs, keyGenerator: (request: FastifyRequest) => `floor-clock:${parseSiteToken(deviceCookieOf(request))?.id ?? clientAddressOf(request)}` },
   }
 
   app.get('/people/clock/floor', { schema: floorStateContract }, async (request) => floorClockState(request))

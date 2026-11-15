@@ -120,7 +120,7 @@ beforeAll(async () => {
   hide2 = (await admin<{ id: string }>(`SELECT id FROM "Hide" WHERE "tenantId" = $1 AND code = 'SEED-HIDE-0002'`, [A.tenant]))[0]!.id
   store = (await admin<{ id: string }>(`SELECT id FROM "Location" WHERE "tenantId" = $1 AND code = 'A1-STORE-01'`, [A.tenant]))[0]!.id
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database: h.database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null), logger: false },
   )
 }, 240_000)

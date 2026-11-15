@@ -141,7 +141,10 @@ B-W2b-124 `modules/plant/statutory` (QHS-205; D.Lgs. 81/2008 art. 71: results ke
 - `logger.ts`: redacts secret keys (passwords, PINs, tokens, cookies, keys, hashes, `…Enc`, cost/margin/price/
   amount/total/wages) at any depth; requests are logged by route pattern, never URL, headers or body.
 - `security.ts`: strict headers on every answer, CORS only for `FACTORY_WEB_ORIGIN`, writes with another Origin
-  refused, rate limit (Redis when present), 1 MiB body limit.
+  refused, rate limit (Redis when present; per client address, `client-address.ts`), 1 MiB body limit.
+- `client-address.ts` (B-W2b-F57): THE client address, `clientAddressOf(request)` — the rate limit (global and every
+  route's own), sessions, sign-in codes, security events, links, approvals and the abuse guard all use it; nothing reads
+  `request.ip`, the socket or X-Forwarded-For itself (its vitest holds that). See "Client address" below.
 - `cors-expose.ts` (B-W2b-383): the answer headers a page may read (`Access-Control-Expose-Headers`): the request id and
   `x-labels-refused`. A route that answers a header of its own for the web adds it there, by its constant.
 - `ids.ts` (request ids), `time.ts` (the server clock). UUIDv7 `newId()` and Europe/Rome dates live in
@@ -152,6 +155,28 @@ B-W2b-124 `modules/plant/statutory` (QHS-205; D.Lgs. 81/2008 art. 71: results ke
   `<prefix>:cron:<job>:<second>` in Redis (SET NX PX); fails closed when Redis is down.
 - `sse.ts`: live screens. One Redis subscriber per process (`LiveFeed`), `GET /live` (platform/outbox) streams what
   `liveViewFor` lets each office or floor viewer see; heartbeat 20 s.
+
+## Client address (`src/core/client-address.ts`, factory-domain `core/client-address.ts`; B-W2b-F57)
+- Every browser reaches the API through the factory web (`/api/*` is a route of the web, apps/factory-web
+  `src/app/api/[...path]/route.ts`; server renders call the API from the web too), and on Railway the web through
+  Railway's edge. The web sends X-Forwarded-For: the chain it received only from a trusted edge, then its own peer
+  (apps/factory-web `src/lib/api/forwarded.ts`); a browser's own header never travels on.
+- The API trusts X-Forwarded-For ONLY from `FACTORY_TRUSTED_PROXIES` (addresses, `address/prefix` ranges, `loopback`,
+  `private` = 10/8, 172.16/12, 192.168/16, 100.64/10, fc00::/7; `none`; never wider than /8 or /7, never "everything").
+  From a trusted peer the client is the right-most address that is not a trusted proxy; anybody else keeps its TCP
+  address whatever it sends. Addresses are canonical (`::ffff:a.b.c.d` = `a.b.c.d`). Fastify's `trustProxy` stays off.
+- `FACTORY_TRUSTED_PROXIES`: local and test default `loopback` (the web beside the API; the test harness trusts
+  loopback too); staging and production refuse to start without it. The old `FACTORY_TRUST_PROXY_HOPS` is refused (a
+  hop count trusted a forged header on a direct request).
+- Go-live on Railway (nothing set from this machine): API service `FACTORY_TRUSTED_PROXIES=private` (the web reaches it
+  over the private network, `*.railway.internal`; Railway publishes no edge range, and every peer there is the edge or
+  a service of the same project); web service `FACTORY_TRUSTED_PROXIES=private` (the edge in front of it) and
+  `FACTORY_API_URL=http://<api service>.railway.internal:<FACTORY_PORT>` (the API listens on `::` there). Check on
+  staging: sign in with a forged header (`X-Forwarded-For: 192.0.2.1`); Admin › Audit log searched by your real
+  address (`GET /audit/search?ip=`) finds the sign-in, by 192.0.2.1 nothing.
+- Tests: `core/client-address.vitest.test.ts` (the rule through the app, the rate-limit buckets, the one-reader check),
+  `platform/auth/sessions/client-address.pg.vitest.test.ts` (two browsers through the proxy, a forged header, session,
+  security events, audit search and place).
 
 ## The outbox (`src/platform/outbox/`)
 - `writer.ts`: command()'s EventWriter. An emitted event must be declared in `@nexus/factory-domain/events/catalogue`
@@ -722,8 +747,8 @@ B-W2b-124 `modules/plant/statutory` (QHS-205; D.Lgs. 81/2008 art. 71: results ke
 
 ## Data protection in depth (`src/platform/privacy/{requests,erasure,retention}/`, `safety-form.ts`; B-W2b-405; PLT-202, PLT-203, PLT-204)
 - Data requests (`requests/`): received → identity checked (IN_PROGRESS) → done | refused | withdrawn, the 30-day clock (720 h, extended once by 1-2 months within the first month); privacy.requests.view / manage on the request's company. An access request's package is collected by the worker's handler `privacy.collectPackage` (on privacy.request_collect_asked): every source's sections as JSON plus the person's files in one ZIP (a DataRequest file, module-owned and module-read: owned.ts); its download is in the read log. Download my data (`/privacy/my-data`): any office person, the session proves who asks, the first download closes it.
-- Erasure (`erasure/`): every source of a person's data is one entry of `erasure/sources/index.ts` (collect for the package, plan for the erasure: ANONYMISED / DELETED / KEPT with the law's why). `POST /privacy/requests/:requestId/erase` (privacy.erase, a fixed LEGAL step-up) writes one ErasureRecord per record looked at. Mail, messages and audit rows are KEPT (IMMUTABLE) until a guarded erasure path exists (schema need). A new table with personal data adds a source.
-- Retention (`retention/`): a rule names a record type of `retention/rules/index.ts` (others refused; the append-only ledgers never); the nightly cron `privacy.retentionSweep` (02:50) writes one RetentionSweep per active rule: REPORT until a person switches the rule on to apply (GATE-PRIVACY, a fresh code). The dated purges of W2b-3/W2b-5 keep their own jobs and are listed beside the rules.
+- Erasure (`erasure/`): every source of a person's data is one entry of `erasure/sources/index.ts` (collect for the package, plan for the erasure: ANONYMISED / DELETED / KEPT with the law's why). `POST /privacy/requests/:requestId/erase` (privacy.erase, a fixed LEGAL step-up) writes one ErasureRecord per record looked at, every one BEFORE any change. Mail received and sent, messages and audit rows (B-W2b-F54) are blanked through the database's door `factory_privacy_erase_row(erasureId, addresses, jsonKeys)` (a `$queryRaw` SELECT; the office role only): it blanks exactly the columns the row's ErasureRecord of this transaction names; a legal hold on the person's own record (own.ts `ownHold`) keeps them too; a mail still queued is stopped first, one being sent right now blocks the erasure (MAIL_SENDING, two minutes). Never `update` these rows yourself (check-append-only). A new table with personal data adds a source.
+- Retention (`retention/`): a rule names a record type of `retention/rules/index.ts` (others refused; the append-only ledgers never: they are never purged, the Owner's decision of 15 Nov 2026); the nightly cron `privacy.retentionSweep` (02:50) writes one RetentionSweep per active rule: REPORT until a person switches the rule on to apply (GATE-PRIVACY, a fresh code). The dated purges of W2b-3/W2b-5 keep their own jobs and are listed beside the rules.
 - The safety-report form: per company (`SalesSettings.safetyReportFormOn`, `PUT /privacy/safety-report-form`), only with the company's SAFETY_REPORT notice published; the environment variable is gone.
 
 ## Notifications, followers, @mentions and tasks (`src/platform/{notifications,tasks}/`, `platform/threads/followers.ts`, `platform/email-out/digest/`; B-W2a-20; PLT-138, PLT-142, COL-006, COL-011, COL-037)

@@ -5,9 +5,9 @@ import { ApiError, apiErrorFrom, networkError } from './errors'
  * The typed client for the factory API — the ONE way this web calls it.
  *
  * Rules (apps/factory-api/CLAUDE.md):
- *  - It only ever reaches the factory API: the browser through this app's own `/api/*` (next.config.ts proxies it to
- *    FACTORY_API_URL, so the session cookie stays first-party); a server component straight at FACTORY_API_URL, which
- *    has no fallback (lib/api-url.ts). Never the Commerce API.
+ *  - It only ever reaches the factory API: the browser through this app's own `/api/*` (the route
+ *    src/app/api/[...path]/route.ts passes it to FACTORY_API_URL, so the session cookie stays first-party); a server
+ *    component straight at FACTORY_API_URL, which has no fallback (lib/api-url.ts). Never the Commerce API.
  *  - Every unsafe call (POST, PUT, PATCH, DELETE) of a cookie session sends `x-csrf-token` = the `__Host-factory_csrf`
  *    cookie (the double submit). Sign-in, sign-out and invitation accept need it too.
  *  - `x-factory-company` names the company the office works in (the URL's `/w/<company>`); the API checks it is one of
@@ -42,6 +42,11 @@ export interface ApiClientOptions {
   cookie?: string | null
   /** A one-off link's token, for `x-factory-link`. */
   linkToken?: string | null
+  /**
+   * B-W2b-F57: a server render's X-Forwarded-For, the browser's address (lib/api/forwarded.ts `forwardedForOf`), so the
+   * API counts and records the person, not this web. Never in the browser (its calls go through the /api proxy route).
+   */
+  forwardedFor?: string | null
 }
 
 export interface RequestOptions<T> {
@@ -97,6 +102,7 @@ export function requestHeaders(options: ApiClientOptions, method: HttpMethod, re
   if (options.company) headers.set(COMPANY_HEADER, options.company)
   if (options.linkToken) headers.set(LINK_HEADER, options.linkToken)
   if (options.cookie) headers.set('cookie', options.cookie)
+  if (options.forwardedFor) headers.set('x-forwarded-for', options.forwardedFor)
   if (request.idempotencyKey) headers.set(IDEMPOTENCY_HEADER, request.idempotencyKey)
   if (UNSAFE.has(method)) {
     const token = options.csrfToken?.()

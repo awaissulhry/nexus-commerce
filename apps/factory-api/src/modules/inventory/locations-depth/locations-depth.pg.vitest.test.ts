@@ -76,7 +76,7 @@ beforeAll(async () => {
   ids = f.ids
   const SESSIONS = sessions()
   app = await buildApp(
-    { environment: 'test', webOrigin: WEB, trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', webOrigin: WEB, cookieSecret: LOCAL_COOKIE_SECRET },
     { database: f.database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
   )
   await f.admin(
