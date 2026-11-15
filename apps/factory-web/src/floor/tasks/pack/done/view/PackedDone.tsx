@@ -12,14 +12,17 @@ import type { PackedSummary } from '../model'
  * the facts: the carton marks, the carrier labels, the DDT with the packing list, each as it really stands.
  */
 export function PackedDone({ summary, t }: { summary: PackedSummary; t: Translate }) {
-  const labelsFact = summary.labels === 'notNeeded' ? t(`done.transport.${summary.transportBy}`) : t(`done.labelsState.${summary.labels}`)
+  // B-W2b-F50: TEST labels say TEST: the office makes them (never "buys"), and a fact says they go to no carrier and are not charged.
+  const labelsKey = summary.labels === 'office' && summary.test ? 'officeTest' : summary.labels
+  const labelsFact = summary.labels === 'notNeeded' ? t(`done.transport.${summary.transportBy}`) : t(`done.labelsState.${labelsKey}`)
   return (
-    <FloorState tone="success" icon={<PackageCheck />} title={t('done.title', { number: summary.number })} text={t('done.line', { count: summary.cartons, labels: t(`done.labels.${summary.labels}`) })}>
+    <FloorState tone="success" icon={<PackageCheck />} title={t('done.title', { number: summary.number })} text={t('done.line', { count: summary.cartons, labels: t(`done.labels.${labelsKey}`) })}>
       <FloorFacts
         facts={[
           { label: t('done.facts.cartons'), value: String(summary.cartons) },
           { label: t('done.facts.marks'), value: summary.marks === 'printed' ? t('done.marks.printed', { count: summary.cartons }) : t('done.marks.due') },
           { label: t('done.facts.labels'), value: labelsFact },
+          ...(summary.test ? [{ label: t('done.facts.test'), value: t('done.test') }] : []),
           { label: t('done.facts.documents'), value: t(`done.documentsState.${summary.documents}`) },
         ]}
       />

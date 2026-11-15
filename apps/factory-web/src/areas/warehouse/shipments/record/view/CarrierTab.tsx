@@ -3,7 +3,7 @@
 import type { ReactNode } from 'react'
 import { Download, MoreHorizontal, Printer, Tag as TagIcon, Truck } from 'lucide-react'
 import { Banner, Card, EmptyState, KeyValue, Menu, SummaryTable } from '@nexus/ui/components'
-import { Button, Pill } from '@nexus/ui/primitives'
+import { Button, Pill, Tag } from '@nexus/ui/primitives'
 import { formatDateTime } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import type { Shipment } from '../../api'
@@ -47,6 +47,9 @@ export function CarrierTab({ shipment, model, actions, depth }: { shipment: Ship
   const plan = voidPlan(shipment, model.tracking?.value ?? null)
   const voidBlocked = voidHeld(shipment, plan, model.can)
   const labelled = shipment.parcels.filter((parcel) => parcel.trackingNumber).length
+  // B-W2b-F50: TEST labels say TEST — the site in test mode makes TEST labels (never bought, not charged); a TEST label says so.
+  const testMode = labels?.testMode === true
+  const anyTest = labels?.parcels.some((entry) => entry.test) === true
 
   return (
     <div className="fw-sh-cards">
@@ -72,11 +75,11 @@ export function CarrierTab({ shipment, model, actions, depth }: { shipment: Ship
         />
         {shipment.transportBy === 'CARRIER' && !depth?.noLabels ? (
           <>
-            <p className="fw-sh-hint">{t('carrier.account')}</p>
+            <p className="fw-sh-hint">{t(testMode ? 'carrier.accountTest' : 'carrier.account')}</p>
             {!left && toLabel > 0 && (
               <span className="fw-sh-inline">
                 <Button size="sm" variant="primary" heldReason={buyHeld} onClick={() => actions?.onDialog?.({ kind: 'buyLabels' })} aria-keyshortcuts="l">
-                  <TagIcon size={14} aria-hidden /> {t('step.buyLabels', { count: toLabel })}
+                  <TagIcon size={14} aria-hidden /> {t(testMode ? 'step.buyLabelsTest' : 'step.buyLabels', { count: toLabel })}
                 </Button>
               </span>
             )}
@@ -109,6 +112,7 @@ export function CarrierTab({ shipment, model, actions, depth }: { shipment: Ship
               )}
             </span>
           </div>
+          {anyTest && <Banner tone="warning" title={t('carrier.testNote')} />}
           {model.labels && !model.labels.value ? (
             <PartState problem={model.labels.problem} onRetry={() => actions?.onRetryPart?.('labels')} label={t('carrier.labels')} />
           ) : shipment.parcels.length === 0 ? (
@@ -129,7 +133,9 @@ export function CarrierTab({ shipment, model, actions, depth }: { shipment: Ship
                     parcel.trackingNumber ? (
                       <span key="t" className="fw-sh-cell">
                         <span className="fw-sh-mono">{parcel.trackingNumber}</span>
-                        {parcel.labelledAt && <span className="fw-sh-cell-sub">{t('carrier.boughtAt', { when: formatDateTime(parcel.labelledAt, { locale }) })}</span>}
+                        {/* B-W2b-F50: TEST labels say TEST (a test label is made, never bought, and not charged). */}
+                        {label?.test && <Tag tone="warning">{t('carrier.test')}</Tag>}
+                        {parcel.labelledAt && <span className="fw-sh-cell-sub">{t(label?.test ? 'carrier.testAt' : 'carrier.boughtAt', { when: formatDateTime(parcel.labelledAt, { locale }) })}</span>}
                       </span>
                     ) : (
                       <span key="t" className="fw-sh-muted">
