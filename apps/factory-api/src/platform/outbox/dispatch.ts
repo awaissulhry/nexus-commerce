@@ -31,6 +31,8 @@ export interface HandlerTools {
   readonly caller: CommandCaller
   /** 1 on the first try. */
   readonly attempt: number
+  // B-W2b-F46: the worker's log, for a handler's structured line (absent where a test or the golden flow runs a handler).
+  readonly log?: Log
 }
 
 export interface EventHandler {
@@ -95,12 +97,13 @@ export async function dispatchEvent(event: EventEnvelope, settings: DispatchSett
 }
 
 /** Runs one handler job. */
-export async function runHandler(job: Job<EventEnvelope>, handlers: readonly EventHandler[], database: FactoryDatabase): Promise<void> {
+// B-W2b-F46: + log (HandlerTools.log).
+export async function runHandler(job: Job<EventEnvelope>, handlers: readonly EventHandler[], database: FactoryDatabase, log?: Log): Promise<void> {
   const handler = handlers.find((entry) => entry.name === job.name)
   if (!handler) throw new HandlerConfigError(`No handler ${job.name} in this worker`)
   const event = eventEnvelope.parse(job.data)
   const caller = callerFor(database, systemContext(event.tenantId, event.correlationId))
-  await handler.handle(event, { caller, attempt: job.attemptsMade + 1 })
+  await handler.handle(event, { caller, attempt: job.attemptsMade + 1, ...(log ? { log } : {}) })
 }
 
 export interface EventWorkers {
@@ -117,7 +120,7 @@ export function startEventWorkers(options: DispatchSettings & { readonly databas
   const concurrency = options.concurrency ?? 4
   const workers: Worker[] = [
     options.kit.work<EventEnvelope>('events', (job) => dispatchEvent(eventEnvelope.parse(job.data), options), { concurrency }),
-    options.kit.work<EventEnvelope>('event-handlers', (job) => runHandler(job, options.handlers, options.database), { concurrency }),
+    options.kit.work<EventEnvelope>('event-handlers', (job) => runHandler(job, options.handlers, options.database, options.log), { concurrency }),
   ]
   for (const worker of workers) {
     worker.on('failed', (job, error) => {

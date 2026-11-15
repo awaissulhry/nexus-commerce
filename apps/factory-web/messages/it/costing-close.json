@@ -109,6 +109,13 @@
     "note": "Nota: {note}",
     "final": "Un ordine chiuso è definitivo: per cambiarlo, riaprilo con un motivo."
   },
+  "afterClose": {
+    "body_one": "{count} costo è arrivato dopo la chiusura — riapri l'ordine per registrarlo.",
+    "body_other": "{count} costi sono arrivati dopo la chiusura — riapri l'ordine per registrarli.",
+    "list": "Costi arrivati dopo la chiusura",
+    "line": "{event} ({document}), {date}",
+    "lineAmount": "{event} ({document}), {date}: {amount}"
+  },
   "refusal": {
     "NOT_COMPLETED": "Rifiutato: si chiude solo un ordine completato.",
     "REASON_NEEDED": "Rifiutato: una voce è oltre la tolleranza, quindi serve un motivo.",
