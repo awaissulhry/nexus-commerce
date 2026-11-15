@@ -159,7 +159,7 @@ export const depositReceivedContract = defineContract({
     externalRef: reference,
     method: manualMethod.optional(),
     internalNote: z.string().trim().max(2000).nullish(),
-    /** Default true: issue the TD02 now when the rule requires one (needs invoices.issue and a fresh step-up). */
+    /** Default true: issue the TD02 now when the rule requires one (needs invoices.issue and a fresh step-up). B-W2b-F55: false, the worker issues it right after. */
     issueDepositInvoice: z.boolean().optional(),
     periodLockOverride: periodLockOverride.optional(),
   }),
