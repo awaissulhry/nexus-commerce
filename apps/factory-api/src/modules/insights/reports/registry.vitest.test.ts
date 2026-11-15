@@ -6,6 +6,7 @@ import type { Permission } from '@nexus/factory-domain/core/permissions'
 import { PERIODS, REPORT_AREAS } from '@nexus/factory-domain/insights/reports/definition'
 import { NUMBER_RULES } from '@nexus/factory-domain/insights/reports/numbers'
 import { REPORT_KEYS } from '@nexus/factory-domain/production/reports/subscriptions'
+import { REPORT_TITLE_KEYS } from '@nexus/factory-domain/insights-digest/report-mail'
 import { NUMBER_READER_KEYS } from './numbers'
 import { reportFiles } from './report-files'
 import { checkReports, loadReports } from './registry'
@@ -36,6 +37,11 @@ describe('the standard report pack (ANA-029)', () => {
       expect(FACTORY_PERMISSIONS.isDeclared(report.permission as Permission), report.key).toBe(true)
       if (report.mail !== null) expect(REPORT_KEYS as readonly string[], report.key).toContain(report.mail)
     }
+  })
+
+  it('B-W2b-435: every report of the pack has its Italian title for the e-mail ("E-mail me this", DG1:01)', async () => {
+    const reports = await loadReports(SRC)
+    expect(reports.map((report) => report.key).filter((key) => !REPORT_TITLE_KEYS.includes(key))).toEqual([])
   })
 
   it('the numbers of Today and the reports name each other; every number has its reader', async () => {

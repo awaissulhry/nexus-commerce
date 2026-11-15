@@ -21,6 +21,9 @@ import {
 } from './contract'
 import { manifest } from './manifest'
 import { createRule, getRule, listRules, ruleChoices, ruleTimers, testRule, updateRule } from './rules'
+// B-W2b-435 (ANA-041): who a rule tells at each place (routes/).
+import { addRouteContract, listRoutesContract, removeRouteContract } from './routes/contract'
+import { addRuleRoute, listRuleRoutes, removeRuleRoute } from './routes/rule-routes'
 
 /**
  * Exception rules and stored alerts (B-W2a-33; ANA-036, PLT-100): the alerts with their tiles, one alert, acknowledge
@@ -47,6 +50,13 @@ export default defineRoutes('alerts', manifest, async (app) => {
   app.post('/alerts/rules/:id/test', { schema: testRuleContract }, async (request) => testRule(request, request.params.id, request.body))
 
   app.get('/alerts/rules/:id/timers', { schema: ruleTimersContract }, async (request) => ruleTimers(request, request.params.id))
+
+  // B-W2b-435 (ANA-041): a rule's routes — who it tells at a company, site, line or customer of its place.
+  app.get('/alerts/rules/:id/routes', { schema: listRoutesContract }, async (request) => listRuleRoutes(request, request.params.id))
+
+  app.post('/alerts/rules/:id/routes', { schema: addRouteContract }, async (request, reply) => reply.code(201).send(await addRuleRoute(request, request.params.id, request.body, idempotencyKeyFrom(request))))
+
+  app.delete('/alerts/routes/:routeId', { schema: removeRouteContract }, async (request) => removeRuleRoute(request, request.params.routeId, idempotencyKeyFrom(request)))
 
   app.get('/alerts/:id', { schema: getAlertContract }, async (request) => getAlert(request, request.params.id))
 

@@ -30,6 +30,8 @@ import type { SubscribeModel } from './view/SubscribeDialog'
 import { cutboardLiveTouches } from '../wip/cutting/model'
 import { getCutYield, type CutYield } from './yield/api'
 import { withYieldDays, yieldCanOf, yieldDaysOf, yieldPeriod } from './yield/model'
+// B-W2b-435: WIP ageing by line (prr-wip).
+import { WipAgeing } from './wip-ageing/WipAgeing'
 
 /**
  * `/w/<company>/production/reports` (SCR-240): reads the day's report of the site in the address (`?site=&date=`; else the
@@ -151,6 +153,18 @@ export function ReportsPage() {
     dialog && site
       ? { site: { id: site.id, code: site.code, name: site.name }, me, can, draft: dialog.draft, mine, others: othersSubscribed(subscriptions, site.id), people: dialog.people, busy: dialog.busy, problem: dialog.problem }
       : null
-  const model: ReportsModel = { prefix, can, address, daily, mine, live, now, dialog: dialogModel, cutYield: { prefix, can: yieldCan, days, read: cutYield } }
+  const model: ReportsModel = {
+    prefix,
+    can,
+    address,
+    daily,
+    mine,
+    live,
+    now,
+    dialog: dialogModel,
+    cutYield: { prefix, can: yieldCan, days, read: cutYield },
+    // B-W2b-435: WIP ageing by line, of the report's site.
+    ...(daily.value ? { wipAgeing: <WipAgeing siteId={daily.value.site.id} siteCode={daily.value.site.code} /> } : {}),
+  }
   return <ReportsView model={model} actions={actions} />
 }

@@ -13,6 +13,8 @@ import { sourceOfPayment, storedSourceOf, termsJsonOf } from '../terms'
 import { coreLineOf, partyFacts, reviewIssue } from '../facts'
 import { invoiceDetail, officeInvoice, readInvoice, readLines, type InvoiceDetail, type InvoiceRow, type LineRow } from '../store'
 import { lockInvoice, readSends } from './store'
+// B-W2b-F47: the correction's new lines take the company's tax rules as every draft does (the stamp duty decided again).
+import { stampDutyAtCorrection, taxedLines } from '../tax-codes/apply'
 
 /**
  * Correcting a rejected invoice (FIN-087; Provv. AdE 89757/2018, circolare AdE 13/E/2018: a file SDI rejected counts as
@@ -20,7 +22,10 @@ import { lockInvoice, readSends } from './store'
  * the invoice (its version guards the edit; the row stays locked): only while REJECTED and no send of it is on its way,
  *
  *   lines         replaced when sent (the goods and services lines; the deposit deductions stay as they are), with their
- *                 VAT decided as for a draft and their order lines and DDTs checked;
+ *                 VAT decided as for a draft and their order lines and DDTs checked; B-W2b-F47: then the company's tax
+ *                 rules as on every draft (tax-codes/apply.ts taxedLines, on the invoice's date): the STAMP_DUTY line is
+ *                 decided again from the new lines (added, kept or taken away), and the quarter counted again as the
+ *                 issue counts it (stampDutyAtCorrection). Left out, the lines stay as they are, the stamp line too;
  *   text          causale, the customer's purchase orders, the payment terms (rebuilt for the new total);
  *   totals        recomputed from the lines (factory-domain computeInvoiceTotals); never below what is paid and credited
  *                 on it (the …_money_guards trigger refuses it too);
@@ -129,7 +134,9 @@ export async function correctInCommand(tools: CommandTools, invoiceId: string, i
     }
     await checkSources(tx, current, prepared)
     const deductions = existing.filter((row) => row.kind === 'DEPOSIT_DEDUCTION').map(kept)
-    const lines: LineToWrite[] = [...prepared.map((line) => ({ ...line, depositInvoiceId: null })), ...(deductions.filter((line) => line !== null) as LineToWrite[])]
+    const untaxed: LineToWrite[] = [...prepared.map((line) => ({ ...line, depositInvoiceId: null })), ...(deductions.filter((line) => line !== null) as LineToWrite[])]
+    // B-W2b-F47: the stamp duty (and the tax codes' law) decided as on every draft, on the invoice's own date.
+    const lines: LineToWrite[] = (await taxedLines(tx, current, untaxed, current.priceBasis, dayOf(current.issueDate!))).map((line) => ({ ...line, depositInvoiceId: line.depositInvoiceId ?? null }))
     totals = computeInvoiceTotals(
       lines.map((line) => line.core),
       current.priceBasis,
@@ -166,6 +173,8 @@ export async function correctInCommand(tools: CommandTools, invoiceId: string, i
   // The seller and the buyer as they are now, in force on the invoice's date (a fixed VAT number, SDI code, address).
   const after = (await readInvoice(tx, invoiceId))!
   const issueDate = dayOf(after.issueDate!)
+  // B-W2b-F47: the quarter of the invoice's date counted again as the issue counts it (this invoice as it stands now).
+  await stampDutyAtCorrection(tools, current, after, issueDate)
   const review = await reviewIssue(tx, after, await readLines(tx, invoiceId), issueDate, tools.now)
   if (review.seller && review.billTo) {
     await tx.invoice.update({ where: { id: invoiceId }, data: { seller: review.seller as unknown as Prisma.InputJsonValue, billTo: review.billTo as unknown as Prisma.InputJsonValue }, select: { id: true } })

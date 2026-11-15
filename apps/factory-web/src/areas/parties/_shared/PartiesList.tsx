@@ -11,6 +11,8 @@ import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
 import { WithMessages } from '../../../record-panels/i18n'
 import { checkVies, countParties, createParty, findParties, listParties, moveParty, type PartyRow, type NewPartyBody } from './api'
 import { downloadText, partyEvent, useLive } from './hooks'
+// B-W2b-427: the check for likely duplicates on create.
+import { checkParty } from '../../admin/import/duplicates/api'
 import {
   BULK_MAX,
   identityBody,
@@ -30,6 +32,7 @@ import {
   type BulkKind,
   type BulkResult,
   type BulkRun,
+  type DuplicateParty,
   type ListDialog,
   type ListFilters,
   type ListView,
@@ -93,7 +96,7 @@ function PartiesListContainer({ side, headActions, columns, depth }: { side: Sid
   const [busy, setBusy] = useState(false)
   const [dialogProblem, setDialogProblem] = useState<string | null>(null)
   const [refused, setRefused] = useState<readonly string[]>([])
-  const [duplicates, setDuplicates] = useState<readonly PartyRow[]>([])
+  const [duplicates, setDuplicates] = useState<readonly DuplicateParty[]>([])
   const [bulk, setBulk] = useState<BulkRun | null>(null)
   const createKey = useRef<string | null>(null)
   const request = useRef<AbortController | null>(null)
@@ -424,9 +427,10 @@ function PartiesListContainer({ side, headActions, columns, depth }: { side: Sid
         onShowUpdates: refresh,
         onSelect: setSelected,
         onDialog: (next) => (next ? setDialog(next) : closeDialog()),
-        onLookup: (q) => {
-          void findParties(api, q).then(
-            (found) => setDuplicates((current) => [...current.filter((row) => !found.some((other) => other.id === row.id)), ...found].slice(0, 5)),
+        // B-W2b-427 (PLT-178): the likely duplicates of the draft as typed (VAT number, codice fiscale, name), with why.
+        onLookup: (draft) => {
+          void checkParty(api, { legalName: draft.party.legalName, tradeName: draft.party.tradeName, country: draft.party.country, vatNumber: draft.identity.vatNumber, fiscalCode: draft.identity.fiscalCode }).then(
+            (found) => setDuplicates(found.map((candidate) => ({ id: candidate.id, code: candidate.code, legalName: candidate.name, tradeName: null, roles: candidate.roles as PartyRow['roles'], status: candidate.status as PartyRow['status'], reasons: candidate.reasons }))),
             () => undefined,
           )
         },

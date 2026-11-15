@@ -55,6 +55,13 @@ import { getDashboardLayout, resetDashboardLayout, saveDashboardLayout } from '.
 import { byCompanyAnswer, numbersAnswer } from './dashboards/numbers'
 import { dashboardsAnswer } from './dashboards/picker'
 import { needsActionAnswer, trendsAnswer, wipAnswer } from './dashboards/sections'
+// B-W2b-435: the owner digest (digest/), Today's value per stage (digest/wip-value.ts), "E-mail me this" for any report
+// (reports/subscriptions.ts).
+import { digestContract, flowValueContract, previewDigestContract, reportSubscriptionsContract, saveDigestContract, subscribeReportContract, switchDigestContract, testDigestContract, unsubscribeReportContract } from './digest/contract'
+import { previewDigest, testDigest } from './digest/mail'
+import { getDigest, saveDigest, switchDigestMail } from './digest/settings'
+import { flowValue } from './digest/wip-value'
+import { listReportSubscriptions, subscribeReport, unsubscribeReport } from './reports/subscriptions'
 
 /**
  * Home › Today (B-W1-52; ANA-037; A2 SCR-029 "Today", SCR-031 W1 "Overview"): the needs-attention list computed from the
@@ -142,4 +149,17 @@ export default defineRoutes('insights', manifest, async (app) => {
   app.get('/insights/dashboards/:board/layout', { schema: dashboardLayoutContract }, async (request) => getDashboardLayout(request, request.params.board))
   app.put('/insights/dashboards/:board/layout', { schema: saveDashboardLayoutContract }, async (request) => saveDashboardLayout(request, request.params.board, request.body, idempotencyKeyFrom(request)))
   app.delete('/insights/dashboards/:board/layout', { schema: resetLayoutContract }, async (request) => resetDashboardLayout(request, request.params.board, request.query.version, idempotencyKeyFrom(request)))
+
+  // B-W2b-435 (ANA-032; design home.reports `digest`, home.today ⋯ "Daily digest by e-mail" and `flow` value per stage; follow-up
+  // DG1:01): my morning e-mail (home.view, my own row), its preview and a test to me, the owner's switch per company
+  // (home.digest.switch), Today's work-order flow with its value at cost (the cost grain), "E-mail me this" for any report.
+  app.get('/insights/digest', { schema: digestContract }, async (request) => getDigest(request))
+  app.put('/insights/digest', { schema: saveDigestContract }, async (request) => saveDigest(request, request.body, idempotencyKeyFrom(request)))
+  app.put('/insights/digest/switch', { schema: switchDigestContract }, async (request) => switchDigestMail(request, request.body, idempotencyKeyFrom(request)))
+  app.get('/insights/digest/preview', { schema: previewDigestContract }, async (request) => previewDigest(request, request.query))
+  app.post('/insights/digest/test', { schema: testDigestContract }, async (request) => testDigest(request, request.body))
+  app.get('/home/flow/value', { schema: flowValueContract }, async (request) => flowValue(request, request.query))
+  app.get('/reports/subscriptions', { schema: reportSubscriptionsContract }, async (request) => listReportSubscriptions(request, request.query))
+  app.put('/reports/:key/subscription', { schema: subscribeReportContract }, async (request) => subscribeReport(request, request.params.key, request.body, idempotencyKeyFrom(request)))
+  app.delete('/reports/:key/subscription', { schema: unsubscribeReportContract }, async (request) => unsubscribeReport(request, request.params.key, request.query.version, idempotencyKeyFrom(request)))
 })

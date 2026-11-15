@@ -1,0 +1,29 @@
+/* Today's value per stage (SCR-644) LAYOUT: under the flow strip; semantic tokens only. */
+.fw-flowv {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6) var(--nds-space-12);
+  margin: 0;
+  min-width: 0;
+}
+
+.fw-flowv-title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  font-weight: 600;
+}
+
+.fw-flowv-muted {
+  color: var(--nds-text-muted);
+}
+
+.fw-flowv-stages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6) var(--nds-space-16);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}

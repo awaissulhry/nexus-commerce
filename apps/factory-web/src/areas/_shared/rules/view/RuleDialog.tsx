@@ -13,6 +13,8 @@ import type { PanelRead } from '../../../../record-panels/model'
 import { OFFICE_PAGES } from '../../../../shell/nav/office-nav'
 import type { AlertRule, RuleChoices, RuleKindInfo, RuleTest, RuleTimer } from '../api'
 import { changeCount, changeHeld, changesOf, defaultRecipient, draftOf, draftProblems, newDraft, placeOptions, placeValue, SEVERITIES, type RuleDraft } from '../model'
+// B-W2b-435 (ANA-041): the rule's routes.
+import { RuleRoutes } from '../routes/RuleRoutes'
 import { RuleSentence } from './RuleSentence'
 import '../rules.css'
 
@@ -203,6 +205,13 @@ function Dialog({ state, rules, offline, busy, prefix, onSave, onTest, onRetryCh
               )}
               {draft.email && <p className="fw-rule-muted">{t('dialog.emailHint')}</p>}
             </section>
+
+            {/* B-W2b-435 (ANA-041): who the rule tells at each place of it (a rule that exists). */}
+            {rule && (
+              <div className="fw-rule-part">
+                <RuleRoutes ruleId={rule.id} />
+              </div>
+            )}
 
             <section className="fw-rule-part" aria-labelledby="fw-rule-test-h">
               <h3 id="fw-rule-test-h" className="fw-rule-h">

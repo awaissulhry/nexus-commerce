@@ -8,6 +8,8 @@ import { recordAddress } from '../../../lib/records/record-links'
 import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
 import { OFFICE_PAGES } from '../../../shell/nav/office-nav'
 import { getAbout, getResults, getSchedule, type ReportAbout, type ReportResults, type ReportSchedule, type ResultRow } from './api'
+// B-W2b-435 (DG1:01): "E-mail me this" for any report.
+import { EmailMe } from './digest/subscribe/EmailMe'
 import { csvName, csvOf, knownFilters, readProblem, reportAddressOf, reportHref, reportsCanOf, type ReportAddress } from './model'
 import { ReportView } from './view/ReportView'
 
@@ -100,7 +102,7 @@ export function ReportPage() {
 
   return (
     <ReportView
-      model={{ can, prefix, key, address, about, results, schedule, rowHrefs, selected }}
+      model={{ can, prefix, key, address, about, results, schedule, rowHrefs, selected, emailMe: about.value ? <EmailMe reportKey={key} filters={about.value.filters} shown={address.filters} /> : null }}
       actions={{
         onFilter: (filter, value) => {
           const filters = { ...address.filters }

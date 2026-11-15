@@ -1,0 +1,54 @@
+/*
+ * Production › Reports › WIP ageing (SCR-643) LAYOUT: the controls are the design system's; this file only places them, with
+ * semantic tokens. No max-width of its own: the lines sit side by side as the width allows (two or three columns on a wide
+ * screen), one under the other on a phone.
+ */
+.fw-wip,
+.fw-wip-stack,
+.fw-wip-line {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-wip-head,
+.fw-wip-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-12);
+  margin: 0;
+  min-width: 0;
+}
+
+.fw-wip-row {
+  justify-content: flex-start;
+}
+
+.fw-wip-h,
+.fw-wip-h3 {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  font-size: var(--nds-font-size-lg);
+  font-weight: 600;
+}
+
+.fw-wip-h3 {
+  font-size: var(--nds-font-size-md);
+}
+
+.fw-wip-muted {
+  margin: 0;
+  color: var(--nds-text-muted);
+}
+
+.fw-wip-lines {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 26rem), 1fr));
+  gap: var(--nds-space-16);
+  min-width: 0;
+}

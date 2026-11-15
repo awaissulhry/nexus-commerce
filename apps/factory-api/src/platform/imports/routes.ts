@@ -18,6 +18,10 @@ import { templateContract } from './templates/contract'
 import { templateFile, templateFor } from './templates/template'
 import { firstLoadContract, markDoneContract } from './guided/contract'
 import { markFirstLoadDone, readFirstLoad } from './guided/first-load'
+// B-W2b-427: likely duplicates — on create, in an import's check, the list of them, and the merge (duplicates/).
+import { checkMaterialContract, checkPartyContract, importDuplicatesContract, mergeContract, mergePreviewContract, scanContract } from './duplicates/contract'
+import { mergeRecords, previewMerge } from './duplicates/merge'
+import { checkMaterial, checkParty, importDuplicates, scanDuplicates } from './duplicates/service'
 
 /**
  * Imports with a dry run (platform part; plan A1 W0-22, feature PLT-176; screen SCR-017): the importers the caller may
@@ -67,4 +71,14 @@ export default defineRoutes('imports', manifest, async (app) => {
   // B-W2a-41 (PLT-185): the guided first load of a company, and a step's "Done".
   app.get('/imports/first-load', { schema: firstLoadContract }, async (request) => readFirstLoad(request, request.query.companyId))
   app.post('/imports/first-load/:step/done', { schema: markDoneContract }, async (request) => markFirstLoadDone(request, request.params.step, request.body, idempotencyKeyFrom(request)))
+
+  // B-W2b-427 (PLT-178): likely duplicates; the merge is a person's decision (imports.duplicates.merge + the record's manage
+  // permission over both, checked in the handler).
+  app.get('/imports/:importId/duplicates', { schema: importDuplicatesContract }, async (request) => importDuplicates(request, request.params.importId))
+  app.post('/duplicates/parties/check', { schema: checkPartyContract }, async (request) => checkParty(request, request.body))
+  app.post('/duplicates/materials/check', { schema: checkMaterialContract }, async (request) => checkMaterial(request, request.body))
+  app.get('/duplicates/parties', { schema: scanContract }, async (request) => scanDuplicates(request, { ...request.query, recordType: 'PARTY' }))
+  app.get('/duplicates/materials', { schema: scanContract }, async (request) => scanDuplicates(request, { ...request.query, recordType: 'MATERIAL' }))
+  app.get('/duplicates/:recordType/merge', { schema: mergePreviewContract }, async (request) => previewMerge(request, request.params.recordType, request.query.keptId, request.query.droppedId))
+  app.post('/duplicates/:recordType/merge', { schema: mergeContract }, async (request) => mergeRecords(request, request.params.recordType, request.body, idempotencyKeyFrom(request)))
 })
