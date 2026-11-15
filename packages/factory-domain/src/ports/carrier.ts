@@ -76,6 +76,31 @@ export interface CarrierLabelRequest {
   readonly lengthCm: string | null
   readonly widthCm: string | null
   readonly heightCm: string | null
+  /** B-W2b-400 (LOG-033, LOG-038, LOG-041, LOG-042): what the booking adds to the label; absent: nothing beyond the service. */
+  readonly extras?: CarrierBookingExtras
+}
+
+/**
+ * B-W2b-400: the services a label is booked with beyond its shipping option (factory-domain shipping/services/booking.ts makes
+ * them; each adapter maps what it can, apps/factory-api adapters/sendcloud/services.ts). No secret travels here: an account
+ * number stays sealed; the provider knows our own contract by its own id.
+ */
+export interface CarrierBookingExtras {
+  /** An express service (the shipping option is the express one). */
+  readonly express: boolean
+  /** Who pays the duties and taxes of an export (DDP: SENDER; DAP: RECEIVER); null: not an export, or not said. */
+  readonly dutyPayer: 'SENDER' | 'RECEIVER' | null
+  /** The export's papers travel electronically (paperless trade), where the carrier takes them. */
+  readonly paperless: boolean
+  /** The parcel's declared and insured values (decimal strings in `currency`); null: not given. */
+  readonly declaredValue: string | null
+  readonly insuredValue: string | null
+  /** ISO 4217 of the two values (the order's); null when neither is given. */
+  readonly currency: string | null
+  /** Our own contract with the carrier the label is bought on (the factory's id), and the provider's id of it when known. */
+  readonly contract: { readonly id: string; readonly providerContractId: number | null } | null
+  /** The freight is billed to the customer's own account with the carrier (COLLECT) or a third party's; null: we pay. */
+  readonly billing: 'COLLECT' | 'THIRD_PARTY' | null
 }
 
 /** A label bought. */
