@@ -24,7 +24,8 @@ import type { FilesRuntime } from '../service'
  * other's object is removed. A HEIC picture (or a damaged one) gets no copy, so it is never shown outside the office.
  */
 
-export type StripOutcome = 'made' | 'exists' | 'not_available' | 'not_picture' | 'unsupported' | 'unreadable' | 'store_unavailable'
+// B-W2b-F56: `missing`: the store answered and holds no bytes for the file (never `store_unavailable`, which is worth a retry).
+export type StripOutcome = 'made' | 'exists' | 'not_available' | 'not_picture' | 'unsupported' | 'unreadable' | 'store_unavailable' | 'missing'
 
 const SELECT = { id: true, companyId: true, contentType: true, sizeBytes: true, storeAccountId: true, storageKey: true, status: true, thumbnailKey: true } as const
 
@@ -46,7 +47,7 @@ export async function makeStrippedCopy(runtime: FilesRuntime, caller: CommandCal
     if (storeDown(error)) return { outcome: 'store_unavailable', key: null }
     throw error
   }
-  if (!bytes) return { outcome: 'store_unavailable', key: null }
+  if (!bytes) return { outcome: 'missing', key: null }
   const stripped = stripImageMetadata(bytes, row.contentType)
   if (!stripped.ok) return { outcome: stripped.reason, key: null }
   const body = Buffer.from(stripped.bytes.buffer, stripped.bytes.byteOffset, stripped.bytes.byteLength)

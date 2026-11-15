@@ -171,13 +171,18 @@ describe('signing in needs the device token (PLT-057)', () => {
     const nobody = new Browser(h.app)
     await nobody.get('/auth/csrf')
     expect((await nobody.post('/floor/sign-in', { badgeCode: ada.badgeCode, pin: ada.pin })).status).toBe(401)
-    expect((await nobody.get('/floor/device')).status).toBe(401)
+    // B-W2b-F56: no device token at all is not a refusal: the browser is no floor device yet (200 in words, the enrol page).
+    const none = await nobody.get('/floor/device')
+    expect(none.status).toBe(200)
+    expect(none.body).toEqual({ device: null, words: expect.stringContaining('not a floor device yet') })
 
     const real = device.browser.cookies.get(DEVICE_COOKIE)!
     const [tenantId, siteId, deviceId] = real.split('.')
     for (const forged of [`${tenantId}.${siteId}.${deviceId}.${'A'.repeat(43)}`, `${tenantId}.${p2.id}.${deviceId}.${real.split('.')[3]}`]) {
       nobody.cookies.set(DEVICE_COOKIE, forged)
       expect((await nobody.post('/floor/sign-in', { badgeCode: ada.badgeCode, pin: ada.pin })).status).toBe(401)
+      // B-W2b-F56: a token that is there but refused stays a refusal.
+      expect((await nobody.get('/floor/device')).status).toBe(401)
     }
     expect((await signIn(device, ada)).status).toBe(200)
   })

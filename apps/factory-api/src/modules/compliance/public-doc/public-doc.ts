@@ -4,7 +4,7 @@ import { formatPublicDocCode, publicDocAddress, publicDocCodeHex, publicDocCodeO
 import type { AddressView, LookupBody, PublicDocPage } from '@nexus/factory-domain/compliance/public-doc/contracts'
 import { MAX_CODE_MATCHES } from '@nexus/factory-domain/compliance/public-doc/contracts'
 import { pickPage, publicDocPage, servedFileIds } from '@nexus/factory-domain/compliance/public-doc/rules'
-import { DomainError, NotFoundError, UnauthenticatedError, ValidationError } from '@nexus/factory-domain/core/errors'
+import { NotFoundError, UnauthenticatedError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import { can } from '@nexus/factory-domain/core/permissions'
 import { businessDate, type BusinessDate } from '@nexus/factory-domain/core/time'
@@ -16,7 +16,7 @@ import { serverClock, type Clock } from '../../../core/time'
 import { abuseGuardOf } from '../../../platform/abuse/guard'
 import { asContext } from '../../../platform/branding/branding'
 import { processEmail } from '../../../platform/email-out/service'
-import { systemCallerOf } from '../../../platform/files/files'
+import { readStoredFile, systemCallerOf } from '../../../platform/files/files'
 import { KIND_RULES } from '../../../platform/files/rules'
 import { processFiles } from '../../../platform/files/service'
 import { systemContext } from '../../../platform/outbox/system'
@@ -175,8 +175,8 @@ export async function publicDocFile(app: FastifyInstance, request: FastifyReques
   const key = `${owner.match.tenantId}:${row.id}`
   const kept = cache.get(key)
   if (kept) return { bytes: remember(key, kept), name: row.originalName }
-  const bytes = await processFiles().storage.read(system, row.storeAccountId, row.storageKey, KIND_RULES.DOCUMENT.maxBytes)
-  if (!bytes) throw new DomainError('not_ready', 'The file store did not answer. Try again in a moment.')
+  // B-W2b-F56: missing from the store 404, the store not answering 503 (the files platform's one reader).
+  const bytes = await readStoredFile(processFiles(), system, row, KIND_RULES.DOCUMENT.maxBytes)
   return { bytes: remember(key, bytes), name: row.originalName }
 }
 

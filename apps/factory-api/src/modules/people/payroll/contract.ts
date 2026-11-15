@@ -64,12 +64,16 @@ const exportRow = output({
   version: z.number().int(),
 })
 
+const siteGate = output({ siteId: id(), code: z.string(), name: z.string(), gateOpen: z.boolean() })
+
 const monthView = output({
+  /** B-W2b-F56: some site of the company has its ATTENDANCE gate open: the month is read. */
+  attendance: z.literal('OPEN'),
   companyId: id(),
   company: companyView,
   month,
   label: z.string(),
-  sites: z.array(output({ siteId: id(), code: z.string(), name: z.string(), gateOpen: z.boolean() })),
+  sites: z.array(siteGate),
   state: z.enum(MONTH_STATES),
   words: z.string(),
   /** The month close (Attendance): it must be closed. */
@@ -90,7 +94,11 @@ const monthView = output({
   carriesPay: z.boolean(),
   actions: output({ export: held, correct: held, preview: held }),
 })
-export const monthContract = defineContract({ querystring: monthQuery, response: { 200: monthView } })
+// ── B-W2b-F56 ─────────────────────────────────────────────────────────────────────────────────────────────────────────
+/** Every site's ATTENDANCE gate is off: the month's state in words (a normal state, 200); nothing of a person is read. */
+const monthClosedView = output({ attendance: z.literal('CLOSED'), companyId: id(), month, label: z.string(), sites: z.array(siteGate), words: z.string() })
+export const monthContract = defineContract({ querystring: monthQuery, response: { 200: z.discriminatedUnion('attendance', [monthView, monthClosedView]) } })
+// ── end B-W2b-F56 ─────────────────────────────────────────────────────────────────────────────────────────────────────
 
 export const showBody = input({ companyId: id(), month, code: z.enum(PAYROLL_CHECKS) })
 export type ShowBody = z.infer<typeof showBody>
