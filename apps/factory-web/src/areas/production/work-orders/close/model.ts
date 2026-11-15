@@ -110,6 +110,13 @@ export function reopenHeld(check: CloseCheck | null, reason: string, busy: boole
   return null
 }
 
+// B-W2b-F46 — costs that arrived after the close wait for a reopen (the close froze the actual; nothing failed).
+/** "N costs arrived after the close — reopen the work order to post them", or null when none (or not closed). */
+export function afterClosePhrase(check: Pick<CloseCheck, 'afterClose'> | null): Phrase | null {
+  const count = check?.afterClose?.count ?? 0
+  return count > 0 ? phrase('afterClose.body', { count }) : null
+}
+
 /** The close that stands on a closed work order in words: settled (its cost closed) or a status only (the accountant's switch was off). */
 export const closedPhrase = (close: Pick<CloseRecord, 'settled'>): Phrase => phrase(close.settled ? 'closed.settled' : 'closed.status')
 
