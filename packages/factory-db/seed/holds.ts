@@ -20,6 +20,7 @@ import {
 } from '../src/generated/prisma/enums'
 import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedReturns } from './returns'
+import { seedAt, seedDay } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The W2a quality seed (schema wave 6/7), per tenant of seed/_core.ts: the defect library, the disposition codes, a
@@ -63,17 +64,17 @@ import { seed as seedReturns } from './returns'
 /** Fixed instants and dates, so the seed never depends on the clock. */
 const T = {
   setup: new Date('2026-10-29T08:00:00.000Z'),
-  held: new Date('2026-11-21T09:10:00.000Z'),
-  raised: new Date('2026-11-21T10:00:00.000Z'),
-  contained: new Date('2026-11-21T11:30:00.000Z'),
-  decided: new Date('2026-11-22T08:30:00.000Z'),
-  found: new Date('2026-11-23T15:00:00.000Z'),
-  received: new Date('2026-11-25T09:00:00.000Z'),
-  altering: new Date('2026-11-25T14:00:00.000Z'),
-  altered: new Date('2026-11-26T16:00:00.000Z'),
-  ddt: new Date('2026-11-27T08:00:00.000Z'),
-  start: new Date('2026-11-27T09:00:00.000Z'),
-  left: new Date('2026-11-27T09:30:00.000Z'),
+  held: seedAt('2026-11-21T09:10:00.000Z'),
+  raised: seedAt('2026-11-21T10:00:00.000Z'),
+  contained: seedAt('2026-11-21T11:30:00.000Z'),
+  decided: seedAt('2026-11-22T08:30:00.000Z'),
+  found: seedAt('2026-11-23T15:00:00.000Z'),
+  received: seedAt('2026-11-25T09:00:00.000Z'),
+  altering: seedAt('2026-11-25T14:00:00.000Z'),
+  altered: seedAt('2026-11-26T16:00:00.000Z'),
+  ddt: seedAt('2026-11-27T08:00:00.000Z'),
+  start: seedAt('2026-11-27T09:00:00.000Z'),
+  left: seedAt('2026-11-27T09:30:00.000Z'),
 } as const
 // B-W2b-30: dated in the past like the shipping seed's DDTs 143 and 144 (the same day), so the DDT series' last issued
 // date lets a fresh seed issue today's DDTs; the repair's other times stay in the November story above.
@@ -269,7 +270,7 @@ export async function seed(context: SeedContext): Promise<HoldsSeed> {
           kind: 'HOLD',
           value,
           formatted: number,
-          documentDate: new Date('2026-11-21T00:00:00.000Z'),
+          documentDate: seedAt('2026-11-21T00:00:00.000Z'),
           recordType: 'QualityHold',
           recordId: holdId,
           allocatedAt: T.held,
@@ -279,7 +280,7 @@ export async function seed(context: SeedContext): Promise<HoldsSeed> {
         },
         select,
       })
-      await tx.numberSeries.update({ where: { id: holdSeriesId }, data: { nextValue: value + 1, lastIssuedDate: new Date('2026-11-21T00:00:00.000Z'), updatedAt: T.held }, select })
+      await tx.numberSeries.update({ where: { id: holdSeriesId }, data: { nextValue: value + 1, lastIssuedDate: seedAt('2026-11-21T00:00:00.000Z'), updatedAt: T.held }, select })
       await tx.qualityHold.create({
         data: {
           id: holdId,
@@ -333,7 +334,7 @@ export async function seed(context: SeedContext): Promise<HoldsSeed> {
           styleId: production.styleId,
           workOrderId: production.workOrderId,
           ownerId: actorId,
-          containmentDueAt: new Date('2026-11-24T15:00:00.000Z'),
+          containmentDueAt: seedAt('2026-11-24T15:00:00.000Z'),
           ...stamp(T.found),
         },
         select,
@@ -368,13 +369,13 @@ export async function seed(context: SeedContext): Promise<HoldsSeed> {
           lotId: leatherLot,
           supplierId,
           ownerId: actorId,
-          containmentDueAt: new Date('2026-11-21T17:00:00.000Z'),
+          containmentDueAt: seedAt('2026-11-21T17:00:00.000Z'),
           ...stamp(T.raised),
         },
         select,
       })
       // The office decides the held hide in this NCR, then records its containment.
-      await tx.qualityHold.update({ where: { id: holdId }, data: { ncrId, ownerId: actorId, expectedReleaseOn: new Date('2026-11-28T00:00:00.000Z'), version: 2, updatedAt: T.raised }, select })
+      await tx.qualityHold.update({ where: { id: holdId }, data: { ncrId, ownerId: actorId, expectedReleaseOn: seedAt('2026-11-28T00:00:00.000Z'), version: 2, updatedAt: T.raised }, select })
       await tx.ncrContainmentAction.createMany({
         data: [
           {
@@ -456,7 +457,7 @@ export async function seed(context: SeedContext): Promise<HoldsSeed> {
           stage: RepairStage.RECEIVED,
           receivedAt: T.received,
           inboundDdtNumber: 'SEED-C1-R-9',
-          inboundDdtDate: new Date('2026-11-24T00:00:00.000Z'),
+          inboundDdtDate: seedAt('2026-11-24T00:00:00.000Z'),
           ownerId: actorId,
           ...stamp(T.received),
         },
@@ -493,7 +494,7 @@ export async function seed(context: SeedContext): Promise<HoldsSeed> {
           sender: { name: 'Seed Factory A S.r.l.', vatNumber: 'IT00000000000', address: { line1: 'Via Seed 1', postalCode: '00000', city: 'Seedtown', province: 'MI', country: 'IT' } },
           recipient: { name: 'Seed Customer One S.r.l.', vatNumber: 'IT00000000001', address: { line1: 'Via Esempio 10', postalCode: '00000', city: 'Seedville', province: 'MI', country: 'IT' } },
           lines: [{ seq: 1, description: 'Giacca moto in pelle SEED-JKT-02, taglia 52, maniche accorciate (vostra riparazione SEED-REP-0002)', quantity: '1', uom: 'PCS', size: '52' }],
-          documentRefs: [{ kind: 'CUSTOMER_DDT', number: 'SEED-C1-R-9', date: '2026-11-24' }],
+          documentRefs: [{ kind: 'CUSTOMER_DDT', number: 'SEED-C1-R-9', date: seedDay('2026-11-24') }],
           remarks: 'Reso dopo lavorazione: nessun addebito per la merce.',
           issuedAt: T.ddt,
           createdById: actorId,

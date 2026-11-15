@@ -6,6 +6,9 @@ import { assertTestDatabaseUrl } from '../test-database'
 import { MIGRATIONS_DIR } from '../tools'
 import { testKitApplicationName, withMigrationLock } from './migration-lock'
 import { createFromTemplate, templateSwitch } from './template'
+// ---- B-W2b-F53: the seeds' calendar, for tests that name a seeded date (seedDay, seedAt) or fix their clock in the seeds' story
+export { SEED_DAY, seedAlong, seedAt, seedDay, seedDayText, seedIso, seedShiftDays, seedsAsWritten, seedToday, seedYear } from '../seed-calendar'
+// ---- end B-W2b-F53
 
 /**
  * Test support (`@nexus/factory-db/testing`): a throwaway database built from the checked-in migrations, one per test

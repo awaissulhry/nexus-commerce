@@ -15,6 +15,7 @@ import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedAuth } from './auth'
 import { seed as seedPortalFollowups } from './portal-followups'
 import { seed as seedProduct } from './product'
+import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The suppliers in depth seed (W2b-5, schema wave 42/44, B-W2b-287), per tenant of seed/_core.ts, written as the API will write
@@ -80,11 +81,11 @@ const T = {
 } as const
 const DAY = {
   terms1From: new Date('2026-01-01T00:00:00.000Z'),
-  terms1Until: new Date('2026-12-31T00:00:00.000Z'),
+  terms1Until: seedAt('2026-12-31T00:00:00.000Z'),
   terms2From: new Date('2026-11-04T00:00:00.000Z'),
-  terms3From: new Date('2027-01-01T00:00:00.000Z'),
+  terms3From: seedAt('2027-01-01T00:00:00.000Z'),
   leatherFrom: new Date('2026-11-03T00:00:00.000Z'),
-  leatherUntil: new Date('2027-12-31T00:00:00.000Z'),
+  leatherUntil: seedAt('2027-12-31T00:00:00.000Z'),
   finishingFrom: new Date('2026-10-30T00:00:00.000Z'),
 } as const
 

@@ -13,6 +13,7 @@ import { businessDate } from '@nexus/factory-domain/core/time'
 import { convertMinor } from '@nexus/factory-domain/money/currency/convert'
 import { addDays } from '@nexus/factory-domain/money/currency/rates'
 import { seedUuid } from '../../../../../packages/factory-db/src/seeding'
+import { seedDay } from '@nexus/factory-db/testing' // B-W2b-F53: the seeds' calendar
 import { FakeEcb } from '../../adapters/ecb/fake'
 import { buildApp } from '../../core/app'
 import { callerFor, command } from '../../core/command'
@@ -97,7 +98,12 @@ const quiet = { info() {}, warn() {}, error() {} }
 
 const today = () => businessDate(new Date())
 // SEED-SC-0002 was issued on 2026-11-17: a rate kept on that day or before (never a future day) is its day's rate.
-const scDay = () => (today() < '2026-11-17' ? today() : '2026-11-17')
+// ---- B-W2b-F53: that day is the seeds' future (seed-calendar: moved on by whole weeks, 2 to 8 days after today), so the rate is
+// kept today; the order takes the last rate of the 7 days up to its day, so on the one weekday its day is 8 days ahead the
+// order is issued a week earlier (written past the guards) to have one (CY1:03).
+let scIssued = seedDay('2026-11-17')
+const scDay = () => (today() < scIssued ? today() : scIssued)
+// ---- end B-W2b-F53
 
 beforeAll(async () => {
   h = await startHarness('currency_w2b389')
@@ -315,6 +321,14 @@ describe('the follow-ups (CY1:01-04) and the invoice', () => {
 
   it('CY1:03 — a subcontract fee in another currency posts in the work order currency at the order rate', async () => {
     const order = await one<{ id: string; workOrderId: string }>(`SELECT id, "workOrderId" FROM "SubcontractOrder" WHERE "tenantId" = $1 AND number = 'SEED-SC-0002'`, [A.tenant])
+    // ---- B-W2b-F53 (see scDay)
+    const { issuedAt } = await one<{ issuedAt: Date }>(`SELECT "issuedAt" FROM "SubcontractOrder" WHERE id = $1`, [order.id])
+    scIssued = businessDate(issuedAt)
+    if (addDays(scIssued, -7) > today()) {
+      await force(`UPDATE "SubcontractOrder" SET "issuedAt" = "issuedAt" - interval '7 days' WHERE id = $1`, [order.id])
+      scIssued = addDays(scIssued, -7)
+    }
+    // ---- end B-W2b-F53
     await ok('finance', 'PUT', '/exchange-rates/manual', { quote: 'NOK', day: scDay(), rate: '11.75' })
     const plan = (currency: string) => h.database.withScope({ audience: 'office', tenantId: A.tenant, actorId: PEOPLE.finance }, (client) => subcontractCostPlan(client, { id: order.workOrderId, currency }, [order.id], [], () => newId()))
     const inEuro = await plan('EUR')

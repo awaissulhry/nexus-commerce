@@ -5,6 +5,7 @@ import { seed as seedCapa } from './capa'
 import { seed as seedFiles } from './files'
 import { seed as seedLinks } from './links'
 import { seed as seedParties } from './parties'
+import { seedAlong, seedAt, seedToday } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The links-in-depth seed (W2b schema wave 19/22, B-W2b-154), per tenant of seed/_core.ts. The office's rows are written in
@@ -42,13 +43,14 @@ const OPENED_AT = new Date('2026-10-28T09:15:00.000Z')
 const ANSWERED_AT = new Date('2026-10-29T10:42:00.000Z')
 const DUE_AT = new Date('2026-11-07T17:00:00.000Z')
 const EXPIRES_AT = new Date('2026-11-11T08:00:00.000Z')
-const SHARE_ENDS_AT = new Date('2026-11-30T17:00:00.000Z')
+const SHARE_ENDS_AT = seedAt('2026-11-30T17:00:00.000Z')
+/** B-W2b-F53: a share ends at most 180 days after it was made, so the two shares are made with their end (seed-calendar seedAlong). */
+const SHARE_MADE_AT = seedAlong(AT)
 const DAY_MS = 86_400_000
 
 /** Today in Europe/Rome as a UTC midnight. */
 function romeToday(): Date {
-  const iso = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
-  return new Date(`${iso}T00:00:00.000Z`)
+  return new Date(`${seedToday()}T00:00:00.000Z`) // B-W2b-F53: the seeds' calendar
 }
 
 export interface LinksDepthSeed {
@@ -255,8 +257,8 @@ export async function seed(context: SeedContext): Promise<LinksDepthSeed> {
             email: 'orders.p2@example.com',
             permissions: ['VIEW'],
             expiresAt: SHARE_ENDS_AT,
-            createdAt: AT,
-            updatedAt: AT,
+            createdAt: SHARE_MADE_AT,
+            updatedAt: SHARE_MADE_AT,
             createdById: actorId,
           },
           {
@@ -270,8 +272,8 @@ export async function seed(context: SeedContext): Promise<LinksDepthSeed> {
             permissions: ['VIEW', 'COMMENT'],
             expiresAt: SHARE_ENDS_AT,
             linkId: links.invite,
-            createdAt: AT,
-            updatedAt: AT,
+            createdAt: SHARE_MADE_AT,
+            updatedAt: SHARE_MADE_AT,
             createdById: actorId,
           },
         ],

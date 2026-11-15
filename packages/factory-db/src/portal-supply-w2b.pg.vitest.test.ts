@@ -9,6 +9,7 @@ import { RUNTIME_LOGIN } from './roles'
 import { seedUuid } from './seeding'
 import { migratedDatabase, type MigratedDatabase } from './testing/database'
 import { loadOwnership, loadSchema } from './tools'
+import { seedDay } from './seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The supplier portal (W2b schema wave 22/22, B-W2b-158, …_portal_supply_w2b_guards) on a database built from the
@@ -293,7 +294,7 @@ describe('purchase order lines: a substitute waits for the buyer', () => {
     await expect(update(partner(), 'PurchaseOrderLine', line, '"proposalNeedsBuyer" = true')).rejects.toThrow(/waits for the buyer only with a proposal/)
     await expect(update(partner(), 'PurchaseOrderLine', line, `"proposedSubstituteNote" = '  ', "proposalNeedsBuyer" = true`)).rejects.toThrow(/its words not blank/)
     expect(
-      await update(partner(), 'PurchaseOrderLine', line, `"proposedSubstituteItemId" = $2::uuid, "proposedSubstituteNote" = 'Our article SEED-ART-301, same level', "proposalNeedsBuyer" = true, "proposedQuantity" = 10, "proposedDate" = '2026-12-04'`, ITEM.lining),
+      await update(partner(), 'PurchaseOrderLine', line, `"proposedSubstituteItemId" = $2::uuid, "proposedSubstituteNote" = 'Our article SEED-ART-301, same level', "proposalNeedsBuyer" = true, "proposedQuantity" = 10, "proposedDate" = '${seedDay('2026-12-04')}'`, ITEM.lining),
     ).toBe(1)
     // Not the price or the item themselves.
     await expect(update(partner(), 'PurchaseOrderLine', line, '"itemId" = $2::uuid', ITEM.lining)).rejects.toThrow(/its lines change only while it is DRAFT|only confirms the lines of its SENT purchase order/)
@@ -315,11 +316,11 @@ describe('subcontract orders: the workshop answers the job', () => {
   })
 
   it('a partner session answers only, once; never the dates, the status or the office answer', async () => {
-    await expect(update(partner(), 'SubcontractOrder', SC1, `"expectedBackDate" = '2026-12-30'`)).rejects.toThrow(/a partner session only answers its job/)
+    await expect(update(partner(), 'SubcontractOrder', SC1, `"expectedBackDate" = '${seedDay('2026-12-30')}'`)).rejects.toThrow(/a partner session only answers its job/)
     await expect(update(partner(), 'SubcontractOrder', SC1, `status = 'AT_WORKSHOP'`)).rejects.toThrow(/a partner session only answers its job/)
-    await expect(update(partner(), 'SubcontractOrder', SC1, `"acceptedAt" = now(), "proposedDate" = '2026-11-30'`)).rejects.toThrow(/a proposed date only with its reason/)
+    await expect(update(partner(), 'SubcontractOrder', SC1, `"acceptedAt" = now(), "proposedDate" = '${seedDay('2026-11-30')}'`)).rejects.toThrow(/a proposed date only with its reason/)
     await expect(update(partner(), 'SubcontractOrder', SC1, `"acceptedAt" = now(), "declinedAt" = now(), "declineReason" = 'x'`)).rejects.toThrow(/never both/)
-    expect(await update(partner(), 'SubcontractOrder', SC1, `"acceptedAt" = now(), "acceptedByName" = 'Seed Workshop Desk', "proposedDate" = '2026-11-30', "proposedDateReason" = 'Busy with another brand', version = version + 1`)).toBe(1)
+    expect(await update(partner(), 'SubcontractOrder', SC1, `"acceptedAt" = now(), "acceptedByName" = 'Seed Workshop Desk', "proposedDate" = '${seedDay('2026-11-30')}', "proposedDateReason" = 'Busy with another brand', version = version + 1`)).toBe(1)
     await expect(update(partner(), 'SubcontractOrder', SC1, `"acceptedByName" = 'Somebody else'`)).rejects.toThrow(/answers subcontract order .* once/)
     await expect(update(partner(), 'SubcontractOrder', SC1, `"proposedDateDecision" = 'ACCEPTED', "proposedDateDecidedAt" = now()`)).rejects.toThrow(/a partner session only answers its job/)
     // The seed's SEED-SC-0002 was accepted already.
@@ -328,7 +329,7 @@ describe('subcontract orders: the workshop answers the job', () => {
 
   it('the office answers the proposed date once: ACCEPTED makes it the expected-back date', async () => {
     await expect(update(office(), 'SubcontractOrder', SC1, `"proposedDateDecision" = 'ACCEPTED', "proposedDateDecidedAt" = now()`)).rejects.toThrow(/ACCEPTED makes it the expected-back date/)
-    expect(await update(office(), 'SubcontractOrder', SC1, `"proposedDateDecision" = 'ACCEPTED', "proposedDateDecidedAt" = now(), "proposedDateDecidedById" = $2::uuid, "expectedBackDate" = '2026-11-30'`, a.actorId)).toBe(1)
+    expect(await update(office(), 'SubcontractOrder', SC1, `"proposedDateDecision" = 'ACCEPTED', "proposedDateDecidedAt" = now(), "proposedDateDecidedById" = $2::uuid, "expectedBackDate" = '${seedDay('2026-11-30')}'`, a.actorId)).toBe(1)
     await expect(update(office(), 'SubcontractOrder', SC1, `"proposedDateDecision" = 'REFUSED'`)).rejects.toThrow(/answers the date the workshop proposed .* once/)
   })
 

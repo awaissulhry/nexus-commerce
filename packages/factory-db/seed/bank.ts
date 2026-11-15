@@ -17,6 +17,7 @@ import { seed as seedAccounting } from './accounting'
 import { seed as seedFiles } from './files'
 import { seed as seedReceivables } from './receivables'
 import { seed as seedSuppliersDepth } from './suppliers-depth'
+import { seedDay } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The bank, receivables, payables and accountant's bridge seed (W2b-6, schema wave 50/57, B-W2b-370), per tenant of
@@ -290,11 +291,11 @@ export async function seed(context: SeedContext): Promise<BankSeed> {
 
       // --- Ri.Ba. (FIN-126): a draft only, the switch stays off ------------------------------------------------------------
       await tx.ribaBatch.create({
-        data: { id: result.ribaBatchId, companyId: companyA, bankAccountId: accountA, dueFrom: DAY('2026-11-16'), dueTo: DAY('2026-11-30'), note: 'Seed: the second half of November (the Ri.Ba. switch is off).', ...stamp(T.riba) },
+        data: { id: result.ribaBatchId, companyId: companyA, bankAccountId: accountA, dueFrom: DAY(seedDay('2026-11-16')), dueTo: DAY(seedDay('2026-11-30')), note: 'Seed: the second half of November (the Ri.Ba. switch is off).', ...stamp(T.riba) },
         select,
       })
       await tx.ribaItem.create({
-        data: { id: result.ribaItemId, companyId: companyA, batchId: result.ribaBatchId, partyId: P1, invoiceId: money.sampleInvoiceId, instalment: 1, dueDate: DAY('2026-11-27'), amount: 41000, ...stamp(T.riba) },
+        data: { id: result.ribaItemId, companyId: companyA, batchId: result.ribaBatchId, partyId: P1, invoiceId: money.sampleInvoiceId, instalment: 1, dueDate: DAY(seedDay('2026-11-27')), amount: 41000, ...stamp(T.riba) },
         select,
       })
 
@@ -327,7 +328,7 @@ export async function seed(context: SeedContext): Promise<BankSeed> {
 
       // --- the week's payment proposal (FIN-140): a draft --------------------------------------------------------------
       await tx.paymentProposal.create({
-        data: { id: result.proposalId, companyId: companyA, weekStart: DAY('2026-11-16'), currency: 'EUR', note: 'Seed: week 47.', createdAt: T.proposal, updatedAt: T.proposal, createdById: actorId },
+        data: { id: result.proposalId, companyId: companyA, weekStart: DAY(seedDay('2026-11-16')), currency: 'EUR', note: 'Seed: week 47.', createdAt: T.proposal, updatedAt: T.proposal, createdById: actorId },
         select,
       })
       await tx.paymentProposalLine.create({
@@ -344,7 +345,7 @@ export async function seed(context: SeedContext): Promise<BankSeed> {
           mapping(AM.freight, AccountMappingKind.COST_CATEGORY, 'FREIGHT', '6205', '2026-01-01'),
           mapping(AM.transfer, AccountMappingKind.PAYMENT_METHOD, 'BANK_TRANSFER', '1801', '2026-01-01'),
           mapping(AM.customersIt, AccountMappingKind.PARTY_GROUP, 'CUSTOMERS_IT', '1201', '2026-01-01'),
-          { ...mapping(AM.leatherNext, AccountMappingKind.ITEM_GROUP, 'LEATHER', '6102', '2027-01-01'), note: 'Seed: the new leather account from next year.' },
+          { ...mapping(AM.leatherNext, AccountMappingKind.ITEM_GROUP, 'LEATHER', '6102', seedDay('2027-01-01')), note: 'Seed: the new leather account from next year.' },
         ],
       })
       await tx.accountingSettings.create({ data: { id: tenantId, journalsOn: false, ...stamp(T.mapping) }, select })

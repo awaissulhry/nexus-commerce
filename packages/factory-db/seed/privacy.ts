@@ -5,6 +5,7 @@ import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedAuth } from './auth'
 import { seed as seedFiles } from './files'
 import { seed as seedFloorAuth } from './floor-auth'
+import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The privacy seed (B-W1-36), per tenant of seed/_core.ts, for company A, written as the app does: the office's rows in
@@ -37,11 +38,11 @@ const T = {
   dpiaStored: new Date('2026-11-12T09:00:00.000Z'),
   published: new Date('2026-11-14T07:00:00.000Z'),
   // The production seed's floor day starts with it (2026-11-16).
-  acknowledged: new Date('2026-11-16T06:00:00.000Z'),
-  staffAcknowledged: new Date('2026-11-17T08:30:00.000Z'),
-  drafted: new Date('2026-11-20T09:00:00.000Z'),
+  acknowledged: seedAt('2026-11-16T06:00:00.000Z'),
+  staffAcknowledged: seedAt('2026-11-17T08:30:00.000Z'),
+  drafted: seedAt('2026-11-20T09:00:00.000Z'),
 } as const
-const DAY = { signed: new Date('2026-11-12T00:00:00.000Z'), review: new Date('2027-11-12T00:00:00.000Z') } as const
+const DAY = { signed: new Date('2026-11-12T00:00:00.000Z'), review: seedAt('2027-11-12T00:00:00.000Z') } as const
 
 const SAMPLE_IT = "ESEMPIO - testo inventato per lo sviluppo. Il testo vero lo scrive il consulente privacy dell'azienda."
 const SAMPLE_EN = "SAMPLE - made-up text for development. The real text comes from the company's privacy consultant."

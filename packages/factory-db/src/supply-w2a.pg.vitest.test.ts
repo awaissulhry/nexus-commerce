@@ -11,6 +11,7 @@ import { FLOOR_ROLE, PARTNER_ROLE, RUNTIME_LOGIN } from './roles'
 import { seedUuid } from './seeding'
 import { migratedDatabase, type MigratedDatabase } from './testing/database'
 import { loadOwnership, loadSchema } from './tools'
+import { seedDay } from './seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * W2a schema wave 3/7 (product and supply) beyond the generated isolation tests, on a database built from the
@@ -115,13 +116,13 @@ async function draftOrder(partyId: string = A.P2): Promise<{ orderId: string; li
     baseQuantity: '10',
     unitPrice: '6.5',
     netAmount: 6_500,
-    needDate: '2026-12-01',
+    needDate: seedDay('2026-12-01'),
   })
   return { orderId, lineId }
 }
 const send = (orderId: string) => run(office(), `UPDATE "PurchaseOrder" SET status = 'SENT', "sentAt" = now() WHERE id = $1::uuid`, orderId)
 async function confirm(orderId: string, lineId: string): Promise<void> {
-  await run(office(), `UPDATE "PurchaseOrderLine" SET "confirmedQuantity" = 10, "confirmedDate" = '2026-12-01' WHERE id = $1::uuid`, lineId)
+  await run(office(), `UPDATE "PurchaseOrderLine" SET "confirmedQuantity" = 10, "confirmedDate" = '${seedDay('2026-12-01')}' WHERE id = $1::uuid`, lineId)
   await run(office(), `UPDATE "PurchaseOrder" SET status = 'CONFIRMED', "confirmedAt" = now(), "confirmedVia" = 'OFFICE', "confirmedByName" = 'Seed desk' WHERE id = $1::uuid`, orderId)
 }
 const status = async (table: string, id: string) => String((await admin(`SELECT status::text AS s FROM "${table}" WHERE id = $1`, [id]))[0]!.s)
@@ -266,7 +267,7 @@ describe('purchase order changes', () => {
     expect(await run(office(), `UPDATE "PurchaseOrder" SET "netAmount" = 7800 WHERE id = $1::uuid`, orderId)).toBe(1)
     expect(await send(orderId)).toBe(1)
     // And the supplier confirms revision 2.
-    await run(office(), `UPDATE "PurchaseOrderLine" SET "confirmedQuantity" = 12, "confirmedDate" = '2026-12-02' WHERE id = $1::uuid`, lineId)
+    await run(office(), `UPDATE "PurchaseOrderLine" SET "confirmedQuantity" = 12, "confirmedDate" = '${seedDay('2026-12-02')}' WHERE id = $1::uuid`, lineId)
     expect(await status('PurchaseOrder', orderId)).toBe('SENT')
   })
 
@@ -274,7 +275,7 @@ describe('purchase order changes', () => {
     const { orderId, lineId } = await draftOrder(A.P2)
     const [link] = await admin(`SELECT id FROM "OneOffLink" WHERE "tenantId" = $1 AND "partyId" = $2 LIMIT 1`, [a.tenantId, A.P2])
     await send(orderId)
-    await run(office(), `UPDATE "PurchaseOrderLine" SET "proposedQuantity" = 8, "proposedDate" = '2026-12-05', "proposalReason" = 'Short of stock' WHERE id = $1::uuid`, lineId)
+    await run(office(), `UPDATE "PurchaseOrderLine" SET "proposedQuantity" = 8, "proposedDate" = '${seedDay('2026-12-05')}', "proposalReason" = 'Short of stock' WHERE id = $1::uuid`, lineId)
     await run(office(), `UPDATE "PurchaseOrder" SET status = 'CHANGES_PROPOSED', "proposedAt" = now(), "proposalLinkId" = $2::uuid WHERE id = $1::uuid`, orderId, link!.id)
     await expect(run(office(), `UPDATE "PurchaseOrder" SET status = 'DRAFT', revision = 2, "sentAt" = NULL WHERE id = $1::uuid`, orderId)).rejects.toThrow(/only by the buyer's decision/)
     expect(
@@ -297,7 +298,7 @@ describe('purchase order changes', () => {
     const { orderId, lineId } = await draftOrder(A.P1)
     // A second line, so the order still has one to send.
     const keep = randomUUID()
-    await insert(office(), 'PurchaseOrderLine', { id: keep, purchaseOrderId: orderId, partyId: A.P1, siteId: A.siteA, seq: 20, itemId: A.protector, quantity: '2', uom: 'PCS', baseQuantity: '2', unitPrice: '6.5', netAmount: 1_300, needDate: '2026-12-01' })
+    await insert(office(), 'PurchaseOrderLine', { id: keep, purchaseOrderId: orderId, partyId: A.P1, siteId: A.siteA, seq: 20, itemId: A.protector, quantity: '2', uom: 'PCS', baseQuantity: '2', unitPrice: '6.5', netAmount: 1_300, needDate: seedDay('2026-12-01') })
     await run(office(), `UPDATE "PurchaseOrder" SET "netAmount" = 7800 WHERE id = $1::uuid`, orderId)
     await send(orderId)
     await expect(run(office(), `UPDATE "PurchaseOrderLine" SET "cancelledAt" = now() WHERE id = $1::uuid`, lineId)).rejects.toThrow(/is cancelled once, with its time and reason/)
@@ -306,7 +307,7 @@ describe('purchase order changes', () => {
     await expect(run(partner(A.P1), `UPDATE "PurchaseOrderLine" SET "cancelledAt" = now(), "cancelReason" = 'x' WHERE id = $1::uuid`, lineId)).rejects.toThrow(/a partner session only confirms the lines/)
     expect(await run(office(), `UPDATE "PurchaseOrderLine" SET "cancelledAt" = now(), "cancelledById" = $2::uuid, "cancelReason" = 'No longer needed' WHERE id = $1::uuid`, lineId, a.actorId)).toBe(1)
     await expect(run(office(), `UPDATE "PurchaseOrderLine" SET "cancelReason" = 'Another reason' WHERE id = $1::uuid`, lineId)).rejects.toThrow(/cancelled or closed short; it changes no more/)
-    await expect(run(office(), `UPDATE "PurchaseOrderLine" SET "confirmedQuantity" = 10, "confirmedDate" = '2026-12-01' WHERE id = $1::uuid`, lineId)).rejects.toThrow(/changes no more/)
+    await expect(run(office(), `UPDATE "PurchaseOrderLine" SET "confirmedQuantity" = 10, "confirmedDate" = '${seedDay('2026-12-01')}' WHERE id = $1::uuid`, lineId)).rejects.toThrow(/changes no more/)
     // No goods against it: a receipt line naming it is refused.
     const receiptId = randomUUID()
     await insert(office(), 'GoodsReceipt', { id: receiptId, companyId: A.companyA, siteId: A.siteA, number: `T-GR-${tag()}`, supplierId: A.P1, purchaseOrderId: orderId, receivedAt: new Date().toISOString() })
@@ -394,7 +395,7 @@ describe('product and compliance data', () => {
     expect(await renew(later.id)).toBe(1)
     await expect(renew(otherHolder.id)).rejects.toThrow(/is set once, never changed/)
     // `later` renews one certificate only.
-    const twin = certificate({ validFrom: '2025-06-01', validTo: '2028-12-31' })
+    const twin = certificate({ validFrom: '2025-06-01', validTo: seedDay('2028-12-31') })
     await insert(office(), 'Certificate', twin)
     await expect(run(office(), `UPDATE "Certificate" SET "successorId" = $2::uuid WHERE id = $1::uuid`, twin.id, later.id)).rejects.toThrow(/Certificate_tenantId_successorId_key|duplicate key/)
   })
@@ -414,7 +415,7 @@ describe('product and compliance data', () => {
     expect(await update(first.id, `status = 'NOTIFIED', "notifiedAt" = now()`)).toBe(1)
     await expect(update(first.id, `changes = '[{"kind":"SEAMS"}]'`)).rejects.toThrow(/fixed once it left OPEN/)
     await expect(update(first.id, `status = 'APPROVED', "decidedAt" = now()`)).rejects.toThrow(/with the wrong times/)
-    expect(await update(first.id, `status = 'APPROVED', "answeredAt" = '2026-12-01', "answerReference" = 'ADD-1', "decidedAt" = now(), "decidedById" = '${a.actorId}'`)).toBe(1)
+    expect(await update(first.id, `status = 'APPROVED', "answeredAt" = '${seedDay('2026-12-01')}', "answerReference" = 'ADD-1', "decidedAt" = now(), "decidedById" = '${a.actorId}'`)).toBe(1)
     await expect(update(first.id, `"answerReference" = 'ADD-2'`)).rejects.toThrow(/is APPROVED; it changes no more/)
     await expect(update(second.id, `status = 'NOT_NEEDED', "decidedAt" = now()`)).rejects.toThrow(/with the reason when not needed/)
     expect(await update(second.id, `status = 'NOT_NEEDED', "decidedAt" = now(), "decisionNote" = 'Same lining weight: no effect on the type'`)).toBe(1)
@@ -497,8 +498,8 @@ describe('subcontract orders', () => {
     // Operations: pieces per cell add up, counts start at 0.
     await expect(run(office(), `UPDATE "SubcontractOperation" SET pieces = 6 WHERE id = $1::uuid`, sub.operationId)).rejects.toThrow(/its sizes adding up to them/)
     expect(await update(`status = 'ISSUED', "issuedAt" = now(), "issuedById" = $2::uuid`, a.actorId)).toBe(1)
-    await expect(update(`"workOrderId" = "workOrderId", "orderDate" = '2026-11-17'`)).rejects.toThrow(/its terms change only while it is DRAFT/)
-    expect(await update(`"expectedBackDate" = '2026-11-28', note = 'Due two days later'`)).toBe(1)
+    await expect(update(`"workOrderId" = "workOrderId", "orderDate" = '${seedDay('2026-11-17')}'`)).rejects.toThrow(/its terms change only while it is DRAFT/)
+    expect(await update(`"expectedBackDate" = '${seedDay('2026-11-28')}', note = 'Due two days later'`)).toBe(1)
     await expect(run(office(), `UPDATE "SubcontractOperation" SET "pricePerPiece" = 5 WHERE id = $1::uuid`, sub.operationId)).rejects.toThrow(/change only while it is DRAFT \(but for the pieces sent and back\)/)
     await expect(run(office(), `UPDATE "SubcontractOperation" SET "piecesSent" = 8 WHERE id = $1::uuid`, sub.operationId)).rejects.toThrow(/no more back than sent nor sent than pieces/)
     expect(await run(office(), `UPDATE "SubcontractOperation" SET "piecesSent" = 7 WHERE id = $1::uuid`, sub.operationId)).toBe(1)

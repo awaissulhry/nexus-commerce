@@ -9,6 +9,7 @@ import { FLOOR_ROLE, PARTNER_ROLE, RUNTIME_LOGIN } from './roles'
 import { seedUuid } from './seeding'
 import { migratedDatabase, type MigratedDatabase } from './testing/database'
 import { loadOwnership, loadSchema } from './tools'
+import { seedDay } from './seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * Buying and subcontracting in depth (W2b-5 schema wave 40/44, B-W2b-285, …_buying_depth_w2b_guards) on a database built
@@ -95,9 +96,9 @@ async function confirmedOrder(): Promise<{ orderId: string; lineId: string; deli
   await copyRow(office(), 'PurchaseOrderLineDelivery', x.sampleOrder.deliveryIds[0], { id: deliveries[0], purchaseOrderLineId: lineId })
   await copyRow(office(), 'PurchaseOrderLineDelivery', x.sampleOrder.deliveryIds[1], { id: deliveries[1], purchaseOrderLineId: lineId })
   await send(orderId)
-  await update(office(), 'PurchaseOrderLine', lineId, `"confirmedQuantity" = 10, "confirmedDate" = '2026-12-07'`)
-  await update(office(), 'PurchaseOrderLineDelivery', deliveries[0], `"confirmedDate" = '2026-12-07'`)
-  await update(office(), 'PurchaseOrderLineDelivery', deliveries[1], `"confirmedDate" = '2026-12-14'`)
+  await update(office(), 'PurchaseOrderLine', lineId, `"confirmedQuantity" = 10, "confirmedDate" = '${seedDay('2026-12-07')}'`)
+  await update(office(), 'PurchaseOrderLineDelivery', deliveries[0], `"confirmedDate" = '${seedDay('2026-12-07')}'`)
+  await update(office(), 'PurchaseOrderLineDelivery', deliveries[1], `"confirmedDate" = '${seedDay('2026-12-14')}'`)
   await update(office(), 'PurchaseOrder', orderId, `status = 'CONFIRMED', "confirmedAt" = now(), "confirmedVia" = 'OFFICE'`)
   return { orderId, lineId, deliveries }
 }
@@ -129,7 +130,7 @@ describe('the seed', () => {
       (SELECT count(*) FROM "SubcontractConsumption")::int AS balance`)
     expect(counts).toEqual({ variants: 3, tolerances: 3, deliveries: 6, changes: 1, requests: 4, costs: 4, balance: 2 })
     expect(await one(`SELECT status::text AS status, "rateAtOrder"::text AS rate, "companyNetAmount" AS value FROM "PurchaseOrder" WHERE id = $1`, [x.usdOrder.orderId])).toEqual({ status: 'CONFIRMED', rate: '1.08500000', value: 6636 })
-    expect((await one(`SELECT "confirmedDate"::text AS d FROM "PurchaseOrderLineDelivery" WHERE id = $1`, [x.usdOrder.deliveryIds[1]])).d).toBe('2027-02-01')
+    expect((await one(`SELECT "confirmedDate"::text AS d FROM "PurchaseOrderLineDelivery" WHERE id = $1`, [x.usdOrder.deliveryIds[1]])).d).toBe(seedDay('2027-02-01'))
   })
 })
 
@@ -161,9 +162,9 @@ describe('a purchase order waiting for its yes', () => {
     const delivery = randomUUID()
     await copyRow(office(), 'PurchaseOrderLineDelivery', x.sampleOrder.deliveryIds[0], { id: delivery, purchaseOrderLineId: scheduled.lineId })
     await expect(ask(scheduled.orderId)).rejects.toThrow(/deliveries of line 10 of purchase order .* do not add up to the line/)
-    await copyRow(office(), 'PurchaseOrderLineDelivery', x.sampleOrder.deliveryIds[1], { id: randomUUID(), purchaseOrderLineId: scheduled.lineId, needDate: '2026-12-01' })
+    await copyRow(office(), 'PurchaseOrderLineDelivery', x.sampleOrder.deliveryIds[1], { id: randomUUID(), purchaseOrderLineId: scheduled.lineId, needDate: seedDay('2026-12-01') })
     await expect(send(scheduled.orderId)).rejects.toThrow(/the first delivery on its need date/)
-    await update(office(), 'PurchaseOrderLine', scheduled.lineId, `"needDate" = '2026-12-01'`)
+    await update(office(), 'PurchaseOrderLine', scheduled.lineId, `"needDate" = '${seedDay('2026-12-01')}'`)
     expect(await ask(scheduled.orderId)).toBe(1)
     // The rate of a foreign currency: with its value or neither, frozen with the terms once sent. Not required at the send
     // (W1 sends an order in the supplier's currency; B-W2b-296 asks for the rate first).
@@ -248,38 +249,38 @@ describe('the delivery schedule and the confirmed dates', () => {
     const first = randomUUID()
     const second = randomUUID()
     await copyRow(office(), 'PurchaseOrderLineDelivery', x.sampleOrder.deliveryIds[0], { id: first, purchaseOrderLineId: lineId })
-    await expect(copyRow(office(), 'PurchaseOrderLineDelivery', x.sampleOrder.deliveryIds[1], { id: randomUUID(), purchaseOrderLineId: lineId, seq: 3, confirmedDate: '2026-12-20' })).rejects.toThrow(/the supplier has not confirmed it yet/)
+    await expect(copyRow(office(), 'PurchaseOrderLineDelivery', x.sampleOrder.deliveryIds[1], { id: randomUUID(), purchaseOrderLineId: lineId, seq: 3, confirmedDate: seedDay('2026-12-20') })).rejects.toThrow(/the supplier has not confirmed it yet/)
     await expect(copyRow(office(), 'PurchaseOrderLineDelivery', x.sampleOrder.deliveryIds[1], { id: randomUUID(), purchaseOrderLineId: lineId, seq: 3, quantity: 0 })).rejects.toThrow(/quantities above 0/)
     await copyRow(office(), 'PurchaseOrderLineDelivery', x.sampleOrder.deliveryIds[1], { id: second, purchaseOrderLineId: lineId })
-    await expect(update(office(), 'PurchaseOrderLineDelivery', first, `"confirmedDate" = '2026-12-07'`)).rejects.toThrow(/is set while its order is SENT, CHANGES_PROPOSED or CONFIRMED \(it is DRAFT\)/)
+    await expect(update(office(), 'PurchaseOrderLineDelivery', first, `"confirmedDate" = '${seedDay('2026-12-07')}'`)).rejects.toThrow(/is set while its order is SENT, CHANGES_PROPOSED or CONFIRMED \(it is DRAFT\)/)
     await send(orderId)
     await expect(update(office(), 'PurchaseOrderLineDelivery', first, `quantity = 5`)).rejects.toThrow(/its deliveries change only while it is DRAFT/)
     await expect(copyRow(office(), 'PurchaseOrderLineDelivery', first, { id: randomUUID(), seq: 9 })).rejects.toThrow(/deliveries are planned only while it is DRAFT/)
     await expect(run(office(), `DELETE FROM "PurchaseOrderLineDelivery" WHERE id = $1::uuid`, first)).rejects.toThrow(/removed only while it is DRAFT/)
     // The supplier's link (the partner scope of its party) confirms each delivery once.
-    expect(await update(partner(), 'PurchaseOrderLineDelivery', first, `"confirmedDate" = '2026-12-07'`)).toBe(1)
-    await expect(update(partner(), 'PurchaseOrderLineDelivery', first, `"confirmedDate" = '2026-12-09'`)).rejects.toThrow(/only with its date change|only confirms the date of a delivery of its SENT purchase order, once/)
+    expect(await update(partner(), 'PurchaseOrderLineDelivery', first, `"confirmedDate" = '${seedDay('2026-12-07')}'`)).toBe(1)
+    await expect(update(partner(), 'PurchaseOrderLineDelivery', first, `"confirmedDate" = '${seedDay('2026-12-09')}'`)).rejects.toThrow(/only with its date change|only confirms the date of a delivery of its SENT purchase order, once/)
     await expect(update(partner(), 'PurchaseOrderLineDelivery', second, `note = 'Our note'`)).rejects.toThrow(/its deliveries change only while it is DRAFT|only confirms the date/)
-    expect(await update(partner(A.P2), 'PurchaseOrderLineDelivery', second, `"confirmedDate" = '2026-12-14'`)).toBe(0)
+    expect(await update(partner(A.P2), 'PurchaseOrderLineDelivery', second, `"confirmedDate" = '${seedDay('2026-12-14')}'`)).toBe(0)
   })
 
   it('moves a confirmed date only with its date change, both ways, and keeps the history', async () => {
     const { lineId, deliveries } = await confirmedOrder()
-    await expect(update(office(), 'PurchaseOrderLineDelivery', deliveries[1], `"confirmedDate" = '2026-12-21'`)).rejects.toThrow(/moves from 2026-12-14 to 2026-12-21 only with its date change/)
-    await expect(update(office(), 'PurchaseOrderLine', lineId, `"confirmedDate" = '2026-12-09'`)).rejects.toThrow(/moves from 2026-12-07 to 2026-12-09 only with its date change/)
+    await expect(update(office(), 'PurchaseOrderLineDelivery', deliveries[1], `"confirmedDate" = '${seedDay('2026-12-21')}'`)).rejects.toThrow(new RegExp(String.raw`moves from ${seedDay('2026-12-14')} to ${seedDay('2026-12-21')} only with its date change`))
+    await expect(update(office(), 'PurchaseOrderLine', lineId, `"confirmedDate" = '${seedDay('2026-12-09')}'`)).rejects.toThrow(new RegExp(String.raw`moves from ${seedDay('2026-12-07')} to ${seedDay('2026-12-09')} only with its date change`))
     // The delivery: the change, then the date, in one command.
-    await together(office(), dateChange(lineId, deliveries[1], 1, '2026-12-14', '2026-12-21'), [`UPDATE "PurchaseOrderLineDelivery" SET "confirmedDate" = '2026-12-21' WHERE id = $1::uuid`, deliveries[1]])
+    await together(office(), dateChange(lineId, deliveries[1], 1, seedDay('2026-12-14'), seedDay('2026-12-21')), [`UPDATE "PurchaseOrderLineDelivery" SET "confirmedDate" = '${seedDay('2026-12-21')}' WHERE id = $1::uuid`, deliveries[1]])
     // A change recorded but not made (the other way) is refused at commit.
-    await expect(together(office(), dateChange(lineId, deliveries[0], 2, '2026-12-07', '2026-12-08'))).rejects.toThrow(/move the date in the same command/)
+    await expect(together(office(), dateChange(lineId, deliveries[0], 2, seedDay('2026-12-07'), seedDay('2026-12-08')))).rejects.toThrow(/move the date in the same command/)
     // The line: its own change (no delivery).
-    await together(office(), dateChange(lineId, null, 2, '2026-12-07', '2026-12-09', 'We asked to bring it forward (made-up).'), [`UPDATE "PurchaseOrderLine" SET "confirmedDate" = '2026-12-09' WHERE id = $1::uuid`, lineId])
-    expect((await one(`SELECT "confirmedDate"::text AS d, "needDate"::text AS asked FROM "PurchaseOrderLine" WHERE id = $1`, [lineId]))).toEqual({ d: '2026-12-09', asked: '2026-12-07' })
+    await together(office(), dateChange(lineId, null, 2, seedDay('2026-12-07'), seedDay('2026-12-09'), 'We asked to bring it forward (made-up).'), [`UPDATE "PurchaseOrderLine" SET "confirmedDate" = '${seedDay('2026-12-09')}' WHERE id = $1::uuid`, lineId])
+    expect((await one(`SELECT "confirmedDate"::text AS d, "needDate"::text AS asked FROM "PurchaseOrderLine" WHERE id = $1`, [lineId]))).toEqual({ d: seedDay('2026-12-09'), asked: seedDay('2026-12-07') })
     // The history: a place above the last, two different days, a reason; a first confirmation is no change.
-    await expect(together(office(), dateChange(lineId, deliveries[1], 2, '2026-12-21', '2026-12-28'))).rejects.toThrow(/takes a place above the line's last one \(2\)/)
-    await expect(together(office(), dateChange(lineId, deliveries[1], 3, '2026-12-21', '2026-12-21'))).rejects.toThrow(/moves the date \(from 2026-12-21 to the same day\)/)
-    await expect(together(office(), dateChange(lineId, deliveries[1], 3, '2026-12-21', '2026-12-28', ' '))).rejects.toThrow(/says why \(1 to 2000 characters\)/)
+    await expect(together(office(), dateChange(lineId, deliveries[1], 2, seedDay('2026-12-21'), seedDay('2026-12-28')))).rejects.toThrow(/takes a place above the line's last one \(2\)/)
+    await expect(together(office(), dateChange(lineId, deliveries[1], 3, seedDay('2026-12-21'), seedDay('2026-12-21')))).rejects.toThrow(new RegExp(String.raw`moves the date \(from ${seedDay('2026-12-21')} to the same day\)`))
+    await expect(together(office(), dateChange(lineId, deliveries[1], 3, seedDay('2026-12-21'), seedDay('2026-12-28'), ' '))).rejects.toThrow(/says why \(1 to 2000 characters\)/)
     const draft = await newOrder()
-    await expect(together(office(), dateChange(draft.lineId, null, 1, '2026-12-07', '2026-12-08'))).rejects.toThrow(/is DRAFT; a confirmed date moves only while it is SENT/)
+    await expect(together(office(), dateChange(draft.lineId, null, 1, seedDay('2026-12-07'), seedDay('2026-12-08')))).rejects.toThrow(/is DRAFT; a confirmed date moves only while it is SENT/)
     const change = (await one(`SELECT id::text AS id FROM "PoDateChange" WHERE "purchaseOrderLineId" = $1 ORDER BY seq LIMIT 1`, [lineId])).id as string
     await expect(update(office(), 'PoDateChange', change, `reason = 'Rewritten'`)).rejects.toThrow(/permission denied/)
     await expect(admin(`UPDATE "PoDateChange" SET reason = 'Rewritten' WHERE id = $1`, [change])).rejects.toThrow(/append-only: UPDATE on "PoDateChange" is refused/)

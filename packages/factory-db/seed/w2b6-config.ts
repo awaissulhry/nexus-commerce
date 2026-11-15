@@ -5,6 +5,7 @@ import { seed as seedAuth } from './auth'
 import { seed as seedOptions } from './options'
 import { seed as seedProduct } from './product'
 import { seed as seedSalesPricing } from './sales-pricing'
+import { seedDay } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The configuration and templates seed (W2b-6 schema wave 56/57, B-W2b-379), per tenant of seed/_core.ts, written in the
@@ -214,7 +215,7 @@ export async function seed(context: SeedContext): Promise<ConfigSeed> {
         { id: result.valueIds[3]!, ...valueKey(F.referenceStyle, 'Style', records.jkt05), value: records.jkt01, ...changed(minutes(3)) },
         { id: result.valueIds[4]!, ...valueKey(F.thickness, 'Item', records.leather), value: 1.2, ...changed(minutes(3)) },
         { id: result.valueIds[5]!, ...valueKey(F.targetRetail, 'SalesOrder', records.order), value: { amount: 89900, currency: 'EUR' }, ...changed(minutes(3)) },
-        { id: result.valueIds[6]!, ...valueKey(F.fairDate, 'SalesOrder', records.order), value: '2027-01-21', ...changed(minutes(3)) },
+        { id: result.valueIds[6]!, ...valueKey(F.fairDate, 'SalesOrder', records.order), value: seedDay('2027-01-21'), ...changed(minutes(3)) },
         { id: result.valueIds[7]!, ...valueKey(F.rushPackaging, 'SalesOrder', records.order), value: false, ...changed(minutes(3), memberId) },
         { id: result.valueIds[8]!, ...valueKey(F.finishGrade, 'SalesOrder', records.order), value: 'A_GRADE', ...changed(minutes(3)) },
         { id: result.valueIds[9]!, ...valueKey(F.oldPromo, 'Quote', records.quote), value: 'SEED-PROMO-2026', ...changed(minutes(3)) },

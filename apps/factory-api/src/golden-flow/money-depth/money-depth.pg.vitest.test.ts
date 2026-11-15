@@ -758,7 +758,7 @@ describe('the W2b-6 golden flow: a cost sheet approved, an order packed by scan 
     await stepped(w, P.finance)
     const switched = await ok(P.finance, 'PUT', `/invoicing/tax/settings/${companyA()}`, { version: settings.version, stampDutyOn: true, declarationsOfIntentOn: true })
     expect(switched.company.switches).toMatchObject({ stampDutyOn: true, declarationsOfIntentOn: true })
-    const declaration = ((await ok(P.finance, 'GET', `/invoicing/declarations-of-intent?companyId=${companyA()}&partyId=${P1()}`)).declarations as Json[]).find((entry) => entry.state === 'CHECKED')!
+    const declaration = ((await ok(P.finance, 'GET', `/invoicing/declarations-of-intent?companyId=${companyA()}&partyId=${P1()}`)).declarations as Json[]).find((entry) => entry.state === 'CHECKED' && entry.year === Number(today().slice(0, 4)))! // B-W2b-F53: the declaration of the invoice's year (the seeds hold one for the run's year)
     expect(declaration).toBeDefined()
     let draft = (
       await ok(P.finance, 'POST', '/invoicing/invoices', {

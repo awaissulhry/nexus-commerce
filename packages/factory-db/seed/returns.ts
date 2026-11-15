@@ -1,6 +1,7 @@
 import { ComplaintCategory, ComplaintChannel, ComplaintSeverity, ComplaintStatus, ParcelCondition, RepairKind, RepairStage, ReturnCause, ReturnDisposition, ReturnFreightPayer, ReturnGoodsOutcome, ReturnGrade, ReturnStatus } from '../src/generated/prisma/enums'
 import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedMoney, type MoneySeed } from './money'
+import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The returns, repairs and complaints seed (W2a schema wave 2/7), per tenant of seed/_core.ts, written in the tenant's
@@ -29,19 +30,19 @@ import { seed as seedMoney, type MoneySeed } from './money'
 
 const T = {
   rma1: new Date('2026-11-05T09:00:00.000Z'),
-  rma2: new Date('2026-11-26T09:00:00.000Z'),
-  complaint: new Date('2026-11-26T08:30:00.000Z'),
-  triaged: new Date('2026-11-27T10:00:00.000Z'),
-  received: new Date('2026-12-01T08:15:00.000Z'),
-  inspected: new Date('2026-12-01T10:00:00.000Z'),
-  decided: new Date('2026-12-01T10:30:00.000Z'),
-  repair: new Date('2026-12-01T11:00:00.000Z'),
+  rma2: seedAt('2026-11-26T09:00:00.000Z'),
+  complaint: seedAt('2026-11-26T08:30:00.000Z'),
+  triaged: seedAt('2026-11-27T10:00:00.000Z'),
+  received: seedAt('2026-12-01T08:15:00.000Z'),
+  inspected: seedAt('2026-12-01T10:00:00.000Z'),
+  decided: seedAt('2026-12-01T10:30:00.000Z'),
+  repair: seedAt('2026-12-01T11:00:00.000Z'),
 } as const
 const DAY = {
-  rma1Due: new Date('2026-11-20T00:00:00.000Z'),
-  rma2Due: new Date('2026-12-11T00:00:00.000Z'),
-  customerDdt: new Date('2026-11-28T00:00:00.000Z'),
-  answerDue: new Date('2026-12-04T00:00:00.000Z'),
+  rma1Due: seedAt('2026-11-20T00:00:00.000Z'),
+  rma2Due: seedAt('2026-12-11T00:00:00.000Z'),
+  customerDdt: seedAt('2026-11-28T00:00:00.000Z'),
+  answerDue: seedAt('2026-12-04T00:00:00.000Z'),
 } as const
 
 export interface ReturnsSeed {

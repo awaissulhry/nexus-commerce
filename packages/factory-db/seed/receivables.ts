@@ -1,6 +1,7 @@
 import { InvoiceChargeKind, InvoiceDocType, InvoiceLineKind, InvoicePriceBasis, PaymentMethod, PaymentReminderStatus, RefundStatus, ReminderAction } from '../src/generated/prisma/enums'
 import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedMoney, type MoneySeed } from './money'
+import { seedAt, seedDay } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The receivables seed (W2a schema wave 7/7), per tenant of seed/_core.ts, written in the tenant's office scope as the
@@ -27,16 +28,16 @@ import { seed as seedMoney, type MoneySeed } from './money'
  */
 
 const T = {
-  charged: new Date('2026-11-25T09:30:00.000Z'),
+  charged: seedAt('2026-11-25T09:30:00.000Z'),
   overpaid: new Date('2026-11-12T09:00:00.000Z'),
   refundDue: new Date('2026-11-13T10:00:00.000Z'),
   settings: new Date('2026-11-01T08:00:00.000Z'),
-  prepared: new Date('2026-11-24T06:00:00.000Z'),
+  prepared: seedAt('2026-11-24T06:00:00.000Z'),
 } as const
 const DAY = {
   overpaid: new Date('2026-11-12T00:00:00.000Z'),
-  refundBy: new Date('2026-11-26T00:00:00.000Z'),
-  sampleDue: new Date('2026-11-27T00:00:00.000Z'),
+  refundBy: seedAt('2026-11-26T00:00:00.000Z'),
+  sampleDue: seedAt('2026-11-27T00:00:00.000Z'),
 } as const
 
 /** The charge draft: the swatch book (25.00) and its freight (12.00), net, and the VAT at 22 %, minor units. */
@@ -104,7 +105,7 @@ export async function seed(context: SeedContext): Promise<ReceivablesSeed> {
           vatTotal: CHARGES.vat,
           grossTotal: CHARGES.net + CHARGES.vat,
           vatSummary: [{ rate: '22.00', nature: null, legalRef: null, taxable: CHARGES.net, vat: CHARGES.vat, rounding: 0 }],
-          paymentTerms: { condition: 'TP02', installments: [{ method: 'MP05', amount: CHARGES.net + CHARGES.vat, dueDate: '2026-12-31' }] },
+          paymentTerms: { condition: 'TP02', installments: [{ method: 'MP05', amount: CHARGES.net + CHARGES.vat, dueDate: seedDay('2026-12-31') }] },
           causale: 'Campionario pelli inviato su richiesta',
           createdAt: T.charged,
           updatedAt: T.charged,

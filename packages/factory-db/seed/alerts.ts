@@ -2,6 +2,7 @@ import type { Prisma } from '../src/generated/prisma/client'
 import { seed as seedAuth } from './auth'
 import { seed as seedRoles } from './roles'
 import { seedUuid, type SeedContext } from '../src/seeding'
+import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The alerts and timers seed (B-W2a-33's tables), per tenant of seed/_core.ts:
@@ -141,7 +142,7 @@ export async function seed(context: SeedContext): Promise<void> {
         await tx.dueTimer.update({ where: { id: timer.cancelled }, data: { status: 'CANCELLED', cancelledAt: hours(1), cancelReason: 'The certificate was renewed: its expiry moved.', version: 2 }, select: { id: true } })
       }
       await tx.dueTimer.createMany({
-        data: [{ id: timer.pending, ...onCertificate, timerKey: 'CERTIFICATE_EXPIRY:-7d', dueAt: new Date('2027-11-15T00:00:00.000Z'), fireAt: new Date('2027-11-08T00:00:00.000Z'), ...stamp }],
+        data: [{ id: timer.pending, ...onCertificate, timerKey: 'CERTIFICATE_EXPIRY:-7d', dueAt: seedAt('2027-11-15T00:00:00.000Z'), fireAt: seedAt('2027-11-08T00:00:00.000Z'), ...stamp }],
         skipDuplicates: true,
       })
     }),

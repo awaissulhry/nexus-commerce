@@ -21,6 +21,8 @@ import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { applySystemRoleChanges, systemRoleChanges } from '../../../platform/auth/roles/system-roles'
 import { addUser, startHarness, type Harness, type TestTenant } from '../../../platform/auth/sessions/testing/harness'
 import { runCheckReminders } from './reminders'
+import { seedDay } from '@nexus/factory-db/testing' // B-W2b-F53: the seeds' future follows the calendar
+import { addMonths } from '@nexus/factory-domain/plant/statutory/rules' // B-W2b-F53
 
 /**
  * Statutory periodic checks (B-W2b-124; QHS-205; D.Lgs. 81/2008 art. 71; Owner answer H1) on the local stack with the app's
@@ -175,7 +177,7 @@ describe('plans: one check type on one machine, one active at a time', () => {
     expect(soon.plans.map((row: Json) => row.id)).toContain(sewPlan.id)
     const press = await ok('viewer', 'GET', `/plant/checks/plans?machineId=${pressMachine}`)
     expect(press.plans.map((row: Json) => row.checkType.code)).toEqual(['PRESS_GUARDS', 'EARTHING'])
-    expect(press.plans[0]).toMatchObject({ lastDone: { resultId: care.resultIds.failed, outcome: 'FAILED' }, machine: { locked: true }, nextDueOn: '2027-02-20' })
+    expect(press.plans[0]).toMatchObject({ lastDone: { resultId: care.resultIds.failed, outcome: 'FAILED' }, machine: { locked: true }, nextDueOn: seedDay('2027-02-20') })
     const first = await ok('viewer', 'GET', `/plant/checks/plans?limit=1`)
     expect(first.plans).toHaveLength(1)
     const second = await ok('viewer', 'GET', `/plant/checks/plans?limit=1&cursor=${encodeURIComponent(first.nextCursor)}`)
@@ -348,25 +350,29 @@ describe('the report: a file of the result, and the check report PDF', () => {
 describe('the page\'s reads', () => {
   it('reads the register newest first with a cursor, by outcome and period', async () => {
     const page = await ok('viewer', 'GET', `/plant/checks/results?machineId=${pressMachine}&limit=2`)
-    expect(page.results.map((row: Json) => row.performedOn)).toEqual(['2026-11-20', '2026-08-21'])
+    expect(page.results.map((row: Json) => row.performedOn)).toEqual([seedDay('2026-11-20'), '2026-08-21'])
     const rest = await ok('viewer', 'GET', `/plant/checks/results?machineId=${pressMachine}&limit=2&cursor=${encodeURIComponent(page.nextCursor)}`)
     expect(rest.results.map((row: Json) => row.id)).toEqual([care.resultIds.passed])
     expect((await ok('viewer', 'GET', `/plant/checks/results?machineId=${pressMachine}&inForce=true`)).results.map((row: Json) => row.id)).toEqual([care.resultIds.failed, care.resultIds.correction])
-    expect((await ok('viewer', 'GET', `/plant/checks/results?outcome=FAILED&from=2026-11-01&to=2026-11-30&machineId=${pressMachine}`)).results.map((row: Json) => row.id)).toEqual([care.resultIds.failed])
-    expect((await no('viewer', 'GET', `/plant/checks/results?from=2026-11-30&to=2026-11-01`, undefined, 400)).issues[0].path).toBe('query/to')
+    // B-W2b-F53: the failed check (20 November as written) is the seeds' future: the period around it moves with it.
+    expect((await ok('viewer', 'GET', `/plant/checks/results?outcome=FAILED&from=${seedDay('2026-11-16')}&to=${seedDay('2026-11-30')}&machineId=${pressMachine}`)).results.map((row: Json) => row.id)).toEqual([care.resultIds.failed])
+    expect((await no('viewer', 'GET', `/plant/checks/results?from=${seedDay('2026-11-30')}&to=2026-11-01`, undefined, 400)).issues[0].path).toBe('query/to')
   })
 
   it('draws the calendar: next due dates, later checks by the interval, checks done', async () => {
-    const calendar = await ok('viewer', 'GET', `/plant/checks/calendar?from=2026-08-01&to=2027-08-31&siteId=${A.siteA1}`)
+    // ---- B-W2b-F53: the seeds' history (the August check) keeps its day, their future (the 20 November check, the dues) moves on by
+    // whole weeks, so the two are read in two windows of at most 400 days: August to SEED_DAY, then the seeds' future to its August.
+    const before = await ok('viewer', 'GET', `/plant/checks/calendar?from=2026-08-01&to=2026-11-15&siteId=${A.siteA1}`)
+    expect(before.chips.filter((chip: Json) => chip.machine.id === pressMachine && chip.kind === 'DONE').map((chip: Json) => [chip.date, chip.outcome])).toEqual([['2026-08-21', 'PASSED']])
+    const calendar = await ok('viewer', 'GET', `/plant/checks/calendar?from=${seedDay('2026-11-16')}&to=${seedDay('2027-08-31')}&siteId=${A.siteA1}`)
     const press = calendar.chips.filter((chip: Json) => chip.machine.id === pressMachine)
-    expect(press.filter((chip: Json) => chip.kind === 'DONE').map((chip: Json) => [chip.date, chip.outcome])).toEqual([
-      ['2026-08-21', 'PASSED'],
-      ['2026-11-20', 'FAILED'],
-    ])
-    expect(press.find((chip: Json) => chip.kind === 'DUE' && chip.checkType.code === 'PRESS_GUARDS')).toMatchObject({ date: '2027-02-20', planId: care.planIds.guards })
-    expect(press.filter((chip: Json) => chip.kind === 'PROJECTED' && chip.checkType.code === 'PRESS_GUARDS').map((chip: Json) => chip.date)).toEqual(['2027-05-20', '2027-08-20'])
-    expect(press.find((chip: Json) => chip.checkType.code === 'EARTHING')).toMatchObject({ kind: 'DUE', date: '2027-03-15', outsideBody: null })
-    expect((await no('viewer', 'GET', `/plant/checks/calendar?from=2026-01-01&to=2027-06-01`, undefined, 400)).issues[0].path).toBe('query/to')
+    expect(press.filter((chip: Json) => chip.kind === 'DONE').map((chip: Json) => [chip.date, chip.outcome])).toEqual([[seedDay('2026-11-20'), 'FAILED']])
+    expect(press.find((chip: Json) => chip.kind === 'DUE' && chip.checkType.code === 'PRESS_GUARDS')).toMatchObject({ date: seedDay('2027-02-20'), planId: care.planIds.guards })
+    // Later checks every 3 months from the due day (PostgreSQL's date + interval: addMonths).
+    expect(press.filter((chip: Json) => chip.kind === 'PROJECTED' && chip.checkType.code === 'PRESS_GUARDS').map((chip: Json) => chip.date)).toEqual([addMonths(seedDay('2027-02-20'), 3), addMonths(seedDay('2027-02-20'), 6)])
+    // ---- end B-W2b-F53
+    expect(press.find((chip: Json) => chip.checkType.code === 'EARTHING')).toMatchObject({ kind: 'DUE', date: seedDay('2027-03-15'), outsideBody: null })
+    expect((await no('viewer', 'GET', `/plant/checks/calendar?from=2026-01-01&to=${seedDay('2027-06-01')}`, undefined, 400)).issues[0].path).toBe('query/to')
   })
 
   it('ends a plan with the reason: its results stay, it takes no more', async () => {

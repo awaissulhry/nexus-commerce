@@ -21,6 +21,7 @@ import {
 import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedHolds } from './holds'
 import { seed as seedProduction } from './production'
+import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The inspection plans and records seed (W2b schema wave 10/16, B-W2b-76), per tenant of seed/_core.ts. Plans, profiles
@@ -54,11 +55,11 @@ import { seed as seedProduction } from './production'
 
 /** Fixed instants, so the seed never depends on the clock. */
 const T = {
-  written: new Date('2026-11-18T08:00:00.000Z'),
-  approved: new Date('2026-11-18T09:00:00.000Z'),
-  inspected: new Date('2026-11-18T10:00:00.000Z'),
-  decided: new Date('2026-11-18T11:00:00.000Z'),
-  amended: new Date('2026-11-18T12:00:00.000Z'),
+  written: seedAt('2026-11-18T08:00:00.000Z'),
+  approved: seedAt('2026-11-18T09:00:00.000Z'),
+  inspected: seedAt('2026-11-18T10:00:00.000Z'),
+  decided: seedAt('2026-11-18T11:00:00.000Z'),
+  amended: seedAt('2026-11-18T12:00:00.000Z'),
 }
 
 export interface InspectionPlansSeed {

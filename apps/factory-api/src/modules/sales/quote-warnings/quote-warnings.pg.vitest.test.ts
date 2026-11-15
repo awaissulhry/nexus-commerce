@@ -14,6 +14,7 @@ import { testAuthenticator, type SessionContext } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { startHarness, type Harness } from '../../../platform/auth/sessions/testing/harness'
 import { overdueWarning } from './overdue'
+import { seedDay } from '@nexus/factory-db/testing' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The customer and product warnings (B-W2b-294; SAL-147; follow-ups QT1:01, QT1:02) through the app's real routes on a throwaway
@@ -158,9 +159,9 @@ describe('product warnings: phase-out, markets, a blocked material (SAL-147)', (
 describe('the customer: an overdue account (SAL-147)', () => {
   it("warns of P1's invoice past its due day, the amount only in the details (price grain)", async () => {
     const read = (today: string) => h.database.withScope({ audience: 'office', tenantId: T, actorId: user }, (client) => overdueWarning(client, { companyId: companyA, partyId: P1 }, today))
-    expect(await read('2026-11-27')).toBeNull()
-    const warning = await read('2027-01-15')
+    expect(await read(seedDay('2026-11-27'))).toBeNull()
+    const warning = await read(seedDay('2027-01-15'))
     expect(warning!.finding).toMatchObject({ code: 'ACCOUNT_OVERDUE', severity: 'WARNING', open: { recordType: 'Party', recordId: P1, tab: 'receivables' }, message: 'Seed Customer One S.r.l. has an invoice past due with this company, the oldest by 49 days: ask about the payment before the deal grows.' })
-    expect(warning!.details).toMatchObject({ invoices: 1, oldestDueDate: '2026-11-27', daysLate: 49, overdue: [{ currency: 'EUR', amount: { $money: 'price', value: 41_000 } }] })
+    expect(warning!.details).toMatchObject({ invoices: 1, oldestDueDate: seedDay('2026-11-27'), daysLate: 49, overdue: [{ currency: 'EUR', amount: { $money: 'price', value: 41_000 } }] })
   })
 })

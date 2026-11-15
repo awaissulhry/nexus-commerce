@@ -15,6 +15,8 @@ import { seed as seedPlanning } from '../../../../../../packages/factory-db/seed
 import { seed as seedSchedule } from '../../../../../../packages/factory-db/seed/schedule'
 import { seed as seedSubcontract } from '../../../../../../packages/factory-db/seed/subcontract'
 import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
+// ---- B-W2b-F53: this file fixes its clock on a day of the seeds' story, so it runs the seeds as written (seed-calendar)
+await vi.hoisted(async () => (await import('@nexus/factory-db/testing')).seedsAsWritten())
 
 /**
  * The planning board (B-W2a-34; PLN-129 backward scheduling and latest safe start, PLN-131 the board, PLN-132 order and

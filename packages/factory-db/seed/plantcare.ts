@@ -16,6 +16,7 @@ import { seed as seedCutting } from './cutting'
 import { seed as seedFiles } from './files'
 import { seed as seedPeople } from './people'
 import { seed as seedPlant } from './plant'
+import { seedAt, seedDay } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The plant care seed (W2b schema wave 14/16, B-W2b-86), per tenant of seed/_core.ts, on plant A1, written as the app does: the
@@ -56,18 +57,18 @@ const T = {
   firstEnded: new Date('2026-07-01T08:00:00.000Z'),
   passed: new Date('2026-08-20T09:00:00.000Z'),
   corrected: new Date('2026-08-22T09:00:00.000Z'),
-  failed: new Date('2026-11-20T09:40:00.000Z'),
-  checkJob: new Date('2026-11-20T10:00:00.000Z'),
-  reported: new Date('2026-11-21T07:50:00.000Z'),
-  escalated: new Date('2026-11-21T08:05:00.000Z'),
-  acknowledged: new Date('2026-11-21T08:07:00.000Z'),
-  onTheWay: new Date('2026-11-21T08:09:00.000Z'),
-  job: new Date('2026-11-21T08:15:00.000Z'),
-  started: new Date('2026-11-21T08:20:00.000Z'),
-  handedBack: new Date('2026-11-21T08:45:00.000Z'),
-  confirmed: new Date('2026-11-21T08:55:00.000Z'),
-  leadConfirmed: new Date('2026-11-21T09:00:00.000Z'),
-  photo: new Date('2026-11-21T09:10:00.000Z'),
+  failed: seedAt('2026-11-20T09:40:00.000Z'),
+  checkJob: seedAt('2026-11-20T10:00:00.000Z'),
+  reported: seedAt('2026-11-21T07:50:00.000Z'),
+  escalated: seedAt('2026-11-21T08:05:00.000Z'),
+  acknowledged: seedAt('2026-11-21T08:07:00.000Z'),
+  onTheWay: seedAt('2026-11-21T08:09:00.000Z'),
+  job: seedAt('2026-11-21T08:15:00.000Z'),
+  started: seedAt('2026-11-21T08:20:00.000Z'),
+  handedBack: seedAt('2026-11-21T08:45:00.000Z'),
+  confirmed: seedAt('2026-11-21T08:55:00.000Z'),
+  leadConfirmed: seedAt('2026-11-21T09:00:00.000Z'),
+  photo: seedAt('2026-11-21T09:10:00.000Z'),
 } as const
 
 const day = (value: string): Date => new Date(`${value}T00:00:00.000Z`)
@@ -224,7 +225,7 @@ export async function seed(context: SeedContext): Promise<PlantCareSeed> {
             intervalUnit: CheckIntervalUnit.MONTH,
             ownerId: actorId,
             firstDueOn: day('2026-08-20'),
-            nextDueOn: day('2026-11-20'),
+            nextDueOn: day(seedDay('2026-11-20')),
             reminderDays: 14,
             ...stamp(T.firstEnded),
           },
@@ -235,8 +236,8 @@ export async function seed(context: SeedContext): Promise<PlantCareSeed> {
             checkTypeId: checkTypeIds.earthing,
             interval: 2,
             intervalUnit: CheckIntervalUnit.YEAR,
-            firstDueOn: day('2027-03-15'),
-            nextDueOn: day('2027-03-15'),
+            firstDueOn: day(seedDay('2027-03-15')),
+            nextDueOn: day(seedDay('2027-03-15')),
             note: 'The outside body is booked by the office (made-up).',
             ...stamp(T.setup),
           },
@@ -253,8 +254,8 @@ export async function seed(context: SeedContext): Promise<PlantCareSeed> {
           performedOn: day('2026-08-20'),
           outcome: CheckOutcome.PASSED,
           performedBy: 'Seed maintenance (in house)',
-          nextDueOn: day('2026-11-20'),
-          keptUntil: day('2029-08-20'),
+          nextDueOn: day(seedDay('2026-11-20')),
+          keptUntil: day(seedDay('2029-08-20')),
           createdAt: T.passed,
           createdById: actorId,
         },
@@ -270,8 +271,8 @@ export async function seed(context: SeedContext): Promise<PlantCareSeed> {
           performedOn: day('2026-08-21'),
           outcome: CheckOutcome.PASSED,
           performedBy: 'Seed maintenance (in house)',
-          nextDueOn: day('2026-11-21'),
-          keptUntil: day('2029-08-21'),
+          nextDueOn: day(seedDay('2026-11-21')),
+          keptUntil: day(seedDay('2029-08-21')),
           correctsId: resultIds.passed,
           correctionReason: 'The day was typed wrong: the check was done on the 21st (made-up).',
           createdAt: T.corrected,
@@ -286,17 +287,17 @@ export async function seed(context: SeedContext): Promise<PlantCareSeed> {
           machineId: press,
           checkTypeId: checkTypeIds.guards,
           planId: planIds.guards,
-          performedOn: day('2026-11-20'),
+          performedOn: day(seedDay('2026-11-20')),
           outcome: CheckOutcome.FAILED,
           remarks: 'The front guard is off its hinges; the two-hand control could not be tested (made-up).',
           performedBy: 'Seed maintenance (in house)',
-          keptUntil: day('2029-11-20'),
+          keptUntil: day(seedDay('2029-11-20')),
           createdAt: T.failed,
           createdById: actorId,
         },
         select,
       })
-      await tx.machineCheckPlan.update({ where: { id: planIds.guards }, data: { nextDueOn: day('2027-02-20'), version: { increment: 1 }, updatedAt: T.failed }, select })
+      await tx.machineCheckPlan.update({ where: { id: planIds.guards }, data: { nextDueOn: day(seedDay('2027-02-20')), version: { increment: 1 }, updatedAt: T.failed }, select })
       // August's report, a file of its result.
       await tx.storedFile.create({
         data: {

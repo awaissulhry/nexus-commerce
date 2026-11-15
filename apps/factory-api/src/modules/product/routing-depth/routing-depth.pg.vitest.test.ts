@@ -18,6 +18,8 @@ import { testAuthenticator, type SessionContext } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { systemContext } from '../../../platform/outbox/system'
 import { applyCheckpoint } from './checkpoints'
+// ---- B-W2b-F53: this file fixes its clock on a day of the seeds' story, so it runs the seeds as written (seed-calendar)
+await vi.hoisted(async () => (await import('@nexus/factory-db/testing')).seedsAsWritten())
 
 /**
  * A routing in depth (B-W2b-225; PRD-118, PRD-119, PRD-124, PRD-128) through the app's real routes on a throwaway PostgreSQL

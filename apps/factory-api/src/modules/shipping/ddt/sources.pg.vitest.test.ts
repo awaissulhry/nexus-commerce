@@ -7,7 +7,7 @@ import type { FastifyInstance } from 'fastify'
 import type { Redis } from 'ioredis'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { openFactoryDatabase, RUNTIME_LOGIN, type FactoryDatabase } from '@nexus/factory-db'
-import { migratedDatabase, type MigratedDatabase } from '@nexus/factory-db/testing'
+import { migratedDatabase, type MigratedDatabase, seedDay } from '@nexus/factory-db/testing' // B-W2b-F53: + the seeds' calendar
 import { newId } from '@nexus/factory-domain/core/ids'
 import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
 import { businessDate } from '@nexus/factory-domain/core/time'
@@ -212,7 +212,7 @@ describe("a repair's way back to its customer (REPAIR; LOG-116)", () => {
       language: 'it',
       source: { type: 'RepairOrder', id: repair(), number: 'SEED-REP-0001', state: 'RECEIVED' },
       reasons: ['REPAIR', 'RETURN_FROM_WORK', 'OTHER'],
-      draft: { reason: 'REPAIR', recipient: { name: expect.any(String), vatNumber: expect.stringMatching(/^IT/) }, documentRefs: [{ kind: 'REPAIR_ORDER', number: 'SEED-REP-0001', date: null }, { kind: 'DDT', number: 'SEED-C1-R-7', date: '2026-11-28' }], replacement: false },
+      draft: { reason: 'REPAIR', recipient: { name: expect.any(String), vatNumber: expect.stringMatching(/^IT/) }, documentRefs: [{ kind: 'REPAIR_ORDER', number: 'SEED-REP-0001', date: null }, { kind: 'DDT', number: 'SEED-C1-R-7', date: seedDay('2026-11-28') }], replacement: false },
     })
     expect(preview.draft.destination).not.toBeNull()
     expect(preview.draft.lines).toEqual([expect.objectContaining({ seq: 1, quantity: '1', uom: 'PCS', sourceLineId: repair() })])
@@ -420,7 +420,7 @@ describe('returned goods sent back unchanged (RETURN; SAL-341)', () => {
     const preview = await ok('warehouse', 'POST', sourceUrl('ReturnAuthorisation', returnsA.inspectedReturnId, 'ddt/preview'), TYPED)
     expect(preview.source).toMatchObject({ number: 'SEED-RMA-0002', state: 'INSPECTED' })
     expect(preview.goods).toEqual([expect.objectContaining({ sourceLineId: returnsA.inspectedLineId, held: 'Line 10 is not sent back as it came (REPAIR).' })])
-    expect(preview.draft.documentRefs).toEqual([{ kind: 'RETURN_AUTHORISATION', number: 'SEED-RMA-0002', date: null }, expect.objectContaining({ kind: 'SALES_ORDER' }), { kind: 'DDT', number: 'SEED-C1-R-7', date: '2026-11-28' }])
+    expect(preview.draft.documentRefs).toEqual([{ kind: 'RETURN_AUTHORISATION', number: 'SEED-RMA-0002', date: null }, expect.objectContaining({ kind: 'SALES_ORDER' }), { kind: 'DDT', number: 'SEED-C1-R-7', date: seedDay('2026-11-28') }])
     expect((await refused('warehouse', 'POST', sourceUrl('ReturnAuthorisation', returnsA.inspectedReturnId), TYPED, 400)).issues).toEqual([
       { path: 'source/lines', message: 'Nothing of return SEED-RMA-0002 may travel now: Line 10 is not sent back as it came (REPAIR).' },
     ])

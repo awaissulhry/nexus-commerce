@@ -14,6 +14,7 @@ import {
 } from '../src/generated/prisma/enums'
 import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedProduct } from './product'
+import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The sales seed, per tenant of seed/_core.ts: the golden flow's stages 05-quote to 07-order for the parties seed's
@@ -48,11 +49,11 @@ const T = {
   ordered: new Date('2026-10-30T08:00:00.000Z'),
 } as const
 const DAY = {
-  validUntil: new Date('2026-11-27T00:00:00.000Z'),
-  promise: new Date('2026-12-18T00:00:00.000Z'),
+  validUntil: seedAt('2026-11-27T00:00:00.000Z'),
+  promise: seedAt('2026-12-18T00:00:00.000Z'),
   depositDue: new Date('2026-11-06T00:00:00.000Z'),
   orderDate: new Date('2026-10-30T00:00:00.000Z'),
-  requested: new Date('2026-12-15T00:00:00.000Z'),
+  requested: seedAt('2026-12-15T00:00:00.000Z'),
 } as const
 
 const sha256 = (text: string): string => createHash('sha256').update(text).digest('hex')

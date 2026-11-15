@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { openFactoryDatabase, RUNTIME_LOGIN, type FactoryDatabase } from '@nexus/factory-db'
 import { migratedDatabase, type MigratedDatabase } from '@nexus/factory-db/testing'
 import { newId } from '@nexus/factory-domain/core/ids'
@@ -28,6 +28,8 @@ import { createSecretsService } from '../../../platform/secrets/envelope'
 import { localKeyProvider } from '../../../platform/secrets/local'
 import { postMoves } from '../ledger/post-moves'
 import { useCountsClock } from './counts'
+// ---- B-W2b-F53: this file fixes its clock on a day of the seeds' story, so it runs the seeds as written (seed-calendar)
+await vi.hoisted(async () => (await import('@nexus/factory-db/testing')).seedsAsWritten())
 
 /**
  * Stock counts and the year-end inventory on the local stack (B-W2a-15; SCM-224, SCM-230, SCM-229, SCM-293), through

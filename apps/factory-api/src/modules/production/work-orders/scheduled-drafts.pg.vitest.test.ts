@@ -4,7 +4,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import type { FastifyInstance } from 'fastify'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { openFactoryDatabase, RUNTIME_LOGIN, type FactoryDatabase } from '@nexus/factory-db'
-import { migratedDatabase, type MigratedDatabase } from '@nexus/factory-db/testing'
+import { migratedDatabase, type MigratedDatabase, seedAt, seedDay, seedDayText, seedIso } from '@nexus/factory-db/testing' // B-W2b-F53: + the seeds' calendar
 import { newId } from '@nexus/factory-domain/core/ids'
 import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
 import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
@@ -101,7 +101,7 @@ async function madeUpOrder(sizes: Record<string, number>): Promise<string> {
           taxMode: 'IT_B2B',
           billTo: { legalName: 'Made-up customer' },
           shipTo: { name: 'Made-up workshop' },
-          promiseDate: new Date('2026-12-10T00:00:00.000Z'),
+          promiseDate: seedAt('2026-12-10T00:00:00.000Z'),
           depositRequired: false,
         },
         select: { id: true },
@@ -199,7 +199,7 @@ describe('B-W2a-F3: a draft whose operations are on the planning board', () => {
     const response = await release(wo.id, wo.version)
     expect(response.statusCode, response.body).toBe(409)
     const error = response.json().error
-    const words = `Op 25 ${sew.name} on line L1 from 20 Nov 09:00 (working plan)`
+    const words = `Op 25 ${sew.name} on line L1 from ${seedDayText('2026-11-20', 'en-day')} 09:00 (working plan)` // B-W2b-F53
     expect(error).toMatchObject({
       code: 'conflict',
       message: `The release would take away an operation of work order SEED-WO-0002 that the planning board books: ${words}. ${tray}, then release it.`,
@@ -230,7 +230,7 @@ describe('B-W2a-F3: a draft whose operations are on the planning board', () => {
     expect(audit!.before).toMatchObject({ status: 'DRAFT', draftSpec: { operations: 1, materials: 0, kept: 4 } })
     // The board draws the same bar, now booking capacity (released work does).
     const site = idOf('site:A1')
-    const board = await ok('GET', `/planning/schedule?siteId=${site}&from=2026-11-16&to=2026-11-20`)
+    const board = await ok('GET', `/planning/schedule?siteId=${site}&from=${seedDay('2026-11-16')}&to=${seedDay('2026-11-20')}`)
     expect((board.slots as Json[]).filter((slot) => slot.workOrderId === wo.id)).toEqual([expect.objectContaining({ id: seedSlot, operationId: seeded[1]!.id, booksCapacity: true })])
     // B-W2b-F39: the copy left its work order; the board's record still names it, by its copy.
     expect(ops.map((op) => op.id)).not.toContain(seedExtra)
@@ -252,14 +252,14 @@ describe('B-W2a-F3: a draft whose operations are on the planning board', () => {
     )
     const before = await opsOf(workOrder.id)
     expect(before).toHaveLength(copied + 1)
-    const placed = await ok('POST', '/planning/schedule/slots', { workOrderId: workOrder.id, operationId: extra, lane: { kind: 'LINE', id: lineL1 }, startAt: '2026-11-25T08:00:00.000Z', overloadReason: 'Made-up reason to keep it there.' }, 201)
+    const placed = await ok('POST', '/planning/schedule/slots', { workOrderId: workOrder.id, operationId: extra, lane: { kind: 'LINE', id: lineL1 }, startAt: seedIso('2026-11-25T08:00:00.000Z'), overloadReason: 'Made-up reason to keep it there.' }, 201)
     const bar = placed.slot.id as string
     const current = await workOrderOf(workOrder.number)
 
     // While the bar books it: refused naming the bar, with B-W2a-F3's Send it back to the tray, then release it.
     const booked = await release(workOrder.id, current.version)
     expect(booked.statusCode, booked.body).toBe(409)
-    const words = `Op 25 ${sew.name} on line L1 from 25 Nov 09:00 (working plan)`
+    const words = `Op 25 ${sew.name} on line L1 from ${seedDayText('2026-11-25', 'en-day')} 09:00 (working plan)` // B-W2b-F53
     expect(booked.json().error).toMatchObject({
       code: 'conflict',
       message: `The release would take away an operation of work order ${workOrder.number} that the planning board books: ${words}. ${tray}, then release it.`,
@@ -289,8 +289,8 @@ describe('B-W2a-F3: a draft whose operations are on the planning board', () => {
     const feed = await ok('GET', `/planning/schedule/changes?siteId=${idOf('site:A1')}&since=ALL&workOrderId=${workOrder.id}`)
     const gone = { id: extra, seq: 25, code: null, name: sewName, onWorkOrder: false }
     expect(feed.entries).toEqual([
-      expect.objectContaining({ kind: 'REMOVE', onBoard: false, operation: gone, undo: { may: false, code: 'OPERATION_GONE', permission: 'planning.schedule.manage', words }, words: expect.stringMatching(new RegExp(`^Sent ${what.replace(/[()]/g, '\\$&')} back to the tray from L1 · 25 Nov 09:00`)) }),
-      expect.objectContaining({ kind: 'PLACE', onBoard: false, operation: gone, undo: expect.objectContaining({ may: false, code: 'OPERATION_GONE' }), words: expect.stringMatching(/^Placed Op 25 .+ \(no longer on the work order\) on L1 · 25 Nov 09:00/) }),
+      expect.objectContaining({ kind: 'REMOVE', onBoard: false, operation: gone, undo: { may: false, code: 'OPERATION_GONE', permission: 'planning.schedule.manage', words }, words: expect.stringMatching(new RegExp(`^Sent ${what.replace(/[()]/g, '\\$&')} back to the tray from L1 · ${seedDayText('2026-11-25', 'en-day')} 09:00`)) }), // B-W2b-F53
+      expect.objectContaining({ kind: 'PLACE', onBoard: false, operation: gone, undo: expect.objectContaining({ may: false, code: 'OPERATION_GONE' }), words: expect.stringMatching(new RegExp(`^Placed Op 25 .+ \\(no longer on the work order\\) on L1 · ${seedDayText('2026-11-25', 'en-day')} 09:00`)) }), // B-W2b-F53
     ])
     const [remove] = feed.entries as Json[]
     const error = await refused('POST', `/planning/schedule/changes/${remove!.id}/undo`, {}, 409)
@@ -305,11 +305,11 @@ describe('B-W2a-F3: a draft whose operations are on the planning board', () => {
     const { workOrder } = await ok('POST', '/production/work-orders/repairs', { repairOrderId: repair, routingSeqs: [20, 30] }, 201)
     const [sew, qc] = await opsOf(workOrder.id)
     expect([sew!.routingSeq, qc!.routingSeq]).toEqual([20, 30])
-    const placed = await ok('POST', '/planning/schedule/slots', { workOrderId: workOrder.id, operationId: sew!.id, lane: { kind: 'LINE', id: lineL1 }, startAt: '2026-11-23T08:00:00.000Z', overloadReason: 'Made-up reason to keep it there.' }, 201)
+    const placed = await ok('POST', '/planning/schedule/slots', { workOrderId: workOrder.id, operationId: sew!.id, lane: { kind: 'LINE', id: lineL1 }, startAt: seedIso('2026-11-23T08:00:00.000Z'), overloadReason: 'Made-up reason to keep it there.' }, 201)
     const bar = placed.slot.id as string
 
     const error = await refused('PUT', `/production/work-orders/${workOrder.id}/repair-steps`, { routingSeqs: [30] }, 409)
-    const words = `Op 20 ${sew!.name} on line L1 from 23 Nov 09:00 (working plan)`
+    const words = `Op 20 ${sew!.name} on line L1 from ${seedDayText('2026-11-23', 'en-day')} 09:00 (working plan)` // B-W2b-F53
     expect(error).toMatchObject({
       code: 'conflict',
       message: `Leaving out these steps would take away an operation of work order ${workOrder.number} that the planning board books: ${words}. ${tray}, then change the steps.`,
@@ -344,7 +344,7 @@ describe('B-W2a-F3: a draft whose operations are on the planning board', () => {
     // As many as were copied (SEED-WO-0002's four; the count is not this test's subject).
     const copied = await copySeedOperations(workOrder.id)
     const sew = (await opsOf(workOrder.id)).find((op) => op.routingSeq === 20)!
-    const placed = await ok('POST', '/planning/schedule/slots', { workOrderId: workOrder.id, operationId: sew.id, lane: { kind: 'LINE', id: lineL1 }, startAt: '2026-11-24T08:00:00.000Z', overloadReason: 'Made-up reason to keep it there.' }, 201)
+    const placed = await ok('POST', '/planning/schedule/slots', { workOrderId: workOrder.id, operationId: sew.id, lane: { kind: 'LINE', id: lineL1 }, startAt: seedIso('2026-11-24T08:00:00.000Z'), overloadReason: 'Made-up reason to keep it there.' }, 201)
     const bar = placed.slot.id as string
     const revision1 = (await workOrderOf(workOrder.number)).styleRevisionId
     // B-W2b-221: SEED-JKT-02 is IN_PRODUCTION, whose default edit rule asks a change order for a new revision; this test is about
@@ -356,7 +356,7 @@ describe('B-W2a-F3: a draft whose operations are on the planning board', () => {
 
     const current = await workOrderOf(workOrder.number)
     const error = await refused('PATCH', `/production/work-orders/${workOrder.id}`, { version: current.version, styleRevisionId: revision2 }, 409)
-    const words = `Op 20 ${sew.name} on line L1 from 24 Nov 09:00 (working plan)`
+    const words = `Op 20 ${sew.name} on line L1 from ${seedDayText('2026-11-24', 'en-day')} 09:00 (working plan)` // B-W2b-F53
     expect(error).toMatchObject({
       code: 'conflict',
       message: `Changing the revision would take away an operation of work order ${workOrder.number} that the planning board books: ${words}. ${tray}, then change the revision.`,

@@ -12,6 +12,7 @@ import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedAuth } from './auth'
 import { seed as seedFiles } from './files'
 import { seed as seedProduct } from './product'
+import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The made-to-measure office seed (W2b-5, schema wave 44/44, B-W2b-297), per tenant of seed/_core.ts, written in the tenant's
@@ -69,8 +70,8 @@ const T = {
   trousersWritten: new Date('2026-11-04T10:30:00.000Z'),
   fitting2Booked: new Date('2026-11-06T08:55:00.000Z'),
   fitting2Invite: new Date('2026-11-06T09:00:00.000Z'),
-  fitting2Starts: new Date('2026-12-02T09:00:00.000Z'),
-  fitting2Ends: new Date('2026-12-02T10:00:00.000Z'),
+  fitting2Starts: seedAt('2026-12-02T09:00:00.000Z'),
+  fitting2Ends: seedAt('2026-12-02T10:00:00.000Z'),
   worksheet: new Date('2026-10-27T16:00:00.000Z'),
 } as const
 

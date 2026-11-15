@@ -10,6 +10,7 @@ import { FLOOR_ROLE, OFFICE_ROLE, PARTNER_ROLE, RUNTIME_LOGIN } from './roles'
 import { seedUuid } from './seeding'
 import { migratedDatabase, type MigratedDatabase } from './testing/database'
 import { loadOwnership, loadSchema } from './tools'
+import { seedDay, seedIso } from './seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * W2b schema wave 7/7 (floor work, B-W2b-12) beyond the generated isolation tests, on a database built from the
@@ -136,8 +137,8 @@ const block = (extra: Record<string, unknown> = {}) => {
       employeeId: E.operator,
       codeId: labour.codeIds.WAIT_MATERIAL,
       source: 'FLOOR',
-      workDate: '2026-11-19',
-      startedAt: '2026-11-19T08:00:00.000Z',
+      workDate: seedDay('2026-11-19'),
+      startedAt: seedIso('2026-11-19T08:00:00.000Z'),
       ...extra,
     },
   }
@@ -342,53 +343,53 @@ describe('off-standard time and line days (MES-155…157, MES-203, MES-204)', ()
     await expect(run(office(), `UPDATE "OffStandardCode" SET colour = 'green' WHERE id = $1::uuid`, labour.codeIds.CLEANING)).rejects.toThrow(/#RRGGBB/)
     await expect(admin('DELETE FROM "OffStandardCode" WHERE id = $1', [labour.codeIds.CLEANING])).rejects.toThrow(/never deleted/)
     expect(await run(office(), `UPDATE "OffStandardCode" SET active = false, "labelEn" = 'Cleaning the station' WHERE id = $1::uuid`, labour.codeIds.TRAINING)).toBe(1)
-    await expect(insert(asOperator(), 'OffStandardEntry', block({ codeId: labour.codeIds.TRAINING, endedAt: '2026-11-19T08:20:00.000Z', status: 'PENDING' }).row)).rejects.toThrow(/is inactive/)
+    await expect(insert(asOperator(), 'OffStandardEntry', block({ codeId: labour.codeIds.TRAINING, endedAt: seedIso('2026-11-19T08:20:00.000Z'), status: 'PENDING' }).row)).rejects.toThrow(/is inactive/)
     await run(office(), `UPDATE "OffStandardCode" SET active = true WHERE id = $1::uuid`, labour.codeIds.TRAINING)
   })
 
   it("approval: by someone else, never on the way in for a code the team leader approves; the site's day", async () => {
-    const ended = { endedAt: '2026-11-19T08:30:00.000Z' }
-    await expect(insert(asOperator(), 'OffStandardEntry', block({ ...ended, status: 'APPROVED', approvedAt: '2026-11-19T08:30:00.000Z', approvedById: lead() }).row)).rejects.toThrow(/waits PENDING/)
+    const ended = { endedAt: seedIso('2026-11-19T08:30:00.000Z') }
+    await expect(insert(asOperator(), 'OffStandardEntry', block({ ...ended, status: 'APPROVED', approvedAt: seedIso('2026-11-19T08:30:00.000Z'), approvedById: lead() }).row)).rejects.toThrow(/waits PENDING/)
     const pending = block({ ...ended, status: 'PENDING' })
     expect(await insert(asOperator(), 'OffStandardEntry', pending.row)).toBe(1)
     await expect(run(office(), `UPDATE "OffStandardEntry" SET status = 'APPROVED', "approvedAt" = now(), "approvedById" = $2::uuid WHERE id = $1::uuid`, pending.id, operator())).rejects.toThrow(/someone else than the worker/)
     expect(await run(asLead(), `UPDATE "OffStandardEntry" SET status = 'APPROVED', "approvedAt" = now(), "approvedById" = $2::uuid WHERE id = $1::uuid`, pending.id, lead())).toBe(1)
     // A code that needs no approval is approved as it ends.
-    expect(await insert(asOperator(), 'OffStandardEntry', block({ ...ended, codeId: labour.codeIds.CLEANING, status: 'APPROVED', approvedAt: '2026-11-19T08:30:00.000Z' }).row)).toBe(1)
+    expect(await insert(asOperator(), 'OffStandardEntry', block({ ...ended, codeId: labour.codeIds.CLEANING, status: 'APPROVED', approvedAt: seedIso('2026-11-19T08:30:00.000Z') }).row)).toBe(1)
     // 23:30 UTC on 19 Nov is 00:30 on the 20th in Rome.
-    await expect(insert(asOperator(), 'OffStandardEntry', block({ startedAt: '2026-11-19T23:30:00.000Z', endedAt: '2026-11-19T23:40:00.000Z', status: 'PENDING' }).row)).rejects.toThrow(/site's day it started in \(2026-11-20\)/)
-    await expect(insert(asOperator(), 'OffStandardEntry', block({ endedAt: '2026-11-19T07:00:00.000Z', status: 'PENDING' }).row)).rejects.toThrow(/never ending before it started/)
+    await expect(insert(asOperator(), 'OffStandardEntry', block({ startedAt: seedIso('2026-11-19T23:30:00.000Z'), endedAt: seedIso('2026-11-19T23:40:00.000Z'), status: 'PENDING' }).row)).rejects.toThrow(new RegExp(String.raw`site's day it started in \(${seedDay('2026-11-20')}\)`))
+    await expect(insert(asOperator(), 'OffStandardEntry', block({ endedAt: seedIso('2026-11-19T07:00:00.000Z'), status: 'PENDING' }).row)).rejects.toThrow(/never ending before it started/)
     await expect(insert(asOperator(), 'OffStandardEntry', block({ ...ended, status: 'PENDING', source: 'HELP_CALL' }).row)).rejects.toThrow(/names a help call exactly when/)
     await expect(admin('DELETE FROM "OffStandardEntry" WHERE id = $1', [pending.id])).rejects.toThrow(/never deleted/)
   })
 
   it('an ended block changes only with a labour edit in the same transaction (MES-204)', async () => {
-    const pending = block({ endedAt: '2026-11-19T09:00:00.000Z', status: 'PENDING', startedAt: '2026-11-19T08:40:00.000Z' })
+    const pending = block({ endedAt: seedIso('2026-11-19T09:00:00.000Z'), status: 'PENDING', startedAt: seedIso('2026-11-19T08:40:00.000Z') })
     expect(await insert(asOperator(), 'OffStandardEntry', pending.row)).toBe(1)
-    await expect(run(asLead(), `UPDATE "OffStandardEntry" SET "endedAt" = '2026-11-19T08:55:00Z' WHERE id = $1::uuid`, pending.id)).rejects.toThrow(/write its LabourEdit in the same command/)
+    await expect(run(asLead(), `UPDATE "OffStandardEntry" SET "endedAt" = '${seedIso('2026-11-19T08:55:00Z')}' WHERE id = $1::uuid`, pending.id)).rejects.toThrow(/write its LabourEdit in the same command/)
     const edit = {
       id: randomUUID(),
       companyId: A.company,
       siteId: A.site,
       lineId: A.line,
-      workDate: '2026-11-19',
+      workDate: seedDay('2026-11-19'),
       recordType: 'OffStandardEntry',
       recordId: pending.id,
       workerId: operator(),
       employeeId: E.operator,
-      before: { endedAt: '2026-11-19T09:00:00.000Z' },
-      after: { endedAt: '2026-11-19T08:55:00.000Z' },
+      before: { endedAt: seedIso('2026-11-19T09:00:00.000Z') },
+      after: { endedAt: seedIso('2026-11-19T08:55:00.000Z') },
       reason: 'The material came at 09:55.',
       createdById: lead(),
     }
     await as(asLead(), (client) =>
       client.$transaction(async (tx) => {
-        await tx.$executeRawUnsafe(`UPDATE "OffStandardEntry" SET "endedAt" = '2026-11-19T08:55:00Z' WHERE id = $1::uuid`, pending.id)
+        await tx.$executeRawUnsafe(`UPDATE "OffStandardEntry" SET "endedAt" = '${seedIso('2026-11-19T08:55:00Z')}' WHERE id = $1::uuid`, pending.id)
         await tx.$executeRawUnsafe(insertSql('LabourEdit', edit), JSON.stringify(edit))
       }),
     )
     const [after] = await admin('SELECT "endedAt" FROM "OffStandardEntry" WHERE id = $1', [pending.id])
-    expect((after!.endedAt as Date).toISOString()).toBe('2026-11-19T08:55:00.000Z')
+    expect((after!.endedAt as Date).toISOString()).toBe(seedIso('2026-11-19T08:55:00.000Z'))
     // The note and a decision are not facts: no edit needed.
     expect(await run(asLead(), `UPDATE "OffStandardEntry" SET note = 'Trolley late.' WHERE id = $1::uuid`, pending.id)).toBe(1)
   })
@@ -396,13 +397,13 @@ describe('off-standard time and line days (MES-155…157, MES-203, MES-204)', ()
   it('a line day closes once its time is coded; then nothing of it changes until it is reopened with a reason', async () => {
     const day = randomUUID()
     const close = () =>
-      insert(office(), 'LabourDay', { id: day, siteId: A.site, lineId: A.line, workDate: '2026-11-17', status: 'CLOSED', closedAt: '2026-10-01T17:00:00.000Z', closedById: a.actorId })
+      insert(office(), 'LabourDay', { id: day, siteId: A.site, lineId: A.line, workDate: seedDay('2026-11-17'), status: 'CLOSED', closedAt: '2026-10-01T17:00:00.000Z', closedById: a.actorId })
     // 17 Nov still has the seeded PENDING waiting for material.
     await expect(close()).rejects.toThrow(/closes once its off-standard time is coded .*1 block/)
     expect(await run(asLead(), `UPDATE "OffStandardEntry" SET status = 'APPROVED', "approvedAt" = now(), "approvedById" = $2::uuid WHERE id = $1::uuid`, labour.blockIds[0], lead())).toBe(1)
     expect(await close()).toBe(1)
     await expect(run(asLead(), `UPDATE "OffStandardEntry" SET note = 'late note' WHERE id = $1::uuid`, labour.blockIds[0])).rejects.toThrow(/is CLOSED .* reopened with a reason/)
-    await expect(insert(asOperator(), 'OffStandardEntry', block({ workDate: '2026-11-17', startedAt: '2026-11-17T11:00:00.000Z', endedAt: '2026-11-17T11:10:00.000Z', status: 'PENDING' }).row)).rejects.toThrow(/is CLOSED/)
+    await expect(insert(asOperator(), 'OffStandardEntry', block({ workDate: seedDay('2026-11-17'), startedAt: seedIso('2026-11-17T11:00:00.000Z'), endedAt: seedIso('2026-11-17T11:10:00.000Z'), status: 'PENDING' }).row)).rejects.toThrow(/is CLOSED/)
     await expect(run(office(), `UPDATE "LabourDay" SET status = 'OPEN', "closedAt" = NULL, "closedById" = NULL WHERE id = $1::uuid`, day)).rejects.toThrow(/records a new reopening/)
     await expect(run(office(), `UPDATE "LabourDay" SET "closedAt" = now() WHERE id = $1::uuid`, day)).rejects.toThrow(/only its note changes/)
     expect(
@@ -418,7 +419,7 @@ describe('off-standard time and line days (MES-155…157, MES-203, MES-204)', ()
         id: randomUUID(),
         companyId: A.company,
         siteId: A.site,
-        workDate: '2026-11-17',
+        workDate: seedDay('2026-11-17'),
         recordType: 'OperationScan',
         recordId: p().scanIds[2],
         workerId: operator(),
@@ -439,7 +440,7 @@ describe('off-standard time and line days (MES-155…157, MES-203, MES-204)', ()
   })
 
   it("a dispute: OPEN with the worker's words, answered by someone else, then final; never at a site that names no worker", async () => {
-    const dispute = { siteId: A.site, workerId: operator(), employeeId: E.operator, workDate: '2026-11-17', recordType: 'OffStandardEntry', recordId: labour.blockIds[1], message: 'I cleaned for 20 minutes.' }
+    const dispute = { siteId: A.site, workerId: operator(), employeeId: E.operator, workDate: seedDay('2026-11-17'), recordType: 'OffStandardEntry', recordId: labour.blockIds[1], message: 'I cleaned for 20 minutes.' }
     const id = randomUUID()
     expect(await insert(asOperator(), 'LabourDispute', { id, ...dispute })).toBe(1)
     await expect(run(asOperator(), `UPDATE "LabourDispute" SET message = 'Something else.' WHERE id = $1::uuid`, id)).rejects.toThrow(/never change/)
@@ -481,12 +482,12 @@ describe('help calls and their routing (MES-142…148)', () => {
     const open = andon.callIds[1]
     await expect(run(asLead(), `UPDATE "HelpCall" SET status = 'SEEN' WHERE id = $1::uuid`, open)).rejects.toThrow(/each state with its time/)
     // The seeded call was sent at 13:05 Rome on 17 Nov.
-    expect(await run(asLead(), `UPDATE "HelpCall" SET status = 'SEEN', "seenAt" = '2026-11-17T12:07:00Z', "seenById" = $2::uuid WHERE id = $1::uuid`, open, lead())).toBe(1)
-    await expect(run(asLead(), `UPDATE "HelpCall" SET "seenAt" = '2026-11-17T12:08:00Z' WHERE id = $1::uuid`, open)).rejects.toThrow(/set once/)
+    expect(await run(asLead(), `UPDATE "HelpCall" SET status = 'SEEN', "seenAt" = '${seedIso('2026-11-17T12:07:00Z')}', "seenById" = $2::uuid WHERE id = $1::uuid`, open, lead())).toBe(1)
+    await expect(run(asLead(), `UPDATE "HelpCall" SET "seenAt" = '${seedIso('2026-11-17T12:08:00Z')}' WHERE id = $1::uuid`, open)).rejects.toThrow(/set once/)
     await expect(run(asLead(), `UPDATE "HelpCall" SET "workerId" = $2::uuid WHERE id = $1::uuid`, open, operator())).rejects.toThrow(/never change/)
-    await expect(run(asLead(), `UPDATE "HelpCall" SET status = 'SOLVED', "solvedAt" = '2026-11-17T12:06:00Z' WHERE id = $1::uuid`, open)).rejects.toThrow(/each time after the one before/)
-    expect(await run(asLead(), `UPDATE "HelpCall" SET status = 'SOLVED', "solvedAt" = '2026-11-17T12:30:00Z', "solvedById" = $2::uuid, "resolutionCode" = 'TIGHTENED' WHERE id = $1::uuid`, open, lead())).toBe(1)
-    await expect(run(asLead(), `UPDATE "HelpCall" SET status = 'CANCELLED', "cancelledAt" = '2026-11-17T12:31:00Z' WHERE id = $1::uuid`, open)).rejects.toThrow(/it is final/)
+    await expect(run(asLead(), `UPDATE "HelpCall" SET status = 'SOLVED', "solvedAt" = '${seedIso('2026-11-17T12:06:00Z')}' WHERE id = $1::uuid`, open)).rejects.toThrow(/each time after the one before/)
+    expect(await run(asLead(), `UPDATE "HelpCall" SET status = 'SOLVED', "solvedAt" = '${seedIso('2026-11-17T12:30:00Z')}', "solvedById" = $2::uuid, "resolutionCode" = 'TIGHTENED' WHERE id = $1::uuid`, open, lead())).toBe(1)
+    await expect(run(asLead(), `UPDATE "HelpCall" SET status = 'CANCELLED', "cancelledAt" = '${seedIso('2026-11-17T12:31:00Z')}' WHERE id = $1::uuid`, open)).rejects.toThrow(/it is final/)
     // What it led to is named once, even after it was solved.
     expect(await run(office(), `UPDATE "HelpCall" SET "outcomeRecordType" = 'MaintenanceJob', "outcomeRecordId" = $2::uuid WHERE id = $1::uuid`, open, randomUUID())).toBe(1)
     await expect(run(office(), `UPDATE "HelpCall" SET "outcomeRecordId" = $2::uuid WHERE id = $1::uuid`, open, randomUUID())).rejects.toThrow(/set once/)
@@ -516,7 +517,7 @@ describe('help calls and their routing (MES-142…148)', () => {
 
 describe('dispatch, coupons, findings, targets and handover notes', () => {
   it('a dispatch line: a station or an operation, an operator or an operation at a station, bundles of the work order', async () => {
-    const line = (extra: Record<string, unknown>) => insert(office(), 'DispatchAssignment', { id: randomUUID(), siteId: A.site, workDate: '2026-11-19', employeeId: employeeOf(extra.workerId), ...extra })
+    const line = (extra: Record<string, unknown>) => insert(office(), 'DispatchAssignment', { id: randomUUID(), siteId: A.site, workDate: seedDay('2026-11-19'), employeeId: employeeOf(extra.workerId), ...extra })
     expect(await line({ workerId: operator(), workOrderId: p().workOrderId, workOrderOperationId: p().operationIds.pack, bundleIds: [p().bundleIds[0], p().bundleIds[1]] })).toBe(1)
     await expect(line({ workerId: operator() })).rejects.toThrow(/names a station or an operation/)
     await expect(line({ workOrderId: p().workOrderId, workOrderOperationId: p().operationIds.pack })).rejects.toThrow(/an operator or an operation queued at a station/)
@@ -551,7 +552,7 @@ describe('dispatch, coupons, findings, targets and handover notes', () => {
     expect(await run(office(), `UPDATE "ScanPatternFinding" SET status = 'DISMISSED', "reviewedAt" = now(), "reviewedById" = $2::uuid, "reviewNote" = 'End of an order.' WHERE id = $1::uuid`, open, a.actorId)).toBe(1)
     await expect(run(office(), `UPDATE "ScanPatternFinding" SET "reviewNote" = 'changed' WHERE id = $1::uuid`, reviewed)).rejects.toThrow(/it is final/)
     await expect(
-      insert(office(), 'ScanPatternFinding', { id: randomUUID(), siteId: A.site, workOrderId: p().workOrderId, bundleId: p().bundleIds[0], kind: 'MOVED_NOT_SCANNED', windowStart: '2026-11-19T10:00:00Z', windowEnd: '2026-11-19T09:00:00Z' }),
+      insert(office(), 'ScanPatternFinding', { id: randomUUID(), siteId: A.site, workOrderId: p().workOrderId, bundleId: p().bundleIds[0], kind: 'MOVED_NOT_SCANNED', windowStart: seedIso('2026-11-19T10:00:00Z'), windowEnd: seedIso('2026-11-19T09:00:00Z') }),
     ).rejects.toThrow(/ends after it starts/)
   })
 
@@ -562,11 +563,11 @@ describe('dispatch, coupons, findings, targets and handover notes', () => {
     expect(await run(asLead(), `UPDATE "LineTarget" SET "shortNote" = 'Slow start.', "shortReasonAt" = now(), "shortReasonById" = $2::uuid WHERE id = $1::uuid`, eight, lead())).toBe(1)
     expect(await run(office(), `UPDATE "LineTarget" SET "targetPieces" = 5 WHERE id = $1::uuid`, eight)).toBe(1)
     await expect(run(office(), `UPDATE "LineTarget" SET hour = 9 WHERE id = $1::uuid`, eight)).rejects.toThrow(/never change/)
-    await expect(insert(office(), 'LineTarget', { id: randomUUID(), siteId: A.site, lineId: A.line, workDate: '2026-11-19', hour: 8, targetPieces: -1 })).rejects.toThrow(/pieces from 0/)
+    await expect(insert(office(), 'LineTarget', { id: randomUUID(), siteId: A.site, lineId: A.line, workDate: seedDay('2026-11-19'), hour: 8, targetPieces: -1 })).rejects.toThrow(/pieces from 0/)
   })
 
   it('a handover note: a topic or a text, each topic once, its shift fixed', async () => {
-    const note = (extra: Record<string, unknown>) => insert(asLead(), 'HandoverNote', { id: randomUUID(), siteId: A.site, lineId: A.line, shiftDate: '2026-11-19', shiftLabel: `B-${tag()}`, ...extra })
+    const note = (extra: Record<string, unknown>) => insert(asLead(), 'HandoverNote', { id: randomUUID(), siteId: A.site, lineId: A.line, shiftDate: seedDay('2026-11-19'), shiftLabel: `B-${tag()}`, ...extra })
     expect(await note({ text: 'All quiet.' })).toBe(1)
     await expect(note({})).rejects.toThrow(/a topic or a short text/)
     await expect(note({ topics: ['MACHINES', 'MACHINES'] })).rejects.toThrow(/each topic once/)
@@ -655,7 +656,7 @@ describe('pay and the timing kinds (MES-092; c.c. art. 2101)', () => {
       payPeriodId: pay.periodIds.november,
       employeeId: E.operator,
       workerId: operator(),
-      workDate: '2026-11-20',
+      workDate: '2026-11-20', // B-W2b-F53: inside the pay seed's November period, which keeps its days (a month-bound story)
       kind: 'SCAN',
       operationScanId,
       rateEntryId: pay.rateEntryIds.pack,

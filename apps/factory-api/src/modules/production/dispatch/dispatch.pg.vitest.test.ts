@@ -13,6 +13,8 @@ import { seed as seedCore } from '../../../../../../packages/factory-db/seed/_co
 import { seed as seedCalendar } from '../../../../../../packages/factory-db/seed/calendar'
 import { seed as seedSchedule } from '../../../../../../packages/factory-db/seed/schedule'
 import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
+// ---- B-W2b-F53: this file fixes its clock on a day of the seeds' story, so it runs the seeds as written (seed-calendar)
+await vi.hoisted(async () => (await import('@nexus/factory-db/testing')).seedsAsWritten())
 
 /**
  * The dispatch list per line or station (B-W2a-34; MES-021; design floor.mywork "Next" and "Then"; Owner answer P3)

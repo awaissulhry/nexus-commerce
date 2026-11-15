@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedPortalFollowups } from './portal-followups'
+import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The supplier qualification seed (B-W2b-315; SCM-020, SCM-022), per tenant of seed/_core.ts: the tannery P2's chromium VI
@@ -12,7 +13,7 @@ import { seed as seedPortalFollowups } from './portal-followups'
  */
 
 const AT = new Date('2026-10-28T10:00:00.000Z')
-const VALID_UNTIL = new Date('2027-12-31T00:00:00.000Z')
+const VALID_UNTIL = seedAt('2027-12-31T00:00:00.000Z')
 
 export interface SupplierQualificationSeed {
   readonly testReportFileId: string

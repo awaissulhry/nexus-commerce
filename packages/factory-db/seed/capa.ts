@@ -21,6 +21,7 @@ import { seed as seedQuality } from './quality'
 import { seed as seedQualityLab } from './quality-lab'
 import { seed as seedReturns } from './returns'
 import { seed as seedRoles } from './roles'
+import { seedAt, seedDay } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The quality problems seed (W2b schema wave 11/16, B-W2b-79), per tenant of seed/_core.ts, written in the tenant's office
@@ -50,11 +51,11 @@ import { seed as seedRoles } from './roles'
  */
 
 const T = {
-  opened: new Date('2026-11-23T08:00:00.000Z'),
-  reminded: new Date('2026-11-24T08:00:00.000Z'),
-  asked: new Date('2026-11-24T09:00:00.000Z'),
-  answered: new Date('2026-11-25T09:00:00.000Z'),
-  placed: new Date('2026-11-23T10:00:00.000Z'),
+  opened: seedAt('2026-11-23T08:00:00.000Z'),
+  reminded: seedAt('2026-11-24T08:00:00.000Z'),
+  asked: seedAt('2026-11-24T09:00:00.000Z'),
+  answered: seedAt('2026-11-25T09:00:00.000Z'),
+  placed: seedAt('2026-11-23T10:00:00.000Z'),
 }
 
 const day = (value: string): Date => new Date(`${value}T00:00:00.000Z`)
@@ -209,7 +210,7 @@ export async function seed(context: SeedContext): Promise<CapaSeed> {
               { userId: actorId, role: 'Lead' },
               { userId: qualityId, role: 'Quality' },
             ],
-            dueOn: day('2026-12-18'),
+            dueOn: day(seedDay('2026-12-18')),
             priority: CapaPriority.HIGH,
             problemWhat: 'A grain crack across the butt of a hide',
             problemWhere: 'Cutting table, plant A1',
@@ -226,7 +227,7 @@ export async function seed(context: SeedContext): Promise<CapaSeed> {
             title: 'Protector pocket seam opened in use',
             ownerId: actorId,
             team: [{ userId: actorId, role: 'Champion' }],
-            dueOn: day('2026-12-30'),
+            dueOn: day(seedDay('2026-12-30')),
             customerId,
             problemWhat: 'The elbow protector pocket seam opened',
             status: CapaStatus.D1,
@@ -250,7 +251,7 @@ export async function seed(context: SeedContext): Promise<CapaSeed> {
             kind: CapaActionKind.CORRECTIVE,
             description: 'Check every hide of the lot under the light table before laying',
             ownerId: actorId,
-            dueOn: day('2026-12-04'),
+            dueOn: day(seedDay('2026-12-04')),
             status: CapaActionStatus.OPEN,
             ...stamp(T.opened),
           },
@@ -261,7 +262,7 @@ export async function seed(context: SeedContext): Promise<CapaSeed> {
             kind: CapaActionKind.PREVENTIVE,
             description: 'Add a grain check to the incoming plan for leather',
             ownerId: qualityId,
-            dueOn: day('2026-12-11'),
+            dueOn: day(seedDay('2026-12-11')),
             status: CapaActionStatus.OPEN,
             ...stamp(T.opened),
           },

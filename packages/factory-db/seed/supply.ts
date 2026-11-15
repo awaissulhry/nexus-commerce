@@ -10,6 +10,7 @@ import {
 } from '../src/generated/prisma/enums'
 import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedSales } from './sales'
+import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The supply seed, per tenant of seed/_core.ts: the golden flow's stage 08-buy for the sales seed's order SO1, written
@@ -47,9 +48,9 @@ const T = {
 const DAY = {
   ordered: new Date('2026-10-30T00:00:00.000Z'),
   draft: new Date('2026-10-31T00:00:00.000Z'),
-  need: new Date('2026-11-16T00:00:00.000Z'),
+  need: seedAt('2026-11-16T00:00:00.000Z'),
   confirmed: new Date('2026-11-13T00:00:00.000Z'),
-  draftNeed: new Date('2026-12-01T00:00:00.000Z'),
+  draftNeed: seedAt('2026-12-01T00:00:00.000Z'),
 } as const
 
 export interface SupplySeed {

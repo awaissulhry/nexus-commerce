@@ -31,6 +31,7 @@ import { seed as seedInventory } from './inventory'
 import { seed as seedOptions } from './options'
 import { seed as seedRoles } from './roles'
 import { seed as seedSales } from './sales'
+import { seedAt, seedDay } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The orders, credit and changes seed (W2b-5, schema wave 39/44, B-W2b-281), per tenant of seed/_core.ts, written in the
@@ -85,9 +86,9 @@ const T = {
 const DAY = {
   ordered2: new Date('2026-11-04T00:00:00.000Z'),
   ordered1: new Date('2026-11-09T00:00:00.000Z'),
-  promise2: new Date('2026-12-11T00:00:00.000Z'),
-  promise1: new Date('2026-11-27T00:00:00.000Z'),
-  depositDue: new Date('2026-11-16T00:00:00.000Z'),
+  promise2: seedAt('2026-12-11T00:00:00.000Z'),
+  promise1: seedAt('2026-11-27T00:00:00.000Z'),
+  depositDue: seedAt('2026-11-16T00:00:00.000Z'),
   ddt: new Date('2026-11-06T00:00:00.000Z'),
 } as const
 const HOUR = 3_600_000
@@ -494,7 +495,7 @@ export async function seed(context: SeedContext): Promise<SalesOrdersDepthSeed> 
         ],
       })
       const snapshot = (sizes: Readonly<Record<string, number>>) => ({
-        header: { promiseDate: '2026-12-11', requestedDate: null, paymentTerms: 'Balance at delivery (made-up)', netAmount: net(sizes), vatAmount: vatOf(net(sizes)), grossAmount: gross(sizes) },
+        header: { promiseDate: seedDay('2026-12-11'), requestedDate: null, paymentTerms: 'Balance at delivery (made-up)', netAmount: net(sizes), vatAmount: vatOf(net(sizes)), grossAmount: gross(sizes) },
         lines: [
           {
             id: result.lineId,

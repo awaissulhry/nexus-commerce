@@ -21,6 +21,7 @@ import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedPortalFollowups } from './portal-followups'
 import { seed as seedProduct } from './product'
 import { seed as seedStylesDepth } from './styles-depth'
+import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The materials and restricted substances seed (W2b-4, schema wave 31/33, B-W2b-217), per tenant of seed/_core.ts, written
@@ -79,10 +80,10 @@ const DAY = {
   v1: new Date('2026-01-15T00:00:00.000Z'),
   v2: new Date('2026-07-01T00:00:00.000Z'),
   dueSvhc: new Date('2026-10-19T00:00:00.000Z'),
-  validSvhc: new Date('2027-10-12T00:00:00.000Z'),
-  dueAgain: new Date('2026-12-04T00:00:00.000Z'),
+  validSvhc: seedAt('2027-10-12T00:00:00.000Z'),
+  dueAgain: seedAt('2026-12-04T00:00:00.000Z'),
   dueNickel: new Date('2026-11-05T00:00:00.000Z'),
-  dueCr6: new Date('2026-11-16T00:00:00.000Z'),
+  dueCr6: seedAt('2026-11-16T00:00:00.000Z'),
   duePfas: new Date('2026-11-03T00:00:00.000Z'),
 } as const
 

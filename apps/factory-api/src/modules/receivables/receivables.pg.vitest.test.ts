@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { templateOf } from '@nexus/factory-domain/auth/roles/templates'
 import { newId } from '@nexus/factory-domain/core/ids'
 import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
@@ -22,6 +22,8 @@ import { systemContext } from '../../platform/outbox/system'
 import { fireDueTimers } from '../../platform/timers/fire'
 import { onRecheck, onTimerFired, runLadder } from './ladder'
 import { useReceivablesClock } from './store'
+// ---- B-W2b-F53: this file fixes its clock on a day of the seeds' story, so it runs the seeds as written (seed-calendar)
+await vi.hoisted(async () => (await import('@nexus/factory-db/testing')).seedsAsWritten())
 
 /**
  * Receivables on the local stack (B-W2a-55; FIN-109, FIN-110, FIN-111), through the app's real routes: a throwaway

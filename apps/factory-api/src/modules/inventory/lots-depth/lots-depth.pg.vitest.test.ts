@@ -6,7 +6,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import type { FastifyInstance } from 'fastify'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { openFactoryDatabase, RUNTIME_LOGIN, type FactoryDatabase } from '@nexus/factory-db'
-import { migratedDatabase, type MigratedDatabase } from '@nexus/factory-db/testing'
+import { migratedDatabase, type MigratedDatabase, seedDay } from '@nexus/factory-db/testing' // B-W2b-F53: + the seeds' calendar
 import { newId } from '@nexus/factory-domain/core/ids'
 import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
 import { businessDate } from '@nexus/factory-domain/core/time'
@@ -178,7 +178,7 @@ describe('the lot page (SCM-238) and its attributes (SCM-185)', () => {
     expect((await depth(LOT.id, 'viewer')).may).toEqual({ manage: false, split: false, report: false })
     // The seed's leather lot: its LWG certificate runs to the end of 2027; its incoming inspection SEED-IIN-0001 is open.
     const seeded = await depth(A.seedLot, 'viewer')
-    expect(seeded.documents).toMatchObject({ expiring: 0, expired: 0, rows: [{ kind: 'LWG_CERTIFICATE', validTo: '2027-12-31', state: 'VALID', from: 'LOT' }] })
+    expect(seeded.documents).toMatchObject({ expiring: 0, expired: 0, rows: [{ kind: 'LWG_CERTIFICATE', validTo: seedDay('2027-12-31'), state: 'VALID', from: 'LOT' }] })
     expect(seeded.incoming).toMatchObject({ state: 'OPEN', number: 'SEED-IIN-0001' })
     // Another company's reader and another tenant see nothing.
     await refused('companyB', 'GET', `/inventory/lots/${LOT.id}/depth`, undefined, 404)

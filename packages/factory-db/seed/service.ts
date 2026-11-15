@@ -19,6 +19,7 @@ import {
 import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedAuth } from './auth'
 import { seed as seedReturns, type ReturnsSeed } from './returns'
+import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The returns, repairs, service and product safety seed (W2b-5, schema wave 43/44, B-W2b-291), per tenant of seed/_core.ts,
@@ -87,10 +88,10 @@ const DAY = {
   oldPolicyFrom: new Date('2025-01-01T00:00:00.000Z'),
   policyFrom: new Date('2026-10-01T00:00:00.000Z'),
   delivered: new Date('2026-10-05T00:00:00.000Z'),
-  factoryGuaranteeEnds: new Date('2028-10-05T00:00:00.000Z'),
+  factoryGuaranteeEnds: seedAt('2028-10-05T00:00:00.000Z'),
   case3Delivered: new Date('2026-06-12T00:00:00.000Z'),
-  case3FactoryEnds: new Date('2028-06-12T00:00:00.000Z'),
-  estimate2Until: new Date('2026-12-05T00:00:00.000Z'),
+  case3FactoryEnds: seedAt('2028-06-12T00:00:00.000Z'),
+  estimate2Until: seedAt('2026-12-05T00:00:00.000Z'),
   accident: new Date('2026-11-01T00:00:00.000Z'),
   report1Happened: new Date('2026-11-05T00:00:00.000Z'),
   report3Happened: new Date('2026-10-12T00:00:00.000Z'),
@@ -198,7 +199,7 @@ export async function seed(context: SeedContext): Promise<ServiceSeed> {
       // --- repair estimates of SEED-REP-0001 (SAL-387) -------------------------------------------------------------------
       const estimate = { companyId: companyA, siteId: siteA1, partyId: P1, repairId: returns.repairId, createdById: ownerId }
       await tx.repairEstimate.create({
-        data: { id: E.declined, ...estimate, revision: 1, validUntil: new Date('2026-11-20T00:00:00.000Z'), customerNote: 'Seed: we replace the front zip and re-stitch the seam.', createdAt: T.estimate1, updatedAt: T.estimate1 },
+        data: { id: E.declined, ...estimate, revision: 1, validUntil: seedAt('2026-11-20T00:00:00.000Z'), customerNote: 'Seed: we replace the front zip and re-stitch the seam.', createdAt: T.estimate1, updatedAt: T.estimate1 },
         select,
       })
       const line = { partyId: P1, createdById: ownerId }

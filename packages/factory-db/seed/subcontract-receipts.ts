@@ -3,6 +3,7 @@ import { GeneratedDocumentKind, SubcontractOrderStatus } from '../src/generated/
 import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedFiles } from './files'
 import { seed as seedSubcontract, type SubcontractSeed } from './subcontract'
+import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The W2b subcontract seed (schema wave 1/7, B-W2b-01): what went out to a workshop and what came back, as rows
@@ -26,12 +27,12 @@ import { seed as seedSubcontract, type SubcontractSeed } from './subcontract'
 
 /** Fixed instants and dates, so the seed never depends on the clock. */
 const T = {
-  drafted: new Date('2026-11-16T11:00:00.000Z'),
-  issued: new Date('2026-11-17T12:00:00.000Z'),
-  sent: new Date('2026-11-17T14:00:00.000Z'),
-  back: new Date('2026-11-19T09:30:00.000Z'),
+  drafted: seedAt('2026-11-16T11:00:00.000Z'),
+  issued: seedAt('2026-11-17T12:00:00.000Z'),
+  sent: seedAt('2026-11-17T14:00:00.000Z'),
+  back: seedAt('2026-11-19T09:30:00.000Z'),
 } as const
-const DAY = { ordered: new Date('2026-11-16T00:00:00.000Z'), back: new Date('2026-11-26T00:00:00.000Z'), workshopDdt: new Date('2026-11-19T00:00:00.000Z') } as const
+const DAY = { ordered: seedAt('2026-11-16T00:00:00.000Z'), back: seedAt('2026-11-26T00:00:00.000Z'), workshopDdt: seedAt('2026-11-19T00:00:00.000Z') } as const
 
 export interface SubcontractReceiptsSeed {
   readonly subcontract: SubcontractSeed

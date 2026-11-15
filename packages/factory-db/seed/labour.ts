@@ -14,6 +14,7 @@ import {
 import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedPeople } from './people'
 import { seed as seedProduction, type ProductionSeed } from './production'
+import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The floor work seed (W2b schema wave 7/7, B-W2b-12), per tenant of seed/_core.ts, on plant A1 (which names workers: its
@@ -53,26 +54,26 @@ import { seed as seedProduction, type ProductionSeed } from './production'
 
 const T = {
   codes: new Date('2026-11-01T08:00:00.000Z'),
-  cleanStart: new Date('2026-11-16T14:30:00.000Z'),
-  cleanEnd: new Date('2026-11-16T14:45:00.000Z'),
-  dayClosed: new Date('2026-11-16T17:00:00.000Z'),
-  crewStart: new Date('2026-11-16T05:00:00.000Z'),
-  leadJoined: new Date('2026-11-16T05:10:00.000Z'),
-  leadLeft: new Date('2026-11-16T12:00:00.000Z'),
-  crewEnd: new Date('2026-11-16T13:00:00.000Z'),
-  typedStart: new Date('2026-11-17T09:35:00.000Z'),
-  waitStart: new Date('2026-11-17T09:40:00.000Z'),
-  waitEnd: new Date('2026-11-17T10:05:00.000Z'),
-  ticked: new Date('2026-11-17T09:20:00.000Z'),
-  disputed: new Date('2026-11-17T15:00:00.000Z'),
-  answered: new Date('2026-11-18T08:30:00.000Z'),
-  planned: new Date('2026-11-17T16:00:00.000Z'),
-  coupon: new Date('2026-11-16T10:05:00.000Z'),
-  couponVoided: new Date('2026-11-16T10:30:00.000Z'),
-  found: new Date('2026-11-18T02:00:00.000Z'),
-  reviewed: new Date('2026-11-18T09:00:00.000Z'),
+  cleanStart: seedAt('2026-11-16T14:30:00.000Z'),
+  cleanEnd: seedAt('2026-11-16T14:45:00.000Z'),
+  dayClosed: seedAt('2026-11-16T17:00:00.000Z'),
+  crewStart: seedAt('2026-11-16T05:00:00.000Z'),
+  leadJoined: seedAt('2026-11-16T05:10:00.000Z'),
+  leadLeft: seedAt('2026-11-16T12:00:00.000Z'),
+  crewEnd: seedAt('2026-11-16T13:00:00.000Z'),
+  typedStart: seedAt('2026-11-17T09:35:00.000Z'),
+  waitStart: seedAt('2026-11-17T09:40:00.000Z'),
+  waitEnd: seedAt('2026-11-17T10:05:00.000Z'),
+  ticked: seedAt('2026-11-17T09:20:00.000Z'),
+  disputed: seedAt('2026-11-17T15:00:00.000Z'),
+  answered: seedAt('2026-11-18T08:30:00.000Z'),
+  planned: seedAt('2026-11-17T16:00:00.000Z'),
+  coupon: seedAt('2026-11-16T10:05:00.000Z'),
+  couponVoided: seedAt('2026-11-16T10:30:00.000Z'),
+  found: seedAt('2026-11-18T02:00:00.000Z'),
+  reviewed: seedAt('2026-11-18T09:00:00.000Z'),
 } as const
-const DAY = { cleaned: new Date('2026-11-16T00:00:00.000Z'), waited: new Date('2026-11-17T00:00:00.000Z'), dispatch: new Date('2026-11-18T00:00:00.000Z') } as const
+const DAY = { cleaned: seedAt('2026-11-16T00:00:00.000Z'), waited: seedAt('2026-11-17T00:00:00.000Z'), dispatch: seedAt('2026-11-18T00:00:00.000Z') } as const
 
 /** Company A's codes: code, kind, pay rule, approval, words, icon, colour. */
 const CODES = [
@@ -280,7 +281,7 @@ export async function seed(context: SeedContext): Promise<LabourSeed> {
       if (await tx.scanPatternFinding.findUnique({ where: { id: findingIds[0] }, select })) return
       const finding = { siteId: siteA, workOrderId, bundleId: bundleIds[1], workOrderOperationId: operationIds.sew, createdAt: T.found, updatedAt: T.found }
       await tx.scanPatternFinding.create({
-        data: { id: findingIds[0], ...finding, kind: ScanPatternKind.BUNCHED_AT_SHIFT_END, windowStart: new Date('2026-11-17T12:30:00.000Z'), windowEnd: new Date('2026-11-17T13:00:00.000Z'), detail: { scans: 6, shiftEnd: '14:00' } },
+        data: { id: findingIds[0], ...finding, kind: ScanPatternKind.BUNCHED_AT_SHIFT_END, windowStart: seedAt('2026-11-17T12:30:00.000Z'), windowEnd: seedAt('2026-11-17T13:00:00.000Z'), detail: { scans: 6, shiftEnd: '14:00' } },
         select,
       })
       await tx.scanPatternFinding.create({
@@ -288,8 +289,8 @@ export async function seed(context: SeedContext): Promise<LabourSeed> {
           id: findingIds[1],
           ...finding,
           kind: ScanPatternKind.GAP_BELOW_STANDARD,
-          windowStart: new Date('2026-11-17T08:00:00.000Z'),
-          windowEnd: new Date('2026-11-17T09:30:00.000Z'),
+          windowStart: seedAt('2026-11-17T08:00:00.000Z'),
+          windowEnd: seedAt('2026-11-17T09:30:00.000Z'),
           detail: { scans: 2, gapMinutes: 48, standardMinutes: 96.5 },
         },
         select,

@@ -16,6 +16,7 @@ import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
 import { serverClock } from '../../../core/time'
 import { applySystemRoleChanges, systemRoleChanges } from '../../../platform/auth/roles/system-roles'
 import { addUser, Browser, enrolTotp, startHarness, type Harness, type TestTenant } from '../../../platform/auth/sessions/testing/harness'
+import { seedDay } from '@nexus/factory-db/testing' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * One demand view and the production strategy per item (B-W2b-319; PLN-017, PLN-040, PLN-041, PLN-042, PLN-061; design
@@ -73,8 +74,8 @@ const today = () => businessDate(serverClock.now(), 'Europe/Rome')
 // ---- B-W2b-F43: SEED-Q-0004 is valid until 20 Dec 2026 (seed/sales-pricing.ts q4ValidUntil). Its two sides are asked with the
 // server's Date pinned to 09:00 UTC of its last valid day and of the day after (the harness's sign-in clock is apart), so both are
 // checked whatever the real day is (they were checked by `today() <= '2026-12-20'`, one side a day).
-const Q4_VALID_UNTIL = '2026-12-20'
-const Q4_ENDED = '2026-12-21'
+const Q4_VALID_UNTIL = seedDay('2026-12-20')
+const Q4_ENDED = seedDay('2026-12-21')
 async function onDay<T>(day: string, read: () => Promise<T>): Promise<T> {
   vi.useFakeTimers({ toFake: ['Date'], now: new Date(`${day}T09:00:00.000Z`) })
   try {
@@ -217,11 +218,11 @@ describe('one demand view: the rows with their source, and what makes a number',
     if (firstUndated !== -1) expect(dates.slice(firstUndated).every((date: string | null) => date === null)).toBe(true)
     expect(list.pieces).toBe(list.rows.reduce((sum: number, row: Json) => sum + row.pieces, 0))
     const rework = list.rows.find((row: Json) => row.kind === 'REWORK')
-    expect(rework).toMatchObject({ layer: 'REMAKES', source: { recordType: 'ReworkOrder', number: 'SEED-WO-0001', mayOpen: true }, workOrder: { number: 'SEED-WO-0001' }, size: '52', pieces: 1, status: 'OPEN', planned: false, date: '2026-12-04' })
+    expect(rework).toMatchObject({ layer: 'REMAKES', source: { recordType: 'ReworkOrder', number: 'SEED-WO-0001', mayOpen: true }, workOrder: { number: 'SEED-WO-0001' }, size: '52', pieces: 1, status: 'OPEN', planned: false, date: seedDay('2026-12-04') })
     const recut = list.rows.find((row: Json) => row.kind === 'RECUT')
     expect(recut).toMatchObject({ source: { recordType: 'WorkOrder', number: 'SEED-WO-0001' }, part: 'sleeve', status: 'OPEN', planned: false })
     const sample = list.rows.find((row: Json) => row.kind === 'SAMPLE_ROUND')
-    expect(sample).toMatchObject({ layer: 'SAMPLES', source: { recordType: 'SampleRound', number: 'SEED-SR-0001', mayOpen: true }, sampleKind: 'FIT', status: 'REQUESTED', date: '2026-11-16', planned: false, style: { code: 'SEED-JKT-01' }, colourway: { code: 'BLK' } })
+    expect(sample).toMatchObject({ layer: 'SAMPLES', source: { recordType: 'SampleRound', number: 'SEED-SR-0001', mayOpen: true }, sampleKind: 'FIT', status: 'REQUESTED', date: seedDay('2026-11-16'), planned: false, style: { code: 'SEED-JKT-01' }, colourway: { code: 'BLK' } })
     expect(sample.party).toMatchObject({ code: expect.any(String), name: expect.any(String) })
     // SEED-SO-0002 line 10: size 50 shipped, 52 and 54 still wait.
     expect(list.rows.filter((row: Json) => row.source.number === 'SEED-SO-0002' && row.source.line === 10).map((row: Json) => [row.size, row.pieces])).toEqual([
@@ -230,8 +231,8 @@ describe('one demand view: the rows with their source, and what makes a number',
     ])
     // SEED-SO-0004: by its delivery schedule, the rest on no day.
     expect(list.rows.filter((row: Json) => row.source.number === 'SEED-SO-0004').map((row: Json) => [row.size, row.date, row.pieces, row.bucket === 'NONE'])).toEqual([
-      ['50', '2027-01-15', 1, false],
-      ['52', '2027-01-29', 2, false],
+      ['50', seedDay('2027-01-15'), 1, false],
+      ['52', seedDay('2027-01-29'), 2, false],
       ['50', null, 1, true],
     ])
     expect(list.rows.some((row: Json) => row.source.number === 'SEED-SO-W39-01')).toBe(false)

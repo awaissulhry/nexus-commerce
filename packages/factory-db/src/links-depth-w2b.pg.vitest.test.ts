@@ -8,6 +8,7 @@ import { RUNTIME_LOGIN } from './roles'
 import { seedUuid } from './seeding'
 import { migratedDatabase, type MigratedDatabase } from './testing/database'
 import { loadOwnership, loadSchema } from './tools'
+import { seedIso } from './seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * Links in depth (W2b schema wave 19/22, B-W2b-154, …_links_depth_w2b_guards) on a database built from the migrations and
@@ -309,7 +310,7 @@ describe('record shares', () => {
   it('allow VIEW, each permission once, at most 180 days, to one address; never a pay record', async () => {
     await expect(share({ permissions: ['COMMENT'] })).rejects.toThrow(/allows VIEW/)
     await expect(share({ permissions: ['VIEW', 'UPLOAD', 'UPLOAD'] })).rejects.toThrow(/allows VIEW/)
-    await expect(share({ expiresAt: '2027-12-31T00:00:00Z' })).rejects.toThrow(/at most 180 days/)
+    await expect(share({ expiresAt: seedIso('2027-12-31T00:00:00Z') })).rejects.toThrow(/at most 180 days/)
     await expect(share({ email: 'Orders.P2@Example.com' })).rejects.toThrow(/trimmed and lower case/)
     await expect(share({ recordType: 'EarningsEntry' })).rejects.toThrow(/pay figures/)
     await expect(share({ revokedAt: '2026-10-29T00:00:00Z' })).rejects.toThrow(/a new share is live/)
@@ -319,9 +320,9 @@ describe('record shares', () => {
   it('open through a RECORD_INVITE link of the record that never outlives them, set once', async () => {
     const id = randomUUID()
     await share({ id })
-    const invite = await newLink({ partyId: P2, contactId: null, purpose: 'RECORD_INVITE', recordType: 'PurchaseOrder', recordId: key('link:P2:record'), expiresAt: '2026-11-20T00:00:00Z' })
+    const invite = await newLink({ partyId: P2, contactId: null, purpose: 'RECORD_INVITE', recordType: 'PurchaseOrder', recordId: key('link:P2:record'), expiresAt: seedIso('2026-11-20T00:00:00Z') })
     const wrongPurpose = await newLink({ partyId: P2, contactId: null, purpose: 'DOCUMENT_VIEW', recordType: 'PurchaseOrder', recordId: key('link:P2:record') })
-    const outliving = await newLink({ partyId: P2, contactId: null, purpose: 'RECORD_INVITE', recordType: 'PurchaseOrder', recordId: key('link:P2:record'), expiresAt: '2026-12-31T00:00:00Z' })
+    const outliving = await newLink({ partyId: P2, contactId: null, purpose: 'RECORD_INVITE', recordType: 'PurchaseOrder', recordId: key('link:P2:record'), expiresAt: seedIso('2026-12-31T00:00:00Z') })
     await expect(update(office(), 'RecordShare', id, `"linkId" = $2::uuid`, wrongPurpose)).rejects.toThrow(/RECORD_INVITE link of the shared record/)
     await expect(update(office(), 'RecordShare', id, `"linkId" = $2::uuid`, outliving)).rejects.toThrow(/never outlives the share/)
     expect(await update(office(), 'RecordShare', id, `"linkId" = $2::uuid, version = version + 1`, invite)).toBe(1)

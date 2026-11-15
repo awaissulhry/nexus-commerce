@@ -15,6 +15,7 @@ import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedAuth } from './auth'
 import { seed as seedCompliance } from './compliance'
 import { seed as seedProduction } from './production'
+import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The samples seed (W2b-4, schema wave 29/33, B-W2b-212), per tenant of seed/_core.ts, written in the tenant's office scope as
@@ -49,9 +50,9 @@ const T = {
   sent: new Date('2026-11-05T09:00:00.000Z'),
   measured: new Date('2026-11-05T14:00:00.000Z'),
   received: new Date('2026-11-07T11:00:00.000Z'),
-  due: new Date('2026-11-20T17:00:00.000Z'),
+  due: seedAt('2026-11-20T17:00:00.000Z'),
 } as const
-const DAY = { due: new Date('2026-11-16T00:00:00.000Z'), gate: new Date('2026-11-25T00:00:00.000Z') } as const
+const DAY = { due: seedAt('2026-11-16T00:00:00.000Z'), gate: seedAt('2026-11-25T00:00:00.000Z') } as const
 
 export interface SamplesSeed {
   readonly roundIds: { readonly fit: string; readonly proto: string; readonly pp: string; readonly cert: string }

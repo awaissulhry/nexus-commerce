@@ -4,7 +4,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import type { FastifyInstance } from 'fastify'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { openFactoryDatabase, RUNTIME_LOGIN, type FactoryDatabase } from '@nexus/factory-db'
-import { migratedDatabase, type MigratedDatabase } from '@nexus/factory-db/testing'
+import { type MigratedDatabase, migratedDatabase, seedDayText } from '@nexus/factory-db/testing' // B-W2b-F53: + the seeds' calendar
 import { newId } from '@nexus/factory-domain/core/ids'
 import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
 import { DEFECT_CLASSES, DISPOSITION_FOLLOW_UPS, DISPOSITION_OUTCOMES, QUALITY_STAGES } from '@nexus/factory-domain/quality/defects/rules'
@@ -271,7 +271,7 @@ describe('a disposition moves the stock through the ledger (QHS-005)', () => {
     expect(moved.result.moves.every((move) => move.reason === 'TRANSFER' && move.to === A.quarantine && move.note === 'QUARANTINE: Grain crack across the butt')).toBe(true)
     await expect(run({ dispositionCodeId: await codeId('QUARANTINE'), siteId: A.siteA1, lines: [{ hideId: A.hideH2 }], toLocationId: id('inventory:location:A1-STORE-01'), reference: 'X', note: 'y' })).rejects.toMatchObject({ message: 'A1-STORE-01 is not a quarantine place.' })
     const issueCode = (await admin<{ id: string }>(`INSERT INTO "DispositionCode" (id, "tenantId", code, "labelIt", "labelEn", outcome, "stockMoveReason") VALUES ($1, $2, 'USE_ON_WO', 'Usa', 'Use on the order', 'REGRADE', 'ISSUE') RETURNING id`, [newId(), A.tenant]))[0]!.id
-    await expect(run({ dispositionCodeId: issueCode, siteId: A.siteA1, lines: [{ hideId: A.hideH2 }], workOrderId: A.wo1, reference: 'X', note: 'y' })).rejects.toMatchObject({ message: expect.stringMatching(/^Hide SEED-HIDE-0002 is on hold \(Quality check, since 21 Nov 2026\): it is not issued until quality releases the hold\.$/) })
+    await expect(run({ dispositionCodeId: issueCode, siteId: A.siteA1, lines: [{ hideId: A.hideH2 }], workOrderId: A.wo1, reference: 'X', note: 'y' })).rejects.toMatchObject({ message: `Hide SEED-HIDE-0002 is on hold (Quality check, since ${seedDayText('2026-11-21', 'en')}): it is not issued until quality releases the hold.` }) // B-W2b-F53: the seeded hold's day follows the calendar
   })
 
   it('scraps stock with a SCRAP move; use as is moves nothing', async () => {

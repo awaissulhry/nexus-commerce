@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import type { Prisma } from '../src/generated/prisma/client'
 import { seedUuid, type SeedContext } from '../src/seeding'
+import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The one-off links' synthetic seed, per tenant of seed/_core.ts: for company A, a QUOTE_ACCEPT link for the made-up
@@ -17,7 +18,7 @@ import { seedUuid, type SeedContext } from '../src/seeding'
 /** Fixed instants, so the seed never depends on the clock. */
 const MADE_AT = new Date('2026-10-28T08:00:00.000Z')
 const OPENED_AT = new Date('2026-10-28T08:30:00.000Z')
-const EXPIRES_AT = new Date('2027-10-28T08:00:00.000Z')
+const EXPIRES_AT = seedAt('2027-10-28T08:00:00.000Z')
 
 const notAToken = (linkId: string): string => createHash('sha256').update(`seed link ${linkId}: no token opens it`).digest('hex')
 

@@ -20,6 +20,8 @@ import { addTenant, addUser, Browser, enrolTotp, startHarness, type Harness, typ
 import { pdfFlatText } from '../../platform/documents/testing/pdf-text'
 import { systemContext } from '../../platform/outbox/system'
 import { supplierView } from './supplier-view'
+// ---- B-W2b-F53: this file fixes its clock on a day of the seeds' story, so it runs the seeds as written (seed-calendar)
+await vi.hoisted(async () => (await import('@nexus/factory-db/testing')).seedsAsWritten())
 
 // ---- B-W2b-F43: the clock is fixed at Friday 13 Nov 2026 09:00 UTC (10:00 at the plant), in the seeds' week, and runs on from
 // there: the expectations read the seeds' fixed days and failed once those days passed (a fake clock on 2026-12-07 or 2027-01-15

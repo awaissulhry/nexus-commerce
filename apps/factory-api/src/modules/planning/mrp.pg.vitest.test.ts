@@ -17,6 +17,8 @@ import { testAuthenticator, type SessionContext } from '../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../env'
 import { runNightlyPlans } from './nightly'
 import { readinessFor } from './readiness/service'
+// ---- B-W2b-F53: this file fixes its clock on a day of the seeds' story, so it runs the seeds as written (seed-calendar)
+await vi.hoisted(async () => (await import('@nexus/factory-db/testing')).seedsAsWritten())
 
 /**
  * MRP every day (B-W2a-22; PLN-071 pegging, PLN-075 firm planned orders, PLN-085 the shortage list with its fixes,

@@ -3,6 +3,7 @@ import type { Prisma } from '../src/generated/prisma/client'
 import { FileUploadStatus, PartyRole, RequiredDocumentLevel } from '../src/generated/prisma/enums'
 import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedFiles } from './files'
+import { seedToday } from '../src/seed-calendar' // B-W2b-F53: the seeds' calendar
 
 /**
  * The files-in-depth seed (W2b schema wave 18/22, B-W2b-153), per tenant of seed/_core.ts, written in the tenant's office
@@ -38,8 +39,7 @@ const TECH_PACK = 20 * MIB
 
 /** Today in Europe/Rome as a UTC midnight. */
 function romeToday(): Date {
-  const iso = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
-  return new Date(`${iso}T00:00:00.000Z`)
+  return new Date(`${seedToday()}T00:00:00.000Z`) // B-W2b-F53: the seeds' calendar
 }
 
 export interface FilesDepthSeed {

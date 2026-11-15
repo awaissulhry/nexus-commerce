@@ -26,6 +26,7 @@ import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedPeople } from './people'
 import { seed as seedPlant } from './plant'
 import { seed as seedSafety } from './safety'
+import { seedToday } from '../src/seed-calendar' // B-W2b-F53: the seeds' calendar
 
 /**
  * The protected safety data seed (W2b schema wave 16/16, B-W2b-91), per tenant of seed/_core.ts, written as the app does: the
@@ -88,8 +89,7 @@ const DAY_MS = 86_400_000
 
 /** Today in Europe/Rome as a UTC midnight. */
 function romeToday(): Date {
-  const iso = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
-  return new Date(`${iso}T00:00:00.000Z`)
+  return new Date(`${seedToday()}T00:00:00.000Z`) // B-W2b-F53: the seeds' calendar
 }
 
 export async function seed(context: SeedContext): Promise<HealthSeed> {

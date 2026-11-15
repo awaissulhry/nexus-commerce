@@ -19,6 +19,7 @@ import { testAuthenticator, type SessionContext } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { applySystemRoleChanges, systemRoleChanges } from '../../../platform/auth/roles/system-roles'
 import { addUser, Browser, startHarness, type Harness, type TestTenant } from '../../../platform/auth/sessions/testing/harness'
+import { seedDay } from '@nexus/factory-db/testing' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * Labour records and corrections (B-W2b-45; MES-201 the labour record per scan, MES-202 the operator's daily sheet,
@@ -155,7 +156,7 @@ describe('the labour record per scan with its minutes (MES-201)', () => {
   it('answers what stands of a report, its standard minutes earned, its correction waiting and its dispute; never who while the gate is off', async () => {
     const [undoneId, undoId, standingId] = labour.production.scanIds
     const record = (await ok('viewer', 'GET', `/production/labour/records/${standingId}`)).record
-    expect(record).toMatchObject({ scanId: standingId, state: 'STANDING', workDate: '2026-11-17', counts: { good: 2, scrap: 0, rework: 0 }, earnedMinutes: '193.000', operation: { seq: 20, standardMinutes: '96.5' }, line: { id: lineL1, code: 'L1' }, correctionsWaiting: 1, worker: null, employeeId: null, workerHidden: true })
+    expect(record).toMatchObject({ scanId: standingId, state: 'STANDING', workDate: seedDay('2026-11-17'), counts: { good: 2, scrap: 0, rework: 0 }, earnedMinutes: '193.000', operation: { seq: 20, standardMinutes: '96.5' }, line: { id: lineL1, code: 'L1' }, correctionsWaiting: 1, worker: null, employeeId: null, workerHidden: true })
     expect(record.disputes).toEqual([expect.objectContaining({ id: labour.disputeIds[0], status: 'OPEN' })])
     expect(JSON.stringify(record)).not.toContain(OPERATOR_NAME)
     // An undo voids it: nothing of it counts; its undo answers the same record.
@@ -171,7 +172,7 @@ describe('one queue and its tiles, never who (design "To decide")', () => {
   it('lists the correction waiting, the open dispute and the waiting block, oldest first, with no person; the tiles count them', async () => {
     const answer = await ok('viewer', 'GET', `/production/labour/inbox?siteId=${siteA1}`)
     const byKind = (kind: string) => answer.items.filter((item: Json) => item.kind === kind)
-    expect(byKind('CORRECTION')).toEqual([expect.objectContaining({ line: expect.objectContaining({ id: lineL1 }), workDate: '2026-11-17', recordId: labour.production.scanIds[2], named: true })])
+    expect(byKind('CORRECTION')).toEqual([expect.objectContaining({ line: expect.objectContaining({ id: lineL1 }), workDate: seedDay('2026-11-17'), recordId: labour.production.scanIds[2], named: true })])
     expect(byKind('CORRECTION')[0].changes.length).toBeGreaterThan(0)
     expect(byKind('DISPUTE').map((item: Json) => item.id)).toEqual([labour.disputeIds[0]])
     expect(byKind('OFF_STANDARD').map((item: Json) => item.id)).toContain(labour.blockIds[0])
@@ -191,17 +192,18 @@ describe("closing a line's day (MES-203)", () => {
   let typed: Json
 
   it("shows each line's day with what holds it, in words: blocks to code, corrections, disputes, attendance anomalies", async () => {
-    const days = (await ok('viewer', 'GET', `/production/labour/days?siteId=${siteA1}&from=2026-11-15&to=2026-11-18`)).days as Json[]
+    // B-W2b-F53: the seeded labour days (16-18 November as written) are the seeds' future: the range moves with them.
+    const days = (await ok('viewer', 'GET', `/production/labour/days?siteId=${siteA1}&from=${seedDay('2026-11-16')}&to=${seedDay('2026-11-18')}`)).days as Json[]
     const of = (day: string) => days.find((row) => row.line.id === lineL1 && row.workDate === day)
-    expect(of('2026-11-16')).toMatchObject({ state: 'CLOSED', labourDayId: labour.labourDayId })
-    expect(of('2026-11-17')).toMatchObject({ state: 'OPEN', records: 2, offStandard: { coded: false, left: 1 }, anomalies: 2 })
-    expect(of('2026-11-17')!.blockers.map((row: Json) => [row.kind, row.count])).toEqual([
+    expect(of(seedDay('2026-11-16'))).toMatchObject({ state: 'CLOSED', labourDayId: labour.labourDayId })
+    expect(of(seedDay('2026-11-17'))).toMatchObject({ state: 'OPEN', records: 2, offStandard: { coded: false, left: 1 }, anomalies: 2 })
+    expect(of(seedDay('2026-11-17'))!.blockers.map((row: Json) => [row.kind, row.count])).toEqual([
       ['OFF_STANDARD_WAITING', 1],
       ['CORRECTION_WAITING', 1],
       ['DISPUTE_OPEN', 1],
     ])
     expect(JSON.stringify(days)).not.toContain(OPERATOR_NAME)
-    await no('viewer', 'GET', `/production/labour/days?from=2026-01-01&to=2026-12-31`, undefined, 400)
+    await no('viewer', 'GET', `/production/labour/days?from=2026-01-01&to=${seedDay('2026-12-31')}`, undefined, 400)
   })
 
   it('holds the close while a block waits and attendance anomalies are open; closes once they are cleared (feeds pay)', async () => {
@@ -238,7 +240,7 @@ describe('the worker reads their own records and disputes one (MES-205, MES-206;
   let raised: Json
 
   it("shows the operator's reports, blocks, disputes and changes, whatever the gate says; the minutes only behind it", async () => {
-    const mine = await tablet.get('/production/labour/floor/mine?from=2026-11-16&to=2026-11-17')
+    const mine = await tablet.get(`/production/labour/floor/mine?from=${seedDay('2026-11-16')}&to=${seedDay('2026-11-17')}`)
     expect(mine.status, JSON.stringify(mine.body)).toBe(200)
     const body = mine.body as Json
     expect(body).toMatchObject({ subject: 'WORKER', minutesShown: false })
@@ -348,21 +350,21 @@ describe("the operator's daily sheet, one person inside one record (MES-202; Sta
 
   it("refuses everyone while the site's PERFORMANCE gate is off, in words; behind it, HR opens it with a reason, logged", async () => {
     const e1 = await employee()
-    const closed = await no('hr', 'POST', '/production/labour/sheets', { employeeId: e1, workDate: '2026-11-17', reason: 'PAY_QUERY' }, 409)
+    const closed = await no('hr', 'POST', '/production/labour/sheets', { employeeId: e1, workDate: seedDay('2026-11-17'), reason: 'PAY_QUERY' }, 409)
     expect(refusalOf(closed)).toBe('gate/PERFORMANCE')
     // B-W2b-77: the closed gate says nothing of who exists: an id that finds nobody gets that same answer.
-    const nobody = await no('hr', 'POST', '/production/labour/sheets', { employeeId: newId(), workDate: '2026-11-17', reason: 'PAY_QUERY' }, 409)
+    const nobody = await no('hr', 'POST', '/production/labour/sheets', { employeeId: newId(), workDate: seedDay('2026-11-17'), reason: 'PAY_QUERY' }, 409)
     expect({ ...nobody, requestId: null }).toEqual({ ...closed, requestId: null })
-    expect(refusalOf(await no('operatorUser', 'POST', '/production/labour/sheets', { employeeId: e1, workDate: '2026-11-17' }, 409))).toBe('gate/PERFORMANCE')
+    expect(refusalOf(await no('operatorUser', 'POST', '/production/labour/sheets', { employeeId: e1, workDate: seedDay('2026-11-17') }, 409))).toBe('gate/PERFORMANCE')
     await openGate('PERFORMANCE')
     // HR not named in People settings yet: not allowed.
-    expect(refusalOf(await no('hr', 'POST', '/production/labour/sheets', { employeeId: e1, workDate: '2026-11-17', reason: 'PAY_QUERY' }, 403))).toBe('figures/NOT_ALLOWED')
+    expect(refusalOf(await no('hr', 'POST', '/production/labour/sheets', { employeeId: e1, workDate: seedDay('2026-11-17'), reason: 'PAY_QUERY' }, 403))).toBe('figures/NOT_ALLOWED')
     await admin(`UPDATE "PeopleSettings" SET "figureRoleKeys" = ARRAY['custom.hr'], version = version + 1 WHERE id = $1`, [companyA])
-    expect(refusalOf(await no('hr', 'POST', '/production/labour/sheets', { employeeId: e1, workDate: '2026-11-17' }, 400))).toBe('body/reason')
-    await no('viewer', 'POST', '/production/labour/sheets', { employeeId: e1, workDate: '2026-11-17', reason: 'PAY_QUERY' }, 404)
-    const opened = await ok('hr', 'POST', '/production/labour/sheets', { employeeId: e1, workDate: '2026-11-17', reason: 'PAY_QUERY' })
+    expect(refusalOf(await no('hr', 'POST', '/production/labour/sheets', { employeeId: e1, workDate: seedDay('2026-11-17') }, 400))).toBe('body/reason')
+    await no('viewer', 'POST', '/production/labour/sheets', { employeeId: e1, workDate: seedDay('2026-11-17'), reason: 'PAY_QUERY' }, 404)
+    const opened = await ok('hr', 'POST', '/production/labour/sheets', { employeeId: e1, workDate: seedDay('2026-11-17'), reason: 'PAY_QUERY' })
     expect(opened).toMatchObject({ person: { employeeId: e1, name: OPERATOR_NAME }, as: 'FIGURE_ROLE', recorded: true, attendanceShown: true })
-    expect(opened.sheet).toMatchObject({ workDate: '2026-11-17', pieces: { good: 2, scrap: 0, rework: 0 }, records: 1, productionMinutes: '193.000', offStandard: { minutes: 25, byCode: [expect.objectContaining({ code: 'WAIT_MATERIAL', minutes: 25, blocks: 1 })] } })
+    expect(opened.sheet).toMatchObject({ workDate: seedDay('2026-11-17'), pieces: { good: 2, scrap: 0, rework: 0 }, records: 1, productionMinutes: '193.000', offStandard: { minutes: 25, byCode: [expect.objectContaining({ code: 'WAIT_MATERIAL', minutes: 25, blocks: 1 })] } })
     expect(opened.sheet.exceptions.map((row: Json) => row.kind)).toEqual(['CORRECTION_WAITING', 'BLOCK_WAITING', 'RECORD_UNDONE'])
     expect(opened.records.map((row: Json) => row.state)).toEqual(['UNDONE', 'STANDING'])
     expect(opened.words[0]).toMatch(/This view is logged/)
@@ -370,12 +372,12 @@ describe("the operator's daily sheet, one person inside one record (MES-202; Sta
     const audit = await admin(`SELECT "actorId", "recordId", after FROM "AuditLog" WHERE "tenantId" = $1 AND action = 'people.openPersonFigures' AND "recordId" = $2`, [T, e1])
     expect(audit).toEqual([expect.objectContaining({ actorId: hrUserId, after: expect.objectContaining({ purpose: 'PERFORMANCE', as: 'FIGURE_ROLE', reason: 'PAY_QUERY' }) })])
     // The worker opens their own, no reason asked.
-    expect((await ok('operatorUser', 'POST', '/production/labour/sheets', { employeeId: e1, workDate: '2026-11-17' })).as).toBe('SELF')
+    expect((await ok('operatorUser', 'POST', '/production/labour/sheets', { employeeId: e1, workDate: seedDay('2026-11-17') })).as).toBe('SELF')
   })
 
   it("keeps no figure in the idempotency receipt: the opening is recorded, the sheet is read after it (B-W2b-77)", async () => {
     const e1 = await employee()
-    const body = { employeeId: e1, workDate: '2026-11-17', reason: 'WORKER_REQUEST' }
+    const body = { employeeId: e1, workDate: seedDay('2026-11-17'), reason: 'WORKER_REQUEST' }
     const sameKey = `t-${run}-sheet-receipt`
     const open = () => app.inject({ method: 'POST', url: '/production/labour/sheets', headers: { 'x-test-session': 'hr', 'idempotency-key': sameKey }, payload: body })
     const openings = async () => (await admin(`SELECT id FROM "AuditLog" WHERE "tenantId" = $1 AND action = 'people.openPersonFigures' AND "idempotencyKey" = $2`, [T, sameKey])).length
@@ -404,7 +406,7 @@ describe("the operator's daily sheet, one person inside one record (MES-202; Sta
 
   it('names the worker on one record and shows the minutes on My day once the gate is on', async () => {
     expect((await ok('viewer', 'GET', `/production/labour/records/${labour.production.scanIds[2]}`)).record).toMatchObject({ worker: { id: operator, name: OPERATOR_NAME }, employeeId: await employee(), workerHidden: false })
-    const mine = (await tablet.get('/production/labour/floor/mine?from=2026-11-17&to=2026-11-17')).body as Json
+    const mine = (await tablet.get(`/production/labour/floor/mine?from=${seedDay('2026-11-17')}&to=${seedDay('2026-11-17')}`)).body as Json
     expect(mine).toMatchObject({ minutesShown: true, words: [] })
     expect(mine.records.find((row: Json) => row.scanId === labour.production.scanIds[2]).minutes).toBe('193.000')
   })

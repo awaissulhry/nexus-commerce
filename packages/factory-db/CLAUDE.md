@@ -486,6 +486,12 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
 - The roles are cluster-wide and shared by every worktree on the local server: tests never drop or alter them; a test
   role gets a random name and is dropped. Migrations take the advisory lock in `src/testing/database.ts`.
 - Seeds (`seed/<module>.ts`, run in name order) hold made-up data only and write through the scoped client.
+- Seed dates follow the calendar (B-W2b-F53, `src/seed-calendar.ts`): a seed date on or before `SEED_DAY` (2026-11-15) is
+  history and never moves; a later one is the seeds' future and goes through `seedDay` / `seedAt`, which move it on by
+  whole weeks so it is still to come on the day the seed runs (same weekday, never nearer than written). Holidays,
+  closures and other calendar facts are plain dates; a record that must hold in today's year uses `seedYear()`. A test
+  that names a seeded future date names it through the same functions (`@nexus/factory-db/testing`); a test file that
+  fixes its clock on a day of the seeds' story calls `seedsAsWritten()` in a `vi.hoisted` before the seeds load.
 - Every generator has an `output` inside this package (`check-prisma-output`). No `Float` (`check-no-float`): amounts
   are Int minor units, unit prices and costs Decimal(18,6), quantities Decimal(18,4).
 - Never hand-edit `src/generated/` or a policy migration.

@@ -3,6 +3,7 @@ import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedInventory } from './inventory'
 import { seed as seedPortalAuth } from './portal-auth'
 import { seed as seedSubcontractReceipts } from './subcontract-receipts'
+import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The supplier portal seed (W2b schema wave 22/22, B-W2b-158), per tenant of seed/_core.ts. The office's rows are written
@@ -46,21 +47,21 @@ const T = {
   noticed: new Date('2026-11-04T08:30:00.000Z'),
   sent: new Date('2026-11-04T09:10:00.000Z'),
   draft: new Date('2026-11-05T16:00:00.000Z'),
-  accepted: new Date('2026-11-17T12:40:00.000Z'),
-  reported: new Date('2026-11-18T16:00:00.000Z'),
-  announced: new Date('2026-11-18T17:30:00.000Z'),
-  back: new Date('2026-11-19T09:30:00.000Z'),
-  announcedAgain: new Date('2026-11-21T10:00:00.000Z'),
+  accepted: seedAt('2026-11-17T12:40:00.000Z'),
+  reported: seedAt('2026-11-18T16:00:00.000Z'),
+  announced: seedAt('2026-11-18T17:30:00.000Z'),
+  back: seedAt('2026-11-19T09:30:00.000Z'),
+  announcedAgain: seedAt('2026-11-21T10:00:00.000Z'),
 } as const
 const DAY = {
   ship: new Date('2026-11-05T00:00:00.000Z'),
   arrive: new Date('2026-11-07T00:00:00.000Z'),
   ddt: new Date('2026-11-05T00:00:00.000Z'),
   draftShip: new Date('2026-11-12T00:00:00.000Z'),
-  finishBy: new Date('2026-11-21T00:00:00.000Z'),
-  backFirst: new Date('2026-11-19T00:00:00.000Z'),
-  backSecond: new Date('2026-11-24T00:00:00.000Z'),
-  ddtSecond: new Date('2026-11-21T00:00:00.000Z'),
+  finishBy: seedAt('2026-11-21T00:00:00.000Z'),
+  backFirst: seedAt('2026-11-19T00:00:00.000Z'),
+  backSecond: seedAt('2026-11-24T00:00:00.000Z'),
+  ddtSecond: seedAt('2026-11-21T00:00:00.000Z'),
 } as const
 
 /** The starter set (SCM-023; Forced Labour Regulation (EU) 2024/3015): made-up words, the kinds are the API's. */

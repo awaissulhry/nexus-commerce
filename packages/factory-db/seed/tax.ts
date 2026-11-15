@@ -4,6 +4,7 @@ import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedAccounting } from './accounting'
 import { seed as seedFiles } from './files'
 import { seed as seedPricing } from './pricing'
+import { seedDay, seedYear } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The invoicing, tax and currency seed (W2b schema wave 49/57, B-W2b-369), per tenant of seed/_core.ts, written in the
@@ -61,7 +62,8 @@ export interface TaxSeed {
   readonly tenantId: string
   readonly actorId: string
   readonly taxCodeIds: { readonly mistake: string; readonly ordinary: string; readonly reducedOld: string; readonly reduced: string; readonly exportCode: string; readonly intraEu: string; readonly declaration: string; readonly stampDuty: string; readonly companyB: string }
-  readonly declarationIds: { readonly revoked: string; readonly live: string }
+  /** B-W2b-F53: `current` is the live, checked declaration for the run's year: `live` (2026) in 2026, the seed's added one later. */
+  readonly declarationIds: { readonly revoked: string; readonly live: string; readonly current: string }
   readonly declarationReceiptFileId: string
   readonly stampDutyQuarterIds: { readonly october: string; readonly july: string }
   readonly selfInvoiceIds: { readonly cancelled: string; readonly pending: string }
@@ -155,6 +157,19 @@ export async function seed(context: SeedContext): Promise<TaxSeed> {
     { id: declarationIds.revoked, companyId: companyA, partyId: P1, protocolNumber: '26000000000000001-000001', protocolDate: DAY('2026-01-15'), year: 2026, amount: 1_000_000, revokedAt: T.revoked, revokeReason: "Replaced by the customer's new declaration", ...stamp(DAY('2026-01-15')) },
     { id: declarationIds.live, companyId: companyA, partyId: P1, protocolNumber: '26000000000000002-000001', protocolDate: DAY('2026-03-02'), year: 2026, amount: 5_000_000, usedAmount: 0, checkedAt: T.checked, checkedById: actorId, receiptFileId: declarationReceiptFileId, ...stamp(T.checked) },
   ]
+  // ---- B-W2b-F53: a declaration covers one year, so in a run after 2026 P1 also holds the live, checked declaration for the run's
+  // year (seed-calendar seedYear()), protocolled on 15 December of the year before (in the past on every day of that year).
+  const runYear = seedYear()
+  const yearFiles: Prisma.StoredFileCreateManyInput[] = []
+  if (runYear > 2026) {
+    const yearId = id(`tax:doi:A:P1:${runYear}`)
+    const yearReceiptId = lastId(`tax:file:doi:A:P1:${runYear}:receipt`)
+    const protocolled = DAY(`${runYear - 1}-12-15`)
+    const yearChecked = new Date(`${runYear - 1}-12-16T10:00:00.000Z`)
+    yearFiles.push({ ...receiptFile, id: yearReceiptId, recordId: yearId, sha256: sha256(`declaration receipt ${runYear}`), storageKey: `t/${tenantId}/c/${companyA}/${runYear - 1}/${id(`tax:file:doi:key:${runYear}`)}`, availableAt: yearChecked, ...stamp(yearChecked) })
+    declarations.push({ id: yearId, companyId: companyA, partyId: P1, protocolNumber: `${String(runYear - 1).slice(2)}000000000000003-000001`, protocolDate: protocolled, year: runYear, amount: 5_000_000, usedAmount: 0, checkedAt: yearChecked, checkedById: actorId, receiptFileId: yearReceiptId, ...stamp(yearChecked) })
+  }
+  // ---- end B-W2b-F53
 
   // --- stamp duty quarters ----------------------------------------------------------------------------------------------
   const stampDutyQuarterIds = { october: firstId('tax:stamp:A:2026-10'), july: id('tax:stamp:A:2026-07') }
@@ -179,13 +194,13 @@ export async function seed(context: SeedContext): Promise<TaxSeed> {
     vatTotal: 0,
     grossTotal: 120_000,
     vatSummary: [],
-    dueDate: DAY('2026-12-05'),
+    dueDate: DAY(seedDay('2026-12-05')),
     ...stamp(T.foreignTyped),
   }
   const selfInvoiceIds = { cancelled: firstId('tax:self-invoice:A:P2:2026-0412'), pending: id('tax:self-invoice:A:P3:SEED-DE-117') }
   const selfInvoices: Prisma.SelfInvoiceCreateManyInput[] = [
-    { id: selfInvoiceIds.cancelled, companyId: companyA, partyId: P2, supplierInvoiceId: accounting.supplierInvoiceId, kind: 'TD19', deadline: DAY('2026-12-15'), status: 'CANCELLED', cancelledAt: T.cancelled, cancelReason: 'The supplier is Italian: no self-invoice is needed', ...stamp(T.cancelled) },
-    { id: selfInvoiceIds.pending, companyId: companyA, partyId: P3, supplierInvoiceId: foreignSupplierInvoiceId, kind: 'TD17', deadline: DAY('2026-12-15'), ...stamp(T.foreignTyped) },
+    { id: selfInvoiceIds.cancelled, companyId: companyA, partyId: P2, supplierInvoiceId: accounting.supplierInvoiceId, kind: 'TD19', deadline: DAY(seedDay('2026-12-15')), status: 'CANCELLED', cancelledAt: T.cancelled, cancelReason: 'The supplier is Italian: no self-invoice is needed', ...stamp(T.cancelled) },
+    { id: selfInvoiceIds.pending, companyId: companyA, partyId: P3, supplierInvoiceId: foreignSupplierInvoiceId, kind: 'TD17', deadline: DAY(seedDay('2026-12-15')), ...stamp(T.foreignTyped) },
   ]
 
   // --- our own copy of FT-2026-00001's delivered send ------------------------------------------------------------------
@@ -285,7 +300,7 @@ export async function seed(context: SeedContext): Promise<TaxSeed> {
     client.$transaction(async (tx) => {
       await tx.companyEInvoiceSettings.createMany({ data: settings, skipDuplicates: true })
       await tx.taxCode.createMany({ data: taxCodes, skipDuplicates: true })
-      await tx.storedFile.createMany({ data: [receiptFile, sdiReceipt], skipDuplicates: true })
+      await tx.storedFile.createMany({ data: [receiptFile, sdiReceipt, ...yearFiles /* B-W2b-F53 */], skipDuplicates: true })
       await tx.declarationOfIntent.createMany({ data: declarations, skipDuplicates: true })
       await tx.stampDutyQuarter.createMany({ data: quarters, skipDuplicates: true })
       await tx.supplierInvoice.createMany({ data: [foreignInvoice], skipDuplicates: true })
@@ -305,7 +320,7 @@ export async function seed(context: SeedContext): Promise<TaxSeed> {
     tenantId,
     actorId,
     taxCodeIds,
-    declarationIds,
+    declarationIds: { ...declarationIds, current: runYear > 2026 ? id(`tax:doi:A:P1:${runYear}`) : declarationIds.live }, // B-W2b-F53
     declarationReceiptFileId,
     stampDutyQuarterIds,
     selfInvoiceIds,

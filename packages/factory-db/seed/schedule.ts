@@ -11,6 +11,7 @@ import {
 } from '../src/generated/prisma/enums'
 import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedProduction, type ProductionSeed } from './production'
+import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The W2a production and schedule seed (schema wave 5/7), per tenant of seed/_core.ts, written in the tenant's office
@@ -42,13 +43,13 @@ const T = {
   setup: new Date('2026-11-15T08:00:00.000Z'),
   planned: new Date('2026-11-15T14:00:00.000Z'),
   published: new Date('2026-11-15T16:00:00.000Z'),
-  moved: new Date('2026-11-16T07:00:00.000Z'),
-  inspected: new Date('2026-11-18T09:00:00.000Z'),
+  moved: seedAt('2026-11-16T07:00:00.000Z'),
+  inspected: seedAt('2026-11-18T09:00:00.000Z'),
 } as const
-const DAY = { from: new Date('2026-11-16T00:00:00.000Z'), to: new Date('2026-11-20T00:00:00.000Z') } as const
+const DAY = { from: seedAt('2026-11-16T00:00:00.000Z'), to: seedAt('2026-11-20T00:00:00.000Z') } as const
 /** 06:00 at the plant (Europe/Rome, CET) on the first day the floor works to v1. */
-const FLOOR_START = new Date('2026-11-16T05:00:00.000Z')
-const at = (day: number, hour: number): Date => new Date(Date.UTC(2026, 10, day, hour, 0, 0))
+const FLOOR_START = seedAt('2026-11-16T05:00:00.000Z')
+const at = (day: number, hour: number): Date => seedAt(new Date(Date.UTC(2026, 10, day, hour, 0, 0))) // B-W2b-F53
 
 export interface ScheduleSeed {
   readonly production: ProductionSeed
