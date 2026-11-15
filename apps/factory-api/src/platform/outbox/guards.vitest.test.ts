@@ -118,8 +118,8 @@ describe('check-event-contract', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
     // tax identities or colours moved, duplicate.merged): with B-W2b-406 (main fdb7cc920c) 934 → 935, 1470 → 1477.
     // B-W2b-415: six events (integration.error_opened, .error_retried, .error_dismissed, .account_tested, jobs.run_requested,
     // jobs.run_finished) and nine literal emits (the collector's opened and went-through, retry, the webhook's inbound_received
-    // again, dismiss, a test, Run now asked, a run failed, a Run now finished): with B-W2b-406 and B-W2b-427 (main a6ffff03d7) 935 → 941, 1477 → 1486.
-    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(941 declared event version\(s\), 1486 literal emit/) })
+    // again, dismiss, a test, Run now asked, a run failed, a Run now finished): with B-W2b-406, B-W2b-427 and B-W2b-435 (main 15a030a875) 942 → 948, 1486 → 1495.
+    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(948 declared event version\(s\), 1495 literal emit/) })
   })
 
   it.each<[string, Plants, RegExp]>([

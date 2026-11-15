@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
 import { AlarmClock, AlertOctagon, AlertTriangle, ArrowRight, AtSign, CalendarCheck, CalendarClock, CheckCircle2, ChevronRight, Circle, ExternalLink, Eye, ListTodo, MoreHorizontal, Sun, UserRound, X } from 'lucide-react'
 import { Banner, Card, EmptyState, Menu, MetricStrip, PressableRow, type Metric } from '@nexus/ui/components'
 import { Button, FilterChip, InfoTip, SegmentedControl, Skeleton, Tag } from '@nexus/ui/primitives'
@@ -55,6 +55,9 @@ import { KeyNumbersSection } from '../numbers/view/KeyNumbers'
 import { WaitingOn } from '../waiting-on/WaitingOn'
 import { Following } from '../following/Following'
 import { MyViews } from '../my-views/MyViews'
+// B-W2b-435: the flow's value per stage at cost (cost grain) and ⋯ Daily digest by e-mail.
+import { FlowValue } from '../flow-value/FlowValue'
+import { DigestDialog } from '../../reports/digest/DigestDialog'
 import { dayBeforeAt } from '../../../../shell/panels/remind-me/model'
 import '../today.css'
 
@@ -161,6 +164,8 @@ function Today({ model, actions }: { model: TodayViewModel; actions?: TodayActio
   const setLens = (next: string) => (actions?.onLens ? actions.onLens(next) : setOwnLens(next))
   // The dialogs: the container's (with their data), else the view's own (the design index).
   const [ownDialog, setOwnDialog] = useState<TodayDialog | null>(model.dialog)
+  // B-W2b-435: Today ⋯ Daily digest by e-mail (the owner digest panel in a dialog; only where the page has its container).
+  const [digestOpen, setDigestOpen] = useState(false)
   useEffect(() => setOwnDialog(model.dialog), [model.dialog])
   const dialog = actions?.onDialog ? model.dialog : ownDialog
   const openDialog = (next: DialogRequest | null) => {
@@ -288,6 +293,7 @@ function Today({ model, actions }: { model: TodayViewModel; actions?: TodayActio
           items={[
             { id: 'arrange', label: t('today.more.arrange'), onSelect: () => openDialog({ kind: 'arrange' }) },
             { id: 'print', label: t('today.more.print'), href: model.printHref, target: '_blank' },
+            ...(actions?.onTile ? [{ id: 'digest', label: t('today.more.digest'), onSelect: () => setDigestOpen(true) }] : []),
           ]}
         />
       </div>
@@ -507,7 +513,16 @@ function Today({ model, actions }: { model: TodayViewModel; actions?: TodayActio
       </section>
     ) : null
 
-  const node = { 'focus-strip': daySection, 'needs-me': needsSection, flow: flowSection, 'role-panels': listsSection } as const
+  // B-W2b-435: under the flow strip, its value per stage at cost (the container decides who sees it; only where the page has its container).
+  const flowLenses = model.flow?.status === 'ready' ? lensesInOrder(model.flow.data, model.layout.mainLens) : []
+  const shownLens = (flowLenses.find((entry) => entry.lens === lens) ?? flowLenses[0])?.lens ?? null
+  const flowWithValue = flowSection && actions?.onTile ? (
+    <Fragment key="flow">
+      {flowSection}
+      <FlowValue lens={shownLens} />
+    </Fragment>
+  ) : flowSection
+  const node = { 'focus-strip': daySection, 'needs-me': needsSection, flow: flowWithValue, 'role-panels': listsSection } as const
   const at = order.indexOf('needs-me')
   // Before "Needs me now": across the page. From it on: the work column, with My lists beside it (unless it came first).
   const head = order.slice(0, at).map((id) => node[id])
@@ -603,6 +618,7 @@ function Today({ model, actions }: { model: TodayViewModel; actions?: TodayActio
         }}
         onClose={() => openDialog(null)}
       />
+      {digestOpen && <DigestDialog onClose={() => setDigestOpen(false)} />}
     </div>
   )
 }

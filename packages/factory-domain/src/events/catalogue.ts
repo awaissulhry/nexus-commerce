@@ -323,6 +323,10 @@ import { events as integrationHealth } from '../integration-health/events'
 import { events as shippingContracts } from '../shipping-contracts/events'
 // B-W2b-406: a customer's own figures against ours (customer_figures.changed).
 import { events as receivablesFigures } from '../receivables-figures/events'
+// B-W2b-435: the owner digest and report e-mails (digest.changed, digest.switch_changed, digest.sent, report_subscription.changed, report_subscription.sent).
+import { events as insightsDigest } from '../insights-digest/events'
+// B-W2b-435: alert routes (alert.route_added, alert.route_removed).
+import { events as alertRoutes } from '../alert-routes/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -709,6 +713,9 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...shippingContracts,
   // B-W2b-406
   ...receivablesFigures,
+  // B-W2b-435
+  ...insightsDigest,
+  ...alertRoutes,
   // B-W2b-415
   ...integrationHealth,
 ] as const satisfies readonly EventDefinition[]

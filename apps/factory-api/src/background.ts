@@ -197,6 +197,9 @@ import { retentionSweepCron } from './platform/privacy/retention/sweep'
 // B-W2b-395: pickups and the day's close (the customer's collection delivered when it leaves; the day closed by the system).
 import { collectionDeliveredHandler } from './modules/shipping/collection/delivered'
 import { closeDaysCron } from './modules/shipping/manifest/close-days'
+// B-W2b-435: the owner digest (the morning e-mail) and "E-mail me this" for any report.
+import { ownerDigestCron } from './modules/insights/digest/mail'
+import { reportMailCron } from './modules/insights/reports/subscriptions'
 // B-W2b-415: every cron writes its run (and Run now, once in the cluster, for one tenant); the error queue's collector.
 import { recordedCrons } from './core/cron-runs'
 import { errorCollectorCron } from './platform/admin/errors/collect'
@@ -476,6 +479,9 @@ if (mode === 'worker') {
   crons.push(retentionSweepCron({ database, log }))
   // B-W2b-395: hourly at minute 50, the day sheets nobody closed are closed by the system once the site's day ended (the dock closes every day).
   crons.push(closeDaysCron({ database, log }))
+  // B-W2b-435: every 15 minutes, the morning e-mails due (only while the person's AND the company's switches are on: both OFF by
+  // default) and the report e-mails people asked for ("E-mail me this"), each read as its person.
+  crons.push(ownerDigestCron({ database, log }), reportMailCron({ database, log }))
   // B-W2b-415: every minute, failed messages in and out (dead events, failed webhooks, failed or refused calls, background jobs
   // out of tries) into the error queue, and items whose retry failed back to OPEN.
   crons.push(errorCollectorCron({ database, log, kit }))

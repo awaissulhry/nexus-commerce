@@ -1,0 +1,131 @@
+/*
+ * The owner digest (SCR-640, Home › Reports `digest` and Today's dialog) and "E-mail me this" (SCR-641) LAYOUT. The controls are
+ * the design system's; this file only places them, with semantic tokens (no colours of its own). No max-width of its own: the
+ * panel fills the page's width; the two columns sit side by side from 960 px, one under the other below.
+ */
+.fw-dig,
+.fw-dig-stack,
+.fw-dig-col,
+.fw-dig-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-dig-head {
+  gap: var(--nds-space-4);
+}
+
+.fw-dig-h,
+.fw-dig-h3 {
+  margin: 0;
+  font-size: var(--nds-font-size-lg);
+  font-weight: 600;
+}
+
+.fw-dig-h3 {
+  font-size: var(--nds-font-size-md);
+}
+
+.fw-dig-title,
+.fw-dig-row {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-dig-row--between {
+  display: flex;
+  justify-content: space-between;
+}
+
+.fw-dig-muted {
+  margin: 0;
+  color: var(--nds-text-muted);
+}
+
+.fw-dig-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+@media (min-width: 960px) {
+  .fw-dig-grid {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  }
+}
+
+.fw-dig-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: var(--nds-space-12);
+}
+
+.fw-dig-fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-dig-legend {
+  padding: 0;
+  font-weight: 600;
+}
+
+.fw-dig-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8) var(--nds-space-16);
+}
+
+.fw-dig-mail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-12) var(--nds-space-16);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-dig-mail p {
+  margin: 0;
+}
+
+.fw-dig-mail-subject {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  font-weight: 600;
+}
+
+.fw-dig-mail-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+.fw-dig-switches {
+  padding-top: var(--nds-space-12);
+  border-top: 1px solid var(--nds-border-subtle);
+}
+
+.fw-dig-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}

@@ -1,0 +1,288 @@
+{
+  "digest": {
+    "title": "Owner daily digest",
+    "intro": "Every morning's e-mail, previewed: yesterday's shipped and late orders, new orders, work stuck, alerts and approvals waiting.",
+    "loading": "Still loading…",
+    "failed": "The morning e-mail could not be read.",
+    "retry": "Try again",
+    "dismiss": "Dismiss",
+    "state": {
+      "on": "On",
+      "off": "Not going out"
+    },
+    "held": {
+      "off": "Your morning e-mail is off: turn it on with Edit.",
+      "mailOff": "The morning e-mail of this company is switched off: the owner switches it on.",
+      "testMailOff": "No company it covers has its morning e-mail switched on: the owner switches it on first.",
+      "offline": "Offline: try again when back online.",
+      "busy": "Still saving…",
+      "nothing": "Change something first.",
+      "time": "Write a time of day as HH:MM.",
+      "days": "Tick at least one weekday.",
+      "sections": "Tick at least one section."
+    },
+    "field": {
+      "when": "When",
+      "language": "Language",
+      "covers": "Covers",
+      "sections": "Lists",
+      "to": "Goes to",
+      "next": "Next",
+      "last": "Last sent"
+    },
+    "when": "{time} site time ({zone}) · {days}",
+    "days": {
+      "workdays": "Monday to Friday",
+      "every": "every day"
+    },
+    "day": {
+      "1": "Monday",
+      "2": "Tuesday",
+      "3": "Wednesday",
+      "4": "Thursday",
+      "5": "Friday",
+      "6": "Saturday",
+      "7": "Sunday"
+    },
+    "language": {
+      "it": "Italiano",
+      "en": "English"
+    },
+    "covers": {
+      "all_one": "Your company ({count})",
+      "all_other": "All your companies ({count})"
+    },
+    "section": {
+      "SHIPPED": "Shipped yesterday",
+      "LATE": "Late orders",
+      "NEW_ORDERS": "New orders",
+      "WIP_STUCK": "Work stuck",
+      "ALERTS": "Alerts",
+      "APPROVALS": "Approvals waiting"
+    },
+    "next": {
+      "none": "Not planned while it does not go out"
+    },
+    "last": {
+      "never": "Never sent"
+    },
+    "edit": "Owner digest settings",
+    "test": "Send me a test",
+    "never": "Figures per company, line and order, never per person. Money only with your rights.",
+    "form": {
+      "label": "Morning e-mail settings",
+      "enabled": "Send me this e-mail every morning",
+      "enabledOn": "It goes out every morning (while the company's morning e-mail is switched on).",
+      "enabledOff": "Off: nothing is sent to you.",
+      "time": "Time",
+      "timeHint": "On the site's clock ({zone}).",
+      "language": "Language",
+      "company": "Company",
+      "companyHint": "All your companies lists only those whose morning e-mail is switched on.",
+      "days": "Weekdays",
+      "sections": "Sections",
+      "noChanges": "No changes",
+      "changes_one": "1 change not saved",
+      "changes_other": "{count} changes not saved",
+      "save": "Save",
+      "saving": "Saving…"
+    },
+    "preview": {
+      "title": "Preview of today's e-mail",
+      "language": "Preview language",
+      "mail": "The e-mail as it would go out",
+      "to": "To:",
+      "failed": "The preview could not be read.",
+      "notSent": "Nothing goes out today: no company it covers has its morning e-mail switched on. This is what it would say.",
+      "leftOut": "Left out because of your rights: {sections}."
+    },
+    "switch": {
+      "title": "The morning e-mail of each company",
+      "intro": "Off until you switch it on: while a company's switch is off, nobody gets its morning e-mail, whoever turned theirs on.",
+      "label": "Morning e-mail of {company}",
+      "on": "{company}: switched on",
+      "off": "{company}: switched off",
+      "since": "since {at}"
+    },
+    "recipients": {
+      "title": "Who gets it",
+      "none": "Nobody has turned the morning e-mail on yet.",
+      "col": {
+        "person": "Person",
+        "company": "Company",
+        "time": "Time",
+        "language": "Language"
+      },
+      "me": "{name} (you)",
+      "group": "All their companies"
+    },
+    "done": {
+      "savedOn": "Saved: your morning e-mail is on.",
+      "savedOff": "Saved: your morning e-mail is off.",
+      "test": "Test sent to {to}.",
+      "switchOn": "The morning e-mail of {company} is switched on.",
+      "switchOff": "The morning e-mail of {company} is switched off."
+    },
+    "error": {
+      "read": "Couldn't read it. Try again.",
+      "forbidden": "This is not in your role.",
+      "offline": "The factory API could not be reached.",
+      "save": "Couldn't save it. Try again.",
+      "stale": "Someone changed it meanwhile: it was read again. Check it and save once more.",
+      "invalid": "Some settings are not valid: check the time, the weekdays and the sections.",
+      "mailOff": "The morning e-mail of this company is switched off: the owner switches it on first, then a test can go out.",
+      "notSent": "The test could not be sent: there is no verified sending address, or your address refuses mail."
+    },
+    "dialog": {
+      "title": "Daily digest by e-mail",
+      "close": "Close"
+    }
+  },
+  "emailMe": {
+    "title": "E-mail me this",
+    "intro": "Get this report by e-mail on the days and at the time you choose, with the filters below. It is run as you, with your rights, and sent to you only.",
+    "loading": "Still loading…",
+    "failed": "Your e-mail of this report could not be read.",
+    "state": {
+      "on": "E-mailed to you",
+      "paused": "Paused"
+    },
+    "summary": "Every {days} at {time} ({zone})",
+    "next": "next {at}",
+    "last": "last sent {at}",
+    "neverSent": "not sent yet",
+    "form": "E-mail me this report",
+    "time": "Time",
+    "timeHint": "On your company's clock.",
+    "reportDefault": "As the report starts: {value}",
+    "go": "E-mail me this",
+    "save": "Save changes",
+    "pause": "Pause",
+    "resume": "Resume",
+    "stop": "Stop e-mailing",
+    "rights": "Each e-mail runs the report again with your rights at that moment: what you may no longer see is not sent.",
+    "held": {
+      "nothing": "Change something first.",
+      "time": "Write a time of day as HH:MM.",
+      "days": "Tick at least one weekday."
+    },
+    "done": {
+      "subscribed": "Done: this report will come to you by e-mail.",
+      "saved": "Saved.",
+      "paused": "Paused: nothing is sent until you resume it.",
+      "resumed": "Resumed.",
+      "stopped": "Stopped: you no longer get this report by e-mail."
+    },
+    "error": {
+      "read": "Couldn't read it. Try again.",
+      "save": "Couldn't save it. Try again.",
+      "stale": "It changed in another window: it was read again. Check it and save once more.",
+      "forbidden": "You cannot run this report, so it cannot be e-mailed to you.",
+      "offline": "The factory API could not be reached.",
+      "invalid": "Some settings are not valid: check the time, the weekdays and the filters.",
+      "ownMail": "This report is e-mailed from its own page (Production › Reports)."
+    }
+  },
+  "wip": {
+    "title": "WIP ageing",
+    "intro": "Garments waiting at each stage and how long since their work order was last reported, by line, at {site}. Now: no history of stages is kept.",
+    "loading": "Still loading…",
+    "failed": "The work in progress could not be read.",
+    "empty": "Nothing is waiting at any stage.",
+    "emptyBody": "No work order in work has garments waiting at a stage now.",
+    "overall": "{workOrders} work orders in work · {waiting} garments waiting",
+    "old_one": "1 garment waited over 10 days",
+    "old_other": "{count} garments waited over 10 days",
+    "line": "{code} · {name}",
+    "noLine": "No line",
+    "noStage": "None waiting",
+    "pieces_one": "1 garment",
+    "pieces_other": "{value} garments",
+    "workOrders_one": "1 work order",
+    "workOrders_other": "{count} work orders",
+    "band": {
+      "D0_2": "0–2 days",
+      "D3_5": "3–5 days",
+      "D6_10": "6–10 days",
+      "D11_PLUS": "Over 10 days"
+    },
+    "longest": "Waited longest",
+    "col": {
+      "workOrder": "Work order",
+      "line": "Line",
+      "stages": "Waiting at",
+      "waited": "Waited"
+    },
+    "days_one": "1 day",
+    "days_other": "{count} days",
+    "foot": "Days since the work order's last report (else its start, else its release). Per line and stage, never per person or station.",
+    "error": {
+      "read": "Couldn't read it. Try again.",
+      "forbidden": "The work in progress is not in your role.",
+      "offline": "The factory API could not be reached."
+    }
+  },
+  "flowValue": {
+    "title": "Value at cost",
+    "label": "The work orders' value at cost per stage",
+    "workOrders_one": "(1 work order)",
+    "workOrders_other": "({count} work orders)",
+    "total": "In all {value}",
+    "mixed": "Value at cost: the companies keep different currencies, so no single amount is shown.",
+    "partial": "Only the first 5000 work orders are counted.",
+    "error": "The value at cost could not be read."
+  },
+  "routes": {
+    "title": "Goes to, by place",
+    "intro": "Who this rule tells at a company, a site, a line or a customer: the holders of a role there, or one person. An alert of a place a route covers goes to the routes' people.",
+    "none": "No route yet.",
+    "elsewhere": "Elsewhere the rule tells its own role, as its sentence says.",
+    "ruleRole": "Without a route the rule tells its own role, as its sentence says.",
+    "readOnly": "You may read the routes; changing them needs the right to keep the rules of this place.",
+    "noPlaces": "No place inside this rule to route.",
+    "scope": {
+      "COMPANY": "Company",
+      "SITE": "Site",
+      "LINE": "Line",
+      "CUSTOMER": "Customer"
+    },
+    "whoRole": "{role} there",
+    "who": {
+      "ROLE": "A role",
+      "PERSON": "One person"
+    },
+    "field": {
+      "scope": "At a",
+      "place": "Which",
+      "who": "Tell",
+      "role": "Role",
+      "person": "Person"
+    },
+    "customersCut": "Only the first 500 customers by name are listed.",
+    "add": "Add route",
+    "remove": "Remove the route at {place}",
+    "held": {
+      "offline": "Offline: try again when back online.",
+      "busy": "Still saving…",
+      "tooMany": "A rule keeps at most {max} routes.",
+      "place": "Choose a place.",
+      "who": "Choose whom to tell."
+    },
+    "done": {
+      "added": "Route added.",
+      "removed": "Route removed."
+    },
+    "error": {
+      "read": "Couldn't read the routes. Try again.",
+      "save": "Couldn't save the route. Try again.",
+      "place": "That place is outside the rule: choose one inside its company or site.",
+      "duplicate": "This rule already tells them at that place.",
+      "role": "Choose an office role that is not archived.",
+      "person": "Choose an active office person.",
+      "forbidden": "You may not change the rules of this place.",
+      "gone": "That route is gone already.",
+      "offline": "The factory API could not be reached.",
+      "conflict": "It changed meanwhile: read it again."
+    }
+  }
+}

@@ -1,5 +1,6 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import Link from 'next/link'
 import { ChevronLeft, ChevronRight, Mail, MoreHorizontal } from 'lucide-react'
 import { Banner, Card, EmptyState, Menu, MetricStrip, PerformanceGraph, SummaryTable } from '@nexus/ui/components'
@@ -34,6 +35,8 @@ export interface ReportsModel {
   readonly dialog: SubscribeModel | null
   /** B-W2b-130: Cutting and yield; absent: not drawn. */
   readonly cutYield?: YieldPanelModel
+  /** B-W2b-435 (prr-wip, ANA-015): WIP ageing by line — the container's (it reads its own data); absent: not drawn. */
+  readonly wipAgeing?: ReactNode
 }
 
 export interface ReportsActions extends SubscribeActions {
@@ -159,6 +162,8 @@ function Reports({ model, actions }: { model: ReportsModel; actions?: ReportsAct
           <YieldPanel model={model.cutYield} actions={{ onDays: actions?.onYieldDays, onRetry: actions?.onRetryYield }} />
         </Card>
       )}
+
+      {model.wipAgeing}
 
       {model.dialog && <SubscribeDialog model={model.dialog} actions={actions} />}
     </div>

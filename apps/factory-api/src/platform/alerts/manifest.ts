@@ -18,6 +18,10 @@ export const manifest = defineManifest({
   'PUT /alerts/rules/:id': { audiences: ['office'], permission: 'alerts.rules.manage', scope: 'record' },
   'POST /alerts/rules/:id/test': { audiences: ['office'], permission: 'alerts.view', scope: 'record' },
   'GET /alerts/rules/:id/timers': { audiences: ['office'], permission: 'alerts.rules.manage', scope: 'record' },
+  // B-W2b-435 (ANA-041): a rule's routes (seeing: alerts.view over its place; adding and removing: alerts.rules.manage there).
+  'GET /alerts/rules/:id/routes': { audiences: ['office'], permission: 'alerts.view', scope: 'record' },
+  'POST /alerts/rules/:id/routes': { audiences: ['office'], permission: 'alerts.rules.manage', scope: 'record' },
+  'DELETE /alerts/routes/:routeId': { audiences: ['office'], permission: 'alerts.rules.manage', scope: 'record' },
   'GET /alerts/:id': { audiences: ['office'], permission: 'alerts.view', scope: 'record' },
   // B-W2a-78: who the alert may be given to (the reader handles it there).
   'GET /alerts/:id/assignees': { audiences: ['office'], permission: 'alerts.handle', scope: 'record' },

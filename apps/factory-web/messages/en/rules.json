@@ -95,7 +95,9 @@
   },
   "goesTo": {
     "at": "{role} at {place}",
-    "everywhere": "{role}, everywhere"
+    "everywhere": "{role}, everywhere",
+    "routes_one": "{text} · and 1 route by place",
+    "routes_other": "{text} · and {count} routes by place"
   },
   "dialog": {
     "title": "Rule: {kind}",
