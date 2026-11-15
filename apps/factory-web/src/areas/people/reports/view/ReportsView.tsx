@@ -287,9 +287,15 @@ function AttendancePanel({ model, actions }: Props) {
 
   const noSite = !model.scope.siteId
   const gateOff = sight.status === 'ready' && !sight.value.open
+  // B-W2b-F56: a part that holds a state in words reads nothing: its count is not "Loading…" (the gate off, no site, a failure
+  // of the gate's own read or of the report).
+  const sightFailed = sight.status === 'error'
+  const held = noSite || gateOff || sightFailed || read.status === 'error'
   const match = report ? matchWords(report.match, report.month, locale) : null
   const state = noSite ? (
     <EmptyState title={t('attendance.pickSite')} description={t('attendance.pickSiteBody')} />
+  ) : sight.status === 'error' ? (
+    <Failed title={t('attendance.failed')} problem={sight.problem} onRetry={actions?.onRetrySight} />
   ) : gateOff ? (
     <EmptyState
       title={t('attendance.gateOff')}
@@ -325,10 +331,10 @@ function AttendancePanel({ model, actions }: Props) {
       <ListFrame<GroupRow>
         label={t('attendance.tableLabel')}
         title={t('section.attendance')}
-        rows={noSite || gateOff || read.status === 'error' ? [] : shown}
+        rows={held ? [] : shown}
         rowId={(row) => row.id ?? 'none'}
         columns={columns}
-        count={shown ? t('attendance.count', { count: shown.length }) : t('common.loading')}
+        count={shown ? t('attendance.count', { count: shown.length }) : held ? null : t('common.loading')}
         search={<Input type="search" size="sm" aria-label={t('common.search')} placeholder={t('common.search')} value={q} onChange={(event) => setQ(event.target.value)} />}
         listKey="people.reports.attendance"
         tools={

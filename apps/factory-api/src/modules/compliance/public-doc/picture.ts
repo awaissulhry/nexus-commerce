@@ -6,11 +6,10 @@ import { DomainError, NotFoundError } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import { isStrippable } from '@nexus/factory-domain/files/thumbs/strip'
 import { abuseGuardOf } from '../../../platform/abuse/guard'
-import { systemCallerOf } from '../../../platform/files/files'
+import { MissingFileError, readStoredFile, systemCallerOf } from '../../../platform/files/files'
 import { KIND_RULES } from '../../../platform/files/rules'
 import { processFiles } from '../../../platform/files/service'
 import { makeStrippedCopy } from '../../../platform/files/thumbs/strip-copy'
-import { GatewayCallFailed, GatewayRefusal } from '../../../platform/gateway/gateway'
 import { mainPictures } from '../../product/images/main-picture'
 import type { CodeMatch } from './facts'
 
@@ -93,18 +92,14 @@ export async function publicDocPicture(
   const made = row.thumbnailKey ? { outcome: 'exists' as const, key: row.thumbnailKey } : await makeStrippedCopy(processFiles(), system, fileId)
   // The store did not answer (paused, rate-limited): try again later (503); never the office's file instead.
   if (!made.key && made.outcome === 'store_unavailable') throw notReady()
+  // B-W2b-F56: the picture's bytes are missing from the store: 404 in words (the page shows its placeholder), never 503.
+  if (!made.key && made.outcome === 'missing') throw new MissingFileError()
   // A picture that cannot be stripped is not shown at all.
   if (!made.key) throw new NotFoundError(NOT_FOUND)
   const key = made.key
   const kept = cache.get(`${owner.match.tenantId}:${key}`)
   if (kept) return remember(`${owner.match.tenantId}:${key}`, kept)
-  let bytes: Buffer | null
-  try {
-    bytes = await processFiles().storage.read(system, row.storeAccountId, key, KIND_RULES.PHOTO.maxBytes)
-  } catch (error) {
-    if (error instanceof GatewayRefusal || error instanceof GatewayCallFailed) throw notReady()
-    throw error
-  }
-  if (!bytes) throw notReady()
+  // B-W2b-F56: the stripped copy missing from the store is 404 (the page shows its placeholder), the store not answering 503.
+  const bytes = await readStoredFile(processFiles(), system, { storeAccountId: row.storeAccountId, storageKey: key }, KIND_RULES.PHOTO.maxBytes)
   return remember(`${owner.match.tenantId}:${key}`, { bytes, contentType: row.contentType })
 }

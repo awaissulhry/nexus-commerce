@@ -170,7 +170,8 @@ export function AlertsList({ model, actions }: { model: RulesModel; actions?: Al
           rows={model.alerts.problem ? [] : rows}
           rowId={(row) => row.id}
           columns={columns}
-          count={!alerts ? t('common.loading') : t('alerts.count', { count: alerts.rules.length })}
+          // B-W2b-F56: a list that could not be read is not "Loading…".
+          count={model.alerts.problem ? null : !alerts ? t('common.loading') : t('alerts.count', { count: alerts.rules.length })}
           selection={{ selected: model.selected, onChange: (ids) => actions?.onSelect?.(ids), actions: bulk }}
           keys={keys}
           onHelp={() => actions?.onKeys?.()}

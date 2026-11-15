@@ -2,7 +2,7 @@ import type { AdapterAccount } from '@nexus/factory-domain/ports/provider'
 import type { CommandCaller } from '../../core/command'
 import { gatewayAccount, ProviderError, type Gateway } from '../gateway/gateway'
 import type { DownloadTarget, FileStoreAdapter, PresignedRequest, PutTarget, StoredObject, UploadTarget } from './port'
-import { deleteBlockers } from './rules'
+import { deleteBlockers, isStorageKey } from './rules'
 
 /**
  * The file store behind the gateway (plan A1 §4; Commerce hard rule 4 for the factory): each store operation is ONE
@@ -58,8 +58,10 @@ export function fileStorage(gateway: Gateway, adapters: FileStoreAdapters): File
       gateway.call(gatewayAccount(caller, accountId), { name: 'files.presign_download', idempotent: true, request: { key: target.key } }, (call) =>
         adapterFor(call.account).presignDownload(call, target),
       ),
-    head: (caller, accountId, key) =>
-      gateway.call(gatewayAccount(caller, accountId), { name: 'files.head', idempotent: true, request: { key } }, (call) => adapterFor(call.account).head(call, key)),
+    // B-W2b-F56: a key storageKeyFor could not have made holds no object: null at once. Sent on, the store refuses the key,
+    // the gateway counts that as a failed call and enough of them open the account's circuit: every file call an outage.
+    head: async (caller, accountId, key) =>
+      isStorageKey(key) ? gateway.call(gatewayAccount(caller, accountId), { name: 'files.head', idempotent: true, request: { key } }, (call) => adapterFor(call.account).head(call, key)) : null,
     put: (caller, accountId, target) =>
       gateway.call(
         gatewayAccount(caller, accountId),
@@ -71,7 +73,10 @@ export function fileStorage(gateway: Gateway, adapters: FileStoreAdapters): File
       if (blockers.length > 0) throw new RetainedFileError(`The object is retained; deleting it needs ${blockers.join(' and ')}.`)
       await gateway.call(gatewayAccount(caller, accountId), { name: 'files.delete', idempotent: true, request: { key: file.key } }, (call) => adapterFor(call.account).remove(call, file.key))
     },
-    read: (caller, accountId, key, maxBytes) =>
-      gateway.call(gatewayAccount(caller, accountId), { name: 'files.read', idempotent: true, request: { key, maxBytes } }, (call) => adapterFor(call.account).read(call, key, maxBytes)),
+    // B-W2b-F56: as head, a key no upload could have made reads as no object (null), never a failed store call.
+    read: async (caller, accountId, key, maxBytes) =>
+      isStorageKey(key)
+        ? gateway.call(gatewayAccount(caller, accountId), { name: 'files.read', idempotent: true, request: { key, maxBytes } }, (call) => adapterFor(call.account).read(call, key, maxBytes))
+        : null,
   } satisfies FileStorage)
 }

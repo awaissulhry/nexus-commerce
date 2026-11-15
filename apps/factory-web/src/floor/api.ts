@@ -137,11 +137,16 @@ async function attempt<T>(run: () => Promise<T>, meanings?: Meanings): Promise<O
 
 // ---- the device ----
 
+// B-W2b-F56: a browser with no device token at all is told so (200, `device: null`): not a floor device yet, no 401 logged.
+const notADevice = z.object({ device: z.null(), words: z.string() })
+
 /** The enrolled device, or null when this browser holds no live device token. */
 export async function fetchDevice(api: ApiClient): Promise<Outcome<DeviceInfo | null>> {
   try {
-    return { ok: true, value: await api.get('/floor/device', { schema: deviceInfoSchema }) }
+    const answer = await api.get('/floor/device', { schema: z.union([notADevice, deviceInfoSchema]) })
+    return { ok: true, value: answer.device === null ? null : (answer as DeviceInfo) }
   } catch (error) {
+    // A device token that is there but refused (revoked, or the device enrolled again elsewhere): the enrol page too.
     if (isApiError(error) && error.kind === 'signed_out') return { ok: true, value: null }
     return problemOf(error)
   }
@@ -155,6 +160,18 @@ export async function fetchMe(api: ApiClient): Promise<Outcome<FloorMe | null>> 
     if (isApiError(error) && (error.kind === 'signed_out' || error.kind === 'forbidden')) return { ok: true, value: null }
     return problemOf(error)
   }
+}
+
+/**
+ * B-W2b-F56: what the app knows at its start: the device, then its operator ONLY when the device says someone is signed in
+ * on it (`operatorSignedIn`): before a sign-in nothing answers 401 for the browser to log.
+ */
+export async function fetchFloorState(api: ApiClient): Promise<Outcome<{ device: DeviceInfo | null; me: FloorMe | null }>> {
+  const device = await fetchDevice(api)
+  if (!device.ok) return device
+  if (!device.value?.operatorSignedIn) return { ok: true, value: { device: device.value, me: null } }
+  const me = await fetchMe(api)
+  return me.ok ? { ok: true, value: { device: device.value, me: me.value } } : me
 }
 
 export function enrolDevice(api: ApiClient, code: string, appVersion: string): Promise<Outcome<DeviceInfo>> {
