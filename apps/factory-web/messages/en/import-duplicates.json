@@ -1,0 +1,192 @@
+{
+  "dup": {
+    "retry": "Try again",
+    "reason": {
+      "SAME_VAT_NUMBER": "Same VAT number",
+      "SAME_FISCAL_CODE": "Same tax code",
+      "SAME_CODE": "Same code",
+      "SAME_SUPPLIER_CODE": "Same supplier article code",
+      "SAME_NAME": "Same name",
+      "SIMILAR_NAME": "Similar name ({score}%)",
+      "SAME_EMAIL_DOMAIN": "Same e-mail domain {detail}",
+      "SAME_WEBSITE": "Same website {detail}"
+    },
+    "status": {
+      "PROSPECT": "Prospect",
+      "ACTIVE": "Active",
+      "BLOCKED": "Blocked",
+      "ARCHIVED": "Archived",
+      "OTHER": "Other state"
+    },
+    "likelihood": {
+      "HIGH": "Very likely",
+      "MEDIUM": "Possible"
+    },
+    "refusal": {
+      "SAME_RECORD": "A record cannot be merged into itself.",
+      "KEPT_ARCHIVED": "{kept} is archived: reactivate it before merging into it.",
+      "DROPPED_ARCHIVED": "{dropped} is archived already.",
+      "DROPPED_BLOCKED": "{dropped} is blocked: unblock it first, so the block is never lost.",
+      "KIND_DIFFERS": "{dropped} and {kept} are different kinds of material.",
+      "OTHER_COMPANY": "{dropped} and {kept} belong to different companies.",
+      "EVERY_COMPANY": "{dropped} is for every company: it can only be merged into another record for every company.",
+      "IN_USE": "{dropped} is already used by other records: they keep it, so it cannot be archived into {kept}.",
+      "NO_RIGHT": "Merging needs the merge right and the right to change both records."
+    },
+    "use": {
+      "SALES_one": "Sales: {count} record (quotes, orders, returns …)",
+      "SALES_other": "Sales: {count} records (quotes, orders, returns …)",
+      "MONEY_one": "Money: {count} record (invoices, payments …)",
+      "MONEY_other": "Money: {count} records (invoices, payments …)",
+      "PURCHASING_one": "Purchasing: {count} record (purchase orders, receipts …)",
+      "PURCHASING_other": "Purchasing: {count} records (purchase orders, receipts …)",
+      "STOCK_one": "Stock: {count} record (lots, movements, shipments …)",
+      "STOCK_other": "Stock: {count} records (lots, movements, shipments …)",
+      "PRODUCTION_one": "Production: {count} record",
+      "PRODUCTION_other": "Production: {count} records",
+      "PRODUCTS_one": "Products: {count} record (styles, BOM lines, certificates …)",
+      "PRODUCTS_other": "Products: {count} records (styles, BOM lines, certificates …)",
+      "QUALITY_one": "Quality and plant: {count} record",
+      "QUALITY_other": "Quality and plant: {count} records",
+      "PORTAL_one": "Portal and links: {count} record (users, mail, shared records …)",
+      "PORTAL_other": "Portal and links: {count} records (users, mail, shared records …)",
+      "PEOPLE_one": "People: {count} record",
+      "PEOPLE_other": "People: {count} records",
+      "OTHER_one": "Other: {count} record",
+      "OTHER_other": "Other: {count} records"
+    },
+    "moves": {
+      "contacts_one": "{count} contact",
+      "contacts_other": "{count} contacts",
+      "addresses_one": "{count} address",
+      "addresses_other": "{count} addresses",
+      "taxIdentities_one": "{count} tax identity (VAT number, tax code)",
+      "taxIdentities_other": "{count} tax identities (VAT number, tax code)",
+      "colours_one": "{count} colour",
+      "colours_other": "{count} colours"
+    },
+    "stays": {
+      "contacts_one": "{count} contact (archived, used elsewhere, or with an e-mail the other already has)",
+      "contacts_other": "{count} contacts (archived, used elsewhere, or with an e-mail the other already has)",
+      "addresses_one": "{count} address (archived, refused or used elsewhere)",
+      "addresses_other": "{count} addresses (archived, refused or used elsewhere)",
+      "taxIdentities_one": "{count} tax identity (the other has its own, or it carries VIES checks)",
+      "taxIdentities_other": "{count} tax identities (the other has its own, or they carry VIES checks)",
+      "colours_one": "{count} colour (the other has its code, or it is used elsewhere)",
+      "colours_other": "{count} colours (the other has their codes, or they are used elsewhere)"
+    },
+    "held": {
+      "noRight": "Merging needs the merge right and the right to change both records.",
+      "archived": "One of the two is archived.",
+      "blocked": "The duplicate is blocked: unblock it first.",
+      "loading": "Still reading what the merge would do…",
+      "refused": "This merge cannot go ahead: see why above.",
+      "busy": "Merging…",
+      "reason": "Say why they are the same record (at least 3 characters).",
+      "noneMergeable": "None of the selected pairs can be merged."
+    },
+    "problem": {
+      "conflict": "One of the two records changed, or can no longer be merged: look at the merge again.",
+      "forbidden": "Your role may not do this.",
+      "notFound": "One of the two records is no longer there, or you may not see it.",
+      "invalid": "Something in the request is not right: look at it again.",
+      "busy": "The system is busy: try again in a moment.",
+      "other": "Something went wrong: try again."
+    },
+    "create": {
+      "title_one": "A record like this one may exist already",
+      "title_other": "{count} records like this one may exist already",
+      "taxTaken": "This VAT number or tax code belongs to a party already",
+      "listLabel": "Records that look like this one",
+      "taxTakenHint": "One record per business partner: open that party and give it the role it lacks, instead of creating a second one.",
+      "hintParty": "Open it in a new tab to check. If it is the same customer or supplier, use it: a second record splits its orders and its credit. If you create it anyway, you can merge the two later in Admin › Import & export.",
+      "hintMaterial": "Open it in a new tab to check. If it is the same material, use it. If you create it anyway, you can merge the two later in Admin › Import & export."
+    },
+    "merge": {
+      "title": "Merge {dropped} into {kept}?",
+      "subtitle": "One record stays, the other is archived. Nothing is deleted.",
+      "cancel": "Cancel",
+      "go": "Merge into {kept}",
+      "stays": "Stays",
+      "archived": "Is archived",
+      "refusedTitle": "These two cannot be merged",
+      "usesLabel": "What uses {dropped}",
+      "inUseHint": "Orders, invoices and other documents always keep the record they were made for. Keep using one of the two and archive the other once nothing is open on it.",
+      "swap": "Keep {dropped} instead",
+      "movesTitle": "Moves to {kept}",
+      "nothingMoves": "Nothing moves: the duplicate has nothing of its own the other lacks.",
+      "staysTitle": "Stays on {dropped}, archived",
+      "history": "Its files, notes, custom fields and history stay on it: it still opens.",
+      "reason": "Why are they the same record?",
+      "reasonHint": "From {min} to {max} characters, kept in the history of both records.",
+      "never": "A merge is never undone by itself: to use the archived record again, reactivate it."
+    },
+    "import": {
+      "title": "Possible duplicates",
+      "failed": "The possible duplicates could not be read.",
+      "count_one": "Possible duplicates: {count} new row",
+      "count_other": "Possible duplicates: {count} new rows",
+      "checkHint": "These new rows look like records already there, or like an earlier row of this sheet. Nothing has been written yet: to update a record instead, put its code in the sheet and import it again; or apply, and merge them afterwards.",
+      "resultHint": "These new records look like records already there, or like another row of this sheet. Merge each one you know is the same: the other record stays.",
+      "merge": "Merge…",
+      "notMade": "Not created",
+      "sameSheet": "Row {row} of this sheet",
+      "more": "Only the first {count} new rows were checked."
+    },
+    "col": {
+      "row": "Row",
+      "sheet": "In the sheet",
+      "looksLike": "Looks like",
+      "why": "Why",
+      "action": "Action"
+    },
+    "list": {
+      "title": "Possible duplicates",
+      "intro": "Records that look alike: the same VAT number or code, a similar name, the same e-mail domain. The older record is first: it usually stays. A merge is always your decision.",
+      "tableLabel": "Possible duplicates",
+      "typeLabel": "Which records",
+      "type": {
+        "PARTY": "Customers and suppliers",
+        "MATERIAL": "Materials"
+      },
+      "count_one": "{count} pair · {compared} records compared",
+      "count_other": "{count} pairs · {compared} records compared",
+      "col": {
+        "kept": "Stays",
+        "duplicate": "Duplicate",
+        "why": "Why",
+        "likelihood": "How likely",
+        "actions": "Actions"
+      },
+      "merge": "Merge…",
+      "mergeOne": "Merge {dropped} into {kept}",
+      "mergeMany_one": "Merge {count}",
+      "mergeMany_other": "Merge {count}",
+      "failed": "The possible duplicates could not be read",
+      "empty": {
+        "PARTY": "No customers or suppliers look alike",
+        "MATERIAL": "No materials look alike"
+      },
+      "emptyBody": "Records are compared by VAT number, code, name, e-mail domain and website.",
+      "more": "The {count} likeliest pairs are shown: merge them to see the others."
+    },
+    "notice": {
+      "merged_one": "{merged} duplicate merged.",
+      "merged_other": "{merged} duplicates merged.",
+      "none": "Nothing was merged: the records changed meanwhile ({refused}). Look at them again.",
+      "partial": "{merged} merged; {refused} not merged because the records changed meanwhile."
+    },
+    "bulk": {
+      "title_one": "Merge {count} pair?",
+      "title_other": "Merge {count} pairs?",
+      "go_one": "Merge {count}",
+      "go_other": "Merge {count}",
+      "body": {
+        "PARTY": "In each pair the older record stays; the duplicate's free contacts, addresses and tax identity move to it and the duplicate is archived.",
+        "MATERIAL": "In each pair the older material stays; the duplicate's free colours move to it and the duplicate is archived."
+      },
+      "listLabel": "The pairs merged",
+      "line": "{dropped} into {kept}"
+    }
+  }
+}

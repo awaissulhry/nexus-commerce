@@ -6,7 +6,7 @@ import { Banner, Field } from '@nexus/ui/components'
 import { Button, Checkbox, Input, Kbd, SegmentedControl, Select, Spinner, Tag } from '@nexus/ui/primitives'
 import { DateField, Modal, Textarea } from '../../../../lib/i18n/ds-parts'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
-import { ADDRESS_KINDS, CONTACT_ROLES, PARTY_TAX_MODES, type PartyRole, type PartyRow, type TaxMode } from '../api'
+import { ADDRESS_KINDS, CONTACT_ROLES, PARTY_TAX_MODES, type PartyRole, type TaxMode } from '../api'
 import {
   addressDraftProblems,
   blankAddress,
@@ -33,12 +33,15 @@ import {
   type BulkRun,
   type ContactDraft,
   type IdentityDraft,
+  type DuplicateParty,
   type NewPartyDraft,
   type PartyDraft,
   type Problems,
   type Side,
 } from '../model'
 import { RoleTags, StatusPill } from './parts'
+// B-W2b-427: why a likely duplicate looks alike, in the duplicates' own words.
+import { ReasonTags } from '../../../admin/import/duplicates/view/parts'
 
 /**
  * The dialogs of the customers' and suppliers' pages (design: customers.new / block / identity / archive, the address and
@@ -347,8 +350,8 @@ function Footer({ onCancel, submit, label, held, busy }: { onCancel: () => void;
 // ---- New customer / supplier ------------------------------------------------------------------------------------------
 
 export interface NewPartyActions {
-  /** Look for parties with this VAT number or name (the duplicate warning). */
-  onLookup?: (q: string) => void
+  /** The duplicate warning: the draft as typed, checked for likely duplicates (VAT number, codice fiscale, name; B-W2b-427). */
+  onLookup?: (draft: NewPartyDraft) => void
   /** Resolve true when created. */
   onCreate?: (draft: NewPartyDraft) => Promise<boolean>
   onClose?: () => void
@@ -373,7 +376,7 @@ export function NewPartyModal({
   busy?: boolean
   problem?: string | null
   refused?: readonly string[]
-  duplicates?: readonly PartyRow[]
+  duplicates?: readonly DuplicateParty[]
   canVies: boolean
   initial?: NewPartyDraft
   /** The companies the person works in: asked "belongs to" only when there are several. */
@@ -416,6 +419,7 @@ export function NewPartyModal({
                 </Link>
                 <RoleTags roles={row.roles} />
                 <StatusPill status={row.status} />
+                {row.reasons && row.reasons.length > 0 && <ReasonTags reasons={row.reasons} />}
               </li>
             )
           })}
@@ -453,7 +457,7 @@ export function NewPartyModal({
             leave={(field) => {
               form.leave(field)
               const typed = field === 'identity.vatNumber' ? draft.identity.vatNumber : field === 'identity.fiscalCode' ? draft.identity.fiscalCode : ''
-              if (typed.trim().length >= 5) actions?.onLookup?.(typed.trim())
+              if (typed.trim().length >= 5) actions?.onLookup?.(draft)
             }}
             onChange={(identity) => {
               const country = identity.country
@@ -476,7 +480,7 @@ export function NewPartyModal({
             shown={form.shown}
             leave={(field) => {
               form.leave(field)
-              if (field === 'legalName' && draft.party.legalName.trim().length >= 4) actions?.onLookup?.(draft.party.legalName.trim())
+              if ((field === 'legalName' || field === 'tradeName') && (draft.party.legalName.trim().length >= 4 || draft.party.tradeName.trim().length >= 4)) actions?.onLookup?.(draft)
             }}
             onChange={(party) => {
               if (party.code !== draft.party.code) setDraft((current) => ({ ...current, party, codeTouched: true }))

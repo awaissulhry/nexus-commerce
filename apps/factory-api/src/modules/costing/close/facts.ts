@@ -1,6 +1,8 @@
 import { toMinorUnits } from '@nexus/factory-domain/core/money'
 import { beyondOf, type Beyond, type CloseFigures } from '@nexus/factory-domain/costing/close/rules'
 import type { WaitingView } from '@nexus/factory-domain/costing/ledger/contracts'
+// B-W2b-F46
+import type { EntryDraft } from '@nexus/factory-domain/costing/ledger/entries'
 import { actualOf, standardOfCells } from '@nexus/factory-domain/costing/ledger/variance'
 import { outputStandard, splitVariances, type Split, type SplitEntry } from '@nexus/factory-domain/costing/variances/split'
 import { decimalOf, decimalText } from '@nexus/factory-domain/product/units/units'
@@ -40,6 +42,9 @@ export interface CloseFacts {
   /** Cost entries the ledger lacks (the close posts them first) and what cannot post yet. */
   readonly toPost: number
   readonly waiting: readonly WaitingView[]
+  // B-W2b-F46
+  /** Those entries themselves (on a CLOSED work order: the costs that arrived after the close, ../actual/after-close.ts). */
+  readonly drafts: readonly EntryDraft[]
 }
 
 /** The good garments made per cell: the final operation's scans, else the finished-goods receipts. */
@@ -125,5 +130,7 @@ export async function closeFactsOf(db: Reader, workOrder: CostedWorkOrder, now: 
     itemIds: unique(split.lines.map((line) => line.itemId)),
     toPost: plan.drafts.length,
     waiting: plan.waiting,
+    // B-W2b-F46
+    drafts: plan.drafts,
   }
 }

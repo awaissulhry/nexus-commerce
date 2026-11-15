@@ -1,0 +1,46 @@
+/*
+ * Anonymise …? (SCR-661) LAYOUT: the sections stacked, each review the DS ChangeReview. Semantic tokens only.
+ */
+.fw-dper {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-dper-intro {
+  margin: 0;
+  color: var(--nds-text-strong);
+}
+
+.fw-dper-muted {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-dper-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-dper-h3 {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-dper-status {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}

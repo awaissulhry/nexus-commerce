@@ -184,6 +184,7 @@
       "receivables": "Receivables & credit",
       "payablesGroup": "Payables & bank",
       "payables": "Supplier invoices",
+      "bank": "Bank",
       "costingGroup": "Costing",
       "costing": "Standard vs actual",
       "margins": "Margins",

@@ -30,7 +30,7 @@ import {
   noticeHref,
   publicAddress,
   REGISTER_FILTERS,
-  VIEWS,
+  viewsFor,
   type DutyLine,
   type Phrase,
   type PrivacyViewModel,
@@ -42,6 +42,17 @@ import { PrivacyDialogs, type DialogActions } from './PrivacyDialogs'
 import '../privacy.css'
 
 export type { PrivacyViewModel } from '../model'
+
+/**
+ * B-W2b-414: the data-protection parts the page container mounts (each loads itself): Data requests and Retention rules as the
+ * lists 4 and 5, their two duty lines, and New data request in the head (the primary).
+ */
+export interface PrivacySlots {
+  requests?: ReactNode
+  retention?: ReactNode
+  duties?: ReactNode
+  newRequest?: ReactNode
+}
 
 export interface PrivacyActions extends DialogActions {
   onPeopleRulesRetry?: () => void
@@ -83,10 +94,10 @@ export function PrivacyMessages({ children }: { children?: ReactNode }) {
  * text is a SAMPLE until the privacy consultant writes the real ones, and the page says so at rest. Keys: 1–3 the lists,
  * n a new notice version, ? the keys.
  */
-export function PrivacyView({ model, actions }: { model: PrivacyViewModel; actions?: PrivacyActions }) {
+export function PrivacyView({ model, actions, slots }: { model: PrivacyViewModel; actions?: PrivacyActions; slots?: PrivacySlots }) {
   return (
     <PrivacyMessages>
-      <Privacy model={model} actions={actions} />
+      <Privacy model={model} actions={actions} slots={slots} />
     </PrivacyMessages>
   )
 }
@@ -98,8 +109,9 @@ export const STATUS_TONE = { DRAFT: 'info', PUBLISHED: 'success', SUPERSEDED: 'n
 /** A calendar day ("2026-11-16") as a moment at noon UTC (no zone moves it to another day). */
 const dayAt = (day: string) => `${day}T12:00:00Z`
 
-function Privacy({ model, actions }: { model: PrivacyViewModel; actions?: PrivacyActions }) {
+function Privacy({ model, actions, slots }: { model: PrivacyViewModel; actions?: PrivacyActions; slots?: PrivacySlots }) {
   const t = useT('privacy')
+  const views = viewsFor(model.can)
   const admin = useT('admin')
   const locale = useLocale()
   const place = { locale, timeZone: model.timeZone }
@@ -110,10 +122,10 @@ function Privacy({ model, actions }: { model: PrivacyViewModel; actions?: Privac
       const target = event.target as HTMLElement | null
       if (event.metaKey || event.ctrlKey || event.altKey || model.dialog || model.stepUp.open) return
       if (target && (target.closest('input, textarea, select, [contenteditable="true"], [role="dialog"], [role="menu"]') || target.isContentEditable)) return
-      const index = ['1', '2', '3'].indexOf(event.key)
+      const index = views.findIndex((_, at) => String(at + 1) === event.key)
       if (index >= 0) {
         event.preventDefault()
-        actions?.onView?.(VIEWS[index]!)
+        actions?.onView?.(views[index]!)
       } else if (event.key === 'n' && model.can.manage) {
         event.preventDefault()
         actions?.onNewNotice?.()
@@ -174,8 +186,9 @@ function Privacy({ model, actions }: { model: PrivacyViewModel; actions?: Privac
               : [{ id: 'public', label: t('pv.page.openPublic'), disabled: true, title: t('pv.page.noPublic') }]),
           ]}
         />
+        {slots?.newRequest}
         {model.can.manage && (
-          <Button size="sm" variant="primary" onClick={() => actions?.onNewNotice?.()} heldReason={overview ? null : t('pv.held.noCompany')}>
+          <Button size="sm" variant={slots?.newRequest ? 'secondary' : 'primary'} onClick={() => actions?.onNewNotice?.()} heldReason={overview ? null : t('pv.held.noCompany')}>
             <Plus size={14} aria-hidden /> {t('pv.page.newNotice')}
           </Button>
         )}
@@ -236,17 +249,19 @@ function Privacy({ model, actions }: { model: PrivacyViewModel; actions?: Privac
         </Card>
       ) : (
         <>
-          <Duties model={model} overview={overview} lines={lines} actions={actions} />
+          <Duties model={model} overview={overview} lines={lines} actions={actions} more={slots?.duties} />
           {model.can.peopleRules && <PeopleRulesPanel prefix={model.prefix} read={model.peopleRules} {...(actions?.onPeopleRulesRetry ? { onRetry: actions.onPeopleRulesRetry } : {})} />}
           <SegmentedControl
             ariaLabel={t('pv.views.label')}
             value={model.view}
             onChange={(value) => actions?.onView?.(value as PrivacyViewName)}
-            options={VIEWS.map((view, index) => ({ value: view, label: t(`pv.views.${view}`), title: t('pv.views.key', { key: index + 1 }) }))}
+            options={views.map((view, index) => ({ value: view, label: t(`pv.views.${view}`), title: t('pv.views.key', { key: index + 1 }) }))}
           />
           {model.view === 'notices' && <NoticesView model={model} actions={actions} />}
           {model.view === 'dpia' && <DpiaView model={model} actions={actions} />}
           {model.view === 'register' && <RegisterView model={model} actions={actions} />}
+          {model.view === 'requests' && model.can.requests && slots?.requests}
+          {model.view === 'retention' && slots?.retention}
         </>
       )}
       <PrivacyDialogs model={model} actions={actions} />
@@ -266,7 +281,7 @@ function Privacy({ model, actions }: { model: PrivacyViewModel; actions?: Privac
 
 // ---- the duties and the floor gate -----------------------------------------------------------------------------------------
 
-function Duties({ model, overview, lines, actions }: { model: PrivacyViewModel; overview: CompanyOverview; lines: readonly DutyLine[]; actions?: PrivacyActions }) {
+function Duties({ model, overview, lines, actions, more }: { model: PrivacyViewModel; overview: CompanyOverview; lines: readonly DutyLine[]; actions?: PrivacyActions; more?: ReactNode }) {
   const t = useT('privacy')
   return (
     <div className="fw-pv-top">
@@ -298,7 +313,7 @@ function Duties({ model, overview, lines, actions }: { model: PrivacyViewModel; 
             )
           })}
         </ol>
-        <p className="fw-pv-later">{t('pv.duties.later')}</p>
+        {more}
       </Card>
       <Card header={t('pv.floor.title')} headingLevel={2} description={t('pv.floor.intro')} className="fw-pv-card">
         {overview.sites.length === 0 ? (
@@ -387,7 +402,7 @@ function NoticesView({ model, actions }: { model: PrivacyViewModel; actions?: Pr
   const columns = useNoticeColumns(model, actions)
   const selected = model.selectedNotices.filter((id) => workers?.some((row) => row.id === id))
   const ownKeys: ListKey[] = [
-    { keys: ['1', '2', '3'], does: t('pv.keys.views') },
+    { keys: viewsFor(model.can).map((_, index) => String(index + 1)), does: t('pv.keys.views') },
     ...(model.can.manage ? [{ keys: ['n'], does: t('pv.keys.new') }] : []),
   ]
   const { onHelp, help } = useKeysHelp(ownKeys, true)
@@ -750,7 +765,7 @@ function RegisterView({ model, actions }: { model: PrivacyViewModel; actions?: P
   const rows = all ? registerRows(all, model.registerFilter) : null
   const columns = useActivityColumns(model, actions)
   const selected = model.selectedActivities.filter((id) => rows?.some((row) => row.id === id))
-  const registerKeys: ListKey[] = [{ keys: ['1', '2', '3'], does: t('pv.keys.views') }]
+  const registerKeys: ListKey[] = [{ keys: viewsFor(model.can).map((_, index) => String(index + 1)), does: t('pv.keys.views') }]
   const { onHelp, help } = useKeysHelp(registerKeys, true)
   const state = model.register.problem ? (
     <EmptyState

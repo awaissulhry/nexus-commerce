@@ -1,0 +1,157 @@
+/*
+ * Likely duplicates (B-W2b-427, SCR-620 … SCR-623) LAYOUT: the reasons beside a record, the warning on create, the import
+ * check's rows, the merge dialog. The controls are the design system's; this file places them with semantic tokens only.
+ * It stands alone: the parts also show in the customer, supplier and material create dialogs.
+ */
+.fw-dup-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-dup-h {
+  margin: 0;
+  color: var(--nds-text-strong);
+  font-size: var(--nds-font-size-sm);
+  font-weight: 600;
+}
+
+.fw-dup-h2 {
+  margin: 0;
+  color: var(--nds-text-strong);
+  font-size: var(--nds-font-size-md);
+  font-weight: 600;
+}
+
+.fw-dup-hint {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-dup-p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-dup-reasons {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-dup-record {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-dup-code {
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-dup-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-dup-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-dup-list > li {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-dup-sides {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--nds-space-12);
+}
+
+.fw-dup-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-md);
+}
+
+.fw-dup-side-label {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
+  font-weight: 600;
+}
+
+.fw-dup-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-dup-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-dup-table {
+  min-width: 0;
+}
+
+.fw-dup-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-dup-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+}
+
+.fw-dup-head-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  flex: 1 1 320px;
+}
+
+.fw-dup-ellipsis {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-dup-link {
+  color: var(--nds-text-link);
+  text-decoration: none;
+  min-width: 0;
+}
+
+.fw-dup-link:hover {
+  text-decoration: underline;
+}

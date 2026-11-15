@@ -28,8 +28,7 @@
       "dialogBody": "Publish it only for a trial: the privacy consultant writes the real notice. A published version never changes; a new version replaces it."
     },
     "duties": {
-      "title": "Your privacy duties",
-      "later": "Data requests (access, erasure) and retention rules come in a later step."
+      "title": "Your privacy duties"
     },
     "duty": {
       "state": {
@@ -93,10 +92,12 @@
       "notices": "Notices",
       "dpia": "DPIA",
       "register": "Processing register",
+      "requests": "Data requests",
+      "retention": "Retention rules",
       "key": "Key {key}"
     },
     "keys": {
-      "views": "Notices · DPIA · Register",
+      "views": "Switch the list",
       "new": "New notice version"
     },
     "list": {

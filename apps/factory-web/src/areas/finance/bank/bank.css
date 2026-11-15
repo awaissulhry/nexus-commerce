@@ -1,0 +1,291 @@
+/*
+ * Finance › Bank (SCR-152, B-W2b-406) LAYOUT only: the page column, the band, the sections, the lines' cells, the match
+ * area (the list on the left, the MatchPanel on the right; stacked below 1100 px), the suggestions, the dialogs' rows and
+ * the balance of their figures vs ours. The controls are the design system's; colours are its semantic tokens. No page
+ * max-width (Owner rule 2026-10-29): the page fills the shell's main area; wide screens give the list more room.
+ */
+.fw-bank {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-bank-band,
+.fw-bank-section-head,
+.fw-bank-panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-bank-inline,
+.fw-bank-chips,
+.fw-bank-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-bank-chips {
+  gap: var(--nds-space-4);
+}
+
+.fw-bank-section,
+.fw-bank-stack,
+.fw-bank-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-bank-dialog {
+  gap: var(--nds-space-12);
+}
+
+.fw-bank-h2,
+.fw-bank-h3 {
+  margin: 0;
+  color: var(--nds-text-strong);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-bank-h2 {
+  font-size: var(--nds-font-size-md);
+}
+
+.fw-bank-h3 {
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-bank-muted {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+}
+
+p.fw-bank-muted[role='status'] {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+/* The match area: the lines' list frame and the panel side by side on a wide screen. */
+.fw-bank-match {
+  display: grid;
+  grid-template-columns: minmax(0, 1.75fr) minmax(340px, 1fr);
+  gap: var(--nds-space-12);
+  align-items: start;
+  min-width: 0;
+}
+
+.fw-bank-match-lines {
+  min-width: 0;
+}
+
+@media (max-width: 1100px) {
+  .fw-bank-match {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.fw-bank-panel {
+  min-width: 0;
+  border-radius: var(--nds-radius-md);
+}
+
+.fw-bank-panel:focus-visible {
+  outline: none;
+  box-shadow: var(--nds-focus-ring);
+}
+
+@media (min-width: 1101px) {
+  .fw-bank-panel {
+    position: sticky;
+    top: var(--nds-space-12);
+  }
+}
+
+.fw-bank-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-bank-suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.fw-bank-suggestions > legend {
+  margin-bottom: var(--nds-space-6);
+  padding: 0;
+}
+
+.fw-bank-suggestion {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+  padding: var(--nds-space-10) var(--nds-space-12);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-md);
+}
+
+.fw-bank-suggestion.is-on {
+  border-color: var(--nds-border-strong);
+  background: var(--nds-surface-sunken);
+}
+
+.fw-bank-suggestion.is-stale {
+  border-style: dashed;
+}
+
+.fw-bank-items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--nds-font-size-sm);
+}
+
+/* Cells of the lists. */
+.fw-bank-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.fw-bank-cell.is-end {
+  align-items: flex-end;
+}
+
+.fw-bank-cell.is-late,
+.fw-bank-num.is-late {
+  color: var(--nds-danger-text);
+}
+
+.fw-bank-sub {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
+}
+
+.fw-bank-ellipsis {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-bank-num {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.fw-bank-num.is-out {
+  color: var(--nds-text-muted);
+}
+
+.fw-bank-code {
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-xs);
+  overflow-wrap: anywhere;
+}
+
+.fw-bank-link {
+  color: var(--nds-text-link);
+  font-weight: var(--nds-font-weight-medium);
+  text-decoration: none;
+}
+
+.fw-bank-link:hover,
+.fw-bank-link:focus-visible {
+  text-decoration: underline;
+}
+
+.fw-bank-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding-left: var(--nds-space-16);
+}
+
+/* Rows inside dialogs (customers found, the sheet's headers, typed figures). */
+.fw-bank-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.fw-bank-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-6) 0;
+  border-bottom: 1px solid var(--nds-border-subtle);
+  min-width: 0;
+}
+
+.fw-bank-entry {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-bank-entry.is-payment {
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1.2fr) minmax(0, 1fr) auto;
+}
+
+.fw-bank-two {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-bank-balance {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--nds-space-12) var(--nds-space-24);
+}
+
+.fw-bank-balance b {
+  font-size: var(--nds-font-size-lg);
+  color: var(--nds-text-strong);
+}
+
+@media (max-width: 720px) {
+  .fw-bank-two,
+  .fw-bank-entry,
+  .fw-bank-entry.is-payment {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -11,6 +11,8 @@ import { archiveMaterial, countMaterials, createMaterial, findSuppliers, listMat
 import type { MaterialsListViewModel, NewMaterialModel } from './list-model'
 import { bodyOf, draftFor, ITEM_KINDS, listQuery, materialsCsv, tilesFor, viewOf, viewQuery, type ItemKind, type MaterialFilters, type MaterialTile } from './model'
 import { MaterialsListView } from './view/MaterialsListView'
+// B-W2b-427: the check for likely duplicates on create.
+import { useMaterialDuplicates } from '../../admin/import/duplicates/use-check'
 
 /** The filters in the address (`?view=leather&kind=LINING&q=…`), so a filtered list can be shared. */
 function filtersOf(params: URLSearchParams | null, seesCost: boolean): MaterialFilters {
@@ -213,7 +215,10 @@ function MaterialsContainer() {
     }
   }
 
-  const model: MaterialsListViewModel = { prefix, can, filters, rows, tiles, asOf, updates, newMaterial, busy, notice }
+  // B-W2b-427 (PLT-178): the likely duplicates of the new material as it is typed.
+  const draft = newMaterial?.draft ?? null
+  const duplicates = useMaterialDuplicates(draft ? { code: draft.code, name: draft.name, supplierId: draft.supplier?.id ?? null, supplierArticleCode: draft.supplierArticleCode } : null)
+  const model: MaterialsListViewModel = { prefix, can, filters, rows, tiles, asOf, updates, newMaterial: newMaterial ? { ...newMaterial, duplicates: { candidates: duplicates, prefix } } : null, busy, notice }
 
   return (
     <MaterialsListView

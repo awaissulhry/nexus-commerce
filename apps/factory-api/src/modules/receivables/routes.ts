@@ -40,6 +40,9 @@ import { cancelBatch, createBatch, getBatch, issueBatch, listBatches, listCandid
 import { listUnpaid, settleItems } from './riba/settle'
 import { addStopContract, changeStopContract, liftStopContract, listStopsContract } from './stops/contract'
 import { addStop, changeStop, liftStop, listStops } from './stops/stops'
+// B-W2b-406: a customer's own figures against ours (FIN-135).
+import { correctFiguresContract, getFiguresContract, listFiguresContract, recordFiguresContract } from './their-figures/contract'
+import { correctFigures, getFigures, listFigures, recordFigures } from './their-figures/their-figures'
 
 /**
  * Receivables (B-W2a-55; FIN-109, FIN-110, FIN-111; design finance.receivables, SCR-151): what customers owe and how late,
@@ -120,4 +123,9 @@ export default defineRoutes('receivables', manifest, async (app) => {
   app.put('/receivables/customers/:partyId/trust', { schema: putTrustContract }, async (request) => putTrust(request, request.params.partyId, request.body, () => requireStepUp(officeAuthOf(app), request), idempotencyKeyFrom(request)))
   app.get('/receivables/collections/settings', { schema: getCollectionsContract }, async (request) => getCollections(request, request.query))
   app.put('/receivables/collections/settings', { schema: putCollectionsContract }, async (request) => putCollections(request, request.body, () => requireStepUp(officeAuthOf(app), request), idempotencyKeyFrom(request)))
+  // B-W2b-406 (FIN-135): a customer's own figures as of a day, compared with our books.
+  app.get('/receivables/their-figures', { schema: listFiguresContract }, async (request) => listFigures(request, request.query))
+  app.get('/receivables/their-figures/:figuresId', { schema: getFiguresContract }, async (request) => getFigures(request, request.params.figuresId))
+  app.post('/receivables/their-figures', { schema: recordFiguresContract }, async (request, reply) => reply.code(201).send(await recordFigures(request, request.body, idempotencyKeyFrom(request))))
+  app.patch('/receivables/their-figures/:figuresId', { schema: correctFiguresContract }, async (request) => correctFigures(request, request.params.figuresId, request.body, idempotencyKeyFrom(request)))
 })

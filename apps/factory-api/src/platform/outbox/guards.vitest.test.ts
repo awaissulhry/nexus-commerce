@@ -112,10 +112,14 @@ describe('check-event-contract', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
     // B-W2b-380, B-W2b-405 and B-W2b-388 (main 295a7832be) the guard counts 924 and 1467; with the planted event and emit: 925, 1468.
     // B-W2b-409: three events (customs.document_made, customs.declaration_changed, customs.settings_changed; emitted through
     // eventFor, never a literal): with B-W2b-395 and B-W2b-400 (main 0c1e2b57e2), 930 → 933 and 1468 literal emits.
+    // B-W2b-406: one event (customer_figures.changed) and two literal emits (their figures recorded, corrected): with B-W2b-409
+    // (main bf4fee0ba4) 933 → 934, 1468 → 1470.
+    // B-W2b-427: one event (duplicate.merged) and seven literal emits (the merge: the duplicate archived, the contacts, addresses,
+    // tax identities or colours moved, duplicate.merged): with B-W2b-406 (main fdb7cc920c) 934 → 935, 1470 → 1477.
     // B-W2b-415: six events (integration.error_opened, .error_retried, .error_dismissed, .account_tested, jobs.run_requested,
     // jobs.run_finished) and nine literal emits (the collector's opened and went-through, retry, the webhook's inbound_received
-    // again, dismiss, a test, Run now asked, a run failed, a Run now finished): with B-W2b-409, 933 → 939 and 1468 → 1477.
-    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(939 declared event version\(s\), 1477 literal emit/) })
+    // again, dismiss, a test, Run now asked, a run failed, a Run now finished): with B-W2b-406 and B-W2b-427 (main a6ffff03d7) 935 → 941, 1477 → 1486.
+    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(941 declared event version\(s\), 1486 literal emit/) })
   })
 
   it.each<[string, Plants, RegExp]>([

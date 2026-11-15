@@ -1,6 +1,7 @@
 import type { LibraryCan, Notice } from '../library/model'
 import type { MaterialRow, SupplierRow } from './api'
 import type { MaterialFilters, MaterialTile, NewMaterialDraft } from './model'
+import type { DuplicateCandidate } from '../../admin/import/duplicates/api'
 
 export interface NewMaterialModel {
   draft: NewMaterialDraft
@@ -13,6 +14,8 @@ export interface NewMaterialModel {
   /** The fields the API refused and its sentences (kept as data). */
   refused: string[]
   messages: string[]
+  /** B-W2b-427 (PLT-178): the materials the draft looks like (same code, supplier code, a close name), and where they open. */
+  duplicates?: { candidates: readonly DuplicateCandidate[] | null; prefix: string } | null
 }
 
 export interface MaterialsListViewModel {

@@ -33,6 +33,9 @@ import { contextOf } from '../../product/materials/store'
 import { costFactsOf } from '../actual/reads'
 import { readWorkOrders, unique, type CostedWorkOrder, type Reader } from '../actual/store'
 import { methodInForce } from '../method/method'
+// B-W2b-416 (FIN-050, KA3:01): the floor each order is held to (the Sales settings') and its flag.
+import { belowCount, type FloorFigures } from '@nexus/factory-domain/costing/profitability/floor'
+import { flagOf, floorFields, orderFloors, type OrderFloor } from './floor'
 
 /**
  * Order margin from estimate to actual (B-W2a-29; FIN-047; design finance.margins SCR-155 "Order margin, quote to
@@ -232,7 +235,25 @@ async function computeOrders(db: Reader, orders: readonly OrderRow[], now: Date)
 const costOf = (parts: Parts | null): number | null => (parts === null ? null : totalOf(parts))
 const marginOf = (value: number, cost: number | null): number | null => (cost === null ? null : value - cost)
 
-function rowOf(computed: OrderComputed): OrderMarginRowView {
+/** B-W2b-416: what the floor flag reads of an order (the final margin once final, else the estimate now). */
+const floorFiguresOfComputed = (computed: OrderComputed): FloorFigures => ({
+  final: computed.final,
+  value: computed.value,
+  estimateMargin: marginOf(computed.value, costOf(computed.estimateParts)),
+  actualMargin: computed.started && !computed.currencyMismatch ? computed.value - totalOf(computed.actualParts) : null,
+})
+
+/** B-W2b-416: the floor flag's figures of some orders, computed as this read does (the low-margin alert's finder reads them). */
+export async function floorFiguresOf(db: Reader, orderIds: readonly string[], now: Date) {
+  const orders = orderIds.length === 0 ? [] : await db.salesOrder.findMany({ where: { id: { in: [...orderIds] } }, select: ORDER_COLUMNS, orderBy: { id: 'asc' } })
+  const out = new Map<string, FloorFigures & { readonly number: string; readonly companyId: string; readonly partyId: string; readonly status: string }>()
+  for (let index = 0; index < orders.length; index += CHUNK) {
+    for (const computed of await computeOrders(db, orders.slice(index, index + CHUNK), now)) out.set(computed.order.id, { ...floorFiguresOfComputed(computed), number: computed.order.number, companyId: computed.order.companyId, partyId: computed.order.partyId, status: computed.order.status })
+  }
+  return out
+}
+
+function rowOf(computed: OrderComputed, floor?: OrderFloor): OrderMarginRowView {
   const { order } = computed
   const quotedCost = costOf(computed.quotedParts)
   const estimateCost = costOf(computed.estimateParts)
@@ -258,7 +279,8 @@ function rowOf(computed: OrderComputed): OrderMarginRowView {
     final: computed.final,
     started: computed.started,
     workOrders: computed.figures.length,
-    belowFloor: null,
+    // B-W2b-416: the floor of the Sales settings and the flag (was null in W2a).
+    ...floorFields(flagOf(floorFiguresOfComputed(computed), floor), floor),
     method: computed.method,
     provisional: isProvisional(computed.method),
   }
@@ -324,7 +346,11 @@ export async function orderMargins(caller: CommandCaller, query: MarginsQuery) {
     const all = await db.salesOrder.findMany({ where, select: ORDER_COLUMNS, orderBy: { id: 'desc' } })
     const computed: OrderComputed[] = []
     for (let index = 0; index < all.length; index += CHUNK) computed.push(...(await computeOrders(db, all.slice(index, index + CHUNK), now)))
-    const after = query.cursor ? computed.filter((row) => row.order.id < query.cursor!) : computed
+    // B-W2b-416: each order's floor and flag; the tile counts them over every order in scope, `floor=below` keeps those below.
+    const floors = await orderFloors(db, all.map((row) => row.id), now)
+    const flags = new Map(computed.map((row) => [row.order.id, flagOf(floorFiguresOfComputed(row), floors.get(row.order.id))]))
+    const listed = query.floor === 'below' ? computed.filter((row) => flags.get(row.order.id)?.below === true) : computed
+    const after = query.cursor ? listed.filter((row) => row.order.id < query.cursor!) : listed
     const page = after.slice(0, query.limit)
 
     const currencies = unique(computed.map((row) => row.order.currency))
@@ -349,11 +375,11 @@ export async function orderMargins(caller: CommandCaller, query: MarginsQuery) {
       }
     }
     return {
-      rows: page.map(rowOf),
+      rows: page.map((row) => rowOf(row, floors.get(row.order.id))),
       nextCursor: after.length > query.limit ? page.at(-1)!.order.id : null,
       tiles: {
         averageMarginPct: asMoney('margin', oneCurrency ? averageMarginPct(estimates) : null),
-        belowFloor: null,
+        belowFloor: asMoney('margin', belowCount([...flags.values()])),
         marginLostSinceQuote: asMoney('margin', oneCurrency && both.length > 0 ? lost : null),
         orders: computed.length,
         unknown: estimates.filter((row) => row.cost === null).length,
@@ -386,7 +412,7 @@ export async function orderMargin(caller: CommandCaller, orderId: string): Promi
     const order = isUuid(orderId) ? await db.salesOrder.findUnique({ where: { id: orderId }, select: ORDER_COLUMNS }) : null
     if (!order || !can(actor, COSTING_VIEW, { companyId: order.companyId, partyId: order.partyId })) throw new NotFoundError('Sales order not found.')
     const [computed] = await computeOrders(db, [order], now)
-    const row = rowOf(computed!)
+    const row = rowOf(computed!, (await orderFloors(db, [order.id], now)).get(order.id))
     const { lines, figures } = computed!
     const actualKnown = computed!.started && !computed!.currencyMismatch
     const shared = figures.some((entry) => entry.weights.size > 1)

@@ -13,9 +13,11 @@ import { workOrder as workOrderOf } from '../../_shared/fixtures'
 import { designScreen as varianceScreen } from '../labour/variance/fixtures'
 import { earlierCloses, entriesOf, explainedOf, lineUnit, liveClose, orderedLines, varianceState, type VarianceModel } from '../labour/variance/model'
 import { CLOSE_REASONS, CLOSE_REFUSALS, closeWorkOrder, getCloseCheck, NOT_SPLIT_CODES, reopenWorkOrder, undoClose, VARIANCE_CATEGORIES } from './api'
-import { BEYOND_CHECK, closeCheck, closeRecord, designScreen as closeScreen, SPLIT, withoutCost } from './fixtures'
+// B-W2b-F46: + AFTER_CLOSE.
+import { AFTER_CLOSE, BEYOND_CHECK, closeCheck, closeRecord, designScreen as closeScreen, SPLIT, withoutCost } from './fixtures'
 import { FiguresTable } from './view/CloseParts'
-import { checksClose, closeCanOf, closeHeld, closeInput, closeTouches, CLOSE_NS, reasonKey, reopenHeld, reopenOpenHeld, undoShownUntil, UNDO_ON_SCREEN_MS, writeProblem } from './model'
+// B-W2b-F46: + afterClosePhrase.
+import { afterClosePhrase, checksClose, closeCanOf, closeHeld, closeInput, closeTouches, CLOSE_NS, reasonKey, reopenHeld, reopenOpenHeld, undoShownUntil, UNDO_ON_SCREEN_MS, writeProblem } from './model'
 
 /**
  * B-W2b-424 — Close work order (SCR-460) and the variance at close (SCR-461) on B-W2b-411's API: the lists equal
@@ -162,7 +164,8 @@ describe('the variance at close', () => {
   })
 })
 
-const LEFT_KEY = /\b(?:common|figure|dialog|settle|waits|reason|held|reopen|undo|closed|refusal|problem|notice|variance|category|notSplit|history|costState|ppv)\.[a-zA-Z_]+(?:\.[a-zA-Z_]+)*\b/
+// B-W2b-F46: + afterClose, event (the costing catalogue's event words in the closed banner).
+const LEFT_KEY = /\b(?:common|figure|dialog|settle|waits|reason|held|reopen|undo|closed|refusal|problem|notice|variance|category|notSplit|history|costState|ppv|afterClose|event)\.[a-zA-Z_]+(?:\.[a-zA-Z_]+)*\b/
 const LEFT_PLACEHOLDER = /\{[a-zA-Z]+\}/
 /** Permission and grain names are said on purpose. */
 const SAID = /\b(?:workorders\.manage|workorders\.reopen|workorders\.view|costing\.view|money\.cost)\b/g
@@ -227,6 +230,59 @@ describe('every design case draws in both languages with no key or placeholder l
       for (const figure of ['quantity', 'material', 'minutes', 'scrap']) has(`figure.row.${figure}`)
       for (const kind of ['changed', 'signed_out', 'forbidden', 'not_found', 'unavailable', 'rate_limited', 'invalid', 'conflict', 'internal']) has(`problem.${kind}`)
       for (const key of ['closed', 'closedSettled', 'undone', 'reopened']) has(`notice.${key}`, { number: 'WO-1' })
+    }
+  })
+})
+
+// B-W2b-F46
+describe('costs that arrived after the close wait for a reopen (B-W2b-F46)', () => {
+  const caseOf = (caseId: string) => closeScreen.cases.find((item) => item.id === caseId)!.model
+  const drawn = (caseId: string, locale: (typeof LOCALES)[number] = 'en') => render(closeScreen as unknown as DesignScreen<unknown>, caseOf(caseId), locale)
+
+  it('the phrase: how many, only when any arrived on a closed work order', () => {
+    expect(afterClosePhrase(null)).toBeNull()
+    expect(afterClosePhrase(closeCheck())).toBeNull()
+    expect(afterClosePhrase(closeCheck({ afterClose: null }))).toBeNull()
+    expect(afterClosePhrase(closeCheck({ afterClose: { count: 0, lines: [] } }))).toBeNull()
+    expect(afterClosePhrase(closeCheck({ afterClose: AFTER_CLOSE }))).toEqual({ key: 'afterClose.body', params: { count: 2 } })
+  })
+
+  it('reads the check with and without the field (an older API), and without the amount for a person without the cost grain', async () => {
+    const answer = (value: unknown) =>
+      createApiClient({ baseUrl: 'http://api.test', fetch: (async () => new Response(JSON.stringify(value), { status: 200, headers: { 'content-type': 'application/json' } })) as unknown as typeof fetch, csrfToken: () => 'csrf' })
+    const closedCheck = closeCheck({ live: closeRecord(), afterClose: AFTER_CLOSE })
+    expect((await getCloseCheck(answer(closedCheck), 'w1')).afterClose).toEqual(AFTER_CLOSE)
+    const { afterClose: _dropped, ...older } = closedCheck
+    expect((await getCloseCheck(answer(older), 'w1')).afterClose).toBeUndefined()
+    const blind = await getCloseCheck(answer(withoutCost(closedCheck)), 'w1')
+    expect(blind.afterClose?.lines.map((line) => line.amount)).toEqual([undefined, undefined])
+  })
+
+  it('the closed banner says it beside Reopen, one line per source; amounts only with the cost grain', () => {
+    const full = drawn('closed-after-close')
+    expect(full).toContain('2 costs arrived after the close — reopen the work order to post them.')
+    expect(full).toContain('Return to stock (RETURN · WO-')
+    expect(full).toContain('Labour earned (DEMO-B-0012 · 40 SEW)')
+    expect(full).toContain('-€1.55')
+    expect(full).toContain('€48.25')
+    expect(full).toContain('Reopen…')
+    expect(drawn('closed-after-close', 'it')).toContain('2 costi sono arrivati dopo la chiusura')
+    const blind = drawn('closed-after-close-no-cost')
+    expect(blind).toContain('2 costs arrived after the close')
+    expect(blind.match(AMOUNT)?.[0] ?? null).toBeNull()
+    // Without workorders.reopen: Reopen held with why, the costs still said.
+    const held = drawn('closed-after-close-no-reopen')
+    expect(held).toContain('2 costs arrived after the close')
+    expect(held).toContain('Reopening a work order needs the permission workorders.reopen.')
+    // A closed work order with nothing after the close says nothing of it.
+    expect(drawn('closed')).not.toContain('arrived after the close')
+  })
+
+  it('its words exist in both languages', () => {
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, [CLOSE_NS])[CLOSE_NS]!)
+      for (const count of [1, 3]) expect(t('afterClose.body', { count }), `${locale}: body ${count}`).toMatch(new RegExp(`^${count} `))
+      for (const key of ['afterClose.list', 'afterClose.line', 'afterClose.lineAmount']) expect(t(key, { event: 'e', document: 'd', date: 'x', amount: 'a' }), `${locale}: ${key}`).not.toBe(key)
     }
   })
 })

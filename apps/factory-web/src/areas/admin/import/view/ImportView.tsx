@@ -47,6 +47,12 @@ export interface ImportActions extends WizardActions {
   firstLoad?: FirstLoadActions
 }
 
+/** B-W2b-427: parts the page's container mounts (they read the API themselves): the possible duplicates, and the wizard's. */
+export interface ImportSlots {
+  duplicates?: ReactNode
+  wizardDuplicates?: ReactNode
+}
+
 const STATUS_TONE: Readonly<Record<ImportStatus, 'info' | 'success' | 'danger' | 'neutral' | 'warning'>> = {
   UPLOADED: 'info',
   PLANNED: 'warning',
@@ -63,10 +69,10 @@ const STATUS_TONE: Readonly<Record<ImportStatus, 'info' | 'success' | 'danger' |
  * Office's list frame (Owner rule 2026-10-29): a row reopens it (`?job=<id>`), a failed apply can be applied again, and
  * jobs nothing was written from yet can be cancelled several at once. Fetches nothing (ImportPage.tsx reads the API).
  */
-export function ImportView({ model, actions }: { model: ImportViewModel; actions?: ImportActions }) {
+export function ImportView({ model, actions, slots }: { model: ImportViewModel; actions?: ImportActions; slots?: ImportSlots }) {
   return (
     <AdminPageMessages namespace="admin-import">
-      <Imports model={model} actions={actions} />
+      <Imports model={model} actions={actions} slots={slots} />
     </AdminPageMessages>
   )
 }
@@ -141,7 +147,7 @@ function usePageKeys(): ListKey[] {
   return [{ keys: ['c'], does: t('imp.keys.new') }]
 }
 
-function Imports({ model, actions }: { model: ImportViewModel; actions?: ImportActions }) {
+function Imports({ model, actions, slots }: { model: ImportViewModel; actions?: ImportActions; slots?: ImportSlots }) {
   const t = useT('admin-import')
   const locale = useLocale()
   const words = useImporterWords()
@@ -260,6 +266,9 @@ function Imports({ model, actions }: { model: ImportViewModel; actions?: ImportA
 
       {model.firstLoad && <FirstLoadSection model={model.firstLoad} companies={model.companies} base={base} actions={actions?.firstLoad} />}
 
+      {/* B-W2b-427: the possible duplicates of the records this person sees. */}
+      {slots?.duplicates}
+
       <section className="fw-adm-imp-section" aria-labelledby="imp-recent">
         <h2 id="imp-recent" className="fw-adm-imp-h2">
           {t('imp.recent.title')}
@@ -291,7 +300,7 @@ function Imports({ model, actions }: { model: ImportViewModel; actions?: ImportA
         {help}
       </section>
 
-      <ImportWizard model={model.wizard} importers={importers ?? []} companies={model.companies} can={model.can} actions={actions} />
+      <ImportWizard model={model.wizard} importers={importers ?? []} companies={model.companies} can={model.can} actions={actions} duplicates={slots?.wizardDuplicates} />
       <CancelManyModal model={model} actions={actions} />
       <TemplatesDialog open={model.templatesOpen === true} importers={importers ?? []} onClose={() => actions?.onTemplates?.(false)} />
     </div>

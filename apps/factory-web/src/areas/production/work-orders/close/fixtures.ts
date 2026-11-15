@@ -2,7 +2,8 @@ import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import { DEMO_USER } from '../../../../shell/design-data'
 import { at, ROLES, workOrder, type Role } from '../../_shared/fixtures'
 import { recordCase, RecordDesign, type RecordCase } from '../record/fixtures'
-import { CLOSE_REASONS, type CloseCheck, type CloseFigures, type CloseRecord, type Split } from './api'
+// B-W2b-F46: + AfterClose.
+import { CLOSE_REASONS, type AfterClose, type CloseCheck, type CloseFigures, type CloseRecord, type Split } from './api'
 import { closeCanOf } from './model'
 import type { CloseModel } from './use-close'
 
@@ -150,6 +151,17 @@ const waitingCheck = closeCheck({
   ],
 })
 
+// B-W2b-F46 — after the close of 29 Oct, 0.5 m of lining came back (−1.55) and a late sewing scan reported 96.5 standard
+// minutes (+48.25): two costs that wait for a reopen (the close froze the actual).
+const LINING = { id: uid(502), code: 'DEMO-LIN-01', name: 'Fodera demo', baseUom: 'M' }
+export const AFTER_CLOSE: AfterClose = {
+  count: 2,
+  lines: [
+    { sourceType: 'StockMove', sourceId: uid(901), event: 'RETURN', occurredAt: at(30, 10, 15), day: '2026-10-30', label: `RETURN · ${CLOSED_WO.number} · DEMO-LOT-07`, item: LINING, quantity: '-0.5000', minutes: null, entries: 1, amount: -155 },
+    { sourceType: 'OperationScan', sourceId: uid(902), event: 'LABOUR', occurredAt: at(30, 11, 40), day: '2026-10-30', label: 'DEMO-B-0012 · 40 SEW', item: null, quantity: null, minutes: '96.5000', entries: 1, amount: 4825 },
+  ],
+}
+
 export const designScreen = defineDesignScreen<RecordCase>({
   screen: 'SCR-460',
   title: 'Close work order: planned against actual, a reason beyond the tolerance, what it settles, Undo for a few seconds, Reopen with a reason',
@@ -175,6 +187,10 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'closed', label: 'Closed: who closed it, when, why; its cost settled; Reopen… (workorders.reopen)', model: closed('manager', closeModel(CLOSE_ROLES.manager, { check: ready(closedCheck(closeRecord())) })) },
     { id: 'closed-status', label: 'Closed as a status while the accountant’s switch was off', model: closed('owner', closeModel(CLOSE_ROLES.owner, { check: ready(closedCheck(closeRecord({ settled: false, reasonCode: null, reasonNote: null, figures: FIGURES_WITHIN, beyond: NONE }))) })) },
     { id: 'closed-no-reopen', label: 'Team leader · closed: Reopen held (needs workorders.reopen)', model: closed('teamLeader', closeModel(CLOSE_ROLES.teamLeader, { check: ready(closedCheck(closeRecord({ can: { undo: false, reopen: false } }))) })) },
+    // B-W2b-F46
+    { id: 'closed-after-close', label: 'Closed: 2 costs arrived after the close (a return, a late scan) — reopen to post them; Reopen… beside it', model: closed('manager', closeModel(CLOSE_ROLES.manager, { check: ready(closedCheck(closeRecord(), { afterClose: AFTER_CLOSE })) })), note: 'Return of 0.5 m lining −1.55; sewing 96.5 min +48.25. Nothing failed: they wait for the reopen, and the close after it posts them first.' },
+    { id: 'closed-after-close-no-cost', label: 'Production manager without the cost grain: the same two lines, no amount', model: closed('manager', closeModel(CLOSE_ROLES.managerNoCost, { check: ready(withoutCost(closedCheck(closeRecord(), { afterClose: AFTER_CLOSE }))) })) },
+    { id: 'closed-after-close-no-reopen', label: 'Team leader · costs arrived after the close: Reopen held with why (needs workorders.reopen)', model: closed('teamLeader', closeModel(CLOSE_ROLES.teamLeader, { check: ready(closedCheck(closeRecord({ can: { undo: false, reopen: false } }), { afterClose: AFTER_CLOSE })) })) },
     { id: 'closed-before-record', label: 'Closed before the close was recorded: Reopen held with why', model: closed('manager', closeModel(CLOSE_ROLES.manager, { check: ready(closedCheck(null)) })) },
     { id: 'closed-reading', label: 'Closed: who closed it still reading (Reopen held)', model: closed('manager', closeModel(CLOSE_ROLES.manager, { check: { value: null, problem: null } })) },
     { id: 'reopen', label: 'Reopen: what it does (its entries reversed) and the reason', model: closed('manager', closeModel(CLOSE_ROLES.manager, { dialog: 'reopen', check: ready(closedCheck(closeRecord())), draft: { reopenReason: 'Two more jackets found finished in packing: counted again' } })) },

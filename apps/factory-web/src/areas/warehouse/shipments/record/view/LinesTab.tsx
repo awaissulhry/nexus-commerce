@@ -1,5 +1,6 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import Link from 'next/link'
 import { CircleAlert, CircleCheck, CircleMinus, FileText, PackagePlus, Plus, Scale, Trash2, TriangleAlert } from 'lucide-react'
 import { Card, EmptyState, SummaryTable } from '@nexus/ui/components'
@@ -21,7 +22,8 @@ const CHECK_ICON = { ok: CircleCheck, open: CircleAlert, warn: TriangleAlert, no
  * office may add or correct). Read-only once packed: unpack first (no label, no live DDT). B-W2a-71: the order's lines on
  * this shipment as size grids and what stays on backorder.
  */
-export function LinesTab({ shipment, checks, model, actions }: { shipment: Shipment; checks: ReadyCheck[]; model: ShipmentRecordModel; actions?: ShipmentRecordActions }) {
+// B-W2b-410: `depth` — the cartons as packed (contents, serials, carton master; in place of W1's card), the holds in Ready to ship.
+export function LinesTab({ shipment, checks, model, actions, depth }: { shipment: Shipment; checks: ReadyCheck[]; model: ShipmentRecordModel; actions?: ShipmentRecordActions; depth?: { cartons?: ReactNode; holds?: ReactNode; held?: boolean } }) {
   const t = useT('shipments')
   const locale = useLocale()
   const draft = shipment.status === 'DRAFT'
@@ -134,15 +136,16 @@ export function LinesTab({ shipment, checks, model, actions }: { shipment: Shipm
         {/* B-W2a-71: the order's lines on this shipment and what stays on backorder (LOG-004). */}
         <OrderProgressCard shipment={shipment} model={model} actions={actions} />
 
-        <Card padded>
-          <div className="fw-sh-card-head">
-            <h2 className="fw-sh-h2">{t('cartons.title')}</h2>
-            <span className="fw-sh-inline">
-              {draft && unplaced > 0 && <Tag tone="warning">{t('cartons.unplaced', { count: unplaced })}</Tag>}
-              {editCartons && (
-                <Button size="sm" onClick={() => actions?.onDialog?.({ kind: 'parcel', parcelId: null })}>
-                  <PackagePlus size={14} aria-hidden /> {t('cartons.add')}
-                </Button>
+        {depth?.cartons ?? (
+          <Card padded>
+            <div className="fw-sh-card-head">
+              <h2 className="fw-sh-h2">{t('cartons.title')}</h2>
+              <span className="fw-sh-inline">
+                {draft && unplaced > 0 && <Tag tone="warning">{t('cartons.unplaced', { count: unplaced })}</Tag>}
+                {editCartons && (
+                  <Button size="sm" onClick={() => actions?.onDialog?.({ kind: 'parcel', parcelId: null })}>
+                    <PackagePlus size={14} aria-hidden /> {t('cartons.add')}
+                  </Button>
               )}
             </span>
           </div>
@@ -219,6 +222,7 @@ export function LinesTab({ shipment, checks, model, actions }: { shipment: Shipm
             </span>
           </div>
         </Card>
+        )}
       </div>
 
       <aside className="fw-sh-rail" aria-label={t('ready.title')}>
@@ -243,7 +247,8 @@ export function LinesTab({ shipment, checks, model, actions }: { shipment: Shipm
               )
             })}
           </ul>
-          {checks.every((check) => check.state !== 'open') && shipment.status === 'PACKED' && <p className="fw-sh-ready-all">{t('ready.all')}</p>}
+          {depth?.holds}
+          {checks.every((check) => check.state !== 'open') && shipment.status === 'PACKED' && !depth?.held && <p className="fw-sh-ready-all">{t('ready.all')}</p>}
           {shipment.packedAt && <p className="fw-sh-hint">{t('ready.packedAt', { when: formatDateTime(shipment.packedAt, { locale }) })}</p>}
         </Card>
       </aside>

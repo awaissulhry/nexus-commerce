@@ -186,12 +186,16 @@ import { COST_DEPTH_ADDS } from '../../costing/mass-update/permissions'
 import { PAYABLES_DEPTH_ADDS } from '../../payables/proposal/permissions'
 // B-W2b-421: custom fields and picklists (the administrator keeps them; sales and buyer see contacts' personal custom fields).
 import { FIELDS_ADDS } from '../../fields/permissions'
+// B-W2b-427: likely duplicates (merge: finance, sales, buyer, production manager — with the record's manage permission).
+import { IMPORTS_DUPLICATES_ADDS } from '../../imports/duplicates/permissions'
 // B-W2b-422: templates (the administrator keeps the document and e-mail templates and the shared replies).
 import { TEMPLATES_ADDS } from '../../templates/permissions'
 // B-W2b-405: data protection in depth (the administrator keeps the data requests, erasures and retention rules).
 import { PRIVACY_DEPTH_ADDS } from '../../privacy/retention/permissions'
 // B-W2b-395: carrier pickups (the dispatch desk books them).
 import { SHIPPING_PICKUPS_ADDS } from '../../shipping/pickups/permissions'
+// B-W2b-406: a customer's own figures against ours (finance records and corrects them).
+import { THEIR_FIGURES_ADDS } from '../../receivables-figures/permissions'
 // B-W2b-415: integration health (the administrator retries and dismisses failed messages and runs a job now).
 import { INTEGRATION_HEALTH_ADDS } from '../../integration-health/permissions'
 
@@ -1143,6 +1147,10 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (PRIVACY_DEPTH_ADDS[key] ?? []) : []),
   // B-W2b-395
   ...(audience === 'office' ? (SHIPPING_PICKUPS_ADDS[key] ?? []) : []),
+  // B-W2b-406
+  ...(audience === 'office' ? (THEIR_FIGURES_ADDS[key] ?? []) : []),
+  // B-W2b-427
+  ...(audience === 'office' ? (IMPORTS_DUPLICATES_ADDS[key] ?? []) : []),
   // B-W2b-415
   ...(audience === 'office' ? (INTEGRATION_HEALTH_ADDS[key] ?? []) : [])]
 /**

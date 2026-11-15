@@ -28,8 +28,7 @@
       "dialogBody": "Pubblicalo solo per una prova: l’informativa vera la scrive il consulente privacy. Una versione pubblicata non cambia mai; una nuova versione la sostituisce."
     },
     "duties": {
-      "title": "I tuoi obblighi privacy",
-      "later": "Le richieste degli interessati (accesso, cancellazione) e le regole di conservazione arrivano in un passo successivo."
+      "title": "I tuoi obblighi privacy"
     },
     "duty": {
       "state": {
@@ -93,10 +92,12 @@
       "notices": "Informative",
       "dpia": "DPIA",
       "register": "Registro dei trattamenti",
+      "requests": "Richieste sui dati",
+      "retention": "Regole di conservazione",
       "key": "Tasto {key}"
     },
     "keys": {
-      "views": "Informative · DPIA · Registro",
+      "views": "Cambia elenco",
       "new": "Nuova versione di informativa"
     },
     "list": {
