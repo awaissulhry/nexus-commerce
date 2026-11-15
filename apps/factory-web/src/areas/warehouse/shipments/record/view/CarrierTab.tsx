@@ -1,5 +1,6 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import { Download, MoreHorizontal, Printer, Tag as TagIcon, Truck } from 'lucide-react'
 import { Banner, Card, EmptyState, KeyValue, Menu, SummaryTable } from '@nexus/ui/components'
 import { Button, Pill } from '@nexus/ui/primitives'
@@ -21,7 +22,8 @@ const PRINT_TONE = { QUEUED: 'neutral', SENT: 'info', PRINTED: 'success', FAILED
  * no label. B-W2a-71: Labels ⋯ Void labels (design pop:sh-void): every labelled parcel at once (the carrier voids parcel by
  * parcel; one it already has keeps its label), held with its reason.
  */
-export function CarrierTab({ shipment, model, actions }: { shipment: Shipment; model: ShipmentRecordModel; actions?: ShipmentRecordActions }) {
+// B-W2b-410: `depth` — how it travels (own van, a carrier by hand, the customer collects; the check before printing) and the label prints (reprint with a reason).
+export function CarrierTab({ shipment, model, actions, depth }: { shipment: Shipment; model: ShipmentRecordModel; actions?: ShipmentRecordActions; depth?: { booking?: ReactNode; labels?: ReactNode; noLabels?: boolean } }) {
   const t = useT('shipments')
   const locale = useLocale()
   const carrier = carrierWords(shipment)
@@ -68,7 +70,7 @@ export function CarrierTab({ shipment, model, actions }: { shipment: Shipment; m
             ...(labels?.cutOff ? [{ label: t('carrier.cutOff'), value: labels.cutOff.passed ? t('carrier.cutOffPassed', { time: labels.cutOff.time }) : t('carrier.cutOffToday', { time: labels.cutOff.time }) }] : []),
           ]}
         />
-        {shipment.transportBy === 'CARRIER' ? (
+        {shipment.transportBy === 'CARRIER' && !depth?.noLabels ? (
           <>
             <p className="fw-sh-hint">{t('carrier.account')}</p>
             {!left && toLabel > 0 && (
@@ -80,7 +82,7 @@ export function CarrierTab({ shipment, model, actions }: { shipment: Shipment; m
             )}
             {!left && toLabel === 0 && shipment.parcels.length > 0 && <p className="fw-sh-hint">{t('held.allLabelled')}</p>}
           </>
-        ) : (
+        ) : depth?.noLabels ? null : (
           <p className="fw-sh-hint">{t(`carrier.noLabel.${shipment.transportBy}`)}</p>
         )}
       </Card>
@@ -161,6 +163,8 @@ export function CarrierTab({ shipment, model, actions }: { shipment: Shipment; m
           {labels && !labels.labelPrinterId && <Banner tone="info" title={t('carrier.noPrinter')} />}
         </Card>
       )}
+      {depth?.booking}
+      {depth?.labels}
     </div>
   )
 }

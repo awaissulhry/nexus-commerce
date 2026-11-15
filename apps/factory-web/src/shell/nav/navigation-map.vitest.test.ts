@@ -197,6 +197,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/finance/payments': 'payments.view', // GET /payments
       '/finance/receivables': 'receivables.view', // GET /receivables/ageing (B-W2a-81)
       '/finance/payables': 'payables.view', // GET /payables/invoices (B-W2a-81)
+      '/finance/bank': 'payments.bank.view', // GET /payments/bank/lines/counts (B-W2b-406)
       '/finance/costing': 'costing.view', // GET /costing/work-orders (B-W2a-72)
       '/finance/margins': 'costing.view', // GET /costing/margins (B-W2a-72)
       '/finance/accounting': 'accounting.view', // GET /accounting/exports (B-W2a-51)

@@ -193,7 +193,6 @@
     "reasons": "Why",
     "reference": "Reference text",
     "reversed": "The match was taken back on {date}.",
-    "statementLater": "The statement opens from the Bank page once it is built.",
     "title": "Bank line"
   },
   "batch": {

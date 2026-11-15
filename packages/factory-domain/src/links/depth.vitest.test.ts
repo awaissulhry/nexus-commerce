@@ -20,10 +20,10 @@ const OTHER_LINK = '0195f5d0-0000-7000-8000-0000000000e2'
 const COMPANY = '0195f5d0-0000-7000-8000-0000000000c1'
 const NOW = new Date('2026-11-07T09:00:00.000Z')
 
-describe('the fourteen purposes', () => {
+describe('the fifteen purposes', () => {
   it('match the schema\'s LinkPurpose and give each action its evidence and its link-session permission', () => {
-    // B-W2b-398: RETURN_LABEL (the schema's BROKER_PACK waits for B-W2b-409).
-    expect(LINK_PURPOSES).toHaveLength(14)
+    // B-W2b-398: RETURN_LABEL. B-W2b-409: BROKER_PACK (every purpose of the schema now).
+    expect(LINK_PURPOSES).toHaveLength(15)
     expect(Object.keys(EVIDENCE_ACTIONS)).toEqual([...LINK_ACTIONS])
     expect(new Set(Object.values(EVIDENCE_ACTIONS)).size).toBe(LINK_ACTIONS.length)
     expect(LINK_SESSION_PERMISSIONS).toHaveLength(LINK_ACTIONS.length)
@@ -54,6 +54,8 @@ describe('the fourteen purposes', () => {
     // B-W2b-398: a return label's link counts nothing (the label is booked once; the page opens and downloads after it).
     expect(PURPOSE_RULES.RETURN_LABEL.actions).toEqual({ open: { counts: false, typedName: 'none', checksEmail: false }, confirm: { counts: false, typedName: 'none', checksEmail: false }, download: { counts: false, typedName: 'none', checksEmail: false } })
     expect(linkPermissions('RETURN_LABEL')).toEqual(['links.confirm', 'links.download', 'links.open'])
+    // B-W2b-409: the broker downloads the papers and types the MRN back.
+    expect(linkPermissions('BROKER_PACK')).toEqual(['links.download', 'links.open', 'links.submit'])
   })
 
   it('keep the design\'s terms: a secure file 7 days and 5 downloads, measurements 21 days and one send', () => {

@@ -18,7 +18,7 @@ import '../me.css'
  * menu in the top bar (not a sidebar row). Four cards: language and display (the language is the person's, the theme
  * this device's), password, the authenticator app (set-up with a QR code, the recovery codes shown ONCE, switch-off
  * when the role allows it), and this session; B-W2b-413: Where I'm signed in (every session, End one, Sign out everywhere
- * else) as the `signedIn` slot. Design-system parts only.
+ * else) as the `signedIn` slot; B-W2b-414: Download my data in the head (`myData`). Design-system parts only.
  */
 
 export type MeAction =
@@ -43,15 +43,17 @@ export interface MyProfileViewProps {
   whereIWork?: ReactNode
   /** B-W2b-413: Where I'm signed in (areas/me/sessions), after this session. */
   signedIn?: ReactNode
+  /** B-W2b-414: Download my data (areas/me/my-data), in the page head (design shell.profile h.more). */
+  myData?: ReactNode
 }
 
 type Translate = ReturnType<typeof useT>
 
-export function MyProfileView({ model, onAction, whereIWork, signedIn }: MyProfileViewProps) {
+export function MyProfileView({ model, onAction, whereIWork, signedIn, myData }: MyProfileViewProps) {
   const t = useT('me')
   return (
     <div className="fw-me">
-      <PageHeader title={t('title')} subtitle={t('subtitle', { name: model.person.displayName, email: model.person.email, tenant: model.tenant })} />
+      <PageHeader title={t('title')} subtitle={t('subtitle', { name: model.person.displayName, email: model.person.email, tenant: model.tenant })} actions={myData} />
       <div className="fw-me-cards">
         <DisplayCard model={model} onAction={onAction} />
         {whereIWork}

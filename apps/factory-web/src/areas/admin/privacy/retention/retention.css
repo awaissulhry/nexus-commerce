@@ -1,0 +1,98 @@
+/*
+ * Admin › Privacy › Retention rules (SCR-662) LAYOUT: the section head, the gate's banner, the list frame (fills the main
+ * area: no page max-width, Owner rule 2026-10-29), then the ledgers kept, the dated purges and what is kept for good side by
+ * side on a wide screen. Semantic tokens only.
+ */
+.fw-dpret {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+.fw-dpret-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+.fw-dpret-h2 {
+  margin: 0;
+  font-size: var(--nds-font-size-lg);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-dpret-muted,
+.fw-dpret-sub {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-dpret-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-dpret-warning {
+  color: var(--nds-warning-text);
+}
+
+.fw-dpret-cell {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.fw-dpret-strong {
+  color: var(--nds-text-strong);
+  font-weight: var(--nds-font-weight-medium);
+}
+
+.fw-dpret-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-dpret-inline {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-dpret-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
+  gap: var(--nds-space-12);
+  align-items: start;
+}
+
+.fw-dpret-card {
+  min-width: 0;
+}
+
+.fw-dpret-kept {
+  margin: 0;
+  padding-left: var(--nds-space-16);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  color: var(--nds-text-strong);
+}
+
+.fw-dpret-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+}
+
+.fw-dpret-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--nds-space-10);
+}

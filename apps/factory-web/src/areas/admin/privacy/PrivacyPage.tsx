@@ -72,6 +72,11 @@ import {
   type StepUpState,
 } from './model'
 import { PrivacyView } from './view/PrivacyView'
+import { DataRequests } from './requests/DataRequests'
+import { DepthDuties } from './requests/DepthDuties'
+import { isDepthEvent } from './requests/model'
+import { NewRequestButton } from './requests/view/NewRequestButton'
+import { RetentionRules } from './retention/RetentionRules'
 
 const TIME_ZONE = 'Europe/Rome'
 
@@ -125,11 +130,14 @@ export function PrivacyPage() {
 
   const companies = overview.value?.map((entry) => entry.company) ?? []
   const companyId = companyOf(companies, asked, session.company?.id ?? null)
+  const depthCompanies = useMemo(() => (overview.value ?? []).map((entry) => ({ id: entry.company.id, name: entry.company.name })), [overview.value])
 
   const go = useCallback(
     (change: { view?: PrivacyViewName; company?: string | null; open?: string | null }) => {
       const next = new URLSearchParams(params?.toString() ?? '')
       if (change.view !== undefined) (change.view === 'notices' ? next.delete('view') : next.set('view', change.view))
+      // B-W2b-414: Data requests' own terms leave with the list.
+      if (change.view !== undefined && change.view !== 'requests') for (const name of ['requests', 'kind', 'request', 'new']) next.delete(name)
       if (change.company !== undefined) (change.company ? next.set('company', change.company) : next.delete('company'))
       if (change.open !== undefined) (change.open ? next.set('open', change.open) : next.delete('open'))
       const query = next.toString()
@@ -227,7 +235,8 @@ export function PrivacyPage() {
   }, 800)
   const live = useLive(
     (change) => {
-      if (!change.type.startsWith('privacy.')) return
+      // B-W2b-414: Data requests and Retention rules read their own events.
+      if (!change.type.startsWith('privacy.') || isDepthEvent(change.type)) return
       if (change.type === 'privacy.notice_acknowledged') refresh()
       else setUpdates((count) => count + 1)
     },
@@ -532,6 +541,12 @@ export function PrivacyPage() {
   return (
     <PrivacyView
       model={model}
+      slots={{
+        requests: <DataRequests companyId={companyId} companies={depthCompanies} />,
+        retention: <RetentionRules companyId={companyId} companies={depthCompanies} />,
+        duties: <DepthDuties companyId={companyId} onView={(next) => go({ view: next })} />,
+        newRequest: can.requests && session.permissions.includes('privacy.requests.manage') ? <NewRequestButton /> : undefined,
+      }}
       actions={{
         onPeopleRulesRetry: () => void loadRules(),
         onCompany: (id) => go({ company: id, open: null }),

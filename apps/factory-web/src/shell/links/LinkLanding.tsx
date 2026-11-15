@@ -31,6 +31,8 @@ import { LinkRenewProvider } from './renew/LinkRenew'
 import { InviteLink } from '../../links/invite/InviteLink'
 // B-W2b-398
 import { ReturnLabelLink } from '../../links/return-label/ReturnLabelLink'
+// B-W2b-409
+import { BrokerPackLink } from '../../links/broker-pack/BrokerPackLink'
 import { linkTaskOf, type LinkTask } from '../../links/_nav/link-types'
 import { linkStateFromError, linkStateOfOpened, type LinkState } from './link-state'
 import { LinkBrandingContext, LinkFrameView, type LinkFrameViewModel, type LinkSender } from './view/LinkFrameView'
@@ -159,6 +161,9 @@ function page(task: { task: LinkTask; api: ApiClient } | null, model: LinkFrameV
     // B-W2b-398: a return label booked when the goods go (SCR-436).
     case 'return-label':
       return <ReturnLabelLink api={task.api} />
+    // B-W2b-409: the export declaration's papers for the customs broker, the MRN back (SCR-580).
+    case 'broker-pack':
+      return <BrokerPackLink api={task.api} />
     default:
       return <LinkFrameView model={model} />
   }

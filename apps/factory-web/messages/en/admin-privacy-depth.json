@@ -1,0 +1,738 @@
+{
+  "dp": {
+    "common": {
+      "cancel": "Cancel",
+      "close": "Close",
+      "dismiss": "Dismiss",
+      "loading": "Loading…",
+      "retry": "Try again",
+      "someone": "someone",
+      "working": "Working…"
+    },
+    "keys": {
+      "views": "Switch the list",
+      "newRule": "Add a retention rule"
+    },
+    "kind": {
+      "ACCESS": "Access",
+      "ERASURE": "Erasure",
+      "CORRECTION": "Correction"
+    },
+    "kindHint": {
+      "ACCESS": "A copy of everything we hold about the person, as one package (GDPR arts. 15 and 20).",
+      "ERASURE": "The person's details erased or anonymised; what the law keeps stays, with why (GDPR art. 17).",
+      "CORRECTION": "Wrong details corrected in the person's own record (GDPR art. 16)."
+    },
+    "personKind": {
+      "CONTACT": "Customer contact",
+      "PROSPECT": "Prospect",
+      "REPORTER": "Safety reporter",
+      "USER": "Office user",
+      "WORKER": "Worker"
+    },
+    "status": {
+      "RECEIVED": "Received",
+      "IN_PROGRESS": "In progress",
+      "DONE": "Done",
+      "REFUSED": "Refused",
+      "WITHDRAWN": "Withdrawn"
+    },
+    "held": {
+      "CLOSED": "The request is closed: it changes no more.",
+      "NOT_STARTED": "Check the person's identity first: the work on a request starts with it (GDPR art. 12(6)).",
+      "IDENTITY_NOT_CHECKED": "The person's identity is not checked yet (GDPR art. 12(6)): check it before the request is done.",
+      "IDENTITY_CHECKED": "The identity was checked already: the check is recorded once.",
+      "EXTENDED": "The request was extended once already: an extension never changes (GDPR art. 12(3)).",
+      "TOO_LATE_TO_EXTEND": "An extension is decided and told within the first month (GDPR art. 12(3)): that month has passed.",
+      "NOT_ACCESS": "Only an access request has a data package.",
+      "NOT_ERASURE": "Only an erasure request erases or anonymises the person.",
+      "NO_PACKAGE": "Collect the person's data package first: an access request is done once it is handed over.",
+      "NOT_ERASED": "Anonymise the person first (what the law keeps stays, with why): an erasure request is done once that is recorded.",
+      "ERASED": "The person was anonymised on this request already: what was erased and kept is recorded."
+    },
+    "duty": {
+      "label": "Data requests and retention",
+      "state": {
+        "done": "Done",
+        "needs": "To do",
+        "review": "To watch"
+      },
+      "doIt": "Do it",
+      "open": "Open",
+      "requests": {
+        "name": "Data requests answered within 30 days",
+        "none": "No request open.",
+        "open_one": "1 request open, none late.",
+        "open_other": "{count} requests open, none late.",
+        "late_one": "1 request is late: answer it now.",
+        "late_other": "{count} requests are late: answer them now.",
+        "law": "GDPR art. 12(3): within one month of receipt, extended once by up to two months."
+      },
+      "retention": {
+        "name": "Retention rules set",
+        "none": "No retention rule yet: nothing says how long personal data is kept.",
+        "reporting_one": "1 rule, only reporting: nothing is deleted until a person switches it on.",
+        "reporting_other": "{count} rules, all only reporting: nothing is deleted until a person switches one on.",
+        "applying_one": "1 rule, {applying} switched on to apply.",
+        "applying_other": "{count} rules, {applying} switched on to apply.",
+        "law": "GDPR art. 5(1)(e): kept no longer than needed; c.c. art. 2220: accounts 10 years."
+      }
+    },
+    "req": {
+      "title": "Data requests",
+      "intro": "Access, erasure and correction requests of a person, each with its 30-day clock (GDPR arts. 12, 15–17, 20).",
+      "new": "New data request",
+      "count_one": "1 request · {open} open · {late} late",
+      "count_other": "{count} requests · {open} open · {late} late",
+      "lateBanner_one": "1 request passed its due day: the law asks for an answer within the month.",
+      "lateBanner_other": "{count} requests passed their due day: the law asks for an answer within the month.",
+      "view": {
+        "label": "Which requests",
+        "open": "Open",
+        "closed": "Closed",
+        "all": "All"
+      },
+      "kindFilter": "Kind",
+      "kindAll": "Every kind",
+      "col": {
+        "person": "Person",
+        "kind": "Kind",
+        "received": "Received",
+        "due": "Due",
+        "state": "State",
+        "company": "Company"
+      },
+      "due": {
+        "in": "due in {left}",
+        "now": "due now",
+        "late": "late: due {date}",
+        "closed": "closed {date}",
+        "extended": "extended"
+      },
+      "erasedPerson": "Erased person",
+      "export_one": "Export 1",
+      "export_other": "Export {count}",
+      "failed": "The requests did not load.",
+      "empty": {
+        "open": "No open request.",
+        "closed": "No closed request.",
+        "all": "No requests.",
+        "kind": "No request of this kind here.",
+        "hint": "A person asks by mail, letter or phone: record it with New data request; the 30-day clock starts when it came in.",
+        "showAll": "Show all"
+      },
+      "held": {
+        "manage": "You may read data requests but not act on them (privacy.requests.manage).",
+        "erase": "Only a person with privacy.erase may anonymise someone."
+      }
+    },
+    "record": {
+      "title": "{kind} request · {person}",
+      "subtitle": "{company} · {kind}",
+      "loading": "Loading the request…",
+      "clock": "The 30-day clock",
+      "due": "Due",
+      "dueAt": "Due day",
+      "received": "Received",
+      "firstDue": "First due day",
+      "extendedWhy": "Extended because",
+      "clockLaw": "GDPR art. 12(3): answered within one month of receipt; extended once, within that month, by up to two months with the reason told to the person.",
+      "identity": "Identity",
+      "identityChecked": "Checked {date} by {name}.",
+      "identityNot": "Not checked yet: the work on the request starts with it (GDPR art. 12(6)).",
+      "erasure": "Anonymise",
+      "eraseIntro": "See what is erased and what the law keeps before anything changes; you type the person's name to confirm.",
+      "erased": "Done: {anonymised} anonymised, {deleted} deleted, {kept} kept with why.",
+      "correction": "Correction",
+      "correctionIntro": "Correct the details in the person's own record, then mark the request done.",
+      "openPerson": "Open the person's record",
+      "notes": "Notes and decision",
+      "note": "Note",
+      "decided": {
+        "RECEIVED": "Decided",
+        "IN_PROGRESS": "Decided",
+        "DONE": "Done",
+        "REFUSED": "Refused",
+        "WITHDRAWN": "Withdrawn"
+      },
+      "decidedBy": "{date} by {name}",
+      "refusal": "Why refused"
+    },
+    "pkg": {
+      "title": "Data package",
+      "intro": "One ZIP of everything we hold about the person: data.json, a file per kind of record, their files, a README and the checksums (GDPR arts. 15, 20).",
+      "collecting": "Collecting the data package",
+      "collectingNote": "You can close this window: the package is made in the background and appears here when ready.",
+      "running": "The package is being collected.",
+      "failed": "The package could not be made. Collect it again; if it fails again, tell the administrator.",
+      "none": "Not collected yet.",
+      "file": "File",
+      "size": "Size",
+      "made": "Made",
+      "sha": "SHA-256"
+    },
+    "action": {
+      "checkIdentity": "Identity checked…",
+      "extend": "Extend…",
+      "collect": "Collect the data",
+      "collectAgain": "Collect again",
+      "openPackage": "Download the package",
+      "erase": "Anonymise…",
+      "close": "Mark done",
+      "refuse": "Refuse…",
+      "withdraw": "Withdrawn…"
+    },
+    "form": {
+      "how": "Say how the identity was checked (3 characters or more).",
+      "reason": "Say why (3 characters or more).",
+      "tooLong": "The text is too long.",
+      "identity": {
+        "title": "Identity checked",
+        "intro": "Record how you checked that the request comes from the person: the work on it starts now.",
+        "label": "How was it checked?",
+        "hint": "For example: the reply came from the e-mail on record. Never a document number.",
+        "save": "Record the check"
+      },
+      "extend": {
+        "title": "Extend the request",
+        "intro": "Once, within the first month, by one or two more months when the request is complex or there are many (GDPR art. 12(3)). Tell the person why.",
+        "label": "Why it is extended",
+        "hint": "What makes the request complex, as told to the person.",
+        "save": "Extend",
+        "months": "By",
+        "one": "1 more month",
+        "two": "2 more months"
+      },
+      "refuse": {
+        "title": "Refuse the request",
+        "intro": "Only when it is manifestly unfounded or excessive (GDPR art. 12(5)); the person may complain to the Garante.",
+        "label": "Why it is refused",
+        "hint": "As told to the person.",
+        "save": "Refuse"
+      },
+      "withdraw": {
+        "title": "The person withdrew it",
+        "intro": "The person no longer wants the request: it closes.",
+        "label": "Note",
+        "hint": "How they said it (optional).",
+        "save": "Record as withdrawn"
+      }
+    },
+    "done": {
+      "created": "Request recorded: due {due}.",
+      "identity": "Identity check recorded: the work on the request starts.",
+      "extended": "Extended: the new due day is set.",
+      "collecting": "Collecting the package: it appears here when ready.",
+      "finished": "The request is done.",
+      "refused": "The request is refused.",
+      "withdrawn": "Recorded as withdrawn.",
+      "erased": "The person is anonymised; what the law keeps stays, with why."
+    },
+    "new": {
+      "title": "New data request",
+      "intro": "Record a request a person made by mail, letter or phone. The 30-day clock starts when it came in.",
+      "company": "Company",
+      "kind": "What they ask",
+      "who": "Who asks",
+      "find": "Find the person",
+      "findCustomer": "Find the customer",
+      "findHint": {
+        "CONTACT": "Part of the customer's code or name.",
+        "PROSPECT": "Part of the inquiry's number, the prospect's company or e-mail.",
+        "REPORTER": "Part of the report's number or the product.",
+        "USER": "Part of the name or e-mail.",
+        "WORKER": "Part of the name or the employee code."
+      },
+      "findButton": "Find",
+      "noneFound": "Nobody found: try another part of the name or number.",
+      "customer": "Customer",
+      "contact": "Contact",
+      "person": "Person",
+      "noContacts": "This customer has no contacts.",
+      "reporterHint": "The list shows the report's number only: the reporter's name is shown once the request is recorded.",
+      "pick": "Pick one",
+      "noLookup": "You cannot look up a {what} here: it needs {permission}. Ask someone who has it to record the request.",
+      "received": "Received",
+      "receivedHint": "When the request came in: the 30-day clock starts here.",
+      "note": "Note",
+      "noteHint": "What they asked and how (a mail, a letter). Never a document number or a health detail.",
+      "create": "Record the request",
+      "held": {
+        "company": "Pick the company first.",
+        "person": "Find and pick the person first.",
+        "otherCompany": "This person belongs to another company: record the request in that company.",
+        "received": "Say when the request came in.",
+        "future": "A request is recorded when it came in: now or before.",
+        "note": "The note is at most 2000 characters."
+      }
+    },
+    "erase": {
+      "title": "Anonymise {name}?",
+      "titleLoading": "Anonymise…",
+      "intro": "What is erased, what stays because the law requires it, and the decision is logged with your reason (GDPR art. 17).",
+      "blockedTitle": "It cannot run yet",
+      "blocked": {
+        "PORTAL_USER": "This person still signs in to the portal with the contact's e-mail: end their portal access first (Portal access › End access), then anonymise.",
+        "STILL_ACTIVE": "This person still works here (an active employee or floor account): anonymise them after they left.",
+        "ACCOUNT_OPEN": "This office account is still open: deactivate it first (Admin › Users), then anonymise.",
+        "NOT_A_PROSPECT": "This inquiry names a contact of a customer, not a prospect: anonymise the contact instead.",
+        "TOO_MANY": "This person has more records than one erasure writes at once: ask the administrator to split it."
+      },
+      "section": {
+        "anonymised": {
+          "title": "Anonymised",
+          "intro": "The person's details are blanked or replaced; the rest of the record (the business data) stays.",
+          "note": "The person's details go; the record stays."
+        },
+        "deleted": {
+          "title": "Deleted",
+          "intro": "These records are removed.",
+          "note": "Removed for good."
+        },
+        "kept": {
+          "title": "Kept because the law requires it",
+          "intro": "These stay as they are, each with the law's reason; invoices keep the business data.",
+          "note": "Kept."
+        }
+      },
+      "method": {
+        "ANONYMISED": "Anonymised",
+        "DELETED": "Deleted",
+        "KEPT": "Kept"
+      },
+      "records_one": "1 record",
+      "records_other": "{count} records",
+      "erasedFields": "Erased",
+      "keptFields": "Kept as is",
+      "why": {
+        "FISCAL": "Fiscal and accounting records are kept 10 years (c.c. art. 2220; DPR 633/72 art. 39; GDPR art. 17(3)(b)).",
+        "DISPUTE": "Kept while a dispute is open (a complaint, a return, a service case or a labour dispute): needed to settle it (GDPR art. 17(3)(e)).",
+        "SAFETY_REPORT": "Kept while the product-safety report is being assessed: the maker may need to reach the reporter (Reg. (EU) 2023/988; GDPR art. 17(3)(b)).",
+        "EMPLOYMENT": "Employment records are kept 5 years after the employment ends (D.L. 112/2008 art. 39; GDPR art. 17(3)(b)).",
+        "HEALTH": "Health surveillance and accident records are kept 10 years after the employment ends (D.Lgs. 81/2008 art. 25; GDPR art. 17(3)(b)).",
+        "CUSTOMER": "The customer record names the person and the orders and invoices refer to it (c.c. art. 2220: 10 years; GDPR art. 17(3)(b)).",
+        "MEASUREMENTS": "The measurements a garment was made to, for the legal guarantee (D.Lgs. 206/2005 art. 132: 26 months); their photos go on their own date.",
+        "IMMUTABLE": "Kept for now: the database keeps this record unchanged once written (a mail, a message, an audit row); blanking the name waits for a guarded erasure path.",
+        "ALREADY_ERASED": "Already anonymised earlier: nothing of the person is left in it.",
+        "NOTICE_PROOF": "The proof the person was given the privacy notice (GDPR arts. 5(2), 13): it names the notice's version, not the person's data."
+      },
+      "type": {
+        "PartyContact": "The contact",
+        "Party": "The customer record",
+        "Inquiry": "The inquiry",
+        "ProductSafetyReport": "The safety report",
+        "User": "The office account",
+        "Employee": "The employee record",
+        "Worker": "Floor accounts",
+        "CustomFieldValue": "Personal custom fields",
+        "MeasurementProfile": "Measurement profiles",
+        "WorkerNoticeAck": "Worker notice acknowledgements",
+        "StaffNoticeAck": "Staff notice acknowledgements",
+        "Message": "Messages they wrote",
+        "InboundEmail": "Mails received from them",
+        "EmailOutbound": "Mails sent to them",
+        "AuditLog": "History of their record",
+        "other": "Other records"
+      },
+      "field": {
+        "name": "name",
+        "email": "e-mail",
+        "phone": "phone",
+        "prospectName": "name",
+        "prospectCompany": "company",
+        "prospectEmail": "e-mail",
+        "prospectPhone": "phone",
+        "prospectLawfulBasis": "lawful basis",
+        "reporterName": "name",
+        "reporterEmail": "e-mail",
+        "reporterPhone": "phone",
+        "displayName": "name shown",
+        "firstName": "first name",
+        "lastName": "last name",
+        "pinHash": "PIN",
+        "legalName": "legal name",
+        "tradeName": "trade name",
+        "riderName": "rider's name",
+        "measurements": "measurements",
+        "fitNotes": "fit notes",
+        "authorName": "author's name",
+        "bodyText": "text",
+        "bodyHtml": "formatted text",
+        "fromAddress": "sender's address",
+        "fromName": "sender's name",
+        "subject": "subject",
+        "to": "recipients",
+        "cc": "copies",
+        "before": "values before",
+        "after": "values after",
+        "other": "other details"
+      },
+      "held": {
+        "loading": "Wait for the preview.",
+        "nothing": "Nothing of this person is left to erase.",
+        "reason": "Say why the person is anonymised (3 characters or more).",
+        "reasonLong": "The reason is at most 1000 characters.",
+        "typed": "Type the person's name exactly as shown."
+      },
+      "reason": "Why",
+      "reasonHint": "What they asked and how (a mail, a letter), without their details: it goes into the history.",
+      "code": "Anonymise asks for a fresh code from your authenticator, every time.",
+      "confirm": "Anonymise",
+      "erasing": "Anonymising…",
+      "failed": "The preview did not load.",
+      "doneTitle": "{name} is anonymised",
+      "done": "{anonymised} anonymised, {deleted} deleted, {kept} kept with why.",
+      "logged": "The decision is logged with your reason; the history never holds the person's name."
+    },
+    "stepUp": {
+      "title": "Confirm it's you",
+      "confirm": "Confirm",
+      "erase": "Anonymising a person asks for a fresh code every time.",
+      "apply": "Switching a rule on to apply asks for a fresh code: from then on the sweep changes records for real.",
+      "shorten": "A shorter period (or another action while the rule applies) asks for a fresh code."
+    },
+    "problem": {
+      "conflict": "Someone changed this meanwhile: it was read again. Look and try again.",
+      "failed": "That did not work. Try again.",
+      "forbidden": "Your role does not allow this here.",
+      "invalid": "It was refused as it is: check the fields.",
+      "notFound": "It is not there any more.",
+      "rateLimited": "Too many tries: wait a moment.",
+      "stepUp": "A fresh code is needed.",
+      "stepUpClosed": "Nothing changed: the code was not given.",
+      "unavailable": "The factory system did not answer. Try again."
+    },
+    "ret": {
+      "title": "Retention rules",
+      "intro": "Per record type: how long it is kept, then delete, anonymise or archive, with the legal reason (GDPR art. 5(1)(e)).",
+      "gate": {
+        "title": "Nothing is deleted by itself",
+        "body": "A rule only reports what it would do until a person switches it on to apply, with a fresh code (GATE-PRIVACY). Every period is UNVERIFIED until the privacy consultant sets it.",
+        "schedule": "The sweep runs every night at 02:50 (Rome time)."
+      },
+      "new": "Add a rule",
+      "count_one": "1 rule",
+      "count_other": "{count} rules",
+      "failed": "The retention rules did not load.",
+      "empty": "No retention rule yet.",
+      "emptyHint": "Add one per record type: how long, then what, and why the law asks for it.",
+      "col": {
+        "type": "Record type",
+        "company": "Whose",
+        "keep": "Keep for",
+        "then": "Then",
+        "reason": "Legal reason",
+        "state": "State",
+        "last": "Last sweep",
+        "more": "More"
+      },
+      "company": {
+        "all": "Every company"
+      },
+      "unverified": "UNVERIFIED",
+      "unverifiedLong": "UNVERIFIED: a made-up period until the privacy consultant sets it (GATE-PRIVACY). The rule only reports until a person switches it on.",
+      "period": {
+        "years_one": "1 year",
+        "years_other": "{count} years",
+        "months_one": "1 month",
+        "months_other": "{count} months",
+        "both": "{years} and {months}"
+      },
+      "then": {
+        "DELETE": "Delete",
+        "ANONYMISE": "Anonymise",
+        "ARCHIVE": "Archive"
+      },
+      "state": {
+        "off": "Off",
+        "reporting": "Reports only",
+        "applying": "Applies"
+      },
+      "last": {
+        "none": "Not swept yet",
+        "running": "Sweeping now",
+        "failed": "The last sweep failed",
+        "report": "{due} due · nothing changed",
+        "apply": "{applied} changed · {held} held"
+      },
+      "menu": "More for {type}",
+      "action": {
+        "change": "Change…",
+        "sweepNow": "Sweep now (report)",
+        "sweepApply": "Sweep now (applies)",
+        "sweeps": "Sweeps…",
+        "applyOn": "Switch on to apply…",
+        "applyOff": "Back to reporting",
+        "switchOff": "Switch off",
+        "switchOn": "Switch on"
+      },
+      "held": {
+        "manage": "You may read the rules but not change them (privacy.retention.manage).",
+        "SWITCHED_OFF": "The rule is switched off: switch it on again first.",
+        "ACTIVE": "The rule is on already.",
+        "APPLYING": "The sweep already applies this rule.",
+        "NOT_APPLYING": "The sweep only reports this rule.",
+        "UNKNOWN_TYPE": "The sweep knows nothing of this record type: the rule can only report.",
+        "NO_ACTION": "No sweep may delete, anonymise or archive this record type: the rule can only report."
+      },
+      "sweepHeld": {
+        "IMMUTABLE": {
+          "short": "held: kept unchanged",
+          "long": "The database keeps this record unchanged once written (a mail as it came): anonymising it waits for a guarded erasure path."
+        },
+        "NEVER_DELETED": {
+          "short": "held: never deleted",
+          "long": "The database never deletes this record (an export expires, its file goes): the rule can only report it."
+        },
+        "ARCHIVE_STAYS": {
+          "short": "archived where it is",
+          "long": "Archived where it is: nothing is erased (the fiscal archive keeps the document and its file for the law)."
+        },
+        "NOT_YET": {
+          "short": "held: not yet",
+          "long": "Not yet: the database keeps it a little longer (a closed error item 30 days, a job run 7 days)."
+        }
+      },
+      "failure": {
+        "UNKNOWN_TYPE": "The sweep knows nothing of this record type.",
+        "DB_REFUSED": "The database refused: nothing was applied; tried again at the next sweep.",
+        "STOPPED": "It stopped before the end: nothing was applied."
+      },
+      "mode": {
+        "REPORT": "Report",
+        "APPLY": "Applied"
+      },
+      "sweepStatus": {
+        "RUNNING": "Running",
+        "DONE": "Done",
+        "FAILED": "Failed"
+      },
+      "type": {
+        "ReportRun": {
+          "name": "Report runs",
+          "countsFrom": "From when the report was run.",
+          "does": {
+            "DELETE": "Deletes the run (who ran which report, with which filters); the reports themselves stay.",
+            "ANONYMISE": "A report run cannot be anonymised: the rule only reports.",
+            "ARCHIVE": "A report run cannot be archived: the rule only reports."
+          }
+        },
+        "CronRun": {
+          "name": "Scheduled job runs",
+          "countsFrom": "From when the run finished (a running one is never due).",
+          "does": {
+            "DELETE": "Deletes the finished run (job, time, result, error); never one still running, never within 7 days of its end.",
+            "ANONYMISE": "A job run cannot be anonymised: the rule only reports.",
+            "ARCHIVE": "A job run cannot be archived: the rule only reports."
+          }
+        },
+        "IntegrationErrorItem": {
+          "name": "Closed error items",
+          "countsFrom": "From when the item was dismissed or retried (an open item is never due).",
+          "does": {
+            "DELETE": "Deletes the closed item (the failed message, its reason and tries); never an open one, never within 30 days of its close.",
+            "ANONYMISE": "An error item cannot be anonymised: the rule only reports.",
+            "ARCHIVE": "An error item cannot be archived: the rule only reports."
+          }
+        },
+        "InboundEmail": {
+          "name": "Mails received",
+          "countsFrom": "From when the mail was received.",
+          "does": {
+            "ANONYMISE": "Would blank the sender, the subject and the text, keeping the thread: held today (the database keeps a read mail unchanged).",
+            "DELETE": "A received mail is never deleted by a sweep: the rule only reports.",
+            "ARCHIVE": "A received mail cannot be archived by a sweep: the rule only reports."
+          }
+        },
+        "ExportJob": {
+          "name": "Exports",
+          "countsFrom": "From when the export was asked.",
+          "does": {
+            "DELETE": "The database never deletes an export (its file expires by itself): the rule only reports.",
+            "ANONYMISE": "An export cannot be anonymised: the rule only reports.",
+            "ARCHIVE": "An export cannot be archived: the rule only reports."
+          }
+        },
+        "Invoice": {
+          "name": "Invoices",
+          "countsFrom": "From the issue date (a draft is never due).",
+          "does": {
+            "ARCHIVE": "Archives the issued invoice where it is: nothing is erased (the fiscal archive keeps the document and its file).",
+            "DELETE": "An invoice is never deleted: the law keeps it 10 years.",
+            "ANONYMISE": "An invoice is never anonymised: the law keeps it as issued."
+          }
+        },
+        "other": {
+          "name": "Other records",
+          "countsFrom": "The sweep knows nothing of this record type.",
+          "does": "The sweep knows nothing of this record type: the rule only reports."
+        }
+      },
+      "form": {
+        "newTitle": "Add a retention rule",
+        "changeTitle": "Change the rule · {type}",
+        "intro": "One rule per record type and company; a company's own rule wins over the group's for its records.",
+        "groupOnly": "These records belong to the whole group: one rule for every company.",
+        "months": "Keep for (months)",
+        "monthsHint": "Whole months, from 1 to 1200 (120 = 10 years).",
+        "reasonHint": "The law that sets the period, for example c.c. art. 2220: 10 years.",
+        "asksCode": "A shorter period (or another action while the rule applies) asks for a fresh code when you save.",
+        "add": "Add the rule",
+        "save": "Save",
+        "held": {
+          "type": "Pick the record type.",
+          "group": "These records belong to the whole group: pick Every company.",
+          "months": "Keep it for whole months, from 1 to 1200.",
+          "noAction": "No sweep may delete, anonymise or archive this record type: the rule can only report.",
+          "action": "Pick what happens after the period.",
+          "reason": "Say the legal reason (3 characters or more).",
+          "reasonLong": "The legal reason is at most 1000 characters."
+        }
+      },
+      "apply": {
+        "title": "Switch {type} ({company}) on to apply?",
+        "confirm": "Switch on to apply",
+        "from": "From the next sweep, the records past the period are changed for real; a deleted record cannot be put back.",
+        "unverified": "The period is UNVERIFIED until the privacy consultant sets it.",
+        "code": "A fresh code from your authenticator is asked next.",
+        "back": "Back to reporting stops it at once.",
+        "ack": "I understand the sweep will change records for real."
+      },
+      "done": {
+        "added": "Rule added for {type}: it only reports until switched on.",
+        "changed": "Rule for {type} saved.",
+        "on": "Rule for {type} switched on.",
+        "off": "Rule for {type} switched off.",
+        "applyOn": "{type}: the sweep now applies the rule.",
+        "applyOff": "{type}: back to reporting.",
+        "swept": "{type} swept: a report, nothing changed.",
+        "sweptApply": "{type} swept and applied.",
+        "sweptMany_one": "1 rule swept: a report, nothing changed.",
+        "sweptMany_other": "{count} rules swept: reports, nothing changed."
+      },
+      "sweepSelected_one": "Sweep 1 now",
+      "sweepSelected_other": "Sweep {count} now",
+      "sweepSelectedNone": "Only rules that are on and only report can be swept together; sweep an applying rule on its own.",
+      "sweepSelectedLeft_one": "1 selected rule is left out (off, or it applies: sweep it on its own).",
+      "sweepSelectedLeft_other": "{count} selected rules are left out (off, or they apply: sweep them on their own).",
+      "sweeps": {
+        "title": "Sweeps · {type}",
+        "failed": "The sweeps did not load.",
+        "when": "When",
+        "mode": "Mode",
+        "cutoff": "Records from before",
+        "due": "Due",
+        "applied": "Changed",
+        "held": "Held",
+        "status": "State",
+        "by": "By",
+        "night": "Nightly sweep"
+      },
+      "ledgers": {
+        "title": "Kept, waits for the Owner's decision",
+        "intro": "The database keeps these ledgers append-only: never swept, never offered for a rule.",
+        "what": "What it holds",
+        "kept": "Kept",
+        "words": "Whether they may be purged after a period waits for the Owner's decision."
+      },
+      "ledger": {
+        "AuditLog": {
+          "name": "Change history",
+          "what": "Every change to a record, who made it and when."
+        },
+        "ReadLog": {
+          "name": "Who looked",
+          "what": "Who opened or downloaded a sensitive record."
+        },
+        "SecurityEvent": {
+          "name": "Security events",
+          "what": "Sign-ins, failed sign-ins, lockouts, role changes and exports."
+        },
+        "StepUpAttempt": {
+          "name": "Fresh-code tries",
+          "what": "Every try of a fresh code."
+        }
+      },
+      "purges": {
+        "title": "Purged on their own dates",
+        "intro": "These go by their own scheduled jobs, decided already; listed here so every way personal data leaves is in one place.",
+        "what": "What",
+        "when": "When",
+        "why": "Why"
+      },
+      "purge": {
+        "measurementPhotos": {
+          "what": "Body photos sent with measurements, made-to-measure office photos and fitting photos",
+          "when": "90 days after the garment ships (each on its own date); the measurements stay",
+          "why": "The Owner's answer (GDPR art. 5(1)(c), (e))"
+        },
+        "portalCodes": {
+          "what": "Portal sign-in and fresh codes",
+          "when": "A day after they expired",
+          "why": "GDPR art. 5(1)(e); kept a day for the security log"
+        },
+        "linkDrafts": {
+          "what": "Drafts of link forms (measurements, claims, questionnaires)",
+          "when": "7 days after their link expired",
+          "why": "GDPR art. 5(1)(e)"
+        },
+        "largeUploads": {
+          "what": "Uploads in parts never finished",
+          "when": "When their upload window ends",
+          "why": "GDPR art. 5(1)(e)"
+        },
+        "exportFiles": {
+          "what": "The files of exports",
+          "when": "When the export expires (the export row stays)",
+          "why": "GDPR art. 5(1)(e)"
+        }
+      },
+      "kept": {
+        "title": "Kept for good",
+        "DataRequest": "Data requests and their answers",
+        "ErasureRecord": "What each erasure did",
+        "RetentionRule": "The retention rules",
+        "RetentionSweep": "Every sweep and what it did"
+      }
+    },
+    "my": {
+      "button": "Download my data",
+      "title": "Download my data",
+      "intro": "A copy of what the factory holds about you, in one ZIP (GDPR arts. 15 and 20):",
+      "holds": {
+        "data": "your data as data.json and one file per kind of record;",
+        "files": "the files linked to you;",
+        "readme": "a README that explains each part, with the checksums."
+      },
+      "ask": "Ask for my data",
+      "asked": "Asked: the copy is collected in the background and appears here when ready.",
+      "downloaded": "Downloaded: the request is done.",
+      "held": {
+        "open": "One request at a time: your last one is still open (download it first).",
+        "company": "Pick the company you work in first (the switch at the top): the request is kept by that company."
+      },
+      "list": "My requests",
+      "col": {
+        "asked": "Asked",
+        "company": "Company",
+        "state": "State",
+        "copy": "Copy"
+      },
+      "state": {
+        "collecting": "Being collected",
+        "ready": "Ready",
+        "handed": "Downloaded",
+        "failed": "Could not be collected",
+        "waiting": "Waiting",
+        "closed": "Closed"
+      },
+      "collecting": "Collecting your data",
+      "download": "Download",
+      "askAgain": "Ask again.",
+      "noCopy": "No copy.",
+      "none": "You have not asked for your data yet.",
+      "failed": "Your requests did not load.",
+      "handover": "The first download hands the copy over: the request is then done. The link works for one minute."
+    }
+  }
+}

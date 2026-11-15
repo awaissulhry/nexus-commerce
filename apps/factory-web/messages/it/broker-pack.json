@@ -1,0 +1,44 @@
+{
+  "title": "Documenti di esportazione della spedizione {number}",
+  "loading": "Apertura dei documenti…",
+  "offline": "Nessuna connessione: riprova quando la rete torna.",
+  "retry": "Riprova",
+  "papers": "I documenti per la dichiarazione di esportazione",
+  "papersHint": "Scarica ogni documento per la dichiarazione: la fattura commerciale, la distinta colli, i documenti di origine e le dichiarazioni di conformità.",
+  "noPapers": "Con questo link non è stato inviato alcun documento: chiedi al mittente.",
+  "shipment": "Spedizione",
+  "destination": "Destinazione",
+  "state": "Dichiarazione",
+  "until": "Questa pagina è aperta fino al",
+  "download": "Scarica",
+  "downloadOne": "Scarica {name}",
+  "status": {
+    "PACK_SENT": "In attesa di presentazione",
+    "FILED": "Presentata",
+    "EXITED": "Merce uscita dall'UE"
+  },
+  "mrn": {
+    "title": "Inserisci l'MRN",
+    "hint": "Dopo aver presentato la dichiarazione di esportazione, inserisci qui il suo MRN: viene inviato al mittente una sola volta.",
+    "label": "MRN (Movement Reference Number)",
+    "format": "18 caratteri: due cifre dell'anno, il paese (due lettere), poi 14 lettere o cifre.",
+    "send": "Invia l'MRN"
+  },
+  "filed": {
+    "title": "MRN ricevuto",
+    "body": "Il mittente ha l'MRN {mrn} della dichiarazione. Grazie."
+  },
+  "held": {
+    "MRN_FORMAT": "Un MRN ha 18 caratteri: due cifre dell'anno, il paese (due lettere), poi 14 lettere o cifre.",
+    "FILED": "La dichiarazione ha già il suo MRN.",
+    "empty": "Inserisci prima l'MRN.",
+    "offline": "Nessuna connessione: riprova quando la rete torna.",
+    "busy": "Attendi: l'ultima operazione è ancora in corso.",
+    "gone": "Il mittente ha ritirato questo documento."
+  },
+  "problem": {
+    "read": "Non è stato possibile aprire i documenti.",
+    "gone": "Questo link non si apre più: il mittente ha ritirato la dichiarazione.",
+    "failed": "Non ha funzionato: riprova."
+  }
+}

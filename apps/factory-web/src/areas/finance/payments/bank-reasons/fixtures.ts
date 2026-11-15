@@ -52,7 +52,7 @@ const LINE: PaymentBankLine = {
     match: { id: uid('9494', 1), confidence: 'HIGH', reasons: [{ code: 'AMOUNT_WITHIN_TOLERANCE' }, { code: 'NUMBER_IN_REFERENCE' }, { code: 'IBAN_KNOWN' }], chosenByPerson: false, acceptedAt: '2026-10-29T09:10:00.000Z', acceptedById: PERSON.id, reversedAt: null },
   },
 }
-const bank = (over: Partial<BankLineModel> = {}): BankLineModel => ({ value: LINE, problem: null, people: [PERSON], ...over })
+const bank = (over: Partial<BankLineModel> = {}): BankLineModel => ({ value: LINE, problem: null, people: [PERSON], prefix: '/w/DEMO', ...over })
 
 type DepthCase = { case: PaymentsCase; depth: { writeOff?: WriteOffModel; bank?: BankLineModel } }
 

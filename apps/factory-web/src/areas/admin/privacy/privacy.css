@@ -35,14 +35,12 @@
 .fw-pv-asof,
 .fw-pv-muted,
 .fw-pv-sub,
-.fw-pv-later,
 .fw-pv-loading {
   color: var(--nds-text-2);
   font-size: var(--nds-font-size-sm);
 }
 
 .fw-pv-muted,
-.fw-pv-later,
 .fw-pv-loading {
   margin: 0;
 }
