@@ -5,6 +5,8 @@ import { defineCron, type CronJob } from '../../../core/cron'
 import type { Log } from '../../../core/queue'
 import { activeTenants, systemContext } from '../../../platform/outbox/system'
 import { postWorkOrderCosts } from './post'
+// B-W2b-F46: a CLOSED work order's late costs wait for a reopen (./after-close.ts): counted, never a failure.
+import { isClosedWorkOrderRefusal, lateCostsOf } from './after-close'
 import { unique, type Reader } from './store'
 
 /**
@@ -21,6 +23,10 @@ import { unique, type Reader } from './store'
  *     postWorkOrderCosts (a dry plan first: a work order whose sources still wait writes nothing — no command, no audit
  *     row), key `costing-catch-up:<tick>:<work order>` (a tick run twice posts once; the entries' own keys hold too).
  * A work order that fails is logged and left for the next night; the run's figures are logged when anything posted.
+ * B-W2b-F46: a CLOSED work order takes no cost entry but a reversal (its close froze the actual): it is skipped and counted
+ * as `afterClose` (not `failed`) when its sources lack anything — the close-check and the cost read say it in words until a
+ * reopen, and the close after the reopen posts it. The database's own refusal (a close that landed meanwhile) counts the
+ * same way; any other refusal is still a failure.
  */
 
 /** Work orders per tenant and night; the rest waits for the next night. */
@@ -67,12 +73,15 @@ export interface CatchUpRun {
   readonly posted: number
   readonly entries: number
   readonly failed: number
+  // B-W2b-F46
+  /** Of them, CLOSED work orders whose sources lack entries: they wait for a reopen (never a failure). */
+  readonly afterClose: number
 }
 
 /** One pass over every active tenant (the cron's tick; tests call it directly). `tick` makes the commands' keys. */
 export async function runCostCatchUp(options: CatchUpOptions, tick: Date = new Date()): Promise<CatchUpRun> {
   const requestId = `costing-catch-up-${newId()}`
-  const totals = { workOrders: 0, posted: 0, entries: 0, failed: 0 }
+  const totals = { workOrders: 0, posted: 0, entries: 0, failed: 0, afterClose: 0 }
   const tenants = await activeTenants(options.database)
   for (const tenantId of tenants) {
     const caller = callerFor(options.database, systemContext(tenantId, requestId))
@@ -80,19 +89,31 @@ export async function runCostCatchUp(options: CatchUpOptions, tick: Date = new D
     totals.workOrders += ids.length
     for (const workOrderId of ids) {
       try {
+        // B-W2b-F46: a CLOSED work order is skipped; it counts when its sources lack anything.
+        const late = await caller.withClient((client) => lateCostsOf(client, workOrderId))
+        if (late) {
+          if (late.drafts.length > 0) totals.afterClose += 1
+          continue
+        }
         const outcome = await postWorkOrderCosts(caller, workOrderId, { idempotencyKey: `costing-catch-up:${tick.getTime()}:${workOrderId}` })
         if (outcome.posted.length > 0) {
           totals.posted += 1
           totals.entries += outcome.posted.length
         }
       } catch (error) {
+        // B-W2b-F46
+        if (isClosedWorkOrderRefusal(error)) {
+          totals.afterClose += 1
+          continue
+        }
         totals.failed += 1
         options.log.error({ err: error, tenantId, workOrderId }, 'the cost catch-up could not post a work order')
       }
     }
   }
   const run = { tenants: tenants.length, ...totals }
-  if (run.posted > 0 || run.failed > 0) options.log.info({ ...run }, 'cost catch-up')
+  // B-W2b-F46: + afterClose (the costs that wait for a reopen are said, at info, never as a failure).
+  if (run.posted > 0 || run.failed > 0 || run.afterClose > 0) options.log.info({ ...run }, 'cost catch-up')
   return run
 }
 

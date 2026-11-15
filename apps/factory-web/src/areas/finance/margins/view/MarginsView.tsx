@@ -16,6 +16,11 @@ import { WithMessages } from '../../../../record-panels/i18n'
 import type { Margins, OrderMargin, OrderMarginRow } from '../api'
 import { barsOf, changeTone, MARGINS_NAMESPACE, moneyText, orderHref, orderMarginTabHref, pctText, pctTone, stagePhrase, type CsvWords, type MarginsAddress, type MarginsCan } from '../model'
 import { BarList, MarginMeter, MarginStrip, ProfitBridge, Waterfall, WorkOrderShares, MarginLines } from './parts'
+// B-W2b-416: the margin floor (tile, flag, the DetailModal's floor) and the order's documents.
+import { DEPTH_NAMESPACE, flagOf, floorTileOf } from '../floor/model'
+import { FloorFlag, FloorSummary } from '../floor/view/FloorParts'
+import type { DocumentsState } from '../documents/model'
+import { DocumentsSection } from '../documents/view/DocumentsSection'
 import '../margins.css'
 
 export type LiveState = 'connecting' | 'live' | 'offline'
@@ -41,6 +46,8 @@ export interface MarginsModel {
   readonly live: LiveState
   readonly updates: number
   readonly detail: OrderDetailState | null
+  /** B-W2b-416: the open order's documents (null: no order open). */
+  readonly documents?: DocumentsState | null
   readonly notice: { readonly tone: 'danger' | 'info'; readonly words: { key: string } } | null
   /** Design cases: the selected rows, the focused row, the keys panel open. */
   readonly selected?: readonly string[]
@@ -51,7 +58,7 @@ export interface MarginsModel {
 export interface MarginsActions {
   onAddress?: (next: Partial<MarginsAddress>) => void
   onSearch?: (text: string) => void
-  onRetry?: (part: 'margins' | 'detail') => void
+  onRetry?: (part: 'margins' | 'detail' | 'documents') => void
   onMore?: () => void
   onShowUpdates?: () => void
   onExport?: (rows: readonly OrderMarginRow[], words: CsvWords, fileName: string) => void
@@ -69,7 +76,7 @@ export interface MarginsActions {
  */
 export function MarginsView({ model, actions }: { model: MarginsModel; actions?: MarginsActions }) {
   return (
-    <WithMessages namespaces={[MARGINS_NAMESPACE, 'lists']}>
+    <WithMessages namespaces={[MARGINS_NAMESPACE, DEPTH_NAMESPACE, 'lists']}>
       <MarginsPageView model={model} actions={actions} />
     </WithMessages>
   )
@@ -77,6 +84,7 @@ export function MarginsView({ model, actions }: { model: MarginsModel; actions?:
 
 function MarginsPageView({ model, actions }: { model: MarginsModel; actions?: MarginsActions }) {
   const t = useT(MARGINS_NAMESPACE)
+  const depth = useT(DEPTH_NAMESPACE)
   const lists = useT('lists')
   const locale = useLocale()
   const [selectedOwn, setSelected] = useState<string[]>([])
@@ -161,12 +169,14 @@ function MarginsPageView({ model, actions }: { model: MarginsModel; actions?: Ma
       ...(can.margin
         ? [
             { colId: 'margin', headerName: t('col.margin'), minWidth: 210, flex: 1.1, cellRenderer: MarginCell } satisfies ColDef<OrderMarginRow>,
+            // B-W2b-416: the floor flag beside the margin it judges (design "floor flag (W2b)"; the margin grain).
+            { colId: 'floor', headerName: depth('col.floor'), minWidth: 140, flex: 0.7, cellRenderer: ({ data }: ICellRendererParams<OrderMarginRow>) => (data ? <FloorFlag row={data} /> : null) } satisfies ColDef<OrderMarginRow>,
             { colId: 'actualPct', headerName: t('col.actualPct'), minWidth: 110, flex: 0.6, type: 'rightAligned', cellRenderer: ActualPctCell } satisfies ColDef<OrderMarginRow>,
           ]
         : []),
       { colId: 'state', headerName: t('col.state'), minWidth: 150, flex: 0.9, cellRenderer: StateCell },
     ]
-  }, [t, locale, model.prefix, can, amounts, actions])
+  }, [t, depth, locale, model.prefix, can, amounts, actions])
 
   if (!can.view) {
     return (
@@ -179,7 +189,7 @@ function MarginsPageView({ model, actions }: { model: MarginsModel; actions?: Ma
   const tiles = margins?.tiles ?? null
   const picked = (rows ?? []).filter((row) => selected.includes(row.order.id))
   const filtered = Object.entries(model.address).some(([key, value]) => key !== 'open' && value !== null)
-  const csvWords: CsvWords = { header: (column) => t(`csv.${column}`), status: (row) => t(`status.${row.order.status}`), stage: (row) => t(stagePhrase(row).key) }
+  const csvWords: CsvWords = { header: (column) => t(`csv.${column}`), status: (row) => t(`status.${row.order.status}`), stage: (row) => t(stagePhrase(row).key), floor: (row) => depth(flagOf(row).key) }
   const fileName = `${t('csv.file', { day: model.today })}.csv`
   const ownKeys: ListKey[] = [{ keys: ['/'], does: t('keys.search') }, { keys: ['Enter'], does: t('keys.open') }]
   const partyName = model.address.party ? (margins?.byCustomer.find((group) => group.party.id === model.address.party)?.party.name ?? t('filter.customer')) : null
@@ -187,7 +197,11 @@ function MarginsPageView({ model, actions }: { model: MarginsModel; actions?: Ma
 
   const metrics: Metric[] = [
     { label: t('tiles.average'), value: tiles ? pctText(tiles.averageMarginPct ?? null, locale) : '—', hint: tiles && tiles.unknown > 0 ? t('tiles.unknown', { count: tiles.unknown }) : t('tiles.averageHint') },
-    { label: t('tiles.floor'), value: '—', hint: t('tiles.floorLater') },
+    // B-W2b-416 (KA3:01): the orders below their floor, from the Sales settings' floors; a filter of the list.
+    (() => {
+      const tile = floorTileOf(tiles, model.address.floor === 'below')
+      return { label: t('tiles.floor'), value: tile.value, hint: depth(tile.hintKey), active: tile.active, onClick: () => actions?.onAddress?.({ floor: tile.active ? null : 'below' }) } satisfies Metric
+    })(),
     ...(amounts
       ? [
           {
@@ -215,8 +229,13 @@ function MarginsPageView({ model, actions }: { model: MarginsModel; actions?: Ma
     />
   )
   const chips =
-    partyName || styleCode ? (
+    partyName || styleCode || model.address.floor ? (
       <span className="fw-fmg-inline">
+        {model.address.floor && (
+          <FilterChip pressed onClick={() => actions?.onAddress?.({ floor: null })} aria-label={depth('filter.clear')}>
+            {depth('filter.below')} <X size={12} aria-hidden />
+          </FilterChip>
+        )}
         {partyName && (
           <FilterChip pressed onClick={() => actions?.onAddress?.({ party: null })} aria-label={t('filter.clear', { name: partyName })}>
             {partyName} <X size={12} aria-hidden />
@@ -234,7 +253,7 @@ function MarginsPageView({ model, actions }: { model: MarginsModel; actions?: Ma
       size="sm"
       onClick={() => {
         setTyped(null)
-        actions?.onAddress?.({ from: null, to: null, party: null, style: null, q: null })
+        actions?.onAddress?.({ from: null, to: null, party: null, style: null, q: null, floor: null })
       }}
     >
       {t('list.clearFilters')}
@@ -374,7 +393,19 @@ function MarginsPageView({ model, actions }: { model: MarginsModel; actions?: Ma
         )}
       </section>
 
-      {model.detail && <OrderMarginDialog state={model.detail} ids={ids} can={can} prefix={model.prefix} onGo={(id) => actions?.onAddress?.({ open: id })} onClose={() => actions?.onAddress?.({ open: null })} onRetry={() => actions?.onRetry?.('detail')} />}
+      {model.detail && (
+        <OrderMarginDialog
+          state={model.detail}
+          documents={model.documents ?? null}
+          ids={ids}
+          can={can}
+          prefix={model.prefix}
+          onGo={(id) => actions?.onAddress?.({ open: id })}
+          onClose={() => actions?.onAddress?.({ open: null })}
+          onRetry={() => actions?.onRetry?.('detail')}
+          onRetryDocuments={() => actions?.onRetry?.('documents')}
+        />
+      )}
 
       {help && (
         <Modal open onClose={() => setHelp(false)} title={t('keys.title')} size="sm">
@@ -395,9 +426,29 @@ function MarginsPageView({ model, actions }: { model: MarginsModel; actions?: Ma
  * pop:order — one order's profitability (design "SO-1043 — profitability", a DetailModal: centred, a full-screen sheet on
  * a phone; J / K the next or previous order of the list): the strip quoted → now → so far, the bridge from price to
  * margin, where the margin went, by line, the work orders behind the cost (each a link to its cost), and "Open order"
- * (its Margin tab). The documents (invoices, credit notes, payments) come with W2b.
+ * (its Margin tab). B-W2b-416: the margin floor and every document of the order (FIN-053), each a link.
  */
-export function OrderMarginDialog({ state, ids, can, prefix, onGo, onClose, onRetry }: { state: OrderDetailState; ids: readonly string[]; can: MarginsCan; prefix: string; onGo?: (id: string) => void; onClose?: () => void; onRetry?: () => void }) {
+export function OrderMarginDialog({
+  state,
+  documents,
+  ids,
+  can,
+  prefix,
+  onGo,
+  onClose,
+  onRetry,
+  onRetryDocuments,
+}: {
+  state: OrderDetailState
+  documents?: DocumentsState | null
+  ids: readonly string[]
+  can: MarginsCan
+  prefix: string
+  onGo?: (id: string) => void
+  onClose?: () => void
+  onRetry?: () => void
+  onRetryDocuments?: () => void
+}) {
   const t = useT(MARGINS_NAMESPACE)
   const detail = state.value
   return (
@@ -430,19 +481,20 @@ export function OrderMarginDialog({ state, ids, can, prefix, onGo, onClose, onRe
         ) : undefined
       }
     >
-      {detail && <ProfitabilityBody detail={detail} can={can} prefix={prefix} />}
+      {detail && <ProfitabilityBody detail={detail} can={can} prefix={prefix} documents={documents?.orderId === detail.order.id ? documents : null} onRetryDocuments={onRetryDocuments} />}
     </DetailModal>
   )
 }
 
 /** The profitability of one order (the DetailModal's body; the sales order's Margin tab draws the same parts). */
-export function ProfitabilityBody({ detail, can, prefix }: { detail: OrderMargin; can: MarginsCan; prefix: string }) {
+export function ProfitabilityBody({ detail, can, prefix, documents, onRetryDocuments }: { detail: OrderMargin; can: MarginsCan; prefix: string; documents?: DocumentsState | null; onRetryDocuments?: () => void }) {
   const t = useT(MARGINS_NAMESPACE)
   return (
     <div className="fw-fmg-detail">
       {can.margin && <MarginStrip detail={detail} can={can} />}
       {can.margin && <MarginMeter quoted={detail.quotedMarginPct} now={detail.estimateMarginPct} />}
       {!can.margin && <Banner tone="info" title={t('detail.noGrain')} />}
+      {can.margin && <FloorSummary detail={detail} />}
       <div className="fw-fmg-pair">
         <section className="fw-fmg-card" aria-label={t('bridge.title')}>
           <h3 className="fw-fmg-h3">{t('bridge.title')}</h3>
@@ -462,7 +514,7 @@ export function ProfitabilityBody({ detail, can, prefix }: { detail: OrderMargin
         <WorkOrderShares detail={detail} can={can} prefix={prefix} />
       </section>
       <p className="fw-fmg-muted">{detail.provisional ? t('detail.provisional') : t('detail.method')}</p>
-      <p className="fw-fmg-muted">{t('detail.documentsLater')}</p>
+      <DocumentsSection state={documents ?? null} can={can} prefix={prefix} onRetry={onRetryDocuments} />
       <p className="fw-fmg-muted">
         <Link className="fw-fmg-link" href={orderHref(prefix, detail.order.id)}>
           {t('detail.orderLink', { number: detail.order.number })}

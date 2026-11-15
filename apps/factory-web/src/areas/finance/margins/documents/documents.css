@@ -1,0 +1,51 @@
+/*
+ * pop:order "Documents" (B-W2b-416; FIN-053) LAYOUT on SCR-155's profitability DetailModal: the groups side by side where
+ * the modal is wide, one under the other on a phone. The controls are the design system's; semantic tokens only.
+ */
+.fw-fmd {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+.fw-fmd-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 26rem), 1fr));
+  gap: var(--nds-space-14) var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-fmd-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-fmd-group.is-wide {
+  grid-column: 1 / -1;
+}
+
+.fw-fmd-h4 {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: 600;
+}
+
+.fw-fmd-notes {
+  margin: 0;
+  padding-left: var(--nds-space-16);
+}
+
+.fw-fmd-places {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4) var(--nds-space-8);
+  min-width: 0;
+}
+
+/* A document's kind and state under its number wrap rather than cut (the tables are narrow inside the DetailModal). */
+.fw-fmd .fw-fmg-cell-sub {
+  white-space: normal;
+}

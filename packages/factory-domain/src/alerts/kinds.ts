@@ -19,6 +19,12 @@ import { APPROVALS_VIEW } from '../approvals/permissions'
 import { SHIPPING_VIEW } from '../shipping/permissions'
 import type { TimerKind } from '../timers/rules'
 
+/**
+ * B-W2b-416: an order below its margin floor is seen with the margin grain (`money.margin`, auth/grains: a grain travels in
+ * the grants as this permission, over the role's companies and customers): the flag is the margin grain wherever it shows.
+ */
+const MARGIN_GRAIN = 'money.margin' satisfies Permission
+
 /** B-W2b-24: seeing a connection (auth/permissions/catalogue INTEGRATIONS_VIEW; named here so the catalogue is not imported). */
 const INTEGRATIONS_VIEW = 'integrations.view' satisfies Permission
 
@@ -50,7 +56,8 @@ const INTEGRATIONS_VIEW = 'integrations.view' satisfies Permission
 // than needed) and SUPPLIER_STATUS_CHANGED (a supplier put on hold, blocked, limited or made inactive).
 // B-W2b-385 (NT1:04, B-W2b-341's gap): RETURN_ARRIVED_LATE, a return whose goods reached the dock after their deadline.
 // B-W2b-409 (LOG-089): EXIT_PROOF_MISSING, an export whose proof of exit is still missing after its declaration's days.
-export const RULE_KINDS = ['ORDER_LATE_RISK', 'HOLD_TOO_LONG', 'MATERIAL_SHORT', 'APPROVAL_OVERDUE', 'PO_NOT_CONFIRMED', 'CERTIFICATE_EXPIRING', 'INVOICE_DEADLINE', 'INTEGRATION_FAILING', 'WORKING_TIME_LIMIT', 'LOW_STOCK', 'PO_CONFIRMED_LATE', 'SUPPLIER_STATUS_CHANGED', 'RETURN_ARRIVED_LATE', 'EXIT_PROOF_MISSING'] as const
+// B-W2b-416 (FIN-050): MARGIN_BELOW_FLOOR, an order whose margin (estimated now, or final) is below its margin floor.
+export const RULE_KINDS = ['ORDER_LATE_RISK', 'HOLD_TOO_LONG', 'MATERIAL_SHORT', 'APPROVAL_OVERDUE', 'PO_NOT_CONFIRMED', 'CERTIFICATE_EXPIRING', 'INVOICE_DEADLINE', 'INTEGRATION_FAILING', 'WORKING_TIME_LIMIT', 'LOW_STOCK', 'PO_CONFIRMED_LATE', 'SUPPLIER_STATUS_CHANGED', 'RETURN_ARRIVED_LATE', 'EXIT_PROOF_MISSING', 'MARGIN_BELOW_FLOOR'] as const
 export type RuleKind = (typeof RULE_KINDS)[number]
 export const isRuleKind = (value: unknown): value is RuleKind => typeof value === 'string' && (RULE_KINDS as readonly string[]).includes(value)
 
@@ -310,6 +317,22 @@ export const KINDS: Readonly<Record<RuleKind, KindSpec>> = Object.freeze({
     builtIn: { name: { en: 'Proof of exit missing for an export', it: "Prova dell'uscita mancante per un'esportazione" }, threshold: {}, severity: 'WARNING', cooldownMinutes: 1440, recipientRole: 'finance' },
     label: { en: 'Exports without their proof of exit', it: "Esportazioni senza la prova dell'uscita" },
     recheck: [{ event: 'customs.declaration_changed', key: 'shipmentId' }],
+  }),
+  // B-W2b-416 (FIN-050 low-margin alert; "the margin floor of W2b-5 is set but nothing watches it").
+  MARGIN_BELOW_FLOOR: spec({
+    kind: 'MARGIN_BELOW_FLOOR',
+    trigger: 'CONDITION',
+    // One alert per sales order (confirmed, being made or on its way): its margin as estimated now — the final margin once
+    // every work order is done — is below the floor it is held to (costing/profitability/floor: the Sales settings' floor of
+    // its seller's roles, else the company's). It clears when the order is above it again or leaves those states. No
+    // numbers of its own (the floors are the Sales settings'); its facts carry no figure.
+    recordType: 'SalesOrder',
+    view: MARGIN_GRAIN,
+    threshold: z.strictObject({}),
+    builtIn: { name: { en: 'Order below its margin floor', it: 'Ordine sotto il margine minimo' }, threshold: {}, severity: 'WARNING', cooldownMinutes: 1440, recipientRole: 'finance' },
+    label: { en: 'Orders below their margin floor', it: 'Ordini sotto il margine minimo' },
+    // Evaluated with every pass: a cost is posted on a work order (several orders), never on the order itself.
+    recheck: [],
   }),
 })
 

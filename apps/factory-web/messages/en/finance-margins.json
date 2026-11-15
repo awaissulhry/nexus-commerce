@@ -34,7 +34,6 @@
     "unknown_one": "{count} order's cost cannot be told yet",
     "unknown_other": "{count} orders' cost cannot be told yet",
     "floor": "Orders below the floor",
-    "floorLater": "Comes in a later version (the margin floor flag)",
     "lost": "Margin lost since quote",
     "lostHint": "Quoted margin less the margin now (gains offset losses)",
     "orders": "Orders",
@@ -123,7 +122,6 @@
     "noGrain": "Margins need the margin grain (money.margin).",
     "provisional": "Provisional: the costing method is not decided yet (the accountant chooses it).",
     "method": "The costs follow the company's costing method.",
-    "documentsLater": "Invoices, credit notes, payments and freight as links come in a later version.",
     "orderLink": "Open {number} in Sales › Orders"
   },
   "held": {
@@ -245,6 +243,7 @@
     "quotedMarginPct": "Quoted margin %",
     "estimateMarginPct": "Margin % now",
     "actualMarginPct": "Margin % so far",
+    "floor": "Margin floor",
     "marginChange": "Margin change",
     "currency": "Currency",
     "stage": "Cost"

@@ -11,7 +11,8 @@ import { WithMessages } from '../../../../../record-panels/i18n'
 import { COSTING_NAMESPACE, decimalText, moneyText } from '../../../../finance/costing/model'
 import type { WorkOrder } from '../../../_shared/api'
 import type { CloseCheck, CloseFigures, CloseReason, CloseRecord } from '../api'
-import { CLOSE_NS, closedPhrase, closeHeld, FIGURES, NOTE_MAX, noteNeeded, REOPEN_MAX, reasonKey, reopenHeld, reopenOpenHeld, type Figure } from '../model'
+// B-W2b-F46: + afterClosePhrase (costs that arrived after the close, beside Reopen).
+import { afterClosePhrase, CLOSE_NS, closedPhrase, closeHeld, FIGURES, NOTE_MAX, noteNeeded, REOPEN_MAX, reasonKey, reopenHeld, reopenOpenHeld, type Figure } from '../model'
 import type { CloseActions, CloseModel } from '../use-close'
 
 /**
@@ -35,8 +36,9 @@ export function CloseParts({ workOrder, model, actions }: { workOrder: WorkOrder
 
 /** The band under the record's tabs: the Undo after a close, or a closed work order's close (who, when, why) with Reopen…. */
 export function CloseBanners({ workOrder, model, actions }: { workOrder: WorkOrder; model: CloseModel; actions?: CloseActions }) {
+  // B-W2b-F46: + the costing catalogue (the events of the costs that arrived after the close).
   return (
-    <WithMessages namespaces={[CLOSE_NS]}>
+    <WithMessages namespaces={[CLOSE_NS, COSTING_NAMESPACE]}>
       {model.undo && <UndoBanner model={model} actions={actions} />}
       {workOrder.status === 'CLOSED' && !model.undo && <ClosedBanner model={model} actions={actions} />}
     </WithMessages>
@@ -298,11 +300,35 @@ function ClosedBanner({ model, actions }: { model: CloseModel; actions?: CloseAc
     )
   }
   const words = closedPhrase(live)
+  // B-W2b-F46: costs that arrived after the close wait for a reopen: said next to Reopen (held with why without the right).
+  const late = afterClosePhrase(check)
   return (
-    <Banner tone="info" title={t(words.key, { date: formatDate(live.closedAt, { locale }), time: formatTime(live.closedAt, { locale }), name: live.closedBy.name })} action={action}>
+    <Banner tone={late ? 'warning' : 'info'} title={t(words.key, { date: formatDate(live.closedAt, { locale }), time: formatTime(live.closedAt, { locale }), name: live.closedBy.name })} action={action}>
       {live.reasonCode ? `${t('closed.reason', { reason: t(reasonKey(live.reasonCode)) })} ` : ''}
       {live.reasonNote ? `${t('closed.note', { note: live.reasonNote })} ` : ''}
       {t('closed.final')}
+      {late && check?.afterClose ? <AfterCloseList late={late} afterClose={check.afterClose} currency={check.figures.currency} /> : null}
     </Banner>
+  )
+}
+
+// B-W2b-F46
+/** The costs that arrived after the close, one line per source: its event, its document, its day, its amount (the cost grain only). */
+function AfterCloseList({ late, afterClose, currency }: { late: { key: string; params?: Readonly<Record<string, string | number>> }; afterClose: NonNullable<CloseCheck['afterClose']>; currency: string }) {
+  const t = useT(CLOSE_NS)
+  const tc = useT(COSTING_NAMESPACE)
+  const locale = useLocale()
+  return (
+    <>
+      <p role="status">
+        <strong>{t(late.key, late.params)}</strong>
+      </p>
+      <ul className="fw-pr-list" aria-label={t('afterClose.list')}>
+        {afterClose.lines.map((line) => {
+          const params = { event: tc(`event.${line.event}`), document: line.label ?? line.item?.code ?? '—', date: formatDate(line.occurredAt, { locale }) }
+          return <li key={`${line.sourceType}:${line.sourceId}`}>{line.amount === undefined ? t('afterClose.line', params) : t('afterClose.lineAmount', { ...params, amount: moneyText(line.amount, currency, locale) })}</li>
+        })}
+      </ul>
+    </>
   )
 }

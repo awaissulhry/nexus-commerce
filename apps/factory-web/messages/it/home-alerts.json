@@ -26,7 +26,10 @@
     "alerts.SUPPLIER_STATUS_CHANGED.INACTIVE": "Il fornitore {label} è inattivo dal {changedOn}: nessun nuovo ordine di acquisto.",
     "alerts.UNKNOWN": "Avviso su {label}.",
     "alerts.RETURN_ARRIVED_LATE": "Il reso {label} è arrivato il {receivedDate}, {days} giorni dopo la scadenza ({dueDate}).",
-    "alerts.EXIT_PROOF_MISSING": "La spedizione {label} è partita il {shippedDate}: la prova dell'uscita manca ancora dopo {days} giorni (senza, l'esportazione non resta non imponibile)."
+    "alerts.EXIT_PROOF_MISSING": "La spedizione {label} è partita il {shippedDate}: la prova dell'uscita manca ancora dopo {days} giorni (senza, l'esportazione non resta non imponibile).",
+    "alerts.MARGIN_BELOW_FLOOR": "Il margine dell'ordine {label}, stimato ora, è sotto il suo margine minimo.",
+    "alerts.MARGIN_BELOW_FLOOR.FINAL": "Il margine finale dell'ordine {label} è sotto il suo margine minimo.",
+    "alerts.MARGIN_BELOW_FLOOR.QUOTED": "Il margine dell'ordine {label} è sotto il suo margine minimo: il suo preventivo era stato approvato sotto."
   },
   "refused": {
     "title": "Non è tua da aprire",
@@ -177,7 +180,8 @@
       "PO_CONFIRMED_LATE": "{record} confermato più tardi del necessario",
       "SUPPLIER_STATUS_CHANGED": "{record}: stato del fornitore cambiato",
       "RETURN_ARRIVED_LATE": "{record} arrivato dopo la scadenza",
-      "EXIT_PROOF_MISSING": "{record}: prova dell'uscita mancante"
+      "EXIT_PROOF_MISSING": "{record}: prova dell'uscita mancante",
+      "MARGIN_BELOW_FLOOR": "{record} sotto il margine minimo"
     },
     "snooze": "Rimanda",
     "assign": "Assegna",
