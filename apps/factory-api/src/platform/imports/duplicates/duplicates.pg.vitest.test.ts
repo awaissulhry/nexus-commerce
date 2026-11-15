@@ -162,7 +162,7 @@ describe('the warning on create', () => {
     const domain = (await call('manager', 'POST', '/duplicates/parties/check', { legalName: 'Completely Different Test', emails: ['someone@example.com'] })).json().candidates
     expect(reasonsOf(domain, 'SEED-C1')).toEqual(['SAME_EMAIL_DOMAIN'])
     expect(domain.find((candidate: Json) => candidate.code === 'SEED-C1').reasons[0].detail).toBe('example.com')
-    const none = (await call('manager', 'POST', '/duplicates/parties/check', { legalName: 'Nobody Like Us Test', emails: ['someone@gmail.com'] })).json().candidates
+    const none = (await call('manager', 'POST', '/duplicates/parties/check', { legalName: 'Nobody Like Us Test', emails: ['someone@libero.it'] })).json().candidates
     expect(none).toEqual([])
   })
 

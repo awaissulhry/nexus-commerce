@@ -44,7 +44,7 @@ describe('names', () => {
 describe('mail, website, codes and tax numbers', () => {
   it('keeps a company domain and drops public and certified-mail ones', () => {
     expect(emailDomain('Ordini@Rossi.Example')).toBe('rossi.example')
-    expect(emailDomain('mario@gmail.com')).toBeNull()
+    expect(emailDomain('mario@libero.it')).toBeNull()
     expect(emailDomain('amministrazione@pec.it')).toBeNull()
     expect(emailDomain('not an address')).toBeNull()
   })
@@ -88,7 +88,7 @@ describe('parties alike', () => {
   })
 
   it('finds nothing between different businesses, nor through a public mailbox', () => {
-    expect(partyReasons(partyKeys({ legalName: 'Conceria Russo', emails: ['a@gmail.com'] }), partyKeys({ legalName: 'Conceria Rossi', emails: ['b@gmail.com'] }))).toEqual([])
+    expect(partyReasons(partyKeys({ legalName: 'Conceria Russo', emails: ['a@libero.it'] }), partyKeys({ legalName: 'Conceria Rossi', emails: ['b@libero.it'] }))).toEqual([])
   })
 
   it('orders HIGH first, then more reasons, then by code', () => {
