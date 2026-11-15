@@ -309,6 +309,8 @@ import { events as payablesDepth } from '../payables-depth/events'
 import { events as fields } from '../fields/events'
 // B-W2b-422: templates (document_template.changed, email_template.changed, saved_reply.changed).
 import { events as templates } from '../templates/events'
+// B-W2b-388: reminders (reminder.set, reminder.came_back, reminder.changed).
+import { events as reminders } from '../reminders/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -683,6 +685,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...fields,
   // B-W2b-422
   ...templates,
+  // B-W2b-388
+  ...reminders,
 ] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */

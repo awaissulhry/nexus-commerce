@@ -111,7 +111,8 @@
       "PLAN_VERSION": "Versioni dei piani di ispezione da approvare",
       "APPROVAL_TASK": "Richieste in attesa del tuo sì",
       "INQUIRY_WAITING": "Richieste in attesa da più di un giorno lavorativo",
-      "SHIPMENT_AT_RISK": "Spedizioni a rischio di mancare la data promessa"
+      "SHIPMENT_AT_RISK": "Spedizioni a rischio di mancare la data promessa",
+      "REMINDER": "Promemoria tornati"
     },
     "severity": {
       "HIGH": "Urgente",
@@ -602,7 +603,13 @@
       "SHIPMENT_AT_RISK.MISSED_CUT_OFF": "La spedizione {number} per {customer} deve partire oggi e ha mancato l'orario limite del corriere.",
       "SHIPMENT_AT_RISK.AT_RISK": "La spedizione {number} per {customer} deve partire oggi e non è imballata, con l'orario limite del corriere vicino.",
       "SHIPMENT_AT_RISK.blocks": "Il cliente riceve la merce più tardi del promesso.",
-      "why.SHIPMENT_AT_RISK.shipping_manage": "Prepari e spedisci le spedizioni di questo stabilimento."
+      "why.SHIPMENT_AT_RISK.shipping_manage": "Prepari e spedisci le spedizioni di questo stabilimento.",
+      "REMINDER.BACK": "Promemoria: {record}.",
+      "REMINDER.BACK_NOTE": "Promemoria: {record} — {note}",
+      "REMINDER.MESSAGE": "Promemoria su un messaggio di {record}.",
+      "REMINDER.MESSAGE_NOTE": "Promemoria su un messaggio di {record} — {note}",
+      "why.REMINDER.AT_TIME": "Hai chiesto di rivederlo adesso.",
+      "why.REMINDER.ON_CHANGE": "Hai chiesto di rivederlo quando cambiava, ed è cambiato."
     },
     "actions": {
       "menu": "Azioni su {record}",
@@ -731,7 +738,8 @@
       "doneTask": "Fatto: {record}. Esce da Oggi.",
       "doneMention": "Fatto: la menzione su {record}. Esce da Oggi e dalle tue notifiche.",
       "snoozed": "Rimandata: {record}. Torna all’ora che hai scelto.",
-      "snoozedUntilChange": "Rimandata: {record}. Torna quando qualcosa cambia."
+      "snoozedUntilChange": "Rimandata: {record}. Torna quando qualcosa cambia.",
+      "doneReminder": "Fatto: il promemoria su {record}. Esce da Oggi."
     },
     "ruleAlert": {
       "handled": "Una regola di eccezione ha sollevato questo avviso: prendine visione, assegnalo o risolvilo nell’avviso stesso (la sua pagina arriva con le schermate degli avvisi).",
@@ -754,6 +762,13 @@
         "DELIVERY": "Consegna attesa",
         "CERTIFICATE": "Scadenza certificato"
       }
+    },
+    "remind": {
+      "dayBefore": "Ricordamelo il giorno prima: {record}",
+      "set": "Promemoria impostato: {record} torna il giorno prima, alle 08:00.",
+      "noRecord": "Questa voce non ha un record da ricordarti.",
+      "already": "Promemoria impostato.",
+      "passed": "Il giorno prima è già passato."
     }
   },
   "mailToSort": {

@@ -155,7 +155,9 @@
       "saved": "View saved",
       "updated": "View updated",
       "defaultOn": "“{name}” is now your default view of this list",
-      "defaultOff": "The list no longer opens on “{name}” for you"
+      "defaultOff": "The list no longer opens on “{name}” for you",
+      "pinned": "“{name}” is pinned to Today.",
+      "unpinned": "“{name}” is no longer pinned to Today."
     },
     "removeDialog": {
       "title": "Remove the view “{name}”?",
@@ -262,7 +264,15 @@
     "freezeFirst": "Freeze “{column}” at the left edge",
     "freezeHint": "It stays in view while the rows scroll sideways",
     "withheld": "Hidden by your rights",
-    "withheldItem": "Hidden: {reason}"
+    "withheldItem": "Hidden: {reason}",
+    "pin": "Pin “{name}” to Today",
+    "unpin": "Unpin “{name}” from Today",
+    "pinHint": "Its count shows on Today; a change tells you.",
+    "unpinHint": "It leaves My saved views on Today.",
+    "pinProblem": {
+      "notFollowable": "This list has no count to follow yet.",
+      "tooMany": "You pinned the most views already: unpin one first."
+    }
   },
   "quick": {
     "trigger": "Quick filters",

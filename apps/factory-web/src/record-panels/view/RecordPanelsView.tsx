@@ -20,6 +20,8 @@ import { SharesPanel } from '../share/view/SharesPanel'
 // B-W2b-307 (PLT-104): the record's approval history under its partner approvals.
 import { ApprovalHistory } from '../../shell/panels/approvals/view/ApprovalHistory'
 import { liveCount, SHARES_NS } from '../share/model'
+// B-W2b-388 (COL-041): Remind me and the reminders I set on this record (loads itself; only where the panels have a container).
+import { RecordRemindMe } from '../../shell/panels/remind-me/RecordRemindMe'
 import '../record-panels.css'
 
 export type { RecordPanelsViewModel } from '../model'
@@ -70,6 +72,7 @@ function Panels({ model, actions }: { model: RecordPanelsViewModel; actions?: Re
     <Card padded className="fw-rp">
       <section aria-label={t('panels.label', { title: model.title })} className="fw-rp-inner">
         {model.followers !== undefined && <FollowersControl model={model} actions={actions} />}
+        {model.followers !== undefined && actions && <RecordRemindMe record={{ type: model.record.type, id: model.record.id, label: model.title }} />}
         <Tabs
           ariaLabel={t('panels.tabs.label')}
           tabs={tabs}

@@ -555,8 +555,8 @@ export function panelRows<P extends { readonly width: PanelWidth }>(panels: read
 /** What a row of mine takes on Today besides the alert verbs: Done (e) and Snooze (h). */
 export type OwnVerb = 'DONE' | 'SNOOZE'
 
-/** The kinds whose rows are the person's own (W2a): a task due, a mention. */
-export const OWN_KINDS: ReadonlySet<string> = new Set(['TASK_DUE', 'MENTION'])
+/** The kinds whose rows are the person's own (W2a): a task due, a mention; B-W2b-388: a reminder that came back. */
+export const OWN_KINDS: ReadonlySet<string> = new Set(['TASK_DUE', 'MENTION', 'REMINDER'])
 
 /** Whether the row takes the verb: a task or a mention Done and Snooze; an alert Snooze when the reader may snooze it. */
 export function offersVerb(item: Pick<TodayItem, 'kind' | 'category' | 'actions'>, verb: OwnVerb): boolean {
@@ -573,12 +573,18 @@ export function ownVerbHeld(item: Pick<TodayItem, 'kind' | 'category' | 'actions
 }
 
 /** What a snooze of this row goes through: the task, the mention's notification, or Today's alert row. */
-export type SnoozeTarget = { readonly kind: 'task'; readonly taskId: string } | { readonly kind: 'notification'; readonly notificationId: string } | { readonly kind: 'row'; readonly key: string }
+export type SnoozeTarget =
+  | { readonly kind: 'task'; readonly taskId: string }
+  | { readonly kind: 'notification'; readonly notificationId: string }
+  | { readonly kind: 'row'; readonly key: string }
+  // B-W2b-388: a reminder that came back (Done, Put off), by its id (the row's sub key).
+  | { readonly kind: 'reminder'; readonly reminderId: string }
 
 /** The task or notification behind a row of mine (a task row's record is the task; a mention's key ends with its notification). */
 export function snoozeTarget(item: Pick<TodayItem, 'kind' | 'key' | 'record'>): SnoozeTarget {
   if (item.kind === 'TASK_DUE') return { kind: 'task', taskId: item.record.id }
   if (item.kind === 'MENTION') return { kind: 'notification', notificationId: item.key.slice(item.key.lastIndexOf(':') + 1) }
+  if (item.kind === 'REMINDER') return { kind: 'reminder', reminderId: item.key.slice(item.key.lastIndexOf(':') + 1) }
   return { kind: 'row', key: item.key }
 }
 
@@ -618,6 +624,8 @@ export type ComingUpAnswer = z.infer<typeof comingUpSchema>
 
 export interface ComingItemView {
   readonly kind: string
+  /** B-W2b-388: the record ("Remind me the day before" sets a reminder on it); absent in older fixtures. */
+  readonly record?: { readonly type: string; readonly id: string }
   readonly label: string
   readonly words: { readonly key: string; readonly params: Readonly<Record<string, string | number | readonly string[]>> }
   /** Its record (own page, else its panels), with the company prefix. */
