@@ -1,34 +1,44 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { z } from 'zod'
 import { browserApi } from '../../lib/api/browser'
+import type { ApiClient } from '../../lib/api/client'
 import { useLiveChanges } from '../../record-panels/live'
-import { getEInvoicing } from '../../areas/finance/invoices/test-mode/api'
-import { readTestModes } from '../../areas/warehouse/shipping/test-mode/api'
-import { TEST_MODE_EVENTS, testModeBanner, type CarrierSiteMode, type CompanyEInvoicingMode, type TestModeRights } from './test-mode'
+import { NO_TEST_MODES, TEST_MODE_EVENTS, testModeBanner, type TestModeNotices, type TestModeRights } from './test-mode'
 import type { SystemBanner } from './view/OfficeShellView'
 
 /** A burst of changes (several sites switched) is one read. */
 const SETTLE_MS = 800
 
+const noticesSchema = z.object({
+  testModes: z.object({
+    carrierSites: z.array(z.object({ siteId: z.string(), name: z.string() })),
+    eInvoicingCompanies: z.array(z.object({ companyId: z.string(), name: z.string() })),
+  }),
+})
+
+/** B-W2b-F49: GET /shell/notices?companyId (any signed-in office person): what is in test mode where the person works. */
+export const readShellNotices = (api: ApiClient, companyId: string | null, signal?: AbortSignal): Promise<TestModeNotices> =>
+  api.get('/shell/notices', { query: { companyId: companyId ?? undefined }, schema: noticesSchema, signal }).then((answer) => answer.testModes)
+
 /**
- * B-W2b-437: the shell's TEST MODE banner, live (test-mode.ts says what it shows). ONE read of each test mode the person may
- * read when the shell mounts or the company changes — never on every page — then again on a test-mode event and after a
- * reconnect. A failed read shows nothing for that part (the banner is a reminder; each settings page says the state in full).
+ * B-W2b-437: the shell's TEST MODE banner, live (test-mode.ts says what it shows). B-W2b-F49: ONE read for every office
+ * person (`GET /shell/notices`) when the shell mounts (a page load) or the company changes — never on every page — then again
+ * on a test-mode event and after a reconnect. The live layer sends shipping.test_mode_changed only to shipping.view and
+ * e_invoicing.settings_changed only to invoices.view (their definitions' live permission): a person without them sees a
+ * change at the next page load or reconnect. A failed read shows nothing (the banner is a reminder; each settings page says
+ * the state in full).
  */
 export function useTestModeBanner(company: string, companyId: string | null, rights: TestModeRights): SystemBanner | null {
   const api = useMemo(() => browserApi({ company }), [company])
-  const [modes, setModes] = useState<{ carrier: CarrierSiteMode[]; eInvoicing: CompanyEInvoicingMode[] }>({ carrier: [], eInvoicing: [] })
+  const [notices, setNotices] = useState<TestModeNotices>(NO_TEST_MODES)
   const seq = useRef(0)
-  const enabled = rights.carrier || rights.eInvoicing
   const read = useCallback(async () => {
     const mine = ++seq.current
-    const [carrier, eInvoicing] = await Promise.all([
-      rights.carrier ? readTestModes(api, companyId).catch(() => []) : Promise.resolve([]),
-      rights.eInvoicing ? getEInvoicing(api).catch(() => []) : Promise.resolve([]),
-    ])
-    if (mine === seq.current) setModes({ carrier, eInvoicing })
-  }, [api, companyId, rights.carrier, rights.eInvoicing])
+    const answer = await readShellNotices(api, companyId).catch(() => NO_TEST_MODES)
+    if (mine === seq.current) setNotices(answer)
+  }, [api, companyId])
 
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const soon = useCallback(() => {
@@ -41,9 +51,9 @@ export function useTestModeBanner(company: string, companyId: string | null, rig
   useEffect(() => () => (timer.current ? clearTimeout(timer.current) : undefined), [])
 
   useEffect(() => {
-    if (enabled) void read()
-  }, [enabled, read])
-  useLiveChanges({ onChange: (change) => TEST_MODE_EVENTS.includes(change.type) && soon(), onReconnect: soon }, enabled)
+    void read()
+  }, [read])
+  useLiveChanges({ onChange: (change) => TEST_MODE_EVENTS.includes(change.type) && soon(), onReconnect: soon })
 
-  return enabled ? testModeBanner({ ...modes, companyId, rights }) : null
+  return testModeBanner({ notices, rights })
 }

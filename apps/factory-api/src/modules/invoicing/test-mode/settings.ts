@@ -24,8 +24,8 @@ import { connectionsOf, instantOf, readSettings, type EInvoiceSettings } from '.
  * e_invoicing.settings_changed.
  */
 
-async function companyView(db: Reader, runtime: Pick<SdiRuntime, 'liveProviderReady'>, company: { id: string; code: string; legalName: string }, caller: { manage: boolean; switchRules: boolean }) {
-  const settings = await readSettings(db, company.id)
+async function companyView(db: Reader, runtime: Pick<SdiRuntime, 'liveProviderReady'>, company: { id: string; code: string; legalName: string }, caller: { manage: boolean; switchRules: boolean }, known?: EInvoiceSettings) {
+  const settings = known ?? (await readSettings(db, company.id))
   const accounts = await connectionsOf(db, company.id)
   const single = accounts.length === 1 ? accounts[0]! : null
   const state = testModeState({ testMode: settings.testMode, liveSince: instantOf(settings.liveSince), simulateOutcome: settings.simulateOutcome, connection: single })
@@ -53,16 +53,32 @@ async function companyView(db: Reader, runtime: Pick<SdiRuntime, 'liveProviderRe
   }
 }
 
+// ── B-W2b-F49 ─────────────────────────────────────────────────────────────────────────────────────────────────────────
+/**
+ * The companies `scope` names, by code, each with its settings (readSettings: no row = the defaults, test mode on): ONE read
+ * for this page (`scope` = invoices.view's scopeWhere) and the shell's TEST MODE notices (platform/shell: the companies the
+ * person works in; `testMode` as this page's state says it), so both say the same.
+ */
+export async function companyTestModes(db: Reader, scope: Prisma.CompanyWhereInput) {
+  const companies = await db.company.findMany({ where: scope, select: { id: true, code: true, legalName: true }, orderBy: { code: 'asc' } })
+  const rows = []
+  for (const company of companies) {
+    const settings = await readSettings(db, company.id)
+    rows.push({ company, settings, testMode: settings.testMode })
+  }
+  return rows
+}
+// ── end B-W2b-F49 ─────────────────────────────────────────────────────────────────────────────────────────────────────
+
 /** invoices.view: the e-invoicing settings of every company the caller sees invoices of. */
 export async function eInvoicingSettings(runtime: Pick<SdiRuntime, 'liveProviderReady'>, callerOf: CommandCaller) {
   const context = officeContextOf(callerOf)
   const actor = actorOf(context)
   return callerOf.withClient(async (client) => {
     const where = scopeWhere(actor, INVOICES_VIEW, { company: 'id' }) as Prisma.CompanyWhereInput
-    const companies = await client.company.findMany({ where, select: { id: true, code: true, legalName: true }, orderBy: { code: 'asc' } })
     const views = []
-    for (const company of companies) {
-      views.push(await companyView(client, runtime, company, { manage: can(actor, INVOICES_TEST_MODE_MANAGE, { companyId: company.id }), switchRules: can(actor, INVOICES_TAX_SWITCH, { companyId: company.id }) }))
+    for (const { company, settings } of await companyTestModes(client, where)) {
+      views.push(await companyView(client, runtime, company, { manage: can(actor, INVOICES_TEST_MODE_MANAGE, { companyId: company.id }), switchRules: can(actor, INVOICES_TAX_SWITCH, { companyId: company.id }) }, settings))
     }
     return { companies: views }
   })

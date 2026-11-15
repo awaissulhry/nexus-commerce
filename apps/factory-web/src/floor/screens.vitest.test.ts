@@ -144,6 +144,9 @@ describe('every floor design case draws in both languages', () => {
     const html = render(homeScreen as DesignScreen<unknown>, homeScreen.cases.find((item) => item.id === 'packing')!.model, 'en')
     expect(html).toContain('Garment labels')
     expect(html).not.toContain('Coming soon')
+    // B-W2b-F50: page one at the packing bench holds Pack, Operation is on page two (Owner answer 2026-11-15).
+    const packing = homeScreen.cases.find((item) => item.id === 'packing')!.model as { tiles: readonly { key: string }[] }
+    expect(packing.tiles.map((tile) => tile.key)).toEqual(['mywork', 'labels', 'pack', 'incident', 'scan'])
     const held = render(homeScreen as DesignScreen<unknown>, homeScreen.cases.find((item) => item.id === 'notice-blocks')!.model, 'en')
     expect(held).toContain('Read the notice first')
     expect(held).not.toContain('Coming soon')

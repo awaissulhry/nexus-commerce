@@ -24,6 +24,8 @@ export interface PackedSummary {
   readonly transportBy: 'SENDER' | 'RECIPIENT' | 'CARRIER'
   readonly labels: LabelsDone
   readonly documents: DocumentsDone
+  /** B-W2b-F50: the carrier labels are TEST labels (rule: TEST labels say TEST): sent to no carrier, not charged. */
+  readonly test: boolean
 }
 
 export interface DoneJob {
@@ -54,5 +56,5 @@ export function packedSummary(facts: {
       ? 'notNeeded'
       : (printedOf(labelJobs) ?? (labelsHeld === 'officeBuys' ? 'office' : labelsHeld === 'noPrinter' ? 'noPrinter' : labelsHeld === 'noRight' ? 'noRight' : 'ready'))
   const documents: DocumentsDone = printedOf(documentJobs) ?? (documentsHeld === 'officeIssues' ? 'office' : documentsHeld === 'noPrinter' ? 'noPrinter' : documentsHeld === 'pdfMissing' ? 'pdfMissing' : 'ready')
-  return { number: facts.number, cartons: facts.cartons, marks: facts.marksDue ? 'due' : 'printed', transportBy: facts.transportBy, labels, documents }
+  return { number: facts.number, cartons: facts.cartons, marks: facts.marksDue ? 'due' : 'printed', transportBy: facts.transportBy, labels, documents, /* B-W2b-F50 */ test: labels !== 'notNeeded' && facts.documents.labels.test }
 }

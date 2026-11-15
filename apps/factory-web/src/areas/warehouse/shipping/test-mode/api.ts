@@ -21,7 +21,7 @@ export const testModeSiteSchema = z.object({
 })
 export type TestModeSite = z.infer<typeof testModeSiteSchema>
 
-/** GET /shipping/test-mode?companyId (shipping.view): every active site the reader reaches. */
+/** GET /shipping/test-mode?companyId (shipping.settings.view since B-W2b-F49, the page's own right): every active site the reader reaches. */
 export const readTestModes = (api: ApiClient, companyId: string | null, signal?: AbortSignal): Promise<TestModeSite[]> =>
   api.get('/shipping/test-mode', { query: { companyId: companyId ?? undefined }, schema: z.object({ sites: z.array(testModeSiteSchema) }), signal }).then((answer) => answer.sites)
 

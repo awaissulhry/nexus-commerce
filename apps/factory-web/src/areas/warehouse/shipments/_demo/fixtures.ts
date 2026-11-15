@@ -284,9 +284,11 @@ export const SAMPLE_PDF = samplePdf(['ESEMPIO / SAMPLE', 'DDT — bozza', 'Giacc
 
 // ---- labels, tracking, documents ------------------------------------------------------------------------------------------------
 
-export function labels(value: Shipment, print: 'QUEUED' | 'SENT' | 'PRINTED' | 'FAILED' | null = null): Labels {
+export function labels(value: Shipment, print: 'QUEUED' | 'SENT' | 'PRINTED' | 'FAILED' | null = null, /* B-W2b-F50 */ test = false): Labels {
   return {
     labelPrinterId: uid('5320', 1),
+    // B-W2b-F50: a site in test mode makes TEST labels.
+    testMode: test,
     cutOff: { time: '17:00', at: at(29, 16), passed: false },
     toLabel: value.parcels.filter((entry) => !entry.trackingNumber).length,
     parcels: value.parcels.map((entry) => ({
@@ -296,6 +298,7 @@ export function labels(value: Shipment, print: 'QUEUED' | 'SENT' | 'PRINTED' | '
       grossWeightKg: entry.grossWeightKg,
       trackingNumber: entry.trackingNumber,
       labelledAt: entry.labelledAt,
+      test: test && entry.trackingNumber !== null,
       files: entry.trackingNumber ? [{ fileId: uid('5330', entry.seq), format: 'PDF' as const, name: `label-${entry.seq}.pdf` }] : [],
       print: entry.trackingNumber && print ? { jobId: uid('5340', entry.seq), status: print, createdAt: at(29, 11, 10) } : null,
     })),

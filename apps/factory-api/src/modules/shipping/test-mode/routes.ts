@@ -8,7 +8,7 @@ import { manifest } from './manifest'
 import { getTestModes, switchTestMode } from './test-mode'
 
 /**
- * Test carrier mode per site (B-W2b-390; LOG-035): read every reachable site's mode (the shell's TEST MODE banner), switch a
+ * Test carrier mode per site (B-W2b-390; LOG-035): read every reachable site's mode (Carriers & shipping; shipping.settings.view), switch a
  * site to live labels (a fresh step-up; labels are bought and charged from then on) or back to test mode.
  */
 export default defineRoutes('shipping.test-mode', manifest, async (app) => {
