@@ -111,7 +111,7 @@ beforeAll(async () => {
   line = await one<typeof line>(`SELECT l."styleId", l."colourwayId", (SELECT json_agg(json_build_object('size', s.size, 'quantity', 1)) FROM (SELECT size FROM "SalesOrderLineSize" WHERE "lineId" = l.id ORDER BY size LIMIT 1) s) AS sizes
                       FROM "SalesOrderLine" l JOIN "SalesOrder" o ON o.id = l."orderId" WHERE o."tenantId" = $1 AND o.number = 'SEED-SO-0001' AND l."styleId" IS NOT NULL ORDER BY l.seq LIMIT 1`, [A.tenant])
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database: h.database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
   )
 }, 900_000)

@@ -133,7 +133,7 @@ beforeAll(async () => {
   // Every upload and every read of a statement is a call to the (fake) file store: room for this file's many.
   await admin(`UPDATE "IntegrationAccount" SET "rateLimitPerMinute" = 6000, "rateLimitBurst" = 1000 WHERE "tenantId" = $1 AND provider = 'R2'`, [A.tenant])
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database: h.database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null), logger: false },
   )
   accountIban = (await admin<{ iban: string }>('SELECT iban FROM "BankAccount" WHERE id = $1', [bank.bankAccountIds.companyA]))[0]!.iban

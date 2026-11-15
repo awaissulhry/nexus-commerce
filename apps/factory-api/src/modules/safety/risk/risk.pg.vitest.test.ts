@@ -114,7 +114,7 @@ beforeAll(async () => {
   await h.database.withScope({ audience: 'office', tenantId: T.tenant, actorId: newId() }, async (client) => applySystemRoleChanges(client, await systemRoleChanges(client), { now: h.clock.now(), actorId: newId() }))
   await admin(`INSERT INTO "User" (id, "tenantId", email, "displayName", status) VALUES ($1, $2, 'made-up-officer@example.test', 'Made-up Officer', 'ACTIVE')`, [OFFICER_ID, T.tenant])
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database: h.database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
   )
   // The occupational doctor of company A signs in to sign for their own role (their account's name is the appointee's).

@@ -447,6 +447,12 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    `QuoteTemplateLine_options_check` (a line with options keeps its style and becomes no fee) and `OptionGroup_template_takes_check`
    (words `options: …` for the takes route); no earlier function redefined; it calls recall's `factory_recall_words_ok`,
    `factory_recall_not_future`, `factory_recall_model_name_ok` and the privacy step's `factory_privacy_ops_key_ok`):
+   `…_privacy_erasure_w2b_guards` (B-W2b-F54, no schema folder of its own: the guarded erasure of mail, messages and audit
+   rows; it redefines email-in's `factory_inbound_email_guard` (its notify-depth body), email's `factory_email_outbound_guard`,
+   threads' `factory_refuse_message_change` and audit's `factory_refuse_audit_change` (an AuditLog-only branch; the other
+   ledgers that reuse it stay refused), each word for word but for the erasure branch, and adds the door
+   `factory_privacy_erase_row` (SECURITY DEFINER, a fixed search path, EXECUTE for factory_runtime only): exactly the named
+   columns go blank, only with an ErasureRecord of an ERASURE request written in the same transaction),
    `…_insights_depth_w2b_guards` (W2b-6 schema wave 57/57, B-W2b-381, the metric layer: KPI versions born DRAFT, made from a
    lower version of the same key with what changed, DRAFT → ACTIVE → SUPERSEDED | RETIRED (one ACTIVE per key: a partial unique),
    an ACTIVE one changed only by its end, a past one frozen, only a DRAFT deleted; names, definitions and formulas in Italian and

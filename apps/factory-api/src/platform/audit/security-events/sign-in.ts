@@ -4,6 +4,7 @@ import type { DeviceRequest } from '../../auth/floor/device'
 import { siteScope } from '../../auth/floor/store'
 import { PRE_SESSION_ACTOR_ID, type OfficeAuth } from '../../auth/sessions/office-auth'
 import { insertSecurityEvent } from './record'
+import { clientAddressOf } from '../../../core/client-address'
 
 /**
  * The sign-ins refused before anybody is proved (B-W2b-399; PLT-075 "unknown attempts too"): an address nobody has, a person
@@ -18,7 +19,7 @@ export type OfficeRefusal = 'UNKNOWN_ACCOUNT' | 'NO_PASSWORD' | 'LOCKED' | 'SUSP
 
 /** The office sign-in's refusal, in the tenant's office scope. */
 export function officeSignInRefused(auth: OfficeAuth, request: FastifyRequest, tenantId: string, actorId: string | null, reason: OfficeRefusal): void {
-  const ipHash = auth.secrets.ipHash(request.ip)
+  const ipHash = auth.secrets.ipHash(clientAddressOf(request))
   auth.afterAnswer(() => auth.inTenant(tenantId, PRE_SESSION_ACTOR_ID, (client) => insertSecurityEvent(client, { kind: 'SIGN_IN_FAILED', surface: 'OFFICE', actorId, ipHash, details: { reason } })), request.log)
 }
 
@@ -30,7 +31,7 @@ interface FloorCandidate {
 export function floorSignInRefused(auth: OfficeAuth, request: FastifyRequest, place: DeviceRequest, byBadge: boolean, candidate: FloorCandidate | null, now: Date): void {
   const worker = candidate?.worker ?? null
   const reason = !worker ? (byBadge ? 'UNKNOWN_BADGE' : 'UNKNOWN_WORKER') : worker.status !== 'ACTIVE' ? 'INACTIVE' : worker.pinHash === null ? 'NO_PIN' : isPinLocked(worker, now) ? 'LOCKED' : 'REFUSED'
-  const ipHash = auth.secrets.ipHash(request.ip)
+  const ipHash = auth.secrets.ipHash(clientAddressOf(request))
   auth.afterAnswer(
     () => auth.database.withScope(siteScope(place.token), (client) => insertSecurityEvent(client, { kind: 'SIGN_IN_FAILED', surface: 'FLOOR', siteId: place.device.siteId, actorId: worker?.id ?? null, ipHash, details: { reason } })),
     request.log,
@@ -39,7 +40,7 @@ export function floorSignInRefused(auth: OfficeAuth, request: FastifyRequest, pl
 
 /** The portal sign-in's refusal of a code (no account, or no live code), in the tenant's office scope. */
 export function portalSignInRefused(auth: OfficeAuth, request: FastifyRequest, tenantSlug: string, person: { readonly id: string; readonly partyId: string } | null): void {
-  const ipHash = auth.secrets.ipHash(request.ip)
+  const ipHash = auth.secrets.ipHash(clientAddressOf(request))
   auth.afterAnswer(async () => {
     const tenant = await auth.inPlatform((client) => client.tenant.findUnique({ where: { slug: tenantSlug.toLowerCase() }, select: { id: true, status: true } }))
     if (tenant?.status !== 'ACTIVE') return

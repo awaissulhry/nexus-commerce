@@ -128,7 +128,7 @@ beforeAll(async () => {
   liningLot = await addLot(A.lining, A.liningGRY, '200.0000', 'M')
   await addLot(A.protector, null, '10.0000', 'PCS')
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null), logger: false },
   )
 }, 300_000)

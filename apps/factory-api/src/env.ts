@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { parseEnv } from 'node:util'
 import { z } from 'zod'
 import { describeUrlHost, isLoopbackUrl } from '@nexus/db-kit/url-guard'
+import { trustedProxies, TrustedProxiesError } from '@nexus/factory-domain/core/client-address'
 
 /**
  * The factory API's configuration. It reads ONE file, apps/factory-api/.env, by explicit path (src/ and dist/ both sit
@@ -26,7 +27,11 @@ import { describeUrlHost, isLoopbackUrl } from '@nexus/db-kit/url-guard'
  *                             32 characters; local and test fall back to a fixed placeholder
  *   FACTORY_PIN_PEPPER_PREVIOUS  optional: the pepper before a rotation, so older PIN hashes still open (each is
  *                             re-hashed with the current one at its next sign-in); drop it once they all were
- *   FACTORY_TRUST_PROXY_HOPS  proxies in front of the API whose X-Forwarded-For is trusted (default 0)
+ *   FACTORY_TRUSTED_PROXIES   B-W2b-F57: the proxies in front of the API whose X-Forwarded-For counts (the browser's
+ *                             address behind the web; core/client-address.ts): addresses, ranges (address/prefix) and
+ *                             the sets `loopback` and `private`, comma or space separated, or `none`; local and test
+ *                             default `loopback` (the web beside the API); staging and production must set it (Railway:
+ *                             `private`, apps/factory-api/CLAUDE.md "Client address")
  *   FACTORY_SECRETS_MASTER_KEY  local and test only: the master key that wraps the data keys of sealed secrets
  *                             (platform/secrets), 32 random bytes in base64 (`openssl rand -base64 32`); optional (sealing
  *                             and opening fail without it)
@@ -54,7 +59,8 @@ import { describeUrlHost, isLoopbackUrl } from '@nexus/db-kit/url-guard'
  *   - FACTORY_ENV staging or production: only on Railway (RAILWAY_ENVIRONMENT set by the platform, never by the file),
  *     with an https web origin, a real cookie secret and PIN pepper of at least 32 characters each (never the local
  *     placeholders), the KMS key
- *     and its AWS keys, no local master key and no local files folder (files are on R2 there).
+ *     and its AWS keys, no local master key and no local files folder (files are on R2 there), and FACTORY_TRUSTED_PROXIES
+ *     (B-W2b-F57: `none` when nothing stands in front; unset, every browser behind the web would share one address).
  */
 export const FACTORY_ENV_FILE = fileURLToPath(new URL('../.env', import.meta.url))
 
@@ -102,7 +108,18 @@ const schema = z.object({
   FACTORY_COOKIE_SECRET: z.string().min(1).optional(),
   FACTORY_PIN_PEPPER: z.string().min(16).optional(),
   FACTORY_PIN_PEPPER_PREVIOUS: z.string().min(16).optional(),
-  FACTORY_TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(0),
+  // B-W2b-F57: checked by factory-domain's trustedProxies (words for a bad entry); the default per environment below.
+  FACTORY_TRUSTED_PROXIES: z
+    .string()
+    .superRefine((value, context) => {
+      try {
+        trustedProxies(value)
+      } catch (error) {
+        if (!(error instanceof TrustedProxiesError)) throw error
+        context.addIssue({ code: 'custom', message: error.message })
+      }
+    })
+    .optional(),
   FACTORY_SECRETS_MASTER_KEY: z
     .string()
     .refine((value) => /^[A-Za-z0-9+/]{43}=$/.test(value) && Buffer.from(value, 'base64').length === 32, {
@@ -129,6 +146,7 @@ export type FactoryEnv = Readonly<
     FACTORY_COOKIE_SECRET: string
     FACTORY_PIN_PEPPER: string
     FACTORY_QUEUE_PREFIX: string
+    FACTORY_TRUSTED_PROXIES: string
   }
 >
 
@@ -157,6 +175,10 @@ export function parseFactoryEnv(variables: Record<string, string>, railwayEnviro
     throw new FactoryEnvError(`apps/factory-api configuration is not valid: ${problems.join('; ')}`)
   }
   const env = parsed.data
+  // B-W2b-F57: a hop count trusted whoever came N hops deep (a direct request could forge its address); it is gone.
+  if (variables.FACTORY_TRUST_PROXY_HOPS !== undefined) {
+    throw new FactoryEnvError('FACTORY_TRUST_PROXY_HOPS is gone: name the proxies in front of the API in FACTORY_TRUSTED_PROXIES instead')
+  }
   const local = env.FACTORY_ENV === 'local' || env.FACTORY_ENV === 'test'
   // B-W2b-F58: hiding the TEST MODE bar is for the Owner's local test server only; anywhere else the bar must show.
   if (env.FACTORY_HIDE_TEST_MODE_BANNER !== undefined && env.FACTORY_ENV !== 'local') {
@@ -211,6 +233,12 @@ export function parseFactoryEnv(variables: Record<string, string>, railwayEnviro
     for (const key of ['FACTORY_KMS_KEY_ID', 'FACTORY_AWS_ACCESS_KEY_ID', 'FACTORY_AWS_SECRET_ACCESS_KEY'] as const) {
       if (env[key] === undefined) throw new FactoryEnvError(`${key} must be set with FACTORY_ENV=${env.FACTORY_ENV}: secrets are wrapped by AWS KMS there`)
     }
+    // B-W2b-F57: behind the web every browser would be the web's one address (one rate-limit budget for everybody).
+    if (env.FACTORY_TRUSTED_PROXIES === undefined || env.FACTORY_TRUSTED_PROXIES.trim() === '') {
+      throw new FactoryEnvError(
+        `FACTORY_TRUSTED_PROXIES must be set with FACTORY_ENV=${env.FACTORY_ENV}: the proxies in front of the API (on Railway \`private\`), or \`none\``,
+      )
+    }
   }
   return Object.freeze({
     ...env,
@@ -219,6 +247,7 @@ export function parseFactoryEnv(variables: Record<string, string>, railwayEnviro
     FACTORY_COOKIE_SECRET: env.FACTORY_COOKIE_SECRET ?? LOCAL_COOKIE_SECRET,
     FACTORY_PIN_PEPPER: env.FACTORY_PIN_PEPPER ?? LOCAL_PIN_PEPPER,
     FACTORY_QUEUE_PREFIX: env.FACTORY_QUEUE_PREFIX ?? RAILWAY_QUEUE_PREFIX,
+    FACTORY_TRUSTED_PROXIES: env.FACTORY_TRUSTED_PROXIES ?? 'loopback',
   })
 }
 

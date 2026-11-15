@@ -105,7 +105,7 @@ beforeAll(async () => {
     SESSIONS[person] = { audience: 'office', tenantId: T, actorId: PEOPLE[person], grants: [grantOf(role, person === 'narrow' ? [partyNarrow] : 'all')] }
   }
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database: h.database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
   )
 }, 900_000)

@@ -3,6 +3,7 @@ import { DomainError } from '@nexus/factory-domain/core/errors'
 import type { RequestContext } from '../../../core/context'
 import { forgetOrigin, originOf, rememberOrigin } from './origin'
 import { insertSecurityEvent, type EventInput } from './record'
+import { clientAddressOf } from '../../../core/client-address'
 
 /**
  * The security events' hooks (B-W2b-399; PLT-075), installed on the root by core/app.ts:
@@ -66,7 +67,7 @@ async function recordDenied(request: FastifyRequest, error: unknown): Promise<bo
 
 export function installSecurityEvents(app: FastifyInstance): void {
   app.addHook('onRequest', async (request) => {
-    rememberOrigin(String(request.id), request.server.officeAuth?.secrets.ipHash(request.ip) ?? null)
+    rememberOrigin(String(request.id), request.server.officeAuth?.secrets.ipHash(clientAddressOf(request)) ?? null)
   })
   app.addHook('onError', async (request, _reply, error) => {
     try {

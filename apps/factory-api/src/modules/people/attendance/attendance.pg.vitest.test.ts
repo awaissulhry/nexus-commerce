@@ -129,7 +129,7 @@ beforeAll(async () => {
   await seedTime({ db: database, namespace: NS })
   people = await seedPeople({ db: database, namespace: NS })
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
   )
   await admin(`INSERT INTO "Device" (id, "tenantId", "companyId", "siteId", name, kind, status, "enrolledAt", "tokenHash") VALUES ($1, $2, $3, $4, 'Made-up kiosk', 'TABLET', 'ACTIVE', now(), $5)`, [DEVICE, T.tenant, T.companyA, T.siteA1, `hash-${run}`])

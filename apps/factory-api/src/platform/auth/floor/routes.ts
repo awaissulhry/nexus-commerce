@@ -41,6 +41,7 @@ import { createDevice, editDevice, getSettings, listDevices, putSettings, renewE
 import { changePin, floorMe, floorSignIn, floorSignOut, floorStepUp, switchOperator } from './sign-in'
 import { parseSiteToken } from './tokens'
 import { createWorker, editWorker, issueBadge, listWorkers, resetPin, revokeBadge, setWorkerRoles, setWorkerStatus } from './workers'
+import { clientAddressOf } from '../../../core/client-address'
 
 /**
  * The floor (an enrolled device):
@@ -84,7 +85,7 @@ export default defineRoutes('auth-floor', manifest, async (app) => {
   const limits = app.officeAuth?.rateLimits ?? AUTH_RATE_LIMITS
   const perAddress = (rate: AuthRateLimit) => ({ rateLimit: { max: rate.max, timeWindow: rate.timeWindowMs } })
   const perDevice = (rate: AuthRateLimit) => ({
-    rateLimit: { max: rate.max, timeWindow: rate.timeWindowMs, keyGenerator: (request: FastifyRequest) => `floor-device:${parseSiteToken(deviceCookieOf(request))?.id ?? request.ip}` },
+    rateLimit: { max: rate.max, timeWindow: rate.timeWindowMs, keyGenerator: (request: FastifyRequest) => `floor-device:${parseSiteToken(deviceCookieOf(request))?.id ?? clientAddressOf(request)}` },
   })
 
   app.post('/floor/device/enrol', { schema: enrolDeviceContract, config: perAddress(limits.tokenUse) }, (request, reply) => enrolDevice(auth(), request, reply, request.body))

@@ -169,7 +169,7 @@ beforeAll(async () => {
   supplierId = (await one<{ partyId: string }>(`SELECT "partyId" FROM "PurchaseOrder" WHERE "tenantId" = $1 AND number = 'SEED-PO-0001'`, [A.tenant])).partyId
   itemId = (await one<{ itemId: string }>(`SELECT l."itemId" FROM "PurchaseOrderLine" l JOIN "PurchaseOrder" o ON o.id = l."purchaseOrderId" WHERE o."tenantId" = $1 AND o.number = 'SEED-PO-0002'`, [A.tenant])).itemId
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database: h.database, routesRoot: fileURLToPath(new URL('../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
   )
 }, 900_000)

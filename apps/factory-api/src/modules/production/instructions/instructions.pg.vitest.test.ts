@@ -151,7 +151,7 @@ beforeAll(async () => {
   useFiles(createFilesRuntime({ gateway, local: localFileStore({ root: localRoot, environment: 'test' }) }))
   const limits = { max: 10_000, timeWindowMs: 60_000 }
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET, rateLimit: limits },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET, rateLimit: limits },
     { database: h.database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
   )
 }, 600_000)

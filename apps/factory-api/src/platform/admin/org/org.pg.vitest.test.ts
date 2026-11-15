@@ -61,7 +61,7 @@ beforeAll(async () => {
   await admin(`INSERT INTO "Company" (id, "tenantId", code, "legalName") VALUES ($1, $2, 'ORGB', 'Altra Prova S.r.l.')`, [companyB, tenantB])
   await admin(`INSERT INTO "Site" (id, "tenantId", "companyId", code, name, kind) VALUES ($1, $2, $3, 'PA1', 'Stabilimento Prova', 'PLANT')`, [siteA, tenantA, companyA])
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     {
       database,
       routesRoot: fileURLToPath(new URL('../../..', import.meta.url)),

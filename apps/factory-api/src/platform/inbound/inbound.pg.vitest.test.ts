@@ -123,7 +123,7 @@ beforeAll(async () => {
     await admin('INSERT INTO "Company" (id, "tenantId", code, "legalName") VALUES ($1, $2, $3, $3)', [companyId, tenantId, `${slug}-c`])
   }
   useInbound(runtime())
-  app = await buildApp({ environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET }, { database, routes: [inboundRoutes] })
+  app = await buildApp({ environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET }, { database, routes: [inboundRoutes] })
 }, 60_000)
 
 afterAll(async () => {

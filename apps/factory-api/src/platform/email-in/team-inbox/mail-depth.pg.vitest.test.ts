@@ -176,7 +176,7 @@ beforeAll(async () => {
   runtime = createEmailInRuntime({ gateway, fake: bucket, s3: inboundS3Store({ clientFor: () => { throw new Error('The mail depth tests never call S3.') } }), files: h.files })
   useEmailIn(runtime)
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database: h.database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])]?.() ?? null) },
   )
   mark = new Date()

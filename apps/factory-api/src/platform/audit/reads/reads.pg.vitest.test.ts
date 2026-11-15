@@ -45,7 +45,7 @@ beforeAll(async () => {
   clerk = await addUser(h, tenant, { email: 'clerk.reads@example.com' })
   const all = sessions()
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database: h.database, clock: h.clock, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => all[String(request.headers['x-test-session'])] ?? null) },
   )
   const made = await call('admin', 'POST', '/compliance/certificates', {

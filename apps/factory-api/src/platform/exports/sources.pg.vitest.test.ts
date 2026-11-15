@@ -100,7 +100,7 @@ beforeAll(async () => {
   // B-W2b-383: one export per source and more every step: past the default 300 requests a minute (429 rate_limited); a high
   // limit like the every-record search walk's (B-W2b-F26).
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET, rateLimit: { max: 10_000, timeWindowMs: 60_000 } },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET, rateLimit: { max: 10_000, timeWindowMs: 60_000 } },
     { database: h.database, routesRoot: SRC, authenticate: testAuthenticator((request) => (String(request.headers['x-test-session']) in PEOPLE ? session(String(request.headers['x-test-session']) as Person) : null)) },
   )
 }, 900_000)

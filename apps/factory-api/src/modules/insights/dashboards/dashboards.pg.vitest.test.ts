@@ -90,7 +90,7 @@ beforeAll(async () => {
   PEOPLE.seedOwner = (await admin<{ userId: string }>(`SELECT "userId" FROM "DashboardLayout" WHERE "tenantId" = $1 AND "dashboardKey" = 'owner-group'`, [T]))[0]!.userId
   SESSIONS.seedOwner = { audience: 'office', tenantId: T, actorId: PEOPLE.seedOwner, grants: [grantOf('owner')] }
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database: h.database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
   )
   await ok('owner', 'POST', '/insights/facts/rebuild', { from: plusDays(today(), -92), to: today() })

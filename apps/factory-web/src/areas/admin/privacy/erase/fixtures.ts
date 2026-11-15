@@ -14,12 +14,13 @@ const { LATE_ERASURE } = DEMO_REQUESTS
 const PROSPECT: ErasurePreview = {
   person: { kind: 'PROSPECT', recordType: 'Inquiry', recordId: LATE_ERASURE.person.recordId, name: 'Bruno Prova', erased: false },
   blocked: null,
-  anonymised: [{ recordType: 'Inquiry', method: 'ANONYMISED', count: 1, erasedFields: ['prospectName', 'prospectCompany', 'prospectEmail', 'prospectPhone', 'prospectLawfulBasis'], keptFields: [], why: null }],
-  deleted: [],
-  kept: [
-    { recordType: 'InboundEmail', method: 'KEPT', count: 3, erasedFields: [], keptFields: ['fromAddress', 'fromName', 'subject', 'bodyText', 'bodyHtml'], why: { code: 'IMMUTABLE' } },
-    { recordType: 'AuditLog', method: 'KEPT', count: 4, erasedFields: [], keptFields: ['before', 'after'], why: { code: 'IMMUTABLE' } },
+  anonymised: [
+    { recordType: 'Inquiry', method: 'ANONYMISED', count: 1, erasedFields: ['prospectName', 'prospectCompany', 'prospectEmail', 'prospectPhone', 'prospectLawfulBasis'], keptFields: [], why: null },
+    { recordType: 'InboundEmail', method: 'ANONYMISED', count: 3, erasedFields: ['fromAddress', 'fromName', 'subject', 'bodyText', 'bodyHtml'], keptFields: ['envelopeFrom'], why: { code: 'IMMUTABLE' } },
+    { recordType: 'AuditLog', method: 'ANONYMISED', count: 4, erasedFields: ['before', 'after'], keptFields: [], why: null },
   ],
+  deleted: [],
+  kept: [],
   records: 8,
   action: { allowed: true, held: null },
 }
@@ -27,13 +28,15 @@ const PROSPECT: ErasurePreview = {
 const CONTACT: ErasurePreview = {
   person: { kind: 'CONTACT', recordType: 'PartyContact', recordId: LATE_ERASURE.person.recordId, name: 'Anna Esempio', erased: false },
   blocked: null,
-  anonymised: [{ recordType: 'PartyContact', method: 'ANONYMISED', count: 1, erasedFields: ['name', 'email', 'phone'], keptFields: [], why: null }],
+  anonymised: [
+    { recordType: 'PartyContact', method: 'ANONYMISED', count: 1, erasedFields: ['name', 'email', 'phone'], keptFields: [], why: null },
+    { recordType: 'Message', method: 'ANONYMISED', count: 5, erasedFields: ['authorName', 'bodyText', 'bodyHtml'], keptFields: [], why: null },
+    { recordType: 'EmailOutbound', method: 'ANONYMISED', count: 2, erasedFields: ['to', 'subject'], keptFields: [], why: null },
+  ],
   deleted: [{ recordType: 'CustomFieldValue', method: 'DELETED', count: 2, erasedFields: [], keptFields: [], why: null }],
   kept: [
     { recordType: 'Party', method: 'KEPT', count: 1, erasedFields: [], keptFields: ['legalName', 'tradeName'], why: { code: 'CUSTOMER' } },
     { recordType: 'MeasurementProfile', method: 'KEPT', count: 1, erasedFields: [], keptFields: ['riderName', 'measurements', 'fitNotes'], why: { code: 'MEASUREMENTS' } },
-    { recordType: 'Message', method: 'KEPT', count: 5, erasedFields: [], keptFields: ['authorName', 'bodyText', 'bodyHtml'], why: { code: 'IMMUTABLE' } },
-    { recordType: 'EmailOutbound', method: 'KEPT', count: 2, erasedFields: [], keptFields: ['to', 'cc', 'subject'], why: { code: 'IMMUTABLE' } },
   ],
   records: 12,
   action: { allowed: true, held: null },
@@ -73,7 +76,7 @@ export const designScreen = defineDesignScreen<RequestsCase>({
   title: 'Anonymise …?',
   view: RequestsDesign,
   cases: [
-    { id: 'prospect', label: 'A prospect: what is erased, what the law keeps', model: at(erase(PROSPECT)), note: 'Anonymised: the inquiry\'s prospect columns; kept as they are, with why: the mails and the history (the database keeps them unchanged).' },
+    { id: 'prospect', label: 'A prospect: what is erased, what the law keeps', model: at(erase(PROSPECT)), note: 'Anonymised: the inquiry\'s prospect columns, the sender, subject and text of their mails (the envelope sender the mail server recorded stays, with why) and their values in the inquiry\'s history.' },
     { id: 'contact', label: 'A customer\'s contact: anonymised, deleted, kept', model: at(erase({ ...CONTACT })), note: 'The customer record stays (invoices keep the business data); the measurements stay for the legal guarantee.' },
     { id: 'armed', label: 'Reason and the typed name: Anonymise armed', model: at(erase(PROSPECT, READY)), note: 'The name exactly as shown (ConfirmPhraseField); Anonymise asks a fresh code next.' },
     { id: 'typed-wrong', label: 'The name typed wrong', model: at(erase(PROSPECT, { reason: READY.reason, typed: 'bruno' })), note: 'Held: "Type the person\'s name exactly as shown."' },
@@ -84,6 +87,6 @@ export const designScreen = defineDesignScreen<RequestsCase>({
     { id: 'no-right', label: 'Without privacy.erase: held', model: at(erase(PROSPECT, READY), {}, ADMIN.filter((permission) => permission !== 'privacy.erase')) },
     { id: 'loading', label: 'Loading the preview', model: at(erase(null)) },
     { id: 'error', label: 'The preview did not load', model: at(erase(null, { preview: { value: null, problem: 'dp.problem.unavailable' } })) },
-    { id: 'done', label: 'Anonymised', model: at(erase(PROSPECT, { ...READY, done: { anonymised: 1, deleted: 0, kept: 7 } })) },
+    { id: 'done', label: 'Anonymised', model: at(erase(PROSPECT, { ...READY, done: { anonymised: 8, deleted: 0, kept: 0 } })) },
   ],
 })

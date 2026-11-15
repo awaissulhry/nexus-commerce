@@ -16,6 +16,7 @@ import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { portalSessionOf, type PortalSession } from './authenticator'
 import { answerFloor, portalOf } from './service'
 import { issueCode, lockedCode, newestCode } from './store'
+import { clientAddressOf } from '../../../core/client-address'
 
 /**
  * Step-up by an e-mail code (B-W2b-159; PLT-050; design portal.supplier.profile step-up "Confirm it's you — We sent a
@@ -58,7 +59,7 @@ export async function startStepUp(app: FastifyInstance, request: FastifyRequest,
   const code = newPortalCode()
   const codeHash = portalCodeHash(p.codeKey, { purpose: 'STEP_UP', tenantId: session.tenantId, userId: session.userId, boundTo: session.id }, code)
   const { result } = await p.auth.command(contextOf(app, request, session), { name: 'portal.stepUpCodeSent', input: { sessionId: session.id } }, async ({ tx, now, audit }) => {
-    const issued = await issueCode(tx, { userId: session.userId, purpose: 'STEP_UP', codeHash, linkTokenHash: null, now, ipHash: p.auth.secrets.ipHash(request.ip) })
+    const issued = await issueCode(tx, { userId: session.userId, purpose: 'STEP_UP', codeHash, linkTokenHash: null, now, ipHash: p.auth.secrets.ipHash(clientAddressOf(request)) })
     audit({ recordType: 'PortalSignInCode', recordId: issued.id, companyId: session.company.id, after: { purpose: 'STEP_UP', sessionId: session.id, expiresAt: issued.expiresAt, replaced: issued.replaced } })
     return issued
   })

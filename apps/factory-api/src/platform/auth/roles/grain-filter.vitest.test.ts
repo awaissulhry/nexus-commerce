@@ -89,7 +89,7 @@ afterEach(async () => {
 
 async function boot(options: { routesRoot?: string } = {}): Promise<FastifyInstance> {
   const app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET, webOrigin: 'http://localhost:3200' },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET, webOrigin: 'http://localhost:3200' },
     {
       authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null),
       routes: [probe],

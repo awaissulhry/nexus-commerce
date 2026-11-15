@@ -614,9 +614,13 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
 ## Rules
 - `FACTORY_API_URL` has NO fallback: without it `next dev`, `next build` and `next start` refuse to start
   (`next.config.ts`). Only `next typegen` loads without it. Never point it at a production API from this machine.
-- The API client (`src/lib/api/client.ts`) is the only way to call the API. The browser calls `/api/<route>` (rewritten
-  to `<FACTORY_API_URL>/<route>`; the session cookie stays first-party); a server component calls FACTORY_API_URL with
-  the request's factory cookies only (`serverApi`). Unsafe methods send `x-csrf-token` (the `__Host-factory_csrf`
+- The API client (`src/lib/api/client.ts`) is the only way to call the API. The browser calls `/api/<route>` (the route
+  `src/app/api/[...path]/route.ts` passes it to `<FACTORY_API_URL>/<route>`, `lib/api/proxy.ts`; the session cookie
+  stays first-party); a server component calls FACTORY_API_URL with the request's factory cookies only (`serverApi`).
+  B-W2b-F57: both send the browser's address in X-Forwarded-For (`lib/api/forwarded.ts`: the received chain only from
+  an edge in FACTORY_TRUSTED_PROXIES — unset locally, `private` on Railway, required there — then the peer; `src/proxy.ts`
+  sets the received header aside on every request so Next.js writes the peer). A new server-side caller passes
+  `forwardedFor: forwardedForOf(await headers())`. Unsafe methods send `x-csrf-token` (the `__Host-factory_csrf`
   cookie); office pages use `useOfficeApi()` (adds `x-factory-company`); link tokens only in `x-factory-link`. Errors are
   `ApiError` with a kind (`signed_out`, `step_up`, `forbidden`, `not_found`, …); show your own words, never the API's.
 - Screens: a view `…/view/<Screen>.tsx` takes ONE typed view model and fetches nothing (`check-view-boundaries`); the
