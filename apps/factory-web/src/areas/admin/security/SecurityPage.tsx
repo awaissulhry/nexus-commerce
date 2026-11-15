@@ -12,6 +12,8 @@ import { changesFor, drillFormErrors, emptyDrillForm, LOADING, NO_DIALOG, securi
 import { SecurityView } from './view/SecurityView'
 import { useSecuritySettings } from './sessions/use-security-settings'
 import { useSecurityEvents } from './events/use-security-events'
+import { useJobs } from './jobs/use-jobs'
+import { JobsCard } from './jobs/view/JobsCard'
 
 const LIVE_TYPES = new Set(['security.drill_recorded', 'security.two_factor_changed'])
 
@@ -45,6 +47,8 @@ export function SecurityPage() {
   // B-W2b-413: Session lengths and Actions that ask for a fresh code (one read), Security events (security.events.view).
   const settings = useSecuritySettings(api, can.view)
   const events = useSecurityEvents(api, held.has('security.events.view'))
+  // B-W2b-415: Jobs and integrations (security.view; Run now with security.jobs.run).
+  const jobs = useJobs(api, { canView: can.view, prefix })
 
   const load = useCallback(async () => {
     if (can.view) {
@@ -157,8 +161,12 @@ export function SecurityPage() {
         depth: { lengths: { prefix, read: settings.read, card: settings.lengths }, stepUp: { read: settings.read, card: settings.rules }, events: events.model, freshCode: settings.stepUp },
       }}
       stepUp={stepUp}
+      jobs={jobs.model ? <JobsCard model={jobs.model} actions={jobs.actions} /> : null}
       actions={{
-        onRecheck: () => void load(),
+        onRecheck: () => {
+          void load()
+          jobs.reload()
+        },
         onRetry: () => void load(),
         onDismissNotice: () => setNotice(null),
         onRecordDrill: () => {

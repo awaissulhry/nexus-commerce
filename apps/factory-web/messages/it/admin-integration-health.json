@@ -1,0 +1,742 @@
+{
+  "aih": {
+    "action": {
+      "dismiss": "Archivia",
+      "editRetry": "Correggi e riprova",
+      "fix": {
+        "customers": "Correggi e riprova in Clienti",
+        "files": "Correggi e riprova in Connessioni",
+        "invoices": "Correggi e riprova in Fatture",
+        "mail": "Correggi e riprova in Consegna posta",
+        "rates": "Correggi e riprova in Impostazioni finanza",
+        "shipments": "Correggi e riprova in Spedizioni"
+      },
+      "retry": "Riprova"
+    },
+    "band": {
+      "loading": "Coda errori",
+      "open_one": "Coda errori (1)",
+      "open_other": "Coda errori ({count})"
+    },
+    "bulk": {
+      "dismiss_one": "Archivia 1",
+      "dismiss_other": "Archivia {count}",
+      "left": {
+        "dismiss": {
+          "DISMISSED_one": "1 escluso: già archiviato.",
+          "DISMISSED_other": "{count} esclusi: già archiviato.",
+          "NO_RIGHT_one": "1 escluso: non di tua competenza.",
+          "NO_RIGHT_other": "{count} esclusi: non di tua competenza."
+        },
+        "retry": {
+          "DISMISSED_one": "1 escluso: già archiviato.",
+          "DISMISSED_other": "{count} esclusi: già archiviato.",
+          "FROM_RECORD_one": "1 escluso: una chiamata da inviare dalla sua origine.",
+          "FROM_RECORD_other": "{count} esclusi: una chiamata da inviare dalla sua origine.",
+          "NO_RIGHT_one": "1 escluso: non di tua competenza.",
+          "NO_RIGHT_other": "{count} esclusi: non di tua competenza.",
+          "SIGNATURE_one": "1 escluso: una firma non valida.",
+          "SIGNATURE_other": "{count} esclusi: una firma non valida.",
+          "WAITING_one": "1 escluso: già inviato di nuovo.",
+          "WAITING_other": "{count} esclusi: già inviato di nuovo."
+        }
+      },
+      "none": {
+        "dismiss": "Nessuno dei messaggi selezionati si può archiviare.",
+        "retry": "Nessuno dei messaggi selezionati si può inviare di nuovo da qui."
+      },
+      "noneTicked": "Seleziona prima i messaggi.",
+      "retry_one": "Riprova 1",
+      "retry_other": "Riprova {count}"
+    },
+    "col": {
+      "reason": "Motivo",
+      "service": "Servizio",
+      "state": "Stato",
+      "time": "Ora",
+      "tries": "Tentativi",
+      "what": "Cosa è fallito"
+    },
+    "count_one": "1 messaggio",
+    "count_other": "{count} messaggi",
+    "dismiss": {
+      "body": "Non si fa altro. Resta nella coda tra gli Archiviati, con chi e perché.",
+      "cancel": "Annulla",
+      "go_one": "Archivia 1",
+      "go_other": "Archivia {count}",
+      "long": "Al massimo 500 caratteri.",
+      "reason": "Perché",
+      "reasonHint": "Da 3 a {max} caratteri, conservati con il messaggio.",
+      "required": "Indica il perché.",
+      "short": "Almeno 3 caratteri.",
+      "title_one": "Archiviare 1 messaggio?",
+      "title_other": "Archiviare {count} messaggi?"
+    },
+    "done": {
+      "dismissedSome_one": "1 messaggio archiviato; {refused} rifiutati.",
+      "dismissedSome_other": "{count} messaggi archiviati; {refused} rifiutati.",
+      "dismissed_one": "1 messaggio archiviato.",
+      "dismissed_other": "{count} messaggi archiviati.",
+      "retriedSome_one": "1 messaggio inviato di nuovo; {refused} rifiutati.",
+      "retriedSome_other": "{count} messaggi inviati di nuovo; {refused} rifiutati.",
+      "retried_one": "1 messaggio inviato di nuovo.",
+      "retried_other": "{count} messaggi inviati di nuovo."
+    },
+    "empty": {
+      "all": {
+        "body": "Eventi, webhook e chiamate falliti arrivano qui da soli.",
+        "title": "Nessun messaggio fallito finora."
+      },
+      "dismissed": {
+        "body": "Un messaggio archiviato resta qui con chi l'ha archiviato e perché.",
+        "title": "Niente archiviato."
+      },
+      "open": {
+        "body": "Ogni messaggio in entrata e in uscita è andato a buon fine, o una persona se ne è occupata.",
+        "title": "Niente in attesa."
+      },
+      "retried": {
+        "body": "I messaggi inviati di nuovo attendono qui il loro esito.",
+        "title": "Niente inviato di nuovo."
+      }
+    },
+    "errors": {
+      "hint": "Messaggi falliti in entrata e in uscita, con cosa fare.",
+      "rule": "Riprova invia di nuovo un messaggio una volta. Una chiamata fallita si invia di nuovo da dove è partita. Archivia conserva il messaggio con chi e perché.",
+      "title": "Coda errori"
+    },
+    "gate": {
+      "ecbFeed": "La connessione dei cambi BCE"
+    },
+    "held": {
+      "dismiss": {
+        "DISMISSED": "Già archiviato.",
+        "NO_RIGHT": "Non puoi riprovare o archiviare i messaggi falliti: può farlo un amministratore."
+      },
+      "fix": "Niente da correggere qui: non ha una pagina sua.",
+      "loading": "Caricamento…",
+      "retry": {
+        "DISMISSED": "Archiviato: non si fa altro.",
+        "FROM_RECORD": "Una chiamata fallita si invia di nuovo da dove è partita: usa Correggi e riprova.",
+        "NO_RIGHT": "Non puoi riprovare o archiviare i messaggi falliti: può farlo un amministratore.",
+        "SIGNATURE": "La firma non era valida, quindi non viene mai elaborato: chiedi al servizio di inviarlo di nuovo.",
+        "WAITING": "Inviato di nuovo: torna qui se fallisce ancora."
+      },
+      "retrying": "Invio in corso…",
+      "saving": "Salvataggio…"
+    },
+    "item": {
+      "bySystem": "Da Nexus: è andato a buon fine da solo",
+      "code": "Codice: {code}",
+      "dismissReason": "Perché è stato archiviato",
+      "dismissed": "Archiviato",
+      "firstFailed": "Primo errore",
+      "gone": "La sua origine non è più conservata.",
+      "lastFailed": "Ultimo errore",
+      "noun": "messaggio",
+      "reason": "Motivo",
+      "retried": "Inviato di nuovo",
+      "service": "Servizio",
+      "someone": "Una persona",
+      "sourceTitle": "Cosa dice la sua origine",
+      "theirWords": "Le parole del servizio",
+      "theirWordsHint": "Come le ha dette il servizio (segreti rimossi).",
+      "title": "Messaggio fallito",
+      "tries_one": "1 tentativo",
+      "tries_other": "{count} tentativi",
+      "what": "Cosa è fallito"
+    },
+    "job": {
+      "accounting": {
+        "integrityNightly": {
+          "name": "Controlli di integrità contabile",
+          "what": "Ogni notte alle 04:10: si eseguono e si conservano i controlli di integrità di ogni azienda."
+        }
+      },
+      "alerts": {
+        "evaluate": {
+          "name": "Regole di eccezione",
+          "what": "Ogni 5 minuti: le regole di eccezione cercano i record che richiedono una persona."
+        }
+      },
+      "approvals": {
+        "officeMail": {
+          "name": "Approvazioni via e-mail",
+          "what": "Ogni 5 minuti: Home › Approvazioni parte via e-mail a chi l'ha chiesta."
+        }
+      },
+      "approvalsOut": {
+        "sweep": {
+          "name": "Pulizia richieste di approvazione",
+          "what": "Ogni 10 minuti: scadono le richieste di approvazione oltre il loro tempo."
+        }
+      },
+      "compliance": {
+        "certificateExpiry": {
+          "name": "Controllo scadenza certificati",
+          "what": "Ogni notte: i certificati di esame del tipo in scadenza vengono segnalati."
+        },
+        "claimEvidenceExpiry": {
+          "name": "Scadenza delle prove dei claim",
+          "what": "Ogni notte: si segnalano una volta i claim approvati con prove non più valide."
+        },
+        "profilesNightly": {
+          "name": "Profili dei materiali rivalutati",
+          "what": "Ogni notte alle 03:50: si rivaluta ogni profilo dei materiali."
+        },
+        "renewalStages": {
+          "name": "Fasi di rinnovo dei certificati",
+          "what": "Ogni ora: si mantengono le fasi di rinnovo dei certificati."
+        },
+        "supplierDeclarations": {
+          "name": "Dichiarazioni dei fornitori",
+          "what": "Ogni ora: le richieste di dichiarazione passano in ritardo e si sollecitano i fornitori."
+        }
+      },
+      "costing": {
+        "catchUp": {
+          "name": "Allineamento registro costi",
+          "what": "Ogni notte: si scrivono i costi degli ordini di lavoro mancati."
+        }
+      },
+      "currency": {
+        "ecbDaily": {
+          "name": "Cambi BCE",
+          "what": "Alle 16:30 e alle 18:30 nei giorni lavorativi: si leggono e si conservano i cambi di riferimento BCE."
+        }
+      },
+      "email": {
+        "liftCatchUp": {
+          "name": "Allineamento indirizzi sbloccati",
+          "what": "Ogni notte: gli indirizzi sbloccati restano nella loro tabella."
+        }
+      },
+      "emailIn": {
+        "followUps": {
+          "name": "Seguiti della casella di squadra",
+          "what": "Ogni 15 minuti: le e-mail il cui seguito è arrivato senza risposta si riaprono."
+        }
+      },
+      "exports": {
+        "expire": {
+          "name": "Esportazioni vecchie rimosse",
+          "what": "Ogni ora: i file esportati oltre il tempo di conservazione vengono rimossi."
+        }
+      },
+      "files": {
+        "expireLargeUploads": {
+          "name": "Caricamenti grandi incompleti rimossi",
+          "what": "Ogni ora: si rimuovono i caricamenti grandi mai completati."
+        },
+        "remindExpiry": {
+          "name": "Promemoria scadenza documenti",
+          "what": "Ogni giorno alle 06:40: si ricordano i documenti in scadenza."
+        },
+        "scanPending": {
+          "name": "Scansione antivirus dei caricamenti in attesa",
+          "what": "Ogni 5 minuti: si scansionano i caricamenti ancora in attesa della scansione antivirus."
+        }
+      },
+      "imports": {
+        "firstLoadCatchUp": {
+          "name": "Allineamento primo caricamento",
+          "what": "Ogni notte: si aggiornano i passi del primo caricamento guidato."
+        }
+      },
+      "insights": {
+        "factsHourly": {
+          "name": "Dati orari",
+          "what": "Ogni ora: si ricostruiscono i dati di oggi e di ieri."
+        },
+        "factsNightly": {
+          "name": "Dati notturni",
+          "what": "Ogni notte alle 02:40: si ricostruiscono i dati dei 35 giorni precedenti."
+        },
+        "ownerDigest": {
+          "name": "Riepilogo del titolare",
+          "what": "Ogni 15 minuti: l'e-mail del mattino parte per ogni persona alla sua ora (solo dove la persona e l'azienda l'hanno attivata)."
+        },
+        "reportMail": {
+          "name": "E-mail dei report",
+          "what": "Ogni 15 minuti: i report che le persone hanno chiesto di ricevere partono alla loro ora."
+        }
+      },
+      "integrations": {
+        "collectErrors": {
+          "name": "Raccolta della coda errori",
+          "what": "Ogni minuto: i messaggi falliti in entrata e in uscita entrano nella coda errori."
+        }
+      },
+      "inventory": {
+        "reservationsCleanup": {
+          "name": "Pulizia delle prenotazioni",
+          "what": "Ogni notte: si rilasciano le prenotazioni la cui domanda è conclusa."
+        },
+        "warehouseTaskTimed": {
+          "name": "Attività di conta in scadenza",
+          "what": "Ogni ora: i piani di conta arrivati a scadenza ricevono la loro attività."
+        }
+      },
+      "invoicing": {
+        "sdiPoll": {
+          "name": "Controllo stato fatture elettroniche",
+          "what": "Ogni 5 minuti: si chiede lo stato delle fatture inviate allo SDI in attesa di risposta."
+        }
+      },
+      "links": {
+        "purgeDrafts": {
+          "name": "Bozze dei link vecchie eliminate",
+          "what": "Ogni ora: si eliminano le bozze dei moduli via link 7 giorni dopo la scadenza."
+        }
+      },
+      "notifications": {
+        "digest": {
+          "name": "Riepiloghi giornalieri",
+          "what": "Ogni 15 minuti: i riepiloghi giornalieri attivati dalle persone partono alla loro ora."
+        },
+        "viewFollow": {
+          "name": "Viste seguite contate",
+          "what": "Ogni 15 minuti: si contano le viste salvate seguite e si avvisano i cambiamenti."
+        }
+      },
+      "outbox": {
+        "lag": {
+          "name": "Controllo degli eventi in background",
+          "what": "Ogni minuto: quanti eventi attendono il worker e se qualcuno è fallito definitivamente."
+        }
+      },
+      "partners": {
+        "accessEnding": {
+          "name": "Accesso partner in scadenza",
+          "what": "Ogni giorno alle 07:20: si avvisano una volta i partner il cui accesso scade entro 7 giorni."
+        }
+      },
+      "payables": {
+        "sdiPickup": {
+          "name": "Ritiro fatture elettroniche passive",
+          "what": "Ogni 15 minuti: si ritirano le fatture dei fornitori consegnate dallo SDI."
+        }
+      },
+      "people": {
+        "attendanceDays": {
+          "name": "Giornate di presenza",
+          "what": "Ogni 15 minuti: si calcolano le giornate di presenza con il passare del tempo."
+        },
+        "autoClockOut": {
+          "name": "Uscita automatica",
+          "what": "Ogni 5 minuti: si chiudono le timbrature rimaste aperte oltre la fine del turno."
+        },
+        "leaverSteps": {
+          "name": "Passi per le uscite",
+          "what": "Ogni ora: avanzano i passi automatici delle persone in uscita."
+        }
+      },
+      "planning": {
+        "nightlyRun": {
+          "name": "Pianificazione notturna",
+          "what": "Ogni 5 minuti: la pianificazione notturna parte quando arriva la sua ora."
+        }
+      },
+      "plant": {
+        "checkReminders": {
+          "name": "Promemoria verifiche obbligatorie",
+          "what": "Ogni ora: si ricordano una volta le verifiche obbligatorie con la finestra aperta."
+        },
+        "escalateRequests": {
+          "name": "Escalation richieste macchina",
+          "what": "Ogni minuto: le richieste macchina non prese in carico in tempo salgono di livello."
+        }
+      },
+      "portal": {
+        "purgeCodes": {
+          "name": "Codici portale vecchi eliminati",
+          "what": "Ogni ora: si eliminano i codici di accesso al portale scaduti da un giorno."
+        }
+      },
+      "portalNotifications": {
+        "digest": {
+          "name": "Riepiloghi ai partner",
+          "what": "Ogni 15 minuti dalle 08:00 nei giorni lavorativi: i partner ricevono i loro riepiloghi."
+        }
+      },
+      "portalTasks": {
+        "remind": {
+          "name": "Promemoria richieste ai partner",
+          "what": "Ogni ora: si ricordano ai partner le loro richieste aperte."
+        }
+      },
+      "privacy": {
+        "retentionSweep": {
+          "name": "Pulizia per conservazione",
+          "what": "Ogni notte alle 02:50: ogni regola di conservazione riporta cosa è dovuto e applica solo dove attiva."
+        }
+      },
+      "product": {
+        "smvTakeEffect": {
+          "name": "Minuti standard in vigore",
+          "what": "Ogni ora: entrano in vigore le versioni SMV approvate arrivate al loro giorno."
+        }
+      },
+      "production": {
+        "dailyReport": {
+          "name": "Report giornaliero di produzione",
+          "what": "Ogni 15 minuti: il report giornaliero va agli iscritti, alla loro ora."
+        },
+        "scanFindings": {
+          "name": "Controlli delle scansioni",
+          "what": "Ogni ora: si segnalano le scansioni che sembrano sbagliate."
+        },
+        "stuckBundles": {
+          "name": "Mazzi fermi",
+          "what": "Ogni 15 minuti: i mazzi fermi vengono segnalati alle persone interessate."
+        }
+      },
+      "purchasing": {
+        "chaseReminders": {
+          "name": "Solleciti per righe in ritardo",
+          "what": "Ogni giorno alle 09:30: si sollecitano i fornitori con righe in ritardo (solo dove attivo)."
+        },
+        "confirmationReminders": {
+          "name": "Solleciti di conferma ai fornitori",
+          "what": "Ogni giorno alle 09:00: si sollecitano i fornitori che non hanno confermato un ordine (solo dove attivo)."
+        }
+      },
+      "quality": {
+        "alertRules": {
+          "name": "Regole di allerta qualità",
+          "what": "Ogni 5 minuti: scattano le regole di allerta qualità con l'attesa superata."
+        },
+        "capaReminders": {
+          "name": "Promemoria azioni correttive",
+          "what": "Ogni 15 minuti: si ricordano le azioni correttive aperte e quelle in ritardo salgono di livello."
+        }
+      },
+      "reasons": {
+        "standardForNewTenants": {
+          "name": "Causali standard assegnate",
+          "what": "Ogni notte: una nuova azienda riceve gli elenchi di causali standard."
+        }
+      },
+      "receivables": {
+        "ladder": {
+          "name": "Scala dei solleciti di pagamento",
+          "what": "Ogni giorno alle 06:00: si preparano i solleciti delle fatture scadute."
+        }
+      },
+      "roles": {
+        "syncTemplates": {
+          "name": "Ruoli pronti allineati",
+          "what": "Ogni notte: i ruoli pronti prendono i permessi dei loro modelli."
+        },
+        "twoFactorSince": {
+          "name": "Allineamento date due fattori",
+          "what": "Ogni notte: le date dei due fattori restano nella loro colonna."
+        }
+      },
+      "safety": {
+        "healthDueList": {
+          "name": "Visite mediche in scadenza",
+          "what": "Ogni giorno: si pianificano le visite periodiche e di rientro."
+        }
+      },
+      "sales": {
+        "fittingReminders": {
+          "name": "Promemoria delle prove",
+          "what": "Ogni ora: si ricorda una volta l'appuntamento entro un giorno ai piloti."
+        },
+        "measurementPhotos": {
+          "name": "Foto delle misure eliminate in tempo",
+          "what": "Ogni ora: le foto delle misure arrivano al giorno di eliminazione e vengono eliminate."
+        },
+        "quoteValidity": {
+          "name": "Validità delle offerte",
+          "what": "Ogni giorno alle 06:15: le offerte inviate oltre l'ultimo giorno scadono e i clienti vengono avvisati una volta."
+        }
+      },
+      "shipping": {
+        "closeDays": {
+          "name": "Fogli del giorno chiusi",
+          "what": "Ogni ora: si chiudono i fogli del giorno non chiusi da nessuno, a giornata finita."
+        },
+        "deliveryCheck": {
+          "name": "Controllo spedizioni in viaggio",
+          "what": "Ogni giorno alle 07:10: le spedizioni senza notizie dal corriere o oltre il giorno previsto ricevono un'attività."
+        },
+        "systemHolds": {
+          "name": "Blocchi di sistema delle spedizioni",
+          "what": "Ogni 30 minuti: i blocchi di sistema sulle spedizioni seguono le loro cause."
+        },
+        "trackingPoll": {
+          "name": "Controllo tracciamento colli",
+          "what": "Ogni ora: si chiede al corriere dove sono i colli in viaggio."
+        }
+      },
+      "tasks": {
+        "reminders": {
+          "name": "Promemoria che tornano",
+          "what": "Ogni minuto: i promemoria arrivati al loro momento tornano alla loro persona."
+        }
+      },
+      "timers": {
+        "fire": {
+          "name": "Timer a data",
+          "what": "Ogni minuto: scattano i timer arrivati al loro momento."
+        }
+      },
+      "unknown": {
+        "name": "{code}",
+        "what": "Un processo ancora senza descrizione: non è nel catalogo dei processi."
+      }
+    },
+    "jobState": {
+      "failing": "Fallisce",
+      "missed": "Esecuzione saltata",
+      "never": "Mai eseguito",
+      "ok": "Funziona",
+      "running": "In corso",
+      "stuck": "Bloccato"
+    },
+    "jobs": {
+      "allWell": "Ogni processo è partito in orario.",
+      "col": {
+        "failures": "Errori 7 giorni",
+        "last": "Ultima esecuzione",
+        "name": "Processo",
+        "next": "Prossima esecuzione",
+        "state": "Stato",
+        "waiting": "In attesa"
+      },
+      "count_one": "1 processo",
+      "count_other": "{count} processi",
+      "empty": {
+        "body": "Lo scheduler non ha ancora segnalato processi.",
+        "title": "Nessun processo pianificato."
+      },
+      "hint": "Ogni processo pianificato: ultima esecuzione, prossima, errori e cosa attende.",
+      "needs_one": "1 processo da guardare (bloccato, in errore o in ritardo).",
+      "needs_other": "{count} processi da guardare (bloccati, in errore o in ritardo).",
+      "neverRan": "Nessuna esecuzione",
+      "outbox": "Eventi in background: {waiting} in attesa · {dead} abbandonati (nella coda errori).",
+      "rule": "Ogni esecuzione è registrata. Esegui ora vale solo per i processi che controllano o recuperano; un processo che invia al suo orario o attende un interruttore mantiene il suo orario.",
+      "title": "Processi e integrazioni",
+      "waitingUnknown": "Le richieste Esegui ora non si leggono ora"
+    },
+    "loading": "Ancora in caricamento…",
+    "older": "Mostra precedenti",
+    "op": {
+      "event": "Consegna di un evento ({code})",
+      "files": {
+        "delete": "Eliminazione di un file",
+        "put": "Salvataggio di un file",
+        "read": "Lettura di un file",
+        "scan": "Scansione antivirus di un file"
+      },
+      "job": "Un processo in background ({code})",
+      "mail": {
+        "create_identity": "Aggiunta di un dominio di posta",
+        "fetch_inbound": "Lettura della posta ricevuta",
+        "get_identity": "Verifica del dominio di posta",
+        "send": "Invio di un'e-mail"
+      },
+      "other": "Una chiamata ({code})",
+      "parcel": {
+        "create": "Creazione di un'etichetta di spedizione",
+        "track": "Tracciamento di un collo"
+      },
+      "sdi": {
+        "send": "Invio di una fattura allo SDI",
+        "send_invoice": "Invio di una fattura allo SDI",
+        "status": "Richiesta di stato di una fattura allo SDI"
+      },
+      "vat": {
+        "check": "Verifica di una partita IVA (VIES)"
+      },
+      "webhook": {
+        "process": "Elaborazione di un messaggio ricevuto dal servizio"
+      }
+    },
+    "reason": {
+      "account_disabled": "La connessione è disattivata: non è stato inviato nulla.",
+      "account_paused": "La connessione è in pausa: non è stato inviato nulla.",
+      "dispatch_failed": "L'evento non è stato distribuito ai suoi processi.",
+      "fake_in_production": "La connessione è in modalità finta, che la produzione non chiama mai.",
+      "job_failed": "Il processo in background ha esaurito i tentativi.",
+      "network_error": "Il servizio non era raggiungibile.",
+      "other": "Il servizio ha risposto con il codice {code}.",
+      "processing_failed": "Quanto inviato dal servizio non è stato elaborato.",
+      "provider_error": "Il servizio ha rifiutato o fallito la chiamata.",
+      "publish_failed": "L'evento non è stato consegnato al worker dopo tutti i tentativi.",
+      "signature_mismatch": "La firma del messaggio non era valida: non è mai stato elaborato.",
+      "timeout": "Il servizio non ha risposto in tempo."
+    },
+    "reconnect": {
+      "action": "Riconnetti",
+      "running": "Chiusura del circuito, poi una chiamata innocua…"
+    },
+    "result": {
+      "FAILED": "Fallito",
+      "RUNNING": "In corso",
+      "SUCCEEDED": "Riuscito"
+    },
+    "retryMany": {
+      "go_one": "Riprova 1",
+      "go_other": "Riprova {count}",
+      "once": "Ognuno viene inviato di nuovo una volta; se fallisce ancora torna In attesa.",
+      "title_one": "Inviare di nuovo 1 messaggio?",
+      "title_other": "Inviare di nuovo {count} messaggi?"
+    },
+    "run": {
+      "byPerson": "Esegui ora",
+      "minutes_one": "1 minuto",
+      "minutes_other": "{count} minuti",
+      "scheduled": "Pianificata",
+      "seconds_one": "1 secondo",
+      "seconds_other": "{count} secondi"
+    },
+    "runNow": {
+      "action": "Esegui ora",
+      "bulk_one": "Esegui 1 ora",
+      "bulk_other": "Esegui {count} ora",
+      "doneSome_one": "1 processo richiesto; {refused} rifiutati.",
+      "doneSome_other": "{count} processi richiesti; {refused} rifiutati.",
+      "done_one": "1 processo richiesto ora: la sua esecuzione compare qui sotto.",
+      "done_other": "{count} processi richiesti ora: le loro esecuzioni compaiono qui sotto.",
+      "go_one": "Esegui ora",
+      "go_other": "Esegui {count} ora",
+      "held": {
+        "ASKED": "Un Esegui ora è già in attesa o in corso.",
+        "NO_RIGHT": "Non puoi eseguire processi ora: può farlo un amministratore.",
+        "SCHEDULE_ONLY": "Invia al suo orario (o elimina sotto un interruttore): parte solo secondo il suo orario.",
+        "SWITCHED_OFF": "Attende un interruttore spento: accendilo prima.",
+        "UNKNOWN_JOB": "Non è nel catalogo dei processi: parte solo secondo il suo orario."
+      },
+      "last": "Ultimo esito: {result} · {at}",
+      "lastNone": "Nessuna esecuzione registrata finora.",
+      "left": {
+        "ASKED_one": "1 escluso: già richiesto.",
+        "ASKED_other": "{count} esclusi: già richiesto.",
+        "NO_RIGHT_one": "1 escluso: non di tua competenza.",
+        "NO_RIGHT_other": "{count} esclusi: non di tua competenza.",
+        "SCHEDULE_ONLY_one": "1 escluso: solo secondo orario.",
+        "SCHEDULE_ONLY_other": "{count} esclusi: solo secondo orario.",
+        "SWITCHED_OFF_one": "1 escluso: attende un interruttore.",
+        "SWITCHED_OFF_other": "{count} esclusi: attende un interruttore.",
+        "UNKNOWN_JOB_one": "1 escluso: fuori catalogo.",
+        "UNKNOWN_JOB_other": "{count} esclusi: fuori catalogo."
+      },
+      "noneTicked": "Nessuno dei processi selezionati può partire ora.",
+      "once": "Parte una volta nel cluster, solo per questa azienda, come sistema, entro circa 10 secondi.",
+      "titleMany_one": "Eseguire 1 processo ora?",
+      "titleMany_other": "Eseguire {count} processi ora?",
+      "titleOne": "Eseguire '{name}' ora?"
+    },
+    "runs": {
+      "failures": "{failed} su {runs} esecuzioni fallite",
+      "list": "Esecuzioni, dalla più recente",
+      "missed": "Un'esecuzione prevista alle {at} non è avvenuta.",
+      "none": "Nessuna esecuzione registrata finora.",
+      "noun": "processo",
+      "schedule": "Orario",
+      "state": "Stato",
+      "switch": "Interruttore",
+      "switchOff": "{name}: spento",
+      "switchOn": "{name}: acceso",
+      "title": "Esecuzioni",
+      "zone": "Fuso orario {zone}"
+    },
+    "service": {
+      "factory": "Nexus stesso"
+    },
+    "src": {
+      "answer": "Risposta",
+      "answered": "Risposto · {key}",
+      "asked": "Richiesto · {key}",
+      "attempts": "Tentativi",
+      "bytes_one": "1 byte",
+      "bytes_other": "{count} byte",
+      "call": {
+        "FAILED": "Fallito",
+        "REFUSED": "Rifiutato prima di inviare",
+        "SUCCEEDED": "Riuscito",
+        "TIMED_OUT": "Nessuna risposta in tempo"
+      },
+      "connection": "Connessione",
+      "duration": "Durata",
+      "eventType": "Tipo",
+      "ms": "{ms} ms",
+      "noAnswer": "Nessuna risposta",
+      "noBody": "Il messaggio stesso non viene mai mostrato.",
+      "notVerified": "Non valida",
+      "occurred": "Avvenuto",
+      "outbox": {
+        "DEAD": "Abbandonato",
+        "PENDING": "In attesa del relay",
+        "PUBLISHED": "Consegnato al worker"
+      },
+      "received": "Ricevuto",
+      "sent": "Inviato",
+      "signature": "Firma",
+      "size": "Dimensione",
+      "status": "Dove si trova",
+      "summaryHint": "Ciò che il gateway ha conservato della chiamata, senza segreti né dati personali.",
+      "verified": "Verificata",
+      "webhook": {
+        "FAILED": "Elaborazione fallita",
+        "PROCESSED": "Elaborato",
+        "RECEIVED": "In attesa di elaborazione",
+        "REJECTED": "Rifiutato"
+      }
+    },
+    "state": {
+      "DISMISSED": "Archiviato",
+      "OPEN": "In attesa",
+      "RETRIED": "Inviato di nuovo",
+      "wentThrough": "Andato a buon fine"
+    },
+    "test": {
+      "action": "Prova",
+      "at": "Provata",
+      "circuit": "Circuito",
+      "circuitClosed_one": "Chiuso: 1 errore di fila dimenticato.",
+      "circuitClosed_other": "Chiuso: {count} errori di fila dimenticati.",
+      "circuitWasClosed": "Era già chiuso.",
+      "close": "Chiudi",
+      "failed": {
+        "other": "La chiamata è fallita ({code}).",
+        "timeout": "Il servizio non ha risposto in tempo."
+      },
+      "held": {
+        "disabled": "Questa connessione è disattivata: non viene più chiamata.",
+        "noProbe": "Questo servizio non ha ancora una chiamata di prova innocua: la sua prossima chiamata reale mostra se funziona (ultimo OK e ultimo errore).",
+        "paused": "Questa connessione è in pausa: riattivala prima. Riconnetti non accende mai una connessione in pausa.",
+        "right": "Non puoi provare questa connessione: serve il permesso di mettere in pausa e riattivare le connessioni.",
+        "running": "Una prova è in corso."
+      },
+      "ledger": "Registro chiamate",
+      "ledgerHint": "La prova è una riga della scheda Chiamate.",
+      "ok": "Il servizio ha risposto in {ms} ms: funziona.",
+      "okFake": "Il simulatore della fabbrica ha risposto in {ms} ms: il gateway, i suoi limiti e il registro chiamate funzionano. Non è uscito nulla dalla fabbrica.",
+      "refused": {
+        "account_disabled": "Rifiutata: la connessione è disattivata.",
+        "account_paused": "Rifiutata: la connessione è in pausa. Riattivala prima.",
+        "circuit_open": "Rifiutata: la connessione ha fallito più chiamate di fila ed è a riposo. Riconnetti chiude il circuito.",
+        "fake_in_production": "Rifiutata: la produzione non chiama mai una connessione finta.",
+        "gateway_unavailable": "Rifiutata: il gateway ora non può controllare i suoi limiti. Non è stato inviato nulla.",
+        "other": "Rifiutata ({code}): non è stato inviato nulla.",
+        "rate_limited": "Rifiutata: il limite di chiamate della connessione è raggiunto. Riprova tra un minuto."
+      },
+      "running": "Una chiamata innocua attraverso il gateway…",
+      "theirWords": "Le parole del servizio",
+      "title": "Prova connessione",
+      "what": "Una chiamata innocua attraverso il gateway; la risposta a parole."
+    },
+    "view": {
+      "all": "Tutti",
+      "dismissed": "Archiviati",
+      "label": "Quali messaggi",
+      "open": "In attesa",
+      "retried": "Inviati di nuovo",
+      "withCount": "{view} · {count}"
+    }
+  }
+}
