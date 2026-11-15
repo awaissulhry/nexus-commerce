@@ -180,4 +180,29 @@ describe('SCR-066 and SCR-067 draw every design case in both languages', () => {
     expect(issued).not.toMatch(/>Edit(?: DDT)?</)
     expect(draw('sales')).toContain('Read-only')
   })
+
+  // B-W2b-F50: rule "TEST labels say TEST" (B-W2b-390, LOG-035).
+  it('a TEST label says TEST and that it was not charged, never bought; a live label keeps its words', () => {
+    const draw = (id: string, locale: 'it' | 'en') => {
+      const item = recordScreen.cases.find((entry) => entry.id === id)!
+      return renderToString(createElement(I18nProvider, { locale, messages: messagesFor(locale, NAMESPACES) }, createElement(ShipmentRecordView, { model: item.model.record })))
+    }
+    const test = draw('labels-test', 'en')
+    expect(test).toContain('>TEST<')
+    expect(test).toContain('Made ')
+    expect(test).toContain('TEST labels: made by the test carrier, they go to no carrier and are not charged.')
+    expect(test).not.toContain('Bought ')
+    const testIt = draw('labels-test', 'it')
+    expect(testIt).toContain('non sono addebitate')
+    expect(testIt).not.toContain('Comprata il')
+    // A live label keeps its words.
+    expect(draw('labels', 'en')).toContain('Bought ')
+    expect(draw('labels', 'en')).not.toContain('TEST labels')
+    // In test mode the step and the booking say test, never buy.
+    const buy = draw('buy-dialog-test', 'en')
+    expect(buy).toContain('Make 2 test labels')
+    expect(buy).toContain('Test mode: the test carrier makes the labels, marked TEST; nothing is bought or charged.')
+    expect(buy).not.toContain('Buy 2 labels')
+    expect(draw('buy-dialog', 'en')).toContain('Buy 2 labels')
+  })
 })

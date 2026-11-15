@@ -497,11 +497,15 @@ const labelParcelSchema = z.object({
   grossWeightKg: z.string().nullable(),
   trackingNumber: z.string().nullable(),
   labelledAt: instant.nullable(),
+  // B-W2b-F50 (B-W2b-390, LOG-035): a TEST label of test mode (made by the test carrier: sent to no carrier, not charged).
+  test: z.boolean(),
   files: z.array(z.object({ fileId: z.string(), format: z.enum(['PDF', 'ZPL']), name: z.string() })),
   print: z.object({ jobId: z.string(), status: z.string(), createdAt: instant }).nullable(),
 })
 export const labelsSchema = z.object({
   labelPrinterId: z.string().nullable(),
+  // B-W2b-F50: the site is in test mode (the buy makes TEST labels).
+  testMode: z.boolean(),
   cutOff: z.object({ time: z.string(), at: instant, passed: z.boolean() }).nullable(),
   toLabel: z.number(),
   parcels: z.array(labelParcelSchema),

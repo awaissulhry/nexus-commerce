@@ -83,7 +83,8 @@
       "officeIssues": "Il DDT lo emette l'ufficio: compare qui appena è emesso.",
       "pdfMissing": "Il PDF del DDT non è ancora salvato: l'ufficio lo ristampa.",
       "noPrinter": "Nessuna stampante documenti a questa postazione: il DDT lo stampa l'ufficio.",
-      "nothing": "Ancora niente da stampare: l'ufficio emette il DDT e compra le etichette."
+      "nothing": "Ancora niente da stampare: l'ufficio emette il DDT e compra le etichette.",
+      "nothingTest": "Ancora niente da stampare: l'ufficio emette il DDT e fa le etichette di prova."
     }
   },
   "labels": {
@@ -92,12 +93,15 @@
     "tracking": "Tracking {number}",
     "noLabel": "Ancora nessuna etichetta",
     "bought": "Etichetta comprata",
+    "test": "Etichetta di prova — non addebitata",
     "waiting": "In attesa",
     "ready_one": "{count} etichetta pronta da stampare",
     "ready_other": "{count} etichette pronte da stampare",
+    "testNote": "Modalità di prova: le etichette dicono TEST, non vanno a nessun corriere e non sono addebitate.",
     "held": {
       "notNeeded": "Nessuna etichetta del corriere necessaria.",
       "officeBuys": "Le etichette le compra l'ufficio: compaiono qui appena comprate.",
+      "officeTest": "Le etichette di prova le fa l'ufficio: compaiono qui appena fatte. Non sono addebitate.",
       "noPrinter": "Nessuna stampante etichette a questa postazione: l'ufficio le stampa in PDF.",
       "noRight": "Il tuo ruolo qui non stampa etichette."
     },
@@ -110,10 +114,12 @@
   "jobs": {
     "title": "Stampe",
     "label": "Etichetta · cartone {seq}",
+    "labelTest": "Etichetta di prova · cartone {seq}",
     "DDT": "DDT",
     "PACKING_LIST": "Packing list",
     "retry": "Ristampa: {what}",
-    "retryLabel": "Ristampa l'etichetta del cartone {seq}"
+    "retryLabel": "Ristampa l'etichetta del cartone {seq}",
+    "retryLabelTest": "Ristampa l'etichetta di prova del cartone {seq}"
   },
   "job": {
     "QUEUED": "In coda",

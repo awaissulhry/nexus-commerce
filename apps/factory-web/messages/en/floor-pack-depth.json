@@ -202,6 +202,7 @@
       "failed": "a label did not print",
       "ready": "labels not printed yet",
       "office": "the office buys the labels",
+      "officeTest": "the office makes the test labels",
       "noPrinter": "the office prints the labels",
       "noRight": "your role does not print the labels",
       "notNeeded": "no carrier labels"
@@ -210,6 +211,7 @@
       "cartons": "Cartons",
       "marks": "Carton marks",
       "labels": "Carrier labels",
+      "test": "Test mode",
       "documents": "DDT and packing list"
     },
     "marks": {
@@ -223,9 +225,11 @@
       "failed": "Not printed: Retry is on the documents",
       "ready": "Not printed yet",
       "office": "The office buys them",
+      "officeTest": "The office makes them: test labels, not charged",
       "noPrinter": "The office prints them (no label printer here)",
       "noRight": "Your role does not print them"
     },
+    "test": "TEST labels: they go to no carrier and are not charged",
     "transport": {
       "SENDER": "Our own van: no carrier label",
       "RECIPIENT": "The customer collects: no carrier label",

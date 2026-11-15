@@ -74,6 +74,12 @@
   color: var(--nds-text-muted);
 }
 
+/* B-W2b-F50: a carton's label status is a sentence for a TEST label ("Test label — not charged"): on a phone, where the
+   status sits under the carton, it wraps inside its pill instead of running past the row. */
+.fw-pack-labels .nds-floor-row-status {
+  white-space: normal;
+}
+
 .fw-pack-job {
   display: flex;
   justify-content: flex-end;
