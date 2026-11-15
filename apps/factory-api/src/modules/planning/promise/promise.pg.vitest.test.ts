@@ -116,7 +116,7 @@ beforeAll(async () => {
   await admin(`INSERT INTO "QuoteLineSize" (id, "tenantId", "lineId", "partyId", size, quantity, "unitPrice") SELECT gen_random_uuid(), "tenantId", $1, "partyId", size, quantity, "unitPrice" FROM "QuoteLineSize" WHERE "lineId" = $2`, [A.q2Line, first])
   today = businessDate(new Date(), 'Europe/Rome')
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
   )
 }, 480_000)

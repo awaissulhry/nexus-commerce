@@ -96,7 +96,7 @@ beforeAll(async () => {
     await admin('INSERT INTO "LeatherGrade" (id, "tenantId", code, "labelIt", "labelEn", "usableShare", "sortOrder") VALUES ($1, $2, $3, $4, $5, $6, $7)', [grade[code], tenant, code, `Scelta ${code}`, `Grade ${code}`, String(90 - index * 15), index + 1])
   }
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     {
       database,
       routesRoot: fileURLToPath(new URL('../../..', import.meta.url)),

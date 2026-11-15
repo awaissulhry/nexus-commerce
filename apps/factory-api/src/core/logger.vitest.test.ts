@@ -120,7 +120,7 @@ describe('the app logger', () => {
       },
     )
     const app = await buildApp(
-      { environment: 'test', webOrigin: 'http://localhost:3200', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+      { environment: 'test', webOrigin: 'http://localhost:3200', cookieSecret: LOCAL_COOKIE_SECRET },
       { routes: [routes], logger: { level: 'info', stream: { write: (line) => void lines.push(line) } } },
     )
     apps.push(app)

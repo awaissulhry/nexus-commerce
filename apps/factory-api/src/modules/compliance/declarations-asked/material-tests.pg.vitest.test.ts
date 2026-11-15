@@ -133,7 +133,7 @@ beforeAll(async () => {
     rateLimits: { signIn: limits, resetRequest: limits, tokenUse: limits, codes: limits, linkUse: limits, floorSignIn: limits },
   })
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database, officeAuth, clock, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((req) => SESSIONS[String(req.headers['x-test-session'])] ?? null) },
   )
   // A fresh test database migrates under one server-wide lock: other worktrees' runs may hold it for minutes.

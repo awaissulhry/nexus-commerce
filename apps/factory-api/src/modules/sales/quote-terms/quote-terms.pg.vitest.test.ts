@@ -113,7 +113,7 @@ beforeAll(async () => {
   seeded = await seedSalesPricing({ db: h.database, namespace: NS })
   sentFacts = await one(`SELECT "billTo", "shipTo", "sentById" FROM "QuoteVersion" WHERE id = $1`, [seeded.sentQuote.versionId])
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database: h.database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
   )
 }, 900_000)

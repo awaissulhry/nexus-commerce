@@ -7,7 +7,7 @@ import { defineManifest, defineRoutes, PUBLIC } from './manifest'
 import { BODY_LIMIT_BYTES, SECURITY_HEADERS } from './security'
 
 const WEB = 'http://localhost:3200'
-const CONFIG: AppConfig = { environment: 'test', webOrigin: WEB, trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET }
+const CONFIG: AppConfig = { environment: 'test', webOrigin: WEB, cookieSecret: LOCAL_COOKIE_SECRET }
 
 const routes = defineRoutes(
   'probe',

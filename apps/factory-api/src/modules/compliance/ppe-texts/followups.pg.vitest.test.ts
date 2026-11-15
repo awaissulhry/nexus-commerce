@@ -125,7 +125,7 @@ beforeAll(async () => {
   // The system roles as the templates hold them now (compliance.ppeTexts.manage: the owner's, from every()).
   await h.database.withScope({ audience: 'office', tenantId: T, actorId: newId() }, async (client) => applySystemRoleChanges(client, await systemRoleChanges(client), { now: h.clock.now(), actorId: newId() }))
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database: h.database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null), logger: false },
   )
   const user = await addUser(h, TENANT, { email: `owner.288.${run}@example.test`, role: 'owner' })

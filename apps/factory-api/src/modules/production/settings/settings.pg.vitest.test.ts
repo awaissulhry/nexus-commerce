@@ -151,7 +151,7 @@ beforeAll(async () => {
   manager = await person(tenantA, 'production.manager@example.com', 'production_manager')
   supervisor = (await person(tenantA, 'floor.supervisor@example.com', 'floor_supervisor')).browser
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     {
       database: h.database,
       clock: h.clock,

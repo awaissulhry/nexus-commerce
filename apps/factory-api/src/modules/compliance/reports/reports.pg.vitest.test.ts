@@ -78,7 +78,7 @@ beforeAll(async () => {
   // The seeds date some rows from the real clock (the database checks them against its own today): the report's clock moves after them.
   vi.useFakeTimers({ toFake: ['Date'], now: NOW })
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null), logger: false },
   )
 }, 1_500_000)

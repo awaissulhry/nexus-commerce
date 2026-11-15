@@ -55,7 +55,7 @@ beforeAll(async () => {
   await write('2026-10-28T11:00:00.000Z', null, tenantA, 'sites.archive')
   await write('2026-10-28T12:00:00.000Z', null, tenantB)
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     {
       database,
       routesRoot: fileURLToPath(new URL('../..', import.meta.url)),

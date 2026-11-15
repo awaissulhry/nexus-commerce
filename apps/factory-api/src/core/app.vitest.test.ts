@@ -19,7 +19,6 @@ import { defineManifest, defineRoutes, PUBLIC, SIGNED_IN } from './manifest'
 const CONFIG: AppConfig = {
   environment: 'test',
   webOrigin: 'http://localhost:3200',
-  trustProxyHops: 0,
   cookieSecret: LOCAL_COOKIE_SECRET,
 }
 const TENANT = '0190f5c2-0000-7000-8000-000000000001'

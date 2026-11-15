@@ -106,7 +106,7 @@ beforeAll(async () => {
   workshopId = (await admin<{ partyId: string }>('SELECT "partyId" FROM "Location" WHERE id = $1', [subcontract.locationId]))[0]!.partyId
   await admin('INSERT INTO "User" (id, "tenantId", email, "displayName", status) VALUES ($1, $2, $3, $4, $5), ($6, $2, $7, $8, $5)', [planner, T, 'pia@example.com', 'Pia Planner', 'ACTIVE', planner2, 'paolo@example.com', 'Paolo Planner'])
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
   )
 }, 240_000)

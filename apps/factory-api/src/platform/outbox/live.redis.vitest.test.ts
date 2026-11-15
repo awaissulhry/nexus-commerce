@@ -88,7 +88,7 @@ beforeAll(async () => {
   feed = new LiveFeed({ connect: () => redis.connect(), prefix: redis.prefix })
   useLiveFeed(feed)
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     {
       routesRoot: fileURLToPath(new URL('../..', import.meta.url)),
       authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null),
@@ -196,7 +196,7 @@ describe('GET /live', () => {
   it('answers 503 when Redis does not answer, instead of hanging the screen', async () => {
     const down = new LiveFeed({ prefix: redis.prefix, readyTimeoutMs: 200, connect: () => new Redis('redis://127.0.0.1:1', { lazyConnect: false, maxRetriesPerRequest: null, retryStrategy: () => null }) })
     const app503 = await buildApp(
-      { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+      { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
       {
         authenticate: testAuthenticator(() => SESSIONS['office-a']!),
         routes: [defineRoutes('test-live', testManifest, async (routes) => {
@@ -222,7 +222,7 @@ describe('GET /live', () => {
     expect(feed.tenants()).not.toContain(tenantB)
 
     const other = await buildApp(
-      { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+      { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
       { routesRoot: fileURLToPath(new URL('../..', import.meta.url)), authenticate: testAuthenticator(() => SESSIONS['office-a']!) },
     )
     const address = await other.listen({ host: '127.0.0.1', port: 0 })

@@ -101,7 +101,7 @@ beforeAll(async () => {
   // The final inspection goes out to the workshop P2 (the revision is a DRAFT: its routing still changes).
   await admin('UPDATE "RoutingOperation" SET "supplierId" = $2, "pricePerPiece" = 1.5 WHERE id = $1', [inspectStep, workshop])
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
   )
 }, 180_000)

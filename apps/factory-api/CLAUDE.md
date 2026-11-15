@@ -139,7 +139,10 @@ B-W2b-124 `modules/plant/statutory` (QHS-205; D.Lgs. 81/2008 art. 71: results ke
 - `logger.ts`: redacts secret keys (passwords, PINs, tokens, cookies, keys, hashes, `…Enc`, cost/margin/price/
   amount/total/wages) at any depth; requests are logged by route pattern, never URL, headers or body.
 - `security.ts`: strict headers on every answer, CORS only for `FACTORY_WEB_ORIGIN`, writes with another Origin
-  refused, rate limit (Redis when present), 1 MiB body limit.
+  refused, rate limit (Redis when present; per client address, `client-address.ts`), 1 MiB body limit.
+- `client-address.ts` (B-W2b-F57): THE client address, `clientAddressOf(request)` — the rate limit (global and every
+  route's own), sessions, sign-in codes, security events, links, approvals and the abuse guard all use it; nothing reads
+  `request.ip`, the socket or X-Forwarded-For itself (its vitest holds that). See "Client address" below.
 - `cors-expose.ts` (B-W2b-383): the answer headers a page may read (`Access-Control-Expose-Headers`): the request id and
   `x-labels-refused`. A route that answers a header of its own for the web adds it there, by its constant.
 - `ids.ts` (request ids), `time.ts` (the server clock). UUIDv7 `newId()` and Europe/Rome dates live in
@@ -150,6 +153,28 @@ B-W2b-124 `modules/plant/statutory` (QHS-205; D.Lgs. 81/2008 art. 71: results ke
   `<prefix>:cron:<job>:<second>` in Redis (SET NX PX); fails closed when Redis is down.
 - `sse.ts`: live screens. One Redis subscriber per process (`LiveFeed`), `GET /live` (platform/outbox) streams what
   `liveViewFor` lets each office or floor viewer see; heartbeat 20 s.
+
+## Client address (`src/core/client-address.ts`, factory-domain `core/client-address.ts`; B-W2b-F57)
+- Every browser reaches the API through the factory web (`/api/*` is a route of the web, apps/factory-web
+  `src/app/api/[...path]/route.ts`; server renders call the API from the web too), and on Railway the web through
+  Railway's edge. The web sends X-Forwarded-For: the chain it received only from a trusted edge, then its own peer
+  (apps/factory-web `src/lib/api/forwarded.ts`); a browser's own header never travels on.
+- The API trusts X-Forwarded-For ONLY from `FACTORY_TRUSTED_PROXIES` (addresses, `address/prefix` ranges, `loopback`,
+  `private` = 10/8, 172.16/12, 192.168/16, 100.64/10, fc00::/7; `none`; never wider than /8 or /7, never "everything").
+  From a trusted peer the client is the right-most address that is not a trusted proxy; anybody else keeps its TCP
+  address whatever it sends. Addresses are canonical (`::ffff:a.b.c.d` = `a.b.c.d`). Fastify's `trustProxy` stays off.
+- `FACTORY_TRUSTED_PROXIES`: local and test default `loopback` (the web beside the API; the test harness trusts
+  loopback too); staging and production refuse to start without it. The old `FACTORY_TRUST_PROXY_HOPS` is refused (a
+  hop count trusted a forged header on a direct request).
+- Go-live on Railway (nothing set from this machine): API service `FACTORY_TRUSTED_PROXIES=private` (the web reaches it
+  over the private network, `*.railway.internal`; Railway publishes no edge range, and every peer there is the edge or
+  a service of the same project); web service `FACTORY_TRUSTED_PROXIES=private` (the edge in front of it) and
+  `FACTORY_API_URL=http://<api service>.railway.internal:<FACTORY_PORT>` (the API listens on `::` there). Check on
+  staging: sign in with a forged header (`X-Forwarded-For: 192.0.2.1`); Admin › Audit log searched by your real
+  address (`GET /audit/search?ip=`) finds the sign-in, by 192.0.2.1 nothing.
+- Tests: `core/client-address.vitest.test.ts` (the rule through the app, the rate-limit buckets, the one-reader check),
+  `platform/auth/sessions/client-address.pg.vitest.test.ts` (two browsers through the proxy, a forged header, session,
+  security events, audit search and place).
 
 ## The outbox (`src/platform/outbox/`)
 - `writer.ts`: command()'s EventWriter. An emitted event must be declared in `@nexus/factory-domain/events/catalogue`

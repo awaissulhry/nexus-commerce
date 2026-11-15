@@ -10,6 +10,7 @@ import { loadFactoryEnv } from '../../env'
 import type { AuthSecrets } from '../auth/sessions/secrets'
 import { officeAuthOf } from '../auth/sessions/office-auth'
 import { failoverStore, memoryAbuseStore, redisAbuseStore, type AbuseStore, type WindowCount } from './store'
+import { clientAddressOf } from '../../core/client-address'
 
 /**
  * The abuse guard of the public routes (B-W2b-159; PLT-066; plan A1 §3.10 "rate limits on every public route"; the
@@ -88,10 +89,10 @@ export function createAbuseGuard(options: AbuseGuardOptions): AbuseGuard {
   const clock = options.clock ?? serverClock
   const name = (policy: string, kind: string, value: string) =>
     `${options.prefix}:abuse:${policy}:${kind}:${createHmac('sha256', options.key).update(`${policy}|${kind}|${value}`, 'utf8').digest('base64url').slice(0, 32)}`
-  const networkSubject = (request: FastifyRequest) => createHmac('sha256', options.key).update(`network|${networkOf(request.ip)}`).digest('base64url')
+  const networkSubject = (request: FastifyRequest) => createHmac('sha256', options.key).update(`network|${networkOf(clientAddressOf(request))}`).digest('base64url')
 
   async function counts(request: FastifyRequest, policy: AbusePolicyName) {
-    const network = networkOf(request.ip)
+    const network = networkOf(clientAddressOf(request))
     const [hits, failures] = await Promise.all([options.store.peek(name(policy, 'n', network)), options.store.peek(name(policy, 'f', network))])
     return { networkHits: hits.count, networkFailures: failures.count }
   }
@@ -99,7 +100,7 @@ export function createAbuseGuard(options: AbuseGuardOptions): AbuseGuard {
   return {
     async check(request, reply, policy, input = {}) {
       const rules = ABUSE_POLICIES[policy]
-      const network = networkOf(request.ip)
+      const network = networkOf(clientAddressOf(request))
       const subject = input.subject ? input.subject.trim().toLowerCase() : null
       const [networkHits, subjectHits, failures] = await Promise.all([
         options.store.hit(name(policy, 'n', network), rules.windowMs),
@@ -130,7 +131,7 @@ export function createAbuseGuard(options: AbuseGuardOptions): AbuseGuard {
     },
 
     async failed(request, policy) {
-      await options.store.hit(name(policy, 'f', networkOf(request.ip)), ABUSE_POLICIES[policy].windowMs)
+      await options.store.hit(name(policy, 'f', networkOf(clientAddressOf(request))), ABUSE_POLICIES[policy].windowMs)
     },
 
     async challenge(request, policy) {

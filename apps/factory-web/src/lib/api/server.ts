@@ -1,11 +1,13 @@
-import { cookies } from 'next/headers'
+import { cookies, headers } from 'next/headers'
 import { readFactoryApiUrl } from '../api-url'
 import { API_COOKIES, createApiClient, type ApiClient } from './client'
+import { forwardedForOf } from './forwarded'
 
 /**
  * The client for server components and route handlers: straight to FACTORY_API_URL (no fallback: lib/api-url.ts), with
- * the request's own factory cookies forwarded — and no other cookie. Read-only by design: a server component never
- * writes; writes go from the browser, through the proxy, with the CSRF double submit.
+ * the request's own factory cookies forwarded — and no other cookie — and the browser's address (B-W2b-F57,
+ * lib/api/forwarded.ts). Read-only by design: a server component never writes; writes go from the browser, through the
+ * proxy, with the CSRF double submit.
  */
 export async function serverApi(options: { company?: string | null } = {}): Promise<ApiClient> {
   const jar = await cookies()
@@ -17,5 +19,6 @@ export async function serverApi(options: { company?: string | null } = {}): Prom
     baseUrl: readFactoryApiUrl(process.env.FACTORY_API_URL),
     company: options.company ?? null,
     cookie: cookie === '' ? null : cookie,
+    forwardedFor: forwardedForOf(await headers()),
   })
 }

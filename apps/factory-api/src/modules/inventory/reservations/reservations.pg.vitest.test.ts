@@ -180,7 +180,7 @@ beforeAll(async () => {
   await addLot('LIN', A.lining, A.liningGRY, 'RELEASED', [{ quantity: '100.0000', uom: 'M' }])
   await addLot('PRO', A.protector, null, 'RELEASED', [{ quantity: '200.0000', uom: 'PCS' }])
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     {
       database,
       routesRoot: fileURLToPath(new URL('../../..', import.meta.url)),

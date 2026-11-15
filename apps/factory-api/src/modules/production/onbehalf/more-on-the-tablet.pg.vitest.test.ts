@@ -167,7 +167,7 @@ beforeAll(async () => {
     rateLimits: { signIn: limits, resetRequest: limits, tokenUse: limits, codes: limits, linkUse: limits, floorSignIn: limits },
   })
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET, rateLimit: limits },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET, rateLimit: limits },
     { database: h.database, officeAuth, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
   )
 }, 600_000)

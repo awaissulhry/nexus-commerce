@@ -235,7 +235,7 @@ async function giveLinkRole(tenant: TestTenant, userId: string, partyIds: string
 beforeAll(async () => {
   h = await startHarness('links')
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET, webOrigin: WEB_ORIGIN, rateLimit: { max: 10_000, timeWindowMs: 60_000 } },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET, webOrigin: WEB_ORIGIN, rateLimit: { max: 10_000, timeWindowMs: 60_000 } },
     { database: h.database, officeAuth: h.auth, clock: h.clock, routesRoot: fileURLToPath(new URL('../..', import.meta.url)), routes: [moduleRoutes] },
   )
   withdraw.push(source('Quote'), source('PurchaseOrder'), source('StoredFile'))

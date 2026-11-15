@@ -182,7 +182,7 @@ export async function startInventoryFixture(label: string): Promise<InventoryFix
   }
 
   const app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     {
       database,
       routesRoot: fileURLToPath(new URL('../../../..', import.meta.url)),

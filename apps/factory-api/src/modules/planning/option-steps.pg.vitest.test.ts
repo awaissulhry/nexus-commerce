@@ -150,7 +150,7 @@ beforeAll(async () => {
     await tx.certificateCoverage.create({ data: { id: newId(), certificateId, styleId: options.jacketStyleId, sizes: ['50', '52', '54'] }, select: { id: true } })
   })
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database, routesRoot: fileURLToPath(new URL('../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
   )
 }, 480_000)

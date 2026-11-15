@@ -147,7 +147,7 @@ beforeAll(async () => {
   packing = operations.at(-1)!.id
   inspection = operations.find((row) => row.code === 'SEED-FIN-QC')!.id
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
   )
 }, 600_000)

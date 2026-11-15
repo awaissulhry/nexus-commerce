@@ -39,6 +39,13 @@ describe('the API client', () => {
     expect(headers.get('content-type')).toBe('application/json')
   })
 
+  // B-W2b-F57: a server render names the browser, not the web.
+  it("sends a server render's X-Forwarded-For, and none without one", () => {
+    expect(requestHeaders({ baseUrl: 'http://127.0.0.1:8190', forwardedFor: '198.51.100.7, 100.64.3.4' }, 'GET', {}).get('x-forwarded-for')).toBe('198.51.100.7, 100.64.3.4')
+    expect(requestHeaders({ baseUrl: '/api' }, 'GET', {}).get('x-forwarded-for')).toBeNull()
+    expect(requestHeaders({ baseUrl: '/api', forwardedFor: null }, 'GET', {}).get('x-forwarded-for')).toBeNull()
+  })
+
   it('validates an answer against its schema', async () => {
     const { api, fetch } = client(json(200, { ok: true, extra: 1 }))
     await expect(api.get('/x', { schema: z.object({ ok: z.boolean() }) })).resolves.toEqual({ ok: true })

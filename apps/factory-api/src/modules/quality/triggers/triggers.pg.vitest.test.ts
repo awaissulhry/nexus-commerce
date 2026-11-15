@@ -140,7 +140,7 @@ beforeAll(async () => {
   }
   await h.database.withScope({ audience: 'office', tenantId: A.tenant, actorId: newId() }, async (client) => applySystemRoleChanges(client, await systemRoleChanges(client), { now: h.clock.now(), actorId: newId() }))
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database: h.database, clock: h.clock, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
   )
   const lot = (await admin<{ lotId: string; itemId: string }>(`SELECT "lotId", "itemId" FROM "IncomingInspection" WHERE "tenantId" = $1 AND number = 'SEED-IIN-0001'`, [A.tenant]))[0]!

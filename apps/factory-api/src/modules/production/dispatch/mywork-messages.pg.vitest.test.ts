@@ -117,7 +117,7 @@ beforeAll(async () => {
     [newId(), lead, operator],
   )
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
   )
   // The day: the sewing of SEED-WO-0001 sits at SEW-01, and only there.

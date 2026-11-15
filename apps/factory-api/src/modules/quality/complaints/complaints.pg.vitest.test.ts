@@ -95,7 +95,7 @@ beforeAll(async () => {
     await admin(`INSERT INTO "NumberSeries" (id, "tenantId", "companyId", kind, code, "scopeKey", reset, pattern, fiscal) VALUES ($1, $2, $3, $4, 'MAIN', $5, 'YEARLY', $6, false) ON CONFLICT DO NOTHING`, [newId(), T, companyA, kind, YEAR, pattern])
   }
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database: h.database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])]?.() ?? null) },
   )
   qualityUserId = (await addUser(h, TENANT, { email: 'qa.complaints@example.com', role: 'quality_inspector' })).id

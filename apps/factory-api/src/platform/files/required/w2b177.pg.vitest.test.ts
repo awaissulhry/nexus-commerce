@@ -112,7 +112,7 @@ beforeAll(async () => {
   await admin(`INSERT INTO "Party" (id, "tenantId", "companyId", code, kind, "legalName", roles) VALUES ($1, $2, $3, 'FORN-177', 'ORGANISATION', 'Conceria Esempio S.r.l.', '{SUPPLIER}')`, [supplier, tenant.id, company])
   await admin(`INSERT INTO "PurchaseOrder" (id, "tenantId", "companyId", "siteId", number, "partyId", "orderDate", "createdById") VALUES ($1, $2, $3, $4, 'PO-177-1', $5, current_date, $6)`, [purchaseOrder, tenant.id, company, site, supplier, PEOPLE.buyer])
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database: h.database, clock: h.clock, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])]?.() ?? null) },
   )
 }, 600_000)
