@@ -122,8 +122,12 @@ export async function depositReceived(files: FilesRuntime, caller: CommandCaller
   }))
 }
 
-/** Inside the deposit command, the request's lock held: the TD02 draft of the amount paid, issued (or 409 with its problems). */
-async function issueDeposit(tools: CommandTools, request: NonNullable<Awaited<ReturnType<typeof readDepositRequest>>>, amount: number, paidOn: string, periodLockOverride?: PeriodLockOverride): Promise<string> {
+/**
+ * Inside the deposit command, the request's lock held: the TD02 draft of the amount paid, issued (or 409 with its problems).
+ * B-W2b-F48: also the worker's, for a deposit paid online or through an accepted bank line (deposit-invoice.ts): one code
+ * makes every TD02 of a payment.
+ */
+export async function issueDeposit(tools: CommandTools, request: NonNullable<Awaited<ReturnType<typeof readDepositRequest>>>, amount: number, paidOn: string, periodLockOverride?: PeriodLockOverride): Promise<string> {
   await lockMoney(tools.tx, tools.context, 'deposit', request.id)
   if ((await seriesKindFor(tools.tx, request.companyId, 'TD02')) === null) {
     throw refusal([{ code: 'SERIES', path: 'numbering', message: 'This company has no active deposit invoice or invoice number series: an admin sets it up under numbering.' }])
