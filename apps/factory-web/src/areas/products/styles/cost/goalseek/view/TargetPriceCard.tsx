@@ -152,7 +152,8 @@ function GoalAnswer({ view, grains, money, pct, kind }: { view: GoalSeekView; gr
   ]
   return (
     <div className="fw-st-stack">
-      <span>
+      {/* B-W2b-437: the state is a sentence: its Pill wraps at phone width (cost-sheets.css). */}
+      <span className="fw-cs-goalstate">
         <Pill tone={state.tone}>{t(state.key)}</Pill>
       </span>
       <MetricStrip metrics={metrics} />

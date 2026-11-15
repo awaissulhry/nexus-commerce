@@ -150,6 +150,11 @@
   border-right: 0;
 }
 
+/* B-W2b-437: the TEST MODE banner's links to where each test mode is switched (the DS link colour, light and dark). */
+.fw-system-banner a {
+  color: var(--nds-text-link);
+}
+
 /* ── rail + page ──────────────────────────────────────────────────────────────────────────────────────────────── */
 .fw-office-body {
   /* The rail is absolutely placed over the reserved 66 px strip and hover-expands without moving the page. */

@@ -55,8 +55,12 @@ export type OfficeFrame = 'office' | 'window' | 'print'
 export interface SystemBanner {
   id: string
   kind: 'test-mode'
-  /** The connections that run fake or in a sandbox ("Email (fake)"). */
-  connections: readonly string[]
+  /** B-W2b-437: the sites whose carrier is in test mode (labels marked TEST, nothing sent; shell/office/test-mode.ts). */
+  carrierSites: readonly string[]
+  /** B-W2b-437: the companies whose e-invoicing is in test mode (nothing reaches SDI). */
+  eInvoicingCompanies: readonly string[]
+  /** Each line links to the page where that test mode is switched, when the person may open it. */
+  links: { carrier: boolean; eInvoicing: boolean }
 }
 
 export interface OfficeShellViewModel {
@@ -129,6 +133,8 @@ export function OfficeShellView({ model, children, onNavigate, onSiteChange, onS
   // lib/i18n/ds-parts reads them (the frame loads `shell` only, and imports nothing from ds-parts, which brings the grid).
   const locale = useLocale()
   const ds = useMemo(() => dsLabels(createTranslator(locale, CATALOGUE[locale]['ds-words'] ?? {}), locale), [locale])
+  // B-W2b-437: the TEST MODE banner names its sites and companies as a list in the person's language ("A1, A2 e A3").
+  const listOf = (names: readonly string[]) => new Intl.ListFormat(locale, { type: 'conjunction' }).format(names)
   const { mode, cycleTheme } = useTheme()
   const [paletteOpen, setPaletteOpen] = useState(model.paletteOpen ?? false)
   const [areaNavOpen, setAreaNavOpen] = useState(false)
@@ -324,7 +330,29 @@ export function OfficeShellView({ model, children, onNavigate, onSiteChange, onS
 
       {model.banners.map((banner) => (
         <Banner key={banner.id} tone="warning" className="fw-system-banner" title={t('banner.testMode.title')}>
-          {t('banner.testMode.body', { connections: banner.connections.join(', ') })}
+          {/* B-W2b-437: one line per test mode that is on, with the page where it is switched. */}
+          {banner.carrierSites.length > 0 && (
+            <p>
+              {t('banner.testMode.carrier', { sites: listOf(banner.carrierSites) })}
+              {banner.links.carrier && (
+                <>
+                  {' '}
+                  <Link href={toHref('/warehouse/shipping')}>{t('nav.warehouse.shipping')}</Link>
+                </>
+              )}
+            </p>
+          )}
+          {banner.eInvoicingCompanies.length > 0 && (
+            <p>
+              {t('banner.testMode.eInvoicing', { companies: listOf(banner.eInvoicingCompanies) })}
+              {banner.links.eInvoicing && (
+                <>
+                  {' '}
+                  <Link href={toHref('/finance/settings')}>{t('nav.finance.settings')}</Link>
+                </>
+              )}
+            </p>
+          )}
         </Banner>
       ))}
 

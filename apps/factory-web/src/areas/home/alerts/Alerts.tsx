@@ -14,6 +14,8 @@ import { useTodayLive } from '../today/live'
 import { acknowledgeAlert, alertAssignees, assignAlert, bulkAcknowledge, getAlert, listAlerts, resolveAlert, snoozeAlert, type AlertDetail, type AlertItem, type AlertList } from './api'
 import { alertsAddress, alertsCan, bulkRows, controlsOf, readProblemOf, refusalOf, updatesBetween, type AlertRow, type AlertsControls, type AlertsDialog, type AlertsNotice, type AlertsViewModel, type AlertView } from './model'
 import { AlertsView, type AlertsDialogRequest } from './view/AlertsView'
+// B-W2b-437: the rule dialog's routes (B-W2b-435's container), passed to the view as a slot.
+import { RuleRoutes } from '../../_shared/rules/routes/RuleRoutes'
 
 interface ListState {
   readonly answer: AlertList
@@ -246,6 +248,7 @@ export function Alerts() {
   return (
     <AlertsView
       model={model}
+      ruleRoutes={(ruleId) => <RuleRoutes ruleId={ruleId} />}
       actions={{
         onControls: (next) => go(next),
         onSearch: setQ,

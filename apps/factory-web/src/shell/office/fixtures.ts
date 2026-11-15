@@ -2,7 +2,8 @@ import { defineDesignScreen, type DesignCase } from '../../lib/design/design-scr
 import { permissionCheck } from '../../lib/session/session'
 import { DEMO_COMPANIES, DEMO_LABELS, DEMO_SITES, DEMO_TAG, DEMO_USER, rolePermissions } from '../design-data'
 import { firstOfficePage, OFFICE_NAV, officeNavFor } from '../nav/office-nav'
-import { OfficeShellView, type OfficeShellViewModel } from './view/OfficeShellView'
+import { testModeBanner, testModeRights } from './test-mode'
+import { OfficeShellView, type OfficeShellViewModel, type SystemBanner } from './view/OfficeShellView'
 
 /**
  * SCR-003 — the Office frame with the navigation of W1 (B-W1-08) and W2a (B-W2a-83): the Owner's full rail (12 areas in
@@ -37,6 +38,18 @@ const areaCases: DesignCase<OfficeShellViewModel>[] = OFFICE_NAV.areas.map((area
 
 const warehouse = navOf('warehouse')
 const sales = navOf('sales')
+
+/** B-W2b-437: the banner a role sees with these sites' carriers and the first company's e-invoicing in test mode (made up). */
+function testModeOf(role: Parameters<typeof rolePermissions>[0], on: { carrier: readonly string[]; eInvoicing: boolean }): SystemBanner[] {
+  const company = DEMO_COMPANIES[0]
+  const banner = testModeBanner({
+    carrier: DEMO_SITES.map((site) => ({ companyId: company.id, name: site.name, testMode: on.carrier.includes(site.name) })),
+    eInvoicing: [{ companyId: company.id, legalName: company.name, state: { code: on.eInvoicing ? 'TEST' : 'LIVE' } }],
+    companyId: company.id,
+    rights: testModeRights(permissionCheck(rolePermissions(role))),
+  })
+  return banner ? [banner] : []
+}
 
 export const designScreen = defineDesignScreen<OfficeShellViewModel>({
   screen: 'SCR-003',
@@ -93,11 +106,30 @@ export const designScreen = defineDesignScreen<OfficeShellViewModel>({
       model: { ...owner, bell: { status: 'error' } },
       note: 'An unknown count shows no badge, never 0; the words say the count is not available now.',
     },
+    // B-W2b-437: the TEST MODE banner from the two W2b-6 test modes, through the shell's own rule (test-mode.ts) per role.
     {
       id: 'test-mode',
-      label: 'TEST MODE banner',
-      model: { ...owner, banners: [{ id: 'test-mode', kind: 'test-mode', connections: ['Email (fake)', 'Files (fake)', 'Printing (fake)'] }] },
-      note: 'Shown while any connection is fake or in a sandbox.',
+      label: 'TEST MODE banner: the carrier and e-invoicing',
+      model: { ...owner, banners: testModeOf('owner', { carrier: [DEMO_SITES[0].name, DEMO_SITES[1].name], eInvoicing: true }) },
+      note: 'Shown on every page while a site\'s carrier or the company\'s e-invoicing is in test mode; each line opens where it is switched (Warehouse › Carriers & shipping, Finance › Finance settings).',
+    },
+    {
+      id: 'test-mode-carrier',
+      label: 'TEST MODE banner: a warehouse person, one site\'s carrier',
+      model: { ...at({ ...owner, nav: warehouse }, '/warehouse/shipments'), banners: testModeOf('warehouse', { carrier: [DEMO_SITES[1].name], eInvoicing: true }) },
+      note: 'The warehouse role does not read e-invoicing (no invoices.view): only the carrier\'s line, with its page.',
+    },
+    {
+      id: 'test-mode-reader',
+      label: 'TEST MODE banner: a sales person, no settings page to open',
+      model: { ...at({ ...owner, nav: sales }, '/sales/orders'), banners: testModeOf('sales', { carrier: [DEMO_SITES[0].name], eInvoicing: true }) },
+      note: 'Sales reads both test modes but may not open Carriers & shipping (shipping.settings.view): that line has no link.',
+    },
+    {
+      id: 'test-mode-off',
+      label: 'TEST MODE banner: everything live',
+      model: { ...owner, banners: testModeOf('owner', { carrier: [], eInvoicing: false }) },
+      note: 'No band at all (no empty strip) once every site\'s carrier and the company\'s e-invoicing are live.',
     },
     {
       id: 'no-areas',

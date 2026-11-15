@@ -59,3 +59,9 @@
   align-self: end;
   flex-wrap: wrap;
 }
+
+/* B-W2b-437: the goal-seek's state Pill is a sentence ("Above the allowed cost: the lines below must come down by the gap."):
+   it wraps at phone width instead of pushing the card 11 px sideways (SCR-503 at 390). */
+.fw-cs-goalstate .nds-pill {
+  white-space: normal;
+}

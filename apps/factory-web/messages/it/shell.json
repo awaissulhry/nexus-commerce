@@ -265,8 +265,9 @@
   },
   "banner": {
     "testMode": {
-      "title": "Modalità di prova",
-      "body": "Questi collegamenti sono finti o in ambiente di prova: {connections}. Nulla di ciò che fanno arriva a un vero cliente, fornitore, corriere o all'Agenzia delle Entrate."
+      "title": "Modalità di prova: nulla arriva a un vero cliente",
+      "carrier": "Corriere in prova a {sites}: le etichette sono marcate TEST, nessuna arriva a un corriere né viene addebitata.",
+      "eInvoicing": "Fatturazione elettronica in prova per {companies}: nessuna fattura arriva allo SDI."
     }
   },
   "subnav": {
