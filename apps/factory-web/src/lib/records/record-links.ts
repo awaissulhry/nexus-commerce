@@ -122,6 +122,10 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   Picklist: '/admin/fields?tab=picklists&list=[id]',
   // Admin › Security & health (SCR-166, B-W2b-24): a restore drill (the reminder that the next one is due names the last one).
   RestoreDrill: '/admin/security?drill=[id]#backups',
+  // B-W2b-414: a data request opens in its dialog on Admin › Privacy › Data requests (SCR-660); a retention rule on Retention
+  // rules (SCR-662).
+  DataRequest: '/admin/privacy?view=requests&request=[id]',
+  RetentionRule: '/admin/privacy?view=retention',
   // Home › My tasks (SCR-233, B-W2a-40): a task opens in its DetailModal on the list.
   Task: '/home/tasks?open=[id]',
   // Home › Insights › Reports (SCR-104, B-W2a-79): a report of the standard pack by its key (`sales.late-orders`).

@@ -1,0 +1,738 @@
+{
+  "dp": {
+    "common": {
+      "cancel": "Annulla",
+      "close": "Chiudi",
+      "dismiss": "Chiudi avviso",
+      "loading": "Caricamento…",
+      "retry": "Riprova",
+      "someone": "qualcuno",
+      "working": "In corso…"
+    },
+    "keys": {
+      "views": "Cambia elenco",
+      "newRule": "Aggiungi una regola di conservazione"
+    },
+    "kind": {
+      "ACCESS": "Accesso",
+      "ERASURE": "Cancellazione",
+      "CORRECTION": "Rettifica"
+    },
+    "kindHint": {
+      "ACCESS": "Una copia di tutto ciò che conserviamo sulla persona, in un unico pacchetto (artt. 15 e 20 GDPR).",
+      "ERASURE": "I dati della persona cancellati o resi anonimi; ciò che la legge conserva resta, con il motivo (art. 17 GDPR).",
+      "CORRECTION": "Dati errati corretti nella scheda della persona (art. 16 GDPR)."
+    },
+    "personKind": {
+      "CONTACT": "Contatto di un cliente",
+      "PROSPECT": "Potenziale cliente",
+      "REPORTER": "Segnalante di sicurezza",
+      "USER": "Utente d'ufficio",
+      "WORKER": "Lavoratore"
+    },
+    "status": {
+      "RECEIVED": "Ricevuta",
+      "IN_PROGRESS": "In lavorazione",
+      "DONE": "Evasa",
+      "REFUSED": "Respinta",
+      "WITHDRAWN": "Ritirata"
+    },
+    "held": {
+      "CLOSED": "La richiesta è chiusa: non cambia più.",
+      "NOT_STARTED": "Verifica prima l'identità della persona: il lavoro sulla richiesta parte da lì (art. 12(6) GDPR).",
+      "IDENTITY_NOT_CHECKED": "L'identità della persona non è ancora verificata (art. 12(6) GDPR): verificala prima di chiudere la richiesta.",
+      "IDENTITY_CHECKED": "L'identità è già stata verificata: la verifica si registra una volta.",
+      "EXTENDED": "La richiesta è già stata prorogata una volta: la proroga non cambia (art. 12(3) GDPR).",
+      "TOO_LATE_TO_EXTEND": "La proroga si decide e si comunica entro il primo mese (art. 12(3) GDPR): quel mese è passato.",
+      "NOT_ACCESS": "Solo una richiesta di accesso ha un pacchetto di dati.",
+      "NOT_ERASURE": "Solo una richiesta di cancellazione cancella o rende anonima la persona.",
+      "NO_PACKAGE": "Raccogli prima il pacchetto di dati della persona: la richiesta di accesso è evasa quando è consegnato.",
+      "NOT_ERASED": "Rendi prima anonima la persona (ciò che la legge conserva resta, con il motivo): la richiesta è evasa quando è registrato.",
+      "ERASED": "La persona è già stata resa anonima su questa richiesta: ciò che è stato cancellato e conservato è registrato."
+    },
+    "duty": {
+      "label": "Richieste sui dati e conservazione",
+      "state": {
+        "done": "Fatto",
+        "needs": "Da fare",
+        "review": "Da seguire"
+      },
+      "doIt": "Fallo ora",
+      "open": "Apri",
+      "requests": {
+        "name": "Richieste sui dati evase entro 30 giorni",
+        "none": "Nessuna richiesta aperta.",
+        "open_one": "1 richiesta aperta, nessuna in ritardo.",
+        "open_other": "{count} richieste aperte, nessuna in ritardo.",
+        "late_one": "1 richiesta è in ritardo: rispondi ora.",
+        "late_other": "{count} richieste sono in ritardo: rispondi ora.",
+        "law": "Art. 12(3) GDPR: entro un mese dal ricevimento, prorogabile una volta fino a due mesi."
+      },
+      "retention": {
+        "name": "Regole di conservazione impostate",
+        "none": "Ancora nessuna regola: nulla dice per quanto si conservano i dati personali.",
+        "reporting_one": "1 regola, solo rapporto: nulla viene cancellato finché una persona non la attiva.",
+        "reporting_other": "{count} regole, tutte solo rapporto: nulla viene cancellato finché una persona non ne attiva una.",
+        "applying_one": "1 regola, {applying} attivata per applicare.",
+        "applying_other": "{count} regole, {applying} attivate per applicare.",
+        "law": "Art. 5(1)(e) GDPR: non oltre il necessario; art. 2220 c.c.: scritture contabili 10 anni."
+      }
+    },
+    "req": {
+      "title": "Richieste sui dati",
+      "intro": "Richieste di accesso, cancellazione e rettifica di una persona, ognuna con i suoi 30 giorni (artt. 12, 15–17, 20 GDPR).",
+      "new": "Nuova richiesta sui dati",
+      "count_one": "1 richiesta · {open} aperte · {late} in ritardo",
+      "count_other": "{count} richieste · {open} aperte · {late} in ritardo",
+      "lateBanner_one": "1 richiesta ha superato la scadenza: la legge chiede una risposta entro il mese.",
+      "lateBanner_other": "{count} richieste hanno superato la scadenza: la legge chiede una risposta entro il mese.",
+      "view": {
+        "label": "Quali richieste",
+        "open": "Aperte",
+        "closed": "Chiuse",
+        "all": "Tutte"
+      },
+      "kindFilter": "Tipo",
+      "kindAll": "Ogni tipo",
+      "col": {
+        "person": "Persona",
+        "kind": "Tipo",
+        "received": "Ricevuta",
+        "due": "Scadenza",
+        "state": "Stato",
+        "company": "Società"
+      },
+      "due": {
+        "in": "scade tra {left}",
+        "now": "scade ora",
+        "late": "in ritardo: scadeva il {date}",
+        "closed": "chiusa il {date}",
+        "extended": "prorogata"
+      },
+      "erasedPerson": "Persona cancellata",
+      "export_one": "Esporta 1",
+      "export_other": "Esporta {count}",
+      "failed": "Le richieste non si sono caricate.",
+      "empty": {
+        "open": "Nessuna richiesta aperta.",
+        "closed": "Nessuna richiesta chiusa.",
+        "all": "Nessuna richiesta.",
+        "kind": "Nessuna richiesta di questo tipo qui.",
+        "hint": "Una persona chiede per mail, lettera o telefono: registrala con Nuova richiesta sui dati; i 30 giorni partono da quando è arrivata.",
+        "showAll": "Mostra tutte"
+      },
+      "held": {
+        "manage": "Puoi leggere le richieste sui dati ma non lavorarle (privacy.requests.manage).",
+        "erase": "Solo chi ha privacy.erase può rendere anonima una persona."
+      }
+    },
+    "record": {
+      "title": "Richiesta di {kind} · {person}",
+      "subtitle": "{company} · {kind}",
+      "loading": "Caricamento della richiesta…",
+      "clock": "I 30 giorni",
+      "due": "Scadenza",
+      "dueAt": "Giorno di scadenza",
+      "received": "Ricevuta",
+      "firstDue": "Prima scadenza",
+      "extendedWhy": "Prorogata perché",
+      "clockLaw": "Art. 12(3) GDPR: risposta entro un mese dal ricevimento; prorogabile una volta, entro quel mese, fino a due mesi comunicando il motivo alla persona.",
+      "identity": "Identità",
+      "identityChecked": "Verificata il {date} da {name}.",
+      "identityNot": "Non ancora verificata: il lavoro sulla richiesta parte da qui (art. 12(6) GDPR).",
+      "erasure": "Anonimizzazione",
+      "eraseIntro": "Vedi cosa si cancella e cosa la legge conserva prima che cambi qualcosa; scrivi il nome della persona per confermare.",
+      "erased": "Fatto: {anonymised} resi anonimi, {deleted} cancellati, {kept} conservati con il motivo.",
+      "correction": "Rettifica",
+      "correctionIntro": "Correggi i dati nella scheda della persona, poi segna la richiesta come evasa.",
+      "openPerson": "Apri la scheda della persona",
+      "notes": "Note e decisione",
+      "note": "Nota",
+      "decided": {
+        "RECEIVED": "Decisa",
+        "IN_PROGRESS": "Decisa",
+        "DONE": "Evasa",
+        "REFUSED": "Respinta",
+        "WITHDRAWN": "Ritirata"
+      },
+      "decidedBy": "{date} da {name}",
+      "refusal": "Motivo del rifiuto"
+    },
+    "pkg": {
+      "title": "Pacchetto di dati",
+      "intro": "Un unico ZIP con tutto ciò che conserviamo sulla persona: data.json, un file per tipo di scheda, i suoi file, un README e i codici di controllo (artt. 15, 20 GDPR).",
+      "collecting": "Raccolta del pacchetto di dati",
+      "collectingNote": "Puoi chiudere questa finestra: il pacchetto si prepara in sottofondo e compare qui quando è pronto.",
+      "running": "Il pacchetto è in preparazione.",
+      "failed": "Il pacchetto non si è potuto preparare. Raccoglilo di nuovo; se non riesce ancora, avvisa l'amministratore.",
+      "none": "Non ancora raccolto.",
+      "file": "File",
+      "size": "Dimensione",
+      "made": "Preparato",
+      "sha": "SHA-256"
+    },
+    "action": {
+      "checkIdentity": "Identità verificata…",
+      "extend": "Proroga…",
+      "collect": "Raccogli i dati",
+      "collectAgain": "Raccogli di nuovo",
+      "openPackage": "Scarica il pacchetto",
+      "erase": "Rendi anonimo…",
+      "close": "Segna come evasa",
+      "refuse": "Respingi…",
+      "withdraw": "Ritirata…"
+    },
+    "form": {
+      "how": "Scrivi come è stata verificata l'identità (almeno 3 caratteri).",
+      "reason": "Scrivi il motivo (almeno 3 caratteri).",
+      "tooLong": "Il testo è troppo lungo.",
+      "identity": {
+        "title": "Identità verificata",
+        "intro": "Registra come hai verificato che la richiesta viene dalla persona: il lavoro parte ora.",
+        "label": "Come è stata verificata?",
+        "hint": "Per esempio: la risposta è arrivata dall'e-mail in archivio. Mai il numero di un documento.",
+        "save": "Registra la verifica"
+      },
+      "extend": {
+        "title": "Proroga la richiesta",
+        "intro": "Una volta, entro il primo mese, di uno o due mesi quando la richiesta è complessa o sono molte (art. 12(3) GDPR). Comunica il motivo alla persona.",
+        "label": "Perché si proroga",
+        "hint": "Cosa rende complessa la richiesta, come lo dici alla persona.",
+        "save": "Proroga",
+        "months": "Di",
+        "one": "1 mese in più",
+        "two": "2 mesi in più"
+      },
+      "refuse": {
+        "title": "Respingi la richiesta",
+        "intro": "Solo se manifestamente infondata o eccessiva (art. 12(5) GDPR); la persona può rivolgersi al Garante.",
+        "label": "Perché si respinge",
+        "hint": "Come lo dici alla persona.",
+        "save": "Respingi"
+      },
+      "withdraw": {
+        "title": "La persona l'ha ritirata",
+        "intro": "La persona non vuole più la richiesta: si chiude.",
+        "label": "Nota",
+        "hint": "Come l'ha detto (facoltativo).",
+        "save": "Registra come ritirata"
+      }
+    },
+    "done": {
+      "created": "Richiesta registrata: scade il {due}.",
+      "identity": "Verifica dell'identità registrata: il lavoro sulla richiesta parte.",
+      "extended": "Prorogata: la nuova scadenza è impostata.",
+      "collecting": "Raccolta del pacchetto avviata: compare qui quando è pronto.",
+      "finished": "La richiesta è evasa.",
+      "refused": "La richiesta è respinta.",
+      "withdrawn": "Registrata come ritirata.",
+      "erased": "La persona è resa anonima; ciò che la legge conserva resta, con il motivo."
+    },
+    "new": {
+      "title": "Nuova richiesta sui dati",
+      "intro": "Registra una richiesta che una persona ha fatto per mail, lettera o telefono. I 30 giorni partono da quando è arrivata.",
+      "company": "Società",
+      "kind": "Cosa chiede",
+      "who": "Chi chiede",
+      "find": "Trova la persona",
+      "findCustomer": "Trova il cliente",
+      "findHint": {
+        "CONTACT": "Parte del codice o del nome del cliente.",
+        "PROSPECT": "Parte del numero della richiesta, dell'azienda o dell'e-mail del potenziale cliente.",
+        "REPORTER": "Parte del numero della segnalazione o del prodotto.",
+        "USER": "Parte del nome o dell'e-mail.",
+        "WORKER": "Parte del nome o della matricola."
+      },
+      "findButton": "Trova",
+      "noneFound": "Nessuno trovato: prova con un'altra parte del nome o del numero.",
+      "customer": "Cliente",
+      "contact": "Contatto",
+      "person": "Persona",
+      "noContacts": "Questo cliente non ha contatti.",
+      "reporterHint": "L'elenco mostra solo il numero della segnalazione: il nome del segnalante compare quando la richiesta è registrata.",
+      "pick": "Scegli",
+      "noLookup": "Qui non puoi cercare un {what}: serve {permission}. Chiedi a chi ce l'ha di registrare la richiesta.",
+      "received": "Ricevuta",
+      "receivedHint": "Quando è arrivata la richiesta: i 30 giorni partono da qui.",
+      "note": "Nota",
+      "noteHint": "Cosa ha chiesto e come (una mail, una lettera). Mai il numero di un documento o un dato sanitario.",
+      "create": "Registra la richiesta",
+      "held": {
+        "company": "Scegli prima la società.",
+        "person": "Trova e scegli prima la persona.",
+        "otherCompany": "Questa persona appartiene a un'altra società: registra la richiesta in quella società.",
+        "received": "Indica quando è arrivata la richiesta.",
+        "future": "Una richiesta si registra da quando è arrivata: ora o prima.",
+        "note": "La nota è al massimo di 2000 caratteri."
+      }
+    },
+    "erase": {
+      "title": "Rendere anonimo {name}?",
+      "titleLoading": "Rendi anonimo…",
+      "intro": "Cosa si cancella, cosa resta perché la legge lo chiede, e la decisione si registra con il tuo motivo (art. 17 GDPR).",
+      "blockedTitle": "Non si può ancora fare",
+      "blocked": {
+        "PORTAL_USER": "Questa persona accede ancora al portale con l'e-mail del contatto: chiudi prima il suo accesso (Accesso al portale › Termina accesso), poi rendila anonima.",
+        "STILL_ACTIVE": "Questa persona lavora ancora qui (un dipendente o un account di reparto attivo): rendila anonima dopo che è uscita.",
+        "ACCOUNT_OPEN": "Questo account d'ufficio è ancora aperto: disattivalo prima (Amministrazione › Utenti), poi rendilo anonimo.",
+        "NOT_A_PROSPECT": "Questa richiesta nomina il contatto di un cliente, non un potenziale cliente: rendi anonimo il contatto.",
+        "TOO_MANY": "Questa persona ha più schede di quante una cancellazione ne scriva in una volta: chiedi all'amministratore di dividerla."
+      },
+      "section": {
+        "anonymised": {
+          "title": "Resi anonimi",
+          "intro": "I dati della persona si svuotano o si sostituiscono; il resto della scheda (i dati aziendali) resta.",
+          "note": "I dati della persona vanno via; la scheda resta."
+        },
+        "deleted": {
+          "title": "Cancellati",
+          "intro": "Queste schede si eliminano.",
+          "note": "Eliminati per sempre."
+        },
+        "kept": {
+          "title": "Conservati perché la legge lo chiede",
+          "intro": "Questi restano come sono, ognuno con il motivo di legge; le fatture conservano i dati aziendali.",
+          "note": "Conservati."
+        }
+      },
+      "method": {
+        "ANONYMISED": "Reso anonimo",
+        "DELETED": "Cancellato",
+        "KEPT": "Conservato"
+      },
+      "records_one": "1 scheda",
+      "records_other": "{count} schede",
+      "erasedFields": "Cancellati",
+      "keptFields": "Conservati come sono",
+      "why": {
+        "FISCAL": "Le scritture fiscali e contabili si conservano 10 anni (art. 2220 c.c.; art. 39 DPR 633/72; art. 17(3)(b) GDPR).",
+        "DISPUTE": "Conservato finché è aperta una contestazione (un reclamo, un reso, un'assistenza o una vertenza di lavoro): serve per risolverla (art. 17(3)(e) GDPR).",
+        "SAFETY_REPORT": "Conservato finché la segnalazione di sicurezza è in valutazione: il fabbricante può dover contattare il segnalante (Reg. (UE) 2023/988; art. 17(3)(b) GDPR).",
+        "EMPLOYMENT": "I dati del rapporto di lavoro si conservano 5 anni dalla fine (art. 39 D.L. 112/2008; art. 17(3)(b) GDPR).",
+        "HEALTH": "Sorveglianza sanitaria e infortuni si conservano 10 anni dalla fine del rapporto (art. 25 D.Lgs. 81/2008; art. 17(3)(b) GDPR).",
+        "CUSTOMER": "La scheda del cliente nomina la persona e ordini e fatture la richiamano (art. 2220 c.c.: 10 anni; art. 17(3)(b) GDPR).",
+        "MEASUREMENTS": "Le misure su cui è stato fatto il capo, per la garanzia legale (art. 132 D.Lgs. 206/2005: 26 mesi); le foto vanno via alla loro data.",
+        "IMMUTABLE": "Conservato per ora: il database non cambia questa scheda una volta scritta (una mail, un messaggio, una riga di storico); svuotare il nome attende un percorso di cancellazione protetto.",
+        "ALREADY_ERASED": "Già resa anonima prima: non resta nulla della persona.",
+        "NOTICE_PROOF": "La prova che alla persona è stata data l'informativa (artt. 5(2), 13 GDPR): nomina la versione dell'informativa, non i dati della persona."
+      },
+      "type": {
+        "PartyContact": "Il contatto",
+        "Party": "La scheda cliente",
+        "Inquiry": "La richiesta commerciale",
+        "ProductSafetyReport": "La segnalazione di sicurezza",
+        "User": "L'account d'ufficio",
+        "Employee": "La scheda dipendente",
+        "Worker": "Account di reparto",
+        "CustomFieldValue": "Campi personalizzati personali",
+        "MeasurementProfile": "Profili di misure",
+        "WorkerNoticeAck": "Prese visione dell'informativa lavoratori",
+        "StaffNoticeAck": "Prese visione dell'informativa personale",
+        "Message": "Messaggi scritti dalla persona",
+        "InboundEmail": "Mail ricevute dalla persona",
+        "EmailOutbound": "Mail inviate alla persona",
+        "AuditLog": "Storico della sua scheda",
+        "other": "Altre schede"
+      },
+      "field": {
+        "name": "nome",
+        "email": "e-mail",
+        "phone": "telefono",
+        "prospectName": "nome",
+        "prospectCompany": "azienda",
+        "prospectEmail": "e-mail",
+        "prospectPhone": "telefono",
+        "prospectLawfulBasis": "base giuridica",
+        "reporterName": "nome",
+        "reporterEmail": "e-mail",
+        "reporterPhone": "telefono",
+        "displayName": "nome mostrato",
+        "firstName": "nome di battesimo",
+        "lastName": "cognome",
+        "pinHash": "PIN",
+        "legalName": "ragione sociale",
+        "tradeName": "nome commerciale",
+        "riderName": "nome del pilota",
+        "measurements": "misure",
+        "fitNotes": "note di vestibilità",
+        "authorName": "nome dell'autore",
+        "bodyText": "testo",
+        "bodyHtml": "testo formattato",
+        "fromAddress": "indirizzo del mittente",
+        "fromName": "nome del mittente",
+        "subject": "oggetto",
+        "to": "destinatari",
+        "cc": "copie",
+        "before": "valori prima",
+        "after": "valori dopo",
+        "other": "altri dati"
+      },
+      "held": {
+        "loading": "Attendi l'anteprima.",
+        "nothing": "Non resta nulla della persona da cancellare.",
+        "reason": "Scrivi perché la persona si rende anonima (almeno 3 caratteri).",
+        "reasonLong": "Il motivo è al massimo di 1000 caratteri.",
+        "typed": "Scrivi il nome della persona esattamente come mostrato."
+      },
+      "reason": "Motivo",
+      "reasonHint": "Cosa ha chiesto e come (una mail, una lettera), senza i suoi dati: va nello storico.",
+      "code": "Rendi anonimo chiede ogni volta un nuovo codice dall'app di autenticazione.",
+      "confirm": "Rendi anonimo",
+      "erasing": "Anonimizzazione in corso…",
+      "failed": "L'anteprima non si è caricata.",
+      "doneTitle": "{name} è reso anonimo",
+      "done": "{anonymised} resi anonimi, {deleted} cancellati, {kept} conservati con il motivo.",
+      "logged": "La decisione è registrata con il tuo motivo; lo storico non contiene mai il nome della persona."
+    },
+    "stepUp": {
+      "title": "Conferma che sei tu",
+      "confirm": "Conferma",
+      "erase": "Rendere anonima una persona chiede ogni volta un nuovo codice.",
+      "apply": "Attivare una regola per applicarla chiede un nuovo codice: da lì in poi la pulizia cambia le schede davvero.",
+      "shorten": "Un periodo più breve (o un'altra azione mentre la regola si applica) chiede un nuovo codice."
+    },
+    "problem": {
+      "conflict": "Qualcuno l'ha modificato nel frattempo: è stato riletto. Controlla e riprova.",
+      "failed": "Non è riuscito. Riprova.",
+      "forbidden": "Il tuo ruolo non lo consente qui.",
+      "invalid": "È stato rifiutato così com'è: controlla i campi.",
+      "notFound": "Non c'è più.",
+      "rateLimited": "Troppi tentativi: attendi un momento.",
+      "stepUp": "Serve un nuovo codice.",
+      "stepUpClosed": "Nulla è cambiato: il codice non è stato dato.",
+      "unavailable": "Il sistema della fabbrica non ha risposto. Riprova."
+    },
+    "ret": {
+      "title": "Regole di conservazione",
+      "intro": "Per tipo di scheda: per quanto si conserva, poi cancella, rendi anonimo o archivia, con il motivo di legge (art. 5(1)(e) GDPR).",
+      "gate": {
+        "title": "Nulla viene cancellato da solo",
+        "body": "Una regola fa solo un rapporto di ciò che farebbe finché una persona non la attiva per applicarla, con un nuovo codice (GATE-PRIVACY). Ogni periodo è NON VERIFICATO finché il consulente privacy non lo fissa.",
+        "schedule": "La pulizia gira ogni notte alle 02:50 (ora di Roma)."
+      },
+      "new": "Aggiungi una regola",
+      "count_one": "1 regola",
+      "count_other": "{count} regole",
+      "failed": "Le regole di conservazione non si sono caricate.",
+      "empty": "Ancora nessuna regola di conservazione.",
+      "emptyHint": "Aggiungine una per tipo di scheda: per quanto, poi cosa, e perché lo chiede la legge.",
+      "col": {
+        "type": "Tipo di scheda",
+        "company": "Di chi",
+        "keep": "Conserva per",
+        "then": "Poi",
+        "reason": "Motivo di legge",
+        "state": "Stato",
+        "last": "Ultima pulizia",
+        "more": "Altro"
+      },
+      "company": {
+        "all": "Ogni società"
+      },
+      "unverified": "NON VERIFICATO",
+      "unverifiedLong": "NON VERIFICATO: un periodo di prova finché il consulente privacy non lo fissa (GATE-PRIVACY). La regola fa solo un rapporto finché una persona non la attiva.",
+      "period": {
+        "years_one": "1 anno",
+        "years_other": "{count} anni",
+        "months_one": "1 mese",
+        "months_other": "{count} mesi",
+        "both": "{years} e {months}"
+      },
+      "then": {
+        "DELETE": "Cancella",
+        "ANONYMISE": "Rendi anonimo",
+        "ARCHIVE": "Archivia"
+      },
+      "state": {
+        "off": "Spenta",
+        "reporting": "Solo rapporto",
+        "applying": "Applica"
+      },
+      "last": {
+        "none": "Mai pulita",
+        "running": "Pulizia in corso",
+        "failed": "L'ultima pulizia non è riuscita",
+        "report": "{due} scadute · nulla cambiato",
+        "apply": "{applied} cambiate · {held} trattenute"
+      },
+      "menu": "Altro per {type}",
+      "action": {
+        "change": "Modifica…",
+        "sweepNow": "Pulisci ora (rapporto)",
+        "sweepApply": "Pulisci ora (applica)",
+        "sweeps": "Pulizie…",
+        "applyOn": "Attiva per applicare…",
+        "applyOff": "Torna al solo rapporto",
+        "switchOff": "Spegni",
+        "switchOn": "Accendi"
+      },
+      "held": {
+        "manage": "Puoi leggere le regole ma non cambiarle (privacy.retention.manage).",
+        "SWITCHED_OFF": "La regola è spenta: riaccendila prima.",
+        "ACTIVE": "La regola è già accesa.",
+        "APPLYING": "La pulizia applica già questa regola.",
+        "NOT_APPLYING": "La pulizia fa solo un rapporto di questa regola.",
+        "UNKNOWN_TYPE": "La pulizia non conosce questo tipo di scheda: la regola può fare solo un rapporto.",
+        "NO_ACTION": "Nessuna pulizia può cancellare, rendere anonimo o archiviare questo tipo di scheda: la regola può fare solo un rapporto."
+      },
+      "sweepHeld": {
+        "IMMUTABLE": {
+          "short": "trattenute: non si cambiano",
+          "long": "Il database non cambia questa scheda una volta scritta (una mail come è arrivata): renderla anonima attende un percorso di cancellazione protetto."
+        },
+        "NEVER_DELETED": {
+          "short": "trattenute: mai cancellate",
+          "long": "Il database non cancella mai questa scheda (un'esportazione scade, il suo file va via): la regola può fare solo un rapporto."
+        },
+        "ARCHIVE_STAYS": {
+          "short": "archiviate dove sono",
+          "long": "Archiviate dove sono: nulla si cancella (l'archivio fiscale conserva il documento e il file per la legge)."
+        },
+        "NOT_YET": {
+          "short": "trattenute: non ancora",
+          "long": "Non ancora: il database le conserva ancora un po' (un errore chiuso 30 giorni, un'esecuzione 7 giorni)."
+        }
+      },
+      "failure": {
+        "UNKNOWN_TYPE": "La pulizia non conosce questo tipo di scheda.",
+        "DB_REFUSED": "Il database ha rifiutato: nulla è stato applicato; si riprova alla prossima pulizia.",
+        "STOPPED": "Si è fermata prima della fine: nulla è stato applicato."
+      },
+      "mode": {
+        "REPORT": "Rapporto",
+        "APPLY": "Applicata"
+      },
+      "sweepStatus": {
+        "RUNNING": "In corso",
+        "DONE": "Fatta",
+        "FAILED": "Non riuscita"
+      },
+      "type": {
+        "ReportRun": {
+          "name": "Esecuzioni di report",
+          "countsFrom": "Da quando il report è stato eseguito.",
+          "does": {
+            "DELETE": "Cancella l'esecuzione (chi ha eseguito quale report, con quali filtri); i report restano.",
+            "ANONYMISE": "Un'esecuzione di report non si rende anonima: la regola fa solo un rapporto.",
+            "ARCHIVE": "Un'esecuzione di report non si archivia: la regola fa solo un rapporto."
+          }
+        },
+        "CronRun": {
+          "name": "Esecuzioni dei lavori pianificati",
+          "countsFrom": "Da quando l'esecuzione è finita (una in corso non scade mai).",
+          "does": {
+            "DELETE": "Cancella l'esecuzione finita (lavoro, ora, esito, errore); mai una in corso, mai entro 7 giorni dalla fine.",
+            "ANONYMISE": "Un'esecuzione non si rende anonima: la regola fa solo un rapporto.",
+            "ARCHIVE": "Un'esecuzione non si archivia: la regola fa solo un rapporto."
+          }
+        },
+        "IntegrationErrorItem": {
+          "name": "Errori chiusi",
+          "countsFrom": "Da quando l'errore è stato archiviato o ritentato (uno aperto non scade mai).",
+          "does": {
+            "DELETE": "Cancella l'errore chiuso (il messaggio non riuscito, il motivo e i tentativi); mai uno aperto, mai entro 30 giorni dalla chiusura.",
+            "ANONYMISE": "Un errore non si rende anonimo: la regola fa solo un rapporto.",
+            "ARCHIVE": "Un errore non si archivia: la regola fa solo un rapporto."
+          }
+        },
+        "InboundEmail": {
+          "name": "Mail ricevute",
+          "countsFrom": "Da quando la mail è stata ricevuta.",
+          "does": {
+            "ANONYMISE": "Svuoterebbe mittente, oggetto e testo, mantenendo la conversazione: oggi trattenuta (il database non cambia una mail letta).",
+            "DELETE": "Una mail ricevuta non viene mai cancellata da una pulizia: la regola fa solo un rapporto.",
+            "ARCHIVE": "Una mail ricevuta non si archivia con una pulizia: la regola fa solo un rapporto."
+          }
+        },
+        "ExportJob": {
+          "name": "Esportazioni",
+          "countsFrom": "Da quando l'esportazione è stata chiesta.",
+          "does": {
+            "DELETE": "Il database non cancella mai un'esportazione (il suo file scade da solo): la regola fa solo un rapporto.",
+            "ANONYMISE": "Un'esportazione non si rende anonima: la regola fa solo un rapporto.",
+            "ARCHIVE": "Un'esportazione non si archivia: la regola fa solo un rapporto."
+          }
+        },
+        "Invoice": {
+          "name": "Fatture",
+          "countsFrom": "Dalla data di emissione (una bozza non scade mai).",
+          "does": {
+            "ARCHIVE": "Archivia la fattura emessa dove si trova: nulla si cancella (l'archivio fiscale conserva il documento e il file).",
+            "DELETE": "Una fattura non si cancella mai: la legge la conserva 10 anni.",
+            "ANONYMISE": "Una fattura non si rende mai anonima: la legge la conserva come emessa."
+          }
+        },
+        "other": {
+          "name": "Altre schede",
+          "countsFrom": "La pulizia non conosce questo tipo di scheda.",
+          "does": "La pulizia non conosce questo tipo di scheda: la regola fa solo un rapporto."
+        }
+      },
+      "form": {
+        "newTitle": "Aggiungi una regola di conservazione",
+        "changeTitle": "Modifica la regola · {type}",
+        "intro": "Una regola per tipo di scheda e società; la regola propria di una società prevale su quella del gruppo per le sue schede.",
+        "groupOnly": "Queste schede sono dell'intero gruppo: una sola regola per ogni società.",
+        "months": "Conserva per (mesi)",
+        "monthsHint": "Mesi interi, da 1 a 1200 (120 = 10 anni).",
+        "reasonHint": "La legge che fissa il periodo, per esempio art. 2220 c.c.: 10 anni.",
+        "asksCode": "Un periodo più breve (o un'altra azione mentre la regola si applica) chiede un nuovo codice al salvataggio.",
+        "add": "Aggiungi la regola",
+        "save": "Salva",
+        "held": {
+          "type": "Scegli il tipo di scheda.",
+          "group": "Queste schede sono dell'intero gruppo: scegli Ogni società.",
+          "months": "Conservala per mesi interi, da 1 a 1200.",
+          "noAction": "Nessuna pulizia può cancellare, rendere anonimo o archiviare questo tipo di scheda: la regola può fare solo un rapporto.",
+          "action": "Scegli cosa succede dopo il periodo.",
+          "reason": "Scrivi il motivo di legge (almeno 3 caratteri).",
+          "reasonLong": "Il motivo di legge è al massimo di 1000 caratteri."
+        }
+      },
+      "apply": {
+        "title": "Attivare {type} ({company}) per applicarla?",
+        "confirm": "Attiva per applicare",
+        "from": "Dalla prossima pulizia le schede oltre il periodo cambiano davvero; una scheda cancellata non si recupera.",
+        "unverified": "Il periodo è NON VERIFICATO finché il consulente privacy non lo fissa.",
+        "code": "Subito dopo si chiede un nuovo codice dall'app di autenticazione.",
+        "back": "Torna al solo rapporto la ferma subito.",
+        "ack": "Ho capito che la pulizia cambierà le schede davvero."
+      },
+      "done": {
+        "added": "Regola aggiunta per {type}: fa solo un rapporto finché non si attiva.",
+        "changed": "Regola per {type} salvata.",
+        "on": "Regola per {type} accesa.",
+        "off": "Regola per {type} spenta.",
+        "applyOn": "{type}: la pulizia ora applica la regola.",
+        "applyOff": "{type}: di nuovo solo rapporto.",
+        "swept": "{type} pulita: un rapporto, nulla cambiato.",
+        "sweptApply": "{type} pulita e applicata.",
+        "sweptMany_one": "1 regola pulita: un rapporto, nulla cambiato.",
+        "sweptMany_other": "{count} regole pulite: rapporti, nulla cambiato."
+      },
+      "sweepSelected_one": "Pulisci 1 ora",
+      "sweepSelected_other": "Pulisci {count} ora",
+      "sweepSelectedNone": "Si possono pulire insieme solo regole accese che fanno solo un rapporto; una regola che applica si pulisce da sola.",
+      "sweepSelectedLeft_one": "1 regola scelta resta fuori (spenta, o applica: puliscila da sola).",
+      "sweepSelectedLeft_other": "{count} regole scelte restano fuori (spente, o applicano: puliscile da sole).",
+      "sweeps": {
+        "title": "Pulizie · {type}",
+        "failed": "Le pulizie non si sono caricate.",
+        "when": "Quando",
+        "mode": "Modo",
+        "cutoff": "Schede da prima del",
+        "due": "Scadute",
+        "applied": "Cambiate",
+        "held": "Trattenute",
+        "status": "Stato",
+        "by": "Da",
+        "night": "Pulizia notturna"
+      },
+      "ledgers": {
+        "title": "Conservati, in attesa della decisione del Titolare",
+        "intro": "Il database tiene questi registri in sola aggiunta: mai puliti, mai proposti per una regola.",
+        "what": "Cosa contiene",
+        "kept": "Conservato",
+        "words": "Se si possano eliminare dopo un periodo attende la decisione del Titolare."
+      },
+      "ledger": {
+        "AuditLog": {
+          "name": "Storico delle modifiche",
+          "what": "Ogni modifica a una scheda, chi l'ha fatta e quando."
+        },
+        "ReadLog": {
+          "name": "Chi ha guardato",
+          "what": "Chi ha aperto o scaricato una scheda riservata."
+        },
+        "SecurityEvent": {
+          "name": "Eventi di sicurezza",
+          "what": "Accessi, accessi falliti, blocchi, cambi di ruolo ed esportazioni."
+        },
+        "StepUpAttempt": {
+          "name": "Tentativi di nuovo codice",
+          "what": "Ogni tentativo di un nuovo codice."
+        }
+      },
+      "purges": {
+        "title": "Eliminati alla loro data",
+        "intro": "Questi vanno via con i loro lavori pianificati, già decisi; elencati qui perché ogni via d'uscita dei dati personali sia in un posto solo.",
+        "what": "Cosa",
+        "when": "Quando",
+        "why": "Perché"
+      },
+      "purge": {
+        "measurementPhotos": {
+          "what": "Foto del corpo inviate con le misure, foto del su misura in ufficio e foto delle prove",
+          "when": "90 giorni dopo la spedizione del capo (ognuna alla sua data); le misure restano",
+          "why": "La risposta del Titolare (art. 5(1)(c), (e) GDPR)"
+        },
+        "portalCodes": {
+          "what": "Codici di accesso al portale e nuovi codici",
+          "when": "Un giorno dopo la scadenza",
+          "why": "Art. 5(1)(e) GDPR; conservati un giorno per il registro di sicurezza"
+        },
+        "linkDrafts": {
+          "what": "Bozze dei moduli via link (misure, reclami, questionari)",
+          "when": "7 giorni dopo la scadenza del link",
+          "why": "Art. 5(1)(e) GDPR"
+        },
+        "largeUploads": {
+          "what": "Caricamenti a parti mai finiti",
+          "when": "Alla fine della finestra di caricamento",
+          "why": "Art. 5(1)(e) GDPR"
+        },
+        "exportFiles": {
+          "what": "I file delle esportazioni",
+          "when": "Alla scadenza dell'esportazione (la riga resta)",
+          "why": "Art. 5(1)(e) GDPR"
+        }
+      },
+      "kept": {
+        "title": "Conservati per sempre",
+        "DataRequest": "Le richieste sui dati e le loro risposte",
+        "ErasureRecord": "Cosa ha fatto ogni cancellazione",
+        "RetentionRule": "Le regole di conservazione",
+        "RetentionSweep": "Ogni pulizia e cosa ha fatto"
+      }
+    },
+    "my": {
+      "button": "Scarica i miei dati",
+      "title": "Scarica i miei dati",
+      "intro": "Una copia di ciò che la fabbrica conserva su di te, in un unico ZIP (artt. 15 e 20 GDPR):",
+      "holds": {
+        "data": "i tuoi dati come data.json e un file per tipo di scheda;",
+        "files": "i file collegati a te;",
+        "readme": "un README che spiega ogni parte, con i codici di controllo."
+      },
+      "ask": "Chiedi i miei dati",
+      "asked": "Richiesta inviata: la copia si prepara in sottofondo e compare qui quando è pronta.",
+      "downloaded": "Scaricata: la richiesta è evasa.",
+      "held": {
+        "open": "Una richiesta alla volta: l'ultima è ancora aperta (scaricala prima).",
+        "company": "Scegli prima la società in cui lavori (il selettore in alto): la richiesta resta a quella società."
+      },
+      "list": "Le mie richieste",
+      "col": {
+        "asked": "Chiesta",
+        "company": "Società",
+        "state": "Stato",
+        "copy": "Copia"
+      },
+      "state": {
+        "collecting": "In preparazione",
+        "ready": "Pronta",
+        "handed": "Scaricata",
+        "failed": "Non preparata",
+        "waiting": "In attesa",
+        "closed": "Chiusa"
+      },
+      "collecting": "Raccolta dei tuoi dati",
+      "download": "Scarica",
+      "askAgain": "Chiedila di nuovo.",
+      "noCopy": "Nessuna copia.",
+      "none": "Non hai ancora chiesto i tuoi dati.",
+      "failed": "Le tue richieste non si sono caricate.",
+      "handover": "Il primo download consegna la copia: la richiesta è allora evasa. Il link vale un minuto."
+    }
+  }
+}

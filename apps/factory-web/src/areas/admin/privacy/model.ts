@@ -23,16 +23,20 @@ export interface PrivacyCan {
   upload: boolean
   /** people.privacy.view: People data rules. */
   peopleRules: boolean
+  /** B-W2b-414: privacy.requests.view — the Data requests list (it names people: absent without the right). */
+  requests: boolean
 }
 
 export function privacyCan(permissions: readonly string[]): PrivacyCan {
   const held = new Set(permissions)
-  return { view: held.has('privacy.view'), manage: held.has('privacy.manage'), files: held.has('files.read'), upload: held.has('privacy.manage') && held.has('files.upload'), peopleRules: held.has('people.privacy.view') }
+  return { view: held.has('privacy.view'), manage: held.has('privacy.manage'), files: held.has('files.read'), upload: held.has('privacy.manage') && held.has('files.upload'), peopleRules: held.has('people.privacy.view'), requests: held.has('privacy.requests.view') }
 }
 
-export const VIEWS = ['notices', 'dpia', 'register'] as const
+export const VIEWS = ['notices', 'dpia', 'register', 'requests', 'retention'] as const
 export type PrivacyViewName = (typeof VIEWS)[number]
 export const viewOf = (value: string | null | undefined): PrivacyViewName => (VIEWS.includes(value as PrivacyViewName) ? (value as PrivacyViewName) : 'notices')
+/** B-W2b-414: the lists this person sees (Data requests only with privacy.requests.view); keys 1… follow this order. */
+export const viewsFor = (can: Pick<PrivacyCan, 'requests'>): PrivacyViewName[] => VIEWS.filter((view) => view !== 'requests' || can.requests)
 
 /** The company the page is about: the address's, else the session's, else the first one the overview lists. */
 export function companyOf(companies: readonly CompanyRef[], asked: string | null | undefined, session: string | null | undefined): string | null {
