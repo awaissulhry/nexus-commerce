@@ -15,7 +15,7 @@ import { WithMessages } from '../../../../../record-panels/i18n'
 import { adminHref } from '../../../shared/model'
 import { RecordProblem } from '../../../shared/view/parts'
 import { documentTemplatePreviewHref, printsNowHref, type DocumentKind, type DocumentTemplate } from '../../doc-templates/api'
-import { documentChanges, documentProblems, droppedColumns, layoutColumns, newVersionHeld, publishHeld, saveHeld, STATUS_TONE, toggleColumn, type DocumentDraft, type Said } from '../model'
+import { documentChanges, documentProblems, droppedColumns, layoutColumns, newVersionHeld, partWhyKey, publishHeld, saveHeld, STATUS_TONE, toggleColumn, type DocumentDraft, type Said } from '../model'
 import { TemplateEditor, TemplateText } from './TemplateEditor'
 import { useTplWords } from './words'
 
@@ -297,7 +297,7 @@ function PartsSection({ kind }: { kind: DocumentKind | null }) {
             <Lock size={14} aria-hidden className="fw-tpl-lock" />
             <span className="fw-tpl-part-text">
               <span className="fw-adm-name">{t(`tpl.part.${part}`)}</span>
-              <span className="fw-adm-hint">{t(`tpl.partWhy.${part}`)}</span>
+              <span className="fw-adm-hint">{t(partWhyKey(kind.kind, part))}</span>
             </span>
           </li>
         ))}

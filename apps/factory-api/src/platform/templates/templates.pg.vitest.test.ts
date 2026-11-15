@@ -91,7 +91,9 @@ describe('document templates (PLT-231)', () => {
     const list = await owner.get(`/templates/documents?companyId=${companyA}`)
     expect(list.status).toBe(200)
     expect(list.body.templates).toEqual([])
-    expect(list.body.slots).toHaveLength(12)
+    // B-W2b-F60: eight documents (the proforma and the commercial invoice too), each in Italian and English.
+    expect(list.body.slots).toHaveLength(16)
+    expect(kinds.body.kinds.map((entry: Json) => entry.kind)).toEqual(['QUOTE', 'ORDER_CONFIRMATION', 'PURCHASE_ORDER', 'DDT', 'INVOICE_COPY', 'PACKING_LIST', 'PROFORMA', 'COMMERCIAL_INVOICE'])
     expect(list.body.slots.every((slot: Json) => slot.active === null && !slot.layout.includes('+t'))).toBe(true)
   })
 
@@ -166,6 +168,112 @@ describe('document templates (PLT-231)', () => {
     expect(changes).toEqual(['QUOTE/it/1 CREATED', 'QUOTE/it/1 EDITED', 'QUOTE/it/1 PUBLISHED', 'QUOTE/it/2 CREATED', 'QUOTE/it/1 RETIRED', 'QUOTE/it/2 PUBLISHED', 'QUOTE/it/2 RETIRED', 'DDT/en/1 CREATED', 'DDT/en/1 DELETED'])
     const audits = await admin(`SELECT action FROM "AuditLog" WHERE "tenantId" = $1 AND "recordType" = 'DocumentTemplate' ORDER BY at, id`, [tenant.id])
     expect(audits.map((row) => row.action)).toContain('templates.publishDocument')
+  })
+})
+
+// B-W2b-F60: the proforma (B-W2b-391) and the commercial invoice (B-W2b-409) take a company's words like every other document.
+describe('the words of the proforma and the commercial invoice (B-W2b-F60)', () => {
+  const day = '2026-11-14'
+  let proforma: Json
+  let commercial: Json
+
+  it('each kind offers its columns, the parts it always prints and its placeholders', async () => {
+    const kinds = (await owner.get('/templates/documents/kinds')).body.kinds as Json[]
+    expect(kinds.find((entry) => entry.kind === 'PROFORMA')).toMatchObject({
+      layout: 'PROFORMA/1',
+      optionalColumns: ['code', 'uom'],
+      mandatoryColumns: ['description', 'quantity', 'unitPrice', 'vat', 'amount'],
+      mandatoryParts: ['COMPANY_LEGAL', 'NUMBER_AND_DATE', 'PARTY', 'FACTS', 'TOTALS', 'NOTICES'],
+      placeholders: expect.arrayContaining(['proforma.number', 'proforma.date', 'proforma.dueDate', 'party.name']),
+    })
+    expect(kinds.find((entry) => entry.kind === 'COMMERCIAL_INVOICE')).toMatchObject({
+      layout: 'COMMERCIAL_INVOICE/1',
+      optionalColumns: ['code', 'uom'],
+      mandatoryColumns: ['description', 'quantity', 'unitPrice', 'amount'],
+      mandatoryParts: ['COMPANY_LEGAL', 'NUMBER_AND_DATE', 'PARTY', 'FACTS', 'TOTALS', 'NOTICES'],
+      placeholders: expect.arrayContaining(['commercialInvoice.number', 'commercialInvoice.date', 'commercialInvoice.destination']),
+    })
+  })
+
+  it('their words are saved, read back as saved and published; a placeholder of another document is refused', async () => {
+    const made = await owner.post('/templates/documents', { companyId: companyA, kind: 'PROFORMA', language: 'it' })
+    expect(made.status, JSON.stringify(made.body)).toBe(201)
+    expect(made.body.template).toMatchObject({ kind: 'PROFORMA', language: 'it', revision: 1, status: 'DRAFT', header: null, fieldsShown: ['code', 'uom'], layout: 'PROFORMA/1+t1' })
+    const refused = await owner.put(`/templates/documents/${made.body.template.id}`, { version: made.body.template.version, header: 'Merce per {{commercialInvoice.destination}}' })
+    expect(refused.status).toBe(400)
+    expect(refused.body.error.issues.map((issue: Json) => issue.path)).toEqual(['body/header'])
+    const saved = await owner.put(`/templates/documents/${made.body.template.id}`, {
+      version: made.body.template.version,
+      header: 'Proforma {{proforma.number}} per {{party.name}}.',
+      terms: 'Resa {{document.deliveryTerms}} (parole inventate).',
+      footer: 'Grazie da {{company.name}}.',
+      fieldsShown: ['code'],
+    })
+    expect(saved.status, JSON.stringify(saved.body)).toBe(200)
+    expect((await owner.post(`/templates/documents/${made.body.template.id}/publish`, { version: saved.body.template.version })).status).toBe(200)
+    const read = await owner.get(`/templates/documents/${made.body.template.id}`)
+    expect(read.body.template).toMatchObject({ kind: 'PROFORMA', status: 'ACTIVE', header: 'Proforma {{proforma.number}} per {{party.name}}.', terms: 'Resa {{document.deliveryTerms}} (parole inventate).', footer: 'Grazie da {{company.name}}.', fieldsShown: ['code'], layout: 'PROFORMA/1+t1' })
+    proforma = read.body.template
+
+    const english = await owner.post('/templates/documents', {
+      companyId: companyA,
+      kind: 'COMMERCIAL_INVOICE',
+      language: 'en',
+      header: 'Commercial invoice {{commercialInvoice.number}} of {{commercialInvoice.date}}: goods for {{commercialInvoice.destination}}.',
+      terms: 'Made-up terms of sale.',
+    })
+    expect(english.status, JSON.stringify(english.body)).toBe(201)
+    expect((await owner.post(`/templates/documents/${english.body.template.id}/publish`, { version: english.body.template.version })).status).toBe(200)
+    commercial = (await owner.get(`/templates/documents/${english.body.template.id}`)).body.template
+    expect(commercial).toMatchObject({ kind: 'COMMERCIAL_INVOICE', language: 'en', status: 'ACTIVE', footer: null, fieldsShown: ['code', 'uom'] })
+    expect(await admin(`SELECT kind::text, language, revision, status::text FROM "DocumentTemplate" WHERE "companyId" = $1 AND kind IN ('PROFORMA', 'COMMERCIAL_INVOICE') ORDER BY "DocumentTemplate"."kind"`, [companyA])).toEqual([
+      { kind: 'PROFORMA', language: 'it', revision: 1, status: 'ACTIVE' },
+      { kind: 'COMMERCIAL_INVOICE', language: 'en', revision: 1, status: 'ACTIVE' },
+    ])
+    const list = await owner.get(`/templates/documents?companyId=${companyA}`)
+    expect(list.body.slots.filter((slot: Json) => slot.active !== null).map((slot: Json) => `${slot.kind}/${slot.language} ${slot.layout}`)).toEqual(['PROFORMA/it PROFORMA/1+t1', 'COMMERCIAL_INVOICE/en COMMERCIAL_INVOICE/1+t1'])
+  })
+
+  it('the documents printed after them show the words and keep every line the law or customs needs', async () => {
+    const company = await companyLegalOf(system(), companyA)
+    // A copy carries no template: the code's layout, to compare with.
+    const plain = (type: 'PROFORMA' | 'COMMERCIAL_INVOICE', language: 'it' | 'en') => composeDocument(sampleDocument(type, language, { ...company }, day))
+
+    const printed = composeDocument(sampleDocument('PROFORMA', 'it', company, day))
+    expect(printed).toMatchObject({ layout: 'PROFORMA/1+t1', intro: 'Proforma SAMPLE per Example Customer S.r.l..', terms: 'Resa EXW (parole inventate).', footer: { text: 'Grazie da Esempio Moto.' } })
+    expect(printed.table.columns.map((column) => column.key)).toEqual(['code', 'description', 'quantity', 'unitPrice', 'vat', 'amount'])
+    const proformaPlain = plain('PROFORMA', 'it')
+    expect(proformaPlain).toMatchObject({ layout: 'PROFORMA/1', footer: { text: 'Company footer (made up)' } })
+    expect('intro' in proformaPlain).toBe(false)
+    // "Not a tax document" and the purpose's notice, the facts, the legal lines and the totals stay as the code prints them.
+    expect(printed.notices).toEqual(proformaPlain.notices)
+    expect(printed.notices).toHaveLength(2)
+    expect(printed.facts).toEqual(proformaPlain.facts)
+    expect(printed.issuer.lines).toEqual(proformaPlain.issuer.lines)
+    expect(printed.footer.legal).toBe(proformaPlain.footer.legal)
+    expect(printed.totals).toEqual(proformaPlain.totals)
+
+    const customs = composeDocument(sampleDocument('COMMERCIAL_INVOICE', 'en', company, day))
+    expect(customs).toMatchObject({ layout: 'COMMERCIAL_INVOICE/1+t1', intro: 'Commercial invoice SAMPLE of 14 Nov 2026: goods for Switzerland.', terms: 'Made-up terms of sale.', footer: { text: 'Company footer (made up)' } })
+    const customsPlain = plain('COMMERCIAL_INVOICE', 'en')
+    // The exporter's EORI, the reason and the destination; the customs values and the non-taxable export notices.
+    expect(customs.facts).toEqual(customsPlain.facts)
+    expect(customs.facts.slice(0, 2).map((fact) => fact.value)).toEqual(['IT00000000000', customsPlain.facts[1]!.value])
+    expect(customs.facts.find((fact) => fact.value === 'Switzerland')).toBeTruthy()
+    expect(customs.notices).toEqual(customsPlain.notices)
+    expect(customs.notices).toHaveLength(2)
+    expect(customs.issuer.lines).toEqual(customsPlain.issuer.lines)
+    expect(customs.footer.legal).toBe(customsPlain.footer.legal)
+    expect(customs.table.columns.map((column) => column.key)).toEqual(customsPlain.table.columns.map((column) => column.key))
+
+    // The other language of each prints the code's layout; each version's preview is a PDF.
+    expect(composeDocument(sampleDocument('PROFORMA', 'en', company, day)).layout).toBe('PROFORMA/1')
+    expect(composeDocument(sampleDocument('COMMERCIAL_INVOICE', 'it', company, day)).layout).toBe('COMMERCIAL_INVOICE/1')
+    for (const template of [proforma, commercial]) {
+      const preview = await owner.get(`/templates/documents/${template.id}/preview`)
+      expect(preview.status, template.kind).toBe(200)
+      expect(preview.response.rawPayload.subarray(0, 5).toString()).toBe('%PDF-')
+    }
   })
 })
 

@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import { samplePdf } from '../../../_shared/document-send/sample-pdf'
 import { inShell } from '../../shared/fixtures'
-import { DEMO, kindOf, PO_IT_V1, QUOTE_IT_V1, QUOTE_IT_V2, QUOTE_IT_V3 } from '../doc-templates/fixtures'
+import { COMMERCIAL_EN_V1, DEMO, kindOf, PO_IT_V1, PROFORMA_IT_V1, QUOTE_IT_V1, QUOTE_IT_V2, QUOTE_IT_V3 } from '../doc-templates/fixtures'
 import { documentDraftOf } from './model'
 import { DocTemplateEditorView, type DocEditorModel } from './view/DocTemplateEditorView'
 
@@ -16,6 +16,9 @@ import { DocTemplateEditorView, type DocEditorModel } from './view/DocTemplateEd
  */
 
 const PDF = samplePdf(['Officina Demo S.r.l. — ESEMPIO', 'Preventivo Q-2026-0142 del 27/10/2026', 'Gentile Moda Demo S.r.l.,', 'le inviamo la nostra offerta Q-2026-0142, valida fino al 30/11/2026.', 'Codice  Descrizione  Q.ta  Unita  Prezzo  Sconto  Importo', 'GIACCA-01  Giacca in pelle nera  10  pz  450,00  5%  4.275,00', 'Pagamento: bonifico a 30 giorni.', 'Testo di prova, da far controllare.'])
+// B-W2b-F60: the commercial invoice and the proforma, each with its own lines that no template removes (ASCII: the stand-in PDF's font).
+const CUSTOMS_PDF = samplePdf(['Officina Demo S.r.l. - SAMPLE', 'Commercial invoice (for customs) CI-2026-0012 of 22 Oct 2026', 'Commercial invoice CI-2026-0012: goods for Switzerland. Made-up words.', 'Exporter EORI IT00000000000 - Reason: sale of goods - Destination: Switzerland', 'Code  Description  Qty  Unit  Unit value  Value', 'JKT-01  Leather jacket, black - HS 420310 - Origin IT  2  pcs  250.00  500.00', 'The values are declared for customs purposes.', 'Non-taxable export (art. 8 DPR 633/1972).'])
+const PROFORMA_PDF = samplePdf(['Officina Demo S.r.l. - ESEMPIO', 'Fattura proforma PF-2026-0031 del 28/10/2026', 'Fattura proforma PF-2026-0031 per Moda Demo S.r.l.', 'Scopo: dogana - Resa EXW - Colli 2', 'Codice  Descrizione  Q.ta  Prezzo  IVA  Importo', 'GIACCA-01  Giacca in pelle nera  2  250,00  22%  500,00', 'Documento non valido ai fini fiscali.', 'Valori dichiarati ai soli fini doganali.'])
 const QUOTE = kindOf('QUOTE')
 const VERSIONS = [QUOTE_IT_V3, QUOTE_IT_V2, QUOTE_IT_V1]
 
@@ -65,6 +68,18 @@ export const designScreen = defineDesignScreen<DocEditorModel>({
     { id: 'published', label: 'Just published: version 3 in use, version 2 retired', model: base({ read: { status: 'ready', template: { ...QUOTE_IT_V3, status: 'ACTIVE', publishedAt: '2026-10-29T09:42:00.000Z' }, mayManage: true }, versions: [{ ...QUOTE_IT_V3, status: 'ACTIVE' }, { ...QUOTE_IT_V2, status: 'RETIRED' }, QUOTE_IT_V1], notice: { key: 'tpl.done.publishedRetired', tone: 'success', params: { revision: 3, retired: 2 } } }) },
     { id: 'in-use-draft-open', label: 'The version in use while a draft is open: New version held, Open draft', model: base({ read: { status: 'ready', template: QUOTE_IT_V2, mayManage: true }, draft: documentDraftOf(QUOTE_IT_V2) }) },
     { id: 'in-use', label: 'The purchase order in use, no draft: New version; More › Back to the fixed layout', model: base({ read: { status: 'ready', template: PO_IT_V1, mayManage: true }, kind: kindOf('PURCHASE_ORDER'), versions: [PO_IT_V1], draft: documentDraftOf(PO_IT_V1) }) },
+    {
+      id: 'commercial-invoice',
+      label: 'The commercial invoice in English in use: its own words added, the EORI, reason, destination and customs notices always printed',
+      model: base({ read: { status: 'ready', template: COMMERCIAL_EN_V1, mayManage: true }, kind: kindOf('COMMERCIAL_INVOICE'), versions: [COMMERCIAL_EN_V1], draft: documentDraftOf(COMMERCIAL_EN_V1), preview: { src: CUSTOMS_PDF, problem: null } }),
+      note: 'B-W2b-F60: a template adds words above the lines, after the totals and in the footer; the facts and notices customs needs are not the template’s to remove (Totals & what it always prints says which).',
+    },
+    {
+      id: 'proforma-draft',
+      label: 'A first draft of the Italian proforma',
+      model: base({ read: { status: 'ready', template: PROFORMA_IT_V1, mayManage: true }, kind: kindOf('PROFORMA'), versions: [PROFORMA_IT_V1], draft: documentDraftOf(PROFORMA_IT_V1), preview: { src: PROFORMA_PDF, problem: null } }),
+      note: 'Its placeholders include the due day of a payment request ({{proforma.dueDate}}); "not a tax document" always prints.',
+    },
     { id: 'retired', label: 'A retired version (kept as it printed)', model: base({ read: { status: 'ready', template: QUOTE_IT_V1, mayManage: true }, draft: documentDraftOf(QUOTE_IT_V1) }) },
     { id: 'read-only', label: 'Read only: documents.view without documents.templates.manage', model: base({ read: { status: 'ready', template: QUOTE_IT_V3, mayManage: false } }), note: 'The words read as text, the columns as Shown / Left out; Publish is held with the reason.' },
     { id: 'changed-elsewhere', label: 'Changed by someone else while open (unsaved words kept until Reload)', model: base({ draft: changed, changedElsewhere: true }) },
