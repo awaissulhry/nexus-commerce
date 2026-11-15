@@ -14,6 +14,8 @@ import { serverClock } from '../../core/time'
 import { cancelTimersOfRule } from '../timers/service'
 import { datedFor, findFor, FIND_LIMIT } from './evaluators'
 import { officeOf, placeNames, RULE_COLUMNS, RULE_SCOPE, type Reader, type RuleRow } from './store'
+// B-W2b-435 (ANA-041): each rule's routes.
+import { routeCounts } from './routes/counts'
 
 /**
  * The exception rules (B-W2a-33; ANA-036, PLT-100; design home.alerts "Rules" with the popup rule, admin.automation
@@ -67,6 +69,7 @@ async function ruleViews(db: Reader, actor: Actor, rules: readonly RuleRow[], no
   const open = ids.length ? await db.alert.groupBy({ by: ['ruleId'], where: { ruleId: { in: ids }, state: { not: 'RESOLVED' } }, _count: { _all: true } }) : []
   const dateIds = rules.filter((rule) => rule.trigger === 'DATE').map((rule) => rule.id)
   const timers = dateIds.length ? await db.dueTimer.groupBy({ by: ['ruleId'], where: { ruleId: { in: dateIds }, status: 'PENDING' }, _count: { _all: true }, _min: { fireAt: true } }) : []
+  const routeCount = await routeCounts(db, ids)
   return rules.filter((rule) => isRuleKind(rule.ruleKind)).map((rule) => {
     const kind = rule.ruleKind as RuleKind
     const timer = timers.find((entry) => entry.ruleId === rule.id)
@@ -90,6 +93,7 @@ async function ruleViews(db: Reader, actor: Actor, rules: readonly RuleRow[], no
       lastFiredAt: lastAt ? toUtcIso(lastAt) : null,
       fired7Days: week.find((entry) => entry.ruleId === rule.id)?._count._all ?? 0,
       openAlerts: open.find((entry) => entry.ruleId === rule.id)?._count._all ?? 0,
+      routes: routeCount.get(rule.id) ?? 0,
       timers: rule.trigger === 'DATE' ? { pending: timer?._count._all ?? 0, nextFireAt: timer?._min.fireAt ? toUtcIso(timer._min.fireAt) : null } : null,
       canChange: mayManage(actor, rule),
       version: rule.version,

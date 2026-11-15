@@ -163,6 +163,8 @@ export const ruleView = output({
   /** Alerts it raised in the last 7 days (a count per rule; never per person). */
   fired7Days: z.number().int(),
   openAlerts: z.number().int(),
+  /** B-W2b-435 (ANA-041): how many routes the rule keeps (who it tells at each place: GET /alerts/rules/:id/routes). */
+  routes: z.number().int(),
   /** DATE rules: the timers waiting, and when the next one fires. */
   timers: output({ pending: z.number().int(), nextFireAt: instant().nullable() }).nullable(),
   canChange: z.boolean(),

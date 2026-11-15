@@ -1,0 +1,288 @@
+{
+  "digest": {
+    "title": "Riepilogo del mattino per il titolare",
+    "intro": "L'e-mail di ogni mattina, in anteprima: spedito e ordini in ritardo di ieri, nuovi ordini, lavorazioni ferme, avvisi e approvazioni in attesa.",
+    "loading": "Caricamento in corso…",
+    "failed": "Non è stato possibile leggere l'e-mail del mattino.",
+    "retry": "Riprova",
+    "dismiss": "Chiudi",
+    "state": {
+      "on": "Attiva",
+      "off": "Non parte"
+    },
+    "held": {
+      "off": "La tua e-mail del mattino è spenta: accendila con Impostazioni.",
+      "mailOff": "L'e-mail del mattino di questa azienda è spenta: la accende il titolare.",
+      "testMailOff": "Nessuna azienda che copre ha l'e-mail del mattino accesa: prima la accende il titolare.",
+      "offline": "Non in linea: riprova quando torni in linea.",
+      "busy": "Salvataggio in corso…",
+      "nothing": "Prima cambia qualcosa.",
+      "time": "Scrivi un orario come HH:MM.",
+      "days": "Spunta almeno un giorno.",
+      "sections": "Spunta almeno una sezione."
+    },
+    "field": {
+      "when": "Quando",
+      "language": "Lingua",
+      "covers": "Copre",
+      "sections": "Elenca",
+      "to": "Va a",
+      "next": "Prossima",
+      "last": "Ultimo invio"
+    },
+    "when": "{time} ora dello stabilimento ({zone}) · {days}",
+    "days": {
+      "workdays": "dal lunedì al venerdì",
+      "every": "ogni giorno"
+    },
+    "day": {
+      "1": "Lunedì",
+      "2": "Martedì",
+      "3": "Mercoledì",
+      "4": "Giovedì",
+      "5": "Venerdì",
+      "6": "Sabato",
+      "7": "Domenica"
+    },
+    "language": {
+      "it": "Italiano",
+      "en": "English"
+    },
+    "covers": {
+      "all_one": "La tua azienda ({count})",
+      "all_other": "Tutte le tue aziende ({count})"
+    },
+    "section": {
+      "SHIPPED": "Spedito ieri",
+      "LATE": "Ordini in ritardo",
+      "NEW_ORDERS": "Nuovi ordini",
+      "WIP_STUCK": "Lavorazioni ferme",
+      "ALERTS": "Avvisi",
+      "APPROVALS": "Approvazioni in attesa"
+    },
+    "next": {
+      "none": "Non prevista finché non parte"
+    },
+    "last": {
+      "never": "Mai inviata"
+    },
+    "edit": "Impostazioni del riepilogo",
+    "test": "Mandami una prova",
+    "never": "Numeri per azienda, linea e ordine, mai per persona. Importi solo con i tuoi permessi.",
+    "form": {
+      "label": "Impostazioni dell'e-mail del mattino",
+      "enabled": "Mandami questa e-mail ogni mattina",
+      "enabledOn": "Parte ogni mattina (finché l'e-mail del mattino dell'azienda è accesa).",
+      "enabledOff": "Spenta: non ti viene inviato nulla.",
+      "time": "Ora",
+      "timeHint": "Sull'orologio dello stabilimento ({zone}).",
+      "language": "Lingua",
+      "company": "Azienda",
+      "companyHint": "Tutte le tue aziende elenca solo quelle con l'e-mail del mattino accesa.",
+      "days": "Giorni",
+      "sections": "Sezioni",
+      "noChanges": "Nessuna modifica",
+      "changes_one": "1 modifica non salvata",
+      "changes_other": "{count} modifiche non salvate",
+      "save": "Salva",
+      "saving": "Salvataggio…"
+    },
+    "preview": {
+      "title": "Anteprima dell'e-mail di oggi",
+      "language": "Lingua dell'anteprima",
+      "mail": "L'e-mail come partirebbe",
+      "to": "A:",
+      "failed": "Non è stato possibile leggere l'anteprima.",
+      "notSent": "Oggi non parte nulla: nessuna azienda che copre ha l'e-mail del mattino accesa. Ecco cosa direbbe.",
+      "leftOut": "Lasciato fuori per i tuoi permessi: {sections}."
+    },
+    "switch": {
+      "title": "L'e-mail del mattino di ogni azienda",
+      "intro": "Spenta finché non la accendi: con l'interruttore di un'azienda spento, nessuno riceve la sua e-mail del mattino, anche chi ha acceso la propria.",
+      "label": "E-mail del mattino di {company}",
+      "on": "{company}: accesa",
+      "off": "{company}: spenta",
+      "since": "dal {at}"
+    },
+    "recipients": {
+      "title": "Chi la riceve",
+      "none": "Nessuno ha ancora acceso l'e-mail del mattino.",
+      "col": {
+        "person": "Persona",
+        "company": "Azienda",
+        "time": "Ora",
+        "language": "Lingua"
+      },
+      "me": "{name} (tu)",
+      "group": "Tutte le sue aziende"
+    },
+    "done": {
+      "savedOn": "Salvato: la tua e-mail del mattino è accesa.",
+      "savedOff": "Salvato: la tua e-mail del mattino è spenta.",
+      "test": "Prova inviata a {to}.",
+      "switchOn": "L'e-mail del mattino di {company} è accesa.",
+      "switchOff": "L'e-mail del mattino di {company} è spenta."
+    },
+    "error": {
+      "read": "Non è stato possibile leggerla. Riprova.",
+      "forbidden": "Non rientra nel tuo ruolo.",
+      "offline": "Non è stato possibile raggiungere l'API della fabbrica.",
+      "save": "Non è stato possibile salvarla. Riprova.",
+      "stale": "Qualcuno l'ha cambiata nel frattempo: è stata riletta. Controllala e salva di nuovo.",
+      "invalid": "Alcune impostazioni non sono valide: controlla ora, giorni e sezioni.",
+      "mailOff": "L'e-mail del mattino di questa azienda è spenta: prima la accende il titolare, poi può partire una prova.",
+      "notSent": "Non è stato possibile inviare la prova: manca un indirizzo di invio verificato, o il tuo indirizzo rifiuta la posta."
+    },
+    "dialog": {
+      "title": "Riepilogo quotidiano via e-mail",
+      "close": "Chiudi"
+    }
+  },
+  "emailMe": {
+    "title": "Mandamelo via e-mail",
+    "intro": "Ricevi questo report via e-mail nei giorni e all'ora che scegli, con i filtri qui sotto. Viene eseguito come te, con i tuoi permessi, e inviato solo a te.",
+    "loading": "Caricamento in corso…",
+    "failed": "Non è stato possibile leggere la tua e-mail di questo report.",
+    "state": {
+      "on": "Ti arriva via e-mail",
+      "paused": "In pausa"
+    },
+    "summary": "Ogni {days} alle {time} ({zone})",
+    "next": "prossima {at}",
+    "last": "ultimo invio {at}",
+    "neverSent": "non ancora inviata",
+    "form": "Mandami questo report via e-mail",
+    "time": "Ora",
+    "timeHint": "Sull'orologio della tua azienda.",
+    "reportDefault": "Come parte il report: {value}",
+    "go": "Mandamelo via e-mail",
+    "save": "Salva le modifiche",
+    "pause": "Metti in pausa",
+    "resume": "Riprendi",
+    "stop": "Smetti di inviarlo",
+    "rights": "Ogni e-mail riesegue il report con i tuoi permessi di quel momento: ciò che non puoi più vedere non viene inviato.",
+    "held": {
+      "nothing": "Prima cambia qualcosa.",
+      "time": "Scrivi un orario come HH:MM.",
+      "days": "Spunta almeno un giorno."
+    },
+    "done": {
+      "subscribed": "Fatto: questo report ti arriverà via e-mail.",
+      "saved": "Salvato.",
+      "paused": "In pausa: non viene inviato nulla finché non riprendi.",
+      "resumed": "Ripreso.",
+      "stopped": "Fermato: non ricevi più questo report via e-mail."
+    },
+    "error": {
+      "read": "Non è stato possibile leggerla. Riprova.",
+      "save": "Non è stato possibile salvarla. Riprova.",
+      "stale": "È cambiata in un'altra finestra: è stata riletta. Controllala e salva di nuovo.",
+      "forbidden": "Non puoi eseguire questo report, quindi non può esserti inviato.",
+      "offline": "Non è stato possibile raggiungere l'API della fabbrica.",
+      "invalid": "Alcune impostazioni non sono valide: controlla ora, giorni e filtri.",
+      "ownMail": "Questo report si riceve via e-mail dalla sua pagina (Produzione › Report)."
+    }
+  },
+  "wip": {
+    "title": "Invecchiamento del semilavorato",
+    "intro": "Capi in attesa a ogni fase e da quanto il loro ordine di lavoro non riceve dichiarazioni, per linea, a {site}. Adesso: non si conserva lo storico delle fasi.",
+    "loading": "Caricamento in corso…",
+    "failed": "Non è stato possibile leggere il semilavorato.",
+    "empty": "Nulla è in attesa a nessuna fase.",
+    "emptyBody": "Nessun ordine di lavoro in corso ha capi in attesa a una fase adesso.",
+    "overall": "{workOrders} ordini di lavoro in corso · {waiting} capi in attesa",
+    "old_one": "1 capo in attesa da oltre 10 giorni",
+    "old_other": "{count} capi in attesa da oltre 10 giorni",
+    "line": "{code} · {name}",
+    "noLine": "Nessuna linea",
+    "noStage": "Nessuno in attesa",
+    "pieces_one": "1 capo",
+    "pieces_other": "{value} capi",
+    "workOrders_one": "1 ordine di lavoro",
+    "workOrders_other": "{count} ordini di lavoro",
+    "band": {
+      "D0_2": "0–2 giorni",
+      "D3_5": "3–5 giorni",
+      "D6_10": "6–10 giorni",
+      "D11_PLUS": "Oltre 10 giorni"
+    },
+    "longest": "In attesa da più tempo",
+    "col": {
+      "workOrder": "Ordine di lavoro",
+      "line": "Linea",
+      "stages": "In attesa a",
+      "waited": "Attesa"
+    },
+    "days_one": "1 giorno",
+    "days_other": "{count} giorni",
+    "foot": "Giorni dall'ultima dichiarazione dell'ordine di lavoro (altrimenti dall'avvio, altrimenti dal rilascio). Per linea e fase, mai per persona o postazione.",
+    "error": {
+      "read": "Non è stato possibile leggerlo. Riprova.",
+      "forbidden": "Il semilavorato non rientra nel tuo ruolo.",
+      "offline": "Non è stato possibile raggiungere l'API della fabbrica."
+    }
+  },
+  "flowValue": {
+    "title": "Valore al costo",
+    "label": "Il valore al costo degli ordini di lavoro per fase",
+    "workOrders_one": "(1 ordine di lavoro)",
+    "workOrders_other": "({count} ordini di lavoro)",
+    "total": "In tutto {value}",
+    "mixed": "Valore al costo: le aziende tengono valute diverse, quindi non si mostra un unico importo.",
+    "partial": "Sono contati solo i primi 5000 ordini di lavoro.",
+    "error": "Non è stato possibile leggere il valore al costo."
+  },
+  "routes": {
+    "title": "A chi va, per luogo",
+    "intro": "Chi avvisa questa regola in un'azienda, uno stabilimento, una linea o per un cliente: chi ha un ruolo lì, o una persona. Un avviso di un luogo coperto da un instradamento va alle persone degli instradamenti.",
+    "none": "Ancora nessun instradamento.",
+    "elsewhere": "Altrove la regola avvisa il proprio ruolo, come dice la sua frase.",
+    "ruleRole": "Senza instradamenti la regola avvisa il proprio ruolo, come dice la sua frase.",
+    "readOnly": "Puoi leggere gli instradamenti; per cambiarli serve il permesso di gestire le regole di questo luogo.",
+    "noPlaces": "Nessun luogo dentro questa regola da instradare.",
+    "scope": {
+      "COMPANY": "Azienda",
+      "SITE": "Stabilimento",
+      "LINE": "Linea",
+      "CUSTOMER": "Cliente"
+    },
+    "whoRole": "{role} lì",
+    "who": {
+      "ROLE": "Un ruolo",
+      "PERSON": "Una persona"
+    },
+    "field": {
+      "scope": "In un/una",
+      "place": "Quale",
+      "who": "Avvisa",
+      "role": "Ruolo",
+      "person": "Persona"
+    },
+    "customersCut": "Sono elencati solo i primi 500 clienti per nome.",
+    "add": "Aggiungi instradamento",
+    "remove": "Togli l'instradamento a {place}",
+    "held": {
+      "offline": "Non in linea: riprova quando torni in linea.",
+      "busy": "Salvataggio in corso…",
+      "tooMany": "Una regola tiene al massimo {max} instradamenti.",
+      "place": "Scegli un luogo.",
+      "who": "Scegli chi avvisare."
+    },
+    "done": {
+      "added": "Instradamento aggiunto.",
+      "removed": "Instradamento tolto."
+    },
+    "error": {
+      "read": "Non è stato possibile leggere gli instradamenti. Riprova.",
+      "save": "Non è stato possibile salvare l'instradamento. Riprova.",
+      "place": "Quel luogo è fuori dalla regola: scegline uno dentro la sua azienda o il suo stabilimento.",
+      "duplicate": "Questa regola li avvisa già in quel luogo.",
+      "role": "Scegli un ruolo d'ufficio non archiviato.",
+      "person": "Scegli una persona d'ufficio attiva.",
+      "forbidden": "Non puoi cambiare le regole di questo luogo.",
+      "gone": "Quell'instradamento non c'è più.",
+      "offline": "Non è stato possibile raggiungere l'API della fabbrica.",
+      "conflict": "È cambiato nel frattempo: rileggilo."
+    }
+  }
+}

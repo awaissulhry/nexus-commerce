@@ -116,7 +116,7 @@ describe('check-event-contract', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
     // (main bf4fee0ba4) 933 → 934, 1468 → 1470.
     // B-W2b-427: one event (duplicate.merged) and seven literal emits (the merge: the duplicate archived, the contacts, addresses,
     // tax identities or colours moved, duplicate.merged): with B-W2b-406 (main fdb7cc920c) 934 → 935, 1470 → 1477.
-    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(935 declared event version\(s\), 1477 literal emit/) })
+    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(942 declared event version\(s\), 1486 literal emit/) })
   })
 
   it.each<[string, Plants, RegExp]>([

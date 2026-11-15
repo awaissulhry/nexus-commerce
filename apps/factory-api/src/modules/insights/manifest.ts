@@ -73,4 +73,17 @@ export const manifest = defineManifest({
   'GET /insights/dashboards/:board/layout': { audiences: ['office'], permission: 'home.kpis.view', scope: 'record' },
   'PUT /insights/dashboards/:board/layout': { audiences: ['office'], permission: 'home.kpis.view', scope: 'record' },
   'DELETE /insights/dashboards/:board/layout': { audiences: ['office'], permission: 'home.kpis.view', scope: 'record' },
+  // B-W2b-435 (digest/, reports/subscriptions.ts): office only. My morning e-mail, its preview and a test are my own (home.view;
+  // each section asks its own list's permission and grains as me); the switch per company is the owner's (home.digest.switch
+  // over that company: the handler checks it); Today's value per stage needs the cost grain and costing.view (else counts only);
+  // "E-mail me this" is the person's own, for a report they may run.
+  'GET /insights/digest': { audiences: ['office'], permission: 'home.view', scope: 'record' },
+  'PUT /insights/digest': { audiences: ['office'], permission: 'home.view', scope: 'record' },
+  'PUT /insights/digest/switch': { audiences: ['office'], permission: 'home.digest.switch', scope: 'record' },
+  'GET /insights/digest/preview': { audiences: ['office'], permission: 'home.view', scope: 'record' },
+  'POST /insights/digest/test': { audiences: ['office'], permission: 'home.view', scope: 'record' },
+  'GET /home/flow/value': { audiences: ['office'], permission: 'home.view', scope: 'record' },
+  'GET /reports/subscriptions': { audiences: ['office'], permission: 'home.reports.view', scope: 'record' },
+  'PUT /reports/:key/subscription': { audiences: ['office'], permission: 'home.reports.view', scope: 'record' },
+  'DELETE /reports/:key/subscription': { audiences: ['office'], permission: 'home.reports.view', scope: 'record' },
 })

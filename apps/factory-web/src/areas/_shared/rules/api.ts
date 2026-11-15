@@ -34,6 +34,8 @@ export const ruleSchema = z.object({
   lastFiredAt: z.string().nullable(),
   fired7Days: z.number(),
   openAlerts: z.number(),
+  /** B-W2b-435 (ANA-041): how many routes the rule keeps (who it tells at each place). */
+  routes: z.number().optional(),
   timers: z.object({ pending: z.number(), nextFireAt: z.string().nullable() }).nullable(),
   canChange: z.boolean(),
   version: z.number(),

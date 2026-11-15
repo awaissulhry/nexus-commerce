@@ -95,7 +95,9 @@
   },
   "goesTo": {
     "at": "{role} a {place}",
-    "everywhere": "{role}, ovunque"
+    "everywhere": "{role}, ovunque",
+    "routes_one": "{text} · e 1 instradamento per luogo",
+    "routes_other": "{text} · e {count} instradamenti per luogo"
   },
   "dialog": {
     "title": "Regola: {kind}",

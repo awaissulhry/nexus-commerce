@@ -49,3 +49,17 @@ export function processReports(): readonly ReportDefinition[] {
 export function reportOf(key: string): ReportDefinition | undefined {
   return processReports().find((report) => report.key === key)
 }
+
+// B-W2b-435 (follow-up DG1:01): "E-mail me this" for any report of the library, except one that shares its rows with a module's
+// own mail (`mail`: production.daily is subscribed on its module's page).
+/** The reports a person may ask "E-mail me this" of (./subscriptions.ts). */
+export function subscribableReports(): readonly ReportDefinition[] {
+  return processReports().filter((report) => report.mail === null)
+}
+
+/** A report a person may subscribe to, or why not: UNKNOWN (no such report), OWN_MAIL (its module sends it). */
+export function subscribableReport(key: string): ReportDefinition | 'UNKNOWN' | 'OWN_MAIL' {
+  const report = reportOf(key)
+  if (!report) return 'UNKNOWN'
+  return report.mail === null ? report : 'OWN_MAIL'
+}

@@ -37,6 +37,8 @@ export interface ReportModel {
   /** Where each row's record opens (company-free), by row id; absent: the row opens nothing. */
   readonly rowHrefs: Readonly<Record<string, string>>
   readonly selected?: readonly string[]
+  /** B-W2b-435 (DG1:01): "E-mail me this" for a report without a module mail (the container's; absent in the design index). */
+  readonly emailMe?: ReactNode
 }
 
 export interface ReportActions {
@@ -416,6 +418,7 @@ function ScheduleTab({ model, actions }: { model: ReportModel; actions?: ReportA
     )
   }
   if (!schedule.schedulable) {
+    if (model.emailMe) return <>{model.emailMe}</>
     return (
       <Card padded>
         <EmptyState icon={<CalendarClock size={22} aria-hidden />} title={t('schedule.none')} description={t('schedule.noneBody')} />
