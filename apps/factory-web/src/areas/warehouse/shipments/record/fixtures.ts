@@ -101,6 +101,8 @@ const packed = shipment('PACKED')
 const packedWithDdt = (role: Role, over: Partial<ShipmentRecordModel> = {}) => base(role, packed, { ddts: { value: [DDT_ROW], problem: null }, ddt: { value: DDT_LIVE, problem: null }, preview: null, pdf: { data: PDF, problem: null, sample: false }, ...over })
 const ready = labelled('PACKED')
 const readyCase = (role: Role, over: Partial<ShipmentRecordModel> = {}) => base(role, ready, { ddts: { value: [DDT_ROW], problem: null }, ddt: { value: DDT_LIVE, problem: null }, preview: null, pdf: { data: PDF, problem: null, sample: false }, labels: { value: labels(ready, 'PRINTED'), problem: null }, ...over })
+// B-W2b-F50: a site in test mode: the test carrier's labels (tracking numbers start with TEST; made, never bought, not charged).
+const testReady = { ...ready, parcels: ready.parcels.map((entry) => ({ ...entry, trackingNumber: entry.trackingNumber ? `TEST-${entry.trackingNumber}` : null })) }
 const shipped = labelled('SHIPPED')
 const delivered = { ...labelled('DELIVERED'), deliveredAt: at(30, 11, 42) }
 // B-W2a-71: labels bought, none collected yet (the carrier has no parcel): Void labels may run.
@@ -137,6 +139,10 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'buy-partial', label: 'Buy labels: parcel 2 refused by the carrier (partial)', model: packedWithDdt('warehouse', { tab: 'carrier', dialog: { kind: 'buyLabels' }, bought: { ...labels({ ...packed, parcels: [ready.parcels[0]!, packed.parcels[1]!] }), outcomes: [{ parcelId: packed.parcels[0]!.id, seq: 1, ok: true }, { parcelId: packed.parcels[1]!.id, seq: 2, ok: false, problem: 'The carrier refuses 31.5 kg for this service.' }], problem: 'Parcel 2 still needs its label.' } }) },
     { id: 'labels', label: 'Labels bought and printed: Mark handed over', model: readyCase('warehouse', { tab: 'carrier' }) },
     { id: 'labels-failed', label: 'A label print failed (said with its word, never colour alone)', model: readyCase('warehouse', { tab: 'carrier', labels: { value: labels(ready, 'FAILED'), problem: null } }) },
+    // B-W2b-F50: rule "TEST labels say TEST" (B-W2b-390, LOG-035): never "Bought" for a TEST label.
+    { id: 'labels-test', label: 'Test mode: TEST labels (made, not charged)', model: base('warehouse', testReady, { tab: 'carrier', ddts: { value: [DDT_ROW], problem: null }, ddt: { value: DDT_LIVE, problem: null }, preview: null, pdf: { data: PDF, problem: null, sample: false }, labels: { value: labels(testReady, 'PRINTED', true), problem: null } }), note: 'Each TEST label carries a TEST tag and "Test label made … : not charged" instead of "Bought …".' },
+    { id: 'buy-dialog-test', label: 'Buy labels in test mode: Make 2 test labels (nothing leaves, nothing charged)', model: packedWithDdt('warehouse', { tab: 'carrier', dialog: { kind: 'buyLabels' }, labels: { value: labels(packed, null, true), problem: null } }) },
+    { id: 'buy-test', label: 'Buy labels in test mode: TEST labels made, nothing bought', model: packedWithDdt('warehouse', { tab: 'carrier', dialog: { kind: 'buyLabels' }, labels: { value: labels(packed, null, true), problem: null }, bought: { ...labels(testReady, null, true), outcomes: testReady.parcels.map((entry) => ({ parcelId: entry.id, seq: entry.seq, ok: true })), problem: null } }) },
     { id: 'ready', label: 'Ready to hand over: every check green', model: readyCase('warehouse') },
     { id: 'hand-over', label: 'Mark handed over', model: readyCase('warehouse', { dialog: { kind: 'handOver' } }) },
     { id: 'link-dialog', label: 'Send the document link to the customer\'s contacts', model: readyCase('warehouse', { tab: 'documents', dialog: { kind: 'sendLink' } }) },
