@@ -2322,7 +2322,8 @@ describe('the W2a golden flow: a factory day through the HTTP routes', { timeout
     // a holiday or a closure of L1 (8 December, Christmas): its available minutes are the day's working days on L1's calendar.
     const barWorking = l1Cell(await capacityOn(barDay), barDay)!.workingDays as number
     expect(barWorking === 0 || barWorking === 1, `L1 on ${barDay}`).toBe(true)
-    expect(await cellOf(barDay, barDay)).toMatchObject({ availableMinutes: (perDay * barWorking).toFixed(1), bookedMinutes: '0.0', loadPct: '0.0', orders: [] })
+    // (a day with no working time has no load: loadPct null)
+    expect(await cellOf(barDay, barDay)).toMatchObject({ availableMinutes: (perDay * barWorking).toFixed(1), bookedMinutes: '0.0', loadPct: barWorking === 1 ? '0.0' : null, orders: [] })
     if (barWorking === 1) expect((await cellOf(barDay, barDay)).words).toBe(words(1))
     // ---- end B-W2b-F53
     // ---- end B-W2b-F43
