@@ -247,9 +247,11 @@ export function numbersWords(kind: RuleKind, threshold: Threshold, t: Translate)
 }
 
 /** Whom a rule tells, and where: "Quality inspector at Plant 1", "Planner, everywhere", "nobody by role". */
-export function goesToWords(rule: Pick<AlertRule, 'recipient' | 'place'>, t: Translate): string {
+export function goesToWords(rule: Pick<AlertRule, 'recipient' | 'place'> & { readonly routes?: number | undefined }, t: Translate): string {
   const role = rule.recipient ? rule.recipient.name : t('recipient.none')
-  return rule.place.companyId === null ? t('goesTo.everywhere', { role }) : t('goesTo.at', { role, place: rule.place.label ?? '…' })
+  const text = rule.place.companyId === null ? t('goesTo.everywhere', { role }) : t('goesTo.at', { role, place: rule.place.label ?? '…' })
+  // B-W2b-435 (ANA-041): the rule's routes by place come first where they cover an alert.
+  return rule.routes ? t('goesTo.routes', { text, count: rule.routes }) : text
 }
 
 /** The sentence of a rule in the reader's language (the API makes both). */

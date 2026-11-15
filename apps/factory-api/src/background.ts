@@ -197,6 +197,9 @@ import { retentionSweepCron } from './platform/privacy/retention/sweep'
 // B-W2b-395: pickups and the day's close (the customer's collection delivered when it leaves; the day closed by the system).
 import { collectionDeliveredHandler } from './modules/shipping/collection/delivered'
 import { closeDaysCron } from './modules/shipping/manifest/close-days'
+// B-W2b-435: the owner digest (the morning e-mail) and "E-mail me this" for any report.
+import { ownerDigestCron } from './modules/insights/digest/mail'
+import { reportMailCron } from './modules/insights/reports/subscriptions'
 
 /**
  * The factory's background processes (plan A1 §3.1), one codebase with the API, two Railway services:
@@ -473,6 +476,9 @@ if (mode === 'worker') {
   crons.push(retentionSweepCron({ database, log }))
   // B-W2b-395: hourly at minute 50, the day sheets nobody closed are closed by the system once the site's day ended (the dock closes every day).
   crons.push(closeDaysCron({ database, log }))
+  // B-W2b-435: every 15 minutes, the morning e-mails due (only while the person's AND the company's switches are on: both OFF by
+  // default) and the report e-mails people asked for ("E-mail me this"), each read as its person.
+  crons.push(ownerDigestCron({ database, log }), reportMailCron({ database, log }))
   const scheduler = startCrons(crons, { redis, prefix, log })
   stops.push(() => scheduler.stop())
 }

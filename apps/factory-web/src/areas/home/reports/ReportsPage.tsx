@@ -6,6 +6,8 @@ import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
 import { getLibrary, type Library } from './api'
 import { libraryAddressOf, libraryHref, readProblem, reportHref, reportsCanOf, type LibraryAddress } from './model'
 import { LibraryView } from './view/LibraryView'
+// B-W2b-435 (ANA-032): the owner daily digest, below the library (design home.reports `digest`).
+import { DigestSection } from './digest/DigestSection'
 
 /**
  * `/w/<company>/home/reports?q=&area=&outside=1` (SCR-104, the library): reads the pack once (GET /reports: every report
@@ -48,7 +50,7 @@ export function ReportsPage() {
     void load()
   }, [load])
 
-  return (
+  const view = (
     <LibraryView
       model={{ can, prefix, address, library }}
       actions={{
@@ -61,5 +63,12 @@ export function ReportsPage() {
         onOpen: (key) => router.push(reportHref(prefix, key)),
       }}
     />
+  )
+  if (!can.view) return view
+  return (
+    <div className="fw-rep">
+      {view}
+      <DigestSection />
+    </div>
   )
 }

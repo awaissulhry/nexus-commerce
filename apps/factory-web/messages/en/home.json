@@ -35,7 +35,8 @@
     "more": {
       "label": "More actions",
       "print": "Print my list",
-      "arrange": "Arrange this page"
+      "arrange": "Arrange this page",
+      "digest": "Daily digest by e-mail"
     },
     "tiles": {
       "all": "Needs me now",

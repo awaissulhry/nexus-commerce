@@ -78,7 +78,8 @@ export async function library(caller: CommandCaller) {
   const context = officeContextOf(caller)
   const actor = actorOf(context)
   const reports = sorted(processReports())
-  const mails = [...new Set(reports.map((report) => report.mail).filter((mail): mail is string => mail !== null))]
+  // B-W2b-435 (DG1:01): a report of no module mail is e-mailed by its own key ("E-mail me this", ./subscriptions.ts).
+  const mails = [...new Set(reports.map((report) => report.mail ?? report.key))]
   const mailed = await mailedToMe(caller, context.actorId, mails)
   const lastRuns = await lastRunsByMe(caller, context.actorId, reports.map((report) => report.key))
   return {
@@ -96,7 +97,7 @@ export async function library(caller: CommandCaller) {
         permission: report.permission,
         formats: [...report.formats],
         mail: report.mail,
-        mailed: report.mail !== null && mailed.has(report.mail),
+        mailed: mailed.has(report.mail ?? report.key),
         lastRunByMe: lastRuns.get(report.key) ?? null,
       }
     }),

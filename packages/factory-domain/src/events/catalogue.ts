@@ -317,6 +317,10 @@ import { events as pricesFollowups } from '../prices-followups/events'
 import { events as shippingDispatch } from '../shipping-dispatch/events'
 // B-W2b-400: carrier contracts and services (shipping.carrier_contract_changed, shipping.carrier_services_changed, shipment.services_changed, shipment.parcel_values_changed, shipping.insurance_rule_changed).
 import { events as shippingContracts } from '../shipping-contracts/events'
+// B-W2b-435: the owner digest and report e-mails (digest.changed, digest.switch_changed, digest.sent, report_subscription.changed, report_subscription.sent).
+import { events as insightsDigest } from '../insights-digest/events'
+// B-W2b-435: alert routes (alert.route_added, alert.route_removed).
+import { events as alertRoutes } from '../alert-routes/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -699,6 +703,9 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...shippingDispatch,
   // B-W2b-400
   ...shippingContracts,
+  // B-W2b-435
+  ...insightsDigest,
+  ...alertRoutes,
 ] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */

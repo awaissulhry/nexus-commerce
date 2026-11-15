@@ -29,6 +29,8 @@ import { databaseReminderRefusal } from '@nexus/factory-domain/reminders/rules'
 import { databaseActualCostRefusal } from '@nexus/factory-domain/costing/actuals-refusals'
 // B-W2b-428: a KPI version or a fact that reached the metric layer's rules (…_insights_depth_w2b_guards) is a 409 in words.
 import { databaseKpiRefusal } from '@nexus/factory-domain/insights/kpis/refusals'
+// B-W2b-435: the owner digest's, the morning e-mail switch's and the alert routes' database rules.
+import { databaseDigestRefusal } from '@nexus/factory-domain/insights-digest/refusals'
 import type { ErrorBody } from '@nexus/factory-domain/core/contracts'
 import { reportError } from '../observability/tracker'
 
@@ -318,6 +320,19 @@ function customerOwnedRefusal(error: unknown): MappedError | null {
   return { status: STATUS_OF.conflict, code: 'conflict', message, issues: [{ path: 'body/lotId', message }], unexpected: false }
 }
 
+// B-W2b-435 ------------------------------------------------------------------------------------------------------------------
+/**
+ * The database's own refusal of a morning e-mail, a company's switch or an alert route (…_insights_depth_w2b_guards: check_violation
+ * 'digest: …', 'insights: …', 'alerts: route …'), when a write reached it without its command's check (the switch turned off
+ * between the read and the send, a role archived meanwhile): a 409 in words (factory-domain insights-digest/refusals), never a 500.
+ */
+function digestRefusal(error: unknown): MappedError | null {
+  const cause = (error as { meta?: { driverAdapterError?: { cause?: { originalCode?: unknown; originalMessage?: unknown } } } } | null)?.meta?.driverAdapterError?.cause
+  if (cause?.originalCode !== '23514' || typeof cause.originalMessage !== 'string') return null
+  const words = databaseDigestRefusal(cause.originalMessage)
+  return words ? { status: STATUS_OF.conflict, code: 'conflict', message: words.message, issues: [{ path: words.path, message: words.message }], unexpected: false } : null
+}
+
 /** What an error becomes on the wire. Pure, so the mapping is tested without a server. */
 export function mapError(error: unknown): MappedError {
   if (error instanceof DomainError) {
@@ -362,6 +377,9 @@ export function mapError(error: unknown): MappedError {
   // B-W2b-428
   const kpi = kpiRefusal(error)
   if (kpi) return kpi
+  // B-W2b-435
+  const digest = digestRefusal(error)
+  if (digest) return digest
   // B-W2b-332
   const askedLine = askedLineRefusal(error)
   if (askedLine) return { status: STATUS_OF.conflict, code: 'conflict', message: askedLine.message, issues: [askedLine], unexpected: false }

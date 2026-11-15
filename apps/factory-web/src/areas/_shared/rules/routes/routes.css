@@ -1,0 +1,53 @@
+/* A rule's routes (SCR-645) LAYOUT inside the rule dialog: semantic tokens only. */
+.fw-route {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-route-h {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  font-size: var(--nds-font-size-md);
+  font-weight: 600;
+}
+
+.fw-route-muted {
+  margin: 0;
+  color: var(--nds-text-muted);
+}
+
+.fw-route-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+
+.fw-route-item,
+.fw-route-who {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6) var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-route-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
+  align-items: end;
+  gap: var(--nds-space-8) var(--nds-space-12);
+  padding-top: var(--nds-space-8);
+  border-top: 1px solid var(--nds-border-subtle);
+}
+
+.fw-route-add {
+  display: flex;
+  align-items: center;
+}

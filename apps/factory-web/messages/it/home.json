@@ -35,7 +35,8 @@
     "more": {
       "label": "Altre azioni",
       "print": "Stampa il mio elenco",
-      "arrange": "Disponi questa pagina"
+      "arrange": "Disponi questa pagina",
+      "digest": "Riepilogo quotidiano via e-mail"
     },
     "tiles": {
       "all": "Aspetta me ora",

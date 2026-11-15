@@ -131,6 +131,16 @@ describe('mapError()', () => {
     expect(mapError(other).status).toBe(500)
   })
 
+  it("B-W2b-435: answers the database's morning e-mail and alert route refusals (a switch turned off meanwhile, a route wider than its rule) as a 409 in words, never a 500", () => {
+    const off = prismaError('P2010', 'Raw query failed.', { driverAdapterError: { cause: { originalCode: '23514', originalMessage: "digest: digest x goes out only while its company's morning e-mail is switched on" } } })
+    const words = "The morning e-mail goes out only while it is on and its company's morning e-mail is switched on."
+    expect(mapError(off)).toEqual({ status: 409, code: 'conflict', message: words, issues: [{ path: 'digest/MAIL_OFF', message: words }], unexpected: false })
+    const wider = prismaError('P2010', 'Raw query failed.', { driverAdapterError: { cause: { originalCode: '23514', originalMessage: "alerts: route x never widens its rule's place: the rule looks at company y, the site is of another" } } })
+    expect(mapError(wider)).toMatchObject({ status: 409, code: 'conflict', issues: [{ path: 'route/WIDER' }] })
+    const truncate = prismaError('P2010', 'Raw query failed.', { driverAdapterError: { cause: { originalCode: '23514', originalMessage: 'insights: TRUNCATE on "InsightsSettings" is refused' } } })
+    expect(mapError(truncate).status).toBe(500)
+  })
+
   it("B-W2b-388: answers the database's reminder refusals (done from another tab, a message of another record) as a 409 in words, never a 500", () => {
     const done = prismaError('P2010', 'Raw query failed.', { driverAdapterError: { cause: { originalCode: '23514', originalMessage: 'tasks: reminder x is done; it changes no more (Undo clears done first)' } } })
     expect(mapError(done)).toEqual({ status: 409, code: 'conflict', message: 'This reminder is done: undo it first.', issues: [{ path: 'reminder/DONE', message: 'This reminder is done: undo it first.' }], unexpected: false })
