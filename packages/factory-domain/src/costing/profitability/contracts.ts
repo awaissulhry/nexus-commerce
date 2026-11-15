@@ -78,8 +78,8 @@ export const freightDocumentView = output({
   /** Charged to the customer, in the order's currency (null: none decided). */
   chargeCurrency: z.string(),
   charge: money.price(z.number().int().nullable()),
-  /** What the carrier charged us (null: not recorded). */
-  costCurrency: z.string().nullable(),
+  /** What the carrier charged us (null: not recorded); its currency is a code, no figure. */
+  costCurrency: notMoney(z.string().nullable()),
   cost: money.cost(z.number().int().nullable()),
 })
 
