@@ -10,6 +10,7 @@ import type { LibraryCan } from '../../library/model'
 import { refusedField } from '../../library/model'
 import type { MaterialsListActions, NewMaterialModel } from '../list-model'
 import { converterOf, createHeld, draftFor, draftProblems, fieldOfPath, ITEM_KINDS, needsFactor, numberText, UOMS, type NewMaterialDraft, type Uom } from '../model'
+import { DuplicateWarning } from '../../../admin/import/duplicates/view/parts'
 
 /** The fields this dialog explains in its own words when the domain's rules refuse them. */
 const KNOWN_FIELDS = new Set([
@@ -131,6 +132,8 @@ export function NewMaterialDialog({ model, can, actions }: { model: NewMaterialM
             <Input value={draft.name} maxLength={200} onChange={(event) => set({ name: event.target.value })} />
           </Field>
         </div>
+        {/* B-W2b-427: the likely duplicates of what is typed (a link opens each in a new tab, the draft stays). */}
+        {model.duplicates && <DuplicateWarning candidates={model.duplicates.candidates} prefix={model.duplicates.prefix} recordType="MATERIAL" />}
 
         <h3 className="fw-lib-h3">{t('material.units')}</h3>
         <div className="fw-lib-form-grid">

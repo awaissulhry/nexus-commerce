@@ -114,10 +114,9 @@ describe('check-event-contract', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
     // eventFor, never a literal): with B-W2b-395 and B-W2b-400 (main 0c1e2b57e2), 930 → 933 and 1468 literal emits.
     // B-W2b-406: one event (customer_figures.changed) and two literal emits (their figures recorded, corrected): with B-W2b-409
     // (main bf4fee0ba4) 933 → 934, 1468 → 1470.
-    // B-W2b-435: seven events (digest.changed, digest.switch_changed, digest.sent, report_subscription.changed, .sent,
-    // alert.route_added, alert.route_removed) and nine literal emits (a digest saved, a switch, a digest sent and a test; a
-    // report subscribed, removed and mailed; a route added and removed): with B-W2b-406 (main 344d31e632) 934 → 941, 1470 → 1479.
-    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(941 declared event version\(s\), 1479 literal emit/) })
+    // B-W2b-427: one event (duplicate.merged) and seven literal emits (the merge: the duplicate archived, the contacts, addresses,
+    // tax identities or colours moved, duplicate.merged): with B-W2b-406 (main fdb7cc920c) 934 → 935, 1470 → 1477.
+    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(942 declared event version\(s\), 1486 literal emit/) })
   })
 
   it.each<[string, Plants, RegExp]>([

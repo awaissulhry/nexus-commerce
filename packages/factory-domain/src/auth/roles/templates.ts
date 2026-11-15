@@ -186,6 +186,8 @@ import { COST_DEPTH_ADDS } from '../../costing/mass-update/permissions'
 import { PAYABLES_DEPTH_ADDS } from '../../payables/proposal/permissions'
 // B-W2b-421: custom fields and picklists (the administrator keeps them; sales and buyer see contacts' personal custom fields).
 import { FIELDS_ADDS } from '../../fields/permissions'
+// B-W2b-427: likely duplicates (merge: finance, sales, buyer, production manager — with the record's manage permission).
+import { IMPORTS_DUPLICATES_ADDS } from '../../imports/duplicates/permissions'
 // B-W2b-422: templates (the administrator keeps the document and e-mail templates and the shared replies).
 import { TEMPLATES_ADDS } from '../../templates/permissions'
 // B-W2b-405: data protection in depth (the administrator keeps the data requests, erasures and retention rules).
@@ -1144,7 +1146,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-395
   ...(audience === 'office' ? (SHIPPING_PICKUPS_ADDS[key] ?? []) : []),
   // B-W2b-406
-  ...(audience === 'office' ? (THEIR_FIGURES_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (THEIR_FIGURES_ADDS[key] ?? []) : []),
+  // B-W2b-427
+  ...(audience === 'office' ? (IMPORTS_DUPLICATES_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the
