@@ -308,6 +308,8 @@
     "issueDdt": "Issue DDT {number}",
     "buyLabels_one": "Buy {count} label",
     "buyLabels_other": "Buy {count} labels",
+    "buyLabelsTest_one": "Make {count} test label",
+    "buyLabelsTest_other": "Make {count} test labels",
     "handOver": "Mark handed over"
   },
   "action": {
@@ -593,6 +595,7 @@
     "cutOffToday": "{time}",
     "cutOffPassed": "{time} passed: it leaves the next working day",
     "account": "Labels are bought through the company's own Sendcloud account; the carrier charges it.",
+    "accountTest": "Test mode: the test carrier makes the labels, marked TEST; nothing is bought or charged.",
     "noLabel": {
       "SENDER": "Own van: the goods leave with the DDT, no carrier label.",
       "RECIPIENT": "The customer collects: the goods leave with the DDT, no carrier label."
@@ -611,6 +614,9 @@
       "file": "Label"
     },
     "boughtAt": "Bought {when}",
+    "test": "TEST",
+    "testAt": "Made {when}",
+    "testNote": "TEST labels: made by the test carrier, they go to no carrier and are not charged.",
     "noLabelYet": "No label yet",
     "notPrinted": "Not printed",
     "pdf": "PDF",
@@ -701,16 +707,22 @@
   },
   "buy": {
     "title": "Buy labels",
+    "titleTest": "Make test labels",
     "go_one": "Buy {count} label",
     "go_other": "Buy {count} labels",
+    "goTest_one": "Make {count} test label",
+    "goTest_other": "Make {count} test labels",
     "outside": "This leaves the building: the carrier is booked and the company's Sendcloud account is charged.",
     "void": "A label is voided within the carrier's window to get the fee back.",
     "test": "On a test account the labels say TEST and nothing is bought.",
     "busy": "Asking the carrier…",
     "done_one": "{count} label bought.",
     "done_other": "{count} labels bought.",
+    "doneTest_one": "{count} test label made: it says TEST, nothing was bought or charged.",
+    "doneTest_other": "{count} test labels made: they say TEST, nothing was bought or charged.",
     "partial": "Some parcels have no label yet.",
     "parcelOk": "Parcel {seq}: bought",
+    "parcelOkTest": "Parcel {seq}: test label, not charged",
     "parcelRefused": "Parcel {seq}: {problem}"
   },
   "handOver": {

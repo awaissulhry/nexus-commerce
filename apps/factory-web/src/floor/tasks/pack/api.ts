@@ -94,12 +94,16 @@ export const labelsSchema = z.object({
   labelPrinterId: z.string().nullable(),
   toLabel: z.number(),
   cutOff: z.object({ time: z.string(), at: instant, passed: z.boolean() }).nullable(),
+  // B-W2b-F50 (B-W2b-390, LOG-035): the site is in test mode — the office's buy makes TEST labels, sent to no carrier, not charged.
+  testMode: z.boolean(),
   parcels: z.array(
     z.object({
       parcelId: z.string(),
       seq: z.number(),
       trackingNumber: z.string().nullable(),
       labelledAt: instant.nullable(),
+      // B-W2b-F50: this parcel's label is a TEST label (rule: TEST labels say TEST).
+      test: z.boolean(),
       print: z.object({ jobId: z.string(), status: z.string(), createdAt: instant }).nullable(),
     }),
   ),

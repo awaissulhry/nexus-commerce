@@ -41,7 +41,7 @@ import {
 } from './carton/model'
 import { printPdf } from './carton/print-pdf'
 import { packedSummary, type PackedSummary } from './done/model'
-import { carrierOf, documentsState, headOf, jobMoving, readyRows, scanTarget, unpackHeld, weightText } from './model'
+import { carrierOf, documentsState, headOf, jobMoving, labelRows, readyRows, scanTarget, testJob, unpackHeld, weightText } from './model'
 import { PackView, type BenchStep, type JobModel, type PackAction, type PackRowModel, type PackStep } from './view/PackView'
 
 /**
@@ -773,8 +773,9 @@ const rowModel = (row: PackingRow): PackRowModel => ({
 
 function documentsModel(loaded: Loaded, jobs: readonly Job[], printLabels: boolean) {
   const state = documentsState(loaded.packing, loaded.labels, { printLabels })
-  const trackingNumbers = (loaded.labels?.parcels ?? [...loaded.packing.parcels].sort((a, b) => a.seq - b.seq).map((parcel) => ({ seq: parcel.seq, trackingNumber: parcel.trackingNumber }))).map((parcel) => ({ seq: parcel.seq, trackingNumber: parcel.trackingNumber }))
-  return { ...state, trackingNumbers, jobs: jobs.map(({ version: _version, ...job }) => job) }
+  // B-W2b-F50: each carton's label with its TEST flag, and each label print job of a TEST label (rule: TEST labels say TEST).
+  const trackingNumbers = labelRows(loaded.packing, loaded.labels)
+  return { ...state, trackingNumbers, jobs: jobs.map(({ version: _version, ...job }) => ({ ...job, test: testJob(job, trackingNumbers) })) }
 }
 
 /** The bench step as the view draws it, from the bench read and the screen's own state. */

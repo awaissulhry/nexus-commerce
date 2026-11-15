@@ -202,6 +202,7 @@
       "failed": "un'etichetta non è stata stampata",
       "ready": "etichette non ancora stampate",
       "office": "le etichette le compra l'ufficio",
+      "officeTest": "le etichette di prova le fa l'ufficio",
       "noPrinter": "le etichette le stampa l'ufficio",
       "noRight": "il tuo ruolo non stampa le etichette",
       "notNeeded": "nessuna etichetta del corriere"
@@ -210,6 +211,7 @@
       "cartons": "Cartoni",
       "marks": "Etichette collo",
       "labels": "Etichette del corriere",
+      "test": "Modalità di prova",
       "documents": "DDT e packing list"
     },
     "marks": {
@@ -223,9 +225,11 @@
       "failed": "Non stampate: Riprova è nei documenti",
       "ready": "Non ancora stampate",
       "office": "Le compra l'ufficio",
+      "officeTest": "Le fa l'ufficio: di prova, non addebitate",
       "noPrinter": "Le stampa l'ufficio (qui non c'è una stampante di etichette)",
       "noRight": "Il tuo ruolo non le stampa"
     },
+    "test": "Etichette TEST: non vanno a nessun corriere e non sono addebitate",
     "transport": {
       "SENDER": "Nostro furgone: nessuna etichetta del corriere",
       "RECIPIENT": "Ritira il cliente: nessuna etichetta del corriere",
