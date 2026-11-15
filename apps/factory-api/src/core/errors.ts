@@ -320,6 +320,25 @@ function customerOwnedRefusal(error: unknown): MappedError | null {
   return { status: STATUS_OF.conflict, code: 'conflict', message, issues: [{ path: 'body/lotId', message }], unexpected: false }
 }
 
+// B-W2b-409 (LOG-088, LOG-089, LOG-095, LOG-097) ----------------------------------------------------------------------------
+/**
+ * The database's own refusal of an export declaration, a company's EORI or a broker's pack link (…_delivery_customs_w2b_guards:
+ * check_violation 'customs: …', and 'links: …' for a BROKER_PACK link), when a write reached it past its command's checks (a
+ * race: two people on one declaration, the switch turned off meanwhile): a 409 in the database's words (issue
+ * `refusal/CUSTOMS`), never a 500.
+ */
+function customsRefusal(error: unknown): MappedError | null {
+  const cause = (error as { meta?: { driverAdapterError?: { cause?: { originalCode?: unknown; originalMessage?: unknown } } } } | null)?.meta?.driverAdapterError?.cause
+  if (cause?.originalCode !== '23514' || typeof cause.originalMessage !== 'string') return null
+  const text = cause.originalMessage
+  const customs = /^customs: /.test(text)
+  const brokerLink = /^links: (?:the broker pack is switched off|BROKER_PACK link|customs declaration .* broker's pack|a BROKER_PACK link)/.test(text)
+  if (!customs && !brokerLink) return null
+  const words = text.replace(/^(?:customs|links): /, '')
+  const message = `${words.charAt(0).toUpperCase()}${words.slice(1)}.`
+  return { status: STATUS_OF.conflict, code: 'conflict', message, issues: [{ path: 'refusal/CUSTOMS', message }], unexpected: false }
+}
+
 // B-W2b-435 ------------------------------------------------------------------------------------------------------------------
 /**
  * The database's own refusal of a morning e-mail, a company's switch or an alert route (…_insights_depth_w2b_guards: check_violation
@@ -377,6 +396,9 @@ export function mapError(error: unknown): MappedError {
   // B-W2b-428
   const kpi = kpiRefusal(error)
   if (kpi) return kpi
+  // B-W2b-409
+  const customs = customsRefusal(error)
+  if (customs) return customs
   // B-W2b-435
   const digest = digestRefusal(error)
   if (digest) return digest

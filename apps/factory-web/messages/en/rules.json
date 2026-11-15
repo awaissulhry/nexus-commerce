@@ -12,7 +12,9 @@
     "LOW_STOCK": "Materials below their minimum",
     "PO_CONFIRMED_LATE": "Purchase orders confirmed later than needed",
     "SUPPLIER_STATUS_CHANGED": "Supplier status changes",
-    "RETURN_ARRIVED_LATE": "Returns that arrived after their deadline"
+    "RETURN_ARRIVED_LATE": "Returns that arrived after their deadline",
+    "EXIT_PROOF_MISSING": "Exports without their proof of exit",
+    "MARGIN_BELOW_FLOOR": "Orders below their margin floor"
   },
   "when": {
     "ORDER_LATE_RISK": "When an order is promised within {daysBeforePromise} and is not ready, or is late",
@@ -27,7 +29,9 @@
     "LOW_STOCK": "When a material falls below the minimum of its planning parameters",
     "PO_CONFIRMED_LATE": "When a supplier confirms a purchase order line at least {days} later than the day it is needed",
     "SUPPLIER_STATUS_CHANGED": "When a supplier is approved with conditions, put on hold, blocked or made inactive (an alert for {days})",
-    "RETURN_ARRIVED_LATE": "When the goods of a return arrive after their deadline"
+    "RETURN_ARRIVED_LATE": "When the goods of a return arrive after their deadline",
+    "EXIT_PROOF_MISSING": "When an export's proof of exit is still missing after its declaration's days",
+    "MARGIN_BELOW_FLOOR": "When an order's margin, as estimated now or final, falls below its margin floor"
   },
   "sentence": {
     "full": "{when} {place}, tell {recipient} by {channels} {cooldown}.",

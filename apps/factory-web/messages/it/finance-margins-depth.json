@@ -1,0 +1,194 @@
+{
+  "col": {
+    "floor": "Margine minimo",
+    "document": "Documento",
+    "date": "Data",
+    "state": "Stato",
+    "forOrder": "Per questo ordine",
+    "total": "Imponibile del documento",
+    "detail": "Dettaglio",
+    "amount": "Costo",
+    "shipment": "Spedizione",
+    "carrier": "Corriere",
+    "charged": "Addebitato al cliente",
+    "carrierCost": "Quanto ci ha addebitato il corriere",
+    "payment": "Incasso",
+    "placedOn": "Imputato a",
+    "paid": "Per questo ordine",
+    "paymentAmount": "Incasso intero"
+  },
+  "flag": {
+    "below": "Sotto il minimo",
+    "above": "Sopra il minimo",
+    "unknown": "Non ancora noto"
+  },
+  "floor": {
+    "role": "Minimo {pct} (ruolo {role})",
+    "company": "Minimo {pct} (della società)",
+    "short": "Minimo {pct}"
+  },
+  "basis": {
+    "ESTIMATE": "Valutato sul margine stimato ora",
+    "FINAL": "Valutato sul margine finale",
+    "unknown": "Valutato quando il costo sarà noto"
+  },
+  "points": {
+    "under": "{points} punti sotto",
+    "over": "{points} punti sopra",
+    "on": "Esattamente al minimo"
+  },
+  "tile": {
+    "hint": "Premi per vedere solo questi",
+    "none": "Nessun ordine è sotto il suo minimo",
+    "unknown": "Non ancora noto",
+    "active": "Mostra solo questi: premi di nuovo per tutti gli ordini"
+  },
+  "filter": {
+    "below": "Sotto il minimo",
+    "clear": "Mostra tutti gli ordini (togli Sotto il minimo)"
+  },
+  "detail": {
+    "floorTitle": "Margine minimo",
+    "quotedBelow": "Il suo preventivo era stato approvato sotto il minimo: un sì lo ha lasciato passare."
+  },
+  "documents": {
+    "title": "Documenti",
+    "loading": "Lettura dei documenti…",
+    "failed": "Impossibile caricare i documenti",
+    "none": "Ancora nessun documento: niente fatturato, costato, spedito o incassato.",
+    "noNumber": "Ancora senza numero"
+  },
+  "group": {
+    "invoices": "Fatture",
+    "creditNotes": "Note di credito",
+    "costs": "Voci di costo",
+    "freight": "Trasporto",
+    "payments": "Incassi",
+    "count_one": "{count}",
+    "count_other": "{count}",
+    "empty": "Nessuno."
+  },
+  "held": "Serve il permesso {permission} per vederli qui.",
+  "totals": {
+    "net": "Fatturato, al netto delle note di credito",
+    "netHint": "Fatturato {invoiced} meno accreditato {credited}",
+    "deposits": "Fatture di acconto",
+    "depositsHint": "Elencate, non sommate: la fattura della merce le scala",
+    "paid": "Incassato",
+    "paidHint": "Imputato alle sue fatture e richieste di acconto",
+    "freightCharged": "Trasporto addebitato",
+    "freightChargedHint": "Al cliente, sulle sue spedizioni",
+    "freightCost": "Costo del trasporto",
+    "freightCostHint": "Quanto ci hanno addebitato i corrieri",
+    "noGrain": "I totali richiedono la visibilità sui prezzi o sui costi."
+  },
+  "invoiceKind": {
+    "INVOICE": "Fattura ({type})",
+    "DEFERRED_INVOICE": "Fattura differita ({type})",
+    "DEPOSIT_INVOICE": "Fattura di acconto ({type})",
+    "DEBIT_NOTE": "Nota di debito ({type})",
+    "CREDIT_NOTE": "Nota di credito ({type})",
+    "OTHER": "Documento {type}"
+  },
+  "invoice": {
+    "shared": "Fattura anche altri ordini",
+    "credits": "accredita {number}",
+    "adds": "si aggiunge a {number}"
+  },
+  "costKind": {
+    "WORK_ORDER": "Costo dell'ordine di lavoro",
+    "COST_OF_SALES": "Costo del venduto",
+    "SUBCONTRACT_ORDER": "Ordine di lavorazione esterna",
+    "SUPPLIER_INVOICE": "Fattura del fornitore"
+  },
+  "cost": {
+    "pieces": "{pieces} di {of} capi per questo ordine",
+    "entries_one": "{count} voce",
+    "entries_other": "{count} voci",
+    "reversed": "una voce stornata"
+  },
+  "freight": {
+    "noCarrier": "Nessun corriere",
+    "noCharge": "Nessuno deciso",
+    "noCost": "Non ancora registrato"
+  },
+  "payment": {
+    "reversed": "un'imputazione ripresa",
+    "deposit": "Richiesta di acconto"
+  },
+  "method": {
+    "BANK_TRANSFER": "Bonifico",
+    "CARD": "Carta",
+    "SEPA_DEBIT": "Addebito diretto SEPA",
+    "other": "Altro metodo"
+  },
+  "note": {
+    "OTHER_CURRENCY_one": "{count} documento è in un'altra valuta: elencato, non sommato nei totali.",
+    "OTHER_CURRENCY_other": "{count} documenti sono in un'altra valuta: elencati, non sommati nei totali.",
+    "SHARED_INVOICE": "Una fattura fattura anche altri ordini: contano solo le righe di questo ordine.",
+    "SHARED_WORK_ORDER": "Un ordine di lavoro fa anche capi di altri ordini: si vede il suo costo intero, il margine prende la quota di questo ordine.",
+    "FREIGHT_COST_MISSING": "Una spedizione partita non ha ancora il costo del corriere registrato.",
+    "NOT_ISSUED": "Una fattura in bozza o scartata è elencata ma non contata."
+  },
+  "state": {
+    "none": "—",
+    "unknown": "Un altro stato",
+    "Invoice": {
+      "DRAFT": "Bozza",
+      "ISSUED": "Emessa",
+      "SENT": "Inviata allo SDI",
+      "DELIVERED": "Consegnata",
+      "NOT_DELIVERABLE": "Non recapitabile",
+      "REJECTED": "Scartata dallo SDI",
+      "ERROR": "Non inviata: errore"
+    },
+    "Payment": {
+      "RECEIVED": "Ricevuto",
+      "VOIDED": "Annullato"
+    },
+    "Shipment": {
+      "DRAFT": "Bozza",
+      "PACKED": "Imballata",
+      "SHIPPED": "Spedita",
+      "DELIVERED": "Consegnata",
+      "RETURNED": "Resa",
+      "CANCELLED": "Annullata"
+    },
+    "WorkOrder": {
+      "DRAFT": "Bozza",
+      "RELEASED": "Rilasciato",
+      "IN_PROGRESS": "In lavorazione",
+      "COMPLETED": "Completato",
+      "CLOSED": "Chiuso",
+      "CANCELLED": "Annullato",
+      "ON_HOLD": "Sospeso"
+    },
+    "SubcontractOrder": {
+      "DRAFT": "Bozza",
+      "ISSUED": "Inviato",
+      "AT_WORKSHOP": "Al laboratorio",
+      "PARTLY_RECEIVED": "Rientrato in parte",
+      "RECEIVED": "Rientrato",
+      "CLOSED": "Chiuso",
+      "CANCELLED": "Annullato"
+    },
+    "SupplierInvoice": {
+      "RECEIVED": "Ricevuta",
+      "APPROVED": "Approvata",
+      "PAID": "Pagata",
+      "DISPUTED": "Contestata",
+      "VOIDED": "Annullata"
+    }
+  },
+  "problem": {
+    "signed_out": "Sei uscito. Accedi di nuovo.",
+    "forbidden": "Il tuo ruolo non può vederlo qui.",
+    "not_found": "Non trovato, oppure appartiene a un'altra società o a un altro cliente.",
+    "unavailable": "Il server non è raggiungibile. Riprova tra un momento.",
+    "rate_limited": "Troppe richieste: attendi un momento e riprova.",
+    "internal": "Qualcosa è andato storto sul server."
+  },
+  "common": {
+    "retry": "Riprova"
+  }
+}

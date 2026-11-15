@@ -13,6 +13,8 @@ import { RecordPanelsView } from '../../../../../record-panels/view/RecordPanels
 import type { Shipment } from '../../api'
 import { actsOnShipments, carrierWords, hasLeft, isFinal, nextStep, openChecks, placeOf, readyChecks, RECORD_TABS, STATUS_TONE, TRACKING_TONE, type RecordTab, type StepKind } from '../../model'
 import type { ShipmentRecordActions, ShipmentRecordModel } from '../record-model'
+// B-W2b-410: the record's parts in depth (holds, split, cartons, how it travels, label prints, papers, delivery, notice).
+import type { ShipmentDepthSlots } from '../../queue/record-depth'
 import { CarrierTab } from './CarrierTab'
 import { ShipmentDialogs } from './Dialogs'
 import { DocumentsTab } from './DocumentsTab'
@@ -38,15 +40,16 @@ export type { ShipmentRecordActions, ShipmentRecordModel } from '../record-model
  * driver's pack (a new tab).
  */
 // B-W2b-170: `trackingLink`, the container's tracking-page card (links.tracking) on the Tracking & delivery tab.
-export function ShipmentRecordView({ model, actions, panels, trackingLink }: { model: ShipmentRecordModel; actions?: ShipmentRecordActions; panels?: ReactNode; trackingLink?: ReactNode }) {
+// B-W2b-410: `depth`, the parts in depth (each its own container) slotted into the tabs, the band and ⋯.
+export function ShipmentRecordView({ model, actions, panels, trackingLink, depth }: { model: ShipmentRecordModel; actions?: ShipmentRecordActions; panels?: ReactNode; trackingLink?: ReactNode; depth?: ShipmentDepthSlots }) {
   return (
     <WithMessages namespaces={['shipments', 'lists', 'records']}>
-      <ShipmentRecord model={model} actions={actions} panels={panels} trackingLink={trackingLink} />
+      <ShipmentRecord model={model} actions={actions} panels={panels} trackingLink={trackingLink} depth={depth} />
     </WithMessages>
   )
 }
 
-function ShipmentRecord({ model, actions, panels, trackingLink }: { model: ShipmentRecordModel; actions?: ShipmentRecordActions; panels?: ReactNode; trackingLink?: ReactNode }) {
+function ShipmentRecord({ model, actions, panels, trackingLink, depth }: { model: ShipmentRecordModel; actions?: ShipmentRecordActions; panels?: ReactNode; trackingLink?: ReactNode; depth?: ShipmentDepthSlots }) {
   const t = useT('shipments')
   const listHref = `${model.prefix}/warehouse/shipments`
   const loaded = model.shipment
@@ -91,19 +94,22 @@ function ShipmentRecord({ model, actions, panels, trackingLink }: { model: Shipm
       </div>
     )
   }
-  return <ReadyRecord shipment={loaded.value} model={model} actions={actions} panels={panels} trackingLink={trackingLink} />
+  return <ReadyRecord shipment={loaded.value} model={model} actions={actions} panels={panels} trackingLink={trackingLink} depth={depth} />
 }
 
 const STEP_DIALOG: Record<Exclude<StepKind, 'pack'>, 'issueDdt' | 'buyLabels' | 'handOver'> = { issueDdt: 'issueDdt', buyLabels: 'buyLabels', handOver: 'handOver' }
 
-function ReadyRecord({ shipment, model, actions, panels, trackingLink }: { shipment: Shipment; model: ShipmentRecordModel; actions?: ShipmentRecordActions; panels?: ReactNode; trackingLink?: ReactNode }) {
+function ReadyRecord({ shipment, model, actions, panels, trackingLink, depth }: { shipment: Shipment; model: ShipmentRecordModel; actions?: ShipmentRecordActions; panels?: ReactNode; trackingLink?: ReactNode; depth?: ShipmentDepthSlots }) {
   const t = useT('shipments')
   const locale = useLocale()
   const recordHref = `${model.prefix}/warehouse/shipments/${shipment.id}`
   const liveDdt = model.ddts.value?.find((row) => row.status === 'LIVE') ?? null
   const facts = { shipment, ddt: liveDdt, labels: model.labels?.value ?? null, documents: model.documents.value }
-  const step = nextStep(facts, model.can)
-  const stepHeld = step.held ? t(step.held.key, step.held.params) : model.busy ? t('held.busy') : null
+  // B-W2b-410: a carrier booked by hand buys no label: the next step goes on to the hand-over.
+  const step = nextStep(depth?.noLabels ? { ...facts, labels: { toLabel: 0, parcels: [] } } : facts, model.can)
+  // B-W2b-410: a hold in force stops packing, labels and the hand-over (the DB refuses them): the primary says why.
+  const holdHeld = depth?.stepHeld && step.kind && step.kind !== 'issueDdt' ? depth.stepHeld : null
+  const stepHeld = step.held ? t(step.held.key, step.held.params) : (holdHeld ?? (model.busy ? t('held.busy') : null))
   const checks = readyChecks(facts)
   const runStep = () => {
     if (!step.kind || stepHeld) return
@@ -190,6 +196,8 @@ function ReadyRecord({ shipment, model, actions, panels, trackingLink }: { shipm
         void navigator.clipboard?.writeText(shipment.number).catch(() => undefined)
       },
     },
+    // B-W2b-410: Place a hold…, Split…
+    ...(depth?.more ?? []),
   ]
 
   const activity = panels ?? (model.panelsPreview ? <RecordPanelsView model={model.panelsPreview} /> : null)
@@ -286,13 +294,14 @@ function ReadyRecord({ shipment, model, actions, panels, trackingLink }: { shipm
       {shipment.status === 'SHIPPED' && shipment.ddtRequired && !liveDdt && model.ddts.value && <Banner tone="danger" title={t('record.needsDdt')} />}
       {trackingProblem && <Banner tone="warning" title={t('record.trackingProblem')}>{trackingProblem}</Banner>}
       {!actsOnShipments(model.can) && !isFinal(shipment.status) && <Banner tone="info" title={t('record.readOnly')} />}
+      {depth?.banner}
 
       <div className={showDock ? 'fw-sh-body has-dock' : 'fw-sh-body'}>
         <div className="fw-sh-main">
-          {model.tab === 'lines' && <LinesTab shipment={shipment} checks={checks} model={model} actions={actions} />}
-          {model.tab === 'documents' && <DocumentsTab shipment={shipment} model={model} actions={actions} />}
-          {model.tab === 'carrier' && <CarrierTab shipment={shipment} model={model} actions={actions} />}
-          {model.tab === 'tracking' && <TrackingTab shipment={shipment} model={model} actions={actions} trackingLink={trackingLink} />}
+          {model.tab === 'lines' && <LinesTab shipment={shipment} checks={checks} model={model} actions={actions} depth={depth ? { cartons: depth.cartons, holds: depth.holds, held: depth.held } : undefined} />}
+          {model.tab === 'documents' && <DocumentsTab shipment={shipment} model={model} actions={actions} papers={depth?.papers} />}
+          {model.tab === 'carrier' && <CarrierTab shipment={shipment} model={model} actions={actions} depth={depth ? { booking: depth.booking, labels: depth.labels, noLabels: depth.noLabels } : undefined} />}
+          {model.tab === 'tracking' && <TrackingTab shipment={shipment} model={model} actions={actions} trackingLink={trackingLink} depth={depth ? { delivery: depth.delivery, notice: depth.notice } : undefined} />}
           {model.tab === 'export' && <ExportTab shipment={shipment} model={model} actions={actions} />}
           {model.tab === 'invoice' && <InvoiceTab shipment={shipment} model={model} actions={actions} />}
           {model.tab === 'activity' && (activity ?? <p className="fw-sh-hint">{t('record.noPanels')}</p>)}
@@ -305,6 +314,7 @@ function ReadyRecord({ shipment, model, actions, panels, trackingLink }: { shipm
       </div>
 
       <ShipmentDialogs shipment={shipment} model={model} actions={actions} />
+      {depth?.dialogs}
     </div>
   )
 }

@@ -285,6 +285,8 @@ import { events as mailDepth } from '../mail-depth/events'
 // B-W2b-398: delivery and return labels (shipment.customer_notice_sent, .tracking_problem_raised, .tracking_problem_resolved,
 // .pod_recorded, return_label.changed).
 import { events as shippingDelivery } from '../shipping-delivery/events'
+// B-W2b-409: export and customs (customs.document_made, customs.declaration_changed, customs.settings_changed).
+import { events as shippingCustoms } from '../shipping-customs/events'
 // B-W2b-396: invoicing in depth (invoice_run.changed, deposit_cancellation_rule.changed, deposit_cancellation.decided, fee_credit.changed).
 import { events as invoicingDepth } from '../invoicing-depth/events'
 // B-W2b-419: cost rates (cost_per_minute.changed, overhead_rule.changed).
@@ -317,6 +319,8 @@ import { events as pricesFollowups } from '../prices-followups/events'
 import { events as shippingDispatch } from '../shipping-dispatch/events'
 // B-W2b-400: carrier contracts and services (shipping.carrier_contract_changed, shipping.carrier_services_changed, shipment.services_changed, shipment.parcel_values_changed, shipping.insurance_rule_changed).
 import { events as shippingContracts } from '../shipping-contracts/events'
+// B-W2b-406: a customer's own figures against ours (customer_figures.changed).
+import { events as receivablesFigures } from '../receivables-figures/events'
 // B-W2b-435: the owner digest and report e-mails (digest.changed, digest.switch_changed, digest.sent, report_subscription.changed, report_subscription.sent).
 import { events as insightsDigest } from '../insights-digest/events'
 // B-W2b-435: alert routes (alert.route_added, alert.route_removed).
@@ -671,6 +675,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...mailDepth,
   // B-W2b-398
   ...shippingDelivery,
+  // B-W2b-409
+  ...shippingCustoms,
   // B-W2b-396
   ...invoicingDepth,
   // B-W2b-419
@@ -703,6 +709,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...shippingDispatch,
   // B-W2b-400
   ...shippingContracts,
+  // B-W2b-406
+  ...receivablesFigures,
   // B-W2b-435
   ...insightsDigest,
   ...alertRoutes,

@@ -33,8 +33,7 @@
     "averageHint": "Come stimato ora, sugli ordini con un costo noto",
     "unknown_one": "Il costo di {count} ordine non si può ancora dire",
     "unknown_other": "Il costo di {count} ordini non si può ancora dire",
-    "floor": "Ordini sotto la soglia",
-    "floorLater": "Arriva in una versione successiva (il segnale di soglia minima)",
+    "floor": "Ordini sotto il margine minimo",
     "lost": "Margine perso dal preventivo",
     "lostHint": "Margine a preventivo meno il margine attuale (i guadagni compensano le perdite)",
     "orders": "Ordini",
@@ -123,7 +122,6 @@
     "noGrain": "I margini richiedono la visibilità sui margini (money.margin).",
     "provisional": "Provvisorio: il metodo di costo non è ancora deciso (lo sceglie il commercialista).",
     "method": "I costi seguono il metodo di costo della società.",
-    "documentsLater": "Fatture, note di credito, incassi e trasporto come collegamenti arrivano in una versione successiva.",
     "orderLink": "Apri {number} in Vendite › Ordini"
   },
   "held": {
@@ -245,6 +243,7 @@
     "quotedMarginPct": "Margine % a preventivo",
     "estimateMarginPct": "Margine % attuale",
     "actualMarginPct": "Margine % finora",
+    "floor": "Margine minimo",
     "marginChange": "Variazione del margine",
     "currency": "Valuta",
     "stage": "Costo"

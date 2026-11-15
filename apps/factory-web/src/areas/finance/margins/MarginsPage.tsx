@@ -9,6 +9,9 @@ import { downloadText, useLive } from '../_shared/hooks'
 import { getMargins, getOrderMargin, type Margins, type OrderMarginRow } from './api'
 import { addressOf, liveTouches, marginsCanOf, marginsCsv, marginsHref, marginsQueryOf, readProblem, type MarginsAddress } from './model'
 import { MarginsView, type MarginsModel, type OrderDetailState } from './view/MarginsView'
+// B-W2b-416 (FIN-053): the open order's documents, read beside its profitability.
+import { getOrderDocuments } from './documents/api'
+import { documentsProblem, type DocumentsState } from './documents/model'
 
 const SLOW_MS = 1000
 const SEARCH_MS = 300
@@ -36,6 +39,7 @@ export function MarginsPage() {
   const [readAt, setReadAt] = useState<number | null>(null)
   const [updates, setUpdates] = useState(0)
   const [detail, setDetail] = useState<OrderDetailState | null>(null)
+  const [documents, setDocuments] = useState<DocumentsState | null>(null)
   const [notice, setNotice] = useState<MarginsModel['notice']>(null)
   const asked = useRef(address)
   asked.current = address
@@ -62,7 +66,7 @@ export function MarginsPage() {
     }
   }, [api, can.view, companyId])
 
-  const filterKey = `${address.from}|${address.to}|${address.party}|${address.style}|${address.q}`
+  const filterKey = `${address.from}|${address.to}|${address.party}|${address.style}|${address.q}|${address.floor}`
   useEffect(() => {
     setMargins({ value: null, problem: null, slow: false })
     setRows(null)
@@ -78,10 +82,24 @@ export function MarginsPage() {
     },
     [api],
   )
+  const readDocuments = useCallback(
+    (id: string) => {
+      setDocuments({ orderId: id, value: null, problem: null })
+      getOrderDocuments(api, id)
+        .then((value) => setDocuments((current) => (current?.orderId === id ? { orderId: id, value, problem: null } : current)))
+        .catch((error: unknown) => setDocuments((current) => (current?.orderId === id ? { orderId: id, value: null, problem: documentsProblem(error) } : current)))
+    },
+    [api],
+  )
   useEffect(() => {
     if (!can.view) return
-    if (!address.open) setDetail(null)
-    else if (detail?.id !== address.open) readDetail(address.open)
+    if (!address.open) {
+      setDetail(null)
+      setDocuments(null)
+    } else if (detail?.id !== address.open) {
+      readDetail(address.open)
+      readDocuments(address.open)
+    }
   }, [address.open, can.view])
 
   const live = useLive(
@@ -112,7 +130,7 @@ export function MarginsPage() {
     }
   }
 
-  const model: MarginsModel = { prefix, can, today: romeToday(), address, margins, rows, more: cursor !== null, readAt, live, updates, detail, notice }
+  const model: MarginsModel = { prefix, can, today: romeToday(), address, margins, rows, more: cursor !== null, readAt, live, updates, detail, documents, notice }
   return (
     <MarginsView
       model={model}
@@ -125,11 +143,15 @@ export function MarginsPage() {
         onRetry: (part) => {
           if (part === 'margins') void load()
           if (part === 'detail' && address.open) readDetail(address.open)
+          if (part === 'documents' && address.open) readDocuments(address.open)
         },
         onMore: () => void more(),
         onShowUpdates: () => {
           void load()
-          if (address.open) readDetail(address.open)
+          if (address.open) {
+            readDetail(address.open)
+            readDocuments(address.open)
+          }
         },
         onExport: (picked, words, fileName) => downloadText(fileName, marginsCsv(picked, can, words, locale)),
         onDismissNotice: () => setNotice(null),

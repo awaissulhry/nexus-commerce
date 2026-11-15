@@ -119,6 +119,20 @@ describe('mapError()', () => {
     expect(mapError(other).status).toBe(500)
   })
 
+  it("B-W2b-409: answers the database's customs refusals (a declaration, an EORI, a broker's pack link) as a 409 in words, never a 500", () => {
+    const refusal = prismaError('P2010', 'Raw query failed.', {
+      driverAdapterError: { cause: { originalCode: '23514', originalMessage: 'customs: the MRN and the invoice of customs declaration x are set once' } },
+    })
+    const words = 'The MRN and the invoice of customs declaration x are set once.'
+    expect(mapError(refusal)).toEqual({ status: 409, code: 'conflict', message: words, issues: [{ path: 'refusal/CUSTOMS', message: words }], unexpected: false })
+    const link = prismaError('P2010', 'Raw query failed.', {
+      driverAdapterError: { cause: { originalCode: '23514', originalMessage: 'links: the broker pack is switched off at the site of customs declaration x (shipping settings); no BROKER_PACK link is made' } },
+    })
+    expect(mapError(link)).toMatchObject({ status: 409, issues: [{ path: 'refusal/CUSTOMS' }] })
+    const other = prismaError('P2010', 'Raw query failed.', { driverAdapterError: { cause: { originalCode: '23514', originalMessage: 'links: the files of link x never change' } } })
+    expect(mapError(other).status).toBe(500)
+  })
+
   it("B-W2b-385: answers the database's notification refusals (a device turned off meanwhile, a view only its owner sees) as a 409 in words, never a 500", () => {
     const refusal = prismaError('P2010', 'Raw query failed.', {
       driverAdapterError: { cause: { originalCode: '23514', originalMessage: 'notifications: push subscription x was turned off at 2026-11-13 09:00:00+00; it changes no more (only its sealed keys go)' } },

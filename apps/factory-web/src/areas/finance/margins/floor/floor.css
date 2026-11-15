@@ -1,0 +1,19 @@
+/*
+ * The margin floor on SCR-155 (B-W2b-416; FIN-050) LAYOUT: the flag in the orders grid and the floor's facts in the
+ * profitability DetailModal. The controls are the design system's; semantic tokens only.
+ */
+.fw-fmf-flag {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+
+.fw-fmf-facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6) var(--nds-space-10);
+  min-width: 0;
+}

@@ -364,6 +364,8 @@ import { SHIPPING_PACKAGING_DEFINITIONS, SHIPPING_PACKAGING_PERMISSIONS } from '
 import { SHIPPING_HOLDS_DEFINITIONS, SHIPPING_HOLDS_PERMISSIONS } from '../../shipping/holds/permissions'
 // B-W2b-391: labels and documents (shipping.proforma.issue).
 import { SHIPPING_PROFORMA_DEFINITIONS, SHIPPING_PROFORMA_PERMISSIONS } from '../../shipping/proforma/permissions'
+// B-W2b-409: export and customs (shipping.customs.manage).
+import { SHIPPING_CUSTOMS_DEFINITIONS, SHIPPING_CUSTOMS_PERMISSIONS } from '../../shipping/customs/permissions'
 // B-W2b-385: notifications in depth (home.notifications.manage: the notification defaults of each office role).
 import { NOTIFICATION_DEFAULTS_DEFINITIONS, NOTIFICATION_DEFAULTS_PERMISSIONS } from '../../notifications/preferences/permissions'
 // B-W2b-389: currencies and exchange rates (currencies.view | manage).
@@ -407,6 +409,8 @@ import { DOCUMENT_TEMPLATES_DEFINITIONS, SAVED_REPLIES_DEFINITIONS, TEMPLATES_PE
 import { PRIVACY_DEPTH_DEFINITIONS, PRIVACY_DEPTH_PERMISSIONS } from '../../privacy/retention/permissions'
 // B-W2b-395: carrier pickups (shipping.pickups.book).
 import { SHIPPING_PICKUPS_DEFINITIONS, SHIPPING_PICKUPS_PERMISSIONS } from '../../shipping/pickups/permissions'
+// B-W2b-406: a customer's own figures against ours (receivables.theirFigures.manage).
+import { THEIR_FIGURES_DEFINITIONS, THEIR_FIGURES_PERMISSIONS } from '../../receivables-figures/permissions'
 // B-W2b-435: the owner digest's per-company switch (home.digest.switch).
 import { HOME_DIGEST_DEFINITIONS, HOME_DIGEST_PERMISSIONS } from '../../insights-digest/permissions'
 
@@ -1079,6 +1083,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   SHIPPING_HOLDS_DEFINITIONS,
   // B-W2b-391: labels and documents (area `shipping`).
   SHIPPING_PROFORMA_DEFINITIONS,
+  // B-W2b-409: export and customs (area `shipping`).
+  SHIPPING_CUSTOMS_DEFINITIONS,
   // B-W2b-385: the notification defaults of each office role (area `home`).
   NOTIFICATION_DEFAULTS_DEFINITIONS,
   // B-W2b-389: currencies and exchange rates (area `currencies`).
@@ -1127,6 +1133,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PRIVACY_DEPTH_DEFINITIONS,
   // B-W2b-395: carrier pickups (area `shipping`).
   SHIPPING_PICKUPS_DEFINITIONS,
+  // B-W2b-406: a customer's own figures against ours (area `receivables`).
+  THEIR_FIGURES_DEFINITIONS,
   // B-W2b-435: the owner digest (area `home`).
   HOME_DIGEST_DEFINITIONS,
 ])
@@ -1497,6 +1505,8 @@ for (const name of SHIPPING_PACKAGING_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDe
 for (const name of SHIPPING_HOLDS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-391: labels and documents.
 for (const name of SHIPPING_PROFORMA_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-409: export and customs.
+for (const name of SHIPPING_CUSTOMS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-385: the notification defaults of each office role.
 for (const name of NOTIFICATION_DEFAULTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-389: currencies and exchange rates.
@@ -1537,6 +1547,8 @@ for (const name of TEMPLATES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(na
 for (const name of PRIVACY_DEPTH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-395: carrier pickups.
 for (const name of SHIPPING_PICKUPS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-406: a customer's own figures against ours.
+for (const name of THEIR_FIGURES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-435: the owner digest.
 for (const name of HOME_DIGEST_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {

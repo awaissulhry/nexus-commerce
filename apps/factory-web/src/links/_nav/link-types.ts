@@ -26,6 +26,7 @@ import { LINK_PURPOSES, PURPOSE_RULES, type LinkPurpose } from '@nexus/factory-d
  *   RECORD_INVITE   a shared record  invite                  links/invite (SCR-270; B-W2b-200): Style, Quote, SalesOrder, PurchaseOrder,
  *                                                            SubcontractOrder, Shipment, Complaint, ReturnAuthorisation, SupplierClaim
  *   RETURN_LABEL    ReturnAuthorisation  return-label        links/return-label (SCR-436; B-W2b-398)
+ *   BROKER_PACK     CustomsDeclaration   broker-pack         links/broker-pack (SCR-580; B-W2b-409)
  *
  * A step that builds a link page adds ONE row here and its component to LinkLanding.
  *
@@ -60,6 +61,8 @@ export const LINK_TASKS = [
   'invite',
   // B-W2b-398: a return label booked by the customer when the goods go (SCR-436).
   'return-label',
+  // B-W2b-409: the export declaration's papers for the customs broker, the MRN back (SCR-580).
+  'broker-pack',
 ] as const
 export type LinkTask = (typeof LINK_TASKS)[number]
 
@@ -99,6 +102,8 @@ export const LINK_TASK_RULES: readonly LinkTaskRule[] = Object.freeze([
   ...PURPOSE_RULES.RECORD_INVITE.recordTypes.map((recordType) => ({ purpose: 'RECORD_INVITE' as const, recordType, task: 'invite' as const })),
   // B-W2b-398: the customer books its return label (SCR-436).
   { purpose: 'RETURN_LABEL', recordType: 'ReturnAuthorisation', task: 'return-label' },
+  // B-W2b-409: the customs broker downloads the papers and types the MRN back (SCR-580).
+  { purpose: 'BROKER_PACK', recordType: 'CustomsDeclaration', task: 'broker-pack' },
 ])
 
 /** Every purpose × record type a link can have (the domain's own list): what the registry must decide for. */

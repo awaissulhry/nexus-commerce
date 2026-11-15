@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { CircleOff, ExternalLink, FileText, Hash, Lock } from 'lucide-react'
+import { CircleOff, Hash, Lock } from 'lucide-react'
 import { Banner, Card, Disclosure, EmptyState, Field, KeyValue } from '@nexus/ui/components'
 import { IdentityCell, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, Input, Pill, SegmentedControl, Select, Tag, TokenChip } from '@nexus/ui/primitives'
@@ -18,7 +18,7 @@ import { AdminPageMessages } from '../../kit/messages'
 import { adminHref } from '../../shared/model'
 import { BulkButton, dash, FrameState, PageHead, StepUp } from '../../shared/view/parts'
 import { PageNotice, useWords } from '../../kit/parts'
-import { DOCUMENT_LANGUAGES, DOCUMENT_TYPES, sampleHref, type Allocation, type DocumentType, type Series } from '../api'
+import type { Allocation, Series } from '../api'
 import {
   chipsPattern,
   closeReach,
@@ -36,14 +36,12 @@ import {
   periodOf,
   preview,
   proofWords,
-  sampleCompany,
   SEPARATORS,
   seriesRows,
   skippedWords,
   startEditable,
   withKind,
   YEAR_TOKENS,
-  type CompanyOption,
   type DocumentsDialog,
   type DocumentsView as ViewName,
   type DocumentsViewModel,
@@ -78,9 +76,9 @@ export interface DocumentsActions {
  * SCR-014 — Admin › Documents & numbering (design 02 admin.documents; PLT-122, PLT-123, PLT-124): Numbers (each series
  * with its next number as it will print, its pattern as chips, whether it restarts every year, the fiscal lock; a row
  * opens the series; tick series to close several at once) and the Fiscal check (proof that invoices and DDTs have no
- * gaps), Documents (the fixed layouts, each previewed with the company's legal data in a new tab). Both lists are the
- * Office's list frame (Owner rule 2026-10-29); their keys — 1 / 2 switch the list, c adds a series — sit in the
- * frame's footer icon. Fetches nothing (DocumentsPage.tsx reads the API).
+ * gaps). Documents and E-mails (the templates, B-W2b-432) are their own sections (doc-templates/, mail-templates/). The
+ * list is the Office's list frame (Owner rule 2026-10-29); its keys — 1 / 2 / 3 switch the list, c adds a series — sit in
+ * the frame's footer icon. Fetches nothing (DocumentsPage.tsx reads the API).
  */
 export function DocumentsView({ model, actions }: { model: DocumentsViewModel; actions?: DocumentsActions }) {
   return (
@@ -97,9 +95,11 @@ function useListKeys(model: DocumentsViewModel, actions?: DocumentsActions) {
       const target = event.target as HTMLElement | null
       if (target && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) || target.closest('[role="dialog"]'))) return
       if (event.key === '1') actions?.onView?.('numbers')
-      else if (event.key === '2') actions?.onView?.('documents')
-      // B-W2b-161: Branding, for whoever may see the documents: 5, its place in the design's six lists (E-mails and
-      // Labels, 3 and 4, come with their steps).
+      // B-W2b-432: Documents (the document templates) and E-mails (the e-mail templates), 2 and 3, for whoever may see the
+      // documents (Labels, 4, comes with its step).
+      else if (event.key === '2' && model.can.documents) actions?.onView?.('documents')
+      else if (event.key === '3' && model.can.documents) actions?.onView?.('mail')
+      // B-W2b-161: Branding, for whoever may see the documents: 5, its place in the design's six lists.
       else if (event.key === '5' && model.can.documents) actions?.onView?.('branding')
       else if (event.key === '6' && model.can.documents) actions?.onView?.('required')
       else if (event.key === 'c' && !newSeriesHeld(model)) actions?.onDialog?.({ kind: 'new' })
@@ -116,7 +116,8 @@ function usePageKeys(branding = false): ListKey[] {
   const t = useT('admin-documents')
   return [
     { keys: ['1'], does: t('docs.keys.numbers') },
-    { keys: ['2'], does: t('docs.keys.documents') },
+    // B-W2b-432: the document and e-mail templates.
+    ...(branding ? [{ keys: ['2'], does: t('docs.keys.documents') }, { keys: ['3'], does: t('docs.keys.mail') }] : []),
     // B-W2b-161: Branding.
     ...(branding ? [{ keys: ['5'], does: t('docs.keys.branding') }] : []),
     // B-W2b-177: Required documents.
@@ -145,14 +146,17 @@ function Documents({ model, actions }: { model: DocumentsViewModel; actions?: Do
             <Button size="sm" heldReason={held ? t(held) : null} onClick={() => actions?.onDialog?.({ kind: 'new' })}>
               {t('docs.new')}
             </Button>
-            <Button size="sm" variant="primary" onClick={() => actions?.onView?.('documents')}>
-              {t('docs.preview')}
-            </Button>
+            {/* B-W2b-432: the document templates, each previewed as it prints now, for whoever may see the documents. */}
+            {model.can.documents && (
+              <Button size="sm" variant="primary" onClick={() => actions?.onView?.('documents')}>
+                {t('docs.preview')}
+              </Button>
+            )}
           </>
         }
       />
       <PageNotice namespace="admin-documents" notice={model.notice} onDismiss={actions?.onDismissNotice} nameOf={nameOf} />
-      {model.view === 'numbers' ? <Numbers model={model} actions={actions} /> : <Layouts model={model} actions={actions} />}
+      <Numbers model={model} actions={actions} />
       <p className="fw-adm-hint">{t('docs.later')}</p>
       <NewSeriesModal model={model} actions={actions} />
       <SeriesModal model={model} actions={actions} />
@@ -177,7 +181,8 @@ function ListTools({ model, actions }: { model: DocumentsViewModel; actions?: Do
         onChange={(value) => actions?.onView?.(value as ViewName)}
         options={[
           { value: 'numbers', label: t('docs.views.numbers') },
-          { value: 'documents', label: t('docs.views.documents') },
+          // B-W2b-432: the document templates and the e-mail templates, for whoever may see the documents.
+          ...(model.can.documents ? [{ value: 'documents', label: t('docs.views.documents') }, { value: 'mail', label: t('docs.views.mail') }] : []),
           // B-W2b-161: Branding, for whoever may see the documents.
           ...(model.can.documents ? [{ value: 'branding', label: t('docs.views.branding') }] : []),
           // B-W2b-177: Required documents (6), for whoever may see the documents.
@@ -413,89 +418,6 @@ function FiscalCheck({ model, rows, actions }: { model: DocumentsViewModel; rows
         )}
       </div>
     </Card>
-  )
-}
-
-/** A layout's previews: one link per language (a PDF in a new tab), held while the company's legal data is missing. */
-export function PreviewCell({ company, type }: { company: CompanyOption; type: DocumentType }) {
-  const t = useT('admin-documents')
-  return (
-    <span className="fw-adm-actions">
-      {DOCUMENT_LANGUAGES.map((language) =>
-        company.legalReady ? (
-          <a key={language} className="fw-adm-docs-link" href={sampleHref(company.id, type, language)} target="_blank" rel="noopener noreferrer">
-            {t(`docs.layouts.previewIn.${language}`)} <ExternalLink size={12} aria-hidden />
-            <span className="fw-adm-sr">{t('docs.layouts.newTab')}</span>
-          </a>
-        ) : (
-          <Button key={language} size="sm" variant="quiet" heldReason={t('docs.layouts.heldLegal')}>
-            {t(`docs.layouts.previewIn.${language}`)}
-          </Button>
-        ),
-      )}
-    </span>
-  )
-}
-
-/** The layouts list's columns (one fixed layout per row, previewed with `company`'s data). */
-export function useLayoutColumns(company: CompanyOption | null): ColDef<DocumentType>[] {
-  const t = useT('admin-documents')
-  return useMemo<ColDef<DocumentType>[]>(
-    () => [
-      { colId: 'document', headerName: t('docs.layouts.col.document'), flex: 1.2, minWidth: 180, cellClass: 'fw-adm-name', valueGetter: ({ data }) => (data ? t(`docs.type.${data}`) : '') },
-      { colId: 'layout', headerName: t('docs.layouts.col.layout'), flex: 1.6, minWidth: 220, cellClass: 'fw-adm-hint', valueGetter: () => t('docs.layouts.fixed') },
-      {
-        colId: 'preview',
-        headerName: t('docs.layouts.col.preview'),
-        flex: 1.2,
-        minWidth: 220,
-        cellRenderer: ({ data }: ICellRendererParams<DocumentType>) => (data && company ? <PreviewCell company={company} type={data} /> : null),
-      },
-    ],
-    [t, company],
-  )
-}
-
-function Layouts({ model, actions }: { model: DocumentsViewModel; actions?: DocumentsActions }) {
-  const t = useT('admin-documents')
-  const company = sampleCompany(model)
-  const columns = useLayoutColumns(company)
-  const own = usePageKeys(model.can.documents)
-  const { onHelp, help } = useKeysHelp(own, false)
-  const state: ReactNode = !model.can.documents ? (
-    <EmptyState icon={<FileText size={24} aria-hidden />} title={t('docs.layouts.noRightTitle')} description={t('docs.layouts.noRight')} />
-  ) : model.companies.problem ? (
-    <FrameState problem={model.companies.problem} onRetry={actions?.onRetry} />
-  ) : model.companies.items !== null && !company ? (
-    <EmptyState title={t('docs.layouts.noCompanyTitle')} description={t('docs.layouts.noCompany')} />
-  ) : undefined
-  return (
-    <div className="fw-adm-stack">
-      {model.can.documents && company && !company.legalReady && (
-        <Banner
-          tone="warning"
-          title={t('docs.layouts.notReady', { name: company.legalName, count: company.legalMissing })}
-          action={
-            <Link className="fw-adm-docs-link" href={adminHref(model.prefix, `/companies/${company.id}?tab=legal`)}>
-              {t('docs.layouts.fixLegal')}
-            </Link>
-          }
-        />
-      )}
-      {model.can.documents && company && <p className="fw-adm-hint">{t('docs.layouts.with', { name: company.legalName })}</p>}
-      <ListFrame<DocumentType>
-        label={t('docs.layouts.label')}
-        rows={state ? [] : model.companies.items === null ? null : DOCUMENT_TYPES}
-        rowId={(type) => type}
-        columns={columns}
-        count={t('docs.layouts.count', { count: DOCUMENT_TYPES.length })}
-        tools={<ListTools model={model} actions={actions} />}
-        keys={own}
-        onHelp={onHelp}
-        state={state}
-      />
-      {help}
-    </div>
   )
 }
 

@@ -1,6 +1,8 @@
 import { z } from 'zod'
 import type { ApiClient } from '../../../lib/api/client'
 import { COSTING_METHODS } from '../costing/api'
+// B-W2b-416: the floor an order is held to (the margin grain).
+import { floorSchema, type FloorFilter } from './floor/model'
 
 /**
  * Every call of Finance › Costing › Margins (SCR-155, design finance.margins; B-W2a-29's API) and of the sales order's
@@ -42,7 +44,9 @@ export const orderMarginRowSchema = z.object({
   final: z.boolean(),
   started: z.boolean(),
   workOrders: z.number(),
-  belowFloor: z.boolean().nullable(),
+  // B-W2b-416: below the floor it is held to (null: not known yet) and that floor; both the margin grain.
+  belowFloor: grain(z.boolean().nullable()),
+  floor: grain(floorSchema.nullable()),
   method: z.enum(COSTING_METHODS),
   provisional: z.boolean(),
 })
@@ -50,7 +54,8 @@ export type OrderMarginRow = z.infer<typeof orderMarginRowSchema>
 
 export const marginTilesSchema = z.object({
   averageMarginPct: grain(z.string().nullable()),
-  belowFloor: z.number().nullable(),
+  // B-W2b-416: the orders below their floor (the margin grain).
+  belowFloor: grain(z.number()),
   marginLostSinceQuote: grain(z.number().nullable()),
   orders: z.number(),
   unknown: z.number(),
@@ -128,6 +133,8 @@ export interface MarginsQuery {
   readonly from?: string | null
   readonly to?: string | null
   readonly q?: string | null
+  /** B-W2b-416: only the orders below their margin floor. */
+  readonly floor?: FloorFilter | null
   readonly cursor?: string | null
   readonly limit?: number
 }
@@ -137,7 +144,7 @@ const clean = (query: Readonly<Record<string, string | number | null | undefined
 /** GET /costing/margins: a page of orders with their margin quoted, now and so far, the tiles and the groups over every order in scope. */
 export function getMargins(api: ApiClient, query: MarginsQuery, signal?: AbortSignal): Promise<Margins> {
   return api.get('/costing/margins', {
-    query: clean({ companyId: query.companyId, partyId: query.partyId, styleId: query.styleId, status: query.status?.length ? query.status.join(',') : null, from: query.from, to: query.to, q: query.q, cursor: query.cursor, limit: query.limit ?? 50 }),
+    query: clean({ companyId: query.companyId, partyId: query.partyId, styleId: query.styleId, status: query.status?.length ? query.status.join(',') : null, from: query.from, to: query.to, q: query.q, floor: query.floor, cursor: query.cursor, limit: query.limit ?? 50 }),
     schema: marginsSchema,
     signal,
   })
