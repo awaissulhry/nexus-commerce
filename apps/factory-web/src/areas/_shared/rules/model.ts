@@ -46,6 +46,8 @@ export const THRESHOLD_FIELDS: Readonly<Record<RuleKind, { readonly numbers: rea
   RETURN_ARRIVED_LATE: { numbers: [], workingDays: false },
   // B-W2b-409: no number (each export declaration has its own days).
   EXIT_PROOF_MISSING: { numbers: [], workingDays: false },
+  // B-W2b-416: no number (the floors are the Sales settings').
+  MARGIN_BELOW_FLOOR: { numbers: [], workingDays: false },
 })
 
 /** The kind's one number edited in the rules list itself (inline), or null (none, as "Material short"). */

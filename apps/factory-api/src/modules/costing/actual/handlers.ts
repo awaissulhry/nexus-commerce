@@ -1,6 +1,8 @@
 import { defineHandler, type EventHandler } from '../../../platform/outbox/dispatch'
 import { valueMove } from '../../inventory/ledger/valuation'
 import { postWorkOrderCosts, type PostScope } from './post'
+// B-W2b-F46: a cost that arrives after the work order's close waits, in words, for a reopen (./after-close.ts).
+import { isClosedWorkOrderRefusal, lateCostsOf, logWaitsForReopen } from './after-close'
 
 /**
  * The worker's half of the cost ledger (B-W2a-21; FIN-026, FIN-027, FIN-038): after each event that can cost a work order,
@@ -15,6 +17,8 @@ import { postWorkOrderCosts, type PostScope } from './post'
  *                              posts now) or refused (nothing posts)
  * Anything that cannot post yet (no value, no labour rate) waits; the next event of the work order, the catch-up route
  * (POST /costing/work-orders/:id/post) or the nightly catch-up (./catch-up.ts, cron costing.catchUp; B-W2b-22) posts it.
+ * B-W2b-F46: a CLOSED work order takes no cost entry but a reversal (its close froze the actual): what its event would post
+ * is not written — the handler ends OK with one info line, and the reads list it until a reopen (./after-close.ts).
  *
  * Listed in background.ts HANDLERS for the worker: ...costingHandlers().
  */
@@ -27,7 +31,7 @@ export function costingHandlers(): EventHandler[] {
       name: 'costing.postWorkOrderCosts',
       // B-W2b-53: + the decision on scrap above a site's limit.
       events: ['inventory.moved', 'production.scan_recorded', 'production.rework_moved', 'production.scrap_over_limit_decided'],
-      async handle(event, { caller }) {
+      async handle(event, { caller, log }) {
         const key = `costing-post:${event.eventId}`
         let workOrderId: string | null = null
         let scope: PostScope
@@ -59,7 +63,22 @@ export function costingHandlers(): EventHandler[] {
           workOrderId = payload.workOrderId
           scope = { reworkIds: [payload.reworkId] }
         }
-        await postWorkOrderCosts(caller, workOrderId, { idempotencyKey: key, causationId: event.eventId, scope })
+        // B-W2b-F46: read the work order before the write: CLOSED → nothing is written, the job ends OK (no retry, no
+        // failure); the database's own refusal (a close between the read and the write) ends the same way. Any other
+        // refusal still fails as before.
+        const target: string = workOrderId
+        const about = { tenantId: event.tenantId, workOrderId: target, eventId: event.eventId, eventType: event.type }
+        const late = await caller.withClient((db) => lateCostsOf(db, target, scope))
+        if (late) {
+          if (late.drafts.length > 0) logWaitsForReopen(log, { ...about, number: late.workOrder.number, entries: late.drafts.length })
+          return
+        }
+        try {
+          await postWorkOrderCosts(caller, target, { idempotencyKey: key, causationId: event.eventId, scope })
+        } catch (error) {
+          if (!isClosedWorkOrderRefusal(error)) throw error
+          logWaitsForReopen(log, { ...about, raced: true })
+        }
       },
     }),
   ]

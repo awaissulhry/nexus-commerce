@@ -48,6 +48,9 @@ import {
   type Reader,
 } from './store'
 import { ledgerViews } from './views'
+// B-W2b-F46: what arrived after the close of a CLOSED work order.
+import type { AfterCloseView } from '@nexus/factory-domain/costing/close/after-close'
+import { afterCloseOf } from './after-close'
 
 /**
  * Estimated vs actual and the cost ledger, read (B-W2a-21; FIN-026, FIN-027, FIN-033, FIN-038; design finance.costing
@@ -313,8 +316,11 @@ async function tilesOf(caller: CommandCaller, db: Reader, where: Prisma.WorkOrde
 const cellWords = (cell: CellFacts, day: string): string =>
   cell.itemId === null ? `${cell.colourwayCode} ${cell.size} has no finished-goods item yet: prepare and freeze its standard (Finance › Standard vs actual).` : `${cell.colourwayCode} ${cell.size} has no frozen standard on ${day}.`
 
-/** GET /costing/work-orders/:workOrderId: the cost of one work order (the DetailModal and the Labour & cost tab). */
-export async function workOrderCost(caller: CommandCaller, workOrderId: string): Promise<WorkOrderCostView> {
+/**
+ * GET /costing/work-orders/:workOrderId: the cost of one work order (the DetailModal and the Labour & cost tab). B-W2b-F46:
+ * + afterClose on a CLOSED work order (the costs that arrived after the close and wait for a reopen; null otherwise).
+ */
+export async function workOrderCost(caller: CommandCaller, workOrderId: string): Promise<WorkOrderCostView & { readonly afterClose: AfterCloseView | null }> {
   const context = contextOf(caller)
   const now = serverClock.now()
   return caller.withClient(async (db) => {
@@ -423,6 +429,8 @@ export async function workOrderCost(caller: CommandCaller, workOrderId: string):
       labour,
       scrap,
       waitingItems: plan.waiting,
+      // B-W2b-F46
+      afterClose: await afterCloseOf(db, workOrder, plan.drafts),
       words,
     }
   })

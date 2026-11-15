@@ -1,0 +1,194 @@
+{
+  "col": {
+    "floor": "Floor",
+    "document": "Document",
+    "date": "Date",
+    "state": "State",
+    "forOrder": "For this order",
+    "total": "Document net",
+    "detail": "Detail",
+    "amount": "Cost",
+    "shipment": "Shipment",
+    "carrier": "Carrier",
+    "charged": "Charged to the customer",
+    "carrierCost": "What the carrier charged",
+    "payment": "Payment",
+    "placedOn": "Placed on",
+    "paid": "For this order",
+    "paymentAmount": "Whole payment"
+  },
+  "flag": {
+    "below": "Below the floor",
+    "above": "Above the floor",
+    "unknown": "Not known yet"
+  },
+  "floor": {
+    "role": "Floor {pct} ({role} role)",
+    "company": "Floor {pct} (the company's)",
+    "short": "Floor {pct}"
+  },
+  "basis": {
+    "ESTIMATE": "Judged on the margin as estimated now",
+    "FINAL": "Judged on the final margin",
+    "unknown": "Judged once its cost is known"
+  },
+  "points": {
+    "under": "{points} points under it",
+    "over": "{points} points above it",
+    "on": "Exactly on it"
+  },
+  "tile": {
+    "hint": "Press to see only them",
+    "none": "No order is below its floor",
+    "unknown": "Not known yet",
+    "active": "Showing only these: press again for every order"
+  },
+  "filter": {
+    "below": "Below the floor",
+    "clear": "Show every order (clear Below the floor)"
+  },
+  "detail": {
+    "floorTitle": "Margin floor",
+    "quotedBelow": "Its quote was approved below the floor: a yes let it through."
+  },
+  "documents": {
+    "title": "Documents",
+    "loading": "Reading the documents…",
+    "failed": "Couldn't load the documents",
+    "none": "No document yet: nothing invoiced, costed, shipped or paid.",
+    "noNumber": "No number yet"
+  },
+  "group": {
+    "invoices": "Invoices",
+    "creditNotes": "Credit notes",
+    "costs": "Cost entries",
+    "freight": "Freight",
+    "payments": "Payments",
+    "count_one": "{count}",
+    "count_other": "{count}",
+    "empty": "None."
+  },
+  "held": "Needs the {permission} permission to be shown here.",
+  "totals": {
+    "net": "Invoiced, net of credit notes",
+    "netHint": "Invoiced {invoiced} less credited {credited}",
+    "deposits": "Deposit invoices",
+    "depositsHint": "Listed, not added: the invoice of the goods takes them off",
+    "paid": "Paid",
+    "paidHint": "Placed on its invoices and deposit requests",
+    "freightCharged": "Freight charged",
+    "freightChargedHint": "To the customer, on its shipments",
+    "freightCost": "Freight cost",
+    "freightCostHint": "What the carriers charged us",
+    "noGrain": "The totals need the price or the cost grain."
+  },
+  "invoiceKind": {
+    "INVOICE": "Invoice ({type})",
+    "DEFERRED_INVOICE": "Deferred invoice ({type})",
+    "DEPOSIT_INVOICE": "Deposit invoice ({type})",
+    "DEBIT_NOTE": "Debit note ({type})",
+    "CREDIT_NOTE": "Credit note ({type})",
+    "OTHER": "Document {type}"
+  },
+  "invoice": {
+    "shared": "It also bills other orders",
+    "credits": "credits {number}",
+    "adds": "adds to {number}"
+  },
+  "costKind": {
+    "WORK_ORDER": "Work order cost",
+    "COST_OF_SALES": "Cost of goods sold",
+    "SUBCONTRACT_ORDER": "Subcontract order",
+    "SUPPLIER_INVOICE": "Supplier invoice"
+  },
+  "cost": {
+    "pieces": "{pieces} of {of} garments for this order",
+    "entries_one": "{count} entry",
+    "entries_other": "{count} entries",
+    "reversed": "an entry reversed"
+  },
+  "freight": {
+    "noCarrier": "No carrier",
+    "noCharge": "None decided",
+    "noCost": "Not recorded yet"
+  },
+  "payment": {
+    "reversed": "a placement taken back",
+    "deposit": "Deposit request"
+  },
+  "method": {
+    "BANK_TRANSFER": "Bank transfer",
+    "CARD": "Card",
+    "SEPA_DEBIT": "SEPA direct debit",
+    "other": "Other method"
+  },
+  "note": {
+    "OTHER_CURRENCY_one": "{count} document is in another currency: listed, not added to the totals.",
+    "OTHER_CURRENCY_other": "{count} documents are in another currency: listed, not added to the totals.",
+    "SHARED_INVOICE": "An invoice also bills other orders: only this order's lines count.",
+    "SHARED_WORK_ORDER": "A work order also makes other orders' garments: its whole cost is shown, the margin takes this order's share.",
+    "FREIGHT_COST_MISSING": "A shipment that left has no carrier cost recorded yet.",
+    "NOT_ISSUED": "A draft or rejected invoice is listed but not counted."
+  },
+  "state": {
+    "none": "—",
+    "unknown": "Another state",
+    "Invoice": {
+      "DRAFT": "Draft",
+      "ISSUED": "Issued",
+      "SENT": "Sent to SDI",
+      "DELIVERED": "Delivered",
+      "NOT_DELIVERABLE": "Not deliverable",
+      "REJECTED": "Rejected by SDI",
+      "ERROR": "Not sent: error"
+    },
+    "Payment": {
+      "RECEIVED": "Received",
+      "VOIDED": "Voided"
+    },
+    "Shipment": {
+      "DRAFT": "Draft",
+      "PACKED": "Packed",
+      "SHIPPED": "Shipped",
+      "DELIVERED": "Delivered",
+      "RETURNED": "Returned",
+      "CANCELLED": "Cancelled"
+    },
+    "WorkOrder": {
+      "DRAFT": "Draft",
+      "RELEASED": "Released",
+      "IN_PROGRESS": "In progress",
+      "COMPLETED": "Completed",
+      "CLOSED": "Closed",
+      "CANCELLED": "Cancelled",
+      "ON_HOLD": "On hold"
+    },
+    "SubcontractOrder": {
+      "DRAFT": "Draft",
+      "ISSUED": "Sent",
+      "AT_WORKSHOP": "At the workshop",
+      "PARTLY_RECEIVED": "Partly back",
+      "RECEIVED": "Back",
+      "CLOSED": "Closed",
+      "CANCELLED": "Cancelled"
+    },
+    "SupplierInvoice": {
+      "RECEIVED": "Received",
+      "APPROVED": "Approved",
+      "PAID": "Paid",
+      "DISPUTED": "Disputed",
+      "VOIDED": "Voided"
+    }
+  },
+  "problem": {
+    "signed_out": "You are signed out. Sign in again.",
+    "forbidden": "Your role may not see this here.",
+    "not_found": "Not found, or it belongs to another company or customer.",
+    "unavailable": "The server cannot be reached. Try again in a moment.",
+    "rate_limited": "Too many requests: wait a moment, then try again.",
+    "internal": "Something went wrong on the server."
+  },
+  "common": {
+    "retry": "Try again"
+  }
+}

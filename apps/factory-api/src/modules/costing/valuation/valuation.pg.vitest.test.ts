@@ -222,12 +222,13 @@ describe('order margin from estimate to actual (FIN-047)', () => {
     expect(answer.rows.map((row: Json) => row.order.number)).toEqual(['SEED-SO-0003', 'SEED-SO-0001', 'SEED-SO-0002'])
     const [so3, so1, so2] = answer.rows
     // SO-0001: no work order: the estimate is the quoted cost; nothing spent yet, so no actual margin.
-    expect(so1).toMatchObject({ quotedValue: 504_000, value: 504_000, quotedCost: 360_600, quotedMargin: 143_400, quotedMarginPct: '28.4524', estimateCost: 360_600, estimateMargin: 143_400, marginChange: 0, actualCost: 0, actualMargin: null, actualMarginPct: null, workOrders: 0, started: false, final: false, belowFloor: null, method: 'UNDECIDED', provisional: true })
+    expect(so1).toMatchObject({ quotedValue: 504_000, value: 504_000, quotedCost: 360_600, quotedMargin: 143_400, quotedMarginPct: '28.4524', estimateCost: 360_600, estimateMargin: 143_400, marginChange: 0, actualCost: 0, actualMargin: null, actualMarginPct: null, workOrders: 0, started: false, final: false, belowFloor: false, method: 'UNDECIDED', provisional: true })
     // SO-0002: no cost at quote; SEED-WO-0001 makes all 7 at its estimate at release 2,037.78; 319.94 spent so far.
     expect(so2).toMatchObject({ quotedCost: null, quotedMargin: null, estimateCost: 203_778, estimateMargin: 76_222, estimateMarginPct: '27.2221', actualCost: 31_994, actualMargin: 248_006, actualMarginPct: '88.5736', marginChange: null, workOrders: 1, started: true, final: false })
     expect(so3).toMatchObject({ quotedCost: null, estimateCost: null, workOrders: 1, started: false })
     // (5,040.00 − 3,606.00 + 2,800.00 − 2,037.78) ÷ 7,840.00.
-    expect(answer.tiles).toEqual({ averageMarginPct: '28.013', belowFloor: null, marginLostSinceQuote: 0, orders: 3, unknown: 1, currency: 'EUR', words: null })
+    // B-W2b-416: no order is below its floor (SO-0001 28.5 %, SO-0002 27.2 %; SO-0003's margin is not known).
+    expect(answer.tiles).toEqual({ averageMarginPct: '28.013', belowFloor: 0, marginLostSinceQuote: 0, orders: 3, unknown: 1, currency: 'EUR', words: null })
     expect(answer.byCustomer).toEqual([expect.objectContaining({ orders: 3, value: 952_000, estimateCost: null, marginPct: '28.013' })])
     expect(answer.byStyle.map((row: Json) => [row.style.code, row.value, row.estimateCost, row.marginPct])).toEqual([
       ['SEED-JKT-01', 504_000, 360_600, '28.4524'],
