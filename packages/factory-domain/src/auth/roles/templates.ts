@@ -188,6 +188,8 @@ import { FIELDS_ADDS } from '../../fields/permissions'
 import { TEMPLATES_ADDS } from '../../templates/permissions'
 // B-W2b-405: data protection in depth (the administrator keeps the data requests, erasures and retention rules).
 import { PRIVACY_DEPTH_ADDS } from '../../privacy/retention/permissions'
+// B-W2b-395: carrier pickups (the dispatch desk books them).
+import { SHIPPING_PICKUPS_ADDS } from '../../shipping/pickups/permissions'
 // B-W2b-406: a customer's own figures against ours (finance records and corrects them).
 import { THEIR_FIGURES_ADDS } from '../../receivables-figures/permissions'
 
@@ -1135,6 +1137,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (TEMPLATES_ADDS[key] ?? []) : []),
   // B-W2b-405
   ...(audience === 'office' ? (PRIVACY_DEPTH_ADDS[key] ?? []) : []),
+  // B-W2b-395
+  ...(audience === 'office' ? (SHIPPING_PICKUPS_ADDS[key] ?? []) : []),
   // B-W2b-406
   ...(audience === 'office' ? (THEIR_FIGURES_ADDS[key] ?? []) : [])]
 /**
