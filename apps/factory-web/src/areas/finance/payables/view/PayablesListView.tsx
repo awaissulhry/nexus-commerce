@@ -90,7 +90,7 @@ export interface PayablesListActions {
 
 /**
  * SCR-153 — Finance › Payables & bank › Supplier invoices (design finance.payables; FIN-136, FIN-137): the band (when it
- * was read, live, "Last SDI pickup", Pick up now; Add foreign invoice; Payment proposal — W2b, held —; ⋯ Self-invoices
+ * was read, live, "Last SDI pickup", Pick up now; Add foreign invoice; Payment proposal (B-W2b-425, `proposal`); ⋯ Self-invoices
  * TD17/18/19 — W2b, held), the "To handle" tiles (saved filters: New from SDI, Differences to check, To approve, Due this
  * week; a tile filters the list), and the invoices on the ONE list frame: supplier, number and date, amount (the cost
  * grain: the column is not drawn without it), source (SDI · e-mail · typed), match in words, approval, due, paid; select
@@ -98,15 +98,15 @@ export interface PayablesListActions {
  * answer says which were approved and why the others were not). A row's number is a real link to the record (⌘-click: a
  * new tab). No person is counted or totalled.
  */
-export function PayablesListView({ model, actions, selfInvoices }: { model: PayablesListModel; actions?: PayablesListActions; /** B-W2b-417: the Self-invoices section (its container, or a design case's view). */ selfInvoices?: ReactNode }) {
+export function PayablesListView({ model, actions, selfInvoices, proposal }: { model: PayablesListModel; actions?: PayablesListActions; /** B-W2b-417: the Self-invoices section (its container, or a design case's view). */ selfInvoices?: ReactNode; /** B-W2b-425: the band's "Payment proposal" and its pop-up (its container, or a design case's view). */ proposal?: ReactNode }) {
   return (
     <WithMessages namespaces={[PAYABLES_NAMESPACE, 'lists']}>
-      <ListPage model={model} actions={actions} selfInvoices={selfInvoices} />
+      <ListPage model={model} actions={actions} selfInvoices={selfInvoices} proposal={proposal} />
     </WithMessages>
   )
 }
 
-function ListPage({ model, actions, selfInvoices }: { model: PayablesListModel; actions?: PayablesListActions; selfInvoices?: ReactNode }) {
+function ListPage({ model, actions, selfInvoices, proposal }: { model: PayablesListModel; actions?: PayablesListActions; selfInvoices?: ReactNode; proposal?: ReactNode }) {
   const t = useT(PAYABLES_NAMESPACE)
   const lists = useT('lists')
   const locale = useLocale()
@@ -281,9 +281,8 @@ function ListPage({ model, actions, selfInvoices }: { model: PayablesListModel; 
           <Button size="sm" heldReason={addHeld} onClick={() => actions?.onAddress?.({ adding: true })}>
             <FilePlus2 size={14} aria-hidden /> {t('band.addForeign')}
           </Button>
-          <Button size="sm" variant="primary" heldReason={t('held.proposalLater')}>
-            {t('band.proposal')}
-          </Button>
+          {/* B-W2b-425: Payment proposal (design page.h, the band's primary) and its pop-up. */}
+          {proposal}
           <Menu
             label={<MoreHorizontal size={16} aria-hidden />}
             align="right"

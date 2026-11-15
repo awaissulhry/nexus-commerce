@@ -319,6 +319,7 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/finance/invoices/[id]/xml', // B-W2a-80: the legal XML shown readable (SCR-081-xml, a new tab)
   '/finance/payments',
   '/finance/payments/[id]',
+  '/finance/payments/riba/[id]/file', // B-W2b-425: a Ri.Ba. batch's CBI file read back (SCR-511, a new tab)
   '/finance/settings',
   // B-W2a-51: Accounting export (SCR-156) with its files tab; Finance reports › stock valuation (SCR-239) with its print tab.
   '/finance/accounting',

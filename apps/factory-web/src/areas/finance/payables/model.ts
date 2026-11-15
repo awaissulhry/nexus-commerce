@@ -178,7 +178,8 @@ export type RecordTab = (typeof RECORD_TABS)[number]
 export const tabOf = (value: string | null | undefined): RecordTab => ((RECORD_TABS as readonly string[]).includes(value ?? '') ? (value as RecordTab) : 'lines')
 
 /** The approval's problems, every code the API answers (factory-domain payables/rules approvalProblems). */
-export const APPROVAL_CODES = ['NOT_RECEIVED', 'OWN_INVOICE', 'NO_LINES', 'NOT_MATCHED', 'WAITING_GOODS', 'DIFFERENCES', 'NO_XML', 'LINES_DO_NOT_ADD_UP'] as const
+// B-W2b-425: OWN_ACCEPTANCE (factory-domain payables/rules.ts, #1015) was never worded on screen.
+export const APPROVAL_CODES = ['NOT_RECEIVED', 'OWN_INVOICE', 'OWN_ACCEPTANCE', 'NO_LINES', 'NOT_MATCHED', 'WAITING_GOODS', 'DIFFERENCES', 'NO_XML', 'LINES_DO_NOT_ADD_UP'] as const
 /** Every `refusal/<CODE>` the payables routes answer (modules/payables invoices, approval, sdi). */
 export const REFUSAL_CODES = [
   ...APPROVAL_CODES,
@@ -200,6 +201,9 @@ export const REFUSAL_CODES = [
   'NO_INTERMEDIARY',
   'INTERMEDIARY_UNAVAILABLE',
   'NO_SDI_ACCOUNT',
+  // B-W2b-425 (B-W2b-403's dual approval): the first approver again; the bulk answer of a first yes.
+  'SECOND_APPROVER',
+  'SECOND_APPROVAL',
 ] as const
 export type RefusalCode = (typeof REFUSAL_CODES)[number]
 
