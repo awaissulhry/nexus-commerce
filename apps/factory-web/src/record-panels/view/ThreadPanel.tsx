@@ -26,6 +26,8 @@ import {
 } from '../model'
 import type { RecordPanelsActions } from './actions'
 import { ReplyComposer } from '../../lib/i18n/ds-parts' // B-W2b-F41: the DS parts in the page's language
+// B-W2b-388 (COL-041): a message's Remind me.
+import { MessageRemindMe } from '../../shell/panels/remind-me/view/MessageRemindMe'
 
 const EMAIL_TONE: Readonly<Record<EmailStatus, 'neutral' | 'info' | 'success' | 'danger'>> = {
   QUEUED: 'info',
@@ -313,6 +315,7 @@ function MessageItem({ message, model, actions }: { message: PanelMessage; model
           <time className="fw-rp-muted fw-rp-small" dateTime={message.at}>
             {formatDateTime(message.at, { locale })}
           </time>
+          {model.followers !== undefined && actions && <MessageRemindMe record={model.record} messageId={message.id} />}
         </header>
         {message.email && (
           <p className="fw-rp-muted fw-rp-small fw-rp-message-meta">

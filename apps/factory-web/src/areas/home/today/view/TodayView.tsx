@@ -32,6 +32,7 @@ import {
   verbHeld,
   verbKey,
   type Category,
+  type ComingItemView,
   type ComingUpView,
   type Loaded,
   type LiveState,
@@ -50,6 +51,11 @@ import { SnoozeDialog } from './SnoozeDialog'
 import { SNOOZE_MAX_DAYS } from '../snooze'
 import { OFFICE_PAGES } from '../../../../shell/nav/office-nav'
 import { KeyNumbersSection } from '../numbers/view/KeyNumbers'
+// B-W2b-388 (COL-035): My work — Waiting on others, Changed since you looked, My saved views (each loads itself).
+import { WaitingOn } from '../waiting-on/WaitingOn'
+import { Following } from '../following/Following'
+import { MyViews } from '../my-views/MyViews'
+import { dayBeforeAt } from '../../../../shell/panels/remind-me/model'
 import '../today.css'
 
 export type { TodayViewModel } from '../model'
@@ -80,6 +86,8 @@ export interface TodayActions extends DecideActions {
   onRetryComing?: () => void
   /** B-W2a-79: read My numbers again. */
   onRetryNumbers?: () => void
+  /** B-W2b-388: Coming up's "Remind me the day before" an item's day (resolves true when set). */
+  onRemindDayBefore?: (item: ComingItemView, day: string) => Promise<boolean>
 }
 
 /** What a control asks to open (the container turns it into a TodayDialog with its data). */
@@ -431,7 +439,7 @@ function Today({ model, actions }: { model: TodayViewModel; actions?: TodayActio
 
   const flowSection = model.flow && shownSection('flow') ? <FlowSection key="flow" model={model} lens={lens} onLens={setLens} onRetry={() => actions?.onRetry?.('flow')} /> : null
   // W2a: Coming up — after the work (not one of the arranged sections yet: the layout's sections are the API's).
-  const comingSection = model.comingUp ? <ComingUpSection key="coming-up" state={model.comingUp} onRetry={() => actions?.onRetryComing?.()} /> : null
+  const comingSection = model.comingUp ? <ComingUpSection key="coming-up" state={model.comingUp} now={model.now} live={model.live} onRetry={() => actions?.onRetryComing?.()} onRemind={actions?.onRemindDayBefore} /> : null
   // B-W2a-79: My numbers — the picked lens's key numbers, after the flow strip (design order), before Coming up.
   const numbersSection = model.numbers ? <KeyNumbersSection key="key-numbers" state={model.numbers} lens={lens} built={OFFICE_PAGES} onRetry={() => actions?.onRetryNumbers?.()} /> : null
 
@@ -503,7 +511,10 @@ function Today({ model, actions }: { model: TodayViewModel; actions?: TodayActio
   const at = order.indexOf('needs-me')
   // Before "Needs me now": across the page. From it on: the work column, with My lists beside it (unless it came first).
   const head = order.slice(0, at).map((id) => node[id])
-  const work = [...order.slice(at).filter((id) => id !== 'role-panels').map((id) => node[id]), numbersSection, comingSection]
+  // B-W2b-388: My work after Coming up, in the design's order (only where the page has its container — it drives the tiles —:
+  // these sections load themselves; the design index shows them as SCR-540 … 542).
+  const myWork = actions?.onTile ? [<WaitingOn key="waiting-on" />, <Following key="following" />, <MyViews key="my-views" />] : []
+  const work = [...order.slice(at).filter((id) => id !== 'role-panels').map((id) => node[id]), numbersSection, comingSection, ...myWork]
   const side = listsFirst ? null : listsSection
   const assignItem = dialog?.kind === 'assign' ? (items.find((entry) => entry.key === dialog.key) ?? null) : null
   const resolveItem = dialog?.kind === 'resolve' ? (items.find((entry) => entry.key === dialog.key) ?? null) : null
@@ -647,7 +658,7 @@ function QueueRow({
     ...(offersVerb(item, 'DONE') ? [ownItem('done', 'DONE', t('today.own.done'), <CheckCircle2 size={14} aria-hidden />)] : []),
     ...(offersVerb(item, 'SNOOZE') ? [ownItem('snooze', 'SNOOZE', t('today.own.snooze'), <AlarmClock size={14} aria-hidden />)] : []),
   ]
-  const Icon = item.kind === 'TASK_DUE' ? ListTodo : item.kind === 'MENTION' ? AtSign : SEVERITY_ICON[item.severity]
+  const Icon = item.kind === 'TASK_DUE' ? ListTodo : item.kind === 'MENTION' ? AtSign : item.kind === 'REMINDER' ? AlarmClock : SEVERITY_ICON[item.severity]
   const due = dueWords(item.due)
   const why = phraseText(item.words.why, t, locale)
   const blocks = item.words.blocks ? phraseText(item.words.blocks, t, locale) : null
@@ -805,9 +816,29 @@ function FlowSection({ model, lens, onLens, onRetry }: { model: TodayViewModel; 
  * company's calendar; none: Monday to Friday), each item one line with its record as a real link. The design's
  * AgendaList (new) is composed here (app CSS), as W1 composed QueueList: no DS part yet.
  */
-function ComingUpSection({ state, onRetry }: { state: Loaded<ComingUpView>; onRetry: () => void }) {
+function ComingUpSection({
+  state,
+  now,
+  live,
+  onRetry,
+  onRemind,
+}: {
+  state: Loaded<ComingUpView>
+  now: number
+  live: LiveState
+  onRetry: () => void
+  /** B-W2b-388: "Remind me the day before" an item (absent: the design index; the button is not drawn). */
+  onRemind?: (item: ComingItemView, day: string) => Promise<boolean>
+}) {
   const t = useT('home')
   const locale = useLocale()
+  const [reminded, setReminded] = useState<ReadonlySet<string>>(() => new Set())
+  const remindHeld = (item: ComingItemView, day: string): string | null => {
+    if (!item.record) return t('today.remind.noRecord')
+    if (live === 'offline') return t('today.actions.held.offline')
+    if (reminded.has(`${item.href}:${day}`)) return t('today.remind.already')
+    return dayBeforeAt(day, now) === null ? t('today.remind.passed') : null
+  }
   const weekday = (date: string) => new Intl.DateTimeFormat(locale === 'it' ? 'it-IT' : 'en-GB', { weekday: 'long', timeZone: 'UTC' }).format(new Date(`${date}T12:00:00.000Z`))
   return (
     <section className="fw-today-section" aria-labelledby="fw-today-coming">
@@ -852,6 +883,22 @@ function ComingUpSection({ state, onRetry }: { state: Loaded<ComingUpView>; onRe
                           {item.label}
                           <ExternalLink size={12} aria-hidden />
                         </a>
+                        {onRemind && (
+                          <Button
+                            size="sm"
+                            variant="quiet"
+                            heldReason={remindHeld(item, day.date)}
+                            aria-label={t('today.remind.dayBefore', { record: item.label })}
+                            title={t('today.remind.dayBefore', { record: item.label })}
+                            onClick={() =>
+                              void onRemind(item, day.date).then((done) => {
+                                if (done) setReminded((current) => new Set([...current, `${item.href}:${day.date}`]))
+                              })
+                            }
+                          >
+                            <AlarmClock size={13} aria-hidden />
+                          </Button>
+                        )}
                       </li>
                     ))}
                   </ul>

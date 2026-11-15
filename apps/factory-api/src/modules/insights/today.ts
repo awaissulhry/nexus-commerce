@@ -43,7 +43,8 @@ export const TODAY_INCLUDES = ['TASKS', 'MENTIONS', 'ALERTS'] as const
  * of the same kind raises the alert, or is switched off): an order late or at risk, a purchase order not confirmed.
  */
 const REPLACED_BY_RULES: ReadonlySet<AttentionKind> = new Set(['ORDER_PROMISE', 'PO_NOT_CONFIRMED'])
-const includeOf = (kind: AttentionKind): TodayInclude => (kind === 'TASK_DUE' ? 'TASKS' : kind === 'RULE_ALERT' ? 'ALERTS' : 'MENTIONS')
+// B-W2b-388: my reminders that came back ride with my tasks (`include=TASKS`).
+const includeOf = (kind: AttentionKind): TodayInclude => (kind === 'TASK_DUE' || kind === 'REMINDER' ? 'TASKS' : kind === 'RULE_ALERT' ? 'ALERTS' : 'MENTIONS')
 export type TodayInclude = (typeof TODAY_INCLUDES)[number]
 
 export interface TodayQuery {

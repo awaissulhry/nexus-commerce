@@ -64,6 +64,9 @@ import {
 } from './model'
 import { PANELS, panelsFor } from './panels'
 import { TodayView, type DialogRequest } from './view/TodayView'
+// B-W2b-388: reminders that came back (Done, Put off) and Coming up's "Remind me the day before".
+import { putOffReminderById, reminderDoneById, setReminder } from '../../../shell/panels/remind-me/api'
+import { dayBeforeAt } from '../../../shell/panels/remind-me/model'
 
 interface QueueState {
   readonly answer: TodayAnswer
@@ -236,7 +239,7 @@ export function Today() {
           days: answer.days.map((day) => ({
             date: day.date,
             working: day.working,
-            items: day.items.map((item) => ({ kind: item.kind, label: item.record.label, words: item.words, href: `${prefix}${recordAddress({ type: item.record.type, id: item.record.id, label: item.record.label, companyId: item.companyId, siteId: item.siteId }, OFFICE_PAGES)}` })),
+            items: day.items.map((item) => ({ kind: item.kind, record: { type: item.record.type, id: item.record.id }, label: item.record.label, words: item.words, href: `${prefix}${recordAddress({ type: item.record.type, id: item.record.id, label: item.record.label, companyId: item.companyId, siteId: item.siteId }, OFFICE_PAGES)}` })),
           })),
         },
       })
@@ -449,9 +452,11 @@ export function Today() {
       key,
       (item) => {
         const target = snoozeTarget(item)
+        // B-W2b-388: a reminder that came back is done through the reminder.
+        if (target.kind === 'reminder') return reminderDoneById(api, target.reminderId)
         return target.kind === 'task' ? setTaskStatus(api, target.taskId, 'DONE') : target.kind === 'notification' ? setMentionDone(api, target.notificationId, true) : Promise.reject(new Error('not an own row'))
       },
-      (item) => ({ key: item.kind === 'TASK_DUE' ? 'today.own.doneTask' : 'today.own.doneMention', tone: 'success', params: { record: item.record.label } }),
+      (item) => ({ key: item.kind === 'TASK_DUE' ? 'today.own.doneTask' : item.kind === 'REMINDER' ? 'today.own.doneReminder' : 'today.own.doneMention', tone: 'success', params: { record: item.record.label } }),
     )
   const snooze = (key: string, until: string | null) =>
     ownAct(
@@ -460,6 +465,8 @@ export function Today() {
         const target = snoozeTarget(item)
         if (target.kind === 'task') return until === null ? Promise.reject(new Error('a task snoozes until a time')) : snoozeTask(api, target.taskId, until)
         if (target.kind === 'notification') return snoozeMention(api, target.notificationId, until)
+        // B-W2b-388: a reminder put off (a new time, or until its record changes).
+        if (target.kind === 'reminder') return putOffReminderById(api, target.reminderId, until)
         return snoozeRow(api, item, until)
       },
       (item) => ({ key: until === null ? 'today.own.snoozedUntilChange' : 'today.own.snoozed', tone: 'success', params: { record: item.record.label } }),
@@ -574,6 +581,20 @@ export function Today() {
         onAcknowledge: (key) => act(key, (item) => acknowledgeRow(api, item), () => ({ key: 'today.actions.acknowledged', tone: 'success' })),
         onDone: markDone,
         onSnooze: snooze,
+        // B-W2b-388: Coming up's "Remind me the day before" (08:00 the day before, the site's time).
+        onRemindDayBefore: async (item, day) => {
+          const remindAt = dayBeforeAt(day, Date.now())
+          if (!item.record || remindAt === null) return false
+          try {
+            await setReminder(api, { record: item.record, kind: 'AT_TIME', remindAt, note: null })
+            setNotice({ key: 'today.remind.set', tone: 'success', params: { record: item.label } })
+            return true
+          } catch (error) {
+            const problem = actionProblem(error)
+            setNotice({ key: problem.key, tone: problem.tone })
+            return false
+          }
+        },
         onRetryNumbers: () => void loadNumbers(),
         onRetryComing: () => {
           setComing({ status: 'loading' })

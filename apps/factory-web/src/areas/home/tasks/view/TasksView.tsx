@@ -18,6 +18,10 @@ import { TaskNewDialog } from '../../../../record-panels/view/TaskNewDialog'
 import { SnoozeDialog } from '../../today/view/SnoozeDialog'
 import { actionHeld, bulkRows, pageKey, popupIds, reassignChanges, selectHeld, tasksKeys, tileValue, type TaskRow, type TasksDialog, type TasksScope, type TasksViewModel } from '../model'
 import '../tasks.css'
+// B-W2b-388: Board by status and Calendar by due date; Reminders (each loads itself).
+import type { ListMode } from '../../../../list-frame/w2b/model'
+import { taskModes } from '../board/modes'
+import { Reminders } from '../reminders/Reminders'
 
 export type { TasksViewModel } from '../model'
 
@@ -51,6 +55,8 @@ export interface TasksActions {
   onDue?: (id: string, dueDate: string | null) => void
   onChecklist?: (id: string, itemId: string, done: boolean) => void
   onSnooze?: (id: string, until: string | null) => Promise<boolean>
+  /** B-W2b-388: Table · Board · Calendar (`?mode=`). */
+  onMode?: (mode: ListMode) => void
 }
 
 const NOBODY = '__nobody__'
@@ -65,7 +71,7 @@ const NOBODY = '__nobody__'
  */
 export function TasksView({ model, actions }: { model: TasksViewModel; actions?: TasksActions }) {
   return (
-    <WithMessages namespaces={['home-tasks', 'records', 'lists']}>
+    <WithMessages namespaces={['home-tasks', 'records', 'lists', /* B-W2b-388 */ 'home-mywork']}>
       <Tasks model={model} actions={actions} />
     </WithMessages>
   )
@@ -74,6 +80,8 @@ export function TasksView({ model, actions }: { model: TasksViewModel; actions?:
 function Tasks({ model, actions }: { model: TasksViewModel; actions?: TasksActions }) {
   const t = useT('home-tasks')
   const r = useT('records')
+  // B-W2b-388: the board's and the calendar's words.
+  const mw = useT('home-mywork')
   const locale = useLocale()
   // Without a container (the design index) the view keeps its own selection, open row and dialog.
   const [ownSelected, setOwnSelected] = useState<readonly string[]>(model.selected)
@@ -92,6 +100,10 @@ function Tasks({ model, actions }: { model: TasksViewModel; actions?: TasksActio
   actionsRef.current = actions
   const setOpenRef = useRef(setOpen)
   setOpenRef.current = setOpen
+  // B-W2b-388: the mode is the container's (`?mode=`), else the view's own (the design index).
+  const [ownMode, setOwnMode] = useState<ListMode>(model.mode ?? 'table')
+  const mode = actions?.onMode ? (model.mode ?? 'table') : ownMode
+  const setMode = (next: ListMode) => (actions?.onMode ? actions.onMode(next) : setOwnMode(next))
   const dialog = actions?.onDialog ? model.dialog : ownDialog
   const openDialog = (request: TasksDialogRequest | null) => {
     if (actions?.onDialog) return actions.onDialog(request)
@@ -356,7 +368,11 @@ function Tasks({ model, actions }: { model: TasksViewModel; actions?: TasksActio
         onOpen={(row) => setOpen(row.id)}
         state={state}
         focusRow={model.focusRow}
+        modes={taskModes(rows, { mode, onMode: setMode, t: mw, held: heldText, onComplete: (id) => actions?.onComplete?.(id), onReopen: (id) => actions?.onReopen?.(id) })}
       />
+
+      {/* B-W2b-388 (COL-041): Reminders — records and messages I asked to see again (only where the page has its container). */}
+      {actions && model.access === 'open' && <Reminders />}
 
       <TaskPopup model={model} openId={openId} rows={rows} held={held} onGo={setOpen} onDialog={openDialog} actions={actions} />
 

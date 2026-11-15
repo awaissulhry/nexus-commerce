@@ -67,9 +67,13 @@ import { sdiArchiveCopyHandler } from '../../../modules/invoicing/archive-copy/c
 // B-W2b-402: the trusted reminders and the payment received notice to the customer.
 import { trustedRemindersHandler } from '../../../modules/receivables/reminders/approval'
 import { paymentNoticeHandler } from '../../../modules/receivables/notices/customer'
+// B-W2b-405: a person's data package collected.
+import { collectPackageHandlers } from '../../../platform/privacy/requests/package'
 import { trackingProblemsHandler } from '../../../modules/shipping/exceptions/check'
 import { carrierPodHandler } from '../../../modules/shipping/pod/handler'
 import { returnLabelsUsedHandler } from '../../../modules/shipping/return-labels/used'
+// B-W2b-395
+import { collectionDeliveredHandler } from '../../../modules/shipping/collection/delivered'
 // B-W2b-294: the schedule of an order confirmed by its yes.
 import { orderScheduleHandler } from '../../../modules/sales/quote-terms/carry'
 // B-W2b-340: the options of an order confirmed by its yes.
@@ -158,6 +162,10 @@ const W2A_LISTS: ReadonlyArray<readonly [string, readonly string[]]> = [
   ['W2B_401_HANDLERS', ['sdiTestAnswerHandler', 'sdiArchiveCopyHandler']],
   // B-W2b-402: a trusted reminder approved and sent by its level; a bank transfer's notice to the customer (both behind switches).
   ['W2B_402_HANDLERS', ['trustedRemindersHandler', 'paymentNoticeHandler']],
+  // B-W2b-405: privacy.request_collect_asked → the person's records and files collected into their package.
+  ['W2B_405_HANDLERS', ['collectPackageHandlers']],
+  // B-W2b-395: a shipment the customer's own carrier collects is delivered when it leaves.
+  ['W2B_395_HANDLERS', ['collectionDeliveredHandler']],
 ]
 
 /** The search indexers the worker loads from the registry folder (background.ts SEARCH_INDEXERS). */
@@ -167,7 +175,7 @@ export async function searchIndexers(): Promise<readonly SearchIndexer[]> {
 
 /** Every handler the worker runs: W1's HANDLERS, then the W2a lists, as background.ts hands them to startEventWorkers. */
 export function everyHandler(indexers: readonly SearchIndexer[]): readonly EventHandler[] {
-  return [...workerHandlers(), notificationsHandler(), ...searchHandlers(indexers), alertsRecheckHandler(), ...ladderHandlers(), ...creditNoteHandlers(), ...payablesHandlers(), releaseOnWorkOrderDoneHandler(), pauseAtClockOutHandler(), ...attendanceHandlers(), ...overtimeHandlers(), ...earningsHandlers(), ...inspectionTriggerHandlers(), alertRulesHandler(), ...incidentHandlers(), ...healthHandlers(), stripPicturesHandler(), partnerNotificationsHandler({ cookieSecret: () => LOCAL_COOKIE_SECRET }), ...onlinePaymentHandlers(), trackingLinkHandler(), sharesNotifyHandler(), ...routingCheckpointHandlers(), ...buildPackHandlers(), ...distributorHandlers(), ...declarationHandlers(), ...reevaluateHandlers(), ...gateHandlers(), lotLifecycleHandler(), ...warehouseTaskHandlers(), approvedSendHandler(), ...creditHandlers(), supplyLateHandler(), orderScheduleHandler(), /* B-W2b-340 */ orderOptionsHandler(), /* B-W2b-377 */ releasedReceiptHandler(), /* B-W2b-386 */ systemHoldsHandler(), /* B-W2b-393 */ ...suggestionHandlers(), /* B-W2b-394 */ mailRouteHandler(), inquiryFromAddressHandler(), bounceTaskHandler(), /* B-W2b-398 */ customerNoticeHandler(), trackingProblemsHandler(), carrierPodHandler(), returnLabelsUsedHandler(), /* B-W2b-407 */ ...ppvHandlers(), ...costOfSalesHandlers(), /* B-W2b-428 */ factsHandler(), /* B-W2b-401 */ sdiTestAnswerHandler(), sdiArchiveCopyHandler(), /* B-W2b-402 */ trustedRemindersHandler(), paymentNoticeHandler()]
+  return [...workerHandlers(), notificationsHandler(), ...searchHandlers(indexers), alertsRecheckHandler(), ...ladderHandlers(), ...creditNoteHandlers(), ...payablesHandlers(), releaseOnWorkOrderDoneHandler(), pauseAtClockOutHandler(), ...attendanceHandlers(), ...overtimeHandlers(), ...earningsHandlers(), ...inspectionTriggerHandlers(), alertRulesHandler(), ...incidentHandlers(), ...healthHandlers(), stripPicturesHandler(), partnerNotificationsHandler({ cookieSecret: () => LOCAL_COOKIE_SECRET }), ...onlinePaymentHandlers(), trackingLinkHandler(), sharesNotifyHandler(), ...routingCheckpointHandlers(), ...buildPackHandlers(), ...distributorHandlers(), ...declarationHandlers(), ...reevaluateHandlers(), ...gateHandlers(), lotLifecycleHandler(), ...warehouseTaskHandlers(), approvedSendHandler(), ...creditHandlers(), supplyLateHandler(), orderScheduleHandler(), /* B-W2b-340 */ orderOptionsHandler(), /* B-W2b-377 */ releasedReceiptHandler(), /* B-W2b-386 */ systemHoldsHandler(), /* B-W2b-393 */ ...suggestionHandlers(), /* B-W2b-394 */ mailRouteHandler(), inquiryFromAddressHandler(), bounceTaskHandler(), /* B-W2b-398 */ customerNoticeHandler(), trackingProblemsHandler(), carrierPodHandler(), returnLabelsUsedHandler(), /* B-W2b-407 */ ...ppvHandlers(), ...costOfSalesHandlers(), /* B-W2b-428 */ factsHandler(), /* B-W2b-401 */ sdiTestAnswerHandler(), sdiArchiveCopyHandler(), /* B-W2b-402 */ trustedRemindersHandler(), paymentNoticeHandler(), /* B-W2b-405 */ ...collectPackageHandlers(), /* B-W2b-395 */ collectionDeliveredHandler()]
 }
 
 /** background.ts starts exactly W1's HANDLERS and the W2a lists above: a list or factory a step adds fails the day until it runs here too. */
