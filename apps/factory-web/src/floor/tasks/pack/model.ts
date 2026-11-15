@@ -10,7 +10,7 @@ import type { Labels, PackLine, PackParcel, Packing, PackingRow } from './api'
  *   scan        what a code scanned at the bench is: a shipment's pack slip (or a carton's marks: its shipment), a
  *               garment's label for the shipment open (the office says what it is), or nothing of this station
  *   documents   what the station prints once packed, and why each part waits (the office issues the DDT and buys the
- *               labels; a station without its printer)
+ *               labels; a station without its printer); B-W2b-F50: whether the labels are TEST labels (rule: TEST labels say TEST)
  *   head        the shipment as the bench's strip says it
  */
 
@@ -66,13 +66,14 @@ export type LabelsHeld = 'notNeeded' | 'officeBuys' | 'noPrinter' | 'noRight' | 
 export type DocumentsHeld = 'officeIssues' | 'pdfMissing' | 'noPrinter' | null
 
 export interface DocumentsState {
-  readonly labels: { readonly held: LabelsHeld; readonly labelled: number; readonly total: number }
+  /** B-W2b-F50: `test` — the carrier labels here are TEST labels (`labelsTest`): the words say test, never bought. */
+  readonly labels: { readonly held: LabelsHeld; readonly labelled: number; readonly total: number; readonly test: boolean }
   readonly documents: { readonly held: DocumentsHeld; readonly ddtNumber: string | null; readonly ddtDate: string | null; readonly packingList: boolean }
   /** Something prints now with one tap (Print documents). */
   readonly printable: boolean
 }
 
-export function documentsState(packing: Pick<Packing, 'transportBy' | 'documents' | 'settings'>, labels: Pick<Labels, 'labelPrinterId' | 'toLabel' | 'parcels'> | null, can: { printLabels: boolean }): DocumentsState {
+export function documentsState(packing: Pick<Packing, 'transportBy' | 'documents' | 'settings'>, labels: Pick<Labels, 'labelPrinterId' | 'toLabel' | 'parcels' | 'testMode'> | null, can: { printLabels: boolean }): DocumentsState {
   const total = labels?.parcels.length ?? 0
   const labelled = labels?.parcels.filter((parcel) => parcel.trackingNumber !== null).length ?? 0
   const labelsHeld: LabelsHeld =
@@ -81,11 +82,43 @@ export function documentsState(packing: Pick<Packing, 'transportBy' | 'documents
   // The DDT is what must travel (DPR 472/1996): without it nothing prints here; the packing list goes with it.
   const documentsHeld: DocumentsHeld = !ddt ? 'officeIssues' : !packing.settings?.documentPrinterId ? 'noPrinter' : !ddt.fileId && !packing.documents.packingList ? 'pdfMissing' : null
   return {
-    labels: { held: labelsHeld, labelled, total },
+    labels: { held: labelsHeld, labelled, total, /* B-W2b-F50 */ test: packing.transportBy === 'CARRIER' && labelsTest(labels) },
     documents: { held: documentsHeld, ddtNumber: ddt?.number ?? null, ddtDate: ddt?.documentDate ?? null, packingList: packing.documents.packingList !== null },
     printable: labelsHeld === null || documentsHeld === null,
   }
 }
+
+// ---- B-W2b-F50: TEST labels say TEST (B-W2b-390, LOG-035) --------------------------------------------------------------------
+
+/**
+ * The carrier labels here are TEST labels: made by the test carrier while the site is in test mode, sent to no carrier, not
+ * charged. With a label: a parcel's label is TEST (the labels read's `test`; each row says its own). None yet: the site is in
+ * test mode (`testMode`: the office's buy will make TEST labels). No labels read: not known, so false (no test words).
+ */
+export function labelsTest(labels: { readonly testMode: boolean; readonly parcels: readonly LabelParcelFacts[] } | null): boolean {
+  if (!labels) return false
+  const labelled = labels.parcels.filter((parcel) => parcel.trackingNumber !== null)
+  return labelled.length > 0 ? labelled.some((parcel) => parcel.test) : labels.testMode
+}
+
+/** What the TEST rules read of a parcel in the labels read. */
+type LabelParcelFacts = Pick<Labels['parcels'][number], 'seq' | 'trackingNumber' | 'test'>
+
+/** A carton's carrier label as the bench lists it: its tracking number and whether it is TEST (null: no labels read, not known). */
+export interface LabelRow {
+  readonly seq: number
+  readonly trackingNumber: string | null
+  readonly test: boolean | null
+}
+
+/** The bench's label rows: from the labels read (each with its TEST flag), else the shipment's own parcels (TEST not known). */
+export function labelRows(packing: { readonly parcels: readonly Pick<PackParcel, 'seq' | 'trackingNumber'>[] }, labels: { readonly parcels: readonly LabelParcelFacts[] } | null): LabelRow[] {
+  if (labels) return labels.parcels.map((parcel) => ({ seq: parcel.seq, trackingNumber: parcel.trackingNumber, test: parcel.trackingNumber !== null && parcel.test }))
+  return [...packing.parcels].sort((a, b) => a.seq - b.seq).map((parcel) => ({ seq: parcel.seq, trackingNumber: parcel.trackingNumber, test: parcel.trackingNumber === null ? false : null }))
+}
+
+/** A label print job of a TEST label (its carton's row says so). */
+export const testJob = (job: { readonly what: string; readonly seq: number | null }, rows: readonly LabelRow[]): boolean => job.what === 'LABEL' && rows.some((row) => row.seq === job.seq && row.test === true)
 
 /** Unpacking waits while a carton has a carrier label or the shipment has a live DDT (the API's rule). */
 export function unpackHeld(packing: Pick<Packing, 'documents'> & { readonly parcels: readonly Pick<PackParcel, 'trackingNumber' | 'labelledAt'>[] }): 'labelled' | 'ddt' | null {

@@ -174,7 +174,8 @@ function ReadyRecord({ shipment, model, actions, panels, trackingLink, depth }: 
 
   const primary = step.kind ? (
     <Button size="sm" variant="primary" heldReason={stepHeld} onClick={runStep} aria-keyshortcuts={step.kind === 'issueDdt' ? 'd Meta+Enter' : step.kind === 'buyLabels' ? 'l Meta+Enter' : 'Meta+Enter Control+Enter'}>
-      {t(`step.${step.kind}`, { number: model.preview?.value?.expectedNumber ?? '', count: model.labels?.value?.toLabel ?? shipment.parcels.filter((parcel) => !parcel.trackingNumber).length })}
+      {/* B-W2b-F50: in test mode the step makes TEST labels (nothing bought): "Make 2 test labels". */}
+      {t(step.kind === 'buyLabels' && model.labels?.value?.testMode === true ? 'step.buyLabelsTest' : `step.${step.kind}`, { number: model.preview?.value?.expectedNumber ?? '', count: model.labels?.value?.toLabel ?? shipment.parcels.filter((parcel) => !parcel.trackingNumber).length })}
     </Button>
   ) : null
 

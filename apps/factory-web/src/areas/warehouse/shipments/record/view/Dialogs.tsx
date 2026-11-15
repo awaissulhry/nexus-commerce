@@ -195,21 +195,23 @@ function BuyDialog({ shipment, model, actions }: DialogProps) {
   const carrier = carrierWords(shipment)
   const toLabel = model.labels?.value?.toLabel ?? shipment.parcels.filter((parcel) => !parcel.trackingNumber).length
   const bought = model.bought
+  // B-W2b-F50: TEST labels say TEST: in test mode the buy makes TEST labels (nothing bought or charged), as the pickup dialog says it.
+  const test = (bought ?? model.labels?.value)?.testMode === true
   const done = bought ? (
     <div className="fw-sh-stack">
       <p className="fw-sh-done">
-        {bought.problem ? <CircleAlert size={16} aria-hidden /> : <CheckCircle2 size={16} aria-hidden />} {bought.problem ? t('buy.partial') : t('buy.done', { count: bought.outcomes.filter((entry) => entry.ok).length })}
+        {bought.problem ? <CircleAlert size={16} aria-hidden /> : <CheckCircle2 size={16} aria-hidden />} {bought.problem ? t('buy.partial') : t(test ? 'buy.doneTest' : 'buy.done', { count: bought.outcomes.filter((entry) => entry.ok).length })}
       </p>
       <ul className="fw-sh-list">
         {bought.outcomes.map((outcome) => (
-          <li key={outcome.parcelId}>{outcome.ok ? t('buy.parcelOk', { seq: outcome.seq }) : t('buy.parcelRefused', { seq: outcome.seq, problem: outcome.problem ?? '—' })}</li>
+          <li key={outcome.parcelId}>{outcome.ok ? t(test ? 'buy.parcelOkTest' : 'buy.parcelOk', { seq: outcome.seq }) : t('buy.parcelRefused', { seq: outcome.seq, problem: outcome.problem ?? '—' })}</li>
         ))}
       </ul>
       {bought.problem && <p className="fw-sh-hint">{bought.problem}</p>}
     </div>
   ) : undefined
   return (
-    <Frame title={t('buy.title')} held={model.busy ? t('held.busy') : null} go={() => actions?.onBuyLabels?.()} goLabel={t('buy.go', { count: toLabel })} onClose={close(actions)} problem={model.dialogProblem} done={done}>
+    <Frame title={t(test ? 'buy.titleTest' : 'buy.title')} held={model.busy ? t('held.busy') : null} go={() => actions?.onBuyLabels?.()} goLabel={t(test ? 'buy.goTest' : 'buy.go', { count: toLabel })} onClose={close(actions)} problem={model.dialogProblem} done={done}>
       <KeyValue
         labelCase="sentence"
         items={[
@@ -219,9 +221,15 @@ function BuyDialog({ shipment, model, actions }: DialogProps) {
         ]}
       />
       <ul className="fw-sh-list">
-        <li>{t('buy.outside')}</li>
-        <li>{t('buy.void')}</li>
-        <li>{t('buy.test')}</li>
+        {/* B-W2b-F50: in test mode nothing leaves the building and nothing is charged: only the test line. */}
+        {test ? (
+          <li>{t('buy.test')}</li>
+        ) : (
+          <>
+            <li>{t('buy.outside')}</li>
+            <li>{t('buy.void')}</li>
+          </>
+        )}
       </ul>
       {model.busy && (
         <p className="fw-sh-hint" role="status">
