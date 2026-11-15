@@ -2,6 +2,8 @@ import type { ReadyOrder, ShipmentRow, TransportBy } from '../api'
 import type { LiveState } from '../hooks'
 import type { PrintOutcome } from '../daily-model'
 import type { CutOffCard, Phrase, RowView, ShippingAbilities, TileKey } from '../model'
+// B-W2b-410
+import type { QueueDepthActions, QueueDepthModel } from '../queue/model'
 
 /** SCR-066 — the shipments list's view model (ShipmentsListView draws it and fetches nothing). */
 export interface ShipmentsListModel {
@@ -30,6 +32,8 @@ export interface ShipmentsListModel {
   create: NewShipmentModel | null
   /** B-W2a-71: Print N DDTs (the selection row), when open. */
   printDdts?: PrintDdtsModel | null
+  /** B-W2b-410: Ship today and At risk from the queue, Exceptions, the search, Hold N (null in W1's design cases). */
+  depth?: QueueDepthModel | null
   /** Design cases: the starting selection, the focused row, the keys panel. */
   selected?: string[]
   focusRow?: number
@@ -84,4 +88,6 @@ export interface ShipmentsListActions {
   onPrintDdts?: (ids: string[]) => void
   onPrintDdtsGo?: () => void
   onPrintDdtsClose?: () => void
+  // B-W2b-410
+  depth?: QueueDepthActions
 }
