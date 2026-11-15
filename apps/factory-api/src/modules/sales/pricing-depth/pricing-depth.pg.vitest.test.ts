@@ -443,6 +443,28 @@ async function upload(session: string, body: Buffer, fields: Json = {}): Promise
   return (await call(session, 'GET', `/imports/${job.id}`)).json().job
 }
 const rowsOf = async (session: string, jobId: string): Promise<Json[]> => (await call(session, 'GET', `/imports/${jobId}/rows`)).json().rows
+/**
+ * B-W2b-380: an upload that waits for the file store's token bucket (the gateway answers 503 "try again shortly" once this
+ * file's earlier uploads spent it): the whole upload again, a few seconds later, up to a minute.
+ */
+async function uploadSoon(session: string, body: Buffer, fields: Json = {}): Promise<Json> {
+  for (let attempt = 1; ; attempt++) {
+    const started = await call(session, 'POST', '/imports', { importerKey: 'sales.priceLists', file: { originalName: 'prices.csv', contentType: SHEET_TYPES.csv, sizeBytes: body.length, sha256: sha256(body) }, ...fields })
+    if (started.statusCode === 201) {
+      const { job, upload: presigned } = started.json() as { job: Json; upload: { url: string; headers: Record<string, string> } }
+      const sent = await app.inject({ method: 'PUT', url: presigned.url, headers: presigned.headers, payload: body })
+      const completed = sent.statusCode === 200 ? await call(session, 'POST', `/files/${job.fileId}/complete`) : null
+      if (completed?.statusCode === 200) {
+        await planImport(system(), job.id, { lastAttempt: true })
+        const read = (await call(session, 'GET', `/imports/${job.id}`)).json().job
+        if (read.status === 'PLANNED' || attempt >= 20) return read
+      }
+    } else if (started.statusCode !== 503 || attempt >= 20) {
+      expect(started.statusCode, started.body).toBe(201)
+    }
+    await new Promise((resolve) => setTimeout(resolve, 3_000))
+  }
+}
 
 describe('the export of a version and its import into the next draft (SAL-183)', () => {
   let exported = ''
@@ -452,19 +474,27 @@ describe('the export of a version and its import into the next draft (SAL-183)',
     expect(response.headers['content-disposition']).toContain('price-list-SEED-PL-P1-v2.csv')
     exported = response.body
     const lines = exported.trim().split('\r\n')
-    expect(lines[0]).toBe('Price list;Style;Colourway;Valid from;Valid to;Unit price;Quantity breaks')
-    expect(lines.slice(1)).toEqual([`SEED-PL-P1;SEED-JKT-01;*;-;-;435;"10=425;20=420"`, `SEED-PL-P1;SEED-JKT-02;*;-;${addDays(TODAY, 20)};400;`, `SEED-PL-P1;SEED-JKT-02;*;${addDays(TODAY, 21)};-;415;`, `SEED-PL-P1;SEED-JKT-02;RED;${addDays(TODAY, 21)};-;430;`])
+    // B-W2b-380 (XF6:04): the size surcharges column; the version's own row first (its 3 % on every price, size 56 + 20 for
+    // every style); SEED-JKT-01's row for every colourway from the start carries its 5 % on size 54.
+    expect(lines[0]).toBe('Price list;Style;Colourway;Valid from;Valid to;Unit price;Quantity breaks;Size surcharges')
+    expect(lines.slice(1)).toEqual([
+      'SEED-PL-P1;*;*;-;;;100=3%;56=20',
+      `SEED-PL-P1;SEED-JKT-01;*;-;-;435;"10=425;20=420";54=5%`,
+      `SEED-PL-P1;SEED-JKT-02;*;-;${addDays(TODAY, 20)};400;;`,
+      `SEED-PL-P1;SEED-JKT-02;*;${addDays(TODAY, 21)};-;415;;`,
+      `SEED-PL-P1;SEED-JKT-02;RED;${addDays(TODAY, 21)};-;430;;`,
+    ])
     const xlsx = await call('sales', 'GET', `${v(P1_V2)}/export?format=xlsx&numberFormat=en`)
     const workbook = new ExcelJS.Workbook()
     await workbook.xlsx.load(xlsx.rawPayload as unknown as ArrayBuffer)
-    expect(workbook.getWorksheet('Prices')!.getRow(2).getCell(6).value).toBe(435)
-    expect(workbook.getWorksheet('Columns')!.rowCount).toBe(8)
+    expect(workbook.getWorksheet('Prices')!.getRow(3).getCell(6).value).toBe(435)
+    expect(workbook.getWorksheet('Columns')!.rowCount).toBe(9)
     expect((await refused('salesNoPrice', 'GET', `${v(P1_V2)}/export?format=csv`, undefined, 403)).message).toBe("A price list's file holds its prices: your role does not see prices.")
   })
 
   it('reads its own file back unchanged; an edited file updates the draft, refusing in words what it cannot', async () => {
     const same = await upload('sales', Buffer.from(exported, 'utf8'), { companyId: companyA })
-    expect(same).toMatchObject({ status: 'PLANNED', rowCount: 4, unchangedCount: 4, errorCount: 0 })
+    expect(same).toMatchObject({ status: 'PLANNED', rowCount: 5, unchangedCount: 5, errorCount: 0 })
     const edited = Buffer.from(
       [
         'Listino;Modello;Variante;Valido dal;Valido al;Prezzo;Scaglioni',
@@ -502,5 +532,54 @@ describe('the export of a version and its import into the next draft (SAL-183)',
     // A person without the price grain may not map the price columns at all.
     const blind = await call('salesNoPrice', 'POST', '/imports', { importerKey: 'sales.priceLists', file: { originalName: 'p.csv', contentType: SHEET_TYPES.csv, sizeBytes: edited.length, sha256: sha256(edited) } })
     expect([201, 403]).toContain(blind.statusCode)
+  })
+
+  it("carries the version's own breaks and surcharges and a style's surcharges, both ways (B-W2b-380 XF6:04)", async () => {
+    const file = Buffer.from(
+      [
+        'Listino;Modello;Variante;Valido dal;Valido al;Prezzo;Scaglioni;Maggiorazioni taglia',
+        // The version's own row: every price 4 % from 100 pieces, size 56 + 25 for every style.
+        'SEED-PL-P1;*;*;-;;;100=4%;56=25',
+        // SEED-JKT-01's row for every colourway from the start: its surcharges as a whole set (size 54 at 6 %, 52 at 2 %).
+        'SEED-PL-P1;SEED-JKT-01;*;-;;;;54=6% | 52=2%',
+        // A style the draft has no such price of: its surcharges alone.
+        'SEED-PL-P1;SEED-JKT-05;*;-;;;;54=7',
+        // Refused in words: surcharges on a colourway's row, a price on the version's row, a size the style does not have.
+        'SEED-PL-P1;SEED-JKT-01;BLK;-;;;;54=1',
+        'SEED-PL-P1;*;BLK;-;;440;;',
+        'SEED-PL-P1;SEED-JKT-02;*;-;;;;99=1',
+      ].join('\r\n'),
+      'utf8',
+    )
+    const job = await uploadSoon('sales', file, { companyId: companyA })
+    const rows = await rowsOf('sales', job.id)
+    expect(rows.map((row) => [row.rowNumber, row.action])).toEqual([
+      [2, 'UPDATE'],
+      [3, 'UPDATE'],
+      [4, 'CREATE'],
+      [5, 'ERROR'],
+      [6, 'ERROR'],
+      [7, 'ERROR'],
+    ])
+    expect(rows[3]!.errors[0].message).toBe("Size surcharges go on the style's row with colourway * and first day -.")
+    expect(rows[4]!.errors.map((error: Json) => error.column)).toEqual(['colourway', 'unitPrice'])
+    expect(rows[5]!.errors[0].message).toMatch(/^99 is not a size of SEED-JKT-02/)
+    const applied = await call('sales', 'POST', `/imports/${job.id}/apply`, { version: job.version })
+    expect(applied.statusCode, applied.body).toBe(200)
+    await applyPlan(system(), job.id, { lastAttempt: true })
+    const rules = await ok('sales', 'GET', `${v(v3)}/rules`)
+    expect(rules.breaks.filter((row: Json) => row.entryId === null).map((row: Json) => [row.minQuantity, row.discountPct])).toEqual([[100, '4']])
+    expect(rules.sizeSurcharges.map((row: Json) => [row.style?.code ?? '*', row.size, row.amount, row.pct]).sort()).toEqual([
+      ['*', '56', '25', null],
+      ['SEED-JKT-01', '52', null, '2'],
+      ['SEED-JKT-01', '54', null, '6'],
+      ['SEED-JKT-05', '54', '7', null],
+    ])
+    expect((await eventsOf(P1_LIST)).filter((event) => event.type === 'price_list.rules_changed' && event.payload.versionId === v3).map((event) => event.payload.change).sort()).toEqual(['BREAKS', 'SIZE_SURCHARGES', 'SIZE_SURCHARGES', 'SIZE_SURCHARGES'])
+    // The draft exported and imported again changes nothing: every row (the version's own, the surcharges alone) reads back.
+    const exported = await call('sales', 'GET', `${v(v3)}/export?format=csv`)
+    expect(exported.body.split('\r\n').filter((line) => line.startsWith('SEED-PL-P1;*;') || line.startsWith('SEED-PL-P1;SEED-JKT-05;'))).toEqual(['SEED-PL-P1;*;*;-;;;100=4%;56=25', 'SEED-PL-P1;SEED-JKT-05;*;-;;;;54=7'])
+    const again = await uploadSoon('sales', Buffer.from(exported.body, 'utf8'), { companyId: companyA })
+    expect(again).toMatchObject({ status: 'PLANNED', errorCount: 0, createCount: 0, updateCount: 0 })
   })
 })

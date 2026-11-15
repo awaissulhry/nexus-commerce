@@ -105,9 +105,12 @@ describe('check-event-contract', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
     // a proposal changed, an invoice paid by its proposal, the remittance switch's payables_settings.changed): 904 → 906, 1442 → 1446.
     // B-W2b-421: three events (custom_field.changed, picklist.changed, custom_value.changed) and three literal emits: with
     // B-W2b-403, 906 → 909 and 1446 → 1449.
+    // B-W2b-380: two events (price_list.pdf_kept, price_list.pdf_sent) and four literal emits (the PDF kept and mailed; the
+    // import's size surcharges of a style and its version row's rules_changed): 912 → 914, 1449 → 1453.
     // B-W2b-395: two events (shipping.pickup_changed, shipping.day_sheet_closed) and five literal emits (a pickup booked, answered
-    // or moved; a day sheet closed; a collection recorded; a collection delivered: tracking recorded and status changed): 912 → 914, 1449 → 1454.
-    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(914 declared event version\(s\), 1454 literal emit/) })
+    // or moved; a day sheet closed; a collection recorded; a collection delivered: tracking recorded and status changed): with
+    // B-W2b-380 and B-W2b-405 (main 6218b241da) the guard counts 921 and 1467; with the planted event and emit: 922, 1468.
+    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(922 declared event version\(s\), 1468 literal emit/) })
   })
 
   it.each<[string, Plants, RegExp]>([

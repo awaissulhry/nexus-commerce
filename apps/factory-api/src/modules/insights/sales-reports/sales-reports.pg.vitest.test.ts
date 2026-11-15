@@ -264,6 +264,29 @@ describe('return reasons (SAL-458)', () => {
       ['T348-RMA-1', 20, 'DEFECT', '52'],
     ])
   })
+
+  it('by reason group (ReasonCode.group, B-W2b-380 XF6:06): the seed groups, a reason without one under none, a renamed group follows', async () => {
+    const answer = await ok('sales', '/sales/reports/returns')
+    expect(answer.reasons.map((reason: Json) => [reason.key, reason.group])).toEqual([
+      ['WRONG_SIZE', 'Taglia'],
+      ['DEFECT', 'Qualità'],
+    ])
+    expect(answer.reasonGroups.map((group: Json) => [group.key, group.reasons, group.figures.pieces, group.figures.lines])).toEqual([
+      ['Taglia', ['WRONG_SIZE'], 2, 1],
+      ['Qualità', ['DEFECT'], 1, 1],
+    ])
+    // The same words are one group; a reason whose group is cleared falls in `none`.
+    await admin(`UPDATE "ReasonCode" SET "group" = 'Taglia' WHERE "tenantId" = $1 AND list = 'RETURN' AND code = 'DEFECT'`, [T])
+    const joined = await ok('sales', '/sales/reports/returns')
+    expect(joined.reasonGroups.map((group: Json) => [group.key, group.reasons, group.figures.pieces, group.figures.returns])).toEqual([['Taglia', ['DEFECT', 'WRONG_SIZE'], 3, 1]])
+    await admin(`UPDATE "ReasonCode" SET "group" = NULL WHERE "tenantId" = $1 AND list = 'RETURN' AND code = 'DEFECT'`, [T])
+    const none = await ok('sales', '/sales/reports/returns')
+    expect(none.reasonGroups.map((group: Json) => [group.key, group.reasons, group.figures.pieces])).toEqual([
+      ['Taglia', ['WRONG_SIZE'], 2],
+      ['none', ['DEFECT'], 1],
+    ])
+    await admin(`UPDATE "ReasonCode" SET "group" = 'Qualità' WHERE "tenantId" = $1 AND list = 'RETURN' AND code = 'DEFECT'`, [T])
+  })
 })
 
 describe('quote speed and the headline', () => {

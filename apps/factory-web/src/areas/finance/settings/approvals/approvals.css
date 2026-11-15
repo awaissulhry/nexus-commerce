@@ -1,0 +1,16 @@
+/* B-W2b-425 — Finance › Settings › Approvals & notifications (SCR-519): a mail switch's words on the left, its button on the right; stacked on a phone. */
+.fw-fap-switch {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--nds-space-12);
+  padding-block: var(--nds-space-8);
+  border-top: 1px solid var(--nds-border);
+  min-width: 0;
+}
+
+@media (max-width: 640px) {
+  .fw-fap-switch {
+    flex-direction: column;
+  }
+}

@@ -8,6 +8,10 @@ import { readRules, type VersionRules } from '../depth/api'
 import { abilitiesOf, versionToShow } from '../model'
 import { readProblem } from '../problems'
 import { PriceListPrintView } from './view/PriceListPrintView'
+// B-W2b-380 (XF6:01): the PDF kept for mail.
+import { useLocale } from '../../../../lib/i18n/provider'
+import { useKeptPdf } from '../pdf/use-kept-pdf'
+import { KeptPdfPart } from '../pdf/view/KeptPdfPart'
 
 interface PrintRead {
   list: PriceListDetail | null
@@ -17,6 +21,8 @@ interface PrintRead {
 }
 
 const EMPTY: PrintRead = { list: null, prices: null, rules: null, problem: null }
+/** B-W2b-380: no customer read yet. */
+const NO_CUSTOMERS: readonly never[] = []
 
 /**
  * `/w/<company>/sales/price-lists/<id>/print?version=<id>` (SCR-420, design tab:pricelists.pdf "Sent to a customer or
@@ -58,6 +64,10 @@ export function PriceListPrint({ listId }: { listId: string }) {
     }
   }, [api, can.view, can.price, listId, asked])
 
+  const locale = useLocale()
+  const shown = read.prices?.version ?? null
+  const kept = useKeptPdf({ api, listId, versionId: shown?.id ?? null, none: !!read.list && !read.prices && !read.problem, companyId: session.company?.id ?? null, can: { manage: can.manage, price: can.price }, customers: read.list?.customers ?? NO_CUSTOMERS, locale: locale === 'en' ? 'en' : 'it' })
+
   return (
     <PriceListPrintView
       model={{
@@ -67,6 +77,7 @@ export function PriceListPrint({ listId }: { listId: string }) {
         can,
         back: `${pathname.replace(/\/print\/?$/, '')}${asked ? `?tab=prices&version=${encodeURIComponent(asked)}` : ''}`,
         ...read,
+        kept: <KeptPdfPart model={kept.model} actions={kept.actions} />,
       }}
     />
   )

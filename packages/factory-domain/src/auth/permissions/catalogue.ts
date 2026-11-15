@@ -403,6 +403,8 @@ import { PAYABLES_DEPTH_DEFINITIONS, PAYABLES_DEPTH_PERMISSIONS } from '../../pa
 import { FIELDS_DEFINITIONS, FIELDS_PERMISSIONS } from '../../fields/permissions'
 // B-W2b-422: templates (documents.templates.manage: document and e-mail templates; email.replies.share: the office's saved replies).
 import { DOCUMENT_TEMPLATES_DEFINITIONS, SAVED_REPLIES_DEFINITIONS, TEMPLATES_PERMISSIONS } from '../../templates/permissions'
+// B-W2b-405: data protection in depth (privacy.requests.view | manage, privacy.erase, privacy.retention.manage).
+import { PRIVACY_DEPTH_DEFINITIONS, PRIVACY_DEPTH_PERMISSIONS } from '../../privacy/retention/permissions'
 // B-W2b-395: carrier pickups (shipping.pickups.book).
 import { SHIPPING_PICKUPS_DEFINITIONS, SHIPPING_PICKUPS_PERMISSIONS } from '../../shipping/pickups/permissions'
 
@@ -1119,6 +1121,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   // B-W2b-422: templates (areas `documents`, `email`).
   DOCUMENT_TEMPLATES_DEFINITIONS,
   SAVED_REPLIES_DEFINITIONS,
+  // B-W2b-405: data protection in depth (area `privacy`).
+  PRIVACY_DEPTH_DEFINITIONS,
   // B-W2b-395: carrier pickups (area `shipping`).
   SHIPPING_PICKUPS_DEFINITIONS,
 ])
@@ -1525,6 +1529,8 @@ for (const name of PAYABLES_DEPTH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclar
 for (const name of FIELDS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-422: templates.
 for (const name of TEMPLATES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-405: data protection in depth.
+for (const name of PRIVACY_DEPTH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-395: carrier pickups.
 for (const name of SHIPPING_PICKUPS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {

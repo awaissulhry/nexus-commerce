@@ -7,6 +7,8 @@ import type { Loaded } from '../parts'
 // B-W2b-343: Breaks & surcharges, dated prices, import, export and the price list PDF.
 import type { Minimum, PriceBreak, VersionRules } from '../depth/api'
 import type { BreakDraft, MinimumDraft, SurchargeDraft, SurchargeGridRow } from '../depth/model'
+// B-W2b-380 (XF6:03)
+import type { MinimumEditState, MinimumField } from '../minimums/model'
 
 /**
  * The price list record's view model (SCR-106-record; design sales.pricelists "Record: Price list"): everything the
@@ -124,6 +126,8 @@ export interface BreaksDepthModel {
   notice: { tone: Tone; words: Phrase } | null
   /** New minimum › a material: the search and its results. */
   materials: { query: string; results: Array<{ id: string; code: string; name: string }> | null }
+  /** B-W2b-380 (XF6:03): the minimums edited in place (each cell's save, the last word). */
+  minimumEdit?: MinimumEditState
 }
 
 export interface BreaksDepthActions {
@@ -142,6 +146,9 @@ export interface BreaksDepthActions {
   onMaterialQuery?: (query: string) => void
   onRetry?: () => void
   onDismissNotice?: () => void
+  /** B-W2b-380 (XF6:03): a minimum's cell typed or picked (saved alone), and the minimums' notice dismissed. */
+  onMinimumCell?: (row: Minimum, field: MinimumField, text: string) => void
+  onMinimumNoticeDismiss?: () => void
 }
 
 export interface PriceListRecordActions {

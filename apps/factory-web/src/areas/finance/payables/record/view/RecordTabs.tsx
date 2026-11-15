@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useRef } from 'react'
+import { useMemo, useRef, type ReactNode } from 'react'
 import Link from 'next/link'
 import { Ban, CheckCheck, CreditCard, MoreHorizontal, Plus, Send, Undo2 } from 'lucide-react'
 import { Banner, Card, EmptyState, KeyValue, Menu, SummaryTable, type MenuItemDef } from '@nexus/ui/components'
@@ -16,10 +16,18 @@ import { actionHeld, mappingOptions, mappingValue, orderHref, PAYABLES_NAMESPACE
 import type { SupplierInvoiceActions, SupplierInvoiceModel } from '../record-model'
 import { MatchPanel } from './MatchPanel'
 
+/** B-W2b-425: the leather area check (Match), dual approval (Approval) and the payment batch (Payment), each its own container or a design case's view. */
+export interface SupplierInvoiceDepth {
+  readonly area?: ReactNode
+  readonly dual?: ReactNode
+  readonly payment?: ReactNode
+}
+
 interface TabProps {
   readonly invoice: SupplierInvoice
   readonly model: SupplierInvoiceModel
   readonly actions?: SupplierInvoiceActions
+  readonly depth?: SupplierInvoiceDepth
 }
 
 const EMPTY_LINE = { description: '', quantity: '', uom: '', unitPrice: '', net: '', vatRate: '22', vatNature: '' }
@@ -237,7 +245,7 @@ function draftOf(line: InvoiceLine) {
  * the accountant yet), "Send to buyer" when lines are outside it, and the empty state "No PO linked — choose the PO or
  * mark it as an invoice without PO". A credit note is never matched against receipts.
  */
-export function MatchTab({ invoice, model, actions }: TabProps) {
+export function MatchTab({ invoice, model, actions, depth }: TabProps) {
   const t = useT(PAYABLES_NAMESPACE)
   const locale = useLocale()
   const held = useHeld()
@@ -300,13 +308,14 @@ export function MatchTab({ invoice, model, actions }: TabProps) {
           {unmapped > 0 && <p className="fw-fpy-muted">{t('match.someUnmapped', { count: unmapped })}</p>}
         </>
       )}
-      <p className="fw-fpy-muted">{t('match.areaLater')}</p>
+      {/* B-W2b-425: the leather area check (rec:Supplier invoice › Match › three-way#1). */}
+      {depth?.area}
     </div>
   )
 }
 
 /** Approval (design "Approval": who approves; separation of duties — "You entered this invoice, so someone else approves it"). */
-export function ApprovalTab({ invoice, model, actions }: TabProps) {
+export function ApprovalTab({ invoice, model, actions, depth }: TabProps) {
   const t = useT(PAYABLES_NAMESPACE)
   const locale = useLocale()
   const held = useHeld()
@@ -346,7 +355,7 @@ export function ApprovalTab({ invoice, model, actions }: TabProps) {
             <ul className="fw-fpy-list" aria-label={t('approval.problems')}>
               {problems.map((problem) => (
                 <li key={problem.code}>
-                  <Banner tone={problem.code === 'OWN_INVOICE' ? 'info' : 'warning'} title={t(refusalPhrase(problem.code).key)} />
+                  <Banner tone={problem.code === 'OWN_INVOICE' || problem.code === 'OWN_ACCEPTANCE' ? 'info' : 'warning'} title={t(refusalPhrase(problem.code).key)} />
                 </li>
               ))}
             </ul>
@@ -385,13 +394,16 @@ export function ApprovalTab({ invoice, model, actions }: TabProps) {
           </span>
         </div>
       </Card>
-      <Card padded>
-        <div className="fw-fpy-stack">
-          <h3 className="fw-fpy-h3">{t('approval.rulesTitle')}</h3>
-          <p className="fw-fpy-muted">{t('approval.rules')}</p>
-          <p className="fw-fpy-muted">{t('approval.dualLater')}</p>
-        </div>
-      </Card>
+      <div className="fw-fpy-stack">
+        <Card padded>
+          <div className="fw-fpy-stack">
+            <h3 className="fw-fpy-h3">{t('approval.rulesTitle')}</h3>
+            <p className="fw-fpy-muted">{t('approval.rules')}</p>
+          </div>
+        </Card>
+        {/* B-W2b-425: dual approval above the amount (rec:Supplier invoice › Approval › approve#1). */}
+        {depth?.dual}
+      </div>
     </div>
   )
 }
@@ -406,8 +418,8 @@ export function approveHeldOf(invoice: SupplierInvoice, model: Pick<SupplierInvo
   return null
 }
 
-/** Payment (design "Payment": due, terms, paid on; the payment batch and the IBAN check are W2b). */
-export function PaymentTab({ invoice, model, actions }: TabProps) {
+/** Payment (design "Payment": due, terms, paid on; B-W2b-425: the payment batch and the IBAN check in `depth.payment`). */
+export function PaymentTab({ invoice, model, actions, depth }: TabProps) {
   const t = useT(PAYABLES_NAMESPACE)
   const locale = useLocale()
   const held = useHeld()
@@ -416,34 +428,37 @@ export function PaymentTab({ invoice, model, actions }: TabProps) {
   const installments = invoice.paymentTerms?.installments ?? []
   return (
     <div className="fw-fpy-pair">
-      <Card padded>
-        <div className="fw-fpy-stack">
-          <h3 className="fw-fpy-h3">{t('payment.title')}</h3>
-          <KeyValue
-            columns={1}
-            labelCase="sentence"
-            items={[
-              { label: t('payment.due'), value: day(invoice.payment.dueDate) },
-              { label: t('payment.paidOn'), value: invoice.payment.paidOn ? day(invoice.payment.paidOn) : t('payment.notPaid') },
-              { label: t('payment.ref'), value: invoice.payment.paymentRef ?? '—' },
-              ...(model.can.cost ? [{ label: t('payment.amount'), value: money(invoice.grossTotal ?? null, invoice.currency, locale) }] : []),
-              { label: t('payment.batch'), value: t('payment.batchLater') },
-            ]}
-          />
-          <span className="fw-fpy-inline">
-            {invoice.status !== 'PAID' && invoice.status !== 'VOIDED' && (
-              <Button
-                size="sm"
-                variant="primary"
-                heldReason={held(payHeld) ?? (model.busy ? t('held.busy') : null)}
-                onClick={() => actions?.onDialog?.({ kind: 'pay', paidOn: model.today, paymentRef: '' })}
-              >
-                <CreditCard size={14} aria-hidden /> {t('payment.markPaid')}
-              </Button>
-            )}
-          </span>
-        </div>
-      </Card>
+      <div className="fw-fpy-stack">
+        <Card padded>
+          <div className="fw-fpy-stack">
+            <h3 className="fw-fpy-h3">{t('payment.title')}</h3>
+            <KeyValue
+              columns={1}
+              labelCase="sentence"
+              items={[
+                { label: t('payment.due'), value: day(invoice.payment.dueDate) },
+                { label: t('payment.paidOn'), value: invoice.payment.paidOn ? day(invoice.payment.paidOn) : t('payment.notPaid') },
+                { label: t('payment.ref'), value: invoice.payment.paymentRef ?? '—' },
+                ...(model.can.cost ? [{ label: t('payment.amount'), value: money(invoice.grossTotal ?? null, invoice.currency, locale) }] : []),
+              ]}
+            />
+            <span className="fw-fpy-inline">
+              {invoice.status !== 'PAID' && invoice.status !== 'VOIDED' && (
+                <Button
+                  size="sm"
+                  variant="primary"
+                  heldReason={held(payHeld) ?? (model.busy ? t('held.busy') : null)}
+                  onClick={() => actions?.onDialog?.({ kind: 'pay', paidOn: model.today, paymentRef: '' })}
+                >
+                  <CreditCard size={14} aria-hidden /> {t('payment.markPaid')}
+                </Button>
+              )}
+            </span>
+          </div>
+        </Card>
+        {/* B-W2b-425: the payment batch and the IBAN used (rec:Supplier invoice › Payment › pay). */}
+        {depth?.payment}
+      </div>
       <Card padded>
         <div className="fw-fpy-stack">
           <h3 className="fw-fpy-h3">{t('payment.terms')}</h3>
@@ -467,7 +482,6 @@ export function PaymentTab({ invoice, model, actions }: TabProps) {
             />
           )}
           {invoice.paymentTerms?.condition && <p className="fw-fpy-muted">{t('payment.condition', { code: invoice.paymentTerms.condition })}</p>}
-          <p className="fw-fpy-muted">{t('payment.ibanLater')}</p>
         </div>
       </Card>
     </div>

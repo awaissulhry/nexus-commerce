@@ -46,6 +46,9 @@ import type { ReminderDialogState } from './view/ReminderDialog'
 import { ReceivablesView, type Notice, type ReceivablesModel } from './view/ReceivablesView'
 // B-W2b-304: Finance › Receivables › Credit limits (sec:credit).
 import { CreditLimits } from './credit/CreditLimits'
+// B-W2b-425: reminder stops and trusted levels (sec:reminders#1, #2).
+import { ReminderDepth } from './reminder-stops/ReminderDepth'
+import { ReminderStops } from './reminder-stops/ReminderStops'
 import type { StatementState } from './view/StatementDialog'
 
 const SLOW_MS = 1000
@@ -310,6 +313,7 @@ export function ReceivablesPage() {
     <ReceivablesView
       model={model}
       credit={<CreditLimits prefix={prefix} />}
+      depth={{ stops: <ReminderStops prefix={prefix} />, reminder: reminder?.value ? <ReminderDepth key={reminder.value.id} reminder={reminder.value} onChanged={() => readReminder(reminder.value!.id)} /> : null }}
       actions={{
         onAddress: go,
         onSearch: (text) => {

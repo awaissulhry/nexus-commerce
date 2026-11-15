@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { Banner, Card, Field, KeyValue, SummaryTable } from '@nexus/ui/components'
 import { Button, Input, Pill, SegmentedControl, Tag } from '@nexus/ui/primitives'
@@ -46,6 +46,7 @@ export function ReminderDialog({
   onEdit,
   onSkip,
   onCancel,
+  depth,
 }: {
   state: ReminderDialogState
   ids: readonly string[]
@@ -69,6 +70,8 @@ export function ReminderDialog({
   onEdit?: (reminder: Reminder, input: { subject?: string; body?: string; language?: 'it' | 'en' }) => Promise<boolean>
   onSkip?: (reminder: Reminder, reason: string) => Promise<boolean>
   onCancel?: (reminder: Reminder, reason: string) => Promise<boolean>
+  /** B-W2b-425: the stops on its invoices and the customer's trusted level (its own container, or a design case's view). */
+  depth?: ReactNode
 }) {
   const t = useT(RECEIVABLES_NAMESPACE)
   const locale = useLocale()
@@ -211,6 +214,8 @@ export function ReminderDialog({
                 </ul>
               </Banner>
             )}
+            {/* B-W2b-425: Held (W2b stop rules) and trusted levels (sec:reminders#1, #2). */}
+            {depth}
             {reminder.status === 'PREPARED' && !switchedOn && (
               <Banner tone="info" title={t('switch.offTitle')}>
                 {t('reminder.offBody')}
