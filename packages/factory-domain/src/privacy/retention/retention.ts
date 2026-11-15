@@ -8,7 +8,8 @@ import { businessDate, type BusinessDate } from '../../core/time'
  *
  * GATE-PRIVACY: the periods wait for the Owner's privacy consultant. A rule is made with a made-up period (UNVERIFIED) and only
  * REPORTS what it would do until a person switches it on (RetentionRule.applyOn, with a fresh code); the database refuses an
- * APPLY sweep of a rule nobody switched on. The append-only ledgers are never swept (the Owner's open question).
+ * APPLY sweep of a rule nobody switched on. The append-only ledgers are never swept and never purged (the Owner's decision of
+ * 15 November 2026).
  */
 
 export const RETENTION_ACTIONS = ['DELETE', 'ANONYMISE', 'ARCHIVE'] as const
@@ -92,24 +93,28 @@ export const SWEEP_HELD = ['IMMUTABLE', 'NEVER_DELETED', 'ARCHIVE_STAYS', 'NOT_Y
 export type SweepHeld = (typeof SWEEP_HELD)[number]
 
 export const SWEEP_HELD_WORDS: Readonly<Record<SweepHeld, string>> = Object.freeze({
-  IMMUTABLE: 'The database keeps this record unchanged once written (a mail as it came, a message as it was sent): anonymising it waits for a guarded erasure path (a schema step).',
+  IMMUTABLE: "The database blanks a received mail only for a person's erasure request (GDPR art. 17), never by a sweep: the rule can only report it.",
   NEVER_DELETED: 'The database never deletes this record (an export expires, its file goes): the rule can only report it.',
   ARCHIVE_STAYS: 'Archived where it is: nothing is erased (the fiscal archive keeps the document and its file for the law).',
   NOT_YET: 'Not yet: the database keeps it a little longer (a closed error item 30 days, a job run 7 days).',
 })
 
-/** The ledgers the database keeps append-only: never swept, kept until the Owner decides (open question, GATE-PRIVACY). */
-export const WAITING_LEDGERS = ['AuditLog', 'ReadLog', 'SecurityEvent', 'StepUpAttempt'] as const
-export type WaitingLedger = (typeof WAITING_LEDGERS)[number]
+/**
+ * The ledgers the database keeps append-only: never swept and never purged after a period (the Owner's decision of 15 November
+ * 2026, answering B-W2b-405's question). An erasure request still blanks the person's details inside an audit row (B-W2b-F54);
+ * the row stays.
+ */
+export const APPEND_ONLY_LEDGERS = ['AuditLog', 'ReadLog', 'SecurityEvent', 'StepUpAttempt'] as const
+export type AppendOnlyLedger = (typeof APPEND_ONLY_LEDGERS)[number]
 
-export const WAITING_LEDGER_WORDS: Readonly<Record<WaitingLedger, string>> = Object.freeze({
+export const LEDGER_WORDS: Readonly<Record<AppendOnlyLedger, string>> = Object.freeze({
   AuditLog: 'Every change to a record, who made it and when (append-only).',
   ReadLog: 'Who opened or downloaded a sensitive record (append-only).',
   SecurityEvent: 'Sign-ins, failed sign-ins, lockouts, role changes and exports (append-only).',
   StepUpAttempt: 'Every try of a fresh code (append-only).',
 })
 
-export const WAITING_WORDS = "Kept: the database keeps it append-only. Whether it may be purged after a period waits for the Owner's decision."
+export const LEDGER_KEPT_WORDS = "Kept for good: the database keeps it append-only and it is never purged after a period (the Owner's decision of 15 November 2026)."
 
 /** Records the privacy pack keeps for good: the requests and their answers, the rules and their sweeps, what an erasure did. */
 export const KEPT_FOR_GOOD = ['DataRequest', 'ErasureRecord', 'RetentionRule', 'RetentionSweep'] as const

@@ -276,7 +276,8 @@
         "STILL_ACTIVE": "Questa persona lavora ancora qui (un dipendente o un account di reparto attivo): rendila anonima dopo che è uscita.",
         "ACCOUNT_OPEN": "Questo account d'ufficio è ancora aperto: disattivalo prima (Admin › Utenti), poi rendilo anonimo.",
         "NOT_A_PROSPECT": "Questa richiesta nomina il contatto di un cliente, non un potenziale cliente: rendi anonimo il contatto.",
-        "TOO_MANY": "Questa persona ha più schede di quante una cancellazione ne scriva in una volta: chiedi all'amministratore di dividerla."
+        "TOO_MANY": "Questa persona ha più schede di quante una cancellazione ne scriva in una volta: chiedi all'amministratore di dividerla.",
+        "MAIL_SENDING": "Una mail a questa persona è in invio proprio ora: riprova tra due minuti, quando è partita."
       },
       "section": {
         "anonymised": {
@@ -312,7 +313,7 @@
         "HEALTH": "Sorveglianza sanitaria e infortuni si conservano 10 anni dalla fine del rapporto (art. 25 D.Lgs. 81/2008; art. 17(3)(b) GDPR).",
         "CUSTOMER": "La scheda del cliente nomina la persona e ordini e fatture la richiamano (art. 2220 c.c.: 10 anni; art. 17(3)(b) GDPR).",
         "MEASUREMENTS": "Le misure su cui è stato fatto il capo, per la garanzia legale (art. 132 D.Lgs. 206/2005: 26 mesi); le foto vanno via alla loro data.",
-        "IMMUTABLE": "Conservato per ora: il database non cambia questa scheda una volta scritta (una mail, un messaggio, una riga di storico); svuotare il nome attende un percorso di cancellazione protetto.",
+        "IMMUTABLE": "Ciò che il server di posta ha registrato all'arrivo della mail (il mittente della busta) resta com'era; gli altri dati della persona nella mail vengono svuotati.",
         "ALREADY_ERASED": "Già resa anonima prima: non resta nulla della persona.",
         "NOTICE_PROOF": "La prova che alla persona è stata data l'informativa (artt. 5(2), 13 GDPR): nomina la versione dell'informativa, non i dati della persona."
       },
@@ -365,6 +366,7 @@
         "cc": "copie",
         "before": "valori prima",
         "after": "valori dopo",
+        "envelopeFrom": "mittente della busta",
         "other": "altri dati"
       },
       "held": {
@@ -477,8 +479,8 @@
       },
       "sweepHeld": {
         "IMMUTABLE": {
-          "short": "trattenute: non si cambiano",
-          "long": "Il database non cambia questa scheda una volta scritta (una mail come è arrivata): renderla anonima attende un percorso di cancellazione protetto."
+          "short": "trattenute: solo richieste di cancellazione",
+          "long": "Il database svuota una mail ricevuta solo per una richiesta di cancellazione della persona, mai con una pulizia: la regola può solo riferirla."
         },
         "NEVER_DELETED": {
           "short": "trattenute: mai cancellate",
@@ -629,11 +631,11 @@
         "night": "Pulizia notturna"
       },
       "ledgers": {
-        "title": "Conservati, in attesa della decisione del Titolare",
+        "title": "Conservati per sempre, mai eliminati",
         "intro": "Il database tiene questi registri in sola aggiunta: mai puliti, mai proposti per una regola.",
         "what": "Cosa contiene",
         "kept": "Conservato",
-        "words": "Se si possano eliminare dopo un periodo attende la decisione del Titolare."
+        "words": "Il Titolare ha deciso (15 novembre 2026): questi registri non si eliminano mai dopo un periodo. Una richiesta di cancellazione svuota comunque i dati della persona nello storico delle modifiche; le sue righe restano."
       },
       "ledger": {
         "AuditLog": {

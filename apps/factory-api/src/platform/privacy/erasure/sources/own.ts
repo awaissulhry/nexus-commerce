@@ -1,5 +1,5 @@
-import { ERASED_NAME, EMPLOYMENT_KEEP_MONTHS, erasedEmailOf, HEALTH_KEEP_MONTHS } from '@nexus/factory-domain/privacy/retention/erasure'
-import { kept, NONE, ROWS, section, type PersonSource, type PlannedRecord } from './type'
+import { ERASED_NAME, EMPLOYMENT_KEEP_MONTHS, erasedEmailOf, HEALTH_KEEP_MONTHS, type KeptWhy } from '@nexus/factory-domain/privacy/retention/erasure'
+import { kept, NONE, ROWS, section, type PersonFacts, type PersonSource, type PlannedRecord, type Reader } from './type'
 
 /**
  * The person's own record (B-W2b-405; PLT-202, PLT-203): the contact, the prospect's columns of the inquiry, the reporter's
@@ -20,6 +20,51 @@ const monthsAfter = (date: Date, months: number): Date => {
   const out = new Date(date.getTime())
   out.setUTCMonth(out.getUTCMonth() + months)
   return out
+}
+
+/**
+ * The personal columns of each of a person's own records: what the erasure blanks in the record, and the keys it blanks inside
+ * the record's audit rows (B-W2b-F54: the history keeps no value its record no longer holds).
+ */
+export const PERSONAL_COLUMNS: Readonly<Record<string, readonly string[]>> = Object.freeze({
+  PartyContact: ['name', 'email', 'phone'],
+  Inquiry: ['prospectName', 'prospectCompany', 'prospectEmail', 'prospectPhone', 'prospectLawfulBasis'],
+  ProductSafetyReport: ['reporterName', 'reporterEmail', 'reporterPhone'],
+  User: ['displayName', 'email'],
+  Employee: ['firstName', 'lastName', 'displayName'],
+  Worker: ['displayName', 'pinHash'],
+})
+
+const columnsOf = (recordType: string): string[] => [...(PERSONAL_COLUMNS[recordType] ?? [])]
+
+/**
+ * The legal hold on the person's own record, or null (B-W2b-F54: the same hold keeps what they wrote and received, and their
+ * record's history, as they are): an open complaint, return or service case of a contact (DISPUTE); a safety report still being
+ * assessed (SAFETY_REPORT); a worker's open labour dispute, health or accident records (10 years) or employment records (5 years)
+ * after the employment ended.
+ */
+export async function ownHold(db: Reader, person: PersonFacts, now: Date): Promise<KeptWhy | null> {
+  switch (person.kind) {
+    case 'CONTACT': {
+      const contactId = person.recordId
+      const open = (await db.complaint.count({ where: { contactId, status: { not: 'CLOSED' } } })) + (await db.returnAuthorisation.count({ where: { contactId, status: { notIn: ['CLOSED', 'REJECTED', 'CANCELLED'] } } })) + (await db.serviceCase.count({ where: { contactId, status: { notIn: ['RESOLVED', 'CLOSED'] } } }))
+      return open > 0 ? 'DISPUTE' : null
+    }
+    case 'REPORTER': {
+      const report = await db.productSafetyReport.findUnique({ where: { id: person.recordId }, select: { status: true } })
+      return report && report.status !== 'CLOSED' ? 'SAFETY_REPORT' : null
+    }
+    case 'WORKER': {
+      const employee = person.employeeId ? await db.employee.findUnique({ where: { id: person.employeeId }, select: { id: true, endDate: true, updatedAt: true } }) : null
+      const ended = employee?.endDate ?? employee?.updatedAt ?? now
+      const disputes = await db.labourDispute.count({ where: { status: 'OPEN', OR: [{ workerId: { in: [...person.workerIds] } }, ...(employee ? [{ employeeId: employee.id }] : [])] } })
+      const health = employee ? (await db.healthVisit.count({ where: { employeeId: employee.id } })) + (await db.fitnessJudgement.count({ where: { employeeId: employee.id } })) + (await db.incidentPerson.count({ where: { employeeId: employee.id } })) : 0
+      return disputes > 0 ? 'DISPUTE' : health > 0 && monthsAfter(ended, HEALTH_KEEP_MONTHS).getTime() > now.getTime() ? 'HEALTH' : monthsAfter(ended, EMPLOYMENT_KEEP_MONTHS).getTime() > now.getTime() ? 'EMPLOYMENT' : null
+    }
+    case 'PROSPECT':
+    case 'USER':
+      return null
+  }
 }
 
 export const ownRecords: PersonSource = {
@@ -75,15 +120,15 @@ export const ownRecords: PersonSource = {
       case 'CONTACT': {
         if (person.erased) return [kept('PartyContact', person.recordId, 'ALREADY_ERASED')]
         const contactId = person.recordId
-        const open = (await db.complaint.count({ where: { contactId, status: { not: 'CLOSED' } } })) + (await db.returnAuthorisation.count({ where: { contactId, status: { notIn: ['CLOSED', 'REJECTED', 'CANCELLED'] } } })) + (await db.serviceCase.count({ where: { contactId, status: { notIn: ['RESOLVED', 'CLOSED'] } } }))
+        const hold = await ownHold(db, person, now)
         const planned: PlannedRecord[] = []
-        if (open > 0) planned.push(kept('PartyContact', contactId, 'DISPUTE', ['name', 'email', 'phone']))
+        if (hold) planned.push(kept('PartyContact', contactId, hold, columnsOf('PartyContact')))
         else {
           planned.push({
             recordType: 'PartyContact',
             recordId: contactId,
             method: 'ANONYMISED',
-            erasedFields: ['name', 'email', 'phone'],
+            erasedFields: columnsOf('PartyContact'),
             keptFields: [],
             why: null,
             async apply({ tx, now: at, actorId, emit }) {
@@ -104,7 +149,7 @@ export const ownRecords: PersonSource = {
             recordType: 'Inquiry',
             recordId: inquiryId,
             method: 'ANONYMISED',
-            erasedFields: ['prospectName', 'prospectCompany', 'prospectEmail', 'prospectPhone', 'prospectLawfulBasis'],
+            erasedFields: columnsOf('Inquiry'),
             keptFields: [],
             why: null,
             async apply({ tx, now: at, actorId }) {
@@ -116,14 +161,14 @@ export const ownRecords: PersonSource = {
       case 'REPORTER': {
         if (person.erased) return [kept('ProductSafetyReport', person.recordId, 'ALREADY_ERASED')]
         const reportId = person.recordId
-        const report = await db.productSafetyReport.findUniqueOrThrow({ where: { id: reportId }, select: { status: true } })
-        if (report.status !== 'CLOSED') return [kept('ProductSafetyReport', reportId, 'SAFETY_REPORT', ['reporterName', 'reporterEmail', 'reporterPhone'])]
+        const hold = await ownHold(db, person, now)
+        if (hold) return [kept('ProductSafetyReport', reportId, hold, columnsOf('ProductSafetyReport'))]
         return [
           {
             recordType: 'ProductSafetyReport',
             recordId: reportId,
             method: 'ANONYMISED',
-            erasedFields: ['reporterName', 'reporterEmail', 'reporterPhone'],
+            erasedFields: columnsOf('ProductSafetyReport'),
             keptFields: [],
             why: null,
             async apply({ tx, now: at, emit }) {
@@ -142,7 +187,7 @@ export const ownRecords: PersonSource = {
             recordType: 'User',
             recordId: userId,
             method: 'ANONYMISED',
-            erasedFields: ['displayName', 'email'],
+            erasedFields: columnsOf('User'),
             keptFields: [],
             why: null,
             async apply({ tx, now: at }) {
@@ -153,13 +198,10 @@ export const ownRecords: PersonSource = {
       }
       case 'WORKER': {
         const planned: PlannedRecord[] = []
-        const employee = person.employeeId ? await db.employee.findUnique({ where: { id: person.employeeId }, select: { id: true, endDate: true, updatedAt: true } }) : null
-        const ended = employee?.endDate ?? employee?.updatedAt ?? now
-        const disputes = await db.labourDispute.count({ where: { status: 'OPEN', OR: [{ workerId: { in: [...person.workerIds] } }, ...(employee ? [{ employeeId: employee.id }] : [])] } })
-        const health = employee ? (await db.healthVisit.count({ where: { employeeId: employee.id } })) + (await db.fitnessJudgement.count({ where: { employeeId: employee.id } })) + (await db.incidentPerson.count({ where: { employeeId: employee.id } })) : 0
-        const hold = disputes > 0 ? 'DISPUTE' : health > 0 && monthsAfter(ended, HEALTH_KEEP_MONTHS).getTime() > now.getTime() ? 'HEALTH' : monthsAfter(ended, EMPLOYMENT_KEEP_MONTHS).getTime() > now.getTime() ? 'EMPLOYMENT' : null
+        const employee = person.employeeId ? await db.employee.findUnique({ where: { id: person.employeeId }, select: { id: true } }) : null
+        const hold = await ownHold(db, person, now)
         if (person.erased) planned.push(...(employee ? [kept('Employee', employee.id, 'ALREADY_ERASED')] : []), ...person.workerIds.map((id) => kept('Worker', id, 'ALREADY_ERASED')))
-        else if (hold) planned.push(...(employee ? [kept('Employee', employee.id, hold, ['firstName', 'lastName', 'displayName'])] : []), ...person.workerIds.map((id) => kept('Worker', id, hold, ['displayName'])))
+        else if (hold) planned.push(...(employee ? [kept('Employee', employee.id, hold, columnsOf('Employee'))] : []), ...person.workerIds.map((id) => kept('Worker', id, hold, ['displayName'])))
         else {
           if (employee) {
             const employeeId = employee.id
@@ -167,7 +209,7 @@ export const ownRecords: PersonSource = {
               recordType: 'Employee',
               recordId: employeeId,
               method: 'ANONYMISED',
-              erasedFields: ['firstName', 'lastName', 'displayName'],
+              erasedFields: columnsOf('Employee'),
               keptFields: [],
               why: null,
               async apply({ tx, now: at }) {
@@ -180,7 +222,7 @@ export const ownRecords: PersonSource = {
               recordType: 'Worker',
               recordId: workerId,
               method: 'ANONYMISED',
-              erasedFields: ['displayName', 'pinHash'],
+              erasedFields: columnsOf('Worker'),
               keptFields: [],
               why: null,
               async apply({ tx, now: at }) {

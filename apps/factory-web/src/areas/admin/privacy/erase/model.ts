@@ -59,6 +59,7 @@ export const ERASURE_FIELDS = [
   'cc',
   'before',
   'after',
+  'envelopeFrom',
 ] as const
 
 const KNOWN_TYPES: ReadonlySet<string> = new Set(ERASURE_TYPES)

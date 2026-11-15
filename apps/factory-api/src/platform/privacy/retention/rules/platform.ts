@@ -71,13 +71,16 @@ const errorItems: RetentionType = {
   },
 }
 
-/** Mail received: the database keeps a read mail as it came, so anonymising it is held until a guarded erasure path exists. */
+/**
+ * Mail received: the database blanks a read mail only for a person's erasure request (B-W2b-F54's guarded path: an ErasureRecord
+ * of an ERASURE request in the same transaction), never by a sweep, so anonymising by age is held.
+ */
 const inboundMail: RetentionType = {
   recordType: 'InboundEmail',
   companyScoped: true,
   actions: ['ANONYMISE'],
   countsFrom: 'the time the mail was received',
-  does: { ANONYMISE: "Would blank the sender's address and name, the subject and the text, keeping the mail's thread and status: held today (the database keeps a read mail unchanged)." },
+  does: { ANONYMISE: "Would blank the sender's address and name, the subject and the text, keeping the mail's thread and status: held (the database blanks a mail only for a person's erasure request, never by a sweep)." },
   holdsAll: 'IMMUTABLE',
   async due(db, scope, cut, _now, take) {
     const where: Prisma.InboundEmailWhereInput = { AND: [companyWhere(scope) as Prisma.InboundEmailWhereInput, { receivedAt: { lt: cut.instant } }] }

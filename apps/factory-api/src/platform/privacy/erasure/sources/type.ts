@@ -34,12 +34,15 @@ export interface ApplyTools {
   readonly tx: CommandTx
   readonly now: Date
   readonly actorId: string
+  /** The record's ErasureRecord, written in this command before any change (the database's door takes it: B-W2b-F54). */
+  readonly erasureId: string
   emit(event: CommandEvent): void
 }
 
 /**
  * What the erasure does to one record (one ErasureRecord): column names only, never values. ANONYMISED and DELETED carry their
- * change (`apply`, run inside the erasure's command); KEPT carries why the law keeps it (or why the database does, for now).
+ * change (`apply`, run inside the erasure's command after every ErasureRecord is written); KEPT carries why the law keeps it. An
+ * ANONYMISED record may name personal columns it keeps, with why (a received mail's envelope sender).
  */
 export interface PlannedRecord {
   readonly recordType: string
