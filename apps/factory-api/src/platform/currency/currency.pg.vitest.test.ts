@@ -14,7 +14,7 @@ import { convertMinor } from '@nexus/factory-domain/money/currency/convert'
 import { addDays } from '@nexus/factory-domain/money/currency/rates'
 import { seedUuid } from '../../../../../packages/factory-db/src/seeding'
 import { seedDay } from '@nexus/factory-db/testing' // B-W2b-F53: the seeds' calendar
-import { FakeEcb } from '../../adapters/ecb/fake'
+import { fakeDay, FakeEcb, lastWeekday } from '../../adapters/ecb/fake' // B-W2b-F53: + the fake's weekday file
 import { buildApp } from '../../core/app'
 import { callerFor, command } from '../../core/command'
 import { completeContext, testAuthenticator, type SessionContext } from '../../core/context'
@@ -231,10 +231,16 @@ describe('the rates table and a manual rate per day (PLT-133)', () => {
 
     const table = await ok('buyer', 'GET', '/exchange-rates?quote=JPY')
     expect(table.canManage).toBe(false)
-    expect(table.days.map((entry: Json) => [entry.day, entry.source, entry.rate])).toEqual([
-      [today(), 'MANUAL', '190'],
-      [addDays(today(), -1), 'ECB', '159'],
+    // ---- B-W2b-F53: the job above read the fake's own file of the last weekday: on a Sunday that is Friday, two days back,
+    // whose JPY row comes after yesterday's (on any other day its JPY day is today or yesterday, kept already: nothing added).
+    const jobDay = lastWeekday(today())
+    const jobRows = jobDay < addDays(today(), -1) ? [[jobDay, 'ECB', Number(fakeDay(jobDay).rates.find((entry) => entry.currency === 'JPY')!.rate)]] : []
+    expect(table.days.map((entry: Json) => [entry.day, entry.source, Number(entry.rate)])).toEqual([
+      [today(), 'MANUAL', 190],
+      [addDays(today(), -1), 'ECB', 159],
+      ...jobRows,
     ])
+    // ---- end B-W2b-F53
     expect((await ok('sales', 'GET', `/exchange-rates/day?quote=JPY&day=${today()}`)).rate).toMatchObject({ rate: '190.00000000', source: 'MANUAL', words: '1 EUR = 190 JPY' })
     // Across the euro: 1 SEK = 190 ÷ 11.50 JPY = 16.52173913.
     expect((await ok('sales', 'GET', `/exchange-rates/day?base=SEK&quote=JPY&day=${today()}`)).rate).toMatchObject({ rate: '16.52173913', how: 'CROSS', source: 'MANUAL' })
