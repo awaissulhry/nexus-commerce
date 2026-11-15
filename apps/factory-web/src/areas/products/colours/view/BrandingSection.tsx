@@ -14,6 +14,8 @@ import { keepLoaded } from '../../library/model'
 import { listState, showsState } from '../../library/parts'
 import { pictureAddress, searchOf, SET_VIEWS, STATUS_TONE, SWATCHES_SHOWN, type BrandingSetRow } from '../model'
 import type { ColoursActions, ColoursViewModel } from '../view-model'
+// B-W2b-F56: a picture missing from the store shows the placeholder.
+import { LibraryPicture } from './LibraryPicture'
 
 /**
  * SCR-118 sec:colours.branding — the branding sets of private-label customers (PRD-045): customer, logos, label artwork,
@@ -58,7 +60,7 @@ export function BrandingSection({ model, actions, sectionRef }: { model: Colours
       const src = pictureAddress(data.logo?.url)
       return (
         <span className="fw-col-logo-cell">
-          {src ? <img className="fw-col-logo" src={src} alt={t('sets.logoOf', { code: data.party.code })} loading="lazy" /> : null}
+          <LibraryPicture className="fw-col-logo" src={src} alt={t('sets.logoOf', { code: data.party.code })} lazy fallback={null} />
           <span className={data.logos === 0 ? 'fw-lib-hint' : undefined}>{data.logos === 0 ? t('sets.none') : t('sets.files', { count: data.logos })}</span>
         </span>
       )

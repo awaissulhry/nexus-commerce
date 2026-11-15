@@ -15,7 +15,9 @@ import { designScreen as overviewScreen } from '../overview/fixtures'
 import { designScreen as rolesScreen } from '../roles/fixtures'
 import { ATTENTION_KINDS, DRILL_STATES, PROTECTION_FACTS, PROTECTION_STATES, REFUSAL_CODES, STATUS_PARTS, STATUS_STATES, type AttentionItem, type Drill, type StatusLine, type TwoFactorRole } from './api'
 import { designScreen } from './fixtures'
-import { bulkHeld, canTake, changesFor, drillFormErrors, drillPreview, emptyDrillForm, overallOf, refusalWords, rowHeld, statusWords } from './model'
+import { designScreen as jobsScreen } from './jobs/fixtures'
+import { bulkHeld, canTake, changesFor, drillFormErrors, drillPreview, emptyDrillForm, overallOf, refusalWords, rowHeld, STATUS_LINKS, statusWords } from './model'
+import { adminHref } from '../shared/model'
 import { attentionColumns, attentionWords } from './view/AttentionSection'
 import { drillColumns, twoFactorColumns } from './view/SecurityView'
 
@@ -185,3 +187,89 @@ describe('the lists’ cells, drawn alone', () => {
     })
   }
 })
+
+// ── B-W2b-F56 ─────────────────────────────────────────────────────────────────────────────────────────────────────────
+// The Owner's test server found a link of this page to /w/SCA/admin/admin/connections (404): every address the page builds
+// must be a route of the app (a page.tsx under src/app, a [param] folder standing for any one segment), and every
+// `#section` link a section the page draws.
+describe('every link Security & health builds resolves to a route', () => {
+  const PREFIX = '/w/DEMO'
+  const APP = fileURLToPath(new URL('../../../app', import.meta.url))
+  const ROUTES: string[] = []
+  const walk = (dir: string, address: string) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      // A route group `(office)` adds no segment; the design index exists only under `next dev` (page.design.tsx).
+      if (entry.isDirectory()) walk(join(dir, entry.name), /^\(.*\)$/.test(entry.name) ? address : `${address}/${entry.name}`)
+      else if (entry.name === 'page.tsx') ROUTES.push(address || '/')
+    }
+  }
+  walk(APP, '')
+  const PATTERNS = ROUTES.map((route) => ({ route, pattern: new RegExp(`^${route.replace(/\[[^\]/]+\]/g, '[^/]+')}$`) }))
+  const unescape = (href: string) => href.replace(/&amp;/g, '&').replace(/&#x27;/g, "'").replace(/&quot;/g, '"')
+  const hrefsOf = (html: string): string[] => [...html.matchAll(/href="([^"]*)"/g)].map((match) => unescape(match[1]!))
+  const external = (href: string) => /^(https?:|mailto:|tel:)/.test(href)
+  /** The route an address opens (query and section dropped), or null. */
+  const routeOf = (href: string): string | null => PATTERNS.find((entry) => entry.pattern.test(href.split(/[?#]/)[0]!))?.route ?? null
+  const idsOf = (html: string): string[] => [...html.matchAll(/\bid="([^"]+)"/g)].map((match) => match[1]!)
+  // The page draws the Jobs and integrations card in its place (SecurityPage passes it as `jobs`; SCR-601 draws it alone).
+  const JOBS = render(jobsScreen as DesignScreen<unknown>, jobsScreen.cases[0]!.model, 'en')
+  const sectionsOf = (html: string): Set<string> => new Set([...idsOf(html), ...idsOf(JOBS)])
+  const check = (html: string, where: string) => {
+    const sections = sectionsOf(html)
+    const hrefs = hrefsOf(html).filter((href) => !external(href))
+    for (const href of hrefs) {
+      if (href.startsWith('#')) expect(sections.has(href.slice(1)), `${where}: ${href}`).toBe(true)
+      else expect(routeOf(href), `${where}: ${href}`).not.toBeNull()
+    }
+    return hrefs.length
+  }
+
+  it('reads the app\'s routes', () => {
+    expect(ROUTES).toContain('/w/[company]/admin/connections')
+    expect(ROUTES).toContain('/w/[company]/admin/security')
+    expect(routeOf(`${PREFIX}/admin/admin/connections`)).toBeNull()
+  })
+
+  it('the status lines link to an Admin page or a section of this page', () => {
+    const security = render(designScreen as DesignScreen<unknown>, designScreen.cases[0]!.model, 'en')
+    for (const [part, link] of Object.entries(STATUS_LINKS)) {
+      if (link!.startsWith('#')) expect(sectionsOf(security).has(link!.slice(1)), `${part} → ${link}`).toBe(true)
+      else expect(routeOf(adminHref(PREFIX, link!)), `${part} → ${adminHref(PREFIX, link!)}`).not.toBeNull()
+    }
+    expect(routeOf(adminHref(PREFIX, STATUS_LINKS.files!))).toBe('/w/[company]/admin/connections')
+  })
+
+  it('every case of SCR-166 and of its Jobs card draws only addresses that open a route, and sections that are on it', () => {
+    let seen = 0
+    for (const item of designScreen.cases) seen += check(render(designScreen as DesignScreen<unknown>, item.model, 'en'), `SCR-166/${item.id}`)
+    for (const item of jobsScreen.cases) seen += check(render(jobsScreen as DesignScreen<unknown>, item.model, 'en'), `SCR-601/${item.id}`)
+    expect(seen).toBeGreaterThan(0)
+  })
+
+  it('the lists’ cells: a role opens its record, each kind of attention its page (the addresses the API builds)', () => {
+    const t = createTranslator('en', words('en'))
+    const holders = { name: (value: { key: string; name: string }) => value.name }
+    // The addresses platform/admin/security/attention.ts builds, one per kind.
+    const built: Record<(typeof ATTENTION_KINDS)[number], string> = {
+      integrationFailing: '/admin/connections/0190f0e2-6060-7000-8000-000000000001',
+      mailDomain: '/admin/connections#mail',
+      tabletUnseen: '/admin/devices/0190f0e2-6161-7000-8000-000000000002',
+      drill: '/admin/security#backups',
+      jobsFailed: '/admin/security#status',
+      twoFactorMissing: '/admin/security#sign-in',
+    }
+    const nodes: ReactNode[] = [
+      ...twoFactorColumns({ t, locale: 'en', prefix: PREFIX, words: holders }).map((column) => cellNode(column, role({ id: 'r1' }))),
+      ...ATTENTION_KINDS.flatMap((kind) => attentionColumns({ t, locale: 'en', prefix: PREFIX }).map((column) => cellNode(column, { kind, subject: 'Made-up', state: null, since: null, count: 1, days: 1, href: built[kind], severity: 'warning' } satisfies AttentionItem))),
+    ]
+    const html = renderToString(createElement(I18nProvider, { locale: 'en', messages: messagesFor('en', ['shell', NAMESPACE]) }, ...nodes))
+    const hrefs = hrefsOf(html)
+    expect(hrefs).toContain(`${PREFIX}/admin/roles/r1?tab=rules`)
+    for (const kind of ATTENTION_KINDS) expect(hrefs, kind).toContain(`${PREFIX}${built[kind]}`)
+    for (const href of hrefs) expect(routeOf(href), href).not.toBeNull()
+    // The sections the attention links name are drawn by this page.
+    const security = sectionsOf(render(designScreen as DesignScreen<unknown>, designScreen.cases[0]!.model, 'en'))
+    for (const address of Object.values(built).filter((entry) => entry.startsWith('/admin/security#'))) expect(security.has(address.split('#')[1]!), address).toBe(true)
+  })
+})
+// ── end B-W2b-F56 ─────────────────────────────────────────────────────────────────────────────────────────────────────

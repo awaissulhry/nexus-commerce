@@ -222,7 +222,9 @@ export async function guestZip(app: FastifyInstance, request: FastifyRequest, re
   const paths = zipPaths(files.map((entry) => ({ folder: entry.folder, name: entry.row.originalName })))
   const bytes = await readAll(reader, files)
   const included = files.map((_, index) => bytes[index] !== null)
-  if (!included.some(Boolean)) throw guestRefusal('FILE_UNAVAILABLE', 'not_ready')
+  // B-W2b-F56: the store answered (an outage already failed the read above as 503) and holds none of the files: missing, a
+  // refusal in words (409), never an outage.
+  if (!included.some(Boolean)) throw guestRefusal('FILE_UNAVAILABLE')
   const index = indexCsv(files.map((entry, at) => ({ path: paths[at]!, what: entry.what, number: entry.number, date: entry.date, sha256: entry.row.sha256, sizeBytes: entry.row.sizeBytes, included: included[at]! })))
   const entries: ZipEntry[] = [{ path: 'index.csv', bytes: index }, ...files.flatMap((_, at) => (bytes[at] ? [{ path: paths[at]!, bytes: bytes[at]! }] : []))]
   const now = reader.clock.now()

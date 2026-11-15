@@ -96,8 +96,11 @@ export function drillWords(drill: DrillStatus): { key: string; params: Record<st
   }
 }
 
-/** Where each status line's detail lives (a page of the Office, or a section of this page). */
-export const STATUS_LINKS: Readonly<Partial<Record<StatusLine['part'], string>>> = { files: '/admin/connections', drill: '#backups', backups: '#backups', scheduled: '#jobs' }
+/**
+ * Where each status line's detail lives: a section of this page (`#…`), or an Admin page by its path INSIDE Admin (the view
+ * builds the address with adminHref, which adds `/admin`; B-W2b-F56: `/admin/connections` here made `/admin/admin/connections`).
+ */
+export const STATUS_LINKS: Readonly<Partial<Record<StatusLine['part'], string>>> = { files: '/connections', drill: '#backups', backups: '#backups', scheduled: '#jobs' }
 
 // ---- Sign-in rules: two-factor per role ------------------------------------------------------------------------------
 

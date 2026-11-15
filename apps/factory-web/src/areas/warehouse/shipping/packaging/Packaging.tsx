@@ -14,7 +14,7 @@ import { PackagingView } from './view/PackagingView'
  * write ONE call with its own Idempotency-Key at the row's version (Switch off N: one call per row, each its own key and
  * outcome). The styles and size scales a new default may name are read when its dialog opens.
  */
-export function Packaging({ companyId, can }: { companyId: string; can: Pick<DispatchAbilities, 'packaging' | 'cost'> }) {
+export function Packaging({ companyId, can }: { companyId: string; can: Pick<DispatchAbilities, 'view' | 'packaging' | 'cost'> }) {
   const api = useOfficeApi()
   const [state, setState] = useState<Omit<PackagingModel, 'can'>>({ types: LOADING, defaults: LOADING, dialog: null, picks: null, busy: false, problem: null, done: null })
   const latest = useRef(state)
@@ -24,6 +24,8 @@ export function Packaging({ companyId, can }: { companyId: string; can: Pick<Dis
 
   const load = useCallback(
     async (quiet: boolean) => {
+      // B-W2b-F56: the types and defaults are read with shipping.view: without it nothing is asked (the card says why).
+      if (!can.view) return
       if (!quiet) setState((current) => ({ ...current, types: current.types.state === 'ready' ? current.types : LOADING, defaults: current.defaults.state === 'ready' ? current.defaults : LOADING }))
       await Promise.all([
         listTypes(api, companyId).then(
@@ -36,7 +38,7 @@ export function Packaging({ companyId, can }: { companyId: string; can: Pick<Dis
         ),
       ])
     },
-    [api, companyId],
+    [api, companyId, can.view],
   )
   useEffect(() => {
     void load(false)

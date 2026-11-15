@@ -15,7 +15,7 @@ import { officeAuthOf } from '../../../platform/auth/sessions/office-auth'
 import { emailOrThrow } from '../../../platform/auth/users/email'
 import { sendingIdentity, suppressedAmong } from '../../../platform/email-out/outbound'
 import { processEmail } from '../../../platform/email-out/service'
-import { presignedView, storeCall, systemCallerOf } from '../../../platform/files/files'
+import { MissingFileError, presignedView, storeCall, systemCallerOf } from '../../../platform/files/files'
 import { attachmentDisposition, DOWNLOAD_URL_SECONDS } from '../../../platform/files/rules'
 import type { FilesRuntime } from '../../../platform/files/service'
 import { makeStrippedCopy } from '../../../platform/files/thumbs/strip-copy'
@@ -347,6 +347,8 @@ export async function openMeasurementPhoto(files: FilesRuntime, request: Fastify
   // Without location data for the office too: the rider's photo is shown as its stripped copy (B-W2b-160).
   const system = systemCallerOf(request)(context.tenantId)
   const made = await makeStrippedCopy(files, system, fileId)
+  // B-W2b-F56: the photo's bytes are missing from the store: 404 in words, never "being prepared".
+  if (made.outcome === 'missing') throw new MissingFileError()
   if (!made.key) throw new ConflictError('This photo is being prepared to be shown; try again in a minute.')
   const download = await storeCall(() =>
     files.storage.presignDownload(system, row.storeAccountId, { key: made.key!, contentType: row.contentType, disposition: attachmentDisposition(row.originalName), expiresInSeconds: DOWNLOAD_URL_SECONDS, now: files.clock.now() }),

@@ -14,6 +14,8 @@ import { emptyRule, moved, pictureAddress, setChangeCount, setDraftProblems, STA
 import { PACKAGING_PER } from '@nexus/factory-domain/product/branding-sets/rules'
 import type { BrandingFileView } from '@nexus/factory-domain/product/branding-sets/contracts'
 import type { ColoursActions, ColoursViewModel, SetModalModel } from '../view-model'
+// B-W2b-F56: a picture missing from the store shows the placeholder.
+import { LibraryPicture } from './LibraryPicture'
 
 /**
  * SCR-118 pop:colours.branding — a branding set in a DetailModal (`?open=<id>`; J / K the next and previous set of the list;
@@ -175,7 +177,7 @@ function FileGroup({ role, label, ids, files, editable, modal, model, actions, o
             const src = file.picture ? pictureAddress(file.url) : null
             return (
               <li key={id} className="fw-col-file">
-                {src ? <img className="fw-col-file-img" src={src} alt={file.name} /> : <FileText size={28} aria-hidden className="fw-col-file-icon" />}
+                <LibraryPicture className="fw-col-file-img" src={src} alt={file.name} fallback={<FileText size={28} aria-hidden className="fw-col-file-icon" />} />
                 <span className="fw-col-file-name">
                   {file.picture || !file.available ? (
                     <span>{file.name}</span>
