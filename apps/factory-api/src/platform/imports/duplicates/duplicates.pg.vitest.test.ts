@@ -315,6 +315,14 @@ describe("an import's check", () => {
     // The import's own records are compared as rows, never offered as records already there.
     expect(made.candidates.map((candidate: Json) => candidate.code)).not.toContain('NEW-D2')
 
+    // Merged from the result (row 4's record into row 3's): row 4 is no longer offered.
+    const ask = (await call('manager', 'GET', `/duplicates/PARTY/merge?keptId=${made.sameSheet[0].recordId}&droppedId=${made.recordId}`)).json()
+    expect(ask.refusals).toEqual([])
+    const merged = await call('manager', 'POST', '/duplicates/PARTY/merge', { keptId: ask.kept.id, droppedId: ask.dropped.id, keptVersion: ask.kept.version, droppedVersion: ask.dropped.version, reason: 'Two rows are one customer (test)' })
+    expect(merged.statusCode, merged.body).toBe(200)
+    expect(merged.json().moved).toMatchObject({ contacts: 1 })
+    expect((await call('manager', 'GET', `/imports/${job.id}/duplicates`)).json().rows.some((row: Json) => row.rowNumber === 4)).toBe(false)
+
     // Without the importer's view permission the job is not found.
     expect((await call('companyB', 'GET', `/imports/${job.id}/duplicates`)).statusCode).toBe(403)
   })

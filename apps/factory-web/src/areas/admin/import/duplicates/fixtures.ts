@@ -58,6 +58,7 @@ export const designScreen = defineDesignScreen<DuplicatesSectionModel>({
     { id: 'more', label: 'Only the likeliest pairs shown', model: base({ scan: { recordType: 'PARTY', pairs: PARTY_PAIRS, more: true, compared: 5120 } }) },
     { id: 'no-merge-right', label: 'May see, not merge', model: base({ canMerge: false }), note: 'Merge… and the bulk action are held with the reason; no row can be ticked for a merge.' },
     { id: 'parties-only', label: 'Sees customers and suppliers only', model: base({ types: ['PARTY'] }) },
+    { id: 'no-access', label: 'Sees neither (the section is absent)', model: base({ types: [] }), note: 'Without parties.view and product.materials.view the section is not drawn (never a locked box).' },
     { id: 'empty', label: 'Nothing looks alike', model: base({ scan: { recordType: 'PARTY', pairs: [], more: false, compared: 248 } }) },
     { id: 'loading', label: 'Loading', model: base({ scan: null, loading: true }) },
     { id: 'error', label: 'Could not be read', model: base({ scan: null, problem: 'dup.problem.busy' }) },

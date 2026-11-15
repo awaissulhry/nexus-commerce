@@ -350,8 +350,7 @@ function Footer({ onCancel, submit, label, held, busy }: { onCancel: () => void;
 // ---- New customer / supplier ------------------------------------------------------------------------------------------
 
 export interface NewPartyActions {
-  /** Look for parties with this VAT number or name (the duplicate warning). */
-  /** B-W2b-427: the draft as typed, checked for likely duplicates (VAT number, codice fiscale, name). */
+  /** The duplicate warning: the draft as typed, checked for likely duplicates (VAT number, codice fiscale, name; B-W2b-427). */
   onLookup?: (draft: NewPartyDraft) => void
   /** Resolve true when created. */
   onCreate?: (draft: NewPartyDraft) => Promise<boolean>

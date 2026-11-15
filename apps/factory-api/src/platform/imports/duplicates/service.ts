@@ -118,7 +118,7 @@ export async function importDuplicates(caller: CommandCaller, importId: string) 
   const job = await getImport(caller, importId)
   const recordType = IMPORT_TYPES[job.importerKey] ?? null
   if (!recordType) return { jobId: job.id, importerKey: job.importerKey, supported: false, recordType: null, checked: 0, more: false, rows: [] as ImportDuplicateRow[] }
-  const { rows, index, more } = await caller.withClient(async (client) => {
+  const { rows, index, more, archived } = await caller.withClient(async (client) => {
     const planned = await client.importRow.findMany({
       where: { jobId: job.id, action: 'CREATE' },
       select: { rowNumber: true, key: true, recordId: true, after: true },
@@ -126,7 +126,20 @@ export async function importDuplicates(caller: CommandCaller, importId: string) 
       take: DUPLICATE_LIMITS.importRows + 1,
     })
     const options = { archived: true }
-    return { rows: planned.slice(0, DUPLICATE_LIMITS.importRows), more: planned.length > DUPLICATE_LIMITS.importRows, index: recordType === 'PARTY' ? await partyIndex(client, actor, options) : await materialIndex(client, actor, options) }
+    const ids = planned.map((row) => row.recordId).filter((id): id is string => id !== null)
+    // A record the import made that is archived since (merged, or archived by hand) is no longer offered.
+    const gone =
+      ids.length === 0
+        ? []
+        : recordType === 'PARTY'
+          ? await client.party.findMany({ where: { id: { in: ids }, status: 'ARCHIVED' }, select: { id: true } })
+          : await client.item.findMany({ where: { id: { in: ids }, status: 'ARCHIVED' }, select: { id: true } })
+    return {
+      rows: planned.slice(0, DUPLICATE_LIMITS.importRows),
+      more: planned.length > DUPLICATE_LIMITS.importRows,
+      archived: new Set(gone.map((row) => row.id)),
+      index: recordType === 'PARTY' ? await partyIndex(client, actor, options) : await materialIndex(client, actor, options),
+    }
   })
   // The records this import made are compared as rows of the sheet, never as records already there.
   const made = new Set(rows.map((row) => row.recordId).filter((id): id is string => id !== null))
@@ -142,8 +155,10 @@ export async function importDuplicates(caller: CommandCaller, importId: string) 
   const reasonsBetween = (a: (typeof judged)[number], b: (typeof judged)[number]): ReasonFound[] =>
     recordType === 'PARTY' ? partyReasons(a.keys as ReturnType<typeof partyKeys>, b.keys as ReturnType<typeof partyKeys>) : materialReasons(a.keys as ReturnType<typeof materialKeys>, b.keys as ReturnType<typeof materialKeys>)
   const answer = judged.flatMap((entry, at) => {
+    if (entry.row.recordId !== null && archived.has(entry.row.recordId)) return []
     const sameSheet = judged
       .slice(0, at)
+      .filter((earlier) => earlier.row.recordId === null || !archived.has(earlier.row.recordId))
       .flatMap((earlier) => {
         const reasons = reasonsBetween(entry, earlier)
         return reasons.length > 0 ? [{ rowNumber: earlier.row.rowNumber, key: keyOf(earlier.row.key), recordId: earlier.row.recordId, likelihood: likelihoodOf(reasons), reasons }] : []
