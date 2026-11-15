@@ -1,4 +1,5 @@
 import type { ListKey } from '../../../list-frame/model'
+import type { ListMode } from '../../../list-frame/w2b/model'
 import type { Translate } from '../../../lib/i18n/messages'
 import type { PanelRead } from '../../../record-panels/model'
 import { TASK_TILES, type Assignable, type TaskItem, type TaskTile } from '../../../record-panels/tasks/model'
@@ -18,8 +19,10 @@ export const scopeOf = (value: string | null | undefined): TasksScope => (value 
 export const tileOf = (value: string | null | undefined): TaskTile | null => ((TASK_TILES as readonly string[]).includes(value ?? '') ? (value as TaskTile) : null)
 
 /** The address of the list (its own query: the API's filters, as the page reads them back). */
-export function tasksAddress(state: { readonly scope: TasksScope; readonly tile: TaskTile | null; readonly q: string; readonly open: string | null; readonly newTask?: boolean }): string {
+export function tasksAddress(state: { readonly scope: TasksScope; readonly tile: TaskTile | null; readonly q: string; readonly open: string | null; readonly newTask?: boolean; /* B-W2b-388 */ readonly mode?: ListMode }): string {
   const query = new URLSearchParams()
+  // B-W2b-388: the board or the calendar (the table drops the term).
+  if (state.mode && state.mode !== 'table') query.set('mode', state.mode)
   if (state.scope !== 'MINE') query.set('scope', state.scope)
   if (state.tile) query.set('tile', state.tile)
   if (state.q.trim()) query.set('q', state.q.trim())
@@ -97,6 +100,8 @@ export interface TasksViewModel {
   readonly notice: TasksNotice | null
   /** Design cases: the row that has the focus. */
   readonly focusRow?: number
+  /** B-W2b-388: Table · Board by status · Calendar by due date (`?mode=`). */
+  readonly mode?: ListMode
 }
 
 // ---- rules ------------------------------------------------------------------------------------------------------------

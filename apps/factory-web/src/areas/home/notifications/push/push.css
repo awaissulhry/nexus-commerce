@@ -1,0 +1,69 @@
+/* Get urgent items on this phone: the Stepper, then one step's content, then my devices. Layout only, semantic tokens. */
+.fw-push {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+}
+
+.fw-push-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-push-section > p {
+  margin: 0;
+}
+
+.fw-push-muted {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-push-h {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: 600;
+}
+
+.fw-push-kinds,
+.fw-push-devices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-push-howto {
+  margin: 0;
+  padding-left: var(--nds-space-16);
+}
+
+.fw-push-device {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-8);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-md);
+  min-width: 0;
+}
+
+.fw-push-device-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-push-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--nds-space-8);
+}

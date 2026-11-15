@@ -51,6 +51,7 @@ export const STEP_UP_ACTIONS: readonly StepUpAction[] = Object.freeze([
   action('email.identities', ['email.manage']),
   action('branding.change', ['documents.branding.manage']),
   action('signatures.sign', ['quality.amendments.sign', 'safety.risk.sign', 'compliance.techfiles.sign', 'compliance.claims.approve', 'compliance.ppeTexts.manage', 'purchasing.compliance.override'], 'SIGNATURE'),
-  action('legal.outward', ['compliance.techfiles.share', 'compliance.recall.send', 'people.privacy.manage', 'people.piecerates.switch', 'invoices.testMode.manage'], 'LEGAL'),
+  // B-W2b-405: erasing or anonymising a person (GDPR art. 17) is a decision in the company's name: always a fresh code.
+  action('legal.outward', ['compliance.techfiles.share', 'compliance.recall.send', 'people.privacy.manage', 'people.piecerates.switch', 'invoices.testMode.manage', 'privacy.erase'], 'LEGAL'),
   action('security.settings', ['security.settings.manage'], 'SECURITY'),
 ])

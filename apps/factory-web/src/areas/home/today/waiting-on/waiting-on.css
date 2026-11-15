@@ -1,0 +1,53 @@
+/* Today › Waiting on others: one line per wait, the words first, the verbs at the end; on a phone the verbs go under
+   the words. Layout only, semantic tokens. */
+.fw-mywork-waiting,
+.fw-mywork-waiting-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-mywork-waiting-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-8);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
+  min-width: 0;
+}
+
+.fw-mywork-waiting-row:focus-within {
+  border-color: var(--nds-border-strong);
+}
+
+.fw-mywork-waiting-icon {
+  flex-shrink: 0;
+  color: var(--nds-text-2);
+}
+
+.fw-mywork-waiting-text {
+  display: flex;
+  flex: 1 1 18rem;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.fw-mywork-waiting-link {
+  overflow-wrap: anywhere;
+}
+
+.fw-mywork-waiting-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4);
+}
+
+.fw-mywork-waiting-what {
+  overflow-wrap: anywhere;
+}

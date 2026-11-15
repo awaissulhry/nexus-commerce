@@ -7,7 +7,7 @@ import { DomainError, NotFoundError, ValidationError } from '@nexus/factory-doma
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import { businessDate, toUtcIso } from '@nexus/factory-domain/core/time'
 import { intakeProblems, PHOTO_TICKET, SAFETY_LIMITS, sentWords } from '@nexus/factory-domain/sales/safety-reports/rules'
-import { readFactoryVariables } from '../../../env'
+import { SYSTEM_ACTOR_ID } from '../../../core/context'
 import { abuseGuardOf, abuseKey, networkOf, type ProofInput } from '../../../platform/abuse/guard'
 import { portalOf } from '../../../platform/auth/portal/service'
 import { officeAuthOf } from '../../../platform/auth/sessions/office-auth'
@@ -42,29 +42,39 @@ import { intakeInCommand, type IntakeBody } from './intake'
  *   POST /portal/safety-reports/:id/photos (+ /:fileId/complete)  photos after the send: the person's own report, in its window
  *   GET  /portal/safety-reports/status          whether the portal's door is open for this company
  *
- * THE SWITCH: FACTORY_SAFETY_REPORTS_OUTSIDE=on in apps/factory-api's environment (Railway; the Owner's), read through the env
- * loader's variables; anything else, or unset: OFF. With it on, a company still takes reports from outside only while its
- * public privacy notice (Admin › Privacy & notices, PRIVACY_PUBLIC) is in force: the reader can read it before sending. A
- * notice of its own for safety reports (a PrivacyNoticeKind) and a per-company switch are schema needs; the office types a report
- * from a mail meanwhile. Nothing is mailed to the reporter (no mail carries anything of a report).
+ * THE SWITCH (B-W2b-405, PV1:04; GATE-PRIVACY): per company, SalesSettings.safetyReportFormOn on the company's own row (Admin ›
+ * Privacy & notices: PUT /privacy/safety-report-form), which the database allows only while the company's safety-report notice
+ * (PrivacyNoticeKind SAFETY_REPORT) is PUBLISHED; OFF by default. A company takes reports from outside only while both hold: the
+ * reader can read that notice before sending. It replaced B-W2b-351's environment variable. The office types a report from a mail
+ * meanwhile. Nothing is mailed to the reporter (no mail carries anything of a report).
  */
-
-let forced: boolean | undefined
-/** Tests: the switch on or off; undefined goes back to the environment's. */
-export function useSafetyReportsOutside(on: boolean | undefined): void {
-  forced = on
-}
-export const outsideSwitchOn = (): boolean => forced ?? readFactoryVariables().FACTORY_SAFETY_REPORTS_OUTSIDE === 'on'
 
 export const OUTSIDE_OFF_WORDS = 'Safety reports cannot be sent here yet: their privacy notice is not published. Write to the maker at the address on this page, or call them.'
 export const NO_NOTICE_WORDS = "This company's privacy notice is not published: safety reports cannot be sent here yet. Write to the maker at the address on this page."
 
 const off = (words: string) => new DomainError('invalid_state', words, [{ path: 'held/OFF', message: words }])
 
-/** The door is open for this company: the switch, and its public privacy notice in force. */
-async function outsideHeld(db: Pick<FactoryClient, 'privacyNotice'>, companyId: string): Promise<string | null> {
-  if (!outsideSwitchOn()) return OUTSIDE_OFF_WORDS
-  return (await noticeInForce(db, companyId, 'PRIVACY_PUBLIC')) ? null : NO_NOTICE_WORDS
+/** The door is open for this company: its own switch, and its safety-report notice in force. */
+async function outsideHeld(db: Pick<FactoryClient, 'privacyNotice' | 'salesSettings'>, companyId: string): Promise<string | null> {
+  const settings = await db.salesSettings.findUnique({ where: { id: companyId }, select: { companyId: true, safetyReportFormOn: true } })
+  if (!settings || settings.companyId !== companyId || !settings.safetyReportFormOn) return OUTSIDE_OFF_WORDS
+  return (await noticeInForce(db, companyId, 'SAFETY_REPORT')) ? null : NO_NOTICE_WORDS
+}
+
+/** Any company of any active tenant whose doors are open (the status without a code: the page then asks at the send). */
+async function anyDoorOpen(request: FastifyRequest): Promise<boolean> {
+  const platform = Object.create(request) as FastifyRequest
+  platform.factoryContext = { audience: 'platform', actorId: SYSTEM_ACTOR_ID, grants: [], requestId: String(request.id) }
+  const tenants = await platform.withClient(async (client) => (await client.tenant.findMany({ where: { status: 'ACTIVE' }, select: { id: true }, orderBy: { id: 'asc' } })).map((row) => row.id))
+  for (const tenantId of tenants) {
+    const open = await systemCallerOf(request)(tenantId).withClient(async (db) => {
+      const rows = await db.salesSettings.findMany({ where: { safetyReportFormOn: true, companyId: { not: null } }, select: { companyId: true } })
+      for (const row of rows) if ((await outsideHeld(db, row.companyId!)) === null) return true
+      return false
+    })
+    if (open) return true
+  }
+  return false
 }
 
 // ---- the photo ticket of the public door ----------------------------------------------------------------------------------
@@ -99,17 +109,27 @@ export interface PublicBody extends Omit<IntakeBody, 'styleId' | 'colourwayId'> 
 
 const HOUR = 60 * 60 * 1000
 
-/** GET /public/safety-reports/status */
-export function publicStatus() {
-  const open = outsideSwitchOn()
-  return { open, words: open ? null : OUTSIDE_OFF_WORDS }
+/** GET /public/safety-reports/status?code=&n=: the door of the company the page's code names; without a code, any door open. */
+export async function publicStatus(request: FastifyRequest, query: { readonly code?: string | undefined; readonly n?: string | undefined }) {
+  if (query.code === undefined) {
+    const open = await anyDoorOpen(request)
+    return { open, words: open ? null : OUTSIDE_OFF_WORDS }
+  }
+  const code = readPublicDocCode(query.code)
+  const found = code ? (await pagesUnder(request, code))[Number(query.n ?? 0)] : undefined
+  if (!found) return { open: false, words: OUTSIDE_OFF_WORDS }
+  const { tenantId, kind, id } = found.match
+  const closed = await systemCallerOf(request)(tenantId).withClient(async (db) => {
+    const companyId = kind === 'BATCH' ? (await db.workOrder.findUnique({ where: { id }, select: { companyId: true } }))?.companyId : ((await db.style.findUnique({ where: { id }, select: { companyId: true } }))?.companyId ?? found.page.sender.companyId)
+    return companyId ? outsideHeld(db, companyId) : OUTSIDE_OFF_WORDS
+  })
+  return { open: closed === null, words: closed }
 }
 
 /** POST /public/safety-reports */
 export async function sendPublicReport(app: FastifyInstance, request: FastifyRequest, reply: FastifyReply, body: PublicBody, idempotencyKey: string | undefined) {
   const guard = abuseGuardOf(app)
   await guard.check(request, reply, 'public.lookup', { proof: body.proof })
-  if (!outsideSwitchOn()) throw off(OUTSIDE_OFF_WORDS)
   if (!idempotencyKey) throw new ValidationError('Send the report with an Idempotency-Key: a repeat then answers the same report.', [{ path: 'headers/idempotency-key', message: 'Required.' }])
   const code = readPublicDocCode(body.code)
   const found = code ? (await pagesUnder(request, code))[body.n ?? 0] : undefined
@@ -166,8 +186,9 @@ async function ticketReport(app: FastifyInstance, request: FastifyRequest, ticke
 
 /** POST /public/safety-reports/photos */
 export async function publicPhoto(app: FastifyInstance, request: FastifyRequest, body: PhotoBody & { readonly ticket: string }, idempotencyKey?: string) {
-  if (!outsideSwitchOn()) throw off(OUTSIDE_OFF_WORDS)
   const { tenantId, report } = await ticketReport(app, request, body.ticket)
+  const closed = await systemCallerOf(request)(tenantId).withClient((db) => outsideHeld(db, report.companyId))
+  if (closed) throw off(closed)
   // B-W2b-160 (FV1:02): an upload from outside waits for the virus scanner in a live environment (GATE-SPEND).
   assertOutsideUploadsOpen()
   const { ticket: _ticket, ...photo } = body

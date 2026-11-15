@@ -155,7 +155,9 @@
       "saved": "Vista salvata",
       "updated": "Vista aggiornata",
       "defaultOn": "«{name}» è ora la tua vista predefinita di questo elenco",
-      "defaultOff": "L’elenco non si apre più su «{name}» per te"
+      "defaultOff": "L’elenco non si apre più su «{name}» per te",
+      "pinned": "«{name}» è fissata in Oggi.",
+      "unpinned": "«{name}» non è più fissata in Oggi."
     },
     "removeDialog": {
       "title": "Rimuovere la vista «{name}»?",
@@ -262,7 +264,15 @@
     "freezeFirst": "Blocca «{column}» a sinistra",
     "freezeHint": "Resta in vista mentre le righe scorrono di lato",
     "withheld": "Nascoste dai tuoi permessi",
-    "withheldItem": "Nascosta: {reason}"
+    "withheldItem": "Nascosta: {reason}",
+    "pin": "Fissa «{name}» in Oggi",
+    "unpin": "Togli «{name}» da Oggi",
+    "pinHint": "Il suo conteggio compare in Oggi; un cambiamento ti viene segnalato.",
+    "unpinHint": "Esce da Le mie viste salvate in Oggi.",
+    "pinProblem": {
+      "notFollowable": "Questo elenco non ha ancora un conteggio da seguire.",
+      "tooMany": "Hai già fissato il massimo di viste: togline una prima."
+    }
   },
   "quick": {
     "trigger": "Filtri rapidi",

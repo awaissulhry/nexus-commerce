@@ -1,0 +1,401 @@
+{
+  "loading": "Caricamento in corso…",
+  "retry": "Riprova",
+  "dismiss": "Chiudi",
+  "held": {
+    "offline": "Offline — fallo quando torni in linea.",
+    "busy": "Una modifica è in salvataggio…"
+  },
+  "band": {
+    "more": "Altro sulle notifiche",
+    "push": "Push su questo dispositivo…",
+    "digest": "Riepilogo giornaliero via e-mail…"
+  },
+  "remind": {
+    "title": "Ricordamelo: {what}",
+    "titleMessage": "Ricordami un messaggio su {what}",
+    "aboutMessage": "Ricordami questo messaggio",
+    "body": "Torna nel tuo Oggi all'ora che scegli, oppure quando qualcosa cambia sul record.",
+    "note": "La tua nota",
+    "noteHint": "Facoltativa, al massimo {count} caratteri. La vedi solo tu.",
+    "notePlaceholder": "Il fornitore ha promesso una data",
+    "noteLong": "Al massimo {count} caratteri.",
+    "choices": "Quando torna",
+    "laterToday": "Più tardi oggi, {time}",
+    "tomorrow": "Domani, {time}",
+    "monday": "Lunedì, {time}",
+    "pick": "Scegli una data…",
+    "onChange": "Quando qualcosa cambia",
+    "pickLabel": "Data e ora",
+    "pickHint": "Nell'ora dello stabilimento, al massimo fra {count} giorni.",
+    "pickFirst": "Scegli prima una data e un'ora.",
+    "past": "Scegli un momento dopo adesso.",
+    "tooFar": "Al massimo fra {count} giorni.",
+    "set": "Imposta promemoria",
+    "cancel": "Annulla",
+    "comesBack": "Allora torna in Oggi.",
+    "held": {
+      "offline": "Offline — imposta i promemoria quando torni in linea.",
+      "busy": "Un promemoria è in salvataggio…"
+    },
+    "when": {
+      "at": "Torna {at}",
+      "onChange": "Torna quando il record cambia",
+      "back": "Tornato {at}",
+      "done": "Fatto {at}"
+    },
+    "problem": {
+      "read": "Non è stato possibile leggere i tuoi promemoria.",
+      "failed": "Il promemoria non è stato salvato. Riprova.",
+      "done": "Questo promemoria è già fatto: annullalo prima.",
+      "tooMany": "Hai già 500 promemoria aperti: chiudine qualcuno prima.",
+      "changed": "Questo promemoria è cambiato nel frattempo: è stato riletto.",
+      "gone": "Questo promemoria o il suo record non c'è più.",
+      "invalid": "Quell'ora non si può usare: scegline un'altra.",
+      "forbidden": "Non puoi impostare un promemoria su questo record.",
+      "offline": "Offline — riprova quando torni in linea."
+    }
+  },
+  "set": {
+    "label": "Ricordamelo e i promemoria che ho impostato su questo record",
+    "title": "Promemoria che ho impostato",
+    "remind": "Ricordamelo",
+    "count_one": "{count} promemoria impostato da me",
+    "count_other": "{count} promemoria impostati da me",
+    "message": "Su un messaggio",
+    "done": "Fatto: il promemoria su {record}",
+    "remove": "Elimina il promemoria su {record}",
+    "notice": {
+      "set": "Promemoria impostato.",
+      "done": "Promemoria fatto.",
+      "removed": "Promemoria eliminato."
+    }
+  },
+  "waiting": {
+    "title": "In attesa di altri",
+    "count_one": "{count} attesa",
+    "count_other": "{count} attese",
+    "error": "Non è stato possibile caricare ciò che aspetti.",
+    "empty": {
+      "title": "Non stai aspettando nessuno.",
+      "body": "Ciò che chiedi o invii — approvazioni, ordini d'acquisto, preventivi, e-mail, link — compare qui finché non riceve risposta."
+    },
+    "kind": {
+      "APPROVAL_REQUEST": "Approvazione di {record}",
+      "PO_CONFIRMATION": "Conferma di {record}",
+      "QUOTE_ANSWER": "La risposta del cliente a {record}",
+      "MESSAGE_REPLY": "Una risposta alla tua e-mail su {record}",
+      "LINK_UNOPENED": "Il link che hai inviato per {record}, non aperto"
+    },
+    "tag": {
+      "APPROVAL_REQUEST": "Approvazione",
+      "PO_CONFIRMATION": "Ordine d'acquisto",
+      "QUOTE_ANSWER": "Preventivo",
+      "MESSAGE_REPLY": "Nessuna risposta in 3 giorni lavorativi",
+      "LINK_UNOPENED": "Link"
+    },
+    "who": {
+      "approver": "Aspetti un approvatore",
+      "party": "Aspetti {name}"
+    },
+    "since": {
+      "today": "da oggi",
+      "days_one": "da {count} giorno",
+      "days_other": "da {count} giorni"
+    },
+    "due": "conta entro il {date}",
+    "open": "Apri {record}",
+    "keys": {
+      "move": "Spostati fra le attese e le loro azioni"
+    },
+    "nudge": {
+      "label": "Sollecita",
+      "on": "Sollecita chi approva {record}",
+      "done_one": "{record}: è stata avvisata {count} persona che può decidere.",
+      "done_other": "{record}: sono state avvisate {count} persone che possono decidere.",
+      "failed": "Il sollecito non è stato inviato. Riprova.",
+      "gone": "Non è più qualcosa che aspetti.",
+      "refusal": {
+        "OUTSIDE": "Questo aspetta un cliente o un fornitore: sollecitalo dal record.",
+        "TODAY_ALREADY": "Li hai già sollecitati oggi. Sollecita di nuovo domani.",
+        "NOBODY": "Nessuno può decidere adesso: chiedi a un amministratore chi deve farlo."
+      }
+    },
+    "problem": {
+      "read": "Non è stato possibile leggere ciò che aspetti.",
+      "forbidden": "I tuoi ruoli non mostrano ciò che aspetti.",
+      "offline": "Offline — riprova quando torni in linea."
+    }
+  },
+  "following": {
+    "title": "Cambiato dall'ultima volta",
+    "error": "Non è stato possibile caricare cosa è cambiato.",
+    "empty": {
+      "title": "Niente di ciò che segui è cambiato dall'ultima volta che hai guardato.",
+      "body": "Segui un record (Segui, su qualsiasi record) o fissa una vista salvata: ciò che cambia compare qui, una riga ciascuno."
+    },
+    "notBuilt": "Questo elenco non ha ancora una sua pagina.",
+    "more_one": "e {count} altra",
+    "more_other": "e altre {count}",
+    "seen": "Visto",
+    "seenOn": "Segna come viste le novità di {record}",
+    "unfollow": "Non seguire più",
+    "unfollowOn": "Smetti di seguire {record}",
+    "unpin": "Togli da Oggi",
+    "unpinOn": "Togli la vista {record} da Oggi",
+    "partial": "È cambiato più di quanto mostra una pagina: segna qualcosa come visto per vedere il resto.",
+    "keys": {
+      "move": "Spostati fra le righe e le loro azioni",
+      "seen": "Segna la riga come vista"
+    },
+    "notice": {
+      "seen": "Visto: {record}.",
+      "unfollowed": "Non segui più {record}.",
+      "unpinned": "{record} non è più fissata in Oggi."
+    },
+    "problem": {
+      "read": "Non è stato possibile leggere cosa è cambiato.",
+      "forbidden": "I tuoi ruoli non arrivano fin qui.",
+      "gone": "Non c'è più.",
+      "offline": "Offline — riprova quando torni in linea."
+    }
+  },
+  "views": {
+    "title": "Le mie viste salvate",
+    "error": "Non è stato possibile caricare le tue viste salvate.",
+    "empty": {
+      "title": "Nessuna vista fissata in Oggi.",
+      "body": "Fissa una vista da qualsiasi elenco con Colonne ▾ › Fissa in Oggi: qui compare il suo conteggio e un cambiamento ti viene segnalato."
+    },
+    "count": "{count}",
+    "capped": "{count}+",
+    "open": "Apri {name}: {count}",
+    "notCounted": "Apri {name}: non ancora contata",
+    "notBuilt": "{name}: il suo elenco non ha ancora una pagina qui",
+    "notBuiltShort": "Ancora senza pagina",
+    "unpin": "Togli {name} da Oggi",
+    "unpinned": "{name} non è più fissata in Oggi.",
+    "problem": {
+      "read": "Non è stato possibile leggere le tue viste salvate.",
+      "forbidden": "I tuoi ruoli non arrivano a queste viste.",
+      "offline": "Offline — riprova quando torni in linea."
+    }
+  },
+  "reminders": {
+    "title": "Promemoria",
+    "hint": "Record e messaggi che hai chiesto di rivedere. Tornano in Oggi alla loro ora, oppure quando il record cambia.",
+    "views": "Quali promemoria",
+    "view": {
+      "OPEN": "Aperti",
+      "CAME_BACK": "Tornati",
+      "WAITING": "In attesa",
+      "DONE": "Fatti",
+      "count": "{view} · {count}"
+    },
+    "countRows_one": "{count} promemoria",
+    "countRows_other": "{count} promemoria",
+    "col": {
+      "record": "Record",
+      "note": "La tua nota",
+      "when": "Quando",
+      "state": "Stato"
+    },
+    "state": {
+      "WAITING": "In attesa",
+      "CAME_BACK": "Tornato",
+      "DONE": "Fatto"
+    },
+    "noNote": "Nessuna nota",
+    "open": "Apri {record}",
+    "menu": "Azioni sul promemoria su {record}",
+    "done": "Fatto",
+    "putOff": "Rimanda…",
+    "remove": "Elimina",
+    "undo": "Annulla",
+    "bulk": {
+      "done": "Fatti {count}",
+      "remove": "Elimina {count}"
+    },
+    "held": {
+      "noneOpen": "Nessuno dei promemoria scelti è aperto.",
+      "tooMany": "Al massimo {count} alla volta."
+    },
+    "keys": {
+      "done": "Fatto",
+      "putOff": "Rimanda"
+    },
+    "error": "Non è stato possibile caricare i tuoi promemoria.",
+    "empty": {
+      "title": "Nessun promemoria.",
+      "done": "Nessun promemoria ancora fatto.",
+      "body": "Su qualsiasi record o messaggio scegli Ricordamelo: allora torna in Oggi."
+    },
+    "notice": {
+      "done": "Fatto: il promemoria su {record}.",
+      "undone": "Il promemoria su {record} è di nuovo aperto.",
+      "removed": "Il promemoria su {record} è eliminato.",
+      "putOff": "Rimandato: {record}. Torna all'ora che hai scelto.",
+      "putOffChange": "Rimandato: {record}. Torna quando il record cambia.",
+      "bulkDone_one": "{count} promemoria fatto.",
+      "bulkDone_other": "{count} promemoria fatti.",
+      "bulkRemoved_one": "{count} promemoria eliminato.",
+      "bulkRemoved_other": "{count} promemoria eliminati."
+    }
+  },
+  "board": {
+    "dueDate": "Scadenza",
+    "late": "In ritardo",
+    "ownTask": "Un'attività a sé",
+    "lane": {
+      "OPEN": "Aperte",
+      "DONE": "Fatte",
+      "CANCELLED": "Annullate"
+    },
+    "held": {
+      "readOnly": "Puoi vedere questa attività, non modificarla.",
+      "cancel": "Annulla un'attività dall'attività stessa, dove si vede il motivo.",
+      "reopenFirst": "Riapri prima l'attività."
+    }
+  },
+  "prefs": {
+    "title": "Preferenze di notifica",
+    "body": "Scegli come ti arriva ogni tipo di novità. Ogni scelta si salva subito; dove non hai scelto nulla vale il predefinito del tuo ruolo o quello discreto.",
+    "tabs": "Preferenze di chi",
+    "tab": {
+      "mine": "Le mie",
+      "roles": "Predefiniti dei ruoli"
+    },
+    "caption": "Tipi di novità per canale",
+    "col": {
+      "event": "Novità"
+    },
+    "channel": {
+      "IN_APP": "Nell'app",
+      "EMAIL": "E-mail",
+      "PUSH": "Push"
+    },
+    "cadence": {
+      "INSTANT": "Subito",
+      "DAILY_DIGEST": "Riepilogo giornaliero",
+      "OFF": "No"
+    },
+    "event": {
+      "MENTIONED": { "label": "Menzionato", "hint": "qualcuno ti ha @menzionato" },
+      "ASSIGNED": { "label": "Assegnato", "hint": "un'attività o una riga di Oggi data a te" },
+      "APPROVAL_WAITING": { "label": "Approvazione in attesa", "hint": "una richiesta aspetta il tuo sì" },
+      "APPROVAL_DECIDED": { "label": "Approvazione decisa", "hint": "una richiesta che hai fatto è stata decisa" },
+      "FOLLOWING_CHANGED": { "label": "Record che seguo cambiato", "hint": "un record o una vista salvata che segui è cambiato" },
+      "AREA_ALERT": { "label": "Allerta sulla mia area", "hint": "una regola di allerta è scattata per te" },
+      "MAIL_ASSIGNED": { "label": "E-mail assegnata", "hint": "un'e-mail di una casella di gruppo data a te" }
+    },
+    "cellLabel": "{event} per {channel}",
+    "source": {
+      "PERSON": "Scelta tua",
+      "ROLE": "Predefinito per {role}",
+      "QUIET": "Predefinito discreto"
+    },
+    "sourceHint": {
+      "PERSON": "L'hai scelto tu. Ripristina i predefiniti del mio ruolo lo toglie.",
+      "ROLE": "Il predefinito del tuo ruolo: scegli qui per renderlo tuo."
+    },
+    "quietHint": "Nessuno ha scelto: il predefinito discreto è {cadence}.",
+    "reset": "Ripristina i predefiniti del mio ruolo",
+    "close": "Chiudi",
+    "held": {
+      "nothingToReset": "Non hai ancora scelto nulla: valgono già i predefiniti del tuo ruolo."
+    },
+    "digestOff": "Il tuo riepilogo giornaliero è spento: le novità che gli mandi aspettano finché non lo accendi.",
+    "digestOpen": "Riepilogo giornaliero…",
+    "digestNote": "Il riepilogo giornaliero è un'e-mail al giorno, all'ora e nei giorni che scegli in Riepilogo giornaliero.",
+    "pushNone": "Nessun dispositivo ha il push attivo: le novità push non raggiungono nessuno.",
+    "pushOpen": "Push su questo dispositivo…",
+    "error": "Non è stato possibile caricare le tue preferenze.",
+    "notice": {
+      "reset": "Le tue scelte sono state tolte: valgono di nuovo i predefiniti del tuo ruolo."
+    },
+    "roles": {
+      "pick": "Ruolo",
+      "body": "Un predefinito vale per chiunque abbia il ruolo e non abbia scelto da sé. Con più ruoli vince il predefinito più forte.",
+      "caption": "I predefiniti del ruolo per canale",
+      "noDefault": "Nessun predefinito ({cadence})",
+      "none": "Ancora nessun ruolo d'ufficio.",
+      "noneBody": "Crea prima un ruolo d'ufficio in Sistema › Ruoli e permessi."
+    },
+    "problem": {
+      "failed": "Non salvato. Riprova.",
+      "forbidden": "Non puoi modificarlo.",
+      "invalid": "Questo canale non ha questa scelta.",
+      "offline": "Offline — riprova quando torni in linea."
+    }
+  },
+  "push": {
+    "title": "Ricevi le urgenze su questo telefono",
+    "step": {
+      "urgent": "Cosa conta come urgente",
+      "install": "Aggiungi alla schermata Home",
+      "turnOn": "Attiva il push",
+      "test": "Prova"
+    },
+    "back": "Indietro",
+    "next": "Avanti",
+    "done": "Fatto",
+    "turnOn": "Attiva il push",
+    "error": "Non è stato possibile leggere il push per te.",
+    "unavailableBody": "Il push richiede il servizio push collegato per questa azienda. Le tue scelte restano; finché non c'è, non si invia nulla.",
+    "urgent": {
+      "body": "Un push porta solo ciò che hai scelto nella colonna Push delle preferenze di notifica, mai un prezzo che non puoi vedere.",
+      "none": "La tua colonna Push ora non porta nulla.",
+      "change": "Cambia cosa porta un push…"
+    },
+    "install": {
+      "body": "Su iPhone o iPad il push arriva solo all'app aggiunta alla schermata Home (iOS 16.4 o successivo).",
+      "one": "Apri questa pagina in Safari.",
+      "two": "Tocca Condividi, poi Aggiungi alla schermata Home.",
+      "three": "Apri Nexus Factory dalla schermata Home e attiva lì il push.",
+      "note": "Telefoni Android e computer attivano il push direttamente qui."
+    },
+    "label": "Nome di questo dispositivo",
+    "labelHint": "Per riconoscerlo nell'elenco, al massimo {count} caratteri.",
+    "permission": "Il browser chiede se questo sito può mostrare notifiche: scegli Consenti.",
+    "on": "Il push è attivo in questo browser.",
+    "test": {
+      "body": "Invia un push di prova a ogni dispositivo con il push attivo.",
+      "send": "Invia un push di prova",
+      "SENT": "Prova inviata",
+      "GONE": "Spento dal servizio push",
+      "FAILED": "Prova non riuscita"
+    },
+    "devices": {
+      "title": "Dispositivi con il push attivo ({count} di {max})",
+      "none": "Nessun dispositivo ha il push attivo.",
+      "this": "Questo dispositivo",
+      "used": "Ultimo push {at}",
+      "since": "Attivo dal {at}",
+      "off": "Spegni il push su {name}",
+      "offShort": "Spegni"
+    },
+    "held": {
+      "reading": "Lettura in corso…",
+      "unavailable": "Il push qui non è ancora collegato.",
+      "ios-install": "Su iPhone o iPad aggiungi prima l'app alla schermata Home.",
+      "insecure": "Il push richiede una pagina sicura (https).",
+      "unsupported": "Questo browser non può ricevere push.",
+      "already": "Il push è già attivo in questo browser.",
+      "label": "Dai prima un nome a questo dispositivo.",
+      "tooMany": "Hai già il push attivo su {count} dispositivi: spegnine uno prima."
+    },
+    "notice": {
+      "on": "Il push è attivo per questo dispositivo.",
+      "off": "Il push è spento su {name}.",
+      "tested_one": "Push di prova inviato a {count} dispositivo.",
+      "tested_other": "Push di prova inviato a {count} dispositivi.",
+      "testFailed": "Il push di prova non ha raggiunto nessun dispositivo."
+    },
+    "problem": {
+      "denied": "Il browser non consente notifiche per questo sito: consentile nelle sue impostazioni, poi riprova.",
+      "browser": "Questo browser non è riuscito ad abbonarsi al push.",
+      "failed": "Non è riuscito. Riprova.",
+      "none": "Nessun dispositivo ha il push attivo."
+    }
+  }
+}

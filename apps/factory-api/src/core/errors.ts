@@ -22,6 +22,8 @@ import { databasePackingRefusal } from '@nexus/factory-domain/shipping/cartons/r
 import { askedLineRefusal } from '@nexus/factory-domain/purchasing/ask-to-buy/ask-to-buy'
 // B-W2b-385: a notification preference, push device or view follow write that reached the database's rules is a 409 in words.
 import { databaseNotificationRefusal } from '@nexus/factory-domain/notifications/preferences/refusals'
+// B-W2b-388: the database's own refusal of a reminder (…_notify_depth_w2b_guards).
+import { databaseReminderRefusal } from '@nexus/factory-domain/reminders/rules'
 // B-W2b-376 (W2b-6 schema wave 54/57): a cost entry of a closed (or settled) work order, or a reversal of a close's entry, that
 // reached the database's actual-cost rules is a 409 in words.
 import { databaseActualCostRefusal } from '@nexus/factory-domain/costing/actuals-refusals'
@@ -235,6 +237,18 @@ function notificationRefusal(error: unknown): MappedError | null {
 }
 
 /**
+ * B-W2b-388 (W2b-6 schema wave 47/57's Reminder guard, …_notify_depth_w2b_guards): the database's own refusal of a reminder
+ * (check_violation 'tasks: … reminder …'), when a write reached it without its command's check (a race: done from another
+ * tab): a 409 in words (factory-domain reminders/rules), never a 500.
+ */
+function reminderRefusal(error: unknown): MappedError | null {
+  const cause = (error as { meta?: { driverAdapterError?: { cause?: { originalCode?: unknown; originalMessage?: unknown } } } } | null)?.meta?.driverAdapterError?.cause
+  if (cause?.originalCode !== '23514' || typeof cause.originalMessage !== 'string') return null
+  const words = databaseReminderRefusal(cause.originalMessage)
+  return words ? { status: STATUS_OF.conflict, code: 'conflict', message: words.message, issues: [{ path: words.path, message: words.message }], unexpected: false } : null
+}
+
+/**
  * B-W2b-373 (W2b-6 schema wave 52/57): the database's own refusal by the archived-role rules (…_security_audit_w2b_guards: an
  * archived custom role changes no more until restored, and is given to nobody), when a write reached it without its command's
  * check (W0's role edit, role assignment and invitation routes, a worker's floor role): a 409 in words (factory-domain
@@ -358,6 +372,9 @@ export function mapError(error: unknown): MappedError {
   // B-W2b-385
   const notification = notificationRefusal(error)
   if (notification) return notification
+  // B-W2b-388
+  const reminder = reminderRefusal(error)
+  if (reminder) return reminder
   // B-W2b-376
   const actualCost = actualCostRefusal(error)
   if (actualCost) return actualCost

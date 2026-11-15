@@ -17,6 +17,13 @@ export const PERSONAL_TEMPLATES: Readonly<Record<string, string>> = Object.freez
   'MENTION.NOTE': '{actor} mentioned you in a note on {record}.',
   'why.TASK_DUE.assigned': 'It is assigned to you.',
   'why.MENTION.mentioned': 'You were mentioned.',
+  // B-W2b-388: a reminder that came back (its time came, or its record changed), with or without the person's note.
+  'REMINDER.BACK': 'Reminder: {record}.',
+  'REMINDER.BACK_NOTE': 'Reminder: {record} — {note}',
+  'REMINDER.MESSAGE': 'Reminder about a message on {record}.',
+  'REMINDER.MESSAGE_NOTE': 'Reminder about a message on {record} — {note}',
+  'why.REMINDER.AT_TIME': 'You asked to see it again now.',
+  'why.REMINDER.ON_CHANGE': 'You asked to see it again when it changed, and it did.',
   // Coming up (insights/coming-up).
   'COMING.TASK': 'Your task "{title}" is due.',
   'COMING.ORDER': 'Order {number} for {customer} is promised.',

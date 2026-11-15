@@ -81,6 +81,9 @@ export const READ_ROUTES: Readonly<Record<string, ReadRoute>> = {
   'POST /people/statements/:statementId/pdf': byParam('DOWNLOAD', 'WorkerStatement', 'statementId'),
   'POST /sales/measurement-profiles/:profileId/photos/:fileId/open': byParam('DOWNLOAD', 'MeasurementProfile', 'profileId'),
   'POST /parties/:partyId/contacts/:contactId/access-copy': byParam('DOWNLOAD', 'PartyContact', 'contactId'),
+  // B-W2b-405: a person's data package, by the privacy desk or by the person.
+  'GET /privacy/requests/:requestId/package': byParam('DOWNLOAD', 'DataRequest', 'requestId'),
+  'GET /privacy/my-data/:requestId/package': byParam('DOWNLOAD', 'DataRequest', 'requestId'),
   // Certificates and training records.
   'GET /compliance/certificates/:certificateId': byParam('VIEW', 'Certificate', 'certificateId'),
   'GET /safety/training/records/:recordId/pdf': byParam('DOWNLOAD', 'TrainingRecord', 'recordId'),
