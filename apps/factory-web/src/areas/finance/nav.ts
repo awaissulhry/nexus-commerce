@@ -1,4 +1,4 @@
-import { Banknote, FileInput, FileText, FolderArchive, HandCoins, PieChart, SlidersHorizontal, Receipt, Scale, TrendingUp } from 'lucide-react'
+import { Banknote, FileInput, FileText, FolderArchive, HandCoins, Landmark, PieChart, SlidersHorizontal, Receipt, Scale, TrendingUp } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -35,7 +35,11 @@ export const officeArea: OfficeAreaNav = {
       {
         id: 'finance-payables',
         label: 'shell:nav.finance.payablesGroup',
-        items: [{ id: 'finance-payables-page', label: 'shell:nav.finance.payables', href: '/finance/payables', icon: FileInput, permission: 'payables.view' }],
+        items: [
+          { id: 'finance-payables-page', label: 'shell:nav.finance.payables', href: '/finance/payables', icon: FileInput, permission: 'payables.view' },
+          // B-W2b-406: Bank (SCR-152: statements imported, lines matched with how sure and why; their figures vs ours).
+          { id: 'finance-bank', label: 'shell:nav.finance.bank', href: '/finance/bank', icon: Landmark, permission: 'payments.bank.view' },
+        ],
       },
       // B-W2a-72: Costing › Standard vs actual (SCR-154) and Margins (SCR-155): costing.view; amounts by the cost, price and margin grains.
       {

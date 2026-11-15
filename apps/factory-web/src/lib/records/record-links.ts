@@ -94,6 +94,11 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   // B-W2a-81: Finance › Supplier invoices (SCR-153): a supplier invoice's record; a payment reminder opens on Receivables (SCR-151).
   SupplierInvoice: '/finance/payables/[id]',
   PaymentReminder: '/finance/receivables?reminder=[id]',
+  // B-W2b-406: Finance › Bank (SCR-152): a statement shows its lines, a line opens beside them, a customer's figures open
+  // with their comparison.
+  BankStatement: '/finance/bank?statement=[id]',
+  BankLine: '/finance/bank?line=[id]',
+  CustomerStatementFigures: '/finance/bank?figures=[id]',
   // Compliance › Certificates (SCR-051) and Labels & marking (SCR-053).
   Certificate: '/compliance/certificates/[id]',
   LabelTemplate: '/compliance/labels/[id]',

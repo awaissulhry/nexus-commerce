@@ -13,7 +13,7 @@ import { BankLineCard } from './view/BankLineCard'
  * its match was (payments.view; the line itself with payments.bank.view). Live: a bank line accepted or taken back reads it
  * again.
  */
-export function BankLine({ payment }: { payment: Payment }) {
+export function BankLine({ payment, prefix }: { payment: Payment; /** B-W2b-406: `/w/<company>` for the statement's link. */ prefix: string }) {
   const api = useOfficeApi()
   const [value, setValue] = useState<PaymentBankLine | null>(null)
   const [problem, setProblem] = useState<string | null>(null)
@@ -35,5 +35,5 @@ export function BankLine({ payment }: { payment: Payment }) {
     },
     () => reread(),
   )
-  return <BankLineCard model={{ value, problem, people: payment.people }} actions={{ onRetry: () => void read() }} />
+  return <BankLineCard model={{ value, problem, people: payment.people, prefix }} actions={{ onRetry: () => void read() }} />
 }
