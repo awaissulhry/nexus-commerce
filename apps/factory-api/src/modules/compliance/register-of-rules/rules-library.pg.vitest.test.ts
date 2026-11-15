@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url'
 import type { FastifyInstance } from 'fastify'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { openFactoryDatabase, RUNTIME_LOGIN, type FactoryDatabase } from '@nexus/factory-db'
 import { migratedDatabase, type MigratedDatabase } from '@nexus/factory-db/testing'
 import { newId } from '@nexus/factory-domain/core/ids'
@@ -15,6 +15,8 @@ import { SYSTEM_ACTOR_ID, testAuthenticator, type SessionContext } from '../../.
 import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { readDocSender } from '../public-doc/sender'
 import { useRulesClock } from './common'
+// ---- B-W2b-F53: this file fixes its clock on a day of the seeds' story, so it runs the seeds as written (seed-calendar)
+await vi.hoisted(async () => (await import('@nexus/factory-db/testing')).seedsAsWritten())
 
 /**
  * Rules & markets (B-W2b-249) on the local stack, with the app's real routes: a throwaway PostgreSQL 17 database from the

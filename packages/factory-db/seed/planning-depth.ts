@@ -18,6 +18,7 @@ import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedPlanning } from './planning'
 import { seed as seedSchedule } from './schedule'
 import { seed as seedSubcontract } from './subcontract'
+import { seedAt, seedDay } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The planning depth seed (W2b-5, schema wave 41/44, B-W2b-286), per tenant of seed/_core.ts, written in the tenant's office
@@ -69,12 +70,12 @@ const T = {
   repromised: new Date('2026-11-09T10:00:00.000Z'),
   told: new Date('2026-11-09T11:00:00.000Z'),
   setup: new Date('2026-11-05T08:00:00.000Z'),
-  kit: new Date('2026-11-17T07:00:00.000Z'),
-  kitPlanned: new Date('2026-11-27T07:00:00.000Z'),
+  kit: seedAt('2026-11-17T07:00:00.000Z'),
+  kitPlanned: seedAt('2026-11-27T07:00:00.000Z'),
 } as const
 const DAY = (iso: string): Date => new Date(`${iso}T00:00:00.000Z`)
 /** A slot's time in the seed week, as seed/schedule.ts writes it. */
-const at = (day: number, hour: number): Date => new Date(Date.UTC(2026, 10, day, hour, 0, 0))
+const at = (day: number, hour: number): Date => seedAt(new Date(Date.UTC(2026, 10, day, hour, 0, 0))) // B-W2b-F53
 
 export interface PlanningDepthSeed {
   readonly plannedWorkOrderIds: { readonly make: string; readonly subcontract: string; readonly converted: string }
@@ -181,8 +182,8 @@ export async function seed(context: SeedContext): Promise<PlanningDepthSeed> {
             colourwayId: jkt01.RED,
             sizes: [{ size: '50', quantity: 1 }, { size: '52', quantity: 2 }, { size: '54', quantity: 1 }],
             quantity: 4,
-            startDate: DAY('2026-11-30'),
-            dueDate: DAY('2026-12-11'),
+            startDate: DAY(seedDay('2026-11-30')),
+            dueDate: DAY(seedDay('2026-12-11')),
             demand: [
               { orderId: so1.order, orderLineId: so1.RED, size: '50', pieces: 1 },
               { orderId: so1.order, orderLineId: so1.RED, size: '52', pieces: 2 },
@@ -203,8 +204,8 @@ export async function seed(context: SeedContext): Promise<PlanningDepthSeed> {
             colourwayId: jkt01.BLK,
             sizes: [{ size: '50', quantity: 2 }, { size: '52', quantity: 4 }, { size: '54', quantity: 2 }],
             quantity: 8,
-            startDate: DAY('2026-11-30'),
-            dueDate: DAY('2026-12-11'),
+            startDate: DAY(seedDay('2026-11-30')),
+            dueDate: DAY(seedDay('2026-12-11')),
             demand: [
               { orderId: so1.order, orderLineId: so1.BLK, size: '50', pieces: 2 },
               { orderId: so1.order, orderLineId: so1.BLK, size: '52', pieces: 4 },
@@ -227,8 +228,8 @@ export async function seed(context: SeedContext): Promise<PlanningDepthSeed> {
             colourwayId: id('production:colourway:JKT-02:BLK'),
             sizes: [{ size: '52', quantity: 1 }],
             quantity: 1,
-            startDate: DAY('2026-11-19'),
-            dueDate: DAY('2026-11-20'),
+            startDate: DAY(seedDay('2026-11-19')),
+            dueDate: DAY(seedDay('2026-11-20')),
             demand: [{ orderId: so2.order, orderLineId: so2.BLK, size: '52', pieces: 1 }],
             lineId: lineL1,
             updatedAt: T.planned,
@@ -251,10 +252,10 @@ export async function seed(context: SeedContext): Promise<PlanningDepthSeed> {
             recordType: 'PurchaseOrderLine',
             recordId: id('supply:PO1:10'),
             action: MrpAction.EXPEDITE,
-            fromDate: DAY('2026-11-20'),
-            toDate: DAY('2026-11-16'),
+            fromDate: DAY(seedDay('2026-11-20')),
+            toDate: DAY(seedDay('2026-11-16')),
             message: 'Expedite the leather of PO1 line 10 from 20 Nov to 16 Nov: SEED-SO-0001 needs it on 16 Nov (made-up).',
-            facts: { needDate: '2026-11-16', orderNumber: 'SEED-SO-0001' },
+            facts: { needDate: seedDay('2026-11-16'), orderNumber: 'SEED-SO-0001' },
           },
           {
             id: M[1],
@@ -276,7 +277,7 @@ export async function seed(context: SeedContext): Promise<PlanningDepthSeed> {
             recordType: 'PlannedWorkOrder',
             recordId: P.subcontract,
             action: MrpAction.NEW,
-            toDate: DAY('2026-11-30'),
+            toDate: DAY(seedDay('2026-11-30')),
             toQuantity: '8.0000',
             uom: Uom.PCS,
             message: 'Give the sewing of 8 black SEED-JKT-01 to the workshop P2 by 30 Nov (made-up).',
@@ -297,7 +298,7 @@ export async function seed(context: SeedContext): Promise<PlanningDepthSeed> {
   await db.withScope(office, (client) =>
     client.$transaction(async (tx) => {
       if (await tx.promiseRecord.findUnique({ where: { id: R.firstBlk }, select })) return
-      const first = { partyId: customerId, promisedDate: DAY('2026-12-18'), kind: PromiseKind.FIRST, promisedById: actorId, promisedAt: T.ordered, customerToldAt: T.ordered, createdAt: T.ordered, createdById: actorId }
+      const first = { partyId: customerId, promisedDate: DAY(seedDay('2026-12-18')), kind: PromiseKind.FIRST, promisedById: actorId, promisedAt: T.ordered, customerToldAt: T.ordered, createdAt: T.ordered, createdById: actorId }
       await tx.promiseRecord.createMany({
         data: [
           { id: R.firstBlk, salesOrderLineId: so1.BLK, ...first },
@@ -310,7 +311,7 @@ export async function seed(context: SeedContext): Promise<PlanningDepthSeed> {
           salesOrderLineId: so1.RED,
           partyId: customerId,
           size: '52',
-          promisedDate: DAY('2026-12-22'),
+          promisedDate: DAY(seedDay('2026-12-22')),
           kind: PromiseKind.RE_PROMISE,
           reasonCode: 'MATERIAL_LATE',
           reason: 'The red leather arrives a week later than asked (made-up).',
@@ -403,7 +404,7 @@ export async function seed(context: SeedContext): Promise<PlanningDepthSeed> {
       await tx.subcontractorCapacity.createMany({
         data: [
           { id: K[0], ...stamp, workCentreKind: WorkCentreKind.SEWING, unit: SubcontractCapacityUnit.MINUTES, perWeek: 2400, validFrom: DAY('2026-11-01') },
-          { id: K[1], ...stamp, unit: SubcontractCapacityUnit.PIECES, perWeek: 60, validFrom: DAY('2026-11-01'), validTo: DAY('2026-12-23'), note: 'Closed for the holidays from 24 Dec (made-up).' },
+          { id: K[1], ...stamp, unit: SubcontractCapacityUnit.PIECES, perWeek: 60, validFrom: DAY('2026-11-01'), validTo: DAY(seedDay('2026-12-23')), note: 'Closed for the holidays from 24 Dec (made-up).' },
         ],
       })
     }),

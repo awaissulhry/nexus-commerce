@@ -6,6 +6,7 @@ import { openFactoryDatabase, type FactoryClient, type FactoryDatabase, type Fac
 import { RUNTIME_LOGIN } from './roles'
 import { seedUuid } from './seeding'
 import { migratedDatabase, type MigratedDatabase } from './testing/database'
+import { seedToday, seedYear } from './seed-calendar' // B-W2b-F53: the seeds' calendar
 
 /**
  * Invoicing, tax and currency (W2b-6, schema wave 49/57, B-W2b-369, …_tax_currency_w2b_guards) on a database built from the
@@ -155,7 +156,8 @@ describe('the seed', () => {
                   AND ("taxCodesOn" OR "stampDutyOn" OR "declarationsOfIntentOn" OR "selfInvoicesOn")) AS switched_on`,
       [a.tenantId],
     )
-    expect(counts).toEqual({ codes: 9, declarations: 2, quarters: 2, selfs: 2, settings: 2, copies: 1, runs: 2, rules: 5, currencies: 5, rates: 4, switched_on: 0 })
+    // B-W2b-F53: in a run after 2026 the seed adds P1's declaration of the run's year (seed-calendar seedYear()).
+    expect(counts).toEqual({ codes: 9, declarations: seedYear() > 2026 ? 3 : 2, quarters: 2, selfs: 2, settings: 2, copies: 1, runs: 2, rules: 5, currencies: 5, rates: 4, switched_on: 0 })
   })
 })
 
@@ -242,7 +244,16 @@ describe('stamp duty quarters (FIN-101)', () => {
     await expect(quarter({ quarterStart: '2026-04-01', paidAt: '2026-05-01T09:00:00.000Z', paidById: a.actorId })).rejects.toThrow(/paid after it ended/)
     expect(await quarter({ quarterStart: '2026-04-01', invoiceCount: 2, total: 400, paidAt: '2026-07-20T09:00:00.000Z', paidById: a.actorId })).toBe(1)
     expect(await update('StampDutyQuarter', s.stampDutyQuarterIds.october, `"invoiceCount" = 2, total = 400`)).toBe(1)
-    await expect(update('StampDutyQuarter', s.stampDutyQuarterIds.october, `"paidAt" = now(), "paidById" = $2::uuid`, a.actorId)).rejects.toThrow(/paid after it ended/)
+    // ---- B-W2b-F53: the quarter that has not ended is today's: the seeded October 2026 one while it runs (the seeds' history
+    // keeps its dates), else a row for today's quarter; paying it now is refused on every day.
+    const todayQuarter = seedToday().slice(0, 5) + String(Math.floor((Number(seedToday().slice(5, 7)) - 1) / 3) * 3 + 1).padStart(2, '0') + '-01'
+    let running = s.stampDutyQuarterIds.october
+    if (todayQuarter !== '2026-10-01') {
+      running = randomUUID()
+      expect(await quarter({ id: running, quarterStart: todayQuarter, invoiceCount: 1, total: 200 })).toBe(1)
+    }
+    await expect(update('StampDutyQuarter', running, `"paidAt" = now(), "paidById" = $2::uuid`, a.actorId)).rejects.toThrow(/paid after it ended/)
+    // ---- end B-W2b-F53
     await expect(update('StampDutyQuarter', s.stampDutyQuarterIds.july, `total = 800`)).rejects.toThrow(/was paid on .* changes no more/)
     await neverDeleted('StampDutyQuarter', s.stampDutyQuarterIds.october, /never deleted/)
   })
@@ -309,12 +320,14 @@ describe('the invoice: language, rate, debit note, run and declaration (FIN-063,
     await expect(draft({ ...n35, declarationOfIntentId: s.declarationIds.revoked }, n35Line)).rejects.toThrow(/was revoked/)
     // An unchecked declaration: named on a draft, refused at the issue.
     const unchecked = randomUUID()
-    await insert('DeclarationOfIntent', { id: unchecked, companyId: s.companyA, partyId: key('party:P1'), protocolNumber: '26000000000000099-000001', protocolDate: '2026-05-01', year: 2026, amount: 100_000 })
+    // B-W2b-F53: a declaration covers one year: this one is for the run's year (protocolled the December before), as the invoice is issued today.
+    await insert('DeclarationOfIntent', { id: unchecked, companyId: s.companyA, partyId: key('party:P1'), protocolNumber: '26000000000000099-000001', protocolDate: `${seedYear() - 1}-12-20`, year: seedYear(), amount: 100_000 })
     const early = await draft({ ...n35, declarationOfIntentId: unchecked }, n35Line)
     await expect(issue(early, invoiceSeries(), 'INVOICE')).rejects.toThrow(/only once it is checked on the tax agency's site/)
-    const plain = await draft({ declarationOfIntentId: s.declarationIds.live })
+    // B-W2b-F53: the invoice is issued today, so it rests on the declaration of the run's year (seed: declarationIds.current).
+    const plain = await draft({ declarationOfIntentId: s.declarationIds.current })
     await expect(issue(plain, invoiceSeries(), 'INVOICE')).rejects.toThrow(/has the N3.5 lines it covers/)
-    const covered = await draft({ ...n35, declarationOfIntentId: s.declarationIds.live }, n35Line)
+    const covered = await draft({ ...n35, declarationOfIntentId: s.declarationIds.current }, n35Line)
     await issue(covered, invoiceSeries(), 'INVOICE')
     await switchOn('declarationsOfIntentOn', false)
   })

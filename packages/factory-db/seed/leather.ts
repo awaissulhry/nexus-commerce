@@ -3,6 +3,7 @@ import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedHolds } from './holds'
 import { seed as seedInspectionPlans } from './inspection-plans'
 import { seed as seedQuality } from './quality'
+import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The leather and roll stock seed (W2b schema wave 12/16, B-W2b-80), per tenant of seed/_core.ts. The grades, rules and shade
@@ -40,11 +41,11 @@ import { seed as seedQuality } from './quality'
 
 /** Fixed instants, so the seed never depends on the clock. */
 const T = {
-  written: new Date('2026-11-18T08:00:00.000Z'),
-  measured: new Date('2026-11-18T10:30:00.000Z'),
-  remeasured: new Date('2026-11-19T09:00:00.000Z'),
-  cut: new Date('2026-11-19T11:00:00.000Z'),
-  withdrawn: new Date('2026-11-19T12:00:00.000Z'),
+  written: seedAt('2026-11-18T08:00:00.000Z'),
+  measured: seedAt('2026-11-18T10:30:00.000Z'),
+  remeasured: seedAt('2026-11-19T09:00:00.000Z'),
+  cut: seedAt('2026-11-19T11:00:00.000Z'),
+  withdrawn: seedAt('2026-11-19T12:00:00.000Z'),
 }
 
 export interface LeatherSeed {
@@ -235,7 +236,7 @@ export async function seed(context: SeedContext): Promise<LeatherSeed> {
           crViStatus: CrViStatus.PASS,
           crViMgKg: '0.800',
           crViEvidence: CrViEvidence.LOT_REPORT,
-          crViTestedAt: new Date('2026-11-17T00:00:00.000Z'),
+          crViTestedAt: seedAt('2026-11-17T00:00:00.000Z'),
           qualityStatus: LotQualityStatus.RELEASED,
           qualityNote: 'Cr VI 0.8 mg/kg on the lab report of this lot, below the 3 mg/kg limit.',
           qualityDecidedAt: T.written,

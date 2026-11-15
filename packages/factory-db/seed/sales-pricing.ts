@@ -17,6 +17,7 @@ import { seed as seedAuth } from './auth'
 import { seed as seedOptions } from './options'
 import { seed as seedPricing } from './pricing'
 import { seed as seedRoles } from './roles'
+import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The quotes, pricing and configuration seed (W2b-5, schema wave 38/44, B-W2b-280), per tenant of seed/_core.ts, written in
@@ -66,15 +67,15 @@ const T = {
   ordered: new Date('2026-11-03T08:00:00.000Z'),
 } as const
 const DAY = {
-  q3FirstDelivery: new Date('2026-12-04T00:00:00.000Z'),
-  q3SecondDelivery: new Date('2026-12-18T00:00:00.000Z'),
-  q3Promise: new Date('2026-12-23T00:00:00.000Z'),
-  q4ValidUntil: new Date('2026-12-20T00:00:00.000Z'),
+  q3FirstDelivery: seedAt('2026-12-04T00:00:00.000Z'),
+  q3SecondDelivery: seedAt('2026-12-18T00:00:00.000Z'),
+  q3Promise: seedAt('2026-12-23T00:00:00.000Z'),
+  q4ValidUntil: seedAt('2026-12-20T00:00:00.000Z'),
   orderDate: new Date('2026-11-03T00:00:00.000Z'),
-  soFirstDelivery: new Date('2027-01-15T00:00:00.000Z'),
-  soSecondDelivery: new Date('2027-01-29T00:00:00.000Z'),
-  oldPriceTo: new Date('2027-01-31T00:00:00.000Z'),
-  newPriceFrom: new Date('2027-02-01T00:00:00.000Z'),
+  soFirstDelivery: seedAt('2027-01-15T00:00:00.000Z'),
+  soSecondDelivery: seedAt('2027-01-29T00:00:00.000Z'),
+  oldPriceTo: seedAt('2027-01-31T00:00:00.000Z'),
+  newPriceFrom: seedAt('2027-02-01T00:00:00.000Z'),
 } as const
 
 const sha256 = (text: string): string => createHash('sha256').update(text).digest('hex')

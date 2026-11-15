@@ -24,6 +24,7 @@ import { seed as seedComplianceRules } from './compliance-rules'
 import { seed as seedFiles } from './files'
 import { seed as seedProduct } from './product'
 import { seed as seedShipping } from './shipping'
+import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The recall, authority and claims seed (W2b-4, schema wave 33/33, B-W2b-222), per tenant of seed/_core.ts, written in the
@@ -87,11 +88,11 @@ const T = {
   useEnded: new Date('2026-11-08T16:00:00.000Z'),
 } as const
 const DAY = {
-  dueItaly: new Date('2026-11-18T00:00:00.000Z'),
+  dueItaly: seedAt('2026-11-18T00:00:00.000Z'),
   dueGermany: new Date('2026-11-13T00:00:00.000Z'),
-  lwgValid: new Date('2027-06-30T00:00:00.000Z'),
+  lwgValid: seedAt('2027-06-30T00:00:00.000Z'),
   pfasValid: new Date('2026-10-31T00:00:00.000Z'),
-  pfasNewValid: new Date('2027-11-30T00:00:00.000Z'),
+  pfasNewValid: seedAt('2027-11-30T00:00:00.000Z'),
 } as const
 
 export interface RecallSeed {

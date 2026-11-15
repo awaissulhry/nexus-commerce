@@ -27,6 +27,7 @@ import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedComplianceRules } from './compliance-rules'
 import { seed as seedFiles } from './files'
 import { seed as seedShipping } from './shipping'
+import { seedDay } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The declarations, technical files and labels seed (W2b-4, schema wave 32/33, B-W2b-218), per tenant of seed/_core.ts,
@@ -396,7 +397,7 @@ export async function seed(context: SeedContext): Promise<TechfilesSeed> {
       const t = result.testIds
       await tx.productionControlTest.createMany({
         data: [
-          { id: t.due, companyId: companyA, styleId: production.styleId, test: ProductionControlTestKind.SEAM_STRENGTH, testName: 'Main back seam', frequency: ProductionControlFrequency.YEARLY, dueOn: day('2027-01-15'), ...stamp(T.recorded) },
+          { id: t.due, companyId: companyA, styleId: production.styleId, test: ProductionControlTestKind.SEAM_STRENGTH, testName: 'Main back seam', frequency: ProductionControlFrequency.YEARLY, dueOn: day(seedDay('2027-01-15')), ...stamp(T.recorded) },
           {
             id: t.passed,
             companyId: companyA,
@@ -432,7 +433,7 @@ export async function seed(context: SeedContext): Promise<TechfilesSeed> {
             retainUntil: day('2036-10-20'),
             ...stamp(T.legacy),
           },
-          { id: t.other, companyId: companyA, styleId: production.styleId, siteId: siteA, workOrderId: production.workOrderId, test: ProductionControlTestKind.OTHER, testName: 'Zip pull strength', frequency: ProductionControlFrequency.EVERY_BATCH, dueOn: day('2026-11-30'), ...stamp(T.recorded) },
+          { id: t.other, companyId: companyA, styleId: production.styleId, siteId: siteA, workOrderId: production.workOrderId, test: ProductionControlTestKind.OTHER, testName: 'Zip pull strength', frequency: ProductionControlFrequency.EVERY_BATCH, dueOn: day(seedDay('2026-11-30')), ...stamp(T.recorded) },
         ],
       })
 

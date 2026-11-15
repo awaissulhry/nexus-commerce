@@ -98,6 +98,20 @@ beforeAll(async () => {
     const module = (await import(pathToFileURL(join(SEED_DIR, file)).href)) as { seed: (context: { db: FactoryDatabase; namespace: string }) => Promise<unknown> }
     await module.seed({ db: h.database, namespace: NS })
   }
+  // ---- B-W2b-F53: the seeds' orders are the seeds' history (dated October and November 2026, never moved), so they leave the
+  // 60 days of the facts as the calendar moves on: a copy of company A's first seeded order, dated yesterday with its lines,
+  // keeps an order in the window on every day (written past the guards, as the floor rows below are).
+  const [source] = await admin<{ id: string }>(`SELECT o.id FROM "SalesOrder" o WHERE o."tenantId" = $1 AND o."companyId" = $2 AND o.status <> 'CANCELLED' AND EXISTS (SELECT 1 FROM "SalesOrderLine" l WHERE l."orderId" = o.id) ORDER BY o.number LIMIT 1`, [T, companyA])
+  const copyId = newId()
+  await force(
+    `INSERT INTO "SalesOrder" SELECT (jsonb_populate_record(NULL::"SalesOrder", to_jsonb(o) || jsonb_build_object('id', $2::text, 'number', $3::text, 'orderDate', $4::text))).* FROM "SalesOrder" o WHERE o.id = $1`,
+    [source!.id, copyId, `K428-SO-${run}`, plusDays(today(), -1)],
+  )
+  await force(
+    `INSERT INTO "SalesOrderLine" SELECT (jsonb_populate_record(NULL::"SalesOrderLine", to_jsonb(l) || jsonb_build_object('id', gen_random_uuid()::text, 'orderId', $2::text))).* FROM "SalesOrderLine" l WHERE l."orderId" = $1`,
+    [source!.id, copyId],
+  )
+  // ---- end B-W2b-F53
   // A customer with orders: the person limited to it reads the order KPIs live.
   partyNarrow = (await admin<{ partyId: string }>(`SELECT "partyId" FROM "SalesOrder" WHERE "tenantId" = $1 AND status <> 'CANCELLED' GROUP BY "partyId" ORDER BY count(*) DESC, "partyId" LIMIT 1`, [T]))[0]!.partyId
   for (const [person, role] of Object.entries(ROLE_OF) as Array<[Person, string]>) {
@@ -127,7 +141,8 @@ describe('the facts, rebuilt from the records (ANA-069)', () => {
     expect(after.map(({ key, v, p, c }) => ({ key, v, p, c }))).toEqual(rows.map(({ key, v, p, c }) => ({ key, v, p, c })))
     expect(after[0]!.at.getTime()).toBeGreaterThanOrEqual(rows[0]!.at.getTime())
     // Every company keeps a row per day and company measure: a day rebuilt says so, zeros too.
-    expect((await factsOf('orders.lines_in', `AND "companyId" = '${companyA}'`)).length).toBe(61)
+    // B-W2b-F53: the 61 days rebuilt (the seeds' future orders keep their own days after today, outside the 60 days).
+    expect((await factsOf('orders.lines_in', `AND "companyId" = '${companyA}' AND day BETWEEN '${FROM()}'::date AND '${today()}'::date`)).length).toBe(61)
     expect(await no('owner', 'POST', '/insights/facts/rebuild', { from: plusDays(today(), -100), to: today() }, 400)).toEqual(['body/from'])
     expect(await no('owner', 'POST', '/insights/facts/rebuild', { from: today(), to: plusDays(today(), 5) }, 400)).toEqual(['body/to'])
     expect((await call('planner', 'POST', '/insights/facts/rebuild', { from: today(), to: today() })).status).toBe(403)

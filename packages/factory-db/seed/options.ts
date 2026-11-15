@@ -19,6 +19,7 @@ import {
 } from '../src/generated/prisma/enums'
 import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedProduct } from './product'
+import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The BOM depth and option library seed (W2b-4, schema wave 28/33, B-W2b-211), per tenant of seed/_core.ts, written in the
@@ -53,9 +54,9 @@ import { seed as seedProduct } from './product'
 
 /** Fixed instants, so the seed never depends on the clock. */
 const T = {
-  library: new Date('2026-11-22T08:00:00.000Z'),
-  released: new Date('2026-11-22T09:00:00.000Z'),
-  style: new Date('2026-11-22T10:00:00.000Z'),
+  library: seedAt('2026-11-22T08:00:00.000Z'),
+  released: seedAt('2026-11-22T09:00:00.000Z'),
+  style: seedAt('2026-11-22T10:00:00.000Z'),
 }
 
 export interface OptionsSeed {

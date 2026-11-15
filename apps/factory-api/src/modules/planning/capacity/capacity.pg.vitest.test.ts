@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url'
 import type { FastifyInstance } from 'fastify'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { openFactoryDatabase, RUNTIME_LOGIN, type FactoryDatabase } from '@nexus/factory-db'
 import { migratedDatabase, type MigratedDatabase } from '@nexus/factory-db/testing'
 import { newId } from '@nexus/factory-domain/core/ids'
@@ -17,6 +17,8 @@ import { seed as seedCalendar } from '../../../../../../packages/factory-db/seed
 import { seed as seedPlanning } from '../../../../../../packages/factory-db/seed/planning'
 import { seed as seedSchedule } from '../../../../../../packages/factory-db/seed/schedule'
 import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
+// ---- B-W2b-F53: this file reads the seeds' story only on days it names (never today), so it runs the seeds as written (seed-calendar)
+await vi.hoisted(async () => (await import('@nexus/factory-db/testing')).seedsAsWritten())
 
 /**
  * Capacity & load (B-W2a-16; PLN-115 capacity per line and work centre, PLN-116 load in standard minutes) through the

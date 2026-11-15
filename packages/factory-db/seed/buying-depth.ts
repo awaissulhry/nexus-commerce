@@ -18,6 +18,7 @@ import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedPortalSupply } from './portal-supply'
 import { seed as seedSamples } from './samples'
 import { seed as seedSubcontractReceipts } from './subcontract-receipts'
+import { seedAt, seedDay } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The buying and subcontracting depth seed (W2b-5, schema wave 40/44, B-W2b-285), per tenant of seed/_core.ts, written in
@@ -72,12 +73,12 @@ const T = {
 } as const
 const DAY = {
   drafted: new Date('2026-11-03T00:00:00.000Z'),
-  sampleNeed: new Date('2026-12-07T00:00:00.000Z'),
-  sampleSecond: new Date('2026-12-14T00:00:00.000Z'),
-  need: new Date('2027-01-11T00:00:00.000Z'),
-  second: new Date('2027-01-25T00:00:00.000Z'),
-  secondLater: new Date('2027-02-01T00:00:00.000Z'),
-  requestNeed: new Date('2026-12-15T00:00:00.000Z'),
+  sampleNeed: seedAt('2026-12-07T00:00:00.000Z'),
+  sampleSecond: seedAt('2026-12-14T00:00:00.000Z'),
+  need: seedAt('2027-01-11T00:00:00.000Z'),
+  second: seedAt('2027-01-25T00:00:00.000Z'),
+  secondLater: seedAt('2027-02-01T00:00:00.000Z'),
+  requestNeed: seedAt('2026-12-15T00:00:00.000Z'),
 } as const
 
 export interface BuyingDepthSeedOptions {
@@ -358,7 +359,7 @@ export async function seed(context: SeedContext, options: BuyingDepthSeedOptions
               needDate: DAY.sampleNeed,
               reason: 'WO-0001 is short of protectors.',
               workOrderId: production.workOrderId,
-              shortage: { word: 'NOT_ENOUGH', short: '8.0000', needDate: '2026-12-07', runId: id('supply:run:1') },
+              shortage: { word: 'NOT_ENOUGH', short: '8.0000', needDate: seedDay('2026-12-07'), runId: id('supply:run:1') },
             },
             {
               id: R.waiting,

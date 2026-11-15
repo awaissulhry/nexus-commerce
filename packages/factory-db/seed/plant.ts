@@ -9,6 +9,7 @@ import {
 } from '../src/generated/prisma/enums'
 import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedFloorAuth } from './floor-auth'
+import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The W2a plant seed (schema wave 6/7), per tenant of seed/_core.ts: the machine classes and the symptoms a station
@@ -43,11 +44,11 @@ import { seed as seedFloorAuth } from './floor-auth'
 /** Fixed instants and dates, so the seed never depends on the clock. */
 const T = {
   setup: new Date('2026-10-29T08:00:00.000Z'),
-  threadReport: new Date('2026-11-20T10:05:00.000Z'),
-  guardReport: new Date('2026-11-20T09:12:00.000Z'),
-  acknowledged: new Date('2026-11-20T09:20:00.000Z'),
-  job: new Date('2026-11-20T09:30:00.000Z'),
-  due: new Date('2026-11-21T08:00:00.000Z'),
+  threadReport: seedAt('2026-11-20T10:05:00.000Z'),
+  guardReport: seedAt('2026-11-20T09:12:00.000Z'),
+  acknowledged: seedAt('2026-11-20T09:20:00.000Z'),
+  job: seedAt('2026-11-20T09:30:00.000Z'),
+  due: seedAt('2026-11-21T08:00:00.000Z'),
 } as const
 
 const AMBER = '#D97706'

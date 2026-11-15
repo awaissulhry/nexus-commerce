@@ -8,6 +8,7 @@ import { RUNTIME_LOGIN } from './roles'
 import { seedUuid } from './seeding'
 import { migratedDatabase, type MigratedDatabase } from './testing/database'
 import { loadOwnership, loadSchema } from './tools'
+import { seedDay, seedIso } from './seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The customer portal (W2b schema wave 21/22, B-W2b-157, …_portal_sales_w2b_guards) on a database built from the migrations
@@ -312,7 +313,7 @@ describe('change and cancel requests', () => {
   })
 
   it('an accepted change names its amendment once: of its own order, made after it was asked, one request per amendment', async () => {
-    const change = await newChange({ orderId: seeded.orders.so1, requestedDate: '2027-01-20', reason: 'Seed test: later, please.' })
+    const change = await newChange({ orderId: seeded.orders.so1, requestedDate: seedDay('2027-01-20'), reason: 'Seed test: later, please.' })
     expect(await update(office(), 'OrderChangeRequest', change, `status = 'ACCEPTED', "answeredAt" = now(), "answeredById" = $2::uuid, version = version + 1`, a.actorId)).toBe(1)
     // SEED-SO-0001's amendment 1 was made before this request was asked (and answers the seed's own request).
     await expect(update(office(), 'OrderChangeRequest', change, `"amendmentId" = $2::uuid`, seeded.amendmentId)).rejects.toThrow(/an amendment made after it was asked|duplicate key/)
@@ -322,7 +323,7 @@ describe('change and cancel requests', () => {
     expect(await update(office(), 'OrderChangeRequest', change, `"amendmentId" = $2::uuid, version = version + 1`, amendment)).toBe(1)
     await expect(update(office(), 'OrderChangeRequest', change, `"amendmentId" = NULL`)).rejects.toThrow(/never changes again/)
     // One request per amendment.
-    const again = await newChange({ orderId: seeded.orders.so1, requestedDate: '2027-01-21', reason: 'Seed test: again.' })
+    const again = await newChange({ orderId: seeded.orders.so1, requestedDate: seedDay('2027-01-21'), reason: 'Seed test: again.' })
     await update(office(), 'OrderChangeRequest', again, `status = 'ACCEPTED', "answeredAt" = now(), "answeredById" = $2::uuid`, a.actorId)
     await expect(update(office(), 'OrderChangeRequest', again, `"amendmentId" = $2::uuid`, amendment)).rejects.toThrow(/OrderChangeRequest_tenantId_amendmentId_key/)
     // An amendment of another order is not a reference of this request (its key names the order).
@@ -417,7 +418,7 @@ describe('measurements by link', () => {
   it('a link session adds only the revision sent through its MEASUREMENTS link, while the link opens, without a deletion date', async () => {
     expect(await sendAgain(3)).toBe(1)
     await expect(sendAgain(4, { submittedViaLinkId: null, submittedAt: null })).rejects.toThrow(/a link session adds only the revision the rider sent/)
-    await expect(sendAgain(4, { photosDeleteAfter: '2027-03-01T00:00:00Z' })).rejects.toThrow(/without a photo deletion date/)
+    await expect(sendAgain(4, { photosDeleteAfter: seedIso('2027-03-01T00:00:00Z') })).rejects.toThrow(/without a photo deletion date/)
     await expect(sendAgain(4, { submittedViaLinkId: key('link:P1') })).rejects.toThrow(/through a MEASUREMENTS link of its party, while the link opened/)
     await expect(sendAgain(4, { submittedAt: '2026-11-01T10:00:00Z' })).rejects.toThrow(/while the link opened|no later than the send/)
     // A link of another party is not a reference of P1's profile (its key names the party).
@@ -433,7 +434,7 @@ describe('measurements by link', () => {
     const workerNotice = (await admin(`SELECT id FROM "PrivacyNotice" WHERE kind = 'WORKER_FLOOR' AND status = 'PUBLISHED' AND "tenantId" = $1::uuid LIMIT 1`, [a.tenantId]))[0]!.id as string
     await expect(sendAgain(5, { noticeVersionId: workerNotice }, office())).rejects.toThrow(/a notice for people outside the company/)
     await expect(sendAgain(5, { privacyNoticeAt: '2026-11-13T09:00:00Z' }, office())).rejects.toThrow(/in force when it was shown/)
-    await expect(sendAgain(5, { privacyNoticeAt: '2026-11-18T10:30:00Z' }, office())).rejects.toThrow(/no later than the send/)
+    await expect(sendAgain(5, { privacyNoticeAt: seedIso('2026-11-18T10:30:00Z') }, office())).rejects.toThrow(/no later than the send/)
   })
 
   it('photos: three different files, AVAILABLE PHOTO files of category BODY_PHOTO, not another party\'s', async () => {
@@ -448,12 +449,12 @@ describe('measurements by link', () => {
     const id = seeded.profileId
     await expect(update(office(), 'MeasurementProfile', id, `"fitNotes" = 'changed'`)).rejects.toThrow(/never edited in place/)
     await expect(update(office(), 'MeasurementProfile', id, `"photoBackFileId" = NULL`)).rejects.toThrow(/never edited in place/)
-    expect(await update(office(), 'MeasurementProfile', id, `"photosDeleteAfter" = '2027-03-18T00:00:00Z'`)).toBe(1)
-    expect(await update(office(), 'MeasurementProfile', id, `"photosDeleteAfter" = '2027-02-18T00:00:00Z'`)).toBe(1)
+    expect(await update(office(), 'MeasurementProfile', id, `"photosDeleteAfter" = '${seedIso('2027-03-18T00:00:00Z')}'`)).toBe(1)
+    expect(await update(office(), 'MeasurementProfile', id, `"photosDeleteAfter" = '${seedIso('2027-02-18T00:00:00Z')}'`)).toBe(1)
     await expect(update(office(), 'MeasurementProfile', id, `"photosDeleteAfter" = NULL`)).rejects.toThrow(/moved, never cleared/)
     await expect(update(office(), 'MeasurementProfile', id, `"photosDeleteAfter" = '2026-01-01T00:00:00Z'`)).rejects.toThrow(/after it was written/)
-    await expect(update(office(), 'MeasurementProfile', key('measurement:P1:rider:JACKET:1'), `"photosDeleteAfter" = '2027-03-18T00:00:00Z'`)).rejects.toThrow(/only with a photo/)
-    await expect(update(linkScope(), 'MeasurementProfile', id, `"photosDeleteAfter" = '2027-04-18T00:00:00Z'`)).rejects.toThrow(DENIED)
+    await expect(update(office(), 'MeasurementProfile', key('measurement:P1:rider:JACKET:1'), `"photosDeleteAfter" = '${seedIso('2027-03-18T00:00:00Z')}'`)).rejects.toThrow(/only with a photo/)
+    await expect(update(linkScope(), 'MeasurementProfile', id, `"photosDeleteAfter" = '${seedIso('2027-04-18T00:00:00Z')}'`)).rejects.toThrow(DENIED)
   })
 })
 

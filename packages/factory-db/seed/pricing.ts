@@ -3,6 +3,7 @@ import { PartyInvoiceTiming, PriceListKind, PriceListVersionStatus, SalesMilesto
 import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedMoney, type MoneySeed } from './money'
 import { seed as seedProduct, type ProductSeed } from './product'
+import { seedDay } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The pricing seed (W2a schema wave 2/7), per tenant of seed/_core.ts, written in the tenant's office scope as the app
@@ -38,8 +39,8 @@ const T = {
 } as const
 const DAY = {
   listsFrom: new Date('2026-10-01T00:00:00.000Z'),
-  requestedBefore: '2026-12-10',
-  requestedAfter: '2026-12-15',
+  requestedBefore: seedDay('2026-12-10'),
+  requestedAfter: seedDay('2026-12-15'),
 } as const
 
 export interface PricingSeed {

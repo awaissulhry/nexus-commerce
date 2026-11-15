@@ -16,6 +16,7 @@ import { startHarness, type Browser, type Harness, type TestTenant } from '../..
 import { systemContext } from '../../../platform/outbox/system'
 import { changePromise, followOrder } from '../orders/moves'
 import { forgetProgress } from './progress'
+import { seedDay } from '@nexus/factory-db/testing' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * Customer orders in the portal on the local stack (B-W2b-175; SAL-075, SAL-076, SAL-080, SAL-081), through the real app
@@ -176,7 +177,7 @@ describe('the order: status, promise, lines (SAL-075, SAL-081)', { timeout: SLOW
       ['DELIVERED', 'TODO', false],
     ])
     expect(record.milestones[2].date).toBe(today)
-    expect(record.milestones[4]).toMatchObject({ date: '2026-11-24', expected: moved })
+    expect(record.milestones[4]).toMatchObject({ date: seedDay('2026-11-24'), expected: moved })
     expect(record.promiseHistory).toEqual([{ on: today, from: current.promise, to: moved, lines: [], reason: { code: 'MATERIAL_LATE', words: { it: 'Consegna dei materiali in ritardo', en: 'Material delivery late' } } }])
     const so1Record = await ok(browsers.buyer, `/portal/sales-orders/${so1}`)
     expect(so1Record.promiseHistory).toEqual([expect.objectContaining({ lines: [line.seq], reason: expect.objectContaining({ code: 'PLANNING' }) })])

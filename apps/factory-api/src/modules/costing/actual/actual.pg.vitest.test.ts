@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url'
 import type { FastifyInstance } from 'fastify'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { openFactoryDatabase, RUNTIME_LOGIN, type FactoryDatabase } from '@nexus/factory-db'
-import { migratedDatabase, type MigratedDatabase } from '@nexus/factory-db/testing'
+import { migratedDatabase, type MigratedDatabase, seedAt, seedDay, seedIso } from '@nexus/factory-db/testing' // B-W2b-F53: + the seeds' calendar
 import { templateOf } from '@nexus/factory-domain/auth/roles/templates'
 import { newId } from '@nexus/factory-domain/core/ids'
 import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
@@ -219,13 +219,13 @@ describe('standard cost per item (FIN-024)', () => {
     expect(await ok('finance', 'POST', `/costing/standards/${typed.id}/discard`, { version: typed.version })).toEqual({ id: typed.id, discarded: true })
 
     // Leather from 15 January 2027: the open 4.20 from October ends on 14 January.
-    const next = (await ok('finance', 'POST', '/costing/standards', { companyId: companyA, itemId: leather, validFrom: '2027-01-15', source: 'PURCHASE', materialCost: '4.4' }, 201)).standard
+    const next = (await ok('finance', 'POST', '/costing/standards', { companyId: companyA, itemId: leather, validFrom: seedDay('2027-01-15'), source: 'PURCHASE', materialCost: '4.4' }, 201)).standard
     const leatherFrozen = await ok('finance', 'POST', `/costing/standards/${next.id}/freeze`, { version: next.version })
-    expect(leatherFrozen.ended).toMatchObject({ id: seeded.standardCostIds.leather, validFrom: '2026-10-01', validTo: '2027-01-14', status: 'FROZEN' })
+    expect(leatherFrozen.ended).toMatchObject({ id: seeded.standardCostIds.leather, validFrom: '2026-10-01', validTo: seedDay('2027-01-14'), status: 'FROZEN' })
     // The seeded DRAFT from 1 January 2027 would now overlap the one frozen from 15 January.
     const draft = (await ok('finance', 'GET', `/costing/standards/${seeded.standardCostIds.nextLeather}`)).standard
     expect((await refused('finance', 'POST', `/costing/standards/${draft.id}/freeze`, { version: draft.version }, 409)).message).toBe(
-      'The standard frozen from 2026-10-01 to 2027-01-14 covers 2027-01-01; its end is set already: start this one after 2027-01-14.',
+      `The standard frozen from 2026-10-01 to ${seedDay('2027-01-14')} covers ${seedDay('2027-01-01')}; its end is set already: start this one after ${seedDay('2027-01-14')}.`,
     )
     // Frozen standards never change but for their end (the DB holds it too).
     await expect(admin('UPDATE "StandardCost" SET "unitCost" = 1, "materialCost" = 1 WHERE id = $1', [blk52.id])).rejects.toThrow(/FROZEN for its period/)
@@ -446,15 +446,15 @@ describe('B-W2b-22: the method apart from the overhead, the catch-up, the filter
     // No worker ran: the ledger lacks its scrap.
     const recordsOf = async () => (await entriesOf(wo())).filter((entry) => entry.sourceId === opened.rework.id)
     expect(await recordsOf()).toEqual([])
-    const first = await runCostCatchUp({ database, log: silent }, new Date('2026-11-20T02:20:00.000Z'))
+    const first = await runCostCatchUp({ database, log: silent }, seedAt('2026-11-20T02:20:00.000Z'))
     expect(first).toMatchObject({ failed: 0 })
     expect(first.posted).toBeGreaterThanOrEqual(1)
     // Its cell was cut only into a SLEEVES bundle so far: the garment's sleeves, 3.3333 ft² of SEED-LEA-100, amount 0.
     const records = await recordsOf()
     expect(records).toEqual([expect.objectContaining({ kind: 'SCRAP', amount: 0, quantity: '3.3333', operationScanId: null, stockMoveId: null, sourceType: 'ReworkOrder', idempotencyKey: `rework-scrap:${opened.rework.id}:${leather}` })])
     // Again (the same night, or the next): nothing more to post, no failure.
-    expect(await runCostCatchUp({ database, log: silent }, new Date('2026-11-20T02:20:00.000Z'))).toMatchObject({ posted: 0, failed: 0 })
-    expect(await runCostCatchUp({ database, log: silent }, new Date('2026-11-21T02:20:00.000Z'))).toMatchObject({ posted: 0, failed: 0 })
+    expect(await runCostCatchUp({ database, log: silent }, seedAt('2026-11-20T02:20:00.000Z'))).toMatchObject({ posted: 0, failed: 0 })
+    expect(await runCostCatchUp({ database, log: silent }, seedAt('2026-11-21T02:20:00.000Z'))).toMatchObject({ posted: 0, failed: 0 })
     expect((await recordsOf()).length).toBe(records.length)
     const audits = await admin<{ n: number }>(`SELECT count(*)::int AS n FROM "AuditLog" WHERE action = 'costing.postCosts' AND "recordId" = $1 AND audience::text = 'SYSTEM' AND "actorId" = $2`, [wo(), SYSTEM_ACTOR_ID])
     expect(audits[0]!.n).toBeGreaterThanOrEqual(1)
@@ -472,7 +472,7 @@ describe('B-W2b-22: the method apart from the overhead, the catch-up, the filter
 
     // Completed between two days: exactly the work orders the database says (SEED-WO-0001 is still in progress).
     const expected = await admin<{ number: string }>(
-      `SELECT number FROM "WorkOrder" WHERE "companyId" = $1 AND status::text NOT IN ('DRAFT', 'CANCELLED') AND "completedAt" >= '2026-01-01T00:00:00+01:00' AND "completedAt" < '2028-01-01T00:00:00+01:00' ORDER BY id DESC`,
+      `SELECT number FROM "WorkOrder" WHERE "companyId" = $1 AND status::text NOT IN ('DRAFT', 'CANCELLED') AND "completedAt" >= '2026-01-01T00:00:00+01:00' AND "completedAt" < '${seedIso('2028-01-01T00:00:00+01:00')}' ORDER BY id DESC`,
       [companyA],
     )
     const completed = await ok('finance', 'GET', `/costing/work-orders?companyId=${companyA}&status=RELEASED,IN_PROGRESS,ON_HOLD,COMPLETED,CLOSED&completedFrom=2026-01-01&completedTo=2027-12-31`)

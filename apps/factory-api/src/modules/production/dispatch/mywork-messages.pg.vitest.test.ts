@@ -18,6 +18,8 @@ import { seed as seedSchedule } from '../../../../../../packages/factory-db/seed
 import { seed as seedSkills } from '../../../../../../packages/factory-db/seed/skills'
 import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
 import { FLOOR_MESSAGES } from './mywork-messages'
+// ---- B-W2b-F53: this file fixes its clock on a day of the seeds' story, so it runs the seeds as written (seed-calendar)
+await vi.hoisted(async () => (await import('@nexus/factory-db/testing')).seedsAsWritten())
 
 /**
  * Open messages on my work orders (B-W2b-71; COL-036; design floor.mywork "For your work") through the app's real routes on a

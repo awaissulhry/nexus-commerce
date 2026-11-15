@@ -8,6 +8,7 @@ import { openFactoryDatabase, type FactoryClient, type FactoryDatabase, type Fac
 import { RUNTIME_LOGIN } from './roles'
 import { seedUuid } from './seeding'
 import { migratedDatabase, type MigratedDatabase } from './testing/database'
+import { seedDay, seedIso } from './seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * Planning in depth (W2b-5 schema wave 41/44, B-W2b-286, …_planning_depth_w2b_guards) on a database built from the migrations
@@ -116,7 +117,7 @@ describe('planned work and subcontract orders', () => {
     await expect(fresh({ sizes: [{ size: '50', quantity: 0 }], quantity: 0 })).rejects.toThrow(/whole garments from 1/)
     await expect(fresh({ sizes: [{ size: '50', quantity: 1.5 }], quantity: 1 })).rejects.toThrow(/whole garments from 1/)
     await expect(fresh({ sizes: [], quantity: 0 })).rejects.toThrow(/a size run of 1 to 200 sizes/)
-    await expect(fresh({ startDate: '2026-12-12' })).rejects.toThrow(/starts on or before its due date/)
+    await expect(fresh({ startDate: seedDay('2026-12-12') })).rejects.toThrow(/starts on or before its due date/)
     await expect(fresh({ status: 'CONVERTED' })).rejects.toThrow(/starts PLANNED/)
   })
 
@@ -124,10 +125,10 @@ describe('planned work and subcontract orders', () => {
     await expect(fresh({ partyId: A.P2 })).rejects.toThrow(/is a MAKE \(on a line of its site, or none\) or a SUBCONTRACT/)
     await expect(fresh({ kitDueAt: now() })).rejects.toThrow(/is a MAKE/)
     await expect(fresh({ kind: 'SUBCONTRACT', partyId: A.P2, lineId: null, operationSeqs: [20, 20] })).rejects.toThrow(/each once from 1/)
-    await expect(fresh({ kind: 'SUBCONTRACT', partyId: A.P2, lineId: null, kitDueAt: '2026-12-12T08:00:00.000Z' })).rejects.toThrow(/the kit leaving by its due date/)
+    await expect(fresh({ kind: 'SUBCONTRACT', partyId: A.P2, lineId: null, kitDueAt: seedIso('2026-12-12T08:00:00.000Z') })).rejects.toThrow(/the kit leaving by its due date/)
     // P1 is a customer, not a workshop.
     await expect(fresh({ kind: 'SUBCONTRACT', partyId: A.P1, lineId: null })).rejects.toThrow(/an ACTIVE workshop \(a party with the SUBCONTRACTOR role\)/)
-    expect(await fresh({ kind: 'SUBCONTRACT', partyId: A.P2, lineId: null, operationSeqs: [20], kitDueAt: '2026-12-01T07:00:00.000Z' })).toBe(1)
+    expect(await fresh({ kind: 'SUBCONTRACT', partyId: A.P2, lineId: null, operationSeqs: [20], kitDueAt: seedIso('2026-12-01T07:00:00.000Z') })).toBe(1)
   })
 
   it('keeps firm and protected fields with who and when; a run never undoes them, nor moves an order back to an older run', async () => {
@@ -175,14 +176,14 @@ describe('action messages', () => {
 
   it('says each action with its from and to, in the right direction', async () => {
     expect(await fresh({})).toBe(1)
-    await expect(fresh({ toDate: '2026-11-21' })).rejects.toThrow(/EXPEDITE and DEFER move a date earlier or later/)
+    await expect(fresh({ toDate: seedDay('2026-11-21') })).rejects.toThrow(/EXPEDITE and DEFER move a date earlier or later/)
     await expect(fresh({ action: 'DEFER' })).rejects.toThrow(/has the wrong from and to/)
-    expect(await fresh({ action: 'DEFER', toDate: '2026-11-25' })).toBe(1)
+    expect(await fresh({ action: 'DEFER', toDate: seedDay('2026-11-25') })).toBe(1)
     await expect(fresh({ action: 'INCREASE', fromDate: null, toDate: null, fromQuantity: '10', toQuantity: '8', uom: 'PCS' })).rejects.toThrow(/has the wrong from and to/)
     await expect(fresh({ action: 'INCREASE', fromDate: null, toDate: null, fromQuantity: '10', toQuantity: '12' })).rejects.toThrow(/has the wrong from and to/)
     expect(await fresh({ action: 'INCREASE', fromDate: null, toDate: null, fromQuantity: '10', toQuantity: '12', uom: 'FT2' })).toBe(1)
     await expect(fresh({ action: 'DECREASE', fromDate: null, toDate: null, fromQuantity: '10', toQuantity: '0', uom: 'FT2' })).rejects.toThrow(/above 0/)
-    await expect(fresh({ action: 'NEW', fromDate: null, toDate: '2026-11-30' })).rejects.toThrow(/NEW says how much by when/)
+    await expect(fresh({ action: 'NEW', fromDate: null, toDate: seedDay('2026-11-30') })).rejects.toThrow(/NEW says how much by when/)
     expect(await fresh({ action: 'CANCEL', toDate: null })).toBe(1)
     await expect(fresh({ message: ' ' })).rejects.toThrow(/says what to do in 1 to 2000 characters/)
     await expect(fresh({ facts: [] })).rejects.toThrow(/keeps its facts as an object/)
@@ -213,7 +214,7 @@ describe('the promise history', () => {
     copyRow(office(), 'PromiseRecord', d.promiseIds.rePromise, { id: randomUUID(), promisedAt: now(), customerToldAt: null, createdAt: now(), ...changes })
 
   it('keeps one first promise per line and size; a re-promise follows it, with why', async () => {
-    expect(await promise({ promisedDate: '2026-12-29' })).toBe(1)
+    expect(await promise({ promisedDate: seedDay('2026-12-29') })).toBe(1)
     await expect(promise({ kind: 'FIRST', size: null })).rejects.toThrow(/PromiseRecord_one_first|unique/i)
     expect(await promise({ kind: 'FIRST', size: '50', reasonCode: null, reason: null })).toBe(1)
     await expect(promise({ kind: 'FIRST', size: '50', reasonCode: null, reason: null })).rejects.toThrow(/PromiseRecord_one_first|unique/i)
@@ -231,8 +232,8 @@ describe('the promise history', () => {
   })
 
   it('is written once: never changed, removed or truncated, by any login', async () => {
-    await expect(update(office(), 'PromiseRecord', d.promiseIds.rePromise, `"promisedDate" = '2026-12-30'`)).rejects.toThrow(/permission denied/)
-    await expect(admin(`UPDATE "PromiseRecord" SET "promisedDate" = '2026-12-30' WHERE id = $1`, [d.promiseIds.rePromise])).rejects.toThrow(/written once and never changed or removed \(append-only\)/)
+    await expect(update(office(), 'PromiseRecord', d.promiseIds.rePromise, `"promisedDate" = '${seedDay('2026-12-30')}'`)).rejects.toThrow(/permission denied/)
+    await expect(admin(`UPDATE "PromiseRecord" SET "promisedDate" = '${seedDay('2026-12-30')}' WHERE id = $1`, [d.promiseIds.rePromise])).rejects.toThrow(/written once and never changed or removed \(append-only\)/)
     await expect(admin(`DELETE FROM "PromiseRecord" WHERE id = $1`, [d.promiseIds.firstRed])).rejects.toThrow(/append-only/)
     await expect(admin(`TRUNCATE "PromiseRecord"`)).rejects.toThrow(/TRUNCATE on "PromiseRecord" is refused/)
   })
@@ -250,9 +251,9 @@ describe('the board: changes, pins, what-ifs', () => {
 
   it('logs each kind of change with its parts, on the site\'s working plan', async () => {
     expect(await change({})).toBe(1)
-    await expect(change({ toEndAt: '2026-11-17T08:00:00.000Z' })).rejects.toThrow(/each side \(from, to\) whole or not at all/)
+    await expect(change({ toEndAt: seedIso('2026-11-17T08:00:00.000Z') })).rejects.toThrow(/each side \(from, to\) whole or not at all/)
     await expect(change({ toWorkCentreId: randomUUID() })).rejects.toThrow(/each side \(from, to\) whole or not at all/)
-    await expect(change({ toStartAt: '2026-11-17T08:00:00.000Z', toEndAt: '2026-11-17T16:00:00.000Z' })).rejects.toThrow(/MOVE goes from one place to another/)
+    await expect(change({ toStartAt: seedIso('2026-11-17T08:00:00.000Z'), toEndAt: seedIso('2026-11-17T16:00:00.000Z') })).rejects.toThrow(/MOVE goes from one place to another/)
     await expect(change({ kind: 'PLACE' })).rejects.toThrow(/PLACE goes to a lane/)
     expect(await change({ kind: 'PLACE', fromLineId: null, fromStartAt: null, fromEndAt: null })).toBe(1)
     expect(await change({ kind: 'REMOVE', toLineId: null, toStartAt: null, toEndAt: null })).toBe(1)
@@ -267,7 +268,7 @@ describe('the board: changes, pins, what-ifs', () => {
 
   it('undoes a change once, of the same plan and slot, never a publish', async () => {
     const undo = (changes: Record<string, unknown>) =>
-      change({ kind: 'UNDO', undoesChangeId: d.scheduleChangeIds.move, fromStartAt: '2026-11-17T09:00:00.000Z', fromEndAt: '2026-11-17T17:00:00.000Z', toStartAt: '2026-11-17T08:00:00.000Z', toEndAt: '2026-11-17T16:00:00.000Z', ...changes })
+      change({ kind: 'UNDO', undoesChangeId: d.scheduleChangeIds.move, fromStartAt: seedIso('2026-11-17T09:00:00.000Z'), fromEndAt: seedIso('2026-11-17T17:00:00.000Z'), toStartAt: seedIso('2026-11-17T08:00:00.000Z'), toEndAt: seedIso('2026-11-17T16:00:00.000Z'), ...changes })
     await expect(undo({ slotId: A.slotPack })).rejects.toThrow(/undoes a change of the same plan and slot/)
     await expect(undo({ undoesChangeId: d.scheduleChangeIds.publish })).rejects.toThrow(/undoes a change of the same plan and slot/)
     await expect(undo({ undoesChangeId: null })).rejects.toThrow(/UNDO names the change it undoes/)
@@ -304,10 +305,10 @@ describe('the board: changes, pins, what-ifs', () => {
   it('holds a pinned slot where it is until it is unpinned; the pin has its time', async () => {
     const moveTo = (start: string) => update(office(), 'ScheduleSlot', A.slotPack, `"startAt" = $2::timestamptz, "endAt" = $2::timestamptz + interval '1 hour', version = version + 1`, start)
     expect(await update(office(), 'ScheduleSlot', A.slotPack, `pinned = true, "pinnedAt" = now(), "pinnedById" = $2::uuid, version = version + 1`, a.actorId)).toBe(1)
-    await expect(moveTo('2026-11-18T12:00:00.000Z')).rejects.toThrow(/is pinned; it stays on its lane and times until it is unpinned/)
+    await expect(moveTo(seedIso('2026-11-18T12:00:00.000Z'))).rejects.toThrow(/is pinned; it stays on its lane and times until it is unpinned/)
     await expect(update(office(), 'ScheduleSlot', A.slotPack, `"pinnedAt" = NULL`)).rejects.toThrow(/pinned exactly with when/)
     expect(await update(office(), 'ScheduleSlot', A.slotPack, `pinned = false, "pinnedAt" = NULL, "pinnedById" = NULL, version = version + 1`)).toBe(1)
-    expect(await moveTo('2026-11-18T12:00:00.000Z')).toBe(1)
+    expect(await moveTo(seedIso('2026-11-18T12:00:00.000Z'))).toBe(1)
     await expect(update(office(), 'ScheduleSlot', A.slotSew, `pinned = true, "pinnedAt" = $2::timestamptz`, later(1))).rejects.toThrow(/not in the future/)
     expect(await update(office(), 'ScheduleSlot', A.slotSew, `pinned = true, "pinnedAt" = now(), "pinnedById" = $2::uuid, version = version + 1`, a.actorId)).toBe(1)
     // A published slot never changes (W2a), the pin included.
@@ -405,11 +406,11 @@ describe('the new columns of earlier tables', () => {
   })
 
   it('times the kit of a subcontract order between its date and the day the goods are due back; a term of the DRAFT order', async () => {
-    await expect(update(office(), 'SubcontractOrder', sub.orderId, `"kitDueAt" = '2026-11-27T07:00:00Z'`)).rejects.toThrow(/leaves on or after the order's date and by the day the goods are due back/)
+    await expect(update(office(), 'SubcontractOrder', sub.orderId, `"kitDueAt" = '${seedIso('2026-11-27T07:00:00Z')}'`)).rejects.toThrow(/leaves on or after the order's date and by the day the goods are due back/)
     await expect(update(office(), 'SubcontractOrder', sub.orderId, `"kitDueAt" = '2026-11-15T07:00:00Z'`)).rejects.toThrow(/leaves on or after the order's date/)
-    expect(await update(office(), 'SubcontractOrder', sub.orderId, `"kitDueAt" = '2026-11-18T07:00:00Z', version = version + 1`)).toBe(1)
+    expect(await update(office(), 'SubcontractOrder', sub.orderId, `"kitDueAt" = '${seedIso('2026-11-18T07:00:00Z')}', version = version + 1`)).toBe(1)
     // W2a's routes move the order's dates without meeting this rule (the planning module keeps the kit in step).
-    expect(await update(office(), 'SubcontractOrder', sub.orderId, `"expectedBackDate" = '2026-11-17', version = version + 1`)).toBe(1)
+    expect(await update(office(), 'SubcontractOrder', sub.orderId, `"expectedBackDate" = '${seedDay('2026-11-17')}', version = version + 1`)).toBe(1)
   })
 
   it('sends one operation of a released work order outside and back in; nothing else of it changes', async () => {

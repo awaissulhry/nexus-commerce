@@ -1,6 +1,7 @@
 import { AuditAudience } from '../src/generated/prisma/enums'
 import type { FactoryClient, FactoryScope } from '../src/client'
 import { seedUuid, type SeedContext } from '../src/seeding'
+import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The audit module's synthetic seed: a few audit rows and idempotency receipts per tenant, written the way the app
@@ -18,7 +19,7 @@ export interface AuditSeed {
 
 /** Receipts of the seed stay valid for a year after this fixed instant (a seed never depends on the clock). */
 const SEEDED_AT = new Date('2026-10-28T08:00:00.000Z')
-const EXPIRES_AT = new Date('2027-10-28T08:00:00.000Z')
+const EXPIRES_AT = seedAt('2027-10-28T08:00:00.000Z')
 
 export async function seed({ db, namespace }: SeedContext): Promise<AuditSeed> {
   const id = (key: string): string => seedUuid(namespace, key)

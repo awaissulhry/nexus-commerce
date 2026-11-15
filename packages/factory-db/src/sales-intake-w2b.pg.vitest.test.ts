@@ -6,6 +6,7 @@ import { openFactoryDatabase, type FactoryClient, type FactoryDatabase, type Fac
 import { RUNTIME_LOGIN } from './roles'
 import { seedUuid } from './seeding'
 import { migratedDatabase, type MigratedDatabase } from './testing/database'
+import { seedDay } from './seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * Sales intake and customers (W2b-5, schema wave 37/44, B-W2b-279, …_sales_intake_w2b_guards) on a database built from the
@@ -323,8 +324,8 @@ describe('seasons', () => {
     await expect(add({ code: 'A season code far too long' })).rejects.toThrow(/1 to 20 characters/)
     await expect(add({ code: 'FW27\n' })).rejects.toThrow(/1 to 20 characters/)
     await expect(add({ code: 'FW27' })).rejects.toThrow(/Season_tenantId_companyId_code_key/)
-    await expect(add({ endsOn: '2027-08-01' })).rejects.toThrow(/order book closes on or before its end|not before it/)
-    await expect(add({ orderBookClosesOn: '2028-03-01' })).rejects.toThrow(/order book closes on or before its end/)
+    await expect(add({ endsOn: seedDay('2027-08-01') })).rejects.toThrow(/order book closes on or before its end|not before it/)
+    await expect(add({ orderBookClosesOn: seedDay('2028-03-01') })).rejects.toThrow(/order book closes on or before its end/)
     await expect(add({ status: 'CLOSED' })).rejects.toThrow(/CLOSED exactly with when/)
     const id = randomUUID()
     expect(await add({ id, code: 'FW29' })).toBe(1)

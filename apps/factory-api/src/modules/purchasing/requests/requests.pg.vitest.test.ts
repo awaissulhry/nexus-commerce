@@ -3,11 +3,12 @@ import { fileURLToPath } from 'node:url'
 import type { FastifyInstance } from 'fastify'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { openFactoryDatabase, RUNTIME_LOGIN, type FactoryDatabase } from '@nexus/factory-db'
-import { migratedDatabase, type MigratedDatabase } from '@nexus/factory-db/testing'
+import { migratedDatabase, type MigratedDatabase, seedDay } from '@nexus/factory-db/testing' // B-W2b-F53: + the seeds' calendar
 import { newId } from '@nexus/factory-domain/core/ids'
 import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
 import { businessDate } from '@nexus/factory-domain/core/time'
 import { addDays } from '@nexus/factory-domain/planning/buy'
+import { needWeekOf } from '@nexus/factory-domain/purchasing/requests/requests' // B-W2b-F53
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedCore } from '../../../../../../packages/factory-db/seed/_core'
 import { seed as seedNumbering } from '../../../../../../packages/factory-db/seed/numbering'
@@ -121,10 +122,12 @@ describe('the queue (SCM-034)', () => {
       site: { code: 'A1' },
       item: { code: 'SEED-LEA-100' },
       colour: { code: 'RED' },
-      needDate: '2026-11-16',
-      needWeek: '2026-W47',
+      needDate: seedDay('2026-11-16'),
+      // B-W2b-F53: the firm need (16 Nov as written) is the seeds' future: its week and its day to order by move with it (P2's
+      // calendar closes only in August 2026, so nothing is skipped).
+      needWeek: needWeekOf(seedDay('2026-11-16')),
       // 16 Nov − 2 safety days (A1's leather) − 14 days (the leather's lead time from its default supplier).
-      orderBy: { date: '2026-10-31', leadTimeDays: 14, closedDaysSkipped: 0 },
+      orderBy: { date: addDays(seedDay('2026-11-16'), -16), leadTimeDays: 14, closedDaysSkipped: 0 },
       quantity: '4.0000',
       uom: 'HIDE',
       baseQuantity: '210.0000',
@@ -252,7 +255,7 @@ describe('Draft POs for n (SCM-036)', () => {
     const detail = (await ok('buyer', 'GET', `/purchasing/orders/${order.id}`)).order
     expect(detail).toMatchObject({ status: 'DRAFT', partyId: A.supplier, netAmount: 88_200 + 31_200 })
     expect(detail.lines.map((line: Json) => [line.quantity, line.uom, line.unitPrice, line.needDate])).toEqual([
-      ['4.0000', 'HIDE', '220.500000', '2026-11-16'],
+      ['4.0000', 'HIDE', '220.500000', seedDay('2026-11-16')],
       ['48.0000', 'PCS', '6.500000', addDays(today(), 7)],
     ])
     expect(detail.lines[0].plan).toEqual([expect.objectContaining({ requirementId: A.redLine, decision: 'ORDERED' })])

@@ -21,6 +21,7 @@ import {
 import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedFiles } from './files'
 import { seed as seedProduct } from './product'
+import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The sizes, measurements and made-to-measure rules seed (W2b-4 schema wave 27/33, B-W2b-210), per tenant of
@@ -61,10 +62,10 @@ import { seed as seedProduct } from './product'
 
 /** Fixed instants, so the seed never depends on the clock. */
 const T = {
-  library: new Date('2026-11-21T08:00:00.000Z'),
-  spec: new Date('2026-11-21T09:00:00.000Z'),
-  approved: new Date('2026-11-21T10:00:00.000Z'),
-  released: new Date('2026-11-21T11:00:00.000Z'),
+  library: seedAt('2026-11-21T08:00:00.000Z'),
+  spec: seedAt('2026-11-21T09:00:00.000Z'),
+  approved: seedAt('2026-11-21T10:00:00.000Z'),
+  released: seedAt('2026-11-21T11:00:00.000Z'),
 }
 
 export interface SizesDepthSeed {

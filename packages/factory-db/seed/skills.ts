@@ -3,6 +3,7 @@ import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedPeople } from './people'
 import { seed as seedPlant } from './plant'
 import { seed as seedProduct } from './product'
+import { seedDay } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The skills seed (W2b schema wave 4/7, B-W2b-06), per tenant of seed/_core.ts, written in the tenant's office scope as
@@ -84,14 +85,14 @@ export async function seed(context: SeedContext): Promise<SkillsSeed> {
       traineeUntil: day('2026-10-31'), signedOffOn: day('2026-10-15'), signedOffById: memberId, trainerEmployeeId: e.e2,
     },
     { id: id('skills:level:E2:SEW-ASM'), siteId: site.A1, employeeId: e.e2, skillId: skillIds.sew, level: SkillLevel.TRAINER, since: day('2023-03-01'), ...assessed('2023-03-01') },
-    { id: levelIds.e3Trainee, siteId: site.A1, employeeId: e.e3, skillId: skillIds.sew, level: SkillLevel.LEARNING, since: day('2026-09-01'), ...assessed('2026-09-01'), traineeUntil: day('2026-12-15') },
+    { id: levelIds.e3Trainee, siteId: site.A1, employeeId: e.e3, skillId: skillIds.sew, level: SkillLevel.LEARNING, since: day('2026-09-01'), ...assessed('2026-09-01'), traineeUntil: day(seedDay('2026-12-15')) },
     { id: id('skills:level:EB1:SEW-ASM'), siteId: site.B1, employeeId: e.eb1, skillId: skillIds.sew, level: SkillLevel.CAN_DO, since: day('2025-03-03'), ...assessed('2025-03-03') },
   ]
   const authorisationIds = { revoked: firstId('skills:auth:E5:WALKING_FOOT'), e1PostBed: id('skills:auth:E1:POST_BED') }
   const authorisations = [
     { id: authorisationIds.revoked, siteId: site.A1, employeeId: e.e5, machineClassId: classOf('WALKING_FOOT'), authorisedOn: day('2022-01-10'), authorisedById: actorId, revokedAt: T.left, revokedById: actorId, revokeReason: 'Left the company (made-up)' },
     { id: authorisationIds.e1PostBed, siteId: site.A1, employeeId: e.e1, machineClassId: classOf('POST_BED'), authorisedOn: day('2025-02-03'), authorisedById: actorId },
-    { id: id('skills:auth:E2:WALKING_FOOT'), siteId: site.A1, employeeId: e.e2, machineClassId: classOf('WALKING_FOOT'), authorisedOn: day('2023-02-01'), validUntil: day('2027-02-01'), authorisedById: actorId },
+    { id: id('skills:auth:E2:WALKING_FOOT'), siteId: site.A1, employeeId: e.e2, machineClassId: classOf('WALKING_FOOT'), authorisedOn: day('2023-02-01'), validUntil: day(seedDay('2027-02-01')), authorisedById: actorId },
     { id: id('skills:auth:EB1:LOCKSTITCH'), siteId: site.B1, employeeId: e.eb1, machineClassId: classOf('LOCKSTITCH'), authorisedOn: day('2025-03-03'), authorisedById: actorId },
   ]
 

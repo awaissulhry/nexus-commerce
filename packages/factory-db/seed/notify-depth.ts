@@ -8,6 +8,7 @@ import { seed as seedRoles } from './roles'
 import { seed as seedSales } from './sales'
 import { seed as seedThreads } from './threads'
 import { seed as seedViews } from './views'
+import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The notifications, My work and mail seed (W2b schema wave 47/57, B-W2b-366), per tenant of seed/_core.ts, written in the
@@ -148,7 +149,7 @@ export async function seed(context: SeedContext): Promise<NotifyDepthSeed> {
       recordId: id('link:P2:record'),
       recordLabel: 'SEED-PO-0001',
       kind: 'AT_TIME',
-      remindAt: new Date('2026-11-16T07:00:00.000Z'),
+      remindAt: seedAt('2026-11-16T07:00:00.000Z'),
       since: AT,
       note: 'Supplier promised a date',
       createdAt: AT,

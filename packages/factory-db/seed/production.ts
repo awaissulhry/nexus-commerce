@@ -31,6 +31,7 @@ import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedFloorAuth } from './floor-auth'
 import { seed as seedInventory, type InventorySeed } from './inventory'
 import { seedWorkerNotice } from './privacy'
+import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The production seed, per tenant of seed/_core.ts: the golden flow's stages 10-work-order, 11a-issue, 11b-cut and
@@ -82,15 +83,15 @@ const T = {
   ordered: new Date('2026-11-12T08:00:00.000Z'),
   planned: new Date('2026-11-15T08:00:00.000Z'),
   woReleased: new Date('2026-11-15T10:00:00.000Z'),
-  issued: new Date('2026-11-16T07:30:00.000Z'),
-  cut: new Date('2026-11-16T09:00:00.000Z'),
-  bundled: new Date('2026-11-16T10:00:00.000Z'),
-  reprinted: new Date('2026-11-16T10:20:00.000Z'),
-  scanned: new Date('2026-11-17T08:00:00.000Z'),
-  undone: new Date('2026-11-17T08:00:20.000Z'),
-  rescanned: new Date('2026-11-17T09:30:00.000Z'),
-  asked: new Date('2026-11-17T10:00:00.000Z'),
-  refused: new Date('2026-11-17T10:30:00.000Z'),
+  issued: seedAt('2026-11-16T07:30:00.000Z'),
+  cut: seedAt('2026-11-16T09:00:00.000Z'),
+  bundled: seedAt('2026-11-16T10:00:00.000Z'),
+  reprinted: seedAt('2026-11-16T10:20:00.000Z'),
+  scanned: seedAt('2026-11-17T08:00:00.000Z'),
+  undone: seedAt('2026-11-17T08:00:20.000Z'),
+  rescanned: seedAt('2026-11-17T09:30:00.000Z'),
+  asked: seedAt('2026-11-17T10:00:00.000Z'),
+  refused: seedAt('2026-11-17T10:30:00.000Z'),
   // B-W2b-74: in the past too, as `cutLogged` (a bundle-operation's rows are ordered by serverTime, so a scan a local run
   // makes today must sort after these).
   overLimit: new Date('2026-10-30T10:00:00.000Z'),
@@ -101,7 +102,7 @@ const T = {
   // local run makes today must sort after the seed's. The work order's start stays `cut` above.
   cutLogged: new Date('2026-10-30T09:00:00.000Z'),
 } as const
-const DAY = { orderDate: new Date('2026-11-12T00:00:00.000Z'), due: new Date('2026-12-04T00:00:00.000Z') } as const
+const DAY = { orderDate: new Date('2026-11-12T00:00:00.000Z'), due: seedAt('2026-12-04T00:00:00.000Z') } as const
 
 /** W2b-2: who the seeded reasons are put down to; the others stay UNKNOWN (made up, as every reason's wording). */
 const FAULT: Readonly<Record<string, ScrapFault>> = { LEATHER_FLAW: ScrapFault.OTHERS, MACHINE: ScrapFault.OTHERS, CUT_WRONG: ScrapFault.OWN, STITCHING: ScrapFault.OWN }

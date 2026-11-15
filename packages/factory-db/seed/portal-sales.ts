@@ -6,6 +6,7 @@ import { seed as seedLinks } from './links'
 import { seed as seedPortalAuth } from './portal-auth'
 import { seed as seedPricing } from './pricing'
 import { seed as seedPrivacy } from './privacy'
+import { seedAt, seedToday } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The customer portal seed (W2b schema wave 21/22, B-W2b-157), per tenant of seed/_core.ts. The customer's own acts (a
@@ -49,17 +50,16 @@ const T = {
   paid: new Date('2026-11-04T10:00:00.000Z'),
   declined: new Date('2026-11-04T10:02:00.000Z'),
   // After company A's public notice came into force (2026-11-14, seed/privacy.ts).
-  linkMade: new Date('2026-11-17T08:00:00.000Z'),
-  noticeShown: new Date('2026-11-18T09:40:00.000Z'),
-  measured: new Date('2026-11-18T09:45:00.000Z'),
-  submitted: new Date('2026-11-18T10:00:00.000Z'),
+  linkMade: seedAt('2026-11-17T08:00:00.000Z'),
+  noticeShown: seedAt('2026-11-18T09:40:00.000Z'),
+  measured: seedAt('2026-11-18T09:45:00.000Z'),
+  submitted: seedAt('2026-11-18T10:00:00.000Z'),
 } as const
 const DAY_MS = 86_400_000
 
 /** Today in Europe/Rome as a UTC midnight. */
 function romeToday(): Date {
-  const iso = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
-  return new Date(`${iso}T00:00:00.000Z`)
+  return new Date(`${seedToday()}T00:00:00.000Z`) // B-W2b-F53: the seeds' calendar
 }
 
 export interface PortalSalesSeed {
@@ -175,8 +175,8 @@ export async function seed(context: SeedContext): Promise<PortalSalesSeed> {
       await tx.portalOrderRequest.createMany({
         data: [
           draft(requests.draft, { source: 'PICKER', customerRef: 'PO-SEED-7004', note: 'Seed: the spring restock, as a first draft.' }),
-          draft(requests.sent, { source: 'REORDER', customerRef: 'PO-SEED-7001', shipToAddressId: known.shipToId, requestedDate: new Date('2026-12-18T00:00:00.000Z') }),
-          draft(requests.accepted, { source: 'PICKER', customerRef: 'PO-SEED-7002', requestedDate: new Date('2026-12-04T00:00:00.000Z') }),
+          draft(requests.sent, { source: 'REORDER', customerRef: 'PO-SEED-7001', shipToAddressId: known.shipToId, requestedDate: seedAt('2026-12-18T00:00:00.000Z') }),
+          draft(requests.accepted, { source: 'PICKER', customerRef: 'PO-SEED-7002', requestedDate: seedAt('2026-12-04T00:00:00.000Z') }),
           draft(requests.refused, { source: 'UPLOAD', customerRef: 'PO-SEED-7003' }),
         ],
         skipDuplicates: true,
@@ -235,7 +235,7 @@ export async function seed(context: SeedContext): Promise<PortalSalesSeed> {
         data: [
           { id: changes.open, ...ask, orderId: known.so2.id, kind: 'CHANGE', reason: 'Seed: one more black 52 instead of the 54.', createdAt: T.asked, updatedAt: T.asked },
           { id: changes.refusedCancel, ...ask, orderId: known.so3.id, kind: 'CANCEL', reasonCode: 'LEAD_TIME', reason: 'Seed: the season starts earlier for us.', createdAt: T.asked, updatedAt: T.asked },
-          { id: changes.acceptedDate, ...ask, orderId: known.so1.id, kind: 'CHANGE', requestedDate: new Date('2026-12-15T00:00:00.000Z'), reason: 'Seed: please deliver from 15 December.', createdAt: T.askedDate, updatedAt: T.askedDate },
+          { id: changes.acceptedDate, ...ask, orderId: known.so1.id, kind: 'CHANGE', requestedDate: seedAt('2026-12-15T00:00:00.000Z'), reason: 'Seed: please deliver from 15 December.', createdAt: T.askedDate, updatedAt: T.askedDate },
         ],
         skipDuplicates: true,
       })

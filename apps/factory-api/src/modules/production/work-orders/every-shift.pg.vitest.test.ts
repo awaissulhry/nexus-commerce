@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url'
 import type { FastifyInstance } from 'fastify'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { openFactoryDatabase, RUNTIME_LOGIN, type FactoryDatabase, type Prisma } from '@nexus/factory-db'
-import { migratedDatabase, type MigratedDatabase } from '@nexus/factory-db/testing'
+import { migratedDatabase, type MigratedDatabase, seedAt, seedDay } from '@nexus/factory-db/testing' // B-W2b-F53: + the seeds' calendar
 import { newId } from '@nexus/factory-domain/core/ids'
 import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
 // The factory-db seeds are no package export: a test reads them where they live.
@@ -83,7 +83,7 @@ const wo = (number: string) => admin<{ id: string }>(`SELECT id FROM "WorkOrder"
 
 /** A CONFIRMED sales order of company A for SEED-JKT-02 (black) to the brand P1: one line with these sizes. */
 let orders = 0
-async function salesOrder(sizes: Record<string, number>, promiseDate = '2026-12-10'): Promise<{ orderId: string; lineId: string }> {
+async function salesOrder(sizes: Record<string, number>, promiseDate = seedDay('2026-12-10')): Promise<{ orderId: string; lineId: string }> {
   const orderId = newId()
   const lineId = newId()
   const pieces = Object.values(sizes).reduce((sum, quantity) => sum + quantity, 0)
@@ -212,7 +212,7 @@ describe('priority and the rush flag (MES-009)', () => {
   })
 
   it('shows the rush flag on the dispatch board and on the tablet’s My work (rush first)', async () => {
-    vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-11-17T09:00:00.000Z') })
+    vi.useFakeTimers({ toFake: ['Date'], now: seedAt('2026-11-17T09:00:00.000Z') })
     try {
       const id = await wo('SEED-WO-0001')
       const before = await ok('sewing', 'GET', '/production/dispatch/station')
@@ -255,12 +255,12 @@ describe('split a work order (MES-010)', () => {
   })
 
   it('splits a DRAFT in ONE command: the new draft names its parent, the pieces move, the order line makes the same, audited and announced', async () => {
-    const order = await salesOrder({ '50': 4, '52': 6 }, '2026-12-15')
+    const order = await salesOrder({ '50': 4, '52': 6 }, seedDay('2026-12-15'))
     const parent = (await ok('planner', 'POST', '/production/work-orders', { lines: [{ salesOrderLineId: order.lineId }], siteId: A.site, priority: 3, rush: true }, 201)).workOrder
     const [c50, c52] = parent.cells as Json[]
     const answer = await ok('manager', 'POST', `/production/work-orders/${parent.id}/split`, { version: parent.version, cells: [{ cellId: c50!.id, quantity: 4 }, { cellId: c52!.id, quantity: 2 }], note: 'First half for the trade fair' }, 201)
     const child = answer.workOrder
-    expect(child).toMatchObject({ status: 'DRAFT', kind: 'SIZE_GRID', siteId: A.site, dueDate: '2026-12-15', priority: 3, rush: true, note: 'First half for the trade fair', splitFrom: { id: parent.id, number: parent.number, status: 'DRAFT' }, splits: [], pieces: 6 })
+    expect(child).toMatchObject({ status: 'DRAFT', kind: 'SIZE_GRID', siteId: A.site, dueDate: seedDay('2026-12-15'), priority: 3, rush: true, note: 'First half for the trade fair', splitFrom: { id: parent.id, number: parent.number, status: 'DRAFT' }, splits: [], pieces: 6 })
     expect(child.number).toMatch(/^WO-\d{5}$/)
     expect(child.cells.map((cell: Json) => [cell.size, cell.quantity, cell.salesOrderLineId])).toEqual([
       ['50', 4, order.lineId],
@@ -290,8 +290,8 @@ describe('split a work order (MES-010)', () => {
   it('takes its own due date, priority and rush flag', async () => {
     const parent = await draft({ '50': 2, '52': 2 })
     const [c50] = parent.cells as Json[]
-    const { workOrder } = await ok('manager', 'POST', `/production/work-orders/${parent.id}/split`, { cells: [{ cellId: c50!.id, quantity: 1 }], dueDate: '2026-11-25', priority: 9, rush: true }, 201)
-    expect(workOrder).toMatchObject({ dueDate: '2026-11-25', priority: 9, rush: true, pieces: 1 })
+    const { workOrder } = await ok('manager', 'POST', `/production/work-orders/${parent.id}/split`, { cells: [{ cellId: c50!.id, quantity: 1 }], dueDate: seedDay('2026-11-25'), priority: 9, rush: true }, 201)
+    expect(workOrder).toMatchObject({ dueDate: seedDay('2026-11-25'), priority: 9, rush: true, pieces: 1 })
     const list = await ok('viewer', 'GET', '/production/work-orders?rush=true&limit=200')
     expect(list.workOrders.find((row: Json) => row.id === workOrder.id)).toMatchObject({ splitFrom: { id: parent.id, number: parent.number } })
   })

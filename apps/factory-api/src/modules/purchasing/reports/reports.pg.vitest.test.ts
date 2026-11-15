@@ -8,6 +8,8 @@ import { testAuthenticator, type SessionContext } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { runAlertEvaluation } from '../../../platform/alerts/engine'
 import { startInventoryFixture, type InventoryFixture } from '../../inventory/ledger/testing/fixture'
+// ---- B-W2b-F53: this file fixes its clock on a day of the seeds' story, so it runs the seeds as written (seed-calendar)
+await vi.hoisted(async () => (await import('@nexus/factory-db/testing')).seedsAsWritten())
 
 /**
  * Purchasing reports and supply alerts (B-W2b-350; design purchasing.reports SCR-255; SCM-165, SCM-174) through the app's real

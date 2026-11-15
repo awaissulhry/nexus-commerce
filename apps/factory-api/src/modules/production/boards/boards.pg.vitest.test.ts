@@ -17,6 +17,8 @@ import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { DEVICE_COOKIE } from '../../../platform/auth/floor/cookies'
 import { floorHash, mintSiteToken } from '../../../platform/auth/floor/tokens'
 import { startHarness, type Harness } from '../../../platform/auth/sessions/testing/harness'
+// ---- B-W2b-F53: this file fixes its clock on a day of the seeds' story, so it runs the seeds as written (seed-calendar)
+await vi.hoisted(async () => (await import('@nexus/factory-db/testing')).seedsAsWritten())
 
 /**
  * Line targets and boards (B-W2b-50; MES-084, MES-161, MES-162, MES-166, ANA-007) on the local stack with the app's real

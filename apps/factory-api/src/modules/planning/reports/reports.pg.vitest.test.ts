@@ -15,6 +15,8 @@ import { seed as seedCalendar } from '../../../../../../packages/factory-db/seed
 import { seed as seedPlanning } from '../../../../../../packages/factory-db/seed/planning'
 import { seed as seedSchedule } from '../../../../../../packages/factory-db/seed/schedule'
 import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
+// ---- B-W2b-F53: this file fixes its clock on a day of the seeds' story, so it runs the seeds as written (seed-calendar)
+await vi.hoisted(async () => (await import('@nexus/factory-db/testing')).seedsAsWritten())
 
 /**
  * Planning reports (B-W2b-349; design planning.reports SCR-254; PLN-202, PLN-204, PLN-207) through the app's real routes on a

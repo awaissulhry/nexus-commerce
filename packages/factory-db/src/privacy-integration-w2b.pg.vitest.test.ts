@@ -432,8 +432,15 @@ describe('the error queue (PLT-201)', () => {
   it('is deleted only once closed, 30 days after it closed; never truncated', async () => {
     const open = s.errorIds.sdiRefused
     await expect(run(`DELETE FROM "IntegrationErrorItem" WHERE id = $1::uuid`, open)).rejects.toThrow(/an open one is never deleted, a closed one only 30 days after it closed/)
-    // The seed's dismissal is recent: kept.
-    await expect(run(`DELETE FROM "IntegrationErrorItem" WHERE id = $1::uuid`, s.errorIds.webhookRejected)).rejects.toThrow(/only 30 days after it closed/)
+    // ---- B-W2b-F53: a dismissal of a day ago is kept, on every day. The seed's dismissal is the seeds' history (12 November 2026,
+    // never moved): kept while it is under 30 days old, deletable after (both sides checked, the side read from the row).
+    const fresh = await item({ firstFailedAt: ago(48), lastFailedAt: ago(48) })
+    expect(await run(`UPDATE "IntegrationErrorItem" SET state = 'DISMISSED', "dismissedAt" = $2::timestamptz, "dismissedById" = $3::uuid, "dismissReason" = 'Recent.' WHERE id = $1::uuid`, fresh, ago(24), a.actorId)).toBe(1)
+    await expect(run(`DELETE FROM "IntegrationErrorItem" WHERE id = $1::uuid`, fresh)).rejects.toThrow(/only 30 days after it closed/)
+    const [seeded] = await admin(`SELECT "dismissedAt" > now() - interval '720 hours' AS recent FROM "IntegrationErrorItem" WHERE id = $1::uuid`, [s.errorIds.webhookRejected])
+    if (seeded!.recent === true) await expect(run(`DELETE FROM "IntegrationErrorItem" WHERE id = $1::uuid`, s.errorIds.webhookRejected)).rejects.toThrow(/only 30 days after it closed/)
+    else expect(await run(`DELETE FROM "IntegrationErrorItem" WHERE id = $1::uuid`, s.errorIds.webhookRejected)).toBe(1)
+    // ---- end B-W2b-F53
     const old = await item({ firstFailedAt: ago(40 * 24), lastFailedAt: ago(40 * 24) })
     expect(await run(`UPDATE "IntegrationErrorItem" SET state = 'DISMISSED', "dismissedAt" = $2::timestamptz, "dismissedById" = $3::uuid, "dismissReason" = 'Old.' WHERE id = $1::uuid`, old, ago(31 * 24), a.actorId)).toBe(1)
     expect(await run(`DELETE FROM "IntegrationErrorItem" WHERE id = $1::uuid`, old)).toBe(1)
@@ -481,7 +488,16 @@ describe('job runs (PLT-221)', () => {
     const running = tickRow('test.delete', new Date(Math.floor(Date.now() / 60_000) * 60_000 - 60_000))
     expect(await insert('CronRun', running)).toBe(1)
     await expect(run(`DELETE FROM "CronRun" WHERE id = $1::uuid`, running.id)).rejects.toThrow(/deleted only once finished, 7 days after it finished/)
-    await expect(run(`DELETE FROM "CronRun" WHERE id = $1::uuid`, s.runIds[0])).rejects.toThrow(/7 days after it finished/)
+    // ---- B-W2b-F53: the seed's run is the seeds' history (12 November 2026, never moved): kept while it finished under 7 days ago,
+    // deletable after (the side read from the row); a run finished an hour ago is kept on every day.
+    const recent = new Date(Math.floor(Date.now() / 60_000) * 60_000 - 2 * HOUR)
+    const kept = tickRow('test.delete', recent, { status: 'SUCCEEDED', finishedAt: new Date(recent.getTime() + HOUR).toISOString() })
+    expect(await insert('CronRun', kept)).toBe(1)
+    await expect(run(`DELETE FROM "CronRun" WHERE id = $1::uuid`, kept.id)).rejects.toThrow(/7 days after it finished/)
+    const [seededRun] = await admin(`SELECT "finishedAt" > now() - interval '168 hours' AS recent FROM "CronRun" WHERE id = $1::uuid`, [s.runIds[0]])
+    if (seededRun!.recent === true) await expect(run(`DELETE FROM "CronRun" WHERE id = $1::uuid`, s.runIds[0])).rejects.toThrow(/7 days after it finished/)
+    else expect(await run(`DELETE FROM "CronRun" WHERE id = $1::uuid`, s.runIds[0])).toBe(1)
+    // ---- end B-W2b-F53
     const old = new Date(Math.floor(Date.now() / 60_000) * 60_000 - 8 * 24 * HOUR)
     const finished = tickRow('test.delete', old, { status: 'SUCCEEDED', finishedAt: new Date(old.getTime() + 1000).toISOString() })
     expect(await insert('CronRun', finished)).toBe(1)

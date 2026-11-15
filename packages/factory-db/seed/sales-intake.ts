@@ -23,6 +23,7 @@ import { seed as seedNumbering } from './numbering'
 import { seed as seedPricing } from './pricing'
 import { seed as seedProduct } from './product'
 import { seed as seedSales } from './sales'
+import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The sales intake and customers seed (W2b-5, schema wave 37/44, B-W2b-279), per tenant of seed/_core.ts, written in the
@@ -72,15 +73,15 @@ const T = {
   objected: new Date('2026-11-06T08:00:00.000Z'),
 } as const
 const DAY = {
-  fw27Start: new Date('2027-09-01T00:00:00.000Z'),
-  fw27End: new Date('2028-02-29T00:00:00.000Z'),
-  fw27Book: new Date('2027-04-30T00:00:00.000Z'),
-  ss28Start: new Date('2028-03-01T00:00:00.000Z'),
-  ss28End: new Date('2028-08-31T00:00:00.000Z'),
-  ss28Book: new Date('2027-10-31T00:00:00.000Z'),
+  fw27Start: seedAt('2027-09-01T00:00:00.000Z'),
+  fw27End: seedAt('2028-02-29T00:00:00.000Z'),
+  fw27Book: seedAt('2027-04-30T00:00:00.000Z'),
+  ss28Start: seedAt('2028-03-01T00:00:00.000Z'),
+  ss28End: seedAt('2028-08-31T00:00:00.000Z'),
+  ss28Book: seedAt('2027-10-31T00:00:00.000Z'),
   fw26Start: new Date('2026-09-01T00:00:00.000Z'),
-  fw26End: new Date('2027-02-28T00:00:00.000Z'),
-  wanted: new Date('2027-03-15T00:00:00.000Z'),
+  fw26End: seedAt('2027-02-28T00:00:00.000Z'),
+  wanted: seedAt('2027-03-15T00:00:00.000Z'),
 } as const
 
 export interface SalesIntakeSeed {

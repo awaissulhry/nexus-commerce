@@ -9,6 +9,8 @@ import { testAuthenticator, type SessionContext } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { postMoves, type MoveDraft } from '../ledger/post-moves'
 import { startInventoryFixture, type InventoryFixture } from '../ledger/testing/fixture'
+// ---- B-W2b-F53: this file fixes its clock on a day of the seeds' story, so it runs the seeds as written (seed-calendar)
+await vi.hoisted(async () => (await import('@nexus/factory-db/testing')).seedsAsWritten())
 
 /**
  * Warehouse reports (B-W2b-356; design warehouse.reports SCR-257) through the app's real routes on a throwaway PostgreSQL 17

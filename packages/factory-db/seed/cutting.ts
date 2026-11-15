@@ -16,6 +16,7 @@ import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedLeather } from './leather'
 import { seed as seedProduct } from './product'
 import { seed as seedSchedule } from './schedule'
+import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The cutting room seed (W2b schema wave 13/16, B-W2b-85), per tenant of seed/_core.ts. What the office plans (cut orders,
@@ -49,18 +50,18 @@ import { seed as seedSchedule } from './schedule'
 
 /** Fixed instants, so the seed never depends on the clock. */
 const T = {
-  planned: new Date('2026-11-20T07:30:00.000Z'),
-  released: new Date('2026-11-20T08:00:00.000Z'),
-  started: new Date('2026-11-20T08:30:00.000Z'),
-  counted: new Date('2026-11-20T09:15:00.000Z'),
-  cut: new Date('2026-11-20T09:45:00.000Z'),
-  printed: new Date('2026-11-20T09:50:00.000Z'),
-  confirmed: new Date('2026-11-20T10:00:00.000Z'),
-  reconciled: new Date('2026-11-20T16:00:00.000Z'),
-  sent: new Date('2026-11-20T11:00:00.000Z'),
-  received: new Date('2026-11-20T11:20:00.000Z'),
-  done: new Date('2026-11-20T13:00:00.000Z'),
-  withdrawn: new Date('2026-11-20T14:00:00.000Z'),
+  planned: seedAt('2026-11-20T07:30:00.000Z'),
+  released: seedAt('2026-11-20T08:00:00.000Z'),
+  started: seedAt('2026-11-20T08:30:00.000Z'),
+  counted: seedAt('2026-11-20T09:15:00.000Z'),
+  cut: seedAt('2026-11-20T09:45:00.000Z'),
+  printed: seedAt('2026-11-20T09:50:00.000Z'),
+  confirmed: seedAt('2026-11-20T10:00:00.000Z'),
+  reconciled: seedAt('2026-11-20T16:00:00.000Z'),
+  sent: seedAt('2026-11-20T11:00:00.000Z'),
+  received: seedAt('2026-11-20T11:20:00.000Z'),
+  done: seedAt('2026-11-20T13:00:00.000Z'),
+  withdrawn: seedAt('2026-11-20T14:00:00.000Z'),
 }
 
 export interface CuttingSeed {

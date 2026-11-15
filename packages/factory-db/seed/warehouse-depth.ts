@@ -29,6 +29,7 @@ import { seed as seedLeather } from './leather'
 import { seed as seedNumbering } from './numbering'
 import { seed as seedPlanning } from './planning'
 import { seed as seedProduction } from './production'
+import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The warehouse in depth seed (W2b-5, schema wave 36/44, B-W2b-277), per tenant of seed/_core.ts, written in the tenant's
@@ -84,8 +85,8 @@ const DAY = {
   ship: new Date('2026-11-04T00:00:00.000Z'),
   expected: new Date('2026-11-06T00:00:00.000Z'),
   later: new Date('2026-11-12T00:00:00.000Z'),
-  dueMonthly: new Date('2026-12-01T00:00:00.000Z'),
-  dueWeekly: new Date('2026-11-16T00:00:00.000Z'),
+  dueMonthly: seedAt('2026-12-01T00:00:00.000Z'),
+  dueWeekly: seedAt('2026-11-16T00:00:00.000Z'),
   lastWeekly: new Date('2026-11-09T00:00:00.000Z'),
   taskDue: new Date('2026-11-12T16:00:00.000Z'),
 } as const

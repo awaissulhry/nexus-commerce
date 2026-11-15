@@ -3,6 +3,7 @@ import { InstructionMediaKind, InstructionVersionStatus, MasterStatus, Operation
 import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedFiles } from './files'
 import { seed as seedInspectionPlans } from './inspection-plans'
+import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The routings, standard minutes and work instructions seed (W2b-4 schema wave 25/33, B-W2b-205), per tenant of
@@ -37,15 +38,15 @@ import { seed as seedInspectionPlans } from './inspection-plans'
 
 /** Fixed instants, so the seed never depends on the clock. */
 const T = {
-  studied: new Date('2026-11-16T08:00:00.000Z'),
-  approved: new Date('2026-11-16T10:00:00.000Z'),
-  proposed: new Date('2026-11-17T08:00:00.000Z'),
-  written: new Date('2026-11-18T08:00:00.000Z'),
-  published: new Date('2026-11-18T09:00:00.000Z'),
-  rewritten: new Date('2026-11-19T08:00:00.000Z'),
-  republished: new Date('2026-11-19T09:00:00.000Z'),
-  seen: new Date('2026-11-19T10:00:00.000Z'),
-  drafted: new Date('2026-11-20T08:00:00.000Z'),
+  studied: seedAt('2026-11-16T08:00:00.000Z'),
+  approved: seedAt('2026-11-16T10:00:00.000Z'),
+  proposed: seedAt('2026-11-17T08:00:00.000Z'),
+  written: seedAt('2026-11-18T08:00:00.000Z'),
+  published: seedAt('2026-11-18T09:00:00.000Z'),
+  rewritten: seedAt('2026-11-19T08:00:00.000Z'),
+  republished: seedAt('2026-11-19T09:00:00.000Z'),
+  seen: seedAt('2026-11-19T10:00:00.000Z'),
+  drafted: seedAt('2026-11-20T08:00:00.000Z'),
 }
 
 export interface InstructionsSeed {
@@ -142,7 +143,7 @@ export async function seed(context: SeedContext): Promise<InstructionsSeed> {
             number: 1,
             ...minutes,
             source: OperationTimeSource.TIME_STUDY,
-            effectiveFrom: new Date('2026-11-16'),
+            effectiveFrom: seedAt('2026-11-16'),
             reason: 'Time study of the cutting table, ten hides.',
             proposedById: actorId,
             ...stamp(T.studied),
@@ -157,7 +158,7 @@ export async function seed(context: SeedContext): Promise<InstructionsSeed> {
             delayPct: '3.0000',
             standardMinutes: '13.440',
             source: OperationTimeSource.TIME_STUDY,
-            effectiveFrom: new Date('2026-12-01'),
+            effectiveFrom: seedAt('2026-12-01'),
             reason: 'The new cutting table needs less handling.',
             proposedById: actorId,
             ...stamp(T.proposed),

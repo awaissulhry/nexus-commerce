@@ -11,6 +11,7 @@ import {
 } from '../src/generated/prisma/enums'
 import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedAccounting, type AccountingSeed } from './accounting'
+import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The actual-cost seed (W2b-6 schema wave 54/57, B-W2b-376), per tenant of seed/_core.ts, for company A, written in the
@@ -65,8 +66,8 @@ const T = {
   landedReversed: new Date('2026-11-13T11:30:00.000Z'),
   landedDraft: new Date('2026-11-13T11:45:00.000Z'),
   // seed/shipping.ts: SEED-SH-0001 was picked up then.
-  shipped: new Date('2026-11-24T08:05:00.000Z'),
-  revalued: new Date('2026-11-24T09:00:00.000Z'),
+  shipped: seedAt('2026-11-24T08:05:00.000Z'),
+  revalued: seedAt('2026-11-24T09:00:00.000Z'),
 } as const
 
 /** SEED-JKT-02's routing (seed/production.ts): step, code, name, standard minutes, work centre. */

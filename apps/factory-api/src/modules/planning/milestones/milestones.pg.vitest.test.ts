@@ -12,6 +12,7 @@ import { applySystemRoleChanges, systemRoleChanges } from '../../../platform/aut
 import { addUser, Browser, enrolTotp, startHarness, type Harness, type TestTenant } from '../../../platform/auth/sessions/testing/harness'
 import { systemContext } from '../../../platform/outbox/system'
 import { passGatesOfRound, passLeatherGatesOfLot } from './follow'
+import { seedDay } from '@nexus/factory-db/testing' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * Time & action (B-W2b-263; PLN-186; design planning.milestones) through the app's real routes and real sign-ins (the system
@@ -117,7 +118,7 @@ describe('Time & action: the gates and milestones of the open orders (PLN-186)',
     expect(so2.milestones.filter((row: Json) => row.kind === 'GATE')).toHaveLength(4)
     expect(so2.milestones.filter((row: Json) => row.kind !== 'GATE').map((row: Json) => row.kind).sort()).toEqual(['SHIP', 'START'])
     expect(so2.milestones.find((row: Json) => row.kind === 'START')).toMatchObject({ state: 'DONE', actual: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) })
-    expect(so2.milestones.find((row: Json) => row.kind === 'SHIP')).toMatchObject({ target: '2026-12-04', state: 'TO_COME' })
+    expect(so2.milestones.find((row: Json) => row.kind === 'SHIP')).toMatchObject({ target: seedDay('2026-12-04'), state: 'TO_COME' })
     // SEED-SO-0001 has no work order: no production start milestone.
     expect(orderIn(world, 'SEED-SO-0001').milestones.map((row: Json) => row.kind)).toEqual(['SHIP'])
     expect(world.tiles).toEqual({ SAMPLE: 1, LEATHER_NOT_RECEIVED: 0, LEATHER_NOT_PASSED: 0, TRIMS: 0, OTHER: 1 })
@@ -139,16 +140,16 @@ describe('Time & action: the gates and milestones of the open orders (PLN-186)',
     await as(readOnly, 'POST', '/planning/milestones/gates', { salesOrderId: so1, kind: 'LAB_PASSED' }, 403)
 
     // A sample gate naming an approved round passes at once, by its round.
-    const sample = (await as(planner, 'POST', '/planning/milestones/gates', { salesOrderId: so1, kind: 'SAMPLE_APPROVED', sampleRoundId: samples.roundIds.proto, targetDate: '2026-11-20' }, 201)).gate
+    const sample = (await as(planner, 'POST', '/planning/milestones/gates', { salesOrderId: so1, kind: 'SAMPLE_APPROVED', sampleRoundId: samples.roundIds.proto, targetDate: seedDay('2026-11-20') }, 201)).gate
     expect(sample).toMatchObject({ state: 'PASSED', via: 'SAMPLE', passedBy: null, sampleRound: { number: 'SEED-SR-0002' } })
     expect((await one('SELECT "passedById" FROM "OrderGate" WHERE id = $1', [sample.id])).passedById).toBe(SYSTEM_ACTOR_ID)
 
-    const lab = (await as(planner, 'POST', '/planning/milestones/gates', { salesOrderId: so1, kind: 'LAB_PASSED', targetDate: '2026-11-18' }, 201)).gate
-    expect(lab).toMatchObject({ state: 'WAITING', targetDate: '2026-11-18', ownerId: null, actions: { edit: { allowed: true }, remove: { allowed: true } } })
-    const moved = (await as(planner, 'PATCH', `/planning/milestones/gates/${lab.id}`, { version: lab.version, targetDate: '2026-11-21' })).gate
-    expect(moved).toMatchObject({ targetDate: '2026-11-21', version: lab.version + 1 })
+    const lab = (await as(planner, 'POST', '/planning/milestones/gates', { salesOrderId: so1, kind: 'LAB_PASSED', targetDate: seedDay('2026-11-18') }, 201)).gate
+    expect(lab).toMatchObject({ state: 'WAITING', targetDate: seedDay('2026-11-18'), ownerId: null, actions: { edit: { allowed: true }, remove: { allowed: true } } })
+    const moved = (await as(planner, 'PATCH', `/planning/milestones/gates/${lab.id}`, { version: lab.version, targetDate: seedDay('2026-11-21') })).gate
+    expect(moved).toMatchObject({ targetDate: seedDay('2026-11-21'), version: lab.version + 1 })
     // A stale version is a 409 that names the version now.
-    await as(planner, 'PATCH', `/planning/milestones/gates/${lab.id}`, { version: lab.version, targetDate: '2026-11-22' }, 409)
+    await as(planner, 'PATCH', `/planning/milestones/gates/${lab.id}`, { version: lab.version, targetDate: seedDay('2026-11-22') }, 409)
     const extra = (await as(planner, 'POST', '/planning/milestones/gates', { salesOrderId: so1, kind: 'OTHER', label: 'Hang tag artwork (made-up)' }, 201)).gate
     expect(await as(planner, 'POST', `/planning/milestones/gates/${extra.id}/remove`, { version: extra.version })).toEqual({ removed: extra.id })
     // A passed gate is kept.
@@ -293,7 +294,7 @@ describe('Time & action: the gates and milestones of the open orders (PLN-186)',
 
   it("passes an order's leather gate when every leather lot reserved for it is released (the handler of lot.released)", async () => {
     const so3 = orders['SEED-SO-0003']!
-    const gate = (await as(planner, 'POST', '/planning/milestones/gates', { salesOrderId: so3, kind: 'LEATHER_APPROVED', targetDate: '2026-11-19' }, 201)).gate
+    const gate = (await as(planner, 'POST', '/planning/milestones/gates', { salesOrderId: so3, kind: 'LEATHER_APPROVED', targetDate: seedDay('2026-11-19') }, 201)).gate
     expect(gate).toMatchObject({ state: 'WAITING', leather: 'NOT_RECEIVED' })
     expect((await read()).tiles.LEATHER_NOT_RECEIVED).toBe(1)
     const lot = await one<{ lotId: string; itemId: string }>(`SELECT id AS "lotId", "itemId" FROM "Lot" WHERE "tenantId" = $1 AND code = 'SEED-LOT-LEA-01'`, [tenant])

@@ -6,6 +6,7 @@ import { seed as seedFiles } from './files'
 import { seed as seedParties } from './parties'
 import { seed as seedPrint } from './print'
 import { seed as seedShipping } from './shipping'
+import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The carriers, labels and dispatch seed (W2b-6, schema wave 48/57, B-W2b-367), per tenant of seed/_core.ts, written in the
@@ -53,7 +54,7 @@ const T = {
 const DAY = {
   closed: new Date('2026-11-11T00:00:00.000Z'),
   /** SH-0001's day (the shipping seed's story: handed over on 24 November). */
-  sh0001: new Date('2026-11-24T00:00:00.000Z'),
+  sh0001: seedAt('2026-11-24T00:00:00.000Z'),
 } as const
 
 export interface CarriersSeed {
@@ -165,7 +166,7 @@ export async function seed(context: SeedContext): Promise<CarriersSeed> {
         data: [
           { id: P.failed, companyId: companyA, siteId: siteA, carrierCode: 'seed-express', readyAt: new Date('2026-11-10T14:00:00.000Z'), parcels: 2, pallets: 0, address: addressA, ...stamp(T.failedAsk) },
           {
-            id: P.recurring, companyId: companyA, siteId: siteA, carrierCode: 'seed-express', readyAt: new Date('2026-11-16T14:30:00.000Z'), parcels: 3, pallets: 0, address: addressA,
+            id: P.recurring, companyId: companyA, siteId: siteA, carrierCode: 'seed-express', readyAt: seedAt('2026-11-16T14:30:00.000Z'), parcels: 3, pallets: 0, address: addressA,
             repeatWeekdays: [IsoWeekday.MONDAY, IsoWeekday.TUESDAY, IsoWeekday.WEDNESDAY, IsoWeekday.THURSDAY, IsoWeekday.FRIDAY], ...stamp(T.recurringAsk),
           },
           { id: P.phone, companyId: companyB, siteId: siteB, carrierCode: 'seed-freight', readyAt: new Date('2026-11-13T09:00:00.000Z'), parcels: 0, pallets: 1, address: addressB, ...stamp(T.phone) },

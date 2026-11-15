@@ -14,6 +14,7 @@ import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedAccounting } from './accounting'
 import { seed as seedCompliance } from './compliance'
 import { seed as seedIntegration } from './integration'
+import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The W2b follow-ups seed for quality, planning and money (W2b schema wave 2/7, B-W2b-02), per tenant of seed/_core.ts,
@@ -47,18 +48,18 @@ const T = {
   settings: new Date('2026-11-02T08:00:00.000Z'),
   rate: new Date('2026-11-02T08:30:00.000Z'),
   renewal: new Date('2026-11-03T09:00:00.000Z'),
-  lottoDelivered: new Date('2026-11-20T06:40:00.000Z'),
-  lottoRecorded: new Date('2026-11-20T06:45:00.000Z'),
-  strangerDelivered: new Date('2026-11-18T05:10:00.000Z'),
-  strangerLastTried: new Date('2026-11-18T05:40:00.000Z'),
+  lottoDelivered: seedAt('2026-11-20T06:40:00.000Z'),
+  lottoRecorded: seedAt('2026-11-20T06:45:00.000Z'),
+  strangerDelivered: seedAt('2026-11-18T05:10:00.000Z'),
+  strangerLastTried: seedAt('2026-11-18T05:40:00.000Z'),
 } as const
 const DAY = {
   halfYear: new Date('2026-07-01T00:00:00.000Z'),
-  windowOpens: new Date('2029-05-31T00:00:00.000Z'),
-  windowCloses: new Date('2029-11-30T00:00:00.000Z'),
-  lottoIssued: new Date('2026-11-18T00:00:00.000Z'),
-  lottoReceived: new Date('2026-11-20T00:00:00.000Z'),
-  lottoDue: new Date('2026-12-31T00:00:00.000Z'),
+  windowOpens: seedAt('2029-05-31T00:00:00.000Z'),
+  windowCloses: seedAt('2029-11-30T00:00:00.000Z'),
+  lottoIssued: seedAt('2026-11-18T00:00:00.000Z'),
+  lottoReceived: seedAt('2026-11-20T00:00:00.000Z'),
+  lottoDue: seedAt('2026-12-31T00:00:00.000Z'),
 } as const
 const YEAR = '2026'
 const TEN_YEARS = (at: Date): Date => new Date(Date.UTC(at.getUTCFullYear() + 10, at.getUTCMonth(), at.getUTCDate()))

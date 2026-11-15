@@ -7,6 +7,7 @@ import { fifteenthOfNextMonth } from '@nexus/factory-domain/invoicing/fatturapa/
 import { supplierInvoiceXml } from '@nexus/factory-domain/payables/testing'
 import { addDays } from '@nexus/factory-domain/planning/buy'
 import { dueDateOf } from '@nexus/factory-domain/sales/terms/terms'
+import { seedAt } from '@nexus/factory-db/testing' // B-W2b-F53: the seeds' calendar
 import { textOf } from '../../adapters/ses/fake'
 import { callerFor } from '../../core/command'
 import { runSdiPoll } from '../../modules/invoicing/sdi/poll'
@@ -2317,7 +2318,14 @@ describe('the W2a golden flow: a factory day through the HTTP routes', { timeout
     const bar = ((await ok(P.planner, 'GET', `/planning/schedule/work-orders/${H.wo1()}`)).slots as Json[]).find((entry) => entry.id === H.workingSewSlot())
     expect(bar, 'the seeded working sewing bar of SEED-WO-0001').toMatchObject({ lane: { kind: 'LINE', id: H.line() }, booksCapacity: true })
     const barDay = businessDate(new Date(bar!.startAt))
-    expect(await cellOf(barDay, barDay)).toMatchObject({ availableMinutes: perDay.toFixed(1), bookedMinutes: '0.0', loadPct: '0.0', words: words(1), orders: [] })
+    // ---- B-W2b-F53: the seeded bar is in the seeds' future, which moves on by whole weeks (seed-calendar), so its Tuesday can be
+    // a holiday or a closure of L1 (8 December, Christmas): its available minutes are the day's working days on L1's calendar.
+    const barWorking = l1Cell(await capacityOn(barDay), barDay)!.workingDays as number
+    expect(barWorking === 0 || barWorking === 1, `L1 on ${barDay}`).toBe(true)
+    // (a day with no working time has no load: loadPct null)
+    expect(await cellOf(barDay, barDay)).toMatchObject({ availableMinutes: (perDay * barWorking).toFixed(1), bookedMinutes: '0.0', loadPct: barWorking === 1 ? '0.0' : null, orders: [] })
+    if (barWorking === 1) expect((await cellOf(barDay, barDay)).words).toBe(words(1))
+    // ---- end B-W2b-F53
     // ---- end B-W2b-F43
     // A closed day (B-W2a-08): the planner closes L1 on a working day ten working days out; capacity follows on the next read.
     const day = await l1WorkingDay(10)
@@ -2463,7 +2471,8 @@ describe('the W2a golden flow: a factory day through the HTTP routes', { timeout
   it('H10 the scheduler’s alert pass finds the seeded hold of SEED-HIDE-0002 too long; the inspector is told, acknowledges it (twice refused) and resolves it', async () => {
     // The cron `alerts.evaluate` (platform/alerts/engine.ts runAlertEvaluation) on a clock 25 h past the hold's placing
     // (seed/holds.ts: 2026-11-21 09:10Z) or past now, whichever is later: the built-in rule (24 h at A1) finds it.
-    const at = new Date(Math.max(Date.now(), Date.parse('2026-11-21T09:10:00.000Z')) + 25 * 3_600_000)
+    // B-W2b-F53: the placing is in the seeds' future, moved on by the seeds' calendar (seedAt).
+    const at = new Date(Math.max(Date.now(), seedAt('2026-11-21T09:10:00.000Z').getTime()) + 25 * 3_600_000)
     const pass = await runAlertEvaluation({ database: w.h.database, log: QUIET, clock: { now: () => at } })
     expect(pass.failed).toBe(0)
     // The cron `timers.fire` (platform/timers/fire.ts fireDueTimers) on the same clock: the DATE rules' due timers fire.

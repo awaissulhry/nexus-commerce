@@ -12,6 +12,7 @@ import {
 import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedFiles } from './files'
 import { seed as seedReturns } from './returns'
+import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The delivery, returns and customs seed (W2b-6, schema wave 51/57, B-W2b-372), per tenant of seed/_core.ts, written in the
@@ -52,7 +53,7 @@ const T = {
   filed: new Date('2026-11-12T14:00:00.000Z'),
   commercialInvoice: new Date('2026-11-12T08:30:00.000Z'),
 } as const
-const LINK_EXPIRES = new Date('2027-01-15T08:00:00.000Z')
+const LINK_EXPIRES = seedAt('2027-01-15T08:00:00.000Z')
 /** Company A's made-up EORI: IT and the made-up VAT number of seed/parties.ts. */
 export const SEED_EORI_A = 'IT00000003038'
 /** A made-up MRN: two digits of the year, IT, then SEED and digits (never a real declaration's). */

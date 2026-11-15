@@ -12,6 +12,7 @@ import {
 } from '../src/generated/prisma/enums'
 import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedSupply, type SupplySeed } from './supply'
+import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The inventory seed, per tenant of seed/_core.ts: the golden flow's stages 09a-receive and 09b-cr6 for the
@@ -45,9 +46,9 @@ const T = {
   received: new Date('2026-11-12T09:00:00.000Z'),
   posted: new Date('2026-11-12T10:00:00.000Z'),
   released: new Date('2026-11-14T15:00:00.000Z'),
-  docked: new Date('2026-11-17T09:00:00.000Z'),
+  docked: seedAt('2026-11-17T09:00:00.000Z'),
 } as const
-const DAY = { ddt: new Date('2026-11-11T00:00:00.000Z'), tested: new Date('2026-11-13T00:00:00.000Z'), ddt2: new Date('2026-11-16T00:00:00.000Z') } as const
+const DAY = { ddt: new Date('2026-11-11T00:00:00.000Z'), tested: new Date('2026-11-13T00:00:00.000Z'), ddt2: seedAt('2026-11-16T00:00:00.000Z') } as const
 
 /** The hides of R1: tag, the tannery's number, measured area in ft² (the base unit), grade and thickness. */
 const HIDES = [

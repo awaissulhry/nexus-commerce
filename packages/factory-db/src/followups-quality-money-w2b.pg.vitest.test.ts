@@ -17,6 +17,7 @@ import { FLOOR_ROLE, PARTNER_ROLE, RUNTIME_LOGIN } from './roles'
 import { seedUuid } from './seeding'
 import { migratedDatabase, type MigratedDatabase } from './testing/database'
 import { loadOwnership, loadSchema } from './tools'
+import { seedDay, seedIso } from './seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * W2b schema wave 2/7 (the W2a follow-ups for quality, planning and money) beyond the generated isolation tests, on a
@@ -239,7 +240,7 @@ describe('holds and NCRs are numbered at the bench', () => {
             kind: 'HOLD',
             value,
             formatted: `HLD-2026-${String(value).padStart(4, '0')}`,
-            documentDate: '2026-11-20',
+            documentDate: seedDay('2026-11-20'),
             recordType: 'QualityHold',
             recordId: randomUUID(),
             allocatedAt: new Date().toISOString(),
@@ -261,7 +262,7 @@ describe('holds and NCRs are numbered at the bench', () => {
         kind: 'INVOICE',
         value: 900_000,
         formatted: `FT-X-${tag()}`,
-        documentDate: '2026-11-20',
+        documentDate: seedDay('2026-11-20'),
         recordType: 'Invoice',
         recordId: randomUUID(),
         allocatedAt: new Date().toISOString(),
@@ -306,8 +307,8 @@ describe('quality follow-ups', () => {
   })
 
   it('an inspection’s due time is the office’s; a decided inspection keeps it', async () => {
-    expect(await run(office(), `UPDATE "Inspection" SET "dueAt" = '2026-11-25T16:00:00Z' WHERE id = $1::uuid`, quality.openInspectionId)).toBe(1)
-    await expect(run(floor(), `UPDATE "Inspection" SET "dueAt" = '2026-11-26T16:00:00Z' WHERE id = $1::uuid`, quality.openInspectionId)).rejects.toThrow(/office sets by when/)
+    expect(await run(office(), `UPDATE "Inspection" SET "dueAt" = '${seedIso('2026-11-25T16:00:00Z')}' WHERE id = $1::uuid`, quality.openInspectionId)).toBe(1)
+    await expect(run(floor(), `UPDATE "Inspection" SET "dueAt" = '${seedIso('2026-11-26T16:00:00Z')}' WHERE id = $1::uuid`, quality.openInspectionId)).rejects.toThrow(/office sets by when/)
     await expect(run(office(), `UPDATE "Inspection" SET "dueAt" = now() WHERE id = $1::uuid`, quality.passedInspectionId)).rejects.toThrow(/never changes/)
   })
 
@@ -395,11 +396,11 @@ describe('a carried firm line made planned again; the PO reminder switch', () =>
         netQuantity: '10',
         suggestedQuantity: '10',
         suggestedUom: from!.uom,
-        needDate: '2026-12-01',
+        needDate: seedDay('2026-12-01'),
         sources: [],
         firmQuantity: '10',
         firmBaseQuantity: '10',
-        firmDate: '2026-12-01',
+        firmDate: seedDay('2026-12-01'),
         firmedAt: new Date().toISOString(),
         firmedById: a.actorId,
         firmCarriedFromId: from!.id,
@@ -415,7 +416,7 @@ describe('a carried firm line made planned again; the PO reminder switch', () =>
     const [unfirmed] = await sql(office(), `SELECT "firmedAt" AS firmed, "firmCarriedFromId" AS carried FROM "MaterialRequirement" WHERE id = $1::uuid`, id)
     expect(unfirmed).toEqual({ firmed: null, carried: from!.id })
     await expect(run(office(), `UPDATE "MaterialRequirement" SET "firmCarriedFromId" = NULL WHERE id = $1::uuid`, id)).rejects.toThrow(/snapshot/)
-    expect(await run(office(), `UPDATE "MaterialRequirement" SET "firmQuantity" = 4, "firmBaseQuantity" = 4, "firmDate" = '2026-12-02', "firmedAt" = now() WHERE id = $1::uuid`, id)).toBe(1)
+    expect(await run(office(), `UPDATE "MaterialRequirement" SET "firmQuantity" = 4, "firmBaseQuantity" = 4, "firmDate" = '${seedDay('2026-12-02')}', "firmedAt" = now() WHERE id = $1::uuid`, id)).toBe(1)
   })
 
   it('the purchasing settings are switched, never deleted, and keep their company', async () => {
@@ -475,16 +476,16 @@ describe('payables follow-ups', () => {
 
   it('a file of several invoices: each body once, with the file’s IdentificativoSdI and day; a single invoice never takes a file’s', async () => {
     const lotto = (row: Record<string, unknown>) =>
-      insert(office(), 'SupplierInvoice', supplierInvoiceRow({ source: 'SDI', docType: 'TD01', sdiIdentifier: 'SEED-SDI-IN-0000002', sdiFileName: 'IT00000002022_00415.xml', receivedOn: '2026-11-20', sdiFileId: followups.supplierInvoiceFileId, ...row }))
+      insert(office(), 'SupplierInvoice', supplierInvoiceRow({ source: 'SDI', docType: 'TD01', sdiIdentifier: 'SEED-SDI-IN-0000002', sdiFileName: 'IT00000002022_00415.xml', receivedOn: seedDay('2026-11-20'), sdiFileId: followups.supplierInvoiceFileId, ...row }))
     await expect(lotto({ sdiBodyIndex: 3 })).rejects.toThrow(/carries the file''s IdentificativoSdI|carries the file's IdentificativoSdI/)
-    await expect(lotto({ sdiBodyIndex: 1, receivedOn: '2026-11-21' })).rejects.toThrow(/carries the file/)
+    await expect(lotto({ sdiBodyIndex: 1, receivedOn: seedDay('2026-11-21') })).rejects.toThrow(/carries the file/)
     await expect(lotto({ sdiBodyIndex: 2 })).rejects.toThrow(/duplicate key|sdiBodyIndex/)
     await expect(lotto({ sdiBodyIndex: null })).rejects.toThrow(/both or neither/)
     await expect(lotto({ sdiFileId: null, sdiBodyIndex: null })).rejects.toThrow(/is a file of several invoices/)
     await expect(lotto({ source: 'MANUAL', docType: null, sdiIdentifier: null, sdiFileName: null, sdiBodyIndex: 1 })).rejects.toThrow(/only when it came through SDI/)
     await expect(run(office(), `UPDATE "SupplierInvoice" SET "sdiBodyIndex" = 2 WHERE id = $1::uuid`, followups.lottoInvoiceIds[0])).rejects.toThrow(/what it says never changes/)
     const file = (row: Record<string, unknown>) =>
-      insert(office(), 'SupplierInvoiceFile', { id: randomUUID(), companyId: A.companyA, partyId: A.P2, sdiIdentifier: `SDI-F-${tag()}`, sdiFileName: 'IT00000002022_00500.xml', receivedOn: '2026-11-22', invoiceCount: 2, ...row })
+      insert(office(), 'SupplierInvoiceFile', { id: randomUUID(), companyId: A.companyA, partyId: A.P2, sdiIdentifier: `SDI-F-${tag()}`, sdiFileName: 'IT00000002022_00500.xml', receivedOn: seedDay('2026-11-22'), invoiceCount: 2, ...row })
     await expect(file({ invoiceCount: 1 })).rejects.toThrow(/two invoices or more/)
     await expect(file({ sdiIdentifier: 'SEED-SDI-IN-0000001' })).rejects.toThrow(/recorded already as one supplier invoice/)
     expect(await file({})).toBe(1)
@@ -501,7 +502,7 @@ describe('payables follow-ups', () => {
     expect(await insert(office(), 'SupplierInvoice', supplierInvoiceRow({ id: note, kind: 'CREDIT_NOTE' }))).toBe(1)
     expect(await run(office(), `UPDATE "SupplierInvoice" SET "matchStatus" = 'NO_PO', "matchedAt" = now() WHERE id = $1::uuid`, note)).toBe(1)
     expect(await run(office(randomUUID()), `UPDATE "SupplierInvoice" SET status = 'APPROVED', "approvedAt" = now(), "approvedById" = $2::uuid WHERE id = $1::uuid`, note, randomUUID())).toBe(1)
-    expect(await run(office(), `UPDATE "SupplierInvoice" SET status = 'PAID', "paidOn" = '2026-11-25', "paymentRef" = $2 WHERE id = $1::uuid`, note, `PAY-${tag()}`)).toBe(1)
+    expect(await run(office(), `UPDATE "SupplierInvoice" SET status = 'PAID', "paidOn" = '${seedDay('2026-11-25')}', "paymentRef" = $2 WHERE id = $1::uuid`, note, `PAY-${tag()}`)).toBe(1)
     expect(await run(office(), `UPDATE "SupplierInvoice" SET "claimId" = $2::uuid, "claimSiteId" = $3::uuid WHERE id = $1::uuid`, note, claim.claimId, claim.claimSiteId)).toBe(1)
     await expect(run(office(), `UPDATE "SupplierInvoice" SET "claimId" = NULL, "claimSiteId" = NULL WHERE id = $1::uuid`, note)).rejects.toThrow(/named once/)
     await expect(run(office(), `UPDATE "SupplierInvoice" SET "paymentRef" = 'X' WHERE id = $1::uuid`, note)).rejects.toThrow(/never changes/)
@@ -534,11 +535,11 @@ describe('payables follow-ups', () => {
         providerRef: `ref-${tag()}`,
         sdiIdentifier: `SDI-W-${tag()}`,
         fileName: 'IT00000002022_00600.xml',
-        receivedAt: '2026-11-21T06:00:00Z',
+        receivedAt: seedIso('2026-11-21T06:00:00Z'),
         problem: 'DUPLICATE_NUMBER',
         problemText: 'Invoice 2026/0412 of this supplier is registered already (typed in).',
-        firstSeenAt: '2026-11-21T06:05:00Z',
-        lastTriedAt: '2026-11-21T06:05:00Z',
+        firstSeenAt: seedIso('2026-11-21T06:05:00Z'),
+        lastTriedAt: seedIso('2026-11-21T06:05:00Z'),
         ...row,
       })
     await expect(item({ status: 'DISMISSED', dismissedAt: new Date().toISOString(), dismissReason: 'x' })).rejects.toThrow(/starts OPEN/)
@@ -629,10 +630,10 @@ describe('refund reasons and the half-year reference rates', () => {
   it('a DUE refund’s reason changes with it; a PAID one’s never does', async () => {
     expect(await run(office(), `UPDATE "Refund" SET "reasonCode" = 'OVERPAYMENT' WHERE id = $1::uuid`, receivables.refundId)).toBe(1)
     const paymentId = randomUUID()
-    await insert(office(), 'Payment', { id: paymentId, companyId: A.companyA, partyId: A.P1, amount: 2000, receivedOn: '2026-11-20', externalRef: `TRN-${tag()}` })
+    await insert(office(), 'Payment', { id: paymentId, companyId: A.companyA, partyId: A.P1, amount: 2000, receivedOn: seedDay('2026-11-20'), externalRef: `TRN-${tag()}` })
     const refundId = randomUUID()
     expect(
-      await insert(office(), 'Refund', { id: refundId, companyId: A.companyA, partyId: A.P1, paymentId, amount: 1000, reasonCode: 'OVERPAYMENT', status: 'PAID', paidOn: '2026-11-21', externalRef: `OUT-${tag()}`, paidAt: new Date().toISOString(), paidById: a.actorId }),
+      await insert(office(), 'Refund', { id: refundId, companyId: A.companyA, partyId: A.P1, paymentId, amount: 1000, reasonCode: 'OVERPAYMENT', status: 'PAID', paidOn: seedDay('2026-11-21'), externalRef: `OUT-${tag()}`, paidAt: new Date().toISOString(), paidById: a.actorId }),
     ).toBe(1)
     await expect(run(office(), `UPDATE "Refund" SET "reasonCode" = 'OTHER' WHERE id = $1::uuid`, refundId)).rejects.toThrow(/what was paid never changes/)
   })

@@ -17,6 +17,7 @@ import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { applySystemRoleChanges, systemRoleChanges } from '../../../platform/auth/roles/system-roles'
 import { addUser, Browser, enrolTotp, startHarness, stepUp, type Harness, type TestTenant } from '../../../platform/auth/sessions/testing/harness'
 import { closeHoldInCommand } from './holds'
+import { seedDayText } from '@nexus/factory-db/testing' // B-W2b-F53: the seeds' calendar
 
 /**
  * Quality holds (B-W2a-26; QHS-074 place a hold, MES-008 hold and release a work order or a bundle) on the local stack
@@ -186,7 +187,7 @@ describe('what a hold blocks, in words', () => {
     expect(lot.message).toMatch(new RegExp(`^Lot ${lining.code} is on hold \\(Supplier check, since \\d+ \\w+ \\d{4}\\): its stock is not issued until quality releases the hold\\.$`))
     expect(paths(lot)).toEqual(['refusal/QUALITY_HOLD'])
     const hide = await refused('floor', 'POST', `/inventory/picking/work-orders/${A.wo1}/issue`, { hideId: A.hideH2 }, 409)
-    expect(hide.message).toBe('Hide SEED-HIDE-0002 is on hold (Quality check, since 21 Nov 2026): it is not issued until quality releases the hold.')
+    expect(hide.message).toBe(`Hide SEED-HIDE-0002 is on hold (Quality check, since ${seedDayText('2026-11-21', 'en')}): it is not issued until quality releases the hold.`) // B-W2b-F53
   })
 })
 

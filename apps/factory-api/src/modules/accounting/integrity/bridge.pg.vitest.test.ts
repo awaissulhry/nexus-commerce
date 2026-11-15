@@ -31,6 +31,8 @@ import { localKeyProvider } from '../../../platform/secrets/local'
 import { saveJournalsSettings } from '../mapping/service'
 import { useAccountingClock } from '../store'
 import { runNightlyIntegrity } from './jobs'
+// ---- B-W2b-F53: this file fixes its clock on a day of the seeds' story, so it runs the seeds as written (seed-calendar)
+await vi.hoisted(async () => (await import('@nexus/factory-db/testing')).seedsAsWritten())
 
 // The routes' clock: 2 December 2026, after November (the seeds' month of the cost bridge), running on from there.
 vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-12-02T09:00:00.000Z'), shouldAdvanceTime: true })

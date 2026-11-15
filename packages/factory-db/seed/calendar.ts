@@ -2,6 +2,7 @@ import { CalendarDayKind, CalendarScope, MasterStatus, ShiftSegmentKind } from '
 import type { Prisma } from '../src/generated/prisma/client'
 import { seed as seedParties } from './parties'
 import { seedUuid, type SeedContext } from '../src/seeding'
+import { seedYear } from '../src/seed-calendar' // B-W2b-F53: the holiday years follow the run's year
 
 /**
  * The calendars seed (B-W2a-08's tables), per tenant of seed/_core.ts:
@@ -22,11 +23,29 @@ const AT = new Date('2026-10-30T08:00:00.000Z')
 
 type Day = { readonly date: string; readonly name: string }
 
+// ---- B-W2b-F53: the holidays are calendar facts, never moved; the seeds' future follows the calendar (seed-calendar), so the
+// list covers 2026, 2027 and every year up to the one after the run's year (Easter Monday by the Gregorian computus).
+/** The years of the holiday rows: 2026 to the year after the run's year. */
+const HOLIDAY_YEARS: readonly number[] = Array.from({ length: Math.max(2027, seedYear() + 1) - 2026 + 1 }, (_, index) => 2026 + index)
+/** Easter Monday of a year: the day after Easter Sunday (the anonymous Gregorian algorithm; 2026-04-06, 2027-03-29). */
+function easterMonday(year: number): string {
+  const a = year % 19
+  const b = Math.floor(year / 100)
+  const c = year % 100
+  const h = (19 * a + b - Math.floor(b / 4) - Math.floor((b - Math.floor((b + 8) / 25) + 1) / 3) + 15) % 30
+  const l = (32 + 2 * (b % 4) + 2 * Math.floor(c / 4) - h - (c % 4)) % 7
+  const m = Math.floor((a + 11 * h + 22 * l) / 451)
+  const month = Math.floor((h + l - 7 * m + 114) / 31)
+  const day = ((h + l - 7 * m + 114) % 31) + 1
+  return new Date(Date.UTC(year, month - 1, day + 1)).toISOString().slice(0, 10)
+}
+// ---- end B-W2b-F53
+
 /** Italy's national holidays (giorni festivi), as dated rows: Easter Monday moves (5 April 2026 and 28 March 2027 are Easter Sunday). */
-const NATIONAL_HOLIDAYS_IT: readonly Day[] = [2026, 2027].flatMap((year) => [
+const NATIONAL_HOLIDAYS_IT: readonly Day[] = HOLIDAY_YEARS.flatMap((year) => [
   { date: `${year}-01-01`, name: 'Capodanno' },
   { date: `${year}-01-06`, name: 'Epifania' },
-  { date: year === 2026 ? '2026-04-06' : '2027-03-29', name: "Lunedì dell'Angelo (Pasquetta)" },
+  { date: easterMonday(year), name: "Lunedì dell'Angelo (Pasquetta)" },
   { date: `${year}-04-25`, name: 'Festa della Liberazione' },
   { date: `${year}-05-01`, name: 'Festa del Lavoro' },
   { date: `${year}-06-02`, name: 'Festa della Repubblica' },
@@ -39,7 +58,8 @@ const NATIONAL_HOLIDAYS_IT: readonly Day[] = [2026, 2027].flatMap((year) => [
 ])
 
 /** An example of a town's patron saint (24 June: San Giovanni Battista, as in Florence, Genoa and Turin). Edit it. */
-const PATRON_SAINT_EXAMPLE: readonly Day[] = [2026, 2027].map((year) => ({ date: `${year}-06-24`, name: 'Santo patrono (esempio: il giorno della vostra città)' }))
+const PATRON_SAINT_EXAMPLE: readonly Day[] = HOLIDAY_YEARS.map( // B-W2b-F53
+  (year) => ({ date: `${year}-06-24`, name: 'Santo patrono (esempio: il giorno della vostra città)' }))
 
 const weekdays = (from: number, to: number): number[] => Array.from({ length: to - from + 1 }, (_, index) => from + index)
 const minutes = (time: string): number => {

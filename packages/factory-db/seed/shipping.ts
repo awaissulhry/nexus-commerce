@@ -3,6 +3,7 @@ import { DdtFreight, DdtReason, ShipmentStatus, TrackingSource, TrackingStatus, 
 import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedNumbering } from './numbering'
 import { seed as seedQuality, type QualitySeed } from './quality'
+import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The shipping seed, per tenant of seed/_core.ts: the golden flow's stage 14-ship on plant A1, written as the app does:
@@ -32,16 +33,16 @@ import { seed as seedQuality, type QualitySeed } from './quality'
 /** Fixed instants and dates, so the seed never depends on the clock. */
 const T = {
   setup: new Date('2026-11-08T08:00:00.000Z'),
-  planned: new Date('2026-11-23T08:00:00.000Z'),
-  packed: new Date('2026-11-23T10:00:00.000Z'),
-  labelled: new Date('2026-11-23T11:00:00.000Z'),
-  firstDdt: new Date('2026-11-24T07:30:00.000Z'),
-  cancelled: new Date('2026-11-24T07:40:00.000Z'),
-  secondDdt: new Date('2026-11-24T07:45:00.000Z'),
-  start: new Date('2026-11-24T08:00:00.000Z'),
-  pickedUp: new Date('2026-11-24T08:05:00.000Z'),
-  inTransit: new Date('2026-11-24T17:30:00.000Z'),
-  draft: new Date('2026-11-25T08:00:00.000Z'),
+  planned: seedAt('2026-11-23T08:00:00.000Z'),
+  packed: seedAt('2026-11-23T10:00:00.000Z'),
+  labelled: seedAt('2026-11-23T11:00:00.000Z'),
+  firstDdt: seedAt('2026-11-24T07:30:00.000Z'),
+  cancelled: seedAt('2026-11-24T07:40:00.000Z'),
+  secondDdt: seedAt('2026-11-24T07:45:00.000Z'),
+  start: seedAt('2026-11-24T08:00:00.000Z'),
+  pickedUp: seedAt('2026-11-24T08:05:00.000Z'),
+  inTransit: seedAt('2026-11-24T17:30:00.000Z'),
+  draft: seedAt('2026-11-25T08:00:00.000Z'),
 } as const
 // B-W2b-30: the DDTs' date (and the series' last issued date) is in the past, before any invoice of them, so a fresh
 // seed issues the TD24 draft of DDT 144 (FatturaPA: no DDT dated after its invoice) and, with the holds seed's DDT 145

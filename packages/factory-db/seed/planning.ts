@@ -14,6 +14,7 @@ import {
 } from '../src/generated/prisma/enums'
 import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedProduction } from './production'
+import { seedAt, seedDay } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The W2a stock and planning seed (schema wave 4/7), per tenant of seed/_core.ts, written in the tenant's office scope,
@@ -52,10 +53,10 @@ const T = {
   firmed: new Date('2026-10-30T12:00:00.000Z'),
   acknowledged: new Date('2026-10-30T14:00:00.000Z'),
   reserved: new Date('2026-11-15T11:00:00.000Z'),
-  countStarted: new Date('2026-11-20T07:00:00.000Z'),
-  counted: new Date('2026-11-20T08:15:00.000Z'),
+  countStarted: seedAt('2026-11-20T07:00:00.000Z'),
+  counted: seedAt('2026-11-20T08:15:00.000Z'),
 } as const
-const DAY = { need: new Date('2026-11-16T00:00:00.000Z'), confirmed: new Date('2026-11-13T00:00:00.000Z'), woNeed: new Date('2026-11-30T00:00:00.000Z') } as const
+const DAY = { need: seedAt('2026-11-16T00:00:00.000Z'), confirmed: new Date('2026-11-13T00:00:00.000Z'), woNeed: seedAt('2026-11-30T00:00:00.000Z') } as const
 
 export interface PlanningSeed {
   readonly reservationId: string
@@ -381,7 +382,7 @@ export async function seed(context: SeedContext): Promise<PlanningSeed> {
             requirementId: requirement.leatherRED,
             recordType: 'SalesOrderLine',
             recordId: orderLine.RED,
-            facts: { needDate: '2026-11-16', quantity: '202.1600', uom: Uom.FT2, orderNumber: 'SEED-SO-0001' },
+            facts: { needDate: seedDay('2026-11-16'), quantity: '202.1600', uom: Uom.FT2, orderNumber: 'SEED-SO-0001' },
             ordersAffected: 1,
             ...stamp(T.planFinished),
           },

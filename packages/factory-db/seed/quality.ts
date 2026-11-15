@@ -22,6 +22,7 @@ import {
 } from '../src/generated/prisma/enums'
 import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedProduction, type ProductionSeed } from './production'
+import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The quality seed, per tenant of seed/_core.ts: the golden flow's stages 13a-labels and 13b-release on plant A1, written
@@ -67,14 +68,14 @@ const T = {
   ordered: new Date('2026-11-12T09:00:00.000Z'),
   planned: new Date('2026-11-15T09:00:00.000Z'),
   woReleased: new Date('2026-11-15T11:00:00.000Z'),
-  serialled: new Date('2026-11-19T15:00:00.000Z'),
-  inspected: new Date('2026-11-20T08:00:00.000Z'),
-  decided: new Date('2026-11-20T09:30:00.000Z'),
-  released: new Date('2026-11-20T11:00:00.000Z'),
-  reversed: new Date('2026-11-20T15:00:00.000Z'),
-  reported: new Date('2026-11-21T10:00:00.000Z'),
+  serialled: seedAt('2026-11-19T15:00:00.000Z'),
+  inspected: seedAt('2026-11-20T08:00:00.000Z'),
+  decided: seedAt('2026-11-20T09:30:00.000Z'),
+  released: seedAt('2026-11-20T11:00:00.000Z'),
+  reversed: seedAt('2026-11-20T15:00:00.000Z'),
+  reported: seedAt('2026-11-21T10:00:00.000Z'),
 } as const
-const DAY = { orderDate: new Date('2026-11-12T00:00:00.000Z'), due: new Date('2026-12-11T00:00:00.000Z') } as const
+const DAY = { orderDate: new Date('2026-11-12T00:00:00.000Z'), due: seedAt('2026-12-11T00:00:00.000Z') } as const
 
 /** The garment and label checklist as a floor inspector checks it (QHS-050). */
 const CHECKLIST = ['EN17092_CLASS_LABEL', 'SIZE_LABEL', 'CE_MARK', 'CARE_LABEL', 'FIBRE_COMPOSITION', 'ANIMAL_ORIGIN_PHRASE', 'ARMOUR_FITTED', 'ZIPS', 'USER_INFORMATION', 'PACKAGING']

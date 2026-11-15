@@ -21,6 +21,7 @@ import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedCalendar } from './calendar'
 import { seed as seedPeople } from './people'
 import { seed as seedPlant } from './plant'
+import { seedToday } from '../src/seed-calendar' // B-W2b-F53: the seeds' calendar
 
 /**
  * The safety at work seed (W2b schema wave 15/16, B-W2b-87), per tenant of seed/_core.ts, written as the app does: the office's
@@ -100,8 +101,7 @@ const DAY_MS = 86_400_000
 
 /** Today in Europe/Rome as a UTC midnight. */
 function romeToday(): Date {
-  const iso = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
-  return new Date(`${iso}T00:00:00.000Z`)
+  return new Date(`${seedToday()}T00:00:00.000Z`) // B-W2b-F53: the seeds' calendar
 }
 
 /** A day plus whole months, the end of the month when the day does not exist there (PostgreSQL's date + interval). */

@@ -3,6 +3,7 @@ import { CrViEvidence, CrViEvidenceRule, LabTest, LabVerdict, LotDocumentKind } 
 import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedFiles } from './files'
 import { seed as seedInventory } from './inventory'
+import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The lab step's seed (B-W1-34), per tenant of seed/_core.ts, written in the tenant's office scope as the app does:
@@ -86,7 +87,7 @@ export async function seed(context: SeedContext): Promise<void> {
         skipDuplicates: true,
       })
       await tx.lotDocument.createMany({
-        data: [{ id: id('quality:lot-document:LEA-01:LWG'), companyId: companyA, siteId: siteA, itemId: leather, lotId, kind: LotDocumentKind.LWG_CERTIFICATE, fileId: lwgFileId, validTo: new Date('2027-12-31T00:00:00.000Z'), ...stamp }],
+        data: [{ id: id('quality:lot-document:LEA-01:LWG'), companyId: companyA, siteId: siteA, itemId: leather, lotId, kind: LotDocumentKind.LWG_CERTIFICATE, fileId: lwgFileId, validTo: seedAt('2027-12-31T00:00:00.000Z'), ...stamp }],
         skipDuplicates: true,
       })
     }),

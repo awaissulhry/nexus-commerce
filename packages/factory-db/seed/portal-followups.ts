@@ -4,6 +4,7 @@ import { FileCategory, PartyAddressApproval, PartyAddressKind, PartyChangeReques
 import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedFiles } from './files'
 import { seed as seedPortalAuth } from './portal-auth'
+import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The portal follow-ups seed (W2b schema wave 23, B-W2b-F12), per tenant of seed/_core.ts: what a supplier sent from its
@@ -46,7 +47,7 @@ const T = {
 } as const
 const DAY = {
   certificateIssued: new Date('2026-01-15T00:00:00.000Z'),
-  certificateExpires: new Date('2027-12-31T00:00:00.000Z'),
+  certificateExpires: seedAt('2027-12-31T00:00:00.000Z'),
   declarationIssued: new Date('2026-10-30T00:00:00.000Z'),
 } as const
 

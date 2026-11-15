@@ -17,6 +17,8 @@ import { seed as seedPlanning } from '../../../../../../packages/factory-db/seed
 import { seed as seedSchedule } from '../../../../../../packages/factory-db/seed/schedule'
 import { seed as seedSubcontract } from '../../../../../../packages/factory-db/seed/subcontract'
 import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
+// ---- B-W2b-F53: this file fixes its clock on a day of the seeds' story, so it runs the seeds as written (seed-calendar)
+await vi.hoisted(async () => (await import('@nexus/factory-db/testing')).seedsAsWritten())
 
 /**
  * The board's record (B-W2b-329; PLN-133 status colours from the floor, PLN-149 every move logged with undo, PLN-154 day

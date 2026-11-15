@@ -6,6 +6,7 @@ import {
 } from '../src/generated/prisma/enums'
 import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedProduction, type ProductionSeed } from './production'
+import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The W2a subcontracting seed (schema wave 3/7), per tenant of seed/_core.ts, written in the tenant's office scope, as
@@ -24,8 +25,8 @@ import { seed as seedProduction, type ProductionSeed } from './production'
  */
 
 /** Fixed instants and dates, so the seed never depends on the clock. */
-const T = { setup: new Date('2026-11-15T08:00:00.000Z'), drafted: new Date('2026-11-16T11:00:00.000Z') } as const
-const DAY = { ordered: new Date('2026-11-16T00:00:00.000Z'), back: new Date('2026-11-26T00:00:00.000Z') } as const
+const T = { setup: new Date('2026-11-15T08:00:00.000Z'), drafted: seedAt('2026-11-16T11:00:00.000Z') } as const
+const DAY = { ordered: seedAt('2026-11-16T00:00:00.000Z'), back: seedAt('2026-11-26T00:00:00.000Z') } as const
 
 export interface SubcontractSeed {
   readonly production: ProductionSeed

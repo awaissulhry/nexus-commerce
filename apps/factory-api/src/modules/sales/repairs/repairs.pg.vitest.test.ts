@@ -15,6 +15,7 @@ import { testAuthenticator, type SessionContext } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { applySystemRoleChanges, systemRoleChanges } from '../../../platform/auth/roles/system-roles'
 import { addUser, Browser, enrolTotp, startHarness, stepUp, type Harness, type TestTenant } from '../../../platform/auth/sessions/testing/harness'
+import { seedDay } from '@nexus/factory-db/testing' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * Repairs and alterations (B-W2a-57; SAL-383 repair order from a case, SAL-390 repair stages, LOG-116 repair round trip)
@@ -336,7 +337,7 @@ describe('the stages through the repair work order (SAL-390, MES-019)', () => {
     expect(shipped.warnings).toEqual([])
     expect(steps(shipped.repair).at(-1)).toEqual(['SHIPPED', 'CURRENT'])
     const [ddt] = await admin(`SELECT "documentRefs", lines FROM "Ddt" WHERE id = $1`, [shipped.ddt.id])
-    expect(ddt?.documentRefs).toEqual([{ kind: 'REPAIR_ORDER', number: repair.number }, { kind: 'DDT', number: 'SEED-C1-R-7', date: '2026-11-28' }])
+    expect(ddt?.documentRefs).toEqual([{ kind: 'REPAIR_ORDER', number: repair.number }, { kind: 'DDT', number: 'SEED-C1-R-7', date: seedDay('2026-11-28') }])
     expect(ddt?.lines).toMatchObject([{ sourceLineId: repair.id, quantity: '1' }])
     expect((await events('ddt.source_issued', repair.id)).map((payload) => payload.ddtId)).toEqual([shipped.ddt.id])
     expect((await events('repair.stage_changed', repair.id)).at(-1)).toMatchObject({ from: 'REPAIRED', to: 'SHIPPED', ddtId: shipped.ddt.id, workOrderId })

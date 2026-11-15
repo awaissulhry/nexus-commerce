@@ -17,6 +17,7 @@ import { testAuthenticator, type SessionContext } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { applySystemRoleChanges, systemRoleChanges } from '../../../platform/auth/roles/system-roles'
 import { addUser, Browser, startHarness, type Harness, type TestTenant } from '../../../platform/auth/sessions/testing/harness'
+import { seedDay } from '@nexus/factory-db/testing' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * Off-standard and indirect time (B-W2b-29; MES-155 codes with pay rules, MES-156 time with no bundle, MES-157 the lead's
@@ -396,7 +397,7 @@ describe("the lead's approval in the office (MES-157)", () => {
     const cleaned = await block(labour.blockIds[1])
     const closed = await no('supervisor', 'POST', `/production/offstandard/blocks/${cleaned.id}/reopen`, { version: cleaned.version, reason: 'Check it again.' }, 409)
     expect(refusalOf(closed)).toBe('refusal/DAY_CLOSED')
-    expect(closed.message).toMatch(/2026-11-16 of line L1/)
+    expect(closed.message).toMatch(new RegExp(String.raw`${seedDay('2026-11-16')} of line L1`))
   })
 
   it('takes a block typed afterwards (never approved with others), in the site’s words about whom it names', async () => {

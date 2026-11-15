@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import type { FastifyInstance } from 'fastify'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { openFactoryDatabase, RUNTIME_LOGIN, type FactoryDatabase } from '@nexus/factory-db'
 import { migratedDatabase, type MigratedDatabase } from '@nexus/factory-db/testing'
 import { newId } from '@nexus/factory-domain/core/ids'
@@ -18,6 +18,8 @@ import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { systemContext } from '../../../platform/outbox/system'
 import { openRegisterEntryFor } from './hook'
 import { useRegisterClock } from './register'
+// ---- B-W2b-F53: this file fixes its clock on a day of the seeds' story, so it runs the seeds as written (seed-calendar)
+await vi.hoisted(async () => (await import('@nexus/factory-db/testing')).seedsAsWritten())
 
 /**
  * The PPE register (B-W1-43; QHS-118; Reg. (EU) 2016/425 art. 8(4), 8(8)) on the local stack, with the app's real routes:

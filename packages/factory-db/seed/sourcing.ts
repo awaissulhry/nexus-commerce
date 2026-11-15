@@ -16,6 +16,7 @@ import {
 import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedCompliance } from './compliance'
 import { seed as seedInventory, type InventorySeed } from './inventory'
+import { seedAt, seedDay } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The W2a sourcing, buying-changes and claims seed (schema wave 3/7), per tenant of seed/_core.ts, written in the
@@ -54,7 +55,7 @@ const T = {
   claimed: new Date('2026-11-12T12:00:00.000Z'),
   reviewed: new Date('2026-11-06T08:00:00.000Z'),
 } as const
-const DAY = { ordered: new Date('2026-11-02T00:00:00.000Z'), need: new Date('2026-12-10T00:00:00.000Z') } as const
+const DAY = { ordered: new Date('2026-11-02T00:00:00.000Z'), need: seedAt('2026-12-10T00:00:00.000Z') } as const
 
 export interface SourcingSeed {
   readonly inventory: InventorySeed
@@ -133,7 +134,7 @@ export async function seed(context: SeedContext): Promise<SourcingSeed> {
     client.$transaction(async (tx) => {
       if (await tx.purchaseOrder.findUnique({ where: { id: po3.order }, select: { id: true } })) return
       const header = {
-        requestedDate: '2026-12-10',
+        requestedDate: seedDay('2026-12-10'),
         incoterms: null,
         paymentTerms: '30 days end of month',
         note: 'Branded shoulder protectors for the brand line (plant B1).',
@@ -179,7 +180,7 @@ export async function seed(context: SeedContext): Promise<SourcingSeed> {
         },
         select: { id: true },
       })
-      const lineAs = (quantity: string) => ({ id: po3.line, seq: 10, itemId: item.protector, itemColourId: null, description: 'Shoulder protector level 2, brand logo', quantity, uom: 'PCS', needDate: '2026-12-10', confirmedQuantity: null, confirmedDate: null, cancelled: false })
+      const lineAs = (quantity: string) => ({ id: po3.line, seq: 10, itemId: item.protector, itemColourId: null, description: 'Shoulder protector level 2, brand logo', quantity, uom: 'PCS', needDate: seedDay('2026-12-10'), confirmedQuantity: null, confirmedDate: null, cancelled: false })
       const pricesAs = (quantity: number) => ({ currency: 'EUR', netAmount: quantity * 650, lines: [{ id: po3.line, seq: 10, unitPrice: '6.500000', netAmount: quantity * 650 }] })
       const revision1 = { ...header, status: 'SENT', confirmation: null, lines: [lineAs('12.0000')] }
 

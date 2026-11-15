@@ -19,6 +19,7 @@ import {
 import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedCompliance } from './compliance'
 import { seed as seedProduction } from './production'
+import { seedAt, seedDay } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The compliance rule library seed (W2b-4, schema wave 30/33, B-W2b-216), per tenant of seed/_core.ts, written in the tenant's
@@ -62,14 +63,14 @@ import { seed as seedProduction } from './production'
 
 /** Fixed instants and days, so the seed never depends on the clock. */
 const T = {
-  register: new Date('2026-11-23T08:00:00.000Z'),
-  refusedLabel: new Date('2026-11-24T09:15:00.000Z'),
-  refusedRelease: new Date('2026-11-24T10:00:00.000Z'),
-  stepUp: new Date('2026-11-24T10:08:00.000Z'),
-  override: new Date('2026-11-24T10:10:00.000Z'),
-  overrideUntil: new Date('2026-11-27T10:10:00.000Z'),
-  refusedShipment: new Date('2026-11-25T14:30:00.000Z'),
-  approved: new Date('2026-11-23T11:00:00.000Z'),
+  register: seedAt('2026-11-23T08:00:00.000Z'),
+  refusedLabel: seedAt('2026-11-24T09:15:00.000Z'),
+  refusedRelease: seedAt('2026-11-24T10:00:00.000Z'),
+  stepUp: seedAt('2026-11-24T10:08:00.000Z'),
+  override: seedAt('2026-11-24T10:10:00.000Z'),
+  overrideUntil: seedAt('2026-11-27T10:10:00.000Z'),
+  refusedShipment: seedAt('2026-11-25T14:30:00.000Z'),
+  approved: seedAt('2026-11-23T11:00:00.000Z'),
 }
 const day = (date: string): Date => new Date(`${date}T00:00:00.000Z`)
 
@@ -249,7 +250,7 @@ export async function seed(context: SeedContext): Promise<ComplianceRulesSeed> {
             sourceReference: 'Seed announcement',
             noticedAt: T.register,
             noticedById: actorId,
-            transitionEndsOn: day('2027-06-30'),
+            transitionEndsOn: day(seedDay('2027-06-30')),
             certificateIds: [compliance.certificateId],
             ...stamp(T.register),
           },
@@ -528,7 +529,7 @@ export async function seed(context: SeedContext): Promise<ComplianceRulesSeed> {
           { id: o.companyA, companyId: company.A, role: EconomicOperatorKind.MANUFACTURER, printedName: 'Seed Company A S.r.l.', printedAddress: 'Via Seed 1, 00000 Seedtown (XX), Italy', contact: 'compliance.a@example.com', validFrom: day('2026-01-01'), ...stamp(T.register) },
           { id: o.companyB, companyId: company.B, role: EconomicOperatorKind.MANUFACTURER, printedName: 'Seed Company B S.r.l.', printedAddress: 'Via Seed 2, 00000 Seedtown (XX), Italy', validFrom: day('2026-01-01'), ...stamp(T.register) },
           { id: o.brand, brandPartyId: party.P1, partyId: party.P1, role: EconomicOperatorKind.MANUFACTURER, printedName: 'Seed Customer One S.r.l.', printedAddress: 'Via Esempio 10, 00000 Seedville (MI), Italy', contact: 'compliance.p1@example.com', validFrom: day('2026-01-01'), note: 'Owner 11-09, question 3: a private-label style sold under the brand\'s name has the brand as its manufacturer.', ...stamp(T.register) },
-          { id: o.styleCh, styleId: jacketStyleId, marketCode: 'CH', role: EconomicOperatorKind.DISTRIBUTOR, partyId: party.P3, printedName: 'Seed Customer Three', printedAddress: 'Seedstrasse 3, 0000 Seedberg, Switzerland', validFrom: day('2026-06-01'), validTo: day('2027-05-31'), ...stamp(T.register) },
+          { id: o.styleCh, styleId: jacketStyleId, marketCode: 'CH', role: EconomicOperatorKind.DISTRIBUTOR, partyId: party.P3, printedName: 'Seed Customer Three', printedAddress: 'Seedstrasse 3, 0000 Seedberg, Switzerland', validFrom: day('2026-06-01'), validTo: day(seedDay('2027-05-31')), ...stamp(T.register) },
         ],
       })
 

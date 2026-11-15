@@ -15,6 +15,7 @@ import { seed as seedFiles } from './files'
 import { seed as seedIntegration } from './integration'
 import { seed as seedSales, type SalesSeed } from './sales'
 import { seed as seedShipping, type ShippingSeed } from './shipping'
+import { seedAt, seedDay } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The money seed, per tenant of seed/_core.ts: the golden flow's stage 06b-deposit and the start of 15-invoice for
@@ -59,7 +60,7 @@ const T = {
   depositSent: new Date('2026-10-29T16:06:00.000Z'),
   depositDelivered: new Date('2026-10-29T16:40:00.000Z'),
   onAccount: new Date('2026-11-10T09:00:00.000Z'),
-  td24Draft: new Date('2026-11-25T09:00:00.000Z'),
+  td24Draft: seedAt('2026-11-25T09:00:00.000Z'),
 } as const
 const DAY = {
   sample: new Date('2026-10-28T00:00:00.000Z'),
@@ -186,7 +187,7 @@ export async function seed(context: SeedContext): Promise<MoneySeed> {
           vatTotal: 11000,
           grossTotal: 61000,
           vatSummary: vat22(50000, 11000),
-          paymentTerms: { condition: 'TP02', installments: [{ method: 'MP05', amount: 61000, dueDate: '2026-11-27' }] },
+          paymentTerms: { condition: 'TP02', installments: [{ method: 'MP05', amount: 61000, dueDate: seedDay('2026-11-27') }] },
           causale: 'Campioni',
           ...stamp(T.sampleDraft),
         },
@@ -469,7 +470,7 @@ export async function seed(context: SeedContext): Promise<MoneySeed> {
           vatTotal: 17600,
           grossTotal: 97600,
           vatSummary: vat22(80000, 17600),
-          paymentTerms: { condition: 'TP02', installments: [{ method: 'MP05', amount: 97600, dueDate: '2026-12-31' }] },
+          paymentTerms: { condition: 'TP02', installments: [{ method: 'MP05', amount: 97600, dueDate: seedDay('2026-12-31') }] },
           documentRefs: [{ kind: 'PURCHASE_ORDER', number: 'SEED-SO-0002' }],
           salesOrderId: id('production:sales-order:SO-0002'),
           ...stamp(T.td24Draft),

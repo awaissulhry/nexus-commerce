@@ -18,6 +18,7 @@ import { seed as seedCosting } from './costing'
 import { seed as seedFiles } from './files'
 import { seed as seedMoney, type MoneySeed } from './money'
 import { seed as seedNumbering } from './numbering'
+import { seedAt, seedDay } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The payables, cost-ledger and accounting seed (W2a schema wave 7/7), per tenant of seed/_core.ts, for company A,
@@ -59,20 +60,20 @@ const T = {
   draftedOctober: new Date('2026-11-02T08:00:00.000Z'),
   supplierInvoice: new Date('2026-11-13T07:00:00.000Z'),
   matched: new Date('2026-11-13T10:00:00.000Z'),
-  nextStandard: new Date('2026-11-20T08:00:00.000Z'),
+  nextStandard: seedAt('2026-11-20T08:00:00.000Z'),
   // seed/production.ts: the hide issued to SEED-WO-0001, and the standing sewing scan.
-  issued: new Date('2026-11-16T07:30:00.000Z'),
-  rescanned: new Date('2026-11-17T09:30:00.000Z'),
+  issued: seedAt('2026-11-16T07:30:00.000Z'),
+  rescanned: seedAt('2026-11-17T09:30:00.000Z'),
 } as const
 const DAY = {
   standardFrom: new Date('2026-10-01T00:00:00.000Z'),
-  nextStandardFrom: new Date('2027-01-01T00:00:00.000Z'),
+  nextStandardFrom: seedAt('2027-01-01T00:00:00.000Z'),
   september: { first: new Date('2026-09-01T00:00:00.000Z'), last: new Date('2026-09-30T00:00:00.000Z') },
   october: { first: new Date('2026-10-01T00:00:00.000Z'), last: new Date('2026-10-31T00:00:00.000Z') },
   exportedSeptember: new Date('2026-10-05T00:00:00.000Z'),
   supplierIssued: new Date('2026-11-12T00:00:00.000Z'),
   supplierReceived: new Date('2026-11-13T00:00:00.000Z'),
-  supplierDue: new Date('2026-12-31T00:00:00.000Z'),
+  supplierDue: seedAt('2026-12-31T00:00:00.000Z'),
 } as const
 const YEAR = '2026'
 const TEN_YEARS = (at: Date): Date => new Date(Date.UTC(at.getUTCFullYear() + 10, at.getUTCMonth(), at.getUTCDate()))
@@ -279,7 +280,7 @@ export async function seed(context: SeedContext): Promise<AccountingSeed> {
           vatTotal: SUPPLIER.vat,
           grossTotal: SUPPLIER.net + SUPPLIER.vat,
           vatSummary: [{ rate: '22.00', nature: null, taxable: SUPPLIER.net, vat: SUPPLIER.vat }],
-          paymentTerms: { condition: 'TP02', installments: [{ method: 'MP05', amount: SUPPLIER.net + SUPPLIER.vat, dueDate: '2026-12-31' }] },
+          paymentTerms: { condition: 'TP02', installments: [{ method: 'MP05', amount: SUPPLIER.net + SUPPLIER.vat, dueDate: seedDay('2026-12-31') }] },
           dueDate: DAY.supplierDue,
           ...stamp(T.supplierInvoice),
         },

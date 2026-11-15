@@ -17,6 +17,7 @@ import type { Prisma } from './generated/prisma/client'
 import { RUNTIME_LOGIN } from './roles'
 import { seedUuid } from './seeding'
 import { migratedDatabase, type MigratedDatabase } from './testing/database'
+import { seedYear } from './seed-calendar' // B-W2b-F53: the seeds' calendar
 
 /**
  * The platform schema of W2a (wave 1/7) beyond the generated isolation tests, on a database built from the migrations
@@ -89,7 +90,8 @@ describe('the seeds', () => {
 
   it("hold Italy's national holidays of 2026 and 2027 on each company's calendar, and the base reason lists", async () => {
     const holidays = await admin(`SELECT count(*)::int AS n FROM "CalendarDay" WHERE "tenantId" = $1 AND "calendarId" = $2 AND "holidaySet" = 'IT'`, [core.tenantId, key('calendar:company:A')])
-    expect(holidays[0]!.n).toBe(24)
+    // B-W2b-F53: twelve a year, from 2026 to the year after the run's year (2026 and 2027 in a 2026 run).
+    expect(holidays[0]!.n).toBe(12 * (Math.max(2027, seedYear() + 1) - 2026 + 1))
     const lists = await admin(`SELECT DISTINCT "list"::text AS list FROM "ReasonCode" WHERE "tenantId" = $1`, [core.tenantId])
     // W2b-6 (B-W2b-363): + SUPPLIER_DOCUMENT_TYPE.
     expect(lists).toHaveLength(14)

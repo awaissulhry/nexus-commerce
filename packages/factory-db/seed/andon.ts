@@ -3,6 +3,7 @@ import { seedUuid, type SeedContext } from '../src/seeding'
 import { seedOffStandardCodes, type OffStandardCodeKey } from './labour'
 import { seed as seedPeople } from './people'
 import { seed as seedProduction, type ProductionSeed } from './production'
+import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
  * The line's signals seed (W2b schema wave 7/7, B-W2b-12), per tenant of seed/_core.ts, on plant A1's line L1, written
@@ -28,16 +29,16 @@ import { seed as seedProduction, type ProductionSeed } from './production'
 
 const T = {
   routing: new Date('2026-11-01T08:00:00.000Z'),
-  sent: new Date('2026-11-17T08:10:00.000Z'),
-  seen: new Date('2026-11-17T08:12:00.000Z'),
-  onTheWay: new Date('2026-11-17T08:14:00.000Z'),
-  solved: new Date('2026-11-17T08:22:00.000Z'),
-  machine: new Date('2026-11-17T12:05:00.000Z'),
-  targets: new Date('2026-11-16T16:00:00.000Z'),
-  shortHour: new Date('2026-11-17T10:05:00.000Z'),
-  handover: new Date('2026-11-17T12:50:00.000Z'),
+  sent: seedAt('2026-11-17T08:10:00.000Z'),
+  seen: seedAt('2026-11-17T08:12:00.000Z'),
+  onTheWay: seedAt('2026-11-17T08:14:00.000Z'),
+  solved: seedAt('2026-11-17T08:22:00.000Z'),
+  machine: seedAt('2026-11-17T12:05:00.000Z'),
+  targets: seedAt('2026-11-16T16:00:00.000Z'),
+  shortHour: seedAt('2026-11-17T10:05:00.000Z'),
+  handover: seedAt('2026-11-17T12:50:00.000Z'),
 } as const
-const DAY = new Date('2026-11-17T00:00:00.000Z')
+const DAY = seedAt('2026-11-17T00:00:00.000Z')
 /** L1's hourly targets on 17 Nov (hours of the day, Rome). */
 const HOURS = [8, 9, 10, 11] as const
 
