@@ -37,6 +37,8 @@ export interface ColumnsMenuInput {
   readonly active: SavedView | null
   readonly changed: boolean
   readonly asBuilt: boolean
+  /** B-W2b-388: whether the active view is pinned to Today (null: not read yet; absent: no Pin to Today here). */
+  readonly pinned?: boolean | null
 }
 
 export interface ColumnsMenuActions {
@@ -50,6 +52,8 @@ export interface ColumnsMenuActions {
   /** B-W2b-24: make my own view my default of the list (on) or no longer (off). */
   readonly setDefault: (view: SavedView, on: boolean) => void
   readonly customise: () => void
+  /** B-W2b-388: pin the view to Today (on) or unpin it. */
+  readonly pin?: (view: SavedView, on: boolean) => void
 }
 
 /** A column the person's rights leave out (design sec:grid: "the Columns menu lists them as 'Hidden: needs cost rights'"). */
@@ -105,6 +109,12 @@ export function columnsMenuItems(t: Translate, input: ColumnsMenuInput, act: Col
     else if (canSave) items.push({ id: 'default', label: t('tools.makeDefault', { name: active.name }), description: t('tools.makeDefaultHint'), onSelect: () => act.setDefault(active, true) })
     else items.push({ id: 'default', label: t('tools.makeDefault', { name: active.name }), disabled: true, description: t('tools.held.save') })
     items.push({ id: 'link', label: t('tools.copyLink', { name: active.name }), onSelect: () => act.copy(active) })
+    // B-W2b-388: My saved views on Today shows a pinned view's count; a change tells me.
+    if (act.pin && input.pinned !== undefined) {
+      const pin = act.pin
+      if (input.pinned === null) items.push({ id: 'pin', label: t('tools.pin', { name: active.name }), disabled: true, description: t('tools.loadingViewsHint') })
+      else items.push({ id: 'pin', label: t(input.pinned ? 'tools.unpin' : 'tools.pin', { name: active.name }), description: t(input.pinned ? 'tools.unpinHint' : 'tools.pinHint'), onSelect: () => pin(active, !input.pinned) })
+    }
     if (active.changeHeld === null) items.push({ id: 'remove', label: t('tools.remove', { name: active.name }), tone: 'danger', onSelect: () => act.remove(active) })
   }
   items.push({ id: 's-customise', separator: true })
@@ -182,6 +192,15 @@ export function ListToolsBar<T>({ state, withheld }: { state: ListToolsState<T>;
   const [jobs, setJobs] = useState<readonly ExportJob[]>([])
   const listKey = state.listKey!
   const exportsOn = !!state.answer?.exports && state.answer.can.export
+  // B-W2b-388: the views I pinned to Today, read when Columns ▾ opens.
+  const [pinned, setPinned] = useState<ReadonlySet<string> | null>(null)
+  useEffect(() => {
+    if (!columnsOpen || !live.current.pins) return
+    live.current.pins
+      .list()
+      .then((ids) => setPinned(new Set(ids)))
+      .catch(() => setPinned(new Set()))
+  }, [columnsOpen])
 
   // The design's edit and remove dialogs open on the active view once the views are read.
   useEffect(() => {
@@ -269,7 +288,7 @@ export function ListToolsBar<T>({ state, withheld }: { state: ListToolsState<T>;
 
   const columnsItems = columnsMenuItems(
     t,
-    { answer: state.answer, problem: state.problem, active: state.active, changed: state.changed, asBuilt: !state.layout.columns && !state.layout.density },
+    { answer: state.answer, problem: state.problem, active: state.active, changed: state.changed, asBuilt: !state.layout.columns && !state.layout.density, ...(transport.pins ? { pinned: state.active && pinned ? pinned.has(state.active.id) : null } : {}) },
     {
       apply: (view) => state.apply(view),
       reload: state.reload,
@@ -294,6 +313,24 @@ export function ListToolsBar<T>({ state, withheld }: { state: ListToolsState<T>;
           })
           .catch((error: unknown) => receipt(t(`tools.problem.${problemOf(error)}`), 'danger')),
       customise: () => setDialog({ kind: 'customise' }),
+      ...(transport.pins
+        ? {
+            pin: (view: SavedView, on: boolean) =>
+              void transport
+                .pins!.set(view.id, on)
+                .then((result) => {
+                  if (result !== 'ok') return receipt(t(`tools.pinProblem.${result}`), 'danger')
+                  setPinned((current) => {
+                    const next = new Set(current ?? [])
+                    if (on) next.add(view.id)
+                    else next.delete(view.id)
+                    return next
+                  })
+                  receipt(t(on ? 'tools.save.pinned' : 'tools.save.unpinned', { name: view.name }))
+                })
+                .catch((error: unknown) => receipt(t(`tools.problem.${problemOf(error)}`), 'danger')),
+          }
+        : {}),
     },
     {
       density: state.layout.density ?? 'cozy',

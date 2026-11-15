@@ -1,10 +1,14 @@
 import type { FactoryClient, Prisma } from '@nexus/factory-db'
 import { DomainError, NotFoundError } from '@nexus/factory-domain/core/errors'
 import { scopeWhere } from '@nexus/factory-domain/core/permissions'
-import { businessDayStart, toUtcIso } from '@nexus/factory-domain/core/time'
+import { businessDate, businessDayStart, toUtcIso } from '@nexus/factory-domain/core/time'
 import { cleanBody } from '@nexus/factory-domain/threads/rules'
 import { matchesScope } from '@nexus/factory-domain/insights/attention'
 import { NUDGE_KINDS, NUDGE_REFUSALS, nudgeNote, nudgeRefusal, WAITING_KINDS, WAITING_RULES, waitingFor, waitingKindsFor, type NudgeRefusal, type WaitingCandidate } from '@nexus/factory-domain/insights/waiting'
+// B-W2b-388: mail with no reply in 3 working days, links not opened.
+import { LINK_UNOPENED_HOURS, linkUnopenedWords, messageReplyWords, REPLY_LOOKBACK_DAYS, REPLY_WORKING_DAYS } from '@nexus/factory-domain/insights/waiting'
+import { addWorkingDaysFor } from '../../platform/calendars/service'
+import { recordLabelOf } from '../../platform/threads/labels'
 import { approvalRequestWords, poConfirmationWords, quoteAnswerWords } from '@nexus/factory-domain/insights/words'
 import { PURCHASING_VIEW } from '@nexus/factory-domain/purchasing/permissions'
 import { QUOTES_VIEW } from '@nexus/factory-domain/sales/quotes/permissions'
@@ -104,6 +108,69 @@ export async function waitingOnOthers(caller: CommandCaller, query: { readonly c
         })
       }
     }
+    // B-W2b-388: the mail I sent from a record's conversation that its party has not answered in 3 working days (the last
+    // mail of mine per conversation, within the last 30 days), and the links I made that nobody opened yet.
+    if (kinds.includes('MESSAGE_REPLY')) {
+      const lookback = new Date(viewer.now.getTime() - REPLY_LOOKBACK_DAYS * 86_400_000)
+      const sent = await db.message.findMany({
+        where: { direction: 'OUTBOUND', authorKind: 'USER', authorId: me, at: { gte: lookback, lte: viewer.now } },
+        orderBy: [{ at: 'desc' }, { id: 'desc' }],
+        take: SOURCE_LIMIT,
+        select: { id: true, threadId: true, at: true, thread: { select: { recordType: true, recordId: true, companyId: true, siteId: true, partyId: true } } },
+      })
+      const lastPerThread = new Map<string, (typeof sent)[number]>()
+      for (const message of sent) if (!lastPerThread.has(message.threadId)) lastPerThread.set(message.threadId, message)
+      const answered = lastPerThread.size === 0 ? [] : await db.message.findMany({ where: { threadId: { in: [...lastPerThread.keys()] }, direction: 'INBOUND', at: { gte: lookback } }, select: { threadId: true, at: true } })
+      const names = await partyNames(db, [...lastPerThread.values()].map((message) => message.thread.partyId))
+      const dueBy = new Map<string, string | null>()
+      for (const message of lastPerThread.values()) {
+        if (answered.some((reply) => reply.threadId === message.threadId && reply.at > message.at)) continue
+        const sentDay = businessDate(message.at)
+        const calendarKey = `${message.thread.companyId ?? ''}:${sentDay}`
+        if (!dueBy.has(calendarKey)) {
+          dueBy.set(calendarKey, message.thread.companyId ? (await addWorkingDaysFor(db, { scope: 'COMPANY', id: message.thread.companyId }, sentDay, REPLY_WORKING_DAYS)).date : plainWorkingDays(sentDay, REPLY_WORKING_DAYS))
+        }
+        const due = dueBy.get(calendarKey) ?? null
+        if (due === null || viewer.today <= due) continue
+        const label = await recordLabelOf(db, message.thread.recordType, message.thread.recordId)
+        if (label === null) continue
+        const party = message.thread.partyId ? (names.get(message.thread.partyId) ?? 'The party') : 'The party'
+        found.push({
+          kind: 'MESSAGE_REPLY',
+          record: { type: message.thread.recordType, id: message.thread.recordId, label },
+          scope: { companyId: message.thread.companyId, siteId: message.thread.siteId, partyId: message.thread.partyId },
+          requestedBy: me,
+          sentence: messageReplyWords({ label, party }),
+          waitingFor: party,
+          since: message.at,
+          due: null,
+        })
+      }
+    }
+    if (kinds.includes('LINK_UNOPENED')) {
+      const links = await db.oneOffLink.findMany({
+        where: { createdById: me, lastUsedAt: null, revokedAt: null, expiresAt: { gt: viewer.now }, createdAt: { lte: new Date(viewer.now.getTime() - LINK_UNOPENED_HOURS * 3_600_000) } },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        take: SOURCE_LIMIT,
+        select: { id: true, companyId: true, partyId: true, recordType: true, recordId: true, createdAt: true, expiresAt: true },
+      })
+      const names = await partyNames(db, links.map((link) => link.partyId))
+      for (const link of links) {
+        const label = await recordLabelOf(db, link.recordType, link.recordId)
+        if (label === null) continue
+        const party = names.get(link.partyId) ?? 'The party'
+        found.push({
+          kind: 'LINK_UNOPENED',
+          record: { type: link.recordType, id: link.recordId, label },
+          scope: { companyId: link.companyId, siteId: null, partyId: link.partyId },
+          requestedBy: me,
+          sentence: linkUnopenedWords({ label, party }),
+          waitingFor: party,
+          since: link.createdAt,
+          due: dayOrNull(link.expiresAt),
+        })
+      }
+    }
     return found
   })
   const items = waitingFor(viewer, candidates).filter((item) => matchesScope(item, filter))
@@ -130,6 +197,18 @@ export async function waitingOnOthers(caller: CommandCaller, query: { readonly c
     })),
     live: { events: [...new Set(kinds.flatMap((kind) => WAITING_RULES[kind].live))].sort() },
   }
+}
+
+/** B-W2b-388: a record of no company has no calendar: Monday to Friday. */
+function plainWorkingDays(day: string, days: number): string {
+  const date = new Date(`${day}T12:00:00.000Z`)
+  let left = days
+  while (left > 0) {
+    date.setUTCDate(date.getUTCDate() + 1)
+    const weekday = date.getUTCDay()
+    if (weekday !== 0 && weekday !== 6) left -= 1
+  }
+  return date.toISOString().slice(0, 10)
 }
 
 // ---- Nudge (W2a, B-W2a-20; design home.today waiting-on "Nudge (sends a reminder in the record's thread, once a day at most)")

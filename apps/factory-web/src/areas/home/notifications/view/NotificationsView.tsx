@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import Link from 'next/link'
-import { AlarmClock, AlertTriangle, AtSign, Bell, BellOff, CheckCheck, CheckCircle2, Eye, Info, MailOpen, RotateCcw, Settings2, UserRound } from 'lucide-react'
-import { Banner, EmptyState, MetricStrip, type Metric } from '@nexus/ui/components'
+import { AlarmClock, AlertTriangle, AtSign, Bell, BellOff, CheckCheck, CheckCircle2, Eye, Info, MailOpen, MoreHorizontal, RotateCcw, Settings2, UserRound } from 'lucide-react'
+import { Banner, EmptyState, Menu, MetricStrip, type Metric } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, SegmentedControl, Tag } from '@nexus/ui/primitives'
 import { AsOf, Modal } from '../../../../lib/i18n/ds-parts'
@@ -31,6 +31,9 @@ import {
 import { sentenceWords } from '../words'
 import { DigestDialog } from './DigestDialog'
 import '../notifications.css'
+// B-W2b-388 (PLT-140, PLT-141): the preferences matrix and push on this device (each loads itself).
+import { Preferences } from '../preferences/Preferences'
+import { Push } from '../push/Push'
 
 export type { NotificationsViewModel } from '../model'
 
@@ -90,7 +93,7 @@ export function notificationKeys(t: (key: string) => string): ListKey[] {
  */
 export function NotificationsView({ model, actions }: { model: NotificationsViewModel; actions?: NotificationsActions }) {
   return (
-    <WithMessages namespaces={['home-notifications', 'home', 'lists']}>
+    <WithMessages namespaces={['home-notifications', 'home', 'lists', /* B-W2b-388 */ 'home-mywork']}>
       <Page model={model} actions={actions} />
     </WithMessages>
   )
@@ -98,6 +101,7 @@ export function NotificationsView({ model, actions }: { model: NotificationsView
 
 function Page({ model, actions }: { model: NotificationsViewModel; actions?: NotificationsActions }) {
   const t = useT('home-notifications')
+  const mw = useT('home-mywork')
   const lists = useT('lists')
   const locale = useLocale()
   // Without a container (the design index) the view keeps its own tab, state, selection and dialogs.
@@ -105,6 +109,8 @@ function Page({ model, actions }: { model: NotificationsViewModel; actions?: Not
   const [ownState, setOwnState] = useState(model.state)
   const [ownSelected, setOwnSelected] = useState<readonly string[]>(model.selected)
   const [ownDialog, setOwnDialog] = useState<NotificationsDialog | null>(model.dialog)
+  // B-W2b-388: the matrix or push on this device, open over the page (null: none).
+  const [mine, setMine] = useState<'preferences' | 'push' | null>(null)
   const [help, setHelp] = useState(false)
   useEffect(() => setOwnSelected(model.selected), [model.selected])
   useEffect(() => setOwnDialog(model.dialog), [model.dialog])
@@ -229,6 +235,9 @@ function Page({ model, actions }: { model: NotificationsViewModel; actions?: Not
   const count = picked.length
 
   // ---- the band: when it was read, how many are unread; Preferences and Mark all read -------------------------------------
+  // B-W2b-388: Preferences opens the matrix where the page has its container (the design index keeps the digest dialog); ⋯ holds
+  // Push on this device and the daily digest's time and days.
+  const openDigest = () => (actions?.onDigest ? actions.onDigest() : setOwnDialog({ kind: 'digest', digest: { status: 'loading' }, saving: false, problem: null }))
   const band = (
     <div className="fw-ntf-band" role="group" aria-label={t('band.label')}>
       <div className="fw-ntf-status">
@@ -237,9 +246,20 @@ function Page({ model, actions }: { model: NotificationsViewModel; actions?: Not
         <strong aria-live="polite">{model.counts === null ? '—' : total === null ? t('band.unreadMore', { count: model.counts.unread }) : t('band.unread', { count: total })}</strong>
       </div>
       <div className="fw-ntf-actions">
-        <Button onClick={() => (actions?.onDigest ? actions.onDigest() : setOwnDialog({ kind: 'digest', digest: { status: 'loading' }, saving: false, problem: null }))}>
+        <Button onClick={() => (actions ? setMine('preferences') : openDigest())}>
           <Settings2 size={14} aria-hidden /> {t('band.preferences')}
         </Button>
+        {actions && (
+          <Menu
+            label={<MoreHorizontal size={16} aria-hidden />}
+            align="right"
+            triggerProps={{ 'aria-label': mw('band.more') }}
+            items={[
+              { id: 'push', label: mw('band.push'), onSelect: () => setMine('push') },
+              { id: 'digest', label: mw('band.digest'), onSelect: openDigest },
+            ]}
+          />
+        )}
         <Button variant="primary" heldReason={heldText ?? (unread === null ? t('held.unknown') : unread === 0 ? t('held.nothingUnread') : null)} onClick={() => void actions?.onAllRead?.()}>
           <MailOpen size={14} aria-hidden /> {t('band.allRead', { tab: t(`tab.${tab}.label`) })}
         </Button>
@@ -388,6 +408,17 @@ function Page({ model, actions }: { model: NotificationsViewModel; actions?: Not
           onClose={closeDialog}
         />
       )}
+      {mine === 'preferences' && (
+        <Preferences
+          onClose={() => setMine(null)}
+          onDigest={() => {
+            setMine(null)
+            openDigest()
+          }}
+          onPush={() => setMine('push')}
+        />
+      )}
+      {mine === 'push' && <Push onClose={() => setMine(null)} onPreferences={() => setMine('preferences')} />}
       {digestDialog && (
         <DigestDialog
           digest={digestDialog.digest}

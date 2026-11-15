@@ -28,6 +28,8 @@ import { digestCron } from './platform/email-out/digest/digest'
 import { notificationsHandler } from './platform/notifications/fan-out'
 // B-W2b-385: the followed saved views, counted as their people every quarter of an hour (their last ids in Redis).
 import { redisIdMemory, viewFollowCron } from './platform/notifications/view-follow/evaluate'
+// B-W2b-388: reminders come back (every minute).
+import { remindersCron } from './platform/tasks/reminders/reminders'
 import { exportExpiryCron } from './platform/exports/expire'
 import { exportHandlers } from './platform/exports/worker'
 import { assertNoFakeAccountsInProduction } from './platform/gateway/boot'
@@ -456,6 +458,8 @@ if (mode === 'worker') {
   crons.push(fittingRemindersCron({ database, log }))
   // B-W2b-385: every 15 minutes, the followed saved views counted as their people; a change tells them (notification.view_changed).
   crons.push(viewFollowCron({ database, log, memory: redisIdMemory(redis, prefix) }))
+  // B-W2b-388: every minute, reminders whose moment came or whose record someone else changed come back to their person's Today.
+  crons.push(remindersCron({ database, log }))
   // B-W2b-389
   crons.push(ecbDailyCron({ database, log }))
   // B-W2b-394: every 15 minutes, a team-inbox mail whose follow-up came with no answer is open again (email.inbound_worked FOLLOW_UP_DUE).

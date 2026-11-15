@@ -1,0 +1,121 @@
+/* Notification preferences: the matrix as a table on a wide screen; on a phone each row stacks its three cells, each with its
+   channel's name. Layout only, semantic tokens. */
+.fw-prefs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-prefs-muted {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-prefs-loading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+.fw-prefs-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--nds-space-8);
+}
+
+.fw-prefs-matrix {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.fw-prefs-caption {
+  padding-bottom: var(--nds-space-4);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  text-align: left;
+}
+
+.fw-prefs-matrix th,
+.fw-prefs-matrix td {
+  padding: var(--nds-space-8);
+  border-bottom: 1px solid var(--nds-border-subtle);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.fw-prefs-matrix thead th {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  font-weight: 600;
+}
+
+.fw-prefs-matrix tbody th {
+  font-weight: 400;
+}
+
+.fw-prefs-event {
+  display: block;
+  font-weight: 600;
+}
+
+.fw-prefs-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+}
+
+.fw-prefs-cell-label {
+  display: none;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-prefs-failed {
+  color: var(--nds-danger-text);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-prefs-role {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+@media (max-width: 640px) {
+  .fw-prefs-matrix thead {
+    display: none;
+  }
+
+  .fw-prefs-matrix tr,
+  .fw-prefs-matrix th,
+  .fw-prefs-matrix td {
+    display: block;
+  }
+
+  .fw-prefs-matrix td {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--nds-space-4);
+    border-bottom: 0;
+    padding-block: var(--nds-space-4);
+  }
+
+  .fw-prefs-matrix tr {
+    border-bottom: 1px solid var(--nds-border-subtle);
+    padding-block: var(--nds-space-4);
+  }
+
+  .fw-prefs-matrix tbody th {
+    border-bottom: 0;
+  }
+
+  .fw-prefs-cell-label {
+    display: inline;
+  }
+}

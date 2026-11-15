@@ -109,8 +109,8 @@ describe('check-event-contract', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
     // import's size surcharges of a style and its version row's rules_changed): 912 → 914, 1449 → 1453.
     // B-W2b-395: two events (shipping.pickup_changed, shipping.day_sheet_closed) and five literal emits (a pickup booked, answered
     // or moved; a day sheet closed; a collection recorded; a collection delivered: tracking recorded and status changed): with
-    // B-W2b-380 and B-W2b-405 (main 6218b241da) the guard counts 921 and 1467; with the planted event and emit: 922, 1468.
-    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(922 declared event version\(s\), 1468 literal emit/) })
+    // B-W2b-380, B-W2b-405 and B-W2b-388 (main 295a7832be) the guard counts 924 and 1467; with the planted event and emit: 925, 1468.
+    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(925 declared event version\(s\), 1468 literal emit/) })
   })
 
   it.each<[string, Plants, RegExp]>([

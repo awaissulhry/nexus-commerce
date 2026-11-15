@@ -27,6 +27,8 @@ import { approvalTask } from './approval-tasks'
 import { inquiryWaiting } from './inquiries'
 // B-W2b-386: shipments at risk of missing their promise.
 import { shipmentsAtRisk } from './shipments-at-risk'
+// B-W2b-388: my reminders that came back.
+import { reminders } from './reminders'
 
 /** One source per kind of Today (factory-domain insights/attention ATTENTION_KINDS). */
 export const SOURCES: Readonly<Record<AttentionKind, Source>> = Object.freeze({
@@ -69,4 +71,6 @@ export const SOURCES: Readonly<Record<AttentionKind, Source>> = Object.freeze({
   INQUIRY_WAITING: inquiryWaiting,
   // B-W2b-386 (LOG-110): shipments at risk of missing their promise, for the dispatch desk of their site.
   SHIPMENT_AT_RISK: shipmentsAtRisk,
+  // B-W2b-388 (COL-041): my reminders that came back (Today asks for them with include=TASKS).
+  REMINDER: reminders,
 })

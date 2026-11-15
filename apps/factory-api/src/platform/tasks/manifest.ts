@@ -16,4 +16,13 @@ export const manifest = defineManifest({
   'POST /tasks/:id/assign': { audiences: ['office'], permission: 'tasks.manage', scope: 'record' },
   'POST /tasks/:id/status': { audiences: ['office'], permission: 'tasks.manage', scope: 'record' },
   'POST /tasks/:id/snooze': { audiences: ['office'], permission: 'tasks.manage', scope: 'record' },
+  // B-W2b-388 (COL-041): my own reminders (home.view; reminders/reminders.ts reads and changes only the person's rows, and
+  // setting one needs the record's thread readable).
+  'GET /reminders': { audiences: ['office'], permission: 'home.view', scope: 'record' },
+  'POST /reminders': { audiences: ['office'], permission: 'home.view', scope: 'record' },
+  'POST /reminders/bulk': { audiences: ['office'], permission: 'home.view', scope: 'record' },
+  'POST /reminders/:id/put-off': { audiences: ['office'], permission: 'home.view', scope: 'record' },
+  'POST /reminders/:id/done': { audiences: ['office'], permission: 'home.view', scope: 'record' },
+  'POST /reminders/:id/undo': { audiences: ['office'], permission: 'home.view', scope: 'record' },
+  'DELETE /reminders/:id': { audiences: ['office'], permission: 'home.view', scope: 'record' },
 })

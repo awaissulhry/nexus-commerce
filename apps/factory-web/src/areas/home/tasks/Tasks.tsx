@@ -1,6 +1,9 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { modeOfAddress, type ListMode } from '../../../list-frame/w2b/model'
+// B-W2b-388: the board and the calendar of my tasks.
+import { TASK_MODES } from './board/modes'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { recordAddress } from '../../../lib/records/record-links'
 import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
@@ -45,6 +48,8 @@ export function Tasks() {
   const addressQ = search.get('q') ?? ''
   const openId = search.get('open')
   const wantsNew = search.get('new') === '1'
+  // B-W2b-388: Board by status · Calendar by due date.
+  const mode = modeOfAddress(search, TASK_MODES)
 
   const [list, setList] = useState<PanelRead<ListState>>({ status: 'loading' })
   const [q, setQ] = useState(addressQ)
@@ -57,14 +62,14 @@ export function Tasks() {
   const [undoTask, setUndoTask] = useState<TaskItem | null>(null)
   const [now, setNow] = useState(() => Date.now())
   const seq = useRef(0)
-  const query = useRef({ scope, tile, q: addressQ })
-  query.current = { scope, tile, q: addressQ }
+  const query = useRef({ scope, tile, q: addressQ, mode })
+  query.current = { scope, tile, q: addressQ, mode }
   const openRef = useRef(openId)
   openRef.current = openId
 
   const go = useCallback(
-    (next: { scope?: typeof scope; tile?: typeof tile; q?: string; open?: string | null; newTask?: boolean }) => {
-      const state = { scope: next.scope ?? query.current.scope, tile: next.tile === undefined ? query.current.tile : next.tile, q: next.q ?? query.current.q, open: next.open === undefined ? openRef.current : next.open, newTask: next.newTask ?? false }
+    (next: { scope?: typeof scope; tile?: typeof tile; q?: string; open?: string | null; newTask?: boolean; mode?: ListMode }) => {
+      const state = { scope: next.scope ?? query.current.scope, tile: next.tile === undefined ? query.current.tile : next.tile, q: next.q ?? query.current.q, open: next.open === undefined ? openRef.current : next.open, newTask: next.newTask ?? false, mode: next.mode ?? query.current.mode }
       router.replace(`${pathname}${tasksAddress(state)}`, { scroll: false })
     },
     [router, pathname],
@@ -303,12 +308,14 @@ export function Tasks() {
     dialog,
     busy,
     notice,
+    mode,
   }
 
   return (
     <TasksView
       model={model}
       actions={{
+        onMode: (next) => go({ mode: next, open: null }),
         onScope: (next) => go({ scope: next, open: null }),
         onTile: (next) => go({ tile: next, open: null }),
         onSearch: setQ,
