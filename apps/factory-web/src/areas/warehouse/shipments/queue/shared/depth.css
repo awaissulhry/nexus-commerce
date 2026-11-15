@@ -1,0 +1,214 @@
+/* Shipments in depth (B-W2b-410; SCR-590 … SCR-598): layout only, semantic tokens, prefix fw-shd-. */
+
+.fw-shd-dialog,
+.fw-shd-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-shd-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-shd-choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.fw-shd-choices--grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.fw-shd-choices > legend {
+  margin-bottom: var(--nds-space-6);
+}
+
+.fw-shd-actions,
+.fw-shd-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-shd-chips {
+  gap: var(--nds-space-4);
+}
+
+.fw-shd-part-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-muted);
+}
+
+/* Holds, problems, mails, pack parts, proforma versions, public DoC pages: one row each. */
+.fw-shd-holds {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  margin-top: var(--nds-space-10);
+  padding-top: var(--nds-space-10);
+  border-top: 1px solid var(--nds-border-subtle);
+  min-width: 0;
+}
+
+.fw-shd-hold-list,
+.fw-shd-parcels,
+.fw-shd-jobs,
+.fw-shd-contents,
+.fw-shd-serials,
+.fw-shd-problems {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-shd-hold,
+.fw-shd-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  padding: var(--nds-space-8) var(--nds-space-10);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-md);
+  min-width: 0;
+}
+
+.fw-shd-hold-head,
+.fw-shd-hold-foot,
+.fw-shd-parcel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-shd-hold-words {
+  font-size: var(--nds-font-size-sm);
+  overflow-wrap: anywhere;
+}
+
+.fw-shd-part,
+.fw-shd-job {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-10);
+  padding: var(--nds-space-6) 0;
+  border-bottom: 1px solid var(--nds-border-subtle);
+  min-width: 0;
+}
+
+.fw-shd-part:last-child,
+.fw-shd-job:last-child {
+  border-bottom: 0;
+}
+
+.fw-shd-parcel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-shd-serials {
+  gap: var(--nds-space-2);
+  font-size: var(--nds-font-size-sm);
+  padding-left: var(--nds-space-10);
+}
+
+.fw-shd-problems > li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-6);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-warning-text);
+}
+
+.fw-shd-ok {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-success-text);
+}
+
+.fw-shd-check {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  padding-top: var(--nds-space-10);
+  border-top: 1px solid var(--nds-border-subtle);
+  min-width: 0;
+}
+
+.fw-shd-break {
+  overflow-wrap: anywhere;
+}
+
+.fw-shd-drawer-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  width: 100%;
+}
+
+/* The list's Ship today header: the site and its counts on one line, the cards under. */
+.fw-shd-today {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+.fw-shd-today-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+/* The record's in-depth cards beside W1's on a tab: the same column grid. */
+.fw-shd-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: var(--nds-space-14);
+  align-items: start;
+  min-width: 0;
+}
+
+@media (max-width: 480px) {
+  .fw-shd-cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .fw-shd-part,
+  .fw-shd-job {
+    flex-wrap: wrap;
+  }
+}

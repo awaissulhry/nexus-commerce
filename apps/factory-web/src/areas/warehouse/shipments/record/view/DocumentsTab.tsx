@@ -1,5 +1,6 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import { Download, FileCheck2, FileStack, FileText, Link2, Lock, Paperclip, Printer, Send } from 'lucide-react'
 import { Banner, Card, EmptyState, KeyValue, SummaryTable } from '@nexus/ui/components'
 import { PdfViewer } from '@nexus/ui/components/PdfViewer/index'
@@ -23,7 +24,8 @@ import { PartState } from './ShipmentRecordView'
  * packing list travels in the parcels only. B-W2a-71: Other documents (design sh-docs-other: the packing list's versions,
  * each with its number, version and when it was made) and "Print all" — the driver's pack in a new tab.
  */
-export function DocumentsTab({ shipment, model, actions }: { shipment: Shipment; model: ShipmentRecordModel; actions?: ShipmentRecordActions }) {
+// B-W2b-410: `papers` — the driver's pack as one PDF, the proforma, each style's public DoC page.
+export function DocumentsTab({ shipment, model, actions, papers }: { shipment: Shipment; model: ShipmentRecordModel; actions?: ShipmentRecordActions; papers?: ReactNode }) {
   const t = useT('shipments')
   if (model.ddts.value === null) return <PartState problem={model.ddts.problem} onRetry={() => actions?.onRetryPart?.('ddts')} label={t('docs.ddt.title')} />
   const live = model.ddts.value.find((row) => row.status === 'LIVE') ?? null
@@ -38,6 +40,7 @@ export function DocumentsTab({ shipment, model, actions }: { shipment: Shipment;
           <LinkCard shipment={shipment} model={model} actions={actions} />
         </div>
       </div>
+      {papers}
       {annulled.length > 0 && (
         <Card padded>
           <h2 className="fw-sh-h2">{t('docs.annulled.title')}</h2>

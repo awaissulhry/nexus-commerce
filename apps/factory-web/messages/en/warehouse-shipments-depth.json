@@ -1,0 +1,947 @@
+{
+  "common": {
+    "cancel": "Cancel",
+    "done": "Done",
+    "retry": "Try again"
+  },
+  "part": {
+    "failed": "Could not read {part}.",
+    "loading": "Reading {part}…"
+  },
+  "problem": {
+    "read": {
+      "internal": "Something went wrong on our side.",
+      "signed_out": "You were signed out: sign in again.",
+      "forbidden": "Your role does not let you see this.",
+      "not_found": "It is no longer there.",
+      "unavailable": "The server cannot be reached: try again in a moment.",
+      "rate_limited": "Too many requests: wait a moment."
+    },
+    "write": {
+      "internal": "It was not saved: something went wrong on our side.",
+      "moved": "Someone changed this shipment meanwhile: it was read again, check and try again.",
+      "state": "The shipment is no longer in a state that allows this: it was read again.",
+      "invalid": "Something in the form is not right: check the fields.",
+      "signed_out": "You were signed out: sign in again.",
+      "forbidden": "Your role does not let you do this.",
+      "not_found": "It is no longer there.",
+      "rate_limited": "Too many requests: wait a moment.",
+      "unavailable": "The server cannot be reached: nothing was changed.",
+      "step_up": "This needs a fresh code from your authenticator."
+    }
+  },
+  "status": {
+    "DRAFT": "Draft",
+    "PACKED": "Packed",
+    "SHIPPED": "Shipped",
+    "DELIVERED": "Delivered",
+    "RETURNED": "Returned",
+    "CANCELLED": "Cancelled"
+  },
+  "risk": {
+    "LATE": "Late",
+    "HELD": "On hold",
+    "MISSED_CUT_OFF": "Missed the cut-off",
+    "AT_RISK": "At risk",
+    "DUE_TODAY": "Due today",
+    "LATER": "Later",
+    "NO_DATE": "No promise date"
+  },
+  "holdReason": {
+    "CREDIT": "Credit",
+    "DEPOSIT": "Deposit",
+    "BALANCE_UNPAID": "Balance before shipping",
+    "QUALITY": "Quality",
+    "CUSTOMER_REQUEST": "Customer request",
+    "OTHER": "Other"
+  },
+  "match": {
+    "NUMBER": "Shipment number",
+    "ORDER": "Order",
+    "CUSTOMER_PO": "Customer PO",
+    "CUSTOMER": "Customer",
+    "TRACKING": "Tracking number",
+    "CARTON": "Carton label",
+    "SERIAL": "Serial"
+  },
+  "trackingStatus": {
+    "LABEL_CREATED": "Label created",
+    "IN_TRANSIT": "In transit",
+    "OUT_FOR_DELIVERY": "Out for delivery",
+    "DELIVERED": "Delivered",
+    "EXCEPTION": "A problem",
+    "RETURNED": "Returned"
+  },
+  "printState": {
+    "QUEUED": "Queued",
+    "SENT": "Sent",
+    "PRINTED": "Printed",
+    "FAILED": "Failed"
+  },
+  "packagingKind": {
+    "CARTON": "Carton",
+    "PALLET": "Pallet",
+    "POLYBAG": "Polybag",
+    "HANGER": "Hanger",
+    "BOX": "Box"
+  },
+  "mailState": {
+    "QUEUED": "Queued",
+    "SENDING": "Sending",
+    "SENT": "Sent",
+    "DELIVERED": "Delivered",
+    "BOUNCED": "Bounced",
+    "COMPLAINED": "Marked as spam",
+    "FAILED": "Failed"
+  },
+  "taskState": {
+    "OPEN": "open",
+    "DONE": "done",
+    "CANCELLED": "cancelled"
+  },
+  "language": {
+    "it": "Italian",
+    "en": "English"
+  },
+  "rows": {
+    "today": "Ship today",
+    "atRisk": "At risk of missing the promise",
+    "open": "Open (not left yet)",
+    "exceptions": "Exceptions (tracking problems)"
+  },
+  "tile": {
+    "exceptions": "Exceptions"
+  },
+  "today": {
+    "label": "Carrier cut-offs today",
+    "site": "Site",
+    "counts": "{due} due today or before · {toPack} still to pack · {willMiss} will miss",
+    "nothing": "Nothing to ship today",
+    "closed": "The site does not work today ({reason}): what is due today misses its cut-off.",
+    "closedNext": "The site does not work today ({reason}); next working day {next}: what is due today misses its cut-off.",
+    "left": "{left} to {time}",
+    "passed": "Cut-off {time} passed",
+    "noCutOff": "No cut-off set",
+    "noCutOffCollects": "The customer collects: no cut-off",
+    "cardCounts": "{packed} packed · {toPack} to pack · {parcels} parcels",
+    "source": {
+      "CARRIER": "this carrier's cut-off",
+      "SITE": "the site's cut-off"
+    },
+    "held_one": "{count} on hold",
+    "held_other": "{count} on hold",
+    "willMiss_one": "{count} will miss",
+    "willMiss_other": "{count} will miss",
+    "truncated": "Only the first 200 open shipments are counted here."
+  },
+  "closedReason": {
+    "WEEK": "not in its working week",
+    "DAY_OFF": "a day off",
+    "HOLIDAY": "a holiday",
+    "CLOSURE": "a closure",
+    "WORKING": "a working day"
+  },
+  "carrier": {
+    "ownVan": "Our own van",
+    "collects": "The customer collects",
+    "named": "{name}",
+    "none": "No carrier chosen"
+  },
+  "col": {
+    "number": "Shipment",
+    "risk": "Risk · state",
+    "customer": "Customer · order",
+    "shipTo": "Ship to",
+    "carrier": "Carrier",
+    "parcels": "Parcels",
+    "shipBy": "Ship by",
+    "holds": "Holds",
+    "more": "More",
+    "order": "Order",
+    "garments": "Garments",
+    "plan": "Plan",
+    "problem": "Problem",
+    "raised": "Raised",
+    "expected": "Expected",
+    "status": "State",
+    "carrierTracking": "Carrier · tracking",
+    "matched": "Found by",
+    "when": "When"
+  },
+  "grid": {
+    "todayLabel": "Ship today",
+    "atRiskLabel": "At risk of missing the promise",
+    "exceptionsLabel": "Tracking problems",
+    "searchLabel": "Search and history",
+    "count_one": "{count} shipment",
+    "count_other": "{count} shipments",
+    "countMore_one": "First {count} shipment",
+    "countMore_other": "First {count} shipments",
+    "failed": "The list could not be read",
+    "split": "Split off another shipment",
+    "po": "PO {po}",
+    "parcels_one": "{count} parcel",
+    "parcels_other": "{count} parcels",
+    "garments_one": "{count} garment",
+    "garments_other": "{count} garments",
+    "noPromise": "No promise date",
+    "noCutOff": "No cut-off",
+    "rowMenu": "Actions for {number}",
+    "open": "Open",
+    "openNewTab": "Open in a new tab",
+    "cartons": "Lines & cartons",
+    "carrier": "Carrier & label",
+    "export_one": "Export {count} (CSV)",
+    "export_other": "Export {count} (CSV)",
+    "atRiskNone": {
+      "title": "Nothing at risk",
+      "body": "No open shipment is late, held or near its cut-off."
+    },
+    "carrierNone": {
+      "title": "Nothing for this carrier today",
+      "body": "Clear the carrier to see every shipment due today."
+    },
+    "clearCarrier": "Clear the carrier",
+    "todayNone": {
+      "body": "No open shipment is due today or before at this site."
+    },
+    "exceptionsNone": {
+      "title": "No tracking problem open",
+      "body": "Delays, address problems, failed deliveries and parcels without news show here."
+    },
+    "searchNone": {
+      "title": "No shipment found",
+      "body": "Try the order number, a tracking number, the customer's PO, a carton label or a serial."
+    },
+    "heldFor": "On hold: {reasons}",
+    "deliveredAt": "Delivered {date}",
+    "shippedAt": "Left {date}",
+    "cancelledAt": "Cancelled {date}",
+    "createdAt": "Created {date}",
+    "more": "Show more"
+  },
+  "search": {
+    "ssccNotKept": "An SSCC is not kept yet: a carton is found by its label code (shipment number and carton).",
+    "note": "The search looks at every shipment, whatever its state; a state view narrows it."
+  },
+  "notPlanned": {
+    "title": "Due and not on a shipment yet",
+    "count_one": "{count} order",
+    "count_other": "{count} orders",
+    "none": "Every released garment that is due is on a shipment.",
+    "plan": "Plan a shipment",
+    "noManage": "Planning a shipment needs the right to manage shipments."
+  },
+  "csv": {
+    "number": "Shipment",
+    "status": "State",
+    "risk": "Risk",
+    "order": "Order",
+    "customerPo": "Customer PO",
+    "customer": "Customer",
+    "carrier": "Carrier",
+    "shipBy": "Ship by",
+    "parcels": "Parcels",
+    "garments": "Garments",
+    "holds": "Holds"
+  },
+  "holds": {
+    "title": "Holds",
+    "check": "No hold",
+    "checkOk": "Nothing holds the goods back.",
+    "checkOpen": "On hold: {reasons}.",
+    "inForce": "Holds in force",
+    "bySystem": "Placed by the system",
+    "byPerson": "Placed by {name}",
+    "someone": "someone",
+    "theSystem": "the system",
+    "since": "Since {when}",
+    "releasedBy": {
+      "finance": "Released by finance",
+      "warehouse": "Released by the warehouse"
+    },
+    "release": "Release",
+    "releaseOf": "Release the hold: {reason}",
+    "releasedLine": "Released {when} by {who}",
+    "released_one": "{count} released hold",
+    "released_other": "{count} released holds",
+    "place": "Place a hold…",
+    "placeMenu": "Place a hold…",
+    "placeTitle": "Place a hold on {number}",
+    "placeBody": "A held shipment cannot be packed, labelled or handed over until the hold is released.",
+    "placeGo": "Hold: {reason}",
+    "reason": "Why",
+    "alreadyHeld": "A reason already in force is not offered again.",
+    "wordsRequired": "What is wrong (needed for Other)",
+    "wordsOptional": "What is wrong (optional)",
+    "wordsHint": "Kept on the shipment; the floor sees only the reason.",
+    "releaseTitle": "Release the hold: {reason}",
+    "releaseSystem": "The system placed this hold: once released by hand, it is not placed again for the same cause.",
+    "stillHeld_one": "{count} other hold stays in force.",
+    "stillHeld_other": "{count} other holds stay in force.",
+    "freeAfter": "After this the shipment is free to go on.",
+    "why": "Why it can go now",
+    "whyHint": "Kept with the release on the shipment.",
+    "banner": "On hold: {reasons}",
+    "bannerFinance": "It cannot be packed, labelled or handed over. Finance releases a money hold or one the system placed.",
+    "bannerWarehouse": "It cannot be packed, labelled or handed over until the warehouse releases it.",
+    "openHolds": "See the holds",
+    "stepHeld": "On hold ({reasons}): release the hold first",
+    "done": {
+      "placed": "The hold is in force.",
+      "released": "The hold is released."
+    },
+    "held": {
+      "noManage": "Holds need the right to manage holds.",
+      "notOpen": "Only a shipment that has not left can be held.",
+      "busy": "Wait: the last change is still being saved.",
+      "notInForce": "This hold is already released.",
+      "financeOnly": "Only finance releases a money hold or one the system placed."
+    },
+    "form": {
+      "pickReason": "Pick a reason.",
+      "wordsNeeded": "Say what is wrong.",
+      "whyNeeded": "Say why it can go now.",
+      "tooLong": "At most {max} characters."
+    },
+    "refusal": {
+      "NOT_OPEN": "It has left or is cancelled.",
+      "ALREADY_HELD": "Already held for this reason.",
+      "NOT_IN_FORCE": "The hold is no longer in force.",
+      "MAY_NOT_RELEASE": "Only finance may release it."
+    },
+    "bulk": {
+      "button_one": "Hold {count}",
+      "button_other": "Hold {count}",
+      "title_one": "Hold {count} shipment",
+      "title_other": "Hold {count} shipments",
+      "go_one": "Hold {count}",
+      "go_other": "Hold {count}",
+      "body": "Each shipment picked gets the same hold; one already held for that reason is left as it is.",
+      "picked_one": "{count} shipment picked",
+      "picked_other": "{count} shipments picked",
+      "gone_one": "{count} has left or is cancelled and is left out: {numbers}",
+      "gone_other": "{count} have left or are cancelled and are left out: {numbers}",
+      "noneOpen": "None of the shipments picked is open.",
+      "placed_one": "{count} shipment is now on hold.",
+      "placed_other": "{count} shipments are now on hold.",
+      "skipped_one": "{count} was left as it was:",
+      "skipped_other": "{count} were left as they were:"
+    }
+  },
+  "split": {
+    "menu": "Split…",
+    "title": "Split the shipment",
+    "titleOf": "Split {number}",
+    "how": "How to split",
+    "byHand": "By hand",
+    "byRule": "By promise date",
+    "go": "Split",
+    "goHand_one": "Move {count} garment",
+    "goHand_other": "Move {count} garments",
+    "goRule_one": "Make {count} shipment",
+    "goRule_other": "Make {count} shipments",
+    "heldCarried": "The holds in force go with the new shipments.",
+    "ruleBody": "Garments promised for different days leave apart; this shipment keeps those of {day}.",
+    "ruleLine_one": "{day}: a new shipment with {count} garment",
+    "ruleLine_other": "{day}: a new shipment with {count} garments",
+    "handBody": "How many garments of each line move onto a new draft of the same order. Garments in a carton or with a serial stay.",
+    "lines": "Lines",
+    "col": {
+      "line": "Line",
+      "shipBy": "Ship by",
+      "stays": "Stays",
+      "moves": "Moves"
+    },
+    "lineFacts": "{quantity} on it · {packed} in cartons · {serials} with a serial",
+    "movesOf": "Garments of {line} {size} that move",
+    "fewer": "One fewer",
+    "more": "One more",
+    "cannotMove": "Cannot move",
+    "noDate": "no date",
+    "totals": "{moving} move · {staying} stay",
+    "reason": "Why",
+    "transportBy": "Who carries the new shipment",
+    "transport": {
+      "CARRIER": "A carrier",
+      "SENDER": "Our own van",
+      "RECIPIENT": "The customer collects"
+    },
+    "carrierCode": "Carrier code",
+    "carrierHint": "As the shipping settings name it (for example brt, gls).",
+    "serviceCode": "Service code",
+    "shipToNote": "Another delivery address: plan a new shipment from the order.",
+    "done_one": "{number} was split: {count} new shipment.",
+    "done_other": "{number} was split: {count} new shipments.",
+    "held": {
+      "noManage": "Splitting needs the right to manage shipments.",
+      "notDraft": "Only a draft can be split: unpack it first.",
+      "busy": "Wait: the split is being made.",
+      "reading": "Wait: reading what can move.",
+      "pickGarments": "Pick the garments that move.",
+      "pickReason": "Pick why.",
+      "carrierNeeded": "Name the new carrier.",
+      "serviceNeeded": "Name the new service."
+    },
+    "refusal": {
+      "NOT_DRAFT": "Only a draft can be split.",
+      "NOTHING_TO_MOVE": "Nothing can move: every garment is in a carton or has a serial.",
+      "NOTHING_STAYS": "Something must stay on this shipment.",
+      "ONE_DAY": "Every garment is promised for the same day: nothing to split by date."
+    }
+  },
+  "splitReason": {
+    "PART_READY": "Part is ready",
+    "CUSTOMER_REQUEST": "Customer request",
+    "CARRIER": "Another carrier",
+    "SERVICE": "Another service",
+    "PROMISE_DATE": "Different promise dates",
+    "OTHER": "Other"
+  },
+  "cartons": {
+    "title": "Cartons",
+    "count_one": "{count} carton",
+    "count_other": "{count} cartons",
+    "add": "Add carton",
+    "nOfN": "Carton {n} of {count}",
+    "open": "Carton {n} (open)",
+    "openOf": "Open {carton}",
+    "weighOf": "Weigh and measure {carton}",
+    "removeOf": "Remove {carton}",
+    "col": {
+      "carton": "Carton",
+      "packaging": "Packaging",
+      "contents": "Contents by size",
+      "weight": "Weight",
+      "size": "L × W × H",
+      "tracking": "Tracking no.",
+      "label": "Marks · label",
+      "actions": "Actions",
+      "style": "Style · colour",
+      "sizes": "Packed of ordered",
+      "lot": "Lot"
+    },
+    "noPackaging": "No packaging named",
+    "packagingAtClose": "Named when closed",
+    "empty": "Empty",
+    "garments_one": "{count} garment",
+    "garments_other": "{count} garments",
+    "serialsCount_one": "{count} serial",
+    "serialsCount_other": "{count} serials",
+    "notWeighed": "Not weighed",
+    "gross": "{value} kg gross",
+    "net": "{value} kg net",
+    "kg": "{value} kg",
+    "cm": "{size} cm",
+    "labelled": "Labelled",
+    "noLabel": "No label",
+    "marks": {
+      "current": "Marks printed",
+      "stale": "Marks out of date",
+      "notPrinted": "Marks not printed",
+      "open": "Open"
+    },
+    "problem": {
+      "NOT_SCANNED": "Garments still to scan",
+      "SERIALS_NOT_IN_CARTONS": "Serials not in a carton",
+      "CARTON_OPEN": "A carton is still open",
+      "MARKS_NOT_PRINTED": "Marks to print"
+    },
+    "none": {
+      "title": "No cartons yet",
+      "body": "Packing happens at the pack station (each garment scanned into its carton) or here."
+    },
+    "bySize": "Packed by size: {packed} of {ordered}",
+    "bySizeLabel": "Packed by size",
+    "serialTracked": "Tracked by serial",
+    "sizeOf": "{size}: {packed}/{ordered}",
+    "serials": "Serials on this shipment ({count})",
+    "serialsLabel": "Serials and their carton",
+    "foot": "The pack station fills the cartons live; the office may add or correct.",
+    "packingList": "Packing list",
+    "held": {
+      "noPack": "Cartons need the right to pack.",
+      "notDraft": "Only while the shipment is a draft: unpack it first.",
+      "left": "The goods have left.",
+      "labelled": "The carton has its carrier label: void the labels first.",
+      "notEmpty": "Take the garments out first (at the pack station).",
+      "busy": "Wait: the last change is still being saved."
+    },
+    "drawer": {
+      "close": "Close the carton",
+      "position": "{index} of {count} · {number}",
+      "previous": "Previous carton",
+      "next": "Next carton",
+      "first": "This is the first carton.",
+      "last": "This is the last carton.",
+      "contents": "Contents by size",
+      "lot": "lot {lot} · work order {order}",
+      "origin": "origin {country}",
+      "serialsOf": "Serials of {style} {size}",
+      "scanned": "scanned {when}",
+      "facts": "Weights, size and label",
+      "gross": "Gross weight",
+      "net": "Net weight",
+      "marks": "Carton marks",
+      "marksHint": "Print the marks again from the pack station or the label prints on Carrier & label."
+    }
+  },
+  "arrangement": {
+    "CARRIER": "Carrier",
+    "MANUAL_CARRIER": "Carrier booked by hand",
+    "OWN_VAN": "Our own van",
+    "CUSTOMER_COLLECTS": "Customer collects"
+  },
+  "arrangementLong": {
+    "CARRIER": "A carrier, labels bought through the aggregator",
+    "OWN_VAN": "Our own van",
+    "CUSTOMER_COLLECTS": "The customer collects (ex works)"
+  },
+  "transport": {
+    "title": "How it travels",
+    "how": "Who carries it",
+    "manualNamed": "{carrier}, booked by hand",
+    "trackingNumber": "Tracking number",
+    "noTracking": "Not typed yet",
+    "ddt": "DDT",
+    "ddtNotYet": "Not issued yet",
+    "ddtNotNeeded": "Not needed",
+    "labels": "Carrier labels",
+    "labelsCount_one": "{count} bought",
+    "labelsCount_other": "{count} bought",
+    "labelsTest": "{count} of them, {test} TEST labels (nothing was bought)",
+    "explain": {
+      "CARRIER": "Labels are bought for each parcel through the connected aggregator; the carrier's tracking follows by itself.",
+      "MANUAL_CARRIER": "Booked by phone or on the carrier's site: no label is bought here; type its tracking number and the statuses it reaches.",
+      "OWN_VAN": "Our van takes it: no label, no carrier; the DDT names us as carrier; type the statuses as the driver reports them.",
+      "CUSTOMER_COLLECTS": "The customer collects at our site (ex works): no label and no carrier; the DDT is signed when they collect."
+    },
+    "arrange": "Our van or a carrier by hand…",
+    "change": "Change how it travels…",
+    "typeTracking": "Type the tracking number…",
+    "changeTracking": "Change the tracking number…",
+    "typeStatus": "Type a status…",
+    "typed": "Statuses typed",
+    "noTyped": "No status typed yet.",
+    "typedAfterLeft": "Statuses are typed once the goods have left.",
+    "typedAt": "typed {when}",
+    "arrangeTitle": "How {number} travels",
+    "arrangeGo": "Save",
+    "ownVanHint": "No carrier, no label: the DDT names us.",
+    "manualHint": "A carrier booked outside: its name and, when known, its tracking number.",
+    "carrierName": "Carrier",
+    "trackingHint": "Optional; it can be typed later.",
+    "arrangeNote": "Held once a label is bought or the DDT is issued (it names the carrier).",
+    "trackingTitle": "Tracking number of {carrier}",
+    "trackingClearHint": "Leave it empty to clear it.",
+    "saveTracking": "Save",
+    "clearTracking": "Clear it",
+    "statusTitle": "A status of {number}",
+    "status": "What happened",
+    "statusGo": "Save: {status}",
+    "movesIt": "Moves the shipment",
+    "when": "When",
+    "whenHint": "Empty: now. Not before the goods left.",
+    "location": "Where",
+    "description": "Note",
+    "done": {
+      "ownVan": "Our own van takes it now.",
+      "manual": "The carrier booked by hand is saved.",
+      "tracking": "The tracking number is saved.",
+      "trackingCleared": "The tracking number is cleared.",
+      "status": "The status is saved.",
+      "delivered": "Marked delivered.",
+      "returned": "Marked returned."
+    },
+    "held": {
+      "noManage": "This needs the right to manage shipments.",
+      "notNow": "Not possible now.",
+      "busy": "Wait: the last change is still being saved."
+    },
+    "form": {
+      "carrierNeeded": "Name the carrier.",
+      "tooLong": "At most {max} characters.",
+      "trackingTooLong": "One line of at most {max} characters.",
+      "pickStatus": "Pick what happened.",
+      "when": "The time is not a time.",
+      "future": "The time is in the future.",
+      "beforeLeft": "The time is before the goods left."
+    },
+    "refusal": {
+      "LEFT": "The goods have left.",
+      "LABELLED": "A carrier label is bought: void the labels first.",
+      "DECLARED": "The DDT is issued and names the carrier: annul it first.",
+      "NOT_A_CARRIER": "Only a carrier shipment takes a typed tracking number.",
+      "CANCELLED": "The shipment is cancelled.",
+      "NOT_LEFT": "The goods have not left yet.",
+      "CARRIER_TRACKED": "The carrier's own tracking follows it: nothing to type.",
+      "CUSTOMER_COLLECTS": "The customer collects: no status to type.",
+      "ARRIVED": "It has arrived already."
+    }
+  },
+  "check": {
+    "title": "Check before printing",
+    "testMode": "Test mode: labels say TEST and nothing is sent to a carrier.",
+    "notApplying": {
+      "OWN_VAN": "Our own van takes it: no carrier label.",
+      "CUSTOMER_COLLECTS": "The customer collects: no carrier label.",
+      "MANUAL_CARRIER": "A carrier booked by hand: no label is bought here."
+    },
+    "allLabelled": "Every parcel has its label.",
+    "noParcels": "No parcel yet: the check runs once the goods are packed.",
+    "ok_one": "The parcel passes {carrier}'s checks.",
+    "ok_other": "All {count} parcels pass {carrier}'s checks.",
+    "problems_one": "{count} problem",
+    "problems_other": "{count} problems",
+    "limitsKept": "The weight and size limits kept for {carrier} are starting values, not verified with the carrier.",
+    "noLimits": "No weight or size limit is kept for {carrier}: its own refusal stays the carrier's.",
+    "incomplete": {
+      "sender": {
+        "name": "The sender's address (the site's shipping settings) lacks who it is.",
+        "line1": "The sender's address (the site's shipping settings) lacks the street.",
+        "postalCode": "The sender's address (the site's shipping settings) lacks the postal code.",
+        "city": "The sender's address (the site's shipping settings) lacks the city.",
+        "country": "The sender's address (the site's shipping settings) lacks the country."
+      },
+      "recipient": {
+        "name": "The delivery address lacks who it is.",
+        "line1": "The delivery address lacks the street.",
+        "postalCode": "The delivery address lacks the postal code.",
+        "city": "The delivery address lacks the city.",
+        "country": "The delivery address lacks the country."
+      }
+    },
+    "POSTAL_CODE": "The delivery postal code \"{value}\" is not a postal code of {country} (like {example}).",
+    "POSTAL_CODE_sender": "The sender's postal code \"{value}\" is not a postal code of {country} (like {example}).",
+    "PHONE_NEEDED": "{carrier} needs the recipient's phone: add it to the delivery address.",
+    "PHONE_NEEDED_eu": "A parcel leaving the European Union needs the recipient's phone (for customs): add it to the delivery address.",
+    "PHONE_FORMAT": "The recipient's phone \"{value}\" is not a phone number (digits, with + and spaces).",
+    "NO_SERVICE": "Choose the carrier service for the shipment (or a default one in the site settings).",
+    "NO_WEIGHT": "Parcel {seq} has no weight: weigh it first.",
+    "SIZES_PARTIAL": "Parcel {seq} has only some of its sizes: give length, width and height, or none.",
+    "TOO_HEAVY": "Parcel {seq} weighs {weight} kg; {carrier} takes at most {max} kg a parcel: repack it into lighter parcels.",
+    "TOO_LONG": "Parcel {seq} is {length} cm on its longest side; {carrier} takes at most {max} cm.",
+    "TOO_BIG": "Parcel {seq} measures {sum} cm in length plus girth; {carrier} takes at most {max} cm.",
+    "DOES_NOT_FIT": "Parcel {seq} ({sizes} cm) does not fit {carrier}'s largest parcel ({box} cm)."
+  },
+  "reprint": {
+    "title": "Label prints",
+    "all_one": "Reprint {count} label…",
+    "all_other": "Reprint {count} labels…",
+    "one": "Reprint…",
+    "oneOf": "Reprint the {kind} of parcel {seq}",
+    "parcel": "Parcel {seq}",
+    "noTracking": "No tracking number",
+    "kind": {
+      "CARRIER": "Carrier label",
+      "MARKS": "Carton marks",
+      "OTHER": "Other label"
+    },
+    "test": "TEST",
+    "again": "Reprint",
+    "line": "{printer} · {copies} cop. · {when}",
+    "why": "Why: {reason}",
+    "by": {
+      "office": "asked by {name}",
+      "floor": "from the tablet {device}",
+      "floorNamed": "from the tablet {device} ({name})",
+      "system": "by the system"
+    },
+    "none": {
+      "title": "No label printed yet",
+      "body": "Carrier labels and carton marks show here once printed."
+    },
+    "note": "A reprint prints the same label again on a label printer of the site: nothing is bought or laid out again; the reason is kept on the shipment.",
+    "dialogTitle_one": "Reprint {count} label",
+    "dialogTitle_other": "Reprint {count} labels",
+    "go_one": "Reprint {count}",
+    "go_other": "Reprint {count}",
+    "pickedLine": "{kind} · parcel {seq} · {printer}",
+    "reason": "Why it is printed again",
+    "reasonHint": "One line, kept on the shipment (for example: the label was torn).",
+    "nothingBought": "Nothing is bought again: the same label goes to the printer.",
+    "done_one": "{count} label is queued for printing.",
+    "done_other": "{count} labels are queued for printing.",
+    "doneTest": "TEST labels stay TEST: not for shipping.",
+    "held": {
+      "noRight": "A reprint needs the rights to pack and to print labels.",
+      "pickOne": "Pick a label.",
+      "notReprintable": "One of the labels picked cannot be printed again.",
+      "notNow": "It cannot be printed again now.",
+      "busy": "Wait: the reprint is being queued."
+    },
+    "form": {
+      "reasonShort": "Say why in at least {min} characters.",
+      "reasonLong": "At most {max} characters.",
+      "oneLine": "One line only."
+    },
+    "refusal": {
+      "NOT_A_LABEL": "Not a label (a PDF print).",
+      "GOODS_GONE": "The goods were delivered, returned or cancelled.",
+      "LABEL_VOIDED": "The label was voided or replaced since.",
+      "MARKS_CHANGED": "The carton was renumbered since: print its marks anew at the pack station.",
+      "REASON": "The reason must be 3 to 200 characters on one line.",
+      "PRINTER": "No label printer takes it: set the site's label printer in the shipping settings."
+    }
+  },
+  "pack": {
+    "title": "Driver's pack (one PDF)",
+    "test": "TEST labels",
+    "parts": "What the pack holds",
+    "part": {
+      "LABELS": "Carrier labels",
+      "PACKING_LIST": "Packing list",
+      "DDT": "DDT",
+      "COMMERCIAL_INVOICE": "Commercial invoice",
+      "PROFORMA": "Proforma"
+    },
+    "state": {
+      "READY": "Ready",
+      "MISSING": "Missing",
+      "NONE": "Not needed",
+      "NOT_SHOWN": "Priced"
+    },
+    "ready": {
+      "numbered_one": "{number} · {count} file",
+      "numbered_other": "{number} · {count} files",
+      "files_one": "{count} file",
+      "files_other": "{count} files"
+    },
+    "missing": {
+      "LABELS": "A parcel has no label yet (or a label only on the label printer).",
+      "PACKING_LIST": "No packing list matches the cartons yet: making the pack makes it.",
+      "DDT": "The DDT is not issued yet, or its file is missing.",
+      "COMMERCIAL_INVOICE": "No commercial invoice made yet.",
+      "PROFORMA": "No proforma made yet."
+    },
+    "none": {
+      "LABELS": "No carrier label: our van, the customer collects or a carrier booked by hand.",
+      "PACKING_LIST": "No packing list.",
+      "DDT": "No DDT for this shipment.",
+      "COMMERCIAL_INVOICE": "Not needed for this shipment.",
+      "PROFORMA": "None made."
+    },
+    "notShown": "It carries prices: it joins the pack only for someone who sees prices.",
+    "latest": "Newest: version {version}, {when}, {pages} pages.",
+    "latestOld": "Newest: version {version}, {when}, {pages} pages — the papers changed since: make it again.",
+    "notMade": "Not made yet.",
+    "makePrint": "Make and print on {printer}",
+    "makePrintNone": "Make and print",
+    "makeOnly": "Make the PDF",
+    "open": "Open the PDF",
+    "note": "Never sent to the customer: the pack is for the driver and the dock.",
+    "pdfTitle": "Pack of {number}, version {version}",
+    "pdfLoading": "Reading the PDF…",
+    "done": {
+      "made": "Version {version} made ({pages} pages).",
+      "printed": "Version {version} made ({pages} pages) and sent to the printer.",
+      "same": "Version {version} already holds these papers: nothing new was made.",
+      "notPrinted": {
+        "NO_PRINTER": "Version {version} made; not printed: the site has no document printer. Open the PDF to print it.",
+        "PRINTER": "Version {version} made; the printer did not take it. Open the PDF to print it."
+      }
+    },
+    "held": {
+      "noPack": "The pack needs the right to pack.",
+      "cancelled": "The shipment is cancelled.",
+      "nothing": "No part is ready yet.",
+      "noPrint": "Printing documents needs the right to print documents.",
+      "noPrinter": "The site has no document printer: make the PDF and print it from the browser.",
+      "notMade": "Make it first.",
+      "busy": "Wait: the pack is being made."
+    }
+  },
+  "proforma": {
+    "title": "Proforma invoice",
+    "purpose": {
+      "CUSTOMS": "For customs: the goods and their values. Not an invoice.",
+      "SAMPLES": "For samples sent out: customs only.",
+      "PREPAYMENT": "A request for payment in advance."
+    },
+    "blockers": "What stops a proforma now",
+    "problem": {
+      "cancelled": "The shipment is cancelled.",
+      "noLines": "The shipment has no garments yet.",
+      "noPrice": "A line has no price on its order.",
+      "vat": "The order's VAT cannot be printed on a proforma.",
+      "currency": "The order has no currency.",
+      "other": "Something on the order or the shipment is not complete."
+    },
+    "none": "No proforma yet.",
+    "versions": "Versions",
+    "version": "{number} · version {version}",
+    "current": "Newest",
+    "older": "Older",
+    "openOf": "Open {number} version {version}",
+    "make": "Make a proforma…",
+    "makeAgain": "Make a new version…",
+    "note": "Its number is taken once; a new version keeps it. The PDF carries prices.",
+    "dialogTitle": "Proforma for {number}",
+    "dialogBody": "The goods, values and references are read from the order and the shipment as they are now.",
+    "language": "Language",
+    "languageDefault": "The order's language",
+    "notes": "Notes printed on it",
+    "notesHint": "Optional.",
+    "notesLong": "At most {max} characters.",
+    "go": "Make the proforma",
+    "done": {
+      "made": "Proforma {number} version {version} made.",
+      "same": "Proforma {number} version {version} already says this: nothing new was made."
+    },
+    "held": {
+      "noRight": "A proforma needs the right to issue proformas and to see prices.",
+      "problems_one": "{count} thing stops it: see above.",
+      "problems_other": "{count} things stop it: see above.",
+      "busy": "Wait: the proforma is being made.",
+      "noFiles": "Opening a file needs the right to read files."
+    }
+  },
+  "publicDoc": {
+    "title": "Public DoC pages",
+    "body": "The address the QR code on the label holds: the Declaration of Conformity and the user information of each style.",
+    "none": "No style on this shipment yet.",
+    "live": "Shows its declaration today.",
+    "notLive": "Shows no declaration yet: publish it in Compliance › Declarations & instructions.",
+    "copyOf": "Copy the address of {style}",
+    "openOf": "Open the page of {style}",
+    "copied": "Address copied.",
+    "copyFailed": "It could not be copied: {address}"
+  },
+  "pod": {
+    "title": "Proof of delivery",
+    "via": {
+      "CARRIER": "From the carrier",
+      "TYPED": "Typed by the office"
+    },
+    "shippedAt": "Left",
+    "expectedAt": "Expected",
+    "deliveredAt": "Delivered",
+    "returnedAt": "Returned",
+    "signedBy": "Signed by",
+    "signedAt": "Signed at",
+    "image": "Image or scan",
+    "noImage": "None",
+    "notYet": "Not yet",
+    "notDelivered": "Not delivered yet",
+    "notDeliveredHint": "The proof is kept once the goods are delivered.",
+    "carrierAsked": "The carrier was asked for its proof: it shows here when it answers.",
+    "record": "Record the proof…",
+    "download": "Download for a dispute",
+    "keptNote": "Every part is kept: the proof never changes.",
+    "recordTitle": "Proof of delivery of {number}",
+    "recordGo": "Keep the proof",
+    "onceNote": "Each part is kept once and then never changes.",
+    "signerHint": "The customer's person who signed, as written on the proof.",
+    "imageHint": "A photo (JPEG, PNG) or a scan (PDF), at most 15 MB.",
+    "picked": "Picked: {name}",
+    "keptSigner": "Signed by {name} (kept).",
+    "keptTime": "Signed at {when} (kept).",
+    "keptImage": "Image {name} (kept).",
+    "done": "The proof of delivery is kept.",
+    "held": {
+      "noManage": "Recording the proof needs the right to manage shipments.",
+      "notDelivered": "Not delivered yet.",
+      "kept": "Every part is kept: it never changes.",
+      "busy": "Wait: the last change is still being saved.",
+      "noImage": "No image is kept.",
+      "noFiles": "Downloading needs the right to read files."
+    },
+    "form": {
+      "nothing": "Type at least one part.",
+      "signerLong": "At most {max} characters.",
+      "oneLine": "One line only.",
+      "when": "The time is not a time.",
+      "future": "The time is in the future.",
+      "beforeLeft": "The time is before the goods left.",
+      "noUpload": "Adding a file needs the right to upload files.",
+      "type": "A photo (JPEG, PNG) or a PDF only.",
+      "size": "At most 15 MB."
+    },
+    "refusal": {
+      "KEPT": "That part is kept already: it never changes.",
+      "NOT_DELIVERED": "The shipment is not delivered."
+    }
+  },
+  "problems": {
+    "title": "Tracking problems",
+    "open_one": "{count} open",
+    "open_other": "{count} open",
+    "none": "No problem raised. A parcel without carrier news for {days} days raises one by itself.",
+    "what": {
+      "DELAYED": "Tell the customer if the promise moves.",
+      "ADDRESS_PROBLEM": "Check the address with the customer and the carrier.",
+      "FAILED_DELIVERY": "Agree a new delivery with the carrier.",
+      "NO_SCAN": "Ask the carrier where the parcel is."
+    },
+    "bySystem": "Raised by the daily check",
+    "byCarrier": "From the carrier's news",
+    "raised": "Raised {when}",
+    "task": "task {state}",
+    "resolved": "Resolved {when}",
+    "resolve": "Resolve",
+    "resolveOf": "Resolve: {kind}",
+    "resolveTitle": "Resolve: {kind}",
+    "taskDone": "Its task is marked done by you.",
+    "noTask": "It has no task.",
+    "note": "What was done",
+    "noteHint": "Optional; kept on the record.",
+    "noteLong": "At most {max} characters.",
+    "done": "The problem is resolved.",
+    "held": {
+      "resolved": "Already resolved."
+    },
+    "refusal": {
+      "RESOLVED": "It was resolved already."
+    }
+  },
+  "problemKind": {
+    "DELAYED": "Delayed",
+    "ADDRESS_PROBLEM": "Address problem",
+    "FAILED_DELIVERY": "Failed delivery",
+    "NO_SCAN": "No news for {days} days"
+  },
+  "notice": {
+    "title": "Customer notice",
+    "switchOn": "Sent by itself",
+    "switchOff": "By hand only",
+    "auto": {
+      "on": "The shipping mail goes by itself to the customer's orders contacts, in their language, when the goods leave.",
+      "off": "The site's customer notice is off (Shipping settings): nothing goes by itself; Send again mails it by hand.",
+      "sent": "The notice of this shipment was sent."
+    },
+    "why": {
+      "SWITCH_OFF": "The site's customer notice is off: nothing goes by itself.",
+      "NOT_LEFT": "The goods have not left yet: the notice goes when they leave with their tracking numbers.",
+      "CANCELLED": "The shipment is cancelled: no notice goes.",
+      "TEST_LABELS": "It left with TEST labels (test mode): no customer ever gets a TEST tracking number.",
+      "NO_TRACKING": "No carrier tracking number (our van, or the customer collects): nothing to follow.",
+      "NO_RECIPIENT": "The customer has no active orders contact with an e-mail address: add one on the customer first.",
+      "SENT": "The notice of this shipment was sent already."
+    },
+    "mails": "Mails sent",
+    "noMail": "No mail sent yet.",
+    "automatic": "By itself",
+    "byHand": "By hand",
+    "mailLine": "{when} · {language}",
+    "sentAt": "sent {when}",
+    "sendAgain": "Send again…",
+    "sendTitle": "Send the shipping mail of {number}",
+    "sendBody": "Each contact gets the mail in their language, with the tracking numbers and what is in the parcels (no prices).",
+    "to": "To",
+    "fake": "On this system the mail goes to the test mailbox: nothing reaches a real customer.",
+    "sendGo_one": "Send to {count} contact",
+    "sendGo_other": "Send to {count} contacts",
+    "outcome": {
+      "sent_one": "Sent to {count} contact.",
+      "sent_other": "Sent to {count} contacts.",
+      "failed": "{sent} sent, {failed} not sent: try again later.",
+      "none": "Nothing was sent.",
+      "skipped": "Not sent to addresses that refuse our mail: {addresses}"
+    },
+    "held": {
+      "noManage": "Sending needs the right to manage shipments.",
+      "busy": "Wait: the mail is being sent.",
+      "pickOne": "Pick at least one contact."
+    }
+  }
+}

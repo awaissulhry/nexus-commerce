@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { Download, MoreHorizontal, PackagePlus, Printer, Search, Timer, Truck } from 'lucide-react'
+import { Download, Hand, MoreHorizontal, PackagePlus, Printer, Search, Timer, Truck } from 'lucide-react'
 import { Banner, Card, EmptyState, Menu, MetricStrip } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, Input, Pill, Select, Tag } from '@nexus/ui/primitives'
@@ -18,6 +18,12 @@ import { carrierWords, kilos, placeOf, ROW_VIEWS, STATUS_TONE, TILES, waitsForHa
 import type { ShipmentsListActions, ShipmentsListModel } from '../list-model'
 import { NewShipmentDialog } from './NewShipmentDialog'
 import { PrintDdtsDialog } from './PrintDdtsDialog'
+// B-W2b-410
+import { BulkHoldDialog } from '../../holds/view/BulkHoldDialog'
+import { holdable } from '../../holds/model'
+import { exceptionsCount, isDepthView } from '../../queue/model'
+import { DEPTH_NS } from '../../queue/shared/depth'
+import { QueueCutOffs, QueueGrid } from '../../queue/view/QueueParts'
 import '../../shipments.css'
 
 export type { ShipmentsListActions, ShipmentsListModel } from '../list-model'
@@ -35,7 +41,7 @@ export type { ShipmentsListActions, ShipmentsListModel } from '../list-model'
  */
 export function ShipmentsListView({ model, actions }: { model: ShipmentsListModel; actions?: ShipmentsListActions }) {
   return (
-    <WithMessages namespaces={['shipments', 'lists']}>
+    <WithMessages namespaces={['shipments', 'lists', DEPTH_NS]}>
       <ShipmentsList model={model} actions={actions} />
     </WithMessages>
   )
@@ -44,6 +50,9 @@ export function ShipmentsListView({ model, actions }: { model: ShipmentsListMode
 function ShipmentsList({ model, actions }: { model: ShipmentsListModel; actions?: ShipmentsListActions }) {
   const t = useT('shipments')
   const lists = useT('lists')
+  // B-W2b-410: the rows views and the tile this step adds are said in its own catalogue.
+  const d = useT(DEPTH_NS)
+  const rowsWord = (view: RowView) => (isDepthView(view) || view === 'open' ? d(`rows.${view}`) : t(`rows.${view}`))
   const locale = useLocale()
   const [query, setQuery] = useState(model.q)
   useEffect(() => setQuery(model.q), [model.q])
@@ -100,7 +109,7 @@ function ShipmentsList({ model, actions }: { model: ShipmentsListModel; actions?
     <Select size="sm" aria-label={t('list.rowsLabel')} value={model.rows} onChange={(event) => actions?.onRows?.(event.target.value as RowView)}>
       {ROW_VIEWS.map((view) => (
         <option key={view} value={view}>
-          {t(`rows.${view}`)}
+          {rowsWord(view)}
         </option>
       ))}
     </Select>
@@ -284,65 +293,95 @@ function ShipmentsList({ model, actions }: { model: ShipmentsListModel; actions?
         </Banner>
       )}
 
-      <CutOffStrip model={model} actions={actions} />
+      {model.depth ? <QueueCutOffs model={model.depth} actions={actions?.depth} /> : <CutOffStrip model={model} actions={actions} />}
 
       <MetricStrip
-        metrics={TILES.map((tile) => {
-          const count = model.tiles?.[tile.key] ?? null
-          return {
-            label: t(`tile.${tile.key}`),
-            value: count === null ? '—' : String(count),
-            hint: count === null && model.asOf !== null ? t('tile.unknown') : undefined,
-            onClick: () => actions?.onRows?.(model.rows === tile.rows && pressedTile === tile.key ? 'today' : tile.rows),
-            active: pressedTile === tile.key,
-          }
-        })}
+        metrics={[
+          ...TILES.map((tile) => {
+            const count = model.tiles?.[tile.key] ?? null
+            return {
+              label: t(`tile.${tile.key}`),
+              value: count === null ? '—' : String(count),
+              hint: count === null && model.asOf !== null ? t('tile.unknown') : undefined,
+              onClick: () => actions?.onRows?.(model.rows === tile.rows && pressedTile === tile.key ? 'today' : tile.rows),
+              active: pressedTile === tile.key,
+            }
+          }),
+          // B-W2b-410 (design sh-metrics "Exceptions"): the open tracking problems.
+          ...(model.depth
+            ? [
+                {
+                  label: d('tile.exceptions'),
+                  value: exceptionsCount(model.depth) === null ? '—' : String(exceptionsCount(model.depth)),
+                  onClick: () => actions?.onRows?.(model.rows === 'exceptions' ? 'today' : 'exceptions'),
+                  active: model.rows === 'exceptions',
+                },
+              ]
+            : []),
+        ]}
       />
 
-      <ListFrame<ShipmentRow>
-        label={t('list.tableLabel')}
-        rows={state ? [] : items}
-        rowId={(row) => row.id}
-        columns={columns}
-        count={items ? t(model.list.more ? 'list.countMore' : 'list.count', { count: items.length }) : '—'}
-        search={searchField}
-        tools={
-          <span className="fw-sh-inline">
-            {rowsSelect}
-            {model.carrier && (
+      {model.depth?.grid ? (
+        <QueueGrid
+          model={model.depth}
+          actions={actions?.depth}
+          search={searchField}
+          tools={<span className="fw-sh-inline">{rowsSelect}</span>}
+          keys={ownKeys}
+          onHelp={() => setHelp(true)}
+        />
+      ) : (
+        <ListFrame<ShipmentRow>
+          label={t('list.tableLabel')}
+          rows={state ? [] : items}
+          rowId={(row) => row.id}
+          columns={columns}
+          count={items ? t(model.list.more ? 'list.countMore' : 'list.count', { count: items.length }) : '—'}
+          search={searchField}
+          tools={
+            <span className="fw-sh-inline">
+              {rowsSelect}
+              {model.carrier && (
+                <>
+                  <Tag tone="info">{t('cutoff.filtered', { carrier: cardName(t, model.cards?.find((card) => card.key === model.carrier) ?? null, model.carrier) })}</Tag>
+                  <Button size="sm" variant="quiet" onClick={() => actions?.onCarrier?.(null)}>
+                    {t('cutoff.clear')}
+                  </Button>
+                </>
+              )}
+            </span>
+          }
+          selection={{
+            selected,
+            onChange: setSelected,
+            actions: (
               <>
-                <Tag tone="info">{t('cutoff.filtered', { carrier: cardName(t, model.cards?.find((card) => card.key === model.carrier) ?? null, model.carrier) })}</Tag>
-                <Button size="sm" variant="quiet" onClick={() => actions?.onCarrier?.(null)}>
-                  {t('cutoff.clear')}
+                <Button size="sm" variant="primary" aria-label={t('bulk.export', { count: picked.length })} onClick={() => actions?.onExport?.(picked.map((row) => row.id))}>
+                  <Download size={13} aria-hidden /> <SelectionLabel>{t('bulk.export', { count: picked.length })}</SelectionLabel>
                 </Button>
+                {/* B-W2a-71 (design sh-grid selection row "Print 4 DDTs"). */}
+                <Button size="sm" aria-label={t('bulk.printDdts', { count: printable })} heldReason={printHeld ? t(printHeld.key, printHeld.params) : null} onClick={() => actions?.onPrintDdts?.(picked.map((row) => row.id))}>
+                  <Printer size={13} aria-hidden /> <SelectionLabel>{t('bulk.printDdts', { count: printable })}</SelectionLabel>
+                </Button>
+                {/* B-W2b-410 (design sh-grid selection row "Hold"). */}
+                {model.depth && (
+                  <Button size="sm" aria-label={d('holds.bulk.button', { count: picked.filter((row) => holdable(row.status)).length })} heldReason={!model.depth.mayHold ? d('holds.held.noManage') : picked.some((row) => holdable(row.status)) ? null : d('holds.bulk.noneOpen')} onClick={() => actions?.depth?.onHold?.(picked)}>
+                    <Hand size={13} aria-hidden /> <SelectionLabel>{d('holds.bulk.button', { count: picked.filter((row) => holdable(row.status)).length })}</SelectionLabel>
+                  </Button>
+                )}
               </>
-            )}
-          </span>
-        }
-        selection={{
-          selected,
-          onChange: setSelected,
-          actions: (
-            <>
-              <Button size="sm" variant="primary" aria-label={t('bulk.export', { count: picked.length })} onClick={() => actions?.onExport?.(picked.map((row) => row.id))}>
-                <Download size={13} aria-hidden /> <SelectionLabel>{t('bulk.export', { count: picked.length })}</SelectionLabel>
-              </Button>
-              {/* B-W2a-71 (design sh-grid selection row "Print 4 DDTs"). */}
-              <Button size="sm" aria-label={t('bulk.printDdts', { count: printable })} heldReason={printHeld ? t(printHeld.key, printHeld.params) : null} onClick={() => actions?.onPrintDdts?.(picked.map((row) => row.id))}>
-                <Printer size={13} aria-hidden /> <SelectionLabel>{t('bulk.printDdts', { count: printable })}</SelectionLabel>
-              </Button>
-            </>
-          ),
-        }}
-        updates={model.updates > 0 ? { count: model.updates, onShow: () => actions?.onShowUpdates?.() } : null}
-        more={model.list.more && items && items.length > 0 ? (model.rows === 'today' ? { label: t('list.moreToday'), onMore: () => actions?.onRows?.('all'), held: null } : { label: t('list.more'), onMore: () => actions?.onMore?.() }) : null}
-        keys={ownKeys}
-        onHelp={() => setHelp(true)}
-        onOpen={(row) => actions?.onOpen?.(row.id)}
-        state={state}
-        focusRow={model.focusRow}
-      />
-      {model.rows !== 'today' && <p className="fw-sh-hint">{t('list.viewing', { view: t(`rows.${model.rows}`) })}</p>}
+            ),
+          }}
+          updates={model.updates > 0 ? { count: model.updates, onShow: () => actions?.onShowUpdates?.() } : null}
+          more={model.list.more && items && items.length > 0 ? (model.rows === 'today' ? { label: t('list.moreToday'), onMore: () => actions?.onRows?.('all'), held: null } : { label: t('list.more'), onMore: () => actions?.onMore?.() }) : null}
+          keys={ownKeys}
+          onHelp={() => setHelp(true)}
+          onOpen={(row) => actions?.onOpen?.(row.id)}
+          state={state}
+          focusRow={model.focusRow}
+        />
+      )}
+      {model.rows !== 'today' && <p className="fw-sh-hint">{t('list.viewing', { view: rowsWord(model.rows) })}</p>}
 
       {help && (
         <Modal open onClose={() => setHelp(false)} title={t('list.keysTitle')} size="sm">
@@ -358,6 +397,7 @@ function ShipmentsList({ model, actions }: { model: ShipmentsListModel; actions?
 
       {model.create && <NewShipmentDialog model={model.create} can={model.can} actions={actions} />}
       {model.printDdts && <PrintDdtsDialog model={model.printDdts} rows={items ?? []} can={model.can} actions={actions} />}
+      {model.depth?.hold && <BulkHoldDialog model={model.depth.hold} actions={{ onReason: actions?.depth?.onHoldReason, onText: actions?.depth?.onHoldText, onGo: actions?.depth?.onHoldGo, onClose: actions?.depth?.onHoldClose }} />}
     </div>
   )
 }
