@@ -73,6 +73,8 @@ function useViewKeys(model: BrandingSectionModel, actions?: BrandingActions) {
       if (target && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) || target.closest('[role="dialog"]'))) return
       if (event.key === '1') actions?.onView?.('numbers')
       else if (event.key === '2') actions?.onView?.('documents')
+      // B-W2b-432: the e-mail templates.
+      else if (event.key === '3') actions?.onView?.('mail')
       // B-W2b-177: Required documents.
       else if (event.key === '6') actions?.onView?.('required')
       else return
@@ -92,6 +94,8 @@ function BrandingPage({ model, actions }: { model: BrandingSectionModel; actions
   const keys: ListKey[] = [
     { keys: ['1'], does: td('docs.keys.numbers') },
     { keys: ['2'], does: td('docs.keys.documents') },
+    // B-W2b-432: the e-mail templates.
+    { keys: ['3'], does: td('docs.keys.mail') },
     // 5: Branding's place among the design's six lists (E-mails and Labels, 3 and 4, come with their steps).
     { keys: ['5'], does: td('docs.keys.branding') },
     { keys: ['6'], does: td('docs.keys.required') },
@@ -109,6 +113,8 @@ function BrandingPage({ model, actions }: { model: BrandingSectionModel; actions
           options={[
             { value: 'numbers', label: td('docs.views.numbers') },
             { value: 'documents', label: td('docs.views.documents') },
+            // B-W2b-432: the e-mail templates.
+            { value: 'mail', label: td('docs.views.mail') },
             { value: 'branding', label: td('docs.views.branding') },
             // B-W2b-177: Required documents.
             { value: 'required', label: td('docs.views.required') },

@@ -17,7 +17,7 @@ import { RequiredView } from './view/RequiredView'
  * stale row is read again), Switch off / on N one rule at a time, New rule (`POST /files/required-rules`, one key per
  * dialog). Reads again when the tab comes back into view. The address keeps the company, "show switched off" and the dialog.
  */
-export function RequiredSection({ companies, askedCompany, onView, onCompany }: { companies: Loaded<CompanyOption>; askedCompany: string | null; onView: (view: 'numbers' | 'documents' | 'branding') => void; onCompany: (companyId: string) => void }) {
+export function RequiredSection({ companies, askedCompany, onView, onCompany }: { companies: Loaded<CompanyOption>; askedCompany: string | null; onView: (view: 'numbers' | 'documents' | 'mail' | 'branding') => void; onCompany: (companyId: string) => void }) {
   const api = useOfficeApi()
   const session = useOfficeSession()
   const router = useRouter()

@@ -7,6 +7,7 @@
     "keys": {
       "numbers": "Mostra le serie di numerazione",
       "documents": "Mostra i modelli dei documenti",
+      "mail": "Mostra i modelli e-mail",
       "branding": "Mostra il marchio",
       "newSeries": "Nuova serie",
       "required": "Mostra i documenti richiesti"
@@ -16,6 +17,7 @@
       "label": "Quale elenco",
       "numbers": "Numerazioni",
       "documents": "Documenti",
+      "mail": "E-mail",
       "branding": "Marchio",
       "required": "Documenti richiesti"
     },
@@ -23,7 +25,7 @@
       "label": "Società",
       "all": "Tutte le società"
     },
-    "later": "Modelli di e-mail ed etichette arrivano nei prossimi passi.",
+    "later": "I modelli delle etichette arrivano in un passo successivo.",
     "pattern": {
       "aria": "Schema {pattern}",
       "year4": "anno (2026)",
@@ -90,38 +92,6 @@
     "status": {
       "ACTIVE": "Attiva",
       "CLOSED": "Chiusa"
-    },
-    "layouts": {
-      "noRightTitle": "Le anteprime dei documenti non sono tue",
-      "noRight": "Serve il permesso di vedere l'anteprima dei documenti della società. Chiedi a un amministratore.",
-      "noCompanyTitle": "Nessuna società attiva",
-      "noCompany": "Aggiungi prima una società: i suoi documenti riportano i suoi dati legali.",
-      "with": "Con i dati di {name}: ogni anteprima si apre come PDF in una nuova scheda, marcata come esempio.",
-      "label": "Modelli dei documenti",
-      "notReady_one": "{name} non può ancora stampare documenti: manca 1 dato legale (sede legale, partita IVA, codice fiscale, ufficio e numero REA).",
-      "notReady_other": "{name} non può ancora stampare documenti: mancano {count} dati legali (sede legale, partita IVA, codice fiscale, ufficio e numero REA).",
-      "fixLegal": "Completa i dati legali",
-      "heldLegal": "Completa prima i dati legali della società",
-      "col": {
-        "document": "Documento",
-        "layout": "Modello",
-        "preview": "Anteprima"
-      },
-      "fixed": "Modello fisso: la modifica arriva più avanti.",
-      "previewIn": {
-        "it": "Italiano",
-        "en": "English"
-      },
-      "newTab": "(si apre in una nuova scheda)",
-      "count_one": "{count} modello",
-      "count_other": "{count} modelli"
-    },
-    "type": {
-      "QUOTE": "Preventivo",
-      "PURCHASE_ORDER": "Ordine fornitore",
-      "DDT": "DDT (documento di trasporto)",
-      "INVOICE_COPY": "Fattura (copia di cortesia)",
-      "PACKING_LIST": "Distinta colli"
     },
     "newDialog": {
       "title": "Nuova serie di numerazione",

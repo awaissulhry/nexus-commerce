@@ -10,7 +10,7 @@ import { formatDate, formatTime } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
 import { RecordPanelsView } from '../../../../../record-panels/view/RecordPanelsView'
-import { DocumentSendView, type DocumentSendActions } from '../../../../_shared/document-send/view/DocumentSendView'
+import { DocumentSendView, type DocumentSendActions, type SendParts } from '../../../../_shared/document-send/view/DocumentSendView'
 import { previewHref, type QuoteDetail } from '../../api'
 import { daysUntil, nextStep, QUOTE_TABS, readOnlyReason, STATUS_TONE, type QuoteTab } from '../../model'
 import type { QuoteRecordActions, QuoteRecordViewModel } from '../record-model'
@@ -36,15 +36,15 @@ export type { QuoteRecordViewModel, QuoteRecordActions } from '../record-model'
  * beside any tab on a wide screen with ⌘J). Money follows the person's grains: cost and margin columns are absent, never
  * zero. It draws one view model and fetches nothing (QuoteRecord.tsx loads it).
  */
-export function QuoteRecordView({ model, actions, sendActions, panels, proofs, depth }: { model: QuoteRecordViewModel; actions?: QuoteRecordActions; sendActions?: DocumentSendActions; panels?: ReactNode; /** B-W2b-165: Documents › Proofs (the container mounts it). */ proofs?: ReactNode; /** B-W2b-316: the W2b parts (lines-depth/slots.ts). */ depth?: QuoteDepthSlots }) {
+export function QuoteRecordView({ model, actions, sendActions, panels, proofs, depth, sendParts }: { model: QuoteRecordViewModel; actions?: QuoteRecordActions; sendActions?: DocumentSendActions; panels?: ReactNode; /** B-W2b-165: Documents › Proofs (the container mounts it). */ proofs?: ReactNode; /** B-W2b-316: the W2b parts (lines-depth/slots.ts). */ depth?: QuoteDepthSlots; /** B-W2b-432: the send panel's language and message template. */ sendParts?: SendParts }) {
   return (
     <WithMessages namespaces={['sales', 'records']}>
-      <QuoteRecord model={model} actions={actions} sendActions={sendActions} panels={panels} proofs={proofs} depth={depth} />
+      <QuoteRecord model={model} actions={actions} sendActions={sendActions} panels={panels} proofs={proofs} depth={depth} sendParts={sendParts} />
     </WithMessages>
   )
 }
 
-function QuoteRecord({ model, actions, sendActions, panels, proofs, depth }: { model: QuoteRecordViewModel; actions?: QuoteRecordActions; sendActions?: DocumentSendActions; panels?: ReactNode; proofs?: ReactNode; depth?: QuoteDepthSlots }) {
+function QuoteRecord({ model, actions, sendActions, panels, proofs, depth, sendParts }: { model: QuoteRecordViewModel; actions?: QuoteRecordActions; sendActions?: DocumentSendActions; panels?: ReactNode; proofs?: ReactNode; depth?: QuoteDepthSlots; sendParts?: SendParts }) {
   const t = useT('sales')
   const listHref = `${model.prefix}/sales/quotes`
   const loaded = model.quote
@@ -89,10 +89,10 @@ function QuoteRecord({ model, actions, sendActions, panels, proofs, depth }: { m
       </div>
     )
   }
-  return <ReadyRecord quote={loaded.value} model={model} actions={actions} sendActions={sendActions} panels={panels} proofs={proofs} depth={depth} />
+  return <ReadyRecord quote={loaded.value} model={model} actions={actions} sendActions={sendActions} panels={panels} proofs={proofs} depth={depth} sendParts={sendParts} />
 }
 
-function ReadyRecord({ quote, model, actions, sendActions, panels, proofs, depth }: { quote: QuoteDetail; model: QuoteRecordViewModel; actions?: QuoteRecordActions; sendActions?: DocumentSendActions; panels?: ReactNode; proofs?: ReactNode; depth?: QuoteDepthSlots }) {
+function ReadyRecord({ quote, model, actions, sendActions, panels, proofs, depth, sendParts }: { quote: QuoteDetail; model: QuoteRecordViewModel; actions?: QuoteRecordActions; sendActions?: DocumentSendActions; panels?: ReactNode; proofs?: ReactNode; depth?: QuoteDepthSlots; sendParts?: SendParts }) {
   const t = useT('sales')
   const locale = useLocale()
   const recordHref = `${model.prefix}/sales/quotes/${quote.id}`
@@ -335,7 +335,7 @@ function ReadyRecord({ quote, model, actions, sendActions, panels, proofs, depth
       <QuoteDialogs quote={quote} model={model} actions={actions} />
       {depth?.overlay}
       {model.duplicate && <DuplicateDialog model={model.duplicate} canManage={model.can.manage} actions={actions} />}
-      {model.send && <DocumentSendView open model={model.send} actions={sendActions} />}
+      {model.send && <DocumentSendView open model={model.send} actions={sendActions} parts={sendParts} />}
     </div>
   )
 }

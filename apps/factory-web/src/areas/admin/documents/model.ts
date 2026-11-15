@@ -8,17 +8,17 @@ import { reachOf, type BulkNotice, type Reach } from '../kit/bulk-model'
 import type { Allocation, NumberKind, NumberReset, Series, SeriesProof } from './api'
 
 /**
- * SCR-014 Documents & numbering (design 02 admin.documents; PLT-122, PLT-123, PLT-124): one page, two lists in W0 —
- * Numbers (every number series of the companies, the next number as it will print, the pattern as chips, the fiscal
- * lock, and the Fiscal check: proof that invoices and DDTs have no gaps) and Documents (the fixed layouts, previewed
- * with the company's legal data in a new tab). E-mail and label templates, branding and required documents come in
- * later waves (W1, W2b). Pure: the container maps the API's answers here, the view draws them, the tests hold every
+ * SCR-014 Documents & numbering (design 02 admin.documents; PLT-122, PLT-123, PLT-124): one page of lists — Numbers
+ * (every number series of the companies, the next number as it will print, the pattern as chips, the fiscal lock, and
+ * the Fiscal check: proof that invoices and DDTs have no gaps); Documents and E-mails (the templates, B-W2b-432),
+ * Branding and Required documents are their own sections. Label templates come later. Pure: the container maps the API's answers here, the view draws them, the tests hold every
  * rule. Pattern words are this web's (the API's English refusal is never shown).
  */
 
 // B-W2b-161: Branding, the W2b section of the page (branding/).
 // B-W2b-177: Required documents (required/).
-export const DOCUMENT_VIEWS = ['numbers', 'documents', 'branding', 'required'] as const
+// B-W2b-432: Documents is the document templates (doc-templates/), E-mails the e-mail templates (mail-templates/).
+export const DOCUMENT_VIEWS = ['numbers', 'documents', 'mail', 'branding', 'required'] as const
 export type DocumentsView = (typeof DOCUMENT_VIEWS)[number]
 
 export interface CompanyOption {
@@ -322,12 +322,6 @@ export function newSeriesHeld(model: Pick<DocumentsViewModel, 'can' | 'companies
   if (!model.can.manage) return 'docs.held.manage'
   if (model.companies.items !== null && model.companies.items.filter((company) => company.status === 'ACTIVE').length === 0) return 'docs.held.noCompany'
   return null
-}
-
-/** The company whose data the sample documents show: the chosen one, else the first active one. */
-export function sampleCompany(model: Pick<DocumentsViewModel, 'companyId' | 'companies'>): CompanyOption | null {
-  const companies = (model.companies.items ?? []).filter((company) => company.status === 'ACTIVE')
-  return companies.find((company) => company.id === model.companyId) ?? companies[0] ?? null
 }
 
 /**
