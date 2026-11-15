@@ -28,8 +28,10 @@ import { assertMay, mayOn, officeContextOf, paymentDetail, readPayment, type Pay
  *
  * Issuing needs invoices.issue and a fresh step-up (A1 §3.10), asked only when a TD02 will be issued. The checks before
  * issue run first (a blocked customer, a missing VIES proof…): when they fail, nothing is recorded and the answer says
- * what to fix, or to record the payment without the deposit invoice (`issueDepositInvoice: false`) and issue it later
- * (POST /invoicing/invoices/deposit-draft, then issue).
+ * what to fix, or to record the payment without the deposit invoice (`issueDepositInvoice: false`).
+ * B-W2b-F55: recorded without it, the TD02 still follows by the one rule of every path (deposit-invoice.ts): the worker's
+ * `payments.allocatedDepositInvoice` issues it right after, and only a refusal of its checks (audited on the request) leaves
+ * it to the office (POST /invoicing/invoices/deposit-draft, then issue).
  */
 
 export interface DepositReceivedInput {
@@ -88,7 +90,8 @@ export async function depositReceived(files: FilesRuntime, caller: CommandCaller
   const issuing = plan.decision.required && body.issueDepositInvoice !== false
   if (issuing) {
     if (!mayOn(context, INVOICES_ISSUE, { companyId: current.companyId, partyId: current.partyId })) {
-      throw new ForbiddenError('Issuing the deposit invoice needs invoices.issue: record the payment without it (issueDepositInvoice: false) and let finance issue it.')
+      // B-W2b-F55: without it the TD02 follows by itself right after (deposit-invoice.ts); the words say so.
+      throw new ForbiddenError('Issuing the deposit invoice now needs invoices.issue: record the payment without it (issueDepositInvoice: false) and the deposit invoice follows by itself right after.')
     }
     stepUp()
   }
