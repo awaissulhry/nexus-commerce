@@ -109,7 +109,7 @@ beforeAll(async () => {
   so2 = (await one<{ id: string }>(`SELECT id FROM "SalesOrder" WHERE "tenantId" = $1 AND number = 'SEED-SO-0002'`, [T])).id
   await force(`UPDATE "SalesOrder" SET "promiseDate" = $2::date, status = 'CONFIRMED' WHERE id = $1`, [so2, plusCalendarDays(businessDate(at), 2)])
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database: h.database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => (String(request.headers['x-test-session']) in PEOPLE ? session(String(request.headers['x-test-session']) as Person) : null)) },
   )
   // The scheduler's first pass makes every built-in rule.

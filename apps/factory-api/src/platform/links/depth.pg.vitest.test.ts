@@ -168,7 +168,7 @@ beforeAll(async () => {
   auth = createOfficeAuth({ database, environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET, pinPepper: LOCAL_PIN_PEPPER, webOrigin: WEB_ORIGIN, clock, mailer: { deliver: async () => {} }, rateLimits: { signIn: limits, resetRequest: limits, tokenUse: limits, codes: limits, linkUse: limits, floorSignIn: limits } })
   const links = linkAuthenticator({ database, clock })
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET, webOrigin: WEB_ORIGIN, rateLimit: limits },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET, webOrigin: WEB_ORIGIN, rateLimit: limits },
     { database, officeAuth: auth, clock, routesRoot: fileURLToPath(new URL('../..', import.meta.url)), authenticate: testAuthenticator((request) => (carriesLink(request) ? links(request) : (SESSIONS[String(request.headers['x-test-session'])] ?? null))), logger: false },
   )
 }, 300_000)

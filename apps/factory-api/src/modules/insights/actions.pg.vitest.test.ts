@@ -135,7 +135,7 @@ beforeAll(async () => {
   await admin(`INSERT INTO "QuoteApproval" (id, "tenantId", "versionId", "partyId", reasons, "createdById") VALUES ($1, $2, $3, $4, ARRAY['DISCOUNT_LIMIT']::"QuoteApprovalReason"[], $5)`, [newId(), T, version.id, version.partyId, PEOPLE.sales])
 
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database: h.database, routesRoot: fileURLToPath(new URL('../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])]?.() ?? null) },
   )
   orderKey = `ORDER_PROMISE:${ids.order}`

@@ -88,7 +88,7 @@ beforeAll(async () => {
   await admin(`INSERT INTO "Tenant" (id, slug, name) VALUES ($1, 'reasons-b', 'Gruppo Nuovo')`, [tenantB])
   await admin(`INSERT INTO "Company" (id, "tenantId", code, "legalName") VALUES ($1, $2, 'NUOVA', 'Nuova Prova S.r.l.')`, [companyB, tenantB])
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database, routesRoot: fileURLToPath(new URL('../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
   )
 }, 240_000)

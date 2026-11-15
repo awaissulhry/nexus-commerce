@@ -136,7 +136,7 @@ beforeAll(async () => {
   await admin(`INSERT INTO "Machine" (id, "tenantId", "companyId", "siteId", "assetNumber", "classId", "stationId", "workCentreId", status, "statusSince") VALUES ($1, $2, $3, $4, 'W2A38-SEW-02', $5, $6, $7, 'DOWN', $8)`, [newId(), T, companyA, siteA1, machineClass, station('SEW-02'), centre('SEW'), NOW])
 
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     {
       database: h.database,
       routesRoot: fileURLToPath(new URL('../../..', import.meta.url)),

@@ -17,8 +17,9 @@ let now = Date.parse('2026-11-05T09:00:00Z')
 const clock = { now: () => new Date(now) }
 const silent = { info() {}, warn() {}, error() {}, debug() {} }
 
+/** A request from an address (B-W2b-F57: the guard reads it through core/client-address.ts, from the TCP peer). */
 function request(ip: string, extra: Partial<FastifyRequest> = {}): FastifyRequest {
-  return { ip, log: silent, ...extra } as unknown as FastifyRequest
+  return { raw: { socket: { remoteAddress: ip } }, headers: {}, log: silent, ...extra } as unknown as FastifyRequest
 }
 
 function reply(): FastifyReply & { headers: Record<string, string> } {

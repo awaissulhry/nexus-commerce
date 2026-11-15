@@ -93,7 +93,7 @@ beforeAll(async () => {
     [lotId, T, companyA, siteA1, leather, idOf('product:item-colour:leather:BLK'), `T-${run}-LOT`],
   )
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database: h.database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
   )
 }, 600_000)

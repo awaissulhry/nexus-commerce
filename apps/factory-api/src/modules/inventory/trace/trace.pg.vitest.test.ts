@@ -75,7 +75,7 @@ beforeAll(async () => {
   await seedShipping({ db: database, namespace: ns.b })
   useTraceClock(fixedClock('2026-12-01T09:00:00.000Z'))
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     {
       database,
       clock: fixedClock('2026-12-01T09:00:00.000Z'),

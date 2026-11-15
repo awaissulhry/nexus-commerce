@@ -116,7 +116,7 @@ beforeAll(async () => {
   leatherLineId = seeded.supplierLineIds.leather
   freightLineId = seeded.supplierLineIds.freight
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
   )
   receiptId = (await one<{ id: string }>('SELECT id FROM "GoodsReceipt" WHERE number = $1', ['SEED-GR-0001'])).id

@@ -106,7 +106,7 @@ export async function openWorld(name: string, ns: string, extraSessions: (T: Wor
     ...extraSessions(T),
   }
   const app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => sessions[String(request.headers['x-test-session'])] ?? null) },
   )
   const admin = async <R = Json>(sql: string, values: unknown[] = []): Promise<R[]> => (await db.admin.query(sql, values)).rows as R[]

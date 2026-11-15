@@ -20,6 +20,7 @@ import { mintSessionSecrets, startSession, type StartedSession } from '../sessio
 import { emailOrThrow } from '../users/email'
 import { adminFacts, userStatus } from '../users/status'
 import type { AcceptInvitationBody, InviteBody } from './contract'
+import { clientAddressOf } from '../../../core/client-address'
 
 /**
  * Invitations by email (feature PLT-015), ported from Commerce's invitation routes (apps/api/src/routes/auth.routes.ts):
@@ -222,7 +223,7 @@ export async function acceptInvitation(auth: OfficeAuth, request: FastifyRequest
         userId: token.userId,
         now,
         mfaProved: false,
-        ipHash: auth.secrets.ipHash(request.ip),
+        ipHash: auth.secrets.ipHash(clientAddressOf(request)),
         userAgent: request.headers['user-agent'],
         place: sessionPlaceOf(request),
         secrets,

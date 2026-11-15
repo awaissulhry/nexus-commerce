@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import rateLimit from '@fastify/rate-limit'
 import type { Redis } from 'ioredis'
+import { clientAddressOf } from './client-address'
 import { EXPOSED_HEADERS } from './cors-expose'
 import { ApiError, sendError } from './errors'
 import { REQUEST_ID_HEADER } from './ids'
@@ -14,8 +15,10 @@ import { REQUEST_ID_HEADER } from './ids'
  *   CORS         only the configured web origin (FACTORY_WEB_ORIGIN), with credentials. A preflight from any other
  *                origin is refused, and so is any state-changing request that carries another Origin (a browser
  *                always sends Origin on those): a cross-site form or script cannot write, whatever its cookies.
- *   rate limit   per client address, on every route; in Redis when the app has one (shared by every replica),
- *                in memory otherwise. Routes can set a stricter `config.rateLimit` (sign-in, links).
+ *   rate limit   per client address (core/client-address.ts: the browser's, behind the trusted proxies), on every
+ *                route; in Redis when the app has one (shared by every replica), in memory otherwise. Routes can set
+ *                a stricter `config.rateLimit` (sign-in, links); they count by the same address unless they key by
+ *                something of their own (a floor device).
  *   body size    1 MiB (files go to R2 by presigned URL, never through the API).
  */
 
@@ -98,6 +101,8 @@ export async function registerSecurity(app: FastifyInstance, options: SecurityOp
     timeWindow: options.rateLimit.timeWindowMs,
     ...(options.rateLimit.redis ? { redis: options.rateLimit.redis } : {}),
     nameSpace: options.rateLimit.namespace,
+    // B-W2b-F57: the browser's address behind the web proxy, never a header from anybody else (route limits inherit it).
+    keyGenerator: clientAddressOf,
     // When Redis is down the API keeps answering (unlimited) and /ready reports Redis as failed.
     skipOnError: true,
     errorResponseBuilder: () => new ApiError('rate_limited'),

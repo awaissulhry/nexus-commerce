@@ -72,7 +72,7 @@ beforeAll(async () => {
   if (signed.body.status !== 'signed_in') throw new Error(`owner sign-in: ${signed.status} ${JSON.stringify(signed.body)}`)
   owner = { browser, secret: await enrolTotp(h, browser) }
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database: h.database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null), logger: false },
   )
 }, 300_000)

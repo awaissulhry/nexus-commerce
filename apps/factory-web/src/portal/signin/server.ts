@@ -1,6 +1,7 @@
-import { cookies } from 'next/headers'
+import { cookies, headers } from 'next/headers'
 import { readFactoryApiUrl } from '../../lib/api-url'
 import { createApiClient, CSRF_COOKIE } from '../../lib/api/client'
+import { forwardedForOf } from '../../lib/api/forwarded'
 import { readSession, type SignedIn } from './api'
 
 /** The API's portal session cookie (apps/factory-api platform/auth/portal/cookies.ts). */
@@ -18,6 +19,7 @@ export async function loadSignInSession(): Promise<SignedIn | null> {
   if (!portal) return null
   const csrf = jar.get(CSRF_COOKIE)?.value
   const cookie = [`${PORTAL_COOKIE}=${portal}`, ...(csrf === undefined ? [] : [`${CSRF_COOKIE}=${csrf}`])].join('; ')
-  const api = createApiClient({ baseUrl: readFactoryApiUrl(process.env.FACTORY_API_URL), cookie })
+  // B-W2b-F57: the browser's address, not this web's (lib/api/forwarded.ts).
+  const api = createApiClient({ baseUrl: readFactoryApiUrl(process.env.FACTORY_API_URL), cookie, forwardedFor: forwardedForOf(await headers()) })
   return readSession(api).catch(() => null)
 }

@@ -223,7 +223,7 @@ beforeAll(async () => {
   files = createFilesRuntime({ gateway, local: localFileStore({ root: localRoot, environment: 'test' }), clock })
   useFiles(files)
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     {
       database,
       clock,

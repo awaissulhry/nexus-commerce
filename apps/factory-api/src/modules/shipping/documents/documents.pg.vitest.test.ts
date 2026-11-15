@@ -221,7 +221,7 @@ beforeAll(async () => {
   })
   const links = linkAuthenticator({ database, clock })
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET, webOrigin: WEB_ORIGIN, rateLimit: limits },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET, webOrigin: WEB_ORIGIN, rateLimit: limits },
     {
       database,
       officeAuth: auth,

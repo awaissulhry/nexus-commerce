@@ -89,7 +89,7 @@ beforeAll(async () => {
   indexers = await loadIndexers(fileURLToPath(new URL('../..', import.meta.url)))
   system = callerFor(database, systemContext(tenantId, 'search-pg-test'))
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     {
       database,
       routesRoot: fileURLToPath(new URL('../..', import.meta.url)),

@@ -8,6 +8,7 @@ import { displayContract, heatCellContract, heatmapContract, hourlyContract, rea
 import { manifest } from './manifest'
 import { displayBoard, heatCell, hourlyBoard, tvBoard, wipHeatmap } from './reads'
 import { giveReason, lineTargets, setTargets } from './targets'
+import { clientAddressOf } from '../../../core/client-address'
 
 /**
  * Line targets and boards (B-W2b-50; ./targets.ts, ./reads.ts, ./facts.ts). Each write is one command with an
@@ -40,7 +41,7 @@ export default defineRoutes('production.boards', manifest, async (app) => {
     '/production/boards/display',
     {
       schema: displayContract,
-      config: { rateLimit: { max: limits.floorSignIn.max, timeWindow: limits.floorSignIn.timeWindowMs, keyGenerator: (request: FastifyRequest) => `floor-board:${parseSiteToken(deviceCookieOf(request))?.id ?? request.ip}` } },
+      config: { rateLimit: { max: limits.floorSignIn.max, timeWindow: limits.floorSignIn.timeWindowMs, keyGenerator: (request: FastifyRequest) => `floor-board:${parseSiteToken(deviceCookieOf(request))?.id ?? clientAddressOf(request)}` } },
     },
     async (request) => displayBoard(officeAuthOf(app), request),
   )

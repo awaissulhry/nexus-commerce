@@ -175,7 +175,7 @@ beforeAll(async () => {
   const gateway = createGateway({ environment: 'test', redis: connection, prefix: redis.prefix, secrets, sleep: async () => {}, log: { info() {}, warn() {}, error() {} } })
   useFiles(createFilesRuntime({ gateway, local: localFileStore({ root: localRoot, environment: 'test' }), r2: r2FileStore({ clientFor: r2.clientFor }) }))
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     {
       database,
       routesRoot: fileURLToPath(new URL('../..', import.meta.url)),

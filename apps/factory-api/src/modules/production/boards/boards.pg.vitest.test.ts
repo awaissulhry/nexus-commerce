@@ -171,7 +171,7 @@ beforeAll(async () => {
   await admin(device, [A.stationTablet, A.tenant, A.companyA, A.siteA1, A.sew1, null, 'STATION', 'Sewing tablet 1', floorHash(station.value)])
   await admin(device, [A.tv, A.tenant, A.companyA, A.siteA1, null, A.lineL1, 'DISPLAY', 'Line 1 TV', floorHash(tv.value)])
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     {
       database: h.database,
       officeAuth: h.auth,
