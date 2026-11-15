@@ -72,10 +72,10 @@ export interface ConnectionsActions {
  * connections themselves say. Both lists are the Office's list frame (Owner rule 2026-10-29). Connecting a service is
  * held in words (no route adds one yet). `c` opens the catalogue. Fetches nothing (ConnectionsPage.tsx).
  */
-export function ConnectionsView({ model, actions }: { model: ConnectionsViewModel; actions?: ConnectionsActions }) {
+export function ConnectionsView({ model, actions, errorQueue }: { model: ConnectionsViewModel; actions?: ConnectionsActions; errorQueue?: ErrorQueueSlot }) {
   return (
     <ConnectionsMessages>
-      <Connections model={model} actions={actions} />
+      <Connections model={model} actions={actions} errorQueue={errorQueue} />
     </ConnectionsMessages>
   )
 }
@@ -232,7 +232,13 @@ function usePageKeys(): ListKey[] {
   return [{ keys: ['c'], does: t('conn.keys.connect') }]
 }
 
-function Connections({ model, actions }: { model: ConnectionsViewModel; actions?: ConnectionsActions }) {
+/** B-W2b-415: the error queue's band action ("Error queue (3)") and its section (connections/errors; absent without integrations.view). */
+export interface ErrorQueueSlot {
+  band: ReactNode
+  section: ReactNode
+}
+
+function Connections({ model, actions, errorQueue }: { model: ConnectionsViewModel; actions?: ConnectionsActions; errorQueue?: ErrorQueueSlot }) {
   const t = useT('admin-connections')
   const tAdmin = useT('admin')
   const providerName = (provider: IntegrationProvider) => t(`conn.provider.${provider}.name`)
@@ -294,9 +300,12 @@ function Connections({ model, actions }: { model: ConnectionsViewModel; actions?
         intro={t('conn.intro')}
         asOf={model.asOf}
         actions={
-          <Button size="sm" variant="primary" onClick={() => actions?.onConnect?.(true)}>
-            {t('conn.connect.open')}
-          </Button>
+          <>
+            {errorQueue?.band}
+            <Button size="sm" variant="primary" onClick={() => actions?.onConnect?.(true)}>
+              {t('conn.connect.open')}
+            </Button>
+          </>
         }
       />
       {testing.length > 0 && (
@@ -370,6 +379,7 @@ function Connections({ model, actions }: { model: ConnectionsViewModel; actions?
         state={state}
       />
       {help}
+      {errorQueue?.section}
       {model.mail ? <MailDomainSection model={model.mail} actions={actions?.mail} prefix={model.prefix} /> : <Banner tone="info" title={t('mail.noRight')} />}
       {model.delivery && <DeliverySection model={model.delivery} actions={actions?.delivery} prefix={model.prefix} />}
       <Residency model={model} />

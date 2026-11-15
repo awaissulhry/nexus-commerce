@@ -54,7 +54,12 @@
         "ok": "The API read this page from the database."
       },
       "scheduled": {
-        "unknown": "Nexus keeps no record of each scheduled run yet: a missed one is not shown here (the jobs list comes later)."
+        "unknown": "No scheduled run is recorded yet: the scheduler writes every run from its next tick (see Jobs and integrations).",
+        "ok": "Every scheduled job ran on time; none failed or is stuck.",
+        "late_one": "1 scheduled job missed its time or is stuck: open Jobs and integrations.",
+        "late_other": "{count} scheduled jobs missed their time or are stuck: open Jobs and integrations.",
+        "failing_one": "1 scheduled job failed its last run: what it does did not happen.",
+        "failing_other": "{count} scheduled jobs failed their last run: what they do did not happen."
       },
       "backups": {
         "unknown": "Backups are kept by the database provider; Nexus cannot read them yet. The second copy at another EU provider waits for the Owner's yes."

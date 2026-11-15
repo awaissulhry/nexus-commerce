@@ -317,6 +317,8 @@ import { events as reminders } from '../reminders/events'
 import { events as pricesFollowups } from '../prices-followups/events'
 // B-W2b-395: pickups and the day's close (shipping.pickup_changed, shipping.day_sheet_closed).
 import { events as shippingDispatch } from '../shipping-dispatch/events'
+// B-W2b-415: integration health (the error queue, connection tests, Run now and its runs).
+import { events as integrationHealth } from '../integration-health/events'
 // B-W2b-400: carrier contracts and services (shipping.carrier_contract_changed, shipping.carrier_services_changed, shipment.services_changed, shipment.parcel_values_changed, shipping.insurance_rule_changed).
 import { events as shippingContracts } from '../shipping-contracts/events'
 // B-W2b-406: a customer's own figures against ours (customer_figures.changed).
@@ -714,6 +716,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-435
   ...insightsDigest,
   ...alertRoutes,
+  // B-W2b-415
+  ...integrationHealth,
 ] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */

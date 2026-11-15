@@ -34,6 +34,8 @@ import { ShipmentsListView } from './view/ShipmentsListView'
 import { gridOf, queueCsv } from '../queue/model'
 import { depthAbilitiesOf, DEPTH_NS } from '../queue/shared/depth'
 import { useShipmentsDepth } from '../queue/use-queue'
+// B-W2b-412
+import { useDispatch } from '../end-of-day/use-dispatch'
 
 /** The open shipments the ship-today queue reads at once (its cards, tiles and rows). */
 const QUEUE_LIMIT = 200
@@ -257,6 +259,10 @@ function ShipmentsContainer() {
       ),
   })
 
+  // ---- B-W2b-412: pickups, the day's close, Mark handed over ------------------------------------------------------------------
+
+  const dispatch = useDispatch({ siteId: depth.model.siteId, today: depth.model.today.state === 'ready' ? depth.model.today.value.site.today : today, prefix, onChanged: () => void load() })
+
   // ---- the model ---------------------------------------------------------------------------------------------------------
 
   const cutOffs = useMemo(() => cutOffsBySite(sites), [sites])
@@ -279,6 +285,7 @@ function ShipmentsContainer() {
     create,
     printDdts,
     depth: depth.model,
+    dispatch: dispatch.model,
   }
 
   // ---- Print N DDTs (B-W2a-71) ---------------------------------------------------------------------------------------------
@@ -360,6 +367,7 @@ function ShipmentsContainer() {
         onPrintDdtsGo: () => void runPrintDdts(),
         onPrintDdtsClose: () => setPrintDdts((current) => (current?.busy ? current : null)),
         depth: depth.actions,
+        dispatch: dispatch.actions,
       }}
     />
   )

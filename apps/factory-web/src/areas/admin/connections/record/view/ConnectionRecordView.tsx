@@ -40,15 +40,15 @@ export interface ConnectionRecordActions {
  * held — no route replaces one yet), Calls (the gateway's ledger), Inbound (received webhooks, never a body) and
  * Activity (the record panels). Fetches nothing (ConnectionRecord.tsx).
  */
-export function ConnectionRecordView({ model, actions, panels }: { model: ConnectionRecordModel; actions?: ConnectionRecordActions; panels?: ReactNode }) {
+export function ConnectionRecordView({ model, actions, panels, test, testCard }: { model: ConnectionRecordModel; actions?: ConnectionRecordActions; panels?: ReactNode; test?: ReactNode; testCard?: ReactNode }) {
   return (
     <ConnectionsMessages>
-      <ConnectionRecord model={model} actions={actions} panels={panels} />
+      <ConnectionRecord model={model} actions={actions} panels={panels} test={test} testCard={testCard} />
     </ConnectionsMessages>
   )
 }
 
-function ConnectionRecord({ model, actions, panels }: { model: ConnectionRecordModel; actions?: ConnectionRecordActions; panels?: ReactNode }) {
+function ConnectionRecord({ model, actions, panels, test, testCard }: { model: ConnectionRecordModel; actions?: ConnectionRecordActions; panels?: ReactNode; test?: ReactNode; testCard?: ReactNode }) {
   const t = useT('admin-connections')
   const tAdmin = useT('admin')
   const href = (path: string) => adminHref(model.prefix, path)
@@ -100,9 +100,12 @@ function ConnectionRecord({ model, actions, panels }: { model: ConnectionRecordM
         }
         actions={
           <>
-            <Button size="sm" heldReason={t('conn.test.held')}>
-              {t('conn.test.action')}
-            </Button>
+            {/* B-W2b-415: Test and Reconnect (connections/errors/view/ConnectionTest); held in the old words without it. */}
+            {test ?? (
+              <Button size="sm" heldReason={t('conn.test.held')}>
+                {t('conn.test.action')}
+              </Button>
+            )}
             {verb && (
               <Button size="sm" variant={verb === 'pause' ? 'danger-outline' : 'primary'} onClick={() => actions?.onConfirm?.({ accountId: account.id, pause: verb === 'pause' })} heldReason={model.can.manage ? null : tAdmin('held.needs', { right: t('conn.right.manage') })}>
                 {t(`conn.${verb}.action`)}
@@ -121,7 +124,7 @@ function ConnectionRecord({ model, actions, panels }: { model: ConnectionRecordM
         {account.status === 'PAUSED' && <Banner tone="warning" title={t('conn.pausedBanner')} />}
         {account.status === 'DISABLED' && <Banner tone="neutral" title={t('conn.disabledBanner')} />}
         {isTestMode(account.mode) && account.status !== 'DISABLED' && <Banner tone="info" title={t(`conn.modeBanner.${account.mode}`)} />}
-        {model.tab === 'overview' && <OverviewTab model={model} account={account} />}
+        {model.tab === 'overview' && <OverviewTab model={model} account={account} testCard={testCard} />}
         {model.tab === 'settings' && <SettingsTab model={model} account={account} />}
         {model.tab === 'calls' && <CallsTab model={model} actions={actions} />}
         {model.tab === 'inbound' && <InboundTab model={model} account={account} actions={actions} />}
@@ -132,7 +135,7 @@ function ConnectionRecord({ model, actions, panels }: { model: ConnectionRecordM
   )
 }
 
-function OverviewTab({ model, account }: { model: ConnectionRecordModel; account: IntegrationAccount }) {
+function OverviewTab({ model, account, testCard }: { model: ConnectionRecordModel; account: IntegrationAccount; testCard?: ReactNode }) {
   const t = useT('admin-connections')
   const locale = useLocale()
   const limits = account.limits
@@ -180,9 +183,11 @@ function OverviewTab({ model, account }: { model: ConnectionRecordModel; account
           <div>
             <span className="fw-adm-hint">{t('conn.test.body')}</span>
           </div>
-          <Button size="sm" heldReason={t('conn.test.held')}>
-            {t('conn.test.action')}
-          </Button>
+          {testCard ?? (
+            <Button size="sm" heldReason={t('conn.test.held')}>
+              {t('conn.test.action')}
+            </Button>
+          )}
         </div>
       </Card>
       {!model.can.manage && <p className="fw-adm-hint">{t('conn.readOnly')}</p>}

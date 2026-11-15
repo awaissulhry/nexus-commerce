@@ -1,5 +1,6 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import { Download, FilePlus2, Globe2, MoreHorizontal, ShieldCheck } from 'lucide-react'
 import { isEuCountry } from '@nexus/factory-domain/shipping/evidence/evidence'
 import { Card, EmptyState, KeyValue, Menu } from '@nexus/ui/components'
@@ -22,7 +23,8 @@ const EVIDENCE_TONE: Record<EvidenceStatus, 'neutral' | 'warning' | 'info' | 'su
  * independent of each other and of the buyer, one a transport document), Reopen, and "needs it / does not" with a reason.
  * A shipment delivered in Italy says "Not needed" (the tab shows no count).
  */
-export function ExportTab({ shipment, model, actions }: { shipment: Shipment; model: ShipmentRecordModel; actions?: ShipmentRecordActions }) {
+// B-W2b-412: `papers`, the export papers (SCR-653), drawn in place of the destination card (they say the destination too).
+export function ExportTab({ shipment, model, actions, papers }: { shipment: Shipment; model: ShipmentRecordModel; actions?: ShipmentRecordActions; papers?: ReactNode }) {
   const t = useT('shipments')
   const locale = useLocale()
   const country = typeof shipment.shipTo.country === 'string' && shipment.shipTo.country ? shipment.shipTo.country.toUpperCase() : null
@@ -39,6 +41,7 @@ export function ExportTab({ shipment, model, actions }: { shipment: Shipment; mo
         </div>
         {!evidence ? <PartState problem={model.evidence.problem} onRetry={() => actions?.onRetryPart?.('evidence')} label={t('evidence.title')} /> : <EvidenceBody shipment={shipment} model={model} actions={actions} />}
       </Card>
+      {papers ?? (
       <Card padded>
         <div className="fw-sh-stack">
           <h2 className="fw-sh-h2">
@@ -54,6 +57,7 @@ export function ExportTab({ shipment, model, actions }: { shipment: Shipment; mo
           <p className="fw-sh-hint">{t(`export.what.${destination}`)}</p>
         </div>
       </Card>
+      )}
     </div>
   )
 }

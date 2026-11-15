@@ -415,6 +415,8 @@ import { THEIR_FIGURES_DEFINITIONS, THEIR_FIGURES_PERMISSIONS } from '../../rece
 import { IMPORTS_DUPLICATES_DEFINITIONS, IMPORTS_DUPLICATES_PERMISSIONS } from '../../imports/duplicates/permissions'
 // B-W2b-435: the owner digest's per-company switch (home.digest.switch).
 import { HOME_DIGEST_DEFINITIONS, HOME_DIGEST_PERMISSIONS } from '../../insights-digest/permissions'
+// B-W2b-415: integration health (integrations.errors.manage: the error queue's retry and dismiss; security.jobs.run: Run now).
+import { INTEGRATION_ERRORS_DEFINITIONS, INTEGRATION_HEALTH_PERMISSIONS, JOBS_RUN_DEFINITIONS } from '../../integration-health/permissions'
 
 /**
  * Every permission of the factory, assembled (feature PLT-029). A module that adds routes declares its permissions
@@ -1141,6 +1143,9 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   IMPORTS_DUPLICATES_DEFINITIONS,
   // B-W2b-435: the owner digest (area `home`).
   HOME_DIGEST_DEFINITIONS,
+  // B-W2b-415
+  INTEGRATION_ERRORS_DEFINITIONS,
+  JOBS_RUN_DEFINITIONS,
 ])
 
 /** The area of the permissions only floor roles hold (and floor roles hold no other, but FLOOR_SHARED_PERMISSIONS). */
@@ -1557,6 +1562,8 @@ for (const name of THEIR_FIGURES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclare
 for (const name of IMPORTS_DUPLICATES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-435: the owner digest.
 for (const name of HOME_DIGEST_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-415: integration health.
+for (const name of INTEGRATION_HEALTH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

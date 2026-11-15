@@ -1,0 +1,949 @@
+{
+  "common": {
+    "dismiss": "Chiudi",
+    "retry": "Riprova"
+  },
+  "problem": {
+    "read": {
+      "internal": "Qualcosa è andato storto da parte nostra.",
+      "signed_out": "La sessione è scaduta: accedi di nuovo.",
+      "forbidden": "Il tuo ruolo non permette di vederlo.",
+      "not_found": "Non c'è più.",
+      "unavailable": "Il server non risponde: riprova tra poco.",
+      "rate_limited": "Troppe richieste: aspetta un momento."
+    },
+    "write": {
+      "internal": "Non è stato salvato: qualcosa è andato storto da parte nostra.",
+      "moved": "Qualcuno l'ha cambiato nel frattempo: è stato riletto, controlla e riprova.",
+      "state": "Non è più in uno stato che lo permetta: è stato riletto.",
+      "invalid": "Qualcosa nel modulo non va: controlla i campi.",
+      "signed_out": "La sessione è scaduta: accedi di nuovo.",
+      "forbidden": "Il tuo ruolo non permette di farlo.",
+      "not_found": "Non c'è più.",
+      "rate_limited": "Troppe richieste: aspetta un momento.",
+      "unavailable": "Il server non risponde: non è cambiato nulla.",
+      "step_up": "Serve un codice nuovo dall'app di autenticazione."
+    }
+  },
+  "stepUp": {
+    "title": "Conferma con un codice nuovo",
+    "confirm": "Conferma",
+    "problem": {
+      "wrong": "Il codice è sbagliato o già usato: scrivi il più recente.",
+      "locked": "Troppi tentativi: aspetta qualche minuto.",
+      "unavailable": "Il codice non si è potuto verificare: riprova."
+    }
+  },
+  "band": {
+    "endOfDay": "Fine giornata",
+    "more": "Altre azioni sulle spedizioni",
+    "bookPickup": "Prenota un ritiro…"
+  },
+  "selection": {
+    "pickup_one": "Prenota ritiro ({count})",
+    "pickup_other": "Prenota ritiro ({count})",
+    "handOver_one": "Segna consegnata al vettore ({count})",
+    "handOver_other": "Segna consegnate al vettore ({count})"
+  },
+  "list": {
+    "export": {
+      "col": "Export",
+      "EXPORT": "Fuori UE",
+      "EU": "UE"
+    }
+  },
+  "pickup": {
+    "title": "Prenota un ritiro",
+    "titleAt": "Prenota un ritiro · {site}",
+    "go": "Prenota ritiro",
+    "goTest": "Prenota il ritiro di TEST",
+    "goPhone": "Registra la prenotazione telefonica",
+    "testMode": "Il sito è in modalità test: risponde subito il ritiro di TEST e nulla viene inviato a un vettore.",
+    "byHand": "Nessuna spedizione scelta: indica quanti colli e bancali ritira l'autista.",
+    "fromShipments_one": "Per {count} spedizione: {numbers}",
+    "fromShipments_other": "Per {count} spedizioni: {numbers}",
+    "skipped_one": "{count} spedizione scelta resta fuori",
+    "skipped_other": "{count} spedizioni scelte restano fuori",
+    "how": "Come si prenota",
+    "way": {
+      "SENDCLOUD": {
+        "title": "Tramite Sendcloud",
+        "body": "Inviata al vettore tramite la connessione Sendcloud dell'azienda; la risposta torna qui.",
+        "test": "Modalità test: risponde subito il ritiro di TEST; nulla viene prenotato."
+      },
+      "PHONE": {
+        "title": "Prenotato al telefono",
+        "body": "L'hai prenotato con il vettore al telefono o per mail: resta confermato, con il nome di chi hai sentito."
+      }
+    },
+    "carrier": "Vettore",
+    "carrierHint": "{name}, il vettore delle spedizioni scelte.",
+    "carrierCodeHint": "Il codice del vettore, come sulle spedizioni (per esempio brt).",
+    "readyAt": "Merce pronta alle",
+    "readyHint": "{day} alle {time} sull'orologio del sito {site}; il vettore passa entro le quattro ore successive.",
+    "parcels": "Colli",
+    "pallets": "Bancali",
+    "fewer": "Meno",
+    "more": "Più",
+    "weight": "Peso comunicato al vettore (kg)",
+    "weightHint": "Facoltativo; il peso della selezione quando ogni collo è pesato.",
+    "weightUnknown": "Un collo scelto non è ancora pesato: scrivi il peso o lascialo vuoto.",
+    "reference": "Riferimento del vettore",
+    "referenceHint": "Facoltativo: il numero dato dal vettore al telefono.",
+    "note": "Con chi",
+    "noteHint": "Chi ha preso la prenotazione presso il vettore (una prenotazione telefonica tiene la nota).",
+    "recurring": "Ogni settimana: il giro fisso del vettore",
+    "recurringPhoneOnly": "Un giro settimanale fisso si concorda con il vettore e si registra come prenotato al telefono (Sendcloud prenota un ritiro alla volta).",
+    "weekdays": "In questi giorni",
+    "weekday": {
+      "MONDAY": "Lunedì",
+      "TUESDAY": "Martedì",
+      "WEDNESDAY": "Mercoledì",
+      "THURSDAY": "Giovedì",
+      "FRIDAY": "Venerdì",
+      "SATURDAY": "Sabato",
+      "SUNDAY": "Domenica"
+    },
+    "weekdayShort": {
+      "MONDAY": "lun",
+      "TUESDAY": "mar",
+      "WEDNESDAY": "mer",
+      "THURSDAY": "gio",
+      "FRIDAY": "ven",
+      "SATURDAY": "sab",
+      "SUNDAY": "dom"
+    },
+    "address": "L'autista ritira presso",
+    "otherAddress": "Ritiro da un altro indirizzo",
+    "countryHint": "Due lettere maiuscole (IT, DE…).",
+    "addressPart": {
+      "name": "Nome",
+      "line1": "Via e numero",
+      "postalCode": "CAP",
+      "city": "Città",
+      "province": "Provincia",
+      "country": "Paese",
+      "phone": "Telefono"
+    },
+    "today": "Ritiri già previsti oggi",
+    "status": {
+      "REQUESTED": "In attesa del vettore",
+      "CONFIRMED": "Prenotato",
+      "FAILED": "Non riuscito",
+      "CANCELLED": "Annullato"
+    },
+    "line": {
+      "REQUESTED": "Chiesto per le {time}",
+      "CONFIRMED": "Prenotato per le {time}",
+      "FAILED": "Non riuscito per le {time}",
+      "CANCELLED": "Annullato ({time})"
+    },
+    "via": {
+      "SENDCLOUD": "Tramite Sendcloud",
+      "PHONE": "Al telefono",
+      "test": "Ritiro di TEST"
+    },
+    "everyWeek": "Ogni settimana: {days}",
+    "counts": "{parcels} colli · {pallets} bancali",
+    "ref": "rif. {reference}",
+    "noteShown": "Prenotato con: {note}",
+    "move": {
+      "CONFIRMED": "Confermato dal vettore",
+      "FAILED": "Non riuscito…",
+      "CANCELLED": "Annulla…"
+    },
+    "moveGo": {
+      "CONFIRMED": "Segna confermato",
+      "FAILED": "Segna non riuscito",
+      "CANCELLED": "Annulla il ritiro"
+    },
+    "moveWhy": "Perché non è riuscito",
+    "moveWords": "Note (facoltative)",
+    "moveBack": "Indietro",
+    "cancelSendcloud": "Si chiede a Sendcloud di annullarlo; se non può, chiama il vettore.",
+    "moved": {
+      "CONFIRMED": "Il ritiro delle {time} è confermato.",
+      "FAILED": "Il ritiro delle {time} è segnato come non riuscito.",
+      "CANCELLED": "Il ritiro delle {time} è annullato.",
+      "REQUESTED": "Il ritiro delle {time} attende il vettore.",
+      "callCarrier": "Il ritiro delle {time} è annullato qui, ma Sendcloud non ha potuto avvisare {carrier}: chiama il vettore."
+    },
+    "done": {
+      "CONFIRMED": "Ritiro prenotato per le {time} con {carrier}.",
+      "REQUESTED": "Ritiro chiesto per le {time}: si attende la risposta di {carrier}.",
+      "FAILED": "{carrier} non ha prenotato il ritiro delle {time}.",
+      "CANCELLED": "Il ritiro delle {time} è annullato.",
+      "test": "Modalità test: nulla è stato inviato al vettore.",
+      "failedNext": "La richiesta resta visibile. Prenota di nuovo con un altro orario, o al telefono."
+    },
+    "weightTold": "Comunicato al vettore: {weight} kg.",
+    "held": {
+      "reading": "Lettura in corso…",
+      "noRight": "Il tuo ruolo non può prenotare ritiri (shipping.pickups.book).",
+      "busy": "Invio in corso…",
+      "problems_one": "{count} campo da correggere",
+      "problems_other": "{count} campi da correggere",
+      "words": "Prima scrivi il perché.",
+      "noSite": "Scegli prima un sito (le schede dei cut-off).",
+      "noneCarrier": "Nessuna delle spedizioni scelte è aperta e ritirata da un vettore."
+    },
+    "problem": {
+      "carrier": "Il codice del vettore: da 1 a 40 caratteri, senza spazi.",
+      "readyAt": "Scegli quando la merce è pronta.",
+      "readyPast": "L'orario è passato: un ritiro si prenota per un orario a venire.",
+      "readyAhead": "Un ritiro si prenota al massimo {days} giorni prima.",
+      "nothing": "Indica quanti colli o bancali ritira l'autista (almeno uno).",
+      "weight": "Chili sopra 0, al massimo {max}, fino a 3 decimali.",
+      "note": "Indica con chi è stato prenotato il ritiro.",
+      "long": "Al massimo {max} caratteri.",
+      "reference": "Al massimo {max} caratteri su una riga.",
+      "weekdays": "Scegli i giorni del giro.",
+      "required": "Obbligatorio.",
+      "country": "Due lettere maiuscole, per esempio IT."
+    },
+    "refusal": {
+      "NO_CONNECTION": "La connessione Sendcloud dell'azienda manca o non è utilizzabile: prenota al telefono e registralo qui.",
+      "FINAL": "Non è riuscito o è stato annullato: non cambia più; un nuovo tentativo è una nuova prenotazione.",
+      "NOT_REQUESTED": "Si conferma a mano solo un ritiro ancora in attesa del vettore.",
+      "NO_SETTINGS": "Il sito non ha l'indirizzo del mittente: indica qui l'indirizzo o impostalo in Corrieri e spedizioni."
+    },
+    "card": {
+      "booked": "Ritiro prenotato {time}",
+      "waiting": "Ritiro chiesto {time}: in attesa",
+      "failed": "Ritiro non riuscito ({time})",
+      "many_one": "{count} ritiro: {times}",
+      "many_other": "{count} ritiri: {times}",
+      "manyWaiting_one": "{count} ritiro: {times} (uno in attesa)",
+      "manyWaiting_other": "{count} ritiri: {times} (uno in attesa)"
+    }
+  },
+  "eod": {
+    "title": "Fine giornata",
+    "titleAt": "Fine giornata · {site}",
+    "go": "Chiudi la giornata e stampa le distinte",
+    "goNoPrint": "Chiudi la giornata",
+    "day": "Giorno",
+    "today": "Oggi, {date}",
+    "lead": "La distinta di ogni vettore elenca ciò che ha ritirato oggi; l'autista firma la distinta stampata.",
+    "none": {
+      "title": "Nulla consegnato a un vettore in questo giorno",
+      "body": "Le spedizioni che partono con un vettore compaiono qui una volta segnate come consegnate."
+    },
+    "state": {
+      "closed": "Chiusa {time}",
+      "closedBySystem": "Chiusa dal sistema {time}",
+      "toClose": "Da chiudere",
+      "nothing": "Nulla da chiudere"
+    },
+    "totals": "{shipments} spedizioni · {parcels} colli · {weight} kg",
+    "noneHanded": "Ancora nulla consegnato a questo vettore.",
+    "stillPacked_one": "Ancora imballata in banchina: {numbers}",
+    "stillPacked_other": "{count} ancora imballate in banchina: {numbers}",
+    "stillPackedBody": "Consegnale prima di chiudere, o finiscono sulla distinta del giorno dopo.",
+    "waiting_one": "Partita dopo la chiusura, sulla distinta del giorno dopo: {numbers}",
+    "waiting_other": "{count} partite dopo la chiusura, sulla distinta del giorno dopo: {numbers}",
+    "letGo_one": "Sulla distinta aperta ma mai partita, tolta alla chiusura: {numbers}",
+    "letGo_other": "{count} sulla distinta aperta ma mai partite, tolte alla chiusura: {numbers}",
+    "earlier": "consegna in ritardo",
+    "preview": "Anteprima",
+    "openManifest": "Apri la distinta",
+    "previewTitle": "Anteprima della distinta · {carrier}",
+    "previewNote": "Come si chiuderebbe ora; non viene salvata.",
+    "previewLoading": "Preparazione dell'anteprima…",
+    "print": "Stampa ogni distinta sulla stampante A4 del sito",
+    "systemCloses": "Ciò che resta aperto di un giorno passato lo chiude il sistema dopo la fine della giornata del sito.",
+    "sheetLabel": "Spedizioni sulla distinta",
+    "col": {
+      "shipment": "Spedizione",
+      "consignee": "Destinatario",
+      "parcels": "Colli",
+      "weight": "kg",
+      "tracking": "Tracking",
+      "ddt": "DDT"
+    },
+    "doneTitle": "La giornata del {date} è chiusa:",
+    "outcome": {
+      "closedPill": "Chiusa",
+      "refusedPill": "Non chiusa",
+      "printed": "{shipments} spedizioni, {parcels} colli: la distinta è inviata alla stampante.",
+      "notPrinted": "{shipments} spedizioni, {parcels} colli: chiusa, ma la distinta non è stata stampata: stampala dal suo PDF.",
+      "closed": "{shipments} spedizioni, {parcels} colli: chiusa."
+    },
+    "refusal": {
+      "FUTURE_DAY": "Quel giorno non è ancora arrivato: una giornata si chiude dopo la consegna della merce.",
+      "TOO_OLD": "Qui si chiudono solo gli ultimi 7 giorni.",
+      "NOTHING_TO_CLOSE": "Quel giorno nulla è stato consegnato a questo vettore.",
+      "ALREADY_CLOSED": "La distinta di quel giorno di questo vettore è già chiusa: le consegne successive vanno su quella del giorno dopo.",
+      "DAY_CHANGED": "Una spedizione è partita o entrata nella distinta durante la chiusura: chiudi di nuovo la giornata.",
+      "NOT_CLOSED": "La distinta non è ancora chiusa: il PDF si crea alla chiusura della giornata."
+    },
+    "held": {
+      "reading": "Lettura della giornata…",
+      "noRight": "Il tuo ruolo non può chiudere la giornata (shipping.manage).",
+      "busy": "Chiusura in corso…",
+      "allClosed": "Ogni distinta di questo giorno è già chiusa.",
+      "nothing": "Nulla da chiudere in questo giorno.",
+      "noneChosen": "Spunta almeno un vettore.",
+      "nothingToPreview": "Ancora nulla sulla distinta di questo vettore.",
+      "noView": "Il tuo ruolo non vede le spedizioni (shipping.view)."
+    }
+  },
+  "handOver": {
+    "title_one": "Segna {count} spedizione consegnata al vettore",
+    "title_other": "Segna {count} spedizioni consegnate al vettore",
+    "go_one": "Segna {count} consegnata",
+    "go_other": "Segna {count} consegnate",
+    "body": "Per la merce che parte con il nostro furgone o un vettore prenotato a mano: ogni spedizione viene segnata come partita, una alla volta. Una spedizione ritirata dal vettore del cliente si chiude dentro la spedizione.",
+    "going": "Partono: {numbers}",
+    "skipped_one": "{count} spedizione scelta resta fuori",
+    "skipped_other": "{count} spedizioni scelte restano fuori",
+    "state": {
+      "done": "Consegnata",
+      "refused": "Non consegnata",
+      "skipped": "Lasciata fuori"
+    },
+    "why": {
+      "done": "Segnata come partita.",
+      "notPacked": "Non è ancora imballata.",
+      "notOpen": "È partita o annullata.",
+      "collects": "La ritira il cliente: registra chi, la targa e il DDT firmato nella spedizione.",
+      "noDdt": "Non ha ancora il DDT.",
+      "held": "È bloccata: sblocca prima il blocco.",
+      "notReady": "Non è pronta a partire: controlla DDT ed etichette nella spedizione.",
+      "gone": "Non c'è più.",
+      "failed": "Non si è potuta inviare: riprova."
+    },
+    "held": {
+      "noRight": "Il tuo ruolo non può consegnare spedizioni (shipping.manage).",
+      "none": "Nessuna delle spedizioni scelte è imballata e pronta da consegnare.",
+      "busy": "Invio in corso…"
+    }
+  },
+  "manifest": {
+    "title": "Distinta di fine giornata · {carrier} · {date}",
+    "state": {
+      "OPEN": "Aperta",
+      "CLOSED": "Chiusa"
+    },
+    "site": "Sito",
+    "closed": "Chiusa",
+    "closedByPerson": "{when} dalla spedizione",
+    "closedBySystem": "{when} dal sistema (a fine giornata del sito)",
+    "notClosed": "Non ancora chiusa",
+    "totals": "Contiene",
+    "sign": "Stampala per l'autista: nome, firma e ora del ritiro vanno sulla carta.",
+    "noFiles": "Il tuo ruolo non apre i file (files.read): la distinta è mostrata senza PDF.",
+    "loading": "Lettura del PDF…",
+    "pdfFailed": "Il PDF non si è potuto leggere."
+  },
+  "window": {
+    "back": "Torna alle spedizioni",
+    "retry": "Riprova",
+    "problem": {
+      "notFound": "Questo documento non c'è.",
+      "forbidden": "Il tuo ruolo non permette di vedere questo documento.",
+      "failed": "Non si è potuto leggere.",
+      "noPrice": "Questo documento mostra valori: serve il livello prezzi."
+    }
+  },
+  "paperWindow": {
+    "title": {
+      "COMMERCIAL_INVOICE": "Fattura commerciale · {number} · versione {version}",
+      "CN22": "CN 22 · {number} · versione {version}",
+      "CN23": "CN 23 · {number} · versione {version}"
+    },
+    "older": "Versione precedente",
+    "notNewest": "Esiste una versione più recente: è nella scheda Export della spedizione.",
+    "back": "Torna a {number}",
+    "loading": "Lettura del PDF…",
+    "failed": "Il PDF non si è potuto leggere."
+  },
+  "export": {
+    "title": "Documenti di esportazione",
+    "state": {
+      "notNeeded": "Non servono",
+      "unknown": "Senza destinazione",
+      "papers": "Documenti da fare",
+      "declare": "Dichiarazione da aprire",
+      "PACK_SENT": "Pacchetto inviato",
+      "FILED": "Presentata",
+      "EXITED": "Uscita confermata",
+      "overdue": "Prova di uscita in ritardo"
+    },
+    "destination": "Destinazione",
+    "class": {
+      "DOMESTIC": "{country} (Italia)",
+      "EU": "{country} (UE)",
+      "EXPORT": "{country} (fuori UE)",
+      "unknown": "{country}"
+    },
+    "noCountry": "Ancora nessun paese",
+    "terms": "Incoterm e luogo",
+    "noTerms": "Non indicato nell'ordine",
+    "eori": "EORI dell'azienda",
+    "noEori": "Manca: indicalo in Corrieri e spedizioni",
+    "notNeeded": {
+      "DOMESTIC": "Non servono: consegna in Italia.",
+      "EU": "Non servono: consegna nell'UE (la prova del trasporto intra-UE è sopra)."
+    },
+    "unknownBody": "La spedizione non ha un paese di destinazione: completa l'indirizzo di consegna.",
+    "papers": "Documenti",
+    "invoiceTitle": "Fattura commerciale",
+    "invoiceWhat": "Per la dogana: codici HS, origine, valori, EORI e pesi. La fattura fiscale è quella SDI.",
+    "noInvoiceYet": "Ancora nessuna.",
+    "makeInvoice": "Crea la fattura commerciale",
+    "makeInvoiceAgain": "Crea una nuova versione",
+    "postalTitle": "CN 22 / CN 23",
+    "postalWhat": "Per i pacchi postali.",
+    "suggested": "Questi colli richiedono un {form}.",
+    "makePostal": "Crea {form}",
+    "because": {
+      "HEAVY": "Un collo pesa più di 2 kg.",
+      "VALUE": "Il valore supera 300 EUR.",
+      "CURRENCY": "La spedizione non è in euro.",
+      "NOT_WEIGHED": "Un collo non è ancora pesato."
+    },
+    "form": {
+      "CN22": "CN 22",
+      "CN23": "CN 23"
+    },
+    "paper": {
+      "COMMERCIAL_INVOICE": "Fattura commerciale v{version}",
+      "CN22": "CN 22 v{version}",
+      "CN23": "CN 23 v{version}"
+    },
+    "current": "più recente",
+    "paperFacts": "{language} · {when}",
+    "language": {
+      "it": "Italiano",
+      "en": "Inglese"
+    },
+    "openPdf": "Apri PDF",
+    "declaration": "Dichiarazione di esportazione",
+    "declarationWhat": "Si apre quando i documenti vanno allo spedizioniere doganale, o quando la presenta il vettore.",
+    "openDeclaration": "Apri la dichiarazione",
+    "status": {
+      "PACK_SENT": "Pacchetto inviato",
+      "FILED": "Presentata",
+      "EXITED": "Uscita confermata"
+    },
+    "filedBy": "Presentata da",
+    "byBroker": "Lo spedizioniere {name}",
+    "byCarrier": "Il vettore",
+    "mrn": "MRN",
+    "noMrn": "Non ancora registrato",
+    "invoiceNamed": "Fattura",
+    "invoiceOf": "{number} del {date}",
+    "noInvoiceNamed": "Non ancora indicata",
+    "exit": "Uscita",
+    "exitOn": "Confermata {when}",
+    "noExit": "Non ancora confermata",
+    "exitFile": "Prova di uscita",
+    "clock": {
+      "left": "Mancano {days} giorni per la prova di uscita prima dell'avviso.",
+      "overdue": "La prova di uscita è in ritardo di {days} giorni.",
+      "notLeft": "I {days} giorni all'avviso partono quando la merce esce.",
+      "until": "({left})",
+      "due": "(scaduto)"
+    },
+    "law": "Esportazione non imponibile (art. 8 DPR 633/72): conserva la prova che la merce è uscita dall'UE.",
+    "recordMrn": "Registra MRN",
+    "nameInvoice": "Indica la fattura",
+    "proveExit": "Prova di uscita",
+    "sendPack": "Invia il pacchetto allo spedizioniere",
+    "remove": "Elimina (inviata per errore)",
+    "links": "Link allo spedizioniere",
+    "linkPassedOn": "Un link passato a mano",
+    "linkFacts": "Fino al {until} · aperto {opened}",
+    "linkNotOpened": "mai",
+    "linkAnswered": "MRN ricevuto",
+    "linkRevoked": "Ritirato",
+    "linkOpen": "Aperto",
+    "pack": {
+      "title": "Invia il pacchetto allo spedizioniere",
+      "send": "Invia con un link allo spedizioniere",
+      "bodyOn": "I documenti vanno allo spedizioniere della dichiarazione con un link (un solo uso: lo spedizioniere risponde con l'MRN). Scarica comunque il pacchetto in un unico PDF.",
+      "bodyOff": "L'invio con link è spento per questo sito: scarica il pacchetto in un unico PDF e passalo a mano.",
+      "parts": "Parti del pacchetto",
+      "origin": "Documenti di origine da aggiungere",
+      "passOn": "Un link da passare (mostrato solo ora):",
+      "download": "Scarica il pacchetto (un PDF)",
+      "passOnGo": "Crea un link da passare",
+      "files": "File del pacchetto",
+      "inPack": "nel pacchetto",
+      "pdfTitle": "Pacchetto per lo spedizioniere · {number}",
+      "pdfLoading": "Unione dei documenti…"
+    },
+    "part": {
+      "COMMERCIAL_INVOICE": "Fattura commerciale",
+      "PACKING_LIST": "Packing list",
+      "POSTAL_FORM": "CN 22 / CN 23",
+      "CONFORMITY": "Dichiarazioni di conformità",
+      "ORIGIN": "Documenti di origine"
+    },
+    "partState": {
+      "READY": "Pronto",
+      "MISSING": "Manca",
+      "NONE": "Non serve"
+    },
+    "packRefusal": {
+      "SWITCH_OFF": "L'invio con link è spento per questo sito (Corrieri e spedizioni › EORI).",
+      "NO_BROKER": "Questa dichiarazione la presenta il vettore: non c'è uno spedizioniere a cui inviarla.",
+      "NO_RECIPIENT": "Lo spedizioniere non ha un contatto attivo con un indirizzo e-mail.",
+      "NOT_WAITING": "La dichiarazione è già presentata: nulla attende lo spedizioniere.",
+      "NO_COMMERCIAL_INVOICE": "Crea prima la fattura commerciale.",
+      "ORIGIN_FILE": "Un documento di origine non è un PDF di questa spedizione.",
+      "PRICE_GRAIN": "Il pacchetto mostra valori: serve il livello prezzi.",
+      "FILES_GONE": "Un documento del pacchetto non è più disponibile."
+    },
+    "refusal": {
+      "NOT_EXPORT": "La merce resta nell'UE: niente documenti di esportazione.",
+      "NO_DESTINATION": "La spedizione non ha un paese di destinazione: completa l'indirizzo.",
+      "CANCELLED": "La spedizione è annullata.",
+      "NO_EORI": "L'azienda non ha ancora l'EORI: indicalo prima in Corrieri e spedizioni.",
+      "NO_LINES": "La spedizione non ha ancora capi.",
+      "CUSTOMS_DATA": "Un modello non ha codice HS o paese di origine.",
+      "NO_PRICE": "Una riga non ha un prezzo dall'ordine.",
+      "NOT_PACKED": "Prima imballa ogni capo in un collo.",
+      "NOT_WEIGHED": "Prima pesa ogni collo.",
+      "CN22_LIMIT": "Questi colli richiedono un CN 23: il CN 22 non è ammesso.",
+      "LETTERHEAD": "La carta intestata dell'azienda non è completa.",
+      "DECLARED": "La spedizione ha già la sua dichiarazione.",
+      "BROKER": "Scegli come spedizioniere un vettore o fornitore attivo dell'azienda.",
+      "NOT_FILED": "Registra prima l'MRN.",
+      "MRN_KEPT": "L'MRN è registrato; non cambia più.",
+      "NOT_LEFT": "La merce non è ancora partita.",
+      "EXIT_TIME": "L'uscita non può essere prima della partenza della merce né nel futuro.",
+      "NO_INVOICE": "Indica prima la fattura emessa.",
+      "INVOICE": "Scegli una fattura emessa a questo cliente.",
+      "INVOICE_KEPT": "La fattura è indicata; non cambia più.",
+      "PROOF_FILE": "La prova di uscita deve essere un PDF o un'immagine caricata sulla dichiarazione.",
+      "EXITED": "L'uscita è confermata: non cambia più nulla.",
+      "KEPT": "Si elimina solo un pacchetto appena inviato; una volta presentata resta.",
+      "SWITCH_OFF": "L'invio con link è spento per questo sito.",
+      "NO_BROKER": "Non c'è uno spedizioniere a cui inviarlo.",
+      "NO_RECIPIENT": "Lo spedizioniere non ha un contatto a cui scrivere.",
+      "NOT_WAITING": "Nulla attende lo spedizioniere.",
+      "NO_COMMERCIAL_INVOICE": "Crea prima la fattura commerciale.",
+      "ORIGIN_FILE": "Un documento di origine non è un PDF di questa spedizione.",
+      "PRICE_GRAIN": "Mostra valori: serve il livello prezzi.",
+      "FILES_GONE": "Un documento non è più disponibile.",
+      "CUSTOMS": "Qualcuno ha cambiato la dichiarazione nel frattempo: è stata riletta."
+    },
+    "held": {
+      "noRight": "Il tuo ruolo non può creare documenti doganali (shipping.customs.manage).",
+      "noPrice": "I documenti mostrano valori: serve il livello prezzi.",
+      "busy": "Invio in corso…",
+      "noInvoices": "Ancora nessuna fattura emessa a questo cliente.",
+      "noUpload": "Il tuo ruolo non può caricare file (files.upload).",
+      "openFirst": "Apri prima la dichiarazione.",
+      "reading": "Lettura in corso…"
+    },
+    "problem": {
+      "reasonText": "Scrivi il motivo.",
+      "alertDays": "Da {min} a {max} giorni.",
+      "mrnEmpty": "Scrivi l'MRN.",
+      "mrn": "Non è un MRN: 2 cifre, il paese, poi 14 lettere o cifre (18 in tutto).",
+      "invoice": "Scegli la fattura.",
+      "exitAt": "Indica quando la merce è uscita dall'UE.",
+      "exitFile": "Aggiungi la prova di uscita (PDF o immagine).",
+      "removeReason": "Scrivi perché è stata inviata per errore."
+    },
+    "done": {
+      "invoice": "Fattura commerciale versione {version} creata.",
+      "invoiceSame": "Nulla è cambiato: la versione {version} resta la più recente.",
+      "postal": "{form} versione {version} creato.",
+      "postalSame": "Nulla è cambiato: {form} versione {version} resta il più recente.",
+      "openedBroker": "La dichiarazione è aperta con lo spedizioniere.",
+      "openedCarrier": "La dichiarazione è aperta: la presenta il vettore.",
+      "mrn": "MRN registrato: la dichiarazione è presentata.",
+      "invoiceNamed": "La fattura è indicata.",
+      "exit": "L'uscita è confermata con la sua prova.",
+      "removed": "La dichiarazione è eliminata; {count} link ritirati.",
+      "packSent": "Il pacchetto è inviato allo spedizioniere con un link.",
+      "packLink": "Il link è pronto: passalo."
+    },
+    "dialog": {
+      "invoiceTitle": "Crea la fattura commerciale",
+      "invoiceGo": "Crea",
+      "invoiceBody": "Una nuova versione dalla spedizione così com'è ora; lo stesso contenuto tiene la versione più recente.",
+      "postalTitle": "Crea CN 22 / CN 23",
+      "postalGo": "Crea {form}",
+      "postalBody": "Una pagina per collo, con ciò che contiene.",
+      "form": "Modulo",
+      "cn23Only": "Questi colli richiedono un CN 23.",
+      "language": "Lingua",
+      "languageOrder": "La lingua dell'ordine",
+      "reason": "Motivo dell'esportazione",
+      "reasonText": "Il motivo a parole",
+      "notes": "Note sulla fattura",
+      "comments": "Osservazioni",
+      "declarationTitle": "Apri la dichiarazione di esportazione",
+      "declarationGo": "Apri",
+      "declarationBody": "Chi la presenta: uno spedizioniere doganale (a cui va il pacchetto), oppure il vettore stesso.",
+      "filedBy": "Chi la presenta",
+      "brokerHint": "Un vettore o fornitore attivo dell'azienda.",
+      "noParties": "Il tuo ruolo non elenca le anagrafiche (parties.view): si può scegliere solo il vettore.",
+      "brokerOption": "{code} · {name}",
+      "brokersLoading": "Lettura dei vettori e fornitori dell'azienda…",
+      "brokersFailed": "Gli spedizionieri non si sono potuti leggere: può comunque presentarla il vettore.",
+      "alertAfter": "Avviso dopo",
+      "alertHint": "Giorni dalla partenza della merce prima di segnalare la prova di uscita mancante (da {min} a {max}).",
+      "days": "giorni",
+      "mrnTitle": "Registra MRN",
+      "mrnGo": "Registra",
+      "mrnBody": "Il Movement Reference Number dato dalla dogana: si registra una volta.",
+      "invoiceNameTitle": "Indica la fattura",
+      "invoiceNameGo": "Indica",
+      "invoiceNameBody": "La fattura emessa di questa esportazione: l'uscita si prova rispetto a questa.",
+      "invoiceOfShipment": "{number} ({type}, del DDT di questa spedizione)",
+      "invoiceOption": "{number} ({type})",
+      "exitTitle": "Prova di uscita",
+      "exitGo": "Conferma l'uscita",
+      "exitBody": "Quando la merce è uscita dall'UE, e il documento che lo prova (il messaggio di uscita, un documento timbrato).",
+      "exitAt": "Uscita dall'UE il",
+      "exitFileHint": "Un PDF o un'immagine, al massimo 15 MB.",
+      "exitPicked": "Scelto: {name}",
+      "removeTitle": "Elimina la dichiarazione",
+      "removeGo": "Elimina",
+      "removeBody": "Solo finché il pacchetto è appena inviato: i link dello spedizioniere vengono ritirati.",
+      "removeReason": "Perché è stata inviata per errore"
+    },
+    "reason": {
+      "SALE_OF_GOODS": "Vendita di merci",
+      "COMMERCIAL_SAMPLE": "Campione commerciale",
+      "RETURNED_GOODS": "Merce resa",
+      "GIFT": "Regalo",
+      "DOCUMENTS": "Documenti",
+      "OTHER": "Altro"
+    }
+  },
+  "test": {
+    "title": "Modalità test",
+    "intro": "Un vettore di prova che crea etichette marcate TEST e non invia nulla.",
+    "pill": {
+      "test": "MODALITÀ TEST",
+      "live": "Etichette reali"
+    },
+    "toggle": "Modalità test a {site}",
+    "toggleOn": "Accesa: etichette TEST",
+    "toggleOff": "Spenta: le etichette si acquistano",
+    "words": {
+      "on": "Le etichette vengono da un vettore di prova, marcate TEST: nulla va a un vettore e nulla viene addebitato. Tutti vedono MODALITÀ TEST finché è accesa.",
+      "off": "Le etichette si acquistano dal vettore e vengono addebitate."
+    },
+    "site": "Sito",
+    "since": "Reale",
+    "liveSince": "Dal {when}",
+    "neverLive": "Mai ancora reale",
+    "testLabels": "Etichette TEST",
+    "toClear_one": "{count} di spedizioni non ancora partite: tolta passando al reale",
+    "toClear_other": "{count} di spedizioni non ancora partite: tolte passando al reale",
+    "noSite": "Scegli un sito sopra.",
+    "others_one": "{count} altro sito è in modalità test.",
+    "others_other": "{count} altri siti sono in modalità test.",
+    "live": {
+      "title": "Passa {site} alle etichette reali",
+      "go": "Passa al reale",
+      "warning": "Da ora le etichette vengono acquistate e addebitate.",
+      "clears_one": "{count} etichetta TEST di spedizioni non ancora partite viene tolta: rietichettale, in reale.",
+      "clears_other": "{count} etichette TEST di spedizioni non ancora partite vengono tolte: rietichettale, in reale.",
+      "code": "Chiede un codice nuovo dall'app di autenticazione."
+    },
+    "back": {
+      "title": "Torna alla modalità test a {site}",
+      "go": "Torna alla modalità test",
+      "body": "Le etichette tornano dal vettore di prova; le etichette reali acquistate restano."
+    },
+    "done": {
+      "live_one": "{site} ora acquista etichette reali; {count} etichetta TEST tolta.",
+      "live_other": "{site} ora acquista etichette reali; {count} etichette TEST tolte.",
+      "test": "{site} è in modalità test."
+    },
+    "refusal": {
+      "NO_SETTINGS": "Il sito non ha ancora le impostazioni di spedizione: impostale prima sopra.",
+      "ALREADY_LIVE": "Il sito acquista già etichette reali.",
+      "ALREADY_TEST": "Il sito è già in modalità test.",
+      "NO_CARRIER_ACCOUNT": "L'azienda non ha ancora una connessione vettore utilizzabile (Admin › Connessioni e API): non si potrebbe acquistare nulla."
+    },
+    "held": {
+      "noRight": "Il tuo ruolo non può cambiare le impostazioni di spedizione (shipping.settings.manage).",
+      "busy": "Cambio in corso…"
+    },
+    "stepUp": "Un codice nuovo permette a questo sito di acquistare etichette reali.",
+    "stepUpCancelled": "Nulla è cambiato: il codice non è stato dato."
+  },
+  "eori": {
+    "title": "EORI",
+    "intro": "L'EORI di ogni azienda per i documenti doganali.",
+    "field": "EORI di {company}",
+    "hint": "Tenuto in maiuscolo senza spazi, punti o trattini (per esempio IT00000000000).",
+    "save": "Salva",
+    "none": "Non indicato",
+    "missing": "Senza EORI non si crea nessuna fattura commerciale né CN 22 / CN 23.",
+    "problem": "Non è un EORI: due lettere per il paese, poi fino a 15 lettere o cifre.",
+    "pack": {
+      "title": "Pacchetto allo spedizioniere con link a {site}",
+      "on": "Acceso",
+      "off": "Spento: solo download",
+      "toggle": "Invia il pacchetto allo spedizioniere con un link a {site}",
+      "wordsOn": "I documenti di esportazione vanno allo spedizioniere doganale con un link.",
+      "wordsOff": "Il pacchetto si scarica e si passa a mano allo spedizioniere.",
+      "onTitle": "Invia i pacchetti con link a {site}",
+      "onGo": "Accendi",
+      "onBody": "Da ora i documenti di esportazione (valori compresi) possono andare a terzi con un link. Chiede un codice nuovo.",
+      "offTitle": "Smetti di inviare con link a {site}",
+      "offGo": "Spegni",
+      "offBody": "I link già inviati smettono di funzionare; il pacchetto si scarica."
+    },
+    "done": {
+      "saved": "EORI salvato: {eori}.",
+      "cleared": "EORI tolto.",
+      "packOn": "{site} invia i pacchetti allo spedizioniere con un link.",
+      "packOff": "{site} non invia più i pacchetti con un link."
+    },
+    "held": {
+      "noRight": "Il tuo ruolo non può cambiare le impostazioni di spedizione (shipping.settings.manage).",
+      "same": "Nulla da salvare.",
+      "busy": "Salvataggio…",
+      "noSettings": "Il sito non ha ancora le impostazioni di spedizione."
+    },
+    "stepUp": "Un codice nuovo permette a questo sito di inviare documenti di esportazione con un link.",
+    "stepUpCancelled": "Nulla è cambiato: il codice non è stato dato."
+  },
+  "contracts": {
+    "title": "I nostri contratti con i vettori",
+    "intro": "Le etichette si acquistano sul nostro contratto con un vettore (per azienda o per sito) invece che alle tariffe dell'aggregatore.",
+    "col": {
+      "carrier": "Vettore",
+      "scope": "Vale per",
+      "rates": "Tariffe",
+      "number": "Numero di conto",
+      "state": "Stato",
+      "more": "Azioni"
+    },
+    "scope": {
+      "site": "Sito {site}",
+      "every": "Ogni sito dell'azienda"
+    },
+    "usedHere": "usato a {site}",
+    "ratesOwn": "Solo le nostre tariffe",
+    "ratesAny": "Le nostre, altrimenti quelle dell'aggregatore",
+    "numberOnFile": "Sigillato, registrato",
+    "noNumber": "Nessuno",
+    "live": "Attivo",
+    "off": "Spento",
+    "count_one": "{count} contratto",
+    "count_other": "{count} contratti",
+    "rowMenu": "Azioni per {carrier}",
+    "add": "Aggiungi un contratto",
+    "sealed": "I numeri di conto sono sigillati e non si mostrano più; dopo il salvataggio se ne dicono solo gli ultimi quattro caratteri.",
+    "none": {
+      "title": "Nessun contratto nostro",
+      "body": "Le etichette vanno alle tariffe dell'aggregatore finché non si aggiunge un contratto."
+    },
+    "action": {
+      "ratesOn": "Usa solo le nostre tariffe",
+      "ratesOff": "Ammetti le tariffe dell'aggregatore",
+      "number": "Sostituisci il numero…",
+      "off": "Spegni…"
+    },
+    "dialog": {
+      "addTitle": "Aggiungi un contratto con un vettore",
+      "addGo": "Aggiungi",
+      "addBody": "Il numero di conto si sigilla al salvataggio e non si mostra più; chiede un codice nuovo.",
+      "carrier": "Vettore",
+      "carrierHint": "Il codice del vettore (per esempio brt).",
+      "number": "Numero di conto",
+      "numberHint": "Da 3 a 40 lettere, cifre, spazi, punti, barre o trattini.",
+      "everySite": "Per ogni sito dell'azienda",
+      "ownRates": "Usa solo le nostre tariffe",
+      "ownRatesHint": "Le etichette di questo vettore si acquistano solo su questo contratto (mai alle tariffe dell'aggregatore).",
+      "numberTitle": "Sostituisci il numero di conto",
+      "numberGo": "Sostituisci",
+      "numberBody": "Il vecchio numero si cancella nello stesso passo; chiede un codice nuovo.",
+      "ratesOnTitle": "Usa solo le nostre tariffe",
+      "ratesOffTitle": "Ammetti le tariffe dell'aggregatore",
+      "ratesGo": "Salva",
+      "ratesOnBody": "Le etichette di questo vettore si acquistano solo su questo contratto.",
+      "ratesOffBody": "Quando il nostro contratto non si può usare, le etichette vanno alle tariffe dell'aggregatore.",
+      "offTitle": "Spegni il contratto",
+      "offGo": "Spegni",
+      "offBody": "Il numero si toglie e il contratto resta spento; un nuovo contratto può coprirlo di nuovo."
+    },
+    "done": {
+      "added": "{carrier}: contratto salvato · termina con {end}.",
+      "number": "{carrier}: numero sostituito · termina con {end}.",
+      "ratesOn": "{carrier}: solo le nostre tariffe.",
+      "ratesOff": "{carrier}: ammesse le tariffe dell'aggregatore.",
+      "off": "{carrier}: contratto spento."
+    },
+    "refusal": {
+      "LIVE_EXISTS": "Un contratto attivo con questo vettore copre già questo sito (o ogni sito): spegnilo o sostituiscine il numero.",
+      "SWITCHED_OFF": "Il contratto è spento: non cambia più.",
+      "DATABASE": "È stato rifiutato: controlla i campi e riprova."
+    },
+    "problem": {
+      "carrier": "Il codice del vettore: da 1 a 40 caratteri, senza spazi.",
+      "number": "Da 3 a 40 lettere, cifre, spazi, punti, barre o trattini, che inizi e finisca con una lettera o cifra.",
+      "invalid": "Qualcosa nel modulo non va: controlla vettore e numero."
+    },
+    "held": {
+      "noRight": "Il tuo ruolo non può cambiare le impostazioni di spedizione (shipping.settings.manage).",
+      "busy": "Salvataggio…"
+    },
+    "stepUp": "Un codice nuovo permette di sigillare un numero di conto del vettore.",
+    "stepUpCancelled": "Nulla è cambiato: il codice non è stato dato."
+  },
+  "packaging": {
+    "title": "Imballi",
+    "intro": "Tipi di cartone, scatola e bancale, e quale si propone per primo all'imballatore per modello o serie di taglie.",
+    "types": "Tipi di imballo",
+    "count_one": "{count} tipo",
+    "count_other": "{count} tipi",
+    "add": "Aggiungi un tipo",
+    "edit": "Modifica…",
+    "switchOff": "Spegni…",
+    "switchOn": "Accendi…",
+    "on": "In uso",
+    "off": "Spento",
+    "rowMenu": "Azioni per {name}",
+    "bulkOff_one": "Spegni {count}",
+    "bulkOff_other": "Spegni {count}",
+    "bulkOn_one": "Accendi {count}",
+    "bulkOn_other": "Accendi {count}",
+    "col": {
+      "name": "Nome",
+      "size": "Misure interne",
+      "tare": "Tara",
+      "max": "Peso massimo",
+      "pallet": "Bancale",
+      "cost": "Costo unitario",
+      "state": "Stato",
+      "more": "Azioni",
+      "scope": "Per",
+      "type": "Imballo"
+    },
+    "cm": "{size} cm",
+    "kg": "{value} kg",
+    "kind": {
+      "CARTON": "Cartone",
+      "PALLET": "Bancale",
+      "POLYBAG": "Busta",
+      "HANGER": "Gruccia",
+      "BOX": "Scatola"
+    },
+    "pallet": {
+      "EUR": "Bancale EUR",
+      "OTHER": "Altro bancale"
+    },
+    "none": {
+      "title": "Ancora nessun tipo di imballo",
+      "body": "Aggiungi i cartoni e i bancali usati in banchina."
+    },
+    "defaults": "Predefiniti per modello o serie di taglie",
+    "defaultsIntro": "L'imballo proposto per primo per un modello, una serie di taglie o entrambi.",
+    "defaultsCount_one": "{count} predefinito",
+    "defaultsCount_other": "{count} predefiniti",
+    "addDefault": "Aggiungi un predefinito",
+    "changeType": "Cambia imballo…",
+    "defaultMenu": "Azioni per {scope}",
+    "noDefaults": {
+      "title": "Ancora nessun predefinito",
+      "body": "Senza, l'imballatore sceglie l'imballo."
+    },
+    "scope": {
+      "style": "{style} · {name}",
+      "scale": "Scala taglie {scale}",
+      "run": "Taglie da {from} a {to} di {scale}",
+      "styleRun": "{style}, taglie da {from} a {to} di {scale}"
+    },
+    "dialog": {
+      "addTitle": "Aggiungi un tipo di imballo",
+      "editTitle": "Modifica {name}",
+      "create": "Crea",
+      "save": "Salva",
+      "kind": "Tipo",
+      "kindFixed": "Il tipo non cambia mai.",
+      "name": "Nome",
+      "length": "Lunghezza interna (cm)",
+      "width": "Larghezza interna (cm)",
+      "height": "Altezza interna (cm)",
+      "tare": "Tara, peso proprio (kg)",
+      "maxWeight": "Peso massimo pieno (kg)",
+      "palletKind": "Tipo di bancale",
+      "cost": "Costo unitario ({currency})",
+      "costHint": "Quanto ci costa un pezzo (livello costi).",
+      "defaultTitle": "Aggiungi un predefinito",
+      "defaultGo": "Aggiungi",
+      "defaultBody": "Un modello, una serie di taglie di una scala o entrambi: all'imballatore si propone prima questo imballo.",
+      "type": "Imballo",
+      "choose": "Scegli…",
+      "typeOption": "{name} ({kind})",
+      "style": "Modello",
+      "styleHint": "Qualsiasi modello se vuoto.",
+      "anyStyle": "Qualsiasi modello",
+      "scale": "Scala taglie",
+      "anyScale": "Nessuna scala",
+      "fromSize": "Dalla taglia",
+      "toSize": "Alla taglia",
+      "runHint": "Entrambe o nessuna; serve la scala taglie.",
+      "picksLoading": "Lettura di modelli e scale taglie…",
+      "picksFailed": "Modelli e scale taglie non si sono potuti leggere: riprova più tardi.",
+      "changeTypeTitle": "Cambia l'imballo del predefinito",
+      "onTitle_one": "Accendi {count}",
+      "onTitle_other": "Accendi {count}",
+      "offTitle_one": "Spegni {count}",
+      "offTitle_other": "Spegni {count}",
+      "onGo_one": "Accendi",
+      "onGo_other": "Accendi {count}",
+      "offGo_one": "Spegni",
+      "offGo_other": "Spegni {count}",
+      "onBody": "Gli imballatori possono sceglierlo di nuovo.",
+      "offBody": "Gli imballatori non lo scelgono più; i cartoni già chiusi lo tengono. Mai cancellato.",
+      "offDefaultBody": "Non si propone più per primo all'imballatore."
+    },
+    "done": {
+      "added": "{name} aggiunto.",
+      "saved": "{name} salvato.",
+      "defaultAdded": "Predefinito aggiunto.",
+      "defaultChanged": "Predefinito cambiato.",
+      "on_one": "{count} acceso.",
+      "on_other": "{count} accesi.",
+      "off_one": "{count} spento.",
+      "off_other": "{count} spenti.",
+      "activePartly_one": "{count} cambiato; {refused} cambiati nel frattempo e lasciati: rileggi e riprova.",
+      "activePartly_other": "{count} cambiati; {refused} cambiati nel frattempo e lasciati: rileggi e riprova."
+    },
+    "refused": {
+      "name": "L'azienda ha già un tipo di imballo con questo nome.",
+      "live": "Un predefinito di questo tipo è già attivo per questo modello o serie di taglie: spegnilo prima.",
+      "invalid": "È stato rifiutato: controlla il modello, la scala taglie e le sue taglie."
+    },
+    "problem": {
+      "name": "Un nome da 1 a {max} caratteri su una riga.",
+      "length": "Centimetri sopra 0, fino a 2 decimali; lunghezza, larghezza e altezza tutte e tre o nessuna.",
+      "width": "Centimetri sopra 0, fino a 2 decimali.",
+      "height": "Centimetri sopra 0, fino a 2 decimali.",
+      "tare": "Chili, 0 o più, fino a 4 decimali.",
+      "maxWeight": "Chili sopra 0 e sopra il peso proprio, fino a 4 decimali.",
+      "palletKind": "Un bancale dice il suo tipo.",
+      "cost": "Un costo di 0 o più, fino a 6 decimali.",
+      "type": "Scegli l'imballo.",
+      "scope": "Scegli un modello o una scala taglie (almeno uno).",
+      "run": "Una serie va da una taglia a un'altra: entrambe o nessuna.",
+      "runScale": "Una serie di taglie richiede la sua scala."
+    },
+    "held": {
+      "noRight": "Il tuo ruolo non può cambiare gli imballi (shipping.packaging.manage).",
+      "busy": "Salvataggio…",
+      "noneOn": "Nessuno dei tipi scelti è in uso.",
+      "noneOff": "Nessuno dei tipi scelti è spento.",
+      "problems_one": "{count} campo da correggere",
+      "problems_other": "{count} campi da correggere",
+      "noType": "Aggiungi prima un tipo di imballo.",
+      "defaultOff": "Accendi prima il predefinito.",
+      "sameType": "Scegli un altro imballo."
+    }
+  }
+}

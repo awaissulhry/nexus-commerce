@@ -8,6 +8,8 @@ import { WithMessages } from '../../../record-panels/i18n'
 import { listCarrierAccounts, listPrinters, listSiteSettings, saveSiteSettings, type CarrierAccount, type Printer, type SiteSettings } from './api'
 import { abilitiesOf, bodyOf, chosenSite, readProblem, saveProblem, serverProblems, type FieldProblems, type SettingsForm } from './model'
 import { ShippingSettingsView, type Part, type ShippingSettingsViewModel } from './view/ShippingSettingsView'
+// B-W2b-412
+import { ShippingDepth } from './test-mode/ShippingDepth'
 
 /**
  * `/w/<company>/warehouse/shipping` (SCR-068): reads the company's sites with their shipping settings
@@ -140,6 +142,7 @@ function Container() {
   return (
     <ShippingSettingsView
       model={model}
+      depth={<ShippingDepth companyId={companyId} siteId={shownSiteId} siteCode={site?.site.code ?? null} />}
       actions={{
         onSite: (next) => {
           setSavedAt(null)
