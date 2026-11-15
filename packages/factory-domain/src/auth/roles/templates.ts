@@ -188,6 +188,8 @@ import { FIELDS_ADDS } from '../../fields/permissions'
 import { TEMPLATES_ADDS } from '../../templates/permissions'
 // B-W2b-405: data protection in depth (the administrator keeps the data requests, erasures and retention rules).
 import { PRIVACY_DEPTH_ADDS } from '../../privacy/retention/permissions'
+// B-W2b-395: carrier pickups (the dispatch desk books them).
+import { SHIPPING_PICKUPS_ADDS } from '../../shipping/pickups/permissions'
 
 /**
  * The system role templates (plan A1 §3.11 "Role"; feature PLT-030): ready roles every tenant gets as system roles
@@ -1132,7 +1134,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-422
   ...(audience === 'office' ? (TEMPLATES_ADDS[key] ?? []) : []),
   // B-W2b-405
-  ...(audience === 'office' ? (PRIVACY_DEPTH_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (PRIVACY_DEPTH_ADDS[key] ?? []) : []),
+  // B-W2b-395
+  ...(audience === 'office' ? (SHIPPING_PICKUPS_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the
