@@ -315,6 +315,8 @@ import { events as reminders } from '../reminders/events'
 import { events as pricesFollowups } from '../prices-followups/events'
 // B-W2b-395: pickups and the day's close (shipping.pickup_changed, shipping.day_sheet_closed).
 import { events as shippingDispatch } from '../shipping-dispatch/events'
+// B-W2b-400: carrier contracts and services (shipping.carrier_contract_changed, shipping.carrier_services_changed, shipment.services_changed, shipment.parcel_values_changed, shipping.insurance_rule_changed).
+import { events as shippingContracts } from '../shipping-contracts/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -695,6 +697,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...pricesFollowups,
   // B-W2b-395
   ...shippingDispatch,
+  // B-W2b-400
+  ...shippingContracts,
 ] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */

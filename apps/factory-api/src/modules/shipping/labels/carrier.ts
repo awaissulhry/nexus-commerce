@@ -62,7 +62,7 @@ export function createCarrierRuntime(options: CarrierRuntimeOptions): CarrierRun
     createLabel: (caller, accountId, request) =>
       options.gateway.call(
         gatewayAccount(caller, accountId),
-        { ...CARRIER_OPERATIONS.createLabel, idempotencyKey: request.externalReference, request: { shipmentNumber: request.shipmentNumber, seq: request.seq, serviceCode: request.serviceCode, carrierCode: request.carrierCode, weightKg: request.weightKg } },
+        { ...CARRIER_OPERATIONS.createLabel, idempotencyKey: request.externalReference, request: { shipmentNumber: request.shipmentNumber, seq: request.seq, serviceCode: request.serviceCode, carrierCode: request.carrierCode, weightKg: request.weightKg, ...bookedWith(request) } },
         (call) => adapterFor(call.account).createLabel(call, request),
       ),
     labelDocument: (caller, accountId, providerId, format) =>
@@ -75,6 +75,16 @@ export function createCarrierRuntime(options: CarrierRuntimeOptions): CarrierRun
     proofOfDelivery: (caller, accountId, label) =>
       options.gateway.call(gatewayAccount(caller, accountId), { ...CARRIER_OPERATIONS.proofOfDelivery, request: { providerId: label.providerId } }, (call) => adapterFor(call.account).proofOfDelivery(call, label)),
   } satisfies CarrierRuntime)
+}
+
+/**
+ * B-W2b-400: what the booking added to a label, for the call ledger: which services, never a value or an account number
+ * (the values are the price grain; a number stays sealed).
+ */
+function bookedWith(request: CarrierLabelRequest): { booking?: Record<string, unknown> } {
+  const extras = request.extras
+  if (!extras) return {}
+  return { booking: { express: extras.express, dutyPayer: extras.dutyPayer, paperless: extras.paperless, insured: extras.insuredValue !== null, ownContract: extras.contract !== null, billing: extras.billing } }
 }
 
 let configured: CarrierRuntime | undefined
