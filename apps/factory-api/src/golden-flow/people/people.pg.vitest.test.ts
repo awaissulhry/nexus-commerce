@@ -149,10 +149,19 @@ const attendanceReads = (): string[] => [
   `/people/overtime/counts?siteId=${siteA1()}`,
   `/people/month-close?companyId=${companyA()}&month=${DAYS.month}`,
   `/people/reports/attendance?siteId=${siteA1()}&month=${DAYS.month}`,
-  `/people/payroll/month?companyId=${companyA()}&month=${DAYS.month}`,
+  // B-W2b-F56: the payroll month says the gate is off (200 in words, closedMonthRead below) instead of refusing.
   `/people/employees/${G.employees.one}/attendance`,
   `/people/employees/${G.employees.one}/limits`,
 ]
+
+// ── B-W2b-F56 ─────────────────────────────────────────────────────────────────────────────────────────────────────────
+/** With every ATTENDANCE gate off the payroll month answers its state in words (200), holding nothing of a person. */
+async function closedMonthRead(): Promise<void> {
+  const closed = await ok(P.hr, 'GET', `/people/payroll/month?companyId=${companyA()}&month=${DAYS.month}`)
+  expect(closed).toMatchObject({ attendance: 'CLOSED', month: DAYS.month, words: expect.stringContaining('art. 4') })
+  expect(Object.keys(closed).sort()).toEqual(['attendance', 'companyId', 'label', 'month', 'sites', 'words'])
+}
+// ── end B-W2b-F56 ─────────────────────────────────────────────────────────────────────────────────────────────────────
 
 const dayUrl = (who: Who) => `/people/attendance/days/${G.days[who].id}`
 const money = (minor: number): string => (minor / 100).toFixed(2).replace('.', ',')
@@ -323,6 +332,7 @@ describe('the W2b-1 golden flow: a shift on the floor and a month in People thro
     expect(pathsOf(scan.error)).toEqual(['gate/ATTENDANCE'])
     expect(scan.error.message).toContain('art. 4')
     for (const url of attendanceReads()) expect(pathsOf((await ok(P.hr, 'GET', url, undefined, 409)).error), url).toContain('gate/ATTENDANCE')
+    await closedMonthRead()
     expect(await admin(w, 'SELECT count(*)::int AS n FROM "ClockEvent" WHERE "employeeId" = ANY($1::uuid[])', [Object.values(G.employees)])).toEqual([{ n: 0 }])
   })
 
@@ -899,6 +909,7 @@ describe('the W2b-1 golden flow: a shift on the floor and a month in People thro
     expect(pathsOf((await ok(G.kiosk, 'POST', '/people/clock/scan', { clientEventId: 'gold-closed-2', badgeCode: G.workers.one.badgeCode }, 409)).error)).toEqual(['gate/ATTENDANCE'])
     expect(pathsOf((await ok(G.tablets.one, 'GET', '/people/clock/floor', undefined, 409)).error)).toEqual(['gate/ATTENDANCE'])
     for (const url of attendanceReads()) expect(pathsOf((await ok(P.hr, 'GET', url, undefined, 409)).error), url).toContain('gate/ATTENDANCE')
+    await closedMonthRead()
     expect(await admin(w, 'SELECT count(*)::int AS n FROM "ClockEvent"')).toEqual(before)
     await settle()
   })

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { ConflictError, DomainError, ForbiddenError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
+import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { can } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
@@ -13,7 +13,7 @@ import { command, type CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { serverClock } from '../../../core/time'
 import { processEmail } from '../../../platform/email-out/service'
-import { putGeneratedFile, recordGeneratedFile, tenantOf } from '../../../platform/files/files'
+import { putGeneratedFile, readStoredFile, recordGeneratedFile, tenantOf } from '../../../platform/files/files'
 import { processFiles } from '../../../platform/files/service'
 import { contextOf } from '../bom/store'
 import type { Reader } from './facts'
@@ -215,7 +215,7 @@ export async function techPackVersionPdf(caller: CommandCaller, styleId: string,
   if (!row || row.recordType !== RECORD || row.recordId !== revision.id || row.kind !== KIND) throw new NotFoundError('Tech pack version not found.')
   const file = await caller.withClient((client) => client.storedFile.findUnique({ where: { id: row.fileId }, select: { status: true, originalName: true, sizeBytes: true, storeAccountId: true, storageKey: true } }))
   if (!file || file.status !== 'AVAILABLE') throw new NotFoundError('Tech pack version not found.')
-  const pdf = await processFiles().storage.read(caller, file.storeAccountId, file.storageKey, file.sizeBytes)
-  if (!pdf) throw new DomainError('not_ready', 'The file store did not answer. Try again in a moment.')
+  // B-W2b-F56: missing from the store 404, the store not answering 503 (the files platform's one reader).
+  const pdf = await readStoredFile(processFiles(), caller, file, file.sizeBytes)
   return { pdf, fileName: file.originalName }
 }

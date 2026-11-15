@@ -245,7 +245,7 @@ beforeAll(async () => {
     rateLimits: { signIn: limits, resetRequest: limits, tokenUse: limits, codes: limits, linkUse: limits, floorSignIn: limits },
   })
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET, rateLimit: limits },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET, rateLimit: limits },
     { database, officeAuth: auth, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null), logger: false },
   )
   const line = await salesOrderLine(60)

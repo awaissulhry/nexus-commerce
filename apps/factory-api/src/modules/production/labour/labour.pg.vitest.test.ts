@@ -128,7 +128,7 @@ beforeAll(async () => {
   })
   SESSIONS.hr = office([grant(['people.figures.view', 'production.labour.view'], [companyA])], hrUserId)
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database: h.database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
   )
   // A tablet at SEW-01 (line L1), enrolled by a floor supervisor; the operator signs in with the PIN (My day's step-up).

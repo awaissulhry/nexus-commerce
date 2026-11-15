@@ -74,7 +74,7 @@ beforeAll(async () => {
   await admin(`INSERT INTO "Device" (id, "tenantId", "companyId", "siteId", "stationId", name, kind, status, "enrolledAt") VALUES ($1, $2, $3, $4, $5, 'Sewing tablet 1', 'TABLET', 'ACTIVE', now())`, [sewingTablet, T, companyA, siteA1, station])
   await admin(`INSERT INTO "Device" (id, "tenantId", "companyId", "siteId", name, kind, status, "enrolledAt") VALUES ($1, $2, $3, $4, 'Spare tablet', 'TABLET', 'ACTIVE', now())`, [looseTablet, T, companyA, siteA1])
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     {
       database,
       routesRoot: fileURLToPath(new URL('../../..', import.meta.url)),

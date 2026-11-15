@@ -120,7 +120,7 @@ beforeAll(async () => {
   fake = new FakeEcb()
   useEcb(createEcbRuntime({ gateway: createGateway({ environment: 'test', redis: h.redis, prefix: `${h.redisPrefix}_ecb`, secrets: h.secrets, sleep: async () => {}, log: quiet }), fake }))
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database: h.database, routesRoot: fileURLToPath(new URL('../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
   )
 }, 900_000)

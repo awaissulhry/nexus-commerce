@@ -284,7 +284,7 @@ beforeAll(async () => {
   await stockLot({ ...atB1, itemId: A.lining, colourId: A.liningGRY, quantity: '100.0000', uom: 'M', code: `T-${run}-B-LIN` })
   await stockLot({ ...atB1, itemId: A.protector, colourId: null, quantity: '100.0000', uom: 'PCS', code: `T-${run}-B-PRO` })
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
   )
 }, 240_000)

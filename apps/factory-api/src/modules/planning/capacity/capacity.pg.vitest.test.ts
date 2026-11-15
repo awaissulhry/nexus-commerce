@@ -80,7 +80,7 @@ beforeAll(async () => {
   await seedSchedule({ db: database, namespace: NS })
   await admin('INSERT INTO "Tenant" (id, slug, name) VALUES ($1, $2, $2)', [OTHER, 'w2a16-capacity-other'])
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     {
       database,
       routesRoot: fileURLToPath(new URL('../../..', import.meta.url)),

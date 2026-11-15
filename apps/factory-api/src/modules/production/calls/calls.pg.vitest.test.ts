@@ -158,7 +158,7 @@ beforeAll(async () => {
   await admin(device, [A.b1Tablet, A.tenant, A.companyB, A.siteB1, A.b1Sew1, null, 'STATION', 'B1 sewing tablet'])
   mark = new Date()
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database: h.database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
   )
 }, 600_000)

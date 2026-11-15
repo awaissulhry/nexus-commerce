@@ -11,17 +11,22 @@ import { seed as seedCore } from '../../../../../packages/factory-db/seed/_core'
 import { seed as seedReceivables, type ReceivablesSeed } from '../../../../../packages/factory-db/seed/receivables'
 import { seedUuid } from '../../../../../packages/factory-db/src/seeding'
 import { buildApp } from '../../core/app'
+import { callerFor } from '../../core/command'
 import { testAuthenticator, type SessionContext } from '../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../env'
 import { startHarness, type Harness } from '../../platform/auth/sessions/testing/harness'
+import { systemContext } from '../../platform/outbox/system'
 import { openInvoices } from '../receivables/store'
+// B-W2b-F55: the worker's step for money placed on a deposit request by any other command.
+import { afterDepositAllocation, allocatedDepositInvoiceHandler } from './deposit-invoice'
 
 /**
  * B-W2b-21 — payments follow-ups on the local stack, through the app's real routes: a throwaway PostgreSQL 17 database from
  * the migrations (the runtime login: row-level security and the …_money_guards / …_followups_quality_money_w2b_guards
  * triggers are real), the factory-db seeds of one tenant (P1's SEED-SO-0002; FT-2026-00001 paid in part on account; a
  * duplicate transfer of 100.00 with 50.00 to refund; September 2026 HARD-locked), test sessions.
- *   Z8:01  a PAID deposit that issues no deposit invoice (NONE) carried onto its order's invoice in ONE command
+ *   Z8:01  a PAID deposit that issues no deposit invoice (NONE) carried onto its order's invoice in ONE command (B-W2b-F55:
+ *          the worker's deposit-invoice step on its allocation makes no TD02 for it)
  *   Z8:02  refunds carry a reason: the source's by default, a person's while DUE, fixed once PAID
  *   Z8:10  a HARD-locked month answers 409 in words on payments (B-W2a-F8's guard), never a 500
  * Every name, number and amount is made up. Run with `node scripts/factory/run-pg-tests.mjs modules/payments/followups`.
@@ -96,7 +101,7 @@ beforeAll(async () => {
   receivables = await seedReceivables({ db: h.database, namespace: NS })
   await seedAccounting({ db: h.database, namespace: NS })
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database: h.database, routesRoot: fileURLToPath(new URL('../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null), logger: false },
   )
 }, 240_000)
@@ -116,6 +121,13 @@ describe('a deposit paid without a deposit invoice, carried onto its order’s i
     const { payment } = await ok('finance', 'POST', '/payments', { companyId: A.company, partyId: A.P1, amount: 30000, receivedOn: TODAY, externalRef: 'TRN-W2B21-DEPOSIT', allocations: [{ depositRequestId: request }] }, 201)
     paymentId = payment.id
     expect((await admin(`SELECT status FROM "DepositRequest" WHERE id = $1`, [request]))[0]!.status).toBe('PAID')
+    // B-W2b-F55: the worker's step, run on this typed payment's payment.allocated event, makes no TD02: the request issues none (NONE).
+    const [allocated] = await admin<{ id: string; source: string; payload: Json }>(`SELECT id, source, payload FROM "OutboxEvent" WHERE type = 'payment.allocated' AND payload->>'paymentId' = $1`, [paymentId])
+    expect(allocated).toMatchObject({ source: 'payments.record', payload: { allocationId: payment.allocations[0].id, target: 'DEPOSIT_REQUEST', targetId: request } })
+    const system = () => callerFor(h.database, systemContext(A.tenant, newId()))
+    await allocatedDepositInvoiceHandler().handle({ eventId: allocated!.id, type: 'payment.allocated', version: 1, tenantId: A.tenant, companyId: A.company, source: allocated!.source, payload: allocated!.payload } as never, { caller: system(), attempt: 1 } as never)
+    expect(await afterDepositAllocation(system(), { ...(allocated!.payload as { paymentId: string; allocationId: string; target: string; targetId: string }), placedBy: allocated!.source }, newId())).toBe('not_required')
+    expect(await admin(`SELECT id FROM "Invoice" WHERE "depositRequestId" = $1`, [request])).toEqual([])
     const early = await refused('finance', 'POST', `/payments/deposit-requests/${request}/carry`, {}, 409)
     expect(early.message).toContain('has no issued invoice (TD01 or TD24) open yet')
     const reversal = await refused('finance', 'POST', `/payments/${paymentId}/allocations/${payment.allocations[0].id}/reverse`, { note: 'Try' }, 409)

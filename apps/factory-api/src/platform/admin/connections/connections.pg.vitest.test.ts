@@ -94,7 +94,7 @@ beforeAll(async () => {
     if (status === 'FAILED') await db.admin.query(`UPDATE "InboundWebhook" SET status = 'FAILED', attempts = 1, "lastError" = 'Unknown invoice' WHERE id = $1`, [id])
   }
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     {
       database,
       routesRoot: fileURLToPath(new URL('../../..', import.meta.url)),

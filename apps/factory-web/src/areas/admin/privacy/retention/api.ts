@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { RETENTION_ACTIONS, RULE_HELD, SWEEP_FAILURES, SWEEP_HELD, SWEEP_MODES, SWEEP_STATUSES, WAITING_LEDGERS, type RetentionAction } from '@nexus/factory-domain/privacy/retention/retention'
+import { APPEND_ONLY_LEDGERS, RETENTION_ACTIONS, RULE_HELD, SWEEP_FAILURES, SWEEP_HELD, SWEEP_MODES, SWEEP_STATUSES, type RetentionAction } from '@nexus/factory-domain/privacy/retention/retention'
 import { newIdempotencyKey, type ApiClient } from '../../../../lib/api/client'
 
 /**
@@ -62,7 +62,7 @@ export type RetentionType = z.infer<typeof typeSchema>
 const listAnswer = z.object({
   rules: z.array(ruleSchema),
   types: z.array(typeSchema),
-  ledgers: z.array(z.object({ recordType: z.enum(WAITING_LEDGERS) })),
+  ledgers: z.array(z.object({ recordType: z.enum(APPEND_ONLY_LEDGERS) })),
   datedPurges: z.array(z.object({ key: z.string(), job: z.string(), recordType: z.string() })),
   keptForGood: z.array(z.string()),
   sweep: z.object({ schedule: z.string() }),

@@ -111,7 +111,7 @@ beforeAll(async () => {
   await admin(`INSERT INTO "Party" (id, "tenantId", code, kind, "legalName", roles, status, country, currency, language) VALUES ($1, $2, 'T406-C8', 'ORGANISATION', 'Test Figures Customer S.r.l.', ARRAY['CUSTOMER']::"PartyRole"[], 'ACTIVE', 'IT', 'EUR', 'it')`, [ids.P8, ids.tenant])
   await h.database.withScope({ audience: 'office', tenantId: ids.tenant, actorId: newId() }, async (client) => applySystemRoleChanges(client, await systemRoleChanges(client), { now: h.clock.now(), actorId: newId() }))
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database: h.database, routesRoot: fileURLToPath(new URL('../../../', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null), logger: false },
   )
   invoice = await issuedInvoice(30000)

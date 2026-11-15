@@ -112,7 +112,7 @@ beforeAll(async () => {
   so1 = await one(`SELECT id FROM "SalesOrder" WHERE "tenantId" = $1 AND number = 'SEED-SO-0001'`, [A.tenant])
   q2 = await one(`SELECT q.id, v.id AS "versionId" FROM "Quote" q JOIN "QuoteVersion" v ON v."quoteId" = q.id WHERE q."tenantId" = $1 AND q.number = 'SEED-Q-0002'`, [A.tenant])
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database: h.database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
   )
 }, 900_000)

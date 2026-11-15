@@ -93,7 +93,7 @@ beforeAll(async () => {
   await admin(`UPDATE "IntegrationAccount" SET "rateLimitPerMinute" = 6000, "rateLimitBurst" = 1000 WHERE provider = 'R2'`)
   useAbuseGuard(createAbuseGuard({ store: memoryAbuseStore(), key: Buffer.alloc(32, 7), prefix: 'test', clock: h.clock }))
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET, rateLimit: { max: 10_000, timeWindowMs: 60_000 } },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET, rateLimit: { max: 10_000, timeWindowMs: 60_000 } },
     {
       database: h.database,
       clock: h.clock,

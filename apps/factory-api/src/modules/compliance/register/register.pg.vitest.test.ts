@@ -115,7 +115,7 @@ beforeAll(async () => {
   liveDdt = ddt!.number
   useRegisterClock(clock)
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     {
       database,
       clock,

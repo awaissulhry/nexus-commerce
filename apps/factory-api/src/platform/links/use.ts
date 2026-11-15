@@ -7,6 +7,7 @@ import { COMMAND_SETTINGS, runCommand, type CommandOutcome, type CommandSpec, ty
 import { ApiError } from '../../core/errors'
 import { officeAuthOf } from '../auth/sessions/office-auth'
 import { linkSessionOf, linkUnavailable } from './authenticator'
+import { clientAddressOf } from '../../core/client-address'
 
 /**
  * One use of a one-off link (plan A1 §3.10 "Links"; features SAL-099 "every open is logged", PLT-073), recorded INSIDE
@@ -89,7 +90,7 @@ export async function useLink(tools: CommandTools, request: FastifyRequest, inpu
         useNumber,
         typedName: draft.typedName,
         emailCheck: draft.emailCheck,
-        ipHash: auth.secrets.ipHash(request.ip),
+        ipHash: auth.secrets.ipHash(clientAddressOf(request)),
         userAgent: userAgentOf(request.headers['user-agent']),
         at: now,
         requestId: context.requestId,

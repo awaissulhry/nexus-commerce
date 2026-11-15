@@ -119,6 +119,8 @@ export const designScreen = defineDesignScreen<ReportsModel>({
     { id: 'by-team', label: 'Grouped by team', model: base({ address: { ...reportsAddressOf(null), group: 'team' }, teams: [{ id: uid('6205', 1), label: 'A1 · Squadra A1' }], attendance: ready({ ...REPORT, groupBy: 'team' }) }) },
     { id: 'by-month', label: 'Earnings by month', model: base({ address: { ...reportsAddressOf(null), earnings: 'month' } }) },
     { id: 'gate-off', label: 'Attendance off at this site: held in words, nothing read', model: base({ sight: ready({ siteId: SITE_N.id, open: false, minimumGroupSize: 3 }), attendance: { status: 'idle' } }) },
+    // B-W2b-F56: the gate's own read failed: the attendance part says so with Try again (never "Loading…" for good).
+    { id: 'gate-read-failed', label: 'What the page shows could not be read: the attendance part says so, Try again', model: base({ sight: failed, attendance: { status: 'idle' } }) },
     { id: 'all-sites', label: 'All sites: attendance needs one site', model: base({ scope: SCOPE_ALL, sight: { status: 'idle' }, attendance: { status: 'idle' } }) },
     { id: 'no-pay', label: 'No pay grain: the earnings report says so', model: base({ can: NO_PAY, earnings: { status: 'idle' } }) },
     { id: 'no-attendance', label: 'Earnings only: no attendance right', model: base({ can: reportsCan(['people.earnings.view', 'money.pay']), attendance: { status: 'idle' }, sight: { status: 'idle' } }) },

@@ -149,7 +149,7 @@ beforeAll(async () => {
   await enrolTotp(h, finance)
   owner = await addUser(h, seedTenant, { email: 'olga.owner@seed-a.example.com', role: 'owner' })
   walls = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database: h.database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])]?.() ?? null) },
   )
 }, 300_000)

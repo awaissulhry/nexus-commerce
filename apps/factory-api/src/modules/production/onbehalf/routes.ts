@@ -10,6 +10,7 @@ import { onBehalfContract, onBehalfOverrideContract, optionsContract, severalCon
 import { manifest } from './manifest'
 import { onBehalfOptions, reportOnBehalf } from './report'
 import { finishSeveral } from './several'
+import { clientAddressOf } from '../../../core/client-address'
 
 /**
  * More on the tablet (B-W2b-47): the team leader's scan on behalf (MES-099) and several bundles at once (MES-100). An entry's
@@ -19,7 +20,7 @@ import { finishSeveral } from './several'
  */
 export default defineRoutes('production.onbehalf', manifest, async (app) => {
   const limit = app.officeAuth?.rateLimits.floorSignIn ?? AUTH_RATE_LIMITS.floorSignIn
-  const perDevice = { rateLimit: { max: limit.max, timeWindow: limit.timeWindowMs, keyGenerator: (request: FastifyRequest) => `behalf-override:${parseSiteToken(deviceCookieOf(request))?.id ?? request.ip}` } }
+  const perDevice = { rateLimit: { max: limit.max, timeWindow: limit.timeWindowMs, keyGenerator: (request: FastifyRequest) => `behalf-override:${parseSiteToken(deviceCookieOf(request))?.id ?? clientAddressOf(request)}` } }
 
   const sameKey = (request: FastifyRequest, clientScanId: string) => {
     const header = idempotencyKeyFrom(request)

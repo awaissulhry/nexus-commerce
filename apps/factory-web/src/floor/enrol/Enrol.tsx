@@ -44,7 +44,10 @@ function tabletFacts(installable: boolean): { fullScreen: boolean | null; instal
 export function FloorEnrol() {
   const store = useFloor()
   const router = useFloorRouter()
-  const feedback = useConfirmFeedback()
+  const confirm = useConfirmFeedback()
+  // B-W2b-F56: the code in the QR's address enrols before anyone has touched the screen; the browser refuses vibration and
+  // sound then and logs it as an error. The cue follows a touch only (a scanned or typed code, a button), never the address's.
+  const feedback = useCallback((kind: Parameters<typeof confirm>[0]) => (navigator.userActivation?.hasBeenActive === false ? null : confirm(kind)), [confirm])
   const { frame, onFrame } = store.frame('enrol.title')
   const [step, setStep] = useState<EnrolStep>(() =>
     store.device ? { kind: 'replace', current: { device: store.device.device.name, station: store.device.device.station?.name ?? null, site: store.device.site.name } } : { kind: 'scan' },

@@ -11,6 +11,8 @@ import { refusedField } from '../../library/model'
 import { COLOUR_SYSTEMS, colourDraftProblems, pictureAddress, typedHex, type ColourDraft, type ColoursCan } from '../model'
 import { REFERENCE_EXAMPLES, REFERENCE_REQUIRED } from '@nexus/factory-domain/product/colours/rules'
 import type { ColourFormModel, ColoursActions } from '../view-model'
+// B-W2b-F56: a picture missing from the store shows the placeholder.
+import { LibraryPicture } from './LibraryPicture'
 
 /**
  * New colour / Edit colour (SCR-118; `c`, the band's New colour, a row's ⋯ Edit…): the company (or every company), our code
@@ -125,7 +127,7 @@ export function ColourFormDialog({ form, can, actions }: { form: ColourFormModel
           <div className="fw-col-photo-edit">
             <h3 className="fw-lib-h3">{t('form.photo')}</h3>
             <div className="fw-col-photo-row">
-              {photo ? <img className="fw-col-photo-lg" src={photo} alt={t('list.photoOf', { code: form.row.code })} /> : <span className="fw-lib-hint">{t('form.noPhoto')}</span>}
+              <LibraryPicture className="fw-col-photo-lg" src={photo} alt={t('list.photoOf', { code: form.row.code })} fallback={<span className="fw-lib-hint">{t('form.noPhoto')}</span>} />
               <input
                 ref={photoInput}
                 type="file"

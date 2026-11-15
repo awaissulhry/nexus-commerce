@@ -11,6 +11,7 @@ import { handBackContract, openContract, partialContract, pauseContract, resumeC
 import { manifest } from './manifest'
 import { timeOperation, type TimingInput } from './timing'
 import { bundleState, openWork, workOrderTiming } from './views'
+import { clientAddressOf } from '../../../core/client-address'
 
 /**
  * Operation timing on the tablet (B-W2b-40; MES-087 start, MES-088 pause with a reason, MES-089 resume, MES-091 hand back,
@@ -23,7 +24,7 @@ import { bundleState, openWork, workOrderTiming } from './views'
  */
 export default defineRoutes('production.terminal', manifest, async (app) => {
   const limit = app.officeAuth?.rateLimits.floorSignIn ?? AUTH_RATE_LIMITS.floorSignIn
-  const perDevice = { rateLimit: { max: limit.max, timeWindow: limit.timeWindowMs, keyGenerator: (request: FastifyRequest) => `timing-override:${parseSiteToken(deviceCookieOf(request))?.id ?? request.ip}` } }
+  const perDevice = { rateLimit: { max: limit.max, timeWindow: limit.timeWindowMs, keyGenerator: (request: FastifyRequest) => `timing-override:${parseSiteToken(deviceCookieOf(request))?.id ?? clientAddressOf(request)}` } }
 
   /** The Idempotency-Key, when sent, names the action: it is its clientScanId. */
   const sameKey = (request: FastifyRequest, clientScanId: string) => {

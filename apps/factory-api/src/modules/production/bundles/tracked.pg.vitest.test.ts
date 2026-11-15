@@ -230,7 +230,7 @@ beforeAll(async () => {
     A.siteA1,
   ])
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     {
       database,
       // "Cut anyway" proves the lead's PIN through the office sign-in's keyring (B-W2b-103's proveLead).

@@ -39,8 +39,8 @@ export interface RetentionActions extends RetentionDialogActions {
  * record type how long it is kept, then what happens (delete, anonymise, archive), the legal reason, the state and the last
  * sweep, on the shared list frame (Sweep N now for rules that only report). Nothing deletes by itself: a rule REPORTS until a
  * person switches it on to apply (a confirm, then a fresh code); shortening a period asks a fresh code too; every period says
- * UNVERIFIED until the privacy consultant sets it. Below: the append-only ledgers, kept until the Owner decides (never offered
- * for a sweep), the purges that run on their own dates, and what is kept for good. Fetches nothing (RetentionRules reads it).
+ * UNVERIFIED until the privacy consultant sets it. Below: the append-only ledgers, kept for good and never purged (the Owner's
+ * decision of 15 Nov 2026; never offered for a sweep), the purges that run on their own dates, and what is kept for good. Fetches nothing (RetentionRules reads it).
  */
 export function RetentionView({ model, actions }: { model: RetentionViewModel; actions?: RetentionActions }) {
   return (

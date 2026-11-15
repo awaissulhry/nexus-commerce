@@ -227,7 +227,7 @@ beforeAll(async () => {
   await addLot({ key: 'LIN', itemId: A.lining, colourId: A.liningGRY, receivedAt: '2026-10-07T08:00:00.000Z', stock: [{ locationId: A.bin, quantity: '30.0000', uom: 'M' }] })
   await addLot({ key: 'PRO', itemId: A.protector, colourId: null, receivedAt: '2026-10-07T08:00:00.000Z', stock: [{ locationId: A.store, quantity: '100.0000', uom: 'PCS' }] })
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
   )
   const line = await salesOrder(3)

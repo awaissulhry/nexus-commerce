@@ -158,7 +158,7 @@ beforeAll(async () => {
   await force(`UPDATE "Ddt" SET "documentDate" = $2::date WHERE id = $1`, [ids.ddt, today])
   ids.seededHoldAlert = (await one<{ id: string }>(`SELECT id FROM "Alert" WHERE "tenantId" = $1 AND "ruleKind" = 'HOLD_TOO_LONG'`, [T])).id
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database: h.database, routesRoot: fileURLToPath(new URL('../..', import.meta.url)), authenticate: testAuthenticator((request) => (String(request.headers['x-test-session']) in PEOPLE ? session(String(request.headers['x-test-session']) as Person) : null)) },
   )
 }, 180_000)

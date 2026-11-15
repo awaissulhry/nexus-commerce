@@ -13,7 +13,7 @@ import type { ReviewStatus } from '@nexus/factory-domain/sales/mtm/rules'
 import { command, type CommandCaller } from '../../../../core/command'
 import { actorOf, SYSTEM_ACTOR_ID, type OfficeContext, type SystemContext } from '../../../../core/context'
 import { serverClock } from '../../../../core/time'
-import { completeUpload, presignedView, requestUpload, storeCall, systemCallerOf } from '../../../../platform/files/files'
+import { completeUpload, MissingFileError, presignedView, requestUpload, storeCall, systemCallerOf } from '../../../../platform/files/files'
 import { attachmentDisposition, DOWNLOAD_URL_SECONDS, normaliseContentType } from '../../../../platform/files/rules'
 import { processFiles } from '../../../../platform/files/service'
 import { makeStrippedCopy } from '../../../../platform/files/thumbs/strip-copy'
@@ -321,6 +321,8 @@ export async function openMtmPhoto(request: FastifyRequest, fileId: string, idem
   const files = processFiles()
   const system = systemCallerOf(request)(context.tenantId)
   const made = await makeStrippedCopy(files, system, fileId)
+  // B-W2b-F56: the photo's bytes are missing from the store: 404 in words, never "being prepared".
+  if (made.outcome === 'missing') throw new MissingFileError()
   if (!made.key) throw new ConflictError('This photo is being prepared to be shown; try again in a minute.')
   const download = await storeCall(() =>
     files.storage.presignDownload(system, row.storeAccountId, { key: made.key!, contentType: row.contentType, disposition: attachmentDisposition(row.originalName), expiresInSeconds: DOWNLOAD_URL_SECONDS, now: files.clock.now() }),

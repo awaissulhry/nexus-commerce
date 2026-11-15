@@ -109,7 +109,7 @@ beforeAll(async () => {
   ruleId = newId()
   await admin(`INSERT INTO "ApprovalRule" (id, "tenantId", kind, name, condition, "approverUserId", sequence, active, version) VALUES ($1, $2, 'PURCHASE_REQUEST', 'Every request to buy (made-up)', '{"combinator":"and","rows":[]}'::jsonb, $3, 1, false, 1)`, [ruleId, A.tenant, A.owner])
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])]?.() ?? null) },
   )
 }, 900_000)

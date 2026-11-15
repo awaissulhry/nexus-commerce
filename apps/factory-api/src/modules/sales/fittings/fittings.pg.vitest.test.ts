@@ -114,7 +114,7 @@ beforeAll(async () => {
   await force(`UPDATE "Style" SET "brandPartyId" = NULL WHERE id = $1`, [S.jkt01])
   await admin(`UPDATE "Company" SET "vatNumber" = 'IT12345670009', "fiscalCode" = '12345670009', "reaOffice" = 'MI', "reaNumber" = '0000001' WHERE id = $1`, [companyA])
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database: h.database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
   )
   // The JACKET template measures the height too (the certificate's made-to-measure route asks it, B-W2b-358's notes).

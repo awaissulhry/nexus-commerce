@@ -230,6 +230,7 @@ describe('the AWS KMS key provider (a fake client: nothing reaches AWS)', () => 
           FACTORY_KMS_KEY_ID: 'arn:aws:kms:eu-south-1:000000000000:key/made-up',
           FACTORY_AWS_ACCESS_KEY_ID: 'AKIAIOSFODNN7EXAMPLE',
           FACTORY_AWS_SECRET_ACCESS_KEY: 'not-a-real-secret-access-key-for-tests',
+          FACTORY_TRUSTED_PROXIES: 'private',
         },
         'production',
       ),

@@ -123,7 +123,7 @@ beforeAll(async () => {
   await admin(`UPDATE "IntegrationAccount" SET "rateLimitPerMinute" = 6000, "rateLimitBurst" = 1000 WHERE provider = 'R2'`)
   useAbuseGuard(createAbuseGuard({ store: memoryAbuseStore(), key: Buffer.alloc(32, 7), prefix: 'test', clock: h.clock }))
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET, rateLimit: { max: 10_000, timeWindowMs: 60_000 } },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET, rateLimit: { max: 10_000, timeWindowMs: 60_000 } },
     {
       database: h.database,
       clock: h.clock,
@@ -199,9 +199,11 @@ describe('Sketches and pictures (PRD-016)', () => {
     // A file that is no style's picture is not served here (the files platform's routes serve it, with files.read).
     await refused('maker', 'GET', `/product/pictures/${newId()}`, undefined, 404)
     await refused('maker', 'GET', `/product/pictures/${seed.revisionFileIds.pattern}`, undefined, 404)
-    // A seeded row has no bytes in the store: a refusal in words, never a 500.
+    // A seeded row has no bytes in the store: missing in words (404, the screen's placeholder), never a 503 outage (B-W2b-F56).
     const seeded = view.pictures.find((picture: Json) => picture.id === seed.imageIds.front)
-    expect((await call('maker', 'GET', seeded.look.url)).statusCode).toBe(503)
+    const missing = await call('maker', 'GET', seeded.look.url)
+    expect(missing.statusCode).toBe(404)
+    expect(missing.json().error).toMatchObject({ code: 'not_found', message: 'The file is missing from the store.' })
   })
 
   it('changes the page’s callouts and caption at its version; a stale version is a 409', async () => {

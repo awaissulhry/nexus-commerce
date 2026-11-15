@@ -36,7 +36,9 @@ import type { DEVICE_NETWORKS } from './contract'
  * person's own: never more than the floor app needs). POST /floor/device/kiosk: the kiosk lock guide's honest check,
  * reported by the tablet: kept as a floor command's audit row on the device (`floor.deviceKioskChecked`), answered as
  * rows, never as "locked".
- * All run in the FLOOR scope of the code's or token's tenant and site; a bad code or token answers 401.
+ * All run in the FLOOR scope of the code's or token's tenant and site; a bad code or token answers 401. B-W2b-F56: GET
+ * /floor/device from a browser that holds no device token at all answers 200 `{ device: null, words }` (not a floor device
+ * yet: the floor app's enrol page), never a 401 the browser logs before anyone has done anything.
  */
 
 export interface DeviceRequest {
@@ -104,7 +106,12 @@ export async function deviceInfoOf(client: FactoryClient, device: FloorDevice, n
   }
 }
 
+// B-W2b-F56: the words of a browser that is no floor device yet (no device token at all).
+export const NOT_A_DEVICE_WORDS = 'This browser is not a floor device yet: enrol it with the QR code from Admin › Devices & printers.'
+
 export async function deviceInfo(auth: OfficeAuth, request: FastifyRequest) {
+  // B-W2b-F56: no device token at all is the enrol page's state (200 in words); a token that is refused stays 401.
+  if (deviceCookieOf(request) === null) return { device: null, words: NOT_A_DEVICE_WORDS }
   const { device, token } = await requireDevice(auth, request)
   return auth.database.withScope(siteScope(token), (client) => deviceInfoOf(client, device, auth.clock.now()))
 }

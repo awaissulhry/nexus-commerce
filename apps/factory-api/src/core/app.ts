@@ -4,12 +4,14 @@ import cookie from '@fastify/cookie'
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod'
 import type { Redis } from 'ioredis'
 import type { FactoryDatabase } from '@nexus/factory-db'
+import { trustedProxies } from '@nexus/factory-domain/core/client-address'
 import { FACTORY_PERMISSIONS } from '@nexus/factory-domain/auth/permissions/catalogue'
 import { healthContract, readyContract } from '@nexus/factory-domain/core/contracts'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import type { FactoryEnv } from '../env'
 import type { OfficeAuth } from '../platform/auth/sessions/office-auth'
 import { routesFiles } from './autoload'
+import { installClientAddress } from './client-address'
 import { isTestAuthenticator, noSessions, withContextClient, type Authenticator } from './context'
 import { installErrorHandling } from './errors'
 import { requestIdFor } from './ids'
@@ -38,8 +40,11 @@ export interface AppConfig {
   readonly environment: FactoryEnv['FACTORY_ENV']
   /** The only origin allowed to call cross-origin (the factory web). */
   readonly webOrigin?: string | undefined
-  /** Proxy hops in front of the API whose X-Forwarded-For is trusted (the client address for rate limits). */
-  readonly trustProxyHops: number
+  /**
+   * B-W2b-F57: the proxies whose X-Forwarded-For counts (FACTORY_TRUSTED_PROXIES' syntax: addresses, ranges, `loopback`,
+   * `private`); left out or `none`: nobody's, every request keeps its TCP address (core/client-address.ts).
+   */
+  readonly trustedProxies?: string
   /** Signs cookies (@fastify/cookie). */
   readonly cookieSecret: string
   readonly rateLimit?: { readonly max: number; readonly timeWindowMs: number }
@@ -52,7 +57,7 @@ export function appConfig(env: FactoryEnv): AppConfig {
   return {
     environment: env.FACTORY_ENV,
     webOrigin: env.FACTORY_WEB_ORIGIN,
-    trustProxyHops: env.FACTORY_TRUST_PROXY_HOPS,
+    trustedProxies: env.FACTORY_TRUSTED_PROXIES,
     cookieSecret: env.FACTORY_COOKIE_SECRET,
     queuePrefix: env.FACTORY_QUEUE_PREFIX,
   }
@@ -152,13 +157,15 @@ export async function buildApp(config: AppConfig, dependencies: AppDependencies 
     requestIdHeader: false,
     requestIdLogLabel: 'requestId',
     bodyLimit: BODY_LIMIT_BYTES,
-    trustProxy: config.trustProxyHops > 0 ? config.trustProxyHops : false,
+    // B-W2b-F57: Fastify never follows a forwarded header; core/client-address.ts decides the client's address.
+    trustProxy: false,
     // A HEAD route would be a second route per GET; the manifest lists each method once.
     exposeHeadRoutes: false,
     return503OnClosing: true,
   })
   app.setValidatorCompiler(validatorCompiler)
   app.setSerializerCompiler(serializerCompiler)
+  installClientAddress(app, trustedProxies(config.trustedProxies))
 
   installErrorHandling(app)
   await registerSecurity(app, {

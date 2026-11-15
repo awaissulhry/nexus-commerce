@@ -276,7 +276,8 @@
         "STILL_ACTIVE": "This person still works here (an active employee or floor account): anonymise them after they left.",
         "ACCOUNT_OPEN": "This office account is still open: deactivate it first (Admin › Users), then anonymise.",
         "NOT_A_PROSPECT": "This inquiry names a contact of a customer, not a prospect: anonymise the contact instead.",
-        "TOO_MANY": "This person has more records than one erasure writes at once: ask the administrator to split it."
+        "TOO_MANY": "This person has more records than one erasure writes at once: ask the administrator to split it.",
+        "MAIL_SENDING": "A mail to this person is being sent right now: try again in two minutes, once it has gone."
       },
       "section": {
         "anonymised": {
@@ -312,7 +313,7 @@
         "HEALTH": "Health surveillance and accident records are kept 10 years after the employment ends (D.Lgs. 81/2008 art. 25; GDPR art. 17(3)(b)).",
         "CUSTOMER": "The customer record names the person and the orders and invoices refer to it (c.c. art. 2220: 10 years; GDPR art. 17(3)(b)).",
         "MEASUREMENTS": "The measurements a garment was made to, for the legal guarantee (D.Lgs. 206/2005 art. 132: 26 months); their photos go on their own date.",
-        "IMMUTABLE": "Kept for now: the database keeps this record unchanged once written (a mail, a message, an audit row); blanking the name waits for a guarded erasure path.",
+        "IMMUTABLE": "What the mail server recorded when the mail arrived (its envelope sender) stays as it came; the rest of the person's details in the mail are blanked.",
         "ALREADY_ERASED": "Already anonymised earlier: nothing of the person is left in it.",
         "NOTICE_PROOF": "The proof the person was given the privacy notice (GDPR arts. 5(2), 13): it names the notice's version, not the person's data."
       },
@@ -365,6 +366,7 @@
         "cc": "copies",
         "before": "values before",
         "after": "values after",
+        "envelopeFrom": "envelope sender",
         "other": "other details"
       },
       "held": {
@@ -477,8 +479,8 @@
       },
       "sweepHeld": {
         "IMMUTABLE": {
-          "short": "held: kept unchanged",
-          "long": "The database keeps this record unchanged once written (a mail as it came): anonymising it waits for a guarded erasure path."
+          "short": "held: erasure requests only",
+          "long": "The database blanks a received mail only for a person's erasure request, never by a sweep: the rule can only report it."
         },
         "NEVER_DELETED": {
           "short": "held: never deleted",
@@ -629,11 +631,11 @@
         "night": "Nightly sweep"
       },
       "ledgers": {
-        "title": "Kept, waits for the Owner's decision",
+        "title": "Kept for good, never purged",
         "intro": "The database keeps these ledgers append-only: never swept, never offered for a rule.",
         "what": "What it holds",
         "kept": "Kept",
-        "words": "Whether they may be purged after a period waits for the Owner's decision."
+        "words": "The Owner decided (15 November 2026): these ledgers are never purged after a period. An erasure request still blanks the person's details inside the change history; its rows stay."
       },
       "ledger": {
         "AuditLog": {

@@ -24,6 +24,7 @@ import { partnerPage } from './page'
 import { adapterOf } from './records'
 import { settleRequest } from './settle'
 import { localeOf, lockRequest, readPartner, RECORD, refOf, sourceKeyOf, type PartnerRow } from './store'
+import { clientAddressOf } from '../../core/client-address'
 
 /**
  * The partner's answer (B-W2b-184; design links.approve "Your decision: approve · approve with comments (where the kind
@@ -115,7 +116,7 @@ async function answerInCommand(tools: CommandTools, request: FastifyRequest, who
       answeredByUserId: who.userId,
       answeredViaLinkId: link?.id ?? null,
       answerRequestId: tools.context.requestId,
-      answerIpHash: auth.secrets.ipHash(request.ip),
+      answerIpHash: auth.secrets.ipHash(clientAddressOf(request)),
       answerUserAgent: userAgentOf(request.headers['user-agent']),
       version: current.version + 1,
       updatedAt: tools.now,

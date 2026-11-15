@@ -20,6 +20,7 @@ import {
   cleanFileName,
   DOWNLOAD_URL_SECONDS,
   fileMachine,
+  isStorageKey,
   normaliseContentType,
   normaliseVisibility,
   retentionFor,
@@ -42,6 +43,8 @@ import { processScanner } from './scan/service'
 // B-W2b-160 (COL-046, COL-052, COL-058): versions, large uploads in parts, the stripped copy outside the office.
 import { refuseLargeUploadConfirm } from './multipart/guard'
 import { keyShownTo } from './thumbs/outside'
+// B-W2b-F56: a file whose bytes are missing from the store (404 in words, never an outage).
+import { MissingFileError } from './missing'
 import { sharingNarrows, supersedeEarlierVersions } from './versions/supersede'
 
 /**
@@ -238,6 +241,33 @@ export async function storeCall<T>(work: () => Promise<T>): Promise<T> {
     throw error
   }
 }
+
+// ── B-W2b-F56 ─────────────────────────────────────────────────────────────────────────────────────────────────────────
+export { MISSING_FILE_WORDS, MissingFileError } from './missing'
+
+/**
+ * A stored file's bytes, for a read that serves them (a picture, a PDF): the store not answering is 503 and worth a retry
+ * (storeCall); no object under the key is MissingFileError (404), never a 503. Server-side work that must tell a missing
+ * object apart in its own words (an import, the scan, a copy) reads `storage.read` and its null itself.
+ */
+export async function readStoredFile(
+  runtime: Pick<FilesRuntime, 'storage'>,
+  caller: CommandCaller,
+  file: { readonly storeAccountId: string; readonly storageKey: string },
+  maxBytes: number,
+): Promise<Buffer> {
+  let bytes: Buffer | null
+  try {
+    bytes = await runtime.storage.read(caller, file.storeAccountId, file.storageKey, maxBytes)
+  } catch (error) {
+    // The store's account paused, rate-limited or not answering: 503 in words, worth a retry.
+    if (error instanceof GatewayRefusal || error instanceof GatewayCallFailed) throw new ApiError('not_ready', 'The file store does not answer now. Try again in a moment.')
+    throw error
+  }
+  if (!bytes) throw new MissingFileError()
+  return bytes
+}
+// ── end B-W2b-F56 ─────────────────────────────────────────────────────────────────────────────────────────────────────
 
 /**
  * The tenant's file store: its R2 account (any mode) that is not DISABLED, the company's own before the tenant-wide
@@ -659,6 +689,8 @@ export async function downloadFile(runtime: FilesRuntime, callers: Callers, file
   const storeCaller = context.audience === 'office' ? callers.caller : callers.system(tenantOf(context))
   // B-W2b-160 (COL-058): a portal or a link gets a picture only as its stripped copy (no EXIF, no position).
   const key = await keyShownTo(runtime, context, storeCaller, row)
+  // B-W2b-F56: a key no upload could have made holds no bytes: missing (404), never a store call that fails as an outage.
+  if (!isStorageKey(key)) throw new MissingFileError()
   const download = await storeCall(() =>
     runtime.storage.presignDownload(storeCaller, row.storeAccountId, {
       key,

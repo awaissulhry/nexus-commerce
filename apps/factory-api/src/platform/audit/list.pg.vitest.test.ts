@@ -81,7 +81,7 @@ beforeAll(async () => {
   await row(60 * 24 * 3, 'org.createCompany', { recordType: 'Company', recordId: companyOne })
   await row(2, 'org.editCompany', { tenantId: otherTenant, companyId: null, recordType: 'Company', recordId: newId() })
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     {
       database,
       routesRoot: fileURLToPath(new URL('../..', import.meta.url)),

@@ -75,8 +75,14 @@ const monthSchema = z.object({
 })
 export type PayrollMonth = z.infer<typeof monthSchema>
 
-export const getMonth = (api: ApiClient, query: { companyId: string; month?: string | null; layoutId?: string | null }) =>
-  api.get('/people/payroll/month', { query: { companyId: query.companyId, ...(query.month ? { month: query.month } : {}), ...(query.layoutId ? { layoutId: query.layoutId } : {}) }, schema: monthSchema })
+// B-W2b-F56: every site's ATTENDANCE gate off is the month's state (200, `attendance: 'CLOSED'`), never a 409 on the first read.
+const monthClosedSchema = z.object({ attendance: z.literal('CLOSED'), companyId: z.string(), month: z.string(), words: z.string() })
+
+/** The month for the layout in use; null when every site of the company has its ATTENDANCE gate off (nothing is read). */
+export const getMonth = (api: ApiClient, query: { companyId: string; month?: string | null; layoutId?: string | null }): Promise<PayrollMonth | null> =>
+  api
+    .get('/people/payroll/month', { query: { companyId: query.companyId, ...(query.month ? { month: query.month } : {}), ...(query.layoutId ? { layoutId: query.layoutId } : {}) }, schema: z.union([monthClosedSchema, monthSchema]) })
+    .then((answer) => ('attendance' in answer ? null : answer))
 
 const showSchema = z.object({
   code: z.enum(PAYROLL_CHECKS),

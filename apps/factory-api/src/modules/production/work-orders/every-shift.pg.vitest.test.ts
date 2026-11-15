@@ -146,7 +146,7 @@ beforeAll(async () => {
   const [station] = await admin<{ id: string }>('SELECT id FROM "Station" WHERE "tenantId" = $1 AND "siteId" = $2 AND code = $3', [A.tenant, A.site, 'SEW-01'])
   await admin(`INSERT INTO "Device" (id, "tenantId", "companyId", "siteId", "stationId", name, kind, status, "enrolledAt") VALUES ($1, $2, $3, $4, $5, 'Sewing tablet', 'TABLET', 'ACTIVE', now())`, [tablet, A.tenant, A.company, A.site, station!.id])
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
   )
 }, 600_000)

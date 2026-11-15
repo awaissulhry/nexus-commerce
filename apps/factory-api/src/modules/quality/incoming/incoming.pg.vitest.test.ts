@@ -135,7 +135,7 @@ beforeAll(async () => {
   groups = Object.fromEntries((await admin<{ id: string; label: string }>(`SELECT id::text, label FROM "ShadeGroup" WHERE "tenantId" = $1 AND "itemId" = $2 AND "lotId" IS NULL`, [A.tenant, A.leather])).map((row) => [row.label, row.id]))
   grades = Object.fromEntries((await admin<{ id: string; code: string }>(`SELECT id::text, code FROM "LeatherGrade" WHERE "tenantId" = $1`, [A.tenant])).map((row) => [row.code, row.id]))
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database: h.database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
   )
 }, 900_000)

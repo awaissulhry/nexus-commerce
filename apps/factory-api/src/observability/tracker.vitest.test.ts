@@ -14,7 +14,7 @@ import { createErrorTracker, errorTrackingMode, reportError, useErrorTracker, ty
  * (4xx) does not, a failed cron tick does, a failing sink never breaks the answer. Made-up values only.
  */
 
-const CONFIG: AppConfig = { environment: 'test', webOrigin: 'http://localhost:3200', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET }
+const CONFIG: AppConfig = { environment: 'test', webOrigin: 'http://localhost:3200', cookieSecret: LOCAL_COOKIE_SECRET }
 
 const routes = defineRoutes(
   'probe',

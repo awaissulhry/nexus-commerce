@@ -22,7 +22,7 @@ import { testRedis, type TestRedis } from '../outbox/testing'
 import { createSecretsService } from '../secrets/envelope'
 import { localKeyProvider } from '../secrets/local'
 import { SECRET_PURPOSES, storeSecret } from '../secrets/store'
-import { prepareFileCopy, putGeneratedFile, recordGeneratedFile } from './files'
+import { MISSING_FILE_WORDS, MissingFileError, prepareFileCopy, putGeneratedFile, readStoredFile, recordGeneratedFile } from './files'
 import { createFilesRuntime, processFiles, useFiles } from './service'
 
 /**
@@ -175,7 +175,7 @@ beforeAll(async () => {
   const gateway = createGateway({ environment: 'test', redis: connection, prefix: redis.prefix, secrets, sleep: async () => {}, log: { info() {}, warn() {}, error() {} } })
   useFiles(createFilesRuntime({ gateway, local: localFileStore({ root: localRoot, environment: 'test' }), r2: r2FileStore({ clientFor: r2.clientFor }) }))
   app = await buildApp(
-    { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     {
       database,
       routesRoot: fileURLToPath(new URL('../..', import.meta.url)),
@@ -562,3 +562,54 @@ describe('a generated file recorded inside the caller\'s command (putGeneratedFi
     expect(await admin('SELECT id FROM "StoredFile" WHERE "storageKey" = $1', [prepared.storageKey])).toEqual([])
   })
 })
+
+// ── B-W2b-F56 ─────────────────────────────────────────────────────────────────────────────────────────────────────────
+// The Owner's test server: a file row whose bytes are missing (seed pictures, seed safety data sheets whose keys no upload
+// could have made) answered 503 "the store is down", and the refused keys opened the store's circuit. Missing is 404 in
+// words; only a store that does not answer is 503 and worth a retry.
+describe('a file whose bytes are missing from the store (B-W2b-F56)', () => {
+  const office = () => callerFor(database, { audience: 'office', tenantId: tenantA, actorId: user, grants: [grant(ALL)], requestId: newId() })
+  const row = async (storageKey: string) => {
+    const id = newId()
+    await admin(
+      `INSERT INTO "StoredFile" (id, "tenantId", "companyId", "recordType", "recordId", kind, "originalName", "contentType", "sizeBytes", sha256, "storeAccountId", "storageKey", status, visibility, "availableAt", "createdById")
+       VALUES ($1, $2, $3, 'Quote', $4, 'DOCUMENT', 'Gone.pdf', 'application/pdf', 64, $5, $6, $7, 'AVAILABLE', '{OFFICE}', now(), $8)`,
+      [id, tenantA, companyOne, quote, 'a'.repeat(64), fakeStore, storageKey, user],
+    )
+    return id
+  }
+
+  it('the platform reader answers 404 "The file is missing from the store." for a row with no object, and 503 only when the store does not answer', async () => {
+    const id = await row(`t/${tenantA}/c/${companyOne}/2026/${newId()}`)
+    const key = await keyOf(id)
+    await expect(readStoredFile(processFiles(), office(), { storeAccountId: fakeStore, storageKey: key }, 1024)).rejects.toMatchObject({ code: 'not_found', message: MISSING_FILE_WORDS })
+    await expect(readStoredFile(processFiles(), office(), { storeAccountId: fakeStore, storageKey: key }, 1024)).rejects.toBeInstanceOf(MissingFileError)
+    // The store answered (no object): one SUCCEEDED read, never a failure that counts towards the circuit.
+    expect((await callsOf(fakeStore)).filter((entry) => entry.operation === 'files.read').at(-1)).toMatchObject({ status: 'SUCCEEDED' })
+    // A paused store is not called: 503 in words, worth a retry.
+    await admin(`UPDATE "IntegrationAccount" SET status = 'PAUSED' WHERE id = $1`, [fakeStore])
+    try {
+      await expect(readStoredFile(processFiles(), office(), { storeAccountId: fakeStore, storageKey: key }, 1024)).rejects.toMatchObject({ code: 'not_ready' })
+    } finally {
+      await admin(`UPDATE "IntegrationAccount" SET status = 'ACTIVE' WHERE id = $1`, [fakeStore])
+    }
+  })
+
+  it('a key no upload could have made is no object: read and head answer null without a store call, the download 404 in words', async () => {
+    const id = await row(`t/${tenantA}/c/${companyOne}/health/${newId()}`)
+    const before = (await callsOf(fakeStore)).length
+    const key = await keyOf(id)
+    expect(await processFiles().storage.read(office(), fakeStore, key, 1024)).toBeNull()
+    expect(await processFiles().storage.head(office(), fakeStore, key)).toBeNull()
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const response = await call('admin', 'GET', `/files/${id}/download`)
+      expect(response.statusCode).toBe(404)
+      expect(response.json().error).toMatchObject({ code: 'not_found', message: MISSING_FILE_WORDS })
+    }
+    // Nothing reached the store: no failed call, so the account's circuit stays shut and the next file downloads.
+    expect((await callsOf(fakeStore)).length).toBe(before)
+    const good = await uploaded('after the missing ones')
+    expect((await download('admin', good.id)).status).toBe(200)
+  })
+})
+// ── end B-W2b-F56 ─────────────────────────────────────────────────────────────────────────────────────────────────────
