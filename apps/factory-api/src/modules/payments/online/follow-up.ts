@@ -71,6 +71,11 @@ export async function syncPayTask(caller: CommandCaller, invoiceId: string, caus
   const planned = await caller.withClient((db) => payTaskMove(db, invoiceId))
   if (planned.move === null) return null
   const { result } = await command(caller, { name: 'payments.payInvoiceTask', input: { invoiceId }, ...(causationId ? { causationId } : {}) }, async (tools) => {
+    // B-W2b-436: the invoice's money lock first. The relay hands a batch's events to the handlers at once, so two events of one
+    // invoice (its issue and its send in one command, a send and an allocation) ran two of these side by side on the same
+    // request: one answered "This request changed meanwhile" and the worker tried again. Under the lock the second plans after
+    // the first has written.
+    await lockMoney(tools.tx, tools.context, 'invoice', invoiceId)
     const { move, facts, dueAt } = await payTaskMove(tools.tx, invoiceId)
     const [task] = await tasksOfRecord(tools.tx, 'Invoice', invoiceId, { kinds: ['PAY_INVOICE'], sourceKey: payInvoiceKey(invoiceId) })
     if (move === 'open') await openTaskInCommand(tools, { companyId: facts!.companyId, partyId: facts!.partyId, kind: 'PAY_INVOICE', record: { type: 'Invoice', id: invoiceId, label: facts!.number ?? '' }, sourceKey: payInvoiceKey(invoiceId), dueAt, askedBy: null })
