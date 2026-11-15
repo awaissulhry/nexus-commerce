@@ -3,7 +3,7 @@ import { alertPhrase, phraseText } from '../../alerts/rules'
 import { KINDS } from '../../alerts/kinds'
 import { templateOf } from '../../auth/roles/templates'
 import { forOrderOf, invoiceKindOf, paidOf, sharedInvoice, totalsOf } from './documents'
-import { belowCount, floorFlagOf, underFloor, watched } from './floor'
+import { belowCount, floorFlagOf, underFloor, WATCHED_STATUSES } from './floor'
 
 /**
  * Margins in depth (B-W2b-416; FIN-050, FIN-053): the floor flag reads the final margin once final and the estimate
@@ -35,8 +35,8 @@ describe('the floor flag', () => {
   })
 
   it('watches orders made, being made or on their way — not one waiting for its yes, closed or cancelled', () => {
-    expect(['CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED', 'SHIPPED', 'DELIVERED'].every(watched)).toBe(true)
-    expect(['PENDING_APPROVAL', 'CLOSED', 'CANCELLED'].some(watched)).toBe(false)
+    expect(WATCHED_STATUSES).toEqual(['CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED', 'SHIPPED', 'DELIVERED'])
+    for (const status of ['PENDING_APPROVAL', 'CLOSED', 'CANCELLED']) expect(WATCHED_STATUSES).not.toContain(status)
   })
 })
 

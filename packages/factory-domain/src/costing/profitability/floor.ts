@@ -65,9 +65,6 @@ export function floorFlagOf(figures: FloorFigures, floorPct: string | null): Flo
   return { below: underFloor(margin, figures.value, floorPct), basis }
 }
 
-/** Whether the alert watches an order of this status. */
-export const watched = (status: string): boolean => (WATCHED_STATUSES as readonly string[]).includes(status)
-
 /** The facts of a low-margin alert: what it is judged on and whether the quote was already under its floor. No figure. */
 export interface FloorAlertFacts {
   readonly basis: FloorBasis

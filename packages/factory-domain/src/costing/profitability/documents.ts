@@ -6,10 +6,6 @@
  * currency is listed but never added (the totals say how many were left out). No person is named.
  */
 
-/** The groups of the report, in the design's order. */
-export const DOCUMENT_GROUPS = ['INVOICES', 'CREDIT_NOTES', 'COSTS', 'FREIGHT', 'PAYMENTS'] as const
-export type DocumentGroup = (typeof DOCUMENT_GROUPS)[number]
-
 /** An invoice of the order by its FatturaPA type (factory-db InvoiceDocType). */
 export const INVOICE_KINDS = ['INVOICE', 'DEFERRED_INVOICE', 'DEPOSIT_INVOICE', 'DEBIT_NOTE', 'CREDIT_NOTE', 'OTHER'] as const
 export type InvoiceKind = (typeof INVOICE_KINDS)[number]
@@ -54,7 +50,6 @@ export function paidOf(allocations: readonly { readonly amount: number }[]): num
 
 /** The kinds of cost document behind the order's cost. */
 export const COST_KINDS = ['WORK_ORDER', 'COST_OF_SALES', 'SUBCONTRACT_ORDER', 'SUPPLIER_INVOICE'] as const
-export type CostKind = (typeof COST_KINDS)[number]
 
 /** Why a figure of the report is partial (codes; the screen says them in words). */
 export const DOCUMENT_NOTES = ['OTHER_CURRENCY', 'SHARED_INVOICE', 'SHARED_WORK_ORDER', 'FREIGHT_COST_MISSING', 'NOT_ISSUED'] as const
