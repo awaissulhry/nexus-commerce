@@ -19,9 +19,10 @@ import { PaymentsListView } from './view/PaymentsListView'
  * roles: Owner, Finance, Sales (read-only).
  */
 
-type PaymentsCase = { role: Role; kind: 'list'; list: PaymentsListModel } | { role: Role; kind: 'record'; record: PaymentRecordModel }
+export type PaymentsCase = { role: Role; kind: 'list'; list: PaymentsListModel } | { role: Role; kind: 'record'; record: PaymentRecordModel }
 
-const list = (role: Role, over: Partial<PaymentsListModel> = {}): PaymentsCase => {
+/** B-W2b-425: SCR-512 and SCR-513 build their cases on these. */
+export const list = (role: Role, over: Partial<PaymentsListModel> = {}): PaymentsCase => {
   const can = canOf(role)
   return {
     role,
@@ -33,7 +34,7 @@ const list = (role: Role, over: Partial<PaymentsListModel> = {}): PaymentsCase =
       companyId: COMPANY,
       rows: 'all',
       list: { items: can.price ? PAYMENT_ROWS : withoutPrices(PAYMENT_ROWS), more: false, problem: null },
-      tiles: { monthCount: 6, monthAmount: can.price ? 1440680 : null, notPlacedCount: 2, notPlacedAmount: can.price ? 250000 : null, capped: false },
+      tiles: { monthCount: 6, monthAmount: can.price ? 1440680 : null },
       asOf: '2026-10-29T15:05:00.000Z',
       live: 'live',
       updates: 0,
@@ -52,7 +53,7 @@ const list = (role: Role, over: Partial<PaymentsListModel> = {}): PaymentsCase =
   }
 }
 
-const record = (role: Role, payment = PAYMENT, over: Partial<PaymentRecordModel> = {}): PaymentsCase => {
+export const record = (role: Role, payment = PAYMENT, over: Partial<PaymentRecordModel> = {}): PaymentsCase => {
   const can = canOf(role)
   return {
     role,
@@ -89,8 +90,8 @@ export const designScreen = defineDesignScreen<PaymentsCase>({
     { id: 'record-too-much', label: 'Finance · More placed than received: held', model: list('finance', { dialog: STEP2, items: { value: OPEN_ITEMS, problem: null }, draft: { amount: '1000,00', reference: 'CRO-0000-ESEMPIO-97', plan: { [OPEN_ITEMS[0]!.id]: '3294,00' } } }) },
     { id: 'record-reference-used', label: 'Finance · The bank reference was recorded already (a transfer counts once)', model: list('finance', { dialog: STEP2, items: { value: OPEN_ITEMS, problem: null }, dialogProblem: { key: 'problem.write.reference' }, draft: { amount: '2000,00', reference: 'CRO-0000-ESEMPIO-42', plan: { [OPEN_ITEMS[0]!.id]: '2000,00' } } }) },
     { id: 'record-no-items', label: 'Finance · The customer has nothing open: the money stays on account', model: list('finance', { dialog: STEP2, items: { value: [], problem: null }, draft: { amount: '500,00', reference: 'CRO-0000-ESEMPIO-98' } }) },
-    { id: 'record-done', label: 'Finance · Recorded and placed; the deposit invoice issued', model: list('finance', { dialog: STEP2, recorded: { payment: { ...PAYMENT, externalRef: 'CRO-0000-ESEMPIO-96', unallocated: 0, allocated: 120000, amount: 120000 }, depositInvoice: { required: true, number: 'FT-2026-00034', filesPending: false } } }) },
-    { id: 'list-empty', label: 'Finance · No payment recorded yet', model: list('finance', { list: { items: [], more: false, problem: null }, tiles: { monthCount: 0, monthAmount: 0, notPlacedCount: 0, notPlacedAmount: 0, capped: false } }) },
+    { id: 'record-done', label: 'Finance · Recorded and placed; the deposit invoice issued', model: list('finance', { dialog: STEP2, recorded: { payment: { ...PAYMENT, externalRef: 'CRO-0000-ESEMPIO-96', unallocated: 0, allocated: 120000, amount: 120000 }, depositInvoice: { required: true, number: 'FT-2026-00034', filesPending: false }, depositOrder: 'OV-2026-0042' } }) },
+    { id: 'list-empty', label: 'Finance · No payment recorded yet', model: list('finance', { list: { items: [], more: false, problem: null }, tiles: { monthCount: 0, monthAmount: 0 } }) },
     { id: 'list-voided', label: 'Finance · Rows: Voided', model: list('finance', { rows: 'voided', list: { items: PAYMENT_ROWS.filter((row) => row.status === 'VOIDED'), more: false, problem: null } }) },
     { id: 'list-selected', label: 'Finance · Rows chosen: Export N (CSV)', model: list('finance', { selected: PAYMENT_ROWS.slice(0, 2).map((row) => row.id) }) },
     { id: 'list-loading', label: 'Loading', model: list('finance', { list: { items: null, more: false, problem: null }, tiles: null, asOf: null, live: 'connecting' }) },
