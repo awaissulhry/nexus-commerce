@@ -174,8 +174,10 @@ export const returnsContract = defineContract({
       /** Pieces shipped in the period (null without orders.view) and the return rate (pieces asked back ÷ shipped). */
       shipped: z.number().int().nullable(),
       returnRatePct: pct(),
-      /** By reason (the RETURN list's code and its words; `words` null: a code no longer in the list). Reason groups: none yet. */
-      reasons: z.array(output({ key: z.string(), words: output({ it: z.string(), en: z.string() }).nullable(), figures: returnFigures })),
+      /** By reason (the RETURN list's code and its words; `words` null: a code no longer in the list) and its group (null: none). */
+      reasons: z.array(output({ key: z.string(), words: output({ it: z.string(), en: z.string() }).nullable(), group: z.string().nullable(), figures: returnFigures })),
+      /** B-W2b-380 (XF6:06): by reason group (ReasonCode.group, the tenant's words; `none`: reasons without a group) and its codes. */
+      reasonGroups: z.array(output({ key: z.string(), reasons: z.array(z.string()), figures: returnFigures })),
       styles: z.array(named),
       colours: z.array(named),
       sizes: z.array(named),

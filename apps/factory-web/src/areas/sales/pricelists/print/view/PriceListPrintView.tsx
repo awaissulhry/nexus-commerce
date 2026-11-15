@@ -1,5 +1,6 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import { Banner, EmptyState, SummaryTable } from '@nexus/ui/components'
 import { PrintSection, PrintView } from '@nexus/ui/patterns/print-view/index'
 import { Spinner } from '@nexus/ui/primitives'
@@ -28,6 +29,8 @@ export interface PriceListPrintModel {
   rules: VersionRules | null
   /** A `pricelists` message key of the read that failed. */
   problem: string | null
+  /** B-W2b-380 (XF6:01): the PDF kept for mail, above the paper (never printed). */
+  kept?: ReactNode
 }
 
 /**
@@ -80,6 +83,7 @@ function Print({ model }: { model: PriceListPrintModel }) {
       back={{ href: model.back, label: t('print.back') }}
       labels={ds.printView}
     >
+      {model.can.view ? model.kept : null}
       {!model.can.view ? (
         <EmptyState title={w('noAccess.title')} description={w('noAccess.body')} />
       ) : !model.can.price ? (

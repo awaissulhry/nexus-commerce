@@ -234,7 +234,8 @@
       "style": "Style",
       "size": "Size",
       "colour": "Colour",
-      "customer": "Customer"
+      "customer": "Customer",
+      "group": "Reason group"
     },
     "failed": "Return reasons could not be read",
     "axes": "Pieces by reason; style by size",
@@ -244,6 +245,7 @@
     "emptyHint": "A return counts on the day it was asked for; turned down and cancelled ones never count.",
     "unknown": "Not known",
     "noSize": "No size",
+    "noGroup": "No group",
     "kv": {
       "pieces": "Pieces asked back",
       "piecesHint": "Returns: {returns} · lines: {lines}",
@@ -257,12 +259,12 @@
     },
     "byReason": "By reason",
     "barSub": "Returns: {returns} · lines: {lines}",
-    "noGroups": "Reasons are shown one by one: reason groups are not kept yet.",
     "alsoTitle": {
       "style": "By style",
       "size": "By size",
       "colour": "By colour",
-      "customer": "By customer"
+      "customer": "By customer",
+      "group": "By reason group"
     },
     "heatTitle": "Most returned styles by size",
     "heatNone": "Nothing came back",

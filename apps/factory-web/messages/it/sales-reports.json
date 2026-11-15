@@ -234,7 +234,8 @@
       "style": "Modello",
       "size": "Taglia",
       "colour": "Colore",
-      "customer": "Cliente"
+      "customer": "Cliente",
+      "group": "Gruppo di motivi"
     },
     "failed": "Non è stato possibile leggere i motivi di reso",
     "axes": "Pezzi per motivo; modello per taglia",
@@ -244,6 +245,7 @@
     "emptyHint": "Un reso conta nel giorno in cui è stato chiesto; quelli rifiutati e annullati non contano mai.",
     "unknown": "Non noto",
     "noSize": "Senza taglia",
+    "noGroup": "Senza gruppo",
     "kv": {
       "pieces": "Pezzi chiesti in reso",
       "piecesHint": "Resi: {returns} · righe: {lines}",
@@ -257,12 +259,12 @@
     },
     "byReason": "Per motivo",
     "barSub": "Resi: {returns} · righe: {lines}",
-    "noGroups": "I motivi sono mostrati uno per uno: i gruppi di motivi non sono ancora tenuti.",
     "alsoTitle": {
       "style": "Per modello",
       "size": "Per taglia",
       "colour": "Per colore",
-      "customer": "Per cliente"
+      "customer": "Per cliente",
+      "group": "Per gruppo di motivi"
     },
     "heatTitle": "Modelli più resi per taglia",
     "heatNone": "Nulla è tornato",
