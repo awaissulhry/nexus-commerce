@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { Card, KeyValue } from '@nexus/ui/components'
 import { Button, Pill, Spinner, Tag } from '@nexus/ui/primitives'
 import { formatDate, formatDateTime } from '../../../../../lib/i18n/format'
@@ -16,6 +17,8 @@ export interface BankLineModel {
   problem: string | null
   /** The people the payment names (who accepted the match). */
   people: ReadonlyArray<{ id: string; name: string | null }>
+  /** B-W2b-406: the company's address prefix (`/w/<company>`): "Open the statement" opens Finance › Bank on it. */
+  prefix: string
 }
 
 export interface BankLineActions {
@@ -113,9 +116,10 @@ function Body({ model, actions }: { model: BankLineModel; actions?: BankLineActi
               : p('bankLine.notAccepted')}
         </p>
       </div>
-      <Button size="sm" heldReason={p('bankLine.statementLater')}>
+      {/* B-W2b-406: the statement's lines on Finance › Bank, this line open beside them (a real link: ⌘-click, a new tab). */}
+      <Link className="fw-fin-link" href={`${model.prefix}/finance/bank?statement=${encodeURIComponent(line.statementId)}&line=${encodeURIComponent(line.id)}`}>
         {p('bankLine.openStatement')}
-      </Button>
+      </Link>
     </Card>
   )
 }

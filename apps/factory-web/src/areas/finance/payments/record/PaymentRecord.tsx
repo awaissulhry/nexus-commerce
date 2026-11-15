@@ -149,7 +149,7 @@ function RecordContainer({ paymentId }: { paymentId: string }) {
   return (
     <PaymentRecordView
       model={model}
-      depth={payment.status === 'ready' ? { writeOff: <WriteOffs payment={payment.value} prefix={prefix} onChanged={() => void load()} />, bank: <BankLine payment={payment.value} /> } : undefined}
+      depth={payment.status === 'ready' ? { writeOff: <WriteOffs payment={payment.value} prefix={prefix} onChanged={() => void load()} />, bank: <BankLine payment={payment.value} prefix={prefix} /> } : undefined}
       actions={{
         onRetry: () => void load(),
         onDismissNotice: () => setNotice(null),

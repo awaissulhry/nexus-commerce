@@ -49,4 +49,9 @@ export const manifest = defineManifest({
   'PUT /receivables/customers/:partyId/trust': { audiences: ['office'], permission: 'receivables.reminders.trust', scope: 'record' },
   'GET /receivables/collections/settings': { audiences: ['office'], permission: 'receivables.view', scope: 'record' },
   'PUT /receivables/collections/settings': { audiences: ['office'], permission: 'receivables.collections.switch', scope: 'record' },
+  // B-W2b-406 (FIN-135): a customer's own figures against ours; typing them also needs the price grain (every figure is one).
+  'GET /receivables/their-figures': { audiences: ['office'], permission: 'receivables.view', scope: 'record' },
+  'GET /receivables/their-figures/:figuresId': { audiences: ['office'], permission: 'receivables.view', scope: 'record' },
+  'POST /receivables/their-figures': { audiences: ['office'], permission: 'receivables.theirFigures.manage', scope: 'record' },
+  'PATCH /receivables/their-figures/:figuresId': { audiences: ['office'], permission: 'receivables.theirFigures.manage', scope: 'record' },
 })

@@ -338,6 +338,8 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/finance/payables',
   '/finance/payables/[id]',
   '/finance/payables/[id]/xml',
+  // B-W2b-406: Bank (SCR-152).
+  '/finance/bank',
   // B-W0-27 Admin: All settings, Companies & sites, Devices & printers, Users, Roles & permissions, and their records.
   '/admin',
   '/admin/companies',
