@@ -38,14 +38,19 @@ const areaCases: DesignCase<OfficeShellViewModel>[] = OFFICE_NAV.areas.map((area
 
 const warehouse = navOf('warehouse')
 const sales = navOf('sales')
+const admin = navOf('admin') // B-W2b-F49
 
-/** B-W2b-437: the banner a role sees with these sites' carriers and the first company's e-invoicing in test mode (made up). */
+/**
+ * B-W2b-437: the banner a role sees with these sites' carriers and the first company's e-invoicing in test mode (made up).
+ * B-W2b-F49: what GET /shell/notices answers every office person; the role only holds the links.
+ */
 function testModeOf(role: Parameters<typeof rolePermissions>[0], on: { carrier: readonly string[]; eInvoicing: boolean }): SystemBanner[] {
   const company = DEMO_COMPANIES[0]
   const banner = testModeBanner({
-    carrier: DEMO_SITES.map((site) => ({ companyId: company.id, name: site.name, testMode: on.carrier.includes(site.name) })),
-    eInvoicing: [{ companyId: company.id, legalName: company.name, state: { code: on.eInvoicing ? 'TEST' : 'LIVE' } }],
-    companyId: company.id,
+    notices: {
+      carrierSites: DEMO_SITES.filter((site) => on.carrier.includes(site.name)).map((site) => ({ siteId: site.id, name: site.name })),
+      eInvoicingCompanies: on.eInvoicing ? [{ companyId: company.id, name: company.name }] : [],
+    },
     rights: testModeRights(permissionCheck(rolePermissions(role))),
   })
   return banner ? [banner] : []
@@ -116,14 +121,21 @@ export const designScreen = defineDesignScreen<OfficeShellViewModel>({
     {
       id: 'test-mode-carrier',
       label: 'TEST MODE banner: a warehouse person, one site\'s carrier',
-      model: { ...at({ ...owner, nav: warehouse }, '/warehouse/shipments'), banners: testModeOf('warehouse', { carrier: [DEMO_SITES[1].name], eInvoicing: true }) },
-      note: 'The warehouse role does not read e-invoicing (no invoices.view): only the carrier\'s line, with its page.',
+      model: { ...at({ ...owner, nav: warehouse }, '/warehouse/shipments'), banners: testModeOf('warehouse', { carrier: [DEMO_SITES[1].name], eInvoicing: false }) },
+      note: 'One site\'s carrier in test mode, e-invoicing live: one line, with its page (Carriers & shipping).',
     },
     {
       id: 'test-mode-reader',
       label: 'TEST MODE banner: a sales person, no settings page to open',
       model: { ...at({ ...owner, nav: sales }, '/sales/orders'), banners: testModeOf('sales', { carrier: [DEMO_SITES[0].name], eInvoicing: true }) },
       note: 'Sales reads both test modes but may not open Carriers & shipping (shipping.settings.view): that line has no link.',
+    },
+    // B-W2b-F49: every office person sees the band, not only who reads shipping or invoices.
+    {
+      id: 'test-mode-admin',
+      label: 'TEST MODE banner: an admin, who reads neither test mode',
+      model: { ...at({ ...owner, nav: admin }, '/admin/users'), banners: testModeOf('admin', { carrier: [DEMO_SITES[0].name], eInvoicing: true }) },
+      note: 'The admin role holds neither shipping.view nor invoices.view and still sees both lines (GET /shell/notices, for every office person); it may open Carriers & shipping (shipping.settings.view), not Finance settings (invoices.view): that line has no link.',
     },
     {
       id: 'test-mode-off',

@@ -4,8 +4,8 @@ import { isUuid } from '@nexus/factory-domain/core/ids'
 import { scopeWhere } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { accountProblems, type LabelEnvironment } from '@nexus/factory-domain/shipping/labels/labels'
-import { SHIPPING_SETTINGS_MANAGE, SHIPPING_SETTINGS_VIEW, SHIPPING_VIEW } from '@nexus/factory-domain/shipping/permissions'
-import { backToTestRefusal, goLiveRefusal, TEST_LABEL_PREFIX, TEST_MODE_WORDS, testModeRefusalPath, type TestModeRefusalCode } from '@nexus/factory-domain/shipping/test-mode/rules'
+import { SHIPPING_SETTINGS_MANAGE, SHIPPING_SETTINGS_VIEW } from '@nexus/factory-domain/shipping/permissions'
+import { backToTestRefusal, goLiveRefusal, inTestMode, TEST_LABEL_PREFIX, TEST_MODE_WORDS, testModeRefusalPath, type TestModeRefusalCode } from '@nexus/factory-domain/shipping/test-mode/rules'
 import { command, type CommandCaller, type CommandTools, type CommandTx } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { assertMay, officeContextOf } from '../access'
@@ -15,9 +15,11 @@ import { carrierAccountIdOf } from '../labels/store'
  * Test carrier mode per site (B-W2b-390; LOG-035; rules factory-domain shipping/test-mode; design warehouse.shipping "Test
  * mode", pop-up "Switch to live labels"). Office only.
  *
- *   read     shipping.view: every site the reader's grants reach, in test mode or live (since when, switched by whom), what
- *            going live would do (ready, or the refusal in words; the TEST labels of shipments not yet left it clears) and
- *            whether any site is in test mode (the shell's TEST MODE banner)
+ *   read     shipping.settings.view (B-W2b-F49: was shipping.view; the settings of Carriers & shipping, whose row asks it, so
+ *            the admin who switches it reads it): every site the reader's grants reach, in test mode or live (since when,
+ *            switched by whom), what going live would do (ready, or the refusal in words; the TEST labels of shipments not
+ *            yet left it clears) and whether any site is in test mode. The shell's TEST MODE banner reads platform/shell's
+ *            notices (names and on/off, every office person) from the same read, siteTestModes
  *   live     shipping.settings.manage over the site + a fresh step-up: refused first in words (no settings, live already, no
  *            usable Sendcloud connection), then the code, then ONE command on the site's ShippingSettings (its version):
  *            testMode false, liveSince now, liveSetById the person, and every TEST label of the site's shipments that have
@@ -46,7 +48,7 @@ async function liveAccountProblems(db: CommandTx, site: Site, settings: Settings
 }
 
 async function siteView(db: CommandTx, site: Site, settings: Settings | null, environment: LabelEnvironment) {
-  const testMode = settings?.testMode ?? true
+  const testMode = inTestMode(settings)
   const refusal = goLiveRefusal(settings, settings?.testMode ? await liveAccountProblems(db, site, settings, environment) : [])
   return {
     siteId: site.id,
@@ -68,23 +70,29 @@ async function siteView(db: CommandTx, site: Site, settings: Settings | null, en
   }
 }
 
-/** shipping.view: the test mode of every site the reader reaches (or one company's, or one site). */
+/**
+ * B-W2b-F49: the ACTIVE sites `scope` names (and one company's, or one site, when asked), each with its settings and whether
+ * its carrier is in test mode (rules inTestMode): ONE read for this page (`scope` = shipping.settings.view's scopeWhere) and the
+ * shell's TEST MODE notices (platform/shell: the sites the person works in), so both say the same.
+ */
+export async function siteTestModes(db: CommandTx, scope: Prisma.SiteWhereInput, query: { companyId?: string | undefined; siteId?: string | undefined } = {}) {
+  const where: Prisma.SiteWhereInput = { AND: [scope, { status: 'ACTIVE' }, query.companyId ? { companyId: query.companyId } : {}, query.siteId ? { id: query.siteId } : {}] }
+  const sites = await db.site.findMany({ where, select: SITE_SELECT, orderBy: [{ companyId: 'asc' }, { code: 'asc' }] })
+  const rows = await db.shippingSettings.findMany({ where: { id: { in: sites.map((site) => site.id) } }, select: SETTINGS_SELECT })
+  const byId = new Map(rows.map((row) => [row.id, row]))
+  return sites.map((site) => {
+    const settings = byId.get(site.id) ?? null
+    return { site, settings, testMode: inTestMode(settings) }
+  })
+}
+
+/** shipping.settings.view: the test mode of every site the reader reaches (or one company's, or one site). */
 export async function getTestModes(caller: CommandCaller, query: { companyId?: string | undefined; siteId?: string | undefined }, environment: LabelEnvironment) {
   const context = officeContextOf(caller)
-  const where: Prisma.SiteWhereInput = {
-    AND: [
-      scopeWhere(actorOf(context), SHIPPING_VIEW, { company: 'companyId', site: 'id' }) as Prisma.SiteWhereInput,
-      { status: 'ACTIVE' },
-      query.companyId ? { companyId: query.companyId } : {},
-      query.siteId ? { id: query.siteId } : {},
-    ],
-  }
+  const scope = scopeWhere(actorOf(context), SHIPPING_SETTINGS_VIEW, { company: 'companyId', site: 'id' }) as Prisma.SiteWhereInput
   return caller.withClient(async (client) => {
-    const sites = await client.site.findMany({ where, select: SITE_SELECT, orderBy: [{ companyId: 'asc' }, { code: 'asc' }] })
-    const rows = await client.shippingSettings.findMany({ where: { id: { in: sites.map((site) => site.id) } }, select: SETTINGS_SELECT })
-    const byId = new Map(rows.map((row) => [row.id, row]))
     const views = []
-    for (const site of sites) views.push(await siteView(client, site, byId.get(site.id) ?? null, environment))
+    for (const { site, settings } of await siteTestModes(client, scope, query)) views.push(await siteView(client, site, settings, environment))
     return { sites: views, anyInTestMode: views.some((view) => view.testMode) }
   })
 }
