@@ -285,6 +285,8 @@ import { events as mailDepth } from '../mail-depth/events'
 // B-W2b-398: delivery and return labels (shipment.customer_notice_sent, .tracking_problem_raised, .tracking_problem_resolved,
 // .pod_recorded, return_label.changed).
 import { events as shippingDelivery } from '../shipping-delivery/events'
+// B-W2b-409: export and customs (customs.document_made, customs.declaration_changed, customs.settings_changed).
+import { events as shippingCustoms } from '../shipping-customs/events'
 // B-W2b-396: invoicing in depth (invoice_run.changed, deposit_cancellation_rule.changed, deposit_cancellation.decided, fee_credit.changed).
 import { events as invoicingDepth } from '../invoicing-depth/events'
 // B-W2b-419: cost rates (cost_per_minute.changed, overhead_rule.changed).
@@ -313,6 +315,10 @@ import { events as templates } from '../templates/events'
 import { events as reminders } from '../reminders/events'
 // B-W2b-380: the price list PDF kept and mailed (price_list.pdf_kept, price_list.pdf_sent).
 import { events as pricesFollowups } from '../prices-followups/events'
+// B-W2b-395: pickups and the day's close (shipping.pickup_changed, shipping.day_sheet_closed).
+import { events as shippingDispatch } from '../shipping-dispatch/events'
+// B-W2b-400: carrier contracts and services (shipping.carrier_contract_changed, shipping.carrier_services_changed, shipment.services_changed, shipment.parcel_values_changed, shipping.insurance_rule_changed).
+import { events as shippingContracts } from '../shipping-contracts/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -663,6 +669,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...mailDepth,
   // B-W2b-398
   ...shippingDelivery,
+  // B-W2b-409
+  ...shippingCustoms,
   // B-W2b-396
   ...invoicingDepth,
   // B-W2b-419
@@ -691,6 +699,10 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...reminders,
   // B-W2b-380
   ...pricesFollowups,
+  // B-W2b-395
+  ...shippingDispatch,
+  // B-W2b-400
+  ...shippingContracts,
 ] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */

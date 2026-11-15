@@ -15,6 +15,8 @@ import { ORDERS_VIEW } from '../sales/orders/permissions'
 // B-W2b-385 (NT1:04): a return that arrived after its deadline is seen on the return (sales.returns.view).
 import { SALES_RETURNS_VIEW } from '../sales/returns/permissions'
 import { APPROVALS_VIEW } from '../approvals/permissions'
+// B-W2b-409: a missing proof of exit is seen on its shipment (shipping.view).
+import { SHIPPING_VIEW } from '../shipping/permissions'
 import type { TimerKind } from '../timers/rules'
 
 /**
@@ -53,8 +55,9 @@ const INTEGRATIONS_VIEW = 'integrations.view' satisfies Permission
 // B-W2b-350: the supply alerts (SCM-174) beside PO_NOT_CONFIRMED (not confirmed in time): PO_CONFIRMED_LATE (confirmed later
 // than needed) and SUPPLIER_STATUS_CHANGED (a supplier put on hold, blocked, limited or made inactive).
 // B-W2b-385 (NT1:04, B-W2b-341's gap): RETURN_ARRIVED_LATE, a return whose goods reached the dock after their deadline.
+// B-W2b-409 (LOG-089): EXIT_PROOF_MISSING, an export whose proof of exit is still missing after its declaration's days.
 // B-W2b-416 (FIN-050): MARGIN_BELOW_FLOOR, an order whose margin (estimated now, or final) is below its margin floor.
-export const RULE_KINDS = ['ORDER_LATE_RISK', 'HOLD_TOO_LONG', 'MATERIAL_SHORT', 'APPROVAL_OVERDUE', 'PO_NOT_CONFIRMED', 'CERTIFICATE_EXPIRING', 'INVOICE_DEADLINE', 'INTEGRATION_FAILING', 'WORKING_TIME_LIMIT', 'LOW_STOCK', 'PO_CONFIRMED_LATE', 'SUPPLIER_STATUS_CHANGED', 'RETURN_ARRIVED_LATE', 'MARGIN_BELOW_FLOOR'] as const
+export const RULE_KINDS = ['ORDER_LATE_RISK', 'HOLD_TOO_LONG', 'MATERIAL_SHORT', 'APPROVAL_OVERDUE', 'PO_NOT_CONFIRMED', 'CERTIFICATE_EXPIRING', 'INVOICE_DEADLINE', 'INTEGRATION_FAILING', 'WORKING_TIME_LIMIT', 'LOW_STOCK', 'PO_CONFIRMED_LATE', 'SUPPLIER_STATUS_CHANGED', 'RETURN_ARRIVED_LATE', 'EXIT_PROOF_MISSING', 'MARGIN_BELOW_FLOOR'] as const
 export type RuleKind = (typeof RULE_KINDS)[number]
 export const isRuleKind = (value: unknown): value is RuleKind => typeof value === 'string' && (RULE_KINDS as readonly string[]).includes(value)
 
@@ -300,6 +303,20 @@ export const KINDS: Readonly<Record<RuleKind, KindSpec>> = Object.freeze({
     builtIn: { name: { en: 'Return arrived after its deadline', it: 'Reso arrivato dopo la scadenza' }, threshold: {}, severity: 'WARNING', cooldownMinutes: 1440, recipientRole: 'sales' },
     label: { en: 'Returns that arrived after their deadline', it: 'Resi arrivati dopo la scadenza' },
     recheck: [{ event: 'return.status_changed', key: 'returnId' }],
+  }),
+  // B-W2b-409 (LOG-089 "an alert when the MRN and the exit confirmation are still missing after N days"; art. 8 DPR 633/1972).
+  EXIT_PROOF_MISSING: spec({
+    kind: 'EXIT_PROOF_MISSING',
+    trigger: 'CONDITION',
+    // One alert per shipment that left with an export declaration whose exit is not confirmed (PACK_SENT or FILED) more than
+    // the declaration's own days (CustomsDeclaration.alertAfterDays, default 30) after the goods left. It clears when the exit
+    // is confirmed with its proof, or the declaration is removed. No numbers of its own: the days are each declaration's.
+    recordType: 'Shipment',
+    view: SHIPPING_VIEW,
+    threshold: z.strictObject({}),
+    builtIn: { name: { en: 'Proof of exit missing for an export', it: "Prova dell'uscita mancante per un'esportazione" }, threshold: {}, severity: 'WARNING', cooldownMinutes: 1440, recipientRole: 'finance' },
+    label: { en: 'Exports without their proof of exit', it: "Esportazioni senza la prova dell'uscita" },
+    recheck: [{ event: 'customs.declaration_changed', key: 'shipmentId' }],
   }),
   // B-W2b-416 (FIN-050 low-margin alert; "the margin floor of W2b-5 is set but nothing watches it").
   MARGIN_BELOW_FLOOR: spec({

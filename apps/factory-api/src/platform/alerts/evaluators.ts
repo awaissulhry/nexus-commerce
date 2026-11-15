@@ -18,6 +18,8 @@ import { lowStockFindings } from '../../modules/inventory/low-stock/alerts'
 import { confirmedLateFindings, supplierStatusFindings } from '../../modules/purchasing/reports/supply-alerts'
 // B-W2b-385 (NT1:04): a return whose goods arrived after their deadline.
 import { lateReturnFindings } from '../../modules/sales/returns-depth/alerts'
+// B-W2b-409 (LOG-089): an export whose proof of exit is still missing after its declaration's days.
+import { exitProofFindings } from '../../modules/shipping/customs/alerts'
 // B-W2b-416 (FIN-050): an order whose margin is below its margin floor.
 import { floorFindingsWith } from '../../modules/costing/margins/floor'
 import { floorFiguresOf } from '../../modules/costing/margins/margins'
@@ -296,6 +298,8 @@ export const FINDERS: Readonly<Partial<Record<RuleKind, Find>>> = Object.freeze(
   SUPPLIER_STATUS_CHANGED: supplierStatusFindings,
   // B-W2b-385: one per return that arrived after its deadline, until it is closed.
   RETURN_ARRIVED_LATE: lateReturnFindings,
+  // B-W2b-409: one per shipment whose export's proof of exit is missing past its declaration's days, until it is confirmed.
+  EXIT_PROOF_MISSING: exitProofFindings,
   // B-W2b-416: one per watched sales order below its margin floor, until it is above it again.
   MARGIN_BELOW_FLOOR: floorFindingsWith(floorFiguresOf),
 })

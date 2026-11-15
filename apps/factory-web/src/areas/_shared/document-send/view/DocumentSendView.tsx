@@ -28,12 +28,23 @@ const CHECK_ICON: Record<SendCheckItem['state'], ReactNode> = {
  * blocking check's reason, never silently disabled; ⌘↵ sends; Esc closes and keeps the draft. After the send the dialog
  * shows the result: to whom, when, how long the link lives — or that the mail failed, with "Send a new link".
  */
-export function DocumentSendView({ open, model, actions, extra }: { open: boolean; model: DocumentSendModel; actions?: DocumentSendActions; extra?: ReactNode }) {
+export function DocumentSendView({ open, model, actions, extra, parts }: { open: boolean; model: DocumentSendModel; actions?: DocumentSendActions; extra?: ReactNode; parts?: SendParts }) {
   return (
     <WithMessages namespaces={['send']}>
-      <DocumentSend open={open} model={model} actions={actions} extra={extra} />
+      <DocumentSend open={open} model={model} actions={actions} extra={extra} parts={parts} />
     </WithMessages>
   )
+}
+
+/**
+ * B-W2b-432 (PLT-131; design shell.preview sec:language-version, sec:send-panel): the host's language pick (the contact's
+ * language preselected; language/) in place of the language's words, its message template pick above the message
+ * (template/), and why Send waits for them (a language other than the document's).
+ */
+export interface SendParts {
+  language?: ReactNode
+  messageTemplate?: ReactNode
+  held?: string | null
 }
 
 /** The design index's cases: one model per language, so each language shows the host's own words too. */
@@ -46,19 +57,23 @@ export function DocumentSendPreview({ model }: { model: DocumentSendPreviewModel
 }
 
 /** `extra`: the host's own fields of this send, below the message (B-W2a-69: a purchase order's confirm-by and change note). */
-function DocumentSend({ open, model, actions, extra }: { open: boolean; model: DocumentSendModel; actions?: DocumentSendActions; extra?: ReactNode }) {
+function DocumentSend({ open, model, actions, extra, parts }: { open: boolean; model: DocumentSendModel; actions?: DocumentSendActions; extra?: ReactNode; parts?: SendParts }) {
   const t = useT('send')
   const shell = useT('shell')
   const locale = useLocale()
   const cc = useMemo(() => parseCc(model.fields.cc), [model.fields.cc])
-  const held = sendHeld(model, cc.invalid, {
-    loading: t('held.loading'),
-    busy: t('held.busy'),
-    noRight: t('held.noRight'),
-    noEmail: t('held.noEmail'),
-    cc: (list) => t('held.cc', { list }),
-    sent: t('held.sent'),
-  })
+  const held =
+    sendHeld(model, cc.invalid, {
+      loading: t('held.loading'),
+      busy: t('held.busy'),
+      noRight: t('held.noRight'),
+      noEmail: t('held.noEmail'),
+      cc: (list) => t('held.cc', { list }),
+      sent: t('held.sent'),
+    }) ??
+    // B-W2b-432: the host's part says why Send waits (the language on screen is not the document's).
+    parts?.held ??
+    null
   const send = () => {
     if (!held) actions?.onSend?.()
   }
@@ -120,7 +135,8 @@ function DocumentSend({ open, model, actions, extra }: { open: boolean; model: D
                         t('to.none')
                       ),
                     },
-                    { label: t('language'), value: t(`languageName.${model.language}`) },
+                    // B-W2b-432: the language pick (the contact's preselected) when the host gives one.
+                    { label: t('language'), value: parts?.language ?? t(`languageName.${model.language}`) },
                     { label: t('how.label'), value: model.how.kind === 'acceptLink' ? (model.how.until ? t('how.acceptLinkUntil', { date: formatDate(model.how.until, place) }) : t('how.acceptLink')) : t('how.pdfOnly') },
                   ]}
                 />
@@ -130,6 +146,8 @@ function DocumentSend({ open, model, actions, extra }: { open: boolean; model: D
                 <Field label={t('subject')}>
                   <Input value={model.fields.subject} onChange={(event) => actions?.onField?.('subject', event.target.value)} maxLength={200} readOnly={!model.canSend || model.sending} />
                 </Field>
+                {/* B-W2b-432: the message from a template of the language on screen. */}
+                {model.canSend && !model.sending && parts?.messageTemplate}
                 <Field label={t('message.label')} hint={t('message.hint')}>
                   <Textarea value={model.fields.message} onChange={(event) => actions?.onField?.('message', event.target.value)} rows={6} maxLength={4000} readOnly={!model.canSend || model.sending} />
                 </Field>

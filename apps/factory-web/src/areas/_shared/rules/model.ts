@@ -44,6 +44,8 @@ export const THRESHOLD_FIELDS: Readonly<Record<RuleKind, { readonly numbers: rea
   SUPPLIER_STATUS_CHANGED: { numbers: [{ key: 'days', min: 1, max: 90, unit: 'days' }], workingDays: false },
   // B-W2b-385: no number (late is late: the return's own deadline).
   RETURN_ARRIVED_LATE: { numbers: [], workingDays: false },
+  // B-W2b-409: no number (each export declaration has its own days).
+  EXIT_PROOF_MISSING: { numbers: [], workingDays: false },
   // B-W2b-416: no number (the floors are the Sales settings').
   MARGIN_BELOW_FLOOR: { numbers: [], workingDays: false },
 })

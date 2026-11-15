@@ -138,3 +138,17 @@
   clip: rect(0 0 0 0);
   white-space: nowrap;
 }
+
+/* B-W2b-432: the language pick and the message template pick (language/, template/). */
+.fw-send-language,
+.fw-send-template {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-send-hint.is-warning {
+  color: var(--nds-warning-text);
+}

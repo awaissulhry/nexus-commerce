@@ -333,6 +333,7 @@
       "PO_CONFIRMED_LATE": "Ordini d’acquisto confermati in ritardo",
       "SUPPLIER_STATUS_CHANGED": "Lo stato di un fornitore è cambiato",
       "RETURN_ARRIVED_LATE": "Resi arrivati in ritardo",
+      "EXIT_PROOF_MISSING": "Esportazioni senza prova dell'uscita",
       "MARGIN_BELOW_FLOOR": "Ordini sotto il margine minimo"
     }
   },
