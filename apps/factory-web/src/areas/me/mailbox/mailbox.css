@@ -1,0 +1,54 @@
+/*
+ * Local mailbox (SCR-007-mailbox; B-W2b-F58): the page header, then one card per mail, newest first. The page fills the
+ * shell's main area (no max-width of its own). Layout only: colours, sizes and radii are semantic design-system tokens.
+ */
+.fw-mailbox {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-mailbox-list,
+.fw-mailbox-links {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+}
+
+.fw-mailbox-links {
+  gap: var(--nds-space-4);
+}
+
+.fw-mailbox-mail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-mailbox-count,
+.fw-mailbox-h3 {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-mailbox-h3 {
+  margin-bottom: var(--nds-space-4);
+  font-weight: 600;
+}
+
+/* A link or the text keeps its own lines and breaks inside a long address (a link token). */
+.fw-mailbox-links a,
+.fw-mailbox-text {
+  overflow-wrap: anywhere;
+}
+
+.fw-mailbox-text {
+  margin: 0;
+  white-space: pre-wrap;
+}

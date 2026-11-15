@@ -3,6 +3,10 @@
     "skipToContent": "Skip to content"
   },
   "nav": {
+    "mfaHint": {
+      "setup": "Set up your authenticator app to see your work",
+      "signIn": "Sign in again with your authenticator app to see your work"
+    },
     "home": {
       "area": "Home",
       "main": "Main",
@@ -252,6 +256,8 @@
     },
     "userMenu": "{name}: profile and sign out",
     "profile": "My profile",
+    "localMailbox": "Local mailbox",
+    "localMailboxHint": "The mail this test server sent (this computer only)",
     "signOut": "Sign out",
     "bell": {
       "label": "Notifications",

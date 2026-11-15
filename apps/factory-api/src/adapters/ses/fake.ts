@@ -6,9 +6,17 @@ import type { IdentityState, MailAdapter, OutgoingMail, SentMail } from '../../p
  * The FAKE mail provider (plan A1 §4 "MailPort … Fake behaviour"; §5.1: local mail is fake): the mailbox of SES accounts
  * in FAKE mode, local and test only (platform/email-out/service.ts makes none in staging or production, where the
  * gateway refuses FAKE accounts anyway). Nothing leaves the process: a sent mail is kept IN MEMORY (the newest
- * MAX_KEPT), never in a table or a file, so a sign-in link it carries is stored nowhere. An identity verifies at once.
+ * MAX_KEPT), never in a table, so a sign-in link it carries is stored nowhere. An identity verifies at once.
  * Tests read the mails (`mails`, `last`, `textOf`) and script a failure (`failNext`).
+ * B-W2b-F58: on FACTORY_ENV=local ONLY (the Owner's local test server), the email runtime gives it the local mailbox
+ * (platform/local/mailbox.ts, `mailbox`): each mail is also kept as a file every process sees, so the office's Local mailbox
+ * page opens an invitation, a password reset, a portal code or a quote link. Test, staging and production have none.
  */
+
+/** B-W2b-F58: where a FAKE mail is kept besides memory (the local mailbox; local only). Its failure never fails the send. */
+export interface FakeMailSink {
+  keep(mail: FakeMail, sentAt: Date): Promise<void>
+}
 
 export interface FakeMail {
   readonly sesMessageId: string
@@ -42,6 +50,12 @@ export class FakeSes implements MailAdapter {
   readonly mails: FakeMail[] = []
   /** The next send fails with this answer (a provider failure). */
   failNext: { readonly httpStatus: number; readonly message: string } | null = null
+  /** B-W2b-F58: the local mailbox (local only), else null. */
+  readonly mailbox: FakeMailSink | null
+
+  constructor(options: { readonly mailbox?: FakeMailSink | null } = {}) {
+    this.mailbox = options.mailbox ?? null
+  }
 
   async send(call: GatewayCall, mail: OutgoingMail): Promise<SentMail> {
     if (call.account.mode !== 'FAKE') throw new ProviderError('Only a FAKE account uses the fake mailbox.', { retryable: false })
@@ -52,21 +66,22 @@ export class FakeSes implements MailAdapter {
       throw new ProviderError(`SES SendEmail: ${failure.message}`, { httpStatus: failure.httpStatus })
     }
     const sesMessageId = `fake-${randomUUID()}`
-    this.mails.push(
-      Object.freeze({
-        sesMessageId,
-        accountId: call.account.id,
-        tenantId: call.account.tenantId,
-        outboundId: mail.outboundId,
-        templateKey: mail.templateKey,
-        from: mail.from,
-        to: [...mail.to],
-        cc: [...mail.cc],
-        bcc: [...mail.bcc],
-        raw: mail.raw,
-      }),
-    )
+    const kept: FakeMail = Object.freeze({
+      sesMessageId,
+      accountId: call.account.id,
+      tenantId: call.account.tenantId,
+      outboundId: mail.outboundId,
+      templateKey: mail.templateKey,
+      from: mail.from,
+      to: [...mail.to],
+      cc: [...mail.cc],
+      bcc: [...mail.bcc],
+      raw: mail.raw,
+    })
+    this.mails.push(kept)
     if (this.mails.length > MAX_KEPT) this.mails.splice(0, this.mails.length - MAX_KEPT)
+    // B-W2b-F58: the local mailbox (local only); a full disk or a wrong folder never fails the send.
+    await this.mailbox?.keep(kept, new Date()).catch(() => undefined)
     call.answer({ httpStatus: 200, response: { messageId: sesMessageId } })
     return { sesMessageId }
   }

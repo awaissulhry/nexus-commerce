@@ -29,12 +29,18 @@ export const testModeRights = (has: (permission: string) => boolean): TestModeRi
 export interface TestModeNotices {
   carrierSites: readonly { siteId: string; name: string }[]
   eInvoicingCompanies: readonly { companyId: string; name: string }[]
+  /**
+   * B-W2b-F58: the Owner's local test server hides the top bar (FACTORY_HIDE_TEST_MODE_BANNER, local only; the Owner's answer
+   * A of 11-15). The test modes stay on and every other TEST word stays; absent or false everywhere else.
+   */
+  bannerHidden?: boolean
 }
 
-export const NO_TEST_MODES: TestModeNotices = Object.freeze({ carrierSites: [], eInvoicingCompanies: [] })
+export const NO_TEST_MODES: TestModeNotices = Object.freeze({ carrierSites: [], eInvoicingCompanies: [], bannerHidden: false })
 
-/** The banner (null: nothing in test mode where the person works — no band at all). */
+/** The banner (null: nothing in test mode where the person works, or the local test server hides it — no band at all). */
 export function testModeBanner(input: { notices: TestModeNotices; rights: TestModeRights }): SystemBanner | null {
+  if (input.notices.bannerHidden) return null
   const carrierSites = input.notices.carrierSites.map((site) => site.name)
   const eInvoicingCompanies = input.notices.eInvoicingCompanies.map((company) => company.name)
   if (carrierSites.length === 0 && eInvoicingCompanies.length === 0) return null

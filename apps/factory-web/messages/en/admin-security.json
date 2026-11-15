@@ -7,7 +7,7 @@
     "cancel": "Cancel",
     "open": "Open",
     "stillLoading": "Still loading…",
-    "later": "Coming later: jobs and integrations with their runs, and sign-in with Microsoft or Google.",
+    "later": "Sign-in with Microsoft or Google is not available yet.",
     "noAccess": {
       "title": "Not yours to open",
       "body": "Security & health needs the right to see it. Ask an administrator of your company."
@@ -229,8 +229,8 @@
       "secondCopyValue": "Not set up yet",
       "secondCopyHint": "Waits for the Owner's yes to the off-site storage.",
       "files": "File versions",
-      "filesValue": "Comes later",
-      "filesHint": "A second copy of every file comes in a later wave.",
+      "filesValue": "Each file keeps its earlier versions",
+      "filesHint": "A second copy of every file at another provider is not set up yet.",
       "lastDrill": "Last restore drill"
     },
     "drill": {

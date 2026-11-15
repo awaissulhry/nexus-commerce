@@ -172,7 +172,7 @@
     "TOO_MANY_FILES": "A zip holds at most 400 files: choose a shorter period or fewer files.",
     "TOO_LARGE": "A zip holds at most 100 MB: choose a shorter period or fewer files.",
     "NOTHING_TO_ZIP": "There is no file to put in the zip.",
-    "FILE_UNAVAILABLE": "These files cannot be downloaded right now. Try again later, or ask finance.",
+    "FILE_UNAVAILABLE": "None of these files is in the file store any more, so the zip cannot be made. Ask finance.",
     "generic": "The download did not work. Try again.",
     "network": "The factory is not answering. Try again in a moment."
   },

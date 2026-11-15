@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { FastifyInstance } from 'fastify'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -15,6 +18,8 @@ import { testAuthenticator, type SessionContext } from '../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../env'
 import { eInvoicingSettings } from '../../modules/invoicing/test-mode/settings'
 import { getTestModes } from '../../modules/shipping/test-mode/test-mode'
+import { localMailbox } from '../local/mailbox'
+import { NO_LOCAL_STACK, useLocalStack } from '../local/stack'
 
 /**
  * The office shell's notices (B-W2b-F49; Owner rule W2b-6 "a test mode shows a banner on every page while it is on", for
@@ -30,6 +35,8 @@ import { getTestModes } from '../../modules/shipping/test-mode/test-mode'
  *   one rule    the notices say what the settings pages say (shipping's and e-invoicing's own reads); the carrier's settings
  *               ask Carriers & shipping's right (shipping.settings.view), so the admin who switches a site reads them
  *   refused     floor, partner and link sessions 403, no session 401
+ *   local       B-W2b-F58: on the Owner's local test server only, `bannerHidden` (FACTORY_HIDE_TEST_MODE_BANNER) still names the
+ *               test modes, and `localMailbox` says the local mailbox exists; both false off local
  */
 
 let db: MigratedDatabase
@@ -59,12 +66,20 @@ const SESSIONS: Record<string, SessionContext> = {
 }
 
 type Notices = { testModes: { carrierSites: { siteId: string; name: string }[]; eInvoicingCompanies: { companyId: string; name: string }[] } }
+type Answer = { testModes: Notices['testModes'] & { bannerHidden: boolean }; localMailbox: boolean }
 const admin = async (sql: string, values: unknown[] = []) => (await db.admin.query(sql, values)).rows as Array<Record<string, unknown>>
 const call = (session: string | null, url: string) => app.inject({ method: 'GET', url, headers: session ? { 'x-test-session': session } : {} })
-async function notices(session: string, companyId?: string): Promise<Notices> {
+async function answerOf(session: string, companyId?: string): Promise<Answer> {
   const response = await call(session, `/shell/notices${companyId ? `?companyId=${companyId}` : ''}`)
   expect(response.statusCode, response.body).toBe(200)
   return response.json()
+}
+/** The test modes named (off the local test server: the bar shows and there is no mailbox, B-W2b-F58). */
+async function notices(session: string, companyId?: string): Promise<Notices> {
+  const { testModes, localMailbox: mailbox, ...rest } = await answerOf(session, companyId)
+  const { bannerHidden, ...named } = testModes
+  expect({ bannerHidden, mailbox, rest }).toEqual({ bannerHidden: false, mailbox: false, rest: {} })
+  return { testModes: named }
 }
 const A1 = { siteId: T.siteA1, name: 'Seed plant A1' }
 const B1 = { siteId: T.siteB1, name: 'Seed plant B1' }
@@ -103,6 +118,7 @@ beforeAll(async () => {
 }, 120_000)
 
 afterAll(async () => {
+  useLocalStack(undefined)
   await app?.close()
   await database?.close()
   await db?.close()
@@ -165,6 +181,29 @@ describe('every office person reads the test modes where they work (B-W2b-F49)',
     } finally {
       await companyBLive(false)
     }
+  })
+
+  it('B-W2b-F58: the local test server’s switch hides the bar but still names the test modes; its mailbox is said', async () => {
+    const folder = mkdtempSync(join(tmpdir(), 'factory-notices-mailbox-'))
+    try {
+      useLocalStack({ mailbox: null, hideTestModeBanner: true })
+      expect(await answerOf('buyer')).toEqual({ testModes: { carrierSites: [A1, B1], eInvoicingCompanies: [A, B], bannerHidden: true }, localMailbox: false })
+      useLocalStack({ mailbox: localMailbox({ folder }), hideTestModeBanner: false })
+      expect(await answerOf('buyer')).toEqual({ testModes: { carrierSites: [A1, B1], eInvoicingCompanies: [A, B], bannerHidden: false }, localMailbox: true })
+      // Everything live: nothing named, whatever the switch says.
+      useLocalStack({ mailbox: null, hideTestModeBanner: true })
+      await companyBLive(true)
+      try {
+        expect(await answerOf('admin', T.companyB)).toEqual({ testModes: { carrierSites: [], eInvoicingCompanies: [], bannerHidden: true }, localMailbox: false })
+      } finally {
+        await companyBLive(false)
+      }
+    } finally {
+      useLocalStack(NO_LOCAL_STACK)
+      rmSync(folder, { recursive: true, force: true })
+    }
+    // Off the local test server (the default here): the bar shows, no mailbox.
+    expect(await answerOf('buyer')).toEqual({ testModes: { carrierSites: [A1, B1], eInvoicingCompanies: [A, B], bannerHidden: false }, localMailbox: false })
   })
 
   it('refuses floor, partner and link sessions (403) and a request without a session (401)', async () => {

@@ -11,12 +11,18 @@ import { processGateway } from '../../../platform/gateway/service'
 // B-W2b-401 (FIN-096): e-invoice test mode answers in-process (a simulated send never reaches the intermediary).
 import { isTestRef } from '@nexus/factory-domain/invoicing/test-mode/test-mode'
 import { simulatedOutcomeFor, simulatedReceipt, simulatedStatus } from '../test-mode/simulator'
+// B-W2b-F58: the FAKE intermediary across processes (the company's simulated answer at the send, the send from the database
+// at the poll and the archive).
+import { fakeChoiceFor, recallFakeSend } from '../test-mode/fake-sdi'
 
 /**
  * The process's SDI runtime (plan A1 §4; B-W1-50): each operation is ONE gateway call for the company's SDI account
  * (rate limit, circuit, timeout, retries of an idempotent operation, one IntegrationCall row), inside it the adapter of
  * the account's mode: FAKE → adapters/sdi/fake.ts (local and test only), LIVE and SANDBOX → the chosen provider's adapter
  * (none until Owner question Q21: every call is refused). Tests set their own with useSdi(createSdiRuntime({ … })).
+ * B-W2b-F58: a FAKE send takes the company's simulated answer while it is in test mode (test-mode/fake-sdi.ts fakeChoiceFor),
+ * and the fake answers `status` and `archive` for a send another process made from the database (recallFakeSend): the API
+ * sends, the worker's status poll gets SDI's answer, as from a real intermediary. LIVE and SANDBOX calls do not change.
  */
 
 /** How a send ended at the provider: its receipt, or why it failed (a failureReason, `<CODE>: <words> (detail)`). */
@@ -58,6 +64,7 @@ export function sendFailureOf(error: unknown): string | null {
 
 export function createSdiRuntime(options: SdiRuntimeOptions): SdiRuntime {
   const remote = options.remote ?? UNCHOSEN_SDI_PROVIDER
+  const fake = options.fake
   function adapterFor(account: Pick<AdapterAccount, 'provider' | 'mode'>): SdiAdapter {
     if (account.provider !== 'SDI') throw new ProviderError('This account is not an SDI account.', { retryable: false })
     if (account.mode !== 'FAKE') return remote
@@ -75,7 +82,11 @@ export function createSdiRuntime(options: SdiRuntimeOptions): SdiRuntime {
         const receipt = await options.gateway.call(
           gatewayAccount(caller, accountId),
           { ...SDI_OPERATIONS.send, idempotencyKey: request.idempotencyKey, request: { fileName: request.fileName, bytes: Buffer.byteLength(request.xml, 'utf8') } },
-          (call) => adapterFor(call.account).send(call, request),
+          async (call) => {
+            const adapter = adapterFor(call.account)
+            // B-W2b-F58: the FAKE intermediary gives the company's simulated answer while it is in test mode.
+            return fake && adapter === fake ? fake.send(call, request, await fakeChoiceFor(caller, accountId, request.idempotencyKey)) : adapter.send(call, request)
+          },
         )
         return { ok: true, receipt }
       } catch (error) {
@@ -86,13 +97,16 @@ export function createSdiRuntime(options: SdiRuntimeOptions): SdiRuntime {
     },
     status: (caller: CommandCaller, accountId: string, request: SdiStatusRequest) =>
       // B-W2b-401: a simulated send's status is the simulation's, always (even after the company went live).
-      isTestRef(request.providerRef) ? simulatedStatus(caller, request) : options.gateway.call(gatewayAccount(caller, accountId), { ...SDI_OPERATIONS.status, idempotencyKey: request.idempotencyKey, request: { fileName: request.fileName, byRef: request.providerRef !== null } }, (call) =>
-        adapterFor(call.account).status(call, request),
-      ),
+      isTestRef(request.providerRef) ? simulatedStatus(caller, request) : options.gateway.call(gatewayAccount(caller, accountId), { ...SDI_OPERATIONS.status, idempotencyKey: request.idempotencyKey, request: { fileName: request.fileName, byRef: request.providerRef !== null } }, (call) => {
+        const adapter = adapterFor(call.account)
+        // B-W2b-F58: a send another process's fake took is answered from the database.
+        return fake && adapter === fake ? fake.status(call, request, () => recallFakeSend(caller, request)) : adapter.status(call, request)
+      }),
     archive: (caller: CommandCaller, accountId: string, request: SdiArchiveRequest) =>
-      options.gateway.call(gatewayAccount(caller, accountId), { ...SDI_OPERATIONS.archive, idempotencyKey: `archive.${request.providerRef}`, request: { fileName: request.fileName } }, (call) =>
-        adapterFor(call.account).archive(call, request),
-      ),
+      options.gateway.call(gatewayAccount(caller, accountId), { ...SDI_OPERATIONS.archive, idempotencyKey: `archive.${request.providerRef}`, request: { fileName: request.fileName } }, (call) => {
+        const adapter = adapterFor(call.account)
+        return fake && adapter === fake ? fake.archive(call, request, () => recallFakeSend(caller, { providerRef: request.providerRef, fileName: request.fileName, idempotencyKey: null })) : adapter.archive(call, request)
+      }),
     webhookMessages: (mode: IntegrationMode, body: string) => adapterFor({ provider: 'SDI', mode }).webhookMessages(body),
   } satisfies SdiRuntime)
 }

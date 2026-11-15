@@ -2,6 +2,7 @@ import { defineDesignScreen, type DesignCase } from '../../lib/design/design-scr
 import { permissionCheck } from '../../lib/session/session'
 import { DEMO_COMPANIES, DEMO_LABELS, DEMO_SITES, DEMO_TAG, DEMO_USER, rolePermissions } from '../design-data'
 import { firstOfficePage, OFFICE_NAV, officeNavFor } from '../nav/office-nav'
+import { navWithMfaHint } from './mfa-hint'
 import { testModeBanner, testModeRights } from './test-mode'
 import { OfficeShellView, type OfficeShellViewModel, type SystemBanner } from './view/OfficeShellView'
 
@@ -44,12 +45,13 @@ const admin = navOf('admin') // B-W2b-F49
  * B-W2b-437: the banner a role sees with these sites' carriers and the first company's e-invoicing in test mode (made up).
  * B-W2b-F49: what GET /shell/notices answers every office person; the role only holds the links.
  */
-function testModeOf(role: Parameters<typeof rolePermissions>[0], on: { carrier: readonly string[]; eInvoicing: boolean }): SystemBanner[] {
+function testModeOf(role: Parameters<typeof rolePermissions>[0], on: { carrier: readonly string[]; eInvoicing: boolean; bannerHidden?: boolean }): SystemBanner[] {
   const company = DEMO_COMPANIES[0]
   const banner = testModeBanner({
     notices: {
       carrierSites: DEMO_SITES.filter((site) => on.carrier.includes(site.name)).map((site) => ({ siteId: site.id, name: site.name })),
       eInvoicingCompanies: on.eInvoicing ? [{ companyId: company.id, name: company.name }] : [],
+      bannerHidden: on.bannerHidden ?? false,
     },
     rights: testModeRights(permissionCheck(rolePermissions(role))),
   })
@@ -144,10 +146,27 @@ export const designScreen = defineDesignScreen<OfficeShellViewModel>({
       note: 'No band at all (no empty strip) once every site\'s carrier and the company\'s e-invoicing are live.',
     },
     {
+      id: 'test-mode-hidden-local',
+      label: 'TEST MODE bar hidden on the local test server',
+      model: { ...owner, banners: testModeOf('owner', { carrier: [DEMO_SITES[0].name], eInvoicing: true, bannerHidden: true }), localMailbox: true },
+      note: 'B-W2b-F58 (Owner answer A, 11-15): FACTORY_HIDE_TEST_MODE_BANNER=1, honoured only on FACTORY_ENV=local: both test modes stay on, no top bar; every other TEST word stays. The person menu offers the Local mailbox (local only).',
+    },
+    {
       id: 'no-areas',
       label: 'No area yet',
       model: { ...owner, nav: officeNavFor(permissionCheck([])), path: '/me', switcher: { ...switcher, companies: DEMO_COMPANIES.slice(0, 1), sites: [], path: '/me' } },
       note: 'A person with no role: no rail rows, no bottom bar; the profile page still opens.',
+    },
+    {
+      id: 'authenticator-first',
+      label: 'Two-factor first: one row in words',
+      model: {
+        ...owner,
+        nav: navWithMfaHint(officeNavFor(permissionCheck([])), { enabled: false, required: true, satisfied: false }),
+        path: '/me',
+        switcher: { ...switcher, companies: DEMO_COMPANIES.slice(0, 1), sites: [], path: '/me' },
+      },
+      note: 'B-W2b-F58: a role that asks for two-factor gives nothing until the code is proved on this session: the rail (and the phone bar) hold ONE row, "Set up your authenticator app to see your work", that opens Me › Authenticator.',
     },
     {
       id: 'palette-pages',

@@ -166,7 +166,7 @@
       "calls": "Calls 24 h",
       "region": "Region"
     },
-    "later": "The error queue, the delivery log and API keys for other systems come in later steps.",
+    "later": "API keys for other systems are not available yet.",
     "residency": {
       "title": "Where your data lives",
       "intro": "Only what each connection’s own settings say: Nexus never guesses a region.",
@@ -290,7 +290,7 @@
       "count_other": "{count} messages shown",
       "verified": "Signature checked",
       "notVerified": "Signature refused",
-      "privacy": "The content of a message is not shown here. Sending a failed one again comes later.",
+      "privacy": "The content of a message is not shown here. A failed one is processed again from the error queue on Connections & API.",
       "col": {
         "event": "Kind",
         "verified": "Signature",

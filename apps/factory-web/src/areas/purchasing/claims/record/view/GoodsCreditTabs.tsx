@@ -133,16 +133,25 @@ export function CreditTab({ claim, model }: { claim: Claim; model: ClaimRecordMo
       </Card>
     )
   }
-  const financeHeld = t('credit.financeLater')
+  // B-W2b-F58: Finance › Supplier invoices is built (B-W2a-81): the button opens it for a person who may see supplier invoices.
+  const financeHref = model.can.payables ? `${model.prefix}/finance/payables` : null
   return (
     <div className="fw-by-stack">
       <Card padded>
         <div className="fw-by-card">
           <div className="fw-by-card-head">
             <h2 className="fw-by-h2">{t('credit.title')}</h2>
-            <Button size="sm" heldReason={financeHeld}>
-              <Landmark size={13} aria-hidden /> {t('credit.openFinance')}
-            </Button>
+            {financeHref ? (
+              <Button asChild size="sm">
+                <Link href={financeHref}>
+                  <Landmark size={13} aria-hidden /> {t('credit.openFinance')}
+                </Link>
+              </Button>
+            ) : (
+              <Button size="sm" heldReason={t('credit.financeNoRight')}>
+                <Landmark size={13} aria-hidden /> {t('credit.openFinance')}
+              </Button>
+            )}
           </div>
           {model.can.cost ? (
             <KeyValue

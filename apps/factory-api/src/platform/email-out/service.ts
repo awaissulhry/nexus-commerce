@@ -2,6 +2,7 @@ import { FakeSes } from '../../adapters/ses/fake'
 import { sesMailAdapter } from '../../adapters/ses/ses'
 import { loadFactoryEnv } from '../../env'
 import { processFiles } from '../files/service'
+import { processLocalStack } from '../local/stack'
 import type { FileStorage } from '../files/store'
 import type { Gateway } from '../gateway/gateway'
 import { processGateway } from '../gateway/service'
@@ -61,7 +62,8 @@ export function processEmail(): EmailRuntime {
       env.FACTORY_AWS_ACCESS_KEY_ID && env.FACTORY_AWS_SECRET_ACCESS_KEY ? { accessKeyId: env.FACTORY_AWS_ACCESS_KEY_ID, secretAccessKey: env.FACTORY_AWS_SECRET_ACCESS_KEY } : undefined
     fromEnv = createEmailRuntime({
       gateway: processGateway(),
-      fake: local ? new FakeSes() : null,
+      // B-W2b-F58: on the Owner's local test server (FACTORY_ENV=local only) the fake also keeps each mail in the local mailbox.
+      fake: local ? new FakeSes({ mailbox: processLocalStack().mailbox }) : null,
       webOrigin: env.FACTORY_WEB_ORIGIN,
       ses: sesMailAdapter({ environmentCredentials }),
     })

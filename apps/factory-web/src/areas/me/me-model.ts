@@ -28,7 +28,8 @@ export type AuthenticatorCard =
   | { state: 'setup'; secret: string; otpauthUri: string; busy?: boolean; problem?: MeProblem | null; fieldErrors?: Readonly<Record<string, MeFieldProblem>> }
   /** Shown once, right after the app was switched on. */
   | { state: 'codes'; recoveryCodes: readonly string[] }
-  | { state: 'on'; required: boolean; recoveryCodesLeft: number; turnedOn?: boolean }
+  /** B-W2b-F58: `proved` false — the app is on, but this session never proved a code (it began before): the role opens nothing yet. */
+  | { state: 'on'; required: boolean; recoveryCodesLeft: number; turnedOn?: boolean; proved?: boolean }
   | { state: 'disable'; busy?: boolean; problem?: MeProblem | null; fieldErrors?: Readonly<Record<string, MeFieldProblem>> }
 
 export interface MyProfileViewModel {
@@ -47,6 +48,11 @@ export interface MyProfileViewModel {
   signOut?: { busy?: boolean; problem?: MeProblem | null }
   /** Put the focus in a form's first field when it opens (the live page; not the design frames). */
   autoFocus?: boolean
+  /**
+   * B-W2b-F58: the authenticator card comes first — the person's roles wait for two-factor on this session (the navigation's
+   * one row opens it here). The live page keeps it first for the visit, so the card does not move while the codes show.
+   */
+  authenticatorFirst?: boolean
 }
 
 /** Fewer than this many recovery codes left: the card says so. */
@@ -54,8 +60,11 @@ export const RECOVERY_LOW = 3
 
 /** The authenticator card at rest, from `me`. */
 export function authenticatorAtRest(mfa: OfficeMe['mfa']): AuthenticatorCard {
-  return mfa.enabled ? { state: 'on', required: mfa.required, recoveryCodesLeft: mfa.recoveryCodesLeft } : { state: 'off', required: mfa.required }
+  return mfa.enabled ? { state: 'on', required: mfa.required, recoveryCodesLeft: mfa.recoveryCodesLeft, ...(mfa.required && !mfa.satisfied ? { proved: false } : {}) } : { state: 'off', required: mfa.required }
 }
+
+/** B-W2b-F58: the person's roles wait for two-factor on this session (required, not proved): the card comes first. */
+export const authenticatorWaits = (mfa: OfficeMe['mfa']): boolean => mfa.required && !mfa.satisfied
 
 /** The profile at rest (no form open) for a signed-in person. */
 export function profileModel(me: OfficeMe, theme: ThemeMode): MyProfileViewModel {
@@ -68,6 +77,7 @@ export function profileModel(me: OfficeMe, theme: ThemeMode): MyProfileViewModel
     password: { state: 'closed' },
     authenticator: authenticatorAtRest(me.mfa),
     session: { createdAt: me.session.createdAt, idleExpiresAt: me.session.idleExpiresAt, absoluteExpiresAt: me.session.absoluteExpiresAt },
+    authenticatorFirst: authenticatorWaits(me.mfa),
   }
 }
 

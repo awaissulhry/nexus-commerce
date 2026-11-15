@@ -1119,7 +1119,7 @@
       "dueValue": "Set on each invoice",
       "iban": "Account",
       "ibanValue": "The company’s bank account",
-      "later": "A library of terms (30/60 days end of month, Ri.Ba.) comes with a later step.",
+      "later": "The library of terms (30/60 days end of month, Ri.Ba.) opens with the right to see payment terms.",
       "method": "Method on the invoice",
       "methodValue": "Bank transfer (MP05)",
       "title": "Payment terms"

@@ -33,6 +33,11 @@ describe('e-invoice test mode (FIN-096)', () => {
     expect(testModeState({ testMode: true, liveSince: null, simulateOutcome: 'DELIVERED', connection: live })).toMatchObject({ code: 'TEST', banner: 'E-invoice test mode — nothing goes to SDI', simulated: true })
     expect(testModeState({ testMode: true, liveSince: null, simulateOutcome: 'DELIVERED', connection: { mode: 'FAKE', status: 'ACTIVE' } })).toMatchObject({ code: 'TEST', simulated: false })
     expect(testModeState({ testMode: true, liveSince: null, simulateOutcome: 'DELIVERED', connection: null }).words).toContain('No single SDI connection')
+    // B-W2b-F58: the FAKE intermediary gives the company's chosen answer too, and says which.
+    const fake = { mode: 'FAKE', status: 'ACTIVE' }
+    expect(testModeState({ testMode: true, liveSince: null, simulateOutcome: 'DELIVERED', connection: fake }).words).toContain('the fake intermediary answers each send as delivered (RC)')
+    expect(testModeState({ testMode: true, liveSince: null, simulateOutcome: 'REJECTED', connection: fake }).words).toContain('the first send of each invoice as rejected (NS 00423)')
+    expect(testModeState({ testMode: true, liveSince: null, simulateOutcome: 'NOT_DELIVERABLE', connection: fake }).words).toContain('each send as not deliverable (MC)')
     expect(testModeState({ testMode: false, liveSince: '2026-11-09T08:00:00.000Z', simulateOutcome: 'DELIVERED', connection: live })).toMatchObject({ code: 'LIVE', banner: null, simulated: false })
   })
 

@@ -65,7 +65,8 @@ export const GUEST_REFUSALS = Object.freeze({
   TOO_MANY_FILES: `A zip holds at most ${GUEST_ZIP.maxFiles} files: choose a shorter period or fewer files.`,
   TOO_LARGE: `A zip holds at most ${Math.round(GUEST_ZIP.maxBytes / (1024 * 1024))} MB: choose a shorter period or fewer files.`,
   NOTHING_TO_ZIP: 'There is no file to put in the zip for this period.',
-  FILE_UNAVAILABLE: 'This file cannot be downloaded right now; try again later or ask finance.',
+  // B-W2b-F58: answered (409) when the store holds none of the zip's files (B-W2b-F56: missing, not an outage): no "try again later".
+  FILE_UNAVAILABLE: 'None of these files is in the file store any more, so the zip cannot be made. Ask finance.',
 })
 export type GuestRefusal = keyof typeof GUEST_REFUSALS
 export const GUEST_PROBLEM = (code: GuestRefusal): string => `problem/${code}`

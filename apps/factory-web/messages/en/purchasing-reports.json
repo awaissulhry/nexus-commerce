@@ -19,7 +19,7 @@
     "print": "Print",
     "more": "More actions",
     "monday": "Email me this every Monday",
-    "mondayHeld": "Scheduled e-mails of a report come later: print it or save the PDF meanwhile.",
+    "mondayHeld": "This page cannot be e-mailed on a schedule yet: print it or save the PDF.",
     "csv": { "spend": "Export spend (CSV)", "late": "Export late lines (CSV)" },
     "csvHeld": "Waits until the panel is read.",
     "keys": "Keyboard shortcuts"
