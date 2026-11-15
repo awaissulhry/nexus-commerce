@@ -20,6 +20,8 @@ import { officeContextOf } from '../../production/work-orders/access'
 import { officeWorkOrder } from '../../production/work-orders/work-orders'
 import { ENTRY_COLUMNS, ratesOf, readWorkOrder, romeDay, unique, type CostedWorkOrder, type Reader } from '../actual/store'
 import { ledgerViews } from '../actual/views'
+// B-W2b-F46: the costs that arrived after the close, in words, until a reopen.
+import { afterCloseOf } from '../actual/after-close'
 import { actualSettingsOf } from '../ppv/settings'
 import { closeFactsOf } from './facts'
 import { CLOSE_COLUMNS, closeRecordViews, figuresView, itemsOf, splitViewOf, VARIANCE_COLUMNS, varianceLineOf } from './views'
@@ -30,7 +32,8 @@ import { CLOSE_COLUMNS, closeRecordViews, figuresView, itemsOf, splitViewOf, VAR
  *   GET /production/work-orders/:workOrderId/close-check   workorders.view: what the close dialog shows — planned against
  *       actual, the tolerance, which figures are beyond it, the reasons, whether the close settles the cost (and what still
  *       waits to post), the variance split it would write (costing.view; amounts with the cost grain), the close that
- *       stands on a CLOSED work order
+ *       stands on a CLOSED work order; B-W2b-F46: on a CLOSED work order, `afterClose` — the costs that arrived after the
+ *       close, one line per source in words (amounts with the cost grain), waiting for a reopen
  *   GET /costing/work-orders/:workOrderId/close            costing.view: every close of the work order, newest first, with
  *       its variance lines and its VARIANCE and CLOSE entries (and their reversals)
  *   GET /costing/work-orders/:workOrderId/scrap-rework     costing.view: the cost of scrap and rework per reason
@@ -58,6 +61,8 @@ export async function closeCheck(caller: CommandCaller, workOrderId: string): Pr
     const facts = await closeFactsOf(db, costed, now)
     const liveRow = header.status === 'CLOSED' ? await db.workOrderClose.findFirst({ where: { workOrderId: header.id, undoneAt: null }, select: CLOSE_COLUMNS }) : null
     const [live] = liveRow ? await closeRecordViews(db, [liveRow], { actorId: context.actorId, mayManage: can(actor, WORKORDERS_MANAGE, scope), mayReopen: can(actor, WORKORDERS_REOPEN, scope), now }) : [null]
+    // B-W2b-F46: on a CLOSED work order, what its sources lack (null on any other).
+    const afterClose = await afterCloseOf(db, costed, facts.drafts)
     const completed = header.status === 'COMPLETED'
     const figures = live ? live.figures : figuresView(facts.figures, costed.currency)
     const beyond = live ? live.beyond : facts.beyond
@@ -68,7 +73,7 @@ export async function closeCheck(caller: CommandCaller, workOrderId: string): Pr
     const words = completed
       ? `${beyondWords(beyond, tolerancePct)} ${settleWords}`
       : live
-        ? `Closed at ${live.closedAt}${live.settled ? ', its cost settled' : ''}. ${live.can.undo ? `The person who closed it may undo it for ${UNDO_SECONDS} seconds after the close; ` : ''}reopening it needs workorders.reopen and a reason.`
+        ? `Closed at ${live.closedAt}${live.settled ? ', its cost settled' : ''}. ${live.can.undo ? `The person who closed it may undo it for ${UNDO_SECONDS} seconds after the close; ` : ''}reopening it needs workorders.reopen and a reason.${afterClose && afterClose.count > 0 ? ` ${afterClose.words}` : ''}`
         : `Work order ${header.number} is ${header.status}: a work order is closed once it is COMPLETED.`
     return {
       workOrder: { id: header.id, number: header.number, status: header.status, version: header.version, companyId: header.companyId, siteId: header.siteId },
@@ -87,6 +92,8 @@ export async function closeCheck(caller: CommandCaller, workOrderId: string): Pr
       split: completed && can(actor, COSTING_VIEW, scope) ? splitViewOf(facts.split, await itemsOf(db, facts.itemIds)) : null,
       undoSeconds: UNDO_SECONDS,
       live: live ?? null,
+      // B-W2b-F46
+      afterClose,
       words,
     }
   })

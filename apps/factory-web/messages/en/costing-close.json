@@ -109,6 +109,13 @@
     "note": "Note: {note}",
     "final": "A closed work order is final: to change it, reopen it with a reason."
   },
+  "afterClose": {
+    "body_one": "{count} cost arrived after the close — reopen the work order to post it.",
+    "body_other": "{count} costs arrived after the close — reopen the work order to post them.",
+    "list": "Costs that arrived after the close",
+    "line": "{event} ({document}), {date}",
+    "lineAmount": "{event} ({document}), {date}: {amount}"
+  },
   "refusal": {
     "NOT_COMPLETED": "Refused: only a completed work order is closed.",
     "REASON_NEEDED": "Refused: a figure is beyond the tolerance, so a reason is needed.",

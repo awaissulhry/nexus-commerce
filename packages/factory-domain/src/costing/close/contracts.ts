@@ -5,6 +5,8 @@ import { UOMS } from '../../product/units/units'
 import { ledgerEntryView, waitingView } from '../ledger/contracts'
 import { NOT_SPLIT_CODES, VARIANCE_CATEGORIES } from '../variances/split'
 import { CLOSE_REASONS, CLOSE_REFUSALS } from './rules'
+// B-W2b-F46: the costs that arrived after the close.
+import { afterCloseView } from './after-close'
 
 /**
  * The contracts of the work order close (B-W2b-411; MES-012, MES-013, FIN-029, FIN-030, FIN-034; design production.workorders
@@ -131,6 +133,9 @@ export const closeCheckView = output({
   undoSeconds: z.number().int(),
   /** The close that stands (a CLOSED work order). */
   live: closeRecordView.nullable(),
+  // B-W2b-F46
+  /** On a CLOSED work order: the costs that arrived after the close and wait for a reopen (one line per source); null otherwise. */
+  afterClose: afterCloseView.nullable(),
   words: z.string(),
 })
 export type CloseCheckView = z.infer<typeof closeCheckView>
