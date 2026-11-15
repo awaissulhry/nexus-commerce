@@ -18,9 +18,9 @@ import {
   SWEEP_FAILURES,
   SWEEP_HELD_WORDS,
   UNVERIFIED_WORDS,
-  WAITING_LEDGER_WORDS,
-  WAITING_LEDGERS,
-  WAITING_WORDS,
+  APPEND_ONLY_LEDGERS,
+  LEDGER_KEPT_WORDS,
+  LEDGER_WORDS,
   type RetentionAction,
   type RuleHeld,
   type SweepFailure,
@@ -38,8 +38,9 @@ import { SWEEP_SCHEDULE, SWEEP_SCHEDULE_WORDS, sweepRule } from './sweep'
  * record type, keep for, then, legal reason, last sweep; "Shortening needs the Owner (fresh code)"):
  *
  *   GET  /privacy/retention?companyId=                    the rules the caller sees (privacy.view) with their last sweep, the
- *                                                         record types a rule may name, the ledgers kept for the Owner's
- *                                                         decision, the purges that run on their own dates
+ *                                                         record types a rule may name, the append-only ledgers (kept for
+ *                                                         good, never purged: the Owner's decision of 15 Nov 2026), the
+ *                                                         purges that run on their own dates
  *   GET  /privacy/retention/rules/:ruleId/sweeps          a rule's sweeps, newest first (privacy.view)
  *   POST /privacy/retention/rules                         a rule (privacy.retention.manage): born on, reporting only
  *   PATCH /privacy/retention/rules/:ruleId                keep for, then, legal reason (version); shortening the period, or
@@ -214,7 +215,7 @@ export async function listRetention(caller: CommandCaller, query: { readonly com
       does: Object.entries(type.does).map(([action, words]) => ({ action: action as RetentionAction, words: words! })),
       holdsAll: coded<SweepHeld>(type.holdsAll, SWEEP_HELD_WORDS),
     })),
-    ledgers: WAITING_LEDGERS.map((recordType) => ({ recordType, what: WAITING_LEDGER_WORDS[recordType], words: WAITING_WORDS })),
+    ledgers: APPEND_ONLY_LEDGERS.map((recordType) => ({ recordType, what: LEDGER_WORDS[recordType], words: LEDGER_KEPT_WORDS })),
     datedPurges: DATED_PURGES.map((purge) => ({ ...purge })),
     keptForGood: [...KEPT_FOR_GOOD],
     sweep: { schedule: SWEEP_SCHEDULE, words: SWEEP_SCHEDULE_WORDS },
@@ -261,7 +262,7 @@ export async function createRule(caller: CommandCaller, body: CreateRuleBody, id
   assertManage(context, body)
   const type = retentionTypeOf(body.recordType)
   if (!type) {
-    const words = (WAITING_LEDGERS as readonly string[]).includes(body.recordType) ? WAITING_WORDS : `The sweep knows nothing of "${body.recordType}": pick a record type it knows.`
+    const words = (APPEND_ONLY_LEDGERS as readonly string[]).includes(body.recordType) ? LEDGER_KEPT_WORDS : `The sweep knows nothing of "${body.recordType}": pick a record type it knows.`
     refuse([{ path: 'recordType', message: words }], words)
   }
   if (body.companyId !== null && !type!.companyScoped) refuse([{ path: 'companyId', message: `${body.recordType} belongs to the whole group: its rule is one for every company.` }], 'This rule is one for the whole group.')

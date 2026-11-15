@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { RetentionAction, RetentionSweepMode, RetentionSweepStatus } from '@nexus/factory-db'
 import { newId } from '@nexus/factory-domain/core/ids'
-import { RETENTION_ACTIONS, SWEEP_MODES, SWEEP_STATUSES, UNVERIFIED_WORDS, WAITING_WORDS } from '@nexus/factory-domain/privacy/retention/retention'
+import { LEDGER_KEPT_WORDS, RETENTION_ACTIONS, SWEEP_MODES, SWEEP_STATUSES, UNVERIFIED_WORDS } from '@nexus/factory-domain/privacy/retention/retention'
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedCore } from '../../../../../../packages/factory-db/seed/_core'
 import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
@@ -85,7 +85,7 @@ describe('a retention rule reports until a person switches it on (GATE-PRIVACY),
     expect((await send('POST', '/privacy/retention/rules', { companyId: null, recordType: 'CronRun', keepMonths: 6, thenAction: 'DELETE', legalReason: 'Again.' })).status).toBe(409)
     const ledger = await send('POST', '/privacy/retention/rules', { companyId: null, recordType: 'AuditLog', keepMonths: 24, thenAction: 'DELETE', legalReason: 'Two years.' })
     expect(ledger.status).toBe(400)
-    expect(ledger.body.error.message).toBe(WAITING_WORDS)
+    expect(ledger.body.error.message).toBe(LEDGER_KEPT_WORDS)
     expect((await send('POST', '/privacy/retention/rules', { companyId: companyA, recordType: 'CronRun', keepMonths: 3, thenAction: 'DELETE', legalReason: 'Per company.' })).status).toBe(400)
     expect((await send('POST', '/privacy/retention/rules', { companyId: null, recordType: 'Invoice', keepMonths: 120, thenAction: 'DELETE', legalReason: 'c.c. art. 2220: 10 years.' })).body.error.issues[0].path).toBe('thenAction')
     // A company's own rule (fiscal records: archived where they are) is listed beside the group's.
@@ -94,6 +94,9 @@ describe('a retention rule reports until a person switches it on (GATE-PRIVACY),
     const listed = await ok('GET', '/privacy/retention')
     expect(listed.rules.map((entry: Json) => entry.key).sort()).toEqual(['retention:CronRun:all', `retention:Invoice:${companyA}`])
     expect(listed.ledgers.map((entry: Json) => entry.recordType)).toEqual(['AuditLog', 'ReadLog', 'SecurityEvent', 'StepUpAttempt'])
+    // B-W2b-F54: the Owner decided (15 Nov 2026): the ledgers are never purged; no word says the question is open.
+    for (const entry of listed.ledgers as Json[]) expect(entry.words).toBe(LEDGER_KEPT_WORDS)
+    expect(JSON.stringify(listed)).not.toMatch(/waits? for the Owner|open question/i)
     expect(listed.datedPurges.map((entry: Json) => entry.job)).toContain('sales.measurementPhotos')
     expect(listed.types.map((entry: Json) => entry.recordType)).toEqual(expect.arrayContaining(['CronRun', 'ReportRun', 'IntegrationErrorItem', 'InboundEmail', 'Invoice']))
   })

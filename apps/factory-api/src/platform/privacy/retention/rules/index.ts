@@ -5,7 +5,7 @@ import type { RetentionType } from './type'
 /**
  * The record types a retention rule may name (B-W2b-405; PLT-204): ONE LINE PER FILE of types (a step that adds record types
  * adds its file here). A rule naming a table outside this list only reports that the sweep knows nothing of it; the append-only
- * ledgers are never here (WAITING_LEDGERS: the Owner decides).
+ * ledgers are never here (APPEND_ONLY_LEDGERS: never purged, the Owner's decision of 15 Nov 2026).
  */
 export const RETENTION_TYPES: readonly RetentionType[] = [
   ...PLATFORM_TYPES,

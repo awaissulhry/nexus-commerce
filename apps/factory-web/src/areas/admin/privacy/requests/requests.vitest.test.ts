@@ -6,7 +6,7 @@ import { renderToString } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { ERASURE_BLOCKED, KEPT_WHY } from '@nexus/factory-domain/privacy/retention/erasure'
 import { DATA_REQUEST_KINDS, DATA_REQUEST_STATUSES, DATA_SUBJECT_KINDS, REQUEST_HELD } from '@nexus/factory-domain/privacy/retention/requests'
-import { DATED_PURGES, ERASURE_METHODS, KEPT_FOR_GOOD, RETENTION_ACTIONS, RULE_HELD, SWEEP_FAILURES, SWEEP_HELD, SWEEP_MODES, SWEEP_STATUSES, WAITING_LEDGERS } from '@nexus/factory-domain/privacy/retention/retention'
+import { APPEND_ONLY_LEDGERS, DATED_PURGES, ERASURE_METHODS, KEPT_FOR_GOOD, RETENTION_ACTIONS, RULE_HELD, SWEEP_FAILURES, SWEEP_HELD, SWEEP_MODES, SWEEP_STATUSES } from '@nexus/factory-domain/privacy/retention/retention'
 import { ApiError } from '../../../../lib/api/errors'
 import type { DesignScreen } from '../../../../lib/design/design-screen'
 import { LOCALES } from '../../../../lib/i18n/locales'
@@ -121,7 +121,10 @@ describe('Anonymise …?', () => {
     expect(eraseHeld(model({ reason: 'Asked by mail', typed: 'Bruno Prova' }), true)).toBeNull()
   })
   it('what is erased first, then deleted, then kept; columns and types in words (an unknown one never by its name)', () => {
-    expect(sectionsOf(preview).map((entry) => entry.section)).toEqual(['anonymised', 'kept'])
+    const contact = eraseScreen.cases.find((item) => item.id === 'contact')!.model.model.erase!.preview.value!
+    expect(sectionsOf(contact).map((entry) => entry.section)).toEqual(['anonymised', 'deleted', 'kept'])
+    // B-W2b-F54: a prospect's mails and history are blanked now, nothing of theirs is kept as it was.
+    expect(sectionsOf(preview).map((entry) => entry.section)).toEqual(['anonymised'])
     expect(fieldKeys(['email', 'secretColumn', 'zzz'])).toEqual(['dp.erase.field.email', 'dp.erase.field.other'])
     expect(eraseTypeKey('NewTable')).toBe('dp.erase.type.other')
   })
@@ -210,7 +213,7 @@ const BUILT = [
   ...each('dp.ret.failure.', SWEEP_FAILURES),
   ...each('dp.ret.held.', RULE_HELD),
   ...each('dp.ret.kept.', KEPT_KEYS),
-  ...each('dp.ret.ledger.', WAITING_LEDGERS, ['.name', '.what']),
+  ...each('dp.ret.ledger.', APPEND_ONLY_LEDGERS, ['.name', '.what']),
   ...each('dp.ret.mode.', SWEEP_MODES),
   ...each('dp.ret.purge.', PURGE_KEYS, ['.what', '.when', '.why']),
   ...each('dp.ret.state.', ['off', 'reporting', 'applying']),
@@ -275,11 +278,12 @@ describe('SCR-660, SCR-661 and SCR-662 draw every case in both languages with no
     expect(html).not.toContain('New data request')
   })
 
-  it('retention: nothing deletes by itself; UNVERIFIED on every rule; the ledgers kept for the Owner, never a sweep', () => {
+  it('retention: nothing deletes by itself; UNVERIFIED on every rule; the ledgers kept for good (the Owner decided), never a sweep', () => {
     const html = render(retentionScreen as DesignScreen<unknown>, retentionScreen.cases[0]!.model, 'en')
     expect(html).toContain('Nothing is deleted by itself')
     expect(html).toContain('UNVERIFIED')
-    expect(html).toContain("Kept, waits for the Owner&#x27;s decision")
+    expect(html).toContain('Kept for good, never purged')
+    expect(html).not.toContain('waits for the Owner')
     expect(html).toContain('Change history')
     expect(render(retentionScreen as DesignScreen<unknown>, retentionScreen.cases[0]!.model, 'it')).toContain('NON VERIFICATO')
   })

@@ -17,6 +17,7 @@ import { command, type CommandCaller } from '../../../core/command'
 import { refuse } from '../access'
 import { actionsOf, readRequest, requestAnswer, type RequestRow } from '../requests/read'
 import { personFacts } from './sources/person'
+import { mailSendingNow } from './sources/shared'
 import { sourcesFor } from './sources'
 import type { PersonFacts, PlannedRecord, Reader } from './sources/type'
 
@@ -27,13 +28,16 @@ import type { PersonFacts, PlannedRecord, Reader } from './sources/type'
  *   GET  /privacy/requests/:requestId/erasure   the preview (privacy.requests.view): per record type what is anonymised,
  *                                               deleted and kept with why; whether something blocks it now
  *   POST /privacy/requests/:requestId/erase     the erasure (privacy.erase, a fresh code each time: a fixed LEGAL action):
- *                                               {version, reason, confirmName}; ONE command: every source's change and one
- *                                               ErasureRecord per record looked at (column names, never values), the audit row
- *                                               with the reason, privacy.person_erased and privacy.request_changed ERASED. The
- *                                               request stays IN_PROGRESS: closing it (done) is its own step.
+ *                                               {version, reason, confirmName}; ONE command: one ErasureRecord per record
+ *                                               looked at (column names, never values) FIRST, then every source's change (the
+ *                                               database blanks a mail, a message or an audit row only with its record written
+ *                                               in the same transaction: B-W2b-F54), the audit row with the reason,
+ *                                               privacy.person_erased and privacy.request_changed ERASED. The request stays
+ *                                               IN_PROGRESS: closing it (done) is its own step.
  *
  * Legal holds win: a record the law keeps is KEPT with why (sources/*.ts), the rest of the erasure runs. A block (a portal user
- * with the contact's e-mail, a person still employed, an open office account) refuses the whole erasure (409) in words.
+ * with the contact's e-mail, a person still employed, an open office account, a mail to them being sent right now) refuses the
+ * whole erasure (409) in words.
  */
 
 export interface PlanGroup {
@@ -76,6 +80,11 @@ async function personOf(db: Reader, request: Pick<RequestRow, 'personKind' | 'pe
   return person
 }
 
+/** What blocks the erasure now: the person's own block, or a mail to them being sent this minute (B-W2b-F54). */
+async function blockOf(db: Reader, person: PersonFacts, now: Date): Promise<ErasureBlocked | null> {
+  return person.blocked ?? ((await mailSendingNow(db, person, now)) ? 'MAIL_SENDING' : null)
+}
+
 /** GET /privacy/requests/:requestId/erasure */
 export async function erasurePreview(caller: CommandCaller, requestId: string, now: Date) {
   const { request } = await readRequest(caller, requestId, PRIVACY_REQUESTS_VIEW)
@@ -89,7 +98,7 @@ export async function erasurePreview(caller: CommandCaller, requestId: string, n
     const action = actionsOf(request, done, now).erase
     return {
       person: { kind: person.kind, recordType: person.recordType, recordId: person.recordId, name: person.name, erased: person.erased },
-      blocked: blockedView(person.blocked ?? (tooMany ? 'TOO_MANY' : null)),
+      blocked: blockedView((await blockOf(client, person, now)) ?? (tooMany ? 'TOO_MANY' : null)),
       anonymised: groups.filter((group) => group.method === 'ANONYMISED'),
       deleted: groups.filter((group) => group.method === 'DELETED'),
       kept: groups.filter((group) => group.method === 'KEPT'),
@@ -112,7 +121,8 @@ export async function erasePerson(caller: CommandCaller, requestId: string, body
   const action = actionsOf(request, done, writes.now).erase
   if (!action.allowed) throw new InvalidStateError(action.held!.words)
   const person = await caller.withClient((client) => personOf(client, request))
-  if (person.blocked) throw blockedError(person.blocked)
+  const blocked = await caller.withClient((client) => blockOf(client, person, writes.now))
+  if (blocked) throw blockedError(blocked)
   refuse([eraseReasonProblem(body.reason), confirmNameProblem(body.confirmName, person.name)].filter((issue) => issue !== null), 'The erasure needs its reason and the typed name.')
   // GDPR art. 17 is a decision in the company's name: a fresh code every time (step-up-actions.ts: a fixed LEGAL action).
   writes.stepUp()
@@ -122,24 +132,28 @@ export async function erasePerson(caller: CommandCaller, requestId: string, body
     async (tools) => {
       const { tx, now } = tools
       // Planned again inside the transaction: what is erased is what the records hold now.
-      const planned = await planOf(tx, await personOf(tx, request), now)
+      const current = await personOf(tx, request)
+      const block = await blockOf(tx, current, now)
+      if (block) throw blockedError(block)
+      const planned = await planOf(tx, current, now)
       if (planned.length > ERASURE_LIMITS.records) throw blockedError('TOO_MANY')
-      for (const record of planned) await record.apply?.({ tx, now, actorId: context.actorId, emit: tools.emit })
-      await tx.erasureRecord.createMany({
-        data: planned.map((record) => ({
-          id: newId(),
-          companyId: request.companyId,
-          dataRequestId: request.id,
-          recordType: record.recordType,
-          recordId: record.recordId,
-          method: record.method,
-          erasedFields: [...record.erasedFields],
-          keptFields: [...record.keptFields],
-          keptWhy: record.why ? KEPT_WHY_WORDS[record.why] : null,
-          erasedAt: now,
-          erasedById: context.actorId,
-        })),
-      })
+      // Every ErasureRecord first: the database's door blanks a mail, a message or an audit row only with its record written in
+      // this same transaction (B-W2b-F54).
+      const records = planned.map((record) => ({
+        id: newId(),
+        companyId: request.companyId,
+        dataRequestId: request.id,
+        recordType: record.recordType,
+        recordId: record.recordId,
+        method: record.method,
+        erasedFields: [...record.erasedFields],
+        keptFields: [...record.keptFields],
+        keptWhy: record.why ? KEPT_WHY_WORDS[record.why] : null,
+        erasedAt: now,
+        erasedById: context.actorId,
+      }))
+      await tx.erasureRecord.createMany({ data: records })
+      for (const [index, record] of planned.entries()) await record.apply?.({ tx, now, actorId: context.actorId, erasureId: records[index]!.id, emit: tools.emit })
       const counts = { anonymised: planned.filter((record) => record.method === 'ANONYMISED').length, deleted: planned.filter((record) => record.method === 'DELETED').length, kept: planned.filter((record) => record.method === 'KEPT').length }
       // The decision is logged: what was asked (the reason, without the person's details), by whom, and what happened (counts).
       tools.audit({ recordType: 'DataRequest', recordId: request.id, companyId: request.companyId, after: { erasedAt: toUtcIso(now), personKind: request.personKind, ...counts, groups: groupsOf(planned).map((group) => ({ recordType: group.recordType, method: group.method, count: group.count, why: group.why?.code ?? null })) }, reason: body.reason.trim() })

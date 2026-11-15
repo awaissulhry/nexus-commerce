@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { businessDate, defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
-import { RETENTION_ACTIONS, RULE_HELD, RULE_LIMITS, SWEEP_FAILURES, SWEEP_HELD, SWEEP_MODES, SWEEP_STATUSES, WAITING_LEDGERS } from '@nexus/factory-domain/privacy/retention/retention'
+import { RETENTION_ACTIONS, RULE_HELD, RULE_LIMITS, SWEEP_FAILURES, SWEEP_HELD, SWEEP_MODES, SWEEP_STATUSES, APPEND_ONLY_LEDGERS } from '@nexus/factory-domain/privacy/retention/retention'
 
 /**
  * Retention rules and their sweeps (B-W2b-405; PLT-204; design admin.privacy "Retention rules"). Lengths here only stop oversized
@@ -82,8 +82,8 @@ export const listRetentionContract = defineContract({
       rules: z.array(ruleView),
       /** The record types a rule may name ("Add a rule"). */
       types: z.array(typeView),
-      /** The append-only ledgers: kept, waiting for the Owner's decision (never swept). */
-      ledgers: z.array(output({ recordType: z.enum(WAITING_LEDGERS), what: z.string(), words: z.string() })),
+      /** The append-only ledgers: kept for good, never swept or purged (the Owner's decision of 15 Nov 2026). */
+      ledgers: z.array(output({ recordType: z.enum(APPEND_ONLY_LEDGERS), what: z.string(), words: z.string() })),
       /** The purges that run on their own dates (by their own jobs; not editable here). */
       datedPurges: z.array(output({ key: z.string(), job: z.string(), recordType: z.string(), what: z.string(), when: z.string(), why: z.string() })),
       /** Records the privacy pack keeps for good. */

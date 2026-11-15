@@ -4,11 +4,12 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { DataRequestKind, DataRequestStatus, DataSubjectKind, ErasureMethod } from '@nexus/factory-db'
 import { newId } from '@nexus/factory-domain/core/ids'
 import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
-import { KEPT_WHY_WORDS } from '@nexus/factory-domain/privacy/retention/erasure'
+import { ERASURE_BLOCKED_WORDS, KEPT_WHY_WORDS } from '@nexus/factory-domain/privacy/retention/erasure'
 import { DATA_REQUEST_KINDS, DATA_REQUEST_STATUSES, DATA_SUBJECT_KINDS, REQUEST_HELD_WORDS } from '@nexus/factory-domain/privacy/retention/requests'
 import { ERASURE_METHODS } from '@nexus/factory-domain/privacy/retention/retention'
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedCore } from '../../../../../../packages/factory-db/seed/_core'
+import { seed as seedEmail } from '../../../../../../packages/factory-db/seed/email'
 import { seed as seedFloorAuth } from '../../../../../../packages/factory-db/seed/floor-auth'
 import { seed as seedSalesIntake } from '../../../../../../packages/factory-db/seed/sales-intake'
 import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
@@ -42,6 +43,24 @@ type Json = Record<string, any>
 const admin = async <R = Json>(sql: string, values: unknown[] = []): Promise<R[]> => (await h.db.admin.query(sql, values)).rows as R[]
 const one = async <R = Json>(sql: string, values: unknown[] = []): Promise<R> => (await admin<R>(sql, values))[0]!
 const system = () => callerFor(h.database, systemContext(T, newId()))
+/** A made-up row written as the owner login: every column given, the database's guards on. */
+async function insertRow(table: string, row: Record<string, unknown>): Promise<void> {
+  const full = { tenantId: T, ...row }
+  const columns = Object.keys(full).map((column) => `"${column}"`).join(', ')
+  await admin(`INSERT INTO "${table}" (${columns}) SELECT ${columns} FROM jsonb_populate_record(NULL::"${table}", $1::jsonb)`, [JSON.stringify(full)])
+}
+/** The same, with the guards off for this one row (a fixture of another module whose own rules are not under test). */
+async function insertFixture(table: string, row: Record<string, unknown>): Promise<void> {
+  await h.db.admin.query('BEGIN')
+  try {
+    await h.db.admin.query("SET LOCAL session_replication_role = 'replica'")
+    await insertRow(table, row)
+    await h.db.admin.query('COMMIT')
+  } catch (error) {
+    await h.db.admin.query('ROLLBACK')
+    throw error
+  }
+}
 
 const grant = (permissions: Permission[], companies: Grant['companies'] = 'all'): Grant => ({ permissions, companies, sites: 'all', parties: 'all' })
 const SESSIONS: Record<string, SessionContext> = {
@@ -65,6 +84,7 @@ beforeAll(async () => {
   await seedCore({ db: h.database, namespace: NS })
   await seedSalesIntake({ db: h.database, namespace: NS })
   await seedFloorAuth({ db: h.database, namespace: NS })
+  await seedEmail({ db: h.database, namespace: NS })
   await h.database.withScope({ audience: 'office', tenantId: T, actorId: newId() }, async (client) => applySystemRoleChanges(client, await systemRoleChanges(client), { now: h.clock.now(), actorId: newId() }))
   const tenant: TestTenant = { id: T, slug: NS, companies: [{ id: companyA, code: 'A' }, { id: companyB, code: 'B' }] }
   const user = await addUser(h, tenant, { email: 'privacy.desk.405@example.com' })
@@ -167,7 +187,7 @@ describe("a prospect's access request: the 30-day clock, identity first, the pac
 })
 
 describe('an erasure: previewed with the law’s exceptions, a fresh code and the typed name, logged (PLT-203, PV1:01, PV1:02)', () => {
-  it("erases a rider's contact: the contact anonymised, their personal custom value deleted, the customer record and immutable rows kept", async () => {
+  it("erases a rider's contact: the contact anonymised, their personal custom value deleted, the customer record kept", async () => {
     const contact = await one<{ id: string; partyId: string }>(`SELECT id, "partyId" FROM "PartyContact" WHERE "tenantId" = $1 AND email = 'rider.p4@example.com'`, [T])
     // A made-up personal custom field on the rider's party, with a value (B-W2b-421's PERSONAL audience).
     const fieldId = newId()
@@ -217,6 +237,118 @@ describe('an erasure: previewed with the law’s exceptions, a fresh code and th
     const erased = await ok('POST', `/privacy/requests/${request.id}/erase`, { version: request.version, reason: 'Asked by mail (made up).', confirmName: name })
     expect(erased.erased.anonymised).toBe(1)
     expect(await one(`SELECT "prospectName", "prospectEmail", "prospectCompany", "prospectPhone", "prospectErasedAt" IS NOT NULL AS erased, status FROM "Inquiry" WHERE id = $1`, [inquiryId])).toMatchObject({ prospectName: null, prospectEmail: null, prospectCompany: null, prospectPhone: null, erased: true })
+  })
+
+  it("blanks the mail they sent and got, the messages they wrote and their values in their record's history; the rows stay (PV1:01, B-W2b-F54)", async () => {
+    const partyId = seedUuid(NS, 'party:P1')
+    const contactId = newId()
+    const address = 'erika.prova.f54@example.com'
+    await insertRow('PartyContact', { id: contactId, partyId, name: 'Erika Prova', email: address, phone: '+39 000 0000154', roles: ['ORDERS'] })
+    // A thread of the party: a mail of hers became its INBOUND message (no author id: she was not known as a contact yet), she
+    // posted from the portal as a portal person of the party with her address, and an office person wrote a note.
+    const threadId = newId()
+    await insertRow('Thread', { id: threadId, companyId: companyA, partyId, recordType: 'Party', recordId: partyId, replyToken: 'f54threadtokenabcdefghijklmnop', createdById: desk.userId })
+    const fromMail = newId()
+    const posted = newId()
+    const note = newId()
+    const at = new Date(Date.now() - 3_600_000).toISOString()
+    await insertRow('Message', { id: fromMail, threadId, partyId, direction: 'INBOUND', audience: 'PARTNER', channel: 'EMAIL', authorKind: 'PARTY', authorName: 'Erika Prova', bodyText: 'Made-up mail: please call me on my mobile.', bodyHtml: '<p>Made-up mail</p>', emailMessageId: '<f54-in@mail.example.com>', at })
+    await insertRow('Message', { id: posted, threadId, partyId, direction: 'INBOUND', audience: 'PARTNER', channel: 'PORTAL', authorKind: 'PARTY', authorName: 'Erika Prova', bodyText: 'Made-up portal post.', at })
+    await insertRow('Message', { id: note, threadId, direction: 'INTERNAL_NOTE', audience: 'OFFICE', channel: 'APP', authorKind: 'USER', authorId: desk.userId, authorName: 'Privacy desk', bodyText: 'Made-up note: Erika asked for a call.', at })
+    const portalPerson = newId()
+    await insertFixture('User', { id: portalPerson, email: address, displayName: 'Erika Prova', audience: 'PARTNER', partyId, status: 'DEACTIVATED' })
+    await insertRow('AuditLog', { id: newId(), companyId: companyA, partyId, audience: 'PARTNER', actorId: portalPerson, action: 'threads.post', recordType: 'Message', recordId: posted, after: { channel: 'PORTAL' }, requestId: `f54-${posted}` })
+    // Two mails from her (one matched to the thread, one waiting to be sorted) and three to her.
+    const account = (await one<{ accountId: string }>(`SELECT "accountId" FROM "InboundEmail" WHERE "tenantId" = $1 LIMIT 1`, [T])).accountId
+    const mail = (id: string, extra: Record<string, unknown>) => ({ id, companyId: companyA, accountId: account, receiptId: newId(), sesMessageId: `f54-${id}`, s3Bucket: 'factory-inbound-f54', s3Key: `inbound/${id}`, receivedAt: at, envelopeFrom: address, envelopeTo: ['orders@example.com'], fromAddress: address, fromName: 'Erika Prova', to: ['orders@example.com'], subject: 'Made-up order question', bodyText: 'Made-up text with her number.', spfVerdict: 'PASS', dkimVerdict: 'PASS', dmarcVerdict: 'PASS', spamVerdict: 'PASS', virusVerdict: 'PASS', fetchedAt: at, ...extra })
+    const matched = newId()
+    const waiting = newId()
+    await insertRow('InboundEmail', mail(matched, { status: 'MATCHED', threadId, messageId: fromMail, matchedBy: 'HEADERS', emailMessageId: '<f54-in@mail.example.com>', bodyHtml: '<p>Made-up</p>' }))
+    await insertRow('InboundEmail', mail(waiting, { status: 'TRIAGE', emailMessageId: '<f54-waiting@mail.example.com>' }))
+    const identity = seedUuid(NS, 'email:identity:A:conversation')
+    const outbound = (id: string, extra: Record<string, unknown>) => ({ id, companyId: companyA, identityId: identity, templateKey: 'sales.order_confirmed', locale: 'it', fromAddress: 'orders@mail.example.com', fromName: 'Seed A', to: [address.toUpperCase(), 'colleague.f54@example.com'], subject: 'Made-up order confirmation for Erika', emailMessageId: `<${id}@mail.example.com>`, queuedAt: at, ...extra })
+    const delivered = newId()
+    const queued = newId()
+    const sending = newId()
+    await insertRow('EmailOutbound', outbound(delivered, { status: 'DELIVERED', sentAt: at, deliveredAt: at, attempts: 1 }))
+    await insertRow('EmailOutbound', outbound(queued, { to: [address], cc: ['boss.f54@example.com'] }))
+    await insertRow('EmailOutbound', outbound(sending, { to: [address], status: 'SENDING', attempts: 1, claimedUntil: new Date(Date.now() + 120_000).toISOString() }))
+    // Her record's history: one row holding her details, one that holds none.
+    const named = newId()
+    const plain = newId()
+    await insertRow('AuditLog', { id: named, companyId: companyA, audience: 'OFFICE', actorId: desk.userId, action: 'parties.updateContact', recordType: 'PartyContact', recordId: contactId, before: { name: 'Erika P.', email: 'old.f54@example.com', roles: ['ORDERS'] }, after: { name: 'Erika Prova', email: address, roles: ['ORDERS'] }, requestId: `f54-${named}` })
+    await insertRow('AuditLog', { id: plain, companyId: companyA, audience: 'OFFICE', actorId: desk.userId, action: 'parties.contactRoles', recordType: 'PartyContact', recordId: contactId, before: { roles: [] }, after: { roles: ['ORDERS'] }, requestId: `f54-${plain}` })
+
+    let request = (await ok('POST', '/privacy/requests', { companyId: companyA, personKind: 'CONTACT', personRecordId: contactId, kind: 'ERASURE' }, 201)).request
+    request = (await ok('POST', `/privacy/requests/${request.id}/identity`, { version: request.version, how: 'Replied from the address we hold (made up).' })).request
+    // A mail to her is being sent this very minute: the erasure waits for it (409 in words).
+    expect((await ok('GET', `/privacy/requests/${request.id}/erasure`)).blocked).toEqual({ code: 'MAIL_SENDING', words: ERASURE_BLOCKED_WORDS.MAIL_SENDING })
+    await stepUp(h, desk.browser, desk.secret)
+    const waitFor = await send('POST', `/privacy/requests/${request.id}/erase`, { version: request.version, reason: 'Asked by mail (made up).', confirmName: 'Erika Prova' })
+    expect(waitFor.status).toBe(409)
+    expect(waitFor.body.error.issues[0].path).toBe('privacy/MAIL_SENDING')
+    await admin(`UPDATE "EmailOutbound" SET status = 'SENT', "sentAt" = now(), "claimedUntil" = NULL WHERE id = $1`, [sending])
+
+    const preview = await ok('GET', `/privacy/requests/${request.id}/erasure`)
+    expect(preview.blocked).toBeNull()
+    const group = (type: string) => preview.anonymised.find((entry: Json) => entry.recordType === type)
+    expect(group('PartyContact')).toMatchObject({ count: 1, erasedFields: ['name', 'email', 'phone'] })
+    expect(group('Message')).toMatchObject({ count: 2, erasedFields: expect.arrayContaining(['authorName', 'bodyText', 'bodyHtml']) })
+    expect(group('InboundEmail')).toMatchObject({ count: 2, keptFields: ['envelopeFrom'], why: { code: 'IMMUTABLE', words: KEPT_WHY_WORDS.IMMUTABLE } })
+    // Her address is only among the To recipients: Cc (a colleague) stays as it is.
+    expect(group('EmailOutbound')).toMatchObject({ count: 3, erasedFields: ['to', 'subject'] })
+    expect(group('AuditLog')).toMatchObject({ count: 1, erasedFields: ['before', 'after'] })
+    expect(preview.kept.filter((entry: Json) => ['Message', 'InboundEmail', 'EmailOutbound', 'AuditLog'].includes(entry.recordType))).toEqual([])
+
+    await stepUp(h, desk.browser, desk.secret)
+    const erased = await ok('POST', `/privacy/requests/${request.id}/erase`, { version: request.version, reason: 'Asked by mail (made up).', confirmName: 'Erika Prova' })
+    expect(erased.erased).toMatchObject({ anonymised: 9, deleted: 0 })
+
+    // The messages she wrote: no name, no text; the office note as it was.
+    const message = (id: string) => one(`SELECT "authorName", "bodyText", "bodyHtml", "threadId" FROM "Message" WHERE id = $1`, [id])
+    expect(await message(fromMail)).toEqual({ authorName: null, bodyText: '', bodyHtml: null, threadId })
+    expect(await message(posted)).toEqual({ authorName: null, bodyText: '', bodyHtml: null, threadId })
+    expect(await message(note)).toEqual({ authorName: 'Privacy desk', bodyText: 'Made-up note: Erika asked for a call.', bodyHtml: null, threadId })
+    // Her mails: sender, name, subject, text and HTML blank; where they went and the envelope stay.
+    for (const id of [matched, waiting]) {
+      expect(await one(`SELECT "fromAddress", "fromName", subject, "bodyText", "bodyHtml", "envelopeFrom", status::text FROM "InboundEmail" WHERE id = $1`, [id])).toEqual({ fromAddress: null, fromName: null, subject: null, bodyText: null, bodyHtml: null, envelopeFrom: address, status: id === matched ? 'MATCHED' : 'TRIAGE' })
+    }
+    // The mails to her: her address and the subject blank, every other address stays; the queued one was stopped first.
+    expect(await one(`SELECT "to", cc, subject, status::text FROM "EmailOutbound" WHERE id = $1`, [delivered])).toEqual({ to: ['', 'colleague.f54@example.com'], cc: [], subject: '', status: 'DELIVERED' })
+    expect(await one(`SELECT "to", cc, subject, status::text, "lastError" FROM "EmailOutbound" WHERE id = $1`, [queued])).toEqual({ to: [''], cc: ['boss.f54@example.com'], subject: '', status: 'FAILED', lastError: expect.stringContaining('asked to be erased') })
+    expect(await one(`SELECT "to", status::text FROM "EmailOutbound" WHERE id = $1`, [sending])).toEqual({ to: [''], status: 'SENT' })
+    // Her record's history: her values null, the keys and the other row as they were; nothing removed.
+    expect(await one(`SELECT before, after FROM "AuditLog" WHERE id = $1`, [named])).toEqual({ before: { name: null, email: null, roles: ['ORDERS'] }, after: { name: null, email: null, roles: ['ORDERS'] } })
+    expect(await one(`SELECT before, after FROM "AuditLog" WHERE id = $1`, [plain])).toEqual({ before: { roles: [] }, after: { roles: ['ORDERS'] } })
+    expect((await one<{ n: number }>(`SELECT count(*)::int AS n FROM "AuditLog" WHERE "recordType" = 'PartyContact' AND "recordId" = $1`, [contactId])).n).toBe(2)
+    // What was done is recorded (columns, never values), and the erasure's own audit row is kept with its reason.
+    const records = await admin(`SELECT "recordType", method::text, "erasedFields", "keptFields" FROM "ErasureRecord" WHERE "dataRequestId" = $1 AND "recordType" <> 'PartyContact' ORDER BY "recordType", "recordId"`, [request.id])
+    expect(records.length).toBe(8)
+    expect(records.every((row) => row.method === 'ANONYMISED')).toBe(true)
+    expect(records.filter((row) => row.recordType === 'InboundEmail').map((row) => row.keptFields)).toEqual([['envelopeFrom'], ['envelopeFrom']])
+    const logged = await one(`SELECT reason, after::text AS after FROM "AuditLog" WHERE "recordType" = 'DataRequest' AND "recordId" = $1 AND action = 'privacy.erase'`, [request.id])
+    expect(logged.reason).toBe('Asked by mail (made up).')
+    expect(logged.after).not.toContain('Erika')
+    expect((await ok('POST', `/privacy/requests/${request.id}/done`, { version: erased.request.version })).request.status).toBe('DONE')
+  })
+
+  it('keeps what they wrote and their history as they are while a legal hold keeps their record (an open service case: DISPUTE)', async () => {
+    const partyId = seedUuid(NS, 'party:P1')
+    const contactId = newId()
+    await insertRow('PartyContact', { id: contactId, partyId, name: 'Ugo Prova', email: 'ugo.prova.f54@example.com', roles: ['ORDERS'] })
+    await insertFixture('ServiceCase', { id: newId(), companyId: companyA, number: 'F54-SC-0001', kind: 'COMPLAINT', problem: 'Made-up complaint still open.', partyId, contactId })
+    const row = newId()
+    await insertRow('AuditLog', { id: row, companyId: companyA, audience: 'OFFICE', actorId: desk.userId, action: 'parties.updateContact', recordType: 'PartyContact', recordId: contactId, after: { name: 'Ugo Prova' }, requestId: `f54-${row}` })
+    let request = (await ok('POST', '/privacy/requests', { companyId: companyA, personKind: 'CONTACT', personRecordId: contactId, kind: 'ERASURE' }, 201)).request
+    request = (await ok('POST', `/privacy/requests/${request.id}/identity`, { version: request.version, how: 'In person (made up).' })).request
+    const preview = await ok('GET', `/privacy/requests/${request.id}/erasure`)
+    expect(preview.anonymised).toEqual([])
+    expect(preview.kept).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ recordType: 'PartyContact', why: { code: 'DISPUTE', words: KEPT_WHY_WORDS.DISPUTE } }),
+        expect.objectContaining({ recordType: 'AuditLog', keptFields: ['before', 'after'], why: { code: 'DISPUTE', words: KEPT_WHY_WORDS.DISPUTE } }),
+      ]),
+    )
   })
 
   it('refuses while the person still works here (409 in words); nothing is written', async () => {

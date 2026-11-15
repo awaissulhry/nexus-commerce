@@ -122,7 +122,7 @@ export const designScreen = defineDesignScreen<Case>({
   title: 'Retention rules',
   view: RetentionDesign,
   cases: [
-    { id: 'normal', label: 'Administrator: the rules, one applying', model: base(), note: 'Every period UNVERIFIED; Job runs applies (switched on with a fresh code); the rest only report; Exports off and held (never deleted). Below: the ledgers kept for the Owner, the dated purges, what is kept for good.' },
+    { id: 'normal', label: 'Administrator: the rules, one applying', model: base(), note: 'Every period UNVERIFIED; Job runs applies (switched on with a fresh code); the rest only report; Exports off and held (never deleted). Below: the ledgers kept for good (never purged), the dated purges, what is kept for good.' },
     { id: 'selected', label: 'Three selected: Sweep 2 now', model: base({ selected: [uid('2525', 1), uid('2525', 4), uid('2525', 6)] }), note: 'The applying rule is left out of a batch (said under the list).' },
     { id: 'rule-new', label: 'Add a rule', model: base({ dialog: { kind: 'rule', draft: { ...newRuleDraft(demo.id), recordType: 'IntegrationErrorItem', thenAction: 'DELETE', keepMonths: '6' }, busy: false, problem: null } }), note: 'What the sweep does with it, in words; UNVERIFIED said.' },
     { id: 'rule-shorten', label: 'Change: a shorter period asks a fresh code', model: base({ dialog: { kind: 'rule', draft: { ...draftOfRule(ruleById(3)), keepMonths: '12' }, busy: false, problem: null } }), note: '"Shortening needs the Owner (fresh code)."' },
