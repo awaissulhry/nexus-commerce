@@ -11,7 +11,7 @@ import { readCookie, writeCookie } from '../lib/cookies'
 import { LOCALE_COOKIE, isLocale, type Locale } from '../lib/i18n/locales'
 import type { LocaleMessages } from '../lib/i18n/messages'
 import { I18nProvider, useT } from '../lib/i18n/provider'
-import { endCrew, fetchDevice, fetchMe, leaveCrew, signIn, signOut as apiSignOut, type CrewView, type DeviceInfo, type FloorMe, type FloorProblem } from './api'
+import { endCrew, fetchFloorState, leaveCrew, signIn, signOut as apiSignOut, type CrewView, type DeviceInfo, type FloorMe, type FloorProblem } from './api'
 import { FloorFrameView, type FrameAction, type FrameModel } from './frame/view/FloorFrameView'
 import { FloorState } from './frame/view/FloorState'
 import { floorLocale, IDLE_WARN_MS, idleWarnAfterMs } from './model'
@@ -230,11 +230,10 @@ export function FloorApp({ appVersion, catalogues, children }: { appVersion: str
   const shellQueue = shellQueueOf(queueSnapshot, { workerId: me?.worker.id ?? null, numberKinds }, { now: new Date(), timeZone: DEFAULT_TIME_ZONE })
 
   const reload = useCallback(async () => {
-    const answer = await fetchDevice(api)
+    // B-W2b-F56: the operator is asked only when the device says someone is signed in on it (no 401 logged before a sign-in).
+    const answer = await fetchFloorState(api)
     if (!answer.ok) return setLoad({ status: 'unavailable' })
-    const operator = answer.value ? await fetchMe(api) : { ok: true as const, value: null }
-    if (!operator.ok) return setLoad({ status: 'unavailable' })
-    setLoad({ status: 'ready', device: answer.value, me: operator.value })
+    setLoad({ status: 'ready', device: answer.value.device, me: answer.value.me })
   }, [api])
 
   useEffect(() => {

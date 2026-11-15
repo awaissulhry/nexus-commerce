@@ -1,13 +1,13 @@
 import type { FastifyRequest } from 'fastify'
 import { FILES_READ } from '@nexus/factory-domain/auth/permissions/catalogue'
-import { DomainError, NotFoundError } from '@nexus/factory-domain/core/errors'
+import { NotFoundError } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import { can } from '@nexus/factory-domain/core/permissions'
 import { isPictureType } from '@nexus/factory-domain/product/images/rules'
 import { PRODUCT_STYLES_VIEW } from '@nexus/factory-domain/product/styles/permissions'
 import { actorOf } from '../../../core/context'
 import { KIND_RULES } from '../../../platform/files/rules'
-import { GatewayCallFailed, GatewayRefusal } from '../../../platform/gateway/gateway'
+import { readStoredFile } from '../../../platform/files/files'
 import { processFiles } from '../../../platform/files/service'
 import { contextOf, filesCaller } from './store'
 
@@ -74,7 +74,7 @@ export interface StoredPicture {
 /**
  * The bytes of a picture the caller's module has checked (B-W2b-247: a library colour's photo and a branding set's logo or
  * artwork reuse it): kept in this process; read through the gateway as the tenant's system holding files.read over the
- * file's company. A store refusal is a 503 in words, never a 500.
+ * file's company. A store refusal is a 503 in words, never a 500; no object under the key is a 404 (B-W2b-F56).
  */
 export async function storedPictureBytes(request: FastifyRequest, found: StoredPicture): Promise<{ bytes: Buffer; contentType: string; name: string }> {
   const context = contextOf(request)
@@ -82,14 +82,8 @@ export async function storedPictureBytes(request: FastifyRequest, found: StoredP
   const key = `${'tenantId' in context ? context.tenantId : ''}:${fileId}`
   const kept = cache.get(key)
   if (kept) return { ...remember(key, kept), name: found.file.originalName }
-  let bytes: Buffer | null
-  try {
-    bytes = await processFiles().storage.read(filesCaller(request, found.companyId, [FILES_READ]), found.file.storeAccountId, found.file.storageKey, Math.max(found.file.sizeBytes, KIND_RULES.PHOTO.maxBytes))
-  } catch (error) {
-    // The store's account paused, rate-limited or not answering: a refusal in words (503), never a 500.
-    if (error instanceof GatewayRefusal || error instanceof GatewayCallFailed) throw new DomainError('not_ready', 'The file store does not answer now. Try again in a moment.')
-    throw error
-  }
-  if (!bytes) throw new DomainError('not_ready', 'The picture is not in the file store now. Try again in a moment.')
+  // B-W2b-F56: through the files platform's one reader: no object under the key is 404 "missing from the store" (the screen
+  // shows its placeholder), the store not answering stays 503 in words (try again).
+  const bytes = await readStoredFile(processFiles(), filesCaller(request, found.companyId, [FILES_READ]), found.file, Math.max(found.file.sizeBytes, KIND_RULES.PHOTO.maxBytes))
   return { ...remember(key, { bytes, contentType: found.file.contentType }), name: found.file.originalName }
 }

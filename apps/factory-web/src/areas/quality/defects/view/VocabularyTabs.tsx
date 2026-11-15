@@ -270,7 +270,8 @@ export function CausesTab({ read, marks, selected, busy, updates, notes, actions
         rows={read.problem ? [] : value ? value.causes : null}
         rowId={(row) => row.id}
         columns={columns}
-        count={!value ? t('common.loading') : t('causes.count', { count: value.causes.length })}
+        // B-W2b-F56: a list that could not be read is not "Loading…".
+        count={read.problem ? null : !value ? t('common.loading') : t('causes.count', { count: value.causes.length })}
         selection={{ selected, onChange: (ids) => actions?.onSelect?.(ids), actions: bulkButtons(t, value?.causes ?? [], selected, can, busy, actions) }}
         updates={updates > 0 ? { count: updates, onShow: () => actions?.onShowUpdates?.() } : null}
         keys={keys}
@@ -440,7 +441,7 @@ export function GradesTab({ read, marks, selected, busy, updates, notes, prefix,
         rows={read.problem ? [] : value ? value.grades : null}
         rowId={(row) => row.id}
         columns={columns}
-        count={!value ? t('common.loading') : t('grades.count', { count: value.grades.length })}
+        count={read.problem ? null : !value ? t('common.loading') : t('grades.count', { count: value.grades.length })}
         selection={{ selected, onChange: (ids) => actions?.onSelect?.(ids), actions: bulkButtons(t, value?.grades ?? [], selected, can, busy, actions) }}
         updates={updates > 0 ? { count: updates, onShow: () => actions?.onShowUpdates?.() } : null}
         keys={keys}
@@ -457,7 +458,7 @@ export function GradesTab({ read, marks, selected, busy, updates, notes, prefix,
         rows={read.problem ? [] : value ? value.hideDefects : null}
         rowId={(row) => row.id}
         columns={hideColumns}
-        count={!value ? t('common.loading') : t('hide.count', { count: value.hideDefects.length })}
+        count={read.problem ? null : !value ? t('common.loading') : t('hide.count', { count: value.hideDefects.length })}
         state={value && value.hideDefects.length === 0 ? <EmptyState title={t('hide.empty.title')} description={t('hide.empty.body')} /> : undefined}
       />
     </div>

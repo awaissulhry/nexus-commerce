@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createApiClient } from '../lib/api/client'
 import { ApiError } from '../lib/api/errors'
-import { acknowledgeNotice, enrolDevice, fetchDevice, fetchMe, lookupHide, lookupLocation, lookupWorkOrder, problemOf, signIn } from './api'
+import { acknowledgeNotice, enrolDevice, fetchDevice, fetchFloorState, fetchMe, lookupHide, lookupLocation, lookupWorkOrder, problemOf, signIn } from './api'
 import { floorIconSvg, floorManifest } from './install'
 
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
@@ -45,6 +45,23 @@ describe('the floor app\'s calls', () => {
     expect(await fetchMe(api(() => error(401)).client)).toEqual({ ok: true, value: null })
     expect((await fetchDevice(api(() => error(503)).client)).ok).toBe(false)
     expect(await fetchDevice(api(() => json(200, device)).client)).toEqual({ ok: true, value: device })
+  })
+
+  // B-W2b-F56: a browser with no device token at all is told so (200), so nothing is logged before anyone has done anything.
+  it('reads "not a floor device yet" from the device\'s own 200 answer', async () => {
+    expect(await fetchDevice(api(() => json(200, { device: null, words: 'This browser is not a floor device yet.' })).client)).toEqual({ ok: true, value: null })
+  })
+
+  it('asks for the operator only when the device says someone is signed in on it', async () => {
+    const nobody = api((url) => (url.endsWith('/floor/device') ? json(200, device) : error(401)))
+    expect(await fetchFloorState(nobody.client)).toEqual({ ok: true, value: { device, me: null } })
+    expect(nobody.calls.map((call) => call.url)).toEqual(['/api/floor/device'])
+    const none = api(() => json(200, { device: null, words: 'Not a floor device yet.' }))
+    expect(await fetchFloorState(none.client)).toEqual({ ok: true, value: { device: null, me: null } })
+    expect(none.calls.map((call) => call.url)).toEqual(['/api/floor/device'])
+    const signed = api((url) => (url.endsWith('/floor/device') ? json(200, { ...device, operatorSignedIn: true }) : json(200, me)))
+    expect(await fetchFloorState(signed.client)).toEqual({ ok: true, value: { device: { ...device, operatorSignedIn: true }, me } })
+    expect(signed.calls.map((call) => call.url)).toEqual(['/api/floor/device', '/api/floor/me'])
   })
 
   it('signs in with a badge alone (no PIN in the body), or switches person on /floor/switch', async () => {
