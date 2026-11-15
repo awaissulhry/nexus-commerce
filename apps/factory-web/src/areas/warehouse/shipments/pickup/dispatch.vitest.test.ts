@@ -289,3 +289,17 @@ describe('SCR-650 … SCR-659 draw every case in both languages', () => {
     })
   }
 })
+
+// ── B-W2b-F56 ─────────────────────────────────────────────────────────────────────────────────────────────────────────
+// The Owner's test server: the administrator (shipping.settings.view, no shipping.view) got 403 on the packaging reads.
+describe('Packaging without shipping.view', () => {
+  it('says in words that the role does not see packaging, and draws no list', () => {
+    const item = packagingScreen.cases.find((entry) => entry.id === 'no-view')!
+    for (const locale of LOCALES) {
+      const html = renderToString(createElement(I18nProvider, { locale, messages: messagesFor(locale, NAMESPACES) }, createElement(packagingScreen.view as never, { model: item.model })))
+      expect(html).toContain(locale === 'en' ? 'Your role does not see the packaging types and defaults.' : 'Il tuo ruolo non vede i tipi di imballo e i predefiniti.')
+      expect(html).not.toContain(locale === 'en' ? 'Add a type' : 'Aggiungi un tipo')
+    }
+  })
+})
+// ── end B-W2b-F56 ─────────────────────────────────────────────────────────────────────────────────────────────────────

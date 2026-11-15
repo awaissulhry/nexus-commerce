@@ -3,6 +3,7 @@ import { isPicture, isStrippable } from '@nexus/factory-domain/files/thumbs/stri
 import type { CommandCaller } from '../../../core/command'
 import type { RequestContext } from '../../../core/context'
 import type { FilesRuntime } from '../service'
+import { MissingFileError } from '../missing'
 import { makeStrippedCopy } from './strip-copy'
 
 /**
@@ -25,6 +26,8 @@ export async function keyShownTo(
   }
   const made = await makeStrippedCopy(runtime, storeCaller, row.id)
   if (made.key) return made.key
+  // B-W2b-F56: the picture's bytes are missing from the store: 404 in words, never "being prepared".
+  if (made.outcome === 'missing') throw new MissingFileError()
   throw new ConflictError(
     made.outcome === 'store_unavailable' ? 'This picture is being prepared to be shown; try again in a minute.' : 'This picture cannot be shown outside the office. Ask your contact for a copy.',
   )

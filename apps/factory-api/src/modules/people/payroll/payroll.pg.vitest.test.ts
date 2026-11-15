@@ -212,7 +212,13 @@ afterAll(async () => {
 
 describe('the legal gate (Statuto dei Lavoratori art. 4 c.2)', () => {
   it('reads nothing while ATTENDANCE is off', async () => {
-    expect(pathsOf(await w.no('payroll', 'GET', monthUrl(), undefined, 409))).toContain('gate/ATTENDANCE')
+    // B-W2b-F56: the month's first read says the gate is off (200 in words; the page's state, never a 409 the browser logs)
+    // and holds nothing of a person: no state, no checks, no count of people.
+    const closed = await w.ok('payroll', 'GET', monthUrl())
+    expect(closed).toMatchObject({ attendance: 'CLOSED', companyId: w.T.companyA, month: M, words: expect.stringContaining('art. 4') })
+    expect(Object.keys(closed).sort()).toEqual(['attendance', 'companyId', 'label', 'month', 'sites', 'words'])
+    expect((closed.sites as { gateOpen: boolean }[]).every((site) => !site.gateOpen)).toBe(true)
+    expect(JSON.stringify(closed)).not.toMatch(/"people"|"checks"|"latest"/)
     expect(pathsOf(await w.no('payroll', 'POST', '/people/payroll/preview', { companyId: w.T.companyA, month: M }, 409))).toContain('gate/ATTENDANCE')
     await w.no('oneSite', 'GET', `/people/payroll/codes?companyId=${w.T.companyB}`, undefined, 404)
   })
@@ -227,7 +233,7 @@ describe('the month before it is closed', () => {
 
   it('holds the export in words, and shows no figure to the view', async () => {
     const month = await w.ok('reader', 'GET', monthUrl())
-    expect(month).toMatchObject({ state: 'NOT_EXPORTED', close: { state: 'OPEN', closeId: null }, latest: null, correction: null, actions: { export: { allowed: false }, preview: { allowed: false } } })
+    expect(month).toMatchObject({ attendance: 'OPEN', state: 'NOT_EXPORTED', close: { state: 'OPEN', closeId: null }, latest: null, correction: null, actions: { export: { allowed: false }, preview: { allowed: false } } })
     expect(checkOf(month, 'MONTH_CLOSED')).toMatchObject({ blocking: true, passed: false, count: 1, place: 'ATTENDANCE' })
     expect(checkOf(month, 'DAYS_APPROVED').passed).toBe(false)
     expect(month.words).toContain('not exported')

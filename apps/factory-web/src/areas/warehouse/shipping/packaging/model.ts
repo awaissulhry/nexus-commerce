@@ -130,7 +130,8 @@ export type PackagingDialog =
 export interface PackagingModel {
   readonly types: Read<readonly PackagingType[]>
   readonly defaults: Read<readonly PackagingDefault[]>
-  readonly can: Pick<DispatchAbilities, 'packaging' | 'cost'>
+  /** B-W2b-F56: `view` (shipping.view) is what the types and defaults are read with; without it the card says so and reads nothing. */
+  readonly can: Pick<DispatchAbilities, 'view' | 'packaging' | 'cost'>
   readonly dialog: PackagingDialog
   /** The styles and size scales a new default may name (read when its dialog opens). */
   readonly picks: Read<{ readonly styles: readonly PickItem[]; readonly scales: readonly PickItem[] }> | null

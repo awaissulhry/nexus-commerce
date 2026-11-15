@@ -23,7 +23,7 @@ import { certificateFor, certificateValidOn } from '@nexus/factory-domain/sales/
 import { DOCUMENT_RETENTION_YEARS } from '@nexus/factory-domain/product/compliance/rules'
 import type { CommandCaller } from '../../../core/command'
 import { processEmail } from '../../../platform/email-out/service'
-import { putGeneratedFile, recordGeneratedFile, retainFilesInCommand, tenantOf } from '../../../platform/files/files'
+import { putGeneratedFile, readStoredFile, recordGeneratedFile, retainFilesInCommand, tenantOf } from '../../../platform/files/files'
 import { addYears } from '../../../platform/files/rules'
 import { processFiles } from '../../../platform/files/service'
 import { writeZip } from '../../accounting/guest/zip'
@@ -210,6 +210,20 @@ async function bytesOf(caller: CommandCaller, fileId: string, sha256: string): P
   }
 }
 
+// ── B-W2b-F56 ─────────────────────────────────────────────────────────────────────────────────────────────────────────
+/**
+ * The pack's own PDF, for its two reads: missing from the store 404 and the store not answering 503 (the files platform's
+ * one reader), bytes that are not the ones sealed 409 in words: never a missing file answered as an outage.
+ */
+async function packPdfBytes(caller: CommandCaller, fileId: string, sha256: string): Promise<Buffer> {
+  const row = await caller.withClient((db) => db.storedFile.findUnique({ where: { id: fileId }, select: { status: true, sizeBytes: true, storeAccountId: true, storageKey: true } }))
+  if (!row || row.status !== 'AVAILABLE') throw new NotFoundError('There is no such compliance pack.')
+  const body = await readStoredFile(processFiles(), caller, row, row.sizeBytes)
+  if (sha(body) !== sha256) throw new ConflictError('The pack\'s PDF in the store is not the one that was sealed: make the pack again.')
+  return body
+}
+// ── end B-W2b-F56 ─────────────────────────────────────────────────────────────────────────────────────────────────────
+
 /** POST /compliance/declarations/shipments/:shipmentId/pack {share?}: a new version of the pack (or the newest again). */
 export async function makePack(caller: CommandCaller, shipmentId: string, body: { readonly share?: boolean | undefined }, idempotencyKey: string | undefined) {
   const context = officeOf(caller)
@@ -301,8 +315,7 @@ async function readVersion(caller: CommandCaller, shipmentId: string, documentId
 /** GET …/pack/:documentId/pdf */
 export async function packPdf(caller: CommandCaller, shipmentId: string, documentId: string): Promise<{ pdf: Buffer; fileName: string }> {
   const { row, file } = await readVersion(caller, shipmentId, documentId)
-  const pdf = await bytesOf(caller, row.fileId, file.sha256)
-  if (!pdf) throw new DomainError('not_ready', 'The file store did not answer. Try again in a moment.')
+  const pdf = await packPdfBytes(caller, row.fileId, file.sha256)
   return { pdf, fileName: file.originalName }
 }
 
@@ -311,8 +324,7 @@ export async function packZip(caller: CommandCaller, shipmentId: string, documen
   const { shipment, row, file } = await readVersion(caller, shipmentId, documentId)
   const contents = await caller.withClient((db) => contentsOf(db, shipment.id, row.id))
   if (!contents) throw new NotFoundError('There is no such compliance pack.')
-  const pdf = await bytesOf(caller, row.fileId, file.sha256)
-  if (!pdf) throw new DomainError('not_ready', 'The file store did not answer. Try again in a moment.')
+  const pdf = await packPdfBytes(caller, row.fileId, file.sha256)
   const pdfPath = `${file.originalName.replace(/[^\w. -]+/g, '-')}`
   const entries: { path: string; bytes: Uint8Array; sha256: string }[] = [{ path: pdfPath, bytes: pdf, sha256: file.sha256 }]
   for (const entry of contents) {

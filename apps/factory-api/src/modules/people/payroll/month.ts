@@ -7,6 +7,7 @@ import { PAYROLL_TO_CONFIRM } from '@nexus/factory-domain/people/payroll/layouts
 import { PEOPLE_PAYROLL_MANAGE, PEOPLE_PAYROLL_RECORDS, PEOPLE_PAYROLL_VIEW } from '@nexus/factory-domain/people/payroll/permissions'
 import { monthStateOf, monthStateWords } from '@nexus/factory-domain/people/payroll/rules'
 import { changeCounts, codeSums, parseValues, valueChanges, type PayrollValue } from '@nexus/factory-domain/people/payroll/values'
+import { gateClosedWords } from '@nexus/factory-domain/people/privacy/gate'
 import { command, type CommandCaller } from '../../../core/command'
 import type { OfficeContext } from '../../../core/context'
 import { serverClock } from '../../../core/time'
@@ -14,7 +15,6 @@ import { fullName, type Client } from '../attendance/store'
 import { companyFor, gatesOf, previousMonth, type Place } from '../close/store'
 import { officeOf } from '../employees/access'
 import { seesPay } from '../piecerates/access'
-import { gateClosedError } from '../privacy/gate'
 import type { MonthQuery, PreviewBody, ShowBody } from './contract'
 import { exportRows } from './views'
 import { lineDaysOf, monthChecks, monthPeople, type MonthPeople } from './facts'
@@ -29,7 +29,9 @@ import { correctionsNotCarried } from './pending'
  *   POST /people/payroll/month/show     "Show me" of a check that lists people: the right, recorded
  *   POST /people/payroll/preview        the values per employee code: the right, recorded; amounts only with the pay grain
  *
- * A month's figures are read behind the ATTENDANCE gate: with every gate off there is nothing to say (409 gate/ATTENDANCE).
+ * A month's figures are read behind the ATTENDANCE gate. B-W2b-F56: with every gate off the month's read says so (200,
+ * `attendance: 'CLOSED'`, the sites and the law in words; a normal state, never an error on the page's first read) and reads
+ * nothing of a person; "Show me" and the preview, a person's values, stay refused (409 gate/ATTENDANCE).
  */
 
 const held = (allowed: boolean, reason: string | null) => ({ allowed, reason: allowed ? null : reason })
@@ -49,7 +51,17 @@ export async function monthView(caller: CommandCaller, query: MonthQuery) {
     const place = await companyFor(db, context, query.companyId, [PEOPLE_PAYROLL_VIEW])
     const month = query.month ?? previousMonth(place, now)
     const gates = await gatesOf(db, place)
-    if (gates.open.length === 0) throw gateClosedError('ATTENDANCE')
+    // B-W2b-F56: every gate off is the month's state in words (200), before anything of a person is read.
+    if (gates.open.length === 0) {
+      return {
+        attendance: 'CLOSED' as const,
+        companyId: place.company.id,
+        month,
+        label: monthLabel(month),
+        sites: place.sites.map((site) => ({ siteId: site.id, code: site.code, name: site.name, gateOpen: false })),
+        words: gateClosedWords('ATTENDANCE'),
+      }
+    }
     const layout = query.layoutId ? await layoutOf(db, place.company.id, query.layoutId) : null
     const exports = await exportsOfMonth(db, place.company.id, month)
     const latest = latestExported(exports)
@@ -63,6 +75,7 @@ export async function monthView(caller: CommandCaller, query: MonthQuery) {
     const payWords = 'This file carries amounts: making it asks the pay grain.'
     const [row] = latest ? await exportRows(db, [latest]) : []
     return {
+      attendance: 'OPEN' as const,
       companyId: place.company.id,
       company: { code: place.company.code, legalName: place.company.legalName, payrollCode: await companyPayrollCode(db, place.company.id) },
       month,

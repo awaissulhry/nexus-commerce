@@ -936,6 +936,8 @@
     },
     "held": {
       "noRight": "Il tuo ruolo non può cambiare gli imballi.",
+      "noView": "Il tuo ruolo non vede i tipi di imballo e i predefiniti.",
+      "noViewBody": "Si leggono con il diritto di vedere le spedizioni, che questo ruolo non ha.",
       "busy": "Salvataggio…",
       "noneOn": "Nessuno dei tipi scelti è in uso.",
       "noneOff": "Nessuno dei tipi scelti è spento.",

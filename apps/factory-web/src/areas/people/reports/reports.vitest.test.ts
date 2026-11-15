@@ -202,3 +202,21 @@ describe('every design case draws in both languages with no key left on screen',
     }
   })
 })
+
+// ── B-W2b-F56 ─────────────────────────────────────────────────────────────────────────────────────────────────────────
+// The Owner's test server saw People › Reports say "Loading…" for good with attendance off at every site: a part that holds a
+// state in words reads nothing, so nothing on the page says it is loading.
+describe('a held part never says it is loading', () => {
+  const BUSY = /Loading…|Reading…|Caricamento|Sto leggendo/
+  for (const id of ['gate-off', 'gate-read-failed', 'all-sites', 'no-attendance', 'no-pay', 'error', 'empty']) {
+    it(id, () => {
+      const item = reportsScreen.cases.find((entry) => entry.id === id)!
+      for (const locale of LOCALES) expect(render(reportsScreen as unknown as DesignScreen<unknown>, item.model, locale).match(BUSY)?.[0] ?? null, `${id} (${locale})`).toBeNull()
+    })
+  }
+  it('while it reads, it says so', () => {
+    const item = reportsScreen.cases.find((entry) => entry.id === 'loading')!
+    expect(render(reportsScreen as unknown as DesignScreen<unknown>, item.model, 'en')).toMatch(BUSY)
+  })
+})
+// ── end B-W2b-F56 ─────────────────────────────────────────────────────────────────────────────────────────────────────

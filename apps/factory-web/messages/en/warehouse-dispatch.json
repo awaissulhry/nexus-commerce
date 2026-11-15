@@ -936,6 +936,8 @@
     },
     "held": {
       "noRight": "Your role cannot change packaging.",
+      "noView": "Your role does not see the packaging types and defaults.",
+      "noViewBody": "They are read with the right to see shipments, which this role does not have.",
       "busy": "Saving…",
       "noneOn": "None of the types picked is in use.",
       "noneOff": "None of the types picked is switched off.",
