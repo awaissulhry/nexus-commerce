@@ -14,7 +14,7 @@ import { WithMessages } from '../../../../record-panels/i18n'
 import { RULE_KINDS, type AlertSeverity, type RuleKind } from '@nexus/factory-domain/alerts/kinds'
 import type { AlertRule } from '../../../_shared/rules/api'
 import type { RuleDraft } from '../../../_shared/rules/model'
-import { RuleDialog } from '../../../_shared/rules/view/RuleDialog'
+import { RuleDialog, type RuleRoutesSlot } from '../../../_shared/rules/view/RuleDialog'
 import { actionHeld, ageWords, alertSentence, alertsKeys, assigneeWords, bulkRows, filtered, kindWords, selectHeld, SEVERITY_ORDER, stateWords, TILES, tileValue, type AlertRow, type AlertsControls, type AlertsViewModel } from '../model'
 import { AlertPopup, AlertsDialogs } from './AlertPopup'
 import { RulesSection } from './RulesSection'
@@ -70,15 +70,15 @@ export const severityTone = (severity: AlertSeverity): 'danger' | 'warning' | 'i
  * note, J / K through the list. Then the Rules: each rule as its sentence, its number edited in place, whom it tells and
  * where, how often, last fired, fired in 7 days, on/off — a row opens the rule dialog. It draws ONE view model.
  */
-export function AlertsView({ model, actions }: { model: AlertsViewModel; actions?: AlertsActions }) {
+export function AlertsView({ model, actions, ruleRoutes }: { model: AlertsViewModel; actions?: AlertsActions; /* B-W2b-437: the rule dialog's routes (the page passes B-W2b-435's container; the design frames none). */ ruleRoutes?: RuleRoutesSlot }) {
   return (
     <WithMessages namespaces={['home-alerts', 'rules', 'lists']}>
-      <Alerts model={model} actions={actions} />
+      <Alerts model={model} actions={actions} ruleRoutes={ruleRoutes} />
     </WithMessages>
   )
 }
 
-function Alerts({ model, actions }: { model: AlertsViewModel; actions?: AlertsActions }) {
+function Alerts({ model, actions, ruleRoutes }: { model: AlertsViewModel; actions?: AlertsActions; ruleRoutes?: RuleRoutesSlot }) {
   const t = useT('home-alerts')
   const r = useT('rules')
   const locale = useLocale()
@@ -342,6 +342,7 @@ function Alerts({ model, actions }: { model: AlertsViewModel; actions?: AlertsAc
           onRetryChoices={actions?.onRetryChoices}
           onRetryTimers={actions?.onRetryTimers}
           onClose={() => actions?.onRule?.(null)}
+          routes={model.ruleDialog.rule ? ruleRoutes?.(model.ruleDialog.rule.id) : undefined}
         />
       )}
     </div>

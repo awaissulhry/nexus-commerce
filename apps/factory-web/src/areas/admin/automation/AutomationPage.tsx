@@ -8,6 +8,8 @@ import { useRules } from '../../_shared/rules/use-rules'
 import { useTodayLive } from '../../home/today/live'
 import { automationAddress, controlsOf, MODULE_TIMERS, type AutomationControls, type AutomationNotice, type AutomationViewModel } from './model'
 import { AutomationView } from './view/AutomationView'
+// B-W2b-437: the rule dialog's routes (B-W2b-435's container), passed to the view as a slot.
+import { RuleRoutes } from '../../_shared/rules/routes/RuleRoutes'
 // B-W2b-307: Approval rules.
 import { useApprovalRules } from './approval-rules/use-approval-rules'
 import { NEW_RULE_KIND_PARAM } from './approval-rules/new-kind/new-kind'
@@ -103,6 +105,7 @@ export function AutomationPage() {
   return (
     <AutomationView
       model={model}
+      ruleRoutes={(ruleId) => <RuleRoutes ruleId={ruleId} />}
       actions={{
         onView: (view) => go({ view }),
         onRule: (id) => {

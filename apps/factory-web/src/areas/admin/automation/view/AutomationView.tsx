@@ -9,7 +9,7 @@ import { useT } from '../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../record-panels/i18n'
 import type { AlertRule } from '../../../_shared/rules/api'
 import type { RuleDraft } from '../../../_shared/rules/model'
-import { RuleDialog } from '../../../_shared/rules/view/RuleDialog'
+import { RuleDialog, type RuleRoutesSlot } from '../../../_shared/rules/view/RuleDialog'
 import { RulesList } from '../../../_shared/rules/view/RulesList'
 import { BUILT, isDateRule, KNOWN_MODULE_TIMERS, LATER, moduleTimerKey, newHeld, VIEWS, viewOfKey, type AutomationView as View, type AutomationViewModel } from '../model'
 // B-W2b-307: Approval rules.
@@ -44,15 +44,16 @@ export interface AutomationActions {
  * whom it tells, how often, its waiting timers and the next one, last fired, fired in 7 days, on/off; a row opens the rule
  * dialog with its timers. Then the reminders the modules keep themselves, with where. It draws ONE view model.
  */
-export function AutomationView({ model, actions }: { model: AutomationViewModel; actions?: AutomationActions }) {
+// B-W2b-437: `ruleRoutes` = the rule dialog's routes (the page passes B-W2b-435's container; the design frames none).
+export function AutomationView({ model, actions, ruleRoutes }: { model: AutomationViewModel; actions?: AutomationActions; ruleRoutes?: RuleRoutesSlot }) {
   return (
     <WithMessages namespaces={['admin-automation', 'rules', 'lists', 'approvals-depth']}>
-      <Automation model={model} actions={actions} />
+      <Automation model={model} actions={actions} ruleRoutes={ruleRoutes} />
     </WithMessages>
   )
 }
 
-function Automation({ model, actions }: { model: AutomationViewModel; actions?: AutomationActions }) {
+function Automation({ model, actions, ruleRoutes }: { model: AutomationViewModel; actions?: AutomationActions; ruleRoutes?: RuleRoutesSlot }) {
   const t = useT('admin-automation')
   const r = useT('rules')
   const apd = useT('approvals-depth')
@@ -248,6 +249,7 @@ function Automation({ model, actions }: { model: AutomationViewModel; actions?: 
           onRetryChoices={actions?.onRetryChoices}
           onRetryTimers={actions?.onRetryTimers}
           onClose={() => actions?.onRule?.(null)}
+          routes={model.ruleDialog.rule ? ruleRoutes?.(model.ruleDialog.rule.id) : undefined}
         />
       )}
     </div>

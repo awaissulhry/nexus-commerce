@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { FlaskConical, Save } from 'lucide-react'
 import { Banner, Field } from '@nexus/ui/components'
 import { Button, Select, Skeleton, Tag, Toggle } from '@nexus/ui/primitives'
@@ -13,8 +13,6 @@ import type { PanelRead } from '../../../../record-panels/model'
 import { OFFICE_PAGES } from '../../../../shell/nav/office-nav'
 import type { AlertRule, RuleChoices, RuleKindInfo, RuleTest, RuleTimer } from '../api'
 import { changeCount, changeHeld, changesOf, defaultRecipient, draftOf, draftProblems, newDraft, placeOptions, placeValue, SEVERITIES, type RuleDraft } from '../model'
-// B-W2b-435 (ANA-041): the rule's routes.
-import { RuleRoutes } from '../routes/RuleRoutes'
 import { RuleSentence } from './RuleSentence'
 import '../rules.css'
 
@@ -37,6 +35,9 @@ export interface RuleDialogState {
   readonly draft?: RuleDraft
 }
 
+/** B-W2b-437: a page's rule routes for a rule that exists (its views pass it to the dialog as `routes`). */
+export type RuleRoutesSlot = (ruleId: string) => ReactNode
+
 export interface RuleDialogProps {
   readonly state: RuleDialogState
   /** Every rule the reader sees (a new rule's defaults; the rule a new one's dry run asks). */
@@ -49,6 +50,11 @@ export interface RuleDialogProps {
   onRetryChoices?: () => void
   onRetryTimers?: () => void
   onClose: () => void
+  /**
+   * B-W2b-435 (ANA-041) + B-W2b-437: who the rule tells at each place of it, for a rule that exists — the page's container
+   * (`RuleRoutes`) passed in as a slot: a view mounts no container (the design frames have no office session).
+   */
+  readonly routes?: ReactNode
 }
 
 /**
@@ -66,7 +72,7 @@ export function RuleDialog(props: RuleDialogProps) {
   )
 }
 
-function Dialog({ state, rules, offline, busy, prefix, onSave, onTest, onRetryChoices, onRetryTimers, onClose }: RuleDialogProps) {
+function Dialog({ state, rules, offline, busy, prefix, onSave, onTest, onRetryChoices, onRetryTimers, onClose, routes }: RuleDialogProps) {
   const t = useT('rules')
   const locale = useLocale()
   const choices = state.choices?.status === 'ready' ? state.choices.data : null
@@ -207,11 +213,7 @@ function Dialog({ state, rules, offline, busy, prefix, onSave, onTest, onRetryCh
             </section>
 
             {/* B-W2b-435 (ANA-041): who the rule tells at each place of it (a rule that exists). */}
-            {rule && (
-              <div className="fw-rule-part">
-                <RuleRoutes ruleId={rule.id} />
-              </div>
-            )}
+            {rule && routes ? <div className="fw-rule-part">{routes}</div> : null}
 
             <section className="fw-rule-part" aria-labelledby="fw-rule-test-h">
               <h3 id="fw-rule-test-h" className="fw-rule-h">
