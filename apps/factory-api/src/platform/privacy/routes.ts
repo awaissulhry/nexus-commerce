@@ -38,6 +38,32 @@ import { createNotice, deleteNotice, deleteText, getNotice, listNotices, noticeA
 import { privacyOverview } from './overview'
 import { acknowledgeFloorNotice, acknowledgeStaffNotice, floorNotice, publicNotice, staffNotice } from './people'
 import { archiveActivity, createActivity, listActivities, patchActivity } from './register'
+// B-W2b-405: data protection in depth.
+import { erasePerson, erasurePreview } from './erasure/erase'
+import {
+  askMyDataContract,
+  collectContract,
+  createRequestContract,
+  eraseContract,
+  erasurePreviewContract,
+  extendContract,
+  finishContract,
+  getRequestContract,
+  identityContract,
+  listRequestsContract,
+  myDataContract,
+  myPackageContract,
+  packageContract,
+  refuseRequestContract,
+  withdrawContract,
+} from './requests/contract'
+import { askMyData, myData, myPackage } from './requests/my-data'
+import { packageDownload } from './requests/package'
+import { listRequests, requestAnswer, readRequest } from './requests/read'
+import { askPackage, checkIdentity, createRequest, extendRequest, finishRequest, refuseRequest, withdrawRequest } from './requests/requests'
+import { changeRuleContract, createRuleContract, listRetentionContract, listSweepsContract, ruleActiveContract, ruleApplyContract, sweepNowContract } from './retention/contract'
+import { changeRule, createRule, listRetention, listSweeps, setRuleActive, setRuleApply, sweepNow } from './retention/retention'
+import { readSafetyForm, safetyFormContract, setSafetyForm, setSafetyFormContract } from './safety-form'
 
 /**
  * Admin › Privacy & notices (B-W1-36; A2 SCR-086; GDPR arts. 13, 28, 30, 35; Statuto dei Lavoratori art. 4 c.3):
@@ -111,4 +137,34 @@ export default defineRoutes('privacy', manifest, async (app) => {
   app.get('/privacy/floor/notice', { schema: floorNoticeContract }, async (request) => floorNotice(request, request.query))
   app.post('/privacy/floor/notice/acknowledge', { schema: floorAckContract }, async (request) => acknowledgeFloorNotice(request, request.body, idempotencyKeyFrom(request)))
   app.get('/privacy/public/:companyId', { schema: publicNoticeContract, config: limited }, async (request) => publicNotice(request, request.params.companyId, request.query))
+
+  // B-W2b-405: data requests (requests/), the erasure (erasure/), download my data, retention (retention/), the safety-report form.
+  const writes = (request: Parameters<typeof idempotencyKeyFrom>[0]) => ({ idempotencyKey: idempotencyKeyFrom(request), now: serverClock.now() })
+  app.get('/privacy/requests', { schema: listRequestsContract }, async (request) => listRequests(request, request.query, serverClock.now()))
+  app.get('/privacy/requests/:requestId', { schema: getRequestContract }, async (request) => {
+    await readRequest(request, request.params.requestId, 'privacy.requests.view')
+    return { request: await requestAnswer(request, request.params.requestId, serverClock.now()) }
+  })
+  app.post('/privacy/requests', { schema: createRequestContract }, async (request, reply) => reply.code(201).send(await createRequest(request, request.body, serverClock.now(), idempotencyKeyFrom(request))))
+  app.post('/privacy/requests/:requestId/identity', { schema: identityContract }, async (request) => checkIdentity(request, request.params.requestId, request.body, writes(request)))
+  app.post('/privacy/requests/:requestId/extend', { schema: extendContract }, async (request) => extendRequest(request, request.params.requestId, request.body, writes(request)))
+  app.post('/privacy/requests/:requestId/collect', { schema: collectContract }, async (request, reply) => reply.code(202).send(await askPackage(request, request.params.requestId, writes(request))))
+  app.get('/privacy/requests/:requestId/package', { schema: packageContract }, async (request) => packageDownload(request, request.params.requestId))
+  app.post('/privacy/requests/:requestId/done', { schema: finishContract }, async (request) => finishRequest(request, request.params.requestId, request.body, writes(request)))
+  app.post('/privacy/requests/:requestId/refuse', { schema: refuseRequestContract }, async (request) => refuseRequest(request, request.params.requestId, request.body, writes(request)))
+  app.post('/privacy/requests/:requestId/withdraw', { schema: withdrawContract }, async (request) => withdrawRequest(request, request.params.requestId, request.body, writes(request)))
+  app.get('/privacy/requests/:requestId/erasure', { schema: erasurePreviewContract }, async (request) => erasurePreview(request, request.params.requestId, serverClock.now()))
+  app.post('/privacy/requests/:requestId/erase', { schema: eraseContract }, async (request) => erasePerson(request, request.params.requestId, request.body, { stepUp: stepUpFor(request), ...writes(request) }))
+  app.get('/privacy/my-data', { schema: myDataContract }, async (request) => myData(request, serverClock.now()))
+  app.post('/privacy/my-data', { schema: askMyDataContract }, async (request, reply) => reply.code(202).send(await askMyData(request, serverClock.now(), idempotencyKeyFrom(request))))
+  app.get('/privacy/my-data/:requestId/package', { schema: myPackageContract }, async (request) => myPackage(request, request.params.requestId))
+  app.get('/privacy/retention', { schema: listRetentionContract }, async (request) => listRetention(request, request.query))
+  app.get('/privacy/retention/rules/:ruleId/sweeps', { schema: listSweepsContract }, async (request) => listSweeps(request, request.params.ruleId))
+  app.post('/privacy/retention/rules', { schema: createRuleContract }, async (request, reply) => reply.code(201).send(await createRule(request, request.body, idempotencyKeyFrom(request))))
+  app.patch('/privacy/retention/rules/:ruleId', { schema: changeRuleContract }, async (request) => changeRule(request, request.params.ruleId, request.body, { stepUp: stepUpFor(request), idempotencyKey: idempotencyKeyFrom(request) }))
+  app.post('/privacy/retention/rules/:ruleId/active', { schema: ruleActiveContract }, async (request) => setRuleActive(request, request.params.ruleId, request.body, idempotencyKeyFrom(request)))
+  app.post('/privacy/retention/rules/:ruleId/apply', { schema: ruleApplyContract }, async (request) => setRuleApply(request, request.params.ruleId, request.body, { stepUp: stepUpFor(request), idempotencyKey: idempotencyKeyFrom(request) }))
+  app.post('/privacy/retention/rules/:ruleId/sweep', { schema: sweepNowContract }, async (request, reply) => reply.code(201).send(await sweepNow(request, request.params.ruleId)))
+  app.get('/privacy/safety-report-form', { schema: safetyFormContract }, async (request) => readSafetyForm(request, request.query.companyId))
+  app.put('/privacy/safety-report-form', { schema: setSafetyFormContract }, async (request) => setSafetyForm(request, request.body, { stepUp: stepUpFor(request), idempotencyKey: idempotencyKeyFrom(request) }))
 })

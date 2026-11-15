@@ -189,6 +189,9 @@ import { sdiArchiveCopyHandler } from './modules/invoicing/archive-copy/copy'
 // B-W2b-402: collections (a trusted reminder approved and sent by its level; the payment received notice to the customer).
 import { trustedRemindersHandler } from './modules/receivables/reminders/approval'
 import { paymentNoticeHandler } from './modules/receivables/notices/customer'
+// B-W2b-405: a person's data package collected (privacy.request_collect_asked); the nightly retention sweep (reports until switched on).
+import { collectPackageHandlers } from './platform/privacy/requests/package'
+import { retentionSweepCron } from './platform/privacy/retention/sweep'
 
 /**
  * The factory's background processes (plan A1 §3.1), one codebase with the API, two Railway services:
@@ -297,6 +300,8 @@ const W2B_428_HANDLERS: readonly EventHandler[] = [factsHandler()]
 const W2B_401_HANDLERS: readonly EventHandler[] = [sdiTestAnswerHandler(), sdiArchiveCopyHandler()]
 // B-W2b-402: a ladder reminder prepared, a stop lifted, a trusted level changed → the customer's trusted reminders that nothing holds approved by their level and sent (the company's reminders on); a bank transfer recorded → its notice to the customer (the company's switch on).
 const W2B_402_HANDLERS: readonly EventHandler[] = [trustedRemindersHandler(), paymentNoticeHandler()]
+// B-W2b-405: privacy.request_collect_asked → the person's records and files collected into their package.
+const W2B_405_HANDLERS: readonly EventHandler[] = collectPackageHandlers()
 // B-W2b-11: the reports (one file each in modules/insights/reports/defs/), read by an export of a report.
 await loadReports(fileURLToPath(new URL('.', import.meta.url)))
 // B-W2b-120: the safety calendar's sources (one file each in modules/safety/calendar/sources/), read by an export of the calendar.
@@ -365,7 +370,7 @@ if (mode === 'worker') {
   await moveLiftsAll({ database, log }).catch((error) => log.error({ err: error }, 'the unblocked addresses could not be moved at start'))
   await writeStepsAll({ database, log }).catch((error) => log.error({ err: error }, 'the first-load steps could not be written at start'))
   const relay = startRelay({ database, publish: queuePublisher(kit), log })
-  const workers = startEventWorkers({ kit, handlers: [...HANDLERS, ...W2A_20_HANDLERS, ...W2A_32_HANDLERS, ...W2A_33_HANDLERS, ...W2A_55_HANDLERS, ...W2A_61_HANDLERS, ...W2A_62_HANDLERS, ...W2B_15_HANDLERS, ...W2B_40_HANDLERS, ...W2B_37_HANDLERS, ...W2B_42_HANDLERS, ...W2B_43_HANDLERS, ...W2B_101_HANDLERS, ...W2B_118_HANDLERS, ...W2B_125_HANDLERS, ...W2B_135_HANDLERS, ...W2B_160_HANDLERS, ...W2B_167_HANDLERS, ...W2B_185_HANDLERS, ...W2B_170_HANDLERS, ...W2B_200_HANDLERS, ...W2B_225_HANDLERS, ...W2B_251_HANDLERS, ...W2B_260_HANDLERS, ...W2B_256_HANDLERS, ...W2B_263_HANDLERS, ...W2B_313_HANDLERS, ...W2B_292_HANDLERS, ...W2B_305_HANDLERS, ...W2B_304_HANDLERS, ...W2B_317_HANDLERS, ...W2B_294_HANDLERS, ...W2B_340_HANDLERS, ...W2B_377_HANDLERS, ...W2B_386_HANDLERS, ...W2B_393_HANDLERS, ...W2B_394_HANDLERS, ...W2B_398_HANDLERS, ...W2B_407_HANDLERS, ...W2B_428_HANDLERS, ...W2B_401_HANDLERS, ...W2B_402_HANDLERS], database, live: redis, log })
+  const workers = startEventWorkers({ kit, handlers: [...HANDLERS, ...W2A_20_HANDLERS, ...W2A_32_HANDLERS, ...W2A_33_HANDLERS, ...W2A_55_HANDLERS, ...W2A_61_HANDLERS, ...W2A_62_HANDLERS, ...W2B_15_HANDLERS, ...W2B_40_HANDLERS, ...W2B_37_HANDLERS, ...W2B_42_HANDLERS, ...W2B_43_HANDLERS, ...W2B_101_HANDLERS, ...W2B_118_HANDLERS, ...W2B_125_HANDLERS, ...W2B_135_HANDLERS, ...W2B_160_HANDLERS, ...W2B_167_HANDLERS, ...W2B_185_HANDLERS, ...W2B_170_HANDLERS, ...W2B_200_HANDLERS, ...W2B_225_HANDLERS, ...W2B_251_HANDLERS, ...W2B_260_HANDLERS, ...W2B_256_HANDLERS, ...W2B_263_HANDLERS, ...W2B_313_HANDLERS, ...W2B_292_HANDLERS, ...W2B_305_HANDLERS, ...W2B_304_HANDLERS, ...W2B_317_HANDLERS, ...W2B_294_HANDLERS, ...W2B_340_HANDLERS, ...W2B_377_HANDLERS, ...W2B_386_HANDLERS, ...W2B_393_HANDLERS, ...W2B_394_HANDLERS, ...W2B_398_HANDLERS, ...W2B_407_HANDLERS, ...W2B_428_HANDLERS, ...W2B_401_HANDLERS, ...W2B_402_HANDLERS, ...W2B_405_HANDLERS], database, live: redis, log })
   stops.push(() => relay.stop(), () => workers.close())
 } else {
   const crons: CronJob[] = [outboxLagCron({ database, kit, log }), rolesSyncCron({ database, log }), certificateExpiryCron({ database, log }), sdiPollCron({ database, log }), trackingPollCron({ database, log }), nightlyPlanCron({ database, log }), exportExpiryCron({ database, log })]
@@ -454,6 +459,9 @@ if (mode === 'worker') {
   crons.push(deliveryCheckCron({ database, log }))
   // B-W2b-428: the facts by the hour (minute 5: today and yesterday) and by night (02:40: the 35 days before).
   crons.push(factsHourlyCron({ database, log }), factsNightlyCron({ database, log }))
+  // B-W2b-405: nightly at 02:50, every retention rule that is on is swept: it reports what is due, and applies only where a person
+  // switched the rule on (GATE-PRIVACY: OFF by default); the append-only ledgers are never swept.
+  crons.push(retentionSweepCron({ database, log }))
   const scheduler = startCrons(crons, { redis, prefix, log })
   stops.push(() => scheduler.stop())
 }

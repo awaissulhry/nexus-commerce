@@ -300,7 +300,8 @@ export const openPhotoContract = defineContract({
 const statusAnswer = output({ open: z.boolean(), words: z.string().nullable() })
 const sentAnswer = output({ number: z.string(), words: z.string() })
 
-export const publicStatusContract = defineContract({ response: { 200: statusAnswer } })
+// B-W2b-405: the code of the page asks that company's door (left out: whether any door is open).
+export const publicStatusContract = defineContract({ querystring: input({ code: z.string().min(1).max(200).optional(), n: z.string().regex(/^[0-9]$/).optional() }), response: { 200: statusAnswer } })
 
 export const publicSendContract = defineContract({
   body: input({
