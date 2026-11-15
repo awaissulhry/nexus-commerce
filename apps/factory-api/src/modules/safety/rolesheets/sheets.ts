@@ -56,7 +56,7 @@ import { changesView, impactView, readSheetRow, refsOf, RECORD_ROLE_SHEET, SHEET
  * health page (B-W2b-135). Which person needs which visit is never said here: visit lines are counts.
  */
 
-const MANAGE_WORDS = 'The role sheets of this site are kept by a role that keeps them (safety.rolesheets.manage).'
+const MANAGE_WORDS = 'The role sheets of this site are kept by a role that keeps them.'
 const L = ROLE_SHEET_LIMITS
 const EMPTY: SheetContent = { items: [], kit: [], requirements: [] }
 const LAW = { roleSheet: ROLE_SHEET_LAW, kit: KIT_LAW, training: TRAINING_LAW, surveillance: SURVEILLANCE_LAW, yearlyVisit: DEFAULT_VISIT_LAW }

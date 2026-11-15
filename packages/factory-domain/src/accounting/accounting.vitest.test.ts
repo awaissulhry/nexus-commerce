@@ -43,7 +43,7 @@ describe('periods (whole months, Europe/Rome days)', () => {
     const lock = { start: '2026-09-01', end: '2026-09-30', company: 'Seed Company A S.r.l.', lockedOn: '2026-10-02', lockedBy: 'Fiona Neri' }
     expect(hardLockedWords(lock, 'the payment received on 15 Sep 2026 is not recorded')).toBe(
       'September 2026 is closed for good for Seed Company A S.r.l. (a hard lock since 2 Oct 2026, by Fiona Neri): the payment received on 15 Sep 2026 is not recorded. ' +
-        'Only someone who may lift a hard lock (accounting.unlock: the owner, by default) reopens the month, with a reason, in Finance › Accounting; agree it with the accountant first.',
+        'Only someone who may lift a hard lock (the owner, by default) reopens the month, with a reason, in Finance › Accounting; agree it with the accountant first.',
     )
     expect(hardLockedWords({ ...lock, lockedBy: null }, 'x')).toContain('(a hard lock since 2 Oct 2026): x.')
   })
@@ -67,7 +67,7 @@ describe('periods (whole months, Europe/Rome days)', () => {
       databaseHardLockWords(`period lock: ${what} is dated 2026-09-15, inside the closed period 2026-09-01 to 2026-09-30 of its company (a HARD lock: the accountant has it; lift the lock first, with a reason)`)
     expect(words('payment 0190f000-0000-7000-8000-000000000001 (CRO-1)')).toBe(
       'September 2026 is closed for good (a hard lock): the payment (CRO-1) dated 15 Sep 2026 is not written. ' +
-        'Only someone who may lift a hard lock (accounting.unlock: the owner, by default) reopens the month, with a reason, in Finance › Accounting; agree it with the accountant first.',
+        'Only someone who may lift a hard lock (the owner, by default) reopens the month, with a reason, in Finance › Accounting; agree it with the accountant first.',
     )
     expect(words('the payment of supplier invoice 0190f000-0000-7000-8000-000000000002 (number 2026/7)')).toContain(': the payment of supplier invoice (number 2026/7) dated 15 Sep 2026 is not written.')
     expect(words('stock move 0190f000-0000-7000-8000-000000000003 (ISSUE)')).toContain(': the stock move (ISSUE) dated 15 Sep 2026')

@@ -43,7 +43,7 @@ export async function suppliersOf(client: CommandTx, partyIds: readonly string[]
 export function authorizeSupplier(actor: Actor, job: { readonly companyId: string | null }, columns: readonly string[]): Issue[] {
   if (!columns.some((column) => STATUS_COLUMNS.includes(column as never))) return []
   const reaches = grantsFor(actor, PURCHASING_SUPPLIERS_STATUS).some((grant) => grant.companies === 'all' || (job.companyId !== null && grant.companies.includes(job.companyId)))
-  return reaches ? [] : [{ path: 'columns/supplierStatus', message: 'Setting where suppliers stand needs purchasing.suppliers.status: leave the Supplier status and Status reason columns out.' }]
+  return reaches ? [] : [{ path: 'columns/supplierStatus', message: 'Setting where suppliers stand needs the right to set their status: leave the Supplier status and Status reason columns out.' }]
 }
 
 /** A new party's first supplier status from its row (undefined: the row names none, the parties' own rule applies). */

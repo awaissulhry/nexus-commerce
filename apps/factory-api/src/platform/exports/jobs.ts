@@ -156,7 +156,7 @@ export async function requestExport(caller: CommandCaller, body: RequestExportBo
   const companyId = context.companyId ?? null
   const source = sourceOf(body.listKey)
   if (!exportFormatsFor(body.listKey).includes(body.format)) throw new ValidationError('This list does not export to that format.', [{ path: 'body/format', message: body.format }])
-  if (!can(actor, VIEWS_EXPORT, companyId ? { companyId } : {})) throw new ForbiddenError('Exporting a list needs views.export.')
+  if (!can(actor, VIEWS_EXPORT, companyId ? { companyId } : {})) throw new ForbiddenError('Exporting a list needs the right to export lists.')
   if (!can(actor, source.permission, companyId ? { companyId } : {})) throw new ForbiddenError('You may not see this list.')
   const refusal = source.refusal?.(actor) ?? null
   if (refusal) throw new ForbiddenError(refusal)

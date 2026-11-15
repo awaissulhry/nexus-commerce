@@ -63,6 +63,7 @@ import {
 } from './model'
 import { designScreen as statementPdfScreen } from './statement/fixtures'
 import { EMAIL_STATUSES } from './view/ReminderDialog'
+import { rightRef } from '../../../lib/i18n/rights'
 
 /**
  * Finance › Receivables & credit (SCR-151) and its statement PDF tab (B-W2a-81 on B-W2a-55's API): the lists equal
@@ -120,7 +121,7 @@ describe('who sees what', () => {
     expect(reminderSelectable(prepared, { approve: true })).toBeNull()
     expect(reminderSelectable(prepared, { approve: false })).toEqual({
       key: 'held.approve',
-      params: { permission: 'receivables.reminders.approve' },
+      params: { right: rightRef('receivables.reminders.approve') },
     })
     expect(reminderSelectable({ ...prepared, status: 'APPROVED' }, { approve: true })).toEqual({ key: 'held.notPrepared' })
     expect(bulkApprovePhrase(3, true)).toEqual({

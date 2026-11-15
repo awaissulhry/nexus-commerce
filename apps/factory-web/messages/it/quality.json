@@ -226,24 +226,24 @@
     "SECOND_PERSON": "Seconda persona"
   },
   "held": {
-    "noRecord": "Il tuo ruolo non registra ispezioni (quality.inspections.record).",
-    "noWorkOrders": "Per scegliere un ordine di produzione serve workorders.view.",
+    "noRecord": "Il tuo ruolo non registra ispezioni.",
+    "noWorkOrders": "Per scegliere un ordine di produzione serve il permesso di vedere gli ordini di lavoro.",
     "decided": "L'esito è firmato: non cambia più (una correzione sarà un emendamento, più avanti).",
     "cancelled": "L'ispezione è annullata.",
     "notYours": "Solo l'ispettore che l'ha aperta la registra e la firma.",
     "maker": "Hai prodotto alcuni di questi capi: firma un altro ispettore.",
     "unanswered": "Prima rispondi a ogni controllo (conforme, non conforme o non applicabile).",
-    "noRelease": "Il tuo ruolo non rilascia capi (quality.garments.release).",
+    "noRelease": "Il tuo ruolo non rilascia capi.",
     "nothingToRelease": "Di questa cella non resta nulla da rilasciare con questa ispezione.",
     "gateOpen_one": "{count} controllo da fare: {check}.",
     "gateOpen_other": "{count} controlli da fare, il primo: {check}.",
-    "noReverse": "Il tuo ruolo non revoca capi (quality.garments.reverse).",
+    "noReverse": "Il tuo ruolo non revoca capi.",
     "nothingToReverse": "Ora non si può revocare nulla di questo rilascio: il resto è su una spedizione.",
-    "noSettings": "Solo il titolare modifica le regole qualità (quality.settings.manage).",
-    "noParties": "Per aggiungere clienti serve parties.view.",
-    "noLots": "Per i lotti serve quality.lots.view.",
+    "noSettings": "Solo il titolare modifica le regole qualità.",
+    "noParties": "Per aggiungere clienti serve il permesso di vedere clienti e fornitori.",
+    "noLots": "Per i lotti serve il permesso di vedere la scheda qualità di un lotto.",
     "noBatch": "L'ordine di produzione non ha ancora un numero di lotto.",
-    "noHoldPlace": "Mettere un blocco richiede quality.holds.place (chiedi al responsabile qualità).",
+    "noHoldPlace": "Mettere un blocco richiede il permesso di mettere blocchi (chiedi al responsabile qualità).",
     "assignedOther": "Assegnata a un altro ispettore: è lui che la registra e la firma."
   },
   "list": {
@@ -309,7 +309,7 @@
     },
     "noAccess": {
       "title": "Le ispezioni non sono aperte al tuo ruolo",
-      "body": "Serve quality.inspections.view; lo concede il titolare o un amministratore in Sistema › Ruoli e permessi."
+      "body": "Serve il permesso di vedere le ispezioni finali; lo concede il titolare o un amministratore in Sistema › Ruoli e permessi."
     },
     "undecided": "Non ancora decisa: metti un blocco o apri una non conformità",
     "decidedIn": "Blocchi {holds} · Non conformità {ncrs}",
@@ -459,8 +459,8 @@
       "RETURNHint": "Capi resi da un cliente: classifica ciascuno.",
       "held": {
         "inline": "Le ispezioni in linea arrivano con un'ondata successiva (W2b).",
-        "return": "Ispezionare i resi richiede sales.returns.view e sales.returns.inspect.",
-        "lot": "I lotti richiedono quality.lots.view."
+        "return": "Ispezionare i resi richiede i permessi di vedere i resi dei clienti e di valutarli.",
+        "lot": "I lotti richiedono il permesso di vedere la scheda qualità di un lotto."
       },
       "lotElsewhere": "I lotti in arrivo si ispezionano e si rilasciano in Conformità › Test e sostanze.",
       "lotOpen": "Apri lì i lotti in attesa"
@@ -982,7 +982,7 @@
     },
     "noAccess": {
       "title": "La catena delle prove non è aperta al tuo ruolo",
-      "body": "Serve quality.inspections.view; lo concede il titolare o un amministratore in Sistema › Ruoli e permessi."
+      "body": "Serve il permesso di vedere le ispezioni finali; lo concede il titolare o un amministratore in Sistema › Ruoli e permessi."
     },
     "badAddress": {
       "title": "Questo indirizzo non indica un capo o un lotto",
@@ -1120,7 +1120,7 @@
   },
   "raiseNcr": {
     "held": {
-      "noRight": "Aprire una non conformità richiede quality.ncr.raise (chiedi al responsabile qualità)."
+      "noRight": "Aprire una non conformità richiede il permesso di aprire NC (chiedi al responsabile qualità)."
     }
   },
   "assign": {
@@ -1155,7 +1155,7 @@
     "made": "Ha fatto capi di {orders}",
     "cellFor": "Ispettore di {label}",
     "held": {
-      "noRight": "Assegnare richiede quality.inspections.record nel sito.",
+      "noRight": "Assegnare richiede il permesso di registrare le ispezioni nel sito.",
       "notOpen": "Si assegna solo un'ispezione aperta (una firmata tiene il suo ispettore).",
       "sites": "Le ispezioni scelte sono di siti diversi: assegna un sito alla volta.",
       "none": "Scegli prima le ispezioni."
@@ -1186,7 +1186,7 @@
     "cleared_one": "La scadenza di {count} ispezione è tolta.",
     "cleared_other": "La scadenza di {count} ispezioni è tolta.",
     "held": {
-      "noRight": "Per impostare la scadenza di un'ispezione serve quality.inspections.record.",
+      "noRight": "Per impostare la scadenza di un'ispezione serve il permesso di registrare le ispezioni.",
       "notOpen": "Solo un'ispezione aperta ha una scadenza.",
       "notOpenSome": "Scegli solo ispezioni aperte: una decisa o annullata non ha scadenza.",
       "none": "Prima scegli le ispezioni.",

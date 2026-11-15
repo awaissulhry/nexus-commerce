@@ -127,7 +127,7 @@ export const mayApprove = (context: OfficeContext, companyId: string): boolean =
 export const holdsHere = (context: OfficeContext, permission: Permission): boolean => (context.companyId ? can(actorOf(context), permission, { companyId: context.companyId }) : holds(actorOf(context), permission))
 
 export function assertManage(context: OfficeContext, companyId: string): void {
-  if (!mayManage(context, companyId)) throw new ForbiddenError('The claims register of this company is kept by a role that keeps it (compliance.claims.manage).')
+  if (!mayManage(context, companyId)) throw new ForbiddenError('The claims register of this company is kept by a role that keeps it.')
 }
 
 // ---- the database's refusal in words ------------------------------------------------------------------------------------------

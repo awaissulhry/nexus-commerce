@@ -129,7 +129,7 @@
       "fileFailed": "Non è stato possibile aprire il file del consulente. Riprova."
     },
     "held": {
-      "manage": "Solo il titolare registra o ritira il sì di un consulente DPI (compliance.ppeTexts.manage).",
+      "manage": "Solo il titolare registra o ritira il sì di un consulente DPI.",
       "offline": "Offline: le modifiche aspettano di essere inviate.",
       "busy": "In corso…",
       "template": "Scegli il modello.",
@@ -141,7 +141,7 @@
       "file": "Scegli il file del consulente.",
       "reason": "Scrivi perché viene ritirato (almeno 3 caratteri).",
       "withdrawn": "Questo sì è già ritirato.",
-      "filesRead": "Per aprire i file serve files.read.",
+      "filesRead": "Per aprire i file serve il permesso di vedere i file di un record.",
       "fileState": "Il file non è disponibile."
     },
     "problem": {

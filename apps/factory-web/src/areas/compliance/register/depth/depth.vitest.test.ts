@@ -227,7 +227,7 @@ describe('every W2b design case draws in both languages with no key left on scre
     const html = (id: string, locale: (typeof LOCALES)[number] = 'en') => render(recallScreen as DesignScreen<unknown>, recallScreen.cases.find((item) => item.id === id)!.model, locale)
     expect(html('draft')).toContain('Start recall of 126 garments')
     expect(html('draft', 'it')).toContain('Avvia il richiamo di 126 capi')
-    expect(html('read-only')).toContain('compliance.recall.manage')
+    expect(html('read-only')).toContain('Your role cannot draft recalls and authority notices')
     expect(html('active')).toContain('62%')
   })
 })

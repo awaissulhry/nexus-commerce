@@ -104,7 +104,7 @@ async function resolve(client: CommandTx, key: Readonly<Record<string, CellValue
   if (!site) return { ok: false, issues: [{ column: 'site', message: `No site ${siteCode} in this company.` }] }
   if (site.status !== 'ACTIVE') return { ok: false, issues: [{ column: 'site', message: `Site ${siteCode} is archived: its planning cannot change.` }] }
   if (actor !== null && !can(actor, PLANNING_ITEMS_MANAGE, { companyId: site.companyId, siteId: site.id })) {
-    return { ok: false, issues: [{ column: 'site', message: `Keeping the item parameters of site ${siteCode} needs planning.items.manage at that site.` }] }
+    return { ok: false, issues: [{ column: 'site', message: `Keeping the item parameters of site ${siteCode} needs the right to keep the item parameters at that site.` }] }
   }
   const itemCode = codeOf(key, 'item')
   const item = facts.items.get(itemCode)

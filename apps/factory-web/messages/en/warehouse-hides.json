@@ -34,7 +34,7 @@
       "series": "What the bars show",
       "seriesArea": "Area",
       "seriesValue": "Area value",
-      "valueHeld": "The area value needs cost access (money.cost): you see areas only.",
+      "valueHeld": "The area value needs cost access: you see areas only.",
       "empty": "No leather on hand",
       "emptyBody": "Hides received at this site show here, per article and colour.",
       "hint": "Press an article to show its hides in the list below; press it again to show every hide."
@@ -74,7 +74,7 @@
       "hint": "Pattern area cut against the area the cuts used. Never by cutter: per style and supplier lot only.",
       "supplierLot": "supplier lot {ref}",
       "planned": "planned {pct} %",
-      "held": "The yield needs the cutting room right (production.cutting.view)."
+      "held": "The yield needs the cutting room right."
     }
   },
   "find": {
@@ -96,7 +96,7 @@
     "pickWorkOrder": "Pick a work order",
     "pieces_one": "{count} piece",
     "pieces_other": "{count} pieces",
-    "noRightWorkOrders": "You can't see work orders (workorders.view): find by article and area.",
+    "noRightWorkOrders": "You can't see work orders: find by article and area.",
     "pickSite": "Pick a site",
     "article": "Article and colour",
     "articlesFailed": "The articles couldn't be read.",
@@ -110,7 +110,7 @@
     "shadeGroupHint": "The groups of the lots found show after the first search.",
     "anyShade": "Any shade",
     "minGrade": "Minimum grade",
-    "gradesHeld": "Grades need the materials right (product.materials.view).",
+    "gradesHeld": "Grades need the materials right.",
     "anyGrade": "Any grade",
     "find": "Find",
     "intro": "Pick a work order, or an article and the area needed, then press Find.",
@@ -164,7 +164,7 @@
       "pickArticle": "Pick an article first.",
       "pickSite": "Pick a site first.",
       "area": "Type the area as a number, for example 44 or 44,5.",
-      "noReserve": "You can't reserve stock (inventory.reserve).",
+      "noReserve": "You can't reserve stock.",
       "busy": "Reserving…",
       "findFirst": "Find the hides first.",
       "none": "Choose at least one hide.",
@@ -213,7 +213,7 @@
       "noPlace": "no place holds it"
     },
     "held": {
-      "noRight": "You can't move stock (inventory.transfer).",
+      "noRight": "You can't move stock.",
       "pick": "Choose at least one hide.",
       "oneSite": "Choose hides of one site.",
       "busy": "Moving…",

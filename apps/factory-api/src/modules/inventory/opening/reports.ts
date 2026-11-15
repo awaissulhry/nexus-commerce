@@ -36,7 +36,7 @@ async function mayUpload(caller: CommandCaller, companyId: string): Promise<void
   const company = isUuid(companyId) ? await caller.withClient((client) => client.company.findUnique({ where: { id: companyId }, select: { id: true } })) : null
   if (!company || !can(actor, INVENTORY_OPENING_IMPORT, { companyId })) throw new NotFoundError('Company not found.')
   for (const permission of [QUALITY_LOTS_TEST, FILES_UPLOAD] as const) {
-    if (!can(actor, permission, { companyId })) throw new ForbiddenError(`Adding an opening-stock report needs ${permission} over the company.`)
+    if (!can(actor, permission, { companyId })) throw new ForbiddenError(`Adding an opening-stock report needs ${permission === FILES_UPLOAD ? 'the right to upload files' : "the right to record a lot's chromium VI result"} over the company.`)
   }
 }
 

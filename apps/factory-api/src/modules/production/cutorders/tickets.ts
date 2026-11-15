@@ -244,7 +244,7 @@ async function managedTicket(caller: CommandCaller, ticketId: string): Promise<{
     return { ticket, order }
   })
   if (!found.ticket || !found.order || !may(context, PRODUCTION_CUTTING_VIEW, found.order)) throw new NotFoundError('Cut ticket not found.')
-  if (!may(context, PRODUCTION_CUTORDERS_MANAGE, found.order)) throw new ForbiddenError('Tickets are voided and printed with production.cutorders.manage at the site.')
+  if (!may(context, PRODUCTION_CUTORDERS_MANAGE, found.order)) throw new ForbiddenError('Tickets are voided and printed with the right to plan cut orders at the site.')
   return { context, ticket: found.ticket, order: found.order }
 }
 

@@ -168,7 +168,7 @@
     "closedFor": "il fornitore è chiuso ({name})",
     "nothing": "nessuna consegna quel giorno",
     "noClosures": "{supplier} non ha chiusure registrate: ogni giorno appare aperto.",
-    "noClosuresRight": "Le chiusure del fornitore richiedono parties.view: il calendario mostra solo le consegne.",
+    "noClosuresRight": "Le chiusure del fornitore richiedono il permesso di vedere clienti e fornitori: il calendario mostra solo le consegne.",
     "closuresFailed": "Non è stato possibile leggere le chiusure del fornitore ({problem}): il calendario mostra solo le consegne."
   },
   "history": {
@@ -367,7 +367,7 @@
     "held": {
       "none": "Nessuna richiesta aspetta una decisione.",
       "own": "L’hai chiesto tu: decide una seconda persona (il titolare compreso).",
-      "noRight": "Per decidere serve purchasing.compliance.override.",
+      "noRight": "Il tuo ruolo non può decidere un invio senza un documento valido.",
       "stale": "Ciò che blocca l’ordine è cambiato dalla richiesta: va chiesto di nuovo.",
       "other": "Non si può decidere ora.",
       "words": "Di’ perché no."

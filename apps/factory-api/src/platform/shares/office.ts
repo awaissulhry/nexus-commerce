@@ -73,9 +73,9 @@ const scopeOf = (scope: RecordScope) => ({ companyId: scope.companyId, ...(scope
 function needs(actor: Actor, adapter: ShareRecordAdapter, scope: RecordScope, mode: 'view' | 'manage'): void {
   const where = scopeOf(scope)
   if (!can(actor, PARTNERS_SHARES_VIEW, where) && !can(actor, PARTNERS_SHARES_MANAGE, where)) throw new NotFoundError('Record not found.')
-  if (mode === 'manage' && !can(actor, PARTNERS_SHARES_MANAGE, where)) throw new ForbiddenError(`Inviting a partner to this record needs ${PARTNERS_SHARES_MANAGE}.`)
+  if (mode === 'manage' && !can(actor, PARTNERS_SHARES_MANAGE, where)) throw new ForbiddenError('Inviting a partner to this record needs the right to invite partners to records.')
   if (!can(actor, mode === 'manage' ? adapter.manage : adapter.view, where)) {
-    throw new ForbiddenError(mode === 'manage' ? `Inviting a partner to this record needs ${adapter.manage}.` : `Seeing who is invited to this record needs ${adapter.view}.`)
+    throw new ForbiddenError(mode === 'manage' ? 'Inviting a partner to this record needs a right your role does not hold over records of this kind.' : 'Seeing who is invited to this record needs the right to see records of this kind.')
   }
 }
 

@@ -1,7 +1,7 @@
 {
   "refused": {
     "title": "Notifications are not open to you",
-    "body": "Your roles do not include Home (home.view). Ask an administrator if you need it."
+    "body": "Your roles do not include Home. Ask an administrator if you need it."
   },
   "band": {
     "label": "Notifications: status and actions",

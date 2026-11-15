@@ -5,9 +5,9 @@
   "wording": "La formulazione della regola sul fido nei documenti attende il parere del commercialista; questi sono i testi predefiniti.",
   "noAccess": {
     "title": "Fidi",
-    "body": "I fidi richiedono il permesso {permission}. Chiedi a chi gestisce i ruoli."
+    "body": "I fidi richiedono il permesso «{right}». Chiedi a chi gestisce i ruoli."
   },
-  "noPrice": "Gli importi richiedono la grana prezzi ({permission}): l'elenco mostra chi ha un fido e cosa attende.",
+  "noPrice": "Gli importi richiedono il permesso «{right}»: l'elenco mostra chi ha un fido e cosa attende.",
   "view": {
     "label": "Mostra",
     "ALL": "Tutti",
@@ -68,8 +68,8 @@
     "add": "Imposta un fido"
   },
   "held": {
-    "change": "Modificare un fido richiede {permission}.",
-    "price": "Gli importi richiedono la grana prezzi ({permission}).",
+    "change": "Modificare un fido richiede il permesso «{right}».",
+    "price": "Gli importi richiedono il permesso «{right}».",
     "busy": "Salvataggio…",
     "pickToExport": "Scegli i clienti da esportare."
   },

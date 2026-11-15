@@ -47,7 +47,7 @@ export async function officeCapa(caller: CommandCaller, capaId: string, permissi
   const context = officeOf(caller)
   const capa = await caller.withClient((client) => readCapa(client, capaId))
   if (!capa || !mayOn(context, QUALITY_CAPA_VIEW, capa)) throw new NotFoundError('CAPA not found.')
-  if (!mayOn(context, permission, capa)) throw new ForbiddenError(`This needs ${permission} over the CAPA's company${capa.customerId ? ' and customer' : ''}.`)
+  if (!mayOn(context, permission, capa)) throw new ForbiddenError(`This needs a right your role does not hold over the CAPA's company${capa.customerId ? ' and customer' : ''}.`)
   return { context, capa }
 }
 

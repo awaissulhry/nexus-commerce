@@ -283,7 +283,7 @@
     "conflict": "Qualcuno l’ha cambiato dopo la tua lettura: è stato riletto, riprova.",
     "forbidden": "Non hai accesso a questa parte.",
     "invalid": "Qualcosa non è valido: controlla e riprova.",
-    "noPermission": "Turni richiede il permesso people.shifts.view.",
+    "noPermission": "Turni richiede il permesso di vedere i turni.",
     "notFound": "Questo non esiste più.",
     "rateLimited": "Troppe richieste: attendi un momento.",
     "signedOut": "Sei stato disconnesso: accedi di nuovo.",

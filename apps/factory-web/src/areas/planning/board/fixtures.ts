@@ -630,7 +630,7 @@ const depthCase = (depth: Partial<BoardDepth>, over: Partial<BoardViewModel> = {
 // The what-if board: the working plan with the scenario's moves (the container does this; the design draws it the same way).
 const whatIfRead = (scenario: WhatIf): BoardViewModel['read'] => ({ status: 'ready', value: whatIfBoardOf(BOARD, scenario) })
 
-const readOnly: Board = { ...BOARD, plan: { ...BOARD.plan, mayChange: false, mayPublish: false, publishHeld: 'Publishing needs planning.schedule.publish at this site.' } }
+const readOnly: Board = { ...BOARD, plan: { ...BOARD.plan, mayChange: false, mayPublish: false, publishHeld: 'Publishing needs the right to publish the plan at this site.' } }
 const held: Board = { ...BOARD, plan: { ...BOARD.plan, changesSincePublished: { moved: 0, added: 0, removed: 0 }, publishHeld: 'Nothing changed since v3 was published for Tue 17 Nov to Mon 23 Nov.' } }
 const empty: Board = { ...BOARD, plan: { ...BOARD.plan, id: null, version: null, published: null, changesSincePublished: null, publishHeld: 'The working plan has nothing on Tue 17 Nov to Mon 23 Nov to publish.' }, slots: [], workOrders: [], tray: [], problems: [], lanes: LANES.map((lane) => ({ ...lane, cells: lane.cells ? cells(lane.people ?? 0, Number(lane.efficiencyPct), {}) : null })) }
 const dialogCase = (dialog: BoardDialog): BoardViewModel => base({ dialog })

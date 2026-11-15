@@ -124,7 +124,7 @@
   },
   "noAccess": {
     "title": "Non per il tuo ruolo",
-    "body": "Il registro dei certificati richiede il permesso di vederli (compliance.certificates.view): lo concede il responsabile conformità, la qualità o un amministratore."
+    "body": "Il registro dei certificati richiede il permesso di vederli: lo concede il responsabile conformità, la qualità o un amministratore."
   },
   "view": {
     "all": "Tutti",
@@ -156,8 +156,8 @@
   },
   "held": {
     "registerMax": "Il registro mostra i primi {max} certificati: restringi con una vista o una ricerca.",
-    "manage": "Il tuo ruolo non modifica i certificati (compliance.certificates.manage).",
-    "upload": "Il tuo ruolo non carica file (files.upload).",
+    "manage": "Il tuo ruolo non modifica i certificati.",
+    "upload": "Il tuo ruolo non carica file.",
     "busy": "In corso…",
     "long": "Al massimo 500 caratteri.",
     "notDraft": "Si registra solo una bozza.",
@@ -273,7 +273,7 @@
     "otherDay": "Un altro giorno: per un audit o un reclamo",
     "run": "Verifica",
     "held": {
-      "styles": "Il tuo ruolo non legge i modelli (product.styles.view).",
+      "styles": "Il tuo ruolo non legge i modelli.",
       "style": "Scegli prima il modello.",
       "colourway": "Scegli la variante colore.",
       "size": "Scegli la taglia.",
@@ -320,7 +320,7 @@
     "bodyMeta": "organismo notificato {number} {name}",
     "modelMeta": "modello {model}",
     "noPanels": "Qui compaiono conversazione, file e storico.",
-    "panelsHeld": "Conversazione, file e storico richiedono il permesso di leggere le conversazioni (threads.read)."
+    "panelsHeld": "Conversazione, file e storico richiedono il permesso di leggere le conversazioni."
   },
   "tab": {
     "coverage": "Copertura",
@@ -479,7 +479,7 @@
       "already": "È già coperto da questo certificato: chiudi prima quella copertura per cambiarla.",
       "colourways": "Spunta almeno una variante.",
       "sizes": "Spunta almeno una taglia.",
-      "materials": "Il tuo ruolo non legge i materiali (product.materials.view).",
+      "materials": "Il tuo ruolo non legge i materiali.",
       "reason": "Di’ perché si chiude."
     },
     "endTitle": "Chiudi la copertura di {code}",
@@ -550,7 +550,7 @@
     "held": {
       "status": "Un certificato {status} non accetta nuovi PDF."
     },
-    "readHeld": "Il tuo ruolo non legge i file (files.read).",
+    "readHeld": "Il tuo ruolo non legge i file.",
     "empty": {
       "title": "Ancora nessun PDF",
       "body": "Carica il PDF firmato dall’organismo notificato."
@@ -833,7 +833,7 @@
       "beforeTold": "La risposta non può arrivare prima della comunicazione all'organismo notificato.",
       "reason": "Dire perché.",
       "file": "Scegliere la risposta dell'organismo notificato (PDF).",
-      "upload": "Il tuo ruolo non carica file (files.upload)."
+      "upload": "Il tuo ruolo non carica file."
     },
     "write": {
       "refused": "Il passo del rinnovo è stato rifiutato."

@@ -144,7 +144,7 @@ export async function createCutOrder(caller: CommandCaller, body: CreateBody, id
     return { site, item, colour }
   })
   if (!facts.site || !may(context, PRODUCTION_CUTTING_VIEW, { companyId: facts.site.companyId, siteId: facts.site.id })) return notFound('Site')
-  if (!may(context, PRODUCTION_CUTORDERS_MANAGE, { companyId: facts.site!.companyId, siteId: facts.site!.id })) throw new ForbiddenError('Planning cut orders needs production.cutorders.manage at the site.')
+  if (!may(context, PRODUCTION_CUTORDERS_MANAGE, { companyId: facts.site!.companyId, siteId: facts.site!.id })) throw new ForbiddenError('Planning cut orders needs the right to plan them at the site.')
   if (!facts.item) invalid([{ path: 'itemId', message: 'The material is not found.' }], 'The material is not found.')
   if (body.itemColourId && (!facts.colour || facts.colour.itemId !== body.itemId)) invalid([{ path: 'itemColourId', message: "Not a colour of the material." }], "Not a colour of the material.")
   const item = facts.item!
@@ -208,7 +208,7 @@ async function managedOrder(caller: CommandCaller, cutOrderId: string): Promise<
   const context = officeOf(caller)
   const order = await caller.withClient((db) => readCutOrder(db, cutOrderId))
   if (!order || !may(context, PRODUCTION_CUTTING_VIEW, order)) return notFound('Cut order')
-  if (!may(context, PRODUCTION_CUTORDERS_MANAGE, order!)) throw new ForbiddenError('Planning cut orders needs production.cutorders.manage at the site.')
+  if (!may(context, PRODUCTION_CUTORDERS_MANAGE, order!)) throw new ForbiddenError('Planning cut orders needs the right to plan them at the site.')
   return { context, order: order! }
 }
 

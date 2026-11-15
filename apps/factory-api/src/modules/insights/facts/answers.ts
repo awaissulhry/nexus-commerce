@@ -50,7 +50,7 @@ export interface FactsQuery {
 
 /** May the person read this measure: its list permission and money grain (403 in words, as the reports say it). */
 function checkMeasure(actor: Actor, measure: Measure): void {
-  if (!holds(actor, measure.permission)) throw new DomainError('forbidden', `Its records are not yours to read: it needs ${measure.permission}.`, [{ path: `permission/${measure.permission}`, message: 'Not held.' }])
+  if (!holds(actor, measure.permission)) throw new DomainError('forbidden', 'Its records are not yours to read: it needs the right to see the list they come from.', [{ path: `permission/${measure.permission}`, message: 'Not held.' }])
   if (measure.grain && !heldGrains(actor).has(measure.grain)) throw new DomainError('forbidden', `Its amounts need the ${measure.grain} rights.`, [{ path: `grain/${measure.grain}`, message: 'Not held.' }])
 }
 

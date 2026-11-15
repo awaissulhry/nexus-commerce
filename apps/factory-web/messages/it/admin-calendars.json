@@ -101,7 +101,7 @@
       "conflict": "Alcuni giorni sono già impostati."
     },
     "problem": {
-      "wholeCompany": "Per gestire il calendario della società serve calendars.manage su tutti gli stabilimenti della società: il tuo diritto ne raggiunge solo alcuni."
+      "wholeCompany": "Per gestire il calendario della società serve il permesso di cambiare i calendari su tutti gli stabilimenti della società: il tuo diritto ne raggiunge solo alcuni."
     },
     "done": {
       "created": "Il calendario della società è impostato: dal lunedì al venerdì, un turno. Ora aggiungi le festività.",

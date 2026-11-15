@@ -58,7 +58,7 @@ vi.mock('@nexus/ui/components', async (original) => {
 const NAMESPACES = [...new Set([...Object.keys(en), ...Object.keys(enNcr)])].filter((name) => /^[a-zA-Z]+$/.test(name))
 const LEFT_KEY = new RegExp(`\\b(?:${NAMESPACES.join('|')})\\.[a-zA-Z_]+(?:\\.[a-zA-Z_]+)*\\b`)
 const LEFT_PLACEHOLDER = /\{[a-zA-Z]+\}/
-/** Permission names are said on purpose ("needs quality.ncr.approve"); file names and the zone are data. */
+/** Permission names are stripped before the key check, though no screen says one since B-W2b-F51; file names and the zone are data. */
 const SAID = /\b(?:quality|inventory|production|purchasing|sales|files|tasks|compliance|threads)\.[a-zA-Z.]+|[\w-]+\.jpg|Europe\/Rome/g
 
 function render(model: unknown, locale: (typeof LOCALES)[number]): string {

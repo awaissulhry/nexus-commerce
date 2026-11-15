@@ -29,7 +29,7 @@ import type { Client } from './store'
 const CODE_SELECT = { id: true, companyId: true, code: true, labelI18n: true, category: true, lulCode: true, paid: true, documentRequired: true, status: true, version: true } as const satisfies Prisma.AbsenceCodeSelect
 type CodeRow = Prisma.AbsenceCodeGetPayload<{ select: typeof CODE_SELECT }>
 
-const SETTINGS_WORDS = 'Absence codes are kept by a role with people.attendance.settings.'
+const SETTINGS_WORDS = 'Absence codes are kept by a role with the right to keep the attendance settings.'
 
 const mayRead = (context: OfficeContext, row: { companyId: string | null }) => can(actorOf(context), PEOPLE_ATTENDANCE_VIEW, row.companyId ? { companyId: row.companyId } : {}) || can(actorOf(context), PEOPLE_ATTENDANCE_SETTINGS, row.companyId ? { companyId: row.companyId } : {})
 

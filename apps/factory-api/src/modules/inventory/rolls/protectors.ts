@@ -253,7 +253,7 @@ export async function withdrawProtector(caller: CommandCaller, rowId: string, bo
   const row = isUuid(rowId) ? await caller.withClient((client) => client.garmentProtectorLot.findUnique({ where: { id: rowId }, select: { ...ROW_SELECT, workOrder: { select: { companyId: true } } } })) : null
   const scope = row ? { companyId: row.workOrder.companyId, siteId: row.siteId } : null
   if (!row || !scope || !(mayAt(context, WORKORDERS_VIEW, scope) || mayAt(context, INVENTORY_PROTECTORS_RECORD, scope))) throw new NotFoundError('Protector record not found.')
-  if (!mayAt(context, INVENTORY_PROTECTORS_RECORD, scope)) throw new ForbiddenError("This needs inventory.protectors.record at the work order's site.")
+  if (!mayAt(context, INVENTORY_PROTECTORS_RECORD, scope)) throw new ForbiddenError("This needs the right to record protectors at the work order's site.")
   const reason = body.reason.trim()
   const { result } = await command(caller, { name: 'inventory.withdrawProtectorLot', idempotencyKey, input: { rowId, ...body }, record: { type: 'GarmentProtectorLot', id: row.id, expectedVersion: body.version } }, async (tools) => {
     const { tx, now } = tools

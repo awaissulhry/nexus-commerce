@@ -357,7 +357,7 @@ export const leadPinWrong = (): CutRefusal => ({ code: 'LEAD_PIN_WRONG', message
 /** Why a lead's "Cut anyway" is refused (the PIN was checked first, by the API), or null. */
 export function cutOverrideRefusal(facts: { readonly leadId: string; readonly cutterId: string; readonly mayOverride: boolean; readonly reasonCode: CutOverrideReasonCode; readonly note: string | null }): CutRefusal | null {
   if (facts.leadId === facts.cutterId) return { code: 'LEAD_IS_CUTTER', message: 'The lead who lets a hide be cut anyway is another person than the cutter (four eyes). Ask another lead to sign.' }
-  if (!facts.mayOverride) return { code: 'NOT_A_LEAD', message: 'This person may not let a hide be cut anyway (production.cut.override). Ask a lead of this site to sign.' }
+  if (!facts.mayOverride) return { code: 'NOT_A_LEAD', message: 'This person may not let a hide be cut anyway. Ask a lead of this site to sign.' }
   const tile = CUT_OVERRIDE_REASONS.find((reason) => reason.code === facts.reasonCode)
   if (tile?.needsNote && !facts.note) return { code: 'LEAD_NOTE_MISSING', message: 'With "Other" the lead says why in a few words, then signs again.' }
   return null

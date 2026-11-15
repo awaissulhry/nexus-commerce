@@ -46,7 +46,7 @@ async function visibleUnplanned(caller: CommandCaller, receiptId: string) {
 }
 
 function deciding(context: OfficeContext, receipt: Pick<UnplannedRow, 'companyId' | 'siteId'>) {
-  if (!can(actorOf(context), INVENTORY_UNPLANNED_DECIDE, { companyId: receipt.companyId, siteId: receipt.siteId })) throw new ForbiddenError(`Deciding on goods without a PO needs ${INVENTORY_UNPLANNED_DECIDE} over the company.`)
+  if (!can(actorOf(context), INVENTORY_UNPLANNED_DECIDE, { companyId: receipt.companyId, siteId: receipt.siteId })) throw new ForbiddenError('Deciding on goods without a PO needs the right to decide them over the company.')
 }
 
 /** The supplier's orders at the site that take goods now, with their open lines. */

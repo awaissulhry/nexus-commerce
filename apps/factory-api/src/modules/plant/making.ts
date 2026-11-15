@@ -31,7 +31,7 @@ export async function checkAssignee(tx: CommandTx, tenantId: string, machine: { 
     const user = await tx.user.findFirst({ where: { id: assigneeId, status: 'ACTIVE' }, select: { id: true } })
     const grants = user ? sessionGrants({ requireMfa: false }, await heldRoles(tx, assigneeId, now), true) : []
     if (!user || !can({ audience: 'office', tenantId, grants }, PLANT_JOBS_WORK, machine)) {
-      throw bodyIssue('assigneeId', "Not a technician of the machine's site: the person needs a role that works maintenance jobs there (plant.jobs.work).")
+      throw bodyIssue('assigneeId', "Not a technician of the machine's site: the person needs a role that works maintenance jobs there.")
     }
   }
   if (assigneeWorkerId) {

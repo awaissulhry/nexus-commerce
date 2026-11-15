@@ -1,7 +1,7 @@
 {
   "noAccess": {
     "title": "You don't have access to receivables",
-    "body": "Receivables & credit needs the permission {permission}. Ask a person who manages roles."
+    "body": "Receivables & credit needs the right “{right}”. Ask a person who manages roles."
   },
   "band": {
     "label": "Day and actions",
@@ -32,7 +32,7 @@
     "overdueHint": "Past the due date",
     "bucketHint": "Days past the due date",
     "priceHint": "Amounts need the price grain",
-    "noPrice": "Amounts are not shown: they need the permission {permission}. The counts and dates stay.",
+    "noPrice": "Amounts are not shown: they need the right “{right}”. The counts and dates stay.",
     "customers_one": "{count} customer",
     "customers_other": "{count} customers",
     "invoices_one": "{count} invoice open",
@@ -240,7 +240,7 @@
     "levelLabel": "Level",
     "actionLabel": "Action",
     "textTitle": "Text in the customer's language",
-    "textNoPrice": "The text names amounts: it needs the permission {permission}.",
+    "textNoPrice": "The text names amounts: it needs the right “{right}”.",
     "callText": "A call: say what was agreed when you record it.",
     "history": "Who did what",
     "prepared": "Prepared",
@@ -297,7 +297,7 @@
     "from": "From",
     "to": "To",
     "otherCurrencies": "Also in",
-    "noPrice": "Amounts are not shown: they need the permission {permission}.",
+    "noPrice": "Amounts are not shown: they need the right “{right}”.",
     "bridge": "Opening, movements, closing",
     "opening": "Opening balance on {date}",
     "invoiced": "Invoices",
@@ -349,12 +349,12 @@
     "noneBody": "Open a customer's statement on Receivables & credit and press Print."
   },
   "held": {
-    "price": "Needs the price grain ({permission}).",
+    "price": "Needs the right “{right}”.",
     "pickToPrint": "Choose the customers in the table first.",
     "printMax": "At most {count} statements at once.",
-    "approve": "Needs the permission {permission}.",
-    "manage": "Needs the permission {permission}.",
-    "sendStatements": "Needs the permission {permission}.",
+    "approve": "Needs the right “{right}”.",
+    "manage": "Needs the right “{right}”.",
+    "sendStatements": "Needs the right “{right}”.",
     "notPrepared": "Only a reminder that waits for approval.",
     "notApproved": "Approve it first.",
     "switchedOff": "Reminders are switched off for this company: it waits, approved.",

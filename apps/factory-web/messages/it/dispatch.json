@@ -160,7 +160,7 @@
   "held": {
     "draft": "Una bozza non si assegna: prima rilascia l'ordine di produzione.",
     "workCentre": "{station} non fa il lavoro di questa operazione.",
-    "readOnly": "Puoi guardare questo tabellone, non cambiarlo (production.dispatch.manage).",
+    "readOnly": "Puoi guardare questo tabellone, non cambiarlo.",
     "past": "Un giorno passato resta com'era.",
     "offline": "Offline: non si può spostare nulla finché la connessione non torna.",
     "noBundles": "Questa scheda non ha mazzi da scegliere.",

@@ -18,6 +18,8 @@ import { CREDIT_NAMESPACE, heldPhrases, usedTone, type CreditCan } from '../mode
 import { ChangeLimitDialog, type ChangeState } from './ChangeLimitDialog'
 import { UsedMeter } from './UsedMeter'
 import '../credit.css'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../../../lib/i18n/rights'
 
 /** SCR-151 sec:credit — Credit limits' view model (the view draws it and fetches nothing). */
 export interface CreditLimitsModel {
@@ -89,7 +91,7 @@ function CreditSection({ model, actions }: { model: CreditLimitsModel; actions?:
   const selected = model.selected ? [...model.selected] : selectedOwn
   const can = model.can
   const rows = model.rows
-  const changeHeld = !can.change ? t('held.change', { permission: 'sales.credit.limits' }) : model.busy ? t('held.busy') : null
+  const changeHeld = !can.change ? t('held.change', { right: rightRef('sales.credit.limits') }) : model.busy ? t('held.busy') : null
 
   const columns = useMemo<ColDef<LimitRow>[]>(() => {
     const CustomerCell = ({ data }: ICellRendererParams<LimitRow>) =>
@@ -155,7 +157,7 @@ function CreditSection({ model, actions }: { model: CreditLimitsModel; actions?:
     }
     const ChangeCell = ({ data }: ICellRendererParams<LimitRow>) =>
       data ? (
-        <Button size="sm" heldReason={!data.mayChange ? t('held.change', { permission: 'sales.credit.limits' }) : changeHeld} aria-label={`${t('action.change')} · ${data.party.name}`} onClick={() => actions?.onOpenChange?.(data)}>
+        <Button size="sm" heldReason={!data.mayChange ? t('held.change', { right: rightRef('sales.credit.limits') }) : changeHeld} aria-label={`${t('action.change')} · ${data.party.name}`} onClick={() => actions?.onOpenChange?.(data)}>
           <Pencil size={13} aria-hidden /> {t('action.change')}
         </Button>
       ) : null
@@ -180,7 +182,7 @@ function CreditSection({ model, actions }: { model: CreditLimitsModel; actions?:
         <h2 id="fw-frc-title" className="fw-frv-h2">
           {t('title')}
         </h2>
-        <EmptyState title={t('noAccess.title')} description={t('noAccess.body', { permission: 'sales.credit.view' })} />
+        <EmptyState title={t('noAccess.title')} description={t('noAccess.body', { right: rightRef('sales.credit.view') })} />
       </section>
     )
   }
@@ -262,7 +264,7 @@ function CreditSection({ model, actions }: { model: CreditLimitsModel; actions?:
       </div>
       <p className="fw-frv-muted">{t('hint')}</p>
       <p className="fw-frv-muted">{t('rules')}</p>
-      {!can.price && <p className="fw-frv-muted">{t('noPrice', { permission: 'money.price' })}</p>}
+      {!can.price && <p className="fw-frv-muted">{t('noPrice', { right: rightRef('money.price') })}</p>}
       {model.notice && (
         <Banner tone={model.notice.tone} title={t(model.notice.key, model.notice.params)} onDismiss={() => actions?.onDismissNotice?.()}>
           {null}

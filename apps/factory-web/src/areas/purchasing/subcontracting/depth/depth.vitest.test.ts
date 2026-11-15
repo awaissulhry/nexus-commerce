@@ -51,6 +51,7 @@ import {
   workshopAgeing,
   softLocked,
 } from './model'
+import { rightRef } from '../../../../lib/i18n/rights'
 
 /**
  * Subcontracting in depth on screen (B-W2b-344): the pure rules of the written terms link, the Material balance and Cost
@@ -68,7 +69,7 @@ describe('the written terms link (SCM-049)', () => {
     expect(termsGap(termsOf('none'))).toEqual({ kind: 'none' })
     expect(termsGap(termsOf('otherDays'))).toEqual({ kind: 'otherDays' })
     expect(downloadHeld(termsOf('covered'), { files: true })).toBeNull()
-    expect(downloadHeld(termsOf('covered'), { files: false })).toEqual({ key: 'held.permission', params: { permission: 'files.read' } })
+    expect(downloadHeld(termsOf('covered'), { files: false })).toEqual({ key: 'held.permission', params: { right: rightRef('files.read') } })
     expect(downloadHeld(termsOf('noFile'), { files: true })?.key).toBe('terms.held.noFile')
     const quarantined = termsOf('covered')
     expect(downloadHeld({ covering: { ...quarantined.covering!, file: { ...quarantined.covering!.file!, status: 'QUARANTINED' } } }, { files: true })?.key).toBe('terms.held.notReady')
@@ -106,7 +107,7 @@ describe('the material balance (SCM-143, SCM-144)', () => {
   })
 
   it('holds the declaration and the adjustment with why: the permission, nothing sent, nothing open, not declared yet', () => {
-    expect(declareHeld(BALANCE_PARTLY, planner)).toEqual({ key: 'held.permission', params: { permission: 'purchasing.subcontract.balance' } })
+    expect(declareHeld(BALANCE_PARTLY, planner)).toEqual({ key: 'held.permission', params: { right: rightRef('purchasing.subcontract.balance') } })
     expect(declareHeld(BALANCE_NOTHING_SENT, warehouse)?.key).toBe('balance.held.nothingSent')
     expect(declareHeld(BALANCE_PARTLY, warehouse)).toBeNull()
     expect(declareHeld({ ...BALANCE_BACK, lines: BALANCE_BACK.lines.map((line) => ({ ...line, open: '0.0000' })) }, warehouse)?.key).toBe('balance.held.nothingOpen')
@@ -194,8 +195,8 @@ describe('the cost on the work order (SCM-146)', () => {
 
   it('holds a charge and a take-back with why: the permission, the grain, a draft, taken back, a reversal', () => {
     expect(bookHeld(COST, buyer)).toBeNull()
-    expect(bookHeld(COST, warehouse)).toEqual({ key: 'held.permission', params: { permission: 'purchasing.subcontract.cost' } })
-    expect(bookHeld(COST, { costBook: true, cost: false })).toEqual({ key: 'held.permission', params: { permission: 'money.cost' } })
+    expect(bookHeld(COST, warehouse)).toEqual({ key: 'held.permission', params: { right: rightRef('purchasing.subcontract.cost') } })
+    expect(bookHeld(COST, { costBook: true, cost: false })).toEqual({ key: 'held.permission', params: { right: rightRef('money.cost') } })
     expect(bookHeld(COST_DRAFT, buyer)?.key).toBe('cost.held.draft')
     expect(reverseHeld(COST, COST.entries[1]!, buyer)).toBeNull()
     expect(reverseHeld(COST, COST.entries[2]!, buyer)?.key).toBe('cost.held.takenBack')

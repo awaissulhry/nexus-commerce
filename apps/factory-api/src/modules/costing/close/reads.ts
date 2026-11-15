@@ -73,7 +73,7 @@ export async function closeCheck(caller: CommandCaller, workOrderId: string): Pr
     const words = completed
       ? `${beyondWords(beyond, tolerancePct)} ${settleWords}`
       : live
-        ? `Closed at ${live.closedAt}${live.settled ? ', its cost settled' : ''}. ${live.can.undo ? `The person who closed it may undo it for ${UNDO_SECONDS} seconds after the close; ` : ''}reopening it needs workorders.reopen and a reason.${afterClose && afterClose.count > 0 ? ` ${afterClose.words}` : ''}`
+        ? `Closed at ${live.closedAt}${live.settled ? ', its cost settled' : ''}. ${live.can.undo ? `The person who closed it may undo it for ${UNDO_SECONDS} seconds after the close; ` : ''}reopening it needs the right to reopen work orders, and a reason.${afterClose && afterClose.count > 0 ? ` ${afterClose.words}` : ''}`
         : `Work order ${header.number} is ${header.status}: a work order is closed once it is COMPLETED.`
     return {
       workOrder: { id: header.id, number: header.number, status: header.status, version: header.version, companyId: header.companyId, siteId: header.siteId },

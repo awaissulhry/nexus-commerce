@@ -63,7 +63,7 @@ export const VERSION_REFUSAL_WORDS: Readonly<Record<VersionRefusal, string>> = O
   LEFT_OUT: 'The components left inputs out when this version was written: write them again once they are there, or type lines for them and say they cover what was left out.',
   SEASON_CLOSED: 'The season of this version is closed: a version is made and approved for an open season (or none).',
   OWN_SHEET: 'Nobody approves a cost sheet they made: someone else in the office approves it.',
-  NO_APPROVER: 'No office role approves cost sheets: give a role costing.sheets.approve and approvals.decide (Admin › Roles), or switch on an approval rule for cost sheets.',
+  NO_APPROVER: 'No office role approves cost sheets: give a role the right to approve cost sheets and the right to decide approvals (Admin › Roles), or switch on an approval rule for cost sheets.',
   OTHER_SERIES: 'A new version is copied from a version of the same style, company and season.',
   OTHER_REVISION: 'A copy keeps the revision of the version it copies: for another revision, write the new version from its components.',
   COPIED_FROM: 'A later version was copied from this draft: it stays.',

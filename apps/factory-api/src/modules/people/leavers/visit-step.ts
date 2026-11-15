@@ -65,7 +65,7 @@ export async function markExitVisit(caller: CommandCaller, caseId: string, stepI
   const context = officeOf(caller)
   const { leaver } = await leaverRecord(caller, caseId)
   const place = { companyId: leaver.employee.companyId, siteId: leaver.employee.site.id }
-  assertMayWrite(context, PEOPLE_LEAVERS_MANAGE, place, 'Leaver steps are kept by a role that keeps them (people.leavers.manage).')
+  assertMayWrite(context, PEOPLE_LEAVERS_MANAGE, place, 'Leaver steps are kept by a role that keeps them.')
   assertHealth(context, SAFETY_HEALTH_VIEW, place, VIEW_WORDS)
   const step = leaver.steps.find((entry) => entry.id === stepId)
   if (!step) throw new NotFoundError('Leaver step not found.')

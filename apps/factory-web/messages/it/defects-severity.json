@@ -4,7 +4,7 @@
   },
   "edit": "Modifica le parole",
   "held": {
-    "noManage": "Per cambiare le parole serve quality.defects.manage su tutte le aziende.",
+    "noManage": "Per cambiare le parole serve il permesso di gestire la libreria dei difetti su tutte le aziende.",
     "reading": "Le parole sono ancora in lettura."
   },
   "col": {

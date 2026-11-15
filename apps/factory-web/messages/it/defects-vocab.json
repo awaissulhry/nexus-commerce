@@ -54,7 +54,7 @@
     "records_other": "{count} record"
   },
   "held": {
-    "noManage": "Per cambiare il vocabolario serve quality.defects.manage su tutte le aziende.",
+    "noManage": "Per cambiare il vocabolario serve il permesso di gestire la libreria dei difetti su tutte le aziende.",
     "busy": "Attendi: l’ultima modifica è ancora in salvataggio.",
     "pickRows": "Spunta prima i codici.",
     "allActive": "Tutti i codici spuntati sono già attivi.",
@@ -184,7 +184,7 @@
     "process": "Scegli il processo che ne risponde.",
     "language": "Queste parole non vanno bene per quella lingua.",
     "invalid": "La modifica è stata rifiutata così com’è.",
-    "forbidden": "Non puoi cambiare il vocabolario (quality.defects.manage su tutte le aziende).",
+    "forbidden": "Non puoi cambiare il vocabolario: si gestisce su tutte le aziende.",
     "gone": "Questo codice non c’è più.",
     "offline": "Nessuna risposta dal server: non sappiamo se è stato salvato. Riprova."
   }

@@ -9,6 +9,8 @@ import { TIME_ZONE } from '../../../_shared/model'
 import { dayText, minutesText, rateText } from '../../model'
 import type { Read } from '../../view-model'
 import { PieceMessages, ReadBlock, usePieceWords } from '../../view/parts'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../../../lib/i18n/rights'
 
 export interface SheetTable {
   key: string
@@ -47,7 +49,7 @@ export function RateSheetView({ model }: { model: RateSheetModel }) {
 function Sheet({ model }: { model: RateSheetModel }) {
   const t = usePieceWords()
   const locale = useLocale()
-  if (!model.allowed) return <EmptyState title={t('sheet.noRight')} description={t('sheet.noRightBody', { permission: 'money.pay' })} />
+  if (!model.allowed) return <EmptyState title={t('sheet.noRight')} description={t('sheet.noRightBody', { right: rightRef('money.pay') })} />
   return (
     <div className="fw-pr8-sheet">
       <div className="fw-pp-head">

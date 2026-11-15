@@ -224,9 +224,10 @@ describe('every design case draws in both languages with no key left on screen',
     }
   }
 
-  it('sales sees no declaration: the permission is named', () => {
+  it('sales sees no declaration: the missing right is said in words, never its code', () => {
     const html = render(declarationsScreen as DesignScreen<unknown>, declarationsScreen.cases.find((item) => item.id === 'no-permission')!.model, 'en')
-    expect(html).toContain('compliance.certificates.view')
+    expect(html).toContain('the right to read compliance')
+    expect(html).not.toContain('compliance.certificates.view')
     expect(html).not.toContain('DEMO-SD-0001')
   })
 

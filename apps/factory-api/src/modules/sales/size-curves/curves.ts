@@ -33,7 +33,7 @@ const mayRead = (context: OfficeContext, curve: Pick<CurveRow, 'companyId'>): bo
 function assertMayKeep(context: OfficeContext, companyId: string | null): void {
   const actor = actorOf(context)
   if (companyId !== null ? can(actor, QUOTES_TEMPLATES_MANAGE, { companyId }) : grantsFor(actor, QUOTES_TEMPLATES_MANAGE).some((grant) => grant.companies === 'all')) return
-  throw new ForbiddenError(companyId === null ? 'A size curve of every company is kept only with quotes.templates.manage over every company.' : 'Keeping this size curve needs quotes.templates.manage for its company.')
+  throw new ForbiddenError(companyId === null ? 'A size curve of every company is kept only with the right to keep quote templates over every company.' : 'Keeping this size curve needs the right to keep quote templates for its company.')
 }
 
 const invalid = (issues: readonly Issue[], fallback = 'The size curve cannot be saved.'): ValidationError => new ValidationError(issues.length === 1 ? issues[0]!.message : fallback, [...issues])

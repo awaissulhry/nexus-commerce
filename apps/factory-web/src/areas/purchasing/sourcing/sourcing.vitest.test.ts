@@ -149,7 +149,7 @@ const NAMESPACE = 'purchasing-sourcing'
 const TOP = [...new Set(Object.keys(CATALOGUE.en[NAMESPACE] ?? {}).map((key) => key.split('.')[0]!.replace(/_(one|other)$/, '')))].filter((key) => !['status', 'what', 'project', 'items'].includes(key))
 const LEFT_KEY = new RegExp(`\\b(?:${TOP.join('|')})\\.[a-zA-Z_-]+(?:\\.[a-zA-Z_-]+)*\\b`)
 const LEFT_PLACEHOLDER = /\{[a-zA-Z]+\}/
-/** Permission names are said on purpose ("purchasing.manage"). */
+/** Permission names are stripped before the key check, though no screen says one since B-W2b-F51. */
 const SAID = /\b(?:purchasing\.[a-zA-Z.]+)\b/g
 
 function render(screen: DesignScreen<unknown>, model: unknown, locale: (typeof LOCALES)[number]): string {

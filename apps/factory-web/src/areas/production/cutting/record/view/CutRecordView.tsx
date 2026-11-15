@@ -49,6 +49,8 @@ import { AllocateHidesDialog, say, type AllocModel } from '../../view/CutDialogs
 import type { CuttingActions } from '../../view/CuttingView'
 import '../../cutting.css'
 import '../../../_shared/production.css'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../../../lib/i18n/rights'
 
 export type CutDialog = { readonly kind: 'recut'; readonly id: string } | { readonly kind: 'reprint'; readonly id: string } | { readonly kind: 'void'; readonly id: string }
 
@@ -126,7 +128,7 @@ function Record({ model, actions }: { model: CutRecordModel; actions?: CutRecord
             <EmptyState
               icon={missing || loaded.status === 'forbidden' ? <ShieldOff size={24} aria-hidden /> : <FileX size={24} aria-hidden />}
               title={missing ? t('record.state.forbidden.title') : t(`record.state.${loaded.status === 'ready' ? 'missing' : loaded.status}.title`)}
-              description={missing ? t('page.noAccess.body', { permission: missing }) : loaded.status === 'error' ? t(loaded.problem ?? 'problem.read') : t(`record.state.${loaded.status === 'ready' ? 'missing' : loaded.status}.body`)}
+              description={missing ? t('page.noAccess.body', { right: rightRef(missing) }) : loaded.status === 'error' ? t(loaded.problem ?? 'problem.read') : t(`record.state.${loaded.status === 'ready' ? 'missing' : loaded.status}.body`)}
               action={
                 loaded.status === 'error' && !missing ? (
                   <Button size="sm" onClick={() => actions?.onRetry?.()}>
@@ -351,7 +353,7 @@ function LayTab({ model, actions }: { model: CutRecordModel; actions?: CutRecord
             </Button>
           </div>
           {!model.can.stock ? (
-            <p className="fw-ct-hint">{t('page.noAccess.body', { permission: 'inventory.stock.view' })}</p>
+            <p className="fw-ct-hint">{t('page.noAccess.body', { right: rightRef('inventory.stock.view') })}</p>
           ) : model.allocated.problem ? (
             <p className="fw-ct-hint">{t(model.allocated.problem)}</p>
           ) : !allocated ? (
@@ -486,7 +488,7 @@ function PiecesTab({ model, actions }: { model: CutRecordModel; actions?: CutRec
       <Card padded className="fw-ct-card">
         <h2 className="fw-ct-h2">{t('recuts.title')}</h2>
         {!model.can.scrap ? (
-          <p className="fw-ct-hint">{t('page.noAccess.body', { permission: 'production.scrap.view' })}</p>
+          <p className="fw-ct-hint">{t('page.noAccess.body', { right: rightRef('production.scrap.view') })}</p>
         ) : model.recuts.problem ? (
           <EmptyState title={t('part.failed', { part: t('recuts.title') })} description={t(model.recuts.problem)} action={<Button size="sm" onClick={() => actions?.onRetryPart?.('recuts')}>{t('common.retry')}</Button>} />
         ) : !model.recuts.value ? (

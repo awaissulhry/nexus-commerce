@@ -5,9 +5,9 @@
   "wording": "The wording of the credit rule on documents waits for the accountant's word; these are the defaults.",
   "noAccess": {
     "title": "Credit limits",
-    "body": "Credit limits need the permission {permission}. Ask a person who manages roles."
+    "body": "Credit limits need the right “{right}”. Ask a person who manages roles."
   },
-  "noPrice": "Amounts need the price grain ({permission}): the list shows who has a limit and what waits.",
+  "noPrice": "Amounts need the right “{right}”: the list shows who has a limit and what waits.",
   "view": {
     "label": "Show",
     "ALL": "All",
@@ -68,8 +68,8 @@
     "add": "Set a limit"
   },
   "held": {
-    "change": "Changing a credit limit needs {permission}.",
-    "price": "Amounts need the price grain ({permission}).",
+    "change": "Changing a credit limit needs the right “{right}”.",
+    "price": "Amounts need the right “{right}”.",
     "busy": "Saving…",
     "pickToExport": "Choose the customers to export."
   },

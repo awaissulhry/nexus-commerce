@@ -139,7 +139,7 @@ export async function doneTask(caller: CommandCaller, taskId: string, body: Done
   const context = floorOf(caller)
   const row = await taskFor(caller, context, taskId)
   const act = TASK_ACTS[row.kind as TaskKind]
-  if (!can(actorOf(context), act.permission, { companyId: row.companyId, siteId: row.siteId })) throw new ForbiddenError(`This task needs ${act.permission} at the site.`)
+  if (!can(actorOf(context), act.permission, { companyId: row.companyId, siteId: row.siteId })) throw new ForbiddenError('This task needs a right your role does not hold at the site.')
   if (row.kind === 'QUARANTINE' && !body.placeCode) refuseTask(doneByTapRefusal('QUARANTINE', null, { label: '', at: null }))
   const occurredAt = body.occurredAt ? (parseInstant(body.occurredAt) ?? undefined) : undefined
   const { result } = await command(

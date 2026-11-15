@@ -121,7 +121,7 @@ export async function visibleNcr(caller: CommandCaller, ncrId: string, permissio
   const context = officeOf(caller)
   const row = await caller.withClient((client) => readNcr(client, ncrId))
   if (!row || !may(context, QUALITY_NCR_VIEW, row)) throw new NotFoundError('NCR not found.')
-  if (permission && !may(context, permission, row)) throw new ForbiddenError(`This needs ${permission} at the NCR's site.`)
+  if (permission && !may(context, permission, row)) throw new ForbiddenError("This needs a right your role does not hold at the NCR's site.")
   return { context, row }
 }
 

@@ -56,7 +56,7 @@ import { employmentIssue, fullName, peopleFacts, planningFor, type PlannedCell, 
 type Client = FactoryClient | CommandTx
 type Value = CellValue | null
 
-const VIEW_WORDS = 'You read this roster; planning it needs people.shifts.manage, or people.shifts.team for the teams you lead.'
+const VIEW_WORDS = 'You read this roster; planning it needs the right to plan the roster, or to plan it for the teams you lead.'
 
 function rangeIssue(from: BusinessDate, to: BusinessDate, where: 'querystring' | 'body'): void {
   if (to < from) throw new ValidationError('The range ends before it starts.', [{ path: `${where}/to`, message: 'On or after the start.' }])

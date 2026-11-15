@@ -7,7 +7,7 @@
   },
   "noAccess": {
     "title": "Lo stato conformità non è nel tuo ruolo",
-    "body": "Chiedi all'amministratore la lettura del registro certificati (compliance.certificates.view)."
+    "body": "Chiedi all'amministratore la lettura del registro certificati."
   },
   "band": {
     "label": "Azioni dello stato conformità",

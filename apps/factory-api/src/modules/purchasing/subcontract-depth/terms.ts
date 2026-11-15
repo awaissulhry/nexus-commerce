@@ -108,7 +108,7 @@ async function agreementViews(db: Reader, context: OfficeContext, rows: readonly
     const facts = factsOf(row)
     const inForce = inForceOn(byPair.get(`${row.companyId}|${row.partyId}`) ?? [], day)
     const writer = may(context, PURCHASING_SUBCONTRACT_TERMS, row)
-    const noWriter = writer ? null : 'You may read these terms; writing them needs purchasing.subcontract.terms.'
+    const noWriter = writer ? null : 'You may read these terms; writing them needs the right to write subcontract terms.'
     const company = companies.get(row.companyId)
     const party = parties.get(row.partyId)
     const file = row.termsFileId ? files.get(row.termsFileId) : undefined

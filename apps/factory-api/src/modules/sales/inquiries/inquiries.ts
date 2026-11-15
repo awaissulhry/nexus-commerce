@@ -218,7 +218,7 @@ export const ASSIGNABLE_MAX = 500
 export async function inquiryAssignees(caller: CommandCaller, query: { readonly companyId: string; readonly partyId?: string | undefined }) {
   const context = officeOf(caller)
   const scope = { companyId: query.companyId, partyId: query.partyId ?? null }
-  if (!may(context, SALES_INQUIRIES_MANAGE, scope)) throw new ForbiddenError('Your role does not keep inquiries for this company or customer (sales.inquiries.manage).')
+  if (!may(context, SALES_INQUIRIES_MANAGE, scope)) throw new ForbiddenError('Your role does not keep inquiries for this company or customer.')
   const now = serverClock.now()
   return caller.withClient(async (db) => {
     const users = await db.user.findMany({ where: { status: 'ACTIVE', audience: 'OFFICE' }, orderBy: [{ displayName: 'asc' }, { id: 'asc' }], take: ASSIGNABLE_MAX, select: { id: true, displayName: true } })
@@ -346,7 +346,7 @@ export async function checkNew(caller: CommandCaller, context: OfficeContext, ma
     await checkedLines(db, made.companyId, made.lines)
     if (made.assigneeId && !(await mayKeep(db, context.tenantId, made.assigneeId, { companyId: made.companyId, partyId: made.partyId }, serverClock.now()))) badBody('assigneeId', ASSIGNEE_REFUSED)
   })
-  if (!may(context, SALES_INQUIRIES_MANAGE, { companyId: made.companyId, partyId: made.partyId })) throw new ForbiddenError('Your role does not keep inquiries for this company or customer (sales.inquiries.manage).')
+  if (!may(context, SALES_INQUIRIES_MANAGE, { companyId: made.companyId, partyId: made.partyId })) throw new ForbiddenError('Your role does not keep inquiries for this company or customer.')
 }
 
 /** Inside a command: the inquiry numbered INQ-…, its lines, its followers, its event. Returns its id. */
@@ -436,7 +436,7 @@ export async function lockForChange(tools: CommandTools, context: OfficeContext,
   await tools.tx.$queryRaw`SELECT id FROM "Inquiry" WHERE id = ${inquiryId}::uuid FOR UPDATE`
   const row = await readInquiryRow(tools.tx, inquiryId)
   if (!row || !may(context, SALES_INQUIRIES_VIEW, row)) throw new NotFoundError('Inquiry not found.')
-  if (!may(context, SALES_INQUIRIES_MANAGE, row)) throw new ForbiddenError('Your role does not keep inquiries for this company or customer (sales.inquiries.manage).')
+  if (!may(context, SALES_INQUIRIES_MANAGE, row)) throw new ForbiddenError('Your role does not keep inquiries for this company or customer.')
   if (row.version !== version) throw new StaleVersionError('Inquiry', inquiryId, row.version, version)
   return row
 }

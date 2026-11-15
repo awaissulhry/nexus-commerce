@@ -163,7 +163,7 @@ export async function createMachine(caller: CommandCaller, body: CreateBody, ide
   assertCostGrain(caller, body.purchaseCost !== undefined)
   const site = await caller.withClient((client) => client.site.findUnique({ where: { id: body.siteId }, select: { id: true, companyId: true, status: true } }))
   if (!site) throw bodyIssue('siteId', 'Not a site of the group.')
-  assertMayWrite(context, PLANT_MACHINES_MANAGE, { companyId: site.companyId, siteId: site.id }, 'Machines of this site are registered by a role that keeps them (plant.machines.manage).')
+  assertMayWrite(context, PLANT_MACHINES_MANAGE, { companyId: site.companyId, siteId: site.id }, 'Machines of this site are registered by a role that keeps them.')
   if (site.status !== 'ACTIVE') throw bodyIssue('siteId', 'This site is archived.')
   const assetNumber = normalAssetNumber(body.assetNumber)
   const id = newId()
@@ -216,7 +216,7 @@ export async function updateMachine(caller: CommandCaller, machineId: string, bo
   const known = isUuid(machineId) ? await caller.withClient((client) => readMachine(client, context, machineId)) : null
   if (!known) throw new NotFoundError('Machine not found.')
   assertMay(context, PLANT_VIEW, known, 'Machine')
-  assertMayWrite(context, PLANT_MACHINES_MANAGE, known, 'Machines of this site are changed by a role that keeps them (plant.machines.manage).')
+  assertMayWrite(context, PLANT_MACHINES_MANAGE, known, 'Machines of this site are changed by a role that keeps them.')
   const { result } = await command(caller, { name: 'plant.updateMachine', idempotencyKey, input: { machineId, ...body } }, async (tools) => {
     const { tx, now } = tools
     const machine = (await lockMachine(tx, context, machineId))!
@@ -254,7 +254,7 @@ export async function retireMachine(caller: CommandCaller, machineId: string, bo
   const known = isUuid(machineId) ? await caller.withClient((client) => readMachine(client, context, machineId)) : null
   if (!known) throw new NotFoundError('Machine not found.')
   assertMay(context, PLANT_VIEW, known, 'Machine')
-  assertMayWrite(context, PLANT_MACHINES_MANAGE, known, 'Machines of this site are retired by a role that keeps them (plant.machines.manage).')
+  assertMayWrite(context, PLANT_MACHINES_MANAGE, known, 'Machines of this site are retired by a role that keeps them.')
   const { result, replayed } = await command(caller, { name: 'plant.retireMachine', idempotencyKey, input: { machineId, ...body } }, async (tools) => {
     const { tx } = tools
     const machine = (await lockMachine(tx, context, machineId))!

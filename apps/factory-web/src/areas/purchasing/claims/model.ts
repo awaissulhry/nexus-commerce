@@ -27,6 +27,8 @@ import type {
   TransportBy,
   AnswerBody,
 } from './api'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../lib/i18n/rights'
 
 /**
  * Purchasing › Returns & claims (SCR-131; design purchasing.claims), the pure rules every part of the page shares: what
@@ -361,14 +363,14 @@ export const plain = (text: string): string => (text.includes('.') ? text.replac
 
 /** Why "Create return" is held, in words: the rights first, then the lot, what goes, the reason, the mail, the DDT. */
 export function returnHeld(draft: ReturnDraft, can: ClaimsCan): Words | null {
-  if (!can.manage) return words('held.permission', { permission: 'purchasing.claims.manage' })
-  if (!can.ret) return words('held.permission', { permission: 'purchasing.claims.return' })
-  if (!can.ddtIssue) return words('held.permission', { permission: 'shipping.ddt.issue' })
-  if (!can.stock) return words('held.permission', { permission: 'inventory.stock.view' })
+  if (!can.manage) return words('held.permission', { right: rightRef('purchasing.claims.manage') })
+  if (!can.ret) return words('held.permission', { right: rightRef('purchasing.claims.return') })
+  if (!can.ddtIssue) return words('held.permission', { right: rightRef('shipping.ddt.issue') })
+  if (!can.stock) return words('held.permission', { right: rightRef('inventory.stock.view') })
   const goods = goodsAndReasonHeld(draft)
   if (goods) return goods
   if (draft.mail) {
-    if (!can.parties) return words('held.permission', { permission: 'parties.view' })
+    if (!can.parties) return words('held.permission', { right: rightRef('parties.view') })
     if (!draft.contacts?.value) return words(draft.contacts?.problem ? 'ret.held.contactsFailed' : 'held.loading')
     if (draft.contactIds.length === 0) return words('ret.held.contact')
   }
@@ -377,8 +379,8 @@ export function returnHeld(draft: ReturnDraft, can: ClaimsCan): Words | null {
 
 /** B-W2b-14: why "Create claim" (New claim) is held: the rights, then the lot, what it is about, the reason. */
 export function newClaimHeld(draft: ReturnDraft, can: ClaimsCan): Words | null {
-  if (!can.manage) return words('held.permission', { permission: 'purchasing.claims.manage' })
-  if (!can.stock) return words('held.permission', { permission: 'inventory.stock.view' })
+  if (!can.manage) return words('held.permission', { right: rightRef('purchasing.claims.manage') })
+  if (!can.stock) return words('held.permission', { right: rightRef('inventory.stock.view') })
   return goodsAndReasonHeld(draft)
 }
 
@@ -580,9 +582,9 @@ const statusIn = (status: ClaimStatus) => `@statusIn.${status}`
  */
 export function actHeld(claim: Pick<Claim, 'status' | 'kind' | 'lines' | 'remedy' | 'number'>, act: ClaimAct, can: ClaimsCan): Words | null {
   if (act === 'returnGoods') {
-    if (!can.ret) return words('held.permission', { permission: 'purchasing.claims.return' })
-    if (!can.ddtIssue) return words('held.permission', { permission: 'shipping.ddt.issue' })
-  } else if (!can.manage) return words('held.permission', { permission: 'purchasing.claims.manage' })
+    if (!can.ret) return words('held.permission', { right: rightRef('purchasing.claims.return') })
+    if (!can.ddtIssue) return words('held.permission', { right: rightRef('shipping.ddt.issue') })
+  } else if (!can.manage) return words('held.permission', { right: rightRef('purchasing.claims.manage') })
   const status = claim.status
   switch (act) {
     case 'send':
@@ -670,7 +672,7 @@ export function changedFields(form: ClaimForm, claim: Claim, can: Pick<ClaimsCan
 
 /** Why Save is held (null: it may save). */
 export function formHeld(form: ClaimForm, claim: Claim, can: Pick<ClaimsCan, 'manage' | 'cost'>, reasons: readonly PickerReason[] | null): Words | null {
-  if (!can.manage) return words('held.permission', { permission: 'purchasing.claims.manage' })
+  if (!can.manage) return words('held.permission', { right: rightRef('purchasing.claims.manage') })
   const changed = changedFields(form, claim, can)
   if (changed.length === 0) return words('form.held.nothing')
   if ((changed.includes('reasonCode') || changed.includes('reasonNote')) && !form.reasonCode) return words('form.held.reason')
@@ -898,8 +900,8 @@ export const CLAIM_PHOTO_LIMIT = 20
 
 /** Why "Add a photo" is held: the rights, a settled claim, the limit (the API's photoProblems). */
 export function photoAddHeld(claim: Pick<Claim, 'status' | 'photos'>, can: ClaimsCan): Words | null {
-  if (!can.manage) return words('held.permission', { permission: 'purchasing.claims.manage' })
-  if (!can.upload) return words('held.permission', { permission: 'files.upload' })
+  if (!can.manage) return words('held.permission', { right: rightRef('purchasing.claims.manage') })
+  if (!can.upload) return words('held.permission', { right: rightRef('files.upload') })
   if (claim.status === 'CLOSED' || claim.status === 'CANCELLED') return words('photos.held.settled', { status: `@statusIn.${claim.status}` })
   if (claim.photos.length >= CLAIM_PHOTO_LIMIT) return words('photos.held.full', { max: CLAIM_PHOTO_LIMIT })
   return null
@@ -907,17 +909,17 @@ export function photoAddHeld(claim: Pick<Claim, 'status' | 'photos'>, can: Claim
 
 /** Why a photo's Remove is held: only a draft's, with files.delete. */
 export function photoRemoveHeld(claim: Pick<Claim, 'status'>, can: ClaimsCan): Words | null {
-  if (!can.manage) return words('held.permission', { permission: 'purchasing.claims.manage' })
-  if (!can.remove) return words('held.permission', { permission: 'files.delete' })
+  if (!can.manage) return words('held.permission', { right: rightRef('purchasing.claims.manage') })
+  if (!can.remove) return words('held.permission', { right: rightRef('files.delete') })
   if (claim.status !== 'DRAFT') return words('photos.held.sent')
   return null
 }
 
 /** Why "Keep a version" of the letter is held. */
-export const letterKeepHeld = (can: ClaimsCan): Words | null => (can.manage ? null : words('held.permission', { permission: 'purchasing.claims.manage' }))
+export const letterKeepHeld = (can: ClaimsCan): Words | null => (can.manage ? null : words('held.permission', { right: rightRef('purchasing.claims.manage') }))
 
 /** Why opening a stored photo or letter is held. */
-export const fileOpenHeld = (can: ClaimsCan): Words | null => (can.files ? null : words('held.permission', { permission: 'files.read' }))
+export const fileOpenHeld = (can: ClaimsCan): Words | null => (can.files ? null : words('held.permission', { right: rightRef('files.read') }))
 
 /** A photo or letter act refused, in our words. */
 export function evidenceRefusal(error: unknown): Words {

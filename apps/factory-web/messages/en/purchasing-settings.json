@@ -24,7 +24,7 @@
   },
   "noAccess": {
     "title": "Purchasing settings are not in your role",
-    "body": "Reading them needs the right to see purchasing (purchasing.view). An administrator gives it in Admin › Roles & permissions."
+    "body": "Reading them needs the right to see purchasing. An administrator gives it in Admin › Roles & permissions."
   },
   "card": {
     "neverChanged": "Never changed here.",
@@ -304,16 +304,16 @@
     "offline": "Offline: changes are kept on this page until the connection is back.",
     "offlineTitle": "Offline",
     "offlineBody": "This is the last copy read. Nothing can be saved until the connection is back.",
-    "noApprovalsView": "Reading the approval rules needs the right to see approvals (approvals.view).",
-    "noRulesManage": "Writing approval rules needs the right to keep them (approvals.rules.manage): the Owner or an administrator.",
-    "noToleranceRight": "Keeping delivery tolerances needs purchasing.tolerances.manage over this company.",
+    "noApprovalsView": "Reading the approval rules needs the right to see approvals.",
+    "noRulesManage": "Writing approval rules needs the right to keep them: the Owner or an administrator.",
+    "noToleranceRight": "Keeping delivery tolerances needs the right to keep them over this company.",
     "noToleranceRightAll": "Every company’s tolerances are kept only by a role over every company.",
     "noSwitch": "Only the Owner switches automatic reminders to suppliers on or off.",
     "noSwitchAll": "The reminders of every company are switched only by a role over every company.",
-    "noAlertsView": "Reading alert rules needs the right to see alerts (alerts.view).",
-    "noAlertsManage": "Writing alert rules needs alerts.rules.manage.",
-    "noPartiesView": "Choosing a supplier needs the right to see suppliers (parties.view): the rule is for every supplier.",
-    "noMaterialsView": "Choosing one material needs the right to see materials (product.materials.view): choose a kind instead.",
+    "noAlertsView": "Reading alert rules needs the right to see alerts.",
+    "noAlertsManage": "Your role cannot write alert rules.",
+    "noPartiesView": "Choosing a supplier needs the right to see suppliers: the rule is for every supplier.",
+    "noMaterialsView": "Choosing one material needs the right to see materials: choose a kind instead.",
     "noneActive": "None of the ticked rules is active, or you may not change them.",
     "noneArchived": "None of the ticked rules is archived, or you may not change them.",
     "nothingChanged": "Nothing changed yet."

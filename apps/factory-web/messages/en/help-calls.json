@@ -17,7 +17,7 @@
   "page": {
     "noAccess": {
       "title": "Your role may not see the help calls",
-      "body": "Your role does not include “production.calls.view”. Ask an administrator if you need this page."
+      "body": "Your role cannot see help calls. Ask an administrator if you need this page."
     },
     "editRouting": "Edit who is called (Floor rules & codes)",
     "more": "More actions",
@@ -37,18 +37,18 @@
     "medianHint": "From sent to seen, today's calls of the site: never a person's figure."
   },
   "held": {
-    "noAnswer": "Your role may not answer help calls (production.calls.answer).",
+    "noAnswer": "Your role may not answer help calls.",
     "busy": "Saving…",
     "loading": "Loading the call…",
     "ackNone": "Select the open calls nobody has seen yet.",
     "ackNothing": "None of the selected calls waits to be seen.",
     "solveNothing": "None of the selected calls is open.",
-    "noSettings": "Your role may not open Floor rules & codes (production.settings.view).",
+    "noSettings": "Your role may not open Floor rules & codes.",
     "closed": "This call is closed.",
     "seenAlready": "Someone has seen this call already.",
     "comingAlready": "Someone is on the way already.",
     "outcomeNamed": "What this call led to is named already.",
-    "noPlantJobs": "Opening a maintenance job needs plant.view and plant.jobs.manage.",
+    "noPlantJobs": "Opening a maintenance job needs the rights to see the plant and to plan maintenance jobs.",
     "code": "Pick one of the codes offered.",
     "noteLong": "Keep the words to 500 characters.",
     "reason": "Say why the call is cancelled.",

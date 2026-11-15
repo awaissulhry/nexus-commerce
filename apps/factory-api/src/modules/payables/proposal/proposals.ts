@@ -550,7 +550,7 @@ export async function recordProposalPaid(caller: CommandCaller, proposalId: stri
     const lines = await tools.tx.paymentProposalLine.findMany({ where: { proposalId }, select: LINE_COLUMNS })
     const invoices = await tools.tx.supplierInvoice.findMany({ where: { id: { in: lines.map((line) => line.supplierInvoiceId) } }, select: INVOICE_COLUMNS })
     const missing = invoices.filter((invoice) => !mayAt(context, PAYABLES_PAY, invoice.companyId, invoice.partyId))
-    if (missing.length > 0) throw new ForbiddenError(`Recording the payment of ${missing.map((invoice) => invoice.number).join(', ')} needs payables.pay over its supplier.`)
+    if (missing.length > 0) throw new ForbiddenError(`Recording the payment of ${missing.map((invoice) => invoice.number).join(', ')} needs the right to record supplier payments over its supplier.`)
     const early = invoices.filter((invoice) => input.paidOn < dayOf(invoice.issueDate)!)
     if (early.length > 0) throw new ValidationError('The payment is dated before an invoice.', early.map((invoice) => ({ path: 'body/paidOn', message: `Invoice ${invoice.number} was issued on ${dayOf(invoice.issueDate)}.` })))
     await honourPeriodLocks(

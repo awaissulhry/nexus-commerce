@@ -18,7 +18,7 @@ const contextOf = (caller: CommandCaller) => {
   return caller.factoryContext
 }
 
-const WORDS = 'Who looked at sensitive records is read by the administrators and the Owner only (audit.reads.view over every company).'
+const WORDS = 'Who looked at sensitive records is read only by the administrators and the Owner: it needs the right to see it over every company.'
 
 const READ_SELECT = { id: true, at: true, action: true, surface: true, userId: true, recordType: true, recordId: true } as const satisfies Prisma.ReadLogSelect
 

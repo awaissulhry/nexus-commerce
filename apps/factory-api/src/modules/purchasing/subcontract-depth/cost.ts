@@ -104,8 +104,8 @@ async function operationFacts(db: Reader, order: OrderRow) {
 }
 
 function heldToBook(context: OfficeContext, order: OrderRow): string | null {
-  if (!can(actorOf(context), PURCHASING_SUBCONTRACT_COST, { companyId: order.companyId, siteId: order.siteId, partyId: order.partyId })) return 'Booking a workshop charge needs purchasing.subcontract.cost.'
-  if (!seesCost(context)) return 'Booking a workshop charge needs the cost grain (money.cost).'
+  if (!can(actorOf(context), PURCHASING_SUBCONTRACT_COST, { companyId: order.companyId, siteId: order.siteId, partyId: order.partyId })) return 'Booking a workshop charge needs the right to book workshop charges.'
+  if (!seesCost(context)) return 'Booking a workshop charge needs the right to see costs.'
   if (!COSTED_STATUSES.includes(order.status as SubcontractOrderStatus)) return `The order is ${order.status === 'DRAFT' ? 'a draft' : 'cancelled'}: its work costs nothing (issue it first).`
   return null
 }
@@ -206,7 +206,7 @@ const blankToNull = (value: string | null | undefined): string | null => (value 
 /** POST /purchasing/subcontracting/orders/:subcontractOrderId/costs — a workshop charge, onto the work order's cost. */
 export async function bookCost(caller: CommandCaller, orderId: string, input: BookCostInput, idempotencyKey?: string) {
   const { context, order: seen } = await officeOrder(caller, orderId, PURCHASING_SUBCONTRACT_COST)
-  if (!seesCost(context)) throw new ForbiddenError('Booking a workshop charge needs the cost grain (money.cost).')
+  if (!seesCost(context)) throw new ForbiddenError('Booking a workshop charge needs the right to see costs.')
   const entryId = newId()
   const { result } = await inWords(() =>
     command(caller, { name: 'purchasing.subcontract.cost.book', idempotencyKey, input: { orderId, ...input }, record: { type: 'SubcontractOrder', id: orderId, expectedVersion: input.version } }, async (tools) => {
@@ -278,7 +278,7 @@ export interface ReverseCostInput {
 /** POST /purchasing/subcontracting/orders/:subcontractOrderId/costs/:entryId/reverse — taken back whole, with why. */
 export async function reverseCost(caller: CommandCaller, orderId: string, entryId: string, input: ReverseCostInput, idempotencyKey?: string) {
   const { context, order: seen } = await officeOrder(caller, orderId, PURCHASING_SUBCONTRACT_COST)
-  if (!seesCost(context)) throw new ForbiddenError('Taking back a workshop charge needs the cost grain (money.cost).')
+  if (!seesCost(context)) throw new ForbiddenError('Taking back a workshop charge needs the right to see costs.')
   const reversalId = newId()
   const { result } = await inWords(() =>
     command(caller, { name: 'purchasing.subcontract.cost.reverse', idempotencyKey, input: { orderId, entryId, ...input }, record: { type: 'SubcontractOrder', id: orderId, expectedVersion: input.version } }, async (tools) => {

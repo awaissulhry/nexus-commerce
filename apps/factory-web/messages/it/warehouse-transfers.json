@@ -15,7 +15,7 @@
   },
   "noAccess": {
     "title": "Non hai accesso ai trasferimenti",
-    "body": "Vedere i trasferimenti richiede inventory.stock.view (magazzino, acquisti, pianificazione, sola lettura); modificarli richiede inventory.transfers.manage (magazzino). Chiedi a un amministratore."
+    "body": "Vedere i trasferimenti richiede il permesso di vedere le giacenze (magazzino, acquisti, pianificazione, sola lettura); modificarli richiede il permesso di gestire i trasferimenti tra sedi (magazzino). Chiedi a un amministratore."
   },
   "list": {
     "intro": "Merce che si sposta tra le tue sedi, o verso un’altra azienda del gruppo, con il suo DDT. La merce in viaggio resta della sede di partenza finché non è ricevuta.",
@@ -181,8 +181,8 @@
     "NO_LOT_SERIES": "L’azienda di arrivo non ha una serie lotti: la imposta un amministratore nella numerazione.",
     "DDT_NOT_PRINTABLE": "Il DDT non si può stampare così: completa i dati legali e gli indirizzi delle aziende.",
     "NO_DDT": "Nessun DDT: si emette quando il trasferimento parte.",
-    "NO_RIGHT_FROM": "Lo fa solo il magazzino della sede di partenza (inventory.transfers.manage).",
-    "NO_RIGHT_TO": "Lo fa solo il magazzino della sede di arrivo (inventory.transfers.manage)."
+    "NO_RIGHT_FROM": "Lo fa solo il magazzino della sede di partenza.",
+    "NO_RIGHT_TO": "Lo fa solo il magazzino della sede di arrivo."
   },
   "problem": {
     "invalid": "Alcuni campi non vanno: vedi sotto.",
@@ -226,7 +226,7 @@
     "expectedBeforeShip": "L’arrivo previsto non è prima della spedizione.",
     "expectedPast": "L’arrivo previsto è oggi o dopo.",
     "moreThanInTransit": "Riga {seq}: più di quanto è in viaggio.",
-    "noManage": "Non hai il permesso di modificare i trasferimenti (inventory.transfers.manage).",
+    "noManage": "Non hai il permesso di modificare i trasferimenti.",
     "nothingChanged": "Nulla è cambiato.",
     "offline": "Non in linea: aspetta che torni la connessione.",
     "packages": "Colli: un numero intero da 1.",

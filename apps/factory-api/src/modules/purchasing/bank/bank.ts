@@ -82,7 +82,7 @@ function refusalOf(issues: readonly Issue[]): DomainError {
 /** The supplier as the caller may see its bank details: parties.view (else 404) and purchasing.bank.view (else 403). */
 async function bankSupplier(caller: CommandCaller, partyId: string): Promise<SupplierRow> {
   const row = await readSupplier(caller, partyId)
-  if (!can(actorOf(officeContextOf(caller)), PURCHASING_BANK_VIEW, { companyId: row.companyId, partyId: row.id })) throw new ForbiddenError("A supplier's bank details are finance's: you need purchasing.bank.view.")
+  if (!can(actorOf(officeContextOf(caller)), PURCHASING_BANK_VIEW, { companyId: row.companyId, partyId: row.id })) throw new ForbiddenError("A supplier's bank details are finance's: you need the right to see them.")
   return row
 }
 
@@ -126,8 +126,8 @@ export async function getBank(caller: CommandCaller, partyId: string) {
     const task = read.tasks.get(row.id) ?? null
     const waitingYes = task?.status === 'PENDING'
     const candidates = status === 'PROPOSED' && row.callBackAt === null ? callBackCandidates(read.onFile, row.proposedAt) : null
-    const callBackHeld = status !== 'PROPOSED' || row.callBackAt !== null ? BANK_REFUSALS.calledBack : !mays.callBack ? 'You need purchasing.bank.callBack.' : own ? BANK_REFUSALS.ownCallBack : null
-    const verifyHeld = !isOpen(status) ? BANK_REFUSALS.notOpen : row.callBackAt === null ? BANK_REFUSALS.notCalledBack : !mays.verify ? 'You need purchasing.bank.verify.' : own ? BANK_REFUSALS.ownCheck : waitingYes ? BANK_REFUSALS.waitingYes : null
+    const callBackHeld = status !== 'PROPOSED' || row.callBackAt !== null ? BANK_REFUSALS.calledBack : !mays.callBack ? 'You need the right to record the call-back of a bank change.' : own ? BANK_REFUSALS.ownCallBack : null
+    const verifyHeld = !isOpen(status) ? BANK_REFUSALS.notOpen : row.callBackAt === null ? BANK_REFUSALS.notCalledBack : !mays.verify ? 'You need the right to check a called-back bank change.' : own ? BANK_REFUSALS.ownCheck : waitingYes ? BANK_REFUSALS.waitingYes : null
     const view = accountView(row, read.names, onFileById)
     return {
       ...view,
@@ -343,7 +343,7 @@ export async function reveal(caller: CommandCaller, partyId: string, accountId: 
   notFound(accountId)
   const context = officeContextOf(caller)
   const supplier = await bankSupplier(caller, partyId)
-  if (!can(actorOf(context), PURCHASING_BANK_REVEAL, { companyId: supplier.companyId, partyId: supplier.id })) throw new ForbiddenError('Reading a full IBAN needs purchasing.bank.reveal.')
+  if (!can(actorOf(context), PURCHASING_BANK_REVEAL, { companyId: supplier.companyId, partyId: supplier.id })) throw new ForbiddenError('Reading a full IBAN needs the right to reveal full IBANs.')
   stepUp()
   await command(caller, { name: 'purchasing.bank.reveal', input: { partyId, accountId } }, async (tools) => {
     const account = await readAccount(tools.tx, accountId)

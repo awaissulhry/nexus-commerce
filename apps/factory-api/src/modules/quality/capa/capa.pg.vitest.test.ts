@@ -173,7 +173,7 @@ describe('escalate to CAPA and the record (QHS-087, QHS-093)', () => {
     await ok('quality', 'POST', `/quality/ncr/${cancelled.id}/cancel`, { version: cancelled.version, reason: 'A duplicate' })
     expect((await refused('quality', 'POST', `/quality/capa/${capaId}/sources`, { sources: [{ recordType: 'Nonconformance', recordId: cancelled.id }] }, 409)).issues[0].path).toBe('held/NCR_CANCELLED')
     const third = await raiseNcr('A third crack')
-    expect((await refused('noNcr', 'POST', `/quality/capa/${capaId}/sources`, { sources: [{ recordType: 'Nonconformance', recordId: third.id }] }, 403)).message).toMatch(/needs quality.ncr.manage/)
+    expect((await refused('noNcr', 'POST', `/quality/capa/${capaId}/sources`, { sources: [{ recordType: 'Nonconformance', recordId: third.id }] }, 403)).message).toMatch(/needs the right to follow up NCRs/)
     // Company B's people do not see company A's CAPAs.
     expect((await call('companyB', 'GET', `/quality/capa/${capaId}`)).status).toBe(404)
     expect((await ok('companyB', 'GET', '/quality/capa?view=all')).capas).toEqual([])

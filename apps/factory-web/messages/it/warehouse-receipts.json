@@ -216,12 +216,12 @@
   "held": {
     "busy": "In corso…",
     "loading": "Caricamento in corso…",
-    "noManage": "Il tuo ruolo non può registrare o chiudere difformità (inventory.discrepancies.manage).",
-    "noReport": "Il tuo ruolo non può inviare la segnalazione (inventory.discrepancies.report).",
-    "noUpload": "Il tuo ruolo non può caricare file (files.upload).",
-    "noReceive": "Il tuo ruolo non può ricevere merce (inventory.receive).",
-    "noClaims": "Il tuo ruolo non può preparare reclami ai fornitori (purchasing.claims.manage).",
-    "noImport": "Il tuo ruolo non può avviare importazioni (imports.run e files.upload).",
+    "noManage": "Il tuo ruolo non può registrare o chiudere difformità.",
+    "noReport": "Il tuo ruolo non può inviare la segnalazione.",
+    "noUpload": "Il tuo ruolo non può caricare file.",
+    "noReceive": "Il tuo ruolo non può ricevere merce.",
+    "noClaims": "Il tuo ruolo non può preparare reclami ai fornitori.",
+    "noImport": "Il tuo ruolo non può avviare importazioni.",
     "receiptClosed": "Un ricevimento stornato o annullato non accetta nuove difformità.",
     "receiptCancelled": "Un ricevimento annullato non accetta foto.",
     "kind": "Indica cosa non va: scegli il motivo o il tipo.",
@@ -252,7 +252,7 @@
     "contactsFailed": "Impossibile controllare la richiesta.",
     "pickDocument": "Scegli almeno un documento da richiedere.",
     "nothingWanted": "I lotti non attendono documenti e il DDT è registrato.",
-    "noRequest": "Il tuo ruolo non può chiedere documenti ai fornitori (inventory.receipts.documents.request).",
+    "noRequest": "Il tuo ruolo non può chiedere documenti ai fornitori.",
     "requestClosed": "Un ricevimento stornato o annullato non attende documenti."
   },
   "report": {

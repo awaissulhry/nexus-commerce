@@ -135,7 +135,7 @@ async function checkList(client: CommandTx, rows: readonly CheckRow[], companyId
   const allFresh = (issue: RowIssue) => answers.forEach((list, index) => (fresh[index] ? list.push(issue) : undefined))
   const problem = receivingProblem(facts.order.status as PurchaseOrderStatus)
   if (problem) allFresh({ column: 'order', message: `${facts.order.number}: ${problem}` })
-  if (!can(actor, INVENTORY_RECEIVE, { companyId: facts.order.companyId, siteId: facts.order.siteId })) allFresh({ column: 'order', message: `Receiving goods at the site of ${facts.order.number} needs inventory.receive there.` })
+  if (!can(actor, INVENTORY_RECEIVE, { companyId: facts.order.companyId, siteId: facts.order.siteId })) allFresh({ column: 'order', message: `Receiving goods at the site of ${facts.order.number} needs the right to receive goods there.` })
   // An order that receives nothing now (or not by this person): its lines are not judged.
   if (problem || answers.some((list) => list.some((issue) => issue.column === 'order'))) return answers
   // The place: the one named (a location of the order's site, active), else the site's one goods-in dock.

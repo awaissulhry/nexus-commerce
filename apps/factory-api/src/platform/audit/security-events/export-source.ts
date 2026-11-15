@@ -42,7 +42,7 @@ export const securityEventsExport = defineExportSource<SecurityEventsQuery, Secu
     }
   },
   refusal(actor) {
-    return actor.audience === 'office' && holdsEverywhere(actor.grants, SECURITY_EVENTS_VIEW) ? null : 'The security events are exported by the administrators and the Owner only (security.events.view over every company).'
+    return actor.audience === 'office' && holdsEverywhere(actor.grants, SECURITY_EVENTS_VIEW) ? null : 'The security events are exported only by the administrators and the Owner: it needs the right to see them over every company.'
   },
   async read(caller, query, cursor, limit) {
     const where = securityEventsWhere(query)

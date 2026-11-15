@@ -42,8 +42,8 @@ export function RoutingEditor({ site, companyId, people, offstd }: { site: { id:
     if (!siteId) return
     const [answer, siteTeams, offCodes, reasons] = await Promise.allSettled([
       listRoutes(api, siteId),
-      people ? listTeams(api, siteId) : Promise.reject(new Error('no people.view')),
-      offstd ? listOffCodes(api, companyId) : Promise.reject(new Error('no production.offstandard.view')),
+      people ? listTeams(api, siteId) : Promise.reject(new Error('no right to see employees')),
+      offstd ? listOffCodes(api, companyId) : Promise.reject(new Error('no right to see off-standard codes')),
       listHelpCodes(api),
     ])
     if (answer.status === 'rejected') {

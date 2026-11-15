@@ -41,6 +41,7 @@ import {
 } from './model'
 import { designScreen as printScreen } from './print/fixtures'
 import { CostBridge, CostLabour, CostMaterials, CostSummary } from './view/CostParts'
+import { rightRef } from '../../../lib/i18n/rights'
 
 /**
  * Finance › Costing › Standard vs actual (SCR-154, SCR-154-print) and the work order's Labour & cost tab (SCR-070 w2a-
@@ -74,7 +75,7 @@ describe('who sees what', () => {
   it('a reversal is held without the permission, on a reversal, on an entry reversed already; the reason needs 3 characters', () => {
     const can = { reverse: true }
     expect(reverseHeld(LEDGER[0]!, can)).toBeNull()
-    expect(reverseHeld(LEDGER[0]!, { reverse: false })).toEqual({ key: 'held.noReverse', params: { permission: 'costing.ledger.manage' } })
+    expect(reverseHeld(LEDGER[0]!, { reverse: false })).toEqual({ key: 'held.noReverse', params: { right: rightRef('costing.ledger.manage') } })
     expect(reverseHeld(LEDGER[1]!, can)?.key).toBe('held.isReversal')
     expect(reverseHeld(LEDGER[2]!, can)?.key).toBe('held.reversed')
     expect(reasonHeld('ok')?.key).toBe('reverse.reasonShort')
@@ -222,7 +223,7 @@ describe('navigation', () => {
 
 const LEFT_KEY = /\b(?:noAccess|band|scope|live|method|tiles|noCost|list|rows|bulk|col|row|basis|state|reason|part|centre|kind|event|detail|bridge|parts|materials|labour|scrap|waiting|standards|itemKind|source|ledger|held|reverse|notice|problem|csv|keys|print|labourTab|common)\.[a-zA-Z_]+(?:\.[a-zA-Z_]+)*\b/
 const LEFT_PLACEHOLDER = /\{[a-zA-Z]+\}/
-/** Permission and grain names are said on purpose ("needs costing.view", "the cost grain (money.cost)"). */
+/** Permission and grain names are stripped before the key check, though no screen says one since B-W2b-F51. */
 const SAID = /\b(?:costing\.view|costing\.ledger\.manage|money\.cost|workorders\.view)\b/g
 /** An amount on screen: a figure with the euro sign (the made-up data is in EUR). */
 const AMOUNT = /€\s?\d|\d\s?€/

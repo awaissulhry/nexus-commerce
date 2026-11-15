@@ -10,6 +10,8 @@ import { useLocale, useT } from '../../../../lib/i18n/provider'
 import type { DowngradeOptions, Repair, ScrapRow } from '../api'
 import { downgradeHeld, SCRAP_NAMESPACE, type DowngradeDraft, type Phrase } from '../model'
 import type { ScrapActions, ScrapModel } from './ScrapView'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../../lib/i18n/rights'
 
 /**
  * B-W2b-126 — second quality and the repair station on Scrap & rework (SCR-140; design production.scrap pop:sc-downgrade
@@ -146,7 +148,7 @@ export function SecondSection({ model, row, actions }: { model: ScrapModel; row:
     setReason('')
   }, [row.id])
   if (!target) return null
-  const held = !model.can.downgrade ? t('held.permission', { permission: 'production.downgrade' }) : target.withdrawn ? t('second.refusal.ALREADY_WITHDRAWN') : model.busy ? t('held.busy') : null
+  const held = !model.can.downgrade ? t('held.permission', { right: rightRef('production.downgrade') }) : target.withdrawn ? t('second.refusal.ALREADY_WITHDRAWN') : model.busy ? t('held.busy') : null
   return (
     <section className="fw-sc-card" aria-label={t('second.section')}>
       <h3 className="fw-sc-h3">{t('second.section')}</h3>

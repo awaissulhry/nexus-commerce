@@ -1533,7 +1533,7 @@
     "atRelease": "At release Compliance gets a review of it; until its answer this revision prints no class label.",
     "law": "Compliance decides with the notified body; the certificate itself is kept in Compliance › Certificates.",
     "held": {
-      "task": "Your role does not make tasks on a style (tasks.manage and threads.post)."
+      "task": "Your role does not make tasks on a style."
     },
     "task": {
       "title": "Check the changes of {code} revision {revision} with the notified body",

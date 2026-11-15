@@ -18,6 +18,8 @@ import { CLAIM_VIEWS, defaultView, KIND_TONE, newClaimHeld, reasonWords, returnH
 import { ReturnDialog } from './ReturnDialog'
 import '../../../../_shared/buying/buying.css'
 import '../../claims.css'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../../../lib/i18n/rights'
 
 export type { ClaimsListActions, ClaimsListModel } from '../../model'
 
@@ -62,10 +64,10 @@ function Page({ model, actions }: { model: ClaimsListModel; actions?: ClaimsList
   const picked = (items ?? []).filter((row) => selected.includes(row.id))
 
   const returnBlocked = !model.can.manage ? 'purchasing.claims.manage' : !model.can.ret ? 'purchasing.claims.return' : !model.can.ddtIssue ? 'shipping.ddt.issue' : null
-  const returnHeldWords = returnBlocked ? t('held.permissionPlain', { permission: returnBlocked }) : null
+  const returnHeldWords = returnBlocked ? t('held.permissionPlain', { right: rightRef(returnBlocked) }) : null
   // B-W2b-14: New claim (design page.h#1, primary, W2b) — a draft for credit or replacement from a lot in stock.
   const newBlocked = !model.can.manage ? 'purchasing.claims.manage' : !model.can.stock ? 'inventory.stock.view' : null
-  const newHeldWords = newBlocked ? t('held.permissionPlain', { permission: newBlocked }) : null
+  const newHeldWords = newBlocked ? t('held.permissionPlain', { right: rightRef(newBlocked) }) : null
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {

@@ -102,7 +102,7 @@ export function releaseRefusal(shipmentNumber: string, hold: HoldFacts, may: (pe
   if (!inForce(hold)) return { code: 'NOT_IN_FORCE', message: `This hold of shipment ${shipmentNumber} was released already.` }
   const permission = releasePermissionFor(hold.reason, hold.placedById === null)
   if (!may(permission)) {
-    const who = permission === SHIPPING_HOLDS_RELEASE ? 'finance (shipping.holds.release)' : 'the dispatch desk (shipping.holds.manage)'
+    const who = permission === SHIPPING_HOLDS_RELEASE ? 'finance' : 'the dispatch desk'
     const what = hold.placedById === null ? `the system's hold for ${HOLD_REASON_WORDS[hold.reason]}` : `a hold for ${HOLD_REASON_WORDS[hold.reason]}`
     return { code: 'MAY_NOT_RELEASE', message: `Only ${who} releases ${what} on shipment ${shipmentNumber}.` }
   }

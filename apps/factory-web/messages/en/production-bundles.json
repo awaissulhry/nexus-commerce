@@ -6,8 +6,8 @@
     "close": "Close"
   },
   "held": {
-    "noAct": "This needs {permission}",
-    "noPrint": "Printing labels needs {permission}",
+    "noAct": "This needs the right “{right}”",
+    "noPrint": "Printing labels needs the right “{right}”",
     "pickFirst": "Tick the bundles first",
     "oneSite": "Reprint one site at a time: each site has its own printers",
     "reprintVoid_one": "{count} selected is void: a void bundle has no new ticket",
@@ -18,10 +18,10 @@
     "voidNotOpen": "Its work order is not open: bundles change only while it is released or in progress",
     "voidScanned_one": "{count} scan names this bundle: undo or correct it instead",
     "voidScanned_other": "{count} scans name this bundle: undo or correct them instead",
-    "noFindings": "Reviewing findings needs {permission}",
+    "noFindings": "Reviewing findings needs the right “{right}”",
     "findingFinal": "This finding was reviewed already: that is final",
     "busy": "Working on it…",
-    "noWho": "Only the owner opens this: it needs {permission}",
+    "noWho": "Only the owner opens this: it needs the right “{right}”",
     "ticketVoid": "A void bundle has no new ticket",
     "ticketNotOpen": "Its work order is not open: tickets change only while it is released or in progress"
   },
@@ -32,7 +32,7 @@
   },
   "noAccess": {
     "title": "You cannot see the bundles",
-    "body": "This page needs {permission}."
+    "body": "This page needs the right “{right}”."
   },
   "tile": {
     "active": "Active",
@@ -264,7 +264,7 @@
     "state": {
       "forbidden": {
         "title": "You cannot see this bundle",
-        "body": "This page needs {permission}."
+        "body": "This page needs the right “{right}”."
       },
       "not_found": {
         "title": "This bundle does not exist",
@@ -307,7 +307,7 @@
   "scans": {
     "noRight": {
       "title": "You cannot see this bundle's scans",
-      "body": "The scans need {permission}."
+      "body": "The scans need the right “{right}”."
     },
     "failed": "The scans could not be read",
     "loading": "Reading the scans…",
@@ -386,7 +386,7 @@
       "operation": "Operation"
     },
     "jobs": "Print history",
-    "noJobsRight": "The print history needs {permission}.",
+    "noJobsRight": "The print history needs the right “{right}”.",
     "noJobs": "Nothing printed yet.",
     "jobFailed": "The printer refused it",
     "coupons": "Coupons per operation"
@@ -394,7 +394,7 @@
   "pdf": {
     "noRight": {
       "title": "You cannot print tickets",
-      "body": "A ticket PDF needs {permission}."
+      "body": "A ticket PDF needs the right “{right}”."
     },
     "title": "Ticket",
     "held": "The PDF is not ready yet",

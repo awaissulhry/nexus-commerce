@@ -322,10 +322,10 @@
     "firstStep": "Questo è il primo passo.",
     "noExportYet": "Questo mese non ha ancora un file.",
     "noLayout": "Scegli prima un formato.",
-    "noManage": "Creare e inviare un file richiede people.payroll.manage.",
+    "noManage": "Il tuo ruolo non può creare e inviare un file paghe.",
     "noPay": "Questo file contiene importi: serve il permesso paghe.",
     "noReach": "Il tuo ruolo non raggiunge tutti i siti di questa società.",
-    "noRecords": "Serve people.payroll.records.",
+    "noRecords": "Serve il permesso di aprire i valori paghe per dipendente.",
     "notClosed": "{month} non è chiuso · Chiudilo in Presenze",
     "notExported": "Solo un file esportato si apre o si invia.",
     "notRead": "Il mese è ancora in lettura.",
@@ -412,7 +412,7 @@
     "failed": "Impossibile leggere questo mese"
   },
   "noAccess": {
-    "body": "Questa pagina richiede people.payroll.view. Chiedi al tuo amministratore.",
+    "body": "Questa pagina richiede il permesso di vedere le esportazioni paghe. Chiedi al tuo amministratore.",
     "title": "Non puoi aprire Esportazione paghe"
   },
   "notPayroll": "Nexus non elabora le paghe: prepara un file per il consulente del lavoro, che le elabora.",
@@ -464,7 +464,7 @@
     "noCode": "Senza matricola",
     "noPay": "Gli importi sono omessi: serve il permesso paghe.",
     "noRight": {
-      "title": "I numeri si aprono con people.payroll.records"
+      "title": "I numeri si aprono con il permesso di aprire i valori paghe"
     },
     "nobody": "Nessuno nel file",
     "nobodyBody": "Nessun dipendente ha giorni o competenze in questo mese.",
@@ -479,7 +479,7 @@
     "law": "GDPR art. 5(1)(c), art. 32",
     "lawPlain": "Viaggiano solo i dati che servono al consulente, e viaggiano protetti.",
     "text": "Questa pagina mostra stati e conteggi. I valori si aprono per matricola, mai per nome.",
-    "who": "Valori e file: chi ha people.payroll.records su tutti i siti della società; gli importi richiedono anche il permesso paghe. Ogni apertura viene registrata."
+    "who": "Valori e file: chi ha il permesso di aprire i valori paghe su tutti i siti della società; gli importi richiedono anche il permesso paghe. Ogni apertura viene registrata."
   },
   "problem": {
     "conflict": "Qualcuno lo ha cambiato nel frattempo: è stato riletto, riprova.",

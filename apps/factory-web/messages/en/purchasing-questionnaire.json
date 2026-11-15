@@ -33,11 +33,11 @@
   "publishStarter": "Publish the starter questionnaire",
   "publishing": "Publishing…",
   "held": {
-    "manage": "Your role does not change the questionnaire (purchasing.questionnaire.manage).",
+    "manage": "Your role does not change the questionnaire.",
     "draft": "Version {revision} is a draft: publish it first.",
-    "send": "Your role does not send the questionnaire (purchasing.questionnaire.send).",
+    "send": "Your role does not send the questionnaire.",
     "noVersion": "Publish a questionnaire first.",
-    "review": "Your role does not review answers (purchasing.questionnaire.review).",
+    "review": "Your role does not review answers.",
     "reviewed": "This answer was reviewed already."
   },
   "send": {

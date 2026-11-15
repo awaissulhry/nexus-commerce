@@ -158,7 +158,7 @@ const NAMESPACES = ['plant-chemicals', 'floor-sds']
 const TOP = [...new Set(NAMESPACES.flatMap((ns) => Object.keys(CATALOGUE.en[ns] ?? {}).map((key) => key.split('.')[0]!.replace(/_(one|other)$/, ''))))].filter((key) => !['actions', 'back', 'home', 'ppe', 'most', 'empty', 'reading', 'opening', 'fresh', 'partial', 'offline', 'refreshing'].includes(key))
 const LEFT_KEY = new RegExp(`\\b(?:${TOP.join('|')})\\.[a-zA-Z_-]+(?:\\.[a-zA-Z_-]+)*\\b`)
 const LEFT_PLACEHOLDER = /\{[a-zA-Z]+\}/
-/** Permission names are said on purpose ("safety.chemicals.manage"); addresses and file names are not keys. */
+/** Permission names are stripped before the key check, though no screen says one since B-W2b-F51; addresses and file names are not keys. */
 const SAID = /\b(?:safety\.[a-zA-Z.]+|[a-z-]+\.example\.com[^\s"<]*|[\w .-]+\.pdf)\b/g
 
 function render(screen: DesignScreen<unknown>, model: unknown, locale: (typeof LOCALES)[number]): string {

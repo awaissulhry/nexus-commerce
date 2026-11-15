@@ -6,8 +6,8 @@
     "close": "Chiudi"
   },
   "held": {
-    "noAct": "Serve {permission}",
-    "noPrint": "Per stampare le etichette serve {permission}",
+    "noAct": "Serve il permesso «{right}»",
+    "noPrint": "Per stampare le etichette serve il permesso «{right}»",
     "pickFirst": "Spunta prima i fasci",
     "oneSite": "Ristampa uno stabilimento alla volta: ognuno ha le sue stampanti",
     "reprintVoid_one": "{count} selezionato è annullato: un fascio annullato non ha un nuovo cartellino",
@@ -18,10 +18,10 @@
     "voidNotOpen": "Il suo ordine di lavoro non è aperto: i fasci cambiano solo mentre è rilasciato o in corso",
     "voidScanned_one": "{count} scansione cita questo fascio: annullala o correggila",
     "voidScanned_other": "{count} scansioni citano questo fascio: annullale o correggile",
-    "noFindings": "Per esaminare le anomalie serve {permission}",
+    "noFindings": "Per esaminare le anomalie serve il permesso «{right}»",
     "findingFinal": "Questa anomalia è già stata esaminata: è definitivo",
     "busy": "Ci sto lavorando…",
-    "noWho": "Lo apre solo il titolare: serve {permission}",
+    "noWho": "Lo apre solo il titolare: serve il permesso «{right}»",
     "ticketVoid": "Un fascio annullato non ha un nuovo cartellino",
     "ticketNotOpen": "Il suo ordine di lavoro non è aperto: i cartellini cambiano solo mentre è rilasciato o in corso"
   },
@@ -32,7 +32,7 @@
   },
   "noAccess": {
     "title": "Non puoi vedere i fasci",
-    "body": "Questa pagina richiede {permission}."
+    "body": "Questa pagina richiede il permesso «{right}»."
   },
   "tile": {
     "active": "Attivi",
@@ -264,7 +264,7 @@
     "state": {
       "forbidden": {
         "title": "Non puoi vedere questo fascio",
-        "body": "Questa pagina richiede {permission}."
+        "body": "Questa pagina richiede il permesso «{right}»."
       },
       "not_found": {
         "title": "Questo fascio non esiste",
@@ -307,7 +307,7 @@
   "scans": {
     "noRight": {
       "title": "Non puoi vedere le scansioni di questo fascio",
-      "body": "Le scansioni richiedono {permission}."
+      "body": "Le scansioni richiedono il permesso «{right}»."
     },
     "failed": "Non è stato possibile leggere le scansioni",
     "loading": "Leggo le scansioni…",
@@ -386,7 +386,7 @@
       "operation": "Operazione"
     },
     "jobs": "Storico di stampa",
-    "noJobsRight": "Lo storico di stampa richiede {permission}.",
+    "noJobsRight": "Lo storico di stampa richiede il permesso «{right}».",
     "noJobs": "Ancora nulla di stampato.",
     "jobFailed": "La stampante l'ha rifiutato",
     "coupons": "Coupon per operazione"
@@ -394,7 +394,7 @@
   "pdf": {
     "noRight": {
       "title": "Non puoi stampare cartellini",
-      "body": "Il PDF del cartellino richiede {permission}."
+      "body": "Il PDF del cartellino richiede il permesso «{right}»."
     },
     "title": "Cartellino",
     "held": "Il PDF non è ancora pronto",

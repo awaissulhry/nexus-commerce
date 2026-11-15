@@ -65,7 +65,7 @@ export async function announcePhoto(request: FastifyRequest, incidentId: string,
   const row = await officeIncident(request, incidentId)
   assertMay(context, SAFETY_INCIDENTS_VIEW, row)
   // The safety roles add photos; whoever reported it from the office adds to their own report.
-  if (row.reportedById !== context.actorId) assertMayWrite(context, SAFETY_INCIDENTS_MANAGE, row, 'Photos of an incident are added by the safety roles (safety.incidents.manage) or by whoever reported it.')
+  if (row.reportedById !== context.actorId) assertMayWrite(context, SAFETY_INCIDENTS_MANAGE, row, 'Photos of an incident are added by the safety roles or by whoever reported it.')
   if (row.status === 'CANCELLED') refuse(refusalOf('NOT_OPEN'))
   return photoUpload(request, context.tenantId, row, row.id, body, idempotencyKey)
 }
@@ -75,7 +75,7 @@ export async function completePhoto(request: FastifyRequest, incidentId: string,
   const context = officeOf(request)
   const row = await officeIncident(request, incidentId)
   assertMay(context, SAFETY_INCIDENTS_VIEW, row)
-  if (row.reportedById !== context.actorId) assertMayWrite(context, SAFETY_INCIDENTS_MANAGE, row, 'Photos of an incident are added by the safety roles (safety.incidents.manage) or by whoever reported it.')
+  if (row.reportedById !== context.actorId) assertMayWrite(context, SAFETY_INCIDENTS_MANAGE, row, 'Photos of an incident are added by the safety roles or by whoever reported it.')
   return completeOne(request, context.tenantId, row, 'Incident', row.id, fileId, 'PHOTO', idempotencyKey)
 }
 
@@ -135,7 +135,7 @@ async function filingPlace(request: FastifyRequest, incidentId: string, filingId
   const context = officeOf(request)
   const row = await officeIncident(request, incidentId)
   assertMay(context, SAFETY_INCIDENTS_VIEW, row)
-  assertMayWrite(context, SAFETY_INCIDENTS_PEOPLE, row, 'INAIL’s receipt is kept by the safety roles and HR (safety.incidents.people).')
+  assertMayWrite(context, SAFETY_INCIDENTS_PEOPLE, row, 'INAIL’s receipt is kept by the safety roles and HR.')
   const filing = isUuid(filingId) ? await request.withClient((db) => db.inailFiling.findFirst({ where: { id: filingId, incidentId }, select: { id: true } })) : null
   if (!filing) throw new NotFoundError('Filing not found.')
   return { context, row, filing }

@@ -12,6 +12,8 @@ import type { CutOrderRecord, LayView } from '../../api'
 import { decimalText, layLength, layShade, lineGarments, liveLays, ORDERS_NAMESPACE, orderMaterial, ticketFacts, ticketLayout } from '../../model'
 import { OrdersMessages } from '../../view/parts'
 import '../../../cutting.css'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../../../../lib/i18n/rights'
 
 /** SCR-238-sheet — the lay sheet and cut ticket on paper (design tab:ct-tab-sheet, "paper at the cutting table"). */
 export interface LaySheetModel {
@@ -58,8 +60,8 @@ function Sheet({ model }: { model: LaySheetModel }) {
   const back = { href: record ? `${model.prefix}/production/cutting/orders/${record.cutOrder.id}` : `${model.prefix}/production/cutting`, label: t('sheet.back') }
   if (!model.can) {
     return (
-      <PrintView title={t('sheet.title')} back={back} labels={ds.printView} printHeld={t('noAccess.body', { permission: 'production.cutting.view' })}>
-        <EmptyState title={t('noAccess.title')} description={t('noAccess.body', { permission: 'production.cutting.view' })} />
+      <PrintView title={t('sheet.title')} back={back} labels={ds.printView} printHeld={t('noAccess.body', { right: rightRef('production.cutting.view') })}>
+        <EmptyState title={t('noAccess.title')} description={t('noAccess.body', { right: rightRef('production.cutting.view') })} />
       </PrintView>
     )
   }

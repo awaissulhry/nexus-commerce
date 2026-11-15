@@ -18,6 +18,8 @@ import { reasonLabel } from '../../stock/daily/model'
 import { useWords, type Words } from '../shared/parts'
 import { GAP_TONE, gapPlace, nodeRecord, onlyAffected, TRACE_OPEN_DEPTH, traceTree, type TreeItem } from './model'
 import './trace.css'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../../lib/i18n/rights'
 
 export interface TraceTreeProps {
   trace: Trace
@@ -78,7 +80,7 @@ export function TraceTree({ trace, prefix, holdReasons, affectedOnly = false }: 
           )}
           {trace.restricted.map((entry) => (
             <p key={entry.permission} className="fw-wl-hint">
-              {t('lt.tree.restricted', { count: entry.nodes, permission: entry.permission })}
+              {t('lt.tree.restricted', { count: entry.nodes, right: rightRef(entry.permission) })}
             </p>
           ))}
           <div className="fw-tt-tools">

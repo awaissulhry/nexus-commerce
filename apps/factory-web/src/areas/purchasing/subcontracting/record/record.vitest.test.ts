@@ -166,7 +166,7 @@ describe('the dialogs: what holds them, what they send', () => {
 const NAMESPACES = ['shell', 'subcontracting', 'subcontract-order', 'lists', 'records']
 const groups = [...new Set(['subcontract-order', 'subcontracting'].flatMap((namespace) => Object.keys(CATALOGUE.en[namespace] ?? {}).map((key) => key.split('.')[0]!)))].join('|')
 const LEFT_KEY = new RegExp(`\\b(?:${groups})\\.[a-zA-Z_]+(?:\\.[a-zA-Z_]+)*\\b`)
-/** Permission names are said on purpose ("needs shipping.ddt.issue"); a file name is no key. */
+/** Permission names are stripped before the key check, though no screen says one since B-W2b-F51; a file name is no key. */
 const SAID = /\b(?:purchasing\.(?:view|subcontract\.(?:manage|kit|receive))|shipping\.ddt\.(?:issue|cancel)|workorders\.view|files\.read|inventory\.locations\.view|product\.materials\.view|money\.cost)\b|DDT-[\w-]+\.pdf/g
 
 function render(screen: DesignScreen<unknown>, model: unknown, locale: (typeof LOCALES)[number]): string {

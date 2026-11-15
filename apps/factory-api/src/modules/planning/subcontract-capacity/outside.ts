@@ -90,7 +90,7 @@ export interface OutsideBody {
 /** Whether the caller can make the order now, and why not in words. */
 function orderHeld(caller: CommandCaller, workOrder: WorkOrderOperations): string | null {
   const context = officeContextOf(caller)
-  if (!mayAt(context, PURCHASING_SUBCONTRACT_MANAGE, { companyId: workOrder.companyId, siteId: workOrder.siteId })) return 'No subcontract order yet: drafting it needs purchasing.subcontract.manage (the buyer makes it from Purchasing › Subcontracting).'
+  if (!mayAt(context, PURCHASING_SUBCONTRACT_MANAGE, { companyId: workOrder.companyId, siteId: workOrder.siteId })) return 'No subcontract order yet: drafting it needs the right to manage subcontract orders (the buyer makes it from Purchasing › Subcontracting).'
   if (!(WORK_ORDER_STATES as readonly string[]).includes(workOrder.status)) return `No subcontract order yet: ${workOrder.number} is ${workOrder.status.toLowerCase()}; its order is made once it is released.`
   return null
 }
@@ -154,7 +154,7 @@ export async function bringInHouse(caller: CommandCaller, workOrderId: string, o
   let orderChange: 'CANCELLED' | 'OPERATION_REMOVED' | null = null
   if (order && (order.status === 'DRAFT' || order.status === 'ISSUED')) {
     const context = officeContextOf(caller)
-    if (!mayAt(context, PURCHASING_SUBCONTRACT_MANAGE, { companyId: workOrder.companyId, siteId: workOrder.siteId })) throw new ForbiddenError(`Bringing it back changes ${order.number}: that needs purchasing.subcontract.manage.`)
+    if (!mayAt(context, PURCHASING_SUBCONTRACT_MANAGE, { companyId: workOrder.companyId, siteId: workOrder.siteId })) throw new ForbiddenError(`Bringing it back changes ${order.number}: that needs the right to manage subcontract orders.`)
     const own = order.operations.filter((entry) => entry.workOrderOperationId === operation.id)
     if (own.length === order.operations.length) {
       await cancelOrder(caller, order.id, { version: order.version, reason: body.reason }, sub(idempotencyKey, 'cancel'))

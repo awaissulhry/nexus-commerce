@@ -10,7 +10,7 @@
   },
   "access": {
     "title": "Qui non puoi vedere le dichiarazioni",
-    "body": "Dichiarazioni e istruzioni richiede il permesso di leggere il registro dei certificati (compliance.certificates.view). Lo dà un amministratore in Sistema › Utenti, con un ruolo come Ispettore qualità."
+    "body": "Dichiarazioni e istruzioni richiede il permesso di leggere il registro dei certificati. Lo dà un amministratore in Sistema › Utenti, con un ruolo come Ispettore qualità."
   },
   "band": {
     "label": "Dichiarazioni e istruzioni",
@@ -27,15 +27,15 @@
     "body": "Vedi l'ultima copia letta. Nuove bozze, traduzioni, verifiche e ritiri richiedono la rete: i loro pulsanti lo dicono finché non torna."
   },
   "held": {
-    "generateAny": "Non puoi preparare dichiarazioni o istruzioni: chiedi alla Conformità (compliance.declarations.generate o compliance.userInformation.generate).",
+    "generateAny": "Non puoi preparare dichiarazioni o istruzioni: chiedi alla Conformità.",
     "offline": "Offline: serve la rete.",
-    "generate": "Non puoi preparare o modificare bozze di DoC (compliance.declarations.generate).",
-    "uiGenerate": "Non puoi preparare o modificare bozze di istruzioni (compliance.userInformation.generate).",
-    "check": "Non puoi verificare traduzioni di DoC (compliance.declarations.check).",
-    "uiCheck": "Non puoi verificare traduzioni di istruzioni (compliance.userInformation.check).",
-    "manage": "Registrare quale versione ha viaggiato richiede compliance.declarations.manage.",
-    "pack": "Preparare un pacchetto di conformità richiede compliance.declarations.pack.",
-    "shipping": "Aprire il pacchetto di una spedizione richiede il permesso di vedere le spedizioni (shipping.view).",
+    "generate": "Non puoi preparare o modificare bozze di DoC.",
+    "uiGenerate": "Non puoi preparare o modificare bozze di istruzioni.",
+    "check": "Non puoi verificare traduzioni di DoC.",
+    "uiCheck": "Non puoi verificare traduzioni di istruzioni.",
+    "manage": "Il tuo ruolo non può registrare quale versione ha viaggiato.",
+    "pack": "Il tuo ruolo non può preparare un pacchetto di conformità.",
+    "shipping": "Aprire il pacchetto di una spedizione richiede il permesso di vedere le spedizioni.",
     "busy": "In corso…",
     "nothingChanged": "Non hai ancora cambiato nulla.",
     "emptyPart": "Ogni punto ha bisogno del suo testo: uno è vuoto.",
@@ -418,7 +418,7 @@
     "noShipmentTitle": "Nessuna spedizione indicata",
     "noShipment": "Apri un pacchetto da una spedizione, da un lotto di una dichiarazione o dai lotti spediti senza versione registrata.",
     "failed": "Il pacchetto non si è potuto leggere",
-    "forbidden": "Non puoi vedere questa spedizione (shipping.view, la sua azienda o il suo cliente).",
+    "forbidden": "Non puoi vedere questa spedizione (le spedizioni, la sua azienda o il suo cliente).",
     "heldRefused": "Il pacchetto non si può preparare: vedi cosa lo rifiuta.",
     "heldNoCustomer": "La spedizione non indica un cliente con cui condividerlo.",
     "title": "Pacchetto di conformità · {number}",

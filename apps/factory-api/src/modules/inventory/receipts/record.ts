@@ -205,7 +205,7 @@ export async function recordReceipt(caller: CommandCaller, body: ReceiptBody, id
   if (!scope || !(can(actor, INVENTORY_RECEIVE, scope) || can(actor, INVENTORY_STOCK_VIEW, scope))) {
     throw new NotFoundError('Purchase order not found.')
   }
-  if (!can(actor, INVENTORY_RECEIVE, scope)) throw new ForbiddenError('Receiving goods at this site needs inventory.receive.')
+  if (!can(actor, INVENTORY_RECEIVE, scope)) throw new ForbiddenError('Receiving goods at this site needs the right to receive goods.')
   const { result } = await command(caller, { name: 'inventory.receive', idempotencyKey, input: body }, async (tools) => {
     const recorded = await recordReceiptInCommand(tools, body, keyFor(idempotencyKey))
     const receipt = (await tools.tx.goodsReceipt.findUnique({ where: { id: recorded.receiptId }, select: RECEIPT_COLUMNS }))!

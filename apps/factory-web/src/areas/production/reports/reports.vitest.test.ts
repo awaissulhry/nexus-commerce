@@ -175,7 +175,7 @@ describe('navigation', () => {
 const LEFT_KEY =
   /\b(?:noAccess|band|live|scope|daily|common|error|tile|chart|kind|lane|col|subscribe|weekday|weekdays|print|lines|floor|list|status)\.[a-zA-Z_]+(?:\.[a-zA-Z_]+)*\b/
 const LEFT_PLACEHOLDER = /\{[a-zA-Z]+\}/
-/** Permission names are said on purpose ("needs production.reports.view"). */
+/** Permission names are stripped before the key check, though no screen says one since B-W2b-F51. */
 const SAID = /\b(?:production\.reports\.[a-z]+|workorders\.view)\b/g
 
 function render(screen: DesignScreen<unknown>, model: unknown, locale: (typeof LOCALES)[number]): string {

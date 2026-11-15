@@ -142,7 +142,7 @@ describe('the live tech pack (PRD-130, PRD-134, PRD-136, PRD-147)', () => {
   it('shows a section the caller may not see as not allowed, and no cost without the grain', async () => {
     const { techPack } = await ok('viewer', 'GET', `${base()}?companyId=${companyA}`)
     expect(techPack.construction).toBeNull()
-    expect(techPack.sections.find((entry: Json) => entry.section === 'CONSTRUCTION')).toMatchObject({ allowed: false, why: expect.stringMatching(/product\.routing\.view/) })
+    expect(techPack.sections.find((entry: Json) => entry.section === 'CONSTRUCTION')).toMatchObject({ allowed: false, why: expect.stringMatching(/it needs the right to see the routing/) })
     expect([techPack.protection, techPack.compliance]).toEqual([null, null])
     expect(techPack.bom.sections.flatMap((section: Json) => section.lines).some((line: Json) => 'unitCost' in line)).toBe(false)
     // Who may not read the BOM does not read the tech pack.

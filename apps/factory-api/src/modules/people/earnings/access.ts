@@ -38,5 +38,5 @@ export const hasRight = (context: OfficeContext, place: { readonly companyId: st
   seesPay(context) && can(actorOf(context), PEOPLE_EARNINGS_RECORDS, place.siteId ? { companyId: place.companyId, siteId: place.siteId } : { companyId: place.companyId })
 
 export function requireRight(context: OfficeContext, place: { readonly companyId: string; readonly siteId?: string | null }): void {
-  if (!hasRight(context, place)) throw new ForbiddenError("One person's pay opens only with people.earnings.records and the pay grain, over the person's company and site.")
+  if (!hasRight(context, place)) throw new ForbiddenError("One person's pay opens only with the right to open earnings records and the right to see pay, over the person's company and site.")
 }

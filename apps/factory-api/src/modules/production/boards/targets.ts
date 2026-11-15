@@ -89,7 +89,7 @@ export interface SetTargetsBody {
 export async function setTargets(caller: CommandCaller, body: SetTargetsBody, idempotencyKey?: string) {
   const context = officeOf(caller)
   const line = await knownLine(caller, context, body.lineId, PRODUCTION_BOARDS_VIEW)
-  if (!may(context, PRODUCTION_BOARDS_TARGETS, { companyId: line.companyId, siteId: line.siteId })) throw new ForbiddenError("A line's hourly targets are set with production.boards.targets.")
+  if (!may(context, PRODUCTION_BOARDS_TARGETS, { companyId: line.companyId, siteId: line.siteId })) throw new ForbiddenError("A line's hourly targets are set with the right to set them.")
   if (line.status !== 'ACTIVE') refuse(BOARD_REFUSALS.NOT_LINE_OF_SITE)
   const problems = targetDraftProblems(body.hours)
   if (problems.length > 0) throw new ValidationError(problems.length === 1 ? problems[0]!.message : 'The targets have problems.', problems.map((issue) => ({ ...issue, path: `body/${issue.path}` })))

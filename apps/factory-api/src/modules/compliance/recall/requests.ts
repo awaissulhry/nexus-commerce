@@ -382,7 +382,7 @@ export async function linkRequestEntry(caller: CommandCaller, requestId: string,
   if (body.registerEntryId) await caller.withClient((db) => checkEntry(db, context, before.companyId, before.styleId, body.registerEntryId!))
   else {
     if (before.styleId === null) throw new ConflictError(`Name the style request ${before.number} is about first: a register entry is about one style.`)
-    if (!can(actorOf(context), REGISTER_MANAGE, { companyId: before.companyId })) throw new ForbiddenError(`Opening a register entry needs ${REGISTER_MANAGE} over this company.`)
+    if (!can(actorOf(context), REGISTER_MANAGE, { companyId: before.companyId })) throw new ForbiddenError('Opening a register entry needs the right to keep the PPE register over this company.')
   }
   await guarded(() =>
     runCommand(

@@ -43,7 +43,7 @@
   },
   "noAccess": {
     "title": "Tests & substances is not open to your role",
-    "body": "It needs the permission to see lots' quality records (quality.lots.view): the quality inspector, the buyer and the warehouse have it. Ask your factory's owner to add it to your role."
+    "body": "It needs the permission to see lots' quality records: the quality inspector, the buyer and the warehouse have it. Ask your factory's owner to add it to your role."
   },
   "view": {
     "all": "All lots",
@@ -155,11 +155,11 @@
     "copy": "Copy lot code"
   },
   "held": {
-    "test": "Recording a result needs the quality role (quality.lots.test).",
-    "documents": "Attaching a supplier's document needs quality.lots.documents.",
-    "release": "Releasing a lot needs the quality role (quality.lots.release).",
-    "reject": "Rejecting or blocking a lot needs quality.lots.reject.",
-    "rule": "Only the owner changes this rule (quality.settings.manage).",
+    "test": "Recording a result needs the quality role.",
+    "documents": "Your role cannot attach a supplier's document to a lot.",
+    "release": "Releasing a lot needs the quality role.",
+    "reject": "Your role cannot reject or block a lot.",
+    "rule": "Only the owner changes this rule.",
     "noTest": "This material needs no chromium VI test.",
     "rejected": "The lot is rejected: that is final.",
     "failFinal": "The lot failed its chromium VI test: a fail is final (the law), reject the lot.",
@@ -187,7 +187,7 @@
       "release": "Release",
       "activity": "Activity"
     },
-    "noPanels": "The thread, files and history need permission to read threads (threads.read).",
+    "noPanels": "The thread, files and history need permission to read threads.",
     "youReceived": "You received this lot: you may record its results and documents, and another quality person releases it.",
     "facts": {
       "status": "Lot status",

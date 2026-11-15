@@ -72,7 +72,7 @@ import {
  * the database refuses it from an office session anyway).
  */
 
-const RECORD_WORDS = 'Training sessions are kept by a role that keeps the training records (safety.training.record).'
+const RECORD_WORDS = 'Training sessions are kept by a role that keeps the training records.'
 const LAW = { training: RECORDS_LAW, language: LANGUAGE_LAW }
 
 export interface ListQuery {

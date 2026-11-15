@@ -268,7 +268,7 @@ export async function carryOut(caller: CommandCaller, ncrId: string, decisionId:
         if (body.followUp.type !== type) refuse([{ path: 'followUp/type', message: `${code.code} is carried out with a ${type.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase()}.` }], 'Another kind of record.')
         followUp = await namedFollowUp(tools, ncr, decision, body.followUp)
       } else if (body.claim && followUpKind === 'SUPPLIER_CLAIM') {
-        if (!may(contextOf(tools), PURCHASING_CLAIMS_MANAGE, ncr)) throw new ForbiddenError('Opening the supplier claim needs purchasing.claims.manage at the NCR\'s site.')
+        if (!may(contextOf(tools), PURCHASING_CLAIMS_MANAGE, ncr)) throw new ForbiddenError("Opening the supplier claim needs the right to keep supplier claims at the NCR's site.")
         if (!ncr.supplierId) refuse([{ path: 'claim', message: 'The NCR names no supplier: name it first.' }], 'No supplier.')
         if (!ncr.lotId) refuse([{ path: 'claim', message: 'The NCR names no lot: name the lot whose goods go back first.' }], 'No lot.')
         const internalNote = `NCR ${ncr.number}: ${ncr.title}`.slice(0, 1000)
@@ -287,7 +287,7 @@ export async function carryOut(caller: CommandCaller, ncrId: string, decisionId:
     if (move !== null) {
       const permission = MOVE_PERMISSIONS[move]
       if (body.stock) {
-        if (!may(contextOf(tools), permission, ncr)) throw new ForbiddenError(`This stock move needs ${permission} at the NCR's site.`)
+        if (!may(contextOf(tools), permission, ncr)) throw new ForbiddenError("This stock move needs a right your role does not hold at the NCR's site.")
         const posted = await postDispositionInCommand(tools, {
           dispositionCodeId: code.id,
           siteId: ncr.siteId,
@@ -359,7 +359,7 @@ export interface ReworkBody {
 export async function reworkFromDecision(caller: CommandCaller, ncrId: string, decisionId: string, body: ReworkBody, idempotencyKey?: string) {
   const { context, row } = await visibleNcr(caller, ncrId, QUALITY_NCR_MANAGE)
   assertOpen(row)
-  if (!may(context, PRODUCTION_REWORK, row)) throw new ForbiddenError("A rework order needs production.rework at the NCR's site.")
+  if (!may(context, PRODUCTION_REWORK, row)) throw new ForbiddenError("A rework order needs the right to send garments to rework at the NCR's site.")
   const decision = await caller.withClient((client) => client.ncrDispositionLine.findUnique({ where: { id: decisionId }, select: DECISION_COLUMNS }))
   if (!decision || decision.ncrId !== ncrId) throw new NotFoundError('Decision not found.')
   if (decision.version !== body.version) throw new StaleVersionError('NcrDispositionLine', decisionId, decision.version, body.version)

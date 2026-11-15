@@ -101,7 +101,7 @@
       "conflict": "Some days are already set."
     },
     "problem": {
-      "wholeCompany": "Keeping the company's calendar needs calendars.manage over every site of the company: your grant reaches only some of them."
+      "wholeCompany": "Keeping the company's calendar needs the right to change calendars over every site of the company: your grant reaches only some of them."
     },
     "done": {
       "created": "The company calendar is set up: Monday to Friday, one shift. Add its holidays next.",

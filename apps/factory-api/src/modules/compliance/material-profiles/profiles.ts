@@ -255,7 +255,7 @@ export async function editProfile(caller: CommandCaller & Pick<FastifyRequest, '
   const context = officeOf(caller)
   const actor = actorOf(context)
   const item = await caller.withClient((db) => readItem(db, actor, itemId))
-  if (!mayWrite(actor, SUBSTANCES_MANAGE, item.companyId)) throw new ForbiddenError(item.companyId === null ? `${item.code} is a material for every company: its profile is kept only by a role over every company.` : `You may not change ${item.code}'s compliance profile: it needs compliance.substances.manage.`)
+  if (!mayWrite(actor, SUBSTANCES_MANAGE, item.companyId)) throw new ForbiddenError(item.companyId === null ? `${item.code} is a material for every company: its profile is kept only by a role over every company.` : `You may not change ${item.code}'s compliance profile: it needs the right to keep the restricted substance list.`)
   const problems = profileEditProblems(body, item.kind)
   if (problems.length > 0) throw new ValidationError('The profile is not valid.', problems)
   const exists = await caller.withClient((db) => db.materialComplianceProfile.findUnique({ where: { id: item.id }, select: { version: true } }))

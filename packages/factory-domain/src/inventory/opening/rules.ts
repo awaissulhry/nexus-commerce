@@ -262,7 +262,7 @@ export function planOpeningRow(values: RowValues, facts: OpeningFacts): { readon
   const colourCode = text(values.colour)
 
   if (!facts.site) problems.push(issue('site', `Site ${site} is not a site of this company.`))
-  else if (!facts.site.reachable) problems.push(issue('site', `Your role does not reach site ${site} for opening stock (inventory.opening.import).`))
+  else if (!facts.site.reachable) problems.push(issue('site', `Your role does not reach site ${site} for opening stock.`))
   else if (!facts.location) problems.push(issue('location', `Location ${location} is not a location of site ${site}.`))
   else if (!facts.location.active) problems.push(issue('location', `Location ${location} is archived: it takes no stock.`))
 

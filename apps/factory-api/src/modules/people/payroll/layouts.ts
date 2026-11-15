@@ -40,7 +40,7 @@ function viewOf(row: LayoutRow) {
   }
 }
 
-const manageWords = 'Payroll layouts need people.payroll.manage over every site of the company.'
+const manageWords = 'Payroll layouts need the right to keep payroll over every site of the company.'
 
 /** GET /people/payroll/layouts. */
 export async function listLayouts(caller: CommandCaller, query: LayoutsQuery) {

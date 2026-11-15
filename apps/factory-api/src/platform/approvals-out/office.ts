@@ -55,7 +55,7 @@ const scopeOf = (record: { readonly companyId: string; readonly siteId: string |
 function needs(actor: Actor, adapter: RecordAdapter, scope: ReturnType<typeof scopeOf>, mode: 'view' | 'ask'): void {
   const platform = mode === 'ask' ? PARTNERS_APPROVALS_ASK : PARTNERS_APPROVALS_VIEW
   if (!can(actor, platform, scope)) throw new NotFoundError('Record not found.')
-  if (!can(actor, mode === 'ask' ? adapter.ask : adapter.view, scope)) throw new ForbiddenError(mode === 'ask' ? `Asking a partner to approve this record needs ${adapter.ask}.` : `Seeing the approvals of this record needs ${adapter.view}.`)
+  if (!can(actor, mode === 'ask' ? adapter.ask : adapter.view, scope)) throw new ForbiddenError(mode === 'ask' ? 'Asking a partner to approve this record needs a right your role does not hold over records of this kind.' : 'Seeing the approvals of this record needs the right to see records of this kind.')
 }
 
 // ---- what the office reads ----------------------------------------------------------------------------------------------

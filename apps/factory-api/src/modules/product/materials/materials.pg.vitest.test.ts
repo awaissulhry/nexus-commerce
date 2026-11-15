@@ -538,7 +538,7 @@ describe('the material import (PLT-176, PRD-040)', () => {
     expect(forCost.after.standardCost).toBe('3.1')
   })
 
-  const COST_REFUSED = { path: 'column/standardCost', message: 'Importing the standard cost needs product.materials.cost over every company.' }
+  const COST_REFUSED = { path: 'column/standardCost', message: 'Importing the standard cost needs the right to set standard costs over every company.' }
 
   it('refuses a sheet with the cost column to a person without the cost grain or the cost permission, in the dry run', async () => {
     const job = await upload('maker', csv(SHEET.slice(0, 2)))
@@ -575,7 +575,7 @@ describe('the material import (PLT-176, PRD-040)', () => {
 
   it('lets a manager of one company import for that company only, never for every company', async () => {
     const sheet = (code: string) => csv([SHEET[0]!.replace(';Costo standard', ''), `${code};Fibbia;minuteria;pz;;;;;;;;;;;`])
-    const COMPANY_REFUSED = { path: 'companyId', message: 'A materials import for every company needs product.materials.manage over every company; import for one company instead.' }
+    const COMPANY_REFUSED = { path: 'companyId', message: 'A materials import for every company needs the right to keep materials over every company; import for one company instead.' }
     // Every company: refused at the start.
     const everyCompany = await start('companyOne', sheet('HW-1'))
     expect(everyCompany.statusCode).toBe(403)

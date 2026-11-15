@@ -4,6 +4,8 @@ import type { DrillAnswer } from '../api'
 import { BUILT, LEAD_DRILL, LEATHER_DRILL, NOW, OTIF_DRILL, PREFIX, inShell, marginDrill, recordFor, supplyDrill, wipDrill, type Role } from '../demo/fixtures'
 import { kpisCanOf } from '../model'
 import { RecordsView, type RecordsModel } from '../view/RecordsView'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../../lib/i18n/rights'
 
 /**
  * SCR-471 — the records behind a KPI (design home.kpis rec:KPI › Now "Click → records behind it"; ANA-003; B-W2b-429's
@@ -61,7 +63,7 @@ export const designScreen = defineDesignScreen<Case>({
     { id: 'supply', label: 'Supplier on-time', model: records('purchasing.supplier_on_time', supplyDrill(true)), note: '4 of 5 receipt lines on time; open shortages per work order; days of cover of the leathers needed.' },
     { id: 'supply-hidden', label: 'Supplier on-time — no planning or stock list', model: records('purchasing.supplier_on_time', supplyDrill(false)), note: 'Shortages and cover say which list they need.' },
     { id: 'empty', label: 'Nothing in the period', model: records('delivery.otif', emptyOtif) },
-    { id: 'needs-grain', label: 'Refused by rights', model: records('sales.margin_actual', null, { drill: { value: null, problem: { key: 'records.needsPermission', params: { permission: 'costing.view' } } } }, 'planner') },
+    { id: 'needs-grain', label: 'Refused by rights', model: records('sales.margin_actual', null, { drill: { value: null, problem: { key: 'records.needsPermission', params: { right: rightRef('costing.view') } } } }, 'planner') },
     { id: 'no-drill', label: 'A KPI whose records are a report', model: records('production.scrap_rate', null), note: 'Its records are the Scrap by reason report: opened from the KPI’s Definition, not here.' },
     { id: 'loading', label: 'Loading', model: records('delivery.otif', null, { kpi: { value: null, problem: null } }) },
     { id: 'error', label: 'The records could not be read', model: records('delivery.otif', null, { drill: { value: null, problem: { key: 'error.offline' } } }) },

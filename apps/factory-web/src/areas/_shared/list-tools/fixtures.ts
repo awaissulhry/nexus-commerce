@@ -58,7 +58,7 @@ const view = (over: Partial<SavedView> & Pick<SavedView, 'id' | 'name'>): SavedV
 
 const LATE = view({ id: 'v-late', name: 'Late, my customers', state: { query: 'late=true', columns: { order: [], hidden: ['net'], pinned: ['number'] } } })
 const ROSSI = view({ id: 'v-rossi', name: 'Demo Rossi orders', audience: 'ROLE', roleId: ROLE_SALES.id, roleName: ROLE_SALES.name, state: { query: 'q=rossi&rows=all', density: 'compact' } })
-const EVERYTHING = view({ id: 'v-all', name: 'Every order', mine: false, ownerId: 'u-bianchi', ownerName: 'Demo Bianchi', audience: 'EVERYONE', state: { query: 'rows=all' }, changeHeld: 'Only its owner changes this view (views.manage changes the views others shared).' })
+const EVERYTHING = view({ id: 'v-all', name: 'Every order', mine: false, ownerId: 'u-bianchi', ownerName: 'Demo Bianchi', audience: 'EVERYONE', state: { query: 'rows=all' }, changeHeld: 'Only its owner changes this view (a role that manages views changes the views others shared).' })
 const START = view({
   id: 'v-start',
   name: 'Sales start',
@@ -70,7 +70,7 @@ const START = view({
   roleName: ROLE_SALES.name,
   roleDefault: true,
   state: { query: 'late=true', columns: { order: ['customer', 'number'], hidden: [], pinned: [] }, density: 'compact' },
-  changeHeld: 'Only its owner changes this view (views.manage changes the views others shared).',
+  changeHeld: 'Only its owner changes this view (a role that manages views changes the views others shared).',
 })
 const VIEWS = [LATE, ROSSI, EVERYTHING, START]
 

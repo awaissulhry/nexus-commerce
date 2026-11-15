@@ -29,7 +29,7 @@
   },
   "noAccess": {
     "title": "Non puoi vedere le esportazioni contabili",
-    "body": "Serve il permesso di contabilità (accounting.view). Chiedi a un amministratore."
+    "body": "Serve il permesso di contabilità. Chiedi a un amministratore."
   },
   "common": {
     "retry": "Riprova",
@@ -88,8 +88,8 @@
     "held": {
       "yearEnd": "Va con l'esportazione del mese che chiude l'anno (31 dicembre).",
       "grain": {
-        "price": "Contiene prezzi: serve il livello prezzi (money.price).",
-        "cost": "Contiene costi: serve il livello costi (money.cost)."
+        "price": "Contiene prezzi: serve il livello prezzi.",
+        "cost": "Contiene costi: serve il livello costi."
       }
     },
     "documents_one": "{count} documento",
@@ -229,7 +229,7 @@
     "noPackage": "Scegli almeno un contenuto.",
     "intrastat": "Correggi le righe a cui mancano dati, o spiega il controllo Intrastat.",
     "nothingChanged": "Nulla è cambiato da {number}: non c'è nulla da inviare.",
-    "noExport": "Preparare un'esportazione richiede il permesso accounting.export.",
+    "noExport": "Preparare un'esportazione richiede il permesso di esportare.",
     "busy": "Attendi: l'ultima azione è ancora in corso.",
     "firstStep": "Questo è il primo passo."
   },
@@ -470,7 +470,7 @@
     "status_other": "{package} · {count} righe · {format}",
     "download": "Scarica",
     "held": {
-      "noView": "Scaricare richiede il permesso accounting.view."
+      "noView": "Scaricare richiede il permesso della contabilità."
     },
     "title_one": "File di {count} esportazione",
     "title_other": "File di {count} esportazioni",
@@ -540,7 +540,7 @@
       "warnings": "Prima della chiusura definitiva:"
     },
     "held": {
-      "noLock": "Bloccare richiede il permesso accounting.lock.",
+      "noLock": "Bloccare richiede il permesso di chiudere i mesi.",
       "chooseMonth": "Scegli prima un mese.",
       "alreadySoft": "Il mese è già bloccato in modo provvisorio.",
       "alreadyHard": "Il mese è già chiuso in modo definitivo.",
@@ -550,14 +550,14 @@
   },
   "lift": {
     "title": "Togli il blocco",
-    "softBody": "Le scritture con data nel mese tornano aperte (accounting.lock).",
-    "hardBody": "Solo chi può togliere una chiusura definitiva (accounting.unlock: il titolare) lo fa, con un codice nuovo dell'app di autenticazione. Concordalo prima con il commercialista.",
+    "softBody": "Le scritture con data nel mese tornano aperte.",
+    "hardBody": "Solo chi può togliere una chiusura definitiva (il titolare) lo fa, con un codice nuovo dell'app di autenticazione. Concordalo prima con il commercialista.",
     "reason": "Perché",
     "go": "Togli il blocco di {month}",
     "done": "Il blocco di {month} è tolto.",
     "held": {
       "notLocked": "Il mese non è bloccato.",
-      "noUnlock": "Togliere una chiusura definitiva richiede accounting.unlock (di norma il titolare).",
+      "noUnlock": "Togliere una chiusura definitiva richiede il permesso di toglierla (di norma il titolare).",
       "reason": "Scrivi prima il perché."
     }
   },

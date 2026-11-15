@@ -107,10 +107,10 @@ export function authorizeTerms(actor: Actor, job: ImportScope, columns: readonly
     grantsFor(actor, permission as never).some((grant) => grant.companies === 'all' || (job.companyId !== null && grant.companies.includes(job.companyId)))
   const issues: Issue[] = []
   if (columns.includes('paymentTermsCode') && !reaches(PAYMENT_TERMS_VIEW)) {
-    issues.push({ path: 'columns/paymentTermsCode', message: 'Naming payment terms needs paymentterms.view (the payment terms library).' })
+    issues.push({ path: 'columns/paymentTermsCode', message: 'Naming payment terms needs the right to see the payment terms library.' })
   }
   if (columns.includes('list') && !reaches(PRICE_LISTS_MANAGE)) {
-    issues.push({ path: 'columns/list', message: 'Giving customers a price list needs pricelists.manage (the right to keep price lists): leave the Price list column out.' })
+    issues.push({ path: 'columns/list', message: 'Giving customers a price list needs the right to keep price lists: leave the Price list column out.' })
   }
   return issues
 }

@@ -73,6 +73,7 @@ import {
 } from './model'
 import { designScreen as recordScreen } from './record/fixtures'
 import { designScreen as recordsScreen } from './records/fixtures'
+import { rightRef } from '../../../lib/i18n/rights'
 
 const words = (locale: (typeof LOCALES)[number]) => messagesFor(locale, ['home-kpis'])['home-kpis']!
 const en = createTranslator('en', words('en'))
@@ -323,7 +324,7 @@ describe('the records behind a KPI (B-W2b-429 drills)', () => {
 
   it('says a refused drill by the right it needs', () => {
     const refused = (path: string) => new ApiError('forbidden', 403, 'forbidden', 'x', null, [{ path, message: 'x' }])
-    expect(drillProblem(refused('permission/costing.view'))).toEqual({ key: 'records.needsPermission', params: { permission: 'costing.view' } })
+    expect(drillProblem(refused('permission/costing.view'))).toEqual({ key: 'records.needsPermission', params: { right: rightRef('costing.view') } })
     expect(drillProblem(refused('grain/margin'))).toEqual({ key: 'records.needsGrain', params: { grain: 'margin' } })
     expect(drillProblem(new ApiError('unavailable', 503, 'network', 'x'))).toEqual({ key: 'error.offline' })
   })

@@ -42,7 +42,7 @@ import { lockEmployee, nameOf, readEmployee, type EmployeeRow } from './store'
 
 type Client = FactoryClient | CommandTx
 
-const MANAGE_WORDS = 'A person’s role is set by a role that keeps the HR register (people.employees.manage).'
+const MANAGE_WORDS = 'A person’s role is set by a role that keeps the HR register.'
 const LAW = { roleSheet: ROLE_SHEET_LAW, kit: KIT_LAW, training: TRAINING_LAW, surveillance: SURVEILLANCE_LAW, changeOfTask: CHANGE_OF_TASK_LAW }
 
 const placeOf = (row: EmployeeRow) => ({ companyId: row.companyId, siteId: row.siteId })

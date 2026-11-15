@@ -188,7 +188,7 @@ const refuse = (problems: Issue[], words: string): never => {
 /** POST /inventory/hides/:hideId/measures. */
 export async function recordMeasure(caller: CommandCaller, hideId: string, body: RecordMeasureBody, idempotencyKey?: string) {
   const { hide, context } = await hideFor(caller, hideId, INVENTORY_HIDES_MANAGE)
-  if (body.correctStock && !mayAtHide(context, INVENTORY_ADJUST, hide)) throw new ValidationError('Correcting the stock is an adjustment: it needs inventory.adjust at the hide\'s site.', [{ path: 'body/correctStock', message: 'Needs inventory.adjust.' }])
+  if (body.correctStock && !mayAtHide(context, INVENTORY_ADJUST, hide)) throw new ValidationError("Correcting the stock is an adjustment: it needs the right to adjust stock at the hide's site.", [{ path: 'body/correctStock', message: 'Needs the right to adjust stock.' }])
   const uom = body.areaUom ?? areaUom(hide.areaUom)
   const measuredAt = body.measuredAt ? parseInstant(body.measuredAt)! : undefined
   const problems = measureDraftProblems({ measuredArea: body.measuredArea, declaredArea: body.declaredArea, areaUom: uom, measuredAt, note: body.note }, new Date())

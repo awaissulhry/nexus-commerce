@@ -56,7 +56,7 @@
       "note": "This reason needs a note.",
       "long": "The note is longer than 500 characters.",
       "place": "Pick the quarantine place.",
-      "noRight": "Your role may not put stock on hold (quality.holds.place).",
+      "noRight": "Your role may not put stock on hold.",
       "pastDate": "Stock as of a past date cannot be changed.",
       "pickLots": "Select the rows of the lots to hold (rows with a lot).",
       "noLot": "This row has no lot: only lots and hides are held."
@@ -83,7 +83,7 @@
     "searching": "Looking for open work orders…",
     "noneFound": "No open work order matches.",
     "workOrdersFailed": "The work orders could not be read. Try again.",
-    "noRightWorkOrders": "Your role does not see work orders (workorders.view): reservations are made from the work order.",
+    "noRightWorkOrders": "Your role does not see work orders: reservations are made from the work order.",
     "due": "due {day}",
     "pieces_one": "{count} garment",
     "pieces_other": "{count} garments",
@@ -107,7 +107,7 @@
       "busy": "Reserving…",
       "workOrder": "Pick the work order.",
       "none": "None of the selected hides is free to reserve.",
-      "noRight": "Your role may not reserve stock (inventory.reserve)."
+      "noRight": "Your role may not reserve stock."
     },
     "refusal": {
       "HIDE_NOT_IN_STOCK": "A hide is not in stock at this site any more. Close and read the hides again.",
@@ -144,7 +144,7 @@
     "photoRemove": "Remove",
     "photoLabel": "Photo of the damaged stock",
     "photoHint": "Optional: the damage, where it is.",
-    "photoNoRight": "Your role may not add files (files.upload).",
+    "photoNoRight": "Your role may not add files.",
     "ncr": "Open a nonconformance about it",
     "ncrHint": "Quality follows the cause up; the NCR is raised from the lot or the hide.",
     "ncrNone": "A nonconformance needs a lot or a hide: this material has neither.",
@@ -186,7 +186,7 @@
       "reason": "Pick the reason.",
       "note": "This reason needs a note: say what happened.",
       "long": "The note is longer than 500 characters.",
-      "noRight": "Your role may not write off stock (inventory.scrap).",
+      "noRight": "Your role may not write off stock.",
       "noKey": "Open Movements from a stock figure (a material at a place) to write it off here.",
       "pastDate": "Stock as of a past date cannot be changed.",
       "consumed": "A hide that is used up or scrapped has nothing left to scrap.",

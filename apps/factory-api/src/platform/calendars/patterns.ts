@@ -32,7 +32,7 @@ const prefixed = (issues: readonly Issue[]): Issue[] => issues.map((issue) => ({
 
 function mayKeep(who: Actor, companyId: string | null): void {
   if (!reachesWholeCompany(who, CALENDARS_MANAGE, companyId)) {
-    throw new ForbiddenError(companyId === null ? 'A tenant-wide shift pattern reaches every company: keeping it needs calendars.manage over every company and site.' : "A company's shift pattern reaches all its sites: keeping it needs calendars.manage over every site of the company.")
+    throw new ForbiddenError(companyId === null ? 'A tenant-wide shift pattern reaches every company: keeping it needs the right to keep calendars over every company and site.' : "A company's shift pattern reaches all its sites: keeping it needs the right to keep calendars over every site of the company.")
   }
 }
 

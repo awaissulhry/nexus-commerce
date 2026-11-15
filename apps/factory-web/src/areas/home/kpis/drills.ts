@@ -4,6 +4,8 @@ import type { Locale } from '../../../lib/i18n/locales'
 import type { DrillAnswer, DrillName, DrillRecord, DrillRef } from './api'
 import { DRILL_NAMES } from './api'
 import type { Translate } from './model'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../lib/i18n/rights'
 
 /**
  * The records behind a KPI (SCR-471; B-W2b-429's drills, KP2:01 "each KPI's drill opens its list with the filters it
@@ -73,7 +75,7 @@ export function drillProblem(error: unknown): { key: string; params?: Record<str
     const grain = /^grain[/.]([a-z]+)$/.exec(path)?.[1]
     if (grain) return { key: 'records.needsGrain', params: { grain } }
     const permission = /^permission[/.]([a-z.]+)$/.exec(path)?.[1]
-    if (permission) return { key: 'records.needsPermission', params: { permission } }
+    if (permission) return { key: 'records.needsPermission', params: { right: rightRef(permission) } }
   }
   if (error.kind === 'forbidden') return { key: 'error.forbidden' }
   if (error.kind === 'invalid') return { key: 'records.span.invalid' }

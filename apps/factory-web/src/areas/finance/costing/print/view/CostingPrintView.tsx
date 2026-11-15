@@ -12,6 +12,8 @@ import { basisPhrase, COSTING_NAMESPACE, methodPhrase, moneyText, pctText, signe
 import { CLOSE_NS } from '../../../../production/work-orders/close/model'
 import { useCostStateWords } from '../../closed/view/CostState'
 import '../../costing.css'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../../../lib/i18n/rights'
 
 /** SCR-154-print — the variance report on paper: one view model, nothing fetched. */
 export interface CostingPrintModel {
@@ -50,7 +52,7 @@ function CostingPrint({ model }: { model: CostingPrintModel }) {
   if (!model.can.view) {
     return (
       <article className="fw-fco-print">
-        <EmptyState title={t('noAccess.title')} description={t('noAccess.body', { permission: 'costing.view' })} />
+        <EmptyState title={t('noAccess.title')} description={t('noAccess.body', { right: rightRef('costing.view') })} />
       </article>
     )
   }

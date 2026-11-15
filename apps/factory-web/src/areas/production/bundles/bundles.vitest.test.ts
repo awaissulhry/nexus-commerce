@@ -5,6 +5,7 @@ import { RECORD } from './record/fixtures'
 import { ticketLabel } from '@nexus/factory-domain/production/bundles/ticket'
 import { addressOf, addressText, askOf, BUNDLE_TILES, BUNDLE_VIEWS, bundlesCanOf, bundleTabOf, csvCell, findingSelectable, isBundleChange, nextWords, oneHit, patternsState, placeWords, reasonOk, reprintHeld, reviewHeld, reviewManyHeld, rowsOfView, seenWords, stuckTile, stuckWords, ticketLayout, ticketOf, viewOfAddress, viewQuery, voidHeld, whoHeld, whoProblem, whoShowHeld } from './model'
 import { ApiError } from '../../../lib/api/errors'
+import { rightRef } from '../../../lib/i18n/rights'
 
 const params = (query: string) => new URLSearchParams(query)
 const manager = bundlesCanOf(permissionsOf('manager'))
@@ -147,7 +148,7 @@ describe('scan-pattern checks: about bundles, never a person', () => {
 
   it('Show who: the owner\'s permission first, then the site\'s checks', () => {
     expect(whoHeld(FINDINGS[0]!, SUMMARY, owner)).toBeNull()
-    expect(whoHeld(FINDINGS[0]!, SUMMARY, manager)).toEqual({ key: 'held.noWho', params: { permission: 'production.bundles.who' } })
+    expect(whoHeld(FINDINGS[0]!, SUMMARY, manager)).toEqual({ key: 'held.noWho', params: { right: rightRef('production.bundles.who') } })
     expect(manager.who).toBe(false)
     const off = (checks: 'STATION_SITE' | 'NO_BASIS' | 'GATE_CLOSED') => whoHeld(FINDINGS[0]!, { ...SUMMARY, sites: [{ ...SUMMARY.sites[0]!, checks }] }, owner)?.key
     expect([off('STATION_SITE'), off('NO_BASIS'), off('GATE_CLOSED')]).toEqual(['checks.STATION_SITE', 'checks.NO_BASIS', 'checks.GATE_CLOSED'])

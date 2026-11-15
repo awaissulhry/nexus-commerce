@@ -165,7 +165,7 @@ export async function createPlan(caller: CommandCaller, body: CreatePlanBody, id
   const known = await caller.withClient((client) => readMachine(client, context, body.machineId))
   if (!known) throw bodyIssue('machineId', 'Not a machine of the group.')
   assertMay(context, PLANT_VIEW, known, 'Machine')
-  assertMayWrite(context, PLANT_CHECKS_MANAGE, known, 'Check plans of this site are kept by a role that keeps the statutory checks (plant.checks.manage).')
+  assertMayWrite(context, PLANT_CHECKS_MANAGE, known, 'Check plans of this site are kept by a role that keeps the statutory checks.')
   if ((body.interval === undefined) !== (body.intervalUnit === undefined)) throw bodyIssue('interval', 'Give the interval with its unit, or neither (the type\'s default).')
   const problems = [...(body.interval !== undefined ? intervalProblems(body.interval, body.intervalUnit) : []), ...reminderProblems(body.reminderDays)]
   if (problems.length > 0) throw problemsError(problems, 'The plan is not valid.')
@@ -250,7 +250,7 @@ export interface UpdatePlanBody {
 export async function updatePlan(caller: CommandCaller, planId: string, body: UpdatePlanBody, idempotencyKey?: string) {
   const context = officeOf(caller)
   const known = await knownPlan(caller, context, planId)
-  assertMayWrite(context, PLANT_CHECKS_MANAGE, known, 'Check plans of this site are kept by a role that keeps the statutory checks (plant.checks.manage).')
+  assertMayWrite(context, PLANT_CHECKS_MANAGE, known, 'Check plans of this site are kept by a role that keeps the statutory checks.')
   const { result, replayed } = await command(caller, { name: 'plant.updateCheckPlan', idempotencyKey, input: { planId, ...body } }, async (tools) => {
     const { tx, now } = tools
     const plan = await lockedPlan(tools, context, known, body.version)
@@ -297,7 +297,7 @@ export async function updatePlan(caller: CommandCaller, planId: string, body: Up
 export async function movePlan(caller: CommandCaller, planId: string, body: { readonly version: number; readonly nextDueOn: BusinessDate; readonly reason: string }, idempotencyKey?: string) {
   const context = officeOf(caller)
   const known = await knownPlan(caller, context, planId)
-  assertMayWrite(context, PLANT_CHECKS_MANAGE, known, 'Check plans of this site are kept by a role that keeps the statutory checks (plant.checks.manage).')
+  assertMayWrite(context, PLANT_CHECKS_MANAGE, known, 'Check plans of this site are kept by a role that keeps the statutory checks.')
   const reason = body.reason.trim()
   if (!reason) throw bodyIssue('reason', 'Say why the check moves.')
   const { result, replayed } = await command(caller, { name: 'plant.moveCheckPlan', idempotencyKey, input: { planId, ...body } }, async (tools) => {
@@ -318,7 +318,7 @@ export async function movePlan(caller: CommandCaller, planId: string, body: { re
 export async function endPlan(caller: CommandCaller, planId: string, body: { readonly version: number; readonly reason: string }, idempotencyKey?: string) {
   const context = officeOf(caller)
   const known = await knownPlan(caller, context, planId)
-  assertMayWrite(context, PLANT_CHECKS_MANAGE, known, 'Check plans of this site are kept by a role that keeps the statutory checks (plant.checks.manage).')
+  assertMayWrite(context, PLANT_CHECKS_MANAGE, known, 'Check plans of this site are kept by a role that keeps the statutory checks.')
   const reason = body.reason.trim()
   if (!reason) throw bodyIssue('reason', 'Say why the plan ends.')
   const { result, replayed } = await command(caller, { name: 'plant.endCheckPlan', idempotencyKey, input: { planId, ...body } }, async (tools) => {

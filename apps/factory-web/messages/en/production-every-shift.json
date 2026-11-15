@@ -118,7 +118,7 @@
   "traveller": {
     "noRight": {
       "title": "You cannot see this traveller",
-      "body": "It needs {permission}."
+      "body": "It needs the right “{right}”."
     },
     "none": {
       "title": "No work order named",
@@ -134,7 +134,7 @@
   "offStandard": {
     "title": "Off-standard minutes",
     "hint": "Time this work order lost to waiting and indirect work, never per person.",
-    "held": "Off-standard minutes need the permission to read off-standard time (production.offstandard.view).",
+    "held": "Off-standard minutes need the permission to read off-standard time.",
     "failed": "The off-standard minutes could not be read",
     "retry": "Try again",
     "loading": "Reading the off-standard minutes…",

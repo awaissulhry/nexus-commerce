@@ -27,7 +27,7 @@
   },
   "noAccess": {
     "title": "You cannot see this view",
-    "body": "It needs the right to read compliance (compliance.certificates.view). An administrator gives it in Admin › Roles & permissions."
+    "body": "It needs the right to read compliance. An administrator gives it in Admin › Roles & permissions."
   },
   "list": {
     "removeFilter": "Remove the filter {name}",
@@ -49,8 +49,8 @@
     "CUSTOMER_RSL": "Brand RSL"
   },
   "held": {
-    "manage": "Asking and deciding supplier declarations needs compliance.supplierDeclarations.manage (the quality role). An administrator gives it in Admin › Roles & permissions.",
-    "substances": "Changing substance rules, test plans and profiles needs compliance.substances.manage (the quality role).",
+    "manage": "Your role cannot ask and decide supplier declarations (the quality role can). An administrator gives it in Admin › Roles & permissions.",
+    "substances": "Your role cannot change substance rules, test plans and profiles (the quality role can).",
     "offline": "Offline: this waits until the connection is back.",
     "remindNotWaiting": "Only a request still waiting for its answer can be reminded.",
     "remindNoneWaiting": "None of the chosen requests is waiting for an answer.",
@@ -61,18 +61,18 @@
     "acceptLines_one": "{count} material has no answer yet: write it in the Answer tab first.",
     "acceptLines_other": "{count} materials have no answer yet: write them in the Answer tab first.",
     "uploadRefused": "The supplier's document was refused among the supplier's documents (Purchasing › Suppliers): ask again instead.",
-    "uploadReview": "The supplier's document still waits in Purchasing: accepting it needs purchasing.supplierDocuments.review too.",
+    "uploadReview": "The supplier's document still waits in Purchasing: accepting it also needs the right to accept supplier documents.",
     "askAgainAnswered": "It is answered: accept or reject it first, then ask again.",
     "askedAgain": "Asked again already in {number}.",
     "answerNotWaiting": "The answer is recorded already.",
-    "filesUpload": "Recording the answer uploads its file: that needs files.upload.",
+    "filesUpload": "Recording the answer uploads its file: that needs the right to upload files.",
     "previewOffice": "Asked by the office (e-mail by hand): the supplier has no portal page for it.",
-    "preview": "Seeing the supplier's portal needs partners.preview (buyers and administrators).",
+    "preview": "Your role cannot open the supplier's portal as it shows to them (buyers and administrators can).",
     "reviewFirst": "Review the requests first.",
     "nothingToAsk": "Nothing to send or add: every supplier and kind is skipped.",
     "archived": "Archived: restore it first.",
     "evaluateMax": "At most {max} materials at a time.",
-    "imports": "Importing needs imports.view (administrators).",
+    "imports": "Importing needs the right to see imports (administrators).",
     "listMax": "The list shows at most {max} rows: narrow it with a filter or the search."
   },
   "decl": {

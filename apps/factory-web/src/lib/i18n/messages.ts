@@ -1,4 +1,6 @@
 import { DEFAULT_LOCALE, INTL_LOCALE, LOCALES, type Locale } from './locales'
+// B-W2b-F51: a right in words, never its code (rights.ts).
+import { rightOf, wordsOfRight } from './rights'
 
 /**
  * The UI text catalogues (A1 §6.2, PLAN §4.6): one JSON file per area and language, `messages/<locale>/<area>.json`
@@ -68,9 +70,26 @@ export function placeholdersOf(text: string): string[] {
   return [...new Set([...text.matchAll(PLACEHOLDER)].map((m) => m[1]))].sort()
 }
 
+// ---- B-W2b-F51: a right in words, never its code -------------------------------------------------------------------
+
+/** A right's words in a language (the role screens' own words, admin.json `perm.*`, said short: rights.ts headlineOf): never the permission code. */
+export function rightWords(locale: Locale, permission: string): string {
+  return wordsOfRight(permission, CATALOGUE[locale]?.admin, CATALOGUE[DEFAULT_LOCALE]?.admin)
+}
+
+/** The parameters with every `rightRef(permission)` said as the right's words in the language. */
+function withRights(locale: Locale, params: Params | undefined): Params | undefined {
+  if (!params || !Object.values(params).some((value) => rightOf(value) !== null)) return params
+  return Object.fromEntries(Object.entries(params).map(([name, value]) => {
+    const permission = rightOf(value)
+    return [name, permission === null ? value : rightWords(locale, permission)]
+  }))
+}
+
 /**
  * A translator for one namespace. A missing key answers the key itself (visible on screen, caught by the i18n test);
- * `count` picks a plural form when `<key>_one` / `<key>_other` exist.
+ * `count` picks a plural form when `<key>_one` / `<key>_other` exist. A parameter made with `rightRef(permission)`
+ * (rights.ts) is said as the right's words in this language (B-W2b-F51).
  */
 export function createTranslator(locale: Locale, dictionary: Dictionary): Translate {
   const plurals = new Intl.PluralRules(INTL_LOCALE[locale])
@@ -79,7 +98,7 @@ export function createTranslator(locale: Locale, dictionary: Dictionary): Transl
     if (text === undefined && params && typeof params.count === 'number') {
       text = dictionary[`${key}_${plurals.select(params.count)}`] ?? dictionary[`${key}_other`]
     }
-    return text === undefined ? key : interpolate(text, params)
+    return text === undefined ? key : interpolate(text, withRights(locale, params))
   }
 }
 

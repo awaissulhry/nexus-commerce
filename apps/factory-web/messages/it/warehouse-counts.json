@@ -174,13 +174,13 @@
   },
   "held": {
     "busy": "In corso…",
-    "noManage": "Il tuo ruolo non può contare (inventory.counts.manage).",
-    "noApprove": "Il tuo ruolo non può approvare inventari (inventory.counts.approve).",
-    "noAdjust": "Registrare le differenze richiede le rettifiche di magazzino (inventory.adjust).",
-    "noSignOff": "La firma richiede inventory.counts.signoff (di solito Amministrazione).",
+    "noManage": "Il tuo ruolo non può contare.",
+    "noApprove": "Il tuo ruolo non può approvare inventari.",
+    "noAdjust": "Registrare le differenze richiede le rettifiche di magazzino.",
+    "noSignOff": "La firma richiede il permesso di firmare l'inventario di fine anno (di solito Amministrazione).",
     "noCostSignOff": "L'elenco valorizzato è un documento di costo: firmarlo richiede l'accesso ai costi.",
     "noCostPreview": "L'elenco valorizzato mostra i costi: richiede l'accesso ai costi.",
-    "noFiles": "Il tuo ruolo non può aprire i file archiviati (files.read).",
+    "noFiles": "Il tuo ruolo non può aprire i file archiviati.",
     "notDraft": "Si avvia solo una bozza.",
     "notCounting": "Si invia solo un inventario in conteggio.",
     "notSubmitted": "Si approva dopo l'invio.",
@@ -248,7 +248,7 @@
     "draftCycle": "Avvia il conteggio per fissare le quantità attese e creare le righe.",
     "draftYearEnd": "Si avvia il {date} o dopo; le quantità attese sono la giacenza alla fine di quel giorno.",
     "noPanels": "Qui si aprono la discussione, i file e la cronologia di questo inventario.",
-    "noThreads": "La discussione di un inventario richiede il permesso di leggere le discussioni (threads.read)."
+    "noThreads": "La discussione di un inventario richiede il permesso di leggere le discussioni."
   },
   "tab": {
     "lines": "Righe",

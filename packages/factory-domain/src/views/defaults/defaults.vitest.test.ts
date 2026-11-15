@@ -20,8 +20,8 @@ describe('who may make a view their default', () => {
 
   it('never a view someone else shared (the mark is the row owner’s); never without views.save', () => {
     expect(personalDefaultRefusal(view({ ownerId: other, audience: 'EVERYONE' }), reader({ manage: true }))).toMatch(/save this one as your own/)
-    expect(personalDefaultRefusal(view(), reader({ save: false }))).toMatch(/views\.save/)
-    expect(personalDefaultRefusal(view(), reader({ save: false, manage: true }))).toMatch(/views\.save/)
+    expect(personalDefaultRefusal(view(), reader({ save: false }))).toMatch(/the right to save views/)
+    expect(personalDefaultRefusal(view(), reader({ save: false, manage: true }))).toMatch(/the right to save views/)
   })
 })
 

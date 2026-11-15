@@ -179,7 +179,7 @@ describe('machines in depth: the calls as the API takes them', () => {
 
 const LEFT_KEY = /\b(?:common|section|tab|tile|tileHint|need|col|due|depth|printState|held|keys|wall|status|stepUp|refusal|docs|history|tag|tags|machineStatus|machineTab|machines|machine|record|problem)\.[a-zA-Z_]+(?:\.[a-zA-Z_]+)*\b/
 const LEFT_PLACEHOLDER = /\{[a-zA-Z]+\}/
-/** Permission names are said on purpose; file names and domains are not keys. */
+/** Permission names are stripped before the key check, though no screen says one since B-W2b-F51; file names and domains are not keys. */
 const SAID = /\b(?:plant\.[a-zA-Z.]+|[a-z0-9-]+\.(?:pdf|jpg|png))\b/g
 
 function render(screen: DesignScreen<unknown>, model: unknown, locale: (typeof LOCALES)[number]): string {

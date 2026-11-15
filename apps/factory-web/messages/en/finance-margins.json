@@ -1,7 +1,7 @@
 {
   "noAccess": {
     "title": "You don't have access to margins",
-    "body": "Margins needs the permission {permission}. Ask a person who manages roles."
+    "body": "Margins needs the right “{right}”. Ask a person who manages roles."
   },
   "band": {
     "label": "Scope and actions",
@@ -28,7 +28,7 @@
   "tiles": {
     "title": "Margins",
     "failed": "Couldn't load margins",
-    "noGrain": "The margin tiles need the margin grain (money.margin).",
+    "noGrain": "The margin tiles need the margin grain.",
     "average": "Average margin %",
     "averageHint": "As estimated now, over the orders with a known cost",
     "unknown_one": "{count} order's cost cannot be told yet",
@@ -105,7 +105,7 @@
   "by": {
     "title": "By customer and style",
     "hint": "Profitability per customer and per style, as estimated now. A bar filters the orders.",
-    "noGrain": "By customer and style needs the margin grain (money.margin).",
+    "noGrain": "By customer and style needs the margin grain.",
     "failed": "Couldn't load by customer and style",
     "loading": "Reading the margins by customer and style…",
     "customer": "By customer",
@@ -119,13 +119,13 @@
     "thisOrder": "Order",
     "noun": "order",
     "open": "Open order",
-    "noGrain": "Margins need the margin grain (money.margin).",
+    "noGrain": "Margins need the margin grain.",
     "provisional": "Provisional: the costing method is not decided yet (the accountant chooses it).",
     "method": "The costs follow the company's costing method.",
     "orderLink": "Open {number} in Sales › Orders"
   },
   "held": {
-    "noOrders": "Opening an order needs the permission {permission}."
+    "noOrders": "Opening an order needs the right “{right}”."
   },
   "strip": {
     "quoted": "Quoted margin",

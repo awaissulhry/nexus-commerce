@@ -17,6 +17,8 @@ import { COUNTS_NAMESPACES, scopeParts, STATUS_TONE, type Phrase } from './model
 import type { Loaded } from './view-model'
 import '../../_shared/stock/stock.css'
 import './counts.css'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../lib/i18n/rights'
 
 /**
  * View parts Warehouse › Counts (SCR-132) shares between the list, the count record and the dialogs: the catalogue
@@ -69,7 +71,7 @@ export function Money({ minor, currency, signed = false }: { minor: number | nul
 /** The page says which permission is missing (design: "no permission" names it), never an empty list. */
 export function NoCountsAccess() {
   const t = useWords()
-  return <EmptyState icon={<ShieldOff size={22} aria-hidden />} title={t('stock:problem.forbidden')} description={t('stock:problem.noPermission', { permission: 'inventory.counts.view' })} />
+  return <EmptyState icon={<ShieldOff size={22} aria-hidden />} title={t('stock:problem.forbidden')} description={t('stock:problem.noPermission', { right: rightRef('inventory.counts.view') })} />
 }
 
 export interface RecordFrameProps {
@@ -115,7 +117,7 @@ export function RecordFrame({ backHref, loaded, title, meta, actions, status, ta
                 loaded.status === 'error'
                   ? t(`stock:${loaded.problem}`)
                   : loaded.status === 'forbidden'
-                    ? t('stock:problem.noPermission', { permission: 'inventory.counts.view' })
+                    ? t('stock:problem.noPermission', { right: rightRef('inventory.counts.view') })
                     : t('record.notFoundBody')
               }
               action={

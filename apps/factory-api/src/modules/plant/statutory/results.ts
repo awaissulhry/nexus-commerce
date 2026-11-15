@@ -95,9 +95,9 @@ export interface RecordBody {
 
 /** What a caller must hold over the machine for each part of the step, asked before anything is written. */
 function assertParts(context: OfficeContext, machine: { readonly companyId: string; readonly siteId: string }, parts: { readonly record: boolean; readonly job: boolean; readonly lock: boolean }): void {
-  if (parts.record) assertMayWrite(context, PLANT_CHECKS_MANAGE, machine, 'Check results of this site are recorded by a role that keeps the statutory checks (plant.checks.manage).')
-  if (parts.job) assertMayWrite(context, PLANT_JOBS_MANAGE, machine, 'A job of the check is made by a role that plans maintenance jobs (plant.jobs.manage).')
-  if (parts.lock) assertMayWrite(context, PLANT_REPORT, machine, 'The machine is locked by a role that reports machine problems (plant.report).')
+  if (parts.record) assertMayWrite(context, PLANT_CHECKS_MANAGE, machine, 'Check results of this site are recorded by a role that keeps the statutory checks.')
+  if (parts.job) assertMayWrite(context, PLANT_JOBS_MANAGE, machine, 'A job of the check is made by a role that plans maintenance jobs.')
+  if (parts.lock) assertMayWrite(context, PLANT_REPORT, machine, 'The machine is locked by a role that reports machine problems.')
 }
 
 /** The newest result of a plan in force (not corrected), other than `except`. */

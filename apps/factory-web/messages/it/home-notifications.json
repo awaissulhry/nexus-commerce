@@ -1,7 +1,7 @@
 {
   "refused": {
     "title": "Le notifiche non sono aperte per te",
-    "body": "I tuoi ruoli non includono la Home (home.view). Chiedi a un amministratore se ti serve."
+    "body": "I tuoi ruoli non includono la Home. Chiedi a un amministratore se ti serve."
   },
   "band": {
     "label": "Notifiche: stato e azioni",

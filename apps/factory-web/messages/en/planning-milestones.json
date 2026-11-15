@@ -1,7 +1,7 @@
 {
   "noAccess": {
     "title": "You cannot open Time & action",
-    "body": "Time & action is for the people who plan: your role does not read the planning (planning.view). Ask your administrator."
+    "body": "Time & action is for the people who plan: your role does not read the planning. Ask your administrator."
   },
   "page": {
     "today": "Today {day}",

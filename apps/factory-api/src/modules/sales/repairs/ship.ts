@@ -47,7 +47,7 @@ export interface ShipAnswer {
 export async function shipRepair(files: FilesRuntime, caller: CommandCaller, repairId: string, body: ShipBody, idempotencyKey?: string, onPdfError?: (error: unknown) => void): Promise<ShipAnswer> {
   const { context, repair: seen } = await officeRepair(caller, repairId, SALES_REPAIRS_SHIP)
   if (body.ddt && !can(actorOf(context), SHIPPING_DDT_ISSUE, { companyId: seen.companyId, siteId: seen.siteId })) {
-    throw new ForbiddenError('Issuing the DDT needs the permission to issue DDTs (shipping.ddt.issue): ask the warehouse, or send the garment back with a DDT issued under Shipping.')
+    throw new ForbiddenError('Issuing the DDT needs the permission to issue DDTs: ask the warehouse, or send the garment back with a DDT issued under Shipping.')
   }
   const company = body.ddt ? await companyLegalOf(caller, seen.companyId) : null
   const { result } = await command(caller, { name: 'repairs.ship', idempotencyKey, input: { repairId, ...body } }, async (tools) => {

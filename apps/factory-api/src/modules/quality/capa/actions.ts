@@ -144,7 +144,7 @@ export async function doneAction(caller: CommandCaller, capaId: string, actionId
     const { tx, now } = tools
     const row = await lockCapaRow(tools, capaId, { bump: false })
     const before = await lockAction(tools, capaId, actionId, body.version)
-    if (!mayRecordDone(context, row, before)) throw new ForbiddenError('Only its owner, or quality (quality.capa.manage), records an action done.')
+    if (!mayRecordDone(context, row, before)) throw new ForbiddenError('Only its owner, or quality, records an action done.')
     const note = body.evidenceNote?.trim() || null
     if (note && note.length > CAPA_LIMITS.evidence) refuse([{ path: 'evidenceNote', message: `At most ${CAPA_LIMITS.evidence} characters.` }], 'The evidence is too long.')
     const files = await tx.storedFile.count({ where: { recordType: 'CapaAction', recordId: actionId, status: 'AVAILABLE' } })

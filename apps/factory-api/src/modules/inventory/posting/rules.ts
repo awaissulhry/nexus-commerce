@@ -124,7 +124,7 @@ export async function getRules(caller: CommandCaller, query: { readonly companyI
 function assertMayChange(caller: CommandCaller, companyId: string | null): OfficeContext {
   const context = officeOf(caller)
   if (!mayWrite(actorOf(context), INVENTORY_RULES_MANAGE, companyId)) {
-    throw new ForbiddenError(companyId === null ? 'The warehouse rules of every company are changed only by a role over every company.' : 'Changing the warehouse rules needs inventory.rules.manage for the company.')
+    throw new ForbiddenError(companyId === null ? 'The warehouse rules of every company are changed only by a role over every company.' : 'Changing the warehouse rules needs the right to change them for the company.')
   }
   return context
 }

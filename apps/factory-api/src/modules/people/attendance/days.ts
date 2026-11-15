@@ -344,7 +344,7 @@ export async function dayForWrite(db: Client, context: OfficeContext, dayId: str
   const head = await dayHead(db, dayId)
   if (!head || !may(context, PEOPLE_ATTENDANCE_VIEW, { companyId: head.companyId, siteId: head.siteId })) throw new NotFoundError('Day not found.')
   if (!may(context, permission, { companyId: head.companyId, siteId: head.siteId })) {
-    throw new DomainError('forbidden', permission === PEOPLE_ATTENDANCE_APPROVE ? 'Approving attendance days needs people.attendance.approve.' : 'Fixing attendance days needs people.attendance.manage.')
+    throw new DomainError('forbidden', permission === PEOPLE_ATTENDANCE_APPROVE ? 'Approving attendance days needs the right to approve them.' : 'Fixing attendance days needs the right to enter and fix them.')
   }
   await requireAttendance(db, head.siteId)
   const person = await personOf(db, head.employeeId)

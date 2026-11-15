@@ -196,7 +196,7 @@ describe('the brand decides by link (SAL-312)', () => {
     expect(seeded.record).toMatchObject({ type: 'SampleRound', words: { en: expect.stringMatching(/^SEED-SR-\d+ · Pre-production · round 1$/), it: expect.stringContaining('Pre-produzione · giro 1') } })
     await as(sales, 'POST', `/approvals-out/${samples.approvalRequestId}/withdraw`, { version: seeded.version, reason: 'Made-up: new photos.' })
     // The quality inspector may ask partners (partners.approvals.ask) but does not decide samples.
-    expect((await as(quality, 'POST', '/approvals-out', { kind: 'SAMPLE', recordType: 'SampleRound', recordId: round, question: 'x', send: false }, 403)).error.message).toBe('Asking a partner to approve this record needs sales.samples.decide.')
+    expect((await as(quality, 'POST', '/approvals-out', { kind: 'SAMPLE', recordType: 'SampleRound', recordId: round, question: 'x', send: false }, 403)).error.message).toBe('Asking a partner to approve this record needs a right your role does not hold over records of this kind.')
     const photo = await photoOf('SampleRound', round, 'Made-up pre-production front.png')
     const asked = await as(sales, 'POST', '/approvals-out', { kind: 'SAMPLE', recordType: 'SampleRound', recordId: round, question: 'Approve the pre-production sample.', fileIds: [photo], send: false }, 201)
     expect(asked.request).toMatchObject({ kind: 'SAMPLE', status: 'OPEN', party: { id: P1 } })

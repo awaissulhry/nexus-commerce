@@ -30,7 +30,7 @@ const day = (value: Date | null): string | null => (value === null ? null : busi
 export function receiverOf(caller: CommandCaller): FloorContext {
   const context = stockContextOf(caller)
   if (context.audience !== 'floor') throw new ForbiddenError()
-  if (!can(actorOf(context), INVENTORY_RECEIVE, { siteId: context.siteId })) throw new ForbiddenError('Receiving goods needs inventory.receive at this site.')
+  if (!can(actorOf(context), INVENTORY_RECEIVE, { siteId: context.siteId })) throw new ForbiddenError('Receiving goods needs the right to receive goods at this site.')
   return context
 }
 

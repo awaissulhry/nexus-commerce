@@ -163,7 +163,7 @@ describe('the API calls', () => {
 const LEFT_KEY =
   /\b(?:tile|view|delivery|language|list|sendMany|send|change|counter|revisionDraft|revisions|field|value|reminders|confirmBy|remind|line|ended|closeShort|end|cancel|reach|refused|notice|common|po|held|problem|record|uom|poStatus|rcStatus|rc|live)\.[a-zA-Z_]+(?:\.[a-zA-Z_]+)*\b/
 const LEFT_PLACEHOLDER = /\{[a-zA-Z]+\}/
-/** Permission names and example mail domains are said on purpose. */
+/** Example mail domains are said on purpose; a permission name is stripped too, though no screen says one since B-W2b-F51. */
 const SAID = /\b(?:purchasing\.[a-z.]+|money\.cost|[a-z-]+\.example\.com|example\.com)\b/g
 
 function render(screen: DesignScreen<unknown>, model: unknown, locale: (typeof LOCALES)[number]): string {

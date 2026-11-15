@@ -173,7 +173,7 @@ export interface IssuedAnswer {
 export async function issueDdt(files: FilesRuntime, caller: CommandCaller, shipmentId: string, body: IssueBody, idempotencyKey?: string, onPdfError?: (error: unknown) => void): Promise<IssuedAnswer> {
   const context = officeContextOf(caller)
   const shipment = await officeShipment(caller, shipmentId, SHIPPING_DDT_ISSUE)
-  if (body.ship === true && !mayOn(context, SHIPPING_MANAGE, shipment)) throw new ForbiddenError('Shipping the goods with the DDT needs shipping.manage too.')
+  if (body.ship === true && !mayOn(context, SHIPPING_MANAGE, shipment)) throw new ForbiddenError('Shipping the goods with the DDT needs the right to work on shipments too.')
   const company = await companyLegalOf(caller, shipment.companyId)
   const { result } = await withCreditHolds(caller, idempotencyKey, () => withGateRecords(caller, idempotencyKey, () => command(
     caller,

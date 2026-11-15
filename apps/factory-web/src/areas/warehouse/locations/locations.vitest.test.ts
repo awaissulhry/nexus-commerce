@@ -136,8 +136,8 @@ describe('SCR-065 draws every design case in both languages with no key left', (
     })
   }
 
-  it('the person without the right is told which permission is missing; read-only gets no inputs', () => {
-    expect(draw(LocationsView, listScreen.cases.find((item) => item.id === 'sales-no-permission')!.model.model)).toContain('inventory.locations.view')
+  it('the person without the right is told which right is missing, in words; read-only gets no inputs', () => {
+    expect(draw(LocationsView, listScreen.cases.find((item) => item.id === 'sales-no-permission')!.model.model)).toContain('Your role does not include the right “See a site')
     expect(draw(LocationRecordView, recordScreen.cases.find((item) => item.id === 'read-only')!.model.model)).not.toContain('<input')
     expect(draw(LocationRecordView, recordScreen.cases.find((item) => item.id === 'archived')!.model.model)).not.toContain('<input')
     expect(draw(LocationsView, listScreen.cases.find((item) => item.id === 'read-only')!.model.model)).not.toContain('New location')

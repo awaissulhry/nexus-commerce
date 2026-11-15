@@ -125,7 +125,7 @@ export function publishHoldOf(previous: PlanRow | null, set: readonly SlotRow[],
 export const heldReasonOf = (previous: PlanRow | null, set: readonly SlotRow[], diff: PlanDiff, range: Pick<PublishRange, 'coversFrom' | 'coversTo'>): string | null => publishHoldOf(previous, set, diff, range)?.words ?? null
 
 /** The hold of a person who may not publish at the site. */
-export const NO_PERMISSION_HOLD: PublishHold = { code: 'NO_PERMISSION', words: 'Publishing needs planning.schedule.publish at this site.', previousVersion: null, coversFrom: null, coversTo: null }
+export const NO_PERMISSION_HOLD: PublishHold = { code: 'NO_PERMISSION', words: 'Publishing needs the right to publish the plan at this site.', previousVersion: null, coversFrom: null, coversTo: null }
 
 /** A hold as the board's band and the dialog give it (without the words). */
 export const holdViewOf = (hold: PublishHold | null) => (hold ? { code: hold.code, previousVersion: hold.previousVersion, coversFrom: hold.coversFrom, coversTo: hold.coversTo } : null)

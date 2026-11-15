@@ -195,7 +195,7 @@ export async function createJob(caller: CommandCaller, body: CreateBody, idempot
   const known = await caller.withClient((client) => readMachine(client, context, body.machineId))
   if (!known) throw bodyIssue('machineId', 'Not a machine of the group.')
   assertMay(context, PLANT_VIEW, known, 'Machine')
-  assertMayWrite(context, PLANT_JOBS_MANAGE, known, 'Maintenance jobs of this site are made by a role that plans them (plant.jobs.manage).')
+  assertMayWrite(context, PLANT_JOBS_MANAGE, known, 'Maintenance jobs of this site are made by a role that plans them.')
   const { result, replayed } = await command(caller, { name: 'plant.createJob', idempotencyKey, input: body }, async (tools) => {
     const { tx, now } = tools
     const machine = (await lockMachine(tx, context, known.id))!
@@ -248,7 +248,7 @@ async function knownJob(caller: CommandCaller, context: PlantContext, jobId: str
 export async function updateJob(caller: CommandCaller, jobId: string, body: UpdateBody, idempotencyKey?: string) {
   const context = officeOf(caller)
   const known = await knownJob(caller, context, jobId)
-  assertMayWrite(context, PLANT_JOBS_MANAGE, known, 'Maintenance jobs of this site are changed by a role that plans them (plant.jobs.manage).')
+  assertMayWrite(context, PLANT_JOBS_MANAGE, known, 'Maintenance jobs of this site are changed by a role that plans them.')
   const { result, replayed } = await command(caller, { name: 'plant.updateJob', idempotencyKey, input: { jobId, ...body } }, async (tools) => {
     const { tx, now } = tools
     const machine = (await lockMachine(tx, context, known.machineId))!
@@ -300,7 +300,7 @@ export async function assignJobs(caller: CommandCaller, body: { readonly jobs: r
   body.jobs.forEach((entry, index) => {
     const job = known.find((row) => row.id === entry.id)
     if (!job || !may(context, PLANT_VIEW, job)) throw new ValidationError('A job named is not there.', [{ path: `body/jobs/${index}`, message: 'Job not found.' }])
-    if (!may(context, PLANT_JOBS_MANAGE, job)) throw new ValidationError('A job named is of a site you do not plan.', [{ path: `body/jobs/${index}`, message: 'Assigned only by a role that plans its jobs (plant.jobs.manage).' }])
+    if (!may(context, PLANT_JOBS_MANAGE, job)) throw new ValidationError('A job named is of a site you do not plan.', [{ path: `body/jobs/${index}`, message: 'Assigned only by a role that plans its jobs.' }])
   })
   const { result, replayed } = await command(caller, { name: 'plant.assignJobs', idempotencyKey, input: body }, async (tools) => {
     const { tx, now } = tools
@@ -353,7 +353,7 @@ export async function moveJob(caller: CommandCaller, jobId: string, move: JobMov
   }
   const workDone = move === 'handBack' ? workDoneOf(body.action, body.workDone)! : null
   const permission = rule.by === 'office' ? PLANT_JOBS_MANAGE : PLANT_JOBS_WORK
-  assertMayWrite(context, permission, known, rule.by === 'office' ? 'Maintenance jobs of this site are planned, closed and cancelled by a role that plans them (plant.jobs.manage).' : 'Maintenance jobs are worked by a technician (plant.jobs.work).')
+  assertMayWrite(context, permission, known, rule.by === 'office' ? 'Maintenance jobs of this site are planned, closed and cancelled by a role that plans them.' : 'Maintenance jobs are worked by a technician.')
   const { result, replayed } = await command(caller, { name: `plant.${move}Job`, idempotencyKey, input: { jobId, move, ...body } }, async (tools) => {
     const { tx, now } = tools
     const machine = (await lockMachine(tx, context, known.machineId))!

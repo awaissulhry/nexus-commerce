@@ -71,7 +71,7 @@ export const maySee = (context: OfficeContext, record: Pick<AmendedRecordRow, 't
 export async function recordFor(caller: CommandCaller, context: OfficeContext, type: AmendedRecord, id: string, permission?: Permission): Promise<AmendedRecordRow> {
   const record = await caller.withClient((client) => readRecord(client, type, id))
   if (!record || !maySee(context, record)) throw new NotFoundError(`${type === 'Inspection' ? 'Inspection' : type === 'IncomingInspection' ? 'Incoming inspection' : 'In-process check'} not found.`)
-  if (permission && !maySee(context, record, permission)) throw new ForbiddenError(`This needs ${permission} over the record's company and site.`)
+  if (permission && !maySee(context, record, permission)) throw new ForbiddenError("This needs a right your role does not hold over the record's company and site.")
   return record
 }
 

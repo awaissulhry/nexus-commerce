@@ -57,7 +57,7 @@ type Client = FactoryClient | CommandTx
 
 const L = TRAINING_LIMITS
 const LAW = { training: TRAINING_LAW, agreement: AGREEMENT_LAW, machines: MACHINE_TRAINING_LAW }
-const MANAGE_WORDS = 'The course catalogue is kept by a role that keeps it (safety.training.manage).'
+const MANAGE_WORDS = 'The course catalogue is kept by a role that keeps it.'
 const GROUP_WORDS = 'A course of the whole group is kept by a role over every company: add it to one company instead.'
 
 /** The caller holds the permission at the screen's company (or anywhere, when the screen names none). */
