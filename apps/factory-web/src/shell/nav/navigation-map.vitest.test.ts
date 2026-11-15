@@ -383,6 +383,32 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       expect(hrefs.includes('/admin/automation'), `${role} rules`).toBe(want.rules)
     }
   })
+
+  // B-W2b-437 (the W2b-6 sweep): Home › Insights with Dashboards and the KPI library (home.kpis.view), Finance › Payables &
+  // bank › Bank (payments.bank.view) and Admin › Platform › Fields & lists (fields.view) per role template, in the tree's
+  // groups and order (the role templates as they stand; a template change that adds or removes one of these reads changes
+  // this table on purpose).
+  it('the W2b-6 rows per role: Home › Insights, Finance › Bank, Admin › Fields & lists', () => {
+    const insights = ['dashboards', 'reports', 'kpis', 'alerts']
+    const platform = ['documents', 'languages', 'fields', 'automation', 'connections']
+    const expected: Record<string, { insights: string[]; payables: string[]; platform: string[] }> = {
+      owner: { insights, payables: ['payables', 'bank'], platform },
+      read_only: { insights, payables: ['payables', 'bank'], platform: platform.filter((page) => page !== 'automation') },
+      admin: { insights: ['alerts'], payables: [], platform },
+      finance: { insights, payables: ['payables', 'bank'], platform: ['documents'] },
+      buyer: { insights, payables: ['payables'], platform: [] },
+      production_manager: { insights, payables: [], platform: ['automation'] },
+      ...Object.fromEntries(['sales', 'planner', 'warehouse', 'quality_inspector', 'floor_supervisor'].map((role) => [role, { insights, payables: [], platform: [] }])),
+    }
+    const groupOf = (nav: AreaNav, area: string, group: string) =>
+      (nav.areas.find((entry) => entry.id === area)?.sections ?? []).filter((section) => section.id === group).flatMap((section) => section.items.map((item) => item.href.split('/')[2]))
+    for (const [role, want] of Object.entries(expected)) {
+      const nav = officeNavFor(permissionCheck(templateOf(role)!.permissions))
+      expect(groupOf(nav, 'home', 'home-insights'), `${role} insights`).toEqual(want.insights)
+      expect(groupOf(nav, 'finance', 'finance-payables'), `${role} payables & bank`).toEqual(want.payables)
+      expect(groupOf(nav, 'admin', 'admin-platform'), `${role} platform`).toEqual(want.platform)
+    }
+  })
 })
 
 describe('the palette finds every page by its name, in Italian and English', () => {

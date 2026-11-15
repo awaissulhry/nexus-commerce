@@ -265,8 +265,9 @@
   },
   "banner": {
     "testMode": {
-      "title": "Test mode",
-      "body": "These connections are fake or in a sandbox: {connections}. Nothing they do reaches a real customer, supplier, carrier or tax office."
+      "title": "Test mode: nothing reaches a real customer",
+      "carrier": "Carrier test mode at {sites}: labels are marked TEST, none reaches a carrier or is charged.",
+      "eInvoicing": "E-invoicing test mode for {companies}: no invoice reaches SDI."
     }
   },
   "subnav": {

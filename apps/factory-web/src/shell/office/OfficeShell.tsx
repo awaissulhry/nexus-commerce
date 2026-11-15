@@ -22,6 +22,8 @@ import { OfficeScopeProvider, type OfficeScopeValue } from '../scope/scope-conte
 import { scopeOf } from '../scope/scope-model'
 import { lastPageOf, readLastPages, writeLastPages, type LastPages } from './phone-bar'
 import { useBell } from './use-bell'
+import { testModeRights } from './test-mode'
+import { useTestModeBanner } from './use-test-mode'
 import { OfficeShellView, type OfficeFrame, type SystemBanner } from './view/OfficeShellView'
 
 /**
@@ -60,8 +62,10 @@ export function OfficeShell({ session, company, site: initialSite = null, childr
   const recordSearch = useRecordSearch({ company, companies: session.companies })
   // B-W2a-40: the bell — unread notifications, one light read, then live (only for a person who reaches Home).
   const bell = useBell(company, session.permissions.includes('home.view'))
-  // No API reports the connections' modes yet (Connections, SCR-087, comes with B-W0-28): no TEST MODE banner until it does.
-  const banners: SystemBanner[] = []
+  // B-W2b-437: TEST MODE while the carrier (a site) or e-invoicing (a company) of this company is in test mode.
+  const testModeRightsOf = useMemo(() => testModeRights(permissionCheck(session.permissions)), [session.permissions])
+  const testMode = useTestModeBanner(company, session.company?.id ?? null, testModeRightsOf)
+  const banners: SystemBanner[] = testMode ? [testMode] : []
 
   // B-W2b-05 (COL-077): the tab's ONE live connection stays open while the Office is (the bell and every page share it).
   useEffect(() => liveBus().subscribe({}), [])
