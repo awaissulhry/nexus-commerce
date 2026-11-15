@@ -5,16 +5,17 @@ import { seedUuid, type SeedContext } from '../../src/seeding'
  * never runs it (it reads only seed/*.ts). It adds what the first real order needs that the base seed lacks AND no route
  * of the API can make today; everything else the flow makes through the routes. Each item is a gap for a later step:
  *
- *   company A    its fiscal identity (VAT number, codice fiscale, regime fiscale RF01, REA) and a full Italian address
- *                (province, CAP): quotes, purchase orders, DDTs and FatturaPA refuse a send or an issue without them,
- *                and no route sets them yet (the admin's companies screen, B-W0-27, brings one). The VAT number is made
- *                up: its office code 000 is no Italian tax office's, so it is nobody's.
+ *   company A    the flow's own fiscal identity (VAT number, codice fiscale, regime fiscale RF01, REA) and a full Italian
+ *                address (province, CAP), which its checks name (B-W2b-F59: the base seed now gives company A one of its
+ *                own, IT00000003038, so a fresh seed issues; the flow keeps its values). The VAT number is made up: its
+ *                office code 000 is no Italian tax office's, so it is nobody's.
  *   DDT date     the base seed's shipment story (shipping.ts) issues its DDTs on 2026-11-24, after the garments its
  *                quality seed releases on 2026-11-20: a DDT dated today would precede them, so the series refuses today's
  *                DDT until then. Company A's DDT series forgets its last issue date (numbers keep counting on); the
  *                base seed's whole November story would have to move back to drop this (see the golden-gaps notes).
  *                The INVOICE series needs nothing: the seeded deposit invoice is dated on the day its quote was accepted.
- *   Sendcloud    company A's carrier account, FAKE (no network): no route makes an integration account yet.
+ *   Sendcloud    company A's carrier account, FAKE (no network): the base seed's own (seed/carrier-connection.ts, B-W2b-F59),
+ *                the same row, written here too so the scenario stands on its own.
  *   live labels  B-W2b-390: site A1 buys its labels through that account (every site starts in test mode, LOG-035; the first
  *                real order leaves with a carrier's label): as the Owner's "Switch to live labels" would, a minute before the run.
  *   rate limits  the tenant's accounts take a whole flow's calls in a minute (the defaults are 60, burst 10).

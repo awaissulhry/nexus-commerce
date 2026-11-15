@@ -1,10 +1,10 @@
-import { createHash } from 'node:crypto'
 import type { Prisma } from '../src/generated/prisma/client'
 import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedAccounting } from './accounting'
 import { seed as seedFiles } from './files'
 import { seed as seedPricing } from './pricing'
 import { seedDay, seedYear } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
+import { seedFile } from '../src/seed-files' // B-W2b-F59: seeded files with their bytes
 
 /**
  * The invoicing, tax and currency seed (W2b schema wave 49/57, B-W2b-369), per tenant of seed/_core.ts, written in the
@@ -86,7 +86,6 @@ export async function seed(context: SeedContext): Promise<TaxSeed> {
   const id = (key: string): string => seedUuid(namespace, key)
   const firstId = (key: string): string => `00000000${id(key).slice(8)}`
   const lastId = (key: string): string => `ffffffff${id(key).slice(8)}`
-  const sha256 = (text: string): string => createHash('sha256').update(`seed tax ${namespace} ${text}`).digest('hex')
   const tenantId = id('tenant')
   const actorId = id('actor')
   const companyA = id('company:A')
@@ -136,7 +135,7 @@ export async function seed(context: SeedContext): Promise<TaxSeed> {
   // --- declarations of intent ------------------------------------------------------------------------------------------
   const declarationIds = { revoked: firstId('tax:doi:A:P1:2026:old'), live: id('tax:doi:A:P1:2026') }
   const declarationReceiptFileId = lastId('tax:file:doi:A:P1:2026:receipt')
-  const receiptFile: Prisma.StoredFileCreateManyInput = {
+  const receiptFile: Prisma.StoredFileCreateManyInput = seedFile(tenantId, {
     id: declarationReceiptFileId,
     companyId: companyA,
     recordType: 'DeclarationOfIntent',
@@ -145,14 +144,13 @@ export async function seed(context: SeedContext): Promise<TaxSeed> {
     originalName: 'declaration-check-receipt.pdf',
     contentType: 'application/pdf',
     sizeBytes: 2048,
-    sha256: sha256('declaration receipt'),
     storeAccountId: store,
     storageKey: `t/${tenantId}/c/${companyA}/2026/${id('tax:file:doi:key')}`,
     status: 'AVAILABLE',
     availableAt: T.checked,
     visibility: ['OFFICE'],
     ...stamp(T.checked),
-  }
+  })
   const declarations: Prisma.DeclarationOfIntentCreateManyInput[] = [
     { id: declarationIds.revoked, companyId: companyA, partyId: P1, protocolNumber: '26000000000000001-000001', protocolDate: DAY('2026-01-15'), year: 2026, amount: 1_000_000, revokedAt: T.revoked, revokeReason: "Replaced by the customer's new declaration", ...stamp(DAY('2026-01-15')) },
     { id: declarationIds.live, companyId: companyA, partyId: P1, protocolNumber: '26000000000000002-000001', protocolDate: DAY('2026-03-02'), year: 2026, amount: 5_000_000, usedAmount: 0, checkedAt: T.checked, checkedById: actorId, receiptFileId: declarationReceiptFileId, ...stamp(T.checked) },
@@ -166,7 +164,7 @@ export async function seed(context: SeedContext): Promise<TaxSeed> {
     const yearReceiptId = lastId(`tax:file:doi:A:P1:${runYear}:receipt`)
     const protocolled = DAY(`${runYear - 1}-12-15`)
     const yearChecked = new Date(`${runYear - 1}-12-16T10:00:00.000Z`)
-    yearFiles.push({ ...receiptFile, id: yearReceiptId, recordId: yearId, sha256: sha256(`declaration receipt ${runYear}`), storageKey: `t/${tenantId}/c/${companyA}/${runYear - 1}/${id(`tax:file:doi:key:${runYear}`)}`, availableAt: yearChecked, ...stamp(yearChecked) })
+    yearFiles.push(seedFile(tenantId, { ...receiptFile, id: yearReceiptId, recordId: yearId, storageKey: `t/${tenantId}/c/${companyA}/${runYear - 1}/${id(`tax:file:doi:key:${runYear}`)}`, availableAt: yearChecked, ...stamp(yearChecked) }))
     declarations.push({ id: yearId, companyId: companyA, partyId: P1, protocolNumber: `${String(runYear - 1).slice(2)}000000000000003-000001`, protocolDate: protocolled, year: runYear, amount: 5_000_000, usedAmount: 0, checkedAt: yearChecked, checkedById: actorId, receiptFileId: yearReceiptId, ...stamp(yearChecked) })
   }
   // ---- end B-W2b-F53
@@ -206,7 +204,7 @@ export async function seed(context: SeedContext): Promise<TaxSeed> {
   // --- our own copy of FT-2026-00001's delivered send ------------------------------------------------------------------
   const deliveredSend = money.sampleSubmissionIds[1]
   const receiptFileId = lastId('tax:file:FT-2026-00001:RC')
-  const sdiReceipt: Prisma.StoredFileCreateManyInput = {
+  const sdiReceipt: Prisma.StoredFileCreateManyInput = seedFile(tenantId, {
     id: receiptFileId,
     companyId: companyA,
     recordType: 'Invoice',
@@ -215,7 +213,6 @@ export async function seed(context: SeedContext): Promise<TaxSeed> {
     originalName: 'FT-2026-00001_RC.xml',
     contentType: 'application/xml',
     sizeBytes: 1024,
-    sha256: sha256('FT-2026-00001 RC'),
     storeAccountId: store,
     storageKey: `legal/t/${tenantId}/c/${companyA}/2026/${id('tax:file:rc:key')}`,
     status: 'AVAILABLE',
@@ -223,7 +220,7 @@ export async function seed(context: SeedContext): Promise<TaxSeed> {
     visibility: ['OFFICE'],
     retainUntil: TEN_YEARS(T.copied),
     ...stamp(T.copied),
-  }
+  })
   const archiveCopyId = firstId('tax:sdi-copy:FT-2026-00001:2')
   const copies: Prisma.SdiArchiveCopyCreateManyInput[] = [
     { id: archiveCopyId, companyId: companyA, partyId: P1, invoiceId: money.sampleInvoiceId, submissionId: deliveredSend, key: `sdi:${deliveredSend}`, providerName: 'FAKE', xmlFileId: money.sampleXmlFileId, receiptFileIds: [receiptFileId], copiedAt: T.copied, ...stamp(T.copied) },

@@ -6,6 +6,7 @@ import { seed as seedAuth } from './auth'
 import { seed as seedFiles } from './files'
 import { seed as seedFloorAuth } from './floor-auth'
 import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
+import { seedFile } from '../src/seed-files' // B-W2b-F59: seeded files with their bytes
 
 /**
  * The privacy seed (B-W1-36), per tenant of seed/_core.ts, for company A, written as the app does: the office's rows in
@@ -247,8 +248,7 @@ export async function seed(context: SeedContext): Promise<PrivacySeed> {
     client.$transaction(async (tx) => {
       if (await tx.privacyDpia.findUnique({ where: { id: dpiaId }, select: { id: true } })) return
       await tx.privacyDpia.create({ data: { id: dpiaId, companyId: companyA, versionNo: 1, scope, ...stamp(T.dpiaStored) }, select: { id: true } })
-      const pdfSha = sha256(`seed privacy ${namespace} dpia 1`)
-      const file: Prisma.StoredFileCreateManyInput = {
+      const file: Prisma.StoredFileCreateManyInput = seedFile(tenantId, {
         id: dpiaFileId,
         companyId: companyA,
         recordType: 'PrivacyDpia',
@@ -257,7 +257,6 @@ export async function seed(context: SeedContext): Promise<PrivacySeed> {
         originalName: 'SAMPLE DPIA v1 (signed).pdf',
         contentType: 'application/pdf',
         sizeBytes: 4096,
-        sha256: pdfSha,
         storeAccountId: store,
         storageKey: `t/${tenantId}/c/${companyA}/2026/${id('privacy:file:key:dpia:1')}`,
         status: 'AVAILABLE',
@@ -265,7 +264,9 @@ export async function seed(context: SeedContext): Promise<PrivacySeed> {
         visibility: ['OFFICE'],
         retainUntil: new Date('2036-11-12T09:00:00.000Z'),
         ...stamp(T.dpiaStored),
-      }
+      })
+      // B-W2b-F59: the DPIA names the hash of its file's seeded bytes.
+      const pdfSha = file.sha256
       await tx.storedFile.createMany({ data: [file], skipDuplicates: true })
       await tx.privacyDpia.update({
         where: { id: dpiaId },

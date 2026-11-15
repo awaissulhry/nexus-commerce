@@ -22,6 +22,7 @@ import { seed as seedCalendar } from './calendar'
 import { seed as seedPeople } from './people'
 import { seed as seedPlant } from './plant'
 import { seedToday } from '../src/seed-calendar' // B-W2b-F53: the seeds' calendar
+import { seedFile, seedFileKey } from '../src/seed-files' // B-W2b-F59: seeded files with their bytes
 
 /**
  * The safety at work seed (W2b schema wave 15/16, B-W2b-87), per tenant of seed/_core.ts, written as the app does: the office's
@@ -187,7 +188,8 @@ export async function seed(context: SeedContext): Promise<SafetySeed> {
   const shift1T = patternIds['1T'] ?? null
   const consultancy = 'Seed Safety Consultancy (made-up)'
   /** A stored file of a record, uploaded and available (office only). */
-  const file = (key: string, companyId: string, recordType: string, recordId: string, name: string, when: Date, kind: 'DOCUMENT' | 'CERTIFICATE' = 'DOCUMENT') => ({
+  const file = (key: string, companyId: string, recordType: string, recordId: string, name: string, when: Date, kind: 'DOCUMENT' | 'CERTIFICATE' = 'DOCUMENT') =>
+    seedFile(tenantId, {
     id: id(`safety:file:${key}`),
     companyId,
     recordType,
@@ -196,9 +198,9 @@ export async function seed(context: SeedContext): Promise<SafetySeed> {
     originalName: name,
     contentType: 'application/pdf',
     sizeBytes: 4096,
-    sha256: sha(`file ${key}`),
     storeAccountId: store,
-    storageKey: `t/${tenantId}/c/${companyId}/safety/${id(`safety:file:key:${key}`)}`,
+    // B-W2b-F59: a key an upload makes (it was …/safety/…, a key no upload could make: the files answered 404).
+    storageKey: seedFileKey({ tenantId, companyId, kind, at: when, random: id(`safety:file:key:${key}`) }),
     status: 'AVAILABLE' as const,
     availableAt: when,
     visibility: ['OFFICE' as const],

@@ -4,6 +4,7 @@ import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedFiles } from './files'
 import { seed as seedSubcontract, type SubcontractSeed } from './subcontract'
 import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
+import { seedFile } from '../src/seed-files' // B-W2b-F59: seeded files with their bytes
 
 /**
  * The W2b subcontract seed (schema wave 1/7, B-W2b-01): what went out to a workshop and what came back, as rows
@@ -149,9 +150,9 @@ export async function seed(context: SeedContext): Promise<SubcontractReceiptsSee
       })
       await tx.subcontractOperation.update({ where: { id: row.operation }, data: { piecesBackGood: 1, version: 3, updatedAt: T.back }, select })
       await tx.subcontractOrder.update({ where: { id: row.order }, data: { status: SubcontractOrderStatus.PARTLY_RECEIVED, updatedAt: T.back }, select })
-      // Its job sheet, version 1: the PDF's row (no object in any store) and the generated document.
+      // Its job sheet, version 1: the PDF's row (its bytes: B-W2b-F59, seed-files.ts) and the generated document.
       await tx.storedFile.create({
-        data: {
+        data: seedFile(tenantId, {
           id: row.jobSheetFile,
           companyId: companyA,
           recordType: 'SubcontractOrder',
@@ -160,7 +161,6 @@ export async function seed(context: SeedContext): Promise<SubcontractReceiptsSee
           originalName: 'SEED-SC-0002 job sheet.pdf',
           contentType: 'application/pdf',
           sizeBytes: 2048,
-          sha256: jobSheetSha,
           storeAccountId: id('files:account:r2'),
           storageKey: `t/${tenantId}/c/${companyA}/2026/${id('subcontract:SC-0002:job-sheet:1:key')}`,
           status: 'AVAILABLE',
@@ -169,7 +169,7 @@ export async function seed(context: SeedContext): Promise<SubcontractReceiptsSee
           createdAt: T.issued,
           updatedAt: T.issued,
           createdById: actorId,
-        },
+        }),
         select,
       })
       await tx.generatedDocument.create({

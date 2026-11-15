@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto'
 import type { Prisma } from '../src/generated/prisma/client'
 import {
   ColourSystem,
@@ -22,6 +21,7 @@ import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedCompliance } from './compliance'
 import { seed as seedFiles } from './files'
 import { seed as seedShipping } from './shipping'
+import { seedFile } from '../src/seed-files' // B-W2b-F59: seeded files with their bytes
 
 /**
  * The styles and libraries seed (W2b-4, schema wave 26/33, B-W2b-206), per tenant of seed/_core.ts, written in the tenant's
@@ -94,7 +94,6 @@ export async function seed(context: SeedContext): Promise<StylesDepthSeed> {
   const brandId = id('party:P1')
   const store = id('files:account:r2')
   const stamp = { createdAt: AT, updatedAt: AT, createdById: actorId }
-  const sha256 = (key: string): string => createHash('sha256').update(`seed styles-depth ${namespace} ${key}`).digest('hex')
   const storageKey = (companyId: string | null, name: string): string =>
     `t/${tenantId}/${companyId ? `c/${companyId}` : 'tenant'}/2026/${id(`styles-depth:key:${name}`)}`
 
@@ -255,8 +254,9 @@ export async function seed(context: SeedContext): Promise<StylesDepthSeed> {
       ]
       for (const { id: rowId, ...data } of texts) await tx.styleText.upsert({ where: { id: rowId }, create: { id: rowId, ...data }, update: data, select: { id: true } })
 
-      // The files the pictures, revision files and branding set name (rows only).
-      const file = (fileId: string, companyId: string | null, recordType: string, recordId: string, kind: 'PHOTO' | 'DOCUMENT' | 'ATTACHMENT', originalName: string, contentType: string): Prisma.StoredFileCreateManyInput => ({
+      // The files the pictures, revision files and branding set name (rows; their bytes: B-W2b-F59, seed-files.ts).
+      const file = (fileId: string, companyId: string | null, recordType: string, recordId: string, kind: 'PHOTO' | 'DOCUMENT' | 'ATTACHMENT', originalName: string, contentType: string): Prisma.StoredFileCreateManyInput =>
+        seedFile(tenantId, {
         id: fileId,
         companyId,
         recordType,
@@ -265,7 +265,6 @@ export async function seed(context: SeedContext): Promise<StylesDepthSeed> {
         originalName,
         contentType,
         sizeBytes: 4096,
-        sha256: sha256(fileId),
         storageKey: storageKey(companyId, fileId),
         visibility: ['OFFICE'],
         status: 'AVAILABLE',

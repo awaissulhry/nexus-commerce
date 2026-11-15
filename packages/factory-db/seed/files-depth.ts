@@ -1,9 +1,9 @@
-import { createHash } from 'node:crypto'
 import type { Prisma } from '../src/generated/prisma/client'
 import { FileUploadStatus, PartyRole, RequiredDocumentLevel } from '../src/generated/prisma/enums'
 import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedFiles } from './files'
 import { seedToday } from '../src/seed-calendar' // B-W2b-F53: the seeds' calendar
+import { seedFile, seedFileKey } from '../src/seed-files' // B-W2b-F59: seeded files with their bytes
 
 /**
  * The files-in-depth seed (W2b schema wave 18/22, B-W2b-153), per tenant of seed/_core.ts, written in the tenant's office
@@ -72,8 +72,8 @@ export async function seed(context: SeedContext): Promise<FilesDepthSeed> {
   const companyB = id('company:B')
   const partyP1 = id('party:P1')
   const store = id('files:account:r2')
-  const sha256 = (key: string): string => createHash('sha256').update(`seed file ${namespace} files-depth ${key}`).digest('hex')
-  const key = (name: string): string => `t/${tenantId}/c/${companyA}/2026/${id(`files-depth:key:${name}`)}`
+  // B-W2b-F59: keys made by the files platform's rule, in the year of the upload.
+  const key = (name: string, at: Date = AT): string => seedFileKey({ tenantId, companyId: companyA, kind: 'DOCUMENT', at, random: id(`files-depth:key:${name}`) })
   const today = romeToday()
   const daysAgo = (days: number): Date => new Date(today.getTime() - days * DAY_MS)
   const daysAhead = (days: number): Date => new Date(today.getTime() + days * DAY_MS)
@@ -109,7 +109,7 @@ export async function seed(context: SeedContext): Promise<FilesDepthSeed> {
   if (done) return result
 
   const available = { status: 'AVAILABLE', availableAt: AT, storeAccountId: store, createdAt: AT, updatedAt: AT, createdById: actorId } as const
-  const certificate = (version: 1 | 2): Prisma.StoredFileCreateManyInput => ({
+  const certificate = (version: 1 | 2): Prisma.StoredFileCreateManyInput => seedFile(tenantId, {
     id: version === 1 ? files.certificateV1 : files.certificateV2,
     companyId: companyA,
     recordType: 'Party',
@@ -119,8 +119,7 @@ export async function seed(context: SeedContext): Promise<FilesDepthSeed> {
     originalName: `Seed tannery LWG certificate ${version === 1 ? 2025 : 2026}.pdf`,
     contentType: 'application/pdf',
     sizeBytes: version === 1 ? 4096 : 4608,
-    sha256: sha256(`certificate v${version}`),
-    storageKey: key(`certificate:v${version}`),
+    storageKey: key(`certificate:v${version}`, version === 1 ? new Date(AT.getTime() - 365 * DAY_MS) : AT),
     visibility: ['OFFICE', 'PARTNER'],
     partyId: partyP1,
     expiresOn: version === 1 ? daysAgo(10) : daysAhead(20),
@@ -129,7 +128,7 @@ export async function seed(context: SeedContext): Promise<FilesDepthSeed> {
     createdAt: version === 1 ? new Date(AT.getTime() - 365 * DAY_MS) : AT,
     availableAt: version === 1 ? new Date(AT.getTime() - 365 * DAY_MS) : AT,
   })
-  const photo = (version: 1 | 2): Prisma.StoredFileCreateManyInput => ({
+  const photo = (version: 1 | 2): Prisma.StoredFileCreateManyInput => seedFile(tenantId, {
     id: version === 1 ? files.photoV1 : files.photoV2,
     companyId: companyA,
     recordType: 'Company',
@@ -139,13 +138,12 @@ export async function seed(context: SeedContext): Promise<FilesDepthSeed> {
     originalName: version === 1 ? 'Seed sample jacket front.jpg' : 'Seed sample jacket front (marked).png',
     contentType: version === 1 ? 'image/jpeg' : 'image/png',
     sizeBytes: version === 1 ? 6144 : 7168,
-    sha256: sha256(`photo v${version}`),
     storageKey: key(`photo:v${version}`),
     visibility: ['OFFICE'],
     ...(version === 2 ? { seriesId: files.photoV1, versionNo: 2 } : {}),
     ...available,
   })
-  const techPack = (fileId: string, name: string, keyName: string): Prisma.StoredFileCreateManyInput => ({
+  const techPack = (fileId: string, name: string, keyName: string): Prisma.StoredFileCreateManyInput => seedFile(tenantId, {
     id: fileId,
     companyId: companyA,
     recordType: 'Company',
@@ -154,7 +152,6 @@ export async function seed(context: SeedContext): Promise<FilesDepthSeed> {
     originalName: name,
     contentType: 'application/pdf',
     sizeBytes: TECH_PACK,
-    sha256: sha256(keyName),
     storageKey: key(keyName),
     visibility: ['OFFICE'],
     status: 'PENDING_UPLOAD',
@@ -201,7 +198,9 @@ export async function seed(context: SeedContext): Promise<FilesDepthSeed> {
       // A copy: the same bytes on another record, naming its source.
       const v2 = certificate(2)
       await tx.storedFile.create({
-        data: {
+        data: seedFile(
+          tenantId,
+          {
           id: files.certificateCopy,
           companyId: companyA,
           recordType: 'Company',
@@ -210,12 +209,14 @@ export async function seed(context: SeedContext): Promise<FilesDepthSeed> {
           originalName: 'Seed tannery LWG certificate 2026 (copy).pdf',
           contentType: v2.contentType,
           sizeBytes: v2.sizeBytes,
-          sha256: v2.sha256,
           storageKey: key('certificate:copy'),
           visibility: ['OFFICE'],
           sourceFileId: files.certificateV2,
           ...available,
-        },
+          },
+          // The same bytes as its source (the database checks the two hashes match).
+          { bytesOf: v2 },
+        ),
         select,
       })
       // The sample photo: its thumbnail (EXIF stripped), then the office's markup making v2, then v1 superseded.

@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto'
 import {
   CheckIntervalUnit,
   CheckOutcome,
@@ -17,6 +16,7 @@ import { seed as seedFiles } from './files'
 import { seed as seedPeople } from './people'
 import { seed as seedPlant } from './plant'
 import { seedAt, seedDay } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
+import { seedFile } from '../src/seed-files' // B-W2b-F59: seeded files with their bytes
 
 /**
  * The plant care seed (W2b schema wave 14/16, B-W2b-86), per tenant of seed/_core.ts, on plant A1, written as the app does: the
@@ -114,7 +114,6 @@ export async function seed(context: SeedContext): Promise<PlantCareSeed> {
   const floorAs = (workerId: string) => ({ audience: 'floor' as const, tenantId, actorId: workerId, siteId: siteA })
   const stamp = (at: Date, by: string | null = actorId) => ({ createdAt: at, updatedAt: at, createdById: by })
   const select = { id: true } as const
-  const sha = (key: string): string => createHash('sha256').update(`seed plant care ${key} (${namespace})`).digest('hex')
   const storageKey = (key: string): string => `t/${tenantId}/c/${companyA}/2026/${id(`plantcare:file:key:${key}`)}`
   const press = plant.machineIds[1]
   const cuttingTable = plant.machineIds[2]
@@ -300,7 +299,7 @@ export async function seed(context: SeedContext): Promise<PlantCareSeed> {
       await tx.machineCheckPlan.update({ where: { id: planIds.guards }, data: { nextDueOn: day(seedDay('2027-02-20')), version: { increment: 1 }, updatedAt: T.failed }, select })
       // August's report, a file of its result.
       await tx.storedFile.create({
-        data: {
+        data: seedFile(tenantId, {
           id: id('plantcare:file:CP-01:2026-08:report'),
           companyId: companyA,
           recordType: 'MachineCheckResult',
@@ -310,14 +309,13 @@ export async function seed(context: SeedContext): Promise<PlantCareSeed> {
           originalName: 'Seed guards check 2026-08.pdf',
           contentType: 'application/pdf',
           sizeBytes: 2048,
-          sha256: sha('report 2026-08'),
           storeAccountId: store,
           storageKey: storageKey('report 2026-08'),
           status: 'AVAILABLE',
           availableAt: T.passed,
           visibility: ['OFFICE'],
           ...stamp(T.passed),
-        },
+        }),
         select,
       })
       // The failed check makes the job (QHS-205).
@@ -465,7 +463,8 @@ export async function seed(context: SeedContext): Promise<PlantCareSeed> {
   )
 
   // --- the floor's photo and voice note (QHS-189) ------------------------------------------------------------------------
-  const floorFile = (fileId: string, recordType: string, recordId: string, kind: 'PHOTO' | 'AUDIO', contentType: string, name: string) => ({
+  const floorFile = (fileId: string, recordType: string, recordId: string, kind: 'PHOTO' | 'AUDIO', contentType: string, name: string, category?: 'BEFORE_WORK') =>
+    seedFile(tenantId, {
     id: fileId,
     companyId: companyA,
     recordType,
@@ -474,16 +473,16 @@ export async function seed(context: SeedContext): Promise<PlantCareSeed> {
     originalName: name,
     contentType,
     sizeBytes: 4096,
-    sha256: sha(name),
     storeAccountId: store,
     storageKey: storageKey(name),
     visibility: ['OFFICE' as const, 'FLOOR' as const],
     floorSiteId: siteA,
+    ...(category ? { category } : {}),
     ...stamp(T.photo, null),
   })
   await db.withScope(floorAs(leadId), (client) =>
     client.$transaction(async (tx) => {
-      await tx.storedFile.create({ data: { ...floorFile(fileIds.photo, 'MaintenanceJob', plant.jobId, 'PHOTO', 'image/jpeg', 'Seed press guard before work.jpg'), category: 'BEFORE_WORK' }, select })
+      await tx.storedFile.create({ data: floorFile(fileIds.photo, 'MaintenanceJob', plant.jobId, 'PHOTO', 'image/jpeg', 'Seed press guard before work.jpg', 'BEFORE_WORK'), select })
       await tx.storedFile.create({ data: floorFile(fileIds.voice, 'MaintenanceRequest', requestId, 'AUDIO', 'audio/webm', 'Seed cutting table voice note.webm'), select })
       await tx.storedFile.update({ where: { id: fileIds.voice }, data: { status: 'AVAILABLE', availableAt: T.photo, version: { increment: 1 }, updatedAt: T.photo }, select })
     }),
