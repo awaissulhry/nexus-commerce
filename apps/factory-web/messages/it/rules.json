@@ -12,7 +12,8 @@
     "LOW_STOCK": "Materiali sotto il minimo",
     "PO_CONFIRMED_LATE": "Ordini di acquisto confermati più tardi del necessario",
     "SUPPLIER_STATUS_CHANGED": "Cambi di stato dei fornitori",
-    "RETURN_ARRIVED_LATE": "Resi arrivati dopo la scadenza"
+    "RETURN_ARRIVED_LATE": "Resi arrivati dopo la scadenza",
+    "MARGIN_BELOW_FLOOR": "Ordini sotto il margine minimo"
   },
   "when": {
     "ORDER_LATE_RISK": "Quando un ordine è promesso entro {daysBeforePromise} e non è pronto, o è in ritardo",
@@ -27,7 +28,8 @@
     "LOW_STOCK": "Quando un materiale scende sotto il minimo dei suoi parametri di pianificazione",
     "PO_CONFIRMED_LATE": "Quando il fornitore conferma una riga di un ordine di acquisto almeno {days} dopo il giorno in cui serve",
     "SUPPLIER_STATUS_CHANGED": "Quando un fornitore viene approvato con condizioni, sospeso, bloccato o reso inattivo (avviso per {days})",
-    "RETURN_ARRIVED_LATE": "Quando la merce di un reso arriva dopo la sua scadenza"
+    "RETURN_ARRIVED_LATE": "Quando la merce di un reso arriva dopo la sua scadenza",
+    "MARGIN_BELOW_FLOOR": "Quando il margine di un ordine, stimato ora o finale, scende sotto il suo margine minimo"
   },
   "sentence": {
     "full": "{when} {place}, avvisa {recipient} con {channels} {cooldown}.",

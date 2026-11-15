@@ -55,10 +55,10 @@ describe('who sees what', () => {
 describe('the address', () => {
   it('reads the dates, the customer, the style, the search and the open order; ignores what is not one', () => {
     const party = MARGINS.byCustomer[0]!.party.id
-    expect(addressOf(new URLSearchParams(`from=2026-10-01&to=2026-10-31&party=${party}&q=SO&open=${ROWS[0]!.order.id}`))).toEqual({ from: '2026-10-01', to: '2026-10-31', party, style: null, q: 'SO', open: ROWS[0]!.order.id })
-    expect(addressOf(new URLSearchParams('from=2026-13-01&party=x&style=y'))).toEqual({ from: null, to: null, party: null, style: null, q: null, open: null })
+    expect(addressOf(new URLSearchParams(`from=2026-10-01&to=2026-10-31&party=${party}&q=SO&open=${ROWS[0]!.order.id}`))).toEqual({ from: '2026-10-01', to: '2026-10-31', party, style: null, q: 'SO', floor: null, open: ROWS[0]!.order.id })
+    expect(addressOf(new URLSearchParams('from=2026-13-01&party=x&style=y'))).toEqual({ from: null, to: null, party: null, style: null, q: null, floor: null, open: null })
     expect(marginsHref('/w/DEMO', { ...addressOf(null), from: '2026-10-01', party })).toBe(`/w/DEMO/finance/margins?from=2026-10-01&party=${party}`)
-    expect(marginsQueryOf({ ...addressOf(null), q: 'SO' }, 'c1')).toEqual({ companyId: 'c1', partyId: null, styleId: null, from: null, to: null, q: 'SO', cursor: null, limit: 50 })
+    expect(marginsQueryOf({ ...addressOf(null), q: 'SO' }, 'c1')).toEqual({ companyId: 'c1', partyId: null, styleId: null, from: null, to: null, q: 'SO', floor: null, cursor: null, limit: 50 })
   })
 })
 
@@ -89,10 +89,11 @@ describe('the figures', () => {
   it('the CSV: each grain\'s columns only for its holder', () => {
     const words = { header: (column: string) => column, status: () => 'status', stage: () => 'stage' }
     const finance = marginsCsv(ROWS.slice(2, 3), { price: true, cost: true, margin: true }, words, 'it').split('\n')
-    expect(finance[0]).toBe('order;customer;orderDate;status;value;quotedCost;estimateCost;actualCost;quotedMarginPct;estimateMarginPct;actualMarginPct;marginChange;currency;stage')
-    expect(finance[1]).toBe('SO-2026-1043;Moto Demo S.r.l.;2026-10-06;status;12000,00;6840,00;7180,00;3950,00;43,0000;40,1667;67,0833;-340,00;EUR;stage')
+    // B-W2b-416: + the floor flag (the margin grain), empty without its words.
+    expect(finance[0]).toBe('order;customer;orderDate;status;value;quotedCost;estimateCost;actualCost;quotedMarginPct;estimateMarginPct;actualMarginPct;floor;marginChange;currency;stage')
+    expect(finance[1]).toBe('SO-2026-1043;Moto Demo S.r.l.;2026-10-06;status;12000,00;6840,00;7180,00;3950,00;43,0000;40,1667;67,0833;;-340,00;EUR;stage')
     const sales = marginsCsv(ROWS.slice(2, 3), { price: true, cost: false, margin: true }, words, 'en').split('\n')
-    expect(sales[0]).toBe('order,customer,orderDate,status,value,quotedMarginPct,estimateMarginPct,actualMarginPct,currency,stage')
+    expect(sales[0]).toBe('order,customer,orderDate,status,value,quotedMarginPct,estimateMarginPct,actualMarginPct,floor,currency,stage')
   })
 })
 
@@ -190,7 +191,7 @@ describe('every design case draws in both languages with no key or placeholder l
       for (const plan of ['STANDARD', 'ESTIMATE', 'QUOTED', 'ACTUAL']) has(`plan.${plan}`)
       for (const stage of ['final', 'started', 'notStarted']) has(`stage.${stage}`)
       for (const kind of ['signed_out', 'forbidden', 'not_found', 'unavailable', 'rate_limited', 'invalid', 'internal']) has(`problem.${kind}`)
-      for (const column of ['order', 'customer', 'orderDate', 'status', 'value', 'quotedCost', 'estimateCost', 'actualCost', 'quotedMarginPct', 'estimateMarginPct', 'actualMarginPct', 'marginChange', 'currency', 'stage']) has(`csv.${column}`)
+      for (const column of ['order', 'customer', 'orderDate', 'status', 'value', 'quotedCost', 'estimateCost', 'actualCost', 'quotedMarginPct', 'estimateMarginPct', 'actualMarginPct', 'floor', 'marginChange', 'currency', 'stage']) has(`csv.${column}`)
       has('tiles.unknown', { count: 2 })
       has('by.orders', { count: 1 })
     }

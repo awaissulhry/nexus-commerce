@@ -332,7 +332,8 @@
       "LOW_STOCK": "Stock below its minimum",
       "PO_CONFIRMED_LATE": "Purchase orders confirmed late",
       "SUPPLIER_STATUS_CHANGED": "A supplier’s status changed",
-      "RETURN_ARRIVED_LATE": "Returns arrived late"
+      "RETURN_ARRIVED_LATE": "Returns arrived late",
+      "MARGIN_BELOW_FLOOR": "Orders below their margin floor"
     }
   },
   "history": {

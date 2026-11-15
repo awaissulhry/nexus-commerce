@@ -314,6 +314,9 @@ function whenWords(kind: RuleKind, threshold: Record<string, number | boolean>, 
     // B-W2b-385 (NT1:04)
     case 'RETURN_ARRIVED_LATE':
       return it ? 'Quando la merce di un reso arriva dopo la sua scadenza' : 'When the goods of a return arrive after their deadline'
+    // B-W2b-416 (FIN-050)
+    case 'MARGIN_BELOW_FLOOR':
+      return it ? "Quando il margine di un ordine, stimato ora o finale, scende sotto il suo margine minimo" : "When an order's margin, as estimated now or final, falls below its margin floor"
   }
 }
 
@@ -376,6 +379,11 @@ export const ALERT_TEMPLATES = {
   'alerts.INVOICE_DEADLINE.LATE': { en: 'The goods of DDT {label} were due to be invoiced by {dueDate}: {days} days late.', it: 'La merce del DDT {label} andava fatturata entro il {dueDate}: {days} giorni di ritardo.' },
   // B-W2b-385 (NT1:04)
   'alerts.RETURN_ARRIVED_LATE': { en: 'Return {label} arrived on {receivedDate}, {days} days after its deadline ({dueDate}).', it: 'Il reso {label} è arrivato il {receivedDate}, {days} giorni dopo la scadenza ({dueDate}).' },
+  // B-W2b-416 (FIN-050): no figure (the margins page shows them by grain); FINAL once every work order is done; QUOTED when
+  // the accepted version was already priced under its floor (a yes let it through).
+  'alerts.MARGIN_BELOW_FLOOR': { en: 'The margin of order {label}, as estimated now, is below its margin floor.', it: "Il margine dell'ordine {label}, stimato ora, è sotto il suo margine minimo." },
+  'alerts.MARGIN_BELOW_FLOOR.FINAL': { en: 'The final margin of order {label} is below its margin floor.', it: "Il margine finale dell'ordine {label} è sotto il suo margine minimo." },
+  'alerts.MARGIN_BELOW_FLOOR.QUOTED': { en: 'The margin of order {label} is below its margin floor: its quote was approved below it.', it: "Il margine dell'ordine {label} è sotto il suo margine minimo: il suo preventivo era stato approvato sotto." },
 } as const satisfies Record<string, Words>
 export type AlertTemplateKey = keyof typeof ALERT_TEMPLATES
 
@@ -428,6 +436,9 @@ export function alertPhrase(kind: string, label: string, facts: unknown): AlertP
     // B-W2b-385 (NT1:04)
     case 'RETURN_ARRIVED_LATE':
       return { key: 'alerts.RETURN_ARRIVED_LATE', params: { label, receivedDate: text('receivedDate'), dueDate: text('dueDate'), days: num('daysLate') } }
+    // B-W2b-416 (FIN-050)
+    case 'MARGIN_BELOW_FLOOR':
+      return { key: text('basis') === 'FINAL' ? 'alerts.MARGIN_BELOW_FLOOR.FINAL' : f.quotedBelow === true ? 'alerts.MARGIN_BELOW_FLOOR.QUOTED' : 'alerts.MARGIN_BELOW_FLOOR', params: { label } }
     case 'WORKING_TIME_LIMIT':
       return { key: text('limit') === 'OVERTIME_YEARLY_CAP' || text('limit') === 'DAILY_REST' || text('limit') === 'WEEKLY_AVERAGE' ? `alerts.WORKING_TIME_LIMIT.${text('limit') as 'DAILY_REST'}` : 'alerts.WORKING_TIME_LIMIT', params: { label } }
     default:

@@ -5,6 +5,8 @@ import { WORK_ORDER_KINDS, WORK_ORDER_STATUSES } from '../../production/work-ord
 import { SALES_ORDER_STATUSES } from '../../sales/orders/orders'
 import { COSTING_METHODS } from '../ledger/entries'
 import { WATERFALL_REASONS } from './rules'
+// B-W2b-416: the floor an order is held to and its flag (the margin grain).
+import { floorView } from '../profitability/contracts'
 
 /**
  * The contracts of order margin from estimate to actual (B-W2a-29; FIN-047; design finance.margins SCR-155 and its
@@ -39,6 +41,8 @@ export const marginsQuery = input({
   to: businessDate().optional(),
   /** The order's number or the customer's reference. */
   q: z.string().trim().min(1).max(100).optional(),
+  /** B-W2b-416: only the orders below their margin floor (the tile "Orders below the floor"). */
+  floor: z.enum(['below']).optional(),
   cursor: id().optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
 })
@@ -76,8 +80,10 @@ export const orderMarginRowView = output({
   /** A cost entry is posted on one of its work orders. */
   started: z.boolean(),
   workOrders: z.number().int(),
-  /** Below the company's margin floor (W2b: null). */
-  belowFloor: z.boolean().nullable(),
+  /** B-W2b-416: below the margin floor it is held to (null: its margin is not known yet); the margin grain. */
+  belowFloor: money.margin(z.boolean().nullable()),
+  /** B-W2b-416: the floor (the Sales settings' floor of its seller's roles, else the company's); the margin grain. */
+  floor: money.margin(floorView.nullable()),
   method: z.enum(COSTING_METHODS),
   provisional: z.boolean(),
 })
@@ -86,8 +92,8 @@ export type OrderMarginRowView = z.infer<typeof orderMarginRowView>
 export const marginTilesView = output({
   /** Σ margin ÷ Σ value as estimated now, over the orders with a known cost. */
   averageMarginPct: money.margin(z.string().nullable()),
-  /** W2b: the floor flag. */
-  belowFloor: z.number().int().nullable(),
+  /** B-W2b-416: the orders below their margin floor (over every order in scope); the margin grain. */
+  belowFloor: money.margin(z.number().int()),
   /** Σ (quoted − estimated margin) over the orders with both (gains offset losses; above 0: lost). */
   marginLostSinceQuote: money.margin(z.number().int().nullable()),
   orders: z.number().int(),

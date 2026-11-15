@@ -18,6 +18,9 @@ import { lowStockFindings } from '../../modules/inventory/low-stock/alerts'
 import { confirmedLateFindings, supplierStatusFindings } from '../../modules/purchasing/reports/supply-alerts'
 // B-W2b-385 (NT1:04): a return whose goods arrived after their deadline.
 import { lateReturnFindings } from '../../modules/sales/returns-depth/alerts'
+// B-W2b-416 (FIN-050): an order whose margin is below its margin floor.
+import { floorFindingsWith } from '../../modules/costing/margins/floor'
+import { floorFiguresOf } from '../../modules/costing/margins/margins'
 // B-W2b-377: the approval engine's requests overdue (their record in words, read by their kind).
 import { kindOf } from '../approvals/kinds'
 import { kindLabelOf } from '../approvals/views'
@@ -293,6 +296,8 @@ export const FINDERS: Readonly<Partial<Record<RuleKind, Find>>> = Object.freeze(
   SUPPLIER_STATUS_CHANGED: supplierStatusFindings,
   // B-W2b-385: one per return that arrived after its deadline, until it is closed.
   RETURN_ARRIVED_LATE: lateReturnFindings,
+  // B-W2b-416: one per watched sales order below its margin floor, until it is above it again.
+  MARGIN_BELOW_FLOOR: floorFindingsWith(floorFiguresOf),
 })
 
 export const DATED: Readonly<Partial<Record<RuleKind, Dated>>> = Object.freeze({

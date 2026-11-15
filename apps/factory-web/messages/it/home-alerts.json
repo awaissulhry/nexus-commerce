@@ -25,7 +25,10 @@
     "alerts.SUPPLIER_STATUS_CHANGED.BLOCKED": "Il fornitore {label} è bloccato dal {changedOn}: nessun nuovo ordine di acquisto.",
     "alerts.SUPPLIER_STATUS_CHANGED.INACTIVE": "Il fornitore {label} è inattivo dal {changedOn}: nessun nuovo ordine di acquisto.",
     "alerts.UNKNOWN": "Avviso su {label}.",
-    "alerts.RETURN_ARRIVED_LATE": "Il reso {label} è arrivato il {receivedDate}, {days} giorni dopo la scadenza ({dueDate})."
+    "alerts.RETURN_ARRIVED_LATE": "Il reso {label} è arrivato il {receivedDate}, {days} giorni dopo la scadenza ({dueDate}).",
+    "alerts.MARGIN_BELOW_FLOOR": "Il margine dell'ordine {label}, stimato ora, è sotto il suo margine minimo.",
+    "alerts.MARGIN_BELOW_FLOOR.FINAL": "Il margine finale dell'ordine {label} è sotto il suo margine minimo.",
+    "alerts.MARGIN_BELOW_FLOOR.QUOTED": "Il margine dell'ordine {label} è sotto il suo margine minimo: il suo preventivo era stato approvato sotto."
   },
   "refused": {
     "title": "Non è tua da aprire",
@@ -175,7 +178,8 @@
       "LOW_STOCK": "{record} sotto il minimo",
       "PO_CONFIRMED_LATE": "{record} confermato più tardi del necessario",
       "SUPPLIER_STATUS_CHANGED": "{record}: stato del fornitore cambiato",
-      "RETURN_ARRIVED_LATE": "{record} arrivato dopo la scadenza"
+      "RETURN_ARRIVED_LATE": "{record} arrivato dopo la scadenza",
+      "MARGIN_BELOW_FLOOR": "{record} sotto il margine minimo"
     },
     "snooze": "Rimanda",
     "assign": "Assegna",
