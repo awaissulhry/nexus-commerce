@@ -16,6 +16,7 @@ import { defaultPicks, freePieces, NO_NEW_ORDER, newOrderBody, newOrderHeld, new
 import { stockKey, stockRowsOf } from './list/view/StockSection'
 import { actHeld, journeyIndex, ORDER_VIEWS, orderQuery, say, showOf, sizeRun, subcontractCan, TILES, viewFromAddress, viewOf } from './model'
 import { designScreen as stockScreen } from './stock/fixtures'
+import { rightRef } from '../../../lib/i18n/rights'
 
 /**
  * Purchasing › Subcontract orders (SCR-128 list, SCR-129 stock at subcontractors; B-W2a-56): the pure rules (the saved
@@ -65,7 +66,7 @@ describe('subcontract orders: the saved views, the address, the tiles', () => {
     const buyer = canFor('buyer')
     const warehouse = canFor('warehouse')
     expect(actHeld(order('DRAFT'), 'issue', buyer)).toBeNull()
-    expect(actHeld(order('DRAFT'), 'issue', warehouse)).toEqual({ key: 'held.permission', params: { permission: 'purchasing.subcontract.manage' } })
+    expect(actHeld(order('DRAFT'), 'issue', warehouse)).toEqual({ key: 'held.permission', params: { right: rightRef('purchasing.subcontract.manage') } })
     const free = order('DRAFT', { actions: { ...order('DRAFT').actions, issue: 'Line 20 (TAS) has no fee per piece: type it before the order goes to the workshop.' } })
     free.operations[1] = { ...free.operations[1]!, pricePerPiece: '0.000000' }
     expect(actHeld(free, 'issue', buyer)).toEqual({ key: 'held.issue.noFee', params: { line: 20, code: 'TAS' } })
@@ -105,7 +106,7 @@ describe('New subcontract order', () => {
 
   it('holds Create draft with the reason, the permission first', () => {
     const buyer = canFor('buyer')
-    expect(newOrderHeld(picked(), canFor('planner'))).toEqual({ key: 'held.permission', params: { permission: 'purchasing.subcontract.manage' } })
+    expect(newOrderHeld(picked(), canFor('planner'))).toEqual({ key: 'held.permission', params: { right: rightRef('purchasing.subcontract.manage') } })
     expect(newOrderHeld({ ...NO_NEW_ORDER }, buyer)?.key).toBe('new.held.workOrder')
     expect(newOrderHeld(picked({ outside: null }), buyer)?.key).toBe('held.loading')
     expect(newOrderHeld(picked({ picked: [] }), buyer)?.key).toBe('new.held.operations')
@@ -201,7 +202,7 @@ describe('the page in the map', () => {
 
 const LEFT_KEY = /\b(?:status|statusIn|kit|act|held|problem|common|live|page|tiles|tile|view|list|col|bulk|csv|stock|new|updates)\.[a-zA-Z_]+(?:\.[a-zA-Z_]+)*\b/
 const LEFT_PLACEHOLDER = /\{[a-zA-Z]+\}/
-/** Permission names are said on purpose ("needs purchasing.subcontract.manage"); domains are not keys. */
+/** Permission names are stripped before the key check, though no screen says one since B-W2b-F51; domains are not keys. */
 const SAID = /\b(?:purchasing\.[a-z.]+|money\.cost|example\.com)\b/g
 
 function render(screen: DesignScreen<unknown>, model: unknown, locale: (typeof LOCALES)[number]): string {

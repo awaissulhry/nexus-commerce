@@ -1014,7 +1014,7 @@
     },
     "reading": "Reading the shipment…",
     "readingDocuments": "Reading the documents…",
-    "noAccess": "Your role does not reach shipments (shipping.view).",
+    "noAccess": "Your role does not reach shipments.",
     "noFiles": "Your role does not read files: the sheet prints alone.",
     "cancelled": "The shipment is cancelled: nothing leaves with this pack.",
     "sheet": "The driver's sheet",

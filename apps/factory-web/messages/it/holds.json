@@ -210,12 +210,12 @@
     "evidenceNoBatch": "L’ordine di lavoro non ha ancora un numero di lotto di produzione: le prove di conformità partono da lì.",
     "evidenceOpen": "Apri il blocco: lì si legge il lotto di produzione del suo ordine di lavoro.",
     "later": "Arriva più avanti (W2b)",
-    "noNcr": "Non apri non conformità (quality.ncr.raise).",
+    "noNcr": "Non apri non conformità.",
     "noPlace": "Non metti né modifichi blocchi: lo fa un ispettore qualità, un responsabile di produzione o un capo reparto.",
-    "noRelease": "Solo la qualità sblocca un blocco (quality.holds.release): chiedi a un ispettore qualità.",
+    "noRelease": "Solo la qualità sblocca un blocco: chiedi a un ispettore qualità.",
     "noReleaseHere": "Non sblocchi blocchi in questa sede.",
     "noRows": "Nessun blocco in questa vista.",
-    "noThreads": "Non leggi conversazioni e cronologia (threads.read).",
+    "noThreads": "Non leggi conversazioni e cronologia.",
     "notActive": "Questo blocco non è più attivo: non cambia più.",
     "pickFirst": "Seleziona prima i blocchi.",
     "traceKind": "La tracciabilità parte da un lotto o da una pelle: tracciala dai suoi lotti in Lotti e tracciabilità.",
@@ -286,7 +286,7 @@
     "otherPlace": "Chiedi un altro posto…"
   },
   "noAccess": {
-    "body": "I blocchi richiedono quality.holds.view: li leggono magazzino, capi reparto, responsabili di produzione e qualità. Lo assegna un amministratore in Sistema › Ruoli e permessi.",
+    "body": "I blocchi richiedono il permesso di vedere cosa è bloccato: li leggono magazzino, capi reparto, responsabili di produzione e qualità. Lo assegna un amministratore in Sistema › Ruoli e permessi.",
     "title": "Non puoi vedere i blocchi"
   },
   "notice": {
@@ -576,7 +576,7 @@
     "saveLoosen": "Salva la regola meno severa",
     "held": {
       "reading": "Lettura della regola…",
-      "noRight": "Per cambiare chi sblocca i blocchi serve quality.settings.manage per questa azienda: chiedi al titolare.",
+      "noRight": "Per cambiare chi sblocca i blocchi serve il permesso di cambiare le impostazioni qualità di questa azienda: chiedi al titolare.",
       "busy": "Salvataggio…",
       "nothing": "Non è cambiato ancora nulla.",
       "reason": "Prima di' perché (almeno 3 caratteri)."
@@ -693,7 +693,7 @@
     "empty": "Con gli elementi bloccati non è stato ancora fatto nulla.",
     "extendHeld": {
       "NOT_ACTIVE": "Un blocco rilasciato o chiuso non si estende.",
-      "NO_RIGHT": "Per estendere un blocco serve quality.holds.place nella sua sede.",
+      "NO_RIGHT": "Per estendere un blocco serve il permesso di mettere blocchi nella sua sede.",
       "KIND": "L'estensione parte da un lotto o da una pelle: questo blocco non ne contiene e non ha un gruppo."
     }
   },
@@ -775,13 +775,13 @@
     "cellGarments_one": "{count} capo, {shipped} spediti",
     "cellGarments_other": "{count} capi, {shipped} spediti",
     "ddt": "DDT {number}",
-    "partyHidden": "nome non mostrato (parties.view)",
+    "partyHidden": "nome non mostrato",
     "received": "ricevuto",
     "left": "uscito dalla sede",
     "onHold": "Bloccato: {reason}",
     "hidden": "non mostrato",
-    "restrictedParties_one": "{count} cliente o fornitore è contato senza nome (serve parties.view).",
-    "restrictedParties_other": "{count} clienti o fornitori sono contati senza nome (serve parties.view).",
+    "restrictedParties_one": "{count} cliente o fornitore è contato senza nome (serve il permesso di vedere clienti e fornitori).",
+    "restrictedParties_other": "{count} clienti o fornitori sono contati senza nome (serve il permesso di vedere clienti e fornitori).",
     "restrictedSites_one": "{count} elemento in una sede che non raggiungi è contato, non mostrato.",
     "restrictedSites_other": "{count} elementi in sedi che non raggiungi sono contati, non mostrati.",
     "affectedOnly_one": "Mostra solo i clienti coinvolti ({count})",
@@ -825,7 +825,7 @@
     },
     "conflict": "{number} è stato cambiato nel frattempo: la bacheca viene riletta.",
     "refused": "{number} non è stato spostato.",
-    "readOnly": "Leggi questa bacheca: spostare un blocco richiede quality.holds.place (un ispettore qualità, un responsabile di produzione o un capo reparto)."
+    "readOnly": "Leggi questa bacheca: spostare un blocco richiede il permesso di mettere blocchi (un ispettore qualità, un responsabile di produzione o un capo reparto)."
   },
   "qmove": {
     "of": "Blocco {number} · {kind} {code} {more}",
@@ -855,7 +855,7 @@
     "held": {
       "notStock": "Solo lotti e pelli vanno in quarantena.",
       "moved": "La merce è già in quarantena.",
-      "noTransfer": "Confermare sposta merce: serve inventory.transfer nella sede.",
+      "noTransfer": "Confermare sposta merce: serve il permesso di spostare merce nella sede.",
       "notAsked": "Nessuno spostamento chiesto: chiedilo prima."
     },
     "problem": {

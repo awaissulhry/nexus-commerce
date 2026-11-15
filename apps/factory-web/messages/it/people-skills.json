@@ -33,7 +33,7 @@
     "TRAINING_DUE_SOON": "Validità entro 60 giorni",
     "AUTHORISATIONS_HELD": "Bloccate finché il corso non è valido",
     "LANGUAGE_NOT_CHECKED": "Comprensione non verificata (art. 37 c.13)",
-    "noSafety": "Mostrato a chi legge la sicurezza (safety.view)"
+    "noSafety": "Mostrato a chi legge la sicurezza"
   },
   "list": {
     "title": "Matrice competenze",

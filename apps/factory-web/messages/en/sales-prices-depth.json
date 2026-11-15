@@ -17,9 +17,9 @@
     "noCostSheet": "The style has no cost sheet: a price from the cost needs one.",
     "noneList": "None of the selected lines can start from a list price.",
     "noneCost": "None of the selected lines has a price from its cost.",
-    "noPrice": "Prices need the price grain (money.price): your role does not have it.",
+    "noPrice": "Prices need the price grain: your role does not have it.",
     "archived": "The list is archived: reactivate it to change it.",
-    "noManage": "Changing price lists needs pricelists.manage: your role reads them only.",
+    "noManage": "Changing price lists needs the right to keep them: your role reads them only.",
     "noVersion": "The list has no version yet.",
     "activeVersion": "Version {revision} is in force: its rules stay as they are. Make the next version to change them.",
     "activeHasDraft": "Version {revision} is in force and keeps its rules: change them on the draft."
@@ -168,7 +168,7 @@
   },
   "drawer": {
     "title": "Cost breakdown and waterfall",
-    "noPrice": "Prices need the price grain (money.price): your role does not have it.",
+    "noPrice": "Prices need the price grain: your role does not have it.",
     "failed": "The line's price couldn't be read",
     "waterfall": "How line {line} is priced",
     "mismatch": "The steps add up to {total}; the line says {given}.",
@@ -180,8 +180,8 @@
     "listDays": "List {code}: the price of {days}.",
     "listAlways": "List {code}.",
     "costTitle": "Cost breakdown",
-    "noCostGrain": "The cost needs the cost grain (money.cost): your role does not have it.",
-    "noCosting": "The cost sheet needs costing.view: your role does not have it.",
+    "noCostGrain": "The cost needs the cost grain: your role does not have it.",
+    "noCosting": "The cost sheet needs the right to see cost sheets: your role does not have it.",
     "costNoCells": "The cost sheet has no cell for this line's colour and sizes.",
     "costChart": "What one piece of line {line} costs today",
     "margin": "Margin of this line",
@@ -431,9 +431,9 @@
     "title": "Import prices",
     "everyCompany": "Every company",
     "held": {
-      "manage": "Importing prices needs pricelists.manage: your role reads price lists only.",
-      "price": "Importing prices needs the price grain (money.price).",
-      "run": "Running an import needs imports.run and files.upload: your role has not got them."
+      "manage": "Importing prices needs the right to keep price lists: your role reads price lists only.",
+      "price": "Importing prices needs the price grain.",
+      "run": "Running an import needs the rights to run imports and to upload files: your role has not got them."
     }
   },
   "print": {
@@ -458,7 +458,7 @@
   "floors": {
     "title": "Margin floor % per role",
     "sub": "A quote version is held to the lowest floor of its maker's roles; a role without one keeps the company floor. Under the floor a quote needs an approval.",
-    "noMargin": "The floors need the margin grain (money.margin): your role does not have it.",
+    "noMargin": "The floors need the margin grain: your role does not have it.",
     "edit": "Change the floors",
     "save": "Save the floors",
     "discard": "Discard",
@@ -486,7 +486,7 @@
     "refusedNoRow": "This scope has no settings of its own yet: save its quote rules first.",
     "refusedRoles": "A role is no longer an office role of this company: read the floors again.",
     "held": {
-      "manage": "Changing the floors needs sales.settings.manage.",
+      "manage": "Changing the floors needs the right to set the company's quote rules.",
       "noRowCompany": "This company follows the group's settings: give it its own settings first (Quote rules).",
       "noRowGroup": "The group has no settings yet: save the group's quote rules first.",
       "same": "Nothing changed yet.",

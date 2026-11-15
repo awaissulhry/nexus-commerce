@@ -98,7 +98,7 @@ export async function hideFor(caller: CommandCaller, hideId: string, permission?
   const context = officeContextOf(caller)
   const hide = isUuid(hideId) ? await caller.withClient((client) => client.hide.findUnique({ where: { id: hideId }, select: HIDE_SELECT })) : null
   if (!hide || !mayAt(context, INVENTORY_STOCK_VIEW, scopeOf(hide))) throw new NotFoundError('Hide not found.')
-  if (permission && !mayAt(context, permission, scopeOf(hide))) throw new ForbiddenError(`This needs ${permission} at the hide's site.`)
+  if (permission && !mayAt(context, permission, scopeOf(hide))) throw new ForbiddenError("This needs a right your role does not hold at the hide's site.")
   return { hide, context }
 }
 

@@ -68,7 +68,7 @@
     "count_other": "{count}",
     "empty": "Nessuno."
   },
-  "held": "Serve il permesso {permission} per vederli qui.",
+  "held": "Serve il permesso «{right}» per vederli qui.",
   "totals": {
     "net": "Fatturato, al netto delle note di credito",
     "netHint": "Fatturato {invoiced} meno accreditato {credited}",

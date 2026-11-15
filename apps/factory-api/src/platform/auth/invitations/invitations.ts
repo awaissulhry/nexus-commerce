@@ -57,7 +57,7 @@ export async function invite(auth: OfficeAuth, request: FastifyRequest, body: In
   const email = emailOrThrow(body.email)
   const locale = body.locale ?? 'it'
   if (body.roles.length > 0 && !holds(actorOf(context), ADMIN_PERMISSION)) {
-    throw new ForbiddenError(`Giving roles with an invitation also needs ${ADMIN_PERMISSION}.`)
+    throw new ForbiddenError('Giving roles with an invitation also needs the right to give roles.')
   }
   const existing = await request.withClient((client) =>
     client.user.findUnique({ where: { tenantId_email: { tenantId: context.tenantId, email } }, select: { id: true, status: true, version: true, audience: true } }),

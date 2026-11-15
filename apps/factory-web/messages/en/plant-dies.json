@@ -135,7 +135,7 @@
     "newDie": "New die"
   },
   "held": {
-    "noManage": "Your role does not keep the register (plant.machines.manage).",
+    "noManage": "Your role does not keep the register.",
     "alreadyRetired": "Already retired.",
     "noneToRetire": "Select dies in use.",
     "busy": "Saving…",

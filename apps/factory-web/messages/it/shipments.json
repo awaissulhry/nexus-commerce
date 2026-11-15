@@ -1014,7 +1014,7 @@
     },
     "reading": "Lettura della spedizione…",
     "readingDocuments": "Lettura dei documenti…",
-    "noAccess": "Il tuo ruolo non vede le spedizioni (shipping.view).",
+    "noAccess": "Il tuo ruolo non vede le spedizioni.",
     "noFiles": "Il tuo ruolo non legge i file: si stampa solo il foglio.",
     "cancelled": "La spedizione è annullata: nulla parte con questi documenti.",
     "sheet": "Il foglio per l'autista",

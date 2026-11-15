@@ -24,7 +24,7 @@
   },
   "noAccess": {
     "title": "Le regole di magazzino non sono nel tuo ruolo",
-    "body": "Per leggerle serve il permesso di vedere le giacenze (inventory.stock.view). Lo assegna un amministratore in Sistema › Ruoli e permessi."
+    "body": "Per leggerle serve il permesso di vedere le giacenze. Lo assegna un amministratore in Sistema › Ruoli e permessi."
   },
   "card": {
     "neverChanged": "Mai cambiato qui.",
@@ -266,17 +266,17 @@
   "held": {
     "reading": "Sto ancora leggendo le regole.",
     "busy": "Salvataggio in corso: attendi un momento.",
-    "noRight": "Per cambiare le regole di magazzino serve inventory.rules.manage su questa azienda (magazzino, amministrazione, il titolare).",
+    "noRight": "Per cambiare le regole di magazzino serve il permesso di modificarle su questa azienda (magazzino, amministrazione, il titolare).",
     "noRightAll": "Le regole di magazzino di tutte le aziende le cambia solo un ruolo su tutte le aziende.",
     "offline": "Offline: le modifiche restano su questa pagina finché la connessione torna.",
     "offlineTitle": "Offline",
     "offlineBody": "Questa è l’ultima copia letta. Non si può salvare nulla finché la connessione torna.",
-    "noApprovalsView": "Per leggere le regole di approvazione serve il permesso di vedere le approvazioni (approvals.view).",
-    "noRulesManage": "Per scrivere regole di approvazione serve il permesso di gestirle (approvals.rules.manage): il titolare o un amministratore.",
-    "noCost": "L’importo è un costo: si vede e si cambia solo con il permesso di vedere i costi (money.cost).",
-    "noLocationsView": "Le ubicazioni predefinite richiedono il permesso di vedere le ubicazioni (inventory.locations.view).",
-    "noLocationsRight": "Per cambiare le ubicazioni predefinite serve inventory.locations.manage.",
-    "noCrViView": "Per leggere questa regola serve il permesso di vedere i lotti e le loro prove (quality.lots.view)."
+    "noApprovalsView": "Per leggere le regole di approvazione serve il permesso di vedere le approvazioni.",
+    "noRulesManage": "Per scrivere regole di approvazione serve il permesso di gestirle: il titolare o un amministratore.",
+    "noCost": "L’importo è un costo: si vede e si cambia solo con il permesso di vedere i costi.",
+    "noLocationsView": "Le ubicazioni predefinite richiedono il permesso di vedere le ubicazioni.",
+    "noLocationsRight": "Per cambiare le ubicazioni predefinite serve il permesso di gestire le ubicazioni.",
+    "noCrViView": "Per leggere questa regola serve il permesso di vedere i lotti e le loro prove."
   },
   "problem": {
     "reasonNeeded": "Indica il motivo: questo allarga ciò che una persona può fare.",

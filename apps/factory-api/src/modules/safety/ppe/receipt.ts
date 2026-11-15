@@ -63,7 +63,7 @@ export async function previewReceipt(request: FastifyRequest, receiptId: string,
 export async function keepReceipt(files: FilesRuntime, request: FastifyRequest, receiptId: string, options: { readonly language?: DocumentLanguage | undefined; readonly idempotencyKey?: string | undefined }) {
   const context = officeOf(request)
   const receipt = await readableReceipt(request, context, receiptId)
-  assertMayWriteAt(context, SAFETY_PPE_ISSUE, receipt, 'A receipt is kept by a role that records receipts (safety.ppe.issue).')
+  assertMayWriteAt(context, SAFETY_PPE_ISSUE, receipt, 'A receipt is kept by a role that records receipts.')
   if (receipt.method !== 'FLOOR_PIN') refuse('PAPER_RECEIPT', PPE_REFUSALS.PAPER_RECEIPT)
   const language = options.language ?? 'it'
   const company = await companyLegalOf(request, receipt.companyId)

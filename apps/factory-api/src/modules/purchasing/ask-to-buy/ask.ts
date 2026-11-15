@@ -258,8 +258,8 @@ export async function askFromShortage(caller: CommandCaller, body: FromShortageI
   const { result } = await command(caller, { name: 'purchasing.askToBuyFromShortage', idempotencyKey, input: body }, async (tools) => {
     const { tx } = tools
     const site = await siteToAsk(tools, context, body.siteId)
-    if (!can(actor, PLANNING_VIEW, { companyId: site.companyId, siteId: site.id })) throw new ForbiddenError('Reading the shortage list needs planning (planning.view) at this site.')
-    if (body.then === 'DRAFT' && !can(actor, PURCHASING_MANAGE, { companyId: site.companyId, siteId: site.id })) throw new ForbiddenError('Drafting a purchase order needs purchasing.manage: send it to the buyers instead.')
+    if (!can(actor, PLANNING_VIEW, { companyId: site.companyId, siteId: site.id })) throw new ForbiddenError('Reading the shortage list needs the right to see planning at this site.')
+    if (body.then === 'DRAFT' && !can(actor, PURCHASING_MANAGE, { companyId: site.companyId, siteId: site.id })) throw new ForbiddenError('Drafting a purchase order needs the right to make purchase orders: send it to the buyers instead.')
     const colourId = body.itemColourId ?? null
     // One open request per work order and material: the second asker waits for the first one's lock and finds it.
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(concat_ws('|', 'factory.ask-shortage', ${context.tenantId}::uuid, ${body.workOrderId}::text, ${body.itemId}::text, ${colourId ?? '-'}::text), 0))`
@@ -349,7 +349,7 @@ export async function rejectRequests(caller: CommandCaller, body: ManyInput, ide
       await tx.$queryRaw`SELECT 1 FROM "PurchaseRequest" WHERE id = ${asked.id}::uuid FOR UPDATE`
       const row = await tx.purchaseRequest.findUnique({ where: { id: asked.id }, select: ASKED_COLUMNS })
       if (!row || !sees(context, row)) throw new NotFoundError('Request not found.')
-      if (!isBuyer(context, row)) throw new ForbiddenError('Refusing a request is the buyer’s (purchasing.manage).')
+      if (!isBuyer(context, row)) throw new ForbiddenError('Refusing a request is the buyer’s.')
       const why = rejectProblem(row.status as PurchaseRequestStatus)
       if (why) throw new ConflictError(why)
       if (row.version !== asked.version) throw new ConflictError(`This request changed since it was read (body/requests/${index}): read it again.`)

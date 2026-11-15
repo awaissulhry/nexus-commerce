@@ -110,8 +110,8 @@ async function matchedLines(db: Reader, invoice: InvoiceRow): Promise<MatchedLin
 
 /** Why a FEE entry may not be booked from this invoice (null: it may); `forbidden`: the person lacks a right. */
 function bookHeld(context: OfficeContext, facts: OrderFacts, invoice: InvoiceRow): { readonly forbidden: boolean; readonly words: string } | null {
-  if (!can(actorOf(context), PURCHASING_SUBCONTRACT_COST, { companyId: facts.order.companyId, siteId: facts.order.siteId, partyId: facts.order.partyId })) return { forbidden: true, words: 'Booking a workshop fee needs purchasing.subcontract.cost.' }
-  if (!seesCost(context)) return { forbidden: true, words: 'Booking a workshop fee needs the cost grain (money.cost).' }
+  if (!can(actorOf(context), PURCHASING_SUBCONTRACT_COST, { companyId: facts.order.companyId, siteId: facts.order.siteId, partyId: facts.order.partyId })) return { forbidden: true, words: 'Booking a workshop fee needs the right to book workshop charges.' }
+  if (!seesCost(context)) return { forbidden: true, words: 'Booking a workshop fee needs the right to see costs.' }
   if (invoice.kind !== 'INVOICE') return { forbidden: false, words: 'A credit note books no fee.' }
   if (invoice.status === 'VOIDED') return { forbidden: false, words: 'The invoice is voided.' }
   if (!COSTED_STATUSES.includes(facts.order.status as SubcontractOrderStatus)) return { forbidden: false, words: `Subcontract order ${facts.order.number} is not issued: its work costs nothing yet.` }

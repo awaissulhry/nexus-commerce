@@ -157,7 +157,7 @@
     "export_other": "Export {count} lines"
   },
   "held": {
-    "noManage": "You can read promises, not change them (planning.promise.manage).",
+    "noManage": "You can read promises, not change them.",
     "mayNot": "This line cannot be re-promised now (it shipped, or you cannot see its order).",
     "noSite": "Pick a site first.",
     "busy": "Saving…",
@@ -167,9 +167,9 @@
     "message": "Write a subject and a message, or use the composed words.",
     "notWaiting": "This re-promise no longer waits for sales.",
     "ownProposal": "You proposed this date: another person of sales gives the word (nobody decides their own request).",
-    "noDecide": "Sales gives the word: it needs the right to change orders (orders.manage).",
+    "noDecide": "Sales gives the word: it needs the right to change orders.",
     "mayNotDecide": "You cannot decide on this order.",
-    "noTell": "Telling the customer needs the right to send mail (email.send).",
+    "noTell": "Telling the customer needs the right to send mail.",
     "noRecipient": "The customer has no e-mail address on the order or its contacts.",
     "notProposer": "Only the planner who proposed it takes it back.",
     "declineReason": "Say why the new date is declined (the planner reads it)."
@@ -581,12 +581,12 @@
       "none": "No order line is put at risk."
     },
     "held": {
-      "noCheck": "Checking needs the right to handle planning exceptions (planning.exceptions.manage).",
+      "noCheck": "Checking needs the right to handle planning exceptions.",
       "noOrder": "No purchase order to check.",
       "checking": "Checking…",
-      "noPurchasing": "The purchase order needs the right to see purchasing (purchasing.view).",
-      "noPromise": "Promise dates needs the right to see promise dates (planning.promise.view).",
-      "noRepromise": "Re-promising needs the right to change promise dates (planning.promise.manage).",
+      "noPurchasing": "The purchase order needs the right to see purchasing.",
+      "noPromise": "Promise dates needs the right to see promise dates.",
+      "noRepromise": "Re-promising needs the right to change promise dates.",
       "mayNot": "This line cannot be re-promised now."
     },
     "newTab": "Each fix opens its record; ⌘-click keeps the queue open while fixing.",

@@ -62,7 +62,7 @@ async function knownResult(request: FastifyRequest, resultId: string, write: boo
   const result = isUuid(resultId) ? await request.withClient((client) => readResult(client, resultId)) : null
   if (!result) throw new NotFoundError('Check result not found.')
   assertMay(context, PLANT_VIEW, result, 'Check result')
-  if (write) assertMayWrite(context, PLANT_CHECKS_MANAGE, result, 'Reports of check results are added by a role that keeps the statutory checks (plant.checks.manage).')
+  if (write) assertMayWrite(context, PLANT_CHECKS_MANAGE, result, 'Reports of check results are added by a role that keeps the statutory checks.')
   return { context, result }
 }
 

@@ -198,9 +198,10 @@ describe('every design case draws in both languages with no key left on screen',
     }
   }
 
-  it('the production manager and sales see no lot: the permission is named', () => {
+  it('the production manager and sales see no lot: the missing right is said in words, never its code', () => {
     const html = render(listScreen as DesignScreen<unknown>, listScreen.cases.find((item) => item.id === 'no-permission')!.model, 'en')
-    expect(html).toContain('quality.lots.view')
+    expect(html).toContain('the permission to see lots')
+    expect(html).not.toContain('quality.lots.view')
     expect(html).not.toContain('DEMO-L-0231')
   })
 

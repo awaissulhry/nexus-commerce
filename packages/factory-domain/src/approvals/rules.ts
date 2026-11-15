@@ -486,8 +486,8 @@ export const APPROVAL_REFUSALS = Object.freeze({
   REASON_CODE: 'Pick a reason of the list "Why an approver says no" (Admin › Reasons).',
   REASON_WORDS: 'Say why in words (1 to 2000 characters).',
   COMMENT: 'A comment is 1 to 2000 characters.',
-  APPROVER_ROLE: 'Name an office role whose people may approve (approvals.decide), or one person.',
-  APPROVER_PERSON: 'Name an office person who is active and may approve (approvals.decide).',
+  APPROVER_ROLE: 'Name an office role whose people may decide approvals, or one person.',
+  APPROVER_PERSON: 'Name an office person who is active and may decide approvals.',
   CHANGE_GRAIN: 'This rule tests a money figure your roles do not show: someone who sees it changes the rule.',
 })
 export type ApprovalRefusal = keyof typeof APPROVAL_REFUSALS

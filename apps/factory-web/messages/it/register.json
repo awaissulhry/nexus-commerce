@@ -6,7 +6,7 @@
   },
   "noAccess": {
     "title": "Il registro DPI non è per il tuo ruolo",
-    "body": "Per vedere il registro serve il permesso compliance.register.view. Lo concede il titolare o un amministratore in Sistema › Ruoli e permessi."
+    "body": "Per vedere il registro serve il permesso di vedere il registro DPI. Lo concede il titolare o un amministratore in Sistema › Ruoli e permessi."
   },
   "tile": {
     "open": "Voci aperte",
@@ -121,7 +121,7 @@
     "atMax": "Al massimo {max} mostrate"
   },
   "held": {
-    "manage": "Il tuo ruolo può vedere il registro; per modificarlo serve compliance.register.manage.",
+    "manage": "Il tuo ruolo può vedere il registro; per modificarlo serve il permesso di tenere il registro DPI.",
     "closed": "Una voce chiusa non cambia mai: aggiungi invece una nota nella discussione.",
     "actionDone": "L'azione correttiva risulta già fatta: aggiungi una nota invece di riscriverla.",
     "informed": "I distributori risultano già informati.",
@@ -152,7 +152,7 @@
     "kind": "Tipo di evento",
     "style": "Modello",
     "styleHint": "Il modello dei capi interessati.",
-    "styleNoRight": "Il tuo ruolo non può elencare i modelli (product.styles.view): chiedi a chi può di aggiungere la voce.",
+    "styleNoRight": "Il tuo ruolo non può elencare i modelli: chiedi a chi può di aggiungere la voce.",
     "chooseStyle": "Scegli un modello",
     "styleUnavailable": "Nessun modello da scegliere",
     "reportedOn": "Segnalata il",
@@ -174,7 +174,7 @@
     "descriptionHint": "In parole semplici: cosa è stato trovato o segnalato, e come lo abbiamo saputo.",
     "reporter": "Segnalata da",
     "reporterHint": "Il cliente o il distributore che lo ha segnalato, se c’è.",
-    "reporterNoRight": "Il tuo ruolo non può elencare i clienti (parties.view): chi segnala può essere aggiunto dopo da chi può.",
+    "reporterNoRight": "Il tuo ruolo non può elencare i clienti: chi segnala può essere aggiunto dopo da chi può.",
     "noReporter": "Nessuno (trovato da noi)",
     "risk": "Il DPI può presentare un rischio?",
     "actionTaken": "Azione già presa",

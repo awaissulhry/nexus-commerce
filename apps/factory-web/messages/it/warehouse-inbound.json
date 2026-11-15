@@ -14,11 +14,11 @@
   "noteEdit": "Modifica la nota per la banchina",
   "noteCard": "Nota per la banchina su {label}",
   "held": {
-    "noReceive": "Ricevere merce richiede il permesso di ricevere in questa sede (inventory.receive)."
+    "noReceive": "Ricevere merce richiede il permesso di ricevere in questa sede."
   },
   "forbidden": {
     "title": "Non puoi vedere gli arrivi previsti",
-    "body": "Serve il permesso di vedere le giacenze della sede (inventory.stock.view): chiedilo all'amministratore."
+    "body": "Serve il permesso di vedere le giacenze della sede: chiedilo all'amministratore."
   },
   "failed": "Non è stato possibile leggere le consegne",
   "retry": "Riprova",

@@ -48,15 +48,15 @@ export function roleProblems(
   if (content.name.trim() === '' || content.name.length > 100) issues.push({ path: 'name', message: 'Expected 1 to 100 characters.' })
   content.permissions.forEach((permission, index) => {
     const definition = registry.get(permission)
-    if (!definition) issues.push({ path: `permissions/${index}`, message: `${permission} is not a permission of the factory.` })
-    else if (definition.grain !== undefined) issues.push({ path: `permissions/${index}`, message: `${permission} is a money grain: list it in grains.` })
+    if (!definition) issues.push({ path: `permissions/${index}`, message: 'Not a permission of the factory.' })
+    else if (definition.grain !== undefined) issues.push({ path: `permissions/${index}`, message: 'A money grain: list it in grains.' })
     else if (definition.link === true) {
-      issues.push({ path: `permissions/${index}`, message: `${permission} is held only by a one-off link session, from its purpose; a role cannot give it.` })
+      issues.push({ path: `permissions/${index}`, message: 'Held only by a one-off link session, from its purpose; a role cannot give it.' })
     }
     // Custom roles are office roles: the floor's permissions come only with the floor templates.
-    else if (definition.area === FLOOR_AREA) issues.push({ path: `permissions/${index}`, message: `${permission} is held only by floor roles.` })
+    else if (definition.area === FLOOR_AREA) issues.push({ path: `permissions/${index}`, message: 'Held only by floor roles.' })
     // B-W2b-162: and the portal's only with the partner templates.
-    else if (definition.partner === true) issues.push({ path: `permissions/${index}`, message: `${permission} is held only by partner roles (a portal's people).` })
+    else if (definition.partner === true) issues.push({ path: `permissions/${index}`, message: "Held only by partner roles (a portal's people)." })
   })
   content.grains.forEach((grain, index) => {
     if (!isGrain(grain)) issues.push({ path: `grains/${index}`, message: `${String(grain)} is not a money grain (${GRAINS.join(', ')}).` })
@@ -190,7 +190,7 @@ export function uncoveredScope(assignerGrants: readonly Grant[], scope: Assignme
     grant.parties === 'all' || (scope.partyIds.length > 0 && scope.partyIds.every((party) => reaches(grant.parties, party)))
   const some = (test: (grant: Grant) => boolean): boolean => grants.some((grant) => parties(grant) && test(grant))
   const issues: Issue[] = []
-  const wider = (path: string, what: string) => issues.push({ path, message: `Outside your own ${ADMIN_PERMISSION} scope: ${what}.` })
+  const wider = (path: string, what: string) => issues.push({ path, message: `Outside where your right to give roles reaches: ${what}.` })
 
   if (scope.allCompanies) {
     if (scope.siteIds.length === 0) {

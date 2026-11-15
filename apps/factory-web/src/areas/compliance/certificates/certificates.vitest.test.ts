@@ -254,10 +254,11 @@ describe('every design case draws in both languages with no key left on screen',
     }
   }
 
-  it('sales sees no certificate: the permission is named, no number is drawn', () => {
+  it('sales sees no certificate: the missing right is said in words (never its code), no number is drawn', () => {
     for (const screen of [listScreen, recordScreen] as DesignScreen<unknown>[]) {
       const html = render(screen, screen.cases.find((item) => item.id === 'no-permission')!.model, 'en')
-      expect(html).toContain('compliance.certificates.view')
+      expect(html).toContain('the permission to view certificates')
+      expect(html).not.toContain('compliance.certificates.view')
       expect(html).not.toContain('CERT-DEMO-0001')
     }
   })

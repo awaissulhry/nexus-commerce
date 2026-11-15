@@ -52,7 +52,7 @@ function companyCaller(request: FastifyRequest, tenantId: string, companyId: str
 export async function announceMedia(request: FastifyRequest, instructionId: string, body: AnnounceBody, idempotencyKey?: string) {
   const context = officeOf(request)
   const instruction = await request.withClient((client) => readInstruction(client as Db, context, instructionId))
-  assertMay(context, PRODUCTION_INSTRUCTIONS_MANAGE, instruction.companyId, 'You add photos and videos to work instructions only for the companies your role reaches (production.instructions.manage).')
+  assertMay(context, PRODUCTION_INSTRUCTIONS_MANAGE, instruction.companyId, 'You add photos and videos to work instructions only for the companies your role reaches.')
   const wrong = mediaTypeProblem(body.kind, body.contentType.trim())
   if (wrong) throw new ValidationError(wrong, [{ path: 'body/contentType', message: wrong }])
   if (instruction.status !== 'ACTIVE') refuse({ code: 'ARCHIVED', message: `${instruction.number} is archived: restore it before adding photos or videos.` })
@@ -79,7 +79,7 @@ export async function announceMedia(request: FastifyRequest, instructionId: stri
 export async function completeMedia(request: FastifyRequest, instructionId: string, fileId: string, idempotencyKey?: string) {
   const context = officeOf(request)
   const instruction = await request.withClient((client) => readInstruction(client as Db, context, instructionId))
-  assertMay(context, PRODUCTION_INSTRUCTIONS_MANAGE, instruction.companyId, 'You add photos and videos to work instructions only for the companies your role reaches (production.instructions.manage).')
+  assertMay(context, PRODUCTION_INSTRUCTIONS_MANAGE, instruction.companyId, 'You add photos and videos to work instructions only for the companies your role reaches.')
   const uploader = companyCaller(request, context.tenantId, instruction.companyId, [FILES_UPLOAD])
   const file = isUuid(fileId) ? await uploader.withClient((client) => client.storedFile.findFirst({ where: { id: fileId, recordType: FILE_RECORD, recordId: instruction.id, kind: 'PHOTO' }, select: { id: true } })) : null
   if (!file) throw new NotFoundError('File not found.')

@@ -106,7 +106,7 @@ export class CountRefusedError extends InvalidStateError {
 const refuse = (message: string, code: string, detail: string): CountRefusedError => new CountRefusedError(message, [{ code, message: detail }])
 
 function must(context: OfficeContext, permission: Permission, row: { readonly companyId: string; readonly siteId: string }, words?: string): void {
-  if (!can(actorOf(context), permission, scopeOf(row))) throw new ForbiddenError(words ?? `This needs ${permission}.`)
+  if (!can(actorOf(context), permission, scopeOf(row))) throw new ForbiddenError(words ?? 'This needs a right your role does not hold.')
 }
 
 /** A count the caller may view, or not found. */
@@ -715,7 +715,7 @@ export interface AppliedMove {
  */
 export async function applyCount(caller: CommandCaller, countId: string, body: { readonly version: number; readonly periodLockOverride?: PeriodLockOverride | undefined }, idempotencyKey?: string): Promise<{ count: CountRecordView; moves: AppliedMove[] }> {
   const context = officeContextOf(caller)
-  must(context, INVENTORY_ADJUST, await visibleCount(caller, countId), 'Posting a count\'s differences needs inventory.adjust.')
+  must(context, INVENTORY_ADJUST, await visibleCount(caller, countId), "Posting a count's differences needs the right to adjust stock.")
   const { result } = await countsCommand(
     caller,
     { name: 'inventory.counts.apply', idempotencyKey, input: { countId, ...body } },

@@ -1,7 +1,7 @@
 {
   "access": {
     "title": "Nessun accesso al registro delle sostanze",
-    "body": "Questa pagina richiede il diritto di vedere la sicurezza (safety.view). Chiedi a chi gestisce i ruoli nella tua azienda."
+    "body": "Questa pagina richiede il diritto di vedere la sicurezza. Chiedi a chi gestisce i ruoli nella tua azienda."
   },
   "common": {
     "stillLoading": "Ancora in caricamento…",
@@ -331,7 +331,7 @@
   },
   "held": {
     "company": "Apri prima un'azienda (la barra in alto): una sostanza appartiene a una delle sue sedi.",
-    "manage": "Il registro delle sostanze lo tiene l'RSPP (safety.chemicals.manage).",
+    "manage": "Il registro delle sostanze lo tiene l'RSPP.",
     "busy": "Salvataggio…",
     "nothingChanged": "Nulla è cambiato.",
     "archived": "Questa sostanza è archiviata: rimettila prima in uso.",

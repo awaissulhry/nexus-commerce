@@ -54,7 +54,7 @@ async function tagTarget(caller: CommandCaller, context: FloorContext, printerId
   if (printer.siteId !== context.siteId || printer.kind !== 'LABEL_ZPL') {
     throw new ValidationError('Hide tags print on a label printer of this site.', [{ path: 'body/printerId', message: 'Pick a label printer of this site.' }])
   }
-  if (!can(actorOf(context), PRINT_LABELS, { companyId: printer.companyId, siteId: printer.siteId })) throw new ForbiddenError('Printing tags needs print.labels.')
+  if (!can(actorOf(context), PRINT_LABELS, { companyId: printer.companyId, siteId: printer.siteId })) throw new ForbiddenError('Printing tags needs the right to print labels.')
   if (printer.status !== 'ACTIVE') throw new InvalidStateError(`Printer ${printer.code} is ${printer.status.toLowerCase()}; it takes no tags now.`)
   return { printer: { id: printer.id, code: printer.code, name: printer.name }, problem: null }
 }

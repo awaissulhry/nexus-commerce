@@ -76,7 +76,7 @@ export async function lotFor(caller: CommandCaller, lotId: string, permission: P
   const context = officeOf(caller)
   const lot = await caller.withClient((client) => readLot(client, lotId))
   if (!lot || !(mayOn(context, QUALITY_LOTS_VIEW, lot) || mayOn(context, permission, lot))) throw new NotFoundError('Lot not found.')
-  if (!mayOn(context, permission, lot)) throw new ForbiddenError(`This needs ${permission} over the lot's company and site.`)
+  if (!mayOn(context, permission, lot)) throw new ForbiddenError("This needs a right your role does not hold over the lot's company and site.")
   return lot
 }
 

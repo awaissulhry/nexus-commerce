@@ -228,7 +228,7 @@ async function markReturnedHides(tools: CommandTools, claim: ClaimRow, hideIds: 
 }
 
 const noDdtRight = (context: OfficeContext, scope: { companyId: string; siteId: string }) =>
-  can(actorOf(context), SHIPPING_DDT_ISSUE, scope) ? null : new ForbiddenError('The return DDT needs the permission to issue DDTs (shipping.ddt.issue): ask the warehouse.')
+  can(actorOf(context), SHIPPING_DDT_ISSUE, scope) ? null : new ForbiddenError('The return DDT needs the permission to issue DDTs: ask the warehouse.')
 
 export interface ReturnInput {
   readonly version: number

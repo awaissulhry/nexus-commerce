@@ -110,7 +110,7 @@ export const supplierPricesImportAdapter = Object.freeze({
       if (party.companyId !== null && party.companyId !== scope.companyId) {
         return [{ column: 'supplier', message: scope.companyId === null ? `${name} supplies one company only: import its prices for that company.` : `${name} is another company's supplier.` }]
       }
-      if (!mayKeep(actor, { companyId: scope.companyId, partyId: party.id })) return [{ column: 'supplier', message: `Keeping ${name}'s prices needs purchasing.sources.manage over it and the import's company.` }]
+      if (!mayKeep(actor, { companyId: scope.companyId, partyId: party.id })) return [{ column: 'supplier', message: `Keeping ${name}'s prices needs the right to keep approved sources over it and the import's company.` }]
       const item = named.items.get(String(row.key.material))
       if (!item) return [{ column: 'material', message: `No material has the code ${String(row.key.material)}.` }]
       if (item.companyId !== null && item.companyId !== scope.companyId) {

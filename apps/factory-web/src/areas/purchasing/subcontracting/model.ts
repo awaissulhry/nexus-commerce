@@ -1,6 +1,8 @@
 import { DUE_STATUSES, OUT_STATUSES, RECEIVING_STATUSES, WORK_ORDER_STATES } from '@nexus/factory-domain/purchasing/subcontracting/rules'
 import type { Tone } from '@nexus/ui/primitives'
 import type { KitState, OperationSize, OrderAction, OrderQuery, OrderRow, OrderStatus, SubcontractOrder } from './api'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../lib/i18n/rights'
 
 /**
  * Purchasing › Subcontract orders (SCR-128 list + record, SCR-129 stock at the subcontractors; design
@@ -221,7 +223,7 @@ const PERMISSION_NAME: Readonly<Record<OrderAction, string>> = {
  * archived location) is classified from its sentence, never drawn as it is.
  */
 export function actHeld(order: SubcontractOrder, act: OrderAction, can: SubcontractCan): Words | null {
-  if (!can[PERMISSION[act]]) return words('held.permission', { permission: PERMISSION_NAME[act] })
+  if (!can[PERMISSION[act]]) return words('held.permission', { right: rightRef(PERMISSION_NAME[act]) })
   const server = order.actions[act]
   if (server === null) {
     if (act === 'send' && plannedLines(order).length === 0 && piecesToSend(order) === 0) return words('held.send.nothing')

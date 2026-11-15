@@ -258,7 +258,7 @@ describe('AqlSummary says the engine’s plan in our words', () => {
 const NAMESPACES = [...new Set([...Object.keys(en), ...Object.keys(enAql)])].filter((name) => /^[a-zA-Z]+$/.test(name))
 const LEFT_KEY = new RegExp(`\\b(?:${NAMESPACES.join('|')})\\.[a-zA-Z_]+(?:\\.[a-zA-Z_]+)*\\b`)
 const LEFT_PLACEHOLDER = /\{[a-zA-Z]+\}/
-/** Permission names are said on purpose ("needs quality.plans.manage"); codes like DEMO-… and the zone are data. */
+/** Permission names are stripped before the key check, though no screen says one since B-W2b-F51; codes like DEMO-… and the zone are data. */
 const SAID = /\b(?:quality|product|parties)\.[a-zA-Z.]+|Europe\/Rome/g
 
 function render(screen: DesignScreen<unknown>, model: unknown, locale: (typeof LOCALES)[number]): string {

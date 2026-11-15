@@ -82,7 +82,7 @@ export async function saveHoldSettings(caller: CommandCaller, body: SaveHoldSett
   const context = officeOf(caller)
   const companyId = body.companyId ?? null
   if (!mayWrite(actorOf(context), QUALITY_SETTINGS_MANAGE, companyId)) {
-    throw new ForbiddenError(companyId === null ? 'The tenant-wide hold rule is changed only by a role over every company.' : 'Changing who releases holds needs quality.settings.manage for the company.')
+    throw new ForbiddenError(companyId === null ? 'The tenant-wide hold rule is changed only by a role over every company.' : 'Changing who releases holds needs the right to change the quality settings for the company.')
   }
   if (companyId !== null) await assertCompany(caller, companyId)
   const inForceAfter = async (db: Reader) => {

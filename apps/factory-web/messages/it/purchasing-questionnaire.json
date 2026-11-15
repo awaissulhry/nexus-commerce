@@ -33,11 +33,11 @@
   "publishStarter": "Pubblica il questionario di partenza",
   "publishing": "Pubblicazione in corso…",
   "held": {
-    "manage": "Il tuo ruolo non modifica il questionario (purchasing.questionnaire.manage).",
+    "manage": "Il tuo ruolo non modifica il questionario.",
     "draft": "La versione {revision} è una bozza: pubblicala prima.",
-    "send": "Il tuo ruolo non invia il questionario (purchasing.questionnaire.send).",
+    "send": "Il tuo ruolo non invia il questionario.",
     "noVersion": "Pubblica prima un questionario.",
-    "review": "Il tuo ruolo non rivede le risposte (purchasing.questionnaire.review).",
+    "review": "Il tuo ruolo non rivede le risposte.",
     "reviewed": "Questa risposta è già stata rivista."
   },
   "send": {

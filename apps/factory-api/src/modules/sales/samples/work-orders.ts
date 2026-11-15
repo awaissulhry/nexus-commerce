@@ -72,7 +72,7 @@ export async function workOrderOptions(caller: CommandCaller, roundId: string) {
     if (stage) blockers.push(stage.message)
     const obsolete = revisionRefusal(revision)
     if (obsolete) blockers.push(`${obsolete.message} Change the round's revision first (while it is requested).`)
-    if (!can(actorOf(context), WORKORDERS_MANAGE, { companyId: round.companyId })) blockers.push('Making a sample work order also needs workorders.manage (the production office).')
+    if (!can(actorOf(context), WORKORDERS_MANAGE, { companyId: round.companyId })) blockers.push('Making a sample work order also needs the right to make work orders (the production office).')
     if (!(await hasSeries(db, round.companyId, 'WORK_ORDER'))) blockers.push('The company has no active work order number series: an admin sets one up under Numbering (kind WORK_ORDER).')
     if (revision.status === 'DRAFT') warnings.push(`Revision ${revision.revision} is a draft: the sample work order is made now, and released once the revision is released.`)
 
@@ -139,7 +139,7 @@ export async function makeWorkOrder(caller: CommandCaller, roundId: string, body
   const { context, round } = await officeRound(caller, roundId, SALES_SAMPLES_MANAGE)
   refuse(workOrderRefusal({ number: round.number, stage: round.stage as SampleStage }))
   if (!can(actorOf(context), WORKORDERS_MANAGE, { companyId: round.companyId })) {
-    throw new ForbiddenError('Making a sample work order also needs workorders.manage (the production office).')
+    throw new ForbiddenError('Making a sample work order also needs the right to make work orders (the production office).')
   }
   const label = `Sample round ${round.number} · ${roundLabel(round.kind as SampleKind, round.roundNo)}`
   const note = body.note === undefined || body.note === null || body.note.trim() === '' ? label : body.note

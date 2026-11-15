@@ -274,7 +274,7 @@ describe("the supplier's delivery note: number, date and photo, office and floor
     expect(file).toMatchObject({ recordType: 'GoodsReceipt', recordId: receipt.id, visibility: ['OFFICE'] })
     const record = (await ok('viewer', 'GET', `/inventory/receipts/${receipt.id}`)).receipt
     expect(record).toMatchObject({ supplierDdtNumber: `DDT-P-${run}`, supplierDdtDate: '2026-10-29', ddtPhotos: [{ id: file.id, originalName: 'ddt-front.jpg', status: 'AVAILABLE' }], discrepancies: { count: 0, open: 0, unsent: 0 } })
-    expect((await refused('noFiles', 'POST', `/inventory/receipts/${receipt.id}/ddt-photos`, { originalName: 'x.jpg', contentType: 'image/jpeg', sizeBytes: 10, sha256: 'a'.repeat(64) }, 403)).message).toBe('Adding a photo needs files.upload over the company.')
+    expect((await refused('noFiles', 'POST', `/inventory/receipts/${receipt.id}/ddt-photos`, { originalName: 'x.jpg', contentType: 'image/jpeg', sizeBytes: 10, sha256: 'a'.repeat(64) }, 403)).message).toBe('Adding a photo needs the right to upload files over the company.')
     expect((await refused('viewer', 'POST', `/inventory/receipts/${receipt.id}/ddt-photos`, { originalName: 'x.jpg', contentType: 'image/jpeg', sizeBytes: 10, sha256: 'a'.repeat(64) }, 403)).code).toBe('forbidden')
   })
 

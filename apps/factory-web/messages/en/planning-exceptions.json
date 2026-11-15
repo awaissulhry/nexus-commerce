@@ -18,7 +18,7 @@
   },
   "noAccess": {
     "title": "Exceptions are not open to your role",
-    "body": "Your role cannot read the plan (planning.view). Ask an administrator if you need it."
+    "body": "Your role cannot read the plan. Ask an administrator if you need it."
   },
   "keys": {
     "acknowledge": "Acknowledge the ticked rows (else the focused one)",
@@ -27,10 +27,10 @@
     "walk": "Previous / next exception in the detail"
   },
   "held": {
-    "noRun": "Your role cannot run the plan (planning.run).",
+    "noRun": "Your role cannot run the plan.",
     "running": "A run is going: two runs never overlap.",
     "noSite": "Pick a site first.",
-    "noManage": "Your role cannot work the exceptions (planning.exceptions.manage).",
+    "noManage": "Your role cannot work the exceptions.",
     "resolved": "It is resolved already.",
     "acknowledged": "It is acknowledged already.",
     "resolvedRow": "Resolved: nothing is left to do with it.",

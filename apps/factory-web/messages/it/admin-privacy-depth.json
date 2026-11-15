@@ -122,8 +122,8 @@
         "showAll": "Mostra tutte"
       },
       "held": {
-        "manage": "Puoi leggere le richieste sui dati ma non lavorarle (privacy.requests.manage).",
-        "erase": "Solo chi ha privacy.erase può rendere anonima una persona."
+        "manage": "Puoi leggere le richieste sui dati ma non lavorarle.",
+        "erase": "Solo chi ha il permesso di cancellare i dati personali può rendere anonima una persona."
       }
     },
     "record": {
@@ -251,7 +251,7 @@
       "noContacts": "Questo cliente non ha contatti.",
       "reporterHint": "L'elenco mostra solo il numero della segnalazione: il nome del segnalante compare quando la richiesta è registrata.",
       "pick": "Scegli",
-      "noLookup": "Qui non puoi cercare un {what}: serve {permission}. Chiedi a chi ce l'ha di registrare la richiesta.",
+      "noLookup": "Qui non puoi cercare un {what}: serve il permesso «{right}». Chiedi a chi ce l'ha di registrare la richiesta.",
       "received": "Ricevuta",
       "receivedHint": "Quando è arrivata la richiesta: i 30 giorni partono da qui.",
       "note": "Nota",
@@ -467,7 +467,7 @@
         "switchOn": "Accendi"
       },
       "held": {
-        "manage": "Puoi leggere le regole ma non cambiarle (privacy.retention.manage).",
+        "manage": "Puoi leggere le regole ma non cambiarle.",
         "SWITCHED_OFF": "La regola è spenta: riaccendila prima.",
         "ACTIVE": "La regola è già accesa.",
         "APPLYING": "La pulizia applica già questa regola.",

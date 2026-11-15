@@ -216,12 +216,12 @@
   "held": {
     "busy": "Working…",
     "loading": "Still loading…",
-    "noManage": "Your role may not record or settle discrepancies (inventory.discrepancies.manage).",
-    "noReport": "Your role may not send the discrepancy report (inventory.discrepancies.report).",
-    "noUpload": "Your role may not upload files (files.upload).",
-    "noReceive": "Your role may not receive goods (inventory.receive).",
-    "noClaims": "Your role may not prepare supplier claims (purchasing.claims.manage).",
-    "noImport": "Your role may not run imports (imports.run and files.upload).",
+    "noManage": "Your role may not record or settle discrepancies.",
+    "noReport": "Your role may not send the discrepancy report.",
+    "noUpload": "Your role may not upload files.",
+    "noReceive": "Your role may not receive goods.",
+    "noClaims": "Your role may not prepare supplier claims.",
+    "noImport": "Your role may not run imports.",
     "receiptClosed": "A reversed or cancelled receipt takes no new discrepancy.",
     "receiptCancelled": "A cancelled receipt takes no photo.",
     "kind": "Say what was wrong: pick the reason or the kind.",
@@ -252,7 +252,7 @@
     "contactsFailed": "The request could not be checked.",
     "pickDocument": "Pick at least one document to ask for.",
     "nothingWanted": "The lots wait for no document and the delivery note is recorded.",
-    "noRequest": "Your role may not ask suppliers for documents (inventory.receipts.documents.request).",
+    "noRequest": "Your role may not ask suppliers for documents.",
     "requestClosed": "A reversed or cancelled receipt waits for no document."
   },
   "report": {

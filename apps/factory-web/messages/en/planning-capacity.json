@@ -30,7 +30,7 @@
   },
   "noAccess": {
     "title": "Capacity & load is not open to your role",
-    "body": "Your role cannot read the plan (planning.view). Ask an administrator if you need it."
+    "body": "Your role cannot read the plan. Ask an administrator if you need it."
   },
   "keys": {
     "cell": "Open the orders of the lane this week",

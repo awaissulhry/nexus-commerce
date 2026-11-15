@@ -65,7 +65,7 @@ describe('the partner role templates (SAL-060, SCM-092, PLT-021)', () => {
     for (const key of ['admin', 'sales', 'buyer', 'owner']) expect(templateOf(key)?.permissions).toEqual(expect.arrayContaining(['partners.view', 'partners.invite', 'partners.manage', 'partners.preview']))
     expect(templateOf('read_only')?.permissions).toContain('partners.view')
     expect(templateOf('read_only')?.permissions).not.toContain('partners.preview')
-    expect(roleProblems({ name: 'Copy', requireMfa: false, permissions: ['portal.comment'], grains: [] })).toEqual([{ path: 'permissions/0', message: 'portal.comment is held only by partner roles (a portal\'s people).' }])
+    expect(roleProblems({ name: 'Copy', requireMfa: false, permissions: ['portal.comment'], grains: [] })).toEqual([{ path: 'permissions/0', message: 'Held only by partner roles (a portal\'s people).' }])
   })
 })
 

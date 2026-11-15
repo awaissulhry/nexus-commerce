@@ -9,7 +9,7 @@
   },
   "noAccess": {
     "title": "Non per il tuo ruolo",
-    "body": "Serve quality.complaints.view per vedere i reclami dei clienti. Lo assegna il titolare o un amministratore in Sistema › Ruoli e permessi."
+    "body": "Serve il permesso di vedere i reclami dei clienti. Lo assegna il titolare o un amministratore in Sistema › Ruoli e permessi."
   },
   "offline": {
     "title": "Offline – la pagina mostra l’ultima copia",
@@ -475,20 +475,20 @@
     "IN_REGISTER": "È già nel registro DPI",
     "NO_STYLE": "Indica prima il modello del capo: il registro DPI tiene una voce per modello",
     "NO_PERMISSION": {
-      "edit": "Il tuo ruolo non può modificare i reclami (quality.complaints.log finché è nuovo, poi quality.complaints.manage)",
-      "triage": "I reclami li smista la qualità (quality.complaints.manage)",
-      "startInvestigation": "I reclami li segue la qualità (quality.complaints.manage)",
-      "markAnswered": "I reclami li segue la qualità (quality.complaints.manage)",
-      "reopenInvestigation": "I reclami li segue la qualità (quality.complaints.manage)",
-      "close": "I reclami li chiude la qualità (quality.complaints.manage)",
-      "acknowledge": "Solo il titolare prende in carico un avviso di sicurezza (quality.complaints.acknowledge)",
-      "register": "Per aggiungere al registro DPI servono quality.complaints.manage e compliance.register.manage",
-      "createNcr": "Per aprire una NC serve quality.ncr.raise",
-      "makeRepair": "Per creare una riparazione serve sales.repairs.manage",
-      "log": "Il tuo ruolo non può registrare reclami (quality.complaints.log)",
-      "investigate": "La qualità scrive l'indagine (quality.complaints.manage)",
-      "writeAnswer": "La qualità scrive la lettera di risposta (quality.complaints.manage)",
-      "sendAnswer": "La qualità invia la lettera di risposta (quality.complaints.manage)"
+      "edit": "Il tuo ruolo non può modificare i reclami (registrarli finché sono nuovi, poi seguirli)",
+      "triage": "I reclami li smista la qualità",
+      "startInvestigation": "I reclami li segue la qualità",
+      "markAnswered": "I reclami li segue la qualità",
+      "reopenInvestigation": "I reclami li segue la qualità",
+      "close": "I reclami li chiude la qualità",
+      "acknowledge": "Solo il titolare prende in carico un avviso di sicurezza",
+      "register": "Per aggiungere al registro DPI servono i permessi di seguire i reclami e di tenere il registro DPI",
+      "createNcr": "Il tuo ruolo non può aprire una NC",
+      "makeRepair": "Il tuo ruolo non può creare riparazioni",
+      "log": "Il tuo ruolo non può registrare reclami",
+      "investigate": "La qualità scrive l'indagine",
+      "writeAnswer": "La qualità scrive la lettera di risposta",
+      "sendAnswer": "La qualità invia la lettera di risposta"
     },
     "ANSWER_SENT": "La lettera è partita e il reclamo ha risposta: torna in indagine per cambiarla",
     "NO_ANSWER": "Scrivi prima la lettera (il testo, in italiano o in inglese)"
@@ -630,15 +630,15 @@
       "Nonconformance": "{label} non nomina più {number}. La NC in sé resta com'è."
     },
     "held": {
-      "log": "Collegare record a un reclamo nuovo richiede quality.complaints.log.",
-      "manage": "Dopo la presa in carico, i collegamenti di un reclamo li cambia la qualità (quality.complaints.manage).",
-      "orders": "Il tuo ruolo non vede gli ordini (orders.view).",
-      "shipments": "Il tuo ruolo non vede le spedizioni (shipping.view).",
-      "returns": "Il tuo ruolo non vede i resi (sales.returns.view).",
-      "garment": "Cercare un capo dalla matricola richiede quality.inspections.view o production.serials: scrivi invece la matricola nei dati del reclamo.",
-      "ncrView": "Il tuo ruolo non vede le NC (quality.ncr.view).",
-      "ncrRaise": "Collegare una NC richiede quality.ncr.raise nel suo stabilimento.",
-      "ncrManage": "Scollegare una NC richiede quality.ncr.manage nel suo stabilimento.",
+      "log": "Collegare record a un reclamo nuovo richiede il permesso di registrare i reclami.",
+      "manage": "Dopo la presa in carico, i collegamenti di un reclamo li cambia la qualità.",
+      "orders": "Il tuo ruolo non vede gli ordini.",
+      "shipments": "Il tuo ruolo non vede le spedizioni.",
+      "returns": "Il tuo ruolo non vede i resi.",
+      "garment": "Cercare un capo dalla matricola richiede il permesso di vedere le ispezioni finali o di stampare le etichette dei capi: scrivi invece la matricola nei dati del reclamo.",
+      "ncrView": "Il tuo ruolo non vede le NC.",
+      "ncrRaise": "Collegare una NC richiede il permesso di aprire NC nel suo stabilimento.",
+      "ncrManage": "Scollegare una NC richiede il permesso di gestire le NC nel suo stabilimento.",
       "source": "Questa NC è stata aperta da questo reclamo: resta collegata."
     },
     "problem": {
@@ -730,14 +730,14 @@
     "textHint": "Quello che il cliente legge, così come sarà stampato.",
     "files": "Allegati alla lettera ({count})",
     "filesHint": "File di questo reclamo (aggiungili nella scheda Attività). Va con la mail solo un file condiviso con il cliente.",
-    "filesNoRight": "Il tuo ruolo non vede i file (files.read).",
+    "filesNoRight": "Il tuo ruolo non vede i file.",
     "filesReading": "Lettura dei file del reclamo…",
     "filesNone": "Questo reclamo non ha ancora file: aggiungine uno nella scheda Attività.",
     "shared": "Condiviso con il cliente",
     "notShared": "Solo ufficio",
     "share": "Condividi con il cliente",
     "shareOf": "Condividi {name} con il cliente",
-    "shareNoRight": "Per condividere un file serve files.manage",
+    "shareNoRight": "Per condividere un file serve il permesso di condividere file fuori dall'ufficio",
     "savedHint": "La lettera come salvata.",
     "discard": "Annulla le modifiche",
     "save": "Salva la lettera",
@@ -794,7 +794,7 @@
         "contactIds": "Il cliente non ha un contatto attivo con un indirizzo e-mail: aggiungine uno al cliente.",
         "letterhead": "L'intestazione dell'azienda è incompleta (ragione sociale, sede, partita IVA, codice fiscale, REA): completala in Sistema › Società e stabilimenti.",
         "notShared": "Un file della lettera non è condiviso con il cliente: condividilo o toglilo.",
-        "filesRead": "Una lettera va con dei file solo per chi può leggere i file (files.read).",
+        "filesRead": "Una lettera va con dei file solo per chi può leggere i file.",
         "other": "La lettera non può partire così: controlla la lettera e il cliente."
       }
     }

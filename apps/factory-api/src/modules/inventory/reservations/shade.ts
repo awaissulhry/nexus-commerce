@@ -86,7 +86,7 @@ export function shadeOverrideOf(context: RequestContext, scope: { readonly compa
   const problem = shadeReasonProblem(reason)
   if (problem) throw new ValidationError(problem, [{ path, message: problem }])
   if (context.audience !== 'office' || !can(actorOf(context), INVENTORY_SHADE_OVERRIDE, scope)) {
-    throw new ForbiddenError('Overriding the shade rule is for a person allowed to (inventory.shade.override), in the office.')
+    throw new ForbiddenError('Overriding the shade rule is for a person allowed to override it, in the office.')
   }
   return reason.trim()
 }

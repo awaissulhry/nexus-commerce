@@ -9,6 +9,8 @@ import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import type { DataRequestKind, DataSubjectKind } from '@nexus/factory-domain/privacy/retention/requests'
 import type { PersonOption } from '../api'
 import { KIND_ORDER, LOOKUP_PERMISSION, newRequestHeld, PERSON_KINDS, type NewRequestDraft, type RequestsViewModel } from '../model'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../../../lib/i18n/rights'
 
 export interface NewRequestActions {
   onDraft?: (change: Partial<NewRequestDraft>) => void
@@ -88,7 +90,7 @@ export function NewRequestDialog({ model, actions }: { model: RequestsViewModel;
         </div>
 
         {!lookup ? (
-          <Banner tone="warning" title={t('dp.new.noLookup', { what: t(`dp.personKind.${draft.personKind}`), permission: LOOKUP_PERMISSION[draft.personKind] })} />
+          <Banner tone="warning" title={t('dp.new.noLookup', { what: t(`dp.personKind.${draft.personKind}`), right: rightRef(LOOKUP_PERMISSION[draft.personKind]) })} />
         ) : (
           <>
             <form className="fw-dprq-find" onSubmit={find} role="search">

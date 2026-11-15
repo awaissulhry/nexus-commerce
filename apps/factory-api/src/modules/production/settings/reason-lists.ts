@@ -75,7 +75,7 @@ async function addMissingInCommand(tools: CommandTools, list: FloorReasonList): 
 /** reasons.manage over every company and site: the full lists' missing codes of the lists asked (every floor list when none). */
 export async function addFullReasons(caller: CommandCaller, body: { readonly lists?: readonly FloorReasonList[] | undefined }, idempotencyKey?: string) {
   const context = officeOf(caller)
-  if (!keepsReasons(actorOf(context))) throw new ForbiddenError("The reason lists are the whole group's: keeping them needs reasons.manage over every company and site.")
+  if (!keepsReasons(actorOf(context))) throw new ForbiddenError("The reason lists are the whole group's: keeping them needs the right to keep the reason lists over every company and site.")
   const lists = FLOOR_REASON_LISTS.filter((list) => !body.lists || body.lists.includes(list))
   const before = await caller.withClient((client) => listsView(client, FLOOR_REASON_LISTS))
   if (before.filter((view) => lists.includes(view.list)).every((view) => view.fullMissing.length === 0)) return { lists: before, canManage: true, added: [] }

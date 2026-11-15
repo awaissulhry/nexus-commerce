@@ -47,14 +47,14 @@ export function viewSeenBy(view: ViewFacts, reader: ViewReader): boolean {
 /** Why the reader may not set this sharing, in words (empty: they may). */
 export function sharingProblems(sharing: ViewSharing, reader: ViewReader): Issue[] {
   const problems: Issue[] = []
-  if (!reader.save && !reader.manage) problems.push({ path: 'body', message: 'Saving a view needs views.save.' })
+  if (!reader.save && !reader.manage) problems.push({ path: 'body', message: 'Saving a view needs the right to save views.' })
   if (sharing.audience === 'ROLE' && !sharing.roleId) problems.push({ path: 'body/roleId', message: 'Name the role whose holders see the view.' })
   if (sharing.audience !== 'ROLE' && sharing.roleId) problems.push({ path: 'body/roleId', message: 'Only a view shared with a role names one.' })
   if (sharing.roleDefault && sharing.audience !== 'ROLE') problems.push({ path: 'body/roleDefault', message: "A role's default view is shared with that role." })
-  if (sharing.audience === 'EVERYONE' && !reader.manage) problems.push({ path: 'body/audience', message: 'Sharing a view with everyone who sees the list needs views.manage.' })
-  if (sharing.roleDefault && !reader.manage) problems.push({ path: 'body/roleDefault', message: "Making a view a role's default needs views.manage." })
+  if (sharing.audience === 'EVERYONE' && !reader.manage) problems.push({ path: 'body/audience', message: 'Sharing a view with everyone who sees the list needs the right to manage shared views.' })
+  if (sharing.roleDefault && !reader.manage) problems.push({ path: 'body/roleDefault', message: "Making a view a role's default needs the right to manage shared views." })
   if (sharing.audience === 'ROLE' && sharing.roleId && !reader.manage && !reader.roleIds.includes(sharing.roleId)) {
-    problems.push({ path: 'body/roleId', message: 'You can share a view only with a role you hold (views.manage shares with any role).' })
+    problems.push({ path: 'body/roleId', message: 'You can share a view only with a role you hold (with the right to manage shared views, with any role).' })
   }
   return problems
 }
@@ -62,12 +62,12 @@ export function sharingProblems(sharing: ViewSharing, reader: ViewReader): Issue
 /** Why the reader may not change or remove the view (null: they may). Another person's ONLY_ME view is never seen at all. */
 export function changeRefusal(view: ViewFacts, reader: ViewReader): string | null {
   if (view.ownerId === reader.userId) {
-    if (view.roleDefault && !reader.manage) return "This view is a role's default: changing it needs views.manage."
-    if (view.audience === 'EVERYONE' && !reader.manage) return 'This view is shared with everyone: changing it needs views.manage.'
-    return reader.save || reader.manage ? null : 'Changing your views needs views.save.'
+    if (view.roleDefault && !reader.manage) return "This view is a role's default: changing it needs the right to manage shared views."
+    if (view.audience === 'EVERYONE' && !reader.manage) return 'This view is shared with everyone: changing it needs the right to manage shared views.'
+    return reader.save || reader.manage ? null : 'Changing your views needs the right to save views.'
   }
   if (view.audience === 'ONLY_ME') return 'This view is not yours.'
-  return reader.manage ? null : 'Only its owner changes this view (views.manage changes the views others shared).'
+  return reader.manage ? null : 'Only its owner changes this view (or someone who may manage the views others shared).'
 }
 
 /** The view the list opens on for the reader: the default of the first role they hold that has one, else none. */

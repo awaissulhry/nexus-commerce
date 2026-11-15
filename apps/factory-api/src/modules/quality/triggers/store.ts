@@ -79,7 +79,7 @@ export const mayManage = (context: OfficeContext, companyId: string): boolean =>
 export const viewWhere = (context: OfficeContext) => scopeWhere(actorOf(context), QUALITY_TRIGGERS_VIEW, TRIGGER_SCOPE)
 
 export function assertManage(context: OfficeContext, companyId: string): void {
-  if (!mayManage(context, companyId)) throw new ForbiddenError('You keep the inspection rules only for the companies your role reaches (quality.triggers.manage).')
+  if (!mayManage(context, companyId)) throw new ForbiddenError('You keep the inspection rules only for the companies your role reaches.')
 }
 
 /** A refusal in words with its code (`refusal/<CODE>`), answered 409. */

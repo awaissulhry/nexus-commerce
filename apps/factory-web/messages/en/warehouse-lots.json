@@ -3,7 +3,7 @@
     "loading": "Loading…",
     "failed": "Couldn't read it",
     "forbidden": "Not for your role",
-    "forbiddenBody": "Your role does not include “inventory.stock.view”. Ask an administrator if you need it.",
+    "forbiddenBody": "Your role cannot see the stock. Ask an administrator if you need it.",
     "retry": "Try again",
     "partFailed": "{part}: couldn't be read",
     "partLoading": "Reading {part}…",
@@ -300,10 +300,10 @@
       "holdOfLot": "A hold on its lot",
       "openDemand": "Open {demand}",
       "held": {
-        "noReserve": "Your role may not reserve stock (inventory.reserve).",
+        "noReserve": "Your role may not reserve stock.",
         "pick": "Select the hides first.",
         "oneSite": "Hides of one site at a time: pick a site first.",
-        "noScrap": "Your role may not scrap stock (inventory.scrap).",
+        "noScrap": "Your role may not scrap stock.",
         "gone": "A selected hide has nothing in stock (used up, scrapped or at a work order): take it out of the selection.",
         "reservedAlready": "Reserved already: release that reservation first."
       }
@@ -345,7 +345,7 @@
       "held": {
         "saving": "Saving…",
         "readOnly": "This hide is read only.",
-        "noRight": "Your role does not correct hides (inventory.hides.manage).",
+        "noRight": "Your role does not correct hides.",
         "nothing": "Nothing changed yet.",
         "thickness": "The thickness is above 0 mm, with at most two decimals (1,20).",
         "defectsLong": "The defects are at most 2000 characters.",
@@ -443,8 +443,8 @@
         "SCRAPPED": "The hide was scrapped: it is not measured any more.",
         "RETURNED": "The hide went back to the supplier: it is not measured any more.",
         "notWhole": "Only a whole hide is measured against the tannery’s area.",
-        "noRight": "Your role does not measure hides (inventory.hides.manage).",
-        "noAdjust": "Correcting the stock is an adjustment: your role needs inventory.adjust.",
+        "noRight": "Your role does not measure hides.",
+        "noAdjust": "Correcting the stock is an adjustment: your role needs the right to correct stock.",
         "reading": "Reading the measures…",
         "saving": "Saving…",
         "measured": "Type the area measured.",
@@ -453,7 +453,7 @@
         "noteLong": "A note is at most 500 characters."
       },
       "refused": {
-        "adjust": "The stock correction was refused: it needs inventory.adjust and an active adjustment reason.",
+        "adjust": "The stock correction was refused: it needs the right to correct stock and an active adjustment reason.",
         "measured": "The area measured was not accepted: above 0, at most four decimals.",
         "declared": "The tannery’s area was not accepted: above 0, at most four decimals.",
         "when": "A hide is measured now or before, never later.",
@@ -510,12 +510,12 @@
       "failed": "The photos couldn’t be read",
       "none": "No photos yet",
       "noneBody": "Photos taken at the cutting table appear here; the office can add one.",
-      "noRead": "Photos need files.read",
+      "noRead": "Photos need the right to see a record's files",
       "noReadBody": "Your role does not read files: ask an administrator if you need the photos.",
       "add": "Add a photo",
       "addHint": "JPEG, PNG, WebP or HEIC, up to 15 MB. Kept on the hide, for the office.",
       "held": {
-        "noUpload": "Adding a photo needs files.upload."
+        "noUpload": "Adding a photo needs the right to upload files."
       },
       "listLabel": "Photos of this hide",
       "uploadsLabel": "Photos being added",
@@ -547,7 +547,7 @@
       "tabsLabel": "Parts of the lot",
       "received": "Received {date}",
       "toChecklist": "Release checklist in Tests & substances",
-      "noQuality": "Your role does not include “quality.lots.view”: quality decides lots in Compliance › Tests & substances.",
+      "noQuality": "Your role cannot see a lot's quality record: quality decides lots in Compliance › Tests & substances.",
       "copyCode": "Copy the lot code",
       "rejected": "Rejected on {date}: final, its stock is never used."
     },
@@ -654,7 +654,7 @@
     "release": {
       "title": "Release checklist",
       "label": "Release checks",
-      "noRight": "The checklist is quality's: your role does not include “quality.lots.view”.",
+      "noRight": "The checklist is quality's: your role cannot see a lot's quality record.",
       "released": "Released: usable stock.",
       "rejected": "Rejected: final.",
       "ready": "Ready to release: every check passed.",
@@ -815,13 +815,13 @@
       "body": "Send it back to the supplier (a claim with its return DDT and the credit expected) or write it off where it lies.",
       "return": "Return to supplier…",
       "writeOff": "Write off at {place} ({quantity})…",
-      "noScrap": "Your role may not write off stock (inventory.scrap)."
+      "noScrap": "Your role may not write off stock."
     },
     "quality": {
       "status": "Status and decisions",
       "where": "Release, block, reject and the Cr VI result are decided in Compliance › Tests & substances.",
       "holdsTitle": "Holds and inspections",
-      "noRight": "Your role does not see quality holds (quality.holds.view).",
+      "noRight": "Your role does not see quality holds.",
       "inspections": "Incoming inspections of the lot come in a later release.",
       "noHolds": "No holds",
       "noHoldsBody": "No quality hold has named this lot or its hides.",
@@ -943,8 +943,8 @@
         "SERIALS_COLLAPSED_one": "{count} serial is counted on its bundle and size: trace the work order or the bundle to see it.",
         "SERIALS_COLLAPSED_other": "{count} serials are counted on their bundles and sizes: trace the work order or a bundle to see each one."
       },
-      "restricted_one": "{count} record you may not see is counted, not shown ({permission}).",
-      "restricted_other": "{count} records you may not see are counted, not shown ({permission}).",
+      "restricted_one": "{count} record you may not see is counted, not shown: it needs the right “{right}”.",
+      "restricted_other": "{count} records you may not see are counted, not shown: it needs the right “{right}”.",
       "affected_one": "Show only affected customers ({count} received)",
       "affected_other": "Show only affected customers ({count} received)",
       "noAffected": "No customer has received these goods.",
@@ -1033,7 +1033,7 @@
         "checking": "Reading the release checks…",
         "none": "None of these lots can be released now.",
         "phrase": "Type {phrase} first.",
-        "noRight": "Your role may not release lots (quality.lots.release).",
+        "noRight": "Your role may not release lots.",
         "pick": "Select the lots to release first."
       },
       "result": {

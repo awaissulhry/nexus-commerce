@@ -94,7 +94,7 @@ export async function saveSeparation(caller: CommandCaller, body: SeparationBody
   const context = officeOf(caller)
   const companyId = body.companyId ?? null
   if (!mayWrite(actorOf(context), INVENTORY_RULES_MANAGE, companyId)) {
-    throw new ForbiddenError(companyId === null ? 'The warehouse rules of every company are changed only by a role over every company.' : 'Changing the warehouse rules needs inventory.rules.manage for the company.')
+    throw new ForbiddenError(companyId === null ? 'The warehouse rules of every company are changed only by a role over every company.' : 'Changing the warehouse rules needs the right to change them for the company.')
   }
   if (companyId !== null) await assertCompany(caller, companyId)
   if (body.counterNotApprover === undefined && body.receiverNotMatcher === undefined) throw new ValidationError('Send a switch to change.', [{ path: 'body/counterNotApprover', message: 'Send counterNotApprover or receiverNotMatcher.' }])

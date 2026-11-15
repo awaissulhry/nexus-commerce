@@ -156,7 +156,7 @@ async function giveMissingCodes(caller: CommandCaller, picked: Picked, idempoten
   if (missing.length === 0) return picked
   const context = stockContextOf(caller)
   if (context.audience !== 'office') throw new ForbiddenError(`${missing.map((row) => row.code).join(', ')}: no label code yet; the office gives one first.`)
-  for (const row of missing) if (!mayAt(context, INVENTORY_LOCATIONS_MANAGE, row)) throw new ForbiddenError(`Location ${row.code} has no label code yet, and giving one needs inventory.locations.manage.`)
+  for (const row of missing) if (!mayAt(context, INVENTORY_LOCATIONS_MANAGE, row)) throw new ForbiddenError(`Location ${row.code} has no label code yet, and giving one needs the right to keep locations.`)
   const { result } = await command(caller, { name: 'inventory.locations.labelCodes', idempotencyKey: idempotencyKey ? `${idempotencyKey}:codes` : undefined, input: { locationIds: missing.map((row) => row.id) } }, async (tools) => {
     const given: PlaceRow[] = []
     const refused: Picked['refused'] = []

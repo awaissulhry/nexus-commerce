@@ -239,7 +239,7 @@ let returned: Json
 describe('Return to supplier in one go (SCM-134; rule 2: rejected leather goes back to the tannery)', () => {
   it('refuses without the DDT permission, without claims.manage, and a hide-tracked line without its hide', async () => {
     const body = { from: { lotId: leatherLot }, reasonCode: 'QUALITY', ddt: TYPED_DDT }
-    expect((await refused('noDdt', 'POST', '/purchasing/claims/returns', body, 403)).message).toContain('shipping.ddt.issue')
+    expect((await refused('noDdt', 'POST', '/purchasing/claims/returns', body, 403)).message).toContain('the permission to issue DDTs')
     const error = await refused('warehouse', 'POST', '/purchasing/claims/returns', { lines: [{ lotId: leatherLot, quantity: '3' }], reasonCode: 'QUALITY', ddt: TYPED_DDT }, 400)
     expect(error.issues[0]).toMatchObject({ path: 'body/lines/0/hideId' })
     expect(await admin(`SELECT count(*)::int AS n FROM "SupplierClaim" WHERE "tenantId" = $1 AND kind = 'RETURN'`, [A.tenant])).toEqual([{ n: 0 }])
@@ -313,7 +313,7 @@ describe('a return prepared first, its goods back later (SCM-134)', () => {
     draft = (await ok('warehouse', 'POST', url(draft.id, '/send'), { version: draft.version, mail: null })).claim
     expect(draft.status).toBe('SENT')
     expect(await admin(`SELECT count(*)::int AS n FROM "EmailOutbound" WHERE "recordId" = $1`, [draft.id])).toEqual([{ n: 0 }])
-    expect((await refused('noDdt', 'POST', url(draft.id, '/return'), { version: draft.version, ddt: TYPED_DDT }, 403)).message).toContain('shipping.ddt.issue')
+    expect((await refused('noDdt', 'POST', url(draft.id, '/return'), { version: draft.version, ddt: TYPED_DDT }, 403)).message).toContain('the permission to issue DDTs')
     const back = await ok('warehouse', 'POST', url(draft.id, '/return'), { version: draft.version, lines: [{ lineId: draft.lines[0].id, fromLocationId: store }], ddt: TYPED_DDT }, 201)
     expect(back.claim.lines[0]).toMatchObject({ move: { reason: 'SUPPLIER_RETURN', quantity: '10.0000', fromLocation: { id: store } }, ddt: { id: back.ddt.id, cancelled: false } })
     expect(Number(await onHand(`"lotId" = $2`, [liningLot]))).toBe(Number(before) - 10)
@@ -384,8 +384,8 @@ describe('B-W2b-14 claims follow-ups (Z1:04 … Z1:08)', () => {
     // The generic files route may not add one (the claims module owns them).
     const generic = await call('photographer', 'POST', '/files', { companyId: A.companyA, recordType: 'SupplierClaim', recordId: claim.id, kind: 'PHOTO', originalName: 'x.jpg', contentType: 'image/jpeg', sizeBytes: 10, sha256: 'a'.repeat(64) })
     expect(generic.statusCode, generic.body).toBe(409)
-    expect((await refused('buyer', 'POST', url(claim.id, '/photos'), { originalName: 'x.jpg', contentType: 'image/jpeg', sizeBytes: 10, sha256: 'a'.repeat(64) }, 403)).message).toBe('Adding a photo needs files.upload over the company.')
-    expect((await refused('photographer', 'DELETE', `${url(claim.id, '/photos')}/${second.id}?version=${second.version}`, undefined, 403)).message).toBe('Removing a photo needs files.delete over the company.')
+    expect((await refused('buyer', 'POST', url(claim.id, '/photos'), { originalName: 'x.jpg', contentType: 'image/jpeg', sizeBytes: 10, sha256: 'a'.repeat(64) }, 403)).message).toBe('Adding a photo needs the right to upload files over the company.')
+    expect((await refused('photographer', 'DELETE', `${url(claim.id, '/photos')}/${second.id}?version=${second.version}`, undefined, 403)).message).toBe('Removing a photo needs the right to delete files over the company.')
     await ok('fileAdmin', 'DELETE', `${url(claim.id, '/photos')}/${second.id}?version=${second.version}`)
     claim = (await ok('photographer', 'GET', url(claim.id))).claim
     expect(claim.photos).toEqual([expect.objectContaining({ id: first.id, originalName: 'macchia-1.jpg', status: 'AVAILABLE' })])

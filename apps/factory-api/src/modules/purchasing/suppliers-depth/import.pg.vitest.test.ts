@@ -184,7 +184,7 @@ describe('suppliers from a sheet: kinds, status, lead time and origin (SCM-289)'
   it('refuses the Supplier status column for a person without purchasing.suppliers.status', async () => {
     const job = await upload('clerk', 'parties.parties', csv(['Codice;Stato fornitore', 'SEED-S1;approvato']), { companyId: companyA })
     expect(job.status).toBe('FAILED')
-    expect(JSON.stringify(job.issues)).toContain('purchasing.suppliers.status')
+    expect(JSON.stringify(job.issues)).toContain('the right to set their status')
     expect(await upload('clerk', 'parties.parties', csv(['Codice;Lead time', 'SEED-S1;12']), { companyId: companyA })).toMatchObject({ status: 'PLANNED', updateCount: 1 })
   })
 })

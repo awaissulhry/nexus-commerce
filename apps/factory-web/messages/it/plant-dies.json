@@ -135,7 +135,7 @@
     "newDie": "Nuova fustella"
   },
   "held": {
-    "noManage": "Il tuo ruolo non tiene il registro (plant.machines.manage).",
+    "noManage": "Il tuo ruolo non tiene il registro.",
     "alreadyRetired": "Già dismessa.",
     "noneToRetire": "Seleziona fustelle in uso.",
     "busy": "Sto salvando…",

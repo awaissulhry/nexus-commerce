@@ -2,6 +2,8 @@ import type { LiveState } from '../../../_shared/buying/hooks'
 import type { OrderRow, OutsideOperations, TileCounts, WorkOrderChoice, WorkshopOption, WorkshopStock } from '../api'
 import type { Ageing, OpenBalance, OpenBalances } from '../depth/api'
 import { words, type OrderView, type PageShow, type SubcontractCan, type Words } from '../model'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../../lib/i18n/rights'
 
 /**
  * The view models of Purchasing › Subcontract orders' page (SCR-128 the orders, SCR-129 the stock at the workshops) and
@@ -170,7 +172,7 @@ export function locationOf(draft: NewOrderDraft): { known: boolean; location: { 
 
 /** Why "Create draft" is held, or null. */
 export function newOrderHeld(draft: NewOrderDraft, can: SubcontractCan): Words | null {
-  if (!can.manage) return words('held.permission', { permission: 'purchasing.subcontract.manage' })
+  if (!can.manage) return words('held.permission', { right: rightRef('purchasing.subcontract.manage') })
   if (draft.busy) return words('held.busy')
   if (!draft.workOrder) return words('new.held.workOrder')
   if (!draft.outside) return words('held.loading')

@@ -34,7 +34,7 @@ export function viewerOf(caller: Pick<CommandCaller, 'factoryContext'>): Viewer 
   const actor = actorOf(context)
   const views = { final: holds(actor, QUALITY_INSPECTIONS_VIEW), incoming: holds(actor, QUALITY_INCOMING_VIEW), inprocess: holds(actor, QUALITY_INPROCESS_VIEW) }
   if (!views.final && !views.incoming && !views.inprocess) {
-    throw new ForbiddenError(`The inspector queue needs ${QUALITY_INSPECTIONS_VIEW}, ${QUALITY_INCOMING_VIEW} or ${QUALITY_INPROCESS_VIEW}.`)
+    throw new ForbiddenError('The inspector queue needs the right to see final, incoming or in-process inspections.')
   }
   return { context, person: signerOf(context), views }
 }

@@ -32,6 +32,7 @@ import {
   tileValue,
   writeProblem,
 } from './model'
+import { rightRef } from '../../../lib/i18n/rights'
 
 /**
  * Production › Scrap & rework (SCR-140; B-W2a-60): the pure rules (the address, the saved views over the rows read, the
@@ -111,7 +112,7 @@ describe('approve and replace', () => {
     expect(reductionOf(ROWS[1]!, REDUCTIONS)?.id).toBe(REDUCTIONS[0]!.id)
     expect(decideHeld(REDUCTIONS[0]!, planner, ME, false)).toEqual({ key: 'held.ownAsk' })
     expect(decideHeld(REDUCTIONS[1]!, planner, ME, false)).toBeNull()
-    expect(decideHeld(REDUCTIONS[1]!, canAs('inspector'), ME, false)).toEqual({ key: 'held.permission', params: { permission: 'production.scrap.approve' } })
+    expect(decideHeld(REDUCTIONS[1]!, canAs('inspector'), ME, false)).toEqual({ key: 'held.permission', params: { right: rightRef('production.scrap.approve') } })
     expect(decideHeld(null, planner, ME, false)).toEqual({ key: 'held.noReduction' })
     expect(approvable(ROWS, REDUCTIONS, planner, ME).map((row) => row.id)).toEqual([REDUCTIONS[1]!.id])
   })
@@ -127,7 +128,7 @@ describe('approve and replace', () => {
     expect(replaceHeld(ROWS[3]!, draft, manager, false)).toEqual({ key: 'replace.held.covered' })
     expect(replaceHeld(ROWS[4]!, draft, manager, false)).toEqual({ key: 'replace.held.notOpen', params: { number: 'WO-26-0036', status: 'COMPLETED' } })
     expect(replaceHeld(ROWS[5]!, draft, manager, false)).toEqual({ key: 'replace.held.rework' })
-    expect(replaceHeld(ROWS[0]!, draft, canAs('inspector'), false)).toEqual({ key: 'held.permission', params: { permission: 'production.scrap' } })
+    expect(replaceHeld(ROWS[0]!, draft, canAs('inspector'), false)).toEqual({ key: 'held.permission', params: { right: rightRef('production.scrap') } })
     expect(replaceBody(ROWS[0]!, draft)).toEqual({ kind: 'RECUT', quantity: 1, reason: 'Stained beyond cleaning', part: null, sourceScanId: ROWS[0]!.source.id })
     expect(replaceBody(ROWS[1]!, draft)).toMatchObject({ part: 'sleeve' })
     expect(replaceBody(ROWS[6]!, { ...draft, kind: 'REDUCE' })).toEqual({ kind: 'REDUCE', quantity: 1, reason: 'Stained beyond cleaning', part: null, reworkOrderId: ROWS[6]!.source.id })

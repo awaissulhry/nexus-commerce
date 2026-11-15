@@ -45,7 +45,7 @@
   },
   "hold": {
     "noManage": "Your role can view styles, not start them.",
-    "noImport": "Importing a file needs the right to run imports (imports.run) and to upload files.",
+    "noImport": "Importing a file needs the right to run imports and to upload files.",
     "reading": "Reading where the styles can come from…",
     "unread": "Where the styles can come from could not be read: try again."
   },

@@ -20,7 +20,7 @@ export interface PersonalDefaultFacts extends ViewFacts {
 /** Why the reader may not make this view their default (null: they may). */
 export function personalDefaultRefusal(view: ViewFacts, reader: Pick<ViewReader, 'userId' | 'save'>): string | null {
   if (view.ownerId !== reader.userId) return 'Only a view of your own can be your default: save this one as your own view first.'
-  return reader.save ? null : 'Making a view your default needs views.save.'
+  return reader.save ? null : 'Making a view your default needs the right to save views.'
 }
 
 /** The reader's own default view of the list, if they marked one. */

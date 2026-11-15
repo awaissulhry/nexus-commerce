@@ -28,7 +28,7 @@ async function companyFor(db: Client, context: OfficeContext, companyId: string,
   const company = isUuid(companyId) ? await db.company.findUnique({ where: { id: companyId }, select: { id: true } }) : null
   const actor = actorOf(context)
   if (!company || !(can(actor, PEOPLE_ATTENDANCE_VIEW, { companyId }) || can(actor, PEOPLE_ATTENDANCE_SETTINGS, { companyId }))) throw new NotFoundError('Company not found.')
-  if (write && !can(actor, PEOPLE_ATTENDANCE_SETTINGS, { companyId })) throw new ForbiddenError('The rounding and grace rules are kept by a role with people.attendance.settings.')
+  if (write && !can(actor, PEOPLE_ATTENDANCE_SETTINGS, { companyId })) throw new ForbiddenError('The rounding and grace rules are kept by a role with the right to keep the attendance settings.')
   return company.id
 }
 

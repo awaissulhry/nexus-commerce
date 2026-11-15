@@ -27,7 +27,7 @@ import { levelViews, lockPerson, readLevel, type LevelRow } from './store'
  * Each command locks the person's record row first (two decisions about one person queue).
  */
 
-const MANAGE_WORDS = 'Levels are set by a role that keeps the skills matrix (people.skills.manage).'
+const MANAGE_WORDS = 'Levels are set by a role that keeps the skills matrix.'
 const placedOf = (row: { companyId: string; siteId: string }) => ({ companyId: row.companyId, siteId: row.siteId })
 const factsOf = (row: LevelRow): LevelFacts => ({ level: row.level as SkillLevel, since: dayOf(row.since), traineeUntil: dayOrNull(row.traineeUntil), signedOffOn: dayOrNull(row.signedOffOn) })
 const audited = (row: LevelRow | null) => (row ? { level: row.level, since: dayOf(row.since), traineeUntil: dayOrNull(row.traineeUntil), signedOffOn: dayOrNull(row.signedOffOn), trainerEmployeeId: row.trainerEmployeeId, removed: row.removedAt !== null } : null)

@@ -64,7 +64,7 @@ export async function leaverPpe(caller: CommandCaller, caseId: string) {
 export async function markPpeReturned(caller: CommandCaller, caseId: string, stepId: string, body: { readonly version: number; readonly issueId: string }, idempotencyKey?: string) {
   const context = officeOf(caller)
   const { leaver } = await leaverRecord(caller, caseId)
-  assertMayWrite(context, PEOPLE_LEAVERS_MANAGE, { companyId: leaver.employee.companyId, siteId: leaver.employee.site.id }, 'Leaver steps are kept by a role that keeps them (people.leavers.manage).')
+  assertMayWrite(context, PEOPLE_LEAVERS_MANAGE, { companyId: leaver.employee.companyId, siteId: leaver.employee.site.id }, 'Leaver steps are kept by a role that keeps them.')
   const step = leaver.steps.find((entry) => entry.id === stepId)
   if (!step) throw new NotFoundError('Leaver step not found.')
   if (step.kind !== 'PPE_RETURNED') refuse('NOT_PPE_STEP', PPE_REFUSALS.NOT_PPE_STEP)

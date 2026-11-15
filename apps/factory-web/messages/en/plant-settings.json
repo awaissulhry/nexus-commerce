@@ -124,7 +124,7 @@
     "atBottom": "Already at the bottom",
     "noManage": "Keeping the symptoms needs the right to keep machines over every company",
     "loading": "The list is still loading",
-    "noSettings": "Changing the routing needs plant.settings.manage at this site",
+    "noSettings": "Changing the routing needs the right to keep the plant settings at this site",
     "noChange": "Nothing changed yet",
     "noTeam": "Choose the team it goes to",
     "noTechnician": "Choose the technician it goes to",
@@ -136,7 +136,7 @@
     "allOff": "Every rule chosen is switched off already",
     "h1Lock": "Owner answer H1 holds: anyone at the station locks",
     "h1SignSafe": "Owner answer H1 holds: only a technician signs safe",
-    "noChecks": "The check types are kept with plant.checks.manage over every company",
+    "noChecks": "The check types are kept by a role that keeps the statutory checks over every company",
     "typeTaken": "The group already has a check type with this code",
     "noTypeWords": "Name the check in Italian and in English",
     "noLaw": "Name the law or standard it rests on",
@@ -146,7 +146,7 @@
     "retention": "Kept at least as long as the law asks, at most 30 years",
     "allActive": "Every check type chosen is active already",
     "allRetired": "Every check type chosen is retired already",
-    "noAudit": "Reading the audit log needs audit.read"
+    "noAudit": "Reading the audit log needs the right to read a record's history"
   },
   "bulk": {
     "off_one": "Stop offering {count}",
@@ -234,7 +234,7 @@
   },
   "noAccess": {
     "title": "You can't see the plant settings",
-    "body": "Plant settings need the right to see the plant (plant.view)."
+    "body": "Plant settings need the right to see the plant."
   },
   "page": {
     "readAt": "Read at {time}",
@@ -271,7 +271,7 @@
     "title": "Request routing and escalation",
     "purpose": "Who gets a machine request, and when it escalates when nobody acknowledges it. A request follows the first rule that is on and fits its machine type.",
     "forSite": "For {site}",
-    "readOnly": "You can view, not change: the routing is kept by a role that keeps the plant settings of this site (plant.settings.manage).",
+    "readOnly": "You can view, not change: the routing is kept by a role that keeps the plant settings of this site.",
     "table": "Routing rules",
     "count_one": "{count} rule · {on} on",
     "count_other": "{count} rules · {on} on",
@@ -376,7 +376,7 @@
     "technician": "Technician",
     "technicianHint": "One person of the company.",
     "choosePerson": "Choose a person",
-    "pickersForbidden": "Choosing a team or a person needs the right to see people (people.view): the rule keeps the one it names.",
+    "pickersForbidden": "Choosing a team or a person needs the right to see people: the rule keeps the one it names.",
     "pickersLoading": "Reading the teams and people…",
     "nobody": "Nobody chosen",
     "push": "Send a notice at once",
@@ -410,7 +410,7 @@
     "purpose": "Who may lock a machine as unsafe, and who signs it safe again.",
     "lawPlain": "Work equipment must be safe: a machine that is not safe is not used until it is checked and put right.",
     "defaults": "Nothing saved for this site yet: these are the defaults (Owner answer H1).",
-    "readOnly": "You can view, not change: the lock is kept by a role that keeps the plant settings of this site (plant.settings.manage).",
+    "readOnly": "You can view, not change: the lock is kept by a role that keeps the plant settings of this site.",
     "lockBy": "Who may lock a machine as unsafe",
     "by": {
       "ANYONE_AT_STATION": "Anyone at the station",
@@ -439,7 +439,7 @@
     "title": "Statutory check types",
     "purpose": "Each check type with its legal basis, default interval, outside body and how long its results are kept. The whole group's list.",
     "retentionPlain": "The results of the checks are kept at least {years} years.",
-    "readOnly": "You can view, not change: the check types are the whole group's, kept with plant.checks.manage over every company.",
+    "readOnly": "You can view, not change: the check types are the whole group's, kept by a role that keeps the statutory checks over every company.",
     "table": "Check types",
     "search": "Search code, words or law",
     "count_one": "{count} active · {retired} retired",
@@ -542,7 +542,7 @@
     "title": "Incidents",
     "purpose": "The kinds of report and the INAIL rule, shown with their law.",
     "noRight": "You can't see the incident rules",
-    "noRightBody": "They need the right to see incidents (safety.incidents.view).",
+    "noRightBody": "They need the right to see incidents.",
     "kinds": "Kinds of report",
     "kind": {
       "INJURY": "Incident (someone hurt)",
@@ -586,7 +586,7 @@
     "group": "The whole group",
     "empty": "Nothing changed yet",
     "failed": "Couldn't load the audit log",
-    "noRight": "The audit log needs the right to read it (audit.read).",
+    "noRight": "The audit log needs the right to read it.",
     "count_one": "{count} change",
     "count_other": "{count} changes",
     "action": {

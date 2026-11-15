@@ -203,7 +203,7 @@ export const priceListImportAdapter = Object.freeze({
 
   authorize(actor, job) {
     if (job.companyId === null && !mayWrite(actor, PRICE_LISTS_MANAGE, null)) {
-      return [{ path: 'companyId', message: 'A price import for every company (lists of every company) needs pricelists.manage over every company; import for one company instead.' }]
+      return [{ path: 'companyId', message: 'A price import for every company (lists of every company) needs the right to keep price lists over every company; import for one company instead.' }]
     }
     return []
   },

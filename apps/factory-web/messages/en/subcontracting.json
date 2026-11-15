@@ -32,7 +32,7 @@
     "receive": "receive goods back"
   },
   "held": {
-    "permission": "Your role may not do this ({permission}).",
+    "permission": "Your role may not do this: it needs the right “{right}”.",
     "busy": "Working…",
     "loading": "Still loading…",
     "issue": {
@@ -117,7 +117,7 @@
     "keyNew": "New subcontract order",
     "noAccess": {
       "title": "Not for your role",
-      "body": "Subcontract orders need purchasing.view: ask an administrator for it."
+      "body": "Subcontract orders need the right to see purchase orders: ask an administrator for it."
     },
     "switch": "What the page shows"
   },

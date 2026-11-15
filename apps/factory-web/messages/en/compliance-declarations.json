@@ -10,7 +10,7 @@
   },
   "access": {
     "title": "You cannot see declarations here",
-    "body": "Declarations & instructions needs the right to read the certificate register (compliance.certificates.view). An administrator gives it in Admin › Users, with a role such as Quality inspector."
+    "body": "Declarations & instructions needs the right to read the certificate register. An administrator gives it in Admin › Users, with a role such as Quality inspector."
   },
   "band": {
     "label": "Declarations & instructions",
@@ -27,15 +27,15 @@
     "body": "You see the last copy read. New drafts, translations, checks and withdrawals need the network: their buttons say so until it is back."
   },
   "held": {
-    "generateAny": "You may not make declarations or user information: ask Compliance (compliance.declarations.generate or compliance.userInformation.generate).",
+    "generateAny": "You may not make declarations or user information: ask Compliance.",
     "offline": "Offline: this needs the network.",
-    "generate": "You may not make or change DoC drafts (compliance.declarations.generate).",
-    "uiGenerate": "You may not make or change user-information drafts (compliance.userInformation.generate).",
-    "check": "You may not check DoC translations (compliance.declarations.check).",
-    "uiCheck": "You may not check user-information translations (compliance.userInformation.check).",
-    "manage": "Recording which version travelled needs compliance.declarations.manage.",
-    "pack": "Making a compliance pack needs compliance.declarations.pack.",
-    "shipping": "Opening a shipment's pack needs the right to see shipments (shipping.view).",
+    "generate": "You may not make or change DoC drafts.",
+    "uiGenerate": "You may not make or change user-information drafts.",
+    "check": "You may not check DoC translations.",
+    "uiCheck": "You may not check user-information translations.",
+    "manage": "Your role cannot record which version travelled.",
+    "pack": "Your role cannot make a compliance pack.",
+    "shipping": "Opening a shipment's pack needs the right to see shipments.",
     "busy": "Working…",
     "nothingChanged": "Nothing changed yet.",
     "emptyPart": "Every point needs its words: one is empty.",
@@ -418,7 +418,7 @@
     "noShipmentTitle": "No shipment named",
     "noShipment": "Open a pack from a shipment, a batch on a declaration, or the batches shipped without a recorded version.",
     "failed": "The pack could not be read",
-    "forbidden": "You may not see this shipment (shipping.view, its company or party).",
+    "forbidden": "You may not see this shipment (shipments, its company or party).",
     "heldRefused": "The pack cannot be made: see what refuses it.",
     "heldNoCustomer": "The shipment names no customer to share it with.",
     "title": "Compliance pack · {number}",

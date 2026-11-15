@@ -64,7 +64,7 @@ async function lotFor(caller: CommandCaller, lotId: string): Promise<{ lot: LotR
   const lot = isUuid(lotId) ? await caller.withClient((client) => client.lot.findUnique({ where: { id: lotId }, select: LOT_SELECT })) : null
   const sees = lot !== null && mayAt(context, context.audience === 'office' ? INVENTORY_STOCK_VIEW : INVENTORY_RECEIVE, lot)
   if (!lot || !sees) throw new NotFoundError('Lot not found.')
-  if (!mayAt(context, INVENTORY_RECEIVE, lot)) throw new ForbiddenError("Tagging rolls is receiving's: it needs inventory.receive at the lot's site.")
+  if (!mayAt(context, INVENTORY_RECEIVE, lot)) throw new ForbiddenError("Tagging rolls is receiving's: it needs the right to receive goods at the lot's site.")
   return { lot, context }
 }
 

@@ -146,7 +146,7 @@ describe('allocation in depth: the kit timing, the switch and the orders', () =>
     expect(holdWords(held.holds[0]!, BETA!, 'x', words())).toBe('Not approved for sewing (Op 20 Sew): being reviewed, not approved yet.')
     expect(switchRefusalOf(apiErrorFrom(409, { error: { code: 'conflict', message: 'Changed.', issues: [{ path: 'body/version', message: 'x' }] } })).code).toBe('CHANGED')
     expect(switchRefusalOf(apiErrorFrom(409, { error: { code: 'conflict', message: 'The kit or pieces of SC-1 are at the workshop: take them back on the order first.' } })).code).toBe('KIT_OUT')
-    expect(switchRefusalOf(apiErrorFrom(403, { error: { code: 'forbidden', message: 'Bringing it back changes SC-1: that needs purchasing.subcontract.manage.' } })).code).toBe('NEEDS_SUBCONTRACT')
+    expect(switchRefusalOf(apiErrorFrom(403, { error: { code: 'forbidden', message: 'Bringing it back changes SC-1: that needs the right to manage subcontract orders.' } })).code).toBe('NEEDS_SUBCONTRACT')
     // W2a's createOrder: garments already on other subcontract orders (how many may still go out), and the workshop's location.
     const onOrders = switchRefusalOf(apiErrorFrom(400, { error: { code: 'validation_failed', message: '7 piece(s) of operation 20 SEW are on other subcontract orders already; at most 0 more of the work order\'s 7.', issues: [{ path: 'body/operations/0/pieces', message: '7 piece(s) of operation 20 SEW are on other subcontract orders already; at most 0 more of the work order\'s 7.' }] } }))
     expect(onOrders).toMatchObject({ code: 'ON_ORDERS', more: 0 })
@@ -160,7 +160,7 @@ describe('allocation in depth: the kit timing, the switch and the orders', () =>
   })
 
   it('what became of the order when an operation went outside', () => {
-    const answer = { operation: { id: 'o', seq: 20, name: 'Cucitura', version: 3, outsourced: true, subcontractOrderId: null }, workshop: { id: 'p', code: 'B', name: 'Laboratorio Beta' }, order: null, orderWords: 'No subcontract order yet: drafting it needs purchasing.subcontract.manage (the buyer makes it from Purchasing › Subcontracting).', timing: { start: '2026-11-23', kitShipOn: '2026-11-19', kitDueAt: 'x', late: false, backOn: '2026-11-26' }, warnings: [] }
+    const answer = { operation: { id: 'o', seq: 20, name: 'Cucitura', version: 3, outsourced: true, subcontractOrderId: null }, workshop: { id: 'p', code: 'B', name: 'Laboratorio Beta' }, order: null, orderWords: 'No subcontract order yet: drafting it needs the right to manage subcontract orders (the buyer makes it from Purchasing › Subcontracting).', timing: { start: '2026-11-23', kitShipOn: '2026-11-19', kitDueAt: 'x', late: false, backOn: '2026-11-26' }, warnings: [] }
     expect(outsideDoneWords(answer, words())).toBe('Op 20 Cucitura sent outside to Laboratorio Beta. No subcontract order yet: the buyer drafts it from Purchasing › Subcontract orders.')
     expect(outsideDoneWords({ ...answer, order: { id: 's', number: 'SC-2026-0001', status: 'DRAFT', kitDueAt: 'x' }, orderWords: null }, words())).toMatch(/Draft subcontract order SC-2026-0001: the kit leaves Thu 19 Nov, back Thu 26 Nov\.$/)
     // A kit already late: the order's kit time is today 08:00 at the site; a name ending in a full stop closes with one.
@@ -186,7 +186,7 @@ describe('allocation in depth: the kit timing, the switch and the orders', () =>
     expect(createOrdersHeld({ ...input, workshops: { status: 'ready', value: { ...WORKSHOPS, workOrders: WORKSHOPS.workOrders.map((entry) => ({ ...entry, operations: entry.operations.map((operation) => ({ ...operation, outsourced: true, subcontractOrderId: 'so' })) })) } } }, words())).toMatch(/^Every part/)
     const part = { workOrder: { id: 'w', number: 'WO-0105' }, workshop: { id: BETA!.id, code: 'LAB-B', name: 'Laboratorio Beta' } }
     expect(partProblemWords("WO-0105's garments at this workshop are on a subcontract order already.", part, WORKSHOPS, 'x', words('it'))).toBe('I capi di WO-0105 presso questo laboratorio sono già su un ordine di lavorazione esterna.')
-    expect(partProblemWords('No subcontract order yet: drafting it needs purchasing.subcontract.manage (the buyer makes it).', part, WORKSHOPS, 'x', words())).toMatch(/^Drafting it needs the subcontracting permission/)
+    expect(partProblemWords('No subcontract order yet: drafting it needs the right to manage subcontract orders (the buyer makes it).', part, WORKSHOPS, 'x', words())).toMatch(/^Drafting it needs the subcontracting permission/)
     expect(partProblemWords('No valid DURC: it expired on 2026-11-05.', { ...part, workshop: { id: GAMMA!.id, code: 'LAB-G', name: 'Laboratorio Gamma' } }, WORKSHOPS, 'x', words())).toMatch(/^No valid DURC: it expired on/)
     expect(partProblemWords('Something we never said.', part, WORKSHOPS, 'x', words())).toBe('The server did not make this order.')
   })

@@ -255,7 +255,7 @@ describe('back unchanged after inspection, with the return DDT (SAL-355)', () =>
     expect((await refused('desk', 'POST', `/sales/returns/${rma.id}/send-back`, { version: await versionOf(rma.id) }, 400)).message).toBe('No line of this return may go back unchanged now.')
     await grade(rma.id, lineId, 'NEW')
     // REFUSED: the DDT needs the permission to issue DDTs; nothing was written.
-    expect((await refused('sales', 'POST', `/sales/returns/${rma.id}/send-back`, { version: await versionOf(rma.id), ddt: TYPED_DDT }, 403)).message).toMatch(/shipping\.ddt\.issue/)
+    expect((await refused('sales', 'POST', `/sales/returns/${rma.id}/send-back`, { version: await versionOf(rma.id), ddt: TYPED_DDT }, 403)).message).toMatch(/the permission to issue DDTs/)
     expect(await lineRow(lineId)).toMatchObject({ disposition: null })
     const sent = await ok('desk', 'POST', `/sales/returns/${rma.id}/send-back`, { version: await versionOf(rma.id), note: 'Made-up: nothing wrong found.', ddt: TYPED_DDT })
     expect(sent.decidedLineIds).toEqual([lineId])

@@ -21,7 +21,7 @@ import { actorIdOf, assertMay, assertMayWrite, officeOf, refuse } from './access
  * guard's own refusal would be a 500).
  */
 
-const MANAGE_WORDS = 'Incidents are kept by the safety roles (safety.incidents.manage).'
+const MANAGE_WORDS = 'Incidents are kept by the safety roles.'
 
 const LOCK_SELECT = { id: true, number: true, companyId: true, siteId: true, kind: true, status: true, version: true, seenAt: true, seenById: true, occurredAt: true, reportedAt: true, areaId: true, stationId: true, machineId: true, place: true } as const
 

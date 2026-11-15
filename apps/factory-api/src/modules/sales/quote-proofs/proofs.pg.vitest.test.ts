@@ -221,7 +221,7 @@ describe('the office attaches proofs to the unsent version (SAL-199)', () => {
   it('walls: a reader sees them with the reason it may not change them; another company or a partner does not see the quote', async () => {
     const viewer = await wall('viewer', 'GET', `${quoteUrl(quote.id)}/proofs`)
     expect(viewer.status).toBe(200)
-    expect(viewer.body.may).toEqual({ change: false, held: 'Changing proofs needs quotes.manage for this customer.' })
+    expect(viewer.body.may).toEqual({ change: false, held: 'Changing proofs needs the right to make quotes for this customer.' })
     expect((await wall('viewer', 'DELETE', `${quoteUrl(quote.id)}/proofs/${photo.id}`)).status).toBe(403)
     const noFiles = await wall('noFiles', 'POST', `${quoteUrl(quote.id)}/proofs`, { originalName: 'a.pdf', contentType: 'application/pdf', sizeBytes: 5, sha256: sha256(Buffer.from('%PDF-')) })
     expect(noFiles.status).toBe(403)

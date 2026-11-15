@@ -313,7 +313,7 @@ describe('a supplier claim from the decision, links, change and cancel', () => {
     let { record } = await ok('qa', 'POST', `/quality/ncr/${A.seedNcr2}/decisions`, { version: before.ncr.version, dispositionCodeId: codes.RETURN_TO_SUPPLIER, quantity: '39.8' }, 201)
     const decision = record.decisions.find((row: Json) => row.disposition.code === 'RETURN_TO_SUPPLIER')
     const body = { version: decision.version, claim: { kind: 'CLAIM', reasonCode: 'QUALITY', reasonNote: 'Grain crack across the butt' } }
-    expect((await refused('qa', 'POST', `/quality/ncr/${A.seedNcr2}/decisions/${decision.id}/carry-out`, body, 403)).message).toBe("Opening the supplier claim needs purchasing.claims.manage at the NCR's site.")
+    expect((await refused('qa', 'POST', `/quality/ncr/${A.seedNcr2}/decisions/${decision.id}/carry-out`, body, 403)).message).toBe("Opening the supplier claim needs the right to keep supplier claims at the NCR's site.")
     const answer = await ok('buyer', 'POST', `/quality/ncr/${A.seedNcr2}/decisions/${decision.id}/carry-out`, body)
     expect(answer.followUp).toMatchObject({ type: 'SupplierClaim' })
     const [claim] = await admin<Json>(`SELECT status::text, "internalNote" FROM "SupplierClaim" WHERE id = $1`, [answer.followUp.id])

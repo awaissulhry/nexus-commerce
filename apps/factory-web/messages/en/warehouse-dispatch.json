@@ -179,7 +179,7 @@
     "weightTold": "Told to the carrier: {weight} kg.",
     "held": {
       "reading": "Reading the start…",
-      "noRight": "Your role cannot book pickups (shipping.pickups.book).",
+      "noRight": "Your role cannot book pickups.",
       "busy": "Sending…",
       "problems_one": "{count} field to fix",
       "problems_other": "{count} fields to fix",
@@ -279,13 +279,13 @@
     },
     "held": {
       "reading": "Reading the day…",
-      "noRight": "Your role cannot close the day (shipping.manage).",
+      "noRight": "Your role cannot close the day.",
       "busy": "Closing…",
       "allClosed": "Every sheet of this day is closed already.",
       "nothing": "Nothing to close on this day.",
       "noneChosen": "Tick at least one carrier.",
       "nothingToPreview": "Nothing on this carrier's sheet yet.",
-      "noView": "Your role cannot see shipments (shipping.view)."
+      "noView": "Your role cannot see shipments."
     }
   },
   "handOver": {
@@ -314,7 +314,7 @@
       "failed": "It could not be sent: try again."
     },
     "held": {
-      "noRight": "Your role cannot hand shipments over (shipping.manage).",
+      "noRight": "Your role cannot hand shipments over.",
       "none": "None of the shipments picked is packed and ready to hand over.",
       "busy": "Sending…"
     }
@@ -332,7 +332,7 @@
     "notClosed": "Not closed yet",
     "totals": "On it",
     "sign": "Print it for the driver: name, signature and the time collected go on the paper.",
-    "noFiles": "Your role cannot open files (files.read): the sheet is shown without its PDF.",
+    "noFiles": "Your role cannot open files: the sheet is shown without its PDF.",
     "loading": "Reading the PDF…",
     "pdfFailed": "The PDF could not be read."
   },
@@ -531,11 +531,11 @@
       "CUSTOMS": "Someone changed the declaration meanwhile: it was read again."
     },
     "held": {
-      "noRight": "Your role cannot make customs papers (shipping.customs.manage).",
+      "noRight": "Your role cannot make customs papers.",
       "noPrice": "The papers show values: they need the price grain.",
       "busy": "Sending…",
       "noInvoices": "No issued invoice to this customer yet.",
-      "noUpload": "Your role cannot upload files (files.upload).",
+      "noUpload": "Your role cannot upload files.",
       "openFirst": "Open the declaration first.",
       "reading": "Reading…"
     },
@@ -583,7 +583,7 @@
       "declarationBody": "Who files it: a customs broker (the pack goes to them), or the carrier itself.",
       "filedBy": "Who files it",
       "brokerHint": "An active carrier or supplier of the company.",
-      "noParties": "Your role cannot list parties (parties.view): only the carrier can be chosen.",
+      "noParties": "Your role cannot list parties: only the carrier can be chosen.",
       "brokerOption": "{code} · {name}",
       "brokersLoading": "Reading the company's carriers and suppliers…",
       "brokersFailed": "The brokers could not be read: the carrier can still file it.",
@@ -667,7 +667,7 @@
       "NO_CARRIER_ACCOUNT": "The company has no usable carrier connection yet (Admin › Connections & API): nothing could be bought."
     },
     "held": {
-      "noRight": "Your role cannot change the shipping settings (shipping.settings.manage).",
+      "noRight": "Your role cannot change the shipping settings.",
       "busy": "Switching…"
     },
     "stepUp": "A fresh code lets this site buy live labels.",
@@ -703,7 +703,7 @@
       "packOff": "{site} no longer sends broker packs by link."
     },
     "held": {
-      "noRight": "Your role cannot change the shipping settings (shipping.settings.manage).",
+      "noRight": "Your role cannot change the shipping settings.",
       "same": "Nothing to save.",
       "busy": "Saving…",
       "noSettings": "The site has no shipping settings yet."
@@ -789,7 +789,7 @@
       "invalid": "Something in the form is not right: check the carrier and the number."
     },
     "held": {
-      "noRight": "Your role cannot change the shipping settings (shipping.settings.manage).",
+      "noRight": "Your role cannot change the shipping settings.",
       "busy": "Saving…"
     },
     "stepUp": "A fresh code lets you seal a carrier account number.",
@@ -935,7 +935,7 @@
       "runScale": "A size run needs its size scale."
     },
     "held": {
-      "noRight": "Your role cannot change packaging (shipping.packaging.manage).",
+      "noRight": "Your role cannot change packaging.",
       "busy": "Saving…",
       "noneOn": "None of the types picked is in use.",
       "noneOff": "None of the types picked is switched off.",

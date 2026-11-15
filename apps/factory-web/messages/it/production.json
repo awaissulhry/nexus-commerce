@@ -106,9 +106,9 @@
     "release_other": "Rilascia {count}"
   },
   "held": {
-    "noManage": "Puoi vedere gli ordini, non modificarli (workorders.manage)",
+    "noManage": "Puoi vedere gli ordini, non modificarli",
     "sampleSizes": "Un ordine di lavoro campione senza riga d'ordine fa le taglie del suo giro: cambiale sul giro",
-    "noRelease": "Per rilasciare serve il permesso di rilascio (workorders.release)",
+    "noRelease": "Per rilasciare serve il permesso di rilascio",
     "checking": "Controllo in corso…",
     "checksOpen_one": "{count} controllo blocca il rilascio: vedi Riepilogo",
     "checksOpen_other": "{count} controlli bloccano il rilascio: vedi Riepilogo",
@@ -125,7 +125,7 @@
     "orderHint": "Ordini confermati non ancora spediti, per numero o riferimento cliente.",
     "orderSearch": "Numero o riferimento cliente",
     "noOrderFound": "Nessun ordine confermato corrisponde.",
-    "noOrders": "Per cercare un ordine di vendita serve orders.view: chiedi a un amministratore.",
+    "noOrders": "Per cercare un ordine di vendita serve il permesso di vedere gli ordini clienti: chiedi a un amministratore.",
     "ref": "Rif. {ref}",
     "units_one": "{count} pezzo",
     "units_other": "{count} pezzi",
@@ -166,7 +166,7 @@
       },
       "forbidden": {
         "title": "Non puoi vedere questo ordine",
-        "body": "Gli ordini richiedono workorders.view per la loro azienda e sede: chiedi a un amministratore."
+        "body": "Gli ordini richiedono il permesso di vederli per la loro azienda e sede: chiedi a un amministratore."
       },
       "error": {
         "title": "Impossibile caricare l'ordine"
@@ -416,7 +416,7 @@
       "returnable": "Restituibile"
     },
     "pick": "la lista di prelievo",
-    "noPick": "La lista di prelievo (scorte per lotto e pelle) richiede inventory.issue.",
+    "noPick": "La lista di prelievo (scorte per lotto e pelle) richiede il permesso di prelevare merce per gli ordini di lavoro.",
     "pickAfterRelease": "La lista di prelievo si apre dopo il rilascio: il reparto preleva con la scansione.",
     "covered": "Prelevato",
     "toIssue": "{quantity} {uom} da prelevare",
@@ -476,7 +476,7 @@
     "hold": {
       "usedUp": "La pelle è esaurita: si corregge solo il taglio di chiusura",
       "notOpen": "L'ordine non è in produzione",
-      "noRight": "Per correggere un taglio serve production.cut.correct",
+      "noRight": "Il tuo ruolo non può correggere un taglio",
       "reversal": "Una correzione non si corregge di nuovo",
       "reversed": "Già stornata"
     },
@@ -569,7 +569,7 @@
       "void": "Un fascio annullato non ha cartellino da ristampare",
       "notOpen": "L'ordine non è in produzione"
     },
-    "noRight": "Per ristampare un cartellino serve production.bundles.",
+    "noRight": "Per ristampare un cartellino serve il permesso di creare i mazzetti.",
     "detailTitle": "Fascio {code}",
     "pieces_one": "{count} pezzo",
     "pieces_other": "{count} pezzi",
@@ -609,7 +609,7 @@
     "printer": "Stampante etichette",
     "noPrinter": "Questa sede non ha una stampante etichette attiva: i cartellini si ristampano dal tablet di reparto.",
     "choosePrinter": "Scegli una stampante etichette",
-    "noPrintRight": "Per stampare etichette serve print.labels",
+    "noPrintRight": "Per stampare etichette serve il permesso di stampare etichette",
     "go_one": "Ristampa {count}",
     "go_other": "Ristampa {count}",
     "done": "Ristampato: nuovo codice {code}"
@@ -661,7 +661,7 @@
   },
   "quality": {
     "what": "I controlli finali iniziano",
-    "noRight": "Controlli e rilasci richiedono quality.inspections.view.",
+    "noRight": "Controlli e rilasci richiedono il permesso di vedere le ispezioni finali.",
     "inspections": "Controlli finali",
     "none": "Non ancora controllato.",
     "number": "Controllo {n}",

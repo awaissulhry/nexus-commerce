@@ -88,7 +88,7 @@ export async function depositReceived(files: FilesRuntime, caller: CommandCaller
   const issuing = plan.decision.required && body.issueDepositInvoice !== false
   if (issuing) {
     if (!mayOn(context, INVOICES_ISSUE, { companyId: current.companyId, partyId: current.partyId })) {
-      throw new ForbiddenError('Issuing the deposit invoice needs invoices.issue: record the payment without it (issueDepositInvoice: false) and let finance issue it.')
+      throw new ForbiddenError('Issuing the deposit invoice needs the right to issue invoices: record the payment without it (issueDepositInvoice: false) and let finance issue it.')
     }
     stepUp()
   }

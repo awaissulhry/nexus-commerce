@@ -69,7 +69,7 @@ async function ownerOf(request: FastifyRequest, recordType: Owner['recordType'],
       ? await request.withClient((client) => client.maintenanceRequest.findUnique({ where: { id }, select: { id: true, companyId: true, siteId: true, status: true } }))
       : await request.withClient((client) => client.maintenanceJob.findUnique({ where: { id }, select: { id: true, companyId: true, siteId: true, status: true, number: true } }))
   if (!row || (!may(context, write, row) && (context.audience === 'floor' || !may(context, PLANT_VIEW, row)))) throw new NotFoundError(recordType === 'MaintenanceRequest' ? 'Request not found.' : 'Job not found.')
-  if (!may(context, write, row)) throw new ForbiddenError(recordType === 'MaintenanceRequest' ? 'Photos and voice notes of a request are added by whoever reports machine problems (plant.report).' : "Photos and voice notes of a job are added by its technician (plant.jobs.work).")
+  if (!may(context, write, row)) throw new ForbiddenError(recordType === 'MaintenanceRequest' ? 'Photos and voice notes of a request are added by whoever reports machine problems.' : "Photos and voice notes of a job are added by its technician.")
   if (recordType === 'MaintenanceRequest' && (row.status === 'MERGED' || row.status === 'CLOSED')) refused(requestFilesClosed(row.status))
   if (recordType === 'MaintenanceJob' && (row.status === 'CLOSED' || row.status === 'CANCELLED')) refused(filesClosed((row as { number: string }).number, row.status))
   return { owner: { recordType, id: row.id, companyId: row.companyId, siteId: row.siteId }, context }

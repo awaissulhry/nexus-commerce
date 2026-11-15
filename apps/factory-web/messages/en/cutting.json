@@ -2,7 +2,7 @@
   "page": {
     "noAccess": {
       "title": "You cannot open Cutting",
-      "body": "This needs the permission {permission}. Ask an administrator to give it to your role."
+      "body": "This needs the right “{right}”. Ask an administrator to give it to your role."
     },
     "keyNew": "New cut order",
     "new": "New cut order",
@@ -110,7 +110,7 @@
     "export_other": "Export {count} (CSV)"
   },
   "held": {
-    "permission": "This needs the permission {permission}.",
+    "permission": "This needs the right “{right}”.",
     "busy": "Working…",
     "loading": "Still loading",
     "reason": "Say why in at least 3 characters.",

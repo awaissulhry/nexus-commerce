@@ -24,7 +24,7 @@
   },
   "noAccess": {
     "title": "Warehouse rules are not in your role",
-    "body": "Reading them needs the right to see stock (inventory.stock.view). An administrator gives it in Admin › Roles & permissions."
+    "body": "Reading them needs the right to see stock. An administrator gives it in Admin › Roles & permissions."
   },
   "card": {
     "neverChanged": "Never changed here.",
@@ -266,17 +266,17 @@
   "held": {
     "reading": "Still reading the rules.",
     "busy": "Saving: wait a moment.",
-    "noRight": "Changing the warehouse rules needs inventory.rules.manage over this company (warehouse, finance, the Owner).",
+    "noRight": "Changing the warehouse rules needs the right to change them over this company (warehouse, finance, the Owner).",
     "noRightAll": "Every company’s warehouse rules are changed only by a role over every company.",
     "offline": "Offline: changes are kept on this page until the connection is back.",
     "offlineTitle": "Offline",
     "offlineBody": "This is the last copy read. Nothing can be saved until the connection is back.",
-    "noApprovalsView": "Reading the approval rules needs the right to see approvals (approvals.view).",
-    "noRulesManage": "Writing approval rules needs the right to keep them (approvals.rules.manage): the Owner or an administrator.",
-    "noCost": "The value is a cost: it is shown and changed only with the right to see costs (money.cost).",
-    "noLocationsView": "Default locations need the right to see locations (inventory.locations.view).",
-    "noLocationsRight": "Changing default locations needs inventory.locations.manage.",
-    "noCrViView": "Reading this rule needs the right to see lots and their tests (quality.lots.view)."
+    "noApprovalsView": "Reading the approval rules needs the right to see approvals.",
+    "noRulesManage": "Writing approval rules needs the right to keep them: the Owner or an administrator.",
+    "noCost": "The value is a cost: it is shown and changed only with the right to see costs.",
+    "noLocationsView": "Default locations need the right to see locations.",
+    "noLocationsRight": "Changing default locations needs the right to keep locations.",
+    "noCrViView": "Reading this rule needs the right to see lots and their tests."
   },
   "problem": {
     "reasonNeeded": "Say why: this widens what one person can do.",

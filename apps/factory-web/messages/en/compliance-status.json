@@ -7,7 +7,7 @@
   },
   "noAccess": {
     "title": "The status board is not in your role",
-    "body": "Ask the administrator for the certificate register's view (compliance.certificates.view)."
+    "body": "Ask the administrator for the certificate register's view."
   },
   "band": {
     "label": "Status board actions",

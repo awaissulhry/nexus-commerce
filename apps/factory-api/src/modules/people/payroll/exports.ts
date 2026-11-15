@@ -56,7 +56,7 @@ export async function visibleExport(caller: CommandCaller, exportId: string, per
     const row = await exportById(db, exportId)
     const place = row ? await placeOf(db, row.companyId) : null
     if (!row || !place || !reachesCompany(context, place, [PEOPLE_PAYROLL_VIEW])) throw notFound()
-    if (!reachesCompany(context, place, [permission])) throw new ForbiddenError(permission === PEOPLE_PAYROLL_MANAGE ? 'This needs people.payroll.manage over every site of the company.' : "A file's figures open only with people.payroll.records over every site of the company.")
+    if (!reachesCompany(context, place, [permission])) throw new ForbiddenError(permission === PEOPLE_PAYROLL_MANAGE ? 'This needs the right to keep payroll over every site of the company.' : "A file's figures open only with the right to open payroll records over every site of the company.")
     return { context, row, place }
   })
 }
@@ -89,7 +89,7 @@ interface Made {
 async function readyToMake(caller: CommandCaller, context: OfficeContext, body: CreateExportBody): Promise<Made> {
   return caller.withClient(async (db) => {
     const place = await companyFor(db, context, body.companyId, [PEOPLE_PAYROLL_VIEW])
-    if (!reachesCompany(context, place, [PEOPLE_PAYROLL_MANAGE])) throw new ForbiddenError('Making a payroll export needs people.payroll.manage over every site of the company.')
+    if (!reachesCompany(context, place, [PEOPLE_PAYROLL_MANAGE])) throw new ForbiddenError('Making a payroll export needs the right to keep payroll over every site of the company.')
     await requireMonthGates(db, place, body.month)
     const earlier = body.correctionOfId ? (await exportsOfMonth(db, place.company.id, body.month)).find((row) => row.id === body.correctionOfId) : undefined
     const layoutId = body.layoutId ?? earlier?.layoutId

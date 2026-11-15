@@ -171,7 +171,7 @@ function reviewMay(context: OfficeContext, latest: ProfileRow, latestRevision: n
   const facts = { status: latest.reviewStatus as ReviewStatus, revision: latest.revision, latestRevision, measuredByUserId: latest.measuredByUserId, takenAt: latest.takenAt, submittedAt: latest.submittedAt, reviewedAt: latest.reviewedAt }
   const confirm = reviewRefusal(facts, 'CONFIRM', context.actorId, now)
   const askMore = reviewRefusal(facts, 'NEED_MORE', context.actorId, now)
-  return { may: { confirm: holds && confirm === null, askMore: holds && askMore === null }, why: holds ? (confirm ?? askMore) : 'Your roles do not review measurements (sales.mtm.review).' }
+  return { may: { confirm: holds && confirm === null, askMore: holds && askMore === null }, why: holds ? (confirm ?? askMore) : 'Your roles do not review measurements.' }
 }
 
 /** GET /sales/mtm/profiles/:profileId */

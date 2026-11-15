@@ -91,7 +91,7 @@ export async function rulesViewOf(db: Reader, record: TemplateRecord, context: R
     styles: { measured, madeToMeasure },
     summary: rulesSummary(checkable),
     editable: mayKeep && active,
-    refusal: !active ? archivedRefusal(template.code) : mayKeep ? null : 'You can view these rules, not change them: keeping them needs product.styles.manage over the template’s company.',
+    refusal: !active ? archivedRefusal(template.code) : mayKeep ? null : 'You can view these rules, not change them: keeping them needs the right to keep styles over the template’s company.',
     switchable: active && mayWrite(actor, PRODUCT_MTM_SWITCH, template.companyId),
   }
 }

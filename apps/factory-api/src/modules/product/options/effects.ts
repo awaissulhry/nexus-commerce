@@ -265,7 +265,7 @@ export async function setPrice(caller: CommandCaller, groupId: string, valueId: 
   const context = contextOf(caller)
   const seen = await readGroup(caller, groupId)
   assertMayManage(context, seen.companyId, PRODUCT_OPTIONS_PRICE)
-  if (!seesPrice(context)) throw new ForbiddenError('A price surcharge is set only with the price grain (money.price).')
+  if (!seesPrice(context)) throw new ForbiddenError('A price surcharge is set only with the right to see prices.')
   const priceDelta = (body.priceDelta as string | undefined) ?? null
   const pricePct = (body.pricePct as string | undefined) ?? null
   const currency = body.currency ?? null

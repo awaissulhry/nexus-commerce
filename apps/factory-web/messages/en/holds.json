@@ -210,12 +210,12 @@
     "evidenceNoBatch": "The work order has no batch number yet: the evidence trail opens from its batch.",
     "evidenceOpen": "Open the hold: its work order's batch is read there.",
     "later": "Comes later (W2b)",
-    "noNcr": "You do not raise NCRs (quality.ncr.raise).",
+    "noNcr": "You do not raise NCRs.",
     "noPlace": "You do not place or change holds: a quality inspector, a production manager or a floor supervisor does.",
-    "noRelease": "Only quality releases a hold (quality.holds.release): ask a quality inspector.",
+    "noRelease": "Only quality releases a hold: ask a quality inspector.",
     "noReleaseHere": "You do not release holds at this site.",
     "noRows": "No hold in this view.",
-    "noThreads": "You do not read threads and history (threads.read).",
+    "noThreads": "You do not read threads and history.",
     "notActive": "This hold is not active any more: it never changes.",
     "pickFirst": "Select the holds first.",
     "traceKind": "The trace starts from a lot or a hide: trace this from its lots on Lots & traceability.",
@@ -286,7 +286,7 @@
     "otherPlace": "Ask another place…"
   },
   "noAccess": {
-    "body": "Holds need quality.holds.view: warehouse, supervisors, production managers and quality read them. An administrator gives it in Admin › Roles & permissions.",
+    "body": "Holds need the right to see what is on hold: warehouse, supervisors, production managers and quality read them. An administrator gives it in Admin › Roles & permissions.",
     "title": "You cannot see the holds"
   },
   "notice": {
@@ -576,7 +576,7 @@
     "saveLoosen": "Save the looser rule",
     "held": {
       "reading": "Reading the rule…",
-      "noRight": "Changing who releases holds needs quality.settings.manage for this company: ask the owner.",
+      "noRight": "Changing who releases holds needs the right to change the quality settings for this company: ask the owner.",
       "busy": "Saving…",
       "nothing": "Nothing changed yet.",
       "reason": "Say why first (at least 3 characters)."
@@ -693,7 +693,7 @@
     "empty": "Nothing was made from the held records yet.",
     "extendHeld": {
       "NOT_ACTIVE": "A released or closed hold is not extended.",
-      "NO_RIGHT": "Extending a hold needs quality.holds.place at its site.",
+      "NO_RIGHT": "Extending a hold needs the right to place holds at its site.",
       "KIND": "Extending starts from a lot or a hide: this hold holds neither and has no group."
     }
   },
@@ -775,13 +775,13 @@
     "cellGarments_one": "{count} garment, {shipped} shipped",
     "cellGarments_other": "{count} garments, {shipped} shipped",
     "ddt": "DDT {number}",
-    "partyHidden": "name not shown (parties.view)",
+    "partyHidden": "name not shown",
     "received": "received",
     "left": "left the site",
     "onHold": "On hold: {reason}",
     "hidden": "not shown",
-    "restrictedParties_one": "{count} customer or supplier is counted without the name (it needs parties.view).",
-    "restrictedParties_other": "{count} customers or suppliers are counted without the name (it needs parties.view).",
+    "restrictedParties_one": "{count} customer or supplier is counted without the name (it needs the right to see customers and suppliers).",
+    "restrictedParties_other": "{count} customers or suppliers are counted without the name (it needs the right to see customers and suppliers).",
     "restrictedSites_one": "{count} record at a site you do not reach is counted, not shown.",
     "restrictedSites_other": "{count} records at sites you do not reach are counted, not shown.",
     "affectedOnly_one": "Show only affected customers ({count})",
@@ -825,7 +825,7 @@
     },
     "conflict": "{number} was changed meanwhile: the board is read again.",
     "refused": "{number} was not moved.",
-    "readOnly": "You read this board: moving a hold needs quality.holds.place (a quality inspector, a production manager or a floor supervisor)."
+    "readOnly": "You read this board: moving a hold needs the right to place holds (a quality inspector, a production manager or a floor supervisor)."
   },
   "qmove": {
     "of": "Hold {number} · {kind} {code} {more}",
@@ -855,7 +855,7 @@
     "held": {
       "notStock": "Only lots and hides move to quarantine.",
       "moved": "The goods lie in quarantine already.",
-      "noTransfer": "Confirming moves stock: it needs inventory.transfer at the site.",
+      "noTransfer": "Confirming moves stock: it needs the right to move stock at the site.",
       "notAsked": "No move was asked: ask it first."
     },
     "problem": {

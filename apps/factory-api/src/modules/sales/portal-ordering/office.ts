@@ -188,7 +188,7 @@ export async function acceptRequest(caller: CommandCaller, requestId: string, bo
   const { context, row } = await officeRequest(caller, requestId)
   const scope = { companyId: row.companyId, partyId: row.partyId }
   assertMay(context, ORDERS_MANAGE, scope, 'Order request')
-  if (body.as === 'QUOTE' && !can(actorOf(context), QUOTES_MANAGE, scope)) throw new ForbiddenError('Making a quote needs quotes.manage for this customer.')
+  if (body.as === 'QUOTE' && !can(actorOf(context), QUOTES_MANAGE, scope)) throw new ForbiddenError('Making a quote needs the right to make quotes for this customer.')
   const problem = decisionProblem(row.status as RequestStatus)
   if (problem) throw new InvalidStateError(problem)
   const lines = await caller.withClient((client) => readLines(client, [row.id]))

@@ -1,7 +1,7 @@
 {
   "noAccess": {
     "title": "Non puoi vedere i report di produzione",
-    "body": "Il report giornaliero di produzione richiede production.reports.view per uno stabilimento. Chiedi all'amministratore il ruolo che lo concede."
+    "body": "Il report giornaliero di produzione richiede il permesso di vederlo per uno stabilimento. Chiedi all'amministratore il ruolo che lo concede."
   },
   "band": {
     "label": "Stato e azioni del report",
@@ -119,7 +119,7 @@
       "time": "Indica un'ora (07:00)",
       "weekdays": "Scegli almeno un giorno",
       "recipients": "Scegli chi lo riceve",
-      "noSubscribe": "Solo tu: per aggiungere colleghi serve production.reports.subscribe"
+      "noSubscribe": "Solo tu: per aggiungere colleghi serve il permesso di inviare il report ai colleghi"
     },
     "problem": {
       "write": "Impossibile salvare. Riprova.",

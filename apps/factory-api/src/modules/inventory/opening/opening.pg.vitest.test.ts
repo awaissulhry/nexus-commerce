@@ -398,7 +398,7 @@ describe('who may import, and the tenant, company and site walls', () => {
   it('a sheet with report columns needs quality.lots.test; without the cost grain the unit cost column is refused', async () => {
     const withReport = await dryRun('warehouse', csv(['Riga;Sito;Ubicazione;Articolo;Colore;Lotto;Quantità;UM;Cromo VI', `W-1;A1;A1-STORE;SEED-LIN-200;GRY;W-1;1;M;`]))
     expect(withReport).toMatchObject({ status: 'FAILED' })
-    expect(withReport.issues).toEqual([{ path: 'column/crViMgKg', message: "This sheet brings chromium VI reports: recording them needs quality.lots.test over the import's company (the lab step's permission)." }])
+    expect(withReport.issues).toEqual([{ path: 'column/crViMgKg', message: "This sheet brings chromium VI reports: recording them needs the right to record a lot's chromium VI result over the import's company (the lab step's right)." }])
     const withCost = await dryRun('warehouse', csv(['Riga;Sito;Ubicazione;Articolo;Colore;Lotto;Quantità;UM;Costo unitario', `W-2;A1;A1-STORE;SEED-LIN-200;GRY;W-2;1;M;3`]))
     expect(withCost).toMatchObject({ status: 'FAILED', issues: [{ path: 'column/unitCost', message: expect.stringContaining('cost') }] })
     // Without those columns the warehouse imports; the standard cost values it.
@@ -416,7 +416,7 @@ describe('who may import, and the tenant, company and site walls', () => {
     const job = await dryRun('siteA2', csv(['Riga;Sito;Ubicazione;Articolo;Colore;Lotto;Quantità;UM', `S-1;A1;A1-STORE;SEED-LIN-200;GRY;S-1;1;M`, `S-2;A2;A2-STORE;SEED-LIN-200;GRY;S-2-${run};1;M`]))
     const rows = await rowsOf(job.id, 'siteA2')
     expect(rows.map((row) => [row.action, row.errors])).toEqual([
-      ['ERROR', [{ column: 'site', message: 'Your role does not reach site A1 for opening stock (inventory.opening.import).' }]],
+      ['ERROR', [{ column: 'site', message: 'Your role does not reach site A1 for opening stock.' }]],
       ['CREATE', null],
     ])
     expect((await call('companyB', 'POST', '/imports', { importerKey: 'inventory.opening', companyId: A.companyA, file: { originalName: 'o.csv', contentType: SHEET_TYPES.csv, sizeBytes: 10, sha256: sha(Buffer.from('0123456789')) } })).statusCode).toBe(403)

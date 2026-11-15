@@ -23,7 +23,7 @@
   },
   "noAccess": {
     "title": "Le impostazioni prodotto non sono nel tuo ruolo",
-    "body": "Per leggerle serve il permesso di vedere i modelli (product.styles.view). Lo assegna un amministratore in Sistema › Ruoli e permessi."
+    "body": "Per leggerle serve il permesso di vedere i modelli. Lo assegna un amministratore in Sistema › Ruoli e permessi."
   },
   "card": {
     "neverChanged": "Mai cambiate qui: vale quanto è in vigore sopra.",
@@ -267,8 +267,8 @@
   },
   "held": {
     "reading": "Sto ancora leggendo le impostazioni.",
-    "noRight": "Per cambiare le impostazioni prodotto serve il permesso product.settings.manage su questa azienda.",
-    "noRightAll": "Le impostazioni di tutte le aziende le cambia solo un ruolo su tutte le aziende con product.settings.manage.",
+    "noRight": "Per cambiare le impostazioni prodotto serve il permesso delle impostazioni prodotto su questa azienda.",
+    "noRightAll": "Le impostazioni di tutte le aziende le cambia solo un ruolo su tutte le aziende che gestisce le impostazioni prodotto.",
     "offline": "Offline: le modifiche restano su questa pagina finché torna la connessione.",
     "offlineTitle": "Offline",
     "offlineBody": "Quello che vedi è l’ultima copia letta. Il salvataggio è sospeso finché torna la connessione; le modifiche restano su questa pagina.",

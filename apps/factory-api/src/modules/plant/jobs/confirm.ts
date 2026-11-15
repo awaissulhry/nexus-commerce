@@ -26,7 +26,7 @@ export async function confirmJob(caller: CommandCaller, jobId: string, body: { r
   const permission = permissionOf(context)
   const known = isUuid(jobId) ? await caller.withClient((client) => readJob(client, jobId)) : null
   if (!known || (!may(context, permission, known) && (context.audience === 'floor' || !may(context, PLANT_VIEW, known)))) throw new NotFoundError('Job not found.')
-  if (!may(context, permission, known)) throw new ForbiddenError(context.audience === 'floor' ? 'The line lead confirms the machine works (floor.lead).' : 'The machine is confirmed working by a role that triages the machine requests (plant.requests.triage).')
+  if (!may(context, permission, known)) throw new ForbiddenError(context.audience === 'floor' ? 'The line lead confirms the machine works.' : 'The machine is confirmed working by a role that triages the machine requests.')
   const { result, replayed } = await command(caller, { name: 'plant.confirmJob', idempotencyKey, input: { jobId, ...body } }, async (tools) => {
     const { tx, now } = tools
     const machine = (await lockMachine(tx, context, known.machineId))!

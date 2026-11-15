@@ -164,7 +164,7 @@ export async function rollFor(caller: CommandCaller, rollId: string, permission:
   const row = isUuid(rollId) ? await caller.withClient((client) => client.fabricRoll.findUnique({ where: { id: rollId }, select: ROLL_SELECT })) : null
   const sees = row !== null && (context.audience === 'office' ? mayAt(context, INVENTORY_STOCK_VIEW, scopeOf(row)) : mayAt(context, permission, scopeOf(row)))
   if (!row || !sees) throw new NotFoundError('Roll not found.')
-  if (!mayAt(context, permission, scopeOf(row))) throw new ForbiddenError(`This needs ${permission} at the roll's site.`)
+  if (!mayAt(context, permission, scopeOf(row))) throw new ForbiddenError("This needs a right your role does not hold at the roll's site.")
   return { row, context }
 }
 

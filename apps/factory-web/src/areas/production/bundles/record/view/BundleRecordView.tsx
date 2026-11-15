@@ -22,6 +22,8 @@ import { TicketQr, type Words } from '../../view/parts'
 import type { BundleRecordActions, BundleRecordModel } from '../record-model'
 import '../../../_shared/production.css'
 import '../../bundles.css'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../../../lib/i18n/rights'
 
 export type { BundleRecordActions, BundleRecordModel } from '../record-model'
 
@@ -62,7 +64,7 @@ function Record({ model, actions }: { model: BundleRecordModel; actions?: Bundle
             <EmptyState
               icon={loaded.status === 'forbidden' ? <ShieldOff size={24} aria-hidden /> : <FileX size={24} aria-hidden />}
               title={t(`record.state.${loaded.status}.title`)}
-              description={loaded.status === 'error' ? scoped(`production:${loaded.problem}`) : t(`record.state.${loaded.status}.body`, { permission: 'production.bundles.view' })}
+              description={loaded.status === 'error' ? scoped(`production:${loaded.problem}`) : t(`record.state.${loaded.status}.body`, { right: rightRef('production.bundles.view') })}
               action={
                 loaded.status === 'error' ? (
                   <Button size="sm" onClick={() => actions?.onRetry?.()}>
@@ -95,7 +97,7 @@ function Ready({ record, model, actions }: { record: BundleRecord; model: Bundle
   const tabs: TabItem[] = BUNDLE_TABS.map((tab) => ({ id: tab, href: `${href}?tab=${tab}`, label: t(`record.tab.${tab}`), count: tab === 'scans' ? record.bundle.scans : null }))
   const more = [
     ...(model.can.workOrders ? [{ id: 'order', label: t('list.openWorkOrder'), href: `${model.prefix}/production/work-orders/${record.workOrder.id}?tab=bundles` }] : []),
-    { id: 'ticket', label: t('ticket.pdf'), ...(model.can.printLabels ? { href: `${href}/ticket`, target: '_blank' as const } : { disabled: true, description: t('held.noPrint', { permission: 'print.labels' }) }) },
+    { id: 'ticket', label: t('ticket.pdf'), ...(model.can.printLabels ? { href: `${href}/ticket`, target: '_blank' as const } : { disabled: true, description: t('held.noPrint', { right: rightRef('print.labels') }) }) },
     { id: 'void', label: t('void.open'), tone: 'danger' as const, disabled: voidWait !== null, ...(voidWait ? { description: t(voidWait.key, voidWait.params) } : {}), onSelect: () => actions?.onVoidDialog?.(true) },
   ]
   return (
@@ -228,7 +230,7 @@ function ScansTab({ model, actions }: { model: BundleRecordModel; actions?: Bund
   if (!scans) {
     return (
       <Card padded>
-        <EmptyState title={t('scans.noRight.title')} description={t('scans.noRight.body', { permission: 'workorders.view' })} />
+        <EmptyState title={t('scans.noRight.title')} description={t('scans.noRight.body', { right: rightRef('workorders.view') })} />
       </Card>
     )
   }
@@ -350,8 +352,8 @@ function TicketTab({ record, model, actions, href }: { record: BundleRecord; mod
   const tp = useT('production')
   const locale = useLocale()
   const { ticket } = record
-  const pdfHeld = model.can.printLabels ? null : t('held.noPrint', { permission: 'print.labels' })
-  const reprintWait = !model.can.act ? t('held.noAct', { permission: 'production.bundles' }) : record.bundle.status === 'VOID' ? t('held.ticketVoid') : record.workOrder.status !== 'RELEASED' && record.workOrder.status !== 'IN_PROGRESS' ? t('held.ticketNotOpen') : pdfHeld
+  const pdfHeld = model.can.printLabels ? null : t('held.noPrint', { right: rightRef('print.labels') })
+  const reprintWait = !model.can.act ? t('held.noAct', { right: rightRef('production.bundles') }) : record.bundle.status === 'VOID' ? t('held.ticketVoid') : record.workOrder.status !== 'RELEASED' && record.workOrder.status !== 'IN_PROGRESS' ? t('held.ticketNotOpen') : pdfHeld
   const layout = ticketLayout(record, {
     name: (code) => t('ticket.name', { code }),
     workOrder: t('ticket.workOrder'),
@@ -403,7 +405,7 @@ function TicketTab({ record, model, actions, href }: { record: BundleRecord; mod
         <Card padded className="fw-pr-card">
           <h2 className="fw-pr-h2">{t('ticket.jobs')}</h2>
           {ticket.jobs === null ? (
-            <p className="fw-pr-hint">{t('ticket.noJobsRight', { permission: 'print.view' })}</p>
+            <p className="fw-pr-hint">{t('ticket.noJobsRight', { right: rightRef('print.view') })}</p>
           ) : ticket.jobs.length === 0 ? (
             <p className="fw-pr-hint">{t('ticket.noJobs')}</p>
           ) : (

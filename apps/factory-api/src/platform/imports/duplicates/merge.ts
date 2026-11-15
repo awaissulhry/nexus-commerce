@@ -199,7 +199,7 @@ const REFUSAL_WORDS: Readonly<Record<MergeRefusal, (plan: MergePlan) => string>>
   OTHER_COMPANY: (plan) => `${plan.dropped.code} and ${plan.kept.code} belong to different companies.`,
   EVERY_COMPANY: (plan) => `${plan.dropped.code} is for every company: it is merged only into another record for every company.`,
   IN_USE: (plan) => `${plan.dropped.code} is used by other records (${plan.uses.reduce((sum, use) => sum + use.count, 0)}): they keep it. Open it and keep using one of them.`,
-  NO_RIGHT: () => 'Merging needs imports.duplicates.merge and the right to change both records.',
+  NO_RIGHT: () => 'Merging needs the right to merge duplicates and the right to change both records.',
 }
 
 const isForeignKeyViolation = (error: unknown): boolean => {

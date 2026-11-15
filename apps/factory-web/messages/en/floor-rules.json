@@ -16,7 +16,7 @@
     "viewOnly": "Only the production manager or the Owner changes this.",
     "noAccess": {
       "title": "Your role may not see the floor rules",
-      "body": "Your role does not include “production.settings.view”. Ask an administrator if you need this page."
+      "body": "Your role cannot see the floor rules. Ask an administrator if you need this page."
     },
     "noSites": {
       "title": "No site to show",
@@ -173,7 +173,7 @@
     "codes": {
       "noAccess": {
         "title": "Your role may not read the reason codes",
-        "body": "Reading them needs “production.scan”, which the production manager and the operators hold."
+        "body": "Reading them needs the right to report bundles done, which the production manager and the operators hold."
       }
     },
     "checks": {
@@ -286,7 +286,7 @@
     },
     "full": {
       "complete": "Every floor list has its full set of reasons.",
-      "held": "Only who keeps the reason lists adds them (reasons.manage at every company and site).",
+      "held": "Only who keeps the reason lists adds them, at every company and site.",
       "title_one": "The full floor lists: {count} reason not added yet",
       "title_other": "The full floor lists: {count} reasons not added yet",
       "add_one": "Add the full lists ({count} reason)",
@@ -345,7 +345,7 @@
       "intro": "Codes for time not on standard work (waiting, cleaning, training…), each with its pay rule. Operators pick them on the tablet when no bundle runs; a help call's waiting books to one.",
       "noAccess": {
         "title": "Your role may not see the off-standard codes",
-        "body": "Reading them needs “production.offstandard.view”."
+        "body": "Your role cannot read the off-standard codes."
       },
       "ccnl": {
         "title": "Pay rules not checked against your CCNL",
@@ -353,7 +353,7 @@
       },
       "readOnly": {
         "title": "You can look, not change",
-        "body": "Keeping the codes needs “production.offstandard.codes” (the production manager)."
+        "body": "Keeping the codes needs the right to keep off-standard codes (the production manager)."
       },
       "table": "Off-standard codes",
       "kind": {
@@ -401,7 +401,7 @@
         "bodyView": "The production manager adds them."
       },
       "held": {
-        "manage": "Keeping the codes needs production.offstandard.codes."
+        "manage": "Your role cannot keep the off-standard codes."
       },
       "new": {
         "button": "New code",
@@ -424,14 +424,14 @@
       "hint": "Escalation minutes are kept now; the timed escalation comes with a later version.",
       "noAccess": {
         "title": "Your role may not see the help-call routing",
-        "body": "Reading it needs “production.calls.view”."
+        "body": "Your role cannot read the help-call routing."
       },
       "readOnly": {
         "title": "You can look, not change",
-        "body": "Keeping the routing needs “production.calls.manage” (the production manager)."
+        "body": "Keeping the routing needs the right to keep help-call types (the production manager)."
       },
       "noSite": "No site to show.",
-      "noPeople": "Picking a team needs people.view: the group is shown as it is.",
+      "noPeople": "Picking a team needs the right to see employees: the group is shown as it is.",
       "table": "Help-call types",
       "kindFixed": "A type keeps its kind: the calls already sent were routed by it.",
       "kind": {
@@ -484,7 +484,7 @@
         "bodyView": "The production manager adds them."
       },
       "held": {
-        "manage": "Keeping the routing needs production.calls.manage.",
+        "manage": "Your role cannot keep the help-call routing.",
         "noCodes": "Every help-call reason is a type here already: add a reason in Reason codes first."
       },
       "new": {

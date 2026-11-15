@@ -10,7 +10,7 @@
     "body": "Ask the partner to approve a photo, a proof or a change: they answer by link or in their portal, signed with their name."
   },
   "held": {
-    "noRight": "Asking a partner to approve needs the right to ask (partners.approvals.ask).",
+    "noRight": "Asking a partner to approve needs the right to ask.",
     "reading": "Wait until the requests are read.",
     "noKind": "No approval is asked on this record.",
     "busy": "Working…",

@@ -133,7 +133,7 @@ async function assertScope(tools: CommandTools, body: Pick<ToleranceBody, 'compa
 export async function createTolerance(caller: CommandCaller, body: ToleranceBody, idempotencyKey?: string): Promise<{ tolerance: ToleranceView }> {
   const context = officeContextOf(caller)
   if (body.companyId !== null && !can(actorOf(context), PURCHASING_VIEW, { companyId: body.companyId })) throw new NotFoundError('Company not found.')
-  if (!mayAt(context, PURCHASING_TOLERANCES_MANAGE, body.companyId)) throw new ForbiddenError(body.companyId === null ? 'A tolerance of every company is kept only by a role over every company.' : 'Keeping delivery tolerances needs purchasing.tolerances.manage.')
+  if (!mayAt(context, PURCHASING_TOLERANCES_MANAGE, body.companyId)) throw new ForbiddenError(body.companyId === null ? 'A tolerance of every company is kept only by a role over every company.' : 'Keeping delivery tolerances needs the right to keep delivery tolerances.')
   const note = blank(body.note)
   const problems = toleranceProblems({ itemId: body.itemId, itemKind: body.itemKind, overPct: body.overPct, underPct: body.underPct, note })
   if (problems.length > 0) throw new ValidationError(problems[0]!.message, problems)
@@ -158,7 +158,7 @@ export async function createTolerance(caller: CommandCaller, body: ToleranceBody
 async function ruleFor(tools: CommandTools, context: OfficeContext, toleranceId: string): Promise<Row> {
   const row = isUuid(toleranceId) ? await tools.tx.deliveryTolerance.findUnique({ where: { id: toleranceId }, select: COLUMNS }) : null
   if (!row || !visible(context, row)) throw new NotFoundError('Delivery tolerance not found.')
-  if (!mayAt(context, PURCHASING_TOLERANCES_MANAGE, row.companyId)) throw new ForbiddenError(row.companyId === null ? 'A tolerance of every company is kept only by a role over every company.' : 'Keeping delivery tolerances needs purchasing.tolerances.manage.')
+  if (!mayAt(context, PURCHASING_TOLERANCES_MANAGE, row.companyId)) throw new ForbiddenError(row.companyId === null ? 'A tolerance of every company is kept only by a role over every company.' : 'Keeping delivery tolerances needs the right to keep delivery tolerances.')
   return row
 }
 

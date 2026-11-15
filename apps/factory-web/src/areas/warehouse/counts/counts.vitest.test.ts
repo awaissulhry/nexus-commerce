@@ -254,7 +254,7 @@ describe('record links: a count opens its record; the API list opens Counts', ()
 const LEFT_KEY =
   /\b(?:list|col|view|tile|tileHint|status|kind|kindShort|itemKind|scope|csv|sheets|new|held|step|record|tab|lines|line|diff|approval|check|valued|edit|cancel|approve|sendBack|reason|apply|signOff|found|done|problem|keys|common|uom|live)\.[a-zA-Z_]+(?:\.[a-zA-Z_]+)*\b/
 const LEFT_PLACEHOLDER = /\{[a-zA-Z]+\}/
-/** Permission names are said on purpose ("needs inventory.counts.manage"); file names and domains are not keys. */
+/** Permission names are stripped before the key check, though no screen says one since B-W2b-F51; file names and domains are not keys. */
 const SAID = /\b(?:inventory\.counts\.[a-z]+|inventory\.adjust|files\.read|example\.com)\b/g
 
 function render(screen: DesignScreen<unknown>, model: unknown, locale: (typeof LOCALES)[number]): string {

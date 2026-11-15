@@ -24,16 +24,16 @@
     "fixFirst_other": "Correggi prima {count} campi"
   },
   "held": {
-    "manage": "Serve il permesso di modificare i clienti (parties.manage).",
-    "hold": "Serve il permesso di bloccare i clienti (parties.hold).",
-    "privacy": "Serve il permesso di gestire i dati personali (parties.privacy).",
-    "erase": "Serve il permesso di cancellare i dati personali (parties.erase).",
+    "manage": "Serve il permesso di modificare i clienti.",
+    "hold": "Serve il permesso di bloccare i clienti.",
+    "privacy": "Serve il permesso di gestire i dati personali.",
+    "erase": "Serve il permesso di cancellare i dati personali.",
     "archived": "Il cliente è archiviato: riattivalo prima.",
     "manageCompany": "Non puoi cambiare le condizioni di questo cliente con questa azienda.",
     "erased": "Questo contatto è stato cancellato: non si può fare altro.",
     "objected": "Un’opposizione è già registrata per questa persona.",
-    "styles": "Per scegliere i modelli serve il permesso di vederli (product.styles.view).",
-    "files": "Per scegliere un file serve il permesso di vedere i file della scheda (files.read)."
+    "styles": "Per scegliere i modelli serve il permesso di vederli.",
+    "files": "Per scegliere un file serve il permesso di vedere i file della scheda."
   },
   "numbers": {
     "freeCredit": "Fido disponibile",

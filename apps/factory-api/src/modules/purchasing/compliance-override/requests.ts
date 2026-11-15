@@ -24,7 +24,7 @@ import { COMPLIANCE_KIND } from './kind'
  */
 
 export const COMPLIANCE_REFUSALS = Object.freeze({
-  noDecider: 'No office role decides a send without a valid document: give a role purchasing.compliance.override and approvals.decide (Admin › Roles), or switch on an approval rule for it.',
+  noDecider: 'No office role decides a send without a valid document: give a role the right to decide a send without a valid document and the right to decide approvals (Admin › Roles), or switch on an approval rule for it.',
 })
 
 /** Whether the person is the request's approver (named, or a holder of its role over the order's place). */

@@ -32,7 +32,7 @@
     "failed": "Impossibile leggere previsto contro effettivo",
     "body": "La chiusura rende l'ordine definitivo. Sotto, previsto contro effettivo: una voce oltre la tolleranza richiede un motivo.",
     "toleranceHint": "Ogni voce può scostarsi dal previsto di ±{tolerance} %; lo scarto si confronta con i capi previsti (non è ancora tenuta una franchigia di scarto).",
-    "noCost": "Il costo dei materiali richiede la visibilità dei costi (money.cost): resta visibile se è oltre la tolleranza.",
+    "noCost": "Il costo dei materiali richiede la visibilità dei costi: resta visibile se è oltre la tolleranza.",
     "reason": "Motivo",
     "reasonHint": "Perché l'ordine si è chiuso fuori tolleranza.",
     "reasonPick": "Scegli un motivo",
@@ -73,14 +73,14 @@
     "busy": "In corso…",
     "reading": "Lettura dei dati dell'ordine…",
     "notCompleted": "Si chiude solo un ordine completato.",
-    "noManage": "Chiudere un ordine richiede il permesso {permission}.",
+    "noManage": "Chiudere un ordine richiede il permesso «{right}».",
     "costsWaiting_one": "{count} evento attende ancora la valorizzazione: la chiusura salda il costo, quindi lo attende.",
     "costsWaiting_other": "{count} eventi attendono ancora la valorizzazione: la chiusura salda il costo, quindi li attende.",
     "reasonNeeded": "Una voce è oltre la tolleranza di ±{tolerance} %: scegli un motivo.",
     "noteNeeded": "Scrivi il motivo a parole.",
     "noteLong": "La nota supera {max} caratteri.",
     "noRecord": "Chiuso prima che la chiusura venisse registrata: non si riapre.",
-    "noReopen": "Riaprire un ordine richiede il permesso {permission}."
+    "noReopen": "Riaprire un ordine richiede il permesso «{right}»."
   },
   "reopen": {
     "open": "Riapri…",
@@ -225,7 +225,7 @@
       "body": "Nessuno scostamento prezzo d'acquisto registrato a {month}: uno scostamento compare quando un materiale è ricevuto o fatturato a un prezzo diverso dal suo standard."
     },
     "more": "Mostra altri",
-    "noCost": "Standard, pagato e differenza sono visibili solo ai ruoli con la visibilità dei costi (money.cost).",
+    "noCost": "Standard, pagato e differenza sono visibili solo ai ruoli con la visibilità dei costi.",
     "export_one": "Esporta {count} (CSV)",
     "export_other": "Esporta {count} (CSV)",
     "line": "{number} · riga {seq}",

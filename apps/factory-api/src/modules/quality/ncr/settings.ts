@@ -76,7 +76,7 @@ export async function saveNcrSettings(caller: CommandCaller, body: SaveNcrSettin
   const context = officeOf(caller)
   const companyId = body.companyId ?? null
   if (!mayWrite(actorOf(context), QUALITY_SETTINGS_MANAGE, companyId)) {
-    throw new ForbiddenError(companyId === null ? 'The tenant-wide containment time is changed only by a role over every company.' : 'Changing the containment time needs quality.settings.manage for the company.')
+    throw new ForbiddenError(companyId === null ? 'The tenant-wide containment time is changed only by a role over every company.' : 'Changing the containment time needs the right to change the quality settings for the company.')
   }
   if (companyId !== null) await assertCompany(caller, companyId)
   const problem = containmentHoursProblem(body.defaultContainmentHours)

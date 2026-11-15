@@ -51,7 +51,7 @@
       "nothingLeft": "Non resta nulla · esaurito il {date}",
       "behind": "Il registro dice “{expected}”: un movimento non è ancora stato considerato.",
       "check": "Verifica",
-      "noRight": "Verificare il ciclo di vita richiede inventory.lots.manage (magazzino, qualità).",
+      "noRight": "Verificare il ciclo di vita richiede il permesso di gestire i lotti (magazzino, qualità).",
       "checked": "Il ciclo di vita è passato da {from} a {to}.",
       "unchanged": "Il ciclo di vita corrisponde già al registro.",
       "checkFailed": "Non è stato possibile verificare il ciclo di vita. Riprova.",
@@ -88,7 +88,7 @@
       "title": "Attributi",
       "edit": "Modifica attributi",
       "none": "Nessun attributo registrato.",
-      "noRight": "Registrare gli attributi richiede inventory.lots.manage (magazzino, qualità).",
+      "noRight": "Registrare gli attributi richiede il permesso di gestire i lotti (magazzino, qualità).",
       "rejected": "Un lotto respinto è di sola lettura.",
       "dialogTitle": "Attributi del lotto {code}",
       "save": "Salva attributi",
@@ -279,7 +279,7 @@
       "move_one": "Sposta {count} pelle",
       "move_other": "Sposta {count} pelli",
       "held": {
-        "noRight": "Dividere le pelli in lotti richiede inventory.lots.manage (magazzino, qualità).",
+        "noRight": "Dividere le pelli in lotti richiede il permesso di gestire i lotti (magazzino, qualità).",
         "notHides": "Solo un lotto di pelli si divide in gruppi di tonalità.",
         "blocked": "Il lotto è bloccato: rilascialo o respingilo prima di dividere le pelli.",
         "rejected": "Il lotto è respinto: le sue pelli tornano indietro o si scartano, mai in un altro lotto.",
@@ -352,12 +352,12 @@
       "byAsOf": "Raggiunti entro il giorno chiesto: {exact} certi, {possible} possibili.",
       "includes": "Anche i lotti divisi da esso sono nel rapporto: {codes}.",
       "openAgain": "Apri di nuovo il file",
-      "noFiles": "Aprire il file richiede files.read.",
+      "noFiles": "Aprire il file richiede il permesso di vedere i file di un record.",
       "fileFailed": "Non è stato possibile aprire il file del rapporto. Riprova dai rapporti fatti.",
       "failed": "Non è stato possibile fare il rapporto. Riprova.",
       "offline": "Nessuna risposta: controlla la connessione e riprova.",
       "held": {
-        "noRight": "Un rapporto di tracciabilità datato richiede inventory.trace.report (qualità).",
+        "noRight": "Un rapporto di tracciabilità datato richiede il permesso di fare i rapporti di tracciabilità (qualità).",
         "busy": "In corso…"
       },
       "problem": {
@@ -444,7 +444,7 @@
       "tileHintNone": "I calendari d’inventario in scadenza questa settimana"
     },
     "held": {
-      "noManage": "Pianificare gli inventari richiede inventory.counts.manage (magazzino).",
+      "noManage": "Pianificare gli inventari richiede il permesso di eseguire gli inventari (magazzino).",
       "retired": "Il calendario è ritirato: prima riattivalo.",
       "busy": "In corso…"
     },
@@ -650,7 +650,7 @@
       "openApprovals": "Apri la richiesta in Home › Approvazioni"
     },
     "held": {
-      "noRight": "Chiedere un sostituto richiede inventory.issue (magazzino, responsabile produzione).",
+      "noRight": "Chiedere un sostituto richiede il permesso di prelevare merce per gli ordini di lavoro (magazzino, responsabile produzione).",
       "busy": "In corso…",
       "pickChoice": "Scegli cosa lo sostituisce.",
       "pickLot": "Scegli il lotto che sostituisce.",

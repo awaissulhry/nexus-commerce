@@ -195,7 +195,7 @@ export async function duplicateStyle(caller: CommandCaller, styleId: string, bod
   const parts = [...new Set(body.parts)] as CopyablePart[]
   for (const part of parts) {
     const permission = PART_PERMISSION[part]
-    if (permission !== undefined && !mayWrite(actor, permission, seen.companyId)) throw new ForbiddenError(`Copying ${PART_NAME[part]} needs ${permission}${seen.companyId === null ? ' over every company' : ''}.`)
+    if (permission !== undefined && !mayWrite(actor, permission, seen.companyId)) throw new ForbiddenError(`Copying ${PART_NAME[part]} needs the right to edit ${PART_NAME[part]}${seen.companyId === null ? ' over every company' : ''}.`)
   }
   const companyId = seen.companyId
 

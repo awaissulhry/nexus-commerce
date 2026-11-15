@@ -130,7 +130,7 @@ export async function postHeldReceipt(caller: CommandCaller, receiptId: string, 
   const context = officeContextOf(caller)
   const receipt = isUuid(receiptId) ? await caller.withClient((client) => client.goodsReceipt.findUnique({ where: { id: receiptId }, select: { companyId: true, siteId: true } })) : null
   if (!receipt || !can(actorOf(context), INVENTORY_STOCK_VIEW, receipt)) throw new NotFoundError('Goods receipt not found.')
-  if (!can(actorOf(context), INVENTORY_RECEIVE, receipt)) throw new ForbiddenError('Receiving goods at this site needs inventory.receive.')
+  if (!can(actorOf(context), INVENTORY_RECEIVE, receipt)) throw new ForbiddenError('Receiving goods at this site needs the right to receive goods.')
   const { result } = await command(caller, { name: 'inventory.postHeldReceipt', idempotencyKey, input: { receiptId } }, async (tools) => {
     const recorded = await postInCommand(tools, receiptId, `inventory.postHeldReceipt:${idempotencyKey ?? receiptId}`)
     const row = (await tools.tx.goodsReceipt.findUnique({ where: { id: recorded.receiptId }, select: RECEIPT_COLUMNS }))!
@@ -144,7 +144,7 @@ export async function cancelHeldReceipt(caller: CommandCaller, receiptId: string
   const context = officeContextOf(caller)
   const seen = isUuid(receiptId) ? await caller.withClient((client) => client.goodsReceipt.findUnique({ where: { id: receiptId }, select: { companyId: true, siteId: true } })) : null
   if (!seen || !can(actorOf(context), INVENTORY_STOCK_VIEW, seen)) throw new NotFoundError('Goods receipt not found.')
-  if (!can(actorOf(context), INVENTORY_RECEIVE, seen)) throw new ForbiddenError('Receiving goods at this site needs inventory.receive.')
+  if (!can(actorOf(context), INVENTORY_RECEIVE, seen)) throw new ForbiddenError('Receiving goods at this site needs the right to receive goods.')
   const reason = body.reason.trim()
   const { result } = await command(caller, { name: 'inventory.cancelHeldReceipt', idempotencyKey, input: { receiptId, ...body } }, async (tools) => {
     await tools.tx.$queryRaw`SELECT id FROM "GoodsReceipt" WHERE id = ${receiptId}::uuid FOR UPDATE`
@@ -190,7 +190,7 @@ export async function postReleased(system: CommandCaller, event: { readonly even
   const person = await asPerson(system, receipt.createdById, serverClock.now())
   try {
     await command(person, { name: 'inventory.postReleasedReceipt', idempotencyKey: `receipt-released-${receiptId}`, input: { receiptId } }, async (tools) => {
-      if (!can(actorOf(officeContextOf(person)), INVENTORY_RECEIVE, receipt)) throw new ForbiddenError('Receiving goods at this site needs inventory.receive.')
+      if (!can(actorOf(officeContextOf(person)), INVENTORY_RECEIVE, receipt)) throw new ForbiddenError('Receiving goods at this site needs the right to receive goods.')
       const recorded = await postInCommand(tools, receiptId, `receipt-released-${receiptId}`)
       return { receiptId: recorded.receiptId }
     })

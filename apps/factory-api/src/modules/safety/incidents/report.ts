@@ -248,7 +248,7 @@ const toDate = (value: string, path: string): Date => {
 export async function reportFromOffice(caller: CommandCaller, body: OfficeReportBody, idempotencyKey?: string): Promise<ReportAnswer & { readonly replayed: boolean }> {
   const context = officeOf(caller)
   const place = { companyId: body.companyId, siteId: body.siteId }
-  assertMayWrite(context, SAFETY_INCIDENTS_REPORT, place, 'Incidents are reported from the office by a role that reports them (safety.incidents.report); anyone reports from a tablet.')
+  assertMayWrite(context, SAFETY_INCIDENTS_REPORT, place, 'Incidents are reported from the office by a role that reports them; anyone reports from a tablet.')
   const people = body.people ?? []
   shapeProblems(people)
   const occurredAt = toDate(body.occurredAt, 'occurredAt')

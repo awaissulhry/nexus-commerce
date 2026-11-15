@@ -90,7 +90,7 @@ export const designScreen = defineDesignScreen<ProofsPanelModel>({
     },
     { id: 'sent', label: 'Sent · frozen with the version', model: model({ data: data({ versions: [SENT], may: { change: false, held: FROZEN } }) }), note: 'Shared with the customer, kept with the quote PDF; only Open.' },
     { id: 'accepted', label: 'Accepted · what the acceptance named', model: model({ data: data({ versions: [ACCEPTED], may: { change: false, held: FROZEN } }) }), note: 'Each proof accepted: name, version, SHA-256, size.' },
-    { id: 'no-right', label: 'A role that may not change them', model: model({ data: data({ may: { change: false, held: 'Changing proofs needs quotes.manage for this customer.' } }) }) },
+    { id: 'no-right', label: 'A role that may not change them', model: model({ data: data({ may: { change: false, held: 'Changing proofs needs the right to make quotes for this customer.' } }) }) },
     { id: 'full', label: 'The version is full (12 proofs)', model: model({ data: data({ versions: [version({ proofs: MANY })] }) }), note: 'The drop zone says why it takes no more.' },
     { id: 'remove', label: 'Remove a proof · the question', model: model({ confirmRemove: CHART_PROOF.fileId }) },
     { id: 'viewer-picture', label: 'The viewer · a picture', model: model({ open: id(2) }), note: 'Previous / Next over the version’s proofs, ← →, Esc closes.' },

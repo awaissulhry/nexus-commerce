@@ -171,9 +171,9 @@ describe('the audiences (PRD-133; Owner W2b-4: no partner sees a cost, a margin 
   })
 
   it('shows a section the caller may not see as not allowed, with why, and never its content', () => {
-    const view = viewFor('INTERNAL', { CONSTRUCTION: 'The construction section needs product.routing.view.' })
+    const view = viewFor('INTERNAL', { CONSTRUCTION: 'The construction section shows the routing: it needs the right to see the routing.' })
     expect(view.construction).toBeNull()
-    expect(view.sections.find((entry) => entry.section === 'CONSTRUCTION')).toMatchObject({ allowed: false, included: false, why: 'The construction section needs product.routing.view.' })
+    expect(view.sections.find((entry) => entry.section === 'CONSTRUCTION')).toMatchObject({ allowed: false, included: false, why: 'The construction section shows the routing: it needs the right to see the routing.' })
     const some = techPackViewOf(FACTS, { audience: 'INTERNAL', language: 'en', sections: orderedSections(['SIZE_SPEC', 'BOM']), notAllowed: {} })
     expect(some.sections.filter((entry) => entry.included).map((entry) => entry.section)).toEqual(['BOM', 'SIZE_SPEC'])
     expect([some.sketches, some.construction, some.protection]).toEqual([null, null, null])

@@ -1,6 +1,6 @@
 {
   "access": {
-    "title": "Preventive & statutory checks need plant.view",
+    "title": "Preventive & statutory checks need the right to see the plant",
     "body": "Ask an administrator for a role that sees the plant (Maintenance, Production manager or Safety officer)."
   },
   "band": {
@@ -184,7 +184,7 @@
     "keptSame": "Already kept as version {version} ({date}): the same contents.",
     "download": "Download the kept copy",
     "clock": "Nexus server clock",
-    "sealNoRight": "The kept copy's fingerprint needs files.read.",
+    "sealNoRight": "The kept copy's fingerprint needs the right to see a record's files.",
     "sealFailed": "The kept copy's fingerprint could not be read: open the copy instead.",
     "pdf": "Check report (PDF)"
   },
@@ -369,7 +369,7 @@
     "reports_other": "{count} reports on file."
   },
   "held": {
-    "manage": "Needs plant.checks.manage.",
+    "manage": "Your role cannot keep the statutory checks.",
     "saving": "Saving…",
     "reading": "Still reading.",
     "machine": "Pick the machine.",
@@ -389,9 +389,9 @@
     "performedByLong": "Who did it is too long.",
     "nextDue": "The next due date is after the day the check was done.",
     "correctionReason": "Say why the result is corrected.",
-    "jobRight": "Making a job needs plant.jobs.manage.",
-    "lockRight": "Locking a machine needs plant.report.",
-    "parties": "Picking an outside body needs parties.view.",
+    "jobRight": "Making a job needs the right to plan maintenance jobs.",
+    "lockRight": "Locking a machine needs the right to report machine problems.",
+    "parties": "Picking an outside body needs the right to see customers and suppliers.",
     "newDate": "Choose the new date.",
     "reason": "Say why.",
     "reasonLong": "The reason is too long.",

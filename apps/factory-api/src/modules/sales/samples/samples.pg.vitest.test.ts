@@ -196,7 +196,7 @@ describe('the sample work order (MES-018)', () => {
     const line = options.lines.find((entry: Json) => entry.id === sampleLine)
     expect(line).toMatchObject({ orderNumber: 'W2B246-SO-1', colourwayCode: 'BLK', proposed: [{ size: '52', quantity: 2 }] })
     // Sales keeps the round but makes no work order (W1's workorders.manage).
-    expect((await no('sales', 'POST', `/sales/samples/rounds/${round}/work-orders`, { lines: [{ salesOrderLineId: sampleLine }] }, 403)).message).toContain('workorders.manage')
+    expect((await no('sales', 'POST', `/sales/samples/rounds/${round}/work-orders`, { lines: [{ salesOrderLineId: sampleLine }] }, 403)).message).toContain('the right to make work orders')
     // The red cell has no line here: named alone, the black line takes the black cell only.
     const made = await ok('manager', 'POST', `/sales/samples/rounds/${round}/work-orders`, { lines: [{ salesOrderLineId: sampleLine }] }, 201)
     workOrder = made.workOrder.id

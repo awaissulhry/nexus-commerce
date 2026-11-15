@@ -183,7 +183,7 @@ describe('the Plans grid and the plan record (QHS-008)', () => {
     expect(record.preview.subject).toBe('styles')
     expect(record.preview.count).toBeLessThanOrEqual(record.preview.outOf)
     expect(record.rules).toBe(0)
-    expect(record.may).toEqual({ manage: true, approve: false, approveHeld: 'Approving a plan version needs quality.plans.approve for this company.' })
+    expect(record.may).toEqual({ manage: true, approve: false, approveHeld: 'Approving a plan version needs the right to approve inspection plans for this company.' })
     // Another company's plan is not said to exist.
     expect((await refused('companyB', 'GET', `/quality/plans/${A.final}`, undefined, 404)).message).toBe('Inspection plan not found.')
     const incoming = await ok('keeper', 'GET', `/quality/plans/${A.incoming}`)
@@ -233,7 +233,7 @@ describe('the starter set and new plans', () => {
     expect(paths(await refused('keeper', 'POST', '/quality/plans', { companyId: A.companyA, code: 'FIN-JACKET', stage: 'FINAL', name: 'Again' }, 409))).toEqual(['refusal/CODE_TAKEN', 'body/code'])
     expect(paths(await refused('keeper', 'POST', '/quality/plans', { companyId: A.companyA, code: 'BAD ONE', stage: 'FINAL', name: '' }, 400))).toEqual(['body/code', 'body/name'])
     expect(paths(await refused('keeper', 'POST', '/quality/plans', { companyId: A.companyA, code: 'X-2', stage: 'FINAL', name: 'x', ownerId: refs.invited, appliesTo: [{ kind: 'SUPPLIER', value: A.brandP1 }, { kind: 'STYLE', value: newId() }] }, 400))).toEqual(['body/appliesTo/0/value', 'body/appliesTo/1/value', 'body/ownerId'])
-    expect((await refused('companyB', 'POST', '/quality/plans', { companyId: A.companyA, code: 'X-3', stage: 'FINAL', name: 'x' }, 403)).message).toMatch(/quality.plans.manage/)
+    expect((await refused('companyB', 'POST', '/quality/plans', { companyId: A.companyA, code: 'X-3', stage: 'FINAL', name: 'x' }, 403)).message).toMatch(/You keep inspection plans only for the companies your role reaches/)
     expect((await refused('viewer', 'POST', '/quality/plans', { companyId: A.companyA, code: 'X-4', stage: 'FINAL', name: 'x' }, 403)).code).toBe('forbidden')
   })
 

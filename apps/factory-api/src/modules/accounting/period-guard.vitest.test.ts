@@ -24,7 +24,7 @@ describe('month locks on the wire', () => {
       status: 409,
       code: 'conflict',
       message:
-        'September 2026 is closed for good (a hard lock): the payment (CRO-1) dated 15 Sep 2026 is not written. Only someone who may lift a hard lock (accounting.unlock: the owner, by default) reopens the month, with a reason, in Finance › Accounting; agree it with the accountant first.',
+        'September 2026 is closed for good (a hard lock): the payment (CRO-1) dated 15 Sep 2026 is not written. Only someone who may lift a hard lock (the owner, by default) reopens the month, with a reason, in Finance › Accounting; agree it with the accountant first.',
       issues: [{ path: 'period/HARD_LOCKED', message: 'Dated inside a month closed for good.' }],
       unexpected: false,
     })

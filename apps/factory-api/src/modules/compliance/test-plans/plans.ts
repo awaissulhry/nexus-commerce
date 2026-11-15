@@ -61,7 +61,7 @@ async function readPlan(db: Reader, actor: Actor, planId: string): Promise<PlanR
 }
 
 function assertMayKeep(actor: Actor, companyId: string | null): void {
-  if (!mayWrite(actor, SUBSTANCES_MANAGE, companyId)) throw new ForbiddenError(companyId === null ? 'A test plan rule for every company is kept only by a role over every company.' : 'Keeping test plan rules needs compliance.substances.manage over this company.')
+  if (!mayWrite(actor, SUBSTANCES_MANAGE, companyId)) throw new ForbiddenError(companyId === null ? 'A test plan rule for every company is kept only by a role over every company.' : 'Keeping test plan rules needs the right to keep the restricted substance list over this company.')
 }
 
 /** What the plan names, checked against the database (the material, the substance rule of its test). */

@@ -40,7 +40,7 @@ export function mayOn(context: Checker, permission: Permission, record: { readon
 /** Seen with `view` (else not found), acted on with `permission` (else forbidden). */
 export function assertOn(context: Checker, view: Permission, permission: Permission, record: { readonly companyId: string; readonly siteId: string }, what: string): void {
   if (!mayOn(context, view, record) && !mayOn(context, permission, record)) throw new NotFoundError(`${what} not found.`)
-  if (!mayOn(context, permission, record)) throw new ForbiddenError(`This needs ${permission} over the ${what.toLowerCase()}'s company and site.`)
+  if (!mayOn(context, permission, record)) throw new ForbiddenError(`This needs a right your role does not hold over the ${what.toLowerCase()}'s company and site.`)
 }
 
 /** Who records and signs: the floor's signed-in worker, or the office user. */

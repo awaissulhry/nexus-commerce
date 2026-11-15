@@ -226,7 +226,7 @@ export async function readGenealogy(caller: CommandCaller, query: { readonly typ
   const actor = actorOf(context)
   return caller.withClient(async (client) => {
     const start = await genealogyStart(client, actor, query.type, query.id)
-    if (!can(actor, QUALITY_HOLDS_PLACE, start)) throw new ForbiddenError('A hold by genealogy needs quality.holds.place at the suspect record\'s site.')
+    if (!can(actor, QUALITY_HOLDS_PLACE, start)) throw new ForbiddenError("A hold by genealogy needs the right to put goods on hold at the suspect record's site.")
     const extending = query.holdId ? await seenHold(client, actor, query.holdId) : null
     const impact = await impactOf(client, actor, [start])
     return {

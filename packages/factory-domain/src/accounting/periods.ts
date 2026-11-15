@@ -132,7 +132,7 @@ export function hardLockedWords(lock: HardLockFacts, refused: string): string {
   return `${periodWords(lock)} is closed for good for ${lock.company} (a hard lock since ${dayWords(lock.lockedOn)}${by}): ${refused}. ${HARD_LOCK_WAY_OUT}`
 }
 
-const HARD_LOCK_WAY_OUT = 'Only someone who may lift a hard lock (accounting.unlock: the owner, by default) reopens the month, with a reason, in Finance › Accounting; agree it with the accountant first.'
+const HARD_LOCK_WAY_OUT = 'Only someone who may lift a hard lock (the owner, by default) reopens the month, with a reason, in Finance › Accounting; agree it with the accountant first.'
 
 // ---- a write dated inside a soft lock (B-W2a-F8) ----------------------------------------------------------------------
 

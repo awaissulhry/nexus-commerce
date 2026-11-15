@@ -217,7 +217,7 @@ export async function previewAnswerLetter(caller: CommandCaller, complaintId: st
 /** Why the letter cannot go now, besides its state: the letterhead, the sender's files.read, the files not shared. */
 async function sendProblemsOf(caller: CommandCaller, context: OfficeContext, row: ComplaintRow, db: Reader): Promise<Issue[]> {
   const problems: Issue[] = legalProblems(await companyLegalOf(caller, row.companyId)).map((issue) => ({ ...issue, path: `letter/${issue.path}` }))
-  if (!can(actorOf(context), FILES_READ, { companyId: row.companyId })) problems.push({ path: 'letter/filesRead', message: 'The letter goes by mail only from a sender who may read files (files.read).' })
+  if (!can(actorOf(context), FILES_READ, { companyId: row.companyId })) problems.push({ path: 'letter/filesRead', message: 'The letter goes by mail only from a sender who may read files.' })
   if (row.answerFileIds.length > 0) {
     const files = await db.storedFile.findMany({ where: { id: { in: row.answerFileIds } }, select: { id: true, originalName: true, visibility: true, partyId: true, status: true } })
     for (const file of files) {

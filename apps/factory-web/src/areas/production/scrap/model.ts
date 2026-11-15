@@ -3,6 +3,8 @@ import { isApiError, issuePath } from '../../../lib/api/errors'
 import type { Replacement } from '../cutting/api'
 import { DOWNGRADE_REASON_WORDS, isDowngradeReason } from '@nexus/factory-domain/production/repair/rules'
 import type { Downgrade, DowngradeAsk, DowngradeOptions, ReplacementAsk, ScrapKind, ScrapRow, ScrapTiles } from './api'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../lib/i18n/rights'
 
 /**
  * Production › Floor control › Scrap & rework (SCR-140; design production.scrap): the rules without a screen. What a
@@ -238,7 +240,7 @@ export function reductionOf(row: ScrapRow, open: readonly Replacement[]): Replac
 
 /** Why this person may not decide this lower quantity (else null): no right, the asker, not read yet. */
 export function decideHeld(reduction: Replacement | null, can: ScrapCan, me: string, busy: boolean): Phrase | null {
-  if (!can.approve) return phrase('held.permission', { permission: 'production.scrap.approve' })
+  if (!can.approve) return phrase('held.permission', { right: rightRef('production.scrap.approve') })
   if (!reduction) return phrase('held.noReduction')
   if (reduction.createdBy?.id === me) return phrase('held.ownAsk')
   if (busy) return phrase('held.busy')
@@ -269,7 +271,7 @@ export interface ReplaceDraft {
 
 /** Why Ask is held (else null). */
 export function replaceHeld(row: ScrapRow | null, draft: ReplaceDraft, can: ScrapCan, busy: boolean): Phrase | null {
-  if (!can.ask) return phrase('held.permission', { permission: 'production.scrap' })
+  if (!can.ask) return phrase('held.permission', { right: rightRef('production.scrap') })
   if (!row) return phrase('held.loading')
   if (row.kind !== 'SCRAP') return phrase('replace.held.rework')
   if (row.workOrder.status !== 'RELEASED' && row.workOrder.status !== 'IN_PROGRESS') return phrase('replace.held.notOpen', { number: row.workOrder.number, status: row.workOrder.status })
@@ -416,7 +418,7 @@ export function downgradedOf(row: ScrapRow, rows: readonly ScrapRow[]): number {
 /** Why "Second quality…" is held on a row (else null): not scrap, no right, a cut piece, nothing left. */
 export function downgradeOpenHeld(row: ScrapRow, rows: readonly ScrapRow[], can: ScrapCan): Phrase | null {
   if (row.kind !== 'SCRAP') return phrase('second.held.notScrap')
-  if (!can.downgrade) return phrase('held.permission', { permission: 'production.downgrade' })
+  if (!can.downgrade) return phrase('held.permission', { right: rightRef('production.downgrade') })
   if (row.part) return phrase('second.held.part', { part: row.part })
   if (row.pieces - downgradedOf(row, rows) <= 0) return phrase('second.held.covered')
   return null
@@ -448,7 +450,7 @@ export const emptyDowngradeDraft = (options: DowngradeOptions | null): Downgrade
 
 /** Why Downgrade is held (else null), checked as the API checks it. */
 export function downgradeHeld(options: DowngradeOptions | null, draft: DowngradeDraft, can: ScrapCan, busy: boolean): Phrase | null {
-  if (!can.downgrade) return phrase('held.permission', { permission: 'production.downgrade' })
+  if (!can.downgrade) return phrase('held.permission', { right: rightRef('production.downgrade') })
   if (!options) return phrase('held.loading')
   if (options.held) return phrase(REFUSALS[options.held.code] ?? 'second.held.general')
   const quantity = Number(draft.quantity)

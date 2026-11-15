@@ -24,16 +24,16 @@
     "fixFirst_other": "Fix {count} fields first"
   },
   "held": {
-    "manage": "Needs the right to change customers (parties.manage).",
-    "hold": "Needs the right to put customers on hold (parties.hold).",
-    "privacy": "Needs the right to manage personal data (parties.privacy).",
-    "erase": "Needs the right to erase personal data (parties.erase).",
+    "manage": "Needs the right to change customers.",
+    "hold": "Needs the right to put customers on hold.",
+    "privacy": "Needs the right to manage personal data.",
+    "erase": "Needs the right to erase personal data.",
     "archived": "The customer is archived: reactivate it first.",
     "manageCompany": "You may not change this customer’s terms with this company.",
     "erased": "This contact was erased: nothing more can be done with it.",
     "objected": "An objection is already recorded for this person.",
-    "styles": "Picking styles needs the right to see styles (product.styles.view).",
-    "files": "Picking a file needs the right to see the record’s files (files.read)."
+    "styles": "Picking styles needs the right to see styles.",
+    "files": "Picking a file needs the right to see the record’s files."
   },
   "numbers": {
     "freeCredit": "Free credit",

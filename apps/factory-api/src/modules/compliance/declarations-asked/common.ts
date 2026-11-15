@@ -25,7 +25,7 @@ export async function readRequest(db: Reader, actor: Actor, requestId: string): 
 }
 
 export function assertMayManage(actor: Actor, companyId: string, what = 'declarations of this company'): void {
-  if (!mayWrite(actor, SUPPLIER_DECLARATIONS_MANAGE, companyId)) throw new ForbiddenError(`You may not ask or decide ${what}: it needs compliance.supplierDeclarations.manage.`)
+  if (!mayWrite(actor, SUPPLIER_DECLARATIONS_MANAGE, companyId)) throw new ForbiddenError(`You may not ask or decide ${what}: it needs the right to keep supplier declarations.`)
 }
 
 export const mayManage = (actor: Actor, companyId: string): boolean => mayWrite(actor, SUPPLIER_DECLARATIONS_MANAGE, companyId)

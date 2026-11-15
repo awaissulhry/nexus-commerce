@@ -30,7 +30,7 @@
   },
   "noAccess": {
     "title": "Requests to buy are not in your role",
-    "body": "Seeing what to buy needs purchasing.view. Ask an administrator if you buy for the factory."
+    "body": "Seeing what to buy needs the right to see purchase orders. Ask an administrator if you buy for the factory."
   },
   "band": {
     "draft_one": "Draft PO for {count}",
@@ -217,13 +217,13 @@
   "held": {
     "busy": "Working on it…",
     "loading": "Still reading…",
-    "noManage": "Drafting purchase orders needs purchasing.manage",
-    "noDecide": "Rejecting needs planning.decide",
+    "noManage": "Drafting purchase orders needs the right to make purchase orders",
+    "noDecide": "Rejecting needs the right to set plan lines aside",
     "offline": "Offline: wait for the connection",
     "selectFirst": "Select requests first",
     "noneOpen": "None of these is open and ready to draft",
     "reorderNoReject": "A reorder point cannot be rejected: change the reorder rule",
-    "noManageReject": "Refusing a request asked in the office needs purchasing.manage"
+    "noManageReject": "Refusing a request asked in the office needs the right to make purchase orders"
   },
   "keys": {
     "draft": "Draft POs for the selected requests (in the request: this one)",

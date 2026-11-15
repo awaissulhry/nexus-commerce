@@ -107,7 +107,7 @@ export async function changeComplaint(caller: CommandCaller, complaintId: string
   const { result } = await command(caller, { name: 'complaints.change', idempotencyKey, input: { complaintId, ...body } }, async (tools) => {
     const { tx, now } = tools
     const row = await lockComplaint(tools, seen.id, body.version)
-    if (row.status !== 'NEW' && !mayOn(context, QUALITY_COMPLAINTS_MANAGE, row)) throw new ForbiddenError('Once triaged, a complaint is changed by quality (quality.complaints.manage).')
+    if (row.status !== 'NEW' && !mayOn(context, QUALITY_COMPLAINTS_MANAGE, row)) throw new ForbiddenError('Once triaged, a complaint is changed by quality.')
     const receivedAt = body.receivedAt !== undefined ? parseInstant(body.receivedAt) : undefined
     const problems: Issue[] = factProblems({ ...body, receivedAt: receivedAt ?? undefined }, now, false)
     const data: Prisma.ComplaintUncheckedUpdateInput = {}
@@ -355,7 +355,7 @@ export async function closeComplaint(caller: CommandCaller, complaintId: string,
 /** POST /quality/complaints/:complaintId/register: a complaint that raised no alert, added to the register by hand. */
 export async function registerComplaint(caller: CommandCaller, complaintId: string, body: { readonly version: number; readonly risk?: RegisterRisk | undefined }, idempotencyKey?: string) {
   const { context, complaint: seen } = await officeComplaint(caller, complaintId, QUALITY_COMPLAINTS_MANAGE)
-  if (!can(actorOf(context), REGISTER_MANAGE, { companyId: seen.companyId, partyId: seen.partyId })) throw new ForbiddenError('Adding to the PPE register also needs compliance.register.manage.')
+  if (!can(actorOf(context), REGISTER_MANAGE, { companyId: seen.companyId, partyId: seen.partyId })) throw new ForbiddenError('Adding to the PPE register also needs the right to keep the PPE register.')
   const { result } = await command(caller, { name: 'complaints.register', idempotencyKey, input: { complaintId, ...body } }, async (tools) => {
     const row = await lockComplaint(tools, seen.id, body.version)
     const inRegister = (await readEntryBySource(tools.tx, COMPLAINT_RECORD, row.id)) !== null

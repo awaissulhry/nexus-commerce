@@ -218,7 +218,7 @@ export function undoHoldWords(code: UndoHoldCode, facts: UndoHoldWordsFacts): st
     case 'CHANGED_SINCE':
       return `${facts.what} changed since${facts.later ? `: ${facts.later}` : ': it is not where this change left it'}. Only the latest change of a bar is undone.`
     case 'NO_PERMISSION':
-      return `Undoing it needs ${facts.permission} at this site.`
+      return 'Undoing it needs the right to plan the schedule at this site.'
     case 'OPERATION_GONE': // B-W2b-F39
       return `${facts.what}: the record keeps this change, but it is not undone.`
   }

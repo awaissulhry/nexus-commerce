@@ -4,6 +4,8 @@ import { isApiError, issuePath } from '../../../../lib/api/errors'
 import { words, type SubcontractCan, type Words } from '../model'
 import type { Loaded } from '../record/record-model'
 import type { Ageing, AgeingRow, BalanceFlag, BalanceLine, CostEntry, CostKind, OpenBalance, OrderBalance, OrderCost, OrderTerms } from './api'
+// B-W2b-F51: a refusal names the missing right in words, never its code.
+import { rightRef } from '../../../../lib/i18n/rights'
 
 /**
  * Subcontracting in depth on screen (B-W2b-344; design purchasing.subcontracting: the record's Material balance and Cost
@@ -125,7 +127,7 @@ export function termsGap(terms: Pick<OrderTerms, 'covering' | 'revisions'>): Ter
 export function downloadHeld(terms: Pick<OrderTerms, 'covering'>, can: Pick<DepthCan, 'files'>): Words | null {
   const file = terms.covering?.file
   if (!file) return words('terms.held.noFile')
-  if (!can.files) return words('held.permission', { permission: 'files.read' })
+  if (!can.files) return words('held.permission', { right: rightRef('files.read') })
   if (file.status !== 'AVAILABLE') return words('terms.held.notReady')
   return null
 }
@@ -193,7 +195,7 @@ const isOpen = (line: Pick<BalanceLine, 'open'>) => decimal(line.open).greaterTh
 
 /** Why "Book the workshop's declaration" is held for the order, or null (the facts, then the API's whether). */
 export function declareHeld(balance: OrderBalance, can: Pick<DepthCan, 'balance'>): Words | null {
-  if (!can.balance) return words('held.permission', { permission: 'purchasing.subcontract.balance' })
+  if (!can.balance) return words('held.permission', { right: rightRef('purchasing.subcontract.balance') })
   if (balance.lines.length === 0) return words('balance.held.nothingSent')
   if (!balance.lines.some(isOpen)) return words('balance.held.nothingOpen')
   return balance.actions.declare === null ? null : words('balance.held.server')
@@ -201,7 +203,7 @@ export function declareHeld(balance: OrderBalance, can: Pick<DepthCan, 'balance'
 
 /** Why "Book over- or under-consumption" is held for a line, or null. */
 export function adjustHeld(balance: OrderBalance, line: BalanceLine, can: Pick<DepthCan, 'balance'>): Words | null {
-  if (!can.balance) return words('held.permission', { permission: 'purchasing.subcontract.balance' })
+  if (!can.balance) return words('held.permission', { right: rightRef('purchasing.subcontract.balance') })
   if (!declared(line)) return words('balance.held.notDeclared')
   return line.actions.adjust === null && balance.actions.adjust === null ? null : words('balance.held.server')
 }
@@ -423,8 +425,8 @@ const COSTED = new Set(['ISSUED', 'AT_WORKSHOP', 'PARTLY_RECEIVED', 'RECEIVED', 
 
 /** Why "Book a charge" is held, or null. */
 export function bookHeld(cost: Pick<OrderCost, 'order' | 'actions'>, can: Pick<DepthCan, 'costBook' | 'cost'>): Words | null {
-  if (!can.costBook) return words('held.permission', { permission: 'purchasing.subcontract.cost' })
-  if (!can.cost) return words('held.permission', { permission: 'money.cost' })
+  if (!can.costBook) return words('held.permission', { right: rightRef('purchasing.subcontract.cost') })
+  if (!can.cost) return words('held.permission', { right: rightRef('money.cost') })
   if (!COSTED.has(cost.order.status)) return words(cost.order.status === 'DRAFT' ? 'cost.held.draft' : 'cost.held.cancelled')
   return cost.actions.book === null ? null : words('cost.held.server')
 }

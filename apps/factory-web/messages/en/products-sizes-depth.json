@@ -78,7 +78,7 @@
     "alreadyActive": "Some of these are already in use.",
     "alreadyArchived": "Some of these are already archived.",
     "busy": "Wait: the last change is still being saved.",
-    "noManage": "Changing the libraries needs product.styles.manage (a product developer's role).",
+    "noManage": "Changing the libraries needs the right to edit styles (a product developer's role).",
     "none": "Pick at least one row.",
     "nothing": "Nothing changed yet."
   },
@@ -187,7 +187,7 @@
     },
     "forbidden": {
       "title": "You don't have access to points of measure",
-      "body": "Reading them needs product.styles.view (product developers, production and quality have it)."
+      "body": "Reading them needs the right to see the styles (product developers, production and quality have it)."
     },
     "dialog": {
       "newTitle": "New point of measure",
@@ -250,7 +250,7 @@
     "held": {
       "archived": "This point is archived: restore it to change it."
     },
-    "readOnly": "You can look at this point; changing it needs product.styles.manage.",
+    "readOnly": "You can look at this point; changing it needs the right to edit styles.",
     "csv": {
       "code": "Code",
       "name": "Name",
@@ -338,7 +338,7 @@
     },
     "forbidden": {
       "title": "You don't have access to grade rules",
-      "body": "Reading them needs product.styles.view (product developers, production and quality have it)."
+      "body": "Reading them needs the right to see the styles (product developers, production and quality have it)."
     },
     "newTitle": "New grade rule",
     "newIntro": "A rule belongs to one size scale. Its increments are typed next, in the rule itself.",
@@ -368,7 +368,7 @@
       "title": "Grade rule",
       "subtitle": "{scale} · base {base} · {format}"
     },
-    "readOnly": "You can look at this rule; changing it needs product.styles.manage.",
+    "readOnly": "You can look at this rule; changing it needs the right to edit styles.",
     "held": {
       "archived": "This rule is archived: restore it to change it."
     },
@@ -499,10 +499,10 @@
       "frozen": "This revision is frozen: its spec changes only in a new revision.",
       "approved": "The spec is approved: reopen it to change it.",
       "archivedSpec": "This spec is archived: it never changes.",
-      "noManage": "Changing the spec needs product.bom.manage (a product developer's role).",
+      "noManage": "Changing the spec needs the right to edit a draft bill of materials (a product developer's role).",
       "rule": "The style's edit rule holds changes in this lifecycle state (Product settings).",
       "noRange": "The style has no size range yet: set it in the Overview first.",
-      "noRelease": "Approving or reopening needs product.bom.release.",
+      "noRelease": "Approving or reopening needs the right to release a revision.",
       "notDraft": "Only a draft spec is approved.",
       "noPoints": "Add points first.",
       "missing_one": "{count} value is still missing.",
@@ -512,7 +512,7 @@
       "archived": "The style is archived: its measurement spec is read only.",
       "approved": "The spec is approved: its values are read only. Reopen it to change them.",
       "archivedSpec": "This measurement spec is archived: it is read only.",
-      "noManage": "You can read the spec; changing it needs product.bom.manage.",
+      "noManage": "You can read the spec; changing it needs the right to edit a draft bill of materials.",
       "rule": "The style's edit rule holds changes in its lifecycle state: the spec is read only (Products › Settings)."
     },
     "offline_one": "Offline: {count} value waits on this page and is sent when the connection is back.",

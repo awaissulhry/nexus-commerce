@@ -233,7 +233,7 @@ export async function approveClaim(caller: CommandCaller, claimId: string, body:
   const context = officeOf(caller)
   const today = todayOf(claimsClock().now())
   const before = await caller.withClient((client) => readClaimRow(client, context, claimId))
-  if (!mayApprove(context, before.companyId)) throw new ForbiddenError('A claim is approved by a role that approves claims (compliance.claims.approve).')
+  if (!mayApprove(context, before.companyId)) throw new ForbiddenError('A claim is approved by a role that approves claims.')
   refuseWith(await caller.withClient((client) => approvalRefusal(client, before, today)))
   options.stepUp()
   const { result } = await guarded(() =>

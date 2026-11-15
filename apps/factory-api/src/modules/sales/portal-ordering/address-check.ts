@@ -77,7 +77,7 @@ async function decidable(caller: CommandCaller, addressId: string): Promise<{ co
   const context = officeContextOf(caller)
   const row = isUuid(addressId) ? await caller.withClient((client) => client.partyAddress.findUnique({ where: { id: addressId }, select: CHECK_COLUMNS })) : null
   if (!row || row.approvalStatus === null || !can(actorOf(context), ORDERS_VIEW, scopeOf(row.party))) throw new NotFoundError('Delivery address not found.')
-  if (!can(actorOf(context), ORDERS_MANAGE, scopeOf(row.party))) throw new ForbiddenError("Checking a customer's delivery addresses needs orders.manage for that customer.")
+  if (!can(actorOf(context), ORDERS_MANAGE, scopeOf(row.party))) throw new ForbiddenError("Checking a customer's delivery addresses needs the right to work on sales orders for that customer.")
   const problem = checkProblem(row)
   if (problem) throw new InvalidStateError(problem)
   return { context, row }
