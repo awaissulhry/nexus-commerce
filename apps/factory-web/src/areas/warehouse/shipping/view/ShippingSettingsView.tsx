@@ -85,15 +85,16 @@ export interface ShippingSettingsActions {
  * DDT, the daily cut-off) and the packing station's two printers. A site picker when the person reaches several sites.
  * Read-only without shipping.settings.manage. Fetches nothing (ShippingSettingsPage reads and saves).
  */
-export function ShippingSettingsView({ model, actions }: { model: ShippingSettingsViewModel; actions?: ShippingSettingsActions }) {
+// B-W2b-412: `depth`, the W2b cards of the chosen site (test mode, contracts, EORI, packaging), drawn below the W1 form.
+export function ShippingSettingsView({ model, actions, depth }: { model: ShippingSettingsViewModel; actions?: ShippingSettingsActions; depth?: ReactNode }) {
   return (
     <WithMessages namespaces={['shipping-setup']}>
-      <Settings model={model} actions={actions} />
+      <Settings model={model} actions={actions} depth={depth} />
     </WithMessages>
   )
 }
 
-function Settings({ model, actions }: { model: ShippingSettingsViewModel; actions?: ShippingSettingsActions }) {
+function Settings({ model, actions, depth }: { model: ShippingSettingsViewModel; actions?: ShippingSettingsActions; depth?: ReactNode }) {
   const t = useT('shipping-setup')
   if (model.sites.status === 'loading') {
     return (
@@ -147,7 +148,13 @@ function Settings({ model, actions }: { model: ShippingSettingsViewModel; action
       </div>
     )
   }
-  return <SiteForm key={`${site.site.id}:${model.formKey}`} site={site} sites={model.sites.items} model={model} actions={actions} />
+  return (
+    <>
+      <SiteForm key={`${site.site.id}:${model.formKey}`} site={site} sites={model.sites.items} model={model} actions={actions} />
+      {/* B-W2b-412: outside the W1 form (each card writes on its own). */}
+      {depth}
+    </>
+  )
 }
 
 function SiteForm({ site, sites, model, actions }: { site: SiteSettings; sites: SiteSettings[]; model: ShippingSettingsViewModel; actions?: ShippingSettingsActions }) {

@@ -1,0 +1,949 @@
+{
+  "common": {
+    "dismiss": "Dismiss",
+    "retry": "Try again"
+  },
+  "problem": {
+    "read": {
+      "internal": "Something went wrong on our side.",
+      "signed_out": "You were signed out: sign in again.",
+      "forbidden": "Your role does not let you see this.",
+      "not_found": "It is no longer there.",
+      "unavailable": "The server cannot be reached: try again in a moment.",
+      "rate_limited": "Too many requests: wait a moment."
+    },
+    "write": {
+      "internal": "It was not saved: something went wrong on our side.",
+      "moved": "Someone changed this meanwhile: it was read again, check and try again.",
+      "state": "It is no longer in a state that allows this: it was read again.",
+      "invalid": "Something in the form is not right: check the fields.",
+      "signed_out": "You were signed out: sign in again.",
+      "forbidden": "Your role does not let you do this.",
+      "not_found": "It is no longer there.",
+      "rate_limited": "Too many requests: wait a moment.",
+      "unavailable": "The server cannot be reached: nothing was changed.",
+      "step_up": "This needs a fresh code from your authenticator."
+    }
+  },
+  "stepUp": {
+    "title": "Confirm with a fresh code",
+    "confirm": "Confirm",
+    "problem": {
+      "wrong": "That code is wrong or already used: type the newest one.",
+      "locked": "Too many tries: wait a few minutes.",
+      "unavailable": "The code could not be checked: try again."
+    }
+  },
+  "band": {
+    "endOfDay": "End of day",
+    "more": "More actions for shipments",
+    "bookPickup": "Book a pickup…"
+  },
+  "selection": {
+    "pickup_one": "Book pickup ({count})",
+    "pickup_other": "Book pickup ({count})",
+    "handOver_one": "Mark handed over ({count})",
+    "handOver_other": "Mark handed over ({count})"
+  },
+  "list": {
+    "export": {
+      "col": "Export",
+      "EXPORT": "Outside the EU",
+      "EU": "EU"
+    }
+  },
+  "pickup": {
+    "title": "Book a pickup",
+    "titleAt": "Book a pickup · {site}",
+    "go": "Book pickup",
+    "goTest": "Book the TEST pickup",
+    "goPhone": "Keep the phone booking",
+    "testMode": "The site is in test mode: the TEST pickup answers at once and nothing is sent to a carrier.",
+    "byHand": "No shipment picked: say how many parcels and pallets the driver collects.",
+    "fromShipments_one": "For {count} shipment: {numbers}",
+    "fromShipments_other": "For {count} shipments: {numbers}",
+    "skipped_one": "{count} picked shipment is left out",
+    "skipped_other": "{count} picked shipments are left out",
+    "how": "How it is booked",
+    "way": {
+      "SENDCLOUD": {
+        "title": "Through Sendcloud",
+        "body": "Sent to the carrier through the company's Sendcloud connection; its answer comes back here.",
+        "test": "Test mode: the TEST pickup answers at once; nothing is booked."
+      },
+      "PHONE": {
+        "title": "Booked by phone",
+        "body": "You booked it with the carrier by phone or mail: it is kept as confirmed, with whom you spoke."
+      }
+    },
+    "carrier": "Carrier",
+    "carrierHint": "{name}, the carrier of the shipments picked.",
+    "carrierCodeHint": "The carrier's code, as on the shipments (for example brt).",
+    "readyAt": "Goods ready at",
+    "readyHint": "{day} at {time} on the clock of site {site}; the carrier comes within the next four hours.",
+    "parcels": "Parcels",
+    "pallets": "Pallets",
+    "fewer": "Fewer",
+    "more": "More",
+    "weight": "Weight told to the carrier (kg)",
+    "weightHint": "Optional; the selection's weight when every parcel is weighed.",
+    "weightUnknown": "A parcel picked is not weighed yet: type the weight, or leave it out.",
+    "reference": "Carrier's reference",
+    "referenceHint": "Optional: the number the carrier gave on the phone.",
+    "note": "With whom",
+    "noteHint": "Who at the carrier took the booking (a phone booking keeps its note).",
+    "recurring": "Every week: the carrier's regular round",
+    "recurringPhoneOnly": "A regular weekly round is agreed with the carrier and kept as booked by phone (Sendcloud books one pickup at a time).",
+    "weekdays": "On these days",
+    "weekday": {
+      "MONDAY": "Monday",
+      "TUESDAY": "Tuesday",
+      "WEDNESDAY": "Wednesday",
+      "THURSDAY": "Thursday",
+      "FRIDAY": "Friday",
+      "SATURDAY": "Saturday",
+      "SUNDAY": "Sunday"
+    },
+    "weekdayShort": {
+      "MONDAY": "Mon",
+      "TUESDAY": "Tue",
+      "WEDNESDAY": "Wed",
+      "THURSDAY": "Thu",
+      "FRIDAY": "Fri",
+      "SATURDAY": "Sat",
+      "SUNDAY": "Sun"
+    },
+    "address": "The driver collects at",
+    "otherAddress": "Collect from another address",
+    "countryHint": "Two capital letters (IT, DE…).",
+    "addressPart": {
+      "name": "Name",
+      "line1": "Street and number",
+      "postalCode": "Postal code",
+      "city": "City",
+      "province": "Province",
+      "country": "Country",
+      "phone": "Phone"
+    },
+    "today": "Pickups already coming today",
+    "status": {
+      "REQUESTED": "Waiting for the carrier",
+      "CONFIRMED": "Booked",
+      "FAILED": "Failed",
+      "CANCELLED": "Called off"
+    },
+    "line": {
+      "REQUESTED": "Asked for {time}",
+      "CONFIRMED": "Booked for {time}",
+      "FAILED": "Failed for {time}",
+      "CANCELLED": "Called off ({time})"
+    },
+    "via": {
+      "SENDCLOUD": "Through Sendcloud",
+      "PHONE": "By phone",
+      "test": "TEST pickup"
+    },
+    "everyWeek": "Every week: {days}",
+    "counts": "{parcels} parcels · {pallets} pallets",
+    "ref": "ref. {reference}",
+    "noteShown": "Booked with: {note}",
+    "move": {
+      "CONFIRMED": "Confirmed by the carrier",
+      "FAILED": "Failed…",
+      "CANCELLED": "Call off…"
+    },
+    "moveGo": {
+      "CONFIRMED": "Mark confirmed",
+      "FAILED": "Mark failed",
+      "CANCELLED": "Call off the pickup"
+    },
+    "moveWhy": "Why it failed",
+    "moveWords": "Words (optional)",
+    "moveBack": "Back",
+    "cancelSendcloud": "Sendcloud is asked to call it off; if it cannot, call the carrier.",
+    "moved": {
+      "CONFIRMED": "The pickup at {time} is confirmed.",
+      "FAILED": "The pickup at {time} is marked failed.",
+      "CANCELLED": "The pickup at {time} is called off.",
+      "REQUESTED": "The pickup at {time} waits for the carrier.",
+      "callCarrier": "The pickup at {time} is called off here, but Sendcloud could not tell {carrier}: call the carrier."
+    },
+    "done": {
+      "CONFIRMED": "Pickup booked for {time} with {carrier}.",
+      "REQUESTED": "Pickup asked for {time}: waiting for {carrier}'s answer.",
+      "FAILED": "{carrier} did not book the pickup for {time}.",
+      "CANCELLED": "The pickup for {time} is called off.",
+      "test": "Test mode: nothing was sent to the carrier.",
+      "failedNext": "The request stays visible. Book again with another time, or book it by phone."
+    },
+    "weightTold": "Told to the carrier: {weight} kg.",
+    "held": {
+      "reading": "Reading the start…",
+      "noRight": "Your role cannot book pickups (shipping.pickups.book).",
+      "busy": "Sending…",
+      "problems_one": "{count} field to fix",
+      "problems_other": "{count} fields to fix",
+      "words": "Say why first.",
+      "noSite": "Choose a site first (the cut-off cards).",
+      "noneCarrier": "None of the shipments picked is an open one a carrier collects."
+    },
+    "problem": {
+      "carrier": "The carrier's code: 1 to 40 characters, no spaces.",
+      "readyAt": "Choose when the goods are ready.",
+      "readyPast": "That time has passed: a pickup is booked for a time to come.",
+      "readyAhead": "A pickup is booked at most {days} days ahead.",
+      "nothing": "Say how many parcels or pallets the driver collects (at least one).",
+      "weight": "Kilograms above 0, at most {max}, up to 3 decimals.",
+      "note": "Say with whom the pickup was booked.",
+      "long": "At most {max} characters.",
+      "reference": "At most {max} characters on one line.",
+      "weekdays": "Choose the days of the round.",
+      "required": "Required.",
+      "country": "Two capital letters, for example IT."
+    },
+    "refusal": {
+      "NO_CONNECTION": "The company's Sendcloud connection is missing or not usable: book it by phone and note it here.",
+      "FINAL": "It failed or was called off: nothing changes on it any more; a new try is a new booking.",
+      "NOT_REQUESTED": "Only a pickup still waiting for the carrier is confirmed by hand.",
+      "NO_SETTINGS": "The site has no sender address: give the address here, or set it in Carriers & shipping."
+    },
+    "card": {
+      "booked": "Pickup booked {time}",
+      "waiting": "Pickup asked {time}: waiting",
+      "failed": "Pickup failed ({time})",
+      "many_one": "{count} pickup: {times}",
+      "many_other": "{count} pickups: {times}",
+      "manyWaiting_one": "{count} pickup: {times} (one waiting)",
+      "manyWaiting_other": "{count} pickups: {times} (one waiting)"
+    }
+  },
+  "eod": {
+    "title": "End of day",
+    "titleAt": "End of day · {site}",
+    "go": "Close the day and print manifests",
+    "goNoPrint": "Close the day",
+    "day": "Day",
+    "today": "Today, {date}",
+    "lead": "Each carrier's sheet lists what it took today; the driver signs the printed manifest.",
+    "none": {
+      "title": "Nothing handed over to a carrier on this day",
+      "body": "Shipments that leave with a carrier appear here once they are marked handed over."
+    },
+    "state": {
+      "closed": "Closed {time}",
+      "closedBySystem": "Closed by the system {time}",
+      "toClose": "To close",
+      "nothing": "Nothing to close"
+    },
+    "totals": "{shipments} shipments · {parcels} parcels · {weight} kg",
+    "noneHanded": "Nothing handed over to this carrier yet.",
+    "stillPacked_one": "Still packed at the dock: {numbers}",
+    "stillPacked_other": "{count} still packed at the dock: {numbers}",
+    "stillPackedBody": "Hand them over before closing, or they go on the next day's sheet.",
+    "waiting_one": "Left after the sheet closed, on the next day's sheet: {numbers}",
+    "waiting_other": "{count} left after the sheet closed, on the next day's sheet: {numbers}",
+    "letGo_one": "On the open sheet but never left, let go at the close: {numbers}",
+    "letGo_other": "{count} on the open sheet but never left, let go at the close: {numbers}",
+    "earlier": "late hand-over",
+    "preview": "Preview",
+    "openManifest": "Open the manifest",
+    "previewTitle": "Manifest preview · {carrier}",
+    "previewNote": "As it would close now; stored nowhere.",
+    "previewLoading": "Making the preview…",
+    "print": "Print each manifest on the site's A4 printer",
+    "systemCloses": "What is left open on a past day is closed by the system after the site's day ended.",
+    "sheetLabel": "Shipments on the sheet",
+    "col": {
+      "shipment": "Shipment",
+      "consignee": "Consignee",
+      "parcels": "Parcels",
+      "weight": "kg",
+      "tracking": "Tracking",
+      "ddt": "DDT"
+    },
+    "doneTitle": "The day {date} is closed:",
+    "outcome": {
+      "closedPill": "Closed",
+      "refusedPill": "Not closed",
+      "printed": "{shipments} shipments, {parcels} parcels: the manifest is sent to the printer.",
+      "notPrinted": "{shipments} shipments, {parcels} parcels: closed, but the manifest was not printed: print it from its PDF.",
+      "closed": "{shipments} shipments, {parcels} parcels: closed."
+    },
+    "refusal": {
+      "FUTURE_DAY": "That day has not come yet: a day is closed once its goods were handed over.",
+      "TOO_OLD": "Only the last 7 days are closed here.",
+      "NOTHING_TO_CLOSE": "Nothing was handed over to this carrier that day.",
+      "ALREADY_CLOSED": "This carrier's sheet of that day is closed already: later hand-overs go on the next day's.",
+      "DAY_CHANGED": "A shipment left or came onto the sheet while it was being closed: close the day again.",
+      "NOT_CLOSED": "The sheet is not closed yet: its PDF is made when the day closes."
+    },
+    "held": {
+      "reading": "Reading the day…",
+      "noRight": "Your role cannot close the day (shipping.manage).",
+      "busy": "Closing…",
+      "allClosed": "Every sheet of this day is closed already.",
+      "nothing": "Nothing to close on this day.",
+      "noneChosen": "Tick at least one carrier.",
+      "nothingToPreview": "Nothing on this carrier's sheet yet.",
+      "noView": "Your role cannot see shipments (shipping.view)."
+    }
+  },
+  "handOver": {
+    "title_one": "Mark {count} shipment handed over",
+    "title_other": "Mark {count} shipments handed over",
+    "go_one": "Mark {count} handed over",
+    "go_other": "Mark {count} handed over",
+    "body": "For goods leaving with our own van or a carrier booked by hand: each shipment is marked as left, one by one. A shipment the customer's own carrier collects is done in the shipment itself.",
+    "going": "Going: {numbers}",
+    "skipped_one": "{count} picked shipment is left out",
+    "skipped_other": "{count} picked shipments are left out",
+    "state": {
+      "done": "Handed over",
+      "refused": "Not handed over",
+      "skipped": "Left out"
+    },
+    "why": {
+      "done": "Marked as left.",
+      "notPacked": "Not packed yet.",
+      "notOpen": "It has left or is cancelled.",
+      "collects": "The customer collects it: record who, the plate and the signed DDT in the shipment.",
+      "noDdt": "It has no DDT yet.",
+      "held": "It is on hold: release the hold first.",
+      "notReady": "Not ready to leave: check its DDT and labels in the shipment.",
+      "gone": "It is no longer there.",
+      "failed": "It could not be sent: try again."
+    },
+    "held": {
+      "noRight": "Your role cannot hand shipments over (shipping.manage).",
+      "none": "None of the shipments picked is packed and ready to hand over.",
+      "busy": "Sending…"
+    }
+  },
+  "manifest": {
+    "title": "End-of-day manifest · {carrier} · {date}",
+    "state": {
+      "OPEN": "Open",
+      "CLOSED": "Closed"
+    },
+    "site": "Site",
+    "closed": "Closed",
+    "closedByPerson": "{when} at the dispatch desk",
+    "closedBySystem": "{when} by the system (after the site's day ended)",
+    "notClosed": "Not closed yet",
+    "totals": "On it",
+    "sign": "Print it for the driver: name, signature and the time collected go on the paper.",
+    "noFiles": "Your role cannot open files (files.read): the sheet is shown without its PDF.",
+    "loading": "Reading the PDF…",
+    "pdfFailed": "The PDF could not be read."
+  },
+  "window": {
+    "back": "Back to shipments",
+    "retry": "Try again",
+    "problem": {
+      "notFound": "There is no such paper.",
+      "forbidden": "Your role does not let you see this paper.",
+      "failed": "It could not be read.",
+      "noPrice": "This paper shows values: it needs the price grain."
+    }
+  },
+  "paperWindow": {
+    "title": {
+      "COMMERCIAL_INVOICE": "Commercial invoice · {number} · version {version}",
+      "CN22": "CN 22 · {number} · version {version}",
+      "CN23": "CN 23 · {number} · version {version}"
+    },
+    "older": "Older version",
+    "notNewest": "A newer version exists: the newest is on the shipment's Export tab.",
+    "back": "Back to {number}",
+    "loading": "Reading the PDF…",
+    "failed": "The PDF could not be read."
+  },
+  "export": {
+    "title": "Export papers",
+    "state": {
+      "notNeeded": "Not needed",
+      "unknown": "No destination",
+      "papers": "Papers to make",
+      "declare": "Declaration to open",
+      "PACK_SENT": "Pack sent",
+      "FILED": "Filed",
+      "EXITED": "Exit confirmed",
+      "overdue": "Exit proof overdue"
+    },
+    "destination": "Destination",
+    "class": {
+      "DOMESTIC": "{country} (Italy)",
+      "EU": "{country} (EU)",
+      "EXPORT": "{country} (outside the EU)",
+      "unknown": "{country}"
+    },
+    "noCountry": "No country yet",
+    "terms": "Incoterm and place",
+    "noTerms": "Not said on the order",
+    "eori": "Company EORI",
+    "noEori": "Missing: give it in Carriers & shipping",
+    "notNeeded": {
+      "DOMESTIC": "Not needed: delivered in Italy.",
+      "EU": "Not needed: delivered in the EU (the intra-EU transport proof is above)."
+    },
+    "unknownBody": "The shipment has no country to go to: complete its delivery address.",
+    "papers": "Papers",
+    "invoiceTitle": "Commercial invoice",
+    "invoiceWhat": "For customs: HS codes, origin, values, the EORI and the weights. The tax invoice is the SDI one.",
+    "noInvoiceYet": "None made yet.",
+    "makeInvoice": "Create commercial invoice",
+    "makeInvoiceAgain": "Make a new version",
+    "postalTitle": "CN 22 / CN 23",
+    "postalWhat": "For postal parcels.",
+    "suggested": "These parcels need a {form}.",
+    "makePostal": "Make {form}",
+    "because": {
+      "HEAVY": "A parcel weighs more than 2 kg.",
+      "VALUE": "The value is more than 300 EUR.",
+      "CURRENCY": "The shipment is not priced in euro.",
+      "NOT_WEIGHED": "A parcel is not weighed yet."
+    },
+    "form": {
+      "CN22": "CN 22",
+      "CN23": "CN 23"
+    },
+    "paper": {
+      "COMMERCIAL_INVOICE": "Commercial invoice v{version}",
+      "CN22": "CN 22 v{version}",
+      "CN23": "CN 23 v{version}"
+    },
+    "current": "newest",
+    "paperFacts": "{language} · {when}",
+    "language": {
+      "it": "Italian",
+      "en": "English"
+    },
+    "openPdf": "Open PDF",
+    "declaration": "Export declaration",
+    "declarationWhat": "Opened when the papers go to the customs broker, or when the carrier files it.",
+    "openDeclaration": "Open the declaration",
+    "status": {
+      "PACK_SENT": "Pack sent",
+      "FILED": "Filed",
+      "EXITED": "Exit confirmed"
+    },
+    "filedBy": "Filed by",
+    "byBroker": "The broker {name}",
+    "byCarrier": "The carrier",
+    "mrn": "MRN",
+    "noMrn": "Not recorded yet",
+    "invoiceNamed": "Invoice",
+    "invoiceOf": "{number} of {date}",
+    "noInvoiceNamed": "Not named yet",
+    "exit": "Exit",
+    "exitOn": "Confirmed {when}",
+    "noExit": "Not confirmed yet",
+    "exitFile": "Proof of exit",
+    "clock": {
+      "left": "{days} days left to file the proof of exit before the alert.",
+      "overdue": "The proof of exit is {days} days late.",
+      "notLeft": "The {days} days to the alert start when the goods leave.",
+      "until": "({left})",
+      "due": "(due)"
+    },
+    "law": "Zero-rated export (art. 8 DPR 633/72): keep the proof that the goods left the EU.",
+    "recordMrn": "Record MRN",
+    "nameInvoice": "Name the invoice",
+    "proveExit": "Proof of exit",
+    "sendPack": "Send broker pack",
+    "remove": "Remove (sent by mistake)",
+    "links": "Links to the broker",
+    "linkPassedOn": "A link passed on",
+    "linkFacts": "Until {until} · opened {opened}",
+    "linkNotOpened": "never",
+    "linkAnswered": "MRN came back",
+    "linkRevoked": "Withdrawn",
+    "linkOpen": "Open",
+    "pack": {
+      "title": "Send broker pack",
+      "send": "Send by link to the broker",
+      "bodyOn": "The papers go to the declaration's broker by link (one use: the broker answers with the MRN). Download the pack as one PDF in any case.",
+      "bodyOff": "Sending by link is off for this site: download the pack as one PDF and pass it on.",
+      "parts": "Parts of the pack",
+      "origin": "Papers of origin to add",
+      "passOn": "A link to pass on (shown this once):",
+      "download": "Download the pack (one PDF)",
+      "passOnGo": "Make a link to pass on",
+      "files": "Files in the pack",
+      "inPack": "in the pack",
+      "pdfTitle": "Broker pack · {number}",
+      "pdfLoading": "Merging the papers…"
+    },
+    "part": {
+      "COMMERCIAL_INVOICE": "Commercial invoice",
+      "PACKING_LIST": "Packing list",
+      "POSTAL_FORM": "CN 22 / CN 23",
+      "CONFORMITY": "Declarations of conformity",
+      "ORIGIN": "Papers of origin"
+    },
+    "partState": {
+      "READY": "Ready",
+      "MISSING": "Missing",
+      "NONE": "Not needed"
+    },
+    "packRefusal": {
+      "SWITCH_OFF": "Sending by link is off for this site (Carriers & shipping › EORI).",
+      "NO_BROKER": "The carrier files this declaration: there is no broker to send it to.",
+      "NO_RECIPIENT": "The broker has no active contact with an e-mail address.",
+      "NOT_WAITING": "The declaration is filed already: nothing waits for the broker.",
+      "NO_COMMERCIAL_INVOICE": "Create the commercial invoice first.",
+      "ORIGIN_FILE": "A paper of origin is not a PDF of this shipment.",
+      "PRICE_GRAIN": "The pack shows values: it needs the price grain.",
+      "FILES_GONE": "A paper of the pack is no longer available."
+    },
+    "refusal": {
+      "NOT_EXPORT": "The goods stay in the EU: no export papers.",
+      "NO_DESTINATION": "The shipment has no country to go to: complete its address.",
+      "CANCELLED": "The shipment is cancelled.",
+      "NO_EORI": "The company has no EORI yet: give it in Carriers & shipping first.",
+      "NO_LINES": "The shipment has no garments yet.",
+      "CUSTOMS_DATA": "A style on it has no HS code or country of origin.",
+      "NO_PRICE": "A line has no price from its order.",
+      "NOT_PACKED": "Pack every garment in a parcel first.",
+      "NOT_WEIGHED": "Weigh every parcel first.",
+      "CN22_LIMIT": "These parcels need a CN 23: a CN 22 is not allowed.",
+      "LETTERHEAD": "The company's letterhead is not complete.",
+      "DECLARED": "The shipment has its declaration already.",
+      "BROKER": "Choose an active carrier or supplier of the company as broker.",
+      "NOT_FILED": "Record the MRN first.",
+      "MRN_KEPT": "The MRN is recorded; it never changes.",
+      "NOT_LEFT": "The goods have not left yet.",
+      "EXIT_TIME": "The exit is neither before the goods left nor in the future.",
+      "NO_INVOICE": "Name the issued invoice first.",
+      "INVOICE": "Choose an issued invoice to this customer.",
+      "INVOICE_KEPT": "The invoice is named; it never changes.",
+      "PROOF_FILE": "The proof of exit must be a PDF or a picture uploaded on the declaration.",
+      "EXITED": "The exit is confirmed: nothing changes any more.",
+      "KEPT": "Only a pack merely sent is removed; once filed it is kept.",
+      "SWITCH_OFF": "Sending by link is off for this site.",
+      "NO_BROKER": "There is no broker to send it to.",
+      "NO_RECIPIENT": "The broker has no contact to mail.",
+      "NOT_WAITING": "Nothing waits for the broker.",
+      "NO_COMMERCIAL_INVOICE": "Create the commercial invoice first.",
+      "ORIGIN_FILE": "A paper of origin is not a PDF of this shipment.",
+      "PRICE_GRAIN": "It shows values: it needs the price grain.",
+      "FILES_GONE": "A paper is no longer available.",
+      "CUSTOMS": "Someone changed the declaration meanwhile: it was read again."
+    },
+    "held": {
+      "noRight": "Your role cannot make customs papers (shipping.customs.manage).",
+      "noPrice": "The papers show values: they need the price grain.",
+      "busy": "Sending…",
+      "noInvoices": "No issued invoice to this customer yet.",
+      "noUpload": "Your role cannot upload files (files.upload).",
+      "openFirst": "Open the declaration first.",
+      "reading": "Reading…"
+    },
+    "problem": {
+      "reasonText": "Say the reason.",
+      "alertDays": "From {min} to {max} days.",
+      "mrnEmpty": "Type the MRN.",
+      "mrn": "Not an MRN: 2 digits, the country, then 14 letters or digits (18 in all).",
+      "invoice": "Choose the invoice.",
+      "exitAt": "Say when the goods left the EU.",
+      "exitFile": "Add the proof of exit (PDF or a picture).",
+      "removeReason": "Say why it was sent by mistake."
+    },
+    "done": {
+      "invoice": "Commercial invoice version {version} made.",
+      "invoiceSame": "Nothing changed: version {version} stays the newest.",
+      "postal": "{form} version {version} made.",
+      "postalSame": "Nothing changed: {form} version {version} stays the newest.",
+      "openedBroker": "The declaration is opened with the broker.",
+      "openedCarrier": "The declaration is opened: the carrier files it.",
+      "mrn": "MRN recorded: the declaration is filed.",
+      "invoiceNamed": "The invoice is named.",
+      "exit": "The exit is confirmed with its proof.",
+      "removed": "The declaration is removed; {count} links withdrawn.",
+      "packSent": "The pack is sent to the broker by link.",
+      "packLink": "The link is made: pass it on."
+    },
+    "dialog": {
+      "invoiceTitle": "Create commercial invoice",
+      "invoiceGo": "Create",
+      "invoiceBody": "A new version from the shipment as it is now; the same contents keep the newest version.",
+      "postalTitle": "Make CN 22 / CN 23",
+      "postalGo": "Make {form}",
+      "postalBody": "One page per parcel, with what each holds.",
+      "form": "Form",
+      "cn23Only": "These parcels need a CN 23.",
+      "language": "Language",
+      "languageOrder": "The order's language",
+      "reason": "Reason for export",
+      "reasonText": "The reason in words",
+      "notes": "Notes on the invoice",
+      "comments": "Comments",
+      "declarationTitle": "Open the export declaration",
+      "declarationGo": "Open",
+      "declarationBody": "Who files it: a customs broker (the pack goes to them), or the carrier itself.",
+      "filedBy": "Who files it",
+      "brokerHint": "An active carrier or supplier of the company.",
+      "noParties": "Your role cannot list parties (parties.view): only the carrier can be chosen.",
+      "brokerOption": "{code} · {name}",
+      "brokersLoading": "Reading the company's carriers and suppliers…",
+      "brokersFailed": "The brokers could not be read: the carrier can still file it.",
+      "alertAfter": "Alert after",
+      "alertHint": "Days after the goods left before the missing proof of exit is raised ({min} to {max}).",
+      "days": "days",
+      "mrnTitle": "Record MRN",
+      "mrnGo": "Record",
+      "mrnBody": "The Movement Reference Number customs gave: set once.",
+      "invoiceNameTitle": "Name the invoice",
+      "invoiceNameGo": "Name it",
+      "invoiceNameBody": "The issued invoice of this export: the exit is proven against it.",
+      "invoiceOfShipment": "{number} ({type}, of this shipment's DDT)",
+      "invoiceOption": "{number} ({type})",
+      "exitTitle": "Proof of exit",
+      "exitGo": "Confirm the exit",
+      "exitBody": "When the goods left the EU, and the paper that proves it (the exit message, a stamped paper).",
+      "exitAt": "Left the EU at",
+      "exitFileHint": "A PDF or a picture, at most 15 MB.",
+      "exitPicked": "Chosen: {name}",
+      "removeTitle": "Remove the declaration",
+      "removeGo": "Remove",
+      "removeBody": "Only while its pack is merely sent: the broker's links are withdrawn.",
+      "removeReason": "Why it was sent by mistake"
+    },
+    "reason": {
+      "SALE_OF_GOODS": "Sale of goods",
+      "COMMERCIAL_SAMPLE": "Commercial sample",
+      "RETURNED_GOODS": "Returned goods",
+      "GIFT": "Gift",
+      "DOCUMENTS": "Documents",
+      "OTHER": "Other"
+    }
+  },
+  "test": {
+    "title": "Test mode",
+    "intro": "A test carrier that makes labels marked TEST and sends nothing.",
+    "pill": {
+      "test": "TEST MODE",
+      "live": "Live labels"
+    },
+    "toggle": "Test mode at {site}",
+    "toggleOn": "On: TEST labels",
+    "toggleOff": "Off: labels are bought",
+    "words": {
+      "on": "Labels come from a test carrier, marked TEST: nothing is sent to a carrier and nothing is charged. Everyone sees TEST MODE while it is on.",
+      "off": "Labels are bought from the carrier and charged."
+    },
+    "site": "Site",
+    "since": "Live",
+    "liveSince": "Since {when}",
+    "neverLive": "Never live yet",
+    "testLabels": "TEST labels",
+    "toClear_one": "{count} of shipments not left yet: cleared when going live",
+    "toClear_other": "{count} of shipments not left yet: cleared when going live",
+    "noSite": "Choose a site above.",
+    "others_one": "{count} other site is in test mode.",
+    "others_other": "{count} other sites are in test mode.",
+    "live": {
+      "title": "Switch {site} to live labels",
+      "go": "Switch to live",
+      "warning": "Labels will be bought and charged from now on.",
+      "clears_one": "{count} TEST label of shipments not left yet is cleared: label them again, live.",
+      "clears_other": "{count} TEST labels of shipments not left yet are cleared: label them again, live.",
+      "code": "It asks a fresh code from your authenticator."
+    },
+    "back": {
+      "title": "Back to test mode at {site}",
+      "go": "Back to test mode",
+      "body": "Labels come from the test carrier again; the live labels bought stay as they are."
+    },
+    "done": {
+      "live_one": "{site} buys live labels now; {count} TEST label cleared.",
+      "live_other": "{site} buys live labels now; {count} TEST labels cleared.",
+      "test": "{site} is in test mode."
+    },
+    "refusal": {
+      "NO_SETTINGS": "The site has no shipping settings yet: set them above first.",
+      "ALREADY_LIVE": "The site buys live labels already.",
+      "ALREADY_TEST": "The site is in test mode already.",
+      "NO_CARRIER_ACCOUNT": "The company has no usable carrier connection yet (Admin › Connections): nothing could be bought."
+    },
+    "held": {
+      "noRight": "Your role cannot change the shipping settings (shipping.settings.manage).",
+      "busy": "Switching…"
+    },
+    "stepUp": "A fresh code lets this site buy live labels.",
+    "stepUpCancelled": "Nothing changed: the code was not given."
+  },
+  "eori": {
+    "title": "EORI",
+    "intro": "Each company's EORI for customs documents.",
+    "field": "EORI of {company}",
+    "hint": "Kept in capitals without spaces, dots or dashes (for example IT00000000000).",
+    "save": "Save",
+    "none": "Not given",
+    "missing": "Without an EORI no commercial invoice or CN 22 / CN 23 is made.",
+    "problem": "Not an EORI: two letters for the country, then up to 15 letters or digits.",
+    "pack": {
+      "title": "Broker pack by link at {site}",
+      "on": "On",
+      "off": "Off: downloads only",
+      "toggle": "Send the broker's pack by link at {site}",
+      "wordsOn": "The export papers go to the customs broker by a link.",
+      "wordsOff": "The broker's pack is downloaded and passed on by hand.",
+      "onTitle": "Send broker packs by link at {site}",
+      "onGo": "Switch on",
+      "onBody": "From now on export papers (values included) can go to a third party by link. It asks a fresh code.",
+      "offTitle": "Stop sending by link at {site}",
+      "offGo": "Switch off",
+      "offBody": "Links already sent stop working; the pack is downloaded instead."
+    },
+    "done": {
+      "saved": "EORI saved: {eori}.",
+      "cleared": "EORI cleared.",
+      "packOn": "{site} sends broker packs by link.",
+      "packOff": "{site} no longer sends broker packs by link."
+    },
+    "held": {
+      "noRight": "Your role cannot change the shipping settings (shipping.settings.manage).",
+      "same": "Nothing to save.",
+      "busy": "Saving…",
+      "noSettings": "The site has no shipping settings yet."
+    },
+    "stepUp": "A fresh code lets this site send export papers by link.",
+    "stepUpCancelled": "Nothing changed: the code was not given."
+  },
+  "contracts": {
+    "title": "Our own carrier contracts",
+    "intro": "Labels are bought on our own contract with a carrier (per company, or per site) instead of the aggregator's rates.",
+    "col": {
+      "carrier": "Carrier",
+      "scope": "Applies to",
+      "rates": "Rates",
+      "number": "Account number",
+      "state": "State",
+      "more": "Actions"
+    },
+    "scope": {
+      "site": "Site {site}",
+      "every": "Every site of the company"
+    },
+    "usedHere": "used at {site}",
+    "ratesOwn": "Only our rates",
+    "ratesAny": "Our rates, else the aggregator's",
+    "numberOnFile": "Sealed, on file",
+    "noNumber": "None",
+    "live": "Live",
+    "off": "Switched off",
+    "count_one": "{count} contract",
+    "count_other": "{count} contracts",
+    "rowMenu": "Actions for {carrier}",
+    "add": "Add a contract",
+    "sealed": "Account numbers are sealed and never shown again; after a save only their last four characters are said.",
+    "none": {
+      "title": "No contract of our own",
+      "body": "Labels go at the aggregator's rates until a contract is added."
+    },
+    "action": {
+      "ratesOn": "Use only our rates",
+      "ratesOff": "Allow the aggregator's rates",
+      "number": "Replace the number…",
+      "off": "Switch off…"
+    },
+    "dialog": {
+      "addTitle": "Add a carrier contract",
+      "addGo": "Add",
+      "addBody": "The account number is sealed when saved and never shown again; it asks a fresh code.",
+      "carrier": "Carrier",
+      "carrierHint": "The carrier's code (for example brt).",
+      "number": "Account number",
+      "numberHint": "3 to 40 letters, digits, spaces, dots, slashes or hyphens.",
+      "everySite": "For every site of the company",
+      "ownRates": "Use only our rates",
+      "ownRatesHint": "Labels for this carrier are bought only on this contract (never at the aggregator's rates).",
+      "numberTitle": "Replace the account number",
+      "numberGo": "Replace",
+      "numberBody": "The old number is deleted in the same step; it asks a fresh code.",
+      "ratesOnTitle": "Use only our rates",
+      "ratesOffTitle": "Allow the aggregator's rates",
+      "ratesGo": "Save",
+      "ratesOnBody": "Labels for this carrier are bought only on this contract.",
+      "ratesOffBody": "When our contract cannot be used, labels go at the aggregator's rates.",
+      "offTitle": "Switch off the contract",
+      "offGo": "Switch off",
+      "offBody": "Its number is removed and the contract stays as switched off; a new contract may cover it again."
+    },
+    "done": {
+      "added": "{carrier}: contract saved · ends in {end}.",
+      "number": "{carrier}: number replaced · ends in {end}.",
+      "ratesOn": "{carrier}: only our rates.",
+      "ratesOff": "{carrier}: the aggregator's rates allowed.",
+      "off": "{carrier}: contract switched off."
+    },
+    "refusal": {
+      "LIVE_EXISTS": "A live contract with this carrier already covers this site (or every site): switch it off or replace its number.",
+      "SWITCHED_OFF": "The contract is switched off: it changes no more.",
+      "DATABASE": "It was refused: check the fields and try again."
+    },
+    "problem": {
+      "carrier": "The carrier's code: 1 to 40 characters, no spaces.",
+      "number": "3 to 40 letters, digits, spaces, dots, slashes or hyphens, starting and ending with a letter or digit.",
+      "invalid": "Something in the form is not right: check the carrier and the number."
+    },
+    "held": {
+      "noRight": "Your role cannot change the shipping settings (shipping.settings.manage).",
+      "busy": "Saving…"
+    },
+    "stepUp": "A fresh code lets you seal a carrier account number.",
+    "stepUpCancelled": "Nothing changed: the code was not given."
+  },
+  "packaging": {
+    "title": "Packaging",
+    "intro": "Carton, box and pallet types, and which one a packer is offered first per style or size run.",
+    "types": "Packaging types",
+    "count_one": "{count} type",
+    "count_other": "{count} types",
+    "add": "Add a type",
+    "edit": "Edit…",
+    "switchOff": "Switch off…",
+    "switchOn": "Switch on…",
+    "on": "In use",
+    "off": "Switched off",
+    "rowMenu": "Actions for {name}",
+    "bulkOff_one": "Switch off {count}",
+    "bulkOff_other": "Switch off {count}",
+    "bulkOn_one": "Switch on {count}",
+    "bulkOn_other": "Switch on {count}",
+    "col": {
+      "name": "Name",
+      "size": "Inner size",
+      "tare": "Tare",
+      "max": "Most weight",
+      "pallet": "Pallet",
+      "cost": "Cost per unit",
+      "state": "State",
+      "more": "Actions",
+      "scope": "For",
+      "type": "Packaging"
+    },
+    "cm": "{size} cm",
+    "kg": "{value} kg",
+    "kind": {
+      "CARTON": "Carton",
+      "PALLET": "Pallet",
+      "POLYBAG": "Polybag",
+      "HANGER": "Hanger",
+      "BOX": "Box"
+    },
+    "pallet": {
+      "EUR": "EUR pallet",
+      "OTHER": "Other pallet"
+    },
+    "none": {
+      "title": "No packaging type yet",
+      "body": "Add the cartons and pallets the dock packs into."
+    },
+    "defaults": "Defaults per style or size run",
+    "defaultsIntro": "The packaging a packer is offered first for a style, a size run, or both.",
+    "defaultsCount_one": "{count} default",
+    "defaultsCount_other": "{count} defaults",
+    "addDefault": "Add a default",
+    "changeType": "Change packaging…",
+    "defaultMenu": "Actions for {scope}",
+    "noDefaults": {
+      "title": "No default yet",
+      "body": "Without one, the packer chooses the packaging."
+    },
+    "scope": {
+      "style": "{style} · {name}",
+      "scale": "Size scale {scale}",
+      "run": "Sizes {from} to {to} of {scale}",
+      "styleRun": "{style}, sizes {from} to {to} of {scale}"
+    },
+    "dialog": {
+      "addTitle": "Add a packaging type",
+      "editTitle": "Edit {name}",
+      "create": "Create",
+      "save": "Save",
+      "kind": "Kind",
+      "kindFixed": "The kind of a type never changes.",
+      "name": "Name",
+      "length": "Inner length (cm)",
+      "width": "Inner width (cm)",
+      "height": "Inner height (cm)",
+      "tare": "Tare, its own weight (kg)",
+      "maxWeight": "Most weight full (kg)",
+      "palletKind": "Pallet kind",
+      "cost": "Cost per unit ({currency})",
+      "costHint": "What one unit costs us (the cost grain).",
+      "defaultTitle": "Add a default",
+      "defaultGo": "Add",
+      "defaultBody": "A style, a size run of a scale, or both: the packer is offered this packaging first.",
+      "type": "Packaging",
+      "choose": "Choose…",
+      "typeOption": "{name} ({kind})",
+      "style": "Style",
+      "styleHint": "Any style when left empty.",
+      "anyStyle": "Any style",
+      "scale": "Size scale",
+      "anyScale": "No size scale",
+      "fromSize": "From size",
+      "toSize": "To size",
+      "runHint": "Both or neither; the size scale is needed.",
+      "picksLoading": "Reading styles and size scales…",
+      "picksFailed": "Styles and size scales could not be read: try again later.",
+      "changeTypeTitle": "Change the packaging of the default",
+      "onTitle_one": "Switch on {count}",
+      "onTitle_other": "Switch on {count}",
+      "offTitle_one": "Switch off {count}",
+      "offTitle_other": "Switch off {count}",
+      "onGo_one": "Switch on",
+      "onGo_other": "Switch on {count}",
+      "offGo_one": "Switch off",
+      "offGo_other": "Switch off {count}",
+      "onBody": "Packers can choose it again.",
+      "offBody": "Packers no longer choose it; cartons already packed keep it. Never deleted.",
+      "offDefaultBody": "The packer is no longer offered it first."
+    },
+    "done": {
+      "added": "{name} added.",
+      "saved": "{name} saved.",
+      "defaultAdded": "Default added.",
+      "defaultChanged": "Default changed.",
+      "on_one": "{count} switched on.",
+      "on_other": "{count} switched on.",
+      "off_one": "{count} switched off.",
+      "off_other": "{count} switched off.",
+      "activePartly_one": "{count} changed; {refused} changed meanwhile and was left: read again and retry.",
+      "activePartly_other": "{count} changed; {refused} changed meanwhile and were left: read again and retry."
+    },
+    "refused": {
+      "name": "The company has a packaging type with that name already.",
+      "live": "A default of this kind is live for this style or size run already: switch it off first.",
+      "invalid": "It was refused: check the style, the size scale and its sizes."
+    },
+    "problem": {
+      "name": "A name of 1 to {max} characters on one line.",
+      "length": "Centimetres above 0, up to 2 decimals; length, width and height all three or none.",
+      "width": "Centimetres above 0, up to 2 decimals.",
+      "height": "Centimetres above 0, up to 2 decimals.",
+      "tare": "Kilograms, 0 or more, up to 4 decimals.",
+      "maxWeight": "Kilograms above 0 and above its own weight, up to 4 decimals.",
+      "palletKind": "A pallet says its kind.",
+      "cost": "A cost of 0 or more, up to 6 decimals.",
+      "type": "Choose the packaging.",
+      "scope": "Choose a style or a size scale (at least one).",
+      "run": "A size run goes from one size to another: both or neither.",
+      "runScale": "A size run needs its size scale."
+    },
+    "held": {
+      "noRight": "Your role cannot change packaging (shipping.packaging.manage).",
+      "busy": "Saving…",
+      "noneOn": "None of the types picked is in use.",
+      "noneOff": "None of the types picked is switched off.",
+      "problems_one": "{count} field to fix",
+      "problems_other": "{count} fields to fix",
+      "noType": "Add a packaging type first.",
+      "defaultOff": "Switch the default on first.",
+      "sameType": "Choose another packaging."
+    }
+  }
+}

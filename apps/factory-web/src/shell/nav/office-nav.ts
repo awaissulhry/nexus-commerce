@@ -241,6 +241,9 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/warehouse/shipments/[id]',
   // B-W2a-71: a shipment's driver's pack (SCR-067-pack, a new tab: the sheet and every document drawn for one print).
   '/warehouse/shipments/[id]/pack',
+  // B-W2b-412: the End-of-day manifest PDF window (SCR-652) and the Commercial invoice PDF window (SCR-654), window pages.
+  '/warehouse/shipments/manifest',
+  '/warehouse/shipments/customs-paper',
   '/warehouse/shipping',
   '/production/floor',
   // B-W2b-66: the Office's preview of a line TV (SCR-173 display.preview), a window page.
@@ -565,7 +568,9 @@ export const WINDOW_PAGES: ReadonlySet<string> = new Set(['/planning/board', /* 
   // B-W2b-398: the Return label PDF window (design sales.returns tab:returns.label).
   '/sales/returns/label',
   // B-W2b-434: a dashboard's Present (design home.dashboards tab:present: the meeting view on a TV or a projector).
-  '/home/dashboards/present'])
+  '/home/dashboards/present',
+  // B-W2b-412: the End-of-day manifest PDF (design warehouse.shipments tab:sh-tab-manifest) and the Commercial invoice PDF (tab:sh-tab-ci).
+  '/warehouse/shipments/manifest', '/warehouse/shipments/customs-paper'])
 
 /** Whether a company-free address (with or without its terms) is a window page. */
 export const isWindowPage = (address: string): boolean => WINDOW_PAGES.has(address.split('?')[0]!.replace(/\/+$/, '') || '/')
